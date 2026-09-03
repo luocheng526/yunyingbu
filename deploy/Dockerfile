@@ -2,5 +2,6 @@
 FROM alpine:3.20
 WORKDIR /app
 COPY . .
+RUN printf '%s\n' 'yunyingbu placeholder — 请替换为实际应用' > /app/index.html
 EXPOSE 8080
-CMD ["sh", "-c", "echo 'yunyingbu placeholder — 请替换为实际启动命令' && sleep infinity"]
+CMD ["httpd", "-f", "-p", "8080", "-h", "/app"]
