@@ -4,4 +4,4 @@ WORKDIR /app
 COPY . .
 RUN printf '%s\n' 'yunyingbu placeholder — 请替换为实际应用' > /app/index.html
 EXPOSE 8080
-CMD ["httpd", "-f", "-p", "8080", "-h", "/app"]
+CMD ["busybox", "httpd", "-f", "-p", "8080", "-h", "/app"]
