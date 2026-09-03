@@ -2,6 +2,67 @@
 
 本文档说明如何将 **yunyingbu** 系统连接并部署到阿里云 ECS 服务器。
 
+## 当前实例（华北2 北京）
+
+| 项 | 值 | 如何获取 |
+|----|----|----------|
+| 公网 IP | `8.140.33.133` | 阿里云控制台 → ECS → 实例 → **公网 IP** |
+| SSH 端口 | `22` | 安全组入方向规则；非默认端口看「修改远程连接端口」 |
+| 登录用户 | `root` | Ubuntu/Alibaba Cloud Linux 默认多为 `root`；若创建时选了密钥+普通用户，可能是 `ecs-user` |
+| 认证方式 | SSH 密钥（已禁用密码登录） | 见下文「如何拿到 SSH 密钥」 |
+| 应用目录 | `/opt/yunyingbu` | 无需从控制台获取，部署脚本会自动创建 |
+
+**还缺的唯一关键凭证：能登录该实例的 SSH 私钥，或把本仓库部署公钥写入服务器。**
+
+2026-09-03 探测结果：`8.140.33.133:22` 可连通，但当前部署密钥未被授权（`Permission denied (publickey)`）。
+
+## 如何拿到 SSH 密钥
+
+密码登录已关闭，所以必须用「服务器上已授权的公钥」对应的 **私钥**。按你当初怎么配的实例，选下面一种。
+
+### 方式 A（推荐）：用你现有电脑登录，写入部署公钥
+
+你平时能登录这台 ECS 的那台电脑上执行：
+
+```bash
+ssh -i /path/to/your-existing-key root@8.140.33.133
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMWVmFDN20mgwJZoNH4tSADBk1elF5MiWAdK3F3CXKAA yunyingbu-deploy' >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+```
+
+完成后告诉我，我即可用本环境密钥完成初始化与部署。
+
+在本机找现有私钥：
+
+```bash
+ls -l ~/.ssh/
+# 常见文件名：id_ed25519、id_rsa、xxx.pem（无私钥后缀）
+```
+
+Windows 一般在 `C:\Users\<用户名>\.ssh\`。
+
+### 方式 B：阿里云控制台创建的密钥对（.pem）
+
+1. 控制台 → ECS → **网络与安全** → **密钥对**
+2. 看绑定到该实例的密钥对名称
+3. 私钥只在 **创建密钥对当时** 允许下载一次（`.pem`），控制台无法再次下载
+4. 在你当时保存 `.pem` 的电脑上找该文件
+
+若 `.pem` 已丢失：控制台 → 实例 → **更多** → **密码/密钥** → **绑定密钥对 / 重置实例密钥对**（需停机），绑定一把新密钥并立刻保存私钥。
+
+### 方式 C：Workbench / VNC 临时写入公钥
+
+若本机也登不进去：
+
+1. 控制台 → 实例 → **远程连接** → **Workbench** 或 **VNC**
+2. 用控制台会话登录后执行方式 A 中的 `echo ... >> authorized_keys`
+
+### 不要做的事
+
+- 不要把 **私钥** 发到聊天、Issue、提交到 Git
+- 自动部署请把私钥放到 GitHub Secrets：`ALIYUN_SSH_PRIVATE_KEY`
+
 ## 前置条件
 
 1. 已购买阿里云 ECS 实例（推荐 Ubuntu 22.04 / 24.04）
@@ -114,8 +175,10 @@ deploy/
 
 ## 下一步
 
-请提供以下信息，我可以帮你完成首次连接测试：
+完成「方式 A」把部署公钥写入服务器后，执行：
 
-1. ECS **公网 IP**
-2. SSH **用户名**（通常是 root）
-3. 是否已有 SSH 密钥，或需要新生成
+```bash
+./deploy/scripts/connect.sh "echo 连接成功 && uname -a"
+./deploy/scripts/setup-server.sh
+./deploy/scripts/deploy.sh
+```

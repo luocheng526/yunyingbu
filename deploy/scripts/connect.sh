@@ -25,4 +25,10 @@ if [[ -f "${KEY_PATH}" ]]; then
 fi
 
 echo "正在连接 ${ALIYUN_USER}@${ALIYUN_HOST}:${ALIYUN_PORT} ..."
-exec ssh "${SSH_OPTS[@]}" "${ALIYUN_USER}@${ALIYUN_HOST}" "$@"
+if ! ssh "${SSH_OPTS[@]}" "${ALIYUN_USER}@${ALIYUN_HOST}" "$@"; then
+  echo ""
+  echo "SSH 认证失败。服务器已禁用密码登录，需要把部署公钥写入服务器："
+  echo "  ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMWVmFDN20mgwJZoNH4tSADBk1elF5MiWAdK3F3CXKAA yunyingbu-deploy"
+  echo "操作步骤见 docs/deployment-aliyun.md"
+  exit 1
+fi
