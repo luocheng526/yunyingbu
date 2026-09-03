@@ -2,6 +2,7 @@
 FROM alpine:3.20
 WORKDIR /app
 COPY . .
-RUN printf '%s\n' 'yunyingbu placeholder — 请替换为实际应用' > /app/index.html
+RUN apk add --no-cache busybox-extras \
+  && printf '%s\n' 'yunyingbu placeholder — 请替换为实际应用' > /app/index.html
 EXPOSE 8080
-CMD ["busybox", "httpd", "-f", "-p", "8080", "-h", "/app"]
+CMD ["httpd", "-f", "-p", "8080", "-h", "/app"]
