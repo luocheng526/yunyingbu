@@ -1,6 +1,6 @@
 {
   "name": "yunyingbu operations dashboard",
-  "install": "./.cursor/install.sh",
+  "install": "bash ./.cursor/install.sh",
   "terminals": [
     {
       "name": "api",
