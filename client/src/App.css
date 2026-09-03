@@ -33,14 +33,29 @@
 
 .completion {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   width: 118px;
   height: 118px;
   border-radius: 50%;
-  background: conic-gradient(var(--indigo) 0turn, #22d3ee 0.5turn, rgba(255, 255, 255, 0.12) 0.5turn);
+  background: conic-gradient(
+    #6366f1 0%,
+    #22d3ee calc(var(--pct, 0) * 1%),
+    rgba(255, 255, 255, 0.14) calc(var(--pct, 0) * 1%)
+  );
   border: 1px solid rgba(255, 255, 255, 0.18);
+  transition: background 0.4s ease;
+}
+
+.completion-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: #111a30;
 }
 
 .completion-value {

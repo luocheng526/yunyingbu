@@ -94,9 +94,15 @@ function App() {
           <h1>Operations Dashboard</h1>
           <p className="subtitle">Track the team&apos;s operational tasks from intake to done.</p>
         </div>
-        <div className="completion" aria-label="Completion rate">
-          <span className="completion-value">{metrics ? `${metrics.completionRate}%` : "—"}</span>
-          <span className="completion-label">complete</span>
+        <div
+          className="completion"
+          aria-label="Completion rate"
+          style={{ "--pct": metrics ? metrics.completionRate : 0 } as React.CSSProperties}
+        >
+          <div className="completion-inner">
+            <span className="completion-value">{metrics ? `${metrics.completionRate}%` : "—"}</span>
+            <span className="completion-label">complete</span>
+          </div>
         </div>
       </header>
 
