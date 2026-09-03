@@ -3,6 +3,6 @@ FROM alpine:3.20
 WORKDIR /app
 COPY . .
 RUN apk add --no-cache busybox-extras \
-  && printf '%s\n' 'yunyingbu placeholder — 请替换为实际应用' > /app/index.html
+  && cp /app/deploy/placeholder.html /app/index.html
 EXPOSE 8080
 CMD ["httpd", "-f", "-p", "8080", "-h", "/app"]
