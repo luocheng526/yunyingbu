@@ -59,6 +59,10 @@ fi
 
 if [[ -f "\${APP_DIR}/current/deploy/docker-compose.prod.yml" ]]; then
   cd "\${APP_DIR}/current"
+  set -a
+  # shellcheck disable=SC1091
+  [[ -f "\${PROD_ENV}" ]] && source "\${PROD_ENV}"
+  set +a
   docker compose -f deploy/docker-compose.prod.yml up -d --build
 fi
 

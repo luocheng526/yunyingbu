@@ -25,7 +25,11 @@ if [[ -f "${KEY_PATH}" ]]; then
 fi
 
 echo "正在连接 ${ALIYUN_USER}@${ALIYUN_HOST}:${ALIYUN_PORT} ..."
-if ! ssh "${SSH_OPTS[@]}" "${ALIYUN_USER}@${ALIYUN_HOST}" "$@"; then
+set +e
+ssh "${SSH_OPTS[@]}" "${ALIYUN_USER}@${ALIYUN_HOST}" "$@"
+status=$?
+set -e
+if [[ "${status}" -eq 255 ]]; then
   echo ""
   echo "SSH 认证失败。服务器已禁用密码登录，需要授权部署公钥。"
   if [[ -f "${KEY_PATH}.pub" ]]; then
@@ -33,5 +37,6 @@ if ! ssh "${SSH_OPTS[@]}" "${ALIYUN_USER}@${ALIYUN_HOST}" "$@"; then
     cat "${KEY_PATH}.pub"
   fi
   echo "操作步骤见 docs/deployment-aliyun.md"
-  exit 1
+  exit 255
 fi
+exit "${status}"
