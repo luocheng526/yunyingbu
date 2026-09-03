@@ -1,0 +1,15 @@
+{
+  "name": "yunyingbu operations dashboard",
+  "install": "bash ./.cursor/install.sh",
+  "terminals": [
+    {
+      "name": "api",
+      "command": "npm run dev:server"
+    },
+    {
+      "name": "web",
+      "command": "npm run dev:client"
+    }
+  ],
+  "ports": [3001, 5173]
+}
