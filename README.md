@@ -23,6 +23,6 @@ cp deploy/aliyun/.env.example deploy/aliyun/.env
 ./deploy/scripts/deploy.sh
 ```
 
-目标服务器：阿里云 ECS（华北2 北京）`root@8.140.33.133:22`，密钥登录。
+目标服务器：阿里云 ECS（华北2 北京）`root@8.140.33.133:22`（`ecs-bj-erp`），SSH 已连通。
 
-还缺：将部署公钥写入服务器，或提供已授权的私钥路径。详见 [docs/deployment-aliyun.md](docs/deployment-aliyun.md)。
+占位服务已部署：服务器本机 `http://127.0.0.1:18080/`。详见 [docs/deployment-aliyun.md](docs/deployment-aliyun.md)。
