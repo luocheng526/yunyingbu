@@ -5,3 +5,4 @@ dist/
 server/data/tasks.json
 .vite/
 coverage/
+*.tsbuildinfo
