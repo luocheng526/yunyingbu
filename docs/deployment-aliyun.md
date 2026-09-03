@@ -22,25 +22,36 @@
 
 ### 方式 A（推荐）：用你现有电脑登录，写入部署公钥
 
-你平时能登录这台 ECS 的那台电脑上执行：
+**先在你的 Mac 上找到真实私钥，再登录服务器。不要把中文说明当成路径粘贴。**
+
+1. 在 Mac 终端执行（查看本机已有密钥）：
 
 ```bash
-ssh -i /path/to/your-existing-key root@8.140.33.133
-mkdir -p ~/.ssh && chmod 700 ~/.ssh
+ls -la ~/.ssh
+```
+
+常见文件名：`id_ed25519`、`id_rsa`，或阿里云下载的 `.pem`（可能在 `~/Downloads/`）。
+
+2. 用真实文件名登录（把 `id_ed25519` 换成上一步看到的文件）：
+
+```bash
+ssh -i ~/.ssh/id_ed25519 root@8.140.33.133
+```
+
+若提示 `Are you sure you want to continue connecting`，输入 `yes` 回车。正确指纹是：
+
+`SHA256:ycvtWUxRqy3vJFIFtXHeeb2PnxzjgZ8RrOK3MezlGJE`
+
+3. **登录成功后**（提示符变成 `root@...`），再在**服务器上**执行：
+
+```bash
+mkdir -p ~/.ssh
+chmod 700 ~/.ssh
 echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMWVmFDN20mgwJZoNH4tSADBk1elF5MiWAdK3F3CXKAA yunyingbu-deploy' >> ~/.ssh/authorized_keys
 chmod 600 ~/.ssh/authorized_keys
 ```
 
 完成后告诉我，我即可用本环境密钥完成初始化与部署。
-
-在本机找现有私钥：
-
-```bash
-ls -l ~/.ssh/
-# 常见文件名：id_ed25519、id_rsa、xxx.pem（无私钥后缀）
-```
-
-Windows 一般在 `C:\Users\<用户名>\.ssh\`。
 
 ### 方式 B：阿里云控制台创建的密钥对（.pem）
 

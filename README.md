@@ -13,7 +13,7 @@ chmod +x deploy/scripts/*.sh
 cp deploy/aliyun/.env.example deploy/aliyun/.env
 # 编辑 deploy/aliyun/.env，填入 ECS 公网 IP
 
-# 3. 测试连接
+# 3. 测试连接（需先把部署公钥写入服务器 authorized_keys）
 ./deploy/scripts/connect.sh "echo 连接成功"
 
 # 4. 初始化服务器
