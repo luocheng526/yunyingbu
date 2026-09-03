@@ -21,8 +21,10 @@ source "${ENV_FILE}"
 
 KEY_PATH="${HOME}/.ssh/yunyingbu_aliyun"
 SSH_OPTS=(-p "${ALIYUN_PORT}" -o StrictHostKeyChecking=accept-new)
+SCP_OPTS=(-P "${ALIYUN_PORT}" -o StrictHostKeyChecking=accept-new)
 if [[ -f "${KEY_PATH}" ]]; then
   SSH_OPTS+=(-i "${KEY_PATH}")
+  SCP_OPTS+=(-i "${KEY_PATH}")
 fi
 
 REMOTE="${ALIYUN_USER}@${ALIYUN_HOST}"
@@ -37,7 +39,7 @@ tar -C "${REPO_ROOT}" \
   --exclude='.venv' \
   -czf /tmp/yunyingbu-release.tar.gz .
 
-scp "${SSH_OPTS[@]}" /tmp/yunyingbu-release.tar.gz "${REMOTE}:/tmp/yunyingbu-release.tar.gz"
+scp "${SCP_OPTS[@]}" /tmp/yunyingbu-release.tar.gz "${REMOTE}:/tmp/yunyingbu-release.tar.gz"
 
 ssh "${SSH_OPTS[@]}" "${REMOTE}" bash -s <<EOF
 set -euo pipefail
