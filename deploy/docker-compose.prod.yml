@@ -9,7 +9,7 @@ services:
     ports:
       - "${APP_PORT:-8080}:8080"
     env_file:
-      - ../deploy/aliyun/.env.production
+      - aliyun/.env.production
     volumes:
       - app-data:/data
 

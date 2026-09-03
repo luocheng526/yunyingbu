@@ -50,6 +50,11 @@ rm -f /tmp/yunyingbu-release.tar.gz
 
 ln -sfn "\${RELEASE_DIR}" "\${APP_DIR}/current"
 
+PROD_ENV="\${APP_DIR}/current/deploy/aliyun/.env.production"
+if [[ ! -f "\${PROD_ENV}" && -f "\${PROD_ENV}.example" ]]; then
+  cp "\${PROD_ENV}.example" "\${PROD_ENV}"
+fi
+
 if [[ -f "\${APP_DIR}/current/deploy/docker-compose.prod.yml" ]]; then
   cd "\${APP_DIR}/current"
   docker compose -f deploy/docker-compose.prod.yml up -d --build
