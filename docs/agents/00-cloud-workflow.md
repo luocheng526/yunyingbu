@@ -6,8 +6,8 @@
 
 | 谁 | 在哪改代码 | 怎么上 ECS |
 |----|------------|------------|
-| 7 个业务 Agent | Cursor **Cloud**，仓库目录 `apps/xingmai/` | 只提交 Git，**禁止**自己 SSH 重启 |
-| 版本发布中心 | Cloud，审核队列 | 你点「发布」后，由发布中心用仓库脚本推到 `/opt/mengkai` 并重启 |
+| 首页 / 数据中心 / 沈子晗 / 韩梦凯 / 人员管理 / 个人中心 | Cloud，`apps/xingmai/` | **只输出发布文档**，禁止自己上 ECS |
+| 版本发布中心 | Cloud | 仅当主脑粘贴发布文档并说「发版」后，才 push 到 `/opt/mengkai` 并按文档重启 |
 | 主脑 | Cloud | 拆任务、验收，不直接改业务页 |
 
 生产目录仍是 ECS `/opt/mengkai`，站点 `zx.xingmaierp.cc`。Cloud 上的同源代码在 **`apps/xingmai`**。
