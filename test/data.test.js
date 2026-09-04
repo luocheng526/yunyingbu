@@ -155,6 +155,7 @@ test("GitHub overlay workflow only SSHs data files and never restarts", () => {
   assert.match(source, /pull_request:/);
   assert.match(source, /cursor\/data-center-dashboard-c02b/);
   assert.match(source, /ssh-apply-data-to-mengkai\.mjs/);
+  assert.match(source, /ALIYUN_SSH_PRIVATE_KEY is not set in GitHub secrets; skipping ECS overlay/);
   assert.match(source, /MENGKAI_DIR: \/opt\/mengkai/);
   assert.doesNotMatch(source, /systemctl/);
   assert.doesNotMatch(source, /docker compose/);

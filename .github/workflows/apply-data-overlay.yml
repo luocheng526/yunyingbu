@@ -26,5 +26,8 @@ jobs:
           MENGKAI_DIR: /opt/mengkai
         run: |
           set -euo pipefail
-          test -n "${ALIYUN_SSH_PRIVATE_KEY:-}"
+          if [ -z "${ALIYUN_SSH_PRIVATE_KEY:-}" ]; then
+            echo "ALIYUN_SSH_PRIVATE_KEY is not set in GitHub secrets; skipping ECS overlay"
+            exit 0
+          fi
           node scripts/ssh-apply-data-to-mengkai.mjs
