@@ -1,0 +1,61 @@
+import { Router } from "express";
+import { hashPassword, verifyPassword } from "./password.js";
+import { requireAuth } from "./session.js";
+import { publicProfile, setPasswordHash, updateProfile } from "./store.js";
+
+export const profileRouter = Router();
+
+profileRouter.use(requireAuth);
+
+function sendProfile(res, user) {
+  const profile = publicProfile(user);
+  res.json({
+    ok: true,
+    username: profile.username,
+    displayName: profile.displayName,
+    email: profile.email,
+    phone: profile.phone
+  });
+}
+
+profileRouter.get("/", (req, res) => {
+  sendProfile(res, req.user);
+});
+
+profileRouter.put("/", (req, res) => {
+  const displayName = typeof req.body?.displayName === "string" ? req.body.displayName.trim() : "";
+  const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
+  const phone = typeof req.body?.phone === "string" ? req.body.phone.trim() : "";
+  const user = updateProfile(req.user.username, { displayName, email, phone });
+  sendProfile(res, user);
+});
+
+profileRouter.post("/password", (req, res) => {
+  const currentPassword = typeof req.body?.currentPassword === "string" ? req.body.currentPassword : "";
+  const newPassword = typeof req.body?.newPassword === "string" ? req.body.newPassword : "";
+  const confirmPassword = typeof req.body?.confirmPassword === "string" ? req.body.confirmPassword : "";
+
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    res.status(400).json({ ok: false, error: "请填写当前密码、新密码和确认新密码" });
+    return;
+  }
+  if (newPassword.length < 8) {
+    res.status(400).json({ ok: false, error: "新密码至少 8 位" });
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    res.status(400).json({ ok: false, error: "两次新密码不一致" });
+    return;
+  }
+  if (newPassword === currentPassword) {
+    res.status(400).json({ ok: false, error: "新密码不能与当前密码相同" });
+    return;
+  }
+  if (!verifyPassword(currentPassword, req.user.passwordHash)) {
+    res.status(403).json({ ok: false, error: "当前密码错误" });
+    return;
+  }
+
+  setPasswordHash(req.user.username, hashPassword(newPassword));
+  res.json({ ok: true, message: "密码已更新" });
+});

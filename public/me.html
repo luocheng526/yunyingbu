@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>个人中心 · 运营部</title>
+    <link rel="stylesheet" href="/shared/layout.css" />
+    <style>
+      :root {
+        --bg: #f3f1ec;
+        --ink: #1c1917;
+        --muted: #57534e;
+        --line: #e7e5e4;
+        --card: #fffcf7;
+        --accent: #0f766e;
+        --accent-ink: #134e4a;
+        --danger: #b91c1c;
+        --ok: #047857;
+        --shadow: 0 10px 30px rgba(28, 25, 23, 0.08);
+        font-family: "PingFang SC", "Noto Sans SC", "Source Han Sans SC", sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink); }
+      .site-header {
+        position: sticky; top: 0; z-index: 10;
+        background: rgba(255, 252, 247, 0.94);
+        border-bottom: 1px solid var(--line);
+      }
+      .site-header__inner {
+        max-width: 1100px; margin: 0 auto; padding: 0.85rem 1.25rem;
+        display: flex; align-items: center; gap: 1.25rem;
+      }
+      .site-brand { font-weight: 700; color: var(--accent-ink); text-decoration: none; }
+      .site-nav { display: flex; flex-wrap: wrap; gap: 0.35rem 0.15rem; }
+      .site-nav a {
+        color: var(--muted); text-decoration: none; padding: 0.4rem 0.7rem;
+        border-radius: 999px; font-size: 0.92rem;
+      }
+      .site-nav a[aria-current="page"], .site-nav a:hover {
+        color: var(--accent-ink); background: #ccfbf1;
+      }
+      .page { max-width: 720px; margin: 0 auto; padding: 2.25rem 1.25rem 3.5rem; }
+      .kicker { margin: 0 0 0.4rem; color: var(--accent); font-size: 0.85rem; letter-spacing: 0.08em; }
+      h1 { margin: 0 0 0.75rem; font-size: 2rem; }
+      .lead { margin: 0 0 1.25rem; color: var(--muted); line-height: 1.7; }
+      .demo-tag {
+        display: inline-block; margin: 0 0 1.25rem; padding: 0.2rem 0.65rem;
+        border-radius: 999px; background: #ccfbf1; color: var(--accent-ink); font-size: 0.85rem;
+      }
+      .panel {
+        background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+        padding: 1.25rem 1.3rem 1.4rem; box-shadow: var(--shadow); margin-bottom: 1.1rem;
+      }
+      .panel h2 { margin: 0 0 1rem; font-size: 1.1rem; }
+      label { display: block; margin: 0 0 0.85rem; font-size: 0.92rem; color: var(--muted); }
+      input {
+        display: block; width: 100%; margin-top: 0.35rem; padding: 0.55rem 0.7rem;
+        border: 1px solid var(--line); border-radius: 10px; font: inherit; color: var(--ink);
+        background: #fff;
+      }
+      input[readonly] { background: #f5f5f4; color: var(--muted); }
+      .actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.4rem; }
+      button {
+        font: inherit; border: 0; border-radius: 999px; padding: 0.55rem 1.1rem;
+        background: var(--accent); color: #fff; cursor: pointer;
+      }
+      button.secondary { background: #e7e5e4; color: var(--ink); }
+      .status { min-height: 1.4rem; margin: 0 0 1rem; font-size: 0.95rem; }
+      .status.error { color: var(--danger); }
+      .status.ok { color: var(--ok); }
+      .hidden { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="site-nav">
+      <header class="site-header">
+        <div class="site-header__inner">
+          <a class="site-brand" href="/">运营部</a>
+          <nav class="site-nav" aria-label="全站导航">
+            <a href="/">首页</a>
+            <a href="/data">数据中心</a>
+            <a href="/shen">沈子晗运营中心</a>
+            <a href="/han">韩梦凯运营中心</a>
+            <a href="/people">人员管理</a>
+            <a href="/releases">版本发布中心</a>
+            <a href="/me" aria-current="page">个人中心</a>
+          </nav>
+        </div>
+      </header>
+    </div>
+    <main class="page">
+      <p class="kicker">运营部</p>
+      <h1>个人中心</h1>
+      <span class="demo-tag">演示环境 · 当前账号设置</span>
+      <p class="lead">只改自己的显示名、邮箱、手机和密码。人员名册不在本页。</p>
+      <p id="status" class="status" role="status"></p>
+
+      <section id="login-panel" class="panel">
+        <h2>登录</h2>
+        <form id="login-form" autocomplete="on">
+          <label>用户名<input id="login-username" name="username" type="text" required autocomplete="username" /></label>
+          <label>密码<input id="login-password" name="password" type="password" required autocomplete="current-password" /></label>
+          <div class="actions">
+            <button type="submit">登录</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="settings-panel" class="hidden">
+        <div class="panel">
+          <h2>账号资料</h2>
+          <form id="profile-form">
+            <label>用户名<input id="profile-username" name="username" type="text" readonly /></label>
+            <label>显示名<input id="profile-displayName" name="displayName" type="text" autocomplete="nickname" /></label>
+            <label>邮箱<input id="profile-email" name="email" type="email" autocomplete="email" /></label>
+            <label>手机<input id="profile-phone" name="phone" type="tel" autocomplete="tel" /></label>
+            <div class="actions">
+              <button type="submit">保存资料</button>
+            </div>
+          </form>
+        </div>
+        <div class="panel">
+          <h2>修改密码</h2>
+          <form id="password-form" autocomplete="off">
+            <label>当前密码<input id="current-password" name="currentPassword" type="password" required autocomplete="current-password" /></label>
+            <label>新密码<input id="new-password" name="newPassword" type="password" required minlength="8" autocomplete="new-password" /></label>
+            <label>确认新密码<input id="confirm-password" name="confirmPassword" type="password" required minlength="8" autocomplete="new-password" /></label>
+            <div class="actions">
+              <button type="submit">修改密码</button>
+            </div>
+          </form>
+        </div>
+        <div class="panel">
+          <form id="logout-form">
+            <div class="actions">
+              <button type="submit" class="secondary">退出登录</button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </main>
+    <script src="/shared/nav.js"></script>
+    <script>
+      (function () {
+        const statusEl = document.getElementById("status");
+        const loginPanel = document.getElementById("login-panel");
+        const settingsPanel = document.getElementById("settings-panel");
+        const loginForm = document.getElementById("login-form");
+        const profileForm = document.getElementById("profile-form");
+        const passwordForm = document.getElementById("password-form");
+        const logoutForm = document.getElementById("logout-form");
+
+        function setStatus(message, kind) {
+          statusEl.textContent = message || "";
+          statusEl.className = "status" + (kind ? " " + kind : "");
+        }
+
+        function showLogin() {
+          loginPanel.hidden = false;
+          settingsPanel.classList.add("hidden");
+        }
+
+        function showSettings() {
+          loginPanel.hidden = true;
+          settingsPanel.classList.remove("hidden");
+        }
+
+        function fillProfile(user) {
+          document.getElementById("profile-username").value = user.username || "";
+          document.getElementById("profile-displayName").value = user.displayName || "";
+          document.getElementById("profile-email").value = user.email || "";
+          document.getElementById("profile-phone").value = user.phone || "";
+        }
+
+        async function api(path, options) {
+          const res = await fetch(path, Object.assign({ credentials: "same-origin" }, options));
+          let data = {};
+          try {
+            data = await res.json();
+          } catch (_err) {
+            data = {};
+          }
+          return { res: res, data: data };
+        }
+
+        async function refreshSession(quiet) {
+          const { res, data } = await api("/api/auth/me");
+          if (!res.ok) {
+            showLogin();
+            if (!quiet) {
+              setStatus(data.error || "未登录", "error");
+            }
+            return null;
+          }
+          fillProfile(data);
+          showSettings();
+          return data;
+        }
+
+        loginForm.addEventListener("submit", async function (event) {
+          event.preventDefault();
+          const username = document.getElementById("login-username").value;
+          const password = document.getElementById("login-password").value;
+          const { res, data } = await api("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: username, password: password })
+          });
+          document.getElementById("login-password").value = "";
+          if (!res.ok) {
+            showLogin();
+            setStatus(data.error || "登录失败", "error");
+            return;
+          }
+          fillProfile(data.user || data);
+          showSettings();
+          setStatus("登录成功", "ok");
+        });
+
+        profileForm.addEventListener("submit", async function (event) {
+          event.preventDefault();
+          const { res, data } = await api("/api/profile", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              displayName: document.getElementById("profile-displayName").value,
+              email: document.getElementById("profile-email").value,
+              phone: document.getElementById("profile-phone").value
+            })
+          });
+          if (!res.ok) {
+            setStatus(data.error || "保存失败", "error");
+            return;
+          }
+          fillProfile(data);
+          setStatus("资料已保存", "ok");
+        });
+
+        passwordForm.addEventListener("submit", async function (event) {
+          event.preventDefault();
+          const currentPassword = document.getElementById("current-password").value;
+          const newPassword = document.getElementById("new-password").value;
+          const confirmPassword = document.getElementById("confirm-password").value;
+          const { res, data } = await api("/api/profile/password", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              currentPassword: currentPassword,
+              newPassword: newPassword,
+              confirmPassword: confirmPassword
+            })
+          });
+          document.getElementById("current-password").value = "";
+          document.getElementById("new-password").value = "";
+          document.getElementById("confirm-password").value = "";
+          if (!res.ok) {
+            setStatus(data.error || "改密失败", "error");
+            return;
+          }
+          setStatus(data.message || "密码已更新", "ok");
+        });
+
+        logoutForm.addEventListener("submit", async function (event) {
+          event.preventDefault();
+          await api("/api/auth/logout", { method: "POST" });
+          profileForm.reset();
+          passwordForm.reset();
+          showLogin();
+          setStatus("已退出登录", "ok");
+        });
+
+        refreshSession(true);
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,6 @@
+node_modules/
+.DS_Store
+deploy/aliyun/.env
+*.pem
+*.key
+.ssh/
