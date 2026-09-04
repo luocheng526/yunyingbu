@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
  * Copy data-center overlay onto /opt/mengkai and add app.use("/api/data", dataRouter).
- * Run on the ECS. Does not touch /opt/yunyingbu, nginx, or other module directories.
+ * Does not restart production. Publish only after 主脑 approves at /releases.
+ * Does not touch /opt/yunyingbu, nginx, or other module directories.
  */
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
 import { patchAppSource } from "../src/modules/data/patch-app.js";
 
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -57,9 +57,4 @@ if (next !== original) {
   fs.writeFileSync(appPath, next);
 }
 
-if (process.env.SKIP_RESTART === "1") {
-  process.exit(0);
-}
-
-const restart = spawnSync("systemctl", ["restart", "mengkai.service"], { stdio: "inherit" });
-process.exit(restart.status ?? 1);
+console.log("data overlay copied; not restarting production. Submit a release ticket for 主脑 review.");
