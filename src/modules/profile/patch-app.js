@@ -1,8 +1,8 @@
-const PROFILE_IMPORT = 'import { profileRouter } from "./modules/profile/profile-router.js";';
-const PROFILE_USE = 'app.use("/api/profile", profileRouter);';
+const PROFILE_IMPORT = 'import { attachProfile } from "./modules/profile/attach.js";';
+const ATTACH_CALL = "attachProfile(app);";
 
 function insertImport(source, line) {
-  if (source.includes(line) || source.includes("./modules/profile/profile-router.js")) {
+  if (source.includes("./modules/profile/attach.js")) {
     return source;
   }
   const importMatches = [...source.matchAll(/^import .+$/gm)];
@@ -16,11 +16,11 @@ function insertImport(source, line) {
 
 export function patchAppSource(source) {
   let next = insertImport(source, PROFILE_IMPORT);
-  if (next.includes(PROFILE_USE)) {
+  if (next.includes(ATTACH_CALL)) {
     return next;
   }
-  if (!/return app;/.test(next)) {
-    throw new Error("src/app.js 中找不到 return app; ，无法安全增加个人中心路由");
+  if (next.includes("app.use(express.json());")) {
+    return next.replace("app.use(express.json());", `app.use(express.json());\n  ${ATTACH_CALL}`);
   }
-  return next.replace(/return app;/, `${PROFILE_USE}\n  return app;`);
+  throw new Error("src/app.js 中找不到 express.json() ，无法安全挂载个人中心");
 }
