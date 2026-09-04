@@ -1,4 +1,5 @@
 import express from "express";
+import { requireReleasesAuth } from "./auth.js";
 import { restartMengkaiService } from "./restart.js";
 import { createStore, MODULES } from "./store.js";
 
@@ -28,6 +29,7 @@ export function createReleasesRouter(options = {}) {
   const store = options.store || createStore({ now: options.now });
   const restart = options.restart || restartMengkaiService;
   const router = express.Router();
+  router.use(requireReleasesAuth(options));
 
   router.get("/", (_req, res) => {
     res.json({ ok: true, items: store.list() });

@@ -1,12 +1,23 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import http from "node:http";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { createApp } from "../src/app.js";
+
+const signedInUser = { username: "罗成" };
+
+function signedIn(extra = {}) {
+  return { restart() {}, getUser: () => signedInUser, ...extra };
+}
 
 async function withServer(options, fn) {
   if (typeof options === "function") {
     fn = options;
-    options = { restart() {} };
+    options = signedIn();
+  } else {
+    options = signedIn(options);
   }
   const server = http.createServer(createApp(options));
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -46,6 +57,45 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /未审核通过禁止上线/);
     assert.match(text, /禁止多 Agent 同时重启服务/);
     assert.match(text, /提交发布申请/);
+    assert.match(text, /window\.location\.replace\("\/login"\)/);
+    assert.doesNotMatch(text, /id="login-form"/);
+    assert.doesNotMatch(text, /星脉管理系统/);
+  });
+});
+
+test("releases.html has no login form and sends users to /login", () => {
+  const html = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../public/releases.html"), "utf8");
+  assert.doesNotMatch(html, /id="login-form"/);
+  assert.doesNotMatch(html, /<input[^>]*type="password"/);
+  assert.match(html, /\/login/);
+});
+
+test("unauthenticated page redirects to /login", async () => {
+  await withServer({ getUser: () => null }, async (base) => {
+    for (const pathname of ["/releases", "/releases.html"]) {
+      const res = await fetch(`${base}${pathname}`, { redirect: "manual" });
+      assert.equal(res.status, 302, pathname);
+      assert.equal(res.headers.get("location"), "/login", pathname);
+    }
+  });
+});
+
+test("unauthenticated APIs return 401 JSON", async () => {
+  await withServer({ getUser: () => null }, async (base) => {
+    const calls = [
+      ["GET", "/api/releases"],
+      ["GET", "/api/releases/queue"],
+      ["GET", "/api/releases/lock"],
+      ["POST", "/api/releases"]
+    ];
+    for (const [method, pathname] of calls) {
+      const { res, body } = await json(base, pathname, {
+        method,
+        body: method === "POST" ? apply("1.0.0", "Eve", "首页", "no session") : undefined
+      });
+      assert.equal(res.status, 401, pathname);
+      assert.equal(body.error, "未登录");
+    }
   });
 });
 

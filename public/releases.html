@@ -171,11 +171,22 @@
         flashEl.className = "flash show" + (isError ? " err" : "");
       }
 
+      function goLogin() {
+        window.location.replace("/login");
+      }
+
       async function api(path, options) {
         const res = await fetch(path, {
+          credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
           ...options
         });
+        if (res.status === 401) {
+          goLogin();
+          const err = new Error("未登录");
+          err.status = 401;
+          throw err;
+        }
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           const err = new Error(data.error || "请求失败");
