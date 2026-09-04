@@ -26,3 +26,5 @@ cp deploy/aliyun/.env.example deploy/aliyun/.env
 目标服务器：阿里云 ECS（华北2 北京）`root@8.140.33.133:22`（`ecs-bj-erp`），SSH 已连通。
 
 占位服务已部署：服务器本机 `http://127.0.0.1:18080/`。详见 [docs/deployment-aliyun.md](docs/deployment-aliyun.md)。
+
+运营部 7 个独立 Agent 提示词（只下发、不直接改站点）：[docs/agents/README.md](docs/agents/README.md)。
