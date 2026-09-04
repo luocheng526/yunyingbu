@@ -2,7 +2,7 @@
 
 主脑只出任务稿，不直接改 `zx.xingmaierp.cc`。下面每个文件是一份完整提示词：在 Cursor 新建 **独立 Agent / 独立对话**，把对应文件全文粘贴即可。
 
-登录是全站大门，**不放在首页对话框里做**。登录页 `/login` 与账号鉴权归「个人中心」：[07-profile.md](agents/07-profile.md)。首页只做登录后的工作台：[01-home-auth-gate.md](agents/01-home-auth-gate.md)。其余模块补丁：[00-login-gate.md](agents/00-login-gate.md)。
+个人中心若误贴了「全站登录大门」会卡住：用 [07-profile-unstick.md](agents/07-profile-unstick.md) 解卡。
 
 **发布纪律：** 只有「版本发布中心」在主脑审核并点击「发布」后才能上线。其余 Agent 禁止自行 `systemctl restart`。补丁提示词：[00-no-self-deploy.md](agents/00-no-self-deploy.md)。
 
