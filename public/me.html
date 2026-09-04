@@ -68,7 +68,6 @@
       .status { min-height: 1.4rem; margin: 0 0 1rem; font-size: 0.95rem; }
       .status.error { color: var(--danger); }
       .status.ok { color: var(--ok); }
-      .hidden { display: none; }
     </style>
   </head>
   <body>
@@ -95,18 +94,7 @@
       <p class="lead">只改自己的显示名、邮箱、手机和密码。人员名册不在本页。</p>
       <p id="status" class="status" role="status"></p>
 
-      <section id="login-panel" class="panel">
-        <h2>登录</h2>
-        <form id="login-form" autocomplete="on">
-          <label>用户名<input id="login-username" name="username" type="text" required autocomplete="username" /></label>
-          <label>密码<input id="login-password" name="password" type="password" required autocomplete="current-password" /></label>
-          <div class="actions">
-            <button type="submit">登录</button>
-          </div>
-        </form>
-      </section>
-
-      <section id="settings-panel" class="hidden">
+      <section id="settings-panel">
         <div class="panel">
           <h2>账号资料</h2>
           <form id="profile-form">
@@ -143,9 +131,6 @@
     <script>
       (function () {
         const statusEl = document.getElementById("status");
-        const loginPanel = document.getElementById("login-panel");
-        const settingsPanel = document.getElementById("settings-panel");
-        const loginForm = document.getElementById("login-form");
         const profileForm = document.getElementById("profile-form");
         const passwordForm = document.getElementById("password-form");
         const logoutForm = document.getElementById("logout-form");
@@ -155,14 +140,8 @@
           statusEl.className = "status" + (kind ? " " + kind : "");
         }
 
-        function showLogin() {
-          loginPanel.hidden = false;
-          settingsPanel.classList.add("hidden");
-        }
-
-        function showSettings() {
-          loginPanel.hidden = true;
-          settingsPanel.classList.remove("hidden");
+        function goLogin() {
+          window.location.href = "/login";
         }
 
         function fillProfile(user) {
@@ -174,6 +153,10 @@
 
         async function api(path, options) {
           const res = await fetch(path, Object.assign({ credentials: "same-origin" }, options));
+          if (res.status === 401) {
+            goLogin();
+            return { res: res, data: { error: "未登录" } };
+          }
           let data = {};
           try {
             data = await res.json();
@@ -183,39 +166,14 @@
           return { res: res, data: data };
         }
 
-        async function refreshSession(quiet) {
+        async function refreshSession() {
           const { res, data } = await api("/api/auth/me");
           if (!res.ok) {
-            showLogin();
-            if (!quiet) {
-              setStatus(data.error || "未登录", "error");
-            }
             return null;
           }
           fillProfile(data);
-          showSettings();
           return data;
         }
-
-        loginForm.addEventListener("submit", async function (event) {
-          event.preventDefault();
-          const username = document.getElementById("login-username").value;
-          const password = document.getElementById("login-password").value;
-          const { res, data } = await api("/api/auth/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username: username, password: password })
-          });
-          document.getElementById("login-password").value = "";
-          if (!res.ok) {
-            showLogin();
-            setStatus(data.error || "登录失败", "error");
-            return;
-          }
-          fillProfile(data.user || data);
-          showSettings();
-          setStatus("登录成功", "ok");
-        });
 
         profileForm.addEventListener("submit", async function (event) {
           event.preventDefault();
@@ -263,13 +221,10 @@
         logoutForm.addEventListener("submit", async function (event) {
           event.preventDefault();
           await api("/api/auth/logout", { method: "POST" });
-          profileForm.reset();
-          passwordForm.reset();
-          showLogin();
-          setStatus("已退出登录", "ok");
+          goLogin();
         });
 
-        refreshSession(true);
+        refreshSession();
       })();
     </script>
   </body>

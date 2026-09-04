@@ -1,7 +1,7 @@
 import { hashPassword } from "./password.js";
 
 /** Demo seed credentials are server-side only. Never send the hash to clients. */
-export const DEMO_USERNAME = "admin";
+export const DEMO_USERNAME = "罗成";
 export const DEMO_INITIAL_PASSWORD = "ChangeMe123!";
 
 const users = new Map();
@@ -10,8 +10,8 @@ const sessions = new Map();
 function seedAdmin() {
   users.set(DEMO_USERNAME, {
     username: DEMO_USERNAME,
-    displayName: "演示管理员",
-    email: "admin@demo.local",
+    displayName: "罗成",
+    email: "luocheng@demo.local",
     phone: "",
     passwordHash: hashPassword(DEMO_INITIAL_PASSWORD)
   });

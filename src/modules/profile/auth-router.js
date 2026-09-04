@@ -21,7 +21,8 @@ authRouter.post("/login", (req, res) => {
 
   const sid = issueSession(user.username);
   setSessionCookie(res, sid);
-  res.json({ ok: true, user: publicProfile(user) });
+  const remember = Boolean(req.body?.remember);
+  res.json({ ok: true, remember, user: publicProfile(user) });
 });
 
 authRouter.post("/logout", (req, res) => {
