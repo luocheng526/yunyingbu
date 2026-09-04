@@ -152,12 +152,14 @@ test("GitHub overlay workflow only SSHs data files and never restarts", () => {
     "utf8"
   );
   assert.match(source, /workflow_dispatch/);
+  assert.match(source, /pull_request:/);
+  assert.match(source, /cursor\/data-center-dashboard-c02b/);
   assert.match(source, /ssh-apply-data-to-mengkai\.mjs/);
   assert.match(source, /MENGKAI_DIR: \/opt\/mengkai/);
   assert.doesNotMatch(source, /systemctl/);
   assert.doesNotMatch(source, /docker compose/);
   assert.doesNotMatch(source, /\/opt\/yunyingbu/);
-  assert.doesNotMatch(source, /branches:\s*\n\s*-\s*main/);
+  assert.doesNotMatch(source, /^on:\s*\n\s*push:/m);
 });
 
 test("apply script refuses when mengkai tree is missing", async () => {

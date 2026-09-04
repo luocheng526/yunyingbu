@@ -2,6 +2,9 @@ name: Apply data overlay to mengkai
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
 
 concurrency:
   group: apply-data-overlay
@@ -10,7 +13,7 @@ concurrency:
 jobs:
   apply:
     runs-on: ubuntu-latest
-    if: github.repository == 'luocheng526/yunyingbu'
+    if: github.repository == 'luocheng526/yunyingbu' && (github.event_name == 'workflow_dispatch' || github.head_ref == 'cursor/data-center-dashboard-c02b')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
