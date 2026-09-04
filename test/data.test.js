@@ -146,6 +146,20 @@ test("apply script never restarts production", () => {
   assert.doesNotMatch(source, /docker compose/);
 });
 
+test("GitHub overlay workflow only SSHs data files and never restarts", () => {
+  const source = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/apply-data-overlay.yml"),
+    "utf8"
+  );
+  assert.match(source, /workflow_dispatch/);
+  assert.match(source, /ssh-apply-data-to-mengkai\.mjs/);
+  assert.match(source, /MENGKAI_DIR: \/opt\/mengkai/);
+  assert.doesNotMatch(source, /systemctl/);
+  assert.doesNotMatch(source, /docker compose/);
+  assert.doesNotMatch(source, /\/opt\/yunyingbu/);
+  assert.doesNotMatch(source, /branches:\s*\n\s*-\s*main/);
+});
+
 test("apply script refuses when mengkai tree is missing", async () => {
   const missing = path.join(os.tmpdir(), `no-mengkai-${Date.now()}`);
   const child = spawn(process.execPath, [path.join(repoRoot, "scripts/apply-data-to-mengkai.mjs")], {

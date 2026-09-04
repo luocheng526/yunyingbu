@@ -1,0 +1,27 @@
+name: Apply data overlay to mengkai
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: apply-data-overlay
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    if: github.repository == 'luocheng526/yunyingbu'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Stage data overlay over SSH (no restart)
+        env:
+          ALIYUN_SSH_PRIVATE_KEY: ${{ secrets.ALIYUN_SSH_PRIVATE_KEY }}
+          ALIYUN_SSH_USER: ${{ secrets.ALIYUN_SSH_USER }}
+          ALIYUN_SSH_HOST: ${{ secrets.ALIYUN_HOST }}
+          MENGKAI_DIR: /opt/mengkai
+        run: |
+          set -euo pipefail
+          test -n "${ALIYUN_SSH_PRIVATE_KEY:-}"
+          node scripts/ssh-apply-data-to-mengkai.mjs
