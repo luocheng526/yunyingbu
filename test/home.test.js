@@ -54,7 +54,7 @@ test("GET / is the workbench with seven cards and nav labels", async () => {
 
 test("unfinished module pages return placeholder instead of 500", async () => {
   await withServer(async (base) => {
-    for (const path of ["/data", "/shen", "/han", "/people", "/releases", "/me"]) {
+    for (const path of ["/data", "/shen", "/han", "/people", "/me"]) {
       const { res, text } = await get(base, path);
       assert.equal(res.status, 200, path);
       assert.match(text, /该模块 Agent 尚未交付/);
