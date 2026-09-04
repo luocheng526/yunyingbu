@@ -1,5 +1,7 @@
 import express from "express";
 import { requireReleasesAuth } from "./auth.js";
+import { checkMainBrainOrder, documentGaps, parseReleaseDocument } from "./document.js";
+import { pushXingmaiToEcs } from "./push.js";
 import { restartMengkaiService } from "./restart.js";
 import { createStore, MODULES } from "./store.js";
 
@@ -28,6 +30,7 @@ function publishBlockedReason(item) {
 export function createReleasesRouter(options = {}) {
   const store = options.store || createStore({ now: options.now });
   const restart = options.restart || restartMengkaiService;
+  const push = options.push || pushXingmaiToEcs;
   const router = express.Router();
   router.use(requireReleasesAuth(options));
 
@@ -47,17 +50,37 @@ export function createReleasesRouter(options = {}) {
     const body = req.body || {};
     const version = String(body.version || "").trim();
     const applicant = String(body.applicant || "").trim();
-    const module = String(body.module || "").trim();
     const summary = String(body.summary || "").trim();
-    if (!version || !applicant || !module || !summary) {
-      res.status(400).json({ ok: false, error: "版本号、申请人、模块、变更摘要均为必填" });
+    const parsed = parseReleaseDocument(body);
+    if (!version || !applicant || !summary) {
+      res.status(400).json({
+        ok: false,
+        error: "版本号、申请人、变更摘要均为必填",
+        missing: ["版本号", "申请人", "变更摘要"].filter((label, i) => ![version, applicant, summary][i])
+      });
       return;
     }
-    if (!MODULES.includes(module)) {
+    if (parsed.missing.length) {
+      res.status(400).json({
+        ok: false,
+        error: `发布文档缺项：${parsed.missing.join("、")}。只入队需要完整文档；没有口令也不会发版。`,
+        missing: parsed.missing
+      });
+      return;
+    }
+    if (!MODULES.includes(parsed.document.module)) {
       res.status(400).json({ ok: false, error: "模块不在允许列表中" });
       return;
     }
-    const item = store.create({ version, applicant, module, summary });
+    const item = store.create({
+      version,
+      applicant,
+      summary,
+      module: parsed.document.module,
+      files: parsed.document.files,
+      acceptance: parsed.document.acceptance,
+      restart: parsed.document.restart
+    });
     res.status(201).json({ ok: true, item });
   });
 
@@ -87,6 +110,22 @@ export function createReleasesRouter(options = {}) {
       return;
     }
 
+    const gaps = documentGaps(item);
+    if (gaps.length) {
+      res.status(409).json({
+        ok: false,
+        error: `缺少发布文档：${gaps.join("、")}。不要发。`,
+        missing: gaps
+      });
+      return;
+    }
+
+    const order = checkMainBrainOrder(req.body?.order ?? req.body?.口令, item.module);
+    if (!order.ok) {
+      res.status(409).json({ ok: false, error: order.error });
+      return;
+    }
+
     const acquired = store.tryAcquireLock(item);
     if (!acquired) {
       res.status(409).json({ ok: false, error: "有发布正在进行，禁止抢发" });
@@ -95,19 +134,24 @@ export function createReleasesRouter(options = {}) {
 
     store.markPublishing(item);
 
-    const runRestart = async () => {
+    const runJob = async () => {
       try {
-        const result = await restart();
-        const extra = result && result.skipped ? result.reason : "";
+        const pushResult = await push(item.files);
+        let extra = "";
+        if (item.restart) {
+          const result = await restart();
+          extra = result && result.skipped ? `未执行 systemctl：${result.reason}` : "已 systemctl restart mengkai.service";
+        } else {
+          extra = "文档要求不重启，已跳过 systemctl。";
+        }
+        const pushNote = pushResult && pushResult.stdout ? String(pushResult.stdout).trim() : "push-xingmai-to-ecs.sh 完成";
         store.markSuccess(
           item,
-          extra
-            ? `发布完成（未执行 systemctl：${extra}）。队列下一条不会自动发布。`
-            : undefined
+          `版本 ${item.version} 发版成功。${pushNote} ${extra} 队列下一条不会自动发布。`
         );
         return { ok: true };
       } catch (err) {
-        const message = `重启失败：${err?.message || err}。已释放发布锁。`;
+        const message = `发版失败：${err?.message || err}。已释放发布锁。`;
         store.markFailed(item, message);
         return { ok: false, error: message };
       } finally {
@@ -115,24 +159,23 @@ export function createReleasesRouter(options = {}) {
       }
     };
 
-    // systemd restart kills this process; flush JSON first. Tests inject restart() and wait.
-    const defer = restart === restartMengkaiService;
+    const defer = item.restart && restart === restartMengkaiService;
     if (defer) {
-      res.json({ ok: true, item });
+      res.json({ ok: true, item, version: item.version });
       setTimeout(() => {
-        runRestart().catch((err) => {
-          console.error("release restart failed", err);
+        runJob().catch((err) => {
+          console.error("release job failed", err);
         });
       }, 400);
       return;
     }
 
-    const result = await runRestart();
+    const result = await runJob();
     if (result.ok) {
-      res.json({ ok: true, item });
+      res.json({ ok: true, item, version: item.version });
       return;
     }
-    res.status(500).json({ ok: false, error: result.error, item });
+    res.status(500).json({ ok: false, error: result.error, item, version: item.version });
   });
 
   return router;

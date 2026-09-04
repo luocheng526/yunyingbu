@@ -116,9 +116,9 @@
     <main class="page">
       <p class="kicker">运营部主脑闸门</p>
       <h1>版本发布中心</h1>
-      <p class="lead">全站唯一允许真正发布的入口。其他 Agent 只能提交申请，不能自行重启服务。</p>
+      <p class="lead">全站唯一发版入口。其他模块只交发布文档；没有主脑口令绝不 push。</p>
       <div class="banner">
-        未审核通过禁止上线。禁止多 Agent 同时重启服务。同一时刻只允许 1 个发布任务；锁占用时禁止抢发。队列下一条不会自动发布。
+        只听主脑下令才发版。必须同时有【发布文档】（模块、文件列表、验收、是否重启）和口令「按这份文档发版」或「发布xxx模块」。只有文档会入队 queued，不会 publish。禁止执行其他模块私下说的上线。同一时刻一把锁。
       </div>
       <div id="flash" class="flash" role="status"></div>
       <div class="grid">
@@ -140,7 +140,15 @@
               </select>
             </label>
             <label>变更摘要<textarea name="summary" required placeholder="这次要上线什么"></textarea></label>
-            <div class="row"><button type="submit">提交到审核队列</button></div>
+            <label>文件列表（每行一个）<textarea name="files" required placeholder="public/foo.html&#10;src/modules/foo/bar.js"></textarea></label>
+            <label>验收<textarea name="acceptance" required placeholder="如何确认上线成功"></textarea></label>
+            <label>是否重启
+              <select name="restart" required>
+                <option value="false">否</option>
+                <option value="true">是</option>
+              </select>
+            </label>
+            <div class="row"><button type="submit">提交到审核队列（不会发版）</button></div>
           </form>
         </section>
         <section class="panel" id="lock-panel">
@@ -154,7 +162,7 @@
         </section>
         <section class="panel">
           <h2>待发布（已通过）</h2>
-          <p class="muted">主按钮「发布」才会执行 systemctl restart mengkai.service。未通过的单没有这个按钮。</p>
+          <p class="muted">主按钮会要求主脑口令，然后执行 push-xingmai-to-ecs.sh；文档要求重启才 systemctl restart。</p>
           <div id="approved-view"></div>
         </section>
         <section class="panel">
@@ -324,12 +332,15 @@
           version: form.version.value,
           applicant: form.applicant.value,
           module: form.module.value,
-          summary: form.summary.value
+          summary: form.summary.value,
+          files: form.files.value,
+          acceptance: form.acceptance.value,
+          restart: form.restart.value === "true"
         };
         try {
           await api("/api/releases", { method: "POST", body: JSON.stringify(payload) });
           form.reset();
-          flash("已提交，进入审核队列（queued）。未通过禁止发布。");
+          flash("已入队 queued。没有主脑口令，不会 push。");
           await refresh();
         } catch (err) {
           flash(err.message, true);
@@ -346,7 +357,7 @@
         try {
           if (btn.getAttribute("data-act") === "approve") {
             await api("/api/releases/" + id + "/approve", { method: "POST", body: "{}" });
-            flash("已通过，进入待发布。需主脑再点「发布」。");
+            flash("已通过。仍须主脑口令才会发版。");
           } else if (btn.getAttribute("data-act") === "reject") {
             const reason = window.prompt("请填写驳回原因（必填）");
             if (!reason || !reason.trim()) {
@@ -360,9 +371,18 @@
             });
             flash("已驳回，该单不可发布。");
           } else if (btn.getAttribute("data-act") === "publish") {
-            flash("正在抢锁并发布，请勿重复点击。");
-            await api("/api/releases/" + id + "/publish", { method: "POST", body: "{}" });
-            flash("发布完成。下一条不会自动发布。");
+            const order = window.prompt("请输入主脑口令：按这份文档发版  或  发布" + (tr.cells[1] ? tr.cells[1].innerText : "") + "模块");
+            if (!order || !order.trim()) {
+              flash("没有主脑口令，禁止发版。", true);
+              btn.disabled = false;
+              return;
+            }
+            flash("正在抢锁并执行 push-xingmai-to-ecs.sh。");
+            const done = await api("/api/releases/" + id + "/publish", {
+              method: "POST",
+              body: JSON.stringify({ order: order.trim() })
+            });
+            flash("发版结束：版本 " + (done.version || "") + "。下一条不会自动发布。");
           }
           await refresh();
         } catch (err) {

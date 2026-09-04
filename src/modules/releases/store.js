@@ -40,7 +40,10 @@ export function createStore({ now } = {}) {
       rejectReason: null,
       publishStartedAt: null,
       publishFinishedAt: null,
-      log: "演示数据：等待运营部主脑审核。"
+      files: ["public/index.html"],
+      acceptance: "演示：打开首页。",
+      restart: false,
+      log: "演示数据：等待运营部主脑审核。没有主脑口令不会发版。"
     });
     items.push({
       id: nextId(),
@@ -56,6 +59,9 @@ export function createStore({ now } = {}) {
       rejectReason: "演示：摘要不完整，驳回。",
       publishStartedAt: null,
       publishFinishedAt: null,
+      files: ["public/data.html"],
+      acceptance: "演示：不应发布。",
+      restart: false,
       log: "演示数据：已驳回，禁止发布。"
     });
   }
@@ -109,13 +115,16 @@ export function createStore({ now } = {}) {
     releaseLock() {
       lock = null;
     },
-    create({ version, applicant, module, summary }) {
+    create({ version, applicant, module, summary, files, acceptance, restart }) {
       const item = {
         id: nextId(),
         version: String(version).trim(),
         applicant: String(applicant).trim(),
         module: String(module).trim(),
         summary: String(summary).trim(),
+        files: Array.isArray(files) ? files.slice() : [],
+        acceptance: String(acceptance || "").trim(),
+        restart: Boolean(restart),
         status: "queued",
         demo: false,
         submittedAt: timestamp(),
@@ -124,7 +133,7 @@ export function createStore({ now } = {}) {
         rejectReason: null,
         publishStartedAt: null,
         publishFinishedAt: null,
-        log: "已进入审核队列，按提交时间排队。"
+        log: "已进入审核队列（queued）。没有主脑口令，不会 push、不会重启。"
       };
       items.push(item);
       return item;
@@ -140,7 +149,7 @@ export function createStore({ now } = {}) {
       item.status = "approved";
       item.reviewer = REVIEWER;
       item.reviewedAt = timestamp();
-      item.log = "审核通过，等待主脑点击发布。不会自动发布下一条。";
+      item.log = "审核通过。仍须主脑口令（按这份文档发版 / 发布该模块）才会 push。";
       return { item };
     },
     reject(id, reason) {
@@ -165,12 +174,12 @@ export function createStore({ now } = {}) {
     markPublishing(item) {
       item.status = "publishing";
       item.publishStartedAt = lock?.startedAt || timestamp();
-      item.log = "已抢到全局发布锁，正在执行 systemctl restart mengkai.service";
+      item.log = "已抢到全局发布锁，正在执行 push-xingmai-to-ecs.sh";
     },
     markSuccess(item, message) {
       item.status = "success";
       item.publishFinishedAt = timestamp();
-      item.log = message || "mengkai.service 重启成功。队列下一条不会自动发布。";
+      item.log = message || "发版成功。队列下一条不会自动发布。";
     },
     markFailed(item, message) {
       item.status = "failed";
