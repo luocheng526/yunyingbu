@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>韩梦凯运营中心</title>
+    <link rel="stylesheet" href="/shared/layout.css" />
+    <style>
+      .fallback-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem 0.15rem;
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 0.85rem 1.25rem;
+      }
+      .fallback-nav a {
+        color: #57534e;
+        text-decoration: none;
+        padding: 0.4rem 0.7rem;
+        border-radius: 999px;
+        font-size: 0.92rem;
+      }
+      .fallback-nav a[aria-current="page"] {
+        color: #134e4a;
+        background: #ccfbf1;
+      }
+      .page {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 2.25rem 1.25rem 3.5rem;
+      }
+      .kicker {
+        margin: 0 0 0.4rem;
+        color: #0f766e;
+        font-size: 0.85rem;
+        letter-spacing: 0.08em;
+      }
+      h1 {
+        margin: 0 0 0.75rem;
+        font-size: 2rem;
+      }
+      .lead {
+        margin: 0 0 1.75rem;
+        color: #57534e;
+        max-width: 42rem;
+        line-height: 1.7;
+      }
+      .stack {
+        display: grid;
+        gap: 1rem;
+      }
+      .panel {
+        background: #fffcf7;
+        border: 1px solid #e7e5e4;
+        border-radius: 16px;
+        padding: 1.15rem 1.2rem 1.25rem;
+        box-shadow: 0 10px 30px rgba(28, 25, 23, 0.08);
+      }
+      .panel h2 {
+        margin: 0 0 0.85rem;
+        font-size: 1.1rem;
+      }
+      form {
+        display: grid;
+        gap: 0.55rem;
+      }
+      label {
+        font-size: 0.9rem;
+        color: #57534e;
+      }
+      input,
+      textarea {
+        width: 100%;
+        border: 1px solid #e7e5e4;
+        border-radius: 10px;
+        padding: 0.65rem 0.75rem;
+        font: inherit;
+        background: #fff;
+        color: #1c1917;
+      }
+      textarea {
+        min-height: 8rem;
+        resize: vertical;
+      }
+      button {
+        justify-self: start;
+        border: 0;
+        border-radius: 999px;
+        padding: 0.55rem 1.1rem;
+        background: #0f766e;
+        color: #fff;
+        font: inherit;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #134e4a;
+      }
+      .msg {
+        min-height: 1.2em;
+        margin: 0;
+        color: #0f766e;
+        font-size: 0.9rem;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.55rem 0.4rem;
+        border-bottom: 1px solid #e7e5e4;
+        font-size: 0.95rem;
+      }
+      th {
+        color: #57534e;
+        font-weight: 600;
+      }
+      .status {
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="site-nav" class="fallback-nav">
+      <a href="/">首页</a>
+      <a href="/data">数据中心</a>
+      <a href="/shen">沈子晗运营中心</a>
+      <a href="/han" aria-current="page">韩梦凯运营中心</a>
+      <a href="/people">人员管理</a>
+      <a href="/releases">版本发布中心</a>
+      <a href="/me">个人中心</a>
+    </div>
+    <main class="page">
+      <p class="kicker">运营部 · 韩梦凯业务线</p>
+      <h1>韩梦凯运营中心</h1>
+      <p class="lead">
+        韩梦凯团队的任务与日报台。数据存在本进程独立内存中，与沈子晗中心隔离；默认负责人为「韩梦凯」。
+      </p>
+      <div class="stack">
+        <section class="panel">
+          <h2>新增任务</h2>
+          <form id="task-form">
+            <label for="title">标题（必填）</label>
+            <input id="title" name="title" required placeholder="任务标题" />
+            <button type="submit">添加</button>
+            <p class="msg" id="task-msg"></p>
+          </form>
+        </section>
+        <section class="panel">
+          <h2>任务列表</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>标题</th>
+                <th>状态</th>
+                <th>负责人</th>
+              </tr>
+            </thead>
+            <tbody id="task-body"></tbody>
+          </table>
+        </section>
+        <section class="panel">
+          <h2>今日简报</h2>
+          <form id="brief-form">
+            <label for="brief">简报</label>
+            <textarea id="brief" name="text" placeholder="今日进展…"></textarea>
+            <button type="submit">保存简报</button>
+            <p class="msg" id="brief-msg"></p>
+          </form>
+        </section>
+      </div>
+    </main>
+    <script src="/shared/nav.js"></script>
+    <script>
+      const taskBody = document.getElementById("task-body");
+      const taskMsg = document.getElementById("task-msg");
+      const briefMsg = document.getElementById("brief-msg");
+      const briefEl = document.getElementById("brief");
+
+      function renderTasks(tasks) {
+        taskBody.innerHTML = "";
+        (tasks || []).forEach((t) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td>" +
+            escapeHtml(t.title) +
+            '</td><td class="status">' +
+            escapeHtml(t.status) +
+            "</td><td>" +
+            escapeHtml(t.owner) +
+            "</td>";
+          taskBody.appendChild(tr);
+        });
+        if (!tasks || !tasks.length) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = '<td colspan="3">暂无任务</td>';
+          taskBody.appendChild(tr);
+        }
+      }
+
+      function escapeHtml(s) {
+        return String(s ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      async function load() {
+        const [tasksRes, briefRes] = await Promise.all([
+          fetch("/api/han/tasks"),
+          fetch("/api/han/brief"),
+        ]);
+        const tasksJson = await tasksRes.json();
+        const briefJson = await briefRes.json();
+        renderTasks(tasksJson.tasks);
+        briefEl.value = briefJson.text || "";
+      }
+
+      document.getElementById("task-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const title = document.getElementById("title").value;
+        const res = await fetch("/api/han/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title }),
+        });
+        const json = await res.json();
+        taskMsg.textContent = json.ok ? "已添加" : json.error || "失败";
+        if (json.ok) {
+          document.getElementById("title").value = "";
+          await load();
+        }
+      });
+
+      document.getElementById("brief-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const res = await fetch("/api/han/brief", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: briefEl.value }),
+        });
+        const json = await res.json();
+        briefMsg.textContent = json.ok ? "已保存" : "保存失败";
+      });
+
+      load().catch((err) => {
+        taskMsg.textContent = String(err);
+      });
+    </script>
+  </body>
+</html>
