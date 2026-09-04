@@ -1,11 +1,9 @@
 import { Router } from "express";
 import { hashPassword, verifyPassword } from "./password.js";
-import { requireAuth } from "./session.js";
-import { publicProfile, setPasswordHash, updateProfile } from "./store.js";
+import { currentUser, issueSession, logoutRequest, requireAuth, setSessionCookie } from "./session.js";
+import { findUser, publicProfile, setPasswordHash, updateProfile } from "./store.js";
 
 export const profileRouter = Router();
-
-profileRouter.use(requireAuth);
 
 function sendProfile(res, user) {
   const profile = publicProfile(user);
@@ -18,11 +16,41 @@ function sendProfile(res, user) {
   });
 }
 
-profileRouter.get("/", (req, res) => {
+profileRouter.post("/login", (req, res) => {
+  const username = typeof req.body?.username === "string" ? req.body.username.trim() : "";
+  const password = typeof req.body?.password === "string" ? req.body.password : "";
+  if (!username || !password) {
+    res.status(401).json({ ok: false, error: "请输入用户名和密码" });
+    return;
+  }
+  const user = findUser(username);
+  if (!user || !verifyPassword(password, user.passwordHash)) {
+    res.status(401).json({ ok: false, error: "用户名或密码错误" });
+    return;
+  }
+  setSessionCookie(res, issueSession(user.username));
+  res.json({ ok: true, user: publicProfile(user) });
+});
+
+profileRouter.post("/logout", (req, res) => {
+  logoutRequest(req, res);
+  res.json({ ok: true });
+});
+
+profileRouter.get("/me", (req, res) => {
+  const user = currentUser(req);
+  if (!user) {
+    res.status(401).json({ ok: false, error: "未登录" });
+    return;
+  }
+  sendProfile(res, user);
+});
+
+profileRouter.get("/", requireAuth, (req, res) => {
   sendProfile(res, req.user);
 });
 
-profileRouter.put("/", (req, res) => {
+profileRouter.put("/", requireAuth, (req, res) => {
   const displayName = typeof req.body?.displayName === "string" ? req.body.displayName.trim() : "";
   const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
   const phone = typeof req.body?.phone === "string" ? req.body.phone.trim() : "";
@@ -30,7 +58,7 @@ profileRouter.put("/", (req, res) => {
   sendProfile(res, user);
 });
 
-profileRouter.post("/password", (req, res) => {
+profileRouter.post("/password", requireAuth, (req, res) => {
   const currentPassword = typeof req.body?.currentPassword === "string" ? req.body.currentPassword : "";
   const newPassword = typeof req.body?.newPassword === "string" ? req.body.newPassword : "";
   const confirmPassword = typeof req.body?.confirmPassword === "string" ? req.body.confirmPassword : "";

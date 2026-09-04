@@ -1,8 +1,7 @@
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { authRouter } from "./modules/profile/auth-router.js";
-import { requireLoginUnlessPublic } from "./modules/profile/gate.js";
+import { attachHome } from "./modules/home/attach.js";
 import { profileRouter } from "./modules/profile/profile-router.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -11,15 +10,8 @@ const publicDir = path.join(__dirname, "../public");
 export function createApp() {
   const app = express();
   app.use(express.json());
-  app.use(requireLoginUnlessPublic);
   app.use(express.static(publicDir));
-  app.get("/login", (_req, res) => {
-    res.sendFile(path.join(publicDir, "login.html"));
-  });
-  app.get("/me", (_req, res) => {
-    res.sendFile(path.join(publicDir, "me.html"));
-  });
+  attachHome(app);
   app.use("/api/profile", profileRouter);
-  app.use("/api/auth", authRouter);
   return app;
 }

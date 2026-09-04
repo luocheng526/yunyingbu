@@ -6,68 +6,33 @@
     <title>个人中心 · 运营部</title>
     <link rel="stylesheet" href="/shared/layout.css" />
     <style>
-      :root {
-        --bg: #f3f1ec;
-        --ink: #1c1917;
-        --muted: #57534e;
-        --line: #e7e5e4;
-        --card: #fffcf7;
-        --accent: #0f766e;
-        --accent-ink: #134e4a;
-        --danger: #b91c1c;
-        --ok: #047857;
-        --shadow: 0 10px 30px rgba(28, 25, 23, 0.08);
-        font-family: "PingFang SC", "Noto Sans SC", "Source Han Sans SC", sans-serif;
-      }
-      * { box-sizing: border-box; }
-      html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink); }
-      .site-header {
-        position: sticky; top: 0; z-index: 10;
-        background: rgba(255, 252, 247, 0.94);
-        border-bottom: 1px solid var(--line);
-      }
-      .site-header__inner {
-        max-width: 1100px; margin: 0 auto; padding: 0.85rem 1.25rem;
-        display: flex; align-items: center; gap: 1.25rem;
-      }
-      .site-brand { font-weight: 700; color: var(--accent-ink); text-decoration: none; }
-      .site-nav { display: flex; flex-wrap: wrap; gap: 0.35rem 0.15rem; }
-      .site-nav a {
-        color: var(--muted); text-decoration: none; padding: 0.4rem 0.7rem;
-        border-radius: 999px; font-size: 0.92rem;
-      }
-      .site-nav a[aria-current="page"], .site-nav a:hover {
-        color: var(--accent-ink); background: #ccfbf1;
-      }
-      .page { max-width: 720px; margin: 0 auto; padding: 2.25rem 1.25rem 3.5rem; }
-      .kicker { margin: 0 0 0.4rem; color: var(--accent); font-size: 0.85rem; letter-spacing: 0.08em; }
-      h1 { margin: 0 0 0.75rem; font-size: 2rem; }
-      .lead { margin: 0 0 1.25rem; color: var(--muted); line-height: 1.7; }
+      .page { max-width: 720px; }
       .demo-tag {
         display: inline-block; margin: 0 0 1.25rem; padding: 0.2rem 0.65rem;
-        border-radius: 999px; background: #ccfbf1; color: var(--accent-ink); font-size: 0.85rem;
+        border-radius: 999px; background: #ccfbf1; color: var(--accent-ink, #134e4a); font-size: 0.85rem;
       }
       .panel {
-        background: var(--card); border: 1px solid var(--line); border-radius: 16px;
-        padding: 1.25rem 1.3rem 1.4rem; box-shadow: var(--shadow); margin-bottom: 1.1rem;
+        background: var(--card, #fffcf7); border: 1px solid var(--line, #e7e5e4);
+        border-radius: 16px; padding: 1.25rem 1.3rem 1.4rem;
+        box-shadow: var(--shadow, 0 10px 30px rgba(28, 25, 23, 0.08)); margin-bottom: 1.1rem;
       }
       .panel h2 { margin: 0 0 1rem; font-size: 1.1rem; }
-      label { display: block; margin: 0 0 0.85rem; font-size: 0.92rem; color: var(--muted); }
+      label { display: block; margin: 0 0 0.85rem; font-size: 0.92rem; color: var(--muted, #57534e); }
       input {
         display: block; width: 100%; margin-top: 0.35rem; padding: 0.55rem 0.7rem;
-        border: 1px solid var(--line); border-radius: 10px; font: inherit; color: var(--ink);
-        background: #fff;
+        border: 1px solid var(--line, #e7e5e4); border-radius: 10px; font: inherit;
       }
-      input[readonly] { background: #f5f5f4; color: var(--muted); }
+      input[readonly] { background: #f5f5f4; color: var(--muted, #57534e); }
       .actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.4rem; }
       button {
         font: inherit; border: 0; border-radius: 999px; padding: 0.55rem 1.1rem;
-        background: var(--accent); color: #fff; cursor: pointer;
+        background: var(--accent, #0f766e); color: #fff; cursor: pointer;
       }
-      button.secondary { background: #e7e5e4; color: var(--ink); }
+      button.secondary { background: #e7e5e4; color: var(--ink, #1c1917); }
       .status { min-height: 1.4rem; margin: 0 0 1rem; font-size: 0.95rem; }
-      .status.error { color: var(--danger); }
-      .status.ok { color: var(--ok); }
+      .status.error { color: #b91c1c; }
+      .status.ok { color: #047857; }
+      .hidden { display: none; }
     </style>
   </head>
   <body>
@@ -90,11 +55,22 @@
     <main class="page">
       <p class="kicker">运营部</p>
       <h1>个人中心</h1>
-      <span class="demo-tag">演示环境 · 当前账号设置</span>
-      <p class="lead">只改自己的显示名、邮箱、手机和密码。人员名册不在本页。</p>
+      <span class="demo-tag">演示环境</span>
+      <p class="lead">登录后可改自己的显示名、邮箱、手机和密码。人员名册不在本页。</p>
       <p id="status" class="status" role="status"></p>
 
-      <section id="settings-panel">
+      <section id="login-panel" class="panel">
+        <h2>登录</h2>
+        <form id="login-form" autocomplete="on">
+          <label>用户名<input id="login-username" name="username" type="text" required autocomplete="username" /></label>
+          <label>密码<input id="login-password" name="password" type="password" required autocomplete="current-password" /></label>
+          <div class="actions">
+            <button type="submit">登录</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="settings-panel" class="hidden">
         <div class="panel">
           <h2>账号资料</h2>
           <form id="profile-form">
@@ -130,18 +106,23 @@
     <script src="/shared/nav.js"></script>
     <script>
       (function () {
-        const statusEl = document.getElementById("status");
-        const profileForm = document.getElementById("profile-form");
-        const passwordForm = document.getElementById("password-form");
-        const logoutForm = document.getElementById("logout-form");
+        var statusEl = document.getElementById("status");
+        var loginPanel = document.getElementById("login-panel");
+        var settingsPanel = document.getElementById("settings-panel");
 
         function setStatus(message, kind) {
           statusEl.textContent = message || "";
           statusEl.className = "status" + (kind ? " " + kind : "");
         }
 
-        function goLogin() {
-          window.location.href = "/login";
+        function showLogin() {
+          loginPanel.classList.remove("hidden");
+          settingsPanel.classList.add("hidden");
+        }
+
+        function showSettings() {
+          loginPanel.classList.add("hidden");
+          settingsPanel.classList.remove("hidden");
         }
 
         function fillProfile(user) {
@@ -152,32 +133,45 @@
         }
 
         async function api(path, options) {
-          const res = await fetch(path, Object.assign({ credentials: "same-origin" }, options));
-          if (res.status === 401) {
-            goLogin();
-            return { res: res, data: { error: "未登录" } };
-          }
-          let data = {};
-          try {
-            data = await res.json();
-          } catch (_err) {
-            data = {};
-          }
+          var res = await fetch(path, Object.assign({ credentials: "same-origin" }, options));
+          var data = {};
+          try { data = await res.json(); } catch (_err) { data = {}; }
           return { res: res, data: data };
         }
 
         async function refreshSession() {
-          const { res, data } = await api("/api/auth/me");
-          if (!res.ok) {
-            return null;
+          var result = await api("/api/profile/me");
+          if (!result.res.ok) {
+            showLogin();
+            return;
           }
-          fillProfile(data);
-          return data;
+          fillProfile(result.data);
+          showSettings();
         }
 
-        profileForm.addEventListener("submit", async function (event) {
+        document.getElementById("login-form").addEventListener("submit", async function (event) {
           event.preventDefault();
-          const { res, data } = await api("/api/profile", {
+          var username = document.getElementById("login-username").value;
+          var password = document.getElementById("login-password").value;
+          var result = await api("/api/profile/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: username, password: password })
+          });
+          document.getElementById("login-password").value = "";
+          if (!result.res.ok) {
+            showLogin();
+            setStatus(result.data.error || "登录失败", "error");
+            return;
+          }
+          fillProfile(result.data.user || result.data);
+          showSettings();
+          setStatus("登录成功", "ok");
+        });
+
+        document.getElementById("profile-form").addEventListener("submit", async function (event) {
+          event.preventDefault();
+          var result = await api("/api/profile", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -186,42 +180,40 @@
               phone: document.getElementById("profile-phone").value
             })
           });
-          if (!res.ok) {
-            setStatus(data.error || "保存失败", "error");
+          if (!result.res.ok) {
+            setStatus(result.data.error || "保存失败", "error");
             return;
           }
-          fillProfile(data);
+          fillProfile(result.data);
           setStatus("资料已保存", "ok");
         });
 
-        passwordForm.addEventListener("submit", async function (event) {
+        document.getElementById("password-form").addEventListener("submit", async function (event) {
           event.preventDefault();
-          const currentPassword = document.getElementById("current-password").value;
-          const newPassword = document.getElementById("new-password").value;
-          const confirmPassword = document.getElementById("confirm-password").value;
-          const { res, data } = await api("/api/profile/password", {
+          var result = await api("/api/profile/password", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              currentPassword: currentPassword,
-              newPassword: newPassword,
-              confirmPassword: confirmPassword
+              currentPassword: document.getElementById("current-password").value,
+              newPassword: document.getElementById("new-password").value,
+              confirmPassword: document.getElementById("confirm-password").value
             })
           });
           document.getElementById("current-password").value = "";
           document.getElementById("new-password").value = "";
           document.getElementById("confirm-password").value = "";
-          if (!res.ok) {
-            setStatus(data.error || "改密失败", "error");
+          if (!result.res.ok) {
+            setStatus(result.data.error || "改密失败", "error");
             return;
           }
-          setStatus(data.message || "密码已更新", "ok");
+          setStatus(result.data.message || "密码已更新", "ok");
         });
 
-        logoutForm.addEventListener("submit", async function (event) {
+        document.getElementById("logout-form").addEventListener("submit", async function (event) {
           event.preventDefault();
-          await api("/api/auth/logout", { method: "POST" });
-          goLogin();
+          await api("/api/profile/logout", { method: "POST" });
+          showLogin();
+          setStatus("已退出登录", "ok");
         });
 
         refreshSession();
