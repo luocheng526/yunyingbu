@@ -1,4 +1,7 @@
-【发布文档】
+# 已取消：不要执行本文档
+
+主脑已改口：线上无问题则保持现状，不回滚、不额外重启。见 [00-keep-production.md](00-keep-production.md)。
+
 模块：生产回滚（清掉业务 Agent 私自上线的文件）
 版本号建议：rollback-feature-agents-1
 PR / 分支：无（ECS 现场回滚）
