@@ -146,12 +146,33 @@ test("apply script never restarts production", () => {
   assert.doesNotMatch(source, /docker compose/);
 });
 
+test("apply script refuses when mengkai tree is missing", async () => {
+  const missing = path.join(os.tmpdir(), `no-mengkai-${Date.now()}`);
+  const child = spawn(process.execPath, [path.join(repoRoot, "scripts/apply-data-to-mengkai.mjs")], {
+    env: { ...process.env, MENGKAI_DIR: missing }
+  });
+  const [code, stderr] = await Promise.all([
+    new Promise((resolve) => child.on("close", resolve)),
+    new Promise((resolve) => {
+      const chunks = [];
+      child.stderr.on("data", (c) => chunks.push(c));
+      child.stderr.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    })
+  ]);
+  assert.equal(code, 1);
+  assert.match(stderr, /MENGKAI_DIR not found/);
+});
+
 test("ssh apply script refuses without a key and never restarts", async () => {
   const source = fs.readFileSync(path.join(repoRoot, "scripts/ssh-apply-data-to-mengkai.mjs"), "utf8");
   assert.doesNotMatch(source, /systemctl\s+restart/);
   assert.doesNotMatch(source, /docker compose/);
   const child = spawn(process.execPath, [path.join(repoRoot, "scripts/ssh-apply-data-to-mengkai.mjs")], {
-    env: { ...process.env, ALIYUN_SSH_PRIVATE_KEY: "" }
+    env: {
+      ...process.env,
+      ALIYUN_SSH_PRIVATE_KEY: "",
+      ALIYUN_SSH_KEY_FILE: path.join(os.tmpdir(), "no-such-yunyingbu-key")
+    }
   });
   const [code, stderr] = await Promise.all([
     new Promise((resolve) => child.on("close", resolve)),

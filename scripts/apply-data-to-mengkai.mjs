@@ -12,6 +12,17 @@ import { patchAppSource } from "../src/modules/data/patch-app.js";
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const targetRoot = process.env.MENGKAI_DIR || "/opt/mengkai";
 
+if (!fs.existsSync(targetRoot) || !fs.statSync(targetRoot).isDirectory()) {
+  console.error(`MENGKAI_DIR not found: ${targetRoot}`);
+  process.exit(1);
+}
+
+const appPath = path.join(targetRoot, "src/app.js");
+if (!fs.existsSync(appPath)) {
+  console.error(`missing ${appPath}; refusing to create a new tree`);
+  process.exit(1);
+}
+
 const copies = [
   ["public/data.html", "public/data.html"],
   ["src/modules/data/overview.js", "src/modules/data/overview.js"],
@@ -49,7 +60,6 @@ for (const [from, to] of copies) {
   copyFile(from, to);
 }
 
-const appPath = path.join(targetRoot, "src/app.js");
 const original = fs.readFileSync(appPath, "utf8");
 let next = patchAppSource(original);
 next = ensureDataPageRoute(next);

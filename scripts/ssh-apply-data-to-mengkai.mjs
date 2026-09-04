@@ -4,7 +4,8 @@
  * Never restarts production. Does not touch other module trees.
  *
  * Env:
- *   ALIYUN_SSH_PRIVATE_KEY  required PEM
+ *   ALIYUN_SSH_PRIVATE_KEY  PEM (preferred)
+ *   ALIYUN_SSH_KEY_FILE     path to private key (default ~/.ssh/yunyingbu_aliyun)
  *   ALIYUN_SSH_USER         default root
  *   ALIYUN_SSH_HOST         default 8.140.33.133
  *   MENGKAI_DIR             remote target, default /opt/mengkai
@@ -16,15 +17,30 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const keyBody = process.env.ALIYUN_SSH_PRIVATE_KEY;
 const user = process.env.ALIYUN_SSH_USER || "root";
 const host = process.env.ALIYUN_SSH_HOST || "8.140.33.133";
 const remoteMengkai = process.env.MENGKAI_DIR || "/opt/mengkai";
+const defaultKeyFile = path.join(os.homedir(), ".ssh", "yunyingbu_aliyun");
 
-if (!keyBody || !keyBody.includes("PRIVATE KEY")) {
-  console.error("ALIYUN_SSH_PRIVATE_KEY is missing; cannot stage overlay on ECS.");
+function loadPrivateKey() {
+  const fromEnv = process.env.ALIYUN_SSH_PRIVATE_KEY;
+  if (fromEnv && fromEnv.includes("PRIVATE KEY")) {
+    return fromEnv;
+  }
+  const keyFile = process.env.ALIYUN_SSH_KEY_FILE || defaultKeyFile;
+  if (fs.existsSync(keyFile)) {
+    const body = fs.readFileSync(keyFile, "utf8");
+    if (body.includes("PRIVATE KEY")) {
+      return body;
+    }
+  }
+  console.error(
+    "ALIYUN_SSH_PRIVATE_KEY is missing; cannot stage overlay on ECS. Also checked ALIYUN_SSH_KEY_FILE / ~/.ssh/yunyingbu_aliyun."
+  );
   process.exit(2);
 }
+
+const keyBody = loadPrivateKey();
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "data-ssh-"));
 const keyPath = path.join(tmp, "id");
