@@ -3,6 +3,7 @@ import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { patchAppSource } from "../src/modules/home/patch-app.js";
+import { DEMO_INITIAL_PASSWORD, DEMO_USERNAME } from "../src/modules/profile/auth.js";
 
 const NAV_LABELS = [
   "首页",
@@ -25,15 +26,27 @@ async function withServer(fn) {
   }
 }
 
-async function get(base, pathname) {
-  const res = await fetch(`${base}${pathname}`);
+async function loginCookie(base) {
+  const res = await fetch(`${base}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: DEMO_USERNAME, password: DEMO_INITIAL_PASSWORD })
+  });
+  return (res.headers.getSetCookie?.() || []).map((part) => part.split(";")[0]).join("; ");
+}
+
+async function get(base, pathname, cookie) {
+  const res = await fetch(`${base}${pathname}`, {
+    headers: cookie ? { Cookie: cookie } : {}
+  });
   const text = await res.text();
   return { res, text };
 }
 
 test("GET /api/home/summary returns module json", async () => {
   await withServer(async (base) => {
-    const { res, text } = await get(base, "/api/home/summary");
+    const cookie = await loginCookie(base);
+    const { res, text } = await get(base, "/api/home/summary", cookie);
     assert.equal(res.status, 200);
     assert.deepEqual(JSON.parse(text), { ok: true, module: "home" });
   });
@@ -41,7 +54,8 @@ test("GET /api/home/summary returns module json", async () => {
 
 test("GET / is the workbench with seven cards and nav labels", async () => {
   await withServer(async (base) => {
-    const { res, text } = await get(base, "/");
+    const cookie = await loginCookie(base);
+    const { res, text } = await get(base, "/", cookie);
     assert.equal(res.status, 200);
     assert.match(text, /欢迎回到运营部工作台/);
     assert.match(text, /各中心由独立 Agent 维护/);
@@ -54,8 +68,9 @@ test("GET / is the workbench with seven cards and nav labels", async () => {
 
 test("unfinished module pages return placeholder instead of 500", async () => {
   await withServer(async (base) => {
-    for (const path of ["/data", "/shen", "/han", "/people", "/me"]) {
-      const { res, text } = await get(base, path);
+    const cookie = await loginCookie(base);
+    for (const path of ["/data", "/shen", "/han", "/people"]) {
+      const { res, text } = await get(base, path, cookie);
       assert.equal(res.status, 200, path);
       assert.match(text, /该模块 Agent 尚未交付/);
       assert.match(text, /shared\/nav\.js/);

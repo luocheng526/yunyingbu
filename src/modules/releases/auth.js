@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 
 export const COOKIE_NAME = "mk_sid";
 
+const profileAuthPath = fileURLToPath(new URL("../profile/auth.js", import.meta.url));
 const profileSessionPath = fileURLToPath(new URL("../profile/session.js", import.meta.url));
 
 let profileCurrentUser = undefined;
@@ -12,11 +13,16 @@ function loadProfileCurrentUser() {
   if (profileCurrentUser !== undefined) {
     return Promise.resolve(profileCurrentUser);
   }
-  if (!existsSync(profileSessionPath)) {
+  const spec = existsSync(profileAuthPath)
+    ? "../profile/auth.js"
+    : existsSync(profileSessionPath)
+      ? "../profile/session.js"
+      : null;
+  if (!spec) {
     return Promise.resolve(null);
   }
   if (!profileImport) {
-    profileImport = import("../profile/session.js")
+    profileImport = import(spec)
       .then((mod) => {
         profileCurrentUser = typeof mod.currentUser === "function" ? mod.currentUser : null;
         return profileCurrentUser;

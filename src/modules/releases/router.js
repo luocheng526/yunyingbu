@@ -96,8 +96,14 @@ export function createReleasesRouter(options = {}) {
     store.markPublishing(item);
 
     try {
-      await restart();
-      store.markSuccess(item);
+      const result = await restart();
+      const extra = result && result.skipped ? result.reason : "";
+      store.markSuccess(
+        item,
+        extra
+          ? `发布完成（未执行 systemctl：${extra}）。队列下一条不会自动发布。`
+          : undefined
+      );
       res.json({ ok: true, item });
     } catch (err) {
       const message = `重启失败：${err?.message || err}。已释放发布锁。`;

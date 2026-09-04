@@ -5,8 +5,10 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { createApp } from "../src/app.js";
+import { DEMO_INITIAL_PASSWORD, DEMO_USERNAME } from "../src/modules/profile/auth.js";
 
 const signedInUser = { username: "罗成" };
+let activeCookie = "";
 
 function signedIn(extra = {}) {
   return { restart() {}, getUser: () => signedInUser, ...extra };
@@ -22,17 +24,36 @@ async function withServer(options, fn) {
   const server = http.createServer(createApp(options));
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
   try {
-    await fn(`http://127.0.0.1:${port}`);
+    activeCookie = options.unauthenticated ? "" : await loginCookie(base);
+    await fn(base);
   } finally {
+    activeCookie = "";
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
 }
 
-async function json(base, pathname, options = {}) {
-  const res = await fetch(`${base}${pathname}`, {
+async function loginCookie(base) {
+  const res = await fetch(`${base}/api/auth/login`, {
+    method: "POST",
     headers: { "Content-Type": "application/json" },
-    ...options
+    body: JSON.stringify({ username: DEMO_USERNAME, password: DEMO_INITIAL_PASSWORD })
+  });
+  return (res.headers.getSetCookie?.() || []).map((part) => part.split(";")[0]).join("; ");
+}
+
+async function json(base, pathname, options = {}) {
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  if (options.cookie) {
+    headers.Cookie = options.cookie;
+  } else if (activeCookie) {
+    headers.Cookie = activeCookie;
+  }
+  const res = await fetch(`${base}${pathname}`, {
+    method: options.method || "GET",
+    headers,
+    body: options.body
   });
   const text = await res.text();
   let body = null;
@@ -50,7 +71,7 @@ function apply(version, applicant, module, summary) {
 
 test("GET /releases is the release center page", async () => {
   await withServer(async (base) => {
-    const res = await fetch(`${base}/releases`);
+    const res = await fetch(`${base}/releases`, { headers: { Cookie: activeCookie } });
     const text = await res.text();
     assert.equal(res.status, 200);
     assert.match(text, /版本发布中心/);
@@ -71,7 +92,7 @@ test("releases.html has no login form and sends users to /login", () => {
 });
 
 test("unauthenticated page redirects to /login", async () => {
-  await withServer({ getUser: () => null }, async (base) => {
+  await withServer({ unauthenticated: true, getUser: () => null }, async (base) => {
     for (const pathname of ["/releases", "/releases.html"]) {
       const res = await fetch(`${base}${pathname}`, { redirect: "manual" });
       assert.equal(res.status, 302, pathname);
@@ -81,7 +102,7 @@ test("unauthenticated page redirects to /login", async () => {
 });
 
 test("unauthenticated APIs return 401 JSON", async () => {
-  await withServer({ getUser: () => null }, async (base) => {
+  await withServer({ unauthenticated: true, getUser: () => null }, async (base) => {
     const calls = [
       ["GET", "/api/releases"],
       ["GET", "/api/releases/queue"],
