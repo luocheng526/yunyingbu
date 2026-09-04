@@ -15,7 +15,7 @@ function isSystemdUnavailable(err) {
 /** Only the releases module may restart mengkai. Other modules must not call this. */
 export async function restartMengkaiService() {
   try {
-    await execFileAsync("systemctl", ["restart", "mengkai.service"]);
+    await execFileAsync("sudo", ["-n", "systemctl", "restart", "mengkai.service"]);
   } catch (err) {
     if (isSystemdUnavailable(err)) {
       return { skipped: true, reason: "当前环境没有 systemd/mengkai.service，已跳过重启；代码已在本进程生效。" };

@@ -95,23 +95,44 @@ export function createReleasesRouter(options = {}) {
 
     store.markPublishing(item);
 
-    try {
-      const result = await restart();
-      const extra = result && result.skipped ? result.reason : "";
-      store.markSuccess(
-        item,
-        extra
-          ? `发布完成（未执行 systemctl：${extra}）。队列下一条不会自动发布。`
-          : undefined
-      );
+    const runRestart = async () => {
+      try {
+        const result = await restart();
+        const extra = result && result.skipped ? result.reason : "";
+        store.markSuccess(
+          item,
+          extra
+            ? `发布完成（未执行 systemctl：${extra}）。队列下一条不会自动发布。`
+            : undefined
+        );
+        return { ok: true };
+      } catch (err) {
+        const message = `重启失败：${err?.message || err}。已释放发布锁。`;
+        store.markFailed(item, message);
+        return { ok: false, error: message };
+      } finally {
+        store.releaseLock();
+      }
+    };
+
+    // systemd restart kills this process; flush JSON first. Tests inject restart() and wait.
+    const defer = restart === restartMengkaiService;
+    if (defer) {
       res.json({ ok: true, item });
-    } catch (err) {
-      const message = `重启失败：${err?.message || err}。已释放发布锁。`;
-      store.markFailed(item, message);
-      res.status(500).json({ ok: false, error: message, item });
-    } finally {
-      store.releaseLock();
+      setTimeout(() => {
+        runRestart().catch((err) => {
+          console.error("release restart failed", err);
+        });
+      }, 400);
+      return;
     }
+
+    const result = await runRestart();
+    if (result.ok) {
+      res.json({ ok: true, item });
+      return;
+    }
+    res.status(500).json({ ok: false, error: result.error, item });
   });
 
   return router;
