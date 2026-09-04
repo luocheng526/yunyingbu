@@ -81,6 +81,11 @@ const files = [
 const tarList = path.join(tmp, "files.txt");
 fs.writeFileSync(tarList, `${files.join("\n")}\n`);
 
+function publicKeyLine() {
+  const pub = spawnSync("ssh-keygen", ["-y", "-f", keyPath], { encoding: "utf8" });
+  return (pub.stdout || "").trim();
+}
+
 try {
   run("tar", ["-czf", path.join(tmp, "overlay.tgz"), "-T", tarList], { cwd: repoRoot });
   run(sshBase[0], [...sshBase.slice(1), `${user}@${host}`, `rm -rf ${staging} && mkdir -p ${staging}`]);
@@ -115,6 +120,18 @@ try {
       2
     )
   );
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(message);
+  if (/Permission denied|publickey/i.test(message)) {
+    const pub = publicKeyLine();
+    if (pub) {
+      console.error(
+        `SSH key is not authorized on ${user}@${host}. Append this public key to /root/.ssh/authorized_keys (no restart):\n${pub}`
+      );
+    }
+  }
+  process.exit(1);
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

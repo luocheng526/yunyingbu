@@ -184,6 +184,7 @@ test("ssh apply script refuses without a key and never restarts", async () => {
   const source = fs.readFileSync(path.join(repoRoot, "scripts/ssh-apply-data-to-mengkai.mjs"), "utf8");
   assert.doesNotMatch(source, /systemctl\s+restart/);
   assert.doesNotMatch(source, /docker compose/);
+  assert.match(source, /Append this public key to \/root\/\.ssh\/authorized_keys/);
   const child = spawn(process.execPath, [path.join(repoRoot, "scripts/ssh-apply-data-to-mengkai.mjs")], {
     env: {
       ...process.env,
