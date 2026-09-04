@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>沈子晗运营中心</title>
+    <link rel="stylesheet" href="/shared/layout.css" />
+    <style>
+      .panel {
+        background: var(--card, #fffcf7);
+        border: 1px solid var(--line, #e7e5e4);
+        border-radius: 16px;
+        box-shadow: var(--shadow, 0 10px 30px rgba(28, 25, 23, 0.08));
+        padding: 1.15rem 1.2rem 1.25rem;
+        margin-bottom: 1.25rem;
+      }
+      .panel h2 {
+        margin: 0 0 0.85rem;
+        font-size: 1.15rem;
+      }
+      label {
+        display: block;
+        margin-bottom: 0.35rem;
+        color: var(--muted, #57534e);
+        font-size: 0.92rem;
+      }
+      input[type="text"],
+      textarea {
+        width: 100%;
+        max-width: 42rem;
+        font: inherit;
+        padding: 0.55rem 0.7rem;
+        border: 1px solid var(--line, #e7e5e4);
+        border-radius: 10px;
+        background: #fff;
+        color: inherit;
+      }
+      textarea {
+        min-height: 8rem;
+        resize: vertical;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        align-items: flex-end;
+        margin-top: 0.65rem;
+      }
+      button {
+        font: inherit;
+        border: 0;
+        border-radius: 999px;
+        padding: 0.5rem 1rem;
+        background: var(--accent, #0f766e);
+        color: #fff;
+        cursor: pointer;
+      }
+      button:hover {
+        filter: brightness(1.05);
+      }
+      .status {
+        margin: 0.65rem 0 0;
+        color: var(--muted, #57534e);
+        font-size: 0.92rem;
+        min-height: 1.3em;
+      }
+      .status--error {
+        color: #b91c1c;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.95rem;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.55rem 0.4rem;
+        border-bottom: 1px solid var(--line, #e7e5e4);
+      }
+      th {
+        color: var(--muted, #57534e);
+        font-weight: 600;
+      }
+      .empty {
+        color: var(--muted, #57534e);
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="site-nav">
+      <header class="site-header">
+        <div class="site-header__inner">
+          <a class="site-brand" href="/">运营部</a>
+          <nav class="site-nav" aria-label="全站导航">
+            <a href="/">首页</a>
+            <a href="/data">数据中心</a>
+            <a href="/shen" aria-current="page">沈子晗运营中心</a>
+            <a href="/han">韩梦凯运营中心</a>
+            <a href="/people">人员管理</a>
+            <a href="/releases">版本发布中心</a>
+            <a href="/me">个人中心</a>
+          </nav>
+        </div>
+      </header>
+    </div>
+    <main class="page">
+      <p class="kicker">沈子晗团队</p>
+      <h1>沈子晗运营中心</h1>
+      <p class="lead">这是沈子晗团队的任务与日报台。任务与今日简报保存在服务内存中，进程重启后会清空。</p>
+
+      <section class="panel" aria-labelledby="task-heading">
+        <h2 id="task-heading">任务列表</h2>
+        <form id="task-form">
+          <label for="task-title">任务标题（必填）</label>
+          <div class="row">
+            <input id="task-title" name="title" type="text" required maxlength="200" placeholder="例如：跟进今日达人排期" />
+            <button type="submit">新增任务</button>
+          </div>
+        </form>
+        <p id="task-status" class="status" role="status"></p>
+        <div id="task-table-wrap">
+          <p class="empty">暂无任务</p>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="brief-heading">
+        <h2 id="brief-heading">今日简报</h2>
+        <form id="brief-form">
+          <label for="brief-text">简报内容</label>
+          <textarea id="brief-text" name="text" placeholder="记录今天的进展、风险与需要协调的事项"></textarea>
+          <div class="row">
+            <button type="submit">保存简报</button>
+          </div>
+        </form>
+        <p id="brief-status" class="status" role="status"></p>
+      </section>
+    </main>
+    <script src="/shared/nav.js"></script>
+    <script>
+      (function () {
+        const taskForm = document.getElementById("task-form");
+        const taskTitle = document.getElementById("task-title");
+        const taskStatus = document.getElementById("task-status");
+        const taskTableWrap = document.getElementById("task-table-wrap");
+        const briefForm = document.getElementById("brief-form");
+        const briefText = document.getElementById("brief-text");
+        const briefStatus = document.getElementById("brief-status");
+
+        function setStatus(el, message, isError) {
+          el.textContent = message || "";
+          el.classList.toggle("status--error", Boolean(isError));
+        }
+
+        function escapeHtml(value) {
+          return String(value)
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;");
+        }
+
+        function renderTasks(tasks) {
+          if (!tasks.length) {
+            taskTableWrap.innerHTML = '<p class="empty">暂无任务</p>';
+            return;
+          }
+          const rows = tasks
+            .map(function (task) {
+              return (
+                "<tr>" +
+                "<td>" +
+                escapeHtml(task.title) +
+                "</td>" +
+                "<td>" +
+                escapeHtml(task.status) +
+                "</td>" +
+                "<td>" +
+                escapeHtml(task.owner) +
+                "</td>" +
+                "</tr>"
+              );
+            })
+            .join("");
+          taskTableWrap.innerHTML =
+            "<table><thead><tr><th>标题</th><th>状态</th><th>负责人</th></tr></thead><tbody>" +
+            rows +
+            "</tbody></table>";
+        }
+
+        async function loadTasks() {
+          const res = await fetch("/api/shen/tasks");
+          if (!res.ok) {
+            throw new Error("无法加载任务");
+          }
+          const data = await res.json();
+          renderTasks(Array.isArray(data) ? data : data.tasks || []);
+        }
+
+        async function loadBrief() {
+          const res = await fetch("/api/shen/brief");
+          if (!res.ok) {
+            throw new Error("无法加载简报");
+          }
+          const data = await res.json();
+          briefText.value = data.text || "";
+        }
+
+        taskForm.addEventListener("submit", async function (event) {
+          event.preventDefault();
+          const title = taskTitle.value.trim();
+          if (!title) {
+            setStatus(taskStatus, "请填写任务标题", true);
+            return;
+          }
+          setStatus(taskStatus, "正在保存…");
+          try {
+            const res = await fetch("/api/shen/tasks", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ title: title })
+            });
+            const data = await res.json().catch(function () {
+              return {};
+            });
+            if (!res.ok) {
+              throw new Error(data.error || "新增失败");
+            }
+            taskTitle.value = "";
+            await loadTasks();
+            setStatus(taskStatus, "已新增任务");
+          } catch (err) {
+            setStatus(taskStatus, err.message || "新增失败", true);
+          }
+        });
+
+        briefForm.addEventListener("submit", async function (event) {
+          event.preventDefault();
+          setStatus(briefStatus, "正在保存…");
+          try {
+            const res = await fetch("/api/shen/brief", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text: briefText.value })
+            });
+            const data = await res.json().catch(function () {
+              return {};
+            });
+            if (!res.ok) {
+              throw new Error(data.error || "保存失败");
+            }
+            briefText.value = data.text || briefText.value;
+            setStatus(briefStatus, "简报已保存");
+          } catch (err) {
+            setStatus(briefStatus, err.message || "保存失败", true);
+          }
+        });
+
+        Promise.all([loadTasks(), loadBrief()]).catch(function (err) {
+          setStatus(taskStatus, err.message || "加载失败", true);
+        });
+      })();
+    </script>
+  </body>
+</html>
