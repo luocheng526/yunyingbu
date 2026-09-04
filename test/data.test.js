@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import http from "node:http";
+import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -97,6 +98,39 @@ test("apply script never restarts production", () => {
   assert.doesNotMatch(source, /systemctl\s+restart/);
   assert.doesNotMatch(source, /spawnSync/);
   assert.doesNotMatch(source, /docker compose/);
+});
+
+test("apply script stages overlay onto a mengkai tree without touching other modules", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "mengkai-data-"));
+  const notes = `import express from "express";
+
+export function createApp() {
+  const app = express();
+  app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
+  app.get("/api/notes", (_req, res) => res.json([]));
+  return app;
+}
+`;
+  fs.mkdirSync(path.join(tmp, "src"));
+  fs.mkdirSync(path.join(tmp, "public"));
+  fs.writeFileSync(path.join(tmp, "src/app.js"), notes);
+  fs.writeFileSync(path.join(tmp, "public/index.html"), "<html><body>home</body></html>");
+
+  const child = spawn(process.execPath, [path.join(repoRoot, "scripts/apply-data-to-mengkai.mjs")], {
+    env: { ...process.env, MENGKAI_DIR: tmp }
+  });
+  const code = await new Promise((resolve) => child.on("close", resolve));
+  assert.equal(code, 0);
+
+  const appJs = fs.readFileSync(path.join(tmp, "src/app.js"), "utf8");
+  assert.match(appJs, /app\.use\("\/api\/data", dataRouter\);/);
+  assert.match(appJs, /app\.get\("\/api\/notes"/);
+  assert.match(appJs, /app\.get\("\/api\/health"/);
+  assert.ok(fs.existsSync(path.join(tmp, "public/data.html")));
+  assert.ok(fs.existsSync(path.join(tmp, "src/modules/data/router.js")));
+  assert.equal(fs.readFileSync(path.join(tmp, "public/index.html"), "utf8"), "<html><body>home</body></html>");
+  assert.equal(fs.existsSync(path.join(tmp, "src/modules/home")), false);
+  assert.equal(fs.existsSync(path.join(tmp, "src/modules/people")), false);
 });
 
 test("submit-data-release posts version applicant module summary", async () => {
