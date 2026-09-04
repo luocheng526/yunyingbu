@@ -27,4 +27,4 @@ cp deploy/aliyun/.env.example deploy/aliyun/.env
 
 占位服务已部署：服务器本机 `http://127.0.0.1:18080/`。详见 [docs/deployment-aliyun.md](docs/deployment-aliyun.md)。
 
-运营部 7 个独立 Agent 提示词（只下发、不直接改站点）：[docs/agents/README.md](docs/agents/README.md)。
+生产站点代码快照在 `apps/xingmai/`（对应 ECS `/opt/mengkai`）。Cloud 开发流程见 [docs/agents/00-cloud-workflow.md](docs/agents/00-cloud-workflow.md)。

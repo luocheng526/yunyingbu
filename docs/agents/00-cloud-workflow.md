@@ -1,0 +1,33 @@
+# Cloud 开发 + ECS 发布（现行方案）
+
+**已废弃：** 让 7 个 Agent 选 My Machines `aliyun-ecs` 在服务器本地改代码。不可行，改回 **Cursor Cloud**。
+
+## 怎么干活
+
+| 谁 | 在哪改代码 | 怎么上 ECS |
+|----|------------|------------|
+| 7 个业务 Agent | Cursor **Cloud**，仓库目录 `apps/xingmai/` | 只提交 Git，**禁止**自己 SSH 重启 |
+| 版本发布中心 | Cloud，审核队列 | 你点「发布」后，由发布中心用仓库脚本推到 `/opt/mengkai` 并重启 |
+| 主脑 | Cloud | 拆任务、验收，不直接改业务页 |
+
+生产目录仍是 ECS `/opt/mengkai`，站点 `zx.xingmaierp.cc`。Cloud 上的同源代码在 **`apps/xingmai`**。
+
+## SSH（只有发版需要）
+
+Cloud Agent 默认没有 ECS 私钥。请在 Cursor 环境 Secrets 增加：
+
+- `ALIYUN_SSH_PRIVATE_KEY`：与服务器 `authorized_keys` 里 `yunyingbu-deploy` 对应的私钥全文
+
+本机/主脑已有 `~/.ssh/yunyingbu_aliyun`。不要把私钥提交进 Git。
+
+```bash
+# 从 ECS 拉最新到仓库
+./deploy/scripts/pull-xingmai-from-ecs.sh
+
+# 同步文件到 ECS（不重启）
+./deploy/scripts/push-xingmai-to-ecs.sh
+```
+
+## 安全组
+
+站点外网要通：入方向 **TCP 80**（以及已放行的 22、18080）。

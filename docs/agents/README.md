@@ -1,10 +1,8 @@
 # 运营部 Agent 分工
 
-主脑只出任务稿，不直接改 `zx.xingmaierp.cc`。下面每个文件是一份完整提示词：在 Cursor 新建 **独立 Agent / 独立对话**，把对应文件全文粘贴即可。
+主脑只出任务稿。7 个业务 Agent **在 Cursor Cloud 工作**，代码目录 `apps/xingmai/`。不要再用 My Machines。流程见 [00-cloud-workflow.md](agents/00-cloud-workflow.md)，全员补丁 [00-cloud-patch.md](agents/00-cloud-patch.md)。
 
-各对话框打通 ECS：机器已是自托管 `aliyun-ecs`。操作说明与全员补丁见 [00-ecs-worker.md](agents/00-ecs-worker.md)。
-
-**发布纪律：** 只有「版本发布中心」在主脑审核并点击「发布」后才能上线。其余 Agent 禁止自行 `systemctl restart`。补丁提示词：[00-no-self-deploy.md](agents/00-no-self-deploy.md)。
+**发布纪律：** 只有「版本发布中心」在主脑审核并点击「发布」后才能同步 ECS 并重启。
 
 | Agent | 提示词文件 | 站点路径 | 只许改的目录 |
 |-------|------------|----------|----------------|
