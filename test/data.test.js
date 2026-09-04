@@ -93,6 +93,52 @@ export function createApp() {
   assert.equal(patchAppSource(patched), patched);
 });
 
+test("patchAppSource keeps notes routes and attachHome from live mengkai app.js", () => {
+  const original = `import express from "express";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { addNote, listNotes } from "./notes-store.js";
+import { attachHome } from "./modules/home/attach.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+export function createApp() {
+  const app = express();
+  app.use(express.json());
+
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok" });
+  });
+
+  app.get("/api/notes", (_req, res) => {
+    res.json(listNotes());
+  });
+
+  app.post("/api/notes", (req, res) => {
+    try {
+      const note = addNote(req.body?.text);
+      res.status(201).json(note);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.use(express.static(join(__dirname, "..", "public")));
+
+  attachHome(app);
+  return app;
+}
+`;
+  const patched = patchAppSource(original);
+  assert.match(patched, /import \{ dataRouter \} from "\.\/modules\/data\/router\.js";/);
+  assert.match(patched, /app\.use\("\/api\/data", dataRouter\);/);
+  assert.match(patched, /app\.get\("\/api\/notes"/);
+  assert.match(patched, /app\.post\("\/api\/notes"/);
+  assert.match(patched, /attachHome\(app\);/);
+  assert.match(patched, /import \{ attachHome \} from "\.\/modules\/home\/attach\.js";/);
+  assert.equal(patchAppSource(patched), patched);
+});
+
 test("apply script never restarts production", () => {
   const source = fs.readFileSync(path.join(repoRoot, "scripts/apply-data-to-mengkai.mjs"), "utf8");
   assert.doesNotMatch(source, /systemctl\s+restart/);
