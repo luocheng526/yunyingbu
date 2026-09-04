@@ -100,6 +100,25 @@ test("apply script never restarts production", () => {
   assert.doesNotMatch(source, /docker compose/);
 });
 
+test("ssh apply script refuses without a key and never restarts", async () => {
+  const source = fs.readFileSync(path.join(repoRoot, "scripts/ssh-apply-data-to-mengkai.mjs"), "utf8");
+  assert.doesNotMatch(source, /systemctl\s+restart/);
+  assert.doesNotMatch(source, /docker compose/);
+  const child = spawn(process.execPath, [path.join(repoRoot, "scripts/ssh-apply-data-to-mengkai.mjs")], {
+    env: { ...process.env, ALIYUN_SSH_PRIVATE_KEY: "" }
+  });
+  const [code, stderr] = await Promise.all([
+    new Promise((resolve) => child.on("close", resolve)),
+    new Promise((resolve) => {
+      const chunks = [];
+      child.stderr.on("data", (c) => chunks.push(c));
+      child.stderr.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    })
+  ]);
+  assert.equal(code, 2);
+  assert.match(stderr, /ALIYUN_SSH_PRIVATE_KEY/);
+});
+
 test("apply script stages overlay onto a mengkai tree without touching other modules", async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "mengkai-data-"));
   const notes = `import express from "express";
