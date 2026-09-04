@@ -1,0 +1,17 @@
+{
+  "name": "mengkai-data-center",
+  "version": "0.1.0",
+  "private": true,
+  "description": "运营部数据中心看板（独立 Agent）",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
