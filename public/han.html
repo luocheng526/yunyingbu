@@ -6,29 +6,80 @@
     <title>韩梦凯运营中心</title>
     <link rel="stylesheet" href="/shared/layout.css" />
     <style>
-      .fallback-nav {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.35rem 0.15rem;
-        max-width: 1100px;
-        margin: 0 auto;
-        padding: 0.85rem 1.25rem;
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
       }
-      .fallback-nav a {
+      .app-shell {
+        display: flex;
+        align-items: stretch;
+        min-height: 100vh;
+      }
+      .site-sidebar {
+        width: 220px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        padding: 1.1rem 0.85rem;
+        background: #fffcf7;
+        border-right: 1px solid #e7e5e4;
+      }
+      .site-sidebar .site-brand {
+        font-weight: 700;
+        color: #134e4a;
+        text-decoration: none;
+        padding: 0.35rem 0.7rem 0.85rem;
+      }
+      .site-sidebar .site-nav {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+      }
+      .site-sidebar .site-nav a {
         color: #57534e;
         text-decoration: none;
-        padding: 0.4rem 0.7rem;
-        border-radius: 999px;
+        padding: 0.45rem 0.7rem;
+        border-radius: 10px;
         font-size: 0.92rem;
       }
-      .fallback-nav a[aria-current="page"] {
+      .site-sidebar .site-nav a:hover,
+      .site-sidebar .site-nav a[aria-current="page"] {
         color: #134e4a;
         background: #ccfbf1;
       }
+      /* 若共享 nav.js 仍注入 header，保持左栏而不是顶部横排 */
+      .app-shell > .site-header {
+        position: sticky;
+        top: 0;
+        width: 220px;
+        flex-shrink: 0;
+        align-self: stretch;
+        border-right: 1px solid var(--line, #e7e5e4);
+        border-bottom: 0;
+        background: var(--card, #fffcf7);
+      }
+      .app-shell > .site-header .site-header__inner {
+        max-width: none;
+        margin: 0;
+        padding: 1.1rem 0.85rem;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5rem;
+      }
+      .app-shell > .site-header .site-nav {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+      }
       .page {
-        max-width: 1100px;
-        margin: 0 auto;
-        padding: 2.25rem 1.25rem 3.5rem;
+        flex: 1;
+        min-width: 0;
+        max-width: none;
+        margin: 0;
+        padding: 2.25rem 1.5rem 3.5rem;
       }
       .kicker {
         margin: 0 0 0.4rem;
@@ -123,55 +174,62 @@
     </style>
   </head>
   <body>
-    <div id="site-nav" class="fallback-nav">
-      <a href="/">首页</a>
-      <a href="/data">数据中心</a>
-      <a href="/shen">沈子晗运营中心</a>
-      <a href="/han" aria-current="page">韩梦凯运营中心</a>
-      <a href="/people">人员管理</a>
-      <a href="/releases">版本发布中心</a>
-      <a href="/me">个人中心</a>
-    </div>
-    <main class="page">
-      <p class="kicker">运营部 · 韩梦凯业务线</p>
-      <h1>韩梦凯运营中心</h1>
-      <p class="lead">
-        韩梦凯团队的任务与日报台。数据存在本进程独立内存中，与沈子晗中心隔离；默认负责人为「韩梦凯」。
-      </p>
-      <div class="stack">
-        <section class="panel">
-          <h2>新增任务</h2>
-          <form id="task-form">
-            <label for="title">标题（必填）</label>
-            <input id="title" name="title" required placeholder="任务标题" />
-            <button type="submit">添加</button>
-            <p class="msg" id="task-msg"></p>
-          </form>
-        </section>
-        <section class="panel">
-          <h2>任务列表</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>标题</th>
-                <th>状态</th>
-                <th>负责人</th>
-              </tr>
-            </thead>
-            <tbody id="task-body"></tbody>
-          </table>
-        </section>
-        <section class="panel">
-          <h2>今日简报</h2>
-          <form id="brief-form">
-            <label for="brief">简报</label>
-            <textarea id="brief" name="text" placeholder="今日进展…"></textarea>
-            <button type="submit">保存简报</button>
-            <p class="msg" id="brief-msg"></p>
-          </form>
-        </section>
+    <div class="app-shell">
+      <div id="site-nav">
+        <aside class="site-sidebar" aria-label="全站导航">
+          <a class="site-brand" href="/">运营部</a>
+          <nav class="site-nav">
+            <a href="/">首页</a>
+            <a href="/data">数据中心</a>
+            <a href="/shen">沈子晗运营中心</a>
+            <a href="/han" aria-current="page">韩梦凯运营中心</a>
+            <a href="/people">人员管理</a>
+            <a href="/releases">版本发布中心</a>
+            <a href="/me">个人中心</a>
+          </nav>
+        </aside>
       </div>
-    </main>
+      <main class="page">
+        <p class="kicker">运营部 · 韩梦凯业务线</p>
+        <h1>韩梦凯运营中心</h1>
+        <p class="lead">
+          韩梦凯团队的任务与日报台。数据存在本进程独立内存中，与沈子晗中心隔离；默认负责人为「韩梦凯」。
+        </p>
+        <div class="stack">
+          <section class="panel">
+            <h2>新增任务</h2>
+            <form id="task-form">
+              <label for="title">标题（必填）</label>
+              <input id="title" name="title" required placeholder="任务标题" />
+              <button type="submit">添加</button>
+              <p class="msg" id="task-msg"></p>
+            </form>
+          </section>
+          <section class="panel">
+            <h2>任务列表</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>标题</th>
+                  <th>状态</th>
+                  <th>负责人</th>
+                </tr>
+              </thead>
+              <tbody id="task-body"></tbody>
+            </table>
+          </section>
+          <section class="panel">
+            <h2>今日简报</h2>
+            <form id="brief-form">
+              <label for="brief">简报</label>
+              <textarea id="brief" name="text" placeholder="今日进展…"></textarea>
+              <button type="submit">保存简报</button>
+              <p class="msg" id="brief-msg"></p>
+            </form>
+          </section>
+        </div>
+      </main>
+    </div>
     <script src="/shared/nav.js"></script>
     <script>
       const taskBody = document.getElementById("task-body");

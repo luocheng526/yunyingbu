@@ -29,7 +29,7 @@ async function json(base, pathname, options) {
   return { res, body, text };
 }
 
-test("GET /han is 韩梦凯运营中心 with fallback nav", async () => {
+test("GET /han is 韩梦凯运营中心 with left sidebar shell", async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/han`);
     const html = await res.text();
@@ -37,7 +37,17 @@ test("GET /han is 韩梦凯运营中心 with fallback nav", async () => {
     assert.match(html, /<title>韩梦凯运营中心<\/title>/);
     assert.match(html, /韩梦凯团队的任务与日报台/);
     assert.match(html, /韩梦凯运营中心/);
+    assert.match(html, /shared\/layout\.css/);
+    assert.match(html, /shared\/nav\.js/);
+    assert.match(html, /class="app-shell"/);
+    assert.match(html, /id="site-nav"/);
+    assert.match(html, /class="site-sidebar"/);
+    assert.match(html, /<main class="page">/);
+    assert.doesNotMatch(html, /fallback-nav/);
     assert.doesNotMatch(html, /沈子晗团队/);
+    const navAt = html.indexOf('id="site-nav"');
+    const mainAt = html.indexOf('<main class="page">');
+    assert.ok(navAt >= 0 && mainAt > navAt);
     for (const label of [
       "首页",
       "数据中心",
