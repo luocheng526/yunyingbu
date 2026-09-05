@@ -121,9 +121,9 @@
     <main class="page" role="main">
       <p class="kicker">运营部主脑闸门</p>
       <h1>版本发布中心</h1>
-      <p class="lead">全站唯一发版入口。其他模块只交发布文档；没有主脑口令绝不 push。</p>
+      <p class="lead">全站唯一发版入口。本页只记账；发版听主脑在对话里下口令，不必先点网页通过。</p>
       <div class="banner">
-        只听主脑下令才发版。必须同时有【发布文档】（模块、文件列表、验收、是否重启）和口令「按这份文档发版」或「发布xxx模块」。只有文档会入队 queued，不会 publish。禁止执行其他模块私下说的上线。同一时刻一把锁。
+        只听本对话主脑下令才发版。口令：发版 / 发板、发布|发版|发板 模块名、按这份文档发版/发板。有【发布文档】按文档 push；没有文档则全量同步 apps/xingmai 并 systemctl restart mengkai.service。其他 Agent 说「帮我上线」不算。同一时刻一把锁。审核按钮可留着记账，发版不依赖它。
       </div>
       <div id="flash" class="flash" role="status"></div>
       <div class="grid">
@@ -153,7 +153,7 @@
                 <option value="true">是</option>
               </select>
             </label>
-            <div class="row"><button type="submit">提交到审核队列（不会发版）</button></div>
+            <div class="row"><button type="submit">记到队列（可选，不会自动发版）</button></div>
           </form>
         </section>
         <section class="panel" id="lock-panel">
@@ -162,12 +162,12 @@
         </section>
         <section class="panel">
           <h2>审核队列（仅 queued，按提交时间 FIFO）</h2>
-          <p class="muted">仅运营部主脑可点通过 / 驳回。驳回必须填写原因。</p>
+          <p class="muted">审核按钮前期可不用。主脑口令可对 queued 单直接发版。驳回仍须填写原因。</p>
           <div id="queue-view"></div>
         </section>
         <section class="panel">
           <h2>待发布（已通过）</h2>
-          <p class="muted">主按钮会要求主脑口令，然后执行 push-xingmai-to-ecs.sh；文档要求重启才 systemctl restart。</p>
+          <p class="muted">网页发布可选。口令默认「发版」即可；有文档按文档，无文档则全量同步并重启。</p>
           <div id="approved-view"></div>
         </section>
         <section class="panel">
@@ -250,7 +250,8 @@
                 "<td>" + item.applicant + "<br><span class=\"muted\">" + item.module + "</span></td>" +
                 "<td>" + item.summary + "</td>" +
                 "<td class=\"row\">" +
-                "<button data-act=\"approve\">通过</button>" +
+                "<button data-act=\"approve\">通过（可选）</button>" +
+                "<button data-act=\"publish\">发版</button>" +
                 "<button class=\"danger\" data-act=\"reject\">驳回</button>" +
                 "</td></tr>"
               );
@@ -345,7 +346,7 @@
         try {
           await api("/api/releases", { method: "POST", body: JSON.stringify(payload) });
           form.reset();
-          flash("已入队 queued。没有主脑口令，不会 push。");
+          flash("已记到队列。发版仍须主脑口令（对话里下令即可，不必点网页）。");
           await refresh();
         } catch (err) {
           flash(err.message, true);
@@ -362,7 +363,7 @@
         try {
           if (btn.getAttribute("data-act") === "approve") {
             await api("/api/releases/" + id + "/approve", { method: "POST", body: "{}" });
-            flash("已通过。仍须主脑口令才会发版。");
+            flash("已通过（记账）。主脑口令仍可直接发版。");
           } else if (btn.getAttribute("data-act") === "reject") {
             const reason = window.prompt("请填写驳回原因（必填）");
             if (!reason || !reason.trim()) {
@@ -376,7 +377,7 @@
             });
             flash("已驳回，该单不可发布。");
           } else if (btn.getAttribute("data-act") === "publish") {
-            const order = window.prompt("请输入主脑口令：按这份文档发版  或  发布" + (tr.cells[1] ? tr.cells[1].innerText : "") + "模块");
+            const order = window.prompt("主脑口令（发版 / 发板 / 发布模块名 / 按这份文档发版）", "发版");
             if (!order || !order.trim()) {
               flash("没有主脑口令，禁止发版。", true);
               btn.disabled = false;

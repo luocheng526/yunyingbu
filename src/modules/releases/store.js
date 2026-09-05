@@ -133,7 +133,7 @@ export function createStore({ now } = {}) {
         rejectReason: null,
         publishStartedAt: null,
         publishFinishedAt: null,
-        log: "已进入审核队列（queued）。没有主脑口令，不会 push、不会重启。"
+        log: "已记到队列。主脑口令（发版/发板）即可发布，不必先点网页通过。"
       };
       items.push(item);
       return item;
@@ -149,7 +149,7 @@ export function createStore({ now } = {}) {
       item.status = "approved";
       item.reviewer = REVIEWER;
       item.reviewedAt = timestamp();
-      item.log = "审核通过。仍须主脑口令（按这份文档发版 / 发布该模块）才会 push。";
+      item.log = "审核通过（记账）。主脑口令即可发版。";
       return { item };
     },
     reject(id, reason) {
