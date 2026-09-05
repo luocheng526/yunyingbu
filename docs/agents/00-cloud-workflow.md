@@ -30,4 +30,6 @@ Cloud Agent 默认没有 ECS 私钥。请在 Cursor 环境 Secrets 增加：
 
 ## 安全组
 
-站点外网要通：入方向 **TCP 80**（以及已放行的 22、18080）。
+站点外网要通：入方向 **TCP 80** 和 **TCP 443**（以及已放行的 22、18080）。
+
+证书已在 ECS 上配好（`zx.xingmaierp.cc` Let’s Encrypt）。若浏览器自动跳到 `https://` 而安全组没放行 443，页面会转圈打不开；此时先用 `http://zx.xingmaierp.cc/login`，或在控制台给安全组加上 **TCP 443 / 0.0.0.0/0**（和放行 80 同一处）。
