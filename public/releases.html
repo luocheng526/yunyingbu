@@ -6,6 +6,11 @@
     <title>版本发布中心 · 运营部</title>
     <link rel="stylesheet" href="/shared/layout.css" />
     <style>
+      /* 左栏由全站壳绘制。本页不画顶部横排导航，只排右侧业务。 */
+      main.page {
+        flex: 1;
+        min-width: 0;
+      }
       .banner {
         background: #fff1f2;
         border: 1px solid #fecdd3;
@@ -113,7 +118,7 @@
   </head>
   <body>
     <div id="site-nav"></div>
-    <main class="page">
+    <main class="page" role="main">
       <p class="kicker">运营部主脑闸门</p>
       <h1>版本发布中心</h1>
       <p class="lead">全站唯一发版入口。其他模块只交发布文档；没有主脑口令绝不 push。</p>

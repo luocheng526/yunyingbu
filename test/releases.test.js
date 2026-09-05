@@ -95,6 +95,10 @@ test("GET /releases is the release center page", async () => {
     assert.equal(res.status, 200);
     assert.match(text, /版本发布中心/);
     assert.match(text, /只听主脑下令才发版/);
+    assert.match(text, /href="\/shared\/layout.css"/);
+    assert.match(text, /src="\/shared\/nav.js"/);
+    assert.match(text, /<main class="page"/);
+    assert.doesNotMatch(text, /<nav class="site-nav"/);
     assert.match(text, /push-xingmai-to-ecs/);
     assert.match(text, /window\.location\.replace\("\/login"\)/);
     assert.doesNotMatch(text, /id="login-form"/);
@@ -106,7 +110,9 @@ test("releases.html has no login form and sends users to /login", () => {
   const html = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../public/releases.html"), "utf8");
   assert.doesNotMatch(html, /id="login-form"/);
   assert.doesNotMatch(html, /<input[^>]*type="password"/);
-  assert.match(html, /\/login/);
+  assert.match(html, /\/shared\/layout.css/);
+  assert.match(html, /\/shared\/nav.js/);
+  assert.doesNotMatch(html, /<nav class="site-nav"/);
 });
 
 test("unauthenticated page redirects to /login", async () => {
