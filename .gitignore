@@ -1,0 +1,23 @@
+# 本地与服务器敏感配置
+deploy/aliyun/.env
+deploy/aliyun/.env.production
+.env
+.env.local
+.env.*.local
+
+# SSH 私钥
+*.pem
+id_rsa
+id_ed25519
+
+# 依赖与构建产物
+node_modules/
+dist/
+build/
+.venv/
+__pycache__/
+
+# 编辑器
+.idea/
+.vscode/
+*.swp
