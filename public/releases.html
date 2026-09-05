@@ -25,11 +25,11 @@
         gap: 1.25rem;
       }
       .panel {
-        background: var(--card);
-        border: 1px solid var(--line);
+        background: var(--xm-card, var(--card, #fff));
+        border: 1px solid var(--xm-line, var(--line, #e7e5e4));
         border-radius: 16px;
         padding: 1.15rem 1.2rem 1.3rem;
-        box-shadow: var(--shadow);
+        box-shadow: var(--xm-shadow, var(--shadow, none));
       }
       .panel h2 {
         margin: 0 0 0.85rem;
@@ -47,7 +47,7 @@
         border-radius: 999px;
         padding: 0.45rem 0.95rem;
         cursor: pointer;
-        background: var(--accent);
+        background: var(--xm-primary, #1677ff);
         color: #fff;
       }
       button.secondary { background: #44403c; }
@@ -67,13 +67,13 @@
         border-bottom: 1px solid var(--line);
         vertical-align: top;
       }
-      .muted { color: var(--muted); font-size: 0.88rem; }
+      .muted { color: var(--xm-muted, var(--muted, #8c8c8c)); font-size: 0.88rem; }
       .badge {
         display: inline-block;
         padding: 0.1rem 0.5rem;
         border-radius: 999px;
         background: #ccfbf1;
-        color: var(--accent-ink);
+        color: var(--accent-ink, #0f766e);
         font-size: 0.75rem;
         margin-left: 0.35rem;
       }
@@ -99,7 +99,7 @@
         gap: 1rem;
       }
       .ticket {
-        border: 1px solid var(--line);
+        border: 1px solid var(--xm-line, var(--line, #e7e5e4));
         border-radius: 14px;
         padding: 1rem 1.1rem 1.05rem;
         background: #fff;
@@ -118,7 +118,7 @@
         margin: 0 0 0.85rem;
         font-size: 0.92rem;
       }
-      .ticket dt { color: var(--muted); }
+      .ticket dt { color: var(--xm-muted, var(--muted, #8c8c8c)); }
       .ticket dd { margin: 0; }
       .files { margin: 0; padding-left: 1.1rem; }
     </style>
