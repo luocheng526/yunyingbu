@@ -6,6 +6,10 @@
     <title>版本发布中心 · 运营部</title>
     <link rel="stylesheet" href="/shared/layout.css" />
     <style>
+      main.page {
+        flex: 1;
+        min-width: 0;
+      }
       .banner {
         background: #fff1f2;
         border: 1px solid #fecdd3;
@@ -16,10 +20,7 @@
         font-weight: 600;
         margin: 0 0 1.5rem;
       }
-      .grid {
-        display: grid;
-        gap: 1.25rem;
-      }
+      .grid { display: grid; gap: 1.25rem; }
       .panel {
         background: var(--card);
         border: 1px solid var(--line);
@@ -27,29 +28,7 @@
         padding: 1.15rem 1.2rem 1.3rem;
         box-shadow: var(--shadow);
       }
-      .panel h2 {
-        margin: 0 0 0.85rem;
-        font-size: 1.15rem;
-      }
-      form {
-        display: grid;
-        gap: 0.7rem;
-      }
-      label {
-        display: grid;
-        gap: 0.3rem;
-        font-size: 0.9rem;
-        color: var(--muted);
-      }
-      input, select, textarea {
-        font: inherit;
-        padding: 0.55rem 0.7rem;
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        background: #fff;
-        color: var(--ink);
-      }
-      textarea { min-height: 4.5rem; resize: vertical; }
+      .panel h2 { margin: 0 0 0.45rem; font-size: 1.15rem; }
       .row {
         display: flex;
         flex-wrap: wrap;
@@ -67,15 +46,8 @@
       }
       button.secondary { background: #44403c; }
       button.danger { background: #be123c; }
-      button:disabled {
-        cursor: not-allowed;
-        opacity: 0.55;
-      }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.92rem;
-      }
+      button:disabled { cursor: not-allowed; opacity: 0.55; }
+      table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
       th, td {
         text-align: left;
         padding: 0.55rem 0.4rem;
@@ -109,56 +81,58 @@
       }
       .flash.show { display: block; }
       .flash.err { background: #ffe4e6; color: #9f1239; }
+      .ticket {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 1rem 1.05rem;
+        margin: 0 0 0.85rem;
+        background: #fff;
+      }
+      .ticket__head {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem 1rem;
+        align-items: baseline;
+        margin-bottom: 0.55rem;
+      }
+      .ticket__rank {
+        font-weight: 700;
+        color: var(--accent-ink);
+      }
+      .ticket dl {
+        margin: 0;
+        display: grid;
+        gap: 0.35rem 1rem;
+        grid-template-columns: 6.5rem 1fr;
+        font-size: 0.92rem;
+      }
+      .ticket dt { color: var(--muted); }
+      .ticket dd { margin: 0; }
+      .ticket ul { margin: 0; padding-left: 1.1rem; }
     </style>
   </head>
   <body>
     <div id="site-nav"></div>
-    <main class="page">
+    <main class="page" role="main">
       <p class="kicker">运营部主脑闸门</p>
       <h1>版本发布中心</h1>
-      <p class="lead">全站唯一允许真正发布的入口。其他 Agent 只能提交申请，不能自行重启服务。</p>
+      <p class="lead">各模块对话提交发版后，在这里排队。看清更新了什么，调整优先级，点「确定」才放行。本页不再用手填申请表。</p>
       <div class="banner">
-        未审核通过禁止上线。禁止多 Agent 同时重启服务。同一时刻只允许 1 个发布任务；锁占用时禁止抢发。队列下一条不会自动发布。
+        单据来自各 Agent 对话（POST 发布文档）。点确定才会真正发版。同一时刻一把锁，下一条不会自动放行。可用上移 / 下移改排队顺序。
       </div>
       <div id="flash" class="flash" role="status"></div>
       <div class="grid">
-        <section class="panel">
-          <h2>提交发布申请</h2>
-          <form id="apply-form">
-            <label>版本号<input name="version" required placeholder="例如 1.2.0" /></label>
-            <label>申请人<input name="applicant" required placeholder="Agent 或姓名" /></label>
-            <label>模块
-              <select name="module" required>
-                <option value="首页">首页</option>
-                <option value="数据中心">数据中心</option>
-                <option value="沈子晗">沈子晗</option>
-                <option value="韩梦凯">韩梦凯</option>
-                <option value="人员管理">人员管理</option>
-                <option value="版本发布中心">版本发布中心</option>
-                <option value="个人中心">个人中心</option>
-                <option value="其他">其他</option>
-              </select>
-            </label>
-            <label>变更摘要<textarea name="summary" required placeholder="这次要上线什么"></textarea></label>
-            <div class="row"><button type="submit">提交到审核队列</button></div>
-          </form>
-        </section>
         <section class="panel" id="lock-panel">
           <h2>发布中（全局锁）</h2>
           <div id="lock-view" class="lock-box empty">当前空闲，没有发布任务。</div>
         </section>
         <section class="panel">
-          <h2>审核队列（仅 queued，按提交时间 FIFO）</h2>
-          <p class="muted">仅运营部主脑可点通过 / 驳回。驳回必须填写原因。</p>
+          <h2>待放行队列</h2>
+          <p class="muted">按优先级排列。数字越小越先发。来自各对话框的提交会显示在这里。</p>
           <div id="queue-view"></div>
         </section>
         <section class="panel">
-          <h2>待发布（已通过）</h2>
-          <p class="muted">主按钮「发布」才会执行 systemctl restart mengkai.service。未通过的单没有这个按钮。</p>
-          <div id="approved-view"></div>
-        </section>
-        <section class="panel">
-          <h2>历史（success / failed / rejected）</h2>
+          <h2>历史</h2>
           <div id="history-view"></div>
         </section>
       </div>
@@ -170,11 +144,14 @@
         flashEl.textContent = message;
         flashEl.className = "flash show" + (isError ? " err" : "");
       }
-
-      function goLogin() {
-        window.location.replace("/login");
+      function goLogin() { window.location.replace("/login"); }
+      function esc(value) {
+        return String(value ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
       }
-
       async function api(path, options) {
         const res = await fetch(path, {
           credentials: "same-origin",
@@ -196,15 +173,12 @@
         }
         return data;
       }
-
       function fmt(ts) {
         return ts ? String(ts).replace("T", " ").replace("Z", " UTC") : "—";
       }
-
       function demoBadge(item) {
         return item.demo ? '<span class="badge">演示</span>' : "";
       }
-
       function renderLock(lock) {
         const el = document.getElementById("lock-view");
         if (!lock.locked) {
@@ -215,62 +189,48 @@
         el.className = "lock-box";
         const cur = lock.current || {};
         el.innerHTML =
-          "<div>锁已被占用，禁止第二下发布。</div>" +
-          "<div>版本号：" + (cur.version || "—") + "</div>" +
-          "<div>开始时间：" + fmt(cur.startedAt) + "</div>";
+          "<div>正在放行，禁止抢发。</div>" +
+          "<div>版本号：" + esc(cur.version || "—") + "</div>" +
+          "<div>开始时间：" + esc(fmt(cur.startedAt)) + "</div>";
       }
-
-      function renderQueue(items) {
+      function renderQueue(items, locked) {
         const el = document.getElementById("queue-view");
         if (!items.length) {
-          el.innerHTML = '<p class="muted">队列为空。</p>';
+          el.innerHTML = '<p class="muted">还没有对话提交发版。各模块做完后把【发布文档】交给版本发布中心，就会出现在这里。</p>';
           return;
         }
-        el.innerHTML =
-          "<table><thead><tr><th>时间</th><th>版本</th><th>申请人 / 模块</th><th>摘要</th><th>操作</th></tr></thead><tbody>" +
-          items
-            .map(function (item) {
-              return (
-                "<tr data-id=\"" + item.id + "\">" +
-                "<td>" + fmt(item.submittedAt) + "</td>" +
-                "<td>" + item.version + demoBadge(item) + "</td>" +
-                "<td>" + item.applicant + "<br><span class=\"muted\">" + item.module + "</span></td>" +
-                "<td>" + item.summary + "</td>" +
-                "<td class=\"row\">" +
-                "<button data-act=\"approve\">通过</button>" +
-                "<button class=\"danger\" data-act=\"reject\">驳回</button>" +
-                "</td></tr>"
-              );
-            })
-            .join("") +
-          "</tbody></table>";
+        el.innerHTML = items.map(function (item, index) {
+          const files = (item.files || []).map(function (file) {
+            return "<li>" + esc(file) + "</li>";
+          }).join("") || "<li class=\"muted\">未列文件（可能整包同步）</li>";
+          const confirmBtn = locked
+            ? "<button disabled>有发布正在进行</button>"
+            : "<button data-act=\"confirm\">确定放行</button>";
+          return (
+            '<article class="ticket" data-id="' + esc(item.id) + '">' +
+            '<div class="ticket__head">' +
+            '<span class="ticket__rank">排队 #' + (index + 1) + '</span>' +
+            "<strong>" + esc(item.module) + "</strong>" +
+            "<span class=\"muted\">" + esc(item.version) + "</span>" +
+            demoBadge(item) +
+            "</div>" +
+            "<dl>" +
+            "<dt>来自对话</dt><dd>" + esc(item.source || item.applicant) + "</dd>" +
+            "<dt>更新了什么</dt><dd>" + esc(item.summary) + "</dd>" +
+            "<dt>文件</dt><dd><ul>" + files + "</ul></dd>" +
+            "<dt>怎么验收</dt><dd>" + esc(item.acceptance || "—") + "</dd>" +
+            "<dt>是否重启</dt><dd>" + (item.restart ? "是" : "否") + "</dd>" +
+            "<dt>提交时间</dt><dd>" + esc(fmt(item.submittedAt)) + "</dd>" +
+            "</dl>" +
+            '<div class="row" style="margin-top:0.8rem">' +
+            '<button class="secondary" data-act="up"' + (index === 0 ? " disabled" : "") + ">上移优先</button>" +
+            '<button class="secondary" data-act="down"' + (index === items.length - 1 ? " disabled" : "") + ">下移</button>" +
+            confirmBtn +
+            '<button class="danger" data-act="reject">驳回</button>' +
+            "</div></article>"
+          );
+        }).join("");
       }
-
-      function renderApproved(items, locked) {
-        const el = document.getElementById("approved-view");
-        if (!items.length) {
-          el.innerHTML = '<p class="muted">没有已通过、等待发布的单据。</p>';
-          return;
-        }
-        el.innerHTML =
-          "<table><thead><tr><th>版本</th><th>模块</th><th>审核</th><th>发布</th></tr></thead><tbody>" +
-          items
-            .map(function (item) {
-              const btn = locked
-                ? "<button disabled>有发布正在进行，请等待</button>"
-                : "<button data-act=\"publish\">发布</button>";
-              return (
-                "<tr data-id=\"" + item.id + "\">" +
-                "<td>" + item.version + demoBadge(item) + "</td>" +
-                "<td>" + item.module + "</td>" +
-                "<td>" + (item.reviewer || "—") + "<br><span class=\"muted\">" + fmt(item.reviewedAt) + "</span></td>" +
-                "<td>" + btn + "</td></tr>"
-              );
-            })
-            .join("") +
-          "</tbody></table>";
-      }
-
       function renderHistory(items) {
         const el = document.getElementById("history-view");
         if (!items.length) {
@@ -278,76 +238,55 @@
           return;
         }
         el.innerHTML =
-          "<table><thead><tr><th>状态</th><th>版本</th><th>审核人 / 时间</th><th>发布时间</th><th>日志</th></tr></thead><tbody>" +
-          items
-            .map(function (item) {
-              return (
-                "<tr>" +
-                "<td>" + item.status + "</td>" +
-                "<td>" + item.version + demoBadge(item) + "</td>" +
-                "<td>" + (item.reviewer || "—") + "<br><span class=\"muted\">" + fmt(item.reviewedAt) + "</span>" +
-                (item.rejectReason ? "<br>原因：" + item.rejectReason : "") +
-                "</td>" +
-                "<td>" + fmt(item.publishStartedAt) + "<br><span class=\"muted\">" + fmt(item.publishFinishedAt) + "</span></td>" +
-                "<td>" + (item.log || "—") + "</td></tr>"
-              );
-            })
-            .join("") +
+          "<table><thead><tr><th>状态</th><th>来自 / 模块</th><th>更新摘要</th><th>日志</th></tr></thead><tbody>" +
+          items.map(function (item) {
+            return (
+              "<tr>" +
+              "<td>" + esc(item.status) + "</td>" +
+              "<td>" + esc(item.source || item.applicant) + "<br><span class=\"muted\">" + esc(item.module) + " · " + esc(item.version) + "</span></td>" +
+              "<td>" + esc(item.summary) +
+              (item.rejectReason ? "<br><span class=\"muted\">驳回：" + esc(item.rejectReason) + "</span>" : "") +
+              "</td>" +
+              "<td>" + esc(item.log || "—") + "</td></tr>"
+            );
+          }).join("") +
           "</tbody></table>";
       }
-
       async function refresh() {
         const [all, queue, lock] = await Promise.all([
           api("/api/releases"),
           api("/api/releases/queue"),
           api("/api/releases/lock")
         ]);
-        const items = all.items || [];
         renderLock(lock);
-        renderQueue(queue.items || []);
-        renderApproved(
-          items.filter(function (item) { return item.status === "approved"; }),
-          lock.locked
-        );
+        renderQueue(queue.items || [], lock.locked);
         renderHistory(
-          items.filter(function (item) {
-            return item.status === "success" || item.status === "failed" || item.status === "rejected";
+          (all.items || []).filter(function (item) {
+            return item.status === "success" || item.status === "failed" || item.status === "rejected" || item.status === "approved" || item.status === "publishing";
           })
         );
         return lock;
       }
-
-      document.getElementById("apply-form").addEventListener("submit", async function (event) {
-        event.preventDefault();
-        const form = event.target;
-        const payload = {
-          version: form.version.value,
-          applicant: form.applicant.value,
-          module: form.module.value,
-          summary: form.summary.value
-        };
-        try {
-          await api("/api/releases", { method: "POST", body: JSON.stringify(payload) });
-          form.reset();
-          flash("已提交，进入审核队列（queued）。未通过禁止发布。");
-          await refresh();
-        } catch (err) {
-          flash(err.message, true);
-        }
-      });
-
       document.body.addEventListener("click", async function (event) {
         const btn = event.target.closest("button[data-act]");
         if (!btn) return;
-        const tr = btn.closest("tr");
-        const id = tr && tr.getAttribute("data-id");
+        const card = btn.closest("[data-id]");
+        const id = card && card.getAttribute("data-id");
         if (!id) return;
+        const act = btn.getAttribute("data-act");
         btn.disabled = true;
         try {
-          if (btn.getAttribute("data-act") === "approve") {
-            await api("/api/releases/" + id + "/approve", { method: "POST", body: "{}" });
-            flash("已通过，进入待发布。需主脑再点「发布」。");
-          } else if (btn.getAttribute("data-act") === "reject") {
+          if (act === "up" || act === "down") {
+            await api("/api/releases/" + id + "/move", {
+              method: "POST",
+              body: JSON.stringify({ direction: act })
+            });
+            flash(act === "up" ? "已提高优先级。" : "已降低优先级。");
+          } else if (act === "confirm") {
+            flash("正在确定放行，请勿重复点击。");
+            const done = await api("/api/releases/" + id + "/confirm", { method: "POST", body: "{}" });
+            flash("已放行：版本 " + (done.version || "") + "。下一条不会自动发布。");
+          } else if (act === "reject") {
             const reason = window.prompt("请填写驳回原因（必填）");
             if (!reason || !reason.trim()) {
               flash("驳回已取消：必须填写原因。", true);
@@ -359,10 +298,6 @@
               body: JSON.stringify({ reason: reason.trim() })
             });
             flash("已驳回，该单不可发布。");
-          } else if (btn.getAttribute("data-act") === "publish") {
-            flash("正在抢锁并发布，请勿重复点击。");
-            await api("/api/releases/" + id + "/publish", { method: "POST", body: "{}" });
-            flash("发布完成。下一条不会自动发布。");
           }
           await refresh();
         } catch (err) {
@@ -370,11 +305,8 @@
           await refresh();
         }
       });
-
       refresh().catch(function (err) { flash(err.message, true); });
-      setInterval(function () {
-        refresh().catch(function () {});
-      }, 2000);
+      setInterval(function () { refresh().catch(function () {}); }, 2000);
     </script>
   </body>
 </html>
