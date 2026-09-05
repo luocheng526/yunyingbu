@@ -62,11 +62,12 @@ test("GET /data is the data center page with title, cards, table, and left-shell
     assert.match(text, /\/api\/data\/overview/);
     assert.match(text, /shared\/layout\.css/);
     assert.match(text, /shared\/nav\.js/);
-    assert.match(text, /class="app-shell"/);
     assert.match(text, /id="site-nav"/);
-    assert.match(text, /<main class="page">/);
+    assert.match(text, /<main class="xm-page">/);
+    assert.match(text, /class="kpi-grid"/);
     assert.doesNotMatch(text, /class="site-header"/);
     assert.doesNotMatch(text, /aria-label="全站导航"/);
+    assert.doesNotMatch(text, /class="app-shell"/);
   });
 });
 

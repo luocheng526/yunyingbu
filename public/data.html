@@ -3,158 +3,69 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>数据中心 · 运营部</title>
+    <title>数据中心 · 星脉管理系统</title>
     <link rel="stylesheet" href="/shared/layout.css" />
     <style>
-      /* 看板样式；全站左栏由 /shared/nav.js 注入 #site-nav，本页不实现导航 */
-      :root {
-        --bg: #f3f1ec;
-        --ink: #1c1917;
-        --muted: #57534e;
-        --line: #e7e5e4;
-        --card: #fffcf7;
-        --accent: #0f766e;
-        --accent-ink: #134e4a;
-        --shadow: 0 10px 30px rgba(28, 25, 23, 0.08);
-        font-family: "PingFang SC", "Noto Sans SC", "Source Han Sans SC", sans-serif;
-      }
-      * { box-sizing: border-box; }
-      html, body {
-        margin: 0;
-        min-height: 100%;
-        background: var(--bg);
-        color: var(--ink);
-      }
-      .app-shell {
-        display: flex;
-        align-items: stretch;
-        min-height: 100vh;
-      }
-      #site-nav {
-        flex: 0 0 auto;
-      }
-      .page {
-        flex: 1 1 auto;
-        min-width: 0;
-        max-width: 1100px;
-        margin: 0 auto;
-        padding: 2.25rem 1.25rem 3.5rem;
-      }
-      .kicker {
-        margin: 0 0 0.4rem;
-        color: var(--accent);
-        font-size: 0.85rem;
-        letter-spacing: 0.08em;
-      }
-      h1 { margin: 0 0 0.75rem; font-size: 2rem; }
-      .lead {
-        margin: 0 0 1.75rem;
-        color: var(--muted);
-        max-width: 42rem;
-        line-height: 1.7;
-      }
-      .metric-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 1rem;
-        margin-bottom: 2rem;
-      }
-      .metric-card {
-        background: var(--card);
-        border: 1px solid var(--line);
-        border-radius: 16px;
-        padding: 1.15rem 1.2rem 1.25rem;
-        box-shadow: var(--shadow);
-      }
-      .metric-card .label { color: var(--muted); font-size: 0.92rem; }
-      .metric-card .value {
-        margin: 0.45rem 0 0.35rem;
-        font-size: 2rem;
-        font-weight: 700;
-        letter-spacing: -0.03em;
-      }
-      .badge {
-        display: inline-block;
-        font-size: 0.75rem;
-        color: var(--accent-ink);
-        background: #ccfbf1;
-        border-radius: 999px;
-        padding: 0.15rem 0.55rem;
-      }
-      .panel {
-        background: var(--card);
-        border: 1px solid var(--line);
-        border-radius: 16px;
-        box-shadow: var(--shadow);
-        overflow: hidden;
-      }
-      .panel h2 {
-        margin: 0;
-        padding: 1rem 1.2rem;
-        font-size: 1.05rem;
-        border-bottom: 1px solid var(--line);
-      }
+      /* 仅看板内容；左栏与顶栏由 /shared/nav.js 注入 */
       table {
         width: 100%;
         border-collapse: collapse;
       }
       th, td {
         text-align: left;
-        padding: 0.75rem 1.2rem;
-        border-bottom: 1px solid var(--line);
+        padding: 0.75rem 0.2rem;
+        border-bottom: 1px solid #f5f5f5;
         font-size: 0.95rem;
       }
-      th { color: var(--muted); font-weight: 600; }
+      th { color: var(--xm-muted, #8c8c8c); font-weight: 600; }
       tr:last-child td { border-bottom: none; }
-      .error { color: #b91c1c; padding: 1rem 1.2rem; }
+      .error { color: #b91c1c; }
     </style>
   </head>
   <body>
-    <div class="app-shell">
-      <div id="site-nav"></div>
-      <main class="page">
-        <p class="kicker">运营部</p>
-        <h1>数据中心</h1>
-        <p class="lead">运营关键指标看板。数字为占位演示，不连接业务库。</p>
-        <section class="metric-grid" id="cards" aria-label="关键指标">
-          <article class="metric-card">
-            <div class="label">今日订单</div>
-            <div class="value">128</div>
-            <span class="badge">演示数据</span>
-          </article>
-          <article class="metric-card">
-            <div class="label">待处理</div>
-            <div class="value">17</div>
-            <span class="badge">演示数据</span>
-          </article>
-          <article class="metric-card">
-            <div class="label">在职人数</div>
-            <div class="value">36</div>
-            <span class="badge">演示数据</span>
-          </article>
-          <article class="metric-card">
-            <div class="label">本周发布次数</div>
-            <div class="value">5</div>
-            <span class="badge">演示数据</span>
-          </article>
-        </section>
-        <section class="panel">
-          <h2>最近数据事件</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>时间</th>
-                <th>类型</th>
-                <th>摘要</th>
-              </tr>
-            </thead>
-            <tbody id="events">
-              <tr><td colspan="3">正在加载…</td></tr>
-            </tbody>
-          </table>
-        </section>
-      </main>
-    </div>
+    <div id="site-nav"></div>
+    <main class="xm-page">
+      <p class="kicker">运营部</p>
+      <h1>数据中心</h1>
+      <p class="lead">运营关键指标看板。数字为占位演示，不连接业务库。</p>
+      <section class="kpi-grid" id="cards" aria-label="关键指标">
+        <article class="kpi-card">
+          <div class="label">今日订单</div>
+          <div class="value">128</div>
+          <span class="demo-flag">演示数据</span>
+        </article>
+        <article class="kpi-card">
+          <div class="label">待处理</div>
+          <div class="value">17</div>
+          <span class="demo-flag">演示数据</span>
+        </article>
+        <article class="kpi-card">
+          <div class="label">在职人数</div>
+          <div class="value">36</div>
+          <span class="demo-flag">演示数据</span>
+        </article>
+        <article class="kpi-card">
+          <div class="label">本周发布次数</div>
+          <div class="value">5</div>
+          <span class="demo-flag">演示数据</span>
+        </article>
+      </section>
+      <section class="panel">
+        <h2>最近数据事件</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>类型</th>
+              <th>摘要</th>
+            </tr>
+          </thead>
+          <tbody id="events">
+            <tr><td colspan="3">正在加载…</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
     <script src="/shared/nav.js"></script>
     <script>
       (function () {
@@ -173,14 +84,14 @@
           cardsEl.innerHTML = cards
             .map(function (card) {
               return (
-                '<article class="metric-card">' +
+                '<article class="kpi-card">' +
                 '<div class="label">' +
                 escapeHtml(card.label) +
                 "</div>" +
                 '<div class="value">' +
                 escapeHtml(card.value) +
                 "</div>" +
-                '<span class="badge">' +
+                '<span class="demo-flag">' +
                 escapeHtml(notice || "演示数据") +
                 "</span>" +
                 "</article>"
@@ -209,7 +120,10 @@
             .join("");
         }
 
-        fetch("/api/data/overview")
+        fetch("/api/data/overview", {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" }
+        })
           .then(function (res) {
             if (!res.ok) throw new Error("接口 " + res.status);
             return res.json();
