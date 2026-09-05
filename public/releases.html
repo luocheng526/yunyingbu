@@ -10,6 +10,21 @@
         flex: 1;
         min-width: 0;
       }
+      .heading-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin: 0 0 0.5rem;
+      }
+      .heading-row h1 { margin: 0; }
+      #refresh-btn {
+        font-size: 1.05rem;
+        padding: 0.6rem 1.35rem;
+        box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.18);
+      }
+      #refresh-meta { margin: 0 0 1rem; }
       .banner {
         background: #fff1f2;
         border: 1px solid #fecdd3;
@@ -127,10 +142,14 @@
     <div id="site-nav"></div>
     <main class="page" role="main">
       <p class="kicker">运营部主脑闸门</p>
-      <h1>版本发布中心</h1>
-      <p class="lead">各模块对话提交发版后在这里排队；看清更新内容、调整顺序，点确定才放行。</p>
+      <div class="heading-row">
+        <h1>版本发布中心</h1>
+        <button type="button" id="refresh-btn">刷新</button>
+      </div>
+      <p class="lead">各模块对话提交发版后在这里排队；看清更新内容、调整顺序，点通过才放行。</p>
+      <p id="refresh-meta" class="muted">点刷新立刻拉队列；同时每 3 秒自动拉取 GET /api/releases/queue。</p>
       <div class="banner">
-        单据来自各模块对话 POST /api/releases 交来的【发布文档】，本页不提供手填表。点「确定」才真正发版（push-xingmai-to-ecs.sh，文档要求则重启）。同一时刻一把锁；正在发时其他确定禁用；下一条不会自动发。业务 Agent 不得自己 SSH / restart。
+        单据来自各模块对话 POST /api/releases，本页不提供手填表。点「通过」才真正发版（push-xingmai-to-ecs.sh，是否重启看单据）。未通过禁止发。同一时刻一把锁；正在发时其他通过禁用；下一条不会自动发。
       </div>
       <div id="flash" class="flash" role="status"></div>
       <div class="grid">
@@ -140,7 +159,7 @@
         </section>
         <section class="panel">
           <h2>待放行（各对话框交来的发版单）</h2>
-          <p class="muted">数字越小越先发。可上移 / 下移，或拖拽卡片。确定 = 放行这一单。</p>
+          <p class="muted">数字越小越先发。可上移 / 下移，或拖拽卡片。通过 = 放行你点的这一单。</p>
           <div id="queue-view" class="cards"></div>
         </section>
         <section class="panel">
@@ -217,7 +236,7 @@
       function fileList(item) {
         const files = item.files || [];
         if (!files.length) {
-          return '<span class="muted">（无文件，确定后将按前期规则全量同步）</span>';
+          return '<span class="muted">（无文件列表）</span>';
         }
         return "<ul class=\"files\">" + files.map(function (file) {
           return "<li>" + esc(file) + "</li>";
@@ -235,7 +254,7 @@
             const seq = item.queueIndex || index + 1;
             const confirmBtn = locked
               ? "<button disabled>有发布正在进行，请等待</button>"
-              : "<button data-act=\"confirm\">确定</button>";
+              : "<button data-act=\"pass\">通过</button>";
             const upOff = index === 0 ? " disabled" : "";
             const downOff = index === items.length - 1 ? " disabled" : "";
             return (
@@ -301,6 +320,11 @@
             return item.status === "success" || item.status === "failed" || item.status === "rejected";
           })
         );
+        const stamp = new Date().toISOString().replace("T", " ").replace("Z", " UTC");
+        const meta = document.getElementById("refresh-meta");
+        if (meta) {
+          meta.textContent = "已拉取队列 " + (queue.items || []).length + " 张待放行单 · " + stamp + " · 每 3 秒自动刷新";
+        }
         return lock;
       }
 
@@ -331,13 +355,13 @@
               body: JSON.stringify({ direction: act })
             });
             flash(act === "up" ? "已上移。" : "已下移。");
-          } else if (act === "confirm") {
-            flash("正在放行：抢锁并执行 push-xingmai-to-ecs.sh。");
+          } else if (act === "pass") {
+            flash("正在通过并放行：抢锁、push，按单据决定是否重启。");
             const done = await api("/api/releases/" + id + "/confirm", {
               method: "POST",
               body: "{}"
             });
-            flash("已放行版本 " + (done.version || "") + "。下一条不会自动发布。");
+            flash("已通过并放行版本 " + (done.version || "") + "。下一条不会自动发布。");
           }
           await refresh();
         } catch (err) {
@@ -389,10 +413,19 @@
         });
       })();
 
+      document.getElementById("refresh-btn").addEventListener("click", async function () {
+        try {
+          await refresh();
+          flash("已刷新队列。");
+        } catch (err) {
+          flash(err.message, true);
+        }
+      });
+
       refresh().catch(function (err) { flash(err.message, true); });
       setInterval(function () {
         refresh().catch(function () {});
-      }, 2000);
+      }, 3000);
     </script>
   </body>
 </html>

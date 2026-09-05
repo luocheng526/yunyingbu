@@ -1,6 +1,6 @@
 import express from "express";
 import { requireReleasesAuth } from "./auth.js";
-import { checkMainBrainOrder, hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
+import { hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
 import { pushXingmaiToEcs } from "./push.js";
 import { restartMengkaiService } from "./restart.js";
 import { createStore, MODULES } from "./store.js";
@@ -26,39 +26,6 @@ function publishBlockedReason(item) {
   return null;
 }
 
-function ticketFromOrder(body, order) {
-  const parsed = parseReleaseDocument(body);
-  const complete = parsed.complete;
-  let module = parsed.document.module || order.module || "";
-  if (!module) {
-    module = "版本发布中心";
-  }
-  const version = String(body.version || "").trim() || `fast-${Date.now()}`;
-  const applicant = String(body.applicant || "").trim() || "主脑";
-  if (complete) {
-    return {
-      complete: true,
-      version,
-      applicant,
-      module,
-      summary: String(body.summary || "").trim() || `按文档发版 ${module}`,
-      files: parsed.document.files,
-      acceptance: parsed.document.acceptance,
-      restart: parsed.document.restart
-    };
-  }
-  return {
-    complete: false,
-    version,
-    applicant,
-    module,
-    summary: String(body.summary || "").trim() || "前期无文档，全量同步 apps/xingmai",
-    files: [],
-    acceptance: "前期无文档，全量同步 apps/xingmai",
-    restart: true
-  };
-}
-
 function successLog(item, pushResult, extra, noDoc) {
   const pushNote = pushResult && pushResult.stdout ? String(pushResult.stdout).trim() : "push-xingmai-to-ecs.sh 完成";
   const prefix = noDoc
@@ -76,7 +43,7 @@ export function createReleasesRouter(options = {}) {
 
   async function runPublishJob(item, noDoc) {
     const files = noDoc ? [] : item.files || [];
-    const shouldRestart = noDoc ? true : Boolean(item.restart);
+    const shouldRestart = Boolean(item.restart);
     const pushResult = await push(files);
     let extra = "";
     if (shouldRestart) {
@@ -89,20 +56,11 @@ export function createReleasesRouter(options = {}) {
     return { ok: true };
   }
 
-  async function handlePublish(req, res, item, options = {}) {
-    const requireOrder = options.requireOrder !== false;
+  async function handlePublish(req, res, item) {
     const blocked = publishBlockedReason(item);
     if (blocked) {
       res.status(blocked.status).json({ ok: false, error: blocked.error });
       return;
-    }
-
-    if (requireOrder) {
-      const order = checkMainBrainOrder(req.body?.order ?? req.body?.口令, item.module);
-      if (!order.ok) {
-        res.status(409).json({ ok: false, error: order.error });
-        return;
-      }
     }
 
     const acquired = store.tryAcquireLock(item);
@@ -169,33 +127,16 @@ export function createReleasesRouter(options = {}) {
     res.json({ ok: true, ...store.getLock() });
   });
 
-  router.post("/go", async (req, res) => {
-    const body = req.body || {};
-    const order = parseMainBrainOrder(body.order ?? body.口令);
+  router.post("/go", (req, res) => {
+    const order = parseMainBrainOrder(req.body?.order ?? req.body?.口令);
     if (!order.ok) {
       res.status(409).json({ ok: false, error: order.error });
       return;
     }
-    if (store.getLock().locked) {
-      res.status(409).json({ ok: false, error: "有发布正在进行，禁止抢发" });
-      return;
-    }
-    const ticket = ticketFromOrder(body, order);
-    if (ticket.complete && ticket.module && !MODULES.includes(ticket.module)) {
-      res.status(400).json({ ok: false, error: "模块不在允许列表中" });
-      return;
-    }
-    const item = store.create({
-      version: ticket.version,
-      applicant: ticket.applicant,
-      source: body.source || ticket.applicant,
-      summary: ticket.summary,
-      module: ticket.module,
-      files: ticket.files,
-      acceptance: ticket.acceptance,
-      restart: ticket.restart
+    res.status(409).json({
+      ok: false,
+      error: "未通过禁止发。请各对话 POST /api/releases 交单，主脑在看板点通过。"
     });
-    await handlePublish(req, res, item);
   });
 
   router.post("/", (req, res) => {
@@ -239,13 +180,9 @@ export function createReleasesRouter(options = {}) {
     res.json({ ok: true, items: result.items });
   });
 
-  router.post("/:id/approve", (req, res) => {
-    const result = store.approve(req.params.id);
-    if (result.error) {
-      res.status(result.status).json({ ok: false, error: result.error });
-      return;
-    }
-    res.json({ ok: true, item: result.item });
+  router.post("/:id/approve", async (req, res) => {
+    const item = store.get(req.params.id);
+    await handlePublish(req, res, item);
   });
 
   router.post("/:id/reject", (req, res) => {
@@ -268,12 +205,11 @@ export function createReleasesRouter(options = {}) {
 
   router.post("/:id/confirm", async (req, res) => {
     const item = store.get(req.params.id);
-    await handlePublish(req, res, item, { requireOrder: false });
+    await handlePublish(req, res, item);
   });
 
-  router.post("/:id/publish", async (req, res) => {
-    const item = store.get(req.params.id);
-    await handlePublish(req, res, item, { requireOrder: true });
+  router.post("/:id/publish", (_req, res) => {
+    res.status(409).json({ ok: false, error: "未通过禁止发。请在看板点通过。" });
   });
 
   return router;

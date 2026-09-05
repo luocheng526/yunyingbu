@@ -192,7 +192,7 @@ export function createStore({ now } = {}) {
         rejectReason: null,
         publishStartedAt: null,
         publishFinishedAt: null,
-        log: "已进入发版看板排队。主脑在网页点确定才放行；下一条不会自动发。"
+        log: "已进入发版看板排队。主脑在网页点通过才放行；下一条不会自动发。"
       };
       items.push(item);
       return item;

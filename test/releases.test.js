@@ -96,6 +96,8 @@ test("GET /releases is the release center page", async () => {
     assert.equal(res.status, 200);
     assert.match(text, /版本发布中心/);
     assert.match(text, /各模块对话提交发版后在这里排队/);
+    assert.match(text, /id="refresh-btn"/);
+    assert.match(text, /点通过才放行/);
     assert.match(text, /href="\/shared\/layout.css"/);
     assert.match(text, /src="\/shared\/nav.js"/);
     assert.match(text, /<main class="page"/);
@@ -117,7 +119,8 @@ test("releases.html has no login form and sends users to /login", () => {
   assert.match(html, /\/shared\/nav.js/);
   assert.doesNotMatch(html, /id="apply-form"/);
   assert.doesNotMatch(html, /提交发布申请/);
-  assert.match(html, /点「确定」才真正发版/);
+  assert.match(html, /id="refresh-btn"/);
+  assert.match(html, /点「通过」才真正发版/);
   assert.match(html, /\/api\/releases\/.*confirm/);
 });
 
@@ -209,7 +212,7 @@ test("主脑口令 aliases", () => {
   assert.match(parseMainBrainOrder("帮我上线").error, /不算/);
 });
 
-test("publish while queued with 发版 does not require website approve", async () => {
+test("queued publish without 通过 is 409 未通过禁止发", async () => {
   let restarts = 0;
   const pushed = [];
   await withServer(
@@ -231,9 +234,9 @@ test("publish while queued with 发版 does not require website approve", async 
         method: "POST",
         body: JSON.stringify({ order: "发板" })
       });
-      assert.equal(pub.res.status, 200);
-      assert.equal(pub.body.item.status, "success");
-      assert.deepEqual(pushed, [["src/app.js"]]);
+      assert.equal(pub.res.status, 409);
+      assert.match(pub.body.error, /未通过禁止发/);
+      assert.equal(pushed.length, 0);
       assert.equal(restarts, 0);
       const lock = await json(base, "/api/releases/lock");
       assert.equal(lock.body.locked, false);
@@ -260,9 +263,9 @@ test("rejected ticket cannot be published", async () => {
       });
       assert.equal(rejected.res.status, 200);
       assert.equal(rejected.body.item.status, "rejected");
-      const pub = await json(base, `/api/releases/${created.body.item.id}/publish`, {
+      const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
         method: "POST",
-        body: publishBody()
+        body: "{}"
       });
       assert.equal(pub.res.status, 409);
       assert.match(pub.body.error, /驳回/);
@@ -271,7 +274,7 @@ test("rejected ticket cannot be published", async () => {
   );
 });
 
-test("approve then publish runs restart once and only that ticket succeeds", async () => {
+test("通过 one ticket restarts once and does not auto-publish next", async () => {
   let restarts = 0;
   await withServer(
     {
@@ -288,11 +291,9 @@ test("approve then publish runs restart once and only that ticket succeeds", asy
         method: "POST",
         body: apply("3.0.1", "Ada", "版本发布中心", "下一条", { restart: true })
       });
-      await json(base, `/api/releases/${first.body.item.id}/approve`, { method: "POST" });
-      await json(base, `/api/releases/${second.body.item.id}/approve`, { method: "POST" });
-      const pub = await json(base, `/api/releases/${first.body.item.id}/publish`, {
+      const pub = await json(base, `/api/releases/${first.body.item.id}/confirm`, {
         method: "POST",
-        body: publishBody()
+        body: "{}"
       });
       assert.equal(pub.res.status, 200);
       assert.equal(pub.body.item.status, "success");
@@ -301,7 +302,7 @@ test("approve then publish runs restart once and only that ticket succeeds", asy
       const a = all.body.items.find((item) => item.id === first.body.item.id);
       const b = all.body.items.find((item) => item.id === second.body.item.id);
       assert.equal(a.status, "success");
-      assert.equal(b.status, "approved");
+      assert.equal(b.status, "queued");
       const lock = await json(base, "/api/releases/lock");
       assert.equal(lock.body.locked, false);
     }
@@ -330,12 +331,10 @@ test("second publish while lock held returns 409 禁止抢发", async () => {
         method: "POST",
         body: apply("4.0.1", "Lin", "首页", "抢发", { restart: true })
       });
-      await json(base, `/api/releases/${first.body.item.id}/approve`, { method: "POST" });
-      await json(base, `/api/releases/${second.body.item.id}/approve`, { method: "POST" });
 
-      const firstPublish = json(base, `/api/releases/${first.body.item.id}/publish`, {
+      const firstPublish = json(base, `/api/releases/${first.body.item.id}/confirm`, {
         method: "POST",
-        body: publishBody()
+        body: "{}"
       });
       for (let i = 0; i < 50; i += 1) {
         const lock = await json(base, "/api/releases/lock");
@@ -348,16 +347,16 @@ test("second publish while lock held returns 409 禁止抢发", async () => {
       assert.equal(lock.body.locked, true);
       assert.equal(lock.body.current.version, "4.0.0");
 
-      const stolen = await json(base, `/api/releases/${second.body.item.id}/publish`, {
+      const stolen = await json(base, `/api/releases/${second.body.item.id}/confirm`, {
         method: "POST",
-        body: publishBody()
+        body: "{}"
       });
       assert.equal(stolen.res.status, 409);
       assert.equal(stolen.body.error, "有发布正在进行，禁止抢发");
 
-      const again = await json(base, `/api/releases/${first.body.item.id}/publish`, {
+      const again = await json(base, `/api/releases/${first.body.item.id}/confirm`, {
         method: "POST",
-        body: publishBody()
+        body: "{}"
       });
       assert.equal(again.res.status, 409);
       assert.match(again.body.error, /禁止抢发/);
@@ -367,7 +366,7 @@ test("second publish while lock held returns 409 禁止抢发", async () => {
       assert.equal(done.body.item.status, "success");
       assert.equal(started, 1);
       const later = await json(base, "/api/releases");
-      assert.equal(later.body.items.find((item) => item.id === second.body.item.id).status, "approved");
+      assert.equal(later.body.items.find((item) => item.id === second.body.item.id).status, "queued");
     }
   );
 });
@@ -425,7 +424,7 @@ test("document without 口令 stays queued and does not push", async () => {
         body: JSON.stringify({})
       });
       assert.equal(pub.res.status, 409);
-      assert.match(pub.body.error, /没有主脑口令/);
+      assert.match(pub.body.error, /未通过禁止发/);
       assert.equal(pushes, 0);
       assert.equal(restarts, 0);
       const all = await json(base, "/api/releases");
@@ -456,10 +455,9 @@ test("口令 发布模块 且 restart=false 只 push 不重启", async () => {
           restart: false
         })
       });
-      await json(base, `/api/releases/${created.body.item.id}/approve`, { method: "POST" });
-      const pub = await json(base, `/api/releases/${created.body.item.id}/publish`, {
+      const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
         method: "POST",
-        body: JSON.stringify({ order: "发布韩梦凯模块" })
+        body: "{}"
       });
       assert.equal(pub.res.status, 200);
       assert.equal(pub.body.item.status, "success");
@@ -470,7 +468,7 @@ test("口令 发布模块 且 restart=false 只 push 不重启", async () => {
   );
 });
 
-test("POST /go 发版 with no document full-syncs and restarts", async () => {
+test("POST /go 发版 is 409 until 通过", async () => {
   const pushed = [];
   let restarts = 0;
   await withServer(
@@ -488,15 +486,10 @@ test("POST /go 发版 with no document full-syncs and restarts", async () => {
         method: "POST",
         body: JSON.stringify({ order: "发版 首页" })
       });
-      assert.equal(pub.res.status, 200);
-      assert.equal(pub.body.item.status, "success");
-      assert.equal(pub.body.noDoc, true);
-      assert.match(pub.body.note, /前期无文档/);
-      assert.match(pub.body.item.log, /前期无文档，全量同步 apps\/xingmai/);
-      assert.match(pub.body.item.log, /systemctl restart mengkai\.service/);
-      assert.match(pub.body.item.log, /zx\.xingmaierp\.cc/);
-      assert.deepEqual(pushed, [[]]);
-      assert.equal(restarts, 1);
+      assert.equal(pub.res.status, 409);
+      assert.match(pub.body.error, /未通过禁止发/);
+      assert.equal(pushed.length, 0);
+      assert.equal(restarts, 0);
     }
   );
 });
@@ -593,13 +586,12 @@ test("mismatch 口令 does not push", async () => {
         method: "POST",
         body: apply("6.2.0", "Doc", "首页", "错口令")
       });
-      await json(base, `/api/releases/${created.body.item.id}/approve`, { method: "POST" });
       const pub = await json(base, `/api/releases/${created.body.item.id}/publish`, {
         method: "POST",
         body: JSON.stringify({ order: "发布个人中心模块" })
       });
       assert.equal(pub.res.status, 409);
-      assert.match(pub.body.error, /不一致/);
+      assert.match(pub.body.error, /未通过禁止发/);
       assert.equal(pushes, 0);
     }
   );
