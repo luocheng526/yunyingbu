@@ -6,10 +6,58 @@
     <title>个人中心 · 运营部</title>
     <link rel="stylesheet" href="/shared/layout.css" />
     <style>
-      .page { max-width: 720px; }
+      body {
+        display: flex;
+        align-items: stretch;
+        min-height: 100vh;
+      }
+      #site-nav,
+      .site-sidebar,
+      aside.site-sidebar,
+      header.site-header {
+        flex: 0 0 220px;
+        width: 220px;
+        min-height: 100vh;
+        border-right: 1px solid var(--line, #e7e5e4);
+        border-bottom: 0;
+        background: var(--card, #fffcf7);
+        position: sticky;
+        top: 0;
+        align-self: flex-start;
+      }
+      .site-header__inner,
+      .site-sidebar__inner {
+        max-width: none;
+        margin: 0;
+        padding: 1.1rem 0.9rem 1.5rem;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.85rem;
+      }
+      .site-nav {
+        display: flex;
+        flex-direction: column;
+        flex-wrap: nowrap;
+        gap: 0.2rem;
+      }
+      .site-nav a {
+        border-radius: 10px;
+      }
+      main.page {
+        flex: 1;
+        max-width: none;
+        margin: 0;
+        padding: 2rem 1.75rem 3rem;
+        min-width: 0;
+      }
       .panel {
-        background: var(--card, #fffcf7); border: 1px solid var(--line, #e7e5e4);
-        border-radius: 16px; padding: 1.25rem 1.3rem; margin-bottom: 1.1rem;
+        background: var(--card, #fffcf7);
+        border: 1px solid var(--line, #e7e5e4);
+        border-radius: 16px;
+        padding: 1.25rem 1.3rem;
+        margin-bottom: 1.1rem;
+        max-width: 640px;
       }
       .panel h2 { margin: 0 0 1rem; font-size: 1.1rem; }
       label { display: block; margin: 0 0 0.85rem; color: var(--muted, #57534e); }
@@ -31,8 +79,8 @@
   </head>
   <body>
     <div id="site-nav">
-      <header class="site-header">
-        <div class="site-header__inner">
+      <aside class="site-sidebar">
+        <div class="site-sidebar__inner">
           <a class="site-brand" href="/">运营部</a>
           <nav class="site-nav" aria-label="全站导航">
             <a href="/">首页</a>
@@ -44,7 +92,7 @@
             <a href="/me" aria-current="page">个人中心</a>
           </nav>
         </div>
-      </header>
+      </aside>
     </div>
     <main class="page">
       <p class="kicker">运营部</p>

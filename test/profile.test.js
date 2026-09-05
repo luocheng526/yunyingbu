@@ -92,6 +92,11 @@ test("login 罗成 sets cookie; GET /api/auth/me 200; wrong password 401", async
     const page = await request(base, "/me", { cookie: ok.cookie, redirect: "follow" });
     assert.equal(page.res.status, 200);
     assert.match(page.text, /个人中心/);
+    assert.match(page.text, /shared\/layout\.css/);
+    assert.match(page.text, /shared\/nav\.js/);
+    assert.match(page.text, /<aside class="site-sidebar">/);
+    assert.match(page.text, /<main class="page">/);
+    assert.doesNotMatch(page.text, /<header class="site-header">/);
   });
 });
 
