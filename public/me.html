@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>个人中心 · 运营部</title>
+    <link rel="stylesheet" href="/shared/layout.css" />
+    <style>
+      body {
+        display: flex;
+        align-items: stretch;
+        min-height: 100vh;
+      }
+      #site-nav,
+      .site-sidebar,
+      aside.site-sidebar,
+      header.site-header {
+        flex: 0 0 220px;
+        width: 220px;
+        min-height: 100vh;
+        border-right: 1px solid var(--line, #e7e5e4);
+        border-bottom: 0;
+        background: var(--card, #fffcf7);
+        position: sticky;
+        top: 0;
+        align-self: flex-start;
+      }
+      .site-header__inner,
+      .site-sidebar__inner {
+        max-width: none;
+        margin: 0;
+        padding: 1.1rem 0.9rem 1.5rem;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.85rem;
+      }
+      .site-nav {
+        display: flex;
+        flex-direction: column;
+        flex-wrap: nowrap;
+        gap: 0.2rem;
+      }
+      .site-nav a {
+        border-radius: 10px;
+      }
+      main.page {
+        flex: 1;
+        max-width: none;
+        margin: 0;
+        padding: 2rem 1.75rem 3rem;
+        min-width: 0;
+      }
+      .panel {
+        background: var(--card, #fffcf7);
+        border: 1px solid var(--line, #e7e5e4);
+        border-radius: 16px;
+        padding: 1.25rem 1.3rem;
+        margin-bottom: 1.1rem;
+        max-width: 640px;
+      }
+      .panel h2 { margin: 0 0 1rem; font-size: 1.1rem; }
+      label { display: block; margin: 0 0 0.85rem; color: var(--muted, #57534e); }
+      input {
+        display: block; width: 100%; margin-top: 0.35rem; padding: 0.55rem 0.7rem;
+        border: 1px solid var(--line, #e7e5e4); border-radius: 10px; font: inherit;
+      }
+      input[readonly] { background: #f5f5f4; }
+      .actions { margin-top: 0.4rem; }
+      button {
+        font: inherit; border: 0; border-radius: 999px; padding: 0.55rem 1.1rem;
+        background: var(--accent, #0f766e); color: #fff; cursor: pointer;
+      }
+      button.secondary { background: #e7e5e4; color: #1c1917; }
+      .status { min-height: 1.4rem; margin: 0 0 1rem; }
+      .status.error { color: #b91c1c; }
+      .status.ok { color: #047857; }
+    </style>
+  </head>
+  <body>
+    <div id="site-nav">
+      <aside class="site-sidebar">
+        <div class="site-sidebar__inner">
+          <a class="site-brand" href="/">运营部</a>
+          <nav class="site-nav" aria-label="全站导航">
+            <a href="/">首页</a>
+            <a href="/data">数据中心</a>
+            <a href="/shen">沈子晗运营中心</a>
+            <a href="/han">韩梦凯运营中心</a>
+            <a href="/people">人员管理</a>
+            <a href="/releases">版本发布中心</a>
+            <a href="/me" aria-current="page">个人中心</a>
+          </nav>
+        </div>
+      </aside>
+    </div>
+    <main class="page">
+      <p class="kicker">运营部</p>
+      <h1>个人中心</h1>
+      <p class="lead">只改当前账号的显示名、邮箱、手机和密码。</p>
+      <p id="status" class="status" role="status"></p>
+      <div class="panel">
+        <h2>账号资料</h2>
+        <form id="profile-form">
+          <label>用户名<input id="profile-username" name="username" type="text" readonly /></label>
+          <label>显示名<input id="profile-displayName" name="displayName" type="text" /></label>
+          <label>邮箱<input id="profile-email" name="email" type="email" /></label>
+          <label>手机<input id="profile-phone" name="phone" type="tel" /></label>
+          <div class="actions"><button type="submit">保存资料</button></div>
+        </form>
+      </div>
+      <div class="panel">
+        <h2>修改密码</h2>
+        <form id="password-form" autocomplete="off">
+          <label>当前密码<input id="current-password" type="password" required /></label>
+          <label>新密码<input id="new-password" type="password" required minlength="8" /></label>
+          <label>确认新密码<input id="confirm-password" type="password" required minlength="8" /></label>
+          <div class="actions"><button type="submit">修改密码</button></div>
+        </form>
+      </div>
+      <div class="panel">
+        <form id="logout-form">
+          <button type="submit" class="secondary">退出登录</button>
+        </form>
+      </div>
+    </main>
+    <script src="/shared/nav.js"></script>
+    <script>
+      (function () {
+        var statusEl = document.getElementById("status");
+        function setStatus(message, kind) {
+          statusEl.textContent = message || "";
+          statusEl.className = "status" + (kind ? " " + kind : "");
+        }
+        function fill(user) {
+          document.getElementById("profile-username").value = user.username || "";
+          document.getElementById("profile-displayName").value = user.displayName || "";
+          document.getElementById("profile-email").value = user.email || "";
+          document.getElementById("profile-phone").value = user.phone || "";
+        }
+        async function api(path, options) {
+          var res = await fetch(path, Object.assign({ credentials: "same-origin" }, options));
+          if (res.status === 401) {
+            window.location.href = "/login";
+            return { res: res, data: {} };
+          }
+          var data = {};
+          try { data = await res.json(); } catch (_e) { data = {}; }
+          return { res: res, data: data };
+        }
+        api("/api/auth/me").then(function (result) {
+          if (result.res && result.res.ok) fill(result.data);
+        });
+        document.getElementById("profile-form").addEventListener("submit", async function (event) {
+          event.preventDefault();
+          var result = await api("/api/profile", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              displayName: document.getElementById("profile-displayName").value,
+              email: document.getElementById("profile-email").value,
+              phone: document.getElementById("profile-phone").value
+            })
+          });
+          if (!result.res.ok) {
+            setStatus(result.data.error || "保存失败", "error");
+            return;
+          }
+          fill(result.data);
+          setStatus("资料已保存", "ok");
+        });
+        document.getElementById("password-form").addEventListener("submit", async function (event) {
+          event.preventDefault();
+          var result = await api("/api/profile/password", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              currentPassword: document.getElementById("current-password").value,
+              newPassword: document.getElementById("new-password").value,
+              confirmPassword: document.getElementById("confirm-password").value
+            })
+          });
+          document.getElementById("current-password").value = "";
+          document.getElementById("new-password").value = "";
+          document.getElementById("confirm-password").value = "";
+          if (!result.res.ok) {
+            setStatus(result.data.error || "改密失败", "error");
+            return;
+          }
+          setStatus(result.data.message || "密码已更新", "ok");
+        });
+        document.getElementById("logout-form").addEventListener("submit", async function (event) {
+          event.preventDefault();
+          await api("/api/auth/logout", { method: "POST" });
+          window.location.href = "/login";
+        });
+      })();
+    </script>
+  </body>
+</html>

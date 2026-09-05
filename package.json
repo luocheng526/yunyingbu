@@ -1,0 +1,17 @@
+{
+  "name": "mengkai",
+  "version": "0.1.0",
+  "description": "运营部站点（首页导航壳）",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test --test-concurrency=1 test/*.test.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

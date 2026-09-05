@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>首页 · 星脉管理系统</title>
+    <link rel="stylesheet" href="/shared/layout.css" />
+  </head>
+  <body>
+    <div id="site-nav">
+      <aside class="xm-sider" aria-label="侧栏导航">
+        <a class="xm-logo" href="/">
+          <span class="xm-logo-mark">星</span>
+          <span class="xm-logo-text">星脉管理系统</span>
+        </a>
+        <nav class="xm-menu">
+          <a class="xm-menu-item is-active" href="/" aria-current="page"><span>首页</span></a>
+          <a class="xm-menu-item" href="/data"><span>数据中心</span></a>
+          <a class="xm-menu-item" href="/shen"><span>沈子晗运营中心</span></a>
+          <a class="xm-menu-item" href="/han"><span>韩梦凯运营中心</span></a>
+          <a class="xm-menu-item" href="/people"><span>人员管理</span></a>
+          <a class="xm-menu-item" href="/releases"><span>版本发布中心</span></a>
+          <a class="xm-menu-item" href="/me"><span>个人中心</span></a>
+        </nav>
+      </aside>
+    </div>
+    <main class="xm-page" id="home-dashboard">
+      <section class="kpi-grid" id="kpi-grid" aria-label="指标卡"></section>
+      <div class="dash-bottom">
+        <section class="panel" aria-labelledby="trend-title">
+          <h2 id="trend-title">趋势看板<span class="demo-flag">演示</span></h2>
+          <svg class="trend-svg" id="trend-svg" viewBox="0 0 640 220" role="img" aria-label="近七日销售趋势"></svg>
+        </section>
+        <div>
+          <section class="panel sales-index" aria-labelledby="index-title">
+            <h2 id="index-title">实时销售指数<span class="demo-flag">演示</span></h2>
+            <div class="figure" id="sales-index">128.6</div>
+            <p class="hint">相对昨日 +3.4%，第一期演示数据</p>
+          </section>
+          <section class="panel" style="margin-top: 12px" aria-labelledby="board-title">
+            <h2 id="board-title">龙虎榜<span class="demo-flag">演示</span></h2>
+            <ol class="board-list" id="board-list"></ol>
+          </section>
+        </div>
+      </div>
+    </main>
+    <script src="/shared/nav.js"></script>
+    <script>
+      (function () {
+        const DEMO = {
+          kpis: [
+            { label: "今日销售额", value: "128,600", unit: "元" },
+            { label: "今日订单", value: 128, unit: "单" },
+            { label: "待处理", value: 17, unit: "件" },
+            { label: "客单价", value: "1,005", unit: "元" }
+          ],
+          trend: [86, 92, 101, 97, 110, 118, 128],
+          board: [
+            { name: "华东一仓", value: "32,400" },
+            { name: "华南旗舰", value: "28,150" },
+            { name: "沈子晗组", value: "21,080" },
+            { name: "韩梦凯组", value: "19,760" },
+            { name: "华北直营", value: "16,230" }
+          ]
+        };
+
+        function renderKpis(cards) {
+          const root = document.getElementById("kpi-grid");
+          if (!root) return;
+          root.innerHTML = cards
+            .slice(0, 4)
+            .map(function (card) {
+              return (
+                '<article class="kpi-card"><div class="label">' +
+                card.label +
+                '</div><div class="value">' +
+                card.value +
+                '<span class="unit">' +
+                (card.unit || "") +
+                "</span></div></article>"
+              );
+            })
+            .join("");
+        }
+
+        function renderTrend(points) {
+          const svg = document.getElementById("trend-svg");
+          if (!svg) return;
+          const max = Math.max.apply(null, points.concat([1]));
+          const w = 640;
+          const h = 220;
+          const step = (w - 40) / Math.max(points.length - 1, 1);
+          const coords = points.map(function (p, i) {
+            const x = 20 + i * step;
+            const y = h - 24 - (p / max) * (h - 48);
+            return x + "," + y;
+          });
+          svg.innerHTML =
+            '<polyline fill="none" stroke="#1677ff" stroke-width="3" points="' +
+            coords.join(" ") +
+            '"></polyline>' +
+            coords
+              .map(function (c) {
+                const xy = c.split(",");
+                return '<circle cx="' + xy[0] + '" cy="' + xy[1] + '" r="4" fill="#1677ff"></circle>';
+              })
+              .join("");
+        }
+
+        function renderBoard(rows) {
+          const list = document.getElementById("board-list");
+          if (!list) return;
+          list.innerHTML = rows
+            .map(function (row, i) {
+              return (
+                "<li><span class=\"rank\">" +
+                (i + 1) +
+                '</span><span class="name">' +
+                row.name +
+                '</span><span>' +
+                row.value +
+                "</span></li>"
+              );
+            })
+            .join("");
+        }
+
+        function paint(payload) {
+          renderKpis(payload.kpis);
+          renderTrend(payload.trend || DEMO.trend);
+          renderBoard(payload.board || DEMO.board);
+        }
+
+        paint(DEMO);
+
+        fetch("/api/data/overview", { credentials: "same-origin", headers: { Accept: "application/json" } })
+          .then(function (res) {
+            return res.ok ? res.json() : null;
+          })
+          .then(function (json) {
+            if (!json || !Array.isArray(json.cards) || !json.cards.length) {
+              return;
+            }
+            paint({
+              kpis: json.cards,
+              trend: DEMO.trend,
+              board: DEMO.board
+            });
+          })
+          .catch(function () {
+            /* keep demo numbers */
+          });
+      })();
+    </script>
+  </body>
+</html>

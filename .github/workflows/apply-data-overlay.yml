@@ -1,0 +1,33 @@
+name: Apply data overlay to mengkai
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: apply-data-overlay
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    if: github.repository == 'luocheng526/yunyingbu' && (github.event_name == 'workflow_dispatch' || github.head_ref == 'cursor/data-center-dashboard-c02b')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Stage data overlay over SSH (no restart)
+        env:
+          ALIYUN_SSH_PRIVATE_KEY: ${{ secrets.ALIYUN_SSH_PRIVATE_KEY }}
+          ALIYUN_SSH_USER: ${{ secrets.ALIYUN_SSH_USER }}
+          ALIYUN_SSH_HOST: ${{ secrets.ALIYUN_HOST }}
+          MENGKAI_DIR: /opt/mengkai
+        run: |
+          set -euo pipefail
+          if [ -z "${ALIYUN_SSH_PRIVATE_KEY:-}" ]; then
+            echo "ALIYUN_SSH_PRIVATE_KEY is not set in GitHub secrets; skipping ECS overlay"
+            exit 0
+          fi
+          node scripts/ssh-apply-data-to-mengkai.mjs
