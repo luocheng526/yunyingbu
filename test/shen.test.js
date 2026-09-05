@@ -39,7 +39,7 @@ async function request(base, pathname, options = {}) {
   return { res, text, json };
 }
 
-test("GET /shen is 沈子晗运营中心 with seven nav items", async () => {
+test("GET /shen is 沈子晗运营中心 with left sidebar and seven nav items", async () => {
   await withServer(async (base) => {
     const { res, text } = await request(base, "/shen");
     assert.equal(res.status, 200);
@@ -47,6 +47,11 @@ test("GET /shen is 沈子晗运营中心 with seven nav items", async () => {
     assert.match(text, /这是沈子晗团队的任务与日报台/);
     assert.match(text, /shared\/nav\.js/);
     assert.match(text, /shared\/layout\.css/);
+    assert.match(text, /class="app-shell"/);
+    assert.match(text, /class="site-sidebar"/);
+    assert.match(text, /<aside class="site-sidebar">/);
+    assert.doesNotMatch(text, /<header class="site-header">/);
+    assert.match(text, /flex-direction:\s*column/);
     for (const label of NAV_LABELS) {
       assert.match(text, new RegExp(label));
     }

@@ -6,6 +6,65 @@
     <title>沈子晗运营中心</title>
     <link rel="stylesheet" href="/shared/layout.css" />
     <style>
+      html, body {
+        margin: 0;
+        min-height: 100%;
+      }
+      .app-shell {
+        display: flex;
+        align-items: stretch;
+        min-height: 100vh;
+      }
+      .site-sidebar,
+      .app-shell > #site-nav,
+      .app-shell > aside,
+      .app-shell > .site-header {
+        flex: 0 0 220px;
+        width: 220px;
+        box-sizing: border-box;
+        background: var(--card, #fffcf7);
+        border-right: 1px solid var(--line, #e7e5e4);
+        padding: 1.15rem 0.85rem 2rem;
+      }
+      .site-brand {
+        display: block;
+        font-weight: 700;
+        color: var(--accent-ink, #134e4a);
+        text-decoration: none;
+        margin: 0 0.4rem 1rem;
+      }
+      .site-nav {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+      }
+      .site-nav a {
+        color: var(--muted, #57534e);
+        text-decoration: none;
+        padding: 0.5rem 0.7rem;
+        border-radius: 10px;
+        font-size: 0.92rem;
+      }
+      .site-nav a:hover,
+      .site-nav a[aria-current="page"] {
+        color: var(--accent-ink, #134e4a);
+        background: #ccfbf1;
+      }
+      .app-shell .site-header__inner {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+        max-width: none;
+        margin: 0;
+        padding: 0;
+      }
+      .page {
+        flex: 1;
+        min-width: 0;
+        max-width: none;
+        padding: 2.25rem 1.5rem 3.5rem;
+      }
       .panel {
         background: var(--card, #fffcf7);
         border: 1px solid var(--line, #e7e5e4);
@@ -89,9 +148,9 @@
     </style>
   </head>
   <body>
-    <div id="site-nav">
-      <header class="site-header">
-        <div class="site-header__inner">
+    <div class="app-shell">
+      <div id="site-nav">
+        <aside class="site-sidebar">
           <a class="site-brand" href="/">运营部</a>
           <nav class="site-nav" aria-label="全站导航">
             <a href="/">首页</a>
@@ -102,10 +161,9 @@
             <a href="/releases">版本发布中心</a>
             <a href="/me">个人中心</a>
           </nav>
-        </div>
-      </header>
-    </div>
-    <main class="page">
+        </aside>
+      </div>
+      <main class="page">
       <p class="kicker">沈子晗团队</p>
       <h1>沈子晗运营中心</h1>
       <p class="lead">这是沈子晗团队的任务与日报台。任务与今日简报保存在服务内存中，进程重启后会清空。</p>
@@ -136,7 +194,8 @@
         </form>
         <p id="brief-status" class="status" role="status"></p>
       </section>
-    </main>
+      </main>
+    </div>
     <script src="/shared/nav.js"></script>
     <script>
       (function () {
