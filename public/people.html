@@ -6,6 +6,7 @@
     <title>人员管理</title>
     <link rel="stylesheet" href="/shared/layout.css" />
     <style>
+      /* 无共享壳时：左侧竖栏 + 右侧业务。不使用顶部横排导航。 */
       :root {
         --bg: #f3f1ec;
         --ink: #1c1917;
@@ -15,28 +16,67 @@
         --accent: #0f766e;
         --accent-ink: #134e4a;
         --shadow: 0 10px 30px rgba(28, 25, 23, 0.08);
+        --sidebar-width: 220px;
         font-family: "PingFang SC", "Noto Sans SC", "Source Han Sans SC", sans-serif;
       }
       * { box-sizing: border-box; }
       html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink); }
-      .site-header {
-        position: sticky; top: 0; z-index: 10;
-        background: rgba(255, 252, 247, 0.94);
-        backdrop-filter: blur(10px);
-        border-bottom: 1px solid var(--line);
+      body {
+        display: flex;
+        align-items: stretch;
+        min-height: 100vh;
+      }
+      #site-nav,
+      .site-sidebar,
+      aside.site-sidebar,
+      body > .site-header {
+        flex: 0 0 var(--sidebar-width);
+        width: var(--sidebar-width);
+        min-height: 100vh;
+        background: var(--card);
+        border-right: 1px solid var(--line);
+        padding: 1.15rem 0.85rem 2rem;
       }
       .site-header__inner {
-        max-width: 1100px; margin: 0 auto; padding: 0.85rem 1.25rem;
-        display: flex; align-items: center; gap: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+        max-width: none;
+        margin: 0;
+        padding: 0;
       }
-      .site-brand { font-weight: 700; color: var(--accent-ink); text-decoration: none; white-space: nowrap; }
-      .site-nav { display: flex; flex-wrap: wrap; gap: 0.35rem 0.15rem; }
+      .site-brand {
+        display: block;
+        font-weight: 700;
+        color: var(--accent-ink);
+        text-decoration: none;
+        padding: 0.35rem 0.7rem 0.85rem;
+      }
+      .site-nav {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+      }
       .site-nav a {
-        color: var(--muted); text-decoration: none; padding: 0.4rem 0.7rem;
-        border-radius: 999px; font-size: 0.92rem;
+        color: var(--muted);
+        text-decoration: none;
+        padding: 0.5rem 0.7rem;
+        border-radius: 10px;
+        font-size: 0.92rem;
       }
-      .site-nav a:hover, .site-nav a[aria-current="page"] { color: var(--accent-ink); background: #ccfbf1; }
-      .page { max-width: 1100px; margin: 0 auto; padding: 2.25rem 1.25rem 3.5rem; }
+      .site-nav a:hover,
+      .site-nav a[aria-current="page"] {
+        color: var(--accent-ink);
+        background: #ccfbf1;
+      }
+      .page {
+        flex: 1;
+        min-width: 0;
+        max-width: none;
+        margin: 0;
+        padding: 2.25rem 1.5rem 3.5rem;
+      }
       .kicker { margin: 0 0 0.4rem; color: var(--accent); font-size: 0.85rem; letter-spacing: 0.08em; }
       h1 { margin: 0 0 0.75rem; font-size: 2rem; }
       .lead { margin: 0 0 1.5rem; color: var(--muted); max-width: 42rem; line-height: 1.7; }
@@ -74,22 +114,18 @@
     </style>
   </head>
   <body>
-    <div id="site-nav">
-      <header class="site-header">
-        <div class="site-header__inner">
-          <a class="site-brand" href="/">运营部</a>
-          <nav class="site-nav" aria-label="全站导航">
-            <a href="/">首页</a>
-            <a href="/data">数据中心</a>
-            <a href="/shen">沈子晗运营中心</a>
-            <a href="/han">韩梦凯运营中心</a>
-            <a href="/people" aria-current="page">人员管理</a>
-            <a href="/releases">版本发布中心</a>
-            <a href="/me">个人中心</a>
-          </nav>
-        </div>
-      </header>
-    </div>
+    <aside id="site-nav" class="site-sidebar">
+      <a class="site-brand" href="/">运营部</a>
+      <nav class="site-nav" aria-label="全站导航">
+        <a href="/">首页</a>
+        <a href="/data">数据中心</a>
+        <a href="/shen">沈子晗运营中心</a>
+        <a href="/han">韩梦凯运营中心</a>
+        <a href="/people" aria-current="page">人员管理</a>
+        <a href="/releases">版本发布中心</a>
+        <a href="/me">个人中心</a>
+      </nav>
+    </aside>
     <main class="page">
       <p class="kicker">运营部</p>
       <h1>人员管理</h1>

@@ -42,6 +42,12 @@ test("GET /people lists title, table headers and fallback nav", async () => {
     const text = await res.text();
     assert.equal(res.status, 200);
     assert.match(text, /<title>人员管理<\/title>/);
+    assert.match(text, /href="\/shared\/layout\.css"/);
+    assert.match(text, /src="\/shared\/nav\.js"/);
+    assert.match(text, /id="site-nav"/);
+    assert.match(text, /class="site-sidebar"/);
+    assert.match(text, /<main class="page">/);
+    assert.doesNotMatch(text, /<header class="site-header">/);
     assert.match(text, /演示/);
     for (const header of ["姓名", "角色", "所属中心", "状态"]) {
       assert.match(text, new RegExp(header));
