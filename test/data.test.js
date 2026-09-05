@@ -12,16 +12,6 @@ import { patchAppSource } from "../src/modules/data/patch-app.js";
 
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-const NAV_LABELS = [
-  "首页",
-  "数据中心",
-  "沈子晗运营中心",
-  "韩梦凯运营中心",
-  "人员管理",
-  "版本发布中心",
-  "个人中心"
-];
-
 async function withServer(fn) {
   const server = http.createServer(createApp());
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -58,7 +48,7 @@ test("GET /api/data/overview returns demo cards and five events", async () => {
   });
 });
 
-test("GET /data is the data center page with title, cards, table, and nav", async () => {
+test("GET /data is the data center page with title, cards, table, and left-shell mount", async () => {
   await withServer(async (base) => {
     const { res, text } = await get(base, "/data");
     assert.equal(res.status, 200);
@@ -72,9 +62,11 @@ test("GET /data is the data center page with title, cards, table, and nav", asyn
     assert.match(text, /\/api\/data\/overview/);
     assert.match(text, /shared\/layout\.css/);
     assert.match(text, /shared\/nav\.js/);
-    for (const label of NAV_LABELS) {
-      assert.match(text, new RegExp(label));
-    }
+    assert.match(text, /class="app-shell"/);
+    assert.match(text, /id="site-nav"/);
+    assert.match(text, /<main class="page">/);
+    assert.doesNotMatch(text, /class="site-header"/);
+    assert.doesNotMatch(text, /aria-label="全站导航"/);
   });
 });
 
