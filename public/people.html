@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>人员管理</title>
+    <link rel="stylesheet" href="/shared/layout.css" />
+    <style>
+      /* 无共享壳时：左侧竖栏 + 右侧业务。不使用顶部横排导航。 */
+      :root {
+        --bg: #f3f1ec;
+        --ink: #1c1917;
+        --muted: #57534e;
+        --line: #e7e5e4;
+        --card: #fffcf7;
+        --accent: #0f766e;
+        --accent-ink: #134e4a;
+        --shadow: 0 10px 30px rgba(28, 25, 23, 0.08);
+        --sidebar-width: 220px;
+        font-family: "PingFang SC", "Noto Sans SC", "Source Han Sans SC", sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink); }
+      body {
+        display: flex;
+        align-items: stretch;
+        min-height: 100vh;
+      }
+      #site-nav,
+      .site-sidebar,
+      aside.site-sidebar,
+      body > .site-header {
+        flex: 0 0 var(--sidebar-width);
+        width: var(--sidebar-width);
+        min-height: 100vh;
+        background: var(--card);
+        border-right: 1px solid var(--line);
+        padding: 1.15rem 0.85rem 2rem;
+      }
+      .site-header__inner {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+        max-width: none;
+        margin: 0;
+        padding: 0;
+      }
+      .site-brand {
+        display: block;
+        font-weight: 700;
+        color: var(--accent-ink);
+        text-decoration: none;
+        padding: 0.35rem 0.7rem 0.85rem;
+      }
+      .site-nav {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+      }
+      .site-nav a {
+        color: var(--muted);
+        text-decoration: none;
+        padding: 0.5rem 0.7rem;
+        border-radius: 10px;
+        font-size: 0.92rem;
+      }
+      .site-nav a:hover,
+      .site-nav a[aria-current="page"] {
+        color: var(--accent-ink);
+        background: #ccfbf1;
+      }
+      .page {
+        flex: 1;
+        min-width: 0;
+        max-width: none;
+        margin: 0;
+        padding: 2.25rem 1.5rem 3.5rem;
+      }
+      .kicker { margin: 0 0 0.4rem; color: var(--accent); font-size: 0.85rem; letter-spacing: 0.08em; }
+      h1 { margin: 0 0 0.75rem; font-size: 2rem; }
+      .lead { margin: 0 0 1.5rem; color: var(--muted); max-width: 42rem; line-height: 1.7; }
+      .demo-banner {
+        display: inline-block; margin: 0 0 1.25rem; padding: 0.2rem 0.65rem;
+        border-radius: 999px; background: #fef3c7; color: #92400e; font-size: 0.82rem;
+      }
+      .panel {
+        background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+        box-shadow: var(--shadow); padding: 1.15rem 1.2rem 1.3rem; margin-bottom: 1.25rem;
+      }
+      .panel h2 { margin: 0 0 0.9rem; font-size: 1.1rem; }
+      .people-form {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 0.75rem 1rem; align-items: end;
+      }
+      label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.88rem; color: var(--muted); }
+      input, select, button {
+        font: inherit; padding: 0.5rem 0.65rem; border-radius: 10px; border: 1px solid var(--line);
+        background: #fff; color: var(--ink);
+      }
+      button {
+        background: var(--accent); color: #ecfdf5; border: 0; cursor: pointer; font-weight: 600;
+        padding: 0.55rem 1rem;
+      }
+      button:hover { filter: brightness(1.05); }
+      .error { color: #b91c1c; margin: 0.75rem 0 0; font-size: 0.9rem; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; padding: 0.7rem 0.55rem; border-bottom: 1px solid var(--line); }
+      th { color: var(--muted); font-size: 0.82rem; font-weight: 600; }
+      .tag {
+        display: inline-block; margin-left: 0.4rem; padding: 0.05rem 0.45rem;
+        border-radius: 999px; background: #fef3c7; color: #92400e; font-size: 0.75rem;
+      }
+    </style>
+  </head>
+  <body>
+    <aside id="site-nav" class="site-sidebar">
+      <a class="site-brand" href="/">运营部</a>
+      <nav class="site-nav" aria-label="全站导航">
+        <a href="/">首页</a>
+        <a href="/data">数据中心</a>
+        <a href="/shen">沈子晗运营中心</a>
+        <a href="/han">韩梦凯运营中心</a>
+        <a href="/people" aria-current="page">人员管理</a>
+        <a href="/releases">版本发布中心</a>
+        <a href="/me">个人中心</a>
+      </nav>
+    </aside>
+    <main class="page">
+      <p class="kicker">运营部</p>
+      <h1>人员管理</h1>
+      <p class="lead">组织与人员名册。预置档案仅供演示，不接入真实 SSO 或密码库。</p>
+      <span class="demo-banner">演示数据</span>
+
+      <section class="panel">
+        <h2>新增人员</h2>
+        <form class="people-form" id="people-form">
+          <label>姓名<input name="name" required maxlength="40" autocomplete="off" /></label>
+          <label>角色<input name="role" required maxlength="40" placeholder="如 运营 / 管理" /></label>
+          <label>
+            所属中心
+            <select name="center" required>
+              <option value="">请选择</option>
+              <option>沈子晗运营中心</option>
+              <option>韩梦凯运营中心</option>
+              <option>数据中心</option>
+              <option>版本发布中心</option>
+              <option>个人中心</option>
+              <option>其他</option>
+            </select>
+          </label>
+          <label>
+            状态
+            <select name="status">
+              <option selected>在职</option>
+              <option>离职</option>
+            </select>
+          </label>
+          <button type="submit">新增</button>
+        </form>
+        <p class="error" id="people-error" hidden></p>
+      </section>
+
+      <section class="panel">
+        <h2>人员名册</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>姓名</th>
+              <th>角色</th>
+              <th>所属中心</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody id="people-tbody"></tbody>
+        </table>
+      </section>
+    </main>
+    <script src="/shared/nav.js"></script>
+    <script>
+      const tbody = document.getElementById("people-tbody");
+      const form = document.getElementById("people-form");
+      const errorEl = document.getElementById("people-error");
+
+      function showError(message) {
+        errorEl.hidden = !message;
+        errorEl.textContent = message || "";
+      }
+
+      function render(people) {
+        tbody.replaceChildren();
+        for (const person of people) {
+          const tr = document.createElement("tr");
+          const name = document.createElement("td");
+          name.append(person.name);
+          if (person.demo) {
+            const tag = document.createElement("span");
+            tag.className = "tag";
+            tag.textContent = "演示";
+            name.append(tag);
+          }
+          const role = document.createElement("td");
+          role.textContent = person.role;
+          const center = document.createElement("td");
+          center.textContent = person.center;
+          const status = document.createElement("td");
+          status.textContent = person.status;
+          tr.append(name, role, center, status);
+          tbody.append(tr);
+        }
+      }
+
+      async function loadPeople() {
+        const res = await fetch("/api/people");
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "无法加载人员名册");
+        }
+        render(data.people || []);
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        showError("");
+        const payload = Object.fromEntries(new FormData(form).entries());
+        const res = await fetch("/api/people", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) {
+          showError(data.error || "新增失败");
+          return;
+        }
+        form.reset();
+        form.status.value = "在职";
+        await loadPeople();
+      });
+
+      loadPeople().catch((err) => showError(err.message));
+    </script>
+  </body>
+</html>

@@ -11,7 +11,7 @@ export const NAV_ITEMS = [
 export function navMarkup(activeHref) {
   const links = NAV_ITEMS.map((item) => {
     const current = item.href === activeHref ? ' aria-current="page"' : "";
-    return `<a href="${item.href}"${current}>${item.label}</a>`;
+    return `<a class="xm-menu-item" href="${item.href}"${current}><span>${item.label}</span></a>`;
   }).join("");
-  return `<header class="site-header"><div class="site-header__inner"><a class="site-brand" href="/">运营部</a><nav class="site-nav" aria-label="全站导航">${links}</nav></div></header>`;
+  return `<aside class="xm-sider" aria-label="侧栏导航"><a class="xm-logo" href="/"><span class="xm-logo-mark">星</span><span class="xm-logo-text">星脉管理系统</span></a><nav class="xm-menu">${links}</nav></aside>`;
 }
