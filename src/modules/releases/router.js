@@ -89,17 +89,20 @@ export function createReleasesRouter(options = {}) {
     return { ok: true };
   }
 
-  async function handlePublish(req, res, item) {
+  async function handlePublish(req, res, item, options = {}) {
+    const requireOrder = options.requireOrder !== false;
     const blocked = publishBlockedReason(item);
     if (blocked) {
       res.status(blocked.status).json({ ok: false, error: blocked.error });
       return;
     }
 
-    const order = checkMainBrainOrder(req.body?.order ?? req.body?.口令, item.module);
-    if (!order.ok) {
-      res.status(409).json({ ok: false, error: order.error });
-      return;
+    if (requireOrder) {
+      const order = checkMainBrainOrder(req.body?.order ?? req.body?.口令, item.module);
+      if (!order.ok) {
+        res.status(409).json({ ok: false, error: order.error });
+        return;
+      }
     }
 
     const acquired = store.tryAcquireLock(item);
@@ -185,6 +188,7 @@ export function createReleasesRouter(options = {}) {
     const item = store.create({
       version: ticket.version,
       applicant: ticket.applicant,
+      source: body.source || ticket.applicant,
       summary: ticket.summary,
       module: ticket.module,
       files: ticket.files,
@@ -216,6 +220,7 @@ export function createReleasesRouter(options = {}) {
     const item = store.create({
       version,
       applicant,
+      source: body.source || applicant,
       summary,
       module,
       files: parsed.complete ? parsed.document.files : parsed.document.files,
@@ -223,6 +228,15 @@ export function createReleasesRouter(options = {}) {
       restart: parsed.complete ? parsed.document.restart : true
     });
     res.status(201).json({ ok: true, item, incomplete: !parsed.complete });
+  });
+
+  router.post("/reorder", (req, res) => {
+    const result = store.reorder(req.body?.ids);
+    if (result.error) {
+      res.status(result.status).json({ ok: false, error: result.error });
+      return;
+    }
+    res.json({ ok: true, items: result.items });
   });
 
   router.post("/:id/approve", (req, res) => {
@@ -243,9 +257,23 @@ export function createReleasesRouter(options = {}) {
     res.json({ ok: true, item: result.item });
   });
 
+  router.post("/:id/move", (req, res) => {
+    const result = store.move(req.params.id, req.body?.direction);
+    if (result.error) {
+      res.status(result.status).json({ ok: false, error: result.error });
+      return;
+    }
+    res.json({ ok: true, item: result.item, items: result.items });
+  });
+
+  router.post("/:id/confirm", async (req, res) => {
+    const item = store.get(req.params.id);
+    await handlePublish(req, res, item, { requireOrder: false });
+  });
+
   router.post("/:id/publish", async (req, res) => {
     const item = store.get(req.params.id);
-    await handlePublish(req, res, item);
+    await handlePublish(req, res, item, { requireOrder: true });
   });
 
   return router;

@@ -6,7 +6,6 @@
     <title>版本发布中心 · 运营部</title>
     <link rel="stylesheet" href="/shared/layout.css" />
     <style>
-      /* 左栏由全站壳绘制。本页不画顶部横排导航，只排右侧业务。 */
       main.page {
         flex: 1;
         min-width: 0;
@@ -36,25 +35,6 @@
         margin: 0 0 0.85rem;
         font-size: 1.15rem;
       }
-      form {
-        display: grid;
-        gap: 0.7rem;
-      }
-      label {
-        display: grid;
-        gap: 0.3rem;
-        font-size: 0.9rem;
-        color: var(--muted);
-      }
-      input, select, textarea {
-        font: inherit;
-        padding: 0.55rem 0.7rem;
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        background: #fff;
-        color: var(--ink);
-      }
-      textarea { min-height: 4.5rem; resize: vertical; }
       .row {
         display: flex;
         flex-wrap: wrap;
@@ -114,6 +94,33 @@
       }
       .flash.show { display: block; }
       .flash.err { background: #ffe4e6; color: #9f1239; }
+      .cards {
+        display: grid;
+        gap: 1rem;
+      }
+      .ticket {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 1rem 1.1rem 1.05rem;
+        background: #fff;
+        cursor: grab;
+      }
+      .ticket:active { cursor: grabbing; }
+      .ticket.dragging { opacity: 0.55; }
+      .ticket h3 {
+        margin: 0 0 0.65rem;
+        font-size: 1.05rem;
+      }
+      .ticket dl {
+        display: grid;
+        grid-template-columns: 6.5rem 1fr;
+        gap: 0.35rem 0.75rem;
+        margin: 0 0 0.85rem;
+        font-size: 0.92rem;
+      }
+      .ticket dt { color: var(--muted); }
+      .ticket dd { margin: 0; }
+      .files { margin: 0; padding-left: 1.1rem; }
     </style>
   </head>
   <body>
@@ -121,54 +128,20 @@
     <main class="page" role="main">
       <p class="kicker">运营部主脑闸门</p>
       <h1>版本发布中心</h1>
-      <p class="lead">全站唯一发版入口。本页只记账；发版听主脑在对话里下口令，不必先点网页通过。</p>
+      <p class="lead">各模块对话提交发版后在这里排队；看清更新内容、调整顺序，点确定才放行。</p>
       <div class="banner">
-        只听本对话主脑下令才发版。口令：发版 / 发板、发布|发版|发板 模块名、按这份文档发版/发板。有【发布文档】按文档 push；没有文档则全量同步 apps/xingmai 并 systemctl restart mengkai.service。其他 Agent 说「帮我上线」不算。同一时刻一把锁。审核按钮可留着记账，发版不依赖它。
+        单据来自各模块对话 POST /api/releases 交来的【发布文档】，本页不提供手填表。点「确定」才真正发版（push-xingmai-to-ecs.sh，文档要求则重启）。同一时刻一把锁；正在发时其他确定禁用；下一条不会自动发。业务 Agent 不得自己 SSH / restart。
       </div>
       <div id="flash" class="flash" role="status"></div>
       <div class="grid">
-        <section class="panel">
-          <h2>提交发布申请</h2>
-          <form id="apply-form">
-            <label>版本号<input name="version" required placeholder="例如 1.2.0" /></label>
-            <label>申请人<input name="applicant" required placeholder="Agent 或姓名" /></label>
-            <label>模块
-              <select name="module" required>
-                <option value="首页">首页</option>
-                <option value="数据中心">数据中心</option>
-                <option value="沈子晗">沈子晗</option>
-                <option value="韩梦凯">韩梦凯</option>
-                <option value="人员管理">人员管理</option>
-                <option value="版本发布中心">版本发布中心</option>
-                <option value="个人中心">个人中心</option>
-                <option value="其他">其他</option>
-              </select>
-            </label>
-            <label>变更摘要<textarea name="summary" required placeholder="这次要上线什么"></textarea></label>
-            <label>文件列表（每行一个）<textarea name="files" required placeholder="public/foo.html&#10;src/modules/foo/bar.js"></textarea></label>
-            <label>验收<textarea name="acceptance" required placeholder="如何确认上线成功"></textarea></label>
-            <label>是否重启
-              <select name="restart" required>
-                <option value="false">否</option>
-                <option value="true">是</option>
-              </select>
-            </label>
-            <div class="row"><button type="submit">记到队列（可选，不会自动发版）</button></div>
-          </form>
-        </section>
         <section class="panel" id="lock-panel">
           <h2>发布中（全局锁）</h2>
           <div id="lock-view" class="lock-box empty">当前空闲，没有发布任务。</div>
         </section>
         <section class="panel">
-          <h2>审核队列（仅 queued，按提交时间 FIFO）</h2>
-          <p class="muted">审核按钮前期可不用。主脑口令可对 queued 单直接发版。驳回仍须填写原因。</p>
-          <div id="queue-view"></div>
-        </section>
-        <section class="panel">
-          <h2>待发布（已通过）</h2>
-          <p class="muted">网页发布可选。口令默认「发版」即可；有文档按文档，无文档则全量同步并重启。</p>
-          <div id="approved-view"></div>
+          <h2>待放行（各对话框交来的发版单）</h2>
+          <p class="muted">数字越小越先发。可上移 / 下移，或拖拽卡片。确定 = 放行这一单。</p>
+          <div id="queue-view" class="cards"></div>
         </section>
         <section class="panel">
           <h2>历史（success / failed / rejected）</h2>
@@ -214,6 +187,14 @@
         return ts ? String(ts).replace("T", " ").replace("Z", " UTC") : "—";
       }
 
+      function esc(value) {
+        return String(value == null ? "" : value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;");
+      }
+
       function demoBadge(item) {
         return item.demo ? '<span class="badge">演示</span>' : "";
       }
@@ -229,60 +210,56 @@
         const cur = lock.current || {};
         el.innerHTML =
           "<div>锁已被占用，禁止第二下发布。</div>" +
-          "<div>版本号：" + (cur.version || "—") + "</div>" +
-          "<div>开始时间：" + fmt(cur.startedAt) + "</div>";
+          "<div>版本号：" + esc(cur.version || "—") + "</div>" +
+          "<div>开始时间：" + esc(fmt(cur.startedAt)) + "</div>";
       }
 
-      function renderQueue(items) {
+      function fileList(item) {
+        const files = item.files || [];
+        if (!files.length) {
+          return '<span class="muted">（无文件，确定后将按前期规则全量同步）</span>';
+        }
+        return "<ul class=\"files\">" + files.map(function (file) {
+          return "<li>" + esc(file) + "</li>";
+        }).join("") + "</ul>";
+      }
+
+      function renderQueue(items, locked) {
         const el = document.getElementById("queue-view");
         if (!items.length) {
-          el.innerHTML = '<p class="muted">队列为空。</p>';
+          el.innerHTML = '<p class="muted">还没有对话交来的发版单。</p>';
           return;
         }
-        el.innerHTML =
-          "<table><thead><tr><th>时间</th><th>版本</th><th>申请人 / 模块</th><th>摘要</th><th>操作</th></tr></thead><tbody>" +
-          items
-            .map(function (item) {
-              return (
-                "<tr data-id=\"" + item.id + "\">" +
-                "<td>" + fmt(item.submittedAt) + "</td>" +
-                "<td>" + item.version + demoBadge(item) + "</td>" +
-                "<td>" + item.applicant + "<br><span class=\"muted\">" + item.module + "</span></td>" +
-                "<td>" + item.summary + "</td>" +
-                "<td class=\"row\">" +
-                "<button data-act=\"approve\">通过（可选）</button>" +
-                "<button data-act=\"publish\">发版</button>" +
-                "<button class=\"danger\" data-act=\"reject\">驳回</button>" +
-                "</td></tr>"
-              );
-            })
-            .join("") +
-          "</tbody></table>";
-      }
-
-      function renderApproved(items, locked) {
-        const el = document.getElementById("approved-view");
-        if (!items.length) {
-          el.innerHTML = '<p class="muted">没有已通过、等待发布的单据。</p>';
-          return;
-        }
-        el.innerHTML =
-          "<table><thead><tr><th>版本</th><th>模块</th><th>审核</th><th>发布</th></tr></thead><tbody>" +
-          items
-            .map(function (item) {
-              const btn = locked
-                ? "<button disabled>有发布正在进行，请等待</button>"
-                : "<button data-act=\"publish\">发布</button>";
-              return (
-                "<tr data-id=\"" + item.id + "\">" +
-                "<td>" + item.version + demoBadge(item) + "</td>" +
-                "<td>" + item.module + "</td>" +
-                "<td>" + (item.reviewer || "—") + "<br><span class=\"muted\">" + fmt(item.reviewedAt) + "</span></td>" +
-                "<td>" + btn + "</td></tr>"
-              );
-            })
-            .join("") +
-          "</tbody></table>";
+        el.innerHTML = items
+          .map(function (item, index) {
+            const seq = item.queueIndex || index + 1;
+            const confirmBtn = locked
+              ? "<button disabled>有发布正在进行，请等待</button>"
+              : "<button data-act=\"confirm\">确定</button>";
+            const upOff = index === 0 ? " disabled" : "";
+            const downOff = index === items.length - 1 ? " disabled" : "";
+            return (
+              "<article class=\"ticket\" draggable=\"true\" data-id=\"" + esc(item.id) + "\">" +
+              "<h3>第 " + seq + " 位 · " + esc(item.module) + " " + esc(item.version) + demoBadge(item) + "</h3>" +
+              "<dl>" +
+              "<dt>来自对话</dt><dd>" + esc(item.source || item.applicant || "—") + "</dd>" +
+              "<dt>模块</dt><dd>" + esc(item.module) + "</dd>" +
+              "<dt>版本号</dt><dd>" + esc(item.version) + "</dd>" +
+              "<dt>更新了什么</dt><dd>" + esc(item.summary) + "</dd>" +
+              "<dt>文件列表</dt><dd>" + fileList(item) + "</dd>" +
+              "<dt>怎么验收</dt><dd>" + esc(item.acceptance || "—") + "</dd>" +
+              "<dt>是否重启</dt><dd>" + (item.restart ? "是" : "否") + "</dd>" +
+              "<dt>提交时间</dt><dd>" + esc(fmt(item.submittedAt)) + "</dd>" +
+              "</dl>" +
+              "<div class=\"row\">" +
+              confirmBtn +
+              "<button class=\"secondary\" data-act=\"up\"" + upOff + ">上移</button>" +
+              "<button class=\"secondary\" data-act=\"down\"" + downOff + ">下移</button>" +
+              "<button class=\"danger\" data-act=\"reject\">驳回</button>" +
+              "</div></article>"
+            );
+          })
+          .join("");
       }
 
       function renderHistory(items) {
@@ -292,18 +269,18 @@
           return;
         }
         el.innerHTML =
-          "<table><thead><tr><th>状态</th><th>版本</th><th>审核人 / 时间</th><th>发布时间</th><th>日志</th></tr></thead><tbody>" +
+          "<table><thead><tr><th>状态</th><th>版本</th><th>来自 / 模块</th><th>审核人 / 时间</th><th>日志</th></tr></thead><tbody>" +
           items
             .map(function (item) {
               return (
                 "<tr>" +
-                "<td>" + item.status + "</td>" +
-                "<td>" + item.version + demoBadge(item) + "</td>" +
-                "<td>" + (item.reviewer || "—") + "<br><span class=\"muted\">" + fmt(item.reviewedAt) + "</span>" +
-                (item.rejectReason ? "<br>原因：" + item.rejectReason : "") +
+                "<td>" + esc(item.status) + "</td>" +
+                "<td>" + esc(item.version) + demoBadge(item) + "</td>" +
+                "<td>" + esc(item.source || item.applicant || "—") + "<br><span class=\"muted\">" + esc(item.module) + "</span></td>" +
+                "<td>" + esc(item.reviewer || "—") + "<br><span class=\"muted\">" + esc(fmt(item.reviewedAt)) + "</span>" +
+                (item.rejectReason ? "<br>原因：" + esc(item.rejectReason) : "") +
                 "</td>" +
-                "<td>" + fmt(item.publishStartedAt) + "<br><span class=\"muted\">" + fmt(item.publishFinishedAt) + "</span></td>" +
-                "<td>" + (item.log || "—") + "</td></tr>"
+                "<td>" + esc(item.log || "—") + "</td></tr>"
               );
             })
             .join("") +
@@ -318,11 +295,7 @@
         ]);
         const items = all.items || [];
         renderLock(lock);
-        renderQueue(queue.items || []);
-        renderApproved(
-          items.filter(function (item) { return item.status === "approved"; }),
-          lock.locked
-        );
+        renderQueue(queue.items || [], lock.locked);
         renderHistory(
           items.filter(function (item) {
             return item.status === "success" || item.status === "failed" || item.status === "rejected";
@@ -331,40 +304,16 @@
         return lock;
       }
 
-      document.getElementById("apply-form").addEventListener("submit", async function (event) {
-        event.preventDefault();
-        const form = event.target;
-        const payload = {
-          version: form.version.value,
-          applicant: form.applicant.value,
-          module: form.module.value,
-          summary: form.summary.value,
-          files: form.files.value,
-          acceptance: form.acceptance.value,
-          restart: form.restart.value === "true"
-        };
-        try {
-          await api("/api/releases", { method: "POST", body: JSON.stringify(payload) });
-          form.reset();
-          flash("已记到队列。发版仍须主脑口令（对话里下令即可，不必点网页）。");
-          await refresh();
-        } catch (err) {
-          flash(err.message, true);
-        }
-      });
-
       document.body.addEventListener("click", async function (event) {
         const btn = event.target.closest("button[data-act]");
         if (!btn) return;
-        const tr = btn.closest("tr");
-        const id = tr && tr.getAttribute("data-id");
+        const card = btn.closest("[data-id]");
+        const id = card && card.getAttribute("data-id");
         if (!id) return;
         btn.disabled = true;
         try {
-          if (btn.getAttribute("data-act") === "approve") {
-            await api("/api/releases/" + id + "/approve", { method: "POST", body: "{}" });
-            flash("已通过（记账）。主脑口令仍可直接发版。");
-          } else if (btn.getAttribute("data-act") === "reject") {
+          const act = btn.getAttribute("data-act");
+          if (act === "reject") {
             const reason = window.prompt("请填写驳回原因（必填）");
             if (!reason || !reason.trim()) {
               flash("驳回已取消：必须填写原因。", true);
@@ -376,19 +325,19 @@
               body: JSON.stringify({ reason: reason.trim() })
             });
             flash("已驳回，该单不可发布。");
-          } else if (btn.getAttribute("data-act") === "publish") {
-            const order = window.prompt("主脑口令（发版 / 发板 / 发布模块名 / 按这份文档发版）", "发版");
-            if (!order || !order.trim()) {
-              flash("没有主脑口令，禁止发版。", true);
-              btn.disabled = false;
-              return;
-            }
-            flash("正在抢锁并执行 push-xingmai-to-ecs.sh。");
-            const done = await api("/api/releases/" + id + "/publish", {
+          } else if (act === "up" || act === "down") {
+            await api("/api/releases/" + id + "/move", {
               method: "POST",
-              body: JSON.stringify({ order: order.trim() })
+              body: JSON.stringify({ direction: act })
             });
-            flash("发版结束：版本 " + (done.version || "") + "。下一条不会自动发布。");
+            flash(act === "up" ? "已上移。" : "已下移。");
+          } else if (act === "confirm") {
+            flash("正在放行：抢锁并执行 push-xingmai-to-ecs.sh。");
+            const done = await api("/api/releases/" + id + "/confirm", {
+              method: "POST",
+              body: "{}"
+            });
+            flash("已放行版本 " + (done.version || "") + "。下一条不会自动发布。");
           }
           await refresh();
         } catch (err) {
@@ -396,6 +345,49 @@
           await refresh();
         }
       });
+
+      (function enableDragReorder() {
+        const root = document.getElementById("queue-view");
+        let dragId = "";
+        root.addEventListener("dragstart", function (event) {
+          const card = event.target.closest(".ticket");
+          if (!card) return;
+          dragId = card.getAttribute("data-id") || "";
+          card.classList.add("dragging");
+          event.dataTransfer.effectAllowed = "move";
+        });
+        root.addEventListener("dragend", function (event) {
+          const card = event.target.closest(".ticket");
+          if (card) card.classList.remove("dragging");
+        });
+        root.addEventListener("dragover", function (event) {
+          event.preventDefault();
+        });
+        root.addEventListener("drop", async function (event) {
+          event.preventDefault();
+          const over = event.target.closest(".ticket");
+          if (!dragId || !over) return;
+          const ids = Array.prototype.map.call(root.querySelectorAll(".ticket"), function (node) {
+            return node.getAttribute("data-id");
+          });
+          const from = ids.indexOf(dragId);
+          const to = ids.indexOf(over.getAttribute("data-id"));
+          if (from < 0 || to < 0 || from === to) return;
+          ids.splice(from, 1);
+          ids.splice(to, 0, dragId);
+          try {
+            await api("/api/releases/reorder", {
+              method: "POST",
+              body: JSON.stringify({ ids: ids })
+            });
+            flash("已按拖拽调整排队顺序。");
+            await refresh();
+          } catch (err) {
+            flash(err.message, true);
+            await refresh();
+          }
+        });
+      })();
 
       refresh().catch(function (err) { flash(err.message, true); });
       setInterval(function () {

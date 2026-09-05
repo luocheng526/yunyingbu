@@ -95,7 +95,7 @@ test("GET /releases is the release center page", async () => {
     const text = await res.text();
     assert.equal(res.status, 200);
     assert.match(text, /版本发布中心/);
-    assert.match(text, /只听本对话主脑下令才发版/);
+    assert.match(text, /各模块对话提交发版后在这里排队/);
     assert.match(text, /href="\/shared\/layout.css"/);
     assert.match(text, /src="\/shared\/nav.js"/);
     assert.match(text, /<main class="page"/);
@@ -103,6 +103,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /push-xingmai-to-ecs/);
     assert.match(text, /window\.location\.replace\("\/login"\)/);
     assert.doesNotMatch(text, /id="login-form"/);
+    assert.doesNotMatch(text, /id="apply-form"/);
+    assert.doesNotMatch(text, /提交发布申请/);
     assert.doesNotMatch(text, /星脉管理系统/);
   });
 });
@@ -113,7 +115,10 @@ test("releases.html has no login form and sends users to /login", () => {
   assert.doesNotMatch(html, /<input[^>]*type="password"/);
   assert.match(html, /\/shared\/layout.css/);
   assert.match(html, /\/shared\/nav.js/);
-  assert.doesNotMatch(html, /<nav class="site-nav"/);
+  assert.doesNotMatch(html, /id="apply-form"/);
+  assert.doesNotMatch(html, /提交发布申请/);
+  assert.match(html, /点「确定」才真正发版/);
+  assert.match(html, /\/api\/releases\/.*confirm/);
 });
 
 test("unauthenticated page redirects to /login", async () => {
@@ -133,12 +138,20 @@ test("unauthenticated APIs return 401 JSON", async () => {
       ["GET", "/api/releases/queue"],
       ["GET", "/api/releases/lock"],
       ["POST", "/api/releases"],
-      ["POST", "/api/releases/go"]
+      ["POST", "/api/releases/go"],
+      ["POST", "/api/releases/reorder"]
     ];
     for (const [method, pathname] of calls) {
       const { res, body } = await json(base, pathname, {
         method,
-        body: method === "POST" ? (pathname.endsWith("/go") ? JSON.stringify({ order: "发版" }) : apply("1.0.0", "Eve", "首页", "no session")) : undefined
+        body:
+          method === "POST"
+            ? pathname.endsWith("/go")
+              ? JSON.stringify({ order: "发版" })
+              : pathname.endsWith("/reorder")
+                ? JSON.stringify({ ids: [] })
+                : apply("1.0.0", "Eve", "首页", "no session")
+            : undefined
       });
       assert.equal(res.status, 401, pathname);
       assert.equal(body.error, "未登录");
@@ -174,6 +187,10 @@ test("submit three applications; queue is FIFO by time", async () => {
       const queue = await json(base, "/api/releases/queue");
       const versions = queue.body.items.filter((item) => !item.demo).map((item) => item.version);
       assert.deepEqual(versions, ["1.0.1", "1.0.2", "1.0.3"]);
+      assert.deepEqual(
+        queue.body.items.filter((item) => !item.demo).map((item) => item.queueIndex),
+        [3, 4, 5]
+      );
       assert.ok(
         queue.body.items.every((item, i, arr) => i === 0 || arr[i - 1].submittedAt <= item.submittedAt)
       );
@@ -403,7 +420,6 @@ test("document without 口令 stays queued and does not push", async () => {
         body: apply("6.0.0", "Doc", "首页", "仅文档")
       });
       assert.equal(created.body.item.status, "queued");
-      await json(base, `/api/releases/${created.body.item.id}/approve`, { method: "POST" });
       const pub = await json(base, `/api/releases/${created.body.item.id}/publish`, {
         method: "POST",
         body: JSON.stringify({})
@@ -413,7 +429,7 @@ test("document without 口令 stays queued and does not push", async () => {
       assert.equal(pushes, 0);
       assert.equal(restarts, 0);
       const all = await json(base, "/api/releases");
-      assert.equal(all.body.items.find((item) => item.id === created.body.item.id).status, "approved");
+      assert.equal(all.body.items.find((item) => item.id === created.body.item.id).status, "queued");
     }
   );
 });
@@ -501,6 +517,65 @@ test("帮我上线 is not a publish order", async () => {
       assert.equal(pub.res.status, 409);
       assert.match(pub.body.error, /不算/);
       assert.equal(pushes, 0);
+    }
+  );
+});
+
+test("confirm 放行 without 口令; move and reorder change queueIndex", async () => {
+  const pushed = [];
+  await withServer(
+    {
+      async push(files) {
+        pushed.push(files);
+        return { stdout: "ok" };
+      }
+    },
+    async (base) => {
+      const first = await json(base, "/api/releases", {
+        method: "POST",
+        body: JSON.stringify({
+          version: "7.0.0",
+          applicant: "首页 Agent",
+          source: "首页导航与工作台",
+          module: "首页",
+          summary: "壳",
+          files: ["public/index.html"],
+          acceptance: "打开 /",
+          restart: false
+        })
+      });
+      const second = await json(base, "/api/releases", {
+        method: "POST",
+        body: apply("7.0.1", "数据中心 Agent", "数据中心", "看板")
+      });
+      const moved = await json(base, `/api/releases/${second.body.item.id}/move`, {
+        method: "POST",
+        body: JSON.stringify({ direction: "up" })
+      });
+      assert.equal(moved.res.status, 200);
+      const afterMove = await json(base, "/api/releases/queue");
+      const live = afterMove.body.items.filter((item) => !item.demo);
+      assert.equal(live[0].id, second.body.item.id);
+      assert.equal(live[0].queueIndex, 3);
+      assert.equal(live[1].id, first.body.item.id);
+
+      const reordered = await json(base, "/api/releases/reorder", {
+        method: "POST",
+        body: JSON.stringify({
+          ids: afterMove.body.items.map((item) => item.id)
+        })
+      });
+      assert.equal(reordered.res.status, 200);
+
+      const confirmed = await json(base, `/api/releases/${first.body.item.id}/confirm`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(confirmed.res.status, 200);
+      assert.equal(confirmed.body.item.status, "success");
+      assert.deepEqual(pushed, [["public/index.html"]]);
+      const still = await json(base, "/api/releases");
+      assert.equal(still.body.items.find((item) => item.id === second.body.item.id).status, "queued");
     }
   );
 });
