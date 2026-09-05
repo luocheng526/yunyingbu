@@ -10,6 +10,10 @@
     <div class="login-backdrop" aria-hidden="true"></div>
     <main class="login-card">
       <h1>星脉管理系统</h1>
+      <p class="login-hint">
+        请用 <strong>http://zx.xingmaierp.cc/login</strong>（不要 https）。<br />
+        试用账号 <strong>罗成</strong> 或 <strong>luocheng</strong>，密码 <strong>ChangeMe123!</strong>
+      </p>
       <form id="login-form" autocomplete="on">
         <div class="field">
           <svg class="icon icon-left" viewBox="0 0 24 24" aria-hidden="true">
@@ -63,13 +67,18 @@
           var username = userEl.value.trim();
           var password = passEl.value;
           var remember = rememberEl.checked;
-          var res = await fetch("/api/auth/login", {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username: username, password: password, remember: remember })
-          });
-          passEl.value = "";
+          var res;
+          try {
+            res = await fetch("/api/auth/login", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ username: username, password: password, remember: remember })
+            });
+          } catch (_err) {
+            errorEl.textContent = "连不上服务器。请改用 http://zx.xingmaierp.cc/login，不要用 https。";
+            return;
+          }
           var data = {};
           try {
             data = await res.json();
@@ -80,6 +89,7 @@
             errorEl.textContent = data.error || "用户名或密码错误";
             return;
           }
+          passEl.value = "";
           if (remember) {
             localStorage.setItem(REMEMBER_KEY, username);
           } else {

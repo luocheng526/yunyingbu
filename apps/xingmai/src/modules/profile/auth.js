@@ -49,6 +49,17 @@ function seed() {
   });
 }
 
+function resolveUser(username) {
+  const trimmed = username.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (trimmed === DEMO_USERNAME || trimmed.toLowerCase() === "luocheng") {
+    return users.get(DEMO_USERNAME) ?? null;
+  }
+  return users.get(trimmed) ?? null;
+}
+
 seed();
 
 export function resetStoreForTests() {
@@ -138,7 +149,7 @@ authRouter.post("/login", (req, res) => {
     res.status(401).json({ ok: false, error: "请输入用户名和密码" });
     return;
   }
-  const user = users.get(username);
+  const user = resolveUser(username);
   if (!user || !verifyPassword(password, user.passwordHash)) {
     res.status(401).json({ ok: false, error: "用户名或密码错误" });
     return;

@@ -48,11 +48,24 @@ body.login-page {
 }
 
 .login-card h1 {
-  margin: 0 0 36px;
+  margin: 0 0 12px;
   text-align: center;
   font-size: 28px;
   font-weight: 600;
   letter-spacing: 0.04em;
+}
+
+.login-hint {
+  margin: 0 0 28px;
+  text-align: center;
+  color: var(--login-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.login-hint strong {
+  color: var(--login-ink);
+  font-weight: 600;
 }
 
 .field {
