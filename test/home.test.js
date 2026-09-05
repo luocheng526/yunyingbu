@@ -39,16 +39,21 @@ test("GET /api/home/summary returns module json", async () => {
   });
 });
 
-test("GET / is the workbench with seven cards and nav labels", async () => {
+test("GET / is the left-nav dashboard with seven menu labels", async () => {
   await withServer(async (base) => {
     const { res, text } = await get(base, "/");
     assert.equal(res.status, 200);
-    assert.match(text, /欢迎回到运营部工作台/);
-    assert.match(text, /各中心由独立 Agent 维护/);
-    assert.equal((text.match(/class="card"/g) || []).length, 7);
+    assert.match(text, /星脉管理系统/);
+    assert.match(text, /趋势看板/);
+    assert.match(text, /实时销售指数/);
+    assert.match(text, /龙虎榜/);
+    assert.match(text, /演示/);
+    assert.match(text, /kpi-grid/);
+    assert.match(text, /xm-sider/);
     for (const label of NAV_LABELS) {
       assert.match(text, new RegExp(label));
     }
+    assert.doesNotMatch(text, /login-page/);
   });
 });
 
@@ -57,7 +62,8 @@ test("unfinished module pages return placeholder instead of 500", async () => {
     for (const path of ["/data", "/shen", "/han", "/people", "/releases", "/me"]) {
       const { res, text } = await get(base, path);
       assert.equal(res.status, 200, path);
-      assert.match(text, /该模块 Agent 尚未交付/);
+      assert.match(text, /星脉管理系统/);
+      assert.match(text, /xm-sider/);
       assert.match(text, /shared\/nav\.js/);
       assert.match(text, /shared\/layout\.css/);
       for (const label of NAV_LABELS) {
