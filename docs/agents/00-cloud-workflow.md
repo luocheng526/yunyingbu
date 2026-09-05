@@ -32,4 +32,9 @@ Cloud Agent 默认没有 ECS 私钥。请在 Cursor 环境 Secrets 增加：
 
 站点外网要通：入方向 **TCP 80** 和 **TCP 443**（以及已放行的 22、18080）。
 
-证书已在 ECS 上配好（`zx.xingmaierp.cc` Let’s Encrypt）。若浏览器自动跳到 `https://` 而安全组没放行 443，页面会转圈打不开；此时先用 `http://zx.xingmaierp.cc/login`，或在控制台给安全组加上 **TCP 443 / 0.0.0.0/0**（和放行 80 同一处）。
+360 等浏览器会强制 `https://zx.xingmaierp.cc`（走 443）。安全组还没放行 443 时，页面就是「打开页面失败」。
+
+**临时可用（443 未放行时）：** `https://zx.xingmaierp.cc:18080/login`  
+账号 `luocheng`，密码 `ChangeMe123!`。
+
+长期：在阿里云安全组 `sg-2zee621yvv8l64q2x2jb` 增加 **TCP 443 / 0.0.0.0/0**，然后即可用 `https://zx.xingmaierp.cc/login`。
