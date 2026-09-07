@@ -1,4 +1,5 @@
 import express from "express";
+import path from "node:path";
 import { requireReleasesAuth } from "./auth.js";
 import { hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
 import { pushXingmaiToEcs } from "./push.js";
@@ -37,8 +38,19 @@ function successLog(item, pushResult, extra, noDoc) {
 }
 
 export function createReleasesRouter(options = {}) {
-  const store = options.store || createStore({ now: options.now });
-  const pipelineStore = options.pipelineStore || createPipelineStore({ now: options.now });
+  const stateDir = options.stateDir || process.env.MENGKAI_STATE_DIR || "";
+  const store =
+    options.store ||
+    createStore({
+      now: options.now,
+      persistPath: stateDir ? path.join(stateDir, "tickets.json") : ""
+    });
+  const pipelineStore =
+    options.pipelineStore ||
+    createPipelineStore({
+      now: options.now,
+      persistPath: stateDir ? path.join(stateDir, "pipeline.json") : ""
+    });
   const restart = options.restart || restartMengkaiService;
   const push = options.push || pushXingmaiToEcs;
   const router = express.Router();

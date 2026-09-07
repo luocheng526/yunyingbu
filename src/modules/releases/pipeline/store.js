@@ -1,12 +1,18 @@
 import { STATES } from "./constants.js";
 import { applyTransition } from "./machine.js";
+import { readJsonFile, writeJsonFile } from "../persist-json.js";
 
-export function createPipelineStore({ now } = {}) {
+export function createPipelineStore({ now, persistPath } = {}) {
   const stamp = () => (now ? now() : new Date().toISOString());
-  const candidates = [];
-  const deliveries = [];
-  const outbox = [];
-  const leases = [];
+  const saved = readJsonFile(persistPath, null);
+  const candidates = Array.isArray(saved?.candidates) ? saved.candidates : [];
+  const deliveries = Array.isArray(saved?.deliveries) ? saved.deliveries : [];
+  const outbox = Array.isArray(saved?.outbox) ? saved.outbox : [];
+  const leases = Array.isArray(saved?.leases) ? saved.leases : [];
+
+  function persist() {
+    writeJsonFile(persistPath, { candidates, deliveries, outbox, leases });
+  }
 
   return {
     list() {
@@ -31,6 +37,7 @@ export function createPipelineStore({ now } = {}) {
       }
       const row = { ...entry, createdAt: stamp() };
       deliveries.push(row);
+      persist();
       return { duplicate: false, entry: row };
     },
     insertCandidate(row) {
@@ -39,6 +46,7 @@ export function createPipelineStore({ now } = {}) {
         return existing;
       }
       candidates.push(row);
+      persist();
       return row;
     },
     consumeOverlay({ ciRunId, ciRunAttempt }) {
@@ -52,6 +60,7 @@ export function createPipelineStore({ now } = {}) {
         return null;
       }
       const [removed] = candidates.splice(idx, 1);
+      persist();
       return removed;
     },
     supersedeOlder({ repository, prNumber, mergeSha, actor }) {
@@ -69,16 +78,20 @@ export function createPipelineStore({ now } = {}) {
           });
         }
       }
+      persist();
     },
     transition(id, to, meta) {
       const row = this.get(id);
       if (!row) {
         throw new Error("候选不存在");
       }
-      return applyTransition(row, to, { ...meta, now: stamp() });
+      const updated = applyTransition(row, to, { ...meta, now: stamp() });
+      persist();
+      return updated;
     },
     pushOutbox(message) {
       outbox.push({ ...message, createdAt: stamp(), status: "pending" });
+      persist();
     },
     outbox() {
       return outbox.slice();

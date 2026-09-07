@@ -3,4 +3,7 @@
 # Secrets live in /etc/mengkai.env (mode 600), never in git.
 
 [Service]
-EnvironmentFile=/etc/mengkai.env
+EnvironmentFile=-/etc/mengkai.env
+StateDirectory=mengkai
+Environment=MENGKAI_STATE_DIR=/var/lib/mengkai
+Environment=RELEASE_MODE=shadow

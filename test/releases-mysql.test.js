@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { isMysqlConfigured, mysqlConfigFromEnv } from "../src/db/pool.js";
 import { createStore } from "../src/modules/releases/store.js";
@@ -174,4 +177,24 @@ test("createStore without MYSQL_* stays on memory for local tests", async () => 
   const store = createStore({ memory: true });
   const queue = await store.queue();
   assert.ok(queue.some((item) => item.demo));
+});
+
+test("memory store with persistPath skips demo seed and reloads tickets", async () => {
+  const persistPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "rel-tickets-")), "tickets.json");
+  const first = createStore({ memory: true, persistPath });
+  const created = await first.create({
+    version: "1.0.0",
+    applicant: "版本发布中心",
+    source: "版本发布中心",
+    module: "版本发布中心",
+    summary: "persist",
+    files: ["src/server.js"],
+    acceptance: "reload",
+    restart: false
+  });
+  const second = createStore({ memory: true, persistPath });
+  const queue = await second.queue();
+  assert.equal(queue.some((item) => item.demo), false);
+  assert.equal(queue[0].id, created.id);
+  assert.equal(queue[0].version, "1.0.0");
 });

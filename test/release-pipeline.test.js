@@ -413,3 +413,19 @@ test("wake with fetchReleaseArtifact ingests the triple and drops overlay", asyn
     }
   );
 });
+
+test("pipeline store survives a new process via persistPath", () => {
+  const persistPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "rel-persist-")), "pipeline.json");
+  const first = createPipelineStore({ persistPath });
+  first.recordDelivery({ deliveryId: "d1", runId: 1 });
+  first.insertCandidate({
+    id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    overlay: true,
+    state: "waiting_ci",
+    ciRunId: 1,
+    ciRunAttempt: 1
+  });
+  const second = createPipelineStore({ persistPath });
+  assert.equal(second.list().length, 1);
+  assert.equal(second.findDelivery("d1").runId, 1);
+});

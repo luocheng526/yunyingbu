@@ -27,11 +27,18 @@ function sortQueued(a, b) {
   return String(a.id).localeCompare(String(b.id));
 }
 
-export function createMemoryStore({ now } = {}) {
+import { readJsonFile, writeJsonFile } from "./persist-json.js";
+
+export function createMemoryStore({ now, persistPath } = {}) {
   const timestamp = () => (now ? now() : new Date().toISOString());
-  const items = [];
-  let seq = 0;
-  let lock = null;
+  const saved = readJsonFile(persistPath, null);
+  const items = Array.isArray(saved?.items) ? saved.items : [];
+  let seq = Number(saved?.seq) || 0;
+  let lock = saved?.lock || null;
+
+  function persist() {
+    writeJsonFile(persistPath, { items, seq, lock });
+  }
 
   function nextId() {
     seq += 1;
@@ -124,7 +131,18 @@ export function createMemoryStore({ now } = {}) {
     });
   }
 
-  seedDemo();
+  if (!persistPath) {
+    seedDemo();
+  } else if (!items.length) {
+    persist();
+  } else {
+    for (const item of items) {
+      const match = String(item.id || "").match(/^rel-(\d+)$/);
+      if (match) {
+        seq = Math.max(seq, Number(match[1]));
+      }
+    }
+  }
 
   return {
     backend: "memory",
@@ -167,10 +185,12 @@ export function createMemoryStore({ now } = {}) {
         return false;
       }
       lock = { id: item.id, version: item.version, startedAt: timestamp() };
+      persist();
       return true;
     },
     releaseLock() {
       lock = null;
+      persist();
     },
     create({ version, applicant, source, module, summary, files, acceptance, restart }) {
       const who = String(applicant || "").trim();
@@ -196,6 +216,7 @@ export function createMemoryStore({ now } = {}) {
         log: "已进入发版看板排队。主脑在网页点通过才放行；下一条不会自动发。"
       };
       items.push(item);
+      persist();
       return item;
     },
     approve(id) {
@@ -210,6 +231,7 @@ export function createMemoryStore({ now } = {}) {
       item.reviewer = REVIEWER;
       item.reviewedAt = timestamp();
       item.log = "已标记通过。请用确定放行上线。";
+      persist();
       return { item };
     },
     reject(id, reason) {
@@ -229,6 +251,7 @@ export function createMemoryStore({ now } = {}) {
       item.reviewedAt = timestamp();
       item.rejectReason = trimmed;
       item.log = `已驳回：${trimmed}`;
+      persist();
       return { item };
     },
     move(id, direction) {
@@ -254,6 +277,7 @@ export function createMemoryStore({ now } = {}) {
       const currentPriority = item.priority;
       item.priority = other.priority;
       other.priority = currentPriority;
+      persist();
       return { item, items: decorateQueue(queuedItems()) };
     },
     reorder(ids) {
@@ -272,22 +296,26 @@ export function createMemoryStore({ now } = {}) {
       wanted.forEach((id, index) => {
         this.get(id).priority = index + 1;
       });
+      persist();
       return { items: decorateQueue(queuedItems()) };
     },
     markPublishing(item) {
       item.status = "publishing";
       item.publishStartedAt = lock?.startedAt || timestamp();
       item.log = "已抢到全局发布锁，正在执行 push-xingmai-to-ecs.sh";
+      persist();
     },
     markSuccess(item, message) {
       item.status = "success";
       item.publishFinishedAt = timestamp();
       item.log = message || "发版成功。队列下一条不会自动发布。";
+      persist();
     },
     markFailed(item, message) {
       item.status = "failed";
       item.publishFinishedAt = timestamp();
       item.log = message || "发布失败。";
+      persist();
     }
   };
 }
