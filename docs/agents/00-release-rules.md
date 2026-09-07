@@ -50,6 +50,7 @@ Cookie: 登录会话
   "module": "首页|数据中心|沈子晗|韩梦凯|人员管理|版本发布中心|个人中心",
   "summary": "更新了什么",
   "files": ["public/...", "src/..."],
+  "contents": { "public/...": "文件正文", "src/...": "文件正文" },
   "acceptance": "上线后怎么验",
   "restart": true
 }
@@ -57,7 +58,9 @@ Cookie: 登录会话
 
 - 文件路径相对 `apps/xingmai/`，**不要**写 `apps/xingmai/` 前缀。
 - 只允许：`public/`、`src/`、`test/`、`package.json`、`package-lock.json`。
-- 源目录没有的新文件、或源目录与线上完全相同，闸门会失败。交单前确认 git 已 push，并让闸门能同步到源目录。
+- **必须带 `contents`（路径→正文）**，闸门靠它写入源目录。只 push Git 不够。闸门不读 Cloud 工作区。
+- **不要带 `gitRef` / `ref`。** 闸门按 `public/...` 去 GitHub 找，对不上仓库里的 `apps/xingmai/`，会 404。
+- 源目录没有的新文件、或源目录与线上完全相同，闸门会失败。
 - 禁止 SSH、禁止 `push-xingmai-to-ecs.sh`、禁止 `systemctl restart`、禁止自己覆盖 `/opt/mengkai`。
 
 ## 网页
