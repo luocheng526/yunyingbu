@@ -33,6 +33,10 @@ test("shared shell assets are public", async () => {
   assert.match(cssText, /\.xm-sider/);
   assert.match(jsText, /xm-shell-perf 0\.1\.45/);
   assert.match(jsText, /aside class="xm-sider"/);
+  const homeHtml = readFileSync(join(root, "public/index.html"), "utf8");
+  assert.match(homeHtml, /工作台/);
+  assert.doesNotMatch(homeHtml, /aria-label="模块入口"/);
+  assert.doesNotMatch(homeHtml, /class="cards"/);
   assert.match(jsText, /function menuHtml\(/);
   assert.match(jsText, /id === "upgrade-mask"/);
   assert.match(jsText, /staleMask\.remove/);
