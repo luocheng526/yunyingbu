@@ -32,13 +32,21 @@ export function createApp() {
     }
   });
 
+  // 页面路由必须在 static 前面。线上 app.js 往往还挂了其它模块，不要整文件覆盖线上。
+  // GET / 的兜底在 profile/middleware.js，不依赖这里的顺序。
+  attachHome(app);
   app.use(
     express.static(join(__dirname, "..", "public"), {
+      index: false,
       etag: true,
       lastModified: true,
       setHeaders(res, filePath) {
         if (/\.(?:css|js)$/i.test(filePath)) {
-          res.setHeader("Cache-Control", "public, max-age=3600");
+          const versioned = Boolean(res.req && res.req.query && res.req.query.v);
+          res.setHeader(
+            "Cache-Control",
+            versioned ? "public, max-age=86400, immutable" : "public, max-age=0, must-revalidate"
+          );
           return;
         }
         if (/\.html?$/i.test(filePath)) {
@@ -47,8 +55,6 @@ export function createApp() {
       }
     })
   );
-
-  attachHome(app);
   app.use("/api/releases", createReleasesRouter());
   return app;
 }

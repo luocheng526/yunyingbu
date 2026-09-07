@@ -1,10 +1,24 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { withSharedShell } from "../profile/middleware.js";
+import * as profileShell from "../profile/middleware.js";
 import { NAV_ITEMS } from "./nav-items.js";
 
+// xm-full-lag-fix 0.1.40  必须和 profile/middleware.js 成套发。
+
+function renderExistingPage(filePath) {
+  if (typeof profileShell.readThemedHtml === "function") {
+    return profileShell.readThemedHtml(filePath);
+  }
+  return profileShell.withSharedShell(fs.readFileSync(filePath, "utf8"));
+}
+
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public");
+const pageFiles = new Map();
+for (const item of NAV_ITEMS) {
+  const filePath = path.join(publicDir, item.file);
+  pageFiles.set(item.href, fs.existsSync(filePath) ? filePath : "");
+}
 
 function escapeHtml(value) {
   return String(value)
@@ -14,7 +28,7 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
-export { withSharedShell };
+export const withSharedShell = profileShell.withSharedShell;
 
 function placeholderHtml(label) {
   const title = escapeHtml(label);
@@ -42,17 +56,16 @@ function placeholderHtml(label) {
 export function registerPageRoutes(app) {
   for (const item of NAV_ITEMS) {
     app.get(item.href, (_req, res) => {
-      const filePath = path.join(publicDir, item.file);
-      if (fs.existsSync(filePath)) {
-        const html = withSharedShell(fs.readFileSync(filePath, "utf8"));
-        res.status(200).type("html").send(html);
+      const filePath = pageFiles.get(item.href);
+      if (filePath) {
+        res.status(200).type("html").set("Cache-Control", "private, no-store").send(renderExistingPage(filePath));
         return;
       }
       res
         .status(200)
         .type("html")
-        .set("Content-Type", "text/html; charset=utf-8")
-        .send(placeholderHtml(item.label));
+        .set("Cache-Control", "private, no-store")
+        .send(profileShell.withSharedShell(placeholderHtml(item.label)));
     });
   }
 }

@@ -1,4 +1,4 @@
-/* xm-shell-always 0.1.19 */
+/* xm-shell-perf 0.1.40 */
 (function () {
   const items = [
     { href: "/", label: "首页" },
@@ -17,6 +17,36 @@
   if (document.body && document.body.classList.contains("login-page")) {
     return;
   }
+
+  let current = window.location.pathname.replace(/\/+$/, "") || "/";
+  const htmlLoads = new Map();
+  let navGen = 0;
+  const THEME_KEY = "xm-theme";
+
+  function currentTheme() {
+    try {
+      return localStorage.getItem(THEME_KEY) === "dark" ? "dark" : "light";
+    } catch (_err) {
+      return "light";
+    }
+  }
+
+  function applyTheme(theme) {
+    const next = theme === "dark" ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", next);
+    document.documentElement.style.colorScheme = next;
+    try {
+      localStorage.setItem(THEME_KEY, next);
+    } catch (_err) {}
+    const btn = document.getElementById("xm-theme");
+    if (btn) {
+      btn.textContent = next === "dark" ? "浅色" : "暗色";
+      btn.setAttribute("aria-label", next === "dark" ? "切换到浅色" : "切换到暗色");
+      btn.setAttribute("aria-pressed", next === "dark" ? "true" : "false");
+    }
+  }
+
+  applyTheme(currentTheme());
 
   function formatChinaTime(value) {
     if (value == null || value === "") {
@@ -80,6 +110,21 @@
     });
   }
 
+  function watchStampRewrites() {
+    if (window.__xmStampObs) {
+      return;
+    }
+    const root = document.querySelector(".xm-content") || document.body;
+    let timer = 0;
+    window.__xmStampObs = new MutationObserver(function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        rewriteTimeNodes(document.querySelector(".xm-content") || document.body);
+      }, 50);
+    });
+    window.__xmStampObs.observe(root, { childList: true, subtree: true });
+  }
+
   function tickChinaClocks() {
     const stamp = formatChinaTime(new Date());
     const bar = document.getElementById("xm-clock");
@@ -94,19 +139,28 @@
     }
   }
 
-  if (!document.querySelector('link[href="/shared/layout.css"]')) {
+  function startClock() {
+    tickChinaClocks();
+    if (!window.__xmChinaClock) {
+      window.__xmChinaClock = setInterval(tickChinaClocks, 1000);
+    }
+  }
+
+  if (!document.querySelector('link[href*="/shared/layout.css"]')) {
     const css = document.createElement("link");
     css.rel = "stylesheet";
-    css.href = "/shared/layout.css";
+    css.href = "/shared/layout.css?v=0.1.40";
     document.head.appendChild(css);
   }
 
-  const current = window.location.pathname.replace(/\/+$/, "") || "/";
-  const currentLabel = (
-    items.find(function (item) {
-      return (item.href.replace(/\/+$/, "") || "/") === current;
-    }) || items[0]
-  ).label;
+  function pageLabel(href) {
+    const key = href.replace(/\/+$/, "") || "/";
+    return (
+      items.find(function (item) {
+        return (item.href.replace(/\/+$/, "") || "/") === key;
+      }) || items[0]
+    ).label;
+  }
 
   function isActive(href) {
     return current === (href.replace(/\/+$/, "") || "/");
@@ -134,6 +188,27 @@
       .join("");
   }
 
+  function highlight(nextPath) {
+    current = nextPath.replace(/\/+$/, "") || "/";
+    document.querySelectorAll(".xm-menu-item").forEach(function (a) {
+      const href = a.getAttribute("href") || "";
+      const on = isActive(href);
+      a.classList.toggle("is-active", on);
+      if (on) {
+        a.setAttribute("aria-current", "page");
+        a.setAttribute("data-self", "1");
+      } else {
+        a.removeAttribute("aria-current");
+        a.removeAttribute("data-self");
+      }
+    });
+    const tab = document.querySelector(".xm-tab");
+    if (tab) {
+      tab.textContent = pageLabel(current);
+    }
+    document.title = pageLabel(current) + " · 星脉";
+  }
+
   function stripInnerChrome(root) {
     if (!root) {
       return;
@@ -154,12 +229,24 @@
     });
   }
 
-  function bindChrome(userLabel) {
-    document.documentElement.classList.remove("xm-collapsed");
+  function applyUserLabel(userLabel) {
     const nameEl = document.getElementById("xm-username");
-    if (nameEl) {
+    if (nameEl && userLabel) {
       nameEl.textContent = userLabel;
     }
+  }
+
+  function bindChrome(userLabel) {
+    document.documentElement.classList.remove("xm-collapsed");
+    applyUserLabel(userLabel);
+    const themeBtn = document.getElementById("xm-theme");
+    if (themeBtn && !themeBtn.dataset.bound) {
+      themeBtn.dataset.bound = "1";
+      themeBtn.addEventListener("click", function () {
+        applyTheme(currentTheme() === "dark" ? "light" : "dark");
+      });
+    }
+    applyTheme(currentTheme());
     const logoutBtn = document.getElementById("xm-logout");
     if (logoutBtn && !logoutBtn.dataset.bound) {
       logoutBtn.dataset.bound = "1";
@@ -173,24 +260,255 @@
         });
       });
     }
-    document.querySelectorAll(".xm-menu-item").forEach(function (a) {
-      a.addEventListener("click", function (event) {
-        if (a.getAttribute("data-self") === "1") {
-          event.preventDefault();
-        }
-      });
+  }
+
+  function appPath(href) {
+    try {
+      const url = new URL(href, window.location.origin);
+      if (url.origin !== window.location.origin) {
+        return "";
+      }
+      const p = (url.pathname.replace(/\/+$/, "") || "/").toLowerCase();
+      if (p === "/login" || p === "/login.html") {
+        return "";
+      }
+      return url.pathname.replace(/\/+$/, "") || "/";
+    } catch (_err) {
+      return "";
+    }
+  }
+
+  function loadHtml(dest) {
+    const hit = htmlLoads.get(dest);
+    if (hit) {
+      return hit;
+    }
+    const pending = fetch(dest, {
+      credentials: "same-origin",
+      headers: { Accept: "text/html" }
+    }).then(function (res) {
+      if (res.status === 401 || /\/login(?:\.html)?$/i.test(res.url)) {
+        window.location.replace("/login");
+        throw new Error("login");
+      }
+      if (!res.ok) {
+        throw new Error("nav " + res.status);
+      }
+      return res.text();
     });
+    htmlLoads.set(dest, pending);
+    setTimeout(function () {
+      htmlLoads.delete(dest);
+    }, 60000);
+    return pending;
+  }
+
+  function mergeSheets(doc) {
+    doc.querySelectorAll('link[rel="stylesheet"]').forEach(function (link) {
+      const href = link.getAttribute("href");
+      if (!href || href.indexOf("/shared/layout.css") !== -1) {
+        return;
+      }
+      if (document.querySelector('link[rel="stylesheet"][href="' + href + '"]')) {
+        return;
+      }
+      const next = document.createElement("link");
+      next.rel = "stylesheet";
+      next.href = href;
+      document.head.appendChild(next);
+    });
+  }
+
+  function activateScripts(root) {
+    root.querySelectorAll("script").forEach(function (old) {
+      const src = old.getAttribute("src") || "";
+      if (src.indexOf("/shared/nav.js") !== -1) {
+        old.remove();
+        return;
+      }
+      const script = document.createElement("script");
+      Array.prototype.slice.call(old.attributes).forEach(function (attr) {
+        script.setAttribute(attr.name, attr.value);
+      });
+      if (!src) {
+        script.textContent = old.textContent;
+      }
+      old.replaceWith(script);
+    });
+  }
+
+  function wipePageTimers() {
+    if (window.__xmChinaClock) {
+      clearInterval(window.__xmChinaClock);
+      window.__xmChinaClock = null;
+    }
+    const extra = window.__xmPageTimers;
+    if (Array.isArray(extra)) {
+      extra.forEach(function (id) {
+        clearInterval(id);
+        clearTimeout(id);
+      });
+      window.__xmPageTimers = [];
+    }
+  }
+
+  function applyHtml(html) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    if (doc.body && doc.body.classList.contains("login-page")) {
+      window.location.replace("/login");
+      return;
+    }
+    mergeSheets(doc);
+    wipePageTimers();
+    const content = document.getElementById("xm-content");
+    if (!content) {
+      window.location.reload();
+      return;
+    }
+    const incoming = doc.querySelector("#xm-content");
+    const source = incoming || doc.body;
+    content.innerHTML = "";
+    Array.prototype.slice.call(source.childNodes).forEach(function (node) {
+      if (node.tagName === "SCRIPT" && /\/shared\/nav\.js/.test(String(node.getAttribute && node.getAttribute("src") || ""))) {
+        return;
+      }
+      if (node.classList && node.classList.contains("xm-shell")) {
+        const inner = node.querySelector("#xm-content");
+        if (inner) {
+          Array.prototype.slice.call(inner.childNodes).forEach(function (child) {
+            content.appendChild(document.importNode(child, true));
+          });
+        }
+        return;
+      }
+      content.appendChild(document.importNode(node, true));
+    });
+    stripInnerChrome(content);
+    activateScripts(content);
+    rewriteTimeNodes(content);
+    watchStampRewrites();
+    startClock();
+  }
+
+  function setPending(on) {
+    const shell = document.querySelector(".xm-shell");
+    if (shell) {
+      shell.classList.toggle("is-pending", on);
+    }
+  }
+
+  function navigate(dest, push) {
+    const next = appPath(dest);
+    if (!next) {
+      return;
+    }
+    if (next === current && push) {
+      return;
+    }
+    navGen += 1;
+    const gen = navGen;
+    highlight(next);
+    setPending(true);
+    loadHtml(next)
+      .then(function (html) {
+        if (gen !== navGen) {
+          return;
+        }
+        applyHtml(html);
+        if (push) {
+          history.pushState({ xm: true, path: next }, "", next);
+        }
+        setPending(false);
+      })
+      .catch(function (err) {
+        if (gen !== navGen) {
+          return;
+        }
+        setPending(false);
+        if (err && err.message === "login") {
+          return;
+        }
+        window.location.assign(next);
+      });
+  }
+
+  function isAppDest(dest) {
+    return items.some(function (item) {
+      return (item.href.replace(/\/+$/, "") || "/") === dest;
+    });
+  }
+
+  function bindSpa() {
+    if (window.__xmSpaBound) {
+      return;
+    }
+    window.__xmSpaBound = true;
+    document.addEventListener("click", function (event) {
+      const a = event.target.closest("a[href]");
+      if (!a || event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+      if (a.target === "_blank" || a.hasAttribute("download")) {
+        return;
+      }
+      const dest = appPath(a.href);
+      if (!dest || !isAppDest(dest)) {
+        return;
+      }
+      event.preventDefault();
+      navigate(dest, true);
+    });
+    document.addEventListener(
+      "pointerenter",
+      function (event) {
+        const a = event.target.closest && event.target.closest("a[href]");
+        if (!a) {
+          return;
+        }
+        const dest = appPath(a.href);
+        if (dest && dest !== current && isAppDest(dest)) {
+          loadHtml(dest);
+        }
+      },
+      true
+    );
+    window.addEventListener("popstate", function () {
+      navigate(window.location.pathname, false);
+    });
+  }
+
+  function warmAppPages() {
+    if (window.__xmWarmPages) {
+      return;
+    }
+    window.__xmWarmPages = true;
+    const hrefs = items.map(function (item) {
+      return item.href;
+    });
+    let i = 0;
+    function next() {
+      if (i >= hrefs.length) {
+        return;
+      }
+      const dest = appPath(hrefs[i]);
+      i += 1;
+      if (dest && dest !== current) {
+        loadHtml(dest);
+      }
+      setTimeout(next, 300);
+    }
+    setTimeout(next, 800);
   }
 
   function mountShell(userLabel) {
     if (document.querySelector(".xm-shell")) {
       stripInnerChrome(document.querySelector(".xm-content") || document.body);
       bindChrome(userLabel);
-      tickChinaClocks();
+      bindSpa();
       rewriteTimeNodes(document.querySelector(".xm-content"));
-      if (!window.__xmChinaClock) {
-        window.__xmChinaClock = setInterval(tickChinaClocks, 1000);
-      }
+      watchStampRewrites();
+      startClock();
+      warmAppPages();
       return;
     }
 
@@ -205,13 +523,14 @@
       '<div class="xm-main">' +
       '<header class="xm-topbar">' +
       '<div class="xm-tabs" aria-label="页签"><span class="xm-tab is-active">' +
-      currentLabel +
+      pageLabel(current) +
       "</span></div>" +
       '<div class="xm-user">' +
       '<span class="xm-clock" id="xm-clock" title="北京时间">—</span>' +
       '<span class="xm-username" id="xm-username">' +
       userLabel +
       "</span>" +
+      '<button type="button" class="xm-theme" id="xm-theme" aria-pressed="false">暗色</button>' +
       '<button type="button" class="xm-logout" id="xm-logout">退出</button>' +
       "</div></header>" +
       '<div class="xm-content" id="xm-content"></div></div>';
@@ -241,11 +560,11 @@
     document.body.insertBefore(shell, document.body.firstChild);
     document.body.classList.add("xm-app");
     bindChrome(userLabel);
-    tickChinaClocks();
+    bindSpa();
     rewriteTimeNodes(document.querySelector(".xm-content"));
-    if (!window.__xmChinaClock) {
-      window.__xmChinaClock = setInterval(tickChinaClocks, 1000);
-    }
+    watchStampRewrites();
+    startClock();
+    warmAppPages();
   }
 
   function start(userLabel) {
@@ -258,28 +577,43 @@
     }
   }
 
-  start("…");
+  function paintMe(payload) {
+    const name = (payload && (payload.displayName || payload.username)) || "用户";
+    applyUserLabel(name);
+  }
 
-  fetch("/api/auth/me", { credentials: "same-origin", headers: { Accept: "application/json" } })
-    .then(function (res) {
-      if (res.status === 401) {
-        window.location.replace("/login");
-        return null;
-      }
-      if (!res.ok) {
-        return { displayName: "用户" };
-      }
-      return res.json();
-    })
-    .then(function (payload) {
-      if (!payload) {
-        return;
-      }
-      const name = payload.displayName || payload.username || "用户";
-      const el = document.getElementById("xm-username");
-      if (el) {
-        el.textContent = name;
-      }
-    })
-    .catch(function () {});
+  start("…");
+  bindSpa();
+
+  try {
+    const cached = sessionStorage.getItem("xm-me");
+    if (cached) {
+      paintMe(JSON.parse(cached));
+    }
+  } catch (_err) {}
+
+  if (!window.__xmMeOnce) {
+    window.__xmMeOnce = true;
+    fetch("/api/auth/me", { credentials: "same-origin", headers: { Accept: "application/json" } })
+      .then(function (res) {
+        if (res.status === 401) {
+          window.location.replace("/login");
+          return null;
+        }
+        if (!res.ok) {
+          return { displayName: "用户" };
+        }
+        return res.json();
+      })
+      .then(function (payload) {
+        if (!payload) {
+          return;
+        }
+        try {
+          sessionStorage.setItem("xm-me", JSON.stringify(payload));
+        } catch (_err) {}
+        paintMe(payload);
+      })
+      .catch(function () {});
+  }
 })();
