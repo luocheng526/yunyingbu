@@ -314,6 +314,34 @@ th, td {
   margin-left: auto;
 }
 
+/* Shared shell sets body overflow:hidden and xm-shell min-height:100vh.
+   The shell then grows with the ledger, body cannot scroll, 版本记录/运行日志被裁切. */
+html:has(.oc-wrap),
+html:has(.oc-wrap) body,
+html:has(.oc-wrap) body.xm-app,
+html:has(.oc-wrap) body:has(.xm-shell) {
+  height: auto !important;
+  max-height: none !important;
+  overflow: auto !important;
+}
+html:has(.oc-wrap) .xm-shell {
+  height: auto;
+  max-height: none;
+  min-height: 100vh;
+}
+html:has(.oc-wrap) .xm-main {
+  height: auto;
+  min-height: 0;
+}
+html:has(.oc-wrap) .xm-content {
+  overflow: visible;
+  flex: 1 1 auto;
+}
+#history-view,
+#logs-view {
+  overflow-x: auto;
+}
+
 @media (max-width: 980px) {
   .oc-tabs { grid-template-columns: 1fr; }
   .oc-hero { flex-direction: column; align-items: flex-start; }

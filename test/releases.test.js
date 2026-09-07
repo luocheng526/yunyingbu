@@ -221,6 +221,8 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.equal(res.status, 200);
     assert.match(text, /\.oc-top/);
     assert.match(text, /\.oc-tab\.active/);
+    assert.match(text, /html:has\(\.oc-wrap\)/);
+    assert.match(text, /overflow: auto !important/);
   });
 });
 
