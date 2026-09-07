@@ -4,7 +4,7 @@ import path from "node:path";
 import { requireReleasesAuth } from "./auth.js";
 import { NEED_PASS_ERROR, REORDER_FORBIDDEN, withCharter } from "./charter.js";
 import { hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
-import { assertQueueHead, findVersionClash, listModuleVersions, parseReleaseVersion } from "./version.js";
+import { assertQueueHead, describeNextVersion, listModuleVersions, resolveReleaseVersion } from "./version.js";
 import { assertSafeRel, formatExecError, listMissingSourceFiles, liveRoot, pathsToSnapshot, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "./push.js";
 import { filesNeedProcessRestart, restartMengkaiService, ticketNeedsProcessRestart } from "./restart.js";
 import { attachPipelineRoutes, attachPipelineWebhook } from "./pipeline/attach.js";
@@ -168,6 +168,11 @@ export function createReleasesRouter(options = {}) {
     res.json(withCharter({ ok: true, ...listModuleVersions(await store.list()) }));
   });
 
+  router.get("/next", async (req, res) => {
+    const slug = req.query?.slug || req.query?.说明 || "next";
+    res.json(withCharter({ ok: true, ...describeNextVersion(await store.list(), slug) }));
+  });
+
   router.post("/go", (req, res) => {
     const order = parseMainBrainOrder(req.body?.order ?? req.body?.口令);
     if (!order.ok) {
@@ -182,32 +187,31 @@ export function createReleasesRouter(options = {}) {
 
   router.post("/", async (req, res) => {
     const body = req.body || {};
-    const parsedVersion = parseReleaseVersion(body.version);
     const applicant = String(body.applicant || "").trim();
     const summary = String(body.summary || "").trim();
     const parsed = parseReleaseDocument(body);
-    if (!parsedVersion.ok || !applicant || !summary) {
+    if (!applicant || !summary) {
       res.status(400).json({
         ok: false,
-        error: parsedVersion.ok ? "版本号、申请人、变更摘要均为必填" : parsedVersion.error,
-        missing: ["版本号", "申请人", "变更摘要"].filter((label, i) =>
-          i === 0 ? !parsedVersion.ok : ![applicant, summary][i - 1]
-        )
+        error: "申请人、变更摘要均为必填",
+        missing: ["申请人", "变更摘要"].filter((label, i) => ![applicant, summary][i])
       });
       return;
     }
-    const version = parsedVersion.version;
+    const items = await store.list();
+    const resolved = resolveReleaseVersion(items, body.version, body.slug || summary);
+    if (!resolved.ok) {
+      res.status(resolved.status || 400).json({
+        ok: false,
+        error: resolved.error,
+        next: describeNextVersion(items)
+      });
+      return;
+    }
+    const version = resolved.version;
     const module = parsed.document.module || "其他";
     if (parsed.complete && !MODULES.includes(module)) {
       res.status(400).json({ ok: false, error: "模块不在允许列表中" });
-      return;
-    }
-    const clash = findVersionClash(await store.list(), module, version);
-    if (clash) {
-      res.status(409).json({
-        ok: false,
-        error: `同模块版本号已占用：${module} ${version}（${clash.id} ${clash.status}）。禁止重复版本号。`
-      });
       return;
     }
     let files = parsed.document.files || [];

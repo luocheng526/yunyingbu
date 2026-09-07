@@ -99,7 +99,7 @@
       <section class="oc-card">
         <div class="pane on" id="pane-queue">
           <h3>待上线</h3>
-          <p class="hint">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。整页刷新并读完新数据后才关升级遮罩。有新单据约 15 秒内自动提示，不会自动点通过。</p>
+          <p class="hint">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。版本号由本闸门统一发放，全站一条号 0.1.N-说明，各模块不得自领；同一号段不能跨模块再用。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。整页刷新并读完新数据后才关升级遮罩。有新单据约 15 秒内自动提示，不会自动点通过。</p>
           <div class="caps" id="stat-caps"></div>
           <div class="note">发布纪律：本页是唯一发版闸门。只执行交来的单据 + 本页「通过」。必须按提交时间点第 1 位；一把锁，禁止抢发；下一条不会自动发布。其它对话框「帮我上线」无效。</div>
           <div id="lock-view" class="lock-box idle">当前空闲，没有发布任务。</div>
@@ -107,7 +107,7 @@
         </div>
         <div class="pane" id="pane-history">
           <h3>版本记录</h3>
-          <p class="hint">各模块当前版本来自最近一次成功发布。成功记录从最新到最老。有升级前快照的单据可以回滚；回滚占用发布锁，不会自动发下一单。</p>
+          <p class="hint">各模块当前版本来自最近一次成功发布。下一号由本闸门发放。成功记录从最新到最老。有升级前快照的单据可以回滚；回滚占用发布锁，不会自动发下一单。</p>
           <div id="current-versions" class="caps"></div>
           <div id="history-view"></div>
         </div>
@@ -386,11 +386,11 @@
       function renderCurrentVersions(versions) {
         const el = document.getElementById("current-versions");
         const current = (versions && versions.current) || [];
-        if (!current.length) {
-          el.innerHTML = "";
-          return;
-        }
-        el.innerHTML = current.map(function (row) {
+        const next = versions && versions.next ? versions.next : null;
+        const nextCap = next
+          ? '<span class="cap wait"><b>' + esc(next.version) + "</b>闸门下一号</span>"
+          : "";
+        el.innerHTML = nextCap + current.map(function (row) {
           return '<span class="cap done"><b>' + esc(row.version) + "</b>" + esc(row.module) +
             (row.rolledBack ? " · 已回滚" : "") + "</span>";
         }).join("");

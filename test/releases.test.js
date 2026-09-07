@@ -8,6 +8,12 @@ import { fileURLToPath } from "node:url";
 import { createApp } from "../src/app.js";
 import { parseMainBrainOrder } from "../src/modules/releases/document.js";
 import { filesNeedProcessRestart, ticketNeedsProcessRestart } from "../src/modules/releases/restart.js";
+import {
+  allocateReleaseVersion,
+  findVersionClash,
+  resolveReleaseVersion,
+  VERSION_GATE_ERROR
+} from "../src/modules/releases/version.js";
 import { formatExecError, hasApplyReceipt, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "../src/modules/releases/push.js";
 import { NOOP_APPLY_ERROR } from "../src/modules/releases/charter.js";
 import { DEMO_INITIAL_PASSWORD, DEMO_USERNAME } from "../src/modules/profile/auth.js";
@@ -80,16 +86,24 @@ async function json(base, pathname, options = {}) {
   return { res, body };
 }
 
-function apply(version, applicant, module, summary, extra = {}) {
-  return JSON.stringify({
-    version,
+function apply(slug, applicant, module, summary, extra = {}) {
+  const body = {
+    slug,
     applicant,
     module,
     summary,
     files: extra.files || ["src/app.js"],
     acceptance: extra.acceptance || "自动化验收",
     restart: extra.restart ?? false
-  });
+  };
+  if (extra.version !== undefined) {
+    body.version = extra.version;
+  } else if (extra.auto === false) {
+    body.version = slug;
+  } else {
+    body.version = "auto";
+  }
+  return JSON.stringify(body);
 }
 
 function publishBody(order = "按这份文档发版") {
@@ -111,6 +125,9 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /watchIncoming/);
     assert.match(text, /提交时间/);
     assert.match(text, /不重启进程/);
+    assert.match(text, /统一发放/);
+    assert.match(text, /0\.1\.N/);
+    assert.match(text, /闸门下一号/);
     assert.doesNotMatch(text, /data-act="up"/);
     assert.doesNotMatch(text, />上移</);
     assert.doesNotMatch(text, />下移</);
@@ -252,6 +269,7 @@ test("queue and lock expose charter: gate is not a second 主脑", async () => {
     assert.equal(queue.body.charter.secondBrain, false);
     assert.equal(queue.body.charter.queue.includes("点一单发一单"), true);
     assert.match(queue.body.charter.queue, /不重启进程/);
+    assert.match(queue.body.charter.version, /统一发放|闸门发放/);
     const lock = await json(base, "/api/releases/lock");
     assert.equal(lock.body.charter.gate, "版本发布中心");
     assert.match(lock.body.charter.queue, /第 1 位/);
@@ -262,44 +280,59 @@ test("invalid or duplicate version is rejected", async () => {
   await withServer(async (base) => {
     const bad = await json(base, "/api/releases", {
       method: "POST",
-      body: apply("../etc", "Eve", "首页", "坏版本号")
+      body: apply("../etc", "Eve", "首页", "坏版本号", { auto: false })
     });
     assert.equal(bad.res.status, 400);
     assert.match(bad.body.error, /版本号/);
 
     const space = await json(base, "/api/releases", {
       method: "POST",
-      body: apply("1.0 bad", "Eve", "首页", "空格")
+      body: apply("1.0 bad", "Eve", "首页", "空格", { auto: false })
     });
     assert.equal(space.res.status, 400);
 
+    const homemade = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("ui-cursor-light-3", "Eve", "首页", "自领号", { auto: false })
+    });
+    assert.equal(homemade.res.status, 409);
+    assert.match(homemade.body.error, /统一发放/);
+
     const first = await json(base, "/api/releases", {
       method: "POST",
-      body: apply("8.0.0-gate", "Eve", "首页", "合法")
+      body: apply("gate", "Eve", "首页", "合法")
     });
     assert.equal(first.res.status, 201);
-    const dup = await json(base, "/api/releases", {
+    assert.match(first.body.item.version, /^0\.1\.1-gate$/);
+    const otherModule = await json(base, "/api/releases", {
       method: "POST",
-      body: apply("8.0.0-gate", "Eve", "首页", "重复")
+      body: apply("same-n", "Eve", "版本发布中心", "跨模块抢同一号段", {
+        version: "0.1.1-other"
+      })
     });
-    assert.equal(dup.res.status, 409);
-    assert.match(dup.body.error, /同模块版本号已占用/);
+    assert.equal(otherModule.res.status, 409);
+    assert.match(otherModule.body.error, /0\.1\.1/);
+    const next = await json(base, "/api/releases/next?slug=sider");
+    assert.equal(next.res.status, 200);
+    assert.equal(next.body.seq, 2);
+    assert.equal(next.body.version, "0.1.2-sider");
 
     const badPath = await json(base, "/api/releases", {
       method: "POST",
-      body: apply("8.0.1-path", "Eve", "首页", "坏路径", { files: ["deploy/secret.sh"] })
+      body: apply("path", "Eve", "首页", "坏路径", { files: ["deploy/secret.sh"] })
     });
     assert.equal(badPath.res.status, 400);
     assert.match(badPath.body.error, /拒绝推送路径/);
 
     const testFile = await json(base, "/api/releases", {
       method: "POST",
-      body: apply("8.0.2-test", "Eve", "版本发布中心", "测试文件可交单", {
+      body: apply("testfile", "Eve", "版本发布中心", "测试文件可交单", {
         files: ["test/releases.test.js"]
       })
     });
     assert.equal(testFile.res.status, 201);
     assert.deepEqual(testFile.body.item.files, ["test/releases.test.js"]);
+    assert.match(testFile.body.item.version, /^0\.1\.2-testfile$/);
   });
 });
 
@@ -338,8 +371,10 @@ test("queue is submit-time FIFO even when later tickets are foundations", async 
     assert.equal(auth.res.status, 201);
     assert.equal(shell.res.status, 201);
     const queue = await json(base, "/api/releases/queue");
-    const real = queue.body.items.filter((item) => !item.demo).map((item) => item.version);
-    assert.deepEqual(real, ["q-gate", "q-data", "q-auth", "q-shell"]);
+    const real = queue.body.items.filter((item) => !item.demo).map((item) => item.id);
+    assert.deepEqual(real, [gate.body.item.id, data.body.item.id, auth.body.item.id, shell.body.item.id]);
+    assert.match(gate.body.item.version, /^0\.1\.1-q-gate$/);
+    assert.match(shell.body.item.version, /^0\.1\.4-q-shell$/);
     assert.match(auth.body.item.log, /提交时间/);
     assert.match(auth.body.item.log, /禁止上移下移/);
   });
@@ -372,7 +407,9 @@ test("queued tickets stay FIFO by submittedAt", async () => {
       assert.equal(a.body.item.status, "queued");
       const queue = await json(base, "/api/releases/queue");
       const versions = queue.body.items.filter((item) => !item.demo).map((item) => item.version);
-      assert.deepEqual(versions, ["1.0.1", "1.0.2", "1.0.3"]);
+      assert.deepEqual(versions, [a.body.item.version, b.body.item.version, c.body.item.version]);
+      assert.match(a.body.item.version, /^0\.1\.1-/);
+      assert.match(c.body.item.version, /^0\.1\.3-/);
       assert.deepEqual(
         queue.body.items.filter((item) => !item.demo).map((item) => item.queueIndex),
         [1, 2, 3]
@@ -498,6 +535,19 @@ test("通过 one ticket restarts once and does not auto-publish next", async () 
   );
 });
 
+test("gate allocates a global 0.1.N and blocks the same series across modules", () => {
+  assert.equal(allocateReleaseVersion([], "Sider Always"), "0.1.1-sider-always");
+  const held = [{ id: "rel-1", version: "0.1.19-skip-restart", module: "版本发布中心", status: "success" }];
+  assert.equal(allocateReleaseVersion(held, "shell-perf"), "0.1.20-shell-perf");
+  assert.equal(findVersionClash(held, "0.1.19-shell-perf")?.id, "rel-1");
+  assert.equal(findVersionClash(held, "0.1.20-shell-perf"), undefined);
+  const failed = [{ id: "rel-2", version: "0.1.18-sider-always", module: "首页", status: "failed" }];
+  assert.equal(allocateReleaseVersion(failed, "sider"), "0.1.1-sider");
+  const homemade = resolveReleaseVersion([], "ui-cursor-light-3", "x");
+  assert.equal(homemade.ok, false);
+  assert.equal(homemade.error, VERSION_GATE_ERROR);
+});
+
 test("filesNeedProcessRestart is false for public and test files", () => {
   assert.equal(filesNeedProcessRestart(["public/releases.html", "test/releases.test.js"]), false);
   assert.equal(filesNeedProcessRestart(["public/releases.css"]), false);
@@ -541,19 +591,21 @@ test("通过 a page-only ticket does not restart the live process", async () => 
 test("通过 writes success to disk before restart", async () => {
   const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "rel-before-restart-"));
   let persisted = null;
+  let createdId = "";
   await withServer(
     {
       stateDir,
       restart() {
         const saved = JSON.parse(fs.readFileSync(path.join(stateDir, "tickets.json"), "utf8"));
-        persisted = saved.items.find((item) => item.version === "5.5.5") || null;
+        persisted = saved.items.find((item) => item.id === createdId) || null;
       }
     },
     async (base) => {
       const created = await json(base, "/api/releases", {
         method: "POST",
-        body: apply("5.5.5", "Ada", "版本发布中心", "先落盘再重启", { restart: true })
+        body: apply("persist", "Ada", "版本发布中心", "先落盘再重启", { restart: true })
       });
+      createdId = created.body.item.id;
       const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
         method: "POST",
         body: "{}"
@@ -604,7 +656,7 @@ test("second publish while lock held returns 409 禁止抢发", async () => {
       }
       const lock = await json(base, "/api/releases/lock");
       assert.equal(lock.body.locked, true);
-      assert.equal(lock.body.current.version, "4.0.0");
+      assert.equal(lock.body.current.version, first.body.item.version);
 
       const stolen = await json(base, `/api/releases/${second.body.item.id}/confirm`, {
         method: "POST",
@@ -651,12 +703,13 @@ test("incomplete document still queues for ledger", async () => {
   await withServer(async (base) => {
     const { res, body } = await json(base, "/api/releases", {
       method: "POST",
-      body: JSON.stringify({ version: "9.0.0", applicant: "X", module: "首页", summary: "无文件" })
+      body: JSON.stringify({ version: "auto", slug: "nodoc", applicant: "X", module: "首页", summary: "无文件" })
     });
     assert.equal(res.status, 201);
     assert.equal(body.item.status, "queued");
+    assert.match(body.item.version, /^0\.1\.1-nodoc$/);
     const queue = await json(base, "/api/releases/queue");
-    assert.equal(queue.body.items.some((item) => item.version === "9.0.0"), true);
+    assert.equal(queue.body.items.some((item) => item.version === body.item.version), true);
   });
 });
 
@@ -720,7 +773,8 @@ test("口令 发布模块 且 restart=false 只 push 不重启", async () => {
       });
       assert.equal(pub.res.status, 200);
       assert.equal(pub.body.item.status, "success");
-      assert.equal(pub.body.version, "6.1.0");
+      assert.equal(pub.body.version, created.body.item.version);
+      assert.match(created.body.item.version, /^0\.1\.1-6-1-0$/);
       assert.deepEqual(pushed, [["public/han.html"]]);
       assert.equal(restarts, 0);
     }
@@ -786,7 +840,8 @@ test("confirm 放行 without 口令; move and reorder are forbidden", async () =
       const first = await json(base, "/api/releases", {
         method: "POST",
         body: JSON.stringify({
-          version: "7.0.0",
+          version: "auto",
+          slug: "home-shell",
           applicant: "首页 Agent",
           source: "首页导航与工作台",
           module: "首页",
@@ -1003,15 +1058,16 @@ test("successful version cannot be queued again; versions lists current", async 
     const versions = await json(base, "/api/releases/versions");
     assert.equal(versions.res.status, 200);
     assert.equal(
-      versions.body.current.some((row) => row.module === "版本发布中心" && row.version === "9.0.0-ver"),
+      versions.body.current.some((row) => row.module === "版本发布中心" && row.version === created.body.item.version),
       true
     );
+    assert.equal(versions.body.next.seq, 2);
     const dup = await json(base, "/api/releases", {
       method: "POST",
-      body: apply("9.0.0-ver", "Eve", "版本发布中心", "再占")
+      body: apply("again", "Eve", "首页", "跨模块再占同一号", { version: created.body.item.version })
     });
     assert.equal(dup.res.status, 409);
-    assert.match(dup.body.error, /同模块版本号已占用/);
+    assert.match(dup.body.error, /占用/);
     const queued = await json(base, `/api/releases/${created.body.item.id}/rollback`, {
       method: "POST",
       body: "{}"

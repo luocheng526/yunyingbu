@@ -32,7 +32,7 @@ export const RELEASE_CHARTER = {
   execute: ["各板块交来的单据", "本页点通过", "主脑对本闸门的明确口令"],
   refuse: ["其它对话框帮我上线", "改首页/登录/人员等业务", "多单同时发", "跳过队首点通过"],
   queue: "入队按提交时间；禁止上移下移；闸门只允许通过第 1 位，点一单发一单；只改页面或测试不重启进程",
-  version: "字母数字和 ._- ；同模块同版本不能重复排队或再次成功发布；成功单可按快照回滚；文件只允许 public/src/test/package.json"
+  version: "全站一条号 0.1.N-说明，由本闸门发放；各模块不得自领；同一 N 全站占用；失败/驳回不占号；成功单可按快照回滚；文件只允许 public/src/test/package.json"
 };
 
 export function withCharter(payload) {
