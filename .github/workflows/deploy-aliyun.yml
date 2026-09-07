@@ -1,0 +1,44 @@
+name: Deploy to Aliyun ECS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-aliyun-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.repository == 'luocheng526/yunyingbu'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ALIYUN_SSH_PRIVATE_KEY }}" > ~/.ssh/yunyingbu_aliyun
+          chmod 600 ~/.ssh/yunyingbu_aliyun
+          ssh-keyscan -p "${{ secrets.ALIYUN_PORT || 22 }}" "${{ secrets.ALIYUN_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Deploy to server
+        env:
+          ALIYUN_HOST: ${{ secrets.ALIYUN_HOST }}
+          ALIYUN_USER: ${{ secrets.ALIYUN_USER }}
+          ALIYUN_PORT: ${{ secrets.ALIYUN_PORT }}
+          ALIYUN_APP_DIR: ${{ secrets.ALIYUN_APP_DIR }}
+        run: |
+          cat > deploy/aliyun/.env <<EOF
+          ALIYUN_HOST=${ALIYUN_HOST}
+          ALIYUN_USER=${ALIYUN_USER:-root}
+          ALIYUN_PORT=${ALIYUN_PORT:-22}
+          ALIYUN_APP_DIR=${ALIYUN_APP_DIR:-/opt/yunyingbu}
+          ALIYUN_DEPLOY_BRANCH=main
+          EOF
+          chmod +x deploy/scripts/*.sh
+          ./deploy/scripts/deploy.sh

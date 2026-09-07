@@ -1,0 +1,139 @@
+:root {
+  --bg: #f7f7f4;
+  --panel: #ffffff;
+  --ink: #14120b;
+  --muted: #6f6b5e;
+  --line: #e6e4dc;
+  --accent: #26241c;
+  --accent-ink: #f7f7f4;
+  --danger: #b42318;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body.login-page {
+  font-family: ui-sans-serif, system-ui, -apple-system, "SF Pro Text", "PingFang SC", "Noto Sans SC", "Segoe UI", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(900px 420px at 12% -10%, rgba(38, 36, 28, 0.05), transparent 55%),
+    var(--bg);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.login-backdrop {
+  display: none;
+}
+
+.login-card {
+  width: min(420px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 28px 26px 24px;
+  box-shadow: 0 1px 2px rgba(20, 18, 11, 0.04);
+}
+
+.login-card h1 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}
+
+.login-hint {
+  margin: 0 0 22px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.login-hint strong { color: var(--ink); font-weight: 600; }
+
+.field {
+  position: relative;
+  margin: 0 0 12px;
+}
+
+.field input {
+  display: block;
+  width: 100%;
+  height: 42px;
+  padding: 9px 42px 9px 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+}
+
+.field input:focus {
+  outline: none;
+  border-color: #c8c4b6;
+  box-shadow: 0 0 0 3px rgba(20, 18, 11, 0.06);
+}
+
+.field .icon {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.field .icon-left { left: 12px; }
+
+.field .icon-right {
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+.field .icon-right:hover { color: var(--ink); }
+
+.remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.remember input { accent-color: var(--accent); }
+
+.login-submit {
+  width: 100%;
+  height: 42px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.login-submit:hover { filter: brightness(1.08); }
+
+.login-error {
+  min-height: 1.3em;
+  margin: 10px 0 0;
+  color: var(--danger);
+  font-size: 13px;
+}

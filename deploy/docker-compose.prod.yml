@@ -1,0 +1,17 @@
+# 生产环境 Docker Compose 模板
+# 应用开发完成后，在此定义实际服务；部署脚本会自动执行 docker compose up
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-18080}:8080"
+    env_file:
+      - aliyun/.env.production
+    volumes:
+      - app-data:/data
+
+volumes:
+  app-data:
