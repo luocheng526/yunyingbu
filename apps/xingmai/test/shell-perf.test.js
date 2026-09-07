@@ -61,6 +61,8 @@ test("home page is injected and not served as raw static index", async () => {
     assert.match(html, /\/shared\/nav\.js\?v=0\.1\.45/);
     assert.match(html, /localStorage.getItem\("xm-theme"\)/);
     assert.match(html, /工作台/);
+    assert.doesNotMatch(html, /aria-label="模块入口"/);
+    assert.doesNotMatch(html, /class="cards"/);
   }
 });
 
