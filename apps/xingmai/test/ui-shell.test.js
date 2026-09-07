@@ -19,7 +19,7 @@ test("shared shell assets are public", async () => {
   assert.equal(css.status, 200);
   assert.equal(js.status, 200);
   assert.equal(loginCss.status, 200);
-  assert.match(await css.text(), /#f7f7f4/);
+  assert.match(await css.text(), /cursor-light-2/);
   assert.match(await js.text(), /xm-shell/);
 });
 

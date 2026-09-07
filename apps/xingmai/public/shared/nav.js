@@ -16,6 +16,9 @@
   if (document.body && document.body.classList.contains("login-page")) {
     return;
   }
+  if (document.querySelector(".oc-tab, .oc-crumb, #pane-queue")) {
+    return;
+  }
 
   const current = window.location.pathname.replace(/\/+$/, "") || "/";
   const currentLabel = (
