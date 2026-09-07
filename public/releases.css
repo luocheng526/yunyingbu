@@ -406,7 +406,8 @@ html:has(.oc-wrap) .xm-content {
 
 /* Keep overlay rules in this linked stylesheet. Theme SPA copies <link>
    tags into the shared shell but drops the page <head><style> block. */
-#upgrade-mask {
+#upgrade-mask,
+html > #upgrade-mask {
   display: none;
   position: fixed;
   inset: 0;
@@ -416,7 +417,8 @@ html:has(.oc-wrap) .xm-content {
   justify-content: center;
   padding: 1.25rem;
 }
-#upgrade-mask.show { display: flex; }
+#upgrade-mask.show,
+html > #upgrade-mask.show { display: flex !important; }
 #upgrade-dismiss { display: none; margin-top: 0.85rem; }
 #upgrade-mask.can-close #upgrade-dismiss { display: inline-block; }
 #upgrade-login { display: none; margin-top: 0.85rem; margin-left: 0.55rem; }

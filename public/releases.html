@@ -4,9 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>版本发布中心</title>
-    <link rel="stylesheet" href="/releases.css?v=pass-visible" />
+    <link rel="stylesheet" href="/releases.css?v=mask-html" />
     <style>
-      #upgrade-mask {
+      #upgrade-mask,
+      html > #upgrade-mask {
         display: none;
         position: fixed;
         inset: 0;
@@ -16,7 +17,8 @@
         justify-content: center;
         padding: 1.25rem;
       }
-      #upgrade-mask.show { display: flex; }
+      #upgrade-mask.show,
+      html > #upgrade-mask.show { display: flex !important; }
       #upgrade-dismiss { display: none; margin-top: 0.85rem; }
       #upgrade-mask.can-close #upgrade-dismiss { display: inline-block; }
       #upgrade-login { display: none; margin-top: 0.85rem; margin-left: 0.55rem; }
@@ -223,12 +225,6 @@
       function countBy(items, status) {
         return items.filter(function (item) { return item.status === status; }).length;
       }
-      const upgradeMask = document.getElementById("upgrade-mask");
-      const upgradeSteps = document.getElementById("upgrade-steps");
-      const upgradeBar = document.getElementById("upgrade-bar");
-      const upgradeLog = document.getElementById("upgrade-log");
-      const upgradeDismiss = document.getElementById("upgrade-dismiss");
-      const upgradeLogin = document.getElementById("upgrade-login");
       const STEP_LABELS = {
         agree: "已同意",
         sync: "正在同步代码",
@@ -245,7 +241,48 @@
           : ["agree", "sync", "health", "reload", "done"];
       }
 
+      function liveUpgradeMask() {
+        return document.getElementById("upgrade-mask");
+      }
+
+      function liveUpgradePart(id) {
+        const mask = liveUpgradeMask();
+        return mask ? mask.querySelector("#" + id) || document.getElementById(id) : document.getElementById(id);
+      }
+
+      function bindUpgradeMaskButtons(mask) {
+        if (!mask || mask.dataset.bound === "1") {
+          return;
+        }
+        mask.dataset.bound = "1";
+        const dismiss = mask.querySelector("#upgrade-dismiss");
+        const loginBtn = mask.querySelector("#upgrade-login");
+        if (dismiss) {
+          dismiss.addEventListener("click", function () {
+            hideUpgrade();
+          });
+        }
+        if (loginBtn) {
+          loginBtn.addEventListener("click", function () {
+            const pending = readPendingUpgrade() || {};
+            savePendingUpgrade({
+              version: pending.version || "",
+              id: pending.id,
+              needLogin: true
+            });
+            window.location.href = "/login";
+          });
+        }
+        mask.addEventListener("click", function (event) {
+          if (event.target === mask && mask.classList.contains("can-close")) {
+            hideUpgrade();
+          }
+        });
+      }
+
       function renderUpgradeSteps(keys, active, terminal) {
+        const upgradeSteps = liveUpgradePart("upgrade-steps");
+        const upgradeBar = liveUpgradePart("upgrade-bar");
         if (!upgradeSteps || !upgradeBar) {
           return;
         }
@@ -265,22 +302,38 @@
       }
 
       function pinUpgradeMask() {
-        if (!upgradeMask) {
-          return;
+        let mask = liveUpgradeMask();
+        if (!mask) {
+          mask = document.createElement("div");
+          mask.id = "upgrade-mask";
+          mask.setAttribute("aria-live", "assertive");
+          mask.setAttribute("aria-modal", "true");
+          mask.setAttribute("role", "dialog");
+          mask.innerHTML =
+            '<div class="upgrade-card">' +
+            "<h2>正在升级，请勿关闭</h2>" +
+            '<ol id="upgrade-steps"></ol>' +
+            '<div class="upgrade-bar"><i id="upgrade-bar"></i></div>' +
+            '<p class="upgrade-log" id="upgrade-log" hidden></p>' +
+            '<button type="button" class="act" id="upgrade-dismiss">关闭</button>' +
+            '<button type="button" class="act" id="upgrade-login">去登录完结</button>' +
+            "</div>";
         }
-        if (upgradeMask.parentNode !== document.body) {
-          document.body.appendChild(upgradeMask);
+        if (mask.parentNode !== document.documentElement) {
+          document.documentElement.appendChild(mask);
         }
-        upgradeMask.style.position = "fixed";
-        upgradeMask.style.left = "0";
-        upgradeMask.style.right = "0";
-        upgradeMask.style.top = "0";
-        upgradeMask.style.bottom = "0";
-        upgradeMask.style.zIndex = "4000";
-        upgradeMask.style.alignItems = "center";
-        upgradeMask.style.justifyContent = "center";
-        upgradeMask.style.padding = "1.25rem";
-        upgradeMask.style.background = "rgba(20, 18, 11, 0.45)";
+        bindUpgradeMaskButtons(mask);
+        mask.style.position = "fixed";
+        mask.style.left = "0";
+        mask.style.right = "0";
+        mask.style.top = "0";
+        mask.style.bottom = "0";
+        mask.style.zIndex = "4000";
+        mask.style.alignItems = "center";
+        mask.style.justifyContent = "center";
+        mask.style.padding = "1.25rem";
+        mask.style.background = "rgba(20, 18, 11, 0.45)";
+        return mask;
       }
 
       function clearShellPending() {
@@ -291,13 +344,12 @@
       }
 
       function showUpgrade(keys, active) {
-        pinUpgradeMask();
-        if (upgradeMask) {
-          upgradeMask.classList.add("show");
-          upgradeMask.classList.remove("can-close");
-          upgradeMask.classList.remove("need-login");
-          upgradeMask.style.display = "flex";
-        }
+        const mask = pinUpgradeMask();
+        mask.classList.add("show");
+        mask.classList.remove("can-close");
+        mask.classList.remove("need-login");
+        mask.style.display = "flex";
+        const upgradeLog = liveUpgradePart("upgrade-log");
         if (upgradeLog) {
           upgradeLog.hidden = true;
           upgradeLog.textContent = "";
@@ -306,24 +358,26 @@
       }
 
       function hideUpgrade() {
-        if (upgradeMask) {
-          upgradeMask.classList.remove("show");
-          upgradeMask.classList.remove("can-close");
-          upgradeMask.classList.remove("need-login");
-          upgradeMask.style.display = "none";
+        const mask = liveUpgradeMask();
+        if (mask) {
+          mask.classList.remove("show");
+          mask.classList.remove("can-close");
+          mask.classList.remove("need-login");
+          mask.style.display = "none";
         }
       }
 
       function failUpgrade(keys, message) {
-        pinUpgradeMask();
+        const mask = pinUpgradeMask();
         renderUpgradeSteps(keys, "done", "bad");
+        const upgradeLog = liveUpgradePart("upgrade-log");
         if (upgradeLog) {
           upgradeLog.hidden = false;
           upgradeLog.textContent = message;
         }
-        if (upgradeMask) {
-          upgradeMask.classList.add("can-close");
-        }
+        mask.classList.add("can-close");
+        mask.classList.add("show");
+        mask.style.display = "flex";
       }
 
       function readPendingUpgrade() {
@@ -359,12 +413,11 @@
         const loginKeys = (keys || ["health", "reload", "done"]).filter(function (key) {
           return key !== "reload" && key !== "done" && key !== "login";
         }).concat(["login", "done"]);
-        pinUpgradeMask();
-        if (upgradeMask) {
-          upgradeMask.classList.add("show", "need-login", "can-close");
-          upgradeMask.style.display = "flex";
-        }
+        const mask = pinUpgradeMask();
+        mask.classList.add("show", "need-login", "can-close");
+        mask.style.display = "flex";
         renderUpgradeSteps(loginKeys, "login", "");
+        const upgradeLog = liveUpgradePart("upgrade-log");
         if (upgradeLog) {
           upgradeLog.hidden = false;
           upgradeLog.textContent = "升级已落地。这次需要重新登录才能完结本页，不会自动跳转。请登录后再打开版本发布中心。";
@@ -744,7 +797,8 @@
       }
 
       async function watchIncoming() {
-        if (upgradeMask && upgradeMask.classList.contains("show")) {
+        const mask = liveUpgradeMask();
+        if (mask && mask.classList.contains("show")) {
           return;
         }
         try {
@@ -773,6 +827,10 @@
       }
 
       document.querySelectorAll(".oc-tab").forEach(function (tab) {
+        if (tab.dataset.bound === "1") {
+          return;
+        }
+        tab.dataset.bound = "1";
         tab.addEventListener("click", function () {
           const name = tab.getAttribute("data-tab");
           document.querySelectorAll(".oc-tab").forEach(function (node) {
@@ -786,9 +844,15 @@
       });
 
       tickClock();
-      window.__xmPageTimers = window.__xmPageTimers || [];
-      window.__xmPageTimers.push(setInterval(tickClock, 1000));
+      if (!window.__xmReleasesBound) {
+        window.__xmReleasesBound = true;
+        window.__xmPageTimers = window.__xmPageTimers || [];
+        window.__xmPageTimers.push(setInterval(tickClock, 1000));
+        window.__xmPageTimers.push(setInterval(function () { watchIncoming(); }, WATCH_MS));
+      }
 
+      if (!window.__xmReleasesClicks) {
+        window.__xmReleasesClicks = true;
       document.body.addEventListener("click", async function (event) {
         const pagerBtn = event.target.closest(".oc-pager [data-page]");
         if (pagerBtn && !pagerBtn.disabled) {
@@ -857,17 +921,24 @@
           await refresh();
         }
       });
+      }
 
       const refreshBtn = document.getElementById("refresh-btn");
-      if (refreshBtn) refreshBtn.addEventListener("click", async function () {
-        try {
-          await refresh();
-          flash("已刷新队列。");
-        } catch (err) {
-          flash(err.message, true);
-        }
-      });
+      if (refreshBtn && refreshBtn.dataset.bound !== "1") {
+        refreshBtn.dataset.bound = "1";
+        refreshBtn.addEventListener("click", async function () {
+          try {
+            await refresh();
+            flash("已刷新队列。");
+          } catch (err) {
+            flash(err.message, true);
+          }
+        });
+      }
 
+      pinUpgradeMask();
+      if (!window.__xmReleasesBooted) {
+        window.__xmReleasesBooted = true;
       (async function bootReleases() {
         clearShellPending();
         const pending = readPendingUpgrade();
@@ -897,30 +968,6 @@
           flash(err.message, true);
         }
       })();
-      window.__xmPageTimers = window.__xmPageTimers || [];
-      window.__xmPageTimers.push(setInterval(function () { watchIncoming(); }, WATCH_MS));
-      if (upgradeDismiss) {
-        upgradeDismiss.addEventListener("click", function () {
-          hideUpgrade();
-        });
-      }
-      if (upgradeLogin) {
-        upgradeLogin.addEventListener("click", function () {
-          const pending = readPendingUpgrade() || {};
-          savePendingUpgrade({
-            version: pending.version || "",
-            id: pending.id,
-            needLogin: true
-          });
-          window.location.href = "/login";
-        });
-      }
-      if (upgradeMask) {
-        upgradeMask.addEventListener("click", function (event) {
-          if (event.target === upgradeMask && upgradeMask.classList.contains("can-close")) {
-            hideUpgrade();
-          }
-        });
       }
     </script>
   </body>
