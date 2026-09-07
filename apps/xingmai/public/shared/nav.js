@@ -17,6 +17,82 @@
     return;
   }
 
+  function formatChinaTime(value) {
+    if (value == null || value === "") {
+      return "—";
+    }
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "—";
+    }
+    const parts = new Intl.DateTimeFormat("zh-CN", {
+      timeZone: "Asia/Shanghai",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false
+    }).formatToParts(date);
+    const pick = function (type) {
+      return (parts.find(function (part) { return part.type === type; }) || {}).value || "00";
+    };
+    return (
+      pick("year") +
+      "-" +
+      pick("month") +
+      "-" +
+      pick("day") +
+      " " +
+      pick("hour") +
+      ":" +
+      pick("minute") +
+      ":" +
+      pick("second")
+    );
+  }
+
+  function rewriteUtcStamp(text) {
+    return String(text).replace(
+      /(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})(?:\.\d+)?(?:Z|\s*UTC)/g,
+      function (_all, day, time) {
+        return formatChinaTime(day + "T" + time + "Z");
+      }
+    );
+  }
+
+  function rewriteTimeNodes(root) {
+    if (!root) {
+      return;
+    }
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) {
+      nodes.push(walker.currentNode);
+    }
+    nodes.forEach(function (node) {
+      const next = rewriteUtcStamp(node.nodeValue);
+      if (next !== node.nodeValue) {
+        node.nodeValue = next;
+      }
+    });
+  }
+
+  function tickChinaClocks() {
+    const stamp = formatChinaTime(new Date());
+    const bar = document.getElementById("xm-clock");
+    if (bar) {
+      bar.textContent = stamp;
+      bar.title = "北京时间";
+    }
+    const pageClock = document.getElementById("clock");
+    if (pageClock) {
+      pageClock.textContent = stamp;
+      pageClock.title = "北京时间";
+    }
+  }
+
   if (!document.querySelector('link[href="/shared/layout.css"]')) {
     const css = document.createElement("link");
     css.rel = "stylesheet";
@@ -125,6 +201,14 @@
     if (document.querySelector(".xm-shell")) {
       stripInnerChrome(document.querySelector(".xm-content") || document.body);
       bindChrome(userLabel);
+      tickChinaClocks();
+      rewriteTimeNodes(document.querySelector(".xm-content"));
+      if (!window.__xmChinaClock) {
+        window.__xmChinaClock = setInterval(function () {
+          tickChinaClocks();
+          rewriteTimeNodes(document.querySelector(".xm-content"));
+        }, 1000);
+      }
       return;
     }
 
@@ -142,6 +226,7 @@
       currentLabel +
       "</span></div>" +
       '<div class="xm-user">' +
+      '<span class="xm-clock" id="xm-clock" title="北京时间">—</span>' +
       '<span class="xm-username" id="xm-username">' +
       userLabel +
       "</span>" +
@@ -174,6 +259,14 @@
     document.body.insertBefore(shell, document.body.firstChild);
     document.body.classList.add("xm-app");
     bindChrome(userLabel);
+    tickChinaClocks();
+    rewriteTimeNodes(document.querySelector(".xm-content"));
+    if (!window.__xmChinaClock) {
+      window.__xmChinaClock = setInterval(function () {
+        tickChinaClocks();
+        rewriteTimeNodes(document.querySelector(".xm-content"));
+      }, 1000);
+    }
   }
 
   function start(userLabel) {

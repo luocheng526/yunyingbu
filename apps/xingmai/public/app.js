@@ -17,7 +17,7 @@ function render(notes) {
     text.textContent = note.text;
     const time = document.createElement("time");
     time.dateTime = note.createdAt;
-    time.textContent = new Date(note.createdAt).toLocaleString();
+    time.textContent = new Date(note.createdAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
     item.append(text, time);
     list.append(item);
   }

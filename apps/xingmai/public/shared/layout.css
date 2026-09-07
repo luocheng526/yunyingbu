@@ -189,6 +189,12 @@ html.xm-collapsed .xm-menu-item span {
   font-size: 13px;
 }
 
+.xm-clock {
+  font-variant-numeric: tabular-nums;
+  color: var(--xm-muted);
+  font-size: 12px;
+}
+
 .xm-logout {
   border: 1px solid var(--xm-line);
   background: #fff;
