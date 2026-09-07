@@ -63,6 +63,17 @@ function writeBuffer(source, rel, buf) {
   fs.writeFileSync(dest, buf);
 }
 
+export function githubPathCandidates(rel) {
+  const pathRel = String(rel || "").replaceAll("\\", "/").replace(/^\/+/, "");
+  if (!pathRel) {
+    return [];
+  }
+  if (pathRel === "apps/xingmai" || pathRel.startsWith("apps/xingmai/")) {
+    return [pathRel];
+  }
+  return [pathRel, `apps/xingmai/${pathRel}`];
+}
+
 export async function fetchGithubFile(rel, options = {}) {
   const ref = String(options.ref || "").trim();
   if (!REF_OK.test(ref)) {
@@ -78,21 +89,33 @@ export async function fetchGithubFile(rel, options = {}) {
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
-  const url = `https://api.github.com/repos/${repository}/contents/${rel}?ref=${encodeURIComponent(ref)}`;
-  const res = await fetchImpl(url, { headers });
-  if (!res.ok) {
-    throw Object.assign(
-      new Error(
-        `GitHub 读不到 ${rel}@${ref}（${res.status}）。闸门不读 Cloud 工作区。请改带 contents，或先把文件写进源目录。`
-      ),
-      { status: 400, code: res.status }
-    );
+  const tried = [];
+  let lastStatus = 0;
+  for (const remotePath of githubPathCandidates(rel)) {
+    const url = `https://api.github.com/repos/${repository}/contents/${remotePath}?ref=${encodeURIComponent(ref)}`;
+    tried.push(remotePath);
+    const res = await fetchImpl(url, { headers });
+    lastStatus = res.status;
+    if (res.ok) {
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length > MAX_FILE_BYTES) {
+        throw Object.assign(new Error(`GitHub 文件 ${rel} 超过 ${MAX_FILE_BYTES} 字节`), { status: 400 });
+      }
+      return { buf, remotePath };
+    }
+    if (res.status !== 404) {
+      throw Object.assign(
+        new Error(`GitHub 读 ${remotePath}@${ref} 失败（${res.status}）。请改带 contents，或先把文件写进源目录。`),
+        { status: 400, code: res.status }
+      );
+    }
   }
-  const buf = Buffer.from(await res.arrayBuffer());
-  if (buf.length > MAX_FILE_BYTES) {
-    throw Object.assign(new Error(`GitHub 文件 ${rel} 超过 ${MAX_FILE_BYTES} 字节`), { status: 400 });
-  }
-  return buf;
+  throw Object.assign(
+    new Error(
+      `GitHub 读不到 ${rel}@${ref}（${lastStatus}）。已试 ${tried.join("、")}。闸门不读 Cloud 工作区。请改带 contents，或先把文件写进源目录。`
+    ),
+    { status: 400, code: lastStatus }
+  );
 }
 
 export async function stageTicketSources(files, options = {}) {
@@ -113,10 +136,23 @@ export async function stageTicketSources(files, options = {}) {
       continue;
     }
     if (ref) {
-      const buf = await fetchGithubFile(rel, { ...options, ref });
-      writeBuffer(source, rel, buf);
-      written.push(rel);
-      notes.push(`staged git ${rel}@${ref}`);
+      try {
+        const fetched = await fetchGithubFile(rel, { ...options, ref });
+        writeBuffer(source, rel, fetched.buf);
+        written.push(rel);
+        notes.push(
+          fetched.remotePath === rel
+            ? `staged git ${rel}@${ref}`
+            : `staged git ${rel}@${ref} <- ${fetched.remotePath}`
+        );
+      } catch (err) {
+        const local = path.join(source, rel);
+        if (options.keepSourceOnMiss && fs.existsSync(local)) {
+          notes.push(`keep source ${rel}：${err.message}`);
+          continue;
+        }
+        throw err;
+      }
     }
   }
   return { written, notes, source, ref };

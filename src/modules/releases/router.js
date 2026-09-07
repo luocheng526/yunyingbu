@@ -82,7 +82,8 @@ export function createReleasesRouter(options = {}) {
         ref: item.gitRef,
         repository: item.repository,
         fetchImpl: options.fetchImpl,
-        env: options.env || process.env
+        env: options.env || process.env,
+        keepSourceOnMiss: true
       });
     }
     const pushResult = await push(files, {

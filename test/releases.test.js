@@ -15,7 +15,13 @@ import {
   VERSION_GATE_ERROR
 } from "../src/modules/releases/version.js";
 import { formatExecError, hasApplyReceipt, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "../src/modules/releases/push.js";
-import { normalizeContents, parseGitRef, shouldRejectUnchangedAtCreate } from "../src/modules/releases/stage.js";
+import {
+  fetchGithubFile,
+  githubPathCandidates,
+  normalizeContents,
+  parseGitRef,
+  shouldRejectUnchangedAtCreate
+} from "../src/modules/releases/stage.js";
 import { NOOP_APPLY_ERROR } from "../src/modules/releases/charter.js";
 import { DEMO_INITIAL_PASSWORD, DEMO_USERNAME } from "../src/modules/profile/auth.js";
 
@@ -1234,6 +1240,83 @@ test("stage helpers accept contents and ignore same-tree create rejects", () => 
   const map = normalizeContents({ "public/nav.js": "x" }, files);
   assert.equal(Buffer.isBuffer(map["public/nav.js"]), true);
   assert.throws(() => normalizeContents({ "src/app.js": "x" }, files), /未交单路径/);
+  assert.deepEqual(githubPathCandidates("public/shared/layout.css"), [
+    "public/shared/layout.css",
+    "apps/xingmai/public/shared/layout.css"
+  ]);
+});
+
+test("fetchGithubFile falls back to apps/xingmai prefix", async () => {
+  const urls = [];
+  const fetched = await fetchGithubFile("public/shared/layout.css", {
+    ref: "cursor/cursor-theme-63da",
+    async fetchImpl(url) {
+      urls.push(String(url));
+      if (String(url).includes("/contents/apps/xingmai/public/shared/layout.css")) {
+        return {
+          ok: true,
+          status: 200,
+          async arrayBuffer() {
+            return Buffer.from("THEME\n");
+          }
+        };
+      }
+      return { ok: false, status: 404, async arrayBuffer() { return Buffer.from(""); } };
+    }
+  });
+  assert.equal(fetched.buf.toString(), "THEME\n");
+  assert.equal(fetched.remotePath, "apps/xingmai/public/shared/layout.css");
+  assert.match(urls[0], /contents\/public\/shared\/layout\.css/);
+  assert.match(urls[1], /contents\/apps\/xingmai\/public\/shared\/layout\.css/);
+});
+
+test("confirm keeps source when git ref 404s after contents staged", async () => {
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), "rel-src-keep-"));
+  const live = fs.mkdtempSync(path.join(os.tmpdir(), "rel-live-keep-"));
+  const state = fs.mkdtempSync(path.join(os.tmpdir(), "rel-state-keep-"));
+  fs.mkdirSync(path.join(source, "public", "shared"), { recursive: true });
+  fs.mkdirSync(path.join(live, "public", "shared"), { recursive: true });
+  fs.writeFileSync(path.join(source, "public", "shared", "layout.css"), "OLD\n");
+  fs.writeFileSync(path.join(live, "public", "shared", "layout.css"), "OLD\n");
+
+  await withServer(
+    {
+      stateDir: state,
+      sourceRoot: source,
+      liveRoot: live,
+      async fetchImpl() {
+        return { ok: false, status: 404, async arrayBuffer() { return Buffer.from(""); } };
+      },
+      async push(files, options) {
+        return pushXingmaiToEcs(files, {
+          snapshotDir: options.snapshotDir,
+          sourceRoot: source,
+          liveRoot: live,
+          env: { MENGKAI_SKIP_PULL: "1" }
+        });
+      }
+    },
+    async (base) => {
+      const created = await json(base, "/api/releases", {
+        method: "POST",
+        body: apply("keep-source", "首页", "首页", "正文已写入源目录", {
+          files: ["public/shared/layout.css"],
+          contents: { "public/shared/layout.css": "THEME-CSS\n" },
+          ref: "cursor/cursor-theme-63da",
+          restart: false
+        })
+      });
+      assert.equal(created.res.status, 201, created.body.error);
+      assert.equal(created.body.item.gitRef, "cursor/cursor-theme-63da");
+      assert.equal(fs.readFileSync(path.join(source, "public", "shared", "layout.css"), "utf8"), "THEME-CSS\n");
+      const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(pub.res.status, 200, pub.body.error);
+      assert.equal(fs.readFileSync(path.join(live, "public", "shared", "layout.css"), "utf8"), "THEME-CSS\n");
+    }
+  );
 });
 
 test("failed push writes stderr into ticket log", async () => {
