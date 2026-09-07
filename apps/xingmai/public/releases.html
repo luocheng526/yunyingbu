@@ -6,113 +6,13 @@
     <title>版本发布中心 · 运营部</title>
     <link rel="stylesheet" href="/shared/layout.css" />
     <style>
-      main.page {
-        flex: 1;
-        min-width: 0;
-      }
-      .banner {
-        background: #fff1f2;
-        border: 1px solid #fecdd3;
-        color: #9f1239;
-        border-radius: 14px;
-        padding: 1rem 1.15rem;
-        line-height: 1.65;
-        font-weight: 600;
-        margin: 0 0 1.5rem;
-      }
-      .grid { display: grid; gap: 1.25rem; }
-      .panel {
-        background: var(--card);
-        border: 1px solid var(--line);
-        border-radius: 16px;
-        padding: 1.15rem 1.2rem 1.3rem;
-        box-shadow: var(--shadow);
-      }
-      .panel h2 { margin: 0 0 0.45rem; font-size: 1.15rem; }
-      .row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        align-items: center;
-      }
-      button {
-        font: inherit;
-        border: 0;
-        border-radius: 999px;
-        padding: 0.45rem 0.95rem;
-        cursor: pointer;
-        background: var(--accent);
-        color: #fff;
-      }
-      button.secondary { background: #44403c; }
-      button.danger { background: #be123c; }
-      button:disabled { cursor: not-allowed; opacity: 0.55; }
-      table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
-      th, td {
-        text-align: left;
-        padding: 0.55rem 0.4rem;
-        border-bottom: 1px solid var(--line);
-        vertical-align: top;
-      }
-      .muted { color: var(--muted); font-size: 0.88rem; }
-      .badge {
-        display: inline-block;
-        padding: 0.1rem 0.5rem;
-        border-radius: 999px;
-        background: #ccfbf1;
-        color: var(--accent-ink);
-        font-size: 0.75rem;
-        margin-left: 0.35rem;
-      }
-      .lock-box {
-        background: #0f766e;
-        color: #fff;
-        border-radius: 14px;
-        padding: 1rem 1.15rem;
-      }
-      .lock-box.empty { background: #57534e; }
-      .flash {
-        margin: 0 0 1rem;
-        padding: 0.7rem 0.9rem;
-        border-radius: 10px;
-        background: #fef3c7;
-        color: #92400e;
-        display: none;
-      }
-      .flash.show { display: block; }
-      .flash.err { background: #ffe4e6; color: #9f1239; }
-      .ticket {
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        padding: 1rem 1.05rem;
-        margin: 0 0 0.85rem;
-        background: #fff;
-      }
-      .ticket__head {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.4rem 1rem;
-        align-items: baseline;
-        margin-bottom: 0.55rem;
-      }
-      .ticket__rank {
-        font-weight: 700;
-        color: var(--accent-ink);
-      }
-      .ticket dl {
-        margin: 0;
-        display: grid;
-        gap: 0.35rem 1rem;
-        grid-template-columns: 6.5rem 1fr;
-        font-size: 0.92rem;
-      }
-      .ticket dt { color: var(--muted); }
-      .ticket dd { margin: 0; }
-      .ticket ul { margin: 0; padding-left: 1.1rem; }
+      .page { max-width: 1120px; }
+      .panel { margin-bottom: 0; }
+      .panel h2 { margin: 0 0 0.45rem; font-size: 1.05rem; }
+      .ticket { margin: 0 0 0.85rem; }
     </style>
   </head>
   <body>
-    <div id="site-nav"></div>
     <main class="page" role="main">
       <p class="kicker">运营部主脑闸门</p>
       <h1>版本发布中心</h1>

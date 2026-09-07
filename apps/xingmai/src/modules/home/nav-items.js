@@ -8,10 +8,6 @@ export const NAV_ITEMS = [
   { href: "/me", file: "me.html", label: "个人中心" }
 ];
 
-export function navMarkup(activeHref) {
-  const links = NAV_ITEMS.map((item) => {
-    const current = item.href === activeHref ? ' aria-current="page"' : "";
-    return `<a href="${item.href}"${current}>${item.label}</a>`;
-  }).join("");
-  return `<header class="site-header"><div class="site-header__inner"><a class="site-brand" href="/">运营部</a><nav class="site-nav" aria-label="全站导航">${links}</nav></div></header>`;
+export function navMarkup() {
+  return "";
 }

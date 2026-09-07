@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { NAV_ITEMS, navMarkup } from "./nav-items.js";
+import { NAV_ITEMS } from "./nav-items.js";
 
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public");
 
@@ -13,7 +13,7 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
-function placeholderHtml(label, href) {
+function placeholderHtml(label) {
   const title = escapeHtml(label);
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -24,7 +24,7 @@ function placeholderHtml(label, href) {
     <link rel="stylesheet" href="/shared/layout.css" />
   </head>
   <body>
-    <div id="site-nav">${navMarkup(href)}</div>
+    <div id="site-nav" hidden></div>
     <main class="page">
       <p class="kicker">运营部</p>
       <h1>${title}</h1>
@@ -48,7 +48,7 @@ export function registerPageRoutes(app) {
         .status(200)
         .type("html")
         .set("Content-Type", "text/html; charset=utf-8")
-        .send(placeholderHtml(item.label, item.href));
+        .send(placeholderHtml(item.label));
     });
   }
 }

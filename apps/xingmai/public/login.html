@@ -11,7 +11,7 @@
     <main class="login-card">
       <h1>星脉管理系统</h1>
       <p class="login-hint">
-        请用 <strong>https://zx.xingmaierp.cc:18080/login</strong>（360 等浏览器会强制 https，必须带 :18080）。<br />
+        请用 <strong>https://zx.xingmaierp.cc/login</strong> 打开本页。<br />
         试用账号 <strong>luocheng</strong> 或 <strong>罗成</strong>，密码 <strong>ChangeMe123!</strong>
       </p>
       <form id="login-form" autocomplete="on">
@@ -76,7 +76,7 @@
               body: JSON.stringify({ username: username, password: password, remember: remember })
             });
           } catch (_err) {
-            errorEl.textContent = "连不上服务器。请改用 http://zx.xingmaierp.cc/login，不要用 https。";
+            errorEl.textContent = "连不上服务器。请确认地址是 https://zx.xingmaierp.cc/login。";
             return;
           }
           var data = {};

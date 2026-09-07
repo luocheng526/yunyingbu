@@ -10,7 +10,13 @@ export function isPublicRequest(req) {
   const method = String(req.method || "GET").toUpperCase();
   const path = normalizedPath(req);
   if (method === "GET" || method === "HEAD") {
-    return path === "/login" || path === "/login.html" || path === "/login.css";
+    return (
+      path === "/login" ||
+      path === "/login.html" ||
+      path === "/login.css" ||
+      path === "/shared/layout.css" ||
+      path === "/shared/nav.js"
+    );
   }
   if (method === "POST") {
     return path === "/api/auth/login" || path === "/api/auth/logout";
