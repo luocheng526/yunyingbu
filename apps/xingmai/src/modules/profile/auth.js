@@ -1,7 +1,15 @@
 import { promisify } from "node:util";
 import { randomBytes, scrypt, scryptSync, timingSafeEqual } from "node:crypto";
 import { Router } from "express";
-import mysql from "mysql2/promise";
+
+let mysqlLib = null;
+
+async function loadMysql() {
+  if (!mysqlLib) {
+    mysqlLib = await import("mysql2/promise");
+  }
+  return mysqlLib.default || mysqlLib;
+}
 
 // xm-mysql 0.1.50  连接池放进已有 auth.js。线上不能新建目录，只能改已有文件。
 
@@ -43,8 +51,9 @@ export function setPoolForTests(next) {
   mode = next ? "mysql" : "memory";
 }
 
-export function getPool() {
+export async function getPool() {
   if (!pool) {
+    const mysql = await loadMysql();
     const cfg = mysqlConfig();
     pool = mysql.createPool({
       ...cfg,
@@ -116,6 +125,7 @@ export const SCHEMA_SQL = [
 ];
 
 export async function ensureDatabase() {
+  const mysql = await loadMysql();
   const cfg = mysqlConfig();
   const { database, ...admin } = cfg;
   const conn = await mysql.createConnection(admin);
@@ -128,14 +138,16 @@ export async function ensureDatabase() {
   }
 }
 
-export async function ensureSchema(target = getPool()) {
+export async function ensureSchema(target) {
+  const db = target || (await getPool());
   for (const sql of SCHEMA_SQL) {
-    await target.query(sql);
+    await db.query(sql);
   }
 }
 
 export async function query(sql, params = []) {
-  return getPool().query(sql, params);
+  const db = await getPool();
+  return db.query(sql, params);
 }
 
 // xm-async-scrypt 0.1.43  启动仍同步播种；登录/改密走异步，避免堵住事件循环。

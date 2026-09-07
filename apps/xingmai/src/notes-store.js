@@ -52,11 +52,23 @@ export function addNote(text) {
   return clone(note);
 }
 
+/** 线上 app.js 仍是 createNotesStore().list() / .create()，缺这个导出会试载失败。 */
+export function createNotesStore() {
+  return {
+    list() {
+      return listNotes();
+    },
+    create(text) {
+      return addNote(text);
+    }
+  };
+}
+
 export async function startMysql({ skipCreateDatabase = false } = {}) {
   if (!skipCreateDatabase) {
     await ensureDatabase();
   }
-  await ensureSchema(getPool());
+  await ensureSchema();
   setDbMode("mysql");
   await hydrateUsers();
   await hydrateHan();

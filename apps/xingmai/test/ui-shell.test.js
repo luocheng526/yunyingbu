@@ -135,6 +135,8 @@ test("page renderer injects shared shell onto module html", async () => {
   const serverJs = readFileSync(join(root, "src/server.js"), "utf8");
   assert.match(serverJs, /keepAliveTimeout = 65_000/);
   assert.match(serverJs, /startMysql/);
+  const notesSrc = readFileSync(join(root, "src/notes-store.js"), "utf8");
+  assert.match(notesSrc, /export function createNotesStore/);
   const authSrc = readFileSync(join(root, "src/modules/profile/auth.js"), "utf8");
   assert.match(authSrc, /MYSQL_HOST/);
   assert.match(authSrc, /CREATE TABLE IF NOT EXISTS han_tasks/);

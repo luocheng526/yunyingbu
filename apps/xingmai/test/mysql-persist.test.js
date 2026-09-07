@@ -8,7 +8,7 @@ import { resetStoreForTests } from "../src/modules/profile/auth.js";
 import { resetHanStore } from "../src/modules/han/store.js";
 import { resetStore as resetShenStore } from "../src/modules/shen/store.js";
 import { resetPeopleStore } from "../src/modules/people/store.js";
-import { clearNotes } from "../src/notes-store.js";
+import { clearNotes, createNotesStore } from "../src/notes-store.js";
 
 const server = createApp().listen(0);
 const { port } = server.address();
@@ -35,6 +35,10 @@ test("memory mode keeps the live JSON shapes for every business API", async () =
   resetShenStore();
   resetPeopleStore();
   clearNotes();
+  const liveNotes = createNotesStore();
+  assert.equal(typeof liveNotes.list, "function");
+  assert.equal(typeof liveNotes.create, "function");
+  assert.deepEqual(liveNotes.list(), []);
   const cookie = await loginCookie();
   const headers = { cookie, "Content-Type": "application/json" };
 
