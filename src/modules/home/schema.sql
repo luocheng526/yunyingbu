@@ -1,0 +1,3 @@
+-- 首页模块：无业务表。
+-- 导航壳（public/shared/nav.js）禁止连库。
+-- 不要创建 profile_users / profile_sessions / people_* / data_* / shen_* / han_* / releases_*。

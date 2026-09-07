@@ -20,7 +20,9 @@ const copies = [
   ["src/modules/home/router.js", "src/modules/home/router.js"],
   ["src/modules/home/pages.js", "src/modules/home/pages.js"],
   ["src/modules/home/attach.js", "src/modules/home/attach.js"],
-  ["src/modules/home/patch-app.js", "src/modules/home/patch-app.js"]
+  ["src/modules/home/patch-app.js", "src/modules/home/patch-app.js"],
+  ["src/modules/home/schema.sql", "src/modules/home/schema.sql"],
+  ["src/db/pool.js", "src/db/pool.js"]
 ];
 
 function copyFile(relFrom, relTo) {
