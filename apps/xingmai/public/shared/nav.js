@@ -1,4 +1,4 @@
-/* xm-shell-theme 0.1.30 */
+/* xm-shell-perf 0.1.33 */
 (function () {
   const items = [
     { href: "/", label: "首页" },
@@ -146,10 +146,10 @@
     }
   }
 
-  if (!document.querySelector('link[href="/shared/layout.css"]')) {
+  if (!document.querySelector('link[href*="/shared/layout.css"]')) {
     const css = document.createElement("link");
     css.rel = "stylesheet";
-    css.href = "/shared/layout.css";
+    css.href = "/shared/layout.css?v=0.1.33";
     document.head.appendChild(css);
   }
 
@@ -338,13 +338,18 @@
   }
 
   function wipePageTimers() {
-    const dummy = setInterval(function () {}, 1e9);
-    const max = Math.min(dummy, 100000);
-    for (let i = 1; i <= max; i += 1) {
-      clearInterval(i);
-      clearTimeout(i);
+    if (window.__xmChinaClock) {
+      clearInterval(window.__xmChinaClock);
+      window.__xmChinaClock = null;
     }
-    window.__xmChinaClock = null;
+    const extra = window.__xmPageTimers;
+    if (Array.isArray(extra)) {
+      extra.forEach(function (id) {
+        clearInterval(id);
+        clearTimeout(id);
+      });
+      window.__xmPageTimers = [];
+    }
   }
 
   function applyHtml(html) {

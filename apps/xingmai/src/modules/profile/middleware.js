@@ -1,6 +1,15 @@
 import fs from "node:fs";
 import { currentUser } from "./auth.js";
 
+export const SHELL_ASSET_VER = "0.1.33";
+const htmlFileCache = new Map();
+
+function versionShellAssets(text) {
+  return String(text || "")
+    .replace(/\/shared\/layout\.css(?:\?[^"'>\s]*)?/g, `/shared/layout.css?v=${SHELL_ASSET_VER}`)
+    .replace(/\/shared\/nav\.js(?:\?[^"'>\s]*)?/g, `/shared/nav.js?v=${SHELL_ASSET_VER}`);
+}
+
 function normalizedPath(req) {
   const raw = String(req.path || "/");
   const trimmed = raw.replace(/\/+$/, "");
@@ -44,29 +53,41 @@ export function withThemeBoot(html) {
 export function withSharedShell(html) {
   const text = String(html || "");
   if (/class=["']login-page["']/.test(text) || /href=["']\/login\.css["']/.test(text)) {
-    return withThemeBoot(text);
+    return versionShellAssets(withThemeBoot(text));
   }
   let out = text;
   if (out.includes("</head>")) {
     const extras = [];
     if (!out.includes("/shared/layout.css")) {
-      extras.push('    <link rel="stylesheet" href="/shared/layout.css" />');
-    } else if (!out.includes('rel="preload" href="/shared/layout.css"')) {
-      extras.push('    <link rel="preload" href="/shared/layout.css" as="style" />');
+      extras.push(`    <link rel="stylesheet" href="/shared/layout.css?v=${SHELL_ASSET_VER}" />`);
+    } else if (!out.includes('rel="preload" href="/shared/layout.css')) {
+      extras.push(`    <link rel="preload" href="/shared/layout.css?v=${SHELL_ASSET_VER}" as="style" />`);
     }
     if (!out.includes("/shared/nav.js")) {
-      extras.push('    <link rel="preload" href="/shared/nav.js" as="script" />');
-      extras.push('    <script src="/shared/nav.js" defer></script>');
-    } else if (!out.includes('rel="preload" href="/shared/nav.js"')) {
-      extras.push('    <link rel="preload" href="/shared/nav.js" as="script" />');
+      extras.push(`    <link rel="preload" href="/shared/nav.js?v=${SHELL_ASSET_VER}" as="script" />`);
+      extras.push(`    <script src="/shared/nav.js?v=${SHELL_ASSET_VER}" defer></script>`);
+    } else if (!out.includes('rel="preload" href="/shared/nav.js')) {
+      extras.push(`    <link rel="preload" href="/shared/nav.js?v=${SHELL_ASSET_VER}" as="script" />`);
     }
     if (extras.length) {
       out = out.replace("</head>", extras.join("\n") + "\n  </head>");
     }
   } else if (!out.includes("/shared/nav.js") && out.includes("</body>")) {
-    out = out.replace("</body>", '    <script src="/shared/nav.js"></script>\n  </body>');
+    out = out.replace("</body>", `    <script src="/shared/nav.js?v=${SHELL_ASSET_VER}"></script>\n  </body>`);
   }
-  return withThemeBoot(out);
+  return versionShellAssets(withThemeBoot(out));
+}
+
+export function readThemedHtml(filePath) {
+  const dest = String(filePath || "");
+  const stat = fs.statSync(dest);
+  const hit = htmlFileCache.get(dest);
+  if (hit && hit.mtimeMs === stat.mtimeMs && hit.size === stat.size) {
+    return hit.html;
+  }
+  const html = withSharedShell(fs.readFileSync(dest, "utf8"));
+  htmlFileCache.set(dest, { mtimeMs: stat.mtimeMs, size: stat.size, html });
+  return html;
 }
 
 export function injectHtmlShell(req, res, next) {
@@ -83,7 +104,7 @@ export function injectHtmlShell(req, res, next) {
     const dest = String(filePath || "");
     if (/\.html?$/i.test(dest)) {
       try {
-        const html = withSharedShell(fs.readFileSync(dest, "utf8"));
+        const html = readThemedHtml(dest);
         res.type("html");
         res.setHeader("Cache-Control", "private, no-store");
         return send(html);
