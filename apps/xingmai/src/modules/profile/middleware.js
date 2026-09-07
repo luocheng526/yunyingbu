@@ -1,10 +1,11 @@
 import fs from "node:fs";
 import { currentUser } from "./auth.js";
 
-// xm-theme-pages-pair 0.1.38  必须和 home/pages.js 成套发，禁止只换本文件。
+// xm-full-lag-fix 0.1.39  必须和 home/pages.js 成套发，禁止只换本文件。
 
-export const SHELL_ASSET_VER = "0.1.33";
+export const SHELL_ASSET_VER = "0.1.39";
 const htmlFileCache = new Map();
+const HTML_CACHE_MS = 5000;
 
 function versionShellAssets(text) {
   return String(text || "")
@@ -83,13 +84,18 @@ export function withSharedShell(html) {
 // 首页 pages.js 会调用本函数。只发 middleware、不发匹配的 pages.js（或反过来）会让进程起不来。
 export function readThemedHtml(filePath) {
   const dest = String(filePath || "");
-  const stat = fs.statSync(dest);
+  const now = Date.now();
   const hit = htmlFileCache.get(dest);
+  if (hit && now - hit.at < HTML_CACHE_MS) {
+    return hit.html;
+  }
+  const stat = fs.statSync(dest);
   if (hit && hit.mtimeMs === stat.mtimeMs && hit.size === stat.size) {
+    hit.at = now;
     return hit.html;
   }
   const html = withSharedShell(fs.readFileSync(dest, "utf8"));
-  htmlFileCache.set(dest, { mtimeMs: stat.mtimeMs, size: stat.size, html });
+  htmlFileCache.set(dest, { mtimeMs: stat.mtimeMs, size: stat.size, html, at: now });
   return html;
 }
 

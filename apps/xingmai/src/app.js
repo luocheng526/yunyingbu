@@ -32,13 +32,20 @@ export function createApp() {
     }
   });
 
+  // 页面路由必须在 static 前面。否则 GET / 会被 index.html 直接吐出，绕过注入。
+  attachHome(app);
   app.use(
     express.static(join(__dirname, "..", "public"), {
+      index: false,
       etag: true,
       lastModified: true,
       setHeaders(res, filePath) {
         if (/\.(?:css|js)$/i.test(filePath)) {
-          res.setHeader("Cache-Control", "public, max-age=3600");
+          const versioned = Boolean(res.req && res.req.query && res.req.query.v);
+          res.setHeader(
+            "Cache-Control",
+            versioned ? "public, max-age=86400, immutable" : "public, max-age=0, must-revalidate"
+          );
           return;
         }
         if (/\.html?$/i.test(filePath)) {
@@ -47,8 +54,6 @@ export function createApp() {
       }
     })
   );
-
-  attachHome(app);
   app.use("/api/releases", createReleasesRouter());
   return app;
 }

@@ -1,4 +1,4 @@
-/* xm-shell-perf 0.1.33 */
+/* xm-shell-perf 0.1.39 */
 (function () {
   const items = [
     { href: "/", label: "首页" },
@@ -149,7 +149,7 @@
   if (!document.querySelector('link[href*="/shared/layout.css"]')) {
     const css = document.createElement("link");
     css.rel = "stylesheet";
-    css.href = "/shared/layout.css?v=0.1.33";
+    css.href = "/shared/layout.css?v=0.1.39";
     document.head.appendChild(css);
   }
 
@@ -299,7 +299,7 @@
     htmlLoads.set(dest, pending);
     setTimeout(function () {
       htmlLoads.delete(dest);
-    }, 20000);
+    }, 60000);
     return pending;
   }
 
@@ -432,21 +432,27 @@
       });
   }
 
+  function isAppDest(dest) {
+    return items.some(function (item) {
+      return (item.href.replace(/\/+$/, "") || "/") === dest;
+    });
+  }
+
   function bindSpa() {
     if (window.__xmSpaBound) {
       return;
     }
     window.__xmSpaBound = true;
     document.addEventListener("click", function (event) {
-      const a = event.target.closest("a.xm-menu-item, a.xm-logo");
+      const a = event.target.closest("a[href]");
       if (!a || event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
         return;
       }
-      if (a.target === "_blank") {
+      if (a.target === "_blank" || a.hasAttribute("download")) {
         return;
       }
       const dest = appPath(a.href);
-      if (!dest) {
+      if (!dest || !isAppDest(dest)) {
         return;
       }
       event.preventDefault();
@@ -455,12 +461,12 @@
     document.addEventListener(
       "pointerenter",
       function (event) {
-        const a = event.target.closest && event.target.closest("a.xm-menu-item, a.xm-logo");
+        const a = event.target.closest && event.target.closest("a[href]");
         if (!a) {
           return;
         }
         const dest = appPath(a.href);
-        if (dest && dest !== current) {
+        if (dest && dest !== current && isAppDest(dest)) {
           loadHtml(dest);
         }
       },
@@ -471,6 +477,29 @@
     });
   }
 
+  function warmAppPages() {
+    if (window.__xmWarmPages) {
+      return;
+    }
+    window.__xmWarmPages = true;
+    const hrefs = items.map(function (item) {
+      return item.href;
+    });
+    let i = 0;
+    function next() {
+      if (i >= hrefs.length) {
+        return;
+      }
+      const dest = appPath(hrefs[i]);
+      i += 1;
+      if (dest && dest !== current) {
+        loadHtml(dest);
+      }
+      setTimeout(next, 300);
+    }
+    setTimeout(next, 800);
+  }
+
   function mountShell(userLabel) {
     if (document.querySelector(".xm-shell")) {
       stripInnerChrome(document.querySelector(".xm-content") || document.body);
@@ -479,6 +508,7 @@
       rewriteTimeNodes(document.querySelector(".xm-content"));
       watchStampRewrites();
       startClock();
+      warmAppPages();
       return;
     }
 
@@ -534,6 +564,7 @@
     rewriteTimeNodes(document.querySelector(".xm-content"));
     watchStampRewrites();
     startClock();
+    warmAppPages();
   }
 
   function start(userLabel) {

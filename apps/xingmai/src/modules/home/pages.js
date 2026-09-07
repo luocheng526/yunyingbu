@@ -4,9 +4,8 @@ import { fileURLToPath } from "node:url";
 import * as profileShell from "../profile/middleware.js";
 import { NAV_ITEMS } from "./nav-items.js";
 
-// xm-theme-pages-pair 0.1.38  必须和 profile/middleware.js 成套发。
+// xm-full-lag-fix 0.1.39  必须和 profile/middleware.js 成套发。
 
-// 必须和 middleware.js 成套发布。命名导入 readThemedHtml 会在旧 middleware 上直接把进程打挂。
 function renderExistingPage(filePath) {
   if (typeof profileShell.readThemedHtml === "function") {
     return profileShell.readThemedHtml(filePath);
@@ -15,6 +14,11 @@ function renderExistingPage(filePath) {
 }
 
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public");
+const pageFiles = new Map();
+for (const item of NAV_ITEMS) {
+  const filePath = path.join(publicDir, item.file);
+  pageFiles.set(item.href, fs.existsSync(filePath) ? filePath : "");
+}
 
 function escapeHtml(value) {
   return String(value)
@@ -52,15 +56,15 @@ function placeholderHtml(label) {
 export function registerPageRoutes(app) {
   for (const item of NAV_ITEMS) {
     app.get(item.href, (_req, res) => {
-      const filePath = path.join(publicDir, item.file);
-      if (fs.existsSync(filePath)) {
-        res.status(200).type("html").send(renderExistingPage(filePath));
+      const filePath = pageFiles.get(item.href);
+      if (filePath) {
+        res.status(200).type("html").set("Cache-Control", "private, no-store").send(renderExistingPage(filePath));
         return;
       }
       res
         .status(200)
         .type("html")
-        .set("Content-Type", "text/html; charset=utf-8")
+        .set("Cache-Control", "private, no-store")
         .send(profileShell.withSharedShell(placeholderHtml(item.label)));
     });
   }
