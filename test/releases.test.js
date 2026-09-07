@@ -128,6 +128,7 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /data-tab="history"/);
     assert.match(text, /data-tab="logs"/);
     assert.match(text, /\/api\/releases\/versions/);
+    assert.match(text, /待上线是空的，没有等待通过的单据/);
     assert.match(text, /\/api\/releases\/.*rollback/);
     assert.match(text, /回滚到升级前/);
     assert.doesNotMatch(text, /data-tab="feed"/);

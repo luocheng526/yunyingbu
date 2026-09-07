@@ -373,10 +373,18 @@
         }).join("");
       }
 
-      function renderQueue(items, locked) {
+      function renderQueue(items, locked, versions) {
         const el = document.getElementById("queue-view");
         if (!items.length) {
-          el.innerHTML = '<div class="empty"><div>还没有对话交来的发版单</div><div>各模块对话框提交【发布文档】后会出现在这里</div></div>';
+          const current = ((versions && versions.current) || []).map(function (row) {
+            return esc(row.module) + " " + esc(row.version);
+          }).join(" · ");
+          el.innerHTML =
+            '<div class="empty">' +
+            "<div>待上线是空的，没有等待通过的单据</div>" +
+            "<div>已成功发布的请点上面「版本记录」" +
+            (current ? "。当前：" + current : "") +
+            "</div></div>";
           return;
         }
         el.innerHTML = items.map(function (item, index) {
@@ -472,7 +480,7 @@
         renderStats(items);
         renderLock(lock, ready);
         renderCurrentVersions(versions);
-        renderQueue(queue.items || [], lock.locked);
+        renderQueue(queue.items || [], lock.locked, versions);
         renderHistory(items, lock.locked);
         renderLogs(items);
         return lock;

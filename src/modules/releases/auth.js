@@ -81,6 +81,7 @@ export function releasesPageGate(options = {}) {
     }
     const user = await resolveUser(req, options);
     if (user) {
+      res.setHeader("Cache-Control", "no-store");
       next();
       return;
     }
