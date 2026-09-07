@@ -4,46 +4,45 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>个人中心 · 运营部</title>
-    <link rel="stylesheet" href="/shared/layout.css" />
-    <style>
-      .page { max-width: 720px; }
-      .panel { margin-bottom: 1.1rem; }
-      .panel h2 { margin: 0 0 1rem; font-size: 1.05rem; }
-      input { display: block; width: 100%; margin-top: 0.35rem; }
-    </style>
+    <link rel="stylesheet" href="/shared/layout.css?v=0.1.52" />
+    <script>try{var t=localStorage.getItem("xm-theme");if(t==="dark"||t==="light"){document.documentElement.setAttribute("data-theme",t);document.documentElement.style.colorScheme=t;}}catch(e){}</script>
   </head>
   <body>
     <main class="page">
-      <p class="kicker">星脉</p>
-      <h1>个人中心</h1>
-      <p class="lead">只改当前账号的显示名、邮箱、手机和密码。</p>
+      <header class="page-head">
+        <p class="kicker">星脉</p>
+        <h1>个人中心</h1>
+        <p class="lead">只改当前账号的显示名、邮箱、手机和密码。</p>
+      </header>
       <p id="status" class="status" role="status"></p>
-      <div class="panel">
-        <h2>账号资料</h2>
-        <form id="profile-form">
-          <label>用户名<input id="profile-username" name="username" type="text" readonly /></label>
-          <label>显示名<input id="profile-displayName" name="displayName" type="text" /></label>
-          <label>邮箱<input id="profile-email" name="email" type="email" /></label>
-          <label>手机<input id="profile-phone" name="phone" type="tel" /></label>
-          <div class="actions"><button type="submit">保存资料</button></div>
-        </form>
-      </div>
-      <div class="panel">
-        <h2>修改密码</h2>
-        <form id="password-form" autocomplete="off">
-          <label>当前密码<input id="current-password" type="password" required /></label>
-          <label>新密码<input id="new-password" type="password" required minlength="8" /></label>
-          <label>确认新密码<input id="confirm-password" type="password" required minlength="8" /></label>
-          <div class="actions"><button type="submit">修改密码</button></div>
-        </form>
-      </div>
-      <div class="panel">
-        <form id="logout-form">
-          <button type="submit" class="secondary">退出登录</button>
-        </form>
+      <div class="stack">
+        <section class="panel">
+          <h2>账号资料</h2>
+          <form id="profile-form">
+            <label>用户名<input id="profile-username" name="username" type="text" readonly /></label>
+            <label>显示名<input id="profile-displayName" name="displayName" type="text" /></label>
+            <label>邮箱<input id="profile-email" name="email" type="email" /></label>
+            <label>手机<input id="profile-phone" name="phone" type="tel" /></label>
+            <div class="actions"><button type="submit">保存资料</button></div>
+          </form>
+        </section>
+        <section class="panel">
+          <h2>修改密码</h2>
+          <form id="password-form" autocomplete="off">
+            <label>当前密码<input id="current-password" type="password" required /></label>
+            <label>新密码<input id="new-password" type="password" required minlength="8" /></label>
+            <label>确认新密码<input id="confirm-password" type="password" required minlength="8" /></label>
+            <div class="actions"><button type="submit">修改密码</button></div>
+          </form>
+        </section>
+        <section class="panel">
+          <form id="logout-form">
+            <button type="submit" class="secondary">退出登录</button>
+          </form>
+        </section>
       </div>
     </main>
-    <script src="/shared/nav.js"></script>
+    <script src="/shared/nav.js?v=0.1.52"></script>
     <script>
       (function () {
         var statusEl = document.getElementById("status");

@@ -20,7 +20,7 @@
   --xm-danger-bg: #f8e8e6;
   --xm-ok: #3f6b3a;
   --xm-sider-w: 232px;
-  --xm-radius: 10px;
+  --xm-radius: 12px;
   --accent: var(--xm-primary);
   --accent-ink: var(--xm-ink);
   --bg: var(--xm-bg);
@@ -371,11 +371,25 @@ h1 {
 .page select,
 .page textarea {
   font: inherit;
+  width: 100%;
   padding: 0.5rem 0.7rem;
   border: 1px solid var(--xm-line);
   border-radius: 8px;
   background: var(--xm-card);
   color: var(--xm-ink);
+}
+
+.row input,
+.row select,
+.people-form input,
+.people-form select {
+  width: 100%;
+}
+
+.xm-content textarea,
+.page textarea {
+  min-height: 8rem;
+  resize: vertical;
 }
 
 .demo-flag {
@@ -684,4 +698,105 @@ body.xm-app #site-nav,
 .xm-content .log-item {
   background: var(--xm-bg);
   border-left-color: var(--xm-ink);
+}
+
+.page-head {
+  margin: 0 0 20px;
+}
+
+.page-head .lead {
+  margin: 0;
+  max-width: 40rem;
+}
+
+.stack {
+  display: grid;
+  gap: 14px;
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.home-grid .panel {
+  min-height: 132px;
+}
+
+.panel h2,
+.xm-content .panel h2,
+.page .panel h2 {
+  margin: 0 0 14px;
+  font-size: 1.02rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.panel + .panel {
+  margin-top: 14px;
+}
+
+.stack .panel + .panel {
+  margin-top: 0;
+}
+
+.empty {
+  margin: 0;
+  padding: 18px 4px;
+  color: var(--xm-muted);
+  font-size: 13px;
+}
+
+.people-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px 12px;
+  align-items: end;
+}
+
+.people-form label {
+  margin-bottom: 0;
+}
+
+.xm-content table thead th,
+.page table thead th {
+  color: var(--xm-muted);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  background: transparent;
+}
+
+.xm-content tbody tr:hover td,
+.page tbody tr:hover td {
+  background: var(--xm-hover);
+}
+
+.xm-content button,
+.page button,
+.xm-theme,
+.xm-logout {
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.xm-content input:focus,
+.xm-content select:focus,
+.xm-content textarea:focus,
+.page input:focus,
+.page select:focus,
+.page textarea:focus {
+  outline: none;
+  border-color: var(--xm-ink);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--xm-ink) 10%, transparent);
+}
+
+.demo-flag {
+  vertical-align: middle;
+}
+
+@media (max-width: 900px) {
+  .home-grid {
+    grid-template-columns: 1fr;
+  }
 }

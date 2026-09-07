@@ -5,15 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>运营部工作台</title>
     <script>try{var t=localStorage.getItem("xm-theme");if(t==="dark"||t==="light"){document.documentElement.setAttribute("data-theme",t);document.documentElement.style.colorScheme=t;}}catch(e){}</script>
-    <link rel="stylesheet" href="/shared/layout.css?v=0.1.45" />
+    <link rel="stylesheet" href="/shared/layout.css?v=0.1.52" />
   </head>
   <body>
     <main class="page">
-      <p class="kicker">星脉</p>
-      <h1>工作台</h1>
-      <p class="lead">模块页面只改自己的内容区。</p>
-      <p class="note">各中心由独立 Agent 维护，从左侧栏进入。</p>
+      <header class="page-head">
+        <p class="kicker">星脉</p>
+        <h1>工作台</h1>
+        <p class="lead">业务数据已写入服务器数据库。从左侧栏进入各中心，不要在本页重复入口。</p>
+      </header>
+      <section class="home-grid" aria-label="工作台概况">
+        <article class="panel">
+          <h2>数据落库</h2>
+          <p class="lead">韩梦凯、沈子晗、人员、数据和登录会话都在 MySQL。重启后业务记录还在。</p>
+        </article>
+        <article class="panel">
+          <h2>登录保持</h2>
+          <p class="lead">登录一次默认保持 7 天。勾选「记住密码」为 30 天。</p>
+        </article>
+        <article class="panel">
+          <h2>发版闸门</h2>
+          <p class="lead">上线只走版本发布中心。点「通过」才落地，禁止插队。</p>
+        </article>
+      </section>
     </main>
-    <script src="/shared/nav.js?v=0.1.45"></script>
+    <script src="/shared/nav.js?v=0.1.52"></script>
   </body>
 </html>

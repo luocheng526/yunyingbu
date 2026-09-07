@@ -3,9 +3,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { currentUser } from "./auth.js";
 
-// xm-upgrade-mask 0.1.45  必须和 home/pages.js 成套发，禁止只换本文件。
+// xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
 
-export const SHELL_ASSET_VER = "0.1.45";
+export const SHELL_ASSET_VER = "0.1.52";
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public");
 const SHELL_ASSET_FILES = {
   "/shared/nav.js": "shared/nav.js",
