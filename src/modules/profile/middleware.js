@@ -17,6 +17,9 @@ export function isPublicRequest(req) {
   if (method === "POST" && (path === "/api/auth/login" || path === "/api/auth/logout")) {
     return true;
   }
+  if (method === "POST" && path === "/api/releases/webhooks/github") {
+    return true;
+  }
   return false;
 }
 

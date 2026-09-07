@@ -17,7 +17,13 @@ const publicDir = path.join(__dirname, "../public");
 export function createApp(options = {}) {
   const notes = options.notesStore || createNotesStore();
   const app = express();
-  app.use(express.json());
+  app.use(
+    express.json({
+      verify: (req, _res, buf) => {
+        req.rawBody = buf;
+      }
+    })
+  );
   attachProfile(app);
   app.use(releasesPageGate(options));
   app.use(express.static(publicDir));

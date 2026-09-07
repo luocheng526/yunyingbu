@@ -1,0 +1,35 @@
+name: Release wake
+
+on:
+  workflow_run:
+    workflows:
+      - Release artifact
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Successful main-branch Release artifact run id; empty = latest"
+        required: false
+
+concurrency:
+  group: release-wake
+  cancel-in-progress: false
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main')
+    steps:
+      - name: POST HMAC wake (no deploy)
+        env:
+          CONTROLLER_WEBHOOK_URL: ${{ secrets.CONTROLLER_WEBHOOK_URL }}
+          CONTROLLER_WEBHOOK_SECRET: ${{ secrets.CONTROLLER_WEBHOOK_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CONTROLLER_WEBHOOK_URL:-}" ] || [ -z "${CONTROLLER_WEBHOOK_SECRET:-}" ]; then
+            echo "controller webhook not configured; skip wake (shadow). This job never deploys."
+            exit 0
+          fi
+          echo "wake would POST to controller; production deploy is not this workflow."
+          exit 0

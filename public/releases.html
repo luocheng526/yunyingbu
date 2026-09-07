@@ -146,16 +146,21 @@
         <h1>版本发布中心</h1>
         <button type="button" id="refresh-btn">刷新</button>
       </div>
-      <p class="lead">各模块对话提交发版后在这里排队；看清更新内容、调整顺序，点通过才放行。</p>
-      <p id="refresh-meta" class="muted">点刷新立刻拉队列；同时每 3 秒自动拉取 GET /api/releases/queue。</p>
+      <p class="lead">各模块对话提交发版后在这里排队；看清更新内容、调整顺序，点通过才放行。GitHub 合入主支后的不可变制品进入「待上线」，PR tip 不会入列。</p>
+      <p id="refresh-meta" class="muted">点刷新立刻拉队列与待上线候选；同时每 3 秒自动拉取 GET /api/releases/queue 与 /api/releases/candidates。</p>
       <div class="banner">
-        单据来自各模块对话 POST /api/releases，本页不提供手填表。点「通过」才真正发版（push-xingmai-to-ecs.sh，是否重启看单据）。未通过禁止发。同一时刻一把锁；正在发时其他通过禁用；下一条不会自动发。
+        PR 合入不等于上线。待上线只批准 candidate_id，禁止手填 SHA/路径/命令。当前 RELEASE_MODE=shadow：可看候选、可 shadow 安装，不创建生产部署消息。对话交单点「通过」才真正发版（push-xingmai-to-ecs.sh，是否重启看单据）。未通过禁止发。同一时刻一把锁；正在发时其他通过禁用；下一条不会自动发。
       </div>
       <div id="flash" class="flash" role="status"></div>
       <div class="grid">
         <section class="panel" id="lock-panel">
           <h2>发布中（全局锁）</h2>
           <div id="lock-view" class="lock-box empty">当前空闲，没有发布任务。</div>
+        </section>
+        <section class="panel">
+          <h2>待上线（GitHub 不可变制品）</h2>
+          <p class="muted">只有真实 UUID candidate_id、state=pending_approval、can_approve=true 且非 overlay 才能点发布。等待入库 overlay 不可批准。</p>
+          <div id="candidates-view" class="cards"></div>
         </section>
         <section class="panel">
           <h2>待放行（各对话框交来的发版单）</h2>
@@ -243,6 +248,39 @@
         }).join("") + "</ul>";
       }
 
+      function renderCandidates(items) {
+        const el = document.getElementById("candidates-view");
+        if (!el) return;
+        if (!items.length) {
+          el.innerHTML = '<p class="muted">还没有待上线候选。PR tip 不会出现在这里；需主支合入并完成制品入库。</p>';
+          return;
+        }
+        el.innerHTML = items
+          .map(function (item) {
+            const can = item.can_approve;
+            const overlay = item.overlay;
+            const btn = overlay
+              ? "<button disabled>等待入库，不可批准</button>"
+              : can
+                ? "<button data-act=\"cand-approve\">发布此候选</button>"
+                : "<button disabled>" + esc(item.block_reason || "不可批准") + "</button>";
+            return (
+              "<article class=\"ticket\" data-candidate=\"" + esc(item.id) + "\">" +
+              "<h3>" + esc(item.version) + " · " + esc(item.state) + (overlay ? '<span class="badge">overlay</span>' : "") + "</h3>" +
+              "<dl>" +
+              "<dt>candidate_id</dt><dd>" + esc(item.id) + "</dd>" +
+              "<dt>release_id</dt><dd>" + esc(item.releaseId) + "</dd>" +
+              "<dt>merge SHA</dt><dd>" + esc(item.mergeSha) + "</dd>" +
+              "<dt>CI run</dt><dd>" + esc(item.ciRunId) + " / attempt " + esc(item.ciRunAttempt) + "</dd>" +
+              "<dt>artifact</dt><dd>" + esc(item.artifactSha256) + "</dd>" +
+              "<dt>manifest</dt><dd>" + esc(item.manifestSha256) + "</dd>" +
+              "</dl>" +
+              "<div class=\"row\">" + btn + "</div></article>"
+            );
+          })
+          .join("");
+      }
+
       function renderQueue(items, locked) {
         const el = document.getElementById("queue-view");
         if (!items.length) {
@@ -307,13 +345,15 @@
       }
 
       async function refresh() {
-        const [all, queue, lock] = await Promise.all([
+        const [all, queue, lock, candidates] = await Promise.all([
           api("/api/releases"),
           api("/api/releases/queue"),
-          api("/api/releases/lock")
+          api("/api/releases/lock"),
+          api("/api/releases/candidates")
         ]);
         const items = all.items || [];
         renderLock(lock);
+        renderCandidates(candidates.items || []);
         renderQueue(queue.items || [], lock.locked);
         renderHistory(
           items.filter(function (item) {
@@ -331,6 +371,22 @@
       document.body.addEventListener("click", async function (event) {
         const btn = event.target.closest("button[data-act]");
         if (!btn) return;
+        const candCard = btn.closest("[data-candidate]");
+        if (candCard && btn.getAttribute("data-act") === "cand-approve") {
+          btn.disabled = true;
+          try {
+            await api("/api/releases/candidates/" + candCard.getAttribute("data-candidate") + "/approve", {
+              method: "POST",
+              body: "{}"
+            });
+            flash("已批准 candidate_id。生产切换只发生在 deployment_ready 模式。");
+            await refresh();
+          } catch (err) {
+            flash((err.status || "") + " " + err.message, true);
+            await refresh();
+          }
+          return;
+        }
         const card = btn.closest("[data-id]");
         const id = card && card.getAttribute("data-id");
         if (!id) return;

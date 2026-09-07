@@ -4,3 +4,4 @@ deploy/aliyun/.env
 *.pem
 *.key
 .ssh/
+dist/

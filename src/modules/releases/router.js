@@ -3,6 +3,8 @@ import { requireReleasesAuth } from "./auth.js";
 import { hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
 import { pushXingmaiToEcs } from "./push.js";
 import { restartMengkaiService } from "./restart.js";
+import { attachPipelineRoutes, attachPipelineWebhook } from "./pipeline/attach.js";
+import { createPipelineStore } from "./pipeline/store.js";
 import { createStore, MODULES } from "./store.js";
 
 const PUBLIC_VERIFY = "http://zx.xingmaierp.cc/";
@@ -36,10 +38,13 @@ function successLog(item, pushResult, extra, noDoc) {
 
 export function createReleasesRouter(options = {}) {
   const store = options.store || createStore({ now: options.now });
+  const pipelineStore = options.pipelineStore || createPipelineStore({ now: options.now });
   const restart = options.restart || restartMengkaiService;
   const push = options.push || pushXingmaiToEcs;
   const router = express.Router();
   router.use(requireReleasesAuth(options));
+  attachPipelineWebhook(router, { ...options, pipelineStore });
+  attachPipelineRoutes(router, { ...options, pipelineStore });
 
   async function runPublishJob(item, noDoc) {
     const files = noDoc ? [] : item.files || [];

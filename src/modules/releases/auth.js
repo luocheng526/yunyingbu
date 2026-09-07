@@ -49,6 +49,11 @@ export async function resolveUser(req, options = {}) {
 
 export function requireReleasesAuth(options = {}) {
   return async function requireReleasesAuthMiddleware(req, res, next) {
+    const path = String(req.path || "");
+    if (req.method === "POST" && (path === "/webhooks/github" || path.endsWith("/webhooks/github"))) {
+      next();
+      return;
+    }
     const user = await resolveUser(req, options);
     if (!user) {
       res.status(401).json({ ok: false, error: "未登录" });
