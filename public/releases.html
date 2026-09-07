@@ -17,6 +17,14 @@
         padding: 1.25rem;
       }
       #upgrade-mask.show { display: flex; }
+      #upgrade-dismiss { display: none; margin-top: 0.85rem; }
+      #upgrade-mask.can-close #upgrade-dismiss { display: inline-block; }
+      /* Theme SPA sets .is-pending { pointer-events:none } on .xm-content. A hung
+         fetch then freezes this page. Keep the gate clickable. */
+      html:has(.oc-wrap) .xm-shell.is-pending .xm-content {
+        pointer-events: auto !important;
+        opacity: 1 !important;
+      }
       .upgrade-card {
         width: min(36rem, 100%);
         background: #fff;
@@ -125,6 +133,7 @@
         <ol id="upgrade-steps"></ol>
         <div class="upgrade-bar"><i id="upgrade-bar"></i></div>
         <p class="upgrade-log" id="upgrade-log" hidden></p>
+        <button type="button" class="act" id="upgrade-dismiss">关闭</button>
       </div>
     </div>
 
@@ -209,6 +218,7 @@
       const upgradeSteps = document.getElementById("upgrade-steps");
       const upgradeBar = document.getElementById("upgrade-bar");
       const upgradeLog = document.getElementById("upgrade-log");
+      const upgradeDismiss = document.getElementById("upgrade-dismiss");
       const STEP_LABELS = {
         agree: "已同意",
         sync: "正在同步代码",
@@ -249,10 +259,18 @@
         }
       }
 
+      function clearShellPending() {
+        const shell = document.querySelector(".xm-shell");
+        if (shell) {
+          shell.classList.remove("is-pending");
+        }
+      }
+
       function showUpgrade(keys, active) {
         pinUpgradeMask();
         if (upgradeMask) {
           upgradeMask.classList.add("show");
+          upgradeMask.classList.remove("can-close");
         }
         if (upgradeLog) {
           upgradeLog.hidden = true;
@@ -264,6 +282,7 @@
       function hideUpgrade() {
         if (upgradeMask) {
           upgradeMask.classList.remove("show");
+          upgradeMask.classList.remove("can-close");
         }
       }
 
@@ -273,6 +292,9 @@
         if (upgradeLog) {
           upgradeLog.hidden = false;
           upgradeLog.textContent = message;
+        }
+        if (upgradeMask) {
+          upgradeMask.classList.add("can-close");
         }
       }
 
@@ -587,6 +609,7 @@
       }
 
       async function refresh() {
+        clearShellPending();
         const [all, queue, lock, versions, ready, me] = await Promise.all([
           api("/api/releases"),
           api("/api/releases/queue"),
@@ -651,7 +674,8 @@
       });
 
       tickClock();
-      setInterval(tickClock, 1000);
+      window.__xmPageTimers = window.__xmPageTimers || [];
+      window.__xmPageTimers.push(setInterval(tickClock, 1000));
 
       document.body.addEventListener("click", async function (event) {
         const pagerBtn = event.target.closest(".oc-pager [data-page]");
@@ -733,6 +757,7 @@
       });
 
       (async function bootReleases() {
+        clearShellPending();
         const pending = consumePendingUpgrade();
         if (pending) {
           showUpgrade(["reload", "done"], "reload");
@@ -749,7 +774,20 @@
           flash(err.message, true);
         }
       })();
-      setInterval(function () { watchIncoming(); }, WATCH_MS);
+      window.__xmPageTimers = window.__xmPageTimers || [];
+      window.__xmPageTimers.push(setInterval(function () { watchIncoming(); }, WATCH_MS));
+      if (upgradeDismiss) {
+        upgradeDismiss.addEventListener("click", function () {
+          hideUpgrade();
+        });
+      }
+      if (upgradeMask) {
+        upgradeMask.addEventListener("click", function (event) {
+          if (event.target === upgradeMask && upgradeMask.classList.contains("can-close")) {
+            hideUpgrade();
+          }
+        });
+      }
     </script>
   </body>
 </html>

@@ -156,6 +156,11 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /function pinUpgradeMask/);
     assert.match(text, /document\.body\.appendChild\(upgradeMask\)/);
     assert.match(text, /function failUpgrade/);
+    assert.match(text, /function clearShellPending/);
+    assert.match(text, /id="upgrade-dismiss"/);
+    assert.match(text, /can-close/);
+    assert.match(text, /pointer-events:\s*auto\s*!important/);
+    assert.match(text, /__xmPageTimers/);
     assert.match(text, /return "failed"/);
     assert.match(text, /通过已落地，但健康检查超时/);
     assert.match(text, /正在升级，请勿关闭/);
