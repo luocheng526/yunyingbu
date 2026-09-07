@@ -6,7 +6,7 @@ import { NEED_PASS_ERROR, REORDER_FORBIDDEN, withCharter } from "./charter.js";
 import { hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
 import { assertQueueHead, findVersionClash, listModuleVersions, parseReleaseVersion } from "./version.js";
 import { assertSafeRel, formatExecError, listMissingSourceFiles, liveRoot, pathsToSnapshot, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "./push.js";
-import { restartMengkaiService } from "./restart.js";
+import { filesNeedProcessRestart, restartMengkaiService, ticketNeedsProcessRestart } from "./restart.js";
 import { attachPipelineRoutes, attachPipelineWebhook } from "./pipeline/attach.js";
 import { createPipelineStore } from "./pipeline/store.js";
 import { createStore, MODULES } from "./store.js";
@@ -64,7 +64,7 @@ export function createReleasesRouter(options = {}) {
 
   async function runPublishJob(item, noDoc) {
     const files = noDoc ? [] : item.files || [];
-    const shouldRestart = Boolean(item.restart);
+    const shouldRestart = ticketNeedsProcessRestart(item, noDoc);
     const snapshotDir = path.join(stateDir || os.tmpdir(), "snapshots", item.id);
     const pushResult = await push(files, { snapshotDir });
     item.snapshotDir = snapshotDir;
@@ -75,6 +75,9 @@ export function createReleasesRouter(options = {}) {
       await store.releaseLock();
       const result = await restart();
       extra = result && result.skipped ? `未执行 systemctl：${result.reason}` : "已 systemctl restart mengkai.service";
+      await store.markSuccess(item, successLog(item, pushResult, extra, noDoc));
+    } else if (item.restart && !filesNeedProcessRestart(files)) {
+      extra = "只改了页面或测试文件，已跳过重启，避免打断正在使用的人。";
       await store.markSuccess(item, successLog(item, pushResult, extra, noDoc));
     } else {
       extra = "文档要求不重启，已跳过 systemctl。";
@@ -117,7 +120,8 @@ export function createReleasesRouter(options = {}) {
       }
     };
 
-    const defer = (noDoc || item.restart) && restart === restartMengkaiService;
+    const willRestart = ticketNeedsProcessRestart(item, noDoc);
+    const defer = (noDoc || willRestart) && restart === restartMengkaiService;
     if (defer) {
       res.json({
         ok: true,
@@ -288,7 +292,8 @@ export function createReleasesRouter(options = {}) {
       const restored = restoreSnapshot(item.snapshotDir, resolveLive(), pathsToSnapshot(item.files || []));
       let extra = "已按快照回滚文件。";
       item.rolledBack = true;
-      if (item.restart) {
+      const willRestart = ticketNeedsProcessRestart(item);
+      if (willRestart) {
         extra += " 回滚结果已先落盘，随后重启。";
         item.log = `已回滚到升级前快照。${restored.stdout || ""} ${extra} 版本号仍记为 ${item.version}，下一条不会自动发。`;
         await store.markSuccess(item, item.log);
@@ -296,6 +301,8 @@ export function createReleasesRouter(options = {}) {
         const result = await restart();
         extra = "已按快照回滚文件。";
         extra += result && result.skipped ? ` ${result.reason}` : " 已重启 mengkai。";
+      } else if (item.restart) {
+        extra += " 只改了页面或测试，回滚后不重启，避免打断正在使用的人。";
       }
       item.log = `已回滚到升级前快照。${restored.stdout || ""} ${extra} 版本号仍记为 ${item.version}，下一条不会自动发。`;
       await store.markSuccess(item, item.log);

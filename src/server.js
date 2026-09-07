@@ -27,9 +27,25 @@ async function start() {
   }
 
   const app = createApp();
-  app.listen(port, host, () => {
+  const server = app.listen(port, host, () => {
     console.log(`mengkai server listening on http://${host}:${port}`);
   });
+
+  function shutdown(signal) {
+    console.log(`[mengkai] ${signal}，先停接新连接，等正在处理的请求结束`);
+    const force = setTimeout(() => process.exit(1), 8000);
+    force.unref();
+    server.close(() => {
+      clearTimeout(force);
+      process.exit(0);
+    });
+    if (typeof server.closeIdleConnections === "function") {
+      const dropIdle = setTimeout(() => server.closeIdleConnections(), 250);
+      dropIdle.unref();
+    }
+  }
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
+  process.once("SIGINT", () => shutdown("SIGINT"));
 }
 
 start().catch((err) => {

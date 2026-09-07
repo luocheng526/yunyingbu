@@ -7,6 +7,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { createApp } from "../src/app.js";
 import { parseMainBrainOrder } from "../src/modules/releases/document.js";
+import { filesNeedProcessRestart, ticketNeedsProcessRestart } from "../src/modules/releases/restart.js";
 import { formatExecError, hasApplyReceipt, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "../src/modules/releases/push.js";
 import { NOOP_APPLY_ERROR } from "../src/modules/releases/charter.js";
 import { DEMO_INITIAL_PASSWORD, DEMO_USERNAME } from "../src/modules/profile/auth.js";
@@ -109,6 +110,7 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /不会自动通过/);
     assert.match(text, /watchIncoming/);
     assert.match(text, /提交时间/);
+    assert.match(text, /不重启进程/);
     assert.doesNotMatch(text, /data-act="up"/);
     assert.doesNotMatch(text, />上移</);
     assert.doesNotMatch(text, />下移</);
@@ -249,6 +251,7 @@ test("queue and lock expose charter: gate is not a second 主脑", async () => {
     assert.equal(queue.body.charter.gateRole, "唯一发版闸门");
     assert.equal(queue.body.charter.secondBrain, false);
     assert.equal(queue.body.charter.queue.includes("点一单发一单"), true);
+    assert.match(queue.body.charter.queue, /不重启进程/);
     const lock = await json(base, "/api/releases/lock");
     assert.equal(lock.body.charter.gate, "版本发布中心");
     assert.match(lock.body.charter.queue, /第 1 位/);
@@ -491,6 +494,46 @@ test("通过 one ticket restarts once and does not auto-publish next", async () 
       assert.equal(b.status, "queued");
       const lock = await json(base, "/api/releases/lock");
       assert.equal(lock.body.locked, false);
+    }
+  );
+});
+
+test("filesNeedProcessRestart is false for public and test files", () => {
+  assert.equal(filesNeedProcessRestart(["public/releases.html", "test/releases.test.js"]), false);
+  assert.equal(filesNeedProcessRestart(["public/releases.css"]), false);
+  assert.equal(filesNeedProcessRestart(["src/modules/releases/router.js"]), true);
+  assert.equal(filesNeedProcessRestart(["public/releases.html", "src/server.js"]), true);
+  assert.equal(filesNeedProcessRestart(["package.json"]), true);
+  assert.equal(filesNeedProcessRestart([]), true);
+  assert.equal(ticketNeedsProcessRestart({ restart: true, files: ["public/releases.html"] }), false);
+  assert.equal(ticketNeedsProcessRestart({ restart: true, files: ["src/app.js"] }), true);
+  assert.equal(ticketNeedsProcessRestart({ restart: false, files: ["src/app.js"] }), false);
+});
+
+test("通过 a page-only ticket does not restart the live process", async () => {
+  let restarts = 0;
+  await withServer(
+    {
+      restart() {
+        restarts += 1;
+      }
+    },
+    async (base) => {
+      const created = await json(base, "/api/releases", {
+        method: "POST",
+        body: apply("0.1.19-static", "Ada", "版本发布中心", "只改页面", {
+          files: ["public/releases.html"],
+          restart: true
+        })
+      });
+      const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(pub.res.status, 200);
+      assert.equal(pub.body.item.status, "success");
+      assert.equal(restarts, 0);
+      assert.match(pub.body.item.log, /跳过重启/);
     }
   );
 });
@@ -1014,11 +1057,14 @@ test("apply snapshots live files and rollback restores them", async () => {
   assert.match(restored.stdout, /restored public\/releases.html/);
   assert.equal(fs.readFileSync(path.join(live, "public", "releases.html"), "utf8"), "OLD\n");
 
+  let restarts = 0;
   await withServer(
     {
       stateDir: state,
       liveRoot: live,
-      restart() {},
+      restart() {
+        restarts += 1;
+      },
       async push(files, options) {
         return pushXingmaiToEcs(files, {
           snapshotDir: options.snapshotDir,
@@ -1034,7 +1080,8 @@ test("apply snapshots live files and rollback restores them", async () => {
       const created = await json(base, "/api/releases", {
         method: "POST",
         body: apply("9.1.0-rb", "版本发布中心", "版本发布中心", "回滚验收", {
-          files: ["public/releases.html"]
+          files: ["public/releases.html"],
+          restart: true
         })
       });
       const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
@@ -1050,6 +1097,8 @@ test("apply snapshots live files and rollback restores them", async () => {
       assert.equal(rb.res.status, 200);
       assert.equal(rb.body.rolledBack, true);
       assert.equal(rb.body.item.status, "success");
+      assert.equal(restarts, 0);
+      assert.match(rb.body.item.log, /不重启/);
       assert.equal(fs.readFileSync(path.join(live, "public", "releases.html"), "utf8"), "LIVE\n");
       const still = await json(base, "/api/releases/queue");
       assert.equal(
