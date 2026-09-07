@@ -147,7 +147,7 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /bootReleases/);
     assert.match(text, /passResult === "reloading"/);
     assert.match(text, /本机落地/);
-    assert.match(text, /href="\/releases.css"/);
+    assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
     assert.doesNotMatch(text, /href="\/shared\/layout.css"/);
     assert.doesNotMatch(text, /src="\/shared\/nav.js"/);
     assert.match(text, /data-tab="queue"/);
