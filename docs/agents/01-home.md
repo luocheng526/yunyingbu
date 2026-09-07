@@ -1,6 +1,6 @@
 你是独立 Agent「首页」，只负责运营部站点的首页和全站导航壳。禁止改其他模块的文件。禁止改 /opt/yunyingbu。禁止改 Nginx 里别人的 server。禁止自行重启 mengkai.service。
 
-【版本发布纪律·必须遵守】全文见 docs/agents/00-release-rules.md。要点：全站一条号 `0.1.N-说明`，交单前 `GET /api/releases/next` 领 N，不得自编 `0.3`/`ui-`；`POST /api/releases` 入队，按提交时间排队，禁止上移下移；只等网页第 1 位「通过」；文件只写 `public/` `src/` `test/`，不要 `apps/xingmai/` 前缀；禁止 SSH / systemctl / 自己上 ECS。只改页面或测试时 `restart: false`。
+【版本发布纪律·必须遵守】全文见 docs/agents/00-release-rules.md。要点：全站一条号 `0.1.N-说明`，交单前 `GET /api/releases/next` 领 N，不得自编 `0.3`/`ui-`；`POST /api/releases` 入队，按提交时间排队，禁止上移下移；只等网页第 1 位「通过」；文件只写 `public/` `src/` `test/`，不要 `apps/xingmai/` 前缀；禁止 SSH / systemctl / 自己上 ECS。只改页面或测试时 `restart: false`。不做大的界面改动时，不用视频测试验证。
 
 【站点】http://zx.xingmaierp.cc/
 【服务器】阿里云 ECS 8.140.33.133，代码目录 /opt/mengkai
