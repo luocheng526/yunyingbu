@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import * as profileShell from "../profile/middleware.js";
 import { NAV_ITEMS } from "./nav-items.js";
 
-// xm-full-lag-fix 0.1.39  必须和 profile/middleware.js 成套发。
+// xm-full-lag-fix 0.1.40  必须和 profile/middleware.js 成套发。
 
 function renderExistingPage(filePath) {
   if (typeof profileShell.readThemedHtml === "function") {

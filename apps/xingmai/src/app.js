@@ -32,7 +32,8 @@ export function createApp() {
     }
   });
 
-  // 页面路由必须在 static 前面。否则 GET / 会被 index.html 直接吐出，绕过注入。
+  // 页面路由必须在 static 前面。线上 app.js 往往还挂了其它模块，不要整文件覆盖线上。
+  // GET / 的兜底在 profile/middleware.js，不依赖这里的顺序。
   attachHome(app);
   app.use(
     express.static(join(__dirname, "..", "public"), {

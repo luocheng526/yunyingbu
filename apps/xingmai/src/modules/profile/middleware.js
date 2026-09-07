@@ -1,9 +1,17 @@
 import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { currentUser } from "./auth.js";
 
-// xm-full-lag-fix 0.1.39  必须和 home/pages.js 成套发，禁止只换本文件。
+// xm-full-lag-fix 0.1.40  必须和 home/pages.js 成套发，禁止只换本文件。
 
-export const SHELL_ASSET_VER = "0.1.39";
+export const SHELL_ASSET_VER = "0.1.40";
+const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public");
+const SHELL_ASSET_FILES = {
+  "/shared/nav.js": "shared/nav.js",
+  "/shared/layout.css": "shared/layout.css",
+  "/login.css": "login.css"
+};
 const htmlFileCache = new Map();
 const HTML_CACHE_MS = 5000;
 
@@ -131,14 +139,55 @@ export function injectHtmlShell(req, res, next) {
   next();
 }
 
+function isReadMethod(req) {
+  const method = String(req.method || "GET").toUpperCase();
+  return method === "GET" || method === "HEAD";
+}
+
+function serveShellAsset(req, res) {
+  if (!isReadMethod(req)) {
+    return false;
+  }
+  const rel = SHELL_ASSET_FILES[normalizedPath(req)];
+  if (!rel) {
+    return false;
+  }
+  const versioned = Boolean(req.query && req.query.v);
+  res.setHeader(
+    "Cache-Control",
+    versioned ? "public, max-age=86400, immutable" : "public, max-age=0, must-revalidate"
+  );
+  res.sendFile(path.join(publicDir, rel));
+  return true;
+}
+
+function serveHomeIndex(req, res) {
+  if (!isReadMethod(req)) {
+    return false;
+  }
+  const destPath = normalizedPath(req);
+  if (destPath !== "/" && destPath !== "/index.html") {
+    return false;
+  }
+  const dest = path.join(publicDir, "index.html");
+  res.status(200).type("html").set("Cache-Control", "private, no-store").send(readThemedHtml(dest));
+  return true;
+}
+
 export function requireLoginUnlessPublic(req, res, next) {
   if (isPublicRequest(req)) {
+    if (serveShellAsset(req, res)) {
+      return;
+    }
     next();
     return;
   }
   const user = currentUser(req);
   if (user) {
     req.user = user;
+    if (serveHomeIndex(req, res)) {
+      return;
+    }
     next();
     return;
   }
