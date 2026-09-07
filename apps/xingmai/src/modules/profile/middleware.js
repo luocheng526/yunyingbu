@@ -33,10 +33,23 @@ export function withSharedShell(html) {
     return text;
   }
   let out = text;
-  if (!out.includes("/shared/layout.css") && out.includes("</head>")) {
-    out = out.replace("</head>", '    <link rel="stylesheet" href="/shared/layout.css" />\n  </head>');
-  }
-  if (!out.includes("/shared/nav.js") && out.includes("</body>")) {
+  if (out.includes("</head>")) {
+    const extras = [];
+    if (!out.includes("/shared/layout.css")) {
+      extras.push('    <link rel="stylesheet" href="/shared/layout.css" />');
+    } else if (!out.includes('rel="preload" href="/shared/layout.css"')) {
+      extras.push('    <link rel="preload" href="/shared/layout.css" as="style" />');
+    }
+    if (!out.includes("/shared/nav.js")) {
+      extras.push('    <link rel="preload" href="/shared/nav.js" as="script" />');
+      extras.push('    <script src="/shared/nav.js" defer></script>');
+    } else if (!out.includes('rel="preload" href="/shared/nav.js"')) {
+      extras.push('    <link rel="preload" href="/shared/nav.js" as="script" />');
+    }
+    if (extras.length) {
+      out = out.replace("</head>", extras.join("\n") + "\n  </head>");
+    }
+  } else if (!out.includes("/shared/nav.js") && out.includes("</body>")) {
     out = out.replace("</body>", '    <script src="/shared/nav.js"></script>\n  </body>');
   }
   return out;

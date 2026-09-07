@@ -83,6 +83,9 @@ test("page renderer injects shared shell onto module html", async () => {
   );
   assert.match(injected, /\/shared\/layout\.css/);
   assert.match(injected, /\/shared\/nav\.js/);
+  assert.match(injected, /rel="preload" href="\/shared\/nav\.js"/);
   const login = withSharedShell('<html><body class="login-page"></body></html>');
   assert.doesNotMatch(login, /\/shared\/nav\.js/);
+  const serverJs = readFileSync(join(root, "src/server.js"), "utf8");
+  assert.match(serverJs, /keepAliveTimeout = 65_000/);
 });
