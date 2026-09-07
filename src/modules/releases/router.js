@@ -5,7 +5,7 @@ import { requireReleasesAuth } from "./auth.js";
 import { NEED_PASS_ERROR, withCharter } from "./charter.js";
 import { hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
 import { assertQueueHead, findVersionClash, listModuleVersions, parseReleaseVersion } from "./version.js";
-import { assertSafeRel, formatExecError, liveRoot, pathsToSnapshot, pushXingmaiToEcs, restoreSnapshot } from "./push.js";
+import { assertSafeRel, formatExecError, listMissingSourceFiles, liveRoot, pathsToSnapshot, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "./push.js";
 import { restartMengkaiService } from "./restart.js";
 import { attachPipelineRoutes, attachPipelineWebhook } from "./pipeline/attach.js";
 import { createPipelineStore } from "./pipeline/store.js";
@@ -213,6 +213,15 @@ export function createReleasesRouter(options = {}) {
       res.status(400).json({
         ok: false,
         error: `${err.message}。只允许 public、src、test、package.json、package-lock.json。`
+      });
+      return;
+    }
+    const missing = listMissingSourceFiles(files, sourceRoot());
+    if (missing.length) {
+      res.status(400).json({
+        ok: false,
+        error: `源目录缺少文件：${missing.join("、")}。交单前必须把文件放到源目录，避免通过后 ENOENT。`,
+        missing
       });
       return;
     }

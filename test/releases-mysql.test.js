@@ -235,7 +235,7 @@ test("persist store recovers stale publishing lock after restart", async () => {
   assert.match(item.log, /新单据重试/);
 });
 
-test("persist store recovers publishing lock as success when snapshot dir exists", async () => {
+test("persist store keeps publishing failed when snapshot exists without apply receipt", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rel-lock-snap-"));
   const persistPath = path.join(dir, "tickets.json");
   const snapDir = path.join(dir, "snapshots", "rel-16");
@@ -268,8 +268,45 @@ test("persist store recovers publishing lock as success when snapshot dir exists
   );
   const store = createStore({ memory: true, persistPath });
   const item = await store.get("rel-16");
+  assert.equal(item.status, "failed");
+  assert.match(item.log, /不能当作成功/);
+});
+
+test("persist store recovers publishing lock as success when apply receipt exists", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rel-lock-receipt-"));
+  const persistPath = path.join(dir, "tickets.json");
+  const snapDir = path.join(dir, "snapshots", "rel-16");
+  fs.mkdirSync(snapDir, { recursive: true });
+  fs.writeFileSync(path.join(snapDir, "apply-receipt.json"), "{\"ok\":true}\n");
+  fs.writeFileSync(
+    persistPath,
+    JSON.stringify({
+      seq: 16,
+      lock: { id: "rel-16", version: "stuck", startedAt: "2026-09-07T09:07:01.672Z" },
+      items: [
+        {
+          id: "rel-16",
+          version: "stuck",
+          applicant: "首页",
+          source: "首页",
+          module: "首页",
+          summary: "有回执",
+          files: ["public/index.html"],
+          acceptance: "有回执按已拷贝",
+          restart: true,
+          status: "publishing",
+          demo: false,
+          priority: 1,
+          submittedAt: "2026-09-07T09:00:00.000Z",
+          log: "已抢到全局发布锁"
+        }
+      ]
+    })
+  );
+  const store = createStore({ memory: true, persistPath });
+  const item = await store.get("rel-16");
   assert.equal(item.status, "success");
-  assert.match(item.log, /升级前快照目录/);
+  assert.match(item.log, /落地回执/);
   assert.equal(item.snapshotDir, snapDir);
 });
 

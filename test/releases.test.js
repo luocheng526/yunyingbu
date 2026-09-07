@@ -7,7 +7,8 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { createApp } from "../src/app.js";
 import { parseMainBrainOrder } from "../src/modules/releases/document.js";
-import { formatExecError, pushXingmaiToEcs, restoreSnapshot } from "../src/modules/releases/push.js";
+import { formatExecError, hasApplyReceipt, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "../src/modules/releases/push.js";
+import { NOOP_APPLY_ERROR } from "../src/modules/releases/charter.js";
 import { DEMO_INITIAL_PASSWORD, DEMO_USERNAME } from "../src/modules/profile/auth.js";
 
 const signedInUser = { username: "罗成" };
@@ -828,6 +829,13 @@ test("mismatch 口令 does not push", async () => {
   );
 });
 
+test("sourceRoot prefers the mengkai tree over leftover apps/xingmai", () => {
+  const root = sourceRoot({ MENGKAI_SOURCE_DIR: "" });
+  assert.match(root, /\/workspace$/);
+  assert.doesNotMatch(root, /apps\/xingmai/);
+  assert.equal(fs.existsSync(path.join(root, "public", "releases.html")), true);
+});
+
 test("local apply copies listed files and never needs push-xingmai-to-ecs.sh", async () => {
   const source = fs.mkdtempSync(path.join(os.tmpdir(), "rel-src-"));
   const live = fs.mkdtempSync(path.join(os.tmpdir(), "rel-live-"));
@@ -866,6 +874,41 @@ test("local apply copies listed files and never needs push-xingmai-to-ecs.sh", a
       return true;
     }
   );
+  fs.mkdirSync(path.join(live, "public"), { recursive: true });
+  fs.writeFileSync(path.join(live, "public", "releases.html"), "<html>oc</html>\n");
+  await assert.rejects(
+    () => pushXingmaiToEcs(["public/releases.html"], { sourceRoot: source, liveRoot: live, env: { MENGKAI_SKIP_PULL: "1" } }),
+    (err) => {
+      assert.match(String(err.message), /完全相同/);
+      assert.equal(String(err.stderr), NOOP_APPLY_ERROR);
+      return true;
+    }
+  );
+  const snapDir = fs.mkdtempSync(path.join(os.tmpdir(), "rel-receipt-"));
+  fs.writeFileSync(path.join(source, "public", "releases.html"), "<html>next</html>\n");
+  const withReceipt = await pushXingmaiToEcs(["public/releases.html"], {
+    sourceRoot: source,
+    liveRoot: live,
+    snapshotDir: snapDir,
+    env: { MENGKAI_SKIP_PULL: "1" }
+  });
+  assert.equal(hasApplyReceipt(snapDir), true);
+  assert.match(withReceipt.stdout, /落地回执/);
+  assert.equal(fs.readFileSync(path.join(live, "public", "releases.html"), "utf8"), "<html>next</html>\n");
+});
+
+test("create rejects tickets whose source files are missing", async () => {
+  await withServer(async (base) => {
+    const created = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("0.1.17-missing", "Ada", "版本发布中心", "缺文件", {
+        files: ["public/does-not-exist-gate.html"]
+      })
+    });
+    assert.equal(created.res.status, 400);
+    assert.match(created.body.error, /源目录缺少文件/);
+    assert.deepEqual(created.body.missing, ["public/does-not-exist-gate.html"]);
+  });
 });
 
 test("failed push writes stderr into ticket log", async () => {

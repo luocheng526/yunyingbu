@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { NOOP_APPLY_ERROR } from "./charter.js";
 
 const execFileAsync = promisify(execFile);
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -21,17 +22,23 @@ export function liveRoot(env = process.env) {
 }
 
 export function sourceRoot(env = process.env) {
-  const candidates = [
-    String(env.MENGKAI_SOURCE_DIR || "").trim(),
-    "/opt/yunyingbu/apps/xingmai",
-    "/opt/yunyingbu",
-    path.join(repoRoot, "apps/xingmai"),
-    repoRoot,
-    process.cwd()
-  ].filter(Boolean);
+  const explicit = String(env.MENGKAI_SOURCE_DIR || "").trim();
+  if (explicit) {
+    const resolved = path.resolve(explicit);
+    if (!fs.existsSync(resolved)) {
+      throw Object.assign(new Error(`MENGKAI_SOURCE_DIR 不存在: ${resolved}`), {
+        stderr: `MENGKAI_SOURCE_DIR 不存在: ${resolved}`
+      });
+    }
+    return resolved;
+  }
+  const candidates = [repoRoot, process.cwd()].filter(Boolean);
   for (const dir of candidates) {
     const resolved = path.resolve(dir);
-    if (fs.existsSync(path.join(resolved, "src")) || fs.existsSync(path.join(resolved, "package.json"))) {
+    if (
+      fs.existsSync(path.join(resolved, "public", "releases.html")) ||
+      fs.existsSync(path.join(resolved, "src", "modules", "releases"))
+    ) {
       return resolved;
     }
   }
@@ -46,6 +53,61 @@ export function xingmaiRoot() {
 /** @deprecated 缺脚本不得再 ENOENT；本机落地走 Node 拷贝。 */
 export function pushScriptPath() {
   return path.join(repoRoot, "deploy/scripts/push-xingmai-to-ecs.sh");
+}
+
+export function applyReceiptPath(snapshotDir) {
+  return snapshotDir ? path.join(snapshotDir, "apply-receipt.json") : "";
+}
+
+export function writeApplyReceipt(snapshotDir, payload = {}) {
+  if (!snapshotDir) {
+    return "";
+  }
+  fs.mkdirSync(snapshotDir, { recursive: true });
+  const file = applyReceiptPath(snapshotDir);
+  fs.writeFileSync(file, `${JSON.stringify({ ok: true, ...payload, at: new Date().toISOString() })}\n`);
+  return file;
+}
+
+export function hasApplyReceipt(snapshotDir) {
+  return Boolean(snapshotDir && fs.existsSync(applyReceiptPath(snapshotDir)));
+}
+
+function sameEntry(left, right) {
+  if (!fs.existsSync(left) || !fs.existsSync(right)) {
+    return false;
+  }
+  const a = fs.statSync(left);
+  const b = fs.statSync(right);
+  if (a.isDirectory() && b.isDirectory()) {
+    const names = new Set([...fs.readdirSync(left), ...fs.readdirSync(right)]);
+    return [...names].every((name) => sameEntry(path.join(left, name), path.join(right, name)));
+  }
+  if (a.isFile() && b.isFile()) {
+    return fs.readFileSync(left).equals(fs.readFileSync(right));
+  }
+  return false;
+}
+
+export function listMissingSourceFiles(files, source) {
+  const root = source || sourceRoot();
+  return (files || [])
+    .map((rel) => {
+      try {
+        return assertSafeRel(rel);
+      } catch {
+        return String(rel || "");
+      }
+    })
+    .filter((rel) => rel && !fs.existsSync(path.join(root, rel)));
+}
+
+export function listedFilesUnchanged(source, live, files) {
+  const list = (files || []).map(assertSafeRel);
+  if (!list.length) {
+    return false;
+  }
+  return list.every((rel) => sameEntry(path.join(source, rel), path.join(live, rel)));
 }
 
 export function assertSafeRel(rel) {
@@ -178,6 +240,11 @@ export async function pushXingmaiToEcs(files, options = {}) {
   const env = options.env || process.env;
   const live = options.liveRoot || liveRoot(env);
   const source = options.sourceRoot || sourceRoot(env);
+  if (path.resolve(live) === "/opt/mengkai" && !String(env.MENGKAI_SOURCE_DIR || "").trim() && !options.sourceRoot) {
+    throw Object.assign(new Error("生产环境必须设置 MENGKAI_SOURCE_DIR，禁止猜源目录"), {
+      stderr: "生产环境必须设置 MENGKAI_SOURCE_DIR，禁止猜源目录"
+    });
+  }
   const list = Array.isArray(files) ? files.filter(Boolean).map(assertSafeRel) : [];
   const notes = [`本机落地 live=${live} source=${source}`];
 
@@ -199,6 +266,17 @@ export async function pushXingmaiToEcs(files, options = {}) {
     );
   }
 
+  const missing = listMissingSourceFiles(list, source);
+  if (missing.length) {
+    throw Object.assign(new Error(`源目录不存在: ${missing.join("、")}`), {
+      code: "ENOENT",
+      stderr: `源目录不存在: ${missing.join("、")}`
+    });
+  }
+  if (list.length && listedFilesUnchanged(source, live, list)) {
+    throw Object.assign(new Error(NOOP_APPLY_ERROR), { stderr: NOOP_APPLY_ERROR });
+  }
+
   const snapRel = pathsToSnapshot(list);
   if (options.snapshotDir) {
     const saved = snapshotExisting(live, snapRel, options.snapshotDir);
@@ -213,6 +291,16 @@ export async function pushXingmaiToEcs(files, options = {}) {
       copyRel(source, live, rel);
       notes.push(`copied ${rel} -> ${path.join(live, rel)}`);
     }
+  }
+
+  if (list.length && !listedFilesUnchanged(source, live, list)) {
+    throw Object.assign(new Error("落地后线上文件与源目录不一致"), {
+      stderr: "落地后线上文件与源目录不一致"
+    });
+  }
+  if (options.snapshotDir) {
+    writeApplyReceipt(options.snapshotDir, { files: list, live, source });
+    notes.push(`落地回执 ${applyReceiptPath(options.snapshotDir)}`);
   }
 
   return {

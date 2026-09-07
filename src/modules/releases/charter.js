@@ -14,8 +14,11 @@ export const QUEUE_LOG =
 export const INTERRUPTED_PUBLISH_LOG =
   "发布未完成：进程在落地确认前被重启打断。不能当作成功。请用新单据重试。下一条不会自动发。";
 
-export const SNAPSHOT_RECOVER_LOG =
-  "重启打断后发现升级前快照目录，按已拷贝处理。请打开页面确认文件，不要自动发下一单。";
+export const RECEIPT_RECOVER_LOG =
+  "重启打断后发现落地回执，按已拷贝处理。请打开页面确认文件，不要自动发下一单。";
+
+export const NOOP_APPLY_ERROR =
+  "源目录文件与线上完全相同，没有可落地的变更。请先把新文件放到源目录再交单。";
 
 export const RELEASE_CHARTER = {
   dispatcher: DISPATCHER_NAME,

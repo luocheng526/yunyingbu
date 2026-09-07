@@ -1,6 +1,6 @@
-import fs from "node:fs";
 import path from "node:path";
-import { INTERRUPTED_PUBLISH_LOG, QUEUE_LOG, SNAPSHOT_RECOVER_LOG } from "./charter.js";
+import { INTERRUPTED_PUBLISH_LOG, QUEUE_LOG, RECEIPT_RECOVER_LOG } from "./charter.js";
+import { hasApplyReceipt } from "./push.js";
 import { assignStablePriorities } from "./order.js";
 import { readJsonFile, writeJsonFile } from "./persist-json.js";
 
@@ -144,12 +144,12 @@ export function createMemoryStore({ now, persistPath } = {}) {
     lock = null;
     if (item && item.status === "publishing") {
       const snapDir = item.snapshotDir || (persistPath ? path.join(path.dirname(persistPath), "snapshots", item.id) : "");
-      const hasSnapshot = Boolean(snapDir && fs.existsSync(snapDir));
+      const copied = hasApplyReceipt(snapDir);
       item.publishFinishedAt = timestamp();
-      if (hasSnapshot) {
+      if (copied) {
         item.status = "success";
         item.snapshotDir = snapDir;
-        item.log = `${SNAPSHOT_RECOVER_LOG}（开始于 ${startedAt || "—"}）`;
+        item.log = `${RECEIPT_RECOVER_LOG}（开始于 ${startedAt || "—"}）`;
       } else {
         item.status = "failed";
         item.log = `${INTERRUPTED_PUBLISH_LOG}（开始于 ${startedAt || "—"}）`;
