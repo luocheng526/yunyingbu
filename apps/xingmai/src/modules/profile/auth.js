@@ -128,6 +128,27 @@ export const SCHEMA_SQL = [
     username VARCHAR(64) NOT NULL,
     created_at BIGINT NOT NULL,
     expires_at BIGINT NOT NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS release_tickets (
+    id VARCHAR(64) NOT NULL PRIMARY KEY,
+    version VARCHAR(128) NOT NULL,
+    applicant VARCHAR(128) NOT NULL DEFAULT '',
+    source VARCHAR(128) NOT NULL DEFAULT '',
+    module VARCHAR(128) NOT NULL DEFAULT '',
+    summary TEXT NOT NULL,
+    files MEDIUMTEXT NOT NULL,
+    acceptance TEXT NOT NULL,
+    restart TINYINT NOT NULL DEFAULT 0,
+    status VARCHAR(32) NOT NULL,
+    priority INT NOT NULL DEFAULT 0,
+    demo TINYINT NOT NULL DEFAULT 0,
+    submitted_at DATETIME NOT NULL,
+    reviewer VARCHAR(128) NULL,
+    reviewed_at DATETIME NULL,
+    reject_reason TEXT NULL,
+    publish_started_at DATETIME NULL,
+    publish_finished_at DATETIME NULL,
+    log MEDIUMTEXT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 ];
 
