@@ -1,4 +1,4 @@
-/* xm-shell-perf 0.1.41 */
+/* xm-shell-perf 0.1.42 */
 (function () {
   const items = [
     { href: "/", label: "首页" },
@@ -159,7 +159,7 @@
   if (!document.querySelector('link[href*="/shared/layout.css"]')) {
     const css = document.createElement("link");
     css.rel = "stylesheet";
-    css.href = "/shared/layout.css?v=0.1.41";
+    css.href = "/shared/layout.css?v=0.1.42";
     document.head.appendChild(css);
   }
 
@@ -345,7 +345,7 @@
         script.setAttribute(attr.name, attr.value);
       });
       if (!src) {
-        script.textContent = old.textContent;
+        script.textContent = "(function(){\n" + old.textContent + "\n})();";
       }
       old.replaceWith(script);
     });

@@ -22,7 +22,7 @@ test("shared shell assets are public", async () => {
   assert.equal(loginCss.status, 200);
   assert.equal(ocCss.status, 200);
   assert.match(String(js.headers.get("cache-control") || ""), /must-revalidate/);
-  const versionedJs = await fetch(`${base}/shared/nav.js?v=0.1.41`);
+  const versionedJs = await fetch(`${base}/shared/nav.js?v=0.1.42`);
   assert.match(String(versionedJs.headers.get("cache-control") || ""), /max-age=86400/);
   const cssText = await css.text();
   const jsText = await js.text();
@@ -30,13 +30,14 @@ test("shared shell assets are public", async () => {
   assert.match(cssText, /cursor-dark-1/);
   assert.match(cssText, /html\[data-theme="dark"\]/);
   assert.match(cssText, /\.xm-shell\.is-pending/);
-  assert.match(jsText, /xm-shell-perf 0\.1\.41/);
+  assert.match(jsText, /xm-shell-perf 0\.1\.42/);
   assert.match(jsText, /function isAppDest\(/);
   assert.match(jsText, /function warmAppPages\(/);
   assert.match(jsText, /function trackPageTimers\(/);
   assert.match(jsText, /function warmUpstream\(/);
   assert.match(jsText, /AbortController/);
   assert.match(jsText, /new Intl\.DateTimeFormat/);
+  assert.match(jsText, /\(function\(\)\{\\n" \+ old\.textContent/);
   assert.doesNotMatch(jsText, /100000/);
   assert.match(jsText, /function applyTheme\(/);
   assert.match(jsText, /id="xm-theme"/);
@@ -106,8 +107,8 @@ test("page renderer injects shared shell onto module html", async () => {
     '<!DOCTYPE html><html><head></head><body class="oc-page"><div class="oc-tab">待上线</div></body></html>'
   );
   assert.match(injected, /\/shared\/layout\.css/);
-  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.41/);
-  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.41"/);
+  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.42/);
+  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.42"/);
   assert.match(injected, /localStorage.getItem\("xm-theme"\)/);
   const login = withSharedShell('<html><head></head><body class="login-page"></body></html>');
   assert.doesNotMatch(login, /\/shared\/nav\.js/);
