@@ -5,16 +5,6 @@ import { createApp } from "../src/app.js";
 import { patchAppSource } from "../src/modules/people/patch-app.js";
 import { resetPeopleStore } from "../src/modules/people/store.js";
 
-const NAV_LABELS = [
-  "首页",
-  "数据中心",
-  "沈子晗运营中心",
-  "韩梦凯运营中心",
-  "人员管理",
-  "版本发布中心",
-  "个人中心"
-];
-
 const PRESET = [
   { name: "沈子晗", role: "运营", center: "沈子晗运营中心", status: "在职" },
   { name: "韩梦凯", role: "运营", center: "韩梦凯运营中心", status: "在职" },
@@ -36,7 +26,7 @@ async function withServer(fn) {
   }
 }
 
-test("GET /people lists title, table headers and fallback nav", async () => {
+test("GET /people is content-only and uses shared xm shell", async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/people`);
     const text = await res.text();
@@ -45,15 +35,13 @@ test("GET /people lists title, table headers and fallback nav", async () => {
     assert.match(text, /href="\/shared\/layout\.css"/);
     assert.match(text, /src="\/shared\/nav\.js"/);
     assert.match(text, /id="site-nav"/);
-    assert.match(text, /class="site-sidebar"/);
     assert.match(text, /<main class="page">/);
+    assert.doesNotMatch(text, /class="site-sidebar"/);
     assert.doesNotMatch(text, /<header class="site-header">/);
+    assert.doesNotMatch(text, /--sidebar-width/);
     assert.match(text, /演示/);
     for (const header of ["姓名", "角色", "所属中心", "状态"]) {
       assert.match(text, new RegExp(header));
-    }
-    for (const label of NAV_LABELS) {
-      assert.match(text, new RegExp(label));
     }
   });
 });
