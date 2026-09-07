@@ -1,4 +1,4 @@
-/* xm-shell-spa 0.1.24 */
+/* xm-shell-spa 0.1.25 */
 (function () {
   const items = [
     { href: "/", label: "首页" },

@@ -24,7 +24,7 @@ test("shared shell assets are public", async () => {
   const jsText = await js.text();
   assert.match(cssText, /cursor-light-3/);
   assert.match(cssText, /\.xm-shell\.is-pending/);
-  assert.match(jsText, /xm-shell-spa 0\.1\.24/);
+  assert.match(jsText, /xm-shell-spa 0\.1\.25/);
   assert.match(jsText, /xm-shell/);
   assert.match(jsText, /history\.pushState/);
   assert.match(jsText, /function navigate\(/);
