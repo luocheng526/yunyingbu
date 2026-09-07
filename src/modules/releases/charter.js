@@ -44,6 +44,9 @@ export const RECEIPT_RECOVER_LOG =
 export const NOOP_APPLY_ERROR =
   "源目录文件与线上完全相同，没有可落地的变更。闸门只把源目录拷到线上，不读 GitHub，也不拉 Cloud 工作区。交单请带 contents（路径→正文）或 ref（分支/提交），或先把新文件写进源目录。";
 
+export const SMOKE_FAIL_ERROR =
+  "重启前试载失败，已按快照收回，未重启进程。";
+
 export const RELEASE_CHARTER = {
   dispatcher: DISPATCHER_NAME,
   dispatcherRole: DISPATCHER_ROLE,

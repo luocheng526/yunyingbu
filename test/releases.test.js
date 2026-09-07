@@ -22,7 +22,8 @@ import {
   parseGitRef,
   shouldRejectUnchangedAtCreate
 } from "../src/modules/releases/stage.js";
-import { NOOP_APPLY_ERROR } from "../src/modules/releases/charter.js";
+import { NOOP_APPLY_ERROR, SMOKE_FAIL_ERROR } from "../src/modules/releases/charter.js";
+import { collectSmokeImports, smokeLoadLive } from "../src/modules/releases/smoke.js";
 import { DEMO_INITIAL_PASSWORD, DEMO_USERNAME } from "../src/modules/profile/auth.js";
 
 const signedInUser = { username: "罗成" };
@@ -258,6 +259,8 @@ test("agent docs say no video unless the UI change is large", () => {
   assert.match(fs.readFileSync(path.join(root, "AGENTS.md"), "utf8"), noVideo);
   assert.match(fs.readFileSync(path.join(root, "docs/agents/06-releases.md"), "utf8"), noVideo);
   assert.match(fs.readFileSync(path.join(root, "docs/agents/00-release-rules.md"), "utf8"), noVideo);
+  assert.match(fs.readFileSync(path.join(root, "docs/agents/00-release-rules.md"), "utf8"), /重启前会试载/);
+  assert.match(fs.readFileSync(path.join(root, "docs/agents/06-releases.md"), "utf8"), /先试载再重启/);
 });
 
 test("GET /releases.css is page-only stylesheet", async () => {
@@ -1563,6 +1566,110 @@ test("apply snapshots live files and rollback restores them", async () => {
         still.body.items.some((item) => item.status === "publishing"),
         false
       );
+    }
+  );
+});
+
+function writeThemeSmokeTree(dir, middlewareBody) {
+  fs.mkdirSync(path.join(dir, "src/modules/profile"), { recursive: true });
+  fs.mkdirSync(path.join(dir, "src/modules/home"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "src/modules/profile/middleware.js"), middlewareBody);
+  fs.writeFileSync(
+    path.join(dir, "src/modules/home/pages.js"),
+    'import { readThemedHtml, withSharedShell } from "../profile/middleware.js";\nexport const page = readThemedHtml() + withSharedShell();\n'
+  );
+}
+
+const LIVE_MIDDLEWARE = `export function readThemedHtml() { return "html"; }\nexport function withSharedShell() { return "shell"; }\n`;
+const THEME_MIDDLEWARE = `export function withSharedShell() { return "theme"; }\nexport function withThemeBoot() { return "boot"; }\n`;
+
+test("collectSmokeImports includes callers of a changed module", () => {
+  const live = fs.mkdtempSync(path.join(os.tmpdir(), "rel-smoke-scan-"));
+  writeThemeSmokeTree(live, LIVE_MIDDLEWARE);
+  assert.deepEqual(
+    collectSmokeImports(live, ["src/modules/profile/middleware.js"]).sort(),
+    ["src/modules/home/pages.js", "src/modules/profile/middleware.js"].sort()
+  );
+});
+
+test("smokeLoadLive rejects a middleware that drops a live export", async () => {
+  const live = fs.mkdtempSync(path.join(os.tmpdir(), "rel-smoke-miss-"));
+  writeThemeSmokeTree(live, THEME_MIDDLEWARE);
+  await assert.rejects(() => smokeLoadLive(live, ["src/modules/profile/middleware.js"]), (err) => {
+    assert.match(String(err.stderr), /readThemedHtml/);
+    assert.match(String(err.message), /readThemedHtml|试载失败/);
+    assert.match(String(err.stderr), new RegExp(SMOKE_FAIL_ERROR.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    return true;
+  });
+});
+
+test("apply restores snapshot and skips receipt when smoke import fails", async () => {
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), "rel-src-smoke-"));
+  const live = fs.mkdtempSync(path.join(os.tmpdir(), "rel-live-smoke-"));
+  const snap = fs.mkdtempSync(path.join(os.tmpdir(), "rel-snap-smoke-"));
+  writeThemeSmokeTree(source, THEME_MIDDLEWARE);
+  writeThemeSmokeTree(live, LIVE_MIDDLEWARE);
+  await assert.rejects(
+    () =>
+      pushXingmaiToEcs(["src/modules/profile/middleware.js"], {
+        sourceRoot: source,
+        liveRoot: live,
+        snapshotDir: snap,
+        env: { MENGKAI_SKIP_PULL: "1" }
+      }),
+    (err) => {
+      assert.match(String(err.message), /readThemedHtml|试载失败/);
+      return true;
+    }
+  );
+  assert.equal(fs.readFileSync(path.join(live, "src/modules/profile/middleware.js"), "utf8"), LIVE_MIDDLEWARE);
+  assert.equal(hasApplyReceipt(snap), false);
+});
+
+test("confirm does not restart when smoke import fails", async () => {
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), "rel-src-smoke-c-"));
+  const live = fs.mkdtempSync(path.join(os.tmpdir(), "rel-live-smoke-c-"));
+  const state = fs.mkdtempSync(path.join(os.tmpdir(), "rel-state-smoke-c-"));
+  writeThemeSmokeTree(source, THEME_MIDDLEWARE);
+  writeThemeSmokeTree(live, LIVE_MIDDLEWARE);
+  let restarts = 0;
+  await withServer(
+    {
+      stateDir: state,
+      liveRoot: live,
+      restart() {
+        restarts += 1;
+      },
+      async push(files, options) {
+        return pushXingmaiToEcs(files, {
+          snapshotDir: options.snapshotDir,
+          sourceRoot: source,
+          liveRoot: live,
+          env: { MENGKAI_SKIP_PULL: "1" }
+        });
+      }
+    },
+    async (base) => {
+      const created = await json(base, "/api/releases", {
+        method: "POST",
+        body: apply("smoke-miss", "首页", "首页", "主题中间件丢掉导出", {
+          files: ["src/modules/profile/middleware.js"],
+          restart: true
+        })
+      });
+      assert.equal(created.res.status, 201, created.body.error);
+      const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(pub.res.status, 500);
+      assert.match(String(pub.body.error || ""), /试载失败|readThemedHtml/);
+      assert.equal(restarts, 0);
+      assert.equal(fs.readFileSync(path.join(live, "src/modules/profile/middleware.js"), "utf8"), LIVE_MIDDLEWARE);
+      const listed = await json(base, "/api/releases");
+      const item = (listed.body.items || []).find((row) => row.id === created.body.item.id);
+      assert.equal(item.status, "failed");
+      assert.equal(hasApplyReceipt(item.snapshotDir), false);
     }
   );
 });

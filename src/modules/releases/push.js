@@ -4,6 +4,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { NOOP_APPLY_ERROR } from "./charter.js";
+import { smokeLoadLive, srcJsFiles } from "./smoke.js";
 
 const execFileAsync = promisify(execFile);
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -299,6 +300,26 @@ export async function pushXingmaiToEcs(files, options = {}) {
     throw Object.assign(new Error("落地后线上文件与源目录不一致"), {
       stderr: "落地后线上文件与源目录不一致"
     });
+  }
+  if (srcJsFiles(list).length) {
+    try {
+      const smoke = await smokeLoadLive(live, list);
+      notes.push(
+        smoke.skipped
+          ? "无 src JS，跳过重启前试载"
+          : `重启前试载通过 ${smoke.imported.length} 个模块`
+      );
+    } catch (err) {
+      if (options.snapshotDir) {
+        restoreSnapshot(options.snapshotDir, live, snapRel);
+        notes.push("试载失败，已按快照收回线上文件");
+      }
+      const detail = String(err?.stderr || err?.message || err).trim();
+      throw Object.assign(err instanceof Error ? err : new Error(detail), {
+        stderr: detail,
+        stdout: `${notes.join("\n")}\n${detail}`
+      });
+    }
   }
   if (options.snapshotDir) {
     writeApplyReceipt(options.snapshotDir, { files: list, live, source });
