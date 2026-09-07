@@ -23,8 +23,12 @@ test("shared shell assets are public", async () => {
   const cssText = await css.text();
   const jsText = await js.text();
   assert.match(cssText, /cursor-light-3/);
+  assert.match(cssText, /cursor-dark-1/);
+  assert.match(cssText, /html\[data-theme="dark"\]/);
   assert.match(cssText, /\.xm-shell\.is-pending/);
-  assert.match(jsText, /xm-shell-spa 0\.1\.25/);
+  assert.match(jsText, /xm-shell-theme 0\.1\.30/);
+  assert.match(jsText, /function applyTheme\(/);
+  assert.match(jsText, /id="xm-theme"/);
   assert.match(jsText, /xm-shell/);
   assert.match(jsText, /history\.pushState/);
   assert.match(jsText, /function navigate\(/);
@@ -43,6 +47,9 @@ test("login page uses official https url and cursor light tokens", async () => {
   const css = readFileSync(join(root, "public/login.css"), "utf8");
   assert.match(css, /#f7f7f4/);
   assert.match(css, /#14120b/);
+  assert.match(css, /html\[data-theme="dark"\]/);
+  assert.match(html, /login-theme/);
+  assert.match(html, /localStorage.getItem\("xm-theme"\)/);
 });
 
 test("placeholder modules share the same shell assets", async () => {
@@ -66,11 +73,12 @@ test("placeholder modules share the same shell assets", async () => {
   assert.match(releasesHtml, /timeZone: "Asia\/Shanghai"/);
   assert.match(releasesHtml, /function formatChinaTime/);
   assert.match(releasesHtml, /xm-china-time 0\.1\.27/);
+  assert.match(releasesHtml, /background: var\(--xm-card/);
   assert.doesNotMatch(releasesHtml, /replace\("Z", " UTC"\)/);
   const ocCss = await fetch(`${base}/releases.css`, { headers: { cookie } });
   assert.equal(ocCss.status, 200);
   const ocText = await ocCss.text();
-  assert.match(ocText, /xm-shell-skin 0\.1\.27/);
+  assert.match(ocText, /xm-shell-skin 0\.1\.30/);
   assert.match(ocText, /--xm-bg/);
   assert.doesNotMatch(ocText, /#1677ff/);
   assert.doesNotMatch(ocText, /#eef2f6/);
@@ -84,8 +92,10 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.match(injected, /\/shared\/layout\.css/);
   assert.match(injected, /\/shared\/nav\.js/);
   assert.match(injected, /rel="preload" href="\/shared\/nav\.js"/);
-  const login = withSharedShell('<html><body class="login-page"></body></html>');
+  assert.match(injected, /localStorage.getItem\("xm-theme"\)/);
+  const login = withSharedShell('<html><head></head><body class="login-page"></body></html>');
   assert.doesNotMatch(login, /\/shared\/nav\.js/);
+  assert.match(login, /localStorage.getItem\("xm-theme"\)/);
   const serverJs = readFileSync(join(root, "src/server.js"), "utf8");
   assert.match(serverJs, /keepAliveTimeout = 65_000/);
 });

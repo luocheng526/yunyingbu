@@ -1,4 +1,4 @@
-/* xm-shell-skin 0.1.27 */
+/* xm-shell-skin 0.1.30 */
 :root {
   --oc-bg: var(--xm-bg, #f7f7f4);
   --oc-hero: transparent;
@@ -7,10 +7,10 @@
   --oc-text: var(--xm-ink, #14120b);
   --oc-muted: var(--xm-muted, #6f6e69);
   --oc-blue: var(--xm-ink, #14120b);
-  --oc-green: #3f6b3a;
-  --oc-green-ink: #3f6b3a;
-  --oc-danger: #9f1239;
-  --oc-warn: #5c4d2a;
+  --oc-green: var(--xm-ok, #3f6b3a);
+  --oc-green-ink: var(--xm-ok, #3f6b3a);
+  --oc-danger: var(--xm-danger, #9f1239);
+  --oc-warn: var(--xm-warn-ink, #5c4d2a);
   --oc-shadow: var(--xm-shadow, 0 0 0 1px rgba(20, 18, 11, 0.06));
   --oc-top: 56px;
 }
@@ -223,11 +223,11 @@ html, body {
   margin: 0 0 1rem;
   padding: 0.7rem 0.9rem;
   border-radius: 8px;
-  background: #f4efe4;
-  color: #5c4d2a;
+  background: var(--xm-warn, #f4efe4);
+  color: var(--xm-warn-ink, #5c4d2a);
 }
 .flash.show { display: block; }
-.flash.err { background: #f8e8e6; color: #9f1239; }
+.flash.err { background: var(--xm-danger-bg, #f8e8e6); color: var(--xm-danger, #9f1239); }
 
 .empty {
   min-height: 14rem;
@@ -273,13 +273,13 @@ button.act {
   padding: 0.4rem 0.9rem;
   cursor: pointer;
   background: var(--oc-text);
-  color: #f7f7f4;
+  color: var(--xm-on-ink, #f7f7f4);
 }
 button.act.secondary {
   background: var(--xm-primary-soft, #eceae3);
   color: var(--oc-text);
 }
-button.act.danger { background: var(--oc-danger); color: #fff; }
+button.act.danger { background: var(--oc-danger); color: var(--xm-on-ink, #f7f7f4); }
 button.act:disabled { opacity: 0.5; cursor: not-allowed; }
 .badge {
   display: inline-block;
@@ -295,7 +295,7 @@ button.act:disabled { opacity: 0.5; cursor: not-allowed; }
 .log-item {
   border-left: 3px solid var(--oc-text);
   padding: 0.45rem 0.8rem;
-  background: #f7f7f4;
+  background: var(--xm-bg, #f7f7f4);
   border-radius: 0 10px 10px 0;
 }
 .lock-box,

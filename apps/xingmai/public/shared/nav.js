@@ -1,4 +1,4 @@
-/* xm-shell-spa 0.1.25 */
+/* xm-shell-theme 0.1.30 */
 (function () {
   const items = [
     { href: "/", label: "首页" },
@@ -21,6 +21,32 @@
   let current = window.location.pathname.replace(/\/+$/, "") || "/";
   const htmlLoads = new Map();
   let navGen = 0;
+  const THEME_KEY = "xm-theme";
+
+  function currentTheme() {
+    try {
+      return localStorage.getItem(THEME_KEY) === "dark" ? "dark" : "light";
+    } catch (_err) {
+      return "light";
+    }
+  }
+
+  function applyTheme(theme) {
+    const next = theme === "dark" ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", next);
+    document.documentElement.style.colorScheme = next;
+    try {
+      localStorage.setItem(THEME_KEY, next);
+    } catch (_err) {}
+    const btn = document.getElementById("xm-theme");
+    if (btn) {
+      btn.textContent = next === "dark" ? "浅色" : "暗色";
+      btn.setAttribute("aria-label", next === "dark" ? "切换到浅色" : "切换到暗色");
+      btn.setAttribute("aria-pressed", next === "dark" ? "true" : "false");
+    }
+  }
+
+  applyTheme(currentTheme());
 
   function formatChinaTime(value) {
     if (value == null || value === "") {
@@ -213,6 +239,14 @@
   function bindChrome(userLabel) {
     document.documentElement.classList.remove("xm-collapsed");
     applyUserLabel(userLabel);
+    const themeBtn = document.getElementById("xm-theme");
+    if (themeBtn && !themeBtn.dataset.bound) {
+      themeBtn.dataset.bound = "1";
+      themeBtn.addEventListener("click", function () {
+        applyTheme(currentTheme() === "dark" ? "light" : "dark");
+      });
+    }
+    applyTheme(currentTheme());
     const logoutBtn = document.getElementById("xm-logout");
     if (logoutBtn && !logoutBtn.dataset.bound) {
       logoutBtn.dataset.bound = "1";
@@ -461,6 +495,7 @@
       '<span class="xm-username" id="xm-username">' +
       userLabel +
       "</span>" +
+      '<button type="button" class="xm-theme" id="xm-theme" aria-pressed="false">暗色</button>' +
       '<button type="button" class="xm-logout" id="xm-logout">退出</button>' +
       "</div></header>" +
       '<div class="xm-content" id="xm-content"></div></div>';

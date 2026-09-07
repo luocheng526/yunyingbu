@@ -27,10 +27,24 @@ export function isPublicRequest(req) {
   return false;
 }
 
+const THEME_BOOT =
+  '    <script>try{var t=localStorage.getItem("xm-theme");if(t==="dark"||t==="light"){document.documentElement.setAttribute("data-theme",t);document.documentElement.style.colorScheme=t;}}catch(e){}</script>\n';
+
+export function withThemeBoot(html) {
+  const text = String(html || "");
+  if (text.includes('localStorage.getItem("xm-theme")')) {
+    return text;
+  }
+  if (text.includes("</head>")) {
+    return text.replace("</head>", THEME_BOOT + "  </head>");
+  }
+  return text;
+}
+
 export function withSharedShell(html) {
   const text = String(html || "");
   if (/class=["']login-page["']/.test(text) || /href=["']\/login\.css["']/.test(text)) {
-    return text;
+    return withThemeBoot(text);
   }
   let out = text;
   if (out.includes("</head>")) {
@@ -52,7 +66,7 @@ export function withSharedShell(html) {
   } else if (!out.includes("/shared/nav.js") && out.includes("</body>")) {
     out = out.replace("</body>", '    <script src="/shared/nav.js"></script>\n  </body>');
   }
-  return out;
+  return withThemeBoot(out);
 }
 
 export function injectHtmlShell(req, res, next) {
