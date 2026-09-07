@@ -119,7 +119,8 @@
         </div>
         <div class="pane" id="pane-history">
           <h3>版本记录</h3>
-          <p class="hint">各模块当前版本来自最近一次成功发布。下一号由本闸门发放。版本记录只记每次升级的简要内容，从最新到最老，每页 20 条。详细流水在「运行日志」。有升级前快照的单据可以回滚；回滚占用发布锁，不会自动发下一单。</p>
+          <p class="hint">各模块当前版本来自最近一次成功发布。下一号由本闸门发放。版本记录只记每次升级的简要内容，从最新到最老，每页 20 条。上方统计已成功落地的版本数，含已回滚。详细流水在「运行日志」。有升级前快照的单据可以回滚；回滚占用发布锁，不会自动发下一单。</p>
+          <div id="history-stats" class="history-stats">已上线发布 <b>0</b> 个版本</div>
           <div id="current-versions" class="caps"></div>
           <div id="history-view"></div>
         </div>
@@ -639,6 +640,21 @@
         }
       }
 
+      function successReleases(items) {
+        return (items || []).filter(function (item) { return item.status === "success"; });
+      }
+
+      function renderHistoryStats(items) {
+        const el = liveEl("history-stats");
+        if (!el) {
+          return;
+        }
+        const success = successReleases(items);
+        const rolled = success.filter(function (item) { return item.rolledBack; }).length;
+        el.innerHTML = "已上线发布 <b>" + success.length + "</b> 个版本" +
+          (rolled ? "（其中 " + rolled + " 个已回滚）" : "");
+      }
+
       function renderCurrentVersions(versions) {
         const el = liveEl("current-versions");
         if (!el) {
@@ -753,7 +769,7 @@
         if (!el) {
           return;
         }
-        const success = items.filter(function (item) { return item.status === "success"; }).slice().sort(newestFirst);
+        const success = successReleases(items).slice().sort(newestFirst);
         if (!success.length) {
           el.innerHTML = '<div class="empty">还没有成功发布的版本记录</div>';
           return;
@@ -816,6 +832,7 @@
         setText("who", me.displayName || me.username || "罗成");
         renderStats(items);
         renderLock(lock, ready);
+        renderHistoryStats(items);
         renderCurrentVersions(versions);
         const queued = queue.items || [];
         knownQueueIds = queued.map(function (item) { return item.id; });

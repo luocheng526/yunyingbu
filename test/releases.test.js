@@ -202,6 +202,12 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /data-tab="history"/);
     assert.match(text, /从最新到最老/);
     assert.match(text, /只记每次升级的简要内容/);
+    assert.match(text, /id="history-stats"/);
+    assert.match(text, /已上线发布/);
+    assert.match(text, /个版本/);
+    assert.match(text, /function renderHistoryStats/);
+    assert.match(text, /function successReleases/);
+    assert.match(text, /成功落地的版本数/);
     assert.match(text, /<th>摘要<\/th>/);
     assert.match(text, /item\.summary/);
     assert.doesNotMatch(text, /<th>日志<\/th>/);
@@ -316,6 +322,7 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /display: block !important/);
     assert.match(text, /#history-view table/);
     assert.match(text, /#logs-view \.log-item/);
+    assert.match(text, /\.history-stats/);
   });
 });
 

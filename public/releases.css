@@ -208,6 +208,20 @@ button.oc-tab.active,
   font-size: 13px;
   line-height: 1.6;
 }
+.history-stats {
+  margin: 0 0 1rem;
+  padding: 0.7rem 0.95rem;
+  border: 1px solid var(--oc-line);
+  border-radius: var(--oc-radius);
+  background: var(--xm-primary-soft, #eceae3);
+  color: var(--oc-text);
+  font-size: 14px;
+}
+.history-stats b {
+  font-size: 1.2rem;
+  font-weight: 650;
+  margin: 0 0.15rem;
+}
 .caps {
   display: flex;
   flex-wrap: wrap;
