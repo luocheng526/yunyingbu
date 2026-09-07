@@ -32,6 +32,9 @@ async function withServer(options, fn) {
   } else {
     options = signedIn(options);
   }
+  if (!options.stateDir) {
+    options = { ...options, stateDir: fs.mkdtempSync(path.join(os.tmpdir(), "rel-state-")) };
+  }
   const server = http.createServer(createApp(options));
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address();
@@ -92,20 +95,6 @@ function publishBody(order = "按这份文档发版") {
   return JSON.stringify({ order });
 }
 
-async function promoteToHead(base, id) {
-  const queue = await json(base, "/api/releases/queue");
-  const ids = (queue.body.items || []).map((item) => item.id);
-  const from = ids.indexOf(id);
-  if (from < 0) {
-    throw new Error("单据不在待上线队列");
-  }
-  ids.splice(from, 1);
-  ids.unshift(id);
-  return json(base, "/api/releases/reorder", {
-    method: "POST",
-    body: JSON.stringify({ ids })
-  });
-}
 
 test("GET /releases is the release center page", async () => {
   await withServer(async (base) => {
@@ -119,7 +108,11 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /自动提示/);
     assert.match(text, /不会自动通过/);
     assert.match(text, /watchIncoming/);
-    assert.match(text, /稳定顺序/);
+    assert.match(text, /提交时间/);
+    assert.doesNotMatch(text, /data-act="up"/);
+    assert.doesNotMatch(text, />上移</);
+    assert.doesNotMatch(text, />下移</);
+    assert.doesNotMatch(text, /稳定顺序/);
     assert.match(text, /id="refresh-btn"/);
     assert.match(text, /唯一发版闸门/);
     assert.match(text, /只允许「通过」第 1 位/);
@@ -177,6 +170,11 @@ test("releases.html has no login form and sends users to /login", () => {
   assert.match(html, /正在刷新界面/);
   assert.match(html, /consumePendingUpgrade/);
   assert.match(html, /不会自动通过/);
+  assert.match(html, /提交时间/);
+  assert.doesNotMatch(html, /data-act="up"/);
+  assert.doesNotMatch(html, />上移</);
+  assert.doesNotMatch(html, />下移</);
+  assert.doesNotMatch(html, /enableDragReorder/);
   assert.match(html, /自动提示/);
   assert.match(html, /watchIncoming/);
   assert.doesNotMatch(html, /setInterval\(function \(\) \{\s*refresh/);
@@ -302,11 +300,11 @@ test("invalid or duplicate version is rejected", async () => {
   });
 });
 
-test("queue inserts by stability: login and shell before features before gate page", async () => {
+test("queue is submit-time FIFO even when later tickets are foundations", async () => {
   await withServer(async (base) => {
     const gate = await json(base, "/api/releases", {
       method: "POST",
-      body: apply("q-gate", "Gate", "版本发布中心", "后到的页面", {
+      body: apply("q-gate", "Gate", "版本发布中心", "先交的页面", {
         files: ["public/releases.html"],
         restart: false
       })
@@ -320,14 +318,14 @@ test("queue inserts by stability: login and shell before features before gate pa
     });
     const auth = await json(base, "/api/releases", {
       method: "POST",
-      body: apply("q-auth", "Auth", "个人中心", "登录会话", {
+      body: apply("q-auth", "Auth", "个人中心", "后到的登录", {
         files: ["src/modules/profile/auth.js"],
         restart: true
       })
     });
     const shell = await json(base, "/api/releases", {
       method: "POST",
-      body: apply("q-shell", "Home", "首页", "共享壳", {
+      body: apply("q-shell", "Home", "首页", "后到的共享壳", {
         files: ["public/shared/nav.js"],
         restart: true
       })
@@ -338,12 +336,13 @@ test("queue inserts by stability: login and shell before features before gate pa
     assert.equal(shell.res.status, 201);
     const queue = await json(base, "/api/releases/queue");
     const real = queue.body.items.filter((item) => !item.demo).map((item) => item.version);
-    assert.deepEqual(real, ["q-auth", "q-shell", "q-data", "q-gate"]);
-    assert.match(auth.body.item.log, /稳定顺序/);
+    assert.deepEqual(real, ["q-gate", "q-data", "q-auth", "q-shell"]);
+    assert.match(auth.body.item.log, /提交时间/);
+    assert.match(auth.body.item.log, /禁止上移下移/);
   });
 });
 
-test("same-layer tickets stay FIFO after stability ranking", async () => {
+test("queued tickets stay FIFO by submittedAt", async () => {
   let n = 0;
   await withServer(
     {
@@ -373,7 +372,7 @@ test("same-layer tickets stay FIFO after stability ranking", async () => {
       assert.deepEqual(versions, ["1.0.1", "1.0.2", "1.0.3"]);
       assert.deepEqual(
         queue.body.items.filter((item) => !item.demo).map((item) => item.queueIndex),
-        [2, 3, 4]
+        [1, 2, 3]
       );
       assert.equal(b.body.item.id !== c.body.item.id, true);
     }
@@ -476,8 +475,7 @@ test("通过 one ticket restarts once and does not auto-publish next", async () 
         body: "{}"
       });
       assert.equal(skipped.res.status, 409);
-      assert.match(skipped.body.error, /排队顺序/);
-      await promoteToHead(base, first.body.item.id);
+      assert.match(skipped.body.error, /第 1 位|提交时间|跳单/);
       const pub = await json(base, `/api/releases/${first.body.item.id}/confirm`, {
         method: "POST",
         body: "{}"
@@ -550,7 +548,6 @@ test("second publish while lock held returns 409 禁止抢发", async () => {
         body: apply("4.0.1", "Lin", "首页", "抢发", { restart: true })
       });
 
-      await promoteToHead(base, first.body.item.id);
       const firstPublish = json(base, `/api/releases/${first.body.item.id}/confirm`, {
         method: "POST",
         body: "{}"
@@ -566,7 +563,6 @@ test("second publish while lock held returns 409 禁止抢发", async () => {
       assert.equal(lock.body.locked, true);
       assert.equal(lock.body.current.version, "4.0.0");
 
-      await promoteToHead(base, second.body.item.id);
       const stolen = await json(base, `/api/releases/${second.body.item.id}/confirm`, {
         method: "POST",
         body: "{}"
@@ -675,7 +671,6 @@ test("口令 发布模块 且 restart=false 只 push 不重启", async () => {
           restart: false
         })
       });
-      await promoteToHead(base, created.body.item.id);
       const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
         method: "POST",
         body: "{}"
@@ -735,7 +730,7 @@ test("帮我上线 is not a publish order", async () => {
   );
 });
 
-test("confirm 放行 without 口令; move and reorder change queueIndex", async () => {
+test("confirm 放行 without 口令; move and reorder are forbidden", async () => {
   const pushed = [];
   await withServer(
     {
@@ -769,12 +764,12 @@ test("confirm 放行 without 口令; move and reorder change queueIndex", async 
         method: "POST",
         body: JSON.stringify({ direction: "up" })
       });
-      assert.equal(moved.res.status, 200);
+      assert.equal(moved.res.status, 409);
+      assert.match(moved.body.error, /禁止上移/);
       const afterMove = await json(base, "/api/releases/queue");
       const live = afterMove.body.items.filter((item) => !item.demo);
-      assert.equal(live[0].id, second.body.item.id);
-      assert.equal(live[0].queueIndex, 2);
-      assert.equal(live[1].id, first.body.item.id);
+      assert.equal(live[0].id, first.body.item.id);
+      assert.equal(live[1].id, second.body.item.id);
 
       const reordered = await json(base, "/api/releases/reorder", {
         method: "POST",
@@ -782,16 +777,16 @@ test("confirm 放行 without 口令; move and reorder change queueIndex", async 
           ids: afterMove.body.items.map((item) => item.id)
         })
       });
-      assert.equal(reordered.res.status, 200);
+      assert.equal(reordered.res.status, 409);
+      assert.match(reordered.body.error, /禁止上移|拖拽/);
 
-      const skipped = await json(base, `/api/releases/${first.body.item.id}/confirm`, {
+      const skipped = await json(base, `/api/releases/${second.body.item.id}/confirm`, {
         method: "POST",
         body: "{}"
       });
       assert.equal(skipped.res.status, 409);
-      assert.match(skipped.body.error, /排队顺序/);
+      assert.match(skipped.body.error, /第 1 位|提交时间|跳单/);
 
-      await promoteToHead(base, first.body.item.id);
       const confirmed = await json(base, `/api/releases/${first.body.item.id}/confirm`, {
         method: "POST",
         body: "{}"
@@ -926,7 +921,6 @@ test("failed push writes stderr into ticket log", async () => {
         method: "POST",
         body: apply("0.1.7-log", "版本发布中心", "版本发布中心", "测失败日志")
       });
-      await promoteToHead(base, created.body.item.id);
       const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
         method: "POST",
         body: "{}"
@@ -958,7 +952,6 @@ test("successful version cannot be queued again; versions lists current", async 
       method: "POST",
       body: apply("9.0.0-ver", "Eve", "版本发布中心", "占版本")
     });
-    await promoteToHead(base, created.body.item.id);
     const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
       method: "POST",
       body: "{}"
@@ -1044,7 +1037,6 @@ test("apply snapshots live files and rollback restores them", async () => {
           files: ["public/releases.html"]
         })
       });
-      await promoteToHead(base, created.body.item.id);
       const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
         method: "POST",
         body: "{}"

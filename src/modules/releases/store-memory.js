@@ -1,7 +1,7 @@
 import path from "node:path";
 import { INTERRUPTED_PUBLISH_LOG, QUEUE_LOG, RECEIPT_RECOVER_LOG } from "./charter.js";
 import { hasApplyReceipt } from "./push.js";
-import { assignStablePriorities } from "./order.js";
+import { assignSubmitOrder, compareSubmit } from "./order.js";
 import { readJsonFile, writeJsonFile } from "./persist-json.js";
 
 export const REVIEWER = "运营部主脑";
@@ -20,17 +20,7 @@ export const MODULES = [
 const HISTORY_STATUSES = new Set(["success", "failed", "rejected"]);
 
 function sortQueued(a, b) {
-  const pa = Number(a.priority) || 0;
-  const pb = Number(b.priority) || 0;
-  if (pa !== pb) {
-    return pa - pb;
-  }
-  const ta = String(a.submittedAt || "");
-  const tb = String(b.submittedAt || "");
-  if (ta !== tb) {
-    return ta.localeCompare(tb);
-  }
-  return String(a.id).localeCompare(String(b.id));
+  return compareSubmit(a, b);
 }
 
 export function createMemoryStore({ now, persistPath } = {}) {
@@ -97,7 +87,7 @@ export function createMemoryStore({ now, persistPath } = {}) {
       applicant: "数据中心 Agent",
       source: "数据中心看板",
       module: "数据中心",
-      summary: "演示：第二位排队。可用上移/下移改优先级。",
+      summary: "演示：第二位排队。按提交时间，不能上移下移。",
       status: "queued",
       demo: true,
       priority: 2,
@@ -246,7 +236,7 @@ export function createMemoryStore({ now, persistPath } = {}) {
         log: QUEUE_LOG
       };
       items.push(item);
-      assignStablePriorities(queuedItems());
+      assignSubmitOrder(queuedItems());
       persist();
       return item;
     },
@@ -285,50 +275,11 @@ export function createMemoryStore({ now, persistPath } = {}) {
       persist();
       return { item };
     },
-    move(id, direction) {
-      const item = this.get(id);
-      if (!item) {
-        return { error: "单据不存在", status: 404 };
-      }
-      if (item.status !== "queued") {
-        return { error: "仅待放行单据可调整顺序", status: 409 };
-      }
-      const queued = queuedItems();
-      const index = queued.findIndex((row) => row.id === id);
-      const delta = direction === "up" ? -1 : direction === "down" ? 1 : 0;
-      if (!delta) {
-        return { error: "direction 须为 up 或 down", status: 400 };
-      }
-      const swapIndex = index + delta;
-      if (swapIndex < 0 || swapIndex >= queued.length) {
-        decorateQueue(queued);
-        return { item, items: queued };
-      }
-      const other = queued[swapIndex];
-      const currentPriority = item.priority;
-      item.priority = other.priority;
-      other.priority = currentPriority;
-      persist();
-      return { item, items: decorateQueue(queuedItems()) };
+    move() {
+      return { error: "排队只按提交时间，禁止上移下移", status: 409 };
     },
-    reorder(ids) {
-      const queued = queuedItems();
-      if (!Array.isArray(ids) || !ids.length) {
-        return { error: "ids 须为待放行单据的完整顺序列表", status: 400 };
-      }
-      const wanted = ids.map((id) => String(id));
-      if (wanted.length !== queued.length) {
-        return { error: "ids 必须覆盖当前全部待放行单据", status: 400 };
-      }
-      const queuedIds = new Set(queued.map((row) => row.id));
-      if (new Set(wanted).size !== wanted.length || wanted.some((id) => !queuedIds.has(id))) {
-        return { error: "ids 必须是当前待放行单据的排列", status: 400 };
-      }
-      wanted.forEach((id, index) => {
-        this.get(id).priority = index + 1;
-      });
-      persist();
-      return { items: decorateQueue(queuedItems()) };
+    reorder() {
+      return { error: "排队只按提交时间，禁止上移下移", status: 409 };
     },
     markPublishing(item) {
       item.status = "publishing";

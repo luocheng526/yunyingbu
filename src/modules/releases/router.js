@@ -2,7 +2,7 @@ import express from "express";
 import os from "node:os";
 import path from "node:path";
 import { requireReleasesAuth } from "./auth.js";
-import { NEED_PASS_ERROR, withCharter } from "./charter.js";
+import { NEED_PASS_ERROR, REORDER_FORBIDDEN, withCharter } from "./charter.js";
 import { hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
 import { assertQueueHead, findVersionClash, listModuleVersions, parseReleaseVersion } from "./version.js";
 import { assertSafeRel, formatExecError, listMissingSourceFiles, liveRoot, pathsToSnapshot, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "./push.js";
@@ -238,13 +238,8 @@ export function createReleasesRouter(options = {}) {
     res.status(201).json({ ok: true, item, incomplete: !parsed.complete });
   });
 
-  router.post("/reorder", async (req, res) => {
-    const result = await store.reorder(req.body?.ids);
-    if (result.error) {
-      res.status(result.status).json({ ok: false, error: result.error });
-      return;
-    }
-    res.json({ ok: true, items: result.items });
+  router.post("/reorder", (_req, res) => {
+    res.status(409).json({ ok: false, error: REORDER_FORBIDDEN });
   });
 
   router.post("/:id/approve", async (req, res) => {
@@ -261,13 +256,8 @@ export function createReleasesRouter(options = {}) {
     res.json({ ok: true, item: result.item });
   });
 
-  router.post("/:id/move", async (req, res) => {
-    const result = await store.move(req.params.id, req.body?.direction);
-    if (result.error) {
-      res.status(result.status).json({ ok: false, error: result.error });
-      return;
-    }
-    res.json({ ok: true, item: result.item, items: result.items });
+  router.post("/:id/move", (_req, res) => {
+    res.status(409).json({ ok: false, error: REORDER_FORBIDDEN });
   });
 
   router.post("/:id/confirm", async (req, res) => {

@@ -1,6 +1,6 @@
 import { getPool } from "../../db/pool.js";
 import { QUEUE_LOG } from "./charter.js";
-import { assignStablePriorities } from "./order.js";
+import { assignSubmitOrder } from "./order.js";
 import { REVIEWER } from "./store-memory.js";
 
 function toIso(value) {
@@ -69,7 +69,7 @@ export function createMysqlStore({ now, pool } = {}) {
 
   async function queuedRows() {
     const [rows] = await db().query(
-      "SELECT * FROM release_tickets WHERE status = 'queued' ORDER BY priority ASC, submitted_at ASC, id ASC"
+      "SELECT * FROM release_tickets WHERE status = 'queued' ORDER BY submitted_at ASC, id ASC"
     );
     return rows.map(mapTicketRow);
   }
@@ -216,7 +216,7 @@ export function createMysqlStore({ now, pool } = {}) {
           item.log
         ]
       );
-      const queued = assignStablePriorities(await queuedRows());
+      const queued = assignSubmitOrder(await queuedRows());
       for (const row of queued) {
         await persist(row);
       }
@@ -246,51 +246,11 @@ export function createMysqlStore({ now, pool } = {}) {
       await persist(item);
       return { item };
     },
-    async move(id, direction) {
-      const item = await this.get(id);
-      if (!item) {
-        return { error: "单据不存在", status: 404 };
-      }
-      if (item.status !== "queued") {
-        return { error: "仅待放行单据可调整顺序", status: 409 };
-      }
-      const queued = await queuedRows();
-      const index = queued.findIndex((row) => row.id === id);
-      const delta = direction === "up" ? -1 : direction === "down" ? 1 : 0;
-      if (!delta) {
-        return { error: "direction 须为 up 或 down", status: 400 };
-      }
-      const swapIndex = index + delta;
-      if (swapIndex < 0 || swapIndex >= queued.length) {
-        return { item, items: decorateQueue(queued) };
-      }
-      const other = queued[swapIndex];
-      const currentPriority = item.priority;
-      item.priority = other.priority;
-      other.priority = currentPriority;
-      await persist(item);
-      await persist(other);
-      return { item, items: decorateQueue(await queuedRows()) };
+    async move() {
+      return { error: "排队只按提交时间，禁止上移下移", status: 409 };
     },
-    async reorder(ids) {
-      const queued = await queuedRows();
-      if (!Array.isArray(ids) || !ids.length) {
-        return { error: "ids 须为待放行单据的完整顺序列表", status: 400 };
-      }
-      const wanted = ids.map((id) => String(id));
-      if (wanted.length !== queued.length) {
-        return { error: "ids 必须覆盖当前全部待放行单据", status: 400 };
-      }
-      const queuedIds = new Set(queued.map((row) => row.id));
-      if (new Set(wanted).size !== wanted.length || wanted.some((id) => !queuedIds.has(id))) {
-        return { error: "ids 必须是当前待放行单据的排列", status: 400 };
-      }
-      for (let index = 0; index < wanted.length; index += 1) {
-        const row = queued.find((item) => item.id === wanted[index]);
-        row.priority = index + 1;
-        await persist(row);
-      }
-      return { items: decorateQueue(await queuedRows()) };
+    async reorder() {
+      return { error: "排队只按提交时间，禁止上移下移", status: 409 };
     },
     async markPublishing(item) {
       item.status = "publishing";

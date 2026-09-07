@@ -1,7 +1,7 @@
 export const VERSION_MAX_LEN = 64;
 export const VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
-export const HEAD_ONLY_ERROR = "必须按排队顺序发布：只允许通过当前第 1 位，禁止跳单，防止叠发把进程打崩。";
+export const HEAD_ONLY_ERROR = "必须按提交时间发布：只允许通过当前第 1 位，禁止跳单和插队，防止叠发把进程打崩。";
 
 const ACTIVE = new Set(["queued", "approved", "publishing", "success"]);
 
@@ -79,7 +79,7 @@ export function assertQueueHead(item, queue) {
   if (head.id !== item.id) {
     return {
       status: 409,
-      error: `${HEAD_ONLY_ERROR} 当前第 1 位是 ${head.module} ${head.version}。请先上移要发的单，或先处理队首。`
+      error: `${HEAD_ONLY_ERROR} 当前第 1 位是 ${head.module} ${head.version}。请先处理队首。`
     };
   }
   return null;

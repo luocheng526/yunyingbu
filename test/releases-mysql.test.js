@@ -59,7 +59,7 @@ function createFakePool() {
       if (text.startsWith("SELECT * FROM release_tickets WHERE status = 'queued'")) {
         const rows = tickets
           .filter((row) => row.status === "queued")
-          .sort((a, b) => a.priority - b.priority || String(a.submitted_at).localeCompare(String(b.submitted_at)) || String(a.id).localeCompare(String(b.id)));
+          .sort((a, b) => String(a.submitted_at).localeCompare(String(b.submitted_at)) || String(a.id).localeCompare(String(b.id)));
         return [rows];
       }
       if (text.startsWith("SELECT * FROM release_tickets WHERE id = ?")) {
@@ -133,7 +133,7 @@ function createFakePool() {
   };
 }
 
-test("mysql store keeps queue order by priority after a second create", async () => {
+test("mysql store keeps queue order by submit time after a second create", async () => {
   const store = createMysqlStore({
     pool: createFakePool(),
     now: () => "2026-09-07T01:00:00.000Z"

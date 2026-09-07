@@ -99,9 +99,9 @@
       <section class="oc-card">
         <div class="pane on" id="pane-queue">
           <h3>待上线</h3>
-          <p class="hint">这是版本发布中心。交单后按稳定顺序排队：登录与依赖 → 共享壳 → 业务模块 → 发布中心页面，避免后到的基础件插到前面把进程打崩。主脑仍可上移/下移；闸门只允许「通过」第 1 位。通过后先拍快照再本机落地。整页刷新并读完新数据后才关升级遮罩。有新单据约 15 秒内自动提示，不会自动点通过。</p>
+          <p class="hint">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。通过后先拍快照再本机落地。整页刷新并读完新数据后才关升级遮罩。有新单据约 15 秒内自动提示，不会自动点通过。</p>
           <div class="caps" id="stat-caps"></div>
-          <div class="note">发布纪律：本页是唯一发版闸门。只执行交来的单据 + 本页「通过」。必须按排队顺序点第 1 位；一把锁，禁止抢发；下一条不会自动发布。其它对话框「帮我上线」无效。</div>
+          <div class="note">发布纪律：本页是唯一发版闸门。只执行交来的单据 + 本页「通过」。必须按提交时间点第 1 位；一把锁，禁止抢发；下一条不会自动发布。其它对话框「帮我上线」无效。</div>
           <div id="lock-view" class="lock-box idle">当前空闲，没有发布任务。</div>
           <div id="queue-view" class="tickets"></div>
         </div>
@@ -421,10 +421,8 @@
           } else {
             confirmBtn = "<button class=\"act\" data-act=\"pass\">通过</button>";
           }
-          const upOff = index === 0 ? " disabled" : "";
-          const downOff = index === items.length - 1 ? " disabled" : "";
           return (
-            "<article class=\"ticket grab\" draggable=\"true\" data-id=\"" + esc(item.id) + "\" data-restart=\"" + (item.restart ? "1" : "0") + "\" data-version=\"" + esc(item.version) + "\">" +
+            "<article class=\"ticket\" data-id=\"" + esc(item.id) + "\" data-restart=\"" + (item.restart ? "1" : "0") + "\" data-version=\"" + esc(item.version) + "\">" +
             "<h4>第 " + seq + " 位 · " + esc(item.module) + " " + esc(item.version) + demoBadge(item) + "</h4>" +
             "<dl>" +
             "<dt>来自对话</dt><dd>" + esc(item.source || item.applicant || "—") + "</dd>" +
@@ -435,8 +433,6 @@
             "</dl>" +
             "<div class=\"row\">" +
             confirmBtn +
-            "<button class=\"act secondary\" data-act=\"up\"" + upOff + ">上移</button>" +
-            "<button class=\"act secondary\" data-act=\"down\"" + downOff + ">下移</button>" +
             "<button class=\"act danger\" data-act=\"reject\">驳回</button>" +
             "</div></article>"
           );
@@ -583,12 +579,6 @@
               body: JSON.stringify({ reason: reason.trim() })
             });
             flash("已驳回，该单不可发布。");
-          } else if (act === "up" || act === "down") {
-            await api("/api/releases/" + id + "/move", {
-              method: "POST",
-              body: JSON.stringify({ direction: act })
-            });
-            flash(act === "up" ? "已上移。" : "已下移。");
           } else if (act === "pass") {
             const needRestart = card.getAttribute("data-restart") === "1";
             const version = card.getAttribute("data-version") || "";
@@ -612,49 +602,6 @@
           await refresh();
         }
       });
-
-      (function enableDragReorder() {
-        const root = document.getElementById("queue-view");
-        let dragId = "";
-        root.addEventListener("dragstart", function (event) {
-          const card = event.target.closest(".ticket");
-          if (!card || !card.getAttribute("data-id")) return;
-          dragId = card.getAttribute("data-id") || "";
-          card.classList.add("dragging");
-          event.dataTransfer.effectAllowed = "move";
-        });
-        root.addEventListener("dragend", function (event) {
-          const card = event.target.closest(".ticket");
-          if (card) card.classList.remove("dragging");
-        });
-        root.addEventListener("dragover", function (event) {
-          event.preventDefault();
-        });
-        root.addEventListener("drop", async function (event) {
-          event.preventDefault();
-          const over = event.target.closest(".ticket");
-          if (!dragId || !over) return;
-          const ids = Array.prototype.map.call(root.querySelectorAll(".ticket[data-id]"), function (node) {
-            return node.getAttribute("data-id");
-          });
-          const from = ids.indexOf(dragId);
-          const to = ids.indexOf(over.getAttribute("data-id"));
-          if (from < 0 || to < 0 || from === to) return;
-          ids.splice(from, 1);
-          ids.splice(to, 0, dragId);
-          try {
-            await api("/api/releases/reorder", {
-              method: "POST",
-              body: JSON.stringify({ ids: ids })
-            });
-            flash("已按拖拽调整排队顺序。");
-            await refresh();
-          } catch (err) {
-            flash(err.message, true);
-            await refresh();
-          }
-        });
-      })();
 
       document.getElementById("refresh-btn").addEventListener("click", async function () {
         try {
