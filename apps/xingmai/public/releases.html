@@ -5,22 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>版本发布中心</title>
     <!-- xm-china-time 0.1.27 -->
-    <!-- xm-upgrade-mask 0.1.44 -->
+    <!-- xm-upgrade-mask 0.1.45 -->
     <link rel="stylesheet" href="/releases.css?v=shell-align" />
     <style>
-      body > #upgrade-mask,
       #upgrade-mask {
         display: none;
         position: fixed;
         inset: 0;
-        z-index: 4000;
+        z-index: 2147483000;
         background: rgba(20, 18, 11, 0.45);
         align-items: center;
         justify-content: center;
         padding: 1.25rem;
       }
       html[data-theme="dark"] #upgrade-mask { background: rgba(0, 0, 0, 0.55); }
-      #upgrade-mask.show { display: flex; }
+      #upgrade-mask.show,
+      html > #upgrade-mask.show,
+      body > #upgrade-mask.show {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+      }
       html:has(.oc-wrap) .xm-shell.is-pending .xm-content {
         pointer-events: auto !important;
         opacity: 1 !important;
@@ -264,13 +269,14 @@
       function countBy(items, status) {
         return items.filter(function (item) { return item.status === status; }).length;
       }
-      const upgradeMask = document.getElementById("upgrade-mask");
-      const upgradeSteps = document.getElementById("upgrade-steps");
-      const upgradeBar = document.getElementById("upgrade-bar");
-      const upgradeLog = document.getElementById("upgrade-log");
-      const upgradeDismiss = document.getElementById("upgrade-dismiss");
-      const upgradeTitle = document.getElementById("upgrade-title");
       let upgradeEscapeTimer = 0;
+      function maskEl() {
+        return document.getElementById("upgrade-mask");
+      }
+      function maskPart(id) {
+        const root = maskEl();
+        return root ? root.querySelector("#" + id) : document.getElementById(id);
+      }
       const STEP_LABELS = {
         agree: "已同意",
         sync: "正在同步代码",
@@ -287,6 +293,8 @@
       }
 
       function renderUpgradeSteps(keys, active, terminal) {
+        const upgradeSteps = maskPart("upgrade-steps");
+        const upgradeBar = maskPart("upgrade-bar");
         if (!upgradeSteps || !upgradeBar) {
           return;
         }
@@ -306,9 +314,14 @@
       }
 
       function pinUpgradeMask() {
-        if (upgradeMask && upgradeMask.parentNode !== document.body) {
-          document.body.appendChild(upgradeMask);
+        const el = maskEl();
+        if (!el) {
+          return null;
         }
+        if (el.parentNode !== document.documentElement) {
+          document.documentElement.appendChild(el);
+        }
+        return el;
       }
 
       function clearShellPending() {
@@ -319,19 +332,34 @@
       }
 
       function setUpgradeTitle(text) {
+        const upgradeTitle = maskPart("upgrade-title");
         if (upgradeTitle) {
           upgradeTitle.textContent = text;
         }
       }
 
-      function showUpgrade(keys, active) {
-        pinUpgradeMask();
-        clearShellPending();
-        if (upgradeMask) {
-          upgradeMask.classList.add("show");
-          upgradeMask.classList.remove("can-close");
+      function paintMask(el, canClose) {
+        if (!el) {
+          return;
         }
+        el.classList.add("show");
+        if (canClose) {
+          el.classList.add("can-close");
+        } else {
+          el.classList.remove("can-close");
+        }
+        el.style.display = "flex";
+        el.style.visibility = "visible";
+        el.style.opacity = "1";
+        el.style.zIndex = "2147483000";
+      }
+
+      function showUpgrade(keys, active) {
+        const el = pinUpgradeMask();
+        clearShellPending();
+        paintMask(el, false);
         setUpgradeTitle("正在升级，请勿关闭");
+        const upgradeLog = maskPart("upgrade-log");
         if (upgradeLog) {
           upgradeLog.hidden = true;
           upgradeLog.textContent = "";
@@ -341,9 +369,10 @@
           clearTimeout(upgradeEscapeTimer);
         }
         upgradeEscapeTimer = setTimeout(function () {
-          if (upgradeMask && upgradeMask.classList.contains("show") && !upgradeMask.classList.contains("can-close")) {
+          const live = pinUpgradeMask();
+          if (live && live.classList.contains("show") && !live.classList.contains("can-close")) {
             setUpgradeTitle("仍在处理，可关闭此层");
-            upgradeMask.classList.add("can-close");
+            paintMask(live, true);
           }
         }, 8000);
       }
@@ -353,15 +382,17 @@
           clearTimeout(upgradeEscapeTimer);
           upgradeEscapeTimer = 0;
         }
-        if (upgradeMask) {
-          upgradeMask.classList.remove("show");
-          upgradeMask.classList.remove("can-close");
+        const el = maskEl();
+        if (el) {
+          el.classList.remove("show");
+          el.classList.remove("can-close");
+          el.style.display = "none";
         }
         setUpgradeTitle("正在升级，请勿关闭");
       }
 
       function failUpgrade(keys, message) {
-        pinUpgradeMask();
+        const el = pinUpgradeMask();
         clearShellPending();
         if (upgradeEscapeTimer) {
           clearTimeout(upgradeEscapeTimer);
@@ -369,18 +400,16 @@
         }
         setUpgradeTitle("升级未完成");
         renderUpgradeSteps(keys, "done", "bad");
+        const upgradeLog = maskPart("upgrade-log");
         if (upgradeLog) {
           upgradeLog.hidden = false;
           upgradeLog.textContent = message;
         }
-        if (upgradeMask) {
-          upgradeMask.classList.add("show");
-          upgradeMask.classList.add("can-close");
-        }
+        paintMask(el, true);
       }
 
       function finishUpgrade(keys, message) {
-        pinUpgradeMask();
+        const el = pinUpgradeMask();
         clearShellPending();
         if (upgradeEscapeTimer) {
           clearTimeout(upgradeEscapeTimer);
@@ -388,14 +417,12 @@
         }
         setUpgradeTitle("升级完成");
         renderUpgradeSteps(keys, "done", "ok");
+        const upgradeLog = maskPart("upgrade-log");
         if (upgradeLog && message) {
           upgradeLog.hidden = false;
           upgradeLog.textContent = message;
         }
-        if (upgradeMask) {
-          upgradeMask.classList.add("show");
-          upgradeMask.classList.add("can-close");
-        }
+        paintMask(el, true);
       }
 
       function readPendingUpgrade() {
@@ -738,7 +765,8 @@
       }
 
       async function watchIncoming() {
-        if (upgradeMask && upgradeMask.classList.contains("show")) {
+        const live = maskEl();
+        if (live && live.classList.contains("show")) {
           return;
         }
         try {
@@ -810,9 +838,12 @@
         const card = btn.closest("[data-id]");
         const id = card && card.getAttribute("data-id");
         if (!id) return;
+        const act = btn.getAttribute("data-act");
+        if (act === "pass") {
+          showUpgrade(stepKeys(card.getAttribute("data-restart") === "1"), "agree");
+        }
         btn.disabled = true;
         try {
-          const act = btn.getAttribute("data-act");
           if (act === "reject") {
             const reason = window.prompt("请填写驳回原因（必填）");
             if (!reason || !reason.trim()) {
@@ -846,7 +877,7 @@
           }
           await refresh();
         } catch (err) {
-          hideUpgrade();
+          failUpgrade(stepKeys(true), (err.status || "") + " " + (err.message || "操作失败"));
           flash((err.status || "") + " " + err.message, true);
           await refresh();
         }
@@ -871,7 +902,7 @@
           if (pending) {
             finishUpgrade(["reload", "done"], "发布成功 · " + pending.version);
             flash("发布成功 · " + pending.version);
-          } else if (upgradeMask && upgradeMask.classList.contains("show")) {
+          } else if (maskEl() && maskEl().classList.contains("show")) {
             hideUpgrade();
           }
         } catch (err) {
@@ -886,24 +917,26 @@
       window.__xmPageTimers = window.__xmPageTimers || [];
       window.__xmPageTimers.push(setInterval(function () { watchIncoming(); }, WATCH_MS));
       window.__xmPageTimers.push(setInterval(function () {
-        if (upgradeMask && upgradeMask.classList.contains("show")) {
+        const live = maskEl();
+        if (live && live.classList.contains("show")) {
           pinUpgradeMask();
         }
       }, 400));
-      if (upgradeDismiss) {
-        upgradeDismiss.addEventListener("click", function (event) {
+      document.addEventListener("click", function (event) {
+        const live = maskEl();
+        if (!live || !live.classList.contains("show")) {
+          return;
+        }
+        if (event.target.closest && event.target.closest("#upgrade-dismiss")) {
           event.preventDefault();
           event.stopPropagation();
           hideUpgrade();
-        });
-      }
-      if (upgradeMask) {
-        upgradeMask.addEventListener("click", function (event) {
-          if (event.target === upgradeMask && upgradeMask.classList.contains("can-close")) {
-            hideUpgrade();
-          }
-        });
-      }
+          return;
+        }
+        if (event.target === live && live.classList.contains("can-close")) {
+          hideUpgrade();
+        }
+      });
     </script>
     <script src="/shared/nav.js"></script>
   </body>

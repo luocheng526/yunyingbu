@@ -1,4 +1,4 @@
-/* xm-shell-perf 0.1.44 */
+/* xm-shell-perf 0.1.45 */
 (function () {
   const items = [
     { href: "/", label: "首页" },
@@ -216,7 +216,7 @@
   if (!document.querySelector('link[href*="/shared/layout.css"]')) {
     const css = document.createElement("link");
     css.rel = "stylesheet";
-    css.href = "/shared/layout.css?v=0.1.44";
+    css.href = "/shared/layout.css?v=0.1.45";
     document.head.appendChild(css);
   }
 
@@ -458,9 +458,6 @@
     }
     wipePageTimers();
     const staleMask = document.getElementById("upgrade-mask");
-    if (staleMask) {
-      staleMask.remove();
-    }
     const content = document.getElementById("xm-content");
     if (!content) {
       window.location.reload();
@@ -487,7 +484,10 @@
     stripInnerChrome(content);
     const movedMask = content.querySelector("#upgrade-mask");
     if (movedMask) {
-      document.body.appendChild(movedMask);
+      document.documentElement.appendChild(movedMask);
+    }
+    if (staleMask && staleMask !== movedMask && staleMask.parentNode) {
+      staleMask.remove();
     }
     trackPageTimers(function () {
       activateScripts(content);
@@ -692,8 +692,8 @@
       content.appendChild(node);
     });
     const upgradeMask = document.getElementById("upgrade-mask");
-    if (upgradeMask && upgradeMask.parentNode !== document.body) {
-      document.body.appendChild(upgradeMask);
+    if (upgradeMask && upgradeMask.parentNode !== document.documentElement) {
+      document.documentElement.appendChild(upgradeMask);
     }
     const mount = document.getElementById("site-nav");
     if (mount) {
