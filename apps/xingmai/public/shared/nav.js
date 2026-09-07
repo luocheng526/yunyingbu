@@ -1,4 +1,4 @@
-/* xm-shell-perf 0.1.40 */
+/* xm-shell-perf 0.1.42 */
 (function () {
   const items = [
     { href: "/", label: "首页" },
@@ -21,7 +21,19 @@
   let current = window.location.pathname.replace(/\/+$/, "") || "/";
   const htmlLoads = new Map();
   let navGen = 0;
+  let navAbort = null;
+  let warmBusy = true;
   const THEME_KEY = "xm-theme";
+  const cnFmt = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  });
 
   function currentTheme() {
     try {
@@ -56,16 +68,7 @@
     if (Number.isNaN(date.getTime())) {
       return "—";
     }
-    const parts = new Intl.DateTimeFormat("zh-CN", {
-      timeZone: "Asia/Shanghai",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false
-    }).formatToParts(date);
+    const parts = cnFmt.formatToParts(date);
     const pick = function (type) {
       return (parts.find(function (part) { return part.type === type; }) || {}).value || "00";
     };
@@ -103,25 +106,32 @@
       nodes.push(walker.currentNode);
     }
     nodes.forEach(function (node) {
-      const next = rewriteUtcStamp(node.nodeValue);
-      if (next !== node.nodeValue) {
+      const text = node.nodeValue;
+      if (!text || !/\d{4}-\d{2}-\d{2}[T ]/.test(text)) {
+        return;
+      }
+      const next = rewriteUtcStamp(text);
+      if (next !== text) {
         node.nodeValue = next;
       }
     });
   }
 
   function watchStampRewrites() {
-    if (window.__xmStampObs) {
+    const root = document.querySelector(".xm-content") || document.body;
+    if (!root) {
       return;
     }
-    const root = document.querySelector(".xm-content") || document.body;
-    let timer = 0;
-    window.__xmStampObs = new MutationObserver(function () {
-      clearTimeout(timer);
-      timer = setTimeout(function () {
-        rewriteTimeNodes(document.querySelector(".xm-content") || document.body);
-      }, 50);
-    });
+    if (!window.__xmStampObs) {
+      let timer = 0;
+      window.__xmStampObs = new MutationObserver(function () {
+        clearTimeout(timer);
+        timer = setTimeout(function () {
+          rewriteTimeNodes(document.querySelector(".xm-content") || document.body);
+        }, 160);
+      });
+    }
+    window.__xmStampObs.disconnect();
     window.__xmStampObs.observe(root, { childList: true, subtree: true });
   }
 
@@ -149,7 +159,7 @@
   if (!document.querySelector('link[href*="/shared/layout.css"]')) {
     const css = document.createElement("link");
     css.rel = "stylesheet";
-    css.href = "/shared/layout.css?v=0.1.40";
+    css.href = "/shared/layout.css?v=0.1.42";
     document.head.appendChild(css);
   }
 
@@ -278,14 +288,15 @@
     }
   }
 
-  function loadHtml(dest) {
+  function loadHtml(dest, signal) {
     const hit = htmlLoads.get(dest);
     if (hit) {
       return hit;
     }
     const pending = fetch(dest, {
       credentials: "same-origin",
-      headers: { Accept: "text/html" }
+      headers: { Accept: "text/html" },
+      signal: signal
     }).then(function (res) {
       if (res.status === 401 || /\/login(?:\.html)?$/i.test(res.url)) {
         window.location.replace("/login");
@@ -295,6 +306,9 @@
         throw new Error("nav " + res.status);
       }
       return res.text();
+    }).catch(function (err) {
+      htmlLoads.delete(dest);
+      throw err;
     });
     htmlLoads.set(dest, pending);
     setTimeout(function () {
@@ -331,10 +345,33 @@
         script.setAttribute(attr.name, attr.value);
       });
       if (!src) {
-        script.textContent = old.textContent;
+        script.textContent = "(function(){\n" + old.textContent + "\n})();";
       }
       old.replaceWith(script);
     });
+  }
+
+  function trackPageTimers(run) {
+    const si = window.setInterval;
+    const st = window.setTimeout;
+    function wrap(fn) {
+      return function (handler, delay) {
+        const id = fn(handler, delay);
+        if (!window.__xmPageTimers) {
+          window.__xmPageTimers = [];
+        }
+        window.__xmPageTimers.push(id);
+        return id;
+      };
+    }
+    window.setInterval = wrap(si);
+    window.setTimeout = wrap(st);
+    try {
+      run();
+    } finally {
+      window.setInterval = si;
+      window.setTimeout = st;
+    }
   }
 
   function wipePageTimers() {
@@ -359,6 +396,9 @@
       return;
     }
     mergeSheets(doc);
+    if (window.__xmStampObs) {
+      window.__xmStampObs.disconnect();
+    }
     wipePageTimers();
     const content = document.getElementById("xm-content");
     if (!content) {
@@ -384,7 +424,9 @@
       content.appendChild(document.importNode(node, true));
     });
     stripInnerChrome(content);
-    activateScripts(content);
+    trackPageTimers(function () {
+      activateScripts(content);
+    });
     rewriteTimeNodes(content);
     watchStampRewrites();
     startClock();
@@ -409,7 +451,14 @@
     const gen = navGen;
     highlight(next);
     setPending(true);
-    loadHtml(next)
+    if (navAbort) {
+      try {
+        navAbort.abort();
+      } catch (_err) {}
+    }
+    navAbort = new AbortController();
+    const signal = htmlLoads.has(next) ? undefined : navAbort.signal;
+    loadHtml(next, signal)
       .then(function (html) {
         if (gen !== navGen) {
           return;
@@ -425,7 +474,7 @@
           return;
         }
         setPending(false);
-        if (err && err.message === "login") {
+        if (err && (err.message === "login" || err.name === "AbortError")) {
           return;
         }
         window.location.assign(next);
@@ -465,6 +514,9 @@
         if (!a) {
           return;
         }
+        if (warmBusy) {
+          return;
+        }
         const dest = appPath(a.href);
         if (dest && dest !== current && isAppDest(dest)) {
           loadHtml(dest);
@@ -482,12 +534,18 @@
       return;
     }
     window.__xmWarmPages = true;
-    const hrefs = items.map(function (item) {
-      return item.href;
-    });
+    const hrefs = items
+      .map(function (item) {
+        return item.href;
+      })
+      .filter(function (href) {
+        return href !== "/releases";
+      })
+      .concat(["/releases"]);
     let i = 0;
     function next() {
       if (i >= hrefs.length) {
+        warmBusy = false;
         return;
       }
       const dest = appPath(hrefs[i]);
@@ -495,9 +553,18 @@
       if (dest && dest !== current) {
         loadHtml(dest);
       }
-      setTimeout(next, 300);
+      setTimeout(next, 400);
     }
     setTimeout(next, 800);
+  }
+
+  function warmUpstream() {
+    if (window.__xmUpstreamPing) {
+      return;
+    }
+    window.__xmUpstreamPing = setInterval(function () {
+      fetch("/api/health", { credentials: "same-origin", cache: "no-store" }).catch(function () {});
+    }, 25000);
   }
 
   function mountShell(userLabel) {
@@ -509,6 +576,7 @@
       watchStampRewrites();
       startClock();
       warmAppPages();
+      warmUpstream();
       return;
     }
 
@@ -565,6 +633,7 @@
     watchStampRewrites();
     startClock();
     warmAppPages();
+    warmUpstream();
   }
 
   function start(userLabel) {

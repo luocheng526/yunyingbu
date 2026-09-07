@@ -3,9 +3,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { currentUser } from "./auth.js";
 
-// xm-full-lag-fix 0.1.40  必须和 home/pages.js 成套发，禁止只换本文件。
+// xm-lag-risks 0.1.42  必须和 home/pages.js 成套发，禁止只换本文件。
 
-export const SHELL_ASSET_VER = "0.1.40";
+export const SHELL_ASSET_VER = "0.1.42";
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public");
 const SHELL_ASSET_FILES = {
   "/shared/nav.js": "shared/nav.js",
@@ -13,7 +13,7 @@ const SHELL_ASSET_FILES = {
   "/login.css": "login.css"
 };
 const htmlFileCache = new Map();
-const HTML_CACHE_MS = 5000;
+const HTML_CACHE_MS = 60_000;
 
 function versionShellAssets(text) {
   return String(text || "")
@@ -38,6 +38,9 @@ export function isPublicRequest(req) {
       path === "/shared/layout.css" ||
       path === "/shared/nav.js"
     ) {
+      return true;
+    }
+    if (/\.(?:css|js|woff2?|png|jpe?g|gif|svg|ico|webp)$/i.test(path)) {
       return true;
     }
   }
@@ -112,6 +115,13 @@ export function injectHtmlShell(req, res, next) {
   res.send = function injectSend(body) {
     if (typeof body === "string" && /<html[\s>]/i.test(body)) {
       res.setHeader("Cache-Control", "private, no-store");
+      if (
+        body.includes(`/shared/nav.js?v=${SHELL_ASSET_VER}`) ||
+        /class=["']login-page["']/.test(body) ||
+        /href=["']\/login\.css["']/.test(body)
+      ) {
+        return send(body);
+      }
       return send(withSharedShell(body));
     }
     return send(body);
