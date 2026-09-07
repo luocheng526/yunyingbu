@@ -3,9 +3,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { currentUser } from "./auth.js";
 
-// xm-lag-risks 0.1.42  必须和 home/pages.js 成套发，禁止只换本文件。
+// xm-remain-lag 0.1.43  必须和 home/pages.js 成套发，禁止只换本文件。
 
-export const SHELL_ASSET_VER = "0.1.42";
+export const SHELL_ASSET_VER = "0.1.43";
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public");
 const SHELL_ASSET_FILES = {
   "/shared/nav.js": "shared/nav.js",
@@ -14,6 +14,9 @@ const SHELL_ASSET_FILES = {
 };
 const htmlFileCache = new Map();
 const HTML_CACHE_MS = 60_000;
+const HAN_API_CACHE_MS = 2500;
+const HAN_API_PATHS = new Set(["/api/han/tasks", "/api/han/brief"]);
+const hanApiCache = new Map();
 
 function versionShellAssets(text) {
   return String(text || "")
@@ -184,6 +187,40 @@ function serveHomeIndex(req, res) {
   return true;
 }
 
+function dropHanApiCache(req) {
+  const method = String(req.method || "GET").toUpperCase();
+  const dest = normalizedPath(req);
+  if (method === "GET" || method === "HEAD") {
+    return;
+  }
+  if (dest.startsWith("/api/han/")) {
+    hanApiCache.clear();
+  }
+}
+
+function serveHanApiCache(req, res) {
+  if (!isReadMethod(req)) {
+    return false;
+  }
+  const dest = normalizedPath(req);
+  if (!HAN_API_PATHS.has(dest)) {
+    return false;
+  }
+  const hit = hanApiCache.get(dest);
+  if (!hit || Date.now() - hit.at >= HAN_API_CACHE_MS) {
+    const json = res.json.bind(res);
+    res.json = function cacheHanJson(body) {
+      if (res.statusCode === 200) {
+        hanApiCache.set(dest, { at: Date.now(), body });
+      }
+      return json(body);
+    };
+    return false;
+  }
+  res.status(200).type("json").set("X-Xm-Cache", "han").json(hit.body);
+  return true;
+}
+
 export function requireLoginUnlessPublic(req, res, next) {
   if (isPublicRequest(req)) {
     if (serveShellAsset(req, res)) {
@@ -195,7 +232,11 @@ export function requireLoginUnlessPublic(req, res, next) {
   const user = currentUser(req);
   if (user) {
     req.user = user;
+    dropHanApiCache(req);
     if (serveHomeIndex(req, res)) {
+      return;
+    }
+    if (serveHanApiCache(req, res)) {
       return;
     }
     next();

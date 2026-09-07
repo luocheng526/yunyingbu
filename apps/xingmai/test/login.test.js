@@ -47,3 +47,23 @@ test("wrong password is rejected", async () => {
   const res = await login("罗成", "wrong");
   assert.equal(res.status, 401);
 });
+
+test("login and password change stay async so scrypt does not block the event loop", async () => {
+  const res = await login("罗成", "ChangeMe123!");
+  assert.equal(res.status, 200);
+  const cookie = String(res.headers.get("set-cookie") || "").split(";")[0];
+  const change = await fetch(`${base}/api/profile/password`, {
+    method: "POST",
+    headers: { cookie, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      currentPassword: "ChangeMe123!",
+      newPassword: "Changed456!",
+      confirmPassword: "Changed456!"
+    })
+  });
+  assert.equal(change.status, 200);
+  const denied = await login("罗成", "ChangeMe123!");
+  assert.equal(denied.status, 401);
+  const next = await login("罗成", "Changed456!");
+  assert.equal(next.status, 200);
+});
