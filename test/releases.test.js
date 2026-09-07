@@ -165,6 +165,7 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /consumePendingUpgrade/);
     assert.match(text, /bootReleases/);
     assert.match(text, /passResult === "reloading"/);
+    assert.match(text, /passResult === "failed"/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
     assert.doesNotMatch(text, /href="\/shared\/layout.css"/);
