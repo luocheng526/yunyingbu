@@ -57,7 +57,7 @@ export function createReleasesRouter(options = {}) {
     } else {
       extra = "文档要求不重启，已跳过 systemctl。";
     }
-    store.markSuccess(item, successLog(item, pushResult, extra, noDoc));
+    await store.markSuccess(item, successLog(item, pushResult, extra, noDoc));
     return { ok: true };
   }
 
@@ -68,13 +68,13 @@ export function createReleasesRouter(options = {}) {
       return;
     }
 
-    const acquired = store.tryAcquireLock(item);
+    const acquired = await store.tryAcquireLock(item);
     if (!acquired) {
       res.status(409).json({ ok: false, error: "有发布正在进行，禁止抢发" });
       return;
     }
 
-    store.markPublishing(item);
+    await store.markPublishing(item);
     const noDoc = !hasCompleteDocument(item);
 
     const runJob = async () => {
@@ -82,10 +82,10 @@ export function createReleasesRouter(options = {}) {
         return await runPublishJob(item, noDoc);
       } catch (err) {
         const message = `发版失败：${err?.message || err}。已释放发布锁。`;
-        store.markFailed(item, message);
+        await store.markFailed(item, message);
         return { ok: false, error: message };
       } finally {
-        store.releaseLock();
+        await store.releaseLock();
       }
     };
 
@@ -120,16 +120,16 @@ export function createReleasesRouter(options = {}) {
     res.status(500).json({ ok: false, error: result.error, item, version: item.version });
   }
 
-  router.get("/", (_req, res) => {
-    res.json({ ok: true, items: store.list() });
+  router.get("/", async (_req, res) => {
+    res.json({ ok: true, items: await store.list() });
   });
 
-  router.get("/queue", (_req, res) => {
-    res.json({ ok: true, items: store.queue() });
+  router.get("/queue", async (_req, res) => {
+    res.json({ ok: true, items: await store.queue() });
   });
 
-  router.get("/lock", (_req, res) => {
-    res.json({ ok: true, ...store.getLock() });
+  router.get("/lock", async (_req, res) => {
+    res.json({ ok: true, ...(await store.getLock()) });
   });
 
   router.post("/go", (req, res) => {
@@ -144,7 +144,7 @@ export function createReleasesRouter(options = {}) {
     });
   });
 
-  router.post("/", (req, res) => {
+  router.post("/", async (req, res) => {
     const body = req.body || {};
     const version = String(body.version || "").trim();
     const applicant = String(body.applicant || "").trim();
@@ -163,7 +163,7 @@ export function createReleasesRouter(options = {}) {
       res.status(400).json({ ok: false, error: "模块不在允许列表中" });
       return;
     }
-    const item = store.create({
+    const item = await store.create({
       version,
       applicant,
       source: body.source || applicant,
@@ -176,8 +176,8 @@ export function createReleasesRouter(options = {}) {
     res.status(201).json({ ok: true, item, incomplete: !parsed.complete });
   });
 
-  router.post("/reorder", (req, res) => {
-    const result = store.reorder(req.body?.ids);
+  router.post("/reorder", async (req, res) => {
+    const result = await store.reorder(req.body?.ids);
     if (result.error) {
       res.status(result.status).json({ ok: false, error: result.error });
       return;
@@ -186,12 +186,12 @@ export function createReleasesRouter(options = {}) {
   });
 
   router.post("/:id/approve", async (req, res) => {
-    const item = store.get(req.params.id);
+    const item = await store.get(req.params.id);
     await handlePublish(req, res, item);
   });
 
-  router.post("/:id/reject", (req, res) => {
-    const result = store.reject(req.params.id, req.body?.reason);
+  router.post("/:id/reject", async (req, res) => {
+    const result = await store.reject(req.params.id, req.body?.reason);
     if (result.error) {
       res.status(result.status).json({ ok: false, error: result.error });
       return;
@@ -199,8 +199,8 @@ export function createReleasesRouter(options = {}) {
     res.json({ ok: true, item: result.item });
   });
 
-  router.post("/:id/move", (req, res) => {
-    const result = store.move(req.params.id, req.body?.direction);
+  router.post("/:id/move", async (req, res) => {
+    const result = await store.move(req.params.id, req.body?.direction);
     if (result.error) {
       res.status(result.status).json({ ok: false, error: result.error });
       return;
@@ -209,7 +209,7 @@ export function createReleasesRouter(options = {}) {
   });
 
   router.post("/:id/confirm", async (req, res) => {
-    const item = store.get(req.params.id);
+    const item = await store.get(req.params.id);
     await handlePublish(req, res, item);
   });
 

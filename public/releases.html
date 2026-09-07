@@ -149,7 +149,7 @@
       <p class="lead">各模块对话提交发版后在这里排队；看清更新内容、调整顺序，点通过才放行。GitHub 合入主支后的不可变制品进入「待上线」，PR tip 不会入列。</p>
       <p id="refresh-meta" class="muted">点刷新立刻拉队列与待上线候选；同时每 3 秒自动拉取 GET /api/releases/queue 与 /api/releases/candidates。</p>
       <div class="banner">
-        PR 合入不等于上线。待上线只批准 candidate_id，禁止手填 SHA/路径/命令。当前 RELEASE_MODE=shadow：可看候选、可 shadow 安装，不创建生产部署消息。对话交单点「通过」才真正发版（push-xingmai-to-ecs.sh，是否重启看单据）。未通过禁止发。同一时刻一把锁；正在发时其他通过禁用；下一条不会自动发。
+        单据来自各模块对话 POST /api/releases，本页不提供手填表。点「通过」才真正发版（push-xingmai-to-ecs.sh，是否重启看单据）。未通过禁止发。同一时刻一把锁；正在发时其他通过禁用；下一条不会自动发。发版队列写入 MySQL（RDS）；配好 MYSQL_* 后重启 mengkai，刷新仍能看到单据。
       </div>
       <div id="flash" class="flash" role="status"></div>
       <div class="grid">
