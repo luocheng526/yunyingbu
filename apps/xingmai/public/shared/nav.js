@@ -1,4 +1,4 @@
-/* xm-shell-perf 0.1.42 */
+/* xm-shell-perf 0.1.43 */
 (function () {
   const items = [
     { href: "/", label: "首页" },
@@ -17,6 +17,63 @@
   if (document.body && document.body.classList.contains("login-page")) {
     return;
   }
+
+  (function wrapHanFetch() {
+    if (window.__xmFetchWrap) {
+      return;
+    }
+    window.__xmFetchWrap = true;
+    const orig = window.fetch.bind(window);
+    const inflight = new Map();
+    const memo = new Map();
+    const MEMO_MS = 2500;
+    const memoPaths = { "/api/han/tasks": true, "/api/han/brief": true };
+    function infoOf(input, init) {
+      const raw = typeof input === "string" ? input : (input && input.url) || "";
+      const method = String((init && init.method) || (input && input.method) || "GET").toUpperCase();
+      let dest = raw;
+      try {
+        dest = new URL(raw, window.location.origin).pathname.replace(/\/+$/, "") || "/";
+      } catch (_err) {}
+      return { method: method, dest: dest, key: method + " " + dest };
+    }
+    window.fetch = function (input, init) {
+      const info = infoOf(input, init);
+      if (info.method !== "GET" && info.method !== "HEAD") {
+        if (info.dest.indexOf("/api/han/") === 0) {
+          memo.clear();
+        }
+        return orig(input, init);
+      }
+      if (memoPaths[info.dest]) {
+        const hit = memo.get(info.key);
+        if (hit && Date.now() - hit.at < MEMO_MS) {
+          return Promise.resolve(hit.res.clone());
+        }
+      }
+      if (inflight.has(info.key)) {
+        return inflight.get(info.key).then(function (res) {
+          return res.clone();
+        });
+      }
+      const pending = orig(input, init)
+        .then(function (res) {
+          inflight.delete(info.key);
+          if (memoPaths[info.dest] && res.ok) {
+            memo.set(info.key, { at: Date.now(), res: res.clone() });
+          }
+          return res;
+        })
+        .catch(function (err) {
+          inflight.delete(info.key);
+          throw err;
+        });
+      inflight.set(info.key, pending);
+      return pending.then(function (res) {
+        return res.clone();
+      });
+    };
+  })();
 
   let current = window.location.pathname.replace(/\/+$/, "") || "/";
   const htmlLoads = new Map();
@@ -159,7 +216,7 @@
   if (!document.querySelector('link[href*="/shared/layout.css"]')) {
     const css = document.createElement("link");
     css.rel = "stylesheet";
-    css.href = "/shared/layout.css?v=0.1.42";
+    css.href = "/shared/layout.css?v=0.1.43";
     document.head.appendChild(css);
   }
 

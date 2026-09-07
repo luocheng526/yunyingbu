@@ -1,5 +1,9 @@
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
+import { randomBytes, scrypt, scryptSync, timingSafeEqual } from "node:crypto";
 import { Router } from "express";
+
+// xm-async-scrypt 0.1.43  启动仍同步播种；登录/改密走异步，避免堵住事件循环。
+const scryptAsync = promisify(scrypt);
 
 export const COOKIE_NAME = "mk_sid";
 export const DEMO_USERNAME = "罗成";
@@ -9,13 +13,19 @@ const KEYLEN = 64;
 const users = new Map();
 const sessions = new Map();
 
-function hashPassword(password) {
+function hashPasswordSync(password) {
   const salt = randomBytes(16);
   const hash = scryptSync(password, salt, KEYLEN);
   return `scrypt:${salt.toString("hex")}:${hash.toString("hex")}`;
 }
 
-function verifyPassword(password, stored) {
+async function hashPassword(password) {
+  const salt = randomBytes(16);
+  const hash = await scryptAsync(password, salt, KEYLEN);
+  return `scrypt:${salt.toString("hex")}:${hash.toString("hex")}`;
+}
+
+async function verifyPassword(password, stored) {
   if (typeof password !== "string" || typeof stored !== "string") {
     return false;
   }
@@ -29,7 +39,7 @@ function verifyPassword(password, stored) {
     if (!salt.length || !expected.length) {
       return false;
     }
-    const actual = scryptSync(password, salt, expected.length);
+    const actual = await scryptAsync(password, salt, expected.length);
     if (actual.length !== expected.length) {
       return false;
     }
@@ -45,7 +55,7 @@ function seed() {
     displayName: "罗成",
     email: "luocheng@demo.local",
     phone: "",
-    passwordHash: hashPassword(DEMO_INITIAL_PASSWORD)
+    passwordHash: hashPasswordSync(DEMO_INITIAL_PASSWORD)
   });
 }
 
@@ -142,7 +152,7 @@ export function requireAuth(req, res, next) {
 
 export const authRouter = Router();
 
-authRouter.post("/login", (req, res) => {
+authRouter.post("/login", async (req, res) => {
   const username = typeof req.body?.username === "string" ? req.body.username.trim() : "";
   const password = typeof req.body?.password === "string" ? req.body.password : "";
   if (!username || !password) {
@@ -150,7 +160,7 @@ authRouter.post("/login", (req, res) => {
     return;
   }
   const user = resolveUser(username);
-  if (!user || !verifyPassword(password, user.passwordHash)) {
+  if (!user || !(await verifyPassword(password, user.passwordHash))) {
     res.status(401).json({ ok: false, error: "用户名或密码错误" });
     return;
   }
@@ -195,7 +205,7 @@ profileRouter.put("/", (req, res) => {
   sendProfile(res, req.user);
 });
 
-profileRouter.post("/password", (req, res) => {
+profileRouter.post("/password", async (req, res) => {
   const currentPassword = typeof req.body?.currentPassword === "string" ? req.body.currentPassword : "";
   const newPassword = typeof req.body?.newPassword === "string" ? req.body.newPassword : "";
   const confirmPassword = typeof req.body?.confirmPassword === "string" ? req.body.confirmPassword : "";
@@ -216,10 +226,10 @@ profileRouter.post("/password", (req, res) => {
     res.status(400).json({ ok: false, error: "新密码不能与当前密码相同" });
     return;
   }
-  if (!verifyPassword(currentPassword, req.user.passwordHash)) {
+  if (!(await verifyPassword(currentPassword, req.user.passwordHash))) {
     res.status(403).json({ ok: false, error: "当前密码错误" });
     return;
   }
-  req.user.passwordHash = hashPassword(newPassword);
+  req.user.passwordHash = await hashPassword(newPassword);
   res.json({ ok: true, message: "密码已更新" });
 });
