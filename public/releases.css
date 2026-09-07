@@ -168,7 +168,7 @@ html, body {
   border-radius: 22px;
   box-shadow: var(--oc-shadow);
   padding: 1.25rem 1.35rem 1.5rem;
-  min-height: 22rem;
+  min-height: 12rem;
 }
 .oc-card h3 {
   margin: 0 0 0.75rem;
@@ -314,32 +314,51 @@ th, td {
   margin-left: auto;
 }
 
-/* Shared shell sets body overflow:hidden and xm-shell min-height:100vh.
-   The shell then grows with the ledger, body cannot scroll, 版本记录/运行日志被裁切. */
-html:has(.oc-wrap),
-html:has(.oc-wrap) body,
-html:has(.oc-wrap) body.xm-app,
-html:has(.oc-wrap) body:has(.xm-shell) {
-  height: auto !important;
-  max-height: none !important;
-  overflow: auto !important;
+/* Shared shell locks body (overflow:hidden) and grows .xm-shell with content.
+   Unlocking the document still loses the wheel to .xm-content { overflow:auto }.
+   Only when the shell is present: constrain it to the viewport and scroll .xm-content. */
+html:has(.oc-wrap):has(.xm-shell),
+html:has(.oc-wrap) body:has(.xm-shell),
+html:has(.oc-wrap) body.xm-app:has(.xm-shell) {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
 }
 html:has(.oc-wrap) .xm-shell {
-  height: auto;
-  max-height: none;
-  min-height: 100vh;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  min-height: 0 !important;
+  overflow: hidden;
 }
 html:has(.oc-wrap) .xm-main {
-  height: auto;
-  min-height: 0;
-}
-html:has(.oc-wrap) .xm-content {
-  overflow: visible;
+  min-height: 0 !important;
+  overflow: hidden;
   flex: 1 1 auto;
 }
+html:has(.oc-wrap) .xm-content {
+  min-height: 0 !important;
+  overflow: auto !important;
+  flex: 1 1 auto !important;
+  overscroll-behavior: contain;
+}
 #history-view,
-#logs-view {
-  overflow-x: auto;
+#logs-view,
+#queue-view {
+  overflow: visible;
+}
+.oc-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  margin-top: 1rem;
+  color: var(--oc-muted);
+  font-size: 0.85rem;
+}
+.oc-pager span {
+  min-width: 11rem;
+  text-align: center;
 }
 
 @media (max-width: 980px) {

@@ -154,6 +154,14 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /data-tab="history"/);
     assert.match(text, /从最新到最老/);
     assert.match(text, /newestFirst/);
+    assert.match(text, /PAGE_SIZE = 20/);
+    assert.match(text, /function paginate/);
+    assert.match(text, /function renderPager/);
+    assert.match(text, /上一页/);
+    assert.match(text, /下一页/);
+    assert.match(text, /都分页/);
+    assert.match(text, /Number\(seq\) === 1/);
+    assert.doesNotMatch(text, /const isHead = index === 0/);
     assert.match(text, /data-tab="logs"/);
     assert.match(text, /\/api\/releases\/versions/);
     assert.match(text, /待上线是空的，没有等待通过的单据/);
@@ -223,6 +231,8 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /\.oc-tab\.active/);
     assert.match(text, /html:has\(\.oc-wrap\)/);
     assert.match(text, /overflow: auto !important/);
+    assert.match(text, /\.oc-pager/);
+    assert.match(text, /overscroll-behavior: contain/);
   });
 });
 
