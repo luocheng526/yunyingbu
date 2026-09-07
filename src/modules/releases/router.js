@@ -2,11 +2,12 @@ import express from "express";
 import os from "node:os";
 import path from "node:path";
 import { requireReleasesAuth } from "./auth.js";
-import { NEED_PASS_ERROR, REORDER_FORBIDDEN, withCharter } from "./charter.js";
-import { hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
+import { INCOMPLETE_ARTIFACT_ERROR, NEED_PASS_ERROR, REORDER_FORBIDDEN, withCharter } from "./charter.js";
+import { documentGaps, hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
 import { assertQueueHead, describeNextVersion, listModuleVersions, resolveReleaseVersion } from "./version.js";
 import { assertSafeRel, attachRollbackMeta, formatExecError, listMissingSourceFiles, liveRoot, markSnapshotRolledBack, pathsToSnapshot, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "./push.js";
 import {
+  normalizeContents,
   parseGitRef,
   parseRepository,
   resolveStageRoots,
@@ -16,6 +17,7 @@ import {
   unchangedCreateError
 } from "./stage.js";
 import { filesNeedProcessRestart, restartMengkaiService, ticketNeedsProcessRestart } from "./restart.js";
+import { smokeCheckBuffers, smokeCheckSyntax } from "./smoke.js";
 import { attachPipelineRoutes, attachPipelineWebhook } from "./pipeline/attach.js";
 import { createPipelineStore } from "./pipeline/store.js";
 import { createStore, MODULES } from "./store.js";
@@ -41,12 +43,18 @@ function publishBlockedReason(item) {
   return null;
 }
 
-function successLog(item, pushResult, extra, noDoc) {
+function successLog(item, pushResult, extra) {
   const pushNote = pushResult && pushResult.stdout ? String(pushResult.stdout).trim() : "push-xingmai-to-ecs.sh 完成";
-  const prefix = noDoc
-    ? "前期无文档，全量同步 apps/xingmai。"
-    : `按发布文档发版（模块 ${item.module}）。已推送：${(item.files || []).join("、") || "（无文件）"}。`;
+  const prefix = `按发布文档发版（模块 ${item.module}）。已推送：${(item.files || []).join("、") || "（无文件）"}。`;
   return `${prefix}${pushNote} ${extra} 公网验收：打开 ${PUBLIC_VERIFY} 看对应模块。队列下一条不会自动发布。`;
+}
+
+function artifactGaps(item) {
+  const gaps = documentGaps(item);
+  if (item && item.module && !MODULES.includes(item.module)) {
+    gaps.push("模块须在允许列表");
+  }
+  return gaps;
 }
 
 export function createReleasesRouter(options = {}) {
@@ -75,11 +83,14 @@ export function createReleasesRouter(options = {}) {
   attachPipelineWebhook(router, { ...options, pipelineStore });
   attachPipelineRoutes(router, { ...options, pipelineStore });
 
-  async function runPublishJob(item, noDoc) {
-    const files = noDoc ? [] : item.files || [];
-    const shouldRestart = ticketNeedsProcessRestart(item, noDoc);
+  async function runPublishJob(item) {
+    const files = item.files || [];
+    if (!files.length) {
+      throw Object.assign(new Error(INCOMPLETE_ARTIFACT_ERROR), { stderr: INCOMPLETE_ARTIFACT_ERROR });
+    }
+    const shouldRestart = ticketNeedsProcessRestart(item);
     const snapshotDir = path.join(stateDir || os.tmpdir(), "snapshots", item.id);
-    if (!noDoc && item.gitRef) {
+    if (item.gitRef) {
       await stageTicketSources(files, {
         sourceRoot: resolveSource(),
         ref: item.gitRef,
@@ -99,17 +110,17 @@ export function createReleasesRouter(options = {}) {
     let extra = "";
     if (shouldRestart) {
       extra = "成功状态已先落盘，随后重启线上进程。";
-      await store.markSuccess(item, successLog(item, pushResult, extra, noDoc));
+      await store.markSuccess(item, successLog(item, pushResult, extra));
       await store.releaseLock();
       const result = await restart();
       extra = result && result.skipped ? `未执行 systemctl：${result.reason}` : "已 systemctl restart mengkai.service";
-      await store.markSuccess(item, successLog(item, pushResult, extra, noDoc));
+      await store.markSuccess(item, successLog(item, pushResult, extra));
     } else if (item.restart && !filesNeedProcessRestart(files)) {
       extra = "只改了页面或测试文件，已跳过重启，避免打断正在使用的人。";
-      await store.markSuccess(item, successLog(item, pushResult, extra, noDoc));
+      await store.markSuccess(item, successLog(item, pushResult, extra));
     } else {
       extra = "文档要求不重启，已跳过 systemctl。";
-      await store.markSuccess(item, successLog(item, pushResult, extra, noDoc));
+      await store.markSuccess(item, successLog(item, pushResult, extra));
     }
     return { ok: true };
   }
@@ -118,6 +129,16 @@ export function createReleasesRouter(options = {}) {
     const blocked = publishBlockedReason(item);
     if (blocked) {
       res.status(blocked.status).json({ ok: false, error: blocked.error });
+      return;
+    }
+
+    const gaps = artifactGaps(item);
+    if (gaps.length || !hasCompleteDocument(item)) {
+      res.status(409).json({
+        ok: false,
+        error: INCOMPLETE_ARTIFACT_ERROR,
+        missing: gaps
+      });
       return;
     }
 
@@ -134,11 +155,10 @@ export function createReleasesRouter(options = {}) {
     }
 
     await store.markPublishing(item);
-    const noDoc = !hasCompleteDocument(item);
 
     const runJob = async () => {
       try {
-        return await runPublishJob(item, noDoc);
+        return await runPublishJob(item);
       } catch (err) {
         const message = formatExecError(err);
         await store.markFailed(item, message);
@@ -148,15 +168,13 @@ export function createReleasesRouter(options = {}) {
       }
     };
 
-    const willRestart = ticketNeedsProcessRestart(item, noDoc);
-    const defer = (noDoc || willRestart) && restart === restartMengkaiService;
+    const willRestart = ticketNeedsProcessRestart(item);
+    const defer = willRestart && restart === restartMengkaiService;
     if (defer) {
       res.json({
         ok: true,
         item,
-        version: item.version,
-        noDoc,
-        note: noDoc ? "前期无文档，全量同步 apps/xingmai" : ""
+        version: item.version
       });
       setTimeout(() => {
         runJob().catch((err) => {
@@ -171,9 +189,7 @@ export function createReleasesRouter(options = {}) {
       res.json({
         ok: true,
         item,
-        version: item.version,
-        noDoc,
-        note: noDoc ? "前期无文档，全量同步 apps/xingmai" : ""
+        version: item.version
       });
       return;
     }
@@ -226,6 +242,14 @@ export function createReleasesRouter(options = {}) {
       });
       return;
     }
+    if (!parsed.complete) {
+      res.status(400).json({
+        ok: false,
+        error: INCOMPLETE_ARTIFACT_ERROR,
+        missing: parsed.missing
+      });
+      return;
+    }
     const items = await store.list();
     const resolved = resolveReleaseVersion(items, body.version, body.slug || summary);
     if (!resolved.ok) {
@@ -237,8 +261,8 @@ export function createReleasesRouter(options = {}) {
       return;
     }
     const version = resolved.version;
-    const module = parsed.document.module || "其他";
-    if (parsed.complete && !MODULES.includes(module)) {
+    const module = parsed.document.module;
+    if (!MODULES.includes(module)) {
       res.status(400).json({ ok: false, error: "模块不在允许列表中" });
       return;
     }
@@ -255,6 +279,8 @@ export function createReleasesRouter(options = {}) {
     const gitRef = parseGitRef(body);
     let repository = "";
     try {
+      const buffers = normalizeContents(body.contents || body.blobs, files);
+      await smokeCheckBuffers(buffers);
       repository = gitRef ? parseRepository(body, options.env || process.env) : "";
       await stageTicketSources(files, {
         sourceRoot: resolveSource(),
@@ -265,6 +291,14 @@ export function createReleasesRouter(options = {}) {
         env: options.env || process.env
       });
     } catch (err) {
+      if (err.code === "SMOKE_IMPORT_ERROR") {
+        res.status(409).json({
+          ok: false,
+          error: `${INCOMPLETE_ARTIFACT_ERROR}${err.message || err}`,
+          missing: files
+        });
+        return;
+      }
       res.status(err.status || 400).json({ ok: false, error: err.message });
       return;
     }
@@ -290,6 +324,16 @@ export function createReleasesRouter(options = {}) {
       });
       return;
     }
+    try {
+      await smokeCheckSyntax(resolveSource(), files);
+    } catch (err) {
+      res.status(409).json({
+        ok: false,
+        error: `${INCOMPLETE_ARTIFACT_ERROR}${err.message || err}`,
+        missing: files
+      });
+      return;
+    }
     const item = await store.create({
       version,
       applicant,
@@ -297,12 +341,12 @@ export function createReleasesRouter(options = {}) {
       summary,
       module,
       files,
-      acceptance: parsed.complete ? parsed.document.acceptance : parsed.document.acceptance,
-      restart: parsed.complete ? parsed.document.restart : true,
+      acceptance: parsed.document.acceptance,
+      restart: parsed.document.restart,
       gitRef,
       repository
     });
-    res.status(201).json({ ok: true, item, incomplete: !parsed.complete });
+    res.status(201).json({ ok: true, item, incomplete: false });
   });
 
   router.post("/reorder", (_req, res) => {

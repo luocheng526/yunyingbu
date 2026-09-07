@@ -110,16 +110,38 @@ function smokeError(detail) {
   });
 }
 
-async function checkSyntax(live, rel) {
-  const file = path.join(live, rel);
+/** Always parse as ESM. `node --check file.js` is CJS unless package.json says type:module. */
+export async function smokeCheckText(rel, source) {
   try {
-    await execFileAsync(process.execPath, ["--check", file], {
+    await execFileAsync(process.execPath, ["--input-type=module", "--check"], {
       timeout: 8000,
-      maxBuffer: 1_000_000
+      maxBuffer: 1_000_000,
+      input: Buffer.isBuffer(source) ? source : Buffer.from(String(source ?? ""))
     });
   } catch (err) {
-    throw smokeError(err.stderr || err.message || err);
+    const detail = String(err.stderr || err.message || err);
+    throw smokeError(`${rel}: ${firstUsefulLine(detail) || detail}`);
   }
+}
+
+async function checkSyntax(root, rel) {
+  const file = path.join(root, rel);
+  if (!file || !fs.existsSync(file)) {
+    throw smokeError(`${rel} 不存在，无法做语法检查`);
+  }
+  await smokeCheckText(rel, fs.readFileSync(file));
+}
+
+export async function smokeCheckBuffers(buffers) {
+  const rels = srcJsFiles(Object.keys(buffers || {}));
+  for (const rel of rels) {
+    const buf = buffers[rel];
+    if (buf == null) {
+      throw smokeError(`${rel} 没有正文，无法做语法检查`);
+    }
+    await smokeCheckText(rel, buf);
+  }
+  return { ok: true, checked: rels };
 }
 
 async function importModules(live, rels) {
@@ -155,15 +177,25 @@ console.log("SMOKE_OK");
   }
 }
 
+/** Syntax-check staged src/*.js before the ticket may enter the queue. */
+export async function smokeCheckSyntax(root, files) {
+  const changed = srcJsFiles(files);
+  if (!changed.length) {
+    return { ok: true, skipped: true, checked: [] };
+  }
+  for (const rel of changed) {
+    await checkSyntax(root, rel);
+  }
+  return { ok: true, skipped: false, checked: changed };
+}
+
 /** Load the new src graph in a child process before systemd restart. */
 export async function smokeLoadLive(live, files) {
   const changed = srcJsFiles(files);
   if (!changed.length) {
     return { ok: true, skipped: true, imported: [] };
   }
-  for (const rel of changed) {
-    await checkSyntax(live, rel);
-  }
+  await smokeCheckSyntax(live, files);
   const imported = collectSmokeImports(live, files).filter((rel) => !SMOKE_SKIP_EVAL.has(rel));
   if (imported.length) {
     await importModules(live, imported);

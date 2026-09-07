@@ -23,7 +23,7 @@ import {
   shouldRejectUnchangedAtCreate
 } from "../src/modules/releases/stage.js";
 import { NOOP_APPLY_ERROR, SMOKE_FAIL_ERROR } from "../src/modules/releases/charter.js";
-import { collectSmokeImports, smokeLoadLive } from "../src/modules/releases/smoke.js";
+import { collectSmokeImports, smokeCheckSyntax, smokeLoadLive } from "../src/modules/releases/smoke.js";
 import { DEMO_INITIAL_PASSWORD, DEMO_USERNAME } from "../src/modules/profile/auth.js";
 
 const signedInUser = { username: "罗成" };
@@ -220,6 +220,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /都分页/);
     assert.match(text, /不要先拷到线上/);
     assert.match(text, /点通过才落地/);
+    assert.match(text, /制品没有完整完成/);
+    assert.match(text, /防止系统崩溃卡住/);
     assert.match(text, /新文件只放源目录/);
     assert.match(text, /不读 git/);
     assert.match(text, /contents/);
@@ -296,6 +298,8 @@ test("agent docs say no video unless the UI change is large", () => {
   assert.match(fs.readFileSync(path.join(root, "docs/agents/00-release-rules.md"), "utf8"), /不自动跳登录/);
   assert.match(fs.readFileSync(path.join(root, "docs/agents/06-releases.md"), "utf8"), /先试载再重启/);
   assert.match(fs.readFileSync(path.join(root, "docs/agents/06-releases.md"), "utf8"), /不自动跳登录/);
+  assert.match(fs.readFileSync(path.join(root, "docs/agents/06-releases.md"), "utf8"), /制品没有完整完成/);
+  assert.match(fs.readFileSync(path.join(root, "docs/agents/00-release-rules.md"), "utf8"), /制品未完成禁止入队/);
 });
 
 test("GET /releases.css is page-only stylesheet", async () => {
@@ -373,6 +377,8 @@ test("queue and lock expose charter: gate is not a second 主脑", async () => {
     assert.equal(queue.body.charter.secondBrain, false);
     assert.equal(queue.body.charter.queue.includes("点一单发一单"), true);
     assert.match(queue.body.charter.queue, /不重启进程/);
+    assert.match(queue.body.charter.queue, /制品未完成禁止入队/);
+    assert.ok(queue.body.charter.refuse.includes("制品未完成进入版本发布中心"));
     assert.match(queue.body.charter.version, /统一发放|闸门发放/);
     const lock = await json(base, "/api/releases/lock");
     assert.equal(lock.body.charter.gate, "版本发布中心");
@@ -803,17 +809,48 @@ test("queued cannot jump to success; reject requires reason", async () => {
   });
 });
 
-test("incomplete document still queues for ledger", async () => {
+test("incomplete document is rejected and does not enter the queue", async () => {
   await withServer(async (base) => {
     const { res, body } = await json(base, "/api/releases", {
       method: "POST",
       body: JSON.stringify({ version: "auto", slug: "nodoc", applicant: "X", module: "首页", summary: "无文件" })
     });
-    assert.equal(res.status, 201);
-    assert.equal(body.item.status, "queued");
-    assert.match(body.item.version, /^0\.1\.1-nodoc$/);
+    assert.equal(res.status, 400);
+    assert.match(body.error, /制品没有完整完成/);
+    assert.ok(Array.isArray(body.missing));
+    assert.ok(body.missing.includes("文件列表"));
     const queue = await json(base, "/api/releases/queue");
-    assert.equal(queue.body.items.some((item) => item.version === body.item.version), true);
+    assert.equal(queue.body.items.length, 0);
+  });
+});
+
+test("smokeCheckSyntax rejects incomplete ESM without package.json type module", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "rel-syntax-"));
+  fs.mkdirSync(path.join(root, "src"), { recursive: true });
+  fs.writeFileSync(path.join(root, "src", "broken.js"), "export function broken( {\n");
+  await assert.rejects(() => smokeCheckSyntax(root, ["src/broken.js"]), (err) => {
+    assert.match(String(err.message), /Unexpected end of input|语法|试载失败/);
+    return true;
+  });
+});
+
+test("broken src syntax is rejected at create and does not enter the queue", async () => {
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), "rel-src-bad-"));
+  const live = fs.mkdtempSync(path.join(os.tmpdir(), "rel-live-bad-"));
+  await withServer({ sourceRoot: source, liveRoot: live, env: { MENGKAI_SKIP_PULL: "1" } }, async (base) => {
+    const { res, body } = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("bad-js", "Eve", "版本发布中心", "语法坏了", {
+        files: ["src/broken.js"],
+        contents: { "src/broken.js": "export function broken( {\n" },
+        restart: true
+      })
+    });
+    assert.equal(res.status, 409);
+    assert.match(body.error, /制品没有完整完成/);
+    assert.equal(fs.existsSync(path.join(source, "src", "broken.js")), false);
+    const queue = await json(base, "/api/releases/queue");
+    assert.equal(queue.body.items.length, 0);
   });
 });
 
@@ -1080,6 +1117,10 @@ test("local apply copies listed files and never needs push-xingmai-to-ecs.sh", a
       assert.equal(String(err.stderr), NOOP_APPLY_ERROR);
       return true;
     }
+  );
+  await assert.rejects(
+    () => pushXingmaiToEcs([], { sourceRoot: source, liveRoot: live, env: { MENGKAI_SKIP_PULL: "1" } }),
+    /制品没有完整完成/
   );
   const snapDir = fs.mkdtempSync(path.join(os.tmpdir(), "rel-receipt-"));
   fs.writeFileSync(path.join(source, "public", "releases.html"), "<html>next</html>\n");

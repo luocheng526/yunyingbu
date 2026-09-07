@@ -263,14 +263,6 @@ export function restoreSnapshot(snapshotDir, live, rels) {
   return { stdout: notes.join("\n"), stderr: "" };
 }
 
-function copyTree(fromRoot, toRoot) {
-  for (const rel of FULL_TREE) {
-    if (fs.existsSync(path.join(fromRoot, rel))) {
-      copyRel(fromRoot, toRoot, rel);
-    }
-  }
-}
-
 /**
  * 进程已在 8.140.33.133 的 /opt/mengkai。
  * 不 spawn 缺失的 push-xingmai-to-ecs.sh，改为本机从源目录拷到 live（排除 node_modules）。
@@ -285,6 +277,11 @@ export async function pushXingmaiToEcs(files, options = {}) {
     });
   }
   const list = Array.isArray(files) ? files.filter(Boolean).map(assertSafeRel) : [];
+  if (!list.length) {
+    throw Object.assign(new Error("制品没有完整完成，禁止全量落地。交单必须带齐文件列表。"), {
+      stderr: "制品没有完整完成，禁止全量落地。交单必须带齐文件列表。"
+    });
+  }
   const notes = [`本机落地 live=${live} source=${source}`];
 
   let pulled = { pulled: false, stdout: "" };
@@ -324,14 +321,9 @@ export async function pushXingmaiToEcs(files, options = {}) {
     notes.push(`升级前快照 ${saved.files.length} 个路径 -> ${options.snapshotDir}`);
   }
 
-  if (!list.length) {
-    copyTree(source, live);
-    notes.push("全量同步 public/src/package.json（排除 node_modules，未走 SSH）");
-  } else {
-    for (const rel of list) {
-      copyRel(source, live, rel);
-      notes.push(`copied ${rel} -> ${path.join(live, rel)}`);
-    }
+  for (const rel of list) {
+    copyRel(source, live, rel);
+    notes.push(`copied ${rel} -> ${path.join(live, rel)}`);
   }
 
   if (list.length && !listedFilesUnchanged(source, live, list)) {

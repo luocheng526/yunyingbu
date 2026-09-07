@@ -47,6 +47,9 @@ export const NOOP_APPLY_ERROR =
 export const SMOKE_FAIL_ERROR =
   "重启前试载失败，已按快照收回，未重启进程。";
 
+export const INCOMPLETE_ARTIFACT_ERROR =
+  "制品没有完整完成，禁止进入版本发布中心，防止系统崩溃卡住。须有模块、文件列表、验收、是否重启，且源目录文件齐、改到的 src 能通过语法检查。";
+
 export const RELEASE_CHARTER = {
   dispatcher: DISPATCHER_NAME,
   dispatcherRole: DISPATCHER_ROLE,
@@ -54,8 +57,8 @@ export const RELEASE_CHARTER = {
   gateRole: "唯一发版闸门",
   secondBrain: false,
   execute: ["各板块交来的单据", "本页点通过", "主脑对本闸门的明确口令"],
-  refuse: ["其它对话框帮我上线", "改首页/登录/人员等业务", "多单同时发", "跳过队首点通过"],
-  queue: "入队按提交时间；禁止上移下移；闸门只允许通过第 1 位，点一单发一单；只改页面或测试不重启进程；交单可带 contents 或 ref 写入源目录，闸门不读 Cloud 工作区",
+  refuse: ["其它对话框帮我上线", "改首页/登录/人员等业务", "多单同时发", "跳过队首点通过", "制品未完成进入版本发布中心"],
+  queue: "入队按提交时间；禁止上移下移；闸门只允许通过第 1 位，点一单发一单；只改页面或测试不重启进程；交单可带 contents 或 ref 写入源目录，闸门不读 Cloud 工作区；制品未完成禁止入队",
   version: "全站一条号 0.1.N-说明，由本闸门发放；各模块不得自领；同一 N 全站占用；失败/驳回不占号；成功单可按快照回滚；文件只允许 public/src/test/package.json"
 };
 
