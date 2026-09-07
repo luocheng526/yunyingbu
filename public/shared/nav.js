@@ -1,4 +1,5 @@
 (function () {
+  const ROUTES = ["/", "/data", "/shen", "/han", "/people", "/releases", "/me"];
   const items = [
     { href: "/", label: "首页" },
     { href: "/data", label: "数据中心" },
@@ -19,11 +20,16 @@
 
   const current = window.location.pathname.replace(/\/+$/, "") || "/";
   const currentLabel = (items.find(function (item) {
-    return (item.href.replace(/\/+$/, "") || "/") === current;
+    return normalize(item.href) === current;
   }) || items[0]).label;
+  const warmed = Object.create(null);
+
+  function normalize(href) {
+    return String(href || "/").replace(/\/+$/, "") || "/";
+  }
 
   function isActive(href) {
-    return current === (href.replace(/\/+$/, "") || "/");
+    return current === normalize(href);
   }
 
   function menuHtml() {
@@ -46,6 +52,48 @@
       .join("");
   }
 
+  function prefetch(href) {
+    const key = normalize(href);
+    if (!ROUTES.includes(key) || isActive(key) || warmed[key]) {
+      return;
+    }
+    warmed[key] = true;
+    const link = document.createElement("link");
+    link.rel = "prefetch";
+    link.as = "document";
+    link.href = key;
+    document.head.appendChild(link);
+    fetch(key, {
+      credentials: "same-origin",
+      headers: { Accept: "text/html" }
+    }).catch(function () {
+      /* keep click navigation */
+    });
+  }
+
+  function bindMenu(root) {
+    const scope = root || document;
+    const links = scope.querySelectorAll('.xm-menu a[href], a.xm-logo[href="/"]');
+    Array.prototype.forEach.call(links, function (anchor) {
+      if (anchor.dataset.navFast === "1") {
+        return;
+      }
+      anchor.dataset.navFast = "1";
+      const href = anchor.getAttribute("href");
+      const warm = function () {
+        prefetch(href);
+      };
+      anchor.addEventListener("mouseenter", warm);
+      anchor.addEventListener("mousedown", warm);
+      anchor.addEventListener("touchstart", warm, { passive: true });
+      anchor.addEventListener("click", function (event) {
+        if (isActive(href)) {
+          event.preventDefault();
+        }
+      });
+    });
+  }
+
   function applyCollapsed(collapsed) {
     document.documentElement.classList.toggle("xm-collapsed", collapsed);
     const btn = document.getElementById("xm-collapse");
@@ -57,7 +105,7 @@
 
   function bindChrome(userLabel) {
     const nameEl = document.getElementById("xm-username");
-    if (nameEl) {
+    if (nameEl && userLabel) {
       nameEl.textContent = userLabel;
     }
     const collapseBtn = document.getElementById("xm-collapse");
@@ -91,22 +139,20 @@
     } catch (_err) {
       applyCollapsed(false);
     }
+    bindMenu(document);
   }
 
-  function mountShell(userLabel) {
+  function mountShell() {
     if (document.querySelector(".xm-shell")) {
-      bindChrome(userLabel);
+      document.body.classList.add("xm-app");
+      bindChrome();
       return;
     }
 
+    const existingSider = document.querySelector(".xm-sider");
     const shell = document.createElement("div");
     shell.className = "xm-shell";
     shell.innerHTML =
-      '<aside class="xm-sider" aria-label="侧栏导航">' +
-      '<a class="xm-logo" href="/"><span class="xm-logo-mark">星</span><span class="xm-logo-text">星脉管理系统</span></a>' +
-      '<nav class="xm-menu">' +
-      menuHtml() +
-      "</nav></aside>" +
       '<div class="xm-main">' +
       '<header class="xm-topbar">' +
       '<button type="button" class="xm-collapse" id="xm-collapse" aria-label="折叠侧栏">☰</button>' +
@@ -114,12 +160,24 @@
       currentLabel +
       "</span></div>" +
       '<div class="xm-user">' +
-      '<span class="xm-username" id="xm-username">' +
-      userLabel +
-      "</span>" +
+      '<span class="xm-username" id="xm-username">用户</span>' +
       '<button type="button" class="xm-logout" id="xm-logout">退出</button>' +
       "</div></header>" +
       '<div class="xm-content" id="xm-content"></div></div>';
+
+    if (existingSider) {
+      shell.insertBefore(existingSider, shell.firstChild);
+    } else {
+      const sider = document.createElement("aside");
+      sider.className = "xm-sider";
+      sider.setAttribute("aria-label", "侧栏导航");
+      sider.innerHTML =
+        '<a class="xm-logo" href="/"><span class="xm-logo-mark">星</span><span class="xm-logo-text">星脉管理系统</span></a>' +
+        '<nav class="xm-menu">' +
+        menuHtml() +
+        "</nav>";
+      shell.insertBefore(sider, shell.firstChild);
+    }
 
     const content = shell.querySelector("#xm-content");
     const leftovers = [];
@@ -127,7 +185,10 @@
       if (node === shell) {
         return;
       }
-      if (node.id === "site-nav" || (node.classList && node.classList.contains("xm-sider"))) {
+      if (node.id === "site-nav") {
+        return;
+      }
+      if (node.classList && node.classList.contains("xm-sider")) {
         return;
       }
       if (node.tagName === "SCRIPT") {
@@ -144,18 +205,23 @@
     }
     document.body.insertBefore(shell, document.body.firstChild);
     document.body.classList.add("xm-app");
-    bindChrome(userLabel);
+    bindChrome();
   }
 
-  function start(userLabel) {
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", function () {
-        mountShell(userLabel);
-      });
-    } else {
-      mountShell(userLabel);
+  function paintNow() {
+    if (!document.body) {
+      document.addEventListener("DOMContentLoaded", paintNow);
+      return;
     }
+    mountShell();
+    ROUTES.forEach(function (href) {
+      if (!isActive(href)) {
+        prefetch(href);
+      }
+    });
   }
+
+  paintNow();
 
   fetch("/api/auth/me", { credentials: "same-origin", headers: { Accept: "application/json" } })
     .then(function (res) {
@@ -164,7 +230,6 @@
         return null;
       }
       if (!res.ok) {
-        start("用户");
         return null;
       }
       return res.json();
@@ -173,9 +238,9 @@
       if (!payload) {
         return;
       }
-      start(payload.displayName || payload.username || "用户");
+      bindChrome(payload.displayName || payload.username || "用户");
     })
     .catch(function () {
-      start("用户");
+      /* keep painted shell */
     });
 })();

@@ -52,6 +52,8 @@ test("GET / is the left-nav dashboard with seven menu labels", async () => {
     assert.match(text, /演示/);
     assert.match(text, /kpi-grid/);
     assert.match(text, /xm-sider/);
+    assert.match(text, /class="xm-shell"/);
+    assert.match(text, /rel="prefetch" href="\/data"/);
     for (const label of NAV_LABELS) {
       assert.match(text, new RegExp(label));
     }
@@ -83,6 +85,8 @@ test("home module does not query MySQL (no tables, nav stays static)", () => {
   assert.equal(homeRouterSource.includes("getPool"), false);
   assert.equal(navItemsSource.includes("getPool"), false);
   assert.equal(navJs.includes("MYSQL"), false);
+  assert.match(navJs, /rel = "prefetch"/);
+  assert.match(navJs, /preventDefault/);
   assert.match(schema, /无业务表/);
 });
 

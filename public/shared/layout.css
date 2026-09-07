@@ -115,6 +115,28 @@ html.xm-collapsed .xm-menu-item span {
   background: #f5f7fa;
 }
 
+.xm-menu-item:active {
+  background: #d6e8ff;
+}
+
+body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) {
+  display: flex;
+  min-height: 100vh;
+  background: var(--xm-bg);
+}
+
+body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > #site-nav {
+  display: contents;
+}
+
+body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > main,
+body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .page,
+body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
+  flex: 1;
+  min-width: 0;
+  padding: 16px;
+}
+
 .xm-menu-item.is-active,
 .xm-menu-item[aria-current="page"] {
   background: var(--xm-primary-soft);
