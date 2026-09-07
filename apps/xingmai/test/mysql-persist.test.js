@@ -159,6 +159,11 @@ test("mysql mode hydrates seeds and keeps writes after a second hydrate", async 
   const overview = await (await fetch(`${base}/api/data/overview`, { headers })).json();
   assert.equal(overview.cards[0].value, 128);
 
+  await startMysql({ skipCreateDatabase: true });
+  const stillMe = await fetch(`${base}/api/auth/me`, { headers });
+  assert.equal(stillMe.status, 200);
+  assert.equal((await stillMe.json()).username, "罗成");
+
   resetStoreForTests();
   setDbMode("memory");
 });
