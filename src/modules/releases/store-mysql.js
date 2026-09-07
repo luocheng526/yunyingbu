@@ -1,4 +1,5 @@
 import { getPool } from "../../db/pool.js";
+import { QUEUE_LOG } from "./charter.js";
 import { REVIEWER } from "./store-memory.js";
 
 function toIso(value) {
@@ -184,7 +185,7 @@ export function createMysqlStore({ now, pool } = {}) {
         rejectReason: null,
         publishStartedAt: null,
         publishFinishedAt: null,
-        log: "已进入发版看板排队。主脑在网页点通过才放行；下一条不会自动发。"
+        log: QUEUE_LOG
       };
       await db().query(
         `INSERT INTO release_tickets (

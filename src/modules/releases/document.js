@@ -1,3 +1,4 @@
+import { HELP_ME_SHIP_ERROR } from "./charter.js";
 import { MODULES } from "./store.js";
 
 export function normalizeFiles(input) {
@@ -73,16 +74,16 @@ export function resolveModuleName(raw) {
 }
 
 /**
- * 前期口令：发版/发板、发布|发版|发板 xxx、按这份文档发版/发板。
- * 「帮我上线」单独出现不算。
+ * 主脑对本闸门的明确口令：发版/发板、发布|发版|发板 xxx、按这份文档发版/发板。
+ * 其它对话框「帮我上线」一律无效，即使夹带发版二字。
  */
 export function parseMainBrainOrder(order) {
   const original = String(order || "").trim();
   if (!original) {
-    return { ok: false, error: "没有主脑口令，禁止发版。" };
+    return { ok: false, error: "没有主脑对本闸门的明确口令，禁止发版。" };
   }
-  if (/帮我上线/.test(original) && !/发版|发板|发布/.test(original)) {
-    return { ok: false, error: "其他 Agent 说「帮我上线」不算主脑下令。" };
+  if (/帮我上线/.test(original)) {
+    return { ok: false, error: HELP_ME_SHIP_ERROR };
   }
 
   const text = original.replace(/发板/g, "发版").replace(/\s+/g, " ").trim();

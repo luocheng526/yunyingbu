@@ -62,9 +62,9 @@
       <section class="oc-card">
         <div class="pane on" id="pane-queue">
           <h3>待上线</h3>
-          <p class="hint">各对话框交单后出现在这里；点通过才发版；可调顺序。本页不提供手填表。点「通过」才真正发版（push-xingmai-to-ecs.sh，是否重启看单据）。</p>
+          <p class="hint">各板块交单后出现在这里。罗成作为运营部主脑调度边界和顺序；本页只是唯一发版闸门，不是第二主脑。点「通过」才放行这一单（push-xingmai-to-ecs.sh，是否重启看单据）。本页不提供手填表，也不改首页/登录/人员等业务。</p>
           <div class="caps" id="stat-caps"></div>
-          <div class="note">确认发布后按现有纪律发版：同一时刻一把锁，禁止抢发；未通过禁止发；队列下一条不会自动发布。</div>
+          <div class="note">编制：只执行各板块交来的单据 + 本页「通过」（或主脑对本闸门的明确口令）。其它对话框「帮我上线」无效。一把锁，禁止抢发；按用户调的优先级，点一单发一单，下一条不会自动发布。</div>
           <div id="queue-view" class="tickets"></div>
           <div id="candidates-wrap" hidden>
             <h3 style="margin-top:1.4rem">GitHub 制品</h3>
@@ -84,7 +84,7 @@
         </div>
         <div class="pane" id="pane-worker">
           <h3>Worker 运行</h3>
-          <p class="hint">全局发布锁与当前运行模式。正在发时其他「通过」会禁用。</p>
+          <p class="hint">全局发布锁：同一时刻只发一单。正在发时其他「通过」禁用。本闸门不听其它对话上线请求。</p>
           <div id="lock-view" class="worker-box idle">当前空闲，没有发布任务。</div>
           <p class="hint" id="ready-meta" style="margin-top:0.9rem"></p>
         </div>
@@ -193,7 +193,7 @@
         const el = document.getElementById("lock-view");
         if (!lock.locked) {
           el.className = "worker-box idle";
-          el.textContent = "当前空闲，没有发布任务。mengkai 未持锁。";
+          el.textContent = "当前空闲。罗成调度顺序；本闸门空闲未持锁。点一单才发一单。";
         } else {
           const cur = lock.current || {};
           el.className = "worker-box";
@@ -206,6 +206,9 @@
         if (ready && ready.version) bits.push("版本 " + ready.version);
         if (ready && ready.release_mode) bits.push("模式 " + ready.release_mode);
         bits.push(ready && ready.deployment_ready ? "deployment_ready" : "shadow，禁止自动部署");
+        if (lock && lock.charter && lock.charter.gateRole) {
+          bits.push(lock.charter.dispatcherRole + " " + lock.charter.dispatcher + " · " + lock.charter.gateRole);
+        }
         document.getElementById("ready-meta").textContent = bits.join(" · ");
         const ver = document.getElementById("app-version");
         if (ready && ready.version) {

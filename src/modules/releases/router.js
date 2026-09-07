@@ -1,6 +1,7 @@
 import express from "express";
 import path from "node:path";
 import { requireReleasesAuth } from "./auth.js";
+import { NEED_PASS_ERROR, withCharter } from "./charter.js";
 import { hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
 import { pushXingmaiToEcs } from "./push.js";
 import { restartMengkaiService } from "./restart.js";
@@ -133,15 +134,15 @@ export function createReleasesRouter(options = {}) {
   }
 
   router.get("/", async (_req, res) => {
-    res.json({ ok: true, items: await store.list() });
+    res.json(withCharter({ ok: true, items: await store.list() }));
   });
 
   router.get("/queue", async (_req, res) => {
-    res.json({ ok: true, items: await store.queue() });
+    res.json(withCharter({ ok: true, items: await store.queue() }));
   });
 
   router.get("/lock", async (_req, res) => {
-    res.json({ ok: true, ...(await store.getLock()) });
+    res.json(withCharter({ ok: true, ...(await store.getLock()) }));
   });
 
   router.post("/go", (req, res) => {
@@ -152,7 +153,7 @@ export function createReleasesRouter(options = {}) {
     }
     res.status(409).json({
       ok: false,
-      error: "未通过禁止发。请各对话 POST /api/releases 交单，主脑在看板点通过。"
+      error: NEED_PASS_ERROR
     });
   });
 
@@ -226,7 +227,7 @@ export function createReleasesRouter(options = {}) {
   });
 
   router.post("/:id/publish", (_req, res) => {
-    res.status(409).json({ ok: false, error: "未通过禁止发。请在看板点通过。" });
+    res.status(409).json({ ok: false, error: NEED_PASS_ERROR });
   });
 
   return router;

@@ -1,3 +1,6 @@
+import { QUEUE_LOG } from "./charter.js";
+import { readJsonFile, writeJsonFile } from "./persist-json.js";
+
 export const REVIEWER = "运营部主脑";
 
 export const MODULES = [
@@ -26,8 +29,6 @@ function sortQueued(a, b) {
   }
   return String(a.id).localeCompare(String(b.id));
 }
-
-import { readJsonFile, writeJsonFile } from "./persist-json.js";
 
 export function createMemoryStore({ now, persistPath } = {}) {
   const timestamp = () => (now ? now() : new Date().toISOString());
@@ -213,7 +214,7 @@ export function createMemoryStore({ now, persistPath } = {}) {
         rejectReason: null,
         publishStartedAt: null,
         publishFinishedAt: null,
-        log: "已进入发版看板排队。主脑在网页点通过才放行；下一条不会自动发。"
+        log: QUEUE_LOG
       };
       items.push(item);
       persist();

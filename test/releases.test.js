@@ -96,9 +96,10 @@ test("GET /releases is the release center page", async () => {
     assert.equal(res.status, 200);
     assert.match(text, /运营中心/);
     assert.match(text, /OPERATING CENTER/);
-    assert.match(text, /各对话框交单后出现在这里/);
+    assert.match(text, /各板块交单后出现在这里/);
     assert.match(text, /id="refresh-btn"/);
-    assert.match(text, /点「通过」才真正发版/);
+    assert.match(text, /唯一发版闸门/);
+    assert.match(text, /点「通过」才放行/);
     assert.match(text, /href="\/releases.css"/);
     assert.doesNotMatch(text, /href="\/shared\/layout.css"/);
     assert.doesNotMatch(text, /src="\/shared\/nav.js"/);
@@ -124,7 +125,10 @@ test("releases.html has no login form and sends users to /login", () => {
   assert.doesNotMatch(html, /id="apply-form"/);
   assert.doesNotMatch(html, /提交发布申请/);
   assert.match(html, /id="refresh-btn"/);
-  assert.match(html, /点「通过」才真正发版/);
+  assert.match(html, /唯一发版闸门/);
+  assert.match(html, /点「通过」才放行/);
+  assert.match(html, /帮我上线/);
+  assert.doesNotMatch(html, /shared\/layout\.css/);
   assert.match(html, /\/api\/releases\/.*confirm/);
 });
 
@@ -183,6 +187,19 @@ test("unauthenticated APIs return 401 JSON", async () => {
   });
 });
 
+test("queue and lock expose charter: gate is not a second 主脑", async () => {
+  await withServer(async (base) => {
+    const queue = await json(base, "/api/releases/queue");
+    assert.equal(queue.body.charter.dispatcher, "罗成");
+    assert.equal(queue.body.charter.dispatcherRole, "运营部主脑");
+    assert.equal(queue.body.charter.gateRole, "唯一发版闸门");
+    assert.equal(queue.body.charter.secondBrain, false);
+    assert.equal(queue.body.charter.queue.includes("点一单发一单"), true);
+    const lock = await json(base, "/api/releases/lock");
+    assert.equal(lock.body.charter.gate, "版本发布中心");
+  });
+});
+
 test("submit three applications; queue is FIFO by time", async () => {
   let n = 0;
   await withServer(
@@ -230,7 +247,9 @@ test("主脑口令 aliases", () => {
   assert.equal(parseMainBrainOrder("发布 首页").module, "首页");
   assert.equal(parseMainBrainOrder("发版首页").module, "首页");
   assert.equal(parseMainBrainOrder("帮我上线").ok, false);
-  assert.match(parseMainBrainOrder("帮我上线").error, /不算/);
+  assert.match(parseMainBrainOrder("帮我上线").error, /帮我上线/);
+  assert.equal(parseMainBrainOrder("帮我上线，发版 首页").ok, false);
+  assert.match(parseMainBrainOrder("帮我上线，发版 首页").error, /无效/);
 });
 
 test("queued publish without 通过 is 409 未通过禁止发", async () => {
@@ -529,7 +548,7 @@ test("帮我上线 is not a publish order", async () => {
         body: JSON.stringify({ order: "帮我上线" })
       });
       assert.equal(pub.res.status, 409);
-      assert.match(pub.body.error, /不算/);
+      assert.match(pub.body.error, /帮我上线/);
       assert.equal(pushes, 0);
     }
   );
