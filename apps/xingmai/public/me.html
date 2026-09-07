@@ -67,9 +67,20 @@
           try { data = await res.json(); } catch (_e) { data = {}; }
           return { res: res, data: data };
         }
-        api("/api/auth/me").then(function (result) {
-          if (result.res && result.res.ok) fill(result.data);
-        });
+        try {
+          var cached = sessionStorage.getItem("xm-me");
+          if (cached) fill(JSON.parse(cached));
+        } catch (_e) {}
+        var now = Date.now();
+        if (!window.__xmMeAt || now - window.__xmMeAt > 30000) {
+          window.__xmMeAt = now;
+          api("/api/auth/me").then(function (result) {
+            if (result.res && result.res.ok) {
+              fill(result.data);
+              try { sessionStorage.setItem("xm-me", JSON.stringify(result.data)); } catch (_e2) {}
+            }
+          });
+        }
         document.getElementById("profile-form").addEventListener("submit", async function (event) {
           event.preventDefault();
           var result = await api("/api/profile", {

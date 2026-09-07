@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import * as profileShell from "../profile/middleware.js";
 import { NAV_ITEMS } from "./nav-items.js";
 
-// xm-full-lag-fix 0.1.40  必须和 profile/middleware.js 成套发。
+// xm-lag-risks 0.1.41  必须和 profile/middleware.js 成套发。
 
 function renderExistingPage(filePath) {
   if (typeof profileShell.readThemedHtml === "function") {
@@ -15,6 +15,7 @@ function renderExistingPage(filePath) {
 
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public");
 const pageFiles = new Map();
+const placeholderPages = new Map();
 for (const item of NAV_ITEMS) {
   const filePath = path.join(publicDir, item.file);
   pageFiles.set(item.href, fs.existsSync(filePath) ? filePath : "");
@@ -53,6 +54,12 @@ function placeholderHtml(label) {
 `;
 }
 
+for (const item of NAV_ITEMS) {
+  if (!pageFiles.get(item.href)) {
+    placeholderPages.set(item.href, profileShell.withSharedShell(placeholderHtml(item.label)));
+  }
+}
+
 export function registerPageRoutes(app) {
   for (const item of NAV_ITEMS) {
     app.get(item.href, (_req, res) => {
@@ -61,11 +68,12 @@ export function registerPageRoutes(app) {
         res.status(200).type("html").set("Cache-Control", "private, no-store").send(renderExistingPage(filePath));
         return;
       }
-      res
-        .status(200)
-        .type("html")
-        .set("Cache-Control", "private, no-store")
-        .send(profileShell.withSharedShell(placeholderHtml(item.label)));
+      let ready = placeholderPages.get(item.href);
+      if (!ready) {
+        ready = profileShell.withSharedShell(placeholderHtml(item.label));
+        placeholderPages.set(item.href, ready);
+      }
+      res.status(200).type("html").set("Cache-Control", "private, no-store").send(ready);
     });
   }
 }
