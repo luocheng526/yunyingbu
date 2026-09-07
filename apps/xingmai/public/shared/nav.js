@@ -16,8 +16,12 @@
   if (document.body && document.body.classList.contains("login-page")) {
     return;
   }
-  if (document.querySelector(".oc-tab, .oc-crumb, #pane-queue")) {
-    return;
+
+  if (!document.querySelector('link[href="/shared/layout.css"]')) {
+    const css = document.createElement("link");
+    css.rel = "stylesheet";
+    css.href = "/shared/layout.css";
+    document.head.appendChild(css);
   }
 
   const current = window.location.pathname.replace(/\/+$/, "") || "/";
@@ -53,15 +57,6 @@
       .join("");
   }
 
-  function applyCollapsed(collapsed) {
-    document.documentElement.classList.toggle("xm-collapsed", collapsed);
-    const btn = document.getElementById("xm-collapse");
-    if (btn) {
-      btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
-      btn.setAttribute("aria-label", collapsed ? "展开侧栏" : "折叠侧栏");
-    }
-  }
-
   function prefetch(href) {
     if (!href || href === current) {
       return;
@@ -75,23 +70,31 @@
     document.head.appendChild(link);
   }
 
+  function stripInnerChrome(root) {
+    if (!root) {
+      return;
+    }
+    root
+      .querySelectorAll(
+        ".site-header, .site-sidebar, aside.sidebar, aside.site-sidebar, #site-nav, .ant-layout-sider, .ant-pro-sider, .oc-top"
+      )
+      .forEach(function (el) {
+        el.remove();
+      });
+    root.querySelectorAll(".app-shell").forEach(function (shell) {
+      const parent = shell.parentNode;
+      while (shell.firstChild) {
+        parent.insertBefore(shell.firstChild, shell);
+      }
+      shell.remove();
+    });
+  }
+
   function bindChrome(userLabel) {
+    document.documentElement.classList.remove("xm-collapsed");
     const nameEl = document.getElementById("xm-username");
     if (nameEl) {
       nameEl.textContent = userLabel;
-    }
-    const collapseBtn = document.getElementById("xm-collapse");
-    if (collapseBtn && !collapseBtn.dataset.bound) {
-      collapseBtn.dataset.bound = "1";
-      collapseBtn.addEventListener("click", function () {
-        const next = !document.documentElement.classList.contains("xm-collapsed");
-        try {
-          localStorage.setItem("xm-sider-collapsed", next ? "1" : "0");
-        } catch (_err) {
-          /* ignore */
-        }
-        applyCollapsed(next);
-      });
     }
     const logoutBtn = document.getElementById("xm-logout");
     if (logoutBtn && !logoutBtn.dataset.bound) {
@@ -116,15 +119,11 @@
         }
       });
     });
-    try {
-      applyCollapsed(localStorage.getItem("xm-sider-collapsed") === "1");
-    } catch (_err) {
-      applyCollapsed(false);
-    }
   }
 
   function mountShell(userLabel) {
     if (document.querySelector(".xm-shell")) {
+      stripInnerChrome(document.querySelector(".xm-content") || document.body);
       bindChrome(userLabel);
       return;
     }
@@ -139,7 +138,6 @@
       "</nav></aside>" +
       '<div class="xm-main">' +
       '<header class="xm-topbar">' +
-      '<button type="button" class="xm-collapse" id="xm-collapse" aria-label="折叠侧栏">☰</button>' +
       '<div class="xm-tabs" aria-label="页签"><span class="xm-tab is-active">' +
       currentLabel +
       "</span></div>" +
@@ -157,7 +155,7 @@
       if (node === shell) {
         return;
       }
-      if (node.id === "site-nav" || (node.classList && (node.classList.contains("xm-sider") || node.classList.contains("sidebar")))) {
+      if (node.id === "site-nav" || (node.classList && (node.classList.contains("xm-sider") || node.classList.contains("sidebar") || node.classList.contains("site-sidebar")))) {
         return;
       }
       if (node.tagName === "SCRIPT") {
@@ -172,9 +170,7 @@
     if (mount) {
       mount.remove();
     }
-    content.querySelectorAll(".site-header, aside.sidebar, .ant-layout-sider, .ant-pro-sider").forEach(function (el) {
-      el.remove();
-    });
+    stripInnerChrome(content);
     document.body.insertBefore(shell, document.body.firstChild);
     document.body.classList.add("xm-app");
     bindChrome(userLabel);

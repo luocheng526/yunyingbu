@@ -13,6 +13,21 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
+export function withSharedShell(html) {
+  const text = String(html || "");
+  if (/class=["']login-page["']/.test(text) || /href=["']\/login\.css["']/.test(text)) {
+    return text;
+  }
+  let out = text;
+  if (!out.includes("/shared/layout.css") && out.includes("</head>")) {
+    out = out.replace("</head>", '    <link rel="stylesheet" href="/shared/layout.css" />\n  </head>');
+  }
+  if (!out.includes("/shared/nav.js") && out.includes("</body>")) {
+    out = out.replace("</body>", '    <script src="/shared/nav.js"></script>\n  </body>');
+  }
+  return out;
+}
+
 function placeholderHtml(label) {
   const title = escapeHtml(label);
   return `<!DOCTYPE html>
@@ -26,7 +41,7 @@ function placeholderHtml(label) {
   <body>
     <div id="site-nav" hidden></div>
     <main class="page">
-      <p class="kicker">运营部</p>
+      <p class="kicker">星脉</p>
       <h1>${title}</h1>
       <p class="lead">该模块 Agent 尚未交付</p>
     </main>
@@ -41,7 +56,8 @@ export function registerPageRoutes(app) {
     app.get(item.href, (_req, res) => {
       const filePath = path.join(publicDir, item.file);
       if (fs.existsSync(filePath)) {
-        res.sendFile(filePath);
+        const html = withSharedShell(fs.readFileSync(filePath, "utf8"));
+        res.status(200).type("html").send(html);
         return;
       }
       res

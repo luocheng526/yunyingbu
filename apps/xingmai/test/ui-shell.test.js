@@ -19,8 +19,12 @@ test("shared shell assets are public", async () => {
   assert.equal(css.status, 200);
   assert.equal(js.status, 200);
   assert.equal(loginCss.status, 200);
-  assert.match(await css.text(), /cursor-light-2/);
-  assert.match(await js.text(), /xm-shell/);
+  const cssText = await css.text();
+  const jsText = await js.text();
+  assert.match(cssText, /cursor-light-3/);
+  assert.match(jsText, /xm-shell/);
+  assert.doesNotMatch(jsText, /xm-sider-collapsed/);
+  assert.doesNotMatch(jsText, /oc-tab, \.oc-crumb/);
 });
 
 test("login page uses official https url and cursor light tokens", async () => {
@@ -48,4 +52,13 @@ test("placeholder modules share the same shell assets", async () => {
   assert.match(html, /\/shared\/layout\.css/);
   assert.match(html, /\/shared\/nav\.js/);
   assert.doesNotMatch(html, /site-header/);
+});
+
+test("page renderer injects shared shell onto module html", async () => {
+  const { withSharedShell } = await import("../src/modules/home/pages.js");
+  const injected = withSharedShell("<html><head></head><body><main>x</main></body></html>");
+  assert.match(injected, /\/shared\/layout\.css/);
+  assert.match(injected, /\/shared\/nav\.js/);
+  const login = withSharedShell('<html><body class="login-page"></body></html>');
+  assert.doesNotMatch(login, /\/shared\/nav\.js/);
 });
