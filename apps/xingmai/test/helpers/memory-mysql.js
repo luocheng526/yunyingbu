@@ -132,6 +132,18 @@ export function createMemoryPool() {
     if (s === "SELECT id, text, created_at FROM notes ORDER BY id ASC") {
       return [tables.notes.map(clone), undefined];
     }
+    if (s.startsWith("DELETE FROM han_tasks WHERE title")) {
+      const title = params[0];
+      const before = tables.han_tasks.length;
+      tables.han_tasks = tables.han_tasks.filter((row) => row.title !== title);
+      return [{ affectedRows: before - tables.han_tasks.length }, undefined];
+    }
+    if (s.startsWith("DELETE FROM notes WHERE text")) {
+      const text = params[0];
+      const before = tables.notes.length;
+      tables.notes = tables.notes.filter((row) => row.text !== text);
+      return [{ affectedRows: before - tables.notes.length }, undefined];
+    }
     if (s.startsWith("INSERT INTO notes")) {
       const [text, created_at] = params;
       const id = nextId("notes");
