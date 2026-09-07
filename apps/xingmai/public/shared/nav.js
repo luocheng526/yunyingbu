@@ -1,4 +1,4 @@
-/* xm-shell-perf 0.1.42-nosider */
+/* xm-shell-perf 0.1.42 */
 (function () {
   const items = [
     { href: "/", label: "首页" },
@@ -159,7 +159,7 @@
   if (!document.querySelector('link[href*="/shared/layout.css"]')) {
     const css = document.createElement("link");
     css.rel = "stylesheet";
-    css.href = "/shared/layout.css?v=0.1.42-nosider";
+    css.href = "/shared/layout.css?v=0.1.42";
     document.head.appendChild(css);
   }
 
@@ -172,8 +172,46 @@
     ).label;
   }
 
+  function isActive(href) {
+    return current === (href.replace(/\/+$/, "") || "/");
+  }
+
+  function menuHtml() {
+    return items
+      .map(function (item) {
+        const cls = "xm-menu-item" + (isActive(item.href) ? " is-active" : "");
+        const cur = isActive(item.href) ? ' aria-current="page"' : "";
+        const extra = isActive(item.href) ? ' data-self="1"' : "";
+        return (
+          '<a class="' +
+          cls +
+          '" href="' +
+          item.href +
+          '"' +
+          cur +
+          extra +
+          "><span>" +
+          item.label +
+          "</span></a>"
+        );
+      })
+      .join("");
+  }
+
   function highlight(nextPath) {
     current = nextPath.replace(/\/+$/, "") || "/";
+    document.querySelectorAll(".xm-menu-item").forEach(function (a) {
+      const href = a.getAttribute("href") || "";
+      const on = isActive(href);
+      a.classList.toggle("is-active", on);
+      if (on) {
+        a.setAttribute("aria-current", "page");
+        a.setAttribute("data-self", "1");
+      } else {
+        a.removeAttribute("aria-current");
+        a.removeAttribute("data-self");
+      }
+    });
     const tab = document.querySelector(".xm-tab");
     if (tab) {
       tab.textContent = pageLabel(current);
@@ -187,7 +225,7 @@
     }
     root
       .querySelectorAll(
-        ".site-header, .site-sidebar, aside.sidebar, aside.site-sidebar, aside.xm-sider, .xm-sider, .xm-menu, #site-nav, .ant-layout-sider, .ant-pro-sider, .oc-top"
+        ".site-header, .site-sidebar, aside.sidebar, aside.site-sidebar, #site-nav, .ant-layout-sider, .ant-pro-sider, .oc-top"
       )
       .forEach(function (el) {
         el.remove();
@@ -545,9 +583,13 @@
     const shell = document.createElement("div");
     shell.className = "xm-shell";
     shell.innerHTML =
+      '<aside class="xm-sider" aria-label="侧栏导航">' +
+      '<a class="xm-logo" href="/"><span class="xm-logo-mark">星</span><span class="xm-logo-text">星脉</span></a>' +
+      '<nav class="xm-menu">' +
+      menuHtml() +
+      "</nav></aside>" +
       '<div class="xm-main">' +
       '<header class="xm-topbar">' +
-      '<a class="xm-brand" href="/"><span class="xm-logo-mark">星</span><span class="xm-logo-text">星脉</span></a>' +
       '<div class="xm-tabs" aria-label="页签"><span class="xm-tab is-active">' +
       pageLabel(current) +
       "</span></div>" +

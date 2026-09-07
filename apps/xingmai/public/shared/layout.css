@@ -76,27 +76,41 @@ body:has(.xm-shell) {
 
 .xm-shell {
   display: flex;
-  flex-direction: column;
   min-height: 100vh;
   background: var(--xm-bg);
 }
 
-.xm-sider,
-.xm-menu,
-aside.sidebar,
-aside.site-sidebar {
-  display: none !important;
+.xm-sider {
+  width: var(--xm-sider-w);
+  flex: 0 0 var(--xm-sider-w);
+  background: var(--xm-sider);
+  border-right: 1px solid var(--xm-line);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: auto;
 }
 
-.xm-brand,
+html.xm-collapsed .xm-sider {
+  width: var(--xm-sider-w);
+  flex-basis: var(--xm-sider-w);
+}
+
+html.xm-collapsed .xm-logo-text,
+html.xm-collapsed .xm-menu-item span {
+  display: inline;
+}
+
 .xm-logo {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0;
+  gap: 10px;
+  padding: 16px 14px 14px;
   text-decoration: none;
   color: var(--xm-ink);
-  flex: 0 0 auto;
+  border-bottom: 1px solid var(--xm-line);
 }
 
 .xm-logo-mark {
@@ -118,6 +132,37 @@ aside.site-sidebar {
   font-size: 14px;
   letter-spacing: -0.02em;
   white-space: nowrap;
+}
+
+.xm-menu {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 8px;
+  gap: 2px;
+}
+
+.xm-menu-item {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: var(--xm-menu);
+  text-decoration: none;
+  font-size: 13.5px;
+  line-height: 1.35;
+}
+
+.xm-menu-item:hover {
+  background: var(--xm-hover);
+}
+
+.xm-menu-item.is-active,
+.xm-menu-item[aria-current="page"] {
+  background: var(--xm-primary-soft);
+  color: var(--xm-ink);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--xm-ink);
 }
 
 .xm-main {
