@@ -75,6 +75,8 @@
       <div class="oc-run">
         <span class="pill run">运行</span>
         <span class="ver" id="app-version">读取版本中</span>
+        <span class="oc-clock" id="clock">—</span>
+        <span class="oc-who">超管 / <b id="who">—</b></span>
         <button type="button" class="act" id="refresh-btn">刷新</button>
       </div>
     </section>
@@ -140,7 +142,17 @@
       const UPGRADE_PENDING_KEY = "oc-after-upgrade";
       let knownQueueIds = null;
 
+      function setText(idOrEl, text) {
+        const el = typeof idOrEl === "string" ? document.getElementById(idOrEl) : idOrEl;
+        if (!el) {
+          return;
+        }
+        el.textContent = text;
+      }
       function flash(message, isError) {
+        if (!flashEl) {
+          return;
+        }
         flashEl.textContent = message;
         flashEl.className = "flash show" + (isError ? " err" : "");
       }
@@ -213,6 +225,9 @@
       }
 
       function renderUpgradeSteps(keys, active, terminal) {
+        if (!upgradeSteps || !upgradeBar) {
+          return;
+        }
         upgradeSteps.innerHTML = keys.map(function (key) {
           let cls = "";
           const idx = keys.indexOf(key);
@@ -229,14 +244,20 @@
       }
 
       function showUpgrade(keys, active) {
-        upgradeMask.classList.add("show");
-        upgradeLog.hidden = true;
-        upgradeLog.textContent = "";
+        if (upgradeMask) {
+          upgradeMask.classList.add("show");
+        }
+        if (upgradeLog) {
+          upgradeLog.hidden = true;
+          upgradeLog.textContent = "";
+        }
         renderUpgradeSteps(keys, active, "");
       }
 
       function hideUpgrade() {
-        upgradeMask.classList.remove("show");
+        if (upgradeMask) {
+          upgradeMask.classList.remove("show");
+        }
       }
 
       function readPendingUpgrade() {
@@ -290,8 +311,10 @@
         while (Date.now() < deadline) {
           if (confirmErr && confirmErr.status && confirmErr.status !== 502 && confirmErr.status !== 503 && confirmErr.status < 500) {
             renderUpgradeSteps(keys, "done", "bad");
-            upgradeLog.hidden = false;
-            upgradeLog.textContent = confirmErr.message || "通过失败";
+            if (upgradeLog) {
+              upgradeLog.hidden = false;
+              upgradeLog.textContent = confirmErr.message || "通过失败";
+            }
             await sleep(400);
             hideUpgrade();
             flash((confirmErr.status || "") + " " + confirmErr.message, true);
@@ -304,8 +327,10 @@
           }
           if (ticket && ticket.status === "failed") {
             renderUpgradeSteps(keys, "done", "bad");
-            upgradeLog.hidden = false;
-            upgradeLog.textContent = ticket.log || "发版失败";
+            if (upgradeLog) {
+              upgradeLog.hidden = false;
+              upgradeLog.textContent = ticket.log || "发版失败";
+            }
             await sleep(500);
             hideUpgrade();
             flash(ticket.log || "发版失败", true);
@@ -334,8 +359,10 @@
           await sleep(1500);
         }
         renderUpgradeSteps(keys, "done", "bad");
-        upgradeLog.hidden = false;
-        upgradeLog.textContent = ((ticket && ticket.log) ? ticket.log + "\n" : "") + "健康检查超时：" + lastHealth;
+        if (upgradeLog) {
+          upgradeLog.hidden = false;
+          upgradeLog.textContent = ((ticket && ticket.log) ? ticket.log + "\n" : "") + "健康检查超时：" + lastHealth;
+        }
         hideUpgrade();
         flash("升级未完成：" + lastHealth, true);
       }
@@ -343,18 +370,24 @@
       function tickClock() {
         const now = new Date();
         const pad = function (n) { return String(n).padStart(2, "0"); };
-        document.getElementById("clock").textContent =
+        setText(
+          "clock",
           now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate()) +
-          " " + pad(now.getHours()) + ":" + pad(now.getMinutes()) + ":" + pad(now.getSeconds());
+          " " + pad(now.getHours()) + ":" + pad(now.getMinutes()) + ":" + pad(now.getSeconds())
+        );
       }
 
       function renderStats(items) {
+        const caps = document.getElementById("stat-caps");
+        if (!caps) {
+          return;
+        }
         const queued = countBy(items, "queued");
         const approved = countBy(items, "approved");
         const publishing = countBy(items, "publishing");
         const failed = countBy(items, "failed");
         const success = countBy(items, "success");
-        document.getElementById("stat-caps").innerHTML =
+        caps.innerHTML =
           '<span class="cap wait"><b>' + queued + "</b>待主脑</span>" +
           '<span class="cap ok"><b>' + approved + "</b>已同意</span>" +
           '<span class="cap busy"><b>' + publishing + "</b>发布中</span>" +
@@ -364,6 +397,9 @@
 
       function renderLock(lock, ready) {
         const el = document.getElementById("lock-view");
+        if (!el) {
+          return;
+        }
         if (!lock.locked) {
           el.className = "lock-box idle";
           el.textContent = "当前空闲。一把锁，点一单才发一单。";
@@ -375,16 +411,18 @@
             "<div>版本号：" + esc(cur.version || "—") + "</div>" +
             "<div>开始时间：" + esc(fmt(cur.startedAt)) + "</div>";
         }
-        const ver = document.getElementById("app-version");
         if (ready && ready.version) {
-          ver.textContent = "mengkai " + ready.version + (ready.release_mode ? " · " + ready.release_mode : "");
+          setText("app-version", "mengkai " + ready.version + (ready.release_mode ? " · " + ready.release_mode : ""));
         } else {
-          ver.textContent = "环境未返回版本号";
+          setText("app-version", "环境未返回版本号");
         }
       }
 
       function renderCurrentVersions(versions) {
         const el = document.getElementById("current-versions");
+        if (!el) {
+          return;
+        }
         const current = (versions && versions.current) || [];
         const next = versions && versions.next ? versions.next : null;
         const nextCap = next
@@ -398,6 +436,9 @@
 
       function renderQueue(items, locked, versions) {
         const el = document.getElementById("queue-view");
+        if (!el) {
+          return;
+        }
         if (!items.length) {
           const current = ((versions && versions.current) || []).map(function (row) {
             return esc(row.module) + " " + esc(row.version);
@@ -447,6 +488,9 @@
 
       function renderHistory(items, locked) {
         const el = document.getElementById("history-view");
+        if (!el) {
+          return;
+        }
         const success = items.filter(function (item) { return item.status === "success"; }).slice().sort(newestFirst);
         if (!success.length) {
           el.innerHTML = '<div class="empty">还没有成功发布的版本记录</div>';
@@ -475,6 +519,9 @@
 
       function renderLogs(items) {
         const el = document.getElementById("logs-view");
+        if (!el) {
+          return;
+        }
         const rows = items.filter(function (item) { return item.log; }).slice().sort(newestFirst);
         if (!rows.length) {
           el.innerHTML = '<div class="empty">暂无发版流水</div>';
@@ -501,7 +548,7 @@
           api("/api/auth/me")
         ]);
         const items = all.items || [];
-        document.getElementById("who").textContent = me.displayName || me.username || "罗成";
+        setText("who", me.displayName || me.username || "罗成");
         renderStats(items);
         renderLock(lock, ready);
         renderCurrentVersions(versions);
@@ -514,7 +561,7 @@
       }
 
       async function watchIncoming() {
-        if (upgradeMask.classList.contains("show")) {
+        if (upgradeMask && upgradeMask.classList.contains("show")) {
           return;
         }
         try {
@@ -551,7 +598,7 @@
           document.querySelectorAll(".pane").forEach(function (pane) {
             pane.classList.toggle("on", pane.id === "pane-" + name);
           });
-          crumb.textContent = tabTitles[name] || "版本发布中心";
+          setText(crumb, tabTitles[name] || "版本发布中心");
         });
       });
 
@@ -603,7 +650,8 @@
         }
       });
 
-      document.getElementById("refresh-btn").addEventListener("click", async function () {
+      const refreshBtn = document.getElementById("refresh-btn");
+      if (refreshBtn) refreshBtn.addEventListener("click", async function () {
         try {
           await refresh();
           flash("已刷新队列。");

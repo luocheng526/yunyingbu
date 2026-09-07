@@ -128,6 +128,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /统一发放/);
     assert.match(text, /0\.1\.N/);
     assert.match(text, /闸门下一号/);
+    assert.match(text, /function setText/);
+    assert.match(text, /if \(!el\)/);
     assert.doesNotMatch(text, /data-act="up"/);
     assert.doesNotMatch(text, />上移</);
     assert.doesNotMatch(text, />下移</);
