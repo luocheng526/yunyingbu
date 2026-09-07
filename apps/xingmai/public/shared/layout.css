@@ -598,8 +598,27 @@ body.xm-app #site-nav,
 }
 
 .xm-content .pill,
-.xm-content .cap {
+.xm-content .cap,
+.xm-content .cap.wait,
+.xm-content .cap.ok,
+.xm-content .cap.busy,
+.xm-content .cap.fail,
+.xm-content .cap.done {
   background: var(--xm-primary-soft);
   color: var(--xm-ink);
   border-radius: 999px;
+}
+
+.xm-content .note,
+.xm-content .lock-box,
+.xm-content .lock-box.idle {
+  background: var(--xm-primary-soft) !important;
+  color: var(--xm-ink) !important;
+  border: 1px solid var(--xm-line);
+  border-radius: var(--xm-radius);
+}
+
+.xm-content .log-item {
+  background: #f7f7f4;
+  border-left-color: var(--xm-ink);
 }

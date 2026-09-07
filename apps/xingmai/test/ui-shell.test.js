@@ -65,7 +65,15 @@ test("placeholder modules share the same shell assets", async () => {
   assert.match(releasesHtml, /\/shared\/nav\.js/);
   assert.match(releasesHtml, /timeZone: "Asia\/Shanghai"/);
   assert.match(releasesHtml, /function formatChinaTime/);
+  assert.match(releasesHtml, /xm-china-time 0\.1\.27/);
   assert.doesNotMatch(releasesHtml, /replace\("Z", " UTC"\)/);
+  const ocCss = await fetch(`${base}/releases.css`, { headers: { cookie } });
+  assert.equal(ocCss.status, 200);
+  const ocText = await ocCss.text();
+  assert.match(ocText, /xm-shell-skin 0\.1\.27/);
+  assert.match(ocText, /--xm-bg/);
+  assert.doesNotMatch(ocText, /#1677ff/);
+  assert.doesNotMatch(ocText, /#eef2f6/);
 });
 
 test("page renderer injects shared shell onto module html", async () => {

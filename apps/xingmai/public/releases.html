@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>版本发布中心</title>
-    <!-- xm-china-time 0.1.25 -->
+    <!-- xm-china-time 0.1.27 -->
     <link rel="stylesheet" href="/releases.css?v=page" />
     <style>
       #upgrade-mask {
@@ -12,7 +12,7 @@
         position: fixed;
         inset: 0;
         z-index: 80;
-        background: rgba(15, 23, 42, 0.62);
+        background: rgba(20, 18, 11, 0.45);
         align-items: center;
         justify-content: center;
         padding: 1.25rem;
@@ -21,20 +21,20 @@
       .upgrade-card {
         width: min(36rem, 100%);
         background: #fff;
-        color: #111827;
-        border-radius: 20px;
+        color: #14120b;
+        border-radius: 10px;
         padding: 1.4rem 1.5rem 1.3rem;
         box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
       }
       .upgrade-card h2 { margin: 0 0 0.85rem; font-size: 1.2rem; }
       .upgrade-card ol { margin: 0 0 1rem; padding-left: 1.2rem; }
-      .upgrade-card li { margin: 0.35rem 0; color: #6b7280; }
-      .upgrade-card li.on { color: #1677ff; font-weight: 650; }
+      .upgrade-card li { margin: 0.35rem 0; color: #6f6e69; }
+      .upgrade-card li.on { color: #14120b; font-weight: 650; }
       .upgrade-card li.ok { color: #15803d; }
       .upgrade-card li.bad { color: #be123c; }
       .upgrade-bar {
         height: 0.45rem;
-        background: #e5e7eb;
+        background: #eceae3;
         border-radius: 999px;
         overflow: hidden;
       }
@@ -42,7 +42,7 @@
         display: block;
         height: 100%;
         width: 8%;
-        background: #1677ff;
+        background: #14120b;
         border-radius: 999px;
         transition: width 0.25s ease;
       }
@@ -105,7 +105,7 @@
           <h3>待上线</h3>
           <p class="hint">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。版本号由本闸门统一发放，全站一条号 0.1.N-说明，各模块不得自领；同一号段不能跨模块再用。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。整页刷新并读完新数据后才关升级遮罩。有新单据约 15 秒内自动提示，不会自动点通过。待上线、版本记录、运行日志都分页，每页 20 条。</p>
           <div class="caps" id="stat-caps"></div>
-          <div class="note">发布纪律：本页是唯一发版闸门。只执行交来的单据 + 本页「通过」。必须按提交时间点第 1 位；一把锁，禁止抢发；下一条不会自动发布。其它对话框「帮我上线」无效。</div>
+          <div class="note">发布纪律：本页是唯一发版闸门。只执行交来的单据 + 本页「通过」。按提交时间点第 1 位；一把锁，禁止抢发；下一条不会自动发。「帮我上线」无效。新文件只放源目录，不要先拷到线上；点通过才落地。源目录与线上相同会失败。</div>
           <div id="lock-view" class="lock-box idle">当前空闲，没有发布任务。</div>
           <div id="queue-view" class="tickets"></div>
         </div>
