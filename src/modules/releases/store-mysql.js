@@ -1,5 +1,6 @@
 import { getPool } from "../../db/pool.js";
 import { QUEUE_LOG } from "./charter.js";
+import { assignStablePriorities } from "./order.js";
 import { REVIEWER } from "./store-memory.js";
 
 function toIso(value) {
@@ -215,6 +216,14 @@ export function createMysqlStore({ now, pool } = {}) {
           item.log
         ]
       );
+      const queued = assignStablePriorities(await queuedRows());
+      for (const row of queued) {
+        await persist(row);
+      }
+      const ranked = queued.find((row) => row.id === item.id);
+      if (ranked) {
+        item.priority = ranked.priority;
+      }
       return item;
     },
     async reject(id, reason) {

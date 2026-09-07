@@ -118,7 +118,7 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /自动提示/);
     assert.match(text, /不会自动通过/);
     assert.match(text, /watchIncoming/);
-    assert.match(text, /各板块交单后出现在这里/);
+    assert.match(text, /稳定顺序/);
     assert.match(text, /id="refresh-btn"/);
     assert.match(text, /唯一发版闸门/);
     assert.match(text, /只允许「通过」第 1 位/);
@@ -288,7 +288,48 @@ test("invalid or duplicate version is rejected", async () => {
   });
 });
 
-test("submit three applications; queue is FIFO by time", async () => {
+test("queue inserts by stability: login and shell before features before gate page", async () => {
+  await withServer(async (base) => {
+    const gate = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("q-gate", "Gate", "版本发布中心", "后到的页面", {
+        files: ["public/releases.html"],
+        restart: false
+      })
+    });
+    const data = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("q-data", "Data", "数据中心", "业务", {
+        files: ["public/data.html"],
+        restart: true
+      })
+    });
+    const auth = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("q-auth", "Auth", "个人中心", "登录会话", {
+        files: ["src/modules/profile/auth.js"],
+        restart: true
+      })
+    });
+    const shell = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("q-shell", "Home", "首页", "共享壳", {
+        files: ["public/shared/nav.js"],
+        restart: true
+      })
+    });
+    assert.equal(gate.res.status, 201);
+    assert.equal(data.res.status, 201);
+    assert.equal(auth.res.status, 201);
+    assert.equal(shell.res.status, 201);
+    const queue = await json(base, "/api/releases/queue");
+    const real = queue.body.items.filter((item) => !item.demo).map((item) => item.version);
+    assert.deepEqual(real, ["q-auth", "q-shell", "q-data", "q-gate"]);
+    assert.match(auth.body.item.log, /稳定顺序/);
+  });
+});
+
+test("same-layer tickets stay FIFO after stability ranking", async () => {
   let n = 0;
   await withServer(
     {
@@ -318,10 +359,7 @@ test("submit three applications; queue is FIFO by time", async () => {
       assert.deepEqual(versions, ["1.0.1", "1.0.2", "1.0.3"]);
       assert.deepEqual(
         queue.body.items.filter((item) => !item.demo).map((item) => item.queueIndex),
-        [3, 4, 5]
-      );
-      assert.ok(
-        queue.body.items.every((item, i, arr) => i === 0 || arr[i - 1].submittedAt <= item.submittedAt)
+        [2, 3, 4]
       );
       assert.equal(b.body.item.id !== c.body.item.id, true);
     }
@@ -670,14 +708,17 @@ test("confirm 放行 without 口令; move and reorder change queueIndex", async 
           source: "首页导航与工作台",
           module: "首页",
           summary: "壳",
-          files: ["public/index.html"],
+          files: ["public/shared/nav.js"],
           acceptance: "打开 /",
           restart: false
         })
       });
       const second = await json(base, "/api/releases", {
         method: "POST",
-        body: apply("7.0.1", "数据中心 Agent", "数据中心", "看板")
+        body: apply("7.0.1", "数据中心 Agent", "数据中心", "看板", {
+          files: ["public/data.html"],
+          restart: true
+        })
       });
       const moved = await json(base, `/api/releases/${second.body.item.id}/move`, {
         method: "POST",
@@ -687,7 +728,7 @@ test("confirm 放行 without 口令; move and reorder change queueIndex", async 
       const afterMove = await json(base, "/api/releases/queue");
       const live = afterMove.body.items.filter((item) => !item.demo);
       assert.equal(live[0].id, second.body.item.id);
-      assert.equal(live[0].queueIndex, 3);
+      assert.equal(live[0].queueIndex, 2);
       assert.equal(live[1].id, first.body.item.id);
 
       const reordered = await json(base, "/api/releases/reorder", {
@@ -712,7 +753,7 @@ test("confirm 放行 without 口令; move and reorder change queueIndex", async 
       });
       assert.equal(confirmed.res.status, 200);
       assert.equal(confirmed.body.item.status, "success");
-      assert.deepEqual(pushed, [["public/index.html"]]);
+      assert.deepEqual(pushed, [["public/shared/nav.js"]]);
       const still = await json(base, "/api/releases");
       assert.equal(still.body.items.find((item) => item.id === second.body.item.id).status, "queued");
     }

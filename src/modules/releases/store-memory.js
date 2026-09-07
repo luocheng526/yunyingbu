@@ -1,4 +1,5 @@
 import { QUEUE_LOG } from "./charter.js";
+import { assignStablePriorities } from "./order.js";
 import { readJsonFile, writeJsonFile } from "./persist-json.js";
 
 export const REVIEWER = "运营部主脑";
@@ -235,6 +236,7 @@ export function createMemoryStore({ now, persistPath } = {}) {
         log: QUEUE_LOG
       };
       items.push(item);
+      assignStablePriorities(queuedItems());
       persist();
       return item;
     },
