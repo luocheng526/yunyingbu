@@ -1,8 +1,8 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { createApp } from "../src/app.js";
-import { startMysql } from "../src/db/boot.js";
-import { setPoolForTests, setDbMode } from "../src/db/pool.js";
+import { startMysql } from "../src/notes-store.js";
+import { setPoolForTests, setDbMode } from "../src/modules/profile/auth.js";
 import { createMemoryPool } from "./helpers/memory-mysql.js";
 import { resetStoreForTests } from "../src/modules/profile/auth.js";
 import { resetHanStore } from "../src/modules/han/store.js";

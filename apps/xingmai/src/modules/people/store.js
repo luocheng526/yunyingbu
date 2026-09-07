@@ -1,4 +1,4 @@
-import { dbMode, query } from "../../db/pool.js";
+import { dbMode, query } from "../profile/auth.js";
 
 export const CENTERS = [
   "沈子晗运营中心",

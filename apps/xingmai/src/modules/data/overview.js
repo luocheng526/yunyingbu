@@ -1,4 +1,4 @@
-import { dbMode, query } from "../../db/pool.js";
+import { dbMode, query } from "../profile/auth.js";
 
 /** Demo-only overview payload. Persisted to MySQL so restart keeps the same numbers. */
 

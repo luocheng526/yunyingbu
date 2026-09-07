@@ -2,7 +2,7 @@ process.env.TZ = process.env.TZ || "Asia/Shanghai";
 
 import http from "node:http";
 import { createApp } from "./app.js";
-import { startMysql } from "./db/boot.js";
+import { startMysql } from "./notes-store.js";
 
 const port = Number(process.env.PORT) || 3000;
 const host = process.env.HOST || "0.0.0.0";

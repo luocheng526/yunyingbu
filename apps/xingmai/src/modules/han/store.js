@@ -1,4 +1,4 @@
-import { dbMode, query } from "../../db/pool.js";
+import { dbMode, query } from "../profile/auth.js";
 
 const DEFAULT_OWNER = "韩梦凯";
 const STATUSES = ["待办", "进行中", "已完成"];
