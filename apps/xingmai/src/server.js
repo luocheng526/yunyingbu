@@ -2,7 +2,18 @@ process.env.TZ = process.env.TZ || "Asia/Shanghai";
 
 import http from "node:http";
 import { createApp } from "./app.js";
+import { ensureFrameworkTrees } from "./boot-dirs.js";
 import { startMysql } from "./notes-store.js";
+
+const dirTrees = ensureFrameworkTrees();
+for (const tree of dirTrees) {
+  if (tree.created.length) {
+    console.log(`主框架已建目录 ${tree.root}: ${tree.created.join("、")}`);
+  }
+  for (const miss of tree.skipped) {
+    console.error(`主框架目录未建齐 ${tree.root}/${miss.rel}: ${miss.error}`);
+  }
+}
 
 const port = Number(process.env.PORT) || 3000;
 const host = process.env.HOST || "0.0.0.0";
