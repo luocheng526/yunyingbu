@@ -155,6 +155,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /z-index:\s*4000/);
     assert.match(text, /function pinUpgradeMask/);
     assert.match(text, /document\.body\.appendChild\(upgradeMask\)/);
+    assert.match(text, /upgradeMask\.style\.display = "flex"/);
+    assert.match(text, /正在通过 /);
     assert.match(text, /function failUpgrade/);
     assert.match(text, /function clearShellPending/);
     assert.match(text, /id="upgrade-dismiss"/);
@@ -282,6 +284,9 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /--oc-bg:\s*var\(--xm-bg,\s*#f7f7f4\)/);
     assert.match(text, /--oc-text:\s*var\(--xm-ink,\s*#14120b\)/);
     assert.match(text, /\.xm-content button\.oc-tab/);
+    assert.match(text, /#upgrade-mask/);
+    assert.match(text, /z-index:\s*4000/);
+    assert.match(text, /Theme SPA copies <link>/);
   });
 });
 

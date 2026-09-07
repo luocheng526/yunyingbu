@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>版本发布中心</title>
-    <link rel="stylesheet" href="/releases.css?v=shell-align" />
+    <link rel="stylesheet" href="/releases.css?v=pass-visible" />
     <style>
       #upgrade-mask {
         display: none;
@@ -254,9 +254,22 @@
       }
 
       function pinUpgradeMask() {
-        if (upgradeMask && upgradeMask.parentNode !== document.body) {
+        if (!upgradeMask) {
+          return;
+        }
+        if (upgradeMask.parentNode !== document.body) {
           document.body.appendChild(upgradeMask);
         }
+        upgradeMask.style.position = "fixed";
+        upgradeMask.style.left = "0";
+        upgradeMask.style.right = "0";
+        upgradeMask.style.top = "0";
+        upgradeMask.style.bottom = "0";
+        upgradeMask.style.zIndex = "4000";
+        upgradeMask.style.alignItems = "center";
+        upgradeMask.style.justifyContent = "center";
+        upgradeMask.style.padding = "1.25rem";
+        upgradeMask.style.background = "rgba(20, 18, 11, 0.45)";
       }
 
       function clearShellPending() {
@@ -271,6 +284,7 @@
         if (upgradeMask) {
           upgradeMask.classList.add("show");
           upgradeMask.classList.remove("can-close");
+          upgradeMask.style.display = "flex";
         }
         if (upgradeLog) {
           upgradeLog.hidden = true;
@@ -283,6 +297,7 @@
         if (upgradeMask) {
           upgradeMask.classList.remove("show");
           upgradeMask.classList.remove("can-close");
+          upgradeMask.style.display = "none";
         }
       }
 
@@ -331,6 +346,7 @@
 
       async function runPass(id, needRestart, version) {
         const keys = stepKeys(needRestart);
+        flash("正在通过 " + (version || id) + "，请稍候。");
         showUpgrade(keys, "agree");
         let confirmErr = null;
         let confirmBody = null;
