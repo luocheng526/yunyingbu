@@ -324,6 +324,15 @@ export function createReleasesRouter(options = {}) {
     res.status(409).json({ ok: false, error: REORDER_FORBIDDEN });
   });
 
+  router.post("/:id/requeue", async (req, res) => {
+    const result = await store.requeueFailed(req.params.id);
+    if (result.error) {
+      res.status(result.status).json({ ok: false, error: result.error });
+      return;
+    }
+    res.json({ ok: true, item: result.item });
+  });
+
   router.post("/:id/confirm", async (req, res) => {
     const item = await store.get(req.params.id);
     await handlePublish(req, res, item);

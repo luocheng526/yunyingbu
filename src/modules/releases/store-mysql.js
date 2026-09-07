@@ -1,5 +1,6 @@
 import { getPool } from "../../db/pool.js";
-import { QUEUE_LOG } from "./charter.js";
+import { QUEUE_LOG, requeueFailedItem } from "./charter.js";
+import { hasApplyReceipt } from "./push.js";
 import { assignSubmitOrder } from "./order.js";
 import { REVIEWER } from "./store-memory.js";
 
@@ -271,6 +272,19 @@ export function createMysqlStore({ now, pool } = {}) {
       item.publishFinishedAt = timestamp();
       item.log = message || "发布失败。";
       await persist(item);
+    },
+    async requeueFailed(id) {
+      const item = await this.get(id);
+      const result = requeueFailedItem(item, hasApplyReceipt(item?.snapshotDir));
+      if (result.error) {
+        return result;
+      }
+      await persist(result.item);
+      const queued = assignSubmitOrder(await queuedRows());
+      for (const row of queued) {
+        await persist(row);
+      }
+      return { item: result.item };
     }
   };
 }

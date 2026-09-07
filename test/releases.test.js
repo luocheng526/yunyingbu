@@ -1319,6 +1319,86 @@ test("confirm keeps source when git ref 404s after contents staged", async () =>
   );
 });
 
+test("failed ticket with no receipt can be requeued", async () => {
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), "rel-src-requeue-"));
+  const live = fs.mkdtempSync(path.join(os.tmpdir(), "rel-live-requeue-"));
+  const state = fs.mkdtempSync(path.join(os.tmpdir(), "rel-state-requeue-"));
+  fs.mkdirSync(path.join(source, "public"), { recursive: true });
+  fs.mkdirSync(path.join(live, "public"), { recursive: true });
+  fs.writeFileSync(path.join(source, "public", "a.html"), "NEW\n");
+  fs.writeFileSync(path.join(live, "public", "a.html"), "OLD\n");
+  let pushes = 0;
+
+  await withServer(
+    {
+      stateDir: state,
+      sourceRoot: source,
+      liveRoot: live,
+      async push(files, options) {
+        pushes += 1;
+        if (pushes === 1) {
+          throw Object.assign(new Error("GitHub 读不到 public/a.html@branch（404）"), {
+            code: 404,
+            stderr: "404"
+          });
+        }
+        return pushXingmaiToEcs(files, {
+          snapshotDir: options.snapshotDir,
+          sourceRoot: source,
+          liveRoot: live,
+          env: { MENGKAI_SKIP_PULL: "1" }
+        });
+      }
+    },
+    async (base) => {
+      const created = await json(base, "/api/releases", {
+        method: "POST",
+        body: apply("requeue-me", "首页", "首页", "先失败再恢复", {
+          files: ["public/a.html"],
+          restart: false
+        })
+      });
+      assert.equal(created.res.status, 201);
+      const failed = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(failed.res.status, 500);
+      assert.equal(fs.readFileSync(path.join(live, "public", "a.html"), "utf8"), "OLD\n");
+
+      const restored = await json(base, `/api/releases/${created.body.item.id}/requeue`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(restored.res.status, 200, restored.body.error);
+      assert.equal(restored.body.item.status, "queued");
+      assert.match(restored.body.item.log, /恢复待审批/);
+
+      const again = await json(base, `/api/releases/${created.body.item.id}/requeue`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(again.res.status, 409);
+
+      const queue = await json(base, "/api/releases/queue");
+      assert.equal(queue.body.items[0].id, created.body.item.id);
+
+      const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(pub.res.status, 200, pub.body.error);
+      assert.equal(fs.readFileSync(path.join(live, "public", "a.html"), "utf8"), "NEW\n");
+
+      const afterSuccess = await json(base, `/api/releases/${created.body.item.id}/requeue`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(afterSuccess.res.status, 409);
+    }
+  );
+});
+
 test("failed push writes stderr into ticket log", async () => {
   await withServer(
     {

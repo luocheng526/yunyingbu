@@ -11,6 +11,27 @@ export const NEED_PASS_ERROR =
 export const QUEUE_LOG =
   "已按提交时间入队。先交先发，禁止上移下移和插队；点通过才放行；下一条不会自动发。";
 
+export const REQUEUE_LOG =
+  "失败未落地，已恢复待审批。按原提交时间排队；点通过才放行；下一条不会自动发。";
+
+export function requeueFailedItem(item, landed) {
+  if (!item) {
+    return { error: "单据不存在", status: 404 };
+  }
+  if (item.status !== "failed") {
+    return { error: "只能恢复失败且未落地的单据", status: 409 };
+  }
+  if (landed) {
+    return { error: "该单已有落地回执，不能当未落地恢复。请新开单据。", status: 409 };
+  }
+  item.status = "queued";
+  item.publishStartedAt = null;
+  item.publishFinishedAt = null;
+  item.snapshotDir = "";
+  item.log = REQUEUE_LOG;
+  return { item };
+}
+
 export const REORDER_FORBIDDEN =
   "排队只按提交时间，禁止上移、下移和拖拽改序。请先处理第 1 位。";
 

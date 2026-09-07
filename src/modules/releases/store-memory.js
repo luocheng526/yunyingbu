@@ -1,5 +1,5 @@
 import path from "node:path";
-import { INTERRUPTED_PUBLISH_LOG, QUEUE_LOG, RECEIPT_RECOVER_LOG } from "./charter.js";
+import { INTERRUPTED_PUBLISH_LOG, QUEUE_LOG, RECEIPT_RECOVER_LOG, requeueFailedItem } from "./charter.js";
 import { hasApplyReceipt } from "./push.js";
 import { assignSubmitOrder, compareSubmit } from "./order.js";
 import { readJsonFile, writeJsonFile } from "./persist-json.js";
@@ -300,6 +300,16 @@ export function createMemoryStore({ now, persistPath } = {}) {
       item.publishFinishedAt = timestamp();
       item.log = message || "发布失败。";
       persist();
+    },
+    requeueFailed(id) {
+      const item = this.get(id);
+      const result = requeueFailedItem(item, hasApplyReceipt(item?.snapshotDir));
+      if (result.error) {
+        return result;
+      }
+      assignSubmitOrder(queuedItems());
+      persist();
+      return { item: result.item };
     }
   };
 }
