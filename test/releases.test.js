@@ -162,6 +162,7 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /都分页/);
     assert.match(text, /不要先拷到线上/);
     assert.match(text, /点通过才落地/);
+    assert.match(text, /新文件只放源目录/);
     assert.match(text, /Number\(seq\) === 1/);
     assert.doesNotMatch(text, /const isHead = index === 0/);
     assert.match(text, /data-tab="logs"/);
