@@ -140,6 +140,8 @@ test("releases.html has no login form and sends users to /login", () => {
   assert.doesNotMatch(html, /id="apply-form"/);
   assert.doesNotMatch(html, /提交发布申请/);
   assert.match(html, /id="refresh-btn"/);
+  assert.match(html, /默认不轮询/);
+  assert.doesNotMatch(html, /setInterval\(function \(\) \{\s*refresh/);
   assert.match(html, /唯一发版闸门/);
   assert.match(html, /只允许「通过」第 1 位/);
   assert.match(html, /帮我上线/);
