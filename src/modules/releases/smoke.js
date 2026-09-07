@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -112,14 +112,17 @@ function smokeError(detail) {
 
 /** Always parse as ESM. `node --check file.js` is CJS unless package.json says type:module. */
 export async function smokeCheckText(rel, source) {
-  try {
-    await execFileAsync(process.execPath, ["--input-type=module", "--check"], {
-      timeout: 8000,
-      maxBuffer: 1_000_000,
-      input: Buffer.isBuffer(source) ? source : Buffer.from(String(source ?? ""))
-    });
-  } catch (err) {
-    const detail = String(err.stderr || err.message || err);
+  const result = spawnSync(process.execPath, ["--input-type=module", "--check"], {
+    input: Buffer.isBuffer(source) ? source : Buffer.from(String(source ?? "")),
+    encoding: "utf8",
+    timeout: 8000,
+    maxBuffer: 1_000_000
+  });
+  if (result.error) {
+    throw smokeError(`${rel}: ${result.error.message || result.error}`);
+  }
+  if (result.status !== 0) {
+    const detail = String(result.stderr || result.stdout || `syntax check exit ${result.status}`);
     throw smokeError(`${rel}: ${firstUsefulLine(detail) || detail}`);
   }
 }
