@@ -70,7 +70,7 @@ test("module pages are delivered instead of placeholders", async () => {
       ["/shen", /沈子晗运营中心/],
       ["/han", /韩梦凯运营中心/],
       ["/people", /人员管理/],
-      ["/releases", /运营中心/],
+      ["/releases", /版本发布中心/],
       ["/me", /个人中心/]
     ];
     for (const [path, title] of pages) {

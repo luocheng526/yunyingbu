@@ -111,8 +111,13 @@ test("GET /releases is the release center page", async () => {
     const res = await fetch(`${base}/releases`, { headers: { Cookie: activeCookie } });
     const text = await res.text();
     assert.equal(res.status, 200);
-    assert.match(text, /运营中心/);
-    assert.match(text, /OPERATING CENTER/);
+    assert.match(text, /版本发布中心/);
+    assert.match(text, /RELEASE GATE/);
+    assert.doesNotMatch(text, /运营中心/);
+    assert.doesNotMatch(text, /OPERATING CENTER/);
+    assert.match(text, /自动提示/);
+    assert.match(text, /不会自动通过/);
+    assert.match(text, /watchIncoming/);
     assert.match(text, /各板块交单后出现在这里/);
     assert.match(text, /id="refresh-btn"/);
     assert.match(text, /唯一发版闸门/);
@@ -138,7 +143,7 @@ test("GET /releases is the release center page", async () => {
     assert.doesNotMatch(text, /文件投喂/);
     assert.doesNotMatch(text, /GitHub 制品/);
     assert.doesNotMatch(text, /<nav class="site-nav"/);
-    assert.match(text, /push-xingmai-to-ecs/);
+    assert.match(text, /本机落地/);
     assert.match(text, /window\.location\.replace\("\/login"\)/);
     assert.doesNotMatch(text, /id="login-form"/);
     assert.doesNotMatch(text, /id="apply-form"/);
@@ -158,8 +163,10 @@ test("releases.html has no login form and sends users to /login", () => {
   assert.doesNotMatch(html, /提交发布申请/);
   assert.match(html, /id="refresh-btn"/);
   assert.match(html, /id="upgrade-mask"/);
-  assert.match(html, /默认不轮询/);
+  assert.match(html, /自动提示/);
+  assert.match(html, /watchIncoming/);
   assert.doesNotMatch(html, /setInterval\(function \(\) \{\s*refresh/);
+  assert.doesNotMatch(html, /运营中心/);
   assert.match(html, /唯一发版闸门/);
   assert.match(html, /只允许「通过」第 1 位/);
   assert.match(html, /帮我上线/);

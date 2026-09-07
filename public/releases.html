@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>运营中心 · 版本发布</title>
+    <title>版本发布中心</title>
     <link rel="stylesheet" href="/releases.css" />
     <style>
       #upgrade-mask {
@@ -58,8 +58,8 @@
   <body>
     <header class="oc-top">
       <div class="oc-brand">
-        <strong>运营中心</strong>
-        <span class="oc-crumb">运营中心 / 待上线</span>
+        <strong>版本发布中心</strong>
+        <span class="oc-crumb">版本发布中心 / 待上线</span>
       </div>
       <div class="oc-top-right">
         <span class="oc-clock" id="clock">—</span>
@@ -69,8 +69,8 @@
 
     <section class="oc-hero">
       <div>
-        <p class="oc-kicker">OPERATING CENTER</p>
-        <h1>运营中心</h1>
+        <p class="oc-kicker">RELEASE GATE</p>
+        <h1>版本发布中心</h1>
       </div>
       <div class="oc-run">
         <span class="pill run">运行</span>
@@ -79,7 +79,7 @@
       </div>
     </section>
 
-    <nav class="oc-tabs" aria-label="运营中心页签">
+    <nav class="oc-tabs" aria-label="版本发布中心页签">
       <button type="button" class="oc-tab active" data-tab="queue">
         <h2>待上线</h2>
         <p>各对话提交的发版队列</p>
@@ -99,7 +99,7 @@
       <section class="oc-card">
         <div class="pane on" id="pane-queue">
           <h3>待上线</h3>
-          <p class="hint">各板块交单后出现在这里。主脑上移/下移决定谁是第 1 位；闸门只允许「通过」第 1 位，禁止跳单叠发。通过后先拍升级前快照再本机落地（不 spawn 缺失的 push-xingmai-to-ecs.sh），是否重启看单据。版本号只允许字母数字和 . _ -，同模块同版本不能重复排队或再次成功发布。文件列表只允许 public、src、test、package.json。本页不提供手填表。列表默认不轮询，要看最新请点「刷新」。</p>
+          <p class="hint">这是版本发布中心，不是运营部主脑，也不是全站后台壳。各板块交单后出现在这里。主脑上移/下移决定谁是第 1 位；闸门只允许「通过」第 1 位，禁止跳单叠发。通过后先拍升级前快照再本机落地，是否重启看单据。有新单据约 15 秒内自动提示并刷新列表，不会自动点通过。版本号只允许字母数字和 . _ -，同模块同版本不能重复。文件列表只允许 public、src、test、package.json。</p>
           <div class="caps" id="stat-caps"></div>
           <div class="note">发布纪律：本页是唯一发版闸门。只执行交来的单据 + 本页「通过」。必须按排队顺序点第 1 位；一把锁，禁止抢发；下一条不会自动发布。其它对话框「帮我上线」无效。</div>
           <div id="lock-view" class="lock-box idle">当前空闲，没有发布任务。</div>
@@ -132,10 +132,12 @@
       const flashEl = document.getElementById("flash");
       const crumb = document.querySelector(".oc-crumb");
       const tabTitles = {
-        queue: "运营中心 / 待上线",
-        history: "运营中心 / 版本记录",
-        logs: "运营中心 / 运行日志"
+        queue: "版本发布中心 / 待上线",
+        history: "版本发布中心 / 版本记录",
+        logs: "版本发布中心 / 运行日志"
       };
+      const WATCH_MS = 15000;
+      let knownQueueIds = null;
 
       function flash(message, isError) {
         flashEl.textContent = message;
@@ -480,10 +482,41 @@
         renderStats(items);
         renderLock(lock, ready);
         renderCurrentVersions(versions);
-        renderQueue(queue.items || [], lock.locked, versions);
+        const queued = queue.items || [];
+        knownQueueIds = queued.map(function (item) { return item.id; });
+        renderQueue(queued, lock.locked, versions);
         renderHistory(items, lock.locked);
         renderLogs(items);
         return lock;
+      }
+
+      async function watchIncoming() {
+        if (upgradeMask.classList.contains("show")) {
+          return;
+        }
+        try {
+          const queue = await api("/api/releases/queue");
+          const items = queue.items || [];
+          const ids = items.map(function (item) { return item.id; });
+          if (!knownQueueIds) {
+            knownQueueIds = ids;
+            return;
+          }
+          const fresh = items.filter(function (item) {
+            return knownQueueIds.indexOf(item.id) < 0;
+          });
+          if (!fresh.length) {
+            return;
+          }
+          await refresh();
+          flash("有新的待上线：" + fresh.map(function (item) {
+            return item.module + " " + item.version;
+          }).join("、") + "。不会自动通过。");
+        } catch (err) {
+          if (err.status === 401) {
+            goLogin();
+          }
+        }
       }
 
       document.querySelectorAll(".oc-tab").forEach(function (tab) {
@@ -495,7 +528,7 @@
           document.querySelectorAll(".pane").forEach(function (pane) {
             pane.classList.toggle("on", pane.id === "pane-" + name);
           });
-          crumb.textContent = tabTitles[name] || "运营中心";
+          crumb.textContent = tabTitles[name] || "版本发布中心";
         });
       });
 
@@ -605,6 +638,7 @@
       });
 
       refresh().catch(function (err) { flash(err.message, true); });
+      setInterval(function () { watchIncoming(); }, WATCH_MS);
     </script>
   </body>
 </html>
