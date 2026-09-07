@@ -49,6 +49,20 @@ async function request(base, pathname, { method = "GET", body, cookie, redirect 
   return { res, text, json, cookie: cookieHeader(res) };
 }
 
+test("GET /shared assets are public and cacheable; APIs are not cached", async () => {
+  await withServer(async (base) => {
+    const css = await request(base, "/shared/layout.css");
+    assert.equal(css.res.status, 200);
+    assert.match(String(css.res.headers.get("cache-control")), /max-age=3600/);
+    const js = await request(base, "/shared/nav.js");
+    assert.equal(js.res.status, 200);
+    assert.match(String(js.res.headers.get("cache-control")), /max-age=3600/);
+    const api = await request(base, "/api/auth/me", { redirect: "follow" });
+    assert.equal(api.res.status, 401);
+    assert.match(String(api.res.headers.get("cache-control")), /no-store/);
+  });
+});
+
 test("unauthenticated / and /me redirect to /login", async () => {
   await withServer(async (base) => {
     for (const pathName of ["/", "/me"]) {

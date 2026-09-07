@@ -6,11 +6,19 @@ function normalizedPath(req) {
   return trimmed || "/";
 }
 
+function isSharedAsset(path) {
+  return path === "/login.css" || path.startsWith("/shared/");
+}
+
+function isApiPath(path) {
+  return path.startsWith("/api/");
+}
+
 export function isPublicRequest(req) {
   const method = String(req.method || "GET").toUpperCase();
   const path = normalizedPath(req);
   if (method === "GET" || method === "HEAD") {
-    if (path === "/login" || path === "/login.css" || path === "/api/health") {
+    if (isSharedAsset(path) || path === "/login" || path === "/api/health") {
       return true;
     }
   }
@@ -18,6 +26,30 @@ export function isPublicRequest(req) {
     return true;
   }
   return false;
+}
+
+function cacheControlFor(path) {
+  if (isApiPath(path)) {
+    return "no-store";
+  }
+  if (isSharedAsset(path)) {
+    return "public, max-age=3600";
+  }
+  return "no-cache";
+}
+
+export function applyCachePolicy(req, res, next) {
+  const path = normalizedPath(req);
+  const wanted = cacheControlFor(path);
+  const original = res.setHeader.bind(res);
+  res.setHeader = function setHeader(name, value) {
+    if (String(name).toLowerCase() === "cache-control") {
+      return original.call(res, "Cache-Control", wanted);
+    }
+    return original.call(res, name, value);
+  };
+  res.setHeader("Cache-Control", wanted);
+  next();
 }
 
 export function requireLoginUnlessPublic(req, res, next) {
@@ -31,7 +63,7 @@ export function requireLoginUnlessPublic(req, res, next) {
     next();
     return;
   }
-  if (normalizedPath(req).startsWith("/api/")) {
+  if (isApiPath(normalizedPath(req))) {
     res.status(401).json({ ok: false, error: "未登录" });
     return;
   }
