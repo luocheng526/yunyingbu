@@ -134,6 +134,14 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.match(login, /localStorage.getItem\("xm-theme"\)/);
   const serverJs = readFileSync(join(root, "src/server.js"), "utf8");
   assert.match(serverJs, /keepAliveTimeout = 65_000/);
+  assert.match(serverJs, /startMysql/);
+  const notesSrc = readFileSync(join(root, "src/notes-store.js"), "utf8");
+  assert.match(notesSrc, /export function createNotesStore/);
+  const authSrc = readFileSync(join(root, "src/modules/profile/auth.js"), "utf8");
+  assert.match(authSrc, /MYSQL_HOST/);
+  assert.match(authSrc, /CREATE TABLE IF NOT EXISTS han_tasks/);
+  assert.match(authSrc, /CREATE TABLE IF NOT EXISTS xm_users/);
+  assert.match(serverJs, /notes-store\.js/);
   const mid = readFileSync(join(root, "src/modules/profile/middleware.js"), "utf8");
   assert.match(mid, /HTML_CACHE_MS = 60_000/);
   assert.match(mid, /HAN_API_CACHE_MS = 2500/);
