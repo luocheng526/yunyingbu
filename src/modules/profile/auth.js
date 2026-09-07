@@ -1,13 +1,56 @@
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import { Router } from "express";
 
 export const COOKIE_NAME = "mk_sid";
 export const DEMO_USERNAME = "罗成";
 export const DEMO_INITIAL_PASSWORD = "ChangeMe123!";
+export const SESSION_MAX_AGE_SEC = 7 * 24 * 60 * 60;
 
 const KEYLEN = 64;
 const users = new Map();
 const sessions = new Map();
+let sessionsHydrated = false;
+
+function sessionFile() {
+  const dir = String(process.env.MENGKAI_STATE_DIR || "").trim();
+  return dir ? path.join(dir, "sessions.json") : "";
+}
+
+function persistSessions() {
+  const file = sessionFile();
+  if (!file) {
+    return;
+  }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, `${JSON.stringify({ sessions: Object.fromEntries(sessions) })}\n`);
+  fs.renameSync(tmp, file);
+}
+
+function hydrateSessions() {
+  if (sessionsHydrated) {
+    return;
+  }
+  sessionsHydrated = true;
+  const file = sessionFile();
+  if (!file || !fs.existsSync(file)) {
+    return;
+  }
+  try {
+    const saved = JSON.parse(fs.readFileSync(file, "utf8"));
+    const rows = saved && saved.sessions && typeof saved.sessions === "object" ? saved.sessions : {};
+    const cutoff = Date.now() - SESSION_MAX_AGE_SEC * 1000;
+    for (const [sid, row] of Object.entries(rows)) {
+      if (row && row.username && Number(row.createdAt || 0) >= cutoff) {
+        sessions.set(sid, { username: row.username, createdAt: Number(row.createdAt) || Date.now() });
+      }
+    }
+  } catch {
+    /* 坏文件当无会话，避免启动失败 */
+  }
+}
 
 function hashPassword(password) {
   const salt = randomBytes(16);
@@ -54,6 +97,7 @@ seed();
 export function resetStoreForTests() {
   users.clear();
   sessions.clear();
+  sessionsHydrated = false;
   seed();
 }
 
@@ -92,6 +136,7 @@ function parseCookies(req) {
 }
 
 export function currentUser(req) {
+  hydrateSessions();
   const sid = parseCookies(req)[COOKIE_NAME];
   const session = sid ? sessions.get(sid) : null;
   if (!session) {
@@ -101,7 +146,10 @@ export function currentUser(req) {
 }
 
 function setSessionCookie(res, sid) {
-  res.setHeader("Set-Cookie", `${COOKIE_NAME}=${encodeURIComponent(sid)}; HttpOnly; Path=/; SameSite=Lax`);
+  res.setHeader(
+    "Set-Cookie",
+    `${COOKIE_NAME}=${encodeURIComponent(sid)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${SESSION_MAX_AGE_SEC}`
+  );
 }
 
 function clearSessionCookie(res) {
@@ -143,16 +191,20 @@ authRouter.post("/login", (req, res) => {
     res.status(401).json({ ok: false, error: "用户名或密码错误" });
     return;
   }
+  hydrateSessions();
   const sid = `${Date.now().toString(36)}-${randomBytes(12).toString("hex")}`;
   sessions.set(sid, { username: user.username, createdAt: Date.now() });
+  persistSessions();
   setSessionCookie(res, sid);
   res.json({ ok: true, remember: Boolean(req.body?.remember), user: publicProfile(user) });
 });
 
 authRouter.post("/logout", (req, res) => {
+  hydrateSessions();
   const sid = parseCookies(req)[COOKIE_NAME];
   if (sid) {
     sessions.delete(sid);
+    persistSessions();
   }
   clearSessionCookie(res);
   res.json({ ok: true });

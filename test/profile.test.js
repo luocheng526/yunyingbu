@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import http from "node:http";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { DEMO_INITIAL_PASSWORD, DEMO_USERNAME, resetStoreForTests } from "../src/modules/profile/auth.js";
@@ -93,6 +96,37 @@ test("login 罗成 sets cookie; GET /api/auth/me 200; wrong password 401", async
     assert.equal(page.res.status, 200);
     assert.match(page.text, /个人中心/);
   });
+});
+
+test("login session survives a simulated mengkai restart", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mk-sess-"));
+  const prev = process.env.MENGKAI_STATE_DIR;
+  process.env.MENGKAI_STATE_DIR = dir;
+  try {
+    await withServer(async (base) => {
+      const ok = await request(base, "/api/auth/login", {
+        method: "POST",
+        body: { username: DEMO_USERNAME, password: DEMO_INITIAL_PASSWORD },
+        redirect: "follow"
+      });
+      assert.equal(ok.res.status, 200);
+      assert.match(String(ok.res.headers.get("set-cookie") || ""), /Max-Age=/);
+      assert.equal(fs.existsSync(path.join(dir, "sessions.json")), true);
+      resetStoreForTests();
+      const me = await request(base, "/api/auth/me", { cookie: ok.cookie, redirect: "follow" });
+      assert.equal(me.res.status, 200);
+      assert.equal(me.json.username, "罗成");
+      const page = await request(base, "/releases", { cookie: ok.cookie, redirect: "manual" });
+      assert.equal(page.res.status, 200);
+    });
+  } finally {
+    if (prev === undefined) {
+      delete process.env.MENGKAI_STATE_DIR;
+    } else {
+      process.env.MENGKAI_STATE_DIR = prev;
+    }
+    resetStoreForTests();
+  }
 });
 
 test("patchAppSource only inserts attachProfile after json()", () => {
