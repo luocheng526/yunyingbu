@@ -3,7 +3,7 @@ import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { patchAppSource } from "../src/modules/shen/patch-app.js";
-import { resetStore } from "../src/modules/shen/store.js";
+import { SQL, resetStore, setPool } from "../src/modules/shen/store.js";
 
 const NAV_LABELS = [
   "首页",
@@ -15,8 +15,49 @@ const NAV_LABELS = [
   "个人中心"
 ];
 
+function createFakePool() {
+  const tasks = [];
+  let nextId = 1;
+  let brief = "";
+  return {
+    async query(sql, params = []) {
+      if (sql === SQL.createTasks || sql === SQL.createBriefs || sql === SQL.ensureBriefRow) {
+        return [{}];
+      }
+      if (sql === SQL.listTasks) {
+        return [tasks.map((task) => ({ ...task }))];
+      }
+      if (sql === SQL.insertTask) {
+        const [title, status, owner] = params;
+        const row = { id: nextId, title, status, owner };
+        nextId += 1;
+        tasks.push(row);
+        return [{ insertId: row.id, affectedRows: 1 }];
+      }
+      if (sql === SQL.getBrief) {
+        return [[{ text: brief }]];
+      }
+      if (sql === SQL.setBrief) {
+        brief = params[0] ?? "";
+        return [{ affectedRows: 1 }];
+      }
+      if (sql === SQL.resetTasks) {
+        tasks.length = 0;
+        nextId = 1;
+        return [{}];
+      }
+      if (sql === SQL.resetBrief) {
+        brief = "";
+        return [{}];
+      }
+      throw new Error(`unexpected sql: ${sql}`);
+    }
+  };
+}
+
 async function withServer(fn) {
-  resetStore();
+  setPool(createFakePool());
+  await resetStore();
   const server = http.createServer(createApp());
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address();
@@ -45,6 +86,7 @@ test("GET /shen is 沈子晗运营中心 with left sidebar and seven nav items",
     assert.equal(res.status, 200);
     assert.match(text, /<title>沈子晗运营中心<\/title>/);
     assert.match(text, /这是沈子晗团队的任务与日报台/);
+    assert.match(text, /shen_tasks/);
     assert.match(text, /shared\/nav\.js/);
     assert.match(text, /shared\/layout\.css/);
     assert.match(text, /class="app-shell"/);
@@ -58,7 +100,7 @@ test("GET /shen is 沈子晗运营中心 with left sidebar and seven nav items",
   });
 });
 
-test("task CRUD stays in memory across requests", async () => {
+test("task CRUD persists across requests via store pool", async () => {
   await withServer(async (base) => {
     const empty = await request(base, "/api/shen/tasks");
     assert.equal(empty.res.status, 200);

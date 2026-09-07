@@ -16,6 +16,7 @@ const copies = [
   ["public/shen.html", "public/shen.html"],
   ["src/modules/shen/store.js", "src/modules/shen/store.js"],
   ["src/modules/shen/router.js", "src/modules/shen/router.js"],
+  ["src/modules/shen/schema.sql", "src/modules/shen/schema.sql"],
   ["src/modules/shen/patch-app.js", "src/modules/shen/patch-app.js"]
 ];
 
@@ -44,6 +45,11 @@ function patchAppJs() {
 if (!fs.existsSync(targetRoot)) {
   console.error(`目标目录不存在: ${targetRoot}`);
   process.exit(1);
+}
+
+const poolDest = path.join(targetRoot, "src/db/pool.js");
+if (!fs.existsSync(poolDest)) {
+  copies.unshift(["src/db/pool.js", "src/db/pool.js"]);
 }
 
 for (const [from, to] of copies) {
