@@ -4,7 +4,7 @@
 
 你改完代码后：
 1. 不要自己上线。
-2. 告诉用户去「版本发布中心」提交申请，或由你调用（若已存在）POST /api/releases 提交 queued 单据：version、applicant（你的 Agent 名）、module、summary。
-3. 真正重启/发布只能等主脑在 http://zx.xingmaierp.cc/releases 审核通过并点击「发布」。
+2. `GET /api/releases/next` 领取全站 `0.1.N`，再 `POST /api/releases` 入队。版本必须是 `0.1.N-说明`，不得自编。纪律见 [00-release-rules.md](00-release-rules.md)。
+3. 真正发布只能等 `https://zx.xingmaierp.cc/releases` 第 1 位点「通过」。禁止上移下移。
 
 若你上一版已经写了「可以重启 mengkai.service」，删掉该行为，改为提交审核单。
