@@ -2,7 +2,7 @@
 
 主脑只出任务稿。7 个业务 Agent **在 Cursor Cloud 工作**，代码目录 `apps/xingmai/`。不要再用 My Machines。流程见 [00-cloud-workflow.md](agents/00-cloud-workflow.md)，全员补丁 [00-cloud-patch.md](agents/00-cloud-patch.md)。
 
-**发布纪律：** 只有「版本发布中心」可发版。其他 Agent 交付时必须输出 [发布文档](agents/00-release-doc-only.md)。主脑把文档交给发布中心并下令后才上线。补丁：[00-release-doc-patch.md](agents/00-release-doc-patch.md)、[06-releases-wait-for-owner.md](agents/06-releases-wait-for-owner.md)。
+**发布纪律（现行）：** [00-release-rules.md](00-release-rules.md)。全站一条号 `0.1.N`，交单前 `GET /api/releases/next`，`POST /api/releases` 按提交时间排队，禁止上移下移，只等网页第 1 位「通过」。只有版本发布中心能落地。补丁：[00-release-doc-only.md](00-release-doc-only.md)、[00-release-doc-patch.md](00-release-doc-patch.md)。
 
 | Agent | 提示词文件 | 站点路径 | 只许改的目录 |
 |-------|------------|----------|----------------|
