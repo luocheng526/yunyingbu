@@ -23,8 +23,11 @@ test("shared shell assets are public", async () => {
   const cssText = await css.text();
   const jsText = await js.text();
   assert.match(cssText, /cursor-light-3/);
-  assert.match(jsText, /xm-shell-always 0\.1\.19/);
+  assert.match(cssText, /\.xm-shell\.is-pending/);
+  assert.match(jsText, /xm-shell-spa 0\.1\.24/);
   assert.match(jsText, /xm-shell/);
+  assert.match(jsText, /history\.pushState/);
+  assert.match(jsText, /function navigate\(/);
   assert.doesNotMatch(jsText, /xm-sider-collapsed/);
   assert.doesNotMatch(jsText, /link\.rel = "prefetch"/);
   assert.doesNotMatch(jsText, /if \(document\.querySelector\("\.oc-tab/);
