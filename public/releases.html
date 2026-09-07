@@ -300,9 +300,8 @@
             try {
               if (await probeHealth()) {
                 renderUpgradeSteps(keys, "done", "ok");
-                await sleep(350);
-                hideUpgrade();
-                flash("已通过并放行版本 " + (version || ticket.version || (confirmBody && confirmBody.version) || "") + "。下一条不会自动发布。");
+                await sleep(400);
+                window.location.replace("/releases?reloaded=" + Date.now());
                 return;
               }
               lastHealth = "健康检查尚未 200";

@@ -125,6 +125,7 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /id="upgrade-mask"/);
     assert.match(text, /正在升级，请勿关闭/);
     assert.match(text, /\/api\/health/);
+    assert.match(text, /location\.replace\("\/releases\?reloaded="/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css"/);
     assert.doesNotMatch(text, /href="\/shared\/layout.css"/);
@@ -163,6 +164,7 @@ test("releases.html has no login form and sends users to /login", () => {
   assert.doesNotMatch(html, /提交发布申请/);
   assert.match(html, /id="refresh-btn"/);
   assert.match(html, /id="upgrade-mask"/);
+  assert.match(html, /location\.replace\("\/releases\?reloaded="/);
   assert.match(html, /自动提示/);
   assert.match(html, /watchIncoming/);
   assert.doesNotMatch(html, /setInterval\(function \(\) \{\s*refresh/);
