@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
-import { HAN_DEFAULT_OWNER } from "../src/modules/han/store.js";
+import { createHanStore, HAN_DEFAULT_OWNER } from "../src/modules/han/store.js";
+import { createHanFakePool } from "./han-fake-pool.js";
 
 async function withServer(fn) {
-  const server = http.createServer(createApp());
+  const hanStore = createHanStore(createHanFakePool());
+  const server = http.createServer(createApp({ hanStore }));
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address();
   try {
@@ -130,4 +132,14 @@ test("notes demo API still works", async () => {
     assert.equal(created.res.status, 201);
     assert.equal(created.body.text, "keep-notes-demo");
   });
+});
+
+test("han schema uses prefixed tables", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const sql = await readFile(new URL("../src/modules/han/schema.sql", import.meta.url), "utf8");
+  assert.match(sql, /utf8mb4/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS han_tasks/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS han_brief/);
+  assert.doesNotMatch(sql, /CREATE TABLE IF NOT EXISTS users\b/);
+  assert.doesNotMatch(sql, /CREATE TABLE IF NOT EXISTS releases\b/);
 });

@@ -1,28 +1,45 @@
 import { Router } from "express";
-import { createTask, getBrief, listTasks, setBrief } from "./store.js";
+import { createHanStore } from "./store.js";
 
-export const hanRouter = Router();
+export function createHanRouter(store = createHanStore()) {
+  const hanRouter = Router();
 
-hanRouter.get("/tasks", (_req, res) => {
-  res.json({ ok: true, tasks: listTasks() });
-});
+  hanRouter.get("/tasks", async (_req, res) => {
+    try {
+      res.json({ ok: true, tasks: await store.listTasks() });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
 
-hanRouter.post("/tasks", (req, res) => {
-  try {
-    const task = createTask(req.body || {});
-    res.status(201).json({ ok: true, task });
-  } catch (err) {
-    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
-  }
-});
+  hanRouter.post("/tasks", async (req, res) => {
+    try {
+      const task = await store.createTask(req.body || {});
+      res.status(201).json({ ok: true, task });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
 
-hanRouter.get("/brief", (_req, res) => {
-  res.json({ ok: true, ...getBrief() });
-});
+  hanRouter.get("/brief", async (_req, res) => {
+    try {
+      res.json({ ok: true, ...(await store.getBrief()) });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
 
-hanRouter.put("/brief", (req, res) => {
-  const body = req.body || {};
-  res.json({ ok: true, ...setBrief({ text: body.text }) });
-});
+  hanRouter.put("/brief", async (req, res) => {
+    try {
+      const body = req.body || {};
+      res.json({ ok: true, ...(await store.setBrief({ text: body.text })) });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
 
+  return hanRouter;
+}
+
+export const hanRouter = createHanRouter();
 export default hanRouter;

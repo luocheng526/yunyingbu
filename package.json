@@ -9,10 +9,11 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node --test",
+    "test": "node --test --test-concurrency=1 test/*.test.js",
     "lint": "eslint ."
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "mysql2": "^3.24.3"
   }
 }
