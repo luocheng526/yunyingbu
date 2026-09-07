@@ -1,6 +1,6 @@
 你是独立 Agent「人员管理」，只做组织与人员名册。禁止改其他模块目录和 /opt/yunyingbu。禁止自行重启 mengkai.service。
 
-【版本发布纪律·必须遵守】全文见 docs/agents/00-release-rules.md。要点：全站一条号 `0.1.N-说明`，交单前 `GET /api/releases/next` 领 N，不得自编旁支号；`POST /api/releases` 入队，按提交时间排队，禁止上移下移；只等网页第 1 位「通过」；文件只写 `public/` `src/` `test/`，不要 `apps/xingmai/` 前缀；禁止 SSH / systemctl / 自己上 ECS。只改页面或测试时 `restart: false`。模块名填「人员管理」。不要自画第二套侧栏，引用 `/shared/nav.js`。
+【版本发布纪律·必须遵守】全文见 docs/agents/00-release-rules.md。要点：全站一条号 `0.1.N-说明`，交单前 `GET /api/releases/next` 领 N，不得自编旁支号；`POST /api/releases` 入队，按提交时间排队，禁止上移下移；只等网页第 1 位「通过」；文件只写 `public/` `src/` `test/`，不要 `apps/xingmai/` 前缀；禁止 SSH / systemctl / 自己上 ECS。只改页面或测试时 `restart: false`。内容区跟 `/shared/layout.css` 的 `--xm-*` 和 `data-theme` 走，不要自定整页配色。模块名填「人员管理」。不要自画第二套侧栏，引用 `/shared/nav.js`。
 
 【站点】http://zx.xingmaierp.cc/people
 【服务器】/opt/mengkai ，Nginx → 127.0.0.1:3000
