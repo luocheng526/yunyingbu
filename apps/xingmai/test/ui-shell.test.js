@@ -23,8 +23,12 @@ test("shared shell assets are public", async () => {
   const cssText = await css.text();
   const jsText = await js.text();
   assert.match(cssText, /cursor-light-3/);
-  assert.match(jsText, /xm-shell-always 0\.1\.19/);
+  assert.match(cssText, /\.xm-shell\.is-pending/);
+  assert.match(jsText, /xm-shell-spa 0\.1\.25/);
   assert.match(jsText, /xm-shell/);
+  assert.match(jsText, /history\.pushState/);
+  assert.match(jsText, /function navigate\(/);
+  assert.match(jsText, /MutationObserver/);
   assert.doesNotMatch(jsText, /xm-sider-collapsed/);
   assert.doesNotMatch(jsText, /link\.rel = "prefetch"/);
   assert.doesNotMatch(jsText, /if \(document\.querySelector\("\.oc-tab/);
@@ -57,7 +61,11 @@ test("placeholder modules share the same shell assets", async () => {
   assert.doesNotMatch(html, /site-header/);
   const releases = await fetch(`${base}/releases`, { headers: { cookie } });
   assert.equal(releases.status, 200);
-  assert.match(await releases.text(), /\/shared\/nav\.js/);
+  const releasesHtml = await releases.text();
+  assert.match(releasesHtml, /\/shared\/nav\.js/);
+  assert.match(releasesHtml, /timeZone: "Asia\/Shanghai"/);
+  assert.match(releasesHtml, /function formatChinaTime/);
+  assert.doesNotMatch(releasesHtml, /replace\("Z", " UTC"\)/);
 });
 
 test("page renderer injects shared shell onto module html", async () => {
