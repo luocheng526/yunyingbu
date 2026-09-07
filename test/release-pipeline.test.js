@@ -122,6 +122,17 @@ async function json(base, cookie, pathname, options = {}) {
   return { res, body };
 }
 
+test("release-wake posts HMAC and never deploys", () => {
+  const source = fs.readFileSync(
+    new URL("../.github/workflows/release-wake.yml", import.meta.url),
+    "utf8"
+  );
+  assert.match(source, /urllib\.request\.Request/);
+  assert.match(source, /X-Hub-Signature-256/);
+  assert.match(source, /This job never deploys|this job never deploys/);
+  assert.doesNotMatch(source, /wake would POST to controller/);
+});
+
 test("illegal state jumps are rejected", () => {
   assert.throws(() => assertTransition(STATES.pending_approval, STATES.succeeded), /非法状态跳转/);
   assert.doesNotThrow(() => assertTransition(STATES.pending_approval, STATES.approved));
@@ -248,6 +259,64 @@ test("duplicate webhook is idempotent; production mode approve queues outbox", a
     });
     assert.equal(unsigned.status, 401);
   });
+
+  await withServer({}, async (base, cookie) => {
+    const overlayPayload = JSON.stringify({
+      action: "completed",
+      repository: { full_name: "luocheng526/yunyingbu" },
+      workflow_run: {
+        id: 88,
+        run_attempt: 1,
+        name: "Release artifact",
+        event: "push",
+        head_branch: "main",
+        head_sha: "cccccccccccccccccccccccccccccccccccccccc",
+        status: "completed",
+        conclusion: "success",
+        pull_requests: [{ number: 4 }]
+      }
+    });
+    const overlayHeaders = {
+      "Content-Type": "application/json",
+      "X-GitHub-Event": "workflow_run",
+      "X-GitHub-Delivery": "del-overlay",
+      "X-Hub-Signature-256": signBody(WEBHOOK_SECRET, overlayPayload)
+    };
+    const woke = await fetch(`${base}/api/releases/webhooks/github`, {
+      method: "POST",
+      headers: overlayHeaders,
+      body: overlayPayload
+    });
+    assert.equal(woke.status, 202);
+    const wokeBody = await woke.json();
+    assert.equal(wokeBody.overlay, true);
+    assert.equal(wokeBody.state, "waiting_ci");
+    const listed = await json(base, cookie, "/api/releases/candidates");
+    assert.equal(listed.body.items.length, 1);
+    assert.equal(listed.body.items[0].overlay, true);
+    assert.equal(listed.body.items[0].can_approve, false);
+    assert.equal(listed.body.items[0].state, "waiting_ci");
+    const blocked = await json(base, cookie, `/api/releases/candidates/${listed.body.items[0].id}/approve`, {
+      method: "POST",
+      body: "{}"
+    });
+    assert.equal(blocked.res.status, 409);
+
+    const srcOverlay = makeFixture();
+    const overlayId = identity({ runId: 88, mergeSha: "cccccccccccccccccccccccccccccccccccccccc" });
+    const overlayDir = fs.mkdtempSync(path.join(os.tmpdir(), "rel-out-"));
+    packArtifact({ sourceRoot: srcOverlay, outDir: overlayDir, identity: overlayId });
+    const ingested = await json(base, cookie, "/api/releases/ingress/local", {
+      method: "POST",
+      body: JSON.stringify({ artifactDir: overlayDir, github: githubFrom(overlayId) })
+    });
+    assert.equal(ingested.res.status, 201);
+    assert.equal(ingested.body.item.overlay, false);
+    const after = await json(base, cookie, "/api/releases/candidates");
+    assert.equal(after.body.items.some((row) => row.overlay), false);
+    assert.equal(after.body.items.some((row) => row.id === ingested.body.item.id), true);
+  });
+
 
   const src = makeFixture();
   const id = identity({ runId: 2002 });

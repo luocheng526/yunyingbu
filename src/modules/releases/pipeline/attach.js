@@ -13,6 +13,8 @@ function extraApproveFields(body) {
 export function attachPipelineWebhook(router, options = {}) {
   const store = options.pipelineStore;
   const secret = options.webhookSecret || process.env.CONTROLLER_WEBHOOK_SECRET || "";
+  const mode = options.releaseMode || RELEASE_MODE;
+  const ingest = createIngest({ store, mode });
 
   router.post("/webhooks/github", (req, res) => {
     const raw = req.rawBody || Buffer.from(JSON.stringify(req.body || {}));
@@ -47,7 +49,14 @@ export function attachPipelineWebhook(router, options = {}) {
       res.status(202).json({ ok: true, ignored: true });
       return;
     }
-    res.status(202).json({ ok: true, accepted: true, state: STATES.waiting_ci });
+    const overlay = ingest.placeWakeOverlay(body, { actor: "github-wake" });
+    res.status(202).json({
+      ok: true,
+      accepted: true,
+      state: overlay.state,
+      overlay: true,
+      item: overlay
+    });
   });
 }
 

@@ -1,5 +1,5 @@
 import { PRODUCTION_BRANCH, RELEASE_MODE, STATES } from "./constants.js";
-import { candidateIdFromKey, candidateKey, makeReleaseId } from "./ids.js";
+import { candidateIdFromKey, candidateKey, makeReleaseId, overlayIdFromRun } from "./ids.js";
 import { verifyArtifactDir } from "./artifact.js";
 import { applyTransition } from "./machine.js";
 
@@ -65,6 +65,7 @@ export function createIngest({ store, mode = RELEASE_MODE }) {
     if (existing) {
       return publicCandidate(existing, mode);
     }
+    store.consumeOverlay({ ciRunId: github.runId, ciRunAttempt: github.runAttempt });
     const row = {
       id,
       candidateKey: key,
@@ -104,8 +105,57 @@ export function createIngest({ store, mode = RELEASE_MODE }) {
     return publicCandidate(row, mode);
   }
 
+  function placeWakeOverlay(body, { actor = "github-wake", now } = {}) {
+    const run = body?.workflow_run || {};
+    const repository = body?.repository?.full_name;
+    if (!repository || !run.id) {
+      throw new Error("wake 缺少 repository / workflow_run.id");
+    }
+    const id = overlayIdFromRun({
+      repository,
+      runId: run.id,
+      attempt: run.run_attempt || 1
+    });
+    const existing = store.get(id);
+    if (existing) {
+      return publicCandidate(existing, mode);
+    }
+    const stamp = now || new Date().toISOString();
+    const prNumber = Number(run.pull_requests?.[0]?.number || 0);
+    const row = {
+      id,
+      candidateKey: `overlay|${repository}|${run.id}|${run.run_attempt || 1}`,
+      overlay: true,
+      dirty: false,
+      blockReason: "等待制品入库",
+      state: STATES.received,
+      transitions: [],
+      releaseId: `pending-run${run.id}-${run.run_attempt || 1}`,
+      version: "(pending)",
+      profile: "mengkai",
+      repository,
+      branch: run.head_branch || PRODUCTION_BRANCH,
+      prNumber,
+      sourceSha: null,
+      mergeSha: run.head_sha || null,
+      treeSha: run.head_sha || null,
+      ciWorkflow: run.name,
+      ciRunId: run.id,
+      ciRunAttempt: run.run_attempt || 1,
+      artifactSha256: null,
+      manifestSha256: null,
+      artifactDir: null,
+      createdAt: stamp,
+      updatedAt: stamp
+    };
+    applyTransition(row, STATES.waiting_ci, { actor, reason: "GitHub wake 已接收，等待制品入库", now: stamp });
+    store.insertCandidate(row);
+    return publicCandidate(row, mode);
+  }
+
   return {
     ingestVerified,
+    placeWakeOverlay,
     view(row) {
       return publicCandidate(row, mode);
     }

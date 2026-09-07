@@ -25,3 +25,7 @@ export function candidateKey({ repository, prNumber, sourceSha, releaseId }) {
 export function candidateIdFromKey(key) {
   return uuidFromKey(key);
 }
+
+export function overlayIdFromRun({ repository, runId, attempt }) {
+  return uuidFromKey(`overlay|${repository}|${runId}|${attempt}`);
+}

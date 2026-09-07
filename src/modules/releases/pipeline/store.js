@@ -41,6 +41,19 @@ export function createPipelineStore({ now } = {}) {
       candidates.push(row);
       return row;
     },
+    consumeOverlay({ ciRunId, ciRunAttempt }) {
+      const idx = candidates.findIndex(
+        (row) =>
+          row.overlay &&
+          Number(row.ciRunId) === Number(ciRunId) &&
+          Number(row.ciRunAttempt) === Number(ciRunAttempt)
+      );
+      if (idx < 0) {
+        return null;
+      }
+      const [removed] = candidates.splice(idx, 1);
+      return removed;
+    },
     supersedeOlder({ repository, prNumber, mergeSha, actor }) {
       for (const row of candidates) {
         if (

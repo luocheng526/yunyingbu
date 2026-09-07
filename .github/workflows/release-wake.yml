@@ -20,16 +20,58 @@ jobs:
   wake:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main')
+    permissions:
+      actions: read
+      contents: read
     steps:
       - name: POST HMAC wake (no deploy)
         env:
           CONTROLLER_WEBHOOK_URL: ${{ secrets.CONTROLLER_WEBHOOK_URL }}
           CONTROLLER_WEBHOOK_SECRET: ${{ secrets.CONTROLLER_WEBHOOK_SECRET }}
+          GH_TOKEN: ${{ github.token }}
+          INPUT_RUN_ID: ${{ github.event.inputs.run_id }}
         run: |
           set -euo pipefail
           if [ -z "${CONTROLLER_WEBHOOK_URL:-}" ] || [ -z "${CONTROLLER_WEBHOOK_SECRET:-}" ]; then
             echo "controller webhook not configured; skip wake (shadow). This job never deploys."
             exit 0
           fi
-          echo "wake would POST to controller; production deploy is not this workflow."
-          exit 0
+
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            RUN_ID="${INPUT_RUN_ID:-}"
+            if [ -z "$RUN_ID" ]; then
+              RUN_ID=$(gh run list --workflow "Release artifact" --branch main --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+            fi
+            if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+              echo "no successful Release artifact run to wake"
+              exit 1
+            fi
+            RUN_JSON=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}")
+            echo "$RUN_JSON" | jq -c --arg repo "$GITHUB_REPOSITORY" '{action:"completed",repository:{full_name:$repo},workflow_run:.}' > /tmp/wake.json
+          else
+            jq -c '{action:.action,repository:{full_name:.repository.full_name},workflow_run:.workflow_run}' "$GITHUB_EVENT_PATH" > /tmp/wake.json
+          fi
+
+          python3 - <<'PY'
+          import hashlib, hmac, json, os, urllib.request
+          body = open("/tmp/wake.json", "rb").read()
+          payload = json.loads(body)
+          run = payload.get("workflow_run") or {}
+          secret = os.environ["CONTROLLER_WEBHOOK_SECRET"].encode("utf-8")
+          sig = "sha256=" + hmac.new(secret, body, hashlib.sha256).hexdigest()
+          delivery = "wake-%s-%s" % (run.get("id"), run.get("run_attempt") or 1)
+          req = urllib.request.Request(
+              os.environ["CONTROLLER_WEBHOOK_URL"],
+              data=body,
+              method="POST",
+              headers={
+                  "Content-Type": "application/json",
+                  "X-GitHub-Event": "workflow_run",
+                  "X-GitHub-Delivery": delivery,
+                  "X-Hub-Signature-256": sig,
+              },
+          )
+          with urllib.request.urlopen(req, timeout=30) as resp:
+              print("wake posted", resp.status, resp.read().decode("utf-8", "replace")[:500])
+          PY
+          echo "wake posted HMAC to controller; this job never deploys."
