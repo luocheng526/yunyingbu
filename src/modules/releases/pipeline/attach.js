@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { PRODUCTION_BRANCH, RELEASE_MODE, BUILD_WORKFLOW_NAME, STATES } from "./constants.js";
+import { PRODUCTION_BRANCH, RELEASE_MODE, BUILD_WORKFLOW_NAME, RELEASE_PROFILE, STATES } from "./constants.js";
 import { verifyArtifactDir } from "./artifact.js";
 import { downloadReleaseTriple, githubFactsFromWake, resolveGithubToken } from "./github-artifact.js";
 import { verifySignature } from "./hmac.js";
@@ -207,8 +207,17 @@ export function attachPipelineRoutes(router, options = {}) {
   });
 
   router.get("/readyz", (_req, res) => {
+    let version = null;
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"));
+      version = String(pkg.version || "").trim() || null;
+    } catch {
+      version = null;
+    }
     res.json({
       ok: true,
+      version,
+      profile: RELEASE_PROFILE,
       release_mode: mode,
       worker_ready: mode !== "production",
       deployment_ready: mode === "production",

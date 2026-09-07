@@ -3,188 +3,118 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>版本发布中心 · 运营部</title>
-    <link rel="stylesheet" href="/shared/layout.css" />
-    <style>
-      main.page {
-        flex: 1;
-        min-width: 0;
-      }
-      .heading-row {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.75rem;
-        margin: 0 0 0.5rem;
-      }
-      .heading-row h1 { margin: 0; }
-      #refresh-btn {
-        font-size: 1.05rem;
-        padding: 0.6rem 1.35rem;
-        box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.18);
-      }
-      #refresh-meta { margin: 0 0 1rem; }
-      .banner {
-        background: #fff1f2;
-        border: 1px solid #fecdd3;
-        color: #9f1239;
-        border-radius: 14px;
-        padding: 1rem 1.15rem;
-        line-height: 1.65;
-        font-weight: 600;
-        margin: 0 0 1.5rem;
-      }
-      .grid {
-        display: grid;
-        gap: 1.25rem;
-      }
-      .panel {
-        background: var(--xm-card, var(--card, #fff));
-        border: 1px solid var(--xm-line, var(--line, #e7e5e4));
-        border-radius: 16px;
-        padding: 1.15rem 1.2rem 1.3rem;
-        box-shadow: var(--xm-shadow, var(--shadow, none));
-      }
-      .panel h2 {
-        margin: 0 0 0.85rem;
-        font-size: 1.15rem;
-      }
-      .row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        align-items: center;
-      }
-      button {
-        font: inherit;
-        border: 0;
-        border-radius: 999px;
-        padding: 0.45rem 0.95rem;
-        cursor: pointer;
-        background: var(--xm-primary, #1677ff);
-        color: #fff;
-      }
-      button.secondary { background: #44403c; }
-      button.danger { background: #be123c; }
-      button:disabled {
-        cursor: not-allowed;
-        opacity: 0.55;
-      }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.92rem;
-      }
-      th, td {
-        text-align: left;
-        padding: 0.55rem 0.4rem;
-        border-bottom: 1px solid var(--line);
-        vertical-align: top;
-      }
-      .muted { color: var(--xm-muted, var(--muted, #8c8c8c)); font-size: 0.88rem; }
-      .badge {
-        display: inline-block;
-        padding: 0.1rem 0.5rem;
-        border-radius: 999px;
-        background: #ccfbf1;
-        color: var(--accent-ink, #0f766e);
-        font-size: 0.75rem;
-        margin-left: 0.35rem;
-      }
-      .lock-box {
-        background: #0f766e;
-        color: #fff;
-        border-radius: 14px;
-        padding: 1rem 1.15rem;
-      }
-      .lock-box.empty { background: #57534e; }
-      .flash {
-        margin: 0 0 1rem;
-        padding: 0.7rem 0.9rem;
-        border-radius: 10px;
-        background: #fef3c7;
-        color: #92400e;
-        display: none;
-      }
-      .flash.show { display: block; }
-      .flash.err { background: #ffe4e6; color: #9f1239; }
-      .cards {
-        display: grid;
-        gap: 1rem;
-      }
-      .ticket {
-        border: 1px solid var(--xm-line, var(--line, #e7e5e4));
-        border-radius: 14px;
-        padding: 1rem 1.1rem 1.05rem;
-        background: #fff;
-        cursor: grab;
-      }
-      .ticket:active { cursor: grabbing; }
-      .ticket.dragging { opacity: 0.55; }
-      .ticket h3 {
-        margin: 0 0 0.65rem;
-        font-size: 1.05rem;
-      }
-      .ticket dl {
-        display: grid;
-        grid-template-columns: 6.5rem 1fr;
-        gap: 0.35rem 0.75rem;
-        margin: 0 0 0.85rem;
-        font-size: 0.92rem;
-      }
-      .ticket dt { color: var(--xm-muted, var(--muted, #8c8c8c)); }
-      .ticket dd { margin: 0; }
-      .files { margin: 0; padding-left: 1.1rem; }
-    </style>
+    <title>运营中心 · 版本发布</title>
+    <link rel="stylesheet" href="/releases.css" />
   </head>
   <body>
-    <div id="site-nav"></div>
-    <main class="page" role="main">
-      <p class="kicker">运营部主脑闸门</p>
-      <div class="heading-row">
-        <h1>版本发布中心</h1>
-        <button type="button" id="refresh-btn">刷新</button>
+    <header class="oc-top">
+      <div class="oc-brand">
+        <strong>运营中心</strong>
+        <span class="oc-crumb">运营中心 / 待上线</span>
       </div>
-      <p class="lead">各模块对话提交发版后在这里排队；看清更新内容、调整顺序，点通过才放行。GitHub 合入主支后的不可变制品进入「待上线」，PR tip 不会入列。</p>
-      <p id="refresh-meta" class="muted">点刷新立刻拉队列与待上线候选；同时每 3 秒自动拉取 GET /api/releases/queue 与 /api/releases/candidates。</p>
-      <div class="banner">
-        单据来自各模块对话 POST /api/releases，本页不提供手填表。点「通过」才真正发版（push-xingmai-to-ecs.sh，是否重启看单据）。未通过禁止发。同一时刻一把锁；正在发时其他通过禁用；下一条不会自动发。发版队列写入 MySQL（RDS）；配好 MYSQL_* 后重启 mengkai，刷新仍能看到单据。
+      <div class="oc-top-right">
+        <div class="theme-switch" role="group" aria-label="外观">
+          <button type="button" id="theme-light" class="on">浅色</button>
+          <button type="button" id="theme-dark">深色</button>
+        </div>
+        <span class="oc-clock" id="clock">—</span>
+        <span class="oc-who">超管 / <b id="who">—</b></span>
       </div>
+    </header>
+
+    <section class="oc-hero">
+      <div>
+        <p class="oc-kicker">OPERATING CENTER</p>
+        <h1>运营中心</h1>
+      </div>
+      <div class="oc-run">
+        <span class="pill run">运行</span>
+        <span class="ver" id="app-version">读取版本中</span>
+        <button type="button" class="act" id="refresh-btn">刷新</button>
+      </div>
+    </section>
+
+    <nav class="oc-tabs" aria-label="运营中心页签">
+      <button type="button" class="oc-tab active" data-tab="queue">
+        <h2>待上线</h2>
+        <p>各对话提交的发版队列</p>
+      </button>
+      <button type="button" class="oc-tab" data-tab="history">
+        <h2>版本记录</h2>
+        <p>已成功发布</p>
+      </button>
+      <button type="button" class="oc-tab" data-tab="logs">
+        <h2>运行日志</h2>
+        <p>发版流水 / log</p>
+      </button>
+      <button type="button" class="oc-tab" data-tab="worker">
+        <h2>Worker 运行</h2>
+        <p>全局锁、mengkai 是否在发</p>
+      </button>
+      <button type="button" class="oc-tab" data-tab="feed">
+        <h2>文件投喂</h2>
+        <p>后续直传，本期不做上传</p>
+      </button>
+    </nav>
+
+    <div class="oc-wrap">
       <div id="flash" class="flash" role="status"></div>
-      <div class="grid">
-        <section class="panel" id="lock-panel">
-          <h2>发布中（全局锁）</h2>
-          <div id="lock-view" class="lock-box empty">当前空闲，没有发布任务。</div>
-        </section>
-        <section class="panel">
-          <h2>待上线（GitHub 不可变制品）</h2>
-          <p class="muted">只有真实 UUID candidate_id、state=pending_approval、can_approve=true 且非 overlay 才能点发布。等待入库 overlay 不可批准。</p>
-          <div id="candidates-view" class="cards"></div>
-        </section>
-        <section class="panel">
-          <h2>待放行（各对话框交来的发版单）</h2>
-          <p class="muted">数字越小越先发。可上移 / 下移，或拖拽卡片。通过 = 放行你点的这一单。</p>
-          <div id="queue-view" class="cards"></div>
-        </section>
-        <section class="panel">
-          <h2>历史（success / failed / rejected）</h2>
+      <section class="oc-card">
+        <div class="pane on" id="pane-queue">
+          <h3>待上线</h3>
+          <p class="hint">各对话框交单后出现在这里；点通过才发版；可调顺序。本页不提供手填表。点「通过」才真正发版（push-xingmai-to-ecs.sh，是否重启看单据）。</p>
+          <div class="caps" id="stat-caps"></div>
+          <div class="note">确认发布后按现有纪律发版：同一时刻一把锁，禁止抢发；未通过禁止发；队列下一条不会自动发布。</div>
+          <div id="queue-view" class="tickets"></div>
+          <div id="candidates-wrap" hidden>
+            <h3 style="margin-top:1.4rem">GitHub 制品</h3>
+            <p class="hint">主支合入后的不可变制品。overlay 不可批准；shadow 模式禁止部署。</p>
+            <div id="candidates-view" class="tickets"></div>
+          </div>
+        </div>
+        <div class="pane" id="pane-history">
+          <h3>版本记录</h3>
+          <p class="hint">只列出已经成功发布的单据，数字来自当前队列接口，不编造。</p>
           <div id="history-view"></div>
-        </section>
-      </div>
-    </main>
-    <script src="/shared/nav.js"></script>
+        </div>
+        <div class="pane" id="pane-logs">
+          <h3>运行日志</h3>
+          <p class="hint">每张单上的发版流水 log。</p>
+          <div id="logs-view" class="log-list"></div>
+        </div>
+        <div class="pane" id="pane-worker">
+          <h3>Worker 运行</h3>
+          <p class="hint">全局发布锁与当前运行模式。正在发时其他「通过」会禁用。</p>
+          <div id="lock-view" class="worker-box idle">当前空闲，没有发布任务。</div>
+          <p class="hint" id="ready-meta" style="margin-top:0.9rem"></p>
+        </div>
+        <div class="pane" id="pane-feed">
+          <h3>文件投喂</h3>
+          <div class="feed-box">
+            后续直传。第一期请各对话 POST /api/releases 提交【发布文档】，不要在本页上传文件。
+          </div>
+        </div>
+      </section>
+    </div>
+
     <script>
       const flashEl = document.getElementById("flash");
+      const crumb = document.querySelector(".oc-crumb");
+      const tabTitles = {
+        queue: "运营中心 / 待上线",
+        history: "运营中心 / 版本记录",
+        logs: "运营中心 / 运行日志",
+        worker: "运营中心 / Worker 运行",
+        feed: "运营中心 / 文件投喂"
+      };
+
       function flash(message, isError) {
         flashEl.textContent = message;
         flashEl.className = "flash show" + (isError ? " err" : "");
       }
-
       function goLogin() {
         window.location.replace("/login");
       }
-
       async function api(path, options) {
         const res = await fetch(path, {
           credentials: "same-origin",
@@ -206,11 +136,9 @@
         }
         return data;
       }
-
       function fmt(ts) {
         return ts ? String(ts).replace("T", " ").replace("Z", " UTC") : "—";
       }
-
       function esc(value) {
         return String(value == null ? "" : value)
           .replaceAll("&", "&amp;")
@@ -218,155 +146,216 @@
           .replaceAll(">", "&gt;")
           .replaceAll('"', "&quot;");
       }
-
       function demoBadge(item) {
         return item.demo ? '<span class="badge">演示</span>' : "";
       }
-
-      function renderLock(lock) {
-        const el = document.getElementById("lock-view");
-        if (!lock.locked) {
-          el.className = "lock-box empty";
-          el.textContent = "当前空闲，没有发布任务。";
-          return;
-        }
-        el.className = "lock-box";
-        const cur = lock.current || {};
-        el.innerHTML =
-          "<div>锁已被占用，禁止第二下发布。</div>" +
-          "<div>版本号：" + esc(cur.version || "—") + "</div>" +
-          "<div>开始时间：" + esc(fmt(cur.startedAt)) + "</div>";
-      }
-
       function fileList(item) {
         const files = item.files || [];
         if (!files.length) {
-          return '<span class="muted">（无文件列表）</span>';
+          return '<span class="oc-crumb">（无文件列表）</span>';
         }
         return "<ul class=\"files\">" + files.map(function (file) {
           return "<li>" + esc(file) + "</li>";
         }).join("") + "</ul>";
       }
+      function countBy(items, status) {
+        return items.filter(function (item) { return item.status === status; }).length;
+      }
+      function setTheme(mode) {
+        document.documentElement.setAttribute("data-theme", mode);
+        document.getElementById("theme-light").classList.toggle("on", mode !== "dark");
+        document.getElementById("theme-dark").classList.toggle("on", mode === "dark");
+        try { localStorage.setItem("oc-theme", mode); } catch (e) {}
+      }
+      function tickClock() {
+        const now = new Date();
+        const pad = function (n) { return String(n).padStart(2, "0"); };
+        document.getElementById("clock").textContent =
+          now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate()) +
+          " " + pad(now.getHours()) + ":" + pad(now.getMinutes()) + ":" + pad(now.getSeconds());
+      }
+
+      function renderStats(items) {
+        const queued = countBy(items, "queued");
+        const approved = countBy(items, "approved");
+        const publishing = countBy(items, "publishing");
+        const failed = countBy(items, "failed");
+        const success = countBy(items, "success");
+        document.getElementById("stat-caps").innerHTML =
+          '<span class="cap wait"><b>' + queued + "</b>待主脑</span>" +
+          '<span class="cap ok"><b>' + approved + "</b>已同意</span>" +
+          '<span class="cap busy"><b>' + publishing + "</b>发布中</span>" +
+          '<span class="cap fail"><b>' + failed + "</b>失败</span>" +
+          '<span class="cap done"><b>' + success + "</b>近已上线</span>";
+      }
+
+      function renderLock(lock, ready) {
+        const el = document.getElementById("lock-view");
+        if (!lock.locked) {
+          el.className = "worker-box idle";
+          el.textContent = "当前空闲，没有发布任务。mengkai 未持锁。";
+        } else {
+          const cur = lock.current || {};
+          el.className = "worker-box";
+          el.innerHTML =
+            "<div>锁已被占用，禁止第二下发布。</div>" +
+            "<div>版本号：" + esc(cur.version || "—") + "</div>" +
+            "<div>开始时间：" + esc(fmt(cur.startedAt)) + "</div>";
+        }
+        const bits = [];
+        if (ready && ready.version) bits.push("版本 " + ready.version);
+        if (ready && ready.release_mode) bits.push("模式 " + ready.release_mode);
+        bits.push(ready && ready.deployment_ready ? "deployment_ready" : "shadow，禁止自动部署");
+        document.getElementById("ready-meta").textContent = bits.join(" · ");
+        const ver = document.getElementById("app-version");
+        if (ready && ready.version) {
+          ver.textContent = "mengkai " + ready.version + (ready.release_mode ? " · " + ready.release_mode : "");
+        } else {
+          ver.textContent = "环境未返回版本号";
+        }
+      }
 
       function renderCandidates(items) {
+        const wrap = document.getElementById("candidates-wrap");
         const el = document.getElementById("candidates-view");
-        if (!el) return;
         if (!items.length) {
-          el.innerHTML = '<p class="muted">还没有待上线候选。PR tip 不会出现在这里；需主支合入并完成制品入库。</p>';
+          wrap.hidden = true;
+          el.innerHTML = "";
           return;
         }
-        el.innerHTML = items
-          .map(function (item) {
-            const can = item.can_approve;
-            const overlay = item.overlay;
-            const btn = overlay
-              ? "<button disabled>等待入库，不可批准</button>"
-              : can
-                ? "<button data-act=\"cand-approve\">发布此候选</button>"
-                : "<button disabled>" + esc(item.block_reason || "不可批准") + "</button>";
-            return (
-              "<article class=\"ticket\" data-candidate=\"" + esc(item.id) + "\">" +
-              "<h3>" + esc(item.version) + " · " + esc(item.state) + (overlay ? '<span class="badge">overlay</span>' : "") + "</h3>" +
-              "<dl>" +
-              "<dt>candidate_id</dt><dd>" + esc(item.id) + "</dd>" +
-              "<dt>release_id</dt><dd>" + esc(item.releaseId) + "</dd>" +
-              "<dt>merge SHA</dt><dd>" + esc(item.mergeSha) + "</dd>" +
-              "<dt>CI run</dt><dd>" + esc(item.ciRunId) + " / attempt " + esc(item.ciRunAttempt) + "</dd>" +
-              "<dt>artifact</dt><dd>" + esc(item.artifactSha256) + "</dd>" +
-              "<dt>manifest</dt><dd>" + esc(item.manifestSha256) + "</dd>" +
-              "</dl>" +
-              "<div class=\"row\">" + btn + "</div></article>"
-            );
-          })
-          .join("");
+        wrap.hidden = false;
+        el.innerHTML = items.map(function (item) {
+          const overlay = item.overlay;
+          const btn = overlay
+            ? "<button class=\"act\" disabled>等待入库，不可批准</button>"
+            : item.can_approve
+              ? "<button class=\"act\" data-act=\"cand-approve\">发布此候选</button>"
+              : "<button class=\"act\" disabled>" + esc(item.block_reason || "不可批准") + "</button>";
+          return (
+            "<article class=\"ticket\" data-candidate=\"" + esc(item.id) + "\">" +
+            "<h4>" + esc(item.version) + " · " + esc(item.state) + (overlay ? '<span class="badge">overlay</span>' : "") + "</h4>" +
+            "<dl>" +
+            "<dt>candidate_id</dt><dd>" + esc(item.id) + "</dd>" +
+            "<dt>release_id</dt><dd>" + esc(item.releaseId) + "</dd>" +
+            "<dt>merge SHA</dt><dd>" + esc(item.mergeSha) + "</dd>" +
+            "</dl><div class=\"row\">" + btn + "</div></article>"
+          );
+        }).join("");
       }
 
       function renderQueue(items, locked) {
         const el = document.getElementById("queue-view");
         if (!items.length) {
-          el.innerHTML = '<p class="muted">还没有对话交来的发版单。</p>';
+          el.innerHTML = '<div class="empty"><div>还没有对话交来的发版单</div><div>各模块对话框提交【发布文档】后会出现在这里</div></div>';
           return;
         }
-        el.innerHTML = items
-          .map(function (item, index) {
-            const seq = item.queueIndex || index + 1;
-            const confirmBtn = locked
-              ? "<button disabled>有发布正在进行，请等待</button>"
-              : "<button data-act=\"pass\">通过</button>";
-            const upOff = index === 0 ? " disabled" : "";
-            const downOff = index === items.length - 1 ? " disabled" : "";
-            return (
-              "<article class=\"ticket\" draggable=\"true\" data-id=\"" + esc(item.id) + "\">" +
-              "<h3>第 " + seq + " 位 · " + esc(item.module) + " " + esc(item.version) + demoBadge(item) + "</h3>" +
-              "<dl>" +
-              "<dt>来自对话</dt><dd>" + esc(item.source || item.applicant || "—") + "</dd>" +
-              "<dt>模块</dt><dd>" + esc(item.module) + "</dd>" +
-              "<dt>版本号</dt><dd>" + esc(item.version) + "</dd>" +
-              "<dt>更新了什么</dt><dd>" + esc(item.summary) + "</dd>" +
-              "<dt>文件列表</dt><dd>" + fileList(item) + "</dd>" +
-              "<dt>怎么验收</dt><dd>" + esc(item.acceptance || "—") + "</dd>" +
-              "<dt>是否重启</dt><dd>" + (item.restart ? "是" : "否") + "</dd>" +
-              "<dt>提交时间</dt><dd>" + esc(fmt(item.submittedAt)) + "</dd>" +
-              "</dl>" +
-              "<div class=\"row\">" +
-              confirmBtn +
-              "<button class=\"secondary\" data-act=\"up\"" + upOff + ">上移</button>" +
-              "<button class=\"secondary\" data-act=\"down\"" + downOff + ">下移</button>" +
-              "<button class=\"danger\" data-act=\"reject\">驳回</button>" +
-              "</div></article>"
-            );
-          })
-          .join("");
+        el.innerHTML = items.map(function (item, index) {
+          const seq = item.queueIndex || index + 1;
+          const confirmBtn = locked
+            ? "<button class=\"act\" disabled>有发布正在进行，请等待</button>"
+            : "<button class=\"act\" data-act=\"pass\">通过</button>";
+          const upOff = index === 0 ? " disabled" : "";
+          const downOff = index === items.length - 1 ? " disabled" : "";
+          return (
+            "<article class=\"ticket grab\" draggable=\"true\" data-id=\"" + esc(item.id) + "\">" +
+            "<h4>第 " + seq + " 位 · " + esc(item.module) + " " + esc(item.version) + demoBadge(item) + "</h4>" +
+            "<dl>" +
+            "<dt>来自对话</dt><dd>" + esc(item.source || item.applicant || "—") + "</dd>" +
+            "<dt>更新了什么</dt><dd>" + esc(item.summary) + "</dd>" +
+            "<dt>文件</dt><dd>" + fileList(item) + "</dd>" +
+            "<dt>验收</dt><dd>" + esc(item.acceptance || "—") + "</dd>" +
+            "<dt>排队序号</dt><dd>" + seq + "</dd>" +
+            "</dl>" +
+            "<div class=\"row\">" +
+            confirmBtn +
+            "<button class=\"act secondary\" data-act=\"up\"" + upOff + ">上移</button>" +
+            "<button class=\"act secondary\" data-act=\"down\"" + downOff + ">下移</button>" +
+            "<button class=\"act danger\" data-act=\"reject\">驳回</button>" +
+            "</div></article>"
+          );
+        }).join("");
       }
 
       function renderHistory(items) {
         const el = document.getElementById("history-view");
-        if (!items.length) {
-          el.innerHTML = '<p class="muted">暂无历史。</p>';
+        const success = items.filter(function (item) { return item.status === "success"; });
+        if (!success.length) {
+          el.innerHTML = '<div class="empty">还没有成功发布的版本记录</div>';
           return;
         }
         el.innerHTML =
-          "<table><thead><tr><th>状态</th><th>版本</th><th>来自 / 模块</th><th>审核人 / 时间</th><th>日志</th></tr></thead><tbody>" +
-          items
-            .map(function (item) {
-              return (
-                "<tr>" +
-                "<td>" + esc(item.status) + "</td>" +
-                "<td>" + esc(item.version) + demoBadge(item) + "</td>" +
-                "<td>" + esc(item.source || item.applicant || "—") + "<br><span class=\"muted\">" + esc(item.module) + "</span></td>" +
-                "<td>" + esc(item.reviewer || "—") + "<br><span class=\"muted\">" + esc(fmt(item.reviewedAt)) + "</span>" +
-                (item.rejectReason ? "<br>原因：" + esc(item.rejectReason) : "") +
-                "</td>" +
-                "<td>" + esc(item.log || "—") + "</td></tr>"
-              );
-            })
-            .join("") +
+          "<table><thead><tr><th>版本</th><th>来自 / 模块</th><th>时间</th><th>日志</th></tr></thead><tbody>" +
+          success.map(function (item) {
+            return (
+              "<tr><td>" + esc(item.version) + demoBadge(item) + "</td>" +
+              "<td>" + esc(item.source || item.applicant || "—") + "<br><span class=\"oc-crumb\">" + esc(item.module) + "</span></td>" +
+              "<td>" + esc(fmt(item.publishFinishedAt || item.reviewedAt)) + "</td>" +
+              "<td>" + esc(item.log || "—") + "</td></tr>"
+            );
+          }).join("") +
           "</tbody></table>";
       }
 
+      function renderLogs(items) {
+        const el = document.getElementById("logs-view");
+        const rows = items.filter(function (item) { return item.log; });
+        if (!rows.length) {
+          el.innerHTML = '<div class="empty">暂无发版流水</div>';
+          return;
+        }
+        el.innerHTML = rows.map(function (item) {
+          return (
+            "<article class=\"log-item\">" +
+            "<div><b>" + esc(item.version) + "</b> · " + esc(item.status) + " · " + esc(item.module) + "</div>" +
+            "<div>" + esc(item.log) + "</div>" +
+            "<div class=\"oc-crumb\">" + esc(fmt(item.publishFinishedAt || item.reviewedAt || item.submittedAt)) + "</div>" +
+            "</article>"
+          );
+        }).join("");
+      }
+
       async function refresh() {
-        const [all, queue, lock, candidates] = await Promise.all([
+        const [all, queue, lock, candidates, ready, me] = await Promise.all([
           api("/api/releases"),
           api("/api/releases/queue"),
           api("/api/releases/lock"),
-          api("/api/releases/candidates")
+          api("/api/releases/candidates"),
+          api("/api/releases/readyz"),
+          api("/api/auth/me")
         ]);
         const items = all.items || [];
-        renderLock(lock);
+        document.getElementById("who").textContent = me.displayName || me.username || "罗成";
+        renderStats(items);
+        renderLock(lock, ready);
         renderCandidates(candidates.items || []);
         renderQueue(queue.items || [], lock.locked);
-        renderHistory(
-          items.filter(function (item) {
-            return item.status === "success" || item.status === "failed" || item.status === "rejected";
-          })
-        );
-        const stamp = new Date().toISOString().replace("T", " ").replace("Z", " UTC");
-        const meta = document.getElementById("refresh-meta");
-        if (meta) {
-          meta.textContent = "已拉取队列 " + (queue.items || []).length + " 张待放行单 · " + stamp + " · 每 3 秒自动刷新";
-        }
+        renderHistory(items);
+        renderLogs(items);
         return lock;
       }
+
+      document.querySelectorAll(".oc-tab").forEach(function (tab) {
+        tab.addEventListener("click", function () {
+          const name = tab.getAttribute("data-tab");
+          document.querySelectorAll(".oc-tab").forEach(function (node) {
+            node.classList.toggle("active", node === tab);
+          });
+          document.querySelectorAll(".pane").forEach(function (pane) {
+            pane.classList.toggle("on", pane.id === "pane-" + name);
+          });
+          crumb.textContent = tabTitles[name] || "运营中心";
+        });
+      });
+
+      document.getElementById("theme-light").addEventListener("click", function () { setTheme("light"); });
+      document.getElementById("theme-dark").addEventListener("click", function () { setTheme("dark"); });
+      try {
+        setTheme(localStorage.getItem("oc-theme") === "dark" ? "dark" : "light");
+      } catch (e) {
+        setTheme("light");
+      }
+      tickClock();
+      setInterval(tickClock, 1000);
 
       document.body.addEventListener("click", async function (event) {
         const btn = event.target.closest("button[data-act]");
@@ -431,7 +420,7 @@
         let dragId = "";
         root.addEventListener("dragstart", function (event) {
           const card = event.target.closest(".ticket");
-          if (!card) return;
+          if (!card || !card.getAttribute("data-id")) return;
           dragId = card.getAttribute("data-id") || "";
           card.classList.add("dragging");
           event.dataTransfer.effectAllowed = "move";
@@ -447,7 +436,7 @@
           event.preventDefault();
           const over = event.target.closest(".ticket");
           if (!dragId || !over) return;
-          const ids = Array.prototype.map.call(root.querySelectorAll(".ticket"), function (node) {
+          const ids = Array.prototype.map.call(root.querySelectorAll(".ticket[data-id]"), function (node) {
             return node.getAttribute("data-id");
           });
           const from = ids.indexOf(dragId);

@@ -70,7 +70,7 @@ test("module pages are delivered instead of placeholders", async () => {
       ["/shen", /沈子晗运营中心/],
       ["/han", /韩梦凯运营中心/],
       ["/people", /人员管理/],
-      ["/releases", /版本发布中心/],
+      ["/releases", /运营中心/],
       ["/me", /个人中心/]
     ];
     for (const [path, title] of pages) {
@@ -78,6 +78,12 @@ test("module pages are delivered instead of placeholders", async () => {
       assert.equal(res.status, 200, path);
       assert.match(text, title, path);
       assert.doesNotMatch(text, /该模块 Agent 尚未交付/, path);
+      if (path === "/releases") {
+        assert.match(text, /releases\.css/, path);
+        assert.doesNotMatch(text, /shared\/nav\.js/, path);
+        assert.doesNotMatch(text, /shared\/layout\.css/, path);
+        continue;
+      }
       assert.match(text, /shared\/nav\.js/, path);
       assert.match(text, /shared\/layout\.css/, path);
     }

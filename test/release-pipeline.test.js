@@ -222,6 +222,7 @@ test("PR tip / non-main ingest is rejected; verified ingest becomes pending_appr
     const ready = await json(base, cookie, "/api/releases/readyz");
     assert.equal(ready.body.deployment_ready, false);
     assert.equal(ready.body.outbox, 0);
+    assert.equal(ready.body.version, "0.1.0");
   });
 });
 

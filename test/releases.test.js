@@ -94,13 +94,16 @@ test("GET /releases is the release center page", async () => {
     const res = await fetch(`${base}/releases`, { headers: { Cookie: activeCookie } });
     const text = await res.text();
     assert.equal(res.status, 200);
-    assert.match(text, /版本发布中心/);
-    assert.match(text, /各模块对话提交发版后在这里排队/);
+    assert.match(text, /运营中心/);
+    assert.match(text, /OPERATING CENTER/);
+    assert.match(text, /各对话框交单后出现在这里/);
     assert.match(text, /id="refresh-btn"/);
-    assert.match(text, /点通过才放行/);
-    assert.match(text, /href="\/shared\/layout.css"/);
-    assert.match(text, /src="\/shared\/nav.js"/);
-    assert.match(text, /<main class="page"/);
+    assert.match(text, /点「通过」才真正发版/);
+    assert.match(text, /href="\/releases.css"/);
+    assert.doesNotMatch(text, /href="\/shared\/layout.css"/);
+    assert.doesNotMatch(text, /src="\/shared\/nav.js"/);
+    assert.match(text, /data-tab="queue"/);
+    assert.match(text, /data-tab="feed"/);
     assert.doesNotMatch(text, /<nav class="site-nav"/);
     assert.match(text, /push-xingmai-to-ecs/);
     assert.match(text, /window\.location\.replace\("\/login"\)/);
@@ -115,13 +118,31 @@ test("releases.html has no login form and sends users to /login", () => {
   const html = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../public/releases.html"), "utf8");
   assert.doesNotMatch(html, /id="login-form"/);
   assert.doesNotMatch(html, /<input[^>]*type="password"/);
-  assert.match(html, /\/shared\/layout.css/);
-  assert.match(html, /\/shared\/nav.js/);
+  assert.match(html, /\/releases.css/);
+  assert.doesNotMatch(html, /\/shared\/layout.css/);
+  assert.doesNotMatch(html, /\/shared\/nav.js/);
   assert.doesNotMatch(html, /id="apply-form"/);
   assert.doesNotMatch(html, /提交发布申请/);
   assert.match(html, /id="refresh-btn"/);
   assert.match(html, /点「通过」才真正发版/);
   assert.match(html, /\/api\/releases\/.*confirm/);
+});
+
+test("login page does not use the operating-center shell", () => {
+  const html = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../public/login.html"), "utf8");
+  assert.doesNotMatch(html, /releases.css/);
+  assert.doesNotMatch(html, /oc-top/);
+  assert.doesNotMatch(html, /OPERATING CENTER/);
+});
+
+test("GET /releases.css is page-only stylesheet", async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/releases.css`, { headers: { Cookie: activeCookie } });
+    const text = await res.text();
+    assert.equal(res.status, 200);
+    assert.match(text, /\.oc-top/);
+    assert.match(text, /\.oc-tab\.active/);
+  });
 });
 
 test("unauthenticated page redirects to /login", async () => {
