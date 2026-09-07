@@ -156,19 +156,48 @@
       let knownQueueIds = null;
       const listPages = { queue: 1, history: 1, logs: 1 };
 
+      /* Theme SPA replace #xm-content and re-runs this script. Prefer the
+         current wrap so leftover empty #history-view / #logs-view are ignored. */
+      function pageRoot() {
+        return document.querySelector(".xm-content .oc-wrap") ||
+          document.querySelector(".oc-wrap") ||
+          document.body;
+      }
+      function liveEl(id) {
+        const root = pageRoot();
+        return (root && root.querySelector("#" + id)) || document.getElementById(id);
+      }
       function setText(idOrEl, text) {
-        const el = typeof idOrEl === "string" ? document.getElementById(idOrEl) : idOrEl;
+        const el = typeof idOrEl === "string" ? liveEl(idOrEl) : idOrEl;
         if (!el) {
           return;
         }
         el.textContent = text;
       }
       function flash(message, isError) {
-        if (!flashEl) {
+        const el = liveEl("flash") || flashEl;
+        if (!el) {
           return;
         }
-        flashEl.textContent = message;
-        flashEl.className = "flash show" + (isError ? " err" : "");
+        el.textContent = message;
+        el.className = "flash show" + (isError ? " err" : "");
+      }
+      function showTab(name) {
+        const root = pageRoot();
+        root.querySelectorAll(".oc-tab").forEach(function (node) {
+          node.classList.toggle("active", node.getAttribute("data-tab") === name);
+        });
+        root.querySelectorAll(".pane").forEach(function (pane) {
+          pane.classList.toggle("on", pane.id === "pane-" + name);
+        });
+        const crumbEl = root.querySelector(".oc-crumb") || crumb;
+        setText(crumbEl, tabTitles[name] || "版本发布中心");
+        const scroller = document.querySelector(".xm-content");
+        if (scroller) {
+          scroller.scrollTop = 0;
+        } else {
+          window.scrollTo(0, 0);
+        }
       }
       function goLogin() {
         window.location.replace("/login");
@@ -570,7 +599,7 @@
       }
 
       function renderStats(items) {
-        const caps = document.getElementById("stat-caps");
+        const caps = liveEl("stat-caps");
         if (!caps) {
           return;
         }
@@ -588,7 +617,7 @@
       }
 
       function renderLock(lock, ready) {
-        const el = document.getElementById("lock-view");
+        const el = liveEl("lock-view");
         if (!el) {
           return;
         }
@@ -611,7 +640,7 @@
       }
 
       function renderCurrentVersions(versions) {
-        const el = document.getElementById("current-versions");
+        const el = liveEl("current-versions");
         if (!el) {
           return;
         }
@@ -666,7 +695,7 @@
       }
 
       function renderQueue(items, locked, versions) {
-        const el = document.getElementById("queue-view");
+        const el = liveEl("queue-view");
         if (!el) {
           return;
         }
@@ -720,7 +749,7 @@
       }
 
       function renderHistory(items, locked) {
-        const el = document.getElementById("history-view");
+        const el = liveEl("history-view");
         if (!el) {
           return;
         }
@@ -752,7 +781,7 @@
       }
 
       function renderLogs(items) {
-        const el = document.getElementById("logs-view");
+        const el = liveEl("logs-view");
         if (!el) {
           return;
         }
@@ -826,30 +855,25 @@
         }
       }
 
-      document.querySelectorAll(".oc-tab").forEach(function (tab) {
+      pageRoot().querySelectorAll(".oc-tab").forEach(function (tab) {
         if (tab.dataset.bound === "1") {
           return;
         }
         tab.dataset.bound = "1";
         tab.addEventListener("click", function () {
-          const name = tab.getAttribute("data-tab");
-          document.querySelectorAll(".oc-tab").forEach(function (node) {
-            node.classList.toggle("active", node === tab);
-          });
-          document.querySelectorAll(".pane").forEach(function (pane) {
-            pane.classList.toggle("on", pane.id === "pane-" + name);
-          });
-          setText(crumb, tabTitles[name] || "版本发布中心");
+          showTab(tab.getAttribute("data-tab"));
         });
       });
 
-      tickClock();
-      if (!window.__xmReleasesBound) {
-        window.__xmReleasesBound = true;
+      function bindPageTimers() {
         window.__xmPageTimers = window.__xmPageTimers || [];
         window.__xmPageTimers.push(setInterval(tickClock, 1000));
         window.__xmPageTimers.push(setInterval(function () { watchIncoming(); }, WATCH_MS));
       }
+
+      tickClock();
+      /* Theme SPA wipePageTimers() before remount. Always re-register. */
+      bindPageTimers();
 
       if (!window.__xmReleasesClicks) {
         window.__xmReleasesClicks = true;
@@ -923,7 +947,7 @@
       });
       }
 
-      const refreshBtn = document.getElementById("refresh-btn");
+      const refreshBtn = liveEl("refresh-btn");
       if (refreshBtn && refreshBtn.dataset.bound !== "1") {
         refreshBtn.dataset.bound = "1";
         refreshBtn.addEventListener("click", async function () {
@@ -937,9 +961,11 @@
       }
 
       pinUpgradeMask();
-      if (!window.__xmReleasesBooted) {
-        window.__xmReleasesBooted = true;
+      /* Always fill views on script activation. Theme SPA remounts this
+         page and leaves empty #history-view / #logs-view; a sticky
+         __xmReleasesBooted flag would skip refresh and the tabs look blank. */
       (async function bootReleases() {
+        window.__xmReleasesBooted = true;
         clearShellPending();
         const pending = readPendingUpgrade();
         if (!(await probeSession())) {
@@ -968,7 +994,6 @@
           flash(err.message, true);
         }
       })();
-      }
     </script>
   </body>
 </html>

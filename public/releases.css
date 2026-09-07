@@ -194,8 +194,12 @@ button.oc-tab.active,
   font-size: 15px;
   font-weight: 600;
 }
-.pane { display: none; }
-.pane.on { display: block; }
+.pane,
+.xm-content .pane,
+.page .pane { display: none !important; }
+.pane.on,
+.xm-content .pane.on,
+.page .pane.on { display: block !important; }
 
 .hint,
 .lead.hint {
@@ -386,8 +390,24 @@ html:has(.oc-wrap) .xm-content {
 }
 #history-view,
 #logs-view,
-#queue-view {
+#queue-view,
+.xm-content #history-view,
+.xm-content #logs-view,
+.xm-content #queue-view {
   overflow: visible;
+  color: var(--oc-text);
+  min-height: 2rem;
+}
+.xm-content #history-view table,
+#history-view table {
+  display: table;
+  width: 100%;
+  color: inherit;
+}
+.xm-content #logs-view .log-item,
+#logs-view .log-item {
+  display: block;
+  color: inherit;
 }
 .oc-pager {
   display: flex;

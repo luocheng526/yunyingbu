@@ -172,6 +172,16 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /oc-after-upgrade/);
     assert.match(text, /正在刷新界面/);
     assert.match(text, /consumePendingUpgrade/);
+    assert.match(text, /function pageRoot/);
+    assert.match(text, /function liveEl/);
+    assert.match(text, /function showTab/);
+    assert.match(text, /function bindPageTimers/);
+    assert.match(text, /Theme SPA remounts/);
+    assert.match(text, /liveEl\("history-view"\)/);
+    assert.match(text, /liveEl\("logs-view"\)/);
+    assert.match(text, /xm-content \.oc-wrap/);
+    assert.doesNotMatch(text, /if \(!window\.__xmReleasesBooted\)/);
+    assert.doesNotMatch(text, /if \(!window\.__xmReleasesBound\)/);
     assert.match(text, /bootReleases/);
     assert.match(text, /passResult === "reloading"/);
     assert.match(text, /passResult === "need-login"/);
@@ -302,6 +312,10 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /display: flex !important/);
     assert.match(text, /Theme SPA copies <link>/);
     assert.match(text, /#upgrade-mask\.need-login #upgrade-login/);
+    assert.match(text, /\.xm-content \.pane\.on/);
+    assert.match(text, /display: block !important/);
+    assert.match(text, /#history-view table/);
+    assert.match(text, /#logs-view \.log-item/);
   });
 });
 
