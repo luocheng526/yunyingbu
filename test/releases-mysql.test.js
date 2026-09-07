@@ -49,6 +49,28 @@ test("mapTicketRow maps SQL columns to ticket fields", () => {
   assert.equal(item.rejectReason, null);
   assert.equal(item.submittedAt, "2026-09-07T00:00:00.000Z");
   assert.deepEqual(item.files, ["src/db/pool.js"]);
+  assert.equal(item.snapshotDir, "");
+  assert.equal(item.rolledBack, false);
+  const withSnap = mapTicketRow({
+    ...{
+      id: "rel-9",
+      version: "1.2.3",
+      applicant: "Ada",
+      source: "Ada",
+      module: "版本发布中心",
+      summary: "mysql",
+      files: [],
+      restart: 0,
+      status: "success",
+      demo: 0,
+      priority: 1,
+      submitted_at: new Date("2026-09-07T00:00:00.000Z")
+    },
+    snapshot_dir: "/var/lib/mengkai/snapshots/rel-9",
+    rolled_back: 1
+  });
+  assert.equal(withSnap.snapshotDir, "/var/lib/mengkai/snapshots/rel-9");
+  assert.equal(withSnap.rolledBack, true);
 });
 
 function createFakePool() {

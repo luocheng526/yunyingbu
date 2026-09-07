@@ -5,7 +5,7 @@ import { requireReleasesAuth } from "./auth.js";
 import { NEED_PASS_ERROR, REORDER_FORBIDDEN, withCharter } from "./charter.js";
 import { hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
 import { assertQueueHead, describeNextVersion, listModuleVersions, resolveReleaseVersion } from "./version.js";
-import { assertSafeRel, formatExecError, listMissingSourceFiles, liveRoot, pathsToSnapshot, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "./push.js";
+import { assertSafeRel, attachRollbackMeta, formatExecError, listMissingSourceFiles, liveRoot, markSnapshotRolledBack, pathsToSnapshot, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "./push.js";
 import {
   parseGitRef,
   parseRepository,
@@ -67,6 +67,9 @@ export function createReleasesRouter(options = {}) {
   const push = options.push || pushXingmaiToEcs;
   const resolveLive = () => options.liveRoot || liveRoot(options.env);
   const resolveSource = () => options.sourceRoot || sourceRoot(options.env);
+  const resolveState = () => stateDir || os.tmpdir();
+  const withSnap = (item) => attachRollbackMeta(item, resolveState());
+  const withSnapList = (items) => (items || []).map(withSnap);
   const router = express.Router();
   router.use(requireReleasesAuth(options));
   attachPipelineWebhook(router, { ...options, pipelineStore });
@@ -178,7 +181,7 @@ export function createReleasesRouter(options = {}) {
   }
 
   router.get("/", async (_req, res) => {
-    res.json(withCharter({ ok: true, items: await store.list() }));
+    res.json(withCharter({ ok: true, items: withSnapList(await store.list()) }));
   });
 
   router.get("/queue", async (_req, res) => {
@@ -190,7 +193,7 @@ export function createReleasesRouter(options = {}) {
   });
 
   router.get("/versions", async (_req, res) => {
-    res.json(withCharter({ ok: true, ...listModuleVersions(await store.list()) }));
+    res.json(withCharter({ ok: true, ...listModuleVersions(withSnapList(await store.list())) }));
   });
 
   router.get("/next", async (req, res) => {
@@ -339,7 +342,7 @@ export function createReleasesRouter(options = {}) {
   });
 
   router.post("/:id/rollback", async (req, res) => {
-    const item = await store.get(req.params.id);
+    const item = withSnap(await store.get(req.params.id));
     if (!item) {
       res.status(404).json({ ok: false, error: "单据不存在" });
       return;
@@ -360,6 +363,7 @@ export function createReleasesRouter(options = {}) {
     try {
       const restored = restoreSnapshot(item.snapshotDir, resolveLive(), pathsToSnapshot(item.files || []));
       let extra = "已按快照回滚文件。";
+      markSnapshotRolledBack(item.snapshotDir);
       item.rolledBack = true;
       const willRestart = ticketNeedsProcessRestart(item);
       if (willRestart) {

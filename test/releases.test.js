@@ -14,7 +14,7 @@ import {
   resolveReleaseVersion,
   VERSION_GATE_ERROR
 } from "../src/modules/releases/version.js";
-import { formatExecError, hasApplyReceipt, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "../src/modules/releases/push.js";
+import { attachRollbackMeta, formatExecError, hasApplyReceipt, markSnapshotRolledBack, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "../src/modules/releases/push.js";
 import {
   fetchGithubFile,
   githubPathCandidates,
@@ -1525,6 +1525,18 @@ test("successful version cannot be queued again; versions lists current", async 
     });
     assert.ok(queued.res.status === 409 || queued.res.status === 500);
   });
+});
+
+test("attachRollbackMeta fills snapshotDir from state snapshots folder", () => {
+  const state = fs.mkdtempSync(path.join(os.tmpdir(), "rel-snap-meta-"));
+  const snap = path.join(state, "snapshots", "rel-40");
+  fs.mkdirSync(snap, { recursive: true });
+  const item = attachRollbackMeta({ id: "rel-40", status: "success", snapshotDir: "" }, state);
+  assert.equal(item.snapshotDir, snap);
+  assert.equal(item.rolledBack, false);
+  markSnapshotRolledBack(snap);
+  const again = attachRollbackMeta({ id: "rel-40", status: "success", snapshotDir: "" }, state);
+  assert.equal(again.rolledBack, true);
 });
 
 test("queued ticket cannot rollback", async () => {

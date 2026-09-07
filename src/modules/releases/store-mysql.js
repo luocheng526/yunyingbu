@@ -52,6 +52,9 @@ export function mapTicketRow(row) {
     rejectReason: row.reject_reason || null,
     publishStartedAt: toIso(row.publish_started_at),
     publishFinishedAt: toIso(row.publish_finished_at),
+    snapshotDir: row.snapshot_dir || "",
+    rolledBack: Boolean(row.rolled_back),
+    gitRef: row.git_ref || "",
     log: row.log || ""
   };
 }
@@ -187,6 +190,8 @@ export function createMysqlStore({ now, pool } = {}) {
         rejectReason: null,
         publishStartedAt: null,
         publishFinishedAt: null,
+        snapshotDir: "",
+        rolledBack: false,
         gitRef: String(gitRef || "").trim(),
         repository: String(repository || "").trim(),
         log: QUEUE_LOG

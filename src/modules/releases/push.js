@@ -74,6 +74,44 @@ export function hasApplyReceipt(snapshotDir) {
   return Boolean(snapshotDir && fs.existsSync(applyReceiptPath(snapshotDir)));
 }
 
+export function rolledBackMarkerPath(snapshotDir) {
+  return snapshotDir ? path.join(snapshotDir, "rolled-back.json") : "";
+}
+
+export function markSnapshotRolledBack(snapshotDir) {
+  if (!snapshotDir) {
+    return "";
+  }
+  fs.mkdirSync(snapshotDir, { recursive: true });
+  const file = rolledBackMarkerPath(snapshotDir);
+  fs.writeFileSync(file, `${JSON.stringify({ ok: true, at: new Date().toISOString() })}\n`);
+  return file;
+}
+
+export function resolveTicketSnapshotDir(item, stateDir) {
+  if (item?.snapshotDir && fs.existsSync(item.snapshotDir)) {
+    return item.snapshotDir;
+  }
+  const id = String(item?.id || "").trim();
+  const root = String(stateDir || "").trim();
+  if (!id || !root) {
+    return item?.snapshotDir || "";
+  }
+  const guessed = path.join(root, "snapshots", id);
+  return fs.existsSync(guessed) ? guessed : item?.snapshotDir || "";
+}
+
+export function attachRollbackMeta(item, stateDir) {
+  if (!item) {
+    return item;
+  }
+  item.snapshotDir = resolveTicketSnapshotDir(item, stateDir);
+  item.rolledBack = Boolean(item.rolledBack) || Boolean(
+    item.snapshotDir && fs.existsSync(rolledBackMarkerPath(item.snapshotDir))
+  );
+  return item;
+}
+
 function sameEntry(left, right) {
   if (!fs.existsSync(left) || !fs.existsSync(right)) {
     return false;
