@@ -160,6 +160,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /上一页/);
     assert.match(text, /下一页/);
     assert.match(text, /都分页/);
+    assert.match(text, /不要先拷到线上/);
+    assert.match(text, /点通过才落地/);
     assert.match(text, /Number\(seq\) === 1/);
     assert.doesNotMatch(text, /const isHead = index === 0/);
     assert.match(text, /data-tab="logs"/);
@@ -1016,6 +1018,66 @@ test("create rejects tickets whose source files are missing", async () => {
     assert.match(created.body.error, /源目录缺少文件/);
     assert.deepEqual(created.body.missing, ["public/does-not-exist-gate.html"]);
   });
+});
+
+test("confirm rejects identical source then copies when source is new", async () => {
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), "rel-src-first-"));
+  const live = fs.mkdtempSync(path.join(os.tmpdir(), "rel-live-first-"));
+  const state = fs.mkdtempSync(path.join(os.tmpdir(), "rel-state-first-"));
+  fs.mkdirSync(path.join(source, "public"), { recursive: true });
+  fs.mkdirSync(path.join(live, "public"), { recursive: true });
+  fs.writeFileSync(path.join(source, "public", "releases.html"), "SAME\n");
+  fs.writeFileSync(path.join(live, "public", "releases.html"), "SAME\n");
+
+  await withServer(
+    {
+      stateDir: state,
+      liveRoot: live,
+      async push(files, options) {
+        return pushXingmaiToEcs(files, {
+          snapshotDir: options.snapshotDir,
+          sourceRoot: source,
+          liveRoot: live,
+          env: { MENGKAI_SKIP_PULL: "1" }
+        });
+      }
+    },
+    async (base) => {
+      const sameTicket = await json(base, "/api/releases", {
+        method: "POST",
+        body: apply("source-same", "版本发布中心", "版本发布中心", "源目录与线上相同应失败", {
+          files: ["public/releases.html"],
+          restart: false
+        })
+      });
+      assert.equal(sameTicket.res.status, 201);
+      const same = await json(base, `/api/releases/${sameTicket.body.item.id}/confirm`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(same.res.status, 500);
+      assert.match(String(same.body.error || ""), /完全相同/);
+      assert.equal(fs.readFileSync(path.join(live, "public", "releases.html"), "utf8"), "SAME\n");
+
+      fs.writeFileSync(path.join(source, "public", "releases.html"), "NEW-SOURCE-FIRST\n");
+      const fresh = await json(base, "/api/releases", {
+        method: "POST",
+        body: apply("source-first", "版本发布中心", "版本发布中心", "只改源目录再通过", {
+          files: ["public/releases.html"],
+          restart: false
+        })
+      });
+      assert.equal(fresh.res.status, 201);
+      const pub = await json(base, `/api/releases/${fresh.body.item.id}/confirm`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(pub.res.status, 200);
+      assert.equal(pub.body.item.status, "success");
+      assert.equal(fs.readFileSync(path.join(live, "public", "releases.html"), "utf8"), "NEW-SOURCE-FIRST\n");
+      assert.match(pub.body.item.log, /不重启|本机落地/);
+    }
+  );
 });
 
 test("failed push writes stderr into ticket log", async () => {
