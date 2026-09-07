@@ -1,6 +1,7 @@
 import { promisify } from "node:util";
 import { randomBytes, scrypt, scryptSync, timingSafeEqual } from "node:crypto";
 import { Router } from "express";
+import { dbMode, query, setDbMode, setPoolForTests } from "../../db/pool.js";
 
 // xm-async-scrypt 0.1.43  启动仍同步播种；登录/改密走异步，避免堵住事件循环。
 const scryptAsync = promisify(scrypt);
@@ -72,7 +73,56 @@ function resolveUser(username) {
 
 seed();
 
+function nowSql() {
+  return new Date().toISOString().slice(0, 19).replace("T", " ");
+}
+
+export async function persistUser(user) {
+  if (dbMode() !== "mysql" || !user) {
+    return;
+  }
+  await query(
+    `INSERT INTO xm_users (username, display_name, email, phone, password_hash, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       display_name = VALUES(display_name),
+       email = VALUES(email),
+       phone = VALUES(phone),
+       password_hash = VALUES(password_hash),
+       updated_at = VALUES(updated_at)`,
+    [user.username, user.displayName, user.email, user.phone, user.passwordHash, nowSql()]
+  );
+}
+
+export async function hydrateFromMysql() {
+  const [rows] = await query(
+    "SELECT username, display_name, email, phone, password_hash FROM xm_users"
+  );
+  if (rows.length) {
+    users.clear();
+    for (const row of rows) {
+      users.set(row.username, {
+        username: row.username,
+        displayName: row.display_name,
+        email: row.email,
+        phone: row.phone,
+        passwordHash: row.password_hash
+      });
+    }
+    if (!users.has(DEMO_USERNAME)) {
+      seed();
+      await persistUser(users.get(DEMO_USERNAME));
+    }
+    return;
+  }
+  for (const user of users.values()) {
+    await persistUser(user);
+  }
+}
+
 export function resetStoreForTests() {
+  setPoolForTests(null);
+  setDbMode("memory");
   users.clear();
   sessions.clear();
   seed();
@@ -195,13 +245,14 @@ profileRouter.get("/", (req, res) => {
   sendProfile(res, req.user);
 });
 
-profileRouter.put("/", (req, res) => {
+profileRouter.put("/", async (req, res) => {
   const displayName = typeof req.body?.displayName === "string" ? req.body.displayName.trim() : "";
   const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
   const phone = typeof req.body?.phone === "string" ? req.body.phone.trim() : "";
   req.user.displayName = displayName;
   req.user.email = email;
   req.user.phone = phone;
+  await persistUser(req.user);
   sendProfile(res, req.user);
 });
 
@@ -231,5 +282,6 @@ profileRouter.post("/password", async (req, res) => {
     return;
   }
   req.user.passwordHash = await hashPassword(newPassword);
+  await persistUser(req.user);
   res.json({ ok: true, message: "密码已更新" });
 });

@@ -6,6 +6,10 @@ import { attachHome } from "./modules/home/attach.js";
 import { attachProfile } from "./modules/profile/attach.js";
 import { releasesPageGate } from "./modules/releases/auth.js";
 import { createReleasesRouter } from "./modules/releases/router.js";
+import { hanRouter } from "./modules/han/router.js";
+import { shenRouter } from "./modules/shen/router.js";
+import { peopleRouter } from "./modules/people/router.js";
+import { dataRouter } from "./modules/data/router.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -35,6 +39,11 @@ export function createApp() {
   // 页面路由必须在 static 前面。线上 app.js 往往还挂了其它模块，不要整文件覆盖线上。
   // GET / 的兜底在 profile/middleware.js，不依赖这里的顺序。
   attachHome(app);
+  // 线上 app.js 往往已经挂了这些路由。本仓库本地要能自测；发版不要整文件覆盖 app.js。
+  app.use("/api/han", hanRouter);
+  app.use("/api/shen", shenRouter);
+  app.use("/api/people", peopleRouter);
+  app.use("/api/data", dataRouter);
   app.use(
     express.static(join(__dirname, "..", "public"), {
       index: false,
