@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import { currentUser } from "./auth.js";
 
+// xm-theme-pages-pair 0.1.38  必须和 home/pages.js 成套发，禁止只换本文件。
+
 export const SHELL_ASSET_VER = "0.1.33";
 const htmlFileCache = new Map();
 
@@ -78,6 +80,7 @@ export function withSharedShell(html) {
   return versionShellAssets(withThemeBoot(out));
 }
 
+// 首页 pages.js 会调用本函数。只发 middleware、不发匹配的 pages.js（或反过来）会让进程起不来。
 export function readThemedHtml(filePath) {
   const dest = String(filePath || "");
   const stat = fs.statSync(dest);

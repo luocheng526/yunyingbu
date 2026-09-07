@@ -1,8 +1,18 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { readThemedHtml, withSharedShell } from "../profile/middleware.js";
+import * as profileShell from "../profile/middleware.js";
 import { NAV_ITEMS } from "./nav-items.js";
+
+// xm-theme-pages-pair 0.1.38  必须和 profile/middleware.js 成套发。
+
+// 必须和 middleware.js 成套发布。命名导入 readThemedHtml 会在旧 middleware 上直接把进程打挂。
+function renderExistingPage(filePath) {
+  if (typeof profileShell.readThemedHtml === "function") {
+    return profileShell.readThemedHtml(filePath);
+  }
+  return profileShell.withSharedShell(fs.readFileSync(filePath, "utf8"));
+}
 
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public");
 
@@ -14,7 +24,7 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
-export { withSharedShell };
+export const withSharedShell = profileShell.withSharedShell;
 
 function placeholderHtml(label) {
   const title = escapeHtml(label);
@@ -44,14 +54,14 @@ export function registerPageRoutes(app) {
     app.get(item.href, (_req, res) => {
       const filePath = path.join(publicDir, item.file);
       if (fs.existsSync(filePath)) {
-        res.status(200).type("html").send(readThemedHtml(filePath));
+        res.status(200).type("html").send(renderExistingPage(filePath));
         return;
       }
       res
         .status(200)
         .type("html")
         .set("Content-Type", "text/html; charset=utf-8")
-        .send(withSharedShell(placeholderHtml(item.label)));
+        .send(profileShell.withSharedShell(placeholderHtml(item.label)));
     });
   }
 }

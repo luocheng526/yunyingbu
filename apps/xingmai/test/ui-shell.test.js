@@ -86,7 +86,12 @@ test("placeholder modules share the same shell assets", async () => {
 });
 
 test("page renderer injects shared shell onto module html", async () => {
-  const { withSharedShell } = await import("../src/modules/profile/middleware.js");
+  const { withSharedShell, readThemedHtml } = await import("../src/modules/profile/middleware.js");
+  assert.equal(typeof readThemedHtml, "function");
+  const pagesSrc = readFileSync(join(root, "src/modules/home/pages.js"), "utf8");
+  assert.match(pagesSrc, /readThemedHtml/);
+  assert.match(pagesSrc, /typeof profileShell\.readThemedHtml/);
+  assert.doesNotMatch(pagesSrc, /import \{[^}]*readThemedHtml/);
   const injected = withSharedShell(
     '<!DOCTYPE html><html><head></head><body class="oc-page"><div class="oc-tab">待上线</div></body></html>'
   );
