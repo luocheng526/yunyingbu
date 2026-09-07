@@ -1,4 +1,9 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { PRODUCTION_BRANCH, RELEASE_MODE, BUILD_WORKFLOW_NAME, STATES } from "./constants.js";
+import { verifyArtifactDir } from "./artifact.js";
+import { downloadReleaseTriple, githubFactsFromWake, resolveGithubToken } from "./github-artifact.js";
 import { verifySignature } from "./hmac.js";
 import { createIngest } from "./ingest.js";
 import { shadowInstall } from "./shadow.js";
@@ -16,7 +21,7 @@ export function attachPipelineWebhook(router, options = {}) {
   const mode = options.releaseMode || RELEASE_MODE;
   const ingest = createIngest({ store, mode });
 
-  router.post("/webhooks/github", (req, res) => {
+  router.post("/webhooks/github", async (req, res) => {
     const raw = req.rawBody || Buffer.from(JSON.stringify(req.body || {}));
     if (!secret || !verifySignature(secret, raw, req.get("x-hub-signature-256"))) {
       res.status(401).json({ ok: false, error: "HMAC 无效" });
@@ -50,13 +55,52 @@ export function attachPipelineWebhook(router, options = {}) {
       return;
     }
     const overlay = ingest.placeWakeOverlay(body, { actor: "github-wake" });
-    res.status(202).json({
-      ok: true,
-      accepted: true,
-      state: overlay.state,
-      overlay: true,
-      item: overlay
-    });
+    const fetchArtifact = options.fetchReleaseArtifact;
+    const token = options.githubToken || resolveGithubToken();
+    if (!fetchArtifact && !token) {
+      res.status(202).json({
+        ok: true,
+        accepted: true,
+        state: overlay.state,
+        overlay: true,
+        item: overlay
+      });
+      return;
+    }
+    try {
+      const dest = fs.mkdtempSync(path.join(os.tmpdir(), "rel-fetch-"));
+      const artifactDir = fetchArtifact
+        ? await fetchArtifact({ run, body, destDir: dest })
+        : await downloadReleaseTriple({
+            token,
+            repository: body.repository.full_name,
+            runId: run.id,
+            destDir: dest
+          });
+      const verified = verifyArtifactDir(artifactDir);
+      const github = githubFactsFromWake({
+        run,
+        repository: body.repository.full_name,
+        manifest: verified.manifest
+      });
+      const item = ingest.ingestVerified({ github, artifactDir, actor: "github-wake" });
+      res.status(202).json({
+        ok: true,
+        ingested: true,
+        overlay: false,
+        state: item.state,
+        item
+      });
+    } catch (err) {
+      res.status(202).json({
+        ok: true,
+        accepted: true,
+        overlay: true,
+        state: overlay.state,
+        item: overlay,
+        fetch_error: err.message || String(err)
+      });
+    }
   });
 }
 

@@ -362,3 +362,54 @@ test("newer merge SHA supersedes the previous pending candidate", async () => {
     assert.equal(fresh.state, "pending_approval");
   });
 });
+
+test("wake with fetchReleaseArtifact ingests the triple and drops overlay", async () => {
+  const src = makeFixture();
+  const id = identity({
+    runId: 91,
+    mergeSha: "dddddddddddddddddddddddddddddddddddddddd",
+    sourceSha: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  });
+  const artifactDir = fs.mkdtempSync(path.join(os.tmpdir(), "rel-out-"));
+  packArtifact({ sourceRoot: src, outDir: artifactDir, identity: id });
+  const payload = JSON.stringify({
+    action: "completed",
+    repository: { full_name: id.repository },
+    workflow_run: {
+      id: id.ciRunId,
+      run_attempt: id.ciRunAttempt,
+      name: "Release artifact",
+      event: "push",
+      head_branch: "main",
+      head_sha: id.mergeSha,
+      status: "completed",
+      conclusion: "success",
+      pull_requests: [{ number: id.prNumber }]
+    }
+  });
+  await withServer(
+    {
+      fetchReleaseArtifact: async () => artifactDir
+    },
+    async (base, cookie) => {
+      const woke = await fetch(`${base}/api/releases/webhooks/github`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-GitHub-Event": "workflow_run",
+          "X-GitHub-Delivery": "del-fetch",
+          "X-Hub-Signature-256": signBody(WEBHOOK_SECRET, payload)
+        },
+        body: payload
+      });
+      assert.equal(woke.status, 202);
+      const body = await woke.json();
+      assert.equal(body.ingested, true);
+      assert.equal(body.overlay, false);
+      assert.equal(body.item.state, "pending_approval");
+      const listed = await json(base, cookie, "/api/releases/candidates");
+      assert.equal(listed.body.items.some((row) => row.overlay), false);
+      assert.equal(listed.body.items[0].can_approve, false);
+    }
+  );
+});
