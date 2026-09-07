@@ -4,7 +4,7 @@ import { requireReleasesAuth } from "./auth.js";
 import { NEED_PASS_ERROR, withCharter } from "./charter.js";
 import { hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
 import { assertQueueHead, findVersionClash, parseReleaseVersion } from "./version.js";
-import { pushXingmaiToEcs } from "./push.js";
+import { formatExecError, pushXingmaiToEcs } from "./push.js";
 import { restartMengkaiService } from "./restart.js";
 import { attachPipelineRoutes, attachPipelineWebhook } from "./pipeline/attach.js";
 import { createPipelineStore } from "./pipeline/store.js";
@@ -101,7 +101,7 @@ export function createReleasesRouter(options = {}) {
       try {
         return await runPublishJob(item, noDoc);
       } catch (err) {
-        const message = `发版失败：${err?.message || err}。已释放发布锁。`;
+        const message = formatExecError(err);
         await store.markFailed(item, message);
         return { ok: false, error: message };
       } finally {

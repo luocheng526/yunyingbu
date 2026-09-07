@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import http from "node:http";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { createApp } from "../src/app.js";
 import { parseMainBrainOrder } from "../src/modules/releases/document.js";
+import { formatExecError, pushXingmaiToEcs } from "../src/modules/releases/push.js";
 import { DEMO_INITIAL_PASSWORD, DEMO_USERNAME } from "../src/modules/profile/auth.js";
 
 const signedInUser = { username: "罗成" };
@@ -115,6 +117,10 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /id="refresh-btn"/);
     assert.match(text, /唯一发版闸门/);
     assert.match(text, /只允许「通过」第 1 位/);
+    assert.match(text, /id="upgrade-mask"/);
+    assert.match(text, /正在升级，请勿关闭/);
+    assert.match(text, /\/api\/health/);
+    assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css"/);
     assert.doesNotMatch(text, /href="\/shared\/layout.css"/);
     assert.doesNotMatch(text, /src="\/shared\/nav.js"/);
@@ -140,6 +146,7 @@ test("releases.html has no login form and sends users to /login", () => {
   assert.doesNotMatch(html, /id="apply-form"/);
   assert.doesNotMatch(html, /提交发布申请/);
   assert.match(html, /id="refresh-btn"/);
+  assert.match(html, /id="upgrade-mask"/);
   assert.match(html, /默认不轮询/);
   assert.doesNotMatch(html, /setInterval\(function \(\) \{\s*refresh/);
   assert.match(html, /唯一发版闸门/);
@@ -700,5 +707,73 @@ test("mismatch 口令 does not push", async () => {
       assert.equal(pushes, 0);
     }
   );
+});
+
+test("local apply copies listed files and never needs push-xingmai-to-ecs.sh", async () => {
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), "rel-src-"));
+  const live = fs.mkdtempSync(path.join(os.tmpdir(), "rel-live-"));
+  fs.mkdirSync(path.join(source, "public"), { recursive: true });
+  fs.writeFileSync(path.join(source, "public", "releases.html"), "<html>oc</html>\n");
+  const result = await pushXingmaiToEcs(["public/releases.html"], {
+    sourceRoot: source,
+    liveRoot: live,
+    env: { MENGKAI_SKIP_PULL: "1" }
+  });
+  assert.match(result.stdout, /本机落地/);
+  assert.equal(fs.existsSync(path.join(live, "public", "releases.html")), true);
+  assert.equal(fs.readFileSync(path.join(live, "public", "releases.html"), "utf8"), "<html>oc</html>\n");
+  await assert.rejects(
+    () => pushXingmaiToEcs(["../secret"], { sourceRoot: source, liveRoot: live, env: { MENGKAI_SKIP_PULL: "1" } }),
+    /拒绝推送路径/
+  );
+  await assert.rejects(
+    () => pushXingmaiToEcs(["public/missing.html"], { sourceRoot: source, liveRoot: live, env: { MENGKAI_SKIP_PULL: "1" } }),
+    (err) => {
+      assert.equal(err.code, "ENOENT");
+      assert.match(String(err.stderr), /源目录不存在/);
+      return true;
+    }
+  );
+});
+
+test("failed push writes stderr into ticket log", async () => {
+  await withServer(
+    {
+      async push() {
+        throw Object.assign(new Error("spawn /opt/mengkai/deploy/scripts/push-xingmai-to-ecs.sh"), {
+          code: "ENOENT",
+          stderr: "ENOENT: no such file or directory"
+        });
+      }
+    },
+    async (base) => {
+      const created = await json(base, "/api/releases", {
+        method: "POST",
+        body: apply("0.1.7-log", "版本发布中心", "版本发布中心", "测失败日志")
+      });
+      await promoteToHead(base, created.body.item.id);
+      const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(pub.res.status, 500);
+      const all = await json(base, "/api/releases");
+      const item = all.body.items.find((row) => row.id === created.body.item.id);
+      assert.equal(item.status, "failed");
+      assert.match(item.log, /stderr: ENOENT/);
+      assert.match(item.log, /code=ENOENT/);
+    }
+  );
+});
+
+test("formatExecError keeps stderr for the board", () => {
+  const text = formatExecError({
+    message: "spawn failed",
+    code: "ENOENT",
+    stderr: "no such file",
+    stdout: ""
+  });
+  assert.match(text, /stderr: no such file/);
+  assert.match(text, /code=ENOENT/);
 });
 

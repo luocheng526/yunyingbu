@@ -5,6 +5,55 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>运营中心 · 版本发布</title>
     <link rel="stylesheet" href="/releases.css" />
+    <style>
+      #upgrade-mask {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 80;
+        background: rgba(15, 23, 42, 0.62);
+        align-items: center;
+        justify-content: center;
+        padding: 1.25rem;
+      }
+      #upgrade-mask.show { display: flex; }
+      .upgrade-card {
+        width: min(36rem, 100%);
+        background: #fff;
+        color: #111827;
+        border-radius: 20px;
+        padding: 1.4rem 1.5rem 1.3rem;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+      }
+      .upgrade-card h2 { margin: 0 0 0.85rem; font-size: 1.2rem; }
+      .upgrade-card ol { margin: 0 0 1rem; padding-left: 1.2rem; }
+      .upgrade-card li { margin: 0.35rem 0; color: #6b7280; }
+      .upgrade-card li.on { color: #1677ff; font-weight: 650; }
+      .upgrade-card li.ok { color: #15803d; }
+      .upgrade-card li.bad { color: #be123c; }
+      .upgrade-bar {
+        height: 0.45rem;
+        background: #e5e7eb;
+        border-radius: 999px;
+        overflow: hidden;
+      }
+      .upgrade-bar i {
+        display: block;
+        height: 100%;
+        width: 8%;
+        background: #1677ff;
+        border-radius: 999px;
+        transition: width 0.25s ease;
+      }
+      .upgrade-log {
+        margin: 0.85rem 0 0;
+        color: #9f1239;
+        font-size: 0.88rem;
+        white-space: pre-wrap;
+        max-height: 10rem;
+        overflow: auto;
+      }
+    </style>
   </head>
   <body>
     <header class="oc-top">
@@ -62,7 +111,7 @@
       <section class="oc-card">
         <div class="pane on" id="pane-queue">
           <h3>待上线</h3>
-          <p class="hint">各板块交单后出现在这里。主脑上移/下移决定谁是第 1 位；闸门只允许「通过」第 1 位，禁止跳单叠发。通过后走 push-xingmai-to-ecs.sh，是否重启看单据。版本号只允许字母数字和 . _ -，同模块同版本不能重复排队。本页不提供手填表，也不改首页/登录/人员等业务。列表默认不轮询，要看最新请点「刷新」。</p>
+          <p class="hint">各板块交单后出现在这里。主脑上移/下移决定谁是第 1 位；闸门只允许「通过」第 1 位，禁止跳单叠发。通过后在 ECS 本机落地（不 spawn 缺失的 push-xingmai-to-ecs.sh），是否重启看单据。版本号只允许字母数字和 . _ -，同模块同版本不能重复排队。本页不提供手填表，也不改首页/登录/人员等业务。列表默认不轮询，要看最新请点「刷新」。</p>
           <div class="caps" id="stat-caps"></div>
           <div class="note">发布纪律：本页是唯一发版闸门。只执行交来的单据 + 本页「通过」。必须按排队顺序点第 1 位；一把锁，禁止抢发；下一条不会自动发布。其它对话框「帮我上线」无效。</div>
           <div id="queue-view" class="tickets"></div>
@@ -95,6 +144,15 @@
           </div>
         </div>
       </section>
+    </div>
+
+    <div id="upgrade-mask" aria-live="assertive" aria-modal="true" role="dialog">
+      <div class="upgrade-card">
+        <h2>正在升级，请勿关闭</h2>
+        <ol id="upgrade-steps"></ol>
+        <div class="upgrade-bar"><i id="upgrade-bar"></i></div>
+        <p class="upgrade-log" id="upgrade-log" hidden></p>
+      </div>
     </div>
 
     <script>
@@ -167,6 +225,133 @@
         document.getElementById("theme-dark").classList.toggle("on", mode === "dark");
         try { localStorage.setItem("oc-theme", mode); } catch (e) {}
       }
+      const upgradeMask = document.getElementById("upgrade-mask");
+      const upgradeSteps = document.getElementById("upgrade-steps");
+      const upgradeBar = document.getElementById("upgrade-bar");
+      const upgradeLog = document.getElementById("upgrade-log");
+      const STEP_LABELS = {
+        agree: "已同意",
+        sync: "正在同步代码",
+        restart: "正在重启服务",
+        health: "等待健康检查",
+        done: "完成"
+      };
+
+      function stepKeys(needRestart) {
+        return needRestart
+          ? ["agree", "sync", "restart", "health", "done"]
+          : ["agree", "sync", "health", "done"];
+      }
+
+      function renderUpgradeSteps(keys, active, terminal) {
+        upgradeSteps.innerHTML = keys.map(function (key) {
+          let cls = "";
+          const idx = keys.indexOf(key);
+          const cur = keys.indexOf(active);
+          if (key === "done" && terminal === "bad") cls = "bad";
+          else if (idx < cur || (key === active && terminal === "ok")) cls = "ok";
+          else if (key === active) cls = "on";
+          const label = key === "done" && terminal === "bad" ? "失败" : STEP_LABELS[key];
+          return "<li class=\"" + cls + "\" data-step=\"" + key + "\">" + label + "</li>";
+        }).join("");
+        const cur = Math.max(0, keys.indexOf(active));
+        const width = terminal === "ok" ? 100 : Math.round(((cur + (terminal === "bad" ? 1 : 0.35)) / keys.length) * 100);
+        upgradeBar.style.width = width + "%";
+      }
+
+      function showUpgrade(keys, active) {
+        upgradeMask.classList.add("show");
+        upgradeLog.hidden = true;
+        upgradeLog.textContent = "";
+        renderUpgradeSteps(keys, active, "");
+      }
+
+      function hideUpgrade() {
+        upgradeMask.classList.remove("show");
+      }
+
+      async function sleep(ms) {
+        return new Promise(function (resolve) { setTimeout(resolve, ms); });
+      }
+
+      async function probeHealth() {
+        const res = await fetch("/api/health", { credentials: "same-origin" });
+        return res.status === 200;
+      }
+
+      async function loadTicket(id) {
+        const all = await api("/api/releases");
+        return (all.items || []).find(function (item) { return item.id === id; }) || null;
+      }
+
+      async function runPass(id, needRestart, version) {
+        const keys = stepKeys(needRestart);
+        showUpgrade(keys, "agree");
+        let confirmErr = null;
+        let confirmBody = null;
+        api("/api/releases/" + id + "/confirm", {
+          method: "POST",
+          body: "{}"
+        }).then(function (body) {
+          confirmBody = body;
+        }).catch(function (err) {
+          confirmErr = err;
+        });
+        renderUpgradeSteps(keys, "sync");
+        const deadline = Date.now() + 120000;
+        let lastHealth = "尚未返回 200";
+        let ticket = null;
+        while (Date.now() < deadline) {
+          if (confirmErr && confirmErr.status && confirmErr.status !== 502 && confirmErr.status !== 503 && confirmErr.status < 500) {
+            renderUpgradeSteps(keys, "done", "bad");
+            upgradeLog.hidden = false;
+            upgradeLog.textContent = confirmErr.message || "通过失败";
+            await sleep(400);
+            hideUpgrade();
+            flash((confirmErr.status || "") + " " + confirmErr.message, true);
+            return;
+          }
+          try {
+            ticket = await loadTicket(id);
+          } catch (err) {
+            lastHealth = err.message || "读取单据中断（可能正在重启）";
+          }
+          if (ticket && ticket.status === "failed") {
+            renderUpgradeSteps(keys, "done", "bad");
+            upgradeLog.hidden = false;
+            upgradeLog.textContent = ticket.log || "发版失败";
+            await sleep(500);
+            hideUpgrade();
+            flash(ticket.log || "发版失败", true);
+            return;
+          }
+          if (ticket && ticket.status === "publishing") {
+            renderUpgradeSteps(keys, needRestart ? "restart" : "sync");
+          }
+          if (ticket && ticket.status === "success") {
+            renderUpgradeSteps(keys, "health");
+            try {
+              if (await probeHealth()) {
+                renderUpgradeSteps(keys, "done", "ok");
+                await sleep(350);
+                hideUpgrade();
+                flash("已通过并放行版本 " + (version || ticket.version || (confirmBody && confirmBody.version) || "") + "。下一条不会自动发布。");
+                return;
+              }
+              lastHealth = "健康检查尚未 200";
+            } catch (err) {
+              lastHealth = err.message || "健康检查请求中断（可能正在重启）";
+            }
+          }
+          await sleep(1500);
+        }
+        renderUpgradeSteps(keys, "done", "bad");
+        upgradeLog.hidden = false;
+        upgradeLog.textContent = ((ticket && ticket.log) ? ticket.log + "\n" : "") + "健康检查超时：" + lastHealth;
+        hideUpgrade();
+        flash("升级未完成：" + lastHealth, true);
+      }
+
       function tickClock() {
         const now = new Date();
         const pad = function (n) { return String(n).padStart(2, "0"); };
@@ -266,7 +451,7 @@
           const upOff = index === 0 ? " disabled" : "";
           const downOff = index === items.length - 1 ? " disabled" : "";
           return (
-            "<article class=\"ticket grab\" draggable=\"true\" data-id=\"" + esc(item.id) + "\">" +
+            "<article class=\"ticket grab\" draggable=\"true\" data-id=\"" + esc(item.id) + "\" data-restart=\"" + (item.restart ? "1" : "0") + "\" data-version=\"" + esc(item.version) + "\">" +
             "<h4>第 " + seq + " 位 · " + esc(item.module) + " " + esc(item.version) + demoBadge(item) + "</h4>" +
             "<dl>" +
             "<dt>来自对话</dt><dd>" + esc(item.source || item.applicant || "—") + "</dd>" +
@@ -410,15 +595,13 @@
             });
             flash(act === "up" ? "已上移。" : "已下移。");
           } else if (act === "pass") {
-            flash("正在通过并放行：抢锁、push，按单据决定是否重启。");
-            const done = await api("/api/releases/" + id + "/confirm", {
-              method: "POST",
-              body: "{}"
-            });
-            flash("已通过并放行版本 " + (done.version || "") + "。下一条不会自动发布。");
+            const needRestart = card.getAttribute("data-restart") === "1";
+            const version = card.getAttribute("data-version") || "";
+            await runPass(id, needRestart, version);
           }
           await refresh();
         } catch (err) {
+          hideUpgrade();
           flash((err.status || "") + " " + err.message, true);
           await refresh();
         }
