@@ -12,7 +12,8 @@ export function createMemoryPool() {
     people: [],
     data_cards: [],
     data_events: [],
-    notes: []
+    notes: [],
+    xm_sessions: []
   };
   const auto = {
     han_tasks: 1,
@@ -143,6 +144,36 @@ export function createMemoryPool() {
       const before = tables.notes.length;
       tables.notes = tables.notes.filter((row) => row.text !== text);
       return [{ affectedRows: before - tables.notes.length }, undefined];
+    }
+    if (s.startsWith("DELETE FROM xm_sessions WHERE expires_at")) {
+      const limit = Number(params[0]) || 0;
+      const before = tables.xm_sessions.length;
+      tables.xm_sessions = tables.xm_sessions.filter((row) => Number(row.expires_at) >= limit);
+      return [{ affectedRows: before - tables.xm_sessions.length }, undefined];
+    }
+    if (s.startsWith("SELECT sid, username, created_at, expires_at FROM xm_sessions")) {
+      const limit = Number(params[0]) || 0;
+      return [
+        tables.xm_sessions.filter((row) => Number(row.expires_at) >= limit).map(clone),
+        undefined
+      ];
+    }
+    if (s.startsWith("INSERT INTO xm_sessions")) {
+      const [sid, username, created_at, expires_at] = params;
+      const existing = tables.xm_sessions.find((row) => row.sid === sid);
+      const row = { sid, username, created_at, expires_at };
+      if (existing) {
+        Object.assign(existing, row);
+      } else {
+        tables.xm_sessions.push(row);
+      }
+      return [{ affectedRows: 1 }, undefined];
+    }
+    if (s.startsWith("DELETE FROM xm_sessions WHERE sid")) {
+      const sid = params[0];
+      const before = tables.xm_sessions.length;
+      tables.xm_sessions = tables.xm_sessions.filter((row) => row.sid !== sid);
+      return [{ affectedRows: before - tables.xm_sessions.length }, undefined];
     }
     if (s.startsWith("INSERT INTO notes")) {
       const [text, created_at] = params;

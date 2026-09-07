@@ -32,7 +32,21 @@ test("demo user can log in", async () => {
   const data = await res.json();
   assert.equal(data.ok, true);
   assert.equal(data.user.username, "罗成");
-  assert.match(res.headers.get("set-cookie") || "", /mk_sid=/);
+  const cookie = res.headers.get("set-cookie") || "";
+  assert.match(cookie, /mk_sid=/);
+  assert.match(cookie, /Max-Age=604800/);
+});
+
+test("remember login stretches the cookie to 30 days", async () => {
+  const res = await fetch(`${base}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Forwarded-Proto": "https" },
+    body: JSON.stringify({ username: "罗成", password: "ChangeMe123!", remember: true })
+  });
+  assert.equal(res.status, 200);
+  const cookie = res.headers.get("set-cookie") || "";
+  assert.match(cookie, /Max-Age=2592000/);
+  assert.match(cookie, /Secure/);
 });
 
 test("luocheng alias can log in", async () => {
