@@ -132,6 +132,8 @@ test("GET /releases is the release center page", async () => {
     assert.doesNotMatch(text, /src="\/shared\/nav.js"/);
     assert.match(text, /data-tab="queue"/);
     assert.match(text, /data-tab="history"/);
+    assert.match(text, /从最新到最老/);
+    assert.match(text, /newestFirst/);
     assert.match(text, /data-tab="logs"/);
     assert.match(text, /\/api\/releases\/versions/);
     assert.match(text, /待上线是空的，没有等待通过的单据/);

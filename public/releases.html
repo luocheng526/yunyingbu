@@ -107,7 +107,7 @@
         </div>
         <div class="pane" id="pane-history">
           <h3>版本记录</h3>
-          <p class="hint">各模块当前版本来自最近一次成功发布。有升级前快照的单据可以回滚文件；回滚占用发布锁，不会自动发下一单。数字来自接口，不编造。</p>
+          <p class="hint">各模块当前版本来自最近一次成功发布。成功记录从最新到最老。有升级前快照的单据可以回滚；回滚占用发布锁，不会自动发下一单。</p>
           <div id="current-versions" class="caps"></div>
           <div id="history-view"></div>
         </div>
@@ -421,9 +421,15 @@
         }).join("");
       }
 
+      function newestFirst(a, b) {
+        return String(b.publishFinishedAt || b.reviewedAt || b.submittedAt || "").localeCompare(
+          String(a.publishFinishedAt || a.reviewedAt || a.submittedAt || "")
+        );
+      }
+
       function renderHistory(items, locked) {
         const el = document.getElementById("history-view");
-        const success = items.filter(function (item) { return item.status === "success"; });
+        const success = items.filter(function (item) { return item.status === "success"; }).slice().sort(newestFirst);
         if (!success.length) {
           el.innerHTML = '<div class="empty">还没有成功发布的版本记录</div>';
           return;
@@ -451,7 +457,7 @@
 
       function renderLogs(items) {
         const el = document.getElementById("logs-view");
-        const rows = items.filter(function (item) { return item.log; });
+        const rows = items.filter(function (item) { return item.log; }).slice().sort(newestFirst);
         if (!rows.length) {
           el.innerHTML = '<div class="empty">暂无发版流水</div>';
           return;
