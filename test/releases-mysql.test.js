@@ -198,3 +198,38 @@ test("memory store with persistPath skips demo seed and reloads tickets", async 
   assert.equal(queue[0].id, created.id);
   assert.equal(queue[0].version, "1.0.0");
 });
+
+test("persist store recovers stale publishing lock after restart", async () => {
+  const persistPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "rel-lock-")), "tickets.json");
+  fs.writeFileSync(
+    persistPath,
+    JSON.stringify({
+      seq: 16,
+      lock: { id: "rel-16", version: "stuck", startedAt: "2026-09-07T09:07:01.672Z" },
+      items: [
+        {
+          id: "rel-16",
+          version: "stuck",
+          applicant: "首页",
+          source: "首页",
+          module: "首页",
+          summary: "卡住",
+          files: ["public/index.html"],
+          acceptance: "刷新不再显示发布中",
+          restart: true,
+          status: "publishing",
+          demo: false,
+          priority: 1,
+          submittedAt: "2026-09-07T09:00:00.000Z",
+          log: "已抢到全局发布锁"
+        }
+      ]
+    })
+  );
+  const store = createStore({ memory: true, persistPath });
+  const lock = await store.getLock();
+  assert.equal(lock.locked, false);
+  const item = await store.get("rel-16");
+  assert.equal(item.status, "success");
+  assert.match(item.log, /锁已回收/);
+});

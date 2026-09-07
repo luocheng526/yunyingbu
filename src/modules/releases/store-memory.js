@@ -132,6 +132,21 @@ export function createMemoryStore({ now, persistPath } = {}) {
     });
   }
 
+  function recoverInterruptedPublish() {
+    if (!lock) {
+      return;
+    }
+    const item = items.find((row) => row.id === lock.id);
+    const startedAt = lock.startedAt;
+    lock = null;
+    if (item && item.status === "publishing") {
+      item.status = "success";
+      item.publishFinishedAt = timestamp();
+      item.log = `锁已回收：发布中进程被重启打断（开始于 ${startedAt || "—"}）。代码多半已落地，下一条不会自动发。请刷新后继续审批下一单。`;
+    }
+    persist();
+  }
+
   if (!persistPath) {
     seedDemo();
   } else if (!items.length) {
@@ -143,6 +158,7 @@ export function createMemoryStore({ now, persistPath } = {}) {
         seq = Math.max(seq, Number(match[1]));
       }
     }
+    recoverInterruptedPublish();
   }
 
   return {
@@ -303,7 +319,7 @@ export function createMemoryStore({ now, persistPath } = {}) {
     markPublishing(item) {
       item.status = "publishing";
       item.publishStartedAt = lock?.startedAt || timestamp();
-      item.log = "已抢到全局发布锁，正在执行 push-xingmai-to-ecs.sh";
+      item.log = "已抢到全局发布锁，正在本机落地";
       persist();
     },
     markSuccess(item, message) {
