@@ -1,4 +1,6 @@
-import { QUEUE_LOG } from "./charter.js";
+import fs from "node:fs";
+import path from "node:path";
+import { INTERRUPTED_PUBLISH_LOG, QUEUE_LOG, SNAPSHOT_RECOVER_LOG } from "./charter.js";
 import { assignStablePriorities } from "./order.js";
 import { readJsonFile, writeJsonFile } from "./persist-json.js";
 
@@ -141,9 +143,17 @@ export function createMemoryStore({ now, persistPath } = {}) {
     const startedAt = lock.startedAt;
     lock = null;
     if (item && item.status === "publishing") {
-      item.status = "success";
+      const snapDir = item.snapshotDir || (persistPath ? path.join(path.dirname(persistPath), "snapshots", item.id) : "");
+      const hasSnapshot = Boolean(snapDir && fs.existsSync(snapDir));
       item.publishFinishedAt = timestamp();
-      item.log = `锁已回收：发布中进程被重启打断（开始于 ${startedAt || "—"}）。代码多半已落地，下一条不会自动发。请刷新后继续审批下一单。`;
+      if (hasSnapshot) {
+        item.status = "success";
+        item.snapshotDir = snapDir;
+        item.log = `${SNAPSHOT_RECOVER_LOG}（开始于 ${startedAt || "—"}）`;
+      } else {
+        item.status = "failed";
+        item.log = `${INTERRUPTED_PUBLISH_LOG}（开始于 ${startedAt || "—"}）`;
+      }
     }
     persist();
   }

@@ -70,12 +70,16 @@ export function createReleasesRouter(options = {}) {
     item.snapshotDir = snapshotDir;
     let extra = "";
     if (shouldRestart) {
+      extra = "成功状态已先落盘，随后重启线上进程。";
+      await store.markSuccess(item, successLog(item, pushResult, extra, noDoc));
+      await store.releaseLock();
       const result = await restart();
       extra = result && result.skipped ? `未执行 systemctl：${result.reason}` : "已 systemctl restart mengkai.service";
+      await store.markSuccess(item, successLog(item, pushResult, extra, noDoc));
     } else {
       extra = "文档要求不重启，已跳过 systemctl。";
+      await store.markSuccess(item, successLog(item, pushResult, extra, noDoc));
     }
-    await store.markSuccess(item, successLog(item, pushResult, extra, noDoc));
     return { ok: true };
   }
 
@@ -284,11 +288,16 @@ export function createReleasesRouter(options = {}) {
     try {
       const restored = restoreSnapshot(item.snapshotDir, resolveLive(), pathsToSnapshot(item.files || []));
       let extra = "已按快照回滚文件。";
+      item.rolledBack = true;
       if (item.restart) {
+        extra += " 回滚结果已先落盘，随后重启。";
+        item.log = `已回滚到升级前快照。${restored.stdout || ""} ${extra} 版本号仍记为 ${item.version}，下一条不会自动发。`;
+        await store.markSuccess(item, item.log);
+        await store.releaseLock();
         const result = await restart();
+        extra = "已按快照回滚文件。";
         extra += result && result.skipped ? ` ${result.reason}` : " 已重启 mengkai。";
       }
-      item.rolledBack = true;
       item.log = `已回滚到升级前快照。${restored.stdout || ""} ${extra} 版本号仍记为 ${item.version}，下一条不会自动发。`;
       await store.markSuccess(item, item.log);
       res.json({ ok: true, item, version: item.version, rolledBack: true });

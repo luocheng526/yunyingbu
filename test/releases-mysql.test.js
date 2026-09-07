@@ -230,6 +230,80 @@ test("persist store recovers stale publishing lock after restart", async () => {
   const lock = await store.getLock();
   assert.equal(lock.locked, false);
   const item = await store.get("rel-16");
+  assert.equal(item.status, "failed");
+  assert.match(item.log, /不能当作成功/);
+  assert.match(item.log, /新单据重试/);
+});
+
+test("persist store recovers publishing lock as success when snapshot dir exists", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rel-lock-snap-"));
+  const persistPath = path.join(dir, "tickets.json");
+  const snapDir = path.join(dir, "snapshots", "rel-16");
+  fs.mkdirSync(snapDir, { recursive: true });
+  fs.writeFileSync(path.join(snapDir, "manifest.json"), "{\"ok\":true}\n");
+  fs.writeFileSync(
+    persistPath,
+    JSON.stringify({
+      seq: 16,
+      lock: { id: "rel-16", version: "stuck", startedAt: "2026-09-07T09:07:01.672Z" },
+      items: [
+        {
+          id: "rel-16",
+          version: "stuck",
+          applicant: "首页",
+          source: "首页",
+          module: "首页",
+          summary: "有快照",
+          files: ["public/index.html"],
+          acceptance: "有快照按已拷贝",
+          restart: true,
+          status: "publishing",
+          demo: false,
+          priority: 1,
+          submittedAt: "2026-09-07T09:00:00.000Z",
+          log: "已抢到全局发布锁"
+        }
+      ]
+    })
+  );
+  const store = createStore({ memory: true, persistPath });
+  const item = await store.get("rel-16");
   assert.equal(item.status, "success");
-  assert.match(item.log, /锁已回收/);
+  assert.match(item.log, /升级前快照目录/);
+  assert.equal(item.snapshotDir, snapDir);
+});
+
+test("persist store leftover lock on an already-success ticket only clears the lock", async () => {
+  const persistPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "rel-lock-ok-")), "tickets.json");
+  fs.writeFileSync(
+    persistPath,
+    JSON.stringify({
+      seq: 33,
+      lock: { id: "rel-33", version: "landed", startedAt: "2026-09-07T10:59:47.212Z" },
+      items: [
+        {
+          id: "rel-33",
+          version: "landed",
+          applicant: "首页",
+          source: "首页",
+          module: "首页",
+          summary: "已落盘",
+          files: ["public/index.html"],
+          acceptance: "成功保持成功",
+          restart: true,
+          status: "success",
+          demo: false,
+          priority: 1,
+          submittedAt: "2026-09-07T10:51:00.000Z",
+          log: "成功状态已先落盘，随后重启线上进程。"
+        }
+      ]
+    })
+  );
+  const store = createStore({ memory: true, persistPath });
+  const lock = await store.getLock();
+  assert.equal(lock.locked, false);
+  const item = await store.get("rel-33");
+  assert.equal(item.status, "success");
+  assert.match(item.log, /成功状态已先落盘/);
 });

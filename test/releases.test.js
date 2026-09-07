@@ -484,6 +484,7 @@ test("通过 one ticket restarts once and does not auto-publish next", async () 
       assert.equal(pub.res.status, 200);
       assert.equal(pub.body.item.status, "success");
       assert.equal(restarts, 1);
+      assert.match(pub.body.item.log, /已 systemctl restart mengkai|成功状态已先落盘/);
       const all = await json(base, "/api/releases");
       const a = all.body.items.find((item) => item.id === first.body.item.id);
       const b = all.body.items.find((item) => item.id === second.body.item.id);
@@ -491,6 +492,35 @@ test("通过 one ticket restarts once and does not auto-publish next", async () 
       assert.equal(b.status, "queued");
       const lock = await json(base, "/api/releases/lock");
       assert.equal(lock.body.locked, false);
+    }
+  );
+});
+
+test("通过 writes success to disk before restart", async () => {
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "rel-before-restart-"));
+  let persisted = null;
+  await withServer(
+    {
+      stateDir,
+      restart() {
+        const saved = JSON.parse(fs.readFileSync(path.join(stateDir, "tickets.json"), "utf8"));
+        persisted = saved.items.find((item) => item.version === "5.5.5") || null;
+      }
+    },
+    async (base) => {
+      const created = await json(base, "/api/releases", {
+        method: "POST",
+        body: apply("5.5.5", "Ada", "版本发布中心", "先落盘再重启", { restart: true })
+      });
+      const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(pub.res.status, 200);
+      assert.ok(persisted);
+      assert.equal(persisted.status, "success");
+      assert.match(persisted.log, /成功状态已先落盘/);
+      assert.ok(persisted.snapshotDir);
     }
   );
 });
@@ -503,9 +533,10 @@ test("second publish while lock held returns 409 禁止抢发", async () => {
   let started = 0;
   await withServer(
     {
-      async restart() {
+      async push() {
         started += 1;
         await hold;
+        return { stdout: "test-push" };
       }
     },
     async (base) => {

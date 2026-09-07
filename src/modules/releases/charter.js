@@ -11,6 +11,12 @@ export const NEED_PASS_ERROR =
 export const QUEUE_LOG =
   "已按稳定顺序入队（登录/依赖 → 共享壳 → 业务 → 发布中心页）。主脑仍可上移下移；点通过才放行；下一条不会自动发。";
 
+export const INTERRUPTED_PUBLISH_LOG =
+  "发布未完成：进程在落地确认前被重启打断。不能当作成功。请用新单据重试。下一条不会自动发。";
+
+export const SNAPSHOT_RECOVER_LOG =
+  "重启打断后发现升级前快照目录，按已拷贝处理。请打开页面确认文件，不要自动发下一单。";
+
 export const RELEASE_CHARTER = {
   dispatcher: DISPATCHER_NAME,
   dispatcherRole: DISPATCHER_ROLE,
