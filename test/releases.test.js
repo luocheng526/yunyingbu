@@ -261,6 +261,22 @@ test("invalid or duplicate version is rejected", async () => {
     });
     assert.equal(dup.res.status, 409);
     assert.match(dup.body.error, /同模块版本号已占用/);
+
+    const badPath = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("8.0.1-path", "Eve", "首页", "坏路径", { files: ["deploy/secret.sh"] })
+    });
+    assert.equal(badPath.res.status, 400);
+    assert.match(badPath.body.error, /拒绝推送路径/);
+
+    const testFile = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("8.0.2-test", "Eve", "版本发布中心", "测试文件可交单", {
+        files: ["test/releases.test.js"]
+      })
+    });
+    assert.equal(testFile.res.status, 201);
+    assert.deepEqual(testFile.body.item.files, ["test/releases.test.js"]);
   });
 });
 
@@ -732,8 +748,21 @@ test("local apply copies listed files and never needs push-xingmai-to-ecs.sh", a
   assert.match(result.stdout, /本机落地/);
   assert.equal(fs.existsSync(path.join(live, "public", "releases.html")), true);
   assert.equal(fs.readFileSync(path.join(live, "public", "releases.html"), "utf8"), "<html>oc</html>\n");
+  fs.mkdirSync(path.join(source, "test"), { recursive: true });
+  fs.writeFileSync(path.join(source, "test", "releases.test.js"), "ok\n");
+  const withTest = await pushXingmaiToEcs(["test/releases.test.js"], {
+    sourceRoot: source,
+    liveRoot: live,
+    env: { MENGKAI_SKIP_PULL: "1" }
+  });
+  assert.match(withTest.stdout, /copied test\/releases.test.js/);
+  assert.equal(fs.readFileSync(path.join(live, "test", "releases.test.js"), "utf8"), "ok\n");
   await assert.rejects(
     () => pushXingmaiToEcs(["../secret"], { sourceRoot: source, liveRoot: live, env: { MENGKAI_SKIP_PULL: "1" } }),
+    /拒绝推送路径/
+  );
+  await assert.rejects(
+    () => pushXingmaiToEcs(["deploy/scripts/push.sh"], { sourceRoot: source, liveRoot: live, env: { MENGKAI_SKIP_PULL: "1" } }),
     /拒绝推送路径/
   );
   await assert.rejects(

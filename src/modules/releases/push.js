@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 const execFileAsync = promisify(execFile);
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
-const ALLOWED_TOP = new Set(["public", "src", "package.json", "package-lock.json"]);
+export const ALLOWED_TOP = new Set(["public", "src", "test", "package.json", "package-lock.json"]);
 
 export function liveRoot(env = process.env) {
   const fromEnv = String(env.MENGKAI_LIVE_ROOT || "").trim();

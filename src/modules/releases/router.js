@@ -5,7 +5,7 @@ import { requireReleasesAuth } from "./auth.js";
 import { NEED_PASS_ERROR, withCharter } from "./charter.js";
 import { hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
 import { assertQueueHead, findVersionClash, listModuleVersions, parseReleaseVersion } from "./version.js";
-import { formatExecError, liveRoot, pathsToSnapshot, pushXingmaiToEcs, restoreSnapshot } from "./push.js";
+import { assertSafeRel, formatExecError, liveRoot, pathsToSnapshot, pushXingmaiToEcs, restoreSnapshot } from "./push.js";
 import { restartMengkaiService } from "./restart.js";
 import { attachPipelineRoutes, attachPipelineWebhook } from "./pipeline/attach.js";
 import { createPipelineStore } from "./pipeline/store.js";
@@ -202,13 +202,23 @@ export function createReleasesRouter(options = {}) {
       });
       return;
     }
+    let files = parsed.document.files || [];
+    try {
+      files = files.map(assertSafeRel);
+    } catch (err) {
+      res.status(400).json({
+        ok: false,
+        error: `${err.message}。只允许 public、src、test、package.json、package-lock.json。`
+      });
+      return;
+    }
     const item = await store.create({
       version,
       applicant,
       source: body.source || applicant,
       summary,
       module,
-      files: parsed.complete ? parsed.document.files : parsed.document.files,
+      files,
       acceptance: parsed.complete ? parsed.document.acceptance : parsed.document.acceptance,
       restart: parsed.complete ? parsed.document.restart : true
     });
