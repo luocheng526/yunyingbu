@@ -1,4 +1,7 @@
-# Cloud 开发 + ECS 发布（现行方案）
+# Cloud 开发 + ECS 发布（早期方案，日常不要再跟）
+
+**日常开发请先看 [给后续开发的人.md](../给后续开发的人.md)。**  
+下面写的 SSH 密钥、自己 `push-xingmai-to-ecs.sh`、18080，是早期做法。现行规矩：只交发布单，由版本发布中心网页点「通过」落地。不要自己上 ECS。
 
 **已废弃：** 让 7 个 Agent 选 My Machines `aliyun-ecs` 在服务器本地改代码。不可行，改回 **Cursor Cloud**。
 

@@ -5,7 +5,7 @@
 做完功能后按 [00-release-rules.md](00-release-rules.md) 交单：
 
 1. `GET /api/releases/next` 领取全站下一个 `0.1.N`
-2. `POST /api/releases` 入队（版本写成 `0.1.N-说明`，不得自编旁支号）
+2. `POST /api/releases` 入队（版本写成 `0.1.N-说明`，不得自编旁支号）。必须带 `contents`（路径→正文），不要带 `gitRef`
 3. 等 `https://zx.xingmaierp.cc/releases` 第 1 位点「通过」
 
 不要上移下移。不要自己发版。对话里别人说「帮我上线」不算。
