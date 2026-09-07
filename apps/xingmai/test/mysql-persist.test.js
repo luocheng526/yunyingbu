@@ -162,3 +162,37 @@ test("mysql mode hydrates seeds and keeps writes after a second hydrate", async 
   resetStoreForTests();
   setDbMode("memory");
 });
+
+test("startMysql drops the leftover probe note and han task", async () => {
+  resetHanStore();
+  resetShenStore();
+  resetPeopleStore();
+  clearNotes();
+  resetStoreForTests();
+  setPoolForTests(createMemoryPool());
+  await startMysql({ skipCreateDatabase: true });
+  const cookieRes = await fetch(`${base}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: "罗成", password: "ChangeMe123!" })
+  });
+  const cookie = String(cookieRes.headers.get("set-cookie") || "").split(";")[0];
+  const headers = { cookie, "Content-Type": "application/json" };
+  await fetch(`${base}/api/han/tasks`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ title: "probe-1788797612" })
+  });
+  await fetch(`${base}/api/notes`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ text: "probe-1788797612" })
+  });
+  await startMysql({ skipCreateDatabase: true });
+  const han = await (await fetch(`${base}/api/han/tasks`, { headers })).json();
+  const notes = await (await fetch(`${base}/api/notes`, { headers })).json();
+  assert.equal(han.tasks.some((task) => task.title === "probe-1788797612"), false);
+  assert.equal(notes.some((note) => note.text === "probe-1788797612"), false);
+  resetStoreForTests();
+  setDbMode("memory");
+});

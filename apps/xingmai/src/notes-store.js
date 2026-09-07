@@ -1,6 +1,6 @@
 import { dbMode, ensureDatabase, ensureSchema, getPool, query, setDbMode } from "./modules/profile/auth.js";
 import { hydrateFromMysql as hydrateUsers } from "./modules/profile/auth.js";
-import { hydrateFromMysql as hydrateHan } from "./modules/han/store.js";
+import { dropProbeTasks, hydrateFromMysql as hydrateHan } from "./modules/han/store.js";
 import { hydrateFromMysql as hydrateShen } from "./modules/shen/store.js";
 import { hydrateFromMysql as hydratePeople } from "./modules/people/store.js";
 import { hydrateFromMysql as hydrateData } from "./modules/data/overview.js";
@@ -17,6 +17,15 @@ export function clearNotes() {
   nextId = 1;
 }
 
+const PROBE_TEXT = "probe-1788797612";
+
+export async function dropProbeNotes() {
+  notes = notes.filter((note) => note.text !== PROBE_TEXT);
+  if (dbMode() === "mysql") {
+    await query("DELETE FROM notes WHERE text = ?", [PROBE_TEXT]);
+  }
+}
+
 export async function hydrateFromMysql() {
   const [rows] = await query("SELECT id, text, created_at FROM notes ORDER BY id ASC");
   notes = rows.map((row) => ({
@@ -25,6 +34,7 @@ export async function hydrateFromMysql() {
     createdAt: row.created_at
   }));
   nextId = notes.reduce((max, note) => Math.max(max, Number(note.id) || 0), 0) + 1;
+  await dropProbeNotes();
 }
 
 export function listNotes() {
@@ -76,4 +86,6 @@ export async function startMysql({ skipCreateDatabase = false } = {}) {
   await hydratePeople();
   await hydrateData();
   await hydrateFromMysql();
+  await dropProbeTasks();
+  await dropProbeNotes();
 }

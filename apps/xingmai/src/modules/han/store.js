@@ -17,6 +17,15 @@ export function resetHanStore() {
   brief = { text: "" };
 }
 
+const PROBE_TITLE = "probe-1788797612";
+
+export async function dropProbeTasks() {
+  tasks = tasks.filter((task) => task.title !== PROBE_TITLE);
+  if (dbMode() === "mysql") {
+    await query("DELETE FROM han_tasks WHERE title = ?", [PROBE_TITLE]);
+  }
+}
+
 export async function hydrateFromMysql() {
   const [taskRows] = await query(
     "SELECT id, title, status, owner, created_at FROM han_tasks ORDER BY id ASC"
@@ -29,6 +38,7 @@ export async function hydrateFromMysql() {
     createdAt: row.created_at
   }));
   seq = tasks.reduce((max, task) => Math.max(max, Number(task.id) || 0), 0) + 1;
+  await dropProbeTasks();
   const [briefRows] = await query("SELECT text FROM han_brief WHERE id = 1");
   if (briefRows.length) {
     brief = { text: briefRows[0].text == null ? "" : String(briefRows[0].text) };
