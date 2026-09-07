@@ -419,6 +419,8 @@ html:has(.oc-wrap) .xm-content {
 #upgrade-mask.show { display: flex; }
 #upgrade-dismiss { display: none; margin-top: 0.85rem; }
 #upgrade-mask.can-close #upgrade-dismiss { display: inline-block; }
+#upgrade-login { display: none; margin-top: 0.85rem; margin-left: 0.55rem; }
+#upgrade-mask.need-login #upgrade-login { display: inline-block; }
 html:has(.oc-wrap) .xm-shell.is-pending .xm-content {
   pointer-events: auto !important;
   opacity: 1 !important;

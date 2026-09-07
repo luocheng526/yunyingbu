@@ -19,6 +19,8 @@
       #upgrade-mask.show { display: flex; }
       #upgrade-dismiss { display: none; margin-top: 0.85rem; }
       #upgrade-mask.can-close #upgrade-dismiss { display: inline-block; }
+      #upgrade-login { display: none; margin-top: 0.85rem; margin-left: 0.55rem; }
+      #upgrade-mask.need-login #upgrade-login { display: inline-block; }
       /* Theme SPA sets .is-pending { pointer-events:none } on .xm-content. A hung
          fetch then freezes this page. Keep the gate clickable. */
       html:has(.oc-wrap) .xm-shell.is-pending .xm-content {
@@ -107,7 +109,7 @@
       <section class="oc-card panel">
         <div class="pane on" id="pane-queue">
           <h3>待上线</h3>
-          <p class="hint lead">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。版本号由本闸门统一发放，全站一条号 0.1.N-说明，各模块不得自领；同一号段不能跨模块再用。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。整页刷新并读完新数据后才关升级遮罩。有新单据约 15 秒内自动提示，不会自动点通过。待上线、版本记录、运行日志都分页，每页 20 条。</p>
+          <p class="hint lead">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。版本号由本闸门统一发放，全站一条号 0.1.N-说明，各模块不得自领；同一号段不能跨模块再用。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。整页刷新并读完新数据后才关升级遮罩。有的升级会掉登录：会话还在就自动刷新完结；需要重新登录时遮罩停住，请你登录后再回本页完结，不会自动跳登录。有新单据约 15 秒内自动提示，不会自动点通过。待上线、版本记录、运行日志都分页，每页 20 条。</p>
           <div class="caps" id="stat-caps"></div>
           <div class="note banner">发布纪律：本页是唯一发版闸门。只执行交来的单据 + 本页「通过」。按提交时间点第 1 位；一把锁，禁止抢发；下一条不会自动发。「帮我上线」无效。新文件只放源目录，不要先拷到线上；点通过才落地。闸门不读 git，也不拉 Cloud 工作区，交单只登记路径。可带 contents（路径→正文）或 ref（分支/提交），闸门会先写入源目录。源目录与线上相同会失败。</div>
           <div id="lock-view" class="lock-box idle">当前空闲，没有发布任务。</div>
@@ -134,6 +136,7 @@
         <div class="upgrade-bar"><i id="upgrade-bar"></i></div>
         <p class="upgrade-log" id="upgrade-log" hidden></p>
         <button type="button" class="act" id="upgrade-dismiss">关闭</button>
+        <button type="button" class="act" id="upgrade-login">去登录完结</button>
       </div>
     </div>
 
@@ -169,13 +172,19 @@
         window.location.replace("/login");
       }
       async function api(path, options) {
+        const opts = options || {};
+        const skipLoginRedirect = Boolean(opts.skipLoginRedirect);
+        const fetchOpts = Object.assign({}, opts);
+        delete fetchOpts.skipLoginRedirect;
         const res = await fetch(path, {
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
-          ...options
+          ...fetchOpts
         });
         if (res.status === 401) {
-          goLogin();
+          if (!skipLoginRedirect) {
+            goLogin();
+          }
           const err = new Error("未登录");
           err.status = 401;
           throw err;
@@ -219,12 +228,14 @@
       const upgradeBar = document.getElementById("upgrade-bar");
       const upgradeLog = document.getElementById("upgrade-log");
       const upgradeDismiss = document.getElementById("upgrade-dismiss");
+      const upgradeLogin = document.getElementById("upgrade-login");
       const STEP_LABELS = {
         agree: "已同意",
         sync: "正在同步代码",
         restart: "正在重启服务",
         health: "等待健康检查",
         reload: "正在刷新界面",
+        login: "请登录完结",
         done: "完成"
       };
 
@@ -284,6 +295,7 @@
         if (upgradeMask) {
           upgradeMask.classList.add("show");
           upgradeMask.classList.remove("can-close");
+          upgradeMask.classList.remove("need-login");
           upgradeMask.style.display = "flex";
         }
         if (upgradeLog) {
@@ -297,6 +309,7 @@
         if (upgradeMask) {
           upgradeMask.classList.remove("show");
           upgradeMask.classList.remove("can-close");
+          upgradeMask.classList.remove("need-login");
           upgradeMask.style.display = "none";
         }
       }
@@ -314,20 +327,54 @@
       }
 
       function readPendingUpgrade() {
-        try {
-          const raw = sessionStorage.getItem(UPGRADE_PENDING_KEY);
-          if (!raw) return null;
-          const data = JSON.parse(raw);
-          return data && data.version ? data : null;
-        } catch {
-          return null;
+        const stores = [sessionStorage, localStorage];
+        for (let i = 0; i < stores.length; i += 1) {
+          try {
+            const raw = stores[i].getItem(UPGRADE_PENDING_KEY);
+            if (!raw) continue;
+            const data = JSON.parse(raw);
+            if (data && data.version) return data;
+          } catch (_err) {
+            /* ignore bad storage */
+          }
         }
+        return null;
+      }
+
+      function savePendingUpgrade(data) {
+        const raw = JSON.stringify(data);
+        try { sessionStorage.setItem(UPGRADE_PENDING_KEY, raw); } catch (_err) { /* ignore */ }
+        try { localStorage.setItem(UPGRADE_PENDING_KEY, raw); } catch (_err) { /* ignore */ }
       }
 
       function consumePendingUpgrade() {
         const data = readPendingUpgrade();
-        sessionStorage.removeItem(UPGRADE_PENDING_KEY);
+        try { sessionStorage.removeItem(UPGRADE_PENDING_KEY); } catch (_err) { /* ignore */ }
+        try { localStorage.removeItem(UPGRADE_PENDING_KEY); } catch (_err) { /* ignore */ }
         return data;
+      }
+
+      function showLoginFinish(pending, keys) {
+        const version = (pending && pending.version) || "";
+        const loginKeys = (keys || ["health", "reload", "done"]).filter(function (key) {
+          return key !== "reload" && key !== "done" && key !== "login";
+        }).concat(["login", "done"]);
+        pinUpgradeMask();
+        if (upgradeMask) {
+          upgradeMask.classList.add("show", "need-login", "can-close");
+          upgradeMask.style.display = "flex";
+        }
+        renderUpgradeSteps(loginKeys, "login", "");
+        if (upgradeLog) {
+          upgradeLog.hidden = false;
+          upgradeLog.textContent = "升级已落地。这次需要重新登录才能完结本页，不会自动跳转。请登录后再打开版本发布中心。";
+        }
+        flash("升级已落地，请登录后回到本页完结。");
+        savePendingUpgrade({
+          version: version,
+          id: pending && pending.id,
+          needLogin: true
+        });
       }
 
       async function sleep(ms) {
@@ -339,8 +386,16 @@
         return res.status === 200;
       }
 
+      async function probeSession() {
+        const res = await fetch("/api/auth/me", {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" }
+        });
+        return res.status === 200;
+      }
+
       async function loadTicket(id) {
-        const all = await api("/api/releases");
+        const all = await api("/api/releases", { skipLoginRedirect: true });
         return (all.items || []).find(function (item) { return item.id === id; }) || null;
       }
 
@@ -352,7 +407,8 @@
         let confirmBody = null;
         api("/api/releases/" + id + "/confirm", {
           method: "POST",
-          body: "{}"
+          body: "{}",
+          skipLoginRedirect: true
         }).then(function (body) {
           confirmBody = body;
         }).catch(function (err) {
@@ -362,8 +418,15 @@
         const deadline = Date.now() + 120000;
         let lastHealth = "尚未返回 200";
         let ticket = null;
+        let sawPublishing = false;
+        let healthOkSince = 0;
         while (Date.now() < deadline) {
           pinUpgradeMask();
+          if (confirmErr && confirmErr.status === 401) {
+            failUpgrade(keys, "通过时已未登录，请先登录再点通过。");
+            flash("未登录，未开始发版。", true);
+            return "failed";
+          }
           if (confirmErr && confirmErr.status && confirmErr.status !== 502 && confirmErr.status !== 503 && confirmErr.status < 500) {
             const msg = (confirmErr.status || "") + " " + (confirmErr.message || "通过失败");
             failUpgrade(keys, msg);
@@ -373,7 +436,9 @@
           try {
             ticket = await loadTicket(id);
           } catch (err) {
-            lastHealth = err.message || "读取单据中断（可能正在重启）";
+            lastHealth = err.status === 401
+              ? "会话已失效（可能需要重新登录）"
+              : (err.message || "读取单据中断（可能正在重启）");
           }
           if (ticket && ticket.status === "failed") {
             failUpgrade(keys, ticket.log || "发版失败");
@@ -381,24 +446,55 @@
             return "failed";
           }
           if (ticket && ticket.status === "publishing") {
+            sawPublishing = true;
             renderUpgradeSteps(keys, needRestart ? "restart" : "sync");
           }
           if (ticket && ticket.status === "success") {
             renderUpgradeSteps(keys, "health");
-            try {
-              if (await probeHealth()) {
+          }
+          try {
+            const healthy = await probeHealth();
+            if (!healthy) {
+              healthOkSince = 0;
+              lastHealth = "健康检查尚未 200";
+            } else {
+              if (!healthOkSince) {
+                healthOkSince = Date.now();
+              }
+              lastHealth = "健康检查已 200";
+              const sessionOk = await probeSession();
+              const landed = Boolean(
+                (ticket && ticket.status === "success") ||
+                (confirmBody && confirmBody.ok) ||
+                (needRestart && sawPublishing)
+              );
+              if (sessionOk && ticket && ticket.status === "success") {
                 renderUpgradeSteps(keys, "reload");
-                sessionStorage.setItem(UPGRADE_PENDING_KEY, JSON.stringify({
+                savePendingUpgrade({
                   version: version || ticket.version,
                   id: id
-                }));
+                });
                 window.location.replace("/releases?reloaded=" + Date.now());
                 return "reloading";
               }
-              lastHealth = "健康检查尚未 200";
-            } catch (err) {
-              lastHealth = err.message || "健康检查请求中断（可能正在重启）";
+              if (!sessionOk && landed && Date.now() - healthOkSince >= 2000) {
+                showLoginFinish({
+                  version: version || (ticket && ticket.version) || "",
+                  id: id
+                }, keys);
+                return "need-login";
+              }
+              if (!sessionOk && needRestart && Date.now() - healthOkSince >= 4000) {
+                showLoginFinish({
+                  version: version || (ticket && ticket.version) || "",
+                  id: id
+                }, keys);
+                return "need-login";
+              }
             }
+          } catch (err) {
+            lastHealth = err.message || "健康检查请求中断（可能正在重启）";
+            healthOkSince = 0;
           }
           await sleep(1500);
         }
@@ -739,7 +835,7 @@
             const needRestart = card.getAttribute("data-restart") === "1";
             const version = card.getAttribute("data-version") || "";
             const passResult = await runPass(id, needRestart, version);
-            if (passResult === "reloading") return;
+            if (passResult === "reloading" || passResult === "need-login") return;
             if (passResult === "failed") {
               btn.disabled = false;
             }
@@ -774,16 +870,27 @@
 
       (async function bootReleases() {
         clearShellPending();
-        const pending = consumePendingUpgrade();
-        if (pending) {
+        const pending = readPendingUpgrade();
+        if (!(await probeSession())) {
+          if (pending) {
+            showLoginFinish(pending);
+            return;
+          }
+          goLogin();
+          return;
+        }
+        const done = consumePendingUpgrade();
+        if (done) {
           showUpgrade(["reload", "done"], "reload");
         }
         try {
           await refresh();
-          if (pending) {
+          if (done) {
             renderUpgradeSteps(["reload", "done"], "done", "ok");
             hideUpgrade();
-            flash("发布成功 · " + pending.version);
+            flash(done.needLogin
+              ? "发布成功 · " + done.version + " · 登录已完结"
+              : "发布成功 · " + done.version);
           }
         } catch (err) {
           hideUpgrade();
@@ -795,6 +902,17 @@
       if (upgradeDismiss) {
         upgradeDismiss.addEventListener("click", function () {
           hideUpgrade();
+        });
+      }
+      if (upgradeLogin) {
+        upgradeLogin.addEventListener("click", function () {
+          const pending = readPendingUpgrade() || {};
+          savePendingUpgrade({
+            version: pending.version || "",
+            id: pending.id,
+            needLogin: true
+          });
+          window.location.href = "/login";
         });
       }
       if (upgradeMask) {

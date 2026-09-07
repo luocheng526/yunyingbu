@@ -173,7 +173,16 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /consumePendingUpgrade/);
     assert.match(text, /bootReleases/);
     assert.match(text, /passResult === "reloading"/);
+    assert.match(text, /passResult === "need-login"/);
     assert.match(text, /passResult === "failed"/);
+    assert.match(text, /function probeSession/);
+    assert.match(text, /function showLoginFinish/);
+    assert.match(text, /skipLoginRedirect/);
+    assert.match(text, /id="upgrade-login"/);
+    assert.match(text, /去登录完结/);
+    assert.match(text, /登录已完结/);
+    assert.match(text, /不会自动跳转/);
+    assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
     assert.doesNotMatch(text, /href="\/shared\/layout.css"/);
@@ -267,7 +276,9 @@ test("agent docs say no video unless the UI change is large", () => {
   assert.match(fs.readFileSync(path.join(root, "docs/agents/06-releases.md"), "utf8"), noVideo);
   assert.match(fs.readFileSync(path.join(root, "docs/agents/00-release-rules.md"), "utf8"), noVideo);
   assert.match(fs.readFileSync(path.join(root, "docs/agents/00-release-rules.md"), "utf8"), /重启前会试载/);
+  assert.match(fs.readFileSync(path.join(root, "docs/agents/00-release-rules.md"), "utf8"), /不自动跳登录/);
   assert.match(fs.readFileSync(path.join(root, "docs/agents/06-releases.md"), "utf8"), /先试载再重启/);
+  assert.match(fs.readFileSync(path.join(root, "docs/agents/06-releases.md"), "utf8"), /不自动跳登录/);
 });
 
 test("GET /releases.css is page-only stylesheet", async () => {
@@ -287,6 +298,7 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /#upgrade-mask/);
     assert.match(text, /z-index:\s*4000/);
     assert.match(text, /Theme SPA copies <link>/);
+    assert.match(text, /#upgrade-mask\.need-login #upgrade-login/);
   });
 });
 
