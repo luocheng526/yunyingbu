@@ -248,6 +248,9 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /overflow: auto !important/);
     assert.match(text, /\.oc-pager/);
     assert.match(text, /overscroll-behavior: contain/);
+    assert.match(text, /--oc-bg:\s*var\(--xm-bg,\s*#f7f7f4\)/);
+    assert.match(text, /--oc-text:\s*var\(--xm-ink,\s*#14120b\)/);
+    assert.match(text, /\.xm-content button\.oc-tab/);
   });
 });
 
