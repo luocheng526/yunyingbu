@@ -153,6 +153,10 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /data-tab="queue"/);
     assert.match(text, /data-tab="history"/);
     assert.match(text, /从最新到最老/);
+    assert.match(text, /只记每次升级的简要内容/);
+    assert.match(text, /<th>摘要<\/th>/);
+    assert.match(text, /item\.summary/);
+    assert.doesNotMatch(text, /<th>日志<\/th>/);
     assert.match(text, /newestFirst/);
     assert.match(text, /PAGE_SIZE = 20/);
     assert.match(text, /function paginate/);

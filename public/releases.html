@@ -109,7 +109,7 @@
         </div>
         <div class="pane" id="pane-history">
           <h3>版本记录</h3>
-          <p class="hint">各模块当前版本来自最近一次成功发布。下一号由本闸门发放。成功记录从最新到最老，每页 20 条。有升级前快照的单据可以回滚；回滚占用发布锁，不会自动发下一单。</p>
+          <p class="hint">各模块当前版本来自最近一次成功发布。下一号由本闸门发放。版本记录只记每次升级的简要内容，从最新到最老，每页 20 条。详细流水在「运行日志」。有升级前快照的单据可以回滚；回滚占用发布锁，不会自动发下一单。</p>
           <div id="current-versions" class="caps"></div>
           <div id="history-view"></div>
         </div>
@@ -540,7 +540,7 @@
         }
         const paged = paginate(success, "history");
         el.innerHTML =
-          "<table><thead><tr><th>版本</th><th>来自 / 模块</th><th>时间</th><th>日志</th><th>回滚</th></tr></thead><tbody>" +
+          "<table><thead><tr><th>版本</th><th>模块</th><th>摘要</th><th>时间</th><th>回滚</th></tr></thead><tbody>" +
           paged.slice.map(function (item) {
             let rollbackBtn = "<span class=\"oc-crumb\">无快照</span>";
             if (item.snapshotDir) {
@@ -551,9 +551,9 @@
             return (
               "<tr data-id=\"" + esc(item.id) + "\"><td>" + esc(item.version) + demoBadge(item) +
               (item.rolledBack ? '<span class="badge">已回滚</span>' : "") + "</td>" +
-              "<td>" + esc(item.source || item.applicant || "—") + "<br><span class=\"oc-crumb\">" + esc(item.module) + "</span></td>" +
+              "<td>" + esc(item.module) + "</td>" +
+              "<td>" + esc(item.summary || "—") + "</td>" +
               "<td>" + esc(fmt(item.publishFinishedAt || item.reviewedAt)) + "</td>" +
-              "<td>" + esc(item.log || "—") + "</td>" +
               "<td>" + rollbackBtn + "</td></tr>"
             );
           }).join("") +
