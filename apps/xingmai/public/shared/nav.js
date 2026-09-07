@@ -1,4 +1,4 @@
-/* xm-shell-perf 0.1.43 */
+/* xm-shell-perf 0.1.44 */
 (function () {
   const items = [
     { href: "/", label: "首页" },
@@ -216,7 +216,7 @@
   if (!document.querySelector('link[href*="/shared/layout.css"]')) {
     const css = document.createElement("link");
     css.rel = "stylesheet";
-    css.href = "/shared/layout.css?v=0.1.43";
+    css.href = "/shared/layout.css?v=0.1.44";
     document.head.appendChild(css);
   }
 
@@ -457,6 +457,10 @@
       window.__xmStampObs.disconnect();
     }
     wipePageTimers();
+    const staleMask = document.getElementById("upgrade-mask");
+    if (staleMask) {
+      staleMask.remove();
+    }
     const content = document.getElementById("xm-content");
     if (!content) {
       window.location.reload();
@@ -481,6 +485,10 @@
       content.appendChild(document.importNode(node, true));
     });
     stripInnerChrome(content);
+    const movedMask = content.querySelector("#upgrade-mask");
+    if (movedMask) {
+      document.body.appendChild(movedMask);
+    }
     trackPageTimers(function () {
       activateScripts(content);
     });
@@ -666,6 +674,9 @@
       if (node === shell) {
         return;
       }
+      if (node.id === "upgrade-mask") {
+        return;
+      }
       if (node.id === "site-nav" || (node.classList && (node.classList.contains("xm-sider") || node.classList.contains("sidebar") || node.classList.contains("site-sidebar")))) {
         return;
       }
@@ -675,8 +686,15 @@
       leftovers.push(node);
     });
     leftovers.forEach(function (node) {
+      if (node.id === "upgrade-mask") {
+        return;
+      }
       content.appendChild(node);
     });
+    const upgradeMask = document.getElementById("upgrade-mask");
+    if (upgradeMask && upgradeMask.parentNode !== document.body) {
+      document.body.appendChild(upgradeMask);
+    }
     const mount = document.getElementById("site-nav");
     if (mount) {
       mount.remove();

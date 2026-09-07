@@ -22,7 +22,7 @@ test("shared shell assets are public", async () => {
   assert.equal(loginCss.status, 200);
   assert.equal(ocCss.status, 200);
   assert.match(String(js.headers.get("cache-control") || ""), /must-revalidate/);
-  const versionedJs = await fetch(`${base}/shared/nav.js?v=0.1.43`);
+  const versionedJs = await fetch(`${base}/shared/nav.js?v=0.1.44`);
   assert.match(String(versionedJs.headers.get("cache-control") || ""), /max-age=86400/);
   const cssText = await css.text();
   const jsText = await js.text();
@@ -31,9 +31,11 @@ test("shared shell assets are public", async () => {
   assert.match(cssText, /html\[data-theme="dark"\]/);
   assert.match(cssText, /\.xm-shell\.is-pending/);
   assert.match(cssText, /\.xm-sider/);
-  assert.match(jsText, /xm-shell-perf 0\.1\.43/);
+  assert.match(jsText, /xm-shell-perf 0\.1\.44/);
   assert.match(jsText, /aside class="xm-sider"/);
   assert.match(jsText, /function menuHtml\(/);
+  assert.match(jsText, /id === "upgrade-mask"/);
+  assert.match(jsText, /staleMask\.remove/);
   assert.match(jsText, /function wrapHanFetch\(/);
   assert.match(jsText, /function isAppDest\(/);
   assert.match(jsText, /function warmAppPages\(/);
@@ -89,6 +91,11 @@ test("placeholder modules share the same shell assets", async () => {
   assert.match(releasesHtml, /timeZone: "Asia\/Shanghai"/);
   assert.match(releasesHtml, /function formatChinaTime/);
   assert.match(releasesHtml, /xm-china-time 0\.1\.27/);
+  assert.match(releasesHtml, /xm-upgrade-mask 0\.1\.44/);
+  assert.match(releasesHtml, /id="upgrade-dismiss"/);
+  assert.match(releasesHtml, /function pinUpgradeMask\(/);
+  assert.match(releasesHtml, /#upgrade-mask\.can-close #upgrade-dismiss/);
+  assert.match(releasesHtml, /position: absolute/);
   assert.match(releasesHtml, /background: var\(--xm-card/);
   assert.doesNotMatch(releasesHtml, /replace\("Z", " UTC"\)/);
   const ocCss = await fetch(`${base}/releases.css`, { headers: { cookie } });
@@ -111,8 +118,8 @@ test("page renderer injects shared shell onto module html", async () => {
     '<!DOCTYPE html><html><head></head><body class="oc-page"><div class="oc-tab">待上线</div></body></html>'
   );
   assert.match(injected, /\/shared\/layout\.css/);
-  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.43/);
-  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.43"/);
+  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.44/);
+  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.44"/);
   assert.match(injected, /localStorage.getItem\("xm-theme"\)/);
   const login = withSharedShell('<html><head></head><body class="login-page"></body></html>');
   assert.doesNotMatch(login, /\/shared\/nav\.js/);

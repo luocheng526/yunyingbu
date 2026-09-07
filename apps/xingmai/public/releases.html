@@ -5,13 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>版本发布中心</title>
     <!-- xm-china-time 0.1.27 -->
-    <link rel="stylesheet" href="/releases.css?v=page" />
+    <!-- xm-upgrade-mask 0.1.44 -->
+    <link rel="stylesheet" href="/releases.css?v=shell-align" />
     <style>
+      body > #upgrade-mask,
       #upgrade-mask {
         display: none;
         position: fixed;
         inset: 0;
-        z-index: 80;
+        z-index: 4000;
         background: rgba(20, 18, 11, 0.45);
         align-items: center;
         justify-content: center;
@@ -19,16 +21,21 @@
       }
       html[data-theme="dark"] #upgrade-mask { background: rgba(0, 0, 0, 0.55); }
       #upgrade-mask.show { display: flex; }
+      html:has(.oc-wrap) .xm-shell.is-pending .xm-content {
+        pointer-events: auto !important;
+        opacity: 1 !important;
+      }
       .upgrade-card {
+        position: relative;
         width: min(36rem, 100%);
         background: var(--xm-card, #fff);
         color: var(--xm-ink, #14120b);
         border: 1px solid var(--xm-line, #e4e2da);
         border-radius: 10px;
-        padding: 1.4rem 1.5rem 1.3rem;
+        padding: 1.4rem 3.4rem 1.3rem 1.5rem;
         box-shadow: var(--xm-shadow, 0 20px 50px rgba(0, 0, 0, 0.25));
       }
-      .upgrade-card h2 { margin: 0 0 0.85rem; font-size: 1.2rem; }
+      .upgrade-card h2 { margin: 0 0 0.85rem; font-size: 1.2rem; padding-right: 0.5rem; }
       .upgrade-card ol { margin: 0 0 1rem; padding-left: 1.2rem; }
       .upgrade-card li { margin: 0.35rem 0; color: var(--xm-muted, #6f6e69); }
       .upgrade-card li.on { color: var(--xm-ink, #14120b); font-weight: 650; }
@@ -56,8 +63,17 @@
         max-height: 10rem;
         overflow: auto;
       }
+      #upgrade-dismiss {
+        display: none;
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        margin: 0;
+        z-index: 1;
+      }
+      #upgrade-mask.can-close #upgrade-dismiss { display: inline-block; }
     </style>
-      <link rel="stylesheet" href="/shared/layout.css" />
+    <link rel="stylesheet" href="/shared/layout.css" />
   </head>
   <body>
     <header class="oc-top">
@@ -71,49 +87,47 @@
       </div>
     </header>
 
-    <section class="oc-hero">
-      <div>
-        <p class="oc-kicker">RELEASE GATE</p>
-        <h1>版本发布中心</h1>
-      </div>
-      <div class="oc-run">
-        <span class="pill run">运行</span>
-        <span class="ver" id="app-version">读取版本中</span>
-        <span class="oc-clock" id="clock">—</span>
-        <span class="oc-who">超管 / <b id="who">—</b></span>
-        <button type="button" class="act" id="refresh-btn">刷新</button>
-      </div>
-    </section>
+    <div class="oc-wrap page xm-page">
+      <section class="oc-hero">
+        <div>
+          <p class="kicker oc-kicker">RELEASE GATE</p>
+          <h1>版本发布中心</h1>
+        </div>
+        <div class="oc-run">
+          <span class="pill run">运行</span>
+          <span class="ver" id="app-version">读取版本中</span>
+          <button type="button" class="act" id="refresh-btn">刷新</button>
+        </div>
+      </section>
 
-    <nav class="oc-tabs" aria-label="版本发布中心页签">
-      <button type="button" class="oc-tab active" data-tab="queue">
-        <h2>待上线</h2>
-        <p>各对话提交的发版队列</p>
-      </button>
-      <button type="button" class="oc-tab" data-tab="history">
-        <h2>版本记录</h2>
-        <p>当前版本 / 回滚</p>
-      </button>
-      <button type="button" class="oc-tab" data-tab="logs">
-        <h2>运行日志</h2>
-        <p>发版流水 / log</p>
-      </button>
-    </nav>
+      <nav class="oc-tabs" aria-label="版本发布中心页签">
+        <button type="button" class="oc-tab active" data-tab="queue">
+          <h2>待上线</h2>
+          <p>各对话提交的发版队列</p>
+        </button>
+        <button type="button" class="oc-tab" data-tab="history">
+          <h2>版本记录</h2>
+          <p>当前版本 / 回滚</p>
+        </button>
+        <button type="button" class="oc-tab" data-tab="logs">
+          <h2>运行日志</h2>
+          <p>发版流水 / log</p>
+        </button>
+      </nav>
 
-    <div class="oc-wrap">
       <div id="flash" class="flash" role="status"></div>
-      <section class="oc-card">
+      <section class="oc-card panel">
         <div class="pane on" id="pane-queue">
           <h3>待上线</h3>
-          <p class="hint">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。版本号由本闸门统一发放，全站一条号 0.1.N-说明，各模块不得自领；同一号段不能跨模块再用。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。整页刷新并读完新数据后才关升级遮罩。有新单据约 15 秒内自动提示，不会自动点通过。待上线、版本记录、运行日志都分页，每页 20 条。</p>
+          <p class="hint lead">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。版本号由本闸门统一发放，全站一条号 0.1.N-说明，各模块不得自领；同一号段不能跨模块再用。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。整页刷新并读完新数据后才关升级遮罩。有新单据约 15 秒内自动提示，不会自动点通过。待上线、版本记录、运行日志都分页，每页 20 条。</p>
           <div class="caps" id="stat-caps"></div>
-          <div class="note">发布纪律：本页是唯一发版闸门。只执行交来的单据 + 本页「通过」。按提交时间点第 1 位；一把锁，禁止抢发；下一条不会自动发。「帮我上线」无效。新文件只放源目录，不要先拷到线上；点通过才落地。源目录与线上相同会失败。</div>
+          <div class="note banner">发布纪律：本页是唯一发版闸门。只执行交来的单据 + 本页「通过」。按提交时间点第 1 位；一把锁，禁止抢发；下一条不会自动发。「帮我上线」无效。新文件只放源目录，不要先拷到线上；点通过才落地。闸门不读 git，也不拉 Cloud 工作区，交单只登记路径。可带 contents（路径→正文）或 ref（分支/提交），闸门会先写入源目录。源目录与线上相同会失败。</div>
           <div id="lock-view" class="lock-box idle">当前空闲，没有发布任务。</div>
           <div id="queue-view" class="tickets"></div>
         </div>
         <div class="pane" id="pane-history">
           <h3>版本记录</h3>
-          <p class="hint">各模块当前版本来自最近一次成功发布。下一号由本闸门发放。成功记录从最新到最老，每页 20 条。有升级前快照的单据可以回滚；回滚占用发布锁，不会自动发下一单。</p>
+          <p class="hint">各模块当前版本来自最近一次成功发布。下一号由本闸门发放。版本记录只记每次升级的简要内容，从最新到最老，每页 20 条。详细流水在「运行日志」。有升级前快照的单据可以回滚；回滚占用发布锁，不会自动发下一单。</p>
           <div id="current-versions" class="caps"></div>
           <div id="history-view"></div>
         </div>
@@ -127,7 +141,8 @@
 
     <div id="upgrade-mask" aria-live="assertive" aria-modal="true" role="dialog">
       <div class="upgrade-card">
-        <h2>正在升级，请勿关闭</h2>
+        <h2 id="upgrade-title">正在升级，请勿关闭</h2>
+        <button type="button" class="act" id="upgrade-dismiss">关闭</button>
         <ol id="upgrade-steps"></ol>
         <div class="upgrade-bar"><i id="upgrade-bar"></i></div>
         <p class="upgrade-log" id="upgrade-log" hidden></p>
@@ -166,11 +181,26 @@
         window.location.replace("/login");
       }
       async function api(path, options) {
-        const res = await fetch(path, {
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-          ...options
-        });
+        const ac = new AbortController();
+        const timer = setTimeout(function () { ac.abort(); }, 10000);
+        let res;
+        try {
+          res = await fetch(path, {
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            signal: ac.signal,
+            ...options
+          });
+        } catch (err) {
+          if (err && err.name === "AbortError") {
+            const timeoutErr = new Error("请求超时");
+            timeoutErr.status = 408;
+            throw timeoutErr;
+          }
+          throw err;
+        } finally {
+          clearTimeout(timer);
+        }
         if (res.status === 401) {
           goLogin();
           const err = new Error("未登录");
@@ -238,6 +268,9 @@
       const upgradeSteps = document.getElementById("upgrade-steps");
       const upgradeBar = document.getElementById("upgrade-bar");
       const upgradeLog = document.getElementById("upgrade-log");
+      const upgradeDismiss = document.getElementById("upgrade-dismiss");
+      const upgradeTitle = document.getElementById("upgrade-title");
+      let upgradeEscapeTimer = 0;
       const STEP_LABELS = {
         agree: "已同意",
         sync: "正在同步代码",
@@ -272,20 +305,96 @@
         upgradeBar.style.width = width + "%";
       }
 
+      function pinUpgradeMask() {
+        if (upgradeMask && upgradeMask.parentNode !== document.body) {
+          document.body.appendChild(upgradeMask);
+        }
+      }
+
+      function clearShellPending() {
+        const shell = document.querySelector(".xm-shell");
+        if (shell) {
+          shell.classList.remove("is-pending");
+        }
+      }
+
+      function setUpgradeTitle(text) {
+        if (upgradeTitle) {
+          upgradeTitle.textContent = text;
+        }
+      }
+
       function showUpgrade(keys, active) {
+        pinUpgradeMask();
+        clearShellPending();
         if (upgradeMask) {
           upgradeMask.classList.add("show");
+          upgradeMask.classList.remove("can-close");
         }
+        setUpgradeTitle("正在升级，请勿关闭");
         if (upgradeLog) {
           upgradeLog.hidden = true;
           upgradeLog.textContent = "";
         }
         renderUpgradeSteps(keys, active, "");
+        if (upgradeEscapeTimer) {
+          clearTimeout(upgradeEscapeTimer);
+        }
+        upgradeEscapeTimer = setTimeout(function () {
+          if (upgradeMask && upgradeMask.classList.contains("show") && !upgradeMask.classList.contains("can-close")) {
+            setUpgradeTitle("仍在处理，可关闭此层");
+            upgradeMask.classList.add("can-close");
+          }
+        }, 8000);
       }
 
       function hideUpgrade() {
+        if (upgradeEscapeTimer) {
+          clearTimeout(upgradeEscapeTimer);
+          upgradeEscapeTimer = 0;
+        }
         if (upgradeMask) {
           upgradeMask.classList.remove("show");
+          upgradeMask.classList.remove("can-close");
+        }
+        setUpgradeTitle("正在升级，请勿关闭");
+      }
+
+      function failUpgrade(keys, message) {
+        pinUpgradeMask();
+        clearShellPending();
+        if (upgradeEscapeTimer) {
+          clearTimeout(upgradeEscapeTimer);
+          upgradeEscapeTimer = 0;
+        }
+        setUpgradeTitle("升级未完成");
+        renderUpgradeSteps(keys, "done", "bad");
+        if (upgradeLog) {
+          upgradeLog.hidden = false;
+          upgradeLog.textContent = message;
+        }
+        if (upgradeMask) {
+          upgradeMask.classList.add("show");
+          upgradeMask.classList.add("can-close");
+        }
+      }
+
+      function finishUpgrade(keys, message) {
+        pinUpgradeMask();
+        clearShellPending();
+        if (upgradeEscapeTimer) {
+          clearTimeout(upgradeEscapeTimer);
+          upgradeEscapeTimer = 0;
+        }
+        setUpgradeTitle("升级完成");
+        renderUpgradeSteps(keys, "done", "ok");
+        if (upgradeLog && message) {
+          upgradeLog.hidden = false;
+          upgradeLog.textContent = message;
+        }
+        if (upgradeMask) {
+          upgradeMask.classList.add("show");
+          upgradeMask.classList.add("can-close");
         }
       }
 
@@ -311,8 +420,16 @@
       }
 
       async function probeHealth() {
-        const res = await fetch("/api/health", { credentials: "same-origin" });
-        return res.status === 200;
+        const ac = new AbortController();
+        const timer = setTimeout(function () { ac.abort(); }, 8000);
+        try {
+          const res = await fetch("/api/health", { credentials: "same-origin", cache: "no-store", signal: ac.signal });
+          return res.status === 200;
+        } catch {
+          return false;
+        } finally {
+          clearTimeout(timer);
+        }
       }
 
       async function loadTicket(id) {
@@ -338,16 +455,12 @@
         let lastHealth = "尚未返回 200";
         let ticket = null;
         while (Date.now() < deadline) {
+          pinUpgradeMask();
           if (confirmErr && confirmErr.status && confirmErr.status !== 502 && confirmErr.status !== 503 && confirmErr.status < 500) {
-            renderUpgradeSteps(keys, "done", "bad");
-            if (upgradeLog) {
-              upgradeLog.hidden = false;
-              upgradeLog.textContent = confirmErr.message || "通过失败";
-            }
-            await sleep(400);
-            hideUpgrade();
-            flash((confirmErr.status || "") + " " + confirmErr.message, true);
-            return;
+            const msg = (confirmErr.status || "") + " " + (confirmErr.message || "通过失败");
+            failUpgrade(keys, msg);
+            flash(msg, true);
+            return "failed";
           }
           try {
             ticket = await loadTicket(id);
@@ -355,15 +468,9 @@
             lastHealth = err.message || "读取单据中断（可能正在重启）";
           }
           if (ticket && ticket.status === "failed") {
-            renderUpgradeSteps(keys, "done", "bad");
-            if (upgradeLog) {
-              upgradeLog.hidden = false;
-              upgradeLog.textContent = ticket.log || "发版失败";
-            }
-            await sleep(500);
-            hideUpgrade();
+            failUpgrade(keys, ticket.log || "发版失败");
             flash(ticket.log || "发版失败", true);
-            return;
+            return "failed";
           }
           if (ticket && ticket.status === "publishing") {
             renderUpgradeSteps(keys, needRestart ? "restart" : "sync");
@@ -387,13 +494,12 @@
           }
           await sleep(1500);
         }
-        renderUpgradeSteps(keys, "done", "bad");
-        if (upgradeLog) {
-          upgradeLog.hidden = false;
-          upgradeLog.textContent = ((ticket && ticket.log) ? ticket.log + "\n" : "") + "健康检查超时：" + lastHealth;
-        }
-        hideUpgrade();
+        const timeoutMsg = ticket && ticket.status === "success"
+          ? "通过已落地，但健康检查超时：" + lastHealth + "。站点可能起不来，请看进程日志，不要再点通过。"
+          : ((ticket && ticket.log) ? ticket.log + "\n" : "") + "健康检查超时：" + lastHealth;
+        failUpgrade(keys, timeoutMsg);
         flash("升级未完成：" + lastHealth, true);
+        return "failed";
       }
 
       function tickClock() {
@@ -536,6 +642,7 @@
             "<dt>来自对话</dt><dd>" + esc(item.source || item.applicant || "—") + "</dd>" +
             "<dt>更新了什么</dt><dd>" + esc(item.summary) + "</dd>" +
             "<dt>文件</dt><dd>" + fileList(item) + "</dd>" +
+            (item.gitRef ? "<dt>git ref</dt><dd>" + esc(item.gitRef) + "</dd>" : "") +
             "<dt>验收</dt><dd>" + esc(item.acceptance || "—") + "</dd>" +
             "<dt>排队序号</dt><dd>" + seq + "</dd>" +
             "</dl>" +
@@ -565,7 +672,7 @@
         }
         const paged = paginate(success, "history");
         el.innerHTML =
-          "<table><thead><tr><th>版本</th><th>来自 / 模块</th><th>时间</th><th>日志</th><th>回滚</th></tr></thead><tbody>" +
+          "<table><thead><tr><th>版本</th><th>模块</th><th>摘要</th><th>时间</th><th>回滚</th></tr></thead><tbody>" +
           paged.slice.map(function (item) {
             let rollbackBtn = "<span class=\"oc-crumb\">无快照</span>";
             if (item.snapshotDir) {
@@ -576,9 +683,9 @@
             return (
               "<tr data-id=\"" + esc(item.id) + "\"><td>" + esc(item.version) + demoBadge(item) +
               (item.rolledBack ? '<span class="badge">已回滚</span>' : "") + "</td>" +
-              "<td>" + esc(item.source || item.applicant || "—") + "<br><span class=\"oc-crumb\">" + esc(item.module) + "</span></td>" +
+              "<td>" + esc(item.module) + "</td>" +
+              "<td>" + esc(item.summary || "—") + "</td>" +
               "<td>" + esc(fmt(item.publishFinishedAt || item.reviewedAt)) + "</td>" +
-              "<td>" + esc(item.log || "—") + "</td>" +
               "<td>" + rollbackBtn + "</td></tr>"
             );
           }).join("") +
@@ -608,6 +715,7 @@
       }
 
       async function refresh() {
+        clearShellPending();
         const [all, queue, lock, versions, ready, me] = await Promise.all([
           api("/api/releases"),
           api("/api/releases/queue"),
@@ -672,7 +780,8 @@
       });
 
       tickClock();
-      setInterval(tickClock, 1000);
+      window.__xmPageTimers = window.__xmPageTimers || [];
+      window.__xmPageTimers.push(setInterval(tickClock, 1000));
 
       document.body.addEventListener("click", async function (event) {
         const pagerBtn = event.target.closest(".oc-pager [data-page]");
@@ -721,6 +830,9 @@
             const version = card.getAttribute("data-version") || "";
             const passResult = await runPass(id, needRestart, version);
             if (passResult === "reloading") return;
+            if (passResult === "failed") {
+              btn.disabled = false;
+            }
           } else if (act === "rollback") {
             if (!window.confirm("确认按升级前快照回滚该版本的文件？不会自动发下一单。")) {
               btn.disabled = false;
@@ -751,24 +863,48 @@
       });
 
       (async function bootReleases() {
+        pinUpgradeMask();
+        clearShellPending();
         const pending = consumePendingUpgrade();
-        if (pending) {
-          showUpgrade(["reload", "done"], "reload");
-        }
         try {
           await refresh();
           if (pending) {
-            renderUpgradeSteps(["reload", "done"], "done", "ok");
-            hideUpgrade();
+            finishUpgrade(["reload", "done"], "发布成功 · " + pending.version);
             flash("发布成功 · " + pending.version);
+          } else if (upgradeMask && upgradeMask.classList.contains("show")) {
+            hideUpgrade();
           }
         } catch (err) {
-          hideUpgrade();
+          if (pending) {
+            finishUpgrade(["reload", "done"], "发布已提交 · " + pending.version + "。页面刷新失败：" + (err.message || ""));
+          } else {
+            hideUpgrade();
+          }
           flash(err.message, true);
         }
       })();
-      setInterval(function () { watchIncoming(); }, WATCH_MS);
+      window.__xmPageTimers = window.__xmPageTimers || [];
+      window.__xmPageTimers.push(setInterval(function () { watchIncoming(); }, WATCH_MS));
+      window.__xmPageTimers.push(setInterval(function () {
+        if (upgradeMask && upgradeMask.classList.contains("show")) {
+          pinUpgradeMask();
+        }
+      }, 400));
+      if (upgradeDismiss) {
+        upgradeDismiss.addEventListener("click", function (event) {
+          event.preventDefault();
+          event.stopPropagation();
+          hideUpgrade();
+        });
+      }
+      if (upgradeMask) {
+        upgradeMask.addEventListener("click", function (event) {
+          if (event.target === upgradeMask && upgradeMask.classList.contains("can-close")) {
+            hideUpgrade();
+          }
+        });
+      }
     </script>
-      <script src="/shared/nav.js"></script>
+    <script src="/shared/nav.js"></script>
   </body>
 </html>
