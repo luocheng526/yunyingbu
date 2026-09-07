@@ -6,6 +6,15 @@ import { NEED_PASS_ERROR, REORDER_FORBIDDEN, withCharter } from "./charter.js";
 import { hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
 import { assertQueueHead, describeNextVersion, listModuleVersions, resolveReleaseVersion } from "./version.js";
 import { assertSafeRel, formatExecError, listMissingSourceFiles, liveRoot, pathsToSnapshot, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "./push.js";
+import {
+  parseGitRef,
+  parseRepository,
+  resolveStageRoots,
+  shouldRejectUnchangedAtCreate,
+  sourceMatchesLive,
+  stageTicketSources,
+  unchangedCreateError
+} from "./stage.js";
 import { filesNeedProcessRestart, restartMengkaiService, ticketNeedsProcessRestart } from "./restart.js";
 import { attachPipelineRoutes, attachPipelineWebhook } from "./pipeline/attach.js";
 import { createPipelineStore } from "./pipeline/store.js";
@@ -56,7 +65,8 @@ export function createReleasesRouter(options = {}) {
     });
   const restart = options.restart || restartMengkaiService;
   const push = options.push || pushXingmaiToEcs;
-  const resolveLive = () => options.liveRoot || liveRoot();
+  const resolveLive = () => options.liveRoot || liveRoot(options.env);
+  const resolveSource = () => options.sourceRoot || sourceRoot(options.env);
   const router = express.Router();
   router.use(requireReleasesAuth(options));
   attachPipelineWebhook(router, { ...options, pipelineStore });
@@ -66,7 +76,21 @@ export function createReleasesRouter(options = {}) {
     const files = noDoc ? [] : item.files || [];
     const shouldRestart = ticketNeedsProcessRestart(item, noDoc);
     const snapshotDir = path.join(stateDir || os.tmpdir(), "snapshots", item.id);
-    const pushResult = await push(files, { snapshotDir });
+    if (!noDoc && item.gitRef) {
+      await stageTicketSources(files, {
+        sourceRoot: resolveSource(),
+        ref: item.gitRef,
+        repository: item.repository,
+        fetchImpl: options.fetchImpl,
+        env: options.env || process.env
+      });
+    }
+    const pushResult = await push(files, {
+      snapshotDir,
+      sourceRoot: options.sourceRoot,
+      liveRoot: resolveLive(),
+      env: options.env || process.env
+    });
     item.snapshotDir = snapshotDir;
     let extra = "";
     if (shouldRestart) {
@@ -224,12 +248,41 @@ export function createReleasesRouter(options = {}) {
       });
       return;
     }
-    const missing = listMissingSourceFiles(files, sourceRoot());
+    const gitRef = parseGitRef(body);
+    let repository = "";
+    try {
+      repository = gitRef ? parseRepository(body, options.env || process.env) : "";
+      await stageTicketSources(files, {
+        sourceRoot: resolveSource(),
+        contents: body.contents || body.blobs,
+        ref: gitRef,
+        repository,
+        fetchImpl: options.fetchImpl,
+        env: options.env || process.env
+      });
+    } catch (err) {
+      res.status(err.status || 400).json({ ok: false, error: err.message });
+      return;
+    }
+    const missing = listMissingSourceFiles(files, resolveSource());
     if (missing.length) {
       res.status(400).json({
         ok: false,
-        error: `源目录缺少文件：${missing.join("、")}。交单前必须把文件放到源目录，避免通过后 ENOENT。`,
+        error: `源目录缺少文件：${missing.join("、")}。闸门不读 Cloud 工作区。交单请带 contents 或 ref，或先把文件放到源目录。`,
         missing
+      });
+      return;
+    }
+    const roots = resolveStageRoots({
+      sourceRoot: resolveSource(),
+      liveRoot: resolveLive(),
+      env: options.env || process.env
+    });
+    if (files.length && shouldRejectUnchangedAtCreate(roots.source, roots.live) && sourceMatchesLive(files, roots.source, roots.live)) {
+      res.status(409).json({
+        ok: false,
+        error: unchangedCreateError(),
+        hint: "交单只登记路径。GitHub 上的提交不会自动进源目录。请带 contents 或 ref。"
       });
       return;
     }
@@ -241,7 +294,9 @@ export function createReleasesRouter(options = {}) {
       module,
       files,
       acceptance: parsed.complete ? parsed.document.acceptance : parsed.document.acceptance,
-      restart: parsed.complete ? parsed.document.restart : true
+      restart: parsed.complete ? parsed.document.restart : true,
+      gitRef,
+      repository
     });
     res.status(201).json({ ok: true, item, incomplete: !parsed.complete });
   });

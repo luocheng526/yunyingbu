@@ -9,6 +9,7 @@
 - 文件只允许 `public/` `src/` `test/` `package.json`。只改页面或测试不重启。
 - 不做大的界面改动，不用视频测试验证；curl 或打开页面即可。
 - 真正落地只在网页点「通过」之后。不要听其它对话框上线。
+- 闸门只拷源目录到线上。交单可带 `contents` 或 `ref`，先写入源目录；不要以为 git push 就算进源目录。
 
 【站点】http://zx.xingmaierp.cc/releases
 【服务器】/opt/mengkai ，Nginx → 127.0.0.1:3000
@@ -50,7 +51,7 @@ queued → rejected（已驳回，终态）
 - GET /api/releases              全部单据（含 status）
 - GET /api/releases/queue        仅 queued，FIFO
 - GET /api/releases/lock         { locked: boolean, current?: 单据摘要 }
-- POST /api/releases             提交申请 { version, applicant, module, summary } → queued
+- POST /api/releases             提交申请 { version, applicant, module, summary, files, contents?, ref? } → queued
 - POST /api/releases/:id/approve 仅 queued → approved
 - POST /api/releases/:id/reject  仅 queued → rejected，body: { reason }
 - POST /api/releases/:id/publish 仅 approved 且 lock 空闲 → publishing → success/failed

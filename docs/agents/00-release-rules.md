@@ -62,7 +62,11 @@ Cookie: 登录会话
 
 - 文件路径相对 `apps/xingmai/`，**不要**写 `apps/xingmai/` 前缀。
 - 只允许：`public/`、`src/`、`test/`、`package.json`、`package-lock.json`。
-- 源目录没有的新文件、或源目录与线上完全相同，闸门会失败。交单前确认 git 已 push，并让闸门能同步到源目录。
+- 源目录没有的新文件、或源目录与线上完全相同，闸门会失败。闸门**不读 GitHub**，也不拉 Cloud 工作区；交单只登记路径。
+- 要把 Cloud/git 里的新字节写进源目录，交单时带上：
+  - `contents`: `{ "public/foo.html": "<文件正文>" }`，或
+  - `ref`: 分支名或提交号（公开仓库按 GitHub contents 拉取后写入源目录）。
+- 源目录与线上不是同一棵树时，两边字节相同会在交单当场 409，不必等到点通过。
 - 禁止 SSH、禁止 `push-xingmai-to-ecs.sh`、禁止 `systemctl restart`、禁止自己覆盖 `/opt/mengkai`。
 
 ## 网页

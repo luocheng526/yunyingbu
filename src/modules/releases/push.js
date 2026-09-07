@@ -253,7 +253,9 @@ export async function pushXingmaiToEcs(files, options = {}) {
     pulled = await pullSource(source);
     notes.push(String(pulled.stdout || pulled.stderr || "").trim() || (pulled.pulled ? "git pull --ff-only 完成" : "跳过 pull"));
   } else {
-    notes.push("未对 Cloud 工作区执行 git pull");
+    notes.push(
+      "未对 Cloud 工作区执行 git pull。源目录若不是 git 仓库，请在交单里带 contents 或 ref，闸门才会把 GitHub 字节写入源目录。"
+    );
   }
 
   if (path.resolve(source) === path.resolve(live) && !pulled.pulled && env.MENGKAI_ALLOW_SAME_TREE !== "1") {

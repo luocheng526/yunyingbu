@@ -157,7 +157,7 @@ export function createMysqlStore({ now, pool } = {}) {
     async releaseLock() {
       lock = null;
     },
-    async create({ version, applicant, source, module, summary, files, acceptance, restart }) {
+    async create({ version, applicant, source, module, summary, files, acceptance, restart, gitRef, repository }) {
       const who = String(applicant || "").trim();
       const [prioRows] = await db().query(
         "SELECT COALESCE(MAX(priority), 0) AS max_priority FROM release_tickets WHERE status = 'queued'"
@@ -186,6 +186,8 @@ export function createMysqlStore({ now, pool } = {}) {
         rejectReason: null,
         publishStartedAt: null,
         publishFinishedAt: null,
+        gitRef: String(gitRef || "").trim(),
+        repository: String(repository || "").trim(),
         log: QUEUE_LOG
       };
       await db().query(

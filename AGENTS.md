@@ -10,6 +10,7 @@
 ## 落地
 
 - 新文件只放源目录，不要先拷到线上。点通过才落地。源目录与线上相同会失败。
+- 闸门不读 GitHub，也不拉 Cloud 工作区。交单可带 `contents`（路径→正文）或 `ref`（分支/提交），会先写入源目录再排队。
 - 版本号由本闸门发放：交单填 `auto` 或不填，或先 `GET /api/releases/next`。
 - 只通过队首。只改 `public/` 或 `test/` 不重启进程。
 - 只改这些路径：`public/releases.html`、`public/releases.css`、`src/modules/releases/`、`test/releases.test.js`、本文件与 `docs/agents/` 里本闸门文档。

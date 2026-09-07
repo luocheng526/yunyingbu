@@ -21,7 +21,7 @@ export const RECEIPT_RECOVER_LOG =
   "重启打断后发现落地回执，按已拷贝处理。请打开页面确认文件，不要自动发下一单。";
 
 export const NOOP_APPLY_ERROR =
-  "源目录文件与线上完全相同，没有可落地的变更。请先把新文件放到源目录再交单。";
+  "源目录文件与线上完全相同，没有可落地的变更。闸门只把源目录拷到线上，不读 GitHub，也不拉 Cloud 工作区。交单请带 contents（路径→正文）或 ref（分支/提交），或先把新文件写进源目录。";
 
 export const RELEASE_CHARTER = {
   dispatcher: DISPATCHER_NAME,
@@ -31,7 +31,7 @@ export const RELEASE_CHARTER = {
   secondBrain: false,
   execute: ["各板块交来的单据", "本页点通过", "主脑对本闸门的明确口令"],
   refuse: ["其它对话框帮我上线", "改首页/登录/人员等业务", "多单同时发", "跳过队首点通过"],
-  queue: "入队按提交时间；禁止上移下移；闸门只允许通过第 1 位，点一单发一单；只改页面或测试不重启进程",
+  queue: "入队按提交时间；禁止上移下移；闸门只允许通过第 1 位，点一单发一单；只改页面或测试不重启进程；交单可带 contents 或 ref 写入源目录，闸门不读 Cloud 工作区",
   version: "全站一条号 0.1.N-说明，由本闸门发放；各模块不得自领；同一 N 全站占用；失败/驳回不占号；成功单可按快照回滚；文件只允许 public/src/test/package.json"
 };
 

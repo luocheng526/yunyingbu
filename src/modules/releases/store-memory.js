@@ -210,7 +210,7 @@ export function createMemoryStore({ now, persistPath } = {}) {
       lock = null;
       persist();
     },
-    create({ version, applicant, source, module, summary, files, acceptance, restart }) {
+    create({ version, applicant, source, module, summary, files, acceptance, restart, gitRef, repository }) {
       const who = String(applicant || "").trim();
       const item = {
         id: nextId(),
@@ -233,6 +233,8 @@ export function createMemoryStore({ now, persistPath } = {}) {
         publishFinishedAt: null,
         snapshotDir: "",
         rolledBack: false,
+        gitRef: String(gitRef || "").trim(),
+        repository: String(repository || "").trim(),
         log: QUEUE_LOG
       };
       items.push(item);

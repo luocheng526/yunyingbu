@@ -15,6 +15,7 @@ import {
   VERSION_GATE_ERROR
 } from "../src/modules/releases/version.js";
 import { formatExecError, hasApplyReceipt, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "../src/modules/releases/push.js";
+import { normalizeContents, parseGitRef, shouldRejectUnchangedAtCreate } from "../src/modules/releases/stage.js";
 import { NOOP_APPLY_ERROR } from "../src/modules/releases/charter.js";
 import { DEMO_INITIAL_PASSWORD, DEMO_USERNAME } from "../src/modules/profile/auth.js";
 
@@ -96,6 +97,12 @@ function apply(slug, applicant, module, summary, extra = {}) {
     acceptance: extra.acceptance || "自动化验收",
     restart: extra.restart ?? false
   };
+  if (extra.contents) {
+    body.contents = extra.contents;
+  }
+  if (extra.ref) {
+    body.ref = extra.ref;
+  }
   if (extra.version !== undefined) {
     body.version = extra.version;
   } else if (extra.auto === false) {
@@ -167,6 +174,9 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /不要先拷到线上/);
     assert.match(text, /点通过才落地/);
     assert.match(text, /新文件只放源目录/);
+    assert.match(text, /不读 git/);
+    assert.match(text, /contents/);
+    assert.match(text, /item\.gitRef/);
     assert.match(text, /Number\(seq\) === 1/);
     assert.doesNotMatch(text, /const isHead = index === 0/);
     assert.match(text, /data-tab="logs"/);
@@ -1094,6 +1104,136 @@ test("confirm rejects identical source then copies when source is new", async ()
       assert.match(pub.body.item.log, /不重启|本机落地/);
     }
   );
+});
+
+test("create writes contents into source and rejects identical trees", async () => {
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), "rel-src-contents-"));
+  const live = fs.mkdtempSync(path.join(os.tmpdir(), "rel-live-contents-"));
+  const state = fs.mkdtempSync(path.join(os.tmpdir(), "rel-state-contents-"));
+  fs.mkdirSync(path.join(source, "public"), { recursive: true });
+  fs.mkdirSync(path.join(live, "public"), { recursive: true });
+  fs.writeFileSync(path.join(source, "public", "nav.js"), "OLD\n");
+  fs.writeFileSync(path.join(live, "public", "nav.js"), "OLD\n");
+
+  await withServer(
+    {
+      stateDir: state,
+      sourceRoot: source,
+      liveRoot: live,
+      async push(files, options) {
+        return pushXingmaiToEcs(files, {
+          snapshotDir: options.snapshotDir,
+          sourceRoot: source,
+          liveRoot: live,
+          env: { MENGKAI_SKIP_PULL: "1" }
+        });
+      }
+    },
+    async (base) => {
+      const same = await json(base, "/api/releases", {
+        method: "POST",
+        body: apply("same-bytes", "版本发布中心", "版本发布中心", "相同应拒", {
+          files: ["public/nav.js"],
+          restart: false
+        })
+      });
+      assert.equal(same.res.status, 409);
+      assert.match(String(same.body.error || ""), /完全相同/);
+      assert.match(String(same.body.hint || ""), /contents|ref/);
+
+      const created = await json(base, "/api/releases", {
+        method: "POST",
+        body: apply("with-contents", "版本发布中心", "版本发布中心", "带正文写入源目录", {
+          files: ["public/nav.js"],
+          contents: { "public/nav.js": "FROM-CONTENTS\n" },
+          restart: false
+        })
+      });
+      assert.equal(created.res.status, 201);
+      assert.equal(fs.readFileSync(path.join(source, "public", "nav.js"), "utf8"), "FROM-CONTENTS\n");
+      assert.equal(fs.readFileSync(path.join(live, "public", "nav.js"), "utf8"), "OLD\n");
+      assert.equal(created.body.item.gitRef, "");
+
+      const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(pub.res.status, 200);
+      assert.equal(fs.readFileSync(path.join(live, "public", "nav.js"), "utf8"), "FROM-CONTENTS\n");
+    }
+  );
+});
+
+test("create fetches ref from GitHub into source", async () => {
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), "rel-src-ref-"));
+  const live = fs.mkdtempSync(path.join(os.tmpdir(), "rel-live-ref-"));
+  const state = fs.mkdtempSync(path.join(os.tmpdir(), "rel-state-ref-"));
+  fs.mkdirSync(path.join(source, "src"), { recursive: true });
+  fs.mkdirSync(path.join(live, "src"), { recursive: true });
+  fs.writeFileSync(path.join(source, "src", "server.js"), "OLD\n");
+  fs.writeFileSync(path.join(live, "src", "server.js"), "OLD\n");
+  let fetchedUrl = "";
+
+  await withServer(
+    {
+      stateDir: state,
+      sourceRoot: source,
+      liveRoot: live,
+      async fetchImpl(url) {
+        fetchedUrl = String(url);
+        return {
+          ok: true,
+          status: 200,
+          async arrayBuffer() {
+            return Buffer.from("KEEPALIVE\n");
+          }
+        };
+      },
+      async push(files, options) {
+        return pushXingmaiToEcs(files, {
+          snapshotDir: options.snapshotDir,
+          sourceRoot: source,
+          liveRoot: live,
+          env: { MENGKAI_SKIP_PULL: "1" }
+        });
+      }
+    },
+    async (base) => {
+      const created = await json(base, "/api/releases", {
+        method: "POST",
+        body: apply("from-ref", "首页", "首页", "按 ref 拉 GitHub", {
+          files: ["src/server.js"],
+          ref: "604188a",
+          restart: false
+        })
+      });
+      assert.equal(created.res.status, 201, created.body.error);
+      assert.match(fetchedUrl, /contents\/src\/server\.js/);
+      assert.match(fetchedUrl, /ref=604188a/);
+      assert.equal(created.body.item.gitRef, "604188a");
+      assert.equal(fs.readFileSync(path.join(source, "src", "server.js"), "utf8"), "KEEPALIVE\n");
+      const extra = await json(base, "/api/releases", {
+        method: "POST",
+        body: apply("bad-contents-path", "首页", "首页", "正文路径不对", {
+          files: ["src/server.js"],
+          contents: { "public/secret.js": "nope" },
+          restart: false
+        })
+      });
+      assert.equal(extra.res.status, 400);
+      assert.match(String(extra.body.error || ""), /未交单路径/);
+    }
+  );
+});
+
+test("stage helpers accept contents and ignore same-tree create rejects", () => {
+  assert.equal(parseGitRef({ sha: "abc1234" }), "abc1234");
+  assert.equal(shouldRejectUnchangedAtCreate("/var/lib/mengkai/source", "/opt/mengkai"), true);
+  assert.equal(shouldRejectUnchangedAtCreate("/workspace", "/workspace"), false);
+  const files = ["public/nav.js"];
+  const map = normalizeContents({ "public/nav.js": "x" }, files);
+  assert.equal(Buffer.isBuffer(map["public/nav.js"]), true);
+  assert.throws(() => normalizeContents({ "src/app.js": "x" }, files), /未交单路径/);
 });
 
 test("failed push writes stderr into ticket log", async () => {
