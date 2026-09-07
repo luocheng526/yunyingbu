@@ -78,6 +78,7 @@ export function withSharedShell(html) {
   return versionShellAssets(withThemeBoot(out));
 }
 
+// 首页 pages.js 会调用本函数。只发 middleware、不发匹配的 pages.js（或反过来）会让进程起不来。
 export function readThemedHtml(filePath) {
   const dest = String(filePath || "");
   const stat = fs.statSync(dest);
