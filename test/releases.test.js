@@ -126,6 +126,11 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /正在升级，请勿关闭/);
     assert.match(text, /\/api\/health/);
     assert.match(text, /location\.replace\("\/releases\?reloaded="/);
+    assert.match(text, /oc-after-upgrade/);
+    assert.match(text, /正在刷新界面/);
+    assert.match(text, /consumePendingUpgrade/);
+    assert.match(text, /bootReleases/);
+    assert.match(text, /passResult === "reloading"/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css"/);
     assert.doesNotMatch(text, /href="\/shared\/layout.css"/);
@@ -167,6 +172,10 @@ test("releases.html has no login form and sends users to /login", () => {
   assert.match(html, /id="refresh-btn"/);
   assert.match(html, /id="upgrade-mask"/);
   assert.match(html, /location\.replace\("\/releases\?reloaded="/);
+  assert.match(html, /oc-after-upgrade/);
+  assert.match(html, /正在刷新界面/);
+  assert.match(html, /consumePendingUpgrade/);
+  assert.match(html, /不会自动通过/);
   assert.match(html, /自动提示/);
   assert.match(html, /watchIncoming/);
   assert.doesNotMatch(html, /setInterval\(function \(\) \{\s*refresh/);
