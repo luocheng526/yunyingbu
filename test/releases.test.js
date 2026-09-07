@@ -151,6 +151,12 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /唯一发版闸门/);
     assert.match(text, /只允许「通过」第 1 位/);
     assert.match(text, /id="upgrade-mask"/);
+    assert.match(text, /z-index:\s*4000/);
+    assert.match(text, /function pinUpgradeMask/);
+    assert.match(text, /document\.body\.appendChild\(upgradeMask\)/);
+    assert.match(text, /function failUpgrade/);
+    assert.match(text, /return "failed"/);
+    assert.match(text, /通过已落地，但健康检查超时/);
     assert.match(text, /正在升级，请勿关闭/);
     assert.match(text, /\/api\/health/);
     assert.match(text, /location\.replace\("\/releases\?reloaded="/);

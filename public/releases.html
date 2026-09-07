@@ -10,7 +10,7 @@
         display: none;
         position: fixed;
         inset: 0;
-        z-index: 80;
+        z-index: 4000;
         background: rgba(20, 18, 11, 0.45);
         align-items: center;
         justify-content: center;
@@ -243,7 +243,14 @@
         upgradeBar.style.width = width + "%";
       }
 
+      function pinUpgradeMask() {
+        if (upgradeMask && upgradeMask.parentNode !== document.body) {
+          document.body.appendChild(upgradeMask);
+        }
+      }
+
       function showUpgrade(keys, active) {
+        pinUpgradeMask();
         if (upgradeMask) {
           upgradeMask.classList.add("show");
         }
@@ -257,6 +264,15 @@
       function hideUpgrade() {
         if (upgradeMask) {
           upgradeMask.classList.remove("show");
+        }
+      }
+
+      function failUpgrade(keys, message) {
+        pinUpgradeMask();
+        renderUpgradeSteps(keys, "done", "bad");
+        if (upgradeLog) {
+          upgradeLog.hidden = false;
+          upgradeLog.textContent = message;
         }
       }
 
@@ -309,16 +325,12 @@
         let lastHealth = "尚未返回 200";
         let ticket = null;
         while (Date.now() < deadline) {
+          pinUpgradeMask();
           if (confirmErr && confirmErr.status && confirmErr.status !== 502 && confirmErr.status !== 503 && confirmErr.status < 500) {
-            renderUpgradeSteps(keys, "done", "bad");
-            if (upgradeLog) {
-              upgradeLog.hidden = false;
-              upgradeLog.textContent = confirmErr.message || "通过失败";
-            }
-            await sleep(400);
-            hideUpgrade();
-            flash((confirmErr.status || "") + " " + confirmErr.message, true);
-            return;
+            const msg = (confirmErr.status || "") + " " + (confirmErr.message || "通过失败");
+            failUpgrade(keys, msg);
+            flash(msg, true);
+            return "failed";
           }
           try {
             ticket = await loadTicket(id);
@@ -326,15 +338,9 @@
             lastHealth = err.message || "读取单据中断（可能正在重启）";
           }
           if (ticket && ticket.status === "failed") {
-            renderUpgradeSteps(keys, "done", "bad");
-            if (upgradeLog) {
-              upgradeLog.hidden = false;
-              upgradeLog.textContent = ticket.log || "发版失败";
-            }
-            await sleep(500);
-            hideUpgrade();
+            failUpgrade(keys, ticket.log || "发版失败");
             flash(ticket.log || "发版失败", true);
-            return;
+            return "failed";
           }
           if (ticket && ticket.status === "publishing") {
             renderUpgradeSteps(keys, needRestart ? "restart" : "sync");
@@ -358,13 +364,12 @@
           }
           await sleep(1500);
         }
-        renderUpgradeSteps(keys, "done", "bad");
-        if (upgradeLog) {
-          upgradeLog.hidden = false;
-          upgradeLog.textContent = ((ticket && ticket.log) ? ticket.log + "\n" : "") + "健康检查超时：" + lastHealth;
-        }
-        hideUpgrade();
+        const timeoutMsg = ticket && ticket.status === "success"
+          ? "通过已落地，但健康检查超时：" + lastHealth + "。站点可能起不来，请看进程日志，不要再点通过。"
+          : ((ticket && ticket.log) ? ticket.log + "\n" : "") + "健康检查超时：" + lastHealth;
+        failUpgrade(keys, timeoutMsg);
         flash("升级未完成：" + lastHealth, true);
+        return "failed";
       }
 
       function tickClock() {
@@ -695,6 +700,9 @@
             const version = card.getAttribute("data-version") || "";
             const passResult = await runPass(id, needRestart, version);
             if (passResult === "reloading") return;
+            if (passResult === "failed") {
+              btn.disabled = false;
+            }
           } else if (act === "rollback") {
             if (!window.confirm("确认按升级前快照回滚该版本的文件？不会自动发下一单。")) {
               btn.disabled = false;
