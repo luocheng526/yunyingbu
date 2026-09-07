@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import * as profileShell from "../profile/middleware.js";
 import { NAV_ITEMS } from "./nav-items.js";
 
+// xm-theme-pages-pair 0.1.38  必须和 profile/middleware.js 成套发。
+
 // 必须和 middleware.js 成套发布。命名导入 readThemedHtml 会在旧 middleware 上直接把进程打挂。
 function renderExistingPage(filePath) {
   if (typeof profileShell.readThemedHtml === "function") {

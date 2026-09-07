@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import { currentUser } from "./auth.js";
 
+// xm-theme-pages-pair 0.1.38  必须和 home/pages.js 成套发，禁止只换本文件。
+
 export const SHELL_ASSET_VER = "0.1.33";
 const htmlFileCache = new Map();
 
