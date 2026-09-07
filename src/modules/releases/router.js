@@ -1,10 +1,11 @@
 import express from "express";
+import os from "node:os";
 import path from "node:path";
 import { requireReleasesAuth } from "./auth.js";
 import { NEED_PASS_ERROR, withCharter } from "./charter.js";
 import { hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
-import { assertQueueHead, findVersionClash, parseReleaseVersion } from "./version.js";
-import { formatExecError, pushXingmaiToEcs } from "./push.js";
+import { assertQueueHead, findVersionClash, listModuleVersions, parseReleaseVersion } from "./version.js";
+import { formatExecError, liveRoot, pathsToSnapshot, pushXingmaiToEcs, restoreSnapshot } from "./push.js";
 import { restartMengkaiService } from "./restart.js";
 import { attachPipelineRoutes, attachPipelineWebhook } from "./pipeline/attach.js";
 import { createPipelineStore } from "./pipeline/store.js";
@@ -55,6 +56,7 @@ export function createReleasesRouter(options = {}) {
     });
   const restart = options.restart || restartMengkaiService;
   const push = options.push || pushXingmaiToEcs;
+  const resolveLive = () => options.liveRoot || liveRoot();
   const router = express.Router();
   router.use(requireReleasesAuth(options));
   attachPipelineWebhook(router, { ...options, pipelineStore });
@@ -63,7 +65,9 @@ export function createReleasesRouter(options = {}) {
   async function runPublishJob(item, noDoc) {
     const files = noDoc ? [] : item.files || [];
     const shouldRestart = Boolean(item.restart);
-    const pushResult = await push(files);
+    const snapshotDir = path.join(stateDir || os.tmpdir(), "snapshots", item.id);
+    const pushResult = await push(files, { snapshotDir });
+    item.snapshotDir = snapshotDir;
     let extra = "";
     if (shouldRestart) {
       const result = await restart();
@@ -152,6 +156,10 @@ export function createReleasesRouter(options = {}) {
     res.json(withCharter({ ok: true, ...(await store.getLock()) }));
   });
 
+  router.get("/versions", async (_req, res) => {
+    res.json(withCharter({ ok: true, ...listModuleVersions(await store.list()) }));
+  });
+
   router.post("/go", (req, res) => {
     const order = parseMainBrainOrder(req.body?.order ?? req.body?.口令);
     if (!order.ok) {
@@ -190,7 +198,7 @@ export function createReleasesRouter(options = {}) {
     if (clash) {
       res.status(409).json({
         ok: false,
-        error: `同模块版本号已在队列中：${module} ${version}（${clash.id}）。禁止重复排队，防止叠发。`
+        error: `同模块版本号已占用：${module} ${version}（${clash.id} ${clash.status}）。禁止重复版本号。`
       });
       return;
     }
@@ -242,6 +250,44 @@ export function createReleasesRouter(options = {}) {
   router.post("/:id/confirm", async (req, res) => {
     const item = await store.get(req.params.id);
     await handlePublish(req, res, item);
+  });
+
+  router.post("/:id/rollback", async (req, res) => {
+    const item = await store.get(req.params.id);
+    if (!item) {
+      res.status(404).json({ ok: false, error: "单据不存在" });
+      return;
+    }
+    if (item.status !== "success") {
+      res.status(409).json({ ok: false, error: "只能回滚已成功发布的版本" });
+      return;
+    }
+    if (!item.snapshotDir) {
+      res.status(409).json({ ok: false, error: "该版本没有升级前快照，不能回滚" });
+      return;
+    }
+    const acquired = await store.tryAcquireLock(item);
+    if (!acquired) {
+      res.status(409).json({ ok: false, error: "有发布正在进行，禁止抢发" });
+      return;
+    }
+    try {
+      const restored = restoreSnapshot(item.snapshotDir, resolveLive(), pathsToSnapshot(item.files || []));
+      let extra = "已按快照回滚文件。";
+      if (item.restart) {
+        const result = await restart();
+        extra += result && result.skipped ? ` ${result.reason}` : " 已重启 mengkai。";
+      }
+      item.rolledBack = true;
+      item.log = `已回滚到升级前快照。${restored.stdout || ""} ${extra} 版本号仍记为 ${item.version}，下一条不会自动发。`;
+      await store.markSuccess(item, item.log);
+      res.json({ ok: true, item, version: item.version, rolledBack: true });
+    } catch (err) {
+      const message = formatExecError(err);
+      res.status(500).json({ ok: false, error: message, item });
+    } finally {
+      await store.releaseLock();
+    }
   });
 
   router.post("/:id/publish", (_req, res) => {

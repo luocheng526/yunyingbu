@@ -73,30 +73,6 @@ html, body {
   color: var(--oc-muted);
 }
 .oc-who b { color: var(--oc-text); font-weight: 600; }
-.theme-switch {
-  display: flex;
-  border: 1px solid var(--oc-line);
-  border-radius: 999px;
-  overflow: hidden;
-  background: var(--oc-bg);
-}
-.theme-switch button {
-  border: 0;
-  background: transparent;
-  color: var(--oc-muted);
-  padding: 0.25rem 0.7rem;
-  font: inherit;
-  cursor: pointer;
-}
-.theme-switch button.on {
-  background: #fff;
-  color: var(--oc-blue);
-  font-weight: 600;
-}
-html[data-theme="dark"] .theme-switch button.on {
-  background: #0f172a;
-}
-
 .oc-hero {
   background: var(--oc-hero);
   padding: 1.6rem 1.5rem 1.35rem;
@@ -312,20 +288,15 @@ button.act:disabled { opacity: 0.5; cursor: not-allowed; }
   border-radius: 0 10px 10px 0;
 }
 html[data-theme="dark"] .log-item { background: #0f172a; }
-.worker-box {
+.lock-box {
   border-radius: 14px;
-  padding: 1rem 1.1rem;
+  padding: 0.85rem 1.1rem;
+  margin: 0 0 1rem;
   background: #111827;
   color: #fff;
+  font-size: 0.9rem;
 }
-.worker-box.idle { background: #64748b; }
-.feed-box {
-  border: 1px dashed var(--oc-line);
-  border-radius: 16px;
-  padding: 2rem 1.25rem;
-  text-align: center;
-  color: var(--oc-muted);
-}
+.lock-box.idle { background: #64748b; }
 
 table {
   width: 100%;

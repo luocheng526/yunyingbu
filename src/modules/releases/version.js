@@ -3,7 +3,7 @@ export const VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 export const HEAD_ONLY_ERROR = "必须按排队顺序发布：只允许通过当前第 1 位，禁止跳单，防止叠发把进程打崩。";
 
-const ACTIVE = new Set(["queued", "approved", "publishing"]);
+const ACTIVE = new Set(["queued", "approved", "publishing", "success"]);
 
 export function parseReleaseVersion(raw) {
   const version = String(raw || "").trim();
@@ -34,6 +34,38 @@ export function findVersionClash(items, module, version, exceptId = "") {
       item.version === version &&
       ACTIVE.has(item.status)
   );
+}
+
+export function listModuleVersions(items) {
+  const success = (items || [])
+    .filter((item) => item && item.status === "success")
+    .slice()
+    .sort((a, b) => String(b.publishFinishedAt || "").localeCompare(String(a.publishFinishedAt || "")));
+  const currentByModule = new Map();
+  for (const item of success) {
+    if (!currentByModule.has(item.module)) {
+      currentByModule.set(item.module, item);
+    }
+  }
+  return {
+    current: [...currentByModule.values()].map((item) => ({
+      id: item.id,
+      module: item.module,
+      version: item.version,
+      publishedAt: item.publishFinishedAt,
+      canRollback: Boolean(item.snapshotDir),
+      rolledBack: Boolean(item.rolledBack)
+    })),
+    history: success.map((item) => ({
+      id: item.id,
+      module: item.module,
+      version: item.version,
+      publishedAt: item.publishFinishedAt,
+      current: currentByModule.get(item.module)?.id === item.id,
+      canRollback: Boolean(item.snapshotDir),
+      rolledBack: Boolean(item.rolledBack)
+    }))
+  };
 }
 
 export function assertQueueHead(item, queue) {

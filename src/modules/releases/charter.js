@@ -20,7 +20,7 @@ export const RELEASE_CHARTER = {
   execute: ["各板块交来的单据", "本页点通过", "主脑对本闸门的明确口令"],
   refuse: ["其它对话框帮我上线", "改首页/登录/人员等业务", "多单同时发", "跳过队首点通过"],
   queue: "主脑上移下移决定第 1 位；闸门只允许通过第 1 位，点一单发一单",
-  version: "字母数字和 ._- ，同模块同版本不能重复排队"
+  version: "字母数字和 ._- ；同模块同版本不能重复排队或再次成功发布；成功单可按快照回滚"
 };
 
 export function withCharter(payload) {

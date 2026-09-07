@@ -7,7 +7,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { createApp } from "../src/app.js";
 import { parseMainBrainOrder } from "../src/modules/releases/document.js";
-import { formatExecError, pushXingmaiToEcs } from "../src/modules/releases/push.js";
+import { formatExecError, pushXingmaiToEcs, restoreSnapshot } from "../src/modules/releases/push.js";
 import { DEMO_INITIAL_PASSWORD, DEMO_USERNAME } from "../src/modules/profile/auth.js";
 
 const signedInUser = { username: "罗成" };
@@ -125,7 +125,17 @@ test("GET /releases is the release center page", async () => {
     assert.doesNotMatch(text, /href="\/shared\/layout.css"/);
     assert.doesNotMatch(text, /src="\/shared\/nav.js"/);
     assert.match(text, /data-tab="queue"/);
-    assert.match(text, /data-tab="feed"/);
+    assert.match(text, /data-tab="history"/);
+    assert.match(text, /data-tab="logs"/);
+    assert.match(text, /\/api\/releases\/versions/);
+    assert.match(text, /\/api\/releases\/.*rollback/);
+    assert.match(text, /回滚到升级前/);
+    assert.doesNotMatch(text, /data-tab="feed"/);
+    assert.doesNotMatch(text, /data-tab="worker"/);
+    assert.doesNotMatch(text, /\/api\/releases\/candidates/);
+    assert.doesNotMatch(text, /theme-light/);
+    assert.doesNotMatch(text, /文件投喂/);
+    assert.doesNotMatch(text, /GitHub 制品/);
     assert.doesNotMatch(text, /<nav class="site-nav"/);
     assert.match(text, /push-xingmai-to-ecs/);
     assert.match(text, /window\.location\.replace\("\/login"\)/);
@@ -250,7 +260,7 @@ test("invalid or duplicate version is rejected", async () => {
       body: apply("8.0.0-gate", "Eve", "首页", "重复")
     });
     assert.equal(dup.res.status, 409);
-    assert.match(dup.body.error, /同模块版本号已在队列中/);
+    assert.match(dup.body.error, /同模块版本号已占用/);
   });
 });
 
@@ -775,5 +785,121 @@ test("formatExecError keeps stderr for the board", () => {
   });
   assert.match(text, /stderr: no such file/);
   assert.match(text, /code=ENOENT/);
+});
+
+test("successful version cannot be queued again; versions lists current", async () => {
+  await withServer(async (base) => {
+    const created = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("9.0.0-ver", "Eve", "版本发布中心", "占版本")
+    });
+    await promoteToHead(base, created.body.item.id);
+    const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
+      method: "POST",
+      body: "{}"
+    });
+    assert.equal(pub.res.status, 200);
+    const versions = await json(base, "/api/releases/versions");
+    assert.equal(versions.res.status, 200);
+    assert.equal(
+      versions.body.current.some((row) => row.module === "版本发布中心" && row.version === "9.0.0-ver"),
+      true
+    );
+    const dup = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("9.0.0-ver", "Eve", "版本发布中心", "再占")
+    });
+    assert.equal(dup.res.status, 409);
+    assert.match(dup.body.error, /同模块版本号已占用/);
+    const queued = await json(base, `/api/releases/${created.body.item.id}/rollback`, {
+      method: "POST",
+      body: "{}"
+    });
+    assert.ok(queued.res.status === 409 || queued.res.status === 500);
+  });
+});
+
+test("queued ticket cannot rollback", async () => {
+  await withServer(async (base) => {
+    const created = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("9.0.1-q", "Eve", "首页", "排队不可回滚")
+    });
+    const rb = await json(base, `/api/releases/${created.body.item.id}/rollback`, {
+      method: "POST",
+      body: "{}"
+    });
+    assert.equal(rb.res.status, 409);
+    assert.match(rb.body.error, /只能回滚已成功发布的版本/);
+  });
+});
+
+test("apply snapshots live files and rollback restores them", async () => {
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), "rel-src-"));
+  const live = fs.mkdtempSync(path.join(os.tmpdir(), "rel-live-"));
+  const state = fs.mkdtempSync(path.join(os.tmpdir(), "rel-state-"));
+  const snap = fs.mkdtempSync(path.join(os.tmpdir(), "rel-snap-"));
+  fs.mkdirSync(path.join(source, "public"), { recursive: true });
+  fs.mkdirSync(path.join(live, "public"), { recursive: true });
+  fs.writeFileSync(path.join(source, "public", "releases.html"), "NEW\n");
+  fs.writeFileSync(path.join(live, "public", "releases.html"), "OLD\n");
+  const result = await pushXingmaiToEcs(["public/releases.html"], {
+    sourceRoot: source,
+    liveRoot: live,
+    snapshotDir: snap,
+    env: { MENGKAI_SKIP_PULL: "1" }
+  });
+  assert.match(result.stdout, /升级前快照/);
+  assert.equal(fs.readFileSync(path.join(live, "public", "releases.html"), "utf8"), "NEW\n");
+  assert.equal(fs.readFileSync(path.join(snap, "public", "releases.html"), "utf8"), "OLD\n");
+  const restored = restoreSnapshot(snap, live, ["public/releases.html"]);
+  assert.match(restored.stdout, /restored public\/releases.html/);
+  assert.equal(fs.readFileSync(path.join(live, "public", "releases.html"), "utf8"), "OLD\n");
+
+  await withServer(
+    {
+      stateDir: state,
+      liveRoot: live,
+      restart() {},
+      async push(files, options) {
+        return pushXingmaiToEcs(files, {
+          snapshotDir: options.snapshotDir,
+          sourceRoot: source,
+          liveRoot: live,
+          env: { MENGKAI_SKIP_PULL: "1" }
+        });
+      }
+    },
+    async (base) => {
+      fs.writeFileSync(path.join(source, "public", "releases.html"), "SHIP\n");
+      fs.writeFileSync(path.join(live, "public", "releases.html"), "LIVE\n");
+      const created = await json(base, "/api/releases", {
+        method: "POST",
+        body: apply("9.1.0-rb", "版本发布中心", "版本发布中心", "回滚验收", {
+          files: ["public/releases.html"]
+        })
+      });
+      await promoteToHead(base, created.body.item.id);
+      const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(pub.res.status, 200);
+      assert.equal(fs.readFileSync(path.join(live, "public", "releases.html"), "utf8"), "SHIP\n");
+      const rb = await json(base, `/api/releases/${created.body.item.id}/rollback`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(rb.res.status, 200);
+      assert.equal(rb.body.rolledBack, true);
+      assert.equal(rb.body.item.status, "success");
+      assert.equal(fs.readFileSync(path.join(live, "public", "releases.html"), "utf8"), "LIVE\n");
+      const still = await json(base, "/api/releases/queue");
+      assert.equal(
+        still.body.items.some((item) => item.status === "publishing"),
+        false
+      );
+    }
+  );
 });
 

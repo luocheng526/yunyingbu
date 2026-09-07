@@ -230,6 +230,8 @@ export function createMemoryStore({ now, persistPath } = {}) {
         rejectReason: null,
         publishStartedAt: null,
         publishFinishedAt: null,
+        snapshotDir: "",
+        rolledBack: false,
         log: QUEUE_LOG
       };
       items.push(item);

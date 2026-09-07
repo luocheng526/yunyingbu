@@ -105,8 +105,65 @@ function copyRel(fromRoot, toRoot, rel) {
   fs.cpSync(src, dest, { recursive: true });
 }
 
+export function snapshotExisting(live, rels, dest) {
+  if (!dest) {
+    return { files: [] };
+  }
+  fs.mkdirSync(dest, { recursive: true });
+  const saved = [];
+  for (const rel of rels) {
+    const src = path.join(live, rel);
+    if (fs.existsSync(src)) {
+      copyRel(live, dest, rel);
+      saved.push(rel);
+    }
+  }
+  fs.writeFileSync(path.join(dest, "manifest.json"), `${JSON.stringify({ files: saved, at: new Date().toISOString() })}\n`);
+  return { files: saved };
+}
+
+export const FULL_TREE = ["public", "src", "package.json", "package-lock.json"];
+
+export function pathsToSnapshot(files) {
+  const list = Array.isArray(files) ? files.filter(Boolean) : [];
+  return list.length ? list.map(assertSafeRel) : FULL_TREE.slice();
+}
+
+export function restoreSnapshot(snapshotDir, live, rels) {
+  const dest = live || liveRoot();
+  if (!snapshotDir || !fs.existsSync(snapshotDir)) {
+    throw Object.assign(new Error("没有可回滚快照"), { stderr: `没有可回滚快照：${snapshotDir || ""}` });
+  }
+  let list = Array.isArray(rels) ? rels.filter(Boolean) : [];
+  if (!list.length) {
+    try {
+      const man = JSON.parse(fs.readFileSync(path.join(snapshotDir, "manifest.json"), "utf8"));
+      list = Array.isArray(man.files) ? man.files : [];
+    } catch {
+      list = [];
+    }
+  }
+  if (!list.length) {
+    list = FULL_TREE.slice();
+  }
+  const notes = [];
+  for (const rel of list) {
+    const src = path.join(snapshotDir, rel);
+    if (!fs.existsSync(src)) {
+      notes.push(`快照无 ${rel}，跳过`);
+      continue;
+    }
+    copyRel(snapshotDir, dest, rel);
+    notes.push(`restored ${rel}`);
+  }
+  if (!notes.some((line) => line.startsWith("restored "))) {
+    throw Object.assign(new Error("快照是空的，拒绝回滚"), { stderr: "快照是空的，拒绝回滚" });
+  }
+  return { stdout: notes.join("\n"), stderr: "" };
+}
+
 function copyTree(fromRoot, toRoot) {
-  for (const rel of ["public", "src", "package.json", "package-lock.json"]) {
+  for (const rel of FULL_TREE) {
     if (fs.existsSync(path.join(fromRoot, rel))) {
       copyRel(fromRoot, toRoot, rel);
     }
@@ -140,6 +197,12 @@ export async function pushXingmaiToEcs(files, options = {}) {
           "源目录与 live 相同且未 git pull。禁止空转。MENGKAI_SOURCE_DIR 或 MENGKAI_GIT_PULL=1。"
       }
     );
+  }
+
+  const snapRel = pathsToSnapshot(list);
+  if (options.snapshotDir) {
+    const saved = snapshotExisting(live, snapRel, options.snapshotDir);
+    notes.push(`升级前快照 ${saved.files.length} 个路径 -> ${options.snapshotDir}`);
   }
 
   if (!list.length) {
