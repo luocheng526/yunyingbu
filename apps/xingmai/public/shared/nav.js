@@ -1,3 +1,4 @@
+/* xm-shell-always 0.3.2 */
 (function () {
   const items = [
     { href: "/", label: "首页" },

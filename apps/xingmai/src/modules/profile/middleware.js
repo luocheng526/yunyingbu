@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { currentUser } from "./auth.js";
 
 function normalizedPath(req) {
@@ -24,6 +25,51 @@ export function isPublicRequest(req) {
     return true;
   }
   return false;
+}
+
+export function withSharedShell(html) {
+  const text = String(html || "");
+  if (/class=["']login-page["']/.test(text) || /href=["']\/login\.css["']/.test(text)) {
+    return text;
+  }
+  let out = text;
+  if (!out.includes("/shared/layout.css") && out.includes("</head>")) {
+    out = out.replace("</head>", '    <link rel="stylesheet" href="/shared/layout.css" />\n  </head>');
+  }
+  if (!out.includes("/shared/nav.js") && out.includes("</body>")) {
+    out = out.replace("</body>", '    <script src="/shared/nav.js"></script>\n  </body>');
+  }
+  return out;
+}
+
+export function injectHtmlShell(req, res, next) {
+  const send = res.send.bind(res);
+  res.send = function injectSend(body) {
+    if (typeof body === "string" && /<html[\s>]/i.test(body)) {
+      return send(withSharedShell(body));
+    }
+    return send(body);
+  };
+  const sendFile = res.sendFile.bind(res);
+  res.sendFile = function injectSendFile(filePath, options, callback) {
+    const dest = String(filePath || "");
+    if (/\.html?$/i.test(dest)) {
+      try {
+        const html = withSharedShell(fs.readFileSync(dest, "utf8"));
+        res.type("html");
+        return send(html);
+      } catch (err) {
+        if (typeof callback === "function") {
+          callback(err);
+          return res;
+        }
+        next(err);
+        return res;
+      }
+    }
+    return sendFile(filePath, options, callback);
+  };
+  next();
 }
 
 export function requireLoginUnlessPublic(req, res, next) {

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { withSharedShell } from "../profile/middleware.js";
 import { NAV_ITEMS } from "./nav-items.js";
 
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public");
@@ -13,20 +14,7 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
-export function withSharedShell(html) {
-  const text = String(html || "");
-  if (/class=["']login-page["']/.test(text) || /href=["']\/login\.css["']/.test(text)) {
-    return text;
-  }
-  let out = text;
-  if (!out.includes("/shared/layout.css") && out.includes("</head>")) {
-    out = out.replace("</head>", '    <link rel="stylesheet" href="/shared/layout.css" />\n  </head>');
-  }
-  if (!out.includes("/shared/nav.js") && out.includes("</body>")) {
-    out = out.replace("</body>", '    <script src="/shared/nav.js"></script>\n  </body>');
-  }
-  return out;
-}
+export { withSharedShell };
 
 function placeholderHtml(label) {
   const title = escapeHtml(label);
