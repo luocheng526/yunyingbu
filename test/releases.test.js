@@ -225,6 +225,14 @@ test("login page does not use the operating-center shell", () => {
   assert.doesNotMatch(html, /OPERATING CENTER/);
 });
 
+test("agent docs say no video unless the UI change is large", () => {
+  const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const noVideo = /不做大的界面改动，不用视频测试验证/;
+  assert.match(fs.readFileSync(path.join(root, "AGENTS.md"), "utf8"), noVideo);
+  assert.match(fs.readFileSync(path.join(root, "docs/agents/06-releases.md"), "utf8"), noVideo);
+  assert.match(fs.readFileSync(path.join(root, "docs/agents/00-release-rules.md"), "utf8"), noVideo);
+});
+
 test("GET /releases.css is page-only stylesheet", async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/releases.css`, { headers: { Cookie: activeCookie } });
