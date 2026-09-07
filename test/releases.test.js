@@ -89,6 +89,21 @@ function publishBody(order = "按这份文档发版") {
   return JSON.stringify({ order });
 }
 
+async function promoteToHead(base, id) {
+  const queue = await json(base, "/api/releases/queue");
+  const ids = (queue.body.items || []).map((item) => item.id);
+  const from = ids.indexOf(id);
+  if (from < 0) {
+    throw new Error("单据不在待上线队列");
+  }
+  ids.splice(from, 1);
+  ids.unshift(id);
+  return json(base, "/api/releases/reorder", {
+    method: "POST",
+    body: JSON.stringify({ ids })
+  });
+}
+
 test("GET /releases is the release center page", async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/releases`, { headers: { Cookie: activeCookie } });
@@ -99,7 +114,7 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /各板块交单后出现在这里/);
     assert.match(text, /id="refresh-btn"/);
     assert.match(text, /唯一发版闸门/);
-    assert.match(text, /点「通过」才放行/);
+    assert.match(text, /只允许「通过」第 1 位/);
     assert.match(text, /href="\/releases.css"/);
     assert.doesNotMatch(text, /href="\/shared\/layout.css"/);
     assert.doesNotMatch(text, /src="\/shared\/nav.js"/);
@@ -126,7 +141,7 @@ test("releases.html has no login form and sends users to /login", () => {
   assert.doesNotMatch(html, /提交发布申请/);
   assert.match(html, /id="refresh-btn"/);
   assert.match(html, /唯一发版闸门/);
-  assert.match(html, /点「通过」才放行/);
+  assert.match(html, /只允许「通过」第 1 位/);
   assert.match(html, /帮我上线/);
   assert.doesNotMatch(html, /shared\/layout\.css/);
   assert.match(html, /\/api\/releases\/.*confirm/);
@@ -197,6 +212,36 @@ test("queue and lock expose charter: gate is not a second 主脑", async () => {
     assert.equal(queue.body.charter.queue.includes("点一单发一单"), true);
     const lock = await json(base, "/api/releases/lock");
     assert.equal(lock.body.charter.gate, "版本发布中心");
+    assert.match(lock.body.charter.queue, /第 1 位/);
+  });
+});
+
+test("invalid or duplicate version is rejected", async () => {
+  await withServer(async (base) => {
+    const bad = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("../etc", "Eve", "首页", "坏版本号")
+    });
+    assert.equal(bad.res.status, 400);
+    assert.match(bad.body.error, /版本号/);
+
+    const space = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("1.0 bad", "Eve", "首页", "空格")
+    });
+    assert.equal(space.res.status, 400);
+
+    const first = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("8.0.0-gate", "Eve", "首页", "合法")
+    });
+    assert.equal(first.res.status, 201);
+    const dup = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("8.0.0-gate", "Eve", "首页", "重复")
+    });
+    assert.equal(dup.res.status, 409);
+    assert.match(dup.body.error, /同模块版本号已在队列中/);
   });
 });
 
@@ -331,6 +376,13 @@ test("通过 one ticket restarts once and does not auto-publish next", async () 
         method: "POST",
         body: apply("3.0.1", "Ada", "版本发布中心", "下一条", { restart: true })
       });
+      const skipped = await json(base, `/api/releases/${second.body.item.id}/confirm`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(skipped.res.status, 409);
+      assert.match(skipped.body.error, /排队顺序/);
+      await promoteToHead(base, first.body.item.id);
       const pub = await json(base, `/api/releases/${first.body.item.id}/confirm`, {
         method: "POST",
         body: "{}"
@@ -372,6 +424,7 @@ test("second publish while lock held returns 409 禁止抢发", async () => {
         body: apply("4.0.1", "Lin", "首页", "抢发", { restart: true })
       });
 
+      await promoteToHead(base, first.body.item.id);
       const firstPublish = json(base, `/api/releases/${first.body.item.id}/confirm`, {
         method: "POST",
         body: "{}"
@@ -387,6 +440,7 @@ test("second publish while lock held returns 409 禁止抢发", async () => {
       assert.equal(lock.body.locked, true);
       assert.equal(lock.body.current.version, "4.0.0");
 
+      await promoteToHead(base, second.body.item.id);
       const stolen = await json(base, `/api/releases/${second.body.item.id}/confirm`, {
         method: "POST",
         body: "{}"
@@ -495,6 +549,7 @@ test("口令 发布模块 且 restart=false 只 push 不重启", async () => {
           restart: false
         })
       });
+      await promoteToHead(base, created.body.item.id);
       const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
         method: "POST",
         body: "{}"
@@ -600,6 +655,14 @@ test("confirm 放行 without 口令; move and reorder change queueIndex", async 
       });
       assert.equal(reordered.res.status, 200);
 
+      const skipped = await json(base, `/api/releases/${first.body.item.id}/confirm`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(skipped.res.status, 409);
+      assert.match(skipped.body.error, /排队顺序/);
+
+      await promoteToHead(base, first.body.item.id);
       const confirmed = await json(base, `/api/releases/${first.body.item.id}/confirm`, {
         method: "POST",
         body: "{}"

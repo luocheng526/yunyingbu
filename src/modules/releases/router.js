@@ -3,6 +3,7 @@ import path from "node:path";
 import { requireReleasesAuth } from "./auth.js";
 import { NEED_PASS_ERROR, withCharter } from "./charter.js";
 import { hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
+import { assertQueueHead, findVersionClash, parseReleaseVersion } from "./version.js";
 import { pushXingmaiToEcs } from "./push.js";
 import { restartMengkaiService } from "./restart.js";
 import { attachPipelineRoutes, attachPipelineWebhook } from "./pipeline/attach.js";
@@ -78,6 +79,12 @@ export function createReleasesRouter(options = {}) {
     const blocked = publishBlockedReason(item);
     if (blocked) {
       res.status(blocked.status).json({ ok: false, error: blocked.error });
+      return;
+    }
+
+    const skip = assertQueueHead(item, await store.queue());
+    if (skip) {
+      res.status(skip.status).json({ ok: false, error: skip.error });
       return;
     }
 
@@ -159,21 +166,32 @@ export function createReleasesRouter(options = {}) {
 
   router.post("/", async (req, res) => {
     const body = req.body || {};
-    const version = String(body.version || "").trim();
+    const parsedVersion = parseReleaseVersion(body.version);
     const applicant = String(body.applicant || "").trim();
     const summary = String(body.summary || "").trim();
     const parsed = parseReleaseDocument(body);
-    if (!version || !applicant || !summary) {
+    if (!parsedVersion.ok || !applicant || !summary) {
       res.status(400).json({
         ok: false,
-        error: "版本号、申请人、变更摘要均为必填",
-        missing: ["版本号", "申请人", "变更摘要"].filter((label, i) => ![version, applicant, summary][i])
+        error: parsedVersion.ok ? "版本号、申请人、变更摘要均为必填" : parsedVersion.error,
+        missing: ["版本号", "申请人", "变更摘要"].filter((label, i) =>
+          i === 0 ? !parsedVersion.ok : ![applicant, summary][i - 1]
+        )
       });
       return;
     }
+    const version = parsedVersion.version;
     const module = parsed.document.module || "其他";
     if (parsed.complete && !MODULES.includes(module)) {
       res.status(400).json({ ok: false, error: "模块不在允许列表中" });
+      return;
+    }
+    const clash = findVersionClash(await store.list(), module, version);
+    if (clash) {
+      res.status(409).json({
+        ok: false,
+        error: `同模块版本号已在队列中：${module} ${version}（${clash.id}）。禁止重复排队，防止叠发。`
+      });
       return;
     }
     const item = await store.create({

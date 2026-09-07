@@ -18,8 +18,9 @@ export const RELEASE_CHARTER = {
   gateRole: "唯一发版闸门",
   secondBrain: false,
   execute: ["各板块交来的单据", "本页点通过", "主脑对本闸门的明确口令"],
-  refuse: ["其它对话框帮我上线", "改首页/登录/人员等业务", "多单同时发"],
-  queue: "按用户在本页调整的优先级，点一单发一单"
+  refuse: ["其它对话框帮我上线", "改首页/登录/人员等业务", "多单同时发", "跳过队首点通过"],
+  queue: "主脑上移下移决定第 1 位；闸门只允许通过第 1 位，点一单发一单",
+  version: "字母数字和 ._- ，同模块同版本不能重复排队"
 };
 
 export function withCharter(payload) {
