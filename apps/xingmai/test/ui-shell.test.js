@@ -26,7 +26,8 @@ test("shared shell assets are public", async () => {
   assert.match(cssText, /cursor-dark-1/);
   assert.match(cssText, /html\[data-theme="dark"\]/);
   assert.match(cssText, /\.xm-shell\.is-pending/);
-  assert.match(jsText, /xm-shell-theme 0\.1\.30/);
+  assert.match(jsText, /xm-shell-perf 0\.1\.33/);
+  assert.doesNotMatch(jsText, /100000/);
   assert.match(jsText, /function applyTheme\(/);
   assert.match(jsText, /id="xm-theme"/);
   assert.match(jsText, /xm-shell/);
@@ -90,8 +91,8 @@ test("page renderer injects shared shell onto module html", async () => {
     '<!DOCTYPE html><html><head></head><body class="oc-page"><div class="oc-tab">待上线</div></body></html>'
   );
   assert.match(injected, /\/shared\/layout\.css/);
-  assert.match(injected, /\/shared\/nav\.js/);
-  assert.match(injected, /rel="preload" href="\/shared\/nav\.js"/);
+  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.33/);
+  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.33"/);
   assert.match(injected, /localStorage.getItem\("xm-theme"\)/);
   const login = withSharedShell('<html><head></head><body class="login-page"></body></html>');
   assert.doesNotMatch(login, /\/shared\/nav\.js/);

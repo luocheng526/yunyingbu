@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { withSharedShell } from "../profile/middleware.js";
+import { readThemedHtml, withSharedShell } from "../profile/middleware.js";
 import { NAV_ITEMS } from "./nav-items.js";
 
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public");
@@ -44,15 +44,14 @@ export function registerPageRoutes(app) {
     app.get(item.href, (_req, res) => {
       const filePath = path.join(publicDir, item.file);
       if (fs.existsSync(filePath)) {
-        const html = withSharedShell(fs.readFileSync(filePath, "utf8"));
-        res.status(200).type("html").send(html);
+        res.status(200).type("html").send(readThemedHtml(filePath));
         return;
       }
       res
         .status(200)
         .type("html")
         .set("Content-Type", "text/html; charset=utf-8")
-        .send(placeholderHtml(item.label));
+        .send(withSharedShell(placeholderHtml(item.label)));
     });
   }
 }
