@@ -207,6 +207,33 @@ html.xm-collapsed .xm-menu-item span {
 
 .xm-logout:hover { background: var(--xm-primary-soft); }
 
+.xm-shell.is-pending .xm-content {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.xm-shell.is-pending .xm-topbar {
+  position: relative;
+}
+
+.xm-shell.is-pending .xm-topbar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--xm-ink);
+  transform-origin: left;
+  animation: xm-pending 0.9s ease-in-out infinite;
+}
+
+@keyframes xm-pending {
+  0% { transform: scaleX(0.12); }
+  50% { transform: scaleX(1); }
+  100% { transform: scaleX(0.12); }
+}
+
 .xm-content {
   flex: 1;
   overflow: auto;
@@ -571,8 +598,27 @@ body.xm-app #site-nav,
 }
 
 .xm-content .pill,
-.xm-content .cap {
+.xm-content .cap,
+.xm-content .cap.wait,
+.xm-content .cap.ok,
+.xm-content .cap.busy,
+.xm-content .cap.fail,
+.xm-content .cap.done {
   background: var(--xm-primary-soft);
   color: var(--xm-ink);
   border-radius: 999px;
+}
+
+.xm-content .note,
+.xm-content .lock-box,
+.xm-content .lock-box.idle {
+  background: var(--xm-primary-soft) !important;
+  color: var(--xm-ink) !important;
+  border: 1px solid var(--xm-line);
+  border-radius: var(--xm-radius);
+}
+
+.xm-content .log-item {
+  background: #f7f7f4;
+  border-left-color: var(--xm-ink);
 }
