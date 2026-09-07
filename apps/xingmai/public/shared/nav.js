@@ -84,6 +84,21 @@
     });
   }
 
+  function watchStampRewrites() {
+    if (window.__xmStampObs) {
+      return;
+    }
+    const root = document.querySelector(".xm-content") || document.body;
+    let timer = 0;
+    window.__xmStampObs = new MutationObserver(function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        rewriteTimeNodes(document.querySelector(".xm-content") || document.body);
+      }, 50);
+    });
+    window.__xmStampObs.observe(root, { childList: true, subtree: true });
+  }
+
   function tickChinaClocks() {
     const stamp = formatChinaTime(new Date());
     const bar = document.getElementById("xm-clock");
@@ -332,6 +347,7 @@
     stripInnerChrome(content);
     activateScripts(content);
     rewriteTimeNodes(content);
+    watchStampRewrites();
     startClock();
   }
 
@@ -422,6 +438,7 @@
       bindChrome(userLabel);
       bindSpa();
       rewriteTimeNodes(document.querySelector(".xm-content"));
+      watchStampRewrites();
       startClock();
       return;
     }
@@ -475,6 +492,7 @@
     bindChrome(userLabel);
     bindSpa();
     rewriteTimeNodes(document.querySelector(".xm-content"));
+    watchStampRewrites();
     startClock();
   }
 
