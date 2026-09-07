@@ -46,6 +46,7 @@ export function injectHtmlShell(req, res, next) {
   const send = res.send.bind(res);
   res.send = function injectSend(body) {
     if (typeof body === "string" && /<html[\s>]/i.test(body)) {
+      res.setHeader("Cache-Control", "private, no-store");
       return send(withSharedShell(body));
     }
     return send(body);
@@ -57,6 +58,7 @@ export function injectHtmlShell(req, res, next) {
       try {
         const html = withSharedShell(fs.readFileSync(dest, "utf8"));
         res.type("html");
+        res.setHeader("Cache-Control", "private, no-store");
         return send(html);
       } catch (err) {
         if (typeof callback === "function") {

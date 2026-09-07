@@ -32,7 +32,21 @@ export function createApp() {
     }
   });
 
-  app.use(express.static(join(__dirname, "..", "public")));
+  app.use(
+    express.static(join(__dirname, "..", "public"), {
+      etag: true,
+      lastModified: true,
+      setHeaders(res, filePath) {
+        if (/\.(?:css|js)$/i.test(filePath)) {
+          res.setHeader("Cache-Control", "public, max-age=3600");
+          return;
+        }
+        if (/\.html?$/i.test(filePath)) {
+          res.setHeader("Cache-Control", "private, no-store");
+        }
+      }
+    })
+  );
 
   attachHome(app);
   app.use("/api/releases", createReleasesRouter());

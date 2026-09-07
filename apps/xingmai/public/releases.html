@@ -226,7 +226,6 @@
         }
       });
       refresh().catch(function (err) { flash(err.message, true); });
-      setInterval(function () { refresh().catch(function () {}); }, 2000);
     </script>
   </body>
 </html>

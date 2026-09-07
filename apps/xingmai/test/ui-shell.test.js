@@ -19,12 +19,14 @@ test("shared shell assets are public", async () => {
   assert.equal(css.status, 200);
   assert.equal(js.status, 200);
   assert.equal(loginCss.status, 200);
+  assert.match(String(js.headers.get("cache-control") || ""), /max-age=3600/);
   const cssText = await css.text();
   const jsText = await js.text();
   assert.match(cssText, /cursor-light-3/);
-  assert.match(jsText, /xm-shell-always 0\.3\.2/);
+  assert.match(jsText, /xm-shell-always 0\.1\.19/);
   assert.match(jsText, /xm-shell/);
   assert.doesNotMatch(jsText, /xm-sider-collapsed/);
+  assert.doesNotMatch(jsText, /link\.rel = "prefetch"/);
   assert.doesNotMatch(jsText, /if \(document\.querySelector\("\.oc-tab/);
 });
 

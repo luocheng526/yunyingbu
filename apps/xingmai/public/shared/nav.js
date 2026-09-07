@@ -1,4 +1,4 @@
-/* xm-shell-always 0.3.2 */
+/* xm-shell-always 0.1.19 */
 (function () {
   const items = [
     { href: "/", label: "首页" },
@@ -134,19 +134,6 @@
       .join("");
   }
 
-  function prefetch(href) {
-    if (!href || href === current) {
-      return;
-    }
-    if (document.querySelector('link[rel="prefetch"][href="' + href + '"]')) {
-      return;
-    }
-    const link = document.createElement("link");
-    link.rel = "prefetch";
-    link.href = href;
-    document.head.appendChild(link);
-  }
-
   function stripInnerChrome(root) {
     if (!root) {
       return;
@@ -187,9 +174,6 @@
       });
     }
     document.querySelectorAll(".xm-menu-item").forEach(function (a) {
-      a.addEventListener("mouseenter", function () {
-        prefetch(a.getAttribute("href"));
-      });
       a.addEventListener("click", function (event) {
         if (a.getAttribute("data-self") === "1") {
           event.preventDefault();
@@ -205,10 +189,7 @@
       tickChinaClocks();
       rewriteTimeNodes(document.querySelector(".xm-content"));
       if (!window.__xmChinaClock) {
-        window.__xmChinaClock = setInterval(function () {
-          tickChinaClocks();
-          rewriteTimeNodes(document.querySelector(".xm-content"));
-        }, 1000);
+        window.__xmChinaClock = setInterval(tickChinaClocks, 1000);
       }
       return;
     }
@@ -263,10 +244,7 @@
     tickChinaClocks();
     rewriteTimeNodes(document.querySelector(".xm-content"));
     if (!window.__xmChinaClock) {
-      window.__xmChinaClock = setInterval(function () {
-        tickChinaClocks();
-        rewriteTimeNodes(document.querySelector(".xm-content"));
-      }, 1000);
+      window.__xmChinaClock = setInterval(tickChinaClocks, 1000);
     }
   }
 
@@ -281,9 +259,6 @@
   }
 
   start("…");
-  items.forEach(function (item) {
-    prefetch(item.href);
-  });
 
   fetch("/api/auth/me", { credentials: "same-origin", headers: { Accept: "application/json" } })
     .then(function (res) {
