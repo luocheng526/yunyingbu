@@ -1,7 +1,7 @@
 # 运营部仓库约定
 
 站点代码在 `apps/xingmai/`（生产 `/opt/mengkai`）。板块分工和发版闸门见 `docs/agents/`。
-**先读** `docs/agents/00-module-charter.md`：现行是嵌入式模块（`XmModules[path].mount(#xm-content)`），壳归主框架，不是首页。不要从 `cursor/home-nav-workbench-e50e` 抄旧全页壳。
+**先读** `docs/agents/00-module-charter.md`：现行是嵌入式模块（`XmModules[path].mount(#xm-content)`），壳归主框架，不是首页。`cursor/home-nav-workbench-e50e` 已整支删除，不要重建仓库根那套全页壳。
 
 ## 做完直接交单上线
 

@@ -30,7 +30,7 @@
 5. 模块之间点击：`history.pushState` + 加载对应 `public/shared/modules/<id>.js`，不要整页跳、不要预取全部模块。
 6. 侧栏：窄 `200px`、无「项目」分组、无顶栏退出/暗色按钮。底部是版本发布中心 / 个人中心 / 退出登录 / 版本号。
 
-不要从 `cursor/home-nav-workbench-e50e` 抄：那是每页完整 HTML + 预取整页，不是嵌入式。
+`cursor/home-nav-workbench-e50e` 已整支删除。不要在仓库根再铺一套全页壳。
 
 ## 交单
 
