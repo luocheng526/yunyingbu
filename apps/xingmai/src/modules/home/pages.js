@@ -13,6 +13,13 @@ function renderExistingPage(filePath) {
   return profileShell.withSharedShell(fs.readFileSync(filePath, "utf8"));
 }
 
+function renderRouteShell(href) {
+  if (typeof profileShell.renderAppShell === "function") {
+    return profileShell.renderAppShell(href);
+  }
+  return renderExistingPage(pageFiles.get(href) || path.join(publicDir, "index.html"));
+}
+
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public");
 const pageFiles = new Map();
 const placeholderPages = new Map();
@@ -63,9 +70,8 @@ for (const item of NAV_ITEMS) {
 export function registerPageRoutes(app) {
   for (const item of NAV_ITEMS) {
     app.get(item.href, (_req, res) => {
-      const filePath = pageFiles.get(item.href);
-      if (filePath) {
-        res.status(200).type("html").set("Cache-Control", "private, no-store").send(renderExistingPage(filePath));
+      if (pageFiles.get(item.href) || typeof profileShell.renderAppShell === "function") {
+        res.status(200).type("html").set("Cache-Control", "private, no-store").send(renderRouteShell(item.href));
         return;
       }
       let ready = placeholderPages.get(item.href);

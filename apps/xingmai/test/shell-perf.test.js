@@ -26,11 +26,14 @@ async function loginCookie() {
 test("shell HTML is versioned so browsers drop the old full-reload nav.js", async () => {
   const cookie = await loginCookie();
   const html = await (await fetch(`${base}/data`, { headers: { cookie } })).text();
-  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.52/);
-  assert.match(html, /\/shared\/layout\.css\?v=0\.1\.52/);
+  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.65/);
+  assert.match(html, /\/shared\/layout\.css\?v=0\.1\.65/);
+  assert.match(html, /\/shared\/modules\/data\.js\?v=0\.1\.65/);
   const js = readFileSync(join(root, "public/shared/nav.js"), "utf8");
   assert.match(js, /history\.pushState/);
-  assert.match(js, /function wipePageTimers/);
+  assert.match(js, /function activate\(/);
+  assert.match(js, /function loadModule\(/);
+  assert.doesNotMatch(js, /function wipePageTimers/);
   assert.doesNotMatch(js, /for \(let i = 1; i <= max/);
   assert.doesNotMatch(js, /100000/);
 });
@@ -47,7 +50,8 @@ test("sidebar HTML stays fast when the same process is reused", async () => {
     assert.equal(res.status, 200);
     samples.push(ms);
     const html = await res.text();
-    assert.match(html, /\/shared\/nav\.js\?v=0\.1\.52/);
+    assert.match(html, /\/shared\/nav\.js\?v=0\.1\.65/);
+    assert.match(html, /\/shared\/modules\//);
   }
   const max = Math.max(...samples);
   assert.ok(max < 250, `slow html fetch ${max.toFixed(1)}ms ${JSON.stringify(samples)}`);
@@ -59,9 +63,10 @@ test("home page is injected and not served as raw static index", async () => {
     const res = await fetch(`${base}${dest}`, { headers: { cookie } });
     assert.equal(res.status, 200);
     const html = await res.text();
-    assert.match(html, /\/shared\/nav\.js\?v=0\.1\.52/);
+    assert.match(html, /\/shared\/nav\.js\?v=0\.1\.65/);
     assert.match(html, /localStorage.getItem\("xm-theme"\)/);
-    assert.match(html, /工作台/);
+    assert.match(html, /\/shared\/modules\/home\.js/);
+    assert.match(readFileSync(join(root, "public/shared/modules/home.js"), "utf8"), /工作台/);
     assert.doesNotMatch(html, /aria-label="模块入口"/);
     assert.doesNotMatch(html, /class="cards"/);
   }

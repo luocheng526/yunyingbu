@@ -5,7 +5,32 @@ import { currentUser } from "./auth.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
 
-export const SHELL_ASSET_VER = "0.1.64";
+export const SHELL_ASSET_VER = "0.1.65";
+export const APP_MODULES = {
+  "/": "home",
+  "/data": "data",
+  "/shen": "shen",
+  "/han": "han",
+  "/people": "people",
+  "/releases": "releases",
+  "/me": "me"
+};
+
+export function renderAppShell(href) {
+  const key = String(href || "/").replace(/\/+$/, "") || "/";
+  const id = APP_MODULES[key] || "home";
+  return withSharedShell(`<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>星脉</title>
+    <link rel="preload" href="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" as="script" />
+    <script src="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" defer></script>
+  </head>
+  <body class="xm-app-shell"></body>
+</html>`);
+}
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public");
 const SHELL_ASSET_FILES = {
   "/shared/nav.js": "shared/nav.js",
@@ -182,8 +207,7 @@ function serveHomeIndex(req, res) {
   if (destPath !== "/" && destPath !== "/index.html") {
     return false;
   }
-  const dest = path.join(publicDir, "index.html");
-  res.status(200).type("html").set("Cache-Control", "private, no-store").send(readThemedHtml(dest));
+  res.status(200).type("html").set("Cache-Control", "private, no-store").send(renderAppShell("/"));
   return true;
 }
 
