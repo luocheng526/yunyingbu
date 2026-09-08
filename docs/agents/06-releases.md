@@ -17,6 +17,7 @@
 - public/releases.html
 - src/modules/releases/
 - src/app.js 只允许增加：app.use("/api/releases", releasesRouter)
+- **禁止提交壳。** `public/shared/nav.js`、`layout.css`、`xingmai-logo.png`、`src/modules/home/nav-items.js` 只由首页交。空 `files` 禁止全量落地。点通过时再验内核和壳。
 
 【核心规则——必须写成代码，不能只写在文案里】
 1. 任何人（含其他 Agent）都不能直接重启/覆盖发布。他们只能「提交发布申请」。

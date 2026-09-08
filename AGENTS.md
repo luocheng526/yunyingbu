@@ -20,4 +20,6 @@
 
 ## 侧栏公共文件只由首页交付
 
-`/shared/nav.js`、`/shared/layout.css`、`/shared/xingmai-logo.png` 以首页模块为准。人员管理、版本发布中心、个人中心及其他模块**禁止覆盖**这 3 个文件。侧栏必须是：顶栏黑底星脉甄选 logo、分组「项目」、底部固定「版本发布中心 / 个人中心 / 退出登录」和版本号；不要顶栏「退出」「暗色」。
+壳文件只许模块名填「首页」的单据包含：`public/shared/nav.js`、`public/shared/layout.css`、`public/shared/xingmai-logo.png`、`src/modules/home/nav-items.js`。数据中心、沈子晗、韩梦凯、人员管理、版本发布中心、个人中心交这些路径会被闸门 400 拒绝。其它模块只引用壳，不要覆盖。侧栏底部固定「版本发布中心 / 个人中心 / 退出登录」和版本号；不要顶栏「退出」「暗色」。
+
+点「通过」时闸门再验一遍内核和壳，空 `files` 禁止全量落地。

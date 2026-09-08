@@ -9,6 +9,7 @@
 - public/shen.html
 - src/modules/shen/
 - src/app.js 只允许增加：app.use("/api/shen", shenRouter)
+- **禁止提交壳**（`public/shared/nav.js`、`layout.css`、`xingmai-logo.png`、`src/modules/home/nav-items.js`）和 `src/app.js` 整文件覆盖。
 
 【依赖】引用 /shared/layout.css 与 /shared/nav.js；没有则本页自带 7 项导航，勿改 index.html。
 
