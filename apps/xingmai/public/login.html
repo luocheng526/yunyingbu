@@ -4,52 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>登录 · 星脉管理系统</title>
-  <link rel="stylesheet" href="/login.css?v=0.1.64" />
+  <link rel="stylesheet" href="/login.css?v=0.1.65" />
   <script>try{var t=localStorage.getItem("xm-theme");if(t==="dark"||t==="light"){document.documentElement.setAttribute("data-theme",t);document.documentElement.style.colorScheme=t;}}catch(e){}</script>
 </head>
 <body class="login-page">
   <main class="login-split">
     <section class="login-hero" aria-label="星脉甄选运营中心">
-      <header class="hero-top">
-        <img class="hero-logo" src="/login-logo.png" width="720" height="209" alt="星脉甄选" />
-      </header>
-      <div class="hero-stage">
-        <img class="hero-art" src="/login-hero.jpg" width="820" height="615" alt="" />
-      </div>
-      <div class="hero-stack">
-        <div class="hero-copy">
-          <h2>星脉甄选运营中心</h2>
-          <p>用数据驱动运营 · 让每一份努力都有回报</p>
-          <p class="hero-pills">更高效<span></span>更专业<span></span>更有结果</p>
-        </div>
-        <ul class="hero-cards">
-          <li>
-            <i class="ico ico-chart" aria-hidden="true"></i>
-            <div>
-              <strong>数据中心</strong>
-              <em>经营数据 · 实时洞察 · 决策支持</em>
-            </div>
-          </li>
-          <li>
-            <i class="ico ico-doc" aria-hidden="true"></i>
-            <div>
-              <strong>运营中心</strong>
-              <em>工单管理 · 流程审批 · 高效协同</em>
-            </div>
-          </li>
-          <li>
-            <i class="ico ico-org" aria-hidden="true"></i>
-            <div>
-              <strong>组织中心</strong>
-              <em>组织架构 · 权责管理 · 人才发展</em>
-            </div>
-          </li>
-        </ul>
-      </div>
-      <footer class="hero-foot">
-        <strong>星脉甄选 × 京东生态 × 共创电商新未来</strong>
-        <span>TOGETHER FOR A BRIGHTER FUTURE</span>
-      </footer>
+      <img class="hero-shot" src="/login-hero.jpg" width="1236" height="841" alt="星脉甄选运营中心：用数据驱动运营，让每一份努力都有回报" />
     </section>
 
     <section class="login-pane">
@@ -60,18 +21,18 @@
         </header>
         <form id="login-form" class="login-form" novalidate>
           <label class="field">
-            <span>账号名称</span>
+            <span class="sr-only">账号名称</span>
             <div class="field-box">
               <i class="ico ico-user" aria-hidden="true"></i>
               <input id="username" name="username" type="text" autocomplete="username" placeholder="请输入账号" required />
             </div>
           </label>
           <label class="field">
-            <span>登录密码</span>
+            <span class="sr-only">登录密码</span>
             <div class="field-box">
               <i class="ico ico-lock" aria-hidden="true"></i>
               <input id="password" name="password" type="password" autocomplete="current-password" placeholder="请输入密码" required />
-              <button type="button" class="ghost-btn" data-toggle-password>显示</button>
+              <button type="button" class="ghost-btn" data-toggle-password aria-label="显示密码"></button>
             </div>
           </label>
           <div class="form-row">
@@ -85,9 +46,9 @@
           <p class="error" data-error hidden></p>
         </form>
         <p class="hint">正式账号由管理员开通。演示：luocheng / ChangeMe123!</p>
-        <p class="pane-foot">数据 · 运营 · 组织 · 人才 · 增长<br /><span>DATA · OPERATION · ORGANIZATION · TALENT · GROWTH</span></p>
-        <button type="button" class="login-theme" data-login-theme aria-label="切换主题"></button>
       </div>
+      <p class="pane-foot">数据 · 运营 · 组织 · 人才 · 增长<br /><span>DATA · OPERATION · ORGANIZATION · TALENT · GROWTH</span></p>
+      <button type="button" class="login-theme" data-login-theme aria-label="切换主题"></button>
     </section>
   </main>
   <script>
@@ -123,7 +84,8 @@
       toggle.addEventListener("click", function () {
         var show = password.type === "password";
         password.type = show ? "text" : "password";
-        toggle.textContent = show ? "隐藏" : "显示";
+        toggle.classList.toggle("is-on", show);
+        toggle.setAttribute("aria-label", show ? "隐藏密码" : "显示密码");
       });
 
       forgot.addEventListener("click", function () {
