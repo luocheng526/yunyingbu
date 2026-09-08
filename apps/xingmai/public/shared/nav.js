@@ -1,4 +1,4 @@
-/* xm-shell-modules 0.1.65 */
+/* xm-shell-modules 0.1.66 */
 (function () {
   const items = [
     { href: "/", label: "首页", module: "home" },
@@ -9,7 +9,7 @@
     { href: "/releases", label: "版本发布中心", module: "releases" },
     { href: "/me", label: "个人中心", module: "me" }
   ];
-  const MODULE_VER = "0.1.65";
+  const MODULE_VER = "0.1.66";
   const MODULE_SRC = {};
   items.forEach(function (item) {
     MODULE_SRC[item.href] = "/shared/modules/" + item.module + ".js?v=" + MODULE_VER;
@@ -220,7 +220,7 @@
   if (!document.querySelector('link[href*="/shared/layout.css"]')) {
     const css = document.createElement("link");
     css.rel = "stylesheet";
-    css.href = "/shared/layout.css?v=0.1.65";
+    css.href = "/shared/layout.css?v=0.1.66";
     document.head.appendChild(css);
   }
 
@@ -374,11 +374,28 @@
         reject(new Error("no module"));
         return;
       }
-      const existing = document.querySelector('script[data-xm-mod="' + dest + '"]');
+      function done() {
+        const mod = window.XmModules && window.XmModules[dest];
+        if (mod && typeof mod.mount === "function") {
+          resolve(mod);
+          return;
+        }
+        reject(new Error("module " + dest));
+      }
+      let existing = document.querySelector('script[data-xm-mod="' + dest + '"]');
+      if (!existing) {
+        existing = document.querySelector('script[src="' + src + '"]');
+      }
       if (existing) {
-        existing.addEventListener("load", function () {
-          resolve(window.XmModules && window.XmModules[dest]);
-        });
+        if (window.XmModules && window.XmModules[dest]) {
+          resolve(window.XmModules[dest]);
+          return;
+        }
+        if (existing.readyState === "complete" || existing.dataset.loaded === "1") {
+          done();
+          return;
+        }
+        existing.addEventListener("load", done);
         existing.addEventListener("error", function () {
           reject(new Error("module " + dest));
         });
@@ -388,7 +405,8 @@
       script.src = src;
       script.dataset.xmMod = dest;
       script.onload = function () {
-        resolve(window.XmModules && window.XmModules[dest]);
+        script.dataset.loaded = "1";
+        done();
       };
       script.onerror = function () {
         reject(new Error("module " + dest));
@@ -396,6 +414,25 @@
       document.head.appendChild(script);
     });
     return moduleLoads[dest];
+  }
+
+  function warmModules() {
+    if (window.__xmWarmMods) {
+      return;
+    }
+    window.__xmWarmMods = true;
+    items.forEach(function (item, idx) {
+      setTimeout(function () {
+        loadModule(item.href);
+      }, 40 + idx * 40);
+    });
+    if (!document.querySelector('link[href*="/releases.css"]')) {
+      const css = document.createElement("link");
+      css.rel = "preload";
+      css.as = "style";
+      css.href = "/releases.css?v=" + MODULE_VER;
+      document.head.appendChild(css);
+    }
   }
 
   function activate(dest, push) {
@@ -468,6 +505,20 @@
     window.addEventListener("popstate", function () {
       activate(window.location.pathname, false);
     });
+    document.addEventListener(
+      "pointerenter",
+      function (event) {
+        const a = event.target.closest && event.target.closest("a[href]");
+        if (!a) {
+          return;
+        }
+        const dest = appPath(a.href);
+        if (dest && MODULE_SRC[dest]) {
+          loadModule(dest);
+        }
+      },
+      true
+    );
   }
 
   function mountShell(userLabel) {
@@ -480,6 +531,7 @@
       watchStampRewrites();
       startClock();
       activate(current, false);
+      warmModules();
       return;
     }
 
@@ -537,6 +589,7 @@
     watchStampRewrites();
     startClock();
     activate(current, false);
+    warmModules();
   }
 
   function start(userLabel) {
@@ -557,9 +610,13 @@
   start("…");
 
   try {
-    const cached = sessionStorage.getItem("xm-me");
-    if (cached) {
-      paintMe(JSON.parse(cached));
+    if (window.__xmBootUser) {
+      paintMe(window.__xmBootUser);
+    } else {
+      const cached = sessionStorage.getItem("xm-me");
+      if (cached) {
+        paintMe(JSON.parse(cached));
+      }
     }
   } catch (_err) {}
 

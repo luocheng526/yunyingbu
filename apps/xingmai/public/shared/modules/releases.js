@@ -146,7 +146,7 @@
     if (!document.querySelector('link[href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=0.1.65";
+      link.href = "/releases.css?v=0.1.66";
       document.head.appendChild(link);
     }
   }

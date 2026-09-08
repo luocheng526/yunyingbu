@@ -22,7 +22,7 @@ test("shared shell assets are public", async () => {
   assert.equal(loginCss.status, 200);
   assert.equal(ocCss.status, 200);
   assert.match(String(js.headers.get("cache-control") || ""), /must-revalidate/);
-  const versionedJs = await fetch(`${base}/shared/nav.js?v=0.1.65`);
+  const versionedJs = await fetch(`${base}/shared/nav.js?v=0.1.66`);
   assert.match(String(versionedJs.headers.get("cache-control") || ""), /max-age=86400/);
   const cssText = await css.text();
   const jsText = await js.text();
@@ -31,7 +31,7 @@ test("shared shell assets are public", async () => {
   assert.match(cssText, /html\[data-theme="dark"\]/);
   assert.match(cssText, /\.xm-shell\.is-pending/);
   assert.match(cssText, /\.xm-sider/);
-  assert.match(jsText, /xm-shell-modules 0\.1\.65/);
+  assert.match(jsText, /xm-shell-modules 0\.1\.66/);
   assert.match(jsText, /aside class="xm-sider"/);
   const homeHtml = readFileSync(join(root, "public/index.html"), "utf8");
   assert.match(homeHtml, /工作台/);
@@ -44,6 +44,8 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /function wrapHanFetch\(/);
   assert.match(jsText, /function activate\(/);
   assert.match(jsText, /function loadModule\(/);
+  assert.match(jsText, /function warmModules\(/);
+  assert.match(jsText, /__xmBootUser/);
   assert.match(jsText, /XmModules/);
   assert.match(jsText, /\/shared\/modules\//);
   assert.match(jsText, /keepalive: true/);
@@ -140,8 +142,8 @@ test("page renderer injects shared shell onto module html", async () => {
     '<!DOCTYPE html><html><head></head><body class="oc-page"><div class="oc-tab">待上线</div></body></html>'
   );
   assert.match(injected, /\/shared\/layout\.css/);
-  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.65/);
-  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.65"/);
+  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.66/);
+  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.66"/);
   assert.match(injected, /localStorage.getItem\("xm-theme"\)/);
   const login = withSharedShell('<html><head></head><body class="login-page"></body></html>');
   assert.doesNotMatch(login, /\/shared\/nav\.js/);
@@ -159,6 +161,9 @@ test("page renderer injects shared shell onto module html", async () => {
   const mid = readFileSync(join(root, "src/modules/profile/middleware.js"), "utf8");
   assert.match(mid, /HTML_CACHE_MS = 60_000/);
   assert.match(mid, /HAN_API_CACHE_MS = 2500/);
+  assert.match(mid, /\/api\/data\/overview/);
+  assert.match(mid, /\/api\/releases\/queue/);
+  assert.match(mid, /shared\/modules\//);
   assert.match(mid, /nav\.js\?v=\$\{SHELL_ASSET_VER\}/);
   assert.match(mid, /woff2\?/);
   const authJs = readFileSync(join(root, "src/modules/profile/auth.js"), "utf8");
@@ -167,6 +172,8 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.match(authJs, /function hashPasswordSync/);
   assert.match(authJs, /dropSession\(sid\)\.catch/);
   assert.doesNotMatch(authJs, /await dropSession/);
+  assert.match(authJs, /persistSession\([\s\S]*\)\.catch/);
+  assert.doesNotMatch(authJs, /await persistSession/);
   assert.match(authJs, /connectTimeout: 2000/);
   const meHtml = readFileSync(join(root, "public/me.html"), "utf8");
   assert.match(meHtml, /sessionStorage\.getItem\("xm-me"\)/);
@@ -177,8 +184,12 @@ test("page renderer injects shared shell onto module html", async () => {
   const homeMod = readFileSync(join(root, "public/shared/modules/home.js"), "utf8");
   assert.match(homeMod, /工作台/);
   const { renderAppShell } = await import("../src/modules/profile/middleware.js");
-  const shell = renderAppShell("/data");
+  const shell = renderAppShell("/data", { username: "罗成", displayName: "罗成" });
   assert.match(shell, /xm-app-shell/);
-  assert.match(shell, /\/shared\/modules\/data\.js\?v=0\.1\.65/);
+  assert.match(shell, /\/shared\/modules\/data\.js\?v=0\.1\.66/);
+  assert.match(shell, /\/shared\/modules\/releases\.js/);
+  assert.match(shell, /__xmBootUser/);
   assert.doesNotMatch(shell, /今日订单/);
+  const versionedMod = await fetch(`${base}/shared/modules/home.js?v=0.1.66`);
+  assert.match(String(versionedMod.headers.get("cache-control") || ""), /max-age=86400/);
 });

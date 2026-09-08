@@ -13,9 +13,9 @@ function renderExistingPage(filePath) {
   return profileShell.withSharedShell(fs.readFileSync(filePath, "utf8"));
 }
 
-function renderRouteShell(href) {
+function renderRouteShell(href, user) {
   if (typeof profileShell.renderAppShell === "function") {
-    return profileShell.renderAppShell(href);
+    return profileShell.renderAppShell(href, user);
   }
   return renderExistingPage(pageFiles.get(href) || path.join(publicDir, "index.html"));
 }
@@ -69,9 +69,9 @@ for (const item of NAV_ITEMS) {
 
 export function registerPageRoutes(app) {
   for (const item of NAV_ITEMS) {
-    app.get(item.href, (_req, res) => {
+    app.get(item.href, (req, res) => {
       if (pageFiles.get(item.href) || typeof profileShell.renderAppShell === "function") {
-        res.status(200).type("html").set("Cache-Control", "private, no-store").send(renderRouteShell(item.href));
+        res.status(200).type("html").set("Cache-Control", "private, no-store").send(renderRouteShell(item.href, req.user));
         return;
       }
       let ready = placeholderPages.get(item.href);
