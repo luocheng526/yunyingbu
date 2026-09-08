@@ -5,7 +5,7 @@ import { currentUser, publicProfile } from "./auth.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
 
-export const SHELL_ASSET_VER = "0.1.66";
+export const SHELL_ASSET_VER = "0.1.67";
 export const APP_MODULES = {
   "/": "home",
   "/data": "data",
@@ -116,9 +116,17 @@ export function withThemeBoot(html) {
   return text;
 }
 
+export function isLoginHtml(html) {
+  const text = String(html || "");
+  return (
+    /class=["'][^"']*\blogin-page\b/.test(text) ||
+    /href=["']\/login\.css(?:\?[^"']*)?["']/.test(text)
+  );
+}
+
 export function withSharedShell(html) {
   const text = String(html || "");
-  if (/class=["']login-page["']/.test(text) || /href=["']\/login\.css["']/.test(text)) {
+  if (isLoginHtml(text)) {
     return versionShellAssets(withThemeBoot(text));
   }
   let out = text;
@@ -157,7 +165,8 @@ export function readThemedHtml(filePath) {
     hit.at = now;
     return hit.html;
   }
-  const html = withSharedShell(fs.readFileSync(dest, "utf8"));
+  const raw = fs.readFileSync(dest, "utf8");
+  const html = /login\.html$/i.test(dest) ? versionShellAssets(withThemeBoot(raw)) : withSharedShell(raw);
   htmlFileCache.set(dest, { mtimeMs: stat.mtimeMs, size: stat.size, html, at: now });
   return html;
 }
@@ -169,8 +178,7 @@ export function injectHtmlShell(req, res, next) {
       res.setHeader("Cache-Control", "private, no-store");
       if (
         body.includes(`/shared/nav.js?v=${SHELL_ASSET_VER}`) ||
-        /class=["']login-page["']/.test(body) ||
-        /href=["']\/login\.css["']/.test(body)
+        isLoginHtml(body)
       ) {
         return send(body);
       }

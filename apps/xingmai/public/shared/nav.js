@@ -1,4 +1,4 @@
-/* xm-shell-modules 0.1.66 */
+/* xm-shell-modules 0.1.67 */
 (function () {
   const items = [
     { href: "/", label: "首页", module: "home" },
@@ -9,7 +9,7 @@
     { href: "/releases", label: "版本发布中心", module: "releases" },
     { href: "/me", label: "个人中心", module: "me" }
   ];
-  const MODULE_VER = "0.1.66";
+  const MODULE_VER = "0.1.67";
   const MODULE_SRC = {};
   items.forEach(function (item) {
     MODULE_SRC[item.href] = "/shared/modules/" + item.module + ".js?v=" + MODULE_VER;
@@ -220,7 +220,7 @@
   if (!document.querySelector('link[href*="/shared/layout.css"]')) {
     const css = document.createElement("link");
     css.rel = "stylesheet";
-    css.href = "/shared/layout.css?v=0.1.66";
+    css.href = "/shared/layout.css?v=0.1.67";
     document.head.appendChild(css);
   }
 
@@ -326,13 +326,21 @@
         try {
           sessionStorage.removeItem("xm-me");
         } catch (_err) {}
+        var left = false;
+        function goLogin() {
+          if (left) {
+            return;
+          }
+          left = true;
+          window.location.replace("/login?out=1");
+        }
         fetch("/api/auth/logout", {
           method: "POST",
           credentials: "same-origin",
           headers: { Accept: "application/json" },
           keepalive: true
-        }).catch(function () {});
-        window.location.replace("/login");
+        }).then(goLogin, goLogin);
+        setTimeout(goLogin, 1500);
       });
     }
   }

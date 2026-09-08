@@ -12,7 +12,8 @@ export function attachProfile(app) {
     res.json({ ok: true });
   });
   app.get("/login", (req, res) => {
-    if (currentUser(req)) {
+    const leaving = String(req.query.out || "") === "1";
+    if (!leaving && currentUser(req)) {
       res.redirect("/");
       return;
     }

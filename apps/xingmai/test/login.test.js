@@ -24,6 +24,22 @@ test("login page is public", async () => {
   const html = await res.text();
   assert.match(html, /星脉管理系统/);
   assert.match(html, /ChangeMe123!/);
+  assert.doesNotMatch(html, /\/shared\/nav\.js/);
+  assert.doesNotMatch(html, /\/shared\/layout\.css/);
+});
+
+test("logged-in visit to /login redirects home unless out=1", async () => {
+  const res = await login("罗成", "ChangeMe123!");
+  assert.equal(res.status, 200);
+  const cookie = String(res.headers.get("set-cookie") || "").split(";")[0];
+  const bounce = await fetch(`${base}/login`, { headers: { cookie }, redirect: "manual" });
+  assert.equal(bounce.status, 302);
+  assert.equal(bounce.headers.get("location"), "/");
+  const leaving = await fetch(`${base}/login?out=1`, { headers: { cookie }, redirect: "manual" });
+  assert.equal(leaving.status, 200);
+  const html = await leaving.text();
+  assert.match(html, /星脉管理系统/);
+  assert.doesNotMatch(html, /\/shared\/nav\.js/);
 });
 
 test("demo user can log in", async () => {
