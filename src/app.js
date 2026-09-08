@@ -1,3 +1,8 @@
+/**
+ * Local demo app only. Never copy this file onto /opt/mengkai or into a
+ * release ticket. Live createApp() belongs to the shared mengkai tree;
+ * we only overlay src/modules/data/* and public/data*.
+ */
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

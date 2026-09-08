@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { patchAppSource } from "../src/modules/data/patch-app.js";
+import { DATA_OVERLAY_FILES, assertDataOnlyPaths } from "../src/modules/data/release-files.js";
 
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const targetRoot = process.env.MENGKAI_DIR || "/opt/mengkai";
@@ -23,19 +24,11 @@ if (!fs.existsSync(appPath)) {
   process.exit(1);
 }
 
-const copies = [
-  ["public/data.html", "public/data.html"],
-  ["public/data-pages.css", "public/data-pages.css"],
-  ["public/data-subnav.js", "public/data-subnav.js"],
-  ["public/data-store-live.html", "public/data-store-live.html"],
-  ["public/data-store-overview.html", "public/data-store-overview.html"],
-  ["public/data-goods-overview.html", "public/data-goods-overview.html"],
-  ["src/modules/data/overview.js", "src/modules/data/overview.js"],
-  ["src/modules/data/nav.js", "src/modules/data/nav.js"],
-  ["src/modules/data/pages.js", "src/modules/data/pages.js"],
-  ["src/modules/data/router.js", "src/modules/data/router.js"],
-  ["src/modules/data/patch-app.js", "src/modules/data/patch-app.js"]
-];
+const copies = DATA_OVERLAY_FILES.map((rel) => [rel, rel]);
+assertDataOnlyPaths(
+  copies.map(([, to]) => to),
+  "apply overlay"
+);
 
 function copyFile(relFrom, relTo) {
   const from = path.join(repoRoot, relFrom);

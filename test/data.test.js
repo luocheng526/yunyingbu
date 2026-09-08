@@ -9,6 +9,12 @@ import test from "node:test";
 import { createApp } from "../src/app.js";
 import { getOverview, hydrateFromMysql } from "../src/modules/data/overview.js";
 import { patchAppSource } from "../src/modules/data/patch-app.js";
+import {
+  DATA_OVERLAY_FILES,
+  assertDataOnlyPaths,
+  isAllowedDataPath,
+  isForbiddenReleasePath
+} from "../src/modules/data/release-files.js";
 
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -277,9 +283,22 @@ export function createApp() {
   assert.match(appJs, /app\.get\("\/api\/health"/);
   assert.ok(fs.existsSync(path.join(tmp, "public/data.html")));
   assert.ok(fs.existsSync(path.join(tmp, "src/modules/data/router.js")));
+  assert.match(fs.readFileSync(path.join(tmp, "src/app.js"), "utf8"), /app\.get\("\/api\/health"/);
   assert.equal(fs.readFileSync(path.join(tmp, "public/index.html"), "utf8"), "<html><body>home</body></html>");
   assert.equal(fs.existsSync(path.join(tmp, "src/modules/home")), false);
   assert.equal(fs.existsSync(path.join(tmp, "src/modules/people")), false);
+});
+
+test("release allowlist never includes the live site entrypoint", () => {
+  assert.equal(DATA_OVERLAY_FILES.includes("src/app.js"), false);
+  assert.equal(isForbiddenReleasePath("src/app.js"), true);
+  assert.equal(isAllowedDataPath("src/app.js"), false);
+  assert.equal(isAllowedDataPath("public/shared/nav.js"), false);
+  assert.equal(isAllowedDataPath("src/modules/data/overview.js"), true);
+  assert.throws(() => assertDataOnlyPaths(["src/app.js"]), /src\/app\.js/);
+  const apply = fs.readFileSync(path.join(repoRoot, "scripts/apply-data-to-mengkai.mjs"), "utf8");
+  assert.match(apply, /DATA_OVERLAY_FILES/);
+  assert.doesNotMatch(apply, /copyFile\("src\/app\.js"/);
 });
 
 test("submit-data-release posts version applicant module summary", async () => {
@@ -305,7 +324,9 @@ test("submit-data-release posts version applicant module summary", async () => {
     const child = spawn(process.execPath, [path.join(repoRoot, "scripts/submit-data-release.mjs")], {
       env: {
         ...process.env,
-        RELEASES_API: `http://127.0.0.1:${port}/api/releases`
+        RELEASES_API: `http://127.0.0.1:${port}/api/releases`,
+        RELEASE_VERSION: "0.1.0-data",
+        RELEASE_APPLICANT: "数据中心"
       }
     });
     const [code] = await Promise.all([
@@ -317,6 +338,21 @@ test("submit-data-release posts version applicant module summary", async () => {
     assert.equal(received[0].module, "数据中心");
     assert.equal(received[0].version, "0.1.0-data");
     assert.ok(received[0].summary);
+    assert.ok(Array.isArray(received[0].files));
+    assert.equal(received[0].files.includes("src/app.js"), false);
+    assert.equal(Object.keys(received[0].contents || {}).includes("src/app.js"), false);
+    for (const rel of received[0].files) {
+      assert.ok(isAllowedDataPath(rel), rel);
+    }
+    const refuse = spawn(process.execPath, [path.join(repoRoot, "scripts/submit-data-release.mjs")], {
+      env: {
+        ...process.env,
+        RELEASES_API: `http://127.0.0.1:${port}/api/releases`,
+        RELEASE_FILES: "src/app.js"
+      }
+    });
+    const refuseCode = await new Promise((resolve) => refuse.on("close", resolve));
+    assert.notEqual(refuseCode, 0);
   } finally {
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
