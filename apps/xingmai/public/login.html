@@ -1,125 +1,213 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>登录 · 星脉管理系统</title>
-  <link rel="stylesheet" href="/login.css?v=0.1.65" />
-  <script>try{var t=localStorage.getItem("xm-theme");if(t==="dark"||t==="light"){document.documentElement.setAttribute("data-theme",t);document.documentElement.style.colorScheme=t;}}catch(e){}</script>
-</head>
-<body class="login-page">
-  <main class="login-split">
-    <section class="login-hero" aria-label="星脉甄选运营中心">
-      <img class="hero-shot" src="/login-hero.jpg" width="1236" height="841" alt="星脉甄选运营中心：用数据驱动运营，让每一份努力都有回报" />
-    </section>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>登录 · 星脉管理系统</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/login.css?v=0.1.66" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("xm-theme");
+          if (t === "light" || t === "dark") {
+            document.documentElement.dataset.theme = t;
+            document.documentElement.style.colorScheme = t;
+          }
+        } catch (_) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <main class="LoginPage login-page login-split">
+      <section class="login-hero" aria-label="运营中心视觉">
+        <div class="hero-bg" aria-hidden="true">
+          <div class="hero-sky"></div>
+          <div class="hero-beams"></div>
+          <div class="hero-orb"></div>
+          <div class="hero-rings"></div>
+          <svg class="hero-city" viewBox="0 0 1200 160" preserveAspectRatio="none">
+            <path d="M0 160V118h18V96h10v22h14V88h12v30h20V70h8v18h16V84h22v34h10V96h18v28h14V78h10v20h16V68h12v40h20V90h18v28h14V102h16v22h22V86h10v28h18V74h14v40h20V98h16v26h18V82h12v34h20V70h10v48h16V94h22v30h14V88h18v36h12V110h16v22h20V76h14v40h18V92h12v32h16V84h20v40h14V100h18v28h16V88h12v36h22V70h10v48h18V96h16v32h14V80h20v44h12V108h18v20h16V86h14v38h20V94h12v34h22V72h16v48h18V100h14v28h20V84h12v40h16V96h18v32h10V110h22v18h80V160H0z" />
+          </svg>
+        </div>
 
-    <section class="login-pane">
-      <div class="pane-box">
-        <header class="pane-head">
-          <h1>登录</h1>
-          <p>欢迎使用星脉甄选运营中心</p>
+        <header class="hero-top">
+          <div class="hero-brand">
+            <img class="hero-logo" src="/login-logo.png" alt="星脉甄选" />
+          </div>
+          <p class="hero-slogan">
+            <span>聚焦数据 · 精细运营 · 共创增长</span>
+            <small>BETTER DATA  BETTER OPERATION  BETTER GROWTH</small>
+          </p>
         </header>
-        <form id="login-form" class="login-form" novalidate>
+
+        <div class="hero-body">
+          <div class="hero-copy">
+            <p class="hero-kicker">OPERATIONS CENTER</p>
+            <h2>
+              用数据驱动运营
+              <span>让每一份努力都有回报</span>
+            </h2>
+            <p class="hero-pills">更高效 ｜ 更专业 ｜ 更有结果</p>
+
+            <ul class="hero-cards">
+              <li>
+                <span class="card-ico" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M4 18V10h3.2v8H4zm6.4 0V6H14v12h-3.6zM16.8 18v-5H20v5h-3.2z" /></svg>
+                </span>
+                <div>
+                  <strong>数据中心</strong>
+                  <span>经营数据 · 实时洞察 · 决策支持</span>
+                </div>
+                <i aria-hidden="true"></i>
+              </li>
+              <li>
+                <span class="card-ico" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M7 3.8h10A2.2 2.2 0 0 1 19.2 6v13.4L12 16.6l-7.2 2.8V6A2.2 2.2 0 0 1 7 3.8z" /></svg>
+                </span>
+                <div>
+                  <strong>运营中心</strong>
+                  <span>工单管理 · 流程审批 · 高效协同</span>
+                </div>
+                <i aria-hidden="true"></i>
+              </li>
+              <li>
+                <span class="card-ico" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M12 12.2a3.4 3.4 0 1 0-3.4-3.4A3.4 3.4 0 0 0 12 12.2zM5.2 20v-1.1A4.7 4.7 0 0 1 9.9 14.2h4.2A4.7 4.7 0 0 1 18.8 18.9V20H5.2z" /></svg>
+                </span>
+                <div>
+                  <strong>组织中心</strong>
+                  <span>组织架构 · 权责管理 · 人才发展</span>
+                </div>
+                <i aria-hidden="true"></i>
+              </li>
+            </ul>
+          </div>
+
+          <div class="hero-visual" aria-hidden="true">
+            <div class="viz-glow"></div>
+            <img class="viz-mascot" src="/login-hero.jpg" alt="" />
+          </div>
+        </div>
+
+        <p class="hero-foot">
+          <span>星脉甄选 × 京东生态 × 共创电商新未来</span>
+          <small>TOGETHER FOR A BRIGHTER FUTURE</small>
+        </p>
+      </section>
+
+      <section class="login-pane">
+        <form id="login-form" class="login-card" method="post" action="/api/auth/login" autocomplete="on" novalidate>
+          <h1>登录</h1>
+          <p class="login-lead">欢迎使用星脉甄选运营中心</p>
+
           <label class="field">
-            <span class="sr-only">账号名称</span>
-            <div class="field-box">
-              <i class="ico ico-user" aria-hidden="true"></i>
-              <input id="username" name="username" type="text" autocomplete="username" placeholder="请输入账号" required />
-            </div>
+            <span class="field-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-4.4 0-8 2.2-8 5v1h16v-1c0-2.8-3.6-5-8-5z" /></svg>
+            </span>
+            <input id="username" name="username" type="text" autocomplete="username" required placeholder="请输入账号" />
           </label>
+
           <label class="field">
-            <span class="sr-only">登录密码</span>
-            <div class="field-box">
-              <i class="ico ico-lock" aria-hidden="true"></i>
-              <input id="password" name="password" type="password" autocomplete="current-password" placeholder="请输入密码" required />
-              <button type="button" class="ghost-btn" data-toggle-password aria-label="显示密码"></button>
-            </div>
+            <span class="field-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M17 9h-1V7a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zm-7-2a2 2 0 0 1 4 0v2h-4zm7 12H7v-8h10z" /></svg>
+            </span>
+            <input id="password" name="password" type="password" autocomplete="current-password" required placeholder="请输入密码" />
+            <button class="eye" type="button" data-toggle-password aria-label="显示密码"></button>
           </label>
-          <div class="form-row">
+
+          <div class="login-row">
             <label class="remember">
               <input id="remember" name="remember" type="checkbox" />
-              <span>记住我</span>
+              记住我
             </label>
-            <button type="button" class="link-btn" data-forgot>忘记密码?</button>
+            <button class="forgot" type="button" data-forgot>忘记密码？</button>
           </div>
-          <button type="submit" class="primary-btn" data-submit>登录</button>
+
+          <button class="submit" type="submit" data-submit>登 录</button>
           <p class="error" data-error hidden></p>
+          <p class="hint">演示账号 luocheng / ChangeMe123!</p>
         </form>
-        <p class="hint">正式账号由管理员开通。演示：luocheng / ChangeMe123!</p>
-      </div>
-      <p class="pane-foot">数据 · 运营 · 组织 · 人才 · 增长<br /><span>DATA · OPERATION · ORGANIZATION · TALENT · GROWTH</span></p>
-      <button type="button" class="login-theme" data-login-theme aria-label="切换主题"></button>
-    </section>
-  </main>
-  <script>
-    (function () {
-      var KEY = "xingmai.rememberUsername";
-      var THEME_KEY = "xm-theme";
-      var form = document.getElementById("login-form");
-      var username = document.getElementById("username");
-      var password = document.getElementById("password");
-      var remember = document.getElementById("remember");
-      var error = document.querySelector("[data-error]");
-      var submit = document.querySelector("[data-submit]");
-      var toggle = document.querySelector("[data-toggle-password]");
-      var themeBtn = document.querySelector("[data-login-theme]");
-      var forgot = document.querySelector("[data-forgot]");
 
-      function applyTheme(theme) {
-        document.documentElement.setAttribute("data-theme", theme === "dark" ? "dark" : "light");
-      }
-      applyTheme(localStorage.getItem("xm-theme") || "light");
-      themeBtn.addEventListener("click", function () {
-        var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
-        localStorage.setItem(THEME_KEY, next);
-        applyTheme(next);
-      });
+        <p class="login-foot">
+          <span>数据 · 运营 · 组织 · 人才 · 增长</span>
+          <small>DATA · OPERATION · ORGANIZATION · TALENT · GROWTH</small>
+        </p>
+        <div class="login-wave" aria-hidden="true"></div>
+      </section>
+    </main>
 
-      var saved = localStorage.getItem(KEY);
-      if (saved) {
-        username.value = saved;
-        remember.checked = true;
-      }
+    <button type="button" class="login-theme" data-login-theme hidden aria-label="切换主题"></button>
 
-      toggle.addEventListener("click", function () {
-        var show = password.type === "password";
-        password.type = show ? "text" : "password";
-        toggle.classList.toggle("is-on", show);
-        toggle.setAttribute("aria-label", show ? "隐藏密码" : "显示密码");
-      });
+    <script>
+      (function () {
+        var KEY = "xingmai.rememberUsername";
+        var THEME_KEY = "xm-theme";
+        var form = document.getElementById("login-form");
+        var username = document.getElementById("username");
+        var password = document.getElementById("password");
+        var remember = document.getElementById("remember");
+        var error = document.querySelector("[data-error]");
+        var submit = document.querySelector("[data-submit]");
+        var toggle = document.querySelector("[data-toggle-password]");
+        var themeBtn = document.querySelector("[data-login-theme]");
+        var forgot = document.querySelector("[data-forgot]");
 
-      forgot.addEventListener("click", function () {
-        error.textContent = "请联系管理员开通或重置密码。";
-        error.hidden = false;
-      });
-
-      form.addEventListener("submit", async function (event) {
-        event.preventDefault();
-        error.hidden = true;
-        submit.disabled = true;
-        try {
-          var res = await fetch("/api/auth/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              username: username.value.trim(),
-              password: password.value,
-              remember: remember.checked
-            })
-          });
-          var data = await res.json();
-          if (!res.ok) throw new Error(data.error || "登录失败");
-          if (remember.checked) localStorage.setItem(KEY, username.value.trim());
-          else localStorage.removeItem(KEY);
-          window.location.href = "/";
-        } catch (err) {
-          error.textContent = err.message || "连不上服务器。请确认地址是 https://zx.xingmaierp.cc/login。";
-          error.hidden = false;
-        } finally {
-          submit.disabled = false;
+        function applyTheme(theme) {
+          document.documentElement.setAttribute("data-theme", theme === "dark" ? "dark" : "light");
         }
-      });
-    })();
-  </script>
-</body>
+        applyTheme(localStorage.getItem("xm-theme") || "light");
+        themeBtn.addEventListener("click", function () {
+          var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+          localStorage.setItem(THEME_KEY, next);
+          applyTheme(next);
+        });
+
+        var saved = localStorage.getItem(KEY);
+        if (saved) {
+          username.value = saved;
+          remember.checked = true;
+        }
+
+        toggle.addEventListener("click", function () {
+          var show = password.type === "password";
+          password.type = show ? "text" : "password";
+          toggle.classList.toggle("is-on", show);
+          toggle.setAttribute("aria-label", show ? "隐藏密码" : "显示密码");
+        });
+
+        forgot.addEventListener("click", function () {
+          error.textContent = "请联系管理员开通或重置密码。";
+          error.hidden = false;
+        });
+
+        form.addEventListener("submit", async function (event) {
+          event.preventDefault();
+          error.hidden = true;
+          submit.disabled = true;
+          try {
+            var res = await fetch("/api/auth/login", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                username: username.value.trim(),
+                password: password.value,
+                remember: remember.checked
+              })
+            });
+            var data = await res.json();
+            if (!res.ok) throw new Error(data.error || "登录失败");
+            if (remember.checked) localStorage.setItem(KEY, username.value.trim());
+            else localStorage.removeItem(KEY);
+            window.location.href = "/";
+          } catch (err) {
+            error.textContent = err.message || "连不上服务器。请确认地址是 https://zx.xingmaierp.cc/login。";
+            error.hidden = false;
+          } finally {
+            submit.disabled = false;
+          }
+        });
+      })();
+    </script>
+  </body>
 </html>
