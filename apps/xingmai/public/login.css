@@ -1,4 +1,4 @@
-/* LoginPage 0.1.82 — split tech-blue operations login */
+/* LoginPage 0.1.83 — split tech-blue operations login */
 :root {
   --login-bg: #f7f7f4;
   --login-ink: #14120b;
@@ -279,8 +279,8 @@ body {
 
 .hero-cards .card-ico svg {
   display: block;
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   margin: 0;
   fill: none;
   stroke: #fff;
