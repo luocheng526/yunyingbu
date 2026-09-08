@@ -40,6 +40,8 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.doesNotMatch(text, /<header class="site-header">/);
     assert.doesNotMatch(text, /--sidebar-width/);
     assert.match(text, /演示/);
+    assert.match(text, /aria-label="占位"/);
+    assert.match(text, /待开发/);
     for (const header of ["姓名", "角色", "所属中心", "状态"]) {
       assert.match(text, new RegExp(header));
     }
