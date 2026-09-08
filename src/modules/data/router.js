@@ -9,8 +9,12 @@ dataRouter.get("/nav", (_req, res) => {
   res.json(getNav());
 });
 
-dataRouter.get("/overview", (_req, res) => {
-  res.json(getOverview());
+dataRouter.get("/overview", async (_req, res, next) => {
+  try {
+    res.json(await getOverview());
+  } catch (err) {
+    next(err);
+  }
 });
 
 dataRouter.get("/stores/live", (_req, res) => {

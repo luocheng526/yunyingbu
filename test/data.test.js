@@ -7,7 +7,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { createApp } from "../src/app.js";
-import { getOverview } from "../src/modules/data/overview.js";
+import { getOverview, hydrateFromMysql } from "../src/modules/data/overview.js";
 import { patchAppSource } from "../src/modules/data/patch-app.js";
 
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -34,7 +34,7 @@ test("GET /api/data/overview returns demo cards and five events", async () => {
     const { res, text } = await get(base, "/api/data/overview");
     assert.equal(res.status, 200);
     const body = JSON.parse(text);
-    const expected = getOverview();
+    const expected = await getOverview();
     assert.equal(body.ok, true);
     assert.equal(body.demo, true);
     assert.equal(body.notice, "演示数据");
@@ -46,6 +46,14 @@ test("GET /api/data/overview returns demo cards and five events", async () => {
     assert.equal(body.events.length, 5);
     assert.deepEqual(body, expected);
   });
+});
+
+test("hydrateFromMysql stays exported for live notes-store smoke import", async () => {
+  assert.equal(typeof hydrateFromMysql, "function");
+  const { hydrateFromMysql: hydrateData } = await import("../src/modules/data/overview.js");
+  const result = await hydrateData();
+  assert.equal(result.ok, true);
+  assert.equal(result.skipped, true);
 });
 
 test("GET /data is the data center page with title, cards, table, and left-shell mount", async () => {
