@@ -1,11 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
+import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
+import { navMarkup } from "../home/nav-items.js";
 import { currentUser, publicProfile } from "./auth.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
+// xm-fast-shell 0.1.90
 
-export const SHELL_ASSET_VER = "0.1.83";
+export const SHELL_ASSET_VER = "0.1.90";
 export const APP_MODULES = {
   "/": "home",
   "/data": "data",
@@ -15,28 +18,83 @@ export const APP_MODULES = {
   "/releases": "releases",
   "/me": "me"
 };
+const SHELL_TITLES = {
+  "/": "首页",
+  "/data": "数据中心",
+  "/shen": "沈子晗运营中心",
+  "/han": "韩梦凯运营中心",
+  "/people": "人员管理",
+  "/releases": "版本发布中心",
+  "/me": "个人中心"
+};
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+export function injectBootUser(html, user) {
+  const text = String(html || "");
+  if (!user || !user.username || text.includes("__xmBootUser")) {
+    return text;
+  }
+  const tag = `    <script>window.__xmBootUser=${JSON.stringify(publicProfile(user))};</script>\n`;
+  if (text.includes("</head>")) {
+    return text.replace("</head>", tag + "  </head>");
+  }
+  return tag + text;
+}
 
 export function renderAppShell(href, user) {
   const key = String(href || "/").replace(/\/+$/, "") || "/";
   const id = APP_MODULES[key] || "home";
+  const title = SHELL_TITLES[key] || "星脉";
   const css =
     key === "/releases"
-      ? `    <link rel="preload" href="/releases.css?v=${SHELL_ASSET_VER}" as="style" />\n`
+      ? `    <link rel="stylesheet" href="/releases.css?v=${SHELL_ASSET_VER}" />\n`
       : "";
   const boot =
     user && user.username
       ? `    <script>window.__xmBootUser=${JSON.stringify(publicProfile(user))};</script>\n`
       : "";
+  const userName = escapeHtml((user && (user.displayName || user.username)) || "用户");
   return withSharedShell(`<!DOCTYPE html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>星脉</title>
+    <title>${title} · 星脉甄选</title>
 ${css}    <link rel="preload" href="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" as="script" />
 ${boot}    <script src="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" defer data-xm-mod="${key}"></script>
   </head>
-  <body class="xm-app-shell"></body>
+  <body class="xm-app xm-app-shell">
+    <div class="xm-shell">
+      ${navMarkup(key)}
+      <div class="xm-main">
+        <header class="xm-topbar">
+          <div class="xm-tabs" aria-label="页签"><span class="xm-tab is-active">${title}</span></div>
+          <div class="xm-user"><span class="xm-username" id="xm-username">${userName}</span></div>
+        </header>
+        <div class="xm-content" id="xm-content"></div>
+      </div>
+    </div>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        var key = ${JSON.stringify(key)};
+        var root = document.getElementById("xm-content");
+        if (!root || key === "/") return;
+        if (root.getAttribute("data-xm-mounted") || root.getAttribute("data-xm-rel-mounted") === "1") return;
+        var mod = window.XmModules && window.XmModules[key];
+        if (!mod || typeof mod.mount !== "function") return;
+        root.setAttribute("data-xm-mounted", key);
+        if (key === "/releases") root.setAttribute("data-xm-rel-mounted", "1");
+        window.__xmUnmount = mod.mount(root);
+      });
+    </script>
+  </body>
 </html>`);
 }
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public");
@@ -48,6 +106,48 @@ const SHELL_ASSET_FILES = {
 };
 const htmlFileCache = new Map();
 const HTML_CACHE_MS = 60_000;
+const gzipFileCache = new Map();
+
+function gzipBuffer(raw) {
+  const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(String(raw));
+  if (buf.length < 256) {
+    return null;
+  }
+  return zlib.gzipSync(buf, { level: 6 });
+}
+
+function attachGzip(req, res) {
+  if (res.__xmGzipAttached) {
+    return;
+  }
+  res.__xmGzipAttached = true;
+  const send = res.send.bind(res);
+  res.send = function gzipSend(body) {
+    if (res.headersSent || res.getHeader("content-encoding")) {
+      return send(body);
+    }
+    if (typeof body !== "string" && !Buffer.isBuffer(body)) {
+      return send(body);
+    }
+    const type = String(res.getHeader("content-type") || "");
+    if (type && !/html|json|javascript|ecmascript|css|svg|xml|text\//i.test(type)) {
+      return send(body);
+    }
+    const raw = Buffer.isBuffer(body) ? body : Buffer.from(String(body));
+    const accept = String(req.headers["accept-encoding"] || "");
+    if (raw.length < 256 || !/\bgzip\b/i.test(accept)) {
+      return send(body);
+    }
+    const gz = gzipBuffer(raw);
+    if (!gz || gz.length >= raw.length) {
+      return send(body);
+    }
+    res.setHeader("Content-Encoding", "gzip");
+    res.setHeader("Vary", "Accept-Encoding");
+    res.removeHeader("Content-Length");
+    return send(gz);
+  };
+}
 const HAN_API_CACHE_MS = 2500;
 const HAN_API_PATHS = new Set([
   "/api/han/tasks",
@@ -172,17 +272,22 @@ export function readThemedHtml(filePath) {
 }
 
 export function injectHtmlShell(req, res, next) {
+  attachGzip(req, res);
   const send = res.send.bind(res);
   res.send = function injectSend(body) {
     if (typeof body === "string" && /<html[\s>]/i.test(body)) {
       res.setHeader("Cache-Control", "private, no-store");
+      let html = body;
       if (
-        body.includes(`/shared/nav.js?v=${SHELL_ASSET_VER}`) ||
-        isLoginHtml(body)
+        !html.includes(`/shared/nav.js?v=${SHELL_ASSET_VER}`) &&
+        !isLoginHtml(html)
       ) {
-        return send(body);
+        html = withSharedShell(html);
       }
-      return send(withSharedShell(body));
+      if (req.user) {
+        html = injectBootUser(html, req.user);
+      }
+      return send(html);
     }
     return send(body);
   };
@@ -238,7 +343,28 @@ function serveShellAsset(req, res) {
     "Cache-Control",
     versioned ? "public, max-age=86400, immutable" : "public, max-age=0, must-revalidate"
   );
-  res.sendFile(path.join(publicDir, rel));
+  const abs = path.join(publicDir, rel);
+  if (/\.(?:js|css)$/i.test(rel)) {
+    const stat = fs.statSync(abs);
+    const cacheKey = `${abs}:${stat.mtimeMs}:${stat.size}`;
+    let hit = gzipFileCache.get(cacheKey);
+    if (!hit) {
+      const raw = fs.readFileSync(abs);
+      hit = { raw, gz: gzipBuffer(raw) };
+      gzipFileCache.set(cacheKey, hit);
+    }
+    res.type(rel.endsWith(".css") ? "css" : "js");
+    const accept = String(req.headers["accept-encoding"] || "");
+    if (hit.gz && hit.gz.length < hit.raw.length && /\bgzip\b/i.test(accept)) {
+      res.setHeader("Content-Encoding", "gzip");
+      res.setHeader("Vary", "Accept-Encoding");
+      res.send(hit.gz);
+      return true;
+    }
+    res.send(hit.raw);
+    return true;
+  }
+  res.sendFile(abs);
   return true;
 }
 
@@ -250,7 +376,12 @@ function serveHomeIndex(req, res) {
   if (destPath !== "/" && destPath !== "/index.html") {
     return false;
   }
-  res.status(200).type("html").set("Cache-Control", "private, no-store").send(readThemedHtml(path.join(publicDir, "index.html")));
+  attachGzip(req, res);
+  let html = readThemedHtml(path.join(publicDir, "index.html"));
+  if (req.user) {
+    html = injectBootUser(html, req.user);
+  }
+  res.status(200).type("html").set("Cache-Control", "private, no-store").send(html);
   return true;
 }
 
@@ -289,6 +420,7 @@ function serveHanApiCache(req, res) {
 }
 
 export function requireLoginUnlessPublic(req, res, next) {
+  attachGzip(req, res);
   if (isPublicRequest(req)) {
     if (serveShellAsset(req, res)) {
       return;
