@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>版本发布中心</title>
-    <link rel="stylesheet" href="/releases.css?v=sc-ui-4" />
+    <link rel="stylesheet" href="/releases.css?v=sc-ui-8" />
     <style>
       #upgrade-mask,
       html > #upgrade-mask {
@@ -118,7 +118,7 @@
       <section class="oc-card panel">
         <div class="pane on" id="pane-queue">
           <h3>待上线</h3>
-          <p class="hint lead">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。版本号由本闸门统一发放，全站一条号 0.1.N-说明，各模块不得自领；同一号段不能跨模块再用。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。整页刷新并读完新数据后才关升级遮罩。有的升级会掉登录：会话还在就自动刷新完结；需要重新登录时遮罩停住，请你登录后再回本页完结，不会自动跳登录。有新单据约 15 秒内自动提示，不会自动点通过。待上线、版本记录、运行日志都分页，每页 20 条。</p>
+          <p class="hint lead">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。版本号由本闸门统一发放，全站一条号 0.1.N-说明，各模块不得自领；同一号段不能跨模块再用。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。站点恢复后就地刷新并关升级遮罩，不再整页跳转。有的升级会掉登录：会话还在就自动刷新完结；需要重新登录时遮罩停住，请你登录后再回本页完结，不会自动跳登录。有新单据约 15 秒内自动提示，不会自动点通过。待上线、版本记录、运行日志都分页，每页 20 条。版本记录和运行日志按页向服务器取，刷新只读当前页，不再一次拉全表。</p>
           <div class="caps" id="stat-caps"></div>
           <div class="note banner">发布纪律：本页是唯一发版闸门。只执行交来的单据 + 本页「通过」。按提交时间点第 1 位；一把锁，禁止抢发；下一条不会自动发。「帮我上线」无效。制品没有完整完成不要进本页：须有模块、文件、验收、是否重启，源目录文件要齐，改到的 src 先过语法检查。未完成的单当场拒绝，不会入队，防止系统崩溃卡住。新文件只放源目录，不要先拷到线上；点通过才落地。闸门不读 git，也不拉 Cloud 工作区，交单只登记路径。可带 contents（路径→正文）或 ref（分支/提交），闸门会先写入源目录。源目录与线上相同会失败。</div>
           <div id="lock-view" class="lock-box idle">当前空闲，没有发布任务。</div>
@@ -126,14 +126,14 @@
         </div>
         <div class="pane" id="pane-history">
           <h3>版本记录</h3>
-          <p class="hint">各模块当前版本来自最近一次成功发布。下一号由本闸门发放。版本记录只记每次升级的简要内容，从最新到最老，每页 20 条。上方统计已成功落地的版本数，含已回滚。详细流水在「运行日志」。有升级前快照的单据可以回滚；回滚占用发布锁，不会自动发下一单。</p>
+          <p class="hint">各模块当前版本来自最近一次成功发布。下一号由本闸门发放。版本记录只记每次升级的简要内容，从最新到最老，每页 20 条，按页向服务器取。上方统计已成功落地的版本数，含已回滚。详细流水在「运行日志」。有升级前快照的单据可以回滚；回滚占用发布锁，不会自动发下一单。</p>
           <div id="history-stats" class="history-stats">已上线发布 <b>0</b> 个版本</div>
           <div id="current-versions" class="caps"></div>
           <div id="history-view"></div>
         </div>
         <div class="pane" id="pane-logs">
           <h3>运行日志</h3>
-          <p class="hint">每张单上的发版流水 log。记录多时分页查看，每页 20 条。</p>
+          <p class="hint">每张单上的发版流水 log。按页向服务器取，每页 20 条，刷新只读当前页。</p>
           <div id="logs-view" class="log-list"></div>
         </div>
       </section>
@@ -190,6 +190,11 @@
         el.textContent = message;
         el.className = "flash show" + (isError ? " err" : "");
       }
+      function activeTabName() {
+        const tab = pageRoot().querySelector(".oc-tab.active");
+        return (tab && tab.getAttribute("data-tab")) || "queue";
+      }
+
       function showTab(name) {
         const root = pageRoot();
         root.querySelectorAll(".oc-tab").forEach(function (node) {
@@ -206,6 +211,11 @@
           scroller.scrollTop = 0;
         } else {
           window.scrollTo(0, 0);
+        }
+        if (name === "history" || name === "logs") {
+          refresh({ tab: name }).catch(function (err) {
+            flash(err.message, true);
+          });
         }
       }
       function goLogin() {
@@ -558,6 +568,44 @@
         return res.status === 200;
       }
 
+      async function probePage() {
+        try {
+          const res = await fetch("/releases?probe=" + Date.now(), {
+            credentials: "same-origin",
+            cache: "no-store",
+            headers: { Accept: "text/html" }
+          });
+          if (res.status !== 200) {
+            return false;
+          }
+          const text = await res.text();
+          return text.indexOf("upgrade-mask") !== -1 || text.indexOf("releases.js") !== -1;
+        } catch (_err) {
+          return false;
+        }
+      }
+
+      async function waitUntilSiteReady(needRestart) {
+        if (!needRestart) {
+          return probeHealth();
+        }
+        let okStreak = 0;
+        for (let i = 0; i < 40; i += 1) {
+          const healthy = await probeHealth();
+          const pageOk = healthy ? await probePage() : false;
+          if (healthy && pageOk) {
+            okStreak += 1;
+            if (okStreak >= 2) {
+              return true;
+            }
+          } else {
+            okStreak = 0;
+          }
+          await sleep(700);
+        }
+        return false;
+      }
+
       async function loadTicket(id) {
         const all = await api("/api/releases", { skipLoginRedirect: true });
         return (all.items || []).find(function (item) { return item.id === id; }) || null;
@@ -643,17 +691,13 @@
                   version: version || ticket.version,
                   id: id
                 });
-                window.location.replace("/releases?reloaded=" + Date.now());
-                await sleep(1200);
-                if (maskIsOpen() && (await probeSession())) {
-                  window.__xmUpgradePass = false;
-                  await finishUpgradeOk({
-                    version: version || ticket.version,
-                    id: id
-                  });
-                }
+                await waitUntilSiteReady(needRestart);
                 window.__xmUpgradePass = false;
-                return "reloading";
+                await finishUpgradeOk({
+                  version: version || ticket.version,
+                  id: id
+                });
+                return "landed";
               }
               if (!sessionOk && landed && Date.now() - healthOkSince >= 2000) {
                 window.__xmUpgradePass = false;
@@ -699,13 +743,13 @@
         );
       }
 
-      function renderStats(items, ready) {
+      function renderStats(summary, ready) {
         const caps = liveEl("stat-caps");
-        const queued = countBy(items, "queued");
-        const approved = countBy(items, "approved");
-        const publishing = countBy(items, "publishing");
-        const failed = countBy(items, "failed");
-        const success = countBy(items, "success");
+        const queued = Number(summary && summary.queued) || 0;
+        const approved = Number(summary && summary.approved) || 0;
+        const publishing = Number(summary && summary.publishing) || 0;
+        const failed = Number(summary && summary.failed) || 0;
+        const success = Number(summary && summary.success) || 0;
         const runVer = ready && ready.version ? String(ready.version) : "";
         if (caps) {
           caps.innerHTML =
@@ -754,14 +798,14 @@
         return (items || []).filter(function (item) { return item.status === "success"; });
       }
 
-      function renderHistoryStats(items) {
+      function renderHistoryStats(summary) {
         const el = liveEl("history-stats");
         if (!el) {
           return;
         }
-        const success = successReleases(items);
-        const rolled = success.filter(function (item) { return item.rolledBack; }).length;
-        el.innerHTML = "已上线发布 <b>" + success.length + "</b> 个版本" +
+        const success = Number(summary && summary.success) || 0;
+        const rolled = Number(summary && summary.rolledBack) || 0;
+        el.innerHTML = "已上线发布 <b>" + success + "</b> 个版本" +
           (rolled ? "（其中 " + rolled + " 个已回滚）" : "");
       }
 
@@ -881,17 +925,32 @@
         );
       }
 
-      function renderHistory(items, locked) {
+      function pageInfoFromBoard(result, key) {
+        const total = Number(result && result.total) || 0;
+        const pageCount = Math.max(1, Number(result && result.pageCount) || 1);
+        const page = Math.min(Math.max(1, Number(result && result.page) || listPages[key] || 1), pageCount);
+        listPages[key] = page;
+        const start = (page - 1) * PAGE_SIZE;
+        return {
+          slice: (result && result.items) || [],
+          page,
+          pageCount,
+          total,
+          from: total ? start + 1 : 0,
+          to: Math.min(start + ((result && result.items) || []).length, total)
+        };
+      }
+
+      function renderHistory(result, locked) {
         const el = liveEl("history-view");
         if (!el) {
           return;
         }
-        const success = successReleases(items).slice().sort(newestFirst);
-        if (!success.length) {
+        const paged = pageInfoFromBoard(result, "history");
+        if (!paged.total) {
           el.innerHTML = '<div class="empty">还没有成功发布的版本记录</div>';
           return;
         }
-        const paged = paginate(success, "history");
         el.innerHTML =
           "<table><thead><tr><th>版本</th><th>模块</th><th>摘要</th><th>时间</th><th>回滚</th></tr></thead><tbody>" +
           paged.slice.map(function (item) {
@@ -913,17 +972,16 @@
           "</tbody></table>" + renderPager("history", paged);
       }
 
-      function renderLogs(items) {
+      function renderLogs(result) {
         const el = liveEl("logs-view");
         if (!el) {
           return;
         }
-        const rows = items.filter(function (item) { return item.log; }).slice().sort(newestFirst);
-        if (!rows.length) {
+        const paged = pageInfoFromBoard(result, "logs");
+        if (!paged.total) {
           el.innerHTML = '<div class="empty">暂无发版流水</div>';
           return;
         }
-        const paged = paginate(rows, "logs");
         el.innerHTML = paged.slice.map(function (item) {
           return (
             "<article class=\"log-item\">" +
@@ -935,27 +993,48 @@
         }).join("") + renderPager("logs", paged);
       }
 
-      async function refresh() {
+      async function refreshHistory(locked) {
+        const el = liveEl("history-view");
+        if (el) {
+          el.innerHTML = '<div class="empty">正在读取本页版本记录…</div>';
+        }
+        const result = await api("/api/releases?view=history&page=" + listPages.history + "&limit=" + PAGE_SIZE);
+        renderHistory(result, locked);
+      }
+
+      async function refreshLogs() {
+        const el = liveEl("logs-view");
+        if (el) {
+          el.innerHTML = '<div class="empty">正在读取本页运行日志…</div>';
+        }
+        const result = await api("/api/releases?view=logs&page=" + listPages.logs + "&limit=" + PAGE_SIZE);
+        renderLogs(result);
+      }
+
+      async function refresh(opts) {
+        const tab = (opts && opts.tab) || activeTabName();
         clearShellPending();
-        const [all, queue, lock, versions, ready, me] = await Promise.all([
-          api("/api/releases"),
+        const [queue, lock, versions, ready, me, summary] = await Promise.all([
           api("/api/releases/queue"),
           api("/api/releases/lock"),
           api("/api/releases/versions"),
           api("/api/releases/readyz"),
-          api("/api/auth/me")
+          api("/api/auth/me"),
+          api("/api/releases?view=summary")
         ]);
-        const items = all.items || [];
         setText("who", me.displayName || me.username || "罗成");
-        renderStats(items, ready);
+        renderStats(summary, ready);
         renderLock(lock, ready);
-        renderHistoryStats(items);
+        renderHistoryStats(summary);
         renderCurrentVersions(versions);
         const queued = queue.items || [];
         knownQueueIds = queued.map(function (item) { return item.id; });
         renderQueue(queued, lock.locked, versions);
-        renderHistory(items, lock.locked);
-        renderLogs(items);
+        if (tab === "history") {
+          await refreshHistory(lock.locked);
+        } else if (tab === "logs") {
+          await refreshLogs();
+        }
         return lock;
       }
 
@@ -996,6 +1075,9 @@
         tab.dataset.bound = "1";
         tab.addEventListener("click", function () {
           showTab(tab.getAttribute("data-tab"));
+          if (typeof tab.blur === "function") {
+            tab.blur();
+          }
         });
       });
 
@@ -1057,7 +1139,7 @@
             const needRestart = card.getAttribute("data-restart") === "1";
             const version = card.getAttribute("data-version") || "";
             const passResult = await runPass(id, needRestart, version);
-            if (passResult === "reloading" || passResult === "need-login") return;
+            if (passResult === "reloading" || passResult === "landed" || passResult === "need-login") return;
             if (passResult === "failed") {
               btn.disabled = false;
             }

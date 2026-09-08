@@ -176,7 +176,11 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /通过已落地，但健康检查超时/);
     assert.match(text, /正在升级，请勿关闭/);
     assert.match(text, /\/api\/health/);
-    assert.match(text, /location\.replace\("\/releases\?reloaded="/);
+    assert.doesNotMatch(text, /location\.replace\("\/releases\?reloaded="/);
+    assert.match(text, /function waitUntilSiteReady/);
+    assert.match(text, /function probePage/);
+    assert.match(text, /function finishUpgradeOk/);
+    assert.match(text, /return "landed"/);
     assert.match(text, /oc-after-upgrade/);
     assert.match(text, /正在刷新界面/);
     assert.match(text, /consumePendingUpgrade/);
@@ -211,8 +215,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /sc-ui-4/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-4/);
+    assert.match(text, /sc-ui-8/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-8/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
     assert.match(text, /id="xm-releases-boot"/);
@@ -242,6 +246,10 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /newestFirst/);
     assert.match(text, /PAGE_SIZE = 20/);
     assert.match(text, /function paginate/);
+    assert.match(text, /view=history/);
+    assert.match(text, /function refreshHistory/);
+    assert.match(text, /function refreshLogs/);
+    assert.match(text, /view=summary/);
     assert.match(text, /function renderPager/);
     assert.match(text, /上一页/);
     assert.match(text, /下一页/);
@@ -289,6 +297,18 @@ test("release board scripts parse so tab refresh can run", () => {
   assert.doesNotThrow(() => new Function(theme));
   assert.match(theme, /function autoMountReleases/);
   assert.match(theme, /data-xm-rel-mounted/);
+  assert.match(theme, /function waitUntilSiteReady/);
+  assert.match(theme, /function finishUpgradeInPlace/);
+  assert.match(theme, /return "landed"/);
+  assert.doesNotMatch(theme, /location\.replace\("\/releases\?reloaded="/);
+  assert.match(theme, /sc-ui-8/);
+  assert.match(theme, /view=history/);
+  assert.match(theme, /function refreshHistory/);
+  assert.match(theme, /function refreshLogs/);
+  assert.match(theme, /max-width: none !important/);
+  assert.doesNotMatch(theme, /border: 2px solid #dc2626/);
+  assert.match(theme, /tab\.blur/);
+  assert.match(theme, /-webkit-tap-highlight-color: transparent/);
 });
 
 test("releases.html has no login form and sends users to /login", () => {
@@ -302,7 +322,9 @@ test("releases.html has no login form and sends users to /login", () => {
   assert.doesNotMatch(html, /提交发布申请/);
   assert.match(html, /id="refresh-btn"/);
   assert.match(html, /id="upgrade-mask"/);
-  assert.match(html, /location\.replace\("\/releases\?reloaded="/);
+  assert.doesNotMatch(html, /location\.replace\("\/releases\?reloaded="/);
+  assert.match(html, /function waitUntilSiteReady/);
+  assert.match(html, /tab\.blur/);
   assert.match(html, /oc-after-upgrade/);
   assert.match(html, /正在刷新界面/);
   assert.match(html, /consumePendingUpgrade/);
@@ -361,7 +383,8 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /#history-view/);
     assert.match(text, /#logs-view/);
     assert.match(text, /\.xm-content:has\(\.oc-wrap\)/);
-    assert.match(text, /height: 0 !important/);
+    assert.match(text, /height: auto !important/);
+    assert.doesNotMatch(text, /(?<!min-)height:\s*0\s*!important/);
     assert.match(text, /100dvh/);
     assert.match(text, /touch-action: pan-y/);
     assert.match(text, /\.oc-pager/);
@@ -386,9 +409,13 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /\.history-stats/);
     assert.match(text, /\.oc-hero-card/);
     assert.match(text, /\.oc-tab-num/);
+    assert.match(text, /\.oc-tab:focus-visible/);
+    assert.match(text, /-webkit-tap-highlight-color:\s*transparent/);
     assert.match(text, /\.sc-table/);
-    assert.match(text, /--oc-frame:\s*#dc2626/);
-    assert.match(text, /border: 2px solid var\(--oc-frame/);
+    assert.doesNotMatch(text, /--oc-frame:\s*#dc2626/);
+    assert.doesNotMatch(text, /border: 2px solid var\(--oc-frame/);
+    assert.match(text, /max-width:\s*none\s*!important/);
+    assert.match(text, /border:\s*0\s*!important/);
   });
 });
 
@@ -413,7 +440,10 @@ test("injectReleasesCssLink turns the theme preload into a real stylesheet", () 
   assert.match(out, /rel="stylesheet"/);
   assert.match(out, /#history-view/);
   assert.match(out, /#logs-view/);
-  assert.match(out, /overflow-y:scroll/);
+  assert.match(out, /overflow-y:auto/);
+  assert.doesNotMatch(out, /(?<!min-)height:0!important/);
+  assert.match(out, /data-rel-fallback/);
+  assert.match(out, /function clearPending/);
   assert.match(out, /delete init\.signal/);
   assert.match(out, /\/api\/releases/);
   assert.doesNotMatch(out, /rel="preload" href="\/releases\.css/);
@@ -1624,6 +1654,40 @@ test("formatExecError keeps stderr for the board", () => {
   });
   assert.match(text, /stderr: no such file/);
   assert.match(text, /code=ENOENT/);
+});
+
+test("history and logs board views page slim rows", async () => {
+  await withServer(async (base) => {
+    const created = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("board-page", "Eve", "版本发布中心", "分页")
+    });
+    const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
+      method: "POST",
+      body: "{}"
+    });
+    assert.equal(pub.res.status, 200, pub.body.error);
+    const summary = await json(base, "/api/releases?view=summary");
+    assert.equal(summary.res.status, 200);
+    assert.ok(summary.body.success >= 1);
+    assert.equal(summary.body.items, undefined);
+    const history = await json(base, "/api/releases?view=history&page=1&limit=20");
+    assert.equal(history.res.status, 200);
+    assert.ok(Array.isArray(history.body.items));
+    assert.equal(history.body.page, 1);
+    assert.ok(history.body.total >= 1);
+    const row = history.body.items.find((item) => item.id === created.body.item.id);
+    assert.ok(row);
+    assert.equal(row.log, undefined);
+    const logs = await json(base, "/api/releases?view=logs&page=1&limit=20");
+    assert.equal(logs.res.status, 200);
+    const logRow = (logs.body.items || []).find((item) => item.id === created.body.item.id);
+    assert.ok(logRow);
+    assert.equal(typeof logRow.log, "string");
+    assert.ok(logRow.log.length > 0);
+    const all = await json(base, "/api/releases");
+    assert.ok((all.body.items || []).some((item) => item.id === created.body.item.id && item.log));
+  });
 });
 
 test("successful version cannot be queued again; versions lists current", async () => {

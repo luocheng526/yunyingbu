@@ -207,7 +207,23 @@ export function createReleasesRouter(options = {}) {
     res.status(500).json({ ok: false, error: result.error, item, version: item.version });
   }
 
-  router.get("/", async (_req, res) => {
+  router.get("/", async (req, res) => {
+    const view = String(req.query?.view || "");
+    const page = Number(req.query?.page) || 1;
+    const limit = Number(req.query?.limit) || 20;
+    if (view === "summary") {
+      res.json(withCharter({ ok: true, ...(await store.boardSummary()) }));
+      return;
+    }
+    if (view === "history") {
+      const result = await store.historyPage(page, limit);
+      res.json(withCharter({ ok: true, ...result, items: withSnapList(result.items) }));
+      return;
+    }
+    if (view === "logs") {
+      res.json(withCharter({ ok: true, ...(await store.logsPage(page, limit)) }));
+      return;
+    }
     res.json(withCharter({ ok: true, items: withSnapList(await listed()) }));
   });
 
@@ -220,7 +236,8 @@ export function createReleasesRouter(options = {}) {
   });
 
   router.get("/versions", async (_req, res) => {
-    res.json(withCharter({ ok: true, ...listModuleVersions(withSnapList(await listed())) }));
+    const rows = typeof store.versionRows === "function" ? await store.versionRows() : await listed();
+    res.json(withCharter({ ok: true, ...listModuleVersions(withSnapList(rows)) }));
   });
 
   router.get("/next", async (req, res) => {
