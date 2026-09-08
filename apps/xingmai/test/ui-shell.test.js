@@ -22,7 +22,7 @@ test("shared shell assets are public", async () => {
   assert.equal(loginCss.status, 200);
   assert.equal(ocCss.status, 200);
   assert.match(String(js.headers.get("cache-control") || ""), /must-revalidate/);
-  const versionedJs = await fetch(`${base}/shared/nav.js?v=0.1.52`);
+  const versionedJs = await fetch(`${base}/shared/nav.js?v=0.1.63`);
   assert.match(String(versionedJs.headers.get("cache-control") || ""), /max-age=86400/);
   const cssText = await css.text();
   const jsText = await js.text();
@@ -31,7 +31,7 @@ test("shared shell assets are public", async () => {
   assert.match(cssText, /html\[data-theme="dark"\]/);
   assert.match(cssText, /\.xm-shell\.is-pending/);
   assert.match(cssText, /\.xm-sider/);
-  assert.match(jsText, /xm-shell-perf 0\.1\.52/);
+  assert.match(jsText, /xm-shell-perf 0\.1\.63/);
   assert.match(jsText, /aside class="xm-sider"/);
   const homeHtml = readFileSync(join(root, "public/index.html"), "utf8");
   assert.match(homeHtml, /工作台/);
@@ -44,6 +44,10 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /function wrapHanFetch\(/);
   assert.match(jsText, /function isAppDest\(/);
   assert.match(jsText, /function warmAppPages\(/);
+  assert.match(jsText, /function cachedHtml\(/);
+  assert.match(jsText, /keepalive: true/);
+  assert.match(jsText, /sessionStorage\.removeItem\("xm-me"\)/);
+  assert.doesNotMatch(jsText, /warmBusy/);
   assert.match(jsText, /function trackPageTimers\(/);
   assert.match(jsText, /function warmUpstream\(/);
   assert.match(jsText, /AbortController/);
@@ -126,8 +130,8 @@ test("page renderer injects shared shell onto module html", async () => {
     '<!DOCTYPE html><html><head></head><body class="oc-page"><div class="oc-tab">待上线</div></body></html>'
   );
   assert.match(injected, /\/shared\/layout\.css/);
-  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.52/);
-  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.52"/);
+  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.63/);
+  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.63"/);
   assert.match(injected, /localStorage.getItem\("xm-theme"\)/);
   const login = withSharedShell('<html><head></head><body class="login-page"></body></html>');
   assert.doesNotMatch(login, /\/shared\/nav\.js/);
@@ -151,6 +155,9 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.match(authJs, /scryptAsync/);
   assert.match(authJs, /async function verifyPassword/);
   assert.match(authJs, /function hashPasswordSync/);
+  assert.match(authJs, /dropSession\(sid\)\.catch/);
+  assert.doesNotMatch(authJs, /await dropSession/);
+  assert.match(authJs, /connectTimeout: 2000/);
   const meHtml = readFileSync(join(root, "public/me.html"), "utf8");
   assert.match(meHtml, /sessionStorage\.getItem\("xm-me"\)/);
   assert.match(meHtml, /__xmMeAt/);

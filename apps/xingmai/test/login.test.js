@@ -81,3 +81,20 @@ test("login and password change stay async so scrypt does not block the event lo
   const next = await login("罗成", "Changed456!");
   assert.equal(next.status, 200);
 });
+
+test("logout returns immediately and clears the session cookie", async () => {
+  const res = await login("罗成", "ChangeMe123!");
+  assert.equal(res.status, 200);
+  const cookie = String(res.headers.get("set-cookie") || "").split(";")[0];
+  const started = Date.now();
+  const out = await fetch(`${base}/api/auth/logout`, {
+    method: "POST",
+    headers: { cookie, Accept: "application/json" }
+  });
+  assert.equal(out.status, 200);
+  assert.equal((await out.json()).ok, true);
+  assert.ok(Date.now() - started < 200);
+  assert.match(String(out.headers.get("set-cookie") || ""), /Max-Age=0/);
+  const me = await fetch(`${base}/api/auth/me`, { headers: { cookie } });
+  assert.equal(me.status, 401);
+});

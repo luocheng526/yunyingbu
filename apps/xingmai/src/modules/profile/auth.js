@@ -60,6 +60,9 @@ export async function getPool() {
       ...cfg,
       waitForConnections: true,
       connectionLimit: 10,
+      connectTimeout: 2000,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 10000,
       namedPlaceholders: false
     });
   }
@@ -485,15 +488,13 @@ authRouter.post("/login", async (req, res) => {
   res.json({ ok: true, remember, user: publicProfile(user) });
 });
 
-authRouter.post("/logout", async (req, res) => {
+authRouter.post("/logout", (req, res) => {
   const sid = parseCookies(req)[COOKIE_NAME];
   if (sid) {
     sessions.delete(sid);
-    try {
-      await dropSession(sid);
-    } catch (err) {
+    dropSession(sid).catch(function (err) {
       console.error("session delete failed", err);
-    }
+    });
   }
   clearSessionCookie(res, req);
   res.json({ ok: true });

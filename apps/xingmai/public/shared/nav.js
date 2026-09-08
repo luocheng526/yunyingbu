@@ -1,4 +1,4 @@
-/* xm-shell-perf 0.1.52 */
+/* xm-shell-perf 0.1.63 */
 (function () {
   const items = [
     { href: "/", label: "首页" },
@@ -77,9 +77,10 @@
 
   let current = window.location.pathname.replace(/\/+$/, "") || "/";
   const htmlLoads = new Map();
+  const htmlCache = new Map();
+  const HTML_CACHE_MS = 300000;
   let navGen = 0;
   let navAbort = null;
-  let warmBusy = true;
   const THEME_KEY = "xm-theme";
   const cnFmt = new Intl.DateTimeFormat("zh-CN", {
     timeZone: "Asia/Shanghai",
@@ -216,7 +217,7 @@
   if (!document.querySelector('link[href*="/shared/layout.css"]')) {
     const css = document.createElement("link");
     css.rel = "stylesheet";
-    css.href = "/shared/layout.css?v=0.1.52";
+    css.href = "/shared/layout.css?v=0.1.63";
     document.head.appendChild(css);
   }
 
@@ -318,13 +319,17 @@
     if (logoutBtn && !logoutBtn.dataset.bound) {
       logoutBtn.dataset.bound = "1";
       logoutBtn.addEventListener("click", function () {
+        logoutBtn.disabled = true;
+        try {
+          sessionStorage.removeItem("xm-me");
+        } catch (_err) {}
         fetch("/api/auth/logout", {
           method: "POST",
           credentials: "same-origin",
-          headers: { Accept: "application/json" }
-        }).finally(function () {
-          window.location.replace("/login");
-        });
+          headers: { Accept: "application/json" },
+          keepalive: true
+        }).catch(function () {});
+        window.location.replace("/login");
       });
     }
   }
@@ -345,7 +350,22 @@
     }
   }
 
+  function cachedHtml(dest) {
+    const hit = htmlCache.get(dest);
+    if (hit && Date.now() - hit.at < HTML_CACHE_MS) {
+      return hit.text;
+    }
+    if (hit) {
+      htmlCache.delete(dest);
+    }
+    return "";
+  }
+
   function loadHtml(dest, signal) {
+    const text = cachedHtml(dest);
+    if (text) {
+      return Promise.resolve(text);
+    }
     const hit = htmlLoads.get(dest);
     if (hit) {
       return hit;
@@ -363,6 +383,9 @@
         throw new Error("nav " + res.status);
       }
       return res.text();
+    }).then(function (text) {
+      htmlCache.set(dest, { at: Date.now(), text: text });
+      return text;
     }).catch(function (err) {
       htmlLoads.delete(dest);
       throw err;
@@ -370,7 +393,7 @@
     htmlLoads.set(dest, pending);
     setTimeout(function () {
       htmlLoads.delete(dest);
-    }, 60000);
+    }, HTML_CACHE_MS);
     return pending;
   }
 
@@ -492,8 +515,15 @@
     trackPageTimers(function () {
       activateScripts(content);
     });
-    rewriteTimeNodes(content);
-    watchStampRewrites();
+    if (window.requestAnimationFrame) {
+      window.requestAnimationFrame(function () {
+        rewriteTimeNodes(content);
+        watchStampRewrites();
+      });
+    } else {
+      rewriteTimeNodes(content);
+      watchStampRewrites();
+    }
     startClock();
   }
 
@@ -515,6 +545,15 @@
     navGen += 1;
     const gen = navGen;
     highlight(next);
+    const ready = cachedHtml(next);
+    if (ready) {
+      applyHtml(ready);
+      if (push) {
+        history.pushState({ xm: true, path: next }, "", next);
+      }
+      setPending(false);
+      return;
+    }
     setPending(true);
     if (navAbort) {
       try {
@@ -579,9 +618,6 @@
         if (!a) {
           return;
         }
-        if (warmBusy) {
-          return;
-        }
         const dest = appPath(a.href);
         if (dest && dest !== current && isAppDest(dest)) {
           loadHtml(dest);
@@ -599,28 +635,15 @@
       return;
     }
     window.__xmWarmPages = true;
-    const hrefs = items
-      .map(function (item) {
-        return item.href;
-      })
-      .filter(function (href) {
-        return href !== "/releases";
-      })
-      .concat(["/releases"]);
-    let i = 0;
-    function next() {
-      if (i >= hrefs.length) {
-        warmBusy = false;
+    items.forEach(function (item, idx) {
+      const dest = appPath(item.href);
+      if (!dest || dest === current) {
         return;
       }
-      const dest = appPath(hrefs[i]);
-      i += 1;
-      if (dest && dest !== current) {
+      setTimeout(function () {
         loadHtml(dest);
-      }
-      setTimeout(next, 400);
-    }
-    setTimeout(next, 800);
+      }, idx * 60);
+    });
   }
 
   function warmUpstream() {
