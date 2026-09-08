@@ -25,7 +25,7 @@ export function dangerousAppJsReason(body = {}) {
   return "";
 }
 
-export const SHELL_OWNER_MODULE = "首页";
+export const SHELL_OWNER_MODULE = "主框架";
 export const SHELL_FILES = [
   "public/shared/nav.js",
   "public/shared/layout.css",
@@ -48,7 +48,7 @@ export function dangerousShellReason(body = {}) {
   if (module === SHELL_OWNER_MODULE) {
     return "";
   }
-  return `${module || "该模块"}禁止提交全站壳文件（${hits.join("、")}）。壳只由首页交付。`;
+  return `${module || "该模块"}禁止提交全站壳文件（${hits.join("、")}）。壳只由主框架交付。`;
 }
 
 export function emptyFilesReason(body = {}) {

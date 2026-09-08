@@ -58,9 +58,17 @@ test("releases module cannot submit shell files", () => {
   assert.match(reason, /禁止提交全站壳文件/);
 });
 
-test("home module may submit shell files", () => {
+test("homepage cannot submit shell files", () => {
   const reason = ticketGuardReason({
     module: "首页",
+    files: ["public/shared/nav.js", "public/index.html"]
+  });
+  assert.match(reason, /禁止提交全站壳文件/);
+});
+
+test("only 主框架 may submit shell files", () => {
+  const reason = ticketGuardReason({
+    module: "主框架",
     files: ["public/shared/nav.js", "public/shared/layout.css", "src/modules/home/nav-items.js"]
   });
   assert.equal(reason, "");
