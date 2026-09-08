@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>首页 · 星脉管理系统</title>
+    <title>首页 · 星脉甄选</title>
     <link rel="stylesheet" href="/shared/layout.css" />
     <link rel="prefetch" href="/data" as="document" />
     <link rel="prefetch" href="/shen" as="document" />
@@ -15,27 +15,32 @@
   <body class="xm-app">
     <div class="xm-shell">
       <aside class="xm-sider" aria-label="侧栏导航">
-        <a class="xm-logo" href="/">
-          <span class="xm-logo-mark">星</span>
-          <span class="xm-logo-text">星脉管理系统</span>
-        </a>
-        <nav class="xm-menu">
-          <a class="xm-menu-item is-active" href="/" aria-current="page"><span>首页</span></a>
-          <a class="xm-menu-item" href="/data"><span>数据中心</span></a>
-          <a class="xm-menu-item" href="/shen"><span>沈子晗运营中心</span></a>
-          <a class="xm-menu-item" href="/han"><span>韩梦凯运营中心</span></a>
-          <a class="xm-menu-item" href="/people"><span>人员管理</span></a>
-          <a class="xm-menu-item" href="/releases"><span>版本发布中心</span></a>
-          <a class="xm-menu-item" href="/me"><span>个人中心</span></a>
+        <div class="xm-brand">
+          <a class="xm-logo" href="/">
+            <img src="/shared/xingmai-logo.png" alt="星脉甄选" />
+          </a>
+          <button type="button" class="xm-collapse" id="xm-collapse" aria-label="折叠侧栏">‹</button>
+        </div>
+        <nav class="xm-menu xm-menu-main">
+          <p class="xm-menu-label">项目</p>
+          <a class="xm-menu-item is-active" href="/" aria-current="page"><i class="xm-ico" aria-hidden="true"></i><span>首页</span></a>
+          <a class="xm-menu-item" href="/data"><i class="xm-ico" aria-hidden="true"></i><span>数据中心</span></a>
+          <a class="xm-menu-item" href="/shen"><i class="xm-ico" aria-hidden="true"></i><span>沈子晗运营中心</span></a>
+          <a class="xm-menu-item" href="/han"><i class="xm-ico" aria-hidden="true"></i><span>韩梦凯运营中心</span></a>
+          <a class="xm-menu-item" href="/people"><i class="xm-ico" aria-hidden="true"></i><span>人员管理</span></a>
+        </nav>
+        <nav class="xm-menu xm-menu-foot">
+          <a class="xm-menu-item" href="/releases"><i class="xm-ico" aria-hidden="true"></i><span>版本发布中心</span></a>
+          <a class="xm-menu-item" href="/me"><i class="xm-ico" aria-hidden="true"></i><span>个人中心</span></a>
+          <button type="button" class="xm-menu-item xm-logout" id="xm-logout"><i class="xm-ico" aria-hidden="true"></i><span>退出登录</span></button>
+          <p class="xm-version">v0.4.2</p>
         </nav>
       </aside>
       <div class="xm-main">
         <header class="xm-topbar">
-          <button type="button" class="xm-collapse" id="xm-collapse" aria-label="折叠侧栏">☰</button>
           <div class="xm-tabs" aria-label="页签"><span class="xm-tab is-active">首页</span></div>
           <div class="xm-user">
             <span class="xm-username" id="xm-username">用户</span>
-            <button type="button" class="xm-logout" id="xm-logout">退出</button>
           </div>
         </header>
         <div class="xm-content">

@@ -32,24 +32,37 @@
     return current === normalize(href);
   }
 
-  function menuHtml() {
-    return items
-      .map(function (item) {
-        const cls = "xm-menu-item" + (isActive(item.href) ? " is-active" : "");
-        const cur = isActive(item.href) ? ' aria-current="page"' : "";
-        return (
-          '<a class="' +
-          cls +
-          '" href="' +
-          item.href +
-          '"' +
-          cur +
-          "><span>" +
-          item.label +
-          "</span></a>"
-        );
-      })
-      .join("");
+  const MAIN = items.slice(0, 5);
+  const FOOT = items.slice(5);
+
+  function itemHtml(item) {
+    const cls = "xm-menu-item" + (isActive(item.href) ? " is-active" : "");
+    const cur = isActive(item.href) ? ' aria-current="page"' : "";
+    return (
+      '<a class="' +
+      cls +
+      '" href="' +
+      item.href +
+      '"' +
+      cur +
+      '><i class="xm-ico" aria-hidden="true"></i><span>' +
+      item.label +
+      "</span></a>"
+    );
+  }
+
+  function siderHtml() {
+    return (
+      '<div class="xm-brand"><a class="xm-logo" href="/"><img src="/shared/xingmai-logo.png" alt="星脉甄选" /></a>' +
+      '<button type="button" class="xm-collapse" id="xm-collapse" aria-label="折叠侧栏">‹</button></div>' +
+      '<nav class="xm-menu xm-menu-main"><p class="xm-menu-label">项目</p>' +
+      MAIN.map(itemHtml).join("") +
+      "</nav>" +
+      '<nav class="xm-menu xm-menu-foot">' +
+      FOOT.map(itemHtml).join("") +
+      '<button type="button" class="xm-menu-item xm-logout" id="xm-logout"><i class="xm-ico" aria-hidden="true"></i><span>退出登录</span></button>' +
+      '<p class="xm-version">v0.4.2</p></nav>'
+    );
   }
 
   function prefetch(href) {
@@ -155,13 +168,11 @@
     shell.innerHTML =
       '<div class="xm-main">' +
       '<header class="xm-topbar">' +
-      '<button type="button" class="xm-collapse" id="xm-collapse" aria-label="折叠侧栏">☰</button>' +
       '<div class="xm-tabs" aria-label="页签"><span class="xm-tab is-active">' +
       currentLabel +
       "</span></div>" +
       '<div class="xm-user">' +
       '<span class="xm-username" id="xm-username">用户</span>' +
-      '<button type="button" class="xm-logout" id="xm-logout">退出</button>' +
       "</div></header>" +
       '<div class="xm-content" id="xm-content"></div></div>';
 
@@ -171,11 +182,7 @@
       const sider = document.createElement("aside");
       sider.className = "xm-sider";
       sider.setAttribute("aria-label", "侧栏导航");
-      sider.innerHTML =
-        '<a class="xm-logo" href="/"><span class="xm-logo-mark">星</span><span class="xm-logo-text">星脉管理系统</span></a>' +
-        '<nav class="xm-menu">' +
-        menuHtml() +
-        "</nav>";
+      sider.innerHTML = siderHtml();
       shell.insertBefore(sider, shell.firstChild);
     }
 

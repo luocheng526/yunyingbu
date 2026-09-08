@@ -16,6 +16,7 @@ const copies = [
   ["public/index.html", "public/index.html"],
   ["public/shared/nav.js", "public/shared/nav.js"],
   ["public/shared/layout.css", "public/shared/layout.css"],
+  ["public/shared/xingmai-logo.png", "public/shared/xingmai-logo.png"],
   ["src/modules/home/nav-items.js", "src/modules/home/nav-items.js"],
   ["src/modules/home/router.js", "src/modules/home/router.js"],
   ["src/modules/home/pages.js", "src/modules/home/pages.js"],

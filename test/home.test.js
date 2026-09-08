@@ -45,7 +45,10 @@ test("GET / is the left-nav dashboard with seven menu labels", async () => {
   await withServer(async (base) => {
     const { res, text } = await get(base, "/");
     assert.equal(res.status, 200);
-    assert.match(text, /星脉管理系统/);
+    assert.match(text, /星脉甄选/);
+    assert.match(text, /xingmai-logo\.png/);
+    assert.match(text, /退出登录/);
+    assert.match(text, /v0\.4\.2/);
     assert.match(text, /趋势看板/);
     assert.match(text, /实时销售指数/);
     assert.match(text, /龙虎榜/);
@@ -58,6 +61,8 @@ test("GET / is the left-nav dashboard with seven menu labels", async () => {
       assert.match(text, new RegExp(label));
     }
     assert.doesNotMatch(text, /login-page/);
+    const logo = await fetch(`${base}/shared/xingmai-logo.png`);
+    assert.equal(logo.status, 200);
   });
 });
 
@@ -66,7 +71,10 @@ test("unfinished module pages return placeholder instead of 500", async () => {
     for (const path of ["/data", "/shen", "/han", "/people", "/releases", "/me"]) {
       const { res, text } = await get(base, path);
       assert.equal(res.status, 200, path);
-      assert.match(text, /星脉管理系统/);
+      assert.match(text, /星脉甄选/);
+    assert.match(text, /xingmai-logo\.png/);
+    assert.match(text, /退出登录/);
+    assert.match(text, /v0\.4\.2/);
       assert.match(text, /xm-sider/);
       assert.match(text, /shared\/nav\.js/);
       assert.match(text, /shared\/layout\.css/);

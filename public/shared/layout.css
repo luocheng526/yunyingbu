@@ -9,7 +9,7 @@
   --xm-primary-soft: #e6f4ff;
   --xm-card: #ffffff;
   --xm-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 8px 24px rgba(0, 0, 0, 0.04);
-  --xm-sider-w: 220px;
+  --xm-sider-w: 232px;
   font-family: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
 }
 
@@ -48,7 +48,7 @@ body:has(.xm-shell) {
   position: sticky;
   top: 0;
   height: 100vh;
-  overflow: auto;
+  overflow: hidden;
 }
 
 html.xm-collapsed .xm-sider {
@@ -56,59 +56,106 @@ html.xm-collapsed .xm-sider {
   flex-basis: 72px;
 }
 
-html.xm-collapsed .xm-logo-text,
-html.xm-collapsed .xm-menu-item span {
+html.xm-collapsed .xm-logo img {
+  max-width: 36px;
+  object-fit: cover;
+  object-position: left center;
+}
+
+html.xm-collapsed .xm-menu-item span,
+html.xm-collapsed .xm-menu-label,
+html.xm-collapsed .xm-version,
+html.xm-collapsed .xm-collapse {
   display: none;
+}
+
+.xm-brand {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 10px 10px;
+  background: #111;
+  border-bottom: 1px solid #1f1f1f;
 }
 
 .xm-logo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 16px 16px 12px;
+  flex: 1;
+  min-width: 0;
   text-decoration: none;
-  color: var(--xm-ink);
-  border-bottom: 1px solid var(--xm-line);
 }
 
-.xm-logo-mark {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: linear-gradient(180deg, #3c89ff, #1677ff);
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 14px;
+.xm-logo img {
+  display: block;
+  width: 100%;
+  max-width: 168px;
+  height: auto;
+}
+
+.xm-brand .xm-collapse {
+  color: #bfbfbf;
   flex: 0 0 auto;
-}
-
-.xm-logo-text {
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
 }
 
 .xm-menu {
   display: flex;
   flex-direction: column;
-  padding: 10px 8px;
+  padding: 8px 0 10px;
   gap: 2px;
 }
 
+.xm-menu-main {
+  flex: 1;
+  overflow: auto;
+}
+
+.xm-menu-foot {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--xm-line);
+}
+
+.xm-menu-label {
+  margin: 6px 16px 4px;
+  color: #bfbfbf;
+  font-size: 12px;
+}
+
+.xm-version {
+  margin: 10px 16px 0;
+  color: #bfbfbf;
+  font-size: 12px;
+}
+
 .xm-menu-item {
+  position: relative;
   display: flex;
   align-items: center;
+  gap: 10px;
   min-height: 40px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  color: #334155;
+  padding: 8px 16px;
+  margin-right: 8px;
+  border: 0;
+  border-radius: 0 8px 8px 0;
+  background: transparent;
+  color: #595959;
   text-decoration: none;
   font-size: 14px;
   line-height: 1.35;
+  text-align: left;
+  width: calc(100% - 8px);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.xm-ico {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+  opacity: 0.7;
 }
 
 .xm-menu-item:hover {
@@ -142,6 +189,18 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
   background: var(--xm-primary-soft);
   color: var(--xm-primary);
   font-weight: 600;
+}
+
+.xm-menu-item.is-active::before,
+.xm-menu-item[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  background: var(--xm-primary);
+  border-radius: 0 2px 2px 0;
 }
 
 .xm-main {
@@ -213,18 +272,7 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
 }
 
 .xm-logout {
-  border: 1px solid #d9d9d9;
-  background: #fff;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  color: #434343;
-}
-
-.xm-logout:hover {
-  border-color: var(--xm-primary);
-  color: var(--xm-primary);
+  color: #595959;
 }
 
 .xm-content {
