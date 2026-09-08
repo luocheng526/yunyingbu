@@ -215,8 +215,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /sc-ui-9/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-9/);
+    assert.match(text, /sc-ui-10/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-10/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
     assert.match(text, /id="xm-releases-boot"/);
@@ -301,7 +301,9 @@ test("release board scripts parse so tab refresh can run", () => {
   assert.match(theme, /function finishUpgradeInPlace/);
   assert.match(theme, /return "landed"/);
   assert.doesNotMatch(theme, /location\.replace\("\/releases\?reloaded="/);
-  assert.match(theme, /sc-ui-9/);
+  assert.match(theme, /sc-ui-10/);
+  assert.match(theme, /\/api\/releases\/item\//);
+  assert.match(theme, /function isTransientPassError/);
   assert.match(theme, /\/api\/releases\/history/);
   assert.match(theme, /function refreshHistory/);
   assert.match(theme, /function refreshLogs/);
@@ -1707,6 +1709,12 @@ test("history and logs board views page slim rows", async () => {
     const pathLogs = await json(base, "/api/releases/logs?page=1&limit=20");
     assert.equal(pathLogs.res.status, 200);
     assert.ok((pathLogs.body.items || []).some((item) => item.id === created.body.item.id));
+    const one = await json(base, "/api/releases/item/" + created.body.item.id);
+    assert.equal(one.res.status, 200);
+    assert.equal(one.body.item.id, created.body.item.id);
+    assert.equal(one.body.item.status, "success");
+    const missing = await json(base, "/api/releases/item/rel-missing");
+    assert.equal(missing.res.status, 404);
   });
 });
 

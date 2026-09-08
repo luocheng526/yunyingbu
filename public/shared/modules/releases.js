@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.89-board-paths */
+/* xm-module-releases 0.1.90-pass-timeout */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -194,7 +194,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-9";
+      link.href = "/releases.css?v=sc-ui-10";
       document.head.appendChild(link);
     }
   }
@@ -604,9 +604,14 @@
         consumePendingUpgrade();
       }
 
+      function isTransientPassError(err) {
+        const status = err && err.status;
+        return !status || status === 408 || status === 502 || status === 503 || status >= 500;
+      }
+
       async function loadTicket(id) {
-        const all = await api("/api/releases", { skipLoginRedirect: true });
-        return (all.items || []).find(function (item) { return item.id === id; }) || null;
+        const one = await api("/api/releases/item/" + encodeURIComponent(id), { skipLoginRedirect: true });
+        return (one && one.item) || null;
       }
 
       async function runPass(id, needRestart, version) {
@@ -628,7 +633,12 @@
         let ticket = null;
         while (Date.now() < deadline) {
           pinUpgradeMask();
-          if (confirmErr && confirmErr.status && confirmErr.status !== 502 && confirmErr.status !== 503 && confirmErr.status < 500) {
+          if (confirmErr && confirmErr.status === 401) {
+            failUpgrade(keys, "401 未登录");
+            flash("未登录", true);
+            return "need-login";
+          }
+          if (confirmErr && !isTransientPassError(confirmErr)) {
             const msg = (confirmErr.status || "") + " " + (confirmErr.message || "通过失败");
             failUpgrade(keys, msg);
             flash(msg, true);
@@ -1122,8 +1132,9 @@
             const version = card.getAttribute("data-version") || "";
             const passResult = await runPass(id, needRestart, version);
             if (passResult === "reloading" || passResult === "landed") return;
-            if (passResult === "failed") {
+            if (passResult === "failed" || passResult === "need-login") {
               btn.disabled = false;
+              return;
             }
           } else if (act === "rollback") {
             if (!window.confirm("确认按升级前快照回滚该版本的文件？不会自动发下一单。")) {
@@ -1138,9 +1149,11 @@
           }
           await refresh();
         } catch (err) {
-          failUpgrade(stepKeys(true), (err.status || "") + " " + (err.message || "操作失败"));
+          if (act !== "pass") {
+            failUpgrade(stepKeys(true), (err.status || "") + " " + (err.message || "操作失败"));
+          }
           flash((err.status || "") + " " + err.message, true);
-          await refresh();
+          btn.disabled = false;
         }
       });
 

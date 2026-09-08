@@ -257,6 +257,15 @@ export function createReleasesRouter(options = {}) {
     res.json(withCharter({ ok: true, items: await store.queue() }));
   });
 
+  router.get("/item/:id", async (req, res) => {
+    const item = await store.get(req.params.id);
+    if (!item) {
+      res.status(404).json({ ok: false, error: "单据不存在" });
+      return;
+    }
+    res.json(withCharter({ ok: true, item: withSnap(item) }));
+  });
+
   router.get("/lock", async (_req, res) => {
     res.json(withCharter({ ok: true, ...(await store.getLock()) }));
   });

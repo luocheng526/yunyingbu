@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>版本发布中心</title>
-    <link rel="stylesheet" href="/releases.css?v=sc-ui-9" />
+    <link rel="stylesheet" href="/releases.css?v=sc-ui-10" />
     <style>
       #upgrade-mask,
       html > #upgrade-mask {
@@ -606,9 +606,14 @@
         return false;
       }
 
+      function isTransientPassError(err) {
+        const status = err && err.status;
+        return !status || status === 408 || status === 502 || status === 503 || status >= 500;
+      }
+
       async function loadTicket(id) {
-        const all = await api("/api/releases", { skipLoginRedirect: true });
-        return (all.items || []).find(function (item) { return item.id === id; }) || null;
+        const one = await api("/api/releases/item/" + encodeURIComponent(id), { skipLoginRedirect: true });
+        return (one && one.item) || null;
       }
 
       async function runPass(id, needRestart, version) {
@@ -642,7 +647,7 @@
             flash("未登录，未开始发版。", true);
             return "failed";
           }
-          if (confirmErr && confirmErr.status && confirmErr.status !== 502 && confirmErr.status !== 503 && confirmErr.status < 500) {
+          if (confirmErr && !isTransientPassError(confirmErr) && confirmErr.status !== 401) {
             window.__xmUpgradePass = false;
             const msg = (confirmErr.status || "") + " " + (confirmErr.message || "通过失败");
             failUpgrade(keys, msg);
@@ -1172,6 +1177,7 @@
             if (passResult === "reloading" || passResult === "landed" || passResult === "need-login") return;
             if (passResult === "failed") {
               btn.disabled = false;
+              return;
             }
           } else if (act === "rollback") {
             if (!window.confirm("确认按升级前快照回滚该版本的文件？不会自动发下一单。")) {
