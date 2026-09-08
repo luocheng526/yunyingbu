@@ -3,8 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const COOKIE_NAME = "mk_sid";
-export const RELEASES_CSS_HREF = "/releases.css?v=sc-ui-4";
-export const RELEASES_MODULE_HREF = "/shared/modules/releases.js?v=sc-ui-4";
+export const RELEASES_CSS_HREF = "/releases.css?v=sc-ui-11";
+export const RELEASES_MODULE_HREF = "/shared/modules/releases.js?v=sc-ui-11";
 export const RELEASES_SCROLL_STYLE_ID = "xm-releases-scroll";
 export const RELEASES_FETCH_PATCH_ID = "xm-releases-fetch-patch";
 export const RELEASES_BOOT_ID = "xm-releases-boot";
@@ -15,11 +15,11 @@ export function releasesScrollStyleTag() {
 html,html body,html body.xm-app,html body.xm-app-shell,html body:has(.xm-shell){height:100%!important;max-height:100dvh!important;overflow:hidden!important;}
 .xm-shell{display:flex!important;align-items:stretch!important;height:100dvh!important;max-height:100dvh!important;min-height:0!important;overflow:hidden!important;}
 .xm-shell .xm-main{display:flex!important;flex-direction:column!important;flex:1 1 0%!important;min-width:0!important;min-height:0!important;overflow:hidden!important;}
-.xm-content,.xm-shell .xm-content{flex:1 1 0%!important;height:0!important;min-height:0!important;overflow-x:auto!important;overflow-y:scroll!important;touch-action:pan-y;}
+.xm-content,.xm-shell .xm-content{flex:1 1 auto!important;height:auto!important;min-height:0!important;overflow-x:auto!important;overflow-y:auto!important;touch-action:pan-y;}
 html:has(.oc-wrap),html:has(.oc-wrap) body,html:has(.oc-wrap) body.xm-app,html:has(.oc-wrap) body.xm-app-shell,html:has(.oc-wrap) body:has(.xm-shell){height:100%!important;max-height:100dvh!important;overflow:hidden!important;}
 .xm-shell:has(.oc-wrap){display:flex!important;align-items:stretch!important;height:100dvh!important;max-height:100dvh!important;min-height:0!important;overflow:hidden!important;}
 .xm-shell:has(.oc-wrap) .xm-main{display:flex!important;flex-direction:column!important;flex:1 1 0%!important;min-width:0!important;min-height:0!important;overflow:hidden!important;}
-.xm-content:has(.oc-wrap),.xm-shell:has(.oc-wrap) .xm-content{flex:1 1 0%!important;height:0!important;min-height:0!important;overflow-x:auto!important;overflow-y:scroll!important;touch-action:pan-y;}
+.xm-content:has(.oc-wrap),.xm-shell:has(.oc-wrap) .xm-content{flex:1 1 auto!important;height:auto!important;min-height:0!important;overflow-x:auto!important;overflow-y:auto!important;touch-action:pan-y;}
 .pane,.xm-content .pane,.page .pane{display:none!important;}
 .pane.on,.xm-content .pane.on,.page .pane.on{display:block!important;}
 #history-view,#logs-view,.xm-content #history-view,.xm-content #logs-view{max-height:calc(100dvh - 15rem);overflow-x:auto!important;overflow-y:scroll!important;touch-action:pan-y;}
@@ -29,6 +29,17 @@ html:has(.oc-wrap),html:has(.oc-wrap) body,html:has(.oc-wrap) body.xm-app,html:h
 export function releasesBootTag() {
   return `<script id="${RELEASES_BOOT_ID}">
 (function(){
+  function clearPending(){
+    document.documentElement.classList.remove("is-pending");
+    if(document.body){document.body.classList.remove("is-pending");}
+    var shell=document.querySelector(".xm-shell");
+    if(shell){shell.classList.remove("is-pending");}
+  }
+  function paintFallback(){
+    var c=document.getElementById("xm-content")||document.querySelector(".xm-content");
+    if(!c||c.querySelector(".oc-wrap")||c.querySelector("[data-rel-fallback]")){return;}
+    c.innerHTML='<div data-rel-fallback class="oc-wrap page xm-page"><p class="kicker oc-kicker">RELEASE GATE</p><h1>版本发布中心</h1><p>正在加载看板…</p></div>';
+  }
   function mountReleases(){
     var root=document.getElementById("xm-content")||document.querySelector(".xm-content");
     var mod=window.XmModules&&window.XmModules["/releases"];
@@ -40,10 +51,13 @@ export function releasesBootTag() {
   }
   var tries=0;
   function tick(){
+    clearPending();
     if(mountReleases()){return;}
+    paintFallback();
     tries+=1;
     if(tries<40){setTimeout(tick,50);}
   }
+  clearPending();
   if(document.readyState==="loading"){
     document.addEventListener("DOMContentLoaded",tick);
   }
@@ -60,7 +74,7 @@ export function releasesFetchPatchTag() {
   function patched(input,init){
     var url=typeof input==="string"?input:(input&&input.url)||"";
     init=init?Object.assign({},init):{};
-    if(String(url).indexOf("/api/releases")===0){
+    if(String(url).indexOf("/api/releases")!==-1 || String(url).indexOf("/api/auth")!==-1){
       delete init.signal;
     }
     return raw.call(this,input,init);
