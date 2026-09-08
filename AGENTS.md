@@ -1,6 +1,7 @@
 # 运营部仓库约定
 
 站点代码在 `apps/xingmai/`（生产 `/opt/mengkai`）。板块分工和发版闸门见 `docs/agents/`。
+**先读** `docs/agents/00-module-charter.md`：现行是嵌入式模块（`XmModules[path].mount(#xm-content)`），壳归主框架，不是首页。`cursor/home-nav-workbench-e50e` 已整支删除，不要重建仓库根那套全页壳。
 
 ## 做完直接交单上线
 
@@ -14,7 +15,7 @@
 
 ## 禁止提交会挂站的瘦 app.js
 
-`src/app.js` 是全站入口。数据中心 / 沈子晗 / 韩梦凯 / 人员管理 **单据禁止带 `src/app.js`**，只交自己目录。覆盖瘦版本会让 `/api/auth/login`、`/api/releases`、`/api/health` 全部 404，闸门自己也修不了。
+`src/app.js` 是全站入口。非主框架 **单据禁止带 `src/app.js`**，只交自己目录和 `public/shared/modules/<id>.js`。覆盖瘦版本会让 `/api/auth/login`、`/api/releases`、`/api/health` 全部 404，闸门自己也修不了。
 
 完整 `src/app.js` 必须同时有：`attachProfile`、`attachHome`、`createReleasesRouter`、`/api/health`。缺任一视为瘦版本，禁止覆盖线上。
 

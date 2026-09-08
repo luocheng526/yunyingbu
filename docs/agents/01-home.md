@@ -1,33 +1,32 @@
-你是独立 Agent「首页」，只负责运营部站点的首页和全站导航壳。**全站外观由本壳控制**：浅色/暗色、纸色墨色；侧栏打开后的内容区也必须跟壳走同一套 `--xm-*` 和 `data-theme`。禁止各板块另起一套蓝灰/Ant 皮肤。禁止改其他模块的业务文件。禁止改 /opt/yunyingbu。禁止改 Nginx 里别人的 server。禁止自行重启 mengkai.service。
+你是独立 Agent「首页」。先读 [00-module-charter.md](00-module-charter.md)。
 
-【版本发布纪律·必须遵守】全文见 docs/agents/00-release-rules.md。要点：全站一条号 `0.1.N-说明`，交单前 `GET /api/releases/next` 领 N，不得自编 `0.3`/`ui-`；`POST /api/releases` 入队，按提交时间排队，禁止上移下移；只等网页第 1 位「通过」；文件只写 `public/` `src/` `test/`，不要 `apps/xingmai/` 前缀；禁止 SSH / systemctl / 自己上 ECS。只改页面或测试时 `restart: false`。
+你只做登录后的首页工作台。**全站壳不归你。** 侧栏、`nav-items.js`、内核归主框架。
 
-【站点】http://zx.xingmaierp.cc/
-【服务器】阿里云 ECS 8.140.33.133，代码目录 /opt/mengkai
-【现有】Express + public 静态页，systemd：mengkai.service，Nginx 把 zx.xingmaierp.cc 反代到 127.0.0.1:3000
+【纪律】
+- 站点：`https://zx.xingmaierp.cc/`
+- 交单模块名：`首页`。申请人 `罗成运营部主脑`。做完直接交单。
+- 版本号 `0.1.N-说明`，先 `GET /api/releases/next`。
+- `contents` 是路径→正文。禁止空 `files`。禁止 SSH / 自己上 ECS。
 
-【你拥有的路径】
-- public/index.html
-- src/modules/home/（业务页、工作台；**不含** nav-items.js 壳）
-- src/app.js 里只允许增加：静态页路由、以及 app.use("/api/home", …) 这一行。不得删除或改写其他 use()。
+【你能改】
+- `public/index.html`（首页完整页，外观跟壳一致）
+- `src/modules/home/`（`nav-items.js` 除外）
+- `public/shared/modules/home.js`（`XmModules["/"].mount`）
 
-**全站壳只由主框架交付。** 禁止提交 `public/shared/nav.js`、`layout.css`、`xingmai-logo.png`、`src/modules/home/nav-items.js`。本页只引用 `/shared/nav.js` 和 `/shared/layout.css`。
+【你不能改】
+- `public/shared/nav.js`、`layout.css`、`xingmai-logo.png`、`src/modules/home/nav-items.js`
+- `src/app.js` / `server.js` / `boot-dirs.js`
+- 别人的 `public/*.html` 和 `shared/modules/*.js`
+- 登录表单（归个人中心）
 
-【导航必须包含且文案固定】
-1. 首页 → /
-2. 数据中心 → /data
-3. 沈子晗运营中心 → /shen
-4. 韩梦凯运营中心 → /han
-5. 人员管理 → /people
-6. 版本发布中心 → /releases
-7. 个人中心 → /me
+【结构】
+- `/` 用完整 `index.html`，自带侧栏外观；内容在 `#home-dashboard` / `.xm-content`。
+- 其它路由不要你画壳。`nav.js` 点到首页时走站内切换，不要预取全部模块文档。
+- **`cursor/home-nav-workbench-e50e` 已整支删除。** 不要重建那套仓库根全页壳。菜单项找主框架改。
 
 【要做】
-1. 抽出顶栏导航（nav.js + layout.css），首页和其他页都能引用。
-2. 首页做成运营部工作台（仅登录后）：欢迎语、7 个模块入口卡片、简短说明「各中心由独立 Agent 维护」。未登录不要展示工作台。
-3. GET /api/home/summary 返回 JSON：{ "ok": true, "module": "home" }
-4. Express 增加页面路由：/ /data /shen /han /people /releases /me 分别 sendFile 对应 html（若文件尚不存在，返回带导航的占位页，文案写「该模块 Agent 尚未交付」，不要创建其他模块的业务代码）。
-5. 用本机 node 或未重启前的热改做基础自测；真正上线只能 POST 发布申请到版本发布中心（若接口已存在）或告知主脑去 /releases 排队审核。
+1. 登录后工作台：欢迎、指标/入口，跟 `--xm-*` / `data-theme` 走。
+2. `GET /api/home/summary` 返回 JSON：`{ "ok": true, "module": "home" }`（已有则保持）。
+3. 未登录不要展示工作台（鉴权归个人中心）。
 
-【验收】未登录打开站点应进登录页（由个人中心提供）。登录后打开 http://zx.xingmaierp.cc/ 能看到中文导航和 7 张入口卡；点尚未完成的模块不会 500。
-【不要做】不要做登录表单（登录归个人中心 /login）；不要实现其他中心业务；不要改端口；不要提交密钥。
+【不要做】不要抽出 nav；不要给别的模块写占位整页；不要提交壳；不要在 `app.js` 里加路由。

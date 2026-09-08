@@ -1,3 +1,17 @@
-【补丁·全站壳换成左导航】
+【补丁·非主框架：不要重做侧栏】
 
-首页会把导航改成左边竖栏。你不要再做顶部横排导航。你的页面引用 /shared/layout.css 和 /shared/nav.js 即可。业务内容放右侧主区域。禁止交这两个文件和 `xingmai-logo.png`、`src/modules/home/nav-items.js`。禁止 SSH/发版。做完只交发布文档（若你这页还没交付）。
+全文以 [00-module-charter.md](00-module-charter.md) 为准。
+
+侧栏不是首页的，是 **主框架** 的。你的页面不要再画左边竖栏、不要交 `nav.js` / `layout.css` / `xingmai-logo.png` / `nav-items.js`。
+
+业务内容只写在 `public/shared/modules/<id>.js` 里，挂到 `#xm-content`：
+
+```js
+window.XmModules = window.XmModules || {};
+window.XmModules["/data"] = { mount: function (root) { /* 只画内容 */ }, unmount: function () {} };
+```
+
+路径按你自己的模块换成 `/shen` `/han` `/people` `/releases` `/me`。
+
+`cursor/home-nav-workbench-e50e` 已整支删除。不要重建「每页完整 HTML + 自己带 nav」。
+禁止 SSH、禁止自己发版。做完直接交单。

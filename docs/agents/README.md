@@ -1,16 +1,22 @@
-# 运营部 Agent 分工
+# 模块纪律（先读这个）
 
-主脑只出任务稿。7 个业务 Agent **在 Cursor Cloud 工作**，代码目录 `apps/xingmai/`。不要再用 My Machines。流程见 [00-cloud-workflow.md](agents/00-cloud-workflow.md)，全员补丁 [00-cloud-patch.md](agents/00-cloud-patch.md)。
+每位模块开发只看自己那一页，但 **结构以 [00-module-charter.md](00-module-charter.md) 为准**。旧分支、旧 prompt 里「每页自己带侧栏」「壳归首页」作废。
 
-**发布纪律（现行）：** [00-release-rules.md](00-release-rules.md)。全站一条号 `0.1.N`，交单前 `GET /api/releases/next`，`POST /api/releases` 按提交时间排队，禁止上移下移，只等网页第 1 位「通过」。**做完直接交单**（含图形改动），不要等用户再单独说「提交」（见仓库根目录 `AGENTS.md`）。只有版本发布中心能落地。补丁：[00-release-doc-only.md](00-release-doc-only.md)、[00-release-doc-patch.md](00-release-doc-patch.md)。全站壳只由主框架改，侧栏内容跟壳同一套浅色/暗色。
+线上：https://zx.xingmaierp.cc  
+交单：版本发布中心。申请人 `罗成运营部主脑`。做完直接交单。纪律：[00-release-rules.md](00-release-rules.md)。
 
-| Agent | 提示词文件 | 站点路径 | 只许改的目录 |
-|-------|------------|----------|----------------|
-| 主框架 | 本仓库内核 + 壳 | `/` 壳 | `public/shared/nav.js` `layout.css` `xingmai-logo.png` `src/modules/home/nav-items.js` `src/app.js`（完整入口） |
-| 首页 | [01-home.md](agents/01-home.md) | `/` | `apps/xingmai/public/index.html` `src/modules/home/`（不含壳） |
-| 数据中心 | [02-data-center.md](agents/02-data-center.md) | `/data` | `public/data.html` `src/modules/data/` |
-| 沈子晗运营中心 | [03-shen-zihan.md](agents/03-shen-zihan.md) | `/shen` | `public/shen.html` `src/modules/shen/` |
-| 韩梦凯运营中心 | [04-han-mengkai.md](agents/04-han-mengkai.md) | `/han` | `public/han.html` `src/modules/han/` |
-| 人员管理 | [05-people.md](agents/05-people.md) | `/people` | `public/people.html` `src/modules/people/` |
-| 版本发布中心 | [06-releases.md](agents/06-releases.md) | `/releases` | `public/releases.html` `src/modules/releases/` |
-| 个人中心 | [07-profile.md](agents/07-profile.md) | `/me` | `public/me.html` `src/modules/profile/` （登录、改资料、改密码） |
+| 文件 | 给谁 |
+|---|---|
+| [00-module-charter.md](00-module-charter.md) | **所有人先读**（嵌入式合同 + 边界 + 闸） |
+| [00-release-rules.md](00-release-rules.md) | 交单格式、闸、排队 |
+| [00-main-framework.md](00-main-framework.md) | 主框架（壳 + 内核 + 闸） |
+| [00-left-nav-others.md](00-left-nav-others.md) | 非主框架：不要重做侧栏 |
+| [01-home.md](01-home.md) | 首页 |
+| [02-data-center.md](02-data-center.md) | 数据中心 |
+| [03-shen-zihan.md](03-shen-zihan.md) | 沈子晗 |
+| [04-han-mengkai.md](04-han-mengkai.md) | 韩梦凯 |
+| [05-people.md](05-people.md) | 人员管理 |
+| [06-releases.md](06-releases.md) | 版本发布中心 |
+| [07-profile.md](07-profile.md) | 个人中心 |
+
+下列补丁页已过期，不要当任务稿执行：[01-home-sidebar.md](01-home-sidebar.md)、[01-home-nav-flat.md](01-home-nav-flat.md)、[02-data-home-shell.md](02-data-home-shell.md)、[06-releases-cloud.md](06-releases-cloud.md)。
