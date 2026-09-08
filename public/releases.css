@@ -376,31 +376,50 @@ th { color: var(--oc-muted); font-weight: 600; }
   margin-left: auto;
 }
 
-/* Shared shell locks body (overflow:hidden) and grows .xm-shell with content.
-   Only when the shell is present: constrain it to the viewport and scroll .xm-content. */
+/* Theme locks body { overflow:hidden; height:100% }. Forcing the shell to
+   100vh + flex-basis:auto made .xm-main as tall as the tickets, then clipped
+   it. Unlock the document so this page can scroll. Sidebar stays sticky. */
 html:has(.oc-wrap):has(.xm-shell),
+html:has(.oc-wrap) {
+  height: auto !important;
+  max-height: none !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
 html:has(.oc-wrap) body:has(.xm-shell),
-html:has(.oc-wrap) body.xm-app:has(.xm-shell) {
-  height: 100% !important;
-  max-height: 100% !important;
-  overflow: hidden !important;
+html:has(.oc-wrap) body.xm-app:has(.xm-shell),
+html:has(.oc-wrap) body.xm-app-shell:has(.xm-shell),
+html:has(.oc-wrap) body.xm-app,
+html:has(.oc-wrap) body {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
 }
 html:has(.oc-wrap) .xm-shell {
-  height: 100vh !important;
-  max-height: 100vh !important;
-  min-height: 0 !important;
-  overflow: hidden;
+  display: flex !important;
+  align-items: stretch !important;
+  height: auto !important;
+  max-height: none !important;
+  min-height: 100vh !important;
+  overflow: visible !important;
 }
 html:has(.oc-wrap) .xm-main {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
   min-height: 0 !important;
-  overflow: hidden;
-  flex: 1 1 auto;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
 }
 html:has(.oc-wrap) .xm-content {
-  min-height: 0 !important;
-  overflow: auto !important;
   flex: 1 1 auto !important;
-  overscroll-behavior: contain;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  overscroll-behavior: auto;
 }
 #history-view,
 #logs-view,

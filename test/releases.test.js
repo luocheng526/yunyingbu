@@ -322,9 +322,11 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /\.oc-top/);
     assert.match(text, /\.oc-tab\.active/);
     assert.match(text, /html:has\(\.oc-wrap\)/);
-    assert.match(text, /overflow: auto !important/);
+    assert.match(text, /overflow-y: auto !important/);
+    assert.match(text, /Unlock the document so this page can scroll/);
     assert.match(text, /\.oc-pager/);
-    assert.match(text, /overscroll-behavior: contain/);
+    assert.doesNotMatch(text, /height: 100vh !important/);
+    assert.doesNotMatch(text, /html:has\(\.oc-wrap\) \.xm-content \{\s*[^}]*overflow: auto !important/);
     assert.match(text, /--oc-bg:\s*var\(--xm-bg,\s*#f7f7f4\)/);
     assert.match(text, /--oc-text:\s*var\(--xm-ink,\s*#14120b\)/);
     assert.match(text, /\.xm-content button\.oc-tab/);
