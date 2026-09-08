@@ -1,3 +1,4 @@
+/* xm-home-sider v0.4.4 */
 (function () {
   const ROUTES = ["/", "/data", "/shen", "/han", "/people", "/releases", "/me"];
   const items = [
@@ -61,8 +62,43 @@
       '<nav class="xm-menu xm-menu-foot">' +
       FOOT.map(itemHtml).join("") +
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout"><i class="xm-ico" aria-hidden="true"></i><span>退出登录</span></button>' +
-      '<p class="xm-version">v0.4.3</p></nav>'
+      '<p class="xm-version">v0.4.4</p></nav>'
     );
+  }
+
+  function siderIsTemplate(sider) {
+    return !!(
+      sider &&
+      sider.querySelector(".xm-brand") &&
+      sider.querySelector(".xm-logo img") &&
+      sider.querySelector("#xm-logout") &&
+      sider.querySelector(".xm-version") &&
+      sider.querySelector(".xm-menu-label")
+    );
+  }
+
+  function paintSider(sider) {
+    const node = sider || document.createElement("aside");
+    node.className = "xm-sider";
+    node.setAttribute("aria-label", "侧栏导航");
+    if (!siderIsTemplate(node)) {
+      node.innerHTML = siderHtml();
+    }
+    return node;
+  }
+
+  function ensureLayoutCss() {
+    if (document.querySelector('link[href*="/shared/layout.css"]')) {
+      return;
+    }
+    if (document.getElementById("xm-home-layout")) {
+      return;
+    }
+    const link = document.createElement("link");
+    link.id = "xm-home-layout";
+    link.rel = "stylesheet";
+    link.href = "/shared/layout.css";
+    document.head.appendChild(link);
   }
 
   function prefetch(href) {
@@ -156,8 +192,16 @@
   }
 
   function mountShell() {
-    if (document.querySelector(".xm-shell")) {
+    ensureLayoutCss();
+    const existingShell = document.querySelector(".xm-shell");
+    if (existingShell) {
       document.body.classList.add("xm-app");
+      const sider = existingShell.querySelector(".xm-sider");
+      if (sider) {
+        paintSider(sider);
+      } else {
+        existingShell.insertBefore(paintSider(null), existingShell.firstChild);
+      }
       bindChrome();
       return;
     }
@@ -177,13 +221,9 @@
       '<div class="xm-content" id="xm-content"></div></div>';
 
     if (existingSider) {
-      shell.insertBefore(existingSider, shell.firstChild);
+      shell.insertBefore(paintSider(existingSider), shell.firstChild);
     } else {
-      const sider = document.createElement("aside");
-      sider.className = "xm-sider";
-      sider.setAttribute("aria-label", "侧栏导航");
-      sider.innerHTML = siderHtml();
-      shell.insertBefore(sider, shell.firstChild);
+      shell.insertBefore(paintSider(null), shell.firstChild);
     }
 
     const content = shell.querySelector("#xm-content");

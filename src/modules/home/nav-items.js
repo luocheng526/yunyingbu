@@ -1,4 +1,4 @@
-export const NAV_VERSION = "v0.4.3";
+export const NAV_VERSION = "v0.4.4";
 
 export const NAV_MAIN = [
   { href: "/", file: "index.html", label: "首页" },

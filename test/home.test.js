@@ -48,7 +48,7 @@ test("GET / is the left-nav dashboard with seven menu labels", async () => {
     assert.match(text, /星脉甄选/);
     assert.match(text, /xingmai-logo\.png/);
     assert.match(text, /退出登录/);
-    assert.match(text, /v0\.4\.2/);
+    assert.match(text, /v0\.4\.4/);
     assert.match(text, /趋势看板/);
     assert.match(text, /实时销售指数/);
     assert.match(text, /龙虎榜/);
@@ -74,7 +74,7 @@ test("unfinished module pages return placeholder instead of 500", async () => {
       assert.match(text, /星脉甄选/);
     assert.match(text, /xingmai-logo\.png/);
     assert.match(text, /退出登录/);
-    assert.match(text, /v0\.4\.2/);
+    assert.match(text, /v0\.4\.4/);
       assert.match(text, /xm-sider/);
       assert.match(text, /shared\/nav\.js/);
       assert.match(text, /shared\/layout\.css/);
@@ -95,6 +95,8 @@ test("home module does not query MySQL (no tables, nav stays static)", () => {
   assert.equal(navJs.includes("MYSQL"), false);
   assert.match(navJs, /rel = "prefetch"/);
   assert.match(navJs, /preventDefault/);
+  assert.match(navJs, /xm-home-sider v0\.4\.4/);
+  assert.match(navJs, /siderIsTemplate/);
   assert.match(schema, /无业务表/);
 });
 
