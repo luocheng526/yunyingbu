@@ -9,6 +9,7 @@ export const DATA_OVERLAY_FILES = [
   "public/data-store-live.html",
   "public/data-store-overview.html",
   "public/data-goods-overview.html",
+  "public/data/placeholder/index.html",
   "src/modules/data/overview.js",
   "src/modules/data/nav.js",
   "src/modules/data/pages.js",

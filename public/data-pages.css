@@ -44,3 +44,14 @@
 .data-table .error {
   color: #b91c1c;
 }
+.data-placeholder {
+  margin-top: 8px;
+  padding: 24px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.data-placeholder .muted {
+  color: var(--xm-muted, #8c8c8c);
+  font-size: 13px;
+}

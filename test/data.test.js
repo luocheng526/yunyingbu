@@ -87,7 +87,7 @@ test("GET /data is the data center page with title, cards, table, and left-shell
   });
 });
 
-test("GET /api/data/nav lists the three data-center children", async () => {
+test("GET /api/data/nav lists the data-center children including placeholder", async () => {
   await withServer(async (base) => {
     const { res, text } = await get(base, "/api/data/nav");
     assert.equal(res.status, 200);
@@ -96,7 +96,7 @@ test("GET /api/data/nav lists the three data-center children", async () => {
     assert.equal(body.parent.label, "数据中心");
     assert.deepEqual(
       body.children.map((c) => c.label),
-      ["店铺实时数据", "店铺数据总揽", "商品数据总揽"]
+      ["店铺实时数据", "店铺数据总揽", "商品数据总揽", "占位"]
     );
   });
 });
@@ -126,6 +126,16 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(subnav.text, /店铺实时数据/);
     assert.match(subnav.text, /店铺数据总揽/);
     assert.match(subnav.text, /商品数据总揽/);
+    assert.match(subnav.text, /占位/);
+    const placeholderPage = await get(base, "/data/placeholder");
+    assert.equal(placeholderPage.res.status, 200);
+    assert.match(placeholderPage.text, /<h1>占位<\/h1>/);
+    assert.match(placeholderPage.text, /此页为占位/);
+    const placeholderApi = await get(base, "/api/data/placeholder");
+    assert.equal(placeholderApi.res.status, 200);
+    const placeholderBody = JSON.parse(placeholderApi.text);
+    assert.equal(placeholderBody.ok, true);
+    assert.equal(placeholderBody.placeholder, true);
   });
 });
 
@@ -282,6 +292,7 @@ export function createApp() {
   assert.match(appJs, /app\.get\("\/api\/notes"/);
   assert.match(appJs, /app\.get\("\/api\/health"/);
   assert.ok(fs.existsSync(path.join(tmp, "public/data.html")));
+  assert.ok(fs.existsSync(path.join(tmp, "public/data/placeholder/index.html")));
   assert.ok(fs.existsSync(path.join(tmp, "src/modules/data/router.js")));
   assert.match(fs.readFileSync(path.join(tmp, "src/app.js"), "utf8"), /app\.get\("\/api\/health"/);
   assert.equal(fs.readFileSync(path.join(tmp, "public/index.html"), "utf8"), "<html><body>home</body></html>");
@@ -295,6 +306,7 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.equal(isAllowedDataPath("src/app.js"), false);
   assert.equal(isAllowedDataPath("public/shared/nav.js"), false);
   assert.equal(isAllowedDataPath("src/modules/data/overview.js"), true);
+  assert.equal(isAllowedDataPath("public/data/placeholder/index.html"), true);
   assert.throws(() => assertDataOnlyPaths(["src/app.js"]), /src\/app\.js/);
   const apply = fs.readFileSync(path.join(repoRoot, "scripts/apply-data-to-mengkai.mjs"), "utf8");
   assert.match(apply, /DATA_OVERLAY_FILES/);

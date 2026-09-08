@@ -5,7 +5,8 @@ export const DATA_NAV = {
   children: [
     { href: "/data/stores/live", label: "店铺实时数据" },
     { href: "/data/stores/overview", label: "店铺数据总揽" },
-    { href: "/data/goods/overview", label: "商品数据总揽" }
+    { href: "/data/goods/overview", label: "商品数据总揽" },
+    { href: "/data/placeholder", label: "占位" }
   ]
 };
 

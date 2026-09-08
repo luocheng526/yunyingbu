@@ -44,6 +44,18 @@ export function getStoreOverview() {
   };
 }
 
+export function getPlaceholder() {
+  return {
+    ok: true,
+    demo: true,
+    placeholder: true,
+    notice: "建设中",
+    title: "占位",
+    cards: [],
+    rows: []
+  };
+}
+
 export function getGoodsOverview() {
   return {
     ok: true,

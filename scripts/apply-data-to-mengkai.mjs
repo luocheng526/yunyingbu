@@ -60,6 +60,9 @@ function ensureDataPageRoute(source) {
   });`],
     ['app.get("/data/goods/overview"', `app.get("/data/goods/overview", (_req, res) => {
     res.sendFile(path.join(path.dirname(fileURLToPath(import.meta.url)), "../public/data-goods-overview.html"));
+  });`],
+    ['app.get("/data/placeholder"', `app.get("/data/placeholder", (_req, res) => {
+    res.sendFile(path.join(path.dirname(fileURLToPath(import.meta.url)), "../public/data/placeholder/index.html"));
   });`]
   ];
   for (const [needle, block] of routes) {

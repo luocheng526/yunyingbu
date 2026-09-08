@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { getOverview } from "./overview.js";
 import { getNav } from "./nav.js";
-import { getGoodsOverview, getStoreLive, getStoreOverview } from "./pages.js";
+import { getGoodsOverview, getPlaceholder, getStoreLive, getStoreOverview } from "./pages.js";
 
 export const dataRouter = Router();
 
@@ -27,4 +27,8 @@ dataRouter.get("/stores/overview", (_req, res) => {
 
 dataRouter.get("/goods/overview", (_req, res) => {
   res.json(getGoodsOverview());
+});
+
+dataRouter.get("/placeholder", (_req, res) => {
+  res.json(getPlaceholder());
 });
