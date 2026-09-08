@@ -1,0 +1,315 @@
+import path from "node:path";
+import { INTERRUPTED_PUBLISH_LOG, QUEUE_LOG, RECEIPT_RECOVER_LOG, requeueFailedItem } from "./charter.js";
+import { hasApplyReceipt } from "./push.js";
+import { assignSubmitOrder, compareSubmit } from "./order.js";
+import { readJsonFile, writeJsonFile } from "./persist-json.js";
+
+export const REVIEWER = "运营部主脑";
+
+export const MODULES = [
+  "首页",
+  "数据中心",
+  "沈子晗",
+  "韩梦凯",
+  "人员管理",
+  "版本发布中心",
+  "个人中心",
+  "其他"
+];
+
+const HISTORY_STATUSES = new Set(["success", "failed", "rejected"]);
+
+function sortQueued(a, b) {
+  return compareSubmit(a, b);
+}
+
+export function createMemoryStore({ now, persistPath } = {}) {
+  const timestamp = () => (now ? now() : new Date().toISOString());
+  const saved = readJsonFile(persistPath, null);
+  const items = Array.isArray(saved?.items) ? saved.items : [];
+  let seq = Number(saved?.seq) || 0;
+  let lock = saved?.lock || null;
+
+  function persist() {
+    writeJsonFile(persistPath, { items, seq, lock });
+  }
+
+  function nextId() {
+    seq += 1;
+    return `rel-${seq}`;
+  }
+
+  function queuedItems() {
+    return items.filter((item) => item.status === "queued").sort(sortQueued);
+  }
+
+  function nextPriority() {
+    const queued = queuedItems();
+    if (!queued.length) {
+      return 1;
+    }
+    return Math.max(...queued.map((item) => Number(item.priority) || 0)) + 1;
+  }
+
+  function decorateQueue(list) {
+    return list.map((item, index) => {
+      item.queueIndex = index + 1;
+      return item;
+    });
+  }
+
+  function seedDemo() {
+    const t0 = timestamp();
+    items.push({
+      id: nextId(),
+      version: "0.1.0-demo",
+      applicant: "首页 Agent",
+      source: "首页导航与工作台",
+      module: "首页",
+      summary: "演示：工作台左导航壳。等待主脑在看板点确定才上线。",
+      status: "queued",
+      demo: true,
+      priority: 1,
+      submittedAt: t0,
+      reviewer: null,
+      reviewedAt: null,
+      rejectReason: null,
+      publishStartedAt: null,
+      publishFinishedAt: null,
+      files: ["public/index.html", "public/shared/layout.css", "public/shared/nav.js"],
+      acceptance: "演示：打开首页，确认左栏七个入口。",
+      restart: false,
+      log: "演示数据：对话交来的发版单，排队等待确定。"
+    });
+    items.push({
+      id: nextId(),
+      version: "0.2.0-demo",
+      applicant: "数据中心 Agent",
+      source: "数据中心看板",
+      module: "数据中心",
+      summary: "演示：第二位排队。按提交时间，不能上移下移。",
+      status: "queued",
+      demo: true,
+      priority: 2,
+      submittedAt: t0,
+      reviewer: null,
+      reviewedAt: null,
+      rejectReason: null,
+      publishStartedAt: null,
+      publishFinishedAt: null,
+      files: ["public/data.html", "src/modules/data/router.js"],
+      acceptance: "演示：打开 /data，看到 KPI 卡。",
+      restart: false,
+      log: "演示数据：对话交来的发版单，排队等待确定。"
+    });
+    items.push({
+      id: nextId(),
+      version: "0.0.9-demo",
+      applicant: "数据中心 Agent",
+      source: "数据中心看板",
+      module: "数据中心",
+      summary: "演示：历史驳回单，终态不可发布。",
+      status: "rejected",
+      demo: true,
+      priority: 0,
+      submittedAt: t0,
+      reviewer: REVIEWER,
+      reviewedAt: t0,
+      rejectReason: "演示：摘要不完整，驳回。",
+      publishStartedAt: null,
+      publishFinishedAt: null,
+      files: ["public/data.html"],
+      acceptance: "演示：不应发布。",
+      restart: false,
+      log: "演示数据：已驳回，禁止发布。"
+    });
+  }
+
+  function recoverInterruptedPublish() {
+    if (!lock) {
+      return;
+    }
+    const item = items.find((row) => row.id === lock.id);
+    const startedAt = lock.startedAt;
+    lock = null;
+    if (item && item.status === "publishing") {
+      const snapDir = item.snapshotDir || (persistPath ? path.join(path.dirname(persistPath), "snapshots", item.id) : "");
+      const copied = hasApplyReceipt(snapDir);
+      item.publishFinishedAt = timestamp();
+      if (copied) {
+        item.status = "success";
+        item.snapshotDir = snapDir;
+        item.log = `${RECEIPT_RECOVER_LOG}（开始于 ${startedAt || "—"}）`;
+      } else {
+        item.status = "failed";
+        item.log = `${INTERRUPTED_PUBLISH_LOG}（开始于 ${startedAt || "—"}）`;
+      }
+    }
+    persist();
+  }
+
+  if (!persistPath) {
+    seedDemo();
+  } else if (!items.length) {
+    persist();
+  } else {
+    for (const item of items) {
+      const match = String(item.id || "").match(/^rel-(\d+)$/);
+      if (match) {
+        seq = Math.max(seq, Number(match[1]));
+      }
+    }
+    recoverInterruptedPublish();
+  }
+
+  return {
+    backend: "memory",
+    list() {
+      return items.slice();
+    },
+    queue() {
+      return decorateQueue(queuedItems());
+    },
+    history() {
+      return items
+        .filter((item) => HISTORY_STATUSES.has(item.status))
+        .sort((a, b) => String(b.reviewedAt || b.submittedAt).localeCompare(String(a.reviewedAt || a.submittedAt)));
+    },
+    approved() {
+      return items.filter((item) => item.status === "approved");
+    },
+    get(id) {
+      return items.find((item) => item.id === id) || null;
+    },
+    getLock() {
+      if (!lock) {
+        return { locked: false };
+      }
+      const current = this.get(lock.id);
+      return {
+        locked: true,
+        current: current
+          ? {
+              id: current.id,
+              version: current.version,
+              status: current.status,
+              startedAt: lock.startedAt
+            }
+          : { id: lock.id, version: lock.version, startedAt: lock.startedAt }
+      };
+    },
+    tryAcquireLock(item) {
+      if (lock) {
+        return false;
+      }
+      lock = { id: item.id, version: item.version, startedAt: timestamp() };
+      persist();
+      return true;
+    },
+    releaseLock() {
+      lock = null;
+      persist();
+    },
+    create({ version, applicant, source, module, summary, files, acceptance, restart, gitRef, repository }) {
+      const who = String(applicant || "").trim();
+      const item = {
+        id: nextId(),
+        version: String(version).trim(),
+        applicant: who,
+        source: String(source || who).trim(),
+        module: String(module).trim(),
+        summary: String(summary).trim(),
+        files: Array.isArray(files) ? files.slice() : [],
+        acceptance: String(acceptance || "").trim(),
+        restart: Boolean(restart),
+        status: "queued",
+        demo: false,
+        priority: nextPriority(),
+        submittedAt: timestamp(),
+        reviewer: null,
+        reviewedAt: null,
+        rejectReason: null,
+        publishStartedAt: null,
+        publishFinishedAt: null,
+        snapshotDir: "",
+        rolledBack: false,
+        gitRef: String(gitRef || "").trim(),
+        repository: String(repository || "").trim(),
+        log: QUEUE_LOG
+      };
+      items.push(item);
+      assignSubmitOrder(queuedItems());
+      persist();
+      return item;
+    },
+    approve(id) {
+      const item = this.get(id);
+      if (!item) {
+        return { error: "单据不存在", status: 404 };
+      }
+      if (item.status !== "queued") {
+        return { error: "仅待放行单据可通过", status: 409 };
+      }
+      item.status = "approved";
+      item.reviewer = REVIEWER;
+      item.reviewedAt = timestamp();
+      item.log = "已标记通过。请用确定放行上线。";
+      persist();
+      return { item };
+    },
+    reject(id, reason) {
+      const item = this.get(id);
+      if (!item) {
+        return { error: "单据不存在", status: 404 };
+      }
+      if (item.status !== "queued") {
+        return { error: "仅待放行单据可驳回", status: 409 };
+      }
+      const trimmed = String(reason || "").trim();
+      if (!trimmed) {
+        return { error: "驳回必须填写原因", status: 400 };
+      }
+      item.status = "rejected";
+      item.reviewer = REVIEWER;
+      item.reviewedAt = timestamp();
+      item.rejectReason = trimmed;
+      item.log = `已驳回：${trimmed}`;
+      persist();
+      return { item };
+    },
+    move() {
+      return { error: "排队只按提交时间，禁止上移下移", status: 409 };
+    },
+    reorder() {
+      return { error: "排队只按提交时间，禁止上移下移", status: 409 };
+    },
+    markPublishing(item) {
+      item.status = "publishing";
+      item.publishStartedAt = lock?.startedAt || timestamp();
+      item.log = "已抢到全局发布锁，正在本机落地";
+      persist();
+    },
+    markSuccess(item, message) {
+      item.status = "success";
+      item.publishFinishedAt = timestamp();
+      item.log = message || "发版成功。队列下一条不会自动发布。";
+      persist();
+    },
+    markFailed(item, message) {
+      item.status = "failed";
+      item.publishFinishedAt = timestamp();
+      item.log = message || "发布失败。";
+      persist();
+    },
+    requeueFailed(id) {
+      const item = this.get(id);
+      const result = requeueFailedItem(item, hasApplyReceipt(item?.snapshotDir));
+      if (result.error) {
+        return result;
+      }
+      assignSubmitOrder(queuedItems());
+      persist();
+      return { item: result.item };
+    }
+  };
+}
