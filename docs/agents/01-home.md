@@ -8,13 +8,10 @@
 
 【你拥有的路径】
 - public/index.html
-- public/shared/nav.js
-- public/shared/layout.css
-- public/shared/xingmai-logo.png
-- src/modules/home/（含 nav-items.js）
+- src/modules/home/（业务页、工作台；**不含** nav-items.js 壳）
 - src/app.js 里只允许增加：静态页路由、以及 app.use("/api/home", …) 这一行。不得删除或改写其他 use()。
 
-**全站壳只由你交付。** 闸门会拒绝其它模块提交上述壳文件。其它模块只许引用 `/shared/nav.js` 和 `/shared/layout.css`。
+**全站壳只由主框架交付。** 禁止提交 `public/shared/nav.js`、`layout.css`、`xingmai-logo.png`、`src/modules/home/nav-items.js`。本页只引用 `/shared/nav.js` 和 `/shared/layout.css`。
 
 【导航必须包含且文案固定】
 1. 首页 → /
