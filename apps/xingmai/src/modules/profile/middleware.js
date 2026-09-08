@@ -6,11 +6,10 @@ import { navMarkup } from "../home/nav-items.js";
 import { currentUser, publicProfile } from "./auth.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.96
+// xm-fast-shell 0.1.100
 
-export const SHELL_ASSET_VER = "0.1.96";
+export const SHELL_ASSET_VER = "0.1.100";
 export const APP_MODULES = {
-  "/": "home",
   "/data": "data",
   "/shen": "shen",
   "/han": "han",
@@ -19,7 +18,6 @@ export const APP_MODULES = {
   "/me": "me"
 };
 const SHELL_TITLES = {
-  "/": "首页",
   "/data": "数据中心",
   "/shen": "沈子晗运营中心",
   "/han": "韩梦凯运营中心",
@@ -50,7 +48,7 @@ export function injectBootUser(html, user) {
 
 export function renderAppShell(href, user) {
   const key = String(href || "/").replace(/\/+$/, "") || "/";
-  const id = APP_MODULES[key] || "home";
+  const id = APP_MODULES[key] || "data";
   const title = SHELL_TITLES[key] || "星脉";
   const css =
     key === "/releases"
@@ -380,12 +378,7 @@ function serveHomeIndex(req, res) {
   if (destPath !== "/" && destPath !== "/index.html") {
     return false;
   }
-  attachGzip(req, res);
-  let html = readThemedHtml(path.join(publicDir, "index.html"));
-  if (req.user) {
-    html = injectBootUser(html, req.user);
-  }
-  res.status(200).type("html").set("Cache-Control", "private, no-store").send(html);
+  res.redirect(302, "/data");
   return true;
 }
 

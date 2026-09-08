@@ -8,7 +8,7 @@
 | 路由 | 谁画壳 | 谁画内容 |
 |---|---|---|
 | `/login` | 无壳。独立登录页，**不加载** `nav.js` | 个人中心 |
-| `/` | 首页自己的 `index.html`（外观跟壳一致） | 首页 |
+| `/` | 无菜单项。登录后 302 到 `/data` | — |
 | `/data` `/shen` `/han` `/people` `/releases` `/me` | **主框架** `renderAppShell`：侧栏 + `#xm-content` | 各模块 `XmModules[path].mount(#xm-content)` |
 
 模块之间点击：`history.pushState` + 加载对应 `public/shared/modules/<id>.js`。不要整页跳，不要预取全部模块文档。

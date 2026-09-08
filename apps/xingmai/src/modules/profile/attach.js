@@ -14,7 +14,7 @@ export function attachProfile(app) {
   app.get("/login", (req, res) => {
     const leaving = String(req.query.out || "") === "1";
     if (!leaving && currentUser(req)) {
-      res.redirect("/");
+      res.redirect("/data");
       return;
     }
     res.sendFile(path.join(publicDir, "login.html"));

@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.96 */
+/* xm-fast-shell 0.1.100 */
 (function () {
-  const ASSET_VER = "0.1.96";
+  const ASSET_VER = "0.1.100";
   const MODULES = {
     "/data": "data",
     "/shen": "shen",
@@ -10,7 +10,6 @@
     "/me": "me"
   };
   const items = [
-    { href: "/", label: "首页" },
     { href: "/data", label: "数据中心" },
     { href: "/shen", label: "沈子晗运营中心" },
     { href: "/han", label: "韩梦凯运营中心" },
@@ -29,7 +28,6 @@
 
   let current = window.location.pathname.replace(/\/+$/, "") || "/";
   const ICO_PATH = {
-    "/": '<path d="M4 11 12 4l8 7"/><path d="M6 10.5V20h4.2v-5.2h3.6V20H18v-9.5"/>',
     "/data": '<path d="M5 19V10"/><path d="M10 19V6"/><path d="M15 19v-7"/><path d="M20 19V8"/>',
     "/shen": '<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 9h6"/><path d="M9 13h6"/><path d="M9 17h4"/>',
     "/han": '<path d="M8 11.5 12 5l4 6.5"/><path d="M6.5 13h11l-1.2 6H7.7z"/>',
@@ -54,11 +52,11 @@
     return (hit || items[0]).label;
   }
 
-  const MAIN = items.slice(0, 5);
-  const FOOT = items.slice(5);
+  const MAIN = items.slice(0, 4);
+  const FOOT = items.slice(4);
 
   function ico(name) {
-    const path = ICO_PATH[name] || ICO_PATH["/"];
+    const path = ICO_PATH[name] || ICO_PATH["/data"];
     return (
       '<i class="xm-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
       path +
@@ -86,7 +84,7 @@
 
   function siderHtml() {
     return (
-      '<div class="xm-brand"><a class="xm-logo" href="/"><img src="/login-logo.png" alt="星脉甄选" onerror="this.onerror=null;this.src=\'/shared/xingmai-logo.png\'" /></a>' +
+      '<div class="xm-brand"><a class="xm-logo" href="/data"><img src="/login-logo.png" alt="星脉甄选" onerror="this.onerror=null;this.src=\'/shared/xingmai-logo.png\'" /></a>' +
       '<button type="button" class="xm-collapse" id="xm-collapse" aria-label="折叠侧栏">‹</button></div>' +
       '<nav class="xm-menu xm-menu-main">' +
       MAIN.map(itemHtml).join("") +
@@ -96,7 +94,7 @@
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout">' +
       ico("logout") +
       "<span>退出登录</span></button>" +
-      '<p class="xm-version">v0.4.5</p></nav>'
+      '<p class="xm-version">v0.4.6</p></nav>'
     );
   }
 
@@ -258,7 +256,7 @@
 
   function bindMenu(root) {
     const scope = root || document;
-    const links = scope.querySelectorAll('.xm-menu a[href], a.xm-logo[href="/"], a.xm-username[href]');
+    const links = scope.querySelectorAll(".xm-menu a[href], a.xm-logo[href], a.xm-username[href]");
     Array.prototype.forEach.call(links, function (anchor) {
       if (anchor.dataset.navFast === "1") {
         return;
@@ -507,7 +505,7 @@
   window.addEventListener("popstate", function () {
     const href = normalize(window.location.pathname);
     if (href === "/") {
-      window.location.reload();
+      window.location.replace("/data");
       return;
     }
     go(href, false);

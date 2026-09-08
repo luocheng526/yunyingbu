@@ -5,7 +5,7 @@ import * as profileShell from "../profile/middleware.js";
 import { NAV_ITEMS } from "./nav-items.js";
 
 // xm-upgrade-mask 0.1.52  必须和 profile/middleware.js 成套发。
-// xm-fast-shell 0.1.96
+// xm-fast-shell 0.1.100
 
 function renderExistingPage(filePath) {
   if (typeof profileShell.readThemedHtml === "function") {
@@ -16,16 +16,10 @@ function renderExistingPage(filePath) {
 
 function renderRouteShell(href, user) {
   const key = String(href || "/").replace(/\/+$/, "") || "/";
-  if (key === "/") {
-    const home = pageFiles.get("/") || path.join(publicDir, "index.html");
-    if (home && fs.existsSync(home)) {
-      return renderExistingPage(home);
-    }
-  }
   if (typeof profileShell.renderAppShell === "function") {
     return profileShell.renderAppShell(href, user);
   }
-  return renderExistingPage(pageFiles.get(href) || path.join(publicDir, "index.html"));
+  return renderExistingPage(pageFiles.get(href) || path.join(publicDir, "data.html"));
 }
 
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public");
