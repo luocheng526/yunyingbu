@@ -86,6 +86,7 @@ test("GET /shen is 沈子晗运营中心 with left sidebar and seven nav items",
     assert.equal(res.status, 200);
     assert.match(text, /<title>沈子晗运营中心<\/title>/);
     assert.match(text, /这是沈子晗团队的任务与日报台/);
+    assert.match(text, /后续功能占位/);
     assert.match(text, /shen_tasks/);
     assert.match(text, /shared\/nav\.js/);
     assert.match(text, /shared\/layout\.css/);
