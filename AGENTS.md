@@ -11,3 +11,7 @@
 3. 告知单据号，等 `https://zx.xingmaierp.cc/releases` 第 1 位「通过」
 
 纪律全文：`docs/agents/00-release-rules.md`。禁止 SSH、禁止自己上 ECS、禁止自己点通过。
+
+## 侧栏公共文件只由首页交付
+
+`/shared/nav.js`、`/shared/layout.css`、`/shared/xingmai-logo.png` 以首页模块为准。人员管理、版本发布中心、个人中心及其他模块**禁止覆盖**这 3 个文件。侧栏必须是：顶栏黑底星脉甄选 logo、分组「项目」、底部固定「版本发布中心 / 个人中心 / 退出登录」和版本号；不要顶栏「退出」「暗色」。
