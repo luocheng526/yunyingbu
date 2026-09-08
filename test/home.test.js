@@ -97,9 +97,12 @@ test("home module does not query MySQL (no tables, nav stays static)", () => {
   assert.equal(navJs.includes("MYSQL"), false);
   assert.match(navJs, /rel = "prefetch"/);
   assert.match(navJs, /preventDefault/);
-  assert.match(navJs, /xm-home-sider v0\.4\.5/);
+  assert.match(navJs, /xm-home-sider 0\.1\.83-restore/);
   assert.match(navJs, /data:image\/png;base64,/);
   assert.match(navJs, /login-logo\.png/);
+  assert.match(navJs, /ICO_PATH/);
+  const layoutCss = fs.readFileSync(new URL("../public/shared/layout.css", import.meta.url), "utf8");
+  assert.match(layoutCss, /background: #1677ff/);
   assert.match(schema, /无业务表/);
 });
 
