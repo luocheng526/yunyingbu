@@ -30,11 +30,21 @@
 - 自己的样式：只写内容区，颜色用 `--xm-*` 和 `html[data-theme]`
 - 交单：`files` 列出路径，`contents` 是路径→正文，模块名填自己
 
-## `cursor/home-nav-workbench-e50e` 为什么不对
+## `cursor/home-nav-workbench-e50e` 为什么不一样，能不能改
 
-那是旧结构：仓库扁平（没有 `apps/xingmai/`），每页完整 HTML，侧栏写死在页面里，用 `<link rel="prefetch" as="document">` 预取整页。没有 `#xm-content`，没有 `XmModules.mount`。
+不一样，是因为**时间线和起点都不同**，不是现行仓库改坏了。
 
-现行产品是嵌入式：壳由主框架 `renderAppShell` 画一次，业务只往 `#xm-content` 挂载。不要复活 e50e，也不要把「每页完整 HTML + 自己带 nav」当模板。
+| | `e50e`（旧样板间） | 现行（嵌入式） |
+|---|---|---|
+| 起点 | 当时 `main` 几乎只有 README，首页 Agent 从零搭 | 代码在 `apps/xingmai/`，一个 Express 挂齐七个模块 |
+| 任务稿 | 「首页抽出 nav、每页完整 HTML」 | 主框架画壳，业务 `XmModules.mount` |
+| 入口 | 瘦 `src/app.js`，只有 `attachHome` | 完整内核：`attachProfile` + `attachHome` + 发版闸 + `/api/health` |
+| 导航 | 整页跳 + `prefetch` 整页文档，侧栏有「项目」分组 | `history.pushState` + 加载 `shared/modules/<id>.js`，无「项目」 |
+| 其它页 | 占位完整 HTML，自带侧栏 | `renderAppShell` + `#xm-content` |
+
+**能改，但不该在 `e50e` 那条旧分支上改。** 两条 git 历史对不上。硬把它改成嵌入式再合进主线，会在仓库根再铺一套 `src/` `public/`，而且是瘦 `app.js`，登录和发版会 404（跟 rel-131 同类）。
+
+现行 `apps/xingmai/` 里侧栏和工作台都已经在，而且是嵌入式。`e50e` 作废：不要当工作分支，不要抄，不要合进主线。首页继续只改 `index.html` 和 `shared/modules/home.js`。
 
 ## 模块边界
 

@@ -22,7 +22,7 @@
 【结构】
 - `/` 用完整 `index.html`，自带侧栏外观；内容在 `#home-dashboard` / `.xm-content`。
 - 其它路由不要你画壳。`nav.js` 点到首页时走站内切换，不要预取全部模块文档。
-- **不要抄 `cursor/home-nav-workbench-e50e`。** 那是旧全页壳（扁平仓库、每页完整 HTML、prefetch 整页），不是现在的嵌入式。菜单项也不要你改，改菜单找主框架。
+- **不要抄、不要继续改 `cursor/home-nav-workbench-e50e`。** 那是首页第一期在空仓库上搭的全页样板间（瘦 `app.js`、prefetch 整页、「项目」分组），不是嵌入式。有用的东西已经在现行 `apps/xingmai/` 里。菜单项找主框架改。
 
 【要做】
 1. 登录后工作台：欢迎、指标/入口，跟 `--xm-*` / `data-theme` 走。
