@@ -1,5 +1,30 @@
 import { MODULES } from "./store.js";
 
+const APP_JS_RE = /(^|\/)src\/app\.js$/;
+const MODULES_FORBIDDEN_APP_JS = new Set(["数据中心", "沈子晗", "韩梦凯", "人员管理"]);
+export const APP_JS_KERNEL = ["attachProfile", "attachHome", "createReleasesRouter", "/api/health"];
+
+export function dangerousAppJsReason(body = {}) {
+  const files = normalizeFiles(body.files);
+  if (!files.some((item) => APP_JS_RE.test(item))) {
+    return "";
+  }
+  const module = String(body.module || "").trim();
+  if (MODULES_FORBIDDEN_APP_JS.has(module)) {
+    return `${module}禁止提交 src/app.js。覆盖全站入口会让登录和发版变成 404。只交本模块目录。`;
+  }
+  const contents = body.contents && typeof body.contents === "object" ? body.contents : {};
+  const text = String(contents["src/app.js"] || contents["apps/xingmai/src/app.js"] || "");
+  if (!text) {
+    return "提交 src/app.js 必须带完整 contents，且含 attachProfile、attachHome、createReleasesRouter、/api/health。";
+  }
+  const missing = APP_JS_KERNEL.filter((mark) => !text.includes(mark));
+  if (missing.length) {
+    return `src/app.js 是瘦版本，缺少 ${missing.join("、")}。禁止覆盖线上。`;
+  }
+  return "";
+}
+
 export function normalizeFiles(input) {
   if (Array.isArray(input)) {
     return input.map((item) => String(item).trim()).filter(Boolean);

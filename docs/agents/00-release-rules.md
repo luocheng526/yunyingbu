@@ -62,6 +62,7 @@ Cookie: 登录会话
 - **主框架可以新建目录。** 交单可带新路径（例如 `src/db/pool.js`）。闸门写入源目录和落地时会 `mkdir` 父目录；进程启动也会补齐 `src/db`、`src/lib` 等框架目录。不要因为以前 EACCES 就改去覆盖已有文件。
 - 源目录没有的新文件、或源目录与线上完全相同，闸门会失败。交单前确认 git 已 push，并让闸门能同步到源目录。
 - 禁止 SSH、禁止 `push-xingmai-to-ecs.sh`、禁止 `systemctl restart`、禁止自己覆盖 `/opt/mengkai`。
+- **禁止瘦 `src/app.js`。** 数据中心 / 沈子晗 / 韩梦凯 / 人员管理不得把 `src/app.js` 写进 `files`。谁交了只挂本模块路由的入口文件，登录和发版会 404，闸门无法自救。完整入口必须含 `attachProfile`、`attachHome`、`createReleasesRouter`、`/api/health`。
 
 ## 网页
 

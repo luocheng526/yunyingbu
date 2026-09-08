@@ -1,6 +1,6 @@
 import express from "express";
 import { requireReleasesAuth } from "./auth.js";
-import { checkMainBrainOrder, hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
+import { checkMainBrainOrder, dangerousAppJsReason, hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
 import { pushXingmaiToEcs } from "./push.js";
 import { restartMengkaiService } from "./restart.js";
 import { createStore, MODULES } from "./store.js";
@@ -178,6 +178,11 @@ export function createReleasesRouter(options = {}) {
       res.status(409).json({ ok: false, error: "有发布正在进行，禁止抢发" });
       return;
     }
+    const dangerGo = dangerousAppJsReason({ ...body, module: body.module || order.module });
+    if (dangerGo) {
+      res.status(400).json({ ok: false, error: dangerGo });
+      return;
+    }
     const ticket = ticketFromOrder(body, order);
     if (ticket.complete && ticket.module && !MODULES.includes(ticket.module)) {
       res.status(400).json({ ok: false, error: "模块不在允许列表中" });
@@ -211,6 +216,11 @@ export function createReleasesRouter(options = {}) {
       return;
     }
     const module = parsed.document.module || "其他";
+    const danger = dangerousAppJsReason({ ...body, module, files: parsed.document.files });
+    if (danger) {
+      res.status(400).json({ ok: false, error: danger });
+      return;
+    }
     if (parsed.complete && !MODULES.includes(module)) {
       res.status(400).json({ ok: false, error: "模块不在允许列表中" });
       return;

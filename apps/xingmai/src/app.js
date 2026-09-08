@@ -36,10 +36,9 @@ export function createApp() {
     }
   });
 
-  // 页面路由必须在 static 前面。线上 app.js 往往还挂了其它模块，不要整文件覆盖线上。
-  // GET / 的兜底在 profile/middleware.js，不依赖这里的顺序。
+  // 全站入口。缺 attachProfile / createReleasesRouter / /api/health 即瘦版本，覆盖线上会 404。
+  // 数据中心等板块禁止提交本文件。GET / 的兜底在 profile/middleware.js。
   attachHome(app);
-  // 线上 app.js 往往已经挂了这些路由。本仓库本地要能自测；发版不要整文件覆盖 app.js。
   app.use("/api/han", hanRouter);
   app.use("/api/shen", shenRouter);
   app.use("/api/people", peopleRouter);

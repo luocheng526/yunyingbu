@@ -1,7 +1,12 @@
 import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createApp } from "../src/app.js";
 import { resetStoreForTests } from "../src/modules/profile/auth.js";
+
+const appJs = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../src/app.js"), "utf8");
 
 const server = createApp().listen(0);
 const { port } = server.address();
@@ -17,6 +22,17 @@ async function login(username, password) {
     body: JSON.stringify({ username, password })
   });
 }
+
+test("app.js keeps login, health, and releases so a thin overwrite cannot ship", async () => {
+  assert.match(appJs, /attachProfile/);
+  assert.match(appJs, /attachHome/);
+  assert.match(appJs, /createReleasesRouter/);
+  assert.match(appJs, /\/api\/health/);
+  const health = await fetch(`${base}/api/health`);
+  assert.equal(health.status, 200);
+  const loginPage = await fetch(`${base}/login`);
+  assert.equal(loginPage.status, 200);
+});
 
 test("login page is public", async () => {
   const res = await fetch(`${base}/login`);

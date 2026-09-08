@@ -8,7 +8,7 @@
 【你拥有的路径】
 - public/data.html
 - src/modules/data/
-- src/app.js 只允许增加：app.use("/api/data", dataRouter)
+- **禁止提交 `src/app.js`。** 只交 `public/data*` 和 `src/modules/data/*`。带上瘦 `app.js` 会覆盖全站入口，登录和发版变 404。
 
 【依赖】顶栏请引用 /shared/layout.css 和 /shared/nav.js（由「首页」Agent 提供）。若文件还不存在，先做本页完整顶栏，链接仍用全站 7 项，但不要去改 public/index.html。
 
