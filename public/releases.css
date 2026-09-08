@@ -376,60 +376,67 @@ th { color: var(--oc-muted); font-weight: 600; }
   margin-left: auto;
 }
 
-/* Theme locks body { overflow:hidden; height:100% }. Forcing the shell to
-   100vh + flex-basis:auto made .xm-main as tall as the tickets, then clipped
-   it. Unlock the document so this page can scroll. Sidebar stays sticky. */
-html:has(.oc-wrap):has(.xm-shell),
-html:has(.oc-wrap) {
-  height: auto !important;
-  max-height: none !important;
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
-}
-html:has(.oc-wrap) body:has(.xm-shell),
-html:has(.oc-wrap) body.xm-app:has(.xm-shell),
-html:has(.oc-wrap) body.xm-app-shell:has(.xm-shell),
+/* Theme only preloads this file. The page gate also injects it as a real
+   stylesheet plus an inline copy of these scroll rules. Theme body is
+   overflow:hidden; pin the shell and make .xm-content / 版本记录 / 运行日志
+   the actual wheel scrollports. */
+html:has(.oc-wrap),
+html:has(.oc-wrap) body,
 html:has(.oc-wrap) body.xm-app,
-html:has(.oc-wrap) body {
-  height: auto !important;
-  max-height: none !important;
-  overflow: visible !important;
+html:has(.oc-wrap) body.xm-app-shell,
+html:has(.oc-wrap) body:has(.xm-shell) {
+  height: 100% !important;
+  max-height: 100dvh !important;
+  overflow: hidden !important;
 }
-html:has(.oc-wrap) .xm-shell {
+.xm-shell:has(.oc-wrap) {
   display: flex !important;
   align-items: stretch !important;
-  height: auto !important;
-  max-height: none !important;
-  min-height: 100vh !important;
-  overflow: visible !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
 }
-html:has(.oc-wrap) .xm-main {
+.xm-shell:has(.oc-wrap) .xm-main {
   display: flex !important;
   flex-direction: column !important;
-  flex: 1 1 auto !important;
+  flex: 1 1 0% !important;
   min-width: 0 !important;
   min-height: 0 !important;
   height: auto !important;
   max-height: none !important;
-  overflow: visible !important;
+  overflow: hidden !important;
 }
-html:has(.oc-wrap) .xm-content {
-  flex: 1 1 auto !important;
+.xm-content:has(.oc-wrap),
+.xm-shell:has(.oc-wrap) .xm-content {
+  flex: 1 1 0% !important;
+  height: 0 !important;
   min-height: 0 !important;
-  height: auto !important;
   max-height: none !important;
-  overflow: visible !important;
-  overscroll-behavior: auto;
+  overflow-x: auto !important;
+  overflow-y: scroll !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
-#history-view,
-#logs-view,
 #queue-view,
-.xm-content #history-view,
-.xm-content #logs-view,
 .xm-content #queue-view {
   overflow: visible;
   color: var(--oc-text);
   min-height: 2rem;
+}
+#history-view,
+#logs-view,
+.xm-content #history-view,
+.xm-content #logs-view {
+  color: var(--oc-text);
+  min-height: 8rem;
+  max-height: calc(100dvh - 15rem);
+  overflow-x: auto !important;
+  overflow-y: scroll !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 .xm-content #history-view table,
 #history-view table {

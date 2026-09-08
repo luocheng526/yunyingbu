@@ -25,6 +25,11 @@ import {
 import { NOOP_APPLY_ERROR, SMOKE_FAIL_ERROR } from "../src/modules/releases/charter.js";
 import { collectSmokeImports, smokeCheckSyntax, smokeLoadLive } from "../src/modules/releases/smoke.js";
 import { DEMO_INITIAL_PASSWORD, DEMO_USERNAME } from "../src/modules/profile/auth.js";
+import {
+  injectReleasesCssLink,
+  RELEASES_CSS_HREF,
+  RELEASES_SCROLL_STYLE_ID
+} from "../src/modules/releases/auth.js";
 
 const signedInUser = { username: "罗成" };
 let activeCookie = "";
@@ -203,6 +208,9 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
+    assert.match(text, /hist-scroll-1/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=hist-scroll-1/);
+    assert.match(text, /id="xm-releases-scroll"/);
     assert.doesNotMatch(text, /href="\/shared\/layout.css"/);
     assert.doesNotMatch(text, /src="\/shared\/nav.js"/);
     assert.match(text, /data-tab="queue"/);
@@ -322,9 +330,16 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /\.oc-top/);
     assert.match(text, /\.oc-tab\.active/);
     assert.match(text, /html:has\(\.oc-wrap\)/);
-    assert.match(text, /overflow-y: auto !important/);
-    assert.match(text, /Unlock the document so this page can scroll/);
+    assert.match(text, /overflow-y: scroll !important/);
+    assert.match(text, /#history-view/);
+    assert.match(text, /#logs-view/);
+    assert.match(text, /\.xm-content:has\(\.oc-wrap\)/);
+    assert.match(text, /height: 0 !important/);
+    assert.match(text, /100dvh/);
+    assert.match(text, /touch-action: pan-y/);
     assert.match(text, /\.oc-pager/);
+    assert.match(res.headers.get("cache-control") || "", /no-store/);
+    assert.doesNotMatch(text, /Unlock the document so this page can scroll/);
     assert.doesNotMatch(text, /(?<!min-)height: 100vh !important/);
     assert.doesNotMatch(text, /html:has\(\.oc-wrap\) \.xm-content \{\s*[^}]*overflow: auto !important/);
     assert.match(text, /--oc-bg:\s*var\(--xm-bg,\s*#f7f7f4\)/);
@@ -343,6 +358,25 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /#logs-view \.log-item/);
     assert.match(text, /\.history-stats/);
   });
+});
+
+test("injectReleasesCssLink turns the theme preload into a real stylesheet", () => {
+  const stub = `<!DOCTYPE html>
+<html lang="zh-CN"><head>
+<title>星脉</title>
+<link rel="preload" href="/releases.css?v=0.1.66" as="style" />
+<link rel="stylesheet" href="/shared/layout.css?v=0.1.66" />
+</head>
+<body class="xm-app-shell"></body></html>`;
+  const out = injectReleasesCssLink(stub);
+  assert.match(out, new RegExp(`href="${RELEASES_CSS_HREF.replace("?", "\\?")}"`));
+  assert.match(out, new RegExp(`id="${RELEASES_SCROLL_STYLE_ID}"`));
+  assert.match(out, /rel="stylesheet"/);
+  assert.match(out, /#history-view/);
+  assert.match(out, /#logs-view/);
+  assert.match(out, /overflow-y:scroll/);
+  assert.doesNotMatch(out, /rel="preload" href="\/releases\.css/);
+  assert.equal(injectReleasesCssLink(out), out);
 });
 
 test("unauthenticated page redirects to /login", async () => {

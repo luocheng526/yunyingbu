@@ -1,7 +1,52 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const COOKIE_NAME = "mk_sid";
+export const RELEASES_CSS_HREF = "/releases.css?v=hist-scroll-1";
+export const RELEASES_SCROLL_STYLE_ID = "xm-releases-scroll";
+const releasesCssFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public/releases.css");
+
+export function releasesScrollStyleTag() {
+  return `<style id="${RELEASES_SCROLL_STYLE_ID}">
+html:has(.oc-wrap),html:has(.oc-wrap) body,html:has(.oc-wrap) body.xm-app,html:has(.oc-wrap) body.xm-app-shell,html:has(.oc-wrap) body:has(.xm-shell){height:100%!important;max-height:100dvh!important;overflow:hidden!important;}
+.xm-shell:has(.oc-wrap){display:flex!important;align-items:stretch!important;height:100dvh!important;max-height:100dvh!important;min-height:0!important;overflow:hidden!important;}
+.xm-shell:has(.oc-wrap) .xm-main{display:flex!important;flex-direction:column!important;flex:1 1 0%!important;min-width:0!important;min-height:0!important;overflow:hidden!important;}
+.xm-content:has(.oc-wrap),.xm-shell:has(.oc-wrap) .xm-content{flex:1 1 0%!important;height:0!important;min-height:0!important;overflow-x:auto!important;overflow-y:scroll!important;touch-action:pan-y;}
+.pane,.xm-content .pane,.page .pane{display:none!important;}
+.pane.on,.xm-content .pane.on,.page .pane.on{display:block!important;}
+#history-view,#logs-view,.xm-content #history-view,.xm-content #logs-view{max-height:calc(100dvh - 15rem);overflow-x:auto!important;overflow-y:scroll!important;touch-action:pan-y;}
+</style>`;
+}
+
+function looksLikeHtml(text) {
+  return /<html[\s>]/i.test(text) || /<\/head>/i.test(text) || /<head[\s>]/i.test(text);
+}
+
+export function injectReleasesCssLink(html) {
+  const text = String(html || "");
+  if (!text || !looksLikeHtml(text)) {
+    return text;
+  }
+  const linkTag = `<link rel="stylesheet" href="${RELEASES_CSS_HREF}">`;
+  let out = text.replace(/<link\b[^>]*href=["'][^"']*\/releases\.css[^"']*["'][^>]*>/gi, (full) => {
+    if (/rel\s*=\s*["']?(?:preload|stylesheet)/i.test(full)) {
+      return linkTag;
+    }
+    return full;
+  });
+  const extras = [];
+  if (!out.includes(`id="${RELEASES_SCROLL_STYLE_ID}"`)) {
+    extras.push(releasesScrollStyleTag());
+  }
+  if (!out.includes(`href="${RELEASES_CSS_HREF}"`)) {
+    extras.push(linkTag);
+  }
+  if (extras.length && /<\/head>/i.test(out)) {
+    out = out.replace(/<\/head>/i, `${extras.join("\n")}\n</head>`);
+  }
+  return out;
+}
 
 const profileAuthPath = fileURLToPath(new URL("../profile/auth.js", import.meta.url));
 const profileSessionPath = fileURLToPath(new URL("../profile/session.js", import.meta.url));
@@ -64,17 +109,87 @@ export function requireReleasesAuth(options = {}) {
   };
 }
 
+function requestPath(req) {
+  return String(req.path || "/").replace(/\/+$/, "") || "/";
+}
+
 function isReleasesPage(req) {
   const method = String(req.method || "GET").toUpperCase();
   if (method !== "GET" && method !== "HEAD") {
     return false;
   }
-  const path = String(req.path || "/").replace(/\/+$/, "") || "/";
-  return path === "/releases" || path === "/releases.html";
+  const pathname = requestPath(req);
+  return pathname === "/releases" || pathname === "/releases.html";
+}
+
+function isReleasesCss(req) {
+  const method = String(req.method || "GET").toUpperCase();
+  return (method === "GET" || method === "HEAD") && requestPath(req) === "/releases.css";
+}
+
+function rewriteHtmlBody(body) {
+  if (typeof body === "string") {
+    return looksLikeHtml(body) ? injectReleasesCssLink(body) : body;
+  }
+  if (Buffer.isBuffer(body) && body.length < 500000) {
+    const text = body.toString("utf8");
+    if (looksLikeHtml(text)) {
+      const next = injectReleasesCssLink(text);
+      return next === text ? body : next;
+    }
+  }
+  return body;
+}
+
+function attachCssInjector(res) {
+  if (res.__xmReleasesCssInject) {
+    return;
+  }
+  res.__xmReleasesCssInject = true;
+  res.setHeader("Link", `<${RELEASES_CSS_HREF}>; rel=stylesheet`);
+  const origSend = res.send.bind(res);
+  res.send = function sendWithCss(body) {
+    return origSend(rewriteHtmlBody(body));
+  };
+  const origSendFile = typeof res.sendFile === "function" ? res.sendFile.bind(res) : null;
+  if (origSendFile) {
+    res.sendFile = function sendFileWithCss(filePath, options, callback) {
+      const cb = typeof options === "function" ? options : callback;
+      const opts = typeof options === "function" || options == null ? undefined : options;
+      try {
+        if (/\.html?$/i.test(String(filePath || "")) && existsSync(filePath)) {
+          res.type("html");
+          return origSend(injectReleasesCssLink(readFileSync(filePath, "utf8")));
+        }
+      } catch {
+        /* fall through to sendFile */
+      }
+      return origSendFile(filePath, opts, cb);
+    };
+  }
+  const origEnd = res.end.bind(res);
+  res.end = function endWithCss(chunk, encoding, cb) {
+    const rewritten = rewriteHtmlBody(chunk);
+    if (rewritten !== chunk) {
+      res.removeHeader("Content-Length");
+      return origEnd.call(this, rewritten, encoding, cb);
+    }
+    return origEnd.call(this, chunk, encoding, cb);
+  };
 }
 
 export function releasesPageGate(options = {}) {
   return async function releasesPageGateMiddleware(req, res, next) {
+    if (isReleasesCss(req)) {
+      res.setHeader("Cache-Control", "no-store, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      if (!existsSync(releasesCssFile)) {
+        next();
+        return;
+      }
+      res.type("css").send(readFileSync(releasesCssFile, "utf8"));
+      return;
+    }
     if (!isReleasesPage(req)) {
       next();
       return;
@@ -82,6 +197,7 @@ export function releasesPageGate(options = {}) {
     const user = await resolveUser(req, options);
     if (user) {
       res.setHeader("Cache-Control", "no-store");
+      attachCssInjector(res);
       next();
       return;
     }
