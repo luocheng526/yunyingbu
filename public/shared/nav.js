@@ -61,7 +61,7 @@
       '<nav class="xm-menu xm-menu-foot">' +
       FOOT.map(itemHtml).join("") +
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout"><i class="xm-ico" aria-hidden="true"></i><span>退出登录</span></button>' +
-      '<p class="xm-version">v0.4.2</p></nav>'
+      '<p class="xm-version">v0.4.3</p></nav>'
     );
   }
 
