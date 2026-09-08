@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.91 */
+/* xm-fast-shell 0.1.92 */
 (function () {
-  const ASSET_VER = "0.1.91";
+  const ASSET_VER = "0.1.92";
   const MODULES = {
     "/data": "data",
     "/shen": "shen",
@@ -88,7 +88,7 @@
     return (
       '<div class="xm-brand"><a class="xm-logo" href="/"><img src="/login-logo.png" alt="星脉甄选" onerror="this.onerror=null;this.src=\'/shared/xingmai-logo.png\'" /></a>' +
       '<button type="button" class="xm-collapse" id="xm-collapse" aria-label="折叠侧栏">‹</button></div>' +
-      '<nav class="xm-menu xm-menu-main"><p class="xm-menu-label">项目</p>' +
+      '<nav class="xm-menu xm-menu-main">' +
       MAIN.map(itemHtml).join("") +
       "</nav>" +
       '<nav class="xm-menu xm-menu-foot">' +

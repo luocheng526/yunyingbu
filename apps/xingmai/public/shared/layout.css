@@ -1,4 +1,4 @@
-/* xm-sider-toggle 0.1.91 */
+/* xm-sider-narrow 0.1.92 */
 :root {
   --xm-sider: #ffffff;
   --xm-bg: #f0f2f5;
@@ -10,7 +10,7 @@
   --xm-primary-soft: #e6f4ff;
   --xm-card: #ffffff;
   --xm-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 8px 24px rgba(0, 0, 0, 0.04);
-  --xm-sider-w: 232px;
+  --xm-sider-w: 200px;
   font-family: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
 }
 
@@ -106,7 +106,7 @@ html.xm-collapsed .xm-collapse {
 .xm-logo img {
   display: block;
   width: 100%;
-  max-width: 168px;
+  max-width: 148px;
   height: auto;
 }
 
@@ -139,13 +139,11 @@ html.xm-collapsed .xm-collapse {
 }
 
 .xm-menu-label {
-  margin: 6px 16px 4px;
-  color: #bfbfbf;
-  font-size: 12px;
+  display: none;
 }
 
 .xm-version {
-  margin: 10px 16px 0;
+  margin: 10px 12px 0;
   color: #bfbfbf;
   font-size: 12px;
 }
@@ -154,10 +152,10 @@ html.xm-collapsed .xm-collapse {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-height: 40px;
-  padding: 8px 16px;
-  margin-right: 8px;
+  padding: 8px 12px;
+  margin-right: 6px;
   border: 0;
   border-radius: 0 8px 8px 0;
   background: transparent;
@@ -166,7 +164,7 @@ html.xm-collapsed .xm-collapse {
   font-size: 14px;
   line-height: 1.35;
   text-align: left;
-  width: calc(100% - 8px);
+  width: calc(100% - 6px);
   cursor: pointer;
   font-family: inherit;
 }
