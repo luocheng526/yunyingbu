@@ -1,4 +1,4 @@
-/* LoginPage 0.1.75 — split tech-blue operations login */
+/* LoginPage 0.1.76 — split tech-blue operations login */
 :root {
   --login-bg: #f7f7f4;
   --login-ink: #14120b;
@@ -122,24 +122,43 @@ body {
 
 .hero-top {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 24px;
+  gap: clamp(16px, 2vw, 36px);
 }
 
 .hero-logo {
   display: block;
-  height: clamp(48px, 5.2vw, 68px);
+  height: clamp(76px, 5.6vw, 102px);
   width: auto;
   mix-blend-mode: screen;
 }
 
 .hero-slogan {
-  margin: 2px 0 0;
+  margin: 0;
   text-align: right;
+  flex: 0 1 auto;
 }
 
-.hero-slogan span,
+.hero-slogan span {
+  display: block;
+  font-size: clamp(18px, 1.35vw, 24px);
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  white-space: nowrap;
+  color: #fff;
+}
+
+.hero-slogan small {
+  display: block;
+  margin-top: 8px;
+  color: rgba(236, 244, 255, 0.9);
+  font-size: clamp(11px, 0.85vw, 14px);
+  letter-spacing: 0.18em;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .hero-foot span {
   display: block;
   font-size: clamp(13px, 1.05vw, 16px);
@@ -147,7 +166,6 @@ body {
   font-weight: 600;
 }
 
-.hero-slogan small,
 .hero-foot small,
 .hero-kicker {
   display: block;
@@ -520,8 +538,10 @@ body {
 }
 
 @media (max-width: 1366px) {
-  .login-hero { padding: 18px 24px 12px; }
-  .hero-logo { height: 58px; }
+  .login-hero { padding: 16px 22px 12px; }
+  .hero-logo { height: 80px; }
+  .hero-slogan span { font-size: 18px; }
+  .hero-slogan small { font-size: 11px; margin-top: 6px; }
   .hero-copy h2 { font-size: 34px; }
   .hero-pills { margin: 10px 0 14px; }
   .hero-lower {
