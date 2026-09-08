@@ -496,12 +496,12 @@ html body:has(.xm-shell) {
 }
 .xm-content,
 .xm-shell .xm-content {
-  flex: 1 1 0% !important;
-  height: 0 !important;
+  flex: 1 1 auto !important;
+  height: auto !important;
   min-height: 0 !important;
   max-height: none !important;
   overflow-x: auto !important;
-  overflow-y: scroll !important;
+  overflow-y: auto !important;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
@@ -535,12 +535,12 @@ html:has(.oc-wrap) body:has(.xm-shell) {
 }
 .xm-content:has(.oc-wrap),
 .xm-shell:has(.oc-wrap) .xm-content {
-  flex: 1 1 0% !important;
-  height: 0 !important;
+  flex: 1 1 auto !important;
+  height: auto !important;
   min-height: 0 !important;
   max-height: none !important;
   overflow-x: auto !important;
-  overflow-y: scroll !important;
+  overflow-y: auto !important;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
