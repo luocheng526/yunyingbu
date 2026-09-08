@@ -1,6 +1,6 @@
 import express from "express";
 import { requireReleasesAuth } from "./auth.js";
-import { checkMainBrainOrder, dangerousAppJsReason, hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
+import { checkMainBrainOrder, hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument, ticketGuardReason } from "./document.js";
 import { pushXingmaiToEcs } from "./push.js";
 import { restartMengkaiService } from "./restart.js";
 import { createStore, MODULES } from "./store.js";
@@ -75,8 +75,15 @@ export function createReleasesRouter(options = {}) {
   router.use(requireReleasesAuth(options));
 
   async function runPublishJob(item, noDoc) {
-    const files = noDoc ? [] : item.files || [];
-    const shouldRestart = noDoc ? true : Boolean(item.restart);
+    if (noDoc) {
+      throw new Error("禁止空文件列表全量落地。交单必须写明路径。");
+    }
+    const files = item.files || [];
+    const danger = ticketGuardReason({ module: item.module, files, contents: item.contents || {} });
+    if (danger) {
+      throw new Error(danger);
+    }
+    const shouldRestart = Boolean(item.restart);
     const pushResult = await push(files);
     let extra = "";
     if (shouldRestart) {
@@ -100,6 +107,16 @@ export function createReleasesRouter(options = {}) {
     const order = checkMainBrainOrder(rawOrder, item.module);
     if (!order.ok) {
       res.status(409).json({ ok: false, error: order.error });
+      return;
+    }
+
+    const danger = ticketGuardReason({
+      module: item.module,
+      files: item.files,
+      contents: extras.contents || item.contents || req.body?.contents
+    });
+    if (danger) {
+      res.status(400).json({ ok: false, error: danger });
       return;
     }
 
@@ -178,7 +195,7 @@ export function createReleasesRouter(options = {}) {
       res.status(409).json({ ok: false, error: "有发布正在进行，禁止抢发" });
       return;
     }
-    const dangerGo = dangerousAppJsReason({ ...body, module: body.module || order.module });
+    const dangerGo = ticketGuardReason({ ...body, module: body.module || order.module });
     if (dangerGo) {
       res.status(400).json({ ok: false, error: dangerGo });
       return;
@@ -216,7 +233,7 @@ export function createReleasesRouter(options = {}) {
       return;
     }
     const module = parsed.document.module || "其他";
-    const danger = dangerousAppJsReason({ ...body, module, files: parsed.document.files });
+    const danger = ticketGuardReason({ ...body, module, files: parsed.document.files });
     if (danger) {
       res.status(400).json({ ok: false, error: danger });
       return;

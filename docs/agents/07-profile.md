@@ -18,6 +18,7 @@
   - app.use("/api/profile", profileRouter)
   - GET /login → sendFile login.html
   不得改写其他模块的业务路由实现。
+- **禁止提交壳。** 不要交 `public/shared/nav.js`、`public/shared/layout.css`、`public/shared/xingmai-logo.png`、`src/modules/home/nav-items.js`。登录页不要套侧栏。
 
 【白名单（未登录可访问）】
 - GET /login 及 login.css、登录页需要的静态资源

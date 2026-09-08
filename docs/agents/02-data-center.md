@@ -9,6 +9,7 @@
 - public/data.html
 - src/modules/data/
 - **禁止提交 `src/app.js`。** 只交 `public/data*` 和 `src/modules/data/*`。带上瘦 `app.js` 会覆盖全站入口，登录和发版变 404。
+- **禁止提交壳。** 不要交 `public/shared/nav.js`、`public/shared/layout.css`、`public/shared/xingmai-logo.png`、`src/modules/home/nav-items.js`。只引用，由首页交付。
 
 【依赖】顶栏请引用 /shared/layout.css 和 /shared/nav.js（由「首页」Agent 提供）。若文件还不存在，先做本页完整顶栏，链接仍用全站 7 项，但不要去改 public/index.html。
 
