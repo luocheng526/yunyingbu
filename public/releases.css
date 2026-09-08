@@ -11,7 +11,6 @@
   --oc-green: #3f6b3a;
   --oc-green-ink: #3f6b3a;
   --oc-danger: #9f1239;
-  --oc-frame: #dc2626;
   --oc-warn: #6a5420;
   --oc-shadow: var(--xm-shadow, 0 0 0 1px rgba(20, 18, 11, 0.06));
   --oc-radius: var(--xm-radius, 10px);
@@ -73,17 +72,23 @@ html:has(.xm-shell) .oc-top {
 
 .oc-wrap.page,
 .oc-wrap.xm-page {
-  max-width: 1240px;
-  margin: 0 auto;
-  padding: 14px 16px 16px;
+  max-width: none !important;
+  width: 100%;
+  margin: 0 !important;
+  padding: 12px 16px 16px;
   background: var(--oc-card);
-  border: 2px solid var(--oc-frame, #dc2626);
-  border-radius: var(--oc-radius);
+  border: 0 !important;
+  border-radius: 0;
   box-shadow: none;
 }
 html:has(.xm-shell) .oc-wrap.page,
 html:has(.xm-shell) .oc-wrap.xm-page {
-  padding: 12px 14px 14px;
+  padding: 10px 16px 16px;
+}
+html:has(.oc-wrap) .xm-content,
+.xm-content:has(.oc-wrap),
+.xm-shell .xm-content:has(.oc-wrap) {
+  padding: 0 !important;
 }
 
 .oc-hero-card {
@@ -496,12 +501,12 @@ html body:has(.xm-shell) {
 }
 .xm-content,
 .xm-shell .xm-content {
-  flex: 1 1 0% !important;
-  height: 0 !important;
+  flex: 1 1 auto !important;
+  height: auto !important;
   min-height: 0 !important;
   max-height: none !important;
   overflow-x: auto !important;
-  overflow-y: scroll !important;
+  overflow-y: auto !important;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
@@ -535,12 +540,12 @@ html:has(.oc-wrap) body:has(.xm-shell) {
 }
 .xm-content:has(.oc-wrap),
 .xm-shell:has(.oc-wrap) .xm-content {
-  flex: 1 1 0% !important;
-  height: 0 !important;
+  flex: 1 1 auto !important;
+  height: auto !important;
   min-height: 0 !important;
   max-height: none !important;
   overflow-x: auto !important;
-  overflow-y: scroll !important;
+  overflow-y: auto !important;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;

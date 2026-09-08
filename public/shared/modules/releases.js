@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.75-sc-mount */
+/* xm-module-releases 0.1.84-fullbleed */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -85,7 +85,7 @@
         display: flex !important; flex-direction: column !important; flex: 1 1 0% !important; min-height: 0 !important; overflow: hidden !important;
       }
       .xm-content, .xm-shell .xm-content {
-        flex: 1 1 0% !important; height: 0 !important; min-height: 0 !important; overflow-y: scroll !important; touch-action: pan-y;
+        flex: 1 1 auto !important; height: auto !important; min-height: 0 !important; overflow-y: auto !important; touch-action: pan-y;
       }
       html:has(.oc-wrap), html:has(.oc-wrap) body, html:has(.oc-wrap) body.xm-app, html:has(.oc-wrap) body.xm-app-shell {
         height: 100% !important; max-height: 100dvh !important; overflow: hidden !important;
@@ -97,12 +97,13 @@
         display: flex !important; flex-direction: column !important; flex: 1 1 0% !important; min-height: 0 !important; overflow: hidden !important;
       }
       .xm-content:has(.oc-wrap), .xm-shell:has(.oc-wrap) .xm-content {
-        flex: 1 1 0% !important; height: 0 !important; min-height: 0 !important; overflow-y: scroll !important; touch-action: pan-y;
+        flex: 1 1 auto !important; height: auto !important; min-height: 0 !important; overflow-y: auto !important; touch-action: pan-y;
       }
       #history-view, #logs-view {
         max-height: calc(100dvh - 15rem); overflow-y: scroll !important; touch-action: pan-y;
       }
-      .oc-wrap.page, .oc-wrap.xm-page { background: var(--xm-card, #fff); border: 2px solid #dc2626; border-radius: 10px; padding: 12px 14px 14px; }
+      .oc-wrap.page, .oc-wrap.xm-page { max-width: none !important; width: 100%; margin: 0 !important; background: var(--xm-card, #fff); border: 0 !important; border-radius: 0; padding: 10px 16px 16px; }
+      html:has(.oc-wrap) .xm-content, .xm-content:has(.oc-wrap) { padding: 0 !important; }
       .oc-hero-card { background: transparent; border: 0; box-shadow: none; padding: 0 0 10px; margin: 0 0 12px; }
       .oc-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; }
       .oc-tab-num { display: block; margin: 0.25rem 0 0.1rem; font-size: 1.35rem; font-weight: 750; }
@@ -147,7 +148,7 @@
       <section class="oc-card panel">
         <div class="pane on" id="pane-queue">
           <h3>待上线</h3>
-          <p class="hint lead">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。版本号由本闸门统一发放，全站一条号 0.1.N-说明，各模块不得自领；同一号段不能跨模块再用。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。整页刷新并读完新数据后才关升级遮罩。有新单据约 15 秒内自动提示，不会自动点通过。待上线、版本记录、运行日志都分页，每页 20 条。</p>
+          <p class="hint lead">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。版本号由本闸门统一发放，全站一条号 0.1.N-说明，各模块不得自领；同一号段不能跨模块再用。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。站点恢复后就地刷新并关升级遮罩，不再整页跳转。有新单据约 15 秒内自动提示，不会自动点通过。待上线、版本记录、运行日志都分页，每页 20 条。</p>
           <div class="caps" id="stat-caps"></div>
           <div class="note banner">发布纪律：本页是唯一发版闸门。只执行交来的单据 + 本页「通过」。按提交时间点第 1 位；一把锁，禁止抢发；下一条不会自动发。「帮我上线」无效。新文件只放源目录，不要先拷到线上；点通过才落地。闸门不读 git，也不拉 Cloud 工作区，交单只登记路径。可带 contents（路径→正文）或 ref（分支/提交），闸门会先写入源目录。源目录与线上相同会失败。</div>
           <div id="lock-view" class="lock-box idle">当前空闲，没有发布任务。</div>
@@ -188,7 +189,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-4";
+      link.href = "/releases.css?v=sc-ui-6";
       document.head.appendChild(link);
     }
   }
@@ -261,6 +262,10 @@
         window.location.replace("/login");
       }
       async function api(path, options) {
+        const opts = options || {};
+        const skipLoginRedirect = Boolean(opts.skipLoginRedirect);
+        const fetchOpts = Object.assign({}, opts);
+        delete fetchOpts.skipLoginRedirect;
         const ac = new AbortController();
         const timer = setTimeout(function () { ac.abort(); }, 60000);
         let res;
@@ -269,7 +274,7 @@
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
             signal: ac.signal,
-            ...options
+            ...fetchOpts
           });
         } catch (err) {
           if (err && err.name === "AbortError") {
@@ -282,7 +287,9 @@
           clearTimeout(timer);
         }
         if (res.status === 401) {
-          goLogin();
+          if (!skipLoginRedirect) {
+            goLogin();
+          }
           const err = new Error("未登录");
           err.status = 401;
           throw err;
@@ -534,8 +541,65 @@
         }
       }
 
+      async function probePage() {
+        const ac = new AbortController();
+        const timer = setTimeout(function () { ac.abort(); }, 8000);
+        try {
+          const res = await fetch("/releases?probe=" + Date.now(), {
+            credentials: "same-origin",
+            cache: "no-store",
+            headers: { Accept: "text/html" },
+            signal: ac.signal
+          });
+          if (res.status !== 200) {
+            return false;
+          }
+          const text = await res.text();
+          return text.indexOf("releases.js") !== -1 || text.indexOf("xm-releases-boot") !== -1 || text.indexOf("upgrade-mask") !== -1;
+        } catch {
+          return false;
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+
+      async function waitUntilSiteReady(needRestart) {
+        if (!needRestart) {
+          return probeHealth();
+        }
+        let okStreak = 0;
+        for (let i = 0; i < 40; i += 1) {
+          const healthy = await probeHealth();
+          const pageOk = healthy ? await probePage() : false;
+          if (healthy && pageOk) {
+            okStreak += 1;
+            if (okStreak >= 2) {
+              return true;
+            }
+          } else {
+            okStreak = 0;
+          }
+          await sleep(700);
+        }
+        return false;
+      }
+
+      async function finishUpgradeInPlace(version) {
+        clearShellPending();
+        renderUpgradeSteps(["reload", "done"], "done", "ok");
+        setUpgradeTitle("升级完成");
+        try {
+          await refresh({ skipLoginRedirect: true });
+        } catch (err) {
+          flash((err && err.message) || "刷新失败", true);
+        }
+        flash("发布成功 · " + (version || ""));
+        hideUpgrade();
+        consumePendingUpgrade();
+      }
+
       async function loadTicket(id) {
-        const all = await api("/api/releases");
+        const all = await api("/api/releases", { skipLoginRedirect: true });
         return (all.items || []).find(function (item) { return item.id === id; }) || null;
       }
 
@@ -586,8 +650,9 @@
                   version: version || ticket.version,
                   id: id
                 }));
-                window.location.replace("/releases?reloaded=" + Date.now());
-                return "reloading";
+                await waitUntilSiteReady(needRestart);
+                await finishUpgradeInPlace(version || ticket.version);
+                return "landed";
               }
               lastHealth = "健康检查尚未 200";
             } catch (err) {
@@ -844,13 +909,14 @@
         }).join("") + renderPager("logs", paged);
       }
 
-      async function refresh() {
+      async function refresh(opts) {
+        const apiOpts = opts && opts.skipLoginRedirect ? { skipLoginRedirect: true } : {};
         clearShellPending();
         const [queue, lock, ready, me] = await Promise.all([
-          api("/api/releases/queue"),
-          api("/api/releases/lock"),
-          api("/api/releases/readyz"),
-          api("/api/auth/me")
+          api("/api/releases/queue", apiOpts),
+          api("/api/releases/lock", apiOpts),
+          api("/api/releases/readyz", apiOpts),
+          api("/api/auth/me", apiOpts)
         ]);
         setText("who", me.displayName || me.username || "罗成");
         renderLock(lock, ready);
@@ -861,8 +927,8 @@
         renderQueue(queued, lock.locked, { current: [] });
         try {
           const [all, versions] = await Promise.all([
-            api("/api/releases"),
-            api("/api/releases/versions")
+            api("/api/releases", apiOpts),
+            api("/api/releases/versions", apiOpts)
           ]);
           const items = all.items || [];
           renderStats(items, ready);
@@ -975,7 +1041,7 @@
             const needRestart = card.getAttribute("data-restart") === "1";
             const version = card.getAttribute("data-version") || "";
             const passResult = await runPass(id, needRestart, version);
-            if (passResult === "reloading") return;
+            if (passResult === "reloading" || passResult === "landed") return;
             if (passResult === "failed") {
               btn.disabled = false;
             }

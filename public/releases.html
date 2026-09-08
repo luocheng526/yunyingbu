@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>版本发布中心</title>
-    <link rel="stylesheet" href="/releases.css?v=sc-ui-4" />
+    <link rel="stylesheet" href="/releases.css?v=sc-ui-6" />
     <style>
       #upgrade-mask,
       html > #upgrade-mask {
@@ -118,7 +118,7 @@
       <section class="oc-card panel">
         <div class="pane on" id="pane-queue">
           <h3>待上线</h3>
-          <p class="hint lead">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。版本号由本闸门统一发放，全站一条号 0.1.N-说明，各模块不得自领；同一号段不能跨模块再用。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。整页刷新并读完新数据后才关升级遮罩。有的升级会掉登录：会话还在就自动刷新完结；需要重新登录时遮罩停住，请你登录后再回本页完结，不会自动跳登录。有新单据约 15 秒内自动提示，不会自动点通过。待上线、版本记录、运行日志都分页，每页 20 条。</p>
+          <p class="hint lead">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。版本号由本闸门统一发放，全站一条号 0.1.N-说明，各模块不得自领；同一号段不能跨模块再用。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。站点恢复后就地刷新并关升级遮罩，不再整页跳转。有的升级会掉登录：会话还在就自动刷新完结；需要重新登录时遮罩停住，请你登录后再回本页完结，不会自动跳登录。有新单据约 15 秒内自动提示，不会自动点通过。待上线、版本记录、运行日志都分页，每页 20 条。</p>
           <div class="caps" id="stat-caps"></div>
           <div class="note banner">发布纪律：本页是唯一发版闸门。只执行交来的单据 + 本页「通过」。按提交时间点第 1 位；一把锁，禁止抢发；下一条不会自动发。「帮我上线」无效。制品没有完整完成不要进本页：须有模块、文件、验收、是否重启，源目录文件要齐，改到的 src 先过语法检查。未完成的单当场拒绝，不会入队，防止系统崩溃卡住。新文件只放源目录，不要先拷到线上；点通过才落地。闸门不读 git，也不拉 Cloud 工作区，交单只登记路径。可带 contents（路径→正文）或 ref（分支/提交），闸门会先写入源目录。源目录与线上相同会失败。</div>
           <div id="lock-view" class="lock-box idle">当前空闲，没有发布任务。</div>
@@ -558,6 +558,44 @@
         return res.status === 200;
       }
 
+      async function probePage() {
+        try {
+          const res = await fetch("/releases?probe=" + Date.now(), {
+            credentials: "same-origin",
+            cache: "no-store",
+            headers: { Accept: "text/html" }
+          });
+          if (res.status !== 200) {
+            return false;
+          }
+          const text = await res.text();
+          return text.indexOf("upgrade-mask") !== -1 || text.indexOf("releases.js") !== -1;
+        } catch (_err) {
+          return false;
+        }
+      }
+
+      async function waitUntilSiteReady(needRestart) {
+        if (!needRestart) {
+          return probeHealth();
+        }
+        let okStreak = 0;
+        for (let i = 0; i < 40; i += 1) {
+          const healthy = await probeHealth();
+          const pageOk = healthy ? await probePage() : false;
+          if (healthy && pageOk) {
+            okStreak += 1;
+            if (okStreak >= 2) {
+              return true;
+            }
+          } else {
+            okStreak = 0;
+          }
+          await sleep(700);
+        }
+        return false;
+      }
+
       async function loadTicket(id) {
         const all = await api("/api/releases", { skipLoginRedirect: true });
         return (all.items || []).find(function (item) { return item.id === id; }) || null;
@@ -643,17 +681,13 @@
                   version: version || ticket.version,
                   id: id
                 });
-                window.location.replace("/releases?reloaded=" + Date.now());
-                await sleep(1200);
-                if (maskIsOpen() && (await probeSession())) {
-                  window.__xmUpgradePass = false;
-                  await finishUpgradeOk({
-                    version: version || ticket.version,
-                    id: id
-                  });
-                }
+                await waitUntilSiteReady(needRestart);
                 window.__xmUpgradePass = false;
-                return "reloading";
+                await finishUpgradeOk({
+                  version: version || ticket.version,
+                  id: id
+                });
+                return "landed";
               }
               if (!sessionOk && landed && Date.now() - healthOkSince >= 2000) {
                 window.__xmUpgradePass = false;
@@ -1057,7 +1091,7 @@
             const needRestart = card.getAttribute("data-restart") === "1";
             const version = card.getAttribute("data-version") || "";
             const passResult = await runPass(id, needRestart, version);
-            if (passResult === "reloading" || passResult === "need-login") return;
+            if (passResult === "reloading" || passResult === "landed" || passResult === "need-login") return;
             if (passResult === "failed") {
               btn.disabled = false;
             }
