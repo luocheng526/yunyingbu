@@ -215,8 +215,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /sc-ui-5/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-5/);
+    assert.match(text, /sc-ui-6/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-6/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
     assert.match(text, /id="xm-releases-boot"/);
@@ -297,7 +297,9 @@ test("release board scripts parse so tab refresh can run", () => {
   assert.match(theme, /function finishUpgradeInPlace/);
   assert.match(theme, /return "landed"/);
   assert.doesNotMatch(theme, /location\.replace\("\/releases\?reloaded="/);
-  assert.match(theme, /sc-ui-5/);
+  assert.match(theme, /sc-ui-6/);
+  assert.match(theme, /max-width: none !important/);
+  assert.doesNotMatch(theme, /border: 2px solid #dc2626/);
 });
 
 test("releases.html has no login form and sends users to /login", () => {
@@ -398,8 +400,10 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /\.oc-hero-card/);
     assert.match(text, /\.oc-tab-num/);
     assert.match(text, /\.sc-table/);
-    assert.match(text, /--oc-frame:\s*#dc2626/);
-    assert.match(text, /border: 2px solid var\(--oc-frame/);
+    assert.doesNotMatch(text, /--oc-frame:\s*#dc2626/);
+    assert.doesNotMatch(text, /border: 2px solid var\(--oc-frame/);
+    assert.match(text, /max-width:\s*none\s*!important/);
+    assert.match(text, /border:\s*0\s*!important/);
   });
 });
 

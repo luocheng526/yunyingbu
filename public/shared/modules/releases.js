@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.80-no-hang */
+/* xm-module-releases 0.1.84-fullbleed */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -102,7 +102,8 @@
       #history-view, #logs-view {
         max-height: calc(100dvh - 15rem); overflow-y: scroll !important; touch-action: pan-y;
       }
-      .oc-wrap.page, .oc-wrap.xm-page { background: var(--xm-card, #fff); border: 2px solid #dc2626; border-radius: 10px; padding: 12px 14px 14px; }
+      .oc-wrap.page, .oc-wrap.xm-page { max-width: none !important; width: 100%; margin: 0 !important; background: var(--xm-card, #fff); border: 0 !important; border-radius: 0; padding: 10px 16px 16px; }
+      html:has(.oc-wrap) .xm-content, .xm-content:has(.oc-wrap) { padding: 0 !important; }
       .oc-hero-card { background: transparent; border: 0; box-shadow: none; padding: 0 0 10px; margin: 0 0 12px; }
       .oc-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; }
       .oc-tab-num { display: block; margin: 0.25rem 0 0.1rem; font-size: 1.35rem; font-weight: 750; }
@@ -188,7 +189,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-5";
+      link.href = "/releases.css?v=sc-ui-6";
       document.head.appendChild(link);
     }
   }
