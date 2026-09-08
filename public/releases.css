@@ -11,6 +11,7 @@
   --oc-green: #3f6b3a;
   --oc-green-ink: #3f6b3a;
   --oc-danger: #9f1239;
+  --oc-frame: #dc2626;
   --oc-warn: #6a5420;
   --oc-shadow: var(--xm-shadow, 0 0 0 1px rgba(20, 18, 11, 0.06));
   --oc-radius: var(--xm-radius, 10px);
@@ -23,7 +24,7 @@ html, body {
   min-height: 100%;
   background: var(--oc-bg);
   color: var(--oc-text);
-  font: 14px/1.55 ui-sans-serif, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font: 13px/1.5 ui-sans-serif, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
 }
 
 .oc-top {
@@ -74,20 +75,24 @@ html:has(.xm-shell) .oc-top {
 .oc-wrap.xm-page {
   max-width: 1240px;
   margin: 0 auto;
-  padding: 8px 0 24px;
+  padding: 14px 16px 16px;
+  background: var(--oc-card);
+  border: 2px solid var(--oc-frame, #dc2626);
+  border-radius: var(--oc-radius);
+  box-shadow: none;
 }
 html:has(.xm-shell) .oc-wrap.page,
 html:has(.xm-shell) .oc-wrap.xm-page {
-  padding: 0 0 8px;
+  padding: 12px 14px 14px;
 }
 
 .oc-hero-card {
-  background: var(--oc-card);
-  border: 1px solid var(--oc-line);
-  border-radius: var(--oc-radius);
-  box-shadow: var(--oc-shadow);
-  padding: 18px 20px 0;
-  margin: 0 0 16px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0 0 10px;
+  margin: 0 0 12px;
 }
 
 .oc-hero {
@@ -109,14 +114,14 @@ html:has(.xm-shell) .oc-wrap.xm-page {
 }
 .oc-hero h1 {
   margin: 0;
-  font-size: 2rem;
+  font-size: 1.45rem;
   font-weight: 750;
   letter-spacing: -0.03em;
 }
 .oc-path {
-  margin: 0.4rem 0 0;
+  margin: 0.3rem 0 0;
   color: var(--oc-muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 .oc-run {
   display: flex;
@@ -187,27 +192,27 @@ button.oc-tab,
 }
 .oc-tab h2 {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--oc-text);
 }
 .oc-tab-num {
   display: block;
-  margin: 0.35rem 0 0.15rem;
-  font-size: 1.7rem;
+  margin: 0.25rem 0 0.1rem;
+  font-size: 1.35rem;
   font-weight: 750;
   letter-spacing: -0.03em;
   line-height: 1.1;
   color: var(--oc-text);
 }
 .oc-tab-num-text {
-  font-size: 1.15rem;
-  padding-top: 0.35rem;
+  font-size: 1rem;
+  padding-top: 0.25rem;
 }
 .oc-tab p {
   display: block;
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--oc-muted);
 }
 .oc-tab.active,
@@ -228,16 +233,16 @@ button.oc-tab.active,
 
 .oc-card,
 .oc-card.panel {
-  background: var(--oc-card);
-  border: 1px solid var(--oc-line);
-  border-radius: var(--oc-radius);
-  box-shadow: var(--oc-shadow);
-  padding: 18px 20px 20px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
   min-height: 12rem;
 }
 .oc-card h3 {
-  margin: 0 0 0.35rem;
-  font-size: 18px;
+  margin: 0 0 0.3rem;
+  font-size: 15px;
   font-weight: 700;
 }
 .pane-head {
@@ -256,19 +261,19 @@ button.oc-tab.active,
 
 .hint,
 .lead.hint {
-  margin: 0 0 1rem;
+  margin: 0 0 0.75rem;
   color: var(--oc-muted);
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 12px;
+  line-height: 1.5;
 }
 .history-stats {
-  margin: 0 0 1rem;
-  padding: 0.7rem 0.95rem;
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.75rem;
   border: 1px solid var(--oc-line);
   border-radius: var(--oc-radius);
   background: var(--xm-primary-soft, #eceae3);
   color: var(--oc-text);
-  font-size: 14px;
+  font-size: 12px;
 }
 .history-stats b {
   font-size: 1.2rem;
@@ -301,10 +306,10 @@ button.oc-tab.active,
   color: #5c4d2a;
   border: 1px solid #e6deca;
   border-radius: var(--oc-radius);
-  padding: 0.75rem 0.95rem;
-  margin: 0 0 1.1rem;
-  font-size: 13px;
-  line-height: 1.6;
+  padding: 0.6rem 0.75rem;
+  margin: 0 0 0.85rem;
+  font-size: 12px;
+  line-height: 1.5;
 }
 .flash {
   display: none;
@@ -409,7 +414,7 @@ button.act:disabled,
   background: var(--xm-primary-soft, #eceae3);
   color: var(--oc-text);
   border: 1px solid var(--oc-line);
-  font-size: 13px;
+  font-size: 12px;
 }
 .lock-box.idle {
   background: #ecfdf3;
@@ -420,7 +425,7 @@ button.act:disabled,
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 12px;
 }
 th, td {
   text-align: left;
@@ -649,7 +654,7 @@ html:has(.oc-wrap) .xm-shell.is-pending .xm-content {
 
 @media (max-width: 980px) {
   .oc-hero { flex-direction: column; align-items: flex-start; }
-  .oc-hero h1 { font-size: 1.55rem; }
+  .oc-hero h1 { font-size: 1.3rem; }
   .oc-tabs { grid-template-columns: 1fr; }
   .oc-tab + .oc-tab {
     box-shadow: inset 0 1px 0 var(--oc-line);

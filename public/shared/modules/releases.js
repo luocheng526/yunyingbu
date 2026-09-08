@@ -102,9 +102,10 @@
       #history-view, #logs-view {
         max-height: calc(100dvh - 15rem); overflow-y: scroll !important; touch-action: pan-y;
       }
-      .oc-hero-card { background: var(--xm-card, #fff); border: 1px solid var(--xm-line, #e4e2da); border-radius: 10px; padding: 18px 20px 0; margin: 0 0 16px; }
+      .oc-wrap.page, .oc-wrap.xm-page { background: var(--xm-card, #fff); border: 2px solid #dc2626; border-radius: 10px; padding: 12px 14px 14px; }
+      .oc-hero-card { background: transparent; border: 0; box-shadow: none; padding: 0 0 10px; margin: 0 0 12px; }
       .oc-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; }
-      .oc-tab-num { display: block; margin: 0.35rem 0 0.15rem; font-size: 1.7rem; font-weight: 750; }
+      .oc-tab-num { display: block; margin: 0.25rem 0 0.1rem; font-size: 1.35rem; font-weight: 750; }
       .oc-tab.active .oc-tab-num { color: #2563eb; }
       .oc-tab p { display: block; margin: 0; font-size: 12px; }
       .sc-table tr.ticket { border: 0; box-shadow: none; padding: 0; background: transparent; }
@@ -187,7 +188,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-3";
+      link.href = "/releases.css?v=sc-ui-4";
       document.head.appendChild(link);
     }
   }

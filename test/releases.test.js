@@ -211,8 +211,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /sc-ui-3/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-3/);
+    assert.match(text, /sc-ui-4/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-4/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
     assert.match(text, /id="xm-releases-boot"/);
@@ -387,6 +387,8 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /\.oc-hero-card/);
     assert.match(text, /\.oc-tab-num/);
     assert.match(text, /\.sc-table/);
+    assert.match(text, /--oc-frame:\s*#dc2626/);
+    assert.match(text, /border: 2px solid var\(--oc-frame/);
   });
 });
 
