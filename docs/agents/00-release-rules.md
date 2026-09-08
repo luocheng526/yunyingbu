@@ -65,6 +65,9 @@ Cookie: 登录会话
 - **禁止瘦 `src/app.js`。** 数据中心 / 沈子晗 / 韩梦凯 / 人员管理不得把 `src/app.js` 写进 `files`。谁交了只挂本模块路由的入口文件，登录和发版会 404，闸门无法自救。完整入口必须含 `attachProfile`、`attachHome`、`createReleasesRouter`、`/api/health`。点「通过」时再验一遍，已入队的危险单也会被拦住。
 - **禁止空 `files` 全量落地。** 必须写明路径；空列表不再同步整个 `apps/xingmai`。
 - **壳只由主框架交。** 只有模块名「主框架」的单据能包含 `public/shared/nav.js`、`public/shared/layout.css`、`public/shared/xingmai-logo.png`、`src/modules/home/nav-items.js`。首页和其他板块一律 400。
+- **内核只由主框架交。** `src/app.js`、`src/server.js`、`src/boot-dirs.js` 非主框架一律 400。`src/app.js` 还必须带完整 contents。
+- **`src/modules/profile/auth.js` 只许主框架或个人中心。**
+- **`src/modules/home/pages.js` 与 `src/modules/profile/middleware.js` 必须成套提交。**
 
 ## 网页
 

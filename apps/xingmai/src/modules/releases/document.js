@@ -1,7 +1,6 @@
 import { MODULES } from "./store.js";
 
 const APP_JS_RE = /(^|\/)src\/app\.js$/;
-const MODULES_FORBIDDEN_APP_JS = new Set(["数据中心", "沈子晗", "韩梦凯", "人员管理"]);
 export const APP_JS_KERNEL = ["attachProfile", "attachHome", "createReleasesRouter", "/api/health"];
 
 export function dangerousAppJsReason(body = {}) {
@@ -10,8 +9,8 @@ export function dangerousAppJsReason(body = {}) {
     return "";
   }
   const module = String(body.module || "").trim();
-  if (MODULES_FORBIDDEN_APP_JS.has(module)) {
-    return `${module}禁止提交 src/app.js。覆盖全站入口会让登录和发版变成 404。只交本模块目录。`;
+  if (module !== "主框架") {
+    return `${module || "该模块"}禁止提交 src/app.js。完整入口只由主框架交付。`;
   }
   const contents = body.contents && typeof body.contents === "object" ? body.contents : {};
   const text = String(contents["src/app.js"] || contents["apps/xingmai/src/app.js"] || "");
@@ -58,8 +57,57 @@ export function emptyFilesReason(body = {}) {
   return "禁止空文件列表全量落地。交单必须写明路径。";
 }
 
+export function listedKernelFiles(input) {
+  return normalizeFiles(input).filter((item) =>
+    /(^|\/)src\/(app|server|boot-dirs)\.js$/.test(String(item).replace(/\\/g, "/"))
+  );
+}
+
+export function dangerousKernelReason(body = {}) {
+  const hits = listedKernelFiles(body.files);
+  if (!hits.length) {
+    return "";
+  }
+  const module = String(body.module || "").trim();
+  if (module === "主框架") {
+    return "";
+  }
+  return `${module || "该模块"}禁止提交内核文件（${hits.join("、")}）。只由主框架交付。`;
+}
+
+export function dangerousAuthReason(body = {}) {
+  const hits = normalizeFiles(body.files).filter((item) =>
+    /(^|\/)src\/modules\/profile\/auth\.js$/.test(String(item).replace(/\\/g, "/"))
+  );
+  if (!hits.length) {
+    return "";
+  }
+  const module = String(body.module || "").trim();
+  if (module === "主框架" || module === "个人中心") {
+    return "";
+  }
+  return `${module || "该模块"}禁止提交 src/modules/profile/auth.js。`;
+}
+
+export function pairedPagesMiddlewareReason(body = {}) {
+  const files = normalizeFiles(body.files).map((item) => String(item).replace(/\\/g, "/"));
+  const hasPages = files.some((item) => /(^|\/)src\/modules\/home\/pages\.js$/.test(item));
+  const hasMid = files.some((item) => /(^|\/)src\/modules\/profile\/middleware\.js$/.test(item));
+  if (hasPages !== hasMid) {
+    return "src/modules/home/pages.js 必须和 src/modules/profile/middleware.js 成套提交，拆开会起不来。";
+  }
+  return "";
+}
+
 export function ticketGuardReason(body = {}) {
-  return emptyFilesReason(body) || dangerousShellReason(body) || dangerousAppJsReason(body);
+  return (
+    emptyFilesReason(body) ||
+    dangerousShellReason(body) ||
+    dangerousKernelReason(body) ||
+    dangerousAuthReason(body) ||
+    pairedPagesMiddlewareReason(body) ||
+    dangerousAppJsReason(body)
+  );
 }
 
 export function normalizeFiles(input) {

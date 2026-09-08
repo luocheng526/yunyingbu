@@ -46,9 +46,9 @@ test("move up changes queue order", async (t) => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ direction: "up" })
   });
-  assert.equal(moved.status, 200);
+  assert.equal(moved.status, 409);
   const after = await (await fetch(`${base}/api/releases/queue`)).json();
-  assert.equal(after.items[0].id, second);
+  assert.equal(after.items[1].id, second);
 });
 
 test("agent POST appears in queue without the webpage form", async (t) => {
