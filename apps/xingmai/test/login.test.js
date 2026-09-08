@@ -26,6 +26,7 @@ test("login page is public", async () => {
   assert.match(html, /ChangeMe123!/);
   assert.doesNotMatch(html, /\/shared\/nav\.js/);
   assert.doesNotMatch(html, /\/shared\/layout\.css/);
+  assert.match(html, /decoding="async"/);
 });
 
 test("logged-in visit to /login redirects home unless out=1", async () => {

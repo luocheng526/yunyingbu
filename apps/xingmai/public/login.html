@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>登录 · 星脉管理系统</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/login.css?v=0.1.84" />
+    <link rel="stylesheet" href="/login.css?v=0.1.90" />
     <script>
       (function () {
         try {
@@ -22,7 +22,7 @@
     <main class="LoginPage login-page login-split">
       <section class="login-hero" aria-label="运营中心视觉">
         <div class="hero-bg" aria-hidden="true">
-          <img class="hero-scene" src="/login-scene.jpg" width="1223" height="841" alt="" />
+          <img class="hero-scene" src="/login-scene.jpg" width="1223" height="841" alt="" decoding="async" fetchpriority="low" />
         </div>
 
         <header class="hero-top">
@@ -211,7 +211,7 @@
             if (!res.ok) throw new Error(data.error || "登录失败");
             if (remember.checked) localStorage.setItem(KEY, username.value.trim());
             else localStorage.removeItem(KEY);
-            window.location.href = "/";
+            window.location.replace("/");
           } catch (err) {
             error.textContent = err.message || "连不上服务器。请确认地址是 https://zx.xingmaierp.cc/login。";
             error.hidden = false;

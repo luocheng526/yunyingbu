@@ -1,4 +1,4 @@
-/* LoginPage 0.1.84 — split tech-blue operations login */
+/* LoginPage 0.1.90 — split tech-blue operations login */
 :root {
   --login-bg: #f7f7f4;
   --login-ink: #14120b;
@@ -111,6 +111,7 @@ body {
   display: block;
   object-fit: cover;
   object-position: right center;
+  content-visibility: auto;
 }
 
 .hero-top,
