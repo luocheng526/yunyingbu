@@ -5,7 +5,7 @@ import { currentUser, publicProfile } from "./auth.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
 
-export const SHELL_ASSET_VER = "0.1.82";
+export const SHELL_ASSET_VER = "0.1.83";
 export const APP_MODULES = {
   "/": "home",
   "/data": "data",
@@ -19,9 +19,10 @@ export const APP_MODULES = {
 export function renderAppShell(href, user) {
   const key = String(href || "/").replace(/\/+$/, "") || "/";
   const id = APP_MODULES[key] || "home";
-  const preloads = Object.values(APP_MODULES)
-    .map((name) => `    <link rel="preload" href="/shared/modules/${name}.js?v=${SHELL_ASSET_VER}" as="script" />`)
-    .join("\n");
+  const css =
+    key === "/releases"
+      ? `    <link rel="preload" href="/releases.css?v=${SHELL_ASSET_VER}" as="style" />\n`
+      : "";
   const boot =
     user && user.username
       ? `    <script>window.__xmBootUser=${JSON.stringify(publicProfile(user))};</script>\n`
@@ -32,8 +33,7 @@ export function renderAppShell(href, user) {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>星脉</title>
-    <link rel="preload" href="/releases.css?v=${SHELL_ASSET_VER}" as="style" />
-${preloads}
+${css}    <link rel="preload" href="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" as="script" />
 ${boot}    <script src="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" defer data-xm-mod="${key}"></script>
   </head>
   <body class="xm-app-shell"></body>

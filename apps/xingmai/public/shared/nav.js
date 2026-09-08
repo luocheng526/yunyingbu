@@ -1,5 +1,5 @@
+/* xm-no-prefetch 0.1.83 */
 (function () {
-  const ROUTES = ["/", "/data", "/shen", "/han", "/people", "/releases", "/me"];
   const items = [
     { href: "/", label: "首页" },
     { href: "/data", label: "数据中心" },
@@ -22,7 +22,6 @@
   const currentLabel = (items.find(function (item) {
     return normalize(item.href) === current;
   }) || items[0]).label;
-  const warmed = Object.create(null);
 
   function normalize(href) {
     return String(href || "/").replace(/\/+$/, "") || "/";
@@ -88,25 +87,6 @@
     );
   }
 
-  function prefetch(href) {
-    const key = normalize(href);
-    if (!ROUTES.includes(key) || isActive(key) || warmed[key]) {
-      return;
-    }
-    warmed[key] = true;
-    const link = document.createElement("link");
-    link.rel = "prefetch";
-    link.as = "document";
-    link.href = key;
-    document.head.appendChild(link);
-    fetch(key, {
-      credentials: "same-origin",
-      headers: { Accept: "text/html" }
-    }).catch(function () {
-      /* keep click navigation */
-    });
-  }
-
   function bindMenu(root) {
     const scope = root || document;
     const links = scope.querySelectorAll('.xm-menu a[href], a.xm-logo[href="/"]');
@@ -116,12 +96,6 @@
       }
       anchor.dataset.navFast = "1";
       const href = anchor.getAttribute("href");
-      const warm = function () {
-        prefetch(href);
-      };
-      anchor.addEventListener("mouseenter", warm);
-      anchor.addEventListener("mousedown", warm);
-      anchor.addEventListener("touchstart", warm, { passive: true });
       anchor.addEventListener("click", function (event) {
         if (isActive(href)) {
           event.preventDefault();
@@ -166,7 +140,7 @@
           credentials: "same-origin",
           headers: { Accept: "application/json" }
         }).finally(function () {
-          window.location.replace("/login");
+          window.location.replace("/login?out=1");
         });
       });
     }
@@ -244,11 +218,6 @@
       return;
     }
     mountShell();
-    ROUTES.forEach(function (href) {
-      if (!isActive(href)) {
-        prefetch(href);
-      }
-    });
   }
 
   paintNow();
