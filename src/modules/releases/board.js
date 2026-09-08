@@ -94,3 +94,53 @@ export function slimVersionItem(item) {
     rolledBack: Boolean(item.rolledBack)
   };
 }
+
+export async function readBoardView(store, view, page, limit, listed) {
+  const loadAll = async () => (typeof listed === "function" ? listed() : store.list());
+  try {
+    if (view === "summary") {
+      if (typeof store.boardSummary === "function") {
+        return await store.boardSummary();
+      }
+      return summarizeItems(await loadAll());
+    }
+    if (view === "history") {
+      if (typeof store.historyPage === "function") {
+        return await store.historyPage(page, limit);
+      }
+      const rows = (await loadAll())
+        .filter((item) => item.status === "success")
+        .slice()
+        .sort(newestFirst)
+        .map(slimHistoryItem);
+      return paginateRows(rows, page, limit);
+    }
+    if (view === "logs") {
+      if (typeof store.logsPage === "function") {
+        return await store.logsPage(page, limit);
+      }
+      const rows = (await loadAll())
+        .filter((item) => item.log)
+        .slice()
+        .sort(newestFirst)
+        .map(slimLogItem);
+      return paginateRows(rows, page, limit);
+    }
+  } catch {
+    const items = await loadAll();
+    if (view === "summary") {
+      return summarizeItems(items);
+    }
+    if (view === "history") {
+      return paginateRows(
+        items.filter((item) => item.status === "success").slice().sort(newestFirst).map(slimHistoryItem),
+        page,
+        limit
+      );
+    }
+    if (view === "logs") {
+      return paginateRows(items.filter((item) => item.log).slice().sort(newestFirst).map(slimLogItem), page, limit);
+    }
+  }
+  return null;
+}

@@ -3,7 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { requireReleasesAuth } from "./auth.js";
 import { INCOMPLETE_ARTIFACT_ERROR, NEED_PASS_ERROR, REORDER_FORBIDDEN, withCharter } from "./charter.js";
-import { documentGaps, hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
+import { documentGaps, hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument, ticketGuardReason } from "./document.js";
+import { newestFirst, paginateRows, readBoardView, slimHistoryItem, slimLogItem, slimVersionItem, summarizeItems } from "./board.js";
 import { assertQueueHead, describeNextVersion, listModuleVersions, resolveReleaseVersion } from "./version.js";
 import { assertSafeRel, attachRollbackMeta, attachRollbackMetaList, formatExecError, listMissingSourceFiles, liveRoot, markSnapshotRolledBack, pathsToSnapshot, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "./push.js";
 import {
@@ -153,6 +154,16 @@ export function createReleasesRouter(options = {}) {
       return;
     }
 
+    const danger = ticketGuardReason({
+      module: item.module,
+      files: item.files,
+      contents: req.body?.contents || item.contents
+    });
+    if (danger) {
+      res.status(400).json({ ok: false, error: danger });
+      return;
+    }
+
     const skip = assertQueueHead(item, await store.queue());
     if (skip) {
       res.status(skip.status).json({ ok: false, error: skip.error });
@@ -207,24 +218,39 @@ export function createReleasesRouter(options = {}) {
     res.status(500).json({ ok: false, error: result.error, item, version: item.version });
   }
 
+  async function sendBoardView(res, view, page, limit) {
+    const payload = await readBoardView(store, view, page, limit, listed);
+    if (!payload) {
+      return false;
+    }
+    if (view === "history") {
+      res.json(withCharter({ ok: true, ...payload, items: withSnapList(payload.items) }));
+      return true;
+    }
+    res.json(withCharter({ ok: true, ...payload }));
+    return true;
+  }
+
   router.get("/", async (req, res) => {
     const view = String(req.query?.view || "");
     const page = Number(req.query?.page) || 1;
     const limit = Number(req.query?.limit) || 20;
-    if (view === "summary") {
-      res.json(withCharter({ ok: true, ...(await store.boardSummary()) }));
-      return;
-    }
-    if (view === "history") {
-      const result = await store.historyPage(page, limit);
-      res.json(withCharter({ ok: true, ...result, items: withSnapList(result.items) }));
-      return;
-    }
-    if (view === "logs") {
-      res.json(withCharter({ ok: true, ...(await store.logsPage(page, limit)) }));
+    if (await sendBoardView(res, view, page, limit)) {
       return;
     }
     res.json(withCharter({ ok: true, items: withSnapList(await listed()) }));
+  });
+
+  router.get("/summary", async (_req, res) => {
+    await sendBoardView(res, "summary", 1, 20);
+  });
+
+  router.get("/history", async (req, res) => {
+    await sendBoardView(res, "history", Number(req.query?.page) || 1, Number(req.query?.limit) || 20);
+  });
+
+  router.get("/logs", async (req, res) => {
+    await sendBoardView(res, "logs", Number(req.query?.page) || 1, Number(req.query?.limit) || 20);
   });
 
   router.get("/queue", async (_req, res) => {
@@ -236,7 +262,13 @@ export function createReleasesRouter(options = {}) {
   });
 
   router.get("/versions", async (_req, res) => {
-    const rows = typeof store.versionRows === "function" ? await store.versionRows() : await listed();
+    let rows = [];
+    try {
+      rows = typeof store.versionRows === "function" ? await store.versionRows() : (await listed()).map(slimVersionItem);
+    } catch (err) {
+      console.error("release versionRows failed", err);
+      rows = (await listed()).map(slimVersionItem);
+    }
     res.json(withCharter({ ok: true, ...listModuleVersions(withSnapList(rows)) }));
   });
 
@@ -292,6 +324,15 @@ export function createReleasesRouter(options = {}) {
     const module = parsed.document.module;
     if (!MODULES.includes(module)) {
       res.status(400).json({ ok: false, error: "模块不在允许列表中" });
+      return;
+    }
+    const danger = ticketGuardReason({
+      module,
+      files: parsed.document.files,
+      contents: body.contents || body.blobs
+    });
+    if (danger) {
+      res.status(400).json({ ok: false, error: danger });
       return;
     }
     let files = parsed.document.files || [];

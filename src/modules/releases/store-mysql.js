@@ -135,7 +135,6 @@ export function createMysqlStore({ now, pool } = {}) {
           COALESCE(SUM(status = 'publishing'), 0) AS publishing,
           COALESCE(SUM(status = 'failed'), 0) AS failed,
           COALESCE(SUM(status = 'success'), 0) AS success,
-          COALESCE(SUM(status = 'success' AND rolled_back), 0) AS rolledBack,
           COALESCE(SUM(CASE WHEN log IS NOT NULL AND log <> '' THEN 1 ELSE 0 END), 0) AS logs
         FROM release_tickets
       `);
@@ -146,7 +145,7 @@ export function createMysqlStore({ now, pool } = {}) {
         publishing: Number(row.publishing) || 0,
         failed: Number(row.failed) || 0,
         success: Number(row.success) || 0,
-        rolledBack: Number(row.rolledBack) || 0,
+        rolledBack: 0,
         logs: Number(row.logs) || 0
       };
     },
@@ -158,7 +157,7 @@ export function createMysqlStore({ now, pool } = {}) {
       const current = Math.min(Math.max(1, Number(page) || 1), pageCount);
       const offset = (current - 1) * size;
       const [rows] = await db().query(
-        `SELECT id, version, module, summary, status, demo, submitted_at, reviewed_at, publish_finished_at, snapshot_dir, rolled_back
+        `SELECT id, version, module, summary, status, demo, submitted_at, reviewed_at, publish_finished_at
          FROM release_tickets
          WHERE status = 'success'
          ORDER BY COALESCE(publish_finished_at, reviewed_at, submitted_at) DESC, id DESC
@@ -176,8 +175,8 @@ export function createMysqlStore({ now, pool } = {}) {
           publishFinishedAt: toIso(row.publish_finished_at),
           reviewedAt: toIso(row.reviewed_at),
           submittedAt: toIso(row.submitted_at),
-          snapshotDir: row.snapshot_dir || "",
-          rolledBack: Boolean(row.rolled_back)
+          snapshotDir: "",
+          rolledBack: false
         })),
         page: current,
         pageCount,
@@ -221,7 +220,7 @@ export function createMysqlStore({ now, pool } = {}) {
     },
     async versionRows() {
       const [rows] = await db().query(
-        "SELECT id, version, status, module, publish_finished_at, snapshot_dir, rolled_back FROM release_tickets"
+        "SELECT id, version, status, module, publish_finished_at FROM release_tickets"
       );
       return rows.map((row) => ({
         id: row.id,
@@ -229,8 +228,8 @@ export function createMysqlStore({ now, pool } = {}) {
         status: row.status,
         module: row.module,
         publishFinishedAt: toIso(row.publish_finished_at),
-        snapshotDir: row.snapshot_dir || "",
-        rolledBack: Boolean(row.rolled_back)
+        snapshotDir: "",
+        rolledBack: false
       }));
     },
     async approved() {

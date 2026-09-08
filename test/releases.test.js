@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { createApp } from "../src/app.js";
-import { parseMainBrainOrder } from "../src/modules/releases/document.js";
+import { parseMainBrainOrder, ticketGuardReason } from "../src/modules/releases/document.js";
 import { filesNeedProcessRestart, ticketNeedsProcessRestart } from "../src/modules/releases/restart.js";
 import {
   allocateReleaseVersion,
@@ -108,7 +108,7 @@ function apply(slug, applicant, module, summary, extra = {}) {
     applicant,
     module,
     summary,
-    files: extra.files || ["src/app.js"],
+    files: extra.files || ["public/releases.css"],
     acceptance: extra.acceptance || "自动化验收",
     restart: extra.restart ?? false
   };
@@ -215,8 +215,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /sc-ui-8/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-8/);
+    assert.match(text, /sc-ui-9/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-9/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
     assert.match(text, /id="xm-releases-boot"/);
@@ -246,10 +246,10 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /newestFirst/);
     assert.match(text, /PAGE_SIZE = 20/);
     assert.match(text, /function paginate/);
-    assert.match(text, /view=history/);
+    assert.match(text, /\/api\/releases\/history/);
     assert.match(text, /function refreshHistory/);
     assert.match(text, /function refreshLogs/);
-    assert.match(text, /view=summary/);
+    assert.match(text, /\/api\/releases\/summary/);
     assert.match(text, /function renderPager/);
     assert.match(text, /上一页/);
     assert.match(text, /下一页/);
@@ -301,10 +301,11 @@ test("release board scripts parse so tab refresh can run", () => {
   assert.match(theme, /function finishUpgradeInPlace/);
   assert.match(theme, /return "landed"/);
   assert.doesNotMatch(theme, /location\.replace\("\/releases\?reloaded="/);
-  assert.match(theme, /sc-ui-8/);
-  assert.match(theme, /view=history/);
+  assert.match(theme, /sc-ui-9/);
+  assert.match(theme, /\/api\/releases\/history/);
   assert.match(theme, /function refreshHistory/);
   assert.match(theme, /function refreshLogs/);
+  assert.match(theme, /function countsFromBoard/);
   assert.match(theme, /max-width: none !important/);
   assert.doesNotMatch(theme, /border: 2px solid #dc2626/);
   assert.match(theme, /tab\.blur/);
@@ -591,8 +592,8 @@ test("queue is submit-time FIFO even when later tickets are foundations", async 
     });
     const shell = await json(base, "/api/releases", {
       method: "POST",
-      body: apply("q-shell", "Home", "首页", "后到的共享壳", {
-        files: ["public/shared/nav.js"],
+      body: apply("q-shell", "Home", "首页", "后到的首页页", {
+        files: ["public/index.html"],
         restart: true
       })
     });
@@ -734,11 +735,17 @@ test("通过 one ticket restarts once and does not auto-publish next", async () 
     async (base) => {
       const first = await json(base, "/api/releases", {
         method: "POST",
-        body: apply("3.0.0", "Ada", "版本发布中心", "本模块", { restart: true })
+        body: apply("3.0.0", "Ada", "版本发布中心", "本模块", {
+          files: ["src/modules/releases/router.js"],
+          restart: true
+        })
       });
       const second = await json(base, "/api/releases", {
         method: "POST",
-        body: apply("3.0.1", "Ada", "版本发布中心", "下一条", { restart: true })
+        body: apply("3.0.1", "Ada", "版本发布中心", "下一条", {
+          files: ["src/modules/releases/board.js"],
+          restart: true
+        })
       });
       const skipped = await json(base, `/api/releases/${second.body.item.id}/confirm`, {
         method: "POST",
@@ -833,7 +840,10 @@ test("通过 writes success to disk before restart", async () => {
     async (base) => {
       const created = await json(base, "/api/releases", {
         method: "POST",
-        body: apply("persist", "Ada", "版本发布中心", "先落盘再重启", { restart: true })
+        body: apply("persist", "Ada", "版本发布中心", "先落盘再重启", {
+          files: ["src/modules/releases/router.js"],
+          restart: true
+        })
       });
       createdId = created.body.item.id;
       const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
@@ -1107,7 +1117,7 @@ test("confirm 放行 without 口令; move and reorder are forbidden", async () =
           source: "首页导航与工作台",
           module: "首页",
           summary: "壳",
-          files: ["public/shared/nav.js"],
+          files: ["public/index.html"],
           acceptance: "打开 /",
           restart: false
         })
@@ -1152,7 +1162,7 @@ test("confirm 放行 without 口令; move and reorder are forbidden", async () =
       });
       assert.equal(confirmed.res.status, 200);
       assert.equal(confirmed.body.item.status, "success");
-      assert.deepEqual(pushed, [["public/shared/nav.js"]]);
+      assert.deepEqual(pushed, [["public/index.html"]]);
       const still = await json(base, "/api/releases");
       assert.equal(still.body.items.find((item) => item.id === second.body.item.id).status, "queued");
     }
@@ -1424,7 +1434,7 @@ test("create fetches ref from GitHub into source", async () => {
     async (base) => {
       const created = await json(base, "/api/releases", {
         method: "POST",
-        body: apply("from-ref", "首页", "首页", "按 ref 拉 GitHub", {
+        body: apply("from-ref", "主框架", "主框架", "按 ref 拉 GitHub", {
           files: ["src/server.js"],
           ref: "604188a",
           restart: false
@@ -1437,7 +1447,7 @@ test("create fetches ref from GitHub into source", async () => {
       assert.equal(fs.readFileSync(path.join(source, "src", "server.js"), "utf8"), "KEEPALIVE\n");
       const extra = await json(base, "/api/releases", {
         method: "POST",
-        body: apply("bad-contents-path", "首页", "首页", "正文路径不对", {
+        body: apply("bad-contents-path", "主框架", "主框架", "正文路径不对", {
           files: ["src/server.js"],
           contents: { "public/secret.js": "nope" },
           restart: false
@@ -1493,8 +1503,8 @@ test("confirm keeps source when git ref 404s after contents staged", async () =>
   const state = fs.mkdtempSync(path.join(os.tmpdir(), "rel-state-keep-"));
   fs.mkdirSync(path.join(source, "public", "shared"), { recursive: true });
   fs.mkdirSync(path.join(live, "public", "shared"), { recursive: true });
-  fs.writeFileSync(path.join(source, "public", "shared", "layout.css"), "OLD\n");
-  fs.writeFileSync(path.join(live, "public", "shared", "layout.css"), "OLD\n");
+  fs.writeFileSync(path.join(source, "public", "index.html"), "OLD\n");
+  fs.writeFileSync(path.join(live, "public", "index.html"), "OLD\n");
 
   await withServer(
     {
@@ -1517,21 +1527,21 @@ test("confirm keeps source when git ref 404s after contents staged", async () =>
       const created = await json(base, "/api/releases", {
         method: "POST",
         body: apply("keep-source", "首页", "首页", "正文已写入源目录", {
-          files: ["public/shared/layout.css"],
-          contents: { "public/shared/layout.css": "THEME-CSS\n" },
+          files: ["public/index.html"],
+          contents: { "public/index.html": "THEME-CSS\n" },
           ref: "cursor/cursor-theme-63da",
           restart: false
         })
       });
       assert.equal(created.res.status, 201, created.body.error);
       assert.equal(created.body.item.gitRef, "cursor/cursor-theme-63da");
-      assert.equal(fs.readFileSync(path.join(source, "public", "shared", "layout.css"), "utf8"), "THEME-CSS\n");
+      assert.equal(fs.readFileSync(path.join(source, "public", "index.html"), "utf8"), "THEME-CSS\n");
       const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
         method: "POST",
         body: "{}"
       });
       assert.equal(pub.res.status, 200, pub.body.error);
-      assert.equal(fs.readFileSync(path.join(live, "public", "shared", "layout.css"), "utf8"), "THEME-CSS\n");
+      assert.equal(fs.readFileSync(path.join(live, "public", "index.html"), "utf8"), "THEME-CSS\n");
     }
   );
 });
@@ -1687,7 +1697,37 @@ test("history and logs board views page slim rows", async () => {
     assert.ok(logRow.log.length > 0);
     const all = await json(base, "/api/releases");
     assert.ok((all.body.items || []).some((item) => item.id === created.body.item.id && item.log));
+    const pathSummary = await json(base, "/api/releases/summary");
+    assert.equal(pathSummary.res.status, 200);
+    assert.ok(pathSummary.body.success >= 1);
+    assert.equal(pathSummary.body.items, undefined);
+    const pathHistory = await json(base, "/api/releases/history?page=1&limit=20");
+    assert.equal(pathHistory.res.status, 200);
+    assert.ok(pathHistory.body.total >= 1);
+    const pathLogs = await json(base, "/api/releases/logs?page=1&limit=20");
+    assert.equal(pathLogs.res.status, 200);
+    assert.ok((pathLogs.body.items || []).some((item) => item.id === created.body.item.id));
   });
+});
+
+test("ticket guards block thin app.js and shell files from other modules", () => {
+  assert.match(ticketGuardReason({ module: "数据中心", files: ["src/app.js"] }), /禁止提交内核文件|禁止提交 src\/app\.js/);
+  assert.match(ticketGuardReason({ module: "首页", files: ["public/shared/nav.js"] }), /壳只由主框架/);
+  assert.match(
+    ticketGuardReason({ module: "首页", files: ["src/modules/profile/middleware.js"] }),
+    /成套提交/
+  );
+  assert.equal(ticketGuardReason({ module: "版本发布中心", files: ["public/releases.css"] }), "");
+  assert.equal(
+    ticketGuardReason({
+      module: "主框架",
+      files: ["src/app.js"],
+      contents: {
+        "src/app.js": "attachProfile attachHome createReleasesRouter /api/health"
+      }
+    }),
+    ""
+  );
 });
 
 test("successful version cannot be queued again; versions lists current", async () => {
@@ -1927,7 +1967,7 @@ test("confirm does not restart when smoke import fails", async () => {
       const created = await json(base, "/api/releases", {
         method: "POST",
         body: apply("smoke-miss", "首页", "首页", "主题中间件丢掉导出", {
-          files: ["src/modules/profile/middleware.js"],
+          files: ["src/modules/home/pages.js", "src/modules/profile/middleware.js"],
           restart: true
         })
       });

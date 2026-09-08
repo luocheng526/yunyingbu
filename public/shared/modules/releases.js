@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.88-board-page */
+/* xm-module-releases 0.1.89-board-paths */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -194,7 +194,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-8";
+      link.href = "/releases.css?v=sc-ui-9";
       document.head.appendChild(link);
     }
   }
@@ -688,13 +688,34 @@
         return (tab && tab.getAttribute("data-tab")) || "queue";
       }
 
+      function countsFromBoard(payload) {
+        if (payload && typeof payload.queued === "number") {
+          return payload;
+        }
+        const items = (payload && payload.items) || [];
+        const summary = { queued: 0, approved: 0, publishing: 0, failed: 0, success: 0, logs: 0, rolledBack: 0 };
+        items.forEach(function (item) {
+          if (item.status === "queued") summary.queued += 1;
+          else if (item.status === "approved") summary.approved += 1;
+          else if (item.status === "publishing") summary.publishing += 1;
+          else if (item.status === "failed") summary.failed += 1;
+          else if (item.status === "success") {
+            summary.success += 1;
+            if (item.rolledBack) summary.rolledBack += 1;
+          }
+          if (item.log) summary.logs += 1;
+        });
+        return summary;
+      }
+
       function renderStats(summary, ready) {
         const caps = document.getElementById("stat-caps");
-        const queued = Number(summary && summary.queued) || 0;
-        const approved = Number(summary && summary.approved) || 0;
-        const publishing = Number(summary && summary.publishing) || 0;
-        const failed = Number(summary && summary.failed) || 0;
-        const success = Number(summary && summary.success) || 0;
+        const counts = countsFromBoard(summary);
+        const queued = Number(counts && counts.queued) || 0;
+        const approved = Number(counts && counts.approved) || 0;
+        const publishing = Number(counts && counts.publishing) || 0;
+        const failed = Number(counts && counts.failed) || 0;
+        const success = Number(counts && counts.success) || 0;
         const runVer = ready && ready.version ? String(ready.version) : "";
         if (caps) {
           caps.innerHTML =
@@ -721,8 +742,9 @@
         if (!el) {
           return;
         }
-        const success = Number(summary && summary.success) || 0;
-        const rolled = Number(summary && summary.rolledBack) || 0;
+        const counts = countsFromBoard(summary);
+        const success = Number(counts && counts.success) || 0;
+        const rolled = Number(counts && counts.rolledBack) || 0;
         el.innerHTML = "已上线发布 <b>" + success + "</b> 个版本" +
           (rolled ? "（其中 " + rolled + " 个已回滚）" : "");
       }
@@ -867,19 +889,27 @@
       }
 
       function pageInfoFromBoard(result, key) {
-        const total = Number(result && result.total) || 0;
-        const pageCount = Math.max(1, Number(result && result.pageCount) || 1);
-        const page = Math.min(Math.max(1, Number(result && result.page) || listPages[key] || 1), pageCount);
-        listPages[key] = page;
-        const start = (page - 1) * PAGE_SIZE;
-        return {
-          slice: (result && result.items) || [],
-          page,
-          pageCount,
-          total,
-          from: total ? start + 1 : 0,
-          to: Math.min(start + ((result && result.items) || []).length, total)
-        };
+        if (result && result.total != null) {
+          const total = Number(result.total) || 0;
+          const pageCount = Math.max(1, Number(result.pageCount) || 1);
+          const page = Math.min(Math.max(1, Number(result.page) || listPages[key] || 1), pageCount);
+          listPages[key] = page;
+          const start = (page - 1) * PAGE_SIZE;
+          const slice = result.items || [];
+          return {
+            slice: slice,
+            page,
+            pageCount,
+            total,
+            from: total ? start + 1 : 0,
+            to: Math.min(start + slice.length, total)
+          };
+        }
+        const raw = (result && result.items) || [];
+        const list = key === "history"
+          ? raw.filter(function (item) { return item.status === "success"; }).sort(newestFirst)
+          : raw.filter(function (item) { return item.log; }).sort(newestFirst);
+        return paginate(list, key);
       }
 
       function renderHistory(result, locked) {
@@ -939,7 +969,7 @@
         if (el) {
           el.innerHTML = '<div class="empty">正在读取本页版本记录…</div>';
         }
-        const result = await api("/api/releases?view=history&page=" + listPages.history + "&limit=" + PAGE_SIZE, apiOpts);
+        const result = await api("/api/releases/history?page=" + listPages.history + "&limit=" + PAGE_SIZE, apiOpts);
         renderHistory(result, locked);
       }
 
@@ -948,7 +978,7 @@
         if (el) {
           el.innerHTML = '<div class="empty">正在读取本页运行日志…</div>';
         }
-        const result = await api("/api/releases?view=logs&page=" + listPages.logs + "&limit=" + PAGE_SIZE, apiOpts);
+        const result = await api("/api/releases/logs?page=" + listPages.logs + "&limit=" + PAGE_SIZE, apiOpts);
         renderLogs(result);
       }
 
@@ -961,7 +991,7 @@
           api("/api/releases/lock", apiOpts),
           api("/api/releases/readyz", apiOpts),
           api("/api/auth/me", apiOpts),
-          api("/api/releases?view=summary", apiOpts),
+          api("/api/releases/summary", apiOpts),
           api("/api/releases/versions", apiOpts)
         ]);
         lastLock = lock;

@@ -15,6 +15,7 @@ import {
 export const REVIEWER = "运营部主脑";
 
 export const MODULES = [
+  "主框架",
   "首页",
   "数据中心",
   "沈子晗",
