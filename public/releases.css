@@ -464,6 +464,43 @@ th { color: var(--oc-muted); font-weight: 600; }
    stylesheet plus an inline copy of these scroll rules. Theme body is
    overflow:hidden; pin the shell and make .xm-content / 版本记录 / 运行日志
    the actual wheel scrollports. */
+html,
+html body,
+html body.xm-app,
+html body.xm-app-shell,
+html body:has(.xm-shell) {
+  height: 100% !important;
+  max-height: 100dvh !important;
+  overflow: hidden !important;
+}
+.xm-shell {
+  display: flex !important;
+  align-items: stretch !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+.xm-shell .xm-main {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+.xm-content,
+.xm-shell .xm-content {
+  flex: 1 1 0% !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow-x: auto !important;
+  overflow-y: scroll !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
 html:has(.oc-wrap),
 html:has(.oc-wrap) body,
 html:has(.oc-wrap) body.xm-app,

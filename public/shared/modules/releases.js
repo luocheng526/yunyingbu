@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.73-sc-ui */
+/* xm-module-releases 0.1.75-sc-mount */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -75,6 +75,18 @@
       #upgrade-mask.can-close #upgrade-dismiss { display: inline-block; }
       .pane, .xm-content .pane { display: none !important; }
       .pane.on, .xm-content .pane.on { display: block !important; }
+      html, html body, html body.xm-app, html body.xm-app-shell {
+        height: 100% !important; max-height: 100dvh !important; overflow: hidden !important;
+      }
+      .xm-shell {
+        display: flex !important; height: 100dvh !important; max-height: 100dvh !important; min-height: 0 !important; overflow: hidden !important;
+      }
+      .xm-shell .xm-main {
+        display: flex !important; flex-direction: column !important; flex: 1 1 0% !important; min-height: 0 !important; overflow: hidden !important;
+      }
+      .xm-content, .xm-shell .xm-content {
+        flex: 1 1 0% !important; height: 0 !important; min-height: 0 !important; overflow-y: scroll !important; touch-action: pan-y;
+      }
       html:has(.oc-wrap), html:has(.oc-wrap) body, html:has(.oc-wrap) body.xm-app, html:has(.oc-wrap) body.xm-app-shell {
         height: 100% !important; max-height: 100dvh !important; overflow: hidden !important;
       }
@@ -175,7 +187,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-1";
+      link.href = "/releases.css?v=sc-ui-3";
       document.head.appendChild(link);
     }
   }
@@ -1064,4 +1076,34 @@
       };
     }
   };
+
+  function autoMountReleases() {
+    const root = document.getElementById("xm-content") || document.querySelector(".xm-content");
+    const mod = window.XmModules && window.XmModules["/releases"];
+    if (!root || !mod || typeof mod.mount !== "function") {
+      return false;
+    }
+    if (root.getAttribute("data-xm-rel-mounted") === "1") {
+      return true;
+    }
+    root.setAttribute("data-xm-rel-mounted", "1");
+    mod.mount(root);
+    return true;
+  }
+  (function bootMount() {
+    let tries = 0;
+    function tick() {
+      if (autoMountReleases()) {
+        return;
+      }
+      tries += 1;
+      if (tries < 40) {
+        setTimeout(tick, 50);
+      }
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", tick);
+    }
+    tick();
+  })();
 })();

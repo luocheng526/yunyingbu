@@ -3,14 +3,19 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const COOKIE_NAME = "mk_sid";
-export const RELEASES_CSS_HREF = "/releases.css?v=sc-ui-1";
-export const RELEASES_MODULE_HREF = "/shared/modules/releases.js?v=sc-ui-2";
+export const RELEASES_CSS_HREF = "/releases.css?v=sc-ui-3";
+export const RELEASES_MODULE_HREF = "/shared/modules/releases.js?v=sc-ui-3";
 export const RELEASES_SCROLL_STYLE_ID = "xm-releases-scroll";
 export const RELEASES_FETCH_PATCH_ID = "xm-releases-fetch-patch";
+export const RELEASES_BOOT_ID = "xm-releases-boot";
 const releasesCssFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public/releases.css");
 
 export function releasesScrollStyleTag() {
   return `<style id="${RELEASES_SCROLL_STYLE_ID}">
+html,html body,html body.xm-app,html body.xm-app-shell,html body:has(.xm-shell){height:100%!important;max-height:100dvh!important;overflow:hidden!important;}
+.xm-shell{display:flex!important;align-items:stretch!important;height:100dvh!important;max-height:100dvh!important;min-height:0!important;overflow:hidden!important;}
+.xm-shell .xm-main{display:flex!important;flex-direction:column!important;flex:1 1 0%!important;min-width:0!important;min-height:0!important;overflow:hidden!important;}
+.xm-content,.xm-shell .xm-content{flex:1 1 0%!important;height:0!important;min-height:0!important;overflow-x:auto!important;overflow-y:scroll!important;touch-action:pan-y;}
 html:has(.oc-wrap),html:has(.oc-wrap) body,html:has(.oc-wrap) body.xm-app,html:has(.oc-wrap) body.xm-app-shell,html:has(.oc-wrap) body:has(.xm-shell){height:100%!important;max-height:100dvh!important;overflow:hidden!important;}
 .xm-shell:has(.oc-wrap){display:flex!important;align-items:stretch!important;height:100dvh!important;max-height:100dvh!important;min-height:0!important;overflow:hidden!important;}
 .xm-shell:has(.oc-wrap) .xm-main{display:flex!important;flex-direction:column!important;flex:1 1 0%!important;min-width:0!important;min-height:0!important;overflow:hidden!important;}
@@ -19,6 +24,32 @@ html:has(.oc-wrap),html:has(.oc-wrap) body,html:has(.oc-wrap) body.xm-app,html:h
 .pane.on,.xm-content .pane.on,.page .pane.on{display:block!important;}
 #history-view,#logs-view,.xm-content #history-view,.xm-content #logs-view{max-height:calc(100dvh - 15rem);overflow-x:auto!important;overflow-y:scroll!important;touch-action:pan-y;}
 </style>`;
+}
+
+export function releasesBootTag() {
+  return `<script id="${RELEASES_BOOT_ID}">
+(function(){
+  function mountReleases(){
+    var root=document.getElementById("xm-content")||document.querySelector(".xm-content");
+    var mod=window.XmModules&&window.XmModules["/releases"];
+    if(!root||!mod||typeof mod.mount!=="function"){return false;}
+    if(root.getAttribute("data-xm-rel-mounted")==="1"){return true;}
+    root.setAttribute("data-xm-rel-mounted","1");
+    mod.mount(root);
+    return true;
+  }
+  var tries=0;
+  function tick(){
+    if(mountReleases()){return;}
+    tries+=1;
+    if(tries<40){setTimeout(tick,50);}
+  }
+  if(document.readyState==="loading"){
+    document.addEventListener("DOMContentLoaded",tick);
+  }
+  tick();
+})();
+</script>`;
 }
 
 export function releasesFetchPatchTag() {
@@ -63,6 +94,9 @@ export function injectReleasesCssLink(html) {
   }
   if (!out.includes(`id="${RELEASES_FETCH_PATCH_ID}"`)) {
     extras.push(releasesFetchPatchTag());
+  }
+  if (!out.includes(`id="${RELEASES_BOOT_ID}"`)) {
+    extras.push(releasesBootTag());
   }
   if (!out.includes(`href="${RELEASES_CSS_HREF}"`)) {
     extras.push(linkTag);

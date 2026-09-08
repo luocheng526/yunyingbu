@@ -28,6 +28,7 @@ import { DEMO_INITIAL_PASSWORD, DEMO_USERNAME } from "../src/modules/profile/aut
 import {
   injectReleasesCssLink,
   RELEASES_CSS_HREF,
+  RELEASES_BOOT_ID,
   RELEASES_FETCH_PATCH_ID,
   RELEASES_MODULE_HREF,
   RELEASES_SCROLL_STYLE_ID
@@ -210,10 +211,12 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /sc-ui-1/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-1/);
+    assert.match(text, /sc-ui-3/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-3/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
+    assert.match(text, /id="xm-releases-boot"/);
+    assert.match(text, /data-xm-rel-mounted/);
     assert.match(text, /delete init\.signal/);
     assert.doesNotMatch(text, /href="\/shared\/layout.css"/);
     assert.doesNotMatch(text, /src="\/shared\/nav.js"/);
@@ -284,6 +287,8 @@ test("release board scripts parse so tab refresh can run", () => {
   assert.doesNotThrow(() => new Function(inline));
   const theme = fs.readFileSync(path.join(root, "public/shared/modules/releases.js"), "utf8");
   assert.doesNotThrow(() => new Function(theme));
+  assert.match(theme, /function autoMountReleases/);
+  assert.match(theme, /data-xm-rel-mounted/);
 });
 
 test("releases.html has no login form and sends users to /login", () => {
@@ -400,6 +405,9 @@ test("injectReleasesCssLink turns the theme preload into a real stylesheet", () 
   assert.doesNotMatch(out, /releases\.js\?v=0\.1\.66/);
   assert.match(out, new RegExp(`id="${RELEASES_SCROLL_STYLE_ID}"`));
   assert.match(out, new RegExp(`id="${RELEASES_FETCH_PATCH_ID}"`));
+  assert.match(out, new RegExp(`id="${RELEASES_BOOT_ID}"`));
+  assert.match(out, /data-xm-rel-mounted/);
+  assert.match(out, /XmModules\["\/releases"\]/);
   assert.match(out, /rel="stylesheet"/);
   assert.match(out, /#history-view/);
   assert.match(out, /#logs-view/);
