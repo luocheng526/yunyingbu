@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>版本发布中心</title>
-    <link rel="stylesheet" href="/releases.css?v=mask-html" />
+    <link rel="stylesheet" href="/releases.css?v=mask-autoclose" />
     <style>
       #upgrade-mask,
       html > #upgrade-mask {
@@ -19,6 +19,8 @@
       }
       #upgrade-mask.show,
       html > #upgrade-mask.show { display: flex !important; }
+      #upgrade-mask[hidden],
+      html > #upgrade-mask[hidden] { display: none !important; }
       #upgrade-dismiss { display: none; margin-top: 0.85rem; }
       #upgrade-mask.can-close #upgrade-dismiss { display: inline-block; }
       #upgrade-login { display: none; margin-top: 0.85rem; margin-left: 0.55rem; }
@@ -378,6 +380,7 @@
         mask.classList.add("show");
         mask.classList.remove("can-close");
         mask.classList.remove("need-login");
+        mask.removeAttribute("hidden");
         mask.style.display = "flex";
         const upgradeLog = liveUpgradePart("upgrade-log");
         if (upgradeLog) {
@@ -388,12 +391,79 @@
       }
 
       function hideUpgrade() {
-        const mask = liveUpgradeMask();
-        if (mask) {
+        document.querySelectorAll("#upgrade-mask").forEach(function (mask) {
           mask.classList.remove("show");
           mask.classList.remove("can-close");
           mask.classList.remove("need-login");
           mask.style.display = "none";
+          mask.setAttribute("hidden", "hidden");
+        });
+      }
+
+      function maskIsOpen() {
+        const mask = liveUpgradeMask();
+        return Boolean(
+          mask &&
+          !mask.hasAttribute("hidden") &&
+          (mask.classList.contains("show") || mask.style.display === "flex")
+        );
+      }
+
+      function stopLoginWatch() {
+        if (window.__xmLoginWatch) {
+          clearInterval(window.__xmLoginWatch);
+          window.__xmLoginWatch = 0;
+        }
+      }
+
+      function startLoginWatch() {
+        stopLoginWatch();
+        window.__xmLoginWatch = setInterval(function () {
+          if (window.__xmUpgradePass || window.__xmUpgradeFinishing) {
+            return;
+          }
+          probeSession().then(function (ok) {
+            if (!ok) {
+              return;
+            }
+            stopLoginWatch();
+            finishUpgradeOk(readPendingUpgrade() || { version: "" });
+          }).catch(function () {});
+        }, 1500);
+      }
+
+      async function finishUpgradeOk(pending) {
+        if (window.__xmUpgradeFinishing) {
+          return;
+        }
+        window.__xmUpgradeFinishing = true;
+        try {
+          stopLoginWatch();
+          const mask = pinUpgradeMask();
+          mask.classList.add("show");
+          mask.classList.remove("can-close");
+          mask.classList.remove("need-login");
+          mask.removeAttribute("hidden");
+          mask.style.display = "flex";
+          renderUpgradeSteps(["reload", "done"], "done", "ok");
+          const upgradeLog = liveUpgradePart("upgrade-log");
+          if (upgradeLog) {
+            upgradeLog.hidden = true;
+            upgradeLog.textContent = "";
+          }
+          try {
+            await refresh();
+          } catch (err) {
+            flash(err.message, true);
+          }
+          flash(pending && pending.needLogin
+            ? "发布成功 · " + (pending.version || "") + " · 登录已完结"
+            : "发布成功 · " + ((pending && pending.version) || ""));
+          await sleep(700);
+          hideUpgrade();
+          consumePendingUpgrade();
+        } finally {
+          window.__xmUpgradeFinishing = false;
         }
       }
 
@@ -407,6 +477,8 @@
         }
         mask.classList.add("can-close");
         mask.classList.add("show");
+        mask.classList.remove("need-login");
+        mask.removeAttribute("hidden");
         mask.style.display = "flex";
       }
 
@@ -444,13 +516,15 @@
           return key !== "reload" && key !== "done" && key !== "login";
         }).concat(["login", "done"]);
         const mask = pinUpgradeMask();
-        mask.classList.add("show", "need-login", "can-close");
+        mask.classList.add("show", "need-login");
+        mask.classList.remove("can-close");
+        mask.removeAttribute("hidden");
         mask.style.display = "flex";
         renderUpgradeSteps(loginKeys, "login", "");
         const upgradeLog = liveUpgradePart("upgrade-log");
         if (upgradeLog) {
           upgradeLog.hidden = false;
-          upgradeLog.textContent = "升级已落地。这次需要重新登录才能完结本页，不会自动跳转。请登录后再打开版本发布中心。";
+          upgradeLog.textContent = "升级已落地。这次需要重新登录才能完结本页，不会自动跳转。请登录后再打开版本发布中心；登录恢复后遮罩会自动关掉。";
         }
         flash("升级已落地，请登录后回到本页完结。");
         savePendingUpgrade({
@@ -458,6 +532,7 @@
           id: pending && pending.id,
           needLogin: true
         });
+        startLoginWatch();
       }
 
       async function sleep(ms) {
@@ -484,6 +559,8 @@
 
       async function runPass(id, needRestart, version) {
         const keys = stepKeys(needRestart);
+        window.__xmUpgradePass = true;
+        try {
         flash("正在通过 " + (version || id) + "，请稍候。");
         showUpgrade(keys, "agree");
         let confirmErr = null;
@@ -506,11 +583,13 @@
         while (Date.now() < deadline) {
           pinUpgradeMask();
           if (confirmErr && confirmErr.status === 401) {
+            window.__xmUpgradePass = false;
             failUpgrade(keys, "通过时已未登录，请先登录再点通过。");
             flash("未登录，未开始发版。", true);
             return "failed";
           }
           if (confirmErr && confirmErr.status && confirmErr.status !== 502 && confirmErr.status !== 503 && confirmErr.status < 500) {
+            window.__xmUpgradePass = false;
             const msg = (confirmErr.status || "") + " " + (confirmErr.message || "通过失败");
             failUpgrade(keys, msg);
             flash(msg, true);
@@ -524,6 +603,7 @@
               : (err.message || "读取单据中断（可能正在重启）");
           }
           if (ticket && ticket.status === "failed") {
+            window.__xmUpgradePass = false;
             failUpgrade(keys, ticket.log || "发版失败");
             flash(ticket.log || "发版失败", true);
             return "failed";
@@ -558,9 +638,19 @@
                   id: id
                 });
                 window.location.replace("/releases?reloaded=" + Date.now());
+                await sleep(1200);
+                if (maskIsOpen() && (await probeSession())) {
+                  window.__xmUpgradePass = false;
+                  await finishUpgradeOk({
+                    version: version || ticket.version,
+                    id: id
+                  });
+                }
+                window.__xmUpgradePass = false;
                 return "reloading";
               }
               if (!sessionOk && landed && Date.now() - healthOkSince >= 2000) {
+                window.__xmUpgradePass = false;
                 showLoginFinish({
                   version: version || (ticket && ticket.version) || "",
                   id: id
@@ -568,6 +658,7 @@
                 return "need-login";
               }
               if (!sessionOk && needRestart && Date.now() - healthOkSince >= 4000) {
+                window.__xmUpgradePass = false;
                 showLoginFinish({
                   version: version || (ticket && ticket.version) || "",
                   id: id
@@ -587,6 +678,9 @@
         failUpgrade(keys, timeoutMsg);
         flash("升级未完成：" + lastHealth, true);
         return "failed";
+        } finally {
+          window.__xmUpgradePass = false;
+        }
       }
 
       function tickClock() {
@@ -984,6 +1078,14 @@
       (async function bootReleases() {
         window.__xmReleasesBooted = true;
         clearShellPending();
+        if (window.__xmUpgradePass) {
+          try {
+            await refresh();
+          } catch (err) {
+            flash(err.message, true);
+          }
+          return;
+        }
         const pending = readPendingUpgrade();
         if (!(await probeSession())) {
           if (pending) {
@@ -993,21 +1095,15 @@
           goLogin();
           return;
         }
-        const done = consumePendingUpgrade();
-        if (done) {
-          showUpgrade(["reload", "done"], "reload");
-        }
         try {
-          await refresh();
-          if (done) {
-            renderUpgradeSteps(["reload", "done"], "done", "ok");
-            hideUpgrade();
-            flash(done.needLogin
-              ? "发布成功 · " + done.version + " · 登录已完结"
-              : "发布成功 · " + done.version);
+          if (pending || maskIsOpen()) {
+            await finishUpgradeOk(pending || {});
+          } else {
+            await refresh();
           }
         } catch (err) {
           hideUpgrade();
+          consumePendingUpgrade();
           flash(err.message, true);
         }
       })();

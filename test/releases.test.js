@@ -172,6 +172,13 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /oc-after-upgrade/);
     assert.match(text, /正在刷新界面/);
     assert.match(text, /consumePendingUpgrade/);
+    assert.match(text, /function finishUpgradeOk/);
+    assert.match(text, /function startLoginWatch/);
+    assert.match(text, /function maskIsOpen/);
+    assert.match(text, /#upgrade-mask\[hidden\]/);
+    assert.match(text, /登录恢复后遮罩会自动关掉/);
+    assert.doesNotMatch(text, /const done = consumePendingUpgrade/);
+    assert.match(text, /hideUpgrade\(\);\s*consumePendingUpgrade\(\);/);
     assert.match(text, /function pageRoot/);
     assert.match(text, /function liveEl/);
     assert.match(text, /function showTab/);
@@ -264,6 +271,8 @@ test("releases.html has no login form and sends users to /login", () => {
   assert.match(html, /oc-after-upgrade/);
   assert.match(html, /正在刷新界面/);
   assert.match(html, /consumePendingUpgrade/);
+  assert.match(html, /function finishUpgradeOk/);
+  assert.match(html, /setAttribute\("hidden"/);
   assert.match(html, /不会自动通过/);
   assert.match(html, /提交时间/);
   assert.doesNotMatch(html, /data-act="up"/);
@@ -297,6 +306,9 @@ test("agent docs say no video unless the UI change is large", () => {
   assert.match(fs.readFileSync(path.join(root, "docs/agents/00-release-rules.md"), "utf8"), /重启前会试载/);
   assert.match(fs.readFileSync(path.join(root, "docs/agents/00-release-rules.md"), "utf8"), /不自动跳登录/);
   assert.match(fs.readFileSync(path.join(root, "docs/agents/06-releases.md"), "utf8"), /先试载再重启/);
+  assert.match(fs.readFileSync(path.join(root, "AGENTS.md"), "utf8"), /自动关遮罩/);
+  assert.match(fs.readFileSync(path.join(root, "docs/agents/06-releases.md"), "utf8"), /自动关遮罩/);
+  assert.match(fs.readFileSync(path.join(root, "docs/agents/00-release-rules.md"), "utf8"), /不用点关闭/);
   assert.match(fs.readFileSync(path.join(root, "docs/agents/06-releases.md"), "utf8"), /不自动跳登录/);
   assert.match(fs.readFileSync(path.join(root, "docs/agents/06-releases.md"), "utf8"), /制品没有完整完成/);
   assert.match(fs.readFileSync(path.join(root, "docs/agents/00-release-rules.md"), "utf8"), /制品未完成禁止入队/);
@@ -322,6 +334,7 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /display: flex !important/);
     assert.match(text, /Theme SPA copies <link>/);
     assert.match(text, /#upgrade-mask\.need-login #upgrade-login/);
+    assert.match(text, /#upgrade-mask\[hidden\]/);
     assert.match(text, /\.xm-content \.pane\.on/);
     assert.match(text, /display: block !important/);
     assert.match(text, /#history-view table/);

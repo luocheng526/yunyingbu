@@ -13,5 +13,6 @@
 - 闸门不读 GitHub，也不拉 Cloud 工作区。交单可带 `contents`（路径→正文）或 `ref`（分支/提交），会先写入源目录再排队。
 - 版本号由本闸门发放：交单填 `auto` 或不填，或先 `GET /api/releases/next`。
 - 只通过队首。只改 `public/` 或 `test/` 不重启进程。
+- 升级全部流程走完后自动关遮罩，不用点关闭；失败才留「关闭」。
 - 制品没有完整完成不要进待上线：缺文档字段、缺源文件或 src 语法不过，交单当场拒绝。
 - 只改这些路径：`public/releases.html`、`public/releases.css`、`src/modules/releases/`、`test/releases.test.js`、本文件与 `docs/agents/` 里本闸门文档。
