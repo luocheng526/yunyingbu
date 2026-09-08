@@ -171,6 +171,30 @@
       .status {
         white-space: nowrap;
       }
+      .board-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin: 0 0 1.25rem;
+      }
+      .board-nav button {
+        background: #fff;
+        color: #57534e;
+        border: 1px solid #e7e5e4;
+      }
+      .board-nav button[aria-current="true"] {
+        background: #0f766e;
+        color: #fff;
+        border-color: #0f766e;
+      }
+      .board[hidden] {
+        display: none;
+      }
+      .fields {
+        display: grid;
+        gap: 0.55rem;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      }
     </style>
   </head>
   <body>
@@ -193,9 +217,15 @@
         <p class="kicker">运营部 · 韩梦凯业务线</p>
         <h1>韩梦凯运营中心</h1>
         <p class="lead">
-          韩梦凯团队的任务与日报台。数据存在本进程独立内存中，与沈子晗中心隔离；默认负责人为「韩梦凯」。
+          韩梦凯团队工作台。任务日报与选品 / 商品 / 付费三个小板块数据互相隔离，也与沈子晗中心隔离；默认负责人为「韩梦凯」。
         </p>
-        <div class="stack">
+        <nav class="board-nav" aria-label="韩梦凯中心板块">
+          <button type="button" data-board="tasks" aria-current="true">任务与日报</button>
+          <button type="button" data-board="selection">选品数据</button>
+          <button type="button" data-board="products">商品数据</button>
+          <button type="button" data-board="paid">付费数据</button>
+        </nav>
+        <div id="board-tasks" class="board stack">
           <section class="panel">
             <h2>新增任务</h2>
             <form id="task-form">
@@ -228,6 +258,122 @@
             </form>
           </section>
         </div>
+        <div id="board-selection" class="board stack" hidden>
+          <section class="panel">
+            <h2>新增选品</h2>
+            <form id="selection-form">
+              <div class="fields">
+                <div>
+                  <label for="sel-name">名称（必填）</label>
+                  <input id="sel-name" name="name" required placeholder="选品名称" />
+                </div>
+                <div>
+                  <label for="sel-category">类目</label>
+                  <input id="sel-category" name="category" placeholder="类目" />
+                </div>
+              </div>
+              <label for="sel-note">备注</label>
+              <input id="sel-note" name="note" placeholder="卖点 / 风险" />
+              <button type="submit">添加</button>
+              <p class="msg" id="selection-msg"></p>
+            </form>
+          </section>
+          <section class="panel">
+            <h2>选品列表</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>名称</th>
+                  <th>类目</th>
+                  <th>状态</th>
+                  <th>负责人</th>
+                </tr>
+              </thead>
+              <tbody id="selection-body"></tbody>
+            </table>
+          </section>
+        </div>
+        <div id="board-products" class="board stack" hidden>
+          <section class="panel">
+            <h2>新增商品</h2>
+            <form id="product-form">
+              <div class="fields">
+                <div>
+                  <label for="prod-name">名称（必填）</label>
+                  <input id="prod-name" name="name" required placeholder="商品名称" />
+                </div>
+                <div>
+                  <label for="prod-sku">SKU</label>
+                  <input id="prod-sku" name="sku" placeholder="SKU" />
+                </div>
+                <div>
+                  <label for="prod-price">价格</label>
+                  <input id="prod-price" name="price" type="number" step="0.01" placeholder="0.00" />
+                </div>
+                <div>
+                  <label for="prod-stock">库存</label>
+                  <input id="prod-stock" name="stock" type="number" step="1" placeholder="0" />
+                </div>
+              </div>
+              <button type="submit">添加</button>
+              <p class="msg" id="product-msg"></p>
+            </form>
+          </section>
+          <section class="panel">
+            <h2>商品列表</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>名称</th>
+                  <th>SKU</th>
+                  <th>价格</th>
+                  <th>库存</th>
+                  <th>负责人</th>
+                </tr>
+              </thead>
+              <tbody id="product-body"></tbody>
+            </table>
+          </section>
+        </div>
+        <div id="board-paid" class="board stack" hidden>
+          <section class="panel">
+            <h2>新增付费记录</h2>
+            <form id="paid-form">
+              <div class="fields">
+                <div>
+                  <label for="paid-channel">渠道（必填）</label>
+                  <input id="paid-channel" name="channel" required placeholder="信息流 / 搜索" />
+                </div>
+                <div>
+                  <label for="paid-amount">金额</label>
+                  <input id="paid-amount" name="amount" type="number" step="0.01" placeholder="0.00" />
+                </div>
+                <div>
+                  <label for="paid-date">日期</label>
+                  <input id="paid-date" name="spentOn" type="date" />
+                </div>
+              </div>
+              <label for="paid-note">备注</label>
+              <input id="paid-note" name="note" placeholder="投放说明" />
+              <button type="submit">添加</button>
+              <p class="msg" id="paid-msg"></p>
+            </form>
+          </section>
+          <section class="panel">
+            <h2>付费列表</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>渠道</th>
+                  <th>金额</th>
+                  <th>日期</th>
+                  <th>负责人</th>
+                </tr>
+              </thead>
+              <tbody id="paid-body"></tbody>
+            </table>
+          </section>
+        </div>
       </main>
     </div>
     <script src="/shared/nav.js"></script>
@@ -237,27 +383,6 @@
       const briefMsg = document.getElementById("brief-msg");
       const briefEl = document.getElementById("brief");
 
-      function renderTasks(tasks) {
-        taskBody.innerHTML = "";
-        (tasks || []).forEach((t) => {
-          const tr = document.createElement("tr");
-          tr.innerHTML =
-            "<td>" +
-            escapeHtml(t.title) +
-            '</td><td class="status">' +
-            escapeHtml(t.status) +
-            "</td><td>" +
-            escapeHtml(t.owner) +
-            "</td>";
-          taskBody.appendChild(tr);
-        });
-        if (!tasks || !tasks.length) {
-          const tr = document.createElement("tr");
-          tr.innerHTML = '<td colspan="3">暂无任务</td>';
-          taskBody.appendChild(tr);
-        }
-      }
-
       function escapeHtml(s) {
         return String(s ?? "")
           .replace(/&/g, "&amp;")
@@ -265,15 +390,58 @@
           .replace(/>/g, "&gt;");
       }
 
+      function renderRows(tbody, rows, cols, emptyCols) {
+        tbody.innerHTML = "";
+        (rows || []).forEach((row) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = cols
+            .map(function (key) {
+              const extra = key === "status" ? ' class="status"' : "";
+              return "<td" + extra + ">" + escapeHtml(row[key]) + "</td>";
+            })
+            .join("");
+          tbody.appendChild(tr);
+        });
+        if (!rows || !rows.length) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = '<td colspan="' + emptyCols + '">暂无数据</td>';
+          tbody.appendChild(tr);
+        }
+      }
+
+      function showBoard(name) {
+        document.querySelectorAll(".board").forEach(function (el) {
+          el.hidden = el.id !== "board-" + name;
+        });
+        document.querySelectorAll(".board-nav button").forEach(function (btn) {
+          btn.setAttribute("aria-current", btn.getAttribute("data-board") === name ? "true" : "false");
+        });
+      }
+
+      document.querySelector(".board-nav").addEventListener("click", function (e) {
+        const btn = e.target.closest("button[data-board]");
+        if (!btn) return;
+        showBoard(btn.getAttribute("data-board"));
+      });
+
       async function load() {
-        const [tasksRes, briefRes] = await Promise.all([
+        const [tasksRes, briefRes, selRes, prodRes, paidRes] = await Promise.all([
           fetch("/api/han/tasks"),
           fetch("/api/han/brief"),
+          fetch("/api/han/selection"),
+          fetch("/api/han/products"),
+          fetch("/api/han/paid"),
         ]);
         const tasksJson = await tasksRes.json();
         const briefJson = await briefRes.json();
-        renderTasks(tasksJson.tasks);
+        const selJson = await selRes.json();
+        const prodJson = await prodRes.json();
+        const paidJson = await paidRes.json();
+        renderRows(taskBody, tasksJson.tasks, ["title", "status", "owner"], 3);
         briefEl.value = briefJson.text || "";
+        renderRows(document.getElementById("selection-body"), selJson.items, ["name", "category", "status", "owner"], 4);
+        renderRows(document.getElementById("product-body"), prodJson.items, ["name", "sku", "price", "stock", "owner"], 5);
+        renderRows(document.getElementById("paid-body"), paidJson.items, ["channel", "amount", "spentOn", "owner"], 4);
       }
 
       document.getElementById("task-form").addEventListener("submit", async (e) => {
@@ -301,6 +469,65 @@
         });
         const json = await res.json();
         briefMsg.textContent = json.ok ? "已保存" : "保存失败";
+      });
+
+      document.getElementById("selection-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const res = await fetch("/api/han/selection", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: document.getElementById("sel-name").value,
+            category: document.getElementById("sel-category").value,
+            note: document.getElementById("sel-note").value,
+          }),
+        });
+        const json = await res.json();
+        document.getElementById("selection-msg").textContent = json.ok ? "已添加" : json.error || "失败";
+        if (json.ok) {
+          document.getElementById("selection-form").reset();
+          await load();
+        }
+      });
+
+      document.getElementById("product-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const res = await fetch("/api/han/products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: document.getElementById("prod-name").value,
+            sku: document.getElementById("prod-sku").value,
+            price: document.getElementById("prod-price").value,
+            stock: document.getElementById("prod-stock").value,
+          }),
+        });
+        const json = await res.json();
+        document.getElementById("product-msg").textContent = json.ok ? "已添加" : json.error || "失败";
+        if (json.ok) {
+          document.getElementById("product-form").reset();
+          await load();
+        }
+      });
+
+      document.getElementById("paid-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const res = await fetch("/api/han/paid", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            channel: document.getElementById("paid-channel").value,
+            amount: document.getElementById("paid-amount").value,
+            spentOn: document.getElementById("paid-date").value,
+            note: document.getElementById("paid-note").value,
+          }),
+        });
+        const json = await res.json();
+        document.getElementById("paid-msg").textContent = json.ok ? "已添加" : json.error || "失败";
+        if (json.ok) {
+          document.getElementById("paid-form").reset();
+          await load();
+        }
       });
 
       load().catch((err) => {

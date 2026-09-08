@@ -4,17 +4,94 @@ import { getPool } from "../../db/pool.js";
 
 const DEFAULT_OWNER = "韩梦凯";
 const STATUSES = ["待办", "进行中", "已完成"];
+const SELECTION_STATUSES = ["观察", "入选", "淘汰"];
 const SCHEMA_PATH = fileURLToPath(new URL("./schema.sql", import.meta.url));
 
+function toIso(value) {
+  if (!value) {
+    return "";
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  return new Date(value).toISOString();
+}
+
+function toDateOnly(value) {
+  if (!value) {
+    return "";
+  }
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+  const text = String(value);
+  return text.slice(0, 10);
+}
+
+function ownerOrDefault(owner) {
+  return owner && String(owner).trim() ? String(owner).trim() : DEFAULT_OWNER;
+}
+
 function mapTask(row) {
-  const created = row.created_at instanceof Date ? row.created_at : new Date(row.created_at);
   return {
     id: String(row.id),
     title: row.title,
     status: row.status,
     owner: row.owner,
-    createdAt: created.toISOString(),
+    createdAt: toIso(row.created_at),
   };
+}
+
+function mapSelection(row) {
+  return {
+    id: String(row.id),
+    name: row.name,
+    category: row.category || "",
+    note: row.note || "",
+    status: row.status,
+    owner: row.owner,
+    createdAt: toIso(row.created_at),
+  };
+}
+
+function mapProduct(row) {
+  return {
+    id: String(row.id),
+    name: row.name,
+    sku: row.sku || "",
+    price: row.price == null ? "" : String(row.price),
+    stock: row.stock == null ? "" : String(row.stock),
+    owner: row.owner,
+    createdAt: toIso(row.created_at),
+  };
+}
+
+function mapPaid(row) {
+  return {
+    id: String(row.id),
+    channel: row.channel,
+    amount: row.amount == null ? "" : String(row.amount),
+    spentOn: toDateOnly(row.spent_on),
+    note: row.note || "",
+    owner: row.owner,
+    createdAt: toIso(row.created_at),
+  };
+}
+
+function optionalNumber(value) {
+  if (value == null || value === "") {
+    return null;
+  }
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function optionalDate(value) {
+  if (!value) {
+    return null;
+  }
+  const text = String(value).trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
 }
 
 function splitSql(sql) {
@@ -97,6 +174,88 @@ export function createHanStore(poolOrFactory = getPool) {
       );
       return { text: value };
     },
+
+    async listSelection() {
+      await ensure();
+      const [rows] = await db().query(
+        "SELECT id, name, category, note, status, owner, created_at FROM han_selection ORDER BY id ASC",
+      );
+      return rows.map(mapSelection);
+    },
+
+    async createSelection({ name, category, note, status, owner } = {}) {
+      await ensure();
+      const trimmed = String(name || "").trim();
+      if (!trimmed) {
+        const err = new Error("name required");
+        err.statusCode = 400;
+        throw err;
+      }
+      const st = SELECTION_STATUSES.includes(status) ? status : "观察";
+      const [result] = await db().query(
+        "INSERT INTO han_selection (name, category, note, status, owner) VALUES (?, ?, ?, ?, ?)",
+        [trimmed, String(category || "").trim(), String(note || "").trim(), st, ownerOrDefault(owner)],
+      );
+      const [rows] = await db().query(
+        "SELECT id, name, category, note, status, owner, created_at FROM han_selection WHERE id = ?",
+        [result.insertId],
+      );
+      return mapSelection(rows[0]);
+    },
+
+    async listProducts() {
+      await ensure();
+      const [rows] = await db().query(
+        "SELECT id, name, sku, price, stock, owner, created_at FROM han_products ORDER BY id ASC",
+      );
+      return rows.map(mapProduct);
+    },
+
+    async createProduct({ name, sku, price, stock, owner } = {}) {
+      await ensure();
+      const trimmed = String(name || "").trim();
+      if (!trimmed) {
+        const err = new Error("name required");
+        err.statusCode = 400;
+        throw err;
+      }
+      const [result] = await db().query(
+        "INSERT INTO han_products (name, sku, price, stock, owner) VALUES (?, ?, ?, ?, ?)",
+        [trimmed, String(sku || "").trim(), optionalNumber(price), optionalNumber(stock), ownerOrDefault(owner)],
+      );
+      const [rows] = await db().query(
+        "SELECT id, name, sku, price, stock, owner, created_at FROM han_products WHERE id = ?",
+        [result.insertId],
+      );
+      return mapProduct(rows[0]);
+    },
+
+    async listPaid() {
+      await ensure();
+      const [rows] = await db().query(
+        "SELECT id, channel, amount, spent_on, note, owner, created_at FROM han_paid ORDER BY id ASC",
+      );
+      return rows.map(mapPaid);
+    },
+
+    async createPaid({ channel, amount, spentOn, note, owner } = {}) {
+      await ensure();
+      const trimmed = String(channel || "").trim();
+      if (!trimmed) {
+        const err = new Error("channel required");
+        err.statusCode = 400;
+        throw err;
+      }
+      const [result] = await db().query(
+        "INSERT INTO han_paid (channel, amount, spent_on, note, owner) VALUES (?, ?, ?, ?, ?)",
+        [trimmed, optionalNumber(amount), optionalDate(spentOn), String(note || "").trim(), ownerOrDefault(owner)],
+      );
+      const [rows] = await db().query(
+        "SELECT id, channel, amount, spent_on, note, owner, created_at FROM han_paid WHERE id = ?",
+        [result.insertId],
+      );
+      return mapPaid(rows[0]);
+    },
   };
 }
 
@@ -109,3 +268,4 @@ export const setBrief = (...args) => defaultStore.setBrief(...args);
 
 export const HAN_DEFAULT_OWNER = DEFAULT_OWNER;
 export const HAN_STATUSES = STATUSES;
+export const HAN_SELECTION_STATUSES = SELECTION_STATUSES;

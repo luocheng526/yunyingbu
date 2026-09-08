@@ -37,7 +37,9 @@ test("GET /han is 韩梦凯运营中心 with left sidebar shell", async () => {
     const html = await res.text();
     assert.equal(res.status, 200);
     assert.match(html, /<title>韩梦凯运营中心<\/title>/);
-    assert.match(html, /韩梦凯团队的任务与日报台/);
+    assert.match(html, /选品数据/);
+    assert.match(html, /商品数据/);
+    assert.match(html, /付费数据/);
     assert.match(html, /韩梦凯运营中心/);
     assert.match(html, /shared\/layout\.css/);
     assert.match(html, /shared\/nav\.js/);
@@ -134,12 +136,57 @@ test("notes demo API still works", async () => {
   });
 });
 
+test("han selection / products / paid boards are isolated", async () => {
+  await withServer(async (base) => {
+    const sel = await json(base, "/api/han/selection", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "春季防晒衣", category: "服饰" }),
+    });
+    assert.equal(sel.res.status, 201);
+    assert.equal(sel.body.item.owner, "韩梦凯");
+    assert.equal(sel.body.item.status, "观察");
+
+    const prod = await json(base, "/api/han/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "防晒衣-白", sku: "SPF-01", price: "89.9", stock: "12" }),
+    });
+    assert.equal(prod.res.status, 201);
+    assert.equal(prod.body.item.sku, "SPF-01");
+    assert.equal(prod.body.item.owner, "韩梦凯");
+
+    const paid = await json(base, "/api/han/paid", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channel: "信息流", amount: "320", spentOn: "2026-09-08" }),
+    });
+    assert.equal(paid.res.status, 201);
+    assert.equal(paid.body.item.channel, "信息流");
+    assert.equal(paid.body.item.spentOn, "2026-09-08");
+
+    const listedSel = await json(base, "/api/han/selection");
+    const listedProd = await json(base, "/api/han/products");
+    const listedPaid = await json(base, "/api/han/paid");
+    const listedTasks = await json(base, "/api/han/tasks");
+    assert.equal(listedSel.body.items.length, 1);
+    assert.equal(listedProd.body.items.length, 1);
+    assert.equal(listedPaid.body.items.length, 1);
+    assert.equal(listedTasks.body.tasks.length, 0);
+    assert.equal(listedSel.body.items[0].name, "春季防晒衣");
+    assert.equal(listedProd.body.items[0].name, "防晒衣-白");
+  });
+});
+
 test("han schema uses prefixed tables", async () => {
   const { readFile } = await import("node:fs/promises");
   const sql = await readFile(new URL("../src/modules/han/schema.sql", import.meta.url), "utf8");
   assert.match(sql, /utf8mb4/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_tasks/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_brief/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS han_selection/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS han_products/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS han_paid/);
   assert.doesNotMatch(sql, /CREATE TABLE IF NOT EXISTS users\b/);
   assert.doesNotMatch(sql, /CREATE TABLE IF NOT EXISTS releases\b/);
 });

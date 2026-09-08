@@ -38,6 +38,57 @@ export function createHanRouter(store = createHanStore()) {
     }
   });
 
+  hanRouter.get("/selection", async (_req, res) => {
+    try {
+      res.json({ ok: true, items: await store.listSelection() });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.post("/selection", async (req, res) => {
+    try {
+      const item = await store.createSelection(req.body || {});
+      res.status(201).json({ ok: true, item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.get("/products", async (_req, res) => {
+    try {
+      res.json({ ok: true, items: await store.listProducts() });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.post("/products", async (req, res) => {
+    try {
+      const item = await store.createProduct(req.body || {});
+      res.status(201).json({ ok: true, item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.get("/paid", async (_req, res) => {
+    try {
+      res.json({ ok: true, items: await store.listPaid() });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.post("/paid", async (req, res) => {
+    try {
+      const item = await store.createPaid(req.body || {});
+      res.status(201).json({ ok: true, item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
   return hanRouter;
 }
 
