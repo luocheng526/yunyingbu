@@ -46,9 +46,9 @@ test("GET / is the left-nav dashboard with seven menu labels", async () => {
     const { res, text } = await get(base, "/");
     assert.equal(res.status, 200);
     assert.match(text, /星脉甄选/);
-    assert.match(text, /xingmai-logo\.png/);
+    assert.match(text, /data:image\/png;base64,/);
     assert.match(text, /退出登录/);
-    assert.match(text, /v0\.4\.4/);
+    assert.match(text, /v0\.4\.5/);
     assert.match(text, /趋势看板/);
     assert.match(text, /实时销售指数/);
     assert.match(text, /龙虎榜/);
@@ -63,6 +63,8 @@ test("GET / is the left-nav dashboard with seven menu labels", async () => {
     assert.doesNotMatch(text, /login-page/);
     const logo = await fetch(`${base}/shared/xingmai-logo.png`);
     assert.equal(logo.status, 200);
+    const buf = Buffer.from(await logo.arrayBuffer());
+    assert.equal(buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])), true);
   });
 });
 
@@ -72,9 +74,9 @@ test("unfinished module pages return placeholder instead of 500", async () => {
       const { res, text } = await get(base, path);
       assert.equal(res.status, 200, path);
       assert.match(text, /星脉甄选/);
-    assert.match(text, /xingmai-logo\.png/);
-    assert.match(text, /退出登录/);
-    assert.match(text, /v0\.4\.4/);
+      assert.match(text, /login-logo\.png/);
+      assert.match(text, /退出登录/);
+      assert.match(text, /v0\.4\.5/);
       assert.match(text, /xm-sider/);
       assert.match(text, /shared\/nav\.js/);
       assert.match(text, /shared\/layout\.css/);
@@ -95,8 +97,9 @@ test("home module does not query MySQL (no tables, nav stays static)", () => {
   assert.equal(navJs.includes("MYSQL"), false);
   assert.match(navJs, /rel = "prefetch"/);
   assert.match(navJs, /preventDefault/);
-  assert.match(navJs, /xm-home-sider v0\.4\.4/);
-  assert.match(navJs, /siderIsTemplate/);
+  assert.match(navJs, /xm-home-sider v0\.4\.5/);
+  assert.match(navJs, /data:image\/png;base64,/);
+  assert.match(navJs, /login-logo\.png/);
   assert.match(schema, /无业务表/);
 });
 

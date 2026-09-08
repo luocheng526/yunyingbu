@@ -1,4 +1,4 @@
-export const NAV_VERSION = "v0.4.4";
+export const NAV_VERSION = "v0.4.5";
 
 export const NAV_MAIN = [
   { href: "/", file: "index.html", label: "首页" },
@@ -24,5 +24,5 @@ function itemLink(item, activeHref) {
 export function navMarkup(activeHref) {
   const main = NAV_MAIN.map((item) => itemLink(item, activeHref)).join("");
   const foot = NAV_FOOT.map((item) => itemLink(item, activeHref)).join("");
-  return `<aside class="xm-sider" aria-label="侧栏导航"><div class="xm-brand"><a class="xm-logo" href="/"><img src="/shared/xingmai-logo.png" alt="星脉甄选" /></a><button type="button" class="xm-collapse" id="xm-collapse" aria-label="折叠侧栏">‹</button></div><nav class="xm-menu xm-menu-main"><p class="xm-menu-label">项目</p>${main}</nav><nav class="xm-menu xm-menu-foot">${foot}<button type="button" class="xm-menu-item xm-logout" id="xm-logout"><i class="xm-ico" aria-hidden="true"></i><span>退出登录</span></button><p class="xm-version">${NAV_VERSION}</p></nav></aside>`;
+  return `<aside class="xm-sider" aria-label="侧栏导航"><div class="xm-brand"><a class="xm-logo" href="/"><img src="/login-logo.png" alt="星脉甄选" /></a><button type="button" class="xm-collapse" id="xm-collapse" aria-label="折叠侧栏">‹</button></div><nav class="xm-menu xm-menu-main"><p class="xm-menu-label">项目</p>${main}</nav><nav class="xm-menu xm-menu-foot">${foot}<button type="button" class="xm-menu-item xm-logout" id="xm-logout"><i class="xm-ico" aria-hidden="true"></i><span>退出登录</span></button><p class="xm-version">${NAV_VERSION}</p></nav></aside>`;
 }

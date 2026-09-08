@@ -78,6 +78,10 @@ html.xm-collapsed .xm-collapse {
   border-bottom: 1px solid #1f1f1f;
 }
 
+.xm-logo-word {
+  display: none;
+}
+
 .xm-logo {
   display: flex;
   align-items: center;
