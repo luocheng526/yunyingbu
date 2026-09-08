@@ -2,7 +2,7 @@
 
 其他 Agent **禁止** SSH 到 ECS、禁止 `push-xingmai-to-ecs.sh`、禁止 `systemctl restart`、禁止 docker 上生产。
 
-做完功能后按 [00-release-rules.md](00-release-rules.md) 交单。非图形改动自测通过后立刻交，不要等用户再单独说「提交」：
+做完功能后按 [00-release-rules.md](00-release-rules.md) 交单。自测通过后立刻交，**图形改动同样交**，不要等用户再单独说「提交」：
 
 1. `GET /api/releases/next` 领取全站下一个 `0.1.N`
 2. `POST /api/releases` 入队（版本写成 `0.1.N-说明`，不得自编旁支号）
