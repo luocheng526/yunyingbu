@@ -12,6 +12,12 @@
 
 纪律全文：`docs/agents/00-release-rules.md`。禁止 SSH、禁止自己上 ECS、禁止自己点通过。
 
+## 禁止提交会挂站的瘦 app.js
+
+`src/app.js` 是全站入口。数据中心 / 沈子晗 / 韩梦凯 / 人员管理 **单据禁止带 `src/app.js`**，只交自己目录。覆盖瘦版本会让 `/api/auth/login`、`/api/releases`、`/api/health` 全部 404，闸门自己也修不了。
+
+完整 `src/app.js` 必须同时有：`attachProfile`、`attachHome`、`createReleasesRouter`、`/api/health`。缺任一视为瘦版本，禁止覆盖线上。
+
 ## 侧栏公共文件只由首页交付
 
 `/shared/nav.js`、`/shared/layout.css`、`/shared/xingmai-logo.png` 以首页模块为准。人员管理、版本发布中心、个人中心及其他模块**禁止覆盖**这 3 个文件。侧栏必须是：顶栏黑底星脉甄选 logo、分组「项目」、底部固定「版本发布中心 / 个人中心 / 退出登录」和版本号；不要顶栏「退出」「暗色」。
