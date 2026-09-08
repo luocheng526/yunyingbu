@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 export const COOKIE_NAME = "mk_sid";
 export const RELEASES_CSS_HREF = "/releases.css?v=sc-ui-1";
-export const RELEASES_MODULE_HREF = "/shared/modules/releases.js?v=sc-ui-1";
+export const RELEASES_MODULE_HREF = "/shared/modules/releases.js?v=sc-ui-2";
 export const RELEASES_SCROLL_STYLE_ID = "xm-releases-scroll";
 export const RELEASES_FETCH_PATCH_ID = "xm-releases-fetch-patch";
 const releasesCssFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public/releases.css");

@@ -274,6 +274,18 @@ test("GET /releases is the release center page", async () => {
   });
 });
 
+test("release board scripts parse so tab refresh can run", () => {
+  const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const html = fs.readFileSync(path.join(root, "public/releases.html"), "utf8");
+  const start = html.indexOf("<script>");
+  const end = html.lastIndexOf("</script>");
+  assert.ok(start >= 0 && end > start);
+  const inline = html.slice(start + "<script>".length, end);
+  assert.doesNotThrow(() => new Function(inline));
+  const theme = fs.readFileSync(path.join(root, "public/shared/modules/releases.js"), "utf8");
+  assert.doesNotThrow(() => new Function(theme));
+});
+
 test("releases.html has no login form and sends users to /login", () => {
   const html = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../public/releases.html"), "utf8");
   assert.doesNotMatch(html, /id="login-form"/);
