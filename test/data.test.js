@@ -65,9 +65,53 @@ test("GET /data is the data center page with title, cards, table, and left-shell
     assert.match(text, /id="site-nav"/);
     assert.match(text, /<main class="xm-page">/);
     assert.match(text, /class="kpi-grid"/);
+    assert.match(text, /data-subnav\.js/);
+    assert.match(text, /id="data-subnav"/);
     assert.doesNotMatch(text, /class="site-header"/);
     assert.doesNotMatch(text, /aria-label="全站导航"/);
     assert.doesNotMatch(text, /class="app-shell"/);
+  });
+});
+
+test("GET /api/data/nav lists the three data-center children", async () => {
+  await withServer(async (base) => {
+    const { res, text } = await get(base, "/api/data/nav");
+    assert.equal(res.status, 200);
+    const body = JSON.parse(text);
+    assert.equal(body.ok, true);
+    assert.equal(body.parent.label, "数据中心");
+    assert.deepEqual(
+      body.children.map((c) => c.label),
+      ["店铺实时数据", "店铺数据总揽", "商品数据总揽"]
+    );
+  });
+});
+
+test("data child pages and demo APIs respond", async () => {
+  await withServer(async (base) => {
+    const pages = [
+      ["/data/stores/live", "店铺实时数据", "/api/data/stores/live"],
+      ["/data/stores/overview", "店铺数据总揽", "/api/data/stores/overview"],
+      ["/data/goods/overview", "商品数据总揽", "/api/data/goods/overview"]
+    ];
+    for (const [pagePath, title, apiPath] of pages) {
+      const page = await get(base, pagePath);
+      assert.equal(page.res.status, 200, pagePath);
+      assert.match(page.text, new RegExp(`<h1>${title}</h1>`));
+      assert.match(page.text, /id="data-subnav"/);
+      const api = await get(base, apiPath);
+      assert.equal(api.res.status, 200, apiPath);
+      const body = JSON.parse(api.text);
+      assert.equal(body.ok, true);
+      assert.equal(body.demo, true);
+      assert.ok(body.cards.length > 0);
+      assert.ok(body.rows.length > 0);
+    }
+    const subnav = await get(base, "/data-subnav.js");
+    assert.equal(subnav.res.status, 200);
+    assert.match(subnav.text, /店铺实时数据/);
+    assert.match(subnav.text, /店铺数据总揽/);
+    assert.match(subnav.text, /商品数据总揽/);
   });
 });
 

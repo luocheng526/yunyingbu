@@ -25,7 +25,14 @@ if (!fs.existsSync(appPath)) {
 
 const copies = [
   ["public/data.html", "public/data.html"],
+  ["public/data-pages.css", "public/data-pages.css"],
+  ["public/data-subnav.js", "public/data-subnav.js"],
+  ["public/data-store-live.html", "public/data-store-live.html"],
+  ["public/data-store-overview.html", "public/data-store-overview.html"],
+  ["public/data-goods-overview.html", "public/data-goods-overview.html"],
   ["src/modules/data/overview.js", "src/modules/data/overview.js"],
+  ["src/modules/data/nav.js", "src/modules/data/nav.js"],
+  ["src/modules/data/pages.js", "src/modules/data/pages.js"],
   ["src/modules/data/router.js", "src/modules/data/router.js"],
   ["src/modules/data/patch-app.js", "src/modules/data/patch-app.js"]
 ];
@@ -44,16 +51,30 @@ function copyFile(relFrom, relTo) {
 }
 
 function ensureDataPageRoute(source) {
-  if (source.includes('app.get("/data"') || (source.includes("sendFile") && source.includes("data.html"))) {
-    return source;
-  }
   if (!/return app;/.test(source)) {
     return source;
   }
-  const pageRoute = `app.get("/data", (_req, res) => {
+  let next = source;
+  const routes = [
+    ['app.get("/data"', `app.get("/data", (_req, res) => {
     res.sendFile(path.join(path.dirname(fileURLToPath(import.meta.url)), "../public/data.html"));
-  });`;
-  return source.replace(/return app;/, `${pageRoute}\n  return app;`);
+  });`],
+    ['app.get("/data/stores/live"', `app.get("/data/stores/live", (_req, res) => {
+    res.sendFile(path.join(path.dirname(fileURLToPath(import.meta.url)), "../public/data-store-live.html"));
+  });`],
+    ['app.get("/data/stores/overview"', `app.get("/data/stores/overview", (_req, res) => {
+    res.sendFile(path.join(path.dirname(fileURLToPath(import.meta.url)), "../public/data-store-overview.html"));
+  });`],
+    ['app.get("/data/goods/overview"', `app.get("/data/goods/overview", (_req, res) => {
+    res.sendFile(path.join(path.dirname(fileURLToPath(import.meta.url)), "../public/data-goods-overview.html"));
+  });`]
+  ];
+  for (const [needle, block] of routes) {
+    if (!next.includes(needle)) {
+      next = next.replace(/return app;/, `${block}\n  return app;`);
+    }
+  }
+  return next;
 }
 
 for (const [from, to] of copies) {

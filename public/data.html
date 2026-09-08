@@ -5,28 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>数据中心 · 星脉管理系统</title>
     <link rel="stylesheet" href="/shared/layout.css" />
-    <style>
-      /* 仅看板内容；左栏与顶栏由 /shared/nav.js 注入 */
-      table {
-        width: 100%;
-        border-collapse: collapse;
-      }
-      th, td {
-        text-align: left;
-        padding: 0.75rem 0.2rem;
-        border-bottom: 1px solid #f5f5f5;
-        font-size: 0.95rem;
-      }
-      th { color: var(--xm-muted, #8c8c8c); font-weight: 600; }
-      tr:last-child td { border-bottom: none; }
-      .error { color: #b91c1c; }
-    </style>
+    <link rel="stylesheet" href="/data-pages.css" />
   </head>
   <body>
     <div id="site-nav"></div>
     <main class="xm-page">
       <p class="kicker">运营部</p>
       <h1>数据中心</h1>
+      <nav class="data-subnav" id="data-subnav"></nav>
       <p class="lead">运营关键指标看板。数字为占位演示，不连接业务库。</p>
       <section class="kpi-grid" id="cards" aria-label="关键指标">
         <article class="kpi-card">
@@ -52,7 +38,7 @@
       </section>
       <section class="panel">
         <h2>最近数据事件</h2>
-        <table>
+        <table class="data-table">
           <thead>
             <tr>
               <th>时间</th>
@@ -67,6 +53,7 @@
       </section>
     </main>
     <script src="/shared/nav.js"></script>
+    <script src="/data-subnav.js"></script>
     <script>
       (function () {
         const cardsEl = document.getElementById("cards");

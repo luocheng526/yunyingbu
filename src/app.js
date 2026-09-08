@@ -13,6 +13,15 @@ export function createApp() {
   app.get("/data", (_req, res) => {
     res.sendFile(path.join(publicDir, "data.html"));
   });
+  app.get("/data/stores/live", (_req, res) => {
+    res.sendFile(path.join(publicDir, "data-store-live.html"));
+  });
+  app.get("/data/stores/overview", (_req, res) => {
+    res.sendFile(path.join(publicDir, "data-store-overview.html"));
+  });
+  app.get("/data/goods/overview", (_req, res) => {
+    res.sendFile(path.join(publicDir, "data-goods-overview.html"));
+  });
   app.use("/api/data", dataRouter);
   return app;
 }

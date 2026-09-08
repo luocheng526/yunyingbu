@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>商品数据总揽 · 数据中心</title>
+    <link rel="stylesheet" href="/shared/layout.css" />
+    <link rel="stylesheet" href="/data-pages.css" />
+  </head>
+  <body>
+    <div id="site-nav"></div>
+    <main class="xm-page">
+      <p class="kicker">数据中心</p>
+      <h1>商品数据总揽</h1>
+      <nav class="data-subnav" id="data-subnav"></nav>
+      <p class="lead">在售商品动销与库存。数字为占位演示。</p>
+      <section class="kpi-grid" id="cards" aria-label="商品总揽指标"></section>
+      <section class="panel">
+        <h2>商品周报</h2>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th>名称</th>
+              <th>周销量</th>
+              <th>库存</th>
+            </tr>
+          </thead>
+          <tbody id="rows">
+            <tr><td colspan="4">正在加载…</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+    <script src="/shared/nav.js"></script>
+    <script src="/data-subnav.js"></script>
+    <script>
+      (function () {
+        function escapeHtml(value) {
+          return String(value)
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;");
+        }
+        fetch("/api/data/goods/overview", {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" }
+        })
+          .then(function (res) {
+            if (!res.ok) throw new Error("接口 " + res.status);
+            return res.json();
+          })
+          .then(function (data) {
+            document.getElementById("cards").innerHTML = (data.cards || [])
+              .map(function (card) {
+                return (
+                  '<article class="kpi-card"><div class="label">' +
+                  escapeHtml(card.label) +
+                  '</div><div class="value">' +
+                  escapeHtml(card.value) +
+                  '<span class="unit">' +
+                  escapeHtml(card.unit || "") +
+                  "</span></div></article>"
+                );
+              })
+              .join("");
+            document.getElementById("rows").innerHTML = (data.rows || [])
+              .map(function (row) {
+                return (
+                  "<tr><td>" +
+                  escapeHtml(row.sku) +
+                  "</td><td>" +
+                  escapeHtml(row.name) +
+                  "</td><td>" +
+                  escapeHtml(row.sales) +
+                  "</td><td>" +
+                  escapeHtml(row.stock) +
+                  "</td></tr>"
+                );
+              })
+              .join("");
+          })
+          .catch(function (err) {
+            document.getElementById("rows").innerHTML =
+              '<tr><td colspan="4" class="error">' + escapeHtml(err.message) + "</td></tr>";
+          });
+      })();
+    </script>
+  </body>
+</html>
