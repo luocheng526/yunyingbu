@@ -6,9 +6,9 @@ import { navMarkup } from "../home/nav-items.js";
 import { currentUser, publicProfile } from "./auth.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.91
+// xm-fast-shell 0.1.92
 
-export const SHELL_ASSET_VER = "0.1.91";
+export const SHELL_ASSET_VER = "0.1.92";
 export const APP_MODULES = {
   "/": "home",
   "/data": "data",
