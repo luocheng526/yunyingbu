@@ -190,6 +190,28 @@ button.oc-tab,
   border-radius: 0;
   box-shadow: none;
   min-height: 28px;
+  -webkit-tap-highlight-color: transparent;
+}
+.oc-tab:hover,
+.oc-tab:focus,
+.oc-tab:focus-visible,
+.oc-tab:active,
+button.oc-tab:hover,
+button.oc-tab:focus,
+button.oc-tab:focus-visible,
+button.oc-tab:active,
+.page button.oc-tab:hover,
+.page button.oc-tab:focus,
+.page button.oc-tab:focus-visible,
+.page button.oc-tab:active,
+.xm-content button.oc-tab:hover,
+.xm-content button.oc-tab:focus,
+.xm-content button.oc-tab:focus-visible,
+.xm-content button.oc-tab:active {
+  background: transparent !important;
+  background-color: transparent !important;
+  outline: none !important;
+  color: inherit;
 }
 .oc-tab + .oc-tab {
   box-shadow: inset 1px 0 0 var(--oc-line);
@@ -223,17 +245,26 @@ button.oc-tab,
 .oc-tab.active,
 button.oc-tab.active,
 .page button.oc-tab.active,
-.xm-content button.oc-tab.active {
-  background: transparent;
+.xm-content button.oc-tab.active,
+.oc-tab.active:hover,
+.oc-tab.active:focus,
+.oc-tab.active:focus-visible,
+.oc-tab.active:active,
+.xm-content button.oc-tab.active:hover,
+.xm-content button.oc-tab.active:focus,
+.xm-content button.oc-tab.active:focus-visible,
+.xm-content button.oc-tab.active:active {
+  background: transparent !important;
+  background-color: transparent !important;
   color: var(--oc-text);
-  box-shadow: none;
-  border-bottom-color: var(--oc-accent);
+  outline: none !important;
+  border-bottom-color: var(--oc-text);
 }
 .oc-tab.active + .oc-tab {
   box-shadow: inset 1px 0 0 var(--oc-line);
 }
 .oc-tab.active .oc-tab-num {
-  color: var(--oc-accent);
+  color: var(--oc-text);
 }
 
 .oc-card,

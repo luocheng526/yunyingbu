@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.84-fullbleed */
+/* xm-module-releases 0.1.87-tab-plain */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -106,8 +106,13 @@
       html:has(.oc-wrap) .xm-content, .xm-content:has(.oc-wrap) { padding: 0 !important; }
       .oc-hero-card { background: transparent; border: 0; box-shadow: none; padding: 0 0 10px; margin: 0 0 12px; }
       .oc-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; }
+      .oc-tab, button.oc-tab { background: transparent !important; outline: none !important; -webkit-tap-highlight-color: transparent; }
+      .oc-tab:hover, .oc-tab:focus, .oc-tab:focus-visible, .oc-tab:active, .oc-tab.active,
+      button.oc-tab:hover, button.oc-tab:focus, button.oc-tab:focus-visible, button.oc-tab:active, button.oc-tab.active {
+        background: transparent !important; background-color: transparent !important; outline: none !important;
+      }
       .oc-tab-num { display: block; margin: 0.25rem 0 0.1rem; font-size: 1.35rem; font-weight: 750; }
-      .oc-tab.active .oc-tab-num { color: #2563eb; }
+      .oc-tab.active .oc-tab-num { color: inherit; }
       .oc-tab p { display: block; margin: 0; font-size: 12px; }
       .sc-table tr.ticket { border: 0; box-shadow: none; padding: 0; background: transparent; }
       .sc-ver { font-weight: 650; color: #2563eb; }
@@ -189,7 +194,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-6";
+      link.href = "/releases.css?v=sc-ui-7";
       document.head.appendChild(link);
     }
   }
@@ -984,6 +989,9 @@
           });
           if (tabTitles[name]) {
             document.title = "版本发布中心 · " + (name === "queue" ? "待上线" : name === "history" ? "版本记录" : "运行日志");
+          }
+          if (typeof tab.blur === "function") {
+            tab.blur();
           }
         });
       });

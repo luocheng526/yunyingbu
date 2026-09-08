@@ -215,8 +215,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /sc-ui-6/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-6/);
+    assert.match(text, /sc-ui-7/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-7/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
     assert.match(text, /id="xm-releases-boot"/);
@@ -297,9 +297,11 @@ test("release board scripts parse so tab refresh can run", () => {
   assert.match(theme, /function finishUpgradeInPlace/);
   assert.match(theme, /return "landed"/);
   assert.doesNotMatch(theme, /location\.replace\("\/releases\?reloaded="/);
-  assert.match(theme, /sc-ui-6/);
+  assert.match(theme, /sc-ui-7/);
   assert.match(theme, /max-width: none !important/);
   assert.doesNotMatch(theme, /border: 2px solid #dc2626/);
+  assert.match(theme, /tab\.blur/);
+  assert.match(theme, /-webkit-tap-highlight-color: transparent/);
 });
 
 test("releases.html has no login form and sends users to /login", () => {
@@ -315,6 +317,7 @@ test("releases.html has no login form and sends users to /login", () => {
   assert.match(html, /id="upgrade-mask"/);
   assert.doesNotMatch(html, /location\.replace\("\/releases\?reloaded="/);
   assert.match(html, /function waitUntilSiteReady/);
+  assert.match(html, /tab\.blur/);
   assert.match(html, /oc-after-upgrade/);
   assert.match(html, /正在刷新界面/);
   assert.match(html, /consumePendingUpgrade/);
@@ -399,6 +402,8 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /\.history-stats/);
     assert.match(text, /\.oc-hero-card/);
     assert.match(text, /\.oc-tab-num/);
+    assert.match(text, /\.oc-tab:focus-visible/);
+    assert.match(text, /-webkit-tap-highlight-color:\s*transparent/);
     assert.match(text, /\.sc-table/);
     assert.doesNotMatch(text, /--oc-frame:\s*#dc2626/);
     assert.doesNotMatch(text, /border: 2px solid var\(--oc-frame/);
