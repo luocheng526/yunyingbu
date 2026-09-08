@@ -1,3 +1,4 @@
+/* xm-sider-toggle 0.1.91 */
 :root {
   --xm-sider: #ffffff;
   --xm-bg: #f0f2f5;
@@ -64,9 +65,25 @@ html.xm-collapsed .xm-logo img {
 
 html.xm-collapsed .xm-menu-item span,
 html.xm-collapsed .xm-menu-label,
-html.xm-collapsed .xm-version,
-html.xm-collapsed .xm-collapse {
+html.xm-collapsed .xm-version {
   display: none;
+}
+
+html.xm-collapsed .xm-brand {
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 6px 8px;
+}
+
+html.xm-collapsed .xm-logo {
+  justify-content: center;
+}
+
+html.xm-collapsed .xm-collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .xm-brand {
@@ -281,6 +298,42 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
   gap: 12px;
   color: #434343;
   font-size: 13px;
+}
+
+.xm-date {
+  color: #8c8c8c;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.xm-refresh {
+  border: 1px solid #e5e5e5;
+  background: #fff;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #434343;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.xm-refresh:hover {
+  background: #e6f4ff;
+  border-color: #1677ff;
+  color: #1677ff;
+}
+
+a.xm-username {
+  color: #1677ff;
+  text-decoration: none;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+a.xm-username:hover {
+  text-decoration: underline;
 }
 
 .xm-logout {

@@ -6,9 +6,9 @@ import { navMarkup } from "../home/nav-items.js";
 import { currentUser, publicProfile } from "./auth.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.90
+// xm-fast-shell 0.1.91
 
-export const SHELL_ASSET_VER = "0.1.90";
+export const SHELL_ASSET_VER = "0.1.91";
 export const APP_MODULES = {
   "/": "home",
   "/data": "data",
@@ -76,7 +76,11 @@ ${boot}    <script src="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" defer dat
       <div class="xm-main">
         <header class="xm-topbar">
           <div class="xm-tabs" aria-label="页签"><span class="xm-tab is-active">${title}</span></div>
-          <div class="xm-user"><span class="xm-username" id="xm-username">${userName}</span></div>
+          <div class="xm-user">
+            <time class="xm-date" id="xm-date"></time>
+            <button type="button" class="xm-refresh" id="xm-refresh">刷新</button>
+            <a class="xm-username" id="xm-username" href="/me">${userName}</a>
+          </div>
         </header>
         <div class="xm-content" id="xm-content"></div>
       </div>

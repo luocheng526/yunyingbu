@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.90 */
+/* xm-fast-shell 0.1.91 */
 (function () {
-  const ASSET_VER = "0.1.90";
+  const ASSET_VER = "0.1.91";
   const MODULES = {
     "/data": "data",
     "/shen": "shen",
@@ -258,7 +258,7 @@
 
   function bindMenu(root) {
     const scope = root || document;
-    const links = scope.querySelectorAll('.xm-menu a[href], a.xm-logo[href="/"]');
+    const links = scope.querySelectorAll('.xm-menu a[href], a.xm-logo[href="/"], a.xm-username[href]');
     Array.prototype.forEach.call(links, function (anchor) {
       if (anchor.dataset.navFast === "1") {
         return;
@@ -282,19 +282,93 @@
     });
   }
 
+  function chinaDate() {
+    return new Date().toLocaleDateString("zh-CN", {
+      timeZone: "Asia/Shanghai",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    });
+  }
+
+  function ensureUserTools() {
+    const topbar = document.querySelector(".xm-topbar");
+    if (!topbar) {
+      return;
+    }
+    let user = topbar.querySelector(".xm-user");
+    if (!user) {
+      user = document.createElement("div");
+      user.className = "xm-user";
+      topbar.appendChild(user);
+    }
+    if (!document.getElementById("xm-date")) {
+      const date = document.createElement("time");
+      date.className = "xm-date";
+      date.id = "xm-date";
+      user.insertBefore(date, user.firstChild);
+    }
+    if (!document.getElementById("xm-refresh")) {
+      const refresh = document.createElement("button");
+      refresh.type = "button";
+      refresh.className = "xm-refresh";
+      refresh.id = "xm-refresh";
+      refresh.textContent = "刷新";
+      const dateEl = document.getElementById("xm-date");
+      if (dateEl && dateEl.nextSibling) {
+        user.insertBefore(refresh, dateEl.nextSibling);
+      } else {
+        user.insertBefore(refresh, user.firstChild ? user.firstChild.nextSibling : null);
+      }
+    }
+    let name = document.getElementById("xm-username");
+    if (!name) {
+      name = document.createElement("a");
+      name.id = "xm-username";
+      name.className = "xm-username";
+      name.href = "/me";
+      name.textContent = "用户";
+      user.appendChild(name);
+    } else if (name.tagName !== "A") {
+      const link = document.createElement("a");
+      link.id = "xm-username";
+      link.className = "xm-username";
+      link.href = "/me";
+      link.textContent = name.textContent || "用户";
+      name.replaceWith(link);
+    } else {
+      name.href = "/me";
+    }
+  }
+
   function applyCollapsed(collapsed) {
     document.documentElement.classList.toggle("xm-collapsed", collapsed);
     const btn = document.getElementById("xm-collapse");
     if (btn) {
+      btn.hidden = false;
+      btn.textContent = collapsed ? "›" : "‹";
       btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
       btn.setAttribute("aria-label", collapsed ? "展开侧栏" : "折叠侧栏");
     }
   }
 
   function bindChrome(userLabel) {
+    ensureUserTools();
     const nameEl = document.getElementById("xm-username");
     if (nameEl && userLabel) {
       nameEl.textContent = userLabel;
+    }
+    const dateEl = document.getElementById("xm-date");
+    if (dateEl) {
+      dateEl.dateTime = new Date().toISOString().slice(0, 10);
+      dateEl.textContent = chinaDate();
+    }
+    const refreshBtn = document.getElementById("xm-refresh");
+    if (refreshBtn && !refreshBtn.dataset.bound) {
+      refreshBtn.dataset.bound = "1";
+      refreshBtn.addEventListener("click", function () {
+        window.location.reload();
+      });
     }
     const collapseBtn = document.getElementById("xm-collapse");
     if (collapseBtn && !collapseBtn.dataset.bound) {
@@ -347,7 +421,9 @@
       labelOf(current) +
       "</span></div>" +
       '<div class="xm-user">' +
-      '<span class="xm-username" id="xm-username">用户</span>' +
+      '<time class="xm-date" id="xm-date"></time>' +
+      '<button type="button" class="xm-refresh" id="xm-refresh">刷新</button>' +
+      '<a class="xm-username" id="xm-username" href="/me">用户</a>' +
       "</div></header>" +
       '<div class="xm-content" id="xm-content"></div></div>';
 
