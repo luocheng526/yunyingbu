@@ -51,7 +51,7 @@ test("logged-in visit to /login redirects home unless out=1", async () => {
   const cookie = String(res.headers.get("set-cookie") || "").split(";")[0];
   const bounce = await fetch(`${base}/login`, { headers: { cookie }, redirect: "manual" });
   assert.equal(bounce.status, 302);
-  assert.equal(bounce.headers.get("location"), "/");
+  assert.equal(bounce.headers.get("location"), "/data");
   const leaving = await fetch(`${base}/login?out=1`, { headers: { cookie }, redirect: "manual" });
   assert.equal(leaving.status, 200);
   const html = await leaving.text();

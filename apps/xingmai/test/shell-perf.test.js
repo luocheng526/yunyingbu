@@ -26,9 +26,9 @@ async function loginCookie() {
 test("shell HTML is versioned so browsers drop the old full-reload nav.js", async () => {
   const cookie = await loginCookie();
   const html = await (await fetch(`${base}/data`, { headers: { cookie } })).text();
-  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.96/);
-  assert.match(html, /\/shared\/layout\.css\?v=0\.1\.96/);
-  assert.match(html, /\/shared\/modules\/data\.js\?v=0\.1\.96/);
+  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.100/);
+  assert.match(html, /\/shared\/layout\.css\?v=0\.1\.100/);
+  assert.match(html, /\/shared\/modules\/data\.js\?v=0\.1\.100/);
   const js = readFileSync(join(root, "public/shared/nav.js"), "utf8");
   assert.match(js, /history\.pushState/);
   assert.match(js, /function go\(/);
@@ -51,8 +51,9 @@ test("sidebar HTML stays fast when the same process is reused", async () => {
     assert.equal(res.status, 200);
     samples.push(ms);
     const html = await res.text();
-    assert.match(html, /\/shared\/nav\.js\?v=0\.1\.96/);
+    assert.match(html, /\/shared\/nav\.js\?v=0\.1\.100/);
     assert.match(html, /\/shared\/modules\//);
+    assert.doesNotMatch(html, /<span>首页<\/span>/);
   }
   const max = Math.max(...samples);
   assert.ok(max < 250, `slow html fetch ${max.toFixed(1)}ms ${JSON.stringify(samples)}`);
@@ -61,15 +62,9 @@ test("sidebar HTML stays fast when the same process is reused", async () => {
 test("home page is injected and not served as raw static index", async () => {
   const cookie = await loginCookie();
   for (const dest of ["/", "/index.html"]) {
-    const res = await fetch(`${base}${dest}`, { headers: { cookie } });
-    assert.equal(res.status, 200);
-    const html = await res.text();
-    assert.match(html, /\/shared\/nav\.js\?v=0\.1\.96/);
-    assert.match(html, /localStorage.getItem\("xm-theme"\)/);
-    assert.match(html, /xm-sider/);
-    assert.match(readFileSync(join(root, "public/shared/modules/home.js"), "utf8"), /工作台/);
-    assert.doesNotMatch(html, /aria-label="模块入口"/);
-    assert.doesNotMatch(html, /class="cards"/);
+    const res = await fetch(`${base}${dest}`, { headers: { cookie }, redirect: "manual" });
+    assert.equal(res.status, 302);
+    assert.equal(res.headers.get("location"), "/data");
   }
 });
 
