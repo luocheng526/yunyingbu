@@ -40,6 +40,8 @@ test("GET /han is 韩梦凯运营中心 with left sidebar shell", async () => {
     assert.match(html, /选品数据/);
     assert.match(html, /商品数据/);
     assert.match(html, /付费数据/);
+    assert.match(html, /占位/);
+    assert.match(html, /该板块尚未交付，先留位/);
     assert.match(html, /韩梦凯运营中心/);
     assert.match(html, /shared\/layout\.css/);
     assert.match(html, /shared\/nav\.js/);
