@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 export const COOKIE_NAME = "mk_sid";
 export const RELEASES_CSS_HREF = "/releases.css?v=hist-scroll-1";
+export const RELEASES_MODULE_HREF = "/shared/modules/releases.js?v=gate-unjam-1";
 export const RELEASES_SCROLL_STYLE_ID = "xm-releases-scroll";
 export const RELEASES_FETCH_PATCH_ID = "xm-releases-fetch-patch";
 const releasesCssFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public/releases.css");
@@ -55,6 +56,7 @@ export function injectReleasesCssLink(html) {
     }
     return full;
   });
+  out = out.replace(/\/shared\/modules\/releases\.js\?v=[^"']+/g, RELEASES_MODULE_HREF);
   const extras = [];
   if (!out.includes(`id="${RELEASES_SCROLL_STYLE_ID}"`)) {
     extras.push(releasesScrollStyleTag());

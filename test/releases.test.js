@@ -368,11 +368,14 @@ test("injectReleasesCssLink turns the theme preload into a real stylesheet", () 
 <html lang="zh-CN"><head>
 <title>星脉</title>
 <link rel="preload" href="/releases.css?v=0.1.66" as="style" />
+<script src="/shared/modules/releases.js?v=0.1.66" defer></script>
 <link rel="stylesheet" href="/shared/layout.css?v=0.1.66" />
 </head>
 <body class="xm-app-shell"></body></html>`;
   const out = injectReleasesCssLink(stub);
   assert.match(out, new RegExp(`href="${RELEASES_CSS_HREF.replace("?", "\\?")}"`));
+  assert.match(out, /releases\.js\?v=gate-unjam-1/);
+  assert.doesNotMatch(out, /releases\.js\?v=0\.1\.66/);
   assert.match(out, new RegExp(`id="${RELEASES_SCROLL_STYLE_ID}"`));
   assert.match(out, new RegExp(`id="${RELEASES_FETCH_PATCH_ID}"`));
   assert.match(out, /rel="stylesheet"/);
