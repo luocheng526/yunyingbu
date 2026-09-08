@@ -215,8 +215,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /sc-ui-7/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-7/);
+    assert.match(text, /sc-ui-8/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-8/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
     assert.match(text, /id="xm-releases-boot"/);
@@ -246,6 +246,10 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /newestFirst/);
     assert.match(text, /PAGE_SIZE = 20/);
     assert.match(text, /function paginate/);
+    assert.match(text, /view=history/);
+    assert.match(text, /function refreshHistory/);
+    assert.match(text, /function refreshLogs/);
+    assert.match(text, /view=summary/);
     assert.match(text, /function renderPager/);
     assert.match(text, /上一页/);
     assert.match(text, /下一页/);
@@ -297,7 +301,10 @@ test("release board scripts parse so tab refresh can run", () => {
   assert.match(theme, /function finishUpgradeInPlace/);
   assert.match(theme, /return "landed"/);
   assert.doesNotMatch(theme, /location\.replace\("\/releases\?reloaded="/);
-  assert.match(theme, /sc-ui-7/);
+  assert.match(theme, /sc-ui-8/);
+  assert.match(theme, /view=history/);
+  assert.match(theme, /function refreshHistory/);
+  assert.match(theme, /function refreshLogs/);
   assert.match(theme, /max-width: none !important/);
   assert.doesNotMatch(theme, /border: 2px solid #dc2626/);
   assert.match(theme, /tab\.blur/);
@@ -1647,6 +1654,40 @@ test("formatExecError keeps stderr for the board", () => {
   });
   assert.match(text, /stderr: no such file/);
   assert.match(text, /code=ENOENT/);
+});
+
+test("history and logs board views page slim rows", async () => {
+  await withServer(async (base) => {
+    const created = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("board-page", "Eve", "版本发布中心", "分页")
+    });
+    const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
+      method: "POST",
+      body: "{}"
+    });
+    assert.equal(pub.res.status, 200, pub.body.error);
+    const summary = await json(base, "/api/releases?view=summary");
+    assert.equal(summary.res.status, 200);
+    assert.ok(summary.body.success >= 1);
+    assert.equal(summary.body.items, undefined);
+    const history = await json(base, "/api/releases?view=history&page=1&limit=20");
+    assert.equal(history.res.status, 200);
+    assert.ok(Array.isArray(history.body.items));
+    assert.equal(history.body.page, 1);
+    assert.ok(history.body.total >= 1);
+    const row = history.body.items.find((item) => item.id === created.body.item.id);
+    assert.ok(row);
+    assert.equal(row.log, undefined);
+    const logs = await json(base, "/api/releases?view=logs&page=1&limit=20");
+    assert.equal(logs.res.status, 200);
+    const logRow = (logs.body.items || []).find((item) => item.id === created.body.item.id);
+    assert.ok(logRow);
+    assert.equal(typeof logRow.log, "string");
+    assert.ok(logRow.log.length > 0);
+    const all = await json(base, "/api/releases");
+    assert.ok((all.body.items || []).some((item) => item.id === created.body.item.id && item.log));
+  });
 });
 
 test("successful version cannot be queued again; versions lists current", async () => {

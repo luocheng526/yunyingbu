@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.87-tab-plain */
+/* xm-module-releases 0.1.88-board-page */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -153,7 +153,7 @@
       <section class="oc-card panel">
         <div class="pane on" id="pane-queue">
           <h3>待上线</h3>
-          <p class="hint lead">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。版本号由本闸门统一发放，全站一条号 0.1.N-说明，各模块不得自领；同一号段不能跨模块再用。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。站点恢复后就地刷新并关升级遮罩，不再整页跳转。有新单据约 15 秒内自动提示，不会自动点通过。待上线、版本记录、运行日志都分页，每页 20 条。</p>
+          <p class="hint lead">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。版本号由本闸门统一发放，全站一条号 0.1.N-说明，各模块不得自领；同一号段不能跨模块再用。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。站点恢复后就地刷新并关升级遮罩，不再整页跳转。有新单据约 15 秒内自动提示，不会自动点通过。待上线、版本记录、运行日志都分页，每页 20 条。版本记录和运行日志按页向服务器取，刷新只读当前页，不再一次拉全表。</p>
           <div class="caps" id="stat-caps"></div>
           <div class="note banner">发布纪律：本页是唯一发版闸门。只执行交来的单据 + 本页「通过」。按提交时间点第 1 位；一把锁，禁止抢发；下一条不会自动发。「帮我上线」无效。新文件只放源目录，不要先拷到线上；点通过才落地。闸门不读 git，也不拉 Cloud 工作区，交单只登记路径。可带 contents（路径→正文）或 ref（分支/提交），闸门会先写入源目录。源目录与线上相同会失败。</div>
           <div id="lock-view" class="lock-box idle">当前空闲，没有发布任务。</div>
@@ -161,14 +161,14 @@
         </div>
         <div class="pane" id="pane-history">
           <h3>版本记录</h3>
-          <p class="hint">各模块当前版本来自最近一次成功发布。下一号由本闸门发放。版本记录只记每次升级的简要内容，从最新到最老，每页 20 条。上方统计已成功落地的版本数，含已回滚。详细流水在「运行日志」。有升级前快照的单据可以回滚；回滚占用发布锁，不会自动发下一单。</p>
+          <p class="hint">各模块当前版本来自最近一次成功发布。下一号由本闸门发放。版本记录只记每次升级的简要内容，从最新到最老，每页 20 条，按页向服务器取。上方统计已成功落地的版本数，含已回滚。详细流水在「运行日志」。有升级前快照的单据可以回滚；回滚占用发布锁，不会自动发下一单。</p>
           <div id="history-stats" class="history-stats">已上线发布 <b>0</b> 个版本</div>
           <div id="current-versions" class="caps"></div>
           <div id="history-view"></div>
         </div>
         <div class="pane" id="pane-logs">
           <h3>运行日志</h3>
-          <p class="hint">每张单上的发版流水 log。记录多时分页查看，每页 20 条。</p>
+          <p class="hint">每张单上的发版流水 log。按页向服务器取，每页 20 条，刷新只读当前页。</p>
           <div id="logs-view" class="log-list"></div>
         </div>
       </section>
@@ -194,7 +194,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-7";
+      link.href = "/releases.css?v=sc-ui-8";
       document.head.appendChild(link);
     }
   }
@@ -247,6 +247,7 @@
       const PAGE_SIZE = 20;
       const UPGRADE_PENDING_KEY = "oc-after-upgrade";
       let knownQueueIds = null;
+      let lastLock = { locked: false };
       const listPages = { queue: 1, history: 1, logs: 1 };
 
       function setText(idOrEl, text) {
@@ -682,13 +683,18 @@
         });
       }
 
-      function renderStats(items, ready) {
+      function activeTabName() {
+        const tab = document.querySelector(".oc-tab.active");
+        return (tab && tab.getAttribute("data-tab")) || "queue";
+      }
+
+      function renderStats(summary, ready) {
         const caps = document.getElementById("stat-caps");
-        const queued = countBy(items, "queued");
-        const approved = countBy(items, "approved");
-        const publishing = countBy(items, "publishing");
-        const failed = countBy(items, "failed");
-        const success = countBy(items, "success");
+        const queued = Number(summary && summary.queued) || 0;
+        const approved = Number(summary && summary.approved) || 0;
+        const publishing = Number(summary && summary.publishing) || 0;
+        const failed = Number(summary && summary.failed) || 0;
+        const success = Number(summary && summary.success) || 0;
         const runVer = ready && ready.version ? String(ready.version) : "";
         if (caps) {
           caps.innerHTML =
@@ -710,14 +716,14 @@
         return (items || []).filter(function (item) { return item.status === "success"; });
       }
 
-      function renderHistoryStats(items) {
+      function renderHistoryStats(summary) {
         const el = document.getElementById("history-stats");
         if (!el) {
           return;
         }
-        const success = successReleases(items);
-        const rolled = success.filter(function (item) { return item.rolledBack; }).length;
-        el.innerHTML = "已上线发布 <b>" + success.length + "</b> 个版本" +
+        const success = Number(summary && summary.success) || 0;
+        const rolled = Number(summary && summary.rolledBack) || 0;
+        el.innerHTML = "已上线发布 <b>" + success + "</b> 个版本" +
           (rolled ? "（其中 " + rolled + " 个已回滚）" : "");
       }
 
@@ -860,17 +866,32 @@
         );
       }
 
-      function renderHistory(items, locked) {
+      function pageInfoFromBoard(result, key) {
+        const total = Number(result && result.total) || 0;
+        const pageCount = Math.max(1, Number(result && result.pageCount) || 1);
+        const page = Math.min(Math.max(1, Number(result && result.page) || listPages[key] || 1), pageCount);
+        listPages[key] = page;
+        const start = (page - 1) * PAGE_SIZE;
+        return {
+          slice: (result && result.items) || [],
+          page,
+          pageCount,
+          total,
+          from: total ? start + 1 : 0,
+          to: Math.min(start + ((result && result.items) || []).length, total)
+        };
+      }
+
+      function renderHistory(result, locked) {
         const el = document.getElementById("history-view");
         if (!el) {
           return;
         }
-        const success = successReleases(items).slice().sort(newestFirst);
-        if (!success.length) {
+        const paged = pageInfoFromBoard(result, "history");
+        if (!paged.total) {
           el.innerHTML = '<div class="empty">还没有成功发布的版本记录</div>';
           return;
         }
-        const paged = paginate(success, "history");
         el.innerHTML =
           "<table><thead><tr><th>版本</th><th>模块</th><th>摘要</th><th>时间</th><th>回滚</th></tr></thead><tbody>" +
           paged.slice.map(function (item) {
@@ -892,17 +913,16 @@
           "</tbody></table>" + renderPager("history", paged);
       }
 
-      function renderLogs(items) {
+      function renderLogs(result) {
         const el = document.getElementById("logs-view");
         if (!el) {
           return;
         }
-        const rows = items.filter(function (item) { return item.log; }).slice().sort(newestFirst);
-        if (!rows.length) {
+        const paged = pageInfoFromBoard(result, "logs");
+        if (!paged.total) {
           el.innerHTML = '<div class="empty">暂无发版流水</div>';
           return;
         }
-        const paged = paginate(rows, "logs");
         el.innerHTML = paged.slice.map(function (item) {
           return (
             "<article class=\"log-item\">" +
@@ -914,34 +934,51 @@
         }).join("") + renderPager("logs", paged);
       }
 
+      async function refreshHistory(apiOpts, locked) {
+        const el = document.getElementById("history-view");
+        if (el) {
+          el.innerHTML = '<div class="empty">正在读取本页版本记录…</div>';
+        }
+        const result = await api("/api/releases?view=history&page=" + listPages.history + "&limit=" + PAGE_SIZE, apiOpts);
+        renderHistory(result, locked);
+      }
+
+      async function refreshLogs(apiOpts) {
+        const el = document.getElementById("logs-view");
+        if (el) {
+          el.innerHTML = '<div class="empty">正在读取本页运行日志…</div>';
+        }
+        const result = await api("/api/releases?view=logs&page=" + listPages.logs + "&limit=" + PAGE_SIZE, apiOpts);
+        renderLogs(result);
+      }
+
       async function refresh(opts) {
         const apiOpts = opts && opts.skipLoginRedirect ? { skipLoginRedirect: true } : {};
+        const tab = (opts && opts.tab) || activeTabName();
         clearShellPending();
-        const [queue, lock, ready, me] = await Promise.all([
+        const [queue, lock, ready, me, summary, versions] = await Promise.all([
           api("/api/releases/queue", apiOpts),
           api("/api/releases/lock", apiOpts),
           api("/api/releases/readyz", apiOpts),
-          api("/api/auth/me", apiOpts)
+          api("/api/auth/me", apiOpts),
+          api("/api/releases?view=summary", apiOpts),
+          api("/api/releases/versions", apiOpts)
         ]);
+        lastLock = lock;
         setText("who", me.displayName || me.username || "罗成");
         renderLock(lock, ready);
+        renderStats(summary, ready);
+        renderHistoryStats(summary);
+        renderCurrentVersions(versions);
         const queued = queue.items || [];
         knownQueueIds = queued.map(function (item) { return item.id; });
-        setText("tab-queue-count", String(queued.length));
-        setText("tab-queue-sub", queued.length + " 待审批");
-        renderQueue(queued, lock.locked, { current: [] });
+        renderQueue(queued, lock.locked, versions);
         try {
-          const [all, versions] = await Promise.all([
-            api("/api/releases", apiOpts),
-            api("/api/releases/versions", apiOpts)
-          ]);
-          const items = all.items || [];
-          renderStats(items, ready);
-          renderHistoryStats(items);
-          renderCurrentVersions(versions);
-          renderQueue(queued, lock.locked, versions);
-          renderHistory(items, lock.locked);
-          renderLogs(items);
+          if (tab === "history") {
+            await refreshHistory(apiOpts, lock.locked);
+          } else if (tab === "logs") {
+            await refreshLogs(apiOpts);
+          }
         } catch (err) {
           flash(err.message, true);
         }
@@ -989,6 +1026,11 @@
           });
           if (tabTitles[name]) {
             document.title = "版本发布中心 · " + (name === "queue" ? "待上线" : name === "history" ? "版本记录" : "运行日志");
+          }
+          if (name === "history" || name === "logs") {
+            refresh({ tab: name }).catch(function (err) {
+              flash(err.message, true);
+            });
           }
           if (typeof tab.blur === "function") {
             tab.blur();

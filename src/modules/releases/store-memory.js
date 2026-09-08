@@ -3,6 +3,14 @@ import { INTERRUPTED_PUBLISH_LOG, QUEUE_LOG, RECEIPT_RECOVER_LOG, requeueFailedI
 import { hasApplyReceipt } from "./push.js";
 import { assignSubmitOrder, compareSubmit } from "./order.js";
 import { readJsonFile, writeJsonFile } from "./persist-json.js";
+import {
+  newestFirst,
+  paginateRows,
+  slimHistoryItem,
+  slimLogItem,
+  slimVersionItem,
+  summarizeItems
+} from "./board.js";
 
 export const REVIEWER = "运营部主脑";
 
@@ -174,6 +182,28 @@ export function createMemoryStore({ now, persistPath } = {}) {
       return items
         .filter((item) => HISTORY_STATUSES.has(item.status))
         .sort((a, b) => String(b.reviewedAt || b.submittedAt).localeCompare(String(a.reviewedAt || a.submittedAt)));
+    },
+    boardSummary() {
+      return summarizeItems(items);
+    },
+    historyPage(page, limit) {
+      const rows = items
+        .filter((item) => item.status === "success")
+        .slice()
+        .sort(newestFirst)
+        .map(slimHistoryItem);
+      return paginateRows(rows, page, limit);
+    },
+    logsPage(page, limit) {
+      const rows = items
+        .filter((item) => item.log)
+        .slice()
+        .sort(newestFirst)
+        .map(slimLogItem);
+      return paginateRows(rows, page, limit);
+    },
+    versionRows() {
+      return items.map(slimVersionItem);
     },
     approved() {
       return items.filter((item) => item.status === "approved");
