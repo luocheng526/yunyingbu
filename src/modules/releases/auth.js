@@ -3,8 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const COOKIE_NAME = "mk_sid";
-export const RELEASES_CSS_HREF = "/releases.css?v=sc-ui-10";
-export const RELEASES_MODULE_HREF = "/shared/modules/releases.js?v=sc-ui-10";
+export const RELEASES_CSS_HREF = "/releases.css?v=sc-ui-11";
+export const RELEASES_MODULE_HREF = "/shared/modules/releases.js?v=sc-ui-11";
 export const RELEASES_SCROLL_STYLE_ID = "xm-releases-scroll";
 export const RELEASES_FETCH_PATCH_ID = "xm-releases-fetch-patch";
 export const RELEASES_BOOT_ID = "xm-releases-boot";
@@ -74,7 +74,7 @@ export function releasesFetchPatchTag() {
   function patched(input,init){
     var url=typeof input==="string"?input:(input&&input.url)||"";
     init=init?Object.assign({},init):{};
-    if(String(url).indexOf("/api/releases")===0){
+    if(String(url).indexOf("/api/releases")!==-1 || String(url).indexOf("/api/auth")!==-1){
       delete init.signal;
     }
     return raw.call(this,input,init);

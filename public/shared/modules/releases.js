@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.90-pass-timeout */
+/* xm-module-releases 0.1.91-no-abort */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -194,7 +194,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-10";
+      link.href = "/releases.css?v=sc-ui-11";
       document.head.appendChild(link);
     }
   }
@@ -272,14 +272,11 @@
         const skipLoginRedirect = Boolean(opts.skipLoginRedirect);
         const fetchOpts = Object.assign({}, opts);
         delete fetchOpts.skipLoginRedirect;
-        const ac = new AbortController();
-        const timer = setTimeout(function () { ac.abort(); }, 60000);
         let res;
         try {
           res = await fetch(path, {
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
-            signal: ac.signal,
             ...fetchOpts
           });
         } catch (err) {
@@ -289,8 +286,6 @@
             throw timeoutErr;
           }
           throw err;
-        } finally {
-          clearTimeout(timer);
         }
         if (res.status === 401) {
           if (!skipLoginRedirect) {
@@ -996,7 +991,10 @@
         const apiOpts = opts && opts.skipLoginRedirect ? { skipLoginRedirect: true } : {};
         const tab = (opts && opts.tab) || activeTabName();
         clearShellPending();
-        const [queue, lock, ready, me, summary, versions] = await Promise.all([
+        function settledValue(result, fallback) {
+          return result && result.status === "fulfilled" ? result.value : fallback;
+        }
+        const settled = await Promise.allSettled([
           api("/api/releases/queue", apiOpts),
           api("/api/releases/lock", apiOpts),
           api("/api/releases/readyz", apiOpts),
@@ -1004,6 +1002,16 @@
           api("/api/releases/summary", apiOpts),
           api("/api/releases/versions", apiOpts)
         ]);
+        const failed = settled.filter(function (result) { return result.status === "rejected"; });
+        if (settled[0].status === "rejected") {
+          throw settled[0].reason;
+        }
+        const queue = settledValue(settled[0], { items: [] });
+        const lock = settledValue(settled[1], { locked: false });
+        const ready = settledValue(settled[2], {});
+        const me = settledValue(settled[3], {});
+        const summary = settledValue(settled[4], {});
+        const versions = settledValue(settled[5], { current: [] });
         lastLock = lock;
         setText("who", me.displayName || me.username || "罗成");
         renderLock(lock, ready);
@@ -1013,6 +1021,9 @@
         const queued = queue.items || [];
         knownQueueIds = queued.map(function (item) { return item.id; });
         renderQueue(queued, lock.locked, versions);
+        if (failed.length) {
+          flash((failed[0].reason && failed[0].reason.message) || "部分刷新失败", true);
+        }
         try {
           if (tab === "history") {
             await refreshHistory(apiOpts, lock.locked);

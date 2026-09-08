@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>版本发布中心</title>
-    <link rel="stylesheet" href="/releases.css?v=sc-ui-10" />
+    <link rel="stylesheet" href="/releases.css?v=sc-ui-11" />
     <style>
       #upgrade-mask,
       html > #upgrade-mask {
@@ -1049,7 +1049,7 @@
       async function refresh(opts) {
         const tab = (opts && opts.tab) || activeTabName();
         clearShellPending();
-        const [queue, lock, versions, ready, me, summary] = await Promise.all([
+        const settled = await Promise.allSettled([
           api("/api/releases/queue"),
           api("/api/releases/lock"),
           api("/api/releases/versions"),
@@ -1057,6 +1057,18 @@
           api("/api/auth/me"),
           api("/api/releases/summary")
         ]);
+        if (settled[0].status === "rejected") {
+          throw settled[0].reason;
+        }
+        function settledValue(result, fallback) {
+          return result && result.status === "fulfilled" ? result.value : fallback;
+        }
+        const queue = settledValue(settled[0], { items: [] });
+        const lock = settledValue(settled[1], { locked: false });
+        const versions = settledValue(settled[2], { current: [] });
+        const ready = settledValue(settled[3], {});
+        const me = settledValue(settled[4], {});
+        const summary = settledValue(settled[5], {});
         setText("who", me.displayName || me.username || "罗成");
         renderStats(summary, ready);
         renderLock(lock, ready);
