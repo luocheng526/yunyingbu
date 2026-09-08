@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.92 */
+/* xm-fast-shell 0.1.96 */
 (function () {
-  const ASSET_VER = "0.1.92";
+  const ASSET_VER = "0.1.96";
   const MODULES = {
     "/data": "data",
     "/shen": "shen",

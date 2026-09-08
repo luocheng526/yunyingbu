@@ -22,16 +22,49 @@ test("thin app.js contents are rejected even from the gate module", () => {
     files: ["src/app.js"],
     contents: { "src/app.js": "app.use('/api/data', dataRouter)" }
   });
-  assert.match(reason, /瘦版本/);
+  assert.match(reason, /禁止提交 src\/app\.js/);
 });
 
-test("full app.js contents are allowed for emergency restore", () => {
+test("full app.js contents are allowed for 主框架 restore", () => {
   const reason = dangerousAppJsReason({
-    module: "版本发布中心",
+    module: "主框架",
     files: ["src/app.js"],
     contents: { "src/app.js": fullApp }
   });
   assert.equal(reason, "");
+});
+
+test("thin app.js is rejected from 主框架", () => {
+  const reason = dangerousAppJsReason({
+    module: "主框架",
+    files: ["src/app.js"],
+    contents: { "src/app.js": "app.use('/api/data', dataRouter)" }
+  });
+  assert.match(reason, /瘦版本/);
+});
+
+test("server.js is kernel-only", () => {
+  const reason = ticketGuardReason({
+    module: "数据中心",
+    files: ["src/server.js"]
+  });
+  assert.match(reason, /禁止提交内核文件/);
+});
+
+test("auth.js is locked to 主框架 or 个人中心", () => {
+  const reason = ticketGuardReason({
+    module: "首页",
+    files: ["src/modules/profile/auth.js"]
+  });
+  assert.match(reason, /禁止提交 src\/modules\/profile\/auth\.js/);
+});
+
+test("pages.js and middleware.js must ship together", () => {
+  const reason = ticketGuardReason({
+    module: "主框架",
+    files: ["src/modules/home/pages.js"]
+  });
+  assert.match(reason, /成套提交/);
 });
 
 test("empty file list cannot full-sync", () => {

@@ -317,6 +317,9 @@ async function hydrateSessionsFromMysql() {
   }
   const now = Date.now();
   await query("DELETE FROM xm_sessions WHERE expires_at < ?", [now]);
+  await query(
+    "DELETE FROM xm_sessions WHERE sid NOT IN (SELECT sid FROM (SELECT sid FROM xm_sessions ORDER BY expires_at DESC LIMIT 8) keep)"
+  );
   const [rows] = await query(
     "SELECT sid, username, created_at, expires_at FROM xm_sessions WHERE expires_at >= ?",
     [now]

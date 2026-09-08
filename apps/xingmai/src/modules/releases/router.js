@@ -255,28 +255,12 @@ export function createReleasesRouter(options = {}) {
     res.status(201).json({ ok: true, item, incomplete: !parsed.complete });
   });
 
-  router.post("/reorder", (req, res) => {
-    const ids = req.body?.ids;
-    if (!Array.isArray(ids) || !ids.length) {
-      res.status(400).json({ ok: false, error: "请提供排队 id 列表" });
-      return;
-    }
-    const items = store.reorder(ids);
-    res.json({ ok: true, items });
+  router.post("/reorder", (_req, res) => {
+    res.status(409).json({ ok: false, error: "禁止上移下移。入队按提交时间。" });
   });
 
-  router.post("/:id/move", (req, res) => {
-    const direction = String(req.body?.direction || "").trim();
-    if (direction !== "up" && direction !== "down") {
-      res.status(400).json({ ok: false, error: "direction 只能是 up 或 down" });
-      return;
-    }
-    const result = store.move(req.params.id, direction);
-    if (result.error) {
-      res.status(result.status).json({ ok: false, error: result.error });
-      return;
-    }
-    res.json({ ok: true, item: result.item, items: result.items });
+  router.post("/:id/move", (_req, res) => {
+    res.status(409).json({ ok: false, error: "禁止上移下移。入队按提交时间。" });
   });
 
   router.post("/:id/confirm", async (req, res) => {
