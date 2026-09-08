@@ -1,4 +1,4 @@
-/* xm-shell-perf 0.1.52 */
+/* xm-shell-pages 0.1.64 */
 (function () {
   const items = [
     { href: "/", label: "首页" },
@@ -75,11 +75,7 @@
     };
   })();
 
-  let current = window.location.pathname.replace(/\/+$/, "") || "/";
-  const htmlLoads = new Map();
-  let navGen = 0;
-  let navAbort = null;
-  let warmBusy = true;
+  const current = window.location.pathname.replace(/\/+$/, "") || "/";
   const THEME_KEY = "xm-theme";
   const cnFmt = new Intl.DateTimeFormat("zh-CN", {
     timeZone: "Asia/Shanghai",
@@ -216,7 +212,7 @@
   if (!document.querySelector('link[href*="/shared/layout.css"]')) {
     const css = document.createElement("link");
     css.rel = "stylesheet";
-    css.href = "/shared/layout.css?v=0.1.52";
+    css.href = "/shared/layout.css?v=0.1.64";
     document.head.appendChild(css);
   }
 
@@ -253,27 +249,6 @@
         );
       })
       .join("");
-  }
-
-  function highlight(nextPath) {
-    current = nextPath.replace(/\/+$/, "") || "/";
-    document.querySelectorAll(".xm-menu-item").forEach(function (a) {
-      const href = a.getAttribute("href") || "";
-      const on = isActive(href);
-      a.classList.toggle("is-active", on);
-      if (on) {
-        a.setAttribute("aria-current", "page");
-        a.setAttribute("data-self", "1");
-      } else {
-        a.removeAttribute("aria-current");
-        a.removeAttribute("data-self");
-      }
-    });
-    const tab = document.querySelector(".xm-tab");
-    if (tab) {
-      tab.textContent = pageLabel(current);
-    }
-    document.title = pageLabel(current) + " · 星脉";
   }
 
   function stripInnerChrome(root) {
@@ -318,330 +293,47 @@
     if (logoutBtn && !logoutBtn.dataset.bound) {
       logoutBtn.dataset.bound = "1";
       logoutBtn.addEventListener("click", function () {
+        logoutBtn.disabled = true;
+        try {
+          sessionStorage.removeItem("xm-me");
+        } catch (_err) {}
         fetch("/api/auth/logout", {
           method: "POST",
           credentials: "same-origin",
-          headers: { Accept: "application/json" }
-        }).finally(function () {
-          window.location.replace("/login");
-        });
-      });
-    }
-  }
-
-  function appPath(href) {
-    try {
-      const url = new URL(href, window.location.origin);
-      if (url.origin !== window.location.origin) {
-        return "";
-      }
-      const p = (url.pathname.replace(/\/+$/, "") || "/").toLowerCase();
-      if (p === "/login" || p === "/login.html") {
-        return "";
-      }
-      return url.pathname.replace(/\/+$/, "") || "/";
-    } catch (_err) {
-      return "";
-    }
-  }
-
-  function loadHtml(dest, signal) {
-    const hit = htmlLoads.get(dest);
-    if (hit) {
-      return hit;
-    }
-    const pending = fetch(dest, {
-      credentials: "same-origin",
-      headers: { Accept: "text/html" },
-      signal: signal
-    }).then(function (res) {
-      if (res.status === 401 || /\/login(?:\.html)?$/i.test(res.url)) {
+          headers: { Accept: "application/json" },
+          keepalive: true
+        }).catch(function () {});
         window.location.replace("/login");
-        throw new Error("login");
-      }
-      if (!res.ok) {
-        throw new Error("nav " + res.status);
-      }
-      return res.text();
-    }).catch(function (err) {
-      htmlLoads.delete(dest);
-      throw err;
-    });
-    htmlLoads.set(dest, pending);
-    setTimeout(function () {
-      htmlLoads.delete(dest);
-    }, 60000);
-    return pending;
-  }
-
-  function mergeSheets(doc) {
-    doc.querySelectorAll('link[rel="stylesheet"]').forEach(function (link) {
-      const href = link.getAttribute("href");
-      if (!href || href.indexOf("/shared/layout.css") !== -1) {
-        return;
-      }
-      if (document.querySelector('link[rel="stylesheet"][href="' + href + '"]')) {
-        return;
-      }
-      const next = document.createElement("link");
-      next.rel = "stylesheet";
-      next.href = href;
-      document.head.appendChild(next);
-    });
-  }
-
-  function activateScripts(root) {
-    root.querySelectorAll("script").forEach(function (old) {
-      const src = old.getAttribute("src") || "";
-      if (src.indexOf("/shared/nav.js") !== -1) {
-        old.remove();
-        return;
-      }
-      const script = document.createElement("script");
-      Array.prototype.slice.call(old.attributes).forEach(function (attr) {
-        script.setAttribute(attr.name, attr.value);
       });
-      if (!src) {
-        script.textContent = "(function(){\n" + old.textContent + "\n})();";
+    }
+    document.querySelectorAll(".xm-menu-item").forEach(function (a) {
+      if (a.dataset.bound) {
+        return;
       }
-      old.replaceWith(script);
-    });
-  }
-
-  function trackPageTimers(run) {
-    const si = window.setInterval;
-    const st = window.setTimeout;
-    function wrap(fn) {
-      return function (handler, delay) {
-        const id = fn(handler, delay);
-        if (!window.__xmPageTimers) {
-          window.__xmPageTimers = [];
+      a.dataset.bound = "1";
+      a.addEventListener("click", function (event) {
+        if (a.getAttribute("data-self") === "1") {
+          event.preventDefault();
         }
-        window.__xmPageTimers.push(id);
-        return id;
-      };
-    }
-    window.setInterval = wrap(si);
-    window.setTimeout = wrap(st);
-    try {
-      run();
-    } finally {
-      window.setInterval = si;
-      window.setTimeout = st;
-    }
-  }
-
-  function wipePageTimers() {
-    if (window.__xmChinaClock) {
-      clearInterval(window.__xmChinaClock);
-      window.__xmChinaClock = null;
-    }
-    const extra = window.__xmPageTimers;
-    if (Array.isArray(extra)) {
-      extra.forEach(function (id) {
-        clearInterval(id);
-        clearTimeout(id);
       });
-      window.__xmPageTimers = [];
-    }
-  }
-
-  function applyHtml(html) {
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    if (doc.body && doc.body.classList.contains("login-page")) {
-      window.location.replace("/login");
-      return;
-    }
-    mergeSheets(doc);
-    if (window.__xmStampObs) {
-      window.__xmStampObs.disconnect();
-    }
-    wipePageTimers();
-    const staleMask = document.getElementById("upgrade-mask");
-    const content = document.getElementById("xm-content");
-    if (!content) {
-      window.location.reload();
-      return;
-    }
-    const incoming = doc.querySelector("#xm-content");
-    const source = incoming || doc.body;
-    content.innerHTML = "";
-    Array.prototype.slice.call(source.childNodes).forEach(function (node) {
-      if (node.tagName === "SCRIPT" && /\/shared\/nav\.js/.test(String(node.getAttribute && node.getAttribute("src") || ""))) {
-        return;
-      }
-      if (node.classList && node.classList.contains("xm-shell")) {
-        const inner = node.querySelector("#xm-content");
-        if (inner) {
-          Array.prototype.slice.call(inner.childNodes).forEach(function (child) {
-            content.appendChild(document.importNode(child, true));
-          });
-        }
-        return;
-      }
-      content.appendChild(document.importNode(node, true));
-    });
-    stripInnerChrome(content);
-    const movedMask = content.querySelector("#upgrade-mask");
-    if (movedMask) {
-      document.documentElement.appendChild(movedMask);
-    }
-    if (staleMask && staleMask !== movedMask && staleMask.parentNode) {
-      staleMask.remove();
-    }
-    trackPageTimers(function () {
-      activateScripts(content);
-    });
-    rewriteTimeNodes(content);
-    watchStampRewrites();
-    startClock();
-  }
-
-  function setPending(on) {
-    const shell = document.querySelector(".xm-shell");
-    if (shell) {
-      shell.classList.toggle("is-pending", on);
-    }
-  }
-
-  function navigate(dest, push) {
-    const next = appPath(dest);
-    if (!next) {
-      return;
-    }
-    if (next === current && push) {
-      return;
-    }
-    navGen += 1;
-    const gen = navGen;
-    highlight(next);
-    setPending(true);
-    if (navAbort) {
-      try {
-        navAbort.abort();
-      } catch (_err) {}
-    }
-    navAbort = new AbortController();
-    const signal = htmlLoads.has(next) ? undefined : navAbort.signal;
-    loadHtml(next, signal)
-      .then(function (html) {
-        if (gen !== navGen) {
-          return;
-        }
-        applyHtml(html);
-        if (push) {
-          history.pushState({ xm: true, path: next }, "", next);
-        }
-        setPending(false);
-      })
-      .catch(function (err) {
-        if (gen !== navGen) {
-          return;
-        }
-        setPending(false);
-        if (err && (err.message === "login" || err.name === "AbortError")) {
-          return;
-        }
-        window.location.assign(next);
-      });
-  }
-
-  function isAppDest(dest) {
-    return items.some(function (item) {
-      return (item.href.replace(/\/+$/, "") || "/") === dest;
     });
   }
 
-  function bindSpa() {
-    if (window.__xmSpaBound) {
-      return;
+  function pinUpgradeMask() {
+    const mask = document.getElementById("upgrade-mask");
+    if (mask && mask.parentNode !== document.documentElement) {
+      document.documentElement.appendChild(mask);
     }
-    window.__xmSpaBound = true;
-    document.addEventListener("click", function (event) {
-      const a = event.target.closest("a[href]");
-      if (!a || event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-        return;
-      }
-      if (a.target === "_blank" || a.hasAttribute("download")) {
-        return;
-      }
-      const dest = appPath(a.href);
-      if (!dest || !isAppDest(dest)) {
-        return;
-      }
-      event.preventDefault();
-      navigate(dest, true);
-    });
-    document.addEventListener(
-      "pointerenter",
-      function (event) {
-        const a = event.target.closest && event.target.closest("a[href]");
-        if (!a) {
-          return;
-        }
-        if (warmBusy) {
-          return;
-        }
-        const dest = appPath(a.href);
-        if (dest && dest !== current && isAppDest(dest)) {
-          loadHtml(dest);
-        }
-      },
-      true
-    );
-    window.addEventListener("popstate", function () {
-      navigate(window.location.pathname, false);
-    });
-  }
-
-  function warmAppPages() {
-    if (window.__xmWarmPages) {
-      return;
-    }
-    window.__xmWarmPages = true;
-    const hrefs = items
-      .map(function (item) {
-        return item.href;
-      })
-      .filter(function (href) {
-        return href !== "/releases";
-      })
-      .concat(["/releases"]);
-    let i = 0;
-    function next() {
-      if (i >= hrefs.length) {
-        warmBusy = false;
-        return;
-      }
-      const dest = appPath(hrefs[i]);
-      i += 1;
-      if (dest && dest !== current) {
-        loadHtml(dest);
-      }
-      setTimeout(next, 400);
-    }
-    setTimeout(next, 800);
-  }
-
-  function warmUpstream() {
-    if (window.__xmUpstreamPing) {
-      return;
-    }
-    window.__xmUpstreamPing = setInterval(function () {
-      fetch("/api/health", { credentials: "same-origin", cache: "no-store" }).catch(function () {});
-    }, 25000);
   }
 
   function mountShell(userLabel) {
     if (document.querySelector(".xm-shell")) {
       stripInnerChrome(document.querySelector(".xm-content") || document.body);
+      pinUpgradeMask();
       bindChrome(userLabel);
-      bindSpa();
       rewriteTimeNodes(document.querySelector(".xm-content"));
       watchStampRewrites();
       startClock();
-      warmAppPages();
-      warmUpstream();
       return;
     }
 
@@ -691,10 +383,7 @@
       }
       content.appendChild(node);
     });
-    const upgradeMask = document.getElementById("upgrade-mask");
-    if (upgradeMask && upgradeMask.parentNode !== document.documentElement) {
-      document.documentElement.appendChild(upgradeMask);
-    }
+    pinUpgradeMask();
     const mount = document.getElementById("site-nav");
     if (mount) {
       mount.remove();
@@ -703,12 +392,9 @@
     document.body.insertBefore(shell, document.body.firstChild);
     document.body.classList.add("xm-app");
     bindChrome(userLabel);
-    bindSpa();
     rewriteTimeNodes(document.querySelector(".xm-content"));
     watchStampRewrites();
     startClock();
-    warmAppPages();
-    warmUpstream();
   }
 
   function start(userLabel) {
@@ -727,7 +413,6 @@
   }
 
   start("…");
-  bindSpa();
 
   try {
     const cached = sessionStorage.getItem("xm-me");
