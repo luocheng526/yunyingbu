@@ -29,6 +29,7 @@ import {
   injectReleasesCssLink,
   RELEASES_CSS_HREF,
   RELEASES_FETCH_PATCH_ID,
+  RELEASES_MODULE_HREF,
   RELEASES_SCROLL_STYLE_ID
 } from "../src/modules/releases/auth.js";
 
@@ -209,8 +210,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /hist-scroll-1/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=hist-scroll-1/);
+    assert.match(text, /sc-ui-1/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-1/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
     assert.match(text, /delete init\.signal/);
@@ -218,6 +219,12 @@ test("GET /releases is the release center page", async () => {
     assert.doesNotMatch(text, /src="\/shared\/nav.js"/);
     assert.match(text, /data-tab="queue"/);
     assert.match(text, /data-tab="history"/);
+    assert.match(text, /id="tab-queue-count"/);
+    assert.match(text, /id="tab-history-count"/);
+    assert.match(text, /oc-hero-card/);
+    assert.doesNotMatch(text, /系统中心/);
+    assert.doesNotMatch(text, /同意并发布/);
+    assert.doesNotMatch(text, /批量移出/);
     assert.match(text, /从最新到最老/);
     assert.match(text, /只记每次升级的简要内容/);
     assert.match(text, /id="history-stats"/);
@@ -360,6 +367,9 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /#history-view table/);
     assert.match(text, /#logs-view \.log-item/);
     assert.match(text, /\.history-stats/);
+    assert.match(text, /\.oc-hero-card/);
+    assert.match(text, /\.oc-tab-num/);
+    assert.match(text, /\.sc-table/);
   });
 });
 
@@ -374,7 +384,7 @@ test("injectReleasesCssLink turns the theme preload into a real stylesheet", () 
 <body class="xm-app-shell"></body></html>`;
   const out = injectReleasesCssLink(stub);
   assert.match(out, new RegExp(`href="${RELEASES_CSS_HREF.replace("?", "\\?")}"`));
-  assert.match(out, /releases\.js\?v=gate-unjam-1/);
+  assert.match(out, new RegExp(RELEASES_MODULE_HREF.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.doesNotMatch(out, /releases\.js\?v=0\.1\.66/);
   assert.match(out, new RegExp(`id="${RELEASES_SCROLL_STYLE_ID}"`));
   assert.match(out, new RegExp(`id="${RELEASES_FETCH_PATCH_ID}"`));

@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.72-gate-unjam */
+/* xm-module-releases 0.1.73-sc-ui */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -90,34 +90,45 @@
       #history-view, #logs-view {
         max-height: calc(100dvh - 15rem); overflow-y: scroll !important; touch-action: pan-y;
       }
+      .oc-hero-card { background: var(--xm-card, #fff); border: 1px solid var(--xm-line, #e4e2da); border-radius: 10px; padding: 18px 20px 0; margin: 0 0 16px; }
+      .oc-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; }
+      .oc-tab-num { display: block; margin: 0.35rem 0 0.15rem; font-size: 1.7rem; font-weight: 750; }
+      .oc-tab.active .oc-tab-num { color: #2563eb; }
+      .oc-tab p { display: block; margin: 0; font-size: 12px; }
+      .sc-table tr.ticket { border: 0; box-shadow: none; padding: 0; background: transparent; }
+      .sc-ver { font-weight: 650; color: #2563eb; }
     `;
   const HTML = `<div class="oc-wrap page xm-page">
-      <section class="oc-hero">
-        <div>
-          <p class="kicker oc-kicker">RELEASE GATE</p>
-          <h1>版本发布中心</h1>
-        </div>
-        <div class="oc-run">
-          <span class="pill run">运行</span>
-          <span class="ver" id="app-version">读取版本中</span>
-          <button type="button" class="act" id="refresh-btn">刷新</button>
-        </div>
+      <section class="oc-hero-card">
+        <section class="oc-hero">
+          <div>
+            <p class="kicker oc-kicker">RELEASE GATE</p>
+            <h1>版本发布中心</h1>
+            <p class="oc-path">待上线 · 版本记录 · 运行日志</p>
+          </div>
+          <div class="oc-run">
+            <span class="pill run">运行 <span class="ver" id="app-version">读取版本中</span></span>
+            <button type="button" class="act secondary" id="refresh-btn">刷新</button>
+          </div>
+        </section>
+        <nav class="oc-tabs" aria-label="版本发布中心页签">
+          <button type="button" class="oc-tab active" data-tab="queue">
+            <h2>待上线</h2>
+            <strong class="oc-tab-num" id="tab-queue-count">—</strong>
+            <p id="tab-queue-sub">待审批</p>
+          </button>
+          <button type="button" class="oc-tab" data-tab="history">
+            <h2>版本记录</h2>
+            <strong class="oc-tab-num" id="tab-history-count">—</strong>
+            <p id="tab-history-sub">个正式版</p>
+          </button>
+          <button type="button" class="oc-tab" data-tab="logs">
+            <h2>运行日志</h2>
+            <strong class="oc-tab-num oc-tab-num-text">流水</strong>
+            <p id="tab-logs-sub">发版流水</p>
+          </button>
+        </nav>
       </section>
-
-      <nav class="oc-tabs" aria-label="版本发布中心页签">
-        <button type="button" class="oc-tab active" data-tab="queue">
-          <h2>待上线</h2>
-          <p>各对话提交的发版队列</p>
-        </button>
-        <button type="button" class="oc-tab" data-tab="history">
-          <h2>版本记录</h2>
-          <p>当前版本 / 回滚</p>
-        </button>
-        <button type="button" class="oc-tab" data-tab="logs">
-          <h2>运行日志</h2>
-          <p>发版流水 / log</p>
-        </button>
-      </nav>
 
       <div id="flash" class="flash" role="status"></div>
       <section class="oc-card panel">
@@ -131,7 +142,8 @@
         </div>
         <div class="pane" id="pane-history">
           <h3>版本记录</h3>
-          <p class="hint">各模块当前版本来自最近一次成功发布。下一号由本闸门发放。版本记录只记每次升级的简要内容，从最新到最老，每页 20 条。详细流水在「运行日志」。有升级前快照的单据可以回滚；回滚占用发布锁，不会自动发下一单。</p>
+          <p class="hint">各模块当前版本来自最近一次成功发布。下一号由本闸门发放。版本记录只记每次升级的简要内容，从最新到最老，每页 20 条。上方统计已成功落地的版本数，含已回滚。详细流水在「运行日志」。有升级前快照的单据可以回滚；回滚占用发布锁，不会自动发下一单。</p>
+          <div id="history-stats" class="history-stats">已上线发布 <b>0</b> 个版本</div>
           <div id="current-versions" class="caps"></div>
           <div id="history-view"></div>
         </div>
@@ -163,7 +175,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=hist-scroll-1";
+      link.href = "/releases.css?v=sc-ui-1";
       document.head.appendChild(link);
     }
   }
@@ -587,22 +599,43 @@
         });
       }
 
-      function renderStats(items) {
+      function renderStats(items, ready) {
         const caps = document.getElementById("stat-caps");
-        if (!caps) {
-          return;
-        }
         const queued = countBy(items, "queued");
         const approved = countBy(items, "approved");
         const publishing = countBy(items, "publishing");
         const failed = countBy(items, "failed");
         const success = countBy(items, "success");
-        caps.innerHTML =
-          '<span class="cap wait"><b>' + queued + "</b>待主脑</span>" +
-          '<span class="cap ok"><b>' + approved + "</b>已同意</span>" +
-          '<span class="cap busy"><b>' + publishing + "</b>发布中</span>" +
-          '<span class="cap fail"><b>' + failed + "</b>失败</span>" +
-          '<span class="cap done"><b>' + success + "</b>近已上线</span>";
+        const runVer = ready && ready.version ? String(ready.version) : "";
+        if (caps) {
+          caps.innerHTML =
+            '<span class="cap wait"><b>' + queued + "</b>待主脑</span>" +
+            '<span class="cap ok"><b>' + approved + "</b>已同意</span>" +
+            '<span class="cap busy"><b>' + publishing + "</b>发布中</span>" +
+            '<span class="cap fail"><b>' + failed + "</b>失败</span>" +
+            '<span class="cap done"><b>' + success + "</b>近已上线</span>' +
+            (runVer ? '<span class="cap done"><b>' + esc(runVer) + "</b>运行版本</span>" : "");
+        }
+        setText("tab-queue-count", String(queued));
+        setText("tab-queue-sub", queued + " 待审批");
+        setText("tab-history-count", String(success));
+        setText("tab-history-sub", success + " 个正式版");
+        setText("tab-logs-sub", "发版流水");
+      }
+
+      function successReleases(items) {
+        return (items || []).filter(function (item) { return item.status === "success"; });
+      }
+
+      function renderHistoryStats(items) {
+        const el = document.getElementById("history-stats");
+        if (!el) {
+          return;
+        }
+        const success = successReleases(items);
+        const rolled = success.filter(function (item) { return item.rolledBack; }).length;
+        el.innerHTML = "已上线发布 <b>" + success.length + "</b> 个版本" +
+          (rolled ? "（其中 " + rolled + " 个已回滚）" : "");
       }
 
       function renderLock(lock, ready) {
@@ -612,7 +645,7 @@
         }
         if (!lock.locked) {
           el.className = "lock-box idle";
-          el.textContent = "当前空闲。一把锁，点一单才发一单。";
+          el.textContent = "确认发布后先启动新版本，健康检查通过再切换。当前空闲。一把锁，点一单才发一单。";
         } else {
           const cur = lock.current || {};
           el.className = "lock-box";
@@ -701,7 +734,9 @@
           return;
         }
         const paged = paginate(items, "queue");
-        el.innerHTML = paged.slice.map(function (item, index) {
+        el.innerHTML =
+          "<table class=\"sc-table\"><thead><tr><th>位次</th><th>模块</th><th>改动</th><th>版本</th><th>状态</th><th>操作</th></tr></thead><tbody>" +
+          paged.slice.map(function (item, index) {
           const seq = item.queueIndex || (paged.from + index);
           const isHead = Number(seq) === 1;
           let confirmBtn;
@@ -713,22 +748,27 @@
             confirmBtn = "<button class=\"act\" data-act=\"pass\">通过</button>";
           }
           return (
-            "<article class=\"ticket\" data-id=\"" + esc(item.id) + "\" data-restart=\"" + (item.restart ? "1" : "0") + "\" data-version=\"" + esc(item.version) + "\">" +
-            "<h4>第 " + seq + " 位 · " + esc(item.module) + " " + esc(item.version) + demoBadge(item) + "</h4>" +
-            "<dl>" +
-            "<dt>来自对话</dt><dd>" + esc(item.source || item.applicant || "—") + "</dd>" +
-            "<dt>更新了什么</dt><dd>" + esc(item.summary) + "</dd>" +
-            "<dt>文件</dt><dd>" + fileList(item) + "</dd>" +
-            (item.gitRef ? "<dt>git ref</dt><dd>" + esc(item.gitRef) + "</dd>" : "") +
-            "<dt>验收</dt><dd>" + esc(item.acceptance || "—") + "</dd>" +
-            "<dt>排队序号</dt><dd>" + seq + "</dd>" +
-            "</dl>" +
-            "<div class=\"row\">" +
+            "<tr class=\"ticket\" data-id=\"" + esc(item.id) + "\" data-restart=\"" + (item.restart ? "1" : "0") + "\" data-version=\"" + esc(item.version) + "\">" +
+            "<td class=\"sc-seq\">第 " + seq + " 位</td>" +
+            "<td>" + esc(item.module) + "</td>" +
+            "<td class=\"sc-change\">" +
+            "<div class=\"sc-sum\">" + esc(item.summary) + demoBadge(item) + "</div>" +
+            "<div class=\"sc-meta\">来自对话 · " + esc(item.source || item.applicant || "—") + "</div>" +
+            fileList(item) +
+            (item.gitRef ? "<div class=\"sc-meta\">git ref · " + esc(item.gitRef) + "</div>" : "") +
+            "<div class=\"sc-meta\">验收 · " + esc(item.acceptance || "—") + "</div>" +
+            "<div class=\"sc-meta\">排队序号 · " + seq + "</div>" +
+            "</td>" +
+            "<td><div class=\"sc-ver\">" + esc(item.version) + "</div>" +
+            "<div class=\"sc-meta\">" + (item.restart ? "含后端" : "仅页面") + "</div></td>" +
+            "<td>" + (isHead ? "待上线·发布包已就绪<br>请先点" : "待上线·排队中") + "</td>" +
+            "<td><div class=\"row\">" +
             confirmBtn +
             "<button class=\"act danger\" data-act=\"reject\">驳回</button>" +
-            "</div></article>"
+            "</div></td></tr>"
           );
-        }).join("") + renderPager("queue", paged);
+        }).join("") +
+          "</tbody></table>" + renderPager("queue", paged);
       }
 
       function newestFirst(a, b) {
@@ -742,7 +782,7 @@
         if (!el) {
           return;
         }
-        const success = items.filter(function (item) { return item.status === "success"; }).slice().sort(newestFirst);
+        const success = successReleases(items).slice().sort(newestFirst);
         if (!success.length) {
           el.innerHTML = '<div class="empty">还没有成功发布的版本记录</div>';
           return;
@@ -803,6 +843,8 @@
         renderLock(lock, ready);
         const queued = queue.items || [];
         knownQueueIds = queued.map(function (item) { return item.id; });
+        setText("tab-queue-count", String(queued.length));
+        setText("tab-queue-sub", queued.length + " 待审批");
         renderQueue(queued, lock.locked, { current: [] });
         try {
           const [all, versions] = await Promise.all([
@@ -810,7 +852,8 @@
             api("/api/releases/versions")
           ]);
           const items = all.items || [];
-          renderStats(items);
+          renderStats(items, ready);
+          renderHistoryStats(items);
           renderCurrentVersions(versions);
           renderQueue(queued, lock.locked, versions);
           renderHistory(items, lock.locked);
@@ -860,7 +903,9 @@
           document.querySelectorAll(".pane").forEach(function (pane) {
             pane.classList.toggle("on", pane.id === "pane-" + name);
           });
-          setText(crumb, tabTitles[name] || "版本发布中心");
+          if (tabTitles[name]) {
+            document.title = "版本发布中心 · " + (name === "queue" ? "待上线" : name === "history" ? "版本记录" : "运行日志");
+          }
         });
       });
 
