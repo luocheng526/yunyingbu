@@ -14,6 +14,13 @@ function renderExistingPage(filePath) {
 }
 
 function renderRouteShell(href, user) {
+  const key = String(href || "/").replace(/\/+$/, "") || "/";
+  if (key === "/") {
+    const home = pageFiles.get("/") || path.join(publicDir, "index.html");
+    if (home && fs.existsSync(home)) {
+      return renderExistingPage(home);
+    }
+  }
   if (typeof profileShell.renderAppShell === "function") {
     return profileShell.renderAppShell(href, user);
   }

@@ -5,7 +5,7 @@ import { currentUser, publicProfile } from "./auth.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
 
-export const SHELL_ASSET_VER = "0.1.67";
+export const SHELL_ASSET_VER = "0.1.80";
 export const APP_MODULES = {
   "/": "home",
   "/data": "data",
@@ -250,7 +250,7 @@ function serveHomeIndex(req, res) {
   if (destPath !== "/" && destPath !== "/index.html") {
     return false;
   }
-  res.status(200).type("html").set("Cache-Control", "private, no-store").send(renderAppShell("/", req.user));
+  res.status(200).type("html").set("Cache-Control", "private, no-store").send(readThemedHtml(path.join(publicDir, "index.html")));
   return true;
 }
 
