@@ -480,11 +480,9 @@ authRouter.post("/login", async (req, res) => {
   const expiresAt = createdAt + maxAgeMs;
   sessions.set(sid, { username: user.username, createdAt, expiresAt });
   setSessionCookie(res, req, sid, Math.floor(maxAgeMs / 1000));
-  try {
-    await persistSession(sid, user.username, createdAt, expiresAt);
-  } catch (err) {
+  persistSession(sid, user.username, createdAt, expiresAt).catch(function (err) {
     console.error("session persist failed", err);
-  }
+  });
   res.json({ ok: true, remember, user: publicProfile(user) });
 });
 

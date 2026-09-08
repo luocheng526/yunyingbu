@@ -1,14 +1,19 @@
-/* xm-shell-pages 0.1.64 */
+/* xm-shell-modules 0.1.66 */
 (function () {
   const items = [
-    { href: "/", label: "首页" },
-    { href: "/data", label: "数据中心" },
-    { href: "/shen", label: "沈子晗运营中心" },
-    { href: "/han", label: "韩梦凯运营中心" },
-    { href: "/people", label: "人员管理" },
-    { href: "/releases", label: "版本发布中心" },
-    { href: "/me", label: "个人中心" }
+    { href: "/", label: "首页", module: "home" },
+    { href: "/data", label: "数据中心", module: "data" },
+    { href: "/shen", label: "沈子晗运营中心", module: "shen" },
+    { href: "/han", label: "韩梦凯运营中心", module: "han" },
+    { href: "/people", label: "人员管理", module: "people" },
+    { href: "/releases", label: "版本发布中心", module: "releases" },
+    { href: "/me", label: "个人中心", module: "me" }
   ];
+  const MODULE_VER = "0.1.66";
+  const MODULE_SRC = {};
+  items.forEach(function (item) {
+    MODULE_SRC[item.href] = "/shared/modules/" + item.module + ".js?v=" + MODULE_VER;
+  });
 
   const path = (window.location.pathname.replace(/\/+$/, "") || "/").toLowerCase();
   if (path === "/login" || path === "/login.html") {
@@ -75,7 +80,10 @@
     };
   })();
 
-  const current = window.location.pathname.replace(/\/+$/, "") || "/";
+  let current = window.location.pathname.replace(/\/+$/, "") || "/";
+  let currentUnmount = null;
+  let navGen = 0;
+  const moduleLoads = {};
   const THEME_KEY = "xm-theme";
   const cnFmt = new Intl.DateTimeFormat("zh-CN", {
     timeZone: "Asia/Shanghai",
@@ -212,7 +220,7 @@
   if (!document.querySelector('link[href*="/shared/layout.css"]')) {
     const css = document.createElement("link");
     css.rel = "stylesheet";
-    css.href = "/shared/layout.css?v=0.1.64";
+    css.href = "/shared/layout.css?v=0.1.66";
     document.head.appendChild(css);
   }
 
@@ -249,6 +257,27 @@
         );
       })
       .join("");
+  }
+
+  function highlight(nextPath) {
+    current = nextPath.replace(/\/+$/, "") || "/";
+    document.querySelectorAll(".xm-menu-item").forEach(function (a) {
+      const href = a.getAttribute("href") || "";
+      const on = isActive(href);
+      a.classList.toggle("is-active", on);
+      if (on) {
+        a.setAttribute("aria-current", "page");
+        a.setAttribute("data-self", "1");
+      } else {
+        a.removeAttribute("aria-current");
+        a.removeAttribute("data-self");
+      }
+    });
+    const tab = document.querySelector(".xm-tab");
+    if (tab) {
+      tab.textContent = pageLabel(current);
+    }
+    document.title = pageLabel(current) + " · 星脉";
   }
 
   function stripInnerChrome(root) {
@@ -306,17 +335,6 @@
         window.location.replace("/login");
       });
     }
-    document.querySelectorAll(".xm-menu-item").forEach(function (a) {
-      if (a.dataset.bound) {
-        return;
-      }
-      a.dataset.bound = "1";
-      a.addEventListener("click", function (event) {
-        if (a.getAttribute("data-self") === "1") {
-          event.preventDefault();
-        }
-      });
-    });
   }
 
   function pinUpgradeMask() {
@@ -326,14 +344,194 @@
     }
   }
 
+  function appPath(href) {
+    try {
+      const url = new URL(href, window.location.origin);
+      if (url.origin !== window.location.origin) {
+        return "";
+      }
+      const p = (url.pathname.replace(/\/+$/, "") || "/").toLowerCase();
+      if (p === "/login" || p === "/login.html") {
+        return "";
+      }
+      return url.pathname.replace(/\/+$/, "") || "/";
+    } catch (_err) {
+      return "";
+    }
+  }
+
+  function loadModule(dest) {
+    const hit = window.XmModules && window.XmModules[dest];
+    if (hit && typeof hit.mount === "function") {
+      return Promise.resolve(hit);
+    }
+    if (moduleLoads[dest]) {
+      return moduleLoads[dest];
+    }
+    moduleLoads[dest] = new Promise(function (resolve, reject) {
+      const src = MODULE_SRC[dest];
+      if (!src) {
+        reject(new Error("no module"));
+        return;
+      }
+      function done() {
+        const mod = window.XmModules && window.XmModules[dest];
+        if (mod && typeof mod.mount === "function") {
+          resolve(mod);
+          return;
+        }
+        reject(new Error("module " + dest));
+      }
+      let existing = document.querySelector('script[data-xm-mod="' + dest + '"]');
+      if (!existing) {
+        existing = document.querySelector('script[src="' + src + '"]');
+      }
+      if (existing) {
+        if (window.XmModules && window.XmModules[dest]) {
+          resolve(window.XmModules[dest]);
+          return;
+        }
+        if (existing.readyState === "complete" || existing.dataset.loaded === "1") {
+          done();
+          return;
+        }
+        existing.addEventListener("load", done);
+        existing.addEventListener("error", function () {
+          reject(new Error("module " + dest));
+        });
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = src;
+      script.dataset.xmMod = dest;
+      script.onload = function () {
+        script.dataset.loaded = "1";
+        done();
+      };
+      script.onerror = function () {
+        reject(new Error("module " + dest));
+      };
+      document.head.appendChild(script);
+    });
+    return moduleLoads[dest];
+  }
+
+  function warmModules() {
+    if (window.__xmWarmMods) {
+      return;
+    }
+    window.__xmWarmMods = true;
+    items.forEach(function (item, idx) {
+      setTimeout(function () {
+        loadModule(item.href);
+      }, 40 + idx * 40);
+    });
+    if (!document.querySelector('link[href*="/releases.css"]')) {
+      const css = document.createElement("link");
+      css.rel = "preload";
+      css.as = "style";
+      css.href = "/releases.css?v=" + MODULE_VER;
+      document.head.appendChild(css);
+    }
+  }
+
+  function activate(dest, push) {
+    const next = appPath(dest) || dest;
+    if (!MODULE_SRC[next]) {
+      return;
+    }
+    if (next === current && push) {
+      return;
+    }
+    navGen += 1;
+    const gen = navGen;
+    highlight(next);
+    const content = document.getElementById("xm-content");
+    if (!content) {
+      window.location.assign(next);
+      return;
+    }
+    loadModule(next)
+      .then(function (mod) {
+        if (gen !== navGen) {
+          return;
+        }
+        if (typeof currentUnmount === "function") {
+          try {
+            currentUnmount();
+          } catch (_err) {}
+          currentUnmount = null;
+        }
+        content.innerHTML = "";
+        if (!mod || typeof mod.mount !== "function") {
+          content.innerHTML = '<main class="page"><p class="empty">模块未注册</p></main>';
+          return;
+        }
+        currentUnmount = mod.mount(content) || null;
+        pinUpgradeMask();
+        if (push) {
+          history.pushState({ xmModule: next }, "", next);
+        }
+        rewriteTimeNodes(content);
+      })
+      .catch(function () {
+        if (gen !== navGen) {
+          return;
+        }
+        window.location.assign(next);
+      });
+  }
+
+  function bindModules() {
+    if (window.__xmModBound) {
+      return;
+    }
+    window.__xmModBound = true;
+    document.addEventListener("click", function (event) {
+      const a = event.target.closest && event.target.closest("a[href]");
+      if (!a || event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+      if (a.target === "_blank" || a.hasAttribute("download")) {
+        return;
+      }
+      const dest = appPath(a.href);
+      if (!dest || !MODULE_SRC[dest]) {
+        return;
+      }
+      event.preventDefault();
+      activate(dest, true);
+    });
+    window.addEventListener("popstate", function () {
+      activate(window.location.pathname, false);
+    });
+    document.addEventListener(
+      "pointerenter",
+      function (event) {
+        const a = event.target.closest && event.target.closest("a[href]");
+        if (!a) {
+          return;
+        }
+        const dest = appPath(a.href);
+        if (dest && MODULE_SRC[dest]) {
+          loadModule(dest);
+        }
+      },
+      true
+    );
+  }
+
   function mountShell(userLabel) {
     if (document.querySelector(".xm-shell")) {
       stripInnerChrome(document.querySelector(".xm-content") || document.body);
       pinUpgradeMask();
       bindChrome(userLabel);
+      bindModules();
       rewriteTimeNodes(document.querySelector(".xm-content"));
       watchStampRewrites();
       startClock();
+      activate(current, false);
+      warmModules();
       return;
     }
 
@@ -360,7 +558,6 @@
       "</div></header>" +
       '<div class="xm-content" id="xm-content"></div></div>';
 
-    const content = shell.querySelector("#xm-content");
     const leftovers = [];
     Array.prototype.slice.call(document.body.childNodes).forEach(function (node) {
       if (node === shell) {
@@ -378,23 +575,21 @@
       leftovers.push(node);
     });
     leftovers.forEach(function (node) {
-      if (node.id === "upgrade-mask") {
-        return;
-      }
-      content.appendChild(node);
+      node.parentNode && node.parentNode.removeChild(node);
     });
     pinUpgradeMask();
     const mount = document.getElementById("site-nav");
     if (mount) {
       mount.remove();
     }
-    stripInnerChrome(content);
     document.body.insertBefore(shell, document.body.firstChild);
     document.body.classList.add("xm-app");
     bindChrome(userLabel);
-    rewriteTimeNodes(document.querySelector(".xm-content"));
+    bindModules();
     watchStampRewrites();
     startClock();
+    activate(current, false);
+    warmModules();
   }
 
   function start(userLabel) {
@@ -415,9 +610,13 @@
   start("…");
 
   try {
-    const cached = sessionStorage.getItem("xm-me");
-    if (cached) {
-      paintMe(JSON.parse(cached));
+    if (window.__xmBootUser) {
+      paintMe(window.__xmBootUser);
+    } else {
+      const cached = sessionStorage.getItem("xm-me");
+      if (cached) {
+        paintMe(JSON.parse(cached));
+      }
     }
   } catch (_err) {}
 

@@ -1,27 +1,76 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { currentUser } from "./auth.js";
+import { currentUser, publicProfile } from "./auth.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
 
-export const SHELL_ASSET_VER = "0.1.64";
+export const SHELL_ASSET_VER = "0.1.66";
+export const APP_MODULES = {
+  "/": "home",
+  "/data": "data",
+  "/shen": "shen",
+  "/han": "han",
+  "/people": "people",
+  "/releases": "releases",
+  "/me": "me"
+};
+
+export function renderAppShell(href, user) {
+  const key = String(href || "/").replace(/\/+$/, "") || "/";
+  const id = APP_MODULES[key] || "home";
+  const preloads = Object.values(APP_MODULES)
+    .map((name) => `    <link rel="preload" href="/shared/modules/${name}.js?v=${SHELL_ASSET_VER}" as="script" />`)
+    .join("\n");
+  const boot =
+    user && user.username
+      ? `    <script>window.__xmBootUser=${JSON.stringify(publicProfile(user))};</script>\n`
+      : "";
+  return withSharedShell(`<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>星脉</title>
+    <link rel="preload" href="/releases.css?v=${SHELL_ASSET_VER}" as="style" />
+${preloads}
+${boot}    <script src="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" defer data-xm-mod="${key}"></script>
+  </head>
+  <body class="xm-app-shell"></body>
+</html>`);
+}
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public");
 const SHELL_ASSET_FILES = {
   "/shared/nav.js": "shared/nav.js",
   "/shared/layout.css": "shared/layout.css",
-  "/login.css": "login.css"
+  "/login.css": "login.css",
+  "/releases.css": "releases.css"
 };
 const htmlFileCache = new Map();
 const HTML_CACHE_MS = 60_000;
 const HAN_API_CACHE_MS = 2500;
-const HAN_API_PATHS = new Set(["/api/han/tasks", "/api/han/brief"]);
+const HAN_API_PATHS = new Set([
+  "/api/han/tasks",
+  "/api/han/brief",
+  "/api/data/overview",
+  "/api/shen/tasks",
+  "/api/shen/brief",
+  "/api/people",
+  "/api/auth/me",
+  "/api/releases",
+  "/api/releases/queue",
+  "/api/releases/lock",
+  "/api/releases/versions",
+  "/api/releases/readyz"
+]);
 const hanApiCache = new Map();
 
 function versionShellAssets(text) {
   return String(text || "")
     .replace(/\/shared\/layout\.css(?:\?[^"'>\s]*)?/g, `/shared/layout.css?v=${SHELL_ASSET_VER}`)
-    .replace(/\/shared\/nav\.js(?:\?[^"'>\s]*)?/g, `/shared/nav.js?v=${SHELL_ASSET_VER}`);
+    .replace(/\/shared\/nav\.js(?:\?[^"'>\s]*)?/g, `/shared/nav.js?v=${SHELL_ASSET_VER}`)
+    .replace(/\/shared\/modules\/([a-z]+)\.js(?:\?[^"'>\s]*)?/g, `/shared/modules/$1.js?v=${SHELL_ASSET_VER}`)
+    .replace(/\/releases\.css(?:\?[^"'>\s]*)?/g, `/releases.css?v=${SHELL_ASSET_VER}`);
 }
 
 function normalizedPath(req) {
@@ -157,11 +206,22 @@ function isReadMethod(req) {
   return method === "GET" || method === "HEAD";
 }
 
+function shellAssetRel(pathname) {
+  if (SHELL_ASSET_FILES[pathname]) {
+    return SHELL_ASSET_FILES[pathname];
+  }
+  const match = String(pathname || "").match(/^\/shared\/modules\/([a-z]+)\.js$/);
+  if (match && Object.values(APP_MODULES).includes(match[1])) {
+    return `shared/modules/${match[1]}.js`;
+  }
+  return "";
+}
+
 function serveShellAsset(req, res) {
   if (!isReadMethod(req)) {
     return false;
   }
-  const rel = SHELL_ASSET_FILES[normalizedPath(req)];
+  const rel = shellAssetRel(normalizedPath(req));
   if (!rel) {
     return false;
   }
@@ -182,8 +242,7 @@ function serveHomeIndex(req, res) {
   if (destPath !== "/" && destPath !== "/index.html") {
     return false;
   }
-  const dest = path.join(publicDir, "index.html");
-  res.status(200).type("html").set("Cache-Control", "private, no-store").send(readThemedHtml(dest));
+  res.status(200).type("html").set("Cache-Control", "private, no-store").send(renderAppShell("/", req.user));
   return true;
 }
 
@@ -193,7 +252,7 @@ function dropHanApiCache(req) {
   if (method === "GET" || method === "HEAD") {
     return;
   }
-  if (dest.startsWith("/api/han/")) {
+  if (dest.startsWith("/api/")) {
     hanApiCache.clear();
   }
 }
