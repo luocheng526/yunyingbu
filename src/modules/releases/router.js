@@ -5,7 +5,7 @@ import { requireReleasesAuth } from "./auth.js";
 import { INCOMPLETE_ARTIFACT_ERROR, NEED_PASS_ERROR, REORDER_FORBIDDEN, withCharter } from "./charter.js";
 import { documentGaps, hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
 import { assertQueueHead, describeNextVersion, listModuleVersions, resolveReleaseVersion } from "./version.js";
-import { assertSafeRel, attachRollbackMeta, formatExecError, listMissingSourceFiles, liveRoot, markSnapshotRolledBack, pathsToSnapshot, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "./push.js";
+import { assertSafeRel, attachRollbackMeta, attachRollbackMetaList, formatExecError, listMissingSourceFiles, liveRoot, markSnapshotRolledBack, pathsToSnapshot, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "./push.js";
 import {
   normalizeContents,
   parseGitRef,
@@ -77,7 +77,18 @@ export function createReleasesRouter(options = {}) {
   const resolveSource = () => options.sourceRoot || sourceRoot(options.env);
   const resolveState = () => stateDir || os.tmpdir();
   const withSnap = (item) => attachRollbackMeta(item, resolveState());
-  const withSnapList = (items) => (items || []).map(withSnap);
+  const withSnapList = (items) => attachRollbackMetaList(items, resolveState());
+  let listInflight = null;
+  async function listed() {
+    if (!listInflight) {
+      listInflight = Promise.resolve()
+        .then(() => store.list())
+        .finally(() => {
+          listInflight = null;
+        });
+    }
+    return listInflight;
+  }
   const router = express.Router();
   router.use(requireReleasesAuth(options));
   attachPipelineWebhook(router, { ...options, pipelineStore });
@@ -197,7 +208,7 @@ export function createReleasesRouter(options = {}) {
   }
 
   router.get("/", async (_req, res) => {
-    res.json(withCharter({ ok: true, items: withSnapList(await store.list()) }));
+    res.json(withCharter({ ok: true, items: withSnapList(await listed()) }));
   });
 
   router.get("/queue", async (_req, res) => {
@@ -209,12 +220,12 @@ export function createReleasesRouter(options = {}) {
   });
 
   router.get("/versions", async (_req, res) => {
-    res.json(withCharter({ ok: true, ...listModuleVersions(withSnapList(await store.list())) }));
+    res.json(withCharter({ ok: true, ...listModuleVersions(withSnapList(await listed())) }));
   });
 
   router.get("/next", async (req, res) => {
     const slug = req.query?.slug || req.query?.说明 || "next";
-    res.json(withCharter({ ok: true, ...describeNextVersion(await store.list(), slug) }));
+    res.json(withCharter({ ok: true, ...describeNextVersion(await listed(), slug) }));
   });
 
   router.post("/go", (req, res) => {

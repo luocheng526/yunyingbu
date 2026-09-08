@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 export const COOKIE_NAME = "mk_sid";
 export const RELEASES_CSS_HREF = "/releases.css?v=hist-scroll-1";
 export const RELEASES_SCROLL_STYLE_ID = "xm-releases-scroll";
+export const RELEASES_FETCH_PATCH_ID = "xm-releases-fetch-patch";
 const releasesCssFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public/releases.css");
 
 export function releasesScrollStyleTag() {
@@ -17,6 +18,25 @@ html:has(.oc-wrap),html:has(.oc-wrap) body,html:has(.oc-wrap) body.xm-app,html:h
 .pane.on,.xm-content .pane.on,.page .pane.on{display:block!important;}
 #history-view,#logs-view,.xm-content #history-view,.xm-content #logs-view{max-height:calc(100dvh - 15rem);overflow-x:auto!important;overflow-y:scroll!important;touch-action:pan-y;}
 </style>`;
+}
+
+export function releasesFetchPatchTag() {
+  return `<script id="${RELEASES_FETCH_PATCH_ID}">
+(function(){
+  var raw=window.fetch;
+  if(!raw||raw.__xmRelPatch){return;}
+  function patched(input,init){
+    var url=typeof input==="string"?input:(input&&input.url)||"";
+    init=init?Object.assign({},init):{};
+    if(String(url).indexOf("/api/releases")===0){
+      delete init.signal;
+    }
+    return raw.call(this,input,init);
+  }
+  patched.__xmRelPatch=1;
+  window.fetch=patched;
+})();
+</script>`;
 }
 
 function looksLikeHtml(text) {
@@ -38,6 +58,9 @@ export function injectReleasesCssLink(html) {
   const extras = [];
   if (!out.includes(`id="${RELEASES_SCROLL_STYLE_ID}"`)) {
     extras.push(releasesScrollStyleTag());
+  }
+  if (!out.includes(`id="${RELEASES_FETCH_PATCH_ID}"`)) {
+    extras.push(releasesFetchPatchTag());
   }
   if (!out.includes(`href="${RELEASES_CSS_HREF}"`)) {
     extras.push(linkTag);

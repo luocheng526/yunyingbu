@@ -14,7 +14,7 @@ import {
   resolveReleaseVersion,
   VERSION_GATE_ERROR
 } from "../src/modules/releases/version.js";
-import { attachRollbackMeta, formatExecError, hasApplyReceipt, markSnapshotRolledBack, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "../src/modules/releases/push.js";
+import { attachRollbackMeta, attachRollbackMetaList, formatExecError, hasApplyReceipt, markSnapshotRolledBack, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "../src/modules/releases/push.js";
 import {
   fetchGithubFile,
   githubPathCandidates,
@@ -28,6 +28,7 @@ import { DEMO_INITIAL_PASSWORD, DEMO_USERNAME } from "../src/modules/profile/aut
 import {
   injectReleasesCssLink,
   RELEASES_CSS_HREF,
+  RELEASES_FETCH_PATCH_ID,
   RELEASES_SCROLL_STYLE_ID
 } from "../src/modules/releases/auth.js";
 
@@ -211,6 +212,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /hist-scroll-1/);
     assert.match(res.headers.get("link") || "", /releases\.css\?v=hist-scroll-1/);
     assert.match(text, /id="xm-releases-scroll"/);
+    assert.match(text, /id="xm-releases-fetch-patch"/);
+    assert.match(text, /delete init\.signal/);
     assert.doesNotMatch(text, /href="\/shared\/layout.css"/);
     assert.doesNotMatch(text, /src="\/shared\/nav.js"/);
     assert.match(text, /data-tab="queue"/);
@@ -371,10 +374,13 @@ test("injectReleasesCssLink turns the theme preload into a real stylesheet", () 
   const out = injectReleasesCssLink(stub);
   assert.match(out, new RegExp(`href="${RELEASES_CSS_HREF.replace("?", "\\?")}"`));
   assert.match(out, new RegExp(`id="${RELEASES_SCROLL_STYLE_ID}"`));
+  assert.match(out, new RegExp(`id="${RELEASES_FETCH_PATCH_ID}"`));
   assert.match(out, /rel="stylesheet"/);
   assert.match(out, /#history-view/);
   assert.match(out, /#logs-view/);
   assert.match(out, /overflow-y:scroll/);
+  assert.match(out, /delete init\.signal/);
+  assert.match(out, /\/api\/releases/);
   assert.doesNotMatch(out, /rel="preload" href="\/releases\.css/);
   assert.equal(injectReleasesCssLink(out), out);
 });
@@ -1627,6 +1633,27 @@ test("attachRollbackMeta fills snapshotDir from state snapshots folder", () => {
   markSnapshotRolledBack(snap);
   const again = attachRollbackMeta({ id: "rel-40", status: "success", snapshotDir: "" }, state);
   assert.equal(again.rolledBack, true);
+});
+
+test("attachRollbackMetaList reads snapshots once and keeps board rollback flags", () => {
+  const state = fs.mkdtempSync(path.join(os.tmpdir(), "rel-snap-list-"));
+  fs.mkdirSync(path.join(state, "snapshots", "rel-1"), { recursive: true });
+  fs.mkdirSync(path.join(state, "snapshots", "rel-2"), { recursive: true });
+  markSnapshotRolledBack(path.join(state, "snapshots", "rel-2"));
+  const items = attachRollbackMetaList(
+    [
+      { id: "rel-1", status: "success", snapshotDir: "" },
+      { id: "rel-2", status: "success", snapshotDir: "" },
+      { id: "rel-3", status: "failed", snapshotDir: "" }
+    ],
+    state
+  );
+  assert.equal(items[0].snapshotDir, path.join(state, "snapshots", "rel-1"));
+  assert.equal(items[0].rolledBack, false);
+  assert.equal(items[1].snapshotDir, path.join(state, "snapshots", "rel-2"));
+  assert.equal(items[1].rolledBack, true);
+  assert.equal(items[2].snapshotDir, "");
+  assert.equal(items[2].rolledBack, false);
 });
 
 test("queued ticket cannot rollback", async () => {

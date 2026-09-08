@@ -88,28 +88,62 @@ export function markSnapshotRolledBack(snapshotDir) {
   return file;
 }
 
-export function resolveTicketSnapshotDir(item, stateDir) {
-  if (item?.snapshotDir && fs.existsSync(item.snapshotDir)) {
-    return item.snapshotDir;
-  }
-  const id = String(item?.id || "").trim();
+function readSnapshotIndex(stateDir) {
   const root = String(stateDir || "").trim();
-  if (!id || !root) {
-    return item?.snapshotDir || "";
+  const dirs = new Set();
+  const rolled = new Set();
+  if (!root) {
+    return { root, dirs, rolled };
   }
-  const guessed = path.join(root, "snapshots", id);
-  return fs.existsSync(guessed) ? guessed : item?.snapshotDir || "";
+  let names = [];
+  try {
+    names = fs.readdirSync(path.join(root, "snapshots"));
+  } catch {
+    return { root, dirs, rolled };
+  }
+  for (const name of names) {
+    dirs.add(name);
+    try {
+      if (fs.existsSync(path.join(root, "snapshots", name, "rolled-back.json"))) {
+        rolled.add(name);
+      }
+    } catch {
+      /* skip unreadable markers */
+    }
+  }
+  return { root, dirs, rolled };
 }
 
-export function attachRollbackMeta(item, stateDir) {
+function applySnapshotIndex(item, index) {
   if (!item) {
     return item;
   }
-  item.snapshotDir = resolveTicketSnapshotDir(item, stateDir);
-  item.rolledBack = Boolean(item.rolledBack) || Boolean(
-    item.snapshotDir && fs.existsSync(rolledBackMarkerPath(item.snapshotDir))
-  );
+  const id = String(item.id || "").trim();
+  if (id && index.root && index.dirs.has(id)) {
+    item.snapshotDir = path.join(index.root, "snapshots", id);
+  }
+  item.rolledBack = Boolean(item.rolledBack) || Boolean(id && index.rolled.has(id));
   return item;
+}
+
+export function resolveTicketSnapshotDir(item, stateDir) {
+  const index = readSnapshotIndex(stateDir);
+  const id = String(item?.id || "").trim();
+  if (id && index.root && index.dirs.has(id)) {
+    return path.join(index.root, "snapshots", id);
+  }
+  return item?.snapshotDir || "";
+}
+
+export function attachRollbackMeta(item, stateDir) {
+  return applySnapshotIndex(item, readSnapshotIndex(stateDir));
+}
+
+/** One snapshots/ readdir for the whole board list. Avoids existsSync on
+ *  every ticket (and on stale snapshotDir mounts that can stall Node). */
+export function attachRollbackMetaList(items, stateDir) {
+  const index = readSnapshotIndex(stateDir);
+  return (items || []).map((item) => applySnapshotIndex(item, index));
 }
 
 function sameEntry(left, right) {
