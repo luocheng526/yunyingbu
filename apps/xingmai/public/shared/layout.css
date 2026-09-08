@@ -74,8 +74,8 @@ html.xm-collapsed .xm-collapse {
   align-items: center;
   gap: 4px;
   padding: 12px 10px 10px;
-  background: #111;
-  border-bottom: 1px solid #1f1f1f;
+  background: #1677ff;
+  border-bottom: 1px solid #1263d6;
 }
 
 .xm-logo {
@@ -94,8 +94,13 @@ html.xm-collapsed .xm-collapse {
 }
 
 .xm-brand .xm-collapse {
-  color: #bfbfbf;
+  color: #ffffff;
   flex: 0 0 auto;
+}
+
+.xm-brand .xm-collapse:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
 }
 
 .xm-menu {
@@ -153,9 +158,16 @@ html.xm-collapsed .xm-collapse {
   width: 16px;
   height: 16px;
   flex: 0 0 16px;
-  border: 1.5px solid currentColor;
-  border-radius: 3px;
-  opacity: 0.7;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.88;
+}
+
+.xm-ico svg {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 
 .xm-menu-item:hover {
