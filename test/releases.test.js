@@ -176,7 +176,11 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /通过已落地，但健康检查超时/);
     assert.match(text, /正在升级，请勿关闭/);
     assert.match(text, /\/api\/health/);
-    assert.match(text, /location\.replace\("\/releases\?reloaded="/);
+    assert.doesNotMatch(text, /location\.replace\("\/releases\?reloaded="/);
+    assert.match(text, /function waitUntilSiteReady/);
+    assert.match(text, /function probePage/);
+    assert.match(text, /function finishUpgradeOk/);
+    assert.match(text, /return "landed"/);
     assert.match(text, /oc-after-upgrade/);
     assert.match(text, /正在刷新界面/);
     assert.match(text, /consumePendingUpgrade/);
@@ -211,8 +215,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /sc-ui-4/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-4/);
+    assert.match(text, /sc-ui-5/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-5/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
     assert.match(text, /id="xm-releases-boot"/);
@@ -289,6 +293,11 @@ test("release board scripts parse so tab refresh can run", () => {
   assert.doesNotThrow(() => new Function(theme));
   assert.match(theme, /function autoMountReleases/);
   assert.match(theme, /data-xm-rel-mounted/);
+  assert.match(theme, /function waitUntilSiteReady/);
+  assert.match(theme, /function finishUpgradeInPlace/);
+  assert.match(theme, /return "landed"/);
+  assert.doesNotMatch(theme, /location\.replace\("\/releases\?reloaded="/);
+  assert.match(theme, /sc-ui-5/);
 });
 
 test("releases.html has no login form and sends users to /login", () => {
@@ -302,7 +311,8 @@ test("releases.html has no login form and sends users to /login", () => {
   assert.doesNotMatch(html, /提交发布申请/);
   assert.match(html, /id="refresh-btn"/);
   assert.match(html, /id="upgrade-mask"/);
-  assert.match(html, /location\.replace\("\/releases\?reloaded="/);
+  assert.doesNotMatch(html, /location\.replace\("\/releases\?reloaded="/);
+  assert.match(html, /function waitUntilSiteReady/);
   assert.match(html, /oc-after-upgrade/);
   assert.match(html, /正在刷新界面/);
   assert.match(html, /consumePendingUpgrade/);
@@ -361,7 +371,8 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /#history-view/);
     assert.match(text, /#logs-view/);
     assert.match(text, /\.xm-content:has\(\.oc-wrap\)/);
-    assert.match(text, /height: 0 !important/);
+    assert.match(text, /height: auto !important/);
+    assert.doesNotMatch(text, /(?<!min-)height:\s*0\s*!important/);
     assert.match(text, /100dvh/);
     assert.match(text, /touch-action: pan-y/);
     assert.match(text, /\.oc-pager/);
@@ -413,7 +424,10 @@ test("injectReleasesCssLink turns the theme preload into a real stylesheet", () 
   assert.match(out, /rel="stylesheet"/);
   assert.match(out, /#history-view/);
   assert.match(out, /#logs-view/);
-  assert.match(out, /overflow-y:scroll/);
+  assert.match(out, /overflow-y:auto/);
+  assert.doesNotMatch(out, /(?<!min-)height:0!important/);
+  assert.match(out, /data-rel-fallback/);
+  assert.match(out, /function clearPending/);
   assert.match(out, /delete init\.signal/);
   assert.match(out, /\/api\/releases/);
   assert.doesNotMatch(out, /rel="preload" href="\/releases\.css/);
