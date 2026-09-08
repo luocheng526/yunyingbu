@@ -1,3 +1,3 @@
-【补丁·数据中心·首页右侧会来拉你的接口】
+【作废】不要执行本页。
 
-首页要把 `/` 做成左导航+右侧 KPI 看板。请保证 GET /api/data/overview 登录后返回卡片和事件 JSON（没有就补演示数据）。不要改 public/shared 导航壳（那是首页的）。不要发版、不要 SSH。做完若有接口变更，写【发布文档】给主脑。
+首页右侧看板不是数据中心的壳。壳归主框架。数据中心只维护 `/api/data` 和 `XmModules["/data"]`。见 [00-module-charter.md](00-module-charter.md) 和 [02-data-center.md](02-data-center.md)。
