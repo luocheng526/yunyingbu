@@ -22,7 +22,7 @@ test("shared shell assets are public", async () => {
   assert.equal(loginCss.status, 200);
   assert.equal(ocCss.status, 200);
   assert.match(String(js.headers.get("cache-control") || ""), /must-revalidate/);
-  const versionedJs = await fetch(`${base}/shared/nav.js?v=0.1.82`);
+  const versionedJs = await fetch(`${base}/shared/nav.js?v=0.1.83`);
   assert.match(String(versionedJs.headers.get("cache-control") || ""), /max-age=86400/);
   const logo = await fetch(`${base}/shared/xingmai-logo.png`);
   assert.equal(logo.status, 200);
@@ -38,6 +38,10 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /<svg viewBox="0 0 24 24"/);
   assert.match(jsText, /xingmai-logo\.png\?v=0\.1\.82/);
   assert.match(jsText, /xingmai-logo\.png/);
+  assert.match(jsText, /xm-no-prefetch 0\.1\.83/);
+  assert.match(jsText, /\/login\?out=1/);
+  assert.doesNotMatch(jsText, /rel=["']prefetch["']/);
+  assert.doesNotMatch(jsText, /ROUTES\.forEach/);
   assert.match(jsText, /项目/);
   assert.match(jsText, /退出登录/);
   assert.match(jsText, /v0\.4\.5/);
@@ -56,6 +60,7 @@ test("shared shell assets are public", async () => {
   assert.doesNotMatch(homeHtml, /class="cards"/);
   assert.doesNotMatch(homeHtml, />退出</);
   assert.doesNotMatch(homeHtml, />暗色</);
+  assert.doesNotMatch(homeHtml, /rel="prefetch"/);
 });
 
 test("login page uses official https url and cursor light tokens", async () => {
@@ -89,7 +94,7 @@ test("home page html is the xingmai sider template", async () => {
   assert.match(html, /项目/);
   assert.match(html, /退出登录/);
   assert.match(html, /v0\.4\.5/);
-  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.82/);
+  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.83/);
   assert.match(html, /<svg viewBox="0 0 24 24"/);
   assert.doesNotMatch(html, /id="xm-theme"/);
   assert.doesNotMatch(html, /xm-app-shell/);
@@ -153,8 +158,8 @@ test("page renderer injects shared shell onto module html", async () => {
     '<!DOCTYPE html><html><head></head><body class="oc-page"><div class="oc-tab">待上线</div></body></html>'
   );
   assert.match(injected, /\/shared\/layout\.css/);
-  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.82/);
-  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.82"/);
+  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.83/);
+  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.83"/);
   assert.match(injected, /localStorage.getItem\("xm-theme"\)/);
   const login = withSharedShell('<html><head></head><body class="login-page"></body></html>');
   assert.doesNotMatch(login, /\/shared\/nav\.js/);
@@ -203,10 +208,12 @@ test("page renderer injects shared shell onto module html", async () => {
   const { renderAppShell } = await import("../src/modules/profile/middleware.js");
   const shell = renderAppShell("/data", { username: "罗成", displayName: "罗成" });
   assert.match(shell, /xm-app-shell/);
-  assert.match(shell, /\/shared\/modules\/data\.js\?v=0\.1\.82/);
-  assert.match(shell, /\/shared\/modules\/releases\.js/);
+  assert.match(shell, /\/shared\/modules\/data\.js\?v=0\.1\.83/);
+  assert.doesNotMatch(shell, /\/shared\/modules\/releases\.js/);
+  assert.doesNotMatch(shell, /\/shared\/modules\/home\.js/);
+  assert.doesNotMatch(shell, /releases\.css/);
   assert.match(shell, /__xmBootUser/);
   assert.doesNotMatch(shell, /今日订单/);
-  const versionedMod = await fetch(`${base}/shared/modules/home.js?v=0.1.82`);
+  const versionedMod = await fetch(`${base}/shared/modules/home.js?v=0.1.83`);
   assert.match(String(versionedMod.headers.get("cache-control") || ""), /max-age=86400/);
 });
