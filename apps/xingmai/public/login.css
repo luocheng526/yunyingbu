@@ -1,4 +1,4 @@
-/* LoginPage 0.1.77 — split tech-blue operations login */
+/* LoginPage 0.1.78 — split tech-blue operations login */
 :root {
   --login-bg: #f7f7f4;
   --login-ink: #14120b;
@@ -193,7 +193,7 @@ body {
   display: block;
   margin: 0 0 12px;
   color: rgba(210, 228, 255, 0.78);
-  font-size: clamp(20px, 1.56vw, 24px);
+  font-size: clamp(14px, 1.09vw, 17px);
   letter-spacing: 0.22em;
   white-space: nowrap;
 }
@@ -206,7 +206,7 @@ body {
 .hero-copy h2 {
   margin: 0;
   font-family: "PingFang SC", "Source Han Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
-  font-size: clamp(64px, 5.2vw, 96px);
+  font-size: clamp(45px, 3.64vw, 67px);
   line-height: 1.2;
   font-weight: 800;
   letter-spacing: 0.02em;
@@ -545,8 +545,8 @@ body {
   .hero-logo { height: 80px; }
   .hero-slogan span { font-size: 18px; }
   .hero-slogan small { font-size: 11px; margin-top: 6px; }
-  .hero-kicker { font-size: 20px; margin-bottom: 8px; }
-  .hero-copy h2 { font-size: 68px; }
+  .hero-kicker { font-size: 14px; margin-bottom: 8px; }
+  .hero-copy h2 { font-size: 48px; }
   .hero-pills { margin: 10px 0 14px; }
   .hero-lower {
     grid-template-columns: minmax(200px, 0.48fr) minmax(0, 1.52fr);
