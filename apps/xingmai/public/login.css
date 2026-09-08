@@ -1,4 +1,4 @@
-/* LoginPage 0.1.66 — split tech-blue operations login */
+/* LoginPage 0.1.75 — split tech-blue operations login */
 :root {
   --login-bg: #f7f7f4;
   --login-ink: #14120b;
@@ -10,6 +10,9 @@
   --login-accent-ink: #ffffff;
   --login-hero: #041a5c;
   --login-hero-deep: #02133f;
+  --login-scene-w: 1101;
+  --login-scene-h: 841;
+  --login-pane-min: 360px;
 }
 
 html[data-theme="dark"] {
@@ -62,19 +65,23 @@ body {
 }
 
 .login-split {
-  display: grid;
-  grid-template-columns: 62fr 38fr;
+  display: flex;
+  align-items: stretch;
   min-height: 100vh;
-}
-
-.login-hero,
-.login-pane {
-  min-height: 100vh;
-  min-height: 100%;
+  height: 100vh;
 }
 
 .login-hero {
   position: relative;
+  flex: 0 0 auto;
+  align-self: center;
+  width: min(
+    calc(100vh * var(--login-scene-w) / var(--login-scene-h)),
+    calc(100vw - var(--login-pane-min))
+  );
+  aspect-ratio: 1101 / 841;
+  height: auto;
+  max-height: 100vh;
   display: flex;
   flex-direction: column;
   color: #fff;
@@ -83,64 +90,27 @@ body {
   overflow: hidden;
 }
 
+.login-pane {
+  flex: 1 1 auto;
+  min-width: var(--login-pane-min);
+  min-height: 100vh;
+}
+
 .hero-bg {
   position: absolute;
   inset: 0;
+  z-index: 0;
   pointer-events: none;
 }
 
-.hero-sky {
+.hero-scene {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(ellipse 70% 55% at 68% 58%, rgba(28, 110, 255, 0.42), transparent 62%),
-    radial-gradient(ellipse 42% 32% at 18% 18%, rgba(70, 150, 255, 0.22), transparent 70%),
-    linear-gradient(180deg, #06308a 0%, var(--login-hero) 38%, var(--login-hero-deep) 100%);
-}
-
-.hero-beams {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(115deg, transparent 36%, rgba(90, 180, 255, 0.08) 48%, transparent 58%),
-    linear-gradient(78deg, transparent 40%, rgba(40, 130, 255, 0.1) 52%, transparent 64%);
-}
-
-.hero-orb {
-  position: absolute;
-  left: 52%;
-  top: 46%;
-  width: min(52vw, 640px);
-  height: min(52vw, 640px);
-  border-radius: 50%;
-  transform: translate(-18%, -12%);
-  background: radial-gradient(circle, rgba(70, 170, 255, 0.28) 0%, rgba(10, 60, 180, 0.08) 42%, transparent 70%);
-  filter: blur(6px);
-}
-
-.hero-rings {
-  position: absolute;
-  left: 58%;
-  top: 62%;
-  width: min(46vw, 560px);
-  height: min(18vw, 220px);
-  transform: translate(-30%, -10%);
-  border-radius: 50%;
-  box-shadow:
-    0 0 0 1px rgba(110, 190, 255, 0.18),
-    0 0 0 18px rgba(40, 120, 255, 0.06),
-    0 0 0 42px rgba(40, 120, 255, 0.05);
-}
-
-.hero-city {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
   width: 100%;
-  height: clamp(88px, 12vh, 150px);
-  fill: #04102e;
-  opacity: 0.55;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: right center;
 }
 
 .hero-top,
@@ -159,7 +129,7 @@ body {
 
 .hero-logo {
   display: block;
-  height: clamp(30px, 3.1vw, 42px);
+  height: clamp(48px, 5.2vw, 68px);
   width: auto;
   mix-blend-mode: screen;
 }
@@ -189,11 +159,17 @@ body {
 
 .hero-body {
   flex: 1;
-  display: grid;
-  grid-template-columns: minmax(280px, 0.92fr) minmax(280px, 1.08fr);
-  align-items: center;
-  gap: clamp(16px, 2vw, 32px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   min-height: 0;
+}
+
+.hero-lower {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.72fr) minmax(0, 1.28fr);
+  align-items: start;
+  gap: clamp(16px, 2vw, 32px);
 }
 
 .hero-kicker {
@@ -201,16 +177,31 @@ body {
   letter-spacing: 0.22em;
 }
 
-.hero-copy h2 {
-  margin: 0;
-  font-size: clamp(26px, 2.35vw, 44px);
-  line-height: 1.22;
-  font-weight: 730;
-  letter-spacing: 0.02em;
+.hero-copy {
+  width: 100%;
+  max-width: none;
 }
 
-.hero-copy h2 span {
+.hero-copy h2 {
+  margin: 0;
+  font-family: "PingFang SC", "Source Han Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: clamp(32px, 2.6vw, 48px);
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  overflow: visible;
+  background: linear-gradient(180deg, #ffffff 8%, #d7ecff 48%, #7eb8ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hero-line {
   display: block;
+  width: max-content;
+  max-width: none;
+  white-space: nowrap;
+  word-break: keep-all;
 }
 
 .hero-pills {
@@ -285,31 +276,7 @@ body {
 }
 
 .hero-visual {
-  position: relative;
-  height: 100%;
   min-height: 0;
-  display: grid;
-  place-items: center;
-}
-
-.viz-glow {
-  position: absolute;
-  width: 72%;
-  height: 56%;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(80, 180, 255, 0.35), transparent 68%);
-  filter: blur(18px);
-}
-
-.viz-mascot {
-  position: relative;
-  z-index: 1;
-  width: min(100%, 38vw);
-  max-height: 64vh;
-  object-fit: contain;
-  mix-blend-mode: screen;
-  pointer-events: none;
-  user-select: none;
 }
 
 .hero-foot {
@@ -331,7 +298,7 @@ body {
 }
 
 .login-card {
-  width: min(100%, 372px);
+  width: min(100%, 328px);
   display: grid;
 }
 
@@ -550,30 +517,37 @@ body {
 
 @media (max-width: 1440px) {
   .hero-cards li { min-height: 54px; }
-  .viz-mascot { width: min(100%, 40vw); max-height: 60vh; }
 }
 
 @media (max-width: 1366px) {
-  .login-hero { padding: 20px 28px 14px; }
-  .hero-copy h2 { font-size: 28px; }
-  .hero-pills { margin: 10px 0 16px; }
-  .hero-cards { gap: 8px; }
-  .hero-cards li { min-height: 50px; padding: 8px 12px; }
+  .login-hero { padding: 18px 24px 12px; }
+  .hero-logo { height: 58px; }
+  .hero-copy h2 { font-size: 34px; }
+  .hero-pills { margin: 10px 0 14px; }
+  .hero-lower {
+    grid-template-columns: minmax(200px, 0.48fr) minmax(0, 1.52fr);
+    gap: 10px;
+  }
+  .hero-cards {
+    max-width: 248px;
+    gap: 8px;
+  }
+  .hero-cards li { min-height: 44px; padding: 6px 8px; }
+  .hero-cards span { font-size: 11px; }
   .login-pane { padding: 48px 36px 88px; }
 }
 
 @media (max-height: 800px) {
-  .hero-copy h2 { font-size: 26px; }
   .hero-pills { margin: 8px 0 12px; }
-  .hero-cards li { min-height: 46px; }
-  .viz-mascot { max-height: 52vh; }
+  .hero-cards li { min-height: 44px; }
   .login-lead { margin-bottom: 22px; }
 }
 
 @media (max-width: 900px) {
-  .login-split { grid-template-columns: 1fr; }
   .login-hero { display: none; }
   .login-pane {
+    min-width: 0;
+    width: 100%;
     min-height: 100vh;
     padding: 36px 24px 88px;
   }
