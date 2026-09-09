@@ -10,14 +10,14 @@
 【你能改】
 - `public/shared/modules/home.js`
 - `src/modules/home/`（`nav-items.js` 除外）
-- 不要改 `public/index.html`（那份是废弃整页，线上 `/` 仍跳到数据中心）
+- 不要改 `public/index.html`（那份是废弃整页，线上 `/` 跳 `/home`）
 
 【你不能改】壳、`nav.js`、`nav-items.js`、内核、登录/改密、别人的模块。侧栏「首页」主框架已经挂在数据中心上面，路径 `/home`。
 
 【对接（已经接上）】
 - 侧栏第一项「首页」→ `/home`。点击是 `pushState`，不是整页跳。
 - 主框架加载 `/shared/modules/home.js`，你只往 `#xm-content` 画工作台。
-- 根路径 `/` 仍然 302 到 `/data`，不要改成整页首页，不要重建 `cursor/home-nav-workbench-e50e`。
+- 根路径 `/` 302 到 `/home`，不要改成整页首页，不要重建 `cursor/home-nav-workbench-e50e`。
 - API 前缀 `/api/home`。仓库已有 stub。要加新接口写在 `src/modules/home/router.js`。线上若还没挂，让主框架补 `app.js`，你不要交内核。
 
 【要做】
