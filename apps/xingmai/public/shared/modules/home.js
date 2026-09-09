@@ -300,9 +300,19 @@
         setCard(root, "queue", state.queueCount, "单");
       });
 
+      var themeWatch = new MutationObserver(function () {
+        if (dead) {
+          return;
+        }
+        setCard(root, "theme", themeName(), "");
+      });
+      themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+      setCard(root, "theme", themeName(), "");
+
       return function unmount() {
         dead = true;
         clearInterval(timer);
+        themeWatch.disconnect();
         root.innerHTML = "";
       };
     }
