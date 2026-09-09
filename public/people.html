@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>人员管理</title>
     <link rel="stylesheet" href="/shared/layout.css" />
+    <link rel="stylesheet" href="/people.css" />
     <style>
       /* 只写内容区。左栏与顶栏由 /shared/nav.js 注入，勿再画侧栏。 */
       .xm-content .page.people-page,
@@ -12,6 +13,7 @@
         max-width: none;
         width: 100%;
       }
+      body:has(.people-page) .xm-tabs { display: none; }
       .people-form {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

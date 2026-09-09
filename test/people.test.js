@@ -36,8 +36,10 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(text, /src="\/shared\/nav\.js"/);
     assert.match(text, /id="site-nav"/);
     assert.match(text, /<main class="page people-page">/);
+    assert.match(text, /href="\/people\.css"/);
     assert.doesNotMatch(text, /class="kicker"/);
     assert.match(text, /max-width:\s*none/);
+    assert.match(text, /xm-tabs/);
     assert.doesNotMatch(text, /class="site-sidebar"/);
     assert.doesNotMatch(text, /<header class="site-header">/);
     assert.doesNotMatch(text, /--sidebar-width/);
