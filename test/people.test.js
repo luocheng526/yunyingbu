@@ -44,6 +44,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.doesNotMatch(text, /<header class="site-header">/);
     assert.doesNotMatch(text, /--sidebar-width/);
     assert.match(text, /演示/);
+    assert.match(text, /智能体是只读调用方/);
     assert.match(text, /aria-label="占位"/);
     assert.match(text, /待开发/);
     for (const header of ["姓名", "角色", "所属中心", "状态"]) {
@@ -59,6 +60,7 @@ test("GET /api/people returns three demo staff", async () => {
     assert.equal(res.status, 200);
     assert.equal(data.ok, true);
     assert.equal(data.demo, true);
+    assert.equal(data.charter.agentAccess, "read-only");
     assert.equal(data.people.length, 3);
     for (const expected of PRESET) {
       const found = data.people.find((row) => row.name === expected.name);
@@ -73,6 +75,18 @@ test("GET /api/people returns three demo staff", async () => {
         { ...expected, demo: true }
       );
     }
+  });
+});
+
+test("GET /api/people/charter is read-only source rule", async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/api/people/charter`);
+    const data = await res.json();
+    assert.equal(res.status, 200);
+    assert.equal(data.ok, true);
+    assert.equal(data.agentAccess, "read-only");
+    assert.equal(data.sourceOfTruth.employment, "花名册");
+    assert.equal(data.sourceOfTruth.shopRights, "管辖");
   });
 });
 
