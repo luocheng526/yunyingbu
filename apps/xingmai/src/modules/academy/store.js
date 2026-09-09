@@ -3,10 +3,10 @@ import { getDoc, listCatalog, listDocs, listLessonIds, searchDocs } from "./cata
 import {
   getExamTrack,
   handbookTree,
-  listCourses,
   listExamTracks,
   plan
 } from "./framework.js";
+import { courseCategories, listPptCourses } from "./ppt-store.js";
 
 const memoryProgress = new Map();
 
@@ -54,8 +54,15 @@ export function frameworkPlan() {
   return plan();
 }
 
-export function courses() {
-  return listCourses();
+export async function courses() {
+  const items = await listPptCourses({ includeUnpublished: true });
+  return {
+    download: false,
+    watermark: true,
+    accept: [".pptx"],
+    categories: courseCategories(),
+    items
+  };
 }
 
 export function examTracks() {

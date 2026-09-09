@@ -1,13 +1,13 @@
 export const PLAN = [
   {
     step: 1,
-    current: true,
+    current: false,
     name: "三格框架",
     detail: "培训课程 / 培训考试 / 运营手册先铺开，后面再往里填。"
   },
   {
     step: 2,
-    current: false,
+    current: true,
     name: "培训课程",
     detail: "导入 PPT，学员只能在线翻页，不能下载原件，截图带水印。"
   },
@@ -72,7 +72,7 @@ export function listCourses() {
   return {
     download: false,
     watermark: true,
-    accept: [".ppt", ".pptx"],
+    accept: [".pptx"],
     items: []
   };
 }
@@ -95,8 +95,8 @@ export function handbookTree() {
 
 export function plan() {
   return {
-    step: 1,
-    title: "第 1 步：框架",
+    step: 2,
+    title: "第 2 步：培训课程",
     steps: PLAN.map((item) => ({ ...item }))
   };
 }

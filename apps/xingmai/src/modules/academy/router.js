@@ -1,5 +1,13 @@
 import { Router } from "express";
 import { currentUser } from "../profile/auth.js";
+import { parseMultipart } from "./multipart.js";
+import {
+  createPptCourse,
+  getPptCourse,
+  getPptPage,
+  mediaType,
+  readPptMedia
+} from "./ppt-store.js";
 import {
   catalog,
   courses,
@@ -60,11 +68,86 @@ academyRouter.get("/plan", (req, res) => {
   res.json({ ok: true, module: "甄选商学院", ...frameworkPlan() });
 });
 
-academyRouter.get("/courses", (req, res) => {
+function denyOriginal(res) {
+  res.status(404).json({ ok: false, error: "不提供原件下载，请在线翻页" });
+}
+
+academyRouter.get("/courses", async (req, res) => {
   if (!requireUser(req, res)) {
     return;
   }
-  res.json({ ok: true, ...courses() });
+  res.json({ ok: true, ...(await courses()) });
+});
+
+academyRouter.post("/courses", async (req, res) => {
+  const user = requireUser(req, res);
+  if (!user) {
+    return;
+  }
+  try {
+    const { fields, file } = await parseMultipart(req);
+    const course = await createPptCourse({
+      title: fields.title,
+      category: fields.category,
+      published: fields.published,
+      file,
+      createdBy: user.username
+    });
+    res.status(201).json({ ok: true, course, download: false });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+academyRouter.get("/courses/:id/source.pptx", (_req, res) => denyOriginal(res));
+academyRouter.get("/courses/:id/source.ppt", (_req, res) => denyOriginal(res));
+academyRouter.get("/courses/:id/download", (_req, res) => denyOriginal(res));
+academyRouter.get("/courses/:id/file", (_req, res) => denyOriginal(res));
+academyRouter.get("/courses/:id/original", (_req, res) => denyOriginal(res));
+
+academyRouter.get("/courses/:id/pages/:index/media/:name", async (req, res) => {
+  if (!requireUser(req, res)) {
+    return;
+  }
+  try {
+    const course = await getPptCourse(req.params.id, { allowUnpublished: true });
+    if (!course) {
+      res.status(404).json({ ok: false, error: "课件不存在" });
+      return;
+    }
+    const buf = await readPptMedia(req.params.id, req.params.name);
+    res.setHeader("Content-Type", mediaType(req.params.name));
+    res.setHeader("Content-Disposition", "inline");
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.send(buf);
+  } catch (err) {
+    res.status(err.statusCode || 404).json({ ok: false, error: err.message });
+  }
+});
+
+academyRouter.get("/courses/:id/pages/:index", async (req, res) => {
+  if (!requireUser(req, res)) {
+    return;
+  }
+  const data = await getPptPage(req.params.id, req.params.index);
+  if (!data) {
+    res.status(404).json({ ok: false, error: "没有这一页" });
+    return;
+  }
+  res.json({ ok: true, download: false, watermark: true, ...data });
+});
+
+academyRouter.get("/courses/:id", async (req, res) => {
+  if (!requireUser(req, res)) {
+    return;
+  }
+  const course = await getPptCourse(req.params.id, { allowUnpublished: true });
+  if (!course) {
+    res.status(404).json({ ok: false, error: "课件不存在" });
+    return;
+  }
+  res.json({ ok: true, download: false, watermark: true, course });
 });
 
 academyRouter.get("/exams/tracks", (req, res) => {

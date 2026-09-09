@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.160 */
+/* xm-module-academy 0.1.170 */
 (function () {
-  const ASSET_VER = "0.1.160";
+  const ASSET_VER = "0.1.170";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -58,14 +58,57 @@
     );
   }
 
-  function pageHead(title, lead) {
+  function pageHead(title, lead, kicker) {
     return (
-      '<header class="page-head"><p class="kicker">甄选商学院 · 第 1 步框架</p><h1>' +
+      '<header class="page-head"><p class="kicker">' +
+      escapeHtml(kicker || "甄选商学院 · 第 2 步培训课程") +
+      "</p><h1>" +
       escapeHtml(title) +
       "</h1><p class=\"lead\">" +
       escapeHtml(lead) +
       "</p></header>"
     );
+  }
+
+  function bootName() {
+    const user = window.__xmBootUser || {};
+    return user.displayName || user.username || "学员";
+  }
+
+  function watermarkText() {
+    const now = new Date();
+    const pad = function (n) {
+      return String(n).padStart(2, "0");
+    };
+    const stamp =
+      now.getFullYear() +
+      "-" +
+      pad(now.getMonth() + 1) +
+      "-" +
+      pad(now.getDate()) +
+      " " +
+      pad(now.getHours()) +
+      ":" +
+      pad(now.getMinutes());
+    return bootName() + " · " + stamp;
+  }
+
+  function postForm(path, form) {
+    return fetch(path, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+      body: form
+    }).then(function (res) {
+      return res.json().catch(function () {
+        return { ok: false, error: "接口 " + res.status };
+      }).then(function (data) {
+        if (!res.ok || data.ok === false) {
+          throw new Error(data.error || "接口 " + res.status);
+        }
+        return data;
+      });
+    });
   }
 
   function mountShell(root, html) {
@@ -83,25 +126,222 @@
           root,
           pageHead(
             "培训课程",
-            "只放运营 PPT。下一步才开导入：能上传，不能下载原件，截图带水印。现在先把架子摆出来。"
+            "导入运营 PPTX。原件不提供下载，只能在线翻页。预览页带姓名和时间水印。"
           ) +
             '<div id="academy-plan"></div>' +
             '<section class="panel academy-drop">' +
-            "<h2>导入 PPT（下一步）</h2>" +
-            '<p class="academy-meta">支持 .ppt / .pptx。原文件不提供下载。预览页会加水印。</p>' +
-            '<label class="academy-file"><input type="file" accept=".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" disabled />选择课件（本步未开放）</label>' +
+            "<h2>导入 PPT</h2>" +
+            '<p class="academy-meta">只接受 .pptx。旧版 .ppt 请另存。不提供原件下载。</p>' +
+            '<form id="academy-upload" class="academy-upload">' +
+            '<label>标题 <input name="title" required maxlength="160" placeholder="课件标题" /></label>' +
+            '<label>分类 <select name="category">' +
+            '<option value="选品与商品">选品与商品</option>' +
+            '<option value="流量与投放">流量与投放</option>' +
+            '<option value="转化与页面">转化与页面</option>' +
+            '<option value="数据与复盘">数据与复盘</option>' +
+            '<option value="大促节奏">大促节奏</option>' +
+            "</select></label>" +
+            '<label class="academy-check"><input type="checkbox" name="published" checked /> 发布</label>' +
+            '<label class="academy-file">课件 <input type="file" name="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" required /></label>' +
+            '<button type="submit">上传</button>' +
+            '<p class="academy-status" id="academy-upload-status"></p>' +
+            "</form>" +
             "</section>" +
-            '<section class="panel"><h2>课件列表</h2><p class="academy-empty" id="academy-course-empty">还没有课件。第 2 步导入后出现在这里，学员只能在线翻页。</p></section>'
+            '<div class="academy-layout">' +
+            '<section class="panel"><h2>课件列表</h2><div class="academy-course-list" id="academy-course-list"></div></section>' +
+            '<section class="panel academy-viewer-panel" id="academy-viewer"><h2>在线翻页</h2><p class="academy-empty">点左侧一份课件。</p></section>' +
+            "</div>"
         );
+        let dead = false;
+        let currentId = "";
+        let pageCount = 0;
+        let pageNo = 1;
+
+        function renderList(items) {
+          const box = root.querySelector("#academy-course-list");
+          if (!items || !items.length) {
+            box.innerHTML = '<p class="academy-empty">还没有课件。上传 PPTX 后出现在这里。</p>';
+            return;
+          }
+          box.innerHTML = items
+            .map(function (item) {
+              return (
+                '<button type="button" class="academy-course' +
+                (item.id === currentId ? " is-on" : "") +
+                '" data-id="' +
+                escapeHtml(item.id) +
+                '"><h3>' +
+                escapeHtml(item.title) +
+                '</h3><p class="academy-meta">' +
+                escapeHtml(item.category) +
+                " · " +
+                escapeHtml(item.pageCount) +
+                " 页 · " +
+                (item.published ? "已发布" : "草稿") +
+                "</p></button>"
+              );
+            })
+            .join("");
+        }
+
+        function loadList() {
+          return api("/api/academy/courses").then(function (data) {
+            if (!dead) {
+              renderList(data.items || []);
+            }
+            return data;
+          });
+        }
+
+        function paintPage(data) {
+          const panel = root.querySelector("#academy-viewer");
+          const page = data.page || {};
+          const texts = (page.texts || [])
+            .map(function (line) {
+              return "<p>" + escapeHtml(line) + "</p>";
+            })
+            .join("");
+          const images = (page.images || [])
+            .map(function (img) {
+              return (
+                '<img src="' +
+                escapeHtml(img.url) +
+                '" alt="" draggable="false" />'
+              );
+            })
+            .join("");
+          const mark = watermarkText();
+          const tiles = new Array(24).fill(escapeHtml(mark)).join(" ");
+          panel.innerHTML =
+            "<h2>" +
+            escapeHtml(data.title || "在线翻页") +
+            "</h2>" +
+            '<p class="academy-meta">第 ' +
+            escapeHtml(page.index) +
+            " / " +
+            escapeHtml(data.pageCount) +
+            " 页 · 不可下载原件</p>" +
+            '<div class="academy-viewer" id="academy-slide">' +
+            '<div class="academy-slide-body">' +
+            (images || "") +
+            (texts || '<p class="academy-empty">本页没有可提取的文字</p>') +
+            "</div>" +
+            '<div class="academy-wm" aria-hidden="true">' +
+            tiles +
+            "</div></div>" +
+            '<div class="academy-actions">' +
+            '<button type="button" class="ghost" data-nav="-1">上一页</button>' +
+            '<button type="button" data-nav="1">下一页</button>' +
+            "</div>";
+        }
+
+        function openPage(id, index) {
+          api("/api/academy/courses/" + encodeURIComponent(id) + "/pages/" + encodeURIComponent(index))
+            .then(function (data) {
+              if (dead) {
+                return;
+              }
+              currentId = id;
+              pageCount = Number(data.pageCount) || 1;
+              pageNo = Number((data.page && data.page.index) || index);
+              paintPage(data);
+              root.querySelectorAll(".academy-course").forEach(function (el) {
+                el.classList.toggle("is-on", el.getAttribute("data-id") === id);
+              });
+            })
+            .catch(function (err) {
+              root.querySelector("#academy-viewer").innerHTML =
+                '<h2>在线翻页</h2><p class="academy-status error">' + escapeHtml(err.message) + "</p>";
+            });
+        }
+
         api("/api/academy/plan")
           .then(function (data) {
             const el = root.querySelector("#academy-plan");
-            if (el) {
+            if (!dead && el) {
               el.innerHTML = stepsHtml(data);
             }
           })
           .catch(function () {});
-        return unmount;
+        loadList().catch(function (err) {
+          const box = root.querySelector("#academy-course-list");
+          if (box) {
+            box.innerHTML = '<p class="academy-status error">' + escapeHtml(err.message) + "</p>";
+          }
+        });
+
+        root.querySelector("#academy-upload").addEventListener("submit", function (ev) {
+          ev.preventDefault();
+          const formEl = ev.currentTarget;
+          const status = root.querySelector("#academy-upload-status");
+          const fileInput = formEl.querySelector('input[type="file"]');
+          const file = fileInput && fileInput.files && fileInput.files[0];
+          if (file && /\.ppt$/i.test(file.name) && !/\.pptx$/i.test(file.name)) {
+            status.textContent = "请另存为 .pptx 再上传（不支持旧版 .ppt）";
+            status.className = "academy-status error";
+            return;
+          }
+          const fd = new FormData();
+          fd.append("title", formEl.title.value);
+          fd.append("category", formEl.category.value);
+          fd.append("published", formEl.published.checked ? "true" : "false");
+          if (file) {
+            fd.append("file", file, file.name);
+          }
+          status.textContent = "正在解析…";
+          status.className = "academy-status";
+          postForm("/api/academy/courses", fd)
+            .then(function (data) {
+              status.textContent = "已导入，学员只能在线翻页。";
+              formEl.reset();
+              formEl.published.checked = true;
+              return loadList().then(function () {
+                if (data.course && data.course.id) {
+                  openPage(data.course.id, 1);
+                }
+              });
+            })
+            .catch(function (err) {
+              status.textContent = err.message;
+              status.className = "academy-status error";
+            });
+        });
+
+        root.querySelector("#academy-course-list").addEventListener("click", function (ev) {
+          const btn = ev.target.closest("[data-id]");
+          if (!btn) {
+            return;
+          }
+          openPage(btn.getAttribute("data-id"), 1);
+        });
+
+        root.querySelector("#academy-viewer").addEventListener("click", function (ev) {
+          const btn = ev.target.closest("[data-nav]");
+          if (!btn || !currentId) {
+            return;
+          }
+          const next = pageNo + Number(btn.getAttribute("data-nav"));
+          if (next < 1 || next > pageCount) {
+            return;
+          }
+          openPage(currentId, next);
+        });
+
+        root.addEventListener("contextmenu", function (ev) {
+          if (ev.target.closest(".academy-viewer")) {
+            ev.preventDefault();
+          }
+        });
+        root.addEventListener("dragstart", function (ev) {
+          if (ev.target.closest(".academy-viewer")) {
+            ev.preventDefault();
+          }
+        });
+
+        return function () {
+          dead = true;
+          unmount();
+        };
       }
     };
   }
