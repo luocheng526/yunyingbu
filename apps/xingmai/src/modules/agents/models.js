@@ -73,7 +73,7 @@ function allModels() {
     id: item.id,
     label: item.label,
     available: ready,
-    note: ready ? "后台模型，密钥不出前端" : "后台未配置 XM_AGENTS_API_KEY / OPENAI_API_KEY",
+    note: ready ? "后台模型，密钥不出前端" : "后台未配置密钥",
     key,
     base
   }));

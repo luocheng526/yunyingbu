@@ -70,7 +70,8 @@ test("模型列表只有 modelId，不准带密钥", async () => {
   assert.ok(data.models.some((item) => item.id === "gpt-4o"));
   assert.equal(typeof data.defaultModelId, "string");
   const blob = JSON.stringify(data);
-  assert.doesNotMatch(blob, /apiKey|secret|XM_AGENTS_API_KEY|OPENAI_API_KEY|sk-/);
+  assert.doesNotMatch(blob, /apiKey|secret|sk-/);
+  assert.doesNotMatch(blob, /XM_AGENTS_API_KEY|OPENAI_API_KEY/);
   publicModels().forEach((item) => {
     assert.equal("key" in item, false);
     assert.equal("base" in item, false);

@@ -117,7 +117,7 @@ export function opsPlaybook(text, files) {
     [
       fileLine,
       "可以聊选品、做店、日常动作。花名册三件事仍走本站只读：在职、店归谁、你能看见哪些店。",
-      "后台写入 XM_AGENTS_API_KEY 或 OPENAI_API_KEY 后，模型下拉可选 GPT，密钥不会进浏览器。"
+      "后台配了密钥后，模型下拉可选 GPT，密钥不会进浏览器。"
     ],
     ["通用运营方法"],
     []
