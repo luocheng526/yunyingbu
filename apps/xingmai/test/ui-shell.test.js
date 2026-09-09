@@ -28,6 +28,13 @@ test("shared shell assets are public", async () => {
   assert.equal(logo.status, 200);
   const logoBytes = Buffer.from(await logo.arrayBuffer());
   assert.equal(logoBytes.subarray(0, 4).toString("binary"), "\x89PNG");
+  const tabIcon = await fetch(`${base}/shared/tab-icon.png`);
+  assert.equal(tabIcon.status, 200);
+  assert.match(String(tabIcon.headers.get("content-type") || ""), /image\/png/);
+  const tabIconBytes = Buffer.from(await tabIcon.arrayBuffer());
+  assert.equal(tabIconBytes.subarray(0, 4).toString("binary"), "\x89PNG");
+  const favicon = await fetch(`${base}/favicon.ico`);
+  assert.equal(favicon.status, 200);
   const tabLogo = await fetch(`${base}/tab-logo.png`);
   assert.equal(tabLogo.status, 200);
   const tabBytes = Buffer.from(await tabLogo.arrayBuffer());
@@ -52,7 +59,7 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /<svg viewBox="0 0 24 24"/);
   assert.match(jsText, /login-logo\.png/);
   assert.match(jsText, /xingmai-logo\.png/);
-  assert.match(jsText, /xm-fast-shell 0\.1\.114/);
+  assert.match(jsText, /xm-fast-shell 0\.1\.115/);
   assert.match(jsText, /data-xm-style/);
   assert.match(jsText, /甄选粉/);
   assert.match(jsText, /setInterval\(tickClock, 1000\)/);
@@ -63,7 +70,7 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /id="xm-date"/);
   assert.match(jsText, /id="xm-refresh"/);
   assert.match(jsText, /展开侧栏/);
-  assert.match(cssText, /xm-sider-narrow 0\.1\.114/);
+  assert.match(cssText, /xm-sider-narrow 0\.1\.115/);
   assert.match(cssText, /\.xm-menu-parent/);
   assert.match(cssText, /\.xm-submenu/);
   assert.match(cssText, /--xm-sider-w: 200px/);
@@ -206,7 +213,7 @@ test("home page html is the xingmai sider template", async () => {
   assert.match(html, /培训系统/);
   assert.match(html, /xm-menu-parent/);
   assert.match(html, /xm-caret/);
-  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.114/);
+  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.115/);
   assert.match(html, /xm-tab-close/);
   assert.match(html, /xm-workspace/);
   assert.match(html, /aria-label="关闭 /);
@@ -224,8 +231,10 @@ test("home page html is the xingmai sider template", async () => {
   assert.match(html, /xm-app-shell/);
   assert.match(html, /<title>星脉甄选运营中心<\/title>/);
   assert.doesNotMatch(html, /<title>数据中心 · 星脉甄选<\/title>/);
-  assert.match(html, /rel="icon" type="image\/png" href="data:image\/png;base64,/);
+  assert.match(html, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=0\.1\.115"/);
+  assert.match(html, /rel="shortcut icon" href="\/favicon\.ico"/);
   assert.doesNotMatch(html, /rel="icon"[^>]+href="\/login-logo\.png"/);
+  assert.doesNotMatch(html, /href="data:image\/png;base64,/);
 });
 
 test("韩梦凯运营中心 expands four placeholder children", async () => {
@@ -479,8 +488,8 @@ test("page renderer injects shared shell onto module html", async () => {
     '<!DOCTYPE html><html><head></head><body class="oc-page"><div class="oc-tab">待上线</div></body></html>'
   );
   assert.match(injected, /\/shared\/layout\.css/);
-  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.114/);
-  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.114"/);
+  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.115/);
+  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.115"/);
   assert.match(injected, /localStorage.getItem\("xm-theme"\)/);
   const login = withSharedShell('<html><head></head><body class="login-page"></body></html>');
   assert.doesNotMatch(login, /\/shared\/nav\.js/);
@@ -529,10 +538,12 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.match(homeMod, /XmModules\["\/home"\]/);
   const { renderAppShell } = await import("../src/modules/profile/middleware.js");
   const shell = renderAppShell("/data", { username: "罗成", displayName: "罗成" });
-  assert.match(shell, /rel="icon" type="image\/png" href="data:image\/png;base64,/);
+  assert.match(shell, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=0\.1\.115"/);
+  assert.match(shell, /rel="shortcut icon" href="\/favicon\.ico"/);
+  assert.doesNotMatch(shell, /href="data:image\/png;base64,/);
   assert.match(shell, /<title>星脉甄选运营中心<\/title>/);
   assert.match(shell, /xm-app-shell/);
-  assert.match(shell, /\/shared\/modules\/data\.js\?v=0\.1\.114/);
+  assert.match(shell, /\/shared\/modules\/data\.js\?v=0\.1\.115/);
   assert.match(shell, /xm-tab-close/);
   assert.match(shell, /xm-workspace/);
   assert.match(shell, /data-xm-style="pink"/);
