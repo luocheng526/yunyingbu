@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.157-board */
+/* xm-module-home 0.1.162-home-scroll */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -257,7 +257,11 @@
 
   function cssText() {
     return (
-      ".xm-hm{position:relative;min-height:100%;padding:10px 12px 16px;color:var(--xm-ink)}" +
+      "html:has(#xm-hm),html:has(#xm-hm) body{height:100%!important;max-height:100%!important;overflow:hidden!important}" +
+      ".xm-shell{height:100vh!important;max-height:100vh!important;min-height:0!important;overflow:hidden!important}" +
+      ".xm-main{min-height:0!important;overflow:hidden!important;flex:1 1 auto!important}" +
+      ".xm-content,#xm-content{min-height:0!important;flex:1 1 auto!important;overflow:auto!important;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}" +
+      ".xm-hm{position:relative;display:block;box-sizing:border-box;min-height:min-content;height:auto;max-height:none;padding:10px 12px 24px;color:var(--xm-ink);overflow:visible}" +
       ".xm-hm-mark{pointer-events:none;position:absolute;inset:0;overflow:hidden;opacity:.045;font-size:42px;font-weight:700;letter-spacing:.4em;display:flex;flex-wrap:wrap;align-content:flex-start;gap:48px 64px;padding:40px 20px;color:var(--xm-ink)}" +
       ".xm-hm-mark span{transform:rotate(-18deg)}" +
       ".xm-hm-bar{position:relative;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;margin-bottom:10px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow)}" +
@@ -270,7 +274,7 @@
       ".xm-hm-ranges button.is-on{background:var(--xm-primary);border-color:var(--xm-primary);color:#fff}" +
       ".xm-hm-dates{display:flex;align-items:center;gap:6px;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-dates input{border:1px solid var(--xm-line);background:var(--xm-card);color:var(--xm-ink);border-radius:4px;padding:4px 6px;font-size:12px}" +
-      ".xm-hm-body{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:12px}" +
+      ".xm-hm-body{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:12px;align-content:start;overflow:visible}" +
       ".xm-hm.is-board .xm-hm-kpis{display:none}" +
       ".xm-hm.is-board .xm-hm-body{grid-template-columns:1fr 1fr}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start}" +
