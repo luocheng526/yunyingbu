@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.112 */
+/* xm-fast-shell 0.1.113 */
 (function () {
-  const ASSET_VER = "0.1.112";
+  const ASSET_VER = "0.1.113";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -121,8 +121,11 @@
     );
   }
 
-  function itemHtml(item) {
-    const cls = "xm-menu-item" + (isActive(item.href) ? " is-active" : "");
+  function itemHtml(item, extraClass) {
+    const cls =
+      "xm-menu-item" +
+      (extraClass ? " " + extraClass : "") +
+      (isActive(item.href) ? " is-active" : "");
     const cur = isActive(item.href) ? ' aria-current="page"' : "";
     const badge =
       item.href === "/releases" ? '<b class="xm-queue-badge" data-xm-queue-badge hidden>0</b>' : "";
@@ -145,7 +148,11 @@
 
   function groupHtml(item) {
     const open = groupOpen(item.href, current);
-    const kids = (item.children || []).map(itemHtml).join("");
+    const kids = (item.children || [])
+      .map(function (child) {
+        return itemHtml(child, "xm-menu-child");
+      })
+      .join("");
     return (
       '<div class="xm-menu-group' +
       (open ? " is-open" : "") +
@@ -185,12 +192,234 @@
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout">' +
       ico("logout") +
       "<span>退出登录</span></button>" +
-      '<p class="xm-version">v0.4.17</p></nav>'
+      '<p class="xm-version">v0.4.18</p></nav>'
     );
   }
 
   function contentRoot() {
     return document.getElementById("xm-content") || document.querySelector(".xm-content");
+  }
+
+  const TAB_STORE = "xm-open-tabs";
+  const PARENT_HOME = {
+    "/data": "/data/overview",
+    "/shen": "/shen/selection",
+    "/han": "/han/selection",
+    "/academy": "/academy/courses"
+  };
+  const unmounts = {};
+  let openTabs = [];
+
+  function readOpenTabs() {
+    try {
+      const raw = sessionStorage.getItem(TAB_STORE);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && Array.isArray(parsed.hrefs)) {
+        const hrefs = parsed.hrefs.map(normalize).filter(function (href) {
+          return Boolean(MODULES[href]) && !PARENT_HOME[href];
+        });
+        if (hrefs.indexOf(current) < 0 && MODULES[current] && !PARENT_HOME[current]) {
+          hrefs.push(current);
+        }
+        if (hrefs.length) {
+          return hrefs;
+        }
+      }
+    } catch (_err) {
+      /* ignore */
+    }
+    return MODULES[current] && !PARENT_HOME[current] ? [current] : [];
+  }
+
+  function writeOpenTabs() {
+    try {
+      sessionStorage.setItem(TAB_STORE, JSON.stringify({ hrefs: openTabs.slice(), active: current }));
+    } catch (_err) {
+      /* ignore */
+    }
+  }
+
+  function tabButtonHtml(href, active) {
+    const label = labelOf(href);
+    return (
+      '<div class="xm-tab' +
+      (active ? " is-active" : "") +
+      '" role="tab" data-href="' +
+      href +
+      '" tabindex="0" aria-selected="' +
+      (active ? "true" : "false") +
+      '"><span class="xm-tab-label">' +
+      label +
+      '</span><button type="button" class="xm-tab-close" aria-label="关闭 ' +
+      label +
+      '">×</button></div>'
+    );
+  }
+
+  function paintTabs() {
+    const bar = document.querySelector(".xm-tabs");
+    if (!bar) {
+      return;
+    }
+    bar.setAttribute("role", "tablist");
+    bar.setAttribute("data-count", String(openTabs.length));
+    bar.innerHTML = openTabs
+      .map(function (href) {
+        return tabButtonHtml(href, href === current);
+      })
+      .join("");
+  }
+
+  function paneFor(href, create) {
+    const key = normalize(href);
+    const wrap = document.querySelector(".xm-workspace");
+    if (!wrap) {
+      return null;
+    }
+    let pane = wrap.querySelector('.xm-pane[data-xm-href="' + key + '"]');
+    if (!pane && create) {
+      pane = document.createElement("div");
+      pane.className = "xm-content xm-pane";
+      pane.setAttribute("data-xm-href", key);
+      pane.hidden = true;
+      wrap.appendChild(pane);
+    }
+    return pane;
+  }
+
+  function showPane(href) {
+    const key = normalize(href);
+    const wrap = document.querySelector(".xm-workspace");
+    if (!wrap) {
+      return contentRoot();
+    }
+    const panes = wrap.querySelectorAll(".xm-pane");
+    let active = null;
+    Array.prototype.forEach.call(panes, function (pane) {
+      const on = pane.getAttribute("data-xm-href") === key;
+      pane.classList.toggle("is-active", on);
+      pane.hidden = !on;
+      if (on) {
+        pane.id = "xm-content";
+        active = pane;
+      } else if (pane.id === "xm-content") {
+        pane.removeAttribute("id");
+      }
+    });
+    return active;
+  }
+
+  function openTab(href) {
+    const key = normalize(href);
+    if (!MODULES[key] || PARENT_HOME[key]) {
+      return;
+    }
+    if (openTabs.indexOf(key) < 0) {
+      openTabs.push(key);
+    }
+    writeOpenTabs();
+    paneFor(key, true);
+    paintTabs();
+  }
+
+  function disposePane(href) {
+    const key = normalize(href);
+    const stop = unmounts[key];
+    delete unmounts[key];
+    if (typeof stop === "function") {
+      try {
+        stop();
+      } catch (_err) {
+        /* keep going */
+      }
+    }
+    const pane = document.querySelector('.xm-pane[data-xm-href="' + key + '"]');
+    if (pane) {
+      pane.remove();
+    }
+  }
+
+  function closeTab(href) {
+    const key = normalize(href);
+    const idx = openTabs.indexOf(key);
+    if (idx < 0) {
+      return;
+    }
+    if (openTabs.length === 1) {
+      return;
+    }
+    openTabs.splice(idx, 1);
+    disposePane(key);
+    writeOpenTabs();
+    if (current === key) {
+      go(openTabs[idx] || openTabs[idx - 1] || openTabs[0], true);
+      return;
+    }
+    paintTabs();
+  }
+
+  function bindTabs() {
+    const bar = document.querySelector(".xm-tabs");
+    if (!bar || bar.dataset.tabBound === "1") {
+      return;
+    }
+    bar.dataset.tabBound = "1";
+    bar.addEventListener("click", function (event) {
+      const closer = event.target.closest(".xm-tab-close");
+      if (closer) {
+        event.preventDefault();
+        event.stopPropagation();
+        const tab = closer.closest(".xm-tab");
+        if (tab) {
+          closeTab(tab.getAttribute("data-href"));
+        }
+        return;
+      }
+      const tab = event.target.closest(".xm-tab");
+      if (!tab) {
+        return;
+      }
+      const href = tab.getAttribute("data-href");
+      if (href && href !== current) {
+        go(href);
+      }
+    });
+  }
+
+  function ensureWorkspace() {
+    if (!MODULES[current]) {
+      return;
+    }
+    if (!openTabs.length) {
+      openTabs = readOpenTabs();
+    }
+    let content = document.getElementById("xm-content") || document.querySelector(".xm-content");
+    if (!content) {
+      return;
+    }
+    if (!content.parentElement || !content.parentElement.classList.contains("xm-workspace")) {
+      const wrap = document.createElement("div");
+      wrap.className = "xm-workspace";
+      content.parentNode.insertBefore(wrap, content);
+      wrap.appendChild(content);
+    }
+    content.classList.add("xm-pane", "xm-content");
+    content.classList.add("is-active");
+    if (!content.getAttribute("data-xm-href")) {
+      content.setAttribute("data-xm-href", current);
+    }
+    if (content.childNodes.length && !content.getAttribute("data-xm-mounted")) {
+      content.setAttribute("data-xm-mounted", content.getAttribute("data-xm-href") || current);
+    }
+    if (!unmounts[current] && typeof window.__xmUnmount === "function") {
+      unmounts[current] = window.__xmUnmount;
+    }
+    if (openTabs.indexOf(current) < 0 && MODULES[current] && !PARENT_HOME[current]) {
+      openTabs.push(current);
+    }
+    paintTabs();
+    bindTabs();
+    showPane(current);
   }
 
   function alreadyMounted(root, href) {
@@ -274,10 +503,7 @@
         anchor.removeAttribute("aria-current");
       }
     });
-    const tab = document.querySelector(".xm-tab");
-    if (tab) {
-      tab.textContent = labelOf(current);
-    }
+    paintTabs();
     document.title = TAB_TITLE;
     const groups = document.querySelectorAll(".xm-menu-group[data-xm-group]");
     Array.prototype.forEach.call(groups, function (group) {
@@ -344,11 +570,14 @@
     if (key === "/" && document.getElementById("home-dashboard")) {
       return;
     }
-    const root = contentRoot();
+    const root = paneFor(key, true) || contentRoot();
     if (!root) {
       return;
     }
     if (alreadyMounted(root, key)) {
+      if (!unmounts[key] && typeof window.__xmUnmount === "function") {
+        unmounts[key] = window.__xmUnmount;
+      }
       return;
     }
     const mod = window.XmModules && window.XmModules[key];
@@ -359,7 +588,11 @@
     if (key === "/releases") {
       root.setAttribute("data-xm-rel-mounted", "1");
     }
-    window.__xmUnmount = mod.mount(root);
+    const stop = mod.mount(root);
+    unmounts[key] = stop;
+    if (key === current) {
+      window.__xmUnmount = stop;
+    }
   }
 
   function bootCurrentModule() {
@@ -379,20 +612,8 @@
 
   function go(href, push) {
     const key = normalize(href);
-    if (key === "/data") {
-      window.location.replace("/data/overview");
-      return;
-    }
-    if (key === "/shen") {
-      window.location.replace("/shen/selection");
-      return;
-    }
-    if (key === "/han") {
-      window.location.replace("/han/selection");
-      return;
-    }
-    if (key === "/academy") {
-      window.location.replace("/academy/courses");
+    if (PARENT_HOME[key]) {
+      go(PARENT_HOME[key], push);
       return;
     }
     if (key === "/" || !MODULES[key]) {
@@ -402,24 +623,17 @@
     if (push !== false) {
       history.pushState({ xm: key }, "", key);
     }
+    current = key;
+    openTab(key);
     paintActive(key);
+    showPane(key);
     if (key === "/releases") {
       ensureReleasesCss();
     }
-    const root = contentRoot();
-    const prev = window.__xmUnmount;
-    window.__xmUnmount = null;
-    if (typeof prev === "function") {
-      try {
-        prev();
-      } catch (_err) {
-        /* keep going */
-      }
-    }
-    if (root) {
-      root.removeAttribute("data-xm-mounted");
-      root.removeAttribute("data-xm-rel-mounted");
-      root.innerHTML = "";
+    const root = paneFor(key, true) || contentRoot();
+    if (alreadyMounted(root, key)) {
+      refreshQueueBadge();
+      return;
     }
     loadModuleScript(key).then(function () {
       mountRoute(key);
@@ -679,6 +893,7 @@
       applyCollapsed(false);
     }
     bindMenu(document);
+    ensureWorkspace();
     startQueueWatch();
   }
 
@@ -695,16 +910,18 @@
     shell.innerHTML =
       '<div class="xm-main">' +
       '<header class="xm-topbar">' +
-      '<div class="xm-tabs" aria-label="页签"><span class="xm-tab is-active">' +
-      labelOf(current) +
-      "</span></div>" +
+      '<div class="xm-tabs" role="tablist" aria-label="页签">' +
+      tabButtonHtml(current, true) +
+      "</div>" +
       '<div class="xm-user">' +
       styleSwitchHtml() +
       '<time class="xm-date" id="xm-date"></time>' +
       '<button type="button" class="xm-refresh" id="xm-refresh">刷新</button>' +
       '<a class="xm-username" id="xm-username" href="/me">用户</a>' +
       "</div></header>" +
-      '<div class="xm-content" id="xm-content"></div></div>';
+      '<div class="xm-workspace"><div class="xm-content xm-pane is-active" id="xm-content" data-xm-href="' +
+      current +
+      '"></div></div></div>';
 
     if (existingSider) {
       shell.insertBefore(existingSider, shell.firstChild);
