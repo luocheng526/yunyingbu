@@ -50,6 +50,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /总负责人/);
     assert.match(jsText, /登录主账号/);
     assert.match(jsText, /全部团队/);
+    assert.match(jsText, /双击单元格/);
     assert.doesNotMatch(jsText, /主数据治理/);
     assert.doesNotMatch(jsText, /全部公司/);
     assert.doesNotMatch(jsText, />缺口</);
@@ -141,6 +142,44 @@ test("org store board lists demo shops and supports add", async () => {
       method: "DELETE"
     });
     assert.equal(removed.status, 200);
+  });
+});
+
+test("org board scopes edit by 责权", async () => {
+  await withServer(async (base) => {
+    const shen = await fetch(`${base}/api/people/org/stores?actor=${encodeURIComponent("沈子晗")}`);
+    const shenJson = await shen.json();
+    assert.equal(shenJson.scope, "shen");
+    assert.ok(shenJson.stores.every((row) => row.chief.includes("沈子晗")));
+    assert.ok(shenJson.stores.every((row) => row.canEdit));
+    assert.ok(!shenJson.stores.some((row) => row.chief.includes("韩梦凯")));
+
+    const hanStore = (await (await fetch(`${base}/api/people/org/stores`)).json()).stores.find((row) =>
+      row.chief.includes("韩梦凯")
+    );
+    const denied = await fetch(`${base}/api/people/org/stores/${hanStore.id}?actor=${encodeURIComponent("沈子晗")}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ remark: "退店" })
+    });
+    assert.equal(denied.status, 403);
+
+    const shenStore = shenJson.stores[0];
+    const allowed = await fetch(`${base}/api/people/org/stores/${shenStore.id}?actor=${encodeURIComponent("沈子晗")}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ merchantId: "11001999" })
+    });
+    const allowedJson = await allowed.json();
+    assert.equal(allowed.status, 200, JSON.stringify(allowedJson));
+    assert.equal(allowedJson.store.merchantId, "11001999");
+
+    const luo = await fetch(`${base}/api/people/org/stores/${hanStore.id}?actor=${encodeURIComponent("罗成")}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ login: "luo_ok" })
+    });
+    assert.equal(luo.status, 200);
   });
 });
 

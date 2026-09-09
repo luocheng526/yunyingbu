@@ -194,6 +194,31 @@ body:has(.people-page) .xm-tabs {
   cursor: pointer;
 }
 
+.org-cell.can-edit {
+  cursor: text;
+}
+
+.org-cell.can-edit:hover {
+  background: #e6f4ff;
+}
+
+.org-cell input,
+.org-cell select {
+  width: 100%;
+  min-width: 88px;
+  box-sizing: border-box;
+}
+
+.org-locked {
+  color: #bfbfbf;
+}
+
+.people-page .banner {
+  margin: 8px 0 0;
+  color: #1677ff;
+  font-size: 13px;
+}
+
 .org-empty {
   color: #bfbfbf;
 }

@@ -11,6 +11,7 @@ import {
   patchPerson,
   reconcilePeople
 } from "./store.js";
+import { scopeOf } from "./org-acl.js";
 import {
   createOrgStore,
   listOrgLogs,
@@ -20,6 +21,26 @@ import {
   removeOrgStore,
   summarizeOrg
 } from "./org-board.js";
+
+async function resolveActor(req) {
+  const fromQuery = typeof req.query?.actor === "string" ? req.query.actor.trim() : "";
+  const header = typeof req.headers["x-actor"] === "string" ? req.headers["x-actor"].trim() : "";
+  if (req.user && req.user.username) {
+    return String(req.user.username);
+  }
+  try {
+    const auth = await import("../profile/auth.js");
+    if (typeof auth.currentUser === "function") {
+      const user = auth.currentUser(req);
+      if (user && user.username) {
+        return String(user.username);
+      }
+    }
+    return fromQuery || header || "";
+  } catch {
+    return fromQuery || header || "罗成";
+  }
+}
 
 export const peopleRouter = Router();
 
@@ -44,29 +65,45 @@ peopleRouter.get("/charter", (_req, res) => {
   res.json({ ok: true, ...PEOPLE_CHARTER });
 });
 
-peopleRouter.get("/org/summary", (_req, res) => {
-  res.json({ ok: true, demo: true, teams: listTeams(), summary: summarizeOrg() });
-});
-
-peopleRouter.get("/org/stores", (req, res) => {
+peopleRouter.get("/org/summary", async (req, res) => {
+  const actor = await resolveActor(req);
+  const scope = scopeOf(actor);
   res.json({
     ok: true,
     demo: true,
+    actor,
+    scope: scope.key,
+    scopeLabel: scope.label,
     teams: listTeams(),
-    stores: listOrgStores(req.query || {})
+    summary: summarizeOrg(actor)
   });
 });
 
-peopleRouter.post("/org/stores", (req, res) => {
-  sendResult(res, createOrgStore(req.body || {}), true);
+peopleRouter.get("/org/stores", async (req, res) => {
+  const actor = await resolveActor(req);
+  const scope = scopeOf(actor);
+  res.json({
+    ok: true,
+    demo: true,
+    actor,
+    scope: scope.key,
+    scopeLabel: scope.label,
+    canCreate: scope.key !== "none",
+    teams: listTeams(),
+    stores: listOrgStores(req.query || {}, actor)
+  });
 });
 
-peopleRouter.patch("/org/stores/:id", (req, res) => {
-  sendResult(res, patchOrgStore(req.params.id, req.body || {}), false);
+peopleRouter.post("/org/stores", async (req, res) => {
+  sendResult(res, createOrgStore(req.body || {}, await resolveActor(req)), true);
 });
 
-peopleRouter.delete("/org/stores/:id", (req, res) => {
-  sendResult(res, removeOrgStore(req.params.id), false);
+peopleRouter.patch("/org/stores/:id", async (req, res) => {
+  sendResult(res, patchOrgStore(req.params.id, req.body || {}, await resolveActor(req)), false);
+});
+
+peopleRouter.delete("/org/stores/:id", async (req, res) => {
+  sendResult(res, removeOrgStore(req.params.id, await resolveActor(req)), false);
 });
 
 peopleRouter.get("/org/logs", (_req, res) => {

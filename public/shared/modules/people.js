@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.140-org";
+    const href = "/people.css?v=0.1.142-edit";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -56,7 +56,8 @@
       root.innerHTML =
         '<main class="page people-page">' +
         '<header class="page-head"><h1>组织中心</h1>' +
-        '<p class="lead">店铺与人对齐。表头按花名册架构；增删改存。智能体只读，在职认花名册，店权认管辖/本表。</p></header>' +
+        '<p class="lead">双击单元格即可改。罗成改全部；沈子晗只改沈子晗组；韩梦凯只改韩梦凯组。按责权显示。</p>' +
+        '<p class="banner" id="org-scope">当前责权：—</p></header>' +
         '<nav class="org-tabs" id="org-tabs">' +
         '<button type="button" class="org-tab is-active" data-pane="stores">店铺主数据</button>' +
         '<button type="button" class="org-tab" data-pane="members">成员管理</button>' +
@@ -123,8 +124,8 @@
         '<tbody id="rights-tbody"></tbody></table></div></section></div>' +
         '<div class="org-pane" data-pane="acl" hidden>' +
         '<section class="panel"><h2>权限</h2>' +
-        "<p>智能体只读：GET /api/people、GET /api/people/org/stores、GET /api/people/grants。</p>" +
-        "<p>登录主账号和密码在店铺主数据列维护，不是钉钉通讯录。</p></section></div>" +
+        "<p>店铺主数据按登录人责权：罗成可改全部，沈子晗只改沈子晗组，韩梦凯只改韩梦凯组。双击单元格保存。</p>" +
+        "<p>智能体只读：GET /api/people、GET /api/people/org/stores、GET /api/people/grants。</p></section></div>" +
         '<div class="org-pane" data-pane="logs" hidden>' +
         '<section class="panel"><h2>改动日志</h2>' +
         '<div class="org-table-wrap"><table><thead><tr><th>时间</th><th>动作</th><th>摘要</th></tr></thead>' +
@@ -173,6 +174,20 @@
       let dead = false;
       let editingId = null;
       let lastStores = [];
+      let boardMeta = { actor: "罗成", scope: "all", canCreate: true };
+      const CELL_FIELDS = [
+        { key: "chief", type: "text" },
+        { key: "lead", type: "text" },
+        { key: "owner", type: "text" },
+        { key: "storeName", type: "text" },
+        { key: "merchantId", type: "text" },
+        { key: "remark", type: "select" },
+        { key: "updatedOn", type: "text" },
+        { key: "closedOn", type: "text" },
+        { key: "login", type: "text" },
+        { key: "password", type: "text" }
+      ];
+      const REMARKS = ["5倍在做", "5倍闲置可退店", "退店", "已退店"];
 
       function showError(el, message) {
         el.hidden = !message;
@@ -230,45 +245,53 @@
           .join("");
       }
 
+      function displayCell(row, field) {
+        const raw = row[field.key];
+        if (field.key === "remark") {
+          return '<span class="' + tagClass(row.statusKey) + '">' + escapeHtml(raw || "—") + "</span>";
+        }
+        if (field.key === "storeName") {
+          return '<span class="org-link">' + escapeHtml(raw || "点击填写") + "</span>";
+        }
+        if (field.key === "owner") {
+          return escapeHtml(raw || "点击填写") + (row.demo ? '<span class="demo-flag">演示</span>' : "");
+        }
+        return escapeHtml(raw || (field.key === "closedOn" || field.key === "updatedOn" ? "—" : "点击填写"));
+      }
+
       function renderStores(stores) {
         lastStores = stores;
         tbody.replaceChildren();
         countEl.textContent = "筛选 " + stores.length + " 条";
+        root.querySelector("#org-add").hidden = !boardMeta.canCreate;
         if (!stores.length) {
           tbody.innerHTML = '<tr><td colspan="11" class="org-empty">暂无店铺</td></tr>';
           return;
         }
         stores.forEach(function (row) {
           const tr = document.createElement("tr");
-          tr.innerHTML =
-            "<td>" +
-            escapeHtml(row.chief) +
-            "</td><td>" +
-            escapeHtml(row.lead) +
-            "</td><td>" +
-            escapeHtml(row.owner) +
-            (row.demo ? '<span class="demo-flag">演示</span>' : "") +
-            '</td><td class="org-link">' +
-            escapeHtml(row.storeName) +
-            "</td><td>" +
-            escapeHtml(row.merchantId || "点击填写") +
-            '</td><td><span class="' +
-            tagClass(row.statusKey) +
-            '">' +
-            escapeHtml(row.remark) +
-            "</span></td><td>" +
-            escapeHtml(row.updatedOn || "—") +
-            "</td><td>" +
-            escapeHtml(row.closedOn || "—") +
-            "</td><td>" +
-            escapeHtml(row.login || "点击填写") +
-            "</td><td>" +
-            escapeHtml(row.password || "点击填写") +
-            '</td><td class="org-actions"><button type="button" class="ghost" data-edit="' +
-            row.id +
-            '">编辑</button><button type="button" class="danger" data-del="' +
-            row.id +
-            '">移除</button></td>';
+          tr.setAttribute("data-id", String(row.id));
+          CELL_FIELDS.forEach(function (field) {
+            const td = document.createElement("td");
+            td.className = "org-cell" + (row.canEdit ? " can-edit" : "");
+            td.setAttribute("data-field", field.key);
+            td.setAttribute("title", row.canEdit ? "双击修改" : "无责权");
+            td.innerHTML = displayCell(row, field);
+            tr.append(td);
+          });
+          const actions = document.createElement("td");
+          actions.className = "org-actions";
+          if (row.canEdit) {
+            actions.innerHTML =
+              '<button type="button" class="ghost" data-edit="' +
+              row.id +
+              '">编辑</button><button type="button" class="danger" data-del="' +
+              row.id +
+              '">移除</button>';
+          } else {
+            actions.innerHTML = '<span class="org-locked">只读</span>';
+          }
+          tr.append(actions);
           tbody.append(tr);
         });
       }
@@ -313,10 +336,118 @@
           if (!summaryData.ok || !storeData.ok) {
             throw new Error(storeData.error || summaryData.error || "无法加载店铺主数据");
           }
+          boardMeta = {
+            actor: storeData.actor || summaryData.actor || "罗成",
+            scope: storeData.scope || "all",
+            canCreate: storeData.canCreate !== false
+          };
+          const scopeEl = root.querySelector("#org-scope");
+          if (scopeEl) {
+            scopeEl.textContent =
+              "当前：" +
+              boardMeta.actor +
+              " · " +
+              (storeData.scopeLabel || "可改全部团队") +
+              " · 双击单元格保存";
+          }
           fillTeams(storeData.teams || summaryData.teams);
           renderKpis(summaryData.summary);
           renderStores(storeData.stores || []);
         });
+      }
+
+      function saveCell(id, field, value) {
+        return fetch("/api/people/org/stores/" + id, {
+          method: "PATCH",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ [field]: value })
+        }).then(function (res) {
+          return res.json().then(function (data) {
+            return { res: res, data: data };
+          });
+        }).then(function (result) {
+          if (!result.res.ok || !result.data.ok) {
+            throw new Error(result.data.error || "保存失败");
+          }
+          return loadBoard();
+        });
+      }
+
+      function startCellEdit(td) {
+        if (!td || td.querySelector("input,select") || !td.classList.contains("can-edit")) {
+          return;
+        }
+        const id = td.parentElement && td.parentElement.getAttribute("data-id");
+        const field = td.getAttribute("data-field");
+        const row = lastStores.find(function (item) {
+          return String(item.id) === String(id);
+        });
+        if (!id || !field || !row || !row.canEdit) {
+          return;
+        }
+        const current = row[field] || "";
+        if (field === "remark") {
+          const select = document.createElement("select");
+          REMARKS.forEach(function (item) {
+            const option = document.createElement("option");
+            option.value = item;
+            option.textContent = item;
+            if (item === current) {
+              option.selected = true;
+            }
+            select.append(option);
+          });
+          td.textContent = "";
+          td.append(select);
+          select.focus();
+          select.addEventListener("change", function () {
+            saveCell(id, field, select.value).catch(function (err) {
+              showError(errorEl, err.message);
+              return loadBoard();
+            });
+          });
+          select.addEventListener("blur", function () {
+            if (select.value === current) {
+              loadBoard();
+            }
+          });
+          return;
+        }
+        const input = document.createElement("input");
+        input.type = "text";
+        input.value = current;
+        td.textContent = "";
+        td.append(input);
+        input.focus();
+        input.select();
+        let saved = false;
+        function commit() {
+          if (saved) {
+            return;
+          }
+          saved = true;
+          const next = input.value.trim();
+          if (next === String(current).trim()) {
+            loadBoard();
+            return;
+          }
+          saveCell(id, field, next).catch(function (err) {
+            showError(errorEl, err.message);
+            return loadBoard();
+          });
+        }
+        input.addEventListener("keydown", function (event) {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            commit();
+          }
+          if (event.key === "Escape") {
+            saved = true;
+            loadBoard();
+          }
+        });
+        input.addEventListener("blur", commit);
       }
 
       function fillSelect(select, items, getValue, getLabel, emptyLabel) {
@@ -524,6 +655,9 @@
         if (event.target === modal) {
           closeForm();
         }
+      });
+      tbody.addEventListener("dblclick", function (event) {
+        startCellEdit(event.target.closest("td.org-cell"));
       });
       tbody.addEventListener("click", function (event) {
         const editId = event.target.getAttribute("data-edit");

@@ -1,3 +1,5 @@
+import { assertCanWrite, canEditStore, rowMatchesScope, scopeOf } from "./org-acl.js";
+
 const STATUSES = {
   operating: "5倍在做",
   idle: "5倍闲置可退店",
@@ -118,8 +120,8 @@ export function listTeams() {
   return ["沈子晗组", "精铺组 韩梦凯"];
 }
 
-export function summarizeOrg() {
-  const stores = rows.filter((row) => true);
+export function summarizeOrg(actor) {
+  const stores = listOrgStores({}, actor);
   return {
     total: stores.length,
     operating: stores.filter((row) => row.statusKey === "operating").length,
@@ -130,11 +132,13 @@ export function summarizeOrg() {
   };
 }
 
-export function listOrgStores(query = {}) {
+export function listOrgStores(query = {}, actor) {
   const team = typeof query.team === "string" ? query.team.trim() : "";
   const status = typeof query.status === "string" ? query.status.trim() : "";
   const q = typeof query.q === "string" ? query.q.trim().toLowerCase() : "";
+  const scope = scopeOf(actor);
   return rows
+    .filter((row) => rowMatchesScope(row, scope))
     .filter((row) => (team ? row.team === team : true))
     .filter((row) => (status ? row.statusKey === status : true))
     .filter((row) => {
@@ -146,7 +150,7 @@ export function listOrgStores(query = {}) {
         .toLowerCase();
       return blob.includes(q);
     })
-    .map(clone);
+    .map((row) => ({ ...clone(row), canEdit: canEditStore(actor, row) }));
 }
 
 export function listOrgLogs() {
@@ -181,31 +185,44 @@ function normalize(input, previous = {}) {
   };
 }
 
-export function createOrgStore(input) {
+export function createOrgStore(input, actor) {
   const next = normalize(input || {});
   if (!next.storeName || !next.owner) {
     return { ok: false, statusCode: 400, error: "店铺名称、店铺所属人员为必填" };
   }
+  const allowed = assertCanWrite(actor, next);
+  if (!allowed.ok) {
+    return allowed;
+  }
   const row = { id: nextId++, demo: false, ...next };
   rows.push(row);
   addLog("新增", row.storeName + " / " + row.owner);
-  return { ok: true, store: clone(row) };
+  return { ok: true, store: { ...clone(row), canEdit: true } };
 }
 
-export function patchOrgStore(id, input) {
+export function patchOrgStore(id, input, actor) {
   const found = rows.find((row) => row.id === Number(id));
   if (!found) {
     return { ok: false, statusCode: 404, error: "店铺行不存在" };
   }
-  Object.assign(found, normalize(input || {}, found));
+  const next = normalize(input || {}, found);
+  const allowed = assertCanWrite(actor, found, next);
+  if (!allowed.ok) {
+    return allowed;
+  }
+  Object.assign(found, next);
   addLog("修改", found.storeName + " / " + found.owner);
-  return { ok: true, store: clone(found) };
+  return { ok: true, store: { ...clone(found), canEdit: true } };
 }
 
-export function removeOrgStore(id) {
+export function removeOrgStore(id, actor) {
   const index = rows.findIndex((row) => row.id === Number(id));
   if (index < 0) {
     return { ok: false, statusCode: 404, error: "店铺行不存在" };
+  }
+  const allowed = assertCanWrite(actor, rows[index]);
+  if (!allowed.ok) {
+    return allowed;
   }
   const [removed] = rows.splice(index, 1);
   addLog("移除", removed.storeName);
