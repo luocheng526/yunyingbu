@@ -39,6 +39,8 @@ test("GET /han is 韩梦凯运营中心 with left sidebar shell", async () => {
     assert.match(html, /<title>韩梦凯运营中心<\/title>/);
     assert.match(html, /han-nav-group/);
     assert.match(html, /han-nav-arrow/);
+    assert.match(html, /attachHanSubmenu/);
+    assert.match(html, /xm-sider/);
     assert.match(html, /href="\/han\?sub=selection"/);
     assert.match(html, /href="\/han\?sub=products"/);
     assert.match(html, /href="\/han\?sub=paid"/);

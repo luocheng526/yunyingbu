@@ -198,29 +198,22 @@
       .han-nav-parent {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 0.35rem;
-        width: 100%;
+        gap: 8px;
+        width: calc(100% - 6px);
         border: 0;
         background: transparent;
-        color: #57534e;
-        padding: 0.45rem 0.7rem;
-        border-radius: 10px;
+        color: inherit;
+        padding: 8px 12px;
+        border-radius: 0 8px 8px 0;
         font: inherit;
-        font-size: 0.92rem;
+        font-size: 14px;
         text-align: left;
         cursor: pointer;
       }
-      .han-nav-parent:hover,
-      .han-nav-parent[aria-current="page"],
-      .han-nav-group.is-open .han-nav-parent {
-        color: #134e4a;
-        background: #ccfbf1;
-      }
       .han-nav-arrow {
-        display: inline-block;
+        margin-left: auto;
         visibility: hidden;
-        font-size: 0.75rem;
+        font-size: 12px;
         line-height: 1;
       }
       .han-nav-group.is-open .han-nav-arrow {
@@ -229,23 +222,15 @@
       .han-nav-sub {
         display: none;
         flex-direction: column;
-        gap: 0.1rem;
-        padding: 0.1rem 0 0.25rem 0.75rem;
+        gap: 2px;
+        padding: 0 0 4px 22px;
       }
       .han-nav-group.is-open .han-nav-sub {
         display: flex;
       }
-      .han-nav-sub a {
-        color: #57534e;
-        text-decoration: none;
-        padding: 0.4rem 0.7rem;
-        border-radius: 10px;
-        font-size: 0.88rem;
-      }
-      .han-nav-sub a:hover,
-      .han-nav-sub a[aria-current="page"] {
-        color: #134e4a;
-        background: #ccfbf1;
+      .xm-sider .han-nav-sub .xm-menu-item {
+        min-height: 34px;
+        font-size: 13px;
       }
     </style>
   </head>
@@ -345,56 +330,85 @@
         const parent = group.querySelector(".han-nav-parent");
         if (!parent || parent.dataset.bound === "1") return;
         parent.dataset.bound = "1";
-        parent.addEventListener("click", function () {
+        parent.addEventListener("click", function (event) {
+          event.preventDefault();
           setGroupOpen(group, !group.classList.contains("is-open"));
         });
-      }
-
-      function enhanceHanNav(root) {
-        if (!root || root.querySelector(".han-nav-group")) {
-          if (root) root.querySelectorAll(".han-nav-group").forEach(bindGroup);
-          return;
-        }
-        const links = Array.from(root.querySelectorAll("a"));
-        const hanLink = links.find(function (a) {
-          const href = (a.getAttribute("href") || "").replace(/\/+$/, "") || "/";
-          return href === "/han";
-        });
-        if (!hanLink) return;
-        const group = document.createElement("div");
-        group.className = "han-nav-group";
-        group.innerHTML =
-          '<button type="button" class="han-nav-parent" aria-expanded="false">' +
-          "<span>韩梦凯运营中心</span>" +
-          '<span class="han-nav-arrow is-down" aria-hidden="true">▾</span></button>' +
-          '<div class="han-nav-sub">' +
-          HAN_SUBS.map(function (item) {
-            return '<a href="' + item.href + '">' + item.label + "</a>";
-          }).join("") +
-          "</div>";
-        hanLink.replaceWith(group);
-        bindGroup(group);
       }
 
       function markCurrent(group) {
         const parent = group.querySelector(".han-nav-parent");
         if (path === "/han" || currentSub) {
-          if (parent) parent.setAttribute("aria-current", "page");
+          if (parent) {
+            parent.setAttribute("aria-current", "page");
+            parent.classList.add("is-active");
+          }
           setGroupOpen(group, true);
         }
         group.querySelectorAll(".han-nav-sub a").forEach(function (a) {
           const href = a.getAttribute("href") || "";
           const key = new URL(href, window.location.origin).searchParams.get("sub");
-          if (key && key === subKey) a.setAttribute("aria-current", "page");
+          if (key && key === subKey) {
+            a.setAttribute("aria-current", "page");
+            a.classList.add("is-active");
+          }
         });
       }
 
-      document.querySelectorAll(".han-nav-group").forEach(function (group) {
+      /* 全站侧栏由 /shared/nav.js 画成 .xm-sider，本页不能改那个文件，只能挂到「韩梦凯运营中心」这一项下面。 */
+      function attachHanSubmenu() {
+        const sider = document.querySelector(".xm-sider");
+        const host = sider || document.querySelector(".xm-menu-main") || document.getElementById("site-nav");
+        if (!host) return false;
+        if (host.querySelector("[data-han-submenu='1']")) {
+          host.querySelectorAll(".han-nav-group").forEach(function (group) {
+            bindGroup(group);
+            markCurrent(group);
+          });
+          return true;
+        }
+        const hanLink = Array.from(host.querySelectorAll("a[href]")).find(function (a) {
+          const href = (a.getAttribute("href") || "").split("?")[0].replace(/\/+$/, "") || "/";
+          return href === "/han" && a.textContent.indexOf("韩梦凯") !== -1;
+        });
+        if (!hanLink) return false;
+        const ico = hanLink.querySelector(".xm-ico");
+        const group = document.createElement("div");
+        group.className = "han-nav-group";
+        group.setAttribute("data-han-submenu", "1");
+        group.innerHTML =
+          '<button type="button" class="xm-menu-item han-nav-parent" aria-expanded="false">' +
+          (ico ? ico.outerHTML : "") +
+          "<span>韩梦凯运营中心</span>" +
+          '<span class="han-nav-arrow" aria-hidden="true">▾</span></button>' +
+          '<div class="han-nav-sub">' +
+          HAN_SUBS.map(function (item) {
+            return '<a class="xm-menu-item" href="' + item.href + '"><span>' + item.label + "</span></a>";
+          }).join("") +
+          "</div>";
+        hanLink.replaceWith(group);
         bindGroup(group);
         markCurrent(group);
-      });
-      enhanceHanNav(document.getElementById("site-nav") || document.body);
-      document.querySelectorAll(".han-nav-group").forEach(markCurrent);
+        return true;
+      }
+
+      function watchHanSider() {
+        if (attachHanSubmenu()) return;
+        const obs = new MutationObserver(function () {
+          if (attachHanSubmenu()) obs.disconnect();
+        });
+        obs.observe(document.documentElement, { childList: true, subtree: true });
+        let n = 0;
+        const timer = setInterval(function () {
+          n += 1;
+          if (attachHanSubmenu() || n > 50) {
+            clearInterval(timer);
+            obs.disconnect();
+          }
+        }, 80);
+      }
+
+      watchHanSider();
 
       const heading = document.querySelector("main.page h1");
       const wait = document.getElementById("board-wait");
