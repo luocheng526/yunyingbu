@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.75-sc-mount */
+/* xm-module-releases 0.1.92-no-false-409 */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -85,7 +85,7 @@
         display: flex !important; flex-direction: column !important; flex: 1 1 0% !important; min-height: 0 !important; overflow: hidden !important;
       }
       .xm-content, .xm-shell .xm-content {
-        flex: 1 1 0% !important; height: 0 !important; min-height: 0 !important; overflow-y: scroll !important; touch-action: pan-y;
+        flex: 1 1 auto !important; height: auto !important; min-height: 0 !important; overflow-y: auto !important; touch-action: pan-y;
       }
       html:has(.oc-wrap), html:has(.oc-wrap) body, html:has(.oc-wrap) body.xm-app, html:has(.oc-wrap) body.xm-app-shell {
         height: 100% !important; max-height: 100dvh !important; overflow: hidden !important;
@@ -97,16 +97,22 @@
         display: flex !important; flex-direction: column !important; flex: 1 1 0% !important; min-height: 0 !important; overflow: hidden !important;
       }
       .xm-content:has(.oc-wrap), .xm-shell:has(.oc-wrap) .xm-content {
-        flex: 1 1 0% !important; height: 0 !important; min-height: 0 !important; overflow-y: scroll !important; touch-action: pan-y;
+        flex: 1 1 auto !important; height: auto !important; min-height: 0 !important; overflow-y: auto !important; touch-action: pan-y;
       }
       #history-view, #logs-view {
         max-height: calc(100dvh - 15rem); overflow-y: scroll !important; touch-action: pan-y;
       }
-      .oc-wrap.page, .oc-wrap.xm-page { background: var(--xm-card, #fff); border: 2px solid #dc2626; border-radius: 10px; padding: 12px 14px 14px; }
+      .oc-wrap.page, .oc-wrap.xm-page { max-width: none !important; width: 100%; margin: 0 !important; background: var(--xm-card, #fff); border: 0 !important; border-radius: 0; padding: 10px 16px 16px; }
+      html:has(.oc-wrap) .xm-content, .xm-content:has(.oc-wrap) { padding: 0 !important; }
       .oc-hero-card { background: transparent; border: 0; box-shadow: none; padding: 0 0 10px; margin: 0 0 12px; }
       .oc-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; }
+      .oc-tab, button.oc-tab { background: transparent !important; outline: none !important; -webkit-tap-highlight-color: transparent; }
+      .oc-tab:hover, .oc-tab:focus, .oc-tab:focus-visible, .oc-tab:active, .oc-tab.active,
+      button.oc-tab:hover, button.oc-tab:focus, button.oc-tab:focus-visible, button.oc-tab:active, button.oc-tab.active {
+        background: transparent !important; background-color: transparent !important; outline: none !important;
+      }
       .oc-tab-num { display: block; margin: 0.25rem 0 0.1rem; font-size: 1.35rem; font-weight: 750; }
-      .oc-tab.active .oc-tab-num { color: #2563eb; }
+      .oc-tab.active .oc-tab-num { color: inherit; }
       .oc-tab p { display: block; margin: 0; font-size: 12px; }
       .sc-table tr.ticket { border: 0; box-shadow: none; padding: 0; background: transparent; }
       .sc-ver { font-weight: 650; color: #2563eb; }
@@ -147,7 +153,7 @@
       <section class="oc-card panel">
         <div class="pane on" id="pane-queue">
           <h3>待上线</h3>
-          <p class="hint lead">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。版本号由本闸门统一发放，全站一条号 0.1.N-说明，各模块不得自领；同一号段不能跨模块再用。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。整页刷新并读完新数据后才关升级遮罩。有新单据约 15 秒内自动提示，不会自动点通过。待上线、版本记录、运行日志都分页，每页 20 条。</p>
+          <p class="hint lead">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。版本号由本闸门统一发放，全站一条号 0.1.N-说明，各模块不得自领；同一号段不能跨模块再用。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。站点恢复后就地刷新并关升级遮罩，不再整页跳转。有新单据约 15 秒内自动提示，不会自动点通过。待上线、版本记录、运行日志都分页，每页 20 条。版本记录和运行日志按页向服务器取，刷新只读当前页，不再一次拉全表。</p>
           <div class="caps" id="stat-caps"></div>
           <div class="note banner">发布纪律：本页是唯一发版闸门。只执行交来的单据 + 本页「通过」。按提交时间点第 1 位；一把锁，禁止抢发；下一条不会自动发。「帮我上线」无效。新文件只放源目录，不要先拷到线上；点通过才落地。闸门不读 git，也不拉 Cloud 工作区，交单只登记路径。可带 contents（路径→正文）或 ref（分支/提交），闸门会先写入源目录。源目录与线上相同会失败。</div>
           <div id="lock-view" class="lock-box idle">当前空闲，没有发布任务。</div>
@@ -155,14 +161,14 @@
         </div>
         <div class="pane" id="pane-history">
           <h3>版本记录</h3>
-          <p class="hint">各模块当前版本来自最近一次成功发布。下一号由本闸门发放。版本记录只记每次升级的简要内容，从最新到最老，每页 20 条。上方统计已成功落地的版本数，含已回滚。详细流水在「运行日志」。有升级前快照的单据可以回滚；回滚占用发布锁，不会自动发下一单。</p>
+          <p class="hint">各模块当前版本来自最近一次成功发布。下一号由本闸门发放。版本记录只记每次升级的简要内容，从最新到最老，每页 20 条，按页向服务器取。上方统计已成功落地的版本数，含已回滚。详细流水在「运行日志」。有升级前快照的单据可以回滚；回滚占用发布锁，不会自动发下一单。</p>
           <div id="history-stats" class="history-stats">已上线发布 <b>0</b> 个版本</div>
           <div id="current-versions" class="caps"></div>
           <div id="history-view"></div>
         </div>
         <div class="pane" id="pane-logs">
           <h3>运行日志</h3>
-          <p class="hint">每张单上的发版流水 log。记录多时分页查看，每页 20 条。</p>
+          <p class="hint">每张单上的发版流水 log。按页向服务器取，每页 20 条，刷新只读当前页。</p>
           <div id="logs-view" class="log-list"></div>
         </div>
       </section>
@@ -188,7 +194,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-4";
+      link.href = "/releases.css?v=sc-ui-12";
       document.head.appendChild(link);
     }
   }
@@ -241,6 +247,7 @@
       const PAGE_SIZE = 20;
       const UPGRADE_PENDING_KEY = "oc-after-upgrade";
       let knownQueueIds = null;
+      let lastLock = { locked: false };
       const listPages = { queue: 1, history: 1, logs: 1 };
 
       function setText(idOrEl, text) {
@@ -261,15 +268,16 @@
         window.location.replace("/login");
       }
       async function api(path, options) {
-        const ac = new AbortController();
-        const timer = setTimeout(function () { ac.abort(); }, 60000);
+        const opts = options || {};
+        const skipLoginRedirect = Boolean(opts.skipLoginRedirect);
+        const fetchOpts = Object.assign({}, opts);
+        delete fetchOpts.skipLoginRedirect;
         let res;
         try {
           res = await fetch(path, {
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
-            signal: ac.signal,
-            ...options
+            ...fetchOpts
           });
         } catch (err) {
           if (err && err.name === "AbortError") {
@@ -278,11 +286,11 @@
             throw timeoutErr;
           }
           throw err;
-        } finally {
-          clearTimeout(timer);
         }
         if (res.status === 401) {
-          goLogin();
+          if (!skipLoginRedirect) {
+            goLogin();
+          }
           const err = new Error("未登录");
           err.status = 401;
           throw err;
@@ -534,16 +542,97 @@
         }
       }
 
+      async function probePage() {
+        const ac = new AbortController();
+        const timer = setTimeout(function () { ac.abort(); }, 8000);
+        try {
+          const res = await fetch("/releases?probe=" + Date.now(), {
+            credentials: "same-origin",
+            cache: "no-store",
+            headers: { Accept: "text/html" },
+            signal: ac.signal
+          });
+          if (res.status !== 200) {
+            return false;
+          }
+          const text = await res.text();
+          return text.indexOf("releases.js") !== -1 || text.indexOf("xm-releases-boot") !== -1 || text.indexOf("upgrade-mask") !== -1;
+        } catch {
+          return false;
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+
+      async function waitUntilSiteReady(needRestart) {
+        if (!needRestart) {
+          return probeHealth();
+        }
+        let okStreak = 0;
+        for (let i = 0; i < 40; i += 1) {
+          const healthy = await probeHealth();
+          const pageOk = healthy ? await probePage() : false;
+          if (healthy && pageOk) {
+            okStreak += 1;
+            if (okStreak >= 2) {
+              return true;
+            }
+          } else {
+            okStreak = 0;
+          }
+          await sleep(700);
+        }
+        return false;
+      }
+
+      async function finishUpgradeInPlace(version) {
+        clearShellPending();
+        renderUpgradeSteps(["reload", "done"], "done", "ok");
+        setUpgradeTitle("升级完成");
+        try {
+          await refresh({ skipLoginRedirect: true });
+        } catch (err) {
+          flash((err && err.message) || "刷新失败", true);
+        }
+        flash("发布成功 · " + (version || ""));
+        hideUpgrade();
+        consumePendingUpgrade();
+      }
+
+      function isTransientPassError(err) {
+        const status = err && err.status;
+        return !status || status === 408 || status === 502 || status === 503 || status >= 500;
+      }
+
+      function isIgnorableConfirmConflict(err, ticket, sawPublishing) {
+        if (!err || err.status === 401) {
+          return false;
+        }
+        if (ticket && (ticket.status === "publishing" || ticket.status === "success")) {
+          return true;
+        }
+        if (!ticket) {
+          return Boolean(sawPublishing || err.status === 409);
+        }
+        return false;
+      }
+
       async function loadTicket(id) {
-        const all = await api("/api/releases");
-        return (all.items || []).find(function (item) { return item.id === id; }) || null;
+        const one = await api("/api/releases/item/" + encodeURIComponent(id), { skipLoginRedirect: true });
+        return (one && one.item) || null;
       }
 
       async function runPass(id, needRestart, version) {
+        if (window.__xmUpgradePass) {
+          flash("有发布正在进行，请等当前这一单完成。", true);
+          return "busy";
+        }
         const keys = stepKeys(needRestart);
+        window.__xmUpgradePass = { id: id, started: Date.now() };
         showUpgrade(keys, "agree");
         let confirmErr = null;
         let confirmBody = null;
+        let sawPublishing = false;
         api("/api/releases/" + id + "/confirm", {
           method: "POST",
           body: "{}"
@@ -556,13 +645,13 @@
         const deadline = Date.now() + 120000;
         let lastHealth = "尚未返回 200";
         let ticket = null;
+        try {
         while (Date.now() < deadline) {
           pinUpgradeMask();
-          if (confirmErr && confirmErr.status && confirmErr.status !== 502 && confirmErr.status !== 503 && confirmErr.status < 500) {
-            const msg = (confirmErr.status || "") + " " + (confirmErr.message || "通过失败");
-            failUpgrade(keys, msg);
-            flash(msg, true);
-            return "failed";
+          if (confirmErr && confirmErr.status === 401) {
+            failUpgrade(keys, "401 未登录");
+            flash("未登录", true);
+            return "need-login";
           }
           try {
             ticket = await loadTicket(id);
@@ -575,7 +664,14 @@
             return "failed";
           }
           if (ticket && ticket.status === "publishing") {
+            sawPublishing = true;
             renderUpgradeSteps(keys, needRestart ? "restart" : "sync");
+          }
+          if (confirmErr && !isTransientPassError(confirmErr) && !isIgnorableConfirmConflict(confirmErr, ticket, sawPublishing)) {
+            const msg = (confirmErr.status || "") + " " + (confirmErr.message || "通过失败");
+            failUpgrade(keys, msg);
+            flash(msg, true);
+            return "failed";
           }
           if (ticket && ticket.status === "success") {
             renderUpgradeSteps(keys, "health");
@@ -586,8 +682,9 @@
                   version: version || ticket.version,
                   id: id
                 }));
-                window.location.replace("/releases?reloaded=" + Date.now());
-                return "reloading";
+                await waitUntilSiteReady(needRestart);
+                await finishUpgradeInPlace(version || ticket.version);
+                return "landed";
               }
               lastHealth = "健康检查尚未 200";
             } catch (err) {
@@ -602,6 +699,9 @@
         failUpgrade(keys, timeoutMsg);
         flash("升级未完成：" + lastHealth, true);
         return "failed";
+        } finally {
+          window.__xmUpgradePass = null;
+        }
       }
 
       function tickClock() {
@@ -612,13 +712,39 @@
         });
       }
 
-      function renderStats(items, ready) {
+      function activeTabName() {
+        const tab = document.querySelector(".oc-tab.active");
+        return (tab && tab.getAttribute("data-tab")) || "queue";
+      }
+
+      function countsFromBoard(payload) {
+        if (payload && typeof payload.queued === "number") {
+          return payload;
+        }
+        const items = (payload && payload.items) || [];
+        const summary = { queued: 0, approved: 0, publishing: 0, failed: 0, success: 0, logs: 0, rolledBack: 0 };
+        items.forEach(function (item) {
+          if (item.status === "queued") summary.queued += 1;
+          else if (item.status === "approved") summary.approved += 1;
+          else if (item.status === "publishing") summary.publishing += 1;
+          else if (item.status === "failed") summary.failed += 1;
+          else if (item.status === "success") {
+            summary.success += 1;
+            if (item.rolledBack) summary.rolledBack += 1;
+          }
+          if (item.log) summary.logs += 1;
+        });
+        return summary;
+      }
+
+      function renderStats(summary, ready) {
         const caps = document.getElementById("stat-caps");
-        const queued = countBy(items, "queued");
-        const approved = countBy(items, "approved");
-        const publishing = countBy(items, "publishing");
-        const failed = countBy(items, "failed");
-        const success = countBy(items, "success");
+        const counts = countsFromBoard(summary);
+        const queued = Number(counts && counts.queued) || 0;
+        const approved = Number(counts && counts.approved) || 0;
+        const publishing = Number(counts && counts.publishing) || 0;
+        const failed = Number(counts && counts.failed) || 0;
+        const success = Number(counts && counts.success) || 0;
         const runVer = ready && ready.version ? String(ready.version) : "";
         if (caps) {
           caps.innerHTML =
@@ -640,14 +766,15 @@
         return (items || []).filter(function (item) { return item.status === "success"; });
       }
 
-      function renderHistoryStats(items) {
+      function renderHistoryStats(summary) {
         const el = document.getElementById("history-stats");
         if (!el) {
           return;
         }
-        const success = successReleases(items);
-        const rolled = success.filter(function (item) { return item.rolledBack; }).length;
-        el.innerHTML = "已上线发布 <b>" + success.length + "</b> 个版本" +
+        const counts = countsFromBoard(summary);
+        const success = Number(counts && counts.success) || 0;
+        const rolled = Number(counts && counts.rolledBack) || 0;
+        el.innerHTML = "已上线发布 <b>" + success + "</b> 个版本" +
           (rolled ? "（其中 " + rolled + " 个已回滚）" : "");
       }
 
@@ -790,17 +917,40 @@
         );
       }
 
-      function renderHistory(items, locked) {
+      function pageInfoFromBoard(result, key) {
+        if (result && result.total != null) {
+          const total = Number(result.total) || 0;
+          const pageCount = Math.max(1, Number(result.pageCount) || 1);
+          const page = Math.min(Math.max(1, Number(result.page) || listPages[key] || 1), pageCount);
+          listPages[key] = page;
+          const start = (page - 1) * PAGE_SIZE;
+          const slice = result.items || [];
+          return {
+            slice: slice,
+            page,
+            pageCount,
+            total,
+            from: total ? start + 1 : 0,
+            to: Math.min(start + slice.length, total)
+          };
+        }
+        const raw = (result && result.items) || [];
+        const list = key === "history"
+          ? raw.filter(function (item) { return item.status === "success"; }).sort(newestFirst)
+          : raw.filter(function (item) { return item.log; }).sort(newestFirst);
+        return paginate(list, key);
+      }
+
+      function renderHistory(result, locked) {
         const el = document.getElementById("history-view");
         if (!el) {
           return;
         }
-        const success = successReleases(items).slice().sort(newestFirst);
-        if (!success.length) {
+        const paged = pageInfoFromBoard(result, "history");
+        if (!paged.total) {
           el.innerHTML = '<div class="empty">还没有成功发布的版本记录</div>';
           return;
         }
-        const paged = paginate(success, "history");
         el.innerHTML =
           "<table><thead><tr><th>版本</th><th>模块</th><th>摘要</th><th>时间</th><th>回滚</th></tr></thead><tbody>" +
           paged.slice.map(function (item) {
@@ -822,17 +972,16 @@
           "</tbody></table>" + renderPager("history", paged);
       }
 
-      function renderLogs(items) {
+      function renderLogs(result) {
         const el = document.getElementById("logs-view");
         if (!el) {
           return;
         }
-        const rows = items.filter(function (item) { return item.log; }).slice().sort(newestFirst);
-        if (!rows.length) {
+        const paged = pageInfoFromBoard(result, "logs");
+        if (!paged.total) {
           el.innerHTML = '<div class="empty">暂无发版流水</div>';
           return;
         }
-        const paged = paginate(rows, "logs");
         el.innerHTML = paged.slice.map(function (item) {
           return (
             "<article class=\"log-item\">" +
@@ -844,33 +993,67 @@
         }).join("") + renderPager("logs", paged);
       }
 
-      async function refresh() {
+      async function refreshHistory(apiOpts, locked) {
+        const el = document.getElementById("history-view");
+        if (el) {
+          el.innerHTML = '<div class="empty">正在读取本页版本记录…</div>';
+        }
+        const result = await api("/api/releases/history?page=" + listPages.history + "&limit=" + PAGE_SIZE, apiOpts);
+        renderHistory(result, locked);
+      }
+
+      async function refreshLogs(apiOpts) {
+        const el = document.getElementById("logs-view");
+        if (el) {
+          el.innerHTML = '<div class="empty">正在读取本页运行日志…</div>';
+        }
+        const result = await api("/api/releases/logs?page=" + listPages.logs + "&limit=" + PAGE_SIZE, apiOpts);
+        renderLogs(result);
+      }
+
+      async function refresh(opts) {
+        const apiOpts = opts && opts.skipLoginRedirect ? { skipLoginRedirect: true } : {};
+        const tab = (opts && opts.tab) || activeTabName();
         clearShellPending();
-        const [queue, lock, ready, me] = await Promise.all([
-          api("/api/releases/queue"),
-          api("/api/releases/lock"),
-          api("/api/releases/readyz"),
-          api("/api/auth/me")
+        function settledValue(result, fallback) {
+          return result && result.status === "fulfilled" ? result.value : fallback;
+        }
+        const settled = await Promise.allSettled([
+          api("/api/releases/queue", apiOpts),
+          api("/api/releases/lock", apiOpts),
+          api("/api/releases/readyz", apiOpts),
+          api("/api/auth/me", apiOpts),
+          api("/api/releases/summary", apiOpts),
+          api("/api/releases/versions", apiOpts)
         ]);
+        const failed = settled.filter(function (result) { return result.status === "rejected"; });
+        if (settled[0].status === "rejected") {
+          throw settled[0].reason;
+        }
+        const queue = settledValue(settled[0], { items: [] });
+        const lock = settledValue(settled[1], { locked: false });
+        const ready = settledValue(settled[2], {});
+        const me = settledValue(settled[3], {});
+        const summary = settledValue(settled[4], {});
+        const versions = settledValue(settled[5], { current: [] });
+        lastLock = lock;
         setText("who", me.displayName || me.username || "罗成");
         renderLock(lock, ready);
+        renderStats(summary, ready);
+        renderHistoryStats(summary);
+        renderCurrentVersions(versions);
         const queued = queue.items || [];
         knownQueueIds = queued.map(function (item) { return item.id; });
-        setText("tab-queue-count", String(queued.length));
-        setText("tab-queue-sub", queued.length + " 待审批");
-        renderQueue(queued, lock.locked, { current: [] });
+        renderQueue(queued, lock.locked, versions);
+        if (failed.length) {
+          flash((failed[0].reason && failed[0].reason.message) || "部分刷新失败", true);
+        }
         try {
-          const [all, versions] = await Promise.all([
-            api("/api/releases"),
-            api("/api/releases/versions")
-          ]);
-          const items = all.items || [];
-          renderStats(items, ready);
-          renderHistoryStats(items);
-          renderCurrentVersions(versions);
-          renderQueue(queued, lock.locked, versions);
-          renderHistory(items, lock.locked);
-          renderLogs(items);
+          if (tab === "history") {
+            await refreshHistory(apiOpts, lock.locked);
+          } else if (tab === "logs") {
+            await refreshLogs(apiOpts);
+          }
         } catch (err) {
           flash(err.message, true);
         }
@@ -919,6 +1102,14 @@
           if (tabTitles[name]) {
             document.title = "版本发布中心 · " + (name === "queue" ? "待上线" : name === "history" ? "版本记录" : "运行日志");
           }
+          if (name === "history" || name === "logs") {
+            refresh({ tab: name }).catch(function (err) {
+              flash(err.message, true);
+            });
+          }
+          if (typeof tab.blur === "function") {
+            tab.blur();
+          }
         });
       });
 
@@ -926,6 +1117,8 @@
       window.__xmPageTimers = window.__xmPageTimers || [];
       window.__xmPageTimers.push(setInterval(tickClock, 1000));
 
+      if (!window.__xmReleasesClicks) {
+      window.__xmReleasesClicks = true;
       document.body.addEventListener("click", async function (event) {
         const pagerBtn = event.target.closest(".oc-pager [data-page]");
         if (pagerBtn && !pagerBtn.disabled) {
@@ -955,9 +1148,15 @@
         if (!id) return;
         const act = btn.getAttribute("data-act");
         if (act === "pass") {
+          if (window.__xmUpgradePass) {
+            flash("有发布正在进行，请等当前这一单完成。", true);
+            return;
+          }
+          btn.disabled = true;
           showUpgrade(stepKeys(card.getAttribute("data-restart") === "1"), "agree");
+        } else {
+          btn.disabled = true;
         }
-        btn.disabled = true;
         try {
           if (act === "reject") {
             const reason = window.prompt("请填写驳回原因（必填）");
@@ -975,9 +1174,10 @@
             const needRestart = card.getAttribute("data-restart") === "1";
             const version = card.getAttribute("data-version") || "";
             const passResult = await runPass(id, needRestart, version);
-            if (passResult === "reloading") return;
-            if (passResult === "failed") {
+            if (passResult === "reloading" || passResult === "landed" || passResult === "busy") return;
+            if (passResult === "failed" || passResult === "need-login") {
               btn.disabled = false;
+              return;
             }
           } else if (act === "rollback") {
             if (!window.confirm("确认按升级前快照回滚该版本的文件？不会自动发下一单。")) {
@@ -992,11 +1192,14 @@
           }
           await refresh();
         } catch (err) {
-          failUpgrade(stepKeys(true), (err.status || "") + " " + (err.message || "操作失败"));
+          if (act !== "pass") {
+            failUpgrade(stepKeys(true), (err.status || "") + " " + (err.message || "操作失败"));
+          }
           flash((err.status || "") + " " + err.message, true);
-          await refresh();
+          btn.disabled = false;
         }
       });
+      }
 
       const refreshBtn = document.getElementById("refresh-btn");
       if (refreshBtn) refreshBtn.addEventListener("click", async function () {
@@ -1060,6 +1263,8 @@
         restoreDocEvents();
       }
       return function unmount() {
+        window.__xmReleasesClicks = false;
+        window.__xmUpgradePass = null;
         timers.forEach(function (item) {
           if (item.kind === "interval") {
             clearInterval(item.id);
