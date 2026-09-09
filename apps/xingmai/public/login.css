@@ -137,12 +137,13 @@ body {
 
 .hero-slogan {
   --slogan-zh: clamp(14.4px, 1.08vw, 19.2px);
-  margin: calc(-1 * clamp(18px, 1.35vw, 24px)) 0 0;
+  margin: 0;
   text-align: right;
   flex: 0 0 auto;
-  width: max-content;
+  display: inline-block;
   font-size: var(--slogan-zh);
-  container-type: inline-size;
+  position: relative;
+  top: calc(-1 * clamp(18px, 1.35vw, 24px));
 }
 
 .hero-slogan span {
@@ -158,14 +159,14 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  column-gap: 0.3em;
+  column-gap: 0.28em;
   width: 0;
   min-width: 100%;
   box-sizing: border-box;
   margin-top: 0.42em;
   color: rgba(236, 244, 255, 0.9);
-  font-size: clamp(7px, 3.5cqi, 0.62em);
-  letter-spacing: 0.04em;
+  font-size: 0.58em;
+  letter-spacing: 0.02em;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -576,7 +577,7 @@ body {
 @media (max-width: 1366px) {
   .login-hero { padding: 16px 22px 12px; }
   .hero-logo { height: 80px; }
-  .hero-slogan { --slogan-zh: 14.4px; margin-top: -18px; }
+  .hero-slogan { --slogan-zh: 14.4px; top: -18px; }
   .hero-kicker { font-size: 11.2px; margin-bottom: 8px; }
   .hero-copy { --hero-title-size: 38.4px; }
   .hero-pills { margin: 10px 0 14px; }

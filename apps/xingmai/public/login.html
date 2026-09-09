@@ -169,6 +169,29 @@
           document.documentElement.setAttribute("data-theme", theme === "dark" ? "dark" : "light");
         }
         applyTheme(localStorage.getItem("xm-theme") || "light");
+
+        function fitHeroSlogan() {
+          var slogan = document.querySelector(".hero-slogan");
+          if (!slogan) return;
+          var zh = slogan.querySelector("span");
+          var en = slogan.querySelector("small");
+          slogan.style.width = "";
+          en.style.fontSize = "";
+          var target = zh.getBoundingClientRect().width;
+          if (!target) return;
+          slogan.style.width = target + "px";
+          var size = parseFloat(window.getComputedStyle(zh).fontSize) * 0.58;
+          var i;
+          for (i = 0; i < 48; i += 1) {
+            en.style.fontSize = size + "px";
+            if (en.scrollWidth <= target + 0.5) break;
+            size *= target / en.scrollWidth;
+          }
+        }
+        fitHeroSlogan();
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitHeroSlogan);
+        window.addEventListener("resize", fitHeroSlogan);
+
         themeBtn.addEventListener("click", function () {
           var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
           localStorage.setItem(THEME_KEY, next);
