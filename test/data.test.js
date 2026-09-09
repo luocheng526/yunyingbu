@@ -136,6 +136,7 @@ test("data child pages and demo APIs respond", async () => {
     assert.equal(overviewPage.res.status, 200);
     assert.match(overviewPage.text, /<h1>数据总揽<\/h1>/);
     assert.match(overviewPage.text, /data-view="team"/);
+    assert.match(overviewPage.text, /data-overview\.js/);
     assert.doesNotMatch(overviewPage.text, /公司/);
     const teamApi = await get(base, "/api/data/team");
     assert.equal(teamApi.res.status, 200);
@@ -309,6 +310,7 @@ export function createApp() {
   assert.ok(fs.existsSync(path.join(tmp, "public/data.html")));
   assert.ok(fs.existsSync(path.join(tmp, "public/data/placeholder/index.html")));
   assert.ok(fs.existsSync(path.join(tmp, "public/data/overview/index.html")));
+  assert.ok(fs.existsSync(path.join(tmp, "public/data/team-demo.json")));
   assert.ok(fs.existsSync(path.join(tmp, "src/modules/data/router.js")));
   assert.match(fs.readFileSync(path.join(tmp, "src/app.js"), "utf8"), /app\.get\("\/api\/health"/);
   assert.equal(fs.readFileSync(path.join(tmp, "public/index.html"), "utf8"), "<html><body>home</body></html>");
