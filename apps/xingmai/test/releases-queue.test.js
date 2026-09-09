@@ -46,9 +46,9 @@ test("move up changes queue order", async (t) => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ direction: "up" })
   });
-  assert.equal(moved.status, 200);
+  assert.equal(moved.status, 409);
   const after = await (await fetch(`${base}/api/releases/queue`)).json();
-  assert.equal(after.items[0].id, second);
+  assert.equal(after.items[1].id, second);
 });
 
 test("agent POST appears in queue without the webpage form", async (t) => {
@@ -73,6 +73,29 @@ test("agent POST appears in queue without the webpage form", async (t) => {
   const queue = await (await fetch(`${base}/api/releases/queue`)).json();
   assert.equal(queue.items.at(-1).source, "沈子晗工作台");
   assert.equal(queue.items.at(-1).summary, "沈子晗运营中心列表页");
+});
+
+test("POST rejects a data ticket that includes the shared shell", async (t) => {
+  const store = createStore({ now: () => "2026-09-05T00:00:00.000Z" });
+  const { server, base } = appWith(store);
+  t.after(() => server.close());
+  const created = await fetch(`${base}/api/releases`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      version: "2.0.1",
+      applicant: "数据中心",
+      source: "数据中心",
+      module: "数据中心",
+      summary: "不该改壳",
+      files: ["public/shared/nav.js", "public/data.html"],
+      acceptance: "应被拒绝",
+      restart: false
+    })
+  });
+  assert.equal(created.status, 400);
+  const body = await created.json();
+  assert.match(String(body.error || ""), /禁止提交全站壳文件/);
 });
 
 test("confirm from the webpage releases the ticket", async (t) => {

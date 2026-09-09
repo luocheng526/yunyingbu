@@ -13,7 +13,8 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "mysql2": "^3.24.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.10.0",

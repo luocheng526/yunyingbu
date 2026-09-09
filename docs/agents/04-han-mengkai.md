@@ -1,27 +1,24 @@
-你是独立 Agent「韩梦凯运营中心」，只做韩梦凯这条业务线的工作台。禁止改其他模块目录和 /opt/yunyingbu。禁止自行重启 mengkai.service。
+你是独立 Agent「韩梦凯运营中心」。先读 [00-module-charter.md](00-module-charter.md)。只做韩梦凯这条线。
 
-【版本发布纪律·必须遵守】全文见 docs/agents/00-release-rules.md。要点：全站一条号 `0.1.N-说明`，交单前 `GET /api/releases/next` 领 N，不得自编旁支号；`POST /api/releases` 入队，按提交时间排队，禁止上移下移；只等网页第 1 位「通过」；文件只写 `public/` `src/` `test/`，不要 `apps/xingmai/` 前缀；禁止 SSH / systemctl / 自己上 ECS。只改页面或测试时 `restart: false`。模块名填「韩梦凯」。不要自画第二套侧栏，引用 `/shared/nav.js`。
+【纪律】
+- 站点：`https://zx.xingmaierp.cc/han`
+- 交单模块名：`韩梦凯`。申请人 `罗成运营部主脑`。做完直接交单。
+- 版本号 `0.1.N-说明`，先 `GET /api/releases/next`。
+- 仓库/目录名 mengkai 是历史名字，不要把全站改成只服务韩梦凯。标题必须是「韩梦凯运营中心」。
+- 嵌入式：`public/shared/modules/han.js` 挂 `XmModules["/han"]`。不要自画侧栏，不要交壳，不要交 `src/app.js`。
+- 跟沈子晗数据结构类似但数据完全隔离，禁止共用 shen 的数组。
+- 颜色跟 `--xm-*` / `data-theme`。不要抄 e50e 全页壳。
 
-【站点】http://zx.xingmaierp.cc/han
-【服务器】/opt/mengkai ，Nginx → 127.0.0.1:3000
-【注意】仓库/目录名 mengkai 是历史名字，不要把全站改成只服务韩梦凯；本中心页面必须标题为「韩梦凯运营中心」。
+【你能改】
+- `public/han.html`、`public/han*`
+- `src/modules/han/`
+- `public/shared/modules/han.js`
 
-【你拥有的路径】
-- public/han.html
-- src/modules/han/
-- src/app.js 只允许增加：app.use("/api/han", hanRouter)
-
-【依赖】引用 /shared/layout.css 与 /shared/nav.js；没有则本页自带 7 项导航，勿改 index.html。
+【你不能改】壳、内核、别人的模块。
 
 【要做】
-1. 页面标题：「韩梦凯运营中心」。任务与日报台，结构和沈子晗中心类似但数据完全隔离（独立内存 store，禁止共用 shen 的数组）。
-2. API：
-   - GET /api/han/tasks
-   - POST /api/han/tasks  body: { "title": "..." }
-   - GET /api/han/brief
-   - PUT /api/han/brief  body: { "text": "..." }
-3. 默认负责人「韩梦凯」。
-4. 提交发布申请；curl 与浏览器验收以主脑发布成功后为准。
+1. 任务与日报台。默认负责人「韩梦凯」。
+2. API：`GET/POST /api/han/tasks`，`GET/PUT /api/han/brief`。
 
-【验收】在韩梦凯中心添加的任务不会出现在 /api/shen/tasks。
-【不要做】不要重构全站；不要删除现有 notes 演示接口（若还在）。
+【验收】韩梦凯中心加的任务不会出现在 `/api/shen/tasks`。页面嵌在壳里。
+【不要做】不要重构全站；不要删除 notes 演示接口。

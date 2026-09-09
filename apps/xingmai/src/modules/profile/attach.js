@@ -12,8 +12,9 @@ export function attachProfile(app) {
     res.json({ ok: true });
   });
   app.get("/login", (req, res) => {
-    if (currentUser(req)) {
-      res.redirect("/");
+    const leaving = String(req.query.out || "") === "1";
+    if (!leaving && currentUser(req)) {
+      res.redirect("/home");
       return;
     }
     res.sendFile(path.join(publicDir, "login.html"));
