@@ -57,6 +57,71 @@
   color: var(--xm-ink);
 }
 
+.agents-rail .agents-new {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.agents-model {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--xm-muted);
+  font-size: 12px;
+  min-width: 160px;
+}
+
+.agents-model select {
+  border: 1px solid var(--xm-line);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+  color: var(--xm-ink);
+  background: var(--xm-bg);
+}
+
+.agents-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 12px;
+}
+
+.agents-chip {
+  display: inline-block;
+  border: 1px solid var(--xm-line);
+  background: var(--xm-primary-soft);
+  color: var(--xm-primary);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.agents-cite {
+  margin-top: 6px;
+  color: var(--xm-muted);
+  font-size: 12px;
+}
+
+.agents-upload {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--xm-line);
+  border-radius: 8px;
+  background: var(--xm-bg);
+  color: var(--xm-ink);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.agents-upload input {
+  display: none;
+}
+
 .agents-rail .agents-subhead {
   margin: 14px 0 8px;
   color: var(--xm-muted);

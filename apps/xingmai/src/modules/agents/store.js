@@ -1,189 +1,35 @@
 import { dbMode, query } from "../profile/auth.js";
+import { defaultModelId } from "./models.js";
 
-export const CATALOG = [
-  {
-    id: "pick",
-    name: "选品助手",
-    title: "选品与排期",
-    summary: "沈子晗线的选品、达人排期和商品成长。",
-    hint: "问排期、爆款或成长阶段。",
-    greeting: "我是选品助手。可以一起看选品方向、达人排期和商品成长，不会改沈子晗中心的表。"
-  },
-  {
-    id: "data",
-    name: "数据解读",
-    title: "看板指标",
-    summary: "解读数据中心看板里的订单、待办和发布次数。",
-    hint: "问今日订单、待处理或发布次数。",
-    greeting: "我是数据解读。看板数字来自库内种子，带演示标记，不是外部业务库。"
-  },
-  {
-    id: "academy",
-    name: "培训问答",
-    title: "运营培训",
-    summary: "对接甄选商学院的运营培训知识点。",
-    hint: "问新人上手、流程或岗位要点。",
-    greeting: "我是培训问答。完整课程目录在甄选商学院，这里先答运营培训常见问题。"
-  },
-  {
-    id: "roster",
-    name: "店权助手",
-    title: "花名册与管辖",
-    summary: "人员管理的身份、店群和管辖规则。",
-    hint: "问一人多店、离职收权或对账。",
-    greeting: "我是店权助手。一人多店用多条管辖；离职当天收权。花名册在人员管理，不写进本模块的表。"
-  },
-  {
-    id: "release",
-    name: "交单助手",
-    title: "发版纪律",
-    summary: "版本号、排队和闸门怎么交单。",
-    hint: "问版本号、队首或谁能点通过。",
-    greeting: "我是交单助手。全站一条号 0.1.N，先 GET /api/releases/next；闸门只过队首，不要自己发版。"
-  }
-];
-
-const AGENT_IDS = new Set(CATALOG.map((item) => item.id));
 const MAX_TEXT = 2000;
 const MAX_TITLE = 40;
+const MAX_UPLOAD = 1.5 * 1024 * 1024;
 
-let threads = [];
+let sessions = [];
 let messages = [];
-let nextThreadId = 1;
+let uploads = [];
+let nextSessionId = 1;
 let nextMessageId = 1;
+let nextUploadId = 1;
 let schemaReady = false;
 
 function nowStamp() {
   return new Date().toLocaleString("sv-SE", { timeZone: "Asia/Shanghai" });
 }
 
-function fail(statusCode, message) {
+export function fail(statusCode, message) {
   const error = new Error(message);
   error.statusCode = statusCode;
   return error;
 }
 
-function findAgent(agentId) {
-  return CATALOG.find((item) => item.id === agentId) || null;
-}
-
-function cloneAgent(agent) {
-  return {
-    id: agent.id,
-    name: agent.name,
-    title: agent.title,
-    summary: agent.summary,
-    hint: agent.hint
-  };
-}
-
-function cloneThread(thread, preview) {
-  const agent = findAgent(thread.agentId);
-  return {
-    id: Number(thread.id),
-    agentId: thread.agentId,
-    agentName: agent ? agent.name : thread.agentId,
-    title: thread.title,
-    createdAt: thread.createdAt,
-    updatedAt: thread.updatedAt,
-    preview: preview || ""
-  };
-}
-
-function cloneMessage(message) {
-  return {
-    id: Number(message.id),
-    threadId: Number(message.threadId),
-    role: message.role,
-    text: message.text,
-    createdAt: message.createdAt
-  };
-}
-
-function previewOf(threadId, rows) {
-  const last = rows.filter((row) => Number(row.threadId) === Number(threadId)).at(-1);
-  if (!last || !last.text) {
-    return "";
-  }
-  const text = String(last.text).replace(/\s+/g, " ").trim();
-  return text.length > 80 ? text.slice(0, 80) + "…" : text;
-}
-
-function titleFromText(agent, text) {
-  const trimmed = String(text || "").replace(/\s+/g, " ").trim();
-  if (!trimmed) {
-    return agent.name + " · 新对话";
-  }
-  return trimmed.length > MAX_TITLE ? trimmed.slice(0, MAX_TITLE) + "…" : trimmed;
-}
-
-function replyFor(agent, text) {
-  const q = String(text || "").toLowerCase();
-  if (agent.id === "pick") {
-    if (/排期|达人/.test(q)) {
-      return "排期先看沈子晗运营中心的选品中心。这里只记对话，不会改那边的任务或简报。";
-    }
-    if (/成长|测款|测图/.test(q)) {
-      return "商品成长在沈子晗「商品成长」页跟。本助手只帮你把问题和结论记在这条对话里。";
-    }
-    if (/爆款|选品|新品/.test(q)) {
-      return "选品可以按转化、退货和达人匹配三件事过一遍。具体店和品仍以沈子晗中心页面为准。";
-    }
-    return "可以问排期、爆款或成长阶段。要改任务或简报，请去沈子晗运营中心。";
-  }
-  if (agent.id === "data") {
-    if (/订单/.test(q)) {
-      return "今日订单在数据中心看板第一张卡。数字是库内种子，带演示标记。";
-    }
-    if (/待办|待处理/.test(q)) {
-      return "待处理也在数据中心看板。本对话只解释口径，不改数据中心的表。";
-    }
-    if (/发布/.test(q)) {
-      return "本周发布次数看数据中心看板。真正排队和通过在版本发布中心。";
-    }
-    return "看板有今日订单、待处理、在职人数和本周发布次数。要点一张卡，直接说名字。";
-  }
-  if (agent.id === "academy") {
-    if (/新[人手]|入职|上手/.test(q)) {
-      return "新人先走甄选商学院的目录，再回各中心看自己的页面。培训不要塞进沈/韩的「培训系统」子菜单。";
-    }
-    if (/流程|岗位|考核/.test(q)) {
-      return "岗位流程和考核要点放在甄选商学院。这里记下你的问题，完整课件还是去商学院页。";
-    }
-    return "运营培训知识在甄选商学院。这里可以先记问题，不会写进沈/韩的库表。";
-  }
-  if (agent.id === "roster") {
-    if (/离职/.test(q)) {
-      return "离职当天收权。人员管理的对账能看出「在职无店权」和「店权还挂在离职人员」。";
-    }
-    if (/店群|一人多店|管辖/.test(q)) {
-      return "一人多店用多条管辖，不要把多店塞进一个字段。店和店群在人员管理维护。";
-    }
-    if (/花名册|工号|上级/.test(q)) {
-      return "身份名册在人员管理：姓名、工号、部门、上级、岗位、所属中心。本模块不写人员表。";
-    }
-    return "可以问离职收权、一人多店或花名册。改人和店请去人员管理。";
-  }
-  if (agent.id === "release") {
-    if (/版本|0\.1|next/.test(q)) {
-      return "版本号全站一条：0.1.N-说明。交单前 GET /api/releases/next，只把 -next 换成说明，禁止自领旁支号。";
-    }
-    if (/通过|队首|排队/.test(q)) {
-      return "入队按提交时间。闸门只允许通过第 1 位，点一单发一单。禁止上移下移。";
-    }
-    if (/申请人|主脑|模块/.test(q)) {
-      return "申请人填 罗成运营部主脑。模块名填自己的中文名，甄选智能体交单不要改壳，也不要交 src/app.js。";
-    }
-    return "交单：GET /api/releases/next → POST /api/releases。files 相对 apps/xingmai，contents 是路径→正文。";
-  }
-  return "已记下。这条对话只存在甄选智能体自己的表里。";
-}
-
 export function resetAgentsStore() {
-  threads = [];
+  sessions = [];
   messages = [];
-  nextThreadId = 1;
+  uploads = [];
+  nextSessionId = 1;
   nextMessageId = 1;
+  nextUploadId = 1;
   schemaReady = false;
 }
 
@@ -192,18 +38,83 @@ export async function ensureAgentsSchema() {
     return;
   }
   await query(
-    "CREATE TABLE IF NOT EXISTS agents_threads (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, agent_id VARCHAR(32) NOT NULL, title VARCHAR(128) NOT NULL, created_at VARCHAR(32) NOT NULL, updated_at VARCHAR(32) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    "CREATE TABLE IF NOT EXISTS agents_sessions (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, username VARCHAR(64) NOT NULL, model_id VARCHAR(64) NOT NULL, title VARCHAR(128) NOT NULL, created_at VARCHAR(32) NOT NULL, updated_at VARCHAR(32) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
   );
   await query(
-    "CREATE TABLE IF NOT EXISTS agents_messages (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, thread_id INT NOT NULL, role VARCHAR(16) NOT NULL, text TEXT NOT NULL, created_at VARCHAR(32) NOT NULL, KEY thread_id (thread_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    "CREATE TABLE IF NOT EXISTS agents_messages (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, session_id INT NOT NULL, role VARCHAR(16) NOT NULL, text TEXT NOT NULL, file_ids VARCHAR(255) NOT NULL DEFAULT '[]', model_id VARCHAR(64) NOT NULL DEFAULT '', sources VARCHAR(255) NOT NULL DEFAULT '[]', created_at VARCHAR(32) NOT NULL, KEY session_id (session_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+  );
+  await query(
+    "CREATE TABLE IF NOT EXISTS agents_uploads (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, username VARCHAR(64) NOT NULL, filename VARCHAR(255) NOT NULL, mime VARCHAR(128) NOT NULL, size INT NOT NULL, content LONGBLOB NOT NULL, created_at VARCHAR(32) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
   );
   schemaReady = true;
 }
 
-function threadFromRow(row) {
+function parseJsonList(raw) {
+  try {
+    const value = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+
+function cloneSession(session, preview) {
+  return {
+    id: Number(session.id),
+    username: session.username,
+    modelId: session.modelId,
+    title: session.title,
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt,
+    preview: preview || ""
+  };
+}
+
+function cloneMessage(message) {
+  return {
+    id: Number(message.id),
+    sessionId: Number(message.sessionId),
+    role: message.role,
+    text: message.text,
+    fileIds: Array.isArray(message.fileIds) ? message.fileIds.map(Number) : [],
+    modelId: message.modelId || "",
+    sources: Array.isArray(message.sources) ? message.sources : [],
+    createdAt: message.createdAt
+  };
+}
+
+function publicUpload(row) {
   return {
     id: Number(row.id),
-    agentId: row.agent_id,
+    filename: row.filename,
+    mime: row.mime,
+    size: Number(row.size),
+    createdAt: row.createdAt
+  };
+}
+
+function previewOf(sessionId, rows) {
+  const last = rows.filter((row) => Number(row.sessionId) === Number(sessionId)).at(-1);
+  if (!last || !last.text) {
+    return "";
+  }
+  const text = String(last.text).replace(/\s+/g, " ").trim();
+  return text.length > 80 ? text.slice(0, 80) + "…" : text;
+}
+
+function titleFromText(text) {
+  const trimmed = String(text || "").replace(/\s+/g, " ").trim();
+  if (!trimmed) {
+    return "主脑问答 · 新会话";
+  }
+  return trimmed.length > MAX_TITLE ? trimmed.slice(0, MAX_TITLE) + "…" : trimmed;
+}
+
+function sessionFromRow(row) {
+  return {
+    id: Number(row.id),
+    username: row.username,
+    modelId: row.model_id,
     title: row.title,
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -213,144 +124,206 @@ function threadFromRow(row) {
 function messageFromRow(row) {
   return {
     id: Number(row.id),
-    threadId: Number(row.thread_id),
+    sessionId: Number(row.session_id),
     role: row.role,
     text: row.text,
+    fileIds: parseJsonList(row.file_ids).map(Number),
+    modelId: row.model_id || "",
+    sources: parseJsonList(row.sources),
     createdAt: row.created_at
   };
 }
 
-async function loadMysqlThreads() {
-  const [rows] = await query(
-    "SELECT id, agent_id, title, created_at, updated_at FROM agents_threads ORDER BY updated_at DESC, id DESC"
-  );
-  return rows.map(threadFromRow);
-}
-
-async function loadMysqlMessages(threadId) {
-  const [rows] = await query(
-    "SELECT id, thread_id, role, text, created_at FROM agents_messages WHERE thread_id = ? ORDER BY id ASC",
-    [threadId]
-  );
-  return rows.map(messageFromRow);
-}
-
-async function loadMysqlAllMessages() {
-  const [rows] = await query(
-    "SELECT id, thread_id, role, text, created_at FROM agents_messages ORDER BY id ASC"
-  );
-  return rows.map(messageFromRow);
-}
-
-export function listCatalog() {
-  return CATALOG.map(cloneAgent);
-}
-
-export async function listThreads() {
+export async function listSessions(username) {
   await ensureAgentsSchema();
-  if (dbMode() === "mysql") {
-    const rows = await loadMysqlThreads();
-    const all = await loadMysqlAllMessages();
-    return rows.map((thread) => cloneThread(thread, previewOf(thread.id, all)));
-  }
-  return threads
-    .slice()
-    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)) || b.id - a.id)
-    .map((thread) => cloneThread(thread, previewOf(thread.id, messages)));
-}
-
-export async function getThread(id) {
-  await ensureAgentsSchema();
-  const threadId = Number(id);
-  if (!Number.isInteger(threadId) || threadId < 1) {
-    throw fail(400, "对话不存在");
-  }
+  const owner = String(username || "");
   if (dbMode() === "mysql") {
     const [rows] = await query(
-      "SELECT id, agent_id, title, created_at, updated_at FROM agents_threads WHERE id = ?",
-      [threadId]
+      "SELECT id, username, model_id, title, created_at, updated_at FROM agents_sessions WHERE username = ? ORDER BY updated_at DESC, id DESC",
+      [owner]
     );
-    if (!rows.length) {
-      throw fail(404, "对话不存在");
-    }
-    const thread = threadFromRow(rows[0]);
-    const msgs = await loadMysqlMessages(threadId);
-    return { thread: cloneThread(thread, previewOf(threadId, msgs)), messages: msgs.map(cloneMessage) };
+    const [msgs] = await query(
+      "SELECT id, session_id, role, text, file_ids, model_id, sources, created_at FROM agents_messages ORDER BY id ASC"
+    );
+    const mapped = msgs.map(messageFromRow);
+    return rows.map((row) => cloneSession(sessionFromRow(row), previewOf(row.id, mapped)));
   }
-  const thread = threads.find((item) => item.id === threadId);
-  if (!thread) {
-    throw fail(404, "对话不存在");
-  }
-  const msgs = messages.filter((item) => item.threadId === threadId);
-  return { thread: cloneThread(thread, previewOf(threadId, msgs)), messages: msgs.map(cloneMessage) };
+  return sessions
+    .filter((item) => item.username === owner)
+    .slice()
+    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)) || b.id - a.id)
+    .map((item) => cloneSession(item, previewOf(item.id, messages)));
 }
 
-async function insertMessage(threadId, role, text, createdAt) {
+export async function getSession(id, username) {
+  await ensureAgentsSchema();
+  const sessionId = Number(id);
+  if (!Number.isInteger(sessionId) || sessionId < 1) {
+    throw fail(400, "会话不存在");
+  }
+  let session;
+  let rows;
   if (dbMode() === "mysql") {
-    const [result] = await query(
-      "INSERT INTO agents_messages (thread_id, role, text, created_at) VALUES (?, ?, ?, ?)",
-      [threadId, role, text, createdAt]
+    const [found] = await query(
+      "SELECT id, username, model_id, title, created_at, updated_at FROM agents_sessions WHERE id = ?",
+      [sessionId]
     );
-    return {
-      id: Number(result.insertId),
-      threadId,
-      role,
-      text,
-      createdAt
-    };
+    if (!found.length) {
+      throw fail(404, "会话不存在");
+    }
+    session = sessionFromRow(found[0]);
+    const [msgRows] = await query(
+      "SELECT id, session_id, role, text, file_ids, model_id, sources, created_at FROM agents_messages WHERE session_id = ? ORDER BY id ASC",
+      [sessionId]
+    );
+    rows = msgRows.map(messageFromRow);
+  } else {
+    session = sessions.find((item) => item.id === sessionId);
+    if (!session) {
+      throw fail(404, "会话不存在");
+    }
+    rows = messages.filter((item) => item.sessionId === sessionId);
   }
-  const message = {
-    id: nextMessageId,
-    threadId,
-    role,
-    text,
-    createdAt
+  if (username && session.username !== username) {
+    throw fail(403, "无权查看他人会话");
+  }
+  return {
+    session: cloneSession(session, previewOf(sessionId, rows)),
+    messages: rows.map(cloneMessage)
   };
-  nextMessageId += 1;
-  messages.push(message);
-  return { ...message };
 }
 
-export async function createThread(agentId) {
-  const agent = findAgent(String(agentId || "").trim());
-  if (!agent || !AGENT_IDS.has(agent.id)) {
-    throw fail(400, "请选择智能体");
-  }
+export async function createSession(username, modelId, greeting) {
   await ensureAgentsSchema();
   const stamp = nowStamp();
-  const title = agent.name + " · 新对话";
-  let thread;
+  const title = "主脑问答 · 新会话";
+  const owner = String(username || "");
+  const model = String(modelId || defaultModelId());
+  let session;
   if (dbMode() === "mysql") {
     const [result] = await query(
-      "INSERT INTO agents_threads (agent_id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
-      [agent.id, title, stamp, stamp]
+      "INSERT INTO agents_sessions (username, model_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+      [owner, model, title, stamp, stamp]
     );
-    thread = {
+    session = {
       id: Number(result.insertId),
-      agentId: agent.id,
+      username: owner,
+      modelId: model,
       title,
       createdAt: stamp,
       updatedAt: stamp
     };
   } else {
-    thread = {
-      id: nextThreadId,
-      agentId: agent.id,
+    session = {
+      id: nextSessionId,
+      username: owner,
+      modelId: model,
       title,
       createdAt: stamp,
       updatedAt: stamp
     };
-    nextThreadId += 1;
-    threads.push(thread);
+    nextSessionId += 1;
+    sessions.push(session);
   }
-  const greeting = await insertMessage(thread.id, "assistant", agent.greeting, stamp);
+  const hello = greeting
+    ? await insertMessage({
+        sessionId: session.id,
+        role: "assistant",
+        text: greeting,
+        fileIds: [],
+        modelId: model,
+        sources: ["本模块纪律"],
+        createdAt: stamp
+      })
+    : null;
   return {
-    thread: cloneThread(thread, greeting.text),
-    messages: [cloneMessage(greeting)]
+    session: cloneSession(session, hello ? hello.text : ""),
+    messages: hello ? [cloneMessage(hello)] : []
   };
 }
 
-export async function addMessage(threadId, text) {
+async function insertMessage(row) {
+  if (dbMode() === "mysql") {
+    const [result] = await query(
+      "INSERT INTO agents_messages (session_id, role, text, file_ids, model_id, sources, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [
+        row.sessionId,
+        row.role,
+        row.text,
+        JSON.stringify(row.fileIds || []),
+        row.modelId || "",
+        JSON.stringify(row.sources || []),
+        row.createdAt
+      ]
+    );
+    return { ...row, id: Number(result.insertId) };
+  }
+  const message = { ...row, id: nextMessageId };
+  nextMessageId += 1;
+  messages.push(message);
+  return { ...message };
+}
+
+async function touchSession(sessionId, title, modelId, stamp) {
+  if (dbMode() === "mysql") {
+    await query("UPDATE agents_sessions SET title = ?, model_id = ?, updated_at = ? WHERE id = ?", [
+      title,
+      modelId,
+      stamp,
+      sessionId
+    ]);
+    return;
+  }
+  const session = sessions.find((item) => item.id === sessionId);
+  if (session) {
+    session.title = title;
+    session.modelId = modelId;
+    session.updatedAt = stamp;
+  }
+}
+
+export async function addChatTurn({ sessionId, username, modelId, userText, fileIds, replyText, sources }) {
+  const current = await getSession(sessionId, username);
+  const stamp = nowStamp();
+  const model = String(modelId || current.session.modelId || defaultModelId());
+  const ids = Array.isArray(fileIds) ? fileIds.map(Number).filter((item) => item > 0) : [];
+  const userMessage = await insertMessage({
+    sessionId: current.session.id,
+    role: "user",
+    text: userText,
+    fileIds: ids,
+    modelId: model,
+    sources: [],
+    createdAt: stamp
+  });
+  const replyStamp = nowStamp();
+  const reply = await insertMessage({
+    sessionId: current.session.id,
+    role: "assistant",
+    text: replyText,
+    fileIds: [],
+    modelId: model,
+    sources: sources || [],
+    createdAt: replyStamp
+  });
+  const nextTitle = current.messages.some((item) => item.role === "user")
+    ? current.session.title
+    : titleFromText(userText);
+  await touchSession(current.session.id, nextTitle, model, replyStamp);
+  return {
+    session: {
+      ...current.session,
+      title: nextTitle,
+      modelId: model,
+      updatedAt: replyStamp,
+      preview: replyText
+    },
+    message: cloneMessage(userMessage),
+    reply: cloneMessage(reply)
+  };
+}
+
+export function assertChatText(text) {
   const trimmed = String(text ?? "").trim();
   if (!trimmed) {
     throw fail(400, "请输入内容");
@@ -358,40 +331,79 @@ export async function addMessage(threadId, text) {
   if (trimmed.length > MAX_TEXT) {
     throw fail(400, "内容过长");
   }
-  const current = await getThread(threadId);
-  const agent = findAgent(current.thread.agentId);
-  if (!agent) {
-    throw fail(400, "智能体不存在");
-  }
+  return trimmed;
+}
+
+export async function saveUpload({ username, filename, mime, content }) {
   await ensureAgentsSchema();
-  const stamp = nowStamp();
-  const userMessage = await insertMessage(current.thread.id, "user", trimmed, stamp);
-  const replyText = replyFor(agent, trimmed);
-  const replyStamp = nowStamp();
-  const reply = await insertMessage(current.thread.id, "assistant", replyText, replyStamp);
-  const nextTitle =
-    current.messages.some((item) => item.role === "user") ? current.thread.title : titleFromText(agent, trimmed);
-  if (dbMode() === "mysql") {
-    await query("UPDATE agents_threads SET title = ?, updated_at = ? WHERE id = ?", [
-      nextTitle,
-      replyStamp,
-      current.thread.id
-    ]);
-  } else {
-    const thread = threads.find((item) => item.id === current.thread.id);
-    if (thread) {
-      thread.title = nextTitle;
-      thread.updatedAt = replyStamp;
-    }
+  const buf = Buffer.isBuffer(content) ? content : Buffer.from(content || "");
+  if (!buf.length) {
+    throw fail(400, "文件是空的");
   }
-  return {
-    thread: {
-      ...current.thread,
-      title: nextTitle,
-      updatedAt: replyStamp,
-      preview: replyText
-    },
-    message: cloneMessage(userMessage),
-    reply: cloneMessage(reply)
+  if (buf.length > MAX_UPLOAD) {
+    throw fail(400, "文件太大");
+  }
+  const stamp = nowStamp();
+  const owner = String(username || "");
+  const name = String(filename || "file").slice(0, 180);
+  const type = String(mime || "application/octet-stream").slice(0, 120);
+  if (dbMode() === "mysql") {
+    const [result] = await query(
+      "INSERT INTO agents_uploads (username, filename, mime, size, content, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      [owner, name, type, buf.length, buf, stamp]
+    );
+    return publicUpload({
+      id: Number(result.insertId),
+      filename: name,
+      mime: type,
+      size: buf.length,
+      createdAt: stamp
+    });
+  }
+  const row = {
+    id: nextUploadId,
+    username: owner,
+    filename: name,
+    mime: type,
+    size: buf.length,
+    content: buf,
+    createdAt: stamp
   };
+  nextUploadId += 1;
+  uploads.push(row);
+  return publicUpload(row);
+}
+
+export async function getUploadsForUser(ids, username) {
+  await ensureAgentsSchema();
+  const wanted = (Array.isArray(ids) ? ids : []).map(Number).filter((item) => item > 0);
+  if (!wanted.length) {
+    return [];
+  }
+  if (dbMode() === "mysql") {
+    const [rows] = await query(
+      `SELECT id, username, filename, mime, size, content, created_at FROM agents_uploads WHERE id IN (${wanted
+        .map(() => "?")
+        .join(",")})`,
+      wanted
+    );
+    return rows
+      .filter((row) => row.username === username)
+      .map((row) => ({
+        ...publicUpload({ ...row, createdAt: row.created_at }),
+        content: row.content
+      }));
+  }
+  return uploads
+    .filter((row) => wanted.includes(row.id) && row.username === username)
+    .map((row) => ({ ...publicUpload(row), content: row.content }));
+}
+
+export async function getUploadMeta(id, username) {
+  const rows = await getUploadsForUser([id], username);
+  if (!rows.length) {
+    throw fail(404, "文件不存在");
+  }
+  const row = rows[0];
+  return { id: row.id, filename: row.filename, mime: row.mime, size: row.size, createdAt: row.createdAt };
 }
