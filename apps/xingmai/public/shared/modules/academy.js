@@ -38,6 +38,8 @@
       /* ignore quota */
     }
   }
+
+  function api(path, options) {
     return fetch(path, {
       credentials: "same-origin",
       headers: Object.assign({ Accept: "application/json" }, options && options.headers),
