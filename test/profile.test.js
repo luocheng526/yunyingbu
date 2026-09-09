@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
-import { DEMO_INITIAL_PASSWORD, DEMO_USERNAME, resetStoreForTests } from "../src/modules/profile/auth.js";
+import {
+  DEMO_INITIAL_PASSWORD,
+  DEMO_USERNAME,
+  dbMode,
+  query,
+  resetStoreForTests
+} from "../src/modules/profile/auth.js";
 import { patchAppSource } from "../src/modules/profile/patch-app.js";
 
 test.beforeEach(() => {
@@ -48,6 +54,12 @@ async function request(base, pathname, { method = "GET", body, cookie, redirect 
   }
   return { res, text, json, cookie: cookieHeader(res) };
 }
+
+test("auth.js exports dbMode() and query for academy and other stores", () => {
+  assert.equal(typeof dbMode, "function");
+  assert.equal(dbMode(), "memory");
+  assert.equal(typeof query, "function");
+});
 
 test("GET /shared assets are public and cacheable; APIs are not cached", async () => {
   await withServer(async (base) => {
