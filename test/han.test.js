@@ -39,9 +39,9 @@ test("GET /han is 韩梦凯运营中心 with left sidebar shell", async () => {
     assert.match(html, /<title>韩梦凯运营中心<\/title>/);
     assert.match(html, /han-nav-group/);
     assert.match(html, /han-nav-arrow/);
-    assert.match(html, /href="\/han\/selection"/);
-    assert.match(html, /href="\/han\/products"/);
-    assert.match(html, /href="\/han\/paid"/);
+    assert.match(html, /href="\/han\?sub=selection"/);
+    assert.match(html, /href="\/han\?sub=products"/);
+    assert.match(html, /href="\/han\?sub=paid"/);
     assert.match(html, /选品数据/);
     assert.match(html, /商品数据/);
     assert.match(html, /付费数据/);
@@ -72,17 +72,12 @@ test("GET /han is 韩梦凯运营中心 with left sidebar shell", async () => {
   });
 });
 
-test("GET /han/selection /products /paid are wait-for-dev placeholders", async () => {
+test("GET /han?sub= selection/products/paid serve the same center page", async () => {
   await withServer(async (base) => {
-    for (const [path, title] of [
-      ["/han/selection", "选品数据"],
-      ["/han/products", "商品数据"],
-      ["/han/paid", "付费数据"],
-    ]) {
+    for (const path of ["/han?sub=selection", "/han?sub=products", "/han?sub=paid"]) {
       const res = await fetch(`${base}${path}`);
       const html = await res.text();
       assert.equal(res.status, 200, path);
-      assert.match(html, new RegExp(title));
       assert.match(html, /内容先等开发/);
       assert.match(html, /han-nav-sub/);
     }

@@ -264,9 +264,9 @@
                 <span class="han-nav-arrow is-down" aria-hidden="true">▾</span>
               </button>
               <div id="han-subnav" class="han-nav-sub">
-                <a href="/han/selection">选品数据</a>
-                <a href="/han/products">商品数据</a>
-                <a href="/han/paid">付费数据</a>
+                <a href="/han?sub=selection">选品数据</a>
+                <a href="/han?sub=products">商品数据</a>
+                <a href="/han?sub=paid">付费数据</a>
               </div>
             </div>
             <a href="/people">人员管理</a>
@@ -325,13 +325,14 @@
     <script src="/shared/nav.js"></script>
     <script>
       const HAN_SUBS = [
-        { href: "/han/selection", label: "选品数据" },
-        { href: "/han/products", label: "商品数据" },
-        { href: "/han/paid", label: "付费数据" },
+        { href: "/han?sub=selection", key: "selection", label: "选品数据" },
+        { href: "/han?sub=products", key: "products", label: "商品数据" },
+        { href: "/han?sub=paid", key: "paid", label: "付费数据" },
       ];
       const path = (window.location.pathname || "/").replace(/\/+$/, "") || "/";
+      const subKey = new URLSearchParams(window.location.search).get("sub") || "";
       const currentSub = HAN_SUBS.find(function (item) {
-        return item.href === path;
+        return item.key === subKey;
       });
 
       function setGroupOpen(group, open) {
@@ -382,8 +383,9 @@
           setGroupOpen(group, true);
         }
         group.querySelectorAll(".han-nav-sub a").forEach(function (a) {
-          const href = (a.getAttribute("href") || "").replace(/\/+$/, "");
-          if (href === path) a.setAttribute("aria-current", "page");
+          const href = a.getAttribute("href") || "";
+          const key = new URL(href, window.location.origin).searchParams.get("sub");
+          if (key && key === subKey) a.setAttribute("aria-current", "page");
         });
       }
 

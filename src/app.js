@@ -33,7 +33,7 @@ export function createApp({ hanStore } = {}) {
 
   app.use("/api/han", createHanRouter(hanStore || createHanStore()));
 
-  app.get(["/han", "/han/selection", "/han/products", "/han/paid"], (_req, res) => {
+  app.get("/han", (_req, res) => {
     res.sendFile(path.join(publicDir, "han.html"));
   });
 
