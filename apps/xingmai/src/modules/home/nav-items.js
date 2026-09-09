@@ -1,4 +1,12 @@
-export const NAV_VERSION = "v0.4.7";
+export const NAV_VERSION = "v0.4.8";
+
+export const SHEN_CHILDREN = [
+  { href: "/shen/selection", label: "选品中心" },
+  { href: "/shen/growth", label: "商品成长" },
+  { href: "/shen/paid", label: "实时付费" },
+  { href: "/shen/training", label: "培训系统" },
+  { href: "/shen/tasks", label: "任务管理" }
+];
 
 export const HAN_CHILDREN = [
   { href: "/han/selection", label: "选品数据" },
@@ -9,7 +17,7 @@ export const HAN_CHILDREN = [
 
 export const NAV_MAIN = [
   { href: "/data", file: "data.html", label: "数据中心" },
-  { href: "/shen", file: "shen.html", label: "沈子晗运营中心" },
+  { href: "/shen", label: "沈子晗运营中心", children: SHEN_CHILDREN },
   { href: "/han", label: "韩梦凯运营中心", children: HAN_CHILDREN },
   { href: "/people", file: "people.html", label: "人员管理" }
 ];

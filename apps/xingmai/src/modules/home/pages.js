@@ -5,7 +5,7 @@ import * as profileShell from "../profile/middleware.js";
 import { NAV_ITEMS } from "./nav-items.js";
 
 // xm-upgrade-mask 0.1.52  必须和 profile/middleware.js 成套发。
-// xm-fast-shell 0.1.102
+// xm-fast-shell 0.1.103
 
 function renderExistingPage(filePath) {
   if (typeof profileShell.readThemedHtml === "function") {
@@ -70,6 +70,9 @@ for (const item of NAV_ITEMS) {
 }
 
 export function registerPageRoutes(app) {
+  app.get("/shen", (_req, res) => {
+    res.redirect(302, "/shen/selection");
+  });
   app.get("/han", (_req, res) => {
     res.redirect(302, "/han/selection");
   });
