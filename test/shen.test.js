@@ -22,18 +22,44 @@ function createFakePool() {
   let brief = "";
   return {
     async query(sql, params = []) {
-      if (sql === SQL.createTasks || sql === SQL.createBriefs || sql === SQL.ensureBriefRow) {
+      if (
+        sql === SQL.createTasks ||
+        sql === SQL.createBriefs ||
+        sql === SQL.ensureBriefRow ||
+        sql === SQL.addStoreColumn
+      ) {
         return [{}];
       }
       if (sql === SQL.listTasks) {
         return [tasks.map((task) => ({ ...task }))];
       }
       if (sql === SQL.insertTask) {
-        const [title, status, owner] = params;
-        const row = { id: nextId, title, status, owner };
+        const [title, status, owner, store] = params;
+        const row = {
+          id: nextId,
+          title,
+          status,
+          owner,
+          store,
+          created_at: "2026-09-09 12:00:00"
+        };
         nextId += 1;
         tasks.push(row);
         return [{ insertId: row.id, affectedRows: 1 }];
+      }
+      if (sql === SQL.summarizeTasks) {
+        const [store, fromAt, toExclusiveAt] = params;
+        const counts = new Map();
+        for (const task of tasks) {
+          if (task.store !== store) {
+            continue;
+          }
+          if (task.created_at < fromAt || task.created_at >= toExclusiveAt) {
+            continue;
+          }
+          counts.set(task.status, (counts.get(task.status) || 0) + 1);
+        }
+        return [[...counts.entries()].map(([status, cnt]) => ({ status, cnt }))];
       }
       if (sql === SQL.getBrief) {
         return [[{ text: brief }]];
@@ -128,23 +154,76 @@ test("task CRUD persists across requests via store pool", async () => {
     const missing = await request(base, "/api/shen/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: "   " })
+      body: JSON.stringify({ title: "   ", store: "旗舰店" })
     });
     assert.equal(missing.res.status, 400);
+
+    const noStore = await request(base, "/api/shen/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "跟进今日达人排期" })
+    });
+    assert.equal(noStore.res.status, 400);
+    assert.match(noStore.json.error, /店/);
 
     const created = await request(base, "/api/shen/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: "跟进今日达人排期" })
+      body: JSON.stringify({ title: "跟进今日达人排期", store: "旗舰店" })
     });
     assert.equal(created.res.status, 201);
     assert.equal(created.json.title, "跟进今日达人排期");
     assert.equal(created.json.status, "待办");
     assert.equal(created.json.owner, "沈子晗");
+    assert.equal(created.json.store, "旗舰店");
 
     const listed = await request(base, "/api/shen/tasks");
     assert.equal(listed.json.tasks.length, 1);
     assert.equal(listed.json.tasks[0].title, "跟进今日达人排期");
+    assert.equal(listed.json.tasks[0].store, "旗舰店");
+  });
+});
+
+test("read-only summary is store + date range aggregates only", async () => {
+  await withServer(async (base) => {
+    const missingStore = await request(base, "/api/shen/summary?from=2026-09-01&to=2026-09-09");
+    assert.equal(missingStore.res.status, 400);
+    assert.equal(missingStore.json.error, "必须指定店");
+
+    const missingRange = await request(base, "/api/shen/summary?store=%E6%97%97%E8%88%B0%E5%BA%97");
+    assert.equal(missingRange.res.status, 400);
+
+    await request(base, "/api/shen/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "旗舰店排期", store: "旗舰店" })
+    });
+    await request(base, "/api/shen/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "专营店排期", store: "专营店" })
+    });
+
+    const summary = await request(
+      base,
+      "/api/shen/summary?store=%E6%97%97%E8%88%B0%E5%BA%97&from=2026-09-09&to=2026-09-09"
+    );
+    assert.equal(summary.res.status, 200);
+    assert.deepEqual(summary.json, {
+      ok: true,
+      store: "旗舰店",
+      from: "2026-09-09",
+      to: "2026-09-09",
+      tasks: { total: 1, byStatus: { 待办: 1, 进行中: 0, 已完成: 0 } }
+    });
+    assert.equal(JSON.stringify(summary.json).includes("旗舰店排期"), false);
+    assert.equal(JSON.stringify(summary.json).includes("shen_tasks"), false);
+
+    const otherDay = await request(
+      base,
+      "/api/shen/summary?store=%E6%97%97%E8%88%B0%E5%BA%97&from=2026-09-01&to=2026-09-08"
+    );
+    assert.equal(otherDay.json.tasks.total, 0);
   });
 });
 
