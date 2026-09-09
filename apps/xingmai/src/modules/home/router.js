@@ -1,38 +1,97 @@
 import { Router } from "express";
 
+function shanghaiYmd(daysAgo) {
+  const now = new Date();
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(now);
+  const shift = Number(daysAgo) || 0;
+  if (!shift) {
+    return today;
+  }
+  const parts = today.split("-").map((item) => Number(item));
+  const utc = Date.UTC(parts[0], parts[1] - 1, parts[2] - shift);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "UTC",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date(utc));
+}
+
 const CARDS = [
-  { key: "queue", label: "待发版", value: "—", unit: "单" },
-  { key: "centers", label: "业务中心", value: "6", unit: "个" },
-  { key: "session", label: "登录保持", value: "7", unit: "天" },
-  { key: "theme", label: "页面风格", value: "跟随顶栏", unit: "" }
+  { key: "payAmount", label: "支付金额（支付）", value: "912,658.94", accent: true, trend: -5.81 },
+  { key: "adCost", label: "推广费（预估）", value: "382,745.07", trend: 3.12 },
+  { key: "refundAmount", label: "退款金额", value: "205,834.05", trend: 1.44 },
+  { key: "adRatio", label: "推广费占比", value: "41.94%", trend: 2.08 },
+  { key: "refundRate", label: "退款率（按金额）", value: "22.55%", trend: -0.86 },
+  { key: "profit", label: "利润（预估）", value: "440,670.82", trend: 4.27 },
+  { key: "payQty", label: "销售件数（支付）", value: "3,466", trend: -2.31 },
+  { key: "grossMargin", label: "大毛利率", value: "48.28%", trend: 0.62 },
+  { key: "platformFee", label: "平台费用（预估）", value: "86,412.30", trend: 1.18 },
+  { key: "saleFee", label: "销售费用（预估）", value: "54,208.16", trend: -0.74 },
+  { key: "goodsCost", label: "总货款", value: "328,190.44", trend: -3.55 },
+  { key: "invalid", label: "无效订单金额（件数）", value: "18,640.00（52）", trend: 6.2 },
+  { key: "netSales", label: "净销售金额", value: "706,824.89", trend: -4.16 },
+  { key: "jdOrders", label: "京东仓订单量", value: "2,211", trend: 1.05 },
+  { key: "jdRatio", label: "京东仓订单占比", value: "63.79%", trend: 0.41 },
+  { key: "netQty", label: "净销售件数", value: "2,908", trend: -1.88 }
 ];
 
-const NOTICES = [
-  { title: "发版闸门", text: "上线只走版本发布中心。点「通过」才落地，禁止插队。" },
-  { title: "经营数据", text: "看板在数据中心。本页只做工作台，不重复画指标大盘。" },
-  { title: "组织与账号", text: "花名册在组织中心，资料和密码在个人中心。" }
+const INDEX_ROWS = [
+  { shop: "RASW家居旗舰店", owner: "张文静", amount: "82,416.20", trend: 9.66 },
+  { shop: "RASW生活电器旗舰店", owner: "陈明婧", amount: "61,208.54", trend: -3.12 },
+  { shop: "RASW健康电器旗舰店", owner: "郭桂良", amount: "54,190.08", trend: 2.44 },
+  { shop: "飒望居家旗舰店", owner: "王博", amount: "41,872.16", trend: -1.08 },
+  { shop: "SAWAAG居家布艺旗舰店", owner: "王博", amount: "36,540.70", trend: 4.21 },
+  { shop: "RASW居家旗舰店", owner: "杨润泽", amount: "32,118.90", trend: -0.55 },
+  { shop: "飒望家居日用旗舰店", owner: "崔安琪", amount: "28,640.12", trend: 1.73 },
+  { shop: "飒望旗舰店", owner: "杨润泽", amount: "24,908.44", trend: -2.9 },
+  { shop: "RASW潮流生活旗舰店", owner: "郭哲宁", amount: "22,710.30", trend: 0.88 },
+  { shop: "HYEGIIR健康器械旗舰店", owner: "高丽男", amount: "22,535.10", trend: -5.81 }
 ];
 
-const ENTRIES = [
-  { href: "/data/overview", label: "数据总揽", hint: "看经营指标" },
-  { href: "/releases", label: "版本发布中心", hint: "待放行单据" },
-  { href: "/people", label: "组织中心", hint: "花名册与店权" },
-  { href: "/me", label: "个人中心", hint: "资料与改密" },
-  { href: "/agents", label: "甄选智能体", hint: "对话与接入" },
-  { href: "/academy/courses", label: "培训课程", hint: "商学院课件" }
+const TIGER_ROWS = [
+  { shop: "RASW家居旗舰店", owner: "张文静", amount: "196,420.18" },
+  { shop: "RASW生活电器旗舰店", owner: "陈明婧", amount: "148,902.44" },
+  { shop: "RASW健康电器旗舰店", owner: "郭桂良", amount: "121,330.06" },
+  { shop: "飒望居家旗舰店", owner: "王博", amount: "98,774.52" },
+  { shop: "SAWAAG居家布艺旗舰店", owner: "王博", amount: "86,210.90" },
+  { shop: "RASW居家旗舰店", owner: "杨润泽", amount: "74,108.33" },
+  { shop: "飒望家居日用旗舰店", owner: "崔安琪", amount: "61,540.27" },
+  { shop: "飒望旗舰店", owner: "杨润泽", amount: "54,882.10" },
+  { shop: "RASW潮流生活旗舰店", owner: "郭哲宁", amount: "48,216.08" },
+  { shop: "HYEGIIR健康器械旗舰店", owner: "高丽男", amount: "41,990.64" }
 ];
 
 export function homeRouter() {
   const router = Router();
   router.get("/summary", (_req, res) => {
+    const from = shanghaiYmd(1);
     res.json({
       ok: true,
       module: "home",
       title: "首页",
-      greeting: "欢迎回到运营工作台",
+      demo: true,
+      view: "company",
+      range: "yesterday",
+      from,
+      to: from,
       cards: CARDS.map((card) => ({ ...card })),
-      notices: NOTICES.map((row) => ({ ...row })),
-      entries: ENTRIES.map((row) => ({ ...row }))
+      index: {
+        title: "实时销售指数",
+        value: "407,140.54",
+        time: "15:30",
+        mode: "shop",
+        rows: INDEX_ROWS.map((row) => ({ ...row }))
+      },
+      tiger: {
+        title: "龙虎榜",
+        rows: TIGER_ROWS.map((row) => ({ ...row }))
+      }
     });
   });
   return router;
