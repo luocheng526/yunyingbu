@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.142-edit";
+    const href = "/people.css?v=0.1.148-scroll";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -27,6 +27,18 @@
       tabs.hidden = true;
       tabs.style.display = "none";
     }
+    let css = document.getElementById("people-page-css");
+    if (!css) {
+      css = document.createElement("style");
+      css.id = "people-page-css";
+      document.head.appendChild(css);
+    }
+    css.textContent =
+      "html:has(.people-page),body:has(.people-page){height:100%;}" +
+      "body:has(.xm-shell):has(.people-page){overflow:hidden;}" +
+      "body:has(.xm-shell):has(.people-page) .xm-shell,body:has(.xm-shell):has(.people-page) .xm-main{height:100vh;max-height:100vh;overflow:hidden;min-height:0;}" +
+      "body:has(.people-page) .xm-content,#xm-content:has(.people-page){min-height:0;overflow:auto!important;}" +
+      ".people-page .org-table-wrap{max-height:calc(100vh - 250px);overflow:auto;}";
   }
 
   function showShellTab() {

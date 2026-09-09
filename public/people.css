@@ -1,9 +1,38 @@
 /* xm-org-board */
+html:has(.people-page),
+body:has(.people-page) {
+  height: 100%;
+}
+
+body:has(.xm-shell):has(.people-page) {
+  overflow: hidden;
+}
+
+body:has(.xm-shell):has(.people-page) .xm-shell {
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
+body:has(.xm-shell):has(.people-page) .xm-main {
+  min-height: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+
+body:has(.people-page) .xm-content,
+#xm-content:has(.people-page) {
+  min-height: 0;
+  overflow: auto !important;
+  overscroll-behavior: contain;
+}
+
 .xm-content .page.people-page,
 .people-page {
   max-width: none !important;
   width: 100%;
   box-sizing: border-box;
+  padding-bottom: 24px;
 }
 
 .people-page .lead {
@@ -140,7 +169,9 @@ body:has(.people-page) .xm-tabs {
 }
 
 .org-table-wrap {
+  max-height: calc(100vh - 250px);
   overflow: auto;
+  overscroll-behavior: contain;
   background: #fff;
   border: 1px solid var(--xm-line, #f0f0f0);
   border-radius: 8px;
@@ -162,6 +193,9 @@ body:has(.people-page) .xm-tabs {
 }
 
 .people-page th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   background: #fafafa;
   color: var(--xm-muted, #8c8c8c);
   font-weight: 600;
