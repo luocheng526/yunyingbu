@@ -1,5 +1,6 @@
-/* xm-sider-narrow 0.1.108 */
-:root {
+/* xm-sider-narrow 0.1.109 */
+:root,
+html[data-theme="light"] {
   --xm-sider: #ffffff;
   --xm-bg: #f0f2f5;
   --xm-top: #ffffff;
@@ -8,10 +9,41 @@
   --xm-line: #f0f0f0;
   --xm-primary: #1677ff;
   --xm-primary-soft: #e6f4ff;
+  --xm-primary-deep: #1263d6;
   --xm-card: #ffffff;
   --xm-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 8px 24px rgba(0, 0, 0, 0.04);
   --xm-sider-w: 200px;
   font-family: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --xm-sider: #1c1a14;
+  --xm-bg: #14120b;
+  --xm-top: #1c1a14;
+  --xm-ink: #f7f7f4;
+  --xm-muted: #9a9688;
+  --xm-line: #2a2820;
+  --xm-primary: #3b82f6;
+  --xm-primary-soft: #1e3a5f;
+  --xm-primary-deep: #2563eb;
+  --xm-card: #1c1a14;
+  --xm-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+html[data-theme="pink"] {
+  color-scheme: light;
+  --xm-sider: #ffffff;
+  --xm-bg: #fff0f5;
+  --xm-top: #fff7fa;
+  --xm-ink: #1f1f1f;
+  --xm-muted: #8c8c8c;
+  --xm-line: #ffd0e0;
+  --xm-primary: #f8005f;
+  --xm-primary-soft: #ffe0ec;
+  --xm-primary-deep: #c1004c;
+  --xm-card: #ffffff;
+  --xm-shadow: 0 1px 2px rgba(248, 0, 95, 0.08), 0 8px 24px rgba(248, 0, 95, 0.06);
 }
 
 * { box-sizing: border-box; }
@@ -43,7 +75,7 @@ body:has(.xm-shell) {
   width: var(--xm-sider-w);
   flex: 0 0 var(--xm-sider-w);
   background: var(--xm-sider);
-  border-right: 1px solid #f0f0f0;
+  border-right: 1px solid var(--xm-line);
   display: flex;
   flex-direction: column;
   position: sticky;
@@ -105,8 +137,8 @@ html.xm-collapsed .xm-collapse {
   align-items: center;
   gap: 4px;
   padding: 12px 10px 10px;
-  background: #1677ff;
-  border-bottom: 1px solid #1263d6;
+  background: var(--xm-primary);
+  border-bottom: 1px solid var(--xm-primary-deep);
 }
 
 .xm-logo {
@@ -327,7 +359,7 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
   height: 48px;
   flex: 0 0 48px;
   background: var(--xm-top);
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 2px solid var(--xm-primary);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -403,13 +435,13 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
 }
 
 .xm-refresh:hover {
-  background: #e6f4ff;
-  border-color: #1677ff;
-  color: #1677ff;
+  background: var(--xm-primary-soft);
+  border-color: var(--xm-primary);
+  color: var(--xm-primary);
 }
 
 a.xm-username {
-  color: #1677ff;
+  color: var(--xm-primary);
   text-decoration: none;
   font-weight: 600;
   white-space: nowrap;
@@ -426,12 +458,41 @@ a.xm-username:hover {
 .xm-content {
   flex: 1;
   overflow: auto;
-  padding: 16px;
+  padding: 0;
 }
 
 .xm-page {
-  max-width: 1280px;
-  margin: 0 auto;
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding: 8px 12px 12px;
+}
+
+.xm-styles {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.xm-styles button {
+  min-width: 28px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--xm-line);
+  border-radius: 4px;
+  background: var(--xm-card);
+  color: var(--xm-ink);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 22px;
+  font-family: inherit;
+}
+
+.xm-styles button.is-on {
+  border-color: var(--xm-primary);
+  color: var(--xm-primary);
+  background: var(--xm-primary-soft);
+  font-weight: 600;
 }
 
 .demo-flag {
@@ -542,15 +603,14 @@ a.xm-username:hover {
 }
 
 .page {
-  max-width: 1100px;
+  max-width: none;
+  width: 100%;
   margin: 0;
-  padding: 8px 4px 24px;
+  padding: 8px 12px 16px;
 }
 
 .kicker {
-  margin: 0 0 0.4rem;
-  color: var(--xm-primary);
-  font-size: 0.85rem;
+  display: none;
 }
 
 .lead,
@@ -565,4 +625,40 @@ a.xm-username:hover {
   .dash-bottom {
     grid-template-columns: 1fr;
   }
+}
+
+html[data-theme="dark"] .xm-menu-item {
+  color: #c8c4b8;
+}
+
+html[data-theme="dark"] .xm-menu-item:hover {
+  background: #2a2820;
+}
+
+html[data-theme="dark"] .xm-menu-item:active {
+  background: #1e3a5f;
+}
+
+html[data-theme="dark"] .xm-user,
+html[data-theme="dark"] .xm-collapse {
+  color: #d8d4c8;
+}
+
+html[data-theme="dark"] .xm-date {
+  color: #9a9688;
+}
+
+html[data-theme="dark"] .xm-refresh {
+  background: #1c1a14;
+  border-color: #3a382e;
+  color: #f7f7f4;
+}
+
+html[data-theme="dark"] .xm-tab {
+  background: #2a2820;
+  color: #9a9688;
+}
+
+html[data-theme="dark"] .xm-collapse:hover {
+  background: #2a2820;
 }

@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.108 */
+/* xm-fast-shell 0.1.109 */
 (function () {
-  const ASSET_VER = "0.1.108";
+  const ASSET_VER = "0.1.109";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/data": "data",
@@ -174,7 +174,7 @@
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout">' +
       ico("logout") +
       "<span>退出登录</span></button>" +
-      '<p class="xm-version">v0.4.13</p></nav>'
+      '<p class="xm-version">v0.4.14</p></nav>'
     );
   }
 
@@ -470,13 +470,71 @@
     });
   }
 
-  function chinaDate() {
-    return new Date().toLocaleDateString("zh-CN", {
+  function chinaNow() {
+    return new Date().toLocaleString("zh-CN", {
       timeZone: "Asia/Shanghai",
       year: "numeric",
       month: "2-digit",
-      day: "2-digit"
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false
     });
+  }
+
+  function styleSwitchHtml() {
+    return (
+      '<div class="xm-styles" role="group" aria-label="页面风格">' +
+      '<button type="button" data-xm-style="light" title="正常蓝色">蓝</button>' +
+      '<button type="button" data-xm-style="dark" title="晚上黑色">夜</button>' +
+      '<button type="button" data-xm-style="pink" title="甄选粉">粉</button>' +
+      "</div>"
+    );
+  }
+
+  function readTheme() {
+    try {
+      const raw = localStorage.getItem("xm-theme");
+      if (raw === "dark" || raw === "pink" || raw === "light") {
+        return raw;
+      }
+    } catch (_err) {
+      /* ignore */
+    }
+    return "light";
+  }
+
+  function applyTheme(theme) {
+    const next = theme === "dark" || theme === "pink" ? theme : "light";
+    document.documentElement.setAttribute("data-theme", next);
+    document.documentElement.style.colorScheme = next === "dark" ? "dark" : "light";
+    try {
+      localStorage.setItem("xm-theme", next);
+    } catch (_err) {
+      /* ignore */
+    }
+    Array.prototype.forEach.call(document.querySelectorAll("[data-xm-style]"), function (btn) {
+      btn.classList.toggle("is-on", btn.getAttribute("data-xm-style") === next);
+    });
+  }
+
+  function tickClock() {
+    const dateEl = document.getElementById("xm-date");
+    if (!dateEl) {
+      return;
+    }
+    const now = new Date();
+    dateEl.dateTime = now.toISOString();
+    dateEl.textContent = chinaNow();
+  }
+
+  function startClock() {
+    tickClock();
+    if (window.__xmClock) {
+      clearInterval(window.__xmClock);
+    }
+    window.__xmClock = setInterval(tickClock, 1000);
   }
 
   function ensureUserTools() {
@@ -490,11 +548,19 @@
       user.className = "xm-user";
       topbar.appendChild(user);
     }
+    if (!user.querySelector(".xm-styles")) {
+      user.insertAdjacentHTML("afterbegin", styleSwitchHtml());
+    }
     if (!document.getElementById("xm-date")) {
       const date = document.createElement("time");
       date.className = "xm-date";
       date.id = "xm-date";
-      user.insertBefore(date, user.firstChild);
+      const styles = user.querySelector(".xm-styles");
+      if (styles && styles.nextSibling) {
+        user.insertBefore(date, styles.nextSibling);
+      } else {
+        user.appendChild(date);
+      }
     }
     if (!document.getElementById("xm-refresh")) {
       const refresh = document.createElement("button");
@@ -546,10 +612,18 @@
     if (nameEl && userLabel) {
       nameEl.textContent = userLabel;
     }
-    const dateEl = document.getElementById("xm-date");
-    if (dateEl) {
-      dateEl.dateTime = new Date().toISOString().slice(0, 10);
-      dateEl.textContent = chinaDate();
+    applyTheme(readTheme());
+    startClock();
+    const styleBox = document.querySelector(".xm-styles");
+    if (styleBox && !styleBox.dataset.bound) {
+      styleBox.dataset.bound = "1";
+      styleBox.addEventListener("click", function (ev) {
+        const btn = ev.target.closest("[data-xm-style]");
+        if (!btn) {
+          return;
+        }
+        applyTheme(btn.getAttribute("data-xm-style"));
+      });
     }
     const refreshBtn = document.getElementById("xm-refresh");
     if (refreshBtn && !refreshBtn.dataset.bound) {
@@ -610,6 +684,7 @@
       labelOf(current) +
       "</span></div>" +
       '<div class="xm-user">' +
+      styleSwitchHtml() +
       '<time class="xm-date" id="xm-date"></time>' +
       '<button type="button" class="xm-refresh" id="xm-refresh">刷新</button>' +
       '<a class="xm-username" id="xm-username" href="/me">用户</a>' +

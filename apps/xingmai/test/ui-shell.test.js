@@ -41,11 +41,21 @@ test("shared shell assets are public", async () => {
   assert.doesNotMatch(jsText.slice(0, 80), /0\.1\.67/);
   assert.match(cssText, /\.xm-sider/);
   assert.match(cssText, /\.xm-brand/);
-  assert.match(cssText, /background: #1677ff/);
+  assert.match(cssText, /--xm-primary: #1677ff/);
+  assert.match(cssText, /background: var\(--xm-primary\)/);
+  assert.match(cssText, /html\[data-theme="dark"\]/);
+  assert.match(cssText, /html\[data-theme="pink"\]/);
+  assert.match(cssText, /#f8005f/);
+  assert.match(cssText, /#14120b/);
+  assert.match(cssText, /#f7f7f4/);
+  assert.match(cssText, /\.kicker \{\s*display: none;/);
   assert.match(jsText, /<svg viewBox="0 0 24 24"/);
   assert.match(jsText, /login-logo\.png/);
   assert.match(jsText, /xingmai-logo\.png/);
-  assert.match(jsText, /xm-fast-shell 0\.1\.108/);
+  assert.match(jsText, /xm-fast-shell 0\.1\.109/);
+  assert.match(jsText, /data-xm-style/);
+  assert.match(jsText, /甄选粉/);
+  assert.match(jsText, /setInterval\(tickClock, 1000\)/);
   assert.match(jsText, /星脉甄选运营中心/);
   assert.doesNotMatch(jsText, /labelOf\(current\) \+ " · 星脉甄选"/);
   assert.match(jsText, /\/login\?out=1/);
@@ -53,7 +63,7 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /id="xm-date"/);
   assert.match(jsText, /id="xm-refresh"/);
   assert.match(jsText, /展开侧栏/);
-  assert.match(cssText, /xm-sider-narrow 0\.1\.108/);
+  assert.match(cssText, /xm-sider-narrow 0\.1\.109/);
   assert.match(cssText, /\.xm-menu-parent/);
   assert.match(cssText, /\.xm-submenu/);
   assert.match(cssText, /--xm-sider-w: 200px/);
@@ -66,7 +76,7 @@ test("shared shell assets are public", async () => {
   assert.doesNotMatch(jsText, /菜单标签">项目<|>项目<\/p>/);
   assert.doesNotMatch(jsText, /xm-menu-label">项目/);
   assert.match(jsText, /退出登录/);
-  assert.match(jsText, /v0\.4\.13/);
+  assert.match(jsText, /v0\.4\.14/);
   assert.match(jsText, /数据总揽/);
   assert.match(jsText, /店铺数据/);
   assert.match(jsText, /选品中心/);
@@ -146,7 +156,7 @@ test("home page html is the xingmai sider template", async () => {
   assert.doesNotMatch(html, />项目</);
   assert.doesNotMatch(html, /<span>首页<\/span>/);
   assert.match(html, /退出登录/);
-  assert.match(html, /v0\.4\.13/);
+  assert.match(html, /v0\.4\.14/);
   assert.match(html, /甄选商学院/);
   assert.match(html, /甄选智能体/);
   assert.match(html, /数据总揽/);
@@ -160,7 +170,9 @@ test("home page html is the xingmai sider template", async () => {
   assert.match(html, /培训系统/);
   assert.match(html, /xm-menu-parent/);
   assert.match(html, /xm-caret/);
-  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.108/);
+  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.109/);
+  assert.match(html, /data-xm-style="pink"/);
+  assert.match(html, /aria-label="页面风格"/);
   assert.match(html, /data-xm-queue-badge/);
   assert.match(html, /__xmBootUser/);
   assert.match(html, /login-logo\.png/);
@@ -400,8 +412,8 @@ test("page renderer injects shared shell onto module html", async () => {
     '<!DOCTYPE html><html><head></head><body class="oc-page"><div class="oc-tab">待上线</div></body></html>'
   );
   assert.match(injected, /\/shared\/layout\.css/);
-  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.108/);
-  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.108"/);
+  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.109/);
+  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.109"/);
   assert.match(injected, /localStorage.getItem\("xm-theme"\)/);
   const login = withSharedShell('<html><head></head><body class="login-page"></body></html>');
   assert.doesNotMatch(login, /\/shared\/nav\.js/);
@@ -452,7 +464,8 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.match(shell, /rel="icon" type="image\/png" href="data:image\/png;base64,/);
   assert.match(shell, /<title>星脉甄选运营中心<\/title>/);
   assert.match(shell, /xm-app-shell/);
-  assert.match(shell, /\/shared\/modules\/data\.js\?v=0\.1\.108/);
+  assert.match(shell, /\/shared\/modules\/data\.js\?v=0\.1\.109/);
+  assert.match(shell, /data-xm-style="pink"/);
   assert.doesNotMatch(shell, /<span>首页<\/span>/);
   assert.match(shell, /id="xm-content"/);
   assert.match(shell, /id="xm-date"/);
