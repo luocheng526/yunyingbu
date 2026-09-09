@@ -1,0 +1,135 @@
+{
+  "title": "甄选商学院",
+  "schema": ["title", "category", "body", "published"],
+  "note": "智能体只检索 published=true 的篇。未发布草稿不进检索，不要把未整理文档丢进已发布。",
+  "categories": [
+    { "id": "onboard", "name": "入职必读" },
+    { "id": "ops", "name": "日常运营" },
+    { "id": "data", "name": "数据看板" },
+    { "id": "people", "name": "人员与店权" },
+    { "id": "release", "name": "发版闸门" },
+    { "id": "draft", "name": "草稿箱" }
+  ],
+  "docs": [
+    {
+      "id": "login-door",
+      "title": "登录大门",
+      "category": "入职必读",
+      "categoryId": "onboard",
+      "published": true,
+      "body": "站点是 https://zx.xingmaierp.cc。没会话就不要用业务页，也不要在自己的 HTML 里复制一套登录表单。\n\n用户名演示账号是「罗成」（也可用 luocheng），初始口令见登录页提示。改密走个人中心。\n\n被拦住时送到 /login。那一页不加载侧栏脚本，不要给登录页加 nav.js。"
+    },
+    {
+      "id": "shell-content",
+      "title": "壳和内容区",
+      "category": "入职必读",
+      "categoryId": "onboard",
+      "published": true,
+      "body": "登录后看到的左侧栏、顶栏是主框架画的。业务模块只往中间的 #xm-content 里画。\n\n点侧栏是 pushState，不是整页跳。刷新后侧栏还在，说明壳对了。\n\n颜色跟 --xm-* 和 html[data-theme]。不要再抄一套全页壳。"
+    },
+    {
+      "id": "module-bound",
+      "title": "模块边界",
+      "category": "入职必读",
+      "categoryId": "onboard",
+      "published": true,
+      "body": "甄选商学院只改 academy 目录和 public/shared/modules/academy.js。\n\n不要改 nav.js、layout.css、nav-items.js、src/app.js。侧栏入口已经挂好。\n\n别人的表（人员、沈、韩）不要写。要持久化就用自己的 /api/academy*。"
+    },
+    {
+      "id": "shen-map",
+      "title": "沈子晗运营中心",
+      "category": "日常运营",
+      "categoryId": "ops",
+      "published": true,
+      "body": "侧栏「沈子晗运营中心」展开后是选品、成长、付费、培训系统、任务管理。\n\n任务和简报走沈线自己的接口。商学院不代替任务板。\n\n做沈线业务的人只改 shen 目录，不要来商学院塞运营流水。"
+    },
+    {
+      "id": "han-map",
+      "title": "韩梦凯运营中心",
+      "category": "日常运营",
+      "categoryId": "ops",
+      "published": true,
+      "body": "韩线菜单覆盖选品数据、商品数据、实时付费、对接培训系统。\n\n「对接培训系统」是韩线占位入口，课程正文放在甄选商学院，不要把课件搬进韩线子菜单。"
+    },
+    {
+      "id": "academy-vs-training",
+      "title": "商学院和培训系统",
+      "category": "日常运营",
+      "categoryId": "ops",
+      "published": true,
+      "body": "甄选商学院 = 全站运营培训知识库，一级菜单，路径 /academy。\n\n沈/韩的「培训系统」子菜单是各中心自己的对接位，不是本知识库。\n\n以后要课程分类子菜单，列路径和中文名，交给主框架改侧栏，学院自己不要改 nav。"
+    },
+    {
+      "id": "overview-cards",
+      "title": "总揽指标卡",
+      "category": "数据看板",
+      "categoryId": "data",
+      "published": true,
+      "body": "数据中心首页是关键指标看板：订单、待处理、在职、发布次数等卡片。\n\n数字来自库内种子或样例，不是外部店铺库。对外汇报前先问数据中心模块是否已接真数。\n\n子菜单里还有店铺数据、商品数据、实时付费，点进去若仍是占位，按占位处理。"
+    },
+    {
+      "id": "demo-mark",
+      "title": "演示与真实",
+      "category": "数据看板",
+      "categoryId": "data",
+      "published": true,
+      "body": "页面上写「演示」的，培训时明确告诉新人：这是练手数据。\n\n不要把演示 KPI 发到群里当业绩。接上真实店铺后，以数据中心当时页面为准。"
+    },
+    {
+      "id": "roster",
+      "title": "身份名册",
+      "category": "人员与店权",
+      "categoryId": "people",
+      "published": true,
+      "body": "人员管理先用手录姓名、工号、部门、上级、岗位、所属中心、在职状态。\n\n沈子晗线的人和店已预置并标演示。不接钉钉。\n\n岗位和中心用下拉，不要自造一套和名册冲突的叫法。"
+    },
+    {
+      "id": "shops-grants",
+      "title": "店铺与管辖",
+      "category": "人员与店权",
+      "categoryId": "people",
+      "published": true,
+      "body": "店铺/店群分开建。一人多店用多条管辖，不要把多店塞进一个姓名字段。\n\n管辖要写角色和生效起止。过期或离职后走对账，不要只改状态不收回店权。"
+    },
+    {
+      "id": "reconcile",
+      "title": "对账两句话",
+      "category": "人员与店权",
+      "categoryId": "people",
+      "published": true,
+      "body": "在职但没有店权：新人还没授权，或店还没建。\n\n店权还挂在离职人员：先收回管辖，再把名册改离职。"
+    },
+    {
+      "id": "one-seq",
+      "title": "一条号",
+      "category": "发版闸门",
+      "categoryId": "release",
+      "published": true,
+      "body": "版本格式 0.1.N-说明。N 由闸门 GET /api/releases/next 发放，模块不得自领旁支号。\n\n同一 N 全站占用。失败/驳回不占号，成功才占号。\n\n申请人填「罗成运营部主脑」。模块名填自己，商学院填「甄选商学院」。"
+    },
+    {
+      "id": "ticket-body",
+      "title": "单据字段",
+      "category": "发版闸门",
+      "categoryId": "release",
+      "published": true,
+      "body": "files 是路径字符串列表，相对 apps/xingmai/，不要带这个前缀。\n\ncontents 是路径到正文。禁止空 files 全量落地。\n\n商学院只交 public/academy*、src/modules/academy/、public/shared/modules/academy.js。\n\n改了运行时代码才 restart: true；只改页面也可以交，restart 可 false。"
+    },
+    {
+      "id": "queue-pass",
+      "title": "排队和通过",
+      "category": "发版闸门",
+      "categoryId": "release",
+      "published": true,
+      "body": "入队按提交时间。禁止上移下移。闸门只允许通过第 1 位。\n\n不要点通过 rel-131。不要自己 SSH、不要 systemctl。\n\n禁止提交瘦 src/app.js。壳和内核只由主框架交。"
+    },
+    {
+      "id": "scrap-notes",
+      "title": "未整理聊天记录",
+      "category": "草稿箱",
+      "categoryId": "draft",
+      "published": false,
+      "body": "群里随手贴的：明天排期?? 那个店好像叫飒望还是 rasw 忘了 数据中心数字别对外说 还有谁交单了来着 先堆着回头再拆。"
+    }
+  ]
+}
