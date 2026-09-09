@@ -437,9 +437,7 @@
         var view = event.target.closest("[data-view]");
         if (view) {
           state.view = view.getAttribute("data-view");
-          if (state.view === "team") {
-            state.mode = "company";
-          }
+          state.mode = state.view === "team" ? "company" : "shop";
           paint(root, state);
           return;
         }
