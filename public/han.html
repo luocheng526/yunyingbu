@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>韩梦凯运营中心</title>
+    <link rel="stylesheet" href="/shared/layout.css" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+      .app-shell {
+        display: flex;
+        align-items: stretch;
+        min-height: 100vh;
+      }
+      .site-sidebar {
+        width: 220px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        padding: 1.1rem 0.85rem;
+        background: #fffcf7;
+        border-right: 1px solid #e7e5e4;
+      }
+      .site-sidebar .site-brand {
+        font-weight: 700;
+        color: #134e4a;
+        text-decoration: none;
+        padding: 0.35rem 0.7rem 0.85rem;
+      }
+      .site-sidebar .site-nav {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+      }
+      .site-sidebar .site-nav a {
+        color: #57534e;
+        text-decoration: none;
+        padding: 0.45rem 0.7rem;
+        border-radius: 10px;
+        font-size: 0.92rem;
+      }
+      .site-sidebar .site-nav a:hover,
+      .site-sidebar .site-nav a[aria-current="page"] {
+        color: #134e4a;
+        background: #ccfbf1;
+      }
+      /* 若共享 nav.js 仍注入 header，保持左栏而不是顶部横排 */
+      .app-shell > .site-header {
+        position: sticky;
+        top: 0;
+        width: 220px;
+        flex-shrink: 0;
+        align-self: stretch;
+        border-right: 1px solid var(--line, #e7e5e4);
+        border-bottom: 0;
+        background: var(--card, #fffcf7);
+      }
+      .app-shell > .site-header .site-header__inner {
+        max-width: none;
+        margin: 0;
+        padding: 1.1rem 0.85rem;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5rem;
+      }
+      .app-shell > .site-header .site-nav {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+      }
+      .page {
+        flex: 1;
+        min-width: 0;
+        max-width: none;
+        margin: 0;
+        padding: 2.25rem 1.5rem 3.5rem;
+      }
+      .kicker {
+        margin: 0 0 0.4rem;
+        color: #0f766e;
+        font-size: 0.85rem;
+        letter-spacing: 0.08em;
+      }
+      h1 {
+        margin: 0 0 0.75rem;
+        font-size: 2rem;
+      }
+      .lead {
+        margin: 0 0 1.75rem;
+        color: #57534e;
+        max-width: 42rem;
+        line-height: 1.7;
+      }
+      .stack {
+        display: grid;
+        gap: 1rem;
+      }
+      .panel {
+        background: #fffcf7;
+        border: 1px solid #e7e5e4;
+        border-radius: 16px;
+        padding: 1.15rem 1.2rem 1.25rem;
+        box-shadow: 0 10px 30px rgba(28, 25, 23, 0.08);
+      }
+      .panel h2 {
+        margin: 0 0 0.85rem;
+        font-size: 1.1rem;
+      }
+      form {
+        display: grid;
+        gap: 0.55rem;
+      }
+      label {
+        font-size: 0.9rem;
+        color: #57534e;
+      }
+      input,
+      textarea {
+        width: 100%;
+        border: 1px solid #e7e5e4;
+        border-radius: 10px;
+        padding: 0.65rem 0.75rem;
+        font: inherit;
+        background: #fff;
+        color: #1c1917;
+      }
+      textarea {
+        min-height: 8rem;
+        resize: vertical;
+      }
+      button {
+        justify-self: start;
+        border: 0;
+        border-radius: 999px;
+        padding: 0.55rem 1.1rem;
+        background: #0f766e;
+        color: #fff;
+        font: inherit;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #134e4a;
+      }
+      .msg {
+        min-height: 1.2em;
+        margin: 0;
+        color: #0f766e;
+        font-size: 0.9rem;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.55rem 0.4rem;
+        border-bottom: 1px solid #e7e5e4;
+        font-size: 0.95rem;
+      }
+      th {
+        color: #57534e;
+        font-weight: 600;
+      }
+      .status {
+        white-space: nowrap;
+      }
+      .board-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin: 0 0 1.25rem;
+      }
+      .board-nav button {
+        background: #fff;
+        color: #57534e;
+        border: 1px solid #e7e5e4;
+      }
+      .board-nav button[aria-current="true"] {
+        background: #0f766e;
+        color: #fff;
+        border-color: #0f766e;
+      }
+      .board[hidden] {
+        display: none;
+      }
+      .han-nav-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.1rem;
+      }
+      .han-nav-parent {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: calc(100% - 6px);
+        border: 0;
+        background: transparent;
+        color: inherit;
+        padding: 8px 12px;
+        border-radius: 0 8px 8px 0;
+        font: inherit;
+        font-size: 14px;
+        text-align: left;
+        cursor: pointer;
+      }
+      .han-nav-arrow {
+        margin-left: auto;
+        visibility: hidden;
+        font-size: 12px;
+        line-height: 1;
+      }
+      .han-nav-group.is-open .han-nav-arrow {
+        visibility: visible;
+      }
+      .han-nav-sub {
+        display: none;
+        flex-direction: column;
+        gap: 2px;
+        padding: 0 0 4px 22px;
+      }
+      .han-nav-group.is-open .han-nav-sub {
+        display: flex;
+      }
+      .xm-sider .han-nav-sub .xm-menu-item {
+        min-height: 34px;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <div id="site-nav">
+        <aside class="site-sidebar" aria-label="全站导航">
+          <a class="site-brand" href="/">运营部</a>
+          <nav class="site-nav">
+            <a href="/">首页</a>
+            <a href="/data">数据中心</a>
+            <a href="/shen">沈子晗运营中心</a>
+            <div class="han-nav-group">
+              <button type="button" class="han-nav-parent" aria-expanded="false" aria-controls="han-subnav">
+                <span>韩梦凯运营中心</span>
+                <span class="han-nav-arrow is-down" aria-hidden="true">▾</span>
+              </button>
+              <div id="han-subnav" class="han-nav-sub">
+                <a href="/han?sub=selection">选品数据</a>
+                <a href="/han?sub=products">商品数据</a>
+                <a href="/han?sub=paid">付费数据</a>
+              </div>
+            </div>
+            <a href="/people">人员管理</a>
+            <a href="/releases">版本发布中心</a>
+            <a href="/me">个人中心</a>
+          </nav>
+        </aside>
+      </div>
+      <main class="page">
+        <p class="kicker">运营部 · 韩梦凯业务线</p>
+        <h1>韩梦凯运营中心</h1>
+        <p class="lead" id="page-lead">
+          韩梦凯团队工作台。左侧展开「韩梦凯运营中心」可进入选品 / 商品 / 付费子菜单。默认负责人为「韩梦凯」。
+        </p>
+        <div id="board-wait" class="stack" hidden>
+          <section class="panel">
+            <h2 id="wait-title">内容先等开发</h2>
+            <p class="lead">该子菜单已留位，业务内容后续再接。</p>
+          </section>
+        </div>
+        <div id="board-tasks" class="board stack">
+          <section class="panel">
+            <h2>新增任务</h2>
+            <form id="task-form">
+              <label for="title">标题（必填）</label>
+              <input id="title" name="title" required placeholder="任务标题" />
+              <button type="submit">添加</button>
+              <p class="msg" id="task-msg"></p>
+            </form>
+          </section>
+          <section class="panel">
+            <h2>任务列表</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>标题</th>
+                  <th>状态</th>
+                  <th>负责人</th>
+                </tr>
+              </thead>
+              <tbody id="task-body"></tbody>
+            </table>
+          </section>
+          <section class="panel">
+            <h2>今日简报</h2>
+            <form id="brief-form">
+              <label for="brief">简报</label>
+              <textarea id="brief" name="text" placeholder="今日进展…"></textarea>
+              <button type="submit">保存简报</button>
+              <p class="msg" id="brief-msg"></p>
+            </form>
+          </section>
+        </div>
+      </main>
+    </div>
+    <script src="/shared/nav.js"></script>
+    <script>
+      const HAN_SUBS = [
+        { href: "/han?sub=selection", key: "selection", label: "选品数据" },
+        { href: "/han?sub=products", key: "products", label: "商品数据" },
+        { href: "/han?sub=paid", key: "paid", label: "付费数据" },
+      ];
+      const path = (window.location.pathname || "/").replace(/\/+$/, "") || "/";
+      const subKey = new URLSearchParams(window.location.search).get("sub") || "";
+      const currentSub = HAN_SUBS.find(function (item) {
+        return item.key === subKey;
+      });
+
+      function setGroupOpen(group, open) {
+        group.classList.toggle("is-open", open);
+        const parent = group.querySelector(".han-nav-parent");
+        if (parent) parent.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+
+      function bindGroup(group) {
+        const parent = group.querySelector(".han-nav-parent");
+        if (!parent || parent.dataset.bound === "1") return;
+        parent.dataset.bound = "1";
+        parent.addEventListener("click", function (event) {
+          event.preventDefault();
+          setGroupOpen(group, !group.classList.contains("is-open"));
+        });
+      }
+
+      function markCurrent(group) {
+        const parent = group.querySelector(".han-nav-parent");
+        if (path === "/han" || currentSub) {
+          if (parent) {
+            parent.setAttribute("aria-current", "page");
+            parent.classList.add("is-active");
+          }
+          setGroupOpen(group, true);
+        }
+        group.querySelectorAll(".han-nav-sub a").forEach(function (a) {
+          const href = a.getAttribute("href") || "";
+          const key = new URL(href, window.location.origin).searchParams.get("sub");
+          if (key && key === subKey) {
+            a.setAttribute("aria-current", "page");
+            a.classList.add("is-active");
+          }
+        });
+      }
+
+      /* 全站侧栏由 /shared/nav.js 画成 .xm-sider，本页不能改那个文件，只能挂到「韩梦凯运营中心」这一项下面。 */
+      function attachHanSubmenu() {
+        const sider = document.querySelector(".xm-sider");
+        const host = sider || document.querySelector(".xm-menu-main") || document.getElementById("site-nav");
+        if (!host) return false;
+        if (host.querySelector("[data-han-submenu='1']")) {
+          host.querySelectorAll(".han-nav-group").forEach(function (group) {
+            bindGroup(group);
+            markCurrent(group);
+          });
+          return true;
+        }
+        const hanLink = Array.from(host.querySelectorAll("a[href]")).find(function (a) {
+          const href = (a.getAttribute("href") || "").split("?")[0].replace(/\/+$/, "") || "/";
+          return href === "/han" && a.textContent.indexOf("韩梦凯") !== -1;
+        });
+        if (!hanLink) return false;
+        const ico = hanLink.querySelector(".xm-ico");
+        const group = document.createElement("div");
+        group.className = "han-nav-group";
+        group.setAttribute("data-han-submenu", "1");
+        group.innerHTML =
+          '<button type="button" class="xm-menu-item han-nav-parent" aria-expanded="false">' +
+          (ico ? ico.outerHTML : "") +
+          "<span>韩梦凯运营中心</span>" +
+          '<span class="han-nav-arrow" aria-hidden="true">▾</span></button>' +
+          '<div class="han-nav-sub">' +
+          HAN_SUBS.map(function (item) {
+            return '<a class="xm-menu-item" href="' + item.href + '"><span>' + item.label + "</span></a>";
+          }).join("") +
+          "</div>";
+        hanLink.replaceWith(group);
+        bindGroup(group);
+        markCurrent(group);
+        return true;
+      }
+
+      function watchHanSider() {
+        if (attachHanSubmenu()) return;
+        const obs = new MutationObserver(function () {
+          if (attachHanSubmenu()) obs.disconnect();
+        });
+        obs.observe(document.documentElement, { childList: true, subtree: true });
+        let n = 0;
+        const timer = setInterval(function () {
+          n += 1;
+          if (attachHanSubmenu() || n > 50) {
+            clearInterval(timer);
+            obs.disconnect();
+          }
+        }, 80);
+      }
+
+      watchHanSider();
+
+      const heading = document.querySelector("main.page h1");
+      const wait = document.getElementById("board-wait");
+      const tasks = document.getElementById("board-tasks");
+      if (currentSub) {
+        document.title = currentSub.label + " · 韩梦凯运营中心";
+        if (heading) heading.textContent = currentSub.label;
+        document.getElementById("page-lead").textContent = "韩梦凯运营中心 · " + currentSub.label + "。内容先等开发。";
+        document.getElementById("wait-title").textContent = currentSub.label;
+        wait.hidden = false;
+        tasks.hidden = true;
+      }
+
+      const taskBody = document.getElementById("task-body");
+      const taskMsg = document.getElementById("task-msg");
+      const briefMsg = document.getElementById("brief-msg");
+      const briefEl = document.getElementById("brief");
+
+      function escapeHtml(s) {
+        return String(s ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      function renderRows(tbody, rows, cols, emptyCols) {
+        tbody.innerHTML = "";
+        (rows || []).forEach((row) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = cols
+            .map(function (key) {
+              const extra = key === "status" ? ' class="status"' : "";
+              return "<td" + extra + ">" + escapeHtml(row[key]) + "</td>";
+            })
+            .join("");
+          tbody.appendChild(tr);
+        });
+        if (!rows || !rows.length) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = '<td colspan="' + emptyCols + '">暂无数据</td>';
+          tbody.appendChild(tr);
+        }
+      }
+
+      async function load() {
+        if (currentSub) return;
+        const [tasksRes, briefRes] = await Promise.all([
+          fetch("/api/han/tasks"),
+          fetch("/api/han/brief"),
+        ]);
+        const tasksJson = await tasksRes.json();
+        const briefJson = await briefRes.json();
+        renderRows(taskBody, tasksJson.tasks, ["title", "status", "owner"], 3);
+        briefEl.value = briefJson.text || "";
+      }
+
+      document.getElementById("task-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const title = document.getElementById("title").value;
+        const res = await fetch("/api/han/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title }),
+        });
+        const json = await res.json();
+        taskMsg.textContent = json.ok ? "已添加" : json.error || "失败";
+        if (json.ok) {
+          document.getElementById("title").value = "";
+          await load();
+        }
+      });
+
+      document.getElementById("brief-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const res = await fetch("/api/han/brief", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: briefEl.value }),
+        });
+        const json = await res.json();
+        briefMsg.textContent = json.ok ? "已保存" : "保存失败";
+      });
+
+      load().catch((err) => {
+        taskMsg.textContent = String(err);
+      });
+    </script>
+  </body>
+</html>
