@@ -12,6 +12,7 @@ let nextSessionId = 1;
 let nextMessageId = 1;
 let nextUploadId = 1;
 let schemaReady = false;
+let messageHasThreadId = false;
 
 function nowStamp() {
   return new Date().toLocaleString("sv-SE", { timeZone: "Asia/Shanghai" });
@@ -31,6 +32,7 @@ export function resetAgentsStore() {
   nextMessageId = 1;
   nextUploadId = 1;
   schemaReady = false;
+  messageHasThreadId = false;
 }
 
 async function ignoreSchemaNoise(work) {
@@ -79,6 +81,16 @@ export async function ensureAgentsSchema() {
       "INSERT INTO agents_sessions (id, username, model_id, title, created_at, updated_at) SELECT id, '', 'desk', title, created_at, updated_at FROM agents_threads WHERE id NOT IN (SELECT id FROM agents_sessions)"
     )
   );
+  try {
+    await query("ALTER TABLE agents_messages MODIFY thread_id INT NOT NULL DEFAULT 0");
+    messageHasThreadId = true;
+  } catch (err) {
+    const message = String(err && err.message ? err.message : err);
+    if (!/Unknown column|check that it exists/i.test(message)) {
+      throw err;
+    }
+    messageHasThreadId = false;
+  }
   schemaReady = true;
 }
 
@@ -277,18 +289,31 @@ export async function createSession(username, modelId, greeting) {
 
 async function insertMessage(row) {
   if (dbMode() === "mysql") {
-    const [result] = await query(
-      "INSERT INTO agents_messages (session_id, role, text, file_ids, model_id, sources, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      [
-        row.sessionId,
-        row.role,
-        row.text,
-        JSON.stringify(row.fileIds || []),
-        row.modelId || "",
-        JSON.stringify(row.sources || []),
-        row.createdAt
-      ]
-    );
+    const cols = messageHasThreadId
+      ? "session_id, thread_id, role, text, file_ids, model_id, sources, created_at"
+      : "session_id, role, text, file_ids, model_id, sources, created_at";
+    const values = messageHasThreadId
+      ? [
+          row.sessionId,
+          row.sessionId,
+          row.role,
+          row.text,
+          JSON.stringify(row.fileIds || []),
+          row.modelId || "",
+          JSON.stringify(row.sources || []),
+          row.createdAt
+        ]
+      : [
+          row.sessionId,
+          row.role,
+          row.text,
+          JSON.stringify(row.fileIds || []),
+          row.modelId || "",
+          JSON.stringify(row.sources || []),
+          row.createdAt
+        ];
+    const placeholders = values.map(() => "?").join(", ");
+    const [result] = await query(`INSERT INTO agents_messages (${cols}) VALUES (${placeholders})`, values);
     return { ...row, id: Number(result.insertId) };
   }
   const message = { ...row, id: nextMessageId };

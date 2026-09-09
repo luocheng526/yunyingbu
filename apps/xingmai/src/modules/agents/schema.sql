@@ -36,3 +36,4 @@ ALTER TABLE agents_messages ADD COLUMN session_id INT NOT NULL DEFAULT 0;
 ALTER TABLE agents_messages ADD COLUMN file_ids VARCHAR(255) NOT NULL DEFAULT '[]';
 ALTER TABLE agents_messages ADD COLUMN model_id VARCHAR(64) NOT NULL DEFAULT '';
 ALTER TABLE agents_messages ADD COLUMN sources VARCHAR(255) NOT NULL DEFAULT '[]';
+ALTER TABLE agents_messages MODIFY thread_id INT NOT NULL DEFAULT 0;

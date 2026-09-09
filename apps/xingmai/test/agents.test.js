@@ -298,6 +298,8 @@ test("旧 thread_id 表会补 session_id，避免线上 Unknown column", async (
   assert.match(storeJs, /ALTER TABLE agents_messages ADD COLUMN session_id/);
   assert.match(storeJs, /ALTER TABLE agents_messages ADD COLUMN file_ids/);
   assert.match(storeJs, /UPDATE agents_messages SET session_id = thread_id/);
+  assert.match(storeJs, /MODIFY thread_id INT NOT NULL DEFAULT 0/);
+  assert.match(storeJs, /thread_id, role, text/);
 
   const alters = [];
   setPoolForTests({
