@@ -9,6 +9,8 @@ import { createReleasesRouter } from "./modules/releases/router.js";
 import { hanRouter } from "./modules/han/router.js";
 import { shenRouter } from "./modules/shen/router.js";
 import { peopleRouter } from "./modules/people/router.js";
+import { academyRouter } from "./modules/academy/router.js";
+import { agentsRouter } from "./modules/agents/router.js";
 import { dataRouter } from "./modules/data/router.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -42,6 +44,8 @@ export function createApp() {
   app.use("/api/han", hanRouter);
   app.use("/api/shen", shenRouter);
   app.use("/api/people", peopleRouter);
+  app.use("/api/academy", academyRouter);
+  app.use("/api/agents", agentsRouter);
   app.use("/api/data", dataRouter);
   app.use(
     express.static(join(__dirname, "..", "public"), {

@@ -18,7 +18,7 @@
 
 - `public/index.html`、`public/data.html`、`public/releases.html`、`public/login.html`、`public/me.html`
 - `public/shared/modules/*.js`（各业务模块自己的嵌入脚本）
-- `src/modules/{home,data,shen,han,people}/**`（`nav-items.js` 除外）
+- `src/modules/{home,data,shen,han,people,academy,agents}/**`（`nav-items.js` 除外）
 - 用仓库里的简化 `releases/router.js` 整文件覆盖线上 `/opt/mengkai`
 
 ## 现行结构（对）
@@ -28,7 +28,8 @@
 3. 首页 `/` 用完整 `index.html`（自带壳外观）。
 4. 其它已登录路由：`renderAppShell(href)` 画出侧栏 + `#xm-content`，再 `XmModules[path].mount(root)`。
 5. 模块之间点击：`history.pushState` + 加载对应 `public/shared/modules/<id>.js`，不要整页跳、不要预取全部模块。
-6. 侧栏：窄 `200px`、无「项目」分组、无顶栏退出/暗色按钮。底部是版本发布中心 / 个人中心 / 退出登录 / 版本号。
+6. 侧栏：窄 `200px`、无「项目」分组、无顶栏退出/暗色按钮。主区是数据中心 / 沈 / 韩 / 人员管理 / 甄选商学院 / 甄选智能体。底部是版本发布中心 / 个人中心 / 退出登录 / 版本号。
+7. 主框架必须认识「甄选商学院」「甄选智能体」：`NAV_MAIN`、`APP_MODULES`、`MODULES`、章程。新对话框只填内容，不要再铺菜单。
 
 `cursor/home-nav-workbench-e50e` 已整支删除。不要在仓库根再铺一套全页壳。
 

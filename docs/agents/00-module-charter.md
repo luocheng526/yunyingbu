@@ -1,6 +1,6 @@
 # 全员纪律（每个模块先读这一页）
 
-线上：`https://zx.xingmaierp.cc`。一个 Express，七个业务面 + **主框架**。
+线上：`https://zx.xingmaierp.cc`。一个 Express，九个业务面 + **主框架**。
 交单：登录版本发布中心 → `GET /api/releases/next` → `POST /api/releases`。申请人 `罗成运营部主脑`。做完直接交单。不要等用户再说「提交」。
 
 ## 现行结构：嵌入式，不是每人一套站
@@ -9,7 +9,7 @@
 |---|---|---|
 | `/login` | 无壳。独立登录页，**不加载** `nav.js` | 个人中心 |
 | `/` | 无菜单项。登录后 302 到 `/data` | — |
-| `/data` `/shen` `/han` `/people` `/releases` `/me` | **主框架** `renderAppShell`：侧栏 + `#xm-content` | 各模块 `XmModules[path].mount(#xm-content)` |
+| `/data` `/shen` `/han` `/people` `/academy` `/agents` `/releases` `/me` | **主框架** `renderAppShell`：侧栏 + `#xm-content` | 各模块 `XmModules[path].mount(#xm-content)` |
 
 模块之间点击：`history.pushState` + 加载对应 `public/shared/modules/<id>.js`。不要整页跳，不要预取全部模块文档。
 
@@ -44,10 +44,36 @@
 | 沈子晗 | `public/shen.html`、`public/shen*`、`src/modules/shen/`、`shared/modules/shen.js` | 同上 |
 | 韩梦凯 | `public/han.html`、`public/han*`、`src/modules/han/`、`shared/modules/han.js` | 同上 |
 | 人员管理 | `public/people.html`、`public/people*`、`src/modules/people/`、`shared/modules/people.js` | 同上 |
+| 甄选商学院 | `public/academy.html`、`public/academy*`、`src/modules/academy/`、`shared/modules/academy.js` | 同上 |
+| 甄选智能体 | `public/agents.html`、`public/agents*`、`src/modules/agents/`、`shared/modules/agents.js` | 同上 |
 | 版本发布中心 | `public/releases.html`、`releases.css`、`src/modules/releases/`（**补丁**线上闸，禁止用仓库简化 router 整文件覆盖） | 壳、业务模块、线上 `app.js` |
 | 个人中心 | `login.html` / `login.css` / `me.html`、`src/modules/profile/`；`home/pages.js` 与 `profile/middleware.js` 必须同单 | 壳；登录页不得加载 `nav.js` |
 
 `nav-items.js` 虽然在 `src/modules/home/`，归属 **主框架**，首页不要交。
+
+主框架已认识这两个新面：侧栏一级入口 `/academy`（甄选商学院）、`/agents`（甄选智能体）；交单模块名已进 `MODULES`；内容脚本是 `XmModules["/academy"]` / `XmModules["/agents"]`。要加子菜单或改 `src/app.js` 挂新 API，问主框架，不要自己改壳。
+
+## 怎么新建独立对话框并对接
+
+每个新业务面单独开一个 **Cursor Cloud Agent**（新对话），不要挤在主框架或别人的对话框里。
+
+1. 打开 [cursor.com/agents](https://cursor.com/agents) → **New agent**。
+2. 仓库选 **同一份** `luocheng526/yunyingbu`，环境和主框架相同。
+3. 第一条消息只贴自己的 brief，不要让它改壳：
+
+```
+你是独立 Agent「甄选商学院」。先读 docs/agents/00-module-charter.md 和 docs/agents/08-academy.md。
+你只改 academy 目录和 public/shared/modules/academy.js。不要改侧栏、nav.js、src/app.js。
+做完用模块名「甄选商学院」交单，申请人 罗成运营部主脑。
+```
+
+智能体对话框把上面两处换成 `09-agents.md`、`agents`、`甄选智能体`。
+
+4. 对接方式（已经接好，新对话不用再铺壳）：
+   - 登录后点侧栏对应入口 → 主框架 `pushState` → 加载 `public/shared/modules/<id>.js` → `mount(#xm-content)`。
+   - API 前缀：`/api/academy`、`/api/agents`。仓库入口已挂 stub；线上若还没有，让主框架补 `app.js`，不要自己交内核。
+   - 交单：`GET /api/releases/next` → `POST /api/releases`，`module` 填自己的中文名。
+5. 主框架认这两个名字：章程表、`NAV_MAIN`、`APP_MODULES`、`MODULES`。新对话改内容即可，不用再申请菜单。
 
 ## 闸（交单前自己对照）
 

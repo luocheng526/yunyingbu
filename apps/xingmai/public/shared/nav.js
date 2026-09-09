@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.105 */
+/* xm-fast-shell 0.1.106 */
 (function () {
-  const ASSET_VER = "0.1.105";
+  const ASSET_VER = "0.1.106";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/data": "data",
@@ -20,6 +20,8 @@
     "/han/paid": "han",
     "/han/training": "han",
     "/people": "people",
+    "/academy": "academy",
+    "/agents": "agents",
     "/releases": "releases",
     "/me": "me"
   };
@@ -47,6 +49,8 @@
     { href: "/shen", label: "沈子晗运营中心", children: SHEN_CHILDREN },
     { href: "/han", label: "韩梦凯运营中心", children: HAN_CHILDREN },
     { href: "/people", label: "人员管理" },
+    { href: "/academy", label: "甄选商学院" },
+    { href: "/agents", label: "甄选智能体" },
     { href: "/releases", label: "版本发布中心" },
     { href: "/me", label: "个人中心" }
   ];
@@ -66,6 +70,8 @@
     "/shen": '<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 9h6"/><path d="M9 13h6"/><path d="M9 17h4"/>',
     "/han": '<path d="M8 11.5 12 5l4 6.5"/><path d="M6.5 13h11l-1.2 6H7.7z"/>',
     "/people": '<circle cx="9" cy="8" r="2.2"/><path d="M4.8 18c.4-2.4 2.2-3.8 4.2-3.8s3.8 1.4 4.2 3.8"/><circle cx="16.2" cy="8.4" r="1.8"/><path d="M15 14.4c1.7.2 3 1.3 3.4 3.1"/>',
+    "/academy": '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M8 7h8"/><path d="M8 11h6"/>',
+    "/agents": '<rect x="6" y="8" width="12" height="10" rx="2"/><path d="M12 8V5"/><circle cx="9.5" cy="13" r="1"/><circle cx="14.5" cy="13" r="1"/><path d="M9 19v1h6v-1"/>',
     "/releases": '<path d="M12 4v10"/><path d="M8.5 7.5 12 4l3.5 3.5"/><rect x="6" y="14" width="12" height="6" rx="1"/>',
     "/me": '<circle cx="12" cy="8" r="2.6"/><path d="M6.2 18.5c.6-2.8 2.8-4.3 5.8-4.3s5.2 1.5 5.8 4.3"/>',
     logout: '<path d="M10 7V5.8A1.8 1.8 0 0 1 11.8 4h6.4A1.8 1.8 0 0 1 20 5.8v12.4a1.8 1.8 0 0 1-1.8 1.8h-6.4A1.8 1.8 0 0 1 10 18.2V17"/><path d="M4 12h10"/><path d="M11.2 8.8 14.4 12l-3.2 3.2"/>'
@@ -92,8 +98,8 @@
     return key === prefix || key.indexOf(prefix + "/") === 0;
   }
 
-  const MAIN = items.slice(0, 4);
-  const FOOT = items.slice(4);
+  const MAIN = items.slice(0, 6);
+  const FOOT = items.slice(6);
 
   function ico(name) {
     const path = ICO_PATH[name] || ICO_PATH["/data"];
@@ -164,7 +170,7 @@
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout">' +
       ico("logout") +
       "<span>退出登录</span></button>" +
-      '<p class="xm-version">v0.4.10</p></nav>'
+      '<p class="xm-version">v0.4.11</p></nav>'
     );
   }
 
