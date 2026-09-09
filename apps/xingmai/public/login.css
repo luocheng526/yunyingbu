@@ -1,4 +1,4 @@
-/* LoginPage 0.1.90 — split tech-blue operations login */
+/* LoginPage 0.1.91 — slogan compact: EN matches ZH, 80% scale, up one em */
 :root {
   --login-bg: #f7f7f4;
   --login-ink: #14120b;
@@ -136,14 +136,18 @@ body {
 }
 
 .hero-slogan {
-  margin: 0;
+  --slogan-zh: clamp(14.4px, 1.08vw, 19.2px);
+  margin: calc(-1 * clamp(18px, 1.35vw, 24px)) 0 0;
   text-align: right;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
+  width: max-content;
+  font-size: var(--slogan-zh);
+  container-type: inline-size;
 }
 
 .hero-slogan span {
   display: block;
-  font-size: clamp(18px, 1.35vw, 24px);
+  font-size: 1em;
   letter-spacing: 0.08em;
   font-weight: 700;
   white-space: nowrap;
@@ -151,13 +155,23 @@ body {
 }
 
 .hero-slogan small {
-  display: block;
-  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  column-gap: 0.3em;
+  width: 0;
+  min-width: 100%;
+  box-sizing: border-box;
+  margin-top: 0.42em;
   color: rgba(236, 244, 255, 0.9);
-  font-size: clamp(11px, 0.85vw, 14px);
-  letter-spacing: 0.18em;
+  font-size: clamp(7px, 3.5cqi, 0.62em);
+  letter-spacing: 0.04em;
   font-weight: 500;
   white-space: nowrap;
+}
+
+.hero-slogan small b {
+  font-weight: inherit;
 }
 
 .hero-foot span {
@@ -562,8 +576,7 @@ body {
 @media (max-width: 1366px) {
   .login-hero { padding: 16px 22px 12px; }
   .hero-logo { height: 80px; }
-  .hero-slogan span { font-size: 18px; }
-  .hero-slogan small { font-size: 11px; margin-top: 6px; }
+  .hero-slogan { --slogan-zh: 14.4px; margin-top: -18px; }
   .hero-kicker { font-size: 11.2px; margin-bottom: 8px; }
   .hero-copy { --hero-title-size: 38.4px; }
   .hero-pills { margin: 10px 0 14px; }
