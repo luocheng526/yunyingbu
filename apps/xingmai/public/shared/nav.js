@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.109 */
+/* xm-fast-shell 0.1.110 */
 (function () {
-  const ASSET_VER = "0.1.109";
+  const ASSET_VER = "0.1.110";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/data": "data",
@@ -48,10 +48,10 @@
     { href: "/data", label: "数据中心", children: DATA_CHILDREN },
     { href: "/shen", label: "沈子晗运营中心", children: SHEN_CHILDREN },
     { href: "/han", label: "韩梦凯运营中心", children: HAN_CHILDREN },
-    { href: "/people", label: "组织中心" },
     { href: "/academy", label: "甄选商学院" },
     { href: "/agents", label: "甄选智能体" },
     { href: "/releases", label: "版本发布中心" },
+    { href: "/people", label: "组织中心" },
     { href: "/me", label: "个人中心" }
   ];
   const labels = items.concat(DATA_CHILDREN, SHEN_CHILDREN, HAN_CHILDREN);
@@ -98,8 +98,8 @@
     return key === prefix || key.indexOf(prefix + "/") === 0;
   }
 
-  const MAIN = items.slice(0, 6);
-  const FOOT = items.slice(6);
+  const MAIN = items.slice(0, 5);
+  const FOOT = items.slice(5);
 
   function ico(name) {
     const path = ICO_PATH[name] || ICO_PATH["/data"];
@@ -174,7 +174,7 @@
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout">' +
       ico("logout") +
       "<span>退出登录</span></button>" +
-      '<p class="xm-version">v0.4.14</p></nav>'
+      '<p class="xm-version">v0.4.15</p></nav>'
     );
   }
 

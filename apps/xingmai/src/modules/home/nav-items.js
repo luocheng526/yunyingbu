@@ -1,4 +1,4 @@
-export const NAV_VERSION = "v0.4.14";
+export const NAV_VERSION = "v0.4.15";
 
 export const DATA_CHILDREN = [
   { href: "/data/overview", label: "数据总揽" },
@@ -26,13 +26,13 @@ export const NAV_MAIN = [
   { href: "/data", label: "数据中心", children: DATA_CHILDREN },
   { href: "/shen", label: "沈子晗运营中心", children: SHEN_CHILDREN },
   { href: "/han", label: "韩梦凯运营中心", children: HAN_CHILDREN },
-  { href: "/people", file: "people.html", label: "组织中心" },
   { href: "/academy", file: "academy.html", label: "甄选商学院" },
   { href: "/agents", file: "agents.html", label: "甄选智能体" }
 ];
 
 export const NAV_FOOT = [
   { href: "/releases", file: "releases.html", label: "版本发布中心" },
+  { href: "/people", file: "people.html", label: "组织中心" },
   { href: "/me", file: "me.html", label: "个人中心" }
 ];
 
