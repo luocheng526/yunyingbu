@@ -4,7 +4,7 @@ import test from "node:test";
 import { createApp } from "../src/app.js";
 import { patchAppSource } from "../src/modules/people/patch-app.js";
 import { resetOrgBoard } from "../src/modules/people/org-board.js";
-import { resetPeopleStore } from "../src/modules/people/store.js";
+import { hydrateFromMysql, resetPeopleStore } from "../src/modules/people/store.js";
 
 const PRESET = [
   { name: "沈子晗", role: "经理", center: "沈子晗运营中心", status: "在职" },
@@ -181,6 +181,13 @@ test("POST /api/people rejects missing fields", async () => {
     assert.equal(res.status, 400);
     assert.equal(data.ok, false);
   });
+});
+
+test("people store exports hydrateFromMysql for notes-store boot", async () => {
+  assert.equal(typeof hydrateFromMysql, "function");
+  const result = await hydrateFromMysql();
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, "memory");
 });
 
 test("patchAppSource only inserts people router mount", () => {

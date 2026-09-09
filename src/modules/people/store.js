@@ -297,3 +297,76 @@ export function createGrant(input) {
   grants.push(grant);
   return { ok: true, grant: presentGrant(grant) };
 }
+
+function personFromMysqlRow(row) {
+  return {
+    id: Number(row.id),
+    name: row.name,
+    role: row.role,
+    center: row.center,
+    status: row.status,
+    demo: Boolean(row.demo),
+    employeeNo: row.employee_no || "",
+    department: row.department || "",
+    managerId: row.manager_id == null ? null : Number(row.manager_id)
+  };
+}
+
+function shopFromMysqlRow(row) {
+  return {
+    id: Number(row.id),
+    name: row.name,
+    kind: row.kind,
+    pack: row.pack || "",
+    bundle: row.bundle || "",
+    demo: Boolean(row.demo)
+  };
+}
+
+function grantFromMysqlRow(row) {
+  return {
+    id: Number(row.id),
+    personId: Number(row.person_id),
+    shopId: Number(row.shop_id),
+    role: row.role,
+    startOn: row.start_on || "",
+    endOn: row.end_on || "",
+    revoked: Boolean(row.revoked)
+  };
+}
+
+/**
+ * notes-store.js 启动时会 import 这个名字。缺导出则闸门试载失败并回滚。
+ * 本仓库没有 profile/auth 时保持内存花名册；线上有 MySQL 时灌入 people / people_shops / people_grants。
+ */
+export async function hydrateFromMysql() {
+  try {
+    const auth = await import("../profile/auth.js");
+    if (typeof auth.dbMode !== "function" || auth.dbMode() !== "mysql" || typeof auth.query !== "function") {
+      return { ok: true, mode: "memory" };
+    }
+    const { query } = auth;
+    const [personRows] = await query(
+      "SELECT id, name, role, center, status, demo, employee_no, department, manager_id FROM people ORDER BY id ASC"
+    );
+    const [shopRows] = await query("SELECT id, name, kind, pack, bundle, demo FROM people_shops ORDER BY id ASC");
+    const [grantRows] = await query(
+      "SELECT id, person_id, shop_id, role, start_on, end_on, revoked FROM people_grants ORDER BY id ASC"
+    );
+    if (personRows && personRows.length) {
+      people = personRows.map(personFromMysqlRow);
+      nextPersonId = people.reduce((max, row) => Math.max(max, row.id), 0) + 1;
+    }
+    if (shopRows && shopRows.length) {
+      shops = shopRows.map(shopFromMysqlRow);
+      nextShopId = shops.reduce((max, row) => Math.max(max, row.id), 0) + 1;
+    }
+    if (grantRows && grantRows.length) {
+      grants = grantRows.map(grantFromMysqlRow);
+      nextGrantId = grants.reduce((max, row) => Math.max(max, row.id), 0) + 1;
+    }
+    return { ok: true, mode: "mysql", people: people.length, shops: shops.length, grants: grants.length };
+  } catch {
+    return { ok: true, mode: "memory" };
+  }
+}
