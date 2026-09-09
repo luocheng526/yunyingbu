@@ -5,7 +5,7 @@ import * as profileShell from "../profile/middleware.js";
 import { NAV_ITEMS } from "./nav-items.js";
 
 // xm-upgrade-mask 0.1.52  必须和 profile/middleware.js 成套发。
-// xm-fast-shell 0.1.108
+// xm-fast-shell 0.1.109
 
 function renderExistingPage(filePath) {
   if (typeof profileShell.readThemedHtml === "function") {

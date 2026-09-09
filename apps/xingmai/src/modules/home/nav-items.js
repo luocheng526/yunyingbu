@@ -1,4 +1,4 @@
-export const NAV_VERSION = "v0.4.13";
+export const NAV_VERSION = "v0.4.14";
 
 export const DATA_CHILDREN = [
   { href: "/data/overview", label: "数据总揽" },
