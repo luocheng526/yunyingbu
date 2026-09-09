@@ -9,6 +9,8 @@ export const FRAMEWORK_DIRS = [
   "src/modules/han",
   "src/modules/shen",
   "src/modules/people",
+  "src/modules/academy",
+  "src/modules/agents",
   "src/modules/profile",
   "src/modules/releases",
   "public/shared",
