@@ -1,4 +1,4 @@
-export const NAV_VERSION = "v0.4.11";
+export const NAV_VERSION = "v0.4.12";
 
 export const DATA_CHILDREN = [
   { href: "/data/overview", label: "数据总揽" },
@@ -78,10 +78,17 @@ function childActive(item, activeHref) {
   return item.children.some((child) => child.href === key) || key === item.href || key.startsWith(`${item.href}/`);
 }
 
+function queueBadge(item) {
+  if (item.href !== "/releases") {
+    return "";
+  }
+  return '<b class="xm-queue-badge" data-xm-queue-badge hidden>0</b>';
+}
+
 function itemLink(item, activeHref) {
   const current = item.href === activeHref ? ' aria-current="page"' : "";
   const active = item.href === activeHref ? " is-active" : "";
-  return `<a class="xm-menu-item${active}" href="${item.href}"${current}>${ico(item.href)}<span>${item.label}</span></a>`;
+  return `<a class="xm-menu-item${active}" href="${item.href}"${current}>${ico(item.href)}<span>${item.label}</span>${queueBadge(item)}</a>`;
 }
 
 function groupMarkup(item, activeHref) {
