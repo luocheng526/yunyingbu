@@ -190,10 +190,62 @@
       .board[hidden] {
         display: none;
       }
-      .fields {
-        display: grid;
-        gap: 0.55rem;
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      .han-nav-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.1rem;
+      }
+      .han-nav-parent {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.35rem;
+        width: 100%;
+        border: 0;
+        background: transparent;
+        color: #57534e;
+        padding: 0.45rem 0.7rem;
+        border-radius: 10px;
+        font: inherit;
+        font-size: 0.92rem;
+        text-align: left;
+        cursor: pointer;
+      }
+      .han-nav-parent:hover,
+      .han-nav-parent[aria-current="page"],
+      .han-nav-group.is-open .han-nav-parent {
+        color: #134e4a;
+        background: #ccfbf1;
+      }
+      .han-nav-arrow {
+        display: inline-block;
+        visibility: hidden;
+        font-size: 0.75rem;
+        line-height: 1;
+      }
+      .han-nav-group.is-open .han-nav-arrow {
+        visibility: visible;
+      }
+      .han-nav-sub {
+        display: none;
+        flex-direction: column;
+        gap: 0.1rem;
+        padding: 0.1rem 0 0.25rem 0.75rem;
+      }
+      .han-nav-group.is-open .han-nav-sub {
+        display: flex;
+      }
+      .han-nav-sub a {
+        color: #57534e;
+        text-decoration: none;
+        padding: 0.4rem 0.7rem;
+        border-radius: 10px;
+        font-size: 0.88rem;
+      }
+      .han-nav-sub a:hover,
+      .han-nav-sub a[aria-current="page"] {
+        color: #134e4a;
+        background: #ccfbf1;
       }
     </style>
   </head>
@@ -206,7 +258,17 @@
             <a href="/">首页</a>
             <a href="/data">数据中心</a>
             <a href="/shen">沈子晗运营中心</a>
-            <a href="/han" aria-current="page">韩梦凯运营中心</a>
+            <div class="han-nav-group">
+              <button type="button" class="han-nav-parent" aria-expanded="false" aria-controls="han-subnav">
+                <span>韩梦凯运营中心</span>
+                <span class="han-nav-arrow is-down" aria-hidden="true">▾</span>
+              </button>
+              <div id="han-subnav" class="han-nav-sub">
+                <a href="/han/selection">选品数据</a>
+                <a href="/han/products">商品数据</a>
+                <a href="/han/paid">付费数据</a>
+              </div>
+            </div>
             <a href="/people">人员管理</a>
             <a href="/releases">版本发布中心</a>
             <a href="/me">个人中心</a>
@@ -216,16 +278,15 @@
       <main class="page">
         <p class="kicker">运营部 · 韩梦凯业务线</p>
         <h1>韩梦凯运营中心</h1>
-        <p class="lead">
-          韩梦凯团队工作台。任务日报与选品 / 商品 / 付费三个小板块数据互相隔离，也与沈子晗中心隔离；默认负责人为「韩梦凯」。
+        <p class="lead" id="page-lead">
+          韩梦凯团队工作台。左侧展开「韩梦凯运营中心」可进入选品 / 商品 / 付费子菜单。默认负责人为「韩梦凯」。
         </p>
-        <nav class="board-nav" aria-label="韩梦凯中心板块">
-          <button type="button" data-board="tasks" aria-current="true">任务与日报</button>
-          <button type="button" data-board="selection">选品数据</button>
-          <button type="button" data-board="products">商品数据</button>
-          <button type="button" data-board="paid">付费数据</button>
-          <button type="button" data-board="placeholder">占位</button>
-        </nav>
+        <div id="board-wait" class="stack" hidden>
+          <section class="panel">
+            <h2 id="wait-title">内容先等开发</h2>
+            <p class="lead">该子菜单已留位，业务内容后续再接。</p>
+          </section>
+        </div>
         <div id="board-tasks" class="board stack">
           <section class="panel">
             <h2>新增任务</h2>
@@ -259,132 +320,92 @@
             </form>
           </section>
         </div>
-        <div id="board-selection" class="board stack" hidden>
-          <section class="panel">
-            <h2>新增选品</h2>
-            <form id="selection-form">
-              <div class="fields">
-                <div>
-                  <label for="sel-name">名称（必填）</label>
-                  <input id="sel-name" name="name" required placeholder="选品名称" />
-                </div>
-                <div>
-                  <label for="sel-category">类目</label>
-                  <input id="sel-category" name="category" placeholder="类目" />
-                </div>
-              </div>
-              <label for="sel-note">备注</label>
-              <input id="sel-note" name="note" placeholder="卖点 / 风险" />
-              <button type="submit">添加</button>
-              <p class="msg" id="selection-msg"></p>
-            </form>
-          </section>
-          <section class="panel">
-            <h2>选品列表</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>名称</th>
-                  <th>类目</th>
-                  <th>状态</th>
-                  <th>负责人</th>
-                </tr>
-              </thead>
-              <tbody id="selection-body"></tbody>
-            </table>
-          </section>
-        </div>
-        <div id="board-products" class="board stack" hidden>
-          <section class="panel">
-            <h2>新增商品</h2>
-            <form id="product-form">
-              <div class="fields">
-                <div>
-                  <label for="prod-name">名称（必填）</label>
-                  <input id="prod-name" name="name" required placeholder="商品名称" />
-                </div>
-                <div>
-                  <label for="prod-sku">SKU</label>
-                  <input id="prod-sku" name="sku" placeholder="SKU" />
-                </div>
-                <div>
-                  <label for="prod-price">价格</label>
-                  <input id="prod-price" name="price" type="number" step="0.01" placeholder="0.00" />
-                </div>
-                <div>
-                  <label for="prod-stock">库存</label>
-                  <input id="prod-stock" name="stock" type="number" step="1" placeholder="0" />
-                </div>
-              </div>
-              <button type="submit">添加</button>
-              <p class="msg" id="product-msg"></p>
-            </form>
-          </section>
-          <section class="panel">
-            <h2>商品列表</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>名称</th>
-                  <th>SKU</th>
-                  <th>价格</th>
-                  <th>库存</th>
-                  <th>负责人</th>
-                </tr>
-              </thead>
-              <tbody id="product-body"></tbody>
-            </table>
-          </section>
-        </div>
-        <div id="board-paid" class="board stack" hidden>
-          <section class="panel">
-            <h2>新增付费记录</h2>
-            <form id="paid-form">
-              <div class="fields">
-                <div>
-                  <label for="paid-channel">渠道（必填）</label>
-                  <input id="paid-channel" name="channel" required placeholder="信息流 / 搜索" />
-                </div>
-                <div>
-                  <label for="paid-amount">金额</label>
-                  <input id="paid-amount" name="amount" type="number" step="0.01" placeholder="0.00" />
-                </div>
-                <div>
-                  <label for="paid-date">日期</label>
-                  <input id="paid-date" name="spentOn" type="date" />
-                </div>
-              </div>
-              <label for="paid-note">备注</label>
-              <input id="paid-note" name="note" placeholder="投放说明" />
-              <button type="submit">添加</button>
-              <p class="msg" id="paid-msg"></p>
-            </form>
-          </section>
-          <section class="panel">
-            <h2>付费列表</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>渠道</th>
-                  <th>金额</th>
-                  <th>日期</th>
-                  <th>负责人</th>
-                </tr>
-              </thead>
-              <tbody id="paid-body"></tbody>
-            </table>
-          </section>
-        </div>
-        <div id="board-placeholder" class="board stack" hidden>
-          <section class="panel">
-            <h2>占位</h2>
-            <p class="lead">该板块尚未交付，先留位。</p>
-          </section>
-        </div>
       </main>
     </div>
     <script src="/shared/nav.js"></script>
     <script>
+      const HAN_SUBS = [
+        { href: "/han/selection", label: "选品数据" },
+        { href: "/han/products", label: "商品数据" },
+        { href: "/han/paid", label: "付费数据" },
+      ];
+      const path = (window.location.pathname || "/").replace(/\/+$/, "") || "/";
+      const currentSub = HAN_SUBS.find(function (item) {
+        return item.href === path;
+      });
+
+      function setGroupOpen(group, open) {
+        group.classList.toggle("is-open", open);
+        const parent = group.querySelector(".han-nav-parent");
+        if (parent) parent.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+
+      function bindGroup(group) {
+        const parent = group.querySelector(".han-nav-parent");
+        if (!parent || parent.dataset.bound === "1") return;
+        parent.dataset.bound = "1";
+        parent.addEventListener("click", function () {
+          setGroupOpen(group, !group.classList.contains("is-open"));
+        });
+      }
+
+      function enhanceHanNav(root) {
+        if (!root || root.querySelector(".han-nav-group")) {
+          if (root) root.querySelectorAll(".han-nav-group").forEach(bindGroup);
+          return;
+        }
+        const links = Array.from(root.querySelectorAll("a"));
+        const hanLink = links.find(function (a) {
+          const href = (a.getAttribute("href") || "").replace(/\/+$/, "") || "/";
+          return href === "/han";
+        });
+        if (!hanLink) return;
+        const group = document.createElement("div");
+        group.className = "han-nav-group";
+        group.innerHTML =
+          '<button type="button" class="han-nav-parent" aria-expanded="false">' +
+          "<span>韩梦凯运营中心</span>" +
+          '<span class="han-nav-arrow is-down" aria-hidden="true">▾</span></button>' +
+          '<div class="han-nav-sub">' +
+          HAN_SUBS.map(function (item) {
+            return '<a href="' + item.href + '">' + item.label + "</a>";
+          }).join("") +
+          "</div>";
+        hanLink.replaceWith(group);
+        bindGroup(group);
+      }
+
+      function markCurrent(group) {
+        const parent = group.querySelector(".han-nav-parent");
+        if (path === "/han" || currentSub) {
+          if (parent) parent.setAttribute("aria-current", "page");
+          setGroupOpen(group, true);
+        }
+        group.querySelectorAll(".han-nav-sub a").forEach(function (a) {
+          const href = (a.getAttribute("href") || "").replace(/\/+$/, "");
+          if (href === path) a.setAttribute("aria-current", "page");
+        });
+      }
+
+      document.querySelectorAll(".han-nav-group").forEach(function (group) {
+        bindGroup(group);
+        markCurrent(group);
+      });
+      enhanceHanNav(document.getElementById("site-nav") || document.body);
+      document.querySelectorAll(".han-nav-group").forEach(markCurrent);
+
+      const heading = document.querySelector("main.page h1");
+      const wait = document.getElementById("board-wait");
+      const tasks = document.getElementById("board-tasks");
+      if (currentSub) {
+        document.title = currentSub.label + " · 韩梦凯运营中心";
+        if (heading) heading.textContent = currentSub.label;
+        document.getElementById("page-lead").textContent = "韩梦凯运营中心 · " + currentSub.label + "。内容先等开发。";
+        document.getElementById("wait-title").textContent = currentSub.label;
+        wait.hidden = false;
+        tasks.hidden = true;
+      }
+
       const taskBody = document.getElementById("task-body");
       const taskMsg = document.getElementById("task-msg");
       const briefMsg = document.getElementById("brief-msg");
@@ -416,39 +437,16 @@
         }
       }
 
-      function showBoard(name) {
-        document.querySelectorAll(".board").forEach(function (el) {
-          el.hidden = el.id !== "board-" + name;
-        });
-        document.querySelectorAll(".board-nav button").forEach(function (btn) {
-          btn.setAttribute("aria-current", btn.getAttribute("data-board") === name ? "true" : "false");
-        });
-      }
-
-      document.querySelector(".board-nav").addEventListener("click", function (e) {
-        const btn = e.target.closest("button[data-board]");
-        if (!btn) return;
-        showBoard(btn.getAttribute("data-board"));
-      });
-
       async function load() {
-        const [tasksRes, briefRes, selRes, prodRes, paidRes] = await Promise.all([
+        if (currentSub) return;
+        const [tasksRes, briefRes] = await Promise.all([
           fetch("/api/han/tasks"),
           fetch("/api/han/brief"),
-          fetch("/api/han/selection"),
-          fetch("/api/han/products"),
-          fetch("/api/han/paid"),
         ]);
         const tasksJson = await tasksRes.json();
         const briefJson = await briefRes.json();
-        const selJson = await selRes.json();
-        const prodJson = await prodRes.json();
-        const paidJson = await paidRes.json();
         renderRows(taskBody, tasksJson.tasks, ["title", "status", "owner"], 3);
         briefEl.value = briefJson.text || "";
-        renderRows(document.getElementById("selection-body"), selJson.items, ["name", "category", "status", "owner"], 4);
-        renderRows(document.getElementById("product-body"), prodJson.items, ["name", "sku", "price", "stock", "owner"], 5);
-        renderRows(document.getElementById("paid-body"), paidJson.items, ["channel", "amount", "spentOn", "owner"], 4);
       }
 
       document.getElementById("task-form").addEventListener("submit", async (e) => {
@@ -476,65 +474,6 @@
         });
         const json = await res.json();
         briefMsg.textContent = json.ok ? "已保存" : "保存失败";
-      });
-
-      document.getElementById("selection-form").addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const res = await fetch("/api/han/selection", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: document.getElementById("sel-name").value,
-            category: document.getElementById("sel-category").value,
-            note: document.getElementById("sel-note").value,
-          }),
-        });
-        const json = await res.json();
-        document.getElementById("selection-msg").textContent = json.ok ? "已添加" : json.error || "失败";
-        if (json.ok) {
-          document.getElementById("selection-form").reset();
-          await load();
-        }
-      });
-
-      document.getElementById("product-form").addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const res = await fetch("/api/han/products", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: document.getElementById("prod-name").value,
-            sku: document.getElementById("prod-sku").value,
-            price: document.getElementById("prod-price").value,
-            stock: document.getElementById("prod-stock").value,
-          }),
-        });
-        const json = await res.json();
-        document.getElementById("product-msg").textContent = json.ok ? "已添加" : json.error || "失败";
-        if (json.ok) {
-          document.getElementById("product-form").reset();
-          await load();
-        }
-      });
-
-      document.getElementById("paid-form").addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const res = await fetch("/api/han/paid", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            channel: document.getElementById("paid-channel").value,
-            amount: document.getElementById("paid-amount").value,
-            spentOn: document.getElementById("paid-date").value,
-            note: document.getElementById("paid-note").value,
-          }),
-        });
-        const json = await res.json();
-        document.getElementById("paid-msg").textContent = json.ok ? "已添加" : json.error || "失败";
-        if (json.ok) {
-          document.getElementById("paid-form").reset();
-          await load();
-        }
       });
 
       load().catch((err) => {
