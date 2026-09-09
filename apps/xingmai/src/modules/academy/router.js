@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { currentUser } from "../profile/auth.js";
-import { catalog, course, listProgress, setProgress } from "./store.js";
+import { catalog, doc, docs, listProgress, search, setProgress } from "./store.js";
 
 export const academyRouter = Router();
 
@@ -13,6 +13,17 @@ function requireUser(req, res) {
   return user;
 }
 
+function publishedFilter(raw, fallback = true) {
+  const value = raw == null ? fallback : raw;
+  if (value === "all" || value === "全部") {
+    return "all";
+  }
+  if (value === false || value === "false" || value === "0" || value === "draft" || value === "草稿") {
+    return false;
+  }
+  return true;
+}
+
 academyRouter.get("/", (req, res) => {
   if (!requireUser(req, res)) {
     return;
@@ -22,22 +33,60 @@ academyRouter.get("/", (req, res) => {
     ok: true,
     module: "甄选商学院",
     title: data.title,
-    tracks: data.tracks,
-    courses: data.courses,
+    schema: data.schema,
+    note: data.note,
+    categories: data.categories,
+    docs: data.docs,
     stats: data.stats
   });
 });
 
-academyRouter.get("/courses/:id", (req, res) => {
+academyRouter.get("/search", (req, res) => {
   if (!requireUser(req, res)) {
     return;
   }
-  const item = course(req.params.id);
-  if (!item) {
-    res.status(404).json({ ok: false, error: "课程不存在" });
+  const q = String(req.query.q || req.query.query || "").trim();
+  const hits = search(q, {
+    published: publishedFilter(req.query.published, true),
+    categoryId: String(req.query.category || req.query.categoryId || "").trim(),
+    limit: Number(req.query.limit) || 20
+  });
+  res.json({
+    ok: true,
+    schema: ["title", "category", "body", "published"],
+    query: q,
+    publishedOnly: publishedFilter(req.query.published, true) === true,
+    hits
+  });
+});
+
+academyRouter.get("/docs", (req, res) => {
+  if (!requireUser(req, res)) {
     return;
   }
-  res.json({ ok: true, course: item });
+  const published = publishedFilter(req.query.published, true);
+  res.json({
+    ok: true,
+    schema: ["title", "category", "body", "published"],
+    docs: docs({
+      published,
+      categoryId: String(req.query.category || req.query.categoryId || "").trim(),
+      includeBody: String(req.query.body || "") === "1"
+    })
+  });
+});
+
+academyRouter.get("/docs/:id", (req, res) => {
+  if (!requireUser(req, res)) {
+    return;
+  }
+  const allowUnpublished = String(req.query.draft || "") === "1";
+  const item = doc(req.params.id, { allowUnpublished });
+  if (!item) {
+    res.status(404).json({ ok: false, error: "课件不存在或未发布" });
+    return;
+  }
+  res.json({ ok: true, doc: item });
 });
 
 academyRouter.get("/progress", async (req, res) => {

@@ -1,4 +1,4 @@
-/* xm-academy-catalog 0.1.126 */
+/* xm-academy-catalog 0.1.128 */
 .academy-page {
   max-width: 1180px;
 }
@@ -171,6 +171,49 @@
 .academy-empty {
   color: var(--xm-muted);
   padding: 12px 0;
+}
+
+.academy-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 12px;
+}
+
+.academy-badge.is-pub {
+  background: var(--xm-primary-soft);
+  color: var(--xm-primary);
+}
+
+.academy-badge.is-draft {
+  background: #fff7e6;
+  color: #d46b08;
+}
+
+.academy-field {
+  color: var(--xm-muted);
+}
+
+.academy-fields {
+  margin: 0 0 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.academy-fields div {
+  display: grid;
+  grid-template-columns: 5.5em 1fr;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.academy-fields dt {
+  margin: 0;
+  color: var(--xm-muted);
+}
+
+.academy-fields dd {
+  margin: 0;
 }
 
 html[data-theme="dark"] .academy-chip.is-on,

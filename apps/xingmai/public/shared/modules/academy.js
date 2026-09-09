@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.126 */
+/* xm-module-academy 0.1.128 */
 (function () {
-  const ASSET_VER = "0.1.126";
+  const ASSET_VER = "0.1.128";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
   const CATALOG_HREF = "/academy-catalog.json?v=" + ASSET_VER;
 
@@ -57,6 +57,15 @@
     });
   }
 
+  function paragraphs(body) {
+    return String(body || "")
+      .split(/\n{2,}/)
+      .map(function (part) {
+        return part.trim();
+      })
+      .filter(Boolean);
+  }
+
   window.XmModules = window.XmModules || {};
   window.XmModules["/academy"] = {
     mount: function (root) {
@@ -64,150 +73,130 @@
       root.innerHTML =
         '<main class="page academy-page">' +
         '<header class="page-head"><p class="kicker">运营培训知识库</p><h1>甄选商学院</h1>' +
-        '<p class="lead">给运营部用的入职和日常课。内容挂在本页内容区，不改侧栏。沈/韩的「培训系统」子菜单不是这里。</p></header>' +
-        '<section class="kpi-grid" id="academy-stats" aria-label="课程规模"></section>' +
-        '<div class="academy-toolbar"><input class="academy-search" id="academy-q" type="search" placeholder="搜索课程" />' +
+        '<p class="lead">课件先结构化：标题、分类、正文、是否发布。智能体只检索已发布篇，草稿箱里的未整理记录不进检索。</p></header>' +
+        '<section class="kpi-grid" id="academy-stats" aria-label="课件规模"></section>' +
+        '<div class="academy-toolbar"><input class="academy-search" id="academy-q" type="search" placeholder="按标题、分类、正文检索（等同智能体）" />' +
         '<div class="academy-chips" id="academy-chips"></div></div>' +
         '<div class="academy-layout">' +
-        '<section class="panel"><h2>课程目录</h2><div class="academy-course-list" id="academy-courses"></div></section>' +
-        '<section class="panel" id="academy-reader"><h2>课时</h2><p class="academy-empty">点左侧一门课开始读。</p></section>' +
+        '<section class="panel"><h2>已发布课件</h2><div class="academy-course-list" id="academy-docs"></div></section>' +
+        '<section class="panel" id="academy-reader"><h2>正文</h2><p class="academy-empty">点左侧一篇开始读。每篇都有标题 / 分类 / 正文 / 是否发布。</p></section>' +
         "</div></main>";
 
       const statsEl = root.querySelector("#academy-stats");
       const chipsEl = root.querySelector("#academy-chips");
-      const listEl = root.querySelector("#academy-courses");
+      const listEl = root.querySelector("#academy-docs");
       const readerEl = root.querySelector("#academy-reader");
       const searchEl = root.querySelector("#academy-q");
       let dead = false;
-      let tracks = [];
-      let courses = [];
+      let categories = [];
+      let allDocs = [];
       let progress = [];
-      let trackFilter = "";
-      let activeCourse = null;
-      let activeLessonId = "";
-      let localCatalog = { tracks: [], courses: [] };
-
-      function summaries(list) {
-        return (list || []).map(function (course) {
-          return {
-            id: course.id,
-            track: course.track,
-            title: course.title,
-            minutes: course.minutes,
-            summary: course.summary,
-            lessonCount: course.lessons ? course.lessons.length : Number(course.lessonCount || 0),
-            lessons: course.lessons
-          };
-        });
-      }
+      let categoryFilter = "";
+      let showDrafts = false;
+      let hitsFromSearch = null;
+      let activeId = "";
 
       function doneSet() {
         const set = new Set();
         progress.forEach(function (row) {
           if (row.done) {
-            set.add(row.lessonId);
+            set.add(row.docId || row.lessonId);
           }
         });
         return set;
       }
 
-      function renderStats(stats) {
-        const s = stats || {
-          tracks: tracks.length,
-          courses: courses.length,
-          lessons: courses.reduce(function (sum, course) {
-            return sum + Number(course.lessonCount || 0);
-          }, 0),
-          minutes: courses.reduce(function (sum, course) {
-            return sum + Number(course.minutes || 0);
-          }, 0)
-        };
+      function publishedDocs() {
+        return allDocs.filter(function (doc) {
+          return doc.published;
+        });
+      }
+
+      function renderStats() {
+        const pub = publishedDocs().length;
+        const drafts = allDocs.length - pub;
         const done = doneSet().size;
         statsEl.innerHTML =
-          '<article class="kpi-card"><div class="label">方向</div><div class="value">' +
-          escapeHtml(s.tracks) +
-          '<span class="unit">条</span></div></article>' +
-          '<article class="kpi-card"><div class="label">课程</div><div class="value">' +
-          escapeHtml(s.courses) +
-          '<span class="unit">门</span></div></article>' +
-          '<article class="kpi-card"><div class="label">课时</div><div class="value">' +
-          escapeHtml(s.lessons) +
-          '<span class="unit">节</span></div></article>' +
+          '<article class="kpi-card"><div class="label">分类</div><div class="value">' +
+          escapeHtml(categories.length) +
+          '<span class="unit">个</span></div></article>' +
+          '<article class="kpi-card"><div class="label">已发布</div><div class="value">' +
+          escapeHtml(pub) +
+          '<span class="unit">篇</span></div></article>' +
+          '<article class="kpi-card"><div class="label">草稿</div><div class="value">' +
+          escapeHtml(drafts) +
+          '<span class="unit">篇</span></div></article>' +
           '<article class="kpi-card"><div class="label">已学完</div><div class="value">' +
           escapeHtml(done) +
-          '<span class="unit">节</span></div></article>';
+          '<span class="unit">篇</span></div></article>';
       }
 
       function renderChips() {
         chipsEl.innerHTML =
           '<button type="button" class="academy-chip' +
-          (trackFilter ? "" : " is-on") +
-          '" data-track="">全部</button>' +
-          tracks
-            .map(function (track) {
+          (!categoryFilter && !showDrafts ? " is-on" : "") +
+          '" data-cat="">已发布</button>' +
+          categories
+            .map(function (cat) {
               return (
                 '<button type="button" class="academy-chip' +
-                (trackFilter === track.id ? " is-on" : "") +
-                '" data-track="' +
-                escapeHtml(track.id) +
+                (categoryFilter === cat.id ? " is-on" : "") +
+                '" data-cat="' +
+                escapeHtml(cat.id) +
                 '">' +
-                escapeHtml(track.name) +
+                escapeHtml(cat.name) +
                 "</button>"
               );
             })
-            .join("");
+            .join("") +
+          '<button type="button" class="academy-chip' +
+          (showDrafts ? " is-on" : "") +
+          '" data-draft="1">草稿（不检索）</button>';
       }
 
-      function filteredCourses() {
-        const q = String(searchEl.value || "").trim();
-        return courses.filter(function (course) {
-          if (trackFilter && course.track !== trackFilter) {
+      function visibleDocs() {
+        if (hitsFromSearch) {
+          return hitsFromSearch;
+        }
+        return allDocs.filter(function (doc) {
+          if (showDrafts) {
+            return !doc.published;
+          }
+          if (!doc.published) {
             return false;
           }
-          if (!q) {
-            return true;
+          if (categoryFilter && doc.categoryId !== categoryFilter) {
+            return false;
           }
-          return (course.title + course.summary).indexOf(q) !== -1;
+          return true;
         });
       }
 
-      function trackName(id) {
-        const hit = tracks.find(function (track) {
-          return track.id === id;
-        });
-        return hit ? hit.name : id;
-      }
-
-      function renderCourses() {
-        const rows = filteredCourses();
+      function renderList() {
+        const rows = visibleDocs();
         if (!rows.length) {
-          listEl.innerHTML = '<p class="academy-empty">没有匹配的课程。</p>';
+          listEl.innerHTML = '<p class="academy-empty">没有可展示的结构化课件。</p>';
           return;
         }
         listEl.innerHTML = rows
-          .map(function (course) {
-            const finished = course.lessons
-              ? course.lessons.filter(function (lesson) {
-                  return doneSet().has(lesson.id);
-                }).length
-              : 0;
+          .map(function (doc) {
             return (
               '<button type="button" class="academy-course' +
-              (activeCourse && activeCourse.id === course.id ? " is-on" : "") +
+              (activeId === doc.id ? " is-on" : "") +
               '" data-id="' +
-              escapeHtml(course.id) +
+              escapeHtml(doc.id) +
               '"><h3>' +
-              escapeHtml(course.title) +
-              "</h3><p class=\"academy-meta\">" +
-              escapeHtml(trackName(course.track)) +
-              " · " +
-              escapeHtml(course.minutes) +
-              " 分钟 · " +
-              escapeHtml(course.lessonCount || (course.lessons && course.lessons.length) || 0) +
-              " 节" +
-              (course.lessons ? " · 已学 " + finished : "") +
-              "</p><p>" +
-              escapeHtml(course.summary) +
+              (doneSet().has(doc.id) ? "✓ " : "") +
+              escapeHtml(doc.title) +
+              '</h3><p class="academy-meta"><span class="academy-field">分类</span> ' +
+              escapeHtml(doc.category) +
+              ' · <span class="academy-badge' +
+              (doc.published ? " is-pub" : " is-draft") +
+              '">' +
+              (doc.published ? "已发布" : "未发布") +
+              "</span></p><p>" +
+              escapeHtml(String(doc.body || "").slice(0, 72)) +
+              (String(doc.body || "").length > 72 ? "…" : "") +
               "</p></button>"
             );
           })
@@ -215,170 +204,156 @@
       }
 
       function renderReader() {
-        if (!activeCourse) {
-          readerEl.innerHTML = "<h2>课时</h2><p class=\"academy-empty\">点左侧一门课开始读。</p>";
-          return;
-        }
-        const lessons = activeCourse.lessons || [];
-        const lesson =
-          lessons.find(function (item) {
-            return item.id === activeLessonId;
-          }) || lessons[0];
-        if (!lesson) {
+        const doc = allDocs.find(function (item) {
+          return item.id === activeId;
+        });
+        if (!doc) {
           readerEl.innerHTML =
-            "<h2>" + escapeHtml(activeCourse.title) + "</h2><p class=\"academy-empty\">这门课还没有课时。</p>";
+            "<h2>正文</h2><p class=\"academy-empty\">点左侧一篇开始读。每篇都有标题 / 分类 / 正文 / 是否发布。</p>";
           return;
         }
-        activeLessonId = lesson.id;
-        const learned = doneSet().has(lesson.id);
+        const learned = doneSet().has(doc.id);
         readerEl.innerHTML =
           "<h2>" +
-          escapeHtml(activeCourse.title) +
-          "</h2><p class=\"academy-meta\">" +
-          escapeHtml(lesson.title) +
-          " · " +
-          escapeHtml(lesson.minutes) +
-          " 分钟</p><ul class=\"academy-lessons\">" +
-          lessons
-            .map(function (item) {
-              return (
-                "<li><button type=\"button\" class=\"" +
-                (item.id === lesson.id ? "is-on" : "") +
-                "\" data-lesson=\"" +
-                escapeHtml(item.id) +
-                "\">" +
-                (doneSet().has(item.id) ? "✓ " : "") +
-                escapeHtml(item.title) +
-                "</button></li>"
-              );
-            })
-            .join("") +
-          '</ul><div class="academy-lesson-body">' +
-          (lesson.body || [])
+          escapeHtml(doc.title) +
+          '</h2><dl class="academy-fields"><div><dt>标题</dt><dd>' +
+          escapeHtml(doc.title) +
+          "</dd></div><div><dt>分类</dt><dd>" +
+          escapeHtml(doc.category) +
+          "</dd></div><div><dt>是否发布</dt><dd>" +
+          (doc.published ? "已发布（智能体可检索）" : "未发布（不进检索）") +
+          "</dd></div></dl><div class=\"academy-lesson-body\"><p class=\"academy-meta\">正文</p>" +
+          paragraphs(doc.body)
             .map(function (para) {
               return "<p>" + escapeHtml(para) + "</p>";
             })
             .join("") +
-          '</div><div class="academy-actions"><button type="button" id="academy-done">' +
-          (learned ? "标为未学" : "学完本节") +
-          '</button><button type="button" class="ghost" id="academy-next">下一节</button></div>' +
-          '<p class="academy-status" id="academy-msg">' +
-          (learned ? "本节已记入学习进度。" : "") +
+          '</div><div class="academy-actions">' +
+          (doc.published
+            ? '<button type="button" id="academy-done">' + (learned ? "标为未学" : "学完本篇") + "</button>"
+            : "") +
+          "</div>" +
+          '<p class="academy-status">' +
+          (doc.published
+            ? learned
+              ? "本篇已记入学习进度。"
+              : "已发布，可供 /api/academy/search 检索。"
+            : "草稿不进入智能体检索。整理成四字段并改为已发布后再入库。") +
           "</p>";
       }
 
-      function openCourse(id) {
-        const local = (localCatalog.courses || []).find(function (item) {
+      function openDoc(id) {
+        activeId = id;
+        const local = allDocs.find(function (item) {
           return item.id === id;
         });
-        api("/api/academy/courses/" + encodeURIComponent(id))
+        const q = local && !local.published ? "?draft=1" : "";
+        api("/api/academy/docs/" + encodeURIComponent(id) + q)
           .then(function (data) {
             if (dead) {
               return;
             }
-            activeCourse = data.course;
-            activeLessonId = activeCourse.lessons && activeCourse.lessons[0] ? activeCourse.lessons[0].id : "";
-            renderCourses();
+            allDocs = allDocs.map(function (item) {
+              return item.id === data.doc.id ? Object.assign({}, item, data.doc) : item;
+            });
+            renderList();
             renderReader();
           })
-          .catch(function (err) {
+          .catch(function () {
             if (dead) {
               return;
             }
-            if (local && local.lessons) {
-              activeCourse = local;
-              activeLessonId = local.lessons[0] ? local.lessons[0].id : "";
-              renderCourses();
-              renderReader();
+            renderList();
+            renderReader();
+          });
+      }
+
+      function runSearch() {
+        const q = String(searchEl.value || "").trim();
+        if (!q || showDrafts) {
+          hitsFromSearch = null;
+          renderList();
+          return;
+        }
+        api("/api/academy/search?q=" + encodeURIComponent(q))
+          .then(function (data) {
+            if (dead) {
               return;
             }
-            readerEl.innerHTML =
-              "<h2>课时</h2><p class=\"academy-status error\">无法打开课程：" +
-              escapeHtml(err.message) +
-              "</p>";
+            hitsFromSearch = data.hits || [];
+            renderList();
+          })
+          .catch(function () {
+            const needle = q;
+            hitsFromSearch = publishedDocs().filter(function (doc) {
+              return (doc.title + doc.category + (doc.body || "")).indexOf(needle) !== -1;
+            });
+            renderList();
           });
       }
 
       chipsEl.addEventListener("click", function (ev) {
-        const btn = ev.target.closest("[data-track]");
-        if (!btn) {
+        const draftBtn = ev.target.closest("[data-draft]");
+        const catBtn = ev.target.closest("[data-cat]");
+        if (draftBtn) {
+          showDrafts = true;
+          categoryFilter = "";
+          hitsFromSearch = null;
+          renderChips();
+          renderList();
           return;
         }
-        trackFilter = btn.getAttribute("data-track") || "";
+        if (!catBtn) {
+          return;
+        }
+        showDrafts = false;
+        categoryFilter = catBtn.getAttribute("data-cat") || "";
+        runSearch();
         renderChips();
-        renderCourses();
       });
       listEl.addEventListener("click", function (ev) {
         const btn = ev.target.closest("[data-id]");
         if (!btn) {
           return;
         }
-        openCourse(btn.getAttribute("data-id"));
+        openDoc(btn.getAttribute("data-id"));
       });
       readerEl.addEventListener("click", function (ev) {
-        const lessonBtn = ev.target.closest("[data-lesson]");
-        if (lessonBtn && activeCourse) {
-          activeLessonId = lessonBtn.getAttribute("data-lesson");
-          renderReader();
+        if (ev.target.id !== "academy-done" || !activeId) {
           return;
         }
-        if (ev.target.id === "academy-next" && activeCourse && activeCourse.lessons) {
-          const ids = activeCourse.lessons.map(function (item) {
-            return item.id;
-          });
-          const index = ids.indexOf(activeLessonId);
-          const next = activeCourse.lessons[index + 1] || activeCourse.lessons[0];
-          activeLessonId = next.id;
-          renderReader();
-          return;
-        }
-        if (ev.target.id === "academy-done" && activeCourse) {
-          const learned = doneSet().has(activeLessonId);
-          const msg = root.querySelector("#academy-msg");
-          const payload = {
-            courseId: activeCourse.id,
-            lessonId: activeLessonId,
-            done: !learned
-          };
-          api("/api/academy/progress", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Accept: "application/json" },
-            body: JSON.stringify(payload)
+        const learned = doneSet().has(activeId);
+        const payload = { docId: activeId, done: !learned };
+        api("/api/academy/progress", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify(payload)
+        })
+          .then(function (data) {
+            return data.progress;
           })
-            .then(function (data) {
-              return data.progress;
-            })
-            .catch(function () {
-              return {
-                courseId: payload.courseId,
-                lessonId: payload.lessonId,
-                done: payload.done
-              };
-            })
-            .then(function (row) {
-              if (dead) {
-                return;
-              }
-              progress = progress.filter(function (item) {
-                return item.lessonId !== activeLessonId;
-              });
-              if (row && row.done) {
-                progress.push(row);
-              }
-              saveLocalProgress(progress);
-              renderStats();
-              renderCourses();
-              renderReader();
+          .catch(function () {
+            return payload;
+          })
+          .then(function (row) {
+            if (dead) {
+              return;
+            }
+            progress = progress.filter(function (item) {
+              return (item.docId || item.lessonId) !== activeId;
             });
-        }
+            if (row && row.done) {
+              progress.push(row);
+            }
+            saveLocalProgress(progress);
+            renderStats();
+            renderList();
+            renderReader();
+          });
       });
       searchEl.addEventListener("input", function () {
-        renderCourses();
+        runSearch();
       });
-
-      renderStats();
-      renderChips();
-      renderCourses();
 
       Promise.all([
         fetch(CATALOG_HREF, { credentials: "same-origin", headers: { Accept: "application/json" } })
@@ -389,29 +364,31 @@
             return res.json();
           })
           .catch(function () {
-            return { tracks: [], courses: [] };
+            return { categories: [], docs: [] };
           }),
         api("/api/academy").catch(function () {
           return {};
         }),
+        api("/api/academy/docs?published=all&body=1").catch(function () {
+          return { docs: [] };
+        }),
         api("/api/academy/progress").catch(function () {
           return { progress: loadLocalProgress() };
         })
-      ]).then(function (triple) {
+      ]).then(function (quad) {
         if (dead) {
           return;
         }
-        localCatalog = triple[0] || { tracks: [], courses: [] };
-        tracks = (localCatalog.tracks && localCatalog.tracks.length
-          ? localCatalog.tracks
-          : triple[1].tracks) || [];
-        courses = summaries(
-          localCatalog.courses && localCatalog.courses.length ? localCatalog.courses : triple[1].courses
-        );
-        progress = Array.isArray(triple[2].progress) ? triple[2].progress : loadLocalProgress();
-        renderStats(triple[1].stats);
+        const file = quad[0] || {};
+        categories = (file.categories || quad[1].categories || []).filter(function (item) {
+          return item.id !== "draft";
+        });
+        const fromApi = quad[2].docs && quad[2].docs.length ? quad[2].docs : null;
+        allDocs = fromApi || file.docs || [];
+        progress = Array.isArray(quad[3].progress) ? quad[3].progress : loadLocalProgress();
+        renderStats();
         renderChips();
-        renderCourses();
+        renderList();
       });
 
       return function unmount() {

@@ -1,5 +1,5 @@
 import { dbMode, query } from "../profile/auth.js";
-import { getCourse, listCatalog, listLessonIds } from "./catalog.js";
+import { getDoc, listCatalog, listDocs, listLessonIds, searchDocs } from "./catalog.js";
 
 const memoryProgress = new Map();
 
@@ -31,8 +31,16 @@ export function catalog() {
   return listCatalog();
 }
 
-export function course(id) {
-  return getCourse(id);
+export function docs(filters) {
+  return listDocs(filters);
+}
+
+export function doc(id, options) {
+  return getDoc(id, options);
+}
+
+export function search(query, options) {
+  return searchDocs(query, options);
 }
 
 export async function listProgress(username) {
@@ -49,6 +57,7 @@ export async function listProgress(username) {
     return rows.map((row) => ({
       courseId: row.course_id,
       lessonId: row.lesson_id,
+      docId: row.lesson_id,
       done: Boolean(Number(row.done)),
       updatedAt: row.updated_at
     }));
@@ -62,25 +71,26 @@ export async function listProgress(username) {
   return out;
 }
 
-export async function setProgress(username, { courseId, lessonId, done = true }) {
+export async function setProgress(username, body = {}) {
   const who = String(username || "").trim();
-  const course = String(courseId || "").trim();
-  const lesson = String(lessonId || "").trim();
+  const lesson = String(body.docId || body.lessonId || "").trim();
+  const known = listLessonIds().find((item) => item.lessonId === lesson);
+  const course = String(body.courseId || body.categoryId || known?.courseId || "").trim();
   if (!who) {
     const error = new Error("未登录");
     error.statusCode = 401;
     throw error;
   }
-  const known = listLessonIds().find((item) => item.courseId === course && item.lessonId === lesson);
   if (!known) {
-    const error = new Error("课程或课时不存在");
+    const error = new Error("课件不存在或未发布");
     error.statusCode = 404;
     throw error;
   }
   const row = {
-    courseId: course,
+    courseId: course || known.courseId,
     lessonId: lesson,
-    done: Boolean(done),
+    docId: lesson,
+    done: body.done !== false && body.done !== "false",
     updatedAt: nowSql()
   };
   if (dbMode() === "mysql") {
@@ -93,7 +103,7 @@ export async function setProgress(username, { courseId, lessonId, done = true })
       `INSERT INTO academy_progress (username, lesson_id, course_id, done, updated_at)
        VALUES (?, ?, ?, 1, ?)
        ON DUPLICATE KEY UPDATE done = 1, course_id = VALUES(course_id), updated_at = VALUES(updated_at)`,
-      [who, lesson, course, row.updatedAt]
+      [who, lesson, row.courseId, row.updatedAt]
     );
     return row;
   }
