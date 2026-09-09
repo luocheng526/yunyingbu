@@ -5,12 +5,12 @@
     "employment": {
       "name": "花名册",
       "read": "GET /api/people",
-      "write": "人员管理页手录，禁止智能体写入"
+      "write": "组织中心页手录，禁止智能体写入"
     },
     "shopRights": {
       "name": "管辖",
       "read": "GET /api/people/grants",
-      "write": "人员管理页授权，禁止智能体写入"
+      "write": "组织中心页授权，禁止智能体写入"
     }
   },
   "notSource": ["钉钉通讯录", "其它模块本地名单", "智能体记忆"],

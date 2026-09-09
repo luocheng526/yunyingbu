@@ -31,7 +31,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     const res = await fetch(`${base}/people`);
     const text = await res.text();
     assert.equal(res.status, 200);
-    assert.match(text, /<title>人员管理<\/title>/);
+    assert.match(text, /<title>组织中心<\/title>/);
     assert.match(text, /href="\/shared\/layout\.css"/);
     assert.match(text, /src="\/shared\/nav\.js"/);
     assert.match(text, /id="site-nav"/);
@@ -44,6 +44,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.doesNotMatch(text, /<header class="site-header">/);
     assert.doesNotMatch(text, /--sidebar-width/);
     assert.match(text, /演示/);
+    assert.match(text, /组织中心/);
     assert.match(text, /智能体是只读调用方/);
     assert.match(text, /aria-label="占位"/);
     assert.match(text, /待开发/);

@@ -70,8 +70,8 @@
       hidePeopleTab();
       root.innerHTML =
         '<main class="page people-page">' +
-        '<header class="page-head"><h1>花名册试点</h1>' +
-        '<p class="lead">智能体是只读调用方。在职只认花名册，店权只认管辖。钉钉和其它模块不得另写一份。</p>' +
+        '<header class="page-head"><h1>组织中心</h1>' +
+        '<p class="lead">花名册试点。智能体是只读调用方。在职只认花名册，店权只认管辖。钉钉和其它模块不得另写一份。</p>' +
         '<p class="banner">手录身份和店权。沈子晗线已预置并标演示。一人多店用多条管辖。智能体只许 GET /api/people 与 GET /api/people/grants。</p></header>' +
         '<div class="stack">' +
         '<section class="panel"><h2>身份名册</h2>' +
