@@ -6,6 +6,7 @@ export function createHanFakePool() {
     han_selection: [],
     han_products: [],
     han_paid: [],
+    han_training: [],
   };
   let nextId = 1;
   let briefRow = null;
@@ -14,11 +15,21 @@ export function createHanFakePool() {
     return { ...row };
   }
 
+  function toDay(value) {
+    if (!value) {
+      return "";
+    }
+    if (value instanceof Date) {
+      return value.toISOString().slice(0, 10);
+    }
+    return String(value).slice(0, 10);
+  }
+
   return {
     async query(sql, params = []) {
       const normalized = String(sql).replace(/\s+/g, " ").trim();
 
-      if (/^CREATE TABLE/i.test(normalized)) {
+      if (/^CREATE TABLE/i.test(normalized) || /^ALTER TABLE/i.test(normalized)) {
         return [{}, undefined];
       }
 
@@ -46,6 +57,32 @@ export function createHanFakePool() {
         const name = one[1];
         const id = Number(params[0]);
         return [(tables[name] || []).filter((row) => row.id === id).map(clone), undefined];
+      }
+
+      const count = normalized.match(
+        /^SELECT COUNT\(\*\) AS n(?:, COALESCE\(SUM\(amount\), 0\) AS amount)? FROM (han_\w+) WHERE store_name = \? AND (.+)$/i,
+      );
+      if (count) {
+        const name = count[1];
+        const shop = params[0];
+        const start = String(params[1]);
+        const until = String(params[2]);
+        const rows = (tables[name] || []).filter((row) => {
+          if (String(row.store_name || "") !== String(shop)) {
+            return false;
+          }
+          let day = "";
+          if (name === "han_paid") {
+            day = String(row.spent_on || "").slice(0, 10) || toDay(row.created_at);
+          } else if (name === "han_training") {
+            day = String(row.scheduled_on || "").slice(0, 10) || toDay(row.created_at);
+          } else {
+            day = toDay(row.created_at);
+          }
+          return day >= start && day < until;
+        });
+        const amount = rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+        return [[{ n: rows.length, amount }], undefined];
       }
 
       const insert = normalized.match(/^INSERT INTO (han_\w+) \((.+)\) VALUES \((.+)\)$/i);
