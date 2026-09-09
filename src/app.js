@@ -30,6 +30,9 @@ export function createApp() {
   app.get("/data/placeholder", (_req, res) => {
     res.sendFile(path.join(publicDir, "data/placeholder/index.html"));
   });
+  app.get("/data/overview", (_req, res) => {
+    res.sendFile(path.join(publicDir, "data/overview/index.html"));
+  });
   app.use("/api/data", dataRouter);
   return app;
 }

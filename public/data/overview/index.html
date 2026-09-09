@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>数据总揽 · 数据中心</title>
+    <link rel="stylesheet" href="/shared/layout.css" />
+    <link rel="stylesheet" href="/data-pages.css" />
+  </head>
+  <body>
+    <div id="site-nav"></div>
+    <main class="xm-page">
+      <p class="kicker">数据中心</p>
+      <h1>数据总揽</h1>
+      <nav class="data-subnav" id="data-subnav"></nav>
+      <div class="dash-toolbar">
+        <div class="dash-tabs" role="tablist" aria-label="数据总揽视图">
+          <button type="button" class="is-active" data-view="team">团队</button>
+          <button type="button" data-view="rank">排行榜</button>
+          <button type="button" class="dash-gear" data-view="settings">卡片设置</button>
+        </div>
+        <div>
+          <div class="dash-ranges" id="ranges" aria-label="时间范围"></div>
+          <div class="dash-dates" id="dates"></div>
+        </div>
+      </div>
+      <p class="dash-notice" id="notice">示例数据，尚未接入店铺。</p>
+      <div id="board"></div>
+    </main>
+    <script src="/shared/nav.js"></script>
+    <script src="/data-subnav.js"></script>
+    <script src="/data-overview.js"></script>
+  </body>
+</html>

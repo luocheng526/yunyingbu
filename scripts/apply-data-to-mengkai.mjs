@@ -63,6 +63,9 @@ function ensureDataPageRoute(source) {
   });`],
     ['app.get("/data/placeholder"', `app.get("/data/placeholder", (_req, res) => {
     res.sendFile(path.join(path.dirname(fileURLToPath(import.meta.url)), "../public/data/placeholder/index.html"));
+  });`],
+    ['app.get("/data/overview"', `app.get("/data/overview", (_req, res) => {
+    res.sendFile(path.join(path.dirname(fileURLToPath(import.meta.url)), "../public/data/overview/index.html"));
   });`]
   ];
   for (const [needle, block] of routes) {
