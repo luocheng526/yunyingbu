@@ -1,4 +1,4 @@
-/* xm-sider-narrow 0.1.116 */
+/* xm-sider-narrow 0.1.117 */
 :root,
 html[data-theme="light"] {
   --xm-sider: #ffffff;
@@ -139,6 +139,7 @@ html.xm-collapsed .xm-collapse {
   padding: 12px 10px 10px;
   background: var(--xm-primary);
   border-bottom: 1px solid var(--xm-primary-deep);
+  cursor: pointer;
 }
 
 .xm-logo {

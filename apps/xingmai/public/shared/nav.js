@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.116 */
+/* xm-fast-shell 0.1.117 */
 (function () {
-  const ASSET_VER = "0.1.116";
+  const ASSET_VER = "0.1.117";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -182,7 +182,7 @@
 
   function siderHtml() {
     return (
-      '<div class="xm-brand"><a class="xm-logo" href="/data"><img src="/login-logo.png" alt="星脉甄选" onerror="this.onerror=null;this.src=\'/shared/xingmai-logo.png\'" /></a>' +
+      '<div class="xm-brand"><a class="xm-logo" href="/home" title="回到首页"><img src="/login-logo.png" alt="星脉甄选" onerror="this.onerror=null;this.src=\'/shared/xingmai-logo.png\'" /></a>' +
       '<button type="button" class="xm-collapse" id="xm-collapse" aria-label="折叠侧栏">‹</button></div>' +
       '<nav class="xm-menu xm-menu-main">' +
       mainHtml() +
@@ -610,6 +610,39 @@
     });
   }
 
+  function goHomeRefresh() {
+    const here = normalize(window.location.pathname);
+    if (here === "/home") {
+      window.location.reload();
+      return;
+    }
+    window.location.assign("/home");
+  }
+
+  function bindBrandHome() {
+    const brand = document.querySelector(".xm-brand");
+    const logo = document.querySelector("a.xm-logo");
+    if (logo) {
+      logo.setAttribute("href", "/home");
+      logo.setAttribute("title", "回到首页");
+    }
+    if (!brand || brand.dataset.homeBound === "1") {
+      return;
+    }
+    brand.dataset.homeBound = "1";
+    brand.setAttribute("title", "回到首页");
+    brand.addEventListener("click", function (event) {
+      if (event.target.closest(".xm-collapse")) {
+        return;
+      }
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button) {
+        return;
+      }
+      event.preventDefault();
+      goHomeRefresh();
+    });
+  }
+
   function go(href, push) {
     const key = normalize(href);
     if (PARENT_HOME[key]) {
@@ -679,7 +712,7 @@
   function bindMenu(root) {
     const scope = root || document;
     bindParents(scope);
-    const links = scope.querySelectorAll(".xm-menu a[href], a.xm-logo[href], a.xm-username[href]");
+    const links = scope.querySelectorAll(".xm-menu a[href], a.xm-username[href]");
     Array.prototype.forEach.call(links, function (anchor) {
       if (anchor.dataset.navFast === "1") {
         return;
@@ -896,6 +929,7 @@
     } catch (_err) {
       applyCollapsed(false);
     }
+    bindBrandHome();
     bindMenu(document);
     ensureWorkspace();
     startQueueWatch();
