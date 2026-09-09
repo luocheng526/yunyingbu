@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
-import { createHanStore, dropProbeTasks, hydrateFromMysql, HAN_DEFAULT_OWNER } from "../src/modules/han/store.js";
+import { createHanStore, dropProbeTasks, hydrateFromMysql, HAN_DEFAULT_OWNER, HAN_DEFAULT_STORE } from "../src/modules/han/store.js";
 import { createHanFakePool } from "./han-fake-pool.js";
 
 async function withServer(fn) {
@@ -207,6 +207,56 @@ test("han selection / products / paid boards are isolated", async () => {
     assert.equal(listedTasks.body.tasks.length, 0);
     assert.equal(listedSel.body.items[0].name, "春季防晒衣");
     assert.equal(listedProd.body.items[0].name, "防晒衣-白");
+    assert.equal(listedSel.body.items[0].store, HAN_DEFAULT_STORE);
+  });
+});
+
+test("han summary is store + date range totals only", async () => {
+  await withServer(async (base) => {
+    await json(base, "/api/han/selection", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "店A选品", store: "一号店" }),
+    });
+    await json(base, "/api/han/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "店A商品", store: "一号店" }),
+    });
+    await json(base, "/api/han/paid", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channel: "信息流", amount: "80", spentOn: "2026-09-08", store: "一号店" }),
+    });
+    await json(base, "/api/han/paid", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channel: "搜索", amount: "20", spentOn: "2026-09-08", store: "二号店" }),
+    });
+
+    const missing = await json(base, "/api/han/summary");
+    assert.equal(missing.res.status, 400);
+
+    const a = await json(base, "/api/han/summary?store=" + encodeURIComponent("一号店") + "&from=2026-09-01&to=2026-09-09");
+    assert.equal(a.res.status, 200);
+    assert.equal(a.body.ok, true);
+    assert.equal(a.body.readOnly, true);
+    assert.equal(a.body.store, "一号店");
+    assert.equal(a.body.selectionCount, 1);
+    assert.equal(a.body.productCount, 1);
+    assert.equal(a.body.paidCount, 1);
+    assert.equal(String(a.body.paidAmount), "80");
+    assert.equal(a.body.items, undefined);
+    assert.equal(a.body.tasks, undefined);
+
+    const b = await json(base, "/api/han/summary?store=" + encodeURIComponent("二号店") + "&from=2026-09-01&to=2026-09-09");
+    assert.equal(b.body.selectionCount, 0);
+    assert.equal(b.body.paidCount, 1);
+    assert.equal(String(b.body.paidAmount), "20");
+
+    const outside = await json(base, "/api/han/summary?store=" + encodeURIComponent("一号店") + "&from=2026-08-01&to=2026-08-31");
+    assert.equal(outside.body.paidCount, 0);
+    assert.equal(outside.body.selectionCount, 0);
   });
 });
 
@@ -221,6 +271,7 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /\/api\/han\/products/);
   assert.match(js, /\/api\/han\/paid/);
   assert.match(js, /\/api\/han\/training/);
+  assert.match(js, /店/);
   assert.match(js, /培训系统/);
   assert.doesNotMatch(js, /内容待开发/);
 });
@@ -245,6 +296,7 @@ test("han schema uses prefixed tables", async () => {
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_products/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_paid/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_training/);
+  assert.match(sql, /store_name/);
   assert.doesNotMatch(sql, /CREATE TABLE IF NOT EXISTS users\b/);
   assert.doesNotMatch(sql, /CREATE TABLE IF NOT EXISTS releases\b/);
 });

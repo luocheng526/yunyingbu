@@ -4,6 +4,20 @@ import { createHanStore } from "./store.js";
 export function createHanRouter(store = createHanStore()) {
   const hanRouter = Router();
 
+  // 智能体只读汇总：按店 + 时间范围。不要直接查 han_* 内部表。
+  hanRouter.get("/summary", async (req, res) => {
+    try {
+      const summary = await store.listSummary({
+        store: req.query.store,
+        from: req.query.from,
+        to: req.query.to,
+      });
+      res.json({ ok: true, ...summary });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
   hanRouter.get("/tasks", async (_req, res) => {
     try {
       res.json({ ok: true, tasks: await store.listTasks() });
