@@ -1,4 +1,4 @@
-/* xm-sider-narrow 0.1.110 */
+/* xm-sider-narrow 0.1.111 */
 :root,
 html[data-theme="light"] {
   --xm-sider: #ffffff;
@@ -383,27 +383,85 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
 
 .xm-tabs {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-end;
+  gap: 4px;
   flex: 1;
   min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-wrap: nowrap;
+  scrollbar-width: thin;
 }
 
 .xm-tab {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   height: 28px;
-  padding: 0 12px;
+  padding: 0 8px 0 12px;
   border-radius: 4px 4px 0 0;
   background: #f5f5f5;
   color: #595959;
   font-size: 13px;
+  flex: 0 0 auto;
+  max-width: 168px;
+  cursor: pointer;
+  user-select: none;
 }
 
 .xm-tab.is-active {
   background: var(--xm-primary-soft);
   color: var(--xm-primary);
   font-weight: 600;
+}
+
+.xm-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xm-tab-close {
+  border: 0;
+  background: transparent;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 4px;
+  line-height: 1;
+  font-size: 14px;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.5;
+  flex: 0 0 16px;
+}
+
+.xm-tab-close:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.xm-tabs[data-count="1"] .xm-tab-close {
+  display: none;
+}
+
+.xm-workspace {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.xm-workspace > .xm-pane {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0;
+}
+
+.xm-workspace > .xm-pane.is-active {
+  display: block;
 }
 
 .xm-user {
@@ -413,6 +471,7 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
   gap: 12px;
   color: #434343;
   font-size: 13px;
+  flex: 0 0 auto;
 }
 
 .xm-date {
@@ -657,6 +716,10 @@ html[data-theme="dark"] .xm-refresh {
 html[data-theme="dark"] .xm-tab {
   background: #2a2820;
   color: #9a9688;
+}
+
+html[data-theme="dark"] .xm-tab-close:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 html[data-theme="dark"] .xm-collapse:hover {
