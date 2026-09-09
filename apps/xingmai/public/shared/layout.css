@@ -1,4 +1,4 @@
-/* xm-sider-narrow 0.1.119 */
+/* xm-sider-narrow 0.1.120 */
 :root,
 html[data-theme="light"] {
   --xm-sider: #ffffff;
@@ -446,8 +446,9 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
 }
 
 .xm-tabs[data-count="1"] .xm-tab-close,
-.xm-tab.is-pinned .xm-tab-close {
-  display: none;
+.xm-tab.is-pinned .xm-tab-close,
+.xm-tab[data-href="/home"] .xm-tab-close {
+  display: none !important;
 }
 
 .xm-workspace {
@@ -457,16 +458,32 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
   flex-direction: column;
 }
 
-.xm-workspace > .xm-pane {
-  display: none;
-  flex: 1;
+.xm-workspace > .xm-pane,
+.xm-workspace > .xm-pane[hidden] {
+  display: none !important;
+  visibility: hidden;
+  pointer-events: none;
+  flex: 0 0 0;
+  height: 0;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   padding: 0;
 }
 
 .xm-workspace > .xm-pane.is-active {
-  display: block;
+  display: block !important;
+  visibility: visible;
+  pointer-events: auto;
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.xm-workspace > .xm-pane.is-active:has(.agents-page) {
+  display: flex !important;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .xm-user {
@@ -732,8 +749,10 @@ html[data-theme="dark"] .xm-collapse:hover {
 }
 
 /* Modules must not hide the shell page tabs. */
-.xm-topbar > .xm-tabs {
+.xm-topbar > .xm-tabs,
+.xm-topbar > .xm-tabs[hidden] {
   display: flex !important;
+  visibility: visible !important;
 }
 
 /* Night skin for every module pane, not one submenu. */
