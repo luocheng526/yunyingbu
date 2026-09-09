@@ -1,8 +1,7 @@
-/* xm-module-academy 0.1.128 */
+/* xm-module-academy 0.1.160 */
 (function () {
-  const ASSET_VER = "0.1.128";
+  const ASSET_VER = "0.1.160";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
-  const CATALOG_HREF = "/academy-catalog.json?v=" + ASSET_VER;
 
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -22,29 +21,10 @@
     document.head.appendChild(link);
   }
 
-  function loadLocalProgress() {
-    try {
-      const rows = JSON.parse(localStorage.getItem("xm-academy-progress") || "[]");
-      return Array.isArray(rows) ? rows : [];
-    } catch (err) {
-      return [];
-    }
-  }
-
-  function saveLocalProgress(rows) {
-    try {
-      localStorage.setItem("xm-academy-progress", JSON.stringify(rows));
-    } catch (err) {
-      /* ignore quota */
-    }
-  }
-
-  function api(path, options) {
+  function api(path) {
     return fetch(path, {
       credentials: "same-origin",
-      headers: Object.assign({ Accept: "application/json" }, options && options.headers),
-      method: (options && options.method) || "GET",
-      body: options && options.body
+      headers: { Accept: "application/json" }
     }).then(function (res) {
       return res.json().catch(function () {
         return { ok: false, error: "接口 " + res.status };
@@ -57,344 +37,259 @@
     });
   }
 
-  function paragraphs(body) {
-    return String(body || "")
-      .split(/\n{2,}/)
-      .map(function (part) {
-        return part.trim();
-      })
-      .filter(Boolean);
+  function stepsHtml(plan) {
+    const steps = (plan && plan.steps) || [];
+    return (
+      '<ol class="academy-steps">' +
+      steps
+        .map(function (item) {
+          return (
+            '<li class="' +
+            (item.current ? "is-on" : "") +
+            '"><span class="academy-step-n">第 ' +
+            escapeHtml(item.step) +
+            " 步</span> " +
+            escapeHtml(item.name) +
+            "</li>"
+          );
+        })
+        .join("") +
+      "</ol>"
+    );
+  }
+
+  function pageHead(title, lead) {
+    return (
+      '<header class="page-head"><p class="kicker">甄选商学院 · 第 1 步框架</p><h1>' +
+      escapeHtml(title) +
+      "</h1><p class=\"lead\">" +
+      escapeHtml(lead) +
+      "</p></header>"
+    );
+  }
+
+  function mountShell(root, html) {
+    ensureCss();
+    root.innerHTML = '<main class="page academy-page">' + html + "</main>";
+    return function unmount() {
+      root.innerHTML = "";
+    };
+  }
+
+  function coursesPage() {
+    return {
+      mount: function (root) {
+        const unmount = mountShell(
+          root,
+          pageHead(
+            "培训课程",
+            "只放运营 PPT。下一步才开导入：能上传，不能下载原件，截图带水印。现在先把架子摆出来。"
+          ) +
+            '<div id="academy-plan"></div>' +
+            '<section class="panel academy-drop">' +
+            "<h2>导入 PPT（下一步）</h2>" +
+            '<p class="academy-meta">支持 .ppt / .pptx。原文件不提供下载。预览页会加水印。</p>' +
+            '<label class="academy-file"><input type="file" accept=".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" disabled />选择课件（本步未开放）</label>' +
+            "</section>" +
+            '<section class="panel"><h2>课件列表</h2><p class="academy-empty" id="academy-course-empty">还没有课件。第 2 步导入后出现在这里，学员只能在线翻页。</p></section>'
+        );
+        api("/api/academy/plan")
+          .then(function (data) {
+            const el = root.querySelector("#academy-plan");
+            if (el) {
+              el.innerHTML = stepsHtml(data);
+            }
+          })
+          .catch(function () {});
+        return unmount;
+      }
+    };
+  }
+
+  function examsPage() {
+    return {
+      mount: function (root) {
+        const unmount = mountShell(
+          root,
+          pageHead(
+            "培训考试",
+            "先选晋升档，再出卷。本步只把六档和限时架子搭好，题目下一步再写。"
+          ) +
+            '<div id="academy-plan"></div>' +
+            '<section class="kpi-grid academy-exam-grid" id="academy-tracks" aria-label="考试档"></section>' +
+            '<section class="panel" id="academy-paper"><h2>试卷</h2><p class="academy-empty">先点上面一档。</p></section>'
+        );
+        let dead = false;
+        api("/api/academy/plan")
+          .then(function (data) {
+            const el = root.querySelector("#academy-plan");
+            if (!dead && el) {
+              el.innerHTML = stepsHtml(data);
+            }
+          })
+          .catch(function () {});
+        api("/api/academy/exams/tracks")
+          .then(function (data) {
+            if (dead) {
+              return;
+            }
+            const box = root.querySelector("#academy-tracks");
+            box.innerHTML = (data.tracks || [])
+              .map(function (track) {
+                return (
+                  '<button type="button" class="kpi-card academy-track" data-id="' +
+                  escapeHtml(track.id) +
+                  '"><div class="label">' +
+                  escapeHtml(track.from) +
+                  " → " +
+                  escapeHtml(track.to) +
+                  '</div><div class="value">' +
+                  escapeHtml(track.name) +
+                  '</div><p class="academy-meta">' +
+                  escapeHtml(track.minutes) +
+                  " 分钟 · " +
+                  escapeHtml(track.questions) +
+                  " 题 · " +
+                  escapeHtml(track.passScore) +
+                  " 分及格</p></button>"
+                );
+              })
+              .join("");
+          })
+          .catch(function (err) {
+            const box = root.querySelector("#academy-tracks");
+            if (box) {
+              box.innerHTML = '<p class="academy-status error">' + escapeHtml(err.message) + "</p>";
+            }
+          });
+        root.querySelector("#academy-tracks").addEventListener("click", function (ev) {
+          const btn = ev.target.closest("[data-id]");
+          if (!btn) {
+            return;
+          }
+          const id = btn.getAttribute("data-id");
+          root.querySelectorAll(".academy-track").forEach(function (el) {
+            el.classList.toggle("is-on", el.getAttribute("data-id") === id);
+          });
+          const paper = root.querySelector("#academy-paper");
+          paper.innerHTML = "<h2>试卷</h2><p class=\"academy-empty\">正在打开这一档…</p>";
+          api("/api/academy/exams/tracks/" + encodeURIComponent(id))
+            .then(function (data) {
+              if (dead) {
+                return;
+              }
+              const track = data.track || {};
+              paper.innerHTML =
+                "<h2>" +
+                escapeHtml(track.name) +
+                '</h2><p class="academy-meta">规定时间 ' +
+                escapeHtml(track.minutes) +
+                " 分钟 · 到点交卷 · 第 3 步才写入题目</p>" +
+                '<div class="academy-timer" aria-live="polite">剩余 ' +
+                escapeHtml(track.minutes) +
+                " : 00（本步不倒计时）</div>" +
+                '<p class="academy-empty">题目区空着。下一步按这一档出选择题。</p>';
+            })
+            .catch(function (err) {
+              paper.innerHTML = '<h2>试卷</h2><p class="academy-status error">' + escapeHtml(err.message) + "</p>";
+            });
+        });
+        return function () {
+          dead = true;
+          unmount();
+        };
+      }
+    };
+  }
+
+  function handbookPage() {
+    return {
+      mount: function (root) {
+        const unmount = mountShell(
+          root,
+          pageHead(
+            "运营手册",
+            "一节一节分开。下一步才在网页里写正文、加分支、插图。现在只放章节树。"
+          ) +
+            '<div id="academy-plan"></div>' +
+            '<div class="academy-layout">' +
+            '<section class="panel"><h2>章节</h2><nav class="academy-tree" id="academy-tree"></nav></section>' +
+            '<section class="panel" id="academy-section"><h2>本节</h2><p class="academy-empty">点左侧一节。编辑、插图下一步再开。</p></section>' +
+            "</div>"
+        );
+        let dead = false;
+        api("/api/academy/plan")
+          .then(function (data) {
+            const el = root.querySelector("#academy-plan");
+            if (!dead && el) {
+              el.innerHTML = stepsHtml(data);
+            }
+          })
+          .catch(function () {});
+        api("/api/academy/handbook/tree")
+          .then(function (data) {
+            if (dead) {
+              return;
+            }
+            const tree = root.querySelector("#academy-tree");
+            tree.innerHTML = (data.tree || [])
+              .map(function (node) {
+                const kids = (node.children || [])
+                  .map(function (child) {
+                    return (
+                      '<button type="button" class="academy-tree-item" data-id="' +
+                      escapeHtml(child.id) +
+                      '" data-title="' +
+                      escapeHtml(child.title) +
+                      '">' +
+                      escapeHtml(child.title) +
+                      "</button>"
+                    );
+                  })
+                  .join("");
+                return (
+                  '<div class="academy-tree-group"><p class="academy-tree-parent">' +
+                  escapeHtml(node.title) +
+                  "</p>" +
+                  kids +
+                  "</div>"
+                );
+              })
+              .join("");
+          })
+          .catch(function (err) {
+            const tree = root.querySelector("#academy-tree");
+            if (tree) {
+              tree.innerHTML = '<p class="academy-status error">' + escapeHtml(err.message) + "</p>";
+            }
+          });
+        root.querySelector("#academy-tree").addEventListener("click", function (ev) {
+          const btn = ev.target.closest("[data-id]");
+          if (!btn) {
+            return;
+          }
+          root.querySelectorAll(".academy-tree-item").forEach(function (el) {
+            el.classList.toggle("is-on", el === btn);
+          });
+          const title = btn.getAttribute("data-title") || "";
+          root.querySelector("#academy-section").innerHTML =
+            "<h2>" +
+            escapeHtml(title) +
+            '</h2><p class="academy-meta">本节还没有正文。第 4 步在网页里写、可加下级分支和图片。</p>' +
+            '<div class="academy-doc-shell" aria-disabled="true"><p class="academy-empty">文档编辑区（下一步）</p></div>';
+        });
+        return function () {
+          dead = true;
+          unmount();
+        };
+      }
+    };
   }
 
   window.XmModules = window.XmModules || {};
-  window.XmModules["/academy"] = {
-    mount: function (root) {
-      ensureCss();
-      root.innerHTML =
-        '<main class="page academy-page">' +
-        '<header class="page-head"><p class="kicker">运营培训知识库</p><h1>甄选商学院</h1>' +
-        '<p class="lead">课件先结构化：标题、分类、正文、是否发布。智能体只检索已发布篇，草稿箱里的未整理记录不进检索。</p></header>' +
-        '<section class="kpi-grid" id="academy-stats" aria-label="课件规模"></section>' +
-        '<div class="academy-toolbar"><input class="academy-search" id="academy-q" type="search" placeholder="按标题、分类、正文检索（等同智能体）" />' +
-        '<div class="academy-chips" id="academy-chips"></div></div>' +
-        '<div class="academy-layout">' +
-        '<section class="panel"><h2>已发布课件</h2><div class="academy-course-list" id="academy-docs"></div></section>' +
-        '<section class="panel" id="academy-reader"><h2>正文</h2><p class="academy-empty">点左侧一篇开始读。每篇都有标题 / 分类 / 正文 / 是否发布。</p></section>' +
-        "</div></main>";
-
-      const statsEl = root.querySelector("#academy-stats");
-      const chipsEl = root.querySelector("#academy-chips");
-      const listEl = root.querySelector("#academy-docs");
-      const readerEl = root.querySelector("#academy-reader");
-      const searchEl = root.querySelector("#academy-q");
-      let dead = false;
-      let categories = [];
-      let allDocs = [];
-      let progress = [];
-      let categoryFilter = "";
-      let showDrafts = false;
-      let hitsFromSearch = null;
-      let activeId = "";
-
-      function doneSet() {
-        const set = new Set();
-        progress.forEach(function (row) {
-          if (row.done) {
-            set.add(row.docId || row.lessonId);
-          }
-        });
-        return set;
-      }
-
-      function publishedDocs() {
-        return allDocs.filter(function (doc) {
-          return doc.published;
-        });
-      }
-
-      function renderStats() {
-        const pub = publishedDocs().length;
-        const drafts = allDocs.length - pub;
-        const done = doneSet().size;
-        statsEl.innerHTML =
-          '<article class="kpi-card"><div class="label">分类</div><div class="value">' +
-          escapeHtml(categories.length) +
-          '<span class="unit">个</span></div></article>' +
-          '<article class="kpi-card"><div class="label">已发布</div><div class="value">' +
-          escapeHtml(pub) +
-          '<span class="unit">篇</span></div></article>' +
-          '<article class="kpi-card"><div class="label">草稿</div><div class="value">' +
-          escapeHtml(drafts) +
-          '<span class="unit">篇</span></div></article>' +
-          '<article class="kpi-card"><div class="label">已学完</div><div class="value">' +
-          escapeHtml(done) +
-          '<span class="unit">篇</span></div></article>';
-      }
-
-      function renderChips() {
-        chipsEl.innerHTML =
-          '<button type="button" class="academy-chip' +
-          (!categoryFilter && !showDrafts ? " is-on" : "") +
-          '" data-cat="">已发布</button>' +
-          categories
-            .map(function (cat) {
-              return (
-                '<button type="button" class="academy-chip' +
-                (categoryFilter === cat.id ? " is-on" : "") +
-                '" data-cat="' +
-                escapeHtml(cat.id) +
-                '">' +
-                escapeHtml(cat.name) +
-                "</button>"
-              );
-            })
-            .join("") +
-          '<button type="button" class="academy-chip' +
-          (showDrafts ? " is-on" : "") +
-          '" data-draft="1">草稿（不检索）</button>';
-      }
-
-      function visibleDocs() {
-        if (hitsFromSearch) {
-          return hitsFromSearch;
-        }
-        return allDocs.filter(function (doc) {
-          if (showDrafts) {
-            return !doc.published;
-          }
-          if (!doc.published) {
-            return false;
-          }
-          if (categoryFilter && doc.categoryId !== categoryFilter) {
-            return false;
-          }
-          return true;
-        });
-      }
-
-      function renderList() {
-        const rows = visibleDocs();
-        if (!rows.length) {
-          listEl.innerHTML = '<p class="academy-empty">没有可展示的结构化课件。</p>';
-          return;
-        }
-        listEl.innerHTML = rows
-          .map(function (doc) {
-            return (
-              '<button type="button" class="academy-course' +
-              (activeId === doc.id ? " is-on" : "") +
-              '" data-id="' +
-              escapeHtml(doc.id) +
-              '"><h3>' +
-              (doneSet().has(doc.id) ? "✓ " : "") +
-              escapeHtml(doc.title) +
-              '</h3><p class="academy-meta"><span class="academy-field">分类</span> ' +
-              escapeHtml(doc.category) +
-              ' · <span class="academy-badge' +
-              (doc.published ? " is-pub" : " is-draft") +
-              '">' +
-              (doc.published ? "已发布" : "未发布") +
-              "</span></p><p>" +
-              escapeHtml(String(doc.body || "").slice(0, 72)) +
-              (String(doc.body || "").length > 72 ? "…" : "") +
-              "</p></button>"
-            );
-          })
-          .join("");
-      }
-
-      function renderReader() {
-        const doc = allDocs.find(function (item) {
-          return item.id === activeId;
-        });
-        if (!doc) {
-          readerEl.innerHTML =
-            "<h2>正文</h2><p class=\"academy-empty\">点左侧一篇开始读。每篇都有标题 / 分类 / 正文 / 是否发布。</p>";
-          return;
-        }
-        const learned = doneSet().has(doc.id);
-        readerEl.innerHTML =
-          "<h2>" +
-          escapeHtml(doc.title) +
-          '</h2><dl class="academy-fields"><div><dt>标题</dt><dd>' +
-          escapeHtml(doc.title) +
-          "</dd></div><div><dt>分类</dt><dd>" +
-          escapeHtml(doc.category) +
-          "</dd></div><div><dt>是否发布</dt><dd>" +
-          (doc.published ? "已发布（智能体可检索）" : "未发布（不进检索）") +
-          "</dd></div></dl><div class=\"academy-lesson-body\"><p class=\"academy-meta\">正文</p>" +
-          paragraphs(doc.body)
-            .map(function (para) {
-              return "<p>" + escapeHtml(para) + "</p>";
-            })
-            .join("") +
-          '</div><div class="academy-actions">' +
-          (doc.published
-            ? '<button type="button" id="academy-done">' + (learned ? "标为未学" : "学完本篇") + "</button>"
-            : "") +
-          "</div>" +
-          '<p class="academy-status">' +
-          (doc.published
-            ? learned
-              ? "本篇已记入学习进度。"
-              : "已发布，可供 /api/academy/search 检索。"
-            : "草稿不进入智能体检索。整理成四字段并改为已发布后再入库。") +
-          "</p>";
-      }
-
-      function openDoc(id) {
-        activeId = id;
-        const local = allDocs.find(function (item) {
-          return item.id === id;
-        });
-        const q = local && !local.published ? "?draft=1" : "";
-        api("/api/academy/docs/" + encodeURIComponent(id) + q)
-          .then(function (data) {
-            if (dead) {
-              return;
-            }
-            allDocs = allDocs.map(function (item) {
-              return item.id === data.doc.id ? Object.assign({}, item, data.doc) : item;
-            });
-            renderList();
-            renderReader();
-          })
-          .catch(function () {
-            if (dead) {
-              return;
-            }
-            renderList();
-            renderReader();
-          });
-      }
-
-      function runSearch() {
-        const q = String(searchEl.value || "").trim();
-        if (!q || showDrafts) {
-          hitsFromSearch = null;
-          renderList();
-          return;
-        }
-        api("/api/academy/search?q=" + encodeURIComponent(q))
-          .then(function (data) {
-            if (dead) {
-              return;
-            }
-            hitsFromSearch = data.hits || [];
-            renderList();
-          })
-          .catch(function () {
-            const needle = q;
-            hitsFromSearch = publishedDocs().filter(function (doc) {
-              return (doc.title + doc.category + (doc.body || "")).indexOf(needle) !== -1;
-            });
-            renderList();
-          });
-      }
-
-      chipsEl.addEventListener("click", function (ev) {
-        const draftBtn = ev.target.closest("[data-draft]");
-        const catBtn = ev.target.closest("[data-cat]");
-        if (draftBtn) {
-          showDrafts = true;
-          categoryFilter = "";
-          hitsFromSearch = null;
-          renderChips();
-          renderList();
-          return;
-        }
-        if (!catBtn) {
-          return;
-        }
-        showDrafts = false;
-        categoryFilter = catBtn.getAttribute("data-cat") || "";
-        runSearch();
-        renderChips();
-      });
-      listEl.addEventListener("click", function (ev) {
-        const btn = ev.target.closest("[data-id]");
-        if (!btn) {
-          return;
-        }
-        openDoc(btn.getAttribute("data-id"));
-      });
-      readerEl.addEventListener("click", function (ev) {
-        if (ev.target.id !== "academy-done" || !activeId) {
-          return;
-        }
-        const learned = doneSet().has(activeId);
-        const payload = { docId: activeId, done: !learned };
-        api("/api/academy/progress", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify(payload)
-        })
-          .then(function (data) {
-            return data.progress;
-          })
-          .catch(function () {
-            return payload;
-          })
-          .then(function (row) {
-            if (dead) {
-              return;
-            }
-            progress = progress.filter(function (item) {
-              return (item.docId || item.lessonId) !== activeId;
-            });
-            if (row && row.done) {
-              progress.push(row);
-            }
-            saveLocalProgress(progress);
-            renderStats();
-            renderList();
-            renderReader();
-          });
-      });
-      searchEl.addEventListener("input", function () {
-        runSearch();
-      });
-
-      Promise.all([
-        fetch(CATALOG_HREF, { credentials: "same-origin", headers: { Accept: "application/json" } })
-          .then(function (res) {
-            if (!res.ok) {
-              throw new Error("目录 " + res.status);
-            }
-            return res.json();
-          })
-          .catch(function () {
-            return { categories: [], docs: [] };
-          }),
-        api("/api/academy").catch(function () {
-          return {};
-        }),
-        api("/api/academy/docs?published=all&body=1").catch(function () {
-          return { docs: [] };
-        }),
-        api("/api/academy/progress").catch(function () {
-          return { progress: loadLocalProgress() };
-        })
-      ]).then(function (quad) {
-        if (dead) {
-          return;
-        }
-        const file = quad[0] || {};
-        categories = (file.categories || quad[1].categories || []).filter(function (item) {
-          return item.id !== "draft";
-        });
-        const fromApi = quad[2].docs && quad[2].docs.length ? quad[2].docs : null;
-        allDocs = fromApi || file.docs || [];
-        progress = Array.isArray(quad[3].progress) ? quad[3].progress : loadLocalProgress();
-        renderStats();
-        renderChips();
-        renderList();
-      });
-
-      return function unmount() {
-        dead = true;
-        root.innerHTML = "";
-      };
-    }
-  };
+  const courses = coursesPage();
+  window.XmModules["/academy"] = courses;
+  window.XmModules["/academy/courses"] = courses;
+  window.XmModules["/academy/exams"] = examsPage();
+  window.XmModules["/academy/handbook"] = handbookPage();
 })();

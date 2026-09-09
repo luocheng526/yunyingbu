@@ -1,4 +1,4 @@
-/* xm-academy-catalog 0.1.128 */
+/* xm-academy-catalog 0.1.160 */
 .academy-page {
   max-width: 1180px;
 }
@@ -222,8 +222,116 @@ html[data-theme="dark"] .academy-actions button.ghost {
   color: var(--xm-primary);
 }
 
+.academy-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+}
+
+.academy-steps li {
+  border: 1px solid var(--xm-line);
+  background: var(--xm-card);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--xm-muted);
+}
+
+.academy-steps li.is-on {
+  border-color: var(--xm-primary);
+  color: var(--xm-ink);
+}
+
+.academy-step-n {
+  color: var(--xm-primary);
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.academy-drop .academy-file {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--xm-muted);
+  font-size: 13px;
+}
+
+.academy-file input {
+  margin-right: 8px;
+}
+
+.academy-exam-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 12px;
+}
+
+.academy-track {
+  text-align: left;
+  border: 1px solid var(--xm-line);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.academy-track.is-on {
+  border-color: var(--xm-primary);
+  box-shadow: 0 0 0 1px var(--xm-primary);
+}
+
+.academy-track .value {
+  font-size: 16px;
+}
+
+.academy-timer {
+  margin: 12px 0;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--xm-primary-soft);
+  color: var(--xm-primary);
+  font-weight: 600;
+}
+
+.academy-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.academy-tree-parent {
+  margin: 0 0 6px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.academy-tree-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 6px 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.academy-tree-item.is-on {
+  color: var(--xm-primary);
+}
+
+.academy-doc-shell {
+  min-height: 180px;
+  border: 1px dashed var(--xm-line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
 @media (max-width: 900px) {
-  .academy-layout {
+  .academy-exam-grid {
     grid-template-columns: 1fr;
   }
 }
+

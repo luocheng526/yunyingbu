@@ -1,5 +1,12 @@
 import { dbMode, query } from "../profile/auth.js";
 import { getDoc, listCatalog, listDocs, listLessonIds, searchDocs } from "./catalog.js";
+import {
+  getExamTrack,
+  handbookTree,
+  listCourses,
+  listExamTracks,
+  plan
+} from "./framework.js";
 
 const memoryProgress = new Map();
 
@@ -41,6 +48,26 @@ export function doc(id, options) {
 
 export function search(query, options) {
   return searchDocs(query, options);
+}
+
+export function frameworkPlan() {
+  return plan();
+}
+
+export function courses() {
+  return listCourses();
+}
+
+export function examTracks() {
+  return listExamTracks();
+}
+
+export function examTrack(id) {
+  return getExamTrack(id);
+}
+
+export function handbook() {
+  return handbookTree();
 }
 
 export async function listProgress(username) {

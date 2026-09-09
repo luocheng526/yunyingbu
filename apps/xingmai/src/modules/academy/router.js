@@ -1,6 +1,18 @@
 import { Router } from "express";
 import { currentUser } from "../profile/auth.js";
-import { catalog, doc, docs, listProgress, search, setProgress } from "./store.js";
+import {
+  catalog,
+  courses,
+  doc,
+  docs,
+  examTrack,
+  examTracks,
+  frameworkPlan,
+  handbook,
+  listProgress,
+  search,
+  setProgress
+} from "./store.js";
 
 export const academyRouter = Router();
 
@@ -39,6 +51,46 @@ academyRouter.get("/", (req, res) => {
     docs: data.docs,
     stats: data.stats
   });
+});
+
+academyRouter.get("/plan", (req, res) => {
+  if (!requireUser(req, res)) {
+    return;
+  }
+  res.json({ ok: true, module: "甄选商学院", ...frameworkPlan() });
+});
+
+academyRouter.get("/courses", (req, res) => {
+  if (!requireUser(req, res)) {
+    return;
+  }
+  res.json({ ok: true, ...courses() });
+});
+
+academyRouter.get("/exams/tracks", (req, res) => {
+  if (!requireUser(req, res)) {
+    return;
+  }
+  res.json({ ok: true, tracks: examTracks() });
+});
+
+academyRouter.get("/exams/tracks/:id", (req, res) => {
+  if (!requireUser(req, res)) {
+    return;
+  }
+  const track = examTrack(req.params.id);
+  if (!track) {
+    res.status(404).json({ ok: false, error: "没有这一档考试" });
+    return;
+  }
+  res.json({ ok: true, track, paper: { ready: false, questions: [] } });
+});
+
+academyRouter.get("/handbook/tree", (req, res) => {
+  if (!requireUser(req, res)) {
+    return;
+  }
+  res.json({ ok: true, tree: handbook() });
 });
 
 academyRouter.get("/search", (req, res) => {
