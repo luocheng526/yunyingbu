@@ -144,19 +144,28 @@ test("duty catalog lists granted items and can register a new duty", async () =>
     const duties = await request(base, "/api/profile/duties", { cookie: ok.cookie, redirect: "follow" });
     assert.equal(duties.res.status, 200);
     assert.ok(duties.json.grantedCount > 0);
-    assert.ok(duties.json.groups.some((group) => group.name === "工单中心"));
-    assert.ok(duties.json.groups.some((group) => group.name === "运营部站点"));
+    const names = duties.json.groups.map((group) => group.name);
+    assert.deepEqual(names, [
+      "数据中心",
+      "沈子晗运营中心",
+      "韩梦凯运营中心",
+      "甄选商学院",
+      "甄选智能体",
+      "版本发布中心",
+      "组织中心",
+      "个人中心"
+    ]);
     assert.equal(duties.json.identity.username, "罗成");
     const before = duties.json.total;
     const added = await request(base, "/api/profile/duties", {
       method: "POST",
       cookie: ok.cookie,
       redirect: "follow",
-      body: { id: "ops.future", group: "运营部站点", label: "进入未来模块" }
+      body: { id: "agents.future", group: "甄选智能体", label: "进入未来能力" }
     });
     assert.equal(added.res.status, 200);
     assert.equal(added.json.total, before + 1);
-    assert.ok(added.json.groups.some((group) => group.items.some((item) => item.id === "ops.future")));
+    assert.ok(added.json.groups.some((group) => group.items.some((item) => item.id === "agents.future")));
   });
 });
 
