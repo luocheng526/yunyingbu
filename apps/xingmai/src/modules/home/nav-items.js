@@ -1,4 +1,4 @@
-export const NAV_VERSION = "v0.4.15";
+export const NAV_VERSION = "v0.4.16";
 
 export const DATA_CHILDREN = [
   { href: "/data/overview", label: "数据总揽" },
@@ -22,11 +22,17 @@ export const HAN_CHILDREN = [
   { href: "/han/training", label: "培训系统" }
 ];
 
+export const ACADEMY_CHILDREN = [
+  { href: "/academy/courses", label: "培训课程" },
+  { href: "/academy/exams", label: "培训考试" },
+  { href: "/academy/handbook", label: "运营手册" }
+];
+
 export const NAV_MAIN = [
   { href: "/data", label: "数据中心", children: DATA_CHILDREN },
   { href: "/shen", label: "沈子晗运营中心", children: SHEN_CHILDREN },
   { href: "/han", label: "韩梦凯运营中心", children: HAN_CHILDREN },
-  { href: "/academy", file: "academy.html", label: "甄选商学院" },
+  { href: "/academy", label: "甄选商学院", children: ACADEMY_CHILDREN },
   { href: "/agents", file: "agents.html", label: "甄选智能体" }
 ];
 

@@ -29,7 +29,7 @@
 4. 其它已登录路由：`renderAppShell(href)` 画出侧栏 + `#xm-content`，再 `XmModules[path].mount(root)`。
 5. 模块之间点击：`history.pushState` + 加载对应 `public/shared/modules/<id>.js`，不要整页跳、不要预取全部模块。
 6. 侧栏：窄 `200px`、无「项目」分组、无顶栏退出/暗色按钮。主区是数据中心 / 沈 / 韩 / 甄选商学院 / 甄选智能体。底部是版本发布中心 / 组织中心 / 个人中心 / 退出登录 / 版本号。
-7. 主框架必须认识「甄选商学院」「甄选智能体」：`NAV_MAIN`、`APP_MODULES`、`MODULES`、章程。新对话框只填内容，不要再铺菜单。
+7. 主框架必须认识「甄选商学院」（子菜单：培训课程 / 培训考试 / 运营手册）和「甄选智能体」：`NAV_MAIN`、`APP_MODULES`、`MODULES`、章程。新对话框只填内容，不要再铺菜单。
 
 `cursor/home-nav-workbench-e50e` 已整支删除。不要在仓库根再铺一套全页壳。
 

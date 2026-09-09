@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.110 */
+/* xm-fast-shell 0.1.111 */
 (function () {
-  const ASSET_VER = "0.1.110";
+  const ASSET_VER = "0.1.111";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/data": "data",
@@ -21,6 +21,9 @@
     "/han/training": "han",
     "/people": "people",
     "/academy": "academy",
+    "/academy/courses": "academy",
+    "/academy/exams": "academy",
+    "/academy/handbook": "academy",
     "/agents": "agents",
     "/releases": "releases",
     "/me": "me"
@@ -44,17 +47,22 @@
     { href: "/han/paid", label: "实时付费" },
     { href: "/han/training", label: "培训系统" }
   ];
+  const ACADEMY_CHILDREN = [
+    { href: "/academy/courses", label: "培训课程" },
+    { href: "/academy/exams", label: "培训考试" },
+    { href: "/academy/handbook", label: "运营手册" }
+  ];
   const items = [
     { href: "/data", label: "数据中心", children: DATA_CHILDREN },
     { href: "/shen", label: "沈子晗运营中心", children: SHEN_CHILDREN },
     { href: "/han", label: "韩梦凯运营中心", children: HAN_CHILDREN },
-    { href: "/academy", label: "甄选商学院" },
+    { href: "/academy", label: "甄选商学院", children: ACADEMY_CHILDREN },
     { href: "/agents", label: "甄选智能体" },
     { href: "/releases", label: "版本发布中心" },
     { href: "/people", label: "组织中心" },
     { href: "/me", label: "个人中心" }
   ];
-  const labels = items.concat(DATA_CHILDREN, SHEN_CHILDREN, HAN_CHILDREN);
+  const labels = items.concat(DATA_CHILDREN, SHEN_CHILDREN, HAN_CHILDREN, ACADEMY_CHILDREN);
 
   const path = (window.location.pathname.replace(/\/+$/, "") || "/").toLowerCase();
   if (path === "/login" || path === "/login.html") {
@@ -174,7 +182,7 @@
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout">' +
       ico("logout") +
       "<span>退出登录</span></button>" +
-      '<p class="xm-version">v0.4.15</p></nav>'
+      '<p class="xm-version">v0.4.16</p></nav>'
     );
   }
 
@@ -378,6 +386,10 @@
     }
     if (key === "/han") {
       window.location.replace("/han/selection");
+      return;
+    }
+    if (key === "/academy") {
+      window.location.replace("/academy/courses");
       return;
     }
     if (key === "/" || !MODULES[key]) {
