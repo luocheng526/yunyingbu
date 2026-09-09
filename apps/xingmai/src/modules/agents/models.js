@@ -5,27 +5,20 @@ const DEFAULT_REMOTE = [
   { id: "gpt-4o", label: "GPT-4o" }
 ];
 
+let runtime = { key: "", base: "", extras: [] };
+
 function env(name, fallback = "") {
   const value = process.env[name];
   return value == null ? fallback : String(value);
 }
 
-function apiKey() {
-  return env("XM_AGENTS_API_KEY") || env("OPENAI_API_KEY");
-}
-
-function apiBase() {
-  const raw = env("XM_AGENTS_API_BASE") || (apiKey() ? "https://api.openai.com/v1" : "");
-  return raw.replace(/\/+$/, "");
-}
-
-function parseExtraModels() {
-  const raw = env("XM_AGENTS_MODELS").trim();
-  if (!raw) {
+export function parseModelList(raw) {
+  const text = String(raw || "").trim();
+  if (!text) {
     return [];
   }
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(text);
     if (Array.isArray(parsed)) {
       return parsed
         .map((item) => ({
@@ -37,13 +30,45 @@ function parseExtraModels() {
   } catch {
     /* id:label,id:label */
   }
-  return raw
+  return text
     .split(",")
     .map((part) => {
       const [id, ...rest] = part.split(":");
       return { id: String(id || "").trim(), label: rest.join(":").trim() || String(id || "").trim() };
     })
     .filter((item) => item.id && item.id !== DESK_ID);
+}
+
+export function setRuntimeRemote(next = {}) {
+  runtime = {
+    key: String(next.key || ""),
+    base: String(next.base || "").replace(/\/+$/, ""),
+    extras: Array.isArray(next.extras) ? next.extras.filter((item) => item && item.id) : []
+  };
+}
+
+function apiKey() {
+  return env("XM_AGENTS_API_KEY") || env("OPENAI_API_KEY") || runtime.key;
+}
+
+function apiBase() {
+  const raw = env("XM_AGENTS_API_BASE") || runtime.base || (apiKey() ? "https://api.openai.com/v1" : "");
+  return raw.replace(/\/+$/, "");
+}
+
+function parseExtraModels() {
+  const fromEnv = parseModelList(env("XM_AGENTS_MODELS"));
+  return fromEnv.length ? fromEnv : runtime.extras;
+}
+
+export function remoteStatus() {
+  const fromEnv = Boolean(env("XM_AGENTS_API_KEY") || env("OPENAI_API_KEY"));
+  return {
+    configured: Boolean(apiKey()),
+    source: fromEnv ? "env" : runtime.key ? "saved" : "",
+    apiBase: apiBase(),
+    locked: fromEnv
+  };
 }
 
 function remoteCatalog() {
@@ -98,7 +123,7 @@ export function resolveModel(modelId) {
     throw error;
   }
   if (!found.available) {
-    const error = new Error("该模型后台未配置密钥，请改选主脑问答台，或让主框架在服务里写入 XM_AGENTS_API_KEY");
+    const error = new Error("该模型后台未配置密钥，请在本页接入，或改选主脑问答台");
     error.statusCode = 400;
     throw error;
   }

@@ -5,11 +5,15 @@ import { defaultModelId, publicModels, resolveModel, stripSecrets } from "./mode
 import {
   addChatTurn,
   assertChatText,
+  clearAgentsSettings,
   createSession,
   getSession,
   getUploadMeta,
   getUploadsForUser,
+  hydrateAgentsRuntime,
   listSessions,
+  readAgentsSettingsPublic,
+  saveAgentsSettings,
   saveUpload
 } from "./store.js";
 import { resolveViewer, rosterSnapshot } from "./tools.js";
@@ -59,19 +63,56 @@ async function parseMultipartFile(req) {
 
 agentsRouter.get("/", async (req, res) => {
   const user = actor(req);
+  await hydrateAgentsRuntime();
   res.json({
     ok: true,
     module: "甄选智能体",
     message: "主脑问答台已就绪",
     models: publicModels(),
     defaultModelId: defaultModelId(),
+    connect: await readAgentsSettingsPublic(),
     sessions: user ? await listSessions(user.username) : []
   });
 });
 
-agentsRouter.get("/models", (_req, res) => {
-  const models = publicModels();
-  res.json({ ok: true, models, defaultModelId: defaultModelId() });
+agentsRouter.get("/models", async (_req, res) => {
+  await hydrateAgentsRuntime();
+  res.json({ ok: true, models: publicModels(), defaultModelId: defaultModelId() });
+});
+
+agentsRouter.get("/settings", requireAuth, async (_req, res) => {
+  try {
+    res.json({ ok: true, ...await readAgentsSettingsPublic() });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+agentsRouter.post("/settings", requireAuth, async (req, res) => {
+  try {
+    await saveAgentsSettings({
+      apiKey: req.body?.apiKey || req.body?.key,
+      apiBase: req.body?.apiBase || req.body?.base,
+      modelsText: req.body?.modelsText || req.body?.models
+    });
+    res.status(201).json({
+      ok: true,
+      ...await readAgentsSettingsPublic(),
+      models: publicModels(),
+      defaultModelId: defaultModelId()
+    });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+agentsRouter.delete("/settings", requireAuth, async (_req, res) => {
+  try {
+    await clearAgentsSettings();
+    res.json({ ok: true, ...await readAgentsSettingsPublic(), models: publicModels(), defaultModelId: defaultModelId() });
+  } catch (err) {
+    sendError(res, err);
+  }
 });
 
 agentsRouter.get("/sessions", requireAuth, async (req, res) => {
@@ -80,6 +121,7 @@ agentsRouter.get("/sessions", requireAuth, async (req, res) => {
 
 agentsRouter.post("/sessions", requireAuth, async (req, res) => {
   try {
+    await hydrateAgentsRuntime();
     const model = resolveModel(req.body?.modelId || defaultModelId());
     const created = await createSession(req.user.username, model.id, GREETING);
     res.status(201).json({ ok: true, model: stripSecrets(model), ...created });
@@ -132,6 +174,7 @@ agentsRouter.get("/uploads/:id", requireAuth, async (req, res) => {
 
 agentsRouter.post("/chat", requireAuth, async (req, res) => {
   try {
+    await hydrateAgentsRuntime();
     const text = assertChatText(req.body?.text);
     const model = resolveModel(req.body?.modelId || defaultModelId());
     const fileIds = Array.isArray(req.body?.fileIds) ? req.body.fileIds : [];

@@ -1,4 +1,4 @@
-/* xm-module-agents 0.1.133 */
+/* xm-module-agents 0.1.144 */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -52,6 +52,14 @@
         "<div><h2 id=\"agents-chat-title\">主脑问答台</h2>" +
         '<p id="agents-chat-lead">选品、做店、日常可聊；花名册三件事仍走本站。模型在后台，下拉只选 modelId。</p></div>' +
         '<label class="agents-model">模型<select id="agents-model"></select></label></div>' +
+        '<details class="agents-connect" id="agents-connect"><summary>接入 GPT（密钥只留在服务器）</summary>' +
+        '<p class="agents-connect-note" id="agents-connect-note">下拉里灰色的 GPT 是还没接入。官方 OpenAI 填密钥即可；中转再填接口地址和模型名。</p>' +
+        '<form id="agents-connect-form">' +
+        '<label>密钥<input type="password" id="agents-key" name="apiKey" autocomplete="off" placeholder="只提交到本站后台，不会出现在模型列表" /></label>' +
+        '<label>接口地址<input type="url" id="agents-base" name="apiBase" placeholder="官方可留空，中转填 …/v1" /></label>' +
+        '<label>模型名单<input type="text" id="agents-models-text" name="modelsText" placeholder="可留空，默认 GPT-4o mini / GPT-4o" /></label>' +
+        '<div class="agents-connect-actions"><button type="submit" id="agents-connect-save">保存接入</button>' +
+        '<button type="button" class="agents-connect-clear" id="agents-connect-clear">清除接入</button></div></form></details>' +
         '<div class="agents-log" id="agents-log"><p class="agents-empty">正在打开会话…</p></div>' +
         '<p class="agents-status" id="agents-status" role="status"></p>' +
         '<div class="agents-files" id="agents-files"></div>' +
@@ -73,6 +81,11 @@
       const newEl = root.querySelector("#agents-new");
       const modelEl = root.querySelector("#agents-model");
       const fileEl = root.querySelector("#agents-file");
+      const connectNoteEl = root.querySelector("#agents-connect-note");
+      const connectFormEl = root.querySelector("#agents-connect-form");
+      const connectKeyEl = root.querySelector("#agents-key");
+      const connectBaseEl = root.querySelector("#agents-base");
+      const connectClearEl = root.querySelector("#agents-connect-clear");
       let dead = false;
       let models = [];
       let preferredModelId = "";
@@ -88,6 +101,21 @@
 
       function modelId() {
         return modelEl.value || "desk";
+      }
+
+      function renderConnect(info) {
+        if (!connectNoteEl || !info) {
+          return;
+        }
+        if (info.locked) {
+          connectNoteEl.textContent = "服务环境已接入，下拉可选 GPT。本页不能覆盖服务环境。";
+          return;
+        }
+        if (info.configured) {
+          connectNoteEl.textContent = "已接入，下拉可选 GPT。再保存会覆盖本站保存的密钥，不会回显旧密钥。";
+          return;
+        }
+        connectNoteEl.textContent = "下拉里灰色的 GPT 是还没接入。官方 OpenAI 填密钥即可；中转再填接口地址和模型名。";
       }
 
       function renderModels() {
@@ -195,13 +223,18 @@
       }
 
       function loadList() {
-        return Promise.all([api("/api/agents/models"), api("/api/agents/sessions")]).then(function (pair) {
+        return Promise.all([
+          api("/api/agents/models"),
+          api("/api/agents/sessions"),
+          api("/api/agents/settings")
+        ]).then(function (pair) {
           if (dead) {
             return;
           }
           models = pair[0].models || [];
           preferredModelId = pair[0].defaultModelId || "";
           sessions = pair[1].sessions || [];
+          renderConnect(pair[2]);
           paint();
         });
       }
@@ -237,6 +270,73 @@
           messages = data.messages || [];
           setStatus("");
           return loadList();
+        });
+      }
+
+      if (connectFormEl) {
+        connectFormEl.addEventListener("submit", function (event) {
+          event.preventDefault();
+          const key = connectKeyEl.value.trim();
+          if (!key) {
+            setStatus("请填写密钥", true);
+            return;
+          }
+          setStatus("正在接入…");
+          api("/api/agents/settings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({
+              apiKey: key,
+              apiBase: root.querySelector("#agents-base").value.trim(),
+              modelsText: root.querySelector("#agents-models-text").value.trim()
+            })
+          })
+            .then(function (data) {
+              if (dead) {
+                return;
+              }
+              connectKeyEl.value = "";
+              models = data.models || models;
+              preferredModelId = data.defaultModelId || preferredModelId;
+              renderConnect(data);
+              paint();
+              setStatus("已接入，下拉可选 GPT");
+            })
+            .catch(function (err) {
+              if (!dead) {
+                setStatus(err.message || "接入失败", true);
+              }
+            });
+        });
+      }
+
+      if (connectClearEl) {
+        connectClearEl.addEventListener("click", function () {
+          setStatus("正在清除接入…");
+          fetch("/api/agents/settings", { method: "DELETE", credentials: "same-origin", headers: { Accept: "application/json" } })
+            .then(function (res) {
+              return res.json().catch(function () { return {}; }).then(function (data) {
+                if (!res.ok) {
+                  throw new Error(data.error || "清除失败");
+                }
+                return data;
+              });
+            })
+            .then(function (data) {
+              if (dead) {
+                return;
+              }
+              models = data.models || models;
+              preferredModelId = data.defaultModelId || "desk";
+              renderConnect(data);
+              paint();
+              setStatus("已清除接入");
+            })
+            .catch(function (err) {
+              if (!dead) {
+                setStatus(err.message || "清除失败", true);
+              }
+            });
         });
       }
 

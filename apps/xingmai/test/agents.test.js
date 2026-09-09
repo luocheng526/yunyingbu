@@ -47,6 +47,8 @@ test("会话页挂 XmModules /agents，颜色走主题变量", () => {
   assert.match(agentsJs, /\/api\/agents\/models/);
   assert.match(agentsJs, /\/api\/agents\/uploads/);
   assert.match(agentsJs, /\/api\/agents\/sessions/);
+  assert.match(agentsJs, /\/api\/agents\/settings/);
+  assert.match(agentsJs, /接入 GPT/);
   assert.match(agentsJs, /defaultModelId/);
   assert.match(agentsJs, /后台模型/);
   assert.doesNotMatch(agentsJs, /xm-sider/);
@@ -291,6 +293,42 @@ test("后台模型只复述运营问答，花名册题不外呼", async () => {
     }
   );
   assert.match(grounded, /张文静在职/);
+});
+
+test("本页接入密钥后 GPT 可选，接口不回密钥", async () => {
+  const cookie = await loginCookie();
+  const headers = { cookie, "Content-Type": "application/json" };
+  const saved = await fetch(`${base}/api/agents/settings`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      apiKey: "test-key-not-openai",
+      apiBase: "https://example.invalid/v1"
+    })
+  });
+  assert.equal(saved.status, 201);
+  const body = await saved.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.configured, true);
+  assert.equal(body.source, "saved");
+  assert.equal("apiKey" in body, false);
+  assert.equal("key" in body, false);
+  assert.doesNotMatch(JSON.stringify(body), /test-key-not-openai/);
+  assert.ok(body.models.some((item) => item.id === "gpt-4o-mini" && item.available));
+
+  const models = await (await fetch(`${base}/api/agents/models`, { headers: { cookie } })).json();
+  assert.equal(models.defaultModelId, "gpt-4o-mini");
+  assert.doesNotMatch(JSON.stringify(models), /test-key-not-openai/);
+
+  const shown = await (await fetch(`${base}/api/agents/settings`, { headers: { cookie } })).json();
+  assert.equal(shown.configured, true);
+  assert.equal("apiKey" in shown, false);
+
+  await fetch(`${base}/api/agents/settings`, { method: "DELETE", headers: { cookie } });
+  const after = await (await fetch(`${base}/api/agents/models`, { headers: { cookie } })).json();
+  if (!process.env.XM_AGENTS_API_KEY && !process.env.OPENAI_API_KEY) {
+    assert.equal(after.models.find((item) => item.id === "gpt-4o-mini").available, false);
+  }
 });
 
 test("旧 thread_id 表会补 session_id，避免线上 Unknown column", async () => {

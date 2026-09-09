@@ -299,6 +299,63 @@
   color: #cf1322;
 }
 
+.agents-connect {
+  margin: 0 12px 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--xm-line);
+  border-radius: 8px;
+  background: var(--xm-bg);
+}
+
+.agents-connect summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--xm-ink);
+}
+
+.agents-connect-note {
+  margin: 8px 0;
+  font-size: 12px;
+  color: var(--xm-muted);
+}
+
+.agents-connect form {
+  display: grid;
+  gap: 8px;
+}
+
+.agents-connect label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--xm-muted);
+}
+
+.agents-connect input {
+  border: 1px solid var(--xm-line);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+  color: var(--xm-ink);
+  background: var(--xm-card);
+}
+
+.agents-connect-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.agents-connect-actions button {
+  height: 36px;
+}
+
+.agents-connect-clear {
+  background: transparent !important;
+  color: var(--xm-ink) !important;
+  border: 1px solid var(--xm-line) !important;
+}
+
 html[data-theme="dark"] .agents-card,
 html[data-theme="dark"] .agents-thread,
 html[data-theme="dark"] .agents-log,

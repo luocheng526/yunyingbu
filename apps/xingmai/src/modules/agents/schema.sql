@@ -37,3 +37,11 @@ ALTER TABLE agents_messages ADD COLUMN file_ids VARCHAR(255) NOT NULL DEFAULT '[
 ALTER TABLE agents_messages ADD COLUMN model_id VARCHAR(64) NOT NULL DEFAULT '';
 ALTER TABLE agents_messages ADD COLUMN sources VARCHAR(255) NOT NULL DEFAULT '[]';
 ALTER TABLE agents_messages MODIFY thread_id INT NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS agents_settings (
+  id INT NOT NULL PRIMARY KEY,
+  api_key TEXT NOT NULL,
+  api_base VARCHAR(255) NOT NULL DEFAULT '',
+  models_text VARCHAR(512) NOT NULL DEFAULT '',
+  updated_at VARCHAR(32) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

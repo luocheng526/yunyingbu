@@ -1,5 +1,5 @@
 import { dbMode, query } from "../profile/auth.js";
-import { defaultModelId } from "./models.js";
+import { defaultModelId, parseModelList, remoteStatus, setRuntimeRemote } from "./models.js";
 
 const MAX_TEXT = 2000;
 const MAX_TITLE = 40;
@@ -13,6 +13,7 @@ let nextMessageId = 1;
 let nextUploadId = 1;
 let schemaReady = false;
 let messageHasThreadId = false;
+let memorySettings = { apiKey: "", apiBase: "", modelsText: "" };
 
 function nowStamp() {
   return new Date().toLocaleString("sv-SE", { timeZone: "Asia/Shanghai" });
@@ -33,6 +34,8 @@ export function resetAgentsStore() {
   nextUploadId = 1;
   schemaReady = false;
   messageHasThreadId = false;
+  memorySettings = { apiKey: "", apiBase: "", modelsText: "" };
+  setRuntimeRemote();
 }
 
 async function ignoreSchemaNoise(work) {
@@ -59,6 +62,10 @@ export async function ensureAgentsSchema() {
   await query(
     "CREATE TABLE IF NOT EXISTS agents_uploads (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, username VARCHAR(64) NOT NULL, filename VARCHAR(255) NOT NULL, mime VARCHAR(128) NOT NULL, size INT NOT NULL, content LONGBLOB NOT NULL, created_at VARCHAR(32) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
   );
+  await query(
+    "CREATE TABLE IF NOT EXISTS agents_settings (id INT NOT NULL PRIMARY KEY, api_key TEXT NOT NULL, api_base VARCHAR(255) NOT NULL DEFAULT '', models_text VARCHAR(512) NOT NULL DEFAULT '', updated_at VARCHAR(32) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+  );
+  await applySavedRuntime();
   // rel-167 建的是 agents_threads + agents_messages.thread_id。CREATE IF NOT EXISTS 不会改旧表，线上会报 Unknown column session_id。
   await ignoreSchemaNoise(() =>
     query("ALTER TABLE agents_messages ADD COLUMN session_id INT NOT NULL DEFAULT 0")
@@ -464,4 +471,80 @@ export async function getUploadMeta(id, username) {
   }
   const row = rows[0];
   return { id: row.id, filename: row.filename, mime: row.mime, size: row.size, createdAt: row.createdAt };
+}
+
+function applySettingsRow(row) {
+  const apiKey = row ? String(row.apiKey || row.api_key || "") : "";
+  const apiBase = row ? String(row.apiBase || row.api_base || "") : "";
+  const modelsText = row ? String(row.modelsText || row.models_text || "") : "";
+  setRuntimeRemote({
+    key: apiKey,
+    base: apiBase,
+    extras: parseModelList(modelsText)
+  });
+  return { apiKey, apiBase, modelsText };
+}
+
+async function applySavedRuntime() {
+  if (dbMode() !== "mysql") {
+    applySettingsRow(memorySettings);
+    return;
+  }
+  const [rows] = await query("SELECT api_key, api_base, models_text FROM agents_settings WHERE id = 1");
+  applySettingsRow(rows && rows[0] ? rows[0] : null);
+}
+
+export async function hydrateAgentsRuntime() {
+  await ensureAgentsSchema();
+}
+
+export async function readAgentsSettingsPublic() {
+  await ensureAgentsSchema();
+  return remoteStatus();
+}
+
+export async function saveAgentsSettings({ apiKey, apiBase, modelsText }) {
+  await ensureAgentsSchema();
+  const nextKey = String(apiKey || "").trim();
+  const nextBase = String(apiBase || "").trim().replace(/\/+$/, "");
+  const nextModels = String(modelsText || "").trim();
+  if (nextKey && nextKey.length < 8) {
+    throw fail(400, "密钥太短");
+  }
+  if (nextBase && !/^https?:\/\//i.test(nextBase)) {
+    throw fail(400, "接口地址要以 http:// 或 https:// 开头");
+  }
+  let current = memorySettings;
+  if (dbMode() === "mysql") {
+    const [rows] = await query("SELECT api_key, api_base, models_text FROM agents_settings WHERE id = 1");
+    current = rows && rows[0] ? applySettingsRow(rows[0]) : { apiKey: "", apiBase: "", modelsText: "" };
+  }
+  const saved = {
+    apiKey: nextKey || current.apiKey,
+    apiBase: nextBase || current.apiBase,
+    modelsText: nextModels || current.modelsText
+  };
+  if (!saved.apiKey) {
+    throw fail(400, "请填写密钥");
+  }
+  const stamp = nowStamp();
+  if (dbMode() === "mysql") {
+    await query(
+      "INSERT INTO agents_settings (id, api_key, api_base, models_text, updated_at) VALUES (1, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE api_key = VALUES(api_key), api_base = VALUES(api_base), models_text = VALUES(models_text), updated_at = VALUES(updated_at)",
+      [saved.apiKey, saved.apiBase, saved.modelsText, stamp]
+    );
+  } else {
+    memorySettings = saved;
+  }
+  applySettingsRow(saved);
+  return true;
+}
+
+export async function clearAgentsSettings() {
+  await ensureAgentsSchema();
+  if (dbMode() === "mysql") {
+    await query("DELETE FROM agents_settings WHERE id = 1");
+  }
+  memorySettings = { apiKey: "", apiBase: "", modelsText: "" };
+  applySettingsRow(null);
 }
