@@ -32,16 +32,22 @@ function publishBlockedReason(item) {
   if (item.status === "rejected") {
     return { status: 409, error: "已驳回的单据禁止发布" };
   }
-  if (item.status === "publishing") {
-    return { status: 409, error: "有发布正在进行，禁止抢发" };
-  }
-  if (item.status === "success" || item.status === "failed") {
+  if (item.status === "failed") {
     return { status: 409, error: "该单据已结束，禁止再次发布" };
   }
   if (item.status !== "queued" && item.status !== "approved") {
     return { status: 409, error: "当前状态不允许发布" };
   }
   return null;
+}
+
+function alreadyPublishedPayload(item) {
+  return {
+    ok: true,
+    item,
+    version: item.version,
+    already: item.status
+  };
 }
 
 function successLog(item, pushResult, extra) {
@@ -138,6 +144,15 @@ export function createReleasesRouter(options = {}) {
   }
 
   async function handlePublish(req, res, item) {
+    if (!item) {
+      res.status(404).json({ ok: false, error: "单据不存在" });
+      return;
+    }
+    if (item.status === "publishing" || item.status === "success") {
+      res.json(alreadyPublishedPayload(item));
+      return;
+    }
+
     const blocked = publishBlockedReason(item);
     if (blocked) {
       res.status(blocked.status).json({ ok: false, error: blocked.error });
@@ -172,6 +187,21 @@ export function createReleasesRouter(options = {}) {
 
     const acquired = await store.tryAcquireLock(item);
     if (!acquired) {
+      const latest = (await store.get(item.id)) || item;
+      const lock = await store.getLock();
+      if (latest.status === "publishing" || latest.status === "success") {
+        res.json(alreadyPublishedPayload(latest));
+        return;
+      }
+      if (lock && lock.locked && lock.current && lock.current.id === item.id) {
+        res.json({
+          ok: true,
+          item: latest,
+          version: latest.version,
+          already: "publishing"
+        });
+        return;
+      }
       res.status(409).json({ ok: false, error: "有发布正在进行，禁止抢发" });
       return;
     }

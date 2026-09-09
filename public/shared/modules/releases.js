@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.91-no-abort */
+/* xm-module-releases 0.1.92-no-false-409 */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -194,7 +194,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-11";
+      link.href = "/releases.css?v=sc-ui-12";
       document.head.appendChild(link);
     }
   }
@@ -604,16 +604,35 @@
         return !status || status === 408 || status === 502 || status === 503 || status >= 500;
       }
 
+      function isIgnorableConfirmConflict(err, ticket, sawPublishing) {
+        if (!err || err.status === 401) {
+          return false;
+        }
+        if (ticket && (ticket.status === "publishing" || ticket.status === "success")) {
+          return true;
+        }
+        if (!ticket) {
+          return Boolean(sawPublishing || err.status === 409);
+        }
+        return false;
+      }
+
       async function loadTicket(id) {
         const one = await api("/api/releases/item/" + encodeURIComponent(id), { skipLoginRedirect: true });
         return (one && one.item) || null;
       }
 
       async function runPass(id, needRestart, version) {
+        if (window.__xmUpgradePass) {
+          flash("有发布正在进行，请等当前这一单完成。", true);
+          return "busy";
+        }
         const keys = stepKeys(needRestart);
+        window.__xmUpgradePass = { id: id, started: Date.now() };
         showUpgrade(keys, "agree");
         let confirmErr = null;
         let confirmBody = null;
+        let sawPublishing = false;
         api("/api/releases/" + id + "/confirm", {
           method: "POST",
           body: "{}"
@@ -626,18 +645,13 @@
         const deadline = Date.now() + 120000;
         let lastHealth = "尚未返回 200";
         let ticket = null;
+        try {
         while (Date.now() < deadline) {
           pinUpgradeMask();
           if (confirmErr && confirmErr.status === 401) {
             failUpgrade(keys, "401 未登录");
             flash("未登录", true);
             return "need-login";
-          }
-          if (confirmErr && !isTransientPassError(confirmErr)) {
-            const msg = (confirmErr.status || "") + " " + (confirmErr.message || "通过失败");
-            failUpgrade(keys, msg);
-            flash(msg, true);
-            return "failed";
           }
           try {
             ticket = await loadTicket(id);
@@ -650,7 +664,14 @@
             return "failed";
           }
           if (ticket && ticket.status === "publishing") {
+            sawPublishing = true;
             renderUpgradeSteps(keys, needRestart ? "restart" : "sync");
+          }
+          if (confirmErr && !isTransientPassError(confirmErr) && !isIgnorableConfirmConflict(confirmErr, ticket, sawPublishing)) {
+            const msg = (confirmErr.status || "") + " " + (confirmErr.message || "通过失败");
+            failUpgrade(keys, msg);
+            flash(msg, true);
+            return "failed";
           }
           if (ticket && ticket.status === "success") {
             renderUpgradeSteps(keys, "health");
@@ -678,6 +699,9 @@
         failUpgrade(keys, timeoutMsg);
         flash("升级未完成：" + lastHealth, true);
         return "failed";
+        } finally {
+          window.__xmUpgradePass = null;
+        }
       }
 
       function tickClock() {
@@ -1093,6 +1117,8 @@
       window.__xmPageTimers = window.__xmPageTimers || [];
       window.__xmPageTimers.push(setInterval(tickClock, 1000));
 
+      if (!window.__xmReleasesClicks) {
+      window.__xmReleasesClicks = true;
       document.body.addEventListener("click", async function (event) {
         const pagerBtn = event.target.closest(".oc-pager [data-page]");
         if (pagerBtn && !pagerBtn.disabled) {
@@ -1122,9 +1148,15 @@
         if (!id) return;
         const act = btn.getAttribute("data-act");
         if (act === "pass") {
+          if (window.__xmUpgradePass) {
+            flash("有发布正在进行，请等当前这一单完成。", true);
+            return;
+          }
+          btn.disabled = true;
           showUpgrade(stepKeys(card.getAttribute("data-restart") === "1"), "agree");
+        } else {
+          btn.disabled = true;
         }
-        btn.disabled = true;
         try {
           if (act === "reject") {
             const reason = window.prompt("请填写驳回原因（必填）");
@@ -1142,7 +1174,7 @@
             const needRestart = card.getAttribute("data-restart") === "1";
             const version = card.getAttribute("data-version") || "";
             const passResult = await runPass(id, needRestart, version);
-            if (passResult === "reloading" || passResult === "landed") return;
+            if (passResult === "reloading" || passResult === "landed" || passResult === "busy") return;
             if (passResult === "failed" || passResult === "need-login") {
               btn.disabled = false;
               return;
@@ -1167,6 +1199,7 @@
           btn.disabled = false;
         }
       });
+      }
 
       const refreshBtn = document.getElementById("refresh-btn");
       if (refreshBtn) refreshBtn.addEventListener("click", async function () {
@@ -1230,6 +1263,8 @@
         restoreDocEvents();
       }
       return function unmount() {
+        window.__xmReleasesClicks = false;
+        window.__xmUpgradePass = null;
         timers.forEach(function (item) {
           if (item.kind === "interval") {
             clearInterval(item.id);

@@ -215,8 +215,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /sc-ui-11/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-11/);
+    assert.match(text, /sc-ui-12/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-12/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
     assert.match(text, /id="xm-releases-boot"/);
@@ -293,6 +293,8 @@ test("release board scripts parse so tab refresh can run", () => {
   assert.ok(start >= 0 && end > start);
   const inline = html.slice(start + "<script>".length, end);
   assert.doesNotThrow(() => new Function(inline));
+  assert.match(inline, /function isIgnorableConfirmConflict/);
+  assert.match(inline, /return "busy"/);
   const theme = fs.readFileSync(path.join(root, "public/shared/modules/releases.js"), "utf8");
   assert.doesNotThrow(() => new Function(theme));
   assert.match(theme, /function autoMountReleases/);
@@ -301,9 +303,12 @@ test("release board scripts parse so tab refresh can run", () => {
   assert.match(theme, /function finishUpgradeInPlace/);
   assert.match(theme, /return "landed"/);
   assert.doesNotMatch(theme, /location\.replace\("\/releases\?reloaded="/);
-  assert.match(theme, /sc-ui-11/);
+  assert.match(theme, /sc-ui-12/);
   assert.match(theme, /\/api\/releases\/item\//);
   assert.match(theme, /function isTransientPassError/);
+  assert.match(theme, /function isIgnorableConfirmConflict/);
+  assert.match(theme, /__xmUpgradePass/);
+  assert.match(theme, /return "busy"/);
   assert.match(theme, /Promise\.allSettled/);
   assert.doesNotMatch(theme, /setTimeout\(function \(\) \{ ac\.abort\(\); \}, 60000\)/);
   assert.match(theme, /\/api\/releases\/history/);
@@ -913,8 +918,10 @@ test("second publish while lock held returns 409 禁止抢发", async () => {
         method: "POST",
         body: "{}"
       });
-      assert.equal(again.res.status, 409);
-      assert.match(again.body.error, /禁止抢发/);
+      assert.equal(again.res.status, 200);
+      assert.equal(again.body.ok, true);
+      assert.equal(again.body.already, "publishing");
+      assert.equal(again.body.item.id, first.body.item.id);
 
       releaseHold();
       const done = await firstPublish;
@@ -922,6 +929,38 @@ test("second publish while lock held returns 409 禁止抢发", async () => {
       assert.equal(started, 1);
       const later = await json(base, "/api/releases");
       assert.equal(later.body.items.find((item) => item.id === second.body.item.id).status, "queued");
+    }
+  );
+});
+
+test("confirm of an already-success ticket is idempotent and does not start another job", async () => {
+  let started = 0;
+  await withServer(
+    {
+      async push() {
+        started += 1;
+        return { stdout: "test-push" };
+      }
+    },
+    async (base) => {
+      const created = await json(base, "/api/releases", {
+        method: "POST",
+        body: apply("4.0.2", "Lin", "首页", "重复确认", { restart: false })
+      });
+      const first = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(first.res.status, 200);
+      assert.equal(first.body.item.status, "success");
+      const again = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(again.res.status, 200);
+      assert.equal(again.body.already, "success");
+      assert.equal(again.body.item.status, "success");
+      assert.equal(started, 1);
     }
   );
 });

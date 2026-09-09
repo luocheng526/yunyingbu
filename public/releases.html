@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>版本发布中心</title>
-    <link rel="stylesheet" href="/releases.css?v=sc-ui-11" />
+    <link rel="stylesheet" href="/releases.css?v=sc-ui-12" />
     <style>
       #upgrade-mask,
       html > #upgrade-mask {
@@ -611,14 +611,31 @@
         return !status || status === 408 || status === 502 || status === 503 || status >= 500;
       }
 
+      function isIgnorableConfirmConflict(err, ticket, sawPublishing) {
+        if (!err || err.status === 401) {
+          return false;
+        }
+        if (ticket && (ticket.status === "publishing" || ticket.status === "success")) {
+          return true;
+        }
+        if (!ticket) {
+          return Boolean(sawPublishing || err.status === 409);
+        }
+        return false;
+      }
+
       async function loadTicket(id) {
         const one = await api("/api/releases/item/" + encodeURIComponent(id), { skipLoginRedirect: true });
         return (one && one.item) || null;
       }
 
       async function runPass(id, needRestart, version) {
+        if (window.__xmUpgradePass) {
+          flash("有发布正在进行，请等当前这一单完成。", true);
+          return "busy";
+        }
         const keys = stepKeys(needRestart);
-        window.__xmUpgradePass = true;
+        window.__xmUpgradePass = { id: id, started: Date.now() };
         try {
         flash("正在通过 " + (version || id) + "，请稍候。");
         showUpgrade(keys, "agree");
@@ -647,13 +664,6 @@
             flash("未登录，未开始发版。", true);
             return "failed";
           }
-          if (confirmErr && !isTransientPassError(confirmErr) && confirmErr.status !== 401) {
-            window.__xmUpgradePass = false;
-            const msg = (confirmErr.status || "") + " " + (confirmErr.message || "通过失败");
-            failUpgrade(keys, msg);
-            flash(msg, true);
-            return "failed";
-          }
           try {
             ticket = await loadTicket(id);
           } catch (err) {
@@ -670,6 +680,13 @@
           if (ticket && ticket.status === "publishing") {
             sawPublishing = true;
             renderUpgradeSteps(keys, needRestart ? "restart" : "sync");
+          }
+          if (confirmErr && !isTransientPassError(confirmErr) && confirmErr.status !== 401 && !isIgnorableConfirmConflict(confirmErr, ticket, sawPublishing)) {
+            window.__xmUpgradePass = false;
+            const msg = (confirmErr.status || "") + " " + (confirmErr.message || "通过失败");
+            failUpgrade(keys, msg);
+            flash(msg, true);
+            return "failed";
           }
           if (ticket && ticket.status === "success") {
             renderUpgradeSteps(keys, "health");
@@ -1183,10 +1200,15 @@
             });
             flash("已驳回，该单不可发布。");
           } else if (act === "pass") {
+            if (window.__xmUpgradePass) {
+              flash("有发布正在进行，请等当前这一单完成。", true);
+              btn.disabled = false;
+              return;
+            }
             const needRestart = card.getAttribute("data-restart") === "1";
             const version = card.getAttribute("data-version") || "";
             const passResult = await runPass(id, needRestart, version);
-            if (passResult === "reloading" || passResult === "landed" || passResult === "need-login") return;
+            if (passResult === "reloading" || passResult === "landed" || passResult === "need-login" || passResult === "busy") return;
             if (passResult === "failed") {
               btn.disabled = false;
               return;
