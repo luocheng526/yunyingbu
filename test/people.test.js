@@ -3,6 +3,7 @@ import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { patchAppSource } from "../src/modules/people/patch-app.js";
+import { resetOrgBoard } from "../src/modules/people/org-board.js";
 import { resetPeopleStore } from "../src/modules/people/store.js";
 
 const PRESET = [
@@ -13,6 +14,7 @@ const PRESET = [
 
 test.beforeEach(() => {
   resetPeopleStore();
+  resetOrgBoard();
 });
 
 async function withServer(fn) {
@@ -35,22 +37,22 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(text, /href="\/shared\/layout\.css"/);
     assert.match(text, /src="\/shared\/nav\.js"/);
     assert.match(text, /id="site-nav"/);
-    assert.match(text, /<main class="page people-page">/);
     assert.match(text, /href="\/people\.css"/);
-    assert.doesNotMatch(text, /class="kicker"/);
-    assert.match(text, /max-width:\s*none/);
-    assert.match(text, /xm-tabs/);
+    assert.match(text, /shared\/modules\/people\.js/);
     assert.doesNotMatch(text, /class="site-sidebar"/);
     assert.doesNotMatch(text, /<header class="site-header">/);
-    assert.doesNotMatch(text, /--sidebar-width/);
-    assert.match(text, /演示/);
     assert.match(text, /组织中心/);
-    assert.match(text, /智能体是只读调用方/);
-    assert.match(text, /aria-label="占位"/);
-    assert.match(text, /待开发/);
-    for (const header of ["姓名", "角色", "所属中心", "状态"]) {
-      assert.match(text, new RegExp(header));
-    }
+
+    const js = await fetch(`${base}/shared/modules/people.js`);
+    const jsText = await js.text();
+    assert.equal(js.status, 200);
+    assert.match(jsText, /店铺主数据/);
+    assert.match(jsText, /总负责人/);
+    assert.match(jsText, /登录主账号/);
+    assert.match(jsText, /全部团队/);
+    assert.doesNotMatch(jsText, /主数据治理/);
+    assert.doesNotMatch(jsText, /全部公司/);
+    assert.doesNotMatch(jsText, />缺口</);
   });
 });
 
@@ -87,7 +89,50 @@ test("GET /api/people/charter is read-only source rule", async () => {
     assert.equal(data.ok, true);
     assert.equal(data.agentAccess, "read-only");
     assert.equal(data.sourceOfTruth.employment, "花名册");
-    assert.equal(data.sourceOfTruth.shopRights, "管辖");
+    assert.match(data.sourceOfTruth.shopRights, /管辖/);
+  });
+});
+
+test("org store board lists demo shops and supports add", async () => {
+  await withServer(async (base) => {
+    const listed = await fetch(`${base}/api/people/org/stores`);
+    const listedJson = await listed.json();
+    assert.equal(listed.status, 200);
+    assert.equal(listedJson.ok, true);
+    assert.ok(listedJson.stores.length >= 15);
+    assert.ok(listedJson.stores.some((row) => row.storeName === "RASW家居旗舰店"));
+
+    const created = await fetch(`${base}/api/people/org/stores`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chief: "沈子晗组",
+        lead: "张文静",
+        owner: "验收同事",
+        storeName: "验收旗舰店",
+        merchantId: "19900001",
+        remark: "5倍在做",
+        login: "demo_ok",
+        password: "Demo123!"
+      })
+    });
+    const createdJson = await created.json();
+    assert.equal(created.status, 201, JSON.stringify(createdJson));
+    assert.equal(createdJson.store.storeName, "验收旗舰店");
+
+    const patched = await fetch(`${base}/api/people/org/stores/${createdJson.store.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ remark: "退店", closedOn: "9.9" })
+    });
+    const patchedJson = await patched.json();
+    assert.equal(patched.status, 200);
+    assert.equal(patchedJson.store.statusKey, "closed");
+
+    const removed = await fetch(`${base}/api/people/org/stores/${createdJson.store.id}`, {
+      method: "DELETE"
+    });
+    assert.equal(removed.status, 200);
   });
 });
 

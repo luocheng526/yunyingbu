@@ -6,145 +6,20 @@
     <title>组织中心</title>
     <link rel="stylesheet" href="/shared/layout.css" />
     <link rel="stylesheet" href="/people.css" />
-    <style>
-      /* 只写内容区。左栏与顶栏由 /shared/nav.js 注入，勿再画侧栏。 */
-      .xm-content .page.people-page,
-      main.page.people-page {
-        max-width: none;
-        width: 100%;
-      }
-      body:has(.people-page) .xm-tabs { display: none; }
-      .people-form {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 4px 12px;
-        align-items: end;
-      }
-      .people-form label { margin-bottom: 0; }
-      .people-form button { margin-top: 4px; }
-    </style>
   </head>
   <body>
     <div id="site-nav"></div>
-    <main class="page people-page">
-      <h1>组织中心</h1>
-      <p class="lead">智能体是只读调用方。在职只认花名册，店权只认管辖。钉钉和其它模块不得另写一份。</p>
-      <p class="banner">手录身份和店权。智能体只许 GET /api/people 与 GET /api/people/grants。</p>
-      <span class="demo-flag">演示数据</span>
-
-      <section class="panel">
-        <h2>新增人员</h2>
-        <form class="people-form" id="people-form">
-          <label>姓名<input name="name" required maxlength="40" autocomplete="off" /></label>
-          <label>角色<input name="role" required maxlength="40" placeholder="如 运营 / 管理" /></label>
-          <label>
-            所属中心
-            <select name="center" required>
-              <option value="">请选择</option>
-              <option>沈子晗运营中心</option>
-              <option>韩梦凯运营中心</option>
-              <option>数据中心</option>
-              <option>版本发布中心</option>
-              <option>个人中心</option>
-              <option>其他</option>
-            </select>
-          </label>
-          <label>
-            状态
-            <select name="status">
-              <option selected>在职</option>
-              <option>离职</option>
-            </select>
-          </label>
-          <button type="submit">新增</button>
-        </form>
-        <p class="status error" id="people-error" hidden></p>
-      </section>
-
-      <section class="panel" aria-label="占位">
-        <h2>占位</h2>
-        <p class="empty">待开发</p>
-      </section>
-
-      <section class="panel">
-        <h2>人员名册</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>姓名</th>
-              <th>角色</th>
-              <th>所属中心</th>
-              <th>状态</th>
-            </tr>
-          </thead>
-          <tbody id="people-tbody"></tbody>
-        </table>
-      </section>
-    </main>
+    <div id="xm-content"></div>
     <script src="/shared/nav.js"></script>
+    <script src="/shared/modules/people.js"></script>
     <script>
-      const tbody = document.getElementById("people-tbody");
-      const form = document.getElementById("people-form");
-      const errorEl = document.getElementById("people-error");
-
-      function showError(message) {
-        errorEl.hidden = !message;
-        errorEl.textContent = message || "";
-      }
-
-      function render(people) {
-        tbody.replaceChildren();
-        for (const person of people) {
-          const tr = document.createElement("tr");
-          const name = document.createElement("td");
-          name.append(person.name);
-          if (person.demo) {
-            const tag = document.createElement("span");
-            tag.className = "demo-flag";
-            tag.textContent = "演示";
-            name.append(tag);
-          }
-          const role = document.createElement("td");
-          role.textContent = person.role;
-          const center = document.createElement("td");
-          center.textContent = person.center;
-          const status = document.createElement("td");
-          status.textContent = person.status;
-          tr.append(name, role, center, status);
-          tbody.append(tr);
+      document.addEventListener("DOMContentLoaded", function () {
+        var root = document.getElementById("xm-content");
+        var mod = window.XmModules && window.XmModules["/people"];
+        if (root && mod && typeof mod.mount === "function") {
+          mod.mount(root);
         }
-      }
-
-      async function loadPeople() {
-        const res = await fetch("/api/people", { credentials: "same-origin" });
-        const data = await res.json();
-        if (!res.ok || !data.ok) {
-          throw new Error(data.error || "无法加载人员名册");
-        }
-        render(data.people || []);
-      }
-
-      form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        showError("");
-        const payload = Object.fromEntries(new FormData(form).entries());
-        const res = await fetch("/api/people", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.ok) {
-          showError(data.error || "新增失败");
-          return;
-        }
-        form.reset();
-        form.status.value = "在职";
-        await loadPeople();
       });
-
-      loadPeople().catch((err) => showError(err.message));
     </script>
   </body>
 </html>
