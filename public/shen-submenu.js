@@ -11,33 +11,37 @@
     return window.location.pathname.replace(/\/+$/, "") || "/";
   }
 
+  function normalize(href) {
+    return String(href || "/").replace(/\/+$/, "") || "/";
+  }
+
   function isShenPath(pathname) {
     return pathname === "/shen" || pathname.indexOf("/shen/") === 0;
   }
 
-  function isActive(href, pathname) {
-    const normalized = href.replace(/\/+$/, "") || "/";
-    return pathname === normalized;
+  function findShenLink() {
+    const official = document.querySelector('.xm-menu a[href="/shen"], .xm-menu a[href="/shen/"]');
+    if (official) {
+      return official;
+    }
+    const fallbacks = document.querySelectorAll("a[href='/shen'], a[href='/shen/']");
+    return fallbacks[0] || null;
   }
 
-  function findShenLink(root) {
-    const links = root.querySelectorAll("a[href]");
-    for (let i = 0; i < links.length; i += 1) {
-      const href = String(links[i].getAttribute("href") || "").replace(/\/+$/, "") || "/";
-      if (href === "/shen") {
-        return links[i];
-      }
+  function setOpen(group, arrow, open) {
+    group.classList.toggle("is-open", open);
+    if (arrow) {
+      arrow.setAttribute("aria-expanded", open ? "true" : "false");
     }
-    return null;
   }
 
-  function enhance(nav) {
-    if (!nav || nav.querySelector(".shen-nav-group")) {
-      return;
+  function enhance() {
+    if (document.querySelector(".shen-nav-group")) {
+      return true;
     }
-    const parentLink = findShenLink(nav);
+    const parentLink = findShenLink();
     if (!parentLink) {
-      return;
+      return false;
     }
 
     const pathname = currentPath();
@@ -58,30 +62,32 @@
     sub.className = "shen-nav-sub";
     ITEMS.forEach(function (item) {
       const link = document.createElement("a");
+      link.className = "xm-menu-item shen-sub-item";
       link.href = item.href;
-      link.textContent = item.label;
-      if (isActive(item.href, pathname)) {
+      link.innerHTML = "<span>" + item.label + "</span>";
+      if (normalize(item.href) === pathname) {
+        link.classList.add("is-active");
         link.setAttribute("aria-current", "page");
       }
       sub.appendChild(link);
     });
 
-    function setOpen(open) {
-      group.classList.toggle("is-open", open);
-      arrow.setAttribute("aria-expanded", open ? "true" : "false");
-    }
-
-    parentLink.addEventListener("click", function (event) {
-      if (!group.classList.contains("is-open")) {
-        event.preventDefault();
-        setOpen(true);
-      }
-    });
+    parentLink.addEventListener(
+      "click",
+      function (event) {
+        if (!group.classList.contains("is-open")) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          setOpen(group, arrow, true);
+        }
+      },
+      true
+    );
 
     arrow.addEventListener("click", function (event) {
       event.preventDefault();
       event.stopPropagation();
-      setOpen(!group.classList.contains("is-open"));
+      setOpen(group, arrow, !group.classList.contains("is-open"));
     });
 
     parentLink.replaceWith(group);
@@ -89,16 +95,28 @@
     parentRow.appendChild(arrow);
     group.appendChild(parentRow);
     group.appendChild(sub);
+    if (isShenPath(pathname)) {
+      parentLink.classList.add("is-active");
+    }
+    return true;
   }
 
-  function run() {
-    const nav = document.querySelector(".site-nav") || document.querySelector("nav[aria-label='全站导航']");
-    enhance(nav);
+  function boot() {
+    if (enhance()) {
+      return;
+    }
+    let tries = 0;
+    const timer = setInterval(function () {
+      tries += 1;
+      if (enhance() || tries > 40) {
+        clearInterval(timer);
+      }
+    }, 50);
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", run);
+    document.addEventListener("DOMContentLoaded", boot);
   } else {
-    run();
+    boot();
   }
 })();
