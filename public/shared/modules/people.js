@@ -3,9 +3,18 @@
   window.XmModules = window.XmModules || {};
   window.XmModules["/people"] = {
     mount: function (root) {
+      if (!document.getElementById("people-page-css")) {
+        const css = document.createElement("style");
+        css.id = "people-page-css";
+        css.textContent =
+          ".xm-content .page.people-page,main.page.people-page{max-width:none;width:100%;}" +
+          ".people-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:4px 12px;align-items:end;}" +
+          ".people-form label{margin-bottom:0;}.people-form button{margin-top:4px;}";
+        document.head.appendChild(css);
+      }
       root.innerHTML =
-        '<main class="page">' +
-        '<header class="page-head"><p class="kicker">星脉</p><h1>人员管理</h1>' +
+        '<main class="page people-page">' +
+        '<header class="page-head"><h1>人员管理</h1>' +
         '<p class="lead">组织名册写入数据库。预置三人带演示标记，后来新增的人员会留下。</p></header>' +
         '<div class="stack"><section class="panel"><h2>新增人员</h2>' +
         '<form class="people-form" id="people-form">' +

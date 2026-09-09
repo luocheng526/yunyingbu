@@ -7,6 +7,11 @@
     <link rel="stylesheet" href="/shared/layout.css" />
     <style>
       /* 只写内容区。左栏与顶栏由 /shared/nav.js 注入，勿再画侧栏。 */
+      .xm-content .page.people-page,
+      main.page.people-page {
+        max-width: none;
+        width: 100%;
+      }
       .people-form {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -19,8 +24,7 @@
   </head>
   <body>
     <div id="site-nav"></div>
-    <main class="page">
-      <p class="kicker">星脉</p>
+    <main class="page people-page">
       <h1>人员管理</h1>
       <p class="lead">组织与人员名册。预置档案仅供演示，不接入真实 SSO 或密码库。</p>
       <span class="demo-flag">演示数据</span>
