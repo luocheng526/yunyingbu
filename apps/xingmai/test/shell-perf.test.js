@@ -25,10 +25,10 @@ async function loginCookie() {
 
 test("shell HTML is versioned so browsers drop the old full-reload nav.js", async () => {
   const cookie = await loginCookie();
-  const html = await (await fetch(`${base}/data`, { headers: { cookie } })).text();
-  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.103/);
-  assert.match(html, /\/shared\/layout\.css\?v=0\.1\.103/);
-  assert.match(html, /\/shared\/modules\/data\.js\?v=0\.1\.103/);
+  const html = await (await fetch(`${base}/data/overview`, { headers: { cookie } })).text();
+  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.105/);
+  assert.match(html, /\/shared\/layout\.css\?v=0\.1\.105/);
+  assert.match(html, /\/shared\/modules\/data\.js\?v=0\.1\.105/);
   const js = readFileSync(join(root, "public/shared/nav.js"), "utf8");
   assert.match(js, /history\.pushState/);
   assert.match(js, /function go\(/);
@@ -44,14 +44,14 @@ test("sidebar HTML stays fast when the same process is reused", async () => {
   const headers = { cookie, Accept: "text/html" };
   await fetch(`${base}/`, { headers });
   const samples = [];
-  for (const path of ["/shen/selection", "/han/selection", "/data", "/me", "/han/goods", "/releases"]) {
+  for (const path of ["/data/overview", "/shen/selection", "/han/selection", "/me", "/han/goods", "/releases"]) {
     const t0 = performance.now();
     const res = await fetch(`${base}${path}`, { headers });
     const ms = performance.now() - t0;
     assert.equal(res.status, 200);
     samples.push(ms);
     const html = await res.text();
-    assert.match(html, /\/shared\/nav\.js\?v=0\.1\.103/);
+    assert.match(html, /\/shared\/nav\.js\?v=0\.1\.105/);
     assert.match(html, /\/shared\/modules\//);
     assert.doesNotMatch(html, /<span>首页<\/span>/);
   }

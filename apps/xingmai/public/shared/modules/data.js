@@ -9,6 +9,28 @@
   }
 
   window.XmModules = window.XmModules || {};
+
+  function waitPage(title) {
+    return {
+      mount: function (root) {
+        root.innerHTML =
+          '<main class="page">' +
+          '<header class="page-head"><p class="kicker">数据中心</p><h1>' +
+          escapeHtml(title) +
+          "</h1>" +
+          '<p class="lead">内容待开发。</p></header></main>';
+        return function unmount() {
+          root.innerHTML = "";
+        };
+      }
+    };
+  }
+
+  window.XmModules["/data/overview"] = waitPage("数据总揽");
+  window.XmModules["/data/shops"] = waitPage("店铺数据");
+  window.XmModules["/data/goods"] = waitPage("商品数据");
+  window.XmModules["/data/paid"] = waitPage("实时付费");
+
   window.XmModules["/data"] = {
     mount: function (root) {
       root.innerHTML =

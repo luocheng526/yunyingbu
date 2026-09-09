@@ -22,7 +22,7 @@ test("shared shell assets are public", async () => {
   assert.equal(loginCss.status, 200);
   assert.equal(ocCss.status, 200);
   assert.match(String(js.headers.get("cache-control") || ""), /must-revalidate/);
-  const versionedJs = await fetch(`${base}/shared/nav.js?v=0.1.103`);
+  const versionedJs = await fetch(`${base}/shared/nav.js?v=0.1.105`);
   assert.match(String(versionedJs.headers.get("cache-control") || ""), /max-age=86400/);
   const logo = await fetch(`${base}/shared/xingmai-logo.png`);
   assert.equal(logo.status, 200);
@@ -38,7 +38,7 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /<svg viewBox="0 0 24 24"/);
   assert.match(jsText, /login-logo\.png/);
   assert.match(jsText, /xingmai-logo\.png/);
-  assert.match(jsText, /xm-fast-shell 0\.1\.103/);
+  assert.match(jsText, /xm-fast-shell 0\.1\.105/);
   assert.match(jsText, /星脉甄选运营中心/);
   assert.doesNotMatch(jsText, /labelOf\(current\) \+ " · 星脉甄选"/);
   assert.match(jsText, /\/login\?out=1/);
@@ -46,7 +46,7 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /id="xm-date"/);
   assert.match(jsText, /id="xm-refresh"/);
   assert.match(jsText, /展开侧栏/);
-  assert.match(cssText, /xm-sider-narrow 0\.1\.103/);
+  assert.match(cssText, /xm-sider-narrow 0\.1\.105/);
   assert.match(cssText, /\.xm-menu-parent/);
   assert.match(cssText, /\.xm-submenu/);
   assert.match(cssText, /--xm-sider-w: 200px/);
@@ -59,7 +59,9 @@ test("shared shell assets are public", async () => {
   assert.doesNotMatch(jsText, /菜单标签">项目<|>项目<\/p>/);
   assert.doesNotMatch(jsText, /xm-menu-label">项目/);
   assert.match(jsText, /退出登录/);
-  assert.match(jsText, /v0\.4\.8/);
+  assert.match(jsText, /v0\.4\.10/);
+  assert.match(jsText, /数据总揽/);
+  assert.match(jsText, /店铺数据/);
   assert.match(jsText, /选品中心/);
   assert.match(jsText, /商品成长/);
   assert.match(jsText, /任务管理/);
@@ -117,7 +119,10 @@ test("home page html is the xingmai sider template", async () => {
   const bounce = await fetch(`${base}/`, { headers: { cookie }, redirect: "manual" });
   assert.equal(bounce.status, 302);
   assert.equal(bounce.headers.get("location"), "/data");
-  const res = await fetch(`${base}/data`, { headers: { cookie } });
+  const dataBounce = await fetch(`${base}/data`, { headers: { cookie }, redirect: "manual" });
+  assert.equal(dataBounce.status, 302);
+  assert.equal(dataBounce.headers.get("location"), "/data/overview");
+  const res = await fetch(`${base}/data/overview`, { headers: { cookie } });
   assert.equal(res.status, 200);
   const html = await res.text();
   assert.match(html, /xingmai-logo\.png/);
@@ -125,7 +130,9 @@ test("home page html is the xingmai sider template", async () => {
   assert.doesNotMatch(html, />项目</);
   assert.doesNotMatch(html, /<span>首页<\/span>/);
   assert.match(html, /退出登录/);
-  assert.match(html, /v0\.4\.8/);
+  assert.match(html, /v0\.4\.10/);
+  assert.match(html, /数据总揽/);
+  assert.match(html, /店铺数据/);
   assert.match(html, /选品中心/);
   assert.match(html, /商品成长/);
   assert.match(html, /任务管理/);
@@ -135,7 +142,7 @@ test("home page html is the xingmai sider template", async () => {
   assert.match(html, /培训系统/);
   assert.match(html, /xm-menu-parent/);
   assert.match(html, /xm-caret/);
-  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.103/);
+  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.105/);
   assert.match(html, /__xmBootUser/);
   assert.match(html, /login-logo\.png/);
   assert.match(html, /id="xm-date"/);
@@ -213,6 +220,43 @@ test("沈子晗运营中心 expands five placeholder children", async () => {
   assert.match(shenMod, /XmModules\["\/shen\/tasks"\]/);
 });
 
+test("数据中心 expands four placeholder children", async () => {
+  const cookieRes = await fetch(`${base}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: "luocheng", password: "ChangeMe123!" })
+  });
+  assert.equal(cookieRes.status, 200);
+  const cookie = String(cookieRes.headers.get("set-cookie") || "").split(";")[0];
+  const bounce = await fetch(`${base}/data`, { headers: { cookie }, redirect: "manual" });
+  assert.equal(bounce.status, 302);
+  assert.equal(bounce.headers.get("location"), "/data/overview");
+  const slash = await fetch(`${base}/data/`, { headers: { cookie }, redirect: "manual" });
+  assert.equal(slash.status, 302);
+  assert.equal(slash.headers.get("location"), "/data/overview");
+  const res = await fetch(`${base}/data/overview`, { headers: { cookie } });
+  assert.equal(res.status, 200);
+  const html = await res.text();
+  assert.match(html, /data-xm-group="\/data"/);
+  assert.match(html, /xm-menu-group is-open/);
+  assert.match(html, /数据总揽/);
+  assert.match(html, /店铺数据/);
+  assert.match(html, /商品数据/);
+  assert.match(html, /实时付费/);
+  assert.match(html, /\/shared\/modules\/data\.js/);
+  assert.match(html, /<title>星脉甄选运营中心<\/title>/);
+  const shops = await fetch(`${base}/data/shops`, { headers: { cookie } });
+  assert.equal(shops.status, 200);
+  const paid = await fetch(`${base}/data/paid`, { headers: { cookie } });
+  assert.equal(paid.status, 200);
+  const dataMod = readFileSync(join(root, "public/shared/modules/data.js"), "utf8");
+  assert.match(dataMod, /内容待开发/);
+  assert.match(dataMod, /XmModules\["\/data\/overview"\]/);
+  assert.match(dataMod, /XmModules\["\/data\/shops"\]/);
+  assert.match(dataMod, /XmModules\["\/data\/goods"\]/);
+  assert.match(dataMod, /XmModules\["\/data\/paid"\]/);
+});
+
 test("placeholder modules share the same shell assets", async () => {
   const cookieRes = await fetch(`${base}/api/auth/login`, {
     method: "POST",
@@ -221,7 +265,7 @@ test("placeholder modules share the same shell assets", async () => {
   });
   assert.equal(cookieRes.status, 200);
   const cookie = String(cookieRes.headers.get("set-cookie") || "").split(";")[0];
-  const res = await fetch(`${base}/data`, { headers: { cookie } });
+  const res = await fetch(`${base}/data/overview`, { headers: { cookie } });
   assert.equal(res.status, 200);
   const html = await res.text();
   assert.match(html, /\/shared\/layout\.css/);
@@ -272,8 +316,8 @@ test("page renderer injects shared shell onto module html", async () => {
     '<!DOCTYPE html><html><head></head><body class="oc-page"><div class="oc-tab">待上线</div></body></html>'
   );
   assert.match(injected, /\/shared\/layout\.css/);
-  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.103/);
-  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.103"/);
+  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.105/);
+  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.105"/);
   assert.match(injected, /localStorage.getItem\("xm-theme"\)/);
   const login = withSharedShell('<html><head></head><body class="login-page"></body></html>');
   assert.doesNotMatch(login, /\/shared\/nav\.js/);
@@ -323,7 +367,7 @@ test("page renderer injects shared shell onto module html", async () => {
   const shell = renderAppShell("/data", { username: "罗成", displayName: "罗成" });
   assert.match(shell, /<title>星脉甄选运营中心<\/title>/);
   assert.match(shell, /xm-app-shell/);
-  assert.match(shell, /\/shared\/modules\/data\.js\?v=0\.1\.103/);
+  assert.match(shell, /\/shared\/modules\/data\.js\?v=0\.1\.105/);
   assert.doesNotMatch(shell, /<span>首页<\/span>/);
   assert.match(shell, /id="xm-content"/);
   assert.match(shell, /id="xm-date"/);
@@ -335,6 +379,6 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.doesNotMatch(shell, /releases\.css/);
   assert.match(shell, /__xmBootUser/);
   assert.doesNotMatch(shell, /今日订单/);
-  const versionedMod = await fetch(`${base}/shared/modules/home.js?v=0.1.103`);
+  const versionedMod = await fetch(`${base}/shared/modules/home.js?v=0.1.105`);
   assert.match(String(versionedMod.headers.get("cache-control") || ""), /max-age=86400/);
 });
