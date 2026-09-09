@@ -1,5 +1,6 @@
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { Router } from "express";
+import { buildDutyView, registerDuty, resetDutyCatalogForTests } from "./duties.js";
 
 export const COOKIE_NAME = "mk_sid";
 export const DEMO_USERNAME = "罗成";
@@ -42,9 +43,15 @@ function verifyPassword(password, stored) {
 function seed() {
   users.set(DEMO_USERNAME, {
     username: DEMO_USERNAME,
-    displayName: "罗成",
+    displayName: "系统管理员",
     email: "luocheng@demo.local",
     phone: "",
+    title: "系统管理员",
+    subtitle: "运营部 · 平台管理员",
+    dataScope: "全平台数据",
+    role: "超级管理员",
+    badge: "系",
+    dutyIds: "*",
     passwordHash: hashPassword(DEMO_INITIAL_PASSWORD)
   });
 }
@@ -54,6 +61,7 @@ seed();
 export function resetStoreForTests() {
   users.clear();
   sessions.clear();
+  resetDutyCatalogForTests();
   seed();
 }
 
@@ -61,11 +69,19 @@ export function publicProfile(user) {
   if (!user) {
     return null;
   }
+  const duties = buildDutyView(user.dutyIds);
   return {
     username: user.username,
     displayName: user.displayName,
     email: user.email,
-    phone: user.phone
+    phone: user.phone,
+    title: user.title || user.displayName || user.username,
+    subtitle: user.subtitle || "",
+    dataScope: user.dataScope || "",
+    role: user.role || "",
+    badge: user.badge || (user.displayName || user.username || "系").slice(0, 1),
+    grantedCount: duties.grantedCount,
+    dutyTotal: duties.total
   };
 }
 
@@ -109,14 +125,7 @@ function clearSessionCookie(res) {
 }
 
 function sendProfile(res, user) {
-  const profile = publicProfile(user);
-  res.json({
-    ok: true,
-    username: profile.username,
-    displayName: profile.displayName,
-    email: profile.email,
-    phone: profile.phone
-  });
+  res.json({ ok: true, ...publicProfile(user) });
 }
 
 export function requireAuth(req, res, next) {
@@ -172,6 +181,21 @@ profileRouter.use(requireAuth);
 
 profileRouter.get("/", (req, res) => {
   sendProfile(res, req.user);
+});
+
+profileRouter.get("/duties", (req, res) => {
+  const duties = buildDutyView(req.user.dutyIds);
+  res.json({ ok: true, ...duties, identity: publicProfile(req.user) });
+});
+
+profileRouter.post("/duties", (req, res) => {
+  const result = registerDuty(req.body || {});
+  if (!result.ok) {
+    res.status(400).json(result);
+    return;
+  }
+  const duties = buildDutyView(req.user.dutyIds);
+  res.json({ ok: true, item: result.item, updated: result.updated, ...duties });
 });
 
 profileRouter.put("/", (req, res) => {

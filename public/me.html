@@ -10,6 +10,7 @@
         display: flex;
         align-items: stretch;
         min-height: 100vh;
+        background: #f3f4f6;
       }
       #site-nav,
       .site-sidebar,
@@ -19,8 +20,7 @@
         width: 220px;
         min-height: 100vh;
         border-right: 1px solid var(--line, #e7e5e4);
-        border-bottom: 0;
-        background: var(--card, #fffcf7);
+        background: #fff;
         position: sticky;
         top: 0;
         align-self: flex-start;
@@ -35,46 +35,112 @@
         align-items: stretch;
         gap: 0.85rem;
       }
-      .site-nav {
-        display: flex;
-        flex-direction: column;
-        flex-wrap: nowrap;
-        gap: 0.2rem;
-      }
-      .site-nav a {
-        border-radius: 10px;
-      }
+      .site-nav { display: flex; flex-direction: column; gap: 0.2rem; }
+      .site-nav a { border-radius: 10px; }
       main.page {
         flex: 1;
         max-width: none;
         margin: 0;
-        padding: 2rem 1.75rem 3rem;
+        padding: 1.25rem 1.25rem 2rem;
         min-width: 0;
       }
-      .panel {
-        background: var(--card, #fffcf7);
-        border: 1px solid var(--line, #e7e5e4);
-        border-radius: 16px;
-        padding: 1.25rem 1.3rem;
-        margin-bottom: 1.1rem;
-        max-width: 640px;
+      .me-grid {
+        display: grid;
+        grid-template-columns: 300px minmax(0, 1fr);
+        gap: 1rem;
+        align-items: start;
       }
-      .panel h2 { margin: 0 0 1rem; font-size: 1.1rem; }
-      label { display: block; margin: 0 0 0.85rem; color: var(--muted, #57534e); }
-      input {
-        display: block; width: 100%; margin-top: 0.35rem; padding: 0.55rem 0.7rem;
-        border: 1px solid var(--line, #e7e5e4); border-radius: 10px; font: inherit;
+      @media (max-width: 960px) {
+        .me-grid { grid-template-columns: 1fr; }
       }
-      input[readonly] { background: #f5f5f4; }
-      .actions { margin-top: 0.4rem; }
-      button {
-        font: inherit; border: 0; border-radius: 999px; padding: 0.55rem 1.1rem;
-        background: var(--accent, #0f766e); color: #fff; cursor: pointer;
+      .card {
+        background: #fff;
+        border-radius: 12px;
+        padding: 1.15rem 1.2rem 1.2rem;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
       }
-      button.secondary { background: #e7e5e4; color: #1c1917; }
-      .status { min-height: 1.4rem; margin: 0 0 1rem; }
+      .card + .card { margin-top: 1rem; }
+      .who {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        margin-bottom: 1rem;
+      }
+      .badge {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        background: #111827;
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-size: 1.05rem;
+        flex-shrink: 0;
+      }
+      .who h2 { margin: 0; font-size: 1.05rem; }
+      .who p { margin: 0.2rem 0 0; color: #6b7280; font-size: 0.85rem; }
+      .kv { display: grid; gap: 0.55rem; font-size: 0.92rem; }
+      .kv div {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.75rem;
+        color: #6b7280;
+      }
+      .kv strong { color: #111827; font-weight: 600; }
+      .card h3 { margin: 0 0 0.85rem; font-size: 1rem; }
+      .card input {
+        display: block;
+        width: 100%;
+        margin: 0 0 0.65rem;
+        padding: 0.62rem 0.7rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        font: inherit;
+        background: #fff;
+      }
+      .btn {
+        display: block;
+        width: 100%;
+        border: 0;
+        border-radius: 8px;
+        padding: 0.7rem 1rem;
+        font: inherit;
+        background: #2563eb;
+        color: #fff;
+        cursor: pointer;
+      }
+      .btn-ghost {
+        margin-top: 0.65rem;
+        background: #f3f4f6;
+        color: #111827;
+      }
+      .status { min-height: 1.25rem; margin: 0 0 0.7rem; font-size: 0.9rem; }
       .status.error { color: #b91c1c; }
       .status.ok { color: #047857; }
+      .rights-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: baseline;
+        margin-bottom: 0.35rem;
+      }
+      .rights-head h3 { margin: 0; }
+      .hint { color: #9ca3af; font-size: 0.82rem; }
+      .group { margin-top: 1.05rem; }
+      .group h4 { margin: 0 0 0.5rem; font-size: 0.92rem; font-weight: 600; }
+      .tags { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.28rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.82rem;
+        background: #d1fae5;
+        color: #065f46;
+      }
+      .tag.off { background: #e5e7eb; color: #9ca3af; }
+      .tag i { font-style: normal; font-weight: 700; }
     </style>
   </head>
   <body>
@@ -95,33 +161,44 @@
       </aside>
     </div>
     <main class="page">
-      <p class="kicker">运营部</p>
-      <h1>个人中心</h1>
-      <p class="lead">只改当前账号的显示名、邮箱、手机和密码。</p>
-      <p id="status" class="status" role="status"></p>
-      <div class="panel">
-        <h2>账号资料</h2>
-        <form id="profile-form">
-          <label>用户名<input id="profile-username" name="username" type="text" readonly /></label>
-          <label>显示名<input id="profile-displayName" name="displayName" type="text" /></label>
-          <label>邮箱<input id="profile-email" name="email" type="email" /></label>
-          <label>手机<input id="profile-phone" name="phone" type="tel" /></label>
-          <div class="actions"><button type="submit">保存资料</button></div>
-        </form>
-      </div>
-      <div class="panel">
-        <h2>修改密码</h2>
-        <form id="password-form" autocomplete="off">
-          <label>当前密码<input id="current-password" type="password" required /></label>
-          <label>新密码<input id="new-password" type="password" required minlength="8" /></label>
-          <label>确认新密码<input id="confirm-password" type="password" required minlength="8" /></label>
-          <div class="actions"><button type="submit">修改密码</button></div>
-        </form>
-      </div>
-      <div class="panel">
-        <form id="logout-form">
-          <button type="submit" class="secondary">退出登录</button>
-        </form>
+      <div class="me-grid">
+        <section>
+          <div class="card" id="who-card">
+            <div class="who">
+              <div class="badge" id="who-badge">系</div>
+              <div>
+                <h2 id="who-title">个人中心</h2>
+                <p id="who-subtitle"></p>
+              </div>
+            </div>
+            <div class="kv">
+              <div>登录账号<strong id="who-username"></strong></div>
+              <div>数据范围<strong id="who-scope"></strong></div>
+              <div>角色<strong id="who-role"></strong></div>
+              <div>权限项<strong id="who-count"></strong></div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>修改密码</h3>
+            <p id="status" class="status" role="status"></p>
+            <form id="password-form" autocomplete="off">
+              <input id="current-password" type="password" required placeholder="当前密码" />
+              <input id="new-password" type="password" required minlength="8" placeholder="新密码（至少 8 位）" />
+              <input id="confirm-password" type="password" required minlength="8" placeholder="再次输入新密码" />
+              <button class="btn" type="submit">保存新密码</button>
+            </form>
+            <form id="logout-form">
+              <button class="btn btn-ghost" type="submit">退出登录</button>
+            </form>
+          </div>
+        </section>
+        <section class="card">
+          <div class="rights-head">
+            <h3>我的责权清单</h3>
+            <p class="hint">灰色表示当前角色未授予</p>
+          </div>
+          <div id="duties"></div>
+        </section>
       </div>
     </main>
     <script src="/shared/nav.js"></script>
@@ -132,11 +209,27 @@
           statusEl.textContent = message || "";
           statusEl.className = "status" + (kind ? " " + kind : "");
         }
-        function fill(user) {
-          document.getElementById("profile-username").value = user.username || "";
-          document.getElementById("profile-displayName").value = user.displayName || "";
-          document.getElementById("profile-email").value = user.email || "";
-          document.getElementById("profile-phone").value = user.phone || "";
+        function fillWho(user) {
+          document.getElementById("who-badge").textContent = user.badge || "系";
+          document.getElementById("who-title").textContent = user.title || user.displayName || "个人中心";
+          document.getElementById("who-subtitle").textContent = user.subtitle || "";
+          document.getElementById("who-username").textContent = user.username || "";
+          document.getElementById("who-scope").textContent = user.dataScope || "";
+          document.getElementById("who-role").textContent = user.role || "";
+          var count = user.grantedCount != null ? user.grantedCount : 0;
+          var total = user.dutyTotal != null ? user.dutyTotal : count;
+          document.getElementById("who-count").textContent = count + " 项" + (total ? " / " + total : "");
+        }
+        function fillDuties(groups) {
+          var root = document.getElementById("duties");
+          root.innerHTML = (groups || []).map(function (group) {
+            var tags = (group.items || []).map(function (item) {
+              var cls = item.granted ? "tag" : "tag off";
+              var mark = item.granted ? "✓" : "–";
+              return '<span class="' + cls + '"><i>' + mark + "</i>" + item.label + "</span>";
+            }).join("");
+            return '<div class="group"><h4>' + group.name + '</h4><div class="tags">' + tags + "</div></div>";
+          }).join("");
         }
         async function api(path, options) {
           var res = await fetch(path, Object.assign({ credentials: "same-origin" }, options));
@@ -148,26 +241,10 @@
           try { data = await res.json(); } catch (_e) { data = {}; }
           return { res: res, data: data };
         }
-        api("/api/auth/me").then(function (result) {
-          if (result.res && result.res.ok) fill(result.data);
-        });
-        document.getElementById("profile-form").addEventListener("submit", async function (event) {
-          event.preventDefault();
-          var result = await api("/api/profile", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              displayName: document.getElementById("profile-displayName").value,
-              email: document.getElementById("profile-email").value,
-              phone: document.getElementById("profile-phone").value
-            })
-          });
-          if (!result.res.ok) {
-            setStatus(result.data.error || "保存失败", "error");
-            return;
-          }
-          fill(result.data);
-          setStatus("资料已保存", "ok");
+        api("/api/profile/duties").then(function (result) {
+          if (!result.res || !result.res.ok) return;
+          fillWho(result.data.identity || result.data);
+          fillDuties(result.data.groups);
         });
         document.getElementById("password-form").addEventListener("submit", async function (event) {
           event.preventDefault();

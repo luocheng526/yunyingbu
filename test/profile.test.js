@@ -110,7 +110,35 @@ test("login 罗成 sets cookie; GET /api/auth/me 200; wrong password 401", async
     assert.match(page.text, /shared\/nav\.js/);
     assert.match(page.text, /<aside class="site-sidebar">/);
     assert.match(page.text, /<main class="page">/);
+    assert.match(page.text, /我的责权清单/);
+    assert.match(page.text, /修改密码/);
     assert.doesNotMatch(page.text, /<header class="site-header">/);
+  });
+});
+
+test("duty catalog lists granted items and can register a new duty", async () => {
+  await withServer(async (base) => {
+    const ok = await request(base, "/api/auth/login", {
+      method: "POST",
+      body: { username: DEMO_USERNAME, password: DEMO_INITIAL_PASSWORD },
+      redirect: "follow"
+    });
+    const duties = await request(base, "/api/profile/duties", { cookie: ok.cookie, redirect: "follow" });
+    assert.equal(duties.res.status, 200);
+    assert.ok(duties.json.grantedCount > 0);
+    assert.ok(duties.json.groups.some((group) => group.name === "工单中心"));
+    assert.ok(duties.json.groups.some((group) => group.name === "运营部站点"));
+    assert.equal(duties.json.identity.username, "罗成");
+    const before = duties.json.total;
+    const added = await request(base, "/api/profile/duties", {
+      method: "POST",
+      cookie: ok.cookie,
+      redirect: "follow",
+      body: { id: "ops.future", group: "运营部站点", label: "进入未来模块" }
+    });
+    assert.equal(added.res.status, 200);
+    assert.equal(added.json.total, before + 1);
+    assert.ok(added.json.groups.some((group) => group.items.some((item) => item.id === "ops.future")));
   });
 });
 
