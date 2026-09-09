@@ -43,7 +43,7 @@
 | 数据中心 | `public/data.html`、`public/data*`、`src/modules/data/`、`shared/modules/data.js` | 壳、内核、别人的模块 |
 | 沈子晗 | `public/shen.html`、`public/shen*`、`src/modules/shen/`、`shared/modules/shen.js` | 同上 |
 | 韩梦凯 | `public/han.html`、`public/han*`、`src/modules/han/`、`shared/modules/han.js` | 同上 |
-| 人员管理 | `public/people.html`、`public/people*`、`src/modules/people/`、`shared/modules/people.js` | 同上 |
+| 组织中心 | `public/people.html`、`public/people*`、`src/modules/people/`、`shared/modules/people.js` | 同上。侧栏显示「组织中心」，路径仍是 `/people`。旧交单名「人员管理」闸门仍认，新单用「组织中心」 |
 | 甄选商学院 | `public/academy.html`、`public/academy*`、`src/modules/academy/`、`shared/modules/academy.js` | 同上 |
 | 甄选智能体 | `public/agents.html`、`public/agents*`、`src/modules/agents/`、`shared/modules/agents.js` | 同上 |
 | 版本发布中心 | `public/releases.html`、`releases.css`、`src/modules/releases/`（**补丁**线上闸，禁止用仓库简化 router 整文件覆盖） | 壳、业务模块、线上 `app.js` |
