@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.104 */
+/* xm-fast-shell 0.1.105 */
 (function () {
-  const ASSET_VER = "0.1.104";
+  const ASSET_VER = "0.1.105";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/data": "data",
@@ -164,7 +164,7 @@
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout">' +
       ico("logout") +
       "<span>退出登录</span></button>" +
-      '<p class="xm-version">v0.4.9</p></nav>'
+      '<p class="xm-version">v0.4.10</p></nav>'
     );
   }
 
