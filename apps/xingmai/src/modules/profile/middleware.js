@@ -6,9 +6,9 @@ import { navMarkup } from "../home/nav-items.js";
 import { currentUser, publicProfile } from "./auth.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.107
+// xm-fast-shell 0.1.108
 
-export const SHELL_ASSET_VER = "0.1.107";
+export const SHELL_ASSET_VER = "0.1.108";
 export const TAB_TITLE = "星脉甄选运营中心";
 export const TAB_ICON = "/login-logo.png";
 export const APP_MODULES = {
@@ -51,7 +51,7 @@ const SHELL_TITLES = {
   "/han/goods": "商品数据",
   "/han/paid": "实时付费",
   "/han/training": "培训系统",
-  "/people": "人员管理",
+  "/people": "组织中心",
   "/academy": "甄选商学院",
   "/agents": "甄选智能体",
   "/releases": "版本发布中心",
