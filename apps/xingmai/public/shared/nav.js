@@ -1,9 +1,13 @@
-/* xm-fast-shell 0.1.103 */
+/* xm-fast-shell 0.1.104 */
 (function () {
-  const ASSET_VER = "0.1.103";
+  const ASSET_VER = "0.1.104";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/data": "data",
+    "/data/overview": "data",
+    "/data/shops": "data",
+    "/data/goods": "data",
+    "/data/paid": "data",
     "/shen": "shen",
     "/shen/selection": "shen",
     "/shen/growth": "shen",
@@ -19,6 +23,12 @@
     "/releases": "releases",
     "/me": "me"
   };
+  const DATA_CHILDREN = [
+    { href: "/data/overview", label: "数据总揽" },
+    { href: "/data/shops", label: "店铺数据" },
+    { href: "/data/goods", label: "商品数据" },
+    { href: "/data/paid", label: "实时付费" }
+  ];
   const SHEN_CHILDREN = [
     { href: "/shen/selection", label: "选品中心" },
     { href: "/shen/growth", label: "商品成长" },
@@ -33,14 +43,14 @@
     { href: "/han/training", label: "培训系统" }
   ];
   const items = [
-    { href: "/data", label: "数据中心" },
+    { href: "/data", label: "数据中心", children: DATA_CHILDREN },
     { href: "/shen", label: "沈子晗运营中心", children: SHEN_CHILDREN },
     { href: "/han", label: "韩梦凯运营中心", children: HAN_CHILDREN },
     { href: "/people", label: "人员管理" },
     { href: "/releases", label: "版本发布中心" },
     { href: "/me", label: "个人中心" }
   ];
-  const labels = items.concat(SHEN_CHILDREN, HAN_CHILDREN);
+  const labels = items.concat(DATA_CHILDREN, SHEN_CHILDREN, HAN_CHILDREN);
 
   const path = (window.location.pathname.replace(/\/+$/, "") || "/").toLowerCase();
   if (path === "/login" || path === "/login.html") {
@@ -154,7 +164,7 @@
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout">' +
       ico("logout") +
       "<span>退出登录</span></button>" +
-      '<p class="xm-version">v0.4.8</p></nav>'
+      '<p class="xm-version">v0.4.9</p></nav>'
     );
   }
 
@@ -293,6 +303,10 @@
 
   function go(href, push) {
     const key = normalize(href);
+    if (key === "/data") {
+      window.location.replace("/data/overview");
+      return;
+    }
     if (key === "/shen") {
       window.location.replace("/shen/selection");
       return;
