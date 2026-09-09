@@ -7,9 +7,9 @@ import { resetOrgBoard } from "../src/modules/people/org-board.js";
 import { resetPeopleStore } from "../src/modules/people/store.js";
 
 const PRESET = [
-  { name: "沈子晗", role: "运营", center: "沈子晗运营中心", status: "在职" },
-  { name: "韩梦凯", role: "运营", center: "韩梦凯运营中心", status: "在职" },
-  { name: "管理员", role: "管理", center: "人员管理", status: "在职" }
+  { name: "沈子晗", role: "经理", center: "沈子晗运营中心", status: "在职" },
+  { name: "韩梦凯", role: "经理", center: "韩梦凯运营中心", status: "在职" },
+  { name: "管理员", role: "经理", center: "人员管理", status: "在职" }
 ];
 
 test.beforeEach(() => {
@@ -56,7 +56,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
   });
 });
 
-test("GET /api/people returns three demo staff", async () => {
+test("GET /api/people returns Shen-line roster and grants", async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/api/people`);
     const data = await res.json();
@@ -64,7 +64,15 @@ test("GET /api/people returns three demo staff", async () => {
     assert.equal(data.ok, true);
     assert.equal(data.demo, true);
     assert.equal(data.charter.agentAccess, "read-only");
-    assert.equal(data.people.length, 3);
+    assert.ok(data.people.length >= 16);
+    const wang = data.people.find((row) => row.name === "王博");
+    assert.equal(wang.visibleShops.length, 2);
+    const shops = await fetch(`${base}/api/people/shops`);
+    const shopJson = await shops.json();
+    assert.ok(shopJson.shops.some((row) => row.name === "RASW家居旗舰店"));
+    const grants = await fetch(`${base}/api/people/grants`);
+    const grantJson = await grants.json();
+    assert.ok(grantJson.grants.length >= 18);
     for (const expected of PRESET) {
       const found = data.people.find((row) => row.name === expected.name);
       assert.deepEqual(
@@ -157,7 +165,7 @@ test("POST /api/people appends a staff row", async () => {
 
     const listed = await fetch(`${base}/api/people`);
     const listedJson = await listed.json();
-    assert.equal(listedJson.people.length, 4);
+    assert.equal(listedJson.people.length, 17);
     assert.ok(listedJson.people.some((row) => row.name === "测试同事" && row.center === "数据中心"));
   });
 });

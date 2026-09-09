@@ -1,5 +1,16 @@
 import { Router } from "express";
-import { CENTERS, createPerson, listPeople } from "./store.js";
+import {
+  CENTERS,
+  POSTS,
+  createGrant,
+  createPerson,
+  createShop,
+  listGrants,
+  listPeople,
+  listShops,
+  patchPerson,
+  reconcilePeople
+} from "./store.js";
 import {
   createOrgStore,
   listOrgLogs,
@@ -63,33 +74,23 @@ peopleRouter.get("/org/logs", (_req, res) => {
 });
 
 peopleRouter.get("/shops", (_req, res) => {
-  const shops = listOrgStores().map((row) => ({
-    id: row.id,
-    name: row.storeName,
-    kind: "店铺",
-    pack: row.team,
-    bundle: row.lead,
-    demo: row.demo
-  }));
-  res.json({ ok: true, kinds: ["店铺", "店群"], shops });
+  res.json({ ok: true, kinds: ["店铺", "店群"], shops: listShops() });
+});
+
+peopleRouter.post("/shops", (req, res) => {
+  sendResult(res, createShop(req.body || {}), true);
 });
 
 peopleRouter.get("/grants", (_req, res) => {
-  const grants = listOrgStores().map((row) => ({
-    id: row.id,
-    personName: row.owner,
-    shopName: row.storeName,
-    role: "运营",
-    startOn: "",
-    endOn: "",
-    active: row.statusKey !== "closed",
-    revoked: false
-  }));
-  res.json({ ok: true, grants });
+  res.json({ ok: true, grants: listGrants() });
+});
+
+peopleRouter.post("/grants", (req, res) => {
+  sendResult(res, createGrant(req.body || {}), true);
 });
 
 peopleRouter.get("/reconcile", (_req, res) => {
-  res.json({ ok: true, employedNoGrant: [], grantOnLeft: [] });
+  res.json({ ok: true, ...reconcilePeople() });
 });
 
 peopleRouter.get("/", (_req, res) => {
@@ -98,9 +99,13 @@ peopleRouter.get("/", (_req, res) => {
     demo: true,
     charter: PEOPLE_CHARTER,
     centers: CENTERS,
-    posts: ["店长", "运营", "主管", "经理"],
+    posts: POSTS,
     people: listPeople()
   });
+});
+
+peopleRouter.patch("/:id", (req, res) => {
+  sendResult(res, patchPerson(req.params.id, req.body || {}), false);
 });
 
 peopleRouter.post("/", (req, res) => {

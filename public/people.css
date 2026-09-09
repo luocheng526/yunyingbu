@@ -13,6 +13,12 @@
 
 .people-page .panel {
   min-height: 0;
+  margin-bottom: 16px;
+}
+
+.people-check {
+  margin: 0 0 8px;
+  color: var(--xm-muted, #8c8c8c);
 }
 
 .people-page .status.error {
