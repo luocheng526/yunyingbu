@@ -6,9 +6,11 @@ import { navMarkup } from "../home/nav-items.js";
 import { currentUser, publicProfile } from "./auth.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.100
+// xm-fast-shell 0.1.101
 
-export const SHELL_ASSET_VER = "0.1.100";
+export const SHELL_ASSET_VER = "0.1.101";
+export const TAB_TITLE = "星脉甄选运营中心";
+export const TAB_ICON = "/login-logo.png";
 export const APP_MODULES = {
   "/data": "data",
   "/shen": "shen",
@@ -64,7 +66,8 @@ export function renderAppShell(href, user) {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${title} · 星脉甄选</title>
+    <title>${TAB_TITLE}</title>
+    <link rel="icon" href="${TAB_ICON}" />
 ${css}    <link rel="preload" href="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" as="script" />
 ${boot}    <script src="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" defer data-xm-mod="${key}"></script>
   </head>
@@ -245,9 +248,13 @@ export function withSharedShell(html) {
     } else if (!out.includes('rel="preload" href="/shared/nav.js')) {
       extras.push(`    <link rel="preload" href="/shared/nav.js?v=${SHELL_ASSET_VER}" as="script" />`);
     }
+    if (!/rel=["']icon["']/.test(out)) {
+      extras.push(`    <link rel="icon" href="${TAB_ICON}" />`);
+    }
     if (extras.length) {
       out = out.replace("</head>", extras.join("\n") + "\n  </head>");
     }
+    out = out.replace(/<title>[^<]*<\/title>/, `<title>${TAB_TITLE}</title>`);
   } else if (!out.includes("/shared/nav.js") && out.includes("</body>")) {
     out = out.replace("</body>", `    <script src="/shared/nav.js?v=${SHELL_ASSET_VER}"></script>\n  </body>`);
   }
