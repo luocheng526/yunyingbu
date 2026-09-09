@@ -211,7 +211,7 @@
             if (!res.ok) throw new Error(data.error || "登录失败");
             if (remember.checked) localStorage.setItem(KEY, username.value.trim());
             else localStorage.removeItem(KEY);
-            window.location.replace("/data");
+            window.location.replace("/home");
           } catch (err) {
             error.textContent = err.message || "连不上服务器。请确认地址是 https://zx.xingmaierp.cc/login。";
             error.hidden = false;
