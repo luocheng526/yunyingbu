@@ -18,8 +18,14 @@ export const DATA_OVERLAY_FILES = [
   "src/modules/data/pages.js",
   "src/modules/data/router.js",
   "src/modules/data/patch-app.js",
-  "src/modules/data/release-files.js"
+  "src/modules/data/release-files.js",
+  "public/data/shops/index.html",
+  "public/data/goods/index.html",
+  "public/data/paid/index.html",
+  "public/shared/modules/data.js"
 ];
+
+const ALLOWED_SHARED = new Set(["public/shared/modules/data.js"]);
 
 const FORBIDDEN_EXACT = new Set([
   "src/app.js",
@@ -42,6 +48,9 @@ const FORBIDDEN_PREFIXES = [
 
 export function isForbiddenReleasePath(relPath) {
   const n = String(relPath || "").replace(/\\/g, "/").replace(/^\.\//, "");
+  if (ALLOWED_SHARED.has(n)) {
+    return false;
+  }
   if (FORBIDDEN_EXACT.has(n)) {
     return true;
   }
@@ -50,6 +59,9 @@ export function isForbiddenReleasePath(relPath) {
 
 export function isAllowedDataPath(relPath) {
   const n = String(relPath || "").replace(/\\/g, "/").replace(/^\.\//, "");
+  if (ALLOWED_SHARED.has(n)) {
+    return true;
+  }
   if (isForbiddenReleasePath(n)) {
     return false;
   }

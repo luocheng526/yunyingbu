@@ -3,10 +3,10 @@
 export const DATA_NAV = {
   parent: { href: "/data", label: "数据中心" },
   children: [
-    { href: "/data/stores/live", label: "店铺实时数据" },
-    { href: "/data/stores/overview", label: "店铺数据总揽" },
-    { href: "/data/goods/overview", label: "商品数据总揽" },
-    { href: "/data/overview", label: "数据总揽" }
+    { href: "/data/overview", label: "数据总揽" },
+    { href: "/data/shops", label: "店铺数据" },
+    { href: "/data/goods", label: "商品数据" },
+    { href: "/data/paid", label: "实时付费" }
   ]
 };
 

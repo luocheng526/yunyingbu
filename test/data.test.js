@@ -96,7 +96,7 @@ test("GET /api/data/nav lists the data-center children including 数据总揽", 
     assert.equal(body.parent.label, "数据中心");
     assert.deepEqual(
       body.children.map((c) => c.label),
-      ["店铺实时数据", "店铺数据总揽", "商品数据总揽", "数据总揽"]
+      ["数据总揽", "店铺数据", "商品数据", "实时付费"]
     );
     assert.equal(
       body.children.some((c) => /公司/.test(c.label)),
@@ -127,10 +127,10 @@ test("data child pages and demo APIs respond", async () => {
     }
     const subnav = await get(base, "/data-subnav.js");
     assert.equal(subnav.res.status, 200);
-    assert.match(subnav.text, /店铺实时数据/);
-    assert.match(subnav.text, /店铺数据总揽/);
-    assert.match(subnav.text, /商品数据总揽/);
     assert.match(subnav.text, /数据总揽/);
+    assert.match(subnav.text, /店铺数据/);
+    assert.match(subnav.text, /商品数据/);
+    assert.match(subnav.text, /实时付费/);
     assert.doesNotMatch(subnav.text, /公司/);
     const overviewPage = await get(base, "/data/overview");
     assert.equal(overviewPage.res.status, 200);
@@ -155,6 +155,13 @@ test("data child pages and demo APIs respond", async () => {
     assert.equal(demoFile.res.status, 200);
     const demo = JSON.parse(demoFile.text);
     assert.equal(demo.cards.length, 17);
+    for (const pathName of ["/data/shops", "/data/goods", "/data/paid"]) {
+      const page = await get(base, pathName);
+      assert.equal(page.res.status, 200, pathName);
+    }
+    const dataMod = await get(base, "/shared/modules/data.js");
+    assert.equal(dataMod.res.status, 200);
+    assert.doesNotMatch(dataMod.text, /内容待开发/);
   });
 });
 
@@ -331,6 +338,19 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.equal(isAllowedDataPath("public/data/overview/index.html"), true);
   assert.equal(isAllowedDataPath("public/data-overview.js"), true);
   assert.equal(isAllowedDataPath("public/data/team-demo.json"), true);
+  assert.equal(isAllowedDataPath("public/shared/modules/data.js"), true);
+  assert.equal(isAllowedDataPath("public/shared/nav.js"), false);
+  const css = fs.readFileSync(path.join(repoRoot, "public/data-pages.css"), "utf8");
+  assert.match(css, /var\(--xm-primary\)/);
+  assert.match(css, /var\(--xm-card\)/);
+  assert.doesNotMatch(css, /#1677ff/);
+  assert.doesNotMatch(css, /#e6f4ff/);
+  assert.match(css, /html\[data-theme="dark"\]/);
+  assert.match(css, /html\[data-theme="pink"\]/);
+  const dataMod = fs.readFileSync(path.join(repoRoot, "public/shared/modules/data.js"), "utf8");
+  assert.doesNotMatch(dataMod, /内容待开发/);
+  assert.doesNotMatch(dataMod, /function waitPage/);
+  assert.match(dataMod, /\/data\/paid/);
   const demo = JSON.parse(fs.readFileSync(path.join(repoRoot, "public/data/team-demo.json"), "utf8"));
   assert.equal(demo.cards.length, 17);
   assert.equal(demo.scope, "团队");

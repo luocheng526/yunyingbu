@@ -266,6 +266,8 @@
     };
   }
 
+  window.XmDataCreateDashboard = createDashboard;
+
   const teamModule = {
     mount: function (root) {
       return createDashboard(root);
