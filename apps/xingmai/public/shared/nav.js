@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.117 */
+/* xm-fast-shell 0.1.118 */
 (function () {
-  const ASSET_VER = "0.1.117";
+  const ASSET_VER = "0.1.118";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -241,33 +241,89 @@
 
   function tabButtonHtml(href, active) {
     const label = labelOf(href);
+    const pinned = href === "/home";
+    const closer = pinned
+      ? ""
+      : '<button type="button" class="xm-tab-close" aria-label="关闭 ' + label + '">×</button>';
     return (
       '<div class="xm-tab' +
       (active ? " is-active" : "") +
+      (pinned ? " is-pinned" : "") +
       '" role="tab" data-href="' +
       href +
       '" tabindex="0" aria-selected="' +
       (active ? "true" : "false") +
       '"><span class="xm-tab-label">' +
       label +
-      '</span><button type="button" class="xm-tab-close" aria-label="关闭 ' +
-      label +
-      '">×</button></div>'
+      "</span>" +
+      closer +
+      "</div>"
     );
   }
 
+  function leafRoute(href) {
+    const key = normalize(href);
+    return PARENT_HOME[key] || key;
+  }
+
+  function ensureOpenTabs() {
+    if (!Array.isArray(openTabs)) {
+      openTabs = [];
+    }
+    const seen = {};
+    openTabs = openTabs
+      .map(function (href) {
+        return leafRoute(href);
+      })
+      .filter(function (href) {
+        if (!MODULES[href] || PARENT_HOME[href] || seen[href]) {
+          return false;
+        }
+        seen[href] = true;
+        return true;
+      });
+    const here = leafRoute(current);
+    if (MODULES[here] && !PARENT_HOME[here] && openTabs.indexOf(here) < 0) {
+      openTabs.push(here);
+    }
+    if (openTabs.indexOf("/home") < 0) {
+      openTabs.unshift("/home");
+    }
+    if (!openTabs.length) {
+      openTabs = ["/home"];
+    }
+    writeOpenTabs();
+  }
+
+  function ensureTabBar() {
+    const topbar = document.querySelector(".xm-topbar");
+    if (!topbar) {
+      return document.querySelector(".xm-tabs");
+    }
+    let bar = topbar.querySelector(".xm-tabs");
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.className = "xm-tabs";
+      topbar.insertBefore(bar, topbar.firstChild);
+    }
+    return bar;
+  }
+
   function paintTabs() {
-    const bar = document.querySelector(".xm-tabs");
+    ensureOpenTabs();
+    const bar = ensureTabBar();
     if (!bar) {
       return;
     }
     bar.setAttribute("role", "tablist");
+    bar.setAttribute("aria-label", "页签");
     bar.setAttribute("data-count", String(openTabs.length));
     bar.innerHTML = openTabs
       .map(function (href) {
-        return tabButtonHtml(href, href === current);
+        return tabButtonHtml(href, href === current || (href === "/home" && leafRoute(current) === "/home"));
       })
       .join("");
+    bindTabs();
   }
 
   function paneFor(href, create) {
@@ -340,7 +396,10 @@
   }
 
   function closeTab(href) {
-    const key = normalize(href);
+    const key = leafRoute(href);
+    if (key === "/home") {
+      return;
+    }
     const idx = openTabs.indexOf(key);
     if (idx < 0) {
       return;
@@ -352,14 +411,14 @@
     disposePane(key);
     writeOpenTabs();
     if (current === key) {
-      go(openTabs[idx] || openTabs[idx - 1] || openTabs[0], true);
+      go(openTabs[idx] || openTabs[idx - 1] || openTabs[0] || "/home", true);
       return;
     }
     paintTabs();
   }
 
   function bindTabs() {
-    const bar = document.querySelector(".xm-tabs");
+    const bar = ensureTabBar();
     if (!bar || bar.dataset.tabBound === "1") {
       return;
     }
@@ -611,12 +670,50 @@
   }
 
   function goHomeRefresh() {
-    const here = normalize(window.location.pathname);
-    if (here === "/home") {
-      window.location.reload();
+    if (openTabs.indexOf("/home") < 0) {
+      openTabs.unshift("/home");
+    }
+    writeOpenTabs();
+    if (normalize(window.location.pathname) !== "/home") {
+      history.pushState({ xm: "/home" }, "", "/home");
+    }
+    current = "/home";
+    disposePane("/home");
+    const root = paneFor("/home", true);
+    if (root) {
+      root.removeAttribute("data-xm-mounted");
+    }
+    paintActive("/home");
+    showPane("/home");
+    loadModuleScript("/home").then(function () {
+      mountRoute("/home");
+    });
+  }
+
+  function watchTabBar() {
+    if (window.__xmTabWatch || typeof MutationObserver !== "function") {
       return;
     }
-    window.location.assign("/home");
+    const topbar = document.querySelector(".xm-topbar");
+    if (!topbar) {
+      return;
+    }
+    window.__xmTabWatch = 1;
+    let queued = 0;
+    const obs = new MutationObserver(function () {
+      if (queued) {
+        return;
+      }
+      queued = 1;
+      setTimeout(function () {
+        queued = 0;
+        const bar = topbar.querySelector(".xm-tabs");
+        if (!bar || !bar.querySelector(".xm-tab")) {
+          paintTabs();
+        }
+      }, 0);
+    });
+    obs.observe(topbar, { childList: true, subtree: true });
   }
 
   function bindBrandHome() {
@@ -932,6 +1029,7 @@
     bindBrandHome();
     bindMenu(document);
     ensureWorkspace();
+    watchTabBar();
     startQueueWatch();
   }
 
