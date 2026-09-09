@@ -1,9 +1,16 @@
-export const NAV_VERSION = "v0.4.6";
+export const NAV_VERSION = "v0.4.7";
+
+export const HAN_CHILDREN = [
+  { href: "/han/selection", label: "选品数据" },
+  { href: "/han/goods", label: "商品数据" },
+  { href: "/han/paid", label: "实时付费" },
+  { href: "/han/training", label: "培训系统" }
+];
 
 export const NAV_MAIN = [
   { href: "/data", file: "data.html", label: "数据中心" },
   { href: "/shen", file: "shen.html", label: "沈子晗运营中心" },
-  { href: "/han", file: "han.html", label: "韩梦凯运营中心" },
+  { href: "/han", label: "韩梦凯运营中心", children: HAN_CHILDREN },
   { href: "/people", file: "people.html", label: "人员管理" }
 ];
 
@@ -12,7 +19,19 @@ export const NAV_FOOT = [
   { href: "/me", file: "me.html", label: "个人中心" }
 ];
 
-export const NAV_ITEMS = [...NAV_MAIN, ...NAV_FOOT];
+function flatten(items) {
+  const out = [];
+  for (const item of items) {
+    if (item.children && item.children.length) {
+      out.push(...item.children);
+    } else {
+      out.push(item);
+    }
+  }
+  return out;
+}
+
+export const NAV_ITEMS = [...flatten(NAV_MAIN), ...NAV_FOOT];
 
 const ICO_PATH = {
   "/data": '<path d="M5 19V10"/><path d="M10 19V6"/><path d="M15 19v-7"/><path d="M20 19V8"/>',
@@ -24,9 +43,20 @@ const ICO_PATH = {
   logout: '<path d="M10 7V5.8A1.8 1.8 0 0 1 11.8 4h6.4A1.8 1.8 0 0 1 20 5.8v12.4a1.8 1.8 0 0 1-1.8 1.8h-6.4A1.8 1.8 0 0 1 10 18.2V17"/><path d="M4 12h10"/><path d="M11.2 8.8 14.4 12l-3.2 3.2"/>'
 };
 
+const CARET =
+  '<i class="xm-caret" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 10 4 4 4-4"/></svg></i>';
+
 function ico(name) {
-  const path = ICO_PATH[name] || ICO_PATH["/data"];
+  const path = ICO_PATH[name] || ICO_PATH["/han"];
   return `<i class="xm-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${path}</svg></i>`;
+}
+
+function childActive(item, activeHref) {
+  const key = String(activeHref || "");
+  if (!item.children) {
+    return false;
+  }
+  return item.children.some((child) => child.href === key) || key === item.href || key.startsWith(`${item.href}/`);
 }
 
 function itemLink(item, activeHref) {
@@ -35,8 +65,16 @@ function itemLink(item, activeHref) {
   return `<a class="xm-menu-item${active}" href="${item.href}"${current}>${ico(item.href)}<span>${item.label}</span></a>`;
 }
 
+function groupMarkup(item, activeHref) {
+  const open = childActive(item, activeHref);
+  const kids = item.children.map((child) => itemLink(child, activeHref)).join("");
+  return `<div class="xm-menu-group${open ? " is-open" : ""}" data-xm-group="${item.href}"><button type="button" class="xm-menu-item xm-menu-parent" aria-expanded="${open ? "true" : "false"}">${ico(item.href)}<span>${item.label}</span>${CARET}</button><div class="xm-submenu">${kids}</div></div>`;
+}
+
 export function navMarkup(activeHref) {
-  const main = NAV_MAIN.map((item) => itemLink(item, activeHref)).join("");
+  const main = NAV_MAIN.map((item) =>
+    item.children ? groupMarkup(item, activeHref) : itemLink(item, activeHref)
+  ).join("");
   const foot = NAV_FOOT.map((item) => itemLink(item, activeHref)).join("");
   return `<aside class="xm-sider" aria-label="侧栏导航"><div class="xm-brand"><a class="xm-logo" href="/data"><img src="/login-logo.png" alt="星脉甄选" onerror="this.onerror=null;this.src='/shared/xingmai-logo.png'" /></a><button type="button" class="xm-collapse" id="xm-collapse" aria-label="折叠侧栏">‹</button></div><nav class="xm-menu xm-menu-main">${main}</nav><nav class="xm-menu xm-menu-foot">${foot}<button type="button" class="xm-menu-item xm-logout" id="xm-logout">${ico("logout")}<span>退出登录</span></button><p class="xm-version">${NAV_VERSION}</p></nav></aside>`;
 }

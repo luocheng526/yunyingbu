@@ -8,6 +8,28 @@
   }
 
   window.XmModules = window.XmModules || {};
+
+  function waitPage(title) {
+    return {
+      mount: function (root) {
+        root.innerHTML =
+          '<main class="page">' +
+          '<header class="page-head"><p class="kicker">韩梦凯运营中心</p><h1>' +
+          escapeHtml(title) +
+          "</h1>" +
+          '<p class="lead">内容待开发。</p></header></main>';
+        return function unmount() {
+          root.innerHTML = "";
+        };
+      }
+    };
+  }
+
+  window.XmModules["/han/selection"] = waitPage("选品数据");
+  window.XmModules["/han/goods"] = waitPage("商品数据");
+  window.XmModules["/han/paid"] = waitPage("实时付费");
+  window.XmModules["/han/training"] = waitPage("培训系统");
+
   window.XmModules["/han"] = {
     mount: function (root) {
       root.innerHTML =

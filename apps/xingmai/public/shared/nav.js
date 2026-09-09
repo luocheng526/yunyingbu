@@ -1,23 +1,34 @@
-/* xm-fast-shell 0.1.101 */
+/* xm-fast-shell 0.1.102 */
 (function () {
-  const ASSET_VER = "0.1.101";
+  const ASSET_VER = "0.1.102";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/data": "data",
     "/shen": "shen",
     "/han": "han",
+    "/han/selection": "han",
+    "/han/goods": "han",
+    "/han/paid": "han",
+    "/han/training": "han",
     "/people": "people",
     "/releases": "releases",
     "/me": "me"
   };
+  const HAN_CHILDREN = [
+    { href: "/han/selection", label: "选品数据" },
+    { href: "/han/goods", label: "商品数据" },
+    { href: "/han/paid", label: "实时付费" },
+    { href: "/han/training", label: "培训系统" }
+  ];
   const items = [
     { href: "/data", label: "数据中心" },
     { href: "/shen", label: "沈子晗运营中心" },
-    { href: "/han", label: "韩梦凯运营中心" },
+    { href: "/han", label: "韩梦凯运营中心", children: HAN_CHILDREN },
     { href: "/people", label: "人员管理" },
     { href: "/releases", label: "版本发布中心" },
     { href: "/me", label: "个人中心" }
   ];
+  const labels = items.concat(HAN_CHILDREN);
 
   const path = (window.location.pathname.replace(/\/+$/, "") || "/").toLowerCase();
   if (path === "/login" || path === "/login.html") {
@@ -47,10 +58,16 @@
   }
 
   function labelOf(href) {
-    const hit = items.find(function (item) {
-      return normalize(item.href) === normalize(href);
+    const key = normalize(href);
+    const hit = labels.find(function (item) {
+      return normalize(item.href) === key;
     });
     return (hit || items[0]).label;
+  }
+
+  function hanOpen(href) {
+    const key = normalize(href);
+    return key === "/han" || key.indexOf("/han/") === 0;
   }
 
   const MAIN = items.slice(0, 4);
@@ -83,19 +100,49 @@
     );
   }
 
+  function groupHtml(item) {
+    const open = hanOpen(current);
+    const kids = (item.children || []).map(itemHtml).join("");
+    return (
+      '<div class="xm-menu-group' +
+      (open ? " is-open" : "") +
+      '" data-xm-group="' +
+      item.href +
+      '">' +
+      '<button type="button" class="xm-menu-item xm-menu-parent" aria-expanded="' +
+      (open ? "true" : "false") +
+      '">' +
+      ico(item.href) +
+      "<span>" +
+      item.label +
+      "</span>" +
+      '<i class="xm-caret" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 10 4 4 4-4"/></svg></i>' +
+      "</button>" +
+      '<div class="xm-submenu">' +
+      kids +
+      "</div></div>"
+    );
+  }
+
+  function mainHtml() {
+    return MAIN.map(function (item) {
+      return item.children ? groupHtml(item) : itemHtml(item);
+    }).join("");
+  }
+
   function siderHtml() {
     return (
       '<div class="xm-brand"><a class="xm-logo" href="/data"><img src="/login-logo.png" alt="星脉甄选" onerror="this.onerror=null;this.src=\'/shared/xingmai-logo.png\'" /></a>' +
       '<button type="button" class="xm-collapse" id="xm-collapse" aria-label="折叠侧栏">‹</button></div>' +
       '<nav class="xm-menu xm-menu-main">' +
-      MAIN.map(itemHtml).join("") +
+      mainHtml() +
       "</nav>" +
       '<nav class="xm-menu xm-menu-foot">' +
       FOOT.map(itemHtml).join("") +
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout">' +
       ico("logout") +
       "<span>退出登录</span></button>" +
-      '<p class="xm-version">v0.4.6</p></nav>'
+      '<p class="xm-version">v0.4.7</p></nav>'
     );
   }
 
@@ -134,6 +181,15 @@
       tab.textContent = labelOf(current);
     }
     document.title = TAB_TITLE;
+    const group = document.querySelector('.xm-menu-group[data-xm-group="/han"]');
+    if (group) {
+      const open = hanOpen(current);
+      group.classList.toggle("is-open", open);
+      const parent = group.querySelector(".xm-menu-parent");
+      if (parent) {
+        parent.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+    }
   }
 
   function ensureReleasesCss() {
@@ -224,6 +280,10 @@
 
   function go(href, push) {
     const key = normalize(href);
+    if (key === "/han") {
+      window.location.replace("/han/selection");
+      return;
+    }
     if (key === "/" || !MODULES[key]) {
       window.location.assign(key);
       return;
@@ -255,8 +315,40 @@
     });
   }
 
+  function bindParents(scope) {
+    const parents = scope.querySelectorAll(".xm-menu-parent");
+    Array.prototype.forEach.call(parents, function (btn) {
+      if (btn.dataset.navFast === "1") {
+        return;
+      }
+      btn.dataset.navFast = "1";
+      btn.addEventListener("click", function (event) {
+        event.preventDefault();
+        const group = btn.closest(".xm-menu-group");
+        if (!group) {
+          return;
+        }
+        if (document.documentElement.classList.contains("xm-collapsed")) {
+          try {
+            localStorage.setItem("xm-sider-collapsed", "0");
+          } catch (_err) {
+            /* ignore */
+          }
+          applyCollapsed(false);
+          group.classList.add("is-open");
+          btn.setAttribute("aria-expanded", "true");
+          return;
+        }
+        const next = !group.classList.contains("is-open");
+        group.classList.toggle("is-open", next);
+        btn.setAttribute("aria-expanded", next ? "true" : "false");
+      });
+    });
+  }
+
   function bindMenu(root) {
     const scope = root || document;
+    bindParents(scope);
     const links = scope.querySelectorAll(".xm-menu a[href], a.xm-logo[href], a.xm-username[href]");
     Array.prototype.forEach.call(links, function (anchor) {
       if (anchor.dataset.navFast === "1") {
