@@ -1,6 +1,7 @@
-/* xm-fast-shell 0.1.100 */
+/* xm-fast-shell 0.1.101 */
 (function () {
-  const ASSET_VER = "0.1.100";
+  const ASSET_VER = "0.1.101";
+  const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/data": "data",
     "/shen": "shen",
@@ -132,7 +133,7 @@
     if (tab) {
       tab.textContent = labelOf(current);
     }
-    document.title = labelOf(current) + " · 星脉甄选";
+    document.title = TAB_TITLE;
   }
 
   function ensureReleasesCss() {
