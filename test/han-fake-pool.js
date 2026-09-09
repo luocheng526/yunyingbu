@@ -22,6 +22,10 @@ export function createHanFakePool() {
         return [{}, undefined];
       }
 
+      if (/^DELETE FROM han_tasks WHERE title LIKE/i.test(normalized)) {
+        return [{ affectedRows: 0 }, undefined];
+      }
+
       if (/^SELECT text FROM han_brief WHERE id = 1$/i.test(normalized)) {
         return [briefRow ? [{ ...briefRow }] : [], undefined];
       }

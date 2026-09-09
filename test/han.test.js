@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
-import { createHanStore, HAN_DEFAULT_OWNER } from "../src/modules/han/store.js";
+import { createHanStore, dropProbeTasks, hydrateFromMysql, HAN_DEFAULT_OWNER } from "../src/modules/han/store.js";
 import { createHanFakePool } from "./han-fake-pool.js";
 
 async function withServer(fn) {
@@ -209,6 +209,16 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /\/api\/han\/paid/);
   assert.match(js, /培训系统/);
   assert.match(js, /内容待开发/);
+});
+
+test("han store keeps dropProbeTasks and hydrateFromMysql exports", async () => {
+  assert.equal(typeof dropProbeTasks, "function");
+  assert.equal(typeof hydrateFromMysql, "function");
+  const pool = createHanFakePool();
+  const dropped = await dropProbeTasks(pool);
+  assert.equal(dropped.ok, true);
+  const hydrated = await hydrateFromMysql(pool);
+  assert.equal(hydrated.ok, true);
 });
 
 test("han schema uses prefixed tables", async () => {

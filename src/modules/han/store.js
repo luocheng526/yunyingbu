@@ -266,6 +266,29 @@ export const createTask = (...args) => defaultStore.createTask(...args);
 export const getBrief = (...args) => defaultStore.getBrief(...args);
 export const setBrief = (...args) => defaultStore.setBrief(...args);
 
+export async function hydrateFromMysql(poolOrFactory = getPool) {
+  const store = poolOrFactory === getPool ? defaultStore : createHanStore(poolOrFactory);
+  await store.listTasks();
+  await store.getBrief();
+  return { ok: true };
+}
+
+export async function dropProbeTasks(poolOrFactory = getPool) {
+  const db = typeof poolOrFactory === "function" ? poolOrFactory() : poolOrFactory;
+  try {
+    const [result] = await db.query(
+      "DELETE FROM han_tasks WHERE title LIKE ? OR title LIKE ?",
+      ["%[probe]%", "HAN-ONLY-%"],
+    );
+    return { ok: true, deleted: Number(result.affectedRows || 0) };
+  } catch (err) {
+    if (err && (err.code === "ER_NO_SUCH_TABLE" || err.code === "MYSQL_NOT_CONFIGURED")) {
+      return { ok: true, deleted: 0 };
+    }
+    throw err;
+  }
+}
+
 export const HAN_DEFAULT_OWNER = DEFAULT_OWNER;
 export const HAN_STATUSES = STATUSES;
 export const HAN_SELECTION_STATUSES = SELECTION_STATUSES;
