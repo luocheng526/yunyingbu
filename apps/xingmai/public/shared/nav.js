@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.106 */
+/* xm-fast-shell 0.1.107 */
 (function () {
-  const ASSET_VER = "0.1.106";
+  const ASSET_VER = "0.1.107";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/data": "data",
@@ -113,6 +113,8 @@
   function itemHtml(item) {
     const cls = "xm-menu-item" + (isActive(item.href) ? " is-active" : "");
     const cur = isActive(item.href) ? ' aria-current="page"' : "";
+    const badge =
+      item.href === "/releases" ? '<b class="xm-queue-badge" data-xm-queue-badge hidden>0</b>' : "";
     return (
       '<a class="' +
       cls +
@@ -124,7 +126,9 @@
       ico(item.href) +
       "<span>" +
       item.label +
-      "</span></a>"
+      "</span>" +
+      badge +
+      "</a>"
     );
   }
 
@@ -170,7 +174,7 @@
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout">' +
       ico("logout") +
       "<span>退出登录</span></button>" +
-      '<p class="xm-version">v0.4.11</p></nav>'
+      '<p class="xm-version">v0.4.12</p></nav>'
     );
   }
 
@@ -189,6 +193,61 @@
       return true;
     }
     return false;
+  }
+
+  function paintQueueBadge(count) {
+    const n = Math.max(0, Number(count) || 0);
+    const badges = document.querySelectorAll("[data-xm-queue-badge]");
+    Array.prototype.forEach.call(badges, function (el) {
+      if (n <= 0) {
+        el.hidden = true;
+        el.textContent = "0";
+        el.removeAttribute("aria-label");
+        return;
+      }
+      const text = n > 99 ? "99+" : String(n);
+      el.hidden = false;
+      el.textContent = text;
+      el.setAttribute("aria-label", text + " 条待放行");
+    });
+  }
+
+  function refreshQueueBadge() {
+    fetch("/api/releases/queue", {
+      credentials: "same-origin",
+      headers: { Accept: "application/json" }
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          return null;
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data) {
+          return;
+        }
+        const items = data.items || [];
+        paintQueueBadge(Array.isArray(items) ? items.length : 0);
+      })
+      .catch(function () {
+        /* keep last count */
+      });
+  }
+
+  function startQueueWatch() {
+    if (window.__xmQueueWatch) {
+      refreshQueueBadge();
+      return;
+    }
+    window.__xmQueueWatch = 1;
+    refreshQueueBadge();
+    setInterval(refreshQueueBadge, 20000);
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden) {
+        refreshQueueBadge();
+      }
+    });
   }
 
   function paintActive(href) {
@@ -350,6 +409,7 @@
     loadModuleScript(key).then(function () {
       mountRoute(key);
     });
+    refreshQueueBadge();
   }
 
   function bindParents(scope) {
@@ -530,6 +590,7 @@
       applyCollapsed(false);
     }
     bindMenu(document);
+    startQueueWatch();
   }
 
   function mountShell() {

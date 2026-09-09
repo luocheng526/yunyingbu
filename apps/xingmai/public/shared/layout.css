@@ -1,4 +1,4 @@
-/* xm-sider-narrow 0.1.106 */
+/* xm-sider-narrow 0.1.107 */
 :root {
   --xm-sider: #ffffff;
   --xm-bg: #f0f2f5;
@@ -69,6 +69,18 @@ html.xm-collapsed .xm-version,
 html.xm-collapsed .xm-caret,
 html.xm-collapsed .xm-submenu {
   display: none;
+}
+
+html.xm-collapsed .xm-queue-badge {
+  position: absolute;
+  top: 4px;
+  right: 2px;
+  margin-left: 0;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 16px;
 }
 
 html.xm-collapsed .xm-brand {
@@ -230,6 +242,25 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
   width: 3px;
   background: var(--xm-primary);
   border-radius: 0 2px 2px 0;
+}
+
+.xm-queue-badge {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ff4d4f;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  flex: 0 0 auto;
+}
+
+.xm-queue-badge[hidden] {
+  display: none !important;
 }
 
 .xm-menu-group {
