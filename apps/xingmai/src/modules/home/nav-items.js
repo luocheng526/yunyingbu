@@ -1,4 +1,4 @@
-export const NAV_VERSION = "v0.4.17";
+export const NAV_VERSION = "v0.4.18";
 
 export const DATA_CHILDREN = [
   { href: "/data/overview", label: "数据总揽" },
@@ -93,15 +93,16 @@ function queueBadge(item) {
   return '<b class="xm-queue-badge" data-xm-queue-badge hidden>0</b>';
 }
 
-function itemLink(item, activeHref) {
+function itemLink(item, activeHref, extraClass) {
   const current = item.href === activeHref ? ' aria-current="page"' : "";
   const active = item.href === activeHref ? " is-active" : "";
-  return `<a class="xm-menu-item${active}" href="${item.href}"${current}>${ico(item.href)}<span>${item.label}</span>${queueBadge(item)}</a>`;
+  const extra = extraClass ? ` ${extraClass}` : "";
+  return `<a class="xm-menu-item${extra}${active}" href="${item.href}"${current}>${ico(item.href)}<span>${item.label}</span>${queueBadge(item)}</a>`;
 }
 
 function groupMarkup(item, activeHref) {
   const open = childActive(item, activeHref);
-  const kids = item.children.map((child) => itemLink(child, activeHref)).join("");
+  const kids = item.children.map((child) => itemLink(child, activeHref, "xm-menu-child")).join("");
   return `<div class="xm-menu-group${open ? " is-open" : ""}" data-xm-group="${item.href}"><button type="button" class="xm-menu-item xm-menu-parent" aria-expanded="${open ? "true" : "false"}">${ico(item.href)}<span>${item.label}</span>${CARET}</button><div class="xm-submenu">${kids}</div></div>`;
 }
 

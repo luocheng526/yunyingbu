@@ -26,12 +26,17 @@ async function loginCookie() {
 test("shell HTML is versioned so browsers drop the old full-reload nav.js", async () => {
   const cookie = await loginCookie();
   const html = await (await fetch(`${base}/data/overview`, { headers: { cookie } })).text();
-  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.112/);
-  assert.match(html, /\/shared\/layout\.css\?v=0\.1\.112/);
-  assert.match(html, /\/shared\/modules\/data\.js\?v=0\.1\.112/);
+  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.113/);
+  assert.match(html, /\/shared\/layout\.css\?v=0\.1\.113/);
+  assert.match(html, /\/shared\/modules\/data\.js\?v=0\.1\.113/);
+  assert.match(html, /xm-tab-close/);
+  assert.match(html, /xm-workspace/);
   const js = readFileSync(join(root, "public/shared/nav.js"), "utf8");
   assert.match(js, /history\.pushState/);
   assert.match(js, /function go\(/);
+  assert.match(js, /function openTab\(/);
+  assert.match(js, /function closeTab\(/);
+  assert.match(js, /xm-menu-child/);
   assert.match(js, /function loadModuleScript\(/);
   assert.match(js, /function mountRoute\(/);
   assert.doesNotMatch(js, /function wipePageTimers/);
@@ -51,7 +56,7 @@ test("sidebar HTML stays fast when the same process is reused", async () => {
     assert.equal(res.status, 200);
     samples.push(ms);
     const html = await res.text();
-    assert.match(html, /\/shared\/nav\.js\?v=0\.1\.112/);
+    assert.match(html, /\/shared\/nav\.js\?v=0\.1\.113/);
     assert.match(html, /\/shared\/modules\//);
     assert.match(html, /<span>首页<\/span>/);
   }

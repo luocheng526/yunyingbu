@@ -6,9 +6,9 @@ import { navMarkup } from "../home/nav-items.js";
 import { currentUser, publicProfile } from "./auth.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.112
+// xm-fast-shell 0.1.113
 
-export const SHELL_ASSET_VER = "0.1.112";
+export const SHELL_ASSET_VER = "0.1.113";
 export const TAB_TITLE = "星脉甄选运营中心";
 // 浏览器标签图标。侧栏品牌条仍用 /login-logo.png，不要改成这个。
 export const TAB_ICON =
@@ -116,7 +116,7 @@ ${boot}    <script src="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" defer dat
       ${navMarkup(key)}
       <div class="xm-main">
         <header class="xm-topbar">
-          <div class="xm-tabs" aria-label="页签"><span class="xm-tab is-active">${title}</span></div>
+          <div class="xm-tabs" role="tablist" aria-label="页签"><div class="xm-tab is-active" role="tab" data-href="${key}" aria-selected="true"><span class="xm-tab-label">${title}</span><button type="button" class="xm-tab-close" aria-label="关闭 ${title}">×</button></div></div>
           <div class="xm-user">
             <div class="xm-styles" role="group" aria-label="页面风格"><button type="button" data-xm-style="light" title="正常蓝色">蓝</button><button type="button" data-xm-style="dark" title="晚上黑色">夜</button><button type="button" data-xm-style="pink" title="甄选粉">粉</button></div>
             <time class="xm-date" id="xm-date"></time>
@@ -124,7 +124,7 @@ ${boot}    <script src="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" defer dat
             <a class="xm-username" id="xm-username" href="/me">${userName}</a>
           </div>
         </header>
-        <div class="xm-content" id="xm-content"></div>
+        <div class="xm-workspace"><div class="xm-content xm-pane is-active" id="xm-content" data-xm-href="${key}"></div></div>
       </div>
     </div>
     <script>
