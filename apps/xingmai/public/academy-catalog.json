@@ -1,0 +1,194 @@
+{
+  "title": "甄选商学院",
+  "tracks": [
+    { "id": "onboard", "name": "入职必读", "blurb": "先认门、认壳、认边界，再动手。" },
+    { "id": "ops", "name": "日常运营", "blurb": "沈线、韩线怎么走，培训系统不是本学院。" },
+    { "id": "data", "name": "数据看板", "blurb": "看懂总揽和演示数字，别当成外部业务库。" },
+    { "id": "people", "name": "人员与店权", "blurb": "花名册、店铺、管辖和对账。" },
+    { "id": "release", "name": "发版闸门", "blurb": "全站一条号，交单排队，网页点通过。" }
+  ],
+  "courses": [
+    {
+      "id": "gate-login",
+      "track": "onboard",
+      "title": "进门：登录与工作台",
+      "minutes": 8,
+      "summary": "未登录不能看业务页。登录页由个人中心负责，其它模块不要自做登录框。",
+      "lessons": [
+        {
+          "id": "login-door",
+          "title": "登录大门",
+          "minutes": 3,
+          "body": [
+            "站点是 https://zx.xingmaierp.cc。没会话就不要用业务页，也不要在自己的 HTML 里复制一套登录表单。",
+            "用户名演示账号是「罗成」（也可用 luocheng），初始口令见登录页提示。改密走个人中心。",
+            "被拦住时送到 /login。那一页不加载侧栏脚本，不要给登录页加 nav.js。"
+          ]
+        },
+        {
+          "id": "shell-content",
+          "title": "壳和内容区",
+          "minutes": 3,
+          "body": [
+            "登录后看到的左侧栏、顶栏是主框架画的。业务模块只往中间的 #xm-content 里画。",
+            "点侧栏是 pushState，不是整页跳。刷新后侧栏还在，说明壳对了。",
+            "颜色跟 --xm-* 和 html[data-theme]。不要再抄一套全页壳。"
+          ]
+        },
+        {
+          "id": "module-bound",
+          "title": "模块边界",
+          "minutes": 2,
+          "body": [
+            "甄选商学院只改 academy 目录和 public/shared/modules/academy.js。",
+            "不要改 nav.js、layout.css、nav-items.js、src/app.js。侧栏入口已经挂好。",
+            "别人的表（人员、沈、韩）不要写。要持久化就用自己的 /api/academy*。"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "shen-han-day",
+      "track": "ops",
+      "title": "沈线与韩线日常",
+      "minutes": 12,
+      "summary": "两条运营中心菜单各自干活。子菜单里的「培训系统」不是本学院。",
+      "lessons": [
+        {
+          "id": "shen-map",
+          "title": "沈子晗运营中心",
+          "minutes": 5,
+          "body": [
+            "侧栏「沈子晗运营中心」展开后是选品、成长、付费、培训系统、任务管理。",
+            "任务和简报走沈线自己的接口。商学院不代替任务板。",
+            "做沈线业务的人只改 shen 目录，不要来商学院塞运营流水。"
+          ]
+        },
+        {
+          "id": "han-map",
+          "title": "韩梦凯运营中心",
+          "minutes": 4,
+          "body": [
+            "韩线菜单覆盖选品数据、商品数据、实时付费、对接培训系统。",
+            "「对接培训系统」是韩线占位入口，课程正文放在甄选商学院，不要把课件搬进韩线子菜单。"
+          ]
+        },
+        {
+          "id": "academy-vs-training",
+          "title": "商学院和培训系统",
+          "minutes": 3,
+          "body": [
+            "甄选商学院 = 全站运营培训知识库，一级菜单，路径 /academy。",
+            "沈/韩的「培训系统」子菜单是各中心自己的对接位，不是本知识库。",
+            "以后要课程分类子菜单，列路径和中文名，交给主框架改侧栏，学院自己不要改 nav。"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "read-data",
+      "track": "data",
+      "title": "怎么读数据中心",
+      "minutes": 10,
+      "summary": "总揽上的数字带演示标记，先认口径再对外说。",
+      "lessons": [
+        {
+          "id": "overview-cards",
+          "title": "总揽指标卡",
+          "minutes": 5,
+          "body": [
+            "数据中心首页是关键指标看板：订单、待处理、在职、发布次数等卡片。",
+            "数字来自库内种子或样例，不是外部店铺库。对外汇报前先问数据中心模块是否已接真数。",
+            "子菜单里还有店铺数据、商品数据、实时付费，点进去若仍是占位，按占位处理。"
+          ]
+        },
+        {
+          "id": "demo-mark",
+          "title": "演示与真实",
+          "minutes": 5,
+          "body": [
+            "页面上写「演示」的，培训时明确告诉新人：这是练手数据。",
+            "不要把演示 KPI 发到群里当业绩。接上真实店铺后，以数据中心当时页面为准。"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "roster-shops",
+      "track": "people",
+      "title": "花名册与店权",
+      "minutes": 14,
+      "summary": "人、店、管辖三条线。离职要对账，避免店权还挂在走人身上。",
+      "lessons": [
+        {
+          "id": "roster",
+          "title": "身份名册",
+          "minutes": 5,
+          "body": [
+            "人员管理先用手录姓名、工号、部门、上级、岗位、所属中心、在职状态。",
+            "沈子晗线的人和店已预置并标演示。不接钉钉。",
+            "岗位和中心用下拉，不要自造一套和名册冲突的叫法。"
+          ]
+        },
+        {
+          "id": "shops-grants",
+          "title": "店铺与管辖",
+          "minutes": 5,
+          "body": [
+            "店铺/店群分开建。一人多店用多条管辖，不要把多店塞进一个姓名字段。",
+            "管辖要写角色和生效起止。过期或离职后走对账，不要只改状态不收回店权。"
+          ]
+        },
+        {
+          "id": "reconcile",
+          "title": "对账两句话",
+          "minutes": 4,
+          "body": [
+            "在职但没有店权：新人还没授权，或店还没建。",
+            "店权还挂在离职人员：先收回管辖，再把名册改离职。"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "release-gate",
+      "track": "release",
+      "title": "版本发布怎么交单",
+      "minutes": 16,
+      "summary": "全站一条号 0.1.N。先领号再交单，等网页队首点通过。禁止自己上服务器。",
+      "lessons": [
+        {
+          "id": "one-seq",
+          "title": "一条号",
+          "minutes": 4,
+          "body": [
+            "版本格式 0.1.N-说明。N 由闸门 GET /api/releases/next 发放，模块不得自领旁支号。",
+            "同一 N 全站占用。失败/驳回不占号，成功才占号。",
+            "申请人填「罗成运营部主脑」。模块名填自己，商学院填「甄选商学院」。"
+          ]
+        },
+        {
+          "id": "ticket-body",
+          "title": "单据字段",
+          "minutes": 6,
+          "body": [
+            "files 是路径字符串列表，相对 apps/xingmai/，不要带这个前缀。",
+            "contents 是路径到正文。禁止空 files 全量落地。",
+            "商学院只交 public/academy*、src/modules/academy/、public/shared/modules/academy.js。",
+            "改了运行时代码才 restart: true；只改页面也可以交，restart 可 false。"
+          ]
+        },
+        {
+          "id": "queue-pass",
+          "title": "排队和通过",
+          "minutes": 4,
+          "body": [
+            "入队按提交时间。禁止上移下移。闸门只允许通过第 1 位。",
+            "不要点通过 rel-131。不要自己 SSH、不要 systemctl。",
+            "禁止提交瘦 src/app.js。壳和内核只由主框架交。"
+          ]
+        }
+      ]
+    }
+  ]
+}
