@@ -30,3 +30,9 @@ CREATE TABLE IF NOT EXISTS agents_uploads (
   content LONGBLOB NOT NULL,
   created_at VARCHAR(32) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 旧表是 rel-167 的 thread_id。线上已有表时必须 ALTER，不能只靠 CREATE IF NOT EXISTS。
+ALTER TABLE agents_messages ADD COLUMN session_id INT NOT NULL DEFAULT 0;
+ALTER TABLE agents_messages ADD COLUMN file_ids VARCHAR(255) NOT NULL DEFAULT '[]';
+ALTER TABLE agents_messages ADD COLUMN model_id VARCHAR(64) NOT NULL DEFAULT '';
+ALTER TABLE agents_messages ADD COLUMN sources VARCHAR(255) NOT NULL DEFAULT '[]';

@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createApp } from "../src/app.js";
-import { resetStoreForTests } from "../src/modules/profile/auth.js";
-import { resetAgentsStore } from "../src/modules/agents/store.js";
+import { resetStoreForTests, setPoolForTests } from "../src/modules/profile/auth.js";
+import { ensureAgentsSchema, resetAgentsStore } from "../src/modules/agents/store.js";
 import { defaultModelId, publicModels, resolveModel } from "../src/modules/agents/models.js";
 import { chatWithModel, classifyQuestion, phraseWithModel, runDesk, shouldUseRemote } from "../src/modules/agents/desk.js";
 import { resolveViewer, rosterSnapshot } from "../src/modules/agents/tools.js";
@@ -291,4 +291,27 @@ test("后台模型只复述运营问答，花名册题不外呼", async () => {
     }
   );
   assert.match(grounded, /张文静在职/);
+});
+
+test("旧 thread_id 表会补 session_id，避免线上 Unknown column", async () => {
+  const storeJs = readFileSync(join(root, "src/modules/agents/store.js"), "utf8");
+  assert.match(storeJs, /ALTER TABLE agents_messages ADD COLUMN session_id/);
+  assert.match(storeJs, /ALTER TABLE agents_messages ADD COLUMN file_ids/);
+  assert.match(storeJs, /UPDATE agents_messages SET session_id = thread_id/);
+
+  const alters = [];
+  setPoolForTests({
+    query: async (sql) => {
+      const text = String(sql);
+      if (/ALTER TABLE|UPDATE agents_messages SET session_id|INSERT INTO agents_sessions/.test(text)) {
+        alters.push(text.replace(/\s+/g, " ").trim());
+      }
+      return [{ affectedRows: 0, insertId: 0 }];
+    }
+  });
+  resetAgentsStore();
+  await ensureAgentsSchema();
+  assert.ok(alters.some((item) => /ADD COLUMN session_id/.test(item)));
+  assert.ok(alters.some((item) => /session_id = thread_id/.test(item)));
+  setPoolForTests(null);
 });

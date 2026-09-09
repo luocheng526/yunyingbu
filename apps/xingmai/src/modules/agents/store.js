@@ -33,6 +33,17 @@ export function resetAgentsStore() {
   schemaReady = false;
 }
 
+async function ignoreSchemaNoise(work) {
+  try {
+    await work();
+  } catch (err) {
+    const message = String(err && err.message ? err.message : err);
+    if (!/Duplicate column|Duplicate key|already exists|Unknown column|Unknown table|check that it exists/i.test(message)) {
+      throw err;
+    }
+  }
+}
+
 export async function ensureAgentsSchema() {
   if (dbMode() !== "mysql" || schemaReady) {
     return;
@@ -45,6 +56,28 @@ export async function ensureAgentsSchema() {
   );
   await query(
     "CREATE TABLE IF NOT EXISTS agents_uploads (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, username VARCHAR(64) NOT NULL, filename VARCHAR(255) NOT NULL, mime VARCHAR(128) NOT NULL, size INT NOT NULL, content LONGBLOB NOT NULL, created_at VARCHAR(32) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+  );
+  // rel-167 建的是 agents_threads + agents_messages.thread_id。CREATE IF NOT EXISTS 不会改旧表，线上会报 Unknown column session_id。
+  await ignoreSchemaNoise(() =>
+    query("ALTER TABLE agents_messages ADD COLUMN session_id INT NOT NULL DEFAULT 0")
+  );
+  await ignoreSchemaNoise(() =>
+    query("ALTER TABLE agents_messages ADD COLUMN file_ids VARCHAR(255) NOT NULL DEFAULT '[]'")
+  );
+  await ignoreSchemaNoise(() =>
+    query("ALTER TABLE agents_messages ADD COLUMN model_id VARCHAR(64) NOT NULL DEFAULT ''")
+  );
+  await ignoreSchemaNoise(() =>
+    query("ALTER TABLE agents_messages ADD COLUMN sources VARCHAR(255) NOT NULL DEFAULT '[]'")
+  );
+  await ignoreSchemaNoise(() => query("ALTER TABLE agents_messages ADD KEY session_id (session_id)"));
+  await ignoreSchemaNoise(() =>
+    query("UPDATE agents_messages SET session_id = thread_id WHERE session_id = 0 AND thread_id IS NOT NULL")
+  );
+  await ignoreSchemaNoise(() =>
+    query(
+      "INSERT INTO agents_sessions (id, username, model_id, title, created_at, updated_at) SELECT id, '', 'desk', title, created_at, updated_at FROM agents_threads WHERE id NOT IN (SELECT id FROM agents_sessions)"
+    )
   );
   schemaReady = true;
 }
