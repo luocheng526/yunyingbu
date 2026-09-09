@@ -24,3 +24,9 @@
 壳文件只许模块名填「主框架」的单据包含：`public/shared/nav.js`、`public/shared/layout.css`、`public/shared/xingmai-logo.png`、`src/modules/home/nav-items.js`。首页、数据中心、沈子晗、韩梦凯、人员管理、版本发布中心、个人中心交这些路径会被闸门 400 拒绝。其它模块只引用壳，不要覆盖。侧栏底部固定「版本发布中心 / 组织中心 / 个人中心 / 退出登录」和版本号；不要顶栏「退出」「暗色」。
 
 点「通过」时闸门再验一遍内核和壳，空 `files` 禁止全量落地。`src/app.js` / `server.js` / `boot-dirs.js` 只许主框架；`auth.js` 只许主框架或个人中心；`pages.js` 必须和 `middleware.js` 成套交。
+
+## Cursor Cloud specific instructions
+
+常规发布**不要录像**。接口、跳转、文案、发版单据用测试、curl 或打开页面即可。
+
+只有用户点名要预览图时才截图。未点名不要录屏、不要为了交单拍预览。大改动也一样：没说要预览图就不拍。
