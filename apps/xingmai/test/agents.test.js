@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url";
 import { createApp } from "../src/app.js";
 import { resetStoreForTests } from "../src/modules/profile/auth.js";
 import { resetAgentsStore } from "../src/modules/agents/store.js";
-import { publicModels } from "../src/modules/agents/models.js";
-import { runDesk } from "../src/modules/agents/desk.js";
+import { defaultModelId, publicModels, resolveModel } from "../src/modules/agents/models.js";
+import { chatWithModel, classifyQuestion, phraseWithModel, runDesk, shouldUseRemote } from "../src/modules/agents/desk.js";
 import { resolveViewer, rosterSnapshot } from "../src/modules/agents/tools.js";
 import { resetPeopleStore } from "../src/modules/people/store.js";
 
@@ -47,8 +47,12 @@ test("会话页挂 XmModules /agents，颜色走主题变量", () => {
   assert.match(agentsJs, /\/api\/agents\/models/);
   assert.match(agentsJs, /\/api\/agents\/uploads/);
   assert.match(agentsJs, /\/api\/agents\/sessions/);
+  assert.match(agentsJs, /defaultModelId/);
+  assert.match(agentsJs, /后台模型/);
   assert.doesNotMatch(agentsJs, /xm-sider/);
   assert.doesNotMatch(agentsJs, /XM_AGENTS_API_KEY/);
+  assert.doesNotMatch(agentsJs, /OPENAI_API_KEY/);
+  assert.doesNotMatch(agentsJs, /sk-/);
   assert.match(agentsCss, /--xm-/);
   assert.match(agentsCss, /data-theme/);
   assert.match(agentsHtml, /甄选智能体/);
@@ -62,12 +66,31 @@ test("模型列表只有 modelId，不准带密钥", async () => {
   const data = await res.json();
   assert.equal(data.ok, true);
   assert.ok(data.models.some((item) => item.id === "desk"));
+  assert.ok(data.models.some((item) => item.id === "gpt-4o-mini"));
+  assert.ok(data.models.some((item) => item.id === "gpt-4o"));
+  assert.equal(typeof data.defaultModelId, "string");
   const blob = JSON.stringify(data);
-  assert.doesNotMatch(blob, /apiKey|secret|XM_AGENTS_API_KEY/);
+  assert.doesNotMatch(blob, /apiKey|secret|XM_AGENTS_API_KEY|OPENAI_API_KEY|sk-/);
   publicModels().forEach((item) => {
     assert.equal("key" in item, false);
+    assert.equal("base" in item, false);
   });
   assert.doesNotMatch(routerJs, /res\.json\(\{[^}]*key/);
+  if (!process.env.XM_AGENTS_API_KEY && !process.env.OPENAI_API_KEY) {
+    const gpt = data.models.find((item) => item.id === "gpt-4o-mini");
+    assert.equal(gpt.available, false);
+    assert.equal(data.defaultModelId, "desk");
+    assert.equal(defaultModelId(), "desk");
+    assert.throws(() => resolveModel("gpt-4o-mini"), /未配置密钥/);
+    const blocked = await fetch(`${base}/api/agents/chat`, {
+      method: "POST",
+      headers: { cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ modelId: "gpt-4o-mini", text: "怎么选品" })
+    });
+    assert.equal(blocked.status, 400);
+    const err = await blocked.json();
+    assert.match(err.error, /未配置密钥/);
+  }
 });
 
 test("多轮对话走 /chat，会话留在本模块", async () => {
@@ -107,7 +130,7 @@ test("无权的店拒绝，花名册在职可查", async () => {
   const denied = await fetch(`${base}/api/agents/chat`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ text: "飒望居家旗舰店归哪些运营" })
+    body: JSON.stringify({ modelId: "desk", text: "飒望居家旗舰店归哪些运营" })
   });
   const body = await denied.json();
   assert.match(body.reply.text, /无权|花名册没有你的名字/);
@@ -139,7 +162,7 @@ test("没接口的数据和改价发版不编造", async () => {
   const gap = await (await fetch(`${base}/api/agents/chat`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ text: "飒望居家旗舰店近30天成交多少" })
+    body: JSON.stringify({ modelId: "desk", text: "飒望居家旗舰店近30天成交多少" })
   })).json();
   assert.match(gap.reply.text, /还没有/);
   assert.ok(gap.gaps.some((item) => item.includes("店近30天")));
@@ -177,7 +200,7 @@ test("上传只回文件 id，对话引用 id", async () => {
   const chat = await fetch(`${base}/api/agents/chat`, {
     method: "POST",
     headers: { cookie, "Content-Type": "application/json" },
-    body: JSON.stringify({ text: "看一下我刚传的文件", fileIds: [file.id] })
+    body: JSON.stringify({ modelId: "desk", text: "看一下我刚传的文件", fileIds: [file.id] })
   });
   assert.equal(chat.status, 201);
   const data = await chat.json();
@@ -189,4 +212,82 @@ test("登录用户解析花名册店权", async () => {
   const viewer = await resolveViewer({ username: "罗成", displayName: "罗成" });
   assert.equal(viewer.person, null);
   assert.deepEqual(viewer.shops, []);
+});
+
+test("选品做店走运营问答，不把方法题当成缺口", async () => {
+  assert.equal(classifyQuestion("怎么选品"), "opsChat");
+  assert.equal(classifyQuestion("怎么去做店"), "opsChat");
+  assert.equal(classifyQuestion("今天日常怎么排"), "opsChat");
+  assert.equal(classifyQuestion("飒望居家旗舰店近30天成交多少"), "siteGap");
+  assert.equal(classifyQuestion("帮我改价"), "refuse");
+
+  const cookie = await loginCookie();
+  const headers = { cookie, "Content-Type": "application/json" };
+  const pick = await (
+    await fetch(`${base}/api/agents/chat`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ modelId: "desk", text: "怎么选品" })
+    })
+  ).json();
+  assert.match(pick.reply.text, /选品|人群|测款/);
+  assert.equal((pick.gaps || []).length, 0);
+  assert.ok(pick.sources.includes("通用运营方法"));
+  assert.doesNotMatch(pick.reply.text, /第一期只能根据人员花名册/);
+
+  const store = await (
+    await fetch(`${base}/api/agents/chat`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ sessionId: pick.session.id, modelId: "desk", text: "怎么去做店" })
+    })
+  ).json();
+  assert.match(store.reply.text, /做店|流量|主图/);
+  assert.equal((store.gaps || []).length, 0);
+});
+
+test("后台模型只复述运营问答，花名册题不外呼", async () => {
+  const desk = {
+    mode: "opsChat",
+    text: "选品先定人群和场景。",
+    refused: false
+  };
+  const model = {
+    id: "gpt-4o-mini",
+    key: "test-key",
+    base: "https://api.openai.com/v1"
+  };
+  assert.equal(shouldUseRemote(model, desk), true);
+  assert.equal(shouldUseRemote(model, { mode: "personStatus", text: "张文静在职", refused: false }), false);
+  assert.equal(shouldUseRemote({ id: "desk", key: "", base: "" }, desk), false);
+
+  let called = 0;
+  const text = await chatWithModel(
+    model,
+    { question: "怎么选品", history: [], desk, files: [] },
+    async (url, opts) => {
+      called += 1;
+      assert.match(url, /\/chat\/completions$/);
+      assert.match(opts.headers.Authorization, /Bearer test-key/);
+      const body = JSON.parse(opts.body);
+      assert.equal(body.model, "gpt-4o-mini");
+      assert.match(body.messages[0].content, /选品/);
+      return {
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: "先定人群再小预算测款。" } }] })
+      };
+    }
+  );
+  assert.equal(called, 1);
+  assert.equal(text, "先定人群再小预算测款。");
+
+  const grounded = await phraseWithModel(
+    model,
+    { mode: "personStatus", text: "张文静在职，岗位运营。", refused: false },
+    { question: "张文静在职吗" },
+    async () => {
+      throw new Error("花名册题不该外呼");
+    }
+  );
+  assert.match(grounded, /张文静在职/);
 });

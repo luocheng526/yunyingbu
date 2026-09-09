@@ -1,4 +1,4 @@
-/* xm-module-agents 0.1.129 */
+/* xm-module-agents 0.1.133 */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -40,7 +40,7 @@
       root.innerHTML =
         '<main class="page agents-page">' +
         '<header class="page-head"><p class="kicker">甄选智能体</p><h1>甄选智能体</h1>' +
-        '<p class="lead">和主脑问答。答案只来自本站只读接口，没有的会说还没有，不会编造、改价、退款或发版。</p></header>' +
+        '<p class="lead">选品、做店、日常聊天走后台模型（配了密钥就是 GPT）。在职、店权走花名册。近30天、商学院课表、外数还没有，不会编。改价、退款、发版不会做。密钥不出前端。</p></header>' +
         '<div class="agents-workbench">' +
         '<aside class="agents-rail" aria-label="历史会话">' +
         "<h2>历史会话</h2>" +
@@ -50,7 +50,7 @@
         '<section class="agents-chat" aria-label="主脑问答台">' +
         '<div class="agents-chat-head">' +
         "<div><h2 id=\"agents-chat-title\">主脑问答台</h2>" +
-        '<p id="agents-chat-lead">先问在职、店归谁、你能看见哪些店。</p></div>' +
+        '<p id="agents-chat-lead">选品、做店、日常可聊；花名册三件事仍走本站。模型在后台，下拉只选 modelId。</p></div>' +
         '<label class="agents-model">模型<select id="agents-model"></select></label></div>' +
         '<div class="agents-log" id="agents-log"><p class="agents-empty">正在打开会话…</p></div>' +
         '<p class="agents-status" id="agents-status" role="status"></p>' +
@@ -75,6 +75,7 @@
       const fileEl = root.querySelector("#agents-file");
       let dead = false;
       let models = [];
+      let preferredModelId = "";
       let sessions = [];
       let current = null;
       let messages = [];
@@ -107,10 +108,9 @@
         if (models.some(function (item) { return item.id === currentId && item.available; })) {
           modelEl.value = currentId;
         } else {
+          const prefer = models.find(function (item) { return item.id === preferredModelId && item.available; });
           const first = models.find(function (item) { return item.available; });
-          if (first) {
-            modelEl.value = first.id;
-          }
+          modelEl.value = (prefer || first || { id: "desk" }).id;
         }
       }
 
@@ -158,12 +158,12 @@
       function renderMessages() {
         if (!current) {
           titleEl.textContent = "主脑问答台";
-          leadEl.textContent = "先问在职、店归谁、你能看见哪些店。";
+          leadEl.textContent = "选品、做店、日常可聊；花名册三件事仍走本站。";
           logEl.innerHTML = '<p class="agents-empty">点左侧新会话，或直接提问。</p>';
           return;
         }
         titleEl.textContent = current.title || "主脑问答台";
-        leadEl.textContent = "答案只引用本站只读接口和文件 id。";
+        leadEl.textContent = "后台模型聊运营；本店数字没有接口就不编。答案可引用文件 id。";
         if (!messages.length) {
           logEl.innerHTML = '<p class="agents-empty">开始提问。</p>';
           return;
@@ -200,6 +200,7 @@
             return;
           }
           models = pair[0].models || [];
+          preferredModelId = pair[0].defaultModelId || "";
           sessions = pair[1].sessions || [];
           paint();
         });

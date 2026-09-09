@@ -64,13 +64,14 @@ agentsRouter.get("/", async (req, res) => {
     module: "甄选智能体",
     message: "主脑问答台已就绪",
     models: publicModels(),
+    defaultModelId: defaultModelId(),
     sessions: user ? await listSessions(user.username) : []
   });
 });
 
 agentsRouter.get("/models", (_req, res) => {
   const models = publicModels();
-  res.json({ ok: true, models });
+  res.json({ ok: true, models, defaultModelId: defaultModelId() });
 });
 
 agentsRouter.get("/sessions", requireAuth, async (req, res) => {
@@ -151,7 +152,11 @@ agentsRouter.post("/chat", requireAuth, async (req, res) => {
       files,
       roster
     });
-    const replyText = await phraseWithModel(model, desk);
+    const replyText = await phraseWithModel(model, desk, {
+      question: text,
+      history: opened.messages,
+      files
+    });
     const turn = await addChatTurn({
       sessionId,
       username: req.user.username,
