@@ -176,6 +176,9 @@
           agents = data.agents || [];
           threads = data.threads || [];
           paint();
+          if (!current && threads.length) {
+            return openThread(threads[0].id);
+          }
         });
       }
 
