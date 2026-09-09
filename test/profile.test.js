@@ -125,6 +125,12 @@ test("login 罗成 sets cookie; GET /api/auth/me 200; wrong password 401", async
     assert.match(page.text, /我的责权清单/);
     assert.match(page.text, /修改密码/);
     assert.doesNotMatch(page.text, /<header class="site-header">/);
+
+    const moduleJs = await request(base, "/shared/modules/me.js", { redirect: "follow" });
+    assert.equal(moduleJs.res.status, 200);
+    assert.match(moduleJs.text, /XmModules\["\/me"\]/);
+    assert.match(moduleJs.text, /我的责权清单/);
+    assert.match(moduleJs.text, /\/api\/profile\/duties/);
   });
 });
 
