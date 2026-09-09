@@ -51,8 +51,8 @@
       if (typeof window.XmDataCreateDashboard === "function") {
         return window.XmDataCreateDashboard(root);
       }
-      root.innerHTML =
-        '<main class="xm-page data-fill"><h1>数据总揽</h1><p class="lead">示例数据，尚未接入店铺。</p></main>';
+          root.innerHTML =
+            '<main class="xm-page data-fill data-overview-root"><p class="lead">示例数据，尚未接入店铺。</p></main>';
       return function unmount() {
         root.innerHTML = "";
       };

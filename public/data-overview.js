@@ -18,12 +18,20 @@
     }
   }
 
+  function stripPageChrome(root) {
+    Array.prototype.forEach.call(root.querySelectorAll(".kicker, .data-subnav"), function (el) {
+      el.remove();
+    });
+    Array.prototype.forEach.call(root.querySelectorAll("h1"), function (el) {
+      if (el.textContent.trim() === "数据总揽") {
+        el.remove();
+      }
+    });
+  }
+
   function frameHtml() {
     return (
       '<main class="xm-page data-overview-root">' +
-      '<p class="kicker">数据中心</p>' +
-      "<h1>数据总揽</h1>" +
-      '<nav class="data-subnav" id="data-subnav"></nav>' +
       '<div class="dash-toolbar">' +
       '<div class="dash-tabs" role="tablist" aria-label="数据总揽视图">' +
       '<button type="button" class="is-active" data-view="team">团队</button>' +
@@ -39,13 +47,11 @@
 
   function createDashboard(root) {
     ensureCss();
+    stripPageChrome(root);
     let board = root.querySelector("#board");
     if (!board) {
       root.innerHTML = frameHtml();
       board = root.querySelector("#board");
-      const sub = document.createElement("script");
-      sub.src = "/data-subnav.js";
-      root.appendChild(sub);
     }
     const rangesEl = root.querySelector("#ranges");
     const datesEl = root.querySelector("#dates");

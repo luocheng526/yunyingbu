@@ -7,7 +7,11 @@
   color: var(--xm-ink);
 }
 
-.xm-content .kicker {
+.xm-content .kicker,
+.xm-content .data-overview-root > h1,
+.xm-page.data-overview-root > h1,
+.xm-content .data-overview-root > .data-subnav,
+.xm-page.data-overview-root > .data-subnav {
   display: none;
 }
 

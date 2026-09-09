@@ -134,7 +134,8 @@ test("data child pages and demo APIs respond", async () => {
     assert.doesNotMatch(subnav.text, /公司/);
     const overviewPage = await get(base, "/data/overview");
     assert.equal(overviewPage.res.status, 200);
-    assert.match(overviewPage.text, /<h1>数据总揽<\/h1>/);
+    assert.doesNotMatch(overviewPage.text, /<h1>数据总揽<\/h1>/);
+    assert.doesNotMatch(overviewPage.text, /id="data-subnav"/);
     assert.match(overviewPage.text, /data-view="team"/);
     assert.match(overviewPage.text, /data-overview\.js/);
     const overviewJs = await get(base, "/data-overview.js");
