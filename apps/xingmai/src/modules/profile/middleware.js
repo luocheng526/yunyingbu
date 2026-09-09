@@ -13,6 +13,10 @@ export const TAB_TITLE = "星脉甄选运营中心";
 // 浏览器标签图标走真实文件。Chrome 标签栏经常不画 data: 内嵌图，会变成地球。
 // 侧栏品牌条仍用 /login-logo.png，不要改成这个。
 export const TAB_ICON = `/shared/tab-icon.png?v=${SHELL_ASSET_VER}`;
+const TAB_ICON_PNG = Buffer.from(
+  "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",
+  "base64"
+);
 export const APP_MODULES = {
   "/home": "home",
   "/data": "data",
@@ -438,6 +442,28 @@ function serveShellAsset(req, res) {
   return true;
 }
 
+
+function serveTabIcon(req, res) {
+  if (!isReadMethod(req)) {
+    return false;
+  }
+  const dest = normalizedPath(req);
+  if (dest !== "/favicon.ico" && dest !== "/shared/tab-icon.png") {
+    return false;
+  }
+  const versioned = Boolean(req.query && req.query.v);
+  res.setHeader("Cache-Control", versioned ? "public, max-age=86400, immutable" : "public, max-age=86400");
+  const abs = dest === "/favicon.ico" ? path.join(publicDir, "favicon.ico") : path.join(publicDir, "shared/tab-icon.png");
+  if (fs.existsSync(abs)) {
+    res.type(dest.endsWith(".ico") ? "image/x-icon" : "png");
+    res.sendFile(abs);
+    return true;
+  }
+  res.type(dest.endsWith(".ico") ? "image/x-icon" : "png");
+  res.send(TAB_ICON_PNG);
+  return true;
+}
+
 function serveHomeIndex(req, res) {
   if (!isReadMethod(req)) {
     return false;
@@ -487,6 +513,9 @@ function serveHanApiCache(req, res) {
 export function requireLoginUnlessPublic(req, res, next) {
   attachGzip(req, res);
   if (isPublicRequest(req)) {
+    if (serveTabIcon(req, res)) {
+      return;
+    }
     if (serveShellAsset(req, res)) {
       return;
     }
