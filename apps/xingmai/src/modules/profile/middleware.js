@@ -6,14 +6,19 @@ import { navMarkup } from "../home/nav-items.js";
 import { currentUser, publicProfile } from "./auth.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.102
+// xm-fast-shell 0.1.103
 
-export const SHELL_ASSET_VER = "0.1.102";
+export const SHELL_ASSET_VER = "0.1.103";
 export const TAB_TITLE = "星脉甄选运营中心";
 export const TAB_ICON = "/login-logo.png";
 export const APP_MODULES = {
   "/data": "data",
   "/shen": "shen",
+  "/shen/selection": "shen",
+  "/shen/growth": "shen",
+  "/shen/paid": "shen",
+  "/shen/training": "shen",
+  "/shen/tasks": "shen",
   "/han": "han",
   "/han/selection": "han",
   "/han/goods": "han",
@@ -26,6 +31,11 @@ export const APP_MODULES = {
 const SHELL_TITLES = {
   "/data": "数据中心",
   "/shen": "沈子晗运营中心",
+  "/shen/selection": "选品中心",
+  "/shen/growth": "商品成长",
+  "/shen/paid": "实时付费",
+  "/shen/training": "培训系统",
+  "/shen/tasks": "任务管理",
   "/han": "韩梦凯运营中心",
   "/han/selection": "选品数据",
   "/han/goods": "商品数据",

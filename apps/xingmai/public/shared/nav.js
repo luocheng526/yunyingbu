@@ -1,10 +1,15 @@
-/* xm-fast-shell 0.1.102 */
+/* xm-fast-shell 0.1.103 */
 (function () {
-  const ASSET_VER = "0.1.102";
+  const ASSET_VER = "0.1.103";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/data": "data",
     "/shen": "shen",
+    "/shen/selection": "shen",
+    "/shen/growth": "shen",
+    "/shen/paid": "shen",
+    "/shen/training": "shen",
+    "/shen/tasks": "shen",
     "/han": "han",
     "/han/selection": "han",
     "/han/goods": "han",
@@ -14,6 +19,13 @@
     "/releases": "releases",
     "/me": "me"
   };
+  const SHEN_CHILDREN = [
+    { href: "/shen/selection", label: "选品中心" },
+    { href: "/shen/growth", label: "商品成长" },
+    { href: "/shen/paid", label: "实时付费" },
+    { href: "/shen/training", label: "培训系统" },
+    { href: "/shen/tasks", label: "任务管理" }
+  ];
   const HAN_CHILDREN = [
     { href: "/han/selection", label: "选品数据" },
     { href: "/han/goods", label: "商品数据" },
@@ -22,13 +34,13 @@
   ];
   const items = [
     { href: "/data", label: "数据中心" },
-    { href: "/shen", label: "沈子晗运营中心" },
+    { href: "/shen", label: "沈子晗运营中心", children: SHEN_CHILDREN },
     { href: "/han", label: "韩梦凯运营中心", children: HAN_CHILDREN },
     { href: "/people", label: "人员管理" },
     { href: "/releases", label: "版本发布中心" },
     { href: "/me", label: "个人中心" }
   ];
-  const labels = items.concat(HAN_CHILDREN);
+  const labels = items.concat(SHEN_CHILDREN, HAN_CHILDREN);
 
   const path = (window.location.pathname.replace(/\/+$/, "") || "/").toLowerCase();
   if (path === "/login" || path === "/login.html") {
@@ -65,9 +77,9 @@
     return (hit || items[0]).label;
   }
 
-  function hanOpen(href) {
+  function groupOpen(prefix, href) {
     const key = normalize(href);
-    return key === "/han" || key.indexOf("/han/") === 0;
+    return key === prefix || key.indexOf(prefix + "/") === 0;
   }
 
   const MAIN = items.slice(0, 4);
@@ -101,7 +113,7 @@
   }
 
   function groupHtml(item) {
-    const open = hanOpen(current);
+    const open = groupOpen(item.href, current);
     const kids = (item.children || []).map(itemHtml).join("");
     return (
       '<div class="xm-menu-group' +
@@ -142,7 +154,7 @@
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout">' +
       ico("logout") +
       "<span>退出登录</span></button>" +
-      '<p class="xm-version">v0.4.7</p></nav>'
+      '<p class="xm-version">v0.4.8</p></nav>'
     );
   }
 
@@ -181,15 +193,16 @@
       tab.textContent = labelOf(current);
     }
     document.title = TAB_TITLE;
-    const group = document.querySelector('.xm-menu-group[data-xm-group="/han"]');
-    if (group) {
-      const open = hanOpen(current);
+    const groups = document.querySelectorAll(".xm-menu-group[data-xm-group]");
+    Array.prototype.forEach.call(groups, function (group) {
+      const prefix = group.getAttribute("data-xm-group");
+      const open = groupOpen(prefix, current);
       group.classList.toggle("is-open", open);
       const parent = group.querySelector(".xm-menu-parent");
       if (parent) {
         parent.setAttribute("aria-expanded", open ? "true" : "false");
       }
-    }
+    });
   }
 
   function ensureReleasesCss() {
@@ -280,6 +293,10 @@
 
   function go(href, push) {
     const key = normalize(href);
+    if (key === "/shen") {
+      window.location.replace("/shen/selection");
+      return;
+    }
     if (key === "/han") {
       window.location.replace("/han/selection");
       return;

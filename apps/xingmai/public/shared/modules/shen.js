@@ -9,6 +9,29 @@
   }
 
   window.XmModules = window.XmModules || {};
+
+  function waitPage(title) {
+    return {
+      mount: function (root) {
+        root.innerHTML =
+          '<main class="page">' +
+          '<header class="page-head"><p class="kicker">沈子晗运营中心</p><h1>' +
+          escapeHtml(title) +
+          "</h1>" +
+          '<p class="lead">内容待开发。</p></header></main>';
+        return function unmount() {
+          root.innerHTML = "";
+        };
+      }
+    };
+  }
+
+  window.XmModules["/shen/selection"] = waitPage("选品中心");
+  window.XmModules["/shen/growth"] = waitPage("商品成长");
+  window.XmModules["/shen/paid"] = waitPage("实时付费");
+  window.XmModules["/shen/training"] = waitPage("培训系统");
+  window.XmModules["/shen/tasks"] = waitPage("任务管理");
+
   window.XmModules["/shen"] = {
     mount: function (root) {
       root.innerHTML =
