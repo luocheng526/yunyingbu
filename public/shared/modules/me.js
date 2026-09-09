@@ -30,6 +30,9 @@
       ".me-kv strong{color:var(--xm-ink,#111);font-weight:600;}" +
       ".me-page input{display:block;width:100%;margin:0 0 10px;padding:8px 10px;border:1px solid var(--xm-line,#e5e7eb);border-radius:8px;font:inherit;background:var(--xm-card,#fff);color:inherit;box-sizing:border-box;}" +
       ".me-page button.me-btn{display:block;width:100%;border:0;border-radius:8px;padding:9px 12px;font:inherit;background:var(--xm-primary,#1677ff);color:#fff;cursor:pointer;}" +
+      ".me-logout-panel{min-height:0;padding:0;overflow:hidden;background:#e11d48;box-shadow:var(--xm-shadow,none);}" +
+      ".me-logout-panel button{display:block;width:100%;border:0;margin:0;padding:14px 12px;font:inherit;font-weight:600;background:#e11d48;color:#fff;cursor:pointer;}" +
+      ".me-logout-panel button:hover{background:#be123c;}" +
       ".me-page .status{min-height:1.2em;margin:0 0 8px;font-size:13px;}" +
       ".me-page .status.error{color:#b91c1c;}" +
       ".me-page .status.ok{color:#047857;}" +
@@ -69,7 +72,10 @@
         '<input id="new-password" type="password" required minlength="8" placeholder="新密码（至少 8 位）" />' +
         '<input id="confirm-password" type="password" required minlength="8" placeholder="再次输入新密码" />' +
         '<button class="me-btn" type="submit">保存新密码</button>' +
-        "</form></div></section>" +
+        "</form></div>" +
+        '<div class="panel me-logout-panel">' +
+        '<form id="logout-form"><button type="submit">退出登录</button></form>' +
+        "</div></section>" +
         '<section class="panel">' +
         '<div class="me-rights-head"><h2>我的责权清单</h2>' +
         '<p class="me-hint">灰色表示当前角色未授予</p></div>' +
@@ -174,6 +180,12 @@
       }
 
       root.querySelector("#password-form").addEventListener("submit", onPassword);
+      root.querySelector("#logout-form").addEventListener("submit", function (event) {
+        event.preventDefault();
+        api("/api/auth/logout", { method: "POST" }).then(function () {
+          window.location.replace("/login?out=1");
+        });
+      });
 
       return function unmount() {
         dead = true;

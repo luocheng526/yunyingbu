@@ -114,6 +114,24 @@
         background: #f3f4f6;
         color: #111827;
       }
+      .logout-panel {
+        padding: 0;
+        overflow: hidden;
+        background: #e11d48;
+      }
+      .logout-panel button {
+        display: block;
+        width: 100%;
+        border: 0;
+        margin: 0;
+        padding: 0.85rem 1rem;
+        font: inherit;
+        font-weight: 600;
+        background: #e11d48;
+        color: #fff;
+        cursor: pointer;
+      }
+      .logout-panel button:hover { background: #be123c; }
       .status { min-height: 1.25rem; margin: 0 0 0.7rem; font-size: 0.9rem; }
       .status.error { color: #b91c1c; }
       .status.ok { color: #047857; }
@@ -187,8 +205,10 @@
               <input id="confirm-password" type="password" required minlength="8" placeholder="再次输入新密码" />
               <button class="btn" type="submit">保存新密码</button>
             </form>
+          </div>
+          <div class="card logout-panel">
             <form id="logout-form">
-              <button class="btn btn-ghost" type="submit">退出登录</button>
+              <button type="submit">退出登录</button>
             </form>
           </div>
         </section>
