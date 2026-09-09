@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>沈子晗运营中心</title>
     <link rel="stylesheet" href="/shared/layout.css" />
+    <link rel="stylesheet" href="/shen-submenu.css" />
     <style>
       html, body {
         margin: 0;
@@ -155,7 +156,19 @@
           <nav class="site-nav" aria-label="全站导航">
             <a href="/">首页</a>
             <a href="/data">数据中心</a>
-            <a href="/shen" aria-current="page">沈子晗运营中心</a>
+            <div class="shen-nav-group is-open">
+              <div class="shen-nav-parent">
+                <a href="/shen" aria-current="page">沈子晗运营中心</a>
+                <button type="button" class="shen-nav-arrow" aria-expanded="true" aria-label="展开或收起沈子晗子菜单">▼</button>
+              </div>
+              <div class="shen-nav-sub">
+                <a href="/shen/xuanpin">选品中心</a>
+                <a href="/shen/chengzhang">商品成长</a>
+                <a href="/shen/fufei">实时付费</a>
+                <a href="/shen/peixun">培训系统</a>
+                <a href="/shen/renwu">任务管理</a>
+              </div>
+            </div>
             <a href="/han">韩梦凯运营中心</a>
             <a href="/people">人员管理</a>
             <a href="/releases">版本发布中心</a>
@@ -202,6 +215,7 @@
       </main>
     </div>
     <script src="/shared/nav.js"></script>
+    <script src="/shen-submenu.js"></script>
     <script>
       (function () {
         const taskForm = document.getElementById("task-form");

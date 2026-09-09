@@ -4,6 +4,7 @@ import test from "node:test";
 import { createApp } from "../src/app.js";
 import { patchAppSource } from "../src/modules/shen/patch-app.js";
 import { SQL, resetStore, setPool } from "../src/modules/shen/store.js";
+import { SHEN_SUBMENUS } from "../src/modules/shen/submenu.js";
 
 const NAV_LABELS = [
   "首页",
@@ -97,6 +98,24 @@ test("GET /shen is 沈子晗运营中心 with left sidebar and seven nav items",
     assert.match(text, /flex-direction:\s*column/);
     for (const label of NAV_LABELS) {
       assert.match(text, new RegExp(label));
+    }
+    for (const item of SHEN_SUBMENUS) {
+      assert.match(text, new RegExp(item.label));
+      assert.match(text, new RegExp(item.href.replaceAll("/", "\\/")));
+    }
+    assert.match(text, /shen-submenu\.js/);
+    assert.match(text, /shen-nav-arrow/);
+  });
+});
+
+test("GET /shen submenu pages are placeholders pending development", async () => {
+  await withServer(async (base) => {
+    for (const item of SHEN_SUBMENUS) {
+      const { res, text } = await request(base, item.href);
+      assert.equal(res.status, 200, item.href);
+      assert.match(text, new RegExp(item.label));
+      assert.match(text, /内容待开发/);
+      assert.match(text, /shen-submenu\.js/);
     }
   });
 });

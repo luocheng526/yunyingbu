@@ -14,8 +14,16 @@ const targetRoot = process.env.MENGKAI_DIR || "/opt/mengkai";
 
 const copies = [
   ["public/shen.html", "public/shen.html"],
+  ["public/shen-submenu.css", "public/shen-submenu.css"],
+  ["public/shen-submenu.js", "public/shen-submenu.js"],
+  ["public/shen/xuanpin/index.html", "public/shen/xuanpin/index.html"],
+  ["public/shen/chengzhang/index.html", "public/shen/chengzhang/index.html"],
+  ["public/shen/fufei/index.html", "public/shen/fufei/index.html"],
+  ["public/shen/peixun/index.html", "public/shen/peixun/index.html"],
+  ["public/shen/renwu/index.html", "public/shen/renwu/index.html"],
   ["src/modules/shen/store.js", "src/modules/shen/store.js"],
   ["src/modules/shen/router.js", "src/modules/shen/router.js"],
+  ["src/modules/shen/submenu.js", "src/modules/shen/submenu.js"],
   ["src/modules/shen/schema.sql", "src/modules/shen/schema.sql"],
   ["src/modules/shen/patch-app.js", "src/modules/shen/patch-app.js"]
 ];

@@ -2,6 +2,7 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { shenRouter } from "./modules/shen/router.js";
+import { SHEN_SUBMENUS } from "./modules/shen/submenu.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "../public");
@@ -13,6 +14,11 @@ export function createApp() {
   app.get("/shen", (_req, res) => {
     res.sendFile(path.join(publicDir, "shen.html"));
   });
+  for (const item of SHEN_SUBMENUS) {
+    app.get(item.href, (_req, res) => {
+      res.sendFile(path.join(publicDir, "shen", item.slug, "index.html"));
+    });
+  }
   app.use("/api/shen", shenRouter);
   return app;
 }
