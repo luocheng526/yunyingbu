@@ -1,4 +1,4 @@
-/* xm-sider-narrow 0.1.96 */
+/* xm-sider-narrow 0.1.102 */
 :root {
   --xm-sider: #ffffff;
   --xm-bg: #f0f2f5;
@@ -65,7 +65,9 @@ html.xm-collapsed .xm-logo img {
 
 html.xm-collapsed .xm-menu-item span,
 html.xm-collapsed .xm-menu-label,
-html.xm-collapsed .xm-version {
+html.xm-collapsed .xm-version,
+html.xm-collapsed .xm-caret,
+html.xm-collapsed .xm-submenu {
   display: none;
 }
 
@@ -228,6 +230,58 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
   width: 3px;
   background: var(--xm-primary);
   border-radius: 0 2px 2px 0;
+}
+
+.xm-menu-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.xm-menu-parent {
+  justify-content: flex-start;
+}
+
+.xm-caret {
+  width: 14px;
+  height: 14px;
+  margin-left: auto;
+  flex: 0 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.65;
+  transform: rotate(-90deg);
+  transition: transform 0.15s ease;
+}
+
+.xm-caret svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.xm-menu-group.is-open > .xm-menu-parent .xm-caret {
+  transform: rotate(0deg);
+}
+
+.xm-submenu {
+  display: none;
+  flex-direction: column;
+  padding: 0 0 6px;
+}
+
+.xm-menu-group.is-open > .xm-submenu {
+  display: flex;
+}
+
+.xm-submenu .xm-menu-item {
+  min-height: 36px;
+  padding-left: 36px;
+  font-size: 13px;
+}
+
+.xm-submenu .xm-ico {
+  display: none;
 }
 
 .xm-main {
