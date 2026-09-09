@@ -147,6 +147,10 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(JSON.stringify(team), /RASW家居旗舰店/);
     assert.match(JSON.stringify(team), /AILUKI居家布艺旗舰店/);
     assert.doesNotMatch(JSON.stringify(team), /公司/);
+    const demoFile = await get(base, "/data/team-demo.json");
+    assert.equal(demoFile.res.status, 200);
+    const demo = JSON.parse(demoFile.text);
+    assert.equal(demo.cards.length, 17);
   });
 });
 
@@ -321,6 +325,10 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.equal(isAllowedDataPath("public/data/placeholder/index.html"), true);
   assert.equal(isAllowedDataPath("public/data/overview/index.html"), true);
   assert.equal(isAllowedDataPath("public/data-overview.js"), true);
+  assert.equal(isAllowedDataPath("public/data/team-demo.json"), true);
+  const demo = JSON.parse(fs.readFileSync(path.join(repoRoot, "public/data/team-demo.json"), "utf8"));
+  assert.equal(demo.cards.length, 17);
+  assert.equal(demo.scope, "团队");
   assert.throws(() => assertDataOnlyPaths(["src/app.js"]), /src\/app\.js/);
   const apply = fs.readFileSync(path.join(repoRoot, "scripts/apply-data-to-mengkai.mjs"), "utf8");
   assert.match(apply, /DATA_OVERLAY_FILES/);

@@ -149,6 +149,36 @@
     render();
   });
 
+  function applyPayload(data) {
+    payload = data;
+    noticeEl.textContent = data.notice || "示例数据，尚未接入店铺。";
+    datesEl.textContent = (data.dateFrom || "") + " 至 " + (data.dateTo || "");
+    rangesEl.innerHTML = (data.ranges || [])
+      .map(function (label) {
+        const active = label === data.range ? " is-active" : "";
+        return (
+          '<button type="button" class="' +
+          active.trim() +
+          '" data-range="' +
+          escapeHtml(label) +
+          '">' +
+          escapeHtml(label) +
+          "</button>"
+        );
+      })
+      .join("");
+    rangesEl.addEventListener("click", function (event) {
+      const btn = event.target.closest("button[data-range]");
+      if (!btn) {
+        return;
+      }
+      rangesEl.querySelectorAll("button").forEach(function (el) {
+        el.classList.toggle("is-active", el === btn);
+      });
+    });
+    render();
+  }
+
   fetch("/api/data/team", {
     credentials: "same-origin",
     headers: { Accept: "application/json" }
@@ -159,26 +189,19 @@
       }
       return res.json();
     })
-    .then(function (data) {
-      payload = data;
-      noticeEl.textContent = data.notice || "示例数据，尚未接入店铺。";
-      datesEl.textContent = (data.dateFrom || "") + " 至 " + (data.dateTo || "");
-      rangesEl.innerHTML = (data.ranges || [])
-        .map(function (label) {
-          const active = label === data.range ? " is-active" : "";
-          return '<button type="button" class="' + active.trim() + '" data-range="' + escapeHtml(label) + '">' + escapeHtml(label) + "</button>";
-        })
-        .join("");
-      rangesEl.addEventListener("click", function (event) {
-        const btn = event.target.closest("button[data-range]");
-        if (!btn) {
-          return;
+    .then(applyPayload)
+    .catch(function () {
+      return fetch("/data/team-demo.json", { credentials: "same-origin" }).then(function (res) {
+        if (!res.ok) {
+          throw new Error("示例数据 " + res.status);
         }
-        rangesEl.querySelectorAll("button").forEach(function (el) {
-          el.classList.toggle("is-active", el === btn);
-        });
+        return res.json();
       });
-      render();
+    })
+    .then(function (data) {
+      if (data && !payload) {
+        applyPayload(data);
+      }
     })
     .catch(function (err) {
       board.innerHTML = '<p class="data-table error">' + escapeHtml(err.message) + "</p>";

@@ -12,6 +12,7 @@ export const DATA_OVERLAY_FILES = [
   "public/data/placeholder/index.html",
   "public/data/overview/index.html",
   "public/data-overview.js",
+  "public/data/team-demo.json",
   "src/modules/data/overview.js",
   "src/modules/data/nav.js",
   "src/modules/data/pages.js",
