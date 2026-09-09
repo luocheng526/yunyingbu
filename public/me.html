@@ -289,7 +289,7 @@
         document.getElementById("logout-form").addEventListener("submit", async function (event) {
           event.preventDefault();
           await api("/api/auth/logout", { method: "POST" });
-          window.location.href = "/login";
+          window.location.replace("/login?out=1");
         });
       })();
     </script>
