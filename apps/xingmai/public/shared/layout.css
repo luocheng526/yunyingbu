@@ -1,4 +1,4 @@
-/* xm-sider-narrow 0.1.118 */
+/* xm-sider-narrow 0.1.119 */
 :root,
 html[data-theme="light"] {
   --xm-sider: #ffffff;
@@ -729,4 +729,108 @@ html[data-theme="dark"] .xm-tab-close:hover {
 
 html[data-theme="dark"] .xm-collapse:hover {
   background: #2a2820;
+}
+
+/* Modules must not hide the shell page tabs. */
+.xm-topbar > .xm-tabs {
+  display: flex !important;
+}
+
+/* Night skin for every module pane, not one submenu. */
+html[data-theme="dark"] .xm-workspace,
+html[data-theme="dark"] .xm-content,
+html[data-theme="dark"] #xm-content,
+html[data-theme="dark"] .xm-pane {
+  color: var(--xm-ink);
+  background: var(--xm-bg);
+}
+
+html[data-theme="dark"] .xm-content :is(
+  .page,
+  .panel,
+  .card,
+  .box,
+  .dialog,
+  .modal,
+  .kpi-card,
+  .org-table-wrap,
+  .org-dialog,
+  .org-kpi,
+  .org-toolbar,
+  .people-table-wrap,
+  .xm-hm-card,
+  .xm-hm-panel,
+  .xm-hm-bar,
+  .xm-hm-pop
+) {
+  background: var(--xm-card);
+  color: var(--xm-ink);
+  border-color: var(--xm-line);
+}
+
+html[data-theme="dark"] .xm-content :is(table, thead, tbody, tfoot, tr) {
+  background: transparent;
+  color: inherit;
+}
+
+html[data-theme="dark"] .xm-content :is(th, td) {
+  color: var(--xm-ink);
+  border-color: var(--xm-line);
+}
+
+html[data-theme="dark"] .xm-content th {
+  background: #2a2820;
+  color: var(--xm-muted);
+}
+
+html[data-theme="dark"] .xm-content :is(input, select, textarea) {
+  background: var(--xm-card);
+  color: var(--xm-ink);
+  border-color: var(--xm-line);
+  color-scheme: dark;
+}
+
+html[data-theme="dark"] .xm-content :is(button.ghost, .ghost, .org-actions .danger) {
+  background: var(--xm-card);
+  border-color: var(--xm-line);
+}
+
+html[data-theme="dark"] .xm-content .ghost {
+  color: var(--xm-ink);
+}
+
+html[data-theme="dark"] .xm-content .danger {
+  color: #ff7875;
+}
+
+html[data-theme="dark"] .xm-content .org-kpi .value,
+html[data-theme="dark"] .xm-content .org-kpi .label {
+  color: inherit;
+}
+
+html[data-theme="dark"] .xm-content .org-kpi .label {
+  color: var(--xm-muted);
+}
+
+html[data-theme="dark"] .xm-content .org-kpi .value {
+  color: var(--xm-ink);
+}
+
+html[data-theme="dark"] .xm-content .org-cell.can-edit:hover {
+  background: var(--xm-primary-soft);
+}
+
+html[data-theme="dark"] .xm-content ::placeholder {
+  color: var(--xm-muted);
+  opacity: 1;
+}
+
+html[data-theme="dark"] .xm-content [style*="background:#fff"],
+html[data-theme="dark"] .xm-content [style*="background: #fff"],
+html[data-theme="dark"] .xm-content [style*="background:#ffffff"],
+html[data-theme="dark"] .xm-content [style*="background: #ffffff"],
+html[data-theme="dark"] .xm-content [style*="background:white"],
+html[data-theme="dark"] .xm-content [style*="background: white"] {
+  background: var(--xm-card) !important;
+  color: var(--xm-ink) !important;
 }
