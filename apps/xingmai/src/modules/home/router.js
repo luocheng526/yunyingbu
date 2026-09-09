@@ -1,5 +1,4 @@
 import { Router } from "express";
-import { formatChinaTime } from "./china-time.js";
 
 const CARDS = [
   { key: "queue", label: "待发版", value: "—", unit: "单" },
@@ -31,7 +30,6 @@ export function homeRouter() {
       module: "home",
       title: "首页",
       greeting: "欢迎回到运营工作台",
-      now: formatChinaTime(new Date()),
       cards: CARDS.map((card) => ({ ...card })),
       notices: NOTICES.map((row) => ({ ...row })),
       entries: ENTRIES.map((row) => ({ ...row }))
