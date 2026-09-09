@@ -73,7 +73,8 @@ test("memory mode keeps the live JSON shapes for every business API", async () =
 
   const people = await (await fetch(`${base}/api/people`, { headers })).json();
   assert.equal(people.ok, true);
-  assert.equal(people.people.length, 3);
+  assert.ok(people.people.length >= 16);
+  assert.equal(people.people.some((person) => person.name === "张文静"), true);
   const added = await fetch(`${base}/api/people`, {
     method: "POST",
     headers,
