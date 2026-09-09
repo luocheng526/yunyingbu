@@ -9,13 +9,46 @@
   }
 
   function ensureCss() {
-    if (document.querySelector('link[href*="people.css"]')) {
-      return;
+    const href = "/people.css?v=0.1.122-fill";
+    let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "stylesheet";
+      document.head.appendChild(link);
     }
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = "/people.css";
-    document.head.appendChild(link);
+    link.setAttribute("data-people-css", "1");
+    link.href = href;
+  }
+
+  function hidePeopleTab() {
+    const tabs = document.querySelector(".xm-tabs");
+    if (tabs) {
+      tabs.dataset.peopleHid = "1";
+      tabs.hidden = true;
+      tabs.style.display = "none";
+    }
+    let css = document.getElementById("people-page-css");
+    if (!css) {
+      css = document.createElement("style");
+      css.id = "people-page-css";
+      document.head.appendChild(css);
+    }
+    css.textContent =
+      ".xm-content .page.people-page,.people-page{max-width:none!important;width:100%!important;}" +
+      "body:has(.people-page) .xm-tabs{display:none!important;}";
+  }
+
+  function showPeopleTab() {
+    const tabs = document.querySelector(".xm-tabs");
+    if (tabs && tabs.dataset.peopleHid) {
+      tabs.hidden = false;
+      tabs.style.display = "";
+      delete tabs.dataset.peopleHid;
+    }
+    const css = document.getElementById("people-page-css");
+    if (css) {
+      css.remove();
+    }
   }
 
   function optionHtml(value, selected) {
@@ -34,6 +67,7 @@
   window.XmModules["/people"] = {
     mount: function (root) {
       ensureCss();
+      hidePeopleTab();
       root.innerHTML =
         '<main class="page people-page">' +
         '<header class="page-head"><h1>花名册试点</h1>' +
@@ -323,6 +357,7 @@
         peopleForm.removeEventListener("submit", onPeople);
         shopForm.removeEventListener("submit", onShop);
         grantForm.removeEventListener("submit", onGrant);
+        showPeopleTab();
         root.innerHTML = "";
       };
     }
