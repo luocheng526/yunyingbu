@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.119 */
+/* xm-fast-shell 0.1.120 */
 (function () {
-  const ASSET_VER = "0.1.119";
+  const ASSET_VER = "0.1.120";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -197,7 +197,12 @@
   }
 
   function contentRoot() {
-    return document.getElementById("xm-content") || document.querySelector(".xm-content");
+    return (
+      document.querySelector(".xm-workspace > .xm-pane.is-active") ||
+      document.getElementById("xm-content") ||
+      document.querySelector(".xm-workspace > .xm-pane") ||
+      document.querySelector(".xm-content")
+    );
   }
 
   const TAB_STORE = "xm-open-tabs";
@@ -309,9 +314,72 @@
     return bar;
   }
 
+  function revealTabBar() {
+    const bar = ensureTabBar();
+    if (!bar) {
+      return null;
+    }
+    bar.hidden = false;
+    bar.removeAttribute("hidden");
+    bar.style.removeProperty("display");
+    bar.style.removeProperty("visibility");
+    delete bar.dataset.peopleHid;
+    return bar;
+  }
+
+  function pinHomeTab() {
+    const home = document.querySelector('.xm-tabs .xm-tab[data-href="/home"]');
+    if (!home) {
+      return;
+    }
+    home.classList.add("is-pinned");
+    const closer = home.querySelector(".xm-tab-close");
+    if (closer) {
+      closer.remove();
+    }
+  }
+
+  function parkPeopleHosts() {
+    const onPeople = current === "/people";
+    const css = document.getElementById("people-page-css");
+    if (css) {
+      css.disabled = !onPeople;
+    }
+    const pages = document.querySelectorAll(".people-page, [data-xm-parked='people-page']");
+    Array.prototype.forEach.call(pages, function (el) {
+      const inActive = el.closest(".xm-pane.is-active");
+      if (onPeople && inActive) {
+        if (el.getAttribute("data-xm-parked") === "people-page") {
+          el.classList.add("people-page");
+          el.removeAttribute("data-xm-parked");
+        }
+        return;
+      }
+      if (el.classList.contains("people-page")) {
+        el.classList.remove("people-page");
+        el.setAttribute("data-xm-parked", "people-page");
+      }
+    });
+  }
+
+  function hideForeignPages() {
+    const pages = document.querySelectorAll(".agents-page, .academy-page, .people-page, [data-xm-parked='people-page']");
+    Array.prototype.forEach.call(pages, function (el) {
+      const pane = el.closest(".xm-pane");
+      const on = pane && pane.classList.contains("is-active");
+      if (on) {
+        el.removeAttribute("hidden");
+        el.style.removeProperty("display");
+        return;
+      }
+      el.setAttribute("hidden", "");
+      el.style.setProperty("display", "none", "important");
+    });
+  }
+
   function paintTabs() {
     ensureOpenTabs();
-    const bar = ensureTabBar();
+    const bar = revealTabBar();
     if (!bar) {
       return;
     }
@@ -323,6 +391,7 @@
         return tabButtonHtml(href, href === current || (href === "/home" && leafRoute(current) === "/home"));
       })
       .join("");
+    pinHomeTab();
     bindTabs();
   }
 
@@ -356,12 +425,28 @@
       pane.classList.toggle("is-active", on);
       pane.hidden = !on;
       if (on) {
+        pane.removeAttribute("hidden");
+        pane.style.removeProperty("visibility");
+        pane.style.setProperty(
+          "display",
+          pane.querySelector(".agents-page") ? "flex" : "block",
+          "important"
+        );
         pane.id = "xm-content";
         active = pane;
-      } else if (pane.id === "xm-content") {
-        pane.removeAttribute("id");
+      } else {
+        pane.setAttribute("hidden", "");
+        pane.style.setProperty("display", "none", "important");
+        pane.style.setProperty("visibility", "hidden", "important");
+        if (pane.id === "xm-content") {
+          pane.removeAttribute("id");
+        }
       }
     });
+    parkPeopleHosts();
+    hideForeignPages();
+    revealTabBar();
+    pinHomeTab();
     return active;
   }
 
@@ -652,6 +737,9 @@
     if (key === current) {
       window.__xmUnmount = stop;
     }
+    showPane(current);
+    revealTabBar();
+    pinHomeTab();
   }
 
   function bootCurrentModule() {
@@ -710,10 +798,13 @@
         const bar = topbar.querySelector(".xm-tabs");
         if (!bar || !bar.querySelector(".xm-tab")) {
           paintTabs();
+          return;
         }
+        revealTabBar();
+        pinHomeTab();
       }, 0);
     });
-    obs.observe(topbar, { childList: true, subtree: true });
+    obs.observe(topbar, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "style", "class"] });
   }
 
   function bindBrandHome() {
