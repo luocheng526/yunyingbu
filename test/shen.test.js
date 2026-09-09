@@ -4,7 +4,7 @@ import test from "node:test";
 import { createApp } from "../src/app.js";
 import { patchAppSource } from "../src/modules/shen/patch-app.js";
 import { SQL, resetStore, setPool } from "../src/modules/shen/store.js";
-import { SHEN_SUBMENUS } from "../src/modules/shen/submenu.js";
+import { SHEN_LEGACY_REDIRECTS, SHEN_SUBMENUS } from "../src/modules/shen/submenu.js";
 
 const NAV_LABELS = [
   "首页",
@@ -81,41 +81,40 @@ async function request(base, pathname, options = {}) {
   return { res, text, json };
 }
 
-test("GET /shen is 沈子晗运营中心 with left sidebar and seven nav items", async () => {
+test("GET /shen redirects to official 选品中心 path", async () => {
   await withServer(async (base) => {
-    const { res, text } = await request(base, "/shen");
-    assert.equal(res.status, 200);
-    assert.match(text, /<title>沈子晗运营中心<\/title>/);
-    assert.match(text, /这是沈子晗团队的任务与日报台/);
-    assert.match(text, /后续功能占位/);
-    assert.match(text, /shen_tasks/);
-    assert.match(text, /shared\/nav\.js/);
-    assert.match(text, /shared\/layout\.css/);
-    assert.match(text, /class="app-shell"/);
-    assert.match(text, /class="site-sidebar"/);
-    assert.match(text, /<aside class="site-sidebar">/);
-    assert.doesNotMatch(text, /<header class="site-header">/);
-    assert.match(text, /flex-direction:\s*column/);
-    for (const label of NAV_LABELS) {
-      assert.match(text, new RegExp(label));
-    }
-    for (const item of SHEN_SUBMENUS) {
-      assert.match(text, new RegExp(item.label));
-      assert.match(text, new RegExp(item.href.replaceAll("/", "\\/")));
-    }
-    assert.match(text, /shen-submenu\.js/);
-    assert.match(text, /shen-nav-arrow/);
+    const res = await fetch(`${base}/shen`, { redirect: "manual" });
+    assert.equal(res.status, 302);
+    assert.equal(res.headers.get("location"), "/shen/selection");
   });
 });
 
-test("GET /shen submenu pages are placeholders pending development", async () => {
+test("official submenu pages match the live sider paths", async () => {
   await withServer(async (base) => {
     for (const item of SHEN_SUBMENUS) {
       const { res, text } = await request(base, item.href);
       assert.equal(res.status, 200, item.href);
       assert.match(text, new RegExp(item.label));
-      assert.match(text, /内容待开发/);
       assert.match(text, /shen-submenu\.js/);
+      if (item.slug !== "tasks") {
+        assert.match(text, /内容待开发/);
+      }
+    }
+    const tasks = await request(base, "/shen/tasks");
+    assert.match(tasks.text, /任务列表/);
+    assert.match(tasks.text, /今日简报/);
+    for (const label of NAV_LABELS) {
+      assert.match(tasks.text, new RegExp(label));
+    }
+  });
+});
+
+test("legacy pinyin submenu paths redirect to official sider paths", async () => {
+  await withServer(async (base) => {
+    for (const item of SHEN_LEGACY_REDIRECTS) {
+      const res = await fetch(`${base}${item.from}`, { redirect: "manual" });
+      assert.equal(res.status, 302, item.from);
+      assert.equal(res.headers.get("location"), item.to);
     }
   });
 });
