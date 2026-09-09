@@ -89,6 +89,23 @@ export function createHanRouter(store = createHanStore()) {
     }
   });
 
+  hanRouter.get("/training", async (_req, res) => {
+    try {
+      res.json({ ok: true, items: await store.listTraining() });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.post("/training", async (req, res) => {
+    try {
+      const item = await store.createTraining(req.body || {});
+      res.status(201).json({ ok: true, item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
   return hanRouter;
 }
 

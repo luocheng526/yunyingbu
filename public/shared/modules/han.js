@@ -22,17 +22,6 @@
     );
   }
 
-  function waitPage(title) {
-    return {
-      mount: function (root) {
-        root.innerHTML = page(title, "内容待开发。", "");
-        return function unmount() {
-          root.innerHTML = "";
-        };
-      },
-    };
-  }
-
   function renderRows(tbody, rows, cols, emptyText) {
     tbody.innerHTML = "";
     if (!rows || !rows.length) {
@@ -302,5 +291,60 @@
     },
   };
 
-  window.XmModules["/han/training"] = waitPage("培训系统");
+  window.XmModules["/han/training"] = {
+    mount: function (root) {
+      root.innerHTML = page(
+        "培训系统",
+        "本中心培训安排。默认负责人韩梦凯。",
+        '<div class="stack"><section class="panel"><h2>新增培训</h2>' +
+          '<form id="train-form"><label for="train-title">课程（必填）</label>' +
+          '<input id="train-title" required placeholder="课程名称" />' +
+          '<label for="train-trainee">学员</label><input id="train-trainee" placeholder="学员姓名" />' +
+          '<label for="train-date">日期</label><input id="train-date" type="date" />' +
+          '<label for="train-note">备注</label><input id="train-note" placeholder="大纲 / 地点" />' +
+          '<div class="actions"><button type="submit">添加</button></div>' +
+          '<p class="msg status" id="train-msg"></p></form></section>' +
+          '<section class="panel"><h2>培训列表</h2><table><thead><tr><th>课程</th><th>学员</th><th>日期</th><th>状态</th><th>负责人</th></tr></thead>' +
+          '<tbody id="train-body"></tbody></table></section></div>',
+      );
+      const tbody = root.querySelector("#train-body");
+      const msg = root.querySelector("#train-msg");
+      const form = root.querySelector("#train-form");
+      let dead = false;
+      function load() {
+        return jsonFetch("/api/han/training").then(function (json) {
+          if (!dead) renderRows(tbody, json.items, ["title", "trainee", "scheduledOn", "status", "owner"], "暂无培训");
+        });
+      }
+      function onSubmit(e) {
+        e.preventDefault();
+        jsonFetch("/api/han/training", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: root.querySelector("#train-title").value,
+            trainee: root.querySelector("#train-trainee").value,
+            scheduledOn: root.querySelector("#train-date").value,
+            note: root.querySelector("#train-note").value,
+          }),
+        }).then(function (json) {
+          if (dead) return;
+          msg.textContent = json.ok ? "已添加" : json.error || "失败";
+          if (json.ok) {
+            form.reset();
+            return load();
+          }
+        });
+      }
+      form.addEventListener("submit", onSubmit);
+      load().catch(function (err) {
+        if (!dead) msg.textContent = String(err);
+      });
+      return function unmount() {
+        dead = true;
+        form.removeEventListener("submit", onSubmit);
+        root.innerHTML = "";
+      };
+    },
+  };
 })();

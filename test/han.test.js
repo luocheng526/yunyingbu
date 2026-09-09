@@ -188,10 +188,22 @@ test("han selection / products / paid boards are isolated", async () => {
     const listedSel = await json(base, "/api/han/selection");
     const listedProd = await json(base, "/api/han/products");
     const listedPaid = await json(base, "/api/han/paid");
+    const train = await json(base, "/api/han/training", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "选品晨会", trainee: "韩梦凯", scheduledOn: "2026-09-10" }),
+    });
+    assert.equal(train.res.status, 201);
+    assert.equal(train.body.item.owner, "韩梦凯");
+    assert.equal(train.body.item.status, "待开始");
+    assert.equal(train.body.item.title, "选品晨会");
+
     const listedTasks = await json(base, "/api/han/tasks");
+    const listedTrain = await json(base, "/api/han/training");
     assert.equal(listedSel.body.items.length, 1);
     assert.equal(listedProd.body.items.length, 1);
     assert.equal(listedPaid.body.items.length, 1);
+    assert.equal(listedTrain.body.items.length, 1);
     assert.equal(listedTasks.body.tasks.length, 0);
     assert.equal(listedSel.body.items[0].name, "春季防晒衣");
     assert.equal(listedProd.body.items[0].name, "防晒衣-白");
@@ -204,11 +216,13 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /XmModules\["\/han\/selection"\]/);
   assert.match(js, /XmModules\["\/han\/goods"\]/);
   assert.match(js, /XmModules\["\/han\/paid"\]/);
+  assert.match(js, /XmModules\["\/han\/training"\]/);
   assert.match(js, /\/api\/han\/selection/);
   assert.match(js, /\/api\/han\/products/);
   assert.match(js, /\/api\/han\/paid/);
+  assert.match(js, /\/api\/han\/training/);
   assert.match(js, /培训系统/);
-  assert.match(js, /内容待开发/);
+  assert.doesNotMatch(js, /内容待开发/);
 });
 
 test("han store keeps dropProbeTasks and hydrateFromMysql exports", async () => {
@@ -230,6 +244,7 @@ test("han schema uses prefixed tables", async () => {
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_selection/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_products/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_paid/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS han_training/);
   assert.doesNotMatch(sql, /CREATE TABLE IF NOT EXISTS users\b/);
   assert.doesNotMatch(sql, /CREATE TABLE IF NOT EXISTS releases\b/);
 });

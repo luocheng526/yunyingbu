@@ -6,6 +6,7 @@ export function createHanFakePool() {
     han_selection: [],
     han_products: [],
     han_paid: [],
+    han_training: [],
   };
   let nextId = 1;
   let briefRow = null;
