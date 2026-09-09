@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>星脉甄选运营中心</title>
     <link rel="icon" href="/login-logo.png" />
-    <link rel="stylesheet" href="/login.css?v=0.1.156" />
+    <link rel="stylesheet" href="/login.css?v=0.1.158" />
     <script>
       (function () {
         try {
@@ -104,7 +104,7 @@
 
         <p class="hero-foot">
           <span>星脉甄选 × 京东生态 × 共创电商新未来</span>
-          <small>TOGETHER FOR A BRIGHTER FUTURE</small>
+          <small><b>TOGETHER</b><b>FOR</b><b>A</b><b>BRIGHTER</b><b>FUTURE</b></small>
         </p>
       </section>
 
@@ -142,8 +142,10 @@
         </form>
 
         <p class="login-foot">
-          <span>数据 · 运营 · 组织 · 人才 · 增长</span>
-          <small>DATA · OPERATION · ORGANIZATION · TALENT · GROWTH</small>
+          <span class="login-foot-pair">
+            <span>数据 · 运营 · 组织 · 人才 · 增长</span>
+            <small><b>DATA</b><b>OPERATION</b><b>ORGANIZATION</b><b>TALENT</b><b>GROWTH</b></small>
+          </span>
         </p>
         <div class="login-wave" aria-hidden="true"></div>
       </section>
@@ -170,17 +172,17 @@
         }
         applyTheme(localStorage.getItem("xm-theme") || "light");
 
-        function fitHeroSlogan() {
-          var slogan = document.querySelector(".hero-slogan");
-          if (!slogan) return;
-          var zh = slogan.querySelector("span");
-          var en = slogan.querySelector("small");
-          slogan.style.width = "";
+        function fitEnToZh(root, ratio) {
+          if (!root) return;
+          var zh = root.querySelector(":scope > span");
+          var en = root.querySelector(":scope > small");
+          if (!zh || !en) return;
+          root.style.width = "";
           en.style.fontSize = "";
           var target = zh.getBoundingClientRect().width;
           if (!target) return;
-          slogan.style.width = target + "px";
-          var size = parseFloat(window.getComputedStyle(zh).fontSize) * 0.58;
+          root.style.width = target + "px";
+          var size = parseFloat(window.getComputedStyle(zh).fontSize) * (ratio || 0.7);
           var i;
           for (i = 0; i < 48; i += 1) {
             en.style.fontSize = size + "px";
@@ -188,9 +190,26 @@
             size *= target / en.scrollWidth;
           }
         }
-        fitHeroSlogan();
-        if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitHeroSlogan);
-        window.addEventListener("resize", fitHeroSlogan);
+
+        function alignHeroLogo() {
+          var logo = document.querySelector(".hero-logo");
+          var line = document.querySelector(".hero-line");
+          if (!logo || !line) return;
+          logo.style.marginLeft = "0px";
+          var box = logo.getBoundingClientRect();
+          var visibleLeft = box.left + box.width * (72 / 720);
+          logo.style.marginLeft = (line.getBoundingClientRect().left - visibleLeft) + "px";
+        }
+
+        function layoutLoginArt() {
+          fitEnToZh(document.querySelector(".hero-slogan"), 0.58);
+          fitEnToZh(document.querySelector(".hero-foot"), 0.72);
+          fitEnToZh(document.querySelector(".login-foot-pair"), 0.72);
+          alignHeroLogo();
+        }
+        layoutLoginArt();
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(layoutLoginArt);
+        window.addEventListener("resize", layoutLoginArt);
 
         themeBtn.addEventListener("click", function () {
           var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";

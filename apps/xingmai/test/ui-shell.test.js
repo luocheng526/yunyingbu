@@ -147,11 +147,15 @@ test("login page uses official https url and cursor light tokens", async () => {
   assert.match(html, /localStorage.getItem\("xm-theme"\)/);
   assert.doesNotMatch(html, /\/shared\/nav\.js/);
   assert.doesNotMatch(html, /\/shared\/layout\.css/);
-  assert.match(html, /function fitHeroSlogan\(/);
+  assert.match(html, /function layoutLoginArt\(/);
+  assert.match(html, /function fitEnToZh\(/);
   assert.match(html, /<b>BETTER DATA<\/b>/);
+  assert.match(html, /<b>ORGANIZATION<\/b>/);
+  assert.match(html, /<b>TOGETHER<\/b>/);
   assert.match(html, /<b>BETTER OPERATION<\/b>/);
   assert.match(html, /<b>BETTER GROWTH<\/b>/);
   assert.match(css, /--slogan-zh: clamp\(14\.4px, 1\.08vw, 19\.2px\)/);
+  assert.match(css, /clamp\(60\.8px, 4\.48vw, 81\.6px\)/);
   assert.match(css, /width: 0;/);
   assert.match(css, /min-width: 100%/);
   assert.match(css, /0\.58em/);
