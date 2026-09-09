@@ -198,6 +198,19 @@ test("han selection / products / paid boards are isolated", async () => {
   });
 });
 
+test("shared han module fills submenu pages", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const js = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
+  assert.match(js, /XmModules\["\/han\/selection"\]/);
+  assert.match(js, /XmModules\["\/han\/goods"\]/);
+  assert.match(js, /XmModules\["\/han\/paid"\]/);
+  assert.match(js, /\/api\/han\/selection/);
+  assert.match(js, /\/api\/han\/products/);
+  assert.match(js, /\/api\/han\/paid/);
+  assert.match(js, /培训系统/);
+  assert.match(js, /内容待开发/);
+});
+
 test("han schema uses prefixed tables", async () => {
   const { readFile } = await import("node:fs/promises");
   const sql = await readFile(new URL("../src/modules/han/schema.sql", import.meta.url), "utf8");
