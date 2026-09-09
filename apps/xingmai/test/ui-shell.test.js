@@ -28,6 +28,13 @@ test("shared shell assets are public", async () => {
   assert.equal(logo.status, 200);
   const logoBytes = Buffer.from(await logo.arrayBuffer());
   assert.equal(logoBytes.subarray(0, 4).toString("binary"), "\x89PNG");
+  const tabLogo = await fetch(`${base}/tab-logo.png`);
+  assert.equal(tabLogo.status, 200);
+  const tabBytes = Buffer.from(await tabLogo.arrayBuffer());
+  assert.equal(tabBytes.subarray(0, 4).toString("binary"), "\x89PNG");
+  const tabSvg = await fetch(`${base}/tab-logo.svg`);
+  assert.equal(tabSvg.status, 200);
+  assert.match(await tabSvg.text(), /<svg[\s>]/);
   const cssText = await css.text();
   const jsText = await js.text();
   assert.doesNotMatch(jsText, /xm-shell-modules/);
@@ -165,7 +172,8 @@ test("home page html is the xingmai sider template", async () => {
   assert.match(html, /xm-app-shell/);
   assert.match(html, /<title>星脉甄选运营中心<\/title>/);
   assert.doesNotMatch(html, /<title>数据中心 · 星脉甄选<\/title>/);
-  assert.match(html, /rel="icon" href="\/login-logo\.png"/);
+  assert.match(html, /rel="icon" type="image\/png" href="data:image\/png;base64,/);
+  assert.doesNotMatch(html, /rel="icon"[^>]+href="\/login-logo\.png"/);
 });
 
 test("韩梦凯运营中心 expands four placeholder children", async () => {
@@ -441,6 +449,7 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.match(homeMod, /工作台/);
   const { renderAppShell } = await import("../src/modules/profile/middleware.js");
   const shell = renderAppShell("/data", { username: "罗成", displayName: "罗成" });
+  assert.match(shell, /rel="icon" type="image\/png" href="data:image\/png;base64,/);
   assert.match(shell, /<title>星脉甄选运营中心<\/title>/);
   assert.match(shell, /xm-app-shell/);
   assert.match(shell, /\/shared\/modules\/data\.js\?v=0\.1\.108/);

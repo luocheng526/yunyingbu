@@ -10,7 +10,9 @@ import { currentUser, publicProfile } from "./auth.js";
 
 export const SHELL_ASSET_VER = "0.1.108";
 export const TAB_TITLE = "星脉甄选运营中心";
-export const TAB_ICON = "/login-logo.png";
+// 浏览器标签图标。侧栏品牌条仍用 /login-logo.png，不要改成这个。
+export const TAB_ICON =
+  "data:image/png;base64,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";
 export const APP_MODULES = {
   "/data": "data",
   "/data/overview": "data",
@@ -97,7 +99,7 @@ export function renderAppShell(href, user) {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${TAB_TITLE}</title>
-    <link rel="icon" href="${TAB_ICON}" />
+    <link rel="icon" type="image/png" href="${TAB_ICON}" />
 ${css}    <link rel="preload" href="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" as="script" />
 ${boot}    <script src="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" defer data-xm-mod="${key}"></script>
   </head>
@@ -251,6 +253,21 @@ export function withThemeBoot(html) {
   return text;
 }
 
+function tabIconTag() {
+  return `<link rel="icon" type="image/png" href="${TAB_ICON}" />`;
+}
+
+export function applyTabIcon(html) {
+  const text = String(html || "");
+  if (/<link\s+rel=["']icon["'][^>]*>/i.test(text)) {
+    return text.replace(/<link\s+rel=["']icon["'][^>]*>/i, tabIconTag());
+  }
+  if (text.includes("</head>")) {
+    return text.replace("</head>", `    ${tabIconTag()}\n  </head>`);
+  }
+  return text;
+}
+
 export function isLoginHtml(html) {
   const text = String(html || "");
   return (
@@ -262,7 +279,7 @@ export function isLoginHtml(html) {
 export function withSharedShell(html) {
   const text = String(html || "");
   if (isLoginHtml(text)) {
-    return versionShellAssets(withThemeBoot(text));
+    return versionShellAssets(withThemeBoot(applyTabIcon(text)));
   }
   let out = text;
   if (out.includes("</head>")) {
@@ -279,7 +296,9 @@ export function withSharedShell(html) {
       extras.push(`    <link rel="preload" href="/shared/nav.js?v=${SHELL_ASSET_VER}" as="script" />`);
     }
     if (!/rel=["']icon["']/.test(out)) {
-      extras.push(`    <link rel="icon" href="${TAB_ICON}" />`);
+      extras.push(`    ${tabIconTag()}`);
+    } else {
+      out = applyTabIcon(out);
     }
     if (extras.length) {
       out = out.replace("</head>", extras.join("\n") + "\n  </head>");
@@ -305,7 +324,9 @@ export function readThemedHtml(filePath) {
     return hit.html;
   }
   const raw = fs.readFileSync(dest, "utf8");
-  const html = /login\.html$/i.test(dest) ? versionShellAssets(withThemeBoot(raw)) : withSharedShell(raw);
+  const html = /login\.html$/i.test(dest)
+    ? versionShellAssets(withThemeBoot(applyTabIcon(raw)))
+    : withSharedShell(raw);
   htmlFileCache.set(dest, { mtimeMs: stat.mtimeMs, size: stat.size, html, at: now });
   return html;
 }

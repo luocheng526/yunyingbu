@@ -40,7 +40,8 @@ test("login page is public", async () => {
   const html = await res.text();
   assert.match(html, /星脉管理系统/);
   assert.match(html, /<title>星脉甄选运营中心<\/title>/);
-  assert.match(html, /rel="icon" href="\/login-logo\.png"/);
+  assert.match(html, /rel="icon" type="image\/png" href="data:image\/png;base64,/);
+  assert.doesNotMatch(html, /rel="icon"[^>]+href="\/login-logo\.png"/);
   assert.match(html, /ChangeMe123!/);
   assert.doesNotMatch(html, /\/shared\/nav\.js/);
   assert.doesNotMatch(html, /\/shared\/layout\.css/);
