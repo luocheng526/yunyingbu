@@ -52,7 +52,7 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /<svg viewBox="0 0 24 24"/);
   assert.match(jsText, /login-logo\.png/);
   assert.match(jsText, /xingmai-logo\.png/);
-  assert.match(jsText, /xm-fast-shell 0\.1\.110/);
+  assert.match(jsText, /xm-fast-shell 0\.1\.111/);
   assert.match(jsText, /data-xm-style/);
   assert.match(jsText, /甄选粉/);
   assert.match(jsText, /setInterval\(tickClock, 1000\)/);
@@ -63,7 +63,7 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /id="xm-date"/);
   assert.match(jsText, /id="xm-refresh"/);
   assert.match(jsText, /展开侧栏/);
-  assert.match(cssText, /xm-sider-narrow 0\.1\.110/);
+  assert.match(cssText, /xm-sider-narrow 0\.1\.111/);
   assert.match(cssText, /\.xm-menu-parent/);
   assert.match(cssText, /\.xm-submenu/);
   assert.match(cssText, /--xm-sider-w: 200px/);
@@ -76,7 +76,7 @@ test("shared shell assets are public", async () => {
   assert.doesNotMatch(jsText, /菜单标签">项目<|>项目<\/p>/);
   assert.doesNotMatch(jsText, /xm-menu-label">项目/);
   assert.match(jsText, /退出登录/);
-  assert.match(jsText, /v0\.4\.15/);
+  assert.match(jsText, /v0\.4\.16/);
   assert.match(jsText, /数据总揽/);
   assert.match(jsText, /店铺数据/);
   assert.match(jsText, /选品中心/);
@@ -92,6 +92,9 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /组织中心/);
   assert.doesNotMatch(jsText, /<span>人员管理<\/span>/);
   assert.match(jsText, /甄选商学院/);
+  assert.match(jsText, /培训课程/);
+  assert.match(jsText, /培训考试/);
+  assert.match(jsText, /运营手册/);
   assert.match(jsText, /甄选智能体/);
   assert.match(jsText, /版本发布中心/);
   assert.match(jsText, /个人中心/);
@@ -165,8 +168,11 @@ test("home page html is the xingmai sider template", async () => {
   assert.doesNotMatch(html, />项目</);
   assert.doesNotMatch(html, /<span>首页<\/span>/);
   assert.match(html, /退出登录/);
-  assert.match(html, /v0\.4\.15/);
+  assert.match(html, /v0\.4\.16/);
   assert.match(html, /甄选商学院/);
+  assert.match(html, /培训课程/);
+  assert.match(html, /培训考试/);
+  assert.match(html, /运营手册/);
   assert.match(html, /甄选智能体/);
   assert.match(html, /数据总揽/);
   assert.match(html, /店铺数据/);
@@ -179,7 +185,7 @@ test("home page html is the xingmai sider template", async () => {
   assert.match(html, /培训系统/);
   assert.match(html, /xm-menu-parent/);
   assert.match(html, /xm-caret/);
-  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.110/);
+  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.111/);
   assert.match(html, /data-xm-style="pink"/);
   assert.match(html, /aria-label="页面风格"/);
   assert.match(html, /data-xm-queue-badge/);
@@ -306,10 +312,19 @@ test("甄选商学院 and 甄选智能体 are top-level sider placeholders", asy
   });
   assert.equal(cookieRes.status, 200);
   const cookie = String(cookieRes.headers.get("set-cookie") || "").split(";")[0];
-  const academy = await fetch(`${base}/academy`, { headers: { cookie } });
+  const academyBounce = await fetch(`${base}/academy`, { headers: { cookie }, redirect: "manual" });
+  assert.equal(academyBounce.status, 302);
+  assert.equal(academyBounce.headers.get("location"), "/academy/courses");
+  const academy = await fetch(`${base}/academy/courses`, { headers: { cookie } });
   assert.equal(academy.status, 200);
   const academyHtml = await academy.text();
   assert.match(academyHtml, /甄选商学院/);
+  assert.match(academyHtml, /培训课程/);
+  assert.match(academyHtml, /培训考试/);
+  assert.match(academyHtml, /运营手册/);
+  assert.match(academyHtml, /href="\/academy\/courses"/);
+  assert.match(academyHtml, /href="\/academy\/exams"/);
+  assert.match(academyHtml, /href="\/academy\/handbook"/);
   assert.match(academyHtml, /甄选智能体/);
   assert.match(academyHtml, /组织中心/);
   assert.doesNotMatch(academyHtml, /<span>人员管理<\/span>/);
@@ -317,6 +332,7 @@ test("甄选商学院 and 甄选智能体 are top-level sider placeholders", asy
   const footNav = academyHtml.match(/<nav class="xm-menu xm-menu-foot">[\s\S]*?<\/nav>/)[0];
   assert.doesNotMatch(mainNav, /组织中心/);
   assert.doesNotMatch(mainNav, /href="\/people"/);
+  assert.match(mainNav, /data-xm-group="\/academy"/);
   assert.ok(footNav.indexOf('href="/releases"') < footNav.indexOf('href="/people"'));
   assert.ok(footNav.indexOf('href="/people"') < footNav.indexOf('href="/me"'));
   assert.ok(footNav.indexOf('href="/me"') < footNav.indexOf("退出登录"));
@@ -324,6 +340,10 @@ test("甄选商学院 and 甄选智能体 are top-level sider placeholders", asy
   assert.match(academyHtml, /id="xm-content"/);
   assert.match(academyHtml, /<title>星脉甄选运营中心<\/title>/);
   assert.doesNotMatch(academyHtml, /<span>首页<\/span>/);
+  const exams = await fetch(`${base}/academy/exams`, { headers: { cookie } });
+  assert.equal(exams.status, 200);
+  const handbook = await fetch(`${base}/academy/handbook`, { headers: { cookie } });
+  assert.equal(handbook.status, 200);
   const agents = await fetch(`${base}/agents`, { headers: { cookie } });
   assert.equal(agents.status, 200);
   const agentsHtml = await agents.text();
@@ -332,6 +352,9 @@ test("甄选商学院 and 甄选智能体 are top-level sider placeholders", asy
   const academyMod = readFileSync(join(root, "public/shared/modules/academy.js"), "utf8");
   const agentsMod = readFileSync(join(root, "public/shared/modules/agents.js"), "utf8");
   assert.match(academyMod, /XmModules\["\/academy"\]/);
+  assert.match(academyMod, /XmModules\["\/academy\/courses"\]/);
+  assert.match(academyMod, /XmModules\["\/academy\/exams"\]/);
+  assert.match(academyMod, /XmModules\["\/academy\/handbook"\]/);
   assert.match(agentsMod, /XmModules\["\/agents"\]/);
   const academyApi = await fetch(`${base}/api/academy`, { headers: { cookie } });
   assert.equal(academyApi.status, 200);
@@ -428,8 +451,8 @@ test("page renderer injects shared shell onto module html", async () => {
     '<!DOCTYPE html><html><head></head><body class="oc-page"><div class="oc-tab">待上线</div></body></html>'
   );
   assert.match(injected, /\/shared\/layout\.css/);
-  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.110/);
-  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.110"/);
+  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.111/);
+  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.111"/);
   assert.match(injected, /localStorage.getItem\("xm-theme"\)/);
   const login = withSharedShell('<html><head></head><body class="login-page"></body></html>');
   assert.doesNotMatch(login, /\/shared\/nav\.js/);
@@ -480,7 +503,7 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.match(shell, /rel="icon" type="image\/png" href="data:image\/png;base64,/);
   assert.match(shell, /<title>星脉甄选运营中心<\/title>/);
   assert.match(shell, /xm-app-shell/);
-  assert.match(shell, /\/shared\/modules\/data\.js\?v=0\.1\.110/);
+  assert.match(shell, /\/shared\/modules\/data\.js\?v=0\.1\.111/);
   assert.match(shell, /data-xm-style="pink"/);
   assert.doesNotMatch(shell, /<span>首页<\/span>/);
   assert.match(shell, /id="xm-content"/);

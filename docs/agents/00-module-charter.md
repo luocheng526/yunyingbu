@@ -51,7 +51,7 @@
 
 `nav-items.js` 虽然在 `src/modules/home/`，归属 **主框架**，首页不要交。
 
-主框架已认识这两个新面：侧栏一级入口 `/academy`（甄选商学院）、`/agents`（甄选智能体）；交单模块名已进 `MODULES`；内容脚本是 `XmModules["/academy"]` / `XmModules["/agents"]`。要加子菜单或改 `src/app.js` 挂新 API，问主框架，不要自己改壳。
+主框架已认识这两个新面：侧栏「甄选商学院」带子菜单培训课程 `/academy/courses`、培训考试 `/academy/exams`、运营手册 `/academy/handbook`（`/academy` 转到培训课程）；「甄选智能体」仍是 `/agents`。交单模块名已进 `MODULES`。要再加子菜单或改 `src/app.js` 挂新 API，问主框架，不要自己改壳。
 
 ## 怎么新建独立对话框并对接
 

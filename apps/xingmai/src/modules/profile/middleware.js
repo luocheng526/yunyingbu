@@ -6,9 +6,9 @@ import { navMarkup } from "../home/nav-items.js";
 import { currentUser, publicProfile } from "./auth.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.110
+// xm-fast-shell 0.1.111
 
-export const SHELL_ASSET_VER = "0.1.110";
+export const SHELL_ASSET_VER = "0.1.111";
 export const TAB_TITLE = "星脉甄选运营中心";
 // 浏览器标签图标。侧栏品牌条仍用 /login-logo.png，不要改成这个。
 export const TAB_ICON =
@@ -32,6 +32,9 @@ export const APP_MODULES = {
   "/han/training": "han",
   "/people": "people",
   "/academy": "academy",
+  "/academy/courses": "academy",
+  "/academy/exams": "academy",
+  "/academy/handbook": "academy",
   "/agents": "agents",
   "/releases": "releases",
   "/me": "me"
@@ -55,6 +58,9 @@ const SHELL_TITLES = {
   "/han/training": "培训系统",
   "/people": "组织中心",
   "/academy": "甄选商学院",
+  "/academy/courses": "培训课程",
+  "/academy/exams": "培训考试",
+  "/academy/handbook": "运营手册",
   "/agents": "甄选智能体",
   "/releases": "版本发布中心",
   "/me": "个人中心"
