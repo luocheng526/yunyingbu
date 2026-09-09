@@ -39,7 +39,7 @@
 | 模块（交单名） | 可改 | 不可改 |
 |---|---|---|
 | 主框架 | 壳四件套、`nav-items.js`、内核三件、闸补丁、`auth.js` | 各业务 `public/*.html`、`shared/modules/*.js` |
-| 首页 | `public/index.html`、`src/modules/home/`（除 `nav-items.js`）、`shared/modules/home.js` | 壳、内核、别人的模块 |
+| 首页 | `shared/modules/home.js`、`src/modules/home/`（除 `nav-items.js`） | 壳、内核、别人的模块。侧栏第一项「首页」，路径 `/home`。不要改 `public/index.html`，`/` 仍跳数据中心 |
 | 数据中心 | `public/data.html`、`public/data*`、`src/modules/data/`、`shared/modules/data.js` | 壳、内核、别人的模块 |
 | 沈子晗 | `public/shen.html`、`public/shen*`、`src/modules/shen/`、`shared/modules/shen.js` | 同上 |
 | 韩梦凯 | `public/han.html`、`public/han*`、`src/modules/han/`、`shared/modules/han.js` | 同上 |
@@ -51,7 +51,7 @@
 
 `nav-items.js` 虽然在 `src/modules/home/`，归属 **主框架**，首页不要交。
 
-主框架已认识这两个新面：侧栏「甄选商学院」带子菜单培训课程 `/academy/courses`、培训考试 `/academy/exams`、运营手册 `/academy/handbook`（`/academy` 转到培训课程）；「甄选智能体」仍是 `/agents`。交单模块名已进 `MODULES`。要再加子菜单或改 `src/app.js` 挂新 API，问主框架，不要自己改壳。
+主框架已认识：侧栏第一项「首页」`/home`（`/` 仍跳数据中心）；「甄选商学院」带子菜单培训课程 / 培训考试 / 运营手册；「甄选智能体」`/agents`。要再加子菜单或改 `src/app.js` 挂新 API，问主框架，不要自己改壳。
 
 ## 怎么新建独立对话框并对接
 
