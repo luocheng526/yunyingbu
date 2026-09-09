@@ -5,6 +5,7 @@ import { getPool } from "../../db/pool.js";
 const DEFAULT_OWNER = "韩梦凯";
 const STATUSES = ["待办", "进行中", "已完成"];
 const SELECTION_STATUSES = ["观察", "入选", "淘汰"];
+const TRAINING_STATUSES = ["待开始", "进行中", "已完成"];
 const SCHEMA_PATH = fileURLToPath(new URL("./schema.sql", import.meta.url));
 
 function toIso(value) {
@@ -72,6 +73,19 @@ function mapPaid(row) {
     channel: row.channel,
     amount: row.amount == null ? "" : String(row.amount),
     spentOn: toDateOnly(row.spent_on),
+    note: row.note || "",
+    owner: row.owner,
+    createdAt: toIso(row.created_at),
+  };
+}
+
+function mapTraining(row) {
+  return {
+    id: String(row.id),
+    title: row.title,
+    trainee: row.trainee || "",
+    scheduledOn: toDateOnly(row.scheduled_on),
+    status: row.status,
     note: row.note || "",
     owner: row.owner,
     createdAt: toIso(row.created_at),
@@ -256,6 +270,41 @@ export function createHanStore(poolOrFactory = getPool) {
       );
       return mapPaid(rows[0]);
     },
+
+    async listTraining() {
+      await ensure();
+      const [rows] = await db().query(
+        "SELECT id, title, trainee, scheduled_on, status, note, owner, created_at FROM han_training ORDER BY id ASC",
+      );
+      return rows.map(mapTraining);
+    },
+
+    async createTraining({ title, trainee, scheduledOn, status, note, owner } = {}) {
+      await ensure();
+      const trimmed = String(title || "").trim();
+      if (!trimmed) {
+        const err = new Error("title required");
+        err.statusCode = 400;
+        throw err;
+      }
+      const st = TRAINING_STATUSES.includes(status) ? status : "待开始";
+      const [result] = await db().query(
+        "INSERT INTO han_training (title, trainee, scheduled_on, status, note, owner) VALUES (?, ?, ?, ?, ?, ?)",
+        [
+          trimmed,
+          String(trainee || "").trim(),
+          optionalDate(scheduledOn),
+          st,
+          String(note || "").trim(),
+          ownerOrDefault(owner),
+        ],
+      );
+      const [rows] = await db().query(
+        "SELECT id, title, trainee, scheduled_on, status, note, owner, created_at FROM han_training WHERE id = ?",
+        [result.insertId],
+      );
+      return mapTraining(rows[0]);
+    },
   };
 }
 
@@ -292,3 +341,4 @@ export async function dropProbeTasks(poolOrFactory = getPool) {
 export const HAN_DEFAULT_OWNER = DEFAULT_OWNER;
 export const HAN_STATUSES = STATUSES;
 export const HAN_SELECTION_STATUSES = SELECTION_STATUSES;
+export const HAN_TRAINING_STATUSES = TRAINING_STATUSES;
