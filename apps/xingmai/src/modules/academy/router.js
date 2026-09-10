@@ -2,6 +2,12 @@ import { Router } from "express";
 import { currentUser } from "../profile/auth.js";
 import { parseMultipart } from "./multipart.js";
 import {
+  examAccept,
+  getExamPaper,
+  gradeExamPaper,
+  importExamPaper
+} from "./exam-store.js";
+import {
   createPptCourse,
   getPptCourse,
   getPptPage,
@@ -13,7 +19,6 @@ import {
   courses,
   doc,
   docs,
-  examTrack,
   examTracks,
   frameworkPlan,
   handbook,
@@ -150,23 +155,69 @@ academyRouter.get("/courses/:id", async (req, res) => {
   res.json({ ok: true, download: false, watermark: true, course });
 });
 
-academyRouter.get("/exams/tracks", (req, res) => {
+function denyExamOriginal(res) {
+  res.status(404).json({ ok: false, error: "不提供考试原件下载，请在线作答" });
+}
+
+academyRouter.get("/exams/tracks", async (req, res) => {
   if (!requireUser(req, res)) {
     return;
   }
-  res.json({ ok: true, tracks: examTracks() });
+  res.json({ ok: true, accept: examAccept(), tracks: await examTracks() });
 });
 
-academyRouter.get("/exams/tracks/:id", (req, res) => {
+academyRouter.post("/exams/papers", async (req, res) => {
+  const user = requireUser(req, res);
+  if (!user) {
+    return;
+  }
+  try {
+    const { fields, file } = await parseMultipart(req);
+    const data = await importExamPaper({
+      trackId: fields.trackId || fields.track,
+      file,
+      createdBy: user.username
+    });
+    res.status(201).json({ ok: true, download: false, ...data });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+academyRouter.get("/exams/tracks/:id/source", (_req, res) => denyExamOriginal(res));
+academyRouter.get("/exams/tracks/:id/source.xlsx", (_req, res) => denyExamOriginal(res));
+academyRouter.get("/exams/tracks/:id/download", (_req, res) => denyExamOriginal(res));
+academyRouter.get("/exams/tracks/:id/file", (_req, res) => denyExamOriginal(res));
+
+academyRouter.post("/exams/tracks/:id/submit", async (req, res) => {
+  const user = requireUser(req, res);
+  if (!user) {
+    return;
+  }
+  try {
+    const result = await gradeExamPaper(req.params.id, (req.body || {}).answers);
+    res.json({ ok: true, result });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+academyRouter.get("/exams/tracks/:id", async (req, res) => {
   if (!requireUser(req, res)) {
     return;
   }
-  const track = examTrack(req.params.id);
-  if (!track) {
+  const packed = await getExamPaper(req.params.id, { includeAnswers: false });
+  if (!packed) {
     res.status(404).json({ ok: false, error: "没有这一档考试" });
     return;
   }
-  res.json({ ok: true, track, paper: { ready: false, questions: [] } });
+  res.json({
+    ok: true,
+    accept: examAccept(),
+    download: false,
+    track: packed.track,
+    paper: packed.paper
+  });
 });
 
 academyRouter.get("/handbook/tree", (req, res) => {

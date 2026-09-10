@@ -1,4 +1,4 @@
-/* xm-academy-catalog 0.1.170 */
+/* xm-academy-catalog 0.1.180 */
 .academy-page {
   max-width: 1180px;
 }
@@ -284,13 +284,23 @@ html[data-theme="dark"] .academy-actions button.ghost {
   font-size: 16px;
 }
 
-.academy-timer {
+.academy-q {
   margin: 12px 0;
-  padding: 12px 16px;
-  border-radius: 8px;
-  background: var(--xm-primary-soft);
-  color: var(--xm-primary);
-  font-weight: 600;
+}
+
+.academy-q p {
+  margin: 0 0 6px;
+}
+
+.academy-q label {
+  display: block;
+  padding: 4px 0;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.academy-upload a {
+  margin-left: 8px;
 }
 
 .academy-tree {

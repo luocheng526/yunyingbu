@@ -7,15 +7,15 @@ export const PLAN = [
   },
   {
     step: 2,
-    current: true,
+    current: false,
     name: "培训课程",
     detail: "导入 PPT，学员只能在线翻页，不能下载原件，截图带水印。"
   },
   {
     step: 3,
-    current: false,
+    current: true,
     name: "培训考试",
-    detail: "先选晋升档再出卷，限时交卷。"
+    detail: "先选晋升档，再导入考试文档出卷，限时交卷。"
   },
   {
     step: 4,
@@ -95,8 +95,8 @@ export function handbookTree() {
 
 export function plan() {
   return {
-    step: 2,
-    title: "第 2 步：培训课程",
+    step: 3,
+    title: "第 3 步：培训考试",
     steps: PLAN.map((item) => ({ ...item }))
   };
 }

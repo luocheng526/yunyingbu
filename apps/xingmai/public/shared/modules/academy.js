@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.170 */
+/* xm-module-academy 0.1.180 */
 (function () {
-  const ASSET_VER = "0.1.170";
+  const ASSET_VER = "0.1.180";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -91,6 +91,24 @@
       ":" +
       pad(now.getMinutes());
     return bootName() + " · " + stamp;
+  }
+
+  function postJson(path, body) {
+    return fetch(path, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify(body || {})
+    }).then(function (res) {
+      return res.json().catch(function () {
+        return { ok: false, error: "接口 " + res.status };
+      }).then(function (data) {
+        if (!res.ok || data.ok === false) {
+          throw new Error(data.error || "接口 " + res.status);
+        }
+        return data;
+      });
+    });
   }
 
   function postForm(path, form) {
@@ -353,13 +371,281 @@
           root,
           pageHead(
             "培训考试",
-            "先选晋升档，再出卷。本步只把六档和限时架子搭好，题目下一步再写。"
+            "先点晋升档，再导入考试文档。表格模板：题干、A、B、C、D、答案。到点交卷。",
+            "甄选商学院 · 第 3 步培训考试"
           ) +
             '<div id="academy-plan"></div>' +
             '<section class="kpi-grid academy-exam-grid" id="academy-tracks" aria-label="考试档"></section>' +
-            '<section class="panel" id="academy-paper"><h2>试卷</h2><p class="academy-empty">先点上面一档。</p></section>'
+            '<section class="panel" id="academy-paper"><h2>试卷</h2><p class="academy-empty">先点上面一档，再导入考试文档。</p></section>'
         );
         let dead = false;
+        let trackId = "";
+        let timer = null;
+        let remain = 0;
+        let ticking = false;
+
+        function stopTimer() {
+          if (timer) {
+            clearInterval(timer);
+            timer = null;
+          }
+          ticking = false;
+        }
+
+        function clock(seconds) {
+          const m = Math.floor(Math.max(0, seconds) / 60);
+          const s = Math.max(0, seconds) % 60;
+          return String(m).padStart(2, "0") + " : " + String(s).padStart(2, "0");
+        }
+
+        function collectAnswers() {
+          const answers = {};
+          root.querySelectorAll(".academy-q").forEach(function (box) {
+            const index = box.getAttribute("data-index");
+            const hit = box.querySelector("input:checked");
+            if (index && hit) {
+              answers[index] = hit.value;
+            }
+          });
+          return answers;
+        }
+
+        function renderTracks(tracks) {
+          const box = root.querySelector("#academy-tracks");
+          box.innerHTML = (tracks || [])
+            .map(function (track) {
+              return (
+                '<button type="button" class="kpi-card academy-track' +
+                (track.id === trackId ? " is-on" : "") +
+                '" data-id="' +
+                escapeHtml(track.id) +
+                '"><div class="label">' +
+                escapeHtml(track.from) +
+                " → " +
+                escapeHtml(track.to) +
+                '</div><div class="value">' +
+                escapeHtml(track.name) +
+                '</div><p class="academy-meta">' +
+                escapeHtml(track.minutes) +
+                " 分钟 · 及格 " +
+                escapeHtml(track.passScore) +
+                " 分" +
+                (track.paperReady ? " · 已导入 " + escapeHtml(track.importedQuestions) + " 题" : " · 待导入") +
+                "</p></button>"
+              );
+            })
+            .join("");
+        }
+
+        function importForm(track) {
+          return (
+            '<form id="academy-exam-upload" class="academy-upload">' +
+            '<p class="academy-meta">支持 .xlsx / .csv / .json / .docx / .txt。原件不提供下载。' +
+            '<a href="/academy-exam-template.csv">下载表格模板</a></p>' +
+            '<input type="hidden" name="trackId" value="' +
+            escapeHtml(track.id) +
+            '" />' +
+            '<label class="academy-file">文档 <input type="file" name="file" accept=".xlsx,.csv,.json,.docx,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required /></label>' +
+            '<button type="submit">导入这一档</button>' +
+            '<p class="academy-status" id="academy-exam-status"></p>' +
+            "</form>"
+          );
+        }
+
+        function questionHtml(list) {
+          return (list || [])
+            .map(function (item) {
+              const opts = (item.options || [])
+                .map(function (opt) {
+                  return (
+                    "<label><input type=\"radio\" name=\"q-" +
+                    escapeHtml(item.index) +
+                    '" value="' +
+                    escapeHtml(opt.key) +
+                    '" /> ' +
+                    escapeHtml(opt.key) +
+                    ". " +
+                    escapeHtml(opt.text) +
+                    "</label>"
+                  );
+                })
+                .join("");
+              return (
+                '<div class="academy-q" data-index="' +
+                escapeHtml(item.index) +
+                '"><p><strong>' +
+                escapeHtml(item.index) +
+                ". " +
+                escapeHtml(item.stem) +
+                "</strong></p>" +
+                opts +
+                "</div>"
+              );
+            })
+            .join("");
+        }
+
+        function showResult(result) {
+          stopTimer();
+          const paper = root.querySelector("#academy-paper");
+          const rows = (result.detail || [])
+            .map(function (item) {
+              return (
+                "<li>" +
+                escapeHtml(item.index) +
+                ". " +
+                (item.ok ? "对" : "错") +
+                " · 你的 " +
+                escapeHtml(item.picked || "未答") +
+                " / 答案 " +
+                escapeHtml(item.answer) +
+                "</li>"
+              );
+            })
+            .join("");
+          paper.innerHTML =
+            "<h2>成绩</h2><p class=\"academy-meta\">" +
+            escapeHtml(result.score) +
+            " 分 · " +
+            (result.passed ? "及格" : "未及格") +
+            " · 对 " +
+            escapeHtml(result.correct) +
+            " / " +
+            escapeHtml(result.total) +
+            "</p><ul class=\"academy-empty\">" +
+            rows +
+            "</ul>";
+        }
+
+        function submitPaper() {
+          if (!trackId) {
+            return;
+          }
+          const answers = collectAnswers();
+          postJson("/api/academy/exams/tracks/" + encodeURIComponent(trackId) + "/submit", { answers: answers })
+            .then(function (data) {
+              if (!dead) {
+                showResult(data.result || {});
+              }
+            })
+            .catch(function (err) {
+              const paper = root.querySelector("#academy-paper");
+              paper.insertAdjacentHTML(
+                "beforeend",
+                '<p class="academy-status error">' + escapeHtml(err.message) + "</p>"
+              );
+            });
+        }
+
+        function startTimer(minutes) {
+          stopTimer();
+          remain = Math.max(1, Number(minutes) || 1) * 60;
+          ticking = true;
+          const el = root.querySelector("#academy-timer");
+          function tick() {
+            if (!el) {
+              return;
+            }
+            if (remain <= 0) {
+              el.textContent = "剩余 00 : 00";
+              stopTimer();
+              submitPaper();
+              return;
+            }
+            el.textContent = "剩余 " + clock(remain);
+            remain -= 1;
+          }
+          tick();
+          timer = setInterval(tick, 1000);
+        }
+
+        function openTaking(data) {
+          const track = data.track || {};
+          const paper = data.paper || {};
+          const box = root.querySelector("#academy-paper");
+          box.innerHTML =
+            "<h2>" +
+            escapeHtml(track.name) +
+            '</h2><p class="academy-meta">规定 ' +
+            escapeHtml(track.minutes) +
+            " 分钟 · 到点交卷 · 不可下载原件</p>" +
+            '<div class="academy-timer" id="academy-timer" aria-live="polite">剩余 -- : --</div>' +
+            '<form id="academy-exam-form">' +
+            questionHtml(paper.questions) +
+            '<div class="academy-actions"><button type="submit">交卷</button></div></form>';
+          startTimer(track.minutes);
+          root.querySelector("#academy-exam-form").addEventListener("submit", function (ev) {
+            ev.preventDefault();
+            submitPaper();
+          });
+        }
+
+        function openTrack(id) {
+          stopTimer();
+          trackId = id;
+          root.querySelectorAll(".academy-track").forEach(function (el) {
+            el.classList.toggle("is-on", el.getAttribute("data-id") === id);
+          });
+          const paper = root.querySelector("#academy-paper");
+          paper.innerHTML = "<h2>试卷</h2><p class=\"academy-empty\">正在打开这一档…</p>";
+          api("/api/academy/exams/tracks/" + encodeURIComponent(id))
+            .then(function (data) {
+              if (dead) {
+                return;
+              }
+              const track = data.track || {};
+              const pack = data.paper || {};
+              const ready = Boolean(pack.ready);
+              paper.innerHTML =
+                "<h2>" +
+                escapeHtml(track.name) +
+                '</h2><p class="academy-meta">' +
+                (ready
+                  ? "已导入 " + escapeHtml(pack.questionCount) + " 题 · " + escapeHtml(track.minutes) + " 分钟 · 及格 " + escapeHtml(track.passScore)
+                  : "还没有考试文档，导入后才能开考") +
+                "</p>" +
+                importForm(track) +
+                (ready
+                  ? '<div class="academy-actions"><button type="button" id="academy-exam-start">开始考试</button></div>'
+                  : "") +
+                '<div id="academy-exam-take"></div>';
+              const form = root.querySelector("#academy-exam-upload");
+              form.addEventListener("submit", function (ev) {
+                ev.preventDefault();
+                const status = root.querySelector("#academy-exam-status");
+                const fd = new FormData(form);
+                status.textContent = "正在解析…";
+                status.className = "academy-status";
+                postForm("/api/academy/exams/papers", fd)
+                  .then(function () {
+                    return api("/api/academy/exams/tracks").then(function (list) {
+                      if (!dead) {
+                        renderTracks(list.tracks);
+                      }
+                      return openTrack(id);
+                    });
+                  })
+                  .catch(function (err) {
+                    status.textContent = err.message;
+                    status.className = "academy-status error";
+                  });
+              });
+              const start = root.querySelector("#academy-exam-start");
+              if (start) {
+                start.addEventListener("click", function () {
+                  api("/api/academy/exams/tracks/" + encodeURIComponent(id)).then(function (fresh) {
+                    if (!dead) {
+                      openTaking(fresh);
+                    }
+                  });
+                });
+              }
+            })
+            .catch(function (err) {
+              paper.innerHTML = '<h2>试卷</h2><p class="academy-status error">' + escapeHtml(err.message) + "</p>";
+            });
+        }
+
         api("/api/academy/plan")
           .then(function (data) {
             const el = root.querySelector("#academy-plan");
@@ -370,31 +656,9 @@
           .catch(function () {});
         api("/api/academy/exams/tracks")
           .then(function (data) {
-            if (dead) {
-              return;
+            if (!dead) {
+              renderTracks(data.tracks);
             }
-            const box = root.querySelector("#academy-tracks");
-            box.innerHTML = (data.tracks || [])
-              .map(function (track) {
-                return (
-                  '<button type="button" class="kpi-card academy-track" data-id="' +
-                  escapeHtml(track.id) +
-                  '"><div class="label">' +
-                  escapeHtml(track.from) +
-                  " → " +
-                  escapeHtml(track.to) +
-                  '</div><div class="value">' +
-                  escapeHtml(track.name) +
-                  '</div><p class="academy-meta">' +
-                  escapeHtml(track.minutes) +
-                  " 分钟 · " +
-                  escapeHtml(track.questions) +
-                  " 题 · " +
-                  escapeHtml(track.passScore) +
-                  " 分及格</p></button>"
-                );
-              })
-              .join("");
           })
           .catch(function (err) {
             const box = root.querySelector("#academy-tracks");
@@ -407,35 +671,11 @@
           if (!btn) {
             return;
           }
-          const id = btn.getAttribute("data-id");
-          root.querySelectorAll(".academy-track").forEach(function (el) {
-            el.classList.toggle("is-on", el.getAttribute("data-id") === id);
-          });
-          const paper = root.querySelector("#academy-paper");
-          paper.innerHTML = "<h2>试卷</h2><p class=\"academy-empty\">正在打开这一档…</p>";
-          api("/api/academy/exams/tracks/" + encodeURIComponent(id))
-            .then(function (data) {
-              if (dead) {
-                return;
-              }
-              const track = data.track || {};
-              paper.innerHTML =
-                "<h2>" +
-                escapeHtml(track.name) +
-                '</h2><p class="academy-meta">规定时间 ' +
-                escapeHtml(track.minutes) +
-                " 分钟 · 到点交卷 · 第 3 步才写入题目</p>" +
-                '<div class="academy-timer" aria-live="polite">剩余 ' +
-                escapeHtml(track.minutes) +
-                " : 00（本步不倒计时）</div>" +
-                '<p class="academy-empty">题目区空着。下一步按这一档出选择题。</p>';
-            })
-            .catch(function (err) {
-              paper.innerHTML = '<h2>试卷</h2><p class="academy-status error">' + escapeHtml(err.message) + "</p>";
-            });
+          openTrack(btn.getAttribute("data-id"));
         });
         return function () {
           dead = true;
+          stopTimer();
           unmount();
         };
       }
