@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.221 */
+/* xm-module-academy 0.1.222 */
 (function () {
-  const ASSET_VER = "0.1.221";
+  const ASSET_VER = "0.1.222";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -385,13 +385,13 @@
         const unmount = mountShell(
           root,
           consoleFrame(
-            '<div class="academy-console-stage" id="academy-view-courses">' +
-              '<div class="academy-work" id="academy-work">' +
-              '<aside class="academy-side" id="academy-side">' +
+            '<div class="academy-console-body" id="academy-view-courses">' +
+              '<aside class="academy-console-side academy-course-pane" id="academy-side">' +
+              '<div class="academy-board-head"><h2>课件</h2></div>' +
               '<div class="academy-course-list" id="academy-course-list"></div>' +
               '<div class="academy-thumbs" id="academy-thumbs" hidden></div></aside>' +
-              '<section class="academy-main" id="academy-viewer" hidden></section>' +
-              "</div></div>" +
+              '<section class="academy-console-main" id="academy-viewer"></section>' +
+              "</div>" +
               uploadPaneHtml(),
             chromeTabs()
           )
@@ -498,23 +498,25 @@
           img.focus();
         }
 
+        function emptyViewer() {
+          return (
+            '<div class="academy-board"><div class="academy-board-head"><h2>课件展示</h2></div>' +
+            '<p class="academy-empty">点左侧课件在此翻页。再点同一课件可收起页签。</p></div>'
+          );
+        }
+
         function closePreview() {
           previewOn = false;
           currentId = "";
           pages = [];
-          const work = root.querySelector("#academy-work");
           const panel = root.querySelector("#academy-viewer");
           const thumbs = root.querySelector("#academy-thumbs");
-          if (work) {
-            work.classList.remove("has-viewer");
-          }
           if (thumbs) {
             thumbs.hidden = true;
             thumbs.innerHTML = "";
           }
           if (panel) {
-            panel.hidden = true;
-            panel.innerHTML = "";
+            panel.innerHTML = emptyViewer();
           }
           exitFs();
           root.querySelectorAll(".academy-course").forEach(function (el) {
@@ -547,23 +549,19 @@
         }
 
         function paintDeck(title) {
-          const work = root.querySelector("#academy-work");
           const panel = root.querySelector("#academy-viewer");
-          panel.hidden = false;
-          if (work) {
-            work.classList.add("has-viewer");
-          }
           const mark = watermarkText();
           const tiles = new Array(18).fill(escapeHtml(mark)).join(" ");
           paintThumbs();
           panel.innerHTML =
-            '<div class="academy-deck-head"><h2>' +
-            escapeHtml(title || "课件") +
-            '</h2><p class="academy-meta" id="academy-slide-cap">第 ' +
+            '<div class="academy-board-head"><h2>课件展示</h2><p class="academy-board-meta" id="academy-slide-cap">第 ' +
             escapeHtml(pageNo) +
             " / " +
             escapeHtml(pageCount) +
             " 页 · 点大图全屏</p></div>" +
+            '<p class="academy-meta">' +
+            escapeHtml(title || "课件") +
+            "</p>" +
             '<div class="academy-deck">' +
             '<div class="academy-stage" id="academy-stage">' +
             '<img class="academy-slide-img" id="academy-slide-img" src="' +
@@ -601,6 +599,8 @@
           });
         }
 
+        root.querySelector("#academy-viewer").innerHTML = emptyViewer();
+
         loadList().catch(function (err) {
           const box = root.querySelector("#academy-course-list");
           if (box) {
@@ -615,8 +615,11 @@
           }
           openPreview(btn.getAttribute("data-id")).catch(function (err) {
             const panel = root.querySelector("#academy-viewer");
-            panel.hidden = false;
-            panel.innerHTML = '<h2>课件</h2><p class="academy-status error">' + escapeHtml(err.message) + "</p>";
+            panel.innerHTML =
+              '<div class="academy-board-head"><h2>课件展示</h2></div>' +
+              '<p class="academy-status error">' +
+              escapeHtml(err.message) +
+              "</p>";
           });
         });
 

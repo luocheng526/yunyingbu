@@ -1,4 +1,4 @@
-/* xm-academy 0.1.218 */
+/* xm-academy 0.1.222 */
 #xm-content > .academy-page,
 #xm-content > main.page.academy-page,
 .xm-content > .academy-page,
@@ -134,6 +134,7 @@ main.page.academy-page,
   background: #fff;
   min-width: 0;
   padding: 16px 20px 24px;
+  overflow: auto;
 }
 
 .academy-console-stage {
@@ -332,17 +333,37 @@ main.page.academy-page,
   color: var(--xm-primary);
 }
 
+.academy-course-pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: calc(100vh - 104px);
+}
+
+.academy-course-pane .academy-board-head {
+  padding: 8px 12px;
+  margin: 0;
+}
+
+.academy-course-pane .academy-course-list {
+  flex: 0 1 auto;
+  padding: 0 8px 8px;
+  overflow: auto;
+  max-height: 42vh;
+}
+
+.academy-course-pane .academy-thumbs {
+  flex: 1 1 auto;
+  margin: 0 8px 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--xm-line, #e5e6eb);
+  max-height: none;
+}
+
 .academy-work {
   display: block;
   width: 100%;
   align-items: start;
-}
-
-.academy-work.has-viewer {
-  display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
-  gap: 8px;
-  align-items: stretch;
 }
 
 .academy-side,
@@ -353,39 +374,12 @@ main.page.academy-page,
   align-self: stretch;
 }
 
-.academy-side {
-  display: flex;
-  flex-direction: column;
-  padding: 8px 10px;
-  background: var(--xm-card);
-  border-radius: 8px;
-  box-shadow: var(--xm-shadow);
-  max-height: calc(100vh - 104px);
-  overflow: hidden;
-}
-
-.academy-course-list {
-  flex: 0 0 auto;
-}
-
-.academy-side .academy-thumbs {
-  flex: 1 1 auto;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--xm-line, #e5e6eb);
-  max-height: none;
-}
-
 .academy-main {
-  display: none;
+  display: block;
   padding: 10px 12px;
   background: var(--xm-card);
   border-radius: 8px;
   box-shadow: var(--xm-shadow);
-}
-
-.academy-work.has-viewer .academy-main {
-  display: block;
 }
 
 .academy-work-book {
@@ -1012,7 +1006,6 @@ html[data-theme="dark"] .academy-tree-item.is-on {
 }
 
 @media (max-width: 800px) {
-  .academy-work.has-viewer,
   .academy-work-book,
   .academy-console-body,
   .academy-exam-shell {
