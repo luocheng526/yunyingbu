@@ -91,6 +91,7 @@ test("academy.js enables upload, watermark, and blocks original download", () =>
   assert.match(js, /文件上传/);
   assert.match(js, /academy-view-upload/);
   assert.match(js, /academy-thumbs/);
+  assert.match(js, /paintThumbs/);
   assert.match(js, /academy-fs/);
   assert.match(js, /Escape/);
   assert.match(js, /openPreview/);
