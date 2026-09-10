@@ -2,6 +2,7 @@ import { Router } from "express";
 import { getOverview } from "./overview.js";
 import { getNav } from "./nav.js";
 import {
+  getGoodsBoard,
   getGoodsOverview,
   getPlaceholder,
   getStoreLive,
@@ -46,4 +47,8 @@ dataRouter.get("/team", (_req, res) => {
 
 dataRouter.get("/shops", (_req, res) => {
   res.json(getShopOverview());
+});
+
+dataRouter.get("/goods/board", (_req, res) => {
+  res.json(getGoodsBoard());
 });

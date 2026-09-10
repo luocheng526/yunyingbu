@@ -59,6 +59,20 @@
     });
   }
 
+  function mountGoodsDashboard(root) {
+    ensureSheet();
+    return loadScript("/data-goods.js?v=goods-tpl").then(function () {
+      if (typeof window.XmDataCreateGoodsDashboard === "function") {
+        return window.XmDataCreateGoodsDashboard(root);
+      }
+      root.innerHTML =
+        '<main class="xm-page data-fill data-overview-root"><p class="lead">示例数据，尚未接入店铺。</p></main>';
+      return function unmount() {
+        root.innerHTML = "";
+      };
+    });
+  }
+
   function mountOverview(root) {
     ensureSheet();
     return loadScript("/data-overview.js?v=channel-tpl2").then(function () {
@@ -193,16 +207,16 @@
 
   window.XmModules["/data/goods"] = {
     mount: function (root) {
-      return mountList(root, {
-        title: "商品数据",
-        lead: "在售商品动销与库存。数字为占位演示。",
-        tableTitle: "商品周报",
-        api: "/api/data/goods/overview",
-        headers: ["SKU", "名称", "周销量", "库存"],
-        cells: function (row) {
-          return [row.sku, row.name, row.sales, row.stock];
-        }
+      let stop = null;
+      mountGoodsDashboard(root).then(function (unmount) {
+        stop = unmount;
       });
+      return function unmount() {
+        if (typeof stop === "function") {
+          stop();
+        }
+        root.innerHTML = "";
+      };
     }
   };
 

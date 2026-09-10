@@ -3,23 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>商品数据 · 数据中心</title>
+    <title>商品数据总览 · 数据中心</title>
     <link rel="stylesheet" href="/shared/layout.css" />
-    <link rel="stylesheet" href="/data-pages.css" />
+    <link rel="stylesheet" href="/data-pages.css?v=goods-tpl" />
   </head>
   <body>
     <div id="site-nav"></div>
-    <main class="xm-page data-fill" id="data-mount"></main>
-    <script src="/data-overview.js?v=xm-module"></script>
-    <script src="/shared/modules/data.js"></script>
+    <main class="xm-page data-overview-root ch-root">
+      <div id="board"></div>
+    </main>
+    <script src="/data-goods.js?v=goods-tpl"></script>
     <script src="/shared/nav.js"></script>
-    <script>
-      (function () {
-        const root = document.getElementById("data-mount");
-        if (window.XmModules && window.XmModules["/data/goods"]) {
-          window.XmModules["/data/goods"].mount(root);
-        }
-      })();
-    </script>
   </body>
 </html>

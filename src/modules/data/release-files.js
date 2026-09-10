@@ -15,6 +15,8 @@ export const DATA_OVERLAY_FILES = [
   "public/data-shops.js",
   "public/data/team-demo.json",
   "public/data/shops-demo.json",
+  "public/data-goods.js",
+  "public/data/goods-demo.json",
   "src/modules/data/overview.js",
   "src/modules/data/nav.js",
   "src/modules/data/pages.js",
