@@ -421,6 +421,8 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.doesNotMatch(dataMod, /店铺周报/);
   assert.doesNotMatch(dataMod, /商品周报/);
   assert.match(dataMod, /data-live\.js/);
+  assert.match(dataMod, /renameDataPaidNav/);
+  assert.match(dataMod, /实时看板/);
   assert.doesNotMatch(dataMod, /实时明细/);
   const demo = JSON.parse(fs.readFileSync(path.join(repoRoot, "public/data/team-demo.json"), "utf8"));
   assert.equal(demo.cards.length, 8);

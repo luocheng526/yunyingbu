@@ -8,6 +8,30 @@
       .replaceAll('"', "&quot;");
   }
 
+  function renameDataPaidNav() {
+    const root = document.getElementById("site-nav");
+    if (!root) {
+      return;
+    }
+    Array.prototype.forEach.call(root.querySelectorAll('a[href="/data/paid"], a[href="/data/paid/"]'), function (el) {
+      if (el.textContent.replace(/\s+/g, "") === "实时付费") {
+        el.textContent = "实时看板";
+      }
+    });
+  }
+
+  function watchPaidNav() {
+    renameDataPaidNav();
+    const root = document.getElementById("site-nav");
+    if (!root || root.getAttribute("data-xm-paid-renamed") === "1") {
+      return;
+    }
+    root.setAttribute("data-xm-paid-renamed", "1");
+    new MutationObserver(function () {
+      renameDataPaidNav();
+    }).observe(root, { childList: true, subtree: true });
+  }
+
   function ensureSheet() {
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
@@ -257,4 +281,6 @@
       };
     }
   };
+
+  watchPaidNav();
 })();
