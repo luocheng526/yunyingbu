@@ -215,8 +215,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /sc-ui-12/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-12/);
+    assert.match(text, /sc-ui-13/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-13/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
     assert.match(text, /id="xm-releases-boot"/);
@@ -294,6 +294,7 @@ test("release board scripts parse so tab refresh can run", () => {
   const inline = html.slice(start + "<script>".length, end);
   assert.doesNotThrow(() => new Function(inline));
   assert.match(inline, /function isIgnorableConfirmConflict/);
+  assert.match(inline, /function refreshAfterFailedPass/);
   assert.match(inline, /return "busy"/);
   const theme = fs.readFileSync(path.join(root, "public/shared/modules/releases.js"), "utf8");
   assert.doesNotThrow(() => new Function(theme));
@@ -303,10 +304,12 @@ test("release board scripts parse so tab refresh can run", () => {
   assert.match(theme, /function finishUpgradeInPlace/);
   assert.match(theme, /return "landed"/);
   assert.doesNotMatch(theme, /location\.replace\("\/releases\?reloaded="/);
-  assert.match(theme, /sc-ui-12/);
+  assert.match(theme, /sc-ui-13/);
   assert.match(theme, /\/api\/releases\/item\//);
   assert.match(theme, /function isTransientPassError/);
   assert.match(theme, /function isIgnorableConfirmConflict/);
+  assert.match(theme, /function refreshAfterFailedPass/);
+  assert.match(theme, /失败单不占队首/);
   assert.match(theme, /__xmUpgradePass/);
   assert.match(theme, /return "busy"/);
   assert.match(theme, /Promise\.allSettled/);

@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.92-no-false-409 */
+/* xm-module-releases 0.1.93-fail-advance */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -194,7 +194,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-12";
+      link.href = "/releases.css?v=sc-ui-13";
       document.head.appendChild(link);
     }
   }
@@ -661,6 +661,7 @@
           if (ticket && ticket.status === "failed") {
             failUpgrade(keys, ticket.log || "发版失败");
             flash(ticket.log || "发版失败", true);
+            await refreshAfterFailedPass();
             return "failed";
           }
           if (ticket && ticket.status === "publishing") {
@@ -671,6 +672,7 @@
             const msg = (confirmErr.status || "") + " " + (confirmErr.message || "通过失败");
             failUpgrade(keys, msg);
             flash(msg, true);
+            await refreshAfterFailedPass();
             return "failed";
           }
           if (ticket && ticket.status === "success") {
@@ -698,6 +700,7 @@
           : ((ticket && ticket.log) ? ticket.log + "\n" : "") + "健康检查超时：" + lastHealth;
         failUpgrade(keys, timeoutMsg);
         flash("升级未完成：" + lastHealth, true);
+        await refreshAfterFailedPass();
         return "failed";
         } finally {
           window.__xmUpgradePass = null;
@@ -1060,9 +1063,18 @@
         return lock;
       }
 
+      async function refreshAfterFailedPass() {
+        try {
+          await refresh({ skipLoginRedirect: true });
+          flash("已刷新待上线。失败单不占队首，下一条不会自动通过。", true);
+        } catch (err) {
+          flash((err && err.message) || "刷新队列失败", true);
+        }
+      }
+
       async function watchIncoming() {
         const live = maskEl();
-        if (live && live.classList.contains("show")) {
+        if (live && live.classList.contains("show") && !live.classList.contains("can-close")) {
           return;
         }
         try {
@@ -1249,10 +1261,16 @@
           event.preventDefault();
           event.stopPropagation();
           hideUpgrade();
+          refresh({ skipLoginRedirect: true }).catch(function (err) {
+            flash((err && err.message) || "刷新队列失败", true);
+          });
           return;
         }
         if (event.target === live && live.classList.contains("can-close")) {
           hideUpgrade();
+          refresh({ skipLoginRedirect: true }).catch(function (err) {
+            flash((err && err.message) || "刷新队列失败", true);
+          });
         }
       });
     
