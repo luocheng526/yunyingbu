@@ -301,6 +301,73 @@ body:has(.people-page) .xm-tabs {
   display: none;
 }
 
+.org-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px 18px 18px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.org-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.org-card-head h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.org-card-head p,
+.notice-item .muted {
+  margin: 0;
+  color: var(--xm-muted, #8c8c8c);
+  font-size: 13px;
+}
+
+.org-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.org-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  gap: 12px;
+}
+
+.notice-item {
+  padding: 12px 0;
+  border-top: 1px solid #f0f0f0;
+}
+
+.notice-item h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.notice-item p {
+  margin: 0 0 6px;
+}
+
+.org-dialog textarea {
+  border: 1px solid var(--xm-line, #d9d9d9);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+  resize: vertical;
+}
+
+@media (max-width: 900px) {
+  .org-split {
+    grid-template-columns: 1fr;
+  }
+}
+
 .people-form,
 .people-mini-form,
 .org-grid {

@@ -4,6 +4,7 @@ import test from "node:test";
 import { createApp } from "../src/app.js";
 import { patchAppSource } from "../src/modules/people/patch-app.js";
 import { resetOrgBoard } from "../src/modules/people/org-board.js";
+import { resetOrgExtra } from "../src/modules/people/org-extra.js";
 import { hydrateFromMysql, resetPeopleStore } from "../src/modules/people/store.js";
 
 const PRESET = [
@@ -15,6 +16,7 @@ const PRESET = [
 test.beforeEach(() => {
   resetPeopleStore();
   resetOrgBoard();
+  resetOrgExtra();
 });
 
 async function withServer(fn) {
@@ -55,6 +57,9 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /登录主账号/);
     assert.match(jsText, /全部团队/);
     assert.match(jsText, /双击单元格/);
+    assert.match(jsText, /龙虎榜/);
+    assert.match(jsText, /价值观践行/);
+    assert.match(jsText, /日常公告/);
     assert.doesNotMatch(jsText, /主数据治理/);
     assert.doesNotMatch(jsText, /全部公司/);
     assert.doesNotMatch(jsText, />缺口</);
@@ -184,6 +189,29 @@ test("org board scopes edit by 责权", async () => {
       body: JSON.stringify({ login: "luo_ok" })
     });
     assert.equal(luo.status, 200);
+  });
+});
+
+test("org extras list leaderboard values and notices", async () => {
+  await withServer(async (base) => {
+    const board = await fetch(`${base}/api/people/org/board`);
+    const boardJson = await board.json();
+    assert.equal(board.status, 200);
+    assert.ok(boardJson.people.some((row) => row.name === "王博" && row.stores >= 2));
+    assert.ok(boardJson.teams.some((row) => row.name.includes("沈子晗")));
+
+    const values = await fetch(`${base}/api/people/org/values`);
+    assert.ok((await values.json()).items.length >= 3);
+
+    const created = await fetch(`${base}/api/people/org/notices`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "验收公告", body: "组织中心页签验收" })
+    });
+    assert.equal(created.status, 201);
+    const listed = await fetch(`${base}/api/people/org/notices`);
+    const listedJson = await listed.json();
+    assert.ok(listedJson.items.some((row) => row.title === "验收公告"));
   });
 });
 

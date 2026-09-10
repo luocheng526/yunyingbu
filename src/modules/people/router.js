@@ -21,6 +21,14 @@ import {
   removeOrgStore,
   summarizeOrg
 } from "./org-board.js";
+import {
+  createNotice,
+  createValue,
+  listLeaderboard,
+  listNotices,
+  listValues,
+  noticeStats
+} from "./org-extra.js";
 
 async function resolveActor(req) {
   const fromQuery = typeof req.query?.actor === "string" ? req.query.actor.trim() : "";
@@ -108,6 +116,31 @@ peopleRouter.delete("/org/stores/:id", async (req, res) => {
 
 peopleRouter.get("/org/logs", (_req, res) => {
   res.json({ ok: true, logs: listOrgLogs() });
+});
+
+peopleRouter.get("/org/board", async (req, res) => {
+  const actor = await resolveActor(req);
+  res.json({ ok: true, actor, ...listLeaderboard(actor) });
+});
+
+peopleRouter.get("/org/values", (_req, res) => {
+  res.json({ ok: true, items: listValues() });
+});
+
+peopleRouter.post("/org/values", (req, res) => {
+  sendResult(res, createValue(req.body || {}), true);
+});
+
+peopleRouter.get("/org/notices", (req, res) => {
+  res.json({
+    ok: true,
+    stats: noticeStats(),
+    items: listNotices(req.query || {})
+  });
+});
+
+peopleRouter.post("/org/notices", async (req, res) => {
+  sendResult(res, createNotice(req.body || {}, await resolveActor(req)), true);
 });
 
 peopleRouter.get("/shops", (_req, res) => {

@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.148-scroll";
+    const href = "/people.css?v=0.1.150-tabs";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -76,6 +76,9 @@
         '<button type="button" class="org-tab" data-pane="rights">责权</button>' +
         '<button type="button" class="org-tab" data-pane="acl">权限</button>' +
         '<button type="button" class="org-tab" data-pane="logs">改动日志</button>' +
+        '<button type="button" class="org-tab" data-pane="board">龙虎榜</button>' +
+        '<button type="button" class="org-tab" data-pane="values">价值观践行</button>' +
+        '<button type="button" class="org-tab" data-pane="notices">日常公告</button>' +
         "</nav>" +
         '<div class="org-pane" data-pane="stores">' +
         '<div class="org-kpis" id="org-kpis"></div>' +
@@ -142,6 +145,45 @@
         '<section class="panel"><h2>改动日志</h2>' +
         '<div class="org-table-wrap"><table><thead><tr><th>时间</th><th>动作</th><th>摘要</th></tr></thead>' +
         '<tbody id="logs-tbody"></tbody></table></div></section></div>' +
+        '<div class="org-pane" data-pane="board" hidden>' +
+        '<section class="org-card"><div class="org-card-head"><div><h2>龙虎榜</h2>' +
+        "<p>按在营店铺数排。罗成看全部，沈子晗/韩梦凯只看本团队。</p></div></div>" +
+        '<div class="org-split">' +
+        '<div class="org-table-wrap"><table><thead><tr><th>名次</th><th>店铺所属人员</th><th>在营</th><th>闲置</th><th>合计</th></tr></thead>' +
+        '<tbody id="board-people"></tbody></table></div>' +
+        '<div class="org-table-wrap"><table><thead><tr><th>名次</th><th>团队</th><th>店铺</th><th>人数</th></tr></thead>' +
+        '<tbody id="board-teams"></tbody></table></div></div></section></div>' +
+        '<div class="org-pane" data-pane="values" hidden>' +
+        '<section class="org-card"><div class="org-card-head"><div><h2>价值观践行</h2>' +
+        "<p>记录谁在践行哪一条，可新增。</p></div></div>" +
+        '<form class="people-mini-form" id="value-form">' +
+        '<label>人<input name="person" required maxlength="40" /></label>' +
+        '<label>践行事项<input name="title" required maxlength="80" /></label>' +
+        '<label>备注<input name="note" maxlength="80" /></label>' +
+        '<label>状态<select name="status"><option>践行中</option><option>已完成</option></select></label>' +
+        '<button type="submit">新增践行</button></form>' +
+        '<p class="status error" id="value-error" hidden></p>' +
+        '<div class="org-table-wrap"><table><thead><tr><th>人</th><th>事项</th><th>备注</th><th>状态</th></tr></thead>' +
+        '<tbody id="value-tbody"></tbody></table></div></section></div>' +
+        '<div class="org-pane" data-pane="notices" hidden>' +
+        '<div class="org-kpis" id="notice-kpis"></div>' +
+        '<section class="org-card"><div class="org-card-head"><div><h2>进行中的公告</h2>' +
+        "<p>集中发布组织日常公告。登录后可看，首页栏可同步最新内容。</p></div>" +
+        '<div class="org-card-actions">' +
+        '<button type="button" class="ghost" id="notice-active">进行中</button>' +
+        '<button type="button" class="ghost" id="notice-all">全部</button>' +
+        '<button type="button" id="notice-add">+ 发布公告</button></div></div>' +
+        '<p class="status error" id="notice-error" hidden></p>' +
+        '<div id="notice-list"></div></section></div>' +
+        '<div class="org-modal" id="notice-modal">' +
+        '<form class="org-dialog" id="notice-form"><h3>发布日常公告</h3>' +
+        '<div class="org-grid">' +
+        '<label>标题<input name="title" required maxlength="80" /></label>' +
+        '<label style="grid-column:1/-1">正文<textarea name="body" required rows="4"></textarea></label></div>' +
+        '<p class="status error" id="notice-form-error" hidden></p>' +
+        '<div class="org-actions" style="margin-top:12px">' +
+        '<button type="submit">发布</button>' +
+        '<button type="button" class="ghost" id="notice-cancel">取消</button></div></form></div>' +
         '<div class="org-modal" id="org-modal">' +
         '<form class="org-dialog" id="org-form"><h3 id="org-form-title">新增店铺</h3>' +
         '<div class="org-grid">' +
@@ -182,6 +224,18 @@
       const grantError = root.querySelector("#grant-error");
       const rightsTbody = root.querySelector("#rights-tbody");
       const logsTbody = root.querySelector("#logs-tbody");
+      const boardPeople = root.querySelector("#board-people");
+      const boardTeams = root.querySelector("#board-teams");
+      const valueForm = root.querySelector("#value-form");
+      const valueError = root.querySelector("#value-error");
+      const valueTbody = root.querySelector("#value-tbody");
+      const noticeKpis = root.querySelector("#notice-kpis");
+      const noticeList = root.querySelector("#notice-list");
+      const noticeError = root.querySelector("#notice-error");
+      const noticeModal = root.querySelector("#notice-modal");
+      const noticeForm = root.querySelector("#notice-form");
+      const noticeFormError = root.querySelector("#notice-form-error");
+      let noticeFilter = "active";
       let roster = { people: [], shops: [], grants: [] };
       let dead = false;
       let editingId = null;
@@ -626,6 +680,120 @@
           });
       }
 
+      function loadBoardRank() {
+        return fetch("/api/people/org/board", { credentials: "same-origin" })
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            if (dead) {
+              return;
+            }
+            boardPeople.replaceChildren();
+            (data.people || []).forEach(function (row) {
+              const tr = document.createElement("tr");
+              tr.innerHTML =
+                "<td>" +
+                escapeHtml(row.rank) +
+                "</td><td>" +
+                escapeHtml(row.name) +
+                "</td><td>" +
+                escapeHtml(row.operating) +
+                "</td><td>" +
+                escapeHtml(row.idle) +
+                "</td><td>" +
+                escapeHtml(row.stores) +
+                "</td>";
+              boardPeople.append(tr);
+            });
+            boardTeams.replaceChildren();
+            (data.teams || []).forEach(function (row) {
+              const tr = document.createElement("tr");
+              tr.innerHTML =
+                "<td>" +
+                escapeHtml(row.rank) +
+                "</td><td>" +
+                escapeHtml(row.name) +
+                "</td><td>" +
+                escapeHtml(row.stores) +
+                "</td><td>" +
+                escapeHtml(row.people) +
+                "</td>";
+              boardTeams.append(tr);
+            });
+          });
+      }
+
+      function loadValues() {
+        return fetch("/api/people/org/values", { credentials: "same-origin" })
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            if (dead) {
+              return;
+            }
+            valueTbody.replaceChildren();
+            (data.items || []).forEach(function (row) {
+              const tr = document.createElement("tr");
+              tr.innerHTML =
+                "<td>" +
+                escapeHtml(row.person) +
+                "</td><td>" +
+                escapeHtml(row.title) +
+                "</td><td>" +
+                escapeHtml(row.note || "—") +
+                "</td><td>" +
+                escapeHtml(row.status) +
+                "</td>";
+              valueTbody.append(tr);
+            });
+          });
+      }
+
+      function loadNotices() {
+        const q = noticeFilter === "active" ? "?status=active" : "";
+        return fetch("/api/people/org/notices" + q, { credentials: "same-origin" })
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            if (dead) {
+              return;
+            }
+            const stats = data.stats || { active: 0, total: 0 };
+            noticeKpis.innerHTML = [
+              ["进行中", stats.active],
+              ["全部", stats.total],
+              ["本周未读", 0]
+            ]
+              .map(function (item) {
+                return (
+                  '<article class="org-kpi"><div class="label">' +
+                  escapeHtml(item[0]) +
+                  '</div><div class="value">' +
+                  escapeHtml(item[1]) +
+                  "</div></article>"
+                );
+              })
+              .join("");
+            const items = data.items || [];
+            if (!items.length) {
+              noticeList.innerHTML = '<p class="org-empty">这一档还没有公告，点右上角发布。</p>';
+              return;
+            }
+            noticeList.innerHTML = items
+              .map(function (row) {
+                return (
+                  '<article class="notice-item"><h3>' +
+                  escapeHtml(row.title) +
+                  "</h3><p>" +
+                  escapeHtml(row.body) +
+                  '</p><p class="muted">' +
+                  escapeHtml(row.author || "") +
+                  " · " +
+                  escapeHtml(row.at || "") +
+                  "</p></article>"
+                );
+              })
+              .join("");
+          });
+      }
+
       root.querySelector("#org-tabs").addEventListener("click", function (event) {
         const tab = event.target.closest(".org-tab");
         if (!tab) {
@@ -641,6 +809,15 @@
         }
         if (pane === "logs") {
           loadLogs();
+        }
+        if (pane === "board") {
+          loadBoardRank();
+        }
+        if (pane === "values") {
+          loadValues();
+        }
+        if (pane === "notices") {
+          loadNotices();
         }
       });
 
@@ -747,9 +924,56 @@
         });
       }
 
+      postForm(valueForm, "/api/people/org/values", valueError, loadValues);
       postForm(peopleForm, "/api/people", peopleError, loadMembers);
       postForm(shopForm, "/api/people/shops", shopError, loadMembers);
       postForm(grantForm, "/api/people/grants", grantError, loadRights);
+
+      root.querySelector("#notice-add").addEventListener("click", function () {
+        showError(noticeFormError, "");
+        noticeForm.reset();
+        noticeModal.classList.add("show");
+      });
+      root.querySelector("#notice-cancel").addEventListener("click", function () {
+        noticeModal.classList.remove("show");
+      });
+      noticeModal.addEventListener("click", function (event) {
+        if (event.target === noticeModal) {
+          noticeModal.classList.remove("show");
+        }
+      });
+      root.querySelector("#notice-active").addEventListener("click", function () {
+        noticeFilter = "active";
+        loadNotices();
+      });
+      root.querySelector("#notice-all").addEventListener("click", function () {
+        noticeFilter = "all";
+        loadNotices();
+      });
+      noticeForm.addEventListener("submit", function (event) {
+        event.preventDefault();
+        showError(noticeFormError, "");
+        fetch("/api/people/org/notices", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(Object.fromEntries(new FormData(noticeForm).entries()))
+        })
+          .then(function (res) {
+            return res.json().then(function (data) {
+              return { res: res, data: data };
+            });
+          })
+          .then(function (result) {
+            if (!result.res.ok || !result.data.ok) {
+              showError(noticeFormError, result.data.error || "发布失败");
+              return;
+            }
+            noticeModal.classList.remove("show");
+            noticeForm.reset();
+            return loadNotices();
+          });
+      });
 
       peopleTbody.addEventListener("change", function (event) {
         const select = event.target.closest("select[data-id]");
