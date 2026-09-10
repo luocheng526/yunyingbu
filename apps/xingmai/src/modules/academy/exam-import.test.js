@@ -85,6 +85,9 @@ test("academy.js has exam import and countdown", () => {
   assert.match(js, /academy-exam-detail/);
   assert.match(js, /academy-exam-shell/);
   assert.match(js, /考试内容/);
+  assert.match(js, /导入试卷请到/);
+  assert.match(js, /examUploadPaneHtml/);
+  assert.doesNotMatch(js, /importForm/);
   assert.doesNotMatch(js, /academy-exam-back/);
   assert.doesNotMatch(js, /点上面一档/);
   assert.doesNotMatch(js, /选晋升档，导入考试文档出卷/);
