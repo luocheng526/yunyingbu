@@ -591,61 +591,88 @@ html[data-theme="pink"] .ch-metrics {
   border-top: 1px solid var(--ch-line, var(--xm-line, #ececec));
   border-radius: 6px;
 }
-.gd-grain,
-.gd-head-tools {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-}
-.gd-head-tools {
-  margin-left: auto;
-}
-.gd-head-tools button {
-  height: 26px;
-  padding: 0 8px;
-  border: 0;
-  background: transparent;
-  color: var(--ch-ink, var(--xm-ink));
-  opacity: 0.65;
-  font-size: 12px;
-}
 .gd-metrics {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
-  margin: 0 0 14px;
+  margin: 0 0 16px;
 }
 .gd-card {
-  position: relative;
-  min-height: 92px;
-  padding: 10px 12px 12px 14px;
+  min-height: 112px;
+  padding: 10px 12px 12px;
   background: var(--ch-card, var(--xm-card, #fff));
   border: 1px solid var(--ch-line, var(--xm-line, #ececec));
   border-radius: 6px;
+  cursor: pointer;
 }
-.gd-mark {
-  position: absolute;
-  left: 0;
-  top: 10px;
-  width: 3px;
-  height: 14px;
-  border-radius: 0 2px 2px 0;
+.gd-card-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.gd-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex: 0 0 auto;
 }
 .gd-card .label {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 13px;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.gd-card .hint,
-.gd-card .extra {
+.gd-date,
+.gd-more {
+  flex: 0 0 auto;
+  font-size: 11px;
+  opacity: 0.45;
+}
+.gd-more {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0 2px;
+  line-height: 1;
+}
+.gd-card .hint {
   margin-top: 4px;
   font-size: 11px;
-  opacity: 0.5;
+  opacity: 0.45;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gd-card .extra {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.45;
 }
 .gd-card .value {
-  margin-top: 8px;
-  font-size: 22px;
+  margin-top: 10px;
+  font-size: 26px;
   font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.gd-card.is-on {
+  background: var(--ch-primary, #3d8bfd);
+  border-color: var(--ch-primary, #3d8bfd);
+  color: #fff;
+}
+.gd-card.is-on .gd-dot {
+  background: #fff !important;
+}
+.gd-card.is-on .hint,
+.gd-card.is-on .extra,
+.gd-card.is-on .gd-date,
+.gd-card.is-on .gd-more {
+  opacity: 0.85;
 }
 .gd-add {
   display: flex;
@@ -653,6 +680,17 @@ html[data-theme="pink"] .ch-metrics {
   justify-content: center;
   font-size: 28px;
   opacity: 0.35;
+  cursor: default;
+  border-style: dashed;
+}
+.gd-thumb {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  margin-right: 8px;
+  border-radius: 4px;
+  background: #d9d9d9;
+  vertical-align: middle;
 }
 .gd-filters {
   gap: 8px;

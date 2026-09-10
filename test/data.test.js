@@ -186,12 +186,18 @@ test("data child pages and demo APIs respond", async () => {
     assert.equal(goodsPage.res.status, 200);
     assert.match(goodsPage.text, /data-goods\.js/);
     assert.match(goodsPage.text, /id="board"/);
+    const goodsJs = await get(base, "/data-goods.js");
+    assert.match(goodsJs.text, /只看精选/);
+    assert.match(goodsJs.text, /08\/13/);
+    assert.doesNotMatch(goodsJs.text, /综合指标/);
     assert.doesNotMatch(goodsPage.text, /商品周报/);
     const goodsBoard = await get(base, "/api/data/goods/board");
     assert.equal(goodsBoard.res.status, 200);
     const goods = JSON.parse(goodsBoard.text);
     assert.equal(goods.title, "商品数据总览");
     assert.equal(goods.cards.length, 14);
+    assert.equal(goods.selectedKey, "all");
+    assert.equal(goods.cardDate, "08/13");
     assert.match(JSON.stringify(goods), /SAWAAG德国儿童枕头/);
     const goodsDemo = await get(base, "/data/goods-demo.json");
     assert.equal(goodsDemo.res.status, 200);

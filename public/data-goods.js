@@ -13,7 +13,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=goods-tpl";
+      link.href = "/data-pages.css?v=goods-tpl3";
       document.head.appendChild(link);
     }
   }
@@ -56,8 +56,13 @@
       "</tr>";
     const body = (block.rows || [])
       .map(function (row) {
+        const thumb = row.thumb
+          ? '<span class="gd-thumb" aria-hidden="true"></span>'
+          : '<span class="ch-bar"></span>';
         return (
-          "<tr><td class=\"ch-name\"><span class=\"ch-bar\"></span><span>" +
+          "<tr><td class=\"ch-name\">" +
+          thumb +
+          "<span>" +
           escapeHtml(row.name) +
           "</span></td>" +
           (row.cells || [])
@@ -79,6 +84,7 @@
       '<label class="ch-pick gd-search"><input type="search" disabled placeholder="输入商品名/商品ID/商品链接编码" /></label>' +
       "</div>" +
       '<div class="ch-table-bar">' +
+      '<label class="ch-zero"><input type="checkbox" disabled /> 只看精选</label>' +
       '<label class="ch-zero"><input type="checkbox" disabled /> 只看负责人</label>' +
       '<label class="ch-zero"><input type="checkbox" disabled /> 只看有效商品</label>' +
       '<label class="ch-zero"><input type="checkbox" disabled /> 显示0</label>' +
@@ -107,20 +113,8 @@
       if (dead || !payload || !board) {
         return;
       }
-      const views = (payload.views || [])
-        .map(function (view) {
-          const current = view.href === "/data/goods";
-          return (
-            '<a href="' +
-            escapeHtml(view.href) +
-            '"' +
-            (current ? ' class="is-active"' : "") +
-            ">" +
-            escapeHtml(view.label) +
-            "</a>"
-          );
-        })
-        .join("");
+      const selected = payload.selectedKey || "all";
+      const cardDate = payload.cardDate || "08/13";
       const ranges = (payload.ranges || [])
         .map(function (label) {
           return (
@@ -136,36 +130,38 @@
         .join("");
       const cards = (payload.cards || [])
         .map(function (card) {
+          const on = card.key === selected;
           return (
-            '<article class="gd-card"><span class="gd-mark" style="background:' +
+            '<article class="gd-card' +
+            (on ? " is-on" : "") +
+            '" data-card="' +
+            escapeHtml(card.key) +
+            '"><div class="gd-card-top"><span class="gd-dot" style="background:' +
             escapeHtml(card.color || "#8c8c8c") +
-            '"></span><div class="label">' +
+            '"></span><span class="label">' +
             escapeHtml(card.label) +
-            '</div><div class="hint">' +
-            escapeHtml(card.hint || "") +
-            '</div><div class="value">' +
+            '</span><span class="gd-date">' +
+            escapeHtml(cardDate) +
+            '</span><button type="button" class="gd-more" disabled>⋯</button></div>' +
+            (card.hint ? '<div class="hint">' + escapeHtml(card.hint) + "</div>" : "") +
+            '<div class="value">' +
             escapeHtml(card.value) +
-            '</div><div class="extra">' +
+            '</div><div class="extra"><span>' +
             escapeHtml(card.share || "") +
-            " · " +
+            "</span><span>" +
             escapeHtml(card.delta || "") +
-            "</div></article>"
+            "</span></div></article>"
           );
         })
         .join("");
       board.innerHTML =
-        '<div class="ch-top"><div class="ch-views">' +
-        views +
-        '</div><div class="ch-right"><span class="ch-time">（统计时间：' +
+        '<div class="ch-top"><div class="ch-title">商品数据总览</div>' +
+        '<div class="ch-right"><span class="ch-time">（统计时间：' +
         escapeHtml(payload.dateLabel || "") +
         "）</span>" +
         '<div class="ch-ranges">' +
         ranges +
         "</div></div></div>" +
-        '<div class="ch-summary"><span class="ch-sum-title">综合指标</span>' +
-        '<label class="gd-grain"><input type="radio" checked disabled /> SPU</label>' +
-        '<span class="gd-head-tools"><button type="button" disabled>默认视图</button>' +
-        '<button type="button" disabled>卡片设计</button></span></div>' +
         '<div class="gd-metrics">' +
         cards +
         '<article class="gd-card gd-add" aria-hidden="true">+</article></div>' +
@@ -176,6 +172,12 @@
       const rangeBtn = event.target.closest("button[data-range]");
       if (rangeBtn && payload) {
         payload.range = rangeBtn.getAttribute("data-range");
+        render();
+        return;
+      }
+      const card = event.target.closest("article[data-card]");
+      if (card && payload) {
+        payload.selectedKey = card.getAttribute("data-card");
         render();
       }
     });

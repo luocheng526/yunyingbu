@@ -226,11 +226,9 @@ export function getGoodsBoard() {
     range: "7天",
     dateLabel: "2026年9月9日",
     ranges: ["7天", "30天", "昨日", "周", "月", "年", "自定义"],
-    views: [
-      { label: "渠道总览", href: "/data/overview" },
-      { label: "商品数据总览", href: "/data/goods" }
-    ],
-    grain: "SPU",
+    views: [{ label: "商品数据总览", href: "/data/goods" }],
+    selectedKey: "all",
+    cardDate: "08/13",
     cards: [
       { key: "all", label: "全部", hint: "", color: "#8c8c8c", ...zero },
       { key: "highMargin", label: "高毛利高利润单品", hint: "净商品成本占比(支付) < 30%", color: "#cf1322", ...zero },
@@ -255,8 +253,8 @@ export function getGoodsBoard() {
         "推广SKU",
         "成长阶段",
         "销售单数",
-        "净销售单数",
-        "支付金额",
+        "净销售单数 (支付)",
+        "支付金额 (支付)",
         "无效金额 (标注)",
         "退款金额",
         "退款率 (移)"
@@ -271,6 +269,7 @@ export function getGoodsBoard() {
         {
           name: "SPU:10031884709988 SAWAAG德国儿童枕头-12岁护颈枕",
           kind: "sku",
+          thumb: true,
           store: "张望跨境专卖店",
           cells: ["张望跨境专卖店", "--", "--", "9", "9", "3,177.80", "0", "0", "0.00%"]
         }
