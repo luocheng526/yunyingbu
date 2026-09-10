@@ -62,6 +62,7 @@ test("academy.js opens the handbook editor", () => {
   assert.match(js, /pane\.hidden = logsOn/);
   assert.match(js, /setConsoleView/);
   assert.match(js, /is-logs/);
+  assert.match(js, /setProperty\(\"display\", \"none\", \"important\"\)/);
   assert.match(js, /stripLogMenu/);
   assert.doesNotMatch(js, /data-academy-logs/);
   assert.doesNotMatch(js, /XmModules\["\/academy\/logs"\]/);
