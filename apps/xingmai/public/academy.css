@@ -1,4 +1,4 @@
-/* xm-academy-catalog 0.1.190 */
+/* xm-academy-catalog 0.1.191 */
 .academy-page {
   max-width: 1180px;
 }
@@ -351,8 +351,18 @@ html[data-theme="dark"] .academy-actions button.ghost {
   color: inherit;
 }
 
-.academy-body-label {
-  align-items: start;
+#academy-section .academy-upload {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+#academy-section .academy-upload label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  grid-template-columns: none;
 }
 
 .academy-upload h3 {
