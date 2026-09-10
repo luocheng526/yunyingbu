@@ -31,15 +31,15 @@
 
   function sparkSvg(points) {
     const vals = points && points.length ? points : [20, 24, 22, 30, 28, 36];
-    const w = 120;
-    const h = 36;
+    const w = 140;
+    const h = 40;
     const min = Math.min.apply(null, vals);
     const max = Math.max.apply(null, vals);
     const span = max - min || 1;
     const d = vals
       .map(function (v, i) {
         const x = (i / (vals.length - 1)) * w;
-        const y = h - ((v - min) / span) * (h - 4) - 2;
+        const y = h - ((v - min) / span) * (h - 6) - 3;
         return (i === 0 ? "M" : "L") + x.toFixed(1) + " " + y.toFixed(1);
       })
       .join(" ");
@@ -48,27 +48,57 @@
       w +
       " " +
       h +
-      '" aria-hidden="true"><path d="' +
+      '" preserveAspectRatio="none" aria-hidden="true"><path d="' +
       d +
-      '" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>'
+      '" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>'
     );
   }
 
-  function tableHtml(block) {
+  function nameCell(row) {
+    const kind = row.kind || "";
+    const mark =
+      kind === "jd"
+        ? '<span class="ch-logo ch-logo-jd" aria-hidden="true">京</span>'
+        : kind === "shop"
+          ? '<span class="ch-logo ch-logo-shop" aria-hidden="true"></span>'
+          : "";
+    return (
+      '<td class="ch-name"><span class="ch-bar"></span>' +
+      mark +
+      "<span>" +
+      escapeHtml(row.name) +
+      "</span></td>"
+    );
+  }
+
+  function toolButtons() {
+    return (
+      '<div class="ch-tools">' +
+      '<button type="button" disabled>打标</button>' +
+      '<button type="button" disabled>目标</button>' +
+      '<button type="button" class="is-on" disabled>列表</button>' +
+      '<button type="button" disabled>周期</button>' +
+      '<button type="button" disabled>图表</button>' +
+      '<button type="button" disabled>个人默认视图</button>' +
+      '<button type="button" disabled>更多数据</button>' +
+      '<button type="button" disabled>导出</button></div>'
+    );
+  }
+
+  function tableHtml(block, extraLeft) {
     const head =
       "<tr>" +
-      block.columns
+      (block.columns || [])
         .map(function (col) {
-          return "<th>" + escapeHtml(col) + "</th>";
+          return "<th>" + escapeHtml(col) + " <i></i></th>";
         })
         .join("") +
       "</tr>";
     const body = (block.rows || [])
       .map(function (row) {
         return (
-          "<tr><td>" +
-          escapeHtml(row.name) +
-          "</td>" +
+          "<tr>" +
+          nameCell(row) +
           (row.cells || [])
             .map(function (cell) {
               return "<td>" + escapeHtml(cell) + "</td>";
@@ -82,8 +112,11 @@
       '<section class="ch-table">' +
       '<div class="ch-table-bar"><strong>' +
       escapeHtml(block.title) +
-      '</strong><label class="ch-zero"><input type="checkbox" disabled /> 显示零</label>' +
-      '<span class="ch-tools">打标 · 目标 · 列表 · 周期 · 图表 · 个人视图 · 更多数据 · 导出</span></div>' +
+      "</strong>" +
+      (extraLeft || "") +
+      '<label class="ch-zero"><input type="checkbox" disabled /> 显示数字</label>' +
+      toolButtons() +
+      "</div>" +
       '<div class="ch-table-wrap"><table><thead>' +
       head +
       "</thead><tbody>" +
@@ -155,32 +188,39 @@
         .join("");
       const lists =
         section === "渠道列表"
-          ? tableHtml(payload.channelTable) + tableHtml(payload.shopTable)
+          ? tableHtml(payload.channelTable) +
+            tableHtml(
+              payload.shopTable,
+              '<label class="ch-pick">请选择店铺 <select disabled><option>请选择店铺</option></select></label>'
+            )
           : '<p class="ch-empty">「' + escapeHtml(section) + "」为示例，尚未接入。</p>";
       board.innerHTML =
         '<div class="ch-top"><div class="ch-title">渠道总览</div>' +
-        '<div class="ch-time">统计时间：' +
+        '<div class="ch-right"><span class="ch-time">（统计时间：' +
         escapeHtml(payload.dateLabel || "") +
-        "</div>" +
+        "）</span>" +
         '<div class="ch-ranges">' +
         ranges +
-        "</div></div>" +
-        '<div class="ch-summary"><span>综合指标</span><b>渠道 ' +
-        escapeHtml(payload.summary.channels) +
-        "个</b><b>店铺 " +
-        escapeHtml(payload.summary.shops) +
+        "</div></div></div>" +
+        '<div class="ch-summary"><span class="ch-sum-title">综合指标</span>' +
+        '<b>渠道 ' +
+        escapeHtml(String(payload.summary.channels)) +
+        "个</b>" +
+        "<b>店铺 " +
+        escapeHtml(String(payload.summary.shops)) +
         '个</b><button type="button" class="ch-set" disabled>设定指标</button></div>' +
         '<div class="ch-metrics"><article class="ch-card ch-hero"><div class="label">' +
         escapeHtml(hero.label || "实时销售指数") +
         "</div>" +
         sparkSvg(hero.spark) +
+        '<div class="ch-axis"><span>00:00</span><span>12:00</span><span>23:00</span></div>' +
         '<div class="value">' +
         escapeHtml(hero.value || "") +
         '</div><div class="delta ' +
         (down ? "is-down" : "is-up") +
         '">' +
         (down ? "↓ " : "↑ ") +
-        escapeHtml(Math.abs(Number(hero.delta || 0))) +
+        escapeHtml(String(Math.abs(Number(hero.delta || 0)))) +
         "%</div></article>" +
         cards +
         "</div>" +

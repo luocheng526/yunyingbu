@@ -47,7 +47,7 @@
 
   function mountOverview(root) {
     ensureSheet();
-    return loadScript("/data-overview.js?v=xm-module").then(function () {
+    return loadScript("/data-overview.js?v=channel-tpl").then(function () {
       if (typeof window.XmDataCreateDashboard === "function") {
         return window.XmDataCreateDashboard(root);
       }

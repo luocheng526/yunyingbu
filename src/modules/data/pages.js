@@ -90,7 +90,7 @@ export function getTeamOverview() {
       { key: "pay", label: "支付金额 (支付)", value: "837,247.17" },
       { key: "orders", label: "销售单数 (支付)", value: "3,174" },
       { key: "ad", label: "推广花费 (支付预估)", value: "348,174.63", extra: "推广占比 41.59%" },
-      { key: "profit", label: "利润 (支付预估)", value: "415,136.64" },
+      { key: "profit", label: "利润 (支付预估)", value: "415,136.64", extra: "毛利率 49.58%" },
       { key: "margin", label: "大毛利率", value: "49.58%" },
       { key: "custom", label: "自定义费用", value: "0" },
       { key: "refundRate", label: "退款率 (按金额)", value: "27.02%" },
@@ -103,10 +103,12 @@ export function getTeamOverview() {
       rows: [
         {
           name: "汇总",
+          kind: "sum",
           cells: ["165,362.13", "--", "3,194", "3,174", "837,247.17", "0", "226,229.63", "27.02%", "825,966.57"]
         },
         {
           name: "京东",
+          kind: "jd",
           cells: ["165,362.13", "--", "3,194", "3,174", "837,247.17", "0", "226,229.63", "27.02%", "825,966.57"]
         }
       ]
@@ -128,10 +130,12 @@ export function getTeamOverview() {
       rows: [
         {
           name: "当页汇总",
+          kind: "sum",
           cells: ["118,700.32", "0.0000%", "2,289", "2,273", "663,906.61", "0", "184,552.98", "27.80%", "654,123.66"]
         },
         {
           name: "RASW家居旗舰店",
+          kind: "shop",
           cells: ["12,889.30", "0.0000%", "205", "202", "70,190.95", "0", "18,467.65", "26.31%", "68,877.95"]
         }
       ]
