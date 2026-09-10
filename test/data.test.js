@@ -172,10 +172,17 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(shopsPage.text, /id="board"/);
     assert.doesNotMatch(shopsPage.text, /店铺周报/);
     assert.doesNotMatch(shopsPage.text, /id="data-subnav"/);
+    const shopsJs = await get(base, "/data-shops.js");
+    assert.match(shopsJs.text, /店铺总览/);
+    assert.doesNotMatch(shopsJs.text, /渠道总览/);
     const shopsApi = await get(base, "/api/data/shops");
     assert.equal(shopsApi.res.status, 200);
     const shops = JSON.parse(shopsApi.text);
     assert.equal(shops.title, "店铺总览");
+    assert.equal(
+      (shops.views || []).some((v) => v.label === "渠道总览"),
+      false
+    );
     assert.equal(shops.shopTable.rows.length, 13);
     assert.match(JSON.stringify(shops), /HYGEAR医疗保健旗舰店/);
     assert.match(JSON.stringify(shops), /请选择标签|30天/);

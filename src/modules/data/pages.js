@@ -166,10 +166,7 @@ export function getShopOverview() {
     range: "7天",
     dateLabel: "2026年9月9日",
     ranges: ["7天", "30天", "昨日", "年", "自定义"],
-    views: [
-      { label: "渠道总览", href: "/data/overview" },
-      { label: "店铺总览", href: "/data/shops" }
-    ],
+    views: [{ label: "店铺总览", href: "/data/shops" }],
     shopTable: {
       title: "店铺列表",
       columns,

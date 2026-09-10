@@ -112,20 +112,6 @@
       if (dead || !payload || !board) {
         return;
       }
-      const views = (payload.views || [])
-        .map(function (view) {
-          const current = view.href === "/data/shops";
-          return (
-            '<a href="' +
-            escapeHtml(view.href) +
-            '"' +
-            (current ? ' class="is-active"' : "") +
-            ">" +
-            escapeHtml(view.label) +
-            "</a>"
-          );
-        })
-        .join("");
       const ranges = (payload.ranges || [])
         .map(function (label) {
           return (
@@ -140,9 +126,8 @@
         })
         .join("");
       board.innerHTML =
-        '<div class="ch-top"><div class="ch-views">' +
-        views +
-        '</div><div class="ch-right"><span class="ch-time">（统计时间：' +
+        '<div class="ch-top"><div class="ch-title">店铺总览</div>' +
+        '<div class="ch-right"><span class="ch-time">（统计时间：' +
         escapeHtml(payload.dateLabel || "") +
         "）</span>" +
         '<div class="ch-ranges">' +

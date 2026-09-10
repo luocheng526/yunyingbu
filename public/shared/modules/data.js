@@ -85,7 +85,7 @@
 
   function mountShopDashboard(root) {
     ensureSheet();
-    return loadScript("/data-shops.js?v=shop-tpl").then(function () {
+    return loadScript("/data-shops.js?v=shop-tpl3").then(function () {
       if (typeof window.XmDataCreateShopDashboard === "function") {
         return window.XmDataCreateShopDashboard(root);
       }

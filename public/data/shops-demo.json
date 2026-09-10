@@ -15,10 +15,6 @@
   ],
   "views": [
     {
-      "label": "渠道总览",
-      "href": "/data/overview"
-    },
-    {
       "label": "店铺总览",
       "href": "/data/shops"
     }
