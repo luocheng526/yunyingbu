@@ -99,7 +99,9 @@ test("academy.js enables upload, watermark, and blocks original download", () =>
   assert.match(js, /academy-wm/);
   assert.match(js, /watermarkText/);
   assert.match(js, /不提供原件下载/);
-  assert.match(js, /postForm\("\/api\/academy\/courses"/);
+  assert.match(js, /postCourseFile/);
+  assert.match(js, /application\/octet-stream/);
+  assert.match(js, /credentials: "include"/);
   assert.doesNotMatch(js, /source\.pptx/);
   assert.doesNotMatch(js, /第 1 步/);
   assert.doesNotMatch(js, /第 2 步/);
@@ -181,4 +183,39 @@ test("upload pptx, turn pages, never serve original", async () => {
     headers: { cookie, Accept: "application/json" }
   });
   assert.equal(download.status, 404);
+});
+
+test("raw octet-stream pptx upload keeps session and rejects anonymous", async () => {
+  const buf = await makePptx();
+  const qs = new URLSearchParams({
+    title: "精准转化课",
+    category: "转化与页面",
+    published: "1",
+    filename: "商学转化.pptx"
+  });
+  const anon = await fetch(`${base}/api/academy/courses?${qs}`, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/octet-stream" },
+    body: buf
+  });
+  assert.equal(anon.status, 401);
+  const anonJson = await anon.json();
+  assert.match(anonJson.error, /未登录/);
+  const cookie = await loginCookie();
+  await resetPptCoursesForTests();
+  const createdRes = await fetch(`${base}/api/academy/courses?${qs}`, {
+    method: "POST",
+    headers: {
+      cookie,
+      Accept: "application/json",
+      "Content-Type": "application/octet-stream"
+    },
+    body: buf
+  });
+  assert.equal(createdRes.status, 201);
+  const created = await createdRes.json();
+  assert.equal(created.ok, true);
+  assert.equal(created.course.title, "精准转化课");
+  assert.equal(created.course.originalName, "商学转化.pptx");
+  assert.equal(created.course.pageCount, 2);
 });

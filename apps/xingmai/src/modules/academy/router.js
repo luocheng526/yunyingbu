@@ -10,7 +10,7 @@ import {
 } from "./handbook-store.js";
 import { appendHandbookLog, listHandbookLogs } from "./log-store.js";
 import { canEditHandbook } from "./framework.js";
-import { parseMultipart } from "./multipart.js";
+import { isRawUpload, parseMultipart, readRawBody } from "./multipart.js";
 import {
   examAccept,
   getExamPaper,
@@ -113,18 +113,46 @@ academyRouter.get("/courses", async (req, res) => {
   res.json({ ok: true, ...(await courses()) });
 });
 
+async function pptUploadPayload(req) {
+  if (isRawUpload(req)) {
+    const title = String(req.query.title || "").trim();
+    const category = String(req.query.category || "").trim();
+    const published = String(req.query.published || "1");
+    const filename = String(req.query.filename || "course.pptx").trim() || "course.pptx";
+    const buffer = await readRawBody(req);
+    return {
+      title,
+      category,
+      published,
+      file: {
+        field: "file",
+        filename,
+        type: "application/octet-stream",
+        buffer
+      }
+    };
+  }
+  const { fields, file } = await parseMultipart(req);
+  return {
+    title: fields.title,
+    category: fields.category,
+    published: fields.published,
+    file
+  };
+}
+
 academyRouter.post("/courses", async (req, res) => {
   const user = requireUser(req, res);
   if (!user) {
     return;
   }
   try {
-    const { fields, file } = await parseMultipart(req);
+    const payload = await pptUploadPayload(req);
     const course = await createPptCourse({
-      title: fields.title,
-      category: fields.category,
-      published: fields.published,
-      file,
+      title: payload.title,
+      category: payload.category,
+      published: payload.published,
+      file: payload.file,
       createdBy: user.username
     });
     res.status(201).json({ ok: true, course, download: false });
