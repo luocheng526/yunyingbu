@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.121 */
+/* xm-fast-shell 0.1.122 */
 (function () {
-  const ASSET_VER = "0.1.121";
+  const ASSET_VER = "0.1.122";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -357,6 +357,7 @@
       href +
       '" tabindex="0" aria-selected="' +
       (active ? "true" : "false") +
+      (pinned ? "" : ' title="双击关闭"') +
       '"><span class="xm-tab-label">' +
       label +
       "</span>" +
@@ -627,6 +628,14 @@
       if (href && href !== current) {
         go(href);
       }
+    });
+    bar.addEventListener("dblclick", function (event) {
+      const tab = event.target.closest(".xm-tab");
+      if (!tab) {
+        return;
+      }
+      event.preventDefault();
+      closeTab(tab.getAttribute("data-href"));
     });
   }
 
