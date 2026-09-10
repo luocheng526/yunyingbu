@@ -50,11 +50,14 @@ test("login page is public", async () => {
   assert.doesNotMatch(html, /rel="icon"[^>]+href="\/login-logo\.png"/);
   assert.doesNotMatch(html, /href="data:image\/png;base64,/);
   assert.match(html, /ChangeMe123!/);
-  assert.match(html, /login\.css\?v=0\.1\.159/);
+  assert.match(html, /login\.css\?v=0\.1\.160/);
   assert.match(html, /login-foot-pair/);
   assert.match(html, /DATA · OPERATION · ORGANIZATIONAL · TALENT · GROWTH/);
-  assert.match(loginCss, /LoginPage 0\.1\.159/);
-  assert.match(loginCss, /\.hero-brand\s*\{[^}]*margin-left:\s*clamp\(40px,\s*4\.6vw,\s*80px\)/s);
+  assert.match(html, /<small><b>TOGETHER<\/b><b>FOR A BRIGHTER<\/b><b>FUTURE<\/b><\/small>/);
+  assert.match(loginCss, /LoginPage 0\.1\.160/);
+  assert.match(loginCss, /\.hero-brand\s*\{[^}]*margin-left:\s*0/s);
+  assert.match(loginCss, /#ffffff 28%/);
+  assert.match(loginCss, /\.login-foot-pair small\s*\{[^}]*white-space:\s*nowrap/s);
   assert.match(loginCss, /transform:\s*scale\(0\.93\)/);
   assert.match(loginCss, /bottom:\s*clamp\(52px,\s*6\.2vh,\s*84px\)/);
   assert.doesNotMatch(html, /\/shared\/nav\.js/);

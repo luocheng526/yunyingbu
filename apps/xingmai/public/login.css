@@ -1,4 +1,4 @@
-/* LoginPage 0.1.159 — logo shift right; hero-copy 93%; foot ZH up / EN below */
+/* LoginPage 0.1.160 — logo left; whiter title; hero-foot align; login-foot EN one line */
 :root {
   --login-bg: #f7f7f4;
   --login-ink: #14120b;
@@ -130,7 +130,7 @@ body {
 
 .hero-brand {
   flex: 0 0 auto;
-  margin-left: clamp(40px, 4.6vw, 80px);
+  margin-left: 0;
 }
 
 .hero-logo {
@@ -249,7 +249,7 @@ body {
   font-weight: 800;
   letter-spacing: 0.02em;
   overflow: visible;
-  background: linear-gradient(180deg, #ffffff 8%, #d7ecff 48%, #7eb8ff 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #ffffff 28%, #eef6ff 62%, #d2e6ff 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -536,8 +536,8 @@ body {
 
 .login-foot {
   position: absolute;
-  left: 48px;
-  right: 48px;
+  left: 24px;
+  right: 24px;
   bottom: clamp(52px, 6.2vh, 84px);
   margin: 0;
   text-align: center;
@@ -568,17 +568,15 @@ body {
 }
 
 .login-foot-pair small {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  column-gap: 0.2em;
-  width: 0;
+  display: block;
+  white-space: nowrap;
+  width: auto;
   min-width: 100%;
   box-sizing: border-box;
   margin-top: 0.35em;
   opacity: 0.78;
-  font-size: 0.85em;
-  letter-spacing: 0.04em;
+  font-size: 0.78em;
+  letter-spacing: 0.03em;
 }
 
 .login-foot-pair small b {
