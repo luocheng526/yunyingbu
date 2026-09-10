@@ -1,4 +1,4 @@
-/* xm-sider-narrow 0.1.128 */
+/* xm-sider-narrow 0.1.130 */
 :root,
 html[data-theme="light"] {
   --xm-sider: #ffffff;
@@ -931,6 +931,15 @@ html[data-theme="dark"] .xm-content [style*="background: white"] {
 .xm-notice-link:hover,
 .xm-notice-more:hover {
   color: var(--xm-primary);
+}
+
+.xm-notice-link.is-important {
+  color: #cf1322 !important;
+  font-weight: 600;
+}
+
+.xm-notice-link.is-important:hover {
+  color: #a8071a !important;
 }
 
 .xm-notice-more {

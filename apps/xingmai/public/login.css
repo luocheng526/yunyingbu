@@ -1,4 +1,4 @@
-/* LoginPage 0.1.161 — title 星脉甄选管理系统; logo at yellow-box left */
+/* LoginPage 0.1.162 — logo a bit more left; title 星脉甄选管理系统 */
 :root {
   --login-bg: #f7f7f4;
   --login-ink: #14120b;
@@ -130,7 +130,7 @@ body {
 
 .hero-brand {
   flex: 0 0 auto;
-  margin-left: 0;
+  margin-left: clamp(-20px, -1.6vw, -12px);
 }
 
 .hero-logo {
