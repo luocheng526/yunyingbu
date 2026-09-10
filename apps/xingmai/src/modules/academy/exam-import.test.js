@@ -79,6 +79,9 @@ test("academy.js has exam import and countdown", () => {
   assert.match(js, /academy-exam-upload/);
   assert.match(js, /开始考试/);
   assert.match(js, /academy-exam-template\.csv/);
+  assert.match(js, /不必套选择题模板/);
+  assert.match(js, /待阅卷/);
+  assert.match(js, /已出分/);
   assert.match(js, /academy-exam-detail/);
   assert.match(js, /academy-exam-shell/);
   assert.match(js, /考试内容/);
@@ -150,3 +153,87 @@ test("import exam document, hide answers, grade, block original", async () => {
   assert.equal(missed.correct, 0);
   assert.equal(missed.passed, false);
 });
+
+test("python reader parses mixed word-like exam text", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "xm-exam-mix-"));
+  const src = join(dir, "week.txt");
+  await writeFile(
+    src,
+    [
+      "一、选择题",
+      "1. 搜索自然流量主要看哪个入口",
+      "A. 搜索框和搜索页",
+      "B. 客服会话",
+      "答案：A",
+      "二、填空题",
+      "2. 高溢价=人群筛选×______",
+      "答案：价值放大",
+      "三、问答题",
+      "3. 从新人到带团队要过哪几层",
+      "答案：新人助理到主管"
+    ].join("\n")
+  );
+  execFileSync("python3", [new URL("./read-exam.py", import.meta.url).pathname, src, dir], { timeout: 10000 });
+  const parsed = JSON.parse(await readFile(join(dir, "questions.json"), "utf8"));
+  assert.equal(parsed.questions.length, 3);
+  assert.equal(parsed.questions[0].type, "choice");
+  assert.equal(parsed.questions[1].type, "fill");
+  assert.equal(parsed.questions[2].type, "qa");
+  assert.equal(parsed.questions[2].grade, "dual");
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("mixed paper auto-grades fill and waits for dual graders", async () => {
+  const cookie = await loginCookie();
+  await resetExamPapersForTests();
+  const headers = { cookie, Accept: "application/json" };
+  const buf = Buffer.from(
+    JSON.stringify({
+      questions: [
+        { stem: "搜索入口", options: ["搜索页", "客服"], answer: "A", points: 40 },
+        { stem: "高溢价=人群筛选×______", type: "fill", answer: "价值放大", points: 20 },
+        { stem: "成长路径怎么走", type: "qa", answer: "新人到主管", points: 40 }
+      ]
+    })
+  );
+  const pack = multipart({ trackId: "newbie" }, { filename: "mix.json", buffer: buf });
+  const createdRes = await fetch(`${base}/api/academy/exams/papers`, {
+    method: "POST",
+    headers: { cookie, Accept: "application/json", "Content-Type": pack.type },
+    body: pack.body
+  });
+  assert.equal(createdRes.status, 201);
+  const paper = await (await fetch(`${base}/api/academy/exams/tracks/newbie`, { headers })).json();
+  assert.equal(paper.paper.questions[1].type, "fill");
+  assert.equal(paper.paper.questions[2].type, "qa");
+  assert.equal(paper.paper.questions[2].answer, undefined);
+  assert.deepEqual(paper.track.graders, ["主管", "经理"]);
+  assert.ok(paper.gradeSeats.includes("主管"));
+  const submitted = await fetch(`${base}/api/academy/exams/tracks/newbie/submit`, {
+    method: "POST",
+    headers: { cookie, Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ answers: { 1: "A", 2: "价值放大", 3: "新人助理再带团队" } })
+  });
+  assert.equal(submitted.status, 200);
+  const result = (await submitted.json()).result;
+  assert.equal(result.status, "grading");
+  assert.equal(result.passed, false);
+  assert.ok(result.attempt && result.attempt.id);
+  const first = await fetch(`${base}/api/academy/exams/attempts/${result.attempt.id}/grade`, {
+    method: "POST",
+    headers: { cookie, Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ seat: "主管", scores: { 3: 30 } })
+  });
+  assert.equal(first.status, 200);
+  const second = await fetch(`${base}/api/academy/exams/attempts/${result.attempt.id}/grade`, {
+    method: "POST",
+    headers: { cookie, Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ seat: "经理", scores: { 3: 40 } })
+  });
+  assert.equal(second.status, 200);
+  const done = (await second.json()).attempt;
+  assert.equal(done.status, "done");
+  assert.equal(done.score, 95);
+  assert.equal(done.passed, true);
+});
+

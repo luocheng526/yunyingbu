@@ -589,6 +589,33 @@ main.page.academy-page,
   font-size: 13px;
 }
 
+.academy-fill,
+.academy-qa,
+.academy-grade input,
+.academy-grade select {
+  width: 100%;
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--xm-line, #e5e6eb);
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.academy-qa {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.academy-grade {
+  border: 1px solid var(--xm-line, #e5e6eb);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .academy-upload {
   display: flex;
   flex-wrap: wrap;

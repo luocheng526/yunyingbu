@@ -33,13 +33,16 @@ export function canEditHandbook(user) {
 }
 
 export const EXAM_TRACKS = [
-  { id: "newbie", name: "新人考试", from: "新人", to: "助理", minutes: 30, questions: 20, passScore: 80 },
-  { id: "assistant-regular", name: "助理转正考试", from: "助理", to: "转正", minutes: 40, questions: 25, passScore: 80 },
-  { id: "assistant-ops", name: "助理转运营考试", from: "助理", to: "运营", minutes: 45, questions: 30, passScore: 80 },
-  { id: "ops-reserve", name: "运营转储备考试", from: "运营", to: "储备", minutes: 50, questions: 30, passScore: 85 },
-  { id: "reserve-supervisor", name: "储备转主管考试", from: "储备", to: "主管", minutes: 60, questions: 35, passScore: 85 },
-  { id: "supervisor-manager", name: "主管转经理考试", from: "主管", to: "经理", minutes: 60, questions: 40, passScore: 85 }
+  { id: "newbie", name: "新人考试", from: "新人", to: "助理", minutes: 30, questions: 20, passScore: 80, graders: ["主管", "经理"] },
+  { id: "assistant-regular", name: "助理转正考试", from: "助理", to: "转正", minutes: 40, questions: 25, passScore: 80, graders: ["主管", "经理"] },
+  { id: "assistant-ops", name: "助理转运营考试", from: "助理", to: "运营", minutes: 45, questions: 30, passScore: 80, graders: ["主管", "经理"] },
+  { id: "ops-reserve", name: "运营转储备考试", from: "运营", to: "储备", minutes: 50, questions: 30, passScore: 85, graders: ["主管", "经理"] },
+  { id: "reserve-supervisor", name: "储备转主管考试", from: "储备", to: "主管", minutes: 60, questions: 35, passScore: 85, graders: ["经理", "总监"] },
+  { id: "supervisor-manager", name: "主管转经理考试", from: "主管", to: "经理", minutes: 60, questions: 40, passScore: 85, graders: ["经理", "总监"] }
 ];
+
+export const EXAM_DIRECTORS = ["罗成"];
+export const EXAM_MANAGERS = ["沈子晗", "韩梦凯"];
 
 export const HANDBOOK_TREE = [
   {
@@ -90,7 +93,47 @@ export function listExamTracks() {
 
 export function getExamTrack(id) {
   const hit = EXAM_TRACKS.find((item) => item.id === String(id || ""));
-  return hit ? { ...hit } : null;
+  return hit ? { ...hit, graders: (hit.graders || []).slice() } : null;
+}
+
+export function examGraderSeats(track) {
+  const row = track && track.graders ? track : getExamTrack(track);
+  return (row && row.graders) || ["主管", "经理"];
+}
+
+export async function postsForUser(user) {
+  const name = String((user && (user.displayName || user.username)) || "").trim();
+  const posts = new Set();
+  if (!name) {
+    return posts;
+  }
+  if (EXAM_DIRECTORS.includes(name) || name === "罗成") {
+    posts.add("总监");
+    posts.add("经理");
+    posts.add("主管");
+  }
+  if (EXAM_MANAGERS.includes(name)) {
+    posts.add("经理");
+  }
+  try {
+    const people = await import("../people/store.js");
+    if (typeof people.listPeople === "function") {
+      const rows = await people.listPeople();
+      const hit = (rows || []).find((row) => row.name === name || String(row.name) === String(user.username));
+      if (hit && hit.role) {
+        posts.add(String(hit.role));
+      }
+    }
+  } catch {
+    /* academy still works if people module is missing */
+  }
+  return posts;
+}
+
+export async function seatsUserCanGrade(user, track) {
+  const need = examGraderSeats(track);
+  const posts = await postsForUser(user);
+  return need.filter((seat) => posts.has(seat));
 }
 
 export function handbookTree() {

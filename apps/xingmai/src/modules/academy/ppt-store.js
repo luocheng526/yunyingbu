@@ -5,12 +5,17 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { dbMode, query } from "../profile/auth.js";
+import { READ_PPTX_PY } from "./read-pptx-script.js";
 
 const execFileAsync = promisify(execFile);
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(ROOT, "data", "courses");
 const READER = join(ROOT, "read-pptx.py");
 const CATEGORIES = ["选品与商品", "流量与投放", "转化与页面", "数据与复盘", "大促节奏"];
+
+async function ensureReader() {
+  await writeFile(READER, READ_PPTX_PY);
+}
 
 let memory = [];
 
@@ -159,6 +164,7 @@ async function ensureSlideRenders(id) {
     return;
   }
   try {
+    await ensureReader();
     await execFileAsync("python3", [READER, source, dir], {
       timeout: 180000,
       env: { ...process.env, HOME: "/tmp", LANG: process.env.LANG || "C.UTF-8" }
@@ -289,6 +295,7 @@ export async function createPptCourse({ title, category, published = true, file,
   const source = join(dir, "source.pptx");
   await writeFile(source, file.buffer);
   try {
+    await ensureReader();
     await execFileAsync("python3", [READER, source, dir], {
       timeout: 180000,
       env: { ...process.env, HOME: "/tmp", LANG: process.env.LANG || "C.UTF-8" }
