@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.224 */
+/* xm-module-academy 0.1.225 */
 (function () {
-  const ASSET_VER = "0.1.224";
+  const ASSET_VER = "0.1.225";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -572,7 +572,13 @@
           if (!box) {
             return;
           }
+          if (!pages.length) {
+            box.hidden = true;
+            box.innerHTML = "";
+            return;
+          }
           box.hidden = false;
+          box.removeAttribute("hidden");
           box.innerHTML = pages
             .map(function (page) {
               const url = page.slide ? page.slide.url : "";
@@ -583,7 +589,9 @@
                 escapeHtml(page.index) +
                 '"><img src="' +
                 escapeHtml(url) +
-                '" alt="" draggable="false" /><span>' +
+                '" alt="第 ' +
+                escapeHtml(page.index) +
+                ' 页" draggable="false" /><span>' +
                 escapeHtml(page.index) +
                 "</span></button>"
               );
@@ -591,8 +599,32 @@
             .join("");
         }
 
+        function paintMissing(course, err) {
+          const panel = root.querySelector("#academy-viewer");
+          const thumbs = root.querySelector("#academy-thumbs");
+          if (thumbs) {
+            thumbs.hidden = true;
+            thumbs.innerHTML = "";
+          }
+          if (!panel) {
+            return;
+          }
+          panel.innerHTML =
+            '<div class="academy-board-head"><h2>课件展示</h2></div>' +
+            "<h3>" +
+            escapeHtml((course && course.title) || "课件") +
+            "</h3>" +
+            '<p class="academy-status error">' +
+            escapeHtml(err || "这一课还没有生成幻灯片。请到「文件上传」重新导入 PPTX。") +
+            "</p>";
+        }
+
         function paintDeck(title) {
           const panel = root.querySelector("#academy-viewer");
+          if (!pages.length || !slideUrl(pageNo)) {
+            paintMissing({ title: title }, "");
+            return;
+          }
           const mark = watermarkText();
           const tiles = new Array(18).fill(escapeHtml(mark)).join(" ");
           paintThumbs();
@@ -625,19 +657,29 @@
             closePreview();
             return Promise.resolve();
           }
+          const panel = root.querySelector("#academy-viewer");
+          if (panel) {
+            panel.innerHTML =
+              '<div class="academy-board-head"><h2>课件展示</h2></div>' +
+              '<p class="academy-empty">正在打开课件，生成幻灯片…</p>';
+          }
           return api("/api/academy/courses/" + encodeURIComponent(id)).then(function (data) {
             if (dead) {
               return data;
             }
             currentId = id;
             previewOn = true;
-            pages = data.pages || [];
-            pageCount = pages.length || Number((data.course && data.course.pageCount) || 1);
+            pages = data.pages || (data.course && data.course.pages) || [];
+            pageCount = pages.length;
             pageNo = 1;
-            paintDeck(data.course && data.course.title);
             root.querySelectorAll(".academy-course").forEach(function (el) {
               el.classList.toggle("is-on", el.getAttribute("data-id") === id);
             });
+            if (!pages.length) {
+              paintMissing(data.course, data.renderError || (data.course && data.course.renderError));
+              return data;
+            }
+            paintDeck(data.course && data.course.title);
             return data;
           });
         }

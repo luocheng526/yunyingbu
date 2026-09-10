@@ -255,7 +255,14 @@ academyRouter.get("/courses/:id", async (req, res) => {
     res.status(404).json({ ok: false, error: "课件不存在" });
     return;
   }
-  res.json({ ok: true, download: false, watermark: true, course: packed, pages: packed.pages });
+  res.json({
+    ok: true,
+    download: false,
+    watermark: true,
+    course: packed,
+    pages: packed.pages || [],
+    renderError: packed.renderError || ""
+  });
 });
 
 function denyExamOriginal(res) {
