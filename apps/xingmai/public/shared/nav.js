@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.125 */
+/* xm-fast-shell 0.1.126 */
 (function () {
-  const ASSET_VER = "0.1.125";
+  const ASSET_VER = "0.1.126";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -1013,30 +1013,71 @@
     }, 400);
   }
 
+  function escapeNotice(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function noticeDetail(item) {
+    const title = String((item && item.title) || "").replace(/\s+/g, " ").trim();
+    const detail = String((item && (item.body || item.summary)) || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (title && detail && detail !== title) {
+      return title + "：" + detail;
+    }
+    return title || detail || "公告";
+  }
+
+  function noticeButtons(list) {
+    return list
+      .map(function (item) {
+        return (
+          '<button type="button" class="xm-notice-link" data-notice-id="' +
+          escapeNotice(item.id) +
+          '">' +
+          escapeNotice(noticeDetail(item)) +
+          "</button>"
+        );
+      })
+      .join('<span class="xm-notice-sep" aria-hidden="true">／</span>');
+  }
+
   function fillNoticeBar(items) {
     const bar = document.getElementById("xm-notice-bar");
     if (!bar) {
       return;
     }
-    const list = (items || []).slice(0, 3);
+    const list = (items || []).filter(function (item) {
+      return item && item.id;
+    });
     if (!list.length) {
       bar.hidden = true;
+      bar.removeAttribute("data-xm-notice-count");
       return;
     }
+    const scroll = list.length > 1;
+    const inner = noticeButtons(list);
+    const chars = list.reduce(function (sum, item) {
+      return sum + noticeDetail(item).length;
+    }, 0);
+    const seconds = Math.max(20, Math.round(chars / 6));
     bar.hidden = false;
+    bar.setAttribute("data-xm-notice-count", String(list.length));
     bar.innerHTML =
       '<span class="xm-notice-kicker">公告栏</span>' +
-      list
-        .map(function (item) {
-          return (
-            '<button type="button" class="xm-notice-link" data-notice-id="' +
-            item.id +
-            '">' +
-            item.title +
-            "</button>"
-          );
-        })
-        .join('<span class="xm-notice-dot">·</span>') +
+      '<div class="xm-notice-track-wrap">' +
+      '<div class="xm-notice-track' +
+      (scroll ? " is-scroll" : " is-static") +
+      '"' +
+      (scroll ? ' style="animation-duration:' + seconds + 's"' : "") +
+      ">" +
+      inner +
+      (scroll ? '<span class="xm-notice-sep" aria-hidden="true">／</span>' + inner : "") +
+      "</div></div>" +
       '<button type="button" class="xm-notice-more" data-notice-id="">全部公告</button>';
   }
 

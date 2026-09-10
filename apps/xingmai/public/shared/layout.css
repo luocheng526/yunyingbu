@@ -1,4 +1,4 @@
-/* xm-sider-narrow 0.1.125 */
+/* xm-sider-narrow 0.1.126 */
 :root,
 html[data-theme="light"] {
   --xm-sider: #ffffff;
@@ -898,6 +898,56 @@ html[data-theme="dark"] .xm-content [style*="background: white"] {
   font-weight: 600;
 }
 
+.xm-notice-track-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.xm-notice-track {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  width: max-content;
+  white-space: nowrap;
+}
+
+.xm-notice-track.is-static {
+  max-width: 100%;
+}
+
+.xm-notice-track.is-static .xm-notice-link {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.xm-notice-track.is-scroll {
+  animation-name: xm-notice-marquee;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.xm-notice-bar:hover .xm-notice-track.is-scroll {
+  animation-play-state: paused;
+}
+
+@keyframes xm-notice-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xm-notice-track.is-scroll {
+    animation: none;
+    max-width: 100%;
+  }
+}
+
 .xm-notice-link,
 .xm-notice-more {
   border: 0;
@@ -906,9 +956,6 @@ html[data-theme="dark"] .xm-content [style*="background: white"] {
   font: inherit;
   cursor: pointer;
   padding: 0;
-  max-width: 280px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -923,6 +970,7 @@ html[data-theme="dark"] .xm-content [style*="background: white"] {
   flex: 0 0 auto;
 }
 
+.xm-notice-sep,
 .xm-notice-dot {
   color: var(--xm-muted);
 }
