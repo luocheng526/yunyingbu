@@ -28,6 +28,7 @@ test("notices API lists seed announcements and banner", async () => {
   const banner = await fetch(`${base}/api/notices/banner`, { headers: { cookie } });
   const bannerData = await banner.json();
   assert.ok(bannerData.items.length >= 1);
+  assert.ok(bannerData.items.every((item) => item.level === "normal" || item.level === "important"));
   const popup = await fetch(`${base}/api/notices/popup`, { headers: { cookie } });
   const popupData = await popup.json();
   assert.ok(popupData.item);

@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.129 */
+/* xm-fast-shell 0.1.130 */
 (function () {
-  const ASSET_VER = "0.1.129";
+  const ASSET_VER = "0.1.130";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -1108,6 +1108,26 @@
   let noticeRotateIndex = 0;
   let noticeRotateItems = [];
 
+  function ensureImportantNoticeCss() {
+    if (document.getElementById("xm-notice-important-css")) {
+      return;
+    }
+    const style = document.createElement("style");
+    style.id = "xm-notice-important-css";
+    style.textContent =
+      ".xm-notice-link.is-important{color:#cf1322!important;font-weight:600;}" +
+      ".xm-notice-link.is-important:hover{color:#a8071a!important;}" +
+      ".xm-notice-dialog.is-important h2,.xm-notice-dialog.is-important .xm-notice-pop-lead{color:#cf1322;}";
+    document.head.appendChild(style);
+  }
+
+  function markNoticeImportant(el, item) {
+    if (!el) {
+      return;
+    }
+    el.classList.toggle("is-important", !!(item && item.level === "important"));
+  }
+
   function stopNoticeRotate() {
     if (noticeRotateTimer) {
       window.clearInterval(noticeRotateTimer);
@@ -1123,6 +1143,7 @@
     }
     link.setAttribute("data-notice-id", item.id);
     link.textContent = noticeDetail(item);
+    markNoticeImportant(link, item);
   }
 
   function fillNoticeBar(items) {
@@ -1144,11 +1165,14 @@
     const first = list[0];
     bar.hidden = false;
     bar.setAttribute("data-xm-notice-count", String(list.length));
+    ensureImportantNoticeCss();
     bar.innerHTML =
       '<span class="xm-notice-kicker">公告栏</span>' +
       '<div class="xm-notice-track-wrap">' +
       '<div class="xm-notice-track is-static">' +
-      '<button type="button" class="xm-notice-link" data-notice-id="' +
+      '<button type="button" class="xm-notice-link' +
+      (first.level === "important" ? " is-important" : "") +
+      '" data-notice-id="' +
       escapeNotice(first.id) +
       '">' +
       escapeNotice(noticeDetail(first)) +
@@ -1224,7 +1248,9 @@
     mask.id = "xm-notice-mask";
     mask.className = "xm-notice-mask";
     mask.innerHTML =
-      '<div class="xm-notice-dialog" role="dialog" aria-labelledby="xm-notice-pop-title">' +
+      '<div class="xm-notice-dialog' +
+      (item.level === "important" ? " is-important" : "") +
+      '" role="dialog" aria-labelledby="xm-notice-pop-title">' +
       '<p class="xm-notice-kicker">登录提醒</p>' +
       '<h2 id="xm-notice-pop-title"></h2>' +
       '<p class="xm-notice-pop-lead"></p>' +
@@ -1255,6 +1281,7 @@
         closeNoticePopup();
       }
     });
+    ensureImportantNoticeCss();
     document.body.appendChild(mask);
   }
 
