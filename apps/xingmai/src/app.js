@@ -12,7 +12,6 @@ import { peopleRouter } from "./modules/people/router.js";
 import { academyRouter } from "./modules/academy/router.js";
 import { agentsRouter } from "./modules/agents/router.js";
 import { dataRouter } from "./modules/data/router.js";
-import { noticesRouter } from "./modules/notices/router.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -48,7 +47,6 @@ export function createApp() {
   app.use("/api/academy", academyRouter);
   app.use("/api/agents", agentsRouter);
   app.use("/api/data", dataRouter);
-  app.use("/api/notices", noticesRouter);
   app.use(
     express.static(join(__dirname, "..", "public"), {
       index: false,
