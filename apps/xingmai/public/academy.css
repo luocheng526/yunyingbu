@@ -1,4 +1,4 @@
-/* xm-academy 0.1.217 */
+/* xm-academy 0.1.218 */
 #xm-content > .academy-page,
 #xm-content > main.page.academy-page,
 .xm-content > .academy-page,
@@ -614,6 +614,140 @@ main.page.academy-page,
   background: #fff;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.academy-deck-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+.academy-deck-head h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.academy-deck {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 8px;
+  min-height: 360px;
+}
+
+.academy-thumbs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+  max-height: calc(100vh - 170px);
+  padding-right: 4px;
+}
+
+.academy-thumb {
+  display: block;
+  width: 100%;
+  border: 2px solid var(--xm-line, #e5e6eb);
+  background: #fff;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 4px;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+
+.academy-thumb img {
+  display: block;
+  width: 100%;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+.academy-thumb span {
+  display: block;
+  padding: 2px 6px;
+  font-size: 11px;
+  color: var(--xm-muted);
+}
+
+.academy-thumb.is-on {
+  border-color: var(--xm-primary);
+}
+
+.academy-stage {
+  position: relative;
+  background: #1a1a1a;
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: zoom-in;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 360px;
+}
+
+.academy-slide-img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 180px);
+  user-select: none;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+.academy-fs {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.academy-fs[hidden] {
+  display: none !important;
+}
+
+.academy-fs-img {
+  max-width: 100%;
+  max-height: 100%;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.academy-fs-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font: inherit;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.academy-fs-prev {
+  left: 16px;
+}
+
+.academy-fs-next {
+  right: 16px;
+}
+
+.academy-fs-hint {
+  position: absolute;
+  bottom: 16px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  margin: 0;
 }
 
 .academy-slide-body {

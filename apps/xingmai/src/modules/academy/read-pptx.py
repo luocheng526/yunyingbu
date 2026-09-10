@@ -3,7 +3,9 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
+import tempfile
 import zipfile
 from xml.etree import ElementTree as ET
 
@@ -48,6 +50,92 @@ def images_of(zf, slide_xml_name):
     return names
 
 
+def render_soffice(pptx_path, media_dir, count):
+    soffice = shutil.which("soffice") or shutil.which("libreoffice")
+    pdftoppm = shutil.which("pdftoppm")
+    if not soffice or not pdftoppm:
+        return False
+    work = tempfile.mkdtemp(prefix="xm-ppt-")
+    env = os.environ.copy()
+    env["HOME"] = work
+    env["LANG"] = env.get("LANG") or "C.UTF-8"
+    try:
+        subprocess.check_call(
+            [soffice, "--headless", "--norestore", "--convert-to", "pdf", "--outdir", work, pptx_path],
+            timeout=150,
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.STDOUT,
+        )
+        pdfs = [name for name in os.listdir(work) if name.lower().endswith(".pdf")]
+        if not pdfs:
+            return False
+        prefix = os.path.join(work, "slide")
+        subprocess.check_call(
+            [pdftoppm, "-png", "-r", "120", os.path.join(work, pdfs[0]), prefix],
+            timeout=150,
+            env=env,
+        )
+        files = sorted(
+            [name for name in os.listdir(work) if name.startswith("slide") and name.endswith(".png")],
+            key=lambda n: int(re.search(r"(\d+)", n).group(1) if re.search(r"(\d+)", n) else 0),
+        )
+        if not files:
+            return False
+        for index, name in enumerate(files, start=1):
+            shutil.copyfile(os.path.join(work, name), os.path.join(media_dir, "slide-%d.png" % index))
+        return len(files) >= count
+    except Exception:
+        return False
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def render_fallback(pages, media_dir):
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except Exception:
+        Image = None
+    W, H = 1280, 720
+    for page in pages:
+        name = "slide-%d.png" % page["index"]
+        target = os.path.join(media_dir, name)
+        pasted = False
+        if Image is not None:
+            canvas = Image.new("RGB", (W, H), (255, 255, 255))
+            for img_name in page.get("images") or []:
+                src = os.path.join(media_dir, img_name)
+                if not os.path.isfile(src):
+                    continue
+                try:
+                    pic = Image.open(src).convert("RGB")
+                    pic.thumbnail((W, H))
+                    x = max(0, (W - pic.size[0]) // 2)
+                    y = max(0, (H - pic.size[1]) // 2)
+                    canvas.paste(pic, (x, y))
+                    pasted = True
+                    break
+                except Exception:
+                    continue
+            if not pasted:
+                draw = ImageDraw.Draw(canvas)
+                font = ImageFont.load_default()
+                y = 40
+                for line in (page.get("texts") or ["课件页 %d" % page["index"]])[:12]:
+                    draw.text((40, y), line, fill=(30, 30, 30), font=font)
+                    y += 28
+            canvas.save(target, "PNG")
+        elif not os.path.isfile(target):
+            with open(target, "wb") as fh:
+                fh.write(
+                    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+                    b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
+                    b"\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+                )
+        page["slide"] = name
+        page["images"] = [name]
+
+
 def extract(pptx_path, out_dir):
     os.makedirs(out_dir, exist_ok=True)
     media_dir = os.path.join(out_dir, "media")
@@ -67,7 +155,7 @@ def extract(pptx_path, out_dir):
             for src in images_of(zf, name):
                 base = os.path.basename(src)
                 safe = re.sub(r"[^A-Za-z0-9._-]", "_", base) or "img"
-                key = f"{index}-{safe}"
+                key = "%d-%s" % (index, safe)
                 if key in used:
                     continue
                 used[key] = True
@@ -76,7 +164,17 @@ def extract(pptx_path, out_dir):
                     with zf.open(src) as src_fh, open(target, "wb") as dest_fh:
                         shutil.copyfileobj(src_fh, dest_fh)
                     images.append(key)
-            pages.append({"index": index, "texts": texts_of(xml), "images": images})
+            pages.append({"index": index, "texts": texts_of(xml), "images": images, "slide": ""})
+    if not render_soffice(pptx_path, media_dir, len(pages)):
+        render_fallback(pages, media_dir)
+    else:
+        for page in pages:
+            name = "slide-%d.png" % page["index"]
+            page["slide"] = name
+            page["images"] = [name]
+    missing = [page for page in pages if not os.path.isfile(os.path.join(media_dir, page["slide"]))]
+    if missing:
+        render_fallback(pages, media_dir)
     with open(os.path.join(out_dir, "pages.json"), "w", encoding="utf-8") as fh:
         json.dump({"pages": pages}, fh, ensure_ascii=False)
     print(json.dumps({"ok": True, "pages": len(pages)}))
