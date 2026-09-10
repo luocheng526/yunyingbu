@@ -81,6 +81,7 @@ test("academy.js has exam import and countdown", () => {
   assert.match(js, /academy-exam-template\.csv/);
   assert.match(js, /不必套选择题模板/);
   assert.match(js, /待阅卷/);
+  assert.match(js, /已出分/);
   assert.match(js, /academy-exam-detail/);
   assert.match(js, /academy-exam-shell/);
   assert.match(js, /考试内容/);
