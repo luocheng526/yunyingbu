@@ -30,6 +30,35 @@
     document.head.appendChild(link);
   }
 
+  function openAcademyLogs() {
+    const root = document.getElementById("xm-content");
+    if (!root) {
+      return;
+    }
+    if (typeof window.__xmUnmount === "function") {
+      try {
+        window.__xmUnmount();
+      } catch (_err) {
+        /* keep going */
+      }
+    }
+    root.removeAttribute("data-xm-mounted");
+    const tab = document.querySelector(".xm-tab");
+    if (tab) {
+      tab.textContent = "操作日志";
+    }
+    document.querySelectorAll(".xm-menu a[href]").forEach(function (el) {
+      const on = el.getAttribute("data-academy-logs") === "1";
+      el.classList.toggle("is-active", on);
+      if (on) {
+        el.setAttribute("aria-current", "page");
+      } else {
+        el.removeAttribute("aria-current");
+      }
+    });
+    window.__xmUnmount = logsPage().mount(root);
+  }
+
   function ensureLogNav() {
     const handbook = document.querySelector('.xm-menu a[href="/academy/handbook"]');
     if (!handbook || document.querySelector("[data-academy-logs]")) {
@@ -46,31 +75,7 @@
       function (ev) {
         ev.preventDefault();
         ev.stopImmediatePropagation();
-        const root = document.getElementById("xm-content");
-        if (!root) {
-          return;
-        }
-        if (typeof window.__xmUnmount === "function") {
-          try {
-            window.__xmUnmount();
-          } catch (_err) {
-            /* keep going */
-          }
-        }
-        root.removeAttribute("data-xm-mounted");
-        const tab = document.querySelector(".xm-tab");
-        if (tab) {
-          tab.textContent = "操作日志";
-        }
-        document.querySelectorAll(".xm-menu a[href]").forEach(function (el) {
-          el.classList.toggle("is-active", el.getAttribute("data-academy-logs") === "1");
-          if (el.getAttribute("data-academy-logs") === "1") {
-            el.setAttribute("aria-current", "page");
-          } else {
-            el.removeAttribute("aria-current");
-          }
-        });
-        window.__xmUnmount = logsPage().mount(root);
+        openAcademyLogs();
       },
       true
     );
@@ -706,6 +711,7 @@
               ? "点开一节阅读。罗成、沈子晗、韩梦凯可双击正文修改。"
               : "点开一节阅读。罗成、沈子晗、韩梦凯可双击修改。"
           ) +
+            '<p class="academy-jump"><button type="button" id="academy-open-logs">操作日志</button></p>' +
             '<div class="academy-work academy-work-book">' +
             '<aside class="panel academy-side"><nav class="academy-tree" id="academy-tree"></nav></aside>' +
             '<section class="panel academy-main" id="academy-section"><p class="academy-empty">点左侧一节阅读。</p></section>' +
@@ -834,6 +840,13 @@
             tree.innerHTML = '<p class="academy-status error">' + escapeHtml(err.message) + "</p>";
           }
         });
+        const jump = root.querySelector("#academy-open-logs");
+        if (jump) {
+          jump.addEventListener("click", function (ev) {
+            ev.preventDefault();
+            openAcademyLogs();
+          });
+        }
 
         root.querySelector("#academy-tree").addEventListener("click", function (ev) {
           const btn = ev.target.closest("[data-id]");

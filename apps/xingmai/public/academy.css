@@ -10,8 +10,19 @@ main.page.academy-page,
   padding: 0 0 16px;
 }
 
-.academy-head {
+.academy-jump {
   margin: 0 0 8px;
+}
+
+.academy-jump button {
+  border: 0;
+  border-radius: 6px;
+  background: var(--xm-primary-soft);
+  color: var(--xm-primary);
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 10px;
+  cursor: pointer;
 }
 
 .academy-head h1 {
