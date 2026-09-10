@@ -14,5 +14,19 @@
     </main>
     <script src="/data-live.js?v=live-tpl"></script>
     <script src="/shared/nav.js"></script>
+    <script src="/shared/modules/data.js?v=paid-nav"></script>
+    <script>
+      (function () {
+        const n = document.getElementById("site-nav");
+        if (n && !n.querySelector("a[href='/data/paid']")) {
+          n.innerHTML =
+            '<nav class="data-subnav" aria-label="数据中心子菜单">' +
+            '<a href="/data/overview">数据总揽</a>' +
+            '<a href="/data/shops">店铺数据</a>' +
+            '<a href="/data/goods">商品数据</a>' +
+            '<a href="/data/paid">实时付费</a></nav>';
+        }
+      })();
+    </script>
   </body>
 </html>
