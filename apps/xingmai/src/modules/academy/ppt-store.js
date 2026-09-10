@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -112,6 +112,15 @@ export async function getPptCourse(id, { allowUnpublished = true } = {}) {
   return hit;
 }
 
+async function fileExists(path) {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function readPages(id) {
   const safe = safeCourseId(id);
   if (!safe) {
@@ -124,6 +133,38 @@ async function readPages(id) {
     return Array.isArray(data.pages) ? data.pages : [];
   } catch {
     return [];
+  }
+}
+
+async function ensureSlideRenders(id) {
+  const safe = safeCourseId(id);
+  if (!safe) {
+    return;
+  }
+  const dir = join(DATA_DIR, safe);
+  const source = join(dir, "source.pptx");
+  if (!(await fileExists(source))) {
+    return;
+  }
+  const pages = await readPages(id);
+  let need = !pages.length;
+  for (const page of pages) {
+    const name = page.slide || `slide-${page.index}.png`;
+    if (!String(name).startsWith("slide-") || !(await fileExists(join(dir, "media", name)))) {
+      need = true;
+      break;
+    }
+  }
+  if (!need) {
+    return;
+  }
+  try {
+    await execFileAsync("python3", [READER, source, dir], {
+      timeout: 180000,
+      env: { ...process.env, HOME: "/tmp", LANG: process.env.LANG || "C.UTF-8" }
+    });
+  } catch {
+    /* keep existing pages.json */
   }
 }
 
@@ -145,15 +186,31 @@ function mediaType(name) {
 }
 
 function pagePayload(id, page) {
-  const images = (page.images || []).map((name) => ({
-    name,
-    url: `/api/academy/courses/${id}/pages/${page.index}/media/${encodeURIComponent(name)}`
-  }));
+  const slideName = page.slide || ((page.images || [])[0] || "");
+  const slide = slideName
+    ? {
+        name: slideName,
+        url: `/api/academy/courses/${id}/pages/${page.index}/media/${encodeURIComponent(slideName)}`
+      }
+    : null;
   return {
     index: page.index,
-    texts: Array.isArray(page.texts) ? page.texts : [],
-    images,
-    hasMedia: images.length > 0
+    slide,
+    hasMedia: Boolean(slide)
+  };
+}
+
+export async function listPptPages(id) {
+  const course = await getPptCourse(id, { allowUnpublished: true });
+  if (!course) {
+    return null;
+  }
+  await ensureSlideRenders(id);
+  const pages = await readPages(id);
+  return {
+    ...course,
+    pageCount: pages.length,
+    pages: pages.map((page) => pagePayload(id, page))
   };
 }
 
@@ -162,6 +219,7 @@ export async function getPptPage(id, index) {
   if (!course) {
     return null;
   }
+  await ensureSlideRenders(id);
   const pages = await readPages(id);
   const page = pages.find((item) => Number(item.index) === Number(index));
   if (!page) {
@@ -177,6 +235,7 @@ export async function getPptPage(id, index) {
 export { mediaType };
 
 export async function readPptMedia(id, name) {
+  await ensureSlideRenders(id);
   const courseId = safeCourseId(id);
   const safe = String(name || "").replace(/[^A-Za-z0-9._-]/g, "");
   if (!courseId || !safe || safe !== name) {
@@ -230,7 +289,10 @@ export async function createPptCourse({ title, category, published = true, file,
   const source = join(dir, "source.pptx");
   await writeFile(source, file.buffer);
   try {
-    await execFileAsync("python3", [READER, source, dir], { timeout: 20000 });
+    await execFileAsync("python3", [READER, source, dir], {
+      timeout: 180000,
+      env: { ...process.env, HOME: "/tmp", LANG: process.env.LANG || "C.UTF-8" }
+    });
   } catch (err) {
     await rm(dir, { recursive: true, force: true });
     const error = new Error(err.stderr ? String(err.stderr).trim() : "无法解析 PPTX");

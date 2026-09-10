@@ -21,6 +21,7 @@ import {
   createPptCourse,
   getPptCourse,
   getPptPage,
+  listPptPages,
   mediaType,
   readPptMedia,
   receivePptChunk
@@ -246,12 +247,12 @@ academyRouter.get("/courses/:id", async (req, res) => {
   if (!requireUser(req, res)) {
     return;
   }
-  const course = await getPptCourse(req.params.id, { allowUnpublished: true });
-  if (!course) {
+  const packed = await listPptPages(req.params.id);
+  if (!packed) {
     res.status(404).json({ ok: false, error: "课件不存在" });
     return;
   }
-  res.json({ ok: true, download: false, watermark: true, course });
+  res.json({ ok: true, download: false, watermark: true, course: packed, pages: packed.pages });
 });
 
 function denyExamOriginal(res) {

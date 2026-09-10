@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.217 */
+/* xm-module-academy 0.1.218 */
 (function () {
-  const ASSET_VER = "0.1.217";
+  const ASSET_VER = "0.1.218";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -398,10 +398,12 @@
         let currentId = "";
         let pageCount = 0;
         let pageNo = 1;
+        let pages = [];
+        let previewOn = false;
         const showView = bindAcademyChrome(root, "academy-view-courses", function (data) {
           loadList().then(function () {
             if (data.course && data.course.id) {
-              openPage(data.course.id, 1);
+              openPreview(data.course.id);
             }
           });
         });
@@ -442,72 +444,148 @@
           });
         }
 
-        function paintPage(data) {
+        function slideUrl(index) {
+          const hit = pages.find(function (page) {
+            return Number(page.index) === Number(index);
+          });
+          return hit && hit.slide ? hit.slide.url : "";
+        }
+
+        function markThumbs() {
+          root.querySelectorAll(".academy-thumb").forEach(function (el) {
+            el.classList.toggle("is-on", Number(el.getAttribute("data-index")) === Number(pageNo));
+          });
+          const cap = root.querySelector("#academy-slide-cap");
+          if (cap) {
+            cap.textContent = "第 " + pageNo + " / " + pageCount + " 页 · 点大图全屏";
+          }
+        }
+
+        function setSlide(index) {
+          if (index < 1 || index > pageCount) {
+            return;
+          }
+          pageNo = index;
+          const url = slideUrl(index);
+          const img = root.querySelector("#academy-slide-img");
+          const fsImg = root.querySelector("#academy-fs-img");
+          if (img && url) {
+            img.src = url;
+          }
+          if (fsImg && url) {
+            fsImg.src = url;
+          }
+          markThumbs();
+        }
+
+        function exitFs() {
+          const box = root.querySelector("#academy-fs");
+          if (box) {
+            box.hidden = true;
+          }
+        }
+
+        function enterFs() {
+          const box = root.querySelector("#academy-fs");
+          const img = root.querySelector("#academy-fs-img");
+          if (!box || !img) {
+            return;
+          }
+          img.src = slideUrl(pageNo);
+          box.hidden = false;
+          img.focus();
+        }
+
+        function closePreview() {
+          previewOn = false;
+          currentId = "";
+          pages = [];
+          const work = root.querySelector("#academy-work");
+          const panel = root.querySelector("#academy-viewer");
+          if (work) {
+            work.classList.remove("has-viewer");
+          }
+          if (panel) {
+            panel.hidden = true;
+            panel.innerHTML = "";
+          }
+          exitFs();
+          root.querySelectorAll(".academy-course").forEach(function (el) {
+            el.classList.remove("is-on");
+          });
+        }
+
+        function paintDeck(title) {
           const work = root.querySelector("#academy-work");
           const panel = root.querySelector("#academy-viewer");
           panel.hidden = false;
           if (work) {
             work.classList.add("has-viewer");
           }
-          const page = data.page || {};
-          const texts = (page.texts || [])
-            .map(function (line) {
-              return "<p>" + escapeHtml(line) + "</p>";
-            })
-            .join("");
-          const images = (page.images || [])
-            .map(function (img) {
+          const mark = watermarkText();
+          const tiles = new Array(18).fill(escapeHtml(mark)).join(" ");
+          const thumbs = pages
+            .map(function (page) {
+              const url = page.slide ? page.slide.url : "";
               return (
-                '<img src="' +
-                escapeHtml(img.url) +
-                '" alt="" draggable="false" />'
+                '<button type="button" class="academy-thumb' +
+                (Number(page.index) === Number(pageNo) ? " is-on" : "") +
+                '" data-index="' +
+                escapeHtml(page.index) +
+                '"><img src="' +
+                escapeHtml(url) +
+                '" alt="" draggable="false" /><span>' +
+                escapeHtml(page.index) +
+                "</span></button>"
               );
             })
             .join("");
-          const mark = watermarkText();
-          const tiles = new Array(24).fill(escapeHtml(mark)).join(" ");
           panel.innerHTML =
-            "<h2>" +
-            escapeHtml(data.title || "在线翻页") +
-            "</h2>" +
-            '<p class="academy-meta">第 ' +
-            escapeHtml(page.index) +
+            '<div class="academy-deck-head"><h2>' +
+            escapeHtml(title || "课件") +
+            '</h2><p class="academy-meta" id="academy-slide-cap">第 ' +
+            escapeHtml(pageNo) +
             " / " +
-            escapeHtml(data.pageCount) +
-            " 页 · 不可下载原件</p>" +
-            '<div class="academy-viewer" id="academy-slide">' +
-            '<div class="academy-slide-body">' +
-            (images || "") +
-            (texts || '<p class="academy-empty">本页没有可提取的文字</p>') +
-            "</div>" +
+            escapeHtml(pageCount) +
+            " 页 · 点大图全屏</p></div>" +
+            '<div class="academy-deck">' +
+            '<aside class="academy-thumbs" id="academy-thumbs">' +
+            thumbs +
+            "</aside>" +
+            '<div class="academy-stage" id="academy-stage">' +
+            '<img class="academy-slide-img" id="academy-slide-img" src="' +
+            escapeHtml(slideUrl(pageNo)) +
+            '" alt="" draggable="false" />' +
             '<div class="academy-wm" aria-hidden="true">' +
             tiles +
-            "</div></div>" +
-            '<div class="academy-actions">' +
-            '<button type="button" class="ghost" data-nav="-1">上一页</button>' +
-            '<button type="button" data-nav="1">下一页</button>' +
-            "</div>";
+            "</div></div></div>" +
+            '<div id="academy-fs" class="academy-fs" hidden>' +
+            '<img class="academy-fs-img" id="academy-fs-img" tabindex="-1" draggable="false" alt="" />' +
+            '<button type="button" class="academy-fs-btn academy-fs-prev" data-fs="-1">上一页</button>' +
+            '<button type="button" class="academy-fs-btn academy-fs-next" data-fs="1">下一页</button>' +
+            '<p class="academy-fs-hint">← → 翻页 · Esc 退出全屏</p></div>';
         }
 
-        function openPage(id, index) {
-          api("/api/academy/courses/" + encodeURIComponent(id) + "/pages/" + encodeURIComponent(index))
-            .then(function (data) {
-              if (dead) {
-                return;
-              }
-              currentId = id;
-              pageCount = Number(data.pageCount) || 1;
-              pageNo = Number((data.page && data.page.index) || index);
-              paintPage(data);
-              root.querySelectorAll(".academy-course").forEach(function (el) {
-                el.classList.toggle("is-on", el.getAttribute("data-id") === id);
-              });
-            })
-            .catch(function (err) {
-              root.querySelector("#academy-viewer").hidden = false;
-              root.querySelector("#academy-viewer").innerHTML =
-                '<h2>在线翻页</h2><p class="academy-status error">' + escapeHtml(err.message) + "</p>";
+        function openPreview(id) {
+          if (previewOn && currentId === id) {
+            closePreview();
+            return Promise.resolve();
+          }
+          return api("/api/academy/courses/" + encodeURIComponent(id)).then(function (data) {
+            if (dead) {
+              return data;
+            }
+            currentId = id;
+            previewOn = true;
+            pages = data.pages || [];
+            pageCount = pages.length || Number((data.course && data.course.pageCount) || 1);
+            pageNo = 1;
+            paintDeck(data.course && data.course.title);
+            root.querySelectorAll(".academy-course").forEach(function (el) {
+              el.classList.toggle("is-on", el.getAttribute("data-id") === id);
             });
+            return data;
+          });
         }
 
         loadList().catch(function (err) {
@@ -522,34 +600,61 @@
           if (!btn) {
             return;
           }
-          openPage(btn.getAttribute("data-id"), 1);
+          openPreview(btn.getAttribute("data-id")).catch(function (err) {
+            const panel = root.querySelector("#academy-viewer");
+            panel.hidden = false;
+            panel.innerHTML = '<h2>课件</h2><p class="academy-status error">' + escapeHtml(err.message) + "</p>";
+          });
         });
 
         root.querySelector("#academy-viewer").addEventListener("click", function (ev) {
-          const btn = ev.target.closest("[data-nav]");
-          if (!btn || !currentId) {
+          const thumb = ev.target.closest("[data-index]");
+          if (thumb) {
+            setSlide(Number(thumb.getAttribute("data-index")));
             return;
           }
-          const next = pageNo + Number(btn.getAttribute("data-nav"));
-          if (next < 1 || next > pageCount) {
+          const fsNav = ev.target.closest("[data-fs]");
+          if (fsNav) {
+            setSlide(pageNo + Number(fsNav.getAttribute("data-fs")));
             return;
           }
-          openPage(currentId, next);
+          if (ev.target.closest("#academy-stage") || ev.target.id === "academy-slide-img") {
+            enterFs();
+          }
         });
 
+        function onKey(ev) {
+          const fs = root.querySelector("#academy-fs");
+          if (!fs || fs.hidden) {
+            return;
+          }
+          if (ev.key === "Escape") {
+            exitFs();
+            return;
+          }
+          if (ev.key === "ArrowLeft") {
+            setSlide(pageNo - 1);
+          }
+          if (ev.key === "ArrowRight") {
+            setSlide(pageNo + 1);
+          }
+        }
+        document.addEventListener("keydown", onKey);
+
         root.addEventListener("contextmenu", function (ev) {
-          if (ev.target.closest(".academy-viewer")) {
+          if (ev.target.closest(".academy-deck") || ev.target.closest(".academy-fs")) {
             ev.preventDefault();
           }
         });
         root.addEventListener("dragstart", function (ev) {
-          if (ev.target.closest(".academy-viewer")) {
+          if (ev.target.closest(".academy-deck") || ev.target.closest(".academy-fs")) {
             ev.preventDefault();
           }
         });
 
         return function () {
           dead = true;
+          document.removeEventListener("keydown", onKey);
           unmount();
         };
       }

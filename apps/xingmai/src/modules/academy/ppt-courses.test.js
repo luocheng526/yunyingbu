@@ -40,37 +40,23 @@ async function makePptx() {
   const dir = await mkdtemp(join(tmpdir(), "xm-pptx-"));
   const path = join(dir, "ops.pptx");
   const py = join(dir, "make.py");
-  const png = Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-    "base64"
-  );
-  await writeFile(join(dir, "image1.png"), png);
   await writeFile(
     py,
     `
-import zipfile, os
-root = os.path.dirname(__file__)
-pptx = os.path.join(root, "ops.pptx")
-slide = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
-  <p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>选品节奏</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld>
-</p:sld>'''
-slide2 = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
-  <p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>投放复盘</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld>
-</p:sld>'''
-rels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>
-</Relationships>'''
-with zipfile.ZipFile(pptx, "w") as zf:
-    zf.writestr("ppt/slides/slide1.xml", slide)
-    zf.writestr("ppt/slides/slide2.xml", slide2)
-    zf.writestr("ppt/slides/_rels/slide2.xml.rels", rels)
-    zf.write(os.path.join(root, "image1.png"), "ppt/media/image1.png")
+from pptx import Presentation
+from pptx.util import Inches
+prs = Presentation()
+blank = prs.slide_layouts[6]
+s1 = prs.slides.add_slide(blank)
+t1 = s1.shapes.add_textbox(Inches(0.8), Inches(1.2), Inches(8), Inches(1.2))
+t1.text_frame.text = "选品节奏"
+s2 = prs.slides.add_slide(blank)
+t2 = s2.shapes.add_textbox(Inches(0.8), Inches(1.2), Inches(8), Inches(1.2))
+t2.text_frame.text = "投放复盘"
+prs.save(${JSON.stringify(path)})
 `
   );
-  execFileSync("python3", [py], { timeout: 10000 });
+  execFileSync("python3", [py], { timeout: 15000 });
   const buf = await readFile(path);
   await rm(dir, { recursive: true, force: true });
   return buf;
@@ -104,6 +90,10 @@ test("academy.js enables upload, watermark, and blocks original download", () =>
   assert.match(js, /\/api\/academy\/courses\/chunk/);
   assert.match(js, /文件上传/);
   assert.match(js, /academy-view-upload/);
+  assert.match(js, /academy-thumbs/);
+  assert.match(js, /academy-fs/);
+  assert.match(js, /Escape/);
+  assert.match(js, /openPreview/);
   assert.match(js, /application\/octet-stream/);
   assert.match(js, /credentials: "include"/);
   assert.doesNotMatch(js, /source\.pptx/);
@@ -113,6 +103,8 @@ test("academy.js enables upload, watermark, and blocks original download", () =>
   assert.doesNotMatch(js, /第 4 步/);
   assert.doesNotMatch(js, /academy-plan/);
   assert.match(css, /\.academy-wm/);
+  assert.match(css, /\.academy-slide-img/);
+  assert.match(css, /\.academy-fs/);
   assert.match(css, /max-width:\s*none/);
   assert.match(css, /\.academy-work\.has-viewer/);
 });
@@ -159,20 +151,26 @@ test("upload pptx, turn pages, never serve original", async () => {
   assert.equal(created.download, false);
   assert.equal(created.course.pageCount, 2);
   const id = created.course.id;
+  const listed = await (
+    await fetch(`${base}/api/academy/courses/${id}`, {
+      headers: { cookie, Accept: "application/json" }
+    })
+  ).json();
+  assert.equal(listed.pages.length, 2);
+  assert.match(listed.pages[0].slide.url, /slide-1\.png/);
   const page1 = await (
     await fetch(`${base}/api/academy/courses/${id}/pages/1`, {
       headers: { cookie, Accept: "application/json" }
     })
   ).json();
-  assert.ok(page1.page.texts.includes("选品节奏"));
+  assert.equal(page1.page.hasMedia, true);
+  assert.match(page1.page.slide.url, /slide-1\.png/);
   const page2 = await (
     await fetch(`${base}/api/academy/courses/${id}/pages/2`, {
       headers: { cookie, Accept: "application/json" }
     })
   ).json();
-  assert.ok(page2.page.texts.includes("投放复盘"));
-  assert.equal(page2.page.hasMedia, true);
-  const mediaUrl = page2.page.images[0].url;
+  const mediaUrl = page2.page.slide.url;
   const img = await fetch(`${base}${mediaUrl}`, { headers: { cookie } });
   assert.equal(img.status, 200);
   assert.match(img.headers.get("content-type") || "", /image\/png/);
