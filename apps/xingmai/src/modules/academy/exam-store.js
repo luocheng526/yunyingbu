@@ -6,12 +6,17 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { dbMode, query } from "../profile/auth.js";
 import { getExamTrack, listExamTracks, seatsUserCanGrade, examGraderSeats } from "./framework.js";
+import { READ_EXAM_PY } from "./read-exam-script.js";
 
 const execFileAsync = promisify(execFile);
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(ROOT, "data", "exams");
 const READER = join(ROOT, "read-exam.py");
 const ACCEPT = [".xlsx", ".csv", ".json", ".docx", ".txt"];
+
+async function ensureReader() {
+  await writeFile(READER, READ_EXAM_PY);
+}
 
 let memory = new Map();
 let attempts = [];
@@ -199,6 +204,7 @@ export async function importExamPaper({ trackId, file, createdBy }) {
   const sourceName = `source${ext}`;
   await writeFile(join(dir, sourceName), file.buffer);
   try {
+    await ensureReader();
     await execFileAsync("python3", [READER, join(dir, sourceName), dir], { timeout: 60000 });
   } catch (err) {
     await rm(dir, { recursive: true, force: true });
