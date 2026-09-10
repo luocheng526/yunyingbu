@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.127 */
+/* xm-fast-shell 0.1.128 */
 (function () {
-  const ASSET_VER = "0.1.127";
+  const ASSET_VER = "0.1.128";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -334,32 +334,62 @@
   };
   const unmounts = {};
   let openTabs = [];
+  let tabsBooted = false;
 
-  function readOpenTabs() {
+  function readTabStoreRaw() {
     try {
-      const raw = sessionStorage.getItem(TAB_STORE);
-      const parsed = raw ? JSON.parse(raw) : null;
-      if (parsed && Array.isArray(parsed.hrefs)) {
-        const hrefs = parsed.hrefs.map(normalize).filter(function (href) {
-          return Boolean(MODULES[href]) && !PARENT_HOME[href];
-        });
-        if (hrefs.indexOf(current) < 0 && MODULES[current] && !PARENT_HOME[current]) {
-          hrefs.push(current);
-        }
-        if (hrefs.length) {
-          return hrefs;
-        }
+      const localRaw = localStorage.getItem(TAB_STORE);
+      if (localRaw) {
+        return localRaw;
       }
     } catch (_err) {
       /* ignore */
     }
-    return MODULES[current] && !PARENT_HOME[current] ? [current] : [];
+    try {
+      return sessionStorage.getItem(TAB_STORE);
+    } catch (_err2) {
+      return null;
+    }
+  }
+
+  function readTabState() {
+    try {
+      const parsed = JSON.parse(readTabStoreRaw() || "null");
+      if (parsed && Array.isArray(parsed.hrefs)) {
+        const hrefs = parsed.hrefs.map(normalize).filter(function (href) {
+          return Boolean(MODULES[href]) && !PARENT_HOME[href];
+        });
+        const active = leafRoute(parsed.active || "");
+        return {
+          hrefs: hrefs,
+          active: MODULES[active] && !PARENT_HOME[active] ? active : ""
+        };
+      }
+    } catch (_err) {
+      /* ignore */
+    }
+    return { hrefs: [], active: "" };
+  }
+
+  function readOpenTabs() {
+    const hrefs = readTabState().hrefs.slice();
+    const here = leafRoute(current);
+    if (hrefs.indexOf(here) < 0 && MODULES[here] && !PARENT_HOME[here]) {
+      hrefs.push(here);
+    }
+    return hrefs;
   }
 
   function writeOpenTabs() {
+    const payload = JSON.stringify({ hrefs: openTabs.slice(), active: current });
     try {
-      sessionStorage.setItem(TAB_STORE, JSON.stringify({ hrefs: openTabs.slice(), active: current }));
+      localStorage.setItem(TAB_STORE, payload);
     } catch (_err) {
+      /* ignore */
+    }
+    try {
+      sessionStorage.setItem(TAB_STORE, payload);
+    } catch (_err2) {
       /* ignore */
     }
   }
@@ -660,9 +690,36 @@
     });
   }
 
+  function restoreSavedPage(dest) {
+    if (window.__xmTabsRestored) {
+      return;
+    }
+    window.__xmTabsRestored = 1;
+    const key = leafRoute(dest || "");
+    if (!key || key === current || !MODULES[key] || PARENT_HOME[key]) {
+      return;
+    }
+    if (openTabs.indexOf(key) < 0) {
+      return;
+    }
+    try {
+      history.replaceState({ xm: key }, "", key);
+    } catch (_err) {
+      /* ignore */
+    }
+    go(key, false);
+  }
+
   function ensureWorkspace() {
     if (!MODULES[current]) {
       return;
+    }
+    let pendingActive = "";
+    if (!tabsBooted) {
+      tabsBooted = true;
+      const state = readTabState();
+      openTabs = state.hrefs.length ? state.hrefs : readOpenTabs();
+      pendingActive = state.active;
     }
     if (!openTabs.length) {
       openTabs = readOpenTabs();
@@ -694,6 +751,7 @@
     paintTabs();
     bindTabs();
     showPane(current);
+    restoreSavedPage(pendingActive);
   }
 
   function alreadyMounted(root, href) {
