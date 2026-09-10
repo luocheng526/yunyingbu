@@ -962,73 +962,109 @@
             if (dead || trackId !== id) {
               return;
             }
-            const items = (data.items || []).filter(function (item) {
+            const items = data.items || [];
+            const pending = items.filter(function (item) {
               return item.status === "grading";
             });
-            if (!items.length) {
-              box.innerHTML = '<p class="academy-meta">暂无待阅答卷。问答题由' + escapeHtml((track.graders || seats).join("、")) + "各打一次分，取平均后出总分。</p>";
-              return;
+            const finished = items.filter(function (item) {
+              return item.status === "done";
+            });
+            let html = "";
+            if (!pending.length) {
+              html +=
+                '<p class="academy-meta">暂无待阅答卷。问答题由' +
+                escapeHtml((track.graders || seats).join("、")) +
+                "各打一次分，取平均后出总分。</p>";
+            } else {
+              html +=
+                "<h3>待阅卷</h3>" +
+                pending
+                  .map(function (item) {
+                    const qa = (item.detail || []).filter(function (q) {
+                      return q.grade === "dual" || q.type === "qa";
+                    });
+                    const fields = qa
+                      .map(function (q) {
+                        return (
+                          '<label class="academy-grade-q">第 ' +
+                          escapeHtml(q.index) +
+                          " 题（满分 " +
+                          escapeHtml(q.points) +
+                          "）" +
+                          "<p>" +
+                          escapeHtml(q.stem) +
+                          "</p><p class=\"academy-meta\">答：" +
+                          escapeHtml(q.picked || "未答") +
+                          '</p><input type="number" min="0" max="' +
+                          escapeHtml(q.points) +
+                          '" step="0.5" data-q="' +
+                          escapeHtml(q.index) +
+                          '" /></label>'
+                        );
+                      })
+                      .join("");
+                    const seatOpts = seats
+                      .map(function (seat) {
+                        const used = item.grades && item.grades[seat];
+                        return (
+                          '<option value="' +
+                          escapeHtml(seat) +
+                          '"' +
+                          (used ? " disabled" : "") +
+                          ">" +
+                          escapeHtml(seat) +
+                          (used ? "（已评）" : "") +
+                          "</option>"
+                        );
+                      })
+                      .join("");
+                    return (
+                      '<form class="academy-grade" data-attempt="' +
+                      escapeHtml(item.id) +
+                      '"><p><strong>' +
+                      escapeHtml(item.displayName || item.username) +
+                      "</strong> · 客观题 " +
+                      escapeHtml(item.autoScore) +
+                      " 分 · 待 " +
+                      escapeHtml((item.pendingSeats || []).join("、")) +
+                      '</p><label>以谁的身份打分 <select name="seat">' +
+                      seatOpts +
+                      "</select></label>" +
+                      fields +
+                      '<label>评语 <input name="comment" maxlength="400" /></label>' +
+                      '<button type="submit">提交阅卷</button></form>'
+                    );
+                  })
+                  .join("");
             }
-            box.innerHTML =
-              "<h3>待阅卷</h3>" +
-              items
-                .map(function (item) {
-                  const qa = (item.detail || []).filter(function (q) {
-                    return q.grade === "dual" || q.type === "qa";
-                  });
-                  const fields = qa
-                    .map(function (q) {
-                      return (
-                        '<label class="academy-grade-q">第 ' +
-                        escapeHtml(q.index) +
-                        " 题（满分 " +
-                        escapeHtml(q.points) +
-                        "）" +
-                        "<p>" +
-                        escapeHtml(q.stem) +
-                        "</p><p class=\"academy-meta\">答：" +
-                        escapeHtml(q.picked || "未答") +
-                        '</p><input type="number" min="0" max="' +
-                        escapeHtml(q.points) +
-                        '" step="0.5" data-q="' +
-                        escapeHtml(q.index) +
-                        '" /></label>'
-                      );
-                    })
-                    .join("");
-                  const seatOpts = seats
-                    .map(function (seat) {
-                      const done = item.grades && item.grades[seat];
-                      return (
-                        '<option value="' +
-                        escapeHtml(seat) +
-                        '"' +
-                        (done ? " disabled" : "") +
-                        ">" +
-                        escapeHtml(seat) +
-                        (done ? "（已评）" : "") +
-                        "</option>"
-                      );
-                    })
-                    .join("");
-                  return (
-                    '<form class="academy-grade" data-attempt="' +
-                    escapeHtml(item.id) +
-                    '"><p><strong>' +
-                    escapeHtml(item.displayName || item.username) +
-                    "</strong> · 客观题 " +
-                    escapeHtml(item.autoScore) +
-                    " 分 · 待 " +
-                    escapeHtml((item.pendingSeats || []).join("、")) +
-                    '</p><label>以谁的身份打分 <select name="seat">' +
-                    seatOpts +
-                    "</select></label>" +
-                    fields +
-                    '<label>评语 <input name="comment" maxlength="400" /></label>' +
-                    '<button type="submit">提交阅卷</button></form>'
-                  );
-                })
-                .join("");
+            if (finished.length) {
+              html +=
+                "<h3>已出分</h3><ul class=\"academy-empty\">" +
+                finished
+                  .map(function (item) {
+                    const seatsLine = Object.keys(item.grades || {})
+                      .map(function (seat) {
+                        return seat + " " + escapeHtml((item.grades[seat] && item.grades[seat].by) || "");
+                      })
+                      .join("、");
+                    return (
+                      "<li>" +
+                      escapeHtml(item.displayName || item.username) +
+                      " · 总分 " +
+                      escapeHtml(item.score) +
+                      " · 客观 " +
+                      escapeHtml(item.autoScore) +
+                      " · 问答 " +
+                      escapeHtml(item.dualScore) +
+                      (item.passed ? " · 及格" : " · 未及格") +
+                      (seatsLine ? " · " + seatsLine : "") +
+                      "</li>"
+                    );
+                  })
+                  .join("") +
+                "</ul>";
+            }
+            box.innerHTML = html;
             box.querySelectorAll("form.academy-grade").forEach(function (form) {
               form.addEventListener("submit", function (ev) {
                 ev.preventDefault();
@@ -1036,11 +1072,14 @@
                 form.querySelectorAll("[data-q]").forEach(function (input) {
                   scores[input.getAttribute("data-q")] = input.value;
                 });
-                postJson("/api/academy/exams/attempts/" + encodeURIComponent(form.getAttribute("data-attempt")) + "/grade", {
-                  seat: form.querySelector("[name=seat]").value,
-                  scores: scores,
-                  comment: form.querySelector("[name=comment]").value
-                })
+                postJson(
+                  "/api/academy/exams/attempts/" + encodeURIComponent(form.getAttribute("data-attempt")) + "/grade",
+                  {
+                    seat: form.querySelector("[name=seat]").value,
+                    scores: scores,
+                    comment: form.querySelector("[name=comment]").value
+                  }
+                )
                   .then(function () {
                     return openTrack(id);
                   })
