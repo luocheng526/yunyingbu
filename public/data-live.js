@@ -13,7 +13,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=live-shops";
+      link.href = "/data-pages.css?v=live-shops2";
       document.head.appendChild(link);
     }
   }
@@ -212,6 +212,29 @@
         shopTableHtml(payload.shopLiveTable);
     }
 
+    function applyPayload(data) {
+      if (dead || !data) {
+        return;
+      }
+      payload = data;
+      clock = formatNow();
+      render();
+    }
+
+    function loadDemoTable(base) {
+      return fetch("/data/live-demo.json", { credentials: "same-origin" }).then(function (res) {
+        if (!res.ok) {
+          throw new Error("示例数据 " + res.status);
+        }
+        return res.json();
+      }).then(function (demo) {
+        if (base && demo && demo.shopLiveTable && !base.shopLiveTable) {
+          base.shopLiveTable = demo.shopLiveTable;
+        }
+        return base || demo;
+      });
+    }
+
     function load() {
       clock = formatNow();
       fetch("/api/data/live", {
@@ -225,26 +248,18 @@
           return res.json();
         })
         .then(function (data) {
-          if (!dead) {
-            payload = data;
-            render();
+          if (data && data.shopLiveTable) {
+            applyPayload(data);
+            return null;
           }
+          return loadDemoTable(data);
         })
         .catch(function () {
-          return fetch("/data/live-demo.json", { credentials: "same-origin" }).then(function (res) {
-            if (!res.ok) {
-              throw new Error("示例数据 " + res.status);
-            }
-            return res.json();
-          });
+          return loadDemoTable(null);
         })
         .then(function (data) {
-          if (data && !payload && !dead) {
-            payload = data;
-            render();
-          } else if (payload && !dead) {
-            clock = formatNow();
-            render();
+          if (data) {
+            applyPayload(data);
           }
         })
         .catch(function (err) {

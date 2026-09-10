@@ -208,6 +208,7 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(paidPage.text, /实时看板/);
     const liveJs = await get(base, "/data-live.js");
     assert.match(liveJs.text, /店铺实时付费明细/);
+    assert.match(liveJs.text, /loadDemoTable/);
     assert.doesNotMatch(paidPage.text, /实时明细/);
     const liveApi = await get(base, "/api/data/live");
     assert.equal(liveApi.res.status, 200);

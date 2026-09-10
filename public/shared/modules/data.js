@@ -71,7 +71,7 @@
 
   function mountLiveDashboard(root) {
     ensureSheet();
-    return loadScript("/data-live.js?v=live-shops").then(function () {
+    return loadScript("/data-live.js?v=live-shops2").then(function () {
       if (typeof window.XmDataCreateLiveDashboard === "function") {
         return window.XmDataCreateLiveDashboard(root);
       }
