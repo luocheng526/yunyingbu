@@ -699,6 +699,7 @@ html[data-theme="pink"] .ch-metrics {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  margin-left: auto;
   font-size: 13px;
 }
 .lv-now button {

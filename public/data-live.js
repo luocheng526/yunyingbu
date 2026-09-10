@@ -13,7 +13,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=live-shops2";
+      link.href = "/data-pages.css?v=live-head3";
       document.head.appendChild(link);
     }
   }
@@ -150,20 +150,10 @@
           );
         })
         .join("");
-      const ranges = (payload.ranges || [])
-        .map(function (label) {
-          return (
-            '<button type="button" data-range="' +
-            escapeHtml(label) +
-            '"' +
-            (label === payload.range ? ' class="is-active"' : "") +
-            ">" +
-            escapeHtml(label) +
-            "</button>"
-          );
-        })
-        .join("");
       const cards = (payload.cards || [])
+        .filter(function (card) {
+          return card.key !== "orders" && !/销售单数/.test(card.label || "");
+        })
         .map(function (card) {
           return (
             '<article class="ch-card"><div class="label">' +
@@ -181,13 +171,7 @@
         views +
         '</div><div class="lv-now"><span id="lv-clock">' +
         escapeHtml(clock) +
-        '</span><button type="button" data-refresh>刷新</button></div>' +
-        '<div class="ch-right"><span class="ch-time">（统计时间：' +
-        escapeHtml(payload.dateLabel || "") +
-        "）</span>" +
-        '<div class="ch-ranges">' +
-        ranges +
-        "</div></div></div>" +
+        '</span><button type="button" data-refresh>刷新</button></div></div>' +
         '<div class="ch-summary"><span class="ch-sum-title">综合指标</span>' +
         "<b>渠道 " +
         escapeHtml(String(payload.summary.channels)) +

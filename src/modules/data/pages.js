@@ -299,7 +299,6 @@ export function getLiveBoard() {
     },
     cards: [
       { key: "pay", label: "支付金额 (支付)", value: "837,247.17", extra: "付费成交ROI 2.40" },
-      { key: "orders", label: "销售单数 (支付)", value: "3,174" },
       { key: "ad", label: "推广花费 (支付预估)", value: "348,174.63", extra: "推广占比 41.59%" },
       { key: "profit", label: "利润 (支付预估)", value: "415,136.64", extra: "毛利率 49.58%" },
       { key: "margin", label: "大毛利率", value: "49.58%" },
