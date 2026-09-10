@@ -94,5 +94,35 @@ export function homeRouter() {
       }
     });
   });
+  router.get("/live", (_req, res) => {
+    res.json({
+      ok: true,
+      module: "home",
+      title: "实时看板",
+      demo: true,
+      source: "home-fallback",
+      dateLabel: shanghaiYmd(0).replace(/^(\d{4})-(\d{2})-(\d{2})$/, "$1年$2月$3日"),
+      range: "7天",
+      summary: { channels: 1, shops: INDEX_ROWS.length },
+      hero: {
+        label: "实时销售指数",
+        value: "407,140.54",
+        delta: -7.44,
+        spark: [28, 30, 26, 32, 31, 36, 34, 40, 38, 48, 46, 58]
+      },
+      cards: [
+        { key: "pay", label: "支付金额 (支付)", value: "837,247.17", extra: "付费成交ROI 2.40" },
+        { key: "orders", label: "销售单数 (支付)", value: "3,174" },
+        { key: "ad", label: "推广花费 (支付预估)", value: "348,174.63", extra: "推广占比 41.59%" },
+        { key: "profit", label: "利润 (支付预估)", value: "415,136.64", extra: "毛利率 49.58%" },
+        { key: "margin", label: "大毛利率", value: "49.58%" },
+        { key: "roi", label: "付费成交ROI", value: "2.40" },
+        { key: "livePay", label: "实时付费成交额", value: "12,480.50" },
+        { key: "liveAd", label: "实时推广花费额", value: "5,210.30" },
+        { key: "liveProfit", label: "实时利润预估", value: "6,180.20" },
+        { key: "liveFee", label: "实时费比", value: "41.75%" }
+      ]
+    });
+  });
   return router;
 }
