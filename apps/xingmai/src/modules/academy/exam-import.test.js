@@ -103,7 +103,7 @@ test("import exam document, hide answers, grade, block original", async () => {
   await resetExamPapersForTests();
   const headers = { cookie, Accept: "application/json" };
   const plan = await (await fetch(`${base}/api/academy/plan`, { headers })).json();
-  assert.equal(plan.step, 3);
+  assert.equal(plan.ready, true);
   const buf = await makeJsonPaper();
   const pack = multipart({ trackId: "newbie" }, { filename: "newbie.json", buffer: buf });
   const createdRes = await fetch(`${base}/api/academy/exams/papers`, {
