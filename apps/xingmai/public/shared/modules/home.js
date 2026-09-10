@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.195-home-no-tiger */
+/* xm-module-home 0.1.197-home-live-5m */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -420,22 +420,6 @@
     );
   }
 
-  function rowHtml(row, index, withTrend) {
-    return (
-      "<tr><td>" +
-      rankMark(index) +
-      "</td><td>" +
-      escapeHtml(row.shop) +
-      "</td><td>" +
-      escapeHtml(row.owner) +
-      "</td><td>" +
-      escapeHtml(row.amount) +
-      "</td>" +
-      (withTrend ? "<td>" + trendHtml(row.trend) + "</td>" : "") +
-      "</tr>"
-    );
-  }
-
   function shopRowHtml(row, index, withOwner) {
     return (
       "<tr><td>" +
@@ -679,33 +663,6 @@
     };
   }
 
-  function groupByOwner(rows) {
-    var map = {};
-    rows.forEach(function (row) {
-      var key = row.owner || "未分配";
-      if (!map[key]) {
-        map[key] = { shop: key + "团队", owner: key, amount: 0, trend: 0, n: 0 };
-      }
-      var num = Number(String(row.amount).replace(/,/g, "")) || 0;
-      map[key].amount += num;
-      map[key].trend += Number(row.trend) || 0;
-      map[key].n += 1;
-    });
-    return Object.keys(map)
-      .map(function (key) {
-        var item = map[key];
-        return {
-          shop: item.shop,
-          owner: item.owner,
-          amount: item.amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-          trend: item.n ? item.trend / item.n : 0
-        };
-      })
-      .sort(function (a, b) {
-        return Number(String(b.amount).replace(/,/g, "")) - Number(String(a.amount).replace(/,/g, ""));
-      });
-  }
-
   function cssText() {
     return (
       "html:has(#xm-hm),html:has(#xm-hm) body{height:100%!important;max-height:100%!important;overflow:hidden!important}" +
@@ -756,9 +713,7 @@
       ".xm-hm-rest em{font-style:normal;font-variant-numeric:tabular-nums}" +
       "html[data-theme=dark] .xm-hm-stand-item{background:#2a2418}" +
       "html[data-theme=dark] .xm-hm-stand-item.is-1{background:#3a3018}" +
-      ".xm-hm-live-meta{display:none;align-items:center;gap:10px;color:var(--xm-muted);font-size:12px}" +
-      ".xm-hm.is-live .xm-hm-live-meta{display:flex}" +
-      ".xm-hm-live-meta a{color:var(--xm-primary);text-decoration:none}" +
+      ".xm-hm-live-clock{margin-top:6px;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-hero{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:14px 16px 12px}" +
       ".xm-hm-hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}" +
       ".xm-hm-spark{display:flex;align-items:flex-end;gap:3px;height:42px;min-width:120px}" +
@@ -818,8 +773,7 @@
       '<div class="xm-hm-ranges">' +
       rangeBtns +
       '<label class="xm-hm-dates"><input type="date" id="xm-hm-from" /><span>至</span><input type="date" id="xm-hm-to" /></label>' +
-      "</div>" +
-      '<div class="xm-hm-live-meta" id="xm-hm-live-meta"></div></div>' +
+      "</div></div>" +
       '<div class="xm-hm-pop" id="xm-hm-pop" hidden><h3>卡片设置</h3><div id="xm-hm-card-opts"></div></div>' +
       '<div class="xm-hm-body">' +
       '<section class="xm-hm-kpis" id="xm-hm-kpis"></section>' +
@@ -860,11 +814,6 @@
     }).join("");
     root.querySelector("#xm-hm-live").hidden = state.view !== "live";
     root.querySelector("#xm-hm-board").hidden = state.view !== "board";
-    root.querySelector("#xm-hm-live-meta").innerHTML =
-      '<span>跟数据中心「实时付费」同一套看板</span>' +
-      (live.dateLabel ? "<span>（统计时间：" + escapeHtml(live.dateLabel) + "）</span>" : "") +
-      (live.range ? "<span>" + escapeHtml(live.range) + "</span>" : "") +
-      '<a href="/data/paid">打开数据中心</a>';
     root.querySelector("#xm-hm-live").innerHTML =
       '<article class="xm-hm-hero"><div class="xm-hm-hero-top"><div><div class="xm-hm-card-head"><span>' +
       escapeHtml(hero.label || "实时销售指数") +
@@ -876,7 +825,9 @@
       (down ? "↘" : "↗") +
       " " +
       Math.abs(Number(hero.delta) || 0).toFixed(2) +
-      "%</div></div>" +
+      '%</div><div class="xm-hm-live-clock">每5分钟自动刷新' +
+      (state.liveAt ? " · 上次 " + escapeHtml(state.liveAt) : "") +
+      "</div></div>" +
       sparkHtml(hero.spark) +
       "</div></article>" +
       '<div class="xm-hm-live-cards">' +
@@ -894,7 +845,7 @@
     root.querySelector("#xm-hm-ladders").innerHTML = (state.ladders || FALLBACK.ladders).map(ladderHtml).join("");
     root.querySelector("#xm-hm-note").textContent =
       state.view === "live"
-        ? "实时页读取数据中心 /api/data/live 与 /api/data/shops，那边看板变了这里跟着变。"
+        ? "实时页每5分钟自动拉一次数。数据源稍后对接，现在仍走现有接口。"
         : state.view === "team"
           ? "团队页分沈子晗、韩梦凯两份。店铺先用演示店，数据中心责权接口有了按店名对齐。"
           : state.view === "board"
@@ -953,26 +904,33 @@
         teams: FALLBACK.teams.map(function (team) {
           return { key: team.key, name: team.name, href: team.href, cards: team.cards, shops: team.shops.slice() };
         }),
-        ladders: FALLBACK.ladders
+        ladders: FALLBACK.ladders,
+        liveAt: ""
       };
       var poll = 0;
+      var LIVE_REFRESH_MS = 5 * 60 * 1000;
       paint(root, state);
 
-      function pullDataCenter() {
-        return Promise.all([
-          api("/api/data/live"),
-          api("/api/data/shops"),
-          api("/api/home/live"),
-          api("/api/home/teams"),
-          api("/api/people/shops")
-        ]).then(function (pack) {
+      function shanghaiClock() {
+        return new Intl.DateTimeFormat("zh-CN", {
+          timeZone: "Asia/Shanghai",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false
+        }).format(new Date());
+      }
+
+      function pullLive() {
+        return Promise.all([api("/api/data/live"), api("/api/data/shops"), api("/api/home/live")]).then(function (pack) {
           if (dead) {
             return;
           }
           var live = pack[0] && pack[0].ok ? pack[0] : pack[2];
           var shops = pack[1];
-          var homeTeams = pack[3];
-          var peopleShops = pack[4];
           if (live && live.ok) {
             state.live = mergeLive(state.live, live);
           }
@@ -980,6 +938,19 @@
           if (nextShops.length) {
             state.shops = nextShops;
           }
+          state.liveAt = shanghaiClock();
+          paint(root, state);
+        });
+      }
+
+      function pullTeams() {
+        return Promise.all([api("/api/home/teams"), api("/api/people/shops"), api("/api/data/shops")]).then(function (pack) {
+          if (dead) {
+            return;
+          }
+          var homeTeams = pack[0];
+          var peopleShops = pack[1];
+          var nextShops = readShopRows(pack[2] || {});
           if (homeTeams && homeTeams.ok && homeTeams.teams && homeTeams.teams.length) {
             state.teams = homeTeams.teams;
           }
@@ -1003,6 +974,9 @@
           state.view = view.getAttribute("data-view");
           state.mode = state.view === "team" ? "company" : "shop";
           paint(root, state);
+          if (state.view === "live") {
+            pullLive();
+          }
           return;
         }
         var range = event.target.closest("[data-range]");
@@ -1064,8 +1038,13 @@
         paint(root, state);
       });
 
-      pullDataCenter();
-      poll = window.setInterval(pullDataCenter, 30000);
+      pullTeams();
+      pullLive();
+      poll = window.setInterval(function () {
+        if (state.view === "live") {
+          pullLive();
+        }
+      }, LIVE_REFRESH_MS);
 
       if (!state.user || !state.user.username) {
         api("/api/auth/me").then(function (user) {
