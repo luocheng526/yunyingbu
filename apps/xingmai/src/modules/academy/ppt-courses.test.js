@@ -7,7 +7,7 @@ import { after, before, test } from "node:test";
 import { createApp } from "../../app.js";
 import { resetStoreForTests } from "../profile/auth.js";
 import { resetHandbookLogsForTests } from "./log-store.js";
-import { resetPptCoursesForTests } from "./ppt-store.js";
+import { DATA_DIR, resetPptCoursesForTests } from "./ppt-store.js";
 
 const server = createApp().listen(0);
 const { port } = server.address();
@@ -194,6 +194,37 @@ test("upload pptx, turn pages, never serve original", async () => {
     headers: { cookie, Accept: "application/json" }
   });
   assert.equal(download.status, 404);
+});
+
+test("GET course rebuilds slide images from source.pptx when pages.json is gone", async () => {
+  const cookie = await loginCookie();
+  await resetPptCoursesForTests();
+  const buf = await makePptx();
+  const pack = multipart(
+    { title: "补渲染课", category: "选品与商品", published: "true" },
+    { filename: "ops.pptx", buffer: buf }
+  );
+  const createdRes = await fetch(`${base}/api/academy/courses`, {
+    method: "POST",
+    headers: { cookie, Accept: "application/json", "Content-Type": pack.type },
+    body: pack.body
+  });
+  assert.equal(createdRes.status, 201);
+  const id = (await createdRes.json()).course.id;
+  await rm(join(DATA_DIR, id, "pages.json"), { force: true });
+  await rm(join(DATA_DIR, id, "media"), { recursive: true, force: true });
+  const listed = await (
+    await fetch(`${base}/api/academy/courses/${id}`, {
+      headers: { cookie, Accept: "application/json" }
+    })
+  ).json();
+  assert.equal(listed.ok, true);
+  assert.equal(listed.renderError, "");
+  assert.equal(listed.pages.length, 2);
+  assert.match(listed.pages[0].slide.url, /slide-1\.png/);
+  const img = await fetch(`${base}${listed.pages[0].slide.url}`, { headers: { cookie } });
+  assert.equal(img.status, 200);
+  assert.match(img.headers.get("content-type") || "", /image\/png/);
 });
 
 test("raw octet-stream pptx upload keeps session and rejects anonymous", async () => {
