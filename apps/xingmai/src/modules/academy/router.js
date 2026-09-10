@@ -8,6 +8,8 @@ import {
   readHandbookMedia,
   saveHandbookSection
 } from "./handbook-store.js";
+import { appendHandbookLog, listHandbookLogs } from "./log-store.js";
+import { canEditHandbook } from "./framework.js";
 import { parseMultipart } from "./multipart.js";
 import {
   examAccept,
@@ -83,6 +85,25 @@ academyRouter.get("/plan", (req, res) => {
 
 function denyOriginal(res) {
   res.status(404).json({ ok: false, error: "不提供原件下载，请在线翻页" });
+}
+
+function requireHandbookEditor(req, res) {
+  const user = requireUser(req, res);
+  if (!user) {
+    return null;
+  }
+  if (!canEditHandbook(user)) {
+    res.status(403).json({ ok: false, error: "手册由罗成、沈子晗、韩梦凯双击修改" });
+    return null;
+  }
+  return user;
+}
+
+function actorOf(user) {
+  return {
+    actor: user.username,
+    actorName: user.displayName || user.username
+  };
 }
 
 academyRouter.get("/courses", async (req, res) => {
@@ -229,10 +250,23 @@ academyRouter.get("/exams/tracks/:id", async (req, res) => {
 });
 
 academyRouter.get("/handbook/tree", async (req, res) => {
+  const user = requireUser(req, res);
+  if (!user) {
+    return;
+  }
+  res.json({
+    ok: true,
+    editors: ["罗成", "沈子晗", "韩梦凯"],
+    canEdit: canEditHandbook(user),
+    tree: await handbook()
+  });
+});
+
+academyRouter.get("/logs", async (req, res) => {
   if (!requireUser(req, res)) {
     return;
   }
-  res.json({ ok: true, tree: await handbook() });
+  res.json({ ok: true, items: await listHandbookLogs(120) });
 });
 
 academyRouter.get("/handbook/media/:name", async (req, res) => {
@@ -263,12 +297,19 @@ academyRouter.get("/handbook/sections/:id", async (req, res) => {
 });
 
 academyRouter.post("/handbook/sections/:id", async (req, res) => {
-  const user = requireUser(req, res);
+  const user = requireHandbookEditor(req, res);
   if (!user) {
     return;
   }
   try {
     const section = await saveHandbookSection(req.params.id, req.body || {});
+    await appendHandbookLog({
+      ...actorOf(user),
+      action: "改正文",
+      sectionId: section.id,
+      sectionTitle: section.title,
+      detail: String((req.body || {}).title || section.title)
+    });
     res.json({ ok: true, section });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
@@ -276,13 +317,20 @@ academyRouter.post("/handbook/sections/:id", async (req, res) => {
 });
 
 academyRouter.post("/handbook/sections/:id/images", async (req, res) => {
-  const user = requireUser(req, res);
+  const user = requireHandbookEditor(req, res);
   if (!user) {
     return;
   }
   try {
     const { file } = await parseMultipart(req, { maxBytes: 5 * 1024 * 1024 });
     const section = await addHandbookImage(req.params.id, file);
+    await appendHandbookLog({
+      ...actorOf(user),
+      action: "插图",
+      sectionId: section.id,
+      sectionTitle: section.title,
+      detail: file && file.filename ? file.filename : "图片"
+    });
     res.status(201).json({ ok: true, section });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
@@ -290,7 +338,7 @@ academyRouter.post("/handbook/sections/:id/images", async (req, res) => {
 });
 
 academyRouter.post("/handbook/branches", async (req, res) => {
-  const user = requireUser(req, res);
+  const user = requireHandbookEditor(req, res);
   if (!user) {
     return;
   }
@@ -298,6 +346,13 @@ academyRouter.post("/handbook/branches", async (req, res) => {
     const section = await addHandbookBranch({
       parentId: (req.body || {}).parentId,
       title: (req.body || {}).title
+    });
+    await appendHandbookLog({
+      ...actorOf(user),
+      action: "加分支",
+      sectionId: section.id,
+      sectionTitle: section.title,
+      detail: "挂在 " + String((req.body || {}).parentId || "")
     });
     res.status(201).json({ ok: true, section, tree: await handbook() });
   } catch (err) {

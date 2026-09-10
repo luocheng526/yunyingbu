@@ -1,4 +1,4 @@
-/* xm-academy 0.1.201 */
+/* xm-academy 0.1.210 */
 main.page.academy-page,
 .page.academy-page {
   flex: 0 0 auto;
@@ -10,8 +10,19 @@ main.page.academy-page,
   padding: 0 0 16px;
 }
 
-.academy-head {
+.academy-jump {
   margin: 0 0 8px;
+}
+
+.academy-jump button {
+  border: 0;
+  border-radius: 6px;
+  background: var(--xm-primary-soft);
+  color: var(--xm-primary);
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 10px;
+  cursor: pointer;
 }
 
 .academy-head h1 {
@@ -94,6 +105,12 @@ main.page.academy-page,
   font-size: 13px;
   padding: 5px 12px;
   cursor: pointer;
+}
+
+.academy-tools button.ghost,
+.academy-actions button.ghost {
+  background: var(--xm-primary-soft);
+  color: var(--xm-primary);
 }
 
 .academy-work {
@@ -425,6 +442,39 @@ html[data-theme="dark"] .academy-track.is-on,
 html[data-theme="dark"] .academy-actions button.ghost,
 html[data-theme="dark"] .academy-tree-item.is-on {
   color: var(--xm-primary);
+}
+
+.academy-doc h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.academy-doc {
+  cursor: default;
+}
+
+.academy-log-panel {
+  min-height: 0 !important;
+  padding: 8px 10px;
+}
+
+.academy-log {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.academy-log th,
+.academy-log td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--xm-line);
+  vertical-align: top;
+}
+
+.academy-log th {
+  color: var(--xm-muted);
+  font-weight: 600;
 }
 
 @media (max-width: 800px) {

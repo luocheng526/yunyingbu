@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.201 */
+/* xm-module-academy 0.1.210 */
 (function () {
-  const ASSET_VER = "0.1.201";
+  const ASSET_VER = "0.1.210";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -12,13 +12,73 @@
   }
 
   function ensureCss() {
-    if (document.querySelector('link[href*="academy.css"]')) {
+    const links = document.querySelectorAll('link[href*="academy.css"]');
+    let fresh = false;
+    Array.prototype.forEach.call(links, function (link) {
+      if (String(link.getAttribute("href") || "").indexOf("v=" + ASSET_VER) >= 0) {
+        fresh = true;
+      } else {
+        link.parentNode.removeChild(link);
+      }
+    });
+    if (fresh) {
       return;
     }
     const link = document.createElement("link");
     link.rel = "stylesheet";
     link.href = CSS_HREF;
     document.head.appendChild(link);
+  }
+
+  function openAcademyLogs() {
+    const root = document.getElementById("xm-content");
+    if (!root) {
+      return;
+    }
+    if (typeof window.__xmUnmount === "function") {
+      try {
+        window.__xmUnmount();
+      } catch (_err) {
+        /* keep going */
+      }
+    }
+    root.removeAttribute("data-xm-mounted");
+    const tab = document.querySelector(".xm-tab");
+    if (tab) {
+      tab.textContent = "操作日志";
+    }
+    document.querySelectorAll(".xm-menu a[href]").forEach(function (el) {
+      const on = el.getAttribute("data-academy-logs") === "1";
+      el.classList.toggle("is-active", on);
+      if (on) {
+        el.setAttribute("aria-current", "page");
+      } else {
+        el.removeAttribute("aria-current");
+      }
+    });
+    window.__xmUnmount = logsPage().mount(root);
+  }
+
+  function ensureLogNav() {
+    const handbook = document.querySelector('.xm-menu a[href="/academy/handbook"]');
+    if (!handbook || document.querySelector("[data-academy-logs]")) {
+      return;
+    }
+    const a = document.createElement("a");
+    a.className = "xm-menu-item";
+    a.href = "/academy/handbook";
+    a.setAttribute("data-academy-logs", "1");
+    a.innerHTML = "<span>操作日志</span>";
+    handbook.parentNode.insertBefore(a, handbook.nextSibling);
+    a.addEventListener(
+      "click",
+      function (ev) {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        openAcademyLogs();
+      },
+      true
+    );
   }
 
   function api(path) {
@@ -108,10 +168,19 @@
 
   function mountShell(root, html) {
     ensureCss();
-    root.innerHTML = '<main class="page academy-page">' + html + "</main>";
+    ensureLogNav();
+    root.innerHTML = '<main class="page academy-page academy-live">' + html + "</main>";
     return function unmount() {
       root.innerHTML = "";
     };
+  }
+
+  function canEditHandbook() {
+    const user = window.__xmBootUser || {};
+    const names = [user.username, user.displayName];
+    return names.some(function (name) {
+      return name === "罗成" || name === "沈子晗" || name === "韩梦凯";
+    });
   }
 
   function coursesPage() {
@@ -330,7 +399,7 @@
       mount: function (root) {
         const unmount = mountShell(
           root,
-          pageHead("培训考试", "先选晋升档，导入考试文档出卷。到点交卷。") +
+          pageHead("培训考试", "选晋升档，导入考试文档出卷，到点交卷。") +
             '<div class="academy-tracks" id="academy-tracks" aria-label="考试档"></div>' +
             '<section class="panel academy-paper" id="academy-paper"><p class="academy-empty">点上面一档，导入文档或开始考试。</p></section>'
         );
@@ -633,16 +702,25 @@
   function handbookPage() {
     return {
       mount: function (root) {
+        const editorOk = canEditHandbook();
         const unmount = mountShell(
           root,
-          pageHead("运营手册", "点一节写正文，可加下级分支和插图。只写京东店铺运营。") +
+          pageHead(
+            "运营手册",
+            editorOk
+              ? "点开一节阅读。罗成、沈子晗、韩梦凯可双击正文修改。"
+              : "点开一节阅读。罗成、沈子晗、韩梦凯可双击修改。"
+          ) +
+            '<p class="academy-jump"><button type="button" id="academy-open-logs">操作日志</button></p>' +
             '<div class="academy-work academy-work-book">' +
             '<aside class="panel academy-side"><nav class="academy-tree" id="academy-tree"></nav></aside>' +
-            '<section class="panel academy-main" id="academy-section"><p class="academy-empty">点左侧一节开始写。</p></section>' +
+            '<section class="panel academy-main" id="academy-section"><p class="academy-empty">点左侧一节阅读。</p></section>' +
             "</div>"
         );
         let dead = false;
         let currentId = "";
+        let clickTimer = 0;
+        let editing = false;
 
         function renderBody(text) {
           return String(text || "")
@@ -695,6 +773,21 @@
           });
         }
 
+        function paintView(section) {
+          const box = root.querySelector("#academy-section");
+          box.innerHTML =
+            '<div class="academy-doc" data-handbook-view="1">' +
+            "<h2>" +
+            escapeHtml(section.title || "") +
+            "</h2>" +
+            '<p class="academy-meta">' +
+            (editorOk ? "双击正文进入修改" : "只读。罗成、沈子晗、韩梦凯可双击修改") +
+            "</p>" +
+            '<div class="academy-doc-shell" id="academy-handbook-preview">' +
+            (section.body ? renderBody(section.body) : '<p class="academy-empty">还没有正文。</p>') +
+            "</div></div>";
+        }
+
         function paintEditor(section) {
           const box = root.querySelector("#academy-section");
           box.innerHTML =
@@ -707,26 +800,30 @@
             escapeHtml(section.body) +
             "</textarea>" +
             '<div class="academy-tools"><button type="submit">保存</button>' +
+            '<button type="button" class="ghost" id="academy-handbook-cancel">取消</button>' +
             '<p class="academy-status" id="academy-handbook-status"></p></div></form>' +
             '<form id="academy-handbook-branch" class="academy-tools">' +
             '<input type="text" name="title" maxlength="160" placeholder="下级分支标题" />' +
             '<button type="submit">添加分支</button></form>' +
             '<form id="academy-handbook-image" class="academy-tools">' +
             '<input type="file" name="file" accept="image/png,image/jpeg,image/gif,image/webp,.png,.jpg,.jpeg,.gif,.webp" />' +
-            '<button type="submit">插入图片</button></form>' +
-            '<div class="academy-doc-shell" id="academy-handbook-preview"><h3>预览</h3>' +
-            (section.body ? renderBody(section.body) : '<p class="academy-empty">还没有正文。</p>') +
-            "</div></div>";
+            '<button type="submit">插入图片</button></form></div>';
         }
 
-        function openSection(id) {
+        function openSection(id, edit) {
           currentId = id;
+          editing = Boolean(edit) && editorOk;
           api("/api/academy/handbook/sections/" + encodeURIComponent(id))
             .then(function (data) {
               if (dead) {
                 return;
               }
-              paintEditor(data.section || {});
+              const section = data.section || {};
+              if (editing) {
+                paintEditor(section);
+              } else {
+                paintView(section);
+              }
               root.querySelectorAll(".academy-tree-item").forEach(function (el) {
                 el.classList.toggle("is-on", el.getAttribute("data-id") === id);
               });
@@ -743,13 +840,51 @@
             tree.innerHTML = '<p class="academy-status error">' + escapeHtml(err.message) + "</p>";
           }
         });
+        const jump = root.querySelector("#academy-open-logs");
+        if (jump) {
+          jump.addEventListener("click", function (ev) {
+            ev.preventDefault();
+            openAcademyLogs();
+          });
+        }
 
         root.querySelector("#academy-tree").addEventListener("click", function (ev) {
           const btn = ev.target.closest("[data-id]");
           if (!btn) {
             return;
           }
-          openSection(btn.getAttribute("data-id"));
+          const id = btn.getAttribute("data-id");
+          window.clearTimeout(clickTimer);
+          clickTimer = window.setTimeout(function () {
+            clickTimer = 0;
+            openSection(id, false);
+          }, 220);
+        });
+        root.querySelector("#academy-tree").addEventListener("dblclick", function (ev) {
+          const btn = ev.target.closest("[data-id]");
+          if (!btn) {
+            return;
+          }
+          ev.preventDefault();
+          window.clearTimeout(clickTimer);
+          clickTimer = 0;
+          openSection(btn.getAttribute("data-id"), true);
+        });
+
+        root.querySelector("#academy-section").addEventListener("dblclick", function (ev) {
+          if (!editorOk || !currentId) {
+            return;
+          }
+          if (ev.target.closest("form") || ev.target.closest("textarea") || ev.target.closest("input")) {
+            return;
+          }
+          openSection(currentId, true);
+        });
+
+        root.querySelector("#academy-section").addEventListener("click", function (ev) {
+          if (ev.target && ev.target.id === "academy-handbook-cancel" && currentId) {
+            openSection(currentId, false);
+          }
         });
 
         root.querySelector("#academy-section").addEventListener("submit", function (ev) {
@@ -767,7 +902,8 @@
               .then(function (data) {
                 status.textContent = "已保存";
                 status.className = "academy-status";
-                paintEditor(data.section);
+                editing = false;
+                paintView(data.section);
                 return loadTree();
               })
               .catch(function (err) {
@@ -785,7 +921,7 @@
               .then(function (data) {
                 return loadTree().then(function () {
                   if (data.section && data.section.id) {
-                    openSection(data.section.id);
+                    openSection(data.section.id, true);
                   }
                 });
               })
@@ -818,8 +954,57 @@
 
         return function () {
           dead = true;
+          window.clearTimeout(clickTimer);
           unmount();
         };
+      }
+    };
+  }
+
+  function logsPage() {
+    return {
+      mount: function (root) {
+        const unmount = mountShell(
+          root,
+          pageHead("操作日志", "手册改动会记下是谁、改了哪一节。") +
+            '<section class="panel academy-log-panel"><div id="academy-logs"><p class="academy-empty">正在读取…</p></div></section>'
+        );
+        api("/api/academy/logs")
+          .then(function (data) {
+            const box = root.querySelector("#academy-logs");
+            const items = data.items || [];
+            if (!items.length) {
+              box.innerHTML = '<p class="academy-empty">还没有操作。</p>';
+              return;
+            }
+            box.innerHTML =
+              '<table class="academy-log"><thead><tr><th>时间</th><th>谁</th><th>动作</th><th>章节</th><th>说明</th></tr></thead><tbody>' +
+              items
+                .map(function (item) {
+                  return (
+                    "<tr><td>" +
+                    escapeHtml(item.at) +
+                    "</td><td>" +
+                    escapeHtml(item.actorName || item.actor) +
+                    "</td><td>" +
+                    escapeHtml(item.action) +
+                    "</td><td>" +
+                    escapeHtml(item.sectionTitle || item.sectionId) +
+                    "</td><td>" +
+                    escapeHtml(item.detail) +
+                    "</td></tr>"
+                  );
+                })
+                .join("") +
+              "</tbody></table>";
+          })
+          .catch(function (err) {
+            const box = root.querySelector("#academy-logs");
+            if (box) {
+              box.innerHTML = '<p class="academy-status error">' + escapeHtml(err.message) + "</p>";
+            }
+          });
+        return unmount;
       }
     };
   }
@@ -830,4 +1015,5 @@
   window.XmModules["/academy/courses"] = courses;
   window.XmModules["/academy/exams"] = examsPage();
   window.XmModules["/academy/handbook"] = handbookPage();
+  window.XmModules["/academy/logs"] = logsPage();
 })();

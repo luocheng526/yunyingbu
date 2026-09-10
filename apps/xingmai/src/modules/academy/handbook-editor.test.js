@@ -4,6 +4,7 @@ import { after, before, test } from "node:test";
 import { createApp } from "../../app.js";
 import { resetStoreForTests } from "../profile/auth.js";
 import { resetHandbookForTests } from "./handbook-store.js";
+import { resetHandbookLogsForTests } from "./log-store.js";
 
 const server = createApp().listen(0);
 const { port } = server.address();
@@ -17,10 +18,12 @@ const png = Buffer.from(
 before(async () => {
   resetStoreForTests();
   await resetHandbookForTests();
+  await resetHandbookLogsForTests();
 });
 
 after(async () => {
   await resetHandbookForTests();
+  await resetHandbookLogsForTests();
   await new Promise((resolve) => server.close(resolve));
 });
 
@@ -48,12 +51,17 @@ test("academy.js opens the handbook editor", () => {
   assert.match(js, /\/api\/academy\/handbook\/sections\//);
   assert.match(js, /添加分支/);
   assert.match(js, /插入图片/);
+  assert.match(js, /操作日志/);
+  assert.match(js, /双击/);
   assert.doesNotMatch(js, /文档编辑区（下一步）/);
+  assert.doesNotMatch(js, /第 1 步/);
+  assert.doesNotMatch(js, /第 4 步/);
 });
 
 test("plan is live; write body, add branch, insert image", async () => {
   const cookie = await loginCookie();
   await resetHandbookForTests();
+  await resetHandbookLogsForTests();
   const headers = { cookie, Accept: "application/json" };
   const plan = await (await fetch(`${base}/api/academy/plan`, { headers })).json();
   assert.equal(plan.ready, true);
@@ -92,4 +100,8 @@ test("plan is live; write body, add branch, insert image", async () => {
   const titleNode = goods.children.find((n) => n.id === "goods-title");
   assert.equal(titleNode.hasBody, true);
   assert.ok(titleNode.children.some((n) => n.title === "测款第一周"));
+  const logs = await (await fetch(`${base}/api/academy/logs`, { headers })).json();
+  assert.ok(logs.items.some((item) => item.actor === "罗成" && item.action === "改正文"));
+  assert.ok(logs.items.some((item) => item.action === "加分支"));
+  assert.ok(logs.items.some((item) => item.action === "插图"));
 });
