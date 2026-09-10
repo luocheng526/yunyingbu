@@ -13,13 +13,13 @@ export const PLAN = [
   },
   {
     step: 3,
-    current: true,
+    current: false,
     name: "培训考试",
     detail: "先选晋升档，再导入考试文档出卷，限时交卷。"
   },
   {
     step: 4,
-    current: false,
+    current: true,
     name: "运营手册",
     detail: "一节一节写，有分支，可插图。"
   }
@@ -95,8 +95,8 @@ export function handbookTree() {
 
 export function plan() {
   return {
-    step: 3,
-    title: "第 3 步：培训考试",
+    step: 4,
+    title: "第 4 步：运营手册",
     steps: PLAN.map((item) => ({ ...item }))
   };
 }

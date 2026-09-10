@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.180 */
+/* xm-module-academy 0.1.190 */
 (function () {
-  const ASSET_VER = "0.1.180";
+  const ASSET_VER = "0.1.190";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -689,15 +689,112 @@
           root,
           pageHead(
             "运营手册",
-            "一节一节分开。下一步才在网页里写正文、加分支、插图。现在只放章节树。"
+            "点一节写正文。可加下级分支，可插图。只写京东店铺运营。",
+            "甄选商学院 · 第 4 步运营手册"
           ) +
             '<div id="academy-plan"></div>' +
             '<div class="academy-layout">' +
             '<section class="panel"><h2>章节</h2><nav class="academy-tree" id="academy-tree"></nav></section>' +
-            '<section class="panel" id="academy-section"><h2>本节</h2><p class="academy-empty">点左侧一节。编辑、插图下一步再开。</p></section>' +
+            '<section class="panel" id="academy-section"><h2>本节</h2><p class="academy-empty">点左侧一节，在网页里写正文。</p></section>' +
             "</div>"
         );
         let dead = false;
+        let currentId = "";
+
+        function renderBody(text) {
+          return String(text || "")
+            .split("\n")
+            .map(function (line) {
+              const hit = line.match(/^!\[(.*?)\]\((\/api\/academy\/handbook\/media\/[A-Za-z0-9._-]+)\)$/);
+              if (hit) {
+                return (
+                  '<p><img src="' +
+                  escapeHtml(hit[2]) +
+                  '" alt="' +
+                  escapeHtml(hit[1]) +
+                  '" /></p>'
+                );
+              }
+              return "<p>" + escapeHtml(line) + "</p>";
+            })
+            .join("");
+        }
+
+        function treeHtml(nodes) {
+          return (nodes || [])
+            .map(function (node) {
+              return (
+                '<div class="academy-tree-group">' +
+                '<button type="button" class="academy-tree-item' +
+                (node.id === currentId ? " is-on" : "") +
+                '" data-id="' +
+                escapeHtml(node.id) +
+                '">' +
+                escapeHtml(node.title) +
+                (node.hasBody ? '<span class="academy-badge is-pub">已写</span>' : "") +
+                "</button>" +
+                '<div class="academy-tree-kids">' +
+                treeHtml(node.children || []) +
+                "</div></div>"
+              );
+            })
+            .join("");
+        }
+
+        function loadTree() {
+          return api("/api/academy/handbook/tree").then(function (data) {
+            if (dead) {
+              return data;
+            }
+            const tree = root.querySelector("#academy-tree");
+            tree.innerHTML = treeHtml(data.tree);
+            return data;
+          });
+        }
+
+        function paintEditor(section) {
+          const box = root.querySelector("#academy-section");
+          box.innerHTML =
+            '<form id="academy-handbook-form" class="academy-upload">' +
+            "<label>标题 <input name=\"title\" maxlength=\"160\" value=\"" +
+            escapeHtml(section.title) +
+            '" /></label>' +
+            '<label class="academy-body-label">正文 <textarea name="body" id="academy-handbook-body" rows="12">' +
+            escapeHtml(section.body) +
+            "</textarea></label>" +
+            '<div class="academy-actions"><button type="submit">保存</button></div>' +
+            '<p class="academy-status" id="academy-handbook-status"></p></form>' +
+            '<form id="academy-handbook-branch" class="academy-upload">' +
+            "<h3>下级分支</h3>" +
+            '<label>标题 <input name="title" maxlength="160" placeholder="例如：测款第一周" /></label>' +
+            '<button type="submit">添加分支</button></form>' +
+            '<form id="academy-handbook-image" class="academy-upload">' +
+            "<h3>插图</h3>" +
+            '<label class="academy-file">图片 <input type="file" name="file" accept="image/png,image/jpeg,image/gif,image/webp,.png,.jpg,.jpeg,.gif,.webp" /></label>' +
+            '<button type="submit">插入图片</button></form>' +
+            '<div class="academy-doc-shell" id="academy-handbook-preview"><h3>预览</h3>' +
+            (section.body ? renderBody(section.body) : '<p class="academy-empty">还没有正文。</p>') +
+            "</div>";
+        }
+
+        function openSection(id) {
+          currentId = id;
+          api("/api/academy/handbook/sections/" + encodeURIComponent(id))
+            .then(function (data) {
+              if (dead) {
+                return;
+              }
+              paintEditor(data.section || {});
+              root.querySelectorAll(".academy-tree-item").forEach(function (el) {
+                el.classList.toggle("is-on", el.getAttribute("data-id") === id);
+              });
+            })
+            .catch(function (err) {
+              root.querySelector("#academy-section").innerHTML =
+                '<h2>本节</h2><p class="academy-status error">' + escapeHtml(err.message) + "</p>";
+            });
+        }
+
         api("/api/academy/plan")
           .then(function (data) {
             const el = root.querySelector("#academy-plan");
@@ -706,58 +803,85 @@
             }
           })
           .catch(function () {});
-        api("/api/academy/handbook/tree")
-          .then(function (data) {
-            if (dead) {
-              return;
-            }
-            const tree = root.querySelector("#academy-tree");
-            tree.innerHTML = (data.tree || [])
-              .map(function (node) {
-                const kids = (node.children || [])
-                  .map(function (child) {
-                    return (
-                      '<button type="button" class="academy-tree-item" data-id="' +
-                      escapeHtml(child.id) +
-                      '" data-title="' +
-                      escapeHtml(child.title) +
-                      '">' +
-                      escapeHtml(child.title) +
-                      "</button>"
-                    );
-                  })
-                  .join("");
-                return (
-                  '<div class="academy-tree-group"><p class="academy-tree-parent">' +
-                  escapeHtml(node.title) +
-                  "</p>" +
-                  kids +
-                  "</div>"
-                );
-              })
-              .join("");
-          })
-          .catch(function (err) {
-            const tree = root.querySelector("#academy-tree");
-            if (tree) {
-              tree.innerHTML = '<p class="academy-status error">' + escapeHtml(err.message) + "</p>";
-            }
-          });
+        loadTree().catch(function (err) {
+          const tree = root.querySelector("#academy-tree");
+          if (tree) {
+            tree.innerHTML = '<p class="academy-status error">' + escapeHtml(err.message) + "</p>";
+          }
+        });
+
         root.querySelector("#academy-tree").addEventListener("click", function (ev) {
           const btn = ev.target.closest("[data-id]");
           if (!btn) {
             return;
           }
-          root.querySelectorAll(".academy-tree-item").forEach(function (el) {
-            el.classList.toggle("is-on", el === btn);
-          });
-          const title = btn.getAttribute("data-title") || "";
-          root.querySelector("#academy-section").innerHTML =
-            "<h2>" +
-            escapeHtml(title) +
-            '</h2><p class="academy-meta">本节还没有正文。第 4 步在网页里写、可加下级分支和图片。</p>' +
-            '<div class="academy-doc-shell" aria-disabled="true"><p class="academy-empty">文档编辑区（下一步）</p></div>';
+          openSection(btn.getAttribute("data-id"));
         });
+
+        root.querySelector("#academy-section").addEventListener("submit", function (ev) {
+          const form = ev.target;
+          if (!form || !currentId) {
+            return;
+          }
+          if (form.id === "academy-handbook-form") {
+            ev.preventDefault();
+            const status = root.querySelector("#academy-handbook-status");
+            postJson("/api/academy/handbook/sections/" + encodeURIComponent(currentId), {
+              title: form.title.value,
+              body: form.body.value
+            })
+              .then(function (data) {
+                status.textContent = "已保存";
+                status.className = "academy-status";
+                paintEditor(data.section);
+                return loadTree();
+              })
+              .catch(function (err) {
+                status.textContent = err.message;
+                status.className = "academy-status error";
+              });
+            return;
+          }
+          if (form.id === "academy-handbook-branch") {
+            ev.preventDefault();
+            postJson("/api/academy/handbook/branches", {
+              parentId: currentId,
+              title: form.title.value
+            })
+              .then(function (data) {
+                return loadTree().then(function () {
+                  if (data.section && data.section.id) {
+                    openSection(data.section.id);
+                  }
+                });
+              })
+              .catch(function (err) {
+                const status = root.querySelector("#academy-handbook-status");
+                if (status) {
+                  status.textContent = err.message;
+                  status.className = "academy-status error";
+                }
+              });
+            return;
+          }
+          if (form.id === "academy-handbook-image") {
+            ev.preventDefault();
+            const fd = new FormData(form);
+            postForm("/api/academy/handbook/sections/" + encodeURIComponent(currentId) + "/images", fd)
+              .then(function (data) {
+                paintEditor(data.section);
+                return loadTree();
+              })
+              .catch(function (err) {
+                const status = root.querySelector("#academy-handbook-status");
+                if (status) {
+                  status.textContent = err.message;
+                  status.className = "academy-status error";
+                }
+              });
+          }
+        });
+
         return function () {
           dead = true;
           unmount();

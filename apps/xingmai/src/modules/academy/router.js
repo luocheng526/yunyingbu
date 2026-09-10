@@ -1,5 +1,13 @@
 import { Router } from "express";
 import { currentUser } from "../profile/auth.js";
+import {
+  addHandbookBranch,
+  addHandbookImage,
+  getHandbookSection,
+  handbookMediaType,
+  readHandbookMedia,
+  saveHandbookSection
+} from "./handbook-store.js";
 import { parseMultipart } from "./multipart.js";
 import {
   examAccept,
@@ -220,11 +228,81 @@ academyRouter.get("/exams/tracks/:id", async (req, res) => {
   });
 });
 
-academyRouter.get("/handbook/tree", (req, res) => {
+academyRouter.get("/handbook/tree", async (req, res) => {
   if (!requireUser(req, res)) {
     return;
   }
-  res.json({ ok: true, tree: handbook() });
+  res.json({ ok: true, tree: await handbook() });
+});
+
+academyRouter.get("/handbook/media/:name", async (req, res) => {
+  if (!requireUser(req, res)) {
+    return;
+  }
+  try {
+    const buf = await readHandbookMedia(req.params.name);
+    res.setHeader("Content-Type", handbookMediaType(req.params.name));
+    res.setHeader("Content-Disposition", "inline");
+    res.setHeader("Cache-Control", "private, no-store");
+    res.send(buf);
+  } catch (err) {
+    res.status(err.statusCode || 404).json({ ok: false, error: err.message });
+  }
+});
+
+academyRouter.get("/handbook/sections/:id", async (req, res) => {
+  if (!requireUser(req, res)) {
+    return;
+  }
+  const section = await getHandbookSection(req.params.id);
+  if (!section) {
+    res.status(404).json({ ok: false, error: "没有这一节" });
+    return;
+  }
+  res.json({ ok: true, section });
+});
+
+academyRouter.post("/handbook/sections/:id", async (req, res) => {
+  const user = requireUser(req, res);
+  if (!user) {
+    return;
+  }
+  try {
+    const section = await saveHandbookSection(req.params.id, req.body || {});
+    res.json({ ok: true, section });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+academyRouter.post("/handbook/sections/:id/images", async (req, res) => {
+  const user = requireUser(req, res);
+  if (!user) {
+    return;
+  }
+  try {
+    const { file } = await parseMultipart(req, { maxBytes: 5 * 1024 * 1024 });
+    const section = await addHandbookImage(req.params.id, file);
+    res.status(201).json({ ok: true, section });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+academyRouter.post("/handbook/branches", async (req, res) => {
+  const user = requireUser(req, res);
+  if (!user) {
+    return;
+  }
+  try {
+    const section = await addHandbookBranch({
+      parentId: (req.body || {}).parentId,
+      title: (req.body || {}).title
+    });
+    res.status(201).json({ ok: true, section, tree: await handbook() });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
 });
 
 academyRouter.get("/search", (req, res) => {

@@ -3,7 +3,7 @@ export function parseMultipart(req, { maxBytes = 25 * 1024 * 1024 } = {}) {
     const ctype = String(req.headers["content-type"] || "");
     const match = ctype.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
     if (!match) {
-      const error = new Error("请用表单上传 PPTX");
+      const error = new Error("请用表单上传文件");
       error.statusCode = 400;
       reject(error);
       return;
