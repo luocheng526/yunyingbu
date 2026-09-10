@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.219 */
+/* xm-module-academy 0.1.220 */
 (function () {
-  const ASSET_VER = "0.1.219";
+  const ASSET_VER = "0.1.220";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -387,7 +387,9 @@
           consoleFrame(
             '<div class="academy-console-stage" id="academy-view-courses">' +
               '<div class="academy-work" id="academy-work">' +
-              '<aside class="academy-side"><div class="academy-course-list" id="academy-course-list"></div></aside>' +
+              '<aside class="academy-side" id="academy-side">' +
+              '<div class="academy-course-list" id="academy-course-list"></div>' +
+              '<div class="academy-thumbs" id="academy-thumbs" hidden></div></aside>' +
               '<section class="academy-main" id="academy-viewer" hidden></section>' +
               "</div></div>" +
               uploadPaneHtml(),
@@ -502,8 +504,13 @@
           pages = [];
           const work = root.querySelector("#academy-work");
           const panel = root.querySelector("#academy-viewer");
+          const thumbs = root.querySelector("#academy-thumbs");
           if (work) {
             work.classList.remove("has-viewer");
+          }
+          if (thumbs) {
+            thumbs.hidden = true;
+            thumbs.innerHTML = "";
           }
           if (panel) {
             panel.hidden = true;
@@ -515,16 +522,13 @@
           });
         }
 
-        function paintDeck(title) {
-          const work = root.querySelector("#academy-work");
-          const panel = root.querySelector("#academy-viewer");
-          panel.hidden = false;
-          if (work) {
-            work.classList.add("has-viewer");
+        function paintThumbs() {
+          const box = root.querySelector("#academy-thumbs");
+          if (!box) {
+            return;
           }
-          const mark = watermarkText();
-          const tiles = new Array(18).fill(escapeHtml(mark)).join(" ");
-          const thumbs = pages
+          box.hidden = false;
+          box.innerHTML = pages
             .map(function (page) {
               const url = page.slide ? page.slide.url : "";
               return (
@@ -540,6 +544,18 @@
               );
             })
             .join("");
+        }
+
+        function paintDeck(title) {
+          const work = root.querySelector("#academy-work");
+          const panel = root.querySelector("#academy-viewer");
+          panel.hidden = false;
+          if (work) {
+            work.classList.add("has-viewer");
+          }
+          const mark = watermarkText();
+          const tiles = new Array(18).fill(escapeHtml(mark)).join(" ");
+          paintThumbs();
           panel.innerHTML =
             '<div class="academy-deck-head"><h2>' +
             escapeHtml(title || "课件") +
@@ -549,9 +565,6 @@
             escapeHtml(pageCount) +
             " 页 · 点大图全屏</p></div>" +
             '<div class="academy-deck">' +
-            '<aside class="academy-thumbs" id="academy-thumbs">' +
-            thumbs +
-            "</aside>" +
             '<div class="academy-stage" id="academy-stage">' +
             '<img class="academy-slide-img" id="academy-slide-img" src="' +
             escapeHtml(slideUrl(pageNo)) +
@@ -607,12 +620,15 @@
           });
         });
 
-        root.querySelector("#academy-viewer").addEventListener("click", function (ev) {
+        root.querySelector("#academy-thumbs").addEventListener("click", function (ev) {
           const thumb = ev.target.closest("[data-index]");
-          if (thumb) {
-            setSlide(Number(thumb.getAttribute("data-index")));
+          if (!thumb) {
             return;
           }
+          setSlide(Number(thumb.getAttribute("data-index")));
+        });
+
+        root.querySelector("#academy-viewer").addEventListener("click", function (ev) {
           const fsNav = ev.target.closest("[data-fs]");
           if (fsNav) {
             setSlide(pageNo + Number(fsNav.getAttribute("data-fs")));
@@ -642,12 +658,12 @@
         document.addEventListener("keydown", onKey);
 
         root.addEventListener("contextmenu", function (ev) {
-          if (ev.target.closest(".academy-deck") || ev.target.closest(".academy-fs")) {
+          if (ev.target.closest(".academy-thumbs") || ev.target.closest(".academy-deck") || ev.target.closest(".academy-fs")) {
             ev.preventDefault();
           }
         });
         root.addEventListener("dragstart", function (ev) {
-          if (ev.target.closest(".academy-deck") || ev.target.closest(".academy-fs")) {
+          if (ev.target.closest(".academy-thumbs") || ev.target.closest(".academy-deck") || ev.target.closest(".academy-fs")) {
             ev.preventDefault();
           }
         });
