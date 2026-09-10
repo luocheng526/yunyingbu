@@ -1,4 +1,4 @@
-/* xm-sider-narrow 0.1.120 */
+/* xm-sider-narrow 0.1.121 */
 :root,
 html[data-theme="light"] {
   --xm-sider: #ffffff;
@@ -519,6 +519,27 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
   background: var(--xm-primary-soft);
   border-color: var(--xm-primary);
   color: var(--xm-primary);
+}
+
+#me-hard-reload,
+.me-page button.me-btn-hard {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  border: 1px solid var(--xm-line);
+  background: var(--xm-card);
+  color: var(--xm-ink);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+
+#me-hard-reload:hover,
+.me-page button.me-btn-hard:hover {
+  border-color: var(--xm-primary);
+  color: var(--xm-primary);
+  background: var(--xm-primary-soft);
 }
 
 a.xm-username {

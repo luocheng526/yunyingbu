@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.120 */
+/* xm-fast-shell 0.1.121 */
 (function () {
-  const ASSET_VER = "0.1.120";
+  const ASSET_VER = "0.1.121";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -72,6 +72,21 @@
   }
   if (document.body && document.body.classList.contains("login-page")) {
     return;
+  }
+
+  try {
+    const bust = new URL(window.location.href);
+    if (bust.searchParams.has("_xm")) {
+      bust.searchParams.delete("_xm");
+      const query = bust.searchParams.toString();
+      window.history.replaceState(
+        window.history.state,
+        "",
+        bust.pathname + (query ? "?" + query : "") + bust.hash
+      );
+    }
+  } catch (_err) {
+    /* ignore */
   }
 
   let current = window.location.pathname.replace(/\/+$/, "") || "/";
@@ -203,6 +218,90 @@
       document.querySelector(".xm-workspace > .xm-pane") ||
       document.querySelector(".xm-content")
     );
+  }
+
+  function collectReloadUrls() {
+    const urls = {};
+    function add(url) {
+      if (!url) {
+        return;
+      }
+      try {
+        const parsed = new URL(url, window.location.origin);
+        if (parsed.origin !== window.location.origin) {
+          return;
+        }
+        urls[parsed.href] = 1;
+        parsed.search = "";
+        urls[parsed.origin + parsed.pathname] = 1;
+      } catch (_err) {
+        /* ignore */
+      }
+    }
+    Array.prototype.forEach.call(document.querySelectorAll("link[href], script[src]"), function (el) {
+      add(el.getAttribute("href") || el.getAttribute("src") || el.href || el.src);
+    });
+    add("/shared/nav.js");
+    add("/shared/layout.css");
+    add(window.location.pathname);
+    const id = MODULES[normalize(window.location.pathname)];
+    if (id) {
+      add("/shared/modules/" + id + ".js");
+    }
+    return Object.keys(urls);
+  }
+
+  function hardReload() {
+    const urls = collectReloadUrls();
+    const jobs = urls.map(function (url) {
+      return fetch(url, {
+        cache: "reload",
+        credentials: "same-origin",
+        headers: { "Cache-Control": "no-cache", Pragma: "no-cache" }
+      }).catch(function () {});
+    });
+    const go = function () {
+      window.location.replace(
+        window.location.pathname + "?_xm=" + Date.now() + (window.location.hash || "")
+      );
+    };
+    Promise.all(jobs).then(go, go);
+  }
+  window.__xmHardReload = hardReload;
+
+  function labelRefreshButton(btn) {
+    if (!btn) {
+      return;
+    }
+    btn.textContent = "强制刷新";
+    btn.title = "绕过缓存重新加载本页";
+    btn.setAttribute("aria-label", "强制刷新");
+  }
+
+  function ensureMeHardReload() {
+    if (normalize(current) !== "/me") {
+      return;
+    }
+    const root = contentRoot();
+    if (!root || root.querySelector("#me-hard-reload")) {
+      return;
+    }
+    const logout = root.querySelector("#logout-form") || root.querySelector(".me-btn-logout");
+    const host = logout && (logout.closest(".panel") || logout.parentElement);
+    if (!host) {
+      return;
+    }
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "me-hard-reload";
+    btn.className = "me-btn me-btn-hard";
+    btn.textContent = "强制刷新";
+    btn.title = "绕过缓存重新加载本页";
+    btn.addEventListener("click", function (event) {
+      event.preventDefault();
+      hardReload();
+    });
+    host.appendChild(btn);
   }
 
   const TAB_STORE = "xm-open-tabs";
@@ -447,6 +546,7 @@
     hideForeignPages();
     revealTabBar();
     pinHomeTab();
+    ensureMeHardReload();
     return active;
   }
 
@@ -740,6 +840,7 @@
     showPane(current);
     revealTabBar();
     pinHomeTab();
+    ensureMeHardReload();
   }
 
   function bootCurrentModule() {
@@ -857,6 +958,7 @@
     }
     const root = paneFor(key, true) || contentRoot();
     if (alreadyMounted(root, key)) {
+      ensureMeHardReload();
       refreshQueueBadge();
       return;
     }
@@ -1021,7 +1123,7 @@
       refresh.type = "button";
       refresh.className = "xm-refresh";
       refresh.id = "xm-refresh";
-      refresh.textContent = "刷新";
+      labelRefreshButton(refresh);
       const dateEl = document.getElementById("xm-date");
       if (dateEl && dateEl.nextSibling) {
         user.insertBefore(refresh, dateEl.nextSibling);
@@ -1047,6 +1149,7 @@
     } else {
       name.href = "/me";
     }
+    labelRefreshButton(document.getElementById("xm-refresh"));
   }
 
   function applyCollapsed(collapsed) {
@@ -1083,7 +1186,7 @@
     if (refreshBtn && !refreshBtn.dataset.bound) {
       refreshBtn.dataset.bound = "1";
       refreshBtn.addEventListener("click", function () {
-        window.location.reload();
+        hardReload();
       });
     }
     const collapseBtn = document.getElementById("xm-collapse");
@@ -1143,7 +1246,7 @@
       '<div class="xm-user">' +
       styleSwitchHtml() +
       '<time class="xm-date" id="xm-date"></time>' +
-      '<button type="button" class="xm-refresh" id="xm-refresh">刷新</button>' +
+      '<button type="button" class="xm-refresh" id="xm-refresh" title="绕过缓存重新加载本页" aria-label="强制刷新">强制刷新</button>' +
       '<a class="xm-username" id="xm-username" href="/me">用户</a>' +
       "</div></header>" +
       '<div class="xm-workspace"><div class="xm-content xm-pane is-active" id="xm-content" data-xm-href="' +
