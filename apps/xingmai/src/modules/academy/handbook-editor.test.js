@@ -49,9 +49,12 @@ function imageForm(id) {
 
 test("academy.js opens the handbook editor", () => {
   assert.match(js, /\/api\/academy\/handbook\/sections\//);
-  assert.match(js, /添加分支/);
+  assert.match(js, /添加子菜单/);
+  assert.match(js, /academy-tree-add/);
+  assert.match(js, /星脉甄选商学院/);
+  assert.match(js, /academy-console/);
   assert.match(js, /插入图片/);
-  assert.match(js, /academy-inline-log/);
+  assert.match(js, /academy-tab/);
   assert.match(js, /双击/);
   assert.match(js, /stripLogMenu/);
   assert.doesNotMatch(js, /data-academy-logs/);
@@ -103,6 +106,21 @@ test("plan is live; write body, add branch, insert image", async () => {
   const titleNode = goods.children.find((n) => n.id === "goods-title");
   assert.equal(titleNode.hasBody, true);
   assert.ok(titleNode.children.some((n) => n.title === "测款第一周"));
+  const sub = await fetch(`${base}/api/academy/handbook/branches`, {
+    method: "POST",
+    headers: { cookie, Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ parentId: "goods", title: "新品日历" })
+  });
+  assert.equal(sub.status, 201);
+  const group = await fetch(`${base}/api/academy/handbook/branches`, {
+    method: "POST",
+    headers: { cookie, Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ parentId: "", title: "客服话术" })
+  });
+  assert.equal(group.status, 201);
+  const afterAdd = await (await fetch(`${base}/api/academy/handbook/tree`, { headers })).json();
+  assert.ok(afterAdd.tree.find((n) => n.id === "goods").children.some((n) => n.title === "新品日历"));
+  assert.ok(afterAdd.tree.some((n) => n.title === "客服话术"));
   const logs = await (await fetch(`${base}/api/academy/logs`, { headers })).json();
   assert.ok(logs.items.some((item) => item.actor === "罗成" && item.action === "改正文"));
   assert.ok(logs.items.some((item) => item.action === "加分支"));
