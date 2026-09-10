@@ -12,6 +12,7 @@ const server = createApp().listen(0);
 const { port } = server.address();
 const base = `http://127.0.0.1:${port}`;
 const js = await readFile(new URL("../../../public/shared/modules/academy.js", import.meta.url), "utf8");
+const examStore = await readFile(new URL("./exam-store.js", import.meta.url), "utf8");
 
 before(async () => {
   resetStoreForTests();
@@ -94,6 +95,8 @@ test("academy.js has exam import and countdown", () => {
   assert.doesNotMatch(js, /第 1 步/);
   assert.doesNotMatch(js, /第 2 步/);
   assert.doesNotMatch(js, /academy-plan/);
+  assert.doesNotMatch(examStore, /examGraderSeats, seatsUserCanGrade/);
+  assert.doesNotMatch(examStore, /examGraderSeats \} from/);
 });
 
 test("python reader parses json exam paper", async () => {

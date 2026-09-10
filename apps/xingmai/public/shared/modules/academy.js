@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.225 */
+/* xm-module-academy 0.1.227 · logs-page-v2 */
 (function () {
-  const ASSET_VER = "0.1.225";
+  const ASSET_VER = "0.1.227";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -40,6 +40,8 @@
           return;
         }
         box.innerHTML =
+          '<div class="academy-board-head"><h2>操作日志</h2></div>' +
+          '<p class="academy-board-meta">学院操作记录，与手册目录分开。</p>' +
           '<table class="academy-log"><thead><tr><th>时间</th><th>谁</th><th>动作</th><th>对象</th><th>说明</th></tr></thead><tbody>' +
           items
             .map(function (item) {
@@ -319,6 +321,29 @@
       shell.classList.toggle("is-home", name === "home");
       shell.classList.toggle("is-upload", name === "upload");
       shell.classList.toggle("is-logs", name === "logs");
+      Array.prototype.forEach.call(shell.children, function (el) {
+        if (el.classList.contains("academy-console-top")) {
+          return;
+        }
+        const show =
+          (name === "logs" && el.id === "academy-log-box") ||
+          (name === "upload" && el.id === "academy-view-upload") ||
+          (name === "home" &&
+            (el.id === "academy-handbook-pane" ||
+              el.id === "academy-view-courses" ||
+              el.id === "academy-view-exams"));
+        el.hidden = !show;
+        if (show) {
+          el.style.removeProperty("display");
+          el.style.removeProperty("visibility");
+          el.style.removeProperty("height");
+          el.style.removeProperty("overflow");
+          el.removeAttribute("inert");
+        } else {
+          el.style.setProperty("display", "none", "important");
+          el.setAttribute("inert", "");
+        }
+      });
     }
     const home = root.querySelector("#academy-view-courses, #academy-view-exams, #academy-handbook-pane");
     const uploadBox = root.querySelector("#academy-view-upload");
