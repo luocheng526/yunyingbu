@@ -5,6 +5,7 @@ import {
   getGoodsOverview,
   getPlaceholder,
   getStoreLive,
+  getShopOverview,
   getStoreOverview,
   getTeamOverview
 } from "./pages.js";
@@ -41,4 +42,8 @@ dataRouter.get("/placeholder", (_req, res) => {
 
 dataRouter.get("/team", (_req, res) => {
   res.json(getTeamOverview());
+});
+
+dataRouter.get("/shops", (_req, res) => {
+  res.json(getShopOverview());
 });

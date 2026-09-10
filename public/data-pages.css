@@ -570,10 +570,27 @@ html[data-theme="pink"] .ch-metrics {
   background: var(--xm-card);
   border-color: var(--xm-line);
 }
-@media (max-width: 1100px) {
-  .ch-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.ch-views {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+.ch-views a {
+  color: var(--ch-ink, var(--xm-ink));
+  text-decoration: none;
+  font-size: 16px;
+  font-weight: 500;
+  opacity: 0.55;
+}
+.ch-views a.is-active {
+  opacity: 1;
+  font-weight: 600;
+}
+.ch-table-solo {
+  border-top: 1px solid var(--ch-line, var(--xm-line, #ececec));
+  border-radius: 6px;
+}
   .ch-card:nth-child(6n) {
     border-right: 1px solid var(--xm-line);
   }

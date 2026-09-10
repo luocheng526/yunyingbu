@@ -165,6 +165,22 @@ test("data child pages and demo APIs respond", async () => {
       const page = await get(base, pathName);
       assert.equal(page.res.status, 200, pathName);
     }
+    const shopsPage = await get(base, "/data/shops/");
+    assert.equal(shopsPage.res.status, 200);
+    assert.match(shopsPage.text, /data-shops\.js/);
+    assert.match(shopsPage.text, /id="board"/);
+    assert.doesNotMatch(shopsPage.text, /店铺周报/);
+    assert.doesNotMatch(shopsPage.text, /id="data-subnav"/);
+    const shopsApi = await get(base, "/api/data/shops");
+    assert.equal(shopsApi.res.status, 200);
+    const shops = JSON.parse(shopsApi.text);
+    assert.equal(shops.title, "店铺总览");
+    assert.equal(shops.shopTable.rows.length, 13);
+    assert.match(JSON.stringify(shops), /HYGEAR医疗保健旗舰店/);
+    assert.match(JSON.stringify(shops), /请选择标签|30天/);
+    const shopsDemo = await get(base, "/data/shops-demo.json");
+    assert.equal(shopsDemo.res.status, 200);
+    assert.equal(JSON.parse(shopsDemo.text).shopTable.rows.length, 13);
     const dataMod = await get(base, "/shared/modules/data.js");
     assert.equal(dataMod.res.status, 200);
     assert.doesNotMatch(dataMod.text, /内容待开发/);
@@ -344,6 +360,8 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.equal(isAllowedDataPath("public/data/overview/index.html"), true);
   assert.equal(isAllowedDataPath("public/data-overview.js"), true);
   assert.equal(isAllowedDataPath("public/data/team-demo.json"), true);
+  assert.equal(isAllowedDataPath("public/data-shops.js"), true);
+  assert.equal(isAllowedDataPath("public/data/shops-demo.json"), true);
   assert.equal(isAllowedDataPath("public/shared/modules/data.js"), true);
   assert.equal(isAllowedDataPath("public/shared/nav.js"), false);
   const css = fs.readFileSync(path.join(repoRoot, "public/data-pages.css"), "utf8");
@@ -357,6 +375,8 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.doesNotMatch(dataMod, /内容待开发/);
   assert.doesNotMatch(dataMod, /function waitPage/);
   assert.match(dataMod, /\/data\/paid/);
+  assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
+  assert.doesNotMatch(dataMod, /店铺周报/);
   const demo = JSON.parse(fs.readFileSync(path.join(repoRoot, "public/data/team-demo.json"), "utf8"));
   assert.equal(demo.cards.length, 8);
   assert.equal(demo.scope, "团队");

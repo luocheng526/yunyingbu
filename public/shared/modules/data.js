@@ -45,6 +45,20 @@
     });
   }
 
+  function mountShopDashboard(root) {
+    ensureSheet();
+    return loadScript("/data-shops.js?v=shop-tpl").then(function () {
+      if (typeof window.XmDataCreateShopDashboard === "function") {
+        return window.XmDataCreateShopDashboard(root);
+      }
+      root.innerHTML =
+        '<main class="xm-page data-fill data-overview-root"><p class="lead">示例数据，尚未接入店铺。</p></main>';
+      return function unmount() {
+        root.innerHTML = "";
+      };
+    });
+  }
+
   function mountOverview(root) {
     ensureSheet();
     return loadScript("/data-overview.js?v=channel-tpl2").then(function () {
@@ -164,16 +178,16 @@
 
   window.XmModules["/data/shops"] = {
     mount: function (root) {
-      return mountList(root, {
-        title: "店铺数据",
-        lead: "各店铺本周成交与退款。数字为占位演示。",
-        tableTitle: "店铺周报",
-        api: "/api/data/stores/overview",
-        headers: ["店铺", "成交", "订单", "退款率"],
-        cells: function (row) {
-          return [row.store, row.gmv, row.orders, row.refund];
-        }
+      let stop = null;
+      mountShopDashboard(root).then(function (unmount) {
+        stop = unmount;
       });
+      return function unmount() {
+        if (typeof stop === "function") {
+          stop();
+        }
+        root.innerHTML = "";
+      };
     }
   };
 
