@@ -41,6 +41,13 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(text, /id="site-nav"/);
     assert.match(text, /href="\/people\.css"/);
     assert.match(text, /shared\/modules\/people\.js/);
+    const noticesJs = await fetch(`${base}/shared/modules/notices.js`);
+    const noticesText = await noticesJs.text();
+    assert.equal(noticesJs.status, 200);
+    assert.match(noticesText, /员工晋升报/);
+    assert.match(noticesText, /龙虎榜/);
+    assert.match(noticesText, /价值观践行/);
+    assert.match(noticesText, /日常公告/);
     const css = await fetch(`${base}/people.css`);
     const cssText = await css.text();
     assert.match(cssText, /max-height:\s*calc\(100vh - 250px\)/);
@@ -57,9 +64,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /登录主账号/);
     assert.match(jsText, /全部团队/);
     assert.match(jsText, /双击单元格/);
-    assert.match(jsText, /龙虎榜/);
-    assert.match(jsText, /价值观践行/);
-    assert.match(jsText, /日常公告/);
+    assert.doesNotMatch(jsText, /龙虎榜/);
     assert.doesNotMatch(jsText, /主数据治理/);
     assert.doesNotMatch(jsText, /全部公司/);
     assert.doesNotMatch(jsText, />缺口</);
