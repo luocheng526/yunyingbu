@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.128 */
+/* xm-fast-shell 0.1.129 */
 (function () {
-  const ASSET_VER = "0.1.128";
+  const ASSET_VER = "0.1.129";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -389,6 +389,20 @@
     }
     try {
       sessionStorage.setItem(TAB_STORE, payload);
+    } catch (_err2) {
+      /* ignore */
+    }
+  }
+
+  function clearOpenTabs() {
+    openTabs = [];
+    try {
+      localStorage.removeItem(TAB_STORE);
+    } catch (_err) {
+      /* ignore */
+    }
+    try {
+      sessionStorage.removeItem(TAB_STORE);
     } catch (_err2) {
       /* ignore */
     }
@@ -1495,6 +1509,7 @@
     if (logoutBtn && !logoutBtn.dataset.bound) {
       logoutBtn.dataset.bound = "1";
       logoutBtn.addEventListener("click", function () {
+        clearOpenTabs();
         fetch("/api/auth/logout", {
           method: "POST",
           credentials: "same-origin",
