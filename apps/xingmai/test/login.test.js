@@ -45,8 +45,8 @@ test("login page is public", async () => {
   const html = await res.text();
   assert.match(html, /星脉管理系统/);
   assert.match(html, /<title>星脉甄选运营中心<\/title>/);
-  assert.match(html, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=0\.1\.128"/);
-  assert.match(html, /rel="shortcut icon" href="\/favicon\.ico\?v=0\.1\.128"/);
+  assert.match(html, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=0\.1\.129"/);
+  assert.match(html, /rel="shortcut icon" href="\/favicon\.ico\?v=0\.1\.129"/);
   assert.doesNotMatch(html, /rel="icon"[^>]+href="\/login-logo\.png"/);
   assert.doesNotMatch(html, /href="data:image\/png;base64,/);
   assert.match(html, /ChangeMe123!/);
@@ -63,6 +63,7 @@ test("login page is public", async () => {
   assert.doesNotMatch(html, /\/shared\/nav\.js/);
   assert.doesNotMatch(html, /\/shared\/layout\.css/);
   assert.match(html, /decoding="async"/);
+  assert.match(html, /removeItem\("xm-open-tabs"\)/);
   assert.match(html, /window\.location\.replace\("\/home"\)/);
   assert.doesNotMatch(html, /window\.location\.replace\("\/data"\)/);
 });
