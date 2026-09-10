@@ -633,7 +633,7 @@ body {
   }
   .hero-cards li { min-height: 44px; padding: 6px 8px; }
   .hero-cards li > div span { font-size: 11px; }
-  .login-pane { padding: 48px 36px 88px; }
+  .login-pane { padding: 48px 36px 120px; }
 }
 
 @media (max-height: 800px) {
@@ -648,7 +648,7 @@ body {
     min-width: 0;
     width: 100%;
     min-height: 100vh;
-    padding: 36px 24px 88px;
+    padding: 36px 24px 120px;
   }
   .login-foot {
     left: 24px;
