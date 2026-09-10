@@ -54,6 +54,111 @@ const INDEX_ROWS = [
   { shop: "HYEGIIR健康器械旗舰店", owner: "高丽男", amount: "22,535.10", trend: -5.81 }
 ];
 
+const LADDERS = [
+  {
+    key: "perf",
+    title: "业绩排行榜",
+    unit: "业绩指数",
+    columns: [
+      {
+        title: "运营排行榜",
+        rows: [
+          { name: "张文静", amount: "585,528.77" },
+          { name: "陈明婧", amount: "364,394.18" },
+          { name: "郭桂良", amount: "342,816.69" },
+          { name: "王博", amount: "273,203.33" },
+          { name: "崔安琪", amount: "259,020.61" },
+          { name: "郭哲宁", amount: "246,265.67" },
+          { name: "高丽男", amount: "237,946.14" },
+          { name: "刘畅", amount: "223,926.24" },
+          { name: "吴桐", amount: "212,929.41" },
+          { name: "郑凯", amount: "210,833.54" }
+        ]
+      },
+      {
+        title: "主管排行榜",
+        rows: [
+          { name: "杨润泽", amount: "612,787.80" },
+          { name: "李斌", amount: "584,589.44" },
+          { name: "刘志勇", amount: "497,311.93" },
+          { name: "罗铮", amount: "483,799.74" },
+          { name: "冯瑾", amount: "466,671.93" },
+          { name: "高婷", amount: "391,553.00" },
+          { name: "冯玉辰", amount: "386,949.92" },
+          { name: "栗静萱", amount: "348,775.68" },
+          { name: "杨禄", amount: "317,635.27" }
+        ]
+      },
+      {
+        title: "经理排行榜",
+        rows: [
+          { name: "沈子晗", amount: "1,695,404.92" },
+          { name: "韩梦凯", amount: "1,611,339.53" },
+          { name: "李忠瑞", amount: "1,574,022.42" },
+          { name: "荣越", amount: "1,172,511.68" },
+          { name: "丹井", amount: "889,167.46" },
+          { name: "王鑫", amount: "710,000.44" },
+          { name: "张勇", amount: "499,507.82" },
+          { name: "杨阳", amount: "387,360.18" },
+          { name: "武魏", amount: "398,576.83" },
+          { name: "张强", amount: "299,312.11" }
+        ]
+      }
+    ]
+  },
+  {
+    key: "profit",
+    title: "利润排行榜",
+    unit: "利润指数",
+    columns: [
+      {
+        title: "运营排行榜",
+        rows: [
+          { name: "张文静", amount: "264,402.49" },
+          { name: "陈明婧", amount: "176,268.33" },
+          { name: "郭桂良", amount: "158,410.20" },
+          { name: "王博", amount: "131,276.18" },
+          { name: "崔安琪", amount: "124,810.55" },
+          { name: "郭哲宁", amount: "118,640.12" },
+          { name: "高丽男", amount: "112,508.85" },
+          { name: "刘畅", amount: "106,474.58" },
+          { name: "吴桐", amount: "98,932.76" },
+          { name: "郑凯", amount: "94,409.11" }
+        ]
+      },
+      {
+        title: "主管排行榜",
+        rows: [
+          { name: "杨润泽", amount: "296,914.26" },
+          { name: "李斌", amount: "264,402.49" },
+          { name: "刘志勇", amount: "229,647.04" },
+          { name: "罗铮", amount: "196,914.26" },
+          { name: "冯瑾", amount: "176,268.33" },
+          { name: "高婷", amount: "153,098.03" },
+          { name: "冯玉辰", amount: "131,276.18" },
+          { name: "栗静萱", amount: "123,500.43" },
+          { name: "杨禄", amount: "112,508.85" }
+        ]
+      },
+      {
+        title: "经理排行榜",
+        rows: [
+          { name: "沈子晗", amount: "764,402.49" },
+          { name: "韩梦凯", amount: "676,268.33" },
+          { name: "李忠瑞", amount: "615,136.64" },
+          { name: "荣越", amount: "512,511.68" },
+          { name: "丹井", amount: "415,136.64" },
+          { name: "王鑫", amount: "348,174.63" },
+          { name: "张勇", amount: "264,402.49" },
+          { name: "杨阳", amount: "196,914.26" },
+          { name: "武魏", amount: "176,268.33" },
+          { name: "张强", amount: "131,276.18" }
+        ]
+      }
+    ]
+  }
+];
+
 const TIGER_ROWS = [
   { shop: "RASW家居旗舰店", owner: "张文静", amount: "196,420.18" },
   { shop: "RASW生活电器旗舰店", owner: "陈明婧", amount: "148,902.44" },
@@ -91,7 +196,16 @@ export function homeRouter() {
       tiger: {
         title: "龙虎榜",
         rows: TIGER_ROWS.map((row) => ({ ...row }))
-      }
+      },
+      ladders: LADDERS.map((board) => ({
+        key: board.key,
+        title: board.title,
+        unit: board.unit,
+        columns: board.columns.map((column) => ({
+          title: column.title,
+          rows: column.rows.map((row) => ({ ...row }))
+        }))
+      }))
     });
   });
   router.get("/teams", (_req, res) => {

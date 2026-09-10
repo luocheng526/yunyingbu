@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.191-home-teams */
+/* xm-module-home 0.1.194-home-ladders */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -168,6 +168,110 @@
           { shop: "ZYUTO旗舰店", owner: "刘畅", liveAmount: "7,087.40", orders: "164", payAmount: "29,329.38", refundRate: "7.80%" },
           { shop: "SAWAAG居家旗舰店", owner: "吴桐", liveAmount: "8,640.20", orders: "92", payAmount: "24,810.55", refundRate: "21.40%" },
           { shop: "HYGEAR健康器械旗舰店", owner: "韩梦凯", liveAmount: "6,287.11", orders: "89", payAmount: "29,508.85", refundRate: "18.32%" }
+        ]
+      }
+    ],
+    ladders: [
+      {
+        key: "perf",
+        title: "业绩排行榜",
+        unit: "业绩指数",
+        columns: [
+          {
+            title: "运营排行榜",
+            rows: [
+              { name: "张文静", amount: "585,528.77" },
+              { name: "陈明婧", amount: "364,394.18" },
+              { name: "郭桂良", amount: "342,816.69" },
+              { name: "王博", amount: "273,203.33" },
+              { name: "崔安琪", amount: "259,020.61" },
+              { name: "郭哲宁", amount: "246,265.67" },
+              { name: "高丽男", amount: "237,946.14" },
+              { name: "刘畅", amount: "223,926.24" },
+              { name: "吴桐", amount: "212,929.41" },
+              { name: "郑凯", amount: "210,833.54" }
+            ]
+          },
+          {
+            title: "主管排行榜",
+            rows: [
+              { name: "杨润泽", amount: "612,787.80" },
+              { name: "李斌", amount: "584,589.44" },
+              { name: "刘志勇", amount: "497,311.93" },
+              { name: "罗铮", amount: "483,799.74" },
+              { name: "冯瑾", amount: "466,671.93" },
+              { name: "高婷", amount: "391,553.00" },
+              { name: "冯玉辰", amount: "386,949.92" },
+              { name: "栗静萱", amount: "348,775.68" },
+              { name: "杨禄", amount: "317,635.27" }
+            ]
+          },
+          {
+            title: "经理排行榜",
+            rows: [
+              { name: "沈子晗", amount: "1,695,404.92" },
+              { name: "韩梦凯", amount: "1,611,339.53" },
+              { name: "李忠瑞", amount: "1,574,022.42" },
+              { name: "荣越", amount: "1,172,511.68" },
+              { name: "丹井", amount: "889,167.46" },
+              { name: "王鑫", amount: "710,000.44" },
+              { name: "张勇", amount: "499,507.82" },
+              { name: "杨阳", amount: "387,360.18" },
+              { name: "武魏", amount: "398,576.83" },
+              { name: "张强", amount: "299,312.11" }
+            ]
+          }
+        ]
+      },
+      {
+        key: "profit",
+        title: "利润排行榜",
+        unit: "利润指数",
+        columns: [
+          {
+            title: "运营排行榜",
+            rows: [
+              { name: "张文静", amount: "264,402.49" },
+              { name: "陈明婧", amount: "176,268.33" },
+              { name: "郭桂良", amount: "158,410.20" },
+              { name: "王博", amount: "131,276.18" },
+              { name: "崔安琪", amount: "124,810.55" },
+              { name: "郭哲宁", amount: "118,640.12" },
+              { name: "高丽男", amount: "112,508.85" },
+              { name: "刘畅", amount: "106,474.58" },
+              { name: "吴桐", amount: "98,932.76" },
+              { name: "郑凯", amount: "94,409.11" }
+            ]
+          },
+          {
+            title: "主管排行榜",
+            rows: [
+              { name: "杨润泽", amount: "296,914.26" },
+              { name: "李斌", amount: "264,402.49" },
+              { name: "刘志勇", amount: "229,647.04" },
+              { name: "罗铮", amount: "196,914.26" },
+              { name: "冯瑾", amount: "176,268.33" },
+              { name: "高婷", amount: "153,098.03" },
+              { name: "冯玉辰", amount: "131,276.18" },
+              { name: "栗静萱", amount: "123,500.43" },
+              { name: "杨禄", amount: "112,508.85" }
+            ]
+          },
+          {
+            title: "经理排行榜",
+            rows: [
+              { name: "沈子晗", amount: "764,402.49" },
+              { name: "韩梦凯", amount: "676,268.33" },
+              { name: "李忠瑞", amount: "615,136.64" },
+              { name: "荣越", amount: "512,511.68" },
+              { name: "丹井", amount: "415,136.64" },
+              { name: "王鑫", amount: "348,174.63" },
+              { name: "张勇", amount: "264,402.49" },
+              { name: "杨阳", amount: "196,914.26" },
+              { name: "武魏", amount: "176,268.33" },
+              { name: "张强", amount: "131,276.18" }
+            ]
+          }
         ]
       }
     ]
@@ -380,6 +484,74 @@
     );
   }
 
+  function standItemHtml(row, place, unit) {
+    var rank = place === 1 ? "01" : place === 2 ? "02" : "03";
+    return (
+      '<div class="xm-hm-stand-item is-' +
+      place +
+      '"><b class="xm-hm-avatar">' +
+      escapeHtml((row.name || "—").slice(0, 1)) +
+      '</b><span class="xm-hm-stand-rank">TOP ' +
+      rank +
+      "</span><strong>" +
+      escapeHtml(row.name) +
+      '</strong><em>' +
+      escapeHtml(row.amount) +
+      "</em><small>" +
+      escapeHtml(unit) +
+      "</small></div>"
+    );
+  }
+
+  function podiumColumnHtml(column, unit) {
+    var rows = column.rows || [];
+    var first = rows[0] || { name: "—", amount: "—" };
+    var second = rows[1] || { name: "—", amount: "—" };
+    var third = rows[2] || { name: "—", amount: "—" };
+    var rest = rows.slice(3, 10);
+    return (
+      '<article class="xm-hm-podium"><h3>' +
+      escapeHtml(column.title) +
+      '</h3><div class="xm-hm-stand">' +
+      standItemHtml(second, 2, unit) +
+      standItemHtml(first, 1, unit) +
+      standItemHtml(third, 3, unit) +
+      "</div><ol class=\"xm-hm-rest\">" +
+      rest
+        .map(function (row, i) {
+          var n = i + 4;
+          return (
+            "<li><span>" +
+            (n < 10 ? "0" + n : String(n)) +
+            "</span><b>" +
+            escapeHtml(row.name) +
+            "</b><em>" +
+            escapeHtml(row.amount) +
+            "</em></li>"
+          );
+        })
+        .join("") +
+      "</ol></article>"
+    );
+  }
+
+  function ladderHtml(ladder) {
+    var unit = ladder.unit || "指数";
+    return (
+      '<section class="xm-hm-ladder" data-ladder="' +
+      escapeHtml(ladder.key) +
+      '"><h2>' +
+      escapeHtml(ladder.title) +
+      '</h2><div class="xm-hm-podiums">' +
+      (ladder.columns || [])
+        .map(function (column) {
+          return podiumColumnHtml(column, unit);
+        })
+        .join("") +
+      "</div></section>"
+    );
+  }
+
   function sparkHtml(values) {
     var list = values && values.length ? values : [20, 24, 22, 28, 26];
     var max = Math.max.apply(null, list) || 1;
@@ -562,6 +734,28 @@
       ".xm-hm-team-head h2{margin:0;font-size:16px}" +
       ".xm-hm-team-head p{margin:4px 0 0;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-team-head a{color:var(--xm-primary);text-decoration:none;font-size:13px;white-space:nowrap}" +
+      ".xm-hm-ladder{margin-top:4px}" +
+      ".xm-hm-ladder h2{margin:16px 0 10px;font-size:16px}" +
+      ".xm-hm-podiums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}" +
+      ".xm-hm-podium{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:12px 12px 8px}" +
+      ".xm-hm-podium h3{margin:0 0 10px;text-align:center;font-size:13px;color:var(--xm-muted);font-weight:600}" +
+      ".xm-hm-stand{display:grid;grid-template-columns:1fr 1.15fr 1fr;align-items:end;gap:6px;min-height:168px}" +
+      ".xm-hm-stand-item{display:flex;flex-direction:column;align-items:center;text-align:center;background:#f6f1e8;border-radius:8px 8px 0 0;padding:10px 6px 8px}" +
+      ".xm-hm-stand-item.is-1{background:#fff4d6;padding-top:16px;min-height:150px}" +
+      ".xm-hm-stand-item.is-2,.xm-hm-stand-item.is-3{min-height:124px}" +
+      ".xm-hm-avatar{width:36px;height:36px;border-radius:50%;background:var(--xm-primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700}" +
+      ".xm-hm-stand-item.is-1 .xm-hm-avatar{background:#f5a623}" +
+      ".xm-hm-stand-rank{margin-top:6px;font-size:10px;color:var(--xm-muted);letter-spacing:.04em}" +
+      ".xm-hm-stand-item strong{margin-top:2px;font-size:13px;color:var(--xm-ink)}" +
+      ".xm-hm-stand-item em{margin-top:4px;font-style:normal;font-size:13px;font-weight:700;color:var(--xm-ink)}" +
+      ".xm-hm-stand-item small{color:var(--xm-muted);font-size:11px}" +
+      ".xm-hm-rest{list-style:none;margin:8px 0 0;padding:0}" +
+      ".xm-hm-rest li{display:flex;align-items:center;gap:8px;padding:7px 2px;border-top:1px solid var(--xm-line);font-size:12px}" +
+      ".xm-hm-rest span{color:var(--xm-muted);width:22px}" +
+      ".xm-hm-rest b{flex:1;font-weight:500}" +
+      ".xm-hm-rest em{font-style:normal;font-variant-numeric:tabular-nums}" +
+      "html[data-theme=dark] .xm-hm-stand-item{background:#2a2418}" +
+      "html[data-theme=dark] .xm-hm-stand-item.is-1{background:#3a3018}" +
       ".xm-hm-live-meta{display:none;align-items:center;gap:10px;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm.is-live .xm-hm-live-meta{display:flex}" +
       ".xm-hm-live-meta a{color:var(--xm-primary);text-decoration:none}" +
@@ -598,8 +792,8 @@
       ".xm-hm-pop h3{margin:0 0 8px;font-size:13px}" +
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{margin:8px 0 0;color:var(--xm-muted);font-size:12px}" +
-      "@media (max-width:1200px){.xm-hm-kpis,.xm-hm-team-kpis,.xm-hm-live-cards{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
-      "@media (max-width:700px){.xm-hm-kpis,.xm-hm-team-kpis,.xm-hm-live-cards{grid-template-columns:1fr}.xm-hm-hero-top{flex-direction:column}.xm-hm-team-head{flex-direction:column}}"
+      "@media (max-width:1200px){.xm-hm-kpis,.xm-hm-team-kpis,.xm-hm-live-cards,.xm-hm-podiums{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
+      "@media (max-width:700px){.xm-hm-kpis,.xm-hm-team-kpis,.xm-hm-live-cards,.xm-hm-podiums{grid-template-columns:1fr}.xm-hm-hero-top{flex-direction:column}.xm-hm-team-head{flex-direction:column}}"
     );
   }
 
@@ -634,7 +828,8 @@
       '<section class="xm-hm-board" id="xm-hm-board" hidden>' +
       '<div class="xm-hm-panel"><h2>龙虎榜</h2>' +
       '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th><th>运营</th><th>销售额</th></tr></thead>' +
-      '<tbody id="xm-hm-tiger-rows"></tbody></table></div></section>' +
+      '<tbody id="xm-hm-tiger-rows"></tbody></table></div>' +
+      '<div id="xm-hm-ladders"></div></section>' +
       '</div><p class="xm-hm-note" id="xm-hm-note">演示看板，数字不是外部业务库。先按这个模版铺上，后面再对真实口径。</p></div>'
     );
   }
@@ -697,17 +892,22 @@
       " 店</span></h2>" +
       '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th><th>实时销售额</th><th>销售单数</th><th>支付金额</th><th>退款率</th></tr></thead>' +
       "<tbody>" +
-      shops.map(shopRowHtml).join("") +
+      shops.map(function (row, i) {
+        return shopRowHtml(row, i, false);
+      }).join("") +
       "</tbody></table></div>";
     root.querySelector("#xm-hm-tiger-rows").innerHTML = tigerRows.map(function (row, i) {
       return rowHtml(row, i, false);
     }).join("");
+    root.querySelector("#xm-hm-ladders").innerHTML = (state.ladders || FALLBACK.ladders).map(ladderHtml).join("");
     root.querySelector("#xm-hm-note").textContent =
       state.view === "live"
         ? "实时页读取数据中心 /api/data/live 与 /api/data/shops，那边看板变了这里跟着变。"
         : state.view === "team"
           ? "团队页分沈子晗、韩梦凯两份。店铺先用演示店，数据中心责权接口有了按店名对齐。"
-          : "演示看板，数字不是外部业务库。先按这个模版铺上，后面再对真实口径。";
+          : state.view === "board"
+            ? "龙虎榜下面是业绩排行榜和利润排行榜，按运营 / 主管 / 经理分列。演示数字。"
+            : "演示看板，数字不是外部业务库。先按这个模版铺上，后面再对真实口径。";
     var user = state.user && (state.user.displayName || state.user.username);
     var mark = user || "星脉";
     root.querySelector("#xm-hm-mark").innerHTML = new Array(18)
@@ -760,7 +960,8 @@
         shops: FALLBACK.shops,
         teams: FALLBACK.teams.map(function (team) {
           return { key: team.key, name: team.name, href: team.href, cards: team.cards, shops: team.shops.slice() };
-        })
+        }),
+        ladders: FALLBACK.ladders
       };
       var poll = 0;
       paint(root, state);
@@ -860,6 +1061,9 @@
         }
         if (data.tiger && data.tiger.rows && data.tiger.rows.length) {
           state.tiger = data.tiger;
+        }
+        if (data.ladders && data.ladders.length) {
+          state.ladders = data.ladders;
         }
         if (data.from && data.to && state.range === "yesterday") {
           state.from = data.from;
