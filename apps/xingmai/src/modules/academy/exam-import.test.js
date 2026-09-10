@@ -79,7 +79,10 @@ test("academy.js has exam import and countdown", () => {
   assert.match(js, /academy-exam-upload/);
   assert.match(js, /开始考试/);
   assert.match(js, /academy-exam-template\.csv/);
-  assert.doesNotMatch(js, /第 3 步才写入题目/);
+  assert.match(js, /academy-exam-detail/);
+  assert.match(js, /academy-exam-back/);
+  assert.doesNotMatch(js, /点上面一档/);
+  assert.doesNotMatch(js, /选晋升档，导入考试文档出卷/);
   assert.doesNotMatch(js, /第 1 步/);
   assert.doesNotMatch(js, /第 2 步/);
   assert.doesNotMatch(js, /academy-plan/);
