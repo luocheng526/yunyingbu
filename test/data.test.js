@@ -206,6 +206,8 @@ test("data child pages and demo APIs respond", async () => {
     assert.equal(paidPage.res.status, 200);
     assert.match(paidPage.text, /data-live\.js/);
     assert.match(paidPage.text, /实时看板/);
+    const liveJs = await get(base, "/data-live.js");
+    assert.match(liveJs.text, /店铺实时付费明细/);
     assert.doesNotMatch(paidPage.text, /实时明细/);
     const liveApi = await get(base, "/api/data/live");
     assert.equal(liveApi.res.status, 200);
@@ -218,6 +220,11 @@ test("data child pages and demo APIs respond", async () => {
     );
     assert.match(JSON.stringify(live), /实时付费成交额/);
     assert.match(JSON.stringify(live), /付费成交ROI/);
+    assert.equal(live.shopLiveTable.title, "店铺实时付费明细");
+    assert.equal(live.shopLiveTable.columns.length, 12);
+    assert.equal(live.shopLiveTable.rows.length, 13);
+    assert.match(JSON.stringify(live.shopLiveTable), /RASW家居旗舰店/);
+    assert.match(JSON.stringify(live.shopLiveTable), /实时费比/);
     const dataMod = await get(base, "/shared/modules/data.js");
     assert.equal(dataMod.res.status, 200);
     assert.doesNotMatch(dataMod.text, /内容待开发/);

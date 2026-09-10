@@ -13,7 +13,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=live-tpl";
+      link.href = "/data-pages.css?v=live-shops";
       document.head.appendChild(link);
     }
   }
@@ -43,6 +43,53 @@
       String(d.getMinutes()).padStart(2, "0") +
       ":" +
       String(d.getSeconds()).padStart(2, "0")
+    );
+  }
+
+  function shopTableHtml(block) {
+    if (!block) {
+      return "";
+    }
+    const head =
+      "<tr>" +
+      (block.columns || [])
+        .map(function (col) {
+          return "<th>" + escapeHtml(col) + " <i></i></th>";
+        })
+        .join("") +
+      "</tr>";
+    const body = (block.rows || [])
+      .map(function (row) {
+        const color = row.color || (row.kind === "shop" ? "#e53935" : "");
+        const mark =
+          row.kind === "shop"
+            ? '<span class="ch-logo" style="background:' + escapeHtml(color) + '" aria-hidden="true"></span>'
+            : "";
+        return (
+          "<tr><td class=\"ch-name\"><span class=\"ch-bar\"></span>" +
+          mark +
+          "<span>" +
+          escapeHtml(row.name) +
+          "</span></td>" +
+          (row.cells || [])
+            .map(function (cell) {
+              return "<td>" + escapeHtml(cell) + "</td>";
+            })
+            .join("") +
+          "</tr>"
+        );
+      })
+      .join("");
+    return (
+      '<section class="ch-table ch-table-solo lv-shop-table">' +
+      '<div class="ch-table-bar"><strong>' +
+      escapeHtml(block.title || "店铺实时付费明细") +
+      "</strong></div>" +
+      '<div class="ch-table-wrap"><table><thead>' +
+      head +
+      "</thead><tbody>" +
+      body +
+      "</tbody></table></div></section>"
     );
   }
 
@@ -161,7 +208,8 @@
         escapeHtml(String(Math.abs(Number(hero.delta || 0)))) +
         "%</div></article>" +
         cards +
-        "</div>";
+        "</div>" +
+        shopTableHtml(payload.shopLiveTable);
     }
 
     function load() {
