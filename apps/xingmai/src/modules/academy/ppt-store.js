@@ -144,13 +144,10 @@ async function readPages(id) {
 async function ensureSlideRenders(id) {
   const safe = safeCourseId(id);
   if (!safe) {
-    return;
+    return { error: "课件不存在" };
   }
   const dir = join(DATA_DIR, safe);
   const source = join(dir, "source.pptx");
-  if (!(await fileExists(source))) {
-    return;
-  }
   const pages = await readPages(id);
   let need = !pages.length;
   for (const page of pages) {
@@ -161,7 +158,10 @@ async function ensureSlideRenders(id) {
     }
   }
   if (!need) {
-    return;
+    return { error: "" };
+  }
+  if (!(await fileExists(source))) {
+    return { error: "课件页图不在服务器，请到「文件上传」重新导入 PPTX" };
   }
   try {
     await ensureReader();
@@ -169,9 +169,15 @@ async function ensureSlideRenders(id) {
       timeout: 180000,
       env: { ...process.env, HOME: "/tmp", LANG: process.env.LANG || "C.UTF-8" }
     });
-  } catch {
-    /* keep existing pages.json */
+  } catch (err) {
+    const detail = err && (err.stderr || err.message);
+    return { error: String(detail || "无法生成幻灯片").trim().slice(0, 240) };
   }
+  const after = await readPages(id);
+  if (!after.length) {
+    return { error: "没能生成幻灯片，请重新上传 PPTX" };
+  }
+  return { error: "" };
 }
 
 function mediaType(name) {
@@ -211,12 +217,13 @@ export async function listPptPages(id) {
   if (!course) {
     return null;
   }
-  await ensureSlideRenders(id);
+  const rendered = await ensureSlideRenders(id);
   const pages = await readPages(id);
   return {
     ...course,
-    pageCount: pages.length,
-    pages: pages.map((page) => pagePayload(id, page))
+    pageCount: pages.length || Number(course.pageCount) || 0,
+    pages: pages.map((page) => pagePayload(id, page)),
+    renderError: (rendered && rendered.error) || ""
   };
 }
 

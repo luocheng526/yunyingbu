@@ -95,6 +95,8 @@ test("academy.js enables upload, watermark, and blocks original download", () =>
   assert.match(js, /课件展示/);
   assert.match(js, /emptyViewer/);
   assert.match(js, /paintThumbs/);
+  assert.match(js, /正在打开课件，生成幻灯片/);
+  assert.match(js, /重新导入 PPTX/);
   assert.match(js, /academy-fs/);
   assert.match(js, /Escape/);
   assert.match(js, /openPreview/);
@@ -163,6 +165,7 @@ test("upload pptx, turn pages, never serve original", async () => {
     })
   ).json();
   assert.equal(listed.pages.length, 2);
+  assert.equal(Array.isArray(listed.pages), true);
   assert.match(listed.pages[0].slide.url, /slide-1\.png/);
   const page1 = await (
     await fetch(`${base}/api/academy/courses/${id}/pages/1`, {

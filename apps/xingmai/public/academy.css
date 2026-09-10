@@ -1,4 +1,4 @@
-/* xm-academy 0.1.224 */
+/* xm-academy 0.1.225 */
 #xm-content > .academy-page,
 #xm-content > main.page.academy-page,
 .xm-content > .academy-page,
@@ -710,8 +710,8 @@ main.page.academy-page,
   padding-right: 4px;
 }
 
-.academy-thumbs[hidden] {
-  display: none;
+.academy-thumbs:not([hidden]) {
+  display: flex !important;
 }
 
 .academy-thumb {
@@ -747,7 +747,8 @@ main.page.academy-page,
 
 .academy-stage {
   position: relative;
-  background: #111;
+  background: #fff;
+  border: 1px solid var(--xm-line, #e5e6eb);
   border-radius: 4px;
   overflow: hidden;
   cursor: zoom-in;
