@@ -6,6 +6,7 @@ import {
   listExamTracks,
   plan
 } from "./framework.js";
+import { listExamPapers } from "./exam-store.js";
 import { courseCategories, listPptCourses } from "./ppt-store.js";
 
 const memoryProgress = new Map();
@@ -65,8 +66,13 @@ export async function courses() {
   };
 }
 
-export function examTracks() {
-  return listExamTracks();
+export async function examTracks() {
+  const papers = await listExamPapers();
+  return listExamTracks().map((item) => ({
+    ...item,
+    paperReady: Boolean(papers[item.id] && papers[item.id].questionCount),
+    importedQuestions: papers[item.id] ? papers[item.id].questionCount : 0
+  }));
 }
 
 export function examTrack(id) {
