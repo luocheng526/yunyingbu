@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.218 */
+/* xm-module-academy 0.1.219 */
 (function () {
-  const ASSET_VER = "0.1.218";
+  const ASSET_VER = "0.1.219";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -716,9 +716,15 @@
           const answers = {};
           root.querySelectorAll(".academy-q").forEach(function (box) {
             const index = box.getAttribute("data-index");
+            if (!index) {
+              return;
+            }
             const hit = box.querySelector("input:checked");
-            if (index && hit) {
+            const text = box.querySelector("textarea, input[type='text']");
+            if (hit) {
               answers[index] = hit.value;
+            } else if (text) {
+              answers[index] = text.value;
             }
           });
           return answers;
@@ -744,6 +750,7 @@
                 " 分钟 · 及格 " +
                 escapeHtml(track.passScore) +
                 " 分" +
+                (track.graders && track.graders.length ? " · " + escapeHtml(track.graders.join("、")) + "阅卷" : "") +
                 (track.paperReady ? " · 已导入 " + escapeHtml(track.importedQuestions) + " 题" : " · 待导入") +
                 "</p></button>"
               );
@@ -751,48 +758,90 @@
             .join("");
         }
 
+        function graderHint(track) {
+          const seats = (track && track.graders) || [];
+          if (!seats.length) {
+            return "";
+          }
+          return "问答题由" + seats.join("、") + "共同打分";
+        }
+
         function importForm(track) {
           return (
             '<form id="academy-exam-upload" class="academy-upload">' +
-            '<p class="academy-meta">支持 .xlsx / .csv / .json / .docx / .txt。原件不提供下载。' +
-            '<a href="/academy-exam-template.csv">下载表格模板</a></p>' +
+            '<p class="academy-meta">直接传现成 Word / 表格即可，不必套选择题模板。选择题、填空、问答都能认；答案写在题后「答案：」或文末「参考答案」。原件不提供下载。' +
+            '<a href="/academy-exam-template.csv">也可下载表格样例</a></p>' +
+            '<p class="academy-meta">' +
+            escapeHtml(graderHint(track)) +
+            "</p>" +
             '<input type="hidden" name="trackId" value="' +
             escapeHtml(track.id) +
             '" />' +
-            '<label class="academy-file">文档 <input type="file" name="file" accept=".xlsx,.csv,.json,.docx,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required /></label>' +
+            '<label class="academy-file">文档 <input type="file" name="file" accept=".xlsx,.csv,.json,.docx,.txt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required /></label>' +
             '<button type="submit">导入这一档</button>' +
             '<p class="academy-status" id="academy-exam-status"></p>' +
             "</form>"
           );
         }
 
+        function typeLabel(type) {
+          if (type === "fill") {
+            return "填空";
+          }
+          if (type === "qa") {
+            return "问答";
+          }
+          if (type === "multi") {
+            return "多选";
+          }
+          return "选择";
+        }
+
         function questionHtml(list) {
           return (list || [])
             .map(function (item) {
-              const opts = (item.options || [])
-                .map(function (opt) {
-                  return (
-                    "<label><input type=\"radio\" name=\"q-" +
-                    escapeHtml(item.index) +
-                    '" value="' +
-                    escapeHtml(opt.key) +
-                    '" /> ' +
-                    escapeHtml(opt.key) +
-                    ". " +
-                    escapeHtml(opt.text) +
-                    "</label>"
-                  );
-                })
-                .join("");
+              const type = item.type || (item.options && item.options.length ? "choice" : "qa");
+              let body = "";
+              if (type === "choice" || type === "multi") {
+                body = (item.options || [])
+                  .map(function (opt) {
+                    return (
+                      "<label><input type=\"radio\" name=\"q-" +
+                      escapeHtml(item.index) +
+                      '" value="' +
+                      escapeHtml(opt.key) +
+                      '" /> ' +
+                      escapeHtml(opt.key) +
+                      ". " +
+                      escapeHtml(opt.text) +
+                      "</label>"
+                    );
+                  })
+                  .join("");
+              } else if (type === "fill") {
+                body =
+                  '<input type="text" name="q-' +
+                  escapeHtml(item.index) +
+                  '" class="academy-fill" autocomplete="off" />';
+              } else {
+                body =
+                  '<textarea name="q-' +
+                  escapeHtml(item.index) +
+                  '" class="academy-qa" rows="5"></textarea>';
+              }
               return (
                 '<div class="academy-q" data-index="' +
                 escapeHtml(item.index) +
+                '" data-type="' +
+                escapeHtml(type) +
                 '"><p><strong>' +
                 escapeHtml(item.index) +
-                ". " +
+                ". [" +
+                typeLabel(type) +
+                "] " +
                 escapeHtml(item.stem) +
                 "</strong></p>" +
-                opts +
+                body +
                 "</div>"
               );
             })
@@ -802,30 +851,40 @@
         function showResult(result) {
           stopTimer();
           const paper = root.querySelector("#academy-paper");
+          const pending = result.status === "grading";
           const rows = (result.detail || [])
             .map(function (item) {
+              const type = item.type || "choice";
+              const mark =
+                type === "qa" ? (pending ? "待阅" : "已阅") : item.ok ? "对" : "错";
               return (
                 "<li>" +
                 escapeHtml(item.index) +
-                ". " +
-                (item.ok ? "对" : "错") +
+                ". [" +
+                typeLabel(type) +
+                "] " +
+                mark +
                 " · 你的 " +
                 escapeHtml(item.picked || "未答") +
-                " / 答案 " +
-                escapeHtml(item.answer) +
                 "</li>"
               );
             })
             .join("");
           paper.innerHTML =
             "<h2>成绩</h2><p class=\"academy-meta\">" +
-            escapeHtml(result.score) +
-            " 分 · " +
-            (result.passed ? "及格" : "未及格") +
-            " · 对 " +
-            escapeHtml(result.correct) +
-            " / " +
-            escapeHtml(result.total) +
+            (pending
+              ? "客观题 " +
+                escapeHtml(result.score) +
+                " 分，问答题待" +
+                escapeHtml((result.pendingSeats || []).join("、") || "阅卷人") +
+                "共同打分后出总分"
+              : escapeHtml(result.score) +
+                " 分 · " +
+                (result.passed ? "及格" : "未及格") +
+                " · 客观题对 " +
+                escapeHtml(result.correct) +
+                " / " +
+                escapeHtml(result.total)) +
             "</p><ul class=\"academy-empty\">" +
             rows +
             "</ul>";
@@ -894,6 +953,108 @@
           });
         }
 
+        function paintGrade(id, seats, track) {
+          const box = root.querySelector("#academy-exam-grade");
+          if (!box) {
+            return;
+          }
+          api("/api/academy/exams/attempts?trackId=" + encodeURIComponent(id)).then(function (data) {
+            if (dead || trackId !== id) {
+              return;
+            }
+            const items = (data.items || []).filter(function (item) {
+              return item.status === "grading";
+            });
+            if (!items.length) {
+              box.innerHTML = '<p class="academy-meta">暂无待阅答卷。问答题由' + escapeHtml((track.graders || seats).join("、")) + "各打一次分，取平均后出总分。</p>";
+              return;
+            }
+            box.innerHTML =
+              "<h3>待阅卷</h3>" +
+              items
+                .map(function (item) {
+                  const qa = (item.detail || []).filter(function (q) {
+                    return q.grade === "dual" || q.type === "qa";
+                  });
+                  const fields = qa
+                    .map(function (q) {
+                      return (
+                        '<label class="academy-grade-q">第 ' +
+                        escapeHtml(q.index) +
+                        " 题（满分 " +
+                        escapeHtml(q.points) +
+                        "）" +
+                        "<p>" +
+                        escapeHtml(q.stem) +
+                        "</p><p class=\"academy-meta\">答：" +
+                        escapeHtml(q.picked || "未答") +
+                        '</p><input type="number" min="0" max="' +
+                        escapeHtml(q.points) +
+                        '" step="0.5" data-q="' +
+                        escapeHtml(q.index) +
+                        '" /></label>'
+                      );
+                    })
+                    .join("");
+                  const seatOpts = seats
+                    .map(function (seat) {
+                      const done = item.grades && item.grades[seat];
+                      return (
+                        '<option value="' +
+                        escapeHtml(seat) +
+                        '"' +
+                        (done ? " disabled" : "") +
+                        ">" +
+                        escapeHtml(seat) +
+                        (done ? "（已评）" : "") +
+                        "</option>"
+                      );
+                    })
+                    .join("");
+                  return (
+                    '<form class="academy-grade" data-attempt="' +
+                    escapeHtml(item.id) +
+                    '"><p><strong>' +
+                    escapeHtml(item.displayName || item.username) +
+                    "</strong> · 客观题 " +
+                    escapeHtml(item.autoScore) +
+                    " 分 · 待 " +
+                    escapeHtml((item.pendingSeats || []).join("、")) +
+                    '</p><label>以谁的身份打分 <select name="seat">' +
+                    seatOpts +
+                    "</select></label>" +
+                    fields +
+                    '<label>评语 <input name="comment" maxlength="400" /></label>' +
+                    '<button type="submit">提交阅卷</button></form>'
+                  );
+                })
+                .join("");
+            box.querySelectorAll("form.academy-grade").forEach(function (form) {
+              form.addEventListener("submit", function (ev) {
+                ev.preventDefault();
+                const scores = {};
+                form.querySelectorAll("[data-q]").forEach(function (input) {
+                  scores[input.getAttribute("data-q")] = input.value;
+                });
+                postJson("/api/academy/exams/attempts/" + encodeURIComponent(form.getAttribute("data-attempt")) + "/grade", {
+                  seat: form.querySelector("[name=seat]").value,
+                  scores: scores,
+                  comment: form.querySelector("[name=comment]").value
+                })
+                  .then(function () {
+                    return openTrack(id);
+                  })
+                  .catch(function (err) {
+                    form.insertAdjacentHTML(
+                      "beforeend",
+                      '<p class="academy-status error">' + escapeHtml(err.message) + "</p>"
+                    );
+                  });
+              });
+            });
+          });
+        }
+
         function openTrack(id) {
           stopTimer();
           trackId = id;
@@ -910,18 +1071,37 @@
               const track = data.track || {};
               const pack = data.paper || {};
               const ready = Boolean(pack.ready);
+              const types = pack.types || {};
+              const typeLine = ready
+                ? "选择 " +
+                  (types.choice || 0) +
+                  " · 填空 " +
+                  (types.fill || 0) +
+                  " · 问答 " +
+                  (types.qa || 0) +
+                  " · "
+                : "";
               paper.innerHTML =
                 "<h2>" +
                 escapeHtml(track.name) +
                 '</h2><p class="academy-meta">' +
                 (ready
-                  ? "已导入 " + escapeHtml(pack.questionCount) + " 题 · " + escapeHtml(track.minutes) + " 分钟 · 及格 " + escapeHtml(track.passScore)
-                  : "还没有考试文档，导入后才能开考") +
+                  ? "已导入 " +
+                    escapeHtml(pack.questionCount) +
+                    " 题 · " +
+                    typeLine +
+                    escapeHtml(track.minutes) +
+                    " 分钟 · 及格 " +
+                    escapeHtml(track.passScore) +
+                    " · " +
+                    escapeHtml(graderHint(track))
+                  : "还没有考试文档，直接导入 Word 即可，不必套选择题模板") +
                 "</p>" +
                 importForm(track) +
                 (ready
                   ? '<div class="academy-actions"><button type="button" id="academy-exam-start">开始考试</button></div>'
                   : "") +
+                '<div id="academy-exam-grade"></div>' +
                 '<div id="academy-exam-take"></div>';
               const form = root.querySelector("#academy-exam-upload");
               form.addEventListener("submit", function (ev) {
@@ -953,6 +1133,10 @@
                     }
                   });
                 });
+              }
+              const gradeSeats = data.gradeSeats || [];
+              if (gradeSeats.length) {
+                paintGrade(id, gradeSeats, track);
               }
             })
             .catch(function (err) {

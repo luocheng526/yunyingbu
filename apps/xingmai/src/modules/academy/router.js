@@ -9,13 +9,15 @@ import {
   saveHandbookSection
 } from "./handbook-store.js";
 import { appendHandbookLog, listHandbookLogs } from "./log-store.js";
-import { canEditHandbook } from "./framework.js";
+import { canEditHandbook, seatsUserCanGrade } from "./framework.js";
 import { isRawUpload, parseMultipart, readRawBody } from "./multipart.js";
 import {
   examAccept,
   getExamPaper,
+  gradeExamAttempt,
   gradeExamPaper,
-  importExamPaper
+  importExamPaper,
+  listExamAttempts
 } from "./exam-store.js";
 import {
   createPptCourse,
@@ -279,6 +281,14 @@ academyRouter.post("/exams/papers", async (req, res) => {
       createdBy: user.username
     });
     res.status(201).json({ ok: true, download: false, ...data });
+    await appendHandbookLog({
+      actor: user.username,
+      actorName: user.displayName || user.username,
+      action: "导入考试",
+      sectionId: data.track && data.track.id,
+      sectionTitle: data.track && data.track.name,
+      detail: data.paper && data.paper.questionCount ? data.paper.questionCount + " 题" : ""
+    });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
   }
@@ -295,15 +305,49 @@ academyRouter.post("/exams/tracks/:id/submit", async (req, res) => {
     return;
   }
   try {
-    const result = await gradeExamPaper(req.params.id, (req.body || {}).answers);
+    const result = await gradeExamPaper(req.params.id, (req.body || {}).answers, user);
     res.json({ ok: true, result });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
   }
 });
 
+academyRouter.get("/exams/attempts", async (req, res) => {
+  const user = requireUser(req, res);
+  if (!user) {
+    return;
+  }
+  try {
+    const trackId = String(req.query.trackId || req.query.track || "");
+    const items = await listExamAttempts(user, { trackId });
+    const gradeSeats = trackId ? await seatsUserCanGrade(user, trackId) : [];
+    res.json({ ok: true, gradeSeats, items });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+academyRouter.post("/exams/attempts/:id/grade", async (req, res) => {
+  const user = requireUser(req, res);
+  if (!user) {
+    return;
+  }
+  try {
+    const data = await gradeExamAttempt(req.params.id, {
+      user,
+      seat: (req.body || {}).seat,
+      scores: (req.body || {}).scores,
+      comment: (req.body || {}).comment
+    });
+    res.json({ ok: true, ...data });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
 academyRouter.get("/exams/tracks/:id", async (req, res) => {
-  if (!requireUser(req, res)) {
+  const user = requireUser(req, res);
+  if (!user) {
     return;
   }
   const packed = await getExamPaper(req.params.id, { includeAnswers: false });
@@ -311,12 +355,14 @@ academyRouter.get("/exams/tracks/:id", async (req, res) => {
     res.status(404).json({ ok: false, error: "没有这一档考试" });
     return;
   }
+  const gradeSeats = await seatsUserCanGrade(user, packed.track);
   res.json({
     ok: true,
     accept: examAccept(),
     download: false,
     track: packed.track,
-    paper: packed.paper
+    paper: packed.paper,
+    gradeSeats
   });
 });
 
