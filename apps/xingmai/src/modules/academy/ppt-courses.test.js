@@ -91,6 +91,9 @@ test("academy.js enables upload, watermark, and blocks original download", () =>
   assert.match(js, /文件上传/);
   assert.match(js, /academy-view-upload/);
   assert.match(js, /academy-thumbs/);
+  assert.match(js, /academy-course-pane/);
+  assert.match(js, /课件展示/);
+  assert.match(js, /emptyViewer/);
   assert.match(js, /paintThumbs/);
   assert.match(js, /academy-fs/);
   assert.match(js, /Escape/);
@@ -107,7 +110,8 @@ test("academy.js enables upload, watermark, and blocks original download", () =>
   assert.match(css, /\.academy-slide-img/);
   assert.match(css, /\.academy-fs/);
   assert.match(css, /max-width:\s*none/);
-  assert.match(css, /\.academy-work\.has-viewer/);
+  assert.match(css, /\.academy-course-pane/);
+  assert.doesNotMatch(js, /has-viewer/);
 });
 
 test("plan is live; old ppt is rejected", async () => {
