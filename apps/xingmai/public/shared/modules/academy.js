@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.210 */
+/* xm-module-academy 0.1.211 */
 (function () {
-  const ASSET_VER = "0.1.210";
+  const ASSET_VER = "0.1.211";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -101,9 +101,9 @@
     return (
       '<header class="page-head academy-head"><h1>' +
       escapeHtml(title) +
-      '</h1><p class="lead">' +
-      escapeHtml(lead) +
-      "</p></header>"
+      "</h1>" +
+      (lead ? '<p class="lead">' + escapeHtml(lead) + "</p>" : "") +
+      "</header>"
     );
   }
 
@@ -188,7 +188,7 @@
       mount: function (root) {
         const unmount = mountShell(
           root,
-          pageHead("培训课程", "导入运营 PPTX，在线翻页。不提供原件下载。") +
+          pageHead("培训课程") +
             '<form id="academy-upload" class="academy-toolbar">' +
             '<label>标题 <input name="title" required maxlength="160" placeholder="课件标题" /></label>' +
             '<label>分类 <select name="category">' +
@@ -203,9 +203,9 @@
             '<button type="submit">上传</button>' +
             "</form>" +
             '<p class="academy-status" id="academy-upload-status"></p>' +
-            '<div class="academy-work">' +
-            '<aside class="panel academy-side"><div class="academy-course-list" id="academy-course-list"></div></aside>' +
-            '<section class="panel academy-main" id="academy-viewer"><p class="academy-empty">点左侧课件在线翻页。</p></section>' +
+            '<div class="academy-work" id="academy-work">' +
+            '<aside class="academy-side"><div class="academy-course-list" id="academy-course-list"></div></aside>' +
+            '<section class="academy-main" id="academy-viewer" hidden></section>' +
             "</div>"
         );
         let dead = false;
@@ -216,7 +216,7 @@
         function renderList(items) {
           const box = root.querySelector("#academy-course-list");
           if (!items || !items.length) {
-            box.innerHTML = '<p class="academy-empty">还没有课件。上传 PPTX 后出现在这里。</p>';
+            box.innerHTML = '<p class="academy-empty">还没有课件。上传 PPTX 后出现在这里。不提供原件下载。</p>';
             return;
           }
           box.innerHTML = items
@@ -250,7 +250,12 @@
         }
 
         function paintPage(data) {
+          const work = root.querySelector("#academy-work");
           const panel = root.querySelector("#academy-viewer");
+          panel.hidden = false;
+          if (work) {
+            work.classList.add("has-viewer");
+          }
           const page = data.page || {};
           const texts = (page.texts || [])
             .map(function (line) {
@@ -306,6 +311,7 @@
               });
             })
             .catch(function (err) {
+              root.querySelector("#academy-viewer").hidden = false;
               root.querySelector("#academy-viewer").innerHTML =
                 '<h2>在线翻页</h2><p class="academy-status error">' + escapeHtml(err.message) + "</p>";
             });
