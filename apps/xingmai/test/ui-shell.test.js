@@ -95,7 +95,7 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /\.xm-workspace > \.xm-pane\.is-active/);
   assert.match(jsText, /disposePane\("\/home"\)/);
   assert.doesNotMatch(jsText, /window\.location\.assign\("\/home"\)/);
-  assert.match(jsText, /xm-fast-shell 0\.1\.122/);
+  assert.match(jsText, /xm-fast-shell 0\.1\.124/);
   assert.match(jsText, /data-xm-style/);
   assert.match(jsText, /甄选粉/);
   assert.match(jsText, /setInterval\(tickClock, 1000\)/);
@@ -566,7 +566,7 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.match(mid, /nav\.js\?v=\$\{SHELL_ASSET_VER\}/);
   assert.match(mid, /磁盘上的图即使在也不能信/);
   assert.match(mid, /TAB_ICON_ICO/);
-  assert.match(mid, /SHELL_ASSET_VER = "0\.1\.122"/);
+  assert.match(mid, /SHELL_ASSET_VER = "0\.1\.124"/);
   assert.match(mid, /woff2\?/);
   const navItems = readFileSync(join(root, "src/modules/home/nav-items.js"), "utf8");
   assert.match(navItems, /xm-logo" href="\/home"/);
