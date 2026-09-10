@@ -1,0 +1,389 @@
+/* xm-org-board */
+html:has(.people-page),
+body:has(.people-page) {
+  height: 100%;
+}
+
+body:has(.xm-shell):has(.people-page) {
+  overflow: hidden;
+}
+
+body:has(.xm-shell):has(.people-page) .xm-shell {
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
+body:has(.xm-shell):has(.people-page) .xm-main {
+  min-height: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+
+body:has(.people-page) .xm-content,
+#xm-content:has(.people-page) {
+  min-height: 0;
+  overflow: auto !important;
+  overscroll-behavior: contain;
+}
+
+.xm-content .page.people-page,
+.people-page {
+  max-width: none !important;
+  width: 100%;
+  box-sizing: border-box;
+  padding-bottom: 24px;
+}
+
+.people-page .lead {
+  color: var(--xm-muted, #8c8c8c);
+  margin: 6px 0 0;
+}
+
+.people-page .panel {
+  min-height: 0;
+  margin-bottom: 16px;
+}
+
+.people-check {
+  margin: 0 0 8px;
+  color: var(--xm-muted, #8c8c8c);
+}
+
+.people-page .status.error {
+  color: #cf1322;
+}
+
+.people-page .demo-flag {
+  margin-left: 6px;
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+.people-page button,
+.org-toolbar button,
+.org-actions button,
+.people-form button {
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  border: 1px solid #1677ff;
+  background: #1677ff;
+  color: #fff;
+}
+
+.people-page button.ghost,
+.org-toolbar .ghost,
+.org-actions .ghost {
+  background: #fff;
+  color: var(--xm-ink, #1f1f1f);
+  border: 1px solid var(--xm-line, #d9d9d9);
+}
+
+.people-page input,
+.people-page select {
+  border: 1px solid var(--xm-line, #d9d9d9);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+}
+
+body:has(.people-page) .xm-tabs {
+  display: none;
+}
+
+.people-page .page-head {
+  margin-bottom: 12px;
+}
+
+.org-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--xm-line, #f0f0f0);
+  margin: 0 0 14px;
+}
+
+.org-tab {
+  border: 0;
+  background: transparent;
+  padding: 8px 12px;
+  color: var(--xm-muted, #8c8c8c);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  font: inherit;
+}
+
+.org-tab.is-active {
+  color: #1677ff;
+  border-bottom-color: #1677ff;
+  font-weight: 600;
+  background: transparent;
+}
+
+.org-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.org-kpi {
+  background: #e6f4ff;
+  border: 1px solid #bae0ff;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.org-kpi .label {
+  color: var(--xm-muted, #8c8c8c);
+  font-size: 12px;
+}
+
+.org-kpi .value {
+  margin-top: 4px;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.org-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.org-toolbar input[type="search"],
+.org-toolbar select {
+  min-width: 160px;
+}
+
+.org-toolbar .spacer {
+  flex: 1;
+}
+
+.org-toolbar .ghost {
+  background: #fff;
+  color: var(--xm-ink, #1f1f1f);
+  border: 1px solid var(--xm-line, #d9d9d9);
+}
+
+.org-table-wrap {
+  max-height: calc(100vh - 250px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: #fff;
+  border: 1px solid var(--xm-line, #f0f0f0);
+  border-radius: 8px;
+}
+
+.people-page table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.people-page th,
+.people-page td {
+  text-align: left;
+  padding: 8px 8px;
+  border-bottom: 1px solid var(--xm-line, #f0f0f0);
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.people-page th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #fafafa;
+  color: var(--xm-muted, #8c8c8c);
+  font-weight: 600;
+}
+
+.tag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.tag-on {
+  background: #f6ffed;
+  color: #389e0d;
+}
+
+.tag-idle {
+  background: #e6f4ff;
+  color: #1677ff;
+}
+
+.tag-off {
+  background: #fff1f0;
+  color: #cf1322;
+}
+
+.org-link {
+  color: #1677ff;
+  cursor: pointer;
+}
+
+.org-cell.can-edit {
+  cursor: text;
+}
+
+.org-cell.can-edit:hover {
+  background: #e6f4ff;
+}
+
+.org-cell input,
+.org-cell select {
+  width: 100%;
+  min-width: 88px;
+  box-sizing: border-box;
+}
+
+.org-locked {
+  color: #bfbfbf;
+}
+
+.people-page .banner {
+  margin: 8px 0 0;
+  color: #1677ff;
+  font-size: 13px;
+}
+
+.org-empty {
+  color: #bfbfbf;
+}
+
+.org-actions button {
+  margin-right: 6px;
+}
+
+.org-actions .danger {
+  background: #fff;
+  color: #cf1322;
+  border: 1px solid #ffa39e;
+}
+
+.org-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+}
+
+.org-modal.show {
+  display: flex;
+}
+
+.org-dialog {
+  width: min(720px, calc(100vw - 32px));
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px 18px 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.org-dialog h3 {
+  margin: 0 0 12px;
+}
+
+.org-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.org-pane[hidden] {
+  display: none;
+}
+
+.org-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px 18px 18px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.org-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.org-card-head h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.org-card-head p,
+.notice-item .muted {
+  margin: 0;
+  color: var(--xm-muted, #8c8c8c);
+  font-size: 13px;
+}
+
+.org-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.org-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  gap: 12px;
+}
+
+.notice-item {
+  padding: 12px 0;
+  border-top: 1px solid #f0f0f0;
+}
+
+.notice-item h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.notice-item p {
+  margin: 0 0 6px;
+}
+
+.org-dialog textarea {
+  border: 1px solid var(--xm-line, #d9d9d9);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+  resize: vertical;
+}
+
+@media (max-width: 900px) {
+  .org-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.people-form,
+.people-mini-form,
+.org-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px 12px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+
+.people-form label,
+.people-mini-form label,
+.org-dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--xm-muted, #8c8c8c);
+  font-size: 12px;
+}

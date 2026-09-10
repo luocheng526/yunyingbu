@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>组织中心</title>
+    <link rel="stylesheet" href="/shared/layout.css" />
+    <link rel="stylesheet" href="/people.css" />
+  </head>
+  <body>
+    <div id="site-nav"></div>
+    <div id="xm-content"></div>
+    <script src="/shared/nav.js"></script>
+    <script src="/shared/modules/people.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        var root = document.getElementById("xm-content");
+        var mod = window.XmModules && window.XmModules["/people"];
+        if (root && mod && typeof mod.mount === "function") {
+          mod.mount(root);
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "mengkai",
+  "version": "0.1.0",
+  "description": "运营部站点（人员管理）",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
