@@ -1,4 +1,4 @@
-/* LoginPage 0.1.160 — logo left; whiter title; hero-foot align; login-foot EN one line */
+/* LoginPage 0.1.161 — title 星脉甄选管理系统; logo at yellow-box left */
 :root {
   --login-bg: #f7f7f4;
   --login-ink: #14120b;
@@ -382,9 +382,10 @@ body {
 
 .login-card h1 {
   margin: 0 0 10px;
-  font-size: clamp(34px, 2.4vw, 42px);
+  font-size: clamp(28px, 2.05vw, 36px);
   font-weight: 730;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 .login-lead,

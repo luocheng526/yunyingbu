@@ -43,6 +43,7 @@ test("login page is public", async () => {
   const res = await fetch(`${base}/login`);
   assert.equal(res.status, 200);
   const html = await res.text();
+  assert.match(html, /星脉甄选管理系统/);
   assert.match(html, /星脉管理系统/);
   assert.match(html, /<title>星脉甄选运营中心<\/title>/);
   assert.match(html, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=0\.1\.129"/);
@@ -50,11 +51,11 @@ test("login page is public", async () => {
   assert.doesNotMatch(html, /rel="icon"[^>]+href="\/login-logo\.png"/);
   assert.doesNotMatch(html, /href="data:image\/png;base64,/);
   assert.match(html, /ChangeMe123!/);
-  assert.match(html, /login\.css\?v=0\.1\.160/);
+  assert.match(html, /login\.css\?v=0\.1\.161/);
   assert.match(html, /login-foot-pair/);
   assert.match(html, /DATA · OPERATION · ORGANIZATIONAL · TALENT · GROWTH/);
   assert.match(html, /<small><b>TOGETHER<\/b><b>FOR A BRIGHTER<\/b><b>FUTURE<\/b><\/small>/);
-  assert.match(loginCss, /LoginPage 0\.1\.160/);
+  assert.match(loginCss, /LoginPage 0\.1\.161/);
   assert.match(loginCss, /\.hero-brand\s*\{[^}]*margin-left:\s*0/s);
   assert.match(loginCss, /#ffffff 28%/);
   assert.match(loginCss, /\.login-foot-pair small\s*\{[^}]*white-space:\s*nowrap/s);
