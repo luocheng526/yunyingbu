@@ -80,6 +80,9 @@ test("academy.js has exam import and countdown", () => {
   assert.match(js, /开始考试/);
   assert.match(js, /academy-exam-template\.csv/);
   assert.doesNotMatch(js, /第 3 步才写入题目/);
+  assert.doesNotMatch(js, /第 1 步/);
+  assert.doesNotMatch(js, /第 2 步/);
+  assert.doesNotMatch(js, /academy-plan/);
 });
 
 test("python reader parses json exam paper", async () => {

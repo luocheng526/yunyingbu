@@ -25,6 +25,13 @@ export const PLAN = [
   }
 ];
 
+export const HANDBOOK_EDITORS = ["罗成", "沈子晗", "韩梦凯"];
+
+export function canEditHandbook(user) {
+  const names = [user && user.username, user && user.displayName].filter(Boolean);
+  return names.some((name) => HANDBOOK_EDITORS.includes(String(name)));
+}
+
 export const EXAM_TRACKS = [
   { id: "newbie", name: "新人考试", from: "新人", to: "助理", minutes: 30, questions: 20, passScore: 80 },
   { id: "assistant-regular", name: "助理转正考试", from: "助理", to: "转正", minutes: 40, questions: 25, passScore: 80 },
