@@ -6,9 +6,9 @@ import { navMarkup } from "../home/nav-items.js";
 import { currentUser, publicProfile } from "./auth.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.122
+// xm-fast-shell 0.1.123
 
-export const SHELL_ASSET_VER = "0.1.122";
+export const SHELL_ASSET_VER = "0.1.123";
 export const TAB_TITLE = "星脉甄选运营中心";
 // 浏览器标签图标走真实文件。Chrome 标签栏经常不画 data: 内嵌图，会变成地球。
 // 侧栏品牌条仍用 /login-logo.png，不要改成这个。
@@ -46,7 +46,8 @@ export const APP_MODULES = {
   "/academy/handbook": "academy",
   "/agents": "agents",
   "/releases": "releases",
-  "/me": "me"
+  "/me": "me",
+  "/notices": "notices"
 };
 const SHELL_TITLES = {
   "/home": "首页",
@@ -73,7 +74,8 @@ const SHELL_TITLES = {
   "/academy/handbook": "运营手册",
   "/agents": "甄选智能体",
   "/releases": "版本发布中心",
-  "/me": "个人中心"
+  "/me": "个人中心",
+  "/notices": "公告中心"
 };
 
 function escapeHtml(value) {

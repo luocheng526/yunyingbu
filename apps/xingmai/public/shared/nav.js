@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.122 */
+/* xm-fast-shell 0.1.123 */
 (function () {
-  const ASSET_VER = "0.1.122";
+  const ASSET_VER = "0.1.123";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -27,7 +27,8 @@
     "/academy/handbook": "academy",
     "/agents": "agents",
     "/releases": "releases",
-    "/me": "me"
+    "/me": "me",
+    "/notices": "notices"
   };
   const DATA_CHILDREN = [
     { href: "/data/overview", label: "数据总揽" },
@@ -53,6 +54,10 @@
     { href: "/academy/exams", label: "培训考试" },
     { href: "/academy/handbook", label: "运营手册" }
   ];
+  const PEOPLE_CHILDREN = [
+    { href: "/people", label: "组织中心" },
+    { href: "/notices", label: "公告中心" }
+  ];
   const items = [
     { href: "/home", label: "首页" },
     { href: "/data", label: "数据中心", children: DATA_CHILDREN },
@@ -61,10 +66,10 @@
     { href: "/academy", label: "甄选商学院", children: ACADEMY_CHILDREN },
     { href: "/agents", label: "甄选智能体" },
     { href: "/releases", label: "版本发布中心" },
-    { href: "/people", label: "组织中心" },
+    { href: "/people", label: "组织中心", children: PEOPLE_CHILDREN },
     { href: "/me", label: "个人中心" }
   ];
-  const labels = items.concat(DATA_CHILDREN, SHEN_CHILDREN, HAN_CHILDREN, ACADEMY_CHILDREN);
+  const labels = items.concat(DATA_CHILDREN, SHEN_CHILDREN, HAN_CHILDREN, ACADEMY_CHILDREN, PEOPLE_CHILDREN);
 
   const path = (window.location.pathname.replace(/\/+$/, "") || "/").toLowerCase();
   if (path === "/login" || path === "/login.html") {
@@ -100,6 +105,7 @@
     "/agents": '<rect x="6" y="8" width="12" height="10" rx="2"/><path d="M12 8V5"/><circle cx="9.5" cy="13" r="1"/><circle cx="14.5" cy="13" r="1"/><path d="M9 19v1h6v-1"/>',
     "/releases": '<path d="M12 4v10"/><path d="M8.5 7.5 12 4l3.5 3.5"/><rect x="6" y="14" width="12" height="6" rx="1"/>',
     "/me": '<circle cx="12" cy="8" r="2.6"/><path d="M6.2 18.5c.6-2.8 2.8-4.3 5.8-4.3s5.2 1.5 5.8 4.3"/>',
+    "/notices": '<path d="M5 9v6"/><path d="M8 7v10"/><path d="M8 7l11-3v16L8 17"/>',
     logout: '<path d="M10 7V5.8A1.8 1.8 0 0 1 11.8 4h6.4A1.8 1.8 0 0 1 20 5.8v12.4a1.8 1.8 0 0 1-1.8 1.8h-6.4A1.8 1.8 0 0 1 10 18.2V17"/><path d="M4 12h10"/><path d="M11.2 8.8 14.4 12l-3.2 3.2"/>'
   };
 
@@ -121,7 +127,20 @@
 
   function groupOpen(prefix, href) {
     const key = normalize(href);
-    return key === prefix || key.indexOf(prefix + "/") === 0;
+    const p = normalize(prefix);
+    const item = items.find(function (row) {
+      return normalize(row.href) === p;
+    });
+    if (item && item.children) {
+      const hit = item.children.some(function (child) {
+        const dest = normalize(child.href);
+        return dest === key || key.indexOf(dest + "/") === 0;
+      });
+      if (hit) {
+        return true;
+      }
+    }
+    return key === p || key.indexOf(p + "/") === 0;
   }
 
   const MAIN = items.slice(0, 6);
@@ -203,7 +222,9 @@
       mainHtml() +
       "</nav>" +
       '<nav class="xm-menu xm-menu-foot">' +
-      FOOT.map(itemHtml).join("") +
+      FOOT.map(function (item) {
+        return item.children ? groupHtml(item) : itemHtml(item);
+      }).join("") +
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout">' +
       ico("logout") +
       "<span>退出登录</span></button>" +
@@ -976,6 +997,154 @@
     });
     refreshQueueBadge();
   }
+  window.__xmGo = go;
+
+  function openNotice(id) {
+    const href = "/notices";
+    go(href);
+    if (!id) {
+      return;
+    }
+    window.setTimeout(function () {
+      const row = document.querySelector('.notice-row[data-id="' + id + '"]');
+      if (row) {
+        row.click();
+      }
+    }, 400);
+  }
+
+  function fillNoticeBar(items) {
+    const bar = document.getElementById("xm-notice-bar");
+    if (!bar) {
+      return;
+    }
+    const list = (items || []).slice(0, 3);
+    if (!list.length) {
+      bar.hidden = true;
+      return;
+    }
+    bar.hidden = false;
+    bar.innerHTML =
+      '<span class="xm-notice-kicker">公告栏</span>' +
+      list
+        .map(function (item) {
+          return (
+            '<button type="button" class="xm-notice-link" data-notice-id="' +
+            item.id +
+            '">' +
+            item.title +
+            "</button>"
+          );
+        })
+        .join('<span class="xm-notice-dot">·</span>') +
+      '<button type="button" class="xm-notice-more" data-notice-id="">全部公告</button>';
+  }
+
+  function ensureNoticeBar() {
+    const main = document.querySelector(".xm-main");
+    const topbar = document.querySelector(".xm-topbar");
+    if (!main || !topbar) {
+      return;
+    }
+    let bar = document.getElementById("xm-notice-bar");
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.id = "xm-notice-bar";
+      bar.className = "xm-notice-bar";
+      bar.hidden = true;
+      if (topbar.nextSibling) {
+        main.insertBefore(bar, topbar.nextSibling);
+      } else {
+        main.appendChild(bar);
+      }
+      bar.addEventListener("click", function (event) {
+        const btn = event.target.closest("[data-notice-id]");
+        if (!btn) {
+          return;
+        }
+        openNotice(btn.getAttribute("data-notice-id"));
+      });
+    }
+    fetch("/api/notices/banner", { credentials: "same-origin" })
+      .then(function (res) {
+        return res.ok ? res.json() : { items: [] };
+      })
+      .then(function (data) {
+        fillNoticeBar(data.items || []);
+      })
+      .catch(function () {
+        fillNoticeBar([]);
+      });
+  }
+
+  function closeNoticePopup() {
+    const mask = document.getElementById("xm-notice-mask");
+    if (mask) {
+      mask.remove();
+    }
+  }
+
+  function showNoticePopup(item) {
+    if (!item || !item.id || document.getElementById("xm-notice-mask")) {
+      return;
+    }
+    try {
+      if (sessionStorage.getItem("xm-notice-popup") === item.id) {
+        return;
+      }
+    } catch (_err) {
+      /* ignore */
+    }
+    const mask = document.createElement("div");
+    mask.id = "xm-notice-mask";
+    mask.className = "xm-notice-mask";
+    mask.innerHTML =
+      '<div class="xm-notice-dialog" role="dialog" aria-labelledby="xm-notice-pop-title">' +
+      '<p class="xm-notice-kicker">登录提醒</p>' +
+      '<h2 id="xm-notice-pop-title"></h2>' +
+      '<p class="xm-notice-pop-lead"></p>' +
+      '<div class="xm-notice-pop-actions">' +
+      '<button type="button" class="xm-notice-pop-close">稍后再看</button>' +
+      '<button type="button" class="xm-notice-pop-open">查看公告</button></div></div>';
+    mask.querySelector("#xm-notice-pop-title").textContent = item.title || "公告";
+    mask.querySelector(".xm-notice-pop-lead").textContent = item.summary || item.body || "";
+    mask.querySelector(".xm-notice-pop-close").addEventListener("click", function () {
+      try {
+        sessionStorage.setItem("xm-notice-popup", item.id);
+      } catch (_err) {
+        /* ignore */
+      }
+      closeNoticePopup();
+    });
+    mask.querySelector(".xm-notice-pop-open").addEventListener("click", function () {
+      try {
+        sessionStorage.setItem("xm-notice-popup", item.id);
+      } catch (_err2) {
+        /* ignore */
+      }
+      closeNoticePopup();
+      openNotice(item.id);
+    });
+    mask.addEventListener("click", function (event) {
+      if (event.target === mask) {
+        closeNoticePopup();
+      }
+    });
+    document.body.appendChild(mask);
+  }
+
+  function bootNoticePopup() {
+    fetch("/api/notices/popup", { credentials: "same-origin" })
+      .then(function (res) {
+        return res.ok ? res.json() : {};
+      })
+      .then(function (data) {
+        if (data && data.item) {
+          showNoticePopup(data.item);
+        }
+      })
+      .catch(function () {});
+  }
 
   function bindParents(scope) {
     const parents = scope.querySelectorAll(".xm-menu-parent");
@@ -1234,6 +1403,8 @@
     ensureWorkspace();
     watchTabBar();
     startQueueWatch();
+    ensureNoticeBar();
+    bootNoticePopup();
   }
 
   function mountShell() {

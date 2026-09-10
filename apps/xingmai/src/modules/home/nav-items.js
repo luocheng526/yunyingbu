@@ -28,6 +28,11 @@ export const ACADEMY_CHILDREN = [
   { href: "/academy/handbook", label: "运营手册" }
 ];
 
+export const PEOPLE_CHILDREN = [
+  { href: "/people", label: "组织中心" },
+  { href: "/notices", label: "公告中心" }
+];
+
 export const NAV_MAIN = [
   { href: "/home", label: "首页" },
   { href: "/data", label: "数据中心", children: DATA_CHILDREN },
@@ -39,7 +44,7 @@ export const NAV_MAIN = [
 
 export const NAV_FOOT = [
   { href: "/releases", file: "releases.html", label: "版本发布中心" },
-  { href: "/people", file: "people.html", label: "组织中心" },
+  { href: "/people", file: "people.html", label: "组织中心", children: PEOPLE_CHILDREN },
   { href: "/me", file: "me.html", label: "个人中心" }
 ];
 
@@ -55,7 +60,7 @@ function flatten(items) {
   return out;
 }
 
-export const NAV_ITEMS = [...flatten(NAV_MAIN), ...NAV_FOOT];
+export const NAV_ITEMS = [...flatten(NAV_MAIN), ...flatten(NAV_FOOT)];
 
 const ICO_PATH = {
   "/home": '<path d="M4 11.5 12 4l8 7.5"/><path d="M6 10.8V20h4.2v-5.2h3.6V20H18v-9.2"/>',
@@ -67,6 +72,7 @@ const ICO_PATH = {
   "/agents": '<rect x="6" y="8" width="12" height="10" rx="2"/><path d="M12 8V5"/><circle cx="9.5" cy="13" r="1"/><circle cx="14.5" cy="13" r="1"/><path d="M9 19v1h6v-1"/>',
   "/releases": '<path d="M12 4v10"/><path d="M8.5 7.5 12 4l3.5 3.5"/><rect x="6" y="14" width="12" height="6" rx="1"/>',
   "/me": '<circle cx="12" cy="8" r="2.6"/><path d="M6.2 18.5c.6-2.8 2.8-4.3 5.8-4.3s5.2 1.5 5.8 4.3"/>',
+  "/notices": '<path d="M5 9v6"/><path d="M8 7v10"/><path d="M8 7l11-3v16L8 17"/>',
   logout: '<path d="M10 7V5.8A1.8 1.8 0 0 1 11.8 4h6.4A1.8 1.8 0 0 1 20 5.8v12.4a1.8 1.8 0 0 1-1.8 1.8h-6.4A1.8 1.8 0 0 1 10 18.2V17"/><path d="M4 12h10"/><path d="M11.2 8.8 14.4 12l-3.2 3.2"/>'
 };
 
@@ -110,6 +116,6 @@ export function navMarkup(activeHref) {
   const main = NAV_MAIN.map((item) =>
     item.children ? groupMarkup(item, activeHref) : itemLink(item, activeHref)
   ).join("");
-  const foot = NAV_FOOT.map((item) => itemLink(item, activeHref)).join("");
+  const foot = NAV_FOOT.map((item) => (item.children ? groupMarkup(item, activeHref) : itemLink(item, activeHref))).join("");
   return `<aside class="xm-sider" aria-label="侧栏导航"><div class="xm-brand"><a class="xm-logo" href="/home" title="回到首页"><img src="/login-logo.png" alt="星脉甄选" onerror="this.onerror=null;this.src='/shared/xingmai-logo.png'" /></a><button type="button" class="xm-collapse" id="xm-collapse" aria-label="折叠侧栏">‹</button></div><nav class="xm-menu xm-menu-main">${main}</nav><nav class="xm-menu xm-menu-foot">${foot}<button type="button" class="xm-menu-item xm-logout" id="xm-logout">${ico("logout")}<span>退出登录</span></button><p class="xm-version">${NAV_VERSION}</p></nav></aside>`;
 }
