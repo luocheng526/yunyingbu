@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.226 */
+/* xm-module-academy 0.1.227 · logs-page-v2 */
 (function () {
-  const ASSET_VER = "0.1.226";
+  const ASSET_VER = "0.1.227";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -41,6 +41,7 @@
         }
         box.innerHTML =
           '<div class="academy-board-head"><h2>操作日志</h2></div>' +
+          '<p class="academy-board-meta">学院操作记录，与手册目录分开。</p>' +
           '<table class="academy-log"><thead><tr><th>时间</th><th>谁</th><th>动作</th><th>对象</th><th>说明</th></tr></thead><tbody>' +
           items
             .map(function (item) {
