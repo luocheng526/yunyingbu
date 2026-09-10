@@ -191,7 +191,7 @@
           ? tableHtml(payload.channelTable) +
             tableHtml(
               payload.shopTable,
-              '<label class="ch-pick">请选择店铺 <select disabled><option>请选择店铺</option></select></label>'
+              '<label class="ch-pick"><select disabled><option>请选择店铺</option></select></label>'
             )
           : '<p class="ch-empty">「' + escapeHtml(section) + "」为示例，尚未接入。</p>";
       board.innerHTML =
@@ -211,12 +211,12 @@
         '个</b><button type="button" class="ch-set" disabled>设定指标</button></div>' +
         '<div class="ch-metrics"><article class="ch-card ch-hero"><div class="label">' +
         escapeHtml(hero.label || "实时销售指数") +
+        '</div><div class="value">' +
+        escapeHtml(hero.value || "") +
         "</div>" +
         sparkSvg(hero.spark) +
         '<div class="ch-axis"><span>00:00</span><span>12:00</span><span>23:00</span></div>' +
-        '<div class="value">' +
-        escapeHtml(hero.value || "") +
-        '</div><div class="delta ' +
+        '<div class="delta ' +
         (down ? "is-down" : "is-up") +
         '">' +
         (down ? "↓ " : "↑ ") +

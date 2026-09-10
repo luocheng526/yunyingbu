@@ -283,7 +283,12 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
 }
 
 .ch-root {
-  color: var(--xm-ink);
+  --ch-ink: var(--xm-ink, #1f1f1f);
+  --ch-line: var(--xm-line, #ececec);
+  --ch-card: var(--xm-card, #fff);
+  --ch-bg: var(--xm-bg, #f7f7f7);
+  --ch-primary: var(--xm-primary, #4da6ff);
+  color: var(--ch-ink);
   padding-top: 8px;
 }
 .ch-top,
@@ -319,10 +324,10 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
 .ch-set {
   height: 28px;
   padding: 0 10px;
-  border: 1px solid var(--xm-line);
+  border: 1px solid var(--ch-line);
   border-radius: 4px;
-  background: var(--xm-card);
-  color: var(--xm-ink);
+  background: var(--ch-card);
+  color: var(--ch-ink);
   cursor: pointer;
   font-size: 13px;
 }
@@ -349,8 +354,8 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0;
   margin-bottom: 8px;
-  background: var(--xm-card);
-  border: 1px solid var(--xm-line);
+  background: var(--ch-card);
+  border: 1px solid var(--ch-line);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -359,8 +364,8 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
   padding: 14px 16px 16px;
   background: transparent;
   border: 0;
-  border-right: 1px solid var(--xm-line);
-  border-bottom: 1px solid var(--xm-line);
+  border-right: 1px solid var(--ch-line);
+  border-bottom: 1px solid var(--ch-line);
   border-radius: 0;
 }
 .ch-card:nth-child(6n) {
@@ -384,7 +389,7 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
   display: block;
   width: 100%;
   height: 36px;
-  color: var(--xm-primary);
+  color: var(--ch-primary);
   margin: 8px 0 0;
 }
 .ch-axis {
@@ -409,7 +414,7 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
   flex-wrap: wrap;
   gap: 0;
   margin: 16px 0 0;
-  border-bottom: 1px solid var(--xm-line);
+  border-bottom: 1px solid var(--ch-line);
 }
 .ch-tabs button {
   height: 36px;
@@ -417,7 +422,7 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
-  color: var(--xm-ink);
+  color: var(--ch-ink);
   cursor: pointer;
   font-size: 13px;
   opacity: 0.7;
@@ -425,21 +430,21 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
 .ch-tabs button.is-active {
   opacity: 1;
   font-weight: 600;
-  color: var(--xm-primary);
-  border-bottom-color: var(--xm-primary);
+  color: var(--ch-primary);
+  border-bottom-color: var(--ch-primary);
   background: transparent;
 }
 .ch-table {
   margin: 0 0 18px;
-  background: var(--xm-card);
-  border: 1px solid var(--xm-line);
+  background: var(--ch-card);
+  border: 1px solid var(--ch-line);
   border-top: 0;
   border-radius: 0 0 6px 6px;
   overflow: hidden;
 }
 .ch-table-bar {
   padding: 10px 12px;
-  border-bottom: 1px solid var(--xm-line);
+  border-bottom: 1px solid var(--ch-line);
   font-size: 13px;
 }
 .ch-pick {
@@ -453,8 +458,9 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
   height: 26px;
   border: 1px solid var(--xm-line);
   border-radius: 4px;
-  background: var(--xm-card);
-  color: var(--xm-ink);
+  background: var(--ch-card);
+  color: var(--ch-ink);
+  border-color: var(--ch-line);
 }
 .ch-zero {
   display: inline-flex;
@@ -473,12 +479,12 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
   padding: 0 8px;
   border: 0;
   background: transparent;
-  color: var(--xm-ink);
+  color: var(--ch-ink);
   opacity: 0.62;
   font-size: 12px;
 }
 .ch-tools button.is-on {
-  color: var(--xm-primary);
+  color: var(--ch-primary);
   opacity: 1;
   font-weight: 600;
 }
@@ -493,14 +499,14 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
 .ch-table th,
 .ch-table td {
   padding: 9px 10px;
-  border-bottom: 1px solid var(--xm-line);
+  border-bottom: 1px solid var(--ch-line);
   font-size: 12px;
   text-align: left;
   white-space: nowrap;
 }
 .ch-table th {
-  background: var(--xm-bg);
-  color: var(--xm-ink);
+  background: var(--ch-bg);
+  color: var(--ch-ink);
   opacity: 0.72;
   font-weight: 600;
 }
@@ -526,7 +532,7 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
   width: 3px;
   height: 14px;
   margin-right: 8px;
-  background: var(--xm-primary);
+  background: var(--ch-primary);
   border-radius: 1px;
 }
 .ch-logo {
