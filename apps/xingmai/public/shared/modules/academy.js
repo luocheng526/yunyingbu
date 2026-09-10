@@ -1294,7 +1294,9 @@
                 (node.id === currentId ? " is-on" : "") +
                 '" data-id="' +
                 escapeHtml(node.id) +
-                '">' +
+                '"' +
+                (editorOk ? ' draggable="true"' : "") +
+                ">" +
                 escapeHtml(node.title) +
                 (node.hasBody ? '<span class="academy-badge is-pub">已写</span>' : "") +
                 "</button>" +

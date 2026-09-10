@@ -860,9 +860,10 @@ main.page.academy-page,
   color: #4e5969;
   font: inherit;
   padding: 8px 8px 8px 16px;
-  cursor: pointer;
+  cursor: grab;
   font-size: 13px;
   border-radius: 0;
+  -webkit-user-drag: element;
 }
 
 .academy-tree-item.is-group {

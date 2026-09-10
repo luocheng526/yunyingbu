@@ -53,6 +53,7 @@ test("academy.js opens the handbook editor", () => {
   assert.match(js, /academy-tree-add/);
   assert.match(js, /handbook\/reorder/);
   assert.match(js, /draggable/);
+  assert.match(js, /draggable=\"true\"/);
   assert.match(js, /星脉甄选商学院/);
   assert.match(js, /academy-console/);
   assert.match(js, /插入图片/);
