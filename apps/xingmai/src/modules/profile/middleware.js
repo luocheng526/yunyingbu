@@ -6,9 +6,9 @@ import { navMarkup } from "../home/nav-items.js";
 import { currentUser, publicProfile } from "./auth.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.120
+// xm-fast-shell 0.1.121
 
-export const SHELL_ASSET_VER = "0.1.120";
+export const SHELL_ASSET_VER = "0.1.121";
 export const TAB_TITLE = "星脉甄选运营中心";
 // 浏览器标签图标走真实文件。Chrome 标签栏经常不画 data: 内嵌图，会变成地球。
 // 侧栏品牌条仍用 /login-logo.png，不要改成这个。
@@ -129,7 +129,7 @@ ${boot}    <script src="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" defer dat
           <div class="xm-user">
             <div class="xm-styles" role="group" aria-label="页面风格"><button type="button" data-xm-style="light" title="正常蓝色">蓝</button><button type="button" data-xm-style="dark" title="晚上黑色">夜</button><button type="button" data-xm-style="pink" title="甄选粉">粉</button></div>
             <time class="xm-date" id="xm-date"></time>
-            <button type="button" class="xm-refresh" id="xm-refresh">刷新</button>
+            <button type="button" class="xm-refresh" id="xm-refresh" title="绕过缓存重新加载本页" aria-label="强制刷新">强制刷新</button>
             <a class="xm-username" id="xm-username" href="/me">${userName}</a>
           </div>
         </header>
