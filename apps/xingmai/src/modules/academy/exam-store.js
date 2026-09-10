@@ -5,7 +5,7 @@ import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { dbMode, query } from "../profile/auth.js";
-import { getExamTrack, listExamTracks, seatsUserCanGrade, examGraderSeats } from "./framework.js";
+import { getExamTrack, listExamTracks, seatsUserCanGrade } from "./framework.js";
 import { READ_EXAM_PY } from "./read-exam-script.js";
 
 const execFileAsync = promisify(execFile);
@@ -13,6 +13,11 @@ const ROOT = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(ROOT, "data", "exams");
 const READER = join(ROOT, "read-exam.py");
 const ACCEPT = [".xlsx", ".csv", ".json", ".docx", ".txt"];
+
+function examGraderSeats(track) {
+  const row = track && track.graders ? track : getExamTrack(track);
+  return (row && row.graders) || ["主管", "经理"];
+}
 
 async function ensureReader() {
   await writeFile(READER, READ_EXAM_PY);
