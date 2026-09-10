@@ -222,7 +222,7 @@
   }
 
   const existingBoard = document.getElementById("board");
-  if (existingBoard) {
+  if (existingBoard && /\/data\/shops\/?$/.test(location.pathname)) {
     createShopDashboard(existingBoard.closest(".xm-page") || document.body);
   }
 })();
