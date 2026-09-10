@@ -13,7 +13,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=live-head3";
+      link.href = "/data-pages.css?v=live-hide4";
       document.head.appendChild(link);
     }
   }
@@ -46,7 +46,43 @@
     );
   }
 
-  function shopTableHtml(block) {
+  function hideMetric(label) {
+    return /销售单数|大毛利率|实时利润预估/.test(label || "");
+  }
+
+  function pruneShopTable(block) {
+    if (!block) {
+      return block;
+    }
+    const keepCell = [];
+    const columns = (block.columns || []).filter(function (col, i) {
+      if (i === 0) {
+        return true;
+      }
+      if (hideMetric(col)) {
+        return false;
+      }
+      keepCell.push(i - 1);
+      return true;
+    });
+    return {
+      title: block.title,
+      columns: columns,
+      rows: (block.rows || []).map(function (row) {
+        return {
+          name: row.name,
+          kind: row.kind,
+          color: row.color,
+          cells: keepCell.map(function (idx) {
+            return (row.cells || [])[idx];
+          })
+        };
+      })
+    };
+  }
+
+  function shopTableHtml(raw) {
+    const block = pruneShopTable(raw);
     if (!block) {
       return "";
     }
@@ -152,7 +188,12 @@
         .join("");
       const cards = (payload.cards || [])
         .filter(function (card) {
-          return card.key !== "orders" && !/销售单数/.test(card.label || "");
+          return (
+            card.key !== "orders" &&
+            card.key !== "margin" &&
+            card.key !== "liveProfit" &&
+            !hideMetric(card.label)
+          );
         })
         .map(function (card) {
           return (

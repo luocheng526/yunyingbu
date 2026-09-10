@@ -216,6 +216,7 @@ test("data child pages and demo APIs respond", async () => {
     const liveJs = await get(base, "/data-live.js");
     assert.match(liveJs.text, /店铺实时付费明细/);
     assert.match(liveJs.text, /loadDemoTable/);
+    assert.match(liveJs.text, /pruneShopTable/);
     assert.doesNotMatch(liveJs.text, /统计时间/);
     assert.match(liveJs.text, /销售单数/);
     assert.doesNotMatch(paidPage.text, /实时明细/);
@@ -223,9 +224,9 @@ test("data child pages and demo APIs respond", async () => {
     assert.equal(liveApi.res.status, 200);
     const live = JSON.parse(liveApi.text);
     assert.equal(live.title, "实时看板");
-    assert.equal(live.cards.length, 9);
+    assert.equal(live.cards.length, 7);
     assert.equal(
-      live.cards.some((c) => c.key === "orders"),
+      live.cards.some((c) => c.key === "orders" || c.key === "margin" || c.key === "liveProfit"),
       false
     );
     assert.equal(
@@ -235,7 +236,11 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(JSON.stringify(live), /实时付费成交额/);
     assert.match(JSON.stringify(live), /付费成交ROI/);
     assert.equal(live.shopLiveTable.title, "店铺实时付费明细");
-    assert.equal(live.shopLiveTable.columns.length, 12);
+    assert.equal(live.shopLiveTable.columns.length, 9);
+    assert.equal(
+      live.shopLiveTable.columns.some((c) => /销售单数|大毛利率|实时利润预估/.test(c)),
+      false
+    );
     assert.equal(live.shopLiveTable.rows.length, 13);
     assert.match(JSON.stringify(live.shopLiveTable), /RASW家居旗舰店/);
     assert.match(JSON.stringify(live.shopLiveTable), /实时费比/);
