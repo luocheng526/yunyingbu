@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.93-fail-advance */
+/* xm-module-releases 0.1.94-fail-unmask */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -194,7 +194,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-13";
+      link.href = "/releases.css?v=sc-ui-14";
       document.head.appendChild(link);
     }
   }
@@ -661,7 +661,7 @@
           if (ticket && ticket.status === "failed") {
             failUpgrade(keys, ticket.log || "发版失败");
             flash(ticket.log || "发版失败", true);
-            await refreshAfterFailedPass();
+            await refreshAfterFailedPass(id);
             return "failed";
           }
           if (ticket && ticket.status === "publishing") {
@@ -672,7 +672,7 @@
             const msg = (confirmErr.status || "") + " " + (confirmErr.message || "通过失败");
             failUpgrade(keys, msg);
             flash(msg, true);
-            await refreshAfterFailedPass();
+            await refreshAfterFailedPass(ticket && ticket.status === "failed" ? id : "");
             return "failed";
           }
           if (ticket && ticket.status === "success") {
@@ -700,7 +700,7 @@
           : ((ticket && ticket.log) ? ticket.log + "\n" : "") + "健康检查超时：" + lastHealth;
         failUpgrade(keys, timeoutMsg);
         flash("升级未完成：" + lastHealth, true);
-        await refreshAfterFailedPass();
+        await refreshAfterFailedPass(ticket && ticket.status === "failed" ? id : "");
         return "failed";
         } finally {
           window.__xmUpgradePass = null;
@@ -891,7 +891,7 @@
             confirmBtn = "<button class=\"act\" data-act=\"pass\">通过</button>";
           }
           return (
-            "<tr class=\"ticket\" data-id=\"" + esc(item.id) + "\" data-restart=\"" + (item.restart ? "1" : "0") + "\" data-version=\"" + esc(item.version) + "\">" +
+            "<tr class=\"ticket\" data-id=\"" + esc(item.id) + "\" data-module=\"" + esc(item.module) + "\" data-restart=\"" + (item.restart ? "1" : "0") + "\" data-version=\"" + esc(item.version) + "\">" +
             "<td class=\"sc-seq\">第 " + seq + " 位</td>" +
             "<td>" + esc(item.module) + "</td>" +
             "<td class=\"sc-change\">" +
@@ -1045,7 +1045,10 @@
         renderStats(summary, ready);
         renderHistoryStats(summary);
         renderCurrentVersions(versions);
-        const queued = queue.items || [];
+        const dropIds = (opts && opts.dropIds) || [];
+        const queued = (queue.items || []).filter(function (item) {
+          return dropIds.indexOf(item.id) < 0;
+        });
         knownQueueIds = queued.map(function (item) { return item.id; });
         renderQueue(queued, lock.locked, versions);
         if (failed.length) {
@@ -1063,11 +1066,31 @@
         return lock;
       }
 
-      async function refreshAfterFailedPass() {
+      async function refreshAfterFailedPass(failedId) {
         try {
-          await refresh({ skipLoginRedirect: true });
-          flash("已刷新待上线。失败单不占队首，下一条不会自动通过。", true);
+          for (let i = 0; i < 10; i += 1) {
+            await refresh({
+              skipLoginRedirect: true,
+              dropIds: failedId ? [failedId] : []
+            });
+            if (!failedId || knownQueueIds.indexOf(failedId) < 0) {
+              break;
+            }
+            await sleep(250);
+          }
+          hideUpgrade();
+          const head = document.querySelector("#queue-view [data-id]");
+          const headLabel = head
+            ? ((head.getAttribute("data-module") || "") + " " + (head.getAttribute("data-version") || "")).trim()
+            : "";
+          flash(
+            headLabel
+              ? "发版失败，该单已离开待上线。现在第 1 位是 " + headLabel + "。请点通过或驳回，后面的单不会自动发。"
+              : "发版失败，该单已离开待上线。待上线已空。",
+            true
+          );
         } catch (err) {
+          hideUpgrade();
           flash((err && err.message) || "刷新队列失败", true);
         }
       }
