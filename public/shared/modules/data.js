@@ -45,6 +45,20 @@
     });
   }
 
+  function mountLiveDashboard(root) {
+    ensureSheet();
+    return loadScript("/data-live.js?v=live-tpl").then(function () {
+      if (typeof window.XmDataCreateLiveDashboard === "function") {
+        return window.XmDataCreateLiveDashboard(root);
+      }
+      root.innerHTML =
+        '<main class="xm-page data-fill data-overview-root"><p class="lead">示例数据，尚未接入店铺。</p></main>';
+      return function unmount() {
+        root.innerHTML = "";
+      };
+    });
+  }
+
   function mountShopDashboard(root) {
     ensureSheet();
     return loadScript("/data-shops.js?v=shop-tpl").then(function () {
@@ -222,16 +236,16 @@
 
   window.XmModules["/data/paid"] = {
     mount: function (root) {
-      return mountList(root, {
-        title: "实时付费",
-        lead: "近5分钟店铺成交与访客。数字为占位演示。",
-        tableTitle: "实时明细",
-        api: "/api/data/stores/live",
-        headers: ["店铺", "成交", "订单", "访客"],
-        cells: function (row) {
-          return [row.store, row.gmv, row.orders, row.visitors];
-        }
+      let stop = null;
+      mountLiveDashboard(root).then(function (unmount) {
+        stop = unmount;
       });
+      return function unmount() {
+        if (typeof stop === "function") {
+          stop();
+        }
+        root.innerHTML = "";
+      };
     }
   };
 

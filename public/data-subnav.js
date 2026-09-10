@@ -3,7 +3,7 @@
     { href: "/data/overview", label: "数据总揽" },
     { href: "/data/shops", label: "店铺数据" },
     { href: "/data/goods", label: "商品数据" },
-    { href: "/data/paid", label: "实时付费" }
+    { href: "/data/paid", label: "实时看板" }
   ];
   const current = window.location.pathname.replace(/\/+$/, "") || "/";
   const root = document.getElementById("data-subnav");

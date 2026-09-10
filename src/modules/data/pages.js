@@ -278,3 +278,40 @@ export function getGoodsBoard() {
     }
   };
 }
+
+/** Live board for 实时看板. Same top metrics as 渠道总览; second row is live paid cards. */
+export function getLiveBoard() {
+  return {
+    ok: true,
+    demo: true,
+    notice: "示例数据，尚未接入店铺",
+    title: "实时看板",
+    scope: "实时",
+    range: "7天",
+    dateLabel: "2026年9月9日",
+    ranges: ["7天", "昨日", "周", "月", "年", "自定义"],
+    views: [
+      { label: "渠道总览", href: "/data/overview" },
+      { label: "实时看板", href: "/data/paid" }
+    ],
+    summary: { channels: 1, shops: 46 },
+    hero: {
+      label: "实时销售指数",
+      value: "165,362.13",
+      delta: -7.44,
+      spark: [28, 30, 26, 32, 31, 36, 34, 40, 38, 48, 46, 58]
+    },
+    cards: [
+      { key: "pay", label: "支付金额 (支付)", value: "837,247.17", extra: "付费成交ROI 2.40" },
+      { key: "orders", label: "销售单数 (支付)", value: "3,174" },
+      { key: "ad", label: "推广花费 (支付预估)", value: "348,174.63", extra: "推广占比 41.59%" },
+      { key: "profit", label: "利润 (支付预估)", value: "415,136.64", extra: "毛利率 49.58%" },
+      { key: "margin", label: "大毛利率", value: "49.58%" },
+      { key: "roi", label: "付费成交ROI", value: "2.40" },
+      { key: "livePay", label: "实时付费成交额", value: "12,480.50" },
+      { key: "liveAd", label: "实时推广花费额", value: "5,210.30" },
+      { key: "liveProfit", label: "实时利润预估", value: "6,180.20" },
+      { key: "liveFee", label: "实时费比", value: "41.75%" }
+    ]
+  };
+}

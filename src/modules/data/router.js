@@ -4,6 +4,7 @@ import { getNav } from "./nav.js";
 import {
   getGoodsBoard,
   getGoodsOverview,
+  getLiveBoard,
   getPlaceholder,
   getStoreLive,
   getShopOverview,
@@ -51,4 +52,8 @@ dataRouter.get("/shops", (_req, res) => {
 
 dataRouter.get("/goods/board", (_req, res) => {
   res.json(getGoodsBoard());
+});
+
+dataRouter.get("/live", (_req, res) => {
+  res.json(getLiveBoard());
 });

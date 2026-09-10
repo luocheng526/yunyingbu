@@ -96,7 +96,7 @@ test("GET /api/data/nav lists the data-center children including 数据总揽", 
     assert.equal(body.parent.label, "数据中心");
     assert.deepEqual(
       body.children.map((c) => c.label),
-      ["数据总揽", "店铺数据", "商品数据", "实时付费"]
+      ["数据总揽", "店铺数据", "商品数据", "实时看板"]
     );
     assert.equal(
       body.children.some((c) => /公司/.test(c.label)),
@@ -130,7 +130,8 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(subnav.text, /数据总揽/);
     assert.match(subnav.text, /店铺数据/);
     assert.match(subnav.text, /商品数据/);
-    assert.match(subnav.text, /实时付费/);
+    assert.match(subnav.text, /实时看板/);
+    assert.doesNotMatch(subnav.text, /实时付费/);
     assert.doesNotMatch(subnav.text, /公司/);
     const overviewPage = await get(base, "/data/overview");
     assert.equal(overviewPage.res.status, 200);
@@ -195,6 +196,22 @@ test("data child pages and demo APIs respond", async () => {
     const goodsDemo = await get(base, "/data/goods-demo.json");
     assert.equal(goodsDemo.res.status, 200);
     assert.equal(JSON.parse(goodsDemo.text).cards.length, 14);
+    const paidPage = await get(base, "/data/paid/");
+    assert.equal(paidPage.res.status, 200);
+    assert.match(paidPage.text, /data-live\.js/);
+    assert.match(paidPage.text, /实时看板/);
+    assert.doesNotMatch(paidPage.text, /实时明细/);
+    const liveApi = await get(base, "/api/data/live");
+    assert.equal(liveApi.res.status, 200);
+    const live = JSON.parse(liveApi.text);
+    assert.equal(live.title, "实时看板");
+    assert.equal(live.cards.length, 10);
+    assert.equal(
+      live.cards.some((c) => c.key === "custom" || c.key === "refundRate" || c.key === "adRate"),
+      false
+    );
+    assert.match(JSON.stringify(live), /实时付费成交额/);
+    assert.match(JSON.stringify(live), /付费成交ROI/);
     const dataMod = await get(base, "/shared/modules/data.js");
     assert.equal(dataMod.res.status, 200);
     assert.doesNotMatch(dataMod.text, /内容待开发/);
@@ -378,6 +395,8 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.equal(isAllowedDataPath("public/data/shops-demo.json"), true);
   assert.equal(isAllowedDataPath("public/data-goods.js"), true);
   assert.equal(isAllowedDataPath("public/data/goods-demo.json"), true);
+  assert.equal(isAllowedDataPath("public/data-live.js"), true);
+  assert.equal(isAllowedDataPath("public/data/live-demo.json"), true);
   assert.equal(isAllowedDataPath("public/shared/modules/data.js"), true);
   assert.equal(isAllowedDataPath("public/shared/nav.js"), false);
   const css = fs.readFileSync(path.join(repoRoot, "public/data-pages.css"), "utf8");
@@ -395,6 +414,8 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /data-goods\.js/);
   assert.doesNotMatch(dataMod, /店铺周报/);
   assert.doesNotMatch(dataMod, /商品周报/);
+  assert.match(dataMod, /data-live\.js/);
+  assert.doesNotMatch(dataMod, /实时明细/);
   const demo = JSON.parse(fs.readFileSync(path.join(repoRoot, "public/data/team-demo.json"), "utf8"));
   assert.equal(demo.cards.length, 8);
   assert.equal(demo.scope, "团队");
