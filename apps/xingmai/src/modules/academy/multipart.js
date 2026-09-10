@@ -1,3 +1,40 @@
+export function isRawUpload(req) {
+  const ctype = String(req.headers["content-type"] || "").toLowerCase();
+  return (
+    ctype.includes("application/octet-stream") ||
+    ctype.includes("application/vnd.openxmlformats-officedocument.presentationml.presentation")
+  );
+}
+
+export function readRawBody(req, { maxBytes = 25 * 1024 * 1024 } = {}) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    let failed = false;
+    req.on("data", (chunk) => {
+      if (failed) {
+        return;
+      }
+      size += chunk.length;
+      if (size > maxBytes) {
+        failed = true;
+        const error = new Error("文件太大，最多 25MB");
+        error.statusCode = 413;
+        reject(error);
+        req.destroy();
+      } else {
+        chunks.push(chunk);
+      }
+    });
+    req.on("end", () => {
+      if (!failed) {
+        resolve(Buffer.concat(chunks));
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
 export function parseMultipart(req, { maxBytes = 25 * 1024 * 1024 } = {}) {
   return new Promise((resolve, reject) => {
     const ctype = String(req.headers["content-type"] || "");
@@ -66,12 +103,20 @@ function splitParts(buf, boundary) {
     }
     const body = buf.slice(sep + 4, bodyEnd);
     const nameHit = header.match(/name="([^"]+)"/i);
-    const fileHit = header.match(/filename="([^"]*)"/i);
+    const fileHit = header.match(/filename\*=(?:UTF-8''|utf-8'')([^;\r\n]+)|filename="([^"]*)"/i);
     const name = nameHit ? nameHit[1] : "";
-    if (fileHit && fileHit[1]) {
+    let filename = "";
+    if (fileHit) {
+      try {
+        filename = fileHit[1] ? decodeURIComponent(fileHit[1].trim()) : fileHit[2] || "";
+      } catch {
+        filename = fileHit[2] || fileHit[1] || "";
+      }
+    }
+    if (filename) {
       file = {
         field: name,
-        filename: fileHit[1],
+        filename,
         type: (header.match(/Content-Type:\s*([^\r\n]+)/i) || [])[1] || "",
         buffer: body
       };

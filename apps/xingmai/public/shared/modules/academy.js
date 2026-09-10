@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.213 */
+/* xm-module-academy 0.1.214 */
 (function () {
-  const ASSET_VER = "0.1.213";
+  const ASSET_VER = "0.1.214";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -65,16 +65,23 @@
       });
   }
 
+  function apiError(res, data) {
+    if (res.status === 401) {
+      return "登录已失效，请刷新后再试";
+    }
+    return (data && data.error) || "接口 " + res.status;
+  }
+
   function api(path) {
     return fetch(path, {
-      credentials: "same-origin",
+      credentials: "include",
       headers: { Accept: "application/json" }
     }).then(function (res) {
       return res.json().catch(function () {
-        return { ok: false, error: "接口 " + res.status };
+        return { ok: false, error: apiError(res, null) };
       }).then(function (data) {
         if (!res.ok || data.ok === false) {
-          throw new Error(data.error || "接口 " + res.status);
+          throw new Error(apiError(res, data));
         }
         return data;
       });
@@ -117,15 +124,15 @@
   function postJson(path, body) {
     return fetch(path, {
       method: "POST",
-      credentials: "same-origin",
+      credentials: "include",
       headers: { Accept: "application/json", "Content-Type": "application/json" },
       body: JSON.stringify(body || {})
     }).then(function (res) {
       return res.json().catch(function () {
-        return { ok: false, error: "接口 " + res.status };
+        return { ok: false, error: apiError(res, null) };
       }).then(function (data) {
         if (!res.ok || data.ok === false) {
-          throw new Error(data.error || "接口 " + res.status);
+          throw new Error(apiError(res, data));
         }
         return data;
       });
@@ -135,15 +142,41 @@
   function postForm(path, form) {
     return fetch(path, {
       method: "POST",
-      credentials: "same-origin",
+      credentials: "include",
       headers: { Accept: "application/json" },
       body: form
     }).then(function (res) {
       return res.json().catch(function () {
-        return { ok: false, error: "接口 " + res.status };
+        return { ok: false, error: apiError(res, null) };
       }).then(function (data) {
         if (!res.ok || data.ok === false) {
-          throw new Error(data.error || "接口 " + res.status);
+          throw new Error(apiError(res, data));
+        }
+        return data;
+      });
+    });
+  }
+
+  function postCourseFile(formEl, file) {
+    const qs = new URLSearchParams();
+    qs.set("title", formEl.title.value);
+    qs.set("category", formEl.category.value);
+    qs.set("published", formEl.published.checked ? "1" : "0");
+    qs.set("filename", file && file.name ? file.name : "course.pptx");
+    return fetch("/api/academy/courses?" + qs.toString(), {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/octet-stream"
+      },
+      body: file || new Blob()
+    }).then(function (res) {
+      return res.json().catch(function () {
+        return { ok: false, error: apiError(res, null) };
+      }).then(function (data) {
+        if (!res.ok || data.ok === false) {
+          throw new Error(apiError(res, data));
         }
         return data;
       });
@@ -342,16 +375,9 @@
             status.className = "academy-status error";
             return;
           }
-          const fd = new FormData();
-          fd.append("title", formEl.title.value);
-          fd.append("category", formEl.category.value);
-          fd.append("published", formEl.published.checked ? "true" : "false");
-          if (file) {
-            fd.append("file", file, file.name);
-          }
           status.textContent = "正在解析…";
           status.className = "academy-status";
-          postForm("/api/academy/courses", fd)
+          postCourseFile(formEl, file)
             .then(function (data) {
               status.textContent = "已导入，学员只能在线翻页。";
               formEl.reset();
