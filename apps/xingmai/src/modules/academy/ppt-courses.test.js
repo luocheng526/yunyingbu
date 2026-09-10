@@ -102,8 +102,12 @@ test("academy.js enables upload, watermark, and blocks original download", () =>
   assert.match(js, /postForm\("\/api\/academy\/courses"/);
   assert.doesNotMatch(js, /source\.pptx/);
   assert.doesNotMatch(js, /第 1 步/);
+  assert.doesNotMatch(js, /第 2 步/);
+  assert.doesNotMatch(js, /第 3 步/);
+  assert.doesNotMatch(js, /第 4 步/);
   assert.doesNotMatch(js, /academy-plan/);
   assert.match(css, /\.academy-wm/);
+  assert.match(css, /align-self:\s*flex-start/);
 });
 
 test("plan is live; old ppt is rejected", async () => {

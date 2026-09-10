@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.200 */
+/* xm-module-academy 0.1.201 */
 (function () {
-  const ASSET_VER = "0.1.200";
+  const ASSET_VER = "0.1.201";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -119,10 +119,8 @@
       mount: function (root) {
         const unmount = mountShell(
           root,
-          pageHead("培训课程", "导入运营 PPTX，在线翻页。不提供原件下载，预览带姓名和时间水印。") +
-            '<div class="academy-work">' +
-            '<aside class="panel academy-side">' +
-            '<form id="academy-upload" class="academy-bar">' +
+          pageHead("培训课程", "导入运营 PPTX，在线翻页。不提供原件下载。") +
+            '<form id="academy-upload" class="academy-toolbar">' +
             '<label>标题 <input name="title" required maxlength="160" placeholder="课件标题" /></label>' +
             '<label>分类 <select name="category">' +
             '<option value="选品与商品">选品与商品</option>' +
@@ -136,8 +134,8 @@
             '<button type="submit">上传</button>' +
             "</form>" +
             '<p class="academy-status" id="academy-upload-status"></p>' +
-            '<div class="academy-course-list" id="academy-course-list"></div>' +
-            "</aside>" +
+            '<div class="academy-work">' +
+            '<aside class="panel academy-side"><div class="academy-course-list" id="academy-course-list"></div></aside>' +
             '<section class="panel academy-main" id="academy-viewer"><p class="academy-empty">点左侧课件在线翻页。</p></section>' +
             "</div>"
         );
