@@ -2,10 +2,10 @@ import { dbMode, query } from "../profile/auth.js";
 import { getDoc, listCatalog, listDocs, listLessonIds, searchDocs } from "./catalog.js";
 import {
   getExamTrack,
-  handbookTree,
   listExamTracks,
   plan
 } from "./framework.js";
+import { getHandbookTree } from "./handbook-store.js";
 import { listExamPapers } from "./exam-store.js";
 import { courseCategories, listPptCourses } from "./ppt-store.js";
 
@@ -79,8 +79,8 @@ export function examTrack(id) {
   return getExamTrack(id);
 }
 
-export function handbook() {
-  return handbookTree();
+export async function handbook() {
+  return getHandbookTree();
 }
 
 export async function listProgress(username) {
