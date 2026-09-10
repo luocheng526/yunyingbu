@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.220 */
+/* xm-module-academy 0.1.221 */
 (function () {
-  const ASSET_VER = "0.1.220";
+  const ASSET_VER = "0.1.221";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -1253,6 +1253,8 @@
         let clickTimer = 0;
         let editing = false;
         let logsOn = false;
+        let draggingId = "";
+        let didDrag = false;
 
         function renderBody(text) {
           return String(text || "")
@@ -1281,8 +1283,12 @@
               return (
                 '<div class="academy-tree-group' +
                 (top ? "" : " is-sub") +
+                '" data-node="' +
+                escapeHtml(node.id) +
                 '">' +
-                '<div class="academy-tree-row">' +
+                '<div class="academy-tree-row"' +
+                (editorOk ? ' draggable="true"' : "") +
+                ">" +
                 '<button type="button" class="academy-tree-item' +
                 (top ? " is-group" : "") +
                 (node.id === currentId ? " is-on" : "") +
@@ -1485,6 +1491,10 @@
           if (!btn) {
             return;
           }
+          if (didDrag) {
+            didDrag = false;
+            return;
+          }
           const id = btn.getAttribute("data-id");
           window.clearTimeout(clickTimer);
           clickTimer = window.setTimeout(function () {
@@ -1520,6 +1530,99 @@
             form.hidden = false;
             form.setAttribute("data-error", err.message);
           });
+        });
+
+        function clearDropMarks() {
+          root.querySelectorAll(".academy-tree-row").forEach(function (el) {
+            el.classList.remove("is-drop-before", "is-drop-after");
+          });
+        }
+
+        function rowNodeId(row) {
+          const item = row && row.querySelector("[data-id]");
+          return item ? item.getAttribute("data-id") : "";
+        }
+
+        const treeNav = root.querySelector("#academy-tree");
+        treeNav.addEventListener("dragstart", function (ev) {
+          if (!editorOk || ev.target.closest("[data-add]") || ev.target.closest("form")) {
+            ev.preventDefault();
+            return;
+          }
+          const row = ev.target.closest(".academy-tree-row");
+          const id = rowNodeId(row);
+          if (!id) {
+            ev.preventDefault();
+            return;
+          }
+          draggingId = id;
+          didDrag = true;
+          window.clearTimeout(clickTimer);
+          ev.dataTransfer.effectAllowed = "move";
+          ev.dataTransfer.setData("text/plain", id);
+        });
+        treeNav.addEventListener("dragend", function () {
+          draggingId = "";
+          clearDropMarks();
+        });
+        treeNav.addEventListener("dragover", function (ev) {
+          if (!draggingId) {
+            return;
+          }
+          const row = ev.target.closest(".academy-tree-row");
+          if (!row) {
+            return;
+          }
+          ev.preventDefault();
+          clearDropMarks();
+          const rect = row.getBoundingClientRect();
+          row.classList.add(ev.clientY > rect.top + rect.height / 2 ? "is-drop-after" : "is-drop-before");
+        });
+        treeNav.addEventListener("drop", function (ev) {
+          const row = ev.target.closest(".academy-tree-row");
+          if (!row || !draggingId) {
+            return;
+          }
+          ev.preventDefault();
+          const targetId = rowNodeId(row);
+          const group = row.closest(".academy-tree-group");
+          const parentGroup = group && group.parentElement ? group.parentElement.closest(".academy-tree-group") : null;
+          const parentId = parentGroup ? parentGroup.getAttribute("data-node") : "";
+          const rect = row.getBoundingClientRect();
+          const after = ev.clientY > rect.top + rect.height / 2;
+          const payload = { id: draggingId };
+          if (after) {
+            const next = group.nextElementSibling;
+            if (next && next.classList.contains("academy-tree-group")) {
+              payload.beforeId = next.getAttribute("data-node");
+            } else {
+              payload.parentId = parentId;
+            }
+          } else {
+            payload.beforeId = targetId;
+          }
+          draggingId = "";
+          clearDropMarks();
+          if (payload.beforeId === payload.id) {
+            return;
+          }
+          postJson("/api/academy/handbook/reorder", payload)
+            .then(function () {
+              return loadTree().then(function () {
+                if (currentId) {
+                  root.querySelectorAll(".academy-tree-item").forEach(function (el) {
+                    el.classList.toggle("is-on", el.getAttribute("data-id") === currentId);
+                  });
+                }
+              });
+            })
+            .catch(function (err) {
+              const tree = root.querySelector("#academy-tree");
+              tree.insertAdjacentHTML(
+                "beforeend",
+                '<p class="academy-status error">' + escapeHtml(err.message) + "</p>"
+              );
+            });
         });
 
         root.querySelector("#academy-section").addEventListener("dblclick", function (ev) {

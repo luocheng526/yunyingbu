@@ -319,6 +319,101 @@ export function handbookMediaType(name) {
   return "application/octet-stream";
 }
 
+function findParent(nodes, id) {
+  let parent = null;
+  let found = false;
+  function walkFind(list, p) {
+    for (const node of list || []) {
+      if (found) {
+        return;
+      }
+      if (node.id === id) {
+        parent = p;
+        found = true;
+        return;
+      }
+      walkFind(node.children, node);
+    }
+  }
+  walkFind(nodes, null);
+  return found ? parent : undefined;
+}
+
+function isDescendant(node, id) {
+  let hit = false;
+  walk(node.children || [], (child) => {
+    if (child.id === id) {
+      hit = true;
+    }
+  });
+  return hit;
+}
+
+function takeNode(nodes, id) {
+  for (let i = 0; i < (nodes || []).length; i += 1) {
+    if (nodes[i].id === id) {
+      return nodes.splice(i, 1)[0];
+    }
+    const got = takeNode(nodes[i].children || [], id);
+    if (got) {
+      return got;
+    }
+  }
+  return null;
+}
+
+function bad(message, code) {
+  const error = new Error(message);
+  error.statusCode = code;
+  return error;
+}
+
+export async function moveHandbookNode({ id, beforeId, parentId }) {
+  const tree = await loadTree();
+  const sid = safeSectionId(id);
+  if (!sid) {
+    throw bad("请选择要移动的菜单", 400);
+  }
+  const moving = findNode(tree, sid);
+  if (!moving) {
+    throw bad("没有这一节", 404);
+  }
+  const before = safeSectionId(beforeId);
+  if (before === sid) {
+    return getHandbookTree();
+  }
+  let destParent = null;
+  let destList = tree;
+  if (before) {
+    if (!findNode(tree, before)) {
+      throw bad("放不下这个位置", 400);
+    }
+    destParent = findParent(tree, before);
+    destList = destParent ? destParent.children : tree;
+  } else if (safeSectionId(parentId)) {
+    destParent = findNode(tree, safeSectionId(parentId));
+    if (!destParent) {
+      throw bad("没有这一节", 404);
+    }
+    destList = destParent.children || (destParent.children = []);
+  }
+  if (destParent && (destParent.id === sid || isDescendant(moving, destParent.id))) {
+    throw bad("不能拖进自己的下级", 400);
+  }
+  const taken = takeNode(tree, sid);
+  if (!taken) {
+    throw bad("没有这一节", 404);
+  }
+  let index = destList.length;
+  if (before) {
+    const at = destList.findIndex((node) => node.id === before);
+    index = at < 0 ? destList.length : at;
+  }
+  destList.splice(index, 0, taken);
+  await saveTree(tree);
+  return getHandbookTree();
+}
+
 export async function addHandbookImage(sectionId, file) {
   const section = await getHandbookSection(sectionId);
   if (!section) {
