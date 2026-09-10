@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.223 */
+/* xm-module-academy 0.1.224 */
 (function () {
-  const ASSET_VER = "0.1.223";
+  const ASSET_VER = "0.1.224";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -253,7 +253,7 @@
       })
       .join("");
     return (
-      '<div class="academy-console">' +
+      '<div class="academy-console is-home">' +
       '<div class="academy-console-top">' +
       '<button type="button" class="academy-brand" id="academy-brand">星脉甄选商学院</button>' +
       (tabHtml ? '<nav class="academy-console-tabs">' + tabHtml + "</nav>" : "") +
@@ -313,6 +313,27 @@
     ];
   }
 
+  function setConsoleView(root, name) {
+    const shell = root.querySelector(".academy-console");
+    if (shell) {
+      shell.classList.toggle("is-home", name === "home");
+      shell.classList.toggle("is-upload", name === "upload");
+      shell.classList.toggle("is-logs", name === "logs");
+    }
+    const home = root.querySelector("#academy-view-courses, #academy-view-exams, #academy-handbook-pane");
+    const uploadBox = root.querySelector("#academy-view-upload");
+    const logBox = root.querySelector("#academy-log-box");
+    if (home) {
+      home.hidden = name !== "home";
+    }
+    if (uploadBox) {
+      uploadBox.hidden = name !== "upload";
+    }
+    if (logBox) {
+      logBox.hidden = name !== "logs";
+    }
+  }
+
   function bindAcademyChrome(root, homeId, afterUpload) {
     function showView(name) {
       const home = root.querySelector("#" + homeId);
@@ -320,7 +341,8 @@
       const logBox = root.querySelector("#academy-log-box");
       const uploadTab = root.querySelector("#academy-tab-upload");
       const logTab = root.querySelector("#academy-open-logs");
-      if (home) {
+      setConsoleView(root, name);
+      if (home && homeId) {
         home.hidden = name !== "home";
       }
       if (uploadBox) {
@@ -1442,6 +1464,7 @@
           const pane = root.querySelector("#academy-handbook-pane");
           const box = root.querySelector("#academy-log-box");
           const tab = root.querySelector("#academy-open-logs");
+          setConsoleView(root, logsOn ? "logs" : "home");
           if (pane) {
             pane.hidden = logsOn;
           }
@@ -1479,7 +1502,7 @@
         if (jump) {
           jump.addEventListener("click", function (ev) {
             ev.preventDefault();
-            showLogs(!logsOn);
+            showLogs(true);
           });
         }
         const brand = root.querySelector("#academy-brand");

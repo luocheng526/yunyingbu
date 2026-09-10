@@ -1,4 +1,4 @@
-/* xm-academy 0.1.223 */
+/* xm-academy 0.1.224 */
 #xm-content > .academy-page,
 #xm-content > main.page.academy-page,
 .xm-content > .academy-page,
@@ -115,6 +115,19 @@ main.page.academy-page,
 }
 
 .academy-console [hidden] {
+  display: none !important;
+}
+
+.academy-console.is-logs > .academy-console-body,
+.academy-console.is-logs > .academy-exam-shell,
+.academy-console.is-logs > .academy-console-stage,
+.academy-console.is-upload > .academy-console-body,
+.academy-console.is-upload > .academy-exam-shell,
+.academy-console.is-upload > .academy-console-logs,
+.academy-console.is-home > .academy-console-stage,
+.academy-console.is-home > .academy-console-logs,
+.academy-console:not(.is-logs):not(.is-upload) > .academy-console-stage,
+.academy-console:not(.is-logs):not(.is-upload) > .academy-console-logs {
   display: none !important;
 }
 

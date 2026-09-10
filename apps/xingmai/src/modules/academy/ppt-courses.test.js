@@ -110,7 +110,7 @@ test("academy.js enables upload, watermark, and blocks original download", () =>
   assert.match(css, /\.academy-slide-img/);
   assert.match(css, /\.academy-fs/);
   assert.match(css, /max-width:\s*none/);
-  assert.match(css, /\.academy-console \[hidden\]/);
+  assert.match(css, /\.academy-console\.is-logs/);
   assert.match(css, /\.academy-course-pane/);
   assert.doesNotMatch(js, /has-viewer/);
 });
