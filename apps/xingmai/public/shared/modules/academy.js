@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.212 */
+/* xm-module-academy 0.1.213 */
 (function () {
-  const ASSET_VER = "0.1.212";
+  const ASSET_VER = "0.1.213";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -150,8 +150,32 @@
     });
   }
 
+  function stripLogMenu() {
+    const menus = document.querySelectorAll(".xm-menu a, .xm-submenu a");
+    Array.prototype.forEach.call(menus, function (el) {
+      const label = String(el.textContent || "").replace(/\s+/g, "");
+      if (label === "操作日志") {
+        el.remove();
+      }
+    });
+  }
+
+  function watchLogMenu() {
+    stripLogMenu();
+    if (watchLogMenu.bound) {
+      return;
+    }
+    watchLogMenu.bound = true;
+    const host = document.querySelector(".xm-menu") || document.body;
+    const mo = new MutationObserver(function () {
+      stripLogMenu();
+    });
+    mo.observe(host, { childList: true, subtree: true });
+  }
+
   function mountShell(root, html) {
     ensureCss();
+    watchLogMenu();
     root.innerHTML = '<main class="page academy-page academy-live">' + html + "</main>";
     return function unmount() {
       root.innerHTML = "";
@@ -733,7 +757,7 @@
         const editorOk = canEditHandbook();
         const unmount = mountShell(
           root,
-          '<header class="page-head academy-head"><h1>运营手册<button type="button" class="academy-inline-log" id="academy-open-logs">操作日志</button></h1></header>' +
+          '<header class="page-head academy-head"><h1>运营手册 <button type="button" class="academy-inline-log" id="academy-open-logs">操作日志</button></h1></header>' +
             '<div id="academy-log-box" class="academy-log-panel" hidden></div>' +
             '<div class="academy-work academy-work-book">' +
             '<aside class="panel academy-side"><nav class="academy-tree" id="academy-tree"></nav></aside>' +
@@ -999,4 +1023,9 @@
   window.XmModules["/academy/courses"] = courses;
   window.XmModules["/academy/exams"] = examsPage();
   window.XmModules["/academy/handbook"] = handbookPage();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", watchLogMenu);
+  } else {
+    watchLogMenu();
+  }
 })();

@@ -53,6 +53,7 @@ test("academy.js opens the handbook editor", () => {
   assert.match(js, /插入图片/);
   assert.match(js, /academy-inline-log/);
   assert.match(js, /双击/);
+  assert.match(js, /stripLogMenu/);
   assert.doesNotMatch(js, /data-academy-logs/);
   assert.doesNotMatch(js, /XmModules\["\/academy\/logs"\]/);
   assert.doesNotMatch(js, /文档编辑区（下一步）/);
