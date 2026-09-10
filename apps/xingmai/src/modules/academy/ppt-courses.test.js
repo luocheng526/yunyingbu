@@ -101,15 +101,16 @@ test("academy.js enables upload, watermark, and blocks original download", () =>
   assert.match(js, /不提供原件下载/);
   assert.match(js, /postForm\("\/api\/academy\/courses"/);
   assert.doesNotMatch(js, /source\.pptx/);
+  assert.doesNotMatch(js, /第 1 步/);
+  assert.doesNotMatch(js, /academy-plan/);
   assert.match(css, /\.academy-wm/);
 });
 
-test("plan is step 2 and old ppt is rejected", async () => {
+test("plan is live; old ppt is rejected", async () => {
   const cookie = await loginCookie();
   const headers = { cookie, Accept: "application/json" };
   const plan = await (await fetch(`${base}/api/academy/plan`, { headers })).json();
-  assert.equal(plan.step, 2);
-  assert.equal(plan.steps[1].current, true);
+  assert.equal(plan.ready, true);
   const listed = await (await fetch(`${base}/api/academy/courses`, { headers })).json();
   assert.equal(listed.download, false);
   assert.equal(listed.watermark, true);

@@ -51,12 +51,12 @@ test("academy.js opens the handbook editor", () => {
   assert.doesNotMatch(js, /文档编辑区（下一步）/);
 });
 
-test("plan is step 4; write body, add branch, insert image", async () => {
+test("plan is live; write body, add branch, insert image", async () => {
   const cookie = await loginCookie();
   await resetHandbookForTests();
   const headers = { cookie, Accept: "application/json" };
   const plan = await (await fetch(`${base}/api/academy/plan`, { headers })).json();
-  assert.equal(plan.step, 4);
+  assert.equal(plan.ready, true);
   const tree = await (await fetch(`${base}/api/academy/handbook/tree`, { headers })).json();
   assert.ok(tree.tree.some((n) => n.title === "选品与商品" && n.children.length));
   const saved = await fetch(`${base}/api/academy/handbook/sections/goods-title`, {

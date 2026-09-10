@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.191 */
+/* xm-module-academy 0.1.200 */
 (function () {
-  const ASSET_VER = "0.1.191";
+  const ASSET_VER = "0.1.200";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -37,34 +37,11 @@
     });
   }
 
-  function stepsHtml(plan) {
-    const steps = (plan && plan.steps) || [];
+  function pageHead(title, lead) {
     return (
-      '<ol class="academy-steps">' +
-      steps
-        .map(function (item) {
-          return (
-            '<li class="' +
-            (item.current ? "is-on" : "") +
-            '"><span class="academy-step-n">第 ' +
-            escapeHtml(item.step) +
-            " 步</span> " +
-            escapeHtml(item.name) +
-            "</li>"
-          );
-        })
-        .join("") +
-      "</ol>"
-    );
-  }
-
-  function pageHead(title, lead, kicker) {
-    return (
-      '<header class="page-head"><p class="kicker">' +
-      escapeHtml(kicker || "甄选商学院 · 第 2 步培训课程") +
-      "</p><h1>" +
+      '<header class="page-head academy-head"><h1>' +
       escapeHtml(title) +
-      "</h1><p class=\"lead\">" +
+      '</h1><p class="lead">' +
       escapeHtml(lead) +
       "</p></header>"
     );
@@ -142,15 +119,10 @@
       mount: function (root) {
         const unmount = mountShell(
           root,
-          pageHead(
-            "培训课程",
-            "导入运营 PPTX。原件不提供下载，只能在线翻页。预览页带姓名和时间水印。"
-          ) +
-            '<div id="academy-plan"></div>' +
-            '<section class="panel academy-drop">' +
-            "<h2>导入 PPT</h2>" +
-            '<p class="academy-meta">只接受 .pptx。旧版 .ppt 请另存。不提供原件下载。</p>' +
-            '<form id="academy-upload" class="academy-upload">' +
+          pageHead("培训课程", "导入运营 PPTX，在线翻页。不提供原件下载，预览带姓名和时间水印。") +
+            '<div class="academy-work">' +
+            '<aside class="panel academy-side">' +
+            '<form id="academy-upload" class="academy-bar">' +
             '<label>标题 <input name="title" required maxlength="160" placeholder="课件标题" /></label>' +
             '<label>分类 <select name="category">' +
             '<option value="选品与商品">选品与商品</option>' +
@@ -159,15 +131,14 @@
             '<option value="数据与复盘">数据与复盘</option>' +
             '<option value="大促节奏">大促节奏</option>' +
             "</select></label>" +
-            '<label class="academy-check"><input type="checkbox" name="published" checked /> 发布</label>' +
-            '<label class="academy-file">课件 <input type="file" name="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" required /></label>' +
+            '<label><input type="checkbox" name="published" checked /> 发布</label>' +
+            '<label>课件 <input type="file" name="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" required /></label>' +
             '<button type="submit">上传</button>' +
-            '<p class="academy-status" id="academy-upload-status"></p>' +
             "</form>" +
-            "</section>" +
-            '<div class="academy-layout">' +
-            '<section class="panel"><h2>课件列表</h2><div class="academy-course-list" id="academy-course-list"></div></section>' +
-            '<section class="panel academy-viewer-panel" id="academy-viewer"><h2>在线翻页</h2><p class="academy-empty">点左侧一份课件。</p></section>' +
+            '<p class="academy-status" id="academy-upload-status"></p>' +
+            '<div class="academy-course-list" id="academy-course-list"></div>' +
+            "</aside>" +
+            '<section class="panel academy-main" id="academy-viewer"><p class="academy-empty">点左侧课件在线翻页。</p></section>' +
             "</div>"
         );
         let dead = false;
@@ -273,14 +244,6 @@
             });
         }
 
-        api("/api/academy/plan")
-          .then(function (data) {
-            const el = root.querySelector("#academy-plan");
-            if (!dead && el) {
-              el.innerHTML = stepsHtml(data);
-            }
-          })
-          .catch(function () {});
         loadList().catch(function (err) {
           const box = root.querySelector("#academy-course-list");
           if (box) {
@@ -369,14 +332,9 @@
       mount: function (root) {
         const unmount = mountShell(
           root,
-          pageHead(
-            "培训考试",
-            "先点晋升档，再导入考试文档。表格模板：题干、A、B、C、D、答案。到点交卷。",
-            "甄选商学院 · 第 3 步培训考试"
-          ) +
-            '<div id="academy-plan"></div>' +
-            '<section class="kpi-grid academy-exam-grid" id="academy-tracks" aria-label="考试档"></section>' +
-            '<section class="panel" id="academy-paper"><h2>试卷</h2><p class="academy-empty">先点上面一档，再导入考试文档。</p></section>'
+          pageHead("培训考试", "先选晋升档，导入考试文档出卷。到点交卷。") +
+            '<div class="academy-tracks" id="academy-tracks" aria-label="考试档"></div>' +
+            '<section class="panel academy-paper" id="academy-paper"><p class="academy-empty">点上面一档，导入文档或开始考试。</p></section>'
         );
         let dead = false;
         let trackId = "";
@@ -415,7 +373,7 @@
           box.innerHTML = (tracks || [])
             .map(function (track) {
               return (
-                '<button type="button" class="kpi-card academy-track' +
+                '<button type="button" class="academy-track' +
                 (track.id === trackId ? " is-on" : "") +
                 '" data-id="' +
                 escapeHtml(track.id) +
@@ -646,14 +604,6 @@
             });
         }
 
-        api("/api/academy/plan")
-          .then(function (data) {
-            const el = root.querySelector("#academy-plan");
-            if (!dead && el) {
-              el.innerHTML = stepsHtml(data);
-            }
-          })
-          .catch(function () {});
         api("/api/academy/exams/tracks")
           .then(function (data) {
             if (!dead) {
@@ -687,15 +637,10 @@
       mount: function (root) {
         const unmount = mountShell(
           root,
-          pageHead(
-            "运营手册",
-            "点一节写正文。可加下级分支，可插图。只写京东店铺运营。",
-            "甄选商学院 · 第 4 步运营手册"
-          ) +
-            '<div id="academy-plan"></div>' +
-            '<div class="academy-layout">' +
-            '<section class="panel"><h2>章节</h2><nav class="academy-tree" id="academy-tree"></nav></section>' +
-            '<section class="panel" id="academy-section"><h2>本节</h2><p class="academy-empty">点左侧一节，在网页里写正文。</p></section>' +
+          pageHead("运营手册", "点一节写正文，可加下级分支和插图。只写京东店铺运营。") +
+            '<div class="academy-work academy-work-book">' +
+            '<aside class="panel academy-side"><nav class="academy-tree" id="academy-tree"></nav></aside>' +
+            '<section class="panel academy-main" id="academy-section"><p class="academy-empty">点左侧一节开始写。</p></section>' +
             "</div>"
         );
         let dead = false;
@@ -755,26 +700,25 @@
         function paintEditor(section) {
           const box = root.querySelector("#academy-section");
           box.innerHTML =
-            '<form id="academy-handbook-form" class="academy-upload">' +
-            "<label>标题 <input name=\"title\" maxlength=\"160\" value=\"" +
+            '<div class="academy-editor">' +
+            '<form id="academy-handbook-form">' +
+            '<input class="academy-title-input" name="title" maxlength="160" value="' +
             escapeHtml(section.title) +
-            '" /></label>' +
-            '<label class="academy-body-label">正文 <textarea name="body" id="academy-handbook-body" rows="12">' +
+            '" />' +
+            '<textarea name="body" id="academy-handbook-body" rows="10">' +
             escapeHtml(section.body) +
-            "</textarea></label>" +
-            '<div class="academy-actions"><button type="submit">保存</button></div>' +
-            '<p class="academy-status" id="academy-handbook-status"></p></form>' +
-            '<form id="academy-handbook-branch" class="academy-upload">' +
-            "<h3>下级分支</h3>" +
-            '<label>标题 <input name="title" maxlength="160" placeholder="例如：测款第一周" /></label>' +
+            "</textarea>" +
+            '<div class="academy-tools"><button type="submit">保存</button>' +
+            '<p class="academy-status" id="academy-handbook-status"></p></div></form>' +
+            '<form id="academy-handbook-branch" class="academy-tools">' +
+            '<input type="text" name="title" maxlength="160" placeholder="下级分支标题" />' +
             '<button type="submit">添加分支</button></form>' +
-            '<form id="academy-handbook-image" class="academy-upload">' +
-            "<h3>插图</h3>" +
-            '<label class="academy-file">图片 <input type="file" name="file" accept="image/png,image/jpeg,image/gif,image/webp,.png,.jpg,.jpeg,.gif,.webp" /></label>' +
+            '<form id="academy-handbook-image" class="academy-tools">' +
+            '<input type="file" name="file" accept="image/png,image/jpeg,image/gif,image/webp,.png,.jpg,.jpeg,.gif,.webp" />' +
             '<button type="submit">插入图片</button></form>' +
             '<div class="academy-doc-shell" id="academy-handbook-preview"><h3>预览</h3>' +
             (section.body ? renderBody(section.body) : '<p class="academy-empty">还没有正文。</p>') +
-            "</div>";
+            "</div></div>";
         }
 
         function openSection(id) {
@@ -795,14 +739,6 @@
             });
         }
 
-        api("/api/academy/plan")
-          .then(function (data) {
-            const el = root.querySelector("#academy-plan");
-            if (!dead && el) {
-              el.innerHTML = stepsHtml(data);
-            }
-          })
-          .catch(function () {});
         loadTree().catch(function (err) {
           const tree = root.querySelector("#academy-tree");
           if (tree) {

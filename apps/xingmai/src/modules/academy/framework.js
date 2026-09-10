@@ -19,7 +19,7 @@ export const PLAN = [
   },
   {
     step: 4,
-    current: true,
+    current: false,
     name: "运营手册",
     detail: "一节一节写，有分支，可插图。"
   }
@@ -95,8 +95,9 @@ export function handbookTree() {
 
 export function plan() {
   return {
-    step: 4,
-    title: "第 4 步：运营手册",
-    steps: PLAN.map((item) => ({ ...item }))
+    ready: true,
+    step: 0,
+    title: "甄选商学院",
+    steps: PLAN.map((item) => ({ ...item, current: false }))
   };
 }
