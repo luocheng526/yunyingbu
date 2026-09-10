@@ -298,21 +298,36 @@ export function homeRouter() {
       summary: { channels: 1, shops: INDEX_ROWS.length },
       hero: {
         label: "实时销售指数",
-        value: "407,140.54",
+        value: "165,362.13",
         delta: -7.44,
-        spark: [28, 30, 26, 32, 31, 36, 34, 40, 38, 48, 46, 58]
+        yesterday: [42, 38, 32, 28, 26, 24, 25, 30, 38, 48, 58, 66, 72, 70, 68, 74, 80, 86, 84, 78, 70, 62, 55, 48],
+        today: [40, 36, 30, 26, 24, 22, 23, 28, 34, 44, 52, 60, 64]
+      },
+      paid: {
+        label: "实时付费金额",
+        value: "41,340.88",
+        delta: -5.20,
+        yesterday: [18, 16, 14, 12, 11, 10, 11, 14, 18, 22, 26, 30, 32, 31, 30, 33, 36, 38, 37, 34, 30, 26, 22, 20],
+        today: [16, 15, 13, 11, 10, 9, 10, 13, 16, 20, 24, 27, 29]
       },
       cards: [
-        { key: "pay", label: "支付金额 (支付)", value: "837,247.17", extra: "付费成交ROI 2.40" },
-        { key: "orders", label: "销售单数 (支付)", value: "3,174" },
         { key: "ad", label: "推广花费 (支付预估)", value: "348,174.63", extra: "推广占比 41.59%" },
         { key: "profit", label: "利润 (支付预估)", value: "415,136.64", extra: "毛利率 49.58%" },
-        { key: "margin", label: "大毛利率", value: "49.58%" },
         { key: "roi", label: "付费成交ROI", value: "2.40" },
         { key: "livePay", label: "实时付费成交额", value: "12,480.50" },
-        { key: "liveAd", label: "实时推广花费额", value: "5,210.30" },
-        { key: "liveProfit", label: "实时利润预估", value: "6,180.20" },
         { key: "liveFee", label: "实时费比", value: "41.75%" }
+      ],
+      shops: [
+        { shop: "RASW家居旗舰店", liveAmount: "22,997.91", paidAmount: "8,280.40", profit: "6,210.18", roi: "2.51", paidDeal: "3,680.15", feeRate: "35.32%" },
+        { shop: "RASW旗舰店", liveAmount: "17,568.69", paidAmount: "6,324.70", profit: "4,743.55", roi: "2.38", paidDeal: "2,811.00", feeRate: "36.18%" },
+        { shop: "HYGEAR医疗保健旗舰店", liveAmount: "19,986.66", paidAmount: "7,195.20", profit: "5,396.40", roi: "2.22", paidDeal: "3,197.86", feeRate: "38.41%" },
+        { shop: "SAWAAG平价专卖店", liveAmount: "14,216.75", paidAmount: "5,118.03", profit: "3,838.52", roi: "2.08", paidDeal: "2,274.68", feeRate: "41.31%" },
+        { shop: "RASW生活电器旗舰店", liveAmount: "8,929.03", paidAmount: "3,214.45", profit: "2,410.84", roi: "2.44", paidDeal: "1,428.64", feeRate: "33.80%" },
+        { shop: "RASW个护旗舰店", liveAmount: "10,792.90", paidAmount: "3,885.44", profit: "2,914.08", roi: "2.31", paidDeal: "1,726.86", feeRate: "36.89%" },
+        { shop: "DIKTTT欧格专卖店", liveAmount: "13,747.75", paidAmount: "4,949.19", profit: "3,711.89", roi: "2.15", paidDeal: "2,199.64", feeRate: "39.86%" },
+        { shop: "RASW健康电器旗舰店", liveAmount: "10,018.13", paidAmount: "3,606.53", profit: "2,704.90", roi: "2.62", paidDeal: "1,602.90", feeRate: "31.10%" },
+        { shop: "HYGEAR健康器械旗舰店", liveAmount: "6,287.11", paidAmount: "2,263.36", profit: "1,697.52", roi: "2.28", paidDeal: "1,005.94", feeRate: "34.32%" },
+        { shop: "ZYUTO旗舰店", liveAmount: "7,087.40", paidAmount: "2,551.46", profit: "1,913.60", roi: "2.74", paidDeal: "1,133.98", feeRate: "28.80%" }
       ]
     });
   });

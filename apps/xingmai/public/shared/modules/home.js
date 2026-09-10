@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.197-home-live-5m */
+/* xm-module-home 0.1.199-home-live-compare */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -75,31 +75,39 @@
       source: "数据中心",
       href: "/data/paid",
       summary: { channels: 1, shops: 10 },
-      hero: { label: "实时销售指数", value: "407,140.54", delta: -7.44, spark: [28, 30, 26, 32, 31, 36, 34, 40, 38, 48, 46, 58] },
+      hero: {
+        label: "实时销售指数",
+        value: "165,362.13",
+        delta: -7.44,
+        yesterday: [42, 38, 32, 28, 26, 24, 25, 30, 38, 48, 58, 66, 72, 70, 68, 74, 80, 86, 84, 78, 70, 62, 55, 48],
+        today: [40, 36, 30, 26, 24, 22, 23, 28, 34, 44, 52, 60, 64]
+      },
+      paid: {
+        label: "实时付费金额",
+        value: "41,340.88",
+        delta: -5.20,
+        yesterday: [18, 16, 14, 12, 11, 10, 11, 14, 18, 22, 26, 30, 32, 31, 30, 33, 36, 38, 37, 34, 30, 26, 22, 20],
+        today: [16, 15, 13, 11, 10, 9, 10, 13, 16, 20, 24, 27, 29]
+      },
       cards: [
-        { key: "pay", label: "支付金额 (支付)", value: "837,247.17", extra: "付费成交ROI 2.40" },
-        { key: "orders", label: "销售单数 (支付)", value: "3,174" },
         { key: "ad", label: "推广花费 (支付预估)", value: "348,174.63", extra: "推广占比 41.59%" },
         { key: "profit", label: "利润 (支付预估)", value: "415,136.64", extra: "毛利率 49.58%" },
-        { key: "margin", label: "大毛利率", value: "49.58%" },
         { key: "roi", label: "付费成交ROI", value: "2.40" },
         { key: "livePay", label: "实时付费成交额", value: "12,480.50" },
-        { key: "liveAd", label: "实时推广花费额", value: "5,210.30" },
-        { key: "liveProfit", label: "实时利润预估", value: "6,180.20" },
         { key: "liveFee", label: "实时费比", value: "41.75%" }
       ]
     },
     shops: [
-      { shop: "RASW家居旗舰店", liveAmount: "22,997.91", orders: "205", payAmount: "70,190.95", refundRate: "26.31%" },
-      { shop: "RASW旗舰店", liveAmount: "17,568.69", orders: "177", payAmount: "66,474.58", refundRate: "26.18%" },
-      { shop: "HYGEAR医疗保健旗舰店", liveAmount: "19,986.66", orders: "177", payAmount: "56,928.22", refundRate: "34.41%" },
-      { shop: "SAWAAG平价专卖店", liveAmount: "14,216.75", orders: "177", payAmount: "52,932.76", refundRate: "41.31%" },
-      { shop: "RASW生活电器旗舰店", liveAmount: "8,929.03", orders: "168", payAmount: "52,426.01", refundRate: "25.00%" },
-      { shop: "RASW个护旗舰店", liveAmount: "10,792.90", orders: "106", payAmount: "35,991.48", refundRate: "26.89%" },
-      { shop: "DIKTTT欧格专卖店", liveAmount: "13,747.75", orders: "130", payAmount: "34,409.11", refundRate: "34.86%" },
-      { shop: "RASW健康电器旗舰店", liveAmount: "10,018.13", orders: "115", payAmount: "30,516.64", refundRate: "17.10%" },
-      { shop: "HYGEAR健康器械旗舰店", liveAmount: "6,287.11", orders: "89", payAmount: "29,508.85", refundRate: "18.32%" },
-      { shop: "ZYUTO旗舰店", liveAmount: "7,087.40", orders: "164", payAmount: "29,329.38", refundRate: "7.80%" }
+      { shop: "RASW家居旗舰店", liveAmount: "22,997.91", paidAmount: "8,280.40", profit: "6,210.18", roi: "2.51", paidDeal: "3,680.15", feeRate: "35.32%", orders: "205", payAmount: "70,190.95", refundRate: "26.31%" },
+      { shop: "RASW旗舰店", liveAmount: "17,568.69", paidAmount: "6,324.70", profit: "4,743.55", roi: "2.38", paidDeal: "2,811.00", feeRate: "36.18%", orders: "177", payAmount: "66,474.58", refundRate: "26.18%" },
+      { shop: "HYGEAR医疗保健旗舰店", liveAmount: "19,986.66", paidAmount: "7,195.20", profit: "5,396.40", roi: "2.22", paidDeal: "3,197.86", feeRate: "38.41%", orders: "177", payAmount: "56,928.22", refundRate: "34.41%" },
+      { shop: "SAWAAG平价专卖店", liveAmount: "14,216.75", paidAmount: "5,118.03", profit: "3,838.52", roi: "2.08", paidDeal: "2,274.68", feeRate: "41.31%", orders: "177", payAmount: "52,932.76", refundRate: "41.31%" },
+      { shop: "RASW生活电器旗舰店", liveAmount: "8,929.03", paidAmount: "3,214.45", profit: "2,410.84", roi: "2.44", paidDeal: "1,428.64", feeRate: "33.80%", orders: "168", payAmount: "52,426.01", refundRate: "25.00%" },
+      { shop: "RASW个护旗舰店", liveAmount: "10,792.90", paidAmount: "3,885.44", profit: "2,914.08", roi: "2.31", paidDeal: "1,726.86", feeRate: "36.89%", orders: "106", payAmount: "35,991.48", refundRate: "26.89%" },
+      { shop: "DIKTTT欧格专卖店", liveAmount: "13,747.75", paidAmount: "4,949.19", profit: "3,711.89", roi: "2.15", paidDeal: "2,199.64", feeRate: "39.86%", orders: "130", payAmount: "34,409.11", refundRate: "34.86%" },
+      { shop: "RASW健康电器旗舰店", liveAmount: "10,018.13", paidAmount: "3,606.53", profit: "2,704.90", roi: "2.62", paidDeal: "1,602.90", feeRate: "31.10%", orders: "115", payAmount: "30,516.64", refundRate: "17.10%" },
+      { shop: "HYGEAR健康器械旗舰店", liveAmount: "6,287.11", paidAmount: "2,263.36", profit: "1,697.52", roi: "2.28", paidDeal: "1,005.94", feeRate: "34.32%", orders: "89", payAmount: "29,508.85", refundRate: "18.32%" },
+      { shop: "ZYUTO旗舰店", liveAmount: "7,087.40", paidAmount: "2,551.46", profit: "1,913.60", roi: "2.74", paidDeal: "1,133.98", feeRate: "28.80%", orders: "164", payAmount: "29,329.38", refundRate: "7.80%" }
     ],
     teams: [
       {
@@ -536,17 +544,151 @@
     );
   }
 
-  function sparkHtml(values) {
-    var list = values && values.length ? values : [20, 24, 22, 28, 26];
-    var max = Math.max.apply(null, list) || 1;
-    return (
-      '<div class="xm-hm-spark" aria-hidden="true">' +
-      list
-        .map(function (n) {
-          return '<i style="height:' + Math.max(12, Math.round((Number(n) / max) * 100)) + '%"></i>';
+  var LIVE_CARD_KEYS = ["ad", "profit", "roi", "livePay", "liveFee"];
+
+  function pickLiveCards(cards) {
+    var map = {};
+    (cards || []).forEach(function (card) {
+      if (card && card.key) {
+        map[card.key] = card;
+      }
+    });
+    return LIVE_CARD_KEYS.map(function (key) {
+      if (map[key]) {
+        return map[key];
+      }
+      return FALLBACK.live.cards.filter(function (card) {
+        return card.key === key;
+      })[0];
+    }).filter(Boolean);
+  }
+
+  function hasVal(value) {
+    return value != null && String(value) !== "" && String(value) !== "—";
+  }
+
+  function fillLiveShopFields(rows, fallbackRows) {
+    var map = {};
+    (fallbackRows || []).forEach(function (row) {
+      map[row.shop] = row;
+    });
+    return (rows || []).map(function (row) {
+      var fb = map[row.shop] || {};
+      return {
+        shop: row.shop,
+        owner: row.owner || fb.owner || "",
+        liveAmount: hasVal(row.liveAmount) ? row.liveAmount : fb.liveAmount || "—",
+        orders: hasVal(row.orders) ? row.orders : fb.orders || "—",
+        payAmount: hasVal(row.payAmount) ? row.payAmount : fb.payAmount || "—",
+        refundRate: hasVal(row.refundRate) ? row.refundRate : fb.refundRate || "—",
+        paidAmount: hasVal(row.paidAmount) ? row.paidAmount : fb.paidAmount || "—",
+        profit: hasVal(row.profit) ? row.profit : fb.profit || "—",
+        roi: hasVal(row.roi) ? row.roi : fb.roi || "—",
+        paidDeal: hasVal(row.paidDeal) ? row.paidDeal : fb.paidDeal || "—",
+        feeRate: hasVal(row.feeRate) ? row.feeRate : fb.feeRate || "—"
+      };
+    });
+  }
+
+  function readChart(chart, fallback) {
+    var src = chart || {};
+    var base = fallback || {};
+    return {
+      label: src.label || base.label,
+      value: src.value || base.value,
+      delta: src.delta != null ? src.delta : base.delta,
+      yesterday: src.yesterday && src.yesterday.length ? src.yesterday : base.yesterday,
+      today: src.today && src.today.length ? src.today : src.spark && src.spark.length ? src.spark : base.today
+    };
+  }
+
+  function compareLineHtml(chart) {
+    var width = 640;
+    var height = 168;
+    var padX = 8;
+    var padY = 14;
+    var yest = (chart && chart.yesterday) || [];
+    var today = (chart && chart.today) || [];
+    var max = 1;
+    yest.concat(today).forEach(function (n) {
+      var v = Number(n) || 0;
+      if (v > max) {
+        max = v;
+      }
+    });
+    var steps = Math.max(yest.length, today.length, 2) - 1;
+    function pts(list) {
+      if (!list.length) {
+        return "";
+      }
+      return list
+        .map(function (n, i) {
+          var x = padX + (i / steps) * (width - padX * 2);
+          var y = height - padY - ((Number(n) || 0) / max) * (height - padY * 2);
+          return x.toFixed(1) + "," + y.toFixed(1);
         })
-        .join("") +
-      "</div>"
+        .join(" ");
+    }
+    var yestPts = pts(yest);
+    var todayPts = pts(today);
+    return (
+      '<svg class="xm-hm-line" viewBox="0 0 ' +
+      width +
+      " " +
+      height +
+      '" preserveAspectRatio="none" aria-hidden="true">' +
+      (yestPts
+        ? '<polyline fill="none" stroke="#2f54eb" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" points="' +
+          yestPts +
+          '"></polyline>'
+        : "") +
+      (todayPts
+        ? '<polyline fill="none" stroke="#cf1322" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" points="' +
+          todayPts +
+          '"></polyline>'
+        : "") +
+      "</svg>"
+    );
+  }
+
+  function liveChartHtml(chart) {
+    var down = Number(chart && chart.delta) < 0;
+    return (
+      '<article class="xm-hm-chart"><div class="xm-hm-card-head"><span>' +
+      escapeHtml((chart && chart.label) || "实时指标") +
+      '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
+      escapeHtml((chart && chart.value) || "—") +
+      '</div><div class="xm-hm-trend ' +
+      (down ? "is-down" : "is-up") +
+      '">环比 ' +
+      (down ? "↘" : "↗") +
+      " " +
+      Math.abs(Number(chart && chart.delta) || 0).toFixed(2) +
+      "%</div>" +
+      compareLineHtml(chart) +
+      "</article>"
+    );
+  }
+
+  function liveShopRowHtml(row, index) {
+    return (
+      "<tr><td>" +
+      rankMark(index) +
+      "</td><td>" +
+      escapeHtml(row.shop) +
+      "</td><td>" +
+      escapeHtml(row.liveAmount || "—") +
+      "</td><td>" +
+      escapeHtml(row.paidAmount || "—") +
+      "</td><td>" +
+      escapeHtml(row.profit || "—") +
+      "</td><td>" +
+      escapeHtml(row.roi || "—") +
+      "</td><td>" +
+      escapeHtml(row.paidDeal || "—") +
+      "</td><td>" +
+      escapeHtml(row.feeRate || "—") +
+      "</td></tr>"
     );
   }
 
@@ -577,7 +719,12 @@
           liveAmount: cells[0] || row.liveAmount || row.amount || "—",
           orders: cells[2] || row.orders || "—",
           payAmount: cells[4] || row.payAmount || "—",
-          refundRate: cells[7] || row.refundRate || "—"
+          refundRate: cells[7] || row.refundRate || "—",
+          paidAmount: row.paidAmount || row.livePaid || "—",
+          profit: row.liveProfit || row.profit || "—",
+          roi: row.liveRoi || row.roi || "—",
+          paidDeal: row.paidDeal || row.livePay || "—",
+          feeRate: row.feeRate || row.liveFee || "—"
         };
       });
   }
@@ -658,8 +805,9 @@
       source: "数据中心",
       href: "/data/paid",
       summary: payload.summary || target.summary,
-      hero: payload.hero || target.hero,
-      cards: payload.cards && payload.cards.length ? payload.cards : target.cards
+      hero: readChart(payload.hero, target.hero),
+      paid: readChart(payload.paid || payload.paidHero, target.paid),
+      cards: pickLiveCards(payload.cards && payload.cards.length ? payload.cards : target.cards)
     };
   }
 
@@ -713,12 +861,18 @@
       ".xm-hm-rest em{font-style:normal;font-variant-numeric:tabular-nums}" +
       "html[data-theme=dark] .xm-hm-stand-item{background:#2a2418}" +
       "html[data-theme=dark] .xm-hm-stand-item.is-1{background:#3a3018}" +
-      ".xm-hm-live-clock{margin-top:6px;color:var(--xm-muted);font-size:12px}" +
-      ".xm-hm-hero{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:14px 16px 12px}" +
-      ".xm-hm-hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}" +
-      ".xm-hm-spark{display:flex;align-items:flex-end;gap:3px;height:42px;min-width:120px}" +
-      ".xm-hm-spark i{flex:1;display:block;background:var(--xm-primary);opacity:.45;border-radius:2px 2px 0 0}" +
+      ".xm-hm-live-clock{margin:0 0 8px;color:var(--xm-muted);font-size:12px}" +
+      ".xm-hm-live-charts{display:grid;grid-template-columns:1fr 1fr;gap:10px}" +
+      ".xm-hm-chart{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:14px 16px 10px;min-width:0}" +
+      ".xm-hm-legs{display:inline-flex;align-items:center;gap:10px;color:var(--xm-muted);font-size:12px}" +
+      ".xm-hm-legs i{width:10px;height:10px;border-radius:50%;display:inline-block}" +
+      ".xm-hm-legs i.is-yest{background:#2f54eb}" +
+      ".xm-hm-legs i.is-today{background:#cf1322}" +
+      ".xm-hm-line{display:block;width:100%;height:160px;margin-top:8px}" +
       ".xm-hm-live-cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}" +
+      ".xm-hm-live .xm-hm-table{min-width:960px}" +
+      ".xm-hm-live .xm-hm-panel{overflow-x:auto}" +
+      ".xm-hm-live .xm-hm-table th:nth-child(n+3),.xm-hm-live .xm-hm-table td:nth-child(n+3){text-align:right}" +
       ".xm-hm-card{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;padding:12px 14px 10px;box-shadow:var(--xm-shadow);min-height:104px}" +
       ".xm-hm-card-head{display:flex;align-items:center;justify-content:space-between;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-card-head i{width:14px;height:14px;border:1px solid var(--xm-line);border-radius:50%;font-style:normal;font-size:10px;display:inline-flex;align-items:center;justify-content:center;color:var(--xm-muted)}" +
@@ -747,8 +901,8 @@
       ".xm-hm-pop h3{margin:0 0 8px;font-size:13px}" +
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{margin:8px 0 0;color:var(--xm-muted);font-size:12px}" +
-      "@media (max-width:1200px){.xm-hm-kpis,.xm-hm-team-kpis,.xm-hm-live-cards,.xm-hm-podiums{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
-      "@media (max-width:700px){.xm-hm-kpis,.xm-hm-team-kpis,.xm-hm-live-cards,.xm-hm-podiums{grid-template-columns:1fr}.xm-hm-hero-top{flex-direction:column}.xm-hm-team-head{flex-direction:column}}"
+      "@media (max-width:1200px){.xm-hm-kpis,.xm-hm-team-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
+      "@media (max-width:700px){.xm-hm-kpis,.xm-hm-team-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:1fr}.xm-hm-team-head{flex-direction:column}}"
     );
   }
 
@@ -794,8 +948,9 @@
     var live = state.live || FALLBACK.live;
     var shops = state.shops && state.shops.length ? state.shops : FALLBACK.shops;
     var teams = state.teams && state.teams.length ? state.teams : FALLBACK.teams;
-    var hero = live.hero || {};
-    var down = Number(hero.delta) < 0;
+    var hero = readChart(live.hero, FALLBACK.live.hero);
+    var paid = readChart(live.paid, FALLBACK.live.paid);
+    var liveCards = pickLiveCards(live.cards);
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", state.view === "team");
@@ -815,31 +970,20 @@
     root.querySelector("#xm-hm-live").hidden = state.view !== "live";
     root.querySelector("#xm-hm-board").hidden = state.view !== "board";
     root.querySelector("#xm-hm-live").innerHTML =
-      '<article class="xm-hm-hero"><div class="xm-hm-hero-top"><div><div class="xm-hm-card-head"><span>' +
-      escapeHtml(hero.label || "实时销售指数") +
-      '</span></div><div class="xm-hm-index-num">' +
-      escapeHtml(hero.value || "—") +
-      '</div><div class="xm-hm-trend ' +
-      (down ? "is-down" : "is-up") +
-      '">环比 ' +
-      (down ? "↘" : "↗") +
-      " " +
-      Math.abs(Number(hero.delta) || 0).toFixed(2) +
-      '%</div><div class="xm-hm-live-clock">每5分钟自动刷新' +
+      '<div class="xm-hm-live-clock">每5分钟自动刷新' +
       (state.liveAt ? " · 上次 " + escapeHtml(state.liveAt) : "") +
-      "</div></div>" +
-      sparkHtml(hero.spark) +
-      "</div></article>" +
-      '<div class="xm-hm-live-cards">' +
-      (live.cards || []).map(liveCardHtml).join("") +
-      "</div>" +
-      '<div class="xm-hm-panel"><h2>数据中心网点 <span>' +
+      '</div><div class="xm-hm-live-charts">' +
+      liveChartHtml(hero) +
+      liveChartHtml(paid) +
+      '</div><div class="xm-hm-live-cards">' +
+      liveCards.map(liveCardHtml).join("") +
+      '</div><div class="xm-hm-panel"><h2>店铺 <span>' +
       escapeHtml(String((live.summary && live.summary.shops) || shops.length)) +
       " 店</span></h2>" +
-      '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th><th>实时销售额</th><th>销售单数</th><th>支付金额</th><th>退款率</th></tr></thead>' +
+      '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th><th>实时销售额</th><th>实时付费金额</th><th>实时利润</th><th>实时付费ROI</th><th>实时付费成交额</th><th>实时费比</th></tr></thead>' +
       "<tbody>" +
       shops.map(function (row, i) {
-        return shopRowHtml(row, i, false);
+        return liveShopRowHtml(row, i);
       }).join("") +
       "</tbody></table></div>";
     root.querySelector("#xm-hm-ladders").innerHTML = (state.ladders || FALLBACK.ladders).map(ladderHtml).join("");
@@ -934,9 +1078,9 @@
           if (live && live.ok) {
             state.live = mergeLive(state.live, live);
           }
-          var nextShops = readShopRows(shops || {});
+          var nextShops = live && live.shops && live.shops.length ? live.shops : readShopRows(shops || {});
           if (nextShops.length) {
-            state.shops = nextShops;
+            state.shops = fillLiveShopFields(nextShops, FALLBACK.shops);
           }
           state.liveAt = shanghaiClock();
           paint(root, state);
