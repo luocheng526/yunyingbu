@@ -747,7 +747,8 @@ main.page.academy-page,
 
 .academy-stage {
   position: relative;
-  background: #111;
+  background: #fff;
+  border: 1px solid var(--xm-line, #e5e6eb);
   border-radius: 4px;
   overflow: hidden;
   cursor: zoom-in;
