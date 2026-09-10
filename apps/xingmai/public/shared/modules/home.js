@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.194-home-ladders */
+/* xm-module-home 0.1.195-home-no-tiger */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -826,9 +826,6 @@
       '<section class="xm-hm-teams" id="xm-hm-teams" hidden></section>' +
       '<section class="xm-hm-live" id="xm-hm-live" hidden></section>' +
       '<section class="xm-hm-board" id="xm-hm-board" hidden>' +
-      '<div class="xm-hm-panel"><h2>龙虎榜</h2>' +
-      '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th><th>运营</th><th>销售额</th></tr></thead>' +
-      '<tbody id="xm-hm-tiger-rows"></tbody></table></div>' +
       '<div id="xm-hm-ladders"></div></section>' +
       '</div><p class="xm-hm-note" id="xm-hm-note">演示看板，数字不是外部业务库。先按这个模版铺上，后面再对真实口径。</p></div>'
     );
@@ -840,11 +837,9 @@
     var cards = (state.cards || FALLBACK.cards).filter(function (card) {
       return hide.indexOf(card.key) === -1;
     });
-    var tiger = state.tiger || FALLBACK.tiger;
     var live = state.live || FALLBACK.live;
     var shops = state.shops && state.shops.length ? state.shops : FALLBACK.shops;
     var teams = state.teams && state.teams.length ? state.teams : FALLBACK.teams;
-    var tigerRows = tiger.rows || [];
     var hero = live.hero || {};
     var down = Number(hero.delta) < 0;
     board.classList.toggle("is-board", state.view === "board");
@@ -896,9 +891,6 @@
         return shopRowHtml(row, i, false);
       }).join("") +
       "</tbody></table></div>";
-    root.querySelector("#xm-hm-tiger-rows").innerHTML = tigerRows.map(function (row, i) {
-      return rowHtml(row, i, false);
-    }).join("");
     root.querySelector("#xm-hm-ladders").innerHTML = (state.ladders || FALLBACK.ladders).map(ladderHtml).join("");
     root.querySelector("#xm-hm-note").textContent =
       state.view === "live"
@@ -906,7 +898,7 @@
         : state.view === "team"
           ? "团队页分沈子晗、韩梦凯两份。店铺先用演示店，数据中心责权接口有了按店名对齐。"
           : state.view === "board"
-            ? "龙虎榜下面是业绩排行榜和利润排行榜，按运营 / 主管 / 经理分列。演示数字。"
+            ? "排行榜是业绩排行榜和利润排行榜，按运营 / 主管 / 经理分列。演示数字。"
             : "演示看板，数字不是外部业务库。先按这个模版铺上，后面再对真实口径。";
     var user = state.user && (state.user.displayName || state.user.username);
     var mark = user || "星脉";
