@@ -12,6 +12,7 @@ export const FRAMEWORK_DIRS = [
   "src/modules/academy",
   "src/modules/agents",
   "src/modules/profile",
+  "src/modules/notices",
   "src/modules/releases",
   "public/shared",
   "test"

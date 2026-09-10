@@ -6,7 +6,9 @@ import { fileURLToPath } from "node:url";
 import { createApp } from "../src/app.js";
 import { resetStoreForTests } from "../src/modules/profile/auth.js";
 
-const appJs = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../src/app.js"), "utf8");
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const appJs = readFileSync(join(root, "src/app.js"), "utf8");
+const attachJs = readFileSync(join(root, "src/modules/profile/attach.js"), "utf8");
 
 const server = createApp().listen(0);
 const { port } = server.address();
@@ -27,7 +29,8 @@ test("app.js keeps login, health, and releases so a thin overwrite cannot ship",
   assert.match(appJs, /attachProfile/);
   assert.match(appJs, /attachHome/);
   assert.match(appJs, /createReleasesRouter/);
-  assert.match(appJs, /noticesRouter/);
+  assert.match(attachJs, /noticesRouter/);
+  assert.match(attachJs, /\/api\/notices/);
   assert.match(appJs, /\/api\/health/);
   const health = await fetch(`${base}/api/health`);
   assert.equal(health.status, 200);
@@ -41,8 +44,8 @@ test("login page is public", async () => {
   const html = await res.text();
   assert.match(html, /星脉管理系统/);
   assert.match(html, /<title>星脉甄选运营中心<\/title>/);
-  assert.match(html, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=0\.1\.123"/);
-  assert.match(html, /rel="shortcut icon" href="\/favicon\.ico\?v=0\.1\.123"/);
+  assert.match(html, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=0\.1\.125"/);
+  assert.match(html, /rel="shortcut icon" href="\/favicon\.ico\?v=0\.1\.125"/);
   assert.doesNotMatch(html, /rel="icon"[^>]+href="\/login-logo\.png"/);
   assert.doesNotMatch(html, /href="data:image\/png;base64,/);
   assert.match(html, /ChangeMe123!/);
