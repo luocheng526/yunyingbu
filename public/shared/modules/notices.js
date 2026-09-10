@@ -56,9 +56,64 @@
       ".notice-form input,.notice-form textarea,.notice-form select{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--xm-line,#e5e7eb);border-radius:8px;font:inherit;background:var(--xm-bg,#fff);color:inherit;}" +
       ".notice-form textarea{min-height:120px;resize:vertical;}" +
       ".notice-check{display:flex;gap:12px;align-items:center;font-size:13px;}" +
+      ".notice-display{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;font-size:13px;}" +
+      ".notice-display-label{color:var(--xm-muted,#8c8c8c);}" +
+      ".notice-display-dates{display:flex;gap:8px;align-items:center;}" +
+      ".notice-display-dates[hidden]{display:none;}" +
+      ".notice-display-dates input[type=date]{width:auto;min-width:140px;}" +
+      ".notice-row.is-important h3,.notice-detail.is-important h2,.notice-important{color:#cf1322;}" +
+      ".notice-tag.hot{background:#fee2e2;color:#b91c1c;}" +
       "html[data-theme=dark] .notice-tag{background:#1e3a5f;color:#93c5fd;}" +
       "html[data-theme=dark] .notice-tag.warn{background:#5b4630;color:#fde68a;}" +
-      "html[data-theme=dark] .notice-tag.ok{background:#16351f;color:#86efac;}";
+      "html[data-theme=dark] .notice-tag.ok{background:#16351f;color:#86efac;}" +
+      "html[data-theme=dark] .notice-tag.hot{background:#5b1d1d;color:#fca5a5;}" +
+      "html[data-theme=dark] .notice-row.is-important h3,html[data-theme=dark] .notice-detail.is-important h2,html[data-theme=dark] .notice-important{color:#ff4d4f;}";
+  }
+
+  function displayWindowLabel(item) {
+    if (!item) {
+      return "一直展示";
+    }
+    if (item.displayLabel) {
+      return item.displayLabel;
+    }
+    if (item.alwaysShow === false && (item.startOn || item.endOn)) {
+      return (item.startOn || "…") + " 至 " + (item.endOn || "…");
+    }
+    return "一直展示";
+  }
+
+  function importantClass(item) {
+    return item && item.level === "important" ? " is-important" : "";
+  }
+
+  function levelTag(item) {
+    const hot = item && item.level === "important";
+    return (
+      '<span class="notice-tag' +
+      (hot ? " hot" : " warn") +
+      '">' +
+      escapeHtml(hot ? "重要" : "普通") +
+      "</span>"
+    );
+  }
+
+  function syncDisplayDates(scope) {
+    const form = scope.querySelector("#notice-form");
+    if (!form || !form.displayMode) {
+      return;
+    }
+    const range = form.displayMode.value === "range";
+    const box = form.querySelector("#notice-display-dates");
+    if (box) {
+      box.hidden = !range;
+    }
+    if (form.startOn) {
+      form.startOn.required = range;
+    }
+    if (form.endOn) {
+      form.endOn.required = range;
+    }
   }
 
   const TABS = [
@@ -164,6 +219,21 @@
           '<select name="level"><option value="normal">普通</option><option value="important"' +
           (row.level === "important" ? " selected" : "") +
           ">重要</option></select>" +
+          '<div class="notice-display"><span class="notice-display-label">展示时长</span>' +
+          '<label class="notice-check"><input type="radio" name="displayMode" value="always"' +
+          (row.alwaysShow === false ? "" : " checked") +
+          " />一直展示</label>" +
+          '<label class="notice-check"><input type="radio" name="displayMode" value="range"' +
+          (row.alwaysShow === false ? " checked" : "") +
+          " />按日期</label></div>" +
+          '<div class="notice-display-dates" id="notice-display-dates">' +
+          '<input type="date" name="startOn" value="' +
+          escapeHtml(row.startOn || "") +
+          '" />' +
+          "<span>至</span>" +
+          '<input type="date" name="endOn" value="' +
+          escapeHtml(row.endOn || "") +
+          '" /></div>' +
           '<label class="notice-check"><input type="checkbox" name="popup"' +
           (row.popup ? " checked" : "") +
           " />登录后弹出</label>" +
@@ -177,13 +247,17 @@
 
       function detailHtml(item) {
         return (
-          '<div class="notice-detail">' +
+          '<div class="notice-detail' +
+          importantClass(item) +
+          '">' +
           '<div class="notice-tags"><span class="notice-tag">' +
           escapeHtml(statusLabel(item.status)) +
-          '</span><span class="notice-tag warn">' +
-          escapeHtml(item.level === "important" ? "重要" : "普通") +
-          '</span><span class="notice-tag">' +
+          "</span>" +
+          levelTag(item) +
+          '<span class="notice-tag">' +
           escapeHtml(item.categoryLabel) +
+          '</span><span class="notice-tag">' +
+          escapeHtml(displayWindowLabel(item)) +
           "</span></div>" +
           "<h2>" +
           escapeHtml(item.title) +
@@ -206,14 +280,18 @@
         return items
           .map(function (item) {
             return (
-              '<article class="notice-row" data-id="' +
+              '<article class="notice-row' +
+              importantClass(item) +
+              '" data-id="' +
               escapeHtml(item.id) +
               '"><div><div class="notice-tags"><span class="notice-tag">' +
               escapeHtml(statusLabel(item.status)) +
-              '</span><span class="notice-tag warn">' +
-              escapeHtml(item.level === "important" ? "重要" : "普通") +
-              '</span><span class="notice-tag ok">' +
+              "</span>" +
+              levelTag(item) +
+              '<span class="notice-tag ok">' +
               escapeHtml(item.categoryLabel) +
+              '</span><span class="notice-tag">' +
+              escapeHtml(displayWindowLabel(item)) +
               "</span></div><h3>" +
               escapeHtml(item.title) +
               "</h3><p>" +
@@ -246,6 +324,7 @@
         }
         if (mode === "form") {
           panel.innerHTML = formHtml(current);
+          syncDisplayDates(panel);
           return;
         }
         if (mode === "detail" && current) {
@@ -310,9 +389,13 @@
                 items
                   .map(function (item) {
                     return (
-                      '<tr class="notice-row" data-id="' +
+                      '<tr class="notice-row' +
+                      importantClass(item) +
+                      '" data-id="' +
                       escapeHtml(item.id) +
-                      '"><td>' +
+                      '"><td class="' +
+                      (item.level === "important" ? "notice-important" : "") +
+                      '">' +
                       escapeHtml(item.title) +
                       "</td><td>" +
                       escapeHtml(item.summary || item.body || "") +
@@ -385,6 +468,7 @@
           current = {
             popup: false,
             banner: tab !== "values",
+            alwaysShow: true,
             category: tab === "all" || tab === "board" ? "general" : tab
           };
           paintPanel();
@@ -413,12 +497,26 @@
           });
         }
       });
+      root.addEventListener("change", function (event) {
+        if (event.target && event.target.name === "displayMode") {
+          syncDisplayDates(root);
+        }
+      });
       root.addEventListener("submit", function (event) {
         const form = event.target.closest("#notice-form");
         if (!form) {
           return;
         }
         event.preventDefault();
+        const alwaysShow = form.displayMode.value !== "range";
+        if (!alwaysShow && (!form.startOn.value || !form.endOn.value)) {
+          window.alert("请选择展示起止日期");
+          return;
+        }
+        if (!alwaysShow && form.startOn.value > form.endOn.value) {
+          window.alert("开始日期不能晚于结束日期");
+          return;
+        }
         const body = {
           title: form.title.value,
           summary: form.summary.value,
@@ -427,6 +525,9 @@
           level: form.level.value,
           popup: form.popup.checked,
           banner: form.banner.checked,
+          alwaysShow: alwaysShow,
+          startOn: alwaysShow ? "" : form.startOn.value,
+          endOn: alwaysShow ? "" : form.endOn.value,
           status: "active"
         };
         const path = current && current.id ? "/api/notices/" + encodeURIComponent(current.id) : "/api/notices";

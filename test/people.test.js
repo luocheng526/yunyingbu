@@ -48,6 +48,11 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(noticesText, /龙虎榜/);
     assert.match(noticesText, /价值观践行/);
     assert.match(noticesText, /日常公告/);
+    assert.match(noticesText, /展示时长/);
+    assert.match(noticesText, /一直展示/);
+    assert.match(noticesText, /按日期/);
+    assert.match(noticesText, /is-important/);
+    assert.match(noticesText, /#cf1322/);
     const css = await fetch(`${base}/people.css`);
     const cssText = await css.text();
     assert.match(cssText, /max-height:\s*calc\(100vh - 250px\)/);
