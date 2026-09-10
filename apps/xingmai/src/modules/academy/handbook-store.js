@@ -265,18 +265,24 @@ export async function addHandbookBranch({ parentId, title }) {
     throw error;
   }
   const tree = await loadTree();
-  const parent = findNode(tree, safeSectionId(parentId));
-  if (!parent) {
-    const error = new Error("请先点左侧一节，再加下级分支");
-    error.statusCode = 400;
-    throw error;
-  }
+  const pid = safeSectionId(parentId);
   let id = slugTitle(name);
   while (findNode(tree, id)) {
     id = slugTitle(name);
   }
-  parent.children = parent.children || [];
-  parent.children.push({ id, title: name.slice(0, 160), children: [] });
+  const node = { id, title: name.slice(0, 160), children: [] };
+  if (!pid) {
+    tree.push(node);
+  } else {
+    const parent = findNode(tree, pid);
+    if (!parent) {
+      const error = new Error("请先点左侧一节，再加下级分支");
+      error.statusCode = 400;
+      throw error;
+    }
+    parent.children = parent.children || [];
+    parent.children.push(node);
+  }
   await saveTree(tree);
   await writeSection({ id, title: name.slice(0, 160), body: "", images: [] });
   return getHandbookSection(id);

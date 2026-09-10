@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.214 */
+/* xm-module-academy 0.1.215 */
 (function () {
-  const ASSET_VER = "0.1.214";
+  const ASSET_VER = "0.1.215";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -209,10 +209,24 @@
   function mountShell(root, html) {
     ensureCss();
     watchLogMenu();
-    root.innerHTML = '<main class="page academy-page academy-live">' + html + "</main>";
+    root.innerHTML = '<main class="page academy-page academy-live academy-console-page">' + html + "</main>";
     return function unmount() {
       root.innerHTML = "";
     };
+  }
+
+  function consoleFrame(inner, withLogs) {
+    return (
+      '<div class="academy-console">' +
+      '<div class="academy-console-top">' +
+      '<div class="academy-brand">星脉甄选商学院</div>' +
+      (withLogs
+        ? '<nav class="academy-console-tabs"><button type="button" class="academy-tab" id="academy-open-logs">操作日志</button></nav>'
+        : "") +
+      "</div>" +
+      inner +
+      "</div>"
+    );
   }
 
   function canEditHandbook() {
@@ -228,25 +242,27 @@
       mount: function (root) {
         const unmount = mountShell(
           root,
-          pageHead("培训课程") +
-            '<form id="academy-upload" class="academy-toolbar">' +
-            '<label>标题 <input name="title" required maxlength="160" placeholder="课件标题" /></label>' +
-            '<label>分类 <select name="category">' +
-            '<option value="选品与商品">选品与商品</option>' +
-            '<option value="流量与投放">流量与投放</option>' +
-            '<option value="转化与页面">转化与页面</option>' +
-            '<option value="数据与复盘">数据与复盘</option>' +
-            '<option value="大促节奏">大促节奏</option>' +
-            "</select></label>" +
-            '<label><input type="checkbox" name="published" checked /> 发布</label>' +
-            '<label>课件 <input type="file" name="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" required /></label>' +
-            '<button type="submit">上传</button>' +
-            "</form>" +
-            '<p class="academy-status" id="academy-upload-status"></p>' +
-            '<div class="academy-work" id="academy-work">' +
-            '<aside class="academy-side"><div class="academy-course-list" id="academy-course-list"></div></aside>' +
-            '<section class="academy-main" id="academy-viewer" hidden></section>' +
-            "</div>"
+          consoleFrame(
+            '<div class="academy-console-stage">' +
+              '<form id="academy-upload" class="academy-toolbar">' +
+              '<label>标题 <input name="title" required maxlength="160" placeholder="课件标题" /></label>' +
+              '<label>分类 <select name="category">' +
+              '<option value="选品与商品">选品与商品</option>' +
+              '<option value="流量与投放">流量与投放</option>' +
+              '<option value="转化与页面">转化与页面</option>' +
+              '<option value="数据与复盘">数据与复盘</option>' +
+              '<option value="大促节奏">大促节奏</option>' +
+              "</select></label>" +
+              '<label><input type="checkbox" name="published" checked /> 发布</label>' +
+              '<label>课件 <input type="file" name="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" required /></label>' +
+              '<button type="submit">上传</button>' +
+              "</form>" +
+              '<p class="academy-status" id="academy-upload-status"></p>' +
+              '<div class="academy-work" id="academy-work">' +
+              '<aside class="academy-side"><div class="academy-course-list" id="academy-course-list"></div></aside>' +
+              '<section class="academy-main" id="academy-viewer" hidden></section>' +
+              "</div></div>"
+          )
         );
         let dead = false;
         let currentId = "";
@@ -438,14 +454,16 @@
       mount: function (root) {
         const unmount = mountShell(
           root,
-          pageHead("培训考试") +
-            '<div id="academy-exam-home">' +
-            '<div class="academy-tracks" id="academy-tracks" aria-label="考试档"></div>' +
-            "</div>" +
-            '<div id="academy-exam-detail" hidden>' +
-            '<button type="button" class="academy-back" id="academy-exam-back">返回考试档</button>' +
-            '<section class="academy-paper" id="academy-paper"></section>' +
-            "</div>"
+          consoleFrame(
+            '<div class="academy-console-stage">' +
+              '<div id="academy-exam-home">' +
+              '<div class="academy-tracks" id="academy-tracks" aria-label="考试档"></div>' +
+              "</div>" +
+              '<div id="academy-exam-detail" hidden>' +
+              '<button type="button" class="academy-back" id="academy-exam-back">返回考试档</button>' +
+              '<section class="academy-paper" id="academy-paper"></section>' +
+              "</div></div>"
+          )
         );
         let dead = false;
         let trackId = "";
@@ -780,20 +798,29 @@
   function handbookPage() {
     return {
       mount: function (root) {
-        const editorOk = canEditHandbook();
+        let editorOk = canEditHandbook();
         const unmount = mountShell(
           root,
-          '<header class="page-head academy-head"><h1>运营手册 <button type="button" class="academy-inline-log" id="academy-open-logs">操作日志</button></h1></header>' +
-            '<div id="academy-log-box" class="academy-log-panel" hidden></div>' +
-            '<div class="academy-work academy-work-book">' +
-            '<aside class="panel academy-side"><nav class="academy-tree" id="academy-tree"></nav></aside>' +
-            '<section class="panel academy-main" id="academy-section"><p class="academy-empty">点左侧一节阅读。</p></section>' +
-            "</div>"
+          consoleFrame(
+            '<div class="academy-console-body" id="academy-handbook-pane">' +
+              '<aside class="academy-console-side">' +
+              '<nav class="academy-tree" id="academy-tree"></nav>' +
+              '<button type="button" class="academy-add-group" id="academy-add-group" hidden>添加分组</button>' +
+              '<form id="academy-group-form" class="academy-sub-form academy-group-form" hidden><input name="title" maxlength="160" placeholder="分组名称" required /><button type="submit">添加</button></form>' +
+              "</aside>" +
+              '<section class="academy-console-main" id="academy-section">' +
+              '<div class="academy-board"><div class="academy-board-head"><h2>课件展示</h2></div>' +
+              '<p class="academy-empty">点左侧一节阅读，双击修改。</p></div></section>' +
+              "</div>" +
+              '<div id="academy-log-box" class="academy-console-logs" hidden></div>',
+            true
+          )
         );
         let dead = false;
         let currentId = "";
         let clickTimer = 0;
         let editing = false;
+        let logsOn = false;
 
         function renderBody(text) {
           return String(text || "")
@@ -814,12 +841,18 @@
             .join("");
         }
 
-        function treeHtml(nodes) {
+        function treeHtml(nodes, depth) {
           return (nodes || [])
             .map(function (node) {
+              const kids = node.children || [];
+              const top = !depth;
               return (
-                '<div class="academy-tree-group">' +
+                '<div class="academy-tree-group' +
+                (top ? "" : " is-sub") +
+                '">' +
+                '<div class="academy-tree-row">' +
                 '<button type="button" class="academy-tree-item' +
+                (top ? " is-group" : "") +
                 (node.id === currentId ? " is-on" : "") +
                 '" data-id="' +
                 escapeHtml(node.id) +
@@ -827,12 +860,30 @@
                 escapeHtml(node.title) +
                 (node.hasBody ? '<span class="academy-badge is-pub">已写</span>' : "") +
                 "</button>" +
+                (editorOk
+                  ? '<button type="button" class="academy-tree-add" data-add="' +
+                    escapeHtml(node.id) +
+                    '" title="添加子菜单">+</button>'
+                  : "") +
+                "</div>" +
+                (editorOk
+                  ? '<form class="academy-sub-form" data-parent="' +
+                    escapeHtml(node.id) +
+                    '" hidden><input name="title" maxlength="160" placeholder="子菜单名称" required /><button type="submit">添加</button></form>'
+                  : "") +
                 '<div class="academy-tree-kids">' +
-                treeHtml(node.children || []) +
+                treeHtml(kids, (depth || 0) + 1) +
                 "</div></div>"
               );
             })
             .join("");
+        }
+
+        function syncEditorChrome() {
+          const addGroup = root.querySelector("#academy-add-group");
+          if (addGroup) {
+            addGroup.hidden = !editorOk;
+          }
         }
 
         function loadTree() {
@@ -840,8 +891,10 @@
             if (dead) {
               return data;
             }
+            editorOk = Boolean(data.canEdit) || canEditHandbook();
             const tree = root.querySelector("#academy-tree");
-            tree.innerHTML = treeHtml(data.tree);
+            tree.innerHTML = treeHtml(data.tree, 0);
+            syncEditorChrome();
             return data;
           });
         }
@@ -849,35 +902,32 @@
         function paintView(section) {
           const box = root.querySelector("#academy-section");
           box.innerHTML =
-            '<div class="academy-doc" data-handbook-view="1">' +
-            "<h2>" +
-            escapeHtml(section.title || "") +
+            '<div class="academy-board" data-handbook-view="1">' +
+            '<div class="academy-board-head"><h2>' +
+            escapeHtml(section.title || "课件展示") +
             "</h2>" +
-            '<p class="academy-meta">' +
-            (editorOk ? "双击正文进入修改" : "只读。罗成、沈子晗、韩梦凯可双击修改") +
-            "</p>" +
-            '<div class="academy-doc-shell" id="academy-handbook-preview">' +
-            (section.body ? renderBody(section.body) : '<p class="academy-empty">还没有正文。</p>') +
+            '<p class="academy-board-meta">' +
+            (editorOk ? "双击标题或正文即可修改" : "只读") +
+            "</p></div>" +
+            '<div class="academy-board-body" id="academy-handbook-preview">' +
+            (section.body ? renderBody(section.body) : '<p class="academy-empty">还没有正文，双击开始写。</p>') +
             "</div></div>";
         }
 
         function paintEditor(section) {
           const box = root.querySelector("#academy-section");
           box.innerHTML =
-            '<div class="academy-editor">' +
+            '<div class="academy-board academy-editor">' +
             '<form id="academy-handbook-form">' +
             '<input class="academy-title-input" name="title" maxlength="160" value="' +
             escapeHtml(section.title) +
             '" />' +
-            '<textarea name="body" id="academy-handbook-body" rows="10">' +
+            '<textarea name="body" id="academy-handbook-body" rows="12">' +
             escapeHtml(section.body) +
             "</textarea>" +
             '<div class="academy-tools"><button type="submit">保存</button>' +
             '<button type="button" class="ghost" id="academy-handbook-cancel">取消</button>' +
             '<p class="academy-status" id="academy-handbook-status"></p></div></form>' +
-            '<form id="academy-handbook-branch" class="academy-tools">' +
-            '<input type="text" name="title" maxlength="160" placeholder="下级分支标题" />' +
-            '<button type="submit">添加分支</button></form>' +
             '<form id="academy-handbook-image" class="academy-tools">' +
             '<input type="file" name="file" accept="image/png,image/jpeg,image/gif,image/webp,.png,.jpg,.jpeg,.gif,.webp" />' +
             '<button type="submit">插入图片</button></form></div>';
@@ -907,6 +957,38 @@
             });
         }
 
+        function showLogs(on) {
+          logsOn = Boolean(on);
+          const pane = root.querySelector("#academy-handbook-pane");
+          const box = root.querySelector("#academy-log-box");
+          const tab = root.querySelector("#academy-open-logs");
+          if (pane) {
+            pane.hidden = logsOn;
+          }
+          if (box) {
+            box.hidden = !logsOn;
+          }
+          if (tab) {
+            tab.classList.toggle("is-on", logsOn);
+          }
+          if (logsOn && box) {
+            fillLogs(box);
+          }
+        }
+
+        function addBranch(parentId, title) {
+          return postJson("/api/academy/handbook/branches", {
+            parentId: parentId || "",
+            title: title
+          }).then(function (data) {
+            return loadTree().then(function () {
+              if (data.section && data.section.id) {
+                openSection(data.section.id, true);
+              }
+            });
+          });
+        }
+
         loadTree().catch(function (err) {
           const tree = root.querySelector("#academy-tree");
           if (tree) {
@@ -917,20 +999,50 @@
         if (jump) {
           jump.addEventListener("click", function (ev) {
             ev.preventDefault();
-            const box = root.querySelector("#academy-log-box");
-            if (!box) {
-              return;
+            showLogs(!logsOn);
+          });
+        }
+        const addGroup = root.querySelector("#academy-add-group");
+        const groupForm = root.querySelector("#academy-group-form");
+        if (addGroup && groupForm) {
+          addGroup.addEventListener("click", function () {
+            groupForm.hidden = !groupForm.hidden;
+            const input = groupForm.querySelector("input");
+            if (!groupForm.hidden && input) {
+              input.focus();
             }
-            if (!box.hidden) {
-              box.hidden = true;
-              return;
-            }
-            box.hidden = false;
-            fillLogs(box);
+          });
+          groupForm.addEventListener("submit", function (ev) {
+            ev.preventDefault();
+            addBranch("", groupForm.title.value)
+              .then(function () {
+                groupForm.reset();
+                groupForm.hidden = true;
+              })
+              .catch(function (err) {
+                groupForm.hidden = false;
+                groupForm.setAttribute("data-error", err.message);
+              });
           });
         }
 
         root.querySelector("#academy-tree").addEventListener("click", function (ev) {
+          const add = ev.target.closest("[data-add]");
+          if (add) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            window.clearTimeout(clickTimer);
+            clickTimer = 0;
+            const form = add.closest(".academy-tree-group").querySelector(".academy-sub-form");
+            if (form) {
+              form.hidden = !form.hidden;
+              const input = form.querySelector("input");
+              if (!form.hidden && input) {
+                input.focus();
+              }
+            }
+            return;
+          }
           const btn = ev.target.closest("[data-id]");
           if (!btn) {
             return;
@@ -943,6 +1055,9 @@
           }, 220);
         });
         root.querySelector("#academy-tree").addEventListener("dblclick", function (ev) {
+          if (ev.target.closest("[data-add]") || ev.target.closest("form")) {
+            return;
+          }
           const btn = ev.target.closest("[data-id]");
           if (!btn) {
             return;
@@ -950,7 +1065,23 @@
           ev.preventDefault();
           window.clearTimeout(clickTimer);
           clickTimer = 0;
+          if (!editorOk) {
+            return;
+          }
           openSection(btn.getAttribute("data-id"), true);
+        });
+        root.querySelector("#academy-tree").addEventListener("submit", function (ev) {
+          const form = ev.target.closest(".academy-sub-form");
+          if (!form) {
+            return;
+          }
+          ev.preventDefault();
+          const parentId = form.getAttribute("data-parent");
+          const title = form.title.value;
+          addBranch(parentId, title).catch(function (err) {
+            form.hidden = false;
+            form.setAttribute("data-error", err.message);
+          });
         });
 
         root.querySelector("#academy-section").addEventListener("dblclick", function (ev) {
@@ -991,28 +1122,6 @@
               .catch(function (err) {
                 status.textContent = err.message;
                 status.className = "academy-status error";
-              });
-            return;
-          }
-          if (form.id === "academy-handbook-branch") {
-            ev.preventDefault();
-            postJson("/api/academy/handbook/branches", {
-              parentId: currentId,
-              title: form.title.value
-            })
-              .then(function (data) {
-                return loadTree().then(function () {
-                  if (data.section && data.section.id) {
-                    openSection(data.section.id, true);
-                  }
-                });
-              })
-              .catch(function (err) {
-                const status = root.querySelector("#academy-handbook-status");
-                if (status) {
-                  status.textContent = err.message;
-                  status.className = "academy-status error";
-                }
               });
             return;
           }
