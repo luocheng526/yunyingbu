@@ -38,6 +38,12 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(text, /<title>组织中心<\/title>/);
     assert.match(text, /href="\/shared\/layout\.css"/);
     assert.match(text, /src="\/shared\/nav\.js"/);
+    const navJs = await fetch(`${base}/shared/nav.js`);
+    const navText = await navJs.text();
+    assert.equal(navJs.status, 200);
+    assert.match(navText, /xm-notice-important-css/);
+    assert.match(navText, /#cf1322/);
+    assert.match(navText, /markNoticeImportant/);
     assert.match(text, /id="site-nav"/);
     assert.match(text, /href="\/people\.css"/);
     assert.match(text, /shared\/modules\/people\.js/);
