@@ -51,6 +51,9 @@ test("academy.js opens the handbook editor", () => {
   assert.match(js, /\/api\/academy\/handbook\/sections\//);
   assert.match(js, /添加子菜单/);
   assert.match(js, /academy-tree-add/);
+  assert.match(js, /handbook\/reorder/);
+  assert.match(js, /draggable/);
+  assert.match(js, /draggable=\"true\"/);
   assert.match(js, /星脉甄选商学院/);
   assert.match(js, /academy-console/);
   assert.match(js, /插入图片/);
@@ -121,8 +124,18 @@ test("plan is live; write body, add branch, insert image", async () => {
   const afterAdd = await (await fetch(`${base}/api/academy/handbook/tree`, { headers })).json();
   assert.ok(afterAdd.tree.find((n) => n.id === "goods").children.some((n) => n.title === "新品日历"));
   assert.ok(afterAdd.tree.some((n) => n.title === "客服话术"));
+  const moved = await fetch(`${base}/api/academy/handbook/reorder`, {
+    method: "POST",
+    headers: { cookie, Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ id: "goods-test", beforeId: "goods-title" })
+  });
+  assert.equal(moved.status, 200);
+  const afterMove = await (await fetch(`${base}/api/academy/handbook/tree`, { headers })).json();
+  const goodsKids = afterMove.tree.find((n) => n.id === "goods").children.map((n) => n.id);
+  assert.ok(goodsKids.indexOf("goods-test") < goodsKids.indexOf("goods-title"));
   const logs = await (await fetch(`${base}/api/academy/logs`, { headers })).json();
   assert.ok(logs.items.some((item) => item.actor === "罗成" && item.action === "改正文"));
   assert.ok(logs.items.some((item) => item.action === "加分支"));
   assert.ok(logs.items.some((item) => item.action === "插图"));
+  assert.ok(logs.items.some((item) => item.action === "调顺序"));
 });

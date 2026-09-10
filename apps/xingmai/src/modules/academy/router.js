@@ -5,6 +5,7 @@ import {
   addHandbookImage,
   getHandbookSection,
   handbookMediaType,
+  moveHandbookNode,
   readHandbookMedia,
   saveHandbookSection
 } from "./handbook-store.js";
@@ -472,6 +473,30 @@ academyRouter.post("/handbook/branches", async (req, res) => {
       detail: "挂在 " + String((req.body || {}).parentId || "")
     });
     res.status(201).json({ ok: true, section, tree: await handbook() });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+academyRouter.post("/handbook/reorder", async (req, res) => {
+  const user = requireHandbookEditor(req, res);
+  if (!user) {
+    return;
+  }
+  try {
+    const tree = await moveHandbookNode({
+      id: (req.body || {}).id,
+      beforeId: (req.body || {}).beforeId,
+      parentId: (req.body || {}).parentId
+    });
+    await appendHandbookLog({
+      ...actorOf(user),
+      action: "调顺序",
+      sectionId: String((req.body || {}).id || ""),
+      sectionTitle: "",
+      detail: "拖拽菜单"
+    });
+    res.json({ ok: true, tree });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
   }

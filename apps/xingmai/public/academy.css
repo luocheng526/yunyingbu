@@ -178,6 +178,15 @@ main.page.academy-page,
   display: flex;
   align-items: center;
   padding-right: 8px;
+  cursor: grab;
+}
+
+.academy-tree-row.is-drop-before {
+  box-shadow: inset 0 2px 0 var(--xm-primary);
+}
+
+.academy-tree-row.is-drop-after {
+  box-shadow: inset 0 -2px 0 var(--xm-primary);
 }
 
 .academy-tree-add {
@@ -851,9 +860,10 @@ main.page.academy-page,
   color: #4e5969;
   font: inherit;
   padding: 8px 8px 8px 16px;
-  cursor: pointer;
+  cursor: grab;
   font-size: 13px;
   border-radius: 0;
+  -webkit-user-drag: element;
 }
 
 .academy-tree-item.is-group {
