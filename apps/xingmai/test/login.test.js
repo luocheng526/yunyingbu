@@ -9,6 +9,7 @@ import { resetStoreForTests } from "../src/modules/profile/auth.js";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const appJs = readFileSync(join(root, "src/app.js"), "utf8");
 const attachJs = readFileSync(join(root, "src/modules/profile/attach.js"), "utf8");
+const loginCss = readFileSync(join(root, "public/login.css"), "utf8");
 
 const server = createApp().listen(0);
 const { port } = server.address();
@@ -49,6 +50,16 @@ test("login page is public", async () => {
   assert.doesNotMatch(html, /rel="icon"[^>]+href="\/login-logo\.png"/);
   assert.doesNotMatch(html, /href="data:image\/png;base64,/);
   assert.match(html, /ChangeMe123!/);
+  assert.match(html, /login\.css\?v=0\.1\.160/);
+  assert.match(html, /login-foot-pair/);
+  assert.match(html, /DATA · OPERATION · ORGANIZATIONAL · TALENT · GROWTH/);
+  assert.match(html, /<small><b>TOGETHER<\/b><b>FOR A BRIGHTER<\/b><b>FUTURE<\/b><\/small>/);
+  assert.match(loginCss, /LoginPage 0\.1\.160/);
+  assert.match(loginCss, /\.hero-brand\s*\{[^}]*margin-left:\s*0/s);
+  assert.match(loginCss, /#ffffff 28%/);
+  assert.match(loginCss, /\.login-foot-pair small\s*\{[^}]*white-space:\s*nowrap/s);
+  assert.match(loginCss, /transform:\s*scale\(0\.93\)/);
+  assert.match(loginCss, /bottom:\s*clamp\(52px,\s*6\.2vh,\s*84px\)/);
   assert.doesNotMatch(html, /\/shared\/nav\.js/);
   assert.doesNotMatch(html, /\/shared\/layout\.css/);
   assert.match(html, /decoding="async"/);

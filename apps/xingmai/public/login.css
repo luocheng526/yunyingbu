@@ -1,4 +1,4 @@
-/* LoginPage 0.1.90 — split tech-blue operations login */
+/* LoginPage 0.1.160 — logo left; whiter title; hero-foot align; login-foot EN one line */
 :root {
   --login-bg: #f7f7f4;
   --login-ink: #14120b;
@@ -128,22 +128,32 @@ body {
   gap: clamp(16px, 2vw, 36px);
 }
 
+.hero-brand {
+  flex: 0 0 auto;
+  margin-left: 0;
+}
+
 .hero-logo {
   display: block;
-  height: clamp(76px, 5.6vw, 102px);
+  height: clamp(60.8px, 4.48vw, 81.6px);
   width: auto;
   mix-blend-mode: screen;
 }
 
 .hero-slogan {
+  --slogan-zh: clamp(14.4px, 1.08vw, 19.2px);
   margin: 0;
   text-align: right;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
+  display: inline-block;
+  font-size: var(--slogan-zh);
+  position: relative;
+  top: calc(-1 * clamp(18px, 1.35vw, 24px));
 }
 
 .hero-slogan span {
   display: block;
-  font-size: clamp(18px, 1.35vw, 24px);
+  font-size: 1em;
   letter-spacing: 0.08em;
   font-weight: 700;
   white-space: nowrap;
@@ -151,13 +161,23 @@ body {
 }
 
 .hero-slogan small {
-  display: block;
-  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  column-gap: 0.28em;
+  width: 0;
+  min-width: 100%;
+  box-sizing: border-box;
+  margin-top: 0.42em;
   color: rgba(236, 244, 255, 0.9);
-  font-size: clamp(11px, 0.85vw, 14px);
-  letter-spacing: 0.18em;
+  font-size: 0.58em;
+  letter-spacing: 0.02em;
   font-weight: 500;
   white-space: nowrap;
+}
+
+.hero-slogan small b {
+  font-weight: inherit;
 }
 
 .hero-foot span {
@@ -165,14 +185,27 @@ body {
   font-size: clamp(13px, 1.05vw, 16px);
   letter-spacing: 0.06em;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .hero-foot small {
-  display: block;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  column-gap: 0.35em;
+  width: 0;
+  min-width: 100%;
+  box-sizing: border-box;
   margin-top: 6px;
   color: rgba(210, 228, 255, 0.72);
-  font-size: clamp(10px, 0.78vw, 12px);
-  letter-spacing: 0.16em;
+  font-size: 0.72em;
+  letter-spacing: 0.06em;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.hero-foot small b {
+  font-weight: inherit;
 }
 
 .hero-body {
@@ -204,6 +237,8 @@ body {
   width: 100%;
   max-width: none;
   margin-top: calc(-1.2 * var(--hero-title-size));
+  transform: scale(0.93);
+  transform-origin: left top;
 }
 
 .hero-copy h2 {
@@ -214,7 +249,7 @@ body {
   font-weight: 800;
   letter-spacing: 0.02em;
   overflow: visible;
-  background: linear-gradient(180deg, #ffffff 8%, #d7ecff 48%, #7eb8ff 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #ffffff 28%, #eef6ff 62%, #d2e6ff 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -321,6 +356,9 @@ body {
 
 .hero-foot {
   margin: 8px 0 0;
+  display: inline-block;
+  width: max-content;
+  align-self: flex-start;
 }
 
 .login-pane {
@@ -329,7 +367,7 @@ body {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 72px 48px 96px;
+  padding: 72px 48px 120px;
   overflow: hidden;
   background:
     radial-gradient(ellipse 70% 42% at 108% -8%, rgba(70, 150, 255, 0.16), transparent 58%),
@@ -498,37 +536,54 @@ body {
 
 .login-foot {
   position: absolute;
-  left: 48px;
-  right: 48px;
-  bottom: 28px;
+  left: 24px;
+  right: 24px;
+  bottom: clamp(52px, 6.2vh, 84px);
   margin: 0;
   text-align: center;
   letter-spacing: 0.12em;
   line-height: 1.7;
-  font-size: 13px;
+  font-size: 10.4px;
 }
 
-.login-foot::before,
-.login-foot::after {
+.login-foot-pair {
+  display: inline-block;
+  text-align: center;
+}
+
+.login-foot-pair > span {
+  display: block;
+  white-space: nowrap;
+}
+
+.login-foot-pair > span::before,
+.login-foot-pair > span::after {
   content: "";
   display: inline-block;
-  width: 36px;
+  width: 28px;
   height: 1px;
-  margin: 0 10px 4px;
+  margin: 0 8px 3px;
   background: var(--login-line);
   vertical-align: middle;
 }
 
-.login-foot span {
-  display: inline;
+.login-foot-pair small {
+  display: block;
+  white-space: nowrap;
+  width: auto;
+  min-width: 100%;
+  box-sizing: border-box;
+  margin-top: 0.35em;
+  opacity: 0.78;
+  font-size: 0.78em;
+  letter-spacing: 0.03em;
 }
 
-.login-foot small {
-  display: block;
-  margin-top: 6px;
-  opacity: 0.78;
-  font-size: 11px;
-  letter-spacing: 0.08em;
+.login-foot-pair small b {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+  font-weight: inherit;
 }
 
 .login-wave {
@@ -561,9 +616,8 @@ body {
 
 @media (max-width: 1366px) {
   .login-hero { padding: 16px 22px 12px; }
-  .hero-logo { height: 80px; }
-  .hero-slogan span { font-size: 18px; }
-  .hero-slogan small { font-size: 11px; margin-top: 6px; }
+  .hero-logo { height: 64px; }
+  .hero-slogan { --slogan-zh: 14.4px; top: -18px; }
   .hero-kicker { font-size: 11.2px; margin-bottom: 8px; }
   .hero-copy { --hero-title-size: 38.4px; }
   .hero-pills { margin: 10px 0 14px; }
@@ -577,7 +631,7 @@ body {
   }
   .hero-cards li { min-height: 44px; padding: 6px 8px; }
   .hero-cards li > div span { font-size: 11px; }
-  .login-pane { padding: 48px 36px 88px; }
+  .login-pane { padding: 48px 36px 120px; }
 }
 
 @media (max-height: 800px) {
@@ -592,7 +646,7 @@ body {
     min-width: 0;
     width: 100%;
     min-height: 100vh;
-    padding: 36px 24px 88px;
+    padding: 36px 24px 120px;
   }
   .login-foot {
     left: 24px;
