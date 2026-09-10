@@ -141,6 +141,9 @@ test("data child pages and demo APIs respond", async () => {
     const overviewJs = await get(base, "/data-overview.js");
     assert.match(overviewJs.text, /XmModules/);
     assert.match(overviewJs.text, /\/data\/overview/);
+    assert.match(overviewJs.text, /显示数字/);
+    assert.match(overviewJs.text, /请选择店铺/);
+    assert.match(overviewJs.text, /个人默认视图/);
     assert.doesNotMatch(overviewPage.text, /公司/);
     const teamApi = await get(base, "/api/data/team");
     assert.equal(teamApi.res.status, 200);
@@ -149,6 +152,7 @@ test("data child pages and demo APIs respond", async () => {
     assert.equal(team.scope, "团队");
     assert.equal(team.title, "渠道总览");
     assert.equal(team.cards.length, 8);
+    assert.equal(team.cards.find((c) => c.key === "profit").extra, "毛利率 49.58%");
     assert.equal(team.summary.shops, 46);
     assert.match(JSON.stringify(team), /RASW家居旗舰店/);
     assert.match(JSON.stringify(team), /京东/);
