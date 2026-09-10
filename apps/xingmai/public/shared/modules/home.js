@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.166-home-live-wide */
+/* xm-module-home 0.1.191-home-teams */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -100,6 +100,76 @@
       { shop: "RASW健康电器旗舰店", liveAmount: "10,018.13", orders: "115", payAmount: "30,516.64", refundRate: "17.10%" },
       { shop: "HYGEAR健康器械旗舰店", liveAmount: "6,287.11", orders: "89", payAmount: "29,508.85", refundRate: "18.32%" },
       { shop: "ZYUTO旗舰店", liveAmount: "7,087.40", orders: "164", payAmount: "29,329.38", refundRate: "7.80%" }
+    ],
+    teams: [
+      {
+        key: "shen",
+        name: "沈子晗",
+        href: "/shen",
+        cards: [
+          { key: "payAmount", label: "支付金额（支付）", value: "548,231.16", accent: true, trend: -4.12 },
+          { key: "adCost", label: "推广费（预估）", value: "229,647.04", trend: 2.41 },
+          { key: "refundAmount", label: "退款金额", value: "123,500.43", trend: 0.88 },
+          { key: "adRatio", label: "推广费占比", value: "41.89%", trend: 1.62 },
+          { key: "refundRate", label: "退款率（按金额）", value: "22.53%", trend: -0.41 },
+          { key: "profit", label: "利润（预估）", value: "264,402.49", trend: 3.18 },
+          { key: "payQty", label: "销售件数（支付）", value: "2,080", trend: -1.55 },
+          { key: "grossMargin", label: "大毛利率", value: "48.22%", trend: 0.44 },
+          { key: "platformFee", label: "平台费用（预估）", value: "51,847.38", trend: 0.92 },
+          { key: "saleFee", label: "销售费用（预估）", value: "32,524.90", trend: -0.51 },
+          { key: "goodsCost", label: "总货款", value: "196,914.26", trend: -2.77 },
+          { key: "invalid", label: "无效订单金额（件数）", value: "11,184.00（31）", trend: 4.1 },
+          { key: "netSales", label: "净销售金额", value: "424,094.93", trend: -3.02 },
+          { key: "jdOrders", label: "京东仓订单量", value: "1,327", trend: 0.72 },
+          { key: "jdRatio", label: "京东仓订单占比", value: "63.80%", trend: 0.28 },
+          { key: "netQty", label: "净销售件数", value: "1,745", trend: -1.21 }
+        ],
+        shops: [
+          { shop: "RASW家居旗舰店", owner: "张文静", liveAmount: "22,997.91", orders: "205", payAmount: "70,190.95", refundRate: "26.31%" },
+          { shop: "RASW生活电器旗舰店", owner: "陈明婧", liveAmount: "8,929.03", orders: "168", payAmount: "52,426.01", refundRate: "25.00%" },
+          { shop: "RASW健康电器旗舰店", owner: "郭桂良", liveAmount: "10,018.13", orders: "115", payAmount: "30,516.64", refundRate: "17.10%" },
+          { shop: "飒望居家旗舰店", owner: "王博", liveAmount: "9,640.22", orders: "98", payAmount: "28,410.70", refundRate: "19.40%" },
+          { shop: "SAWAAG居家布艺旗舰店", owner: "王博", liveAmount: "8,210.55", orders: "86", payAmount: "24,108.33", refundRate: "18.22%" },
+          { shop: "RASW居家旗舰店", owner: "杨润泽", liveAmount: "7,540.18", orders: "74", payAmount: "21,330.80", refundRate: "16.80%" },
+          { shop: "飒望家居日用旗舰店", owner: "崔安琪", liveAmount: "6,880.40", orders: "69", payAmount: "19,640.12", refundRate: "15.10%" },
+          { shop: "飒望旗舰店", owner: "杨润泽", liveAmount: "6,120.08", orders: "61", payAmount: "17,908.44", refundRate: "14.60%" },
+          { shop: "RASW潮流生活旗舰店", owner: "郭哲宁", liveAmount: "5,410.30", orders: "54", payAmount: "15,710.30", refundRate: "13.88%" },
+          { shop: "HYEGIIR健康器械旗舰店", owner: "高丽男", liveAmount: "6,287.11", orders: "89", payAmount: "29,508.85", refundRate: "18.32%" }
+        ]
+      },
+      {
+        key: "han",
+        name: "韩梦凯",
+        href: "/han",
+        cards: [
+          { key: "payAmount", label: "支付金额（支付）", value: "364,427.78", accent: true, trend: -7.90 },
+          { key: "adCost", label: "推广费（预估）", value: "153,098.03", trend: 4.08 },
+          { key: "refundAmount", label: "退款金额", value: "82,333.62", trend: 2.16 },
+          { key: "adRatio", label: "推广费占比", value: "42.01%", trend: 2.70 },
+          { key: "refundRate", label: "退款率（按金额）", value: "22.59%", trend: -1.44 },
+          { key: "profit", label: "利润（预估）", value: "176,268.33", trend: 5.66 },
+          { key: "payQty", label: "销售件数（支付）", value: "1,386", trend: -3.40 },
+          { key: "grossMargin", label: "大毛利率", value: "48.37%", trend: 0.88 },
+          { key: "platformFee", label: "平台费用（预估）", value: "34,564.92", trend: 1.55 },
+          { key: "saleFee", label: "销售费用（预估）", value: "21,683.26", trend: -1.08 },
+          { key: "goodsCost", label: "总货款", value: "131,276.18", trend: -4.62 },
+          { key: "invalid", label: "无效订单金额（件数）", value: "7,456.00（21）", trend: 8.8 },
+          { key: "netSales", label: "净销售金额", value: "282,729.96", trend: -5.70 },
+          { key: "jdOrders", label: "京东仓订单量", value: "884", trend: 1.52 },
+          { key: "jdRatio", label: "京东仓订单占比", value: "63.77%", trend: 0.60 },
+          { key: "netQty", label: "净销售件数", value: "1,163", trend: -2.80 }
+        ],
+        shops: [
+          { shop: "RASW旗舰店", owner: "刘畅", liveAmount: "17,568.69", orders: "177", payAmount: "66,474.58", refundRate: "26.18%" },
+          { shop: "HYGEAR医疗保健旗舰店", owner: "郑凯", liveAmount: "19,986.66", orders: "177", payAmount: "56,928.22", refundRate: "34.41%" },
+          { shop: "SAWAAG平价专卖店", owner: "吴桐", liveAmount: "14,216.75", orders: "177", payAmount: "52,932.76", refundRate: "41.31%" },
+          { shop: "RASW个护旗舰店", owner: "郑凯", liveAmount: "10,792.90", orders: "106", payAmount: "35,991.48", refundRate: "26.89%" },
+          { shop: "DIKTTT欧格专卖店", owner: "韩梦凯", liveAmount: "13,747.75", orders: "130", payAmount: "34,409.11", refundRate: "34.86%" },
+          { shop: "ZYUTO旗舰店", owner: "刘畅", liveAmount: "7,087.40", orders: "164", payAmount: "29,329.38", refundRate: "7.80%" },
+          { shop: "SAWAAG居家旗舰店", owner: "吴桐", liveAmount: "8,640.20", orders: "92", payAmount: "24,810.55", refundRate: "21.40%" },
+          { shop: "HYGEAR健康器械旗舰店", owner: "韩梦凯", liveAmount: "6,287.11", orders: "89", payAmount: "29,508.85", refundRate: "18.32%" }
+        ]
+      }
     ]
   };
 
@@ -262,13 +332,15 @@
     );
   }
 
-  function shopRowHtml(row, index) {
+  function shopRowHtml(row, index, withOwner) {
     return (
       "<tr><td>" +
       rankMark(index) +
       "</td><td>" +
       escapeHtml(row.shop) +
-      "</td><td>" +
+      "</td>" +
+      (withOwner ? "<td>" + escapeHtml(row.owner || "—") + "</td>" : "") +
+      "<td>" +
       escapeHtml(row.liveAmount) +
       "</td><td>" +
       escapeHtml(row.orders || "—") +
@@ -277,6 +349,34 @@
       "</td><td>" +
       escapeHtml(row.refundRate || "—") +
       "</td></tr>"
+    );
+  }
+
+  function teamBlockHtml(team, hide) {
+    var cards = (team.cards || []).filter(function (card) {
+      return hide.indexOf(card.key) === -1;
+    });
+    var shops = team.shops || [];
+    return (
+      '<section class="xm-hm-team" data-team="' +
+      escapeHtml(team.key) +
+      '"><header class="xm-hm-team-head"><div><h2>' +
+      escapeHtml(team.name) +
+      "团队</h2><p>责权下的店铺先走演示店，数据中心按店名对齐后替换数字。</p></div>" +
+      '<a href="' +
+      escapeHtml(team.href || "#") +
+      '">打开运营中心</a></header>' +
+      '<div class="xm-hm-team-kpis">' +
+      cards.map(cardHtml).join("") +
+      "</div>" +
+      '<div class="xm-hm-panel"><h2>责权店铺 <span>' +
+      shops.length +
+      " 店 · 演示</span></h2>" +
+      '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th><th>运营</th><th>实时销售额</th><th>销售单数</th><th>支付金额</th><th>退款率</th></tr></thead><tbody>' +
+      shops.map(function (row, i) {
+        return shopRowHtml(row, i, true);
+      }).join("") +
+      "</tbody></table></div></section>"
     );
   }
 
@@ -324,6 +424,71 @@
           refundRate: cells[7] || row.refundRate || "—"
         };
       });
+  }
+
+  function assignTeam(pack, name) {
+    var text = String(pack || "") + String(name || "");
+    if (text.indexOf("韩梦凯") !== -1) {
+      return "han";
+    }
+    if (text.indexOf("沈子晗") !== -1) {
+      return "shen";
+    }
+    return "";
+  }
+
+  function overlayShopMetrics(shops, liveRows) {
+    var map = {};
+    (liveRows || []).forEach(function (row) {
+      map[row.shop] = row;
+    });
+    return (shops || []).map(function (row) {
+      var live = map[row.shop];
+      if (!live) {
+        return row;
+      }
+      return {
+        shop: row.shop,
+        owner: row.owner || live.owner || "—",
+        liveAmount: live.liveAmount || row.liveAmount,
+        orders: live.orders || row.orders,
+        payAmount: live.payAmount || row.payAmount,
+        refundRate: live.refundRate || row.refundRate
+      };
+    });
+  }
+
+  function mergePeopleShops(teams, peoplePayload) {
+    var shops = (peoplePayload && peoplePayload.shops) || [];
+    shops.forEach(function (shop) {
+      if (!shop || shop.kind === "店群") {
+        return;
+      }
+      var key = assignTeam(shop.pack, shop.name);
+      if (!key) {
+        return;
+      }
+      var team = teams.filter(function (item) {
+        return item.key === key;
+      })[0];
+      if (!team) {
+        return;
+      }
+      var exists = (team.shops || []).some(function (row) {
+        return row.shop === shop.name;
+      });
+      if (!exists) {
+        team.shops.push({
+          shop: shop.name,
+          owner: team.name,
+          liveAmount: "—",
+          orders: "—",
+          payAmount: "—",
+          refundRate: "—"
+        });
+      }
+    });
+    return teams;
   }
 
   function mergeLive(target, payload) {
@@ -389,9 +554,14 @@
       ".xm-hm-dates{display:flex;align-items:center;gap:6px;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-dates input{border:1px solid var(--xm-line);background:var(--xm-card);color:var(--xm-ink);border-radius:4px;padding:4px 6px;font-size:12px}" +
       ".xm-hm-body{position:relative;display:flex;flex-direction:column;gap:12px;overflow:visible}" +
-      ".xm-hm.is-live .xm-hm-kpis,.xm-hm.is-board .xm-hm-kpis,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
-      ".xm-hm-live[hidden],.xm-hm-board[hidden]{display:none}" +
-      ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
+      ".xm-hm.is-live .xm-hm-kpis,.xm-hm.is-board .xm-hm-kpis,.xm-hm.is-team .xm-hm-kpis,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
+      ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden]{display:none}" +
+      ".xm-hm-kpis,.xm-hm-team-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
+      ".xm-hm-team{display:flex;flex-direction:column;gap:10px;padding-bottom:8px}" +
+      ".xm-hm-team-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}" +
+      ".xm-hm-team-head h2{margin:0;font-size:16px}" +
+      ".xm-hm-team-head p{margin:4px 0 0;color:var(--xm-muted);font-size:12px}" +
+      ".xm-hm-team-head a{color:var(--xm-primary);text-decoration:none;font-size:13px;white-space:nowrap}" +
       ".xm-hm-live-meta{display:none;align-items:center;gap:10px;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm.is-live .xm-hm-live-meta{display:flex}" +
       ".xm-hm-live-meta a{color:var(--xm-primary);text-decoration:none}" +
@@ -428,8 +598,8 @@
       ".xm-hm-pop h3{margin:0 0 8px;font-size:13px}" +
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{margin:8px 0 0;color:var(--xm-muted);font-size:12px}" +
-      "@media (max-width:1200px){.xm-hm-kpis,.xm-hm-live-cards{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
-      "@media (max-width:700px){.xm-hm-kpis,.xm-hm-live-cards{grid-template-columns:1fr}.xm-hm-hero-top{flex-direction:column}}"
+      "@media (max-width:1200px){.xm-hm-kpis,.xm-hm-team-kpis,.xm-hm-live-cards{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
+      "@media (max-width:700px){.xm-hm-kpis,.xm-hm-team-kpis,.xm-hm-live-cards{grid-template-columns:1fr}.xm-hm-hero-top{flex-direction:column}.xm-hm-team-head{flex-direction:column}}"
     );
   }
 
@@ -459,6 +629,7 @@
       '<div class="xm-hm-pop" id="xm-hm-pop" hidden><h3>卡片设置</h3><div id="xm-hm-card-opts"></div></div>' +
       '<div class="xm-hm-body">' +
       '<section class="xm-hm-kpis" id="xm-hm-kpis"></section>' +
+      '<section class="xm-hm-teams" id="xm-hm-teams" hidden></section>' +
       '<section class="xm-hm-live" id="xm-hm-live" hidden></section>' +
       '<section class="xm-hm-board" id="xm-hm-board" hidden>' +
       '<div class="xm-hm-panel"><h2>龙虎榜</h2>' +
@@ -477,11 +648,13 @@
     var tiger = state.tiger || FALLBACK.tiger;
     var live = state.live || FALLBACK.live;
     var shops = state.shops && state.shops.length ? state.shops : FALLBACK.shops;
-    var tigerRows = state.view === "team" ? groupByOwner(tiger.rows || []) : tiger.rows || [];
+    var teams = state.teams && state.teams.length ? state.teams : FALLBACK.teams;
+    var tigerRows = tiger.rows || [];
     var hero = live.hero || {};
     var down = Number(hero.delta) < 0;
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
+    board.classList.toggle("is-team", state.view === "team");
     Array.prototype.forEach.call(root.querySelectorAll("[data-view]"), function (btn) {
       btn.classList.toggle("is-on", btn.getAttribute("data-view") === state.view);
     });
@@ -491,6 +664,10 @@
     root.querySelector("#xm-hm-from").value = state.from;
     root.querySelector("#xm-hm-to").value = state.to;
     root.querySelector("#xm-hm-kpis").innerHTML = cards.map(cardHtml).join("");
+    root.querySelector("#xm-hm-teams").hidden = state.view !== "team";
+    root.querySelector("#xm-hm-teams").innerHTML = teams.map(function (team) {
+      return teamBlockHtml(team, hide);
+    }).join("");
     root.querySelector("#xm-hm-live").hidden = state.view !== "live";
     root.querySelector("#xm-hm-board").hidden = state.view !== "board";
     root.querySelector("#xm-hm-live-meta").innerHTML =
@@ -528,7 +705,9 @@
     root.querySelector("#xm-hm-note").textContent =
       state.view === "live"
         ? "实时页读取数据中心 /api/data/live 与 /api/data/shops，那边看板变了这里跟着变。"
-        : "演示看板，数字不是外部业务库。先按这个模版铺上，后面再对真实口径。";
+        : state.view === "team"
+          ? "团队页分沈子晗、韩梦凯两份。店铺先用演示店，数据中心责权接口有了按店名对齐。"
+          : "演示看板，数字不是外部业务库。先按这个模版铺上，后面再对真实口径。";
     var user = state.user && (state.user.displayName || state.user.username);
     var mark = user || "星脉";
     root.querySelector("#xm-hm-mark").innerHTML = new Array(18)
@@ -578,18 +757,29 @@
         cards: FALLBACK.cards,
         tiger: FALLBACK.tiger,
         live: FALLBACK.live,
-        shops: FALLBACK.shops
+        shops: FALLBACK.shops,
+        teams: FALLBACK.teams.map(function (team) {
+          return { key: team.key, name: team.name, href: team.href, cards: team.cards, shops: team.shops.slice() };
+        })
       };
       var poll = 0;
       paint(root, state);
 
       function pullDataCenter() {
-        return Promise.all([api("/api/data/live"), api("/api/data/shops"), api("/api/home/live")]).then(function (pack) {
+        return Promise.all([
+          api("/api/data/live"),
+          api("/api/data/shops"),
+          api("/api/home/live"),
+          api("/api/home/teams"),
+          api("/api/people/shops")
+        ]).then(function (pack) {
           if (dead) {
             return;
           }
           var live = pack[0] && pack[0].ok ? pack[0] : pack[2];
           var shops = pack[1];
+          var homeTeams = pack[3];
+          var peopleShops = pack[4];
           if (live && live.ok) {
             state.live = mergeLive(state.live, live);
           }
@@ -597,6 +787,19 @@
           if (nextShops.length) {
             state.shops = nextShops;
           }
+          if (homeTeams && homeTeams.ok && homeTeams.teams && homeTeams.teams.length) {
+            state.teams = homeTeams.teams;
+          }
+          state.teams = mergePeopleShops(state.teams, peopleShops);
+          state.teams = state.teams.map(function (team) {
+            return {
+              key: team.key,
+              name: team.name,
+              href: team.href,
+              cards: team.cards,
+              shops: overlayShopMetrics(team.shops, nextShops)
+            };
+          });
           paint(root, state);
         });
       }
