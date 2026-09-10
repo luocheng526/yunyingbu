@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.216 */
+/* xm-module-academy 0.1.217 */
 (function () {
-  const ASSET_VER = "0.1.216";
+  const ASSET_VER = "0.1.217";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -263,6 +263,114 @@
     );
   }
 
+  function uploadPaneHtml() {
+    return (
+      '<div class="academy-console-stage" id="academy-view-upload" hidden>' +
+      '<form id="academy-upload" class="academy-toolbar">' +
+      '<label>标题 <input name="title" required maxlength="160" placeholder="课件标题" /></label>' +
+      '<label>分类 <select name="category">' +
+      '<option value="选品与商品">选品与商品</option>' +
+      '<option value="流量与投放">流量与投放</option>' +
+      '<option value="转化与页面">转化与页面</option>' +
+      '<option value="数据与复盘">数据与复盘</option>' +
+      '<option value="大促节奏">大促节奏</option>' +
+      "</select></label>" +
+      '<label><input type="checkbox" name="published" checked /> 发布</label>' +
+      '<label>课件 <input type="file" name="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" required /></label>' +
+      '<button type="submit">上传</button>' +
+      "</form>" +
+      '<p class="academy-status" id="academy-upload-status"></p>' +
+      "</div>" +
+      '<div id="academy-log-box" class="academy-console-logs" hidden></div>'
+    );
+  }
+
+  function chromeTabs() {
+    return [
+      { id: "academy-tab-upload", label: "文件上传" },
+      { id: "academy-open-logs", label: "操作日志" }
+    ];
+  }
+
+  function bindAcademyChrome(root, homeId, afterUpload) {
+    function showView(name) {
+      const home = root.querySelector("#" + homeId);
+      const uploadBox = root.querySelector("#academy-view-upload");
+      const logBox = root.querySelector("#academy-log-box");
+      const uploadTab = root.querySelector("#academy-tab-upload");
+      const logTab = root.querySelector("#academy-open-logs");
+      if (home) {
+        home.hidden = name !== "home";
+      }
+      if (uploadBox) {
+        uploadBox.hidden = name !== "upload";
+      }
+      if (logBox) {
+        logBox.hidden = name !== "logs";
+      }
+      if (uploadTab) {
+        uploadTab.classList.toggle("is-on", name === "upload");
+      }
+      if (logTab) {
+        logTab.classList.toggle("is-on", name === "logs");
+      }
+      if (name === "logs" && logBox) {
+        fillLogs(logBox);
+      }
+    }
+    const brand = root.querySelector("#academy-brand");
+    if (brand) {
+      brand.addEventListener("click", function () {
+        showView("home");
+      });
+    }
+    const uploadTab = root.querySelector("#academy-tab-upload");
+    if (uploadTab) {
+      uploadTab.addEventListener("click", function () {
+        showView("upload");
+      });
+    }
+    const logTab = root.querySelector("#academy-open-logs");
+    if (logTab) {
+      logTab.addEventListener("click", function () {
+        showView("logs");
+      });
+    }
+    const form = root.querySelector("#academy-upload");
+    if (form) {
+      form.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        const status = root.querySelector("#academy-upload-status");
+        const fileInput = form.querySelector('input[type="file"]');
+        const file = fileInput && fileInput.files && fileInput.files[0];
+        if (file && /\.ppt$/i.test(file.name) && !/\.pptx$/i.test(file.name)) {
+          status.textContent = "请另存为 .pptx 再上传（不支持旧版 .ppt）";
+          status.className = "academy-status error";
+          return;
+        }
+        status.textContent = "正在上传…";
+        status.className = "academy-status";
+        postCourseFile(form, file, function (got, total) {
+          status.textContent = "正在上传 " + got + "/" + total;
+        })
+          .then(function (data) {
+            status.textContent = "已导入，学员只能在线翻页。";
+            form.reset();
+            form.published.checked = true;
+            showView("home");
+            if (afterUpload) {
+              afterUpload(data);
+            }
+          })
+          .catch(function (err) {
+            status.textContent = err.message;
+            status.className = "academy-status error";
+          });
+      });
+    }
+    return showView;
+  }
+
   function canEditHandbook() {
     const user = window.__xmBootUser || {};
     const names = [user.username, user.displayName];
@@ -282,33 +390,21 @@
               '<aside class="academy-side"><div class="academy-course-list" id="academy-course-list"></div></aside>' +
               '<section class="academy-main" id="academy-viewer" hidden></section>' +
               "</div></div>" +
-              '<div class="academy-console-stage" id="academy-view-upload" hidden>' +
-              '<form id="academy-upload" class="academy-toolbar">' +
-              '<label>标题 <input name="title" required maxlength="160" placeholder="课件标题" /></label>' +
-              '<label>分类 <select name="category">' +
-              '<option value="选品与商品">选品与商品</option>' +
-              '<option value="流量与投放">流量与投放</option>' +
-              '<option value="转化与页面">转化与页面</option>' +
-              '<option value="数据与复盘">数据与复盘</option>' +
-              '<option value="大促节奏">大促节奏</option>' +
-              "</select></label>" +
-              '<label><input type="checkbox" name="published" checked /> 发布</label>' +
-              '<label>课件 <input type="file" name="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" required /></label>' +
-              '<button type="submit">上传</button>' +
-              "</form>" +
-              '<p class="academy-status" id="academy-upload-status"></p>' +
-              "</div>" +
-              '<div id="academy-log-box" class="academy-console-logs" hidden></div>',
-            [
-              { id: "academy-tab-upload", label: "文件上传" },
-              { id: "academy-open-logs", label: "操作日志" }
-            ]
+              uploadPaneHtml(),
+            chromeTabs()
           )
         );
         let dead = false;
         let currentId = "";
         let pageCount = 0;
         let pageNo = 1;
+        const showView = bindAcademyChrome(root, "academy-view-courses", function (data) {
+          loadList().then(function () {
+            if (data.course && data.course.id) {
+              openPage(data.course.id, 1);
+            }
+          });
+        });
 
         function renderList(items) {
           const box = root.querySelector("#academy-course-list");
@@ -414,89 +510,11 @@
             });
         }
 
-        function showCoursesView(name) {
-          const coursesBox = root.querySelector("#academy-view-courses");
-          const uploadBox = root.querySelector("#academy-view-upload");
-          const logBox = root.querySelector("#academy-log-box");
-          const uploadTab = root.querySelector("#academy-tab-upload");
-          const logTab = root.querySelector("#academy-open-logs");
-          if (coursesBox) {
-            coursesBox.hidden = name !== "courses";
-          }
-          if (uploadBox) {
-            uploadBox.hidden = name !== "upload";
-          }
-          if (logBox) {
-            logBox.hidden = name !== "logs";
-          }
-          if (uploadTab) {
-            uploadTab.classList.toggle("is-on", name === "upload");
-          }
-          if (logTab) {
-            logTab.classList.toggle("is-on", name === "logs");
-          }
-          if (name === "logs" && logBox) {
-            fillLogs(logBox);
-          }
-        }
-
         loadList().catch(function (err) {
           const box = root.querySelector("#academy-course-list");
           if (box) {
             box.innerHTML = '<p class="academy-status error">' + escapeHtml(err.message) + "</p>";
           }
-        });
-
-        const brand = root.querySelector("#academy-brand");
-        if (brand) {
-          brand.addEventListener("click", function () {
-            showCoursesView("courses");
-          });
-        }
-        const uploadTab = root.querySelector("#academy-tab-upload");
-        if (uploadTab) {
-          uploadTab.addEventListener("click", function () {
-            showCoursesView("upload");
-          });
-        }
-        const logTab = root.querySelector("#academy-open-logs");
-        if (logTab) {
-          logTab.addEventListener("click", function () {
-            showCoursesView("logs");
-          });
-        }
-
-        root.querySelector("#academy-upload").addEventListener("submit", function (ev) {
-          ev.preventDefault();
-          const formEl = ev.currentTarget;
-          const status = root.querySelector("#academy-upload-status");
-          const fileInput = formEl.querySelector('input[type="file"]');
-          const file = fileInput && fileInput.files && fileInput.files[0];
-          if (file && /\.ppt$/i.test(file.name) && !/\.pptx$/i.test(file.name)) {
-            status.textContent = "请另存为 .pptx 再上传（不支持旧版 .ppt）";
-            status.className = "academy-status error";
-            return;
-          }
-          status.textContent = "正在上传…";
-          status.className = "academy-status";
-          postCourseFile(formEl, file, function (got, total) {
-            status.textContent = "正在上传 " + got + "/" + total;
-          })
-            .then(function (data) {
-              status.textContent = "已导入，学员只能在线翻页。";
-              formEl.reset();
-              formEl.published.checked = true;
-              showCoursesView("courses");
-              return loadList().then(function () {
-                if (data.course && data.course.id) {
-                  openPage(data.course.id, 1);
-                }
-              });
-            })
-            .catch(function (err) {
-              status.textContent = err.message;
-              status.className = "academy-status error";
-            });
         });
 
         root.querySelector("#academy-course-list").addEventListener("click", function (ev) {
@@ -544,14 +562,14 @@
         const unmount = mountShell(
           root,
           consoleFrame(
-            '<div class="academy-console-stage">' +
-              '<div id="academy-exam-home">' +
-              '<div class="academy-tracks" id="academy-tracks" aria-label="考试档"></div>' +
-              "</div>" +
-              '<div id="academy-exam-detail" hidden>' +
-              '<button type="button" class="academy-back" id="academy-exam-back">返回考试档</button>' +
-              '<section class="academy-paper" id="academy-paper"></section>' +
-              "</div></div>"
+            '<div class="academy-exam-shell" id="academy-view-exams">' +
+              '<aside class="academy-exam-side"><nav class="academy-tracks" id="academy-tracks" aria-label="考试档"></nav></aside>' +
+              '<section class="academy-exam-main academy-exam-detail" id="academy-exam-detail">' +
+              '<div class="academy-board" id="academy-paper">' +
+              '<div class="academy-board-head"><h2>考试内容</h2></div>' +
+              '<p class="academy-empty">点左侧一档，导入文档或开始考试。</p></div></section></div>' +
+              uploadPaneHtml(),
+            chromeTabs()
           )
         );
         let dead = false;
@@ -559,6 +577,7 @@
         let timer = null;
         let remain = 0;
         let ticking = false;
+        bindAcademyChrome(root, "academy-view-exams");
 
         function stopTimer() {
           if (timer) {
@@ -577,24 +596,14 @@
         function showHome() {
           stopTimer();
           trackId = "";
-          const home = root.querySelector("#academy-exam-home");
-          const detail = root.querySelector("#academy-exam-detail");
-          if (home) {
-            home.hidden = false;
-          }
-          if (detail) {
-            detail.hidden = true;
-          }
-        }
-
-        function showDetail() {
-          const home = root.querySelector("#academy-exam-home");
-          const detail = root.querySelector("#academy-exam-detail");
-          if (home) {
-            home.hidden = true;
-          }
-          if (detail) {
-            detail.hidden = false;
+          root.querySelectorAll(".academy-track").forEach(function (el) {
+            el.classList.remove("is-on");
+          });
+          const paper = root.querySelector("#academy-paper");
+          if (paper) {
+            paper.innerHTML =
+              '<div class="academy-board-head"><h2>考试内容</h2></div>' +
+              '<p class="academy-empty">点左侧一档，导入文档或开始考试。</p>';
           }
         }
 
@@ -783,7 +792,9 @@
         function openTrack(id) {
           stopTimer();
           trackId = id;
-          showDetail();
+          root.querySelectorAll(".academy-track").forEach(function (el) {
+            el.classList.toggle("is-on", el.getAttribute("data-id") === id);
+          });
           const paper = root.querySelector("#academy-paper");
           paper.innerHTML = "<h2>试卷</h2><p class=\"academy-empty\">正在打开这一档…</p>";
           api("/api/academy/exams/tracks/" + encodeURIComponent(id))
@@ -862,18 +873,6 @@
             return;
           }
           openTrack(btn.getAttribute("data-id"));
-        });
-        root.querySelector("#academy-exam-back").addEventListener("click", function () {
-          showHome();
-          api("/api/academy/exams/tracks")
-            .then(function (data) {
-              if (!dead) {
-                renderTracks(data.tracks);
-              }
-            })
-            .catch(function () {
-              /* keep home */
-            });
         });
         return function () {
           dead = true;
