@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
-const dataFile = path.join(root, "data", "notices.json");
+const defaultDataFile = path.join(root, "data", "notices.json");
 
 const LEVELS = new Set(["normal", "important"]);
 const STATUSES = new Set(["active", "done", "draft"]);
@@ -17,8 +17,69 @@ const CATEGORIES = {
   board: "龙虎榜"
 };
 
+function dataFilePath() {
+  return process.env.NOTICES_DATA_FILE || defaultDataFile;
+}
+
 function nowIso() {
   return new Date().toISOString();
+}
+
+export function todayYmd(now = new Date()) {
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function parseYmd(value) {
+  const text = String(value || "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : "";
+}
+
+export function resolveAlwaysShow(item = {}) {
+  if (item.alwaysShow === false || item.alwaysShow === "false") {
+    return false;
+  }
+  if (item.alwaysShow === true || item.alwaysShow === "true") {
+    return true;
+  }
+  const mode = String(item.displayMode || "").trim();
+  if (mode === "range") {
+    return false;
+  }
+  if (mode === "always") {
+    return true;
+  }
+  return !parseYmd(item.startOn) && !parseYmd(item.endOn);
+}
+
+export function isNoticeShowing(item, today = todayYmd()) {
+  if (!item || String(item.status || "active") !== "active") {
+    return false;
+  }
+  if (resolveAlwaysShow(item)) {
+    return true;
+  }
+  const day = parseYmd(today) || todayYmd();
+  const start = parseYmd(item.startOn);
+  const end = parseYmd(item.endOn);
+  if (start && day < start) {
+    return false;
+  }
+  if (end && day > end) {
+    return false;
+  }
+  return true;
+}
+
+function displayLabel(item) {
+  if (resolveAlwaysShow(item)) {
+    return "一直展示";
+  }
+  const start = parseYmd(item.startOn) || "…";
+  const end = parseYmd(item.endOn) || "…";
+  return `${start} 至 ${end}`;
 }
 
 function blankDoc() {
@@ -27,7 +88,7 @@ function blankDoc() {
 
 function readDoc() {
   try {
-    const raw = fs.readFileSync(dataFile, "utf8");
+    const raw = fs.readFileSync(dataFilePath(), "utf8");
     const parsed = JSON.parse(raw);
     if (parsed && Array.isArray(parsed.items)) {
       return parsed;
@@ -41,11 +102,15 @@ function readDoc() {
 }
 
 function writeDoc(doc) {
-  fs.mkdirSync(path.dirname(dataFile), { recursive: true });
-  fs.writeFileSync(dataFile, JSON.stringify(doc, null, 2) + "\n", "utf8");
+  const file = dataFilePath();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(doc, null, 2) + "\n");
 }
 
-function publicItem(item) {
+export function publicItem(item) {
+  const alwaysShow = resolveAlwaysShow(item);
+  const startOn = alwaysShow ? "" : parseYmd(item.startOn);
+  const endOn = alwaysShow ? "" : parseYmd(item.endOn);
   return {
     id: item.id,
     title: item.title,
@@ -59,13 +124,40 @@ function publicItem(item) {
     images: Number(item.images) || 0,
     popup: Boolean(item.popup),
     banner: Boolean(item.banner),
+    alwaysShow,
+    startOn,
+    endOn,
+    showing: isNoticeShowing(item),
+    displayLabel: displayLabel({ ...item, alwaysShow, startOn, endOn }),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt
   };
 }
 
-function nextId(items) {
+function nextId(_items) {
   return `n-${Date.now().toString(36)}`;
+}
+
+function resolveWindow(input = {}, prev) {
+  const hasWindow =
+    input.alwaysShow != null ||
+    input.displayMode != null ||
+    input.startOn != null ||
+    input.endOn != null;
+  const source = hasWindow ? input : prev || input;
+  const alwaysShow = resolveAlwaysShow(source);
+  if (alwaysShow) {
+    return { ok: true, alwaysShow: true, startOn: "", endOn: "" };
+  }
+  const startOn = parseYmd(source.startOn);
+  const endOn = parseYmd(source.endOn);
+  if (!startOn || !endOn) {
+    return { ok: false, statusCode: 400, error: "请选择展示起止日期" };
+  }
+  if (startOn > endOn) {
+    return { ok: false, statusCode: 400, error: "开始日期不能晚于结束日期" };
+  }
+  return { ok: true, alwaysShow: false, startOn, endOn };
 }
 
 export function listNotices(query = {}) {
@@ -75,12 +167,15 @@ export function listNotices(query = {}) {
   const category = String(query.category || "").trim();
   if (status && status !== "all") {
     items = items.filter((item) => item.status === status);
+    if (status === "active") {
+      items = items.filter((item) => item.showing);
+    }
   }
   if (category && category !== "all") {
     items = items.filter((item) => item.category === category);
   }
   items.sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
-  const active = doc.items.filter((item) => item.status === "active");
+  const active = doc.items.filter((item) => isNoticeShowing(item));
   return {
     ok: true,
     items,
@@ -118,6 +213,10 @@ export function upsertNotice(input = {}, existingId) {
   const doc = readDoc();
   const id = String(existingId || input.id || "").trim() || nextId(doc.items);
   const prev = doc.items.find((item) => item.id === id);
+  const window = resolveWindow(input, prev);
+  if (!window.ok) {
+    return window;
+  }
   const category = CATEGORIES[input.category] ? input.category : prev?.category || "general";
   const item = {
     id,
@@ -132,6 +231,9 @@ export function upsertNotice(input = {}, existingId) {
     images: Math.max(0, Number(input.images) || prev?.images || 0),
     popup: input.popup == null ? Boolean(prev?.popup) : Boolean(input.popup),
     banner: input.banner == null ? (prev ? Boolean(prev.banner) : true) : Boolean(input.banner),
+    alwaysShow: window.alwaysShow,
+    startOn: window.startOn,
+    endOn: window.endOn,
     createdAt: prev?.createdAt || nowIso(),
     updatedAt: nowIso()
   };
