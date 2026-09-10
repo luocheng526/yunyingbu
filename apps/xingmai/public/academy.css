@@ -1,4 +1,4 @@
-/* xm-academy 0.1.222 */
+/* xm-academy 0.1.223 */
 #xm-content > .academy-page,
 #xm-content > main.page.academy-page,
 .xm-content > .academy-page,
@@ -114,11 +114,20 @@ main.page.academy-page,
   border-bottom-color: var(--xm-primary);
 }
 
+.academy-console [hidden] {
+  display: none !important;
+}
+
 .academy-console-body {
   display: grid;
   grid-template-columns: 200px minmax(0, 1fr);
   flex: 1;
   min-height: 0;
+}
+
+.academy-console-logs {
+  flex: 1;
+  min-height: calc(100vh - 104px);
 }
 
 .academy-console-side {

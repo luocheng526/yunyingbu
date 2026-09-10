@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.222 */
+/* xm-module-academy 0.1.223 */
 (function () {
-  const ASSET_VER = "0.1.222";
+  const ASSET_VER = "0.1.223";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -263,6 +263,10 @@
     );
   }
 
+  function logPaneHtml() {
+    return '<div id="academy-log-box" class="academy-console-logs" hidden></div>';
+  }
+
   function uploadPaneHtml() {
     return (
       '<div class="academy-console-stage" id="academy-view-upload" hidden>' +
@@ -281,7 +285,24 @@
       "</form>" +
       '<p class="academy-status" id="academy-upload-status"></p>' +
       "</div>" +
-      '<div id="academy-log-box" class="academy-console-logs" hidden></div>'
+      logPaneHtml()
+    );
+  }
+
+  function examUploadPaneHtml() {
+    return (
+      '<div class="academy-console-stage" id="academy-view-upload" hidden>' +
+      '<h2>导入考试文档</h2>' +
+      '<p class="academy-meta">直接传现成 Word / 表格即可，不必套选择题模板。选择题、填空、问答都能认；答案写在题后「答案：」或文末「参考答案」。原件不提供下载。' +
+      '<a href="/academy-exam-template.csv">也可下载表格样例</a></p>' +
+      '<form id="academy-exam-upload" class="academy-toolbar">' +
+      '<label>考试档 <select name="trackId" id="academy-exam-track" required></select></label>' +
+      '<label>文档 <input type="file" name="file" accept=".xlsx,.csv,.json,.docx,.txt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required /></label>' +
+      '<button type="submit">导入这一档</button>' +
+      "</form>" +
+      '<p class="academy-status" id="academy-exam-status"></p>' +
+      "</div>" +
+      logPaneHtml()
     );
   }
 
@@ -691,8 +712,8 @@
               '<section class="academy-exam-main academy-exam-detail" id="academy-exam-detail">' +
               '<div class="academy-board" id="academy-paper">' +
               '<div class="academy-board-head"><h2>考试内容</h2></div>' +
-              '<p class="academy-empty">点左侧一档，导入文档或开始考试。</p></div></section></div>' +
-              uploadPaneHtml(),
+              '<p class="academy-empty">点左侧一档查看考试内容。导入试卷请到「文件上传」。</p></div></section></div>' +
+              examUploadPaneHtml(),
             chromeTabs()
           )
         );
@@ -701,7 +722,7 @@
         let timer = null;
         let remain = 0;
         let ticking = false;
-        bindAcademyChrome(root, "academy-view-exams");
+        const showView = bindAcademyChrome(root, "academy-view-exams");
 
         function stopTimer() {
           if (timer) {
@@ -727,7 +748,7 @@
           if (paper) {
             paper.innerHTML =
               '<div class="academy-board-head"><h2>考试内容</h2></div>' +
-              '<p class="academy-empty">点左侧一档，导入文档或开始考试。</p>';
+              '<p class="academy-empty">点左侧一档查看考试内容。导入试卷请到「文件上传」。</p>';
           }
         }
 
@@ -775,6 +796,25 @@
               );
             })
             .join("");
+          const sel = root.querySelector("#academy-exam-track");
+          if (sel) {
+            const keep = sel.value || trackId;
+            sel.innerHTML = (tracks || [])
+              .map(function (track) {
+                return (
+                  '<option value="' +
+                  escapeHtml(track.id) +
+                  '">' +
+                  escapeHtml(track.name) +
+                  (track.paperReady ? "（已导入）" : "（待导入）") +
+                  "</option>"
+                );
+              })
+              .join("");
+            if (keep) {
+              sel.value = keep;
+            }
+          }
         }
 
         function graderHint(track) {
@@ -783,24 +823,6 @@
             return "";
           }
           return "问答题由" + seats.join("、") + "共同打分";
-        }
-
-        function importForm(track) {
-          return (
-            '<form id="academy-exam-upload" class="academy-upload">' +
-            '<p class="academy-meta">直接传现成 Word / 表格即可，不必套选择题模板。选择题、填空、问答都能认；答案写在题后「答案：」或文末「参考答案」。原件不提供下载。' +
-            '<a href="/academy-exam-template.csv">也可下载表格样例</a></p>' +
-            '<p class="academy-meta">' +
-            escapeHtml(graderHint(track)) +
-            "</p>" +
-            '<input type="hidden" name="trackId" value="' +
-            escapeHtml(track.id) +
-            '" />' +
-            '<label class="academy-file">文档 <input type="file" name="file" accept=".xlsx,.csv,.json,.docx,.txt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required /></label>' +
-            '<button type="submit">导入这一档</button>' +
-            '<p class="academy-status" id="academy-exam-status"></p>' +
-            "</form>"
-          );
         }
 
         function typeLabel(type) {
@@ -1126,6 +1148,10 @@
               if (dead) {
                 return;
               }
+              const sel = root.querySelector("#academy-exam-track");
+              if (sel) {
+                sel.value = id;
+              }
               const track = data.track || {};
               const pack = data.paper || {};
               const ready = Boolean(pack.ready);
@@ -1153,35 +1179,13 @@
                     escapeHtml(track.passScore) +
                     " · " +
                     escapeHtml(graderHint(track))
-                  : "还没有考试文档，直接导入 Word 即可，不必套选择题模板") +
+                  : "还没有考试文档，请到「文件上传」导入 Word，不必套选择题模板") +
                 "</p>" +
-                importForm(track) +
                 (ready
                   ? '<div class="academy-actions"><button type="button" id="academy-exam-start">开始考试</button></div>'
                   : "") +
                 '<div id="academy-exam-grade"></div>' +
                 '<div id="academy-exam-take"></div>';
-              const form = root.querySelector("#academy-exam-upload");
-              form.addEventListener("submit", function (ev) {
-                ev.preventDefault();
-                const status = root.querySelector("#academy-exam-status");
-                const fd = new FormData(form);
-                status.textContent = "正在解析…";
-                status.className = "academy-status";
-                postForm("/api/academy/exams/papers", fd)
-                  .then(function () {
-                    return api("/api/academy/exams/tracks").then(function (list) {
-                      if (!dead) {
-                        renderTracks(list.tracks);
-                      }
-                      return openTrack(id);
-                    });
-                  })
-                  .catch(function (err) {
-                    status.textContent = err.message;
-                    status.className = "academy-status error";
-                  });
-              });
               const start = root.querySelector("#academy-exam-start");
               if (start) {
                 start.addEventListener("click", function () {
@@ -1219,8 +1223,41 @@
           if (!btn) {
             return;
           }
-          openTrack(btn.getAttribute("data-id"));
+          const id = btn.getAttribute("data-id");
+          const sel = root.querySelector("#academy-exam-track");
+          if (sel) {
+            sel.value = id;
+          }
+          showView("home");
+          openTrack(id);
         });
+        const examForm = root.querySelector("#academy-exam-upload");
+        if (examForm) {
+          examForm.addEventListener("submit", function (ev) {
+            ev.preventDefault();
+            const status = root.querySelector("#academy-exam-status");
+            const fd = new FormData(examForm);
+            const id = String(fd.get("trackId") || "");
+            status.textContent = "正在解析…";
+            status.className = "academy-status";
+            postForm("/api/academy/exams/papers", fd)
+              .then(function () {
+                return api("/api/academy/exams/tracks").then(function (list) {
+                  if (!dead) {
+                    renderTracks(list.tracks);
+                  }
+                  showView("home");
+                  if (id) {
+                    return openTrack(id);
+                  }
+                });
+              })
+              .catch(function (err) {
+                status.textContent = err.message;
+                status.className = "academy-status error";
+              });
+          });
+        }
         return function () {
           dead = true;
           stopTimer();
