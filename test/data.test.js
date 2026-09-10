@@ -136,7 +136,7 @@ test("data child pages and demo APIs respond", async () => {
     assert.equal(overviewPage.res.status, 200);
     assert.doesNotMatch(overviewPage.text, /<h1>数据总揽<\/h1>/);
     assert.doesNotMatch(overviewPage.text, /id="data-subnav"/);
-    assert.match(overviewPage.text, /data-view="team"/);
+    assert.match(overviewPage.text, /id="board"/);
     assert.match(overviewPage.text, /data-overview\.js/);
     const overviewJs = await get(base, "/data-overview.js");
     assert.match(overviewJs.text, /XmModules/);
@@ -147,15 +147,16 @@ test("data child pages and demo APIs respond", async () => {
     const team = JSON.parse(teamApi.text);
     assert.equal(team.ok, true);
     assert.equal(team.scope, "团队");
-    assert.equal(team.cards.length, 17);
-    assert.equal(team.liveIndex.group, "按店铺");
+    assert.equal(team.title, "渠道总览");
+    assert.equal(team.cards.length, 8);
+    assert.equal(team.summary.shops, 46);
     assert.match(JSON.stringify(team), /RASW家居旗舰店/);
-    assert.match(JSON.stringify(team), /AILUKI居家布艺旗舰店/);
+    assert.match(JSON.stringify(team), /京东/);
     assert.doesNotMatch(JSON.stringify(team), /公司/);
     const demoFile = await get(base, "/data/team-demo.json");
     assert.equal(demoFile.res.status, 200);
     const demo = JSON.parse(demoFile.text);
-    assert.equal(demo.cards.length, 17);
+    assert.equal(demo.cards.length, 8);
     for (const pathName of ["/data/shops", "/data/goods", "/data/paid"]) {
       const page = await get(base, pathName);
       assert.equal(page.res.status, 200, pathName);
@@ -353,7 +354,7 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.doesNotMatch(dataMod, /function waitPage/);
   assert.match(dataMod, /\/data\/paid/);
   const demo = JSON.parse(fs.readFileSync(path.join(repoRoot, "public/data/team-demo.json"), "utf8"));
-  assert.equal(demo.cards.length, 17);
+  assert.equal(demo.cards.length, 8);
   assert.equal(demo.scope, "团队");
   assert.throws(() => assertDataOnlyPaths(["src/app.js"]), /src\/app\.js/);
   const apply = fs.readFileSync(path.join(repoRoot, "scripts/apply-data-to-mengkai.mjs"), "utf8");

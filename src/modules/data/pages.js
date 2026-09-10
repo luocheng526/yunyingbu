@@ -56,58 +56,84 @@ export function getPlaceholder() {
   };
 }
 
-/** Team-level 数据总揽 demo. No company view. Numbers copied from the product mock. */
+/** Channel-overview template for 数据总揽. Demo numbers from the product mock. */
 export function getTeamOverview() {
+  const tableCols = [
+    "渠道",
+    "实时销售额 (支付)",
+    "店铺上新成功率",
+    "销售单数",
+    "净销售单数 (支付)",
+    "支付金额 (支付)",
+    "无效单金额 (标注)",
+    "退款金额",
+    "退款率 (按金额)",
+    "净销售额 (支付)"
+  ];
   return {
     ok: true,
     demo: true,
     notice: "示例数据，尚未接入店铺",
-    title: "数据总揽",
+    title: "渠道总览",
     scope: "团队",
-    range: "昨天",
-    dateFrom: "2026-09-08",
-    dateTo: "2026-09-08",
-    ranges: ["昨天", "近3天", "近7天", "近15天", "近30天", "本月", "上月", "今年"],
+    range: "7天",
+    dateLabel: "2026年9月9日",
+    ranges: ["7天", "昨日", "周", "月", "年", "自定义"],
+    summary: { channels: 1, shops: 46 },
+    hero: {
+      label: "实时销售指数",
+      value: "165,362.13",
+      delta: -7.44,
+      spark: [28, 30, 26, 32, 31, 36, 34, 40, 38, 48, 46, 58]
+    },
     cards: [
-      { key: "payAmount", label: "支付金额 (支付)", value: "912,658.94", delta: -5.81 },
-      { key: "adSpend", label: "推广花费 (支付预估)", value: "382,745.07", delta: -1.79 },
-      { key: "refundAmount", label: "退款金额", value: "205,834.05", delta: -12.13 },
-      { key: "adSpendRate", label: "推广花费 (支付预估) 占比", value: "41.94%" },
-      { key: "refundRate", label: "退款率 (按金额)", value: "22.55%" },
-      { key: "profit", label: "利润 (支付预估)", value: "446,392.64", delta: -4.48 },
-      { key: "orderCount", label: "销售单数 (支付)", value: "3,466", delta: -5.71 },
-      { key: "grossMargin", label: "大毛利率", value: "48.91%" },
-      { key: "platformSpend", label: "平台花费 (支付预估)", value: "49,690.97", delta: -6.4 },
-      { key: "salesExpense", label: "销售费用 (支付预估)", value: "432,436.04", delta: -2.34 },
-      { key: "goodsCost", label: "总货品成本", value: "28,156.56", delta: 5.89 },
-      { key: "invalidAmount", label: "无效单金额", value: "677", delta: -21.54 },
-      { key: "netSales", label: "净销售额 (支付)", value: "906,869.84", delta: -3.11 },
-      { key: "jdOrders", label: "京仓订单数量", value: "2,211", delta: -9.12 },
-      { key: "jdOrderRate", label: "京仓订单占比", value: "63.79%" },
-      { key: "netQty", label: "净销售件数 (支付)", value: "4,098", delta: -5.92 },
-      { key: "netGoodsCost", label: "净货品成本 (支付)", value: "28,041.16", delta: 8.61 }
+      { key: "pay", label: "支付金额 (支付)", value: "837,247.17" },
+      { key: "orders", label: "销售单数 (支付)", value: "3,174" },
+      { key: "ad", label: "推广花费 (支付预估)", value: "348,174.63", extra: "推广占比 41.59%" },
+      { key: "profit", label: "利润 (支付预估)", value: "415,136.64" },
+      { key: "margin", label: "大毛利率", value: "49.58%" },
+      { key: "custom", label: "自定义费用", value: "0" },
+      { key: "refundRate", label: "退款率 (按金额)", value: "27.02%" },
+      { key: "adRate", label: "推广花费占比 (支付预估)", value: "41.59%" }
     ],
-    liveIndex: {
-      title: "实时销售指数",
-      total: "210,087.32",
-      time: "10:30",
-      group: "按店铺",
+    sections: ["渠道列表", "店铺分组", "经营数据", "竞对对比", "品类分析", "热销商品"],
+    channelTable: {
+      title: "渠道列表",
+      columns: tableCols,
       rows: [
-        { rank: 1, store: "RASW家居旗舰店", owner: "张文静", sales: "17,970.14", delta: -0.33 },
-        { rank: 2, store: "AILUKI居家布艺旗舰店", owner: "李昊", sales: "16,420.08", delta: -1.12 },
-        { rank: 3, store: "星脉茶具专营店", owner: "王倩", sales: "14,880.50", delta: 0.86 },
-        { rank: 4, store: "华北仓店", owner: "赵磊", sales: "12,210.33", delta: -2.04 },
-        { rank: 5, store: "华南直营", owner: "陈静", sales: "11,640.20", delta: -0.58 }
+        {
+          name: "汇总",
+          cells: ["165,362.13", "--", "3,194", "3,174", "837,247.17", "0", "226,229.63", "27.02%", "825,966.57"]
+        },
+        {
+          name: "京东",
+          cells: ["165,362.13", "--", "3,194", "3,174", "837,247.17", "0", "226,229.63", "27.02%", "825,966.57"]
+        }
       ]
     },
-    heroBoard: {
-      title: "龙虎榜",
+    shopTable: {
+      title: "店铺列表",
+      columns: [
+        "店铺",
+        "实时销售额 (支付)",
+        "店铺上新成功率",
+        "销售单数",
+        "净销售单数 (支付)",
+        "支付金额 (支付)",
+        "无效单金额 (标注)",
+        "退款金额",
+        "退款率 (按金额)",
+        "净销售额 (支付)"
+      ],
       rows: [
-        { rank: 1, store: "AILUKI居家布艺旗舰店", owner: "李昊", sales: "92,860.64" },
-        { rank: 2, store: "RASW家居旗舰店", owner: "张文静", sales: "81,240.18" },
-        { rank: 3, store: "星脉茶具专营店", owner: "王倩", sales: "63,150.90" },
-        { rank: 4, store: "华北仓店", owner: "赵磊", sales: "48,320.00" },
-        { rank: 5, store: "华南直营", owner: "陈静", sales: "41,080.22" }
+        {
+          name: "当页汇总",
+          cells: ["118,700.32", "0.0000%", "2,289", "2,273", "663,906.61", "0", "184,552.98", "27.80%", "654,123.66"]
+        },
+        {
+          name: "RASW家居旗舰店",
+          cells: ["12,889.30", "0.0000%", "205", "202", "70,190.95", "0", "18,467.65", "26.31%", "68,877.95"]
+        }
       ]
     }
   };
