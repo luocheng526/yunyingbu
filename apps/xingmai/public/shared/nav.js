@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.126 */
+/* xm-fast-shell 0.1.127 */
 (function () {
-  const ASSET_VER = "0.1.126";
+  const ASSET_VER = "0.1.127";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -1032,18 +1032,25 @@
     return title || detail || "公告";
   }
 
-  function noticeButtons(list) {
-    return list
-      .map(function (item) {
-        return (
-          '<button type="button" class="xm-notice-link" data-notice-id="' +
-          escapeNotice(item.id) +
-          '">' +
-          escapeNotice(noticeDetail(item)) +
-          "</button>"
-        );
-      })
-      .join('<span class="xm-notice-sep" aria-hidden="true">／</span>');
+  let noticeRotateTimer = 0;
+  let noticeRotateIndex = 0;
+  let noticeRotateItems = [];
+
+  function stopNoticeRotate() {
+    if (noticeRotateTimer) {
+      window.clearInterval(noticeRotateTimer);
+      noticeRotateTimer = 0;
+    }
+  }
+
+  function paintNoticeSlide(bar) {
+    const item = noticeRotateItems[noticeRotateIndex];
+    const link = bar && bar.querySelector(".xm-notice-link");
+    if (!item || !link) {
+      return;
+    }
+    link.setAttribute("data-notice-id", item.id);
+    link.textContent = noticeDetail(item);
   }
 
   function fillNoticeBar(items) {
@@ -1051,34 +1058,39 @@
     if (!bar) {
       return;
     }
+    stopNoticeRotate();
     const list = (items || []).filter(function (item) {
       return item && item.id;
     });
+    noticeRotateItems = list;
+    noticeRotateIndex = 0;
     if (!list.length) {
       bar.hidden = true;
       bar.removeAttribute("data-xm-notice-count");
       return;
     }
-    const scroll = list.length > 1;
-    const inner = noticeButtons(list);
-    const chars = list.reduce(function (sum, item) {
-      return sum + noticeDetail(item).length;
-    }, 0);
-    const seconds = Math.max(20, Math.round(chars / 6));
+    const first = list[0];
     bar.hidden = false;
     bar.setAttribute("data-xm-notice-count", String(list.length));
     bar.innerHTML =
       '<span class="xm-notice-kicker">公告栏</span>' +
       '<div class="xm-notice-track-wrap">' +
-      '<div class="xm-notice-track' +
-      (scroll ? " is-scroll" : " is-static") +
-      '"' +
-      (scroll ? ' style="animation-duration:' + seconds + 's"' : "") +
-      ">" +
-      inner +
-      (scroll ? '<span class="xm-notice-sep" aria-hidden="true">／</span>' + inner : "") +
-      "</div></div>" +
+      '<div class="xm-notice-track is-static">' +
+      '<button type="button" class="xm-notice-link" data-notice-id="' +
+      escapeNotice(first.id) +
+      '">' +
+      escapeNotice(noticeDetail(first)) +
+      "</button></div></div>" +
       '<button type="button" class="xm-notice-more" data-notice-id="">全部公告</button>';
+    if (list.length > 1) {
+      noticeRotateTimer = window.setInterval(function () {
+        if (bar.matches(":hover")) {
+          return;
+        }
+        noticeRotateIndex = (noticeRotateIndex + 1) % noticeRotateItems.length;
+        paintNoticeSlide(bar);
+      }, 6000);
+    }
   }
 
   function ensureNoticeBar() {
