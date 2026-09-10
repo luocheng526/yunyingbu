@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { createApp } from "../../app.js";
 import { resetStoreForTests } from "../profile/auth.js";
+import { resetHandbookLogsForTests } from "./log-store.js";
 import { resetPptCoursesForTests } from "./ppt-store.js";
 
 const server = createApp().listen(0);
@@ -100,6 +101,9 @@ test("academy.js enables upload, watermark, and blocks original download", () =>
   assert.match(js, /watermarkText/);
   assert.match(js, /不提供原件下载/);
   assert.match(js, /postCourseFile/);
+  assert.match(js, /\/api\/academy\/courses\/chunk/);
+  assert.match(js, /文件上传/);
+  assert.match(js, /academy-view-upload/);
   assert.match(js, /application\/octet-stream/);
   assert.match(js, /credentials: "include"/);
   assert.doesNotMatch(js, /source\.pptx/);
@@ -218,4 +222,52 @@ test("raw octet-stream pptx upload keeps session and rejects anonymous", async (
   assert.equal(created.course.title, "精准转化课");
   assert.equal(created.course.originalName, "商学转化.pptx");
   assert.equal(created.course.pageCount, 2);
+});
+
+test("chunked pptx upload records 上传课件 in logs", async () => {
+  const cookie = await loginCookie();
+  await resetPptCoursesForTests();
+  await resetHandbookLogsForTests();
+  const buf = await makePptx();
+  const mid = Math.ceil(buf.length / 2);
+  const uploadId = "chunk-test-7e72";
+  function qs(index) {
+    return new URLSearchParams({
+      uploadId,
+      index: String(index),
+      total: "2",
+      size: String(buf.length),
+      title: "分片课",
+      category: "转化与页面",
+      published: "1",
+      filename: "split.pptx"
+    });
+  }
+  const part1 = await fetch(`${base}/api/academy/courses/chunk?${qs(0)}`, {
+    method: "POST",
+    headers: {
+      cookie,
+      Accept: "application/json",
+      "Content-Type": "application/octet-stream"
+    },
+    body: buf.subarray(0, mid)
+  });
+  assert.equal(part1.status, 200);
+  assert.equal((await part1.json()).pending, true);
+  const part2 = await fetch(`${base}/api/academy/courses/chunk?${qs(1)}`, {
+    method: "POST",
+    headers: {
+      cookie,
+      Accept: "application/json",
+      "Content-Type": "application/octet-stream"
+    },
+    body: buf.subarray(mid)
+  });
+  assert.equal(part2.status, 201);
+  const created = await part2.json();
+  assert.equal(created.course.title, "分片课");
+  const logs = await (
+    await fetch(`${base}/api/academy/logs`, { headers: { cookie, Accept: "application/json" } })
+  ).json();
+  assert.ok(logs.items.some((item) => item.action === "上传课件" && item.sectionTitle === "分片课"));
 });

@@ -22,7 +22,8 @@ import {
   getPptCourse,
   getPptPage,
   mediaType,
-  readPptMedia
+  readPptMedia,
+  receivePptChunk
 } from "./ppt-store.js";
 import {
   catalog,
@@ -141,6 +142,46 @@ async function pptUploadPayload(req) {
   };
 }
 
+async function logCourseUpload(user, course) {
+  await appendHandbookLog({
+    ...actorOf(user),
+    action: "上传课件",
+    sectionId: course && course.id,
+    sectionTitle: course && course.title,
+    detail: course && course.originalName ? course.originalName : "PPTX"
+  });
+}
+
+academyRouter.post("/courses/chunk", async (req, res) => {
+  const user = requireUser(req, res);
+  if (!user) {
+    return;
+  }
+  try {
+    const buffer = await readRawBody(req, { maxBytes: 128 * 1024 });
+    const result = await receivePptChunk({
+      uploadId: req.query.uploadId,
+      index: req.query.index,
+      total: req.query.total,
+      size: req.query.size,
+      title: req.query.title,
+      category: req.query.category,
+      published: req.query.published,
+      filename: req.query.filename,
+      buffer,
+      createdBy: user.username
+    });
+    if (result.pending) {
+      res.json({ ok: true, pending: true, received: result.received, total: result.total });
+      return;
+    }
+    await logCourseUpload(user, result.course);
+    res.status(201).json({ ok: true, course: result.course, download: false });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
 academyRouter.post("/courses", async (req, res) => {
   const user = requireUser(req, res);
   if (!user) {
@@ -155,6 +196,7 @@ academyRouter.post("/courses", async (req, res) => {
       file: payload.file,
       createdBy: user.username
     });
+    await logCourseUpload(user, course);
     res.status(201).json({ ok: true, course, download: false });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });

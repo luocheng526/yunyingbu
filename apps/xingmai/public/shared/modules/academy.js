@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.215 */
+/* xm-module-academy 0.1.216 */
 (function () {
-  const ASSET_VER = "0.1.215";
+  const ASSET_VER = "0.1.216";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -40,7 +40,7 @@
           return;
         }
         box.innerHTML =
-          '<table class="academy-log"><thead><tr><th>时间</th><th>谁</th><th>动作</th><th>章节</th><th>说明</th></tr></thead><tbody>' +
+          '<table class="academy-log"><thead><tr><th>时间</th><th>谁</th><th>动作</th><th>对象</th><th>说明</th></tr></thead><tbody>' +
           items
             .map(function (item) {
               return (
@@ -68,6 +68,9 @@
   function apiError(res, data) {
     if (res.status === 401) {
       return "登录已失效，请刷新后再试";
+    }
+    if (res.status === 413) {
+      return "文件被网关拦截，请到「文件上传」分片上传";
     }
     return (data && data.error) || "接口 " + res.status;
   }
@@ -157,30 +160,52 @@
     });
   }
 
-  function postCourseFile(formEl, file) {
-    const qs = new URLSearchParams();
-    qs.set("title", formEl.title.value);
-    qs.set("category", formEl.category.value);
-    qs.set("published", formEl.published.checked ? "1" : "0");
-    qs.set("filename", file && file.name ? file.name : "course.pptx");
-    return fetch("/api/academy/courses?" + qs.toString(), {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/octet-stream"
-      },
-      body: file || new Blob()
-    }).then(function (res) {
-      return res.json().catch(function () {
-        return { ok: false, error: apiError(res, null) };
-      }).then(function (data) {
-        if (!res.ok || data.ok === false) {
-          throw new Error(apiError(res, data));
-        }
-        return data;
+  function postCourseFile(formEl, file, onProgress) {
+    const chunkSize = 128 * 1024;
+    const uploadId =
+      window.crypto && crypto.randomUUID ? crypto.randomUUID() : "u" + String(Date.now());
+    const total = Math.max(1, Math.ceil((file && file.size ? file.size : 0) / chunkSize));
+    function send(index) {
+      if (onProgress) {
+        onProgress(index + 1, total);
+      }
+      const start = index * chunkSize;
+      const blob = file ? file.slice(start, start + chunkSize) : new Blob();
+      const qs = new URLSearchParams();
+      qs.set("uploadId", uploadId);
+      qs.set("index", String(index));
+      qs.set("total", String(total));
+      qs.set("size", String(file && file.size ? file.size : 0));
+      qs.set("title", formEl.title.value);
+      qs.set("category", formEl.category.value);
+      qs.set("published", formEl.published.checked ? "1" : "0");
+      qs.set("filename", file && file.name ? file.name : "course.pptx");
+      return fetch("/api/academy/courses/chunk?" + qs.toString(), {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/octet-stream"
+        },
+        body: blob
+      }).then(function (res) {
+        return res
+          .json()
+          .catch(function () {
+            return { ok: false, error: apiError(res, null) };
+          })
+          .then(function (data) {
+            if (!res.ok || data.ok === false) {
+              throw new Error(apiError(res, data));
+            }
+            if (data.pending && index + 1 < total) {
+              return send(index + 1);
+            }
+            return data;
+          });
       });
-    });
+    }
+    return send(0);
   }
 
   function stripLogMenu() {
@@ -215,14 +240,23 @@
     };
   }
 
-  function consoleFrame(inner, withLogs) {
+  function consoleFrame(inner, tabs) {
+    const tabHtml = (tabs || [])
+      .map(function (tab) {
+        return (
+          '<button type="button" class="academy-tab" id="' +
+          escapeHtml(tab.id) +
+          '">' +
+          escapeHtml(tab.label) +
+          "</button>"
+        );
+      })
+      .join("");
     return (
       '<div class="academy-console">' +
       '<div class="academy-console-top">' +
-      '<div class="academy-brand">星脉甄选商学院</div>' +
-      (withLogs
-        ? '<nav class="academy-console-tabs"><button type="button" class="academy-tab" id="academy-open-logs">操作日志</button></nav>'
-        : "") +
+      '<button type="button" class="academy-brand" id="academy-brand">星脉甄选商学院</button>' +
+      (tabHtml ? '<nav class="academy-console-tabs">' + tabHtml + "</nav>" : "") +
       "</div>" +
       inner +
       "</div>"
@@ -243,7 +277,12 @@
         const unmount = mountShell(
           root,
           consoleFrame(
-            '<div class="academy-console-stage">' +
+            '<div class="academy-console-stage" id="academy-view-courses">' +
+              '<div class="academy-work" id="academy-work">' +
+              '<aside class="academy-side"><div class="academy-course-list" id="academy-course-list"></div></aside>' +
+              '<section class="academy-main" id="academy-viewer" hidden></section>' +
+              "</div></div>" +
+              '<div class="academy-console-stage" id="academy-view-upload" hidden>' +
               '<form id="academy-upload" class="academy-toolbar">' +
               '<label>标题 <input name="title" required maxlength="160" placeholder="课件标题" /></label>' +
               '<label>分类 <select name="category">' +
@@ -258,10 +297,12 @@
               '<button type="submit">上传</button>' +
               "</form>" +
               '<p class="academy-status" id="academy-upload-status"></p>' +
-              '<div class="academy-work" id="academy-work">' +
-              '<aside class="academy-side"><div class="academy-course-list" id="academy-course-list"></div></aside>' +
-              '<section class="academy-main" id="academy-viewer" hidden></section>' +
-              "</div></div>"
+              "</div>" +
+              '<div id="academy-log-box" class="academy-console-logs" hidden></div>',
+            [
+              { id: "academy-tab-upload", label: "文件上传" },
+              { id: "academy-open-logs", label: "操作日志" }
+            ]
           )
         );
         let dead = false;
@@ -272,7 +313,7 @@
         function renderList(items) {
           const box = root.querySelector("#academy-course-list");
           if (!items || !items.length) {
-            box.innerHTML = '<p class="academy-empty">还没有课件。上传 PPTX 后出现在这里。不提供原件下载。</p>';
+            box.innerHTML = '<p class="academy-empty">还没有课件。到「文件上传」导入 PPTX。不提供原件下载。</p>';
             return;
           }
           box.innerHTML = items
@@ -373,12 +414,57 @@
             });
         }
 
+        function showCoursesView(name) {
+          const coursesBox = root.querySelector("#academy-view-courses");
+          const uploadBox = root.querySelector("#academy-view-upload");
+          const logBox = root.querySelector("#academy-log-box");
+          const uploadTab = root.querySelector("#academy-tab-upload");
+          const logTab = root.querySelector("#academy-open-logs");
+          if (coursesBox) {
+            coursesBox.hidden = name !== "courses";
+          }
+          if (uploadBox) {
+            uploadBox.hidden = name !== "upload";
+          }
+          if (logBox) {
+            logBox.hidden = name !== "logs";
+          }
+          if (uploadTab) {
+            uploadTab.classList.toggle("is-on", name === "upload");
+          }
+          if (logTab) {
+            logTab.classList.toggle("is-on", name === "logs");
+          }
+          if (name === "logs" && logBox) {
+            fillLogs(logBox);
+          }
+        }
+
         loadList().catch(function (err) {
           const box = root.querySelector("#academy-course-list");
           if (box) {
             box.innerHTML = '<p class="academy-status error">' + escapeHtml(err.message) + "</p>";
           }
         });
+
+        const brand = root.querySelector("#academy-brand");
+        if (brand) {
+          brand.addEventListener("click", function () {
+            showCoursesView("courses");
+          });
+        }
+        const uploadTab = root.querySelector("#academy-tab-upload");
+        if (uploadTab) {
+          uploadTab.addEventListener("click", function () {
+            showCoursesView("upload");
+          });
+        }
+        const logTab = root.querySelector("#academy-open-logs");
+        if (logTab) {
+          logTab.addEventListener("click", function () {
+            showCoursesView("logs");
+          });
+        }
 
         root.querySelector("#academy-upload").addEventListener("submit", function (ev) {
           ev.preventDefault();
@@ -391,13 +477,16 @@
             status.className = "academy-status error";
             return;
           }
-          status.textContent = "正在解析…";
+          status.textContent = "正在上传…";
           status.className = "academy-status";
-          postCourseFile(formEl, file)
+          postCourseFile(formEl, file, function (got, total) {
+            status.textContent = "正在上传 " + got + "/" + total;
+          })
             .then(function (data) {
               status.textContent = "已导入，学员只能在线翻页。";
               formEl.reset();
               formEl.published.checked = true;
+              showCoursesView("courses");
               return loadList().then(function () {
                 if (data.course && data.course.id) {
                   openPage(data.course.id, 1);
@@ -813,7 +902,7 @@
               '<p class="academy-empty">点左侧一节阅读，双击修改。</p></div></section>' +
               "</div>" +
               '<div id="academy-log-box" class="academy-console-logs" hidden></div>',
-            true
+            [{ id: "academy-open-logs", label: "操作日志" }]
           )
         );
         let dead = false;
@@ -1000,6 +1089,12 @@
           jump.addEventListener("click", function (ev) {
             ev.preventDefault();
             showLogs(!logsOn);
+          });
+        }
+        const brand = root.querySelector("#academy-brand");
+        if (brand) {
+          brand.addEventListener("click", function () {
+            showLogs(false);
           });
         }
         const addGroup = root.querySelector("#academy-add-group");

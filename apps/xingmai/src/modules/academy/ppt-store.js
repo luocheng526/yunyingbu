@@ -272,8 +272,90 @@ export async function createPptCourse({ title, category, published = true, file,
   return publicCourse(row);
 }
 
+const CHUNK_MAX = 128 * 1024;
+const TOTAL_MAX = 80 * 1024 * 1024;
+const uploads = new Map();
+
+function safeUploadId(id) {
+  const value = String(id || "");
+  return /^[a-z0-9-]{8,80}$/i.test(value) ? value : "";
+}
+
+export async function receivePptChunk({
+  uploadId,
+  index,
+  total,
+  size,
+  title,
+  category,
+  published,
+  filename,
+  buffer,
+  createdBy
+}) {
+  const id = safeUploadId(uploadId);
+  if (!id) {
+    const error = new Error("上传会话无效");
+    error.statusCode = 400;
+    throw error;
+  }
+  const i = Number(index);
+  const n = Number(total);
+  const bytes = Number(size) || 0;
+  if (!Number.isInteger(i) || !Number.isInteger(n) || i < 0 || n < 1 || i >= n) {
+    const error = new Error("分片参数不对");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (n > 640 || bytes > TOTAL_MAX) {
+    const error = new Error("文件太大，最多 80MB");
+    error.statusCode = 413;
+    throw error;
+  }
+  if (!buffer || buffer.length === 0 || buffer.length > CHUNK_MAX) {
+    const error = new Error("分片过大");
+    error.statusCode = 413;
+    throw error;
+  }
+  let session = uploads.get(id);
+  if (!session) {
+    session = {
+      title,
+      category,
+      published,
+      filename,
+      size: bytes,
+      total: n,
+      createdBy,
+      parts: new Array(n)
+    };
+    uploads.set(id, session);
+  }
+  session.parts[i] = Buffer.from(buffer);
+  const got = session.parts.filter(Boolean).length;
+  if (got < n) {
+    return { pending: true, received: got, total: n };
+  }
+  const assembled = Buffer.concat(session.parts);
+  uploads.delete(id);
+  if (session.size && assembled.length !== session.size) {
+    const error = new Error("文件不完整，请重新上传");
+    error.statusCode = 400;
+    throw error;
+  }
+  const course = await createPptCourse({
+    title: session.title,
+    category: session.category,
+    published: session.published,
+    file: { filename: session.filename || "course.pptx", buffer: assembled },
+    createdBy: session.createdBy
+  });
+  return { pending: false, course };
+}
+
 export async function resetPptCoursesForTests() {
   memory = [];
+  uploads.clear();
   await rm(DATA_DIR, { recursive: true, force: true });
   await mkdir(DATA_DIR, { recursive: true });
 }
