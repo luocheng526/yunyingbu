@@ -1,4 +1,4 @@
-/* xm-academy 0.1.211 */
+/* xm-academy 0.1.212 */
 #xm-content > .academy-page,
 #xm-content > main.page.academy-page,
 .xm-content > .academy-page,
@@ -33,6 +33,21 @@ main.page.academy-page,
   font-size: 18px;
   line-height: 1.25;
   font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.academy-inline-log {
+  border: 0;
+  border-radius: 6px;
+  background: var(--xm-primary-soft);
+  color: var(--xm-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 3px 10px;
+  cursor: pointer;
 }
 
 .academy-head .lead {
@@ -262,24 +277,45 @@ main.page.academy-page,
 }
 
 .academy-tracks {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
-  margin: 0 0 8px;
+  width: 100%;
+  margin: 0;
 }
 
 .academy-track {
   text-align: left;
-  width: 148px;
-  flex: 0 0 auto;
+  width: auto;
   border: 1px solid var(--xm-line);
   background: var(--xm-card);
   color: inherit;
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   cursor: pointer;
   font: inherit;
   min-height: 0;
+  box-shadow: var(--xm-shadow);
+}
+
+.academy-back {
+  border: 0;
+  border-radius: 6px;
+  background: var(--xm-primary-soft);
+  color: var(--xm-primary);
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 12px;
+  cursor: pointer;
+  margin: 0 0 8px;
+}
+
+.academy-paper {
+  min-height: 0 !important;
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--xm-card);
+  border-radius: 8px;
   box-shadow: var(--xm-shadow);
 }
 
@@ -297,10 +333,6 @@ main.page.academy-page,
   margin-top: 2px;
   font-size: 13px;
   font-weight: 600;
-}
-
-.academy-paper {
-  min-height: 0 !important;
 }
 
 .academy-timer {
@@ -499,7 +531,11 @@ html[data-theme="dark"] .academy-tree-item.is-on {
 
 .academy-log-panel {
   min-height: 0 !important;
+  margin: 0 0 8px;
   padding: 8px 10px;
+  background: var(--xm-card);
+  border-radius: 8px;
+  box-shadow: var(--xm-shadow);
 }
 
 .academy-log {
@@ -521,13 +557,25 @@ html[data-theme="dark"] .academy-tree-item.is-on {
   font-weight: 600;
 }
 
+@media (max-width: 1000px) {
+  .academy-tracks {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1000px) {
+  .academy-tracks {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 800px) {
   .academy-work.has-viewer,
   .academy-work-book {
     grid-template-columns: 1fr;
   }
 
-  .academy-track {
-    width: calc(50% - 4px);
+  .academy-tracks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.211 */
+/* xm-module-academy 0.1.212 */
 (function () {
-  const ASSET_VER = "0.1.211";
+  const ASSET_VER = "0.1.212";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -30,55 +30,39 @@
     document.head.appendChild(link);
   }
 
-  function openAcademyLogs() {
-    const root = document.getElementById("xm-content");
-    if (!root) {
-      return;
-    }
-    if (typeof window.__xmUnmount === "function") {
-      try {
-        window.__xmUnmount();
-      } catch (_err) {
-        /* keep going */
-      }
-    }
-    root.removeAttribute("data-xm-mounted");
-    const tab = document.querySelector(".xm-tab");
-    if (tab) {
-      tab.textContent = "操作日志";
-    }
-    document.querySelectorAll(".xm-menu a[href]").forEach(function (el) {
-      const on = el.getAttribute("data-academy-logs") === "1";
-      el.classList.toggle("is-active", on);
-      if (on) {
-        el.setAttribute("aria-current", "page");
-      } else {
-        el.removeAttribute("aria-current");
-      }
-    });
-    window.__xmUnmount = logsPage().mount(root);
-  }
-
-  function ensureLogNav() {
-    const handbook = document.querySelector('.xm-menu a[href="/academy/handbook"]');
-    if (!handbook || document.querySelector("[data-academy-logs]")) {
-      return;
-    }
-    const a = document.createElement("a");
-    a.className = "xm-menu-item";
-    a.href = "/academy/handbook";
-    a.setAttribute("data-academy-logs", "1");
-    a.innerHTML = "<span>操作日志</span>";
-    handbook.parentNode.insertBefore(a, handbook.nextSibling);
-    a.addEventListener(
-      "click",
-      function (ev) {
-        ev.preventDefault();
-        ev.stopImmediatePropagation();
-        openAcademyLogs();
-      },
-      true
-    );
+  function fillLogs(box) {
+    box.innerHTML = '<p class="academy-empty">正在读取…</p>';
+    api("/api/academy/logs")
+      .then(function (data) {
+        const items = data.items || [];
+        if (!items.length) {
+          box.innerHTML = '<p class="academy-empty">还没有操作。</p>';
+          return;
+        }
+        box.innerHTML =
+          '<table class="academy-log"><thead><tr><th>时间</th><th>谁</th><th>动作</th><th>章节</th><th>说明</th></tr></thead><tbody>' +
+          items
+            .map(function (item) {
+              return (
+                "<tr><td>" +
+                escapeHtml(item.at) +
+                "</td><td>" +
+                escapeHtml(item.actorName || item.actor) +
+                "</td><td>" +
+                escapeHtml(item.action) +
+                "</td><td>" +
+                escapeHtml(item.sectionTitle || item.sectionId) +
+                "</td><td>" +
+                escapeHtml(item.detail) +
+                "</td></tr>"
+              );
+            })
+            .join("") +
+          "</tbody></table>";
+      })
+      .catch(function (err) {
+        box.innerHTML = '<p class="academy-status error">' + escapeHtml(err.message) + "</p>";
+      });
   }
 
   function api(path) {
@@ -168,7 +152,6 @@
 
   function mountShell(root, html) {
     ensureCss();
-    ensureLogNav();
     root.innerHTML = '<main class="page academy-page academy-live">' + html + "</main>";
     return function unmount() {
       root.innerHTML = "";
@@ -405,9 +388,14 @@
       mount: function (root) {
         const unmount = mountShell(
           root,
-          pageHead("培训考试", "选晋升档，导入考试文档出卷，到点交卷。") +
+          pageHead("培训考试") +
+            '<div id="academy-exam-home">' +
             '<div class="academy-tracks" id="academy-tracks" aria-label="考试档"></div>' +
-            '<section class="panel academy-paper" id="academy-paper"><p class="academy-empty">点上面一档，导入文档或开始考试。</p></section>'
+            "</div>" +
+            '<div id="academy-exam-detail" hidden>' +
+            '<button type="button" class="academy-back" id="academy-exam-back">返回考试档</button>' +
+            '<section class="academy-paper" id="academy-paper"></section>' +
+            "</div>"
         );
         let dead = false;
         let trackId = "";
@@ -427,6 +415,30 @@
           const m = Math.floor(Math.max(0, seconds) / 60);
           const s = Math.max(0, seconds) % 60;
           return String(m).padStart(2, "0") + " : " + String(s).padStart(2, "0");
+        }
+
+        function showHome() {
+          stopTimer();
+          trackId = "";
+          const home = root.querySelector("#academy-exam-home");
+          const detail = root.querySelector("#academy-exam-detail");
+          if (home) {
+            home.hidden = false;
+          }
+          if (detail) {
+            detail.hidden = true;
+          }
+        }
+
+        function showDetail() {
+          const home = root.querySelector("#academy-exam-home");
+          const detail = root.querySelector("#academy-exam-detail");
+          if (home) {
+            home.hidden = true;
+          }
+          if (detail) {
+            detail.hidden = false;
+          }
         }
 
         function collectAnswers() {
@@ -614,9 +626,7 @@
         function openTrack(id) {
           stopTimer();
           trackId = id;
-          root.querySelectorAll(".academy-track").forEach(function (el) {
-            el.classList.toggle("is-on", el.getAttribute("data-id") === id);
-          });
+          showDetail();
           const paper = root.querySelector("#academy-paper");
           paper.innerHTML = "<h2>试卷</h2><p class=\"academy-empty\">正在打开这一档…</p>";
           api("/api/academy/exams/tracks/" + encodeURIComponent(id))
@@ -696,6 +706,18 @@
           }
           openTrack(btn.getAttribute("data-id"));
         });
+        root.querySelector("#academy-exam-back").addEventListener("click", function () {
+          showHome();
+          api("/api/academy/exams/tracks")
+            .then(function (data) {
+              if (!dead) {
+                renderTracks(data.tracks);
+              }
+            })
+            .catch(function () {
+              /* keep home */
+            });
+        });
         return function () {
           dead = true;
           stopTimer();
@@ -711,13 +733,8 @@
         const editorOk = canEditHandbook();
         const unmount = mountShell(
           root,
-          pageHead(
-            "运营手册",
-            editorOk
-              ? "点开一节阅读。罗成、沈子晗、韩梦凯可双击正文修改。"
-              : "点开一节阅读。罗成、沈子晗、韩梦凯可双击修改。"
-          ) +
-            '<p class="academy-jump"><button type="button" id="academy-open-logs">操作日志</button></p>' +
+          '<header class="page-head academy-head"><h1>运营手册<button type="button" class="academy-inline-log" id="academy-open-logs">操作日志</button></h1></header>' +
+            '<div id="academy-log-box" class="academy-log-panel" hidden></div>' +
             '<div class="academy-work academy-work-book">' +
             '<aside class="panel academy-side"><nav class="academy-tree" id="academy-tree"></nav></aside>' +
             '<section class="panel academy-main" id="academy-section"><p class="academy-empty">点左侧一节阅读。</p></section>' +
@@ -850,7 +867,16 @@
         if (jump) {
           jump.addEventListener("click", function (ev) {
             ev.preventDefault();
-            openAcademyLogs();
+            const box = root.querySelector("#academy-log-box");
+            if (!box) {
+              return;
+            }
+            if (!box.hidden) {
+              box.hidden = true;
+              return;
+            }
+            box.hidden = false;
+            fillLogs(box);
           });
         }
 
@@ -967,59 +993,10 @@
     };
   }
 
-  function logsPage() {
-    return {
-      mount: function (root) {
-        const unmount = mountShell(
-          root,
-          pageHead("操作日志", "手册改动会记下是谁、改了哪一节。") +
-            '<section class="panel academy-log-panel"><div id="academy-logs"><p class="academy-empty">正在读取…</p></div></section>'
-        );
-        api("/api/academy/logs")
-          .then(function (data) {
-            const box = root.querySelector("#academy-logs");
-            const items = data.items || [];
-            if (!items.length) {
-              box.innerHTML = '<p class="academy-empty">还没有操作。</p>';
-              return;
-            }
-            box.innerHTML =
-              '<table class="academy-log"><thead><tr><th>时间</th><th>谁</th><th>动作</th><th>章节</th><th>说明</th></tr></thead><tbody>' +
-              items
-                .map(function (item) {
-                  return (
-                    "<tr><td>" +
-                    escapeHtml(item.at) +
-                    "</td><td>" +
-                    escapeHtml(item.actorName || item.actor) +
-                    "</td><td>" +
-                    escapeHtml(item.action) +
-                    "</td><td>" +
-                    escapeHtml(item.sectionTitle || item.sectionId) +
-                    "</td><td>" +
-                    escapeHtml(item.detail) +
-                    "</td></tr>"
-                  );
-                })
-                .join("") +
-              "</tbody></table>";
-          })
-          .catch(function (err) {
-            const box = root.querySelector("#academy-logs");
-            if (box) {
-              box.innerHTML = '<p class="academy-status error">' + escapeHtml(err.message) + "</p>";
-            }
-          });
-        return unmount;
-      }
-    };
-  }
-
   window.XmModules = window.XmModules || {};
   const courses = coursesPage();
   window.XmModules["/academy"] = courses;
   window.XmModules["/academy/courses"] = courses;
   window.XmModules["/academy/exams"] = examsPage();
   window.XmModules["/academy/handbook"] = handbookPage();
-  window.XmModules["/academy/logs"] = logsPage();
 })();
