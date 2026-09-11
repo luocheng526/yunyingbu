@@ -77,18 +77,31 @@ test("login page is public", async () => {
   assert.doesNotMatch(html, /window\.location\.replace\("\/data"\)/);
 });
 
-test("logged-in visit to /login redirects home unless out=1", async () => {
+test("logged-in visit to /login still shows the login page", async () => {
   const res = await login("罗成", "ChangeMe123!");
   assert.equal(res.status, 200);
   const cookie = String(res.headers.get("set-cookie") || "").split(";")[0];
   const bounce = await fetch(`${base}/login`, { headers: { cookie }, redirect: "manual" });
-  assert.equal(bounce.status, 302);
-  assert.equal(bounce.headers.get("location"), "/home");
-  const leaving = await fetch(`${base}/login?out=1`, { headers: { cookie }, redirect: "manual" });
-  assert.equal(leaving.status, 200);
-  const html = await leaving.text();
+  assert.equal(bounce.status, 200);
+  const html = await bounce.text();
+  assert.match(html, /星脉甄选管理系统/);
   assert.match(html, /星脉管理系统/);
   assert.doesNotMatch(html, /\/shared\/nav\.js/);
+  const leaving = await fetch(`${base}/login?out=1`, { headers: { cookie }, redirect: "manual" });
+  assert.equal(leaving.status, 200);
+  const leavingHtml = await leaving.text();
+  assert.match(leavingHtml, /星脉管理系统/);
+  assert.doesNotMatch(leavingHtml, /\/shared\/nav\.js/);
+});
+
+test("login.css is never cached as immutable", async () => {
+  const plain = await fetch(`${base}/login.css`);
+  const versioned = await fetch(`${base}/login.css?v=0.1.167`);
+  assert.equal(plain.status, 200);
+  assert.equal(versioned.status, 200);
+  assert.match(String(plain.headers.get("cache-control") || ""), /no-store/);
+  assert.match(String(versioned.headers.get("cache-control") || ""), /no-store/);
+  assert.doesNotMatch(String(versioned.headers.get("cache-control") || ""), /immutable/);
 });
 
 test("demo user can log in", async () => {

@@ -592,6 +592,8 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.match(serverJs, /notes-store\.js/);
   const mid = readFileSync(join(root, "src/modules/profile/middleware.js"), "utf8");
   assert.match(mid, /HTML_CACHE_MS = 60_000/);
+  assert.match(mid, /loginFile && hit && now - hit\.at < HTML_CACHE_MS/);
+  assert.match(mid, /rel === "login\.css"/);
   assert.match(mid, /HAN_API_CACHE_MS = 2500/);
   assert.match(mid, /\/api\/data\/overview/);
   assert.match(mid, /\/api\/releases\/queue/);
