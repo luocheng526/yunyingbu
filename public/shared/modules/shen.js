@@ -1,7 +1,7 @@
 /* xm-module-shen 0.1.65 */
 (function () {
   var ITEMS = [
-    { href: "/shen/product", label: "产品中心" },
+    { href: "/shen/selection", label: "产品中心" },
     { href: "/shen/paid", label: "付费中心" },
     { href: "/shen/training", label: "培训系统" },
     { href: "/shen/tasks", label: "任务管理" }
@@ -22,6 +22,7 @@
     }
     var text = sub.textContent || "";
     if (
+      !sub.querySelector('a[href="/shen/product"]') &&
       text.indexOf("选品中心") === -1 &&
       text.indexOf("商品成长") === -1 &&
       text.indexOf("实时付费") === -1 &&
@@ -32,8 +33,8 @@
     var ico = sub.querySelector(".xm-ico");
     var icon = ico ? ico.outerHTML : "";
     var activeHref = pathNow();
-    if (activeHref === "/shen/selection" || activeHref === "/shen/growth") {
-      activeHref = "/shen/product";
+    if (activeHref === "/shen/product" || activeHref === "/shen/growth") {
+      activeHref = "/shen/selection";
     }
     sub.innerHTML = ITEMS.map(function (item) {
       var active = item.href === activeHref;
@@ -52,6 +53,26 @@
       );
     }).join("");
   }
+
+  document.addEventListener(
+    "click",
+    function (event) {
+      var link = event.target.closest("a[href]");
+      if (!link) {
+        return;
+      }
+      var href = String(link.getAttribute("href") || "").replace(/\/+$/, "") || "/";
+      if (href === "/shen/product" || href === "/shen/growth") {
+        event.preventDefault();
+        if (typeof window.__xmGo === "function") {
+          window.__xmGo("/shen/selection", true);
+        } else {
+          location.assign("/shen/selection");
+        }
+      }
+    },
+    true
+  );
 
   rewriteOfficialShenMenu();
   var timer = 0;

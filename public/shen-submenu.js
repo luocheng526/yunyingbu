@@ -1,13 +1,13 @@
 (function () {
   var ITEMS = [
-    { href: "/shen/product", label: "产品中心" },
+    { href: "/shen/selection", label: "产品中心" },
     { href: "/shen/paid", label: "付费中心" },
     { href: "/shen/training", label: "培训系统" },
     { href: "/shen/tasks", label: "任务管理" }
   ];
-  var RETIRED = {
-    "/shen/selection": "/shen/product",
-    "/shen/growth": "/shen/product"
+  var TO_EMBED = {
+    "/shen/product": "/shen/selection",
+    "/shen/growth": "/shen/selection"
   };
   var TITLE_FIX = {
     选品中心: "产品中心",
@@ -19,13 +19,21 @@
     return String(location.pathname || "/").replace(/\/+$/, "") || "/";
   }
 
+  function goEmbed(href, push) {
+    if (typeof window.__xmGo === "function") {
+      window.__xmGo(href, push);
+      return;
+    }
+    location.assign(href);
+  }
+
   function officialGroup() {
     return document.querySelector('.xm-menu-group[data-xm-group="/shen"]');
   }
 
   function currentHref() {
     var path = pathNow();
-    return RETIRED[path] || path;
+    return TO_EMBED[path] || path;
   }
 
   function icoHtml(sub) {
@@ -39,10 +47,14 @@
       return;
     }
     var text = sub.textContent || "";
-    if (text.indexOf("选品中心") === -1 && text.indexOf("商品成长") === -1 && text.indexOf("实时付费") === -1) {
-      if (text.indexOf("产品中心") !== -1 && text.indexOf("付费中心") !== -1 && text.indexOf("选品") === -1) {
-        return;
-      }
+    if (
+      !sub.querySelector('a[href="/shen/product"]') &&
+      text.indexOf("选品中心") === -1 &&
+      text.indexOf("商品成长") === -1 &&
+      text.indexOf("实时付费") === -1 &&
+      text.indexOf("产品中心") !== -1
+    ) {
+      return;
     }
     var icon = icoHtml(sub);
     var activeHref = currentHref();
@@ -64,69 +76,39 @@
     }).join("");
   }
 
-  function rewriteFallback() {
-    var box = document.querySelector(".shen-nav-sub");
-    if (!box) {
-      return;
-    }
-    var text = box.textContent || "";
-    if (text.indexOf("选品中心") === -1 && text.indexOf("商品成长") === -1 && text.indexOf("实时付费") === -1) {
-      return;
-    }
-    var activeHref = currentHref();
-    box.innerHTML = ITEMS.map(function (item) {
-      var active = item.href === activeHref;
-      return (
-        '<a href="' +
-        item.href +
-        '"' +
-        (active ? ' aria-current="page"' : "") +
-        ">" +
-        item.label +
-        "</a>"
-      );
-    }).join("");
-  }
-
-  function relabelHeadings() {
-    var nodes = document.querySelectorAll("h1, title, .page-head h1");
+  function relabelChrome() {
+    var nodes = document.querySelectorAll("h1, title, .page-head h1, .xm-tab-label");
     for (var i = 0; i < nodes.length; i += 1) {
       var node = nodes[i];
       var raw = (node.textContent || "").trim();
       if (TITLE_FIX[raw]) {
-        if (node.tagName === "TITLE") {
-          node.textContent = raw.replace(raw, TITLE_FIX[raw]) + " · 沈子晗运营中心";
-        } else {
-          node.textContent = TITLE_FIX[raw];
-        }
+        node.textContent = TITLE_FIX[raw];
       }
     }
-    if (TITLE_FIX[document.title]) {
-      document.title = TITLE_FIX[document.title] + " · 沈子晗运营中心";
-    } else {
-      Object.keys(TITLE_FIX).forEach(function (oldLabel) {
-        if (document.title.indexOf(oldLabel) === 0) {
-          document.title = document.title.replace(oldLabel, TITLE_FIX[oldLabel]);
-        }
-      });
-    }
+    Object.keys(TITLE_FIX).forEach(function (oldLabel) {
+      if (document.title.indexOf(oldLabel) !== -1) {
+        document.title = document.title.replace(oldLabel, TITLE_FIX[oldLabel]);
+      }
+    });
   }
 
-  function redirectRetired() {
-    var dest = RETIRED[pathNow()];
-    if (dest && dest !== pathNow()) {
-      location.replace(dest);
+  function bounceStandaloneProduct() {
+    if (pathNow() !== "/shen/product") {
+      return;
+    }
+    if (typeof window.__xmGo === "function") {
+      history.replaceState({ xm: "/shen/selection" }, "", "/shen/selection");
+      window.__xmGo("/shen/selection", false);
     }
   }
 
   function apply() {
-    redirectRetired();
+    bounceStandaloneProduct();
     var group = officialGroup();
     if (group) {
       rewriteOfficial(group);
     }
-    rewriteFallback();
-    relabelHeadings();
+    relabelChrome();
   }
 
   document.addEventListener(
@@ -137,9 +119,9 @@
         return;
       }
       var href = String(link.getAttribute("href") || "").replace(/\/+$/, "") || "/";
-      if (RETIRED[href]) {
+      if (TO_EMBED[href]) {
         event.preventDefault();
-        location.assign(RETIRED[href]);
+        goEmbed(TO_EMBED[href], true);
       }
     },
     true
