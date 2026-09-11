@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.166-rights-chips";
+    const href = "/people.css?v=0.1.167-store-id";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -105,7 +105,7 @@
         '<div class="org-pane" data-pane="stores">' +
         '<div class="org-kpis" id="org-kpis"></div>' +
         '<div class="org-toolbar">' +
-        '<input type="search" id="org-q" placeholder="商家ID / 店铺名 / 人员" />' +
+        '<input type="search" id="org-q" placeholder="店铺ID / 商家ID / 店铺名 / 人员" />' +
         '<button type="button" id="org-search">搜索</button>' +
         '<span class="spacer" id="org-count"></span>' +
         '<button type="button" class="ghost" id="org-template">下载模板</button>' +
@@ -121,6 +121,7 @@
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="lead"><span class="org-filter-name">小组负责人</span><span class="org-filter-caret">▾</span></button></th>' +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="owner"><span class="org-filter-name">店铺所属人员</span><span class="org-filter-caret">▾</span></button></th>' +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="storeName"><span class="org-filter-name">店铺名称</span><span class="org-filter-caret">▾</span></button></th>' +
+        "<th>店铺ID</th>" +
         "<th>商家id</th>" +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="remark"><span class="org-filter-name">店铺情况备注</span><span class="org-filter-caret">▾</span></button></th>' +
         "<th>更新时间</th><th>退店时间</th><th>登录主账号</th><th>密码</th><th>操作</th>" +
@@ -187,6 +188,7 @@
         '<label>小组负责人<input name="lead" required /></label>' +
         '<label>店铺所属人员<input name="owner" required /></label>' +
         '<label>店铺名称<input name="storeName" required /></label>' +
+        '<label>店铺ID<input name="storeId" /></label>' +
         '<label>商家id<input name="merchantId" /></label>' +
         '<label>店铺情况备注<select name="remark"><option>运营中</option><option>闲置中</option><option>退店中</option><option>已退店</option></select></label>' +
         '<label>更新时间<input name="updatedOn" placeholder="9.8更新" /></label>' +
@@ -292,6 +294,7 @@
         { key: "lead", type: "text" },
         { key: "owner", type: "text" },
         { key: "storeName", type: "text" },
+        { key: "storeId", type: "text" },
         { key: "merchantId", type: "text" },
         { key: "remark", type: "select" },
         { key: "updatedOn", type: "text" },
@@ -305,6 +308,7 @@
         "小组负责人",
         "店铺所属人员",
         "店铺名称",
+        "店铺ID",
         "商家id",
         "店铺情况备注",
         "更新时间",
@@ -317,6 +321,7 @@
         "lead",
         "owner",
         "storeName",
+        "storeId",
         "merchantId",
         "remark",
         "updatedOn",
@@ -409,6 +414,7 @@
           ["闲置中", summary.idle],
           ["退店中", summary.closing],
           ["已退店", summary.closed],
+          ["缺店铺ID", summary.missingStoreId],
           ["缺商家ID", summary.missingMerchant],
           ["缺主账号", summary.missingLogin],
           ["缺密码", summary.missingPassword],
@@ -669,7 +675,7 @@
         countEl.textContent = "筛选 " + stores.length + " 条 · 已选 " + selectedCount() + " 条";
         root.querySelector("#org-add").hidden = !boardMeta.canCreate;
         if (!stores.length) {
-          tbody.innerHTML = '<tr><td colspan="12" class="org-empty">暂无店铺</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="13" class="org-empty">暂无店铺</td></tr>';
           syncCheckAll();
           return;
         }
@@ -719,6 +725,7 @@
         form.lead.value = row ? row.lead : "";
         form.owner.value = row ? row.owner : "";
         form.storeName.value = row ? row.storeName : "";
+        form.storeId.value = row ? row.storeId : "";
         form.merchantId.value = row ? row.merchantId : "";
         form.remark.value = row ? row.remark : "运营中";
         form.updatedOn.value = row ? row.updatedOn : "";
@@ -1766,6 +1773,7 @@
               lead: "张文静",
               owner: "示例运营",
               storeName: "示例旗舰店",
+              storeId: "10001",
               merchantId: "11009999",
               remark: "运营中",
               updatedOn: "9.11更新",

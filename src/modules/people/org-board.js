@@ -44,6 +44,7 @@ function seedRows() {
       lead,
       owner,
       storeName,
+      storeId: "",
       merchantId,
       remark: "运营中",
       statusKey: "operating",
@@ -62,6 +63,7 @@ function seedRows() {
       lead,
       owner,
       storeName,
+      storeId: "",
       merchantId,
       remark: "运营中",
       statusKey: "operating",
@@ -245,6 +247,7 @@ export function summarizeOrg(actor) {
     idle: stores.filter((row) => row.statusKey === "idle").length,
     closing: stores.filter((row) => row.statusKey === "closing").length,
     closed: stores.filter((row) => row.statusKey === "closed").length,
+    missingStoreId: stores.filter((row) => !String(row.storeId || "").trim()).length,
     missingMerchant: stores.filter((row) => !String(row.merchantId || "").trim()).length,
     missingLogin: stores.filter((row) => !String(row.login || "").trim()).length,
     missingPassword: stores.filter((row) => !String(row.password || "").trim()).length,
@@ -265,7 +268,7 @@ export function listOrgStores(query = {}, actor) {
       if (!q) {
         return true;
       }
-      const blob = [row.storeName, row.merchantId, row.owner, row.lead, row.chief, row.login]
+      const blob = [row.storeName, row.storeId, row.merchantId, row.owner, row.lead, row.chief, row.login]
         .join(" ")
         .toLowerCase();
       return blob.includes(q);
@@ -297,6 +300,7 @@ function normalize(input, previous = {}) {
     lead: typeof input.lead === "string" ? input.lead.trim() : previous.lead || "",
     owner: typeof input.owner === "string" ? input.owner.trim() : previous.owner || "",
     storeName: typeof input.storeName === "string" ? input.storeName.trim() : previous.storeName || "",
+    storeId: typeof input.storeId === "string" ? input.storeId.trim() : previous.storeId || "",
     merchantId: typeof input.merchantId === "string" ? input.merchantId.trim() : previous.merchantId || "",
     remark: remark || STATUSES[statusKey] || "运营中",
     statusKey,
@@ -312,6 +316,7 @@ export const STORE_IMPORT_HEADERS = [
   "小组负责人",
   "店铺所属人员",
   "店铺名称",
+  "店铺ID",
   "商家id",
   "店铺情况备注",
   "更新时间",
@@ -325,6 +330,8 @@ const HEADER_TO_FIELD = {
   小组负责人: "lead",
   店铺所属人员: "owner",
   店铺名称: "storeName",
+  店铺ID: "storeId",
+  店铺id: "storeId",
   商家id: "merchantId",
   商家ID: "merchantId",
   店铺情况备注: "remark",
@@ -335,6 +342,13 @@ const HEADER_TO_FIELD = {
 };
 
 function findExistingStore(input) {
+  const storeId = String(input.storeId || "").trim();
+  if (storeId) {
+    const byStoreId = rows.find((row) => String(row.storeId || "").trim() === storeId);
+    if (byStoreId) {
+      return byStoreId;
+    }
+  }
   const merchantId = String(input.merchantId || "").trim();
   if (merchantId) {
     const byMerchant = rows.find((row) => String(row.merchantId || "").trim() === merchantId);
@@ -360,7 +374,7 @@ export function mapImportRow(raw = {}) {
   }
   const next = {};
   for (const [key, value] of Object.entries(raw)) {
-    const field = HEADER_TO_FIELD[String(key).trim()] || (["chief", "lead", "owner", "storeName", "merchantId", "remark", "updatedOn", "closedOn", "login", "password"].includes(key) ? key : "");
+    const field = HEADER_TO_FIELD[String(key).trim()] || (["chief", "lead", "owner", "storeName", "storeId", "merchantId", "remark", "updatedOn", "closedOn", "login", "password"].includes(key) ? key : "");
     if (field) {
       next[field] = value;
     }

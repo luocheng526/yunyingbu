@@ -82,6 +82,8 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, />全选</);
     assert.match(jsText, /key === "remark"/);
     assert.match(jsText, /org-row-check/);
+    assert.match(jsText, /店铺ID/);
+    assert.match(jsText, /缺店铺ID/);
     assert.match(jsText, /缺密码/);
     assert.match(jsText, /缺所属人员/);
     assert.match(jsText, /运营中/);
@@ -188,6 +190,8 @@ test("org store board lists demo shops and supports add", async () => {
     assert.equal(summary.status, 200);
     assert.equal(typeof summaryJson.summary.missingPassword, "number");
     assert.equal(typeof summaryJson.summary.missingOwner, "number");
+    assert.equal(typeof summaryJson.summary.missingStoreId, "number");
+    assert.ok(summaryJson.summary.missingStoreId >= 15);
 
     const listed = await fetch(`${base}/api/people/org/stores`);
     const listedJson = await listed.json();
@@ -204,6 +208,7 @@ test("org store board lists demo shops and supports add", async () => {
         lead: "张文静",
         owner: "验收同事",
         storeName: "验收旗舰店",
+        storeId: "SID199",
         merchantId: "19900001",
         remark: "运营中",
         login: "demo_ok",
@@ -213,6 +218,7 @@ test("org store board lists demo shops and supports add", async () => {
     const createdJson = await created.json();
     assert.equal(created.status, 201, JSON.stringify(createdJson));
     assert.equal(createdJson.store.storeName, "验收旗舰店");
+    assert.equal(createdJson.store.storeId, "SID199");
 
     const patched = await fetch(`${base}/api/people/org/stores/${createdJson.store.id}`, {
       method: "PATCH",
@@ -240,7 +246,7 @@ test("org store board lists demo shops and supports add", async () => {
     const template = await fetch(`${base}/api/people/org/stores/template`);
     const csv = await template.text();
     assert.equal(template.status, 200);
-    assert.match(csv, /总负责人,小组负责人,店铺所属人员,店铺名称,商家id/);
+    assert.match(csv, /总负责人,小组负责人,店铺所属人员,店铺名称,店铺ID,商家id/);
 
     const imported = await fetch(`${base}/api/people/org/stores/import`, {
       method: "POST",
@@ -252,6 +258,7 @@ test("org store board lists demo shops and supports add", async () => {
             小组负责人: "张文静",
             店铺所属人员: "导入同事",
             店铺名称: "导入旗舰店",
+            店铺ID: "SID188",
             商家id: "18800001",
             店铺情况备注: "运营中",
             更新时间: "9.11更新",
@@ -267,7 +274,12 @@ test("org store board lists demo shops and supports add", async () => {
     assert.equal(importedJson.created, 1);
     const listedAfter = await fetch(`${base}/api/people/org/stores?q=${encodeURIComponent("导入旗舰店")}`);
     const listedAfterJson = await listedAfter.json();
-    assert.ok(listedAfterJson.stores.some((row) => row.storeName === "导入旗舰店" && row.owner === "导入同事"));
+    assert.ok(
+      listedAfterJson.stores.some((row) => row.storeName === "导入旗舰店" && row.owner === "导入同事" && row.storeId === "SID188")
+    );
+    const byStoreId = await fetch(`${base}/api/people/org/stores?q=SID188`);
+    const byStoreIdJson = await byStoreId.json();
+    assert.ok(byStoreIdJson.stores.some((row) => row.storeId === "SID188"));
   });
 });
 
