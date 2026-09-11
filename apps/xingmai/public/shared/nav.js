@@ -8,9 +8,6 @@
     "/data/overview": "data",
     "/data/shops": "data",
     "/data/goods": "data",
-    "/data/groups": "data",
-    "/data/categories": "data",
-    "/data/compare": "data",
     "/data/paid": "data",
     "/shen": "shen",
     "/shen/selection": "shen",
@@ -37,9 +34,6 @@
     { href: "/data/overview", label: "数据总揽" },
     { href: "/data/shops", label: "店铺数据" },
     { href: "/data/goods", label: "商品数据" },
-    { href: "/data/groups", label: "渠道分组" },
-    { href: "/data/categories", label: "渠道品类" },
-    { href: "/data/compare", label: "渠道对比" },
     { href: "/data/paid", label: "实时付费" }
   ];
   const SHEN_CHILDREN = [
@@ -234,7 +228,7 @@
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout">' +
       ico("logout") +
       "<span>退出登录</span></button>" +
-      '<p class="xm-version">v0.4.19</p></nav>'
+      '<p class="xm-version">v0.4.20</p></nav>'
     );
   }
 

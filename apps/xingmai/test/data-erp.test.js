@@ -67,10 +67,10 @@ test("data module mounts shop and goods pages against ERP proxies", () => {
   assert.match(dataJs, /\/api\/data\/shops/);
   assert.match(dataJs, /\/api\/data\/goods/);
   assert.match(dataJs, /\/api\/data\/shop-options/);
-  assert.match(dataJs, /\/api\/data\/groups/);
-  assert.match(dataJs, /\/api\/data\/categories/);
-  assert.match(dataJs, /\/api\/data\/compare/);
   assert.match(dataJs, /内容待开发/);
+  assert.doesNotMatch(dataJs, /渠道分组/);
+  assert.doesNotMatch(dataJs, /渠道品类/);
+  assert.doesNotMatch(dataJs, /渠道对比/);
   assert.match(dataJs, /今日订单/);
   assert.match(dataJs, /待处理/);
   assert.match(dataJs, /在职人数/);
