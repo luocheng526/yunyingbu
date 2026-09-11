@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.157-wheel";
+    const href = "/people.css?v=0.1.158-remark-filter";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -411,16 +411,23 @@
       function uniqueColumnValues(key) {
         const seen = {};
         const list = [];
-        rawStores.forEach(function (row) {
-          const value = cellFilterValue(row, key);
+        function add(value) {
           if (!seen[value]) {
             seen[value] = true;
             list.push(value);
           }
+        }
+        if (key === "remark") {
+          REMARKS.forEach(add);
+        }
+        rawStores.forEach(function (row) {
+          add(cellFilterValue(row, key));
         });
-        list.sort(function (a, b) {
-          return a.localeCompare(b, "zh");
-        });
+        if (key !== "remark") {
+          list.sort(function (a, b) {
+            return a.localeCompare(b, "zh");
+          });
+        }
         return list;
       }
 
@@ -478,10 +485,12 @@
         const values = uniqueColumnValues(key);
         if (!columnPicked[key]) {
           columnPicked[key] = {};
-          values.forEach(function (value) {
-            columnPicked[key][value] = true;
-          });
         }
+        values.forEach(function (value) {
+          if (columnPicked[key][value] == null) {
+            columnPicked[key][value] = true;
+          }
+        });
         const picked = columnPicked[key];
         const selected = values.filter(function (value) {
           return picked[value];

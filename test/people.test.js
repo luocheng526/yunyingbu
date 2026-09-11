@@ -73,6 +73,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /org-filter-btn/);
     assert.match(jsText, /data-filter-key="chief"/);
     assert.match(jsText, />全选</);
+    assert.match(jsText, /key === "remark"/);
     assert.match(jsText, /org-row-check/);
     assert.match(jsText, /缺密码/);
     assert.match(jsText, /缺所属人员/);
