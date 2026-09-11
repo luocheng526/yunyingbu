@@ -361,6 +361,196 @@ test("shared han module fills submenu pages", async () => {
   assert.doesNotMatch(js, /内容待开发/);
 });
 
+test("goHanPage switches Han pages through the shell router", () => {
+  const calls = [];
+  const location = {
+    pathname: "/han/selection",
+    search: "",
+    assign(href) {
+      calls.push(["assign", href]);
+    },
+  };
+  const window = {
+    __xmGo(href) {
+      calls.push(["go", href]);
+    },
+  };
+  function goHanPage(href) {
+    const target = String(href || "/han/goods");
+    const here = String(location.pathname || "") + String(location.search || "");
+    if (here === target || here === target + "/") {
+      return;
+    }
+    if (typeof window.__xmGo === "function" && target.indexOf("?") < 0) {
+      window.__xmGo(target);
+      return;
+    }
+    location.assign(target);
+  }
+  goHanPage("/han/goods");
+  assert.deepEqual(calls, [["go", "/han/goods"]]);
+  calls.length = 0;
+  location.pathname = "/han/goods";
+  goHanPage("/han/goods");
+  assert.deepEqual(calls, []);
+  goHanPage("/han/goods?team=" + encodeURIComponent("陈晓曼组"));
+  assert.deepEqual(calls, [["assign", "/han/goods?team=" + encodeURIComponent("陈晓曼组")]]);
+});
+
+test("han goods injector keeps the official 商品数据 link", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { runInNewContext } = await import("node:vm");
+  const js = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
+
+  function el(tag, attrs) {
+    const node = {
+      tagName: String(tag || "div").toUpperCase(),
+      attrs: Object.assign({}, attrs || {}),
+      children: [],
+      parentNode: null,
+      nextSibling: null,
+      listeners: {},
+      className: (attrs && attrs.class) || "",
+      id: (attrs && attrs.id) || "",
+      href: (attrs && attrs.href) || "",
+      textContent: "",
+      innerHTML: "",
+      classList: {
+        contains(name) {
+          return node.className.split(/\s+/).indexOf(name) >= 0;
+        },
+        add(name) {
+          if (!node.classList.contains(name)) node.className = (node.className + " " + name).trim();
+        },
+        toggle(name, on) {
+          if (on) node.classList.add(name);
+          else node.className = node.className.split(/\s+/).filter((x) => x && x !== name).join(" ");
+        },
+      },
+      setAttribute(key, value) {
+        node.attrs[key] = String(value);
+        if (key === "id") node.id = String(value);
+        if (key === "href") node.href = String(value);
+        if (key === "class") node.className = String(value);
+      },
+      getAttribute(key) {
+        if (key === "href") return node.href || node.attrs.href || "";
+        if (key === "id") return node.id || node.attrs.id || "";
+        return node.attrs[key];
+      },
+      appendChild(child) {
+        child.parentNode = node;
+        if (node.children.length) node.children[node.children.length - 1].nextSibling = child;
+        node.children.push(child);
+        return child;
+      },
+      insertBefore(child, ref) {
+        child.parentNode = node;
+        if (!ref) return node.appendChild(child);
+        const idx = node.children.indexOf(ref);
+        node.children.splice(idx < 0 ? node.children.length : idx, 0, child);
+        for (let i = 0; i < node.children.length; i += 1) {
+          node.children[i].nextSibling = node.children[i + 1] || null;
+        }
+        return child;
+      },
+      addEventListener(type, fn) {
+        node.listeners[type] = node.listeners[type] || [];
+        node.listeners[type].push(fn);
+      },
+      querySelector(sel) {
+        return queryAll(node, sel)[0] || null;
+      },
+      querySelectorAll(sel) {
+        return queryAll(node, sel);
+      },
+    };
+    return node;
+  }
+
+  function match(node, sel) {
+    if (sel.startsWith(".")) return node.className.split(/\s+/).indexOf(sel.slice(1)) >= 0;
+    const attr = sel.match(/^(\w+)?\[(\w+)="([^"]+)"\]$/);
+    if (attr) {
+      const tagOk = !attr[1] || node.tagName === attr[1].toUpperCase();
+      return tagOk && node.getAttribute(attr[2]) === attr[3];
+    }
+    return node.tagName === sel.toUpperCase();
+  }
+
+  function queryAll(root, sel) {
+    const parts = String(sel).trim().split(/\s+/);
+    let set = [root];
+    parts.forEach((part) => {
+      const next = [];
+      set.forEach((node) => walk(node, (child) => {
+        if (match(child, part)) next.push(child);
+      }));
+      set = next;
+    });
+    return set.filter((node) => node !== root || match(node, parts[parts.length - 1]));
+  }
+
+  function walk(node, visit) {
+    (node.children || []).forEach((child) => {
+      visit(child);
+      walk(child, visit);
+    });
+  }
+
+  const submenu = el("div", { class: "xm-submenu" });
+  const goods = el("a", { href: "/han/goods", class: "xm-menu-item xm-menu-child" });
+  goods.textContent = "商品数据";
+  submenu.appendChild(el("a", { href: "/han/selection", class: "xm-menu-item xm-menu-child" }));
+  submenu.appendChild(goods);
+  submenu.appendChild(el("a", { href: "/han/paid", class: "xm-menu-item xm-menu-child" }));
+  const head = el("head");
+  const document = {
+    readyState: "complete",
+    head,
+    getElementById(id) {
+      if (id === "han-goods-teams") {
+        return queryAll(submenu, '[id="han-goods-teams"]')[0] || null;
+      }
+      if (id === "han-goods-teams-css") return null;
+      return null;
+    },
+    querySelector(sel) {
+      if (sel === '.xm-submenu a[href="/han/goods"]') return goods.parentNode ? goods : null;
+      return submenu.querySelector(sel);
+    },
+    createElement(tag) {
+      return el(tag);
+    },
+    addEventListener() {},
+  };
+  const calls = [];
+  const sandbox = {
+    URLSearchParams,
+    window: {
+      XmModules: {},
+      __xmGo(href) {
+        calls.push(href);
+      },
+      location: { pathname: "/han/selection", search: "", href: "/han/selection" },
+    },
+    document,
+    location: { pathname: "/han/selection", search: "", href: "/han/selection", assign() {} },
+    fetch() {
+      return Promise.resolve({ json: () => Promise.resolve({ items: [] }) });
+    },
+  };
+  sandbox.window.document = document;
+  sandbox.globalThis = sandbox;
+  runInNewContext(js, sandbox);
+  assert.equal(goods.parentNode, submenu);
+  assert.equal(Boolean(document.getElementById("han-goods-teams")), true);
+  const layer = queryAll(submenu, "button").find((node) => String(node.innerHTML).indexOf("商品分层") >= 0);
+  assert.ok(layer);
+  (layer.listeners.click || []).forEach((fn) => fn({ preventDefault() {} }));
+  assert.deepEqual(calls, ["/han/goods"]);
+});
+
 test("han store keeps dropProbeTasks and hydrateFromMysql exports", async () => {
   assert.equal(typeof dropProbeTasks, "function");
   assert.equal(typeof hydrateFromMysql, "function");
