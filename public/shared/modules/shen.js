@@ -26,9 +26,112 @@
     };
   }
 
-  window.XmModules["/shen/product"] = waitPage("产品中心");
-  window.XmModules["/shen/selection"] = waitPage("产品中心");
-  window.XmModules["/shen/growth"] = waitPage("产品中心");
+  var PRODUCT_TABS = [
+    { id: "xuanpin", label: "选品" },
+    { id: "youhua", label: "优化" },
+    { id: "chengzhang", label: "产品成长" }
+  ];
+
+  function productTabId() {
+    var hash = String(location.hash || "").replace(/^#/, "").toLowerCase();
+    for (var i = 0; i < PRODUCT_TABS.length; i += 1) {
+      if (PRODUCT_TABS[i].id === hash) {
+        return hash;
+      }
+    }
+    return "xuanpin";
+  }
+
+  function productCenterPage() {
+    return {
+      mount: function (root) {
+        var tabButtons = PRODUCT_TABS.map(function (tab) {
+          return (
+            '<button type="button" class="shen-product-tab" data-product-tab="' +
+            tab.id +
+            '" aria-controls="shen-product-pane-' +
+            tab.id +
+            '">' +
+            escapeHtml(tab.label) +
+            "</button>"
+          );
+        }).join("");
+        var panes = PRODUCT_TABS.map(function (tab) {
+          return (
+            '<section class="panel shen-product-pane" id="shen-product-pane-' +
+            tab.id +
+            '" data-product-pane="' +
+            tab.id +
+            '" hidden>' +
+            "<h2>" +
+            escapeHtml(tab.label) +
+            "</h2>" +
+            '<p class="lead">内容待开发。</p></section>'
+          );
+        }).join("");
+        root.innerHTML =
+          '<main class="page">' +
+          '<header class="page-head"><p class="kicker">沈子晗运营中心</p><h1>产品中心</h1>' +
+          '<p class="lead">产品中心分为选品、优化、产品成长三个模块。</p></header>' +
+          '<nav class="shen-product-tabs" aria-label="产品中心分页">' +
+          tabButtons +
+          "</nav>" +
+          '<div class="stack">' +
+          panes +
+          "</div>" +
+          "<style>" +
+          ".shen-product-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px}" +
+          ".shen-product-tab{appearance:none;border:1px solid var(--xm-border, #d9dde3);background:var(--xm-surface, #fff);color:var(--xm-text, #1f2329);border-radius:999px;padding:8px 16px;cursor:pointer;font:inherit}" +
+          '.shen-product-tab[aria-selected="true"]{background:var(--xm-accent, #1677ff);border-color:var(--xm-accent, #1677ff);color:#fff}' +
+          "</style></main>";
+
+        function applyTab() {
+          var active = productTabId();
+          var buttons = root.querySelectorAll("[data-product-tab]");
+          var sections = root.querySelectorAll("[data-product-pane]");
+          for (var i = 0; i < buttons.length; i += 1) {
+            var selected = buttons[i].getAttribute("data-product-tab") === active;
+            buttons[i].setAttribute("aria-selected", selected ? "true" : "false");
+          }
+          for (var j = 0; j < sections.length; j += 1) {
+            sections[j].hidden = sections[j].getAttribute("data-product-pane") !== active;
+          }
+        }
+
+        function onHashChange() {
+          applyTab();
+        }
+
+        function onClick(event) {
+          var btn = event.target.closest("[data-product-tab]");
+          if (!btn || !root.contains(btn)) {
+            return;
+          }
+          event.preventDefault();
+          var id = btn.getAttribute("data-product-tab");
+          if (location.hash !== "#" + id) {
+            location.hash = id;
+          } else {
+            applyTab();
+          }
+        }
+
+        root.addEventListener("click", onClick);
+        window.addEventListener("hashchange", onHashChange);
+        applyTab();
+
+        return function unmount() {
+          root.removeEventListener("click", onClick);
+          window.removeEventListener("hashchange", onHashChange);
+          root.innerHTML = "";
+        };
+      }
+    };
+  }
+
+  window.XmModules["/shen/product"] = productCenterPage();
+  window.XmModules["/shen/selection"] = productCenterPage();
+  window.XmModules["/shen/growth"] = productCenterPage();
   window.XmModules["/shen/paid"] = waitPage("付费中心");
   window.XmModules["/shen/training"] = waitPage("培训系统");
   window.XmModules["/shen/tasks"] = waitPage("任务管理");
