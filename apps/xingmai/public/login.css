@@ -1,4 +1,4 @@
-/* LoginPage 0.1.167 — restore previous Joy login scene */
+/* LoginPage 0.1.168 — Joy scene left crop so copy sits on blue */
 :root {
   --login-bg: #f7f7f4;
   --login-ink: #14120b;
@@ -110,14 +110,14 @@ body {
   height: 100%;
   display: block;
   object-fit: cover;
-  object-position: right center;
+  object-position: left center;
   content-visibility: auto;
 }
 
-/* 只盖两侧手：源图 (679,623) 125×43；框 1101×841 右对齐裁左 122px。脚和身体不动。 */
+/* 只盖两侧手：源图 (679,623) 125×43；框 1101×841 左对齐裁右 122px。脚和身体不动。 */
 .hero-dog-nohands {
   position: absolute;
-  left: 50.5904%;
+  left: 61.6712%;
   top: 74.0785%;
   width: 11.3533%;
   height: 5.113%;
