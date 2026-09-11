@@ -1025,7 +1025,7 @@
         const ah = Math.max(host.clientHeight - 16, 80);
         const bw = Math.max(fit.scrollWidth, 1);
         const bh = Math.max(fit.scrollHeight, 1);
-        const scale = Math.min(aw / bw, ah / bh);
+        const scale = Math.min(1, aw / bw, ah / bh);
         fit.style.transform = "scale(" + scale + ")";
       }
 
@@ -1037,7 +1037,9 @@
         host.innerHTML = tree
           ? '<div class="rights-tree-fit" id="rights-tree-fit">' + renderRightsNode(tree) + "</div>"
           : '<p class="rights-empty">还没有树。先在成员管理和店铺主数据里对上人和店。</p>';
-        requestAnimationFrame(fitRightsTree);
+        requestAnimationFrame(function () {
+          requestAnimationFrame(fitRightsTree);
+        });
       }
 
       function loadRights() {

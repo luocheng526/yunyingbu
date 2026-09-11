@@ -704,8 +704,9 @@ body:has(.people-page) .xm-tabs {
   display: flex;
   flex-direction: column;
   flex-wrap: wrap;
-  max-height: none;
-  gap: 6px;
+  align-content: flex-start;
+  max-height: min(64vh, 620px);
+  gap: 6px 18px;
   margin: 0;
   padding-left: 10px;
   border-left: 2px solid #d9d9d9;
