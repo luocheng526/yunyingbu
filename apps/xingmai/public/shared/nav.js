@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.134 */
+/* xm-fast-shell 0.1.135 */
 (function () {
-  const ASSET_VER = "0.1.134";
+  const ASSET_VER = "0.1.135";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -40,7 +40,7 @@
   const SHEN_CHILDREN = [
     { href: "/shen/product", label: "产品中心" },
     { href: "/shen/growth", label: "商品成长" },
-    { href: "/shen/paid", label: "实时付费" },
+    { href: "/shen/paid", label: "付费中心" },
     { href: "/shen/training", label: "培训系统" },
     { href: "/shen/tasks", label: "任务管理" }
   ];
@@ -234,7 +234,7 @@
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout">' +
       ico("logout") +
       "<span>退出登录</span></button>" +
-      '<p class="xm-version">v0.4.21</p></nav>'
+      '<p class="xm-version">v0.4.22</p></nav>'
     );
   }
 
