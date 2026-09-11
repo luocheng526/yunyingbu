@@ -1,4 +1,5 @@
 import { assertCanWrite, canEditStore, rowMatchesScope, scopeOf } from "./org-acl.js";
+import { listPeople } from "./store.js";
 
 const STATUSES = {
   operating: "运营中",
@@ -101,7 +102,122 @@ function addLog(action, detail) {
   logs = logs.slice(0, 80);
 }
 
+export const RIGHTS_ROLES = ["总监", "经理", "主管", "储备", "运营", "助理"];
+const DEFAULT_PINS = { 罗成: "总监", 沈子晗: "经理", 韩梦凯: "经理" };
+let rightsPins = { ...DEFAULT_PINS };
+
+function mapBoardRole(role) {
+  const raw = String(role || "").trim();
+  if (raw === "店长") {
+    return "运营";
+  }
+  if (RIGHTS_ROLES.includes(raw)) {
+    return raw;
+  }
+  return "";
+}
+
+function namesFromStore(row) {
+  const names = [];
+  [row.lead, row.owner].forEach((value) => {
+    const name = String(value || "").trim();
+    if (name) {
+      names.push(name);
+    }
+  });
+  const chief = String(row.chief || row.team || "");
+  if (chief.includes("沈子晗")) {
+    names.push("沈子晗");
+  }
+  if (chief.includes("韩梦凯")) {
+    names.push("韩梦凯");
+  }
+  if (chief.includes("罗成")) {
+    names.push("罗成");
+  }
+  return names;
+}
+
+function storeCountOf(name, stores) {
+  return stores.filter((row) => namesFromStore(row).includes(name)).length;
+}
+
+function collectRoster() {
+  return listPeople().filter((row) => row.status === "在职" && row.center !== "人员管理" && row.name !== "管理员");
+}
+
+export function listRightsBoard() {
+  const stores = rows.map(clone);
+  const roster = collectRoster();
+  const names = new Set(Object.keys(rightsPins));
+  stores.forEach((row) => {
+    namesFromStore(row).forEach((name) => names.add(name));
+  });
+  const byName = {};
+  roster.forEach((row) => {
+    byName[row.name] = row;
+  });
+  const columns = {};
+  RIGHTS_ROLES.forEach((role) => {
+    columns[role] = [];
+  });
+  names.forEach((name) => {
+    const person = byName[name];
+    const role = rightsPins[name] || mapBoardRole(person && person.role) || "运营";
+    columns[role].push({
+      name,
+      role,
+      id: person ? person.id : null,
+      stores: storeCountOf(name, stores)
+    });
+  });
+  RIGHTS_ROLES.forEach((role) => {
+    columns[role].sort((a, b) => a.name.localeCompare(b.name, "zh"));
+  });
+  const candidates = [...new Set([...names, ...roster.map((row) => row.name)])]
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, "zh"))
+    .map((name) => ({
+      name,
+      role: rightsPins[name] || mapBoardRole(byName[name] && byName[name].role) || "运营"
+    }));
+  return {
+    ok: true,
+    roles: RIGHTS_ROLES,
+    columns: RIGHTS_ROLES.map((role) => ({ role, people: columns[role] })),
+    candidates
+  };
+}
+
+export function pinRightsName(name, role) {
+  const who = String(name || "").trim();
+  const next = String(role || "").trim();
+  if (!who) {
+    return { ok: false, statusCode: 400, error: "请填写姓名" };
+  }
+  if (!RIGHTS_ROLES.includes(next)) {
+    return { ok: false, statusCode: 400, error: "职位不在责权栏中" };
+  }
+  rightsPins[who] = next;
+  addLog("指定责权", who + " → " + next);
+  return listRightsBoard();
+}
+
+export function unpinRightsName(name) {
+  const who = String(name || "").trim();
+  if (!who) {
+    return { ok: false, statusCode: 400, error: "请填写姓名" };
+  }
+  delete rightsPins[who];
+  if (DEFAULT_PINS[who]) {
+    rightsPins[who] = DEFAULT_PINS[who];
+  }
+  addLog("取消指定", who);
+  return listRightsBoard();
+}
+
 export function resetOrgBoard() {
+  rightsPins = { ...DEFAULT_PINS };
   seeded = seedRows();
   rows = seeded.rows;
   nextId = seeded.nextId;

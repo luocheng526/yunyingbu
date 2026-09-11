@@ -12,7 +12,7 @@ export const CENTERS = [
   "人员管理"
 ];
 
-export const POSTS = ["店长", "运营", "主管", "经理"];
+export const POSTS = ["店长", "运营", "主管", "经理", "储备", "助理", "总监"];
 export const SHOP_KINDS = ["店铺", "店群"];
 export const INITIAL_PASSWORD = "ChangeMe123!";
 
@@ -127,7 +127,8 @@ function saveLoginOverlay() {
 function rememberLogin(person) {
   loginOverlay[String(person.id)] = {
     username: person.username,
-    password: person.password
+    password: person.password,
+    role: person.role
   };
   saveLoginOverlay();
 }
@@ -143,6 +144,9 @@ function applyLoginOverlay() {
     }
     if (saved.password) {
       person.password = saved.password;
+    }
+    if (saved.role) {
+      person.role = saved.role;
     }
   }
 }
@@ -427,9 +431,13 @@ export function patchPerson(id, input) {
     }
     found.password = password;
   }
+  if (typeof input.role === "string" && input.role.trim()) {
+    found.role = input.role.trim();
+  }
   if (
     Object.prototype.hasOwnProperty.call(input, "username") ||
-    Object.prototype.hasOwnProperty.call(input, "password")
+    Object.prototype.hasOwnProperty.call(input, "password") ||
+    Object.prototype.hasOwnProperty.call(input, "role")
   ) {
     rememberLogin(withLogin(found));
   }

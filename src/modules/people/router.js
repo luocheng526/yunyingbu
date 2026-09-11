@@ -21,10 +21,13 @@ import {
   importOrgStores,
   listOrgLogs,
   listOrgStores,
+  listRightsBoard,
   listTeams,
   patchOrgStore,
+  pinRightsName,
   removeOrgStore,
-  summarizeOrg
+  summarizeOrg,
+  unpinRightsName
 } from "./org-board.js";
 import {
   createNotice,
@@ -155,6 +158,18 @@ peopleRouter.delete("/org/stores/:id", async (req, res) => {
 
 peopleRouter.get("/org/logs", (_req, res) => {
   res.json({ ok: true, logs: listOrgLogs() });
+});
+
+peopleRouter.get("/org/rights-board", (_req, res) => {
+  res.json(listRightsBoard());
+});
+
+peopleRouter.post("/org/rights-board/pin", (req, res) => {
+  sendResult(res, pinRightsName(req.body?.name, req.body?.role), false);
+});
+
+peopleRouter.post("/org/rights-board/unpin", (req, res) => {
+  sendResult(res, unpinRightsName(req.body?.name), false);
 });
 
 peopleRouter.get("/org/board", async (req, res) => {
