@@ -71,19 +71,21 @@ test("data module mounts shop and goods pages against ERP proxies", () => {
   assert.match(dataJs, /\/api\/data\/categories/);
   assert.match(dataJs, /\/api\/data\/compare/);
   assert.match(dataJs, /内容待开发/);
-  assert.match(dataJs, /趋势看板/);
-  assert.match(dataJs, /实时销售指数/);
-  assert.match(dataJs, /龙虎榜/);
-  assert.match(dataJs, /viewBox="0 0 640 220"/);
+  assert.match(dataJs, /今日订单/);
+  assert.match(dataJs, /待处理/);
+  assert.match(dataJs, /在职人数/);
+  assert.match(dataJs, /本周发布次数/);
+  assert.match(dataJs, /最近数据事件/);
   assert.match(dataJs, /<th>店铺<\/th><th>类型<\/th><th>状态<\/th><th>类目<\/th><th>简介<\/th><th>开店时间<\/th>/);
   assert.match(dataJs, /<th>商品<\/th><th>店铺<\/th><th>订单<\/th><th>应收<\/th><th>净销售<\/th><th>利润<\/th><th>推广<\/th>/);
-  assert.doesNotMatch(dataJs, /今日订单/);
-  assert.doesNotMatch(dataJs, /在职人数/);
   assert.doesNotMatch(dataJs, /<th>今日<\/th>/);
   assert.doesNotMatch(dataJs, /todayPayAmount/);
   assert.doesNotMatch(dataJs, /热销商品/);
   assert.doesNotMatch(dataJs, /店铺排行/);
   assert.doesNotMatch(dataJs, /品类走势/);
+  assert.doesNotMatch(dataJs, /销售趋势/);
+  assert.doesNotMatch(dataJs, /趋势看板/);
+  assert.doesNotMatch(dataJs, /龙虎榜/);
   assert.doesNotMatch(dataJs, /<th>推广<\/th><th>退款率<\/th>/);
   assert.doesNotMatch(dataJs, /authInfo/);
   assert.doesNotMatch(dataJs, /XM_ERP_TOKEN/);
@@ -116,7 +118,7 @@ function mockErp(handler) {
   return calls;
 }
 
-test("shops join names and strip JD auth secrets", async () => {
+test("shops return directory fields and strip JD auth secrets", async () => {
   process.env.XM_ERP_TOKEN = "test-token";
   const calls = mockErp(async (url) => {
     if (String(url).includes("/jd/shopInfo/page")) {
@@ -162,11 +164,12 @@ test("shops join names and strip JD auth secrets", async () => {
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.records[0].shopName, "飒望苒鸥专卖店");
-  assert.equal(body.records[0].payAmount, 100);
+  assert.equal(body.records[0].typeLabel, "POP");
+  assert.equal(body.records[0].statusLabel, "营业");
+  assert.equal(body.records[0].payAmount, undefined);
   assert.equal(body.records[0].authInfo, undefined);
   assert.equal(JSON.stringify(body).includes("SECRET"), false);
-  assert.equal(calls.some((item) => String(item.url).includes("/jd/shopInfo/page")), true);
-  assert.equal(calls.some((item) => String(item.url).includes("/jd/order/shop/page")), true);
+  assert.equal(calls.every((item) => String(item.url).includes("/jd/shopInfo/page")), true);
 });
 
 test("shop options return every shop from the directory cache", async () => {

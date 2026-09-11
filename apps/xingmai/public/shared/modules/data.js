@@ -1,4 +1,4 @@
-/* xm-module-data 0.1.70 */
+/* xm-module-data 0.1.71 */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -12,9 +12,13 @@
     return value === null || value === undefined || value === "";
   }
 
+  function none(value) {
+    return blank(value) ? "无" : escapeHtml(value);
+  }
+
   function money(value) {
     if (blank(value)) {
-      return "—";
+      return "无";
     }
     const n = Number(value);
     if (!Number.isFinite(n)) {
@@ -25,7 +29,7 @@
 
   function count(value) {
     if (blank(value)) {
-      return "—";
+      return "无";
     }
     const n = Number(value);
     return Number.isFinite(n) ? n.toLocaleString("zh-CN") : escapeHtml(value);
@@ -33,13 +37,30 @@
 
   function pct(value) {
     if (blank(value)) {
-      return "—";
+      return "无";
     }
     const n = Number(value);
     if (!Number.isFinite(n)) {
       return escapeHtml(value);
     }
     return (n * 100).toFixed(2) + "%";
+  }
+
+  function categoryText(first, second) {
+    if (blank(first) && blank(second)) {
+      return "无";
+    }
+    if (blank(first)) {
+      return escapeHtml(second);
+    }
+    if (blank(second)) {
+      return escapeHtml(first);
+    }
+    return escapeHtml(first) + " / " + escapeHtml(second);
+  }
+
+  function shanghaiToday() {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(new Date());
   }
 
   function fetchJson(url) {
@@ -78,50 +99,16 @@
       "第 " + page + " / " + pages + " 页，共 " + total + " 条";
   }
 
-  function paintTrend(svg, points) {
-    const values = (points || [])
-      .map(function (item) {
-        return item && !blank(item.payAmount) ? Number(item.payAmount) : NaN;
-      })
-      .filter(function (value) {
-        return Number.isFinite(value);
-      });
-    svg.innerHTML = "";
-    if (values.length < 2) {
-      return;
-    }
-    const max = Math.max.apply(null, values.concat([1]));
-    const w = 640;
-    const h = 220;
-    const step = (w - 40) / Math.max(values.length - 1, 1);
-    const coords = values.map(function (value, index) {
-      const x = 20 + index * step;
-      const y = h - 24 - (value / max) * (h - 48);
-      return x + "," + y;
-    });
-    svg.innerHTML =
-      '<polyline fill="none" stroke="#1677ff" stroke-width="3" points="' +
-      coords.join(" ") +
-      '"></polyline>' +
-      coords
-        .map(function (pair) {
-          const xy = pair.split(",");
-          return '<circle cx="' + xy[0] + '" cy="' + xy[1] + '" r="4" fill="#1677ff"></circle>';
-        })
-        .join("");
-  }
-
-  function cardValue(card) {
-    if (!card || blank(card.value)) {
-      return "—";
-    }
-    if (card.unit === "元") {
-      return money(card.value);
-    }
-    if (card.unit === "单") {
-      return count(card.value);
-    }
-    return escapeHtml(card.value);
+  function kpiCard(label, value, unit) {
+    return (
+      '<article class="kpi-card"><div class="label">' +
+      escapeHtml(label) +
+      '</div><div class="value">' +
+      escapeHtml(value) +
+      '<span class="unit">' +
+      escapeHtml(unit) +
+      "</span></div></article>"
+    );
   }
 
   window.XmModules = window.XmModules || {};
@@ -148,64 +135,52 @@
     root.innerHTML =
       '<main class="page">' +
       '<header class="page-head"><p class="kicker">数据中心</p><h1>数据总揽</h1>' +
-      '<p class="lead">数字来自星脉 ERP。实时销售指数后期另接，这里先空着。</p></header>' +
+      '<p class="lead">关键指标看板。对得上的来自星脉 ERP，没有的写无。</p></header>' +
       '<p class="status error" data-err hidden></p>' +
-      '<section class="kpi-grid" data-cards aria-label="指标卡"></section>' +
-      '<div class="dash-bottom">' +
-      '<section class="panel" aria-labelledby="trend-title">' +
-      '<h2 id="trend-title">趋势看板</h2>' +
-      '<svg class="trend-svg" data-trend viewBox="0 0 640 220" role="img" aria-label="销售趋势"></svg>' +
+      '<section class="kpi-grid" data-cards aria-label="关键指标">' +
+      kpiCard("今日订单", "无", "单") +
+      kpiCard("待处理", "无", "件") +
+      kpiCard("在职人数", "无", "人") +
+      kpiCard("本周发布次数", "无", "次") +
       "</section>" +
-      "<div>" +
-      '<section class="panel sales-index" aria-labelledby="index-title">' +
-      '<h2 id="index-title">实时销售指数</h2>' +
-      '<div class="figure" data-index>—</div>' +
-      '<p class="hint">实时付费后期对接，这里先空着。</p>' +
-      "</section>" +
-      '<section class="panel" style="margin-top: 12px" aria-labelledby="board-title">' +
-      '<h2 id="board-title">龙虎榜</h2>' +
-      '<ol class="board-list" data-board></ol>' +
-      "</section>" +
-      "</div></div></main>";
+      '<section class="panel"><h2>最近数据事件</h2>' +
+      "<table><thead><tr><th>时间</th><th>类型</th><th>摘要</th></tr></thead>" +
+      '<tbody data-events><tr><td colspan="3" class="empty">无</td></tr></tbody></table>' +
+      "</section></main>";
     const err = root.querySelector("[data-err]");
+    const cards = root.querySelector("[data-cards]");
+    const events = root.querySelector("[data-events]");
     let dead = false;
     fetchJson("/api/data/overview")
       .then(function (data) {
         if (dead) {
           return;
         }
-        const cards = (data.cards || []).slice(0, 4);
-        root.querySelector("[data-cards]").innerHTML = cards.length
-          ? cards
-              .map(function (card) {
+        const today = shanghaiToday();
+        const row = (data.trend || []).find(function (item) {
+          return item && item.date === today && !blank(item.orderCount);
+        });
+        cards.innerHTML =
+          kpiCard("今日订单", row ? count(row.orderCount) : "无", "单") +
+          kpiCard("待处理", "无", "件") +
+          kpiCard("在职人数", "无", "人") +
+          kpiCard("本周发布次数", "无", "次");
+        const rows = data.events || [];
+        events.innerHTML = rows.length
+          ? rows
+              .map(function (item) {
                 return (
-                  '<article class="kpi-card"><div class="label">' +
-                  escapeHtml(card.label) +
-                  '</div><div class="value">' +
-                  cardValue(card) +
-                  (card.unit ? '<span class="unit">' + escapeHtml(card.unit) + "</span>" : "") +
-                  "</div></article>"
+                  "<tr><td>" +
+                  none(item.time) +
+                  "</td><td>" +
+                  none(item.type) +
+                  "</td><td>" +
+                  none(item.summary) +
+                  "</td></tr>"
                 );
               })
               .join("")
-          : "";
-        paintTrend(root.querySelector("[data-trend]"), data.trend);
-        const shops = data.shops || [];
-        root.querySelector("[data-board]").innerHTML = shops.length
-          ? shops
-              .map(function (row, index) {
-                return (
-                  "<li><span class=\"rank\">" +
-                  (index + 1) +
-                  '</span><span class="name">' +
-                  escapeHtml(row.shopName || row.shopId || "") +
-                  "</span><span>" +
-                  money(row.payAmount) +
-                  "</span></li>"
-                );
-              })
-              .join("")
-          : "";
+          : '<tr><td colspan="3" class="empty">无</td></tr>';
       })
       .catch(function (error) {
         if (dead) {
@@ -242,18 +217,6 @@
       const body = root.querySelector("[data-body]");
       const err = root.querySelector("[data-err]");
       let dead = false;
-      let names = {};
-
-      function loadMeta() {
-        return fetchJson("/api/data/shop-options").then(function (data) {
-          names = {};
-          (data.records || []).forEach(function (row) {
-            if (row && row.id) {
-              names[row.id] = row;
-            }
-          });
-        });
-      }
 
       function load() {
         err.hidden = true;
@@ -266,28 +229,25 @@
             state.pages = Math.max(1, Number(data.totalPages || 1));
             const rows = data.records || [];
             if (!rows.length) {
-              body.innerHTML = '<tr><td colspan="6" class="empty">没有店铺</td></tr>';
+              body.innerHTML = '<tr><td colspan="6" class="empty">无</td></tr>';
             } else {
               body.innerHTML = rows
                 .map(function (row) {
-                  const info = names[row.shopId] || names[row.id] || {};
                   return (
                     "<tr><td>" +
-                    escapeHtml(row.shopName || info.shopName) +
+                    none(row.shopName) +
                     '<div class="lead">' +
-                    escapeHtml(row.shopId || info.id) +
+                    none(row.id) +
                     "</div></td><td>" +
-                    escapeHtml(info.typeLabel || row.typeLabel) +
+                    none(row.typeLabel) +
                     "</td><td>" +
-                    escapeHtml(info.statusLabel || row.statusLabel) +
+                    none(row.statusLabel) +
                     "</td><td>" +
-                    escapeHtml(info.mainFirstCategoryName) +
-                    " / " +
-                    escapeHtml(info.mainSecondCategoryName) +
+                    categoryText(row.mainFirstCategoryName, row.mainSecondCategoryName) +
                     "</td><td>" +
-                    escapeHtml(info.introduction) +
+                    none(row.introduction) +
                     "</td><td>" +
-                    escapeHtml(info.openTime) +
+                    none(row.openTime) +
                     "</td></tr>"
                   );
                 })
@@ -312,7 +272,7 @@
         load();
       });
       bindPager(root, state, load);
-      loadMeta().finally(load);
+      load();
       return function unmount() {
         dead = true;
         root.innerHTML = "";
@@ -351,7 +311,7 @@
           (data.records || []).forEach(function (row) {
             const option = document.createElement("option");
             option.value = row.id;
-            option.textContent = row.shopName;
+            option.textContent = row.shopName || "无";
             shopSelect.append(option);
           });
         });
@@ -379,19 +339,19 @@
             state.pages = Math.max(1, Number(data.totalPages || 1));
             const rows = data.records || [];
             if (!rows.length) {
-              body.innerHTML = '<tr><td colspan="7" class="empty">没有商品</td></tr>';
+              body.innerHTML = '<tr><td colspan="7" class="empty">无</td></tr>';
             } else {
               body.innerHTML = rows
                 .map(function (row) {
                   return (
                     "<tr><td>" +
-                    escapeHtml(row.productName) +
+                    none(row.productName) +
                     '<div class="lead">' +
-                    escapeHtml(row.productId) +
+                    none(row.productId) +
                     "</div></td><td>" +
-                    escapeHtml(row.shopName || row.shopId) +
+                    none(row.shopName || row.shopId) +
                     "</td><td>" +
-                    escapeHtml(row.orderCount) +
+                    count(row.orderCount) +
                     "</td><td>" +
                     money(row.payAmount) +
                     "</td><td>" +
@@ -441,7 +401,7 @@
       root.innerHTML =
         '<main class="page">' +
         '<header class="page-head"><p class="kicker">数据中心</p><h1>渠道分组</h1>' +
-        '<p class="lead">来自星脉 ERP 渠道分组。ERP 里还没建分组就空着。</p></header>' +
+        '<p class="lead">来自星脉 ERP 渠道分组。没有的写无。</p></header>' +
         '<section class="panel"><form id="group-filter" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:12px">' +
         '<label>分组<input name="name" maxlength="64" /></label>' +
         '<button type="submit">查询</button></form>' +
@@ -475,16 +435,16 @@
                       .join("、");
                     return (
                       "<tr><td>" +
-                      escapeHtml(row.name || row.id) +
+                      none(row.name || row.id) +
                       "</td><td>" +
-                      escapeHtml((row.shops || []).length) +
+                      count((row.shops || []).length) +
                       "</td><td>" +
-                      escapeHtml(shops) +
+                      none(shops) +
                       "</td></tr>"
                     );
                   })
                   .join("")
-              : '<tr><td colspan="3" class="empty">还没有渠道分组</td></tr>';
+              : '<tr><td colspan="3" class="empty">无</td></tr>';
             renderPager(root, data);
           })
           .catch(function (error) {
@@ -518,7 +478,7 @@
       root.innerHTML =
         '<main class="page">' +
         '<header class="page-head"><p class="kicker">数据中心</p><h1>渠道品类</h1>' +
-        '<p class="lead">来自星脉 ERP 渠道品类。没有的字段先空着。</p></header>' +
+        '<p class="lead">来自星脉 ERP 渠道品类。没有的写无。</p></header>' +
         '<section class="panel">' +
         '<p class="status error" data-err hidden></p>' +
         '<div style="overflow:auto"><table><thead><tr><th>品类</th><th>商品数</th><th>订单</th><th>应收</th><th>净销售</th><th>利润</th><th>退款率</th></tr></thead>' +
@@ -544,11 +504,11 @@
                   .map(function (row) {
                     return (
                       "<tr><td>" +
-                      escapeHtml(row.categoryName || row.thirdCategoryId) +
+                      none(row.categoryName || row.thirdCategoryId) +
                       "</td><td>" +
-                      escapeHtml(row.productCount) +
+                      count(row.productCount) +
                       "</td><td>" +
-                      escapeHtml(row.orderCount) +
+                      count(row.orderCount) +
                       "</td><td>" +
                       money(row.payAmount) +
                       "</td><td>" +
@@ -561,7 +521,7 @@
                     );
                   })
                   .join("")
-              : '<tr><td colspan="7" class="empty">没有品类</td></tr>';
+              : '<tr><td colspan="7" class="empty">无</td></tr>';
             renderPager(root, data);
           })
           .catch(function (error) {
@@ -588,7 +548,7 @@
       root.innerHTML =
         '<main class="page">' +
         '<header class="page-head"><p class="kicker">数据中心</p><h1>渠道对比</h1>' +
-        '<p class="lead">来自星脉 ERP 渠道业绩对比，按月。没有的字段先空着。</p></header>' +
+        '<p class="lead">来自星脉 ERP 渠道业绩对比，按月。没有的写无。</p></header>' +
         '<section class="panel">' +
         '<p class="status error" data-err hidden></p>' +
         '<div style="overflow:auto"><table><thead><tr><th>月份</th><th>应收</th><th>净额</th><th>利润</th><th>退款</th><th>推广</th><th>利润率</th></tr></thead>' +
@@ -608,7 +568,7 @@
                 .map(function (row) {
                   return (
                     "<tr><td>" +
-                    escapeHtml(row.yearMonth) +
+                    none(row.yearMonth) +
                     "</td><td>" +
                     money(row.payAmount) +
                     "</td><td>" +
@@ -625,7 +585,7 @@
                   );
                 })
                 .join("")
-            : '<tr><td colspan="7" class="empty">没有对比数据</td></tr>';
+            : '<tr><td colspan="7" class="empty">无</td></tr>';
         })
         .catch(function (error) {
           if (dead) {

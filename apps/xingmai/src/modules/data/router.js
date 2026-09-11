@@ -6,7 +6,7 @@ import {
   listErpCompare,
   listErpGoods,
   listErpShopOptions,
-  listErpShopStats
+  listErpShops
 } from "./erp.js";
 
 export const dataRouter = Router();
@@ -39,7 +39,7 @@ dataRouter.get("/overview", (req, res) => {
 });
 
 dataRouter.get("/shops", (req, res) => {
-  sendErp(res, () => listErpShopStats(rangeQuery(req.query)));
+  sendErp(res, () => listErpShops(rangeQuery(req.query)));
 });
 
 dataRouter.get("/shop-options", (_req, res) => {
