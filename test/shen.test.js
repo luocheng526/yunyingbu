@@ -3,7 +3,7 @@ import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { patchAppSource } from "../src/modules/shen/patch-app.js";
-import { SQL, resetStore, setPool } from "../src/modules/shen/store.js";
+import { SQL, hydrateFromMysql, resetStore, setPool } from "../src/modules/shen/store.js";
 import { SHEN_LEGACY_REDIRECTS, SHEN_SUBMENUS } from "../src/modules/shen/submenu.js";
 
 const NAV_LABELS = [
@@ -22,12 +22,7 @@ function createFakePool() {
   let brief = "";
   return {
     async query(sql, params = []) {
-      if (
-        sql === SQL.createTasks ||
-        sql === SQL.createBriefs ||
-        sql === SQL.ensureBriefRow ||
-        sql === SQL.addStoreColumn
-      ) {
+      if (sql === SQL.addStoreColumn || sql === SQL.addCreatedAtColumn) {
         return [{}];
       }
       if (sql === SQL.listTasks) {
@@ -75,7 +70,7 @@ function createFakePool() {
       }
       if (sql === SQL.resetBrief) {
         brief = "";
-        return [{}];
+        return [{ affectedRows: 1 }];
       }
       throw new Error(`unexpected sql: ${sql}`);
     }
@@ -244,6 +239,13 @@ test("brief GET/PUT round-trip", async () => {
     const loaded = await request(base, "/api/shen/brief");
     assert.equal(loaded.json.text, "今日完成排期核对。");
   });
+});
+
+test("store keeps hydrateFromMysql for live notes-store", async () => {
+  assert.equal(typeof hydrateFromMysql, "function");
+  setPool(createFakePool());
+  resetStore();
+  await hydrateFromMysql();
 });
 
 test("patchAppSource only inserts shen router mount", () => {
