@@ -1,4 +1,4 @@
-export const NAV_VERSION = "v0.4.20";
+export const NAV_VERSION = "v0.4.21";
 
 export const DATA_CHILDREN = [
   { href: "/data/overview", label: "数据总揽" },
@@ -8,7 +8,7 @@ export const DATA_CHILDREN = [
 ];
 
 export const SHEN_CHILDREN = [
-  { href: "/shen/selection", label: "选品中心" },
+  { href: "/shen/product", label: "产品中心" },
   { href: "/shen/growth", label: "商品成长" },
   { href: "/shen/paid", label: "实时付费" },
   { href: "/shen/training", label: "培训系统" },
