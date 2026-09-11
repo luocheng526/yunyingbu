@@ -17,17 +17,19 @@ body:has(.xm-shell):has(.people-page) .xm-shell {
 body:has(.xm-shell):has(.people-page) .xm-main {
   min-height: 0;
   height: 100vh;
-  overflow: hidden;
+  max-height: 100vh;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
   display: flex;
   flex-direction: column;
 }
 
 body:has(.people-page) .xm-content,
 #xm-content:has(.people-page) {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+  height: auto;
   min-height: 0;
-  overflow: auto !important;
-  overscroll-behavior: contain;
+  overflow: visible !important;
 }
 
 .xm-content .page.people-page,
@@ -173,8 +175,7 @@ body:has(.people-page) .xm-tabs {
 }
 
 .org-table-wrap {
-  overflow: auto;
-  overscroll-behavior: contain;
+  overflow: visible;
   background: #fff;
   border: 1px solid var(--xm-line, #f0f0f0);
   border-radius: 8px;

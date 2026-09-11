@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.156-colfilter";
+    const href = "/people.css?v=0.1.157-wheel";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -37,10 +37,10 @@
       "html:has(.people-page),body:has(.people-page){height:100%;}" +
       "body:has(.xm-shell):has(.people-page){overflow:hidden;}" +
       "body:has(.xm-shell):has(.people-page) .xm-shell{height:100vh;max-height:100vh;overflow:hidden;min-height:0;}" +
-      "body:has(.xm-shell):has(.people-page) .xm-main{height:100vh;max-height:100vh;overflow:hidden;min-height:0;display:flex;flex-direction:column;}" +
-      "body:has(.people-page) .xm-content,#xm-content:has(.people-page){flex:1 1 auto;min-height:0;overflow:auto!important;}" +
+      "body:has(.xm-shell):has(.people-page) .xm-main{height:100vh;max-height:100vh;overflow-x:hidden!important;overflow-y:auto!important;min-height:0;display:flex;flex-direction:column;}" +
+      "body:has(.people-page) .xm-content,#xm-content:has(.people-page){flex:0 0 auto;height:auto;overflow:visible!important;}" +
       ".people-page{overflow:visible;padding-bottom:24px;}" +
-      ".people-page .org-table-wrap{overflow:auto;}";
+      ".people-page .org-table-wrap{overflow:visible;}";
   }
 
   function showShellTab() {
@@ -70,6 +70,24 @@
     mount: function (root) {
       ensureCss();
       hideShellTab();
+      function onPeopleWheel(event) {
+        if (event.defaultPrevented || event.ctrlKey) {
+          return;
+        }
+        if (event.target.closest && event.target.closest(".org-filter-pop, input, select, textarea")) {
+          return;
+        }
+        const main = document.querySelector(".xm-main");
+        if (!main) {
+          return;
+        }
+        const before = main.scrollTop;
+        main.scrollTop += event.deltaY;
+        if (main.scrollTop !== before) {
+          event.preventDefault();
+        }
+      }
+      document.addEventListener("wheel", onPeopleWheel, { passive: false, capture: true });
       root.innerHTML =
         '<main class="page people-page">' +
         '<header class="page-head"><h1>组织中心</h1>' +
@@ -1220,6 +1238,7 @@
 
       return function unmount() {
         dead = true;
+        document.removeEventListener("wheel", onPeopleWheel, true);
         document.removeEventListener("click", onDocFilterClose);
         closeFilterPop();
         showShellTab();
