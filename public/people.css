@@ -224,19 +224,30 @@ body:has(.people-page) .xm-tabs {
   position: relative;
 }
 
+.people-page button.org-filter-btn,
 .org-filter-btn {
   border: 0;
   background: transparent;
   padding: 0;
   font: inherit;
+  font-weight: 600;
   color: inherit;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  border-radius: 0;
+  min-height: 0;
+  box-shadow: none;
 }
 
-.org-filter-btn.is-on {
+.people-page button.org-filter-btn .org-filter-name,
+.org-filter-name {
+  color: inherit;
+}
+
+.org-filter-btn.is-on,
+.org-filter-btn.is-on .org-filter-name {
   color: #1677ff;
 }
 

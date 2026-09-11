@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.158-remark-filter";
+    const href = "/people.css?v=0.1.159-filter-label";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -105,8 +105,6 @@
         '<div class="org-toolbar">' +
         '<input type="search" id="org-q" placeholder="商家ID / 店铺名 / 人员" />' +
         '<button type="button" id="org-search">搜索</button>' +
-        '<select id="org-team"><option value="">全部团队</option></select>' +
-        '<select id="org-status"><option value="">全部状态</option><option value="operating">运营中</option><option value="idle">闲置中</option><option value="closing">退店中</option><option value="closed">已退店</option></select>' +
         '<span class="spacer" id="org-count"></span>' +
         '<button type="button" class="ghost" id="org-template">下载模板</button>' +
         '<button type="button" class="ghost" id="org-import">导入</button>' +
@@ -117,12 +115,12 @@
         '<p class="status error" id="org-error" hidden></p>' +
         '<div class="org-table-wrap"><table><thead><tr>' +
         '<th class="org-check"><input type="checkbox" id="org-check-all" title="全选本筛" /></th>' +
-        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="chief">总负责人<span class="org-filter-caret">▾</span></button></th>' +
-        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="lead">小组负责人<span class="org-filter-caret">▾</span></button></th>' +
-        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="owner">店铺所属人员<span class="org-filter-caret">▾</span></button></th>' +
-        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="storeName">店铺名称<span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="chief"><span class="org-filter-name">总负责人</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="lead"><span class="org-filter-name">小组负责人</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="owner"><span class="org-filter-name">店铺所属人员</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="storeName"><span class="org-filter-name">店铺名称</span><span class="org-filter-caret">▾</span></button></th>' +
         "<th>商家id</th>" +
-        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="remark">店铺情况备注<span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="remark"><span class="org-filter-name">店铺情况备注</span><span class="org-filter-caret">▾</span></button></th>' +
         "<th>更新时间</th><th>退店时间</th><th>登录主账号</th><th>密码</th><th>操作</th>" +
         '</tr></thead><tbody id="org-tbody"></tbody></table></div>' +
         '<div class="org-filter-pop" id="org-filter-pop" hidden></div></div>' +
@@ -199,8 +197,6 @@
 
       const kpis = root.querySelector("#org-kpis");
       const tbody = root.querySelector("#org-tbody");
-      const teamSel = root.querySelector("#org-team");
-      const statusSel = root.querySelector("#org-status");
       const qInput = root.querySelector("#org-q");
       const errorEl = root.querySelector("#org-error");
       const countEl = root.querySelector("#org-count");
@@ -347,22 +343,8 @@
 
       function query() {
         return {
-          q: qInput.value.trim(),
-          team: teamSel.value,
-          status: statusSel.value
+          q: qInput.value.trim()
         };
-      }
-
-      function fillTeams(teams) {
-        const current = teamSel.value;
-        teamSel.innerHTML = '<option value="">全部团队</option>';
-        (teams || []).forEach(function (team) {
-          const option = document.createElement("option");
-          option.value = team;
-          option.textContent = team;
-          teamSel.append(option);
-        });
-        teamSel.value = current;
       }
 
       function renderKpis(summary) {
@@ -645,7 +627,6 @@
               (storeData.scopeLabel || "可改全部团队") +
               " · 双击单元格保存";
           }
-          fillTeams(storeData.teams || summaryData.teams);
           renderKpis(summaryData.summary);
           rawStores = storeData.stores || [];
           renderStores(applyColumnFilters(rawStores));
@@ -981,16 +962,6 @@
         });
       }
       root.querySelector("#org-search").addEventListener("click", function () {
-        loadBoard().catch(function (err) {
-          showError(errorEl, err.message);
-        });
-      });
-      teamSel.addEventListener("change", function () {
-        loadBoard().catch(function (err) {
-          showError(errorEl, err.message);
-        });
-      });
-      statusSel.addEventListener("change", function () {
         loadBoard().catch(function (err) {
           showError(errorEl, err.message);
         });
