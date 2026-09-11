@@ -24,6 +24,11 @@ function normalizeProductLayer(layer) {
   const text = String(layer || "").trim();
   return PRODUCT_LAYER_ALIASES[text] || text;
 }
+
+function normalizeProductTeam(team) {
+  const text = String(team || "").trim();
+  return PRODUCT_TEAMS.includes(text) ? text : "";
+}
 const PRODUCT_LAYER_COLUMNS = [
   ["layer", "VARCHAR(64) NOT NULL DEFAULT ''"],
   ["image_url", "VARCHAR(1024) NOT NULL DEFAULT ''"],
@@ -44,9 +49,11 @@ const PRODUCT_LAYER_COLUMNS = [
   ["has_new_badge", "VARCHAR(32) NOT NULL DEFAULT ''"],
   ["need_order", "VARCHAR(256) NOT NULL DEFAULT ''"],
   ["remark", "VARCHAR(1024) NOT NULL DEFAULT ''"],
+  ["team_name", "VARCHAR(64) NOT NULL DEFAULT ''"],
 ];
+const PRODUCT_TEAMS = ["陈晓曼组", "高明阳组", "毛永超组", "段坤孝组", "薛双双组"];
 const PRODUCT_SELECT =
-  "id, name, sku, price, stock, owner, store_name, layer, image_url, spu, first_sku, hot_sell, review_count, share_count, qa_video, return_m5, return_m6, return_m7, return_m8, orders_30d, fulfill_note, jd_stock, listed_on, has_new_badge, need_order, remark, created_at";
+  "id, name, sku, price, stock, owner, store_name, layer, image_url, spu, first_sku, hot_sell, review_count, share_count, qa_video, return_m5, return_m6, return_m7, return_m8, orders_30d, fulfill_note, jd_stock, listed_on, has_new_badge, need_order, remark, team_name, created_at";
 const SCHEMA_PATH = fileURLToPath(new URL("./schema.sql", import.meta.url));
 
 function toIso(value) {
@@ -136,6 +143,7 @@ function mapProduct(row) {
     hasNewBadge: row.has_new_badge || "",
     needOrder: row.need_order || "",
     remark: row.remark || "",
+    team: row.team_name || "",
     createdAt: toIso(row.created_at),
   };
 }
@@ -334,10 +342,15 @@ export function createHanStore(poolOrFactory = getPool) {
       return mapSelection(rows[0]);
     },
 
-    async listProducts() {
+    async listProducts({ team } = {}) {
       await ensure();
       const [rows] = await db().query(`SELECT ${PRODUCT_SELECT} FROM han_products ORDER BY id ASC`);
-      return rows.map(mapProduct);
+      const mapped = rows.map(mapProduct);
+      const teamName = normalizeProductTeam(team);
+      if (!teamName) {
+        return mapped;
+      }
+      return mapped.filter((row) => row.team === teamName);
     },
 
     async createProduct({
@@ -366,6 +379,7 @@ export function createHanStore(poolOrFactory = getPool) {
       hasNewBadge,
       needOrder,
       remark,
+      team,
     } = {}) {
       await ensure();
       const spuText = String(spu || "").trim();
@@ -382,8 +396,9 @@ export function createHanStore(poolOrFactory = getPool) {
         err.statusCode = 400;
         throw err;
       }
+      const teamName = normalizeProductTeam(team);
       const [result] = await db().query(
-        `INSERT INTO han_products (name, sku, price, stock, owner, store_name, layer, image_url, spu, first_sku, hot_sell, review_count, share_count, qa_video, return_m5, return_m6, return_m7, return_m8, orders_30d, fulfill_note, jd_stock, listed_on, has_new_badge, need_order, remark) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO han_products (name, sku, price, stock, owner, store_name, layer, image_url, spu, first_sku, hot_sell, review_count, share_count, qa_video, return_m5, return_m6, return_m7, return_m8, orders_30d, fulfill_note, jd_stock, listed_on, has_new_badge, need_order, remark, team_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           trimmed,
           first || String(sku || "").trim(),
@@ -410,6 +425,7 @@ export function createHanStore(poolOrFactory = getPool) {
           String(hasNewBadge || "").trim(),
           String(needOrder || "").trim(),
           String(remark || "").trim(),
+          teamName,
         ],
       );
       const [rows] = await db().query(
@@ -559,3 +575,4 @@ export const HAN_STATUSES = STATUSES;
 export const HAN_SELECTION_STATUSES = SELECTION_STATUSES;
 export const HAN_TRAINING_STATUSES = TRAINING_STATUSES;
 export const HAN_PRODUCT_LAYERS = PRODUCT_LAYERS;
+export const HAN_PRODUCT_TEAMS = PRODUCT_TEAMS;

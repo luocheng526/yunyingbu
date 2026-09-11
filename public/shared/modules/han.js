@@ -293,9 +293,34 @@
         return "<td>" + escapeHtml(value) + "</td>";
       }
 
+      const teams = ["陈晓曼组", "高明阳组", "毛永超组", "段坤孝组", "薛双双组"];
+      const team = (new URLSearchParams(window.location.search).get("team") || "").trim();
+      if (!teams.includes(team)) {
+        root.innerHTML = page(
+          "商品数据",
+          "先选小组，再填该组的店铺产品分层表。",
+          '<div class="stack"><section class="panel"><h2>小组</h2><div class="actions" style="flex-wrap:wrap">' +
+            teams
+              .map(function (name) {
+                return (
+                  '<a class="han-team-card" href="/han/goods?team=' +
+                  encodeURIComponent(name) +
+                  '">' +
+                  escapeHtml(name) +
+                  "</a>"
+                );
+              })
+              .join("") +
+            "</div></section></div>",
+        );
+        return function unmount() {
+          root.innerHTML = "";
+        };
+      }
+
       root.innerHTML = page(
-        "商品数据",
-        "按《商品分层表》做成一张工作表：六个分层左右排在同一张表里，向右滑动可看完。",
+        team,
+        "商品数据 · " + team + "。六个分层左右排在同一张工作表里，向右滑动可看完。",
         '<style>' +
           ".han-sheet-wrap{overflow-x:auto;background:#fff;border:1px solid #c6c6c6}" +
           ".han-sheet{border-collapse:collapse;font-size:12px;min-width:2200px}" +
@@ -322,7 +347,9 @@
 
       function paintHead() {
         const title =
-          '<tr><th class="han-sheet-title" colspan="' + totalCols + '">店铺产品分层表</th></tr>';
+          '<tr><th class="han-sheet-title" colspan="' + totalCols + '">' +
+          escapeHtml(team) +
+          " · 店铺产品分层表</th></tr>";
         const groups = "<tr>" + layers.map(function (layer) {
           return (
             '<th class="han-sheet-group" colspan="' +
@@ -426,7 +453,7 @@
       }
 
       function load() {
-        return jsonFetch("/api/han/products").then(function (json) {
+        return jsonFetch("/api/han/products?team=" + encodeURIComponent(team)).then(function (json) {
           if (dead) return;
           items = json.items || [];
           paintBody();
@@ -438,7 +465,7 @@
         if (!btn) return;
         const index = Number(btn.getAttribute("data-layer"));
         const layer = layers[index];
-        const body = { layer: layer.name };
+        const body = { layer: layer.name, team: team };
         root.querySelectorAll('input[data-layer="' + index + '"]').forEach(function (el) {
           body[el.getAttribute("data-key")] = el.value;
         });
@@ -583,4 +610,68 @@
       };
     },
   };
+
+  const HAN_GOODS_TEAMS = ["陈晓曼组", "高明阳组", "毛永超组", "段坤孝组", "薛双双组"];
+
+  function attachHanGoodsTeams() {
+    if (document.getElementById("han-goods-teams")) {
+      return true;
+    }
+    const goods = document.querySelector('.xm-submenu a[href="/han/goods"]');
+    if (!goods) {
+      return false;
+    }
+    if (!document.getElementById("han-goods-teams-css")) {
+      const style = document.createElement("style");
+      style.id = "han-goods-teams-css";
+      style.textContent =
+        ".han-goods-teams{display:flex;flex-direction:column}" +
+        ".han-goods-teams-sub{display:flex;flex-direction:column;padding:0 0 0.15rem}" +
+        ".han-goods-teams-sub a{padding-left:2.35rem !important;font-size:0.88rem}" +
+        ".han-team-card{display:inline-block;margin:0 0.5rem 0.5rem 0;padding:0.55rem 0.9rem;border-radius:8px;background:#ccfbf1;color:#134e4a;text-decoration:none;font-weight:600}";
+      document.head.appendChild(style);
+    }
+    const wrap = document.createElement("div");
+    wrap.id = "han-goods-teams";
+    wrap.className = "han-goods-teams";
+    goods.parentNode.insertBefore(wrap, goods);
+    wrap.appendChild(goods);
+    const sub = document.createElement("div");
+    sub.className = "han-goods-teams-sub";
+    const current = new URLSearchParams(window.location.search).get("team") || "";
+    HAN_GOODS_TEAMS.forEach(function (name) {
+      const a = document.createElement("a");
+      a.className = "xm-menu-item xm-menu-child";
+      a.href = "/han/goods?team=" + encodeURIComponent(name);
+      a.textContent = name;
+      if (current === name) {
+        a.classList.add("is-active");
+        a.setAttribute("aria-current", "page");
+        goods.classList.remove("is-active");
+        goods.removeAttribute("aria-current");
+      }
+      sub.appendChild(a);
+    });
+    wrap.appendChild(sub);
+    return true;
+  }
+
+  function watchHanGoodsTeams() {
+    if (attachHanGoodsTeams()) {
+      return;
+    }
+    let n = 0;
+    const timer = setInterval(function () {
+      n += 1;
+      if (attachHanGoodsTeams() || n > 40) {
+        clearInterval(timer);
+      }
+    }, 200);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", watchHanGoodsTeams);
+  } else {
+    watchHanGoodsTeams();
+  }
 })();

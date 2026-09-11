@@ -69,9 +69,9 @@ export function createHanRouter(store = createHanStore()) {
     }
   });
 
-  hanRouter.get("/products", async (_req, res) => {
+  hanRouter.get("/products", async (req, res) => {
     try {
-      res.json({ ok: true, items: await store.listProducts() });
+      res.json({ ok: true, items: await store.listProducts({ team: req.query.team }) });
     } catch (err) {
       res.status(err.statusCode || 500).json({ ok: false, error: err.message });
     }

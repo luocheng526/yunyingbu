@@ -226,6 +226,23 @@ test("han selection / products / paid boards are isolated", async () => {
     assert.equal(layered.body.item.spu, "SPU-HEAD-1");
     assert.equal(layered.body.item.firstSku, "SKU-HEAD-1");
     assert.equal(layered.body.item.name, "SPU-HEAD-1");
+
+    const teamA = await json(base, "/api/han/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ layer: "头部产品", spu: "TEAM-A", team: "陈晓曼组" }),
+    });
+    const teamB = await json(base, "/api/han/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ layer: "头部产品", spu: "TEAM-B", team: "高明阳组" }),
+    });
+    assert.equal(teamA.body.item.team, "陈晓曼组");
+    assert.equal(teamB.body.item.team, "高明阳组");
+    const onlyA = await json(base, "/api/han/products?team=" + encodeURIComponent("陈晓曼组"));
+    const titlesA = onlyA.body.items.map((row) => row.spu);
+    assert.equal(titlesA.includes("TEAM-A"), true);
+    assert.equal(titlesA.includes("TEAM-B"), false);
   });
 });
 
@@ -292,6 +309,12 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /动销产品/);
   assert.match(js, /测新产品/);
   assert.match(js, /待做单产品/);
+  assert.match(js, /陈晓曼组/);
+  assert.match(js, /高明阳组/);
+  assert.match(js, /毛永超组/);
+  assert.match(js, /段坤孝组/);
+  assert.match(js, /薛双双组/);
+  assert.match(js, /han-goods-teams/);
   assert.doesNotMatch(js, /han-layer-bar/);
   assert.doesNotMatch(js, /头部产品（高利润）/);
   assert.doesNotMatch(js, /新上架需做单产品/);
@@ -326,6 +349,7 @@ test("han schema uses prefixed tables", async () => {
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_products/);
   assert.match(sql, /layer VARCHAR/);
   assert.match(sql, /\bspu VARCHAR/);
+  assert.match(sql, /team_name/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_paid/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_training/);
   assert.match(sql, /store_name/);
