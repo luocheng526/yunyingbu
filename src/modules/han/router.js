@@ -4,6 +4,20 @@ import { createHanStore } from "./store.js";
 export function createHanRouter(store = createHanStore()) {
   const hanRouter = Router();
 
+  // 智能体只读汇总：按店 + 时间范围。不要直接查 han_* 内部表。
+  hanRouter.get("/summary", async (req, res) => {
+    try {
+      const summary = await store.listSummary({
+        store: req.query.store,
+        from: req.query.from,
+        to: req.query.to,
+      });
+      res.json({ ok: true, ...summary });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
   hanRouter.get("/tasks", async (_req, res) => {
     try {
       res.json({ ok: true, tasks: await store.listTasks() });
@@ -55,9 +69,29 @@ export function createHanRouter(store = createHanStore()) {
     }
   });
 
-  hanRouter.get("/products", async (_req, res) => {
+  hanRouter.get("/products", async (req, res) => {
     try {
-      res.json({ ok: true, items: await store.listProducts() });
+      res.json({
+        ok: true,
+        items: await store.listProducts({ team: req.query.team, store: req.query.store }),
+      });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.get("/shops", async (req, res) => {
+    try {
+      res.json({ ok: true, items: await store.listShops({ team: req.query.team }) });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.post("/shops", async (req, res) => {
+    try {
+      const item = await store.createShop(req.body || {});
+      res.status(201).json({ ok: true, item });
     } catch (err) {
       res.status(err.statusCode || 500).json({ ok: false, error: err.message });
     }
@@ -83,6 +117,23 @@ export function createHanRouter(store = createHanStore()) {
   hanRouter.post("/paid", async (req, res) => {
     try {
       const item = await store.createPaid(req.body || {});
+      res.status(201).json({ ok: true, item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.get("/training", async (_req, res) => {
+    try {
+      res.json({ ok: true, items: await store.listTraining() });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.post("/training", async (req, res) => {
+    try {
+      const item = await store.createTraining(req.body || {});
       res.status(201).json({ ok: true, item });
     } catch (err) {
       res.status(err.statusCode || 500).json({ ok: false, error: err.message });

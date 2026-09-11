@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
-import { createHanStore, dropProbeTasks, hydrateFromMysql, HAN_DEFAULT_OWNER } from "../src/modules/han/store.js";
+import { createHanStore, dropProbeTasks, hydrateFromMysql, HAN_DEFAULT_OWNER, HAN_DEFAULT_STORE } from "../src/modules/han/store.js";
 import { createHanFakePool } from "./han-fake-pool.js";
 
 async function withServer(fn) {
@@ -188,13 +188,136 @@ test("han selection / products / paid boards are isolated", async () => {
     const listedSel = await json(base, "/api/han/selection");
     const listedProd = await json(base, "/api/han/products");
     const listedPaid = await json(base, "/api/han/paid");
+    const train = await json(base, "/api/han/training", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "选品晨会", trainee: "韩梦凯", scheduledOn: "2026-09-10" }),
+    });
+    assert.equal(train.res.status, 201);
+    assert.equal(train.body.item.owner, "韩梦凯");
+    assert.equal(train.body.item.status, "待开始");
+    assert.equal(train.body.item.title, "选品晨会");
+
     const listedTasks = await json(base, "/api/han/tasks");
+    const listedTrain = await json(base, "/api/han/training");
     assert.equal(listedSel.body.items.length, 1);
     assert.equal(listedProd.body.items.length, 1);
     assert.equal(listedPaid.body.items.length, 1);
+    assert.equal(listedTrain.body.items.length, 1);
     assert.equal(listedTasks.body.tasks.length, 0);
     assert.equal(listedSel.body.items[0].name, "春季防晒衣");
     assert.equal(listedProd.body.items[0].name, "防晒衣-白");
+    assert.equal(listedSel.body.items[0].store, HAN_DEFAULT_STORE);
+
+    const layered = await json(base, "/api/han/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        layer: "头部产品",
+        spu: "SPU-HEAD-1",
+        firstSku: "SKU-HEAD-1",
+        hotSell: "是",
+        reviewCount: "120",
+        store: "一号店",
+      }),
+    });
+    assert.equal(layered.res.status, 201);
+    assert.equal(layered.body.item.layer, "头部产品");
+    assert.equal(layered.body.item.spu, "SPU-HEAD-1");
+    assert.equal(layered.body.item.firstSku, "SKU-HEAD-1");
+    assert.equal(layered.body.item.name, "SPU-HEAD-1");
+
+    const teamA = await json(base, "/api/han/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ layer: "头部产品", spu: "TEAM-A", team: "陈晓曼组" }),
+    });
+    const teamB = await json(base, "/api/han/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ layer: "头部产品", spu: "TEAM-B", team: "高明阳组" }),
+    });
+    assert.equal(teamA.body.item.team, "陈晓曼组");
+    assert.equal(teamB.body.item.team, "高明阳组");
+    const onlyA = await json(base, "/api/han/products?team=" + encodeURIComponent("陈晓曼组"));
+    const titlesA = onlyA.body.items.map((row) => row.spu);
+    assert.equal(titlesA.includes("TEAM-A"), true);
+    assert.equal(titlesA.includes("TEAM-B"), false);
+
+    const shopA = await json(base, "/api/han/shops", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ team: "陈晓曼组", store: "晓曼一店" }),
+    });
+    assert.equal(shopA.res.status, 201);
+    await json(base, "/api/han/shops", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ team: "陈晓曼组", store: "晓曼二店" }),
+    });
+    await json(base, "/api/han/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ layer: "头部产品", spu: "SHOP-1", team: "陈晓曼组", store: "晓曼一店" }),
+    });
+    const shopList = await json(base, "/api/han/shops?team=" + encodeURIComponent("陈晓曼组"));
+    assert.equal(shopList.body.items.length, 2);
+    const onlyShop = await json(
+      base,
+      "/api/han/products?team=" + encodeURIComponent("陈晓曼组") + "&store=" + encodeURIComponent("晓曼一店"),
+    );
+    assert.equal(onlyShop.body.items.some((row) => row.spu === "SHOP-1"), true);
+    assert.equal(onlyShop.body.items.every((row) => row.store === "晓曼一店"), true);
+  });
+});
+
+test("han summary is store + date range totals only", async () => {
+  await withServer(async (base) => {
+    const today = new Date().toISOString().slice(0, 10);
+    await json(base, "/api/han/selection", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "店A选品", store: "一号店" }),
+    });
+    await json(base, "/api/han/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "店A商品", store: "一号店" }),
+    });
+    await json(base, "/api/han/paid", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channel: "信息流", amount: "80", spentOn: "2026-09-08", store: "一号店" }),
+    });
+    await json(base, "/api/han/paid", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channel: "搜索", amount: "20", spentOn: "2026-09-08", store: "二号店" }),
+    });
+
+    const missing = await json(base, "/api/han/summary");
+    assert.equal(missing.res.status, 400);
+
+    const a = await json(base, "/api/han/summary?store=" + encodeURIComponent("一号店") + "&from=2026-09-01&to=" + today);
+    assert.equal(a.res.status, 200);
+    assert.equal(a.body.ok, true);
+    assert.equal(a.body.readOnly, true);
+    assert.equal(a.body.store, "一号店");
+    assert.equal(a.body.selectionCount, 1);
+    assert.equal(a.body.productCount, 1);
+    assert.equal(a.body.paidCount, 1);
+    assert.equal(String(a.body.paidAmount), "80");
+    assert.equal(a.body.items, undefined);
+    assert.equal(a.body.tasks, undefined);
+
+    const b = await json(base, "/api/han/summary?store=" + encodeURIComponent("二号店") + "&from=2026-09-01&to=" + today);
+    assert.equal(b.body.selectionCount, 0);
+    assert.equal(b.body.paidCount, 1);
+    assert.equal(String(b.body.paidAmount), "20");
+
+    const outside = await json(base, "/api/han/summary?store=" + encodeURIComponent("一号店") + "&from=2026-08-01&to=2026-08-31");
+    assert.equal(outside.body.paidCount, 0);
+    assert.equal(outside.body.selectionCount, 0);
   });
 });
 
@@ -203,12 +326,36 @@ test("shared han module fills submenu pages", async () => {
   const js = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
   assert.match(js, /XmModules\["\/han\/selection"\]/);
   assert.match(js, /XmModules\["\/han\/goods"\]/);
+  assert.match(js, /店铺产品分层表/);
+  assert.match(js, /han-sheet/);
+  assert.match(js, /头部产品/);
+  assert.match(js, /中部产品/);
+  assert.match(js, /尾部产品/);
+  assert.match(js, /动销产品/);
+  assert.match(js, /测新产品/);
+  assert.match(js, /待做单产品/);
+  assert.match(js, /陈晓曼组/);
+  assert.match(js, /高明阳组/);
+  assert.match(js, /毛永超组/);
+  assert.match(js, /段坤孝组/);
+  assert.match(js, /薛双双组/);
+  assert.match(js, /han-goods-teams/);
+  assert.match(js, /商品分层/);
+  assert.match(js, /han-fold-parent/);
+  assert.match(js, /\/api\/han\/shops/);
+  assert.match(js, /添加店铺/);
+  assert.doesNotMatch(js, /han-layer-bar/);
+  assert.doesNotMatch(js, /头部产品（高利润）/);
+  assert.doesNotMatch(js, /新上架需做单产品/);
   assert.match(js, /XmModules\["\/han\/paid"\]/);
+  assert.match(js, /XmModules\["\/han\/training"\]/);
   assert.match(js, /\/api\/han\/selection/);
   assert.match(js, /\/api\/han\/products/);
   assert.match(js, /\/api\/han\/paid/);
+  assert.match(js, /\/api\/han\/training/);
+  assert.match(js, /店/);
   assert.match(js, /培训系统/);
-  assert.match(js, /内容待开发/);
+  assert.doesNotMatch(js, /内容待开发/);
 });
 
 test("han store keeps dropProbeTasks and hydrateFromMysql exports", async () => {
@@ -229,7 +376,13 @@ test("han schema uses prefixed tables", async () => {
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_brief/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_selection/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_products/);
+  assert.match(sql, /layer VARCHAR/);
+  assert.match(sql, /\bspu VARCHAR/);
+  assert.match(sql, /team_name/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS han_team_shops/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_paid/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS han_training/);
+  assert.match(sql, /store_name/);
   assert.doesNotMatch(sql, /CREATE TABLE IF NOT EXISTS users\b/);
   assert.doesNotMatch(sql, /CREATE TABLE IF NOT EXISTS releases\b/);
 });
