@@ -89,7 +89,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /与姓名相同/);
     assert.doesNotMatch(jsText, /工号/);
     assert.doesNotMatch(jsText, /name="employeeNo"/);
-    assert.match(jsText, /勾选后上方出现操作栏/);
+    assert.match(jsText, /表头可筛部门、上级、岗位、所属中心、状态/);
     assert.match(jsText, /people-cell/);
     assert.match(jsText, /startPersonCellEdit/);
     assert.match(jsText, /people-row-check/);
@@ -97,10 +97,17 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /people-bulk/);
     assert.match(jsText, /\/api\/people\/passwords/);
     assert.doesNotMatch(jsText, /能看见的店/);
-    assert.match(jsText, /<th>状态<\/th><th>账号<\/th><th>登录密码<\/th>/);
+    assert.match(jsText, /data-filter-key="status"/);
+    assert.match(jsText, /<th>账号<\/th><th>登录密码<\/th>/);
     assert.doesNotMatch(jsText, /店铺 \/ 店群/);
     assert.doesNotMatch(jsText, /id="shop-form"/);
     assert.doesNotMatch(jsText, /id="shop-tbody"/);
+    assert.match(jsText, /id="people-filter-pop"/);
+    assert.match(jsText, /data-filter-key="department"/);
+    assert.match(jsText, /data-filter-key="managerName"/);
+    assert.match(jsText, /data-filter-key="center"/);
+    assert.match(jsText, /data-filter-key="status"/);
+    assert.match(jsText, /applyMemberFilters/);
     assert.doesNotMatch(jsText, /demo-flag/);
     assert.doesNotMatch(jsText, /演示<\/span>/);
     assert.doesNotMatch(jsText, /龙虎榜/);

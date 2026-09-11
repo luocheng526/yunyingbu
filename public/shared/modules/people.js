@@ -126,7 +126,7 @@
         '<div class="org-filter-pop" id="org-filter-pop" hidden></div></div>' +
         '<div class="org-pane" data-pane="members" hidden>' +
         '<section class="panel"><h2>身份名册</h2>' +
-        '<p class="lead">勾选后上方出现操作栏，可统一改密码。单击账号或登录密码也可单人改。</p>' +
+        '<p class="lead">表头可筛部门、上级、岗位、所属中心、状态。勾选后可统一改密码。</p>' +
         '<form class="people-form" id="people-form">' +
         '<label>姓名<input name="name" required maxlength="40" autocomplete="off" /></label>' +
         '<label>部门<input name="department" maxlength="64" placeholder="如 沈子晗运营中心" /></label>' +
@@ -147,8 +147,15 @@
         '<button type="button" id="people-bulk-apply">应用密码</button></div>' +
         '<div class="org-table-wrap"><table><thead><tr>' +
         '<th class="org-check"><input type="checkbox" id="people-check-all" title="全选" /></th>' +
-        '<th>姓名</th><th>部门</th><th>上级</th><th>岗位</th><th>所属中心</th><th>状态</th><th>账号</th><th>登录密码</th></tr></thead>' +
-        '<tbody id="people-tbody"></tbody></table></div></section></div>' +
+        '<th>姓名</th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="department"><span class="org-filter-name">部门</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="managerName"><span class="org-filter-name">上级</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="role"><span class="org-filter-name">岗位</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="center"><span class="org-filter-name">所属中心</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="status"><span class="org-filter-name">状态</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th>账号</th><th>登录密码</th></tr></thead>' +
+        '<tbody id="people-tbody"></tbody></table></div>' +
+        '<div class="org-filter-pop" id="people-filter-pop" hidden></div></section></div>' +
         '<div class="org-pane" data-pane="rights" hidden>' +
         '<section class="panel"><h2>管辖</h2>' +
         '<p class="lead">店权认管辖。一人多店多行。店铺主数据的「店铺所属人员」与此对齐。</p>' +
@@ -220,11 +227,14 @@
       let selectedIds = {};
       let memberSelectedIds = {};
       const COLUMN_FILTERS = ["chief", "lead", "owner", "storeName", "remark"];
+      const MEMBER_FILTERS = ["department", "managerName", "role", "center", "status"];
       const columnPicked = {};
-      COLUMN_FILTERS.forEach(function (key) {
+      COLUMN_FILTERS.concat(MEMBER_FILTERS).forEach(function (key) {
         columnPicked[key] = null;
       });
       const filterPop = root.querySelector("#org-filter-pop");
+      const peopleFilterPop = root.querySelector("#people-filter-pop");
+      let lastPeople = [];
       let openFilterKey = "";
       let boardMeta = { actor: "罗成", scope: "all", canCreate: true };
       const CELL_FIELDS = [
@@ -385,6 +395,17 @@
         return String(row[key] || "").trim() || "（空）";
       }
 
+      function personFilterValue(person, key) {
+        if (key === "managerName") {
+          return String(person.managerName || "").trim() || "（空）";
+        }
+        return String(person[key] || "").trim() || "（空）";
+      }
+
+      function isMemberFilter(key) {
+        return MEMBER_FILTERS.indexOf(key) >= 0;
+      }
+
       function uniqueColumnValues(key) {
         const seen = {};
         const list = [];
@@ -393,6 +414,20 @@
             seen[value] = true;
             list.push(value);
           }
+        }
+        if (isMemberFilter(key)) {
+          if (key === "status") {
+            ["在职", "离职"].forEach(add);
+          }
+          roster.people.forEach(function (row) {
+            add(personFilterValue(row, key));
+          });
+          if (key !== "status") {
+            list.sort(function (a, b) {
+              return a.localeCompare(b, "zh");
+            });
+          }
+          return list;
         }
         if (key === "remark") {
           REMARKS.forEach(add);
@@ -431,6 +466,18 @@
         });
       }
 
+      function applyMemberFilters(people) {
+        return people.filter(function (row) {
+          return MEMBER_FILTERS.every(function (key) {
+            const picked = columnPicked[key];
+            if (!picked) {
+              return true;
+            }
+            return Boolean(picked[personFilterValue(row, key)]);
+          });
+        });
+      }
+
       function paintFilterCarets() {
         root.querySelectorAll(".org-filter-btn").forEach(function (btn) {
           const key = btn.getAttribute("data-filter-key");
@@ -438,12 +485,18 @@
         });
       }
 
+      function filterPopFor(key) {
+        return isMemberFilter(key) ? peopleFilterPop : filterPop;
+      }
+
       function closeFilterPop() {
         openFilterKey = "";
-        if (filterPop) {
-          filterPop.hidden = true;
-          filterPop.innerHTML = "";
-        }
+        [filterPop, peopleFilterPop].forEach(function (pop) {
+          if (pop) {
+            pop.hidden = true;
+            pop.innerHTML = "";
+          }
+        });
       }
 
       function toggleFilterPop(key, btn) {
@@ -455,9 +508,11 @@
       }
 
       function fillFilterPop(key, btn) {
-        if (!filterPop) {
+        const pop = filterPopFor(key);
+        if (!pop) {
           return;
         }
+        closeFilterPop();
         openFilterKey = key;
         const values = uniqueColumnValues(key);
         if (!columnPicked[key]) {
@@ -472,8 +527,8 @@
         const selected = values.filter(function (value) {
           return picked[value];
         }).length;
-        filterPop.hidden = false;
-        filterPop.innerHTML =
+        pop.hidden = false;
+        pop.innerHTML =
           '<label class="org-filter-item org-filter-all"><input type="checkbox" id="org-filter-all"' +
           (selected === values.length && values.length ? " checked" : "") +
           (selected > 0 && selected < values.length ? " data-mid=1" : "") +
@@ -494,13 +549,13 @@
                 .join("")
             : '<p class="org-empty">没有可筛选项</p>') +
           "</div>";
-        const allBox = filterPop.querySelector("#org-filter-all");
+        const allBox = pop.querySelector("#org-filter-all");
         if (allBox && selected > 0 && selected < values.length) {
           allBox.indeterminate = true;
         }
         const rect = btn.getBoundingClientRect();
-        filterPop.style.left = Math.max(8, rect.left) + "px";
-        filterPop.style.top = rect.bottom + 4 + "px";
+        pop.style.left = Math.max(8, rect.left) + "px";
+        pop.style.top = rect.bottom + 4 + "px";
       }
 
       function selectedCount() {
@@ -740,45 +795,51 @@
         }
       }
 
+      function renderPeople(people) {
+        lastPeople = people;
+        peopleTbody.replaceChildren();
+        people.forEach(function (person) {
+          const tr = document.createElement("tr");
+          tr.setAttribute("data-id", String(person.id));
+          tr.innerHTML =
+            '<td class="org-check"><input type="checkbox" class="people-row-check" data-check="' +
+            person.id +
+            '"' +
+            (memberSelectedIds[String(person.id)] ? " checked" : "") +
+            " /></td><td>" +
+            escapeHtml(person.name) +
+            "</td><td>" +
+            escapeHtml(person.department || "—") +
+            "</td><td>" +
+            escapeHtml(person.managerName || "—") +
+            "</td><td>" +
+            escapeHtml(person.role) +
+            "</td><td>" +
+            escapeHtml(person.center) +
+            '</td><td><select class="people-status" data-id="' +
+            person.id +
+            '"><option' +
+            (person.status === "在职" ? " selected" : "") +
+            ">在职</option><option" +
+            (person.status === "离职" ? " selected" : "") +
+            ">离职</option></select></td>" +
+            '<td class="people-cell can-edit" data-field="username" title="单击可改">' +
+            escapeHtml(person.username || person.name || "—") +
+            '</td><td class="people-cell can-edit" data-field="password" title="单击可改">' +
+            escapeHtml(person.password || "ChangeMe123!") +
+            "</td>";
+          peopleTbody.append(tr);
+        });
+        paintMemberBar();
+        paintFilterCarets();
+      }
+
       function loadMembers() {
         return fetch("/api/people", { credentials: "same-origin" }).then(function (res) { return res.json(); }).then(function (peopleData) {
           if (dead) {
             return;
           }
           roster.people = peopleData.people || [];
-          peopleTbody.replaceChildren();
-          roster.people.forEach(function (person) {
-            const tr = document.createElement("tr");
-            tr.setAttribute("data-id", String(person.id));
-            tr.innerHTML =
-              '<td class="org-check"><input type="checkbox" class="people-row-check" data-check="' +
-              person.id +
-              '"' +
-              (memberSelectedIds[String(person.id)] ? " checked" : "") +
-              " /></td><td>" +
-              escapeHtml(person.name) +
-              "</td><td>" +
-              escapeHtml(person.department || "—") +
-              "</td><td>" +
-              escapeHtml(person.managerName || "—") +
-              "</td><td>" +
-              escapeHtml(person.role) +
-              "</td><td>" +
-              escapeHtml(person.center) +
-              '</td><td><select class="people-status" data-id="' +
-              person.id +
-              '"><option' +
-              (person.status === "在职" ? " selected" : "") +
-              ">在职</option><option" +
-              (person.status === "离职" ? " selected" : "") +
-              ">离职</option></select></td>" +
-              '<td class="people-cell can-edit" data-field="username" title="单击可改">' +
-              escapeHtml(person.username || person.name || "—") +
-              '</td><td class="people-cell can-edit" data-field="password" title="单击可改">' +
-              escapeHtml(person.password || "ChangeMe123!") +
-              "</td>";
-            peopleTbody.append(tr);
-          });
           fillSelect(
             peopleForm.managerId,
             roster.people,
@@ -786,7 +847,7 @@
             function (item) { return item.name; },
             "无"
           );
-          paintMemberBar();
+          renderPeople(applyMemberFilters(roster.people));
         });
       }
 
@@ -895,7 +956,7 @@
           toggleFilterPop(btn.getAttribute("data-filter-key"), btn);
           return;
         }
-        if (!event.target.closest("#org-filter-pop")) {
+        if (!event.target.closest("#org-filter-pop") && !event.target.closest("#people-filter-pop")) {
           closeFilterPop();
         }
       });
@@ -904,38 +965,50 @@
           document.removeEventListener("click", onDocFilterClose);
           return;
         }
-        if (!event.target.closest("#org-filter-pop") && !event.target.closest(".org-filter-btn")) {
+        if (
+          !event.target.closest("#org-filter-pop") &&
+          !event.target.closest("#people-filter-pop") &&
+          !event.target.closest(".org-filter-btn")
+        ) {
           closeFilterPop();
         }
       }
       document.addEventListener("click", onDocFilterClose);
-      if (filterPop) {
-        filterPop.addEventListener("change", function (event) {
-          const key = openFilterKey;
-          if (!key) {
-            return;
-          }
-          const values = uniqueColumnValues(key);
-          if (!columnPicked[key]) {
-            columnPicked[key] = {};
-          }
-          if (event.target.id === "org-filter-all") {
-            const on = event.target.checked;
-            values.forEach(function (value) {
-              columnPicked[key][value] = on;
-            });
-          } else if (event.target.classList.contains("org-filter-value")) {
-            columnPicked[key][event.target.getAttribute("data-value")] = event.target.checked;
-          } else {
-            return;
-          }
+      function onFilterChange(event) {
+        const key = openFilterKey;
+        if (!key) {
+          return;
+        }
+        const values = uniqueColumnValues(key);
+        if (!columnPicked[key]) {
+          columnPicked[key] = {};
+        }
+        if (event.target.id === "org-filter-all") {
+          const on = event.target.checked;
+          values.forEach(function (value) {
+            columnPicked[key][value] = on;
+          });
+        } else if (event.target.classList.contains("org-filter-value")) {
+          columnPicked[key][event.target.getAttribute("data-value")] = event.target.checked;
+        } else {
+          return;
+        }
+        if (isMemberFilter(key)) {
+          renderPeople(applyMemberFilters(roster.people));
+        } else {
           renderStores(applyColumnFilters(rawStores));
-          paintFilterCarets();
-          const btn = root.querySelector('.org-filter-btn[data-filter-key="' + key + '"]');
-          if (btn) {
-            fillFilterPop(key, btn);
-          }
-        });
+        }
+        paintFilterCarets();
+        const btn = root.querySelector('.org-filter-btn[data-filter-key="' + key + '"]');
+        if (btn) {
+          fillFilterPop(key, btn);
+        }
+      }
+      if (filterPop) {
+        filterPop.addEventListener("change", onFilterChange);
+      }
+      if (peopleFilterPop) {
+        peopleFilterPop.addEventListener("change", onFilterChange);
       }
       root.querySelector("#org-search").addEventListener("click", function () {
         loadBoard().catch(function (err) {
@@ -1063,7 +1136,7 @@
       }
 
       function memberSelectedCount() {
-        return roster.people.filter(function (person) {
+        return lastPeople.filter(function (person) {
           return memberSelectedIds[String(person.id)];
         }).length;
       }
@@ -1080,7 +1153,7 @@
         if (countEl) {
           countEl.textContent = "已选 " + count + " 人";
         }
-        const allOn = roster.people.length > 0 && count === roster.people.length;
+        const allOn = lastPeople.length > 0 && count === lastPeople.length;
         if (header) {
           header.checked = allOn;
           header.indeterminate = count > 0 && !allOn;
@@ -1092,7 +1165,7 @@
       }
 
       function setAllMembers(on) {
-        roster.people.forEach(function (person) {
+        lastPeople.forEach(function (person) {
           if (on) {
             memberSelectedIds[String(person.id)] = true;
           } else {
