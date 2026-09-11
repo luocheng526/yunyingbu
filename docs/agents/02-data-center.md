@@ -21,7 +21,7 @@
 1. 看板：至少 4 张卡（今日订单、待处理、在职人数、本周发布次数），标明演示。
 2. 最近数据事件表，从 API 拉。
 3. `GET /api/data/overview` 返回卡片和表格 JSON。
-4. 店铺 / 商品走星脉 ERP：服务端 `XM_ERP_TOKEN` + `GET /api/data/shops`、`GET /api/data/goods`。不要把 JWT 或京东 `authInfo` 交给浏览器。
+4. 店铺 / 商品走星脉 ERP：服务端自己登录拿 token，过期或 401 就再登。可用 `XM_ERP_USERNAME` / `XM_ERP_PASSWORD`（默认罗成账号）。不要把 JWT、密码或京东 `authInfo` 交给浏览器。
 
-【验收】`/data` 在壳里能看到「数据中心」、指标卡、表格；接口 200。配置 token 后 `/data/shops`、`/data/goods` 能列出 ERP 数据。
+【验收】`/data` 在壳里能看到「数据中心」、指标卡、表格；接口 200。`/data/shops`、`/data/goods` 用服务端自动续期的 ERP token 列出数据。
 【不要做】不要把 ERP token 写进仓库或页面；不要改人员/发布/两个运营中心/个人中心。

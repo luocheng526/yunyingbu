@@ -12,6 +12,9 @@ const dataJs = readFileSync(join(root, "public/shared/modules/data.js"), "utf8")
 
 const prevToken = process.env.XM_ERP_TOKEN;
 const prevBase = process.env.XM_ERP_BASE;
+const prevLogin = process.env.XM_ERP_LOGIN;
+const prevUser = process.env.XM_ERP_USERNAME;
+const prevPass = process.env.XM_ERP_PASSWORD;
 const server = createApp().listen(0);
 const { port } = server.address();
 const base = `http://127.0.0.1:${port}`;
@@ -21,24 +24,30 @@ beforeEach(() => {
   resetErpCacheForTests();
   setErpFetchForTests(null);
   delete process.env.XM_ERP_TOKEN;
-  delete process.env.XM_ERP_BASE;
+  delete process.env.XM_ERP_USERNAME;
+  delete process.env.XM_ERP_PASSWORD;
+  process.env.XM_ERP_LOGIN = "0";
+  process.env.XM_ERP_BASE = "http://erp.test";
 });
 
 after(() => {
   setErpFetchForTests(null);
   resetErpCacheForTests();
-  if (prevToken == null) {
-    delete process.env.XM_ERP_TOKEN;
-  } else {
-    process.env.XM_ERP_TOKEN = prevToken;
-  }
-  if (prevBase == null) {
-    delete process.env.XM_ERP_BASE;
-  } else {
-    process.env.XM_ERP_BASE = prevBase;
-  }
+  restoreEnv("XM_ERP_TOKEN", prevToken);
+  restoreEnv("XM_ERP_BASE", prevBase);
+  restoreEnv("XM_ERP_LOGIN", prevLogin);
+  restoreEnv("XM_ERP_USERNAME", prevUser);
+  restoreEnv("XM_ERP_PASSWORD", prevPass);
   server.close();
 });
+
+function restoreEnv(name, value) {
+  if (value == null) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
+  }
+}
 
 async function loginCookie() {
   const res = await fetch(`${base}/api/auth/login`, {
@@ -58,6 +67,7 @@ test("data module mounts shop and goods pages against ERP proxies", () => {
   assert.match(dataJs, /内容待开发/);
   assert.doesNotMatch(dataJs, /authInfo/);
   assert.doesNotMatch(dataJs, /XM_ERP_TOKEN/);
+  assert.doesNotMatch(dataJs, /xingmai110/);
 });
 
 test("shops and goods require login", async () => {
@@ -67,13 +77,13 @@ test("shops and goods require login", async () => {
   assert.equal(goods.status, 401);
 });
 
-test("shops return 503 when ERP token is missing", async () => {
+test("shops return 503 when ERP login is disabled and token is missing", async () => {
   const cookie = await loginCookie();
   const res = await fetch(`${base}/api/data/shops`, { headers: { cookie } });
   assert.equal(res.status, 503);
   const body = await res.json();
   assert.equal(body.ok, false);
-  assert.match(body.error, /XM_ERP_TOKEN/);
+  assert.match(body.error, /XM_ERP_/);
 });
 
 test("shops proxy strips JD auth secrets", async () => {
@@ -180,4 +190,59 @@ test("goods load all shop ids when none are selected", async () => {
   assert.equal(calls[0].url, "http://erp.test/product/jd/shopInfo/page");
   assert.equal(calls[1].url, "http://erp.test/product/jd/order/product/page");
   assert.deepEqual(calls[1].body.shopIds, [19852571]);
+});
+
+test("logs into ERP and retries once after an expired token", async () => {
+  delete process.env.XM_ERP_LOGIN;
+  process.env.XM_ERP_USERNAME = "罗成";
+  process.env.XM_ERP_PASSWORD = "xingmai110";
+  const calls = [];
+  setErpFetchForTests(async (url, options) => {
+    const body = options.body ? JSON.parse(options.body) : {};
+    calls.push({ url, body, auth: options.headers.Authorization || "" });
+    if (String(url).includes("/system/auth/login")) {
+      assert.equal(body.username, "罗成");
+      assert.equal(body.password, "xingmai110");
+      return {
+        status: 200,
+        json: async () => ({
+          code: 200,
+          message: "登录成功！",
+          data: { token: `fresh-token-${calls.length}`, expireTime: "2099-01-01 00:00:00" }
+        })
+      };
+    }
+    if ((options.headers.Authorization || "").includes("fresh-token-1")) {
+      return {
+        status: 401,
+        json: async () => ({ code: 401, message: "token已过期" })
+      };
+    }
+    return {
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: {
+          total: 1,
+          totalPages: 1,
+          currentPage: 1,
+          pageSize: 20,
+          records: [{ id: "1", shopName: "续期后的店", type: 0, status: 1 }]
+        }
+      })
+    };
+  });
+  const cookie = await loginCookie();
+  const first = await fetch(`${base}/api/data/shops`, { headers: { cookie } });
+  assert.equal(first.status, 200);
+  assert.equal((await first.json()).records[0].shopName, "续期后的店");
+  const again = await fetch(`${base}/api/data/shops`, { headers: { cookie } });
+  assert.equal(again.status, 200);
+  const loginCalls = calls.filter((item) => String(item.url).includes("/auth/login"));
+  const shopCalls = calls.filter((item) => String(item.url).includes("/shopInfo/page"));
+  assert.equal(loginCalls.length, 2);
+  assert.equal(shopCalls.length, 3);
+  assert.equal(shopCalls[0].auth, "Bearer fresh-token-1");
+  assert.equal(shopCalls[1].auth, "Bearer fresh-token-3");
+  assert.equal(shopCalls[2].auth, "Bearer fresh-token-3");
 });
