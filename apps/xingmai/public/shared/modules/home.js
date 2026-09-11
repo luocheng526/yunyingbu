@@ -557,7 +557,7 @@
       if (map[key]) {
         return map[key];
       }
-      return FALLBACK.live.cards.filter(function (card) {
+      return blankLive().cards.filter(function (card) {
         return card.key === key;
       })[0];
     }).filter(Boolean);
@@ -942,14 +942,14 @@
   function paint(root, state) {
     var board = root.querySelector("#xm-hm");
     var hide = hiddenCards();
-    var cards = (state.cards || FALLBACK.cards).filter(function (card) {
+    var cards = (state.cards || blankCompanyCards()).filter(function (card) {
       return hide.indexOf(card.key) === -1;
     });
-    var live = state.live || FALLBACK.live;
-    var shops = state.shops && state.shops.length ? state.shops : FALLBACK.shops;
-    var teams = state.teams && state.teams.length ? state.teams : FALLBACK.teams;
-    var hero = readChart(live.hero, FALLBACK.live.hero);
-    var paid = readChart(live.paid, FALLBACK.live.paid);
+    var live = state.live || blankLive();
+    var shops = state.shops && state.shops.length ? state.shops : [];
+    var teams = state.teams && state.teams.length ? state.teams : blankTeams();
+    var hero = readChart(live.hero, blankLive().hero);
+    var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
@@ -986,9 +986,9 @@
         return liveShopRowHtml(row, i);
       }).join("") +
       "</tbody></table></div>";
-    root.querySelector("#xm-hm-ladders").innerHTML = (state.ladders || FALLBACK.ladders).map(ladderHtml).join("");
+    root.querySelector("#xm-hm-ladders").innerHTML = (state.ladders || blankLadders()).map(ladderHtml).join("");
     var gapText = (state.gaps || []).filter(function (item) {
-      return item.indexOf("人管") !== -1 || item.indexOf("韩梦凯") !== -1;
+      return item.indexOf("人管有店") !== -1 || item.indexOf("韩梦凯 ·") !== -1;
     }).join("；");
     root.querySelector("#xm-hm-note").textContent =
       state.view === "live"
@@ -1008,7 +1008,7 @@
         return "<span>" + escapeHtml(mark) + "</span>";
       })
       .join("");
-    root.querySelector("#xm-hm-card-opts").innerHTML = (state.cards || FALLBACK.cards)
+    root.querySelector("#xm-hm-card-opts").innerHTML = (state.cards || blankCompanyCards())
       .map(function (card) {
         return (
           '<label><input type="checkbox" data-hide="' +
@@ -1558,6 +1558,10 @@
           state.liveAt = shanghaiClock();
           state.source = "xingmai-erp";
           paint(root, state);
+        }).catch(function () {
+          if (!dead) {
+            paint(root, state);
+          }
         });
       }
 
@@ -1598,6 +1602,10 @@
           state.gaps = built.mismatches.concat(extra);
           state.source = rangePack.records && rangePack.records.length ? "xingmai-erp" : "";
           paint(root, state);
+        }).catch(function () {
+          if (!dead) {
+            paint(root, state);
+          }
         });
       }
 
