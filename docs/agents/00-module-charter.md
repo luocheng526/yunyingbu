@@ -1,7 +1,7 @@
 # 全员纪律（每个模块先读这一页）
 
 线上：`https://zx.xingmaierp.cc`。一个 Express，九个业务面 + **主框架**。
-交单：登录版本发布中心 → `GET /api/releases/next` → `POST /api/releases`。申请人 `罗成运营部主脑`。做完直接交单。不要等用户再说「提交」。
+交单：登录版本发布中心 → `GET /api/releases/next` → `POST /api/releases`。申请人 `罗成运营部主脑`。线上账号见 [00-prod-admin.md](00-prod-admin.md)，不要用演示号。做完直接交单。不要等用户再说「提交」。
 
 ## 现行结构：嵌入式，不是每人一套站
 
