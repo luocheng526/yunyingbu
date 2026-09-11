@@ -177,6 +177,10 @@ test("data child pages and demo APIs respond", async () => {
     assert.doesNotMatch(shopsPage.text, /id="data-subnav"/);
     const shopsJs = await get(base, "/data-shops.js");
     assert.match(shopsJs.text, /店铺总览/);
+    assert.match(shopsJs.text, /总营销额/);
+    assert.match(shopsJs.text, /打包费/);
+    assert.match(shopsJs.text, /\/api\/data\/overview/);
+    assert.match(shopsJs.text, /data-hscroll/);
     assert.doesNotMatch(shopsJs.text, /渠道总览/);
     const shopsApi = await get(base, "/api/data/shops");
     assert.equal(shopsApi.res.status, 200);

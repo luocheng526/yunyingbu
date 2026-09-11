@@ -490,11 +490,56 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
 }
 .ch-table-wrap {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .ch-table table {
   width: 100%;
   min-width: 1100px;
   border-collapse: collapse;
+}
+.sh-wide .ch-table-wrap {
+  max-width: 100%;
+}
+.sh-wide table {
+  min-width: 3200px;
+}
+.sh-wide th:first-child,
+.sh-wide td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--ch-card, var(--xm-card, #fff));
+  box-shadow: 1px 0 0 var(--ch-line, var(--xm-line, #ececec));
+}
+.sh-wide thead th:first-child {
+  background: var(--ch-bg, var(--xm-bg, #f7f7f7));
+}
+.sh-profit {
+  position: relative;
+  display: block;
+  min-width: 120px;
+  height: 22px;
+}
+.sh-profit i {
+  position: absolute;
+  left: 0;
+  top: 4px;
+  height: 14px;
+  background: #cf1322;
+  opacity: 0.85;
+  border-radius: 1px;
+}
+.sh-profit em {
+  position: relative;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+.sh-hint {
+  margin: 0;
+  padding: 8px 12px 10px;
+  font-size: 12px;
+  color: var(--ch-ink, var(--xm-ink));
+  opacity: 0.45;
 }
 .ch-table th,
 .ch-table td {
