@@ -469,6 +469,59 @@ export function patchPeoplePasswords(ids, password) {
   return { ok: true, updated: updated.length, people: updated };
 }
 
+const PROTECTED_NAMES = new Set(["管理员"]);
+
+async function persistRemovedPeople(ids) {
+  try {
+    const auth = await import("../profile/auth.js");
+    if (typeof auth.dbMode !== "function" || auth.dbMode() !== "mysql" || typeof auth.query !== "function") {
+      return;
+    }
+    const { query } = auth;
+    for (const id of ids) {
+      await query("DELETE FROM people_grants WHERE person_id = ?", [id]);
+      await query("UPDATE people SET manager_id = NULL WHERE manager_id = ?", [id]);
+      await query("DELETE FROM people WHERE id = ?", [id]);
+    }
+  } catch {
+    /* keep memory delete even if disk write is missing */
+  }
+}
+
+export async function removePeople(ids) {
+  const list = [...new Set((Array.isArray(ids) ? ids : []).map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
+  if (!list.length) {
+    return { ok: false, statusCode: 400, error: "请先勾选人员" };
+  }
+  const removed = [];
+  const skipped = [];
+  for (const id of list) {
+    const found = findPerson(id);
+    if (!found) {
+      continue;
+    }
+    if (PROTECTED_NAMES.has(found.name)) {
+      skipped.push(found.name);
+      continue;
+    }
+    people = people.filter((row) => row.id !== found.id);
+    grants = grants.filter((grant) => grant.personId !== found.id);
+    people.forEach((row) => {
+      if (row.managerId === found.id) {
+        row.managerId = null;
+      }
+    });
+    delete loginOverlay[String(found.id)];
+    removed.push({ id: found.id, name: found.name });
+  }
+  if (!removed.length) {
+    return { ok: false, statusCode: skipped.length ? 400 : 404, error: skipped.length ? "管理员不能删" : "人员不存在" };
+  }
+  saveLoginOverlay();
+  await persistRemovedPeople(removed.map((row) => row.id));
+  return { ok: true, removed: removed.length, people: removed, skipped };
+}
+
 export function createShop(input) {
   const name = typeof input.name === "string" ? input.name.trim() : "";
   const kind = typeof input.kind === "string" ? input.kind.trim() : "店铺";

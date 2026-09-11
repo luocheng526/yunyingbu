@@ -275,6 +275,12 @@ body:has(.people-page) .xm-tabs {
   font-size: 13px;
 }
 
+.people-page #people-bulk-remove {
+  background: #fff;
+  color: #cf1322;
+  border-color: #ffa39e;
+}
+
 .org-th-filter {
   position: relative;
 }

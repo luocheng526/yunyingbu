@@ -12,7 +12,8 @@ import {
   patchPerson,
   patchPeoplePasswords,
   PEOPLE_IMPORT_HEADERS,
-  reconcilePeople
+  reconcilePeople,
+  removePeople
 } from "./store.js";
 import { scopeOf } from "./org-acl.js";
 import {
@@ -250,6 +251,10 @@ peopleRouter.post("/import", (req, res) => {
 peopleRouter.patch("/passwords", (req, res) => {
   const body = req.body || {};
   sendResult(res, patchPeoplePasswords(body.ids, body.password), false);
+});
+
+peopleRouter.post("/remove", async (req, res) => {
+  sendResult(res, await removePeople(req.body?.ids), false);
 });
 
 peopleRouter.patch("/:id", (req, res) => {

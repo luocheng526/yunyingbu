@@ -101,7 +101,9 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /people-row-check/);
     assert.match(jsText, /people-check-all/);
     assert.match(jsText, /people-bulk/);
+    assert.match(jsText, /people-bulk-remove/);
     assert.match(jsText, /\/api\/people\/passwords/);
+    assert.match(jsText, /\/api\/people\/remove/);
     assert.doesNotMatch(jsText, /能看见的店/);
     assert.match(jsText, /data-filter-key="status"/);
     assert.match(jsText, /<th>账号<\/th><th>登录密码<\/th>/);
@@ -479,6 +481,41 @@ test("PATCH /api/people/passwords sets one password for selected staff", async (
     assert.equal(afterJson.people.find((row) => row.id === wang.id).password, "TeamPass1");
     assert.equal(afterJson.people.find((row) => row.id === yang.id).password, "TeamPass1");
     assert.equal(afterJson.people.find((row) => row.name === "沈子晗").password, "ChangeMe123!");
+  });
+});
+
+test("POST /api/people/remove deletes selected staff and their grants", async () => {
+  await withServer(async (base) => {
+    const listed = await fetch(`${base}/api/people`);
+    const listedJson = await listed.json();
+    const wang = listedJson.people.find((row) => row.name === "王博");
+    const admin = listedJson.people.find((row) => row.name === "管理员");
+    const empty = await fetch(`${base}/api/people/remove`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [] })
+    });
+    assert.equal(empty.status, 400);
+    const blocked = await fetch(`${base}/api/people/remove`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [admin.id] })
+    });
+    assert.equal(blocked.status, 400);
+    const removed = await fetch(`${base}/api/people/remove`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [wang.id] })
+    });
+    const removedJson = await removed.json();
+    assert.equal(removed.status, 200, JSON.stringify(removedJson));
+    assert.equal(removedJson.removed, 1);
+    const after = await fetch(`${base}/api/people`);
+    const afterJson = await after.json();
+    assert.equal(afterJson.people.some((row) => row.name === "王博"), false);
+    const grants = await fetch(`${base}/api/people/grants`);
+    const grantsJson = await grants.json();
+    assert.equal(grantsJson.grants.some((row) => row.personName === "王博"), false);
   });
 });
 

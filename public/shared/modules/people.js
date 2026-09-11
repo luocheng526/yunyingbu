@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.167-store-id";
+    const href = "/people.css?v=0.1.168-people-remove";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -129,7 +129,7 @@
         '<div class="org-filter-pop" id="org-filter-pop" hidden></div></div>' +
         '<div class="org-pane" data-pane="members" hidden>' +
         '<section class="panel"><h2>身份名册</h2>' +
-        '<p class="lead">表头可筛部门、上级、岗位、所属中心、状态。勾选后可统一改密码。点新增人员弹出对话框。</p>' +
+        '<p class="lead">表头可筛部门、上级、岗位、所属中心、状态。勾选后可统一改密码或删除。点新增人员弹出对话框。</p>' +
         '<div class="org-toolbar">' +
         '<input type="search" id="people-q" placeholder="姓名 / 账号 / 部门" />' +
         '<button type="button" id="people-search">搜索</button>' +
@@ -144,7 +144,8 @@
         '<label class="people-bulk-check"><input type="checkbox" id="people-bulk-all" />全选</label>' +
         '<span id="people-bulk-count">已选 0 人</span>' +
         '<label>统一密码<input id="people-bulk-password" maxlength="64" placeholder="给勾中的人一起改" autocomplete="off" /></label>' +
-        '<button type="button" id="people-bulk-apply">应用密码</button></div>' +
+        '<button type="button" id="people-bulk-apply">应用密码</button>' +
+        '<button type="button" class="danger" id="people-bulk-remove">删除</button></div>' +
         '<div class="org-table-wrap"><table><thead><tr>' +
         '<th class="org-check"><input type="checkbox" id="people-check-all" title="全选" /></th>' +
         '<th>姓名</th>' +
@@ -1696,15 +1697,19 @@
       root.querySelector("#people-bulk-all").addEventListener("change", function (event) {
         setAllMembers(event.target.checked);
       });
-      root.querySelector("#people-bulk-apply").addEventListener("click", function () {
-        const password = root.querySelector("#people-bulk-password").value.trim();
-        const ids = roster.people
+      function selectedMemberIds() {
+        return roster.people
           .filter(function (person) {
             return memberSelectedIds[String(person.id)];
           })
           .map(function (person) {
             return person.id;
           });
+      }
+
+      root.querySelector("#people-bulk-apply").addEventListener("click", function () {
+        const password = root.querySelector("#people-bulk-password").value.trim();
+        const ids = selectedMemberIds();
         if (!ids.length) {
           showError(peopleError, "请先勾选人员");
           return;
@@ -1730,6 +1735,40 @@
             }
             showError(peopleError, "");
             root.querySelector("#people-bulk-password").value = "";
+            return loadMembers();
+          })
+          .catch(function (err) {
+            showError(peopleError, err.message);
+          });
+      });
+      root.querySelector("#people-bulk-remove").addEventListener("click", function () {
+        const ids = selectedMemberIds();
+        if (!ids.length) {
+          showError(peopleError, "请先勾选人员");
+          return;
+        }
+        if (!window.confirm("确定删除已选 " + ids.length + " 人？名册和店权会一起去掉。")) {
+          return;
+        }
+        fetch("/api/people/remove", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: ids })
+        })
+          .then(function (res) {
+            return res.json().then(function (data) {
+              return { res: res, data: data };
+            });
+          })
+          .then(function (result) {
+            if (!result.res.ok || !result.data.ok) {
+              throw new Error(result.data.error || "删除失败");
+            }
+            (result.data.people || []).forEach(function (person) {
+              delete memberSelectedIds[String(person.id)];
+            });
+            showError(peopleError, "");
             return loadMembers();
           })
           .catch(function (err) {
