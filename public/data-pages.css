@@ -695,6 +695,48 @@ html[data-theme="pink"] .ch-metrics {
 .gd-filters {
   gap: 8px;
 }
+.gd-sub {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+.gd-sub button {
+  border: 0;
+  background: transparent;
+  color: var(--ch-ink, var(--xm-ink));
+  opacity: 0.5;
+  cursor: pointer;
+  padding: 0;
+  font-size: 13px;
+}
+.gd-sub button.is-on {
+  opacity: 1;
+  font-weight: 600;
+  color: var(--ch-primary, #3d8bfd);
+}
+.gd-sub-tools {
+  margin-left: auto;
+  display: flex;
+  gap: 12px;
+}
+.gd-sub-tools button {
+  opacity: 0.55;
+  cursor: default;
+}
+.gd-pager {
+  justify-content: flex-end;
+  gap: 10px;
+}
+.gd-pager button {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--ch-line, var(--xm-line, #ececec));
+  border-radius: 4px;
+  background: var(--ch-card, var(--xm-card, #fff));
+  color: var(--ch-ink, var(--xm-ink));
+}
 .lv-now {
   display: inline-flex;
   align-items: center;

@@ -99,7 +99,7 @@
 
   function mountGoodsDashboard(root) {
     ensureSheet();
-    return loadScript("/data-goods.js?v=goods-tpl3").then(function () {
+    return loadScript("/data-goods.js?v=goods-erp1").then(function () {
       if (typeof window.XmDataCreateGoodsDashboard === "function") {
         return window.XmDataCreateGoodsDashboard(root);
       }

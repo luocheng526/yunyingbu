@@ -196,7 +196,9 @@ test("data child pages and demo APIs respond", async () => {
     const goodsJs = await get(base, "/data-goods.js");
     assert.match(goodsJs.text, /只看精选/);
     assert.match(goodsJs.text, /08\/13/);
-    assert.doesNotMatch(goodsJs.text, /综合指标/);
+    assert.match(goodsJs.text, /综合指标/);
+    assert.match(goodsJs.text, /\/api\/data\/goods/);
+    assert.match(goodsJs.text, /shop-options/);
     assert.doesNotMatch(goodsPage.text, /商品周报/);
     const goodsBoard = await get(base, "/api/data/goods/board");
     assert.equal(goodsBoard.res.status, 200);
@@ -452,7 +454,7 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.doesNotMatch(dataMod, /function waitPage/);
   assert.match(dataMod, /\/data\/paid/);
   assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
-  assert.match(dataMod, /data-goods\.js/);
+    assert.match(dataMod, /data-goods\.js\?v=goods-erp1/);
   assert.doesNotMatch(dataMod, /店铺周报/);
   assert.doesNotMatch(dataMod, /商品周报/);
   assert.match(dataMod, /data-live\.js/);
