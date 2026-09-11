@@ -86,6 +86,9 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /登录密码/);
     assert.match(jsText, /ChangeMe123!/);
     assert.match(jsText, /与姓名相同/);
+    assert.match(jsText, /双击账号或登录密码可改/);
+    assert.match(jsText, /people-cell/);
+    assert.match(jsText, /startPersonCellEdit/);
     assert.doesNotMatch(jsText, /demo-flag/);
     assert.doesNotMatch(jsText, /演示<\/span>/);
     assert.doesNotMatch(jsText, /龙虎榜/);
@@ -319,6 +322,37 @@ test("POST /api/people appends a staff row", async () => {
     const shen = listedJson.people.find((row) => row.name === "沈子晗");
     assert.equal(shen.username, "沈子晗");
     assert.equal(shen.password, "ChangeMe123!");
+  });
+});
+
+test("PATCH /api/people updates username and password", async () => {
+  await withServer(async (base) => {
+    const listed = await fetch(`${base}/api/people`);
+    const listedJson = await listed.json();
+    const wang = listedJson.people.find((row) => row.name === "王博");
+    const patched = await fetch(`${base}/api/people/${wang.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "wangbo", password: "ShopLogin1" })
+    });
+    const patchedJson = await patched.json();
+    assert.equal(patched.status, 200, JSON.stringify(patchedJson));
+    assert.equal(patchedJson.person.username, "wangbo");
+    assert.equal(patchedJson.person.password, "ShopLogin1");
+
+    const empty = await fetch(`${base}/api/people/${wang.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "   " })
+    });
+    assert.equal(empty.status, 400);
+
+    const taken = await fetch(`${base}/api/people/${wang.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "沈子晗" })
+    });
+    assert.equal(taken.status, 400);
   });
 });
 

@@ -272,6 +272,26 @@ export function patchPerson(id, input) {
       }
     }
   }
+  if (Object.prototype.hasOwnProperty.call(input, "username")) {
+    const username = typeof input.username === "string" ? input.username.trim() : "";
+    if (!username) {
+      return { ok: false, statusCode: 400, error: "账号不能为空" };
+    }
+    const taken = people.some(
+      (row) => row.id !== found.id && String(row.username || row.name).trim() === username
+    );
+    if (taken) {
+      return { ok: false, statusCode: 400, error: "账号已被占用" };
+    }
+    found.username = username;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, "password")) {
+    const password = typeof input.password === "string" ? input.password.trim() : "";
+    if (!password) {
+      return { ok: false, statusCode: 400, error: "密码不能为空" };
+    }
+    found.password = password;
+  }
   return { ok: true, person: presentPerson(found) };
 }
 

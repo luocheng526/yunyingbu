@@ -320,16 +320,19 @@ body:has(.people-page) .xm-tabs {
   cursor: pointer;
 }
 
-.org-cell.can-edit {
+.org-cell.can-edit,
+.people-cell.can-edit {
   cursor: text;
 }
 
-.org-cell.can-edit:hover {
+.org-cell.can-edit:hover,
+.people-cell.can-edit:hover {
   background: #e6f4ff;
 }
 
 .org-cell input,
-.org-cell select {
+.org-cell select,
+.people-cell input {
   width: 100%;
   min-width: 88px;
   box-sizing: border-box;

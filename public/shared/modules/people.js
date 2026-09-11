@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.159-filter-label";
+    const href = "/people.css?v=0.1.160-login-edit";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -126,6 +126,7 @@
         '<div class="org-filter-pop" id="org-filter-pop" hidden></div></div>' +
         '<div class="org-pane" data-pane="members" hidden>' +
         '<section class="panel"><h2>身份名册</h2>' +
+        '<p class="lead">双击账号或登录密码可改。新增默认账号同姓名。</p>' +
         '<form class="people-form" id="people-form">' +
         '<label>姓名<input name="name" required maxlength="40" autocomplete="off" /></label>' +
         '<label>工号<input name="employeeNo" maxlength="32" /></label>' +
@@ -761,14 +762,15 @@
           roster.people.forEach(function (person) {
             const tr = document.createElement("tr");
             const shops = (person.visibleShops || []).join("、") || "—";
+            tr.setAttribute("data-id", String(person.id));
             tr.innerHTML =
               "<td>" +
               escapeHtml(person.name) +
               "</td><td>" +
               escapeHtml(person.employeeNo || "—") +
-              "</td><td>" +
+              "</td><td class=\"people-cell can-edit\" data-field=\"username\">" +
               escapeHtml(person.username || person.name || "—") +
-              "</td><td>" +
+              "</td><td class=\"people-cell can-edit\" data-field=\"password\">" +
               escapeHtml(person.password || "ChangeMe123!") +
               "</td><td>" +
               escapeHtml(person.department || "—") +
@@ -1089,6 +1091,79 @@
       postForm(peopleForm, "/api/people", peopleError, loadMembers);
       postForm(shopForm, "/api/people/shops", shopError, loadMembers);
       postForm(grantForm, "/api/people/grants", grantError, loadRights);
+
+      function savePersonField(id, field, value) {
+        return fetch("/api/people/" + id, {
+          method: "PATCH",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ [field]: value })
+        }).then(function (res) {
+          return res.json().then(function (data) {
+            return { res: res, data: data };
+          });
+        }).then(function (result) {
+          if (!result.res.ok || !result.data.ok) {
+            throw new Error(result.data.error || "保存失败");
+          }
+          return loadMembers();
+        });
+      }
+
+      function startPersonCellEdit(td) {
+        if (!td || td.querySelector("input") || !td.classList.contains("can-edit")) {
+          return;
+        }
+        const id = td.parentElement && td.parentElement.getAttribute("data-id");
+        const field = td.getAttribute("data-field");
+        const person = roster.people.find(function (item) {
+          return String(item.id) === String(id);
+        });
+        if (!id || !field || !person) {
+          return;
+        }
+        const current = field === "username"
+          ? person.username || person.name || ""
+          : person.password || "ChangeMe123!";
+        const input = document.createElement("input");
+        input.type = "text";
+        input.value = current;
+        td.textContent = "";
+        td.append(input);
+        input.focus();
+        input.select();
+        let saved = false;
+        function commit() {
+          if (saved) {
+            return;
+          }
+          saved = true;
+          const next = input.value.trim();
+          if (!next || next === String(current).trim()) {
+            loadMembers();
+            return;
+          }
+          savePersonField(id, field, next).catch(function (err) {
+            showError(peopleError, err.message);
+            return loadMembers();
+          });
+        }
+        input.addEventListener("keydown", function (event) {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            commit();
+          }
+          if (event.key === "Escape") {
+            saved = true;
+            loadMembers();
+          }
+        });
+        input.addEventListener("blur", commit);
+      }
+
+      peopleTbody.addEventListener("dblclick", function (event) {
+        startPersonCellEdit(event.target.closest("td.people-cell"));
+      });
 
       peopleTbody.addEventListener("change", function (event) {
         const select = event.target.closest("select[data-id]");
