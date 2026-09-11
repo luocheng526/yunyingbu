@@ -11,7 +11,7 @@
 2. `POST /api/releases` 入队（`contents` 为路径→正文；`files` 只写路径字符串）
 3. 告知单据号，等 `https://zx.xingmaierp.cc/releases` 第 1 位「通过」
 
-纪律全文：`docs/agents/00-release-rules.md`。线上交单账号见 `docs/agents/00-prod-admin.md`，不要用演示号。禁止 SSH、禁止自己上 ECS、禁止自己点通过。
+纪律全文：`docs/agents/00-release-rules.md`。演示号已停用，线上只准用罗成，见 `docs/agents/00-prod-admin.md`。禁止 SSH、禁止自己上 ECS、禁止自己点通过。
 
 ## 禁止提交会挂站的瘦 app.js
 

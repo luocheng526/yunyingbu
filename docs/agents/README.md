@@ -3,7 +3,7 @@
 每位模块开发只看自己那一页，但 **结构以 [00-module-charter.md](00-module-charter.md) 为准**。旧分支、旧 prompt 里「每页自己带侧栏」「壳归首页」作废。
 
 线上：https://zx.xingmaierp.cc  
-交单：版本发布中心。申请人 `罗成运营部主脑`。做完直接交单。纪律：[00-release-rules.md](00-release-rules.md)。线上账号：[00-prod-admin.md](00-prod-admin.md)，不要用演示号。
+交单：版本发布中心。申请人 `罗成运营部主脑`。做完直接交单。纪律：[00-release-rules.md](00-release-rules.md)。演示号已停用，只准用罗成：[00-prod-admin.md](00-prod-admin.md)。
 
 | 文件 | 给谁 |
 |---|---|
