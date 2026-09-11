@@ -48,11 +48,20 @@
 - 失败 / 驳回**不占号**，成功才占号。
 - 成功单可按快照回滚。
 
+## 登录（交单前）
+
+生产站不是演示环境。先 `POST https://zx.xingmaierp.cc/api/auth/login`：
+
+- 用户名：`罗成` 或 `luocheng`
+- 密码：`jingdong220`
+
+不要再用演示账号 / `ChangeMe123!`，那个登不上，交不了单。不要把密码写进单据标题或登录页。员工名册初始密码不能用来交版本发布。全文：[00-prod-admin.md](00-prod-admin.md)。
+
 ## 交单
 
 ```
 POST /api/releases
-Cookie: 登录会话
+Cookie: 管理员号登录会话
 {
   "version": "0.1.N-说明",
   "applicant": "罗成运营部主脑",

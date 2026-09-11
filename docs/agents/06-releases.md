@@ -3,6 +3,7 @@
 【纪律】
 - 站点：`https://zx.xingmaierp.cc/releases`
 - 交单模块名：`版本发布中心`。申请人 `罗成运营部主脑`。做完直接交单。
+- 线上登录：`罗成` 或 `luocheng`，密码 `jingdong220`。不要再用演示账号 / `ChangeMe123!`。见 [00-prod-admin.md](00-prod-admin.md)。
 - 版本号 `0.1.N-说明`，先 `GET /api/releases/next`。
 - 嵌入式：页面内容在 `public/shared/modules/releases.js`，挂 `XmModules["/releases"]`。壳归主框架。
 - **只补丁线上闸，禁止用仓库简化 `router.js` 整文件覆盖 `/opt/mengkai`。** 仓库里的 router 比线上少（章程、流水线、冒烟、store-mysql）。

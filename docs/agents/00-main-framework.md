@@ -41,3 +41,4 @@
 - 改 `app.js` 时正文必须同时有 `attachProfile`、`attachHome`、`createReleasesRouter`、`/api/health`。缺一个闸会拒。
 - 禁止空 `files`。
 - 申请人：`罗成运营部主脑`。做完直接交单。
+- 线上登录：`罗成` 或 `luocheng`，密码 `jingdong220`。不要再用演示账号 / `ChangeMe123!`。见 [00-prod-admin.md](00-prod-admin.md)。

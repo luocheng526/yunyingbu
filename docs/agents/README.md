@@ -4,9 +4,11 @@
 
 线上：https://zx.xingmaierp.cc  
 交单：版本发布中心。申请人 `罗成运营部主脑`。做完直接交单。纪律：[00-release-rules.md](00-release-rules.md)。
+线上管理员：`罗成` / `luocheng`，密码 `jingdong220`。不要再用演示账号。[00-prod-admin.md](00-prod-admin.md)。
 
 | 文件 | 给谁 |
 |---|---|
+| [00-prod-admin.md](00-prod-admin.md) | **交单登录号**（演示账号已作废） |
 | [00-module-charter.md](00-module-charter.md) | **所有人先读**（嵌入式合同 + 边界 + 闸） |
 | [00-release-rules.md](00-release-rules.md) | 交单格式、闸、排队 |
 | [00-main-framework.md](00-main-framework.md) | 主框架（壳 + 内核 + 闸） |

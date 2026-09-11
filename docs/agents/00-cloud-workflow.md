@@ -14,6 +14,7 @@
 
 生产目录是 ECS `/opt/mengkai`，站点 `https://zx.xingmaierp.cc`。禁止 SSH、禁止 `push-xingmai-to-ecs.sh`、禁止自己 `systemctl restart`。
 
-做完：`GET /api/releases/next` → `POST /api/releases`（`files` + `contents`）→ 等队首「通过」。
+做完：用 `罗成` / `luocheng` + `jingdong220` 登录 → `GET /api/releases/next` → `POST /api/releases`（`files` + `contents`）→ 等队首「通过」。
+不要再用演示账号 / `ChangeMe123!`。见 [00-prod-admin.md](00-prod-admin.md)。
 
 常规发布不录像。只有用户点名要预览图时才截图。

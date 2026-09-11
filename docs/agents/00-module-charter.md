@@ -1,7 +1,8 @@
 # 全员纪律（每个模块先读这一页）
 
 线上：`https://zx.xingmaierp.cc`。一个 Express，九个业务面 + **主框架**。
-交单：登录版本发布中心 → `GET /api/releases/next` → `POST /api/releases`。申请人 `罗成运营部主脑`。做完直接交单。不要等用户再说「提交」。
+交单：用管理员号登录 → `GET /api/releases/next` → `POST /api/releases`。申请人 `罗成运营部主脑`。做完直接交单。不要等用户再说「提交」。
+线上账号：`罗成` 或 `luocheng`，密码 `jingdong220`。不要再用演示账号 / `ChangeMe123!`（登不上生产）。全文：[00-prod-admin.md](00-prod-admin.md)。
 
 ## 现行结构：嵌入式，不是每人一套站
 
@@ -65,6 +66,7 @@
 你是独立 Agent「甄选商学院」。先读 docs/agents/00-module-charter.md 和 docs/agents/08-academy.md。
 你只改 academy 目录和 public/shared/modules/academy.js。不要改侧栏、nav.js、src/app.js。
 做完用模块名「甄选商学院」交单，申请人 罗成运营部主脑。
+线上登录：罗成 或 luocheng，密码 jingdong220。不要再用演示账号。
 ```
 
 智能体对话框把上面两处换成 `09-agents.md`、`agents`、`甄选智能体`。
@@ -90,6 +92,7 @@
 cd apps/xingmai && node --test test/app.test.js test/home.test.js test/theme.test.js
 ```
 
-必须还在：`星脉管理系统`、`https://zx.xingmaierp.cc/login`、`#f7f7f4`、`#14120b`、`html[data-theme="dark"]`、`login-theme`、`localStorage.getItem("xm-theme")`、`ChangeMe123!`。
+必须还在：`星脉管理系统`、`https://zx.xingmaierp.cc/login`、`#f7f7f4`、`#14120b`、`html[data-theme="dark"]`、`login-theme`、`localStorage.getItem("xm-theme")`。
+本地测试种子仍是 `ChangeMe123!`；线上交单用 `jingdong220`，见 [00-prod-admin.md](00-prod-admin.md)。
 `src/app.js` 必须同时有 `attachProfile`、`attachHome`、`createReleasesRouter`、`/api/health`。
 登录页 HTML 不得出现 `nav.js`。

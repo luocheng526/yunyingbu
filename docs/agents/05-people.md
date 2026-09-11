@@ -5,6 +5,7 @@
 【纪律】
 - 站点：`https://zx.xingmaierp.cc/people`
 - 交单模块名：`组织中心`。申请人 `罗成运营部主脑`。做完直接交单。闸门仍认旧名「人员管理」，新单一律用「组织中心」。
+- 线上登录：`罗成` 或 `luocheng`，密码 `jingdong220`。不要再用演示账号 / `ChangeMe123!`。见 [00-prod-admin.md](00-prod-admin.md)。
 - 版本号 `0.1.N-说明`，先 `GET /api/releases/next`。
 - 嵌入式：`public/shared/modules/people.js` 挂 `XmModules["/people"]`。不要自画侧栏，不要交壳，不要交 `src/app.js`。
 - 颜色跟 `--xm-*` / `data-theme`。不要抄 e50e 全页壳。
@@ -18,7 +19,7 @@
 
 【要做】
 1. 标题：「组织中心」。表格：姓名、角色、所属中心、状态。页内旧文案「人员管理」可以改成「组织中心」，不要改路径。
-2. 预置至少 3 人（标明演示）：沈子晗、韩梦凯、管理员。
+2. 名册是正式登记，不要标「演示」。预置至少 3 人：沈子晗、韩梦凯、管理员。
 3. 支持新增人员。
 4. API：`GET/POST /api/people`。
 
