@@ -1,4 +1,4 @@
-/* xm-module-data 0.1.67 */
+/* xm-module-data 0.1.68 */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -322,7 +322,7 @@
       let dead = false;
 
       function loadShops() {
-        return fetchJson("/api/data/shop-options?pageNum=1&pageSize=50").then(function (data) {
+        return fetchJson("/api/data/shop-options").then(function (data) {
           if (dead) {
             return;
           }

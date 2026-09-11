@@ -314,6 +314,20 @@ export async function listErpShops(input = {}) {
   return pageResult(data, publicShop);
 }
 
+export async function listErpShopOptions() {
+  const meta = await listErpShopMeta();
+  const records = Object.values(meta.names);
+  return {
+    ok: true,
+    source: "xingmai-erp",
+    total: records.length,
+    totalPages: 1,
+    currentPage: 1,
+    pageSize: records.length,
+    records
+  };
+}
+
 export async function listErpShopMeta() {
   const now = Date.now();
   if (shopMetaCache.ids.length && now - shopMetaCache.at < SHOP_ID_TTL_MS) {

@@ -66,6 +66,7 @@ test("data module mounts shop and goods pages against ERP proxies", () => {
   assert.match(dataJs, /\/api\/data\/overview/);
   assert.match(dataJs, /\/api\/data\/shops/);
   assert.match(dataJs, /\/api\/data\/goods/);
+  assert.match(dataJs, /\/api\/data\/shop-options/);
   assert.match(dataJs, /内容待开发/);
   assert.doesNotMatch(dataJs, /今日订单/);
   assert.doesNotMatch(dataJs, /在职人数/);
@@ -151,6 +152,38 @@ test("shops join names and strip JD auth secrets", async () => {
   assert.equal(JSON.stringify(body).includes("SECRET"), false);
   assert.equal(calls.some((item) => String(item.url).includes("/jd/shopInfo/page")), true);
   assert.equal(calls.some((item) => String(item.url).includes("/jd/order/shop/page")), true);
+});
+
+test("shop options return every shop from the directory cache", async () => {
+  process.env.XM_ERP_TOKEN = "test-token";
+  mockErp(async (url) => {
+    if (String(url).includes("/jd/shopInfo/page")) {
+      return {
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: {
+            total: 2,
+            totalPages: 1,
+            currentPage: 1,
+            pageSize: 50,
+            records: [
+              { id: "1", shopName: "甲店", type: 0, status: 1 },
+              { id: "2", shopName: "乙店", type: 0, status: 1 }
+            ]
+          }
+        })
+      };
+    }
+    throw new Error("shop-options should only read shopInfo");
+  });
+  const cookie = await loginCookie();
+  const res = await fetch(`${base}/api/data/shop-options`, { headers: { cookie } });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.total, 2);
+  assert.equal(body.records.length, 2);
+  assert.equal(body.records[0].shopName, "甲店");
 });
 
 test("goods load all shop ids when none are selected", async () => {

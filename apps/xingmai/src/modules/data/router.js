@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getErpOverview, listErpGoods, listErpShopStats, listErpShops } from "./erp.js";
+import { getErpOverview, listErpGoods, listErpShopOptions, listErpShopStats } from "./erp.js";
 
 export const dataRouter = Router();
 
@@ -34,15 +34,8 @@ dataRouter.get("/shops", (req, res) => {
   sendErp(res, () => listErpShopStats(rangeQuery(req.query)));
 });
 
-dataRouter.get("/shop-options", (req, res) => {
-  sendErp(res, () =>
-    listErpShops({
-      pageNum: req.query.pageNum || req.query.page || 1,
-      pageSize: req.query.pageSize || 50,
-      shopName: req.query.shopName || req.query.q,
-      shopId: req.query.shopId
-    })
-  );
+dataRouter.get("/shop-options", (_req, res) => {
+  sendErp(res, () => listErpShopOptions());
 });
 
 dataRouter.get("/goods", (req, res) => {
