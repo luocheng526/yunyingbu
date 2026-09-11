@@ -1,4 +1,4 @@
-/* xm-module-data — themed content mounts; does not paint a stub page */
+/* xm-module-data restore-v1 — left-nav must load page scripts; do not restore the old waitPage shell */
 (function () {
   function escapeHtml(value) {
     return String(value)
@@ -41,11 +41,35 @@
     }
   }
 
+  function factoryReady(src) {
+    if (/data-shops\.js/.test(src)) {
+      return typeof window.XmDataCreateShopDashboard === "function";
+    }
+    if (/data-overview\.js/.test(src)) {
+      return typeof window.XmDataCreateDashboard === "function";
+    }
+    if (/data-goods\.js/.test(src)) {
+      return typeof window.XmDataCreateGoodsDashboard === "function";
+    }
+    if (/data-live\.js/.test(src)) {
+      return typeof window.XmDataCreateLiveDashboard === "function";
+    }
+    return false;
+  }
+
   function loadScript(src) {
     return new Promise(function (resolve) {
+      if (factoryReady(src)) {
+        resolve();
+        return;
+      }
       const existing = document.querySelector('script[src="' + src + '"]');
       if (existing) {
-        if (window.XmDataCreateDashboard) {
+        if (
+          existing.getAttribute("data-loaded") === "1" ||
+          existing.readyState === "complete" ||
+          existing.readyState === "loaded"
+        ) {
           resolve();
           return;
         }
@@ -55,11 +79,13 @@
         existing.addEventListener("error", function () {
           resolve();
         });
+        setTimeout(resolve, 8000);
         return;
       }
       const script = document.createElement("script");
       script.src = src;
       script.onload = function () {
+        script.setAttribute("data-loaded", "1");
         resolve();
       };
       script.onerror = function () {
@@ -85,7 +111,11 @@
 
   function mountShopDashboard(root) {
     ensureSheet();
-    return loadScript("/data-shops.js?v=shop-wide1").then(function () {
+    if (root && !root.querySelector("#board")) {
+      root.innerHTML =
+        '<main class="xm-page data-overview-root ch-root"><div id="board"><p class="ch-empty">正在加载店铺数据…</p></div></main>';
+    }
+    return loadScript("/data-shops.js?v=shop-wide2").then(function () {
       if (typeof window.XmDataCreateShopDashboard === "function") {
         return window.XmDataCreateShopDashboard(root);
       }
@@ -213,67 +243,32 @@
 
   window.XmModules = window.XmModules || {};
 
-  window.XmModules["/data/overview"] = {
-    mount: function (root) {
-      let stop = null;
-      mountOverview(root).then(function (unmount) {
-        stop = unmount;
-      });
-      return function unmount() {
-        if (typeof stop === "function") {
-          stop();
+  function asyncMount(start) {
+    return {
+      mount: function (root) {
+        let stop = null;
+        try {
+          Promise.resolve(start(root)).then(function (unmount) {
+            stop = unmount;
+          });
+        } catch (_err) {
+          root.innerHTML = '<main class="xm-page"><p class="ch-empty">页面加载失败</p></main>';
         }
-        root.innerHTML = "";
-      };
-    }
-  };
+        return function unmount() {
+          if (typeof stop === "function") {
+            stop();
+          }
+          root.innerHTML = "";
+        };
+      }
+    };
+  }
 
-  window.XmModules["/data/shops"] = {
-    mount: function (root) {
-      let stop = null;
-      mountShopDashboard(root).then(function (unmount) {
-        stop = unmount;
-      });
-      return function unmount() {
-        if (typeof stop === "function") {
-          stop();
-        }
-        root.innerHTML = "";
-      };
-    }
-  };
-
-  window.XmModules["/data/goods"] = {
-    mount: function (root) {
-      let stop = null;
-      mountGoodsDashboard(root).then(function (unmount) {
-        stop = unmount;
-      });
-      return function unmount() {
-        if (typeof stop === "function") {
-          stop();
-        }
-        root.innerHTML = "";
-      };
-    }
-  };
-
-  window.XmModules["/data/paid"] = {
-    mount: function (root) {
-      let stop = null;
-      mountLiveDashboard(root).then(function (unmount) {
-        stop = unmount;
-      });
-      return function unmount() {
-        if (typeof stop === "function") {
-          stop();
-        }
-        root.innerHTML = "";
-      };
-    }
-  };
-
-  window.XmModules["/data"] = {
+  const overviewModule = asyncMount(mountOverview);
+  const shopsModule = asyncMount(mountShopDashboard);
+  const goodsModule = asyncMount(mountGoodsDashboard);
+  const paidModule = asyncMount(mountLiveDashboard);
+  const homeModule = {
     mount: function (root) {
       window.location.replace("/data/overview");
       return function unmount() {
@@ -281,6 +276,39 @@
       };
     }
   };
+
+  function lockModule(path, module) {
+    try {
+      Object.defineProperty(window.XmModules, path, {
+        configurable: true,
+        enumerable: true,
+        get: function () {
+          return module;
+        },
+        set: function () {}
+      });
+    } catch (_err) {
+      window.XmModules[path] = module;
+    }
+  }
+
+  function registerModule(path, module) {
+    lockModule(path, module);
+    if (path !== "/" && !path.endsWith("/")) {
+      lockModule(path + "/", module);
+    }
+  }
+
+  function restoreModules() {
+    registerModule("/data/overview", overviewModule);
+    registerModule("/data/shops", shopsModule);
+    registerModule("/data/goods", goodsModule);
+    registerModule("/data/paid", paidModule);
+    registerModule("/data", homeModule);
+  }
+
+  restoreModules();
+  setInterval(restoreModules, 1500);
 
   watchPaidNav();
 })();

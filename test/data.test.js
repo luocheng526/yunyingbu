@@ -181,6 +181,12 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(shopsJs.text, /打包费/);
     assert.match(shopsJs.text, /\/api\/data\/overview/);
     assert.match(shopsJs.text, /data-hscroll/);
+    assert.match(shopsJs.text, /shop-wide2/);
+    assert.match(shopsJs.text, /正在加载店铺数据|XmDataCreateShopDashboard/);
+    const dataModShops = await get(base, "/shared/modules/data.js");
+    assert.match(dataModShops.text, /restore-v1/);
+    assert.match(dataModShops.text, /data-shops\.js\?v=shop-wide2/);
+    assert.match(dataModShops.text, /正在加载店铺数据/);
     assert.doesNotMatch(shopsJs.text, /渠道总览/);
     const shopsApi = await get(base, "/api/data/shops");
     assert.equal(shopsApi.res.status, 200);
@@ -461,6 +467,9 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.doesNotMatch(dataMod, /function waitPage/);
   assert.match(dataMod, /\/data\/paid/);
   assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
+  assert.match(dataMod, /restore-v1/);
+  assert.match(dataMod, /lockModule/);
+  assert.doesNotMatch(dataMod, /0\.1\.72/);
     assert.match(dataMod, /data-goods\.js\?v=goods-erp1/);
   assert.doesNotMatch(dataMod, /店铺周报/);
   assert.doesNotMatch(dataMod, /商品周报/);

@@ -46,7 +46,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=shop-wide1";
+      link.href = "/data-pages.css?v=shop-wide2";
       document.head.appendChild(link);
     }
   }
@@ -359,11 +359,15 @@
             return;
           }
           if (data && data.ok && data.shops && data.shops.length) {
-            const mapped = fromErp(data);
-            state.shops = mapped.shops;
-            state.rows = mapped.rows;
-            render();
-            return;
+            try {
+              const mapped = fromErp(data);
+              state.shops = mapped.shops;
+              state.rows = mapped.rows;
+              render();
+              return;
+            } catch (_err) {
+              throw new Error("empty");
+            }
           }
           throw new Error("empty");
         })
@@ -404,6 +408,7 @@
       }
     });
 
+    render();
     load();
 
     return function unmount() {
