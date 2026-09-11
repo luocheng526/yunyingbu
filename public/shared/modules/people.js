@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.160-login-edit";
+    const href = "/people.css?v=0.1.161-bulk-pass";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -126,7 +126,7 @@
         '<div class="org-filter-pop" id="org-filter-pop" hidden></div></div>' +
         '<div class="org-pane" data-pane="members" hidden>' +
         '<section class="panel"><h2>身份名册</h2>' +
-        '<p class="lead">单击账号或登录密码即可改。新增默认账号同姓名。</p>' +
+        '<p class="lead">勾选后上方出现操作栏，可统一改密码。单击账号或登录密码也可单人改。</p>' +
         '<form class="people-form" id="people-form">' +
         '<label>姓名<input name="name" required maxlength="40" autocomplete="off" /></label>' +
         '<label>部门<input name="department" maxlength="64" placeholder="如 沈子晗运营中心" /></label>' +
@@ -140,7 +140,14 @@
         '<label>登录密码<input name="password" maxlength="64" value="ChangeMe123!" placeholder="初始密码" /></label>' +
         '<button type="submit">新增人员</button></form>' +
         '<p class="status error" id="people-error" hidden></p>' +
-        '<div class="org-table-wrap"><table><thead><tr><th>姓名</th><th>账号</th><th>登录密码</th><th>部门</th><th>上级</th><th>岗位</th><th>所属中心</th><th>状态</th><th>能看见的店</th></tr></thead>' +
+        '<div class="people-bulk" id="people-bulk" hidden>' +
+        '<label class="people-bulk-check"><input type="checkbox" id="people-bulk-all" />全选</label>' +
+        '<span id="people-bulk-count">已选 0 人</span>' +
+        '<label>统一密码<input id="people-bulk-password" maxlength="64" placeholder="给勾中的人一起改" autocomplete="off" /></label>' +
+        '<button type="button" id="people-bulk-apply">应用密码</button></div>' +
+        '<div class="org-table-wrap"><table><thead><tr>' +
+        '<th class="org-check"><input type="checkbox" id="people-check-all" title="全选" /></th>' +
+        '<th>姓名</th><th>账号</th><th>登录密码</th><th>部门</th><th>上级</th><th>岗位</th><th>所属中心</th><th>状态</th><th>能看见的店</th></tr></thead>' +
         '<tbody id="people-tbody"></tbody></table></div></section>' +
         '<section class="panel"><h2>店铺 / 店群</h2>' +
         '<form class="people-mini-form" id="shop-form">' +
@@ -224,6 +231,7 @@
       let lastStores = [];
       let rawStores = [];
       let selectedIds = {};
+      let memberSelectedIds = {};
       const COLUMN_FILTERS = ["chief", "lead", "owner", "storeName", "remark"];
       const columnPicked = {};
       COLUMN_FILTERS.forEach(function (key) {
@@ -763,7 +771,11 @@
             const shops = (person.visibleShops || []).join("、") || "—";
             tr.setAttribute("data-id", String(person.id));
             tr.innerHTML =
-              "<td>" +
+              '<td class="org-check"><input type="checkbox" class="people-row-check" data-check="' +
+              person.id +
+              '"' +
+              (memberSelectedIds[String(person.id)] ? " checked" : "") +
+              ' /></td><td>' +
               escapeHtml(person.name) +
               '</td><td class="people-cell can-edit" data-field="username" title="单击可改">' +
               escapeHtml(person.username || person.name || "—") +
@@ -810,6 +822,7 @@
             function (item) { return item.name; },
             "无"
           );
+          paintMemberBar();
         });
       }
 
@@ -1085,6 +1098,49 @@
         });
       }
 
+      function memberSelectedCount() {
+        return roster.people.filter(function (person) {
+          return memberSelectedIds[String(person.id)];
+        }).length;
+      }
+
+      function paintMemberBar() {
+        const bar = root.querySelector("#people-bulk");
+        const count = memberSelectedCount();
+        const header = root.querySelector("#people-check-all");
+        const barAll = root.querySelector("#people-bulk-all");
+        const countEl = root.querySelector("#people-bulk-count");
+        if (bar) {
+          bar.hidden = count === 0;
+        }
+        if (countEl) {
+          countEl.textContent = "已选 " + count + " 人";
+        }
+        const allOn = roster.people.length > 0 && count === roster.people.length;
+        if (header) {
+          header.checked = allOn;
+          header.indeterminate = count > 0 && !allOn;
+        }
+        if (barAll) {
+          barAll.checked = allOn;
+          barAll.indeterminate = count > 0 && !allOn;
+        }
+      }
+
+      function setAllMembers(on) {
+        roster.people.forEach(function (person) {
+          if (on) {
+            memberSelectedIds[String(person.id)] = true;
+          } else {
+            delete memberSelectedIds[String(person.id)];
+          }
+        });
+        peopleTbody.querySelectorAll(".people-row-check").forEach(function (box) {
+          box.checked = on;
+        });
+        paintMemberBar();
+      }
+
       postForm(peopleForm, "/api/people", peopleError, loadMembers);
       postForm(shopForm, "/api/people/shops", shopError, loadMembers);
       postForm(grantForm, "/api/people/grants", grantError, loadRights);
@@ -1163,6 +1219,65 @@
           return;
         }
         startPersonCellEdit(event.target.closest("td.people-cell"));
+      });
+      peopleTbody.addEventListener("change", function (event) {
+        const box = event.target.closest(".people-row-check");
+        if (!box) {
+          return;
+        }
+        const id = box.getAttribute("data-check");
+        if (box.checked) {
+          memberSelectedIds[id] = true;
+        } else {
+          delete memberSelectedIds[id];
+        }
+        paintMemberBar();
+      });
+      root.querySelector("#people-check-all").addEventListener("change", function (event) {
+        setAllMembers(event.target.checked);
+      });
+      root.querySelector("#people-bulk-all").addEventListener("change", function (event) {
+        setAllMembers(event.target.checked);
+      });
+      root.querySelector("#people-bulk-apply").addEventListener("click", function () {
+        const password = root.querySelector("#people-bulk-password").value.trim();
+        const ids = roster.people
+          .filter(function (person) {
+            return memberSelectedIds[String(person.id)];
+          })
+          .map(function (person) {
+            return person.id;
+          });
+        if (!ids.length) {
+          showError(peopleError, "请先勾选人员");
+          return;
+        }
+        if (!password) {
+          showError(peopleError, "请填写统一密码");
+          return;
+        }
+        fetch("/api/people/passwords", {
+          method: "PATCH",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: ids, password: password })
+        })
+          .then(function (res) {
+            return res.json().then(function (data) {
+              return { res: res, data: data };
+            });
+          })
+          .then(function (result) {
+            if (!result.res.ok || !result.data.ok) {
+              throw new Error(result.data.error || "保存失败");
+            }
+            showError(peopleError, "");
+            root.querySelector("#people-bulk-password").value = "";
+            return loadMembers();
+          })
+          .catch(function (err) {
+            showError(peopleError, err.message);
+          });
       });
       peopleTbody.addEventListener("dblclick", function (event) {
         startPersonCellEdit(event.target.closest("td.people-cell"));

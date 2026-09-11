@@ -359,6 +359,31 @@ export function patchPerson(id, input) {
   return { ok: true, person: presentPerson(found) };
 }
 
+export function patchPeoplePasswords(ids, password) {
+  const next = typeof password === "string" ? password.trim() : "";
+  if (!next) {
+    return { ok: false, statusCode: 400, error: "密码不能为空" };
+  }
+  const list = Array.isArray(ids) ? ids : [];
+  if (!list.length) {
+    return { ok: false, statusCode: 400, error: "请先勾选人员" };
+  }
+  const updated = [];
+  for (const id of list) {
+    const found = findPerson(id);
+    if (!found) {
+      continue;
+    }
+    found.password = next;
+    rememberLogin(withLogin(found));
+    updated.push(presentPerson(found));
+  }
+  if (!updated.length) {
+    return { ok: false, statusCode: 404, error: "人员不存在" };
+  }
+  return { ok: true, updated: updated.length, people: updated };
+}
+
 export function createShop(input) {
   const name = typeof input.name === "string" ? input.name.trim() : "";
   const kind = typeof input.kind === "string" ? input.kind.trim() : "店铺";

@@ -9,6 +9,7 @@ import {
   listPeople,
   listShops,
   patchPerson,
+  patchPeoplePasswords,
   reconcilePeople
 } from "./store.js";
 import { scopeOf } from "./org-acl.js";
@@ -208,6 +209,11 @@ peopleRouter.get("/", (_req, res) => {
     posts: POSTS,
     people: listPeople()
   });
+});
+
+peopleRouter.patch("/passwords", (req, res) => {
+  const body = req.body || {};
+  sendResult(res, patchPeoplePasswords(body.ids, body.password), false);
 });
 
 peopleRouter.patch("/:id", (req, res) => {

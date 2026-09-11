@@ -89,9 +89,13 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /与姓名相同/);
     assert.doesNotMatch(jsText, /工号/);
     assert.doesNotMatch(jsText, /name="employeeNo"/);
-    assert.match(jsText, /单击账号或登录密码即可改/);
+    assert.match(jsText, /勾选后上方出现操作栏/);
     assert.match(jsText, /people-cell/);
     assert.match(jsText, /startPersonCellEdit/);
+    assert.match(jsText, /people-row-check/);
+    assert.match(jsText, /people-check-all/);
+    assert.match(jsText, /people-bulk/);
+    assert.match(jsText, /\/api\/people\/passwords/);
     assert.doesNotMatch(jsText, /demo-flag/);
     assert.doesNotMatch(jsText, /演示<\/span>/);
     assert.doesNotMatch(jsText, /龙虎榜/);
@@ -360,6 +364,40 @@ test("PATCH /api/people updates username and password", async () => {
     const overlay = JSON.parse(fs.readFileSync("src/modules/people/data/people-logins.json", "utf8"));
     assert.equal(overlay[String(wang.id)].username, "wangbo");
     assert.equal(overlay[String(wang.id)].password, "ShopLogin1");
+  });
+});
+
+test("PATCH /api/people/passwords sets one password for selected staff", async () => {
+  await withServer(async (base) => {
+    const listed = await fetch(`${base}/api/people`);
+    const listedJson = await listed.json();
+    const wang = listedJson.people.find((row) => row.name === "王博");
+    const yang = listedJson.people.find((row) => row.name === "杨润泽");
+    const empty = await fetch(`${base}/api/people/passwords`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [wang.id], password: "  " })
+    });
+    assert.equal(empty.status, 400);
+    const none = await fetch(`${base}/api/people/passwords`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [], password: "TeamPass1" })
+    });
+    assert.equal(none.status, 400);
+    const patched = await fetch(`${base}/api/people/passwords`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [wang.id, yang.id], password: "TeamPass1" })
+    });
+    const patchedJson = await patched.json();
+    assert.equal(patched.status, 200, JSON.stringify(patchedJson));
+    assert.equal(patchedJson.updated, 2);
+    const after = await fetch(`${base}/api/people`);
+    const afterJson = await after.json();
+    assert.equal(afterJson.people.find((row) => row.id === wang.id).password, "TeamPass1");
+    assert.equal(afterJson.people.find((row) => row.id === yang.id).password, "TeamPass1");
+    assert.equal(afterJson.people.find((row) => row.name === "沈子晗").password, "ChangeMe123!");
   });
 });
 

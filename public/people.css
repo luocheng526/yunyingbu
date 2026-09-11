@@ -220,6 +220,58 @@ body:has(.people-page) .xm-tabs {
   cursor: pointer;
 }
 
+.people-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: center;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  background: #e6f4ff;
+  border: 1px solid #91caff;
+  border-radius: 8px;
+}
+
+.people-bulk[hidden] {
+  display: none;
+}
+
+.people-bulk-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #1677ff;
+  font-size: 13px;
+}
+
+.people-bulk-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.people-bulk label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #1677ff;
+  font-size: 13px;
+}
+
+.people-bulk input[type="text"],
+.people-bulk #people-bulk-password {
+  min-width: 180px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #91caff;
+  border-radius: 6px;
+}
+
+.people-bulk #people-bulk-count {
+  color: #1677ff;
+  font-size: 13px;
+}
+
 .org-th-filter {
   position: relative;
 }
