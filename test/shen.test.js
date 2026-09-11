@@ -106,7 +106,7 @@ test("submenu pages use 产品中心 and 付费中心", async () => {
       const { res, text } = await request(base, item.href);
       assert.equal(res.status, 200, item.href);
       assert.match(text, new RegExp(item.label));
-      assert.match(text, /shen-submenu\.js/);
+      assert.equal(text.includes("/shared/nav.js"), false, item.href);
       if (item.slug !== "tasks") {
         assert.match(text, /内容待开发/);
       }
@@ -127,23 +127,23 @@ function productHasSecondNav(page) {
   return page.text.includes('id="site-nav"') || page.text.includes("site-sidebar") || page.text.includes("运营部</a>");
 }
 
-test("shen-submenu script replaces retired sider labels", async () => {
+test("shen module mounts product and paid content only", async () => {
   await withServer(async (base) => {
-    const script = await request(base, "/shen-submenu.js");
-    assert.equal(script.res.status, 200);
-    assert.match(script.text, /产品中心/);
-    assert.match(script.text, /付费中心/);
-    assert.match(script.text, /\/shen\/selection/);
-    assert.match(script.text, /__xmGo/);
-    assert.equal(script.text.includes("innerHTML"), false);
     const embed = await request(base, "/shared/modules/shen.js");
     assert.equal(embed.res.status, 200);
-    assert.match(embed.text, /产品中心/);
-    assert.match(embed.text, /付费中心/);
+    assert.match(embed.text, /XmModules\["\/shen\/product"\]/);
+    assert.match(embed.text, /XmModules\["\/shen\/paid"\]/);
     assert.match(embed.text, /waitPage\("产品中心"\)/);
     assert.match(embed.text, /waitPage\("付费中心"\)/);
-    assert.equal(embed.text.includes('waitPage("选品中心")'), false);
-    assert.equal(embed.text.includes('waitPage("实时付费")'), false);
+    assert.equal(embed.text.includes("relabelOfficialShenMenu"), false);
+    assert.equal(embed.text.includes("MutationObserver"), false);
+    assert.equal(embed.text.includes("选品中心"), false);
+    assert.equal(embed.text.includes("实时付费"), false);
+    const product = await request(base, "/shen/product");
+    assert.equal(product.text.includes("/shared/nav.js"), false);
+    const selection = await request(base, "/shen/selection", { redirect: "manual" });
+    assert.equal(selection.res.status, 302);
+    assert.equal(selection.res.headers.get("location"), "/shen/product");
   });
 });
 
