@@ -1252,7 +1252,7 @@
   function uniqShops(records) {
     var seen = {};
     return (records || []).filter(function (row) {
-      var id = row.shopId || row.shopName;
+      var id = normShopId(row && (row.shopId || row.id)) || (row && row.shopName);
       if (!id || seen[id]) {
         return false;
       }
@@ -1265,7 +1265,7 @@
     var acc = [];
     var summary = null;
     function page(n) {
-      var path = "/api/data/shops?pageSize=50&currentPage=" + n + (qs ? "&" + qs : "");
+      var path = "/api/data/shops?pageSize=50&pageNum=" + n + "&currentPage=" + n + (qs ? "&" + qs : "");
       return api(path).then(function (data) {
         if (!data || !data.ok || !data.records) {
           return { records: uniqShops(acc), summary: summary };
@@ -1292,10 +1292,78 @@
     return id;
   }
 
+  function erpRecordId(row) {
+    return normShopId(row && (row.shopId || row.id));
+  }
+
+  function withShopIds(records) {
+    return (records || []).map(function (row) {
+      var id = erpRecordId(row);
+      if (!id || (row && row.shopId === id)) {
+        return row;
+      }
+      return Object.assign({}, row, { shopId: id });
+    });
+  }
+
+  function packHasStats(pack) {
+    return ((pack && pack.records) || []).some(function (row) {
+      return row && (row.payAmount != null || row.totalPromotionCost != null || row.profit != null);
+    });
+  }
+
+  function summaryFromOverview(data) {
+    var sum = {};
+    ((data && data.cards) || []).forEach(function (card) {
+      if (card && card.key) {
+        sum[card.key] = card.value;
+      }
+    });
+    return withRates(sum);
+  }
+
+  function fetchOverviewPack(from, to) {
+    return api("/api/data/overview?" + erpQuery(from, to)).then(function (data) {
+      if (!data || !data.ok) {
+        return { records: [], summary: null };
+      }
+      return {
+        records: withShopIds(data.shops || []),
+        summary: summaryFromOverview(data)
+      };
+    });
+  }
+
+  function fetchCatalogPack() {
+    return api("/api/data/shop-options").then(function (data) {
+      var records = withShopIds((data && data.records) || []);
+      if (records.length) {
+        return { records: records, summary: null };
+      }
+      return fetchShopPages("").then(function (pack) {
+        return { records: withShopIds(pack.records), summary: pack.summary };
+      });
+    });
+  }
+
+  function fetchRangePack(from, to) {
+    var qs = erpQuery(from, to);
+    return api("/api/data/shops?pageSize=1&pageNum=1&currentPage=1&" + qs).then(function (probe) {
+      var row = probe && probe.records && probe.records[0];
+      if (row && (row.payAmount != null || row.totalPromotionCost != null || row.profit != null)) {
+        return fetchShopPages(qs).then(function (pack) {
+          pack.records = withShopIds(pack.records);
+          return pack;
+        });
+      }
+      return fetchOverviewPack(from, to);
+    });
+  }
+
   function mapByShopId(records) {
     var map = {};
     (records || []).forEach(function (row) {
-      var id = normShopId(row && row.shopId);
+      var id = erpRecordId(row);
       if (id) {
         map[id] = row;
       }
@@ -1617,9 +1685,9 @@
         var today = shanghaiYmd(0);
         var yest = shanghaiYmd(1);
         return Promise.all([
-          fetchShopPages(erpQuery(today, today)),
-          fetchShopPages(erpQuery(yest, yest)),
-          fetchShopPages("")
+          fetchRangePack(today, today),
+          fetchRangePack(yest, yest),
+          fetchCatalogPack()
         ]).then(function (pack) {
           if (dead) {
             return;
@@ -1639,9 +1707,9 @@
       function pullBoard() {
         var prev = previousDates(state.from, state.to);
         return Promise.all([
-          fetchShopPages(erpQuery(state.from, state.to)),
-          fetchShopPages(erpQuery(prev.from, prev.to)),
-          fetchShopPages(""),
+          fetchRangePack(state.from, state.to),
+          fetchRangePack(prev.from, prev.to),
+          fetchCatalogPack(),
           api("/api/people"),
           api("/api/people/shops"),
           api("/api/people/grants"),
@@ -1662,7 +1730,7 @@
           state.teams = built.teams;
           state.ladders = buildLadders(people, dutyShops, rangePack);
           state.gaps = built.mismatches;
-          state.source = rangePack.records && rangePack.records.length ? "xingmai-erp" : "";
+          state.source = (rangePack.summary && rangePack.summary.payAmount != null) || (rangePack.records && rangePack.records.length) ? "xingmai-erp" : "";
           paint(root, state);
         }).catch(function () {
           if (!dead) {
