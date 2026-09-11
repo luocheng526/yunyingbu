@@ -188,7 +188,8 @@
       const layers = [
         {
           name: "头部产品",
-          hint: "参考：退货率20%以下；推广花费占比42%以下；近7天日成交金额2000元以上；成交转化率7%以上；近30天转化率不合格需优化。",
+          color: "#f4b183",
+          hint: "满足以下参考条件：1.退货率20%以下  2.推广花费占比42%以下  3.近7天日成交金额2000元以上  4.成交转化率7%以上  5.近30天转化率不合格的需要优化转化率",
           cols: [
             ["image", "主图"],
             ["spu", "SPU"],
@@ -205,22 +206,24 @@
             ["fulfillNote", "京仓/线下/拍单/无锡中转"],
             ["jdStock", "京仓库存"],
             ["remark", "备注"],
-            ["store", "店"],
           ],
         },
         {
           name: "中部产品",
-          hint: "参考：成交3单以上；退货率25%以下；推广花费占比40%以下；近7天日成交金额1000元以上；成交转化率5%以上；近30天转化率不合格需优化。",
+          color: "#ffe699",
+          hint: "满足以下参考条件：1.成交3单以上  2.退货率25%以下  3.推广花费占比40%以下  4.近7天日成交金额1000元以上  5.成交转化率5%以上  6.近30天转化率不合格的需要优化转化率",
           cols: null,
         },
         {
           name: "尾部产品",
-          hint: "参考：成交3单以上；退货率25-30%；推广花费占比35%以下；近7天日成交金额1000元以上；成交转化率5%以上；近30天转化率不合格需优化。",
+          color: "#c6e0b4",
+          hint: "满足以下参考条件：1.成交3单以上  2.退货率25-30%之间  3.推广花费占比35%以下  4.近7天日成交金额1000元以上  5.成交转化率5%以上  6.近30天转化率不合格的需要优化",
           cols: null,
         },
         {
           name: "动销产品",
-          hint: "参考：超过3单看退货率；退货率25-30%加到尾部；退货率25%以下加到中部。",
+          color: "#bdd7ee",
+          hint: "满足以下参考条件：1.超过3单的以上的看退货率  2.退货率在25-30%加到尾部  3.退货率在25%以下加到中部",
           cols: [
             ["image", "主图"],
             ["spu", "SPU"],
@@ -236,12 +239,12 @@
             ["fulfillNote", "京仓/线下/拍单/无锡中转"],
             ["jdStock", "京仓库存"],
             ["remark", "备注"],
-            ["store", "店"],
           ],
         },
         {
           name: "测新产品",
-          hint: "参考：新上架未出单、基础优化完成、评价至少1条；花费达到产品价格35%仍未出单则暂停测新。",
+          color: "#d9d2e9",
+          hint: "满足以下参考条件：1.新上架未出单 基础优化完成 评价至少1条  2.花费本身产品价格的35%未出单产品暂停测新",
           cols: [
             ["image", "主图"],
             ["spu", "SPU"],
@@ -252,12 +255,12 @@
             ["listedOn", "上架时间"],
             ["hasNewBadge", "是否有新品标"],
             ["remark", "备注"],
-            ["store", "店"],
           ],
         },
         {
           name: "待做单产品",
-          hint: "上架后做单，做单之后直接上车。",
+          color: "#f8cbad",
+          hint: "上架后做单 做单之后直接上车",
           cols: [
             ["image", "主图"],
             ["spu", "SPU"],
@@ -267,194 +270,197 @@
             ["listedOn", "上架时间"],
             ["needOrder", "需做单数量和时间"],
             ["remark", "备注"],
-            ["store", "店"],
           ],
         },
       ];
-      const coreCols = layers[0].cols;
-      layers[1].cols = coreCols;
-      layers[2].cols = coreCols;
+      layers[1].cols = layers[0].cols;
+      layers[2].cols = layers[0].cols;
+      const totalCols = layers.reduce(function (sum, layer) {
+        return sum + layer.cols.length;
+      }, 0);
 
-      const tabs = layers
-        .map(function (layer, i) {
-          return (
-            '<button type="button" class="han-layer-tab' +
-            (i === 0 ? " is-on" : "") +
-            '" data-layer="' +
-            escapeHtml(layer.name) +
-            '">' +
-            escapeHtml(layer.name) +
-            "</button>"
-          );
-        })
-        .join("");
-      const layerNames = layers.map(function (layer) {
-        return layer.name;
-      }).join("、");
-
-      function fieldsHtml(layer) {
-        return layer.cols
-          .map(function (pair) {
-            const key = pair[0];
-            const label = pair[1];
-            const id = "prod-" + key;
-            const extra =
-              key === "listedOn"
-                ? ' type="date"'
-                : key === "price"
-                  ? ' type="number" step="0.01"'
-                  : key === "image"
-                    ? ' placeholder="主图链接"'
-                    : key === "spu"
-                      ? " required placeholder=\"SPU\""
-                      : "";
-            return '<label for="' + id + '">' + escapeHtml(label) + (key === "spu" ? "（必填）" : "") + "</label><input id=\"" + id + '"' + extra + " />";
-          })
-          .join("");
+      function inputType(key) {
+        if (key === "listedOn") return "date";
+        if (key === "price") return "number";
+        return "text";
       }
 
-      function tableHead(layer) {
-        return layer.cols.map(function (pair) {
-          return "<th>" + escapeHtml(pair[1]) + "</th>";
-        }).join("");
-      }
-
-      root.innerHTML = page(
-        "商品数据",
-        "店铺产品分层：" + layerNames + "。点上面一排分类切换。默认负责人韩梦凯。",
-        '<style>' +
-          ".han-layer-bar{margin:0 0 1rem}" +
-          ".han-layer-label{margin:0 0 0.5rem;font-weight:700}" +
-          ".han-layer-row{display:flex;flex-wrap:wrap;border:1px solid #d6d3d1;border-radius:8px;overflow:hidden;background:#fff}" +
-          ".han-layer-tab{flex:1 1 7rem;margin:0;border:0;border-right:1px solid #d6d3d1;padding:0.75rem 0.4rem;background:#fff;cursor:pointer;font-size:0.95rem}" +
-          ".han-layer-tab:last-child{border-right:0}" +
-          ".han-layer-tab.is-on{background:#0f766e;color:#fff;font-weight:700}" +
-          "</style>" +
-          '<div class="stack"><section class="panel"><div id="prod-tabs" class="han-layer-bar">' +
-          '<p class="han-layer-label">商品分层</p>' +
-          '<div class="han-layer-row">' +
-          tabs +
-          "</div></div>" +
-          '<p class="lead" id="prod-hint"></p>' +
-          '<form id="prod-form"></form></section>' +
-          '<section class="panel" style="overflow-x:auto"><h2 id="prod-table-title">分层列表</h2>' +
-          '<table><thead id="prod-head"></thead><tbody id="prod-body"></tbody></table></section></div>',
-      );
-
-      const form = root.querySelector("#prod-form");
-      const hint = root.querySelector("#prod-hint");
-      const thead = root.querySelector("#prod-head");
-      const tbody = root.querySelector("#prod-body");
-      const title = root.querySelector("#prod-table-title");
-      const msgId = "prod-msg";
-      let current = layers[0];
-      let items = [];
-      let dead = false;
-
-      function paintForm() {
-        form.innerHTML =
-          fieldsHtml(current) +
-          '<div class="actions"><button type="submit">添加到' +
-          escapeHtml(current.name) +
-          '</button></div><p class="msg status" id="' +
-          msgId +
-          '"></p>';
-        hint.textContent = current.hint;
-        title.textContent = current.name;
-        thead.innerHTML = "<tr>" + tableHead(current) + "</tr>";
-      }
-
-      function cell(row, key) {
+      function cellHtml(row, key) {
         const value = row[key] || "";
         if (key === "image" && /^https?:\/\//i.test(value)) {
-          return '<td><img src="' + escapeHtml(value) + '" alt="" style="height:40px;max-width:72px;object-fit:cover" /></td>';
+          return '<td><img src="' + escapeHtml(value) + '" alt="" style="height:36px;max-width:64px;object-fit:cover" /></td>';
         }
         return "<td>" + escapeHtml(value) + "</td>";
       }
 
-      function paintRows() {
-        const rows = items.filter(function (row) {
-          return row.layer === current.name;
-        });
-        if (!rows.length) {
-          tbody.innerHTML =
-            '<tr><td class="empty" colspan="' + current.cols.length + '">该分层暂无商品</td></tr>';
-          return;
-        }
-        tbody.innerHTML = rows
-          .map(function (row) {
-            return (
-              "<tr>" +
-              current.cols
+      root.innerHTML = page(
+        "商品数据",
+        "按《商品分层表》做成一张工作表：六个分层左右排在同一张表里，向右滑动可看完。",
+        '<style>' +
+          ".han-sheet-wrap{overflow-x:auto;background:#fff;border:1px solid #c6c6c6}" +
+          ".han-sheet{border-collapse:collapse;font-size:12px;min-width:2200px}" +
+          ".han-sheet th,.han-sheet td{border:1px solid #b1b1b1;padding:4px 6px;white-space:nowrap;vertical-align:middle}" +
+          ".han-sheet .han-sheet-title{text-align:center;font-size:20px;font-weight:700;background:#fff2cc}" +
+          ".han-sheet .han-sheet-group{text-align:center;font-weight:700}" +
+          ".han-sheet .han-sheet-hint{white-space:normal;min-width:160px;max-width:220px;font-size:11px;line-height:1.45;color:#444;background:#fafafa}" +
+          ".han-sheet .han-sheet-col{background:#f3f3f3;font-weight:600}" +
+          ".han-sheet input{width:92px;border:0;background:#fffde7;padding:2px 4px}" +
+          ".han-sheet button{font-size:12px;padding:2px 8px}" +
+          ".han-sheet-msg{margin:0.5rem 0 0;min-height:1.2em}" +
+          "</style>" +
+          '<div class="han-sheet-wrap"><table class="han-sheet" id="han-sheet">' +
+          "<thead></thead><tbody></tbody></table></div>" +
+          '<p class="msg status han-sheet-msg" id="prod-msg"></p>',
+      );
+
+      const table = root.querySelector("#han-sheet");
+      const thead = table.querySelector("thead");
+      const tbody = table.querySelector("tbody");
+      const msg = root.querySelector("#prod-msg");
+      let items = [];
+      let dead = false;
+
+      function paintHead() {
+        const title =
+          '<tr><th class="han-sheet-title" colspan="' + totalCols + '">店铺产品分层表</th></tr>';
+        const groups = "<tr>" + layers.map(function (layer) {
+          return (
+            '<th class="han-sheet-group" colspan="' +
+            layer.cols.length +
+            '" style="background:' +
+            layer.color +
+            '">' +
+            escapeHtml(layer.name) +
+            "</th>"
+          );
+        }).join("") + "</tr>";
+        const hints = "<tr>" + layers.map(function (layer) {
+          return (
+            '<th class="han-sheet-hint" colspan="' +
+            layer.cols.length +
+            '">' +
+            escapeHtml(layer.hint) +
+            "</th>"
+          );
+        }).join("") + "</tr>";
+        const cols = "<tr>" + layers.map(function (layer) {
+          return layer.cols.map(function (pair) {
+            return '<th class="han-sheet-col">' + escapeHtml(pair[1]) + "</th>";
+          }).join("");
+        }).join("") + "</tr>";
+        thead.innerHTML = title + groups + hints + cols;
+      }
+
+      function addRowHtml() {
+        return (
+          "<tr>" +
+          layers
+            .map(function (layer, i) {
+              return layer.cols
                 .map(function (pair) {
-                  return cell(row, pair[0]);
+                  const key = pair[0];
+                  return (
+                    '<td><input data-layer="' +
+                    i +
+                    '" data-key="' +
+                    key +
+                    '" type="' +
+                    inputType(key) +
+                    '"' +
+                    (key === "spu" ? " placeholder=\"SPU\"" : "") +
+                    (key === "image" ? " placeholder=\"主图链接\"" : "") +
+                    " /></td>"
+                  );
                 })
-                .join("") +
-              "</tr>"
-            );
-          })
-          .join("");
+                .join("");
+            })
+            .join("") +
+          "</tr><tr>" +
+          layers
+            .map(function (layer, i) {
+              return (
+                '<td colspan="' +
+                layer.cols.length +
+                '"><button type="button" class="han-sheet-add" data-layer="' +
+                i +
+                '">添加到' +
+                escapeHtml(layer.name) +
+                "</button></td>"
+              );
+            })
+            .join("") +
+          "</tr>"
+        );
+      }
+
+      function paintBody() {
+        const grouped = layers.map(function (layer) {
+          return items.filter(function (row) {
+            return row.layer === layer.name;
+          });
+        });
+        const max = Math.max.apply(
+          null,
+          grouped.map(function (rows) {
+            return rows.length;
+          }).concat([0]),
+        );
+        let html = "";
+        for (let r = 0; r < max; r += 1) {
+          html += "<tr>";
+          layers.forEach(function (layer, i) {
+            const row = grouped[i][r];
+            if (!row) {
+              html += layer.cols.map(function () {
+                return "<td></td>";
+              }).join("");
+              return;
+            }
+            html += layer.cols.map(function (pair) {
+              return cellHtml(row, pair[0]);
+            }).join("");
+          });
+          html += "</tr>";
+        }
+        tbody.innerHTML = html + addRowHtml();
       }
 
       function load() {
         return jsonFetch("/api/han/products").then(function (json) {
           if (dead) return;
           items = json.items || [];
-          paintRows();
+          paintBody();
         });
       }
 
-      function switchLayer(name) {
-        const next = layers.find(function (layer) {
-          return layer.name === name;
+      function onAdd(e) {
+        const btn = e.target.closest(".han-sheet-add");
+        if (!btn) return;
+        const index = Number(btn.getAttribute("data-layer"));
+        const layer = layers[index];
+        const body = { layer: layer.name };
+        root.querySelectorAll('input[data-layer="' + index + '"]').forEach(function (el) {
+          body[el.getAttribute("data-key")] = el.value;
         });
-        if (!next) return;
-        current = next;
-        root.querySelectorAll(".han-layer-tab").forEach(function (btn) {
-          btn.classList.toggle("is-on", btn.getAttribute("data-layer") === name);
-        });
-        paintForm();
-        paintRows();
-      }
-
-      function onSubmit(e) {
-        e.preventDefault();
-        const body = { layer: current.name };
-        current.cols.forEach(function (pair) {
-          const el = root.querySelector("#prod-" + pair[0]);
-          if (el) body[pair[0]] = el.value;
-        });
-        const msg = root.querySelector("#" + msgId);
         jsonFetch("/api/han/products", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         }).then(function (json) {
           if (dead) return;
-          if (msg) msg.textContent = json.ok ? "已添加到" + current.name : json.error || "失败";
-          if (json.ok) {
-            form.reset();
-            return load();
-          }
+          msg.textContent = json.ok ? "已写入" + layer.name : json.error || "失败";
+          if (json.ok) return load();
         });
       }
 
-      function onTab(e) {
-        const btn = e.target.closest(".han-layer-tab");
-        if (btn) switchLayer(btn.getAttribute("data-layer"));
-      }
-
-      paintForm();
-      root.querySelector("#prod-tabs").addEventListener("click", onTab);
-      form.addEventListener("submit", onSubmit);
+      paintHead();
+      table.addEventListener("click", onAdd);
       load().catch(function (err) {
-        const msg = root.querySelector("#" + msgId);
-        if (!dead && msg) msg.textContent = String(err);
+        if (!dead) msg.textContent = String(err);
       });
       return function unmount() {
         dead = true;
-        root.querySelector("#prod-tabs").removeEventListener("click", onTab);
-        form.removeEventListener("submit", onSubmit);
+        table.removeEventListener("click", onAdd);
         root.innerHTML = "";
       };
     },
