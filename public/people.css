@@ -26,10 +26,8 @@ body:has(.people-page) .xm-content,
 #xm-content:has(.people-page) {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: hidden !important;
+  overflow: auto !important;
   overscroll-behavior: contain;
-  display: flex;
-  flex-direction: column;
 }
 
 .xm-content .page.people-page,
@@ -37,12 +35,8 @@ body:has(.people-page) .xm-content,
   max-width: none !important;
   width: 100%;
   box-sizing: border-box;
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding-bottom: 8px;
+  overflow: visible;
+  padding-bottom: 24px;
 }
 
 .people-page .lead {
@@ -178,26 +172,7 @@ body:has(.people-page) .xm-tabs {
   border: 1px solid var(--xm-line, #d9d9d9);
 }
 
-.people-page .org-pane:not([hidden]) {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.people-page .org-pane:not([hidden]) > .panel {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
 .org-table-wrap {
-  flex: 1 1 auto;
-  min-height: 0;
-  max-height: none;
   overflow: auto;
   overscroll-behavior: contain;
   background: #fff;

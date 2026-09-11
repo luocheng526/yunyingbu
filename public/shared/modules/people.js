@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.154-status";
+    const href = "/people.css?v=0.1.155-pagescroll";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -38,10 +38,9 @@
       "body:has(.xm-shell):has(.people-page){overflow:hidden;}" +
       "body:has(.xm-shell):has(.people-page) .xm-shell{height:100vh;max-height:100vh;overflow:hidden;min-height:0;}" +
       "body:has(.xm-shell):has(.people-page) .xm-main{height:100vh;max-height:100vh;overflow:hidden;min-height:0;display:flex;flex-direction:column;}" +
-      "body:has(.people-page) .xm-content,#xm-content:has(.people-page){flex:1 1 auto;min-height:0;overflow:hidden!important;display:flex;flex-direction:column;}" +
-      ".people-page{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;}" +
-      ".people-page .org-pane:not([hidden]){flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;}" +
-      ".people-page .org-table-wrap{flex:1 1 auto;min-height:0;max-height:none;overflow:auto;}";
+      "body:has(.people-page) .xm-content,#xm-content:has(.people-page){flex:1 1 auto;min-height:0;overflow:auto!important;}" +
+      ".people-page{overflow:visible;padding-bottom:24px;}" +
+      ".people-page .org-table-wrap{overflow:auto;}";
   }
 
   function showShellTab() {

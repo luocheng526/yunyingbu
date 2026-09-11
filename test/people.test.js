@@ -50,9 +50,8 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(noticesText, /日常公告/);
     const css = await fetch(`${base}/people.css`);
     const cssText = await css.text();
-    assert.match(cssText, /overflow:\s*hidden\s*!important/);
+    assert.match(cssText, /overflow:\s*auto\s*!important/);
     assert.match(cssText, /\.org-table-wrap[\s\S]*overflow:\s*auto/);
-    assert.doesNotMatch(cssText, /max-height:\s*calc\(100vh - 250px\)/);
     assert.doesNotMatch(text, /class="site-sidebar"/);
     assert.doesNotMatch(text, /<header class="site-header">/);
     assert.match(text, /组织中心/);
@@ -60,6 +59,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     const js = await fetch(`${base}/shared/modules/people.js`);
     const jsText = await js.text();
     assert.equal(js.status, 200);
+    assert.match(jsText, /overflow:auto!important/);
     assert.match(jsText, /店铺主数据/);
     assert.match(jsText, /总负责人/);
     assert.match(jsText, /登录主账号/);
