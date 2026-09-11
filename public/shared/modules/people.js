@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.161-bulk-pass";
+    const href = "/people.css?v=0.1.162-sticky-filter";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -40,7 +40,8 @@
       "body:has(.xm-shell):has(.people-page) .xm-main{height:100vh;max-height:100vh;overflow-x:hidden!important;overflow-y:auto!important;min-height:0;display:flex;flex-direction:column;}" +
       "body:has(.people-page) .xm-content,#xm-content:has(.people-page){flex:0 0 auto;height:auto;overflow:visible!important;}" +
       ".people-page{overflow:visible;padding-bottom:24px;}" +
-      ".people-page .org-table-wrap{overflow:visible;}";
+      ".people-page .org-table-wrap{overflow:auto!important;max-height:min(70vh,calc(100vh - 240px));}" +
+      ".people-page th{position:sticky;top:0;z-index:3;background:#fafafa;}";
   }
 
   function showShellTab() {

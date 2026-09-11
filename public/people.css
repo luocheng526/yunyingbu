@@ -175,7 +175,8 @@ body:has(.people-page) .xm-tabs {
 }
 
 .org-table-wrap {
-  overflow: visible;
+  overflow: auto;
+  max-height: min(70vh, calc(100vh - 240px));
   background: #fff;
   border: 1px solid var(--xm-line, #f0f0f0);
   border-radius: 8px;
@@ -199,7 +200,7 @@ body:has(.people-page) .xm-tabs {
 .people-page th {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 3;
   background: #fafafa;
   color: var(--xm-muted, #8c8c8c);
   font-weight: 600;

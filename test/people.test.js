@@ -61,6 +61,10 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     const jsText = await js.text();
     assert.equal(js.status, 200);
     assert.match(jsText, /overflow-y:auto!important/);
+    assert.match(jsText, /org-table-wrap\{overflow:auto!important/);
+    assert.match(jsText, /position:sticky/);
+    assert.match(cssText, /org-table-wrap/);
+    assert.match(cssText, /position:\s*sticky/);
     assert.match(jsText, /onPeopleWheel/);
     assert.match(jsText, /店铺主数据/);
     assert.match(jsText, /总负责人/);
