@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.227 · logs-page-v2 */
+/* xm-module-academy 0.1.271 · handbook-move */
 (function () {
-  const ASSET_VER = "0.1.227";
+  const ASSET_VER = "0.1.271";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -1675,6 +1675,51 @@
           return item ? item.getAttribute("data-id") : "";
         }
 
+        function movePayload(row, ev) {
+          const group = row.closest(".academy-tree-group");
+          const targetId = rowNodeId(row);
+          const payload = { id: draggingId };
+          const dragGroup = treeNav.querySelector('.academy-tree-group[data-node="' + draggingId + '"]');
+          if (group && dragGroup && group !== dragGroup && group.contains(dragGroup)) {
+            payload.parentId = targetId;
+            const kids = group.querySelector(".academy-tree-kids");
+            const first = kids ? kids.querySelector(":scope > .academy-tree-group") : null;
+            const firstId = first ? first.getAttribute("data-node") : "";
+            if (firstId && firstId !== draggingId) {
+              payload.beforeId = firstId;
+            }
+            return payload;
+          }
+          const parentGroup = group && group.parentElement ? group.parentElement.closest(".academy-tree-group") : null;
+          const parentId = parentGroup ? parentGroup.getAttribute("data-node") : "";
+          const rect = row.getBoundingClientRect();
+          const after = ev.clientY > rect.top + rect.height / 2;
+          if (after) {
+            const next = group && group.nextElementSibling;
+            if (next && next.classList.contains("academy-tree-group")) {
+              payload.beforeId = next.getAttribute("data-node");
+            } else {
+              payload.parentId = parentId;
+            }
+          } else {
+            payload.beforeId = targetId;
+          }
+          return payload;
+        }
+
+        function postMove(payload) {
+          return postJson("/api/academy/handbook/reorder", payload).catch(function (err) {
+            if (String(err.message || "").indexOf("404") < 0) {
+              throw err;
+            }
+            return postJson("/api/academy/handbook/sections/" + encodeURIComponent(payload.id), {
+              move: true,
+              beforeId: payload.beforeId || "",
+              parentId: payload.parentId || ""
+            });
+          });
+        }
+
         const treeNav = root.querySelector("#academy-tree");
         treeNav.addEventListener("dragstart", function (ev) {
           if (!editorOk || ev.target.closest("[data-add]") || ev.target.closest("form")) {
@@ -1716,29 +1761,13 @@
             return;
           }
           ev.preventDefault();
-          const targetId = rowNodeId(row);
-          const group = row.closest(".academy-tree-group");
-          const parentGroup = group && group.parentElement ? group.parentElement.closest(".academy-tree-group") : null;
-          const parentId = parentGroup ? parentGroup.getAttribute("data-node") : "";
-          const rect = row.getBoundingClientRect();
-          const after = ev.clientY > rect.top + rect.height / 2;
-          const payload = { id: draggingId };
-          if (after) {
-            const next = group.nextElementSibling;
-            if (next && next.classList.contains("academy-tree-group")) {
-              payload.beforeId = next.getAttribute("data-node");
-            } else {
-              payload.parentId = parentId;
-            }
-          } else {
-            payload.beforeId = targetId;
-          }
+          const payload = movePayload(row, ev);
           draggingId = "";
           clearDropMarks();
-          if (payload.beforeId === payload.id) {
+          if (!payload.id || payload.beforeId === payload.id) {
             return;
           }
-          postJson("/api/academy/handbook/reorder", payload)
+          postMove(payload)
             .then(function () {
               return loadTree().then(function () {
                 if (currentId) {
@@ -1750,6 +1779,9 @@
             })
             .catch(function (err) {
               const tree = root.querySelector("#academy-tree");
+              tree.querySelectorAll(".academy-status.error").forEach(function (el) {
+                el.parentNode.removeChild(el);
+              });
               tree.insertAdjacentHTML(
                 "beforeend",
                 '<p class="academy-status error">' + escapeHtml(err.message) + "</p>"

@@ -52,6 +52,9 @@ test("academy.js opens the handbook editor", () => {
   assert.match(js, /添加子菜单/);
   assert.match(js, /academy-tree-add/);
   assert.match(js, /handbook\/reorder/);
+  assert.match(js, /move: true/);
+  assert.match(js, /postMove/);
+  assert.match(js, /movePayload/);
   assert.match(js, /draggable/);
   assert.match(js, /draggable=\"true\"/);
   assert.match(js, /星脉甄选商学院/);
@@ -134,9 +137,25 @@ test("plan is live; write body, add branch, insert image", async () => {
     body: JSON.stringify({ id: "goods-test", beforeId: "goods-title" })
   });
   assert.equal(moved.status, 200);
+  const viaSave = await fetch(`${base}/api/academy/handbook/sections/goods-test`, {
+    method: "POST",
+    headers: { cookie, Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ move: true, parentId: "goods", beforeId: "goods-title" })
+  });
+  assert.equal(viaSave.status, 200);
   const afterMove = await (await fetch(`${base}/api/academy/handbook/tree`, { headers })).json();
   const goodsKids = afterMove.tree.find((n) => n.id === "goods").children.map((n) => n.id);
   assert.ok(goodsKids.indexOf("goods-test") < goodsKids.indexOf("goods-title"));
+  const nested = afterAdd.tree.find((n) => n.id === "goods").children.find((n) => n.title === "新品日历");
+  const up = await fetch(`${base}/api/academy/handbook/sections/${nested.id}`, {
+    method: "POST",
+    headers: { cookie, Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ move: true, parentId: "goods", beforeId: goodsKids[0] })
+  });
+  assert.equal(up.status, 200);
+  const afterUp = await (await fetch(`${base}/api/academy/handbook/tree`, { headers })).json();
+  const kidsUp = afterUp.tree.find((n) => n.id === "goods").children.map((n) => n.id);
+  assert.equal(kidsUp[0], nested.id);
   const logs = await (await fetch(`${base}/api/academy/logs`, { headers })).json();
   assert.ok(logs.items.some((item) => item.actor === "罗成" && item.action === "改正文"));
   assert.ok(logs.items.some((item) => item.action === "加分支"));
