@@ -3,6 +3,7 @@
 【纪律】
 - 站点：`https://zx.xingmaierp.cc/shen`
 - 交单模块名：`沈子晗`。申请人 `罗成运营部主脑`。做完直接交单。
+- 线上登录：`罗成` 或 `luocheng`，密码 `jingdong220`。不要再用演示账号 / `ChangeMe123!`。见 [00-prod-admin.md](00-prod-admin.md)。
 - 版本号 `0.1.N-说明`，先 `GET /api/releases/next`。禁止自编 `shen-0.1.x`。
 - 嵌入式：`public/shared/modules/shen.js` 挂 `XmModules["/shen"]`。不要自画侧栏，不要交壳，不要交 `src/app.js`。
 - 内容区跟 `--xm-*` / `data-theme`。不要抄 e50e 全页壳。
