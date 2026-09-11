@@ -44,7 +44,6 @@ test("GET /han is 韩梦凯运营中心 with left sidebar shell", async () => {
     assert.match(html, /href="\/han\?sub=selection"/);
     assert.match(html, /href="\/han\?sub=products"/);
     assert.match(html, /href="\/han\?sub=paid"/);
-    assert.match(html, /class="han-tabs"/);
     assert.match(html, /选品数据/);
     assert.match(html, /商品数据/);
     assert.match(html, /付费数据/);
@@ -345,7 +344,7 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /商品分层/);
   assert.match(js, /function goHanPage/);
   assert.match(js, /window\.__xmGo/);
-  assert.match(js, /data-xm-group='\/han'\]>\.xm-submenu/);
+  assert.doesNotMatch(js, /data-xm-group='\/han'\]>\.xm-submenu/);
   assert.doesNotMatch(js, /han-fold-parent/);
   assert.doesNotMatch(js, /goods\.remove\(/);
   assert.match(js, /\/api\/han\/shops/);
@@ -400,13 +399,18 @@ test("goHanPage switches Han pages through the shell router", () => {
   assert.deepEqual(calls, [["assign", "/han/goods?team=" + encodeURIComponent("陈晓曼组")]]);
 });
 
-test("han pages put 选品/商品/付费/培训 on a horizontal tab bar", async () => {
+test("goods page puts 商品分层 teams on a horizontal tab bar", async () => {
   const { readFile } = await import("node:fs/promises");
   const { runInNewContext } = await import("node:vm");
   const js = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
   const leftover = { id: "han-goods-teams", parentNode: { removeChild() { leftover.gone = true; } } };
   const styles = [];
-  const root = { innerHTML: "", querySelector() { return { innerHTML: "", addEventListener() {} }; } };
+  const root = {
+    innerHTML: "",
+    querySelector() {
+      return { innerHTML: "", addEventListener() {} };
+    },
+  };
   const document = {
     readyState: "complete",
     head: {
@@ -430,24 +434,25 @@ test("han pages put 选品/商品/付费/培训 on a horizontal tab bar", async 
       return 1;
     },
     clearInterval() {},
-    window: { XmModules: {}, location: { pathname: "/han/selection", search: "" } },
+    window: { XmModules: {}, location: { pathname: "/han/goods", search: "" } },
     document,
-    location: { pathname: "/han/selection", search: "", assign() {} },
+    location: { pathname: "/han/goods", search: "", assign() {} },
     fetch() {
       return Promise.resolve({ json: () => Promise.resolve({ items: [] }) });
     },
   };
   sandbox.window.document = document;
   runInNewContext(js, sandbox);
-  sandbox.window.XmModules["/han/selection"].mount(root);
-  assert.match(root.innerHTML, /class="han-tabs"/);
-  assert.match(root.innerHTML, /选品数据/);
-  assert.match(root.innerHTML, /商品数据/);
-  assert.match(root.innerHTML, /实时付费/);
-  assert.match(root.innerHTML, /培训系统/);
-  assert.match(root.innerHTML, /data-han-tab="\/han\/goods"/);
+  sandbox.window.XmModules["/han/goods"].mount(root);
+  assert.match(root.innerHTML, /class="han-tabs han-tabs-sub"/);
+  assert.match(root.innerHTML, /商品分层/);
+  assert.match(root.innerHTML, /陈晓曼组/);
+  assert.match(root.innerHTML, /薛双双组/);
+  assert.doesNotMatch(root.innerHTML, /data-han-tab="\/han\/selection"/);
   assert.equal(leftover.gone, true);
-  assert.match(styles[0].textContent, /xm-submenu/);
+  assert.doesNotMatch(styles[0].textContent, /xm-submenu/);
+  sandbox.window.XmModules["/han/selection"].mount(root);
+  assert.doesNotMatch(root.innerHTML, /class="han-tabs"/);
 });
 
 test("han store keeps dropProbeTasks and hydrateFromMysql exports", async () => {

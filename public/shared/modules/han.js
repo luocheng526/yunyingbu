@@ -9,17 +9,7 @@
 
   window.XmModules = window.XmModules || {};
 
-  const HAN_TABS = [
-    { href: "/han/selection", label: "选品数据" },
-    { href: "/han/goods", label: "商品数据" },
-    { href: "/han/paid", label: "实时付费" },
-    { href: "/han/training", label: "培训系统" },
-  ];
   const HAN_GOODS_TEAMS = ["陈晓曼组", "高明阳组", "毛永超组", "段坤孝组", "薛双双组"];
-
-  function hanPath() {
-    return String(location.pathname || "").replace(/\/+$/, "") || "/";
-  }
 
   function tabLink(href, label, on) {
     return (
@@ -32,18 +22,6 @@
       '">' +
       escapeHtml(label) +
       "</a>"
-    );
-  }
-
-  function mainTabsHtml() {
-    const path = hanPath();
-    return (
-      '<nav class="han-tabs" aria-label="韩梦凯栏目">' +
-      HAN_TABS.map(function (tab) {
-        const on = path === tab.href || (tab.href !== "/han/selection" && path.indexOf(tab.href) === 0);
-        return tabLink(tab.href, tab.label, on);
-      }).join("") +
-      "</nav>"
     );
   }
 
@@ -80,7 +58,6 @@
     ensureHanChrome();
     return (
       '<main class="page">' +
-      mainTabsHtml() +
       (extraTabs || "") +
       '<header class="page-head"><p class="kicker">韩梦凯运营中心</p><h1>' +
       escapeHtml(title) +
@@ -370,7 +347,7 @@
       if (!teams.includes(team)) {
         root.innerHTML = page(
           "商品分层",
-          "上方横排切换栏目和小组。点小组后添加店铺，再进该店分层表。",
+          "右侧横排切换小组。点小组后添加店铺，再进该店分层表。",
           '<div class="stack"><section class="panel"><h2>商品分层</h2><p class="lead">用上面的小组标签进入各团队店铺。</p></section></div>',
           teamTabsHtml(""),
         );
@@ -772,7 +749,7 @@
       const style = document.createElement("style");
       style.id = "han-top-tabs-css";
       style.textContent =
-        ".xm-menu-group[data-xm-group='/han']>.xm-submenu,.han-goods-teams{display:none!important}" +
+        ".han-goods-teams{display:none!important}" +
         ".han-tabs{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 14px}" +
         ".han-tab{display:inline-flex;align-items:center;min-height:34px;padding:6px 16px;border-radius:999px;background:#f3f4f6;color:#374151;text-decoration:none;font-size:14px;font-weight:600}" +
         ".han-tab:hover{background:#e5e7eb}" +
