@@ -6,16 +6,6 @@ import { patchAppSource } from "../src/modules/shen/patch-app.js";
 import { SQL, hydrateFromMysql, resetStore, setPool } from "../src/modules/shen/store.js";
 import { SHEN_LEGACY_REDIRECTS, SHEN_SUBMENUS } from "../src/modules/shen/submenu.js";
 
-const NAV_LABELS = [
-  "首页",
-  "数据中心",
-  "沈子晗运营中心",
-  "韩梦凯运营中心",
-  "人员管理",
-  "版本发布中心",
-  "个人中心"
-];
-
 function createFakePool() {
   const tasks = [];
   let nextId = 1;
@@ -124,16 +114,18 @@ test("submenu pages use 产品中心 and 付费中心", async () => {
     const tasks = await request(base, "/shen/tasks");
     assert.match(tasks.text, /任务列表/);
     assert.match(tasks.text, /今日简报/);
-    for (const label of NAV_LABELS) {
-      assert.match(tasks.text, new RegExp(label));
-    }
-    assert.match(tasks.text, /产品中心/);
-    assert.match(tasks.text, /付费中心/);
     assert.equal(tasks.text.includes("选品中心"), false);
     assert.equal(tasks.text.includes("商品成长"), false);
     assert.equal(tasks.text.includes("实时付费"), false);
+    assert.equal(tasks.text.includes('id="site-nav"'), false);
+    assert.equal(tasks.text.includes("site-sidebar"), false);
+    assert.equal(productHasSecondNav(await request(base, "/shen/product")), false);
   });
 });
+
+function productHasSecondNav(page) {
+  return page.text.includes('id="site-nav"') || page.text.includes("site-sidebar") || page.text.includes("运营部</a>");
+}
 
 test("shen-submenu script replaces retired sider labels", async () => {
   await withServer(async (base) => {

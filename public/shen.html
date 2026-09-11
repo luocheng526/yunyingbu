@@ -5,67 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>沈子晗运营中心</title>
     <link rel="stylesheet" href="/shared/layout.css" />
-    <link rel="stylesheet" href="/shen-submenu.css" />
     <style>
-      html, body {
-        margin: 0;
-        min-height: 100%;
-      }
-      .app-shell {
-        display: flex;
-        align-items: stretch;
-        min-height: 100vh;
-      }
-      .site-sidebar,
-      .app-shell > #site-nav,
-      .app-shell > aside,
-      .app-shell > .site-header {
-        flex: 0 0 220px;
-        width: 220px;
-        box-sizing: border-box;
-        background: var(--card, #fffcf7);
-        border-right: 1px solid var(--line, #e7e5e4);
-        padding: 1.15rem 0.85rem 2rem;
-      }
-      .site-brand {
-        display: block;
-        font-weight: 700;
-        color: var(--accent-ink, #134e4a);
-        text-decoration: none;
-        margin: 0 0.4rem 1rem;
-      }
-      .site-nav {
-        display: flex;
-        flex-direction: column;
-        gap: 0.2rem;
-      }
-      .site-nav a {
-        color: var(--muted, #57534e);
-        text-decoration: none;
-        padding: 0.5rem 0.7rem;
-        border-radius: 10px;
-        font-size: 0.92rem;
-      }
-      .site-nav a:hover,
-      .site-nav a[aria-current="page"] {
-        color: var(--accent-ink, #134e4a);
-        background: #ccfbf1;
-      }
-      .app-shell .site-header__inner {
-        display: flex;
-        flex-direction: column;
-        align-items: stretch;
-        gap: 0.75rem;
-        max-width: none;
-        margin: 0;
-        padding: 0;
-      }
-      .page {
-        flex: 1;
-        min-width: 0;
-        max-width: none;
-        padding: 2.25rem 1.5rem 3.5rem;
-      }
       .panel {
         background: var(--card, #fffcf7);
         border: 1px solid var(--line, #e7e5e4);
@@ -74,112 +14,33 @@
         padding: 1.15rem 1.2rem 1.25rem;
         margin-bottom: 1.25rem;
       }
-      .panel h2 {
-        margin: 0 0 0.85rem;
-        font-size: 1.15rem;
+      .panel h2 { margin: 0 0 0.85rem; font-size: 1.15rem; }
+      label { display: block; margin-bottom: 0.35rem; color: var(--muted, #57534e); font-size: 0.92rem; }
+      input[type="text"], textarea {
+        width: 100%; max-width: 42rem; font: inherit; padding: 0.55rem 0.7rem;
+        border: 1px solid var(--line, #e7e5e4); border-radius: 10px; background: #fff; color: inherit;
       }
-      label {
-        display: block;
-        margin-bottom: 0.35rem;
-        color: var(--muted, #57534e);
-        font-size: 0.92rem;
-      }
-      input[type="text"],
-      textarea {
-        width: 100%;
-        max-width: 42rem;
-        font: inherit;
-        padding: 0.55rem 0.7rem;
-        border: 1px solid var(--line, #e7e5e4);
-        border-radius: 10px;
-        background: #fff;
-        color: inherit;
-      }
-      textarea {
-        min-height: 8rem;
-        resize: vertical;
-      }
-      .row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.6rem;
-        align-items: flex-end;
-        margin-top: 0.65rem;
-      }
+      textarea { min-height: 8rem; resize: vertical; }
+      .row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: flex-end; margin-top: 0.65rem; }
       button {
-        font: inherit;
-        border: 0;
-        border-radius: 999px;
-        padding: 0.5rem 1rem;
-        background: var(--accent, #0f766e);
-        color: #fff;
-        cursor: pointer;
+        font: inherit; border: 0; border-radius: 999px; padding: 0.5rem 1rem;
+        background: var(--accent, #0f766e); color: #fff; cursor: pointer;
       }
-      button:hover {
-        filter: brightness(1.05);
-      }
-      .status {
-        margin: 0.65rem 0 0;
-        color: var(--muted, #57534e);
-        font-size: 0.92rem;
-        min-height: 1.3em;
-      }
-      .status--error {
-        color: #b91c1c;
-      }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.95rem;
-      }
-      th,
-      td {
-        text-align: left;
-        padding: 0.55rem 0.4rem;
-        border-bottom: 1px solid var(--line, #e7e5e4);
-      }
-      th {
-        color: var(--muted, #57534e);
-        font-weight: 600;
-      }
-      .empty {
-        color: var(--muted, #57534e);
-        margin: 0;
-      }
+      .status { margin: 0.65rem 0 0; color: var(--muted, #57534e); font-size: 0.92rem; min-height: 1.3em; }
+      .status--error { color: #b91c1c; }
+      table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+      th, td { text-align: left; padding: 0.55rem 0.4rem; border-bottom: 1px solid var(--line, #e7e5e4); }
+      th { color: var(--muted, #57534e); font-weight: 600; }
+      .empty { color: var(--muted, #57534e); margin: 0; }
     </style>
   </head>
   <body>
-    <div class="app-shell">
-      <div id="site-nav">
-        <aside class="site-sidebar">
-          <a class="site-brand" href="/">运营部</a>
-          <nav class="site-nav" aria-label="全站导航">
-            <a href="/">首页</a>
-            <a href="/data">数据中心</a>
-            <div class="shen-nav-group is-open">
-              <div class="shen-nav-parent">
-                <a href="/shen" aria-current="page">沈子晗运营中心</a>
-                <button type="button" class="shen-nav-arrow" aria-expanded="true" aria-label="展开或收起沈子晗子菜单">▼</button>
-              </div>
-              <div class="shen-nav-sub">
-                <a href="/shen/product">产品中心</a>
-                <a href="/shen/paid">付费中心</a>
-                <a href="/shen/training">培训系统</a>
-                <a href="/shen/tasks">任务管理</a>
-              </div>
-            </div>
-            <a href="/han">韩梦凯运营中心</a>
-            <a href="/people">人员管理</a>
-            <a href="/releases">版本发布中心</a>
-            <a href="/me">个人中心</a>
-          </nav>
-        </aside>
-      </div>
-      <main class="page">
-      <p class="kicker">沈子晗团队</p>
-      <h1>沈子晗运营中心</h1>
-      <p class="lead">这是沈子晗团队的任务与日报台。其他智能体请走只读汇总：按店 + 时间范围请求 /api/shen/summary，不要直连内部表。</p>
-
+    <main class="page">
+      <header class="page-head">
+        <p class="kicker">沈子晗团队</p>
+        <h1>沈子晗运营中心</h1>
+        <p class="lead">这是沈子晗团队的任务与日报台。其他智能体请走只读汇总：按店 + 时间范围请求 /api/shen/summary，不要直连内部表。</p>
+      </header>
       <section class="panel" aria-labelledby="task-heading">
         <h2 id="task-heading">任务列表</h2>
         <form id="task-form">
@@ -196,7 +57,6 @@
           <p class="empty">暂无任务</p>
         </div>
       </section>
-
       <section class="panel" aria-labelledby="brief-heading">
         <h2 id="brief-heading">今日简报</h2>
         <form id="brief-form">
@@ -208,13 +68,7 @@
         </form>
         <p id="brief-status" class="status" role="status"></p>
       </section>
-
-      <section class="panel" aria-labelledby="placeholder-heading">
-        <h2 id="placeholder-heading">后续功能占位</h2>
-        <p class="empty">这里预留位置，后续由沈子晗运营中心补业务，当前无功能。</p>
-      </section>
-      </main>
-    </div>
+    </main>
     <script src="/shared/nav.js"></script>
     <script src="/shen-submenu.js"></script>
     <script>
@@ -249,20 +103,15 @@
           const rows = tasks
             .map(function (task) {
               return (
-                "<tr>" +
-                "<td>" +
+                "<tr><td>" +
                 escapeHtml(task.title) +
-                "</td>" +
-                "<td>" +
+                "</td><td>" +
                 escapeHtml(task.status) +
-                "</td>" +
-                "<td>" +
+                "</td><td>" +
                 escapeHtml(task.store) +
-                "</td>" +
-                "<td>" +
+                "</td><td>" +
                 escapeHtml(task.owner) +
-                "</td>" +
-                "</tr>"
+                "</td></tr>"
               );
             })
             .join("");
@@ -274,18 +123,14 @@
 
         async function loadTasks() {
           const res = await fetch("/api/shen/tasks");
-          if (!res.ok) {
-            throw new Error("无法加载任务");
-          }
+          if (!res.ok) throw new Error("无法加载任务");
           const data = await res.json();
           renderTasks(Array.isArray(data) ? data : data.tasks || []);
         }
 
         async function loadBrief() {
           const res = await fetch("/api/shen/brief");
-          if (!res.ok) {
-            throw new Error("无法加载简报");
-          }
+          if (!res.ok) throw new Error("无法加载简报");
           const data = await res.json();
           briefText.value = data.text || "";
         }
@@ -294,14 +139,8 @@
           event.preventDefault();
           const title = taskTitle.value.trim();
           const store = taskStore.value.trim();
-          if (!store) {
-            setStatus(taskStatus, "请填写店", true);
-            return;
-          }
-          if (!title) {
-            setStatus(taskStatus, "请填写任务标题", true);
-            return;
-          }
+          if (!store) return setStatus(taskStatus, "请填写店", true);
+          if (!title) return setStatus(taskStatus, "请填写任务标题", true);
           setStatus(taskStatus, "正在保存…");
           try {
             const res = await fetch("/api/shen/tasks", {
@@ -309,12 +148,8 @@
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ title: title, store: store })
             });
-            const data = await res.json().catch(function () {
-              return {};
-            });
-            if (!res.ok) {
-              throw new Error(data.error || "新增失败");
-            }
+            const data = await res.json().catch(function () { return {}; });
+            if (!res.ok) throw new Error(data.error || "新增失败");
             taskTitle.value = "";
             await loadTasks();
             setStatus(taskStatus, "已新增任务");
@@ -332,12 +167,8 @@
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ text: briefText.value })
             });
-            const data = await res.json().catch(function () {
-              return {};
-            });
-            if (!res.ok) {
-              throw new Error(data.error || "保存失败");
-            }
+            const data = await res.json().catch(function () { return {}; });
+            if (!res.ok) throw new Error(data.error || "保存失败");
             briefText.value = data.text || briefText.value;
             setStatus(briefStatus, "简报已保存");
           } catch (err) {
