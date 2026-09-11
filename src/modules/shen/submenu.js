@@ -1,15 +1,16 @@
 export const SHEN_SUBMENUS = [
-  { slug: "selection", href: "/shen/selection", label: "选品中心" },
-  { slug: "growth", href: "/shen/growth", label: "商品成长" },
-  { slug: "paid", href: "/shen/paid", label: "实时付费" },
+  { slug: "product", href: "/shen/product", label: "产品中心" },
+  { slug: "paid", href: "/shen/paid", label: "付费中心" },
   { slug: "training", href: "/shen/training", label: "培训系统" },
   { slug: "tasks", href: "/shen/tasks", label: "任务管理" }
 ];
 
-/** Old pinyin paths → official sider paths */
+/** Retired and pinyin paths → current sider paths */
 export const SHEN_LEGACY_REDIRECTS = [
-  { from: "/shen/xuanpin", to: "/shen/selection" },
-  { from: "/shen/chengzhang", to: "/shen/growth" },
+  { from: "/shen/selection", to: "/shen/product" },
+  { from: "/shen/growth", to: "/shen/product" },
+  { from: "/shen/xuanpin", to: "/shen/product" },
+  { from: "/shen/chengzhang", to: "/shen/product" },
   { from: "/shen/fufei", to: "/shen/paid" },
   { from: "/shen/peixun", to: "/shen/training" },
   { from: "/shen/renwu", to: "/shen/tasks" }

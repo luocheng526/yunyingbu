@@ -102,15 +102,15 @@ async function request(base, pathname, options = {}) {
   return { res, text, json };
 }
 
-test("GET /shen redirects to official 选品中心 path", async () => {
+test("GET /shen redirects to 产品中心", async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/shen`, { redirect: "manual" });
     assert.equal(res.status, 302);
-    assert.equal(res.headers.get("location"), "/shen/selection");
+    assert.equal(res.headers.get("location"), "/shen/product");
   });
 });
 
-test("official submenu pages match the live sider paths", async () => {
+test("submenu pages use 产品中心 and 付费中心", async () => {
   await withServer(async (base) => {
     for (const item of SHEN_SUBMENUS) {
       const { res, text } = await request(base, item.href);
@@ -127,6 +127,29 @@ test("official submenu pages match the live sider paths", async () => {
     for (const label of NAV_LABELS) {
       assert.match(tasks.text, new RegExp(label));
     }
+    assert.match(tasks.text, /产品中心/);
+    assert.match(tasks.text, /付费中心/);
+    assert.equal(tasks.text.includes("选品中心"), false);
+    assert.equal(tasks.text.includes("商品成长"), false);
+    assert.equal(tasks.text.includes("实时付费"), false);
+  });
+});
+
+test("shen-submenu script replaces retired sider labels", async () => {
+  await withServer(async (base) => {
+    const script = await request(base, "/shen-submenu.js");
+    assert.equal(script.res.status, 200);
+    assert.match(script.text, /产品中心/);
+    assert.match(script.text, /付费中心/);
+    assert.match(script.text, /\/shen\/product/);
+    const embed = await request(base, "/shared/modules/shen.js");
+    assert.equal(embed.res.status, 200);
+    assert.match(embed.text, /产品中心/);
+    assert.match(embed.text, /付费中心/);
+    assert.match(embed.text, /waitPage\("产品中心"\)/);
+    assert.match(embed.text, /waitPage\("付费中心"\)/);
+    assert.equal(embed.text.includes('waitPage("选品中心")'), false);
+    assert.equal(embed.text.includes('waitPage("实时付费")'), false);
   });
 });
 

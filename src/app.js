@@ -11,7 +11,7 @@ export function createApp() {
   const app = express();
   app.use(express.json());
   app.get("/shen", (_req, res) => {
-    res.redirect(302, "/shen/selection");
+    res.redirect(302, "/shen/product");
   });
   for (const item of SHEN_SUBMENUS) {
     app.get(item.href, (_req, res) => {
