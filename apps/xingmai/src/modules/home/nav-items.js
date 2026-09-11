@@ -1,9 +1,12 @@
-export const NAV_VERSION = "v0.4.18";
+export const NAV_VERSION = "v0.4.19";
 
 export const DATA_CHILDREN = [
   { href: "/data/overview", label: "数据总揽" },
   { href: "/data/shops", label: "店铺数据" },
   { href: "/data/goods", label: "商品数据" },
+  { href: "/data/groups", label: "渠道分组" },
+  { href: "/data/categories", label: "渠道品类" },
+  { href: "/data/compare", label: "渠道对比" },
   { href: "/data/paid", label: "实时付费" }
 ];
 

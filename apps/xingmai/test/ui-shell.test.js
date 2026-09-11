@@ -130,7 +130,7 @@ test("shared shell assets are public", async () => {
   assert.doesNotMatch(jsText, /菜单标签">项目<|>项目<\/p>/);
   assert.doesNotMatch(jsText, /xm-menu-label">项目/);
   assert.match(jsText, /退出登录/);
-  assert.match(jsText, /v0\.4\.18/);
+  assert.match(jsText, /v0\.4\.19/);
   assert.match(jsText, /数据总揽/);
   assert.match(jsText, /店铺数据/);
   assert.match(jsText, /选品中心/);
@@ -265,7 +265,7 @@ test("home page html is the xingmai sider template", async () => {
   assert.match(homePageHtml, /\/shared\/modules\/home\.js/);
   assert.match(homePageHtml, /<span>首页<\/span>/);
   assert.match(html, /退出登录/);
-  assert.match(html, /v0\.4\.18/);
+  assert.match(html, /v0\.4\.19/);
   assert.match(html, /甄选商学院/);
   assert.match(html, /培训课程/);
   assert.match(html, /培训考试/);
@@ -378,7 +378,7 @@ test("沈子晗运营中心 expands five placeholder children", async () => {
   assert.match(shenMod, /XmModules\["\/shen\/tasks"\]/);
 });
 
-test("数据中心 expands four placeholder children", async () => {
+test("数据中心 expands seven children including channel boards", async () => {
   const cookieRes = await fetch(`${base}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -400,11 +400,20 @@ test("数据中心 expands four placeholder children", async () => {
   assert.match(html, /数据总揽/);
   assert.match(html, /店铺数据/);
   assert.match(html, /商品数据/);
+  assert.match(html, /渠道分组/);
+  assert.match(html, /渠道品类/);
+  assert.match(html, /渠道对比/);
   assert.match(html, /实时付费/);
   assert.match(html, /\/shared\/modules\/data\.js/);
   assert.match(html, /<title>星脉甄选运营中心<\/title>/);
   const shops = await fetch(`${base}/data/shops`, { headers: { cookie } });
   assert.equal(shops.status, 200);
+  const groups = await fetch(`${base}/data/groups`, { headers: { cookie } });
+  assert.equal(groups.status, 200);
+  const categories = await fetch(`${base}/data/categories`, { headers: { cookie } });
+  assert.equal(categories.status, 200);
+  const compare = await fetch(`${base}/data/compare`, { headers: { cookie } });
+  assert.equal(compare.status, 200);
   const paid = await fetch(`${base}/data/paid`, { headers: { cookie } });
   assert.equal(paid.status, 200);
   const dataMod = readFileSync(join(root, "public/shared/modules/data.js"), "utf8");
@@ -412,6 +421,9 @@ test("数据中心 expands four placeholder children", async () => {
   assert.match(dataMod, /XmModules\["\/data\/overview"\]/);
   assert.match(dataMod, /XmModules\["\/data\/shops"\]/);
   assert.match(dataMod, /XmModules\["\/data\/goods"\]/);
+  assert.match(dataMod, /XmModules\["\/data\/groups"\]/);
+  assert.match(dataMod, /XmModules\["\/data\/categories"\]/);
+  assert.match(dataMod, /XmModules\["\/data\/compare"\]/);
   assert.match(dataMod, /XmModules\["\/data\/paid"\]/);
 });
 
