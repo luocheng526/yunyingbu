@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
@@ -50,8 +51,8 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(noticesText, /日常公告/);
     const css = await fetch(`${base}/people.css`);
     const cssText = await css.text();
-    assert.match(cssText, /max-height:\s*calc\(100vh - 250px\)/);
-    assert.match(cssText, /overflow:\s*auto/);
+    assert.match(cssText, /overflow-y:\s*auto\s*!important/);
+    assert.match(cssText, /\.xm-main/);
     assert.doesNotMatch(text, /class="site-sidebar"/);
     assert.doesNotMatch(text, /<header class="site-header">/);
     assert.match(text, /组织中心/);
@@ -59,11 +60,74 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     const js = await fetch(`${base}/shared/modules/people.js`);
     const jsText = await js.text();
     assert.equal(js.status, 200);
+    assert.match(jsText, /overflow-y:auto!important/);
+    assert.match(jsText, /org-table-wrap\{overflow:auto!important/);
+    assert.match(jsText, /position:sticky/);
+    assert.match(cssText, /org-table-wrap/);
+    assert.match(cssText, /position:\s*sticky/);
+    assert.match(jsText, /onPeopleWheel/);
     assert.match(jsText, /店铺主数据/);
     assert.match(jsText, /总负责人/);
     assert.match(jsText, /登录主账号/);
-    assert.match(jsText, /全部团队/);
+    assert.doesNotMatch(jsText, /id="org-team"/);
+    assert.doesNotMatch(jsText, /id="org-status"/);
+    assert.match(jsText, /org-filter-name/);
     assert.match(jsText, /双击单元格/);
+    assert.match(jsText, /下载模板/);
+    assert.match(jsText, /id="org-import"/);
+    assert.match(jsText, /组织中心-店铺主数据模板/);
+    assert.match(jsText, /org-check-all/);
+    assert.match(jsText, /org-filter-btn/);
+    assert.match(jsText, /data-filter-key="chief"/);
+    assert.match(jsText, />全选</);
+    assert.match(jsText, /key === "remark"/);
+    assert.match(jsText, /org-row-check/);
+    assert.match(jsText, /缺密码/);
+    assert.match(jsText, /缺所属人员/);
+    assert.match(jsText, /运营中/);
+    assert.match(jsText, /闲置中/);
+    assert.match(jsText, /退店中/);
+    assert.doesNotMatch(jsText, /5倍在做/);
+    assert.match(jsText, /登录密码/);
+    assert.match(jsText, /ChangeMe123!/);
+    assert.match(jsText, /与姓名相同/);
+    assert.doesNotMatch(jsText, /工号/);
+    assert.doesNotMatch(jsText, /name="employeeNo"/);
+    assert.match(jsText, /表头可筛部门、上级、岗位、所属中心、状态/);
+    assert.match(jsText, /people-cell/);
+    assert.match(jsText, /startPersonCellEdit/);
+    assert.match(jsText, /people-row-check/);
+    assert.match(jsText, /people-check-all/);
+    assert.match(jsText, /people-bulk/);
+    assert.match(jsText, /\/api\/people\/passwords/);
+    assert.doesNotMatch(jsText, /能看见的店/);
+    assert.match(jsText, /data-filter-key="status"/);
+    assert.match(jsText, /<th>账号<\/th><th>登录密码<\/th>/);
+    assert.doesNotMatch(jsText, /店铺 \/ 店群/);
+    assert.doesNotMatch(jsText, /id="shop-form"/);
+    assert.doesNotMatch(jsText, /id="shop-tbody"/);
+    assert.match(jsText, /id="people-filter-pop"/);
+    assert.match(jsText, /data-filter-key="department"/);
+    assert.match(jsText, /data-filter-key="managerName"/);
+    assert.match(jsText, /data-filter-key="center"/);
+    assert.match(jsText, /data-filter-key="status"/);
+    assert.match(jsText, /applyMemberFilters/);
+    assert.match(jsText, /id="people-modal"/);
+    assert.match(jsText, /id="people-add"/);
+    assert.match(jsText, /id="people-template"/);
+    assert.match(jsText, /组织中心-身份名册模板/);
+    assert.match(jsText, /\/api\/people\/import/);
+    assert.match(jsText, /点新增人员弹出对话框/);
+    assert.match(jsText, /id="people-q"/);
+    assert.match(jsText, /id="people-search"/);
+    assert.match(jsText, /id="rights-tree"/);
+    assert.match(jsText, /总监/);
+    assert.match(jsText, /renderRightsTree/);
+    assert.match(jsText, /placeFilterPop/);
+    assert.match(jsText, /onFilterPin/);
+    assert.match(jsText, /border-collapse:separate/);
+    assert.doesNotMatch(jsText, /demo-flag/);
+    assert.doesNotMatch(jsText, /演示<\/span>/);
     assert.doesNotMatch(jsText, /龙虎榜/);
     assert.doesNotMatch(jsText, /主数据治理/);
     assert.doesNotMatch(jsText, /全部公司/);
@@ -118,6 +182,12 @@ test("GET /api/people/charter is read-only source rule", async () => {
 
 test("org store board lists demo shops and supports add", async () => {
   await withServer(async (base) => {
+    const summary = await fetch(`${base}/api/people/org/summary`);
+    const summaryJson = await summary.json();
+    assert.equal(summary.status, 200);
+    assert.equal(typeof summaryJson.summary.missingPassword, "number");
+    assert.equal(typeof summaryJson.summary.missingOwner, "number");
+
     const listed = await fetch(`${base}/api/people/org/stores`);
     const listedJson = await listed.json();
     assert.equal(listed.status, 200);
@@ -134,7 +204,7 @@ test("org store board lists demo shops and supports add", async () => {
         owner: "验收同事",
         storeName: "验收旗舰店",
         merchantId: "19900001",
-        remark: "5倍在做",
+        remark: "运营中",
         login: "demo_ok",
         password: "Demo123!"
       })
@@ -146,16 +216,57 @@ test("org store board lists demo shops and supports add", async () => {
     const patched = await fetch(`${base}/api/people/org/stores/${createdJson.store.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ remark: "退店", closedOn: "9.9" })
+      body: JSON.stringify({ remark: "已退店", closedOn: "9.9" })
     });
     const patchedJson = await patched.json();
     assert.equal(patched.status, 200);
     assert.equal(patchedJson.store.statusKey, "closed");
+    const closing = await fetch(`${base}/api/people/org/stores/${createdJson.store.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ remark: "退店中" })
+    });
+    const closingJson = await closing.json();
+    assert.equal(closing.status, 200);
+    assert.equal(closingJson.store.statusKey, "closing");
+    assert.equal(closingJson.store.remark, "退店中");
 
     const removed = await fetch(`${base}/api/people/org/stores/${createdJson.store.id}`, {
       method: "DELETE"
     });
     assert.equal(removed.status, 200);
+
+    const template = await fetch(`${base}/api/people/org/stores/template`);
+    const csv = await template.text();
+    assert.equal(template.status, 200);
+    assert.match(csv, /总负责人,小组负责人,店铺所属人员,店铺名称,商家id/);
+
+    const imported = await fetch(`${base}/api/people/org/stores/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          {
+            总负责人: "沈子晗组",
+            小组负责人: "张文静",
+            店铺所属人员: "导入同事",
+            店铺名称: "导入旗舰店",
+            商家id: "18800001",
+            店铺情况备注: "运营中",
+            更新时间: "9.11更新",
+            退店时间: "",
+            登录主账号: "demo_imp",
+            密码: "Demo123!"
+          }
+        ]
+      })
+    });
+    const importedJson = await imported.json();
+    assert.equal(imported.status, 200, JSON.stringify(importedJson));
+    assert.equal(importedJson.created, 1);
+    const listedAfter = await fetch(`${base}/api/people/org/stores?q=${encodeURIComponent("导入旗舰店")}`);
+    const listedAfterJson = await listedAfter.json();
+    assert.ok(listedAfterJson.stores.some((row) => row.storeName === "导入旗舰店" && row.owner === "导入同事"));
   });
 });
 
@@ -174,7 +285,7 @@ test("org board scopes edit by 责权", async () => {
     const denied = await fetch(`${base}/api/people/org/stores/${hanStore.id}?actor=${encodeURIComponent("沈子晗")}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ remark: "退店" })
+      body: JSON.stringify({ remark: "已退店" })
     });
     assert.equal(denied.status, 403);
 
@@ -238,11 +349,121 @@ test("POST /api/people appends a staff row", async () => {
     assert.equal(createdJson.ok, true);
     assert.equal(createdJson.person.demo, false);
     assert.equal(createdJson.person.name, body.name);
+    assert.equal(createdJson.person.username, body.name);
+    assert.equal(createdJson.person.password, "ChangeMe123!");
 
     const listed = await fetch(`${base}/api/people`);
     const listedJson = await listed.json();
     assert.equal(listedJson.people.length, 17);
     assert.ok(listedJson.people.some((row) => row.name === "测试同事" && row.center === "数据中心"));
+    const shen = listedJson.people.find((row) => row.name === "沈子晗");
+    assert.equal(shen.username, "沈子晗");
+    assert.equal(shen.password, "ChangeMe123!");
+  });
+});
+
+test("PATCH /api/people updates username and password", async () => {
+  await withServer(async (base) => {
+    const listed = await fetch(`${base}/api/people`);
+    const listedJson = await listed.json();
+    const wang = listedJson.people.find((row) => row.name === "王博");
+    const patched = await fetch(`${base}/api/people/${wang.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "wangbo", password: "ShopLogin1" })
+    });
+    const patchedJson = await patched.json();
+    assert.equal(patched.status, 200, JSON.stringify(patchedJson));
+    assert.equal(patchedJson.person.username, "wangbo");
+    assert.equal(patchedJson.person.password, "ShopLogin1");
+
+    const empty = await fetch(`${base}/api/people/${wang.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "   " })
+    });
+    assert.equal(empty.status, 400);
+
+    const taken = await fetch(`${base}/api/people/${wang.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "沈子晗" })
+    });
+    assert.equal(taken.status, 400);
+
+    const overlay = JSON.parse(fs.readFileSync("src/modules/people/data/people-logins.json", "utf8"));
+    assert.equal(overlay[String(wang.id)].username, "wangbo");
+    assert.equal(overlay[String(wang.id)].password, "ShopLogin1");
+  });
+});
+
+test("PATCH /api/people/passwords sets one password for selected staff", async () => {
+  await withServer(async (base) => {
+    const listed = await fetch(`${base}/api/people`);
+    const listedJson = await listed.json();
+    const wang = listedJson.people.find((row) => row.name === "王博");
+    const yang = listedJson.people.find((row) => row.name === "杨润泽");
+    const empty = await fetch(`${base}/api/people/passwords`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [wang.id], password: "  " })
+    });
+    assert.equal(empty.status, 400);
+    const none = await fetch(`${base}/api/people/passwords`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [], password: "TeamPass1" })
+    });
+    assert.equal(none.status, 400);
+    const patched = await fetch(`${base}/api/people/passwords`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [wang.id, yang.id], password: "TeamPass1" })
+    });
+    const patchedJson = await patched.json();
+    assert.equal(patched.status, 200, JSON.stringify(patchedJson));
+    assert.equal(patchedJson.updated, 2);
+    const after = await fetch(`${base}/api/people`);
+    const afterJson = await after.json();
+    assert.equal(afterJson.people.find((row) => row.id === wang.id).password, "TeamPass1");
+    assert.equal(afterJson.people.find((row) => row.id === yang.id).password, "TeamPass1");
+    assert.equal(afterJson.people.find((row) => row.name === "沈子晗").password, "ChangeMe123!");
+  });
+});
+
+test("people roster template and import upsert by username", async () => {
+  await withServer(async (base) => {
+    const template = await fetch(`${base}/api/people/template`);
+    const csv = await template.text();
+    assert.equal(template.status, 200);
+    assert.match(csv, /姓名,部门,上级,岗位,所属中心,状态,账号,登录密码/);
+
+    const imported = await fetch(`${base}/api/people/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          {
+            姓名: "导入同事",
+            部门: "数据中心",
+            上级: "管理员",
+            岗位: "运营",
+            所属中心: "数据中心",
+            状态: "在职",
+            账号: "daoru",
+            登录密码: "Import1!"
+          }
+        ]
+      })
+    });
+    const importedJson = await imported.json();
+    assert.equal(imported.status, 200, JSON.stringify(importedJson));
+    assert.equal(importedJson.created, 1);
+    const listed = await fetch(`${base}/api/people`);
+    const listedJson = await listed.json();
+    const row = listedJson.people.find((item) => item.username === "daoru");
+    assert.equal(row.name, "导入同事");
+    assert.equal(row.password, "Import1!");
   });
 });
 

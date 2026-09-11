@@ -1,8 +1,9 @@
 import { assertCanWrite, canEditStore, rowMatchesScope, scopeOf } from "./org-acl.js";
 
 const STATUSES = {
-  operating: "5倍在做",
-  idle: "5倍闲置可退店",
+  operating: "运营中",
+  idle: "闲置中",
+  closing: "退店中",
   closed: "已退店"
 };
 
@@ -43,7 +44,7 @@ function seedRows() {
       owner,
       storeName,
       merchantId,
-      remark: "5倍在做",
+      remark: "运营中",
       statusKey: "operating",
       updatedOn: "9.8更新",
       closedOn: "",
@@ -61,7 +62,7 @@ function seedRows() {
       owner,
       storeName,
       merchantId,
-      remark: "5倍在做",
+      remark: "运营中",
       statusKey: "operating",
       updatedOn: "8.12更新",
       closedOn: "",
@@ -70,7 +71,7 @@ function seedRows() {
       demo: true
     });
   }
-  rows[rows.length - 1].remark = "5倍闲置可退店";
+  rows[rows.length - 1].remark = "闲置中";
   rows[rows.length - 1].statusKey = "idle";
   return { nextId: id, rows };
 }
@@ -126,9 +127,12 @@ export function summarizeOrg(actor) {
     total: stores.length,
     operating: stores.filter((row) => row.statusKey === "operating").length,
     idle: stores.filter((row) => row.statusKey === "idle").length,
+    closing: stores.filter((row) => row.statusKey === "closing").length,
     closed: stores.filter((row) => row.statusKey === "closed").length,
     missingMerchant: stores.filter((row) => !String(row.merchantId || "").trim()).length,
-    missingLogin: stores.filter((row) => !String(row.login || "").trim()).length
+    missingLogin: stores.filter((row) => !String(row.login || "").trim()).length,
+    missingPassword: stores.filter((row) => !String(row.password || "").trim()).length,
+    missingOwner: stores.filter((row) => !String(row.owner || "").trim()).length
   };
 }
 
@@ -158,13 +162,15 @@ export function listOrgLogs() {
 }
 
 function normalize(input, previous = {}) {
-  const remark = typeof input.remark === "string" ? input.remark.trim() : previous.remark || "5倍在做";
+  const remark = typeof input.remark === "string" ? input.remark.trim() : previous.remark || "运营中";
   let statusKey = typeof input.statusKey === "string" ? input.statusKey.trim() : previous.statusKey || "operating";
-  if (remark.includes("已退") || remark === "退店") {
+  if (remark.includes("已退")) {
     statusKey = "closed";
+  } else if (remark.includes("退店")) {
+    statusKey = "closing";
   } else if (remark.includes("闲置")) {
     statusKey = "idle";
-  } else if (remark.includes("在做") || remark.includes("正常")) {
+  } else if (remark.includes("运营") || remark.includes("在做") || remark.includes("正常")) {
     statusKey = "operating";
   }
   const chief = typeof input.chief === "string" ? input.chief.trim() : previous.chief || "";
@@ -176,12 +182,107 @@ function normalize(input, previous = {}) {
     owner: typeof input.owner === "string" ? input.owner.trim() : previous.owner || "",
     storeName: typeof input.storeName === "string" ? input.storeName.trim() : previous.storeName || "",
     merchantId: typeof input.merchantId === "string" ? input.merchantId.trim() : previous.merchantId || "",
-    remark: remark || STATUSES[statusKey] || "5倍在做",
+    remark: remark || STATUSES[statusKey] || "运营中",
     statusKey,
     updatedOn: typeof input.updatedOn === "string" ? input.updatedOn.trim() : previous.updatedOn || "",
     closedOn: typeof input.closedOn === "string" ? input.closedOn.trim() : previous.closedOn || "",
     login: typeof input.login === "string" ? input.login.trim() : previous.login || "",
     password: typeof input.password === "string" ? input.password.trim() : previous.password || ""
+  };
+}
+
+export const STORE_IMPORT_HEADERS = [
+  "总负责人",
+  "小组负责人",
+  "店铺所属人员",
+  "店铺名称",
+  "商家id",
+  "店铺情况备注",
+  "更新时间",
+  "退店时间",
+  "登录主账号",
+  "密码"
+];
+
+const HEADER_TO_FIELD = {
+  总负责人: "chief",
+  小组负责人: "lead",
+  店铺所属人员: "owner",
+  店铺名称: "storeName",
+  商家id: "merchantId",
+  商家ID: "merchantId",
+  店铺情况备注: "remark",
+  更新时间: "updatedOn",
+  退店时间: "closedOn",
+  登录主账号: "login",
+  密码: "password"
+};
+
+function findExistingStore(input) {
+  const merchantId = String(input.merchantId || "").trim();
+  if (merchantId) {
+    const byMerchant = rows.find((row) => String(row.merchantId || "").trim() === merchantId);
+    if (byMerchant) {
+      return byMerchant;
+    }
+  }
+  const storeName = String(input.storeName || "").trim();
+  const owner = String(input.owner || "").trim();
+  if (!storeName || !owner) {
+    return null;
+  }
+  return (
+    rows.find(
+      (row) => String(row.storeName || "").trim() === storeName && String(row.owner || "").trim() === owner
+    ) || null
+  );
+}
+
+export function mapImportRow(raw = {}) {
+  if (!raw || typeof raw !== "object") {
+    return {};
+  }
+  const next = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const field = HEADER_TO_FIELD[String(key).trim()] || (["chief", "lead", "owner", "storeName", "merchantId", "remark", "updatedOn", "closedOn", "login", "password"].includes(key) ? key : "");
+    if (field) {
+      next[field] = value;
+    }
+  }
+  return next;
+}
+
+export function importOrgStores(items, actor) {
+  const list = Array.isArray(items) ? items : [];
+  const created = [];
+  const updated = [];
+  const failed = [];
+  list.forEach((raw, index) => {
+    const input = mapImportRow(raw);
+    const line = index + 2;
+    if (!String(input.storeName || "").trim() || !String(input.owner || "").trim()) {
+      failed.push({ line, error: "店铺名称、店铺所属人员为必填" });
+      return;
+    }
+    const existing = findExistingStore(input);
+    const result = existing ? patchOrgStore(existing.id, input, actor) : createOrgStore(input, actor);
+    if (!result.ok) {
+      failed.push({ line, error: result.error || "导入失败", storeName: input.storeName });
+      return;
+    }
+    if (existing) {
+      updated.push(result.store);
+    } else {
+      created.push(result.store);
+    }
+  });
+  addLog("导入", `新增${created.length}条，更新${updated.length}条，失败${failed.length}条`);
+  return {
+    ok: true,
+    created: created.length,
+    updated: updated.length,
+    failed,
+    stores: [...created, ...updated]
   };
 }
 

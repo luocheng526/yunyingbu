@@ -52,7 +52,7 @@ export function listLeaderboard(actor) {
     ownerRow.stores += 1;
     if (row.statusKey === "idle") {
       ownerRow.idle += 1;
-    } else {
+    } else if (row.statusKey === "operating") {
       ownerRow.operating += 1;
     }
     byOwner.set(owner, ownerRow);

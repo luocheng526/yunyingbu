@@ -1,3 +1,7 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 export const CENTERS = [
   "沈子晗运营中心",
   "韩梦凯运营中心",
@@ -10,6 +14,14 @@ export const CENTERS = [
 
 export const POSTS = ["店长", "运营", "主管", "经理"];
 export const SHOP_KINDS = ["店铺", "店群"];
+export const INITIAL_PASSWORD = "ChangeMe123!";
+
+function withLogin(person) {
+  const name = String(person.name || "").trim();
+  const username = String(person.username || name).trim() || name;
+  const password = String(person.password || INITIAL_PASSWORD).trim() || INITIAL_PASSWORD;
+  return { ...person, username, password };
+}
 
 const STATUSES = new Set(["在职", "离职"]);
 
@@ -87,6 +99,53 @@ let nextGrantId = 19;
 let people = PEOPLE_SEED.map(clone);
 let shops = SHOP_SEED.map(clone);
 let grants = GRANT_SEED.map(clone);
+const loginFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "data", "people-logins.json");
+let loginOverlay = loadLoginOverlay();
+applyLoginOverlay();
+
+function loadLoginOverlay() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(loginFile, "utf8"));
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch {
+    /* keep empty */
+  }
+  return {};
+}
+
+function saveLoginOverlay() {
+  try {
+    fs.mkdirSync(path.dirname(loginFile), { recursive: true });
+    fs.writeFileSync(loginFile, JSON.stringify(loginOverlay, null, 2) + "\n", "utf8");
+  } catch {
+    /* ignore missing disk */
+  }
+}
+
+function rememberLogin(person) {
+  loginOverlay[String(person.id)] = {
+    username: person.username,
+    password: person.password
+  };
+  saveLoginOverlay();
+}
+
+function applyLoginOverlay() {
+  for (const person of people) {
+    const saved = loginOverlay[String(person.id)];
+    if (!saved) {
+      continue;
+    }
+    if (saved.username) {
+      person.username = saved.username;
+    }
+    if (saved.password) {
+      person.password = saved.password;
+    }
+  }
+}
 
 export function resetPeopleStore() {
   nextPersonId = 17;
@@ -95,6 +154,12 @@ export function resetPeopleStore() {
   people = PEOPLE_SEED.map(clone);
   shops = SHOP_SEED.map(clone);
   grants = GRANT_SEED.map(clone);
+  loginOverlay = {};
+  try {
+    fs.unlinkSync(loginFile);
+  } catch {
+    /* no overlay file */
+  }
 }
 
 function findPerson(id) {
@@ -154,8 +219,9 @@ function visibleShopsOf(person) {
 }
 
 function presentPerson(person) {
+  const row = withLogin(person);
   return {
-    ...clone(person),
+    ...clone(row),
     managerName: managerNameOf(person),
     visibleShops: visibleShopsOf(person)
   };
@@ -224,6 +290,8 @@ export function createPerson(input) {
     return { ok: false, statusCode: 400, error: "上级不存在" };
   }
 
+  const usernameRaw = typeof input.username === "string" ? input.username.trim() : "";
+  const passwordRaw = typeof input.password === "string" ? input.password.trim() : "";
   const person = {
     id: nextPersonId++,
     name,
@@ -233,10 +301,90 @@ export function createPerson(input) {
     demo: false,
     employeeNo,
     department,
-    managerId
+    managerId,
+    username: usernameRaw || name,
+    password: passwordRaw || INITIAL_PASSWORD
   };
   people.push(person);
+  rememberLogin(person);
   return { ok: true, person: presentPerson(person) };
+}
+
+export const PEOPLE_IMPORT_HEADERS = ["姓名", "部门", "上级", "岗位", "所属中心", "状态", "账号", "登录密码"];
+
+export function importPeople(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (!list.length) {
+    return { ok: false, statusCode: 400, error: "请按模板导入至少一行" };
+  }
+  let created = 0;
+  let updated = 0;
+  const failed = [];
+  list.forEach((raw, index) => {
+    const line = index + 2;
+    const item = raw && typeof raw === "object" ? raw : {};
+    const name = String(item.姓名 || item.name || "").trim();
+    const department = String(item.部门 || item.department || "").trim();
+    const managerName = String(item.上级 || item.managerName || "").trim();
+    const role = String(item.岗位 || item.role || "").trim() || "运营";
+    const center = String(item.所属中心 || item.center || "").trim();
+    const status = String(item.状态 || item.status || "").trim() || "在职";
+    const username = String(item.账号 || item.username || "").trim();
+    const password = String(item.登录密码 || item.password || "").trim();
+    if (!name || !center) {
+      failed.push({ line, error: "姓名、所属中心均为必填" });
+      return;
+    }
+    let managerId = null;
+    if (managerName) {
+      const manager = people.find((row) => row.name === managerName);
+      if (!manager) {
+        failed.push({ line, error: "上级不存在" });
+        return;
+      }
+      managerId = manager.id;
+    }
+    const found = people.find(
+      (row) =>
+        (username && String(row.username || row.name).trim() === username) ||
+        (!username && row.name === name)
+    );
+    if (found) {
+      const result = patchPerson(found.id, {
+        status,
+        username: username || found.username || found.name,
+        ...(password ? { password } : {})
+      });
+      if (!result.ok) {
+        failed.push({ line, error: result.error });
+        return;
+      }
+      found.name = name;
+      found.role = role;
+      found.center = center;
+      found.department = department || found.department || center;
+      found.managerId = managerId;
+      rememberLogin(withLogin(found));
+      updated += 1;
+      return;
+    }
+    const createdRow = createPerson({
+      name,
+      role,
+      center,
+      status,
+      department,
+      managerId,
+      username,
+      password
+    });
+    if (!createdRow.ok) {
+      failed.push({ line, error: createdRow.error });
+      return;
+    }
+    created += 1;
+  });
+  return { ok: true, created, updated, failed };
 }
 
 export function patchPerson(id, input) {
@@ -259,7 +407,58 @@ export function patchPerson(id, input) {
       }
     }
   }
+  if (Object.prototype.hasOwnProperty.call(input, "username")) {
+    const username = typeof input.username === "string" ? input.username.trim() : "";
+    if (!username) {
+      return { ok: false, statusCode: 400, error: "账号不能为空" };
+    }
+    const taken = people.some(
+      (row) => row.id !== found.id && String(row.username || row.name).trim() === username
+    );
+    if (taken) {
+      return { ok: false, statusCode: 400, error: "账号已被占用" };
+    }
+    found.username = username;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, "password")) {
+    const password = typeof input.password === "string" ? input.password.trim() : "";
+    if (!password) {
+      return { ok: false, statusCode: 400, error: "密码不能为空" };
+    }
+    found.password = password;
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(input, "username") ||
+    Object.prototype.hasOwnProperty.call(input, "password")
+  ) {
+    rememberLogin(withLogin(found));
+  }
   return { ok: true, person: presentPerson(found) };
+}
+
+export function patchPeoplePasswords(ids, password) {
+  const next = typeof password === "string" ? password.trim() : "";
+  if (!next) {
+    return { ok: false, statusCode: 400, error: "密码不能为空" };
+  }
+  const list = Array.isArray(ids) ? ids : [];
+  if (!list.length) {
+    return { ok: false, statusCode: 400, error: "请先勾选人员" };
+  }
+  const updated = [];
+  for (const id of list) {
+    const found = findPerson(id);
+    if (!found) {
+      continue;
+    }
+    found.password = next;
+    rememberLogin(withLogin(found));
+    updated.push(presentPerson(found));
+  }
+  if (!updated.length) {
+    return { ok: false, statusCode: 404, error: "人员不存在" };
+  }
+  return { ok: true, updated: updated.length, people: updated };
 }
 
 export function createShop(input) {
@@ -308,7 +507,9 @@ function personFromMysqlRow(row) {
     demo: Boolean(row.demo),
     employeeNo: row.employee_no || "",
     department: row.department || "",
-    managerId: row.manager_id == null ? null : Number(row.manager_id)
+    managerId: row.manager_id == null ? null : Number(row.manager_id),
+    username: row.username || row.name,
+    password: row.password || INITIAL_PASSWORD
   };
 }
 
@@ -343,6 +544,8 @@ export async function hydrateFromMysql() {
   try {
     const auth = await import("../profile/auth.js");
     if (typeof auth.dbMode !== "function" || auth.dbMode() !== "mysql" || typeof auth.query !== "function") {
+      loginOverlay = { ...loadLoginOverlay(), ...loginOverlay };
+      applyLoginOverlay();
       return { ok: true, mode: "memory" };
     }
     const { query } = auth;
@@ -365,8 +568,12 @@ export async function hydrateFromMysql() {
       grants = grantRows.map(grantFromMysqlRow);
       nextGrantId = grants.reduce((max, row) => Math.max(max, row.id), 0) + 1;
     }
+    loginOverlay = { ...loadLoginOverlay(), ...loginOverlay };
+    applyLoginOverlay();
     return { ok: true, mode: "mysql", people: people.length, shops: shops.length, grants: grants.length };
   } catch {
+    loginOverlay = { ...loadLoginOverlay(), ...loginOverlay };
+    applyLoginOverlay();
     return { ok: true, mode: "memory" };
   }
 }
