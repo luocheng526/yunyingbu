@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.153-check";
+    const href = "/people.css?v=0.1.154-status";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -57,6 +57,9 @@
     if (statusKey === "idle") {
       return "tag tag-idle";
     }
+    if (statusKey === "closing") {
+      return "tag tag-warn";
+    }
     if (statusKey === "closed") {
       return "tag tag-off";
     }
@@ -86,7 +89,7 @@
         '<input type="search" id="org-q" placeholder="商家ID / 店铺名 / 人员" />' +
         '<button type="button" id="org-search">搜索</button>' +
         '<select id="org-team"><option value="">全部团队</option></select>' +
-        '<select id="org-status"><option value="">全部状态</option><option value="operating">在营</option><option value="idle">闲置</option><option value="closed">退店</option></select>' +
+        '<select id="org-status"><option value="">全部状态</option><option value="operating">运营中</option><option value="idle">闲置中</option><option value="closing">退店中</option><option value="closed">已退店</option></select>' +
         '<span class="spacer" id="org-count"></span>' +
         '<button type="button" class="ghost" id="org-template">下载模板</button>' +
         '<button type="button" class="ghost" id="org-import">导入</button>' +
@@ -159,7 +162,7 @@
         '<label>店铺所属人员<input name="owner" required /></label>' +
         '<label>店铺名称<input name="storeName" required /></label>' +
         '<label>商家id<input name="merchantId" /></label>' +
-        '<label>店铺情况备注<select name="remark"><option>5倍在做</option><option>5倍闲置可退店</option><option>退店</option><option>已退店</option></select></label>' +
+        '<label>店铺情况备注<select name="remark"><option>运营中</option><option>闲置中</option><option>退店中</option><option>已退店</option></select></label>' +
         '<label>更新时间<input name="updatedOn" placeholder="9.8更新" /></label>' +
         '<label>退店时间<input name="closedOn" /></label>' +
         '<label>登录主账号<input name="login" /></label>' +
@@ -214,7 +217,7 @@
         { key: "login", type: "text" },
         { key: "password", type: "text" }
       ];
-      const REMARKS = ["5倍在做", "5倍闲置可退店", "退店", "已退店"];
+      const REMARKS = ["运营中", "闲置中", "退店中", "已退店"];
       const STORE_HEADERS = [
         "总负责人",
         "小组负责人",
@@ -334,9 +337,10 @@
       function renderKpis(summary) {
         const items = [
           ["店铺总数", summary.total],
-          ["正常运营", summary.operating],
-          ["闲置", summary.idle],
-          ["退店", summary.closed],
+          ["运营中", summary.operating],
+          ["闲置中", summary.idle],
+          ["退店中", summary.closing],
+          ["已退店", summary.closed],
           ["缺商家ID", summary.missingMerchant],
           ["缺主账号", summary.missingLogin],
           ["缺密码", summary.missingPassword],
@@ -443,7 +447,7 @@
         form.owner.value = row ? row.owner : "";
         form.storeName.value = row ? row.storeName : "";
         form.merchantId.value = row ? row.merchantId : "";
-        form.remark.value = row ? row.remark : "5倍在做";
+        form.remark.value = row ? row.remark : "运营中";
         form.updatedOn.value = row ? row.updatedOn : "";
         form.closedOn.value = row ? row.closedOn : "";
         form.login.value = row ? row.login : "";
@@ -945,7 +949,7 @@
               owner: "示例运营",
               storeName: "示例旗舰店",
               merchantId: "11009999",
-              remark: "5倍在做",
+              remark: "运营中",
               updatedOn: "9.11更新",
               closedOn: "",
               login: "demo_9999",

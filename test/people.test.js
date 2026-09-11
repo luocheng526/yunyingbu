@@ -72,6 +72,10 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /org-row-check/);
     assert.match(jsText, /缺密码/);
     assert.match(jsText, /缺所属人员/);
+    assert.match(jsText, /运营中/);
+    assert.match(jsText, /闲置中/);
+    assert.match(jsText, /退店中/);
+    assert.doesNotMatch(jsText, /5倍在做/);
     assert.match(jsText, /登录密码/);
     assert.match(jsText, /ChangeMe123!/);
     assert.match(jsText, /与姓名相同/);
@@ -153,7 +157,7 @@ test("org store board lists demo shops and supports add", async () => {
         owner: "验收同事",
         storeName: "验收旗舰店",
         merchantId: "19900001",
-        remark: "5倍在做",
+        remark: "运营中",
         login: "demo_ok",
         password: "Demo123!"
       })
@@ -165,11 +169,20 @@ test("org store board lists demo shops and supports add", async () => {
     const patched = await fetch(`${base}/api/people/org/stores/${createdJson.store.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ remark: "退店", closedOn: "9.9" })
+      body: JSON.stringify({ remark: "已退店", closedOn: "9.9" })
     });
     const patchedJson = await patched.json();
     assert.equal(patched.status, 200);
     assert.equal(patchedJson.store.statusKey, "closed");
+    const closing = await fetch(`${base}/api/people/org/stores/${createdJson.store.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ remark: "退店中" })
+    });
+    const closingJson = await closing.json();
+    assert.equal(closing.status, 200);
+    assert.equal(closingJson.store.statusKey, "closing");
+    assert.equal(closingJson.store.remark, "退店中");
 
     const removed = await fetch(`${base}/api/people/org/stores/${createdJson.store.id}`, {
       method: "DELETE"
@@ -192,7 +205,7 @@ test("org store board lists demo shops and supports add", async () => {
             店铺所属人员: "导入同事",
             店铺名称: "导入旗舰店",
             商家id: "18800001",
-            店铺情况备注: "5倍在做",
+            店铺情况备注: "运营中",
             更新时间: "9.11更新",
             退店时间: "",
             登录主账号: "demo_imp",
@@ -225,7 +238,7 @@ test("org board scopes edit by 责权", async () => {
     const denied = await fetch(`${base}/api/people/org/stores/${hanStore.id}?actor=${encodeURIComponent("沈子晗")}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ remark: "退店" })
+      body: JSON.stringify({ remark: "已退店" })
     });
     assert.equal(denied.status, 403);
 

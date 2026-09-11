@@ -261,6 +261,11 @@ body:has(.people-page) .xm-tabs {
   color: #1677ff;
 }
 
+.tag-warn {
+  background: #fff7e6;
+  color: #d46b08;
+}
+
 .tag-off {
   background: #fff1f0;
   color: #cf1322;

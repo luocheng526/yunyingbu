@@ -1,8 +1,9 @@
 import { assertCanWrite, canEditStore, rowMatchesScope, scopeOf } from "./org-acl.js";
 
 const STATUSES = {
-  operating: "5倍在做",
-  idle: "5倍闲置可退店",
+  operating: "运营中",
+  idle: "闲置中",
+  closing: "退店中",
   closed: "已退店"
 };
 
@@ -43,7 +44,7 @@ function seedRows() {
       owner,
       storeName,
       merchantId,
-      remark: "5倍在做",
+      remark: "运营中",
       statusKey: "operating",
       updatedOn: "9.8更新",
       closedOn: "",
@@ -61,7 +62,7 @@ function seedRows() {
       owner,
       storeName,
       merchantId,
-      remark: "5倍在做",
+      remark: "运营中",
       statusKey: "operating",
       updatedOn: "8.12更新",
       closedOn: "",
@@ -70,7 +71,7 @@ function seedRows() {
       demo: true
     });
   }
-  rows[rows.length - 1].remark = "5倍闲置可退店";
+  rows[rows.length - 1].remark = "闲置中";
   rows[rows.length - 1].statusKey = "idle";
   return { nextId: id, rows };
 }
@@ -126,6 +127,7 @@ export function summarizeOrg(actor) {
     total: stores.length,
     operating: stores.filter((row) => row.statusKey === "operating").length,
     idle: stores.filter((row) => row.statusKey === "idle").length,
+    closing: stores.filter((row) => row.statusKey === "closing").length,
     closed: stores.filter((row) => row.statusKey === "closed").length,
     missingMerchant: stores.filter((row) => !String(row.merchantId || "").trim()).length,
     missingLogin: stores.filter((row) => !String(row.login || "").trim()).length,
@@ -160,13 +162,15 @@ export function listOrgLogs() {
 }
 
 function normalize(input, previous = {}) {
-  const remark = typeof input.remark === "string" ? input.remark.trim() : previous.remark || "5倍在做";
+  const remark = typeof input.remark === "string" ? input.remark.trim() : previous.remark || "运营中";
   let statusKey = typeof input.statusKey === "string" ? input.statusKey.trim() : previous.statusKey || "operating";
-  if (remark.includes("已退") || remark === "退店") {
+  if (remark.includes("已退")) {
     statusKey = "closed";
+  } else if (remark.includes("退店")) {
+    statusKey = "closing";
   } else if (remark.includes("闲置")) {
     statusKey = "idle";
-  } else if (remark.includes("在做") || remark.includes("正常")) {
+  } else if (remark.includes("运营") || remark.includes("在做") || remark.includes("正常")) {
     statusKey = "operating";
   }
   const chief = typeof input.chief === "string" ? input.chief.trim() : previous.chief || "";
@@ -178,7 +182,7 @@ function normalize(input, previous = {}) {
     owner: typeof input.owner === "string" ? input.owner.trim() : previous.owner || "",
     storeName: typeof input.storeName === "string" ? input.storeName.trim() : previous.storeName || "",
     merchantId: typeof input.merchantId === "string" ? input.merchantId.trim() : previous.merchantId || "",
-    remark: remark || STATUSES[statusKey] || "5倍在做",
+    remark: remark || STATUSES[statusKey] || "运营中",
     statusKey,
     updatedOn: typeof input.updatedOn === "string" ? input.updatedOn.trim() : previous.updatedOn || "",
     closedOn: typeof input.closedOn === "string" ? input.closedOn.trim() : previous.closedOn || "",
