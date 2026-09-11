@@ -187,7 +187,7 @@
     mount: function (root) {
       const layers = [
         {
-          name: "头部产品（高利润）",
+          name: "头部产品",
           hint: "参考：退货率20%以下；推广花费占比42%以下；近7天日成交金额2000元以上；成交转化率7%以上；近30天转化率不合格需优化。",
           cols: [
             ["image", "主图"],
@@ -256,7 +256,7 @@
           ],
         },
         {
-          name: "新上架需做单产品",
+          name: "待做单产品",
           hint: "上架后做单，做单之后直接上车。",
           cols: [
             ["image", "主图"],
@@ -318,7 +318,7 @@
 
       root.innerHTML = page(
         "商品数据",
-        "店铺产品分层表。按头部 / 中部 / 尾部 / 动销 / 测新 / 新上架需做单填写，方便做商品分层。默认负责人韩梦凯。",
+        "店铺产品分层表。按头部 / 中部 / 尾部 / 动销 / 测新 / 待做单填写，方便做商品分层。默认负责人韩梦凯。",
         '<style>.han-layer-tab{margin:0 0.35rem 0.35rem 0}.han-layer-tab.is-on{background:#ccfbf1;color:#134e4a;font-weight:600}</style>' +
         '<div class="stack"><section class="panel"><div id="prod-tabs" class="actions" style="flex-wrap:wrap">' +
           tabs +

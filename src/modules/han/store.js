@@ -8,13 +8,22 @@ const STATUSES = ["待办", "进行中", "已完成"];
 const SELECTION_STATUSES = ["观察", "入选", "淘汰"];
 const TRAINING_STATUSES = ["待开始", "进行中", "已完成"];
 const PRODUCT_LAYERS = [
-  "头部产品（高利润）",
+  "头部产品",
   "中部产品",
   "尾部产品",
   "动销产品",
   "测新产品",
-  "新上架需做单产品",
+  "待做单产品",
 ];
+const PRODUCT_LAYER_ALIASES = {
+  "头部产品（高利润）": "头部产品",
+  "新上架需做单产品": "待做单产品",
+};
+
+function normalizeProductLayer(layer) {
+  const text = String(layer || "").trim();
+  return PRODUCT_LAYER_ALIASES[text] || text;
+}
 const PRODUCT_LAYER_COLUMNS = [
   ["layer", "VARCHAR(64) NOT NULL DEFAULT ''"],
   ["image_url", "VARCHAR(1024) NOT NULL DEFAULT ''"],
@@ -108,7 +117,7 @@ function mapProduct(row) {
     stock: row.stock == null ? "" : String(row.stock),
     owner: row.owner,
     store: row.store_name || DEFAULT_STORE,
-    layer: row.layer || "",
+    layer: normalizeProductLayer(row.layer),
     image: row.image_url || "",
     spu: row.spu || "",
     firstSku: row.first_sku || row.sku || "",
@@ -367,7 +376,12 @@ export function createHanStore(poolOrFactory = getPool) {
         err.statusCode = 400;
         throw err;
       }
-      const layerName = PRODUCT_LAYERS.includes(layer) ? layer : String(layer || "").trim();
+      const layerName = normalizeProductLayer(layer);
+      if (layerName && !PRODUCT_LAYERS.includes(layerName)) {
+        const err = new Error("unknown layer");
+        err.statusCode = 400;
+        throw err;
+      }
       const [result] = await db().query(
         `INSERT INTO han_products (name, sku, price, stock, owner, store_name, layer, image_url, spu, first_sku, hot_sell, review_count, share_count, qa_video, return_m5, return_m6, return_m7, return_m8, orders_30d, fulfill_note, jd_stock, listed_on, has_new_badge, need_order, remark) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [

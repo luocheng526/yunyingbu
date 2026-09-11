@@ -213,7 +213,7 @@ test("han selection / products / paid boards are isolated", async () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        layer: "头部产品（高利润）",
+        layer: "头部产品",
         spu: "SPU-HEAD-1",
         firstSku: "SKU-HEAD-1",
         hotSell: "是",
@@ -222,7 +222,7 @@ test("han selection / products / paid boards are isolated", async () => {
       }),
     });
     assert.equal(layered.res.status, 201);
-    assert.equal(layered.body.item.layer, "头部产品（高利润）");
+    assert.equal(layered.body.item.layer, "头部产品");
     assert.equal(layered.body.item.spu, "SPU-HEAD-1");
     assert.equal(layered.body.item.firstSku, "SKU-HEAD-1");
     assert.equal(layered.body.item.name, "SPU-HEAD-1");
@@ -285,12 +285,14 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /XmModules\["\/han\/selection"\]/);
   assert.match(js, /XmModules\["\/han\/goods"\]/);
   assert.match(js, /店铺产品分层表/);
-  assert.match(js, /头部产品（高利润）/);
+  assert.match(js, /头部产品/);
   assert.match(js, /中部产品/);
   assert.match(js, /尾部产品/);
   assert.match(js, /动销产品/);
   assert.match(js, /测新产品/);
-  assert.match(js, /新上架需做单产品/);
+  assert.match(js, /待做单产品/);
+  assert.doesNotMatch(js, /头部产品（高利润）/);
+  assert.doesNotMatch(js, /新上架需做单产品/);
   assert.match(js, /XmModules\["\/han\/paid"\]/);
   assert.match(js, /XmModules\["\/han\/training"\]/);
   assert.match(js, /\/api\/han\/selection/);
