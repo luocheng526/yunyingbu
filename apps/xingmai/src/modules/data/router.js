@@ -1,5 +1,13 @@
 import { Router } from "express";
-import { getErpOverview, listErpGoods, listErpShopOptions, listErpShopStats } from "./erp.js";
+import {
+  getErpCategoryBoard,
+  getErpOverview,
+  listErpChannelGroups,
+  listErpCompare,
+  listErpGoods,
+  listErpShopOptions,
+  listErpShopStats
+} from "./erp.js";
 
 export const dataRouter = Router();
 
@@ -40,4 +48,16 @@ dataRouter.get("/shop-options", (_req, res) => {
 
 dataRouter.get("/goods", (req, res) => {
   sendErp(res, () => listErpGoods(rangeQuery(req.query)));
+});
+
+dataRouter.get("/groups", (req, res) => {
+  sendErp(res, () => listErpChannelGroups(rangeQuery(req.query)));
+});
+
+dataRouter.get("/categories", (req, res) => {
+  sendErp(res, () => getErpCategoryBoard(rangeQuery(req.query)));
+});
+
+dataRouter.get("/compare", (req, res) => {
+  sendErp(res, () => listErpCompare(rangeQuery(req.query)));
 });

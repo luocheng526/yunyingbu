@@ -6,6 +6,8 @@ const SHOP_ID_TTL_MS = 5 * 60 * 1000;
 
 let testFetch = null;
 let shopMetaCache = { at: 0, ids: [], names: {} };
+let categoryCache = { at: 0, key: "", rows: [], trend: [] };
+const CATEGORY_TTL_MS = 3 * 60 * 1000;
 let session = { token: "", expiresAt: 0 };
 let loginInFlight = null;
 let skipForcedToken = false;
@@ -16,6 +18,7 @@ export function setErpFetchForTests(fn) {
 
 export function resetErpCacheForTests() {
   shopMetaCache = { at: 0, ids: [], names: {} };
+  categoryCache = { at: 0, key: "", rows: [], trend: [] };
   session = { token: "", expiresAt: 0 };
   loginInFlight = null;
   skipForcedToken = false;
@@ -247,8 +250,6 @@ function publicShopStat(row, names = {}) {
     typeLabel: info.typeLabel || "",
     statusLabel: info.statusLabel || "",
     payAmount: row.payAmount ?? null,
-    todayPayAmount: row.todayPayAmount ?? null,
-    yesterdayPayAmount: row.yesterdayPayAmount ?? null,
     orderCount: row.orderCount ?? null,
     netOrderCount: row.netOrderCount ?? null,
     profit: row.profit ?? null,
@@ -402,6 +403,82 @@ function payRange(input = {}) {
   };
 }
 
+function timeRange(input = {}) {
+  const range = payRange(input);
+  return {
+    startTime: String(input.startTime || range.payTimeStart),
+    endTime: String(input.endTime || range.payTimeEnd)
+  };
+}
+
+function paginate(rows, input = {}) {
+  const pageNum = toInt(input.pageNum, 1);
+  const pageSize = Math.min(toInt(input.pageSize, 20), 50);
+  const start = (pageNum - 1) * pageSize;
+  return {
+    ok: true,
+    source: "xingmai-erp",
+    total: rows.length,
+    totalPages: Math.max(1, Math.ceil(rows.length / pageSize) || 1),
+    currentPage: pageNum,
+    pageSize,
+    records: rows.slice(start, start + pageSize)
+  };
+}
+
+function publicGroup(row) {
+  if (!row || typeof row !== "object") {
+    return null;
+  }
+  const details = Array.isArray(row.details) ? row.details : [];
+  return {
+    id: String(row.id ?? ""),
+    name: row.name || "",
+    shops: details
+      .map((item) => ({
+        shopId: String(item?.shopId ?? ""),
+        shopName: item?.shopName || ""
+      }))
+      .filter((item) => item.shopId || item.shopName)
+  };
+}
+
+function publicCategory(row) {
+  if (!row || typeof row !== "object") {
+    return null;
+  }
+  return {
+    thirdCategoryId: String(row.thirdCategoryId ?? ""),
+    categoryName: row.categoryName || "",
+    productCount: row.productCount ?? null,
+    skuCount: row.skuCount ?? null,
+    orderCount: row.orderCount ?? null,
+    payAmount: row.payAmount ?? null,
+    netSalesAmount: row.netSalesAmount ?? null,
+    profit: row.profit ?? null,
+    refundAmount: row.refundAmount ?? null,
+    refundRate: row.refundRate ?? null,
+    promotionRate: row.promotionRate ?? null
+  };
+}
+
+function publicCompare(row) {
+  if (!row || typeof row !== "object") {
+    return null;
+  }
+  return {
+    yearMonth: row.yearMonth || "",
+    payAmount: row.payAmount ?? null,
+    netAmount: row.netAmount ?? null,
+    profit: row.profit ?? null,
+    refundAmount: row.refundAmount ?? null,
+    promotionCost: row.promotionCost ?? null,
+    profitRate: row.profitRate ?? null,
+    refundRate: row.refundRate ?? null,
+    promotionCostRate: row.promotionCostRate ?? null
+  };
+}
+
 async function resolveShopIds(input = {}) {
   const shopIds = parseShopIds(input);
   if (shopIds.length) {
@@ -496,5 +573,73 @@ export async function getErpOverview(input = {}) {
     shops: shops.records,
     goods,
     shopTotal: shops.total
+  };
+}
+
+export async function listErpChannelGroups(input = {}) {
+  const data = await erpPost("/product/channel/group/list", {
+    name: String(input.name || input.shopName || "").trim() || undefined
+  });
+  const rows = (Array.isArray(data) ? data : []).map(publicGroup).filter(Boolean);
+  return paginate(rows, input);
+}
+
+export async function listErpCategories(input = {}) {
+  const board = await getErpCategoryBoard(input);
+  const { trend: _trend, ...page } = board;
+  return page;
+}
+
+export async function listErpCategoryTrend(input = {}) {
+  const board = await getErpCategoryBoard(input);
+  return board.trend;
+}
+
+export async function getErpCategoryBoard(input = {}) {
+  const times = timeRange(input);
+  const key = `${times.startTime}|${times.endTime}`;
+  const now = Date.now();
+  if (categoryCache.key !== key || now - categoryCache.at >= CATEGORY_TTL_MS) {
+    const [list, trendData] = await Promise.all([
+      erpPost("/product/channel/category/list", {
+        startTime: times.startTime,
+        endTime: times.endTime,
+        thirdCategoryIds: []
+      }),
+      erpPost("/product/channel/category/trend", {
+        startTime: times.startTime,
+        endTime: times.endTime,
+        thirdCategoryIds: []
+      })
+    ]);
+    const rows = (Array.isArray(list) ? list : []).map(publicCategory).filter(Boolean);
+    rows.sort((a, b) => (Number(b.payAmount) || 0) - (Number(a.payAmount) || 0));
+    const trend = (Array.isArray(trendData) ? trendData : [])
+      .map((row) => ({
+        date: row?.date || "",
+        payAmount: row?.payAmount ?? null,
+        orderCount: row?.orderCount ?? null,
+        profit: row?.profit ?? null,
+        refundAmount: row?.refundAmount ?? null
+      }))
+      .filter((row) => row.date);
+    categoryCache = { at: now, key, rows, trend };
+  }
+  return { ...paginate(categoryCache.rows, input), range: times, trend: categoryCache.trend };
+}
+
+export async function listErpCompare(input = {}) {
+  const times = timeRange(input);
+  const data = await erpPost("/product/channel/compare/list", {
+    startTime: times.startTime,
+    endTime: times.endTime
+  });
+  const rows = (Array.isArray(data) ? data : []).map(publicCompare).filter(Boolean);
+  return {
+    ok: true,
+    source: "xingmai-erp",
+    range: times,
+    total: rows.length,
+    records: rows
   };
 }

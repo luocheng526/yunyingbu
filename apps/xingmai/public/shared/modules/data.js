@@ -1,4 +1,4 @@
-/* xm-module-data 0.1.68 */
+/* xm-module-data 0.1.69 */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -225,8 +225,8 @@
         '<label>店名<input name="shopName" maxlength="64" /></label>' +
         '<button type="submit">查询</button></form>' +
         '<p class="status error" data-err hidden></p>' +
-        '<div style="overflow:auto"><table><thead><tr><th>店铺</th><th>状态</th><th>应收</th><th>今日</th><th>昨日</th><th>订单</th><th>利润</th><th>退款率</th></tr></thead>' +
-        '<tbody data-body><tr><td colspan="8" class="empty">正在加载…</td></tr></tbody></table></div>' +
+        '<div style="overflow:auto"><table><thead><tr><th>店铺</th><th>状态</th><th>应收</th><th>订单</th><th>利润</th><th>退款率</th></tr></thead>' +
+        '<tbody data-body><tr><td colspan="6" class="empty">正在加载…</td></tr></tbody></table></div>' +
         '<p class="lead" data-pager></p>' +
         '<p><button type="button" data-prev>上一页</button> <button type="button" data-next>下一页</button></p>' +
         "</section></main>";
@@ -257,10 +257,6 @@
                       "</td><td>" +
                       money(row.payAmount) +
                       "</td><td>" +
-                      money(row.todayPayAmount) +
-                      "</td><td>" +
-                      money(row.yesterdayPayAmount) +
-                      "</td><td>" +
                       count(row.orderCount) +
                       "</td><td>" +
                       money(row.profit) +
@@ -270,14 +266,14 @@
                     );
                   })
                   .join("")
-              : '<tr><td colspan="8" class="empty">没有店铺</td></tr>';
+              : '<tr><td colspan="6" class="empty">没有店铺</td></tr>';
             renderPager(root, data);
           })
           .catch(function (error) {
             if (dead) {
               return;
             }
-            body.innerHTML = '<tr><td colspan="8" class="empty">无法加载</td></tr>';
+            body.innerHTML = '<tr><td colspan="6" class="empty">无法加载</td></tr>';
             err.hidden = false;
             err.textContent = error.message;
           });
@@ -406,6 +402,213 @@
       });
       bindPager(root, state, load);
       loadShops().finally(load);
+      return function unmount() {
+        dead = true;
+        root.innerHTML = "";
+      };
+    }
+  };
+
+  window.XmModules["/data/groups"] = {
+    mount: function (root) {
+      const state = { page: 1, pages: 1, q: "" };
+      root.innerHTML =
+        '<main class="page">' +
+        '<header class="page-head"><p class="kicker">数据中心</p><h1>渠道分组</h1>' +
+        '<p class="lead">来自星脉 ERP 渠道分组。ERP 里还没建分组就空着。</p></header>' +
+        '<section class="panel"><form id="group-filter" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:12px">' +
+        '<label>分组<input name="name" maxlength="64" /></label>' +
+        '<button type="submit">查询</button></form>' +
+        '<p class="status error" data-err hidden></p>' +
+        '<div style="overflow:auto"><table><thead><tr><th>分组</th><th>店铺数</th><th>店铺</th></tr></thead>' +
+        '<tbody data-body><tr><td colspan="3" class="empty">正在加载…</td></tr></tbody></table></div>' +
+        '<p class="lead" data-pager></p>' +
+        '<p><button type="button" data-prev>上一页</button> <button type="button" data-next>下一页</button></p>' +
+        "</section></main>";
+      const body = root.querySelector("[data-body]");
+      const err = root.querySelector("[data-err]");
+      let dead = false;
+
+      function load() {
+        err.hidden = true;
+        fetchJson("/api/data/groups?pageNum=" + state.page + "&pageSize=20&shopName=" + encodeURIComponent(state.q))
+          .then(function (data) {
+            if (dead) {
+              return;
+            }
+            state.pages = Math.max(1, Number(data.totalPages || 1));
+            const rows = data.records || [];
+            body.innerHTML = rows.length
+              ? rows
+                  .map(function (row) {
+                    const shops = (row.shops || [])
+                      .map(function (shop) {
+                        return shop.shopName || shop.shopId;
+                      })
+                      .filter(Boolean)
+                      .join("、");
+                    return (
+                      "<tr><td>" +
+                      escapeHtml(row.name || row.id || "—") +
+                      "</td><td>" +
+                      count((row.shops || []).length) +
+                      "</td><td>" +
+                      escapeHtml(shops || "—") +
+                      "</td></tr>"
+                    );
+                  })
+                  .join("")
+              : '<tr><td colspan="3" class="empty">还没有渠道分组</td></tr>';
+            renderPager(root, data);
+          })
+          .catch(function (error) {
+            if (dead) {
+              return;
+            }
+            body.innerHTML = '<tr><td colspan="3" class="empty">无法加载</td></tr>';
+            err.hidden = false;
+            err.textContent = error.message;
+          });
+      }
+
+      root.querySelector("#group-filter").addEventListener("submit", function (event) {
+        event.preventDefault();
+        state.q = String(new FormData(event.target).get("name") || "").trim();
+        state.page = 1;
+        load();
+      });
+      bindPager(root, state, load);
+      load();
+      return function unmount() {
+        dead = true;
+        root.innerHTML = "";
+      };
+    }
+  };
+
+  window.XmModules["/data/categories"] = {
+    mount: function (root) {
+      const state = { page: 1, pages: 1 };
+      root.innerHTML =
+        '<main class="page">' +
+        '<header class="page-head"><p class="kicker">数据中心</p><h1>渠道品类</h1>' +
+        '<p class="lead">来自星脉 ERP 渠道品类查询和走势。没有的字段先空着。</p></header>' +
+        '<p class="status error" data-err hidden></p>' +
+        '<section class="panel"><h2>品类走势</h2><div data-trend><p class="lead">正在加载…</p></div></section>' +
+        '<section class="panel"><div style="overflow:auto"><table><thead><tr><th>品类</th><th>商品数</th><th>订单</th><th>应收</th><th>净销售</th><th>利润</th><th>退款率</th></tr></thead>' +
+        '<tbody data-body><tr><td colspan="7" class="empty">正在加载…</td></tr></tbody></table></div>' +
+        '<p class="lead" data-pager></p>' +
+        '<p><button type="button" data-prev>上一页</button> <button type="button" data-next>下一页</button></p>' +
+        "</section></main>";
+      const body = root.querySelector("[data-body]");
+      const err = root.querySelector("[data-err]");
+      let dead = false;
+
+      function load() {
+        err.hidden = true;
+        fetchJson("/api/data/categories?pageNum=" + state.page + "&pageSize=20")
+          .then(function (data) {
+            if (dead) {
+              return;
+            }
+            state.pages = Math.max(1, Number(data.totalPages || 1));
+            root.querySelector("[data-trend]").innerHTML = trendSvg(data.trend);
+            const rows = data.records || [];
+            body.innerHTML = rows.length
+              ? rows
+                  .map(function (row) {
+                    return (
+                      "<tr><td>" +
+                      escapeHtml(row.categoryName || row.thirdCategoryId || "—") +
+                      "</td><td>" +
+                      count(row.productCount) +
+                      "</td><td>" +
+                      count(row.orderCount) +
+                      "</td><td>" +
+                      money(row.payAmount) +
+                      "</td><td>" +
+                      money(row.netSalesAmount) +
+                      "</td><td>" +
+                      money(row.profit) +
+                      "</td><td>" +
+                      pct(row.refundRate) +
+                      "</td></tr>"
+                    );
+                  })
+                  .join("")
+              : '<tr><td colspan="7" class="empty">没有品类</td></tr>';
+            renderPager(root, data);
+          })
+          .catch(function (error) {
+            if (dead) {
+              return;
+            }
+            body.innerHTML = '<tr><td colspan="7" class="empty">无法加载</td></tr>';
+            err.hidden = false;
+            err.textContent = error.message;
+          });
+      }
+
+      bindPager(root, state, load);
+      load();
+      return function unmount() {
+        dead = true;
+        root.innerHTML = "";
+      };
+    }
+  };
+
+  window.XmModules["/data/compare"] = {
+    mount: function (root) {
+      root.innerHTML =
+        '<main class="page">' +
+        '<header class="page-head"><p class="kicker">数据中心</p><h1>渠道对比</h1>' +
+        '<p class="lead">来自星脉 ERP 渠道业绩对比，按月。没有的字段先空着。</p></header>' +
+        '<p class="status error" data-err hidden></p>' +
+        '<section class="panel"><div style="overflow:auto"><table><thead><tr><th>月份</th><th>应收</th><th>净额</th><th>利润</th><th>退款</th><th>推广</th><th>利润率</th></tr></thead>' +
+        '<tbody data-body><tr><td colspan="7" class="empty">正在加载…</td></tr></tbody></table></div></section>' +
+        "</main>";
+      const body = root.querySelector("[data-body]");
+      const err = root.querySelector("[data-err]");
+      let dead = false;
+      fetchJson("/api/data/compare")
+        .then(function (data) {
+          if (dead) {
+            return;
+          }
+          const rows = data.records || [];
+          body.innerHTML = rows.length
+            ? rows
+                .map(function (row) {
+                  return (
+                    "<tr><td>" +
+                    escapeHtml(row.yearMonth || "—") +
+                    "</td><td>" +
+                    money(row.payAmount) +
+                    "</td><td>" +
+                    money(row.netAmount) +
+                    "</td><td>" +
+                    money(row.profit) +
+                    "</td><td>" +
+                    money(row.refundAmount) +
+                    "</td><td>" +
+                    money(row.promotionCost) +
+                    "</td><td>" +
+                    pct(row.profitRate) +
+                    "</td></tr>"
+                  );
+                })
+                .join("")
+            : '<tr><td colspan="7" class="empty">没有对比数据</td></tr>';
+        })
+        .catch(function (error) {
+          if (dead) {
+            return;
+          }
+          body.innerHTML = '<tr><td colspan="7" class="empty">无法加载</td></tr>';
+          err.hidden = false;
+          err.textContent = error.message;
+        });
       return function unmount() {
         dead = true;
         root.innerHTML = "";

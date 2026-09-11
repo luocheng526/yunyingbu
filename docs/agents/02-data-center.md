@@ -19,10 +19,11 @@
 
 【要做】
 1. 数据总揽：销售趋势 + 店铺总览汇总 KPI（应收/订单/利润/退款，有才填）+ 热销商品 + 店铺排行。不要演示「今日订单 / 待处理 / 在职人数 / 本周发布」。
-2. 店铺数据：渠道总览店铺，店名用店铺管理补。
+2. 店铺数据：渠道总览店铺，店名用店铺管理补。不要填今日/昨日。
 3. 商品数据：商品总览，店名用店铺管理补。
-4. 实时付费：另接接口，先保持「内容待开发」。
-5. 服务端自己登录 ERP，过期或 401 再登。可用 `XM_ERP_USERNAME` / `XM_ERP_PASSWORD`。不要把 JWT、密码或京东 `authInfo` 交给浏览器。
+4. 渠道分组 / 渠道品类 / 渠道对比：分别接 ERP `channel/group/list`、`channel/category/list`+`trend`、`channel/compare/list`。
+5. 实时付费：后期另接，先保持「内容待开发」。
+6. 服务端自己登录 ERP，过期或 401 再登。可用 `XM_ERP_USERNAME` / `XM_ERP_PASSWORD`。不要把 JWT、密码或京东 `authInfo` 交给浏览器。
 
-【验收】`/data`、`/data/shops`、`/data/goods` 能看到 ERP 对上的字段；对不上的空着。`/data/paid` 仍是待开发。
+【验收】`/data`、`/data/shops`、`/data/goods`、`/data/groups`、`/data/categories`、`/data/compare` 能看到 ERP 对上的字段；对不上的空着。`/data/paid` 仍是待开发。
 【不要做】不要把 ERP token 写进仓库或页面；不要改人员/发布/两个运营中心/个人中心；不要接实时付费看板接口。

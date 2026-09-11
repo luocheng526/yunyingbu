@@ -67,9 +67,14 @@ test("data module mounts shop and goods pages against ERP proxies", () => {
   assert.match(dataJs, /\/api\/data\/shops/);
   assert.match(dataJs, /\/api\/data\/goods/);
   assert.match(dataJs, /\/api\/data\/shop-options/);
+  assert.match(dataJs, /\/api\/data\/groups/);
+  assert.match(dataJs, /\/api\/data\/categories/);
+  assert.match(dataJs, /\/api\/data\/compare/);
   assert.match(dataJs, /内容待开发/);
   assert.doesNotMatch(dataJs, /今日订单/);
   assert.doesNotMatch(dataJs, /在职人数/);
+  assert.doesNotMatch(dataJs, /<th>今日<\/th>/);
+  assert.doesNotMatch(dataJs, /todayPayAmount/);
   assert.doesNotMatch(dataJs, /authInfo/);
   assert.doesNotMatch(dataJs, /XM_ERP_TOKEN/);
   assert.doesNotMatch(dataJs, /xingmai110/);
@@ -359,4 +364,56 @@ test("overview maps trend, shop rank and hot goods", async () => {
   assert.equal(body.shops[0].shopName, "示例店");
   assert.equal(body.goods[0].productName, "热销刀");
   assert.equal(body.events, undefined);
+});
+
+test("channel groups, categories and compare map ERP boards", async () => {
+  process.env.XM_ERP_TOKEN = "test-token";
+  mockErp(async (url) => {
+    if (String(url).includes("/channel/group/list")) {
+      return {
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: [{ id: 3, name: "家居包", details: [{ shopId: "1", shopName: "示例店" }] }]
+        })
+      };
+    }
+    if (String(url).includes("/channel/category/trend")) {
+      return {
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: [{ date: "2026-09-01", payAmount: 20, orderCount: 2, profit: 1, refundAmount: 0 }]
+        })
+      };
+    }
+    if (String(url).includes("/channel/category/list")) {
+      return {
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: [{ thirdCategoryId: "34706", categoryName: "记忆枕", payAmount: 99, orderCount: 4, profit: 8, refundRate: 0.1 }]
+        })
+      };
+    }
+    return {
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: [{ yearMonth: "2026-08", payAmount: 50, netAmount: 40, profit: 5, refundAmount: 2, promotionCost: 3, profitRate: 0.1 }]
+      })
+    };
+  });
+  const cookie = await loginCookie();
+  const groups = await fetch(`${base}/api/data/groups`, { headers: { cookie } });
+  assert.equal(groups.status, 200);
+  assert.equal((await groups.json()).records[0].name, "家居包");
+  const categories = await fetch(`${base}/api/data/categories`, { headers: { cookie } });
+  assert.equal(categories.status, 200);
+  const categoryBody = await categories.json();
+  assert.equal(categoryBody.records[0].categoryName, "记忆枕");
+  assert.equal(categoryBody.trend[0].date, "2026-09-01");
+  const compare = await fetch(`${base}/api/data/compare`, { headers: { cookie } });
+  assert.equal(compare.status, 200);
+  assert.equal((await compare.json()).records[0].yearMonth, "2026-08");
 });
