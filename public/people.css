@@ -578,6 +578,182 @@ body:has(.people-page) .xm-tabs {
   margin-top: 10px;
 }
 
+.rights-watch {
+  margin: 0 0 14px;
+}
+
+.rights-watch-banner {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #595959;
+}
+
+.rights-watch-banner.is-conflict {
+  background: #fff2f0;
+  border-color: #ffccc7;
+}
+
+.rights-watch-banner strong {
+  color: #237804;
+  white-space: nowrap;
+}
+
+.rights-watch-banner.is-conflict strong {
+  color: #cf1322;
+}
+
+.rights-watch-kpis {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(90px, 1fr));
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.rights-watch-kpi {
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.rights-watch-kpi .label {
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+.rights-watch-kpi .value {
+  margin-top: 4px;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.rights-watch-issues {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.rights-watch-issues li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #f5f5f5;
+  font-size: 13px;
+}
+
+.rights-watch-issues span {
+  color: #8c8c8c;
+}
+
+.rights-tree-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+}
+
+.rights-tree-chart {
+  overflow: auto;
+  margin: 0 0 16px;
+  padding: 16px;
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 12px;
+}
+
+.rights-tree-node {
+  position: relative;
+}
+
+.rights-tree-kids {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 10px 0 0 28px;
+  padding-left: 16px;
+  border-left: 2px solid #d9d9d9;
+}
+
+.rights-tree-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+}
+
+.rights-tree-card em {
+  font-style: normal;
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.rights-tree-node[data-role="总监"] > .rights-tree-card {
+  background: #cf1322;
+  border-color: #cf1322;
+  color: #fff;
+}
+
+.rights-tree-node[data-role="总监"] > .rights-tree-card em {
+  color: #fff;
+}
+
+.rights-tree-node[data-role="经理"] > .rights-tree-card {
+  background: #ffccc7;
+  border-color: #ffa39e;
+}
+
+.rights-tree-node[data-role="主管"] > .rights-tree-card {
+  background: #b7eb8f;
+  border-color: #95de64;
+}
+
+.rights-tree-node[data-role="运营"] > .rights-tree-card,
+.rights-tree-node[data-role="店长"] > .rights-tree-card {
+  background: #87e8de;
+  border-color: #5cdbd3;
+}
+
+.rights-tree-node[data-role="助理"] > .rights-tree-card,
+.rights-tree-node[data-role="储备"] > .rights-tree-card {
+  background: #e6fffb;
+  border-color: #87e8de;
+}
+
+.rights-tree-stores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 0 8px;
+}
+
+.rights-tree-store {
+  padding: 2px 8px;
+  background: #fff;
+  border: 1px dashed #d9d9d9;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #595959;
+}
+
+@media (max-width: 1100px) {
+  .rights-watch-kpis {
+    grid-template-columns: repeat(4, minmax(90px, 1fr));
+  }
+}
+
 .rights-board {
   display: grid;
   grid-template-columns: repeat(6, minmax(150px, 1fr));

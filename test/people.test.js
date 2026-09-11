@@ -125,8 +125,11 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /id="people-q"/);
     assert.match(jsText, /id="people-search"/);
     assert.match(jsText, /id="rights-board"/);
+    assert.match(jsText, /id="rights-tree-chart"/);
+    assert.match(jsText, /id="rights-refresh"/);
     assert.match(jsText, /总监/);
     assert.match(jsText, /renderRightsBoard/);
+    assert.match(jsText, /renderRightsTreeChart/);
     assert.match(jsText, /\/api\/people\/org\/rights-board/);
     assert.match(jsText, /placeFilterPop/);
     assert.match(jsText, /onFilterPin/);
@@ -320,6 +323,25 @@ test("rights board groups store staff under 总监经理主管运营", async () 
     const unpinnedJson = await unpinned.json();
     assert.equal(unpinned.status, 200);
     assert.ok(unpinnedJson.columns.find((col) => col.role === "运营").people.some((row) => row.name === "张文静"));
+
+    const tree = data.tree;
+    assert.equal(tree.name, "罗成");
+    assert.equal(tree.role, "总监");
+    const managers = tree.children.map((row) => row.name);
+    assert.ok(managers.includes("韩梦凯"));
+    assert.ok(managers.includes("沈子晗"));
+    const shen = tree.children.find((row) => row.name === "沈子晗");
+    const yang = (shen.children || []).find((row) => row.name === "杨润泽");
+    assert.ok(yang);
+    assert.equal(yang.role, "主管");
+    assert.ok((yang.children || []).some((row) => row.name === "崔安琪"));
+    assert.ok((yang.stores || []).length + (yang.children || []).reduce((sum, child) => sum + (child.stores || []).length, 0) >= 1);
+    const watch = data.watch;
+    assert.equal(typeof watch.checkedAt, "string");
+    assert.ok(watch.kpis.some((item) => item.label === "在营店铺" && item.value >= 15));
+    assert.ok(watch.issues.some((item) => item.kind === "人员对不上" && item.title.includes("陈晓曼")));
+    assert.ok(watch.issues.some((item) => item.kind === "待补全" && item.title.includes("缺店铺ID")));
+    assert.equal(watch.conflict, true);
   });
 });
 

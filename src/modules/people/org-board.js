@@ -148,6 +148,249 @@ function collectRoster() {
   return listPeople().filter((row) => row.status === "在职" && row.center !== "人员管理" && row.name !== "管理员");
 }
 
+function roleOfName(name, byName) {
+  return rightsPins[name] || mapBoardRole(byName[name] && byName[name].role) || "运营";
+}
+
+function managerBranchOfStore(row) {
+  const blob = [row.chief, row.team, row.lead, row.owner].join(" ");
+  if (blob.includes("韩梦凯")) {
+    return "韩梦凯";
+  }
+  if (blob.includes("沈子晗")) {
+    return "沈子晗";
+  }
+  if (blob.includes("罗成")) {
+    return "罗成";
+  }
+  return "";
+}
+
+function branchOfPerson(name, person, stores) {
+  if (name === "韩梦凯" || name === "沈子晗" || name === "罗成") {
+    return name;
+  }
+  const blob = [person && person.center, person && person.department].join(" ");
+  if (blob.includes("韩梦凯")) {
+    return "韩梦凯";
+  }
+  if (blob.includes("沈子晗")) {
+    return "沈子晗";
+  }
+  const hit = stores.find((row) => namesFromStore(row).includes(name));
+  return hit ? managerBranchOfStore(hit) : "";
+}
+
+function makeNode(name, role, extra = {}) {
+  return {
+    name,
+    role,
+    id: extra.id || null,
+    synthetic: Boolean(extra.synthetic),
+    children: [],
+    stores: []
+  };
+}
+
+function attachChild(parent, child) {
+  if (!parent || !child || parent === child) {
+    return;
+  }
+  if (!parent.children.includes(child)) {
+    parent.children.push(child);
+  }
+}
+
+function sortTree(node) {
+  const rank = { 主管: 1, 储备: 2, 运营: 3, 助理: 4, 店长: 5 };
+  node.children.sort((a, b) => (rank[a.role] || 9) - (rank[b.role] || 9) || a.name.localeCompare(b.name, "zh"));
+  node.stores.sort((a, b) => String(a.storeName).localeCompare(String(b.storeName), "zh"));
+  node.children.forEach(sortTree);
+}
+
+function countTreePeople(node) {
+  if (!node) {
+    return 0;
+  }
+  return (node.synthetic ? 0 : 1) + node.children.reduce((sum, child) => sum + countTreePeople(child), 0);
+}
+
+function buildRightsTree(stores, roster, byName) {
+  const director = makeNode("罗成", "总监");
+  const han = makeNode("韩梦凯", "经理", { id: byName["韩梦凯"] ? byName["韩梦凯"].id : null });
+  const shen = makeNode("沈子晗", "经理", { id: byName["沈子晗"] ? byName["沈子晗"].id : null });
+  attachChild(director, han);
+  attachChild(director, shen);
+  const nodes = { 罗成: director, 韩梦凯: han, 沈子晗: shen };
+  const branches = { 韩梦凯: han, 沈子晗: shen, 罗成: director };
+
+  function ensure(name) {
+    if (nodes[name]) {
+      return nodes[name];
+    }
+    nodes[name] = makeNode(name, roleOfName(name, byName), { id: byName[name] ? byName[name].id : null });
+    return nodes[name];
+  }
+
+  function place(name, hintBranch) {
+    if (name === "罗成" || name === "韩梦凯" || name === "沈子晗") {
+      return nodes[name];
+    }
+    const node = ensure(name);
+    const person = byName[name];
+    const manager = person && person.managerId ? roster.find((row) => row.id === person.managerId) : null;
+    if (manager && manager.name !== name) {
+      const parent = ensure(manager.name);
+      attachChild(parent, node);
+      if (parent.role === "主管" || parent.role === "储备") {
+        const branch = branchOfPerson(parent.name, byName[parent.name], stores) || hintBranch || "沈子晗";
+        attachChild(branches[branch] || shen, parent);
+      }
+      return node;
+    }
+    const branch = hintBranch || branchOfPerson(name, person, stores) || "沈子晗";
+    attachChild(branches[branch] || shen, node);
+    return node;
+  }
+
+  roster.forEach((person) => {
+    place(person.name);
+  });
+  stores.forEach((row) => {
+    const branch = managerBranchOfStore(row);
+    [row.lead, row.owner].forEach((value) => {
+      const name = String(value || "").trim();
+      if (name) {
+        place(name, branch);
+      }
+    });
+  });
+
+  stores.forEach((row) => {
+    const owner = String(row.owner || "").trim();
+    const lead = String(row.lead || "").trim();
+    const target = (owner && nodes[owner]) || (lead && nodes[lead]) || branches[managerBranchOfStore(row)] || shen;
+    target.stores.push({
+      id: row.id,
+      storeName: row.storeName,
+      storeId: row.storeId || "",
+      merchantId: row.merchantId || "",
+      hanging: !(owner && nodes[owner])
+    });
+  });
+
+  [han, shen].forEach((mgr) => {
+    const leads = mgr.children.filter((child) => child.role === "主管");
+    const rest = mgr.children.filter((child) => child.role !== "主管");
+    if (!leads.length && rest.length) {
+      const group = makeNode(mgr.name + "组", "主管", { synthetic: true });
+      rest.forEach((child) => attachChild(group, child));
+      mgr.children = [group];
+    }
+  });
+
+  sortTree(director);
+  return director;
+}
+
+function buildRightsWatch(stores, roster, byName, tree) {
+  const issues = [];
+  const rosterNames = new Set(roster.map((row) => row.name));
+  rosterNames.add("罗成");
+  stores.forEach((row) => {
+    ["owner", "lead"].forEach((field) => {
+      const name = String(row[field] || "").trim();
+      if (name && !rosterNames.has(name) && !["罗成", "沈子晗", "韩梦凯"].includes(name)) {
+        issues.push({
+          kind: "人员对不上",
+          level: "warn",
+          title: name + " 不在花名册",
+          detail: (field === "owner" ? "店铺所属人员" : "小组负责人") + "「" + name + "」出现在「" + row.storeName + "」，成员管理没有这个人。"
+        });
+      }
+    });
+    if (!String(row.owner || "").trim()) {
+      issues.push({
+        kind: "店铺对不上",
+        level: "error",
+        title: row.storeName + " 缺所属人员",
+        detail: "店铺主数据没有店铺所属人员，挂不到树上。"
+      });
+    }
+    if (!managerBranchOfStore(row)) {
+      issues.push({
+        kind: "店铺对不上",
+        level: "warn",
+        title: row.storeName + " 对不上经理线",
+        detail: "总负责人 / 小组里看不到罗成、沈子晗或韩梦凯。"
+      });
+    }
+    if (!String(row.storeId || "").trim()) {
+      issues.push({
+        kind: "待补全",
+        level: "info",
+        title: row.storeName + " 缺店铺ID",
+        detail: "店铺主数据还没填店铺ID。"
+      });
+    }
+    if (!String(row.merchantId || "").trim()) {
+      issues.push({
+        kind: "待补全",
+        level: "info",
+        title: row.storeName + " 缺商家id",
+        detail: "店铺主数据还没填商家id。"
+      });
+    }
+  });
+  roster.forEach((person) => {
+    const role = roleOfName(person.name, byName);
+    if ((role === "运营" || role === "店长" || role === "助理") && storeCountOf(person.name, stores) === 0) {
+      issues.push({
+        kind: "店铺对不上",
+        level: "warn",
+        title: person.name + " 名下没有店铺",
+        detail: "花名册在职，店铺主数据里不是总负责人、小组负责人或所属人员。"
+      });
+    }
+    if (person.managerId && !roster.some((row) => row.id === person.managerId) && !listPeople().some((row) => row.id === person.managerId)) {
+      issues.push({
+        kind: "人员对不上",
+        level: "warn",
+        title: person.name + " 的上级不存在",
+        detail: "花名册上级已不在名册里。"
+      });
+    }
+  });
+  const seen = new Set();
+  const unique = issues.filter((item) => {
+    const key = item.kind + item.title;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+  const kinds = [...new Set(unique.map((item) => item.kind))];
+  const pending = unique.filter((item) => item.kind !== "待补全").length;
+  const fill = unique.filter((item) => item.kind === "待补全").length;
+  const departments = new Set(roster.map((row) => String(row.department || row.center || "").trim()).filter(Boolean));
+  return {
+    checkedAt: new Date().toISOString().slice(0, 19).replace("T", " "),
+    conflict: pending > 0,
+    kpis: [
+      { label: "经理线", value: 2 },
+      { label: "在营店铺", value: stores.filter((row) => row.statusKey === "operating").length },
+      { label: "部门", value: departments.size },
+      { label: "在职员工", value: roster.length + (byName["罗成"] ? 0 : 1) },
+      { label: "树上人数", value: countTreePeople(tree) },
+      { label: "待处理", value: pending },
+      { label: "冲突类型", value: kinds.filter((kind) => kind !== "待补全").length },
+      { label: "待补全", value: fill }
+    ],
+    issues: unique
+  };
+}
+
 export function listRightsBoard() {
   const stores = rows.map(clone);
   const roster = collectRoster();
@@ -183,11 +426,14 @@ export function listRightsBoard() {
       name,
       role: rightsPins[name] || mapBoardRole(byName[name] && byName[name].role) || "运营"
     }));
+  const tree = buildRightsTree(stores, roster, byName);
   return {
     ok: true,
     roles: RIGHTS_ROLES,
     columns: RIGHTS_ROLES.map((role) => ({ role, people: columns[role] })),
-    candidates
+    candidates,
+    tree,
+    watch: buildRightsWatch(stores, roster, byName, tree)
   };
 }
 

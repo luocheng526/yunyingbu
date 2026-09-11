@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.168-people-remove";
+    const href = "/people.css?v=0.1.169-rights-tree";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -159,7 +159,10 @@
         '<div class="org-filter-pop" id="people-filter-pop" hidden></div></section></div>' +
         '<div class="org-pane" data-pane="rights" hidden>' +
         '<section class="panel"><h2>管辖</h2>' +
-        '<p class="lead">责权按店铺主数据登记的总负责人、小组负责人、店铺所属人员归属来排。总监是罗成，下面两个经理是韩梦凯、沈子晗，再往下是主管、储备、运营、助理。灯钉职位对不上就点「指定」。</p>' +
+        '<p class="lead">树按花名册上级和店铺主数据归属来画：总监罗成，下面经理韩梦凯、沈子晗，再往下主管、运营、助理和店铺。点刷新重新读成员管理和店铺主数据。人员对不上或店铺对不上会在看板里列出来。</p>' +
+        '<div class="rights-watch" id="rights-watch"></div>' +
+        '<div class="rights-tree-toolbar"><button type="button" id="rights-refresh">刷新树和看板</button><span class="muted" id="rights-checked">检查时间：—</span></div>' +
+        '<div class="rights-tree-chart" id="rights-tree-chart"></div>' +
         '<div class="rights-board" id="rights-board"></div>' +
         '<div class="rights-pin-pop" id="rights-pin-pop" hidden></div>' +
         '<form class="people-mini-form" id="grant-form">' +
@@ -977,6 +980,90 @@
         });
       }
 
+      function renderRightsWatch(watch) {
+        const host = root.querySelector("#rights-watch");
+        const checked = root.querySelector("#rights-checked");
+        if (checked) {
+          checked.textContent = "检查时间：" + ((watch && watch.checkedAt) || "—");
+        }
+        if (!host) {
+          return;
+        }
+        const kpis = (watch && watch.kpis) || [];
+        const issues = (watch && watch.issues) || [];
+        host.innerHTML =
+          '<div class="rights-watch-banner' +
+          (watch && watch.conflict ? " is-conflict" : "") +
+          '"><div>组织人员以花名册为准，店铺、店铺ID、商家id以店铺主数据为准。刷新只读这两边，不另开一套权。</div><strong>' +
+          (watch && watch.conflict ? "存在冲突" : "暂无冲突") +
+          "</strong></div>" +
+          '<div class="rights-watch-kpis">' +
+          kpis
+            .map(function (item) {
+              return (
+                '<article class="rights-watch-kpi"><div class="label">' +
+                escapeHtml(item.label) +
+                '</div><div class="value">' +
+                escapeHtml(item.value) +
+                "</div></article>"
+              );
+            })
+            .join("") +
+          "</div>" +
+          (issues.length
+            ? '<ul class="rights-watch-issues">' +
+              issues
+                .map(function (item) {
+                  return (
+                    "<li data-kind=\"" +
+                    escapeHtml(item.kind) +
+                    '"><strong>' +
+                    escapeHtml(item.kind) +
+                    " · " +
+                    escapeHtml(item.title) +
+                    "</strong><span>" +
+                    escapeHtml(item.detail) +
+                    "</span></li>"
+                  );
+                })
+                .join("") +
+              "</ul>"
+            : '<p class="rights-empty">人员和店铺都对得上。</p>');
+      }
+
+      function renderRightsNode(node) {
+        if (!node) {
+          return "";
+        }
+        const stores = (node.stores || [])
+          .map(function (store) {
+            return '<span class="rights-tree-store">' + escapeHtml(store.storeName) + "</span>";
+          })
+          .join("");
+        return (
+          '<div class="rights-tree-node" data-role="' +
+          escapeHtml(node.role) +
+          '"><div class="rights-tree-card"><em>' +
+          escapeHtml(node.role) +
+          "</em><strong>" +
+          escapeHtml(node.name) +
+          "</strong></div>" +
+          (stores ? '<div class="rights-tree-stores">' + stores + "</div>" : "") +
+          ((node.children || []).length
+            ? '<div class="rights-tree-kids">' + node.children.map(renderRightsNode).join("") + "</div>"
+            : "") +
+          "</div>"
+        );
+      }
+
+      function renderRightsTreeChart(tree) {
+        const host = root.querySelector("#rights-tree-chart");
+        if (!host) {
+          return;
+        }
+        host.innerHTML = tree ? renderRightsNode(tree) : '<p class="rights-empty">还没有树。</p>';
+      }
+
       function renderRightsBoard(board) {
         const host = root.querySelector("#rights-board");
         if (!host) {
@@ -1086,7 +1173,10 @@
           const checkData = results[1];
           roster.people = results[2].people || roster.people;
           roster.shops = results[3].shops || roster.shops;
-          renderRightsBoard(results[4] || { columns: [] });
+          const board = results[4] || { columns: [] };
+          renderRightsWatch(board.watch || {});
+          renderRightsTreeChart(board.tree);
+          renderRightsBoard(board);
           rightsTbody.replaceChildren();
           (grantData.grants || []).forEach(function (grant) {
             const tr = document.createElement("tr");
@@ -1153,6 +1243,9 @@
           });
       }
 
+      root.querySelector("#rights-refresh").addEventListener("click", function () {
+        loadRights();
+      });
       root.querySelector("#rights-board").addEventListener("click", function (event) {
         const pinBtn = event.target.closest("[data-rights-pin]");
         if (pinBtn) {
