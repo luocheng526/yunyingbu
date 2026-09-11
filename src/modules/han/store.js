@@ -7,6 +7,37 @@ const DEFAULT_STORE = "韩梦凯店";
 const STATUSES = ["待办", "进行中", "已完成"];
 const SELECTION_STATUSES = ["观察", "入选", "淘汰"];
 const TRAINING_STATUSES = ["待开始", "进行中", "已完成"];
+const PRODUCT_LAYERS = [
+  "头部产品（高利润）",
+  "中部产品",
+  "尾部产品",
+  "动销产品",
+  "测新产品",
+  "新上架需做单产品",
+];
+const PRODUCT_LAYER_COLUMNS = [
+  ["layer", "VARCHAR(64) NOT NULL DEFAULT ''"],
+  ["image_url", "VARCHAR(1024) NOT NULL DEFAULT ''"],
+  ["spu", "VARCHAR(128) NOT NULL DEFAULT ''"],
+  ["first_sku", "VARCHAR(128) NOT NULL DEFAULT ''"],
+  ["hot_sell", "VARCHAR(256) NOT NULL DEFAULT ''"],
+  ["review_count", "VARCHAR(64) NOT NULL DEFAULT ''"],
+  ["share_count", "VARCHAR(64) NOT NULL DEFAULT ''"],
+  ["qa_video", "VARCHAR(128) NOT NULL DEFAULT ''"],
+  ["return_m5", "VARCHAR(64) NOT NULL DEFAULT ''"],
+  ["return_m6", "VARCHAR(64) NOT NULL DEFAULT ''"],
+  ["return_m7", "VARCHAR(64) NOT NULL DEFAULT ''"],
+  ["return_m8", "VARCHAR(64) NOT NULL DEFAULT ''"],
+  ["orders_30d", "VARCHAR(64) NOT NULL DEFAULT ''"],
+  ["fulfill_note", "VARCHAR(256) NOT NULL DEFAULT ''"],
+  ["jd_stock", "VARCHAR(64) NOT NULL DEFAULT ''"],
+  ["listed_on", "DATE NULL"],
+  ["has_new_badge", "VARCHAR(32) NOT NULL DEFAULT ''"],
+  ["need_order", "VARCHAR(256) NOT NULL DEFAULT ''"],
+  ["remark", "VARCHAR(1024) NOT NULL DEFAULT ''"],
+];
+const PRODUCT_SELECT =
+  "id, name, sku, price, stock, owner, store_name, layer, image_url, spu, first_sku, hot_sell, review_count, share_count, qa_video, return_m5, return_m6, return_m7, return_m8, orders_30d, fulfill_note, jd_stock, listed_on, has_new_badge, need_order, remark, created_at";
 const SCHEMA_PATH = fileURLToPath(new URL("./schema.sql", import.meta.url));
 
 function toIso(value) {
@@ -72,11 +103,30 @@ function mapProduct(row) {
   return {
     id: String(row.id),
     name: row.name,
-    sku: row.sku || "",
+    sku: row.sku || row.first_sku || "",
     price: row.price == null ? "" : String(row.price),
     stock: row.stock == null ? "" : String(row.stock),
     owner: row.owner,
     store: row.store_name || DEFAULT_STORE,
+    layer: row.layer || "",
+    image: row.image_url || "",
+    spu: row.spu || "",
+    firstSku: row.first_sku || row.sku || "",
+    hotSell: row.hot_sell || "",
+    reviewCount: row.review_count || "",
+    shareCount: row.share_count || "",
+    qaVideo: row.qa_video || "",
+    returnM5: row.return_m5 || "",
+    returnM6: row.return_m6 || "",
+    returnM7: row.return_m7 || "",
+    returnM8: row.return_m8 || "",
+    orders30d: row.orders_30d || "",
+    fulfillNote: row.fulfill_note || "",
+    jdStock: row.jd_stock || "",
+    listedOn: toDateOnly(row.listed_on),
+    hasNewBadge: row.has_new_badge || "",
+    needOrder: row.need_order || "",
+    remark: row.remark || "",
     createdAt: toIso(row.created_at),
   };
 }
@@ -182,6 +232,15 @@ export function createHanStore(poolOrFactory = getPool) {
             }
           }
         }
+        for (const [col, spec] of PRODUCT_LAYER_COLUMNS) {
+          try {
+            await pool.query(`ALTER TABLE han_products ADD COLUMN ${col} ${spec}`);
+          } catch (err) {
+            if (!err || (err.code !== "ER_DUP_FIELDNAME" && err.errno !== 1060)) {
+              throw err;
+            }
+          }
+        }
       })();
     }
     try {
@@ -268,26 +327,79 @@ export function createHanStore(poolOrFactory = getPool) {
 
     async listProducts() {
       await ensure();
-      const [rows] = await db().query(
-        "SELECT id, name, sku, price, stock, owner, store_name, created_at FROM han_products ORDER BY id ASC",
-      );
+      const [rows] = await db().query(`SELECT ${PRODUCT_SELECT} FROM han_products ORDER BY id ASC`);
       return rows.map(mapProduct);
     },
 
-    async createProduct({ name, sku, price, stock, owner, store } = {}) {
+    async createProduct({
+      name,
+      sku,
+      price,
+      stock,
+      owner,
+      store,
+      layer,
+      image,
+      spu,
+      firstSku,
+      hotSell,
+      reviewCount,
+      shareCount,
+      qaVideo,
+      returnM5,
+      returnM6,
+      returnM7,
+      returnM8,
+      orders30d,
+      fulfillNote,
+      jdStock,
+      listedOn,
+      hasNewBadge,
+      needOrder,
+      remark,
+    } = {}) {
       await ensure();
-      const trimmed = String(name || "").trim();
+      const spuText = String(spu || "").trim();
+      const first = String(firstSku || sku || "").trim();
+      const trimmed = String(name || "").trim() || spuText || first;
       if (!trimmed) {
-        const err = new Error("name required");
+        const err = new Error("name or spu required");
         err.statusCode = 400;
         throw err;
       }
+      const layerName = PRODUCT_LAYERS.includes(layer) ? layer : String(layer || "").trim();
       const [result] = await db().query(
-        "INSERT INTO han_products (name, sku, price, stock, owner, store_name) VALUES (?, ?, ?, ?, ?, ?)",
-        [trimmed, String(sku || "").trim(), optionalNumber(price), optionalNumber(stock), ownerOrDefault(owner), storeOrDefault(store)],
+        `INSERT INTO han_products (name, sku, price, stock, owner, store_name, layer, image_url, spu, first_sku, hot_sell, review_count, share_count, qa_video, return_m5, return_m6, return_m7, return_m8, orders_30d, fulfill_note, jd_stock, listed_on, has_new_badge, need_order, remark) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          trimmed,
+          first || String(sku || "").trim(),
+          optionalNumber(price),
+          optionalNumber(stock),
+          ownerOrDefault(owner),
+          storeOrDefault(store),
+          layerName,
+          String(image || "").trim(),
+          spuText,
+          first,
+          String(hotSell || "").trim(),
+          String(reviewCount || "").trim(),
+          String(shareCount || "").trim(),
+          String(qaVideo || "").trim(),
+          String(returnM5 || "").trim(),
+          String(returnM6 || "").trim(),
+          String(returnM7 || "").trim(),
+          String(returnM8 || "").trim(),
+          String(orders30d || "").trim(),
+          String(fulfillNote || "").trim(),
+          String(jdStock || "").trim(),
+          optionalDate(listedOn),
+          String(hasNewBadge || "").trim(),
+          String(needOrder || "").trim(),
+          String(remark || "").trim(),
+        ],
       );
       const [rows] = await db().query(
-        "SELECT id, name, sku, price, stock, owner, store_name, created_at FROM han_products WHERE id = ?",
+        `SELECT ${PRODUCT_SELECT} FROM han_products WHERE id = ?`,
         [result.insertId],
       );
       return mapProduct(rows[0]);
@@ -432,3 +544,4 @@ export const HAN_DEFAULT_STORE = DEFAULT_STORE;
 export const HAN_STATUSES = STATUSES;
 export const HAN_SELECTION_STATUSES = SELECTION_STATUSES;
 export const HAN_TRAINING_STATUSES = TRAINING_STATUSES;
+export const HAN_PRODUCT_LAYERS = PRODUCT_LAYERS;
