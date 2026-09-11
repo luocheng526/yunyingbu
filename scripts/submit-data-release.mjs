@@ -97,7 +97,11 @@ const extraFiles = (process.env.RELEASE_FILES || "")
   .map((s) => s.trim())
   .filter(Boolean);
 
-const files = assertDataOnlyPaths([...DATA_OVERLAY_FILES, ...extraFiles], "交单 files");
+const listed =
+  extraFiles.length && process.env.RELEASE_ONLY === "1"
+    ? extraFiles
+    : [...DATA_OVERLAY_FILES, ...extraFiles];
+const files = assertDataOnlyPaths(listed, "交单 files");
 const contents = {};
 for (const rel of files) {
   const abs = path.join(repoRoot, rel);
