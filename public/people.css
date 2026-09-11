@@ -694,9 +694,157 @@ body:has(.people-page) .xm-tabs {
   border-radius: 12px;
 }
 
-.rights-tree-fit {
-  display: inline-block;
+.rights-tree-fit,
+.rights-modules {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  min-width: 100%;
   transform-origin: top left;
+}
+
+.rights-mod-director,
+.rights-mod-manager,
+.rights-mod-lead {
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.rights-mod-director {
+  display: flex;
+  align-items: center;
+  min-width: 88px;
+  border-color: #cf1322;
+}
+
+.rights-mod-bands {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.rights-mod-band {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 10px;
+  min-height: 140px;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #ffccc7;
+  border-radius: 12px;
+}
+
+.rights-mod-manager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff2f0;
+  border-color: #ffa39e;
+}
+
+.rights-mod-leads {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rights-mod-lead {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 8px;
+  background: #f6ffed;
+  border-color: #b7eb8f;
+}
+
+.rights-mod-chain {
+  display: grid;
+  grid-template-columns: 1fr 0.7fr 1.3fr;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rights-mod-col {
+  min-height: 56px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+}
+
+.rights-mod-h {
+  display: block;
+  margin-bottom: 4px;
+  color: #8c8c8c;
+  font-size: 11px;
+}
+
+.rights-mod-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.rights-mod-card em {
+  font-style: normal;
+  color: #8c8c8c;
+  font-size: 11px;
+}
+
+.rights-mod-card[data-role="总监"] {
+  background: #cf1322;
+  border-color: #cf1322;
+  color: #fff;
+}
+
+.rights-mod-card[data-role="总监"] em {
+  color: #fff;
+}
+
+.rights-mod-card[data-role="经理"] {
+  background: #ffccc7;
+  border-color: #ffa39e;
+}
+
+.rights-mod-card[data-role="主管"] {
+  background: #b7eb8f;
+  border-color: #95de64;
+}
+
+.rights-mod-card[data-role="运营"] {
+  background: #87e8de;
+  border-color: #5cdbd3;
+}
+
+.rights-mod-card[data-role="助理"] {
+  background: #e6fffb;
+  border-color: #87e8de;
+}
+
+.rights-mod-shop {
+  margin: 0 0 4px;
+  padding: 3px 8px;
+  background: #fff;
+  border: 1px dashed #d9d9d9;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #595959;
+}
+
+.rights-mod-empty {
+  color: #d9d9d9;
+  font-size: 12px;
 }
 
 .rights-tree-node {
