@@ -310,6 +310,83 @@ export function createPerson(input) {
   return { ok: true, person: presentPerson(person) };
 }
 
+export const PEOPLE_IMPORT_HEADERS = ["姓名", "部门", "上级", "岗位", "所属中心", "状态", "账号", "登录密码"];
+
+export function importPeople(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (!list.length) {
+    return { ok: false, statusCode: 400, error: "请按模板导入至少一行" };
+  }
+  let created = 0;
+  let updated = 0;
+  const failed = [];
+  list.forEach((raw, index) => {
+    const line = index + 2;
+    const item = raw && typeof raw === "object" ? raw : {};
+    const name = String(item.姓名 || item.name || "").trim();
+    const department = String(item.部门 || item.department || "").trim();
+    const managerName = String(item.上级 || item.managerName || "").trim();
+    const role = String(item.岗位 || item.role || "").trim() || "运营";
+    const center = String(item.所属中心 || item.center || "").trim();
+    const status = String(item.状态 || item.status || "").trim() || "在职";
+    const username = String(item.账号 || item.username || "").trim();
+    const password = String(item.登录密码 || item.password || "").trim();
+    if (!name || !center) {
+      failed.push({ line, error: "姓名、所属中心均为必填" });
+      return;
+    }
+    let managerId = null;
+    if (managerName) {
+      const manager = people.find((row) => row.name === managerName);
+      if (!manager) {
+        failed.push({ line, error: "上级不存在" });
+        return;
+      }
+      managerId = manager.id;
+    }
+    const found = people.find(
+      (row) =>
+        (username && String(row.username || row.name).trim() === username) ||
+        (!username && row.name === name)
+    );
+    if (found) {
+      const result = patchPerson(found.id, {
+        status,
+        username: username || found.username || found.name,
+        ...(password ? { password } : {})
+      });
+      if (!result.ok) {
+        failed.push({ line, error: result.error });
+        return;
+      }
+      found.name = name;
+      found.role = role;
+      found.center = center;
+      found.department = department || found.department || center;
+      found.managerId = managerId;
+      rememberLogin(withLogin(found));
+      updated += 1;
+      return;
+    }
+    const createdRow = createPerson({
+      name,
+      role,
+      center,
+      status,
+      department,
+      managerId,
+      username,
+      password
+    });
+    if (!createdRow.ok) {
+      failed.push({ line, error: createdRow.error });
+      return;
+    }
+    created += 1;
+  });
+  return { ok: true, created, updated, failed };
+}
+
 export function patchPerson(id, input) {
   const found = findPerson(id);
   if (!found) {

@@ -5,11 +5,13 @@ import {
   createGrant,
   createPerson,
   createShop,
+  importPeople,
   listGrants,
   listPeople,
   listShops,
   patchPerson,
   patchPeoplePasswords,
+  PEOPLE_IMPORT_HEADERS,
   reconcilePeople
 } from "./store.js";
 import { scopeOf } from "./org-acl.js";
@@ -209,6 +211,24 @@ peopleRouter.get("/", (_req, res) => {
     posts: POSTS,
     people: listPeople()
   });
+});
+
+peopleRouter.get("/template", (_req, res) => {
+  const sample = ["示例同事", "沈子晗运营中心", "沈子晗", "运营", "沈子晗运营中心", "在职", "示例同事", "ChangeMe123!"];
+  const csv =
+    "\uFEFF" +
+    PEOPLE_IMPORT_HEADERS.join(",") +
+    "\n" +
+    sample.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",") +
+    "\n";
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", 'attachment; filename="people-template.csv"');
+  res.send(csv);
+});
+
+peopleRouter.post("/import", (req, res) => {
+  const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+  sendResult(res, importPeople(rows), false);
 });
 
 peopleRouter.patch("/passwords", (req, res) => {

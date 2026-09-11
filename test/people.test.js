@@ -108,6 +108,12 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /data-filter-key="center"/);
     assert.match(jsText, /data-filter-key="status"/);
     assert.match(jsText, /applyMemberFilters/);
+    assert.match(jsText, /id="people-modal"/);
+    assert.match(jsText, /id="people-add"/);
+    assert.match(jsText, /id="people-template"/);
+    assert.match(jsText, /组织中心-身份名册模板/);
+    assert.match(jsText, /\/api\/people\/import/);
+    assert.match(jsText, /点新增人员弹出对话框/);
     assert.doesNotMatch(jsText, /demo-flag/);
     assert.doesNotMatch(jsText, /演示<\/span>/);
     assert.doesNotMatch(jsText, /龙虎榜/);
@@ -410,6 +416,42 @@ test("PATCH /api/people/passwords sets one password for selected staff", async (
     assert.equal(afterJson.people.find((row) => row.id === wang.id).password, "TeamPass1");
     assert.equal(afterJson.people.find((row) => row.id === yang.id).password, "TeamPass1");
     assert.equal(afterJson.people.find((row) => row.name === "沈子晗").password, "ChangeMe123!");
+  });
+});
+
+test("people roster template and import upsert by username", async () => {
+  await withServer(async (base) => {
+    const template = await fetch(`${base}/api/people/template`);
+    const csv = await template.text();
+    assert.equal(template.status, 200);
+    assert.match(csv, /姓名,部门,上级,岗位,所属中心,状态,账号,登录密码/);
+
+    const imported = await fetch(`${base}/api/people/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          {
+            姓名: "导入同事",
+            部门: "数据中心",
+            上级: "管理员",
+            岗位: "运营",
+            所属中心: "数据中心",
+            状态: "在职",
+            账号: "daoru",
+            登录密码: "Import1!"
+          }
+        ]
+      })
+    });
+    const importedJson = await imported.json();
+    assert.equal(imported.status, 200, JSON.stringify(importedJson));
+    assert.equal(importedJson.created, 1);
+    const listed = await fetch(`${base}/api/people`);
+    const listedJson = await listed.json();
+    const row = listedJson.people.find((item) => item.username === "daoru");
+    assert.equal(row.name, "导入同事");
+    assert.equal(row.password, "Import1!");
   });
 });
 

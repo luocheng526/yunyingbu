@@ -126,19 +126,14 @@
         '<div class="org-filter-pop" id="org-filter-pop" hidden></div></div>' +
         '<div class="org-pane" data-pane="members" hidden>' +
         '<section class="panel"><h2>身份名册</h2>' +
-        '<p class="lead">表头可筛部门、上级、岗位、所属中心、状态。勾选后可统一改密码。</p>' +
-        '<form class="people-form" id="people-form">' +
-        '<label>姓名<input name="name" required maxlength="40" autocomplete="off" /></label>' +
-        '<label>部门<input name="department" maxlength="64" placeholder="如 沈子晗运营中心" /></label>' +
-        '<label>上级<select name="managerId"><option value="">无</option></select></label>' +
-        '<label>岗位<select name="role"><option>运营</option><option>主管</option><option>经理</option><option>店长</option></select></label>' +
-        '<label>所属中心<select name="center" required><option value="">请选择</option>' +
-        "<option>沈子晗运营中心</option><option>韩梦凯运营中心</option><option>数据中心</option>" +
-        "<option>版本发布中心</option><option>个人中心</option><option>其他</option></select></label>" +
-        "<label>状态<select name=\"status\"><option>在职</option><option>离职</option></select></label>" +
-        '<label>账号<input name="username" maxlength="40" placeholder="与姓名相同" /></label>' +
-        '<label>登录密码<input name="password" maxlength="64" value="ChangeMe123!" placeholder="初始密码" /></label>' +
-        '<button type="submit">新增人员</button></form>' +
+        '<p class="lead">表头可筛部门、上级、岗位、所属中心、状态。勾选后可统一改密码。点新增人员弹出对话框。</p>' +
+        '<div class="org-toolbar">' +
+        '<span class="spacer" id="people-count"></span>' +
+        '<button type="button" class="ghost" id="people-template">下载模板</button>' +
+        '<button type="button" class="ghost" id="people-import">导入</button>' +
+        '<input type="file" id="people-import-file" accept=".csv,text/csv" hidden />' +
+        '<button type="button" class="ghost" id="people-export">导出本筛</button>' +
+        '<button type="button" id="people-add">+ 新增人员</button></div>' +
         '<p class="status error" id="people-error" hidden></p>' +
         '<div class="people-bulk" id="people-bulk" hidden>' +
         '<label class="people-bulk-check"><input type="checkbox" id="people-bulk-all" />全选</label>' +
@@ -197,6 +192,25 @@
         '<div class="org-actions" style="margin-top:12px">' +
         '<button type="submit">保存</button>' +
         '<button type="button" class="ghost" id="org-cancel">取消</button>' +
+        "</div></form></div>" +
+        '<div class="org-modal" id="people-modal">' +
+        '<form class="org-dialog people-form" id="people-form"><h3>新增人员</h3>' +
+        '<div class="org-grid">' +
+        '<label>姓名<input name="name" required maxlength="40" autocomplete="off" /></label>' +
+        '<label>部门<input name="department" maxlength="64" placeholder="如 沈子晗运营中心" /></label>' +
+        '<label>上级<select name="managerId"><option value="">无</option></select></label>' +
+        '<label>岗位<select name="role"><option>运营</option><option>主管</option><option>经理</option><option>店长</option></select></label>' +
+        '<label>所属中心<select name="center" required><option value="">请选择</option>' +
+        "<option>沈子晗运营中心</option><option>韩梦凯运营中心</option><option>数据中心</option>" +
+        "<option>版本发布中心</option><option>个人中心</option><option>其他</option></select></label>" +
+        "<label>状态<select name=\"status\"><option>在职</option><option>离职</option></select></label>" +
+        '<label>账号<input name="username" maxlength="40" placeholder="与姓名相同" /></label>' +
+        '<label>登录密码<input name="password" maxlength="64" value="ChangeMe123!" placeholder="初始密码" /></label>' +
+        "</div>" +
+        '<p class="status error" id="people-form-error" hidden></p>' +
+        '<div class="org-actions" style="margin-top:12px">' +
+        '<button type="submit">保存</button>' +
+        '<button type="button" class="ghost" id="people-cancel">取消</button>' +
         "</div></form></div></main>";
 
       const kpis = root.querySelector("#org-kpis");
@@ -209,10 +223,34 @@
       const formError = root.querySelector("#org-form-error");
       const peopleTbody = root.querySelector("#people-tbody");
       const peopleForm = root.querySelector("#people-form");
+      const peopleModal = root.querySelector("#people-modal");
+      const peopleFormError = root.querySelector("#people-form-error");
+      const PEOPLE_HEADERS = ["姓名", "部门", "上级", "岗位", "所属中心", "状态", "账号", "登录密码"];
+      const PEOPLE_KEYS = ["name", "department", "managerName", "role", "center", "status", "username", "password"];
       if (peopleForm && peopleForm.name && peopleForm.username) {
         peopleForm.name.addEventListener("input", function () {
           peopleForm.username.value = peopleForm.name.value.trim();
         });
+      }
+      function openPeopleForm() {
+        if (peopleForm) {
+          peopleForm.reset();
+          if (peopleForm.password) {
+            peopleForm.password.value = "ChangeMe123!";
+          }
+        }
+        showError(peopleFormError, "");
+        fillSelect(
+          peopleForm.managerId,
+          roster.people,
+          function (item) { return String(item.id); },
+          function (item) { return item.name; },
+          "无"
+        );
+        peopleModal.classList.add("show");
+      }
+      function closePeopleForm() {
+        peopleModal.classList.remove("show");
       }
       const grantForm = root.querySelector("#grant-form");
       const peopleError = root.querySelector("#people-error");
@@ -832,6 +870,10 @@
         });
         paintMemberBar();
         paintFilterCarets();
+        const peopleCount = root.querySelector("#people-count");
+        if (peopleCount) {
+          peopleCount.textContent = "筛选 " + people.length + " 人";
+        }
       }
 
       function loadMembers() {
@@ -1178,8 +1220,139 @@
         paintMemberBar();
       }
 
-      postForm(peopleForm, "/api/people", peopleError, loadMembers);
       postForm(grantForm, "/api/people/grants", grantError, loadRights);
+      root.querySelector("#people-add").addEventListener("click", openPeopleForm);
+      root.querySelector("#people-cancel").addEventListener("click", closePeopleForm);
+      peopleModal.addEventListener("click", function (event) {
+        if (event.target === peopleModal) {
+          closePeopleForm();
+        }
+      });
+      peopleForm.addEventListener("submit", function (event) {
+        event.preventDefault();
+        showError(peopleFormError, "");
+        fetch("/api/people", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(Object.fromEntries(new FormData(peopleForm).entries()))
+        })
+          .then(function (res) {
+            return res.json().then(function (data) {
+              return { res: res, data: data };
+            });
+          })
+          .then(function (result) {
+            if (!result.res.ok || !result.data.ok) {
+              showError(peopleFormError, result.data.error || "保存失败");
+              return;
+            }
+            closePeopleForm();
+            peopleForm.reset();
+            return loadMembers();
+          })
+          .catch(function (err) {
+            showError(peopleFormError, err.message);
+          });
+      });
+      function peopleCsvLines(rows) {
+        return [PEOPLE_HEADERS.map(csvEscape).join(",")].concat(
+          rows.map(function (row) {
+            return PEOPLE_KEYS.map(function (key) {
+              return csvEscape(row[key]);
+            }).join(",");
+          })
+        );
+      }
+      root.querySelector("#people-template").addEventListener("click", function () {
+        downloadCsv(
+          "组织中心-身份名册模板.csv",
+          peopleCsvLines([
+            {
+              name: "示例同事",
+              department: "沈子晗运营中心",
+              managerName: "沈子晗",
+              role: "运营",
+              center: "沈子晗运营中心",
+              status: "在职",
+              username: "示例同事",
+              password: "ChangeMe123!"
+            }
+          ])
+        );
+      });
+      root.querySelector("#people-export").addEventListener("click", function () {
+        downloadCsv("组织中心-身份名册.csv", peopleCsvLines(lastPeople));
+      });
+      root.querySelector("#people-import").addEventListener("click", function () {
+        root.querySelector("#people-import-file").click();
+      });
+      root.querySelector("#people-import-file").addEventListener("change", function (event) {
+        const file = event.target.files && event.target.files[0];
+        event.target.value = "";
+        if (!file) {
+          return;
+        }
+        file
+          .text()
+          .then(function (text) {
+            const table = parseCsv(text);
+            if (table.length < 2) {
+              throw new Error("模板至少要有表头和一行数据");
+            }
+            const headers = table[0].map(function (cell) {
+              return String(cell || "").trim();
+            });
+            const missing = PEOPLE_HEADERS.filter(function (name) {
+              return headers.indexOf(name) < 0;
+            });
+            if (missing.length) {
+              throw new Error("表头需与表格一致，缺少：" + missing.join("、"));
+            }
+            const rows = table.slice(1).map(function (cells) {
+              const item = {};
+              headers.forEach(function (name, index) {
+                item[name] = cells[index] || "";
+              });
+              return item;
+            });
+            return fetch("/api/people/import", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ rows: rows })
+            }).then(function (res) {
+              return res.json().then(function (data) {
+                return { res: res, data: data };
+              });
+            });
+          })
+          .then(function (result) {
+            if (!result.res.ok || !result.data.ok) {
+              throw new Error(result.data.error || "导入失败");
+            }
+            const failed = result.data.failed || [];
+            showError(
+              peopleError,
+              failed.length
+                ? "导入完成：新增" +
+                    result.data.created +
+                    "，更新" +
+                    result.data.updated +
+                    "。失败" +
+                    failed.length +
+                    "行"
+                : ""
+            );
+            if (!failed.length) {
+              window.alert("导入完成：新增" + result.data.created + "条，更新" + result.data.updated + "条。");
+            }
+            return loadMembers();
+          })
+          .catch(function (err) {
+            showError(peopleError, err.message);
+          });
+      });
 
       function savePersonField(id, field, value) {
         return fetch("/api/people/" + id, {
