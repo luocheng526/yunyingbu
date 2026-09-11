@@ -147,7 +147,7 @@
         '<button type="button" id="people-bulk-apply">应用密码</button></div>' +
         '<div class="org-table-wrap"><table><thead><tr>' +
         '<th class="org-check"><input type="checkbox" id="people-check-all" title="全选" /></th>' +
-        '<th>姓名</th><th>账号</th><th>登录密码</th><th>部门</th><th>上级</th><th>岗位</th><th>所属中心</th><th>状态</th><th>能看见的店</th></tr></thead>' +
+        '<th>姓名</th><th>账号</th><th>登录密码</th><th>部门</th><th>上级</th><th>岗位</th><th>所属中心</th><th>状态</th></tr></thead>' +
         '<tbody id="people-tbody"></tbody></table></div></section>' +
         '<section class="panel"><h2>店铺 / 店群</h2>' +
         '<form class="people-mini-form" id="shop-form">' +
@@ -768,7 +768,6 @@
           peopleTbody.replaceChildren();
           roster.people.forEach(function (person) {
             const tr = document.createElement("tr");
-            const shops = (person.visibleShops || []).join("、") || "—";
             tr.setAttribute("data-id", String(person.id));
             tr.innerHTML =
               '<td class="org-check"><input type="checkbox" class="people-row-check" data-check="' +
@@ -795,9 +794,7 @@
               (person.status === "在职" ? " selected" : "") +
               ">在职</option><option" +
               (person.status === "离职" ? " selected" : "") +
-              ">离职</option></select></td><td>" +
-              escapeHtml(shops) +
-              "</td>";
+              ">离职</option></select></td>";
             peopleTbody.append(tr);
           });
           shopTbody.replaceChildren();
