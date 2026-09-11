@@ -625,6 +625,15 @@ body:has(.people-page) .xm-tabs {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
+.rights-watch-kpi.is-click {
+  cursor: pointer;
+}
+
+.rights-watch-kpi.is-open {
+  border-color: #1677ff;
+  box-shadow: 0 0 0 1px #1677ff inset;
+}
+
 .rights-watch-kpi .label {
   color: #8c8c8c;
   font-size: 12px;
@@ -643,11 +652,15 @@ body:has(.people-page) .xm-tabs {
 }
 
 .rights-watch-issues {
-  max-height: 88px;
+  max-height: 220px;
   overflow: auto;
   margin: 0 0 8px;
   padding: 0;
   list-style: none;
+}
+
+.rights-watch-issues[hidden] {
+  display: none;
 }
 
 .rights-watch-issues li {

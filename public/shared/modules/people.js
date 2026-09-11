@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.170-rights-fit";
+    const href = "/people.css?v=0.1.172-watch-click";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -937,28 +937,101 @@
         });
       }
 
+      let lastWatch = { kpis: [], issues: [] };
+      let watchOpen = "";
+
+      function watchFilterOf(label) {
+        if (label === "待补全") {
+          return "待补全";
+        }
+        if (label === "待处理" || label === "冲突类型") {
+          return "冲突";
+        }
+        return "";
+      }
+
+      function issuesForWatch(open) {
+        const issues = lastWatch.issues || [];
+        if (open === "待补全") {
+          return issues.filter(function (item) {
+            return item.kind === "待补全";
+          });
+        }
+        if (open === "冲突") {
+          return issues.filter(function (item) {
+            return item.kind !== "待补全";
+          });
+        }
+        return [];
+      }
+
+      function paintWatchIssues() {
+        const host = root.querySelector("#rights-watch");
+        if (!host) {
+          return;
+        }
+        host.querySelectorAll("[data-watch-open]").forEach(function (card) {
+          card.classList.toggle("is-open", card.getAttribute("data-watch-open") === watchOpen);
+        });
+        let box = host.querySelector("#rights-watch-issues");
+        if (!box) {
+          box = document.createElement("ul");
+          box.id = "rights-watch-issues";
+          box.className = "rights-watch-issues";
+          host.append(box);
+        }
+        const shown = issuesForWatch(watchOpen);
+        box.hidden = !watchOpen;
+        if (!watchOpen) {
+          box.innerHTML = "";
+          return;
+        }
+        box.innerHTML = shown.length
+          ? shown
+              .map(function (item) {
+                return (
+                  "<li data-kind=\"" +
+                  escapeHtml(item.kind) +
+                  '"><strong>' +
+                  escapeHtml(item.kind) +
+                  " · " +
+                  escapeHtml(item.title) +
+                  "</strong><span>" +
+                  escapeHtml(item.detail) +
+                  "</span></li>"
+                );
+              })
+              .join("")
+          : '<li class="rights-empty">这一项没有明细。</li>';
+      }
+
       function renderRightsWatch(watch) {
         const host = root.querySelector("#rights-watch");
         const checked = root.querySelector("#rights-checked");
+        lastWatch = watch || { kpis: [], issues: [] };
         if (checked) {
-          checked.textContent = "检查时间：" + ((watch && watch.checkedAt) || "—");
+          checked.textContent = "检查时间：" + (lastWatch.checkedAt || "—");
         }
         if (!host) {
           return;
         }
-        const kpis = (watch && watch.kpis) || [];
-        const issues = (watch && watch.issues) || [];
+        const kpis = lastWatch.kpis || [];
         host.innerHTML =
           '<div class="rights-watch-banner' +
-          (watch && watch.conflict ? " is-conflict" : "") +
-          '"><div>组织人员以花名册为准，店铺、店铺ID、商家id以店铺主数据为准。刷新只读这两边，不另开一套权。</div><strong>' +
-          (watch && watch.conflict ? "存在冲突" : "暂无冲突") +
+          (lastWatch.conflict ? " is-conflict" : "") +
+          '"><div>组织人员以花名册为准，店铺、店铺ID、商家id以店铺主数据为准。刷新只读这两边，不另开一套权。待补全要点数字才展开。</div><strong>' +
+          (lastWatch.conflict ? "存在冲突" : "暂无冲突") +
           "</strong></div>" +
           '<div class="rights-watch-kpis">' +
           kpis
             .map(function (item) {
+              const open = watchFilterOf(item.label);
               return (
-                '<article class="rights-watch-kpi"><div class="label">' +
+                '<article class="rights-watch-kpi' +
+                (open ? " is-click" : "") +
+                '"' +
+                (open ? ' data-watch-open="' + open + '"' : "") +
+                '><div class="label">' +
                 escapeHtml(item.label) +
                 '</div><div class="value">' +
                 escapeHtml(item.value) +
@@ -966,26 +1039,8 @@
               );
             })
             .join("") +
-          "</div>" +
-          (issues.length
-            ? '<ul class="rights-watch-issues">' +
-              issues
-                .map(function (item) {
-                  return (
-                    "<li data-kind=\"" +
-                    escapeHtml(item.kind) +
-                    '"><strong>' +
-                    escapeHtml(item.kind) +
-                    " · " +
-                    escapeHtml(item.title) +
-                    "</strong><span>" +
-                    escapeHtml(item.detail) +
-                    "</span></li>"
-                  );
-                })
-                .join("") +
-              "</ul>"
-            : '<p class="rights-empty">人员和店铺都对得上。</p>');
+          "</div>";
+        paintWatchIssues();
       }
 
       function renderRightsNode(node) {
@@ -1081,6 +1136,16 @@
           });
       }
 
+      root.querySelector("#rights-watch").addEventListener("click", function (event) {
+        const card = event.target.closest("[data-watch-open]");
+        if (!card) {
+          return;
+        }
+        const next = card.getAttribute("data-watch-open");
+        watchOpen = watchOpen === next ? "" : next;
+        paintWatchIssues();
+        requestAnimationFrame(fitRightsTree);
+      });
       root.querySelector("#rights-refresh").addEventListener("click", function () {
         loadRights();
       });
