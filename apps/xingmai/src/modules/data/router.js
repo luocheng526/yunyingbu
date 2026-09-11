@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { getOverview } from "./overview.js";
-import { listErpGoods, listErpShops } from "./erp.js";
+import { getErpOverview, listErpGoods, listErpShopStats, listErpShops } from "./erp.js";
 
 export const dataRouter = Router();
 
@@ -13,15 +12,33 @@ function sendErp(res, run) {
     });
 }
 
-dataRouter.get("/overview", async (_req, res) => {
-  res.json(await getOverview());
+function rangeQuery(query) {
+  return {
+    pageNum: query.pageNum || query.page,
+    pageSize: query.pageSize,
+    shopId: query.shopId,
+    shopIds: query.shopIds,
+    shopName: query.shopName || query.q,
+    payTimeStart: query.payTimeStart || query.from,
+    payTimeEnd: query.payTimeEnd || query.to,
+    orderBy: query.orderBy,
+    asc: query.asc
+  };
+}
+
+dataRouter.get("/overview", (req, res) => {
+  sendErp(res, () => getErpOverview(rangeQuery(req.query)));
 });
 
 dataRouter.get("/shops", (req, res) => {
+  sendErp(res, () => listErpShopStats(rangeQuery(req.query)));
+});
+
+dataRouter.get("/shop-options", (req, res) => {
   sendErp(res, () =>
     listErpShops({
-      pageNum: req.query.pageNum || req.query.page,
-      pageSize: req.query.pageSize,
+      pageNum: req.query.pageNum || req.query.page || 1,
+      pageSize: req.query.pageSize || 50,
       shopName: req.query.shopName || req.query.q,
       shopId: req.query.shopId
     })
@@ -29,16 +46,5 @@ dataRouter.get("/shops", (req, res) => {
 });
 
 dataRouter.get("/goods", (req, res) => {
-  sendErp(res, () =>
-    listErpGoods({
-      pageNum: req.query.pageNum || req.query.page,
-      pageSize: req.query.pageSize,
-      shopId: req.query.shopId,
-      shopIds: req.query.shopIds,
-      payTimeStart: req.query.payTimeStart || req.query.from,
-      payTimeEnd: req.query.payTimeEnd || req.query.to,
-      orderBy: req.query.orderBy,
-      asc: req.query.asc
-    })
-  );
+  sendErp(res, () => listErpGoods(rangeQuery(req.query)));
 });

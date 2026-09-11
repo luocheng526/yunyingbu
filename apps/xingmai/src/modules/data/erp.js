@@ -5,7 +5,7 @@ const REFRESH_SKEW_MS = 5 * 60 * 1000;
 const SHOP_ID_TTL_MS = 5 * 60 * 1000;
 
 let testFetch = null;
-let shopIdCache = { at: 0, ids: [] };
+let shopMetaCache = { at: 0, ids: [], names: {} };
 let session = { token: "", expiresAt: 0 };
 let loginInFlight = null;
 let skipForcedToken = false;
@@ -15,7 +15,7 @@ export function setErpFetchForTests(fn) {
 }
 
 export function resetErpCacheForTests() {
-  shopIdCache = { at: 0, ids: [] };
+  shopMetaCache = { at: 0, ids: [], names: {} };
   session = { token: "", expiresAt: 0 };
   loginInFlight = null;
   skipForcedToken = false;
@@ -213,22 +213,81 @@ function publicShop(row) {
   };
 }
 
-function publicGoods(row) {
+function publicGoods(row, names = {}) {
+  if (!row || typeof row !== "object") {
+    return null;
+  }
+  const shopId = String(row.shopId ?? "");
+  const info = names[shopId] || {};
+  return {
+    shopId,
+    shopName: row.shopName || info.shopName || "",
+    productId: String(row.productId ?? ""),
+    productName: row.productName || "",
+    growthStage: row.growthStage || "",
+    orderCount: row.orderCount ?? null,
+    skuNum: row.skuNum ?? null,
+    payAmount: row.payAmount ?? null,
+    netSalesAmount: row.netSalesAmount ?? null,
+    profit: row.profit ?? null,
+    promotionCost: row.promotionCost ?? null,
+    refundRate: row.refundRate ?? null
+  };
+}
+
+function publicShopStat(row, names = {}) {
+  if (!row || typeof row !== "object") {
+    return null;
+  }
+  const shopId = String(row.shopId ?? row.id ?? "");
+  const info = names[shopId] || {};
+  return {
+    shopId,
+    shopName: row.shopName || info.shopName || "",
+    typeLabel: info.typeLabel || "",
+    statusLabel: info.statusLabel || "",
+    payAmount: row.payAmount ?? null,
+    todayPayAmount: row.todayPayAmount ?? null,
+    yesterdayPayAmount: row.yesterdayPayAmount ?? null,
+    orderCount: row.orderCount ?? null,
+    netOrderCount: row.netOrderCount ?? null,
+    profit: row.profit ?? null,
+    profitRate: row.profitRate ?? null,
+    refundAmount: row.refundAmount ?? null,
+    refundRate: row.refundRate ?? null,
+    totalPromotionCost: row.totalPromotionCost ?? null,
+    promotionRate: row.promotionRate ?? null
+  };
+}
+
+function publicTrend(row) {
   if (!row || typeof row !== "object") {
     return null;
   }
   return {
-    shopId: String(row.shopId ?? ""),
-    productId: String(row.productId ?? ""),
-    productName: row.productName || "",
-    growthStage: row.growthStage || "",
-    orderCount: row.orderCount ?? 0,
-    skuNum: row.skuNum ?? 0,
-    payAmount: row.payAmount ?? 0,
-    netSalesAmount: row.netSalesAmount ?? 0,
-    profit: row.profit ?? 0,
-    promotionCost: row.promotionCost ?? 0,
-    refundRate: row.refundRate ?? 0
+    date: row.date || "",
+    payAmount: row.payAmount ?? null,
+    orderCount: row.orderCount ?? null,
+    profit: row.profit ?? null,
+    refundAmount: row.refundAmount ?? null,
+    promotionCost: row.promotionCost ?? null
+  };
+}
+
+function hasValue(value) {
+  return value !== null && value !== undefined && value !== "";
+}
+
+function card(key, label, value, unit) {
+  if (!hasValue(value)) {
+    return null;
+  }
+  const n = Number(value);
+  return {
+    key,
+    label,
+    value: Number.isFinite(n) ? n : value,
+    unit
   };
 }
 
@@ -255,27 +314,38 @@ export async function listErpShops(input = {}) {
   return pageResult(data, publicShop);
 }
 
-export async function listErpShopIds() {
+export async function listErpShopMeta() {
   const now = Date.now();
-  if (shopIdCache.ids.length && now - shopIdCache.at < SHOP_ID_TTL_MS) {
-    return shopIdCache.ids;
+  if (shopMetaCache.ids.length && now - shopMetaCache.at < SHOP_ID_TTL_MS) {
+    return shopMetaCache;
   }
   const ids = [];
+  const names = {};
   let pageNum = 1;
   let totalPages = 1;
   do {
     const data = await erpPost("/product/jd/shopInfo/page", { pageNum, pageSize: 50 });
     for (const row of data?.records || []) {
-      const id = Number(row.id);
+      const mapped = publicShop(row);
+      if (!mapped?.id) {
+        continue;
+      }
+      const id = Number(mapped.id);
       if (Number.isFinite(id)) {
         ids.push(id);
       }
+      names[mapped.id] = mapped;
     }
     totalPages = Number(data?.totalPages || 1);
     pageNum += 1;
   } while (pageNum <= totalPages && pageNum <= 20);
-  shopIdCache = { at: now, ids };
-  return ids;
+  shopMetaCache = { at: now, ids, names };
+  return shopMetaCache;
+}
+
+export async function listErpShopIds() {
+  const meta = await listErpShopMeta();
+  return meta.ids;
 }
 
 function defaultPayRange() {
@@ -310,23 +380,107 @@ function parseShopIds(input) {
   return [];
 }
 
-export async function listErpGoods(input = {}) {
-  let shopIds = parseShopIds(input);
-  if (!shopIds.length) {
-    shopIds = await listErpShopIds();
+function payRange(input = {}) {
+  const range = defaultPayRange();
+  return {
+    payTimeStart: String(input.payTimeStart || range.payTimeStart),
+    payTimeEnd: String(input.payTimeEnd || range.payTimeEnd)
+  };
+}
+
+async function resolveShopIds(input = {}) {
+  const shopIds = parseShopIds(input);
+  if (shopIds.length) {
+    return shopIds;
   }
-  if (!shopIds.length) {
+  const ids = await listErpShopIds();
+  if (!ids.length) {
     throw asError("星脉 ERP 没有可查询的店铺", 502);
   }
-  const range = defaultPayRange();
+  return ids;
+}
+
+export async function listErpGoods(input = {}) {
+  const shopIds = await resolveShopIds(input);
+  const range = payRange(input);
+  const meta = await listErpShopMeta();
   const data = await erpPost("/product/jd/order/product/page", {
     pageNum: toInt(input.pageNum, 1),
     pageSize: Math.min(toInt(input.pageSize, 20), 50),
     shopIds,
     orderBy: String(input.orderBy || "payAmount"),
     asc: input.asc === true || input.asc === "true",
-    payTimeStart: String(input.payTimeStart || range.payTimeStart),
-    payTimeEnd: String(input.payTimeEnd || range.payTimeEnd)
+    ...range
   });
-  return pageResult(data, publicGoods);
+  return pageResult(data, (row) => publicGoods(row, meta.names));
+}
+
+export async function listErpShopStats(input = {}) {
+  const range = payRange(input);
+  const meta = await listErpShopMeta();
+  const data = await erpPost("/product/jd/order/shop/page", {
+    pageNum: toInt(input.pageNum, 1),
+    pageSize: Math.min(toInt(input.pageSize, 20), 50),
+    shopIds: parseShopIds(input),
+    shopName: String(input.shopName || "").trim() || undefined,
+    orderBy: String(input.orderBy || "payAmount"),
+    asc: input.asc === true || input.asc === "true",
+    filters: [],
+    ...range
+  });
+  const result = pageResult(data, (row) => publicShopStat(row, meta.names));
+  const summary = data?.summary ? publicShopStat(data.summary, meta.names) : null;
+  return { ...result, summary };
+}
+
+export async function listErpHotGoods(input = {}) {
+  const shopIds = await resolveShopIds(input);
+  const range = payRange(input);
+  const meta = await listErpShopMeta();
+  const data = await erpPost("/product/jd/order/product/trend", {
+    pageNum: 1,
+    pageSize: Math.min(toInt(input.pageSize, 8), 20),
+    shopIds,
+    orderBy: "payAmount",
+    asc: false,
+    ...range
+  });
+  const rows = Array.isArray(data) ? data : data?.records || [];
+  return rows.map((row) => publicGoods(row, meta.names)).filter(Boolean);
+}
+
+export async function listErpSalesTrend(input = {}) {
+  const range = payRange(input);
+  const data = await erpPost("/product/board/salesTrend", {
+    startDate: range.payTimeStart,
+    endDate: range.payTimeEnd
+  });
+  const rows = Array.isArray(data) ? data : [];
+  return rows.map(publicTrend).filter(Boolean);
+}
+
+export async function getErpOverview(input = {}) {
+  const range = payRange(input);
+  const [trend, shops, goods] = await Promise.all([
+    listErpSalesTrend(range),
+    listErpShopStats({ ...range, pageNum: 1, pageSize: 8 }),
+    listErpHotGoods({ ...range, pageSize: 8 })
+  ]);
+  const summary = shops.summary || {};
+  const cards = [
+    card("payAmount", "应收金额", summary.payAmount, "元"),
+    card("orderCount", "订单数", summary.orderCount, "单"),
+    card("profit", "利润", summary.profit, "元"),
+    card("refundAmount", "退款金额", summary.refundAmount, "元")
+  ].filter(Boolean);
+  return {
+    ok: true,
+    source: "xingmai-erp",
+    range,
+    cards,
+    trend,
+    shops: shops.records,
+    goods,
+    shopTotal: shops.total
+  };
 }

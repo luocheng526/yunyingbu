@@ -60,11 +60,15 @@ async function loginCookie() {
 }
 
 test("data module mounts shop and goods pages against ERP proxies", () => {
+  assert.match(dataJs, /XmModules\["\/data\/overview"\]/);
   assert.match(dataJs, /XmModules\["\/data\/shops"\]/);
   assert.match(dataJs, /XmModules\["\/data\/goods"\]/);
+  assert.match(dataJs, /\/api\/data\/overview/);
   assert.match(dataJs, /\/api\/data\/shops/);
   assert.match(dataJs, /\/api\/data\/goods/);
   assert.match(dataJs, /内容待开发/);
+  assert.doesNotMatch(dataJs, /今日订单/);
+  assert.doesNotMatch(dataJs, /在职人数/);
   assert.doesNotMatch(dataJs, /authInfo/);
   assert.doesNotMatch(dataJs, /XM_ERP_TOKEN/);
   assert.doesNotMatch(dataJs, /xingmai110/);
@@ -86,52 +90,67 @@ test("shops return 503 when ERP login is disabled and token is missing", async (
   assert.match(body.error, /XM_ERP_/);
 });
 
-test("shops proxy strips JD auth secrets", async () => {
-  process.env.XM_ERP_TOKEN = "test-token";
-  process.env.XM_ERP_BASE = "http://erp.test";
+function mockErp(handler) {
   const calls = [];
   setErpFetchForTests(async (url, options) => {
-    calls.push({ url, body: JSON.parse(options.body), auth: options.headers.Authorization });
+    const body = options.body ? JSON.parse(options.body) : {};
+    calls.push({ url, body, auth: options.headers.Authorization || "" });
+    return handler(url, body, options);
+  });
+  return calls;
+}
+
+test("shops join names and strip JD auth secrets", async () => {
+  process.env.XM_ERP_TOKEN = "test-token";
+  const calls = mockErp(async (url) => {
+    if (String(url).includes("/jd/shopInfo/page")) {
+      return {
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: {
+            total: 1,
+            totalPages: 1,
+            currentPage: 1,
+            pageSize: 50,
+            records: [
+              {
+                id: "12286853",
+                shopName: "飒望苒鸥专卖店",
+                type: 0,
+                status: 1,
+                authInfo: { appKey: "SECRET", appSecret: "SECRET", accessToken: "SECRET" }
+              }
+            ]
+          }
+        })
+      };
+    }
     return {
       status: 200,
       json: async () => ({
         code: 200,
-        message: "操作成功",
         data: {
           total: 1,
           totalPages: 1,
           currentPage: 1,
           pageSize: 20,
-          records: [
-            {
-              id: "12286853",
-              shopName: "飒望苒鸥专卖店",
-              type: 0,
-              status: 1,
-              introduction: "家居日用",
-              mainFirstCategoryName: "床上用品",
-              mainSecondCategoryName: "枕头",
-              openTime: "2022-09-02 17:54:01",
-              authInfo: { appKey: "SECRET", appSecret: "SECRET", accessToken: "SECRET" }
-            }
-          ]
+          summary: { payAmount: 100, orderCount: 2, profit: 10, refundAmount: 1 },
+          records: [{ shopId: "12286853", payAmount: 100, orderCount: 2, profit: 10, refundRate: 0.1 }]
         }
       })
     };
   });
   const cookie = await loginCookie();
-  const res = await fetch(`${base}/api/data/shops?shopName=飒望`, { headers: { cookie } });
+  const res = await fetch(`${base}/api/data/shops`, { headers: { cookie } });
   assert.equal(res.status, 200);
   const body = await res.json();
-  assert.equal(body.ok, true);
-  assert.equal(body.total, 1);
   assert.equal(body.records[0].shopName, "飒望苒鸥专卖店");
-  assert.equal(body.records[0].typeLabel, "POP");
+  assert.equal(body.records[0].payAmount, 100);
   assert.equal(body.records[0].authInfo, undefined);
   assert.equal(JSON.stringify(body).includes("SECRET"), false);
-  assert.equal(calls[0].url, "http://erp.test/product/jd/shopInfo/page");
-  assert.equal(calls[0].auth, "Bearer test-token");
-  assert.equal(calls[0].body.shopName, "飒望");
+  assert.equal(calls.some((item) => String(item.url).includes("/jd/shopInfo/page")), true);
+  assert.equal(calls.some((item) => String(item.url).includes("/jd/order/shop/page")), true);
 });
 
 test("goods load all shop ids when none are selected", async () => {
@@ -239,10 +258,72 @@ test("logs into ERP and retries once after an expired token", async () => {
   const again = await fetch(`${base}/api/data/shops`, { headers: { cookie } });
   assert.equal(again.status, 200);
   const loginCalls = calls.filter((item) => String(item.url).includes("/auth/login"));
-  const shopCalls = calls.filter((item) => String(item.url).includes("/shopInfo/page"));
+  const shopInfoCalls = calls.filter((item) => String(item.url).includes("/shopInfo/page"));
   assert.equal(loginCalls.length, 2);
-  assert.equal(shopCalls.length, 3);
-  assert.equal(shopCalls[0].auth, "Bearer fresh-token-1");
-  assert.equal(shopCalls[1].auth, "Bearer fresh-token-3");
-  assert.equal(shopCalls[2].auth, "Bearer fresh-token-3");
+  assert.equal(shopInfoCalls[0].auth, "Bearer fresh-token-1");
+  assert.equal(shopInfoCalls.at(-1).auth, "Bearer fresh-token-3");
+});
+
+test("overview maps trend, shop rank and hot goods", async () => {
+  process.env.XM_ERP_TOKEN = "test-token";
+  mockErp(async (url) => {
+    if (String(url).includes("/board/salesTrend")) {
+      return {
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: [
+            { date: "2026-09-10", payAmount: 10, orderCount: 1, profit: 2, refundAmount: 1, promotionCost: 3 }
+          ]
+        })
+      };
+    }
+    if (String(url).includes("/jd/shopInfo/page")) {
+      return {
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: {
+            total: 1,
+            totalPages: 1,
+            records: [{ id: "1", shopName: "示例店", type: 0, status: 1 }]
+          }
+        })
+      };
+    }
+    if (String(url).includes("/jd/order/shop/page")) {
+      return {
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: {
+            total: 1,
+            totalPages: 1,
+            currentPage: 1,
+            pageSize: 8,
+            summary: { payAmount: 88, orderCount: 9, profit: 7, refundAmount: 3 },
+            records: [{ shopId: "1", payAmount: 88, orderCount: 9, profit: 7 }]
+          }
+        })
+      };
+    }
+    return {
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: [{ shopId: "1", productId: "9", productName: "热销刀", payAmount: 50 }]
+      })
+    };
+  });
+  const cookie = await loginCookie();
+  const res = await fetch(`${base}/api/data/overview`, { headers: { cookie } });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.source, "xingmai-erp");
+  assert.equal(body.cards[0].label, "应收金额");
+  assert.equal(body.cards[0].value, 88);
+  assert.equal(body.trend[0].date, "2026-09-10");
+  assert.equal(body.shops[0].shopName, "示例店");
+  assert.equal(body.goods[0].productName, "热销刀");
+  assert.equal(body.events, undefined);
 });
