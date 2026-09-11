@@ -135,6 +135,7 @@ test("shen-submenu script replaces retired sider labels", async () => {
     assert.match(script.text, /付费中心/);
     assert.match(script.text, /\/shen\/selection/);
     assert.match(script.text, /__xmGo/);
+    assert.equal(script.text.includes("innerHTML"), false);
     const embed = await request(base, "/shared/modules/shen.js");
     assert.equal(embed.res.status, 200);
     assert.match(embed.text, /产品中心/);

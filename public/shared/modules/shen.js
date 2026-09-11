@@ -1,84 +1,79 @@
 /* xm-module-shen 0.1.65 */
 (function () {
-  var ITEMS = [
-    { href: "/shen/selection", label: "产品中心" },
-    { href: "/shen/paid", label: "付费中心" },
-    { href: "/shen/training", label: "培训系统" },
-    { href: "/shen/tasks", label: "任务管理" }
-  ];
+  var LABEL_BY_HREF = {
+    "/shen/selection": "产品中心",
+    "/shen/product": "产品中心",
+    "/shen/paid": "付费中心"
+  };
+  var HIDE_HREFS = { "/shen/growth": true };
+  var EMBED = {
+    "/shen/product": "/shen/selection",
+    "/shen/growth": "/shen/selection"
+  };
 
-  function pathNow() {
-    return String(location.pathname || "/").replace(/\/+$/, "") || "/";
+  function leafHref(href) {
+    return String(href || "/").replace(/\/+$/, "") || "/";
   }
 
-  function rewriteOfficialShenMenu() {
+  function retargetShenClick(event) {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button) {
+      return;
+    }
+    var link = event.target.closest("a[href]");
+    if (!link) {
+      return;
+    }
+    var href = leafHref(link.getAttribute("href"));
+    var dest = EMBED[href] || href;
+    if (!/^\/shen\/(selection|product|growth|paid|training|tasks)$/.test(href)) {
+      return;
+    }
+    if (typeof window.__xmGo !== "function") {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    window.__xmGo(dest, true);
+  }
+
+  function relabelOfficialShenMenu() {
     var group = document.querySelector('.xm-menu-group[data-xm-group="/shen"]');
     if (!group) {
       return;
     }
-    var sub = group.querySelector(".xm-submenu");
-    if (!sub) {
-      return;
+    var links = group.querySelectorAll("a[href]");
+    for (var i = 0; i < links.length; i += 1) {
+      var a = links[i];
+      var href = leafHref(a.getAttribute("href"));
+      var span = a.querySelector("span");
+      if (HIDE_HREFS[href]) {
+        a.hidden = true;
+        a.style.display = "none";
+        continue;
+      }
+      if (LABEL_BY_HREF[href] && span && span.textContent !== LABEL_BY_HREF[href]) {
+        span.textContent = LABEL_BY_HREF[href];
+      }
     }
-    var text = sub.textContent || "";
-    if (
-      !sub.querySelector('a[href="/shen/product"]') &&
-      text.indexOf("选品中心") === -1 &&
-      text.indexOf("商品成长") === -1 &&
-      text.indexOf("实时付费") === -1 &&
-      text.indexOf("产品中心") !== -1
-    ) {
-      return;
+    var tabs = document.querySelectorAll(".xm-tab-label");
+    for (var t = 0; t < tabs.length; t += 1) {
+      var label = (tabs[t].textContent || "").trim();
+      if (label === "选品中心") {
+        tabs[t].textContent = "产品中心";
+      } else if (label === "实时付费") {
+        tabs[t].textContent = "付费中心";
+      } else if (label === "商品成长") {
+        tabs[t].textContent = "产品中心";
+      }
     }
-    var ico = sub.querySelector(".xm-ico");
-    var icon = ico ? ico.outerHTML : "";
-    var activeHref = pathNow();
-    if (activeHref === "/shen/product" || activeHref === "/shen/growth") {
-      activeHref = "/shen/selection";
-    }
-    sub.innerHTML = ITEMS.map(function (item) {
-      var active = item.href === activeHref;
-      return (
-        '<a class="xm-menu-item xm-menu-child' +
-        (active ? " is-active" : "") +
-        '" href="' +
-        item.href +
-        '"' +
-        (active ? ' aria-current="page"' : "") +
-        ">" +
-        icon +
-        "<span>" +
-        item.label +
-        "</span></a>"
-      );
-    }).join("");
   }
 
-  document.addEventListener(
-    "click",
-    function (event) {
-      var link = event.target.closest("a[href]");
-      if (!link) {
-        return;
-      }
-      var href = String(link.getAttribute("href") || "").replace(/\/+$/, "") || "/";
-      if (href === "/shen/product" || href === "/shen/growth") {
-        event.preventDefault();
-        if (typeof window.__xmGo === "function") {
-          window.__xmGo("/shen/selection", true);
-        } else {
-          location.assign("/shen/selection");
-        }
-      }
-    },
-    true
-  );
-
-  rewriteOfficialShenMenu();
+  document.addEventListener("click", retargetShenClick, true);
+  relabelOfficialShenMenu();
   var timer = 0;
   var observer = new MutationObserver(function () {
     window.clearTimeout(timer);
-    timer = window.setTimeout(rewriteOfficialShenMenu, 30);
+    timer = window.setTimeout(relabelOfficialShenMenu, 30);
   });
   if (document.documentElement) {
     observer.observe(document.documentElement, { childList: true, subtree: true });
