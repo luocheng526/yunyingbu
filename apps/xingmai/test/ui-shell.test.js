@@ -130,7 +130,7 @@ test("shared shell assets are public", async () => {
   assert.doesNotMatch(jsText, /菜单标签">项目<|>项目<\/p>/);
   assert.doesNotMatch(jsText, /xm-menu-label">项目/);
   assert.match(jsText, /退出登录/);
-  assert.match(jsText, /v0\.4\.19/);
+  assert.match(jsText, /v0\.4\.20/);
   assert.match(jsText, /数据总揽/);
   assert.match(jsText, /店铺数据/);
   assert.match(jsText, /选品中心/);
@@ -265,7 +265,7 @@ test("home page html is the xingmai sider template", async () => {
   assert.match(homePageHtml, /\/shared\/modules\/home\.js/);
   assert.match(homePageHtml, /<span>首页<\/span>/);
   assert.match(html, /退出登录/);
-  assert.match(html, /v0\.4\.19/);
+  assert.match(html, /v0\.4\.20/);
   assert.match(html, /甄选商学院/);
   assert.match(html, /培训课程/);
   assert.match(html, /培训考试/);
