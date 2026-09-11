@@ -1,4 +1,4 @@
-/* xm-module-people 0.1.82 */
+/* xm-module-people 0.1.83 */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -37,7 +37,7 @@
       root.innerHTML =
         '<main class="page people-page">' +
         '<header class="page-head"><p class="kicker">组织中心</p><h1>花名册与登录</h1>' +
-        '<p class="lead">登录名用姓名，初始密码 zhenxuan123。离职或删除后立刻不能登录。一人多店用多条管辖。</p></header>' +
+        '<p class="lead">正式花名册。登录名用姓名，新增在职即开号。离职或删除后立刻不能登录。一人多店用多条管辖。</p></header>' +
         '<div class="stack">' +
         '<section class="panel"><h2>身份名册</h2>' +
         '<form class="people-form" id="people-form">' +
@@ -118,12 +118,6 @@
           const tr = document.createElement("tr");
           const name = document.createElement("td");
           name.append(person.name);
-          if (person.demo) {
-            const tag = document.createElement("span");
-            tag.className = "demo-flag";
-            tag.textContent = "演示";
-            name.append(tag);
-          }
           const status = document.createElement("td");
           const select = document.createElement("select");
           select.className = "people-status";
@@ -236,12 +230,6 @@
           const tr = document.createElement("tr");
           const name = document.createElement("td");
           name.append(shop.name);
-          if (shop.demo) {
-            const tag = document.createElement("span");
-            tag.className = "demo-flag";
-            tag.textContent = "演示";
-            name.append(tag);
-          }
           tr.append(name, textCell(shop.kind), textCell(shop.pack), textCell(shop.bundle || "—"));
           tbody.append(tr);
         });

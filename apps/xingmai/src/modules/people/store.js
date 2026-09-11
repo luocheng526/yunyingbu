@@ -101,22 +101,22 @@ function grantFromRow(row) {
 
 function seedPeople() {
   return [
-    { id: 1, name: "沈子晗", role: "经理", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ001", department: "沈子晗运营中心", managerId: null },
-    { id: 2, name: "韩梦凯", role: "经理", center: "韩梦凯运营中心", status: "在职", demo: true, employeeNo: "HK001", department: "韩梦凯运营中心", managerId: null },
-    { id: 3, name: "管理员", role: "经理", center: "人员管理", status: "在职", demo: true, employeeNo: "XM001", department: "人员管理", managerId: null },
-    { id: 4, name: "张文静", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ002", department: "沈子晗运营中心", managerId: 1 },
-    { id: 5, name: "陈明婧", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ003", department: "沈子晗运营中心", managerId: 1 },
-    { id: 6, name: "郭桂良", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ004", department: "沈子晗运营中心", managerId: 1 },
-    { id: 7, name: "王博", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ005", department: "沈子晗运营中心", managerId: 1 },
-    { id: 8, name: "杨润泽", role: "主管", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ006", department: "沈子晗运营中心", managerId: 1 },
-    { id: 9, name: "崔安琪", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ007", department: "沈子晗运营中心", managerId: 8 },
-    { id: 10, name: "郭哲宁", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ008", department: "沈子晗运营中心", managerId: 8 },
-    { id: 11, name: "高丽男", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ009", department: "沈子晗运营中心", managerId: 1 },
-    { id: 12, name: "栗静萱", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ010", department: "沈子晗运营中心", managerId: 1 },
-    { id: 13, name: "杨禄", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ011", department: "沈子晗运营中心", managerId: 1 },
-    { id: 14, name: "张鹏", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ012", department: "沈子晗运营中心", managerId: 1 },
-    { id: 15, name: "王梓萱", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ013", department: "沈子晗运营中心", managerId: 1 },
-    { id: 16, name: "秦怡硕", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ014", department: "沈子晗运营中心", managerId: 1 }
+    { id: 1, name: "沈子晗", role: "经理", center: "沈子晗运营中心", status: "在职", demo: false, employeeNo: "SZ001", department: "沈子晗运营中心", managerId: null },
+    { id: 2, name: "韩梦凯", role: "经理", center: "韩梦凯运营中心", status: "在职", demo: false, employeeNo: "HK001", department: "韩梦凯运营中心", managerId: null },
+    { id: 3, name: "管理员", role: "经理", center: "人员管理", status: "在职", demo: false, employeeNo: "XM001", department: "人员管理", managerId: null },
+    { id: 4, name: "张文静", role: "运营", center: "沈子晗运营中心", status: "在职", demo: false, employeeNo: "SZ002", department: "沈子晗运营中心", managerId: 1 },
+    { id: 5, name: "陈明婧", role: "运营", center: "沈子晗运营中心", status: "在职", demo: false, employeeNo: "SZ003", department: "沈子晗运营中心", managerId: 1 },
+    { id: 6, name: "郭桂良", role: "运营", center: "沈子晗运营中心", status: "在职", demo: false, employeeNo: "SZ004", department: "沈子晗运营中心", managerId: 1 },
+    { id: 7, name: "王博", role: "运营", center: "沈子晗运营中心", status: "在职", demo: false, employeeNo: "SZ005", department: "沈子晗运营中心", managerId: 1 },
+    { id: 8, name: "杨润泽", role: "主管", center: "沈子晗运营中心", status: "在职", demo: false, employeeNo: "SZ006", department: "沈子晗运营中心", managerId: 1 },
+    { id: 9, name: "崔安琪", role: "运营", center: "沈子晗运营中心", status: "在职", demo: false, employeeNo: "SZ007", department: "沈子晗运营中心", managerId: 8 },
+    { id: 10, name: "郭哲宁", role: "运营", center: "沈子晗运营中心", status: "在职", demo: false, employeeNo: "SZ008", department: "沈子晗运营中心", managerId: 8 },
+    { id: 11, name: "高丽男", role: "运营", center: "沈子晗运营中心", status: "在职", demo: false, employeeNo: "SZ009", department: "沈子晗运营中心", managerId: 1 },
+    { id: 12, name: "栗静萱", role: "运营", center: "沈子晗运营中心", status: "在职", demo: false, employeeNo: "SZ010", department: "沈子晗运营中心", managerId: 1 },
+    { id: 13, name: "杨禄", role: "运营", center: "沈子晗运营中心", status: "在职", demo: false, employeeNo: "SZ011", department: "沈子晗运营中心", managerId: 1 },
+    { id: 14, name: "张鹏", role: "运营", center: "沈子晗运营中心", status: "在职", demo: false, employeeNo: "SZ012", department: "沈子晗运营中心", managerId: 1 },
+    { id: 15, name: "王梓萱", role: "运营", center: "沈子晗运营中心", status: "在职", demo: false, employeeNo: "SZ013", department: "沈子晗运营中心", managerId: 1 },
+    { id: 16, name: "秦怡硕", role: "运营", center: "沈子晗运营中心", status: "在职", demo: false, employeeNo: "SZ014", department: "沈子晗运营中心", managerId: 1 }
   ];
 }
 
@@ -144,10 +144,10 @@ function seedShops() {
     kind: "店铺",
     pack: item[1],
     bundle: item[2],
-    demo: true
+    demo: false
   }));
-  shops.push({ id: 16, name: "沈子晗包", kind: "店群", pack: "沈子晗包", bundle: "", demo: true });
-  shops.push({ id: 17, name: "杨润泽包", kind: "店群", pack: "杨润泽包", bundle: "", demo: true });
+  shops.push({ id: 16, name: "沈子晗包", kind: "店群", pack: "沈子晗包", bundle: "", demo: false });
+  shops.push({ id: 17, name: "杨润泽包", kind: "店群", pack: "杨润泽包", bundle: "", demo: false });
   return shops;
 }
 
@@ -212,6 +212,20 @@ setRosterLookup(async (username) => {
 async function ensureRosterLogins(list) {
   const roster = list || (dbMode() === "mysql" ? await loadMysqlPeople() : people);
   await syncRosterLogins(roster);
+}
+
+async function promoteRosterToReal() {
+  if (dbMode() === "mysql") {
+    await query("UPDATE people SET demo = 0 WHERE demo <> 0");
+    await query("UPDATE people_shops SET demo = 0 WHERE demo <> 0");
+    return;
+  }
+  people.forEach((person) => {
+    person.demo = false;
+  });
+  shops.forEach((shop) => {
+    shop.demo = false;
+  });
 }
 
 async function ignoreDuplicateColumn(work) {
@@ -338,6 +352,9 @@ export async function hydrateFromMysql() {
   }
   grants = grantRows;
   nextGrantId = grants.reduce((max, grant) => Math.max(max, Number(grant.id) || 0), 0) + 1;
+  await promoteRosterToReal();
+  people = await loadMysqlPeople();
+  shops = await loadMysqlShops();
   await ensureRosterLogins(people);
 }
 
@@ -398,6 +415,7 @@ function decoratePeople(list, shopList, grantList) {
 }
 
 export async function listPeople() {
+  await promoteRosterToReal();
   if (dbMode() === "mysql") {
     const [personRows, shopRows, grantRows] = await Promise.all([
       loadMysqlPeople(),
@@ -412,6 +430,7 @@ export async function listPeople() {
 }
 
 export async function listShops() {
+  await promoteRosterToReal();
   if (dbMode() === "mysql") {
     return (await loadMysqlShops()).map(cloneShop);
   }

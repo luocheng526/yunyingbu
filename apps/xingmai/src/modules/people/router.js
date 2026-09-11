@@ -67,7 +67,7 @@ peopleRouter.get("/reconcile", async (_req, res) => {
 peopleRouter.get("/", async (_req, res) => {
   res.json({
     ok: true,
-    demo: true,
+    demo: false,
     centers: CENTERS,
     posts: POSTS,
     people: await listPeople()

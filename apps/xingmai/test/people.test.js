@@ -42,6 +42,8 @@ describe("组织中心登录绑定", { concurrency: 1 }, () => {
     const headers = { cookie, "Content-Type": "application/json" };
     const roster = await (await fetch(`${base}/api/people`, { headers })).json();
     assert.equal(roster.ok, true);
+    assert.equal(roster.demo, false);
+    assert.equal(roster.people.every((person) => person.demo === false), true);
     const names = roster.people.map((person) => person.name);
     assert.ok(names.includes("张文静"));
     assert.ok(names.includes("王博"));

@@ -164,6 +164,26 @@ export function createMemoryPool() {
       }
       return [{ affectedRows: row ? 1 : 0 }, undefined];
     }
+    if (s.startsWith("UPDATE people SET demo =")) {
+      let count = 0;
+      tables.people.forEach((row) => {
+        if (Number(row.demo)) {
+          row.demo = 0;
+          count += 1;
+        }
+      });
+      return [{ affectedRows: count }, undefined];
+    }
+    if (s.startsWith("UPDATE people_shops SET demo =")) {
+      let count = 0;
+      tables.people_shops.forEach((row) => {
+        if (Number(row.demo)) {
+          row.demo = 0;
+          count += 1;
+        }
+      });
+      return [{ affectedRows: count }, undefined];
+    }
     if (s.startsWith("UPDATE people SET role =")) {
       const id = Number(params[params.length - 1]);
       const row = tables.people.find((item) => Number(item.id) === id);
