@@ -1,4 +1,5 @@
 import { assertCanWrite, canEditStore, rowMatchesScope, scopeOf } from "./org-acl.js";
+import { listPeople } from "./store.js";
 
 const STATUSES = {
   operating: "运营中",
@@ -43,6 +44,7 @@ function seedRows() {
       lead,
       owner,
       storeName,
+      storeId: "",
       merchantId,
       remark: "运营中",
       statusKey: "operating",
@@ -61,6 +63,7 @@ function seedRows() {
       lead,
       owner,
       storeName,
+      storeId: "",
       merchantId,
       remark: "运营中",
       statusKey: "operating",
@@ -101,7 +104,368 @@ function addLog(action, detail) {
   logs = logs.slice(0, 80);
 }
 
+export const RIGHTS_ROLES = ["总监", "经理", "主管", "储备", "运营", "助理"];
+const DEFAULT_PINS = { 罗成: "总监", 沈子晗: "经理", 韩梦凯: "经理" };
+let rightsPins = { ...DEFAULT_PINS };
+
+function mapBoardRole(role) {
+  const raw = String(role || "").trim();
+  if (raw === "店长") {
+    return "运营";
+  }
+  if (RIGHTS_ROLES.includes(raw)) {
+    return raw;
+  }
+  return "";
+}
+
+function namesFromStore(row) {
+  const names = [];
+  [row.lead, row.owner].forEach((value) => {
+    const name = String(value || "").trim();
+    if (name) {
+      names.push(name);
+    }
+  });
+  const chief = String(row.chief || row.team || "");
+  if (chief.includes("沈子晗")) {
+    names.push("沈子晗");
+  }
+  if (chief.includes("韩梦凯")) {
+    names.push("韩梦凯");
+  }
+  if (chief.includes("罗成")) {
+    names.push("罗成");
+  }
+  return names;
+}
+
+function storeCountOf(name, stores) {
+  return stores.filter((row) => namesFromStore(row).includes(name)).length;
+}
+
+function collectRoster() {
+  return listPeople().filter((row) => row.status === "在职" && row.center !== "人员管理" && row.name !== "管理员");
+}
+
+function roleOfName(name, byName) {
+  return rightsPins[name] || mapBoardRole(byName[name] && byName[name].role) || "运营";
+}
+
+function managerBranchOfStore(row) {
+  const blob = [row.chief, row.team, row.lead, row.owner].join(" ");
+  if (blob.includes("韩梦凯")) {
+    return "韩梦凯";
+  }
+  if (blob.includes("沈子晗")) {
+    return "沈子晗";
+  }
+  if (blob.includes("罗成")) {
+    return "罗成";
+  }
+  return "";
+}
+
+function branchOfPerson(name, person, stores) {
+  if (name === "韩梦凯" || name === "沈子晗" || name === "罗成") {
+    return name;
+  }
+  const blob = [person && person.center, person && person.department].join(" ");
+  if (blob.includes("韩梦凯")) {
+    return "韩梦凯";
+  }
+  if (blob.includes("沈子晗")) {
+    return "沈子晗";
+  }
+  const hit = stores.find((row) => namesFromStore(row).includes(name));
+  return hit ? managerBranchOfStore(hit) : "";
+}
+
+function makeNode(name, role, extra = {}) {
+  return {
+    name,
+    role,
+    id: extra.id || null,
+    synthetic: Boolean(extra.synthetic),
+    children: [],
+    stores: []
+  };
+}
+
+function attachChild(parent, child) {
+  if (!parent || !child || parent === child) {
+    return;
+  }
+  if (!parent.children.includes(child)) {
+    parent.children.push(child);
+  }
+}
+
+function sortTree(node) {
+  const rank = { 主管: 1, 储备: 2, 运营: 3, 助理: 4, 店长: 5 };
+  node.children.sort((a, b) => (rank[a.role] || 9) - (rank[b.role] || 9) || a.name.localeCompare(b.name, "zh"));
+  node.stores.sort((a, b) => String(a.storeName).localeCompare(String(b.storeName), "zh"));
+  node.children.forEach(sortTree);
+}
+
+function countTreePeople(node) {
+  if (!node) {
+    return 0;
+  }
+  return (node.synthetic ? 0 : 1) + node.children.reduce((sum, child) => sum + countTreePeople(child), 0);
+}
+
+function buildRightsTree(stores, roster, byName) {
+  const director = makeNode("罗成", "总监");
+  const han = makeNode("韩梦凯", "经理", { id: byName["韩梦凯"] ? byName["韩梦凯"].id : null });
+  const shen = makeNode("沈子晗", "经理", { id: byName["沈子晗"] ? byName["沈子晗"].id : null });
+  attachChild(director, han);
+  attachChild(director, shen);
+  const nodes = { 罗成: director, 韩梦凯: han, 沈子晗: shen };
+  const branches = { 韩梦凯: han, 沈子晗: shen, 罗成: director };
+
+  function ensure(name) {
+    if (nodes[name]) {
+      return nodes[name];
+    }
+    nodes[name] = makeNode(name, roleOfName(name, byName), { id: byName[name] ? byName[name].id : null });
+    return nodes[name];
+  }
+
+  function place(name, hintBranch) {
+    if (name === "罗成" || name === "韩梦凯" || name === "沈子晗") {
+      return nodes[name];
+    }
+    const node = ensure(name);
+    const person = byName[name];
+    const manager = person && person.managerId ? roster.find((row) => row.id === person.managerId) : null;
+    if (manager && manager.name !== name) {
+      const parent = ensure(manager.name);
+      attachChild(parent, node);
+      if (parent.role === "主管" || parent.role === "储备") {
+        const branch = branchOfPerson(parent.name, byName[parent.name], stores) || hintBranch || "沈子晗";
+        attachChild(branches[branch] || shen, parent);
+      }
+      return node;
+    }
+    const branch = hintBranch || branchOfPerson(name, person, stores) || "沈子晗";
+    attachChild(branches[branch] || shen, node);
+    return node;
+  }
+
+  roster.forEach((person) => {
+    place(person.name);
+  });
+  stores.forEach((row) => {
+    const branch = managerBranchOfStore(row);
+    [row.lead, row.owner].forEach((value) => {
+      const name = String(value || "").trim();
+      if (name) {
+        place(name, branch);
+      }
+    });
+  });
+
+  stores.forEach((row) => {
+    const owner = String(row.owner || "").trim();
+    const lead = String(row.lead || "").trim();
+    const target = (owner && nodes[owner]) || (lead && nodes[lead]) || branches[managerBranchOfStore(row)] || shen;
+    target.stores.push({
+      id: row.id,
+      storeName: row.storeName,
+      storeId: row.storeId || "",
+      merchantId: row.merchantId || "",
+      hanging: !(owner && nodes[owner])
+    });
+  });
+
+  [han, shen].forEach((mgr) => {
+    const leads = mgr.children.filter((child) => child.role === "主管");
+    const rest = mgr.children.filter((child) => child.role !== "主管");
+    if (!leads.length && rest.length) {
+      const group = makeNode(mgr.name + "组", "主管", { synthetic: true });
+      rest.forEach((child) => attachChild(group, child));
+      mgr.children = [group];
+    }
+  });
+
+  sortTree(director);
+  return director;
+}
+
+function buildRightsWatch(stores, roster, byName, tree) {
+  const issues = [];
+  const rosterNames = new Set(roster.map((row) => row.name));
+  rosterNames.add("罗成");
+  stores.forEach((row) => {
+    ["owner", "lead"].forEach((field) => {
+      const name = String(row[field] || "").trim();
+      if (name && !rosterNames.has(name) && !["罗成", "沈子晗", "韩梦凯"].includes(name)) {
+        issues.push({
+          kind: "人员对不上",
+          level: "warn",
+          title: name + " 不在花名册",
+          detail: (field === "owner" ? "店铺所属人员" : "小组负责人") + "「" + name + "」出现在「" + row.storeName + "」，成员管理没有这个人。"
+        });
+      }
+    });
+    if (!String(row.owner || "").trim()) {
+      issues.push({
+        kind: "店铺对不上",
+        level: "error",
+        title: row.storeName + " 缺所属人员",
+        detail: "店铺主数据没有店铺所属人员，挂不到树上。"
+      });
+    }
+    if (!managerBranchOfStore(row)) {
+      issues.push({
+        kind: "店铺对不上",
+        level: "warn",
+        title: row.storeName + " 对不上经理线",
+        detail: "总负责人 / 小组里看不到罗成、沈子晗或韩梦凯。"
+      });
+    }
+    if (!String(row.storeId || "").trim()) {
+      issues.push({
+        kind: "待补全",
+        level: "info",
+        title: row.storeName + " 缺店铺ID",
+        detail: "店铺主数据还没填店铺ID。"
+      });
+    }
+    if (!String(row.merchantId || "").trim()) {
+      issues.push({
+        kind: "待补全",
+        level: "info",
+        title: row.storeName + " 缺商家id",
+        detail: "店铺主数据还没填商家id。"
+      });
+    }
+  });
+  roster.forEach((person) => {
+    const role = roleOfName(person.name, byName);
+    if ((role === "运营" || role === "店长" || role === "助理") && storeCountOf(person.name, stores) === 0) {
+      issues.push({
+        kind: "店铺对不上",
+        level: "warn",
+        title: person.name + " 名下没有店铺",
+        detail: "花名册在职，店铺主数据里不是总负责人、小组负责人或所属人员。"
+      });
+    }
+    if (person.managerId && !roster.some((row) => row.id === person.managerId) && !listPeople().some((row) => row.id === person.managerId)) {
+      issues.push({
+        kind: "人员对不上",
+        level: "warn",
+        title: person.name + " 的上级不存在",
+        detail: "花名册上级已不在名册里。"
+      });
+    }
+  });
+  const seen = new Set();
+  const unique = issues.filter((item) => {
+    const key = item.kind + item.title;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+  const kinds = [...new Set(unique.map((item) => item.kind))];
+  const pending = unique.filter((item) => item.kind !== "待补全").length;
+  const fill = unique.filter((item) => item.kind === "待补全").length;
+  const departments = new Set(roster.map((row) => String(row.department || row.center || "").trim()).filter(Boolean));
+  return {
+    checkedAt: new Date().toISOString().slice(0, 19).replace("T", " "),
+    conflict: pending > 0,
+    kpis: [
+      { label: "经理线", value: 2 },
+      { label: "在营店铺", value: stores.filter((row) => row.statusKey === "operating").length },
+      { label: "部门", value: departments.size },
+      { label: "在职员工", value: roster.length + (byName["罗成"] ? 0 : 1) },
+      { label: "树上人数", value: countTreePeople(tree) },
+      { label: "待处理", value: pending },
+      { label: "冲突类型", value: kinds.filter((kind) => kind !== "待补全").length },
+      { label: "待补全", value: fill }
+    ],
+    issues: unique
+  };
+}
+
+export function listRightsBoard() {
+  const stores = rows.map(clone);
+  const roster = collectRoster();
+  const names = new Set(Object.keys(rightsPins));
+  stores.forEach((row) => {
+    namesFromStore(row).forEach((name) => names.add(name));
+  });
+  const byName = {};
+  roster.forEach((row) => {
+    byName[row.name] = row;
+  });
+  const columns = {};
+  RIGHTS_ROLES.forEach((role) => {
+    columns[role] = [];
+  });
+  names.forEach((name) => {
+    const person = byName[name];
+    const role = rightsPins[name] || mapBoardRole(person && person.role) || "运营";
+    columns[role].push({
+      name,
+      role,
+      id: person ? person.id : null,
+      stores: storeCountOf(name, stores)
+    });
+  });
+  RIGHTS_ROLES.forEach((role) => {
+    columns[role].sort((a, b) => a.name.localeCompare(b.name, "zh"));
+  });
+  const candidates = [...new Set([...names, ...roster.map((row) => row.name)])]
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, "zh"))
+    .map((name) => ({
+      name,
+      role: rightsPins[name] || mapBoardRole(byName[name] && byName[name].role) || "运营"
+    }));
+  const tree = buildRightsTree(stores, roster, byName);
+  return {
+    ok: true,
+    roles: RIGHTS_ROLES,
+    columns: RIGHTS_ROLES.map((role) => ({ role, people: columns[role] })),
+    candidates,
+    tree,
+    watch: buildRightsWatch(stores, roster, byName, tree)
+  };
+}
+
+export function pinRightsName(name, role) {
+  const who = String(name || "").trim();
+  const next = String(role || "").trim();
+  if (!who) {
+    return { ok: false, statusCode: 400, error: "请填写姓名" };
+  }
+  if (!RIGHTS_ROLES.includes(next)) {
+    return { ok: false, statusCode: 400, error: "职位不在责权栏中" };
+  }
+  rightsPins[who] = next;
+  addLog("指定责权", who + " → " + next);
+  return listRightsBoard();
+}
+
+export function unpinRightsName(name) {
+  const who = String(name || "").trim();
+  if (!who) {
+    return { ok: false, statusCode: 400, error: "请填写姓名" };
+  }
+  delete rightsPins[who];
+  if (DEFAULT_PINS[who]) {
+    rightsPins[who] = DEFAULT_PINS[who];
+  }
+  addLog("取消指定", who);
+  return listRightsBoard();
+}
+
 export function resetOrgBoard() {
+  rightsPins = { ...DEFAULT_PINS };
   seeded = seedRows();
   rows = seeded.rows;
   nextId = seeded.nextId;
@@ -129,6 +493,7 @@ export function summarizeOrg(actor) {
     idle: stores.filter((row) => row.statusKey === "idle").length,
     closing: stores.filter((row) => row.statusKey === "closing").length,
     closed: stores.filter((row) => row.statusKey === "closed").length,
+    missingStoreId: stores.filter((row) => !String(row.storeId || "").trim()).length,
     missingMerchant: stores.filter((row) => !String(row.merchantId || "").trim()).length,
     missingLogin: stores.filter((row) => !String(row.login || "").trim()).length,
     missingPassword: stores.filter((row) => !String(row.password || "").trim()).length,
@@ -149,7 +514,7 @@ export function listOrgStores(query = {}, actor) {
       if (!q) {
         return true;
       }
-      const blob = [row.storeName, row.merchantId, row.owner, row.lead, row.chief, row.login]
+      const blob = [row.storeName, row.storeId, row.merchantId, row.owner, row.lead, row.chief, row.login]
         .join(" ")
         .toLowerCase();
       return blob.includes(q);
@@ -181,6 +546,7 @@ function normalize(input, previous = {}) {
     lead: typeof input.lead === "string" ? input.lead.trim() : previous.lead || "",
     owner: typeof input.owner === "string" ? input.owner.trim() : previous.owner || "",
     storeName: typeof input.storeName === "string" ? input.storeName.trim() : previous.storeName || "",
+    storeId: typeof input.storeId === "string" ? input.storeId.trim() : previous.storeId || "",
     merchantId: typeof input.merchantId === "string" ? input.merchantId.trim() : previous.merchantId || "",
     remark: remark || STATUSES[statusKey] || "运营中",
     statusKey,
@@ -196,6 +562,7 @@ export const STORE_IMPORT_HEADERS = [
   "小组负责人",
   "店铺所属人员",
   "店铺名称",
+  "店铺ID",
   "商家id",
   "店铺情况备注",
   "更新时间",
@@ -208,17 +575,32 @@ const HEADER_TO_FIELD = {
   总负责人: "chief",
   小组负责人: "lead",
   店铺所属人员: "owner",
+  所属人员: "owner",
   店铺名称: "storeName",
+  店名: "storeName",
+  店铺ID: "storeId",
+  店铺id: "storeId",
+  店铺编号: "storeId",
   商家id: "merchantId",
   商家ID: "merchantId",
+  商家Id: "merchantId",
   店铺情况备注: "remark",
+  备注: "remark",
   更新时间: "updatedOn",
   退店时间: "closedOn",
   登录主账号: "login",
+  主账号: "login",
   密码: "password"
 };
 
 function findExistingStore(input) {
+  const storeId = String(input.storeId || "").trim();
+  if (storeId) {
+    const byStoreId = rows.find((row) => String(row.storeId || "").trim() === storeId);
+    if (byStoreId) {
+      return byStoreId;
+    }
+  }
   const merchantId = String(input.merchantId || "").trim();
   if (merchantId) {
     const byMerchant = rows.find((row) => String(row.merchantId || "").trim() === merchantId);
@@ -244,7 +626,15 @@ export function mapImportRow(raw = {}) {
   }
   const next = {};
   for (const [key, value] of Object.entries(raw)) {
-    const field = HEADER_TO_FIELD[String(key).trim()] || (["chief", "lead", "owner", "storeName", "merchantId", "remark", "updatedOn", "closedOn", "login", "password"].includes(key) ? key : "");
+    const norm = String(key || "")
+      .replace(/^\uFEFF/, "")
+      .replace(/\s+/g, "")
+      .trim();
+    const field =
+      HEADER_TO_FIELD[norm] ||
+      (["chief", "lead", "owner", "storeName", "storeId", "merchantId", "remark", "updatedOn", "closedOn", "login", "password"].includes(norm)
+        ? norm
+        : "");
     if (field) {
       next[field] = value;
     }

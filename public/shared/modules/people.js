@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.164-pin-filter";
+    const href = "/people.css?v=0.1.174-store-import";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -105,12 +105,12 @@
         '<div class="org-pane" data-pane="stores">' +
         '<div class="org-kpis" id="org-kpis"></div>' +
         '<div class="org-toolbar">' +
-        '<input type="search" id="org-q" placeholder="商家ID / 店铺名 / 人员" />' +
+        '<input type="search" id="org-q" placeholder="店铺ID / 商家ID / 店铺名 / 人员" />' +
         '<button type="button" id="org-search">搜索</button>' +
         '<span class="spacer" id="org-count"></span>' +
         '<button type="button" class="ghost" id="org-template">下载模板</button>' +
         '<button type="button" class="ghost" id="org-import">导入</button>' +
-        '<input type="file" id="org-import-file" accept=".csv,text/csv" hidden />' +
+        '<input type="file" id="org-import-file" accept=".csv,.txt,text/csv,text/plain" hidden />' +
         '<button type="button" class="ghost" id="org-export">导出本筛</button>' +
         '<button type="button" id="org-add">+ 新增店铺</button>' +
         "</div>" +
@@ -121,6 +121,7 @@
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="lead"><span class="org-filter-name">小组负责人</span><span class="org-filter-caret">▾</span></button></th>' +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="owner"><span class="org-filter-name">店铺所属人员</span><span class="org-filter-caret">▾</span></button></th>' +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="storeName"><span class="org-filter-name">店铺名称</span><span class="org-filter-caret">▾</span></button></th>' +
+        "<th>店铺ID</th>" +
         "<th>商家id</th>" +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="remark"><span class="org-filter-name">店铺情况备注</span><span class="org-filter-caret">▾</span></button></th>' +
         "<th>更新时间</th><th>退店时间</th><th>登录主账号</th><th>密码</th><th>操作</th>" +
@@ -128,7 +129,7 @@
         '<div class="org-filter-pop" id="org-filter-pop" hidden></div></div>' +
         '<div class="org-pane" data-pane="members" hidden>' +
         '<section class="panel"><h2>身份名册</h2>' +
-        '<p class="lead">表头可筛部门、上级、岗位、所属中心、状态。勾选后可统一改密码。点新增人员弹出对话框。</p>' +
+        '<p class="lead">表头可筛部门、上级、岗位、所属中心、状态。勾选后可统一改密码或删除。点新增人员弹出对话框。</p>' +
         '<div class="org-toolbar">' +
         '<input type="search" id="people-q" placeholder="姓名 / 账号 / 部门" />' +
         '<button type="button" id="people-search">搜索</button>' +
@@ -143,7 +144,8 @@
         '<label class="people-bulk-check"><input type="checkbox" id="people-bulk-all" />全选</label>' +
         '<span id="people-bulk-count">已选 0 人</span>' +
         '<label>统一密码<input id="people-bulk-password" maxlength="64" placeholder="给勾中的人一起改" autocomplete="off" /></label>' +
-        '<button type="button" id="people-bulk-apply">应用密码</button></div>' +
+        '<button type="button" id="people-bulk-apply">应用密码</button>' +
+        '<button type="button" class="danger" id="people-bulk-remove">删除</button></div>' +
         '<div class="org-table-wrap"><table><thead><tr>' +
         '<th class="org-check"><input type="checkbox" id="people-check-all" title="全选" /></th>' +
         '<th>姓名</th>' +
@@ -156,21 +158,11 @@
         '<tbody id="people-tbody"></tbody></table></div>' +
         '<div class="org-filter-pop" id="people-filter-pop" hidden></div></section></div>' +
         '<div class="org-pane" data-pane="rights" hidden>' +
-        '<section class="panel"><h2>管辖</h2>' +
-        '<p class="lead">按店铺主数据的总负责人、小组负责人、店铺所属人员排树。总监罗成，下辖经理沈子晗、韩梦凯，再往下是主管、储备、运营、助理。</p>' +
-        '<div class="org-tree" id="rights-tree"></div>' +
-        '<form class="people-mini-form" id="grant-form">' +
-        '<label>人员<select name="personId" required><option value="">请选择</option></select></label>' +
-        '<label>店铺或店群<select name="shopId" required><option value="">请选择</option></select></label>' +
-        '<label>角色<select name="role"><option>运营</option><option>主管</option><option>经理</option><option>店长</option></select></label>' +
-        '<label>生效起<input name="startOn" type="date" /></label>' +
-        '<label>生效止<input name="endOn" type="date" /></label>' +
-        '<button type="submit">新增授权</button></form>' +
-        '<p class="status error" id="grant-error" hidden></p>' +
-        '<p class="people-check muted" id="check-employed">在职但没有店权：—</p>' +
-        '<p class="people-check muted" id="check-left">店权还挂在离职人员：—</p>' +
-        '<div class="org-table-wrap"><table><thead><tr><th>人</th><th>店 / 店群</th><th>角色</th><th>生效</th><th>状态</th></tr></thead>' +
-        '<tbody id="rights-tbody"></tbody></table></div></section></div>' +
+        '<section class="panel rights-fit-panel"><h2>管辖</h2>' +
+        '<p class="lead">只读对照。按模块铺：总监、经理、主管、运营、助理、店铺。人在成员管理改，店在店铺主数据改，这里对上就行。</p>' +
+        '<div class="rights-watch" id="rights-watch"></div>' +
+        '<div class="rights-tree-toolbar"><button type="button" id="rights-refresh">刷新树和看板</button><span class="muted" id="rights-checked">检查时间：—</span></div>' +
+        '<div class="rights-tree-chart" id="rights-tree-chart"></div></section></div>' +
         '<div class="org-pane" data-pane="acl" hidden>' +
         '<section class="panel"><h2>权限</h2>' +
         "<p>店铺主数据按登录人责权：罗成可改全部，沈子晗只改沈子晗组，韩梦凯只改韩梦凯组。双击单元格保存。</p>" +
@@ -186,6 +178,7 @@
         '<label>小组负责人<input name="lead" required /></label>' +
         '<label>店铺所属人员<input name="owner" required /></label>' +
         '<label>店铺名称<input name="storeName" required /></label>' +
+        '<label>店铺ID<input name="storeId" /></label>' +
         '<label>商家id<input name="merchantId" /></label>' +
         '<label>店铺情况备注<select name="remark"><option>运营中</option><option>闲置中</option><option>退店中</option><option>已退店</option></select></label>' +
         '<label>更新时间<input name="updatedOn" placeholder="9.8更新" /></label>' +
@@ -257,10 +250,7 @@
       function closePeopleForm() {
         peopleModal.classList.remove("show");
       }
-      const grantForm = root.querySelector("#grant-form");
       const peopleError = root.querySelector("#people-error");
-      const grantError = root.querySelector("#grant-error");
-      const rightsTbody = root.querySelector("#rights-tbody");
       const logsTbody = root.querySelector("#logs-tbody");
       let roster = { people: [], shops: [], grants: [] };
       let dead = false;
@@ -291,6 +281,7 @@
         { key: "lead", type: "text" },
         { key: "owner", type: "text" },
         { key: "storeName", type: "text" },
+        { key: "storeId", type: "text" },
         { key: "merchantId", type: "text" },
         { key: "remark", type: "select" },
         { key: "updatedOn", type: "text" },
@@ -304,6 +295,7 @@
         "小组负责人",
         "店铺所属人员",
         "店铺名称",
+        "店铺ID",
         "商家id",
         "店铺情况备注",
         "更新时间",
@@ -316,6 +308,7 @@
         "lead",
         "owner",
         "storeName",
+        "storeId",
         "merchantId",
         "remark",
         "updatedOn",
@@ -337,11 +330,76 @@
         URL.revokeObjectURL(a.href);
       }
 
-      function parseCsv(text) {
+      function sniffDelimiter(text) {
+        const line = String(text || "").split(/\r?\n/).find(function (item) {
+          return item.trim();
+        }) || "";
+        const commas = (line.match(/,/g) || []).length;
+        const tabs = (line.match(/\t/g) || []).length;
+        const semis = (line.match(/;/g) || []).length;
+        if (tabs > commas && tabs >= semis) {
+          return "\t";
+        }
+        if (semis > commas) {
+          return ";";
+        }
+        return ",";
+      }
+
+      function decodeTableText(bytes) {
+        if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+          return new TextDecoder("utf-16le").decode(bytes);
+        }
+        if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+          return new TextDecoder("utf-16be").decode(bytes);
+        }
+        const utf8 = new TextDecoder("utf-8").decode(bytes);
+        if (/店铺名称|店名|总负责人|姓名/.test(utf8)) {
+          return utf8;
+        }
+        try {
+          const gbk = new TextDecoder("gb18030").decode(bytes);
+          if (/店铺名称|店名|总负责人|姓名/.test(gbk)) {
+            return gbk;
+          }
+        } catch (err) {
+          /* keep utf8 */
+        }
+        return utf8;
+      }
+
+      function normalizeStoreHeader(name) {
+        const raw = String(name || "").replace(/^\uFEFF/, "").replace(/\s+/g, "").trim();
+        const aliases = {
+          总负责人: "总负责人",
+          小组负责人: "小组负责人",
+          店铺所属人员: "店铺所属人员",
+          所属人员: "店铺所属人员",
+          店铺名称: "店铺名称",
+          店名: "店铺名称",
+          店铺ID: "店铺ID",
+          店铺id: "店铺ID",
+          店铺编号: "店铺ID",
+          商家id: "商家id",
+          商家ID: "商家id",
+          商家Id: "商家id",
+          店铺情况备注: "店铺情况备注",
+          备注: "店铺情况备注",
+          更新时间: "更新时间",
+          退店时间: "退店时间",
+          登录主账号: "登录主账号",
+          主账号: "登录主账号",
+          密码: "密码"
+        };
+        return aliases[raw] || raw;
+      }
+
+      function parseCsv(text, delim) {
         const rows = [];
         let row = [];
         let cell = "";
         let quoted = false;
+        const sep = delim || ",";
         const source = String(text || "").replace(/^\uFEFF/, "");
         for (let i = 0; i < source.length; i += 1) {
           const ch = source[i];
@@ -358,7 +416,7 @@
           }
           if (ch === '"') {
             quoted = true;
-          } else if (ch === ",") {
+          } else if (ch === sep) {
             row.push(cell);
             cell = "";
           } else if (ch === "\n") {
@@ -408,6 +466,7 @@
           ["闲置中", summary.idle],
           ["退店中", summary.closing],
           ["已退店", summary.closed],
+          ["缺店铺ID", summary.missingStoreId],
           ["缺商家ID", summary.missingMerchant],
           ["缺主账号", summary.missingLogin],
           ["缺密码", summary.missingPassword],
@@ -668,7 +727,7 @@
         countEl.textContent = "筛选 " + stores.length + " 条 · 已选 " + selectedCount() + " 条";
         root.querySelector("#org-add").hidden = !boardMeta.canCreate;
         if (!stores.length) {
-          tbody.innerHTML = '<tr><td colspan="12" class="org-empty">暂无店铺</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="13" class="org-empty">暂无店铺</td></tr>';
           syncCheckAll();
           return;
         }
@@ -718,6 +777,7 @@
         form.lead.value = row ? row.lead : "";
         form.owner.value = row ? row.owner : "";
         form.storeName.value = row ? row.storeName : "";
+        form.storeId.value = row && row.storeId ? row.storeId : "";
         form.merchantId.value = row ? row.merchantId : "";
         form.remark.value = row ? row.remark : "运营中";
         form.updatedOn.value = row ? row.updatedOn : "";
@@ -942,147 +1002,284 @@
         });
       }
 
-      function roleRank(role) {
-        const order = { 主管: 1, 储备: 2, 运营: 3, 助理: 4, 店长: 5, 经理: 6 };
-        return order[role] || 9;
+      let lastWatch = { kpis: [], issues: [] };
+      let watchOpen = "";
+
+      function watchFilterOf(label) {
+        if (label === "待补全") {
+          return "待补全";
+        }
+        if (label === "待处理" || label === "冲突类型") {
+          return "冲突";
+        }
+        return "";
       }
 
-      function renderRightsTree(stores, peopleList) {
-        const tree = root.querySelector("#rights-tree");
-        if (!tree) {
+      function issuesForWatch(open) {
+        const issues = lastWatch.issues || [];
+        if (open === "待补全") {
+          return issues.filter(function (item) {
+            return item.kind === "待补全";
+          });
+        }
+        if (open === "冲突") {
+          return issues.filter(function (item) {
+            return item.kind !== "待补全";
+          });
+        }
+        return [];
+      }
+
+      function paintWatchIssues() {
+        const host = root.querySelector("#rights-watch");
+        if (!host) {
           return;
         }
-        const byName = {};
-        (peopleList || []).forEach(function (person) {
-          byName[person.name] = person;
+        host.querySelectorAll("[data-watch-open]").forEach(function (card) {
+          card.classList.toggle("is-open", card.getAttribute("data-watch-open") === watchOpen);
         });
-        function titleOf(name) {
-          const person = byName[name];
-          const role = person && person.role ? person.role : "";
-          if (name === "罗成") {
-            return "总监";
-          }
-          if (name === "沈子晗" || name === "韩梦凯") {
-            return "经理";
-          }
-          return role || "运营";
+        let box = host.querySelector("#rights-watch-issues");
+        if (!box) {
+          box = document.createElement("ul");
+          box.id = "rights-watch-issues";
+          box.className = "rights-watch-issues";
+          host.append(box);
         }
-        const branches = [
-          { name: "沈子晗", match: "沈子晗" },
-          { name: "韩梦凯", match: "韩梦凯" }
-        ].map(function (mgr) {
-          const kids = {};
-          (stores || []).forEach(function (row) {
-            const blob = [row.chief, row.team, row.lead].join(" ");
-            if (blob.indexOf(mgr.match) < 0) {
-              return;
-            }
-            [row.lead, row.owner].forEach(function (name) {
-              const who = String(name || "").trim();
-              if (!who || who === mgr.name || who === "罗成") {
-                return;
-              }
-              if (!kids[who]) {
-                kids[who] = { name: who, title: titleOf(who), stores: 0 };
-              }
-              kids[who].stores += 1;
-            });
-          });
-          const list = Object.keys(kids)
-            .map(function (key) {
-              return kids[key];
-            })
-            .sort(function (a, b) {
-              return roleRank(a.title) - roleRank(b.title) || a.name.localeCompare(b.name, "zh");
-            });
-          return { name: mgr.name, title: "经理", kids: list };
-        });
-        tree.innerHTML =
-          '<div class="org-tree-director"><strong>罗成</strong><span>总监</span></div>' +
-          '<div class="org-tree-row">' +
-          branches
-            .map(function (branch) {
+        const shown = issuesForWatch(watchOpen);
+        box.hidden = !watchOpen;
+        if (!watchOpen) {
+          box.innerHTML = "";
+          return;
+        }
+        box.innerHTML = shown.length
+          ? shown
+              .map(function (item) {
+                return (
+                  "<li data-kind=\"" +
+                  escapeHtml(item.kind) +
+                  '"><strong>' +
+                  escapeHtml(item.kind) +
+                  " · " +
+                  escapeHtml(item.title) +
+                  "</strong><span>" +
+                  escapeHtml(item.detail) +
+                  "</span></li>"
+                );
+              })
+              .join("")
+          : '<li class="rights-empty">这一项没有明细。</li>';
+      }
+
+      function renderRightsWatch(watch) {
+        const host = root.querySelector("#rights-watch");
+        const checked = root.querySelector("#rights-checked");
+        lastWatch = watch || { kpis: [], issues: [] };
+        if (checked) {
+          checked.textContent = "检查时间：" + (lastWatch.checkedAt || "—");
+        }
+        if (!host) {
+          return;
+        }
+        const kpis = lastWatch.kpis || [];
+        host.innerHTML =
+          '<div class="rights-watch-banner' +
+          (lastWatch.conflict ? " is-conflict" : "") +
+          '"><div>组织人员以花名册为准，店铺、店铺ID、商家id以店铺主数据为准。刷新只读这两边，不另开一套权。待补全要点数字才展开。</div><strong>' +
+          (lastWatch.conflict ? "存在冲突" : "暂无冲突") +
+          "</strong></div>" +
+          '<div class="rights-watch-kpis">' +
+          kpis
+            .map(function (item) {
+              const open = watchFilterOf(item.label);
               return (
-                '<div class="org-tree-branch"><div class="org-tree-manager"><strong>' +
-                escapeHtml(branch.name) +
-                "</strong><span>经理</span></div><div class=\"org-tree-kids\">" +
-                (branch.kids.length
-                  ? branch.kids
-                      .map(function (kid) {
-                        return (
-                          '<div class="org-tree-kid"><strong>' +
-                          escapeHtml(kid.name) +
-                          "</strong><span>" +
-                          escapeHtml(kid.title) +
-                          " · " +
-                          kid.stores +
-                          "店</span></div>"
-                        );
-                      })
-                      .join("")
-                  : '<p class="org-empty">暂无下属店铺人员</p>') +
-                "</div></div>"
+                '<article class="rights-watch-kpi' +
+                (open ? " is-click" : "") +
+                '"' +
+                (open ? ' data-watch-open="' + open + '"' : "") +
+                '><div class="label">' +
+                escapeHtml(item.label) +
+                '</div><div class="value">' +
+                escapeHtml(item.value) +
+                "</div></article>"
               );
             })
             .join("") +
           "</div>";
+        paintWatchIssues();
+      }
+
+      function rightsModCard(role, name) {
+        return (
+          '<div class="rights-mod-card" data-role="' +
+          escapeHtml(role) +
+          '"><em>' +
+          escapeHtml(role) +
+          "</em><strong>" +
+          escapeHtml(name) +
+          "</strong></div>"
+        );
+      }
+
+      function flattenRightsModules(tree) {
+        const bands = [];
+        (tree && tree.children ? tree.children : []).forEach(function (manager) {
+          const leads = (manager.children || []).filter(function (child) {
+            return child.role === "主管";
+          });
+          const direct = (manager.children || []).filter(function (child) {
+            return child.role !== "主管";
+          });
+          const groups = leads.length ? leads.slice() : [];
+          if (direct.length) {
+            groups.push({
+              name: manager.name + "直属",
+              role: "主管",
+              synthetic: true,
+              children: direct,
+              stores: manager.stores || []
+            });
+          }
+          if (!groups.length) {
+            groups.push({
+              name: manager.name + "组",
+              role: "主管",
+              synthetic: true,
+              children: [],
+              stores: manager.stores || []
+            });
+          }
+          bands.push({
+            manager: { name: manager.name, role: "经理" },
+            leads: groups.map(function (lead) {
+              const ops = [];
+              const assistants = [];
+              const shops = (lead.stores || []).map(function (store) {
+                return store.storeName;
+              });
+              (lead.children || []).forEach(function (child) {
+                if (child.role === "助理") {
+                  assistants.push(child.name);
+                  (child.stores || []).forEach(function (store) {
+                    shops.push(store.storeName);
+                  });
+                  return;
+                }
+                ops.push(child.name);
+                (child.children || []).forEach(function (kid) {
+                  if (kid.role === "助理") {
+                    assistants.push(kid.name);
+                  }
+                  (kid.stores || []).forEach(function (store) {
+                    shops.push(store.storeName);
+                  });
+                });
+                (child.stores || []).forEach(function (store) {
+                  shops.push(store.storeName);
+                });
+              });
+              return {
+                name: lead.name,
+                ops: ops,
+                assistants: assistants,
+                shops: shops
+              };
+            })
+          });
+        });
+        return {
+          director: tree ? { name: tree.name, role: "总监" } : { name: "罗成", role: "总监" },
+          bands: bands
+        };
+      }
+
+      function renderRightsModules(tree) {
+        const data = flattenRightsModules(tree);
+        return (
+          '<div class="rights-modules" id="rights-tree-fit">' +
+          '<aside class="rights-mod rights-mod-director">' +
+          rightsModCard(data.director.role, data.director.name) +
+          "</aside>" +
+          '<div class="rights-mod-bands">' +
+          data.bands
+            .map(function (band) {
+              return (
+                '<section class="rights-mod-band" data-manager="' +
+                escapeHtml(band.manager.name) +
+                '">' +
+                '<article class="rights-mod rights-mod-manager">' +
+                rightsModCard(band.manager.role, band.manager.name) +
+                "</article>" +
+                '<div class="rights-mod-leads">' +
+                band.leads
+                  .map(function (lead) {
+                    return (
+                      '<article class="rights-mod rights-mod-lead"><div class="rights-mod-lead-name">' +
+                      rightsModCard("主管", lead.name) +
+                      '</div><div class="rights-mod-chain">' +
+                      '<div class="rights-mod-col" data-mod="运营"><span class="rights-mod-h">运营</span>' +
+                      (lead.ops.length
+                        ? lead.ops.map(function (name) { return rightsModCard("运营", name); }).join("")
+                        : '<div class="rights-mod-empty">—</div>') +
+                      '</div><div class="rights-mod-col" data-mod="助理"><span class="rights-mod-h">助理</span>' +
+                      (lead.assistants.length
+                        ? lead.assistants.map(function (name) { return rightsModCard("助理", name); }).join("")
+                        : '<div class="rights-mod-empty">—</div>') +
+                      '</div><div class="rights-mod-col" data-mod="店铺"><span class="rights-mod-h">店铺</span>' +
+                      (lead.shops.length
+                        ? lead.shops.map(function (name) { return '<div class="rights-mod-shop">' + escapeHtml(name) + "</div>"; }).join("")
+                        : '<div class="rights-mod-empty">—</div>') +
+                      "</div></div></article>"
+                    );
+                  })
+                  .join("") +
+                "</div></section>"
+              );
+            })
+            .join("") +
+          "</div></div>"
+        );
+      }
+
+      function fitRightsTree() {
+        const host = root.querySelector("#rights-tree-chart");
+        const fit = host && host.querySelector("#rights-tree-fit");
+        if (!host || !fit) {
+          return;
+        }
+        fit.style.transform = "none";
+        const aw = Math.max(host.clientWidth - 16, 80);
+        const ah = Math.max(host.clientHeight - 16, 80);
+        const bw = Math.max(fit.scrollWidth, 1);
+        const bh = Math.max(fit.scrollHeight, 1);
+        const scale = Math.min(1, aw / bw, ah / bh);
+        fit.style.transform = "scale(" + scale + ")";
+      }
+
+      function renderRightsTreeChart(tree) {
+        const host = root.querySelector("#rights-tree-chart");
+        if (!host) {
+          return;
+        }
+        host.innerHTML = tree
+          ? renderRightsModules(tree)
+          : '<p class="rights-empty">还没有树。先在成员管理和店铺主数据里对上人和店。</p>';
+        requestAnimationFrame(function () {
+          requestAnimationFrame(fitRightsTree);
+        });
       }
 
       function loadRights() {
-        return Promise.all([
-          fetch("/api/people/grants", { credentials: "same-origin" }).then(function (res) { return res.json(); }),
-          fetch("/api/people/reconcile", { credentials: "same-origin" }).then(function (res) { return res.json(); }),
-          fetch("/api/people", { credentials: "same-origin" }).then(function (res) { return res.json(); }),
-          fetch("/api/people/shops", { credentials: "same-origin" }).then(function (res) { return res.json(); }),
-          fetch("/api/people/org/stores", { credentials: "same-origin" }).then(function (res) { return res.json(); })
-        ]).then(function (results) {
-          if (dead) {
-            return;
-          }
-          const grantData = results[0];
-          const checkData = results[1];
-          roster.people = results[2].people || roster.people;
-          roster.shops = results[3].shops || roster.shops;
-          renderRightsTree((results[4] && results[4].stores) || [], roster.people);
-          rightsTbody.replaceChildren();
-          (grantData.grants || []).forEach(function (grant) {
-            const tr = document.createElement("tr");
-            const range = (grant.startOn || "") + (grant.endOn ? " ~ " + grant.endOn : " 起");
-            tr.innerHTML =
-              "<td>" +
-              escapeHtml(grant.personName) +
-              "</td><td>" +
-              escapeHtml(grant.shopName) +
-              "</td><td>" +
-              escapeHtml(grant.role) +
-              "</td><td>" +
-              escapeHtml(range) +
-              "</td><td>" +
-              escapeHtml(grant.active ? "有效" : "已失效") +
-              "</td>";
-            rightsTbody.append(tr);
+        return fetch("/api/people/org/rights-board", { credentials: "same-origin" })
+          .then(function (res) {
+            return res.json();
+          })
+          .then(function (board) {
+            if (dead) {
+              return;
+            }
+            renderRightsWatch(board.watch || {});
+            renderRightsTreeChart(board.tree);
           });
-          const employed = (checkData.employedNoGrant || []).map(function (item) { return item.name; });
-          const left = (checkData.grantOnLeft || []).map(function (item) { return item.personName + " / " + item.shopName; });
-          root.querySelector("#check-employed").textContent =
-            "在职但没有店权：" + (employed.length ? employed.join("、") : "无");
-          root.querySelector("#check-left").textContent =
-            "店权还挂在离职人员：" + (left.length ? left.join("、") : "无");
-          fillSelect(
-            grantForm.personId,
-            roster.people,
-            function (item) { return String(item.id); },
-            function (item) { return item.name; },
-            "请选择"
-          );
-          fillSelect(
-            grantForm.shopId,
-            roster.shops,
-            function (item) { return String(item.id); },
-            function (item) { return item.name + "（" + item.kind + "）"; },
-            "请选择"
-          );
-        });
       }
 
       function loadLogs() {
@@ -1109,6 +1306,21 @@
             });
           });
       }
+
+      root.querySelector("#rights-watch").addEventListener("click", function (event) {
+        const card = event.target.closest("[data-watch-open]");
+        if (!card) {
+          return;
+        }
+        const next = card.getAttribute("data-watch-open");
+        watchOpen = watchOpen === next ? "" : next;
+        paintWatchIssues();
+        requestAnimationFrame(fitRightsTree);
+      });
+      root.querySelector("#rights-refresh").addEventListener("click", function () {
+        loadRights();
+      });
+      window.addEventListener("resize", fitRightsTree);
 
       root.querySelector("#org-tabs").addEventListener("click", function (event) {
         const tab = event.target.closest(".org-tab");
@@ -1372,7 +1584,6 @@
         paintMemberBar();
       }
 
-      postForm(grantForm, "/api/people/grants", grantError, loadRights);
       function rerenderPeople() {
         renderPeople(applyMemberFilters(roster.people));
       }
@@ -1610,15 +1821,19 @@
       root.querySelector("#people-bulk-all").addEventListener("change", function (event) {
         setAllMembers(event.target.checked);
       });
-      root.querySelector("#people-bulk-apply").addEventListener("click", function () {
-        const password = root.querySelector("#people-bulk-password").value.trim();
-        const ids = roster.people
+      function selectedMemberIds() {
+        return roster.people
           .filter(function (person) {
             return memberSelectedIds[String(person.id)];
           })
           .map(function (person) {
             return person.id;
           });
+      }
+
+      root.querySelector("#people-bulk-apply").addEventListener("click", function () {
+        const password = root.querySelector("#people-bulk-password").value.trim();
+        const ids = selectedMemberIds();
         if (!ids.length) {
           showError(peopleError, "请先勾选人员");
           return;
@@ -1644,6 +1859,40 @@
             }
             showError(peopleError, "");
             root.querySelector("#people-bulk-password").value = "";
+            return loadMembers();
+          })
+          .catch(function (err) {
+            showError(peopleError, err.message);
+          });
+      });
+      root.querySelector("#people-bulk-remove").addEventListener("click", function () {
+        const ids = selectedMemberIds();
+        if (!ids.length) {
+          showError(peopleError, "请先勾选人员");
+          return;
+        }
+        if (!window.confirm("确定删除已选 " + ids.length + " 人？名册和店权会一起去掉。")) {
+          return;
+        }
+        fetch("/api/people/remove", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: ids })
+        })
+          .then(function (res) {
+            return res.json().then(function (data) {
+              return { res: res, data: data };
+            });
+          })
+          .then(function (result) {
+            if (!result.res.ok || !result.data.ok) {
+              throw new Error(result.data.error || "删除失败");
+            }
+            (result.data.people || []).forEach(function (person) {
+              delete memberSelectedIds[String(person.id)];
+            });
+            showError(peopleError, "");
             return loadMembers();
           })
           .catch(function (err) {
@@ -1687,6 +1936,7 @@
               lead: "张文静",
               owner: "示例运营",
               storeName: "示例旗舰店",
+              storeId: "10001",
               merchantId: "11009999",
               remark: "运营中",
               updatedOn: "9.11更新",
@@ -1707,28 +1957,56 @@
           return;
         }
         file
-          .text()
-          .then(function (text) {
-            const table = parseCsv(text);
-            if (table.length < 2) {
+          .arrayBuffer()
+          .then(function (buf) {
+            const bytes = new Uint8Array(buf);
+            if (bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4b) {
+              throw new Error("请把 Excel 另存为 CSV 再导入，不要直接传 xlsx");
+            }
+            const text = decodeTableText(bytes);
+            const table = parseCsv(text, sniffDelimiter(text));
+            if (!table.length) {
               throw new Error("模板至少要有表头和一行数据");
             }
-            const headers = table[0].map(function (cell) {
-              return String(cell || "").trim();
+            let headerIndex = -1;
+            table.forEach(function (cells, index) {
+              if (headerIndex >= 0) {
+                return;
+              }
+              const joined = cells.map(normalizeStoreHeader).join(",");
+              if (joined.indexOf("店铺名称") >= 0) {
+                headerIndex = index;
+              }
             });
-            const missing = STORE_HEADERS.filter(function (name) {
+            if (headerIndex < 0) {
+              throw new Error("没认出店铺名称。请用下载模板，或把 Excel 另存为 CSV 再导。");
+            }
+            const headers = (table[headerIndex] || []).map(normalizeStoreHeader);
+            const missing = ["店铺名称", "店铺所属人员"].filter(function (name) {
               return headers.indexOf(name) < 0;
             });
             if (missing.length) {
-              throw new Error("表头需与表格一致，缺少：" + missing.join("、"));
+              throw new Error("没认出店铺名称、店铺所属人员。请用下载模板，或把 Excel 另存为 CSV 再导。缺：" + missing.join("、"));
             }
-            const rows = table.slice(1).map(function (cells) {
-              const item = {};
-              headers.forEach(function (name, index) {
-                item[name] = cells[index] || "";
+            const rows = table
+              .slice(headerIndex + 1)
+              .map(function (cells) {
+                const item = {};
+                headers.forEach(function (name, index) {
+                  if (name) {
+                    item[name] = cells[index] || "";
+                  }
+                });
+                return item;
+              })
+              .filter(function (item) {
+                return Object.keys(item).some(function (key) {
+                  return String(item[key] || "").trim();
+                });
               });
-              return item;
-            });
+            if (!rows.length) {
+              throw new Error("模板至少要有表头和一行数据");
+            }
             return fetch("/api/people/org/stores/import", {
               method: "POST",
               credentials: "same-origin",
@@ -1783,6 +2061,7 @@
       return function unmount() {
         dead = true;
         document.removeEventListener("wheel", onPeopleWheel, true);
+        window.removeEventListener("resize", fitRightsTree);
         document.removeEventListener("click", onDocFilterClose);
         window.removeEventListener("scroll", onFilterPin, true);
         window.removeEventListener("resize", onFilterPin);

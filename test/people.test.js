@@ -4,7 +4,7 @@ import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { patchAppSource } from "../src/modules/people/patch-app.js";
-import { resetOrgBoard } from "../src/modules/people/org-board.js";
+import { mapImportRow, resetOrgBoard } from "../src/modules/people/org-board.js";
 import { resetOrgExtra } from "../src/modules/people/org-extra.js";
 import { hydrateFromMysql, resetPeopleStore } from "../src/modules/people/store.js";
 
@@ -18,6 +18,19 @@ test.beforeEach(() => {
   resetPeopleStore();
   resetOrgBoard();
   resetOrgExtra();
+});
+
+test("mapImportRow accepts Excel-style store headers", () => {
+  assert.deepEqual(
+    mapImportRow({ 店名: "A店", 所属人员: "张三", 商家ID: "188", 店铺编号: "SID188", 主账号: "demo_a" }),
+    {
+      storeName: "A店",
+      owner: "张三",
+      merchantId: "188",
+      storeId: "SID188",
+      login: "demo_a"
+    }
+  );
 });
 
 async function withServer(fn) {
@@ -75,6 +88,10 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /双击单元格/);
     assert.match(jsText, /下载模板/);
     assert.match(jsText, /id="org-import"/);
+    assert.match(jsText, /decodeTableText/);
+    assert.match(jsText, /gb18030/);
+    assert.match(jsText, /normalizeStoreHeader/);
+    assert.match(jsText, /另存为 CSV/);
     assert.match(jsText, /组织中心-店铺主数据模板/);
     assert.match(jsText, /org-check-all/);
     assert.match(jsText, /org-filter-btn/);
@@ -82,6 +99,8 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, />全选</);
     assert.match(jsText, /key === "remark"/);
     assert.match(jsText, /org-row-check/);
+    assert.match(jsText, /店铺ID/);
+    assert.match(jsText, /缺店铺ID/);
     assert.match(jsText, /缺密码/);
     assert.match(jsText, /缺所属人员/);
     assert.match(jsText, /运营中/);
@@ -99,7 +118,9 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /people-row-check/);
     assert.match(jsText, /people-check-all/);
     assert.match(jsText, /people-bulk/);
+    assert.match(jsText, /people-bulk-remove/);
     assert.match(jsText, /\/api\/people\/passwords/);
+    assert.match(jsText, /\/api\/people\/remove/);
     assert.doesNotMatch(jsText, /能看见的店/);
     assert.match(jsText, /data-filter-key="status"/);
     assert.match(jsText, /<th>账号<\/th><th>登录密码<\/th>/);
@@ -120,9 +141,20 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /点新增人员弹出对话框/);
     assert.match(jsText, /id="people-q"/);
     assert.match(jsText, /id="people-search"/);
-    assert.match(jsText, /id="rights-tree"/);
+    assert.doesNotMatch(jsText, /id="rights-board"/);
+    assert.doesNotMatch(jsText, /id="grant-form"/);
+    assert.match(jsText, /id="rights-tree-chart"/);
+    assert.match(jsText, /id="rights-refresh"/);
     assert.match(jsText, /总监/);
-    assert.match(jsText, /renderRightsTree/);
+    assert.match(jsText, /fitRightsTree/);
+    assert.match(jsText, /flattenRightsModules/);
+    assert.match(jsText, /rights-mod-band/);
+    assert.match(jsText, /renderRightsTreeChart/);
+    assert.match(jsText, /只读对照/);
+    assert.match(jsText, /data-watch-open/);
+    assert.match(jsText, /paintWatchIssues/);
+    assert.match(jsText, /待补全要点数字才展开/);
+    assert.match(jsText, /\/api\/people\/org\/rights-board/);
     assert.match(jsText, /placeFilterPop/);
     assert.match(jsText, /onFilterPin/);
     assert.match(jsText, /border-collapse:separate/);
@@ -187,6 +219,8 @@ test("org store board lists demo shops and supports add", async () => {
     assert.equal(summary.status, 200);
     assert.equal(typeof summaryJson.summary.missingPassword, "number");
     assert.equal(typeof summaryJson.summary.missingOwner, "number");
+    assert.equal(typeof summaryJson.summary.missingStoreId, "number");
+    assert.ok(summaryJson.summary.missingStoreId >= 15);
 
     const listed = await fetch(`${base}/api/people/org/stores`);
     const listedJson = await listed.json();
@@ -203,6 +237,7 @@ test("org store board lists demo shops and supports add", async () => {
         lead: "张文静",
         owner: "验收同事",
         storeName: "验收旗舰店",
+        storeId: "SID199",
         merchantId: "19900001",
         remark: "运营中",
         login: "demo_ok",
@@ -212,6 +247,7 @@ test("org store board lists demo shops and supports add", async () => {
     const createdJson = await created.json();
     assert.equal(created.status, 201, JSON.stringify(createdJson));
     assert.equal(createdJson.store.storeName, "验收旗舰店");
+    assert.equal(createdJson.store.storeId, "SID199");
 
     const patched = await fetch(`${base}/api/people/org/stores/${createdJson.store.id}`, {
       method: "PATCH",
@@ -239,7 +275,7 @@ test("org store board lists demo shops and supports add", async () => {
     const template = await fetch(`${base}/api/people/org/stores/template`);
     const csv = await template.text();
     assert.equal(template.status, 200);
-    assert.match(csv, /总负责人,小组负责人,店铺所属人员,店铺名称,商家id/);
+    assert.match(csv, /总负责人,小组负责人,店铺所属人员,店铺名称,店铺ID,商家id/);
 
     const imported = await fetch(`${base}/api/people/org/stores/import`, {
       method: "POST",
@@ -251,7 +287,8 @@ test("org store board lists demo shops and supports add", async () => {
             小组负责人: "张文静",
             店铺所属人员: "导入同事",
             店铺名称: "导入旗舰店",
-            商家id: "18800001",
+            店铺ID: "SID188",
+            商家ID: "18800001",
             店铺情况备注: "运营中",
             更新时间: "9.11更新",
             退店时间: "",
@@ -266,7 +303,69 @@ test("org store board lists demo shops and supports add", async () => {
     assert.equal(importedJson.created, 1);
     const listedAfter = await fetch(`${base}/api/people/org/stores?q=${encodeURIComponent("导入旗舰店")}`);
     const listedAfterJson = await listedAfter.json();
-    assert.ok(listedAfterJson.stores.some((row) => row.storeName === "导入旗舰店" && row.owner === "导入同事"));
+    assert.ok(
+      listedAfterJson.stores.some((row) => row.storeName === "导入旗舰店" && row.owner === "导入同事" && row.storeId === "SID188")
+    );
+    const byStoreId = await fetch(`${base}/api/people/org/stores?q=SID188`);
+    const byStoreIdJson = await byStoreId.json();
+    assert.ok(byStoreIdJson.stores.some((row) => row.storeId === "SID188"));
+  });
+});
+
+test("rights board groups store staff under 总监经理主管运营", async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/api/people/org/rights-board`);
+    const data = await res.json();
+    assert.equal(res.status, 200);
+    assert.deepEqual(data.roles, ["总监", "经理", "主管", "储备", "运营", "助理"]);
+    const namesOf = (role) => (data.columns.find((col) => col.role === role).people || []).map((row) => row.name);
+    assert.deepEqual(namesOf("总监"), ["罗成"]);
+    assert.ok(namesOf("经理").includes("沈子晗"));
+    assert.ok(namesOf("经理").includes("韩梦凯"));
+    assert.ok(namesOf("主管").includes("杨润泽"));
+    assert.ok(namesOf("运营").includes("张文静"));
+    assert.ok(namesOf("运营").includes("陈晓曼"));
+    assert.equal(namesOf("储备").length, 0);
+    assert.equal(namesOf("助理").length, 0);
+    assert.ok(!namesOf("运营").includes("管理员"));
+
+    const pinned = await fetch(`${base}/api/people/org/rights-board/pin`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "张文静", role: "储备" })
+    });
+    const pinnedJson = await pinned.json();
+    assert.equal(pinned.status, 200, JSON.stringify(pinnedJson));
+    assert.ok(pinnedJson.columns.find((col) => col.role === "储备").people.some((row) => row.name === "张文静"));
+    assert.ok(!pinnedJson.columns.find((col) => col.role === "运营").people.some((row) => row.name === "张文静"));
+
+    const unpinned = await fetch(`${base}/api/people/org/rights-board/unpin`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "张文静" })
+    });
+    const unpinnedJson = await unpinned.json();
+    assert.equal(unpinned.status, 200);
+    assert.ok(unpinnedJson.columns.find((col) => col.role === "运营").people.some((row) => row.name === "张文静"));
+
+    const tree = data.tree;
+    assert.equal(tree.name, "罗成");
+    assert.equal(tree.role, "总监");
+    const managers = tree.children.map((row) => row.name);
+    assert.ok(managers.includes("韩梦凯"));
+    assert.ok(managers.includes("沈子晗"));
+    const shen = tree.children.find((row) => row.name === "沈子晗");
+    const yang = (shen.children || []).find((row) => row.name === "杨润泽");
+    assert.ok(yang);
+    assert.equal(yang.role, "主管");
+    assert.ok((yang.children || []).some((row) => row.name === "崔安琪"));
+    assert.ok((yang.stores || []).length + (yang.children || []).reduce((sum, child) => sum + (child.stores || []).length, 0) >= 1);
+    const watch = data.watch;
+    assert.equal(typeof watch.checkedAt, "string");
+    assert.ok(watch.kpis.some((item) => item.label === "在营店铺" && item.value >= 15));
+    assert.ok(watch.issues.some((item) => item.kind === "人员对不上" && item.title.includes("陈晓曼")));
+    assert.ok(watch.issues.some((item) => item.kind === "待补全" && item.title.includes("缺店铺ID")));
+    assert.equal(watch.conflict, true);
   });
 });
 
@@ -428,6 +527,41 @@ test("PATCH /api/people/passwords sets one password for selected staff", async (
     assert.equal(afterJson.people.find((row) => row.id === wang.id).password, "TeamPass1");
     assert.equal(afterJson.people.find((row) => row.id === yang.id).password, "TeamPass1");
     assert.equal(afterJson.people.find((row) => row.name === "沈子晗").password, "ChangeMe123!");
+  });
+});
+
+test("POST /api/people/remove deletes selected staff and their grants", async () => {
+  await withServer(async (base) => {
+    const listed = await fetch(`${base}/api/people`);
+    const listedJson = await listed.json();
+    const wang = listedJson.people.find((row) => row.name === "王博");
+    const admin = listedJson.people.find((row) => row.name === "管理员");
+    const empty = await fetch(`${base}/api/people/remove`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [] })
+    });
+    assert.equal(empty.status, 400);
+    const blocked = await fetch(`${base}/api/people/remove`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [admin.id] })
+    });
+    assert.equal(blocked.status, 400);
+    const removed = await fetch(`${base}/api/people/remove`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [wang.id] })
+    });
+    const removedJson = await removed.json();
+    assert.equal(removed.status, 200, JSON.stringify(removedJson));
+    assert.equal(removedJson.removed, 1);
+    const after = await fetch(`${base}/api/people`);
+    const afterJson = await after.json();
+    assert.equal(afterJson.people.some((row) => row.name === "王博"), false);
+    const grants = await fetch(`${base}/api/people/grants`);
+    const grantsJson = await grants.json();
+    assert.equal(grantsJson.grants.some((row) => row.personName === "王博"), false);
   });
 });
 

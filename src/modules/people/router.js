@@ -12,7 +12,8 @@ import {
   patchPerson,
   patchPeoplePasswords,
   PEOPLE_IMPORT_HEADERS,
-  reconcilePeople
+  reconcilePeople,
+  removePeople
 } from "./store.js";
 import { scopeOf } from "./org-acl.js";
 import {
@@ -21,10 +22,13 @@ import {
   importOrgStores,
   listOrgLogs,
   listOrgStores,
+  listRightsBoard,
   listTeams,
   patchOrgStore,
+  pinRightsName,
   removeOrgStore,
-  summarizeOrg
+  summarizeOrg,
+  unpinRightsName
 } from "./org-board.js";
 import {
   createNotice,
@@ -113,6 +117,7 @@ peopleRouter.get("/org/stores/template", (_req, res) => {
     "张文静",
     "示例运营",
     "示例旗舰店",
+    "10001",
     "11009999",
     "运营中",
     "9.11更新",
@@ -155,6 +160,18 @@ peopleRouter.delete("/org/stores/:id", async (req, res) => {
 
 peopleRouter.get("/org/logs", (_req, res) => {
   res.json({ ok: true, logs: listOrgLogs() });
+});
+
+peopleRouter.get("/org/rights-board", (_req, res) => {
+  res.json(listRightsBoard());
+});
+
+peopleRouter.post("/org/rights-board/pin", (req, res) => {
+  sendResult(res, pinRightsName(req.body?.name, req.body?.role), false);
+});
+
+peopleRouter.post("/org/rights-board/unpin", (req, res) => {
+  sendResult(res, unpinRightsName(req.body?.name), false);
 });
 
 peopleRouter.get("/org/board", async (req, res) => {
@@ -234,6 +251,10 @@ peopleRouter.post("/import", (req, res) => {
 peopleRouter.patch("/passwords", (req, res) => {
   const body = req.body || {};
   sendResult(res, patchPeoplePasswords(body.ids, body.password), false);
+});
+
+peopleRouter.post("/remove", async (req, res) => {
+  sendResult(res, await removePeople(req.body?.ids), false);
 });
 
 peopleRouter.patch("/:id", (req, res) => {
