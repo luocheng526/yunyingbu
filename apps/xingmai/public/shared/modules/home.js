@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.199-home-live-compare */
+/* xm-module-home 0.1.282-home-erp */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -418,7 +418,7 @@
       escapeHtml(card.key) +
       '"><div class="xm-hm-card-head"><span>' +
       escapeHtml(card.label) +
-      '</span><i title="演示指标">i</i></div><div class="xm-hm-value' +
+      '</span><i title="指标">i</i></div><div class="xm-hm-value' +
       (card.accent ? " is-accent" : "") +
       '">' +
       escapeHtml(card.value) +
@@ -458,7 +458,7 @@
       escapeHtml(team.key) +
       '"><header class="xm-hm-team-head"><div><h2>' +
       escapeHtml(team.name) +
-      "团队</h2><p>责权下的店铺先走演示店，数据中心按店名对齐后替换数字。</p></div>" +
+      "团队</h2><p>店铺按人管责权，数字按店名对齐数据中心 ERP。</p></div>" +
       '<a href="' +
       escapeHtml(team.href || "#") +
       '">打开运营中心</a></header>' +
@@ -467,7 +467,7 @@
       "</div>" +
       '<div class="xm-hm-panel"><h2>责权店铺 <span>' +
       shops.length +
-      " 店 · 演示</span></h2>" +
+      " 店</span></h2>" +
       '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th><th>运营</th><th>实时销售额</th><th>销售单数</th><th>支付金额</th><th>退款率</th></tr></thead><tbody>' +
       shops.map(function (row, i) {
         return shopRowHtml(row, i, true);
@@ -935,7 +935,7 @@
       '<section class="xm-hm-live" id="xm-hm-live" hidden></section>' +
       '<section class="xm-hm-board" id="xm-hm-board" hidden>' +
       '<div id="xm-hm-ladders"></div></section>' +
-      '</div><p class="xm-hm-note" id="xm-hm-note">演示看板，数字不是外部业务库。先按这个模版铺上，后面再对真实口径。</p></div>'
+      '</div><p class="xm-hm-note" id="xm-hm-note">数字来自数据中心 ERP，已取消演示数。</p></div>'
     );
   }
 
@@ -987,14 +987,19 @@
       }).join("") +
       "</tbody></table></div>";
     root.querySelector("#xm-hm-ladders").innerHTML = (state.ladders || FALLBACK.ladders).map(ladderHtml).join("");
+    var gapText = (state.gaps || []).filter(function (item) {
+      return item.indexOf("人管") !== -1 || item.indexOf("韩梦凯") !== -1;
+    }).join("；");
     root.querySelector("#xm-hm-note").textContent =
       state.view === "live"
-        ? "实时页每5分钟自动拉一次数。数据源稍后对接，现在仍走现有接口。"
+        ? "实时数字来自数据中心 ERP，每5分钟拉一次。昨今曲线各用当日总额，没有分时点。"
         : state.view === "team"
-          ? "团队页分沈子晗、韩梦凯两份。店铺先用演示店，数据中心责权接口有了按店名对齐。"
+          ? (gapText
+            ? "人管对不上：" + gapText
+            : "团队店按人管责权，数字按店名对齐 ERP。")
           : state.view === "board"
-            ? "排行榜是业绩排行榜和利润排行榜，按运营 / 主管 / 经理分列。演示数字。"
-            : "演示看板，数字不是外部业务库。先按这个模版铺上，后面再对真实口径。";
+            ? "排行榜按人管职务和责权店，对齐 ERP 店名后汇总支付金额 / 利润。"
+            : "数字来自数据中心 ERP，已取消演示数。平台费用、销售费用、总货款、无效订单、京东仓无接口，显示 —。";
     var user = state.user && (state.user.displayName || state.user.username);
     var mark = user || "星脉";
     root.querySelector("#xm-hm-mark").innerHTML = new Array(18)
@@ -1028,6 +1033,475 @@
     });
   }
 
+  var COMPANY_CARD_DEFS = [
+    { key: "payAmount", label: "支付金额（支付）", accent: true, field: "payAmount", kind: "money" },
+    { key: "adCost", label: "推广费（预估）", field: "totalPromotionCost", kind: "money" },
+    { key: "refundAmount", label: "退款金额", field: "refundAmount", kind: "money" },
+    { key: "adRatio", label: "推广费占比", field: "promotionRate", kind: "rate" },
+    { key: "refundRate", label: "退款率（按金额）", field: "refundRate", kind: "rate" },
+    { key: "profit", label: "利润（预估）", field: "profit", kind: "money" },
+    { key: "payQty", label: "销售件数（支付）", field: "orderCount", kind: "int" },
+    { key: "grossMargin", label: "大毛利率", field: "profitRate", kind: "rate" },
+    { key: "platformFee", label: "平台费用（预估）", field: "", kind: "none" },
+    { key: "saleFee", label: "销售费用（预估）", field: "", kind: "none" },
+    { key: "goodsCost", label: "总货款", field: "", kind: "none" },
+    { key: "invalid", label: "无效订单金额（件数）", field: "", kind: "none" },
+    { key: "netSales", label: "净销售金额", field: "netSales", kind: "money" },
+    { key: "jdOrders", label: "京东仓订单量", field: "", kind: "none" },
+    { key: "jdRatio", label: "京东仓订单占比", field: "", kind: "none" },
+    { key: "netQty", label: "净销售件数", field: "netOrderCount", kind: "int" }
+  ];
+
+  function asNum(value) {
+    if (value == null || value === "" || value === "—") {
+      return null;
+    }
+    var n = Number(String(value).replace(/,/g, ""));
+    return isFinite(n) ? n : null;
+  }
+
+  function fmtMoney(value) {
+    var n = asNum(value);
+    return n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function fmtInt(value) {
+    var n = asNum(value);
+    return n == null ? "—" : Math.round(n).toLocaleString("en-US");
+  }
+
+  function fmtRate(value) {
+    var n = asNum(value);
+    if (n == null) {
+      return "—";
+    }
+    if (Math.abs(n) <= 1) {
+      n = n * 100;
+    }
+    return n.toFixed(2) + "%";
+  }
+
+  function fmtRoi(pay, ad) {
+    var p = asNum(pay);
+    var a = asNum(ad);
+    if (p == null || a == null || a === 0) {
+      return "—";
+    }
+    return (p / a).toFixed(2);
+  }
+
+  function trendOf(cur, prev) {
+    var c = asNum(cur);
+    var p = asNum(prev);
+    if (c == null || p == null || p === 0) {
+      return 0;
+    }
+    return ((c - p) / Math.abs(p)) * 100;
+  }
+
+  function sumField(rows, key) {
+    var total = 0;
+    var ok = false;
+    (rows || []).forEach(function (row) {
+      var n = asNum(row[key]);
+      if (n != null) {
+        total += n;
+        ok = true;
+      }
+    });
+    return ok ? total : null;
+  }
+
+  function withRates(sum) {
+    var next = {
+      payAmount: sum.payAmount,
+      totalPromotionCost: sum.totalPromotionCost,
+      refundAmount: sum.refundAmount,
+      profit: sum.profit,
+      orderCount: sum.orderCount,
+      netOrderCount: sum.netOrderCount,
+      todayPayAmount: sum.todayPayAmount,
+      yesterdayPayAmount: sum.yesterdayPayAmount,
+      profitRate: sum.profitRate,
+      promotionRate: sum.promotionRate,
+      refundRate: sum.refundRate,
+      netSales: null
+    };
+    if (next.payAmount != null) {
+      if (next.profit != null && next.profitRate == null) {
+        next.profitRate = next.profit / next.payAmount;
+      }
+      if (next.totalPromotionCost != null && next.promotionRate == null) {
+        next.promotionRate = next.totalPromotionCost / next.payAmount;
+      }
+      if (next.refundAmount != null) {
+        next.netSales = next.payAmount - next.refundAmount;
+        if (next.refundRate == null) {
+          next.refundRate = next.refundAmount / next.payAmount;
+        }
+      }
+    }
+    return next;
+  }
+
+  function summaryFrom(pack) {
+    if (pack && pack.summary && pack.summary.payAmount != null) {
+      return withRates(pack.summary);
+    }
+    return withRates({
+      payAmount: sumField(pack && pack.records, "payAmount"),
+      totalPromotionCost: sumField(pack && pack.records, "totalPromotionCost"),
+      refundAmount: sumField(pack && pack.records, "refundAmount"),
+      profit: sumField(pack && pack.records, "profit"),
+      orderCount: sumField(pack && pack.records, "orderCount"),
+      netOrderCount: sumField(pack && pack.records, "netOrderCount"),
+      todayPayAmount: sumField(pack && pack.records, "todayPayAmount"),
+      yesterdayPayAmount: sumField(pack && pack.records, "yesterdayPayAmount")
+    });
+  }
+
+  function blankCompanyCards() {
+    return COMPANY_CARD_DEFS.map(function (def) {
+      return { key: def.key, label: def.label, value: "—", accent: !!def.accent, trend: 0 };
+    });
+  }
+
+  function companyCardsFrom(sum, prev) {
+    sum = sum || {};
+    prev = prev || {};
+    return COMPANY_CARD_DEFS.map(function (def) {
+      var cur = def.kind === "none" ? null : sum[def.field];
+      var old = def.kind === "none" ? null : prev[def.field];
+      var value = "—";
+      if (def.kind === "money") {
+        value = fmtMoney(cur);
+      } else if (def.kind === "int") {
+        value = fmtInt(cur);
+      } else if (def.kind === "rate") {
+        value = fmtRate(cur);
+      }
+      return { key: def.key, label: def.label, value: value, accent: !!def.accent, trend: trendOf(cur, old) };
+    });
+  }
+
+  function blankLive() {
+    return {
+      title: "实时看板",
+      summary: { channels: 1, shops: 0 },
+      hero: { label: "实时销售指数", value: "—", delta: 0, yesterday: [], today: [] },
+      paid: { label: "实时付费金额", value: "—", delta: 0, yesterday: [], today: [] },
+      cards: [
+        { key: "ad", label: "推广花费 (支付预估)", value: "—" },
+        { key: "profit", label: "利润 (支付预估)", value: "—" },
+        { key: "roi", label: "付费成交ROI", value: "—" },
+        { key: "livePay", label: "实时付费成交额", value: "—" },
+        { key: "liveFee", label: "实时费比", value: "—" }
+      ],
+      shops: []
+    };
+  }
+
+  function blankTeams() {
+    return [
+      { key: "shen", name: "沈子晗", href: "/shen", cards: blankCompanyCards(), shops: [] },
+      { key: "han", name: "韩梦凯", href: "/han", cards: blankCompanyCards(), shops: [] }
+    ];
+  }
+
+  function blankLadders() {
+    var cols = [
+      { title: "运营排行榜", rows: [] },
+      { title: "主管排行榜", rows: [] },
+      { title: "经理排行榜", rows: [] }
+    ];
+    return [
+      { key: "perf", title: "业绩排行榜", unit: "支付金额", columns: cols },
+      { key: "profit", title: "利润排行榜", unit: "利润", columns: cols.map(function (col) {
+        return { title: col.title, rows: [] };
+      }) }
+    ];
+  }
+
+  function erpQuery(from, to) {
+    return (
+      "payTimeStart=" +
+      encodeURIComponent(from + " 00:00:00") +
+      "&payTimeEnd=" +
+      encodeURIComponent(to + " 23:59:59")
+    );
+  }
+
+  function shiftYmd(ymd, days) {
+    var parts = String(ymd || "").split("-").map(Number);
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "UTC",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).format(new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + days)));
+  }
+
+  function previousDates(from, to) {
+    var start = new Date(from + "T00:00:00+08:00").getTime();
+    var end = new Date(to + "T00:00:00+08:00").getTime();
+    var days = Math.round((end - start) / 86400000) + 1;
+    var prevTo = shiftYmd(from, -1);
+    return { from: shiftYmd(prevTo, -(days - 1)), to: prevTo };
+  }
+
+  function uniqShops(records) {
+    var seen = {};
+    return (records || []).filter(function (row) {
+      var id = row.shopId || row.shopName;
+      if (!id || seen[id]) {
+        return false;
+      }
+      seen[id] = true;
+      return true;
+    });
+  }
+
+  function fetchShopPages(qs) {
+    var acc = [];
+    var summary = null;
+    function page(n) {
+      var path = "/api/data/shops?pageSize=50&currentPage=" + n + (qs ? "&" + qs : "");
+      return api(path).then(function (data) {
+        if (!data || !data.ok || !data.records) {
+          return { records: uniqShops(acc), summary: summary };
+        }
+        if (data.summary) {
+          summary = data.summary;
+        }
+        acc = acc.concat(data.records);
+        var unique = uniqShops(acc);
+        if (unique.length >= (data.total || unique.length) || !data.records.length || n >= 8) {
+          return { records: unique, summary: summary };
+        }
+        if (n > 1 && unique.length === uniqShops(acc.slice(0, acc.length - data.records.length)).length) {
+          return { records: unique, summary: summary };
+        }
+        return page(n + 1);
+      });
+    }
+    return page(1);
+  }
+
+  function mapByName(records) {
+    var map = {};
+    (records || []).forEach(function (row) {
+      if (row.shopName) {
+        map[row.shopName] = row;
+      }
+    });
+    return map;
+  }
+
+  function liveFromErp(todayPack, yestPack, snapPack) {
+    var live = blankLive();
+    var todaySum = summaryFrom(todayPack);
+    var yestSum = summaryFrom(yestPack);
+    var snap = summaryFrom(snapPack);
+    var todayPay = snap.todayPayAmount != null ? snap.todayPayAmount : todaySum.payAmount;
+    var yestPay = snap.yesterdayPayAmount != null ? snap.yesterdayPayAmount : yestSum.payAmount;
+    var todayAd = todaySum.totalPromotionCost;
+    var yestAd = yestSum.totalPromotionCost;
+    live.hero = {
+      label: "实时销售指数",
+      value: fmtMoney(todayPay),
+      delta: trendOf(todayPay, yestPay),
+      yesterday: yestPay == null ? [] : [yestPay, yestPay],
+      today: todayPay == null ? [] : [todayPay, todayPay]
+    };
+    live.paid = {
+      label: "实时付费金额",
+      value: fmtMoney(todayAd),
+      delta: trendOf(todayAd, yestAd),
+      yesterday: yestAd == null ? [] : [yestAd, yestAd],
+      today: todayAd == null ? [] : [todayAd, todayAd]
+    };
+    live.cards = [
+      { key: "ad", label: "推广花费 (支付预估)", value: fmtMoney(todayAd), extra: todaySum.promotionRate != null ? "推广占比 " + fmtRate(todaySum.promotionRate) : "" },
+      { key: "profit", label: "利润 (支付预估)", value: fmtMoney(todaySum.profit), extra: todaySum.profitRate != null ? "利润率 " + fmtRate(todaySum.profitRate) : "" },
+      { key: "roi", label: "付费成交ROI", value: fmtRoi(todaySum.payAmount != null ? todaySum.payAmount : todayPay, todayAd) },
+      { key: "livePay", label: "实时付费成交额", value: fmtMoney(todayPay) },
+      { key: "liveFee", label: "实时费比", value: fmtRate(todaySum.promotionRate != null ? todaySum.promotionRate : snap.promotionRate) }
+    ];
+    var rows = (todayPack && todayPack.records && todayPack.records.length ? todayPack.records : snapPack && snapPack.records) || [];
+    live.shops = rows
+      .slice()
+      .sort(function (a, b) {
+        return (asNum(b.todayPayAmount) || asNum(b.payAmount) || 0) - (asNum(a.todayPayAmount) || asNum(a.payAmount) || 0);
+      })
+      .map(function (row) {
+        var pay = row.todayPayAmount != null ? row.todayPayAmount : row.payAmount;
+        return {
+          shop: row.shopName,
+          liveAmount: fmtMoney(pay),
+          paidAmount: fmtMoney(row.totalPromotionCost),
+          profit: fmtMoney(row.profit),
+          roi: fmtRoi(row.payAmount != null ? row.payAmount : pay, row.totalPromotionCost),
+          paidDeal: fmtMoney(pay),
+          feeRate: fmtRate(row.promotionRate)
+        };
+      });
+    live.summary = { channels: 1, shops: live.shops.length };
+    return live;
+  }
+
+  function ownerOfShop(shopMeta, grants) {
+    if (!shopMeta) {
+      return "—";
+    }
+    var hit = (grants || []).filter(function (grant) {
+      return grant.active && grant.shopId === shopMeta.id;
+    });
+    var op = hit.filter(function (grant) {
+      return grant.role === "运营";
+    })[0];
+    return (op || hit[0] || {}).personName || "—";
+  }
+
+  function teamPredicate(name) {
+    return function (shop) {
+      var text = String(shop.pack || "") + String(shop.name || "");
+      return text.indexOf(name) !== -1;
+    };
+  }
+
+  function buildTeams(peopleShops, grants, rangePack, prevPack, catalogPack) {
+    var erp = mapByName(rangePack && rangePack.records);
+    var prevErp = mapByName(prevPack && prevPack.records);
+    var catalog = mapByName((catalogPack && catalogPack.records) || (rangePack && rangePack.records));
+    var shops = ((peopleShops && peopleShops.shops) || []).filter(function (shop) {
+      return shop.kind !== "店群";
+    });
+    var mismatches = [];
+    function oneTeam(key, name, href) {
+      var pred = teamPredicate(name);
+      var rows = [];
+      var matched = [];
+      var prevMatched = [];
+      shops.forEach(function (shop) {
+        if (!pred(shop)) {
+          return;
+        }
+        var erpRow = erp[shop.name];
+        if (!erpRow) {
+          if (!catalog[shop.name]) {
+            mismatches.push(name + " · " + shop.name + "（人管有店，ERP 无同名店）");
+          }
+          rows.push({
+            shop: shop.name,
+            owner: ownerOfShop(shop, grants),
+            liveAmount: "—",
+            orders: "—",
+            payAmount: catalog[shop.name] ? fmtMoney(0) : "—",
+            refundRate: "—"
+          });
+          return;
+        }
+        matched.push(erpRow);
+        if (prevErp[shop.name]) {
+          prevMatched.push(prevErp[shop.name]);
+        }
+        rows.push({
+          shop: shop.name,
+          owner: ownerOfShop(shop, grants),
+          liveAmount: fmtMoney(erpRow.todayPayAmount),
+          orders: fmtInt(erpRow.orderCount),
+          payAmount: fmtMoney(erpRow.payAmount),
+          refundRate: fmtRate(erpRow.refundRate)
+        });
+      });
+      rows.sort(function (a, b) {
+        return (asNum(b.payAmount) || 0) - (asNum(a.payAmount) || 0);
+      });
+      if (!rows.length && name === "韩梦凯") {
+        mismatches.push("韩梦凯 · 整包（人管没有韩梦凯的店铺或店群）");
+      }
+      return {
+        key: key,
+        name: name,
+        href: href,
+        cards: companyCardsFrom(withRates({
+          payAmount: sumField(matched, "payAmount"),
+          totalPromotionCost: sumField(matched, "totalPromotionCost"),
+          refundAmount: sumField(matched, "refundAmount"),
+          profit: sumField(matched, "profit"),
+          orderCount: sumField(matched, "orderCount"),
+          netOrderCount: sumField(matched, "netOrderCount")
+        }), withRates({
+          payAmount: sumField(prevMatched, "payAmount"),
+          totalPromotionCost: sumField(prevMatched, "totalPromotionCost"),
+          refundAmount: sumField(prevMatched, "refundAmount"),
+          profit: sumField(prevMatched, "profit"),
+          orderCount: sumField(prevMatched, "orderCount"),
+          netOrderCount: sumField(prevMatched, "netOrderCount")
+        })),
+        shops: rows
+      };
+    }
+    return {
+      teams: [oneTeam("shen", "沈子晗", "/shen"), oneTeam("han", "韩梦凯", "/han")],
+      mismatches: mismatches
+    };
+  }
+
+  function buildLadders(people, rangePack) {
+    var erp = mapByName(rangePack && rangePack.records);
+    function amount(person, field) {
+      var total = 0;
+      var ok = false;
+      (person.visibleShops || []).forEach(function (name) {
+        var row = erp[name];
+        var n = row ? asNum(row[field]) : null;
+        if (n != null) {
+          total += n;
+          ok = true;
+        }
+      });
+      return ok ? total : 0;
+    }
+    function column(title, role, field) {
+      var rows = (people || [])
+        .filter(function (person) {
+          return person.status === "在职" && person.role === role && person.name !== "管理员";
+        })
+        .map(function (person) {
+          var n = amount(person, field);
+          return { name: person.name, amount: fmtMoney(n), _n: n };
+        })
+        .sort(function (a, b) {
+          return b._n - a._n;
+        })
+        .map(function (row) {
+          return { name: row.name, amount: row.amount };
+        });
+      return { title: title, rows: rows };
+    }
+    return [
+      {
+        key: "perf",
+        title: "业绩排行榜",
+        unit: "支付金额",
+        columns: [column("运营排行榜", "运营", "payAmount"), column("主管排行榜", "主管", "payAmount"), column("经理排行榜", "经理", "payAmount")]
+      },
+      {
+        key: "profit",
+        title: "利润排行榜",
+        unit: "利润",
+        columns: [column("运营排行榜", "运营", "profit"), column("主管排行榜", "主管", "profit"), column("经理排行榜", "经理", "profit")]
+      }
+    ];
+  }
+
+  function erpShopNames(records) {
+    return (records || []).map(function (row) {
+      return row.shopName;
+    });
+  }
+
   window.XmModules = window.XmModules || {};
   window.XmModules["/home"] = {
     mount: function (root) {
@@ -1041,15 +1515,15 @@
         from: dates.from,
         to: dates.to,
         user: readUser(),
-        cards: FALLBACK.cards,
-        tiger: FALLBACK.tiger,
-        live: FALLBACK.live,
-        shops: FALLBACK.shops,
-        teams: FALLBACK.teams.map(function (team) {
-          return { key: team.key, name: team.name, href: team.href, cards: team.cards, shops: team.shops.slice() };
-        }),
-        ladders: FALLBACK.ladders,
-        liveAt: ""
+        cards: blankCompanyCards(),
+        tiger: { title: "龙虎榜", rows: [] },
+        live: blankLive(),
+        shops: [],
+        teams: blankTeams(),
+        ladders: blankLadders(),
+        liveAt: "",
+        gaps: [],
+        source: ""
       };
       var poll = 0;
       var LIVE_REFRESH_MS = 5 * 60 * 1000;
@@ -1069,45 +1543,60 @@
       }
 
       function pullLive() {
-        return Promise.all([api("/api/data/live"), api("/api/data/shops"), api("/api/home/live")]).then(function (pack) {
+        var today = shanghaiYmd(0);
+        var yest = shanghaiYmd(1);
+        return Promise.all([
+          fetchShopPages(erpQuery(today, today)),
+          fetchShopPages(erpQuery(yest, yest)),
+          fetchShopPages("")
+        ]).then(function (pack) {
           if (dead) {
             return;
           }
-          var live = pack[0] && pack[0].ok ? pack[0] : pack[2];
-          var shops = pack[1];
-          if (live && live.ok) {
-            state.live = mergeLive(state.live, live);
-          }
-          var nextShops = live && live.shops && live.shops.length ? live.shops : readShopRows(shops || {});
-          if (nextShops.length) {
-            state.shops = fillLiveShopFields(nextShops, FALLBACK.shops);
-          }
+          state.live = liveFromErp(pack[0], pack[1], pack[2]);
+          state.shops = state.live.shops;
           state.liveAt = shanghaiClock();
+          state.source = "xingmai-erp";
           paint(root, state);
         });
       }
 
-      function pullTeams() {
-        return Promise.all([api("/api/home/teams"), api("/api/people/shops"), api("/api/data/shops")]).then(function (pack) {
+      function pullBoard() {
+        var prev = previousDates(state.from, state.to);
+        return Promise.all([
+          fetchShopPages(erpQuery(state.from, state.to)),
+          fetchShopPages(erpQuery(prev.from, prev.to)),
+          fetchShopPages(""),
+          api("/api/people"),
+          api("/api/people/shops"),
+          api("/api/people/grants")
+        ]).then(function (pack) {
           if (dead) {
             return;
           }
-          var homeTeams = pack[0];
-          var peopleShops = pack[1];
-          var nextShops = readShopRows(pack[2] || {});
-          if (homeTeams && homeTeams.ok && homeTeams.teams && homeTeams.teams.length) {
-            state.teams = homeTeams.teams;
-          }
-          state.teams = mergePeopleShops(state.teams, peopleShops);
-          state.teams = state.teams.map(function (team) {
-            return {
-              key: team.key,
-              name: team.name,
-              href: team.href,
-              cards: team.cards,
-              shops: overlayShopMetrics(team.shops, nextShops)
-            };
+          var rangePack = pack[0] || { records: [], summary: null };
+          var prevPack = pack[1] || { records: [], summary: null };
+          var catalogPack = pack[2] || { records: [], summary: null };
+          var people = pack[3] && pack[3].people ? pack[3].people : [];
+          var peopleShops = pack[4] || { shops: [] };
+          var grants = pack[5] && pack[5].grants ? pack[5].grants : [];
+          state.cards = companyCardsFrom(summaryFrom(rangePack), summaryFrom(prevPack));
+          var built = buildTeams(peopleShops, grants, rangePack, prevPack, catalogPack);
+          state.teams = built.teams;
+          state.ladders = buildLadders(people, rangePack);
+          var peopleNames = ((peopleShops.shops || []).filter(function (shop) {
+            return shop.kind !== "店群";
+          })).map(function (shop) {
+            return shop.name;
           });
+          var erpNames = erpShopNames(catalogPack.records && catalogPack.records.length ? catalogPack.records : rangePack.records);
+          var extra = erpNames.filter(function (name) {
+            return peopleNames.indexOf(name) === -1;
+          }).map(function (name) {
+            return "ERP · " + name + "（ERP 有店，人管未建或不在沈/韩包）";
+          });
+          state.gaps = built.mismatches.concat(extra);
+          state.source = rangePack.records && rangePack.records.length ? "xingmai-erp" : "";
           paint(root, state);
         });
       }
@@ -1130,6 +1619,7 @@
           state.from = next.from;
           state.to = next.to;
           paint(root, state);
+          pullBoard();
           return;
         }
         if (event.target.closest("#xm-hm-set")) {
@@ -1156,33 +1646,14 @@
         if (event.target.id === "xm-hm-from" || event.target.id === "xm-hm-to") {
           state.from = root.querySelector("#xm-hm-from").value || state.from;
           state.to = root.querySelector("#xm-hm-to").value || state.to;
+          pullBoard();
         }
       }
 
       root.addEventListener("click", onClick);
       root.addEventListener("change", onChange);
 
-      api("/api/home/summary").then(function (data) {
-        if (dead || !data || data.ok !== true) {
-          return;
-        }
-        if (data.cards && data.cards.some(function (card) { return card.key === "payAmount"; })) {
-          state.cards = data.cards;
-        }
-        if (data.tiger && data.tiger.rows && data.tiger.rows.length) {
-          state.tiger = data.tiger;
-        }
-        if (data.ladders && data.ladders.length) {
-          state.ladders = data.ladders;
-        }
-        if (data.from && data.to && state.range === "yesterday") {
-          state.from = data.from;
-          state.to = data.to;
-        }
-        paint(root, state);
-      });
-
-      pullTeams();
+      pullBoard();
       pullLive();
       poll = window.setInterval(function () {
         if (state.view === "live") {
