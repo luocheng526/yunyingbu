@@ -46,15 +46,25 @@
 - 失败 / 驳回**不占号**，成功才占号。
 - 成功单可按快照回滚。
 
+## 登录（交单前）
+
+生产站不是演示环境。先读 [00-prod-admin.md](00-prod-admin.md)，再 `POST https://zx.xingmaierp.cc/api/auth/login`：
+
+- 用户名：`罗成` 或 `luocheng`
+- 密码：见该文档，不要写进单据标题或登录页
+- 申请人：`罗成运营部主脑`
+
+不要再用演示账号 / `ChangeMe123!`，那个登不上生产，交不了单。员工名册初始密码不能用来交版本发布。本地 `node --test` 仍用仓库种子密码。
+
 ## 交单
 
 ```
 POST /api/releases
-Cookie: 登录会话
+Cookie: 管理员号登录会话
 {
   "version": "0.1.N-说明",   // N 来自 /api/releases/next
-  "applicant": "你的对话名",
-  "source": "你的对话名",
+  "applicant": "罗成运营部主脑",
+  "source": "罗成运营部主脑",
   "module": "首页|数据中心|沈子晗|韩梦凯|人员管理|版本发布中心|个人中心",
   "summary": "更新了什么",
   "files": ["public/...", "src/..."],
