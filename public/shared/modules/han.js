@@ -686,6 +686,19 @@
   const HAN_CARET =
     '<i class="xm-caret" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 10 4 4 4-4"/></svg></i>';
 
+  function goHanPage(href) {
+    const target = String(href || "/han/goods");
+    const here = String(location.pathname || "") + String(location.search || "");
+    if (here === target || here === target + "/") {
+      return;
+    }
+    if (typeof window.__xmGo === "function" && target.indexOf("?") < 0) {
+      window.__xmGo(target);
+      return;
+    }
+    location.assign(target);
+  }
+
   function attachHanGoodsTeams() {
     if (document.getElementById("han-goods-teams")) {
       return true;
@@ -719,14 +732,6 @@
     const wrap = document.createElement("div");
     wrap.id = "han-goods-teams";
     wrap.className = "han-goods-teams" + (onGoods ? " is-open" : "");
-    const goodsBtn = document.createElement("button");
-    goodsBtn.type = "button";
-    goodsBtn.className = "xm-menu-item xm-menu-child han-fold-parent";
-    goodsBtn.setAttribute("aria-expanded", onGoods ? "true" : "false");
-    goodsBtn.innerHTML = "<span>商品数据</span>" + HAN_CARET;
-    if (goods.classList.contains("is-active") && !current) {
-      goodsBtn.classList.add("is-active");
-    }
     const level2 = document.createElement("div");
     level2.className = "han-goods-level2";
     const layerFold = document.createElement("div");
@@ -750,7 +755,7 @@
         teamBtn.classList.add("is-active");
       }
       teamBtn.addEventListener("click", function () {
-        window.location.href = "/han/goods?team=" + encodeURIComponent(name);
+        goHanPage("/han/goods?team=" + encodeURIComponent(name));
       });
       const shops = document.createElement("div");
       shops.className = "han-team-shops";
@@ -776,6 +781,10 @@
             a.classList.add("is-active");
             a.setAttribute("aria-current", "page");
           }
+          a.addEventListener("click", function (event) {
+            event.preventDefault();
+            goHanPage(a.getAttribute("href") || "/han/goods");
+          });
           box.appendChild(a);
         });
       });
@@ -783,17 +792,17 @@
     layerFold.appendChild(layerBtn);
     layerFold.appendChild(sub);
     level2.appendChild(layerFold);
-    wrap.appendChild(goodsBtn);
     wrap.appendChild(level2);
-    goods.parentNode.insertBefore(wrap, goods);
-    goods.remove();
-    goodsBtn.addEventListener("click", function () {
-      const open = wrap.classList.toggle("is-open");
-      goodsBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    goods.parentNode.insertBefore(wrap, goods.nextSibling);
+    goods.addEventListener("click", function () {
+      wrap.classList.add("is-open");
     });
     layerBtn.addEventListener("click", function () {
-      const open = layerFold.classList.toggle("is-open");
+      wrap.classList.add("is-open");
+      const open = !layerFold.classList.contains("is-open");
+      layerFold.classList.toggle("is-open", open);
       layerBtn.setAttribute("aria-expanded", open ? "true" : "false");
+      goHanPage("/han/goods");
     });
     return true;
   }

@@ -342,6 +342,9 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /han-goods-teams/);
   assert.match(js, /商品分层/);
   assert.match(js, /han-fold-parent/);
+  assert.match(js, /function goHanPage/);
+  assert.match(js, /window\.__xmGo/);
+  assert.doesNotMatch(js, /goods\.remove\(/);
   assert.match(js, /\/api\/han\/shops/);
   assert.match(js, /添加店铺/);
   assert.doesNotMatch(js, /han-layer-bar/);
