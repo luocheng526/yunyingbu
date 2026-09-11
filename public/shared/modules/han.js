@@ -288,6 +288,9 @@
           );
         })
         .join("");
+      const layerNames = layers.map(function (layer) {
+        return layer.name;
+      }).join("、");
 
       function fieldsHtml(layer) {
         return layer.cols
@@ -318,11 +321,21 @@
 
       root.innerHTML = page(
         "商品数据",
-        "店铺产品分层表。按头部 / 中部 / 尾部 / 动销 / 测新 / 待做单填写，方便做商品分层。默认负责人韩梦凯。",
-        '<style>.han-layer-tab{margin:0 0.35rem 0.35rem 0}.han-layer-tab.is-on{background:#ccfbf1;color:#134e4a;font-weight:600}</style>' +
-        '<div class="stack"><section class="panel"><div id="prod-tabs" class="actions" style="flex-wrap:wrap">' +
+        "店铺产品分层：" + layerNames + "。点上面一排分类切换。默认负责人韩梦凯。",
+        '<style>' +
+          ".han-layer-bar{margin:0 0 1rem}" +
+          ".han-layer-label{margin:0 0 0.5rem;font-weight:700}" +
+          ".han-layer-row{display:flex;flex-wrap:wrap;border:1px solid #d6d3d1;border-radius:8px;overflow:hidden;background:#fff}" +
+          ".han-layer-tab{flex:1 1 7rem;margin:0;border:0;border-right:1px solid #d6d3d1;padding:0.75rem 0.4rem;background:#fff;cursor:pointer;font-size:0.95rem}" +
+          ".han-layer-tab:last-child{border-right:0}" +
+          ".han-layer-tab.is-on{background:#0f766e;color:#fff;font-weight:700}" +
+          "</style>" +
+          '<div class="stack"><section class="panel"><div id="prod-tabs" class="han-layer-bar">' +
+          '<p class="han-layer-label">商品分层</p>' +
+          '<div class="han-layer-row">' +
           tabs +
-          '</div><p class="lead" id="prod-hint"></p>' +
+          "</div></div>" +
+          '<p class="lead" id="prod-hint"></p>' +
           '<form id="prod-form"></form></section>' +
           '<section class="panel" style="overflow-x:auto"><h2 id="prod-table-title">分层列表</h2>' +
           '<table><thead id="prod-head"></thead><tbody id="prod-body"></tbody></table></section></div>',

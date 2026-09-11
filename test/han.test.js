@@ -284,13 +284,15 @@ test("shared han module fills submenu pages", async () => {
   const js = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
   assert.match(js, /XmModules\["\/han\/selection"\]/);
   assert.match(js, /XmModules\["\/han\/goods"\]/);
-  assert.match(js, /店铺产品分层表/);
+  assert.match(js, /店铺产品分层/);
   assert.match(js, /头部产品/);
   assert.match(js, /中部产品/);
   assert.match(js, /尾部产品/);
   assert.match(js, /动销产品/);
   assert.match(js, /测新产品/);
   assert.match(js, /待做单产品/);
+  assert.match(js, /商品分层/);
+  assert.match(js, /han-layer-bar/);
   assert.doesNotMatch(js, /头部产品（高利润）/);
   assert.doesNotMatch(js, /新上架需做单产品/);
   assert.match(js, /XmModules\["\/han\/paid"\]/);
