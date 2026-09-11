@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.282-home-erp */
+/* xm-module-home 0.1.317-home-shopid */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -458,7 +458,7 @@
       escapeHtml(team.key) +
       '"><header class="xm-hm-team-head"><div><h2>' +
       escapeHtml(team.name) +
-      "团队</h2><p>店铺按人管责权，数字按店名对齐数据中心 ERP。</p></div>" +
+      "团队</h2><p>店铺按人管责权，数字按店铺id对齐数据中心 ERP。</p></div>" +
       '<a href="' +
       escapeHtml(team.href || "#") +
       '">打开运营中心</a></header>' +
@@ -996,9 +996,9 @@
         : state.view === "team"
           ? (gapText
             ? "人管对不上：" + gapText
-            : "团队店按人管责权，数字按店名对齐 ERP。")
+            : "团队店按人管责权，数字只按店铺id对齐 ERP。")
           : state.view === "board"
-            ? "排行榜按人管职务和责权店，对齐 ERP 店名后汇总支付金额 / 利润。"
+            ? "排行榜按人管职务和责权店，只按店铺id对齐 ERP 后汇总支付金额 / 利润。"
             : "数字来自数据中心 ERP，已取消演示数。平台费用、销售费用、总货款、无效订单、京东仓无接口，显示 —。";
     var user = state.user && (state.user.displayName || state.user.username);
     var mark = user || "星脉";
@@ -1287,14 +1287,74 @@
     return page(1);
   }
 
-  function mapByName(records) {
+  function normShopId(value) {
+    var id = String(value == null ? "" : value).trim();
+    return id;
+  }
+
+  function mapByShopId(records) {
     var map = {};
     (records || []).forEach(function (row) {
-      if (row.shopName) {
-        map[row.shopName] = row;
+      var id = normShopId(row && row.shopId);
+      if (id) {
+        map[id] = row;
       }
     });
     return map;
+  }
+
+  function shopDisplayName(shop) {
+    return (shop && (shop.storeName || shop.name || shop.shopName)) || "—";
+  }
+
+  function shopErpId(shop) {
+    if (!shop) {
+      return "";
+    }
+    var keys = ["storeId", "erpShopId", "erpId", "platformShopId", "jdShopId", "shopCode"];
+    var i;
+    for (i = 0; i < keys.length; i++) {
+      var id = normShopId(shop[keys[i]]);
+      if (id) {
+        return id;
+      }
+    }
+    var shopId = normShopId(shop.shopId);
+    if (shopId && shopId !== String(shop.id == null ? "" : shop.id)) {
+      return shopId;
+    }
+    return "";
+  }
+
+  function dutyShopsFrom(orgPack, peopleShops) {
+    if (orgPack && Object.prototype.toString.call(orgPack.stores) === "[object Array]") {
+      return orgPack.stores.filter(function (row) {
+        return row && row.statusKey !== "closed" && row.kind !== "店群";
+      });
+    }
+    return ((peopleShops && peopleShops.shops) || []).filter(function (shop) {
+      return shop && shop.kind !== "店群";
+    });
+  }
+
+  function personOwnsShop(person, shop) {
+    if (!person || !shop) {
+      return false;
+    }
+    var name = String(person.name || "").trim();
+    if (!name) {
+      return false;
+    }
+    if (String(shop.owner || "").trim() === name || String(shop.lead || "").trim() === name) {
+      return true;
+    }
+    if (person.role === "经理") {
+      var line = String(shop.team || "") + String(shop.chief || "") + String(shop.pack || "");
+      if (line.indexOf(name) !== -1) {
+        return true;
+      }
+    }
+    return (person.visibleShops || []).indexOf(shopDisplayName(shop)) !== -1;
   }
 
   function liveFromErp(todayPack, yestPack, snapPack) {
@@ -1364,18 +1424,16 @@
 
   function teamPredicate(name) {
     return function (shop) {
-      var text = String(shop.pack || "") + String(shop.name || "");
+      var text = String(shop.team || "") + String(shop.chief || "") + String(shop.pack || "") + String(shop.name || "") + String(shop.storeName || "");
       return text.indexOf(name) !== -1;
     };
   }
 
-  function buildTeams(peopleShops, grants, rangePack, prevPack, catalogPack) {
-    var erp = mapByName(rangePack && rangePack.records);
-    var prevErp = mapByName(prevPack && prevPack.records);
-    var catalog = mapByName((catalogPack && catalogPack.records) || (rangePack && rangePack.records));
-    var shops = ((peopleShops && peopleShops.shops) || []).filter(function (shop) {
-      return shop.kind !== "店群";
-    });
+  function buildTeams(dutyShops, grants, rangePack, prevPack, catalogPack) {
+    var erp = mapByShopId(rangePack && rangePack.records);
+    var prevErp = mapByShopId(prevPack && prevPack.records);
+    var catalog = mapByShopId((catalogPack && catalogPack.records) || (rangePack && rangePack.records));
+    var shops = dutyShops || [];
     var mismatches = [];
     function oneTeam(key, name, href) {
       var pred = teamPredicate(name);
@@ -1386,28 +1444,43 @@
         if (!pred(shop)) {
           return;
         }
-        var erpRow = erp[shop.name];
-        if (!erpRow) {
-          if (!catalog[shop.name]) {
-            mismatches.push(name + " · " + shop.name + "（人管有店，ERP 无同名店）");
-          }
+        var label = shopDisplayName(shop);
+        var id = shopErpId(shop);
+        var owner = (shop.owner && String(shop.owner).trim()) || ownerOfShop(shop, grants);
+        if (!id) {
+          mismatches.push(name + " · " + label + "（人管有店，未填店铺id）");
           rows.push({
-            shop: shop.name,
-            owner: ownerOfShop(shop, grants),
+            shop: label,
+            owner: owner,
             liveAmount: "—",
             orders: "—",
-            payAmount: catalog[shop.name] ? fmtMoney(0) : "—",
+            payAmount: "—",
+            refundRate: "—"
+          });
+          return;
+        }
+        var erpRow = erp[id];
+        if (!erpRow) {
+          if (!catalog[id]) {
+            mismatches.push(name + " · " + label + "（人管有店，ERP 无此店铺id）");
+          }
+          rows.push({
+            shop: label,
+            owner: owner,
+            liveAmount: "—",
+            orders: "—",
+            payAmount: catalog[id] ? fmtMoney(0) : "—",
             refundRate: "—"
           });
           return;
         }
         matched.push(erpRow);
-        if (prevErp[shop.name]) {
-          prevMatched.push(prevErp[shop.name]);
+        if (prevErp[id]) {
+          prevMatched.push(prevErp[id]);
         }
         rows.push({
-          shop: shop.name,
-          owner: ownerOfShop(shop, grants),
+          shop: label,
+          owner: owner,
           liveAmount: fmtMoney(erpRow.todayPayAmount),
           orders: fmtInt(erpRow.orderCount),
           payAmount: fmtMoney(erpRow.payAmount),
@@ -1448,13 +1521,17 @@
     };
   }
 
-  function buildLadders(people, rangePack) {
-    var erp = mapByName(rangePack && rangePack.records);
+  function buildLadders(people, dutyShops, rangePack) {
+    var erp = mapByShopId(rangePack && rangePack.records);
     function amount(person, field) {
       var total = 0;
       var ok = false;
-      (person.visibleShops || []).forEach(function (name) {
-        var row = erp[name];
+      (dutyShops || []).forEach(function (shop) {
+        if (!personOwnsShop(person, shop)) {
+          return;
+        }
+        var id = shopErpId(shop);
+        var row = id ? erp[id] : null;
         var n = row ? asNum(row[field]) : null;
         if (n != null) {
           total += n;
@@ -1494,12 +1571,6 @@
         columns: [column("运营排行榜", "运营", "profit"), column("主管排行榜", "主管", "profit"), column("经理排行榜", "经理", "profit")]
       }
     ];
-  }
-
-  function erpShopNames(records) {
-    return (records || []).map(function (row) {
-      return row.shopName;
-    });
   }
 
   window.XmModules = window.XmModules || {};
@@ -1573,7 +1644,8 @@
           fetchShopPages(""),
           api("/api/people"),
           api("/api/people/shops"),
-          api("/api/people/grants")
+          api("/api/people/grants"),
+          api("/api/people/org/stores")
         ]).then(function (pack) {
           if (dead) {
             return;
@@ -1584,22 +1656,12 @@
           var people = pack[3] && pack[3].people ? pack[3].people : [];
           var peopleShops = pack[4] || { shops: [] };
           var grants = pack[5] && pack[5].grants ? pack[5].grants : [];
+          var dutyShops = dutyShopsFrom(pack[6], peopleShops);
           state.cards = companyCardsFrom(summaryFrom(rangePack), summaryFrom(prevPack));
-          var built = buildTeams(peopleShops, grants, rangePack, prevPack, catalogPack);
+          var built = buildTeams(dutyShops, grants, rangePack, prevPack, catalogPack);
           state.teams = built.teams;
-          state.ladders = buildLadders(people, rangePack);
-          var peopleNames = ((peopleShops.shops || []).filter(function (shop) {
-            return shop.kind !== "店群";
-          })).map(function (shop) {
-            return shop.name;
-          });
-          var erpNames = erpShopNames(catalogPack.records && catalogPack.records.length ? catalogPack.records : rangePack.records);
-          var extra = erpNames.filter(function (name) {
-            return peopleNames.indexOf(name) === -1;
-          }).map(function (name) {
-            return "ERP · " + name + "（ERP 有店，人管未建或不在沈/韩包）";
-          });
-          state.gaps = built.mismatches.concat(extra);
+          state.ladders = buildLadders(people, dutyShops, rangePack);
+          state.gaps = built.mismatches;
           state.source = rangePack.records && rangePack.records.length ? "xingmai-erp" : "";
           paint(root, state);
         }).catch(function () {
