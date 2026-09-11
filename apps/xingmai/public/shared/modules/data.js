@@ -1,4 +1,4 @@
-/* xm-module-data 0.1.69 */
+/* xm-module-data 0.1.70 */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -78,32 +78,50 @@
       "第 " + page + " / " + pages + " 页，共 " + total + " 条";
   }
 
-  function trendSvg(points) {
-    const rows = (points || []).filter(function (item) {
-      return item && item.date && !blank(item.payAmount);
-    });
-    if (rows.length < 2) {
-      return '<p class="lead">这段时间还没有可画的销售趋势。</p>';
-    }
-    const values = rows.map(function (item) {
-      return Number(item.payAmount) || 0;
-    });
-    const min = Math.min.apply(null, values);
-    const max = Math.max.apply(null, values);
-    const span = max - min || 1;
-    const coords = values
-      .map(function (value, index) {
-        const x = (index / (values.length - 1)) * 320;
-        const y = 110 - ((value - min) / span) * 90;
-        return x.toFixed(1) + "," + y.toFixed(1);
+  function paintTrend(svg, points) {
+    const values = (points || [])
+      .map(function (item) {
+        return item && !blank(item.payAmount) ? Number(item.payAmount) : NaN;
       })
-      .join(" ");
-    return (
-      '<svg class="trend-svg" viewBox="0 0 320 120" role="img" aria-label="应收趋势">' +
-      '<polyline fill="none" stroke="currentColor" stroke-width="2" points="' +
-      coords +
-      '" /></svg>'
-    );
+      .filter(function (value) {
+        return Number.isFinite(value);
+      });
+    svg.innerHTML = "";
+    if (values.length < 2) {
+      return;
+    }
+    const max = Math.max.apply(null, values.concat([1]));
+    const w = 640;
+    const h = 220;
+    const step = (w - 40) / Math.max(values.length - 1, 1);
+    const coords = values.map(function (value, index) {
+      const x = 20 + index * step;
+      const y = h - 24 - (value / max) * (h - 48);
+      return x + "," + y;
+    });
+    svg.innerHTML =
+      '<polyline fill="none" stroke="#1677ff" stroke-width="3" points="' +
+      coords.join(" ") +
+      '"></polyline>' +
+      coords
+        .map(function (pair) {
+          const xy = pair.split(",");
+          return '<circle cx="' + xy[0] + '" cy="' + xy[1] + '" r="4" fill="#1677ff"></circle>';
+        })
+        .join("");
+  }
+
+  function cardValue(card) {
+    if (!card || blank(card.value)) {
+      return "—";
+    }
+    if (card.unit === "元") {
+      return money(card.value);
+    }
+    if (card.unit === "单") {
+      return count(card.value);
+    }
+    return escapeHtml(card.value);
   }
 
   window.XmModules = window.XmModules || {};
@@ -130,16 +148,25 @@
     root.innerHTML =
       '<main class="page">' +
       '<header class="page-head"><p class="kicker">数据中心</p><h1>数据总揽</h1>' +
-      '<p class="lead">来自星脉 ERP 销售趋势和店铺/商品总览。实时付费另接接口，这里不填。</p></header>' +
+      '<p class="lead">数字来自星脉 ERP。实时销售指数后期另接，这里先空着。</p></header>' +
       '<p class="status error" data-err hidden></p>' +
-      '<section class="kpi-grid" data-cards></section>' +
+      '<section class="kpi-grid" data-cards aria-label="指标卡"></section>' +
       '<div class="dash-bottom">' +
-      '<section class="panel"><h2>销售趋势</h2><div data-trend><p class="lead">正在加载…</p></div></section>' +
-      '<section class="panel sales-index"><h2>热销商品</h2><ol class="board-list" data-goods></ol></section>' +
-      "</div>" +
-      '<section class="panel"><h2>店铺排行</h2><div style="overflow:auto"><table><thead><tr><th>店铺</th><th>应收</th><th>订单</th><th>利润</th></tr></thead>' +
-      '<tbody data-shops><tr><td colspan="4" class="empty">正在加载…</td></tr></tbody></table></div></section>' +
-      "</main>";
+      '<section class="panel" aria-labelledby="trend-title">' +
+      '<h2 id="trend-title">趋势看板</h2>' +
+      '<svg class="trend-svg" data-trend viewBox="0 0 640 220" role="img" aria-label="销售趋势"></svg>' +
+      "</section>" +
+      "<div>" +
+      '<section class="panel sales-index" aria-labelledby="index-title">' +
+      '<h2 id="index-title">实时销售指数</h2>' +
+      '<div class="figure" data-index>—</div>' +
+      '<p class="hint">实时付费后期对接，这里先空着。</p>' +
+      "</section>" +
+      '<section class="panel" style="margin-top: 12px" aria-labelledby="board-title">' +
+      '<h2 id="board-title">龙虎榜</h2>' +
+      '<ol class="board-list" data-board></ol>' +
+      "</section>" +
+      "</div></div></main>";
     const err = root.querySelector("[data-err]");
     let dead = false;
     fetchJson("/api/data/overview")
@@ -147,7 +174,7 @@
         if (dead) {
           return;
         }
-        const cards = data.cards || [];
+        const cards = (data.cards || []).slice(0, 4);
         root.querySelector("[data-cards]").innerHTML = cards.length
           ? cards
               .map(function (card) {
@@ -155,48 +182,30 @@
                   '<article class="kpi-card"><div class="label">' +
                   escapeHtml(card.label) +
                   '</div><div class="value">' +
-                  (card.unit === "元" ? money(card.value) : count(card.value)) +
+                  cardValue(card) +
                   (card.unit ? '<span class="unit">' + escapeHtml(card.unit) + "</span>" : "") +
                   "</div></article>"
                 );
               })
               .join("")
-          : '<p class="lead">看板数字还对不上，先空着。</p>';
-        root.querySelector("[data-trend]").innerHTML = trendSvg(data.trend);
-        const goods = data.goods || [];
-        root.querySelector("[data-goods]").innerHTML = goods.length
-          ? goods
+          : "";
+        paintTrend(root.querySelector("[data-trend]"), data.trend);
+        const shops = data.shops || [];
+        root.querySelector("[data-board]").innerHTML = shops.length
+          ? shops
               .map(function (row, index) {
                 return (
                   "<li><span class=\"rank\">" +
                   (index + 1) +
-                  "</span><span class=\"name\">" +
-                  escapeHtml(row.productName || "—") +
+                  '</span><span class="name">' +
+                  escapeHtml(row.shopName || row.shopId || "") +
                   "</span><span>" +
                   money(row.payAmount) +
                   "</span></li>"
                 );
               })
               .join("")
-          : '<li class="lead">没有热销商品。</li>';
-        const shops = data.shops || [];
-        root.querySelector("[data-shops]").innerHTML = shops.length
-          ? shops
-              .map(function (row) {
-                return (
-                  "<tr><td>" +
-                  escapeHtml(row.shopName || row.shopId || "—") +
-                  "</td><td>" +
-                  money(row.payAmount) +
-                  "</td><td>" +
-                  count(row.orderCount) +
-                  "</td><td>" +
-                  money(row.profit) +
-                  "</td></tr>"
-                );
-              })
-              .join("")
-          : '<tr><td colspan="4" class="empty">没有店铺排行</td></tr>';
+          : "";
       })
       .catch(function (error) {
         if (dead) {
@@ -220,12 +229,12 @@
       root.innerHTML =
         '<main class="page">' +
         '<header class="page-head"><p class="kicker">数据中心</p><h1>店铺数据</h1>' +
-        '<p class="lead">来自星脉 ERP 渠道总览店铺。店名用店铺管理补上，没有的字段先空着。</p></header>' +
+        '<p class="lead">来自星脉 ERP 店铺管理，不是演示名单。</p></header>' +
         '<section class="panel"><form id="shop-filter" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:12px">' +
         '<label>店名<input name="shopName" maxlength="64" /></label>' +
         '<button type="submit">查询</button></form>' +
         '<p class="status error" data-err hidden></p>' +
-        '<div style="overflow:auto"><table><thead><tr><th>店铺</th><th>状态</th><th>应收</th><th>订单</th><th>利润</th><th>退款率</th></tr></thead>' +
+        '<div style="overflow:auto"><table><thead><tr><th>店铺</th><th>类型</th><th>状态</th><th>类目</th><th>简介</th><th>开店时间</th></tr></thead>' +
         '<tbody data-body><tr><td colspan="6" class="empty">正在加载…</td></tr></tbody></table></div>' +
         '<p class="lead" data-pager></p>' +
         '<p><button type="button" data-prev>上一页</button> <button type="button" data-next>下一页</button></p>' +
@@ -233,6 +242,18 @@
       const body = root.querySelector("[data-body]");
       const err = root.querySelector("[data-err]");
       let dead = false;
+      let names = {};
+
+      function loadMeta() {
+        return fetchJson("/api/data/shop-options").then(function (data) {
+          names = {};
+          (data.records || []).forEach(function (row) {
+            if (row && row.id) {
+              names[row.id] = row;
+            }
+          });
+        });
+      }
 
       function load() {
         err.hidden = true;
@@ -244,29 +265,34 @@
             }
             state.pages = Math.max(1, Number(data.totalPages || 1));
             const rows = data.records || [];
-            body.innerHTML = rows.length
-              ? rows
-                  .map(function (row) {
-                    return (
-                      "<tr><td>" +
-                      escapeHtml(row.shopName || "—") +
-                      '<div class="lead">' +
-                      escapeHtml(row.shopId || "") +
-                      "</div></td><td>" +
-                      escapeHtml(row.statusLabel || "—") +
-                      "</td><td>" +
-                      money(row.payAmount) +
-                      "</td><td>" +
-                      count(row.orderCount) +
-                      "</td><td>" +
-                      money(row.profit) +
-                      "</td><td>" +
-                      pct(row.refundRate) +
-                      "</td></tr>"
-                    );
-                  })
-                  .join("")
-              : '<tr><td colspan="6" class="empty">没有店铺</td></tr>';
+            if (!rows.length) {
+              body.innerHTML = '<tr><td colspan="6" class="empty">没有店铺</td></tr>';
+            } else {
+              body.innerHTML = rows
+                .map(function (row) {
+                  const info = names[row.shopId] || names[row.id] || {};
+                  return (
+                    "<tr><td>" +
+                    escapeHtml(row.shopName || info.shopName) +
+                    '<div class="lead">' +
+                    escapeHtml(row.shopId || info.id) +
+                    "</div></td><td>" +
+                    escapeHtml(info.typeLabel || row.typeLabel) +
+                    "</td><td>" +
+                    escapeHtml(info.statusLabel || row.statusLabel) +
+                    "</td><td>" +
+                    escapeHtml(info.mainFirstCategoryName) +
+                    " / " +
+                    escapeHtml(info.mainSecondCategoryName) +
+                    "</td><td>" +
+                    escapeHtml(info.introduction) +
+                    "</td><td>" +
+                    escapeHtml(info.openTime) +
+                    "</td></tr>"
+                  );
+                })
+                .join("");
+            }
             renderPager(root, data);
           })
           .catch(function (error) {
@@ -286,7 +312,7 @@
         load();
       });
       bindPager(root, state, load);
-      load();
+      loadMeta().finally(load);
       return function unmount() {
         dead = true;
         root.innerHTML = "";
@@ -300,15 +326,15 @@
       root.innerHTML =
         '<main class="page">' +
         '<header class="page-head"><p class="kicker">数据中心</p><h1>商品数据</h1>' +
-        '<p class="lead">来自星脉 ERP 商品总览。店名用店铺管理补上，没有的字段先空着。</p></header>' +
+        '<p class="lead">来自星脉 ERP 商品总览。不选店时查全部已授权店铺。</p></header>' +
         '<section class="panel"><form id="goods-filter" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:12px">' +
         '<label>店铺<select name="shopId"><option value="">全部店铺</option></select></label>' +
         '<label>开始<input name="from" type="date" /></label>' +
         '<label>结束<input name="to" type="date" /></label>' +
         '<button type="submit">查询</button></form>' +
         '<p class="status error" data-err hidden></p>' +
-        '<div style="overflow:auto"><table><thead><tr><th>商品</th><th>店铺</th><th>订单</th><th>应收</th><th>净销售</th><th>利润</th><th>推广</th><th>退款率</th></tr></thead>' +
-        '<tbody data-body><tr><td colspan="8" class="empty">正在加载…</td></tr></tbody></table></div>' +
+        '<div style="overflow:auto"><table><thead><tr><th>商品</th><th>店铺</th><th>订单</th><th>应收</th><th>净销售</th><th>利润</th><th>推广</th></tr></thead>' +
+        '<tbody data-body><tr><td colspan="7" class="empty">正在加载…</td></tr></tbody></table></div>' +
         '<p class="lead" data-pager></p>' +
         '<p><button type="button" data-prev>上一页</button> <button type="button" data-next>下一页</button></p>' +
         "</section></main>";
@@ -352,40 +378,40 @@
             }
             state.pages = Math.max(1, Number(data.totalPages || 1));
             const rows = data.records || [];
-            body.innerHTML = rows.length
-              ? rows
-                  .map(function (row) {
-                    return (
-                      "<tr><td>" +
-                      escapeHtml(row.productName || "—") +
-                      '<div class="lead">' +
-                      escapeHtml(row.productId || "") +
-                      "</div></td><td>" +
-                      escapeHtml(row.shopName || row.shopId || "—") +
-                      "</td><td>" +
-                      count(row.orderCount) +
-                      "</td><td>" +
-                      money(row.payAmount) +
-                      "</td><td>" +
-                      money(row.netSalesAmount) +
-                      "</td><td>" +
-                      money(row.profit) +
-                      "</td><td>" +
-                      money(row.promotionCost) +
-                      "</td><td>" +
-                      pct(row.refundRate) +
-                      "</td></tr>"
-                    );
-                  })
-                  .join("")
-              : '<tr><td colspan="8" class="empty">没有商品</td></tr>';
+            if (!rows.length) {
+              body.innerHTML = '<tr><td colspan="7" class="empty">没有商品</td></tr>';
+            } else {
+              body.innerHTML = rows
+                .map(function (row) {
+                  return (
+                    "<tr><td>" +
+                    escapeHtml(row.productName) +
+                    '<div class="lead">' +
+                    escapeHtml(row.productId) +
+                    "</div></td><td>" +
+                    escapeHtml(row.shopName || row.shopId) +
+                    "</td><td>" +
+                    escapeHtml(row.orderCount) +
+                    "</td><td>" +
+                    money(row.payAmount) +
+                    "</td><td>" +
+                    money(row.netSalesAmount) +
+                    "</td><td>" +
+                    money(row.profit) +
+                    "</td><td>" +
+                    money(row.promotionCost) +
+                    "</td></tr>"
+                  );
+                })
+                .join("");
+            }
             renderPager(root, data);
           })
           .catch(function (error) {
             if (dead) {
               return;
             }
-            body.innerHTML = '<tr><td colspan="8" class="empty">无法加载</td></tr>';
+            body.innerHTML = '<tr><td colspan="7" class="empty">无法加载</td></tr>';
             err.hidden = false;
             err.textContent = error.message;
           });
@@ -449,11 +475,11 @@
                       .join("、");
                     return (
                       "<tr><td>" +
-                      escapeHtml(row.name || row.id || "—") +
+                      escapeHtml(row.name || row.id) +
                       "</td><td>" +
-                      count((row.shops || []).length) +
+                      escapeHtml((row.shops || []).length) +
                       "</td><td>" +
-                      escapeHtml(shops || "—") +
+                      escapeHtml(shops) +
                       "</td></tr>"
                     );
                   })
@@ -492,10 +518,10 @@
       root.innerHTML =
         '<main class="page">' +
         '<header class="page-head"><p class="kicker">数据中心</p><h1>渠道品类</h1>' +
-        '<p class="lead">来自星脉 ERP 渠道品类查询和走势。没有的字段先空着。</p></header>' +
+        '<p class="lead">来自星脉 ERP 渠道品类。没有的字段先空着。</p></header>' +
+        '<section class="panel">' +
         '<p class="status error" data-err hidden></p>' +
-        '<section class="panel"><h2>品类走势</h2><div data-trend><p class="lead">正在加载…</p></div></section>' +
-        '<section class="panel"><div style="overflow:auto"><table><thead><tr><th>品类</th><th>商品数</th><th>订单</th><th>应收</th><th>净销售</th><th>利润</th><th>退款率</th></tr></thead>' +
+        '<div style="overflow:auto"><table><thead><tr><th>品类</th><th>商品数</th><th>订单</th><th>应收</th><th>净销售</th><th>利润</th><th>退款率</th></tr></thead>' +
         '<tbody data-body><tr><td colspan="7" class="empty">正在加载…</td></tr></tbody></table></div>' +
         '<p class="lead" data-pager></p>' +
         '<p><button type="button" data-prev>上一页</button> <button type="button" data-next>下一页</button></p>' +
@@ -512,18 +538,17 @@
               return;
             }
             state.pages = Math.max(1, Number(data.totalPages || 1));
-            root.querySelector("[data-trend]").innerHTML = trendSvg(data.trend);
             const rows = data.records || [];
             body.innerHTML = rows.length
               ? rows
                   .map(function (row) {
                     return (
                       "<tr><td>" +
-                      escapeHtml(row.categoryName || row.thirdCategoryId || "—") +
+                      escapeHtml(row.categoryName || row.thirdCategoryId) +
                       "</td><td>" +
-                      count(row.productCount) +
+                      escapeHtml(row.productCount) +
                       "</td><td>" +
-                      count(row.orderCount) +
+                      escapeHtml(row.orderCount) +
                       "</td><td>" +
                       money(row.payAmount) +
                       "</td><td>" +
@@ -564,10 +589,11 @@
         '<main class="page">' +
         '<header class="page-head"><p class="kicker">数据中心</p><h1>渠道对比</h1>' +
         '<p class="lead">来自星脉 ERP 渠道业绩对比，按月。没有的字段先空着。</p></header>' +
+        '<section class="panel">' +
         '<p class="status error" data-err hidden></p>' +
-        '<section class="panel"><div style="overflow:auto"><table><thead><tr><th>月份</th><th>应收</th><th>净额</th><th>利润</th><th>退款</th><th>推广</th><th>利润率</th></tr></thead>' +
-        '<tbody data-body><tr><td colspan="7" class="empty">正在加载…</td></tr></tbody></table></div></section>' +
-        "</main>";
+        '<div style="overflow:auto"><table><thead><tr><th>月份</th><th>应收</th><th>净额</th><th>利润</th><th>退款</th><th>推广</th><th>利润率</th></tr></thead>' +
+        '<tbody data-body><tr><td colspan="7" class="empty">正在加载…</td></tr></tbody></table></div>' +
+        "</section></main>";
       const body = root.querySelector("[data-body]");
       const err = root.querySelector("[data-err]");
       let dead = false;
@@ -582,7 +608,7 @@
                 .map(function (row) {
                   return (
                     "<tr><td>" +
-                    escapeHtml(row.yearMonth || "—") +
+                    escapeHtml(row.yearMonth) +
                     "</td><td>" +
                     money(row.payAmount) +
                     "</td><td>" +
