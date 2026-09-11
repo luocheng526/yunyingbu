@@ -7,6 +7,7 @@ import { currentUser, publicProfile } from "./auth.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
 // xm-fast-shell 0.1.131
+// login.html 不走 HTML 内存缓存；login.css 禁止 immutable。必须和 home/pages.js 成套发。
 
 export const SHELL_ASSET_VER = "0.1.131";
 export const TAB_TITLE = "星脉甄选运营中心";
@@ -333,21 +334,24 @@ export function withSharedShell(html) {
 // 首页 pages.js 会调用本函数。只发 middleware、不发匹配的 pages.js（或反过来）会让进程起不来。
 export function readThemedHtml(filePath) {
   const dest = String(filePath || "");
+  const loginFile = /login\.html$/i.test(dest);
   const now = Date.now();
   const hit = htmlFileCache.get(dest);
-  if (hit && now - hit.at < HTML_CACHE_MS) {
+  if (!loginFile && hit && now - hit.at < HTML_CACHE_MS) {
     return hit.html;
   }
   const stat = fs.statSync(dest);
-  if (hit && hit.mtimeMs === stat.mtimeMs && hit.size === stat.size) {
+  if (!loginFile && hit && hit.mtimeMs === stat.mtimeMs && hit.size === stat.size) {
     hit.at = now;
     return hit.html;
   }
   const raw = fs.readFileSync(dest, "utf8");
-  const html = /login\.html$/i.test(dest)
+  const html = loginFile
     ? versionShellAssets(withThemeBoot(applyTabIcon(raw)))
     : withSharedShell(raw);
-  htmlFileCache.set(dest, { mtimeMs: stat.mtimeMs, size: stat.size, html, at: now });
+  if (!loginFile) {
+    htmlFileCache.set(dest, { mtimeMs: stat.mtimeMs, size: stat.size, html, at: now });
+  }
   return html;
 }
 
@@ -421,7 +425,11 @@ function serveShellAsset(req, res) {
   const versioned = Boolean(req.query && req.query.v);
   res.setHeader(
     "Cache-Control",
-    versioned ? "public, max-age=86400, immutable" : "public, max-age=0, must-revalidate"
+    rel === "login.css"
+      ? "private, no-store"
+      : versioned
+        ? "public, max-age=86400, immutable"
+        : "public, max-age=0, must-revalidate"
   );
   const abs = path.join(publicDir, rel);
   if (/\.(?:js|css)$/i.test(rel)) {
