@@ -219,14 +219,33 @@
       .han-nav-group.is-open .han-nav-arrow {
         visibility: visible;
       }
-      .han-nav-sub {
-        display: none;
-        flex-direction: column;
-        gap: 2px;
-        padding: 0 0 4px 22px;
-      }
+      .han-nav-sub,
       .han-nav-group.is-open .han-nav-sub {
+        display: none !important;
+      }
+      .han-tabs {
         display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin: 0 0 14px;
+      }
+      .han-tab {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        padding: 6px 16px;
+        border-radius: 999px;
+        background: #f3f4f6;
+        color: #374151;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .han-tab.is-active {
+        background: #fff;
+        color: #111827;
+        box-shadow: 0 0 0 1px #e5e7eb;
       }
       .xm-sider .han-nav-sub .xm-menu-item {
         min-height: 34px;
@@ -261,10 +280,15 @@
         </aside>
       </div>
       <main class="page">
+        <nav class="han-tabs" aria-label="韩梦凯栏目">
+          <a class="han-tab" href="/han?sub=selection">选品数据</a>
+          <a class="han-tab" href="/han?sub=products">商品数据</a>
+          <a class="han-tab" href="/han?sub=paid">付费数据</a>
+        </nav>
         <p class="kicker">运营部 · 韩梦凯业务线</p>
         <h1>韩梦凯运营中心</h1>
         <p class="lead" id="page-lead">
-          韩梦凯团队工作台。左侧展开「韩梦凯运营中心」可进入选品 / 商品 / 付费子菜单。默认负责人为「韩梦凯」。
+          韩梦凯团队工作台。右侧上方横排切换选品 / 商品 / 付费。默认负责人为「韩梦凯」。
         </p>
         <div id="board-wait" class="stack" hidden>
           <section class="panel">
@@ -352,6 +376,11 @@
             a.setAttribute("aria-current", "page");
             a.classList.add("is-active");
           }
+        });
+        document.querySelectorAll(".han-tabs a").forEach(function (a) {
+          const href = a.getAttribute("href") || "";
+          const key = new URL(href, window.location.origin).searchParams.get("sub");
+          a.classList.toggle("is-active", Boolean(key && key === (subKey || "selection")));
         });
       }
 

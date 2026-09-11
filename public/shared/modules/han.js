@@ -9,9 +9,79 @@
 
   window.XmModules = window.XmModules || {};
 
-  function page(title, lead, body) {
+  const HAN_TABS = [
+    { href: "/han/selection", label: "选品数据" },
+    { href: "/han/goods", label: "商品数据" },
+    { href: "/han/paid", label: "实时付费" },
+    { href: "/han/training", label: "培训系统" },
+  ];
+  const HAN_GOODS_TEAMS = ["陈晓曼组", "高明阳组", "毛永超组", "段坤孝组", "薛双双组"];
+
+  function hanPath() {
+    return String(location.pathname || "").replace(/\/+$/, "") || "/";
+  }
+
+  function tabLink(href, label, on) {
+    return (
+      '<a class="han-tab' +
+      (on ? " is-active" : "") +
+      '" href="' +
+      href +
+      '" data-han-tab="' +
+      href +
+      '">' +
+      escapeHtml(label) +
+      "</a>"
+    );
+  }
+
+  function mainTabsHtml() {
+    const path = hanPath();
+    return (
+      '<nav class="han-tabs" aria-label="韩梦凯栏目">' +
+      HAN_TABS.map(function (tab) {
+        const on = path === tab.href || (tab.href !== "/han/selection" && path.indexOf(tab.href) === 0);
+        return tabLink(tab.href, tab.label, on);
+      }).join("") +
+      "</nav>"
+    );
+  }
+
+  function teamTabsHtml(team) {
+    const current = String(team || "").trim();
+    return (
+      '<nav class="han-tabs han-tabs-sub" aria-label="商品分层小组">' +
+      tabLink("/han/goods", "商品分层", !current) +
+      HAN_GOODS_TEAMS.map(function (name) {
+        return tabLink("/han/goods?team=" + encodeURIComponent(name), name, current === name);
+      }).join("") +
+      "</nav>"
+    );
+  }
+
+  function shopTabsHtml(team, shop, shops) {
+    if (!team || !shops || !shops.length) {
+      return "";
+    }
+    return (
+      '<nav class="han-tabs han-tabs-sub" aria-label="小组店铺">' +
+      shops
+        .map(function (item) {
+          const href =
+            "/han/goods?team=" + encodeURIComponent(team) + "&store=" + encodeURIComponent(item.store);
+          return tabLink(href, item.store, shop === item.store);
+        })
+        .join("") +
+      "</nav>"
+    );
+  }
+
+  function page(title, lead, body, extraTabs) {
+    ensureHanChrome();
     return (
       '<main class="page">' +
+      mainTabsHtml() +
+      (extraTabs || "") +
       '<header class="page-head"><p class="kicker">韩梦凯运营中心</p><h1>' +
       escapeHtml(title) +
       "</h1><p class=\"lead\">" +
@@ -293,27 +363,16 @@
         return "<td>" + escapeHtml(value) + "</td>";
       }
 
-      const teams = ["陈晓曼组", "高明阳组", "毛永超组", "段坤孝组", "薛双双组"];
+      const teams = HAN_GOODS_TEAMS;
       const params = new URLSearchParams(window.location.search);
       const team = (params.get("team") || "").trim();
       const shop = (params.get("store") || "").trim();
       if (!teams.includes(team)) {
         root.innerHTML = page(
           "商品分层",
-          "商品数据展开后是商品分层，再打开是各小组。点小组进入该组工作表。",
-          '<div class="stack"><section class="panel"><h2>商品分层</h2><div class="actions" style="flex-wrap:wrap">' +
-            teams
-              .map(function (name) {
-                return (
-                  '<a class="han-team-card" href="/han/goods?team=' +
-                  encodeURIComponent(name) +
-                  '">' +
-                  escapeHtml(name) +
-                  "</a>"
-                );
-              })
-              .join("") +
-            "</div></section></div>",
+          "上方横排切换栏目和小组。点小组后添加店铺，再进该店分层表。",
+          '<div class="stack"><section class="panel"><h2>商品分层</h2><p class="lead">用上面的小组标签进入各团队店铺。</p></section></div>',
+          teamTabsHtml(""),
         );
         return function unmount() {
           root.innerHTML = "";
@@ -330,12 +389,15 @@
             '<div class="actions"><button type="submit">添加店铺</button></div>' +
             '<p class="msg status" id="shop-msg"></p></form></section>' +
             '<section class="panel"><h2>本小组店铺</h2><div id="shop-list" class="actions" style="flex-wrap:wrap"></div></section></div>',
+          teamTabsHtml(team) + '<div id="han-shop-tabs"></div>',
         );
         const form = root.querySelector("#shop-form");
         const list = root.querySelector("#shop-list");
         const msg = root.querySelector("#shop-msg");
         let dead = false;
         function paintShops(items) {
+          const shopTabs = root.querySelector("#han-shop-tabs");
+          if (shopTabs) shopTabs.innerHTML = shopTabsHtml(team, "", items);
           if (!items.length) {
             list.innerHTML = '<p class="lead">还没有店铺，先在上面添加。</p>';
             return;
@@ -344,6 +406,10 @@
             .map(function (item) {
               return (
                 '<a class="han-team-card" href="/han/goods?team=' +
+                encodeURIComponent(team) +
+                "&store=" +
+                encodeURIComponent(item.store) +
+                '" data-han-tab="/han/goods?team=' +
                 encodeURIComponent(team) +
                 "&store=" +
                 encodeURIComponent(item.store) +
@@ -403,6 +469,7 @@
           '<div class="han-sheet-wrap"><table class="han-sheet" id="han-sheet">' +
           "<thead></thead><tbody></tbody></table></div>" +
           '<p class="msg status han-sheet-msg" id="prod-msg"></p>',
+        teamTabsHtml(team) + '<div id="han-shop-tabs"></div>',
       );
 
       const table = root.querySelector("#han-sheet");
@@ -522,11 +589,16 @@
       }
 
       function load() {
-        return jsonFetch(
-          "/api/han/products?team=" + encodeURIComponent(team) + "&store=" + encodeURIComponent(shop),
-        ).then(function (json) {
+        return Promise.all([
+          jsonFetch(
+            "/api/han/products?team=" + encodeURIComponent(team) + "&store=" + encodeURIComponent(shop),
+          ),
+          jsonFetch("/api/han/shops?team=" + encodeURIComponent(team)),
+        ]).then(function (pair) {
           if (dead) return;
-          items = json.items || [];
+          items = pair[0].items || [];
+          const shopTabs = root.querySelector("#han-shop-tabs");
+          if (shopTabs) shopTabs.innerHTML = shopTabsHtml(team, shop, pair[1].items || []);
           paintBody();
         });
       }
@@ -682,10 +754,6 @@
     },
   };
 
-  const HAN_GOODS_TEAMS = ["陈晓曼组", "高明阳组", "毛永超组", "段坤孝组", "薛双双组"];
-  const HAN_CARET =
-    '<i class="xm-caret" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 10 4 4 4-4"/></svg></i>';
-
   function goHanPage(href) {
     const target = String(href || "/han/goods");
     const here = String(location.pathname || "") + String(location.search || "");
@@ -699,130 +767,47 @@
     location.assign(target);
   }
 
-  function attachHanGoodsTeams() {
-    if (document.getElementById("han-goods-teams")) {
-      return true;
-    }
-    const goods = document.querySelector('.xm-submenu a[href="/han/goods"]');
-    if (!goods) {
-      return false;
-    }
-    if (!document.getElementById("han-goods-teams-css")) {
+  function ensureHanChrome() {
+    if (!document.getElementById("han-top-tabs-css")) {
       const style = document.createElement("style");
-      style.id = "han-goods-teams-css";
+      style.id = "han-top-tabs-css";
       style.textContent =
-        ".han-goods-teams{display:flex;flex-direction:column}" +
-        ".han-goods-teams:not(.is-open) .han-goods-level2{display:none}" +
-        ".han-layer-fold:not(.is-open) .han-goods-teams-sub{display:none}" +
-        ".han-fold-parent{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;background:transparent;cursor:pointer;text-align:left}" +
-        ".han-fold-parent .xm-caret{flex-shrink:0}" +
-        ".han-goods-level2,.han-goods-teams-sub{display:flex;flex-direction:column}" +
-        ".han-goods-level2 .han-fold-parent{padding-left:1.85rem !important;font-size:0.9rem}" +
-        ".han-goods-teams-sub{gap:0}" +
-        ".han-goods-teams-sub a,.han-goods-teams-sub .han-fold-parent{padding-left:2.6rem !important;font-size:0.88rem}" +
-        ".han-team-fold:not(.is-open) .han-team-shops{display:none}" +
-        ".han-team-shops{display:flex;flex-direction:column}" +
-        ".han-team-shops a{padding-left:3.2rem !important;font-size:0.84rem}" +
+        ".xm-menu-group[data-xm-group='/han']>.xm-submenu,.han-goods-teams{display:none!important}" +
+        ".han-tabs{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 14px}" +
+        ".han-tab{display:inline-flex;align-items:center;min-height:34px;padding:6px 16px;border-radius:999px;background:#f3f4f6;color:#374151;text-decoration:none;font-size:14px;font-weight:600}" +
+        ".han-tab:hover{background:#e5e7eb}" +
+        ".han-tab.is-active{background:#fff;color:#111827;box-shadow:0 0 0 1px #e5e7eb}" +
+        ".han-tabs-sub .han-tab{min-height:30px;font-size:13px;font-weight:500}" +
         ".han-team-card{display:inline-block;margin:0 0.5rem 0.5rem 0;padding:0.55rem 0.9rem;border-radius:8px;background:#ccfbf1;color:#134e4a;text-decoration:none;font-weight:600}";
       document.head.appendChild(style);
     }
-    const onGoods = location.pathname.indexOf("/han/goods") === 0;
-    const current = new URLSearchParams(window.location.search).get("team") || "";
-    const currentShop = new URLSearchParams(window.location.search).get("store") || "";
-    const wrap = document.createElement("div");
-    wrap.id = "han-goods-teams";
-    wrap.className = "han-goods-teams" + (onGoods ? " is-open" : "");
-    const level2 = document.createElement("div");
-    level2.className = "han-goods-level2";
-    const layerFold = document.createElement("div");
-    layerFold.className = "han-layer-fold" + (onGoods ? " is-open" : "");
-    const layerBtn = document.createElement("button");
-    layerBtn.type = "button";
-    layerBtn.className = "xm-menu-item xm-menu-child han-fold-parent";
-    layerBtn.setAttribute("aria-expanded", onGoods ? "true" : "false");
-    layerBtn.innerHTML = "<span>商品分层</span>" + HAN_CARET;
-    const sub = document.createElement("div");
-    sub.className = "han-goods-teams-sub";
-    HAN_GOODS_TEAMS.forEach(function (name) {
-      const teamFold = document.createElement("div");
-      teamFold.className = "han-team-fold" + (current === name ? " is-open" : "");
-      teamFold.setAttribute("data-team", name);
-      const teamBtn = document.createElement("button");
-      teamBtn.type = "button";
-      teamBtn.className = "xm-menu-item xm-menu-child han-fold-parent";
-      teamBtn.innerHTML = "<span>" + name + "</span>" + HAN_CARET;
-      if (current === name && !currentShop) {
-        teamBtn.classList.add("is-active");
-      }
-      teamBtn.addEventListener("click", function () {
-        goHanPage("/han/goods?team=" + encodeURIComponent(name));
+    const leftover = document.getElementById("han-goods-teams");
+    if (leftover && leftover.parentNode) leftover.parentNode.removeChild(leftover);
+    if (!window.__hanTabBound) {
+      window.__hanTabBound = 1;
+      document.addEventListener("click", function (event) {
+        const link = event.target.closest ? event.target.closest("a[data-han-tab]") : null;
+        if (!link) return;
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button) return;
+        event.preventDefault();
+        goHanPage(link.getAttribute("href") || "/han/selection");
       });
-      const shops = document.createElement("div");
-      shops.className = "han-team-shops";
-      teamFold.appendChild(teamBtn);
-      teamFold.appendChild(shops);
-      sub.appendChild(teamFold);
-    });
-    jsonFetch("/api/han/shops").then(function (json) {
-      const items = json.items || [];
-      HAN_GOODS_TEAMS.forEach(function (name) {
-        const box = wrap.querySelector('.han-team-fold[data-team="' + name + '"] .han-team-shops');
-        if (!box) return;
-        const mine = items.filter(function (row) {
-          return row.team === name;
-        });
-        box.innerHTML = "";
-        mine.forEach(function (row) {
-          const a = document.createElement("a");
-          a.className = "xm-menu-item xm-menu-child";
-          a.href = "/han/goods?team=" + encodeURIComponent(name) + "&store=" + encodeURIComponent(row.store);
-          a.textContent = row.store;
-          if (current === name && currentShop === row.store) {
-            a.classList.add("is-active");
-            a.setAttribute("aria-current", "page");
-          }
-          a.addEventListener("click", function (event) {
-            event.preventDefault();
-            goHanPage(a.getAttribute("href") || "/han/goods");
-          });
-          box.appendChild(a);
-        });
-      });
-    });
-    layerFold.appendChild(layerBtn);
-    layerFold.appendChild(sub);
-    level2.appendChild(layerFold);
-    wrap.appendChild(level2);
-    goods.parentNode.insertBefore(wrap, goods.nextSibling);
-    goods.addEventListener("click", function () {
-      wrap.classList.add("is-open");
-    });
-    layerBtn.addEventListener("click", function () {
-      wrap.classList.add("is-open");
-      const open = !layerFold.classList.contains("is-open");
-      layerFold.classList.toggle("is-open", open);
-      layerBtn.setAttribute("aria-expanded", open ? "true" : "false");
-      goHanPage("/han/goods");
-    });
-    return true;
+    }
   }
 
-  function watchHanGoodsTeams() {
-    if (attachHanGoodsTeams()) {
-      return;
-    }
+  function watchHanChrome() {
+    ensureHanChrome();
     let n = 0;
     const timer = setInterval(function () {
       n += 1;
-      if (attachHanGoodsTeams() || n > 40) {
-        clearInterval(timer);
-      }
+      ensureHanChrome();
+      if (n > 40) clearInterval(timer);
     }, 200);
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", watchHanGoodsTeams);
+    document.addEventListener("DOMContentLoaded", watchHanChrome);
   } else {
-    watchHanGoodsTeams();
+    watchHanChrome();
   }
 })();
