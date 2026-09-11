@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.163-rights-tree";
+    const href = "/people.css?v=0.1.164-pin-filter";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -41,7 +41,8 @@
       "body:has(.people-page) .xm-content,#xm-content:has(.people-page){flex:0 0 auto;height:auto;overflow:visible!important;}" +
       ".people-page{overflow:visible;padding-bottom:24px;}" +
       ".people-page .org-table-wrap{overflow:auto!important;max-height:min(70vh,calc(100vh - 240px));}" +
-      ".people-page th{position:sticky;top:0;z-index:3;background:#fafafa;}";
+      ".people-page table{border-collapse:separate;border-spacing:0;}" +
+      ".people-page th{position:sticky;top:0;z-index:4;background:#fafafa;}";
   }
 
   function showShellTab() {
@@ -276,7 +277,13 @@
       });
       const filterPop = root.querySelector("#org-filter-pop");
       const peopleFilterPop = root.querySelector("#people-filter-pop");
+      [filterPop, peopleFilterPop].forEach(function (pop) {
+        if (pop) {
+          document.body.appendChild(pop);
+        }
+      });
       let lastPeople = [];
+      let openFilterBtn = null;
       let openFilterKey = "";
       let boardMeta = { actor: "罗成", scope: "all", canCreate: true };
       const CELL_FIELDS = [
@@ -553,12 +560,31 @@
 
       function closeFilterPop() {
         openFilterKey = "";
+        openFilterBtn = null;
         [filterPop, peopleFilterPop].forEach(function (pop) {
           if (pop) {
             pop.hidden = true;
             pop.innerHTML = "";
           }
         });
+      }
+
+      function placeFilterPop() {
+        if (!openFilterKey || !openFilterBtn) {
+          return;
+        }
+        const pop = filterPopFor(openFilterKey);
+        if (!pop || pop.hidden) {
+          return;
+        }
+        const rect = openFilterBtn.getBoundingClientRect();
+        const width = pop.offsetWidth || 188;
+        let left = rect.left;
+        if (left + width > window.innerWidth - 8) {
+          left = Math.max(8, window.innerWidth - width - 8);
+        }
+        pop.style.left = Math.max(8, left) + "px";
+        pop.style.top = rect.bottom + 4 + "px";
       }
 
       function toggleFilterPop(key, btn) {
@@ -615,9 +641,8 @@
         if (allBox && selected > 0 && selected < values.length) {
           allBox.indeterminate = true;
         }
-        const rect = btn.getBoundingClientRect();
-        pop.style.left = Math.max(8, rect.left) + "px";
-        pop.style.top = rect.bottom + 4 + "px";
+        openFilterBtn = btn;
+        placeFilterPop();
       }
 
       function selectedCount() {
@@ -1128,6 +1153,21 @@
         }
       }
       document.addEventListener("click", onDocFilterClose);
+      function onFilterPin() {
+        if (dead) {
+          return;
+        }
+        placeFilterPop();
+      }
+      window.addEventListener("scroll", onFilterPin, true);
+      window.addEventListener("resize", onFilterPin);
+      root.querySelectorAll(".org-table-wrap").forEach(function (wrap) {
+        wrap.addEventListener("scroll", onFilterPin);
+      });
+      const mainPane = document.querySelector(".xm-main");
+      if (mainPane) {
+        mainPane.addEventListener("scroll", onFilterPin);
+      }
       function onFilterChange(event) {
         const key = openFilterKey;
         if (!key) {
@@ -1744,7 +1784,17 @@
         dead = true;
         document.removeEventListener("wheel", onPeopleWheel, true);
         document.removeEventListener("click", onDocFilterClose);
+        window.removeEventListener("scroll", onFilterPin, true);
+        window.removeEventListener("resize", onFilterPin);
+        if (mainPane) {
+          mainPane.removeEventListener("scroll", onFilterPin);
+        }
         closeFilterPop();
+        [filterPop, peopleFilterPop].forEach(function (pop) {
+          if (pop && pop.parentNode) {
+            pop.parentNode.removeChild(pop);
+          }
+        });
         showShellTab();
         root.innerHTML = "";
       };

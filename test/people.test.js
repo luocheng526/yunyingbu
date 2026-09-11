@@ -123,6 +123,9 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /id="rights-tree"/);
     assert.match(jsText, /总监/);
     assert.match(jsText, /renderRightsTree/);
+    assert.match(jsText, /placeFilterPop/);
+    assert.match(jsText, /onFilterPin/);
+    assert.match(jsText, /border-collapse:separate/);
     assert.doesNotMatch(jsText, /demo-flag/);
     assert.doesNotMatch(jsText, /演示<\/span>/);
     assert.doesNotMatch(jsText, /龙虎榜/);

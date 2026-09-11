@@ -184,7 +184,8 @@ body:has(.people-page) .xm-tabs {
 
 .people-page table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 13px;
 }
 
@@ -200,10 +201,11 @@ body:has(.people-page) .xm-tabs {
 .people-page th {
   position: sticky;
   top: 0;
-  z-index: 3;
+  z-index: 4;
   background: #fafafa;
   color: var(--xm-muted, #8c8c8c);
   font-weight: 600;
+  box-shadow: inset 0 -1px 0 var(--xm-line, #f0f0f0);
 }
 
 .people-page th.org-check,
