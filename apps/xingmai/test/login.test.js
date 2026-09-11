@@ -51,25 +51,26 @@ test("login page is public", async () => {
   assert.doesNotMatch(html, /rel="icon"[^>]+href="\/login-logo\.png"/);
   assert.doesNotMatch(html, /href="data:image\/png;base64,/);
   assert.match(html, /ChangeMe123!/);
-  assert.match(html, /login\.css\?v=0\.1\.168/);
+  assert.match(html, /login\.css\?v=0\.1\.169/);
   assert.match(html, /login-foot-pair/);
   assert.match(html, /DATA · OPERATION · ORGANIZATIONAL · TALENT · GROWTH/);
   assert.match(html, /<small><b>TOGETHER<\/b><b>FOR A BRIGHTER<\/b><b>FUTURE<\/b><\/small>/);
-  assert.match(loginCss, /LoginPage 0\.1\.168/);
-  assert.match(loginCss, /aspect-ratio:\s*1101\s*\/\s*841/);
+  assert.match(loginCss, /LoginPage 0\.1\.169/);
+  assert.match(loginCss, /height:\s*100vh/);
   assert.match(loginCss, /--login-scene-w:\s*1101/);
-  assert.match(loginCss, /object-position:\s*left center/);
-  assert.match(loginCss, /left:\s*61\.6712%/);
+  assert.match(loginCss, /--login-scene-h:\s*734/);
+  assert.match(loginCss, /object-position:\s*right center/);
+  assert.doesNotMatch(loginCss, /aspect-ratio:\s*1101\s*\/\s*841/);
   assert.match(loginCss, /\.hero-brand\s*\{[^}]*margin-left:\s*clamp\(-20px/s);
   assert.match(loginCss, /#ffffff 28%/);
   assert.match(loginCss, /\.login-foot-pair small\s*\{[^}]*white-space:\s*nowrap/s);
   assert.match(loginCss, /transform:\s*scale\(0\.93\)/);
   assert.match(loginCss, /bottom:\s*clamp\(52px,\s*6\.2vh,\s*84px\)/);
-  assert.match(html, /hero-dog-nohands/);
-  assert.match(loginCss, /\.hero-dog-nohands\s*\{/);
+  assert.doesNotMatch(html, /hero-dog-nohands/);
+  assert.doesNotMatch(loginCss, /\.hero-dog-nohands\s*\{/);
   assert.match(html, /data:image\/webp;base64,/);
-  assert.match(html, /width="1223"/);
-  assert.match(html, /height="841"/);
+  assert.match(html, /width="1101"/);
+  assert.match(html, /height="734"/);
   assert.doesNotMatch(html, /\/shared\/nav\.js/);
   assert.doesNotMatch(html, /\/shared\/layout\.css/);
   assert.match(html, /decoding="async"/);
@@ -97,7 +98,7 @@ test("logged-in visit to /login still shows the login page", async () => {
 
 test("login.css is never cached as immutable", async () => {
   const plain = await fetch(`${base}/login.css`);
-  const versioned = await fetch(`${base}/login.css?v=0.1.168`);
+  const versioned = await fetch(`${base}/login.css?v=0.1.169`);
   assert.equal(plain.status, 200);
   assert.equal(versioned.status, 200);
   assert.match(String(plain.headers.get("cache-control") || ""), /no-store/);
