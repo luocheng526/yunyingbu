@@ -148,17 +148,7 @@
         '<div class="org-table-wrap"><table><thead><tr>' +
         '<th class="org-check"><input type="checkbox" id="people-check-all" title="全选" /></th>' +
         '<th>姓名</th><th>部门</th><th>上级</th><th>岗位</th><th>所属中心</th><th>状态</th><th>账号</th><th>登录密码</th></tr></thead>' +
-        '<tbody id="people-tbody"></tbody></table></div></section>' +
-        '<section class="panel"><h2>店铺 / 店群</h2>' +
-        '<form class="people-mini-form" id="shop-form">' +
-        '<label>名称<input name="name" required maxlength="64" /></label>' +
-        '<label>类型<select name="kind"><option>店铺</option><option>店群</option></select></label>' +
-        '<label>所属包<input name="pack" maxlength="32" placeholder="沈子晗包" /></label>' +
-        '<label>主管包<input name="bundle" maxlength="32" placeholder="杨润泽包，可空" /></label>' +
-        '<button type="submit">新增店铺</button></form>' +
-        '<p class="status error" id="shop-error" hidden></p>' +
-        '<div class="org-table-wrap"><table><thead><tr><th>名称</th><th>类型</th><th>所属包</th><th>主管包</th></tr></thead>' +
-        '<tbody id="shop-tbody"></tbody></table></div></section></div>' +
+        '<tbody id="people-tbody"></tbody></table></div></section></div>' +
         '<div class="org-pane" data-pane="rights" hidden>' +
         '<section class="panel"><h2>管辖</h2>' +
         '<p class="lead">店权认管辖。一人多店多行。店铺主数据的「店铺所属人员」与此对齐。</p>' +
@@ -211,17 +201,14 @@
       const form = root.querySelector("#org-form");
       const formError = root.querySelector("#org-form-error");
       const peopleTbody = root.querySelector("#people-tbody");
-      const shopTbody = root.querySelector("#shop-tbody");
       const peopleForm = root.querySelector("#people-form");
       if (peopleForm && peopleForm.name && peopleForm.username) {
         peopleForm.name.addEventListener("input", function () {
           peopleForm.username.value = peopleForm.name.value.trim();
         });
       }
-      const shopForm = root.querySelector("#shop-form");
       const grantForm = root.querySelector("#grant-form");
       const peopleError = root.querySelector("#people-error");
-      const shopError = root.querySelector("#shop-error");
       const grantError = root.querySelector("#grant-error");
       const rightsTbody = root.querySelector("#rights-tbody");
       const logsTbody = root.querySelector("#logs-tbody");
@@ -754,17 +741,11 @@
       }
 
       function loadMembers() {
-        return Promise.all([
-          fetch("/api/people", { credentials: "same-origin" }).then(function (res) { return res.json(); }),
-          fetch("/api/people/shops", { credentials: "same-origin" }).then(function (res) { return res.json(); })
-        ]).then(function (results) {
+        return fetch("/api/people", { credentials: "same-origin" }).then(function (res) { return res.json(); }).then(function (peopleData) {
           if (dead) {
             return;
           }
-          const peopleData = results[0];
-          const shopData = results[1];
           roster.people = peopleData.people || [];
-          roster.shops = shopData.shops || [];
           peopleTbody.replaceChildren();
           roster.people.forEach(function (person) {
             const tr = document.createElement("tr");
@@ -797,21 +778,6 @@
               escapeHtml(person.password || "ChangeMe123!") +
               "</td>";
             peopleTbody.append(tr);
-          });
-          shopTbody.replaceChildren();
-          roster.shops.forEach(function (shop) {
-            const tr = document.createElement("tr");
-            tr.innerHTML =
-              "<td>" +
-              escapeHtml(shop.name) +
-              "</td><td>" +
-              escapeHtml(shop.kind) +
-              "</td><td>" +
-              escapeHtml(shop.pack || "—") +
-              "</td><td>" +
-              escapeHtml(shop.bundle || "—") +
-              "</td>";
-            shopTbody.append(tr);
           });
           fillSelect(
             peopleForm.managerId,
@@ -1140,7 +1106,6 @@
       }
 
       postForm(peopleForm, "/api/people", peopleError, loadMembers);
-      postForm(shopForm, "/api/people/shops", shopError, loadMembers);
       postForm(grantForm, "/api/people/grants", grantError, loadRights);
 
       function savePersonField(id, field, value) {

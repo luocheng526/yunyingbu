@@ -98,6 +98,9 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /\/api\/people\/passwords/);
     assert.doesNotMatch(jsText, /能看见的店/);
     assert.match(jsText, /<th>状态<\/th><th>账号<\/th><th>登录密码<\/th>/);
+    assert.doesNotMatch(jsText, /店铺 \/ 店群/);
+    assert.doesNotMatch(jsText, /id="shop-form"/);
+    assert.doesNotMatch(jsText, /id="shop-tbody"/);
     assert.doesNotMatch(jsText, /demo-flag/);
     assert.doesNotMatch(jsText, /演示<\/span>/);
     assert.doesNotMatch(jsText, /龙虎榜/);
