@@ -128,7 +128,9 @@ export function summarizeOrg(actor) {
     idle: stores.filter((row) => row.statusKey === "idle").length,
     closed: stores.filter((row) => row.statusKey === "closed").length,
     missingMerchant: stores.filter((row) => !String(row.merchantId || "").trim()).length,
-    missingLogin: stores.filter((row) => !String(row.login || "").trim()).length
+    missingLogin: stores.filter((row) => !String(row.login || "").trim()).length,
+    missingPassword: stores.filter((row) => !String(row.password || "").trim()).length,
+    missingOwner: stores.filter((row) => !String(row.owner || "").trim()).length
   };
 }
 

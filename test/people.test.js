@@ -68,6 +68,10 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /下载模板/);
     assert.match(jsText, /id="org-import"/);
     assert.match(jsText, /组织中心-店铺主数据模板/);
+    assert.match(jsText, /org-check-all/);
+    assert.match(jsText, /org-row-check/);
+    assert.match(jsText, /缺密码/);
+    assert.match(jsText, /缺所属人员/);
     assert.match(jsText, /登录密码/);
     assert.match(jsText, /ChangeMe123!/);
     assert.match(jsText, /与姓名相同/);
@@ -127,6 +131,12 @@ test("GET /api/people/charter is read-only source rule", async () => {
 
 test("org store board lists demo shops and supports add", async () => {
   await withServer(async (base) => {
+    const summary = await fetch(`${base}/api/people/org/summary`);
+    const summaryJson = await summary.json();
+    assert.equal(summary.status, 200);
+    assert.equal(typeof summaryJson.summary.missingPassword, "number");
+    assert.equal(typeof summaryJson.summary.missingOwner, "number");
+
     const listed = await fetch(`${base}/api/people/org/stores`);
     const listedJson = await listed.json();
     assert.equal(listed.status, 200);

@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.152-noscroll";
+    const href = "/people.css?v=0.1.153-check";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -96,6 +96,7 @@
         "</div>" +
         '<p class="status error" id="org-error" hidden></p>' +
         '<div class="org-table-wrap"><table><thead><tr>' +
+        '<th class="org-check"><input type="checkbox" id="org-check-all" title="全选本筛" /></th>' +
         "<th>总负责人</th><th>小组负责人</th><th>店铺所属人员</th><th>店铺名称</th><th>商家id</th>" +
         "<th>店铺情况备注</th><th>更新时间</th><th>退店时间</th><th>登录主账号</th><th>密码</th><th>操作</th>" +
         '</tr></thead><tbody id="org-tbody"></tbody></table></div></div>' +
@@ -199,6 +200,7 @@
       let dead = false;
       let editingId = null;
       let lastStores = [];
+      let selectedIds = {};
       let boardMeta = { actor: "罗成", scope: "all", canCreate: true };
       const CELL_FIELDS = [
         { key: "chief", type: "text" },
@@ -336,7 +338,9 @@
           ["闲置", summary.idle],
           ["退店", summary.closed],
           ["缺商家ID", summary.missingMerchant],
-          ["缺主账号", summary.missingLogin]
+          ["缺主账号", summary.missingLogin],
+          ["缺密码", summary.missingPassword],
+          ["缺所属人员", summary.missingOwner]
         ];
         kpis.innerHTML = items
           .map(function (item) {
@@ -365,18 +369,45 @@
         return escapeHtml(raw || (field.key === "closedOn" || field.key === "updatedOn" ? "—" : "点击填写"));
       }
 
+      function selectedCount() {
+        return lastStores.filter(function (row) {
+          return selectedIds[String(row.id)];
+        }).length;
+      }
+
+      function syncCheckAll() {
+        const all = root.querySelector("#org-check-all");
+        if (!all) {
+          return;
+        }
+        const n = lastStores.length;
+        const picked = selectedCount();
+        all.checked = n > 0 && picked === n;
+        all.indeterminate = picked > 0 && picked < n;
+      }
+
       function renderStores(stores) {
         lastStores = stores;
         tbody.replaceChildren();
-        countEl.textContent = "筛选 " + stores.length + " 条";
+        countEl.textContent = "筛选 " + stores.length + " 条 · 已选 " + selectedCount() + " 条";
         root.querySelector("#org-add").hidden = !boardMeta.canCreate;
         if (!stores.length) {
-          tbody.innerHTML = '<tr><td colspan="11" class="org-empty">暂无店铺</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="12" class="org-empty">暂无店铺</td></tr>';
+          syncCheckAll();
           return;
         }
         stores.forEach(function (row) {
           const tr = document.createElement("tr");
           tr.setAttribute("data-id", String(row.id));
+          const checkTd = document.createElement("td");
+          checkTd.className = "org-check";
+          const box = document.createElement("input");
+          box.type = "checkbox";
+          box.className = "org-row-check";
+          box.setAttribute("data-check", String(row.id));
+          box.checked = Boolean(selectedIds[String(row.id)]);
+          checkTd.append(box);
+          tr.append(checkTd);
           CELL_FIELDS.forEach(function (field) {
             const td = document.createElement("td");
             td.className = "org-cell" + (row.canEdit ? " can-edit" : "");
@@ -400,6 +431,7 @@
           tr.append(actions);
           tbody.append(tr);
         });
+        syncCheckAll();
       }
 
       function openForm(row) {
@@ -765,9 +797,41 @@
         }
       });
       tbody.addEventListener("dblclick", function (event) {
+        if (event.target.closest(".org-check")) {
+          return;
+        }
         startCellEdit(event.target.closest("td.org-cell"));
       });
+      function paintCount() {
+        countEl.textContent = "筛选 " + lastStores.length + " 条 · 已选 " + selectedCount() + " 条";
+        syncCheckAll();
+      }
+      root.querySelector("#org-check-all").addEventListener("change", function (event) {
+        const on = event.target.checked;
+        lastStores.forEach(function (row) {
+          if (on) {
+            selectedIds[String(row.id)] = true;
+          } else {
+            delete selectedIds[String(row.id)];
+          }
+        });
+        tbody.querySelectorAll(".org-row-check").forEach(function (box) {
+          box.checked = on;
+        });
+        paintCount();
+      });
       tbody.addEventListener("click", function (event) {
+        const box = event.target.closest(".org-row-check");
+        if (box) {
+          const id = box.getAttribute("data-check");
+          if (box.checked) {
+            selectedIds[id] = true;
+          } else {
+            delete selectedIds[id];
+          }
+          paintCount();
+          return;
+        }
         const editId = event.target.getAttribute("data-edit");
         const delId = event.target.getAttribute("data-del");
         if (editId) {

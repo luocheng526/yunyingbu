@@ -132,7 +132,7 @@ body:has(.people-page) .xm-tabs {
 
 .org-kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: 10px;
   margin-bottom: 12px;
 }
@@ -227,6 +227,21 @@ body:has(.people-page) .xm-tabs {
   background: #fafafa;
   color: var(--xm-muted, #8c8c8c);
   font-weight: 600;
+}
+
+.people-page th.org-check,
+.people-page td.org-check {
+  width: 36px;
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.people-page .org-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
 }
 
 .tag {
