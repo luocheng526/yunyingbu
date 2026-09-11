@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.155-pagescroll";
+    const href = "/people.css?v=0.1.156-colfilter";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -99,9 +99,15 @@
         '<p class="status error" id="org-error" hidden></p>' +
         '<div class="org-table-wrap"><table><thead><tr>' +
         '<th class="org-check"><input type="checkbox" id="org-check-all" title="全选本筛" /></th>' +
-        "<th>总负责人</th><th>小组负责人</th><th>店铺所属人员</th><th>店铺名称</th><th>商家id</th>" +
-        "<th>店铺情况备注</th><th>更新时间</th><th>退店时间</th><th>登录主账号</th><th>密码</th><th>操作</th>" +
-        '</tr></thead><tbody id="org-tbody"></tbody></table></div></div>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="chief">总负责人<span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="lead">小组负责人<span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="owner">店铺所属人员<span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="storeName">店铺名称<span class="org-filter-caret">▾</span></button></th>' +
+        "<th>商家id</th>" +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="remark">店铺情况备注<span class="org-filter-caret">▾</span></button></th>' +
+        "<th>更新时间</th><th>退店时间</th><th>登录主账号</th><th>密码</th><th>操作</th>" +
+        '</tr></thead><tbody id="org-tbody"></tbody></table></div>' +
+        '<div class="org-filter-pop" id="org-filter-pop" hidden></div></div>' +
         '<div class="org-pane" data-pane="members" hidden>' +
         '<section class="panel"><h2>身份名册</h2>' +
         '<form class="people-form" id="people-form">' +
@@ -202,7 +208,15 @@
       let dead = false;
       let editingId = null;
       let lastStores = [];
+      let rawStores = [];
       let selectedIds = {};
+      const COLUMN_FILTERS = ["chief", "lead", "owner", "storeName", "remark"];
+      const columnPicked = {};
+      COLUMN_FILTERS.forEach(function (key) {
+        columnPicked[key] = null;
+      });
+      const filterPop = root.querySelector("#org-filter-pop");
+      let openFilterKey = "";
       let boardMeta = { actor: "罗成", scope: "all", canCreate: true };
       const CELL_FIELDS = [
         { key: "chief", type: "text" },
@@ -372,6 +386,119 @@
         return escapeHtml(raw || (field.key === "closedOn" || field.key === "updatedOn" ? "—" : "点击填写"));
       }
 
+      function cellFilterValue(row, key) {
+        return String(row[key] || "").trim() || "（空）";
+      }
+
+      function uniqueColumnValues(key) {
+        const seen = {};
+        const list = [];
+        rawStores.forEach(function (row) {
+          const value = cellFilterValue(row, key);
+          if (!seen[value]) {
+            seen[value] = true;
+            list.push(value);
+          }
+        });
+        list.sort(function (a, b) {
+          return a.localeCompare(b, "zh");
+        });
+        return list;
+      }
+
+      function isColumnFiltered(key) {
+        const picked = columnPicked[key];
+        const all = uniqueColumnValues(key);
+        if (!picked) {
+          return false;
+        }
+        return all.some(function (value) {
+          return !picked[value];
+        });
+      }
+
+      function applyColumnFilters(stores) {
+        return stores.filter(function (row) {
+          return COLUMN_FILTERS.every(function (key) {
+            const picked = columnPicked[key];
+            if (!picked) {
+              return true;
+            }
+            return Boolean(picked[cellFilterValue(row, key)]);
+          });
+        });
+      }
+
+      function paintFilterCarets() {
+        root.querySelectorAll(".org-filter-btn").forEach(function (btn) {
+          const key = btn.getAttribute("data-filter-key");
+          btn.classList.toggle("is-on", isColumnFiltered(key));
+        });
+      }
+
+      function closeFilterPop() {
+        openFilterKey = "";
+        if (filterPop) {
+          filterPop.hidden = true;
+          filterPop.innerHTML = "";
+        }
+      }
+
+      function toggleFilterPop(key, btn) {
+        if (openFilterKey === key) {
+          closeFilterPop();
+          return;
+        }
+        fillFilterPop(key, btn);
+      }
+
+      function fillFilterPop(key, btn) {
+        if (!filterPop) {
+          return;
+        }
+        openFilterKey = key;
+        const values = uniqueColumnValues(key);
+        if (!columnPicked[key]) {
+          columnPicked[key] = {};
+          values.forEach(function (value) {
+            columnPicked[key][value] = true;
+          });
+        }
+        const picked = columnPicked[key];
+        const selected = values.filter(function (value) {
+          return picked[value];
+        }).length;
+        filterPop.hidden = false;
+        filterPop.innerHTML =
+          '<label class="org-filter-item org-filter-all"><input type="checkbox" id="org-filter-all"' +
+          (selected === values.length && values.length ? " checked" : "") +
+          (selected > 0 && selected < values.length ? " data-mid=1" : "") +
+          " />全选</label><div class=\"org-filter-list\">" +
+          (values.length
+            ? values
+                .map(function (value) {
+                  return (
+                    '<label class="org-filter-item"><input type="checkbox" class="org-filter-value" data-value="' +
+                    escapeHtml(value) +
+                    '"' +
+                    (picked[value] ? " checked" : "") +
+                    " />" +
+                    escapeHtml(value) +
+                    "</label>"
+                  );
+                })
+                .join("")
+            : '<p class="org-empty">没有可筛选项</p>') +
+          "</div>";
+        const allBox = filterPop.querySelector("#org-filter-all");
+        if (allBox && selected > 0 && selected < values.length) {
+          allBox.indeterminate = true;
+        }
+        const rect = btn.getBoundingClientRect();
+        filterPop.style.left = Math.max(8, rect.left) + "px";
+        filterPop.style.top = rect.bottom + 4 + "px";
+      }
+
       function selectedCount() {
         return lastStores.filter(function (row) {
           return selectedIds[String(row.id)];
@@ -493,7 +620,9 @@
           }
           fillTeams(storeData.teams || summaryData.teams);
           renderKpis(summaryData.summary);
-          renderStores(storeData.stores || []);
+          rawStores = storeData.stores || [];
+          renderStores(applyColumnFilters(rawStores));
+          paintFilterCarets();
         });
       }
 
@@ -775,6 +904,55 @@
         }
       });
 
+      root.querySelector("#org-tabs").parentElement.addEventListener("click", function (event) {
+        const btn = event.target.closest(".org-filter-btn");
+        if (btn && root.contains(btn)) {
+          event.preventDefault();
+          toggleFilterPop(btn.getAttribute("data-filter-key"), btn);
+          return;
+        }
+        if (!event.target.closest("#org-filter-pop")) {
+          closeFilterPop();
+        }
+      });
+      function onDocFilterClose(event) {
+        if (dead) {
+          document.removeEventListener("click", onDocFilterClose);
+          return;
+        }
+        if (!event.target.closest("#org-filter-pop") && !event.target.closest(".org-filter-btn")) {
+          closeFilterPop();
+        }
+      }
+      document.addEventListener("click", onDocFilterClose);
+      if (filterPop) {
+        filterPop.addEventListener("change", function (event) {
+          const key = openFilterKey;
+          if (!key) {
+            return;
+          }
+          const values = uniqueColumnValues(key);
+          if (!columnPicked[key]) {
+            columnPicked[key] = {};
+          }
+          if (event.target.id === "org-filter-all") {
+            const on = event.target.checked;
+            values.forEach(function (value) {
+              columnPicked[key][value] = on;
+            });
+          } else if (event.target.classList.contains("org-filter-value")) {
+            columnPicked[key][event.target.getAttribute("data-value")] = event.target.checked;
+          } else {
+            return;
+          }
+          renderStores(applyColumnFilters(rawStores));
+          paintFilterCarets();
+          const btn = root.querySelector('.org-filter-btn[data-filter-key="' + key + '"]');
+          if (btn) {
+            fillFilterPop(key, btn);
+          }
+        });
+      }
       root.querySelector("#org-search").addEventListener("click", function () {
         loadBoard().catch(function (err) {
           showError(errorEl, err.message);
@@ -1042,6 +1220,8 @@
 
       return function unmount() {
         dead = true;
+        document.removeEventListener("click", onDocFilterClose);
+        closeFilterPop();
         showShellTab();
         root.innerHTML = "";
       };

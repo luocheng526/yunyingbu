@@ -219,6 +219,63 @@ body:has(.people-page) .xm-tabs {
   cursor: pointer;
 }
 
+.org-th-filter {
+  position: relative;
+}
+
+.org-filter-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.org-filter-btn.is-on {
+  color: #1677ff;
+}
+
+.org-filter-caret {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.org-filter-pop {
+  position: fixed;
+  z-index: 30;
+  min-width: 188px;
+  max-width: 280px;
+  max-height: 280px;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid var(--xm-line, #d9d9d9);
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  padding: 8px 10px;
+}
+
+.org-filter-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--xm-ink, #1f1f1f);
+  padding: 3px 0;
+  cursor: pointer;
+}
+
+.org-filter-all {
+  border-bottom: 1px solid var(--xm-line, #f0f0f0);
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  font-weight: 600;
+}
+
 .tag {
   display: inline-block;
   padding: 1px 8px;
