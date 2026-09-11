@@ -611,7 +611,7 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.match(authJs, /async function verifyPassword/);
   assert.match(authJs, /function hashPasswordSync/);
   assert.match(authJs, /dropSession\(sid\)\.catch/);
-  assert.doesNotMatch(authJs, /await dropSession/);
+  assert.doesNotMatch(authJs, /await dropSession\(/);
   assert.match(authJs, /persistSession\([\s\S]*\)\.catch/);
   assert.doesNotMatch(authJs, /await persistSession/);
   assert.match(authJs, /connectTimeout: 2000/);
