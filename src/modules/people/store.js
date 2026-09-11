@@ -1,3 +1,7 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 export const CENTERS = [
   "沈子晗运营中心",
   "韩梦凯运营中心",
@@ -95,6 +99,53 @@ let nextGrantId = 19;
 let people = PEOPLE_SEED.map(clone);
 let shops = SHOP_SEED.map(clone);
 let grants = GRANT_SEED.map(clone);
+const loginFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "data", "people-logins.json");
+let loginOverlay = loadLoginOverlay();
+applyLoginOverlay();
+
+function loadLoginOverlay() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(loginFile, "utf8"));
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch {
+    /* keep empty */
+  }
+  return {};
+}
+
+function saveLoginOverlay() {
+  try {
+    fs.mkdirSync(path.dirname(loginFile), { recursive: true });
+    fs.writeFileSync(loginFile, JSON.stringify(loginOverlay, null, 2) + "\n", "utf8");
+  } catch {
+    /* ignore missing disk */
+  }
+}
+
+function rememberLogin(person) {
+  loginOverlay[String(person.id)] = {
+    username: person.username,
+    password: person.password
+  };
+  saveLoginOverlay();
+}
+
+function applyLoginOverlay() {
+  for (const person of people) {
+    const saved = loginOverlay[String(person.id)];
+    if (!saved) {
+      continue;
+    }
+    if (saved.username) {
+      person.username = saved.username;
+    }
+    if (saved.password) {
+      person.password = saved.password;
+    }
+  }
+}
 
 export function resetPeopleStore() {
   nextPersonId = 17;
@@ -103,6 +154,12 @@ export function resetPeopleStore() {
   people = PEOPLE_SEED.map(clone);
   shops = SHOP_SEED.map(clone);
   grants = GRANT_SEED.map(clone);
+  loginOverlay = {};
+  try {
+    fs.unlinkSync(loginFile);
+  } catch {
+    /* no overlay file */
+  }
 }
 
 function findPerson(id) {
@@ -249,6 +306,7 @@ export function createPerson(input) {
     password: passwordRaw || INITIAL_PASSWORD
   };
   people.push(person);
+  rememberLogin(person);
   return { ok: true, person: presentPerson(person) };
 }
 
@@ -291,6 +349,12 @@ export function patchPerson(id, input) {
       return { ok: false, statusCode: 400, error: "密码不能为空" };
     }
     found.password = password;
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(input, "username") ||
+    Object.prototype.hasOwnProperty.call(input, "password")
+  ) {
+    rememberLogin(withLogin(found));
   }
   return { ok: true, person: presentPerson(found) };
 }
@@ -378,6 +442,8 @@ export async function hydrateFromMysql() {
   try {
     const auth = await import("../profile/auth.js");
     if (typeof auth.dbMode !== "function" || auth.dbMode() !== "mysql" || typeof auth.query !== "function") {
+      loginOverlay = { ...loadLoginOverlay(), ...loginOverlay };
+      applyLoginOverlay();
       return { ok: true, mode: "memory" };
     }
     const { query } = auth;
@@ -400,8 +466,12 @@ export async function hydrateFromMysql() {
       grants = grantRows.map(grantFromMysqlRow);
       nextGrantId = grants.reduce((max, row) => Math.max(max, row.id), 0) + 1;
     }
+    loginOverlay = { ...loadLoginOverlay(), ...loginOverlay };
+    applyLoginOverlay();
     return { ok: true, mode: "mysql", people: people.length, shops: shops.length, grants: grants.length };
   } catch {
+    loginOverlay = { ...loadLoginOverlay(), ...loginOverlay };
+    applyLoginOverlay();
     return { ok: true, mode: "memory" };
   }
 }

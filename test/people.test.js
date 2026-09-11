@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
@@ -353,6 +354,10 @@ test("PATCH /api/people updates username and password", async () => {
       body: JSON.stringify({ username: "沈子晗" })
     });
     assert.equal(taken.status, 400);
+
+    const overlay = JSON.parse(fs.readFileSync("src/modules/people/data/people-logins.json", "utf8"));
+    assert.equal(overlay[String(wang.id)].username, "wangbo");
+    assert.equal(overlay[String(wang.id)].password, "ShopLogin1");
   });
 });
 
