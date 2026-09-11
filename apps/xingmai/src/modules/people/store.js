@@ -5,6 +5,7 @@ import {
   loginStateForPerson,
   provisionLogin,
   query,
+  setRosterLookup,
   STAFF_INITIAL_PASSWORD,
   syncRosterLogins
 } from "../profile/auth.js";
@@ -198,6 +199,15 @@ export function resetPeopleStore() {
   nextShopId = 18;
   nextGrantId = 19;
 }
+
+setRosterLookup(async (username) => {
+  const name = typeof username === "string" ? username.trim() : "";
+  if (!name) {
+    return null;
+  }
+  const list = dbMode() === "mysql" ? await loadMysqlPeople() : people;
+  return list.find((person) => person.name === name) || null;
+});
 
 async function ensureRosterLogins(list) {
   const roster = list || (dbMode() === "mysql" ? await loadMysqlPeople() : people);

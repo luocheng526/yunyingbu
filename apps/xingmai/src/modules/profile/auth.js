@@ -217,6 +217,11 @@ export const STAFF_INITIAL_PASSWORD = "zhenxuan123";
 const KEYLEN = 64;
 const users = new Map();
 const sessions = new Map();
+let rosterLookup = null;
+
+export function setRosterLookup(fn) {
+  rosterLookup = typeof fn === "function" ? fn : null;
+}
 
 function hashPasswordSync(password) {
   const salt = randomBytes(16);
@@ -711,6 +716,34 @@ export function requireAuth(req, res, next) {
 
 export const authRouter = Router();
 
+async function attachRosterLogin(username) {
+  if (!rosterLookup || isPlatformAdminName(username)) {
+    return resolveUser(username);
+  }
+  let person = null;
+  try {
+    person = await rosterLookup(username);
+  } catch (err) {
+    console.error("roster login lookup failed", err);
+    return resolveUser(username);
+  }
+  if (!person || person.status === "离职" || isPlatformAdminName(person.name)) {
+    return resolveUser(username);
+  }
+  const existing = resolveUser(person.name) || findUserByPersonId(person.id);
+  if (existing && !existing.disabled && existing.username === person.name) {
+    return existing;
+  }
+  await provisionLogin({
+    username: person.name,
+    displayName: person.name,
+    personId: person.id,
+    password: STAFF_INITIAL_PASSWORD,
+    resetPassword: !existing || existing.disabled
+  });
+  return resolveUser(person.name);
+}
+
 authRouter.post("/login", async (req, res) => {
   const username = typeof req.body?.username === "string" ? req.body.username.trim() : "";
   const password = typeof req.body?.password === "string" ? req.body.password : "";
@@ -718,7 +751,10 @@ authRouter.post("/login", async (req, res) => {
     res.status(401).json({ ok: false, error: "请输入用户名和密码" });
     return;
   }
-  const user = resolveUser(username);
+  let user = resolveUser(username);
+  if (!user || user.disabled) {
+    user = (await attachRosterLogin(username)) || user;
+  }
   if (!user || user.disabled) {
     res.status(401).json({
       ok: false,

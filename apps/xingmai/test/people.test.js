@@ -127,6 +127,12 @@ describe("组织中心登录绑定", { concurrency: 1 }, () => {
     setDbMode("memory");
   });
 
+  test("没打开花名册也能用姓名和初始密码登录", async () => {
+    await loginCookie();
+    const staff = await staffLogin("王博", "zhenxuan123");
+    assert.equal(staff.status, 200);
+  });
+
   test("在职人员用姓名和初始密码登录，离职或删除后不能登录", async () => {
     const adminCookie = await loginCookie();
     const headers = { cookie: adminCookie, "Content-Type": "application/json" };
