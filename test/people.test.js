@@ -50,8 +50,9 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(noticesText, /日常公告/);
     const css = await fetch(`${base}/people.css`);
     const cssText = await css.text();
-    assert.match(cssText, /max-height:\s*calc\(100vh - 250px\)/);
-    assert.match(cssText, /overflow:\s*auto/);
+    assert.match(cssText, /overflow:\s*hidden\s*!important/);
+    assert.match(cssText, /\.org-table-wrap[\s\S]*overflow:\s*auto/);
+    assert.doesNotMatch(cssText, /max-height:\s*calc\(100vh - 250px\)/);
     assert.doesNotMatch(text, /class="site-sidebar"/);
     assert.doesNotMatch(text, /<header class="site-header">/);
     assert.match(text, /组织中心/);
@@ -64,6 +65,9 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /登录主账号/);
     assert.match(jsText, /全部团队/);
     assert.match(jsText, /双击单元格/);
+    assert.match(jsText, /下载模板/);
+    assert.match(jsText, /id="org-import"/);
+    assert.match(jsText, /组织中心-店铺主数据模板/);
     assert.doesNotMatch(jsText, /龙虎榜/);
     assert.doesNotMatch(jsText, /主数据治理/);
     assert.doesNotMatch(jsText, /全部公司/);
@@ -156,6 +160,38 @@ test("org store board lists demo shops and supports add", async () => {
       method: "DELETE"
     });
     assert.equal(removed.status, 200);
+
+    const template = await fetch(`${base}/api/people/org/stores/template`);
+    const csv = await template.text();
+    assert.equal(template.status, 200);
+    assert.match(csv, /总负责人,小组负责人,店铺所属人员,店铺名称,商家id/);
+
+    const imported = await fetch(`${base}/api/people/org/stores/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          {
+            总负责人: "沈子晗组",
+            小组负责人: "张文静",
+            店铺所属人员: "导入同事",
+            店铺名称: "导入旗舰店",
+            商家id: "18800001",
+            店铺情况备注: "5倍在做",
+            更新时间: "9.11更新",
+            退店时间: "",
+            登录主账号: "demo_imp",
+            密码: "Demo123!"
+          }
+        ]
+      })
+    });
+    const importedJson = await imported.json();
+    assert.equal(imported.status, 200, JSON.stringify(importedJson));
+    assert.equal(importedJson.created, 1);
+    const listedAfter = await fetch(`${base}/api/people/org/stores?q=${encodeURIComponent("导入旗舰店")}`);
+    const listedAfterJson = await listedAfter.json();
+    assert.ok(listedAfterJson.stores.some((row) => row.storeName === "导入旗舰店" && row.owner === "导入同事"));
   });
 });
 

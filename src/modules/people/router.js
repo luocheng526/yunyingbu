@@ -13,7 +13,9 @@ import {
 } from "./store.js";
 import { scopeOf } from "./org-acl.js";
 import {
+  STORE_IMPORT_HEADERS,
   createOrgStore,
+  importOrgStores,
   listOrgLogs,
   listOrgStores,
   listTeams,
@@ -100,6 +102,40 @@ peopleRouter.get("/org/stores", async (req, res) => {
     teams: listTeams(),
     stores: listOrgStores(req.query || {}, actor)
   });
+});
+
+peopleRouter.get("/org/stores/template", (_req, res) => {
+  const sample = [
+    "沈子晗组",
+    "张文静",
+    "示例运营",
+    "示例旗舰店",
+    "11009999",
+    "5倍在做",
+    "9.11更新",
+    "",
+    "demo_9999",
+    "Demo123!"
+  ];
+  const csv =
+    "\uFEFF" +
+    STORE_IMPORT_HEADERS.join(",") +
+    "\n" +
+    sample.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",") +
+    "\n";
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", 'attachment; filename="org-stores-template.csv"');
+  res.send(csv);
+});
+
+peopleRouter.post("/org/stores/import", async (req, res) => {
+  const actor = await resolveActor(req);
+  const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+  if (!rows.length) {
+    res.status(400).json({ ok: false, error: "请按模板导入至少一行" });
+    return;
+  }
+  sendResult(res, importOrgStores(rows, actor), false);
 });
 
 peopleRouter.post("/org/stores", async (req, res) => {

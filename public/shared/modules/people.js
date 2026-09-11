@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.151-notabs";
+    const href = "/people.css?v=0.1.152-noscroll";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -36,9 +36,12 @@
     css.textContent =
       "html:has(.people-page),body:has(.people-page){height:100%;}" +
       "body:has(.xm-shell):has(.people-page){overflow:hidden;}" +
-      "body:has(.xm-shell):has(.people-page) .xm-shell,body:has(.xm-shell):has(.people-page) .xm-main{height:100vh;max-height:100vh;overflow:hidden;min-height:0;}" +
-      "body:has(.people-page) .xm-content,#xm-content:has(.people-page){min-height:0;overflow:auto!important;}" +
-      ".people-page .org-table-wrap{max-height:calc(100vh - 250px);overflow:auto;}";
+      "body:has(.xm-shell):has(.people-page) .xm-shell{height:100vh;max-height:100vh;overflow:hidden;min-height:0;}" +
+      "body:has(.xm-shell):has(.people-page) .xm-main{height:100vh;max-height:100vh;overflow:hidden;min-height:0;display:flex;flex-direction:column;}" +
+      "body:has(.people-page) .xm-content,#xm-content:has(.people-page){flex:1 1 auto;min-height:0;overflow:hidden!important;display:flex;flex-direction:column;}" +
+      ".people-page{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;}" +
+      ".people-page .org-pane:not([hidden]){flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;}" +
+      ".people-page .org-table-wrap{flex:1 1 auto;min-height:0;max-height:none;overflow:auto;}";
   }
 
   function showShellTab() {
@@ -85,6 +88,9 @@
         '<select id="org-team"><option value="">全部团队</option></select>' +
         '<select id="org-status"><option value="">全部状态</option><option value="operating">在营</option><option value="idle">闲置</option><option value="closed">退店</option></select>' +
         '<span class="spacer" id="org-count"></span>' +
+        '<button type="button" class="ghost" id="org-template">下载模板</button>' +
+        '<button type="button" class="ghost" id="org-import">导入</button>' +
+        '<input type="file" id="org-import-file" accept=".csv,text/csv" hidden />' +
         '<button type="button" class="ghost" id="org-export">导出本筛</button>' +
         '<button type="button" id="org-add">+ 新增店铺</button>' +
         "</div>" +
@@ -200,6 +206,87 @@
         { key: "password", type: "text" }
       ];
       const REMARKS = ["5倍在做", "5倍闲置可退店", "退店", "已退店"];
+      const STORE_HEADERS = [
+        "总负责人",
+        "小组负责人",
+        "店铺所属人员",
+        "店铺名称",
+        "商家id",
+        "店铺情况备注",
+        "更新时间",
+        "退店时间",
+        "登录主账号",
+        "密码"
+      ];
+      const STORE_KEYS = [
+        "chief",
+        "lead",
+        "owner",
+        "storeName",
+        "merchantId",
+        "remark",
+        "updatedOn",
+        "closedOn",
+        "login",
+        "password"
+      ];
+
+      function csvEscape(value) {
+        return '"' + String(value == null ? "" : value).replaceAll('"', '""') + '"';
+      }
+
+      function downloadCsv(filename, lines) {
+        const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+
+      function parseCsv(text) {
+        const rows = [];
+        let row = [];
+        let cell = "";
+        let quoted = false;
+        const source = String(text || "").replace(/^\uFEFF/, "");
+        for (let i = 0; i < source.length; i += 1) {
+          const ch = source[i];
+          if (quoted) {
+            if (ch === '"' && source[i + 1] === '"') {
+              cell += '"';
+              i += 1;
+            } else if (ch === '"') {
+              quoted = false;
+            } else {
+              cell += ch;
+            }
+            continue;
+          }
+          if (ch === '"') {
+            quoted = true;
+          } else if (ch === ",") {
+            row.push(cell);
+            cell = "";
+          } else if (ch === "\n") {
+            row.push(cell);
+            rows.push(row);
+            row = [];
+            cell = "";
+          } else if (ch !== "\r") {
+            cell += ch;
+          }
+        }
+        if (cell || row.length) {
+          row.push(cell);
+          rows.push(row);
+        }
+        return rows.filter(function (item) {
+          return item.some(function (value) {
+            return String(value || "").trim();
+          });
+        });
+      }
 
       function showError(el, message) {
         el.hidden = !message;
@@ -765,44 +852,112 @@
           return loadMembers();
         });
       });
-      root.querySelector("#org-export").addEventListener("click", function () {
-        const header = [
-          "总负责人",
-          "小组负责人",
-          "店铺所属人员",
-          "店铺名称",
-          "商家id",
-          "店铺情况备注",
-          "更新时间",
-          "退店时间",
-          "登录主账号",
-          "密码"
-        ];
-        const lines = [header.join(",")].concat(
-          lastStores.map(function (row) {
-            return [
-              row.chief,
-              row.lead,
-              row.owner,
-              row.storeName,
-              row.merchantId,
-              row.remark,
-              row.updatedOn,
-              row.closedOn,
-              row.login,
-              row.password
-            ]
-              .map(function (cell) {
-                return '"' + String(cell || "").replaceAll('"', '""') + '"';
-              })
-              .join(",");
+      function storeCsvLines(rows) {
+        return [STORE_HEADERS.map(csvEscape).join(",")].concat(
+          rows.map(function (row) {
+            return STORE_KEYS.map(function (key) {
+              return csvEscape(row[key]);
+            }).join(",");
           })
         );
-        const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = "组织中心-店铺主数据.csv";
-        a.click();
+      }
+
+      root.querySelector("#org-template").addEventListener("click", function () {
+        downloadCsv(
+          "组织中心-店铺主数据模板.csv",
+          storeCsvLines([
+            {
+              chief: "沈子晗组",
+              lead: "张文静",
+              owner: "示例运营",
+              storeName: "示例旗舰店",
+              merchantId: "11009999",
+              remark: "5倍在做",
+              updatedOn: "9.11更新",
+              closedOn: "",
+              login: "demo_9999",
+              password: "Demo123!"
+            }
+          ])
+        );
+      });
+      root.querySelector("#org-import").addEventListener("click", function () {
+        root.querySelector("#org-import-file").click();
+      });
+      root.querySelector("#org-import-file").addEventListener("change", function (event) {
+        const file = event.target.files && event.target.files[0];
+        event.target.value = "";
+        if (!file) {
+          return;
+        }
+        file
+          .text()
+          .then(function (text) {
+            const table = parseCsv(text);
+            if (table.length < 2) {
+              throw new Error("模板至少要有表头和一行数据");
+            }
+            const headers = table[0].map(function (cell) {
+              return String(cell || "").trim();
+            });
+            const missing = STORE_HEADERS.filter(function (name) {
+              return headers.indexOf(name) < 0;
+            });
+            if (missing.length) {
+              throw new Error("表头需与表格一致，缺少：" + missing.join("、"));
+            }
+            const rows = table.slice(1).map(function (cells) {
+              const item = {};
+              headers.forEach(function (name, index) {
+                item[name] = cells[index] || "";
+              });
+              return item;
+            });
+            return fetch("/api/people/org/stores/import", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ rows: rows })
+            }).then(function (res) {
+              return res.json().then(function (data) {
+                return { res: res, data: data };
+              });
+            });
+          })
+          .then(function (result) {
+            if (!result.res.ok || !result.data.ok) {
+              throw new Error(result.data.error || "导入失败");
+            }
+            const failed = result.data.failed || [];
+            showError(
+              errorEl,
+              failed.length
+                ? "导入完成：新增" +
+                    result.data.created +
+                    "，更新" +
+                    result.data.updated +
+                    "。失败" +
+                    failed.length +
+                    "行：" +
+                    failed
+                      .slice(0, 3)
+                      .map(function (item) {
+                        return "第" + item.line + "行" + item.error;
+                      })
+                      .join("；")
+                : ""
+            );
+            if (!failed.length) {
+              window.alert("导入完成：新增" + result.data.created + "条，更新" + result.data.updated + "条。");
+            }
+            return loadBoard();
+          })
+          .catch(function (err) {
+            showError(errorEl, err.message);
+          });
+      });
+      root.querySelector("#org-export").addEventListener("click", function () {
+        downloadCsv("组织中心-店铺主数据.csv", storeCsvLines(lastStores));
       });
 
       loadBoard().catch(function (err) {

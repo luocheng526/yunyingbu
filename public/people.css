@@ -18,13 +18,18 @@ body:has(.xm-shell):has(.people-page) .xm-main {
   min-height: 0;
   height: 100vh;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 body:has(.people-page) .xm-content,
 #xm-content:has(.people-page) {
+  flex: 1 1 auto;
   min-height: 0;
-  overflow: auto !important;
+  overflow: hidden !important;
   overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
 }
 
 .xm-content .page.people-page,
@@ -32,7 +37,12 @@ body:has(.people-page) .xm-content,
   max-width: none !important;
   width: 100%;
   box-sizing: border-box;
-  padding-bottom: 24px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 8px;
 }
 
 .people-page .lead {
@@ -168,8 +178,26 @@ body:has(.people-page) .xm-tabs {
   border: 1px solid var(--xm-line, #d9d9d9);
 }
 
+.people-page .org-pane:not([hidden]) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.people-page .org-pane:not([hidden]) > .panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .org-table-wrap {
-  max-height: calc(100vh - 250px);
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
   overflow: auto;
   overscroll-behavior: contain;
   background: #fff;

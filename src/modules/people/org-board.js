@@ -185,6 +185,101 @@ function normalize(input, previous = {}) {
   };
 }
 
+export const STORE_IMPORT_HEADERS = [
+  "总负责人",
+  "小组负责人",
+  "店铺所属人员",
+  "店铺名称",
+  "商家id",
+  "店铺情况备注",
+  "更新时间",
+  "退店时间",
+  "登录主账号",
+  "密码"
+];
+
+const HEADER_TO_FIELD = {
+  总负责人: "chief",
+  小组负责人: "lead",
+  店铺所属人员: "owner",
+  店铺名称: "storeName",
+  商家id: "merchantId",
+  商家ID: "merchantId",
+  店铺情况备注: "remark",
+  更新时间: "updatedOn",
+  退店时间: "closedOn",
+  登录主账号: "login",
+  密码: "password"
+};
+
+function findExistingStore(input) {
+  const merchantId = String(input.merchantId || "").trim();
+  if (merchantId) {
+    const byMerchant = rows.find((row) => String(row.merchantId || "").trim() === merchantId);
+    if (byMerchant) {
+      return byMerchant;
+    }
+  }
+  const storeName = String(input.storeName || "").trim();
+  const owner = String(input.owner || "").trim();
+  if (!storeName || !owner) {
+    return null;
+  }
+  return (
+    rows.find(
+      (row) => String(row.storeName || "").trim() === storeName && String(row.owner || "").trim() === owner
+    ) || null
+  );
+}
+
+export function mapImportRow(raw = {}) {
+  if (!raw || typeof raw !== "object") {
+    return {};
+  }
+  const next = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const field = HEADER_TO_FIELD[String(key).trim()] || (["chief", "lead", "owner", "storeName", "merchantId", "remark", "updatedOn", "closedOn", "login", "password"].includes(key) ? key : "");
+    if (field) {
+      next[field] = value;
+    }
+  }
+  return next;
+}
+
+export function importOrgStores(items, actor) {
+  const list = Array.isArray(items) ? items : [];
+  const created = [];
+  const updated = [];
+  const failed = [];
+  list.forEach((raw, index) => {
+    const input = mapImportRow(raw);
+    const line = index + 2;
+    if (!String(input.storeName || "").trim() || !String(input.owner || "").trim()) {
+      failed.push({ line, error: "店铺名称、店铺所属人员为必填" });
+      return;
+    }
+    const existing = findExistingStore(input);
+    const result = existing ? patchOrgStore(existing.id, input, actor) : createOrgStore(input, actor);
+    if (!result.ok) {
+      failed.push({ line, error: result.error || "导入失败", storeName: input.storeName });
+      return;
+    }
+    if (existing) {
+      updated.push(result.store);
+    } else {
+      created.push(result.store);
+    }
+  });
+  addLog("导入", `新增${created.length}条，更新${updated.length}条，失败${failed.length}条`);
+  return {
+    ok: true,
+    created: created.length,
+    updated: updated.length,
+    failed,
+    stores: [...created, ...updated]
+  };
+}
+
 export function createOrgStore(input, actor) {
   const next = normalize(input || {});
   if (!next.storeName || !next.owner) {
