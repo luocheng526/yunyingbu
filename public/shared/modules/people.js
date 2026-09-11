@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.162-sticky-filter";
+    const href = "/people.css?v=0.1.163-rights-tree";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -129,6 +129,8 @@
         '<section class="panel"><h2>身份名册</h2>' +
         '<p class="lead">表头可筛部门、上级、岗位、所属中心、状态。勾选后可统一改密码。点新增人员弹出对话框。</p>' +
         '<div class="org-toolbar">' +
+        '<input type="search" id="people-q" placeholder="姓名 / 账号 / 部门" />' +
+        '<button type="button" id="people-search">搜索</button>' +
         '<span class="spacer" id="people-count"></span>' +
         '<button type="button" class="ghost" id="people-template">下载模板</button>' +
         '<button type="button" class="ghost" id="people-import">导入</button>' +
@@ -154,7 +156,8 @@
         '<div class="org-filter-pop" id="people-filter-pop" hidden></div></section></div>' +
         '<div class="org-pane" data-pane="rights" hidden>' +
         '<section class="panel"><h2>管辖</h2>' +
-        '<p class="lead">店权认管辖。一人多店多行。店铺主数据的「店铺所属人员」与此对齐。</p>' +
+        '<p class="lead">按店铺主数据的总负责人、小组负责人、店铺所属人员排树。总监罗成，下辖经理沈子晗、韩梦凯，再往下是主管、储备、运营、助理。</p>' +
+        '<div class="org-tree" id="rights-tree"></div>' +
         '<form class="people-mini-form" id="grant-form">' +
         '<label>人员<select name="personId" required><option value="">请选择</option></select></label>' +
         '<label>店铺或店群<select name="shopId" required><option value="">请选择</option></select></label>' +
@@ -506,14 +509,34 @@
       }
 
       function applyMemberFilters(people) {
+        const q = String((root.querySelector("#people-q") || {}).value || "")
+          .trim()
+          .toLowerCase();
         return people.filter(function (row) {
-          return MEMBER_FILTERS.every(function (key) {
+          const passColumns = MEMBER_FILTERS.every(function (key) {
             const picked = columnPicked[key];
             if (!picked) {
               return true;
             }
             return Boolean(picked[personFilterValue(row, key)]);
           });
+          if (!passColumns) {
+            return false;
+          }
+          if (!q) {
+            return true;
+          }
+          const blob = [
+            row.name,
+            row.username,
+            row.department,
+            row.role,
+            row.center,
+            row.managerName
+          ]
+            .join(" ")
+            .toLowerCase();
+          return blob.indexOf(q) >= 0;
         });
       }
 
@@ -894,12 +917,99 @@
         });
       }
 
+      function roleRank(role) {
+        const order = { 主管: 1, 储备: 2, 运营: 3, 助理: 4, 店长: 5, 经理: 6 };
+        return order[role] || 9;
+      }
+
+      function renderRightsTree(stores, peopleList) {
+        const tree = root.querySelector("#rights-tree");
+        if (!tree) {
+          return;
+        }
+        const byName = {};
+        (peopleList || []).forEach(function (person) {
+          byName[person.name] = person;
+        });
+        function titleOf(name) {
+          const person = byName[name];
+          const role = person && person.role ? person.role : "";
+          if (name === "罗成") {
+            return "总监";
+          }
+          if (name === "沈子晗" || name === "韩梦凯") {
+            return "经理";
+          }
+          return role || "运营";
+        }
+        const branches = [
+          { name: "沈子晗", match: "沈子晗" },
+          { name: "韩梦凯", match: "韩梦凯" }
+        ].map(function (mgr) {
+          const kids = {};
+          (stores || []).forEach(function (row) {
+            const blob = [row.chief, row.team, row.lead].join(" ");
+            if (blob.indexOf(mgr.match) < 0) {
+              return;
+            }
+            [row.lead, row.owner].forEach(function (name) {
+              const who = String(name || "").trim();
+              if (!who || who === mgr.name || who === "罗成") {
+                return;
+              }
+              if (!kids[who]) {
+                kids[who] = { name: who, title: titleOf(who), stores: 0 };
+              }
+              kids[who].stores += 1;
+            });
+          });
+          const list = Object.keys(kids)
+            .map(function (key) {
+              return kids[key];
+            })
+            .sort(function (a, b) {
+              return roleRank(a.title) - roleRank(b.title) || a.name.localeCompare(b.name, "zh");
+            });
+          return { name: mgr.name, title: "经理", kids: list };
+        });
+        tree.innerHTML =
+          '<div class="org-tree-director"><strong>罗成</strong><span>总监</span></div>' +
+          '<div class="org-tree-row">' +
+          branches
+            .map(function (branch) {
+              return (
+                '<div class="org-tree-branch"><div class="org-tree-manager"><strong>' +
+                escapeHtml(branch.name) +
+                "</strong><span>经理</span></div><div class=\"org-tree-kids\">" +
+                (branch.kids.length
+                  ? branch.kids
+                      .map(function (kid) {
+                        return (
+                          '<div class="org-tree-kid"><strong>' +
+                          escapeHtml(kid.name) +
+                          "</strong><span>" +
+                          escapeHtml(kid.title) +
+                          " · " +
+                          kid.stores +
+                          "店</span></div>"
+                        );
+                      })
+                      .join("")
+                  : '<p class="org-empty">暂无下属店铺人员</p>') +
+                "</div></div>"
+              );
+            })
+            .join("") +
+          "</div>";
+      }
+
       function loadRights() {
         return Promise.all([
           fetch("/api/people/grants", { credentials: "same-origin" }).then(function (res) { return res.json(); }),
           fetch("/api/people/reconcile", { credentials: "same-origin" }).then(function (res) { return res.json(); }),
           fetch("/api/people", { credentials: "same-origin" }).then(function (res) { return res.json(); }),
-          fetch("/api/people/shops", { credentials: "same-origin" }).then(function (res) { return res.json(); })
+          fetch("/api/people/shops", { credentials: "same-origin" }).then(function (res) { return res.json(); }),
+          fetch("/api/people/org/stores", { credentials: "same-origin" }).then(function (res) { return res.json(); })
         ]).then(function (results) {
           if (dead) {
             return;
@@ -908,6 +1018,7 @@
           const checkData = results[1];
           roster.people = results[2].people || roster.people;
           roster.shops = results[3].shops || roster.shops;
+          renderRightsTree((results[4] && results[4].stores) || [], roster.people);
           rightsTbody.replaceChildren();
           (grantData.grants || []).forEach(function (grant) {
             const tr = document.createElement("tr");
@@ -1222,6 +1333,16 @@
       }
 
       postForm(grantForm, "/api/people/grants", grantError, loadRights);
+      function rerenderPeople() {
+        renderPeople(applyMemberFilters(roster.people));
+      }
+      root.querySelector("#people-search").addEventListener("click", rerenderPeople);
+      root.querySelector("#people-q").addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          rerenderPeople();
+        }
+      });
       root.querySelector("#people-add").addEventListener("click", openPeopleForm);
       root.querySelector("#people-cancel").addEventListener("click", closePeopleForm);
       peopleModal.addEventListener("click", function (event) {
