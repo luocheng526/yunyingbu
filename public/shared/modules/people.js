@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.169-rights-tree";
+    const href = "/people.css?v=0.1.170-rights-fit";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -158,25 +158,11 @@
         '<tbody id="people-tbody"></tbody></table></div>' +
         '<div class="org-filter-pop" id="people-filter-pop" hidden></div></section></div>' +
         '<div class="org-pane" data-pane="rights" hidden>' +
-        '<section class="panel"><h2>管辖</h2>' +
-        '<p class="lead">树按花名册上级和店铺主数据归属来画：总监罗成，下面经理韩梦凯、沈子晗，再往下主管、运营、助理和店铺。点刷新重新读成员管理和店铺主数据。人员对不上或店铺对不上会在看板里列出来。</p>' +
+        '<section class="panel rights-fit-panel"><h2>管辖</h2>' +
+        '<p class="lead">只读对照，一页看完整棵树：总监罗成，经理韩梦凯、沈子晗，再对上主管、运营和店铺。人在成员管理改，店在店铺主数据改，这里不能改。点刷新按这两边重新对上。</p>' +
         '<div class="rights-watch" id="rights-watch"></div>' +
         '<div class="rights-tree-toolbar"><button type="button" id="rights-refresh">刷新树和看板</button><span class="muted" id="rights-checked">检查时间：—</span></div>' +
-        '<div class="rights-tree-chart" id="rights-tree-chart"></div>' +
-        '<div class="rights-board" id="rights-board"></div>' +
-        '<div class="rights-pin-pop" id="rights-pin-pop" hidden></div>' +
-        '<form class="people-mini-form" id="grant-form">' +
-        '<label>人员<select name="personId" required><option value="">请选择</option></select></label>' +
-        '<label>店铺或店群<select name="shopId" required><option value="">请选择</option></select></label>' +
-        '<label>角色<select name="role"><option>运营</option><option>主管</option><option>经理</option><option>店长</option></select></label>' +
-        '<label>生效起<input name="startOn" type="date" /></label>' +
-        '<label>生效止<input name="endOn" type="date" /></label>' +
-        '<button type="submit">新增授权</button></form>' +
-        '<p class="status error" id="grant-error" hidden></p>' +
-        '<p class="people-check muted" id="check-employed">在职但没有店权：—</p>' +
-        '<p class="people-check muted" id="check-left">店权还挂在离职人员：—</p>' +
-        '<div class="org-table-wrap"><table><thead><tr><th>人</th><th>店 / 店群</th><th>角色</th><th>生效</th><th>状态</th></tr></thead>' +
-        '<tbody id="rights-tbody"></tbody></table></div></section></div>' +
+        '<div class="rights-tree-chart" id="rights-tree-chart"></div></section></div>' +
         '<div class="org-pane" data-pane="acl" hidden>' +
         '<section class="panel"><h2>权限</h2>' +
         "<p>店铺主数据按登录人责权：罗成可改全部，沈子晗只改沈子晗组，韩梦凯只改韩梦凯组。双击单元格保存。</p>" +
@@ -264,10 +250,7 @@
       function closePeopleForm() {
         peopleModal.classList.remove("show");
       }
-      const grantForm = root.querySelector("#grant-form");
       const peopleError = root.querySelector("#people-error");
-      const grantError = root.querySelector("#grant-error");
-      const rightsTbody = root.querySelector("#rights-tbody");
       const logsTbody = root.querySelector("#logs-tbody");
       let roster = { people: [], shops: [], grants: [] };
       let dead = false;
@@ -954,32 +937,6 @@
         });
       }
 
-      const rightsPinPop = root.querySelector("#rights-pin-pop");
-      let rightsPinRole = "";
-      let rightsCandidates = [];
-
-      function closeRightsPin() {
-        if (rightsPinPop) {
-          rightsPinPop.hidden = true;
-          rightsPinPop.innerHTML = "";
-        }
-        rightsPinRole = "";
-      }
-
-      function pinRights(name, role) {
-        return fetch("/api/people/org/rights-board/pin", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: name, role: role })
-        }).then(function (res) {
-          return res.json();
-        }).then(function () {
-          closeRightsPin();
-          return loadRights();
-        });
-      }
-
       function renderRightsWatch(watch) {
         const host = root.querySelector("#rights-watch");
         const checked = root.querySelector("#rights-checked");
@@ -1043,12 +1000,13 @@
         return (
           '<div class="rights-tree-node" data-role="' +
           escapeHtml(node.role) +
-          '"><div class="rights-tree-card"><em>' +
+          '"><div class="rights-tree-self"><div class="rights-tree-card"><em>' +
           escapeHtml(node.role) +
           "</em><strong>" +
           escapeHtml(node.name) +
           "</strong></div>" +
           (stores ? '<div class="rights-tree-stores">' + stores + "</div>" : "") +
+          "</div>" +
           ((node.children || []).length
             ? '<div class="rights-tree-kids">' + node.children.map(renderRightsNode).join("") + "</div>"
             : "") +
@@ -1056,166 +1014,44 @@
         );
       }
 
+      function fitRightsTree() {
+        const host = root.querySelector("#rights-tree-chart");
+        const fit = host && host.querySelector("#rights-tree-fit");
+        if (!host || !fit) {
+          return;
+        }
+        fit.style.transform = "none";
+        const aw = Math.max(host.clientWidth - 16, 80);
+        const ah = Math.max(host.clientHeight - 16, 80);
+        const bw = Math.max(fit.scrollWidth, 1);
+        const bh = Math.max(fit.scrollHeight, 1);
+        const scale = Math.min(aw / bw, ah / bh);
+        fit.style.transform = "scale(" + scale + ")";
+      }
+
       function renderRightsTreeChart(tree) {
         const host = root.querySelector("#rights-tree-chart");
         if (!host) {
           return;
         }
-        host.innerHTML = tree ? renderRightsNode(tree) : '<p class="rights-empty">还没有树。</p>';
-      }
-
-      function renderRightsBoard(board) {
-        const host = root.querySelector("#rights-board");
-        if (!host) {
-          return;
-        }
-        rightsCandidates = board.candidates || [];
-        const columns = board.columns || [];
-        host.innerHTML = columns
-          .map(function (col) {
-            const people = col.people || [];
-            const chips = people.length
-              ? people
-                  .map(function (person) {
-                    return (
-                      '<span class="rights-chip">' +
-                      escapeHtml(person.name) +
-                      '<button type="button" class="rights-chip-x" data-rights-unpin="' +
-                      escapeHtml(person.name) +
-                      '" aria-label="取消指定">×</button></span>'
-                    );
-                  })
-                  .join("")
-              : '<p class="rights-empty">还没有人。灯钉职位对不上就点「指定」。</p>';
-            return (
-              '<div class="rights-col" data-rights-role="' +
-              escapeHtml(col.role) +
-              '"><div class="rights-col-head"><div><strong>' +
-              escapeHtml(col.role) +
-              '</strong><span class="rights-col-count">' +
-              people.length +
-              "人</span></div>" +
-              '<button type="button" class="rights-pin-btn" data-rights-pin="' +
-              escapeHtml(col.role) +
-              '">指定</button></div><div class="rights-chips">' +
-              chips +
-              "</div></div>"
-            );
-          })
-          .join("");
-      }
-
-      function openRightsPin(role, btn) {
-        if (!rightsPinPop) {
-          return;
-        }
-        rightsPinRole = role;
-        const taken = {};
-        root.querySelectorAll(".rights-col").forEach(function (col) {
-          if (col.getAttribute("data-rights-role") === role) {
-            col.querySelectorAll(".rights-chip-x").forEach(function (chip) {
-              taken[chip.getAttribute("data-rights-unpin")] = true;
-            });
-          }
-        });
-        const list = rightsCandidates.filter(function (item) {
-          return !taken[item.name];
-        });
-        rightsPinPop.innerHTML =
-          "<p>指定到「" +
-          escapeHtml(role) +
-          "」</p>" +
-          '<input id="rights-pin-q" type="search" placeholder="搜姓名" autocomplete="off" />' +
-          '<div class="rights-pin-list" id="rights-pin-list"></div>';
-        function paintList() {
-          const q = String(rightsPinPop.querySelector("#rights-pin-q").value || "").trim();
-          const matched = list.filter(function (item) {
-            return !q || item.name.indexOf(q) >= 0;
-          });
-          rightsPinPop.querySelector("#rights-pin-list").innerHTML = matched.length
-            ? matched
-                .map(function (item) {
-                  return (
-                    '<button type="button" class="rights-pin-item" data-rights-name="' +
-                    escapeHtml(item.name) +
-                    '">' +
-                    escapeHtml(item.name) +
-                    "<span>" +
-                    escapeHtml(item.role) +
-                    "</span></button>"
-                  );
-                })
-                .join("")
-            : '<p class="rights-empty">没有可指定的人</p>';
-        }
-        paintList();
-        rightsPinPop.hidden = false;
-        const rect = btn.getBoundingClientRect();
-        rightsPinPop.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 280)) + "px";
-        rightsPinPop.style.top = rect.bottom + 6 + "px";
-        const input = rightsPinPop.querySelector("#rights-pin-q");
-        input.addEventListener("input", paintList);
-        input.focus();
+        host.innerHTML = tree
+          ? '<div class="rights-tree-fit" id="rights-tree-fit">' + renderRightsNode(tree) + "</div>"
+          : '<p class="rights-empty">还没有树。先在成员管理和店铺主数据里对上人和店。</p>';
+        requestAnimationFrame(fitRightsTree);
       }
 
       function loadRights() {
-        return Promise.all([
-          fetch("/api/people/grants", { credentials: "same-origin" }).then(function (res) { return res.json(); }),
-          fetch("/api/people/reconcile", { credentials: "same-origin" }).then(function (res) { return res.json(); }),
-          fetch("/api/people", { credentials: "same-origin" }).then(function (res) { return res.json(); }),
-          fetch("/api/people/shops", { credentials: "same-origin" }).then(function (res) { return res.json(); }),
-          fetch("/api/people/org/rights-board", { credentials: "same-origin" }).then(function (res) { return res.json(); })
-        ]).then(function (results) {
-          if (dead) {
-            return;
-          }
-          const grantData = results[0];
-          const checkData = results[1];
-          roster.people = results[2].people || roster.people;
-          roster.shops = results[3].shops || roster.shops;
-          const board = results[4] || { columns: [] };
-          renderRightsWatch(board.watch || {});
-          renderRightsTreeChart(board.tree);
-          renderRightsBoard(board);
-          rightsTbody.replaceChildren();
-          (grantData.grants || []).forEach(function (grant) {
-            const tr = document.createElement("tr");
-            const range = (grant.startOn || "") + (grant.endOn ? " ~ " + grant.endOn : " 起");
-            tr.innerHTML =
-              "<td>" +
-              escapeHtml(grant.personName) +
-              "</td><td>" +
-              escapeHtml(grant.shopName) +
-              "</td><td>" +
-              escapeHtml(grant.role) +
-              "</td><td>" +
-              escapeHtml(range) +
-              "</td><td>" +
-              escapeHtml(grant.active ? "有效" : "已失效") +
-              "</td>";
-            rightsTbody.append(tr);
+        return fetch("/api/people/org/rights-board", { credentials: "same-origin" })
+          .then(function (res) {
+            return res.json();
+          })
+          .then(function (board) {
+            if (dead) {
+              return;
+            }
+            renderRightsWatch(board.watch || {});
+            renderRightsTreeChart(board.tree);
           });
-          const employed = (checkData.employedNoGrant || []).map(function (item) { return item.name; });
-          const left = (checkData.grantOnLeft || []).map(function (item) { return item.personName + " / " + item.shopName; });
-          root.querySelector("#check-employed").textContent =
-            "在职但没有店权：" + (employed.length ? employed.join("、") : "无");
-          root.querySelector("#check-left").textContent =
-            "店权还挂在离职人员：" + (left.length ? left.join("、") : "无");
-          fillSelect(
-            grantForm.personId,
-            roster.people,
-            function (item) { return String(item.id); },
-            function (item) { return item.name; },
-            "请选择"
-          );
-          fillSelect(
-            grantForm.shopId,
-            roster.shops,
-            function (item) { return String(item.id); },
-            function (item) { return item.name + "（" + item.kind + "）"; },
-            "请选择"
-          );
-        });
       }
 
       function loadLogs() {
@@ -1246,49 +1082,7 @@
       root.querySelector("#rights-refresh").addEventListener("click", function () {
         loadRights();
       });
-      root.querySelector("#rights-board").addEventListener("click", function (event) {
-        const pinBtn = event.target.closest("[data-rights-pin]");
-        if (pinBtn) {
-          event.preventDefault();
-          openRightsPin(pinBtn.getAttribute("data-rights-pin"), pinBtn);
-          return;
-        }
-        const unpinBtn = event.target.closest("[data-rights-unpin]");
-        if (unpinBtn) {
-          event.preventDefault();
-          fetch("/api/people/org/rights-board/unpin", {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: unpinBtn.getAttribute("data-rights-unpin") })
-          }).then(function (res) {
-            return res.json();
-          }).then(function () {
-            closeRightsPin();
-            return loadRights();
-          });
-        }
-      });
-      if (rightsPinPop) {
-        rightsPinPop.addEventListener("click", function (event) {
-          const item = event.target.closest("[data-rights-name]");
-          if (!item || !rightsPinRole) {
-            return;
-          }
-          pinRights(item.getAttribute("data-rights-name"), rightsPinRole);
-        });
-      }
-      function onDocRightsPinClose(event) {
-        if (dead) {
-          document.removeEventListener("click", onDocRightsPinClose);
-          return;
-        }
-        if (event.target.closest("#rights-pin-pop") || event.target.closest("[data-rights-pin]")) {
-          return;
-        }
-        closeRightsPin();
-      }
-      document.addEventListener("click", onDocRightsPinClose);
+      window.addEventListener("resize", fitRightsTree);
 
       root.querySelector("#org-tabs").addEventListener("click", function (event) {
         const tab = event.target.closest(".org-tab");
@@ -1552,7 +1346,6 @@
         paintMemberBar();
       }
 
-      postForm(grantForm, "/api/people/grants", grantError, loadRights);
       function rerenderPeople() {
         renderPeople(applyMemberFilters(roster.people));
       }
@@ -2002,7 +1795,7 @@
       return function unmount() {
         dead = true;
         document.removeEventListener("wheel", onPeopleWheel, true);
-        document.removeEventListener("click", onDocRightsPinClose);
+        window.removeEventListener("resize", fitRightsTree);
         document.removeEventListener("click", onDocFilterClose);
         window.removeEventListener("scroll", onFilterPin, true);
         window.removeEventListener("resize", onFilterPin);

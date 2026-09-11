@@ -636,8 +636,16 @@ body:has(.people-page) .xm-tabs {
   font-weight: 600;
 }
 
+.rights-fit-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 190px);
+}
+
 .rights-watch-issues {
-  margin: 0 0 12px;
+  max-height: 88px;
+  overflow: auto;
+  margin: 0 0 8px;
   padding: 0;
   list-style: none;
 }
@@ -663,35 +671,56 @@ body:has(.people-page) .xm-tabs {
 }
 
 .rights-tree-chart {
-  overflow: auto;
-  margin: 0 0 16px;
-  padding: 16px;
+  flex: 1 1 auto;
+  min-height: 360px;
+  overflow: hidden;
+  margin: 0;
+  padding: 10px;
   background: #fafafa;
   border: 1px solid #f0f0f0;
   border-radius: 12px;
 }
 
+.rights-tree-fit {
+  display: inline-block;
+  transform-origin: top left;
+}
+
 .rights-tree-node {
-  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.rights-tree-self {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 88px;
 }
 
 .rights-tree-kids {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  margin: 10px 0 0 28px;
-  padding-left: 16px;
+  flex-wrap: wrap;
+  max-height: none;
+  gap: 6px;
+  margin: 0;
+  padding-left: 10px;
   border-left: 2px solid #d9d9d9;
 }
 
 .rights-tree-card {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: 6px;
+  padding: 3px 8px;
   border-radius: 999px;
   background: #fff;
   border: 1px solid #f0f0f0;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .rights-tree-card em {
@@ -735,8 +764,8 @@ body:has(.people-page) .xm-tabs {
 .rights-tree-stores {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin: 6px 0 0 8px;
+  gap: 4px;
+  max-width: 220px;
 }
 
 .rights-tree-store {

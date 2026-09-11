@@ -124,12 +124,14 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /点新增人员弹出对话框/);
     assert.match(jsText, /id="people-q"/);
     assert.match(jsText, /id="people-search"/);
-    assert.match(jsText, /id="rights-board"/);
+    assert.doesNotMatch(jsText, /id="rights-board"/);
+    assert.doesNotMatch(jsText, /id="grant-form"/);
     assert.match(jsText, /id="rights-tree-chart"/);
     assert.match(jsText, /id="rights-refresh"/);
     assert.match(jsText, /总监/);
-    assert.match(jsText, /renderRightsBoard/);
+    assert.match(jsText, /fitRightsTree/);
     assert.match(jsText, /renderRightsTreeChart/);
+    assert.match(jsText, /只读对照/);
     assert.match(jsText, /\/api\/people\/org\/rights-board/);
     assert.match(jsText, /placeFilterPop/);
     assert.match(jsText, /onFilterPin/);
