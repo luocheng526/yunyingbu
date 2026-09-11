@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.133 */
+/* xm-fast-shell 0.1.136 */
 (function () {
-  const ASSET_VER = "0.1.133";
+  const ASSET_VER = "0.1.136";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -10,6 +10,7 @@
     "/data/goods": "data",
     "/data/paid": "data",
     "/shen": "shen",
+    "/shen/product": "shen",
     "/shen/selection": "shen",
     "/shen/growth": "shen",
     "/shen/paid": "shen",
@@ -37,9 +38,8 @@
     { href: "/data/paid", label: "实时付费" }
   ];
   const SHEN_CHILDREN = [
-    { href: "/shen/selection", label: "选品中心" },
-    { href: "/shen/growth", label: "商品成长" },
-    { href: "/shen/paid", label: "实时付费" },
+    { href: "/shen/product", label: "产品中心" },
+    { href: "/shen/paid", label: "付费中心" },
     { href: "/shen/training", label: "培训系统" },
     { href: "/shen/tasks", label: "任务管理" }
   ];
@@ -109,8 +109,14 @@
     logout: '<path d="M10 7V5.8A1.8 1.8 0 0 1 11.8 4h6.4A1.8 1.8 0 0 1 20 5.8v12.4a1.8 1.8 0 0 1-1.8 1.8h-6.4A1.8 1.8 0 0 1 10 18.2V17"/><path d="M4 12h10"/><path d="M11.2 8.8 14.4 12l-3.2 3.2"/>'
   };
 
+  const ROUTE_ALIAS = {
+    "/shen/selection": "/shen/product",
+    "/shen/growth": "/shen/product"
+  };
+
   function normalize(href) {
-    return String(href || "/").replace(/\/+$/, "") || "/";
+    const key = String(href || "/").replace(/\/+$/, "") || "/";
+    return ROUTE_ALIAS[key] || key;
   }
 
   function isActive(href) {
@@ -228,7 +234,7 @@
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout">' +
       ico("logout") +
       "<span>退出登录</span></button>" +
-      '<p class="xm-version">v0.4.20</p></nav>'
+      '<p class="xm-version">v0.4.23</p></nav>'
     );
   }
 
@@ -332,7 +338,7 @@
   const TAB_STORE = "xm-open-tabs";
   const PARENT_HOME = {
     "/data": "/data/overview",
-    "/shen": "/shen/selection",
+    "/shen": "/shen/product",
     "/han": "/han/selection",
     "/academy": "/academy/courses"
   };
