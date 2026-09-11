@@ -126,7 +126,7 @@
         '<div class="org-filter-pop" id="org-filter-pop" hidden></div></div>' +
         '<div class="org-pane" data-pane="members" hidden>' +
         '<section class="panel"><h2>身份名册</h2>' +
-        '<p class="lead">双击账号或登录密码可改。新增默认账号同姓名。</p>' +
+        '<p class="lead">单击账号或登录密码即可改。新增默认账号同姓名。</p>' +
         '<form class="people-form" id="people-form">' +
         '<label>姓名<input name="name" required maxlength="40" autocomplete="off" /></label>' +
         '<label>工号<input name="employeeNo" maxlength="32" /></label>' +
@@ -768,9 +768,9 @@
               escapeHtml(person.name) +
               "</td><td>" +
               escapeHtml(person.employeeNo || "—") +
-              "</td><td class=\"people-cell can-edit\" data-field=\"username\">" +
+              '</td><td class="people-cell can-edit" data-field="username" title="单击可改">' +
               escapeHtml(person.username || person.name || "—") +
-              "</td><td class=\"people-cell can-edit\" data-field=\"password\">" +
+              '</td><td class="people-cell can-edit" data-field="password" title="单击可改">' +
               escapeHtml(person.password || "ChangeMe123!") +
               "</td><td>" +
               escapeHtml(person.department || "—") +
@@ -1161,6 +1161,12 @@
         input.addEventListener("blur", commit);
       }
 
+      peopleTbody.addEventListener("click", function (event) {
+        if (event.target.closest("select, input, button")) {
+          return;
+        }
+        startPersonCellEdit(event.target.closest("td.people-cell"));
+      });
       peopleTbody.addEventListener("dblclick", function (event) {
         startPersonCellEdit(event.target.closest("td.people-cell"));
       });
