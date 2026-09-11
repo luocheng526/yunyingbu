@@ -294,7 +294,9 @@
       }
 
       const teams = ["陈晓曼组", "高明阳组", "毛永超组", "段坤孝组", "薛双双组"];
-      const team = (new URLSearchParams(window.location.search).get("team") || "").trim();
+      const params = new URLSearchParams(window.location.search);
+      const team = (params.get("team") || "").trim();
+      const shop = (params.get("store") || "").trim();
       if (!teams.includes(team)) {
         root.innerHTML = page(
           "商品分层",
@@ -318,9 +320,74 @@
         };
       }
 
+      if (!shop) {
+        root.innerHTML = page(
+          team,
+          "先添加本小组的店铺，再点店铺看商品分层。一组大约 5 到 8 家店。",
+          '<div class="stack"><section class="panel"><h2>添加店铺</h2>' +
+            '<form id="shop-form"><label for="shop-name">店铺名称（必填）</label>' +
+            '<input id="shop-name" required placeholder="例如：京东旗舰店" />' +
+            '<div class="actions"><button type="submit">添加店铺</button></div>' +
+            '<p class="msg status" id="shop-msg"></p></form></section>' +
+            '<section class="panel"><h2>本小组店铺</h2><div id="shop-list" class="actions" style="flex-wrap:wrap"></div></section></div>',
+        );
+        const form = root.querySelector("#shop-form");
+        const list = root.querySelector("#shop-list");
+        const msg = root.querySelector("#shop-msg");
+        let dead = false;
+        function paintShops(items) {
+          if (!items.length) {
+            list.innerHTML = '<p class="lead">还没有店铺，先在上面添加。</p>';
+            return;
+          }
+          list.innerHTML = items
+            .map(function (item) {
+              return (
+                '<a class="han-team-card" href="/han/goods?team=' +
+                encodeURIComponent(team) +
+                "&store=" +
+                encodeURIComponent(item.store) +
+                '">' +
+                escapeHtml(item.store) +
+                "</a>"
+              );
+            })
+            .join("");
+        }
+        function loadShops() {
+          return jsonFetch("/api/han/shops?team=" + encodeURIComponent(team)).then(function (json) {
+            if (!dead) paintShops(json.items || []);
+          });
+        }
+        function onSubmit(e) {
+          e.preventDefault();
+          jsonFetch("/api/han/shops", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ team: team, store: root.querySelector("#shop-name").value }),
+          }).then(function (json) {
+            if (dead) return;
+            msg.textContent = json.ok ? "已添加店铺" : json.error || "失败";
+            if (json.ok) {
+              form.reset();
+              return loadShops();
+            }
+          });
+        }
+        form.addEventListener("submit", onSubmit);
+        loadShops().catch(function (err) {
+          if (!dead) msg.textContent = String(err);
+        });
+        return function unmount() {
+          dead = true;
+          form.removeEventListener("submit", onSubmit);
+          root.innerHTML = "";
+        };
+      }
+
       root.innerHTML = page(
-        team,
-        "商品数据 · " + team + "。六个分层左右排在同一张工作表里，向右滑动可看完。",
+        shop,
+        team + " · " + shop + "。六个分层左右排在同一张工作表里，向右滑动可看完。",
         '<style>' +
           ".han-sheet-wrap{overflow-x:auto;background:#fff;border:1px solid #c6c6c6}" +
           ".han-sheet{border-collapse:collapse;font-size:12px;min-width:2200px}" +
@@ -348,6 +415,8 @@
       function paintHead() {
         const title =
           '<tr><th class="han-sheet-title" colspan="' + totalCols + '">' +
+          escapeHtml(shop) +
+          " · " +
           escapeHtml(team) +
           " · 店铺产品分层表</th></tr>";
         const groups = "<tr>" + layers.map(function (layer) {
@@ -453,7 +522,9 @@
       }
 
       function load() {
-        return jsonFetch("/api/han/products?team=" + encodeURIComponent(team)).then(function (json) {
+        return jsonFetch(
+          "/api/han/products?team=" + encodeURIComponent(team) + "&store=" + encodeURIComponent(shop),
+        ).then(function (json) {
           if (dead) return;
           items = json.items || [];
           paintBody();
@@ -465,7 +536,7 @@
         if (!btn) return;
         const index = Number(btn.getAttribute("data-layer"));
         const layer = layers[index];
-        const body = { layer: layer.name, team: team };
+        const body = { layer: layer.name, team: team, store: shop };
         root.querySelectorAll('input[data-layer="' + index + '"]').forEach(function (el) {
           body[el.getAttribute("data-key")] = el.value;
         });
@@ -634,12 +705,17 @@
         ".han-fold-parent .xm-caret{flex-shrink:0}" +
         ".han-goods-level2,.han-goods-teams-sub{display:flex;flex-direction:column}" +
         ".han-goods-level2 .han-fold-parent{padding-left:1.85rem !important;font-size:0.9rem}" +
-        ".han-goods-teams-sub a{padding-left:2.6rem !important;font-size:0.88rem}" +
+        ".han-goods-teams-sub{gap:0}" +
+        ".han-goods-teams-sub a,.han-goods-teams-sub .han-fold-parent{padding-left:2.6rem !important;font-size:0.88rem}" +
+        ".han-team-fold:not(.is-open) .han-team-shops{display:none}" +
+        ".han-team-shops{display:flex;flex-direction:column}" +
+        ".han-team-shops a{padding-left:3.2rem !important;font-size:0.84rem}" +
         ".han-team-card{display:inline-block;margin:0 0.5rem 0.5rem 0;padding:0.55rem 0.9rem;border-radius:8px;background:#ccfbf1;color:#134e4a;text-decoration:none;font-weight:600}";
       document.head.appendChild(style);
     }
     const onGoods = location.pathname.indexOf("/han/goods") === 0;
     const current = new URLSearchParams(window.location.search).get("team") || "";
+    const currentShop = new URLSearchParams(window.location.search).get("store") || "";
     const wrap = document.createElement("div");
     wrap.id = "han-goods-teams";
     wrap.className = "han-goods-teams" + (onGoods ? " is-open" : "");
@@ -663,15 +739,46 @@
     const sub = document.createElement("div");
     sub.className = "han-goods-teams-sub";
     HAN_GOODS_TEAMS.forEach(function (name) {
-      const a = document.createElement("a");
-      a.className = "xm-menu-item xm-menu-child";
-      a.href = "/han/goods?team=" + encodeURIComponent(name);
-      a.textContent = name;
-      if (current === name) {
-        a.classList.add("is-active");
-        a.setAttribute("aria-current", "page");
+      const teamFold = document.createElement("div");
+      teamFold.className = "han-team-fold" + (current === name ? " is-open" : "");
+      teamFold.setAttribute("data-team", name);
+      const teamBtn = document.createElement("button");
+      teamBtn.type = "button";
+      teamBtn.className = "xm-menu-item xm-menu-child han-fold-parent";
+      teamBtn.innerHTML = "<span>" + name + "</span>" + HAN_CARET;
+      if (current === name && !currentShop) {
+        teamBtn.classList.add("is-active");
       }
-      sub.appendChild(a);
+      teamBtn.addEventListener("click", function () {
+        window.location.href = "/han/goods?team=" + encodeURIComponent(name);
+      });
+      const shops = document.createElement("div");
+      shops.className = "han-team-shops";
+      teamFold.appendChild(teamBtn);
+      teamFold.appendChild(shops);
+      sub.appendChild(teamFold);
+    });
+    jsonFetch("/api/han/shops").then(function (json) {
+      const items = json.items || [];
+      HAN_GOODS_TEAMS.forEach(function (name) {
+        const box = wrap.querySelector('.han-team-fold[data-team="' + name + '"] .han-team-shops');
+        if (!box) return;
+        const mine = items.filter(function (row) {
+          return row.team === name;
+        });
+        box.innerHTML = "";
+        mine.forEach(function (row) {
+          const a = document.createElement("a");
+          a.className = "xm-menu-item xm-menu-child";
+          a.href = "/han/goods?team=" + encodeURIComponent(name) + "&store=" + encodeURIComponent(row.store);
+          a.textContent = row.store;
+          if (current === name && currentShop === row.store) {
+            a.classList.add("is-active");
+            a.setAttribute("aria-current", "page");
+          }
+          box.appendChild(a);
+        });
+      });
     });
     layerFold.appendChild(layerBtn);
     layerFold.appendChild(sub);

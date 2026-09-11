@@ -243,6 +243,31 @@ test("han selection / products / paid boards are isolated", async () => {
     const titlesA = onlyA.body.items.map((row) => row.spu);
     assert.equal(titlesA.includes("TEAM-A"), true);
     assert.equal(titlesA.includes("TEAM-B"), false);
+
+    const shopA = await json(base, "/api/han/shops", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ team: "陈晓曼组", store: "晓曼一店" }),
+    });
+    assert.equal(shopA.res.status, 201);
+    await json(base, "/api/han/shops", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ team: "陈晓曼组", store: "晓曼二店" }),
+    });
+    await json(base, "/api/han/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ layer: "头部产品", spu: "SHOP-1", team: "陈晓曼组", store: "晓曼一店" }),
+    });
+    const shopList = await json(base, "/api/han/shops?team=" + encodeURIComponent("陈晓曼组"));
+    assert.equal(shopList.body.items.length, 2);
+    const onlyShop = await json(
+      base,
+      "/api/han/products?team=" + encodeURIComponent("陈晓曼组") + "&store=" + encodeURIComponent("晓曼一店"),
+    );
+    assert.equal(onlyShop.body.items.some((row) => row.spu === "SHOP-1"), true);
+    assert.equal(onlyShop.body.items.every((row) => row.store === "晓曼一店"), true);
   });
 });
 
@@ -317,6 +342,8 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /han-goods-teams/);
   assert.match(js, /商品分层/);
   assert.match(js, /han-fold-parent/);
+  assert.match(js, /\/api\/han\/shops/);
+  assert.match(js, /添加店铺/);
   assert.doesNotMatch(js, /han-layer-bar/);
   assert.doesNotMatch(js, /头部产品（高利润）/);
   assert.doesNotMatch(js, /新上架需做单产品/);
@@ -352,6 +379,7 @@ test("han schema uses prefixed tables", async () => {
   assert.match(sql, /layer VARCHAR/);
   assert.match(sql, /\bspu VARCHAR/);
   assert.match(sql, /team_name/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS han_team_shops/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_paid/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_training/);
   assert.match(sql, /store_name/);

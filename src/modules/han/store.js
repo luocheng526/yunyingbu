@@ -342,15 +342,70 @@ export function createHanStore(poolOrFactory = getPool) {
       return mapSelection(rows[0]);
     },
 
-    async listProducts({ team } = {}) {
+    async listProducts({ team, store } = {}) {
       await ensure();
       const [rows] = await db().query(`SELECT ${PRODUCT_SELECT} FROM han_products ORDER BY id ASC`);
-      const mapped = rows.map(mapProduct);
+      let mapped = rows.map(mapProduct);
       const teamName = normalizeProductTeam(team);
-      if (!teamName) {
-        return mapped;
+      const shop = String(store || "").trim();
+      if (teamName) {
+        mapped = mapped.filter((row) => row.team === teamName);
       }
-      return mapped.filter((row) => row.team === teamName);
+      if (shop) {
+        mapped = mapped.filter((row) => row.store === shop);
+      }
+      return mapped;
+    },
+
+    async listShops({ team } = {}) {
+      await ensure();
+      const [rows] = await db().query(
+        "SELECT id, team_name, store_name, created_at FROM han_team_shops ORDER BY id ASC",
+      );
+      const items = rows.map((row) => ({
+        id: String(row.id),
+        team: row.team_name,
+        store: row.store_name,
+        createdAt: toIso(row.created_at),
+      }));
+      const teamName = normalizeProductTeam(team);
+      return teamName ? items.filter((row) => row.team === teamName) : items;
+    },
+
+    async createShop({ team, store } = {}) {
+      await ensure();
+      const teamName = normalizeProductTeam(team);
+      const shop = String(store || "").trim();
+      if (!teamName) {
+        const err = new Error("team required");
+        err.statusCode = 400;
+        throw err;
+      }
+      if (!shop) {
+        const err = new Error("store required");
+        err.statusCode = 400;
+        throw err;
+      }
+      const existing = await this.listShops({ team: teamName });
+      if (existing.some((row) => row.store === shop)) {
+        const err = new Error("store already exists");
+        err.statusCode = 409;
+        throw err;
+      }
+      const [result] = await db().query(
+        "INSERT INTO han_team_shops (team_name, store_name) VALUES (?, ?)",
+        [teamName, shop],
+      );
+      const [rows] = await db().query(
+        "SELECT id, team_name, store_name, created_at FROM han_team_shops WHERE id = ?",
+        [result.insertId],
+      );
+      return {
+        id: String(rows[0].id),
+        team: rows[0].team_name,
+        store: rows[0].store_name,
+        createdAt: toIso(rows[0].created_at),
+      };
     },
 
     async createProduct({
