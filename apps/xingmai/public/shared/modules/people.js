@@ -1,4 +1,4 @@
-/* xm-module-people 0.1.80 */
+/* xm-module-people 0.1.82 */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -36,8 +36,8 @@
       ensureCss();
       root.innerHTML =
         '<main class="page people-page">' +
-        '<header class="page-head"><p class="kicker">人员管理</p><h1>花名册试点</h1>' +
-        '<p class="lead">先用手录身份和店权。沈子晗线的人和店已预置，标了演示。不接钉钉。一人多店用多条管辖。</p></header>' +
+        '<header class="page-head"><p class="kicker">组织中心</p><h1>花名册与登录</h1>' +
+        '<p class="lead">登录名用姓名，初始密码 zhenxuan123。离职或删除后立刻不能登录。一人多店用多条管辖。</p></header>' +
         '<div class="stack">' +
         '<section class="panel"><h2>身份名册</h2>' +
         '<form class="people-form" id="people-form">' +
@@ -50,7 +50,7 @@
         '<label>状态<select name="status"><option selected>在职</option><option>离职</option></select></label>' +
         '<button type="submit">新增人员</button></form>' +
         '<p class="status error" id="people-error" hidden></p>' +
-        '<div class="people-table-wrap"><table><thead><tr><th>姓名</th><th>工号</th><th>部门</th><th>上级</th><th>岗位</th><th>所属中心</th><th>状态</th><th>能看见的店</th></tr></thead>' +
+        '<div class="people-table-wrap"><table><thead><tr><th>姓名</th><th>工号</th><th>部门</th><th>上级</th><th>岗位</th><th>所属中心</th><th>状态</th><th>登录名</th><th>登录</th><th>能看见的店</th><th>操作</th></tr></thead>' +
         '<tbody id="people-tbody"></tbody></table></div></section>' +
         '<section class="panel"><h2>店铺 / 店群</h2>' +
         '<form class="people-mini-form" id="shop-form">' +
@@ -86,6 +86,7 @@
       const grantError = root.querySelector("#grant-error");
       let dead = false;
       let snapshot = { people: [], shops: [], grants: [], posts: ["店长", "运营", "主管", "经理"], centers: [] };
+      let me = null;
 
       function showError(el, message) {
         el.hidden = !message;
@@ -110,7 +111,7 @@
         const tbody = root.querySelector("#people-tbody");
         tbody.replaceChildren();
         if (!people.length) {
-          tbody.innerHTML = '<tr><td colspan="8" class="empty">暂无人员</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="11" class="empty">暂无人员</td></tr>';
           return;
         }
         people.forEach(function (person) {
@@ -140,6 +141,64 @@
           status.append(select);
           const shops = document.createElement("td");
           shops.textContent = (person.visibleShops || []).join("、") || "—";
+          const loginName = textCell(person.loginUsername || person.name);
+          const loginState = textCell(person.loginEnabled ? "可登录" : "已停用");
+          const actions = document.createElement("td");
+          if (me && me.username === "罗成") {
+            const box = document.createElement("div");
+            box.className = "people-actions";
+            const reset = document.createElement("button");
+            reset.type = "button";
+            reset.textContent = "强制改密";
+            reset.addEventListener("click", function () {
+              const next = window.prompt("新密码，留空则重置为 zhenxuan123", "");
+              if (next == null) {
+                return;
+              }
+              fetch("/api/people/" + person.id + "/password", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ newPassword: next })
+              }).then(function (res) {
+                return res.json().then(function (data) {
+                  return { res: res, data: data };
+                });
+              }).then(function (result) {
+                if (!result.res.ok || !result.data.ok) {
+                  window.alert(result.data.error || "改密失败");
+                  return;
+                }
+                return reload();
+              });
+            });
+            const remove = document.createElement("button");
+            remove.type = "button";
+            remove.textContent = "删除";
+            remove.addEventListener("click", function () {
+              if (!window.confirm("删除 " + person.name + " 后将不能登录。确定？")) {
+                return;
+              }
+              fetch("/api/people/" + person.id, {
+                method: "DELETE",
+                credentials: "same-origin"
+              }).then(function (res) {
+                return res.json().then(function (data) {
+                  return { res: res, data: data };
+                });
+              }).then(function (result) {
+                if (!result.res.ok || !result.data.ok) {
+                  window.alert(result.data.error || "删除失败");
+                  return;
+                }
+                return reload();
+              });
+            });
+            box.append(reset, remove);
+            actions.append(box);
+          } else {
+            actions.textContent = "—";
+          }
           const cells = [
             name,
             textCell(person.employeeNo),
@@ -148,7 +207,10 @@
             textCell(person.role),
             textCell(person.center),
             status,
-            shops
+            loginName,
+            loginState,
+            shops,
+            actions
           ];
           cells.forEach(function (cell) {
             tr.append(cell);
@@ -248,7 +310,8 @@
           fetch("/api/people", { credentials: "same-origin" }).then(function (res) { return res.json(); }),
           fetch("/api/people/shops", { credentials: "same-origin" }).then(function (res) { return res.json(); }),
           fetch("/api/people/grants", { credentials: "same-origin" }).then(function (res) { return res.json(); }),
-          fetch("/api/people/reconcile", { credentials: "same-origin" }).then(function (res) { return res.json(); })
+          fetch("/api/people/reconcile", { credentials: "same-origin" }).then(function (res) { return res.json(); }),
+          fetch("/api/auth/me", { credentials: "same-origin" }).then(function (res) { return res.json(); })
         ]).then(function (results) {
           if (dead) {
             return;
@@ -257,6 +320,7 @@
           const shopData = results[1];
           const grantData = results[2];
           const checkData = results[3];
+          me = results[4] && results[4].ok ? results[4] : null;
           if (!peopleData.ok) {
             throw new Error(peopleData.error || "无法加载人员名册");
           }

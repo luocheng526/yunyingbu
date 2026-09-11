@@ -51,6 +51,7 @@ test("login page is public", async () => {
   assert.doesNotMatch(html, /rel="icon"[^>]+href="\/login-logo\.png"/);
   assert.doesNotMatch(html, /href="data:image\/png;base64,/);
   assert.match(html, /ChangeMe123!/);
+  assert.match(html, /zhenxuan123/);
   assert.match(html, /login\.css\?v=0\.1\.169/);
   assert.match(html, /login-foot-pair/);
   assert.match(html, /DATA · OPERATION · ORGANIZATIONAL · TALENT · GROWTH/);

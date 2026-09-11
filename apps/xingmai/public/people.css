@@ -78,3 +78,15 @@
 .people-check {
   margin: 0 0 8px;
 }
+
+.people-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.people-actions button {
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+}

@@ -1,4 +1,13 @@
-import { dbMode, query } from "../profile/auth.js";
+import {
+  dbMode,
+  disableLogin,
+  disableLoginByPersonId,
+  loginStateForPerson,
+  provisionLogin,
+  query,
+  STAFF_INITIAL_PASSWORD,
+  syncRosterLogins
+} from "../profile/auth.js";
 
 export const CENTERS = [
   "沈子晗运营中心",
@@ -190,6 +199,11 @@ export function resetPeopleStore() {
   nextGrantId = 19;
 }
 
+async function ensureRosterLogins(list) {
+  const roster = list || (dbMode() === "mysql" ? await loadMysqlPeople() : people);
+  await syncRosterLogins(roster);
+}
+
 async function ignoreDuplicateColumn(work) {
   try {
     await work();
@@ -314,6 +328,7 @@ export async function hydrateFromMysql() {
   }
   grants = grantRows;
   nextGrantId = grants.reduce((max, grant) => Math.max(max, Number(grant.id) || 0), 0) + 1;
+  await ensureRosterLogins(people);
 }
 
 function personById(id, list) {
@@ -361,10 +376,13 @@ function decoratePeople(list, shopList, grantList) {
         seen.set(item.id, item.name);
       });
     });
+    const login = loginStateForPerson(person);
     return {
       ...clonePerson(person),
       managerName: person.managerId ? names.get(Number(person.managerId)) || "" : "",
-      visibleShops: [...seen.values()]
+      visibleShops: [...seen.values()],
+      loginUsername: login.loginUsername,
+      loginEnabled: login.loginEnabled
     };
   });
 }
@@ -376,8 +394,10 @@ export async function listPeople() {
       loadMysqlShops(),
       loadMysqlGrants()
     ]);
+    await ensureRosterLogins(personRows);
     return decoratePeople(personRows, shopRows, grantRows);
   }
+  await ensureRosterLogins(people);
   return decoratePeople(people, shops, grants);
 }
 
@@ -431,10 +451,38 @@ function parsePersonInput(input, { requireCore }) {
   return { ok: true, name, role, center, status, employeeNo, department, managerId };
 }
 
+async function nameTaken(name, exceptId) {
+  const list = dbMode() === "mysql" ? await loadMysqlPeople() : people;
+  return list.some((person) => person.name === name && Number(person.id) !== Number(exceptId || 0));
+}
+
+async function attachLogin(person, { resetPassword = false } = {}) {
+  if (!person || person.name === "罗成") {
+    return person;
+  }
+  if (person.status === "离职") {
+    await disableLogin(person.name);
+    await disableLoginByPersonId(person.id);
+    return { ...clonePerson(person), ...loginStateForPerson(person) };
+  }
+  await provisionLogin({
+    username: person.name,
+    displayName: person.name,
+    personId: person.id,
+    password: STAFF_INITIAL_PASSWORD,
+    resetPassword,
+    disabled: false
+  });
+  return { ...clonePerson(person), ...loginStateForPerson(person) };
+}
+
 export async function createPerson(input) {
   const parsed = parsePersonInput(input || {}, { requireCore: true });
   if (!parsed.ok) {
     return parsed;
+  }
+  if (await nameTaken(parsed.name)) {
+    return { ok: false, statusCode: 409, error: "姓名已存在，登录名必须唯一" };
   }
   const person = {
     id: nextPersonId,
@@ -454,12 +502,12 @@ export async function createPerson(input) {
       [person.name, person.role, person.center, person.status, person.employeeNo, person.department, person.managerId]
     );
     person.id = Number(result.insertId);
-    return { ok: true, person: clonePerson(person) };
+    return { ok: true, person: await attachLogin(person, { resetPassword: true }) };
   }
 
   person.id = nextPersonId++;
   people.push(person);
-  return { ok: true, person: clonePerson(person) };
+  return { ok: true, person: await attachLogin(person, { resetPassword: true }) };
 }
 
 async function revokeOpenGrants(personId) {
@@ -493,7 +541,9 @@ export async function updatePerson(id, input) {
   if (!current) {
     return { ok: false, statusCode: 404, error: "人员不存在" };
   }
-  const leaving = current.status !== "离职" && String(input.status || "").trim() === "离职";
+  const nextStatus = String(input.status || current.status || "").trim();
+  const leaving = current.status !== "离职" && nextStatus === "离职";
+  const rejoining = current.status === "离职" && nextStatus === "在职";
   const parsed = parsePersonInput(
     {
       name: input.name ?? current.name,
@@ -508,6 +558,9 @@ export async function updatePerson(id, input) {
   );
   if (!parsed.ok) {
     return parsed;
+  }
+  if (parsed.name !== current.name && (await nameTaken(parsed.name, personId))) {
+    return { ok: false, statusCode: 409, error: "姓名已存在，登录名必须唯一" };
   }
   const next = {
     ...current,
@@ -529,8 +582,43 @@ export async function updatePerson(id, input) {
   }
   if (leaving) {
     await revokeOpenGrants(personId);
+    await disableLogin(next.name);
+    await disableLoginByPersonId(personId);
+    if (current.name !== next.name) {
+      await disableLogin(current.name);
+    }
+  } else if (rejoining) {
+    await attachLogin(next, { resetPassword: true });
+  } else if (current.name !== next.name) {
+    await disableLogin(current.name);
+    await attachLogin(next, { resetPassword: false });
   }
-  return { ok: true, person: clonePerson(next) };
+  return { ok: true, person: { ...clonePerson(next), ...loginStateForPerson(next) } };
+}
+
+export async function deletePerson(id) {
+  const personId = Number(id);
+  if (!Number.isFinite(personId)) {
+    return { ok: false, statusCode: 400, error: "人员不存在" };
+  }
+  const current =
+    dbMode() === "mysql"
+      ? (await loadMysqlPeople()).find((person) => person.id === personId)
+      : personById(personId, people);
+  if (!current) {
+    return { ok: false, statusCode: 404, error: "人员不存在" };
+  }
+  await disableLogin(current.name);
+  await disableLoginByPersonId(personId);
+  await revokeOpenGrants(personId);
+  if (dbMode() === "mysql") {
+    await query("DELETE FROM people_grants WHERE person_id = ?", [personId]);
+    await query("DELETE FROM people WHERE id = ?", [personId]);
+  } else {
+    grants = grants.filter((grant) => Number(grant.personId) !== personId);
+    people = people.filter((person) => Number(person.id) !== personId);
+  }
+  return { ok: true };
 }
 
 export async function createShop(input) {
