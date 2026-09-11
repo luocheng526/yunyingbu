@@ -3,7 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { requireReleasesAuth } from "./auth.js";
 import { INCOMPLETE_ARTIFACT_ERROR, NEED_PASS_ERROR, REORDER_FORBIDDEN, withCharter } from "./charter.js";
-import { documentGaps, hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
+import { documentGaps, hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument, ticketGuardReason } from "./document.js";
+import { readBoardView, slimVersionItem } from "./board.js";
 import { assertQueueHead, describeNextVersion, listModuleVersions, resolveReleaseVersion } from "./version.js";
 import { assertSafeRel, attachRollbackMeta, attachRollbackMetaList, formatExecError, listMissingSourceFiles, liveRoot, markSnapshotRolledBack, pathsToSnapshot, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "./push.js";
 import {
@@ -31,16 +32,22 @@ function publishBlockedReason(item) {
   if (item.status === "rejected") {
     return { status: 409, error: "已驳回的单据禁止发布" };
   }
-  if (item.status === "publishing") {
-    return { status: 409, error: "有发布正在进行，禁止抢发" };
-  }
-  if (item.status === "success" || item.status === "failed") {
+  if (item.status === "failed") {
     return { status: 409, error: "该单据已结束，禁止再次发布" };
   }
   if (item.status !== "queued" && item.status !== "approved") {
     return { status: 409, error: "当前状态不允许发布" };
   }
   return null;
+}
+
+function alreadyPublishedPayload(item) {
+  return {
+    ok: true,
+    item,
+    version: item.version,
+    already: item.status
+  };
 }
 
 function successLog(item, pushResult, extra) {
@@ -137,6 +144,15 @@ export function createReleasesRouter(options = {}) {
   }
 
   async function handlePublish(req, res, item) {
+    if (!item) {
+      res.status(404).json({ ok: false, error: "单据不存在" });
+      return;
+    }
+    if (item.status === "publishing" || item.status === "success") {
+      res.json(alreadyPublishedPayload(item));
+      return;
+    }
+
     const blocked = publishBlockedReason(item);
     if (blocked) {
       res.status(blocked.status).json({ ok: false, error: blocked.error });
@@ -153,6 +169,16 @@ export function createReleasesRouter(options = {}) {
       return;
     }
 
+    const danger = ticketGuardReason({
+      module: item.module,
+      files: item.files,
+      contents: req.body?.contents || item.contents
+    });
+    if (danger) {
+      res.status(400).json({ ok: false, error: danger });
+      return;
+    }
+
     const skip = assertQueueHead(item, await store.queue());
     if (skip) {
       res.status(skip.status).json({ ok: false, error: skip.error });
@@ -161,6 +187,21 @@ export function createReleasesRouter(options = {}) {
 
     const acquired = await store.tryAcquireLock(item);
     if (!acquired) {
+      const latest = (await store.get(item.id)) || item;
+      const lock = await store.getLock();
+      if (latest.status === "publishing" || latest.status === "success") {
+        res.json(alreadyPublishedPayload(latest));
+        return;
+      }
+      if (lock && lock.locked && lock.current && lock.current.id === item.id) {
+        res.json({
+          ok: true,
+          item: latest,
+          version: latest.version,
+          already: "publishing"
+        });
+        return;
+      }
       res.status(409).json({ ok: false, error: "有发布正在进行，禁止抢发" });
       return;
     }
@@ -207,12 +248,52 @@ export function createReleasesRouter(options = {}) {
     res.status(500).json({ ok: false, error: result.error, item, version: item.version });
   }
 
-  router.get("/", async (_req, res) => {
+  async function sendBoardView(res, view, page, limit) {
+    const payload = await readBoardView(store, view, page, limit, listed);
+    if (!payload) {
+      return false;
+    }
+    if (view === "history") {
+      res.json(withCharter({ ok: true, ...payload, items: withSnapList(payload.items) }));
+      return true;
+    }
+    res.json(withCharter({ ok: true, ...payload }));
+    return true;
+  }
+
+  router.get("/", async (req, res) => {
+    const view = String(req.query?.view || "");
+    const page = Number(req.query?.page) || 1;
+    const limit = Number(req.query?.limit) || 20;
+    if (await sendBoardView(res, view, page, limit)) {
+      return;
+    }
     res.json(withCharter({ ok: true, items: withSnapList(await listed()) }));
+  });
+
+  router.get("/summary", async (_req, res) => {
+    await sendBoardView(res, "summary", 1, 20);
+  });
+
+  router.get("/history", async (req, res) => {
+    await sendBoardView(res, "history", Number(req.query?.page) || 1, Number(req.query?.limit) || 20);
+  });
+
+  router.get("/logs", async (req, res) => {
+    await sendBoardView(res, "logs", Number(req.query?.page) || 1, Number(req.query?.limit) || 20);
   });
 
   router.get("/queue", async (_req, res) => {
     res.json(withCharter({ ok: true, items: await store.queue() }));
+  });
+
+  router.get("/item/:id", async (req, res) => {
+    const item = await store.get(req.params.id);
+    if (!item) {
+      res.status(404).json({ ok: false, error: "单据不存在" });
+      return;
+    }
+    res.json(withCharter({ ok: true, item: withSnap(item) }));
   });
 
   router.get("/lock", async (_req, res) => {
@@ -220,7 +301,14 @@ export function createReleasesRouter(options = {}) {
   });
 
   router.get("/versions", async (_req, res) => {
-    res.json(withCharter({ ok: true, ...listModuleVersions(withSnapList(await listed())) }));
+    let rows = [];
+    try {
+      rows = typeof store.versionRows === "function" ? await store.versionRows() : (await listed()).map(slimVersionItem);
+    } catch (err) {
+      console.error("release versionRows failed", err);
+      rows = (await listed()).map(slimVersionItem);
+    }
+    res.json(withCharter({ ok: true, ...listModuleVersions(withSnapList(rows)) }));
   });
 
   router.get("/next", async (req, res) => {
@@ -275,6 +363,15 @@ export function createReleasesRouter(options = {}) {
     const module = parsed.document.module;
     if (!MODULES.includes(module)) {
       res.status(400).json({ ok: false, error: "模块不在允许列表中" });
+      return;
+    }
+    const danger = ticketGuardReason({
+      module,
+      files: parsed.document.files,
+      contents: body.contents || body.blobs
+    });
+    if (danger) {
+      res.status(400).json({ ok: false, error: danger });
       return;
     }
     let files = parsed.document.files || [];

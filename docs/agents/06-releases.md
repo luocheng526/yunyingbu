@@ -14,8 +14,9 @@
 - 闸门只拷源目录到线上。交单可带 `contents` 或 `ref`，先写入源目录；不要以为 git push 就算进源目录。
 - 制品没有完整完成不要交单：须有模块、文件、验收、是否重启，源文件齐，改到的 src 先过语法检查。未完成当场拒绝，防止系统崩溃卡住。
 
-【站点】http://zx.xingmaierp.cc/releases
+【站点】https://zx.xingmaierp.cc/releases
 【服务器】/opt/mengkai ，Nginx → 127.0.0.1:3000
+【线上登录】先读 docs/agents/00-prod-admin.md。用户名 `罗成` 或 `luocheng`。申请人写 `罗成运营部主脑`。不要用演示账号。不要把密码写进单据标题或登录页。
 
 【你拥有的路径】
 - public/releases.html
