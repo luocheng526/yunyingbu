@@ -1,4 +1,9 @@
 /** Demo payloads for data-center child pages. No database. */
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const liveDemoFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public/data/live-demo.json");
 
 export function getStoreLive() {
   return {
@@ -275,62 +280,7 @@ export function getGoodsBoard() {
   };
 }
 
-/** Live board for 实时看板. Same top metrics as 渠道总览; second row is live paid cards. */
+/** Live board for 实时看板. Mirrors homepage /api/home/live (charts, 5 cards, ranked shops). */
 export function getLiveBoard() {
-  return {
-    ok: true,
-    demo: true,
-    notice: "示例数据，尚未接入店铺",
-    title: "实时看板",
-    scope: "实时",
-    range: "7天",
-    dateLabel: "2026年9月9日",
-    ranges: ["7天", "昨日", "周", "月", "年", "自定义"],
-    views: [{ label: "实时看板", href: "/data/paid" }],
-    summary: { channels: 1, shops: 46 },
-    hero: {
-      label: "实时销售指数",
-      value: "165,362.13",
-      delta: -7.44,
-      spark: [28, 30, 26, 32, 31, 36, 34, 40, 38, 48, 46, 58]
-    },
-    cards: [
-      { key: "pay", label: "支付金额 (支付)", value: "837,247.17", extra: "付费成交ROI 2.40" },
-      { key: "ad", label: "推广花费 (支付预估)", value: "348,174.63", extra: "推广占比 41.59%" },
-      { key: "profit", label: "利润 (支付预估)", value: "415,136.64", extra: "毛利率 49.58%" },
-      { key: "roi", label: "付费成交ROI", value: "2.40" },
-      { key: "livePay", label: "实时付费成交额", value: "12,480.50" },
-      { key: "liveAd", label: "实时推广花费额", value: "5,210.30" },
-      { key: "liveFee", label: "实时费比", value: "41.75%" }
-    ],
-    shopLiveTable: {
-      title: "店铺实时付费明细",
-      columns: [
-        "店铺",
-        "实时销售指数",
-        "支付金额 (支付)",
-        "推广花费 (支付预估)",
-        "利润 (支付预估)",
-        "付费成交ROI",
-        "实时付费成交额",
-        "实时推广花费额",
-        "实时费比"
-      ],
-      rows: [
-        { name: "当页汇总", kind: "sum", cells: ["165,362.13", "837,247.17", "348,174.63", "415,136.64", "2.40", "12,480.50", "5,210.30", "41.75%"] },
-        { name: "RASW家居旗舰店", kind: "shop", color: "#4da6ff", cells: ["22,997.91", "70,190.95", "29,180.40", "34,820.11", "2.41", "1,842.30", "764.20", "41.48%"] },
-        { name: "RASW旗舰店", kind: "shop", color: "#4da6ff", cells: ["17,568.69", "66,474.58", "27,640.22", "32,910.80", "2.40", "1,620.10", "678.50", "41.88%"] },
-        { name: "HYGEAR医疗保健旗舰店", kind: "shop", color: "#4da6ff", cells: ["19,986.66", "56,928.22", "23,710.18", "28,210.40", "2.40", "1,410.80", "592.10", "41.97%"] },
-        { name: "SAWAAG平价专卖店", kind: "shop", color: "#4da6ff", cells: ["14,216.75", "52,932.76", "22,040.66", "26,240.90", "2.40", "1,288.40", "541.80", "42.05%"] },
-        { name: "RASW生活电器旗舰店", kind: "shop", color: "#e53935", cells: ["8,929.03", "52,426.01", "21,830.10", "25,980.20", "2.40", "1,205.60", "504.20", "41.82%"] },
-        { name: "RASW个护旗舰店", kind: "shop", color: "#4da6ff", cells: ["10,792.90", "35,991.48", "14,980.40", "17,840.30", "2.40", "880.20", "366.40", "41.63%"] },
-        { name: "DIKTTT欧格专卖店", kind: "shop", color: "#e53935", cells: ["13,747.75", "34,409.11", "14,320.80", "17,050.60", "2.40", "842.10", "352.80", "41.89%"] },
-        { name: "RASW健康电器旗舰店", kind: "shop", color: "#4da6ff", cells: ["10,018.13", "30,516.64", "12,700.20", "15,120.80", "2.40", "746.50", "311.20", "41.69%"] },
-        { name: "HYGEAR健康器械旗舰店", kind: "shop", color: "#4da6ff", cells: ["6,287.11", "29,508.85", "12,280.40", "14,620.10", "2.40", "721.80", "301.50", "41.77%"] },
-        { name: "ZYUTO旗舰店", kind: "shop", color: "#e53935", cells: ["7,087.40", "29,329.38", "12,210.30", "14,530.40", "2.40", "718.20", "299.80", "41.74%"] },
-        { name: "SAWAAG居家旗舰店", kind: "shop", color: "#4da6ff", cells: ["5,226.70", "25,147.45", "10,470.20", "12,460.80", "2.40", "615.40", "256.90", "41.75%"] },
-        { name: "张望居家旗舰店", kind: "shop", color: "#e53935", cells: ["8,850.20", "24,587.95", "10,240.80", "12,180.50", "2.40", "601.80", "251.40", "41.77%"] }
-      ]
-    }
-  };
+  return JSON.parse(fs.readFileSync(liveDemoFile, "utf8"));
 }
