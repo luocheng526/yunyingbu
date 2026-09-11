@@ -229,7 +229,15 @@ export async function getHandbookSection(id) {
   };
 }
 
-export async function saveHandbookSection(id, { title, body } = {}) {
+export async function saveHandbookSection(id, { title, body, move, beforeId, parentId } = {}) {
+  if (move === true || move === "true") {
+    await moveHandbookNode({ id, beforeId, parentId });
+    const section = await getHandbookSection(id);
+    if (!section) {
+      throw bad("没有这一节", 404);
+    }
+    return section;
+  }
   const tree = await loadTree();
   const node = findNode(tree, safeSectionId(id));
   if (!node) {
