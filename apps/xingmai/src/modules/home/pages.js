@@ -5,7 +5,7 @@ import * as profileShell from "../profile/middleware.js";
 import { NAV_ITEMS } from "./nav-items.js";
 
 // xm-upgrade-mask 0.1.52  必须和 profile/middleware.js 成套发。
-// xm-fast-shell 0.1.135
+// xm-fast-shell 0.1.136
 // login.html 不走 HTML 内存缓存，必须和 profile/middleware.js 成套发。
 
 function renderExistingPage(filePath) {
@@ -90,6 +90,10 @@ export function registerPageRoutes(app) {
       res.redirect(302, "/shen/product");
       return;
     }
+    if ((method === "GET" || method === "HEAD") && path === "/shen/growth") {
+      res.redirect(302, "/shen/product");
+      return;
+    }
     next();
   });
   app.get("/data", (_req, res) => {
@@ -99,6 +103,9 @@ export function registerPageRoutes(app) {
     res.redirect(302, "/shen/product");
   });
   app.get("/shen/selection", (_req, res) => {
+    res.redirect(302, "/shen/product");
+  });
+  app.get("/shen/growth", (_req, res) => {
     res.redirect(302, "/shen/product");
   });
   app.get("/han", (_req, res) => {
