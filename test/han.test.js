@@ -315,6 +315,8 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /段坤孝组/);
   assert.match(js, /薛双双组/);
   assert.match(js, /han-goods-teams/);
+  assert.match(js, /商品分层/);
+  assert.match(js, /han-fold-parent/);
   assert.doesNotMatch(js, /han-layer-bar/);
   assert.doesNotMatch(js, /头部产品（高利润）/);
   assert.doesNotMatch(js, /新上架需做单产品/);

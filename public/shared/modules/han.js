@@ -297,9 +297,9 @@
       const team = (new URLSearchParams(window.location.search).get("team") || "").trim();
       if (!teams.includes(team)) {
         root.innerHTML = page(
-          "商品数据",
-          "先选小组，再填该组的店铺产品分层表。",
-          '<div class="stack"><section class="panel"><h2>小组</h2><div class="actions" style="flex-wrap:wrap">' +
+          "商品分层",
+          "商品数据展开后是商品分层，再打开是各小组。点小组进入该组工作表。",
+          '<div class="stack"><section class="panel"><h2>商品分层</h2><div class="actions" style="flex-wrap:wrap">' +
             teams
               .map(function (name) {
                 return (
@@ -612,6 +612,8 @@
   };
 
   const HAN_GOODS_TEAMS = ["陈晓曼组", "高明阳组", "毛永超组", "段坤孝组", "薛双双组"];
+  const HAN_CARET =
+    '<i class="xm-caret" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 10 4 4 4-4"/></svg></i>';
 
   function attachHanGoodsTeams() {
     if (document.getElementById("han-goods-teams")) {
@@ -626,19 +628,40 @@
       style.id = "han-goods-teams-css";
       style.textContent =
         ".han-goods-teams{display:flex;flex-direction:column}" +
-        ".han-goods-teams-sub{display:flex;flex-direction:column;padding:0 0 0.15rem}" +
-        ".han-goods-teams-sub a{padding-left:2.35rem !important;font-size:0.88rem}" +
+        ".han-goods-teams:not(.is-open) .han-goods-level2{display:none}" +
+        ".han-layer-fold:not(.is-open) .han-goods-teams-sub{display:none}" +
+        ".han-fold-parent{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;background:transparent;cursor:pointer;text-align:left}" +
+        ".han-fold-parent .xm-caret{flex-shrink:0}" +
+        ".han-goods-level2,.han-goods-teams-sub{display:flex;flex-direction:column}" +
+        ".han-goods-level2 .han-fold-parent{padding-left:1.85rem !important;font-size:0.9rem}" +
+        ".han-goods-teams-sub a{padding-left:2.6rem !important;font-size:0.88rem}" +
         ".han-team-card{display:inline-block;margin:0 0.5rem 0.5rem 0;padding:0.55rem 0.9rem;border-radius:8px;background:#ccfbf1;color:#134e4a;text-decoration:none;font-weight:600}";
       document.head.appendChild(style);
     }
+    const onGoods = location.pathname.indexOf("/han/goods") === 0;
+    const current = new URLSearchParams(window.location.search).get("team") || "";
     const wrap = document.createElement("div");
     wrap.id = "han-goods-teams";
-    wrap.className = "han-goods-teams";
-    goods.parentNode.insertBefore(wrap, goods);
-    wrap.appendChild(goods);
+    wrap.className = "han-goods-teams" + (onGoods ? " is-open" : "");
+    const goodsBtn = document.createElement("button");
+    goodsBtn.type = "button";
+    goodsBtn.className = "xm-menu-item xm-menu-child han-fold-parent";
+    goodsBtn.setAttribute("aria-expanded", onGoods ? "true" : "false");
+    goodsBtn.innerHTML = "<span>商品数据</span>" + HAN_CARET;
+    if (goods.classList.contains("is-active") && !current) {
+      goodsBtn.classList.add("is-active");
+    }
+    const level2 = document.createElement("div");
+    level2.className = "han-goods-level2";
+    const layerFold = document.createElement("div");
+    layerFold.className = "han-layer-fold" + (onGoods ? " is-open" : "");
+    const layerBtn = document.createElement("button");
+    layerBtn.type = "button";
+    layerBtn.className = "xm-menu-item xm-menu-child han-fold-parent";
+    layerBtn.setAttribute("aria-expanded", onGoods ? "true" : "false");
+    layerBtn.innerHTML = "<span>商品分层</span>" + HAN_CARET;
     const sub = document.createElement("div");
     sub.className = "han-goods-teams-sub";
-    const current = new URLSearchParams(window.location.search).get("team") || "";
     HAN_GOODS_TEAMS.forEach(function (name) {
       const a = document.createElement("a");
       a.className = "xm-menu-item xm-menu-child";
@@ -647,12 +670,24 @@
       if (current === name) {
         a.classList.add("is-active");
         a.setAttribute("aria-current", "page");
-        goods.classList.remove("is-active");
-        goods.removeAttribute("aria-current");
       }
       sub.appendChild(a);
     });
-    wrap.appendChild(sub);
+    layerFold.appendChild(layerBtn);
+    layerFold.appendChild(sub);
+    level2.appendChild(layerFold);
+    wrap.appendChild(goodsBtn);
+    wrap.appendChild(level2);
+    goods.parentNode.insertBefore(wrap, goods);
+    goods.remove();
+    goodsBtn.addEventListener("click", function () {
+      const open = wrap.classList.toggle("is-open");
+      goodsBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    layerBtn.addEventListener("click", function () {
+      const open = layerFold.classList.toggle("is-open");
+      layerBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    });
     return true;
   }
 
