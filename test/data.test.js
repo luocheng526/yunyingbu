@@ -219,11 +219,16 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(liveJs.text, /pruneShopTable/);
     assert.doesNotMatch(liveJs.text, /统计时间/);
     assert.match(liveJs.text, /销售单数/);
+    assert.doesNotMatch(liveJs.text, /渠道总览/);
     assert.doesNotMatch(paidPage.text, /实时明细/);
     const liveApi = await get(base, "/api/data/live");
     assert.equal(liveApi.res.status, 200);
     const live = JSON.parse(liveApi.text);
     assert.equal(live.title, "实时看板");
+    assert.equal(
+      (live.views || []).some((v) => v.label === "渠道总览"),
+      false
+    );
     assert.equal(live.cards.length, 7);
     assert.equal(
       live.cards.some((c) => c.key === "orders" || c.key === "margin" || c.key === "liveProfit"),

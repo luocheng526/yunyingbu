@@ -16,10 +16,6 @@
   ],
   "views": [
     {
-      "label": "渠道总览",
-      "href": "/data/overview"
-    },
-    {
       "label": "实时看板",
       "href": "/data/paid"
     }

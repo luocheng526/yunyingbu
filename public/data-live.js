@@ -13,7 +13,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=live-hide4";
+      link.href = "/data-pages.css?v=live-notitle5";
       document.head.appendChild(link);
     }
   }
@@ -172,20 +172,6 @@
       }
       const hero = payload.hero || {};
       const down = Number(hero.delta) < 0;
-      const views = (payload.views || [])
-        .map(function (view) {
-          const current = view.href === "/data/paid";
-          return (
-            '<a href="' +
-            escapeHtml(view.href) +
-            '"' +
-            (current ? ' class="is-active"' : "") +
-            ">" +
-            escapeHtml(view.label) +
-            "</a>"
-          );
-        })
-        .join("");
       const cards = (payload.cards || [])
         .filter(function (card) {
           return (
@@ -208,9 +194,8 @@
         })
         .join("");
       board.innerHTML =
-        '<div class="ch-top"><div class="ch-views">' +
-        views +
-        '</div><div class="lv-now"><span id="lv-clock">' +
+        '<div class="ch-top"><div class="ch-title">实时看板</div>' +
+        '<div class="lv-now"><span id="lv-clock">' +
         escapeHtml(clock) +
         '</span><button type="button" data-refresh>刷新</button></div></div>' +
         '<div class="ch-summary"><span class="ch-sum-title">综合指标</span>' +

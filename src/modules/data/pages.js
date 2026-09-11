@@ -286,10 +286,7 @@ export function getLiveBoard() {
     range: "7天",
     dateLabel: "2026年9月9日",
     ranges: ["7天", "昨日", "周", "月", "年", "自定义"],
-    views: [
-      { label: "渠道总览", href: "/data/overview" },
-      { label: "实时看板", href: "/data/paid" }
-    ],
+    views: [{ label: "实时看板", href: "/data/paid" }],
     summary: { channels: 1, shops: 46 },
     hero: {
       label: "实时销售指数",
