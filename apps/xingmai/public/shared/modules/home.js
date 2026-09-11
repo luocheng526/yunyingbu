@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.317-home-shopid */
+/* xm-module-home 0.1.331-home-shopid */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
