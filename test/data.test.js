@@ -145,6 +145,9 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /显示数字/);
     assert.match(overviewJs.text, /请选择店铺/);
     assert.match(overviewJs.text, /个人默认视图/);
+    assert.match(overviewJs.text, /\/api\/data\/overview/);
+    assert.match(overviewJs.text, /实时销售指数/);
+    assert.match(overviewJs.text, /渠道总览/);
     assert.doesNotMatch(overviewPage.text, /公司/);
     const teamApi = await get(base, "/api/data/team");
     assert.equal(teamApi.res.status, 200);

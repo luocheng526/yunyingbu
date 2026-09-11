@@ -113,7 +113,7 @@
 
   function mountOverview(root) {
     ensureSheet();
-    return loadScript("/data-overview.js?v=channel-tpl2").then(function () {
+    return loadScript("/data-overview.js?v=channel-erp1").then(function () {
       if (typeof window.XmDataCreateDashboard === "function") {
         return window.XmDataCreateDashboard(root);
       }

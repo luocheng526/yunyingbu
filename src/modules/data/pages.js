@@ -82,8 +82,8 @@ export function getTeamOverview() {
     title: "渠道总览",
     scope: "团队",
     range: "7天",
-    dateLabel: "2026年9月9日",
-    ranges: ["7天", "昨日", "周", "月", "年", "自定义"],
+    dateLabel: "2026/9/10",
+    ranges: ["7天", "30天", "日", "周", "月", "年", "自定义"],
     summary: { channels: 1, shops: 46 },
     hero: {
       label: "实时销售指数",

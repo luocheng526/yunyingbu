@@ -1,8 +1,22 @@
 (function () {
   window.XmModules = window.XmModules || {};
 
+  var RANGES = ["7天", "30天", "日", "周", "月", "年", "自定义"];
+  var SECTIONS = ["渠道列表", "店铺分组", "经营数据", "竞对对比", "品类分析", "热销商品"];
+  var TABLE_COLS = [
+    "实时销售额 (支付)",
+    "店铺上新成功率",
+    "销售单数",
+    "净销售单数 (支付)",
+    "支付金额 (支付)",
+    "无效单金额 (标注)",
+    "退款金额",
+    "退款率 (按金额)",
+    "净销售额 (支付)"
+  ];
+
   function escapeHtml(value) {
-    return String(value)
+    return String(value == null ? "" : value)
       .replaceAll("&", "&amp;")
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;")
@@ -13,13 +27,13 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css";
+      link.href = "/data-pages.css?v=channel-erp1";
       document.head.appendChild(link);
     }
   }
 
   function stripPageChrome(root) {
-    Array.prototype.forEach.call(root.querySelectorAll(".kicker, .data-subnav"), function (el) {
+    Array.prototype.forEach.call(root.querySelectorAll(".kicker, .data-subnav, .page-head"), function (el) {
       el.remove();
     });
     Array.prototype.forEach.call(root.querySelectorAll("h1"), function (el) {
@@ -27,6 +41,164 @@
         el.remove();
       }
     });
+  }
+
+  function pad(n) {
+    return String(n).padStart(2, "0");
+  }
+
+  function ymd(date) {
+    return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate());
+  }
+
+  function slashDate(date) {
+    return date.getFullYear() + "/" + (date.getMonth() + 1) + "/" + date.getDate();
+  }
+
+  function rangeSpan(label, customFrom, customTo) {
+    const to = new Date();
+    to.setHours(0, 0, 0, 0);
+    const from = new Date(to);
+    if (label === "30天") {
+      from.setDate(from.getDate() - 29);
+    } else if (label === "日") {
+      from.setDate(from.getDate() - 1);
+      to.setTime(from.getTime());
+    } else if (label === "周") {
+      const day = from.getDay() || 7;
+      from.setDate(from.getDate() - day + 1);
+    } else if (label === "月") {
+      from.setDate(1);
+    } else if (label === "年") {
+      from.setMonth(0, 1);
+    } else if (label === "自定义" && customFrom && customTo) {
+      return { from: customFrom, to: customTo, dateLabel: customFrom.replaceAll("-", "/") + " - " + customTo.replaceAll("-", "/") };
+    } else {
+      from.setDate(from.getDate() - 6);
+    }
+    return { from: ymd(from), to: ymd(to), dateLabel: slashDate(to) };
+  }
+
+  function fmt(value, digits) {
+    if (value == null || value === "" || value === "--") {
+      return "--";
+    }
+    const n = Number(value);
+    if (Number.isNaN(n)) {
+      return String(value);
+    }
+    return n.toLocaleString("zh-CN", {
+      minimumFractionDigits: digits || 0,
+      maximumFractionDigits: digits == null ? 2 : digits
+    });
+  }
+
+  function pct(value) {
+    if (value == null || Number.isNaN(Number(value))) {
+      return "--";
+    }
+    const n = Number(value);
+    return ((n > 1 ? n : n * 100)).toFixed(2) + "%";
+  }
+
+  function cardOf(cards, key) {
+    return (cards || []).find(function (card) {
+      return card.key === key;
+    }) || {};
+  }
+
+  function metricRow(shop) {
+    const pay = Number(shop.payAmount) || 0;
+    const refund = Number(shop.refundAmount) || 0;
+    return [
+      fmt(pay, 2),
+      "--",
+      fmt(shop.orderCount, 0),
+      fmt(shop.netOrderCount, 0),
+      fmt(pay, 2),
+      "--",
+      fmt(refund, 2),
+      pct(shop.refundRate != null ? shop.refundRate : pay ? refund / pay : null),
+      fmt(pay - refund, 2)
+    ];
+  }
+
+  function fromErp(raw, rangeLabel, dateLabel) {
+    const cardsIn = raw.cards || [];
+    const shops = raw.shops || [];
+    const trend = raw.trend || [];
+    const pay = Number(cardOf(cardsIn, "payAmount").value) || shops.reduce(function (s, r) { return s + (Number(r.payAmount) || 0); }, 0);
+    const orders = Number(cardOf(cardsIn, "orderCount").value) || shops.reduce(function (s, r) { return s + (Number(r.orderCount) || 0); }, 0);
+    const profit = Number(cardOf(cardsIn, "profit").value) || shops.reduce(function (s, r) { return s + (Number(r.profit) || 0); }, 0);
+    const refund = Number(cardOf(cardsIn, "refundAmount").value) || shops.reduce(function (s, r) { return s + (Number(r.refundAmount) || 0); }, 0);
+    const promo = shops.reduce(function (s, r) { return s + (Number(r.totalPromotionCost) || 0); }, 0)
+      || trend.reduce(function (s, r) { return s + (Number(r.promotionCost) || 0); }, 0);
+    const last = trend[trend.length - 1] || {};
+    const prev = trend[trend.length - 2] || last;
+    const lastPay = Number(last.payAmount);
+    const prevPay = Number(prev.payAmount);
+    const heroVal = lastPay || pay;
+    const delta = prevPay ? ((lastPay - prevPay) / prevPay) * 100 : 0;
+    const margin = pay ? profit / pay : 0;
+    const refundRate = pay ? refund / pay : 0;
+    const promoRate = pay ? promo / pay : 0;
+    const shopCount = Number(raw.shopTotal) || shops.length;
+    const channelCells = metricRow({
+      payAmount: pay,
+      orderCount: orders,
+      netOrderCount: shops.reduce(function (s, r) { return s + (Number(r.netOrderCount) || 0); }, 0),
+      refundAmount: refund,
+      refundRate: refundRate
+    });
+    const shopRows = shops.map(function (shop) {
+      return { name: shop.shopName, kind: "shop", shopId: shop.shopId, cells: metricRow(shop) };
+    });
+    const pageSum = metricRow({
+      payAmount: shops.reduce(function (s, r) { return s + (Number(r.payAmount) || 0); }, 0),
+      orderCount: shops.reduce(function (s, r) { return s + (Number(r.orderCount) || 0); }, 0),
+      netOrderCount: shops.reduce(function (s, r) { return s + (Number(r.netOrderCount) || 0); }, 0),
+      refundAmount: shops.reduce(function (s, r) { return s + (Number(r.refundAmount) || 0); }, 0)
+    });
+    return {
+      ok: true,
+      source: raw.source || "xingmai-erp",
+      title: "渠道总览",
+      range: rangeLabel,
+      dateLabel: dateLabel,
+      ranges: RANGES,
+      summary: { channels: 1, shops: shopCount },
+      hero: {
+        label: "实时销售指数",
+        value: fmt(heroVal, 2),
+        delta: Number(delta.toFixed(2)),
+        spark: trend.map(function (row) { return Number(row.payAmount) || 0; })
+      },
+      cards: [
+        { key: "pay", label: "支付金额 (支付)", value: fmt(pay, 2) },
+        { key: "orders", label: "销售单数 (支付)", value: fmt(orders, 0) },
+        { key: "ad", label: "推广花费 (支付预估)", value: fmt(promo, 2), extra: "推广占比 " + pct(promoRate) },
+        { key: "profit", label: "利润 (支付预估)", value: fmt(profit, 2), extra: "毛利率 " + pct(margin) },
+        { key: "margin", label: "大毛利率", value: pct(margin) },
+        { key: "custom", label: "自定义费用", value: "0" },
+        { key: "refundRate", label: "退款率 (按金额)", value: pct(refundRate) },
+        { key: "adRate", label: "推广花费占比 (支付预估)", value: pct(promoRate) }
+      ],
+      sections: SECTIONS,
+      shops: shops,
+      channelTable: {
+        title: "渠道列表",
+        columns: ["渠道"].concat(TABLE_COLS),
+        rows: [
+          { name: "汇总", kind: "sum", cells: channelCells },
+          { name: "京东", kind: "jd", cells: channelCells }
+        ]
+      },
+      shopTable: {
+        title: "店铺列表",
+        columns: ["店铺"].concat(TABLE_COLS),
+        rows: [{ name: "当页汇总", kind: "sum", cells: pageSum }].concat(shopRows)
+      }
+    };
   }
 
   function sparkSvg(points) {
@@ -125,26 +297,43 @@
     );
   }
 
-  function frameHtml() {
-    return '<main class="xm-page data-overview-root ch-root"><div id="board"></div></main>';
-  }
-
   function createDashboard(root) {
     ensureCss();
     stripPageChrome(root);
     let board = root.querySelector("#board");
     if (!board) {
-      root.innerHTML = frameHtml();
+      root.innerHTML = '<main class="xm-page data-overview-root ch-root"><div id="board"></div></main>';
       board = root.querySelector("#board");
     }
-    let payload = null;
-    let section = "渠道列表";
+    const state = {
+      range: "7天",
+      customFrom: "",
+      customTo: "",
+      shopId: "",
+      section: "渠道列表",
+      payload: null
+    };
     let dead = false;
 
+    function filteredPayload() {
+      const payload = state.payload;
+      if (!payload || !state.shopId) {
+        return payload;
+      }
+      const shopTable = payload.shopTable || {};
+      const rows = (shopTable.rows || []).filter(function (row) {
+        return row.kind === "sum" || row.shopId === state.shopId;
+      });
+      return Object.assign({}, payload, {
+        shopTable: Object.assign({}, shopTable, { rows: rows })
+      });
+    }
+
     function render() {
-      if (dead || !payload || !board) {
+      if (dead || !state.payload || !board) {
         return;
       }
+      const payload = filteredPayload();
       const hero = payload.hero || {};
       const down = Number(hero.delta) < 0;
       const cards = (payload.cards || [])
@@ -160,40 +349,59 @@
           );
         })
         .join("");
-      const tabs = (payload.sections || [])
+      const tabs = (payload.sections || SECTIONS)
         .map(function (name) {
           return (
             '<button type="button" data-section="' +
             escapeHtml(name) +
             '"' +
-            (name === section ? ' class="is-active"' : "") +
+            (name === state.section ? ' class="is-active"' : "") +
             ">" +
             escapeHtml(name) +
             "</button>"
           );
         })
         .join("");
-      const ranges = (payload.ranges || [])
-        .map(function (label) {
+      const ranges = RANGES.map(function (label) {
+        return (
+          '<button type="button" data-range="' +
+          escapeHtml(label) +
+          '"' +
+          (label === state.range ? ' class="is-active"' : "") +
+          ">" +
+          escapeHtml(label) +
+          "</button>"
+        );
+      }).join("");
+      const custom =
+        state.range === "自定义"
+          ? '<label class="ch-pick">从 <input type="date" data-from value="' +
+            escapeHtml(state.customFrom) +
+            '" /></label><label class="ch-pick">至 <input type="date" data-to value="' +
+            escapeHtml(state.customTo) +
+            '" /></label>'
+          : "";
+      const shopOpts =
+        '<option value="">请选择店铺</option>' +
+        ((payload.shops || []).map(function (shop) {
           return (
-            '<button type="button" data-range="' +
-            escapeHtml(label) +
+            '<option value="' +
+            escapeHtml(shop.shopId) +
             '"' +
-            (label === payload.range ? ' class="is-active"' : "") +
+            (shop.shopId === state.shopId ? " selected" : "") +
             ">" +
-            escapeHtml(label) +
-            "</button>"
+            escapeHtml(shop.shopName) +
+            "</option>"
           );
-        })
-        .join("");
+        }).join(""));
       const lists =
-        section === "渠道列表"
+        state.section === "渠道列表"
           ? tableHtml(payload.channelTable) +
             tableHtml(
               payload.shopTable,
-              '<label class="ch-pick"><select disabled><option>请选择店铺</option></select></label>'
+              '<label class="ch-pick"><select data-shop>' + shopOpts + "</select></label>"
             )
-          : '<p class="ch-empty">「' + escapeHtml(section) + "」为示例，尚未接入。</p>";
+          : '<p class="ch-empty">「' + escapeHtml(state.section) + "」为示例，尚未接入。</p>";
       board.innerHTML =
         '<div class="ch-top"><div class="ch-title">渠道总览</div>' +
         '<div class="ch-right"><span class="ch-time">（统计时间：' +
@@ -201,9 +409,10 @@
         "）</span>" +
         '<div class="ch-ranges">' +
         ranges +
+        custom +
         "</div></div></div>" +
         '<div class="ch-summary"><span class="ch-sum-title">综合指标</span>' +
-        '<b>渠道 ' +
+        "<b>渠道 " +
         escapeHtml(String(payload.summary.channels)) +
         "个</b>" +
         "<b>店铺 " +
@@ -220,7 +429,7 @@
         (down ? "is-down" : "is-up") +
         '">' +
         (down ? "↓ " : "↑ ") +
-        escapeHtml(String(Math.abs(Number(hero.delta || 0)))) +
+        escapeHtml(String(Math.abs(Number(hero.delta || 0)).toFixed(2))) +
         "%</div></article>" +
         cards +
         "</div>" +
@@ -230,55 +439,83 @@
         lists;
     }
 
-    board.addEventListener("click", function (event) {
-      const rangeBtn = event.target.closest("button[data-range]");
-      if (rangeBtn && payload) {
-        payload.range = rangeBtn.getAttribute("data-range");
-        render();
-        return;
-      }
-      const secBtn = event.target.closest("button[data-section]");
-      if (secBtn) {
-        section = secBtn.getAttribute("data-section");
-        render();
-      }
-    });
-
-    fetch("/api/data/team", {
-      credentials: "same-origin",
-      headers: { Accept: "application/json" }
-    })
-      .then(function (res) {
+    function json(url) {
+      return fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } }).then(function (res) {
         if (!res.ok) {
           throw new Error("接口 " + res.status);
         }
         return res.json();
-      })
-      .then(function (data) {
-        if (!dead) {
-          payload = data;
-          render();
-        }
-      })
-      .catch(function () {
-        return fetch("/data/team-demo.json", { credentials: "same-origin" }).then(function (res) {
-          if (!res.ok) {
-            throw new Error("示例数据 " + res.status);
-          }
-          return res.json();
-        });
-      })
-      .then(function (data) {
-        if (data && !payload && !dead) {
-          payload = data;
-          render();
-        }
-      })
-      .catch(function (err) {
-        if (!dead && board) {
-          board.innerHTML = '<p class="data-table error">' + escapeHtml(err.message) + "</p>";
-        }
       });
+    }
+
+    function load() {
+      const span = rangeSpan(state.range, state.customFrom, state.customTo);
+      const params = new URLSearchParams();
+      params.set("from", span.from + " 00:00:00");
+      params.set("to", span.to + " 23:59:59");
+      params.set("payTimeStart", span.from + " 00:00:00");
+      params.set("payTimeEnd", span.to + " 23:59:59");
+      return json("/api/data/overview?" + params.toString())
+        .then(function (data) {
+          if (dead) {
+            return;
+          }
+          if (data && data.ok && (data.source === "xingmai-erp" || (data.shops && data.shops.length) || (data.cards || []).some(function (c) { return c.key === "payAmount"; }))) {
+            state.payload = fromErp(data, state.range, span.dateLabel);
+            render();
+            return;
+          }
+          throw new Error("empty");
+        })
+        .catch(function () {
+          return json("/api/data/team")
+            .catch(function () {
+              return json("/data/team-demo.json");
+            })
+            .then(function (demo) {
+              if (dead || !demo) {
+                return;
+              }
+              demo.range = state.range;
+              demo.dateLabel = span.dateLabel;
+              demo.ranges = RANGES;
+              state.payload = demo;
+              render();
+            });
+        });
+    }
+
+    board.addEventListener("click", function (event) {
+      const rangeBtn = event.target.closest("button[data-range]");
+      if (rangeBtn) {
+        state.range = rangeBtn.getAttribute("data-range");
+        load();
+        return;
+      }
+      const secBtn = event.target.closest("button[data-section]");
+      if (secBtn) {
+        state.section = secBtn.getAttribute("data-section");
+        render();
+      }
+    });
+    board.addEventListener("change", function (event) {
+      if (event.target.matches("[data-shop]")) {
+        state.shopId = event.target.value;
+        render();
+        return;
+      }
+      if (event.target.matches("[data-from]")) {
+        state.customFrom = event.target.value;
+        load();
+        return;
+      }
+      if (event.target.matches("[data-to]")) {
+        state.customTo = event.target.value;
+        load();
+      }
+    });
+
+    load();
 
     return function unmount() {
       dead = true;
@@ -307,7 +544,7 @@
   }
 
   const existingBoard = document.getElementById("board");
-  if (existingBoard) {
+  if (existingBoard && /\/data\/overview\/?$/.test(location.pathname)) {
     createDashboard(existingBoard.closest(".xm-page") || document.body);
   }
 })();
