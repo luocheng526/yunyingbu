@@ -50,7 +50,9 @@ test("login page is public", async () => {
   assert.match(html, /rel="shortcut icon" href="\/favicon\.ico\?v=0\.1\.131"/);
   assert.doesNotMatch(html, /rel="icon"[^>]+href="\/login-logo\.png"/);
   assert.doesNotMatch(html, /href="data:image\/png;base64,/);
-  assert.match(html, /ChangeMe123!/);
+  assert.doesNotMatch(html, /ChangeMe123!/);
+  assert.doesNotMatch(html, /zhenxuan123/);
+  assert.doesNotMatch(html, /演示账号/);
   assert.match(html, /login\.css\?v=0\.1\.169/);
   assert.match(html, /login-foot-pair/);
   assert.match(html, /DATA · OPERATION · ORGANIZATIONAL · TALENT · GROWTH/);

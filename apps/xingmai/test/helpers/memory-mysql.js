@@ -67,13 +67,28 @@ export function createMemoryPool() {
       return Number(row.id);
     }
 
-    if (s === "SELECT username, display_name, email, phone, password_hash FROM xm_users") {
-      return [tables.xm_users.map(clone), undefined];
+    if (s.startsWith("SELECT username, display_name, email, phone, password_hash")) {
+      return [
+        tables.xm_users.map((row) => ({
+          person_id: row.person_id ?? null,
+          disabled: row.disabled ?? 0,
+          ...clone(row)
+        })),
+        undefined
+      ];
     }
     if (s.startsWith("INSERT INTO xm_users")) {
-      const [username, display_name, email, phone, password_hash, updated_at] = params;
-      const existing = tables.xm_users.find((row) => row.username === username);
-      const row = { username, display_name, email, phone, password_hash, updated_at };
+      const existing = tables.xm_users.find((row) => row.username === params[0]);
+      const row = {
+        username: params[0],
+        display_name: params[1],
+        email: params[2],
+        phone: params[3],
+        password_hash: params[4],
+        person_id: params.length > 6 ? params[5] : null,
+        disabled: params.length > 6 ? params[6] : 0,
+        updated_at: params.length > 6 ? params[7] : params[5]
+      };
       if (existing) {
         Object.assign(existing, row);
       } else {
@@ -148,6 +163,26 @@ export function createMemoryPool() {
         row.manager_id = params[6];
       }
       return [{ affectedRows: row ? 1 : 0 }, undefined];
+    }
+    if (s.startsWith("UPDATE people SET demo =")) {
+      let count = 0;
+      tables.people.forEach((row) => {
+        if (Number(row.demo)) {
+          row.demo = 0;
+          count += 1;
+        }
+      });
+      return [{ affectedRows: count }, undefined];
+    }
+    if (s.startsWith("UPDATE people_shops SET demo =")) {
+      let count = 0;
+      tables.people_shops.forEach((row) => {
+        if (Number(row.demo)) {
+          row.demo = 0;
+          count += 1;
+        }
+      });
+      return [{ affectedRows: count }, undefined];
     }
     if (s.startsWith("UPDATE people SET role =")) {
       const id = Number(params[params.length - 1]);
@@ -252,6 +287,35 @@ export function createMemoryPool() {
       const before = tables.xm_sessions.length;
       tables.xm_sessions = tables.xm_sessions.filter((row) => row.sid !== sid);
       return [{ affectedRows: before - tables.xm_sessions.length }, undefined];
+    }
+    if (s.startsWith("DELETE FROM xm_sessions WHERE username")) {
+      const username = params[0];
+      const before = tables.xm_sessions.length;
+      tables.xm_sessions = tables.xm_sessions.filter((row) => row.username !== username);
+      return [{ affectedRows: before - tables.xm_sessions.length }, undefined];
+    }
+    if (s.startsWith("DELETE FROM xm_sessions WHERE sid NOT IN")) {
+      const keep = tables.xm_sessions
+        .slice()
+        .sort((a, b) => Number(b.expires_at) - Number(a.expires_at))
+        .slice(0, 8)
+        .map((row) => row.sid);
+      const keepSet = new Set(keep);
+      const before = tables.xm_sessions.length;
+      tables.xm_sessions = tables.xm_sessions.filter((row) => keepSet.has(row.sid));
+      return [{ affectedRows: before - tables.xm_sessions.length }, undefined];
+    }
+    if (s.startsWith("DELETE FROM people_grants WHERE person_id")) {
+      const personId = Number(params[0]);
+      const before = tables.people_grants.length;
+      tables.people_grants = tables.people_grants.filter((row) => Number(row.person_id) !== personId);
+      return [{ affectedRows: before - tables.people_grants.length }, undefined];
+    }
+    if (s.startsWith("DELETE FROM people WHERE id")) {
+      const id = Number(params[0]);
+      const before = tables.people.length;
+      tables.people = tables.people.filter((row) => Number(row.id) !== id);
+      return [{ affectedRows: before - tables.people.length }, undefined];
     }
     if (s.startsWith("INSERT INTO notes")) {
       const [text, created_at] = params;

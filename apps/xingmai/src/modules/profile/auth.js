@@ -76,6 +76,8 @@ export const SCHEMA_SQL = [
     email VARCHAR(255) NOT NULL DEFAULT '',
     phone VARCHAR(64) NOT NULL DEFAULT '',
     password_hash VARCHAR(512) NOT NULL,
+    person_id INT NULL,
+    disabled TINYINT NOT NULL DEFAULT 0,
     updated_at DATETIME NOT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   `CREATE TABLE IF NOT EXISTS han_tasks (
@@ -172,11 +174,31 @@ export async function ensureDatabase() {
   }
 }
 
+async function ignoreDuplicateColumn(work) {
+  try {
+    await work();
+  } catch (err) {
+    const message = String(err && err.message ? err.message : err);
+    if (!/Duplicate column|already exists/i.test(message)) {
+      throw err;
+    }
+  }
+}
+
+export async function ensureUserColumns(target) {
+  const db = target || (await getPool());
+  await ignoreDuplicateColumn(() => db.query("ALTER TABLE xm_users ADD COLUMN person_id INT NULL"));
+  await ignoreDuplicateColumn(() =>
+    db.query("ALTER TABLE xm_users ADD COLUMN disabled TINYINT NOT NULL DEFAULT 0")
+  );
+}
+
 export async function ensureSchema(target) {
   const db = target || (await getPool());
   for (const sql of SCHEMA_SQL) {
     await db.query(sql);
   }
+  await ensureUserColumns(db);
 }
 
 export async function query(sql, params = []) {
@@ -190,10 +212,16 @@ const scryptAsync = promisify(scrypt);
 export const COOKIE_NAME = "mk_sid";
 export const DEMO_USERNAME = "罗成";
 export const DEMO_INITIAL_PASSWORD = "ChangeMe123!";
+export const STAFF_INITIAL_PASSWORD = "zhenxuan123";
 
 const KEYLEN = 64;
 const users = new Map();
 const sessions = new Map();
+let rosterLookup = null;
+
+export function setRosterLookup(fn) {
+  rosterLookup = typeof fn === "function" ? fn : null;
+}
 
 function hashPasswordSync(password) {
   const salt = randomBytes(16);
@@ -237,19 +265,77 @@ function seed() {
     displayName: "罗成",
     email: "luocheng@demo.local",
     phone: "",
-    passwordHash: hashPasswordSync(DEMO_INITIAL_PASSWORD)
+    passwordHash: hashPasswordSync(DEMO_INITIAL_PASSWORD),
+    personId: null,
+    disabled: false
   });
 }
 
+function normalizeUsername(username) {
+  return typeof username === "string" ? username.trim() : "";
+}
+
+function isPlatformAdminName(username) {
+  const name = normalizeUsername(username);
+  return name === DEMO_USERNAME || name.toLowerCase() === "luocheng";
+}
+
+export function isPlatformAdmin(user) {
+  return Boolean(user && isPlatformAdminName(user.username));
+}
+
+function findUserByPersonId(personId) {
+  if (personId == null || personId === "") {
+    return null;
+  }
+  const id = Number(personId);
+  if (!Number.isFinite(id) || id <= 0) {
+    return null;
+  }
+  for (const user of users.values()) {
+    if (user.personId == null || user.personId === "") {
+      continue;
+    }
+    if (Number(user.personId) === id) {
+      return user;
+    }
+  }
+  return null;
+}
+
+export function loginStateForPerson(person) {
+  if (!person) {
+    return { loginUsername: "", loginEnabled: false };
+  }
+  const user = resolveUser(person.name) || findUserByPersonId(person.id);
+  if (!user) {
+    return { loginUsername: person.name, loginEnabled: false };
+  }
+  return { loginUsername: user.username, loginEnabled: !user.disabled };
+}
+
 function resolveUser(username) {
-  const trimmed = username.trim();
+  const trimmed = normalizeUsername(username);
   if (!trimmed) {
     return null;
   }
-  if (trimmed === DEMO_USERNAME || trimmed.toLowerCase() === "luocheng") {
+  if (isPlatformAdminName(trimmed)) {
     return users.get(DEMO_USERNAME) ?? null;
   }
-  return users.get(trimmed) ?? null;
+  const direct = users.get(trimmed);
+  if (direct) {
+    return direct;
+  }
+  for (const [key, user] of users.entries()) {
+    if (user.username === trimmed) {
+      if (key !== trimmed) {
+        users.delete(key);
+        users.set(trimmed, user);
+      }
+      return user;
+    }
+  }
+  return null;
 }
 
 seed();
@@ -263,21 +349,33 @@ export async function persistUser(user) {
     return;
   }
   await query(
-    `INSERT INTO xm_users (username, display_name, email, phone, password_hash, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO xm_users (username, display_name, email, phone, password_hash, person_id, disabled, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        display_name = VALUES(display_name),
        email = VALUES(email),
        phone = VALUES(phone),
        password_hash = VALUES(password_hash),
+       person_id = VALUES(person_id),
+       disabled = VALUES(disabled),
        updated_at = VALUES(updated_at)`,
-    [user.username, user.displayName, user.email, user.phone, user.passwordHash, nowSql()]
+    [
+      user.username,
+      user.displayName,
+      user.email || "",
+      user.phone || "",
+      user.passwordHash,
+      user.personId == null ? null : Number(user.personId),
+      user.disabled ? 1 : 0,
+      nowSql()
+    ]
   );
 }
 
 export async function hydrateFromMysql() {
+  await ensureUserColumns();
   const [rows] = await query(
-    "SELECT username, display_name, email, phone, password_hash FROM xm_users"
+    "SELECT username, display_name, email, phone, password_hash, person_id, disabled FROM xm_users"
   );
   if (rows.length) {
     users.clear();
@@ -287,7 +385,9 @@ export async function hydrateFromMysql() {
         displayName: row.display_name,
         email: row.email,
         phone: row.phone,
-        passwordHash: row.password_hash
+        passwordHash: row.password_hash,
+        personId: row.person_id == null || row.person_id === "" ? null : Number(row.person_id),
+        disabled: Boolean(Number(row.disabled))
       });
     }
     if (!users.has(DEMO_USERNAME)) {
@@ -356,6 +456,152 @@ async function dropSession(sid) {
   await query("DELETE FROM xm_sessions WHERE sid = ?", [sid]);
 }
 
+export async function dropSessionsForUser(username) {
+  const name = normalizeUsername(username);
+  if (!name) {
+    return;
+  }
+  for (const [sid, session] of [...sessions.entries()]) {
+    if (session.username === name) {
+      sessions.delete(sid);
+    }
+  }
+  if (dbMode() === "mysql") {
+    await query("DELETE FROM xm_sessions WHERE username = ?", [name]);
+  }
+}
+
+function publicLoginState(user) {
+  return {
+    username: user.username,
+    displayName: user.displayName,
+    personId: user.personId == null ? null : Number(user.personId),
+    disabled: Boolean(user.disabled)
+  };
+}
+
+export async function provisionLogin(input = {}) {
+  const username = normalizeUsername(input.username);
+  if (!username) {
+    return { ok: false, statusCode: 400, error: "登录名不能为空" };
+  }
+  if (isPlatformAdminName(username)) {
+    return { ok: false, statusCode: 409, error: "不能占用平台超管账号" };
+  }
+  const personId = input.personId == null || input.personId === "" ? null : Number(input.personId);
+  const existing = users.get(username) || (personId != null ? findUserByPersonId(personId) : null);
+  if (
+    existing &&
+    !existing.disabled &&
+    existing.personId != null &&
+    personId != null &&
+    Number(existing.personId) !== personId
+  ) {
+    return { ok: false, statusCode: 409, error: "该姓名已有登录账号" };
+  }
+  if (existing && existing.username !== username && users.has(username) && !users.get(username).disabled) {
+    return { ok: false, statusCode: 409, error: "该姓名已有登录账号" };
+  }
+  const password =
+    typeof input.password === "string" && input.password.trim()
+      ? input.password.trim()
+      : STAFF_INITIAL_PASSWORD;
+  if (password.length < 8) {
+    return { ok: false, statusCode: 400, error: "密码至少 8 位" };
+  }
+  const reused = Boolean(existing && existing.disabled);
+  const resetPassword = input.resetPassword === true || !existing || reused || !existing.passwordHash;
+  const user = existing || {
+    username,
+    email: "",
+    phone: ""
+  };
+  if (existing && existing.username !== username) {
+    users.delete(existing.username);
+    await dropSessionsForUser(existing.username);
+    user.username = username;
+  }
+  user.username = username;
+  user.displayName = input.displayName || username;
+  user.personId = personId;
+  user.disabled = Boolean(input.disabled);
+  if (resetPassword || input.resetPassword === true || !user.passwordHash) {
+    user.passwordHash = hashPasswordSync(password);
+  }
+  users.set(username, user);
+  await persistUser(user);
+  return { ok: true, user: publicLoginState(user) };
+}
+
+export async function disableLogin(username) {
+  const user = resolveUser(username) || users.get(normalizeUsername(username));
+  if (!user) {
+    return { ok: true };
+  }
+  if (isPlatformAdminName(user.username)) {
+    return { ok: false, statusCode: 403, error: "不能停用平台超管" };
+  }
+  user.disabled = true;
+  await persistUser(user);
+  await dropSessionsForUser(user.username);
+  return { ok: true };
+}
+
+export async function disableLoginByPersonId(personId) {
+  const user = findUserByPersonId(personId);
+  if (!user) {
+    return { ok: true };
+  }
+  return disableLogin(user.username);
+}
+
+export async function forceResetPassword(username, newPassword) {
+  const user = resolveUser(username) || users.get(normalizeUsername(username));
+  if (!user) {
+    return { ok: false, statusCode: 404, error: "账号不存在" };
+  }
+  if (isPlatformAdminName(user.username)) {
+    return { ok: false, statusCode: 403, error: "超管请到个人中心改密" };
+  }
+  const password =
+    typeof newPassword === "string" && newPassword.trim() ? newPassword.trim() : STAFF_INITIAL_PASSWORD;
+  if (password.length < 8) {
+    return { ok: false, statusCode: 400, error: "密码至少 8 位" };
+  }
+  user.passwordHash = await hashPassword(password);
+  user.disabled = false;
+  await persistUser(user);
+  await dropSessionsForUser(user.username);
+  return { ok: true };
+}
+
+export async function syncRosterLogins(roster) {
+  for (const person of roster || []) {
+    const name = normalizeUsername(person && person.name);
+    if (!name || isPlatformAdminName(name)) {
+      continue;
+    }
+    if (person.status === "离职") {
+      const user = users.get(name) || findUserByPersonId(person.id);
+      if (user) {
+        await disableLogin(user.username);
+      }
+      continue;
+    }
+    const existing = users.get(name) || findUserByPersonId(person.id);
+    if (existing && !existing.disabled && existing.username === name && existing.personId != null) {
+      continue;
+    }
+    await provisionLogin({
+      username: name,
+      displayName: name,
+      personId: person.id,
+      password: STAFF_INITIAL_PASSWORD,
+      resetPassword: !existing || existing.disabled
+    });
+  }
+}
+
 export function resetStoreForTests() {
   setPoolForTests(null);
   setDbMode("memory");
@@ -372,7 +618,9 @@ export function publicProfile(user) {
     username: user.username,
     displayName: user.displayName,
     email: user.email,
-    phone: user.phone
+    phone: user.phone,
+    personId: user.personId == null ? null : Number(user.personId),
+    disabled: Boolean(user.disabled)
   };
 }
 
@@ -408,7 +656,11 @@ export function currentUser(req) {
     sessions.delete(sid);
     return null;
   }
-  return users.get(session.username) ?? null;
+  const user = resolveUser(session.username);
+  if (!user || user.disabled) {
+    return null;
+  }
+  return user;
 }
 
 function cookieSecure(req) {
@@ -464,6 +716,34 @@ export function requireAuth(req, res, next) {
 
 export const authRouter = Router();
 
+async function attachRosterLogin(username) {
+  if (!rosterLookup || isPlatformAdminName(username)) {
+    return resolveUser(username);
+  }
+  let person = null;
+  try {
+    person = await rosterLookup(username);
+  } catch (err) {
+    console.error("roster login lookup failed", err);
+    return resolveUser(username);
+  }
+  if (!person || person.status === "离职" || isPlatformAdminName(person.name)) {
+    return resolveUser(username);
+  }
+  const existing = resolveUser(person.name) || findUserByPersonId(person.id);
+  if (existing && !existing.disabled && existing.username === person.name) {
+    return existing;
+  }
+  await provisionLogin({
+    username: person.name,
+    displayName: person.name,
+    personId: person.id,
+    password: STAFF_INITIAL_PASSWORD,
+    resetPassword: !existing || existing.disabled
+  });
+  return resolveUser(person.name);
+}
+
 authRouter.post("/login", async (req, res) => {
   const username = typeof req.body?.username === "string" ? req.body.username.trim() : "";
   const password = typeof req.body?.password === "string" ? req.body.password : "";
@@ -471,8 +751,18 @@ authRouter.post("/login", async (req, res) => {
     res.status(401).json({ ok: false, error: "请输入用户名和密码" });
     return;
   }
-  const user = resolveUser(username);
-  if (!user || !(await verifyPassword(password, user.passwordHash))) {
+  let user = resolveUser(username);
+  if (!user || user.disabled) {
+    user = (await attachRosterLogin(username)) || user;
+  }
+  if (!user || user.disabled) {
+    res.status(401).json({
+      ok: false,
+      error: user && user.disabled ? "账号已停用，无法登录" : "用户名或密码错误"
+    });
+    return;
+  }
+  if (!(await verifyPassword(password, user.passwordHash))) {
     res.status(401).json({ ok: false, error: "用户名或密码错误" });
     return;
   }
