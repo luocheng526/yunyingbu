@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.130 */
+/* xm-fast-shell 0.1.131 */
 (function () {
-  const ASSET_VER = "0.1.130";
+  const ASSET_VER = "0.1.131";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -265,6 +265,9 @@
     add("/shared/nav.js");
     add("/shared/layout.css");
     add(window.location.pathname);
+    add("/login");
+    add("/login.html");
+    add("/login.css");
     const id = MODULES[normalize(window.location.pathname)];
     if (id) {
       add("/shared/modules/" + id + ".js");
@@ -275,9 +278,10 @@
   function hardReload() {
     const urls = collectReloadUrls();
     const jobs = urls.map(function (url) {
+      const loginAsset = /\/login(?:\.html|\.css)?(?:[?#]|$)/.test(url);
       return fetch(url, {
         cache: "reload",
-        credentials: "same-origin",
+        credentials: loginAsset ? "omit" : "same-origin",
         headers: { "Cache-Control": "no-cache", Pragma: "no-cache" }
       }).catch(function () {});
     });
