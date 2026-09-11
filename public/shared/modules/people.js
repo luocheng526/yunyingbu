@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.173-rights-mods";
+    const href = "/people.css?v=0.1.174-store-import";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -110,7 +110,7 @@
         '<span class="spacer" id="org-count"></span>' +
         '<button type="button" class="ghost" id="org-template">下载模板</button>' +
         '<button type="button" class="ghost" id="org-import">导入</button>' +
-        '<input type="file" id="org-import-file" accept=".csv,text/csv" hidden />' +
+        '<input type="file" id="org-import-file" accept=".csv,.txt,text/csv,text/plain" hidden />' +
         '<button type="button" class="ghost" id="org-export">导出本筛</button>' +
         '<button type="button" id="org-add">+ 新增店铺</button>' +
         "</div>" +
@@ -330,11 +330,76 @@
         URL.revokeObjectURL(a.href);
       }
 
-      function parseCsv(text) {
+      function sniffDelimiter(text) {
+        const line = String(text || "").split(/\r?\n/).find(function (item) {
+          return item.trim();
+        }) || "";
+        const commas = (line.match(/,/g) || []).length;
+        const tabs = (line.match(/\t/g) || []).length;
+        const semis = (line.match(/;/g) || []).length;
+        if (tabs > commas && tabs >= semis) {
+          return "\t";
+        }
+        if (semis > commas) {
+          return ";";
+        }
+        return ",";
+      }
+
+      function decodeTableText(bytes) {
+        if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+          return new TextDecoder("utf-16le").decode(bytes);
+        }
+        if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+          return new TextDecoder("utf-16be").decode(bytes);
+        }
+        const utf8 = new TextDecoder("utf-8").decode(bytes);
+        if (/店铺名称|店名|总负责人|姓名/.test(utf8)) {
+          return utf8;
+        }
+        try {
+          const gbk = new TextDecoder("gb18030").decode(bytes);
+          if (/店铺名称|店名|总负责人|姓名/.test(gbk)) {
+            return gbk;
+          }
+        } catch (err) {
+          /* keep utf8 */
+        }
+        return utf8;
+      }
+
+      function normalizeStoreHeader(name) {
+        const raw = String(name || "").replace(/^\uFEFF/, "").replace(/\s+/g, "").trim();
+        const aliases = {
+          总负责人: "总负责人",
+          小组负责人: "小组负责人",
+          店铺所属人员: "店铺所属人员",
+          所属人员: "店铺所属人员",
+          店铺名称: "店铺名称",
+          店名: "店铺名称",
+          店铺ID: "店铺ID",
+          店铺id: "店铺ID",
+          店铺编号: "店铺ID",
+          商家id: "商家id",
+          商家ID: "商家id",
+          商家Id: "商家id",
+          店铺情况备注: "店铺情况备注",
+          备注: "店铺情况备注",
+          更新时间: "更新时间",
+          退店时间: "退店时间",
+          登录主账号: "登录主账号",
+          主账号: "登录主账号",
+          密码: "密码"
+        };
+        return aliases[raw] || raw;
+      }
+
+      function parseCsv(text, delim) {
         const rows = [];
         let row = [];
         let cell = "";
         let quoted = false;
+        const sep = delim || ",";
         const source = String(text || "").replace(/^\uFEFF/, "");
         for (let i = 0; i < source.length; i += 1) {
           const ch = source[i];
@@ -351,7 +416,7 @@
           }
           if (ch === '"') {
             quoted = true;
-          } else if (ch === ",") {
+          } else if (ch === sep) {
             row.push(cell);
             cell = "";
           } else if (ch === "\n") {
@@ -1892,28 +1957,56 @@
           return;
         }
         file
-          .text()
-          .then(function (text) {
-            const table = parseCsv(text);
-            if (table.length < 2) {
+          .arrayBuffer()
+          .then(function (buf) {
+            const bytes = new Uint8Array(buf);
+            if (bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4b) {
+              throw new Error("请把 Excel 另存为 CSV 再导入，不要直接传 xlsx");
+            }
+            const text = decodeTableText(bytes);
+            const table = parseCsv(text, sniffDelimiter(text));
+            if (!table.length) {
               throw new Error("模板至少要有表头和一行数据");
             }
-            const headers = table[0].map(function (cell) {
-              return String(cell || "").trim();
+            let headerIndex = -1;
+            table.forEach(function (cells, index) {
+              if (headerIndex >= 0) {
+                return;
+              }
+              const joined = cells.map(normalizeStoreHeader).join(",");
+              if (joined.indexOf("店铺名称") >= 0) {
+                headerIndex = index;
+              }
             });
-            const missing = STORE_HEADERS.filter(function (name) {
+            if (headerIndex < 0) {
+              throw new Error("没认出店铺名称。请用下载模板，或把 Excel 另存为 CSV 再导。");
+            }
+            const headers = (table[headerIndex] || []).map(normalizeStoreHeader);
+            const missing = ["店铺名称", "店铺所属人员"].filter(function (name) {
               return headers.indexOf(name) < 0;
             });
             if (missing.length) {
-              throw new Error("表头需与表格一致，缺少：" + missing.join("、"));
+              throw new Error("没认出店铺名称、店铺所属人员。请用下载模板，或把 Excel 另存为 CSV 再导。缺：" + missing.join("、"));
             }
-            const rows = table.slice(1).map(function (cells) {
-              const item = {};
-              headers.forEach(function (name, index) {
-                item[name] = cells[index] || "";
+            const rows = table
+              .slice(headerIndex + 1)
+              .map(function (cells) {
+                const item = {};
+                headers.forEach(function (name, index) {
+                  if (name) {
+                    item[name] = cells[index] || "";
+                  }
+                });
+                return item;
+              })
+              .filter(function (item) {
+                return Object.keys(item).some(function (key) {
+                  return String(item[key] || "").trim();
+                });
               });
-              return item;
-            });
+            if (!rows.length) {
+              throw new Error("模板至少要有表头和一行数据");
+            }
             return fetch("/api/people/org/stores/import", {
               method: "POST",
               credentials: "same-origin",

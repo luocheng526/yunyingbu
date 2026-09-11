@@ -575,15 +575,21 @@ const HEADER_TO_FIELD = {
   总负责人: "chief",
   小组负责人: "lead",
   店铺所属人员: "owner",
+  所属人员: "owner",
   店铺名称: "storeName",
+  店名: "storeName",
   店铺ID: "storeId",
   店铺id: "storeId",
+  店铺编号: "storeId",
   商家id: "merchantId",
   商家ID: "merchantId",
+  商家Id: "merchantId",
   店铺情况备注: "remark",
+  备注: "remark",
   更新时间: "updatedOn",
   退店时间: "closedOn",
   登录主账号: "login",
+  主账号: "login",
   密码: "password"
 };
 
@@ -620,7 +626,15 @@ export function mapImportRow(raw = {}) {
   }
   const next = {};
   for (const [key, value] of Object.entries(raw)) {
-    const field = HEADER_TO_FIELD[String(key).trim()] || (["chief", "lead", "owner", "storeName", "storeId", "merchantId", "remark", "updatedOn", "closedOn", "login", "password"].includes(key) ? key : "");
+    const norm = String(key || "")
+      .replace(/^\uFEFF/, "")
+      .replace(/\s+/g, "")
+      .trim();
+    const field =
+      HEADER_TO_FIELD[norm] ||
+      (["chief", "lead", "owner", "storeName", "storeId", "merchantId", "remark", "updatedOn", "closedOn", "login", "password"].includes(norm)
+        ? norm
+        : "");
     if (field) {
       next[field] = value;
     }

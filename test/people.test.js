@@ -4,7 +4,7 @@ import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { patchAppSource } from "../src/modules/people/patch-app.js";
-import { resetOrgBoard } from "../src/modules/people/org-board.js";
+import { mapImportRow, resetOrgBoard } from "../src/modules/people/org-board.js";
 import { resetOrgExtra } from "../src/modules/people/org-extra.js";
 import { hydrateFromMysql, resetPeopleStore } from "../src/modules/people/store.js";
 
@@ -18,6 +18,19 @@ test.beforeEach(() => {
   resetPeopleStore();
   resetOrgBoard();
   resetOrgExtra();
+});
+
+test("mapImportRow accepts Excel-style store headers", () => {
+  assert.deepEqual(
+    mapImportRow({ 店名: "A店", 所属人员: "张三", 商家ID: "188", 店铺编号: "SID188", 主账号: "demo_a" }),
+    {
+      storeName: "A店",
+      owner: "张三",
+      merchantId: "188",
+      storeId: "SID188",
+      login: "demo_a"
+    }
+  );
 });
 
 async function withServer(fn) {
@@ -75,6 +88,10 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /双击单元格/);
     assert.match(jsText, /下载模板/);
     assert.match(jsText, /id="org-import"/);
+    assert.match(jsText, /decodeTableText/);
+    assert.match(jsText, /gb18030/);
+    assert.match(jsText, /normalizeStoreHeader/);
+    assert.match(jsText, /另存为 CSV/);
     assert.match(jsText, /组织中心-店铺主数据模板/);
     assert.match(jsText, /org-check-all/);
     assert.match(jsText, /org-filter-btn/);
@@ -271,7 +288,7 @@ test("org store board lists demo shops and supports add", async () => {
             店铺所属人员: "导入同事",
             店铺名称: "导入旗舰店",
             店铺ID: "SID188",
-            商家id: "18800001",
+            商家ID: "18800001",
             店铺情况备注: "运营中",
             更新时间: "9.11更新",
             退店时间: "",
