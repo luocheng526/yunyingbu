@@ -489,7 +489,8 @@ test("submit-data-release posts version applicant module summary", async () => {
         ...process.env,
         RELEASES_API: `http://127.0.0.1:${port}/api/releases`,
         RELEASE_VERSION: "0.1.0-data",
-        RELEASE_APPLICANT: "数据中心"
+        RELEASE_APPLICANT: "数据中心",
+        RELEASE_NO_LOGIN: "1"
       }
     });
     const [code] = await Promise.all([
@@ -511,11 +512,89 @@ test("submit-data-release posts version applicant module summary", async () => {
       env: {
         ...process.env,
         RELEASES_API: `http://127.0.0.1:${port}/api/releases`,
-        RELEASE_FILES: "src/app.js"
+        RELEASE_FILES: "src/app.js",
+        RELEASE_NO_LOGIN: "1"
       }
     });
     const refuseCode = await new Promise((resolve) => refuse.on("close", resolve));
     assert.notEqual(refuseCode, 0);
+  } finally {
+    await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
+});
+
+test("prod admin doc and submit script keep password off tickets", async () => {
+  const adminDoc = fs.readFileSync(path.join(repoRoot, "docs/agents/00-prod-admin.md"), "utf8");
+  assert.match(adminDoc, /罗成运营部主脑/);
+  assert.match(adminDoc, /不要把登录密码写进单据标题/);
+  assert.match(adminDoc, /luocheng/);
+  const script = fs.readFileSync(path.join(repoRoot, "scripts/submit-data-release.mjs"), "utf8");
+  assert.doesNotMatch(script, /ChangeMe123/);
+  assert.match(script, /00-prod-admin\.md/);
+  assert.match(script, /罗成运营部主脑/);
+
+  const received = [];
+  const logins = [];
+  const server = http.createServer((req, res) => {
+    if (req.method === "POST" && req.url === "/api/auth/login") {
+      const chunks = [];
+      req.on("data", (c) => chunks.push(c));
+      req.on("end", () => {
+        logins.push(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+        res.writeHead(200, {
+          "Content-Type": "application/json",
+          "Set-Cookie": "sid=admin-session"
+        });
+        res.end(JSON.stringify({ ok: true }));
+      });
+      return;
+    }
+    if (req.method === "POST" && req.url === "/api/releases") {
+      const chunks = [];
+      req.on("data", (c) => chunks.push(c));
+      req.on("end", () => {
+        received.push({
+          cookie: req.headers.cookie || "",
+          body: JSON.parse(Buffer.concat(chunks).toString("utf8"))
+        });
+        res.writeHead(201, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, item: { id: "rel-login" } }));
+      });
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  try {
+    const child = spawn(process.execPath, [path.join(repoRoot, "scripts/submit-data-release.mjs")], {
+      env: {
+        ...process.env,
+        RELEASES_API: `http://127.0.0.1:${port}/api/releases`,
+        RELEASE_VERSION: "0.1.0-data"
+      }
+    });
+    const [code] = await Promise.all([new Promise((resolve) => child.on("close", resolve))]);
+    assert.equal(code, 0);
+    assert.equal(logins.length, 1);
+    assert.equal(logins[0].username, "罗成");
+    assert.ok(logins[0].password);
+    assert.equal(received.length, 1);
+    assert.match(received[0].cookie, /sid=admin-session/);
+    assert.equal(received[0].body.applicant, "罗成运营部主脑");
+    assert.equal(JSON.stringify(received[0].body).includes(logins[0].password), false);
+
+    const blocked = spawn(process.execPath, [path.join(repoRoot, "scripts/submit-data-release.mjs")], {
+      env: {
+        ...process.env,
+        RELEASES_API: `http://127.0.0.1:${port}/api/releases`,
+        RELEASE_SUMMARY: `leak ${logins[0].password}`,
+        RELEASE_NO_LOGIN: "1"
+      }
+    });
+    const blockedCode = await new Promise((resolve) => blocked.on("close", resolve));
+    assert.notEqual(blockedCode, 0);
   } finally {
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
