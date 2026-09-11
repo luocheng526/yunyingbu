@@ -87,6 +87,8 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /登录密码/);
     assert.match(jsText, /ChangeMe123!/);
     assert.match(jsText, /与姓名相同/);
+    assert.doesNotMatch(jsText, /工号/);
+    assert.doesNotMatch(jsText, /name="employeeNo"/);
     assert.match(jsText, /单击账号或登录密码即可改/);
     assert.match(jsText, /people-cell/);
     assert.match(jsText, /startPersonCellEdit/);

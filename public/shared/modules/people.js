@@ -129,7 +129,6 @@
         '<p class="lead">单击账号或登录密码即可改。新增默认账号同姓名。</p>' +
         '<form class="people-form" id="people-form">' +
         '<label>姓名<input name="name" required maxlength="40" autocomplete="off" /></label>' +
-        '<label>工号<input name="employeeNo" maxlength="32" /></label>' +
         '<label>部门<input name="department" maxlength="64" placeholder="如 沈子晗运营中心" /></label>' +
         '<label>上级<select name="managerId"><option value="">无</option></select></label>' +
         '<label>岗位<select name="role"><option>运营</option><option>主管</option><option>经理</option><option>店长</option></select></label>' +
@@ -141,7 +140,7 @@
         '<label>登录密码<input name="password" maxlength="64" value="ChangeMe123!" placeholder="初始密码" /></label>' +
         '<button type="submit">新增人员</button></form>' +
         '<p class="status error" id="people-error" hidden></p>' +
-        '<div class="org-table-wrap"><table><thead><tr><th>姓名</th><th>工号</th><th>账号</th><th>登录密码</th><th>部门</th><th>上级</th><th>岗位</th><th>所属中心</th><th>状态</th><th>能看见的店</th></tr></thead>' +
+        '<div class="org-table-wrap"><table><thead><tr><th>姓名</th><th>账号</th><th>登录密码</th><th>部门</th><th>上级</th><th>岗位</th><th>所属中心</th><th>状态</th><th>能看见的店</th></tr></thead>' +
         '<tbody id="people-tbody"></tbody></table></div></section>' +
         '<section class="panel"><h2>店铺 / 店群</h2>' +
         '<form class="people-mini-form" id="shop-form">' +
@@ -766,8 +765,6 @@
             tr.innerHTML =
               "<td>" +
               escapeHtml(person.name) +
-              "</td><td>" +
-              escapeHtml(person.employeeNo || "—") +
               '</td><td class="people-cell can-edit" data-field="username" title="单击可改">' +
               escapeHtml(person.username || person.name || "—") +
               '</td><td class="people-cell can-edit" data-field="password" title="单击可改">' +
