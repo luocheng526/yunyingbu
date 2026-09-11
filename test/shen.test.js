@@ -142,6 +142,8 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /waitPage\("付费中心"\)/);
     assert.equal(embed.text.includes("relabelOfficialShenMenu"), false);
     assert.equal(embed.text.includes("MutationObserver"), false);
+    assert.equal(embed.text.includes("shen-product-tab"), false);
+    assert.equal(embed.text.includes("productCenterPage"), false);
     assert.equal(embed.text.includes("选品中心"), false);
     assert.equal(embed.text.includes("实时付费"), false);
     const product = await request(base, "/shen/product");
