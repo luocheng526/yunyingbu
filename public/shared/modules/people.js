@@ -725,7 +725,7 @@
         form.lead.value = row ? row.lead : "";
         form.owner.value = row ? row.owner : "";
         form.storeName.value = row ? row.storeName : "";
-        form.storeId.value = row ? row.storeId : "";
+        form.storeId.value = row && row.storeId ? row.storeId : "";
         form.merchantId.value = row ? row.merchantId : "";
         form.remark.value = row ? row.remark : "运营中";
         form.updatedOn.value = row ? row.updatedOn : "";
