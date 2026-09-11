@@ -10,6 +10,14 @@ export const CENTERS = [
 
 export const POSTS = ["店长", "运营", "主管", "经理"];
 export const SHOP_KINDS = ["店铺", "店群"];
+export const INITIAL_PASSWORD = "ChangeMe123!";
+
+function withLogin(person) {
+  const name = String(person.name || "").trim();
+  const username = String(person.username || name).trim() || name;
+  const password = String(person.password || INITIAL_PASSWORD).trim() || INITIAL_PASSWORD;
+  return { ...person, username, password };
+}
 
 const STATUSES = new Set(["在职", "离职"]);
 
@@ -154,8 +162,9 @@ function visibleShopsOf(person) {
 }
 
 function presentPerson(person) {
+  const row = withLogin(person);
   return {
-    ...clone(person),
+    ...clone(row),
     managerName: managerNameOf(person),
     visibleShops: visibleShopsOf(person)
   };
@@ -224,6 +233,8 @@ export function createPerson(input) {
     return { ok: false, statusCode: 400, error: "上级不存在" };
   }
 
+  const usernameRaw = typeof input.username === "string" ? input.username.trim() : "";
+  const passwordRaw = typeof input.password === "string" ? input.password.trim() : "";
   const person = {
     id: nextPersonId++,
     name,
@@ -233,7 +244,9 @@ export function createPerson(input) {
     demo: false,
     employeeNo,
     department,
-    managerId
+    managerId,
+    username: usernameRaw || name,
+    password: passwordRaw || INITIAL_PASSWORD
   };
   people.push(person);
   return { ok: true, person: presentPerson(person) };
@@ -308,7 +321,9 @@ function personFromMysqlRow(row) {
     demo: Boolean(row.demo),
     employeeNo: row.employee_no || "",
     department: row.department || "",
-    managerId: row.manager_id == null ? null : Number(row.manager_id)
+    managerId: row.manager_id == null ? null : Number(row.manager_id),
+    username: row.username || row.name,
+    password: row.password || INITIAL_PASSWORD
   };
 }
 

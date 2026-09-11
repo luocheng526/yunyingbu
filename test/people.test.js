@@ -68,6 +68,11 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /下载模板/);
     assert.match(jsText, /id="org-import"/);
     assert.match(jsText, /组织中心-店铺主数据模板/);
+    assert.match(jsText, /登录密码/);
+    assert.match(jsText, /ChangeMe123!/);
+    assert.match(jsText, /与姓名相同/);
+    assert.doesNotMatch(jsText, /demo-flag/);
+    assert.doesNotMatch(jsText, /演示<\/span>/);
     assert.doesNotMatch(jsText, /龙虎榜/);
     assert.doesNotMatch(jsText, /主数据治理/);
     assert.doesNotMatch(jsText, /全部公司/);
@@ -274,11 +279,16 @@ test("POST /api/people appends a staff row", async () => {
     assert.equal(createdJson.ok, true);
     assert.equal(createdJson.person.demo, false);
     assert.equal(createdJson.person.name, body.name);
+    assert.equal(createdJson.person.username, body.name);
+    assert.equal(createdJson.person.password, "ChangeMe123!");
 
     const listed = await fetch(`${base}/api/people`);
     const listedJson = await listed.json();
     assert.equal(listedJson.people.length, 17);
     assert.ok(listedJson.people.some((row) => row.name === "测试同事" && row.center === "数据中心"));
+    const shen = listedJson.people.find((row) => row.name === "沈子晗");
+    assert.equal(shen.username, "沈子晗");
+    assert.equal(shen.password, "ChangeMe123!");
   });
 });
 

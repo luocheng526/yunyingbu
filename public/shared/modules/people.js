@@ -111,9 +111,11 @@
         "<option>沈子晗运营中心</option><option>韩梦凯运营中心</option><option>数据中心</option>" +
         "<option>版本发布中心</option><option>个人中心</option><option>其他</option></select></label>" +
         "<label>状态<select name=\"status\"><option>在职</option><option>离职</option></select></label>" +
+        '<label>账号<input name="username" maxlength="40" placeholder="与姓名相同" /></label>' +
+        '<label>登录密码<input name="password" maxlength="64" value="ChangeMe123!" placeholder="初始密码" /></label>' +
         '<button type="submit">新增人员</button></form>' +
         '<p class="status error" id="people-error" hidden></p>' +
-        '<div class="org-table-wrap"><table><thead><tr><th>姓名</th><th>工号</th><th>部门</th><th>上级</th><th>岗位</th><th>所属中心</th><th>状态</th><th>能看见的店</th></tr></thead>' +
+        '<div class="org-table-wrap"><table><thead><tr><th>姓名</th><th>工号</th><th>账号</th><th>登录密码</th><th>部门</th><th>上级</th><th>岗位</th><th>所属中心</th><th>状态</th><th>能看见的店</th></tr></thead>' +
         '<tbody id="people-tbody"></tbody></table></div></section>' +
         '<section class="panel"><h2>店铺 / 店群</h2>' +
         '<form class="people-mini-form" id="shop-form">' +
@@ -181,6 +183,11 @@
       const peopleTbody = root.querySelector("#people-tbody");
       const shopTbody = root.querySelector("#shop-tbody");
       const peopleForm = root.querySelector("#people-form");
+      if (peopleForm && peopleForm.name && peopleForm.username) {
+        peopleForm.name.addEventListener("input", function () {
+          peopleForm.username.value = peopleForm.name.value.trim();
+        });
+      }
       const shopForm = root.querySelector("#shop-form");
       const grantForm = root.querySelector("#grant-form");
       const peopleError = root.querySelector("#people-error");
@@ -353,7 +360,7 @@
           return '<span class="org-link">' + escapeHtml(raw || "点击填写") + "</span>";
         }
         if (field.key === "owner") {
-          return escapeHtml(raw || "点击填写") + (row.demo ? '<span class="demo-flag">演示</span>' : "");
+          return escapeHtml(raw || "点击填写");
         }
         return escapeHtml(raw || (field.key === "closedOn" || field.key === "updatedOn" ? "—" : "点击填写"));
       }
@@ -585,9 +592,12 @@
             tr.innerHTML =
               "<td>" +
               escapeHtml(person.name) +
-              (person.demo ? '<span class="demo-flag">演示</span>' : "") +
               "</td><td>" +
               escapeHtml(person.employeeNo || "—") +
+              "</td><td>" +
+              escapeHtml(person.username || person.name || "—") +
+              "</td><td>" +
+              escapeHtml(person.password || "ChangeMe123!") +
               "</td><td>" +
               escapeHtml(person.department || "—") +
               "</td><td>" +
@@ -613,7 +623,6 @@
             tr.innerHTML =
               "<td>" +
               escapeHtml(shop.name) +
-              (shop.demo ? '<span class="demo-flag">演示</span>' : "") +
               "</td><td>" +
               escapeHtml(shop.kind) +
               "</td><td>" +
