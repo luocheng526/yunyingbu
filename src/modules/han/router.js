@@ -155,6 +155,38 @@ export function createHanRouter(store = createHanStore()) {
     }
   });
 
+  hanRouter.get("/shop-rules", async (req, res) => {
+    try {
+      const item = await store.getShopRules({ team: req.query.team, store: req.query.store });
+      res.json({ ok: true, ...item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.put("/shop-rules", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const item = await store.saveShopRules({
+        team: body.team,
+        store: body.store,
+        rules: body.rules,
+      });
+      res.json({ ok: true, ...item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.delete("/shop-rules", async (req, res) => {
+    try {
+      const item = await store.resetShopRules({ team: req.query.team, store: req.query.store });
+      res.json({ ok: true, ...item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
   hanRouter.post("/products/classify", async (req, res) => {
     try {
       const body = req.body || {};
