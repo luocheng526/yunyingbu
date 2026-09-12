@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.181-people-import";
+    const href = "/people.css?v=0.1.182-people-import-ok";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -1834,7 +1834,14 @@
                     result.data.updated +
                     "。失败" +
                     failed.length +
-                    "行。未导入的原人员保留"
+                    "行：" +
+                    failed
+                      .slice(0, 5)
+                      .map(function (item) {
+                        return "第" + item.line + "行" + item.error;
+                      })
+                      .join("；") +
+                    "。未导入的原人员保留"
                 : ""
             );
             if (!failed.length) {

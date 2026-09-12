@@ -332,11 +332,15 @@ function inferRoleFromLine(name, line, fallback) {
 
 function resolveManagerIdByName(managerName) {
   const name = String(managerName || "").trim();
-  if (!name) {
+  if (!name || name.includes("罗成")) {
     return null;
   }
-  const hit = people.find((row) => row.name === name);
-  return hit ? hit.id : null;
+  const exact = people.find((row) => row.name === name);
+  if (exact) {
+    return exact.id;
+  }
+  const loose = people.find((row) => name.includes(row.name) || row.name.includes(name));
+  return loose ? loose.id : null;
 }
 
 export function applyOrgLine(input = {}) {
@@ -364,7 +368,7 @@ export function applyOrgLine(input = {}) {
   const department = String(input.department || input.部门 || "").trim() || center;
   const managerName =
     String(input.managerName || input.上级 || "").trim() ||
-    [supervisor, lineManager, director].find((item) => item && item !== name) ||
+    [supervisor, lineManager, director].find((item) => item && item !== name && !String(item).includes("罗成")) ||
     "";
   let managerId = input.managerId;
   if (managerId === "" || managerId == null) {
@@ -483,25 +487,22 @@ export function reconcilePeople() {
 export function createPerson(input) {
   const line = applyOrgLine(input || {});
   const name = line.name;
-  const role = line.role;
-  const center = line.center;
+  const role = line.role || "运营";
+  let center = line.center;
+  if (!CENTERS.includes(center)) {
+    center = centerOfManager(line.lineManager) || centerOfManager(line.supervisor) || "其他";
+  }
   const statusRaw = typeof input.status === "string" ? input.status.trim() : typeof input.状态 === "string" ? input.状态.trim() : "在职";
-  const status = statusRaw || "在职";
+  const status = STATUSES.has(statusRaw) ? statusRaw : "在职";
   const employeeNo = typeof input.employeeNo === "string" ? input.employeeNo.trim() : "";
   const department = line.department || center;
-  const managerId = line.managerId;
-
-  if (!name || !role || !center) {
-    return { ok: false, statusCode: 400, error: "姓名、岗位均为必填" };
-  }
-  if (!CENTERS.includes(center)) {
-    return { ok: false, statusCode: 400, error: "所属中心不在可选列表中" };
-  }
-  if (!STATUSES.has(status)) {
-    return { ok: false, statusCode: 400, error: "状态仅支持在职或离职" };
-  }
+  let managerId = line.managerId;
   if (managerId != null && !findPerson(managerId)) {
-    return { ok: false, statusCode: 400, error: "上级不存在" };
+    managerId = null;
+  }
+
+  if (!name) {
+    return { ok: false, statusCode: 400, error: "姓名为必填" };
   }
 
   const usernameRaw = typeof input.username === "string" ? input.username.trim() : typeof input.账号 === "string" ? input.账号.trim() : "";
@@ -550,11 +551,9 @@ export function importPeople(rows) {
       failed.push({ line, error: "姓名为必填" });
       return;
     }
-    const managerName = String(item.上级 || item.managerName || org.supervisor || org.lineManager || "").trim();
     let managerId = org.managerId;
-    if (managerName && managerId == null) {
-      failed.push({ line, error: "上级不存在" });
-      return;
+    if (managerId != null && !findPerson(managerId)) {
+      managerId = null;
     }
     const found = people.find((row) => String(row.name || "").trim() === name);
     if (found) {
