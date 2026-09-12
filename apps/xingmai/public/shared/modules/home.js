@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.361-home-compare */
+/* xm-module-home 0.1.362-home-relfix */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1082,7 +1082,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.361-home-compare");
+    board.setAttribute("data-hm-js", "0.1.362-home-relfix");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", state.view === "team");
