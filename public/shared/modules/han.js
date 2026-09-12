@@ -446,9 +446,19 @@
         };
       }
 
+      function field(name, label) {
+        return (
+          "<label>" +
+          escapeHtml(label) +
+          '<input data-rule="' +
+          escapeHtml(name) +
+          '" type="number" step="any" /></label>'
+        );
+      }
+
       root.innerHTML = page(
         shop,
-        team + " · " + shop + "。导入后按初版规则自动分层，格子可改，调动可换层。正式分类流程稍后替换。",
+        team + " · " + shop + "。本店可自定义分类规则；导入和分类只按本店规则。格子可改，调动可换层。",
         '<style>' +
           ".han-sheet-wrap{overflow-x:auto;background:#fff;border:1px solid #c6c6c6}" +
           ".han-sheet{border-collapse:collapse;font-size:12px;min-width:2200px}" +
@@ -465,13 +475,50 @@
           ".han-sheet-toolbar .han-export-btn{background:#2563eb}" +
           ".han-sheet-toolbar .han-tpl-btn{background:#6b7280}" +
           ".han-sheet-toolbar .han-class-btn{background:#0f766e}" +
+          ".han-sheet-toolbar .han-rules-btn{background:#7c3aed}" +
           ".han-sheet select{max-width:88px;border:0;background:#ecfeff;font-size:12px}" +
+          ".han-rules{display:none;margin:0 0 12px;padding:12px 14px;background:#fff;border:1px solid #ddd}" +
+          ".han-rules.is-open{display:block}" +
+          ".han-rules h3{margin:0 0 8px;font-size:14px}" +
+          ".han-rules .han-rules-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px 14px}" +
+          ".han-rules label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#374151}" +
+          ".han-rules input{min-height:30px;padding:4px 8px;border:1px solid #d1d5db}" +
+          ".han-rules .han-rules-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}" +
+          ".han-rules .han-rules-actions button{min-height:32px;padding:6px 12px;border:0;border-radius:999px;color:#fff;cursor:pointer}" +
+          ".han-rules #han-rules-save{background:#0f766e}" +
+          ".han-rules #han-rules-reset{background:#6b7280}" +
           "</style>" +
           '<div class="han-sheet-toolbar">' +
-          '<button type="button" class="han-class-btn" id="han-classify">按初版规则分类</button>' +
+          '<button type="button" class="han-rules-btn" id="han-rules-toggle">本店分类规则</button>' +
+          '<button type="button" class="han-class-btn" id="han-classify">按本店规则分类</button>' +
           '<button type="button" class="han-export-btn" id="han-export">导出</button>' +
           '<label class="han-import-btn">导入原始数据<input id="han-import" type="file" accept=".csv,text/csv" hidden /></label>' +
           '<button type="button" class="han-tpl-btn" id="han-tpl">下载模板</button></div>' +
+          '<div class="han-rules" id="han-rules">' +
+          "<h3>本店分类规则</h3>" +
+          '<p class="lead" id="han-rules-status">未保存过则用初版默认值，只作用于当前店铺。</p>' +
+          '<div class="han-rules-grid">' +
+          field("head.returnMax", "头部 退货率上限 %") +
+          field("head.spendMax", "头部 花费占比上限 %") +
+          field("head.gmvMin", "头部 近7天日成交下限") +
+          field("head.convMin", "头部 转化率下限 %") +
+          field("mid.ordersMin", "中部 成交单量下限") +
+          field("mid.returnMax", "中部 退货率上限 %") +
+          field("mid.spendMax", "中部 花费占比上限 %") +
+          field("mid.gmvMin", "中部 近7天日成交下限") +
+          field("mid.convMin", "中部 转化率下限 %") +
+          field("tail.ordersMin", "尾部 成交单量下限") +
+          field("tail.returnMin", "尾部 退货率下限 %") +
+          field("tail.returnMax", "尾部 退货率上限 %") +
+          field("tail.spendMax", "尾部 花费占比上限 %") +
+          field("tail.gmvMin", "尾部 近7天日成交下限") +
+          field("tail.convMin", "尾部 转化率下限 %") +
+          field("moving.ordersMin", "动销 超过单量看退货率") +
+          field("testNew.reviewMin", "测新 评价数下限") +
+          "</div>" +
+          '<div class="han-rules-actions">' +
+          '<button type="button" id="han-rules-save">保存本店规则</button>' +
+          '<button type="button" id="han-rules-reset">恢复默认</button></div></div>' +
           '<div class="han-sheet-wrap"><table class="han-sheet" id="han-sheet">' +
           "<thead></thead><tbody></tbody></table></div>" +
           '<p class="msg status han-sheet-msg" id="prod-msg"></p>',
@@ -636,6 +683,11 @@
       const importInput = root.querySelector("#han-import");
       const tplBtn = root.querySelector("#han-tpl");
       const classifyBtn = root.querySelector("#han-classify");
+      const rulesBox = root.querySelector("#han-rules");
+      const rulesToggle = root.querySelector("#han-rules-toggle");
+      const rulesSave = root.querySelector("#han-rules-save");
+      const rulesReset = root.querySelector("#han-rules-reset");
+      const rulesStatus = root.querySelector("#han-rules-status");
       const csvHeader =
         "SPU,第一个sku,退货率,推广花费占比,近7天日成交金额,成交转化率,成交单量,评价数,上架时间,价格,主图,备注";
 
@@ -694,6 +746,85 @@
         downloadText("商品分层导入模板.csv", csvHeader + "\n");
       }
 
+      function applyHints(hints) {
+        if (!hints) return;
+        layers.forEach(function (layer) {
+          if (hints[layer.name]) layer.hint = hints[layer.name];
+        });
+        paintHead();
+      }
+
+      function fillRules(rules) {
+        if (!rules) return;
+        Array.prototype.forEach.call(root.querySelectorAll("[data-rule]"), function (input) {
+          const path = input.getAttribute("data-rule").split(".");
+          const group = rules[path[0]] || {};
+          input.value = group[path[1]] == null ? "" : group[path[1]];
+        });
+      }
+
+      function readRules() {
+        const rules = { head: {}, mid: {}, tail: {}, moving: {}, testNew: {} };
+        Array.prototype.forEach.call(root.querySelectorAll("[data-rule]"), function (input) {
+          const path = input.getAttribute("data-rule").split(".");
+          rules[path[0]][path[1]] = Number(input.value);
+        });
+        return rules;
+      }
+
+      function loadRules() {
+        return jsonFetch(
+          "/api/han/shop-rules?team=" + encodeURIComponent(team) + "&store=" + encodeURIComponent(shop),
+        ).then(function (json) {
+          if (dead || !json.ok) return json;
+          fillRules(json.rules);
+          applyHints(json.hints);
+          rulesStatus.textContent = json.custom
+            ? "当前使用本店已保存规则。"
+            : "当前使用初版默认规则，保存后只改本店。";
+          return json;
+        });
+      }
+
+      function onToggleRules() {
+        rulesBox.classList.toggle("is-open");
+      }
+
+      function onSaveRules() {
+        jsonFetch("/api/han/shop-rules", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ team: team, store: shop, rules: readRules() }),
+        }).then(function (json) {
+          if (dead) return;
+          if (!json.ok) {
+            msg.textContent = json.error || "保存规则失败";
+            return;
+          }
+          fillRules(json.rules);
+          applyHints(json.hints);
+          rulesStatus.textContent = "已保存本店规则。";
+          msg.textContent = "本店规则已保存，可点「按本店规则分类」重算。";
+        });
+      }
+
+      function onResetRules() {
+        jsonFetch(
+          "/api/han/shop-rules?team=" + encodeURIComponent(team) + "&store=" + encodeURIComponent(shop),
+          { method: "DELETE" },
+        ).then(function (json) {
+          if (dead) return;
+          if (!json.ok) {
+            msg.textContent = json.error || "恢复失败";
+            return;
+          }
+          fillRules(json.rules);
+          applyHints(json.hints);
+          rulesStatus.textContent = "已恢复初版默认规则。";
+          msg.textContent = "本店已恢复默认规则。";
+        });
+      }
+
       function onClassify() {
         jsonFetch("/api/han/products/classify", {
           method: "POST",
@@ -701,7 +832,7 @@
           body: JSON.stringify({ team: team, store: shop }),
         }).then(function (json) {
           if (dead) return;
-          msg.textContent = json.ok ? "已按规则调动" + (json.count || 0) + "条" : json.error || "分类失败";
+          msg.textContent = json.ok ? "已按本店规则调动" + (json.count || 0) + "条" : json.error || "分类失败";
           if (json.ok) return load();
         });
       }
@@ -736,7 +867,7 @@
             if (dead) return;
             const n = (json.created || []).length;
             msg.textContent = json.ok
-              ? "已按规则导入" + n + "条" + (json.skipped ? "，跳过" + json.skipped + "条" : "")
+              ? "已按本店规则导入" + n + "条" + (json.skipped ? "，跳过" + json.skipped + "条" : "")
               : json.error || "导入失败";
             if (json.ok) return load();
           });
@@ -749,10 +880,13 @@
       table.addEventListener("change", onSheetChange);
       table.addEventListener("focusout", onSheetBlur);
       classifyBtn.addEventListener("click", onClassify);
+      rulesToggle.addEventListener("click", onToggleRules);
+      rulesSave.addEventListener("click", onSaveRules);
+      rulesReset.addEventListener("click", onResetRules);
       exportBtn.addEventListener("click", onExport);
       tplBtn.addEventListener("click", onTpl);
       importInput.addEventListener("change", onImport);
-      load().catch(function (err) {
+      Promise.all([load(), loadRules()]).catch(function (err) {
         if (!dead) msg.textContent = String(err);
       });
       return function unmount() {
@@ -761,6 +895,9 @@
         table.removeEventListener("change", onSheetChange);
         table.removeEventListener("focusout", onSheetBlur);
         classifyBtn.removeEventListener("click", onClassify);
+        rulesToggle.removeEventListener("click", onToggleRules);
+        rulesSave.removeEventListener("click", onSaveRules);
+        rulesReset.removeEventListener("click", onResetRules);
         exportBtn.removeEventListener("click", onExport);
         tplBtn.removeEventListener("click", onTpl);
         importInput.removeEventListener("change", onImport);

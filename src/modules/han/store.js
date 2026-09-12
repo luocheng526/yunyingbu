@@ -1,9 +1,22 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { getPool } from "../../db/pool.js";
-import { PRODUCT_LAYERS, classifyProduct, normalizeProductLayer } from "./classify.js";
+import {
+  PRODUCT_LAYERS,
+  classifyProduct,
+  classifyRuleHints,
+  defaultClassifyRules,
+  mergeClassifyRules,
+  normalizeProductLayer,
+} from "./classify.js";
 
-export { classifyProduct, normalizeProductLayer } from "./classify.js";
+export {
+  classifyProduct,
+  defaultClassifyRules,
+  mergeClassifyRules,
+  classifyRuleHints,
+  normalizeProductLayer,
+} from "./classify.js";
 
 const DEFAULT_OWNER = "韩梦凯";
 const DEFAULT_STORE = "韩梦凯店";
@@ -400,6 +413,85 @@ export function createHanStore(poolOrFactory = getPool) {
       };
     },
 
+    async getShopRules({ team, store } = {}) {
+      await ensure();
+      const teamName = normalizeProductTeam(team);
+      const shop = String(store || "").trim();
+      if (!shop) {
+        const err = new Error("store required");
+        err.statusCode = 400;
+        throw err;
+      }
+      const [rows] = await db().query(
+        "SELECT id, team_name, store_name, rules_json, updated_at FROM han_shop_rules WHERE team_name = ? AND store_name = ?",
+        [teamName, shop],
+      );
+      if (!rows.length) {
+        const rules = defaultClassifyRules();
+        return {
+          team: teamName,
+          store: shop,
+          custom: false,
+          rules,
+          hints: classifyRuleHints(rules),
+        };
+      }
+      let parsed = {};
+      try {
+        parsed = JSON.parse(rows[0].rules_json || "{}");
+      } catch {
+        parsed = {};
+      }
+      const rules = mergeClassifyRules(defaultClassifyRules(), parsed);
+      return {
+        team: teamName,
+        store: shop,
+        custom: true,
+        rules,
+        hints: classifyRuleHints(rules),
+        updatedAt: toIso(rows[0].updated_at),
+      };
+    },
+
+    async saveShopRules({ team, store, rules } = {}) {
+      await ensure();
+      const teamName = normalizeProductTeam(team);
+      const shop = String(store || "").trim();
+      if (!shop) {
+        const err = new Error("store required");
+        err.statusCode = 400;
+        throw err;
+      }
+      const merged = mergeClassifyRules(defaultClassifyRules(), rules);
+      const json = JSON.stringify(merged);
+      const [found] = await db().query(
+        "SELECT id FROM han_shop_rules WHERE team_name = ? AND store_name = ?",
+        [teamName, shop],
+      );
+      if (found.length) {
+        await db().query("UPDATE han_shop_rules SET rules_json = ? WHERE id = ?", [json, found[0].id]);
+      } else {
+        await db().query(
+          "INSERT INTO han_shop_rules (team_name, store_name, rules_json) VALUES (?, ?, ?)",
+          [teamName, shop, json],
+        );
+      }
+      return this.getShopRules({ team: teamName, store: shop });
+    },
+
+    async resetShopRules({ team, store } = {}) {
+      await ensure();
+      const teamName = normalizeProductTeam(team);
+      const shop = String(store || "").trim();
+      if (!shop) {
+        const err = new Error("store required");
+        err.statusCode = 400;
+        throw err;
+      }
+      await db().query("DELETE FROM han_shop_rules WHERE team_name = ? AND store_name = ?", [teamName, shop]);
+      return this.getShopRules({ team: teamName, store: shop });
+    },
+
     async createProduct({
       name,
       sku,
@@ -454,16 +546,18 @@ export function createHanStore(poolOrFactory = getPool) {
         needOrder,
         listedOn,
       };
+      const teamName = normalizeProductTeam(team);
+      const shopName = storeOrDefault(store);
       let layerName = normalizeProductLayer(layer);
       if (!layerName) {
-        layerName = classifyProduct(payload, { force: true });
+        const shopRules = await this.getShopRules({ team: teamName, store: shopName });
+        layerName = classifyProduct(payload, { force: true, rules: shopRules.rules });
       }
       if (layerName && !PRODUCT_LAYERS.includes(layerName)) {
         const err = new Error("unknown layer");
         err.statusCode = 400;
         throw err;
       }
-      const teamName = normalizeProductTeam(team);
       const [result] = await db().query(
         `INSERT INTO han_products (name, sku, price, stock, owner, store_name, layer, image_url, spu, first_sku, hot_sell, review_count, share_count, qa_video, return_m5, return_m6, return_m7, return_m8, orders_30d, fulfill_note, jd_stock, listed_on, has_new_badge, need_order, remark, team_name, spend_rate, gmv_7d, conv_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -472,7 +566,7 @@ export function createHanStore(poolOrFactory = getPool) {
           optionalNumber(price),
           optionalNumber(stock),
           ownerOrDefault(owner),
-          storeOrDefault(store),
+          shopName,
           layerName,
           String(image || "").trim(),
           spuText,
@@ -571,9 +665,21 @@ export function createHanStore(poolOrFactory = getPool) {
 
     async classifyProducts({ team, store } = {}) {
       const items = await this.listProducts({ team, store });
+      const cache = new Map();
       const updated = [];
       for (const item of items) {
-        const layer = classifyProduct(item, { force: true });
+        const key = String(item.team || team || "") + "\0" + String(item.store || store || "");
+        if (!cache.has(key)) {
+          cache.set(
+            key,
+            await this.getShopRules({
+              team: item.team || team,
+              store: item.store || store || DEFAULT_STORE,
+            }),
+          );
+        }
+        const shopRules = cache.get(key);
+        const layer = classifyProduct(item, { force: true, rules: shopRules.rules });
         if (layer && layer !== item.layer) {
           updated.push(await this.updateProduct(item.id, { layer }));
         }
@@ -585,13 +691,18 @@ export function createHanStore(poolOrFactory = getPool) {
       const rows = Array.isArray(items) && items.length ? items : parseProductCsv(csv);
       const created = [];
       const errors = [];
+      const shopRules = String(store || "").trim()
+        ? await this.getShopRules({ team, store })
+        : { rules: defaultClassifyRules() };
       for (const row of rows) {
         try {
           const layer = normalizeProductLayer(row.layer);
           created.push(
             await this.createProduct({
               ...row,
-              layer: PRODUCT_LAYERS.includes(layer) ? layer : classifyProduct(row, { force: true }),
+              layer: PRODUCT_LAYERS.includes(layer)
+                ? layer
+                : classifyProduct(row, { force: true, rules: shopRules.rules }),
               team: team || row.team,
               store: store || row.store,
             }),

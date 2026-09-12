@@ -8,6 +8,7 @@ export function createHanFakePool() {
     han_paid: [],
     han_training: [],
     han_team_shops: [],
+    han_shop_rules: [],
   };
   let nextId = 1;
   let briefRow = null;
@@ -51,6 +52,30 @@ export function createHanFakePool() {
       if (list) {
         const name = list[1];
         return [(tables[name] || []).map(clone), undefined];
+      }
+
+      const byShop = normalized.match(
+        /^SELECT .+ FROM han_shop_rules WHERE team_name = \? AND store_name = \?$/i,
+      );
+      if (byShop) {
+        const team = String(params[0] ?? "");
+        const shop = String(params[1] ?? "");
+        return [
+          (tables.han_shop_rules || [])
+            .filter((row) => String(row.team_name || "") === team && String(row.store_name || "") === shop)
+            .map(clone),
+          undefined,
+        ];
+      }
+
+      if (/^DELETE FROM han_shop_rules WHERE team_name = \? AND store_name = \?$/i.test(normalized)) {
+        const team = String(params[0] ?? "");
+        const shop = String(params[1] ?? "");
+        const before = tables.han_shop_rules.length;
+        tables.han_shop_rules = tables.han_shop_rules.filter(
+          (row) => !(String(row.team_name || "") === team && String(row.store_name || "") === shop),
+        );
+        return [{ affectedRows: before - tables.han_shop_rules.length }, undefined];
       }
 
       const one = normalized.match(/^SELECT .+ FROM (han_\w+) WHERE id = \?$/i);

@@ -382,7 +382,9 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /店铺产品分层表/);
   assert.match(js, /han-sheet/);
   assert.match(js, /导入原始数据/);
-  assert.match(js, /按初版规则分类/);
+  assert.match(js, /按本店规则分类/);
+  assert.match(js, /本店分类规则/);
+  assert.match(js, /\/api\/han\/shop-rules/);
   assert.match(js, /han-layer-pick/);
   assert.match(js, /id="han-export"/);
   assert.match(js, /\/api\/han\/products\/import/);
@@ -573,6 +575,73 @@ test("classifyProduct follows 商品分层规则", () => {
   );
   assert.equal(classifyProduct({ reviewCount: "2" }, { force: true }), "测新产品");
   assert.equal(classifyProduct({ spu: "NEW" }, { force: true }), "待做单产品");
+  assert.equal(
+    classifyProduct(
+      { returnM8: "12%", spendRate: "30%", gmv7d: "2500", convRate: "8%", orders30d: "20" },
+      { force: true, rules: { head: { gmvMin: 9000 } } },
+    ),
+    "中部产品",
+  );
+});
+
+test("each shop can save its own classify rules", async () => {
+  await withServer(async (base) => {
+    const metrics = {
+      returnM8: "12%",
+      spendRate: "30%",
+      gmv7d: "2500",
+      convRate: "8%",
+      orders30d: "20",
+    };
+    const def = await json(
+      base,
+      "/api/han/shop-rules?team=" + encodeURIComponent("陈晓曼组") + "&store=" + encodeURIComponent("一号店"),
+    );
+    assert.equal(def.body.ok, true);
+    assert.equal(def.body.custom, false);
+    assert.equal(def.body.rules.head.gmvMin, 2000);
+
+    const saved = await json(base, "/api/han/shop-rules", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        team: "陈晓曼组",
+        store: "一号店",
+        rules: { head: { gmvMin: 9000 } },
+      }),
+    });
+    assert.equal(saved.body.custom, true);
+    assert.equal(saved.body.rules.head.gmvMin, 9000);
+    assert.equal(saved.body.rules.head.returnMax, 20);
+
+    const other = await json(
+      base,
+      "/api/han/shop-rules?team=" + encodeURIComponent("陈晓曼组") + "&store=" + encodeURIComponent("二号店"),
+    );
+    assert.equal(other.body.custom, false);
+    assert.equal(other.body.rules.head.gmvMin, 2000);
+
+    const a = await json(base, "/api/han/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ team: "陈晓曼组", store: "一号店", spu: "S-A", ...metrics }),
+    });
+    const b = await json(base, "/api/han/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ team: "陈晓曼组", store: "二号店", spu: "S-B", ...metrics }),
+    });
+    assert.equal(a.body.item.layer, "中部产品");
+    assert.equal(b.body.item.layer, "头部产品");
+
+    const reset = await json(
+      base,
+      "/api/han/shop-rules?team=" + encodeURIComponent("陈晓曼组") + "&store=" + encodeURIComponent("一号店"),
+      { method: "DELETE" },
+    );
+    assert.equal(reset.body.custom, false);
+    assert.equal(reset.body.rules.head.gmvMin, 2000);
+  });
 });
 
 test("product csv round-trips layer columns", () => {

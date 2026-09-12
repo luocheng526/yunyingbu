@@ -8,6 +8,7 @@ export {
   buildProductCsv,
   parseProductCsv,
   classifyProduct,
+  defaultClassifyRules,
   HAN_DEFAULT_OWNER,
   HAN_DEFAULT_STORE,
   HAN_PRODUCT_TEAMS,
