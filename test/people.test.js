@@ -151,6 +151,11 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /导入是合并不是换表/);
     assert.match(jsText, /同一家店才覆盖/);
     assert.match(jsText, /店铺导入会落盘/);
+    assert.match(jsText, /normalizePeopleHeader/);
+    assert.match(jsText, /endsWith\("姓名"\)/);
+    assert.match(jsText, /people-import-file/);
+    assert.match(jsText, /arrayBuffer/);
+    assert.match(jsText, /这是店铺模板/);
     assert.match(jsText, /id="people-modal"/);
     assert.match(jsText, /id="people-add"/);
     assert.match(jsText, /id="people-template"/);

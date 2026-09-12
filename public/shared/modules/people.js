@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.180-store-persist";
+    const href = "/people.css?v=0.1.181-people-import";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -138,7 +138,7 @@
         '<span class="spacer" id="people-count"></span>' +
         '<button type="button" class="ghost" id="people-template">下载模板</button>' +
         '<button type="button" class="ghost" id="people-import">导入</button>' +
-        '<input type="file" id="people-import-file" accept=".csv,text/csv" hidden />' +
+        '<input type="file" id="people-import-file" accept=".csv,.txt,text/csv,text/plain" hidden />' +
         '<button type="button" class="ghost" id="people-export">导出本筛</button>' +
         '<button type="button" id="people-add">+ 新增人员</button></div>' +
         '<p class="status error" id="people-error" hidden></p>' +
@@ -411,6 +411,43 @@
           登录主账号: "登录主账号",
           主账号: "登录主账号",
           密码: "密码"
+        };
+        return aliases[raw] || raw;
+      }
+
+      function normalizePeopleHeader(name) {
+        const raw = String(name || "")
+          .replace(/^\uFEFF/, "")
+          .replace(/[\u200b-\u200d\ufeff]/g, "")
+          .replace(/\s+/g, "")
+          .replace(/[*:：()（）【】\[\]#]/g, "")
+          .trim();
+        if (!raw) {
+          return "";
+        }
+        if (raw === "姓名" || raw === "名字" || raw === "花名" || raw === "同事" || raw.endsWith("姓名") || raw.toLowerCase() === "name") {
+          return "姓名";
+        }
+        const aliases = {
+          总监: "总监",
+          经理: "经理",
+          "主管/储备": "主管/储备",
+          主管: "主管/储备",
+          储备: "主管/储备",
+          运营: "运营",
+          助理: "助理",
+          状态: "状态",
+          账号: "账号",
+          登录账号: "账号",
+          用户名: "账号",
+          username: "账号",
+          登录密码: "登录密码",
+          密码: "登录密码",
+          password: "登录密码",
+          部门: "部门",
+          上级: "上级",
+          岗位: "岗位",
+          所属中心: "所属中心"
         };
         return aliases[raw] || raw;
       }
@@ -1721,39 +1758,57 @@
           return;
         }
         file
-          .text()
-          .then(function (text) {
-            const table = parseCsv(text);
-            if (table.length < 2) {
+          .arrayBuffer()
+          .then(function (buf) {
+            const bytes = new Uint8Array(buf);
+            if (bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4b) {
+              throw new Error("请把 Excel 另存为 CSV 再导入，不要直接传 xlsx");
+            }
+            const text = decodeTableText(bytes);
+            const table = parseCsv(text, sniffDelimiter(text));
+            if (!table.length) {
               throw new Error("模板至少要有表头和一行数据");
             }
-            const aliases = {
-              总监: "总监",
-              经理: "经理",
-              "主管/储备": "主管/储备",
-              主管: "主管/储备",
-              储备: "主管/储备",
-              运营: "运营",
-              助理: "助理",
-              部门: "部门",
-              上级: "上级",
-              岗位: "岗位",
-              所属中心: "所属中心"
-            };
-            const headers = table[0].map(function (cell) {
-              const raw = String(cell || "").replace(/^\uFEFF/, "").replace(/\s+/g, "").trim();
-              return aliases[raw] || raw;
+            let headerIndex = -1;
+            table.forEach(function (cells, index) {
+              if (headerIndex >= 0) {
+                return;
+              }
+              const headers = cells.map(normalizePeopleHeader);
+              if (headers.indexOf("姓名") >= 0) {
+                headerIndex = index;
+              }
             });
-            if (headers.indexOf("姓名") < 0) {
-              throw new Error("没认出姓名。请用下载模板，或把 Excel 另存为 CSV 再导。");
+            if (headerIndex < 0) {
+              const preview = (table[0] || []).map(normalizePeopleHeader).filter(Boolean).join("、");
+              if (preview.indexOf("店铺名称") >= 0) {
+                throw new Error("这是店铺模板。请到店铺主数据导入，或下载身份名册模板。");
+              }
+              throw new Error(
+                "没认出姓名。请用「下载模板」，或把 Excel 另存为 CSV（不要直接传 xlsx）。当前表头：" +
+                  (preview || "空")
+              );
             }
-            const rows = table.slice(1).map(function (cells) {
-              const item = {};
-              headers.forEach(function (name, index) {
-                item[name] = cells[index] || "";
+            const headers = (table[headerIndex] || []).map(normalizePeopleHeader);
+            const rows = table
+              .slice(headerIndex + 1)
+              .map(function (cells) {
+                const item = {};
+                headers.forEach(function (name, index) {
+                  if (name) {
+                    item[name] = cells[index] || "";
+                  }
+                });
+                return item;
+              })
+              .filter(function (item) {
+                return Object.keys(item).some(function (key) {
+                  return String(item[key] || "").trim();
+                });
               });
-              return item;
-            });
+            if (!rows.length) {
+              throw new Error("模板至少要有表头和一行数据");
+            }
             return fetch("/api/people/import", {
               method: "POST",
               credentials: "same-origin",
