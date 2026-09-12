@@ -156,6 +156,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /people-import-file/);
     assert.match(jsText, /arrayBuffer/);
     assert.match(jsText, /这是店铺模板/);
+    assert.match(jsText, /第" \+ item.line \+ "行" \+ item.error/);
     assert.match(jsText, /id="people-modal"/);
     assert.match(jsText, /id="people-add"/);
     assert.match(jsText, /id="people-template"/);
@@ -917,16 +918,62 @@ test("roster line cells are editable only by 罗成, 韩梦凯, 沈子晗", asyn
   });
 });
 
-test("POST /api/people rejects missing fields", async () => {
+test("POST /api/people rejects missing name", async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/api/people`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "无中心" })
+      body: JSON.stringify({ role: "运营", center: "数据中心" })
     });
     const data = await res.json();
     assert.equal(res.status, 400);
     assert.equal(data.ok, false);
+  });
+});
+
+test("people import creates rows even if 总监 is 罗成 and 经理 is missing", async () => {
+  await withServer(async (base) => {
+    const before = await (await fetch(`${base}/api/people`)).json();
+    const imported = await fetch(`${base}/api/people/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          {
+            姓名: "新同事甲",
+            总监: "罗成",
+            经理: "",
+            运营: "新同事甲",
+            状态: "在职",
+            账号: "xinjiashang-a"
+          },
+          {
+            姓名: "新同事乙",
+            总监: "罗成",
+            经理: "精铺组 韩梦凯",
+            运营: "新同事乙",
+            状态: "在职"
+          },
+          {
+            姓名: "新同事丙",
+            总监: "罗成",
+            经理: "不存在的经理",
+            所属中心: "韩梦凯组",
+            运营: "新同事丙",
+            状态: "在职"
+          }
+        ]
+      })
+    });
+    const importedJson = await imported.json();
+    assert.equal(imported.status, 200, JSON.stringify(importedJson));
+    assert.equal(importedJson.failed.length, 0, JSON.stringify(importedJson));
+    assert.equal(importedJson.created, 3, JSON.stringify(importedJson));
+    const after = await (await fetch(`${base}/api/people`)).json();
+    assert.equal(after.people.length, before.people.length + 3);
+    const yi = after.people.find((row) => row.name === "新同事乙");
+    assert.equal(yi.lineManager, "精铺组 韩梦凯");
+    assert.ok(after.people.some((row) => row.name === "沈子晗"));
   });
 });
 
