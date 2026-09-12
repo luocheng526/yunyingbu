@@ -1301,7 +1301,7 @@
       }
       let sheetDrag = null;
       function onSheetPointerDown(e) {
-        if (e.target.closest("input,select,textarea,button,a")) return;
+        if (e.target.closest("input,select,textarea,button,a,.han-thumb-box")) return;
         if (e.button) return;
         sheetDrag = {
           x: e.clientX,
@@ -1330,12 +1330,17 @@
         sheetDrag = null;
         viewport.classList.remove("is-panning");
       }
-      function onSheetDblClick(e) {
+      function onSheetImageOpen(e) {
         const img = e.target.closest(".han-thumb");
-        if (img && img.src) {
+        if (img && img.src && e.detail === 2) {
+          e.preventDefault();
           openHanLightbox(img.src);
-          return;
+          return true;
         }
+        return false;
+      }
+      function onSheetDblClick(e) {
+        if (onSheetImageOpen(e)) return;
         const box = e.target.closest(".han-thumb-box");
         if (!box) return;
         const input = box.querySelector('input[data-key="image"]');
@@ -1344,9 +1349,13 @@
         if (next == null) return;
         setImageUrl(input, next);
       }
+      function onSheetClick(e) {
+        if (onSheetImageOpen(e)) return;
+        onAdd(e);
+      }
 
       paintHead();
-      table.addEventListener("click", onAdd);
+      table.addEventListener("click", onSheetClick);
       table.addEventListener("change", onSheetChange);
       table.addEventListener("focusout", onSheetBlur);
       table.addEventListener("dblclick", onSheetDblClick);
@@ -1390,7 +1399,7 @@
       return function unmount() {
         dead = true;
         closeHanLightbox();
-        table.removeEventListener("click", onAdd);
+        table.removeEventListener("click", onSheetClick);
         table.removeEventListener("change", onSheetChange);
         table.removeEventListener("focusout", onSheetBlur);
         table.removeEventListener("dblclick", onSheetDblClick);
