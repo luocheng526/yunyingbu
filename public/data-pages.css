@@ -454,14 +454,31 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
   font-size: 12px;
 }
 .ch-summary {
-  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 2px 0 12px;
+  margin: 0 0 10px;
+  border-bottom: 1px solid var(--ch-line, var(--xm-line, #eee));
   font-size: 13px;
 }
 .ch-sum-title {
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 28px;
 }
-.ch-summary b {
-  font-weight: 500;
+.ch-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 14px;
+  border-radius: 14px;
+  background: #2f54eb;
+  color: #fff;
+  font-size: 13px;
+  line-height: 28px;
+  white-space: nowrap;
 }
 .ch-summary .ch-set {
   margin-left: auto;

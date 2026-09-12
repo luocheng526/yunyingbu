@@ -166,6 +166,7 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /昨天/);
     assert.match(overviewJs.text, /今天/);
     assert.match(overviewJs.text, /数据总览/);
+    assert.match(overviewJs.text, /ch-pill/);
     assert.match(overviewJs.text, /自定义费用/);
     assert.match(overviewJs.text, /ch-cal/);
     assert.match(overviewJs.text, /ch-cal-pop/);
@@ -516,7 +517,8 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /\/data\/paid/);
   assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
   assert.match(dataMod, /restore-v1/);
-  assert.match(dataMod, /data-overview\.js\?v=data-ov1/);
+  assert.match(dataMod, /data-overview\.js\?v=data-ov2/);
+  assert.match(css, /ch-pill/);
   assert.match(css, /ch-cal-days/);
   assert.match(css, /ch-cal-pop/);
   assert.match(dataMod, /正在加载数据总览/);

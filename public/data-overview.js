@@ -27,10 +27,25 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov1";
+      link.href = "/data-pages.css?v=data-ov2";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
+    ensureSummaryStyle();
+  }
+
+  function ensureSummaryStyle() {
+    if (document.getElementById("ch-sum-style")) {
+      return;
+    }
+    const style = document.createElement("style");
+    style.id = "ch-sum-style";
+    style.textContent =
+      ".ch-summary{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:2px 0 12px;margin:0 0 10px;border-bottom:1px solid var(--xm-line,#eee);font-size:13px}" +
+      ".ch-sum-title{font-size:18px;font-weight:700;color:var(--xm-ink,#1f1f1f);line-height:28px}" +
+      ".ch-pill{display:inline-flex;align-items:center;height:28px;padding:0 14px;border-radius:14px;background:#2f54eb;color:#fff;font-size:13px;line-height:28px;white-space:nowrap}" +
+      ".ch-summary .ch-set{margin-left:auto}";
+    document.head.appendChild(style);
   }
 
   function ensureHeroStyle() {
@@ -898,12 +913,12 @@
         ranges +
         "</div></div></div></div>" +
         '<div class="ch-summary"><span class="ch-sum-title">综合指标</span>' +
-        "<b>渠道 " +
+        '<span class="ch-pill">渠道' +
         escapeHtml(String(payload.summary.channels)) +
-        "个</b>" +
-        "<b>店铺 " +
+        "个</span>" +
+        '<span class="ch-pill">店铺' +
         escapeHtml(String(payload.summary.shops)) +
-        '个</b><button type="button" class="ch-set" disabled>设定指标</button></div>' +
+        '个</span><button type="button" class="ch-set" disabled>设定指标</button></div>' +
         '<div class="ch-metrics"><article class="ch-card ch-hero"><div class="label">' +
         "实时销售额" +
         '<span class="ch-clock">' +
