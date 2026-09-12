@@ -166,6 +166,8 @@ test("upload pptx, turn pages, never serve original", async () => {
   ).json();
   assert.equal(listed.pages.length, 2);
   assert.equal(Array.isArray(listed.pages), true);
+  assert.equal(listed.course.pages.length, 2);
+  assert.equal(listed.renderError, "");
   assert.match(listed.pages[0].slide.url, /slide-1\.png/);
   const page1 = await (
     await fetch(`${base}/api/academy/courses/${id}/pages/1`, {

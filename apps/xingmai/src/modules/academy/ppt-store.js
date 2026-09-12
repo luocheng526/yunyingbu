@@ -104,7 +104,7 @@ export async function listPptCourses({ includeUnpublished = true } = {}) {
     .filter((item) => includeUnpublished || item.published);
 }
 
-export async function getPptCourse(id, { allowUnpublished = true } = {}) {
+export async function getPptCourse(id, { allowUnpublished = true, withPages = true } = {}) {
   const safe = safeCourseId(id);
   if (!safe) {
     return null;
@@ -114,7 +114,17 @@ export async function getPptCourse(id, { allowUnpublished = true } = {}) {
   if (!hit || (!hit.published && !allowUnpublished)) {
     return null;
   }
-  return hit;
+  if (!withPages) {
+    return hit;
+  }
+  const rendered = await ensureSlideRenders(safe);
+  const pages = await readPages(safe);
+  return {
+    ...hit,
+    pageCount: pages.length || Number(hit.pageCount) || 0,
+    pages: pages.map((page) => pagePayload(safe, page)),
+    renderError: (rendered && rendered.error) || ""
+  };
 }
 
 async function fileExists(path) {
@@ -213,22 +223,11 @@ function pagePayload(id, page) {
 }
 
 export async function listPptPages(id) {
-  const course = await getPptCourse(id, { allowUnpublished: true });
-  if (!course) {
-    return null;
-  }
-  const rendered = await ensureSlideRenders(id);
-  const pages = await readPages(id);
-  return {
-    ...course,
-    pageCount: pages.length || Number(course.pageCount) || 0,
-    pages: pages.map((page) => pagePayload(id, page)),
-    renderError: (rendered && rendered.error) || ""
-  };
+  return getPptCourse(id, { allowUnpublished: true, withPages: true });
 }
 
 export async function getPptPage(id, index) {
-  const course = await getPptCourse(id, { allowUnpublished: true });
+  const course = await getPptCourse(id, { allowUnpublished: true, withPages: false });
   if (!course) {
     return null;
   }
