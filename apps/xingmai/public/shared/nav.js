@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.140 */
+/* xm-fast-shell 0.1.142 */
 (function () {
-  const ASSET_VER = "0.1.140";
+  const ASSET_VER = "0.1.142";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -1134,8 +1134,21 @@
       "#xm-hm .xm-hm-bar{display:flex!important;flex-direction:column!important;flex-wrap:nowrap!important;align-items:stretch!important;justify-content:flex-start!important;gap:8px!important}" +
       "#xm-hm .xm-hm-views{display:flex!important;flex-wrap:nowrap!important;width:100%!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch;gap:4px!important}" +
       "#xm-hm .xm-hm-views button,#xm-hm .xm-hm-set{flex:1 0 auto!important;white-space:nowrap!important;padding:5px 8px!important;font-size:13px!important}" +
-      "#xm-hm .xm-hm-ranges{display:flex!important;flex-wrap:nowrap!important;width:100%!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch;gap:6px!important}" +
-      "#xm-hm .xm-hm-ranges button,#xm-hm .xm-hm-dates{flex:0 0 auto!important;white-space:nowrap!important}" +
+      "#xm-hm:not(.is-live):not(.is-board) .xm-hm-ranges{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.35fr)!important;align-items:stretch!important;width:100%!important;overflow:visible!important;gap:6px!important}" +
+      "#xm-hm.is-live .xm-hm-ranges,#xm-hm.is-board .xm-hm-ranges{display:none!important}" +
+      "#xm-hm .xm-hm-ranges>button[data-range]:not([data-range=yesterday]):not([data-range=lastMonth]){display:none!important}" +
+      "#xm-hm .xm-hm-ranges>button[data-range=yesterday],#xm-hm .xm-hm-ranges>button[data-range=lastMonth]{width:100%!important;min-width:0!important;padding:6px 4px!important;font-size:13px!important}" +
+      "#xm-hm .xm-hm-datewrap{position:relative!important;min-width:0!important;width:100%!important}" +
+      "#xm-hm .xm-hm-dates{display:flex!important;width:100%!important;min-width:0!important;height:32px!important;box-sizing:border-box!important;padding:0 8px!important;border-radius:4px!important;border:1px solid var(--xm-line)!important;background:var(--xm-card)!important;color:var(--xm-ink)!important;gap:4px!important}" +
+      "#xm-hm .xm-hm-ranges:not(:has(>[data-range].is-on)) .xm-hm-dates{background:var(--xm-primary)!important;border-color:var(--xm-primary)!important;color:#fff!important}" +
+      "#xm-hm .xm-hm-dates-text{overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;font-size:12px!important;text-align:center!important}" +
+      "#xm-hm .xm-hm-ranges:has(>[data-range].is-on) .xm-hm-dates-text{font-size:0!important;line-height:0!important;color:transparent!important}" +
+      "#xm-hm .xm-hm-ranges:has(>[data-range].is-on) .xm-hm-dates-text::after{content:\"自定义\";font-size:13px!important;line-height:32px!important;color:var(--xm-ink)}" +
+      "#xm-hm .xm-hm-ranges:has(>[data-range].is-on) .xm-hm-dates-ico,#xm-hm .xm-hm-ranges:has(>[data-range].is-on) .xm-hm-dates-clear{display:none!important}" +
+      "#xm-hm .xm-hm-cal{left:0!important;right:0!important;width:auto!important;max-width:none!important}" +
+      "#xm-hm .xm-hm-cal-months{flex-direction:column!important}" +
+      "#xm-hm .xm-hm-cal-month+.xm-hm-cal-month{border-left:0!important;border-top:1px solid var(--xm-line)!important}" +
+      "#xm-hm .xm-hm-cal-grid button{width:36px!important;height:36px!important}" +
       "#xm-hm .xm-hm-kpis,#xm-hm .xm-hm-team-kpis,#xm-hm .xm-hm-live-cards{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important}" +
       "#xm-hm .xm-hm-card{min-height:0!important;padding:8px!important;background:var(--xm-card)!important;border:1px solid var(--xm-line)!important;border-radius:8px!important}" +
       "#xm-hm .xm-hm-card-head span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}" +
@@ -1155,8 +1168,43 @@
     document.documentElement.appendChild(style);
   }
 
+  function compactPhoneHomeDates() {
+    const el = document.getElementById("xm-hm-date-text");
+    if (!el || !window.matchMedia || !window.matchMedia(PHONE_MQ).matches) {
+      return;
+    }
+    const raw = String(el.textContent || "");
+    const m = raw.match(/(\d{4})-(\d{2})-(\d{2})\s*至\s*(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) {
+      return;
+    }
+    const next = m[2] === m[5] && m[3] === m[6] ? m[2] + "-" + m[3] : m[2] + "-" + m[3] + "至" + m[5] + "-" + m[6];
+    if (el.textContent !== next) {
+      el.textContent = next;
+    }
+  }
+
+  function watchPhoneHomeDates() {
+    if (window.__xmPhoneDatesWatch) {
+      return;
+    }
+    window.__xmPhoneDatesWatch = 1;
+    const attach = function () {
+      const root = document.getElementById("xm-hm");
+      if (!root || root.dataset.xmPhoneDates === "1") {
+        return;
+      }
+      root.dataset.xmPhoneDates = "1";
+      new MutationObserver(compactPhoneHomeDates).observe(root, { childList: true, subtree: true, characterData: true });
+      compactPhoneHomeDates();
+    };
+    attach();
+    new MutationObserver(attach).observe(document.documentElement, { childList: true, subtree: true });
+  }
+
   function ensurePhoneChrome() {
     ensurePhonePanelCss();
+    watchPhoneHomeDates();
     const topbar = document.querySelector(".xm-topbar");
     if (!topbar) {
       return;

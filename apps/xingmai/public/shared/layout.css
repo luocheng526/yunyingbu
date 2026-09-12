@@ -1042,7 +1042,7 @@ html[data-theme="dark"] .xm-content [style*="background: white"] {
   font-size: 13px;
 }
 
-/* xm-phone-panel 0.1.140  窄屏抽屉；首页卡片三列，公司/团队一行，时间一行。 */
+/* xm-phone-panel 0.1.142  窄屏抽屉；首页卡片三列；时间只留昨天、上月、自定义。 */
 .xm-phone-menu,
 .xm-phone-mask {
   display: none;
@@ -1217,18 +1217,103 @@ html[data-theme="dark"] .xm-content [style*="background: white"] {
     font-size: 13px !important;
   }
 
-  #xm-hm .xm-hm-ranges {
-    display: flex !important;
-    flex-wrap: nowrap !important;
+  #xm-hm:not(.is-live):not(.is-board) .xm-hm-ranges {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.35fr) !important;
+    align-items: stretch !important;
     width: 100% !important;
-    overflow-x: auto;
+    overflow: visible !important;
     gap: 6px !important;
   }
 
-  #xm-hm .xm-hm-ranges button,
+  #xm-hm.is-live .xm-hm-ranges,
+  #xm-hm.is-board .xm-hm-ranges {
+    display: none !important;
+  }
+
+  #xm-hm .xm-hm-ranges > button[data-range]:not([data-range="yesterday"]):not([data-range="lastMonth"]) {
+    display: none !important;
+  }
+
+  #xm-hm .xm-hm-ranges > button[data-range="yesterday"],
+  #xm-hm .xm-hm-ranges > button[data-range="lastMonth"] {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 6px 4px !important;
+    font-size: 13px !important;
+  }
+
+  #xm-hm .xm-hm-datewrap {
+    position: relative !important;
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
   #xm-hm .xm-hm-dates {
-    flex: 0 0 auto !important;
+    display: flex !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 32px !important;
+    box-sizing: border-box !important;
+    padding: 0 8px !important;
+    border-radius: 4px !important;
+    border: 1px solid var(--xm-line) !important;
+    background: var(--xm-card) !important;
+    color: var(--xm-ink) !important;
+    gap: 4px !important;
+  }
+
+  #xm-hm .xm-hm-ranges:not(:has(> [data-range].is-on)) .xm-hm-dates {
+    background: var(--xm-primary) !important;
+    border-color: var(--xm-primary) !important;
+    color: #fff !important;
+  }
+
+  #xm-hm .xm-hm-dates-text {
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
     white-space: nowrap !important;
+    font-size: 12px !important;
+    text-align: center !important;
+  }
+
+  #xm-hm .xm-hm-ranges:has(> [data-range].is-on) .xm-hm-dates-text {
+    font-size: 0 !important;
+    line-height: 0 !important;
+    color: transparent !important;
+  }
+
+  #xm-hm .xm-hm-ranges:has(> [data-range].is-on) .xm-hm-dates-text::after {
+    content: "自定义";
+    font-size: 13px !important;
+    line-height: 32px !important;
+    color: var(--xm-ink);
+  }
+
+  #xm-hm .xm-hm-ranges:has(> [data-range].is-on) .xm-hm-dates-ico,
+  #xm-hm .xm-hm-ranges:has(> [data-range].is-on) .xm-hm-dates-clear {
+    display: none !important;
+  }
+
+  #xm-hm .xm-hm-cal {
+    left: 0 !important;
+    right: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+  }
+
+  #xm-hm .xm-hm-cal-months {
+    flex-direction: column !important;
+  }
+
+  #xm-hm .xm-hm-cal-month + .xm-hm-cal-month {
+    border-left: 0 !important;
+    border-top: 1px solid var(--xm-line) !important;
+  }
+
+  #xm-hm .xm-hm-cal-grid button {
+    width: 36px !important;
+    height: 36px !important;
   }
 
   #xm-hm .xm-hm-kpis,
