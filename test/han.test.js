@@ -376,6 +376,10 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /商品分层/);
   assert.match(js, /function goHanPage/);
   assert.match(js, /window\.__xmGo/);
+  assert.match(js, /history\.pushState/);
+  assert.match(js, /han-goods-stage/);
+  assert.match(js, /is-leave/);
+  assert.match(js, /animateGoodsSwap/);
   assert.doesNotMatch(js, /data-xm-group='\/han'\]>\.xm-submenu/);
   assert.doesNotMatch(js, /han-fold-parent/);
   assert.doesNotMatch(js, /goods\.remove\(/);
@@ -467,9 +471,14 @@ test("goods page puts 商品分层 teams on a horizontal tab bar", async () => {
       return 1;
     },
     clearInterval() {},
-    window: { XmModules: {}, location: { pathname: "/han/goods", search: "" } },
+    window: {
+      XmModules: {},
+      location: { pathname: "/han/goods", search: "" },
+      addEventListener() {},
+    },
     document,
     location: { pathname: "/han/goods", search: "", assign() {} },
+    history: { pushState() {} },
     fetch() {
       return Promise.resolve({ json: () => Promise.resolve({ items: [] }) });
     },
