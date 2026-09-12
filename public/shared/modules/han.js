@@ -7,9 +7,23 @@
       .replace(/>/g, "&gt;");
   }
 
+  function ensureHanLightboxStyle() {
+    if (document.getElementById("han-lightbox-css")) return;
+    const style = document.createElement("style");
+    style.id = "han-lightbox-css";
+    style.textContent =
+      ".han-lightbox{display:none;position:fixed;inset:0;z-index:20000;background:rgba(0,0,0,.78);align-items:center;justify-content:center;padding:24px}" +
+      ".han-lightbox.is-open{display:flex}" +
+      ".han-lightbox img{max-width:92vw;max-height:88vh;object-fit:contain;background:#fff;box-shadow:0 12px 40px rgba(0,0,0,.4)}" +
+      ".han-lightbox-close{position:fixed;top:16px;right:16px;border:0;border-radius:999px;padding:8px 14px;background:#fff;cursor:pointer;z-index:20001}" +
+      ".han-thumb{cursor:zoom-in}";
+    document.head.appendChild(style);
+  }
+
   function openHanLightbox(src) {
     const url = String(src || "").trim();
     if (!url) return;
+    ensureHanLightboxStyle();
     let box = document.querySelector(".han-lightbox");
     if (!box) {
       box = document.createElement("div");
@@ -19,14 +33,18 @@
       document.body.appendChild(box);
       box.addEventListener("click", function (event) {
         if (event.target === box || event.target.closest(".han-lightbox-close")) {
-          box.classList.remove("is-open");
-          const img = box.querySelector("img");
-          if (img) img.removeAttribute("src");
+          closeHanLightbox();
         }
+      });
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") closeHanLightbox();
       });
     }
     const img = box.querySelector("img");
-    if (img) img.src = url;
+    if (img) {
+      img.src = url;
+      img.setAttribute("referrerpolicy", "no-referrer");
+    }
     box.classList.add("is-open");
   }
 
@@ -501,7 +519,7 @@
             hidden +
             '<img class="han-thumb" src="' +
             escapeHtml(src) +
-            '" alt="" referrerpolicy="no-referrer" decoding="async" />' +
+            '" alt="" title="双击看大图" referrerpolicy="no-referrer" decoding="async" />' +
             "</div>"
           );
         }
@@ -1326,13 +1344,28 @@
         sheetView.y = sheetDrag.oy + dy;
         applySheetView();
       }
-      function onSheetPointerUp() {
+      let lastThumbTap = { t: 0, el: null };
+      function thumbFromEvent(e) {
+        const box = e.target.closest(".han-thumb-box");
+        if (!box) return null;
+        return box.querySelector("img.han-thumb");
+      }
+      function onSheetPointerUp(e) {
         sheetDrag = null;
         viewport.classList.remove("is-panning");
+        const img = thumbFromEvent(e);
+        if (!img || !img.src) return;
+        const now = Date.now();
+        if (lastThumbTap.el === img && now - lastThumbTap.t < 420) {
+          lastThumbTap = { t: 0, el: null };
+          openHanLightbox(img.src);
+          return;
+        }
+        lastThumbTap = { t: now, el: img };
       }
       function onSheetImageOpen(e) {
-        const img = e.target.closest(".han-thumb");
-        if (img && img.src && e.detail === 2) {
+        const img = thumbFromEvent(e) || e.target.closest(".han-thumb");
+        if (img && img.src && (e.detail === 2 || e.type === "dblclick")) {
           e.preventDefault();
           openHanLightbox(img.src);
           return true;
