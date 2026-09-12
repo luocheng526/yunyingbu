@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.356-home-caltip */
+/* xm-module-home 0.1.357-home-team */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -790,7 +790,10 @@
       ".xm-hm.is-live .xm-hm-kpis,.xm-hm.is-board .xm-hm-kpis,.xm-hm.is-team .xm-hm-kpis,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
       ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden]{display:none}" +
       ".xm-hm-kpis,.xm-hm-team-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
-      ".xm-hm-team{display:flex;flex-direction:column;gap:10px;padding-bottom:8px}" +
+      ".xm-hm-teams{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}" +
+      ".xm-hm-team{display:flex;flex-direction:column;gap:10px;min-width:0;padding-bottom:8px}" +
+      ".xm-hm-team + .xm-hm-team{border-left:1px solid var(--xm-line);padding-left:12px}" +
+      ".xm-hm-team .xm-hm-panel{overflow-x:auto}" +
       ".xm-hm-team-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}" +
       ".xm-hm-team-head h2{margin:0;font-size:16px}" +
       ".xm-hm-team-head p{margin:4px 0 0;color:var(--xm-muted);font-size:12px}" +
@@ -861,6 +864,7 @@
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{margin:8px 0 0;color:var(--xm-muted);font-size:12px}" +
       "@media (max-width:1200px){.xm-hm-kpis,.xm-hm-team-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
+      "@media (max-width:900px){.xm-hm-teams{grid-template-columns:1fr}.xm-hm-team + .xm-hm-team{border-left:0;padding-left:0}}" +
       "@media (max-width:700px){.xm-hm-kpis,.xm-hm-team-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:1fr}.xm-hm-team-head{flex-direction:column}.xm-hm-cal-months{flex-direction:column}}"
     );
   }
@@ -912,7 +916,7 @@
     var hero = readChart(live.hero, blankLive().hero);
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
-    board.setAttribute("data-hm-js", "0.1.356-home-caltip");
+    board.setAttribute("data-hm-js", "0.1.357-home-team");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", state.view === "team");

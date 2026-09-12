@@ -31,6 +31,11 @@ test("custom range allows 30 inclusive days and rejects 31", () => {
   assert.equal(withinDays("2026-09-11", "2026-09-11", 30), true);
 });
 
+test("team view splits two people side by side", () => {
+  assert.match(homeJs, /\.xm-hm-teams\{display:grid;grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)/);
+  assert.match(homeJs, /@media \(max-width:900px\)\{\.xm-hm-teams\{grid-template-columns:1fr\}/);
+});
+
 test("card help uses data-tip so multiline ERP copy can show", () => {
   assert.match(homeJs, /function tipAttr/);
   assert.match(homeJs, /data-tip="/);
