@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
-import { createHanStore, dropProbeTasks, hydrateFromMysql, matchOrgStoresForTeam, mergeTeamShops, buildProductCsv, parseProductCsv, HAN_DEFAULT_OWNER, HAN_DEFAULT_STORE } from "../src/modules/han/store.js";
+import { createHanStore, dropProbeTasks, hydrateFromMysql, matchOrgStoresForTeam, mergeTeamShops, buildProductCsv, parseProductCsv, classifyProduct, HAN_DEFAULT_OWNER, HAN_DEFAULT_STORE } from "../src/modules/han/store.js";
 import { createHanFakePool } from "./han-fake-pool.js";
 
 async function withServer(fn) {
@@ -296,6 +296,31 @@ test("han selection / products / paid boards are isolated", async () => {
       "/api/han/products?team=" + encodeURIComponent("陈晓曼组") + "&store=" + encodeURIComponent("晓曼一店"),
     );
     assert.equal(again.body.items.some((row) => row.spu === "CSV-1"), true);
+
+    const raw = await json(base, "/api/han/products/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        team: "陈晓曼组",
+        store: "晓曼一店",
+        csv:
+          "SPU,退货率,推广花费占比,近7天日成交金额,成交转化率,成交单量,评价数\n" +
+          "HEAD-AUTO,12%,30%,2500,8%,20,10\n" +
+          "TEST-AUTO,,,,,,1\n",
+      }),
+    });
+    assert.equal(raw.body.created.length, 2);
+    const head = raw.body.created.find((row) => row.spu === "HEAD-AUTO");
+    const testNew = raw.body.created.find((row) => row.spu === "TEST-AUTO");
+    assert.equal(head.layer, "头部产品");
+    assert.equal(testNew.layer, "测新产品");
+    const moved = await json(base, "/api/han/products/" + head.id, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ layer: "中部产品", remark: "手调" }),
+    });
+    assert.equal(moved.body.item.layer, "中部产品");
+    assert.equal(moved.body.item.remark, "手调");
   });
 });
 
@@ -356,7 +381,9 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /XmModules\["\/han\/goods"\]/);
   assert.match(js, /店铺产品分层表/);
   assert.match(js, /han-sheet/);
-  assert.match(js, /批量导入/);
+  assert.match(js, /导入原始数据/);
+  assert.match(js, /按初版规则分类/);
+  assert.match(js, /han-layer-pick/);
   assert.match(js, /id="han-export"/);
   assert.match(js, /\/api\/han\/products\/import/);
   assert.match(js, /\/api\/han\/products\.csv/);
@@ -525,6 +552,29 @@ test("GET /api/han/shops pulls 组织中心 stores for the team", async () => {
   }
 });
 
+test("classifyProduct follows 商品分层规则", () => {
+  assert.equal(
+    classifyProduct(
+      { returnM8: "12%", spendRate: "30%", gmv7d: "2500", convRate: "8%", orders30d: "20" },
+      { force: true },
+    ),
+    "头部产品",
+  );
+  assert.equal(
+    classifyProduct(
+      { returnM8: "22%", spendRate: "35%", gmv7d: "1200", convRate: "6%", orders30d: "5" },
+      { force: true },
+    ),
+    "中部产品",
+  );
+  assert.equal(
+    classifyProduct({ returnM8: "27%", orders30d: "8" }, { force: true }),
+    "尾部产品",
+  );
+  assert.equal(classifyProduct({ reviewCount: "2" }, { force: true }), "测新产品");
+  assert.equal(classifyProduct({ spu: "NEW" }, { force: true }), "待做单产品");
+});
+
 test("product csv round-trips layer columns", () => {
   const csv = buildProductCsv([
     { layer: "头部产品", spu: "A1", firstSku: "S1", remark: "含,逗号" },
@@ -575,6 +625,9 @@ test("han schema uses prefixed tables", async () => {
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_brief/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_selection/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_products/);
+  assert.match(sql, /spend_rate/);
+  assert.match(sql, /gmv_7d/);
+  assert.match(sql, /conv_rate/);
   assert.match(sql, /layer VARCHAR/);
   assert.match(sql, /\bspu VARCHAR/);
   assert.match(sql, /team_name/);
