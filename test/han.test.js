@@ -475,6 +475,9 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /data-han-tab/);
   assert.match(js, /商品分层/);
   assert.match(js, /全部汇总/);
+  assert.match(js, /本组汇总/);
+  assert.match(js, /本组产品分层汇总/);
+  assert.doesNotMatch(js, /本小组店铺/);
   assert.match(js, /han-store-cell/);
   assert.match(js, /unified: true/);
   assert.match(js, /function goHanPage/);
@@ -629,6 +632,13 @@ test("goods page puts 商品分层 teams on a horizontal tab bar", async () => {
   assert.match(js, /店铺产品分层汇总/);
   assert.match(root.innerHTML, /陈晓曼组/);
   assert.match(root.innerHTML, /薛双双组/);
+  assert.doesNotMatch(root.innerHTML, /本店分类规则/);
+  sandbox.window.location.search = "?team=" + encodeURIComponent("陈晓曼组");
+  sandbox.location.search = sandbox.window.location.search;
+  sandbox.window.XmModules["/han/goods"].mount(root);
+  assert.match(root.innerHTML, /全部店铺的分层/);
+  assert.match(root.innerHTML, /按统一规则分类/);
+  assert.doesNotMatch(root.innerHTML, /本小组店铺/);
   assert.doesNotMatch(root.innerHTML, /本店分类规则/);
   assert.doesNotMatch(root.innerHTML, /data-han-tab="\/han\/selection"/);
   assert.equal(leftover.gone, true);

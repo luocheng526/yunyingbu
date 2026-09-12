@@ -107,12 +107,13 @@
   }
 
   function shopTabsHtml(team, shop, shops) {
-    if (!team || !shops || !shops.length) {
+    if (!team) {
       return "";
     }
     return (
       '<nav class="han-tabs han-tabs-sub" aria-label="小组店铺">' +
-      shops
+      tabLink("/han/goods?team=" + encodeURIComponent(team), "本组汇总", !shop) +
+      (shops || [])
         .map(function (item) {
           const href =
             "/han/goods?team=" + encodeURIComponent(team) + "&store=" + encodeURIComponent(item.store);
@@ -457,9 +458,9 @@
       const params = new URLSearchParams(window.location.search);
       const team = (params.get("team") || "").trim();
       const shop = (params.get("store") || "").trim();
-      const allShops = !teams.includes(team);
+      const summaryView = !shop;
       layers.forEach(function (layer) {
-        const lead = allShops
+        const lead = summaryView
           ? [
               ["store", "店铺"],
               ["_layer", "调动"],
@@ -575,61 +576,6 @@
         );
       }
 
-      if (!allShops && !shop) {
-        root.innerHTML = page(
-          team,
-          team === "韩梦凯组"
-            ? "没有对应主管的店直接挂在韩梦凯下面，从组织中心抓到本页。点店铺进入分层表。"
-            : "店铺从组织中心抓取，对应小组负责人「" +
-              escapeHtml(String(team).replace(/组$/, "")) +
-              "」。点店铺进入分层表。",
-          '<div class="stack"><section class="panel"><h2>本小组店铺</h2>' +
-            '<p class="msg status" id="shop-msg"></p>' +
-            '<div id="shop-list" class="actions" style="flex-wrap:wrap"></div></section></div>',
-          teamTabsHtml(team) + '<div id="han-shop-tabs"></div>',
-        );
-        const list = root.querySelector("#shop-list");
-        const msg = root.querySelector("#shop-msg");
-        let dead = false;
-        function paintShops(items) {
-          const shopTabs = root.querySelector("#han-shop-tabs");
-          if (shopTabs) shopTabs.innerHTML = shopTabsHtml(team, "", items);
-          if (!items.length) {
-            list.innerHTML = '<p class="lead">组织中心还没有该组店铺。</p>';
-            return;
-          }
-          list.innerHTML = items
-            .map(function (item) {
-              return (
-                '<a class="han-team-card" href="/han/goods?team=' +
-                encodeURIComponent(team) +
-                "&store=" +
-                encodeURIComponent(item.store) +
-                '" data-han-tab="/han/goods?team=' +
-                encodeURIComponent(team) +
-                "&store=" +
-                encodeURIComponent(item.store) +
-                '">' +
-                escapeHtml(item.store) +
-                "</a>"
-              );
-            })
-            .join("");
-        }
-        function loadShops() {
-          return jsonFetch("/api/han/shops?team=" + encodeURIComponent(team)).then(function (json) {
-            if (!dead) paintShops(json.items || []);
-          });
-        }
-        loadShops().catch(function (err) {
-          if (!dead) msg.textContent = String(err);
-        });
-        return function unmount() {
-          dead = true;
-          root.innerHTML = "";
-        };
-      }
-
       function field(name, label) {
         return (
           "<label>" +
@@ -653,9 +599,13 @@
       })();
 
       root.innerHTML = page(
-        allShops ? "全部汇总" : shop,
-        allShops
-          ? "汇总六个小组全部店铺，用统一默认规则分头部、中部、尾部。每层最前一列是店铺名。点右侧小组可进单店表。"
+        summaryView ? (team || "全部汇总") : shop,
+        summaryView
+          ? team
+            ? "先看「" +
+              escapeHtml(team) +
+              "」全部店铺的分层，店铺从组织中心抓取。点下面店铺名再进单店表，可改本店规则和导入。"
+            : "汇总六个小组全部店铺，用统一默认规则分头部、中部、尾部。每层最前一列是店铺名。点右侧小组看该组全部店。"
           : team + " · " + shop + "。本店可自定义分类规则；导入和分类只按本店规则。拖动表格移动，拖表头右边调列宽，双击格子编辑，双击主图看大图。",
         '<style>' +
           ".han-sheet-wrap{background:#fff;border:1px solid #c6c6c6}" +
@@ -721,7 +671,7 @@
           "@media (max-width:900px){.han-plans{grid-template-columns:1fr}}" +
           "</style>" +
           '<div class="han-sheet-toolbar">' +
-          (allShops
+          (summaryView
             ? '<button type="button" class="han-class-btn" id="han-classify">按统一规则分类</button>' +
               '<button type="button" class="han-export-btn" id="han-export">导出</button>'
             : '<button type="button" class="han-rules-btn" id="han-rules-toggle">本店分类规则</button>' +
@@ -730,7 +680,7 @@
               '<label class="han-import-btn">导入原始数据<input id="han-import" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden /></label>' +
               '<button type="button" class="han-tpl-btn" id="han-tpl">下载模板</button>') +
           "</div>" +
-          (allShops
+          (summaryView
             ? ""
             : '<div class="han-rules" id="han-rules">' +
           "<h3>本店分类规则</h3>" +
@@ -766,7 +716,7 @@
           "<thead></thead><tbody></tbody></table></div></div></div>" +
           '<p class="msg status han-sheet-msg" id="prod-msg"></p>',
         teamTabsHtml(team) + '<div id="han-shop-tabs"></div>',
-        allShops
+        summaryView
           ? ""
           : '<div class="han-plans">' +
             '<section class="han-plan" data-kind="month"><h3>本月任务规划<span>' +
@@ -901,8 +851,10 @@
       function paintHead() {
         const title =
           '<tr><th class="han-sheet-title" colspan="' + totalCols + '">' +
-          (allShops
-            ? "全部小组 · 店铺产品分层汇总"
+          (summaryView
+            ? team
+              ? escapeHtml(team) + " · 本组产品分层汇总"
+              : "全部小组 · 店铺产品分层汇总"
             : escapeHtml(shop) + " · " + escapeHtml(team) + " · 店铺产品分层表") +
           "</th></tr>";
         const groups = "<tr>" + layers.map(function (layer) {
@@ -934,7 +886,7 @@
       }
 
       function addRowHtml() {
-        if (allShops) return "";
+        if (summaryView) return "";
         return (
           "<tr>" +
           layers
@@ -1018,15 +970,17 @@
       }
 
       function load() {
-        const productsUrl = allShops
-          ? "/api/han/products"
-          : "/api/han/products?team=" + encodeURIComponent(team) + "&store=" + encodeURIComponent(shop);
+        const productsUrl = shop
+          ? "/api/han/products?team=" + encodeURIComponent(team) + "&store=" + encodeURIComponent(shop)
+          : team
+            ? "/api/han/products?team=" + encodeURIComponent(team)
+            : "/api/han/products";
         const jobs = [jsonFetch(productsUrl)];
-        if (!allShops) jobs.push(jsonFetch("/api/han/shops?team=" + encodeURIComponent(team)));
+        if (team) jobs.push(jsonFetch("/api/han/shops?team=" + encodeURIComponent(team)));
         return Promise.all(jobs).then(function (pair) {
           if (dead) return;
           items = pair[0].items || [];
-          if (allShops) {
+          if (summaryView) {
             items = items.slice().sort(function (a, b) {
               const storeCmp = String(a.store || "").localeCompare(String(b.store || ""), "zh");
               if (storeCmp) return storeCmp;
@@ -1101,12 +1055,14 @@
       }
 
       function onExport() {
-        const url = allShops
-          ? "/api/han/products.csv"
-          : "/api/han/products.csv?team=" +
+        const url = shop
+          ? "/api/han/products.csv?team=" +
             encodeURIComponent(team) +
             "&store=" +
-            encodeURIComponent(shop);
+            encodeURIComponent(shop)
+          : team
+            ? "/api/han/products.csv?team=" + encodeURIComponent(team)
+            : "/api/han/products.csv";
         fetch(url, { credentials: "same-origin" })
           .then(function (res) {
             return res.blob();
@@ -1114,7 +1070,7 @@
           .then(function (blob) {
             const a = document.createElement("a");
             a.href = URL.createObjectURL(blob);
-            a.download = (allShops ? "全部汇总" : shop) + "-分层表.csv";
+            a.download = (shop || team || "全部汇总") + "-分层表.csv";
             a.click();
             URL.revokeObjectURL(a.href);
           })
@@ -1210,11 +1166,17 @@
         jsonFetch("/api/han/products/classify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(allShops ? { unified: true } : { team: team, store: shop }),
+          body: JSON.stringify(
+            summaryView
+              ? team
+                ? { team: team, unified: true }
+                : { unified: true }
+              : { team: team, store: shop },
+          ),
         }).then(function (json) {
           if (dead) return;
           msg.textContent = json.ok
-            ? (allShops ? "已按统一规则调动" : "已按本店规则调动") + (json.count || 0) + "条"
+            ? (summaryView ? "已按统一规则调动" : "已按本店规则调动") + (json.count || 0) + "条"
             : json.error || "分类失败";
           if (json.ok) return load();
         });
@@ -1529,7 +1491,7 @@
       }
       const plansBox = root.querySelector(".han-plans");
       if (plansBox) plansBox.addEventListener("click", onPlanClick);
-      const boot = allShops ? [load()] : [load(), loadRules(), loadPlans()];
+      const boot = summaryView ? [load()] : [load(), loadRules(), loadPlans()];
       Promise.all(boot).catch(function (err) {
         if (!dead) msg.textContent = String(err);
       });
