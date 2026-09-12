@@ -7,6 +7,7 @@ export {
   mergeTeamShops,
   buildProductCsv,
   parseProductCsv,
+  classifyProduct,
   HAN_DEFAULT_OWNER,
   HAN_DEFAULT_STORE,
   HAN_PRODUCT_TEAMS,

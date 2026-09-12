@@ -50,10 +50,13 @@ const PRODUCT_LAYER_COLUMNS = [
   ["need_order", "VARCHAR(256) NOT NULL DEFAULT ''"],
   ["remark", "VARCHAR(1024) NOT NULL DEFAULT ''"],
   ["team_name", "VARCHAR(64) NOT NULL DEFAULT ''"],
+  ["spend_rate", "VARCHAR(64) NOT NULL DEFAULT ''"],
+  ["gmv_7d", "VARCHAR(64) NOT NULL DEFAULT ''"],
+  ["conv_rate", "VARCHAR(64) NOT NULL DEFAULT ''"],
 ];
 const PRODUCT_TEAMS = ["陈晓曼组", "高明阳组", "毛永超组", "段坤孝组", "薛双双组"];
 const PRODUCT_SELECT =
-  "id, name, sku, price, stock, owner, store_name, layer, image_url, spu, first_sku, hot_sell, review_count, share_count, qa_video, return_m5, return_m6, return_m7, return_m8, orders_30d, fulfill_note, jd_stock, listed_on, has_new_badge, need_order, remark, team_name, created_at";
+  "id, name, sku, price, stock, owner, store_name, layer, image_url, spu, first_sku, hot_sell, review_count, share_count, qa_video, return_m5, return_m6, return_m7, return_m8, orders_30d, fulfill_note, jd_stock, listed_on, has_new_badge, need_order, remark, team_name, spend_rate, gmv_7d, conv_rate, created_at";
 const SCHEMA_PATH = fileURLToPath(new URL("./schema.sql", import.meta.url));
 
 function toIso(value) {
@@ -75,6 +78,81 @@ function toDateOnly(value) {
   }
   const text = String(value);
   return text.slice(0, 10);
+}
+
+function parseMetric(value) {
+  const text = String(value ?? "")
+    .replace(/,/g, "")
+    .replace(/%/g, "")
+    .trim();
+  if (!text) {
+    return null;
+  }
+  const n = Number(text);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parsePercent(value) {
+  const n = parseMetric(value);
+  if (n == null) {
+    return null;
+  }
+  return n <= 1 && String(value).includes("%") === false && n !== 0 ? n * 100 : n;
+}
+
+function latestReturnRate(row) {
+  return (
+    parsePercent(row.returnM8) ??
+    parsePercent(row.returnM7) ??
+    parsePercent(row.returnM6) ??
+    parsePercent(row.returnM5) ??
+    parsePercent(row.returnRate)
+  );
+}
+
+export function classifyProduct(row = {}, options = {}) {
+  if (!options.force) {
+    const given = normalizeProductLayer(row.layer);
+    if (given && PRODUCT_LAYERS.includes(given)) {
+      return given;
+    }
+  }
+  const ret = latestReturnRate(row);
+  const spend = parsePercent(row.spendRate);
+  const gmv = parseMetric(row.gmv7d);
+  const conv = parsePercent(row.convRate);
+  const orders = parseMetric(row.orders30d);
+  const reviews = parseMetric(row.reviewCount);
+  const needOrder = String(row.needOrder || "").trim();
+  const hasOrders = orders != null && orders > 0;
+  const manyOrders = orders != null && orders > 3;
+  const someOrders = orders != null && orders >= 3;
+
+  if (ret != null && ret <= 20 && spend != null && spend <= 42 && gmv != null && gmv >= 2000 && conv != null && conv >= 7) {
+    return "头部产品";
+  }
+  if (someOrders && ret != null && ret < 25 && spend != null && spend <= 40 && gmv != null && gmv >= 1000 && conv != null && conv >= 5) {
+    return "中部产品";
+  }
+  if (someOrders && ret != null && ret >= 25 && ret <= 30 && spend != null && spend <= 35 && gmv != null && gmv >= 1000 && conv != null && conv >= 5) {
+    return "尾部产品";
+  }
+  if (manyOrders && ret != null && ret < 25) {
+    return "中部产品";
+  }
+  if (manyOrders && ret != null && ret >= 25 && ret <= 30) {
+    return "尾部产品";
+  }
+  if (manyOrders) {
+    return "动销产品";
+  }
+  if (!hasOrders && reviews != null && reviews >= 1) {
+    return "测新产品";
+  }
+  if (needOrder || !hasOrders) {
+    return "待做单产品";
+  }
+  return "动销产品";
 }
 
 function ownerOrDefault(owner) {
@@ -144,6 +222,9 @@ function mapProduct(row) {
     needOrder: row.need_order || "",
     remark: row.remark || "",
     team: row.team_name || "",
+    spendRate: row.spend_rate || "",
+    gmv7d: row.gmv_7d || "",
+    convRate: row.conv_rate || "",
     createdAt: toIso(row.created_at),
   };
 }
@@ -435,6 +516,9 @@ export function createHanStore(poolOrFactory = getPool) {
       needOrder,
       remark,
       team,
+      spendRate,
+      gmv7d,
+      convRate,
     } = {}) {
       await ensure();
       const spuText = String(spu || "").trim();
@@ -445,7 +529,24 @@ export function createHanStore(poolOrFactory = getPool) {
         err.statusCode = 400;
         throw err;
       }
-      const layerName = normalizeProductLayer(layer);
+      const payload = {
+        layer,
+        returnM5,
+        returnM6,
+        returnM7,
+        returnM8,
+        orders30d,
+        reviewCount,
+        spendRate,
+        gmv7d,
+        convRate,
+        needOrder,
+        listedOn,
+      };
+      let layerName = normalizeProductLayer(layer);
+      if (!layerName) {
+        layerName = classifyProduct(payload, { force: true });
+      }
       if (layerName && !PRODUCT_LAYERS.includes(layerName)) {
         const err = new Error("unknown layer");
         err.statusCode = 400;
@@ -453,7 +554,7 @@ export function createHanStore(poolOrFactory = getPool) {
       }
       const teamName = normalizeProductTeam(team);
       const [result] = await db().query(
-        `INSERT INTO han_products (name, sku, price, stock, owner, store_name, layer, image_url, spu, first_sku, hot_sell, review_count, share_count, qa_video, return_m5, return_m6, return_m7, return_m8, orders_30d, fulfill_note, jd_stock, listed_on, has_new_badge, need_order, remark, team_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO han_products (name, sku, price, stock, owner, store_name, layer, image_url, spu, first_sku, hot_sell, review_count, share_count, qa_video, return_m5, return_m6, return_m7, return_m8, orders_30d, fulfill_note, jd_stock, listed_on, has_new_badge, need_order, remark, team_name, spend_rate, gmv_7d, conv_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           trimmed,
           first || String(sku || "").trim(),
@@ -481,6 +582,9 @@ export function createHanStore(poolOrFactory = getPool) {
           String(needOrder || "").trim(),
           String(remark || "").trim(),
           teamName,
+          String(spendRate || "").trim(),
+          String(gmv7d || "").trim(),
+          String(convRate || "").trim(),
         ],
       );
       const [rows] = await db().query(
@@ -490,15 +594,93 @@ export function createHanStore(poolOrFactory = getPool) {
       return mapProduct(rows[0]);
     },
 
+    async updateProduct(id, patch = {}) {
+      await ensure();
+      const productId = Number(id);
+      if (!productId) {
+        const err = new Error("id required");
+        err.statusCode = 400;
+        throw err;
+      }
+      const [found] = await db().query(`SELECT ${PRODUCT_SELECT} FROM han_products WHERE id = ?`, [productId]);
+      if (!found.length) {
+        const err = new Error("not found");
+        err.statusCode = 404;
+        throw err;
+      }
+      const current = mapProduct(found[0]);
+      const next = { ...current, ...patch };
+      if (patch.layer != null) {
+        const layerName = normalizeProductLayer(patch.layer);
+        if (layerName && !PRODUCT_LAYERS.includes(layerName)) {
+          const err = new Error("unknown layer");
+          err.statusCode = 400;
+          throw err;
+        }
+        next.layer = layerName;
+      }
+      await db().query(
+        `UPDATE han_products SET name = ?, sku = ?, price = ?, stock = ?, owner = ?, store_name = ?, layer = ?, image_url = ?, spu = ?, first_sku = ?, hot_sell = ?, review_count = ?, share_count = ?, qa_video = ?, return_m5 = ?, return_m6 = ?, return_m7 = ?, return_m8 = ?, orders_30d = ?, fulfill_note = ?, jd_stock = ?, listed_on = ?, has_new_badge = ?, need_order = ?, remark = ?, team_name = ?, spend_rate = ?, gmv_7d = ?, conv_rate = ? WHERE id = ?`,
+        [
+          next.name,
+          next.sku || next.firstSku || "",
+          optionalNumber(next.price),
+          optionalNumber(next.stock),
+          ownerOrDefault(next.owner),
+          storeOrDefault(next.store),
+          next.layer || "",
+          String(next.image || "").trim(),
+          String(next.spu || "").trim(),
+          String(next.firstSku || "").trim(),
+          String(next.hotSell || "").trim(),
+          String(next.reviewCount || "").trim(),
+          String(next.shareCount || "").trim(),
+          String(next.qaVideo || "").trim(),
+          String(next.returnM5 || "").trim(),
+          String(next.returnM6 || "").trim(),
+          String(next.returnM7 || "").trim(),
+          String(next.returnM8 || "").trim(),
+          String(next.orders30d || "").trim(),
+          String(next.fulfillNote || "").trim(),
+          String(next.jdStock || "").trim(),
+          optionalDate(next.listedOn),
+          String(next.hasNewBadge || "").trim(),
+          String(next.needOrder || "").trim(),
+          String(next.remark || "").trim(),
+          normalizeProductTeam(next.team),
+          String(next.spendRate || "").trim(),
+          String(next.gmv7d || "").trim(),
+          String(next.convRate || "").trim(),
+          productId,
+        ],
+      );
+      const [rows] = await db().query(`SELECT ${PRODUCT_SELECT} FROM han_products WHERE id = ?`, [productId]);
+      return mapProduct(rows[0]);
+    },
+
+    async classifyProducts({ team, store } = {}) {
+      const items = await this.listProducts({ team, store });
+      const updated = [];
+      for (const item of items) {
+        const layer = classifyProduct(item, { force: true });
+        if (layer && layer !== item.layer) {
+          updated.push(await this.updateProduct(item.id, { layer }));
+        }
+      }
+      return { updated, count: updated.length };
+    },
+
     async importProducts({ team, store, items, csv } = {}) {
       const rows = Array.isArray(items) && items.length ? items : parseProductCsv(csv);
       const created = [];
       const errors = [];
       for (const row of rows) {
         try {
+          const layer = normalizeProductLayer(row.layer);
           created.push(
             await this.createProduct({
               ...row,
+              layer: PRODUCT_LAYERS.includes(layer) ? layer : classifyProduct(row, { force: true }),
               team: team || row.team,
               store: store || row.store,
             }),
@@ -669,7 +851,19 @@ export const PRODUCT_CSV_FIELDS = [
   ["hasNewBadge", "是否有新品标"],
   ["needOrder", "需做单数量和时间"],
   ["remark", "备注"],
+  ["spendRate", "推广花费占比"],
+  ["gmv7d", "近7天日成交金额"],
+  ["convRate", "成交转化率"],
 ];
+
+const PRODUCT_CSV_ALIASES = {
+  退货率: "returnM8",
+  成交单量: "orders30d",
+  近30天真实单量: "orders30d",
+  花费占比: "spendRate",
+  日成交金额: "gmv7d",
+  转化率: "convRate",
+};
 
 function csvEscape(value) {
   const text = String(value ?? "");
@@ -732,6 +926,9 @@ export function parseProductCsv(text) {
   const keyOf = new Map(PRODUCT_CSV_FIELDS.map((pair) => [pair[0], pair[0]]));
   PRODUCT_CSV_FIELDS.forEach((pair) => {
     keyOf.set(pair[1], pair[0]);
+  });
+  Object.entries(PRODUCT_CSV_ALIASES).forEach(([label, key]) => {
+    keyOf.set(label, key);
   });
   const keys = headers.map((header) => keyOf.get(header) || "");
   return lines.slice(1).map((line) => {

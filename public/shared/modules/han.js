@@ -322,6 +322,9 @@
       ];
       layers[1].cols = layers[0].cols;
       layers[2].cols = layers[0].cols;
+      layers.forEach(function (layer) {
+        layer.cols = [["_layer", "调动"]].concat(layer.cols);
+      });
       const totalCols = layers.reduce(function (sum, layer) {
         return sum + layer.cols.length;
       }, 0);
@@ -332,12 +335,46 @@
         return "text";
       }
 
+      function layerSelect(row) {
+        return (
+          '<select class="han-layer-pick" data-id="' +
+          escapeHtml(row.id) +
+          '">' +
+          layers
+            .map(function (layer) {
+              return (
+                '<option value="' +
+                escapeHtml(layer.name) +
+                '"' +
+                (row.layer === layer.name ? " selected" : "") +
+                ">" +
+                escapeHtml(layer.name) +
+                "</option>"
+              );
+            })
+            .join("") +
+          "</select>"
+        );
+      }
+
       function cellHtml(row, key) {
-        const value = row[key] || "";
-        if (key === "image" && /^https?:\/\//i.test(value)) {
-          return '<td><img src="' + escapeHtml(value) + '" alt="" style="height:36px;max-width:64px;object-fit:cover" /></td>';
+        if (key === "_layer") {
+          return "<td>" + layerSelect(row) + "</td>";
         }
-        return "<td>" + escapeHtml(value) + "</td>";
+        const value = row[key] || "";
+        return (
+          '<td><input class="han-cell" data-id="' +
+          escapeHtml(row.id) +
+          '" data-key="' +
+          key +
+          '" type="' +
+          inputType(key) +
+          '" value="' +
+          escapeHtml(value) +
+          '"' +
+          (key === "image" ? " placeholder=\"主图链接\"" : "") +
+          " /></td>"
+        );
       }
 
       const teams = HAN_GOODS_TEAMS;
@@ -411,7 +448,7 @@
 
       root.innerHTML = page(
         shop,
-        team + " · " + shop + "。六个分层左右排在同一张工作表里，向右滑动可看完。",
+        team + " · " + shop + "。导入原始数据后按规则自动分层，格子可改，调动可换层。",
         '<style>' +
           ".han-sheet-wrap{overflow-x:auto;background:#fff;border:1px solid #c6c6c6}" +
           ".han-sheet{border-collapse:collapse;font-size:12px;min-width:2200px}" +
@@ -427,10 +464,13 @@
           ".han-sheet-toolbar button,.han-sheet-toolbar label{min-height:34px;padding:6px 14px;border:0;border-radius:999px;background:#111827;color:#fff;font-size:13px;font-weight:600;cursor:pointer}" +
           ".han-sheet-toolbar .han-export-btn{background:#2563eb}" +
           ".han-sheet-toolbar .han-tpl-btn{background:#6b7280}" +
+          ".han-sheet-toolbar .han-class-btn{background:#0f766e}" +
+          ".han-sheet select{max-width:88px;border:0;background:#ecfeff;font-size:12px}" +
           "</style>" +
           '<div class="han-sheet-toolbar">' +
+          '<button type="button" class="han-class-btn" id="han-classify">按规则分类</button>' +
           '<button type="button" class="han-export-btn" id="han-export">导出</button>' +
-          '<label class="han-import-btn">批量导入<input id="han-import" type="file" accept=".csv,text/csv" hidden /></label>' +
+          '<label class="han-import-btn">导入原始数据<input id="han-import" type="file" accept=".csv,text/csv" hidden /></label>' +
           '<button type="button" class="han-tpl-btn" id="han-tpl">下载模板</button></div>' +
           '<div class="han-sheet-wrap"><table class="han-sheet" id="han-sheet">' +
           "<thead></thead><tbody></tbody></table></div>" +
@@ -488,6 +528,9 @@
               return layer.cols
                 .map(function (pair) {
                   const key = pair[0];
+                  if (key === "_layer") {
+                    return "<td></td>";
+                  }
                   return (
                     '<td><input data-layer="' +
                     i +
@@ -592,8 +635,29 @@
       const exportBtn = root.querySelector("#han-export");
       const importInput = root.querySelector("#han-import");
       const tplBtn = root.querySelector("#han-tpl");
+      const classifyBtn = root.querySelector("#han-classify");
       const csvHeader =
-        "分层,主图,SPU,第一个sku,全网热销,评价数,晒单数,问答/视频logo,BI 5月退货率,BI 6月退货率,BI 7月退货率,BI 8月退货率,近30天真实单量,京仓/线下/拍单/无锡中转,京仓库存,价格,上架时间,是否有新品标,需做单数量和时间,备注";
+        "SPU,第一个sku,退货率,推广花费占比,近7天日成交金额,成交转化率,成交单量,评价数,上架时间,价格,主图,备注";
+
+      function savePatch(id, patch) {
+        return jsonFetch("/api/han/products/" + encodeURIComponent(id), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patch),
+        }).then(function (json) {
+          if (dead) return json;
+          msg.textContent = json.ok ? "已保存" : json.error || "保存失败";
+          if (json.ok && patch.layer) {
+            return load();
+          }
+          if (json.ok && json.item) {
+            items = items.map(function (row) {
+              return String(row.id) === String(id) ? json.item : row;
+            });
+          }
+          return json;
+        });
+      }
 
       function downloadText(name, text) {
         const blob = new Blob(["\uFEFF" + text], { type: "text/csv; charset=utf-8" });
@@ -630,6 +694,34 @@
         downloadText("商品分层导入模板.csv", csvHeader + "\n");
       }
 
+      function onClassify() {
+        jsonFetch("/api/han/products/classify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ team: team, store: shop }),
+        }).then(function (json) {
+          if (dead) return;
+          msg.textContent = json.ok ? "已按规则调动" + (json.count || 0) + "条" : json.error || "分类失败";
+          if (json.ok) return load();
+        });
+      }
+
+      function onSheetChange(e) {
+        const pick = e.target.closest(".han-layer-pick");
+        if (!pick) return;
+        savePatch(pick.getAttribute("data-id"), { layer: pick.value });
+      }
+
+      function onSheetBlur(e) {
+        const input = e.target.closest("input.han-cell");
+        if (!input) return;
+        const id = input.getAttribute("data-id");
+        const key = input.getAttribute("data-key");
+        const patch = {};
+        patch[key] = input.value;
+        savePatch(id, patch);
+      }
+
       function onImport(e) {
         const file = e.target.files && e.target.files[0];
         e.target.value = "";
@@ -644,7 +736,7 @@
             if (dead) return;
             const n = (json.created || []).length;
             msg.textContent = json.ok
-              ? "已导入" + n + "条" + (json.skipped ? "，跳过" + json.skipped + "条" : "")
+              ? "已按规则导入" + n + "条" + (json.skipped ? "，跳过" + json.skipped + "条" : "")
               : json.error || "导入失败";
             if (json.ok) return load();
           });
@@ -654,6 +746,9 @@
 
       paintHead();
       table.addEventListener("click", onAdd);
+      table.addEventListener("change", onSheetChange);
+      table.addEventListener("focusout", onSheetBlur);
+      classifyBtn.addEventListener("click", onClassify);
       exportBtn.addEventListener("click", onExport);
       tplBtn.addEventListener("click", onTpl);
       importInput.addEventListener("change", onImport);
@@ -663,6 +758,9 @@
       return function unmount() {
         dead = true;
         table.removeEventListener("click", onAdd);
+        table.removeEventListener("change", onSheetChange);
+        table.removeEventListener("focusout", onSheetBlur);
+        classifyBtn.removeEventListener("click", onClassify);
         exportBtn.removeEventListener("click", onExport);
         tplBtn.removeEventListener("click", onTpl);
         importInput.removeEventListener("change", onImport);

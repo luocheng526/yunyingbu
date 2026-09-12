@@ -146,6 +146,25 @@ export function createHanRouter(store = createHanStore()) {
     }
   });
 
+  hanRouter.patch("/products/:id", async (req, res) => {
+    try {
+      const item = await store.updateProduct(req.params.id, req.body || {});
+      res.json({ ok: true, item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.post("/products/classify", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const result = await store.classifyProducts({ team: body.team, store: body.store });
+      res.json({ ok: true, ...result });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
   hanRouter.post("/products/import", async (req, res) => {
     try {
       const body = req.body || {};

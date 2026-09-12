@@ -86,6 +86,21 @@ export function createHanFakePool() {
         return [[{ n: rows.length, amount }], undefined];
       }
 
+      const update = normalized.match(/^UPDATE (han_\w+) SET (.+) WHERE id = \?$/i);
+      if (update) {
+        const name = update[1];
+        const cols = update[2].split(",").map((part) => part.trim().split(" = ")[0]);
+        const id = Number(params[params.length - 1]);
+        const row = (tables[name] || []).find((item) => item.id === id);
+        if (!row) {
+          return [{ affectedRows: 0 }, undefined];
+        }
+        cols.forEach((col, i) => {
+          row[col] = params[i];
+        });
+        return [{ affectedRows: 1 }, undefined];
+      }
+
       const insert = normalized.match(/^INSERT INTO (han_\w+) \((.+)\) VALUES \((.+)\)$/i);
       if (insert) {
         const name = insert[1];
