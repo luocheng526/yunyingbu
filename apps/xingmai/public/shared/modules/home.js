@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.354-home-cardset */
+/* xm-module-home 0.1.355-home-sort */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -380,6 +380,102 @@
     try {
       localStorage.setItem("xm-home-hidden-cards", JSON.stringify(list));
     } catch (_err) {}
+  }
+
+  function defaultCardKeys() {
+    return COMPANY_CARD_DEFS.map(function (def) {
+      return def.key;
+    });
+  }
+
+  function cardOrder() {
+    var defs = defaultCardKeys();
+    var saved = [];
+    try {
+      saved = JSON.parse(localStorage.getItem("xm-home-card-order") || "[]");
+    } catch (_err) {
+      saved = [];
+    }
+    if (Object.prototype.toString.call(saved) !== "[object Array]") {
+      saved = [];
+    }
+    var seen = {};
+    var out = [];
+    saved.forEach(function (key) {
+      if (defs.indexOf(key) !== -1 && !seen[key]) {
+        seen[key] = true;
+        out.push(key);
+      }
+    });
+    defs.forEach(function (key) {
+      if (!seen[key]) {
+        out.push(key);
+      }
+    });
+    return out;
+  }
+
+  function saveCardOrder(keys) {
+    try {
+      localStorage.setItem("xm-home-card-order", JSON.stringify(cardOrderFrom(keys)));
+    } catch (_err) {}
+  }
+
+  function cardOrderFrom(keys) {
+    var defs = defaultCardKeys();
+    var seen = {};
+    var out = [];
+    (keys || []).forEach(function (key) {
+      if (defs.indexOf(key) !== -1 && !seen[key]) {
+        seen[key] = true;
+        out.push(key);
+      }
+    });
+    defs.forEach(function (key) {
+      if (!seen[key]) {
+        out.push(key);
+      }
+    });
+    return out;
+  }
+
+  function applyCardMove(fromKey, toKey, visibleOnly) {
+    var full = cardOrder();
+    var hide = hiddenCards();
+    var seq = visibleOnly
+      ? full.filter(function (key) {
+          return hide.indexOf(key) === -1;
+        })
+      : full.slice();
+    var from = seq.indexOf(fromKey);
+    var to = seq.indexOf(toKey);
+    if (from < 0 || to < 0 || from === to) {
+      return full;
+    }
+    seq.splice(from, 1);
+    seq.splice(to, 0, fromKey);
+    if (!visibleOnly) {
+      return seq;
+    }
+    var i = 0;
+    return full.map(function (key) {
+      if (hide.indexOf(key) !== -1) {
+        return key;
+      }
+      return seq[i++];
+    });
+  }
+
+  function orderedDefs() {
+    var map = {};
+    COMPANY_CARD_DEFS.forEach(function (def) {
+      map[def.key] = def;
+    });
+    return cardOrder()
+      .map(function (key) {
+        return map[key];
+      })
+      .filter(Boolean);
   }
 
   function trendHtml(trend) {
@@ -876,6 +972,9 @@
       ".xm-hm-live .xm-hm-panel{overflow-x:auto}" +
       ".xm-hm-live .xm-hm-table th:nth-child(n+3),.xm-hm-live .xm-hm-table td:nth-child(n+3){text-align:right}" +
       ".xm-hm-card{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;padding:12px 14px 10px;box-shadow:var(--xm-shadow);min-height:104px}" +
+      ".xm-hm-card.is-hold,.xm-hm-pop label.is-hold{opacity:.72;cursor:grabbing;user-select:none;pointer-events:none}" +
+      ".xm-hm-card.is-over,.xm-hm-pop label.is-over{outline:1px dashed var(--xm-primary)}" +
+      ".xm-hm-pop label{cursor:grab}" +
       ".xm-hm-card-head{display:flex;align-items:center;justify-content:space-between;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-card-head i{width:14px;height:14px;border:1px solid var(--xm-line);border-radius:50%;font-style:normal;font-size:10px;display:inline-flex;align-items:center;justify-content:center;color:var(--xm-muted)}" +
       ".xm-hm-value{margin-top:8px;font-size:22px;font-weight:700;letter-spacing:-.02em;color:var(--xm-ink)}" +
@@ -953,7 +1052,7 @@
     var hero = readChart(live.hero, blankLive().hero);
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
-    board.setAttribute("data-hm-js", "0.1.354-home-cardset");
+    board.setAttribute("data-hm-js", "0.1.355-home-sort");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", state.view === "team");
@@ -1014,7 +1113,9 @@
     root.querySelector("#xm-hm-card-opts").innerHTML = (state.cards || blankCompanyCards())
       .map(function (card) {
         return (
-          '<label><input type="checkbox" data-hide="' +
+          '<label data-sort="' +
+          escapeHtml(card.key) +
+          '"><input type="checkbox" data-hide="' +
           escapeHtml(card.key) +
           '"' +
           (hide.indexOf(card.key) === -1 ? " checked" : "") +
@@ -1279,7 +1380,7 @@
   }
 
   function blankCompanyCards() {
-    return COMPANY_CARD_DEFS.map(function (def) {
+    return orderedDefs().map(function (def) {
       return { key: def.key, label: def.label, value: "—", accent: !!def.accent, trend: 0, tip: def.tip || "" };
     });
   }
@@ -1287,7 +1388,7 @@
   function companyCardsFrom(sum, prev) {
     sum = sum || {};
     prev = prev || {};
-    return COMPANY_CARD_DEFS.map(function (def) {
+    return orderedDefs().map(function (def) {
       var cur = def.kind === "none" ? null : sum[def.field];
       var old = def.kind === "none" ? null : prev[def.field];
       var value = "—";
@@ -1931,6 +2032,160 @@
         pop.hidden = true;
       }
 
+      function syncCardOrderToState() {
+        var keys = cardOrder();
+        function sortCards(list) {
+          var map = {};
+          (list || []).forEach(function (card) {
+            map[card.key] = card;
+          });
+          return keys
+            .map(function (key) {
+              return map[key];
+            })
+            .filter(Boolean);
+        }
+        state.cards = sortCards(state.cards && state.cards.length ? state.cards : blankCompanyCards());
+        (state.teams || []).forEach(function (team) {
+          team.cards = sortCards(team.cards);
+        });
+      }
+
+      var sortHold = 0;
+      var sortFrom = "";
+      var sortDragging = false;
+      var sortSettings = false;
+      var sortStartX = 0;
+      var sortStartY = 0;
+      var sortSwallow = false;
+
+      function sortClearHold() {
+        window.clearTimeout(sortHold);
+        sortHold = 0;
+      }
+
+      function sortFinish() {
+        sortClearHold();
+        sortFrom = "";
+        sortDragging = false;
+        sortSettings = false;
+        Array.prototype.forEach.call(root.querySelectorAll(".is-hold, .is-over"), function (el) {
+          el.classList.remove("is-hold", "is-over");
+        });
+      }
+
+      function sortMarkOver(el) {
+        Array.prototype.forEach.call(root.querySelectorAll(".is-over"), function (item) {
+          item.classList.remove("is-over");
+        });
+        if (el) {
+          el.classList.add("is-over");
+        }
+      }
+
+      function hitSortEl(event) {
+        var el = document.elementFromPoint(event.clientX || 0, event.clientY || 0);
+        if (!el || !el.closest || !root.contains(el)) {
+          return null;
+        }
+        return sortSettings ? el.closest("#xm-hm-card-opts label") : el.closest(".xm-hm-card");
+      }
+
+      function onSortDown(event) {
+        if (event.button && event.button !== 0) {
+          return;
+        }
+        if (!event.target.closest || !event.target.closest("#xm-hm")) {
+          return;
+        }
+        if (event.target.closest("i") || event.target.closest("input") || event.target.closest("button") || event.target.closest("a")) {
+          return;
+        }
+        var card = event.target.closest(".xm-hm-card");
+        var row = event.target.closest("#xm-hm-card-opts label");
+        sortClearHold();
+        sortStartX = event.clientX || 0;
+        sortStartY = event.clientY || 0;
+        if (card && (card.closest("#xm-hm-kpis") || card.closest(".xm-hm-team-kpis"))) {
+          sortFrom = card.getAttribute("data-card") || "";
+          sortSettings = false;
+          sortHold = window.setTimeout(function () {
+            var hold = root.querySelector('.xm-hm-card[data-card="' + sortFrom + '"]');
+            if (!sortFrom || !hold) {
+              return;
+            }
+            sortDragging = true;
+            hold.classList.add("is-hold");
+          }, 420);
+          return;
+        }
+        if (row) {
+          sortFrom = row.getAttribute("data-sort") || "";
+          sortSettings = true;
+        }
+      }
+
+      function onSortMove(event) {
+        var x = event.clientX || 0;
+        var y = event.clientY || 0;
+        if (sortHold && !sortDragging && (Math.abs(x - sortStartX) > 8 || Math.abs(y - sortStartY) > 8)) {
+          sortClearHold();
+          sortFrom = "";
+        }
+        if (sortSettings && sortFrom && !sortDragging && (Math.abs(x - sortStartX) > 6 || Math.abs(y - sortStartY) > 6)) {
+          sortDragging = true;
+          var startRow = root.querySelector('#xm-hm-card-opts label[data-sort="' + sortFrom + '"]');
+          if (startRow) {
+            startRow.classList.add("is-hold");
+          }
+        }
+        if (!sortDragging || !sortFrom) {
+          return;
+        }
+        if (event.cancelable) {
+          event.preventDefault();
+        }
+        var over = hitSortEl(event);
+        if (over && (over.getAttribute("data-sort") || over.getAttribute("data-card")) !== sortFrom) {
+          sortMarkOver(over);
+        } else {
+          sortMarkOver(null);
+        }
+      }
+
+      function onSortUp(event) {
+        var moved = sortDragging && sortFrom;
+        var toEl = hitSortEl(event);
+        var toKey = toEl ? toEl.getAttribute(sortSettings ? "data-sort" : "data-card") : "";
+        if (moved && toKey && toKey !== sortFrom) {
+          saveCardOrder(applyCardMove(sortFrom, toKey, !sortSettings));
+          syncCardOrderToState();
+          var pop = root.querySelector("#xm-hm-pop");
+          var popOpen = pop && !pop.hidden;
+          paint(root, state);
+          if (pop && popOpen) {
+            pop.hidden = false;
+          }
+          sortSwallow = true;
+        }
+        sortFinish();
+      }
+
+      function onSortClickCapture(event) {
+        if (!sortSwallow) {
+          return;
+        }
+        sortSwallow = false;
+        event.preventDefault();
+        event.stopPropagation();
+      }
+
+      function onSortMenu(event) {
+        if (sortHold || sortDragging) {
+          event.preventDefault();
+        }
+      }
+
       function onChange(event) {
         var hideKey = event.target.getAttribute("data-hide");
         if (hideKey) {
@@ -1956,6 +2211,12 @@
       root.addEventListener("click", onClick);
       root.addEventListener("change", onChange);
       document.addEventListener("mousedown", onOutsideCardSet);
+      document.addEventListener("pointerdown", onSortDown);
+      document.addEventListener("pointermove", onSortMove, { passive: false });
+      document.addEventListener("pointerup", onSortUp);
+      document.addEventListener("pointercancel", onSortUp);
+      document.addEventListener("click", onSortClickCapture, true);
+      document.addEventListener("contextmenu", onSortMenu);
 
       pullBoard();
       pullLive();
@@ -1981,6 +2242,13 @@
         root.removeEventListener("click", onClick);
         root.removeEventListener("change", onChange);
         document.removeEventListener("mousedown", onOutsideCardSet);
+        document.removeEventListener("pointerdown", onSortDown);
+        document.removeEventListener("pointermove", onSortMove);
+        document.removeEventListener("pointerup", onSortUp);
+        document.removeEventListener("pointercancel", onSortUp);
+        document.removeEventListener("click", onSortClickCapture, true);
+        document.removeEventListener("contextmenu", onSortMenu);
+        sortFinish();
         root.innerHTML = "";
       };
     }
