@@ -105,13 +105,15 @@ test("shared shell assets are public", async () => {
   const manifestJson = await manifest.json();
   assert.equal(manifestJson.start_url, "/home");
   assert.equal(manifestJson.display, "standalone");
-  assert.equal(manifestJson.icons[0].src, "/apple-touch-icon.png?v=0.1.143");
+  assert.equal(manifestJson.icons[0].src, "/apple-touch-icon.png?v=0.1.144");
   assert.equal(manifestJson.icons[0].sizes, "180x180");
   assert.doesNotMatch(JSON.stringify(manifestJson), /login-logo\.png/);
   assert.match(jsText, /function ensurePhoneChrome/);
   assert.match(jsText, /function setPhoneNav/);
   assert.match(jsText, /xm-phone-menu/);
-  assert.match(cssText, /xm-phone-panel 0\.1\.143/);
+  assert.match(cssText, /xm-phone-panel 0\.1\.144/);
+  assert.match(cssText, /#xm-hm-ai/);
+  assert.match(cssText, /#xm-hm-ai-refresh/);
   assert.match(cssText, /@media \(max-width: 880px\)/);
   assert.match(cssText, /html\.xm-phone-nav \.xm-sider/);
   assert.match(cssText, /#xm-hm \.xm-hm-views/);
@@ -128,6 +130,10 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /function watchPhoneHomeDates/);
   assert.match(jsText, /function decoratePhoneCal/);
   assert.match(jsText, /function watchPhoneHomeCal/);
+  assert.match(jsText, /function watchHomeAiDiag/);
+  assert.match(jsText, /function renderHomeAiDiag/);
+  assert.match(jsText, /AI 诊断/);
+  assert.match(jsText, /#xm-hm-ai-refresh/);
   assert.match(jsText, /function armPhoneCalDouble/);
   assert.match(jsText, /连点同一天只看当天/);
   assert.match(jsText, /#xm-hm \.xm-hm-bar/);
@@ -151,7 +157,7 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /\.xm-workspace > \.xm-pane\.is-active/);
   assert.match(jsText, /disposePane\("\/home"\)/);
   assert.doesNotMatch(jsText, /window\.location\.assign\("\/home"\)/);
-  assert.match(jsText, /xm-fast-shell 0\.1\.143/);
+  assert.match(jsText, /xm-fast-shell 0\.1\.144/);
   assert.match(jsText, /\/shared\/modules\/" \+ id \+ "\.js"/);
   assert.doesNotMatch(jsText, /modules\/" \+ id \+ "\.js\?v=/);
   assert.match(jsText, /add\("\/login"\)/);
@@ -335,7 +341,7 @@ test("home page html is the xingmai sider template", async () => {
   assert.match(html, /培训系统/);
   assert.match(html, /xm-menu-parent/);
   assert.match(html, /xm-caret/);
-  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.143/);
+  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.144/);
   assert.match(html, /xm-tab-close/);
   assert.match(html, /data-href="\/data\/overview"/);
   assert.match(homePageHtml, /xm-tab is-active is-pinned/);
@@ -361,9 +367,9 @@ test("home page html is the xingmai sider template", async () => {
   assert.match(html, /xm-app-shell/);
   assert.match(html, /<title>星脉甄选运营中心<\/title>/);
   assert.doesNotMatch(html, /<title>数据中心 · 星脉甄选<\/title>/);
-  assert.match(html, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=0\.1\.143"/);
-  assert.match(html, /rel="shortcut icon" href="\/favicon\.ico\?v=0\.1\.143"/);
-  assert.match(html, /rel="apple-touch-icon" sizes="180x180" href="\/apple-touch-icon\.png\?v=0\.1\.143"/);
+  assert.match(html, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=0\.1\.144"/);
+  assert.match(html, /rel="shortcut icon" href="\/favicon\.ico\?v=0\.1\.144"/);
+  assert.match(html, /rel="apple-touch-icon" sizes="180x180" href="\/apple-touch-icon\.png\?v=0\.1\.144"/);
   assert.doesNotMatch(html, /rel="icon"[^>]+href="\/login-logo\.png"/);
   assert.doesNotMatch(html, /rel="apple-touch-icon"[^>]+href="\/login-logo\.png"/);
   assert.doesNotMatch(html, /href="data:image\/png;base64,/);
@@ -640,9 +646,9 @@ test("page renderer injects shared shell onto module html", async () => {
     '<!DOCTYPE html><html><head></head><body class="oc-page"><div class="oc-tab">待上线</div></body></html>'
   );
   assert.match(injected, /\/shared\/layout\.css/);
-  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.143/);
-  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.143"/);
-  assert.match(injected, /\/apple-touch-icon\.png\?v=0\.1\.143/);
+  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.144/);
+  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.144"/);
+  assert.match(injected, /\/apple-touch-icon\.png\?v=0\.1\.144/);
   assert.match(injected, /localStorage.getItem\("xm-theme"\)/);
   const login = withSharedShell('<html><head></head><body class="login-page"></body></html>');
   assert.doesNotMatch(login, /\/shared\/nav\.js/);
@@ -676,7 +682,7 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.doesNotMatch(mid, /\/shared\/modules\/\$1\.js\?v=/);
   assert.match(mid, /磁盘上的图即使在也不能信/);
   assert.match(mid, /TAB_ICON_ICO/);
-  assert.match(mid, /SHELL_ASSET_VER = "0\.1\.143"/);
+  assert.match(mid, /SHELL_ASSET_VER = "0\.1\.144"/);
   assert.match(mid, /function sendLoginPage/);
   assert.match(mid, /302 到 \/login 在 iOS 会白屏/);
   assert.match(mid, /APP_ICON_PNG/);
@@ -706,9 +712,9 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.match(homeMod, /XmModules\["\/home"\]/);
   const { renderAppShell } = await import("../src/modules/profile/middleware.js");
   const shell = renderAppShell("/data", { username: "罗成", displayName: "罗成" });
-  assert.match(shell, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=0\.1\.143"/);
-  assert.match(shell, /rel="shortcut icon" href="\/favicon\.ico\?v=0\.1\.143"/);
-  assert.match(shell, /rel="apple-touch-icon" sizes="180x180" href="\/apple-touch-icon\.png\?v=0\.1\.143"/);
+  assert.match(shell, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=0\.1\.144"/);
+  assert.match(shell, /rel="shortcut icon" href="\/favicon\.ico\?v=0\.1\.144"/);
+  assert.match(shell, /rel="apple-touch-icon" sizes="180x180" href="\/apple-touch-icon\.png\?v=0\.1\.144"/);
   assert.doesNotMatch(shell, /rel="apple-touch-icon"[^>]+href="\/login-logo\.png"/);
   assert.doesNotMatch(shell, /href="data:image\/png;base64,/);
   assert.match(shell, /<title>星脉甄选运营中心<\/title>/);

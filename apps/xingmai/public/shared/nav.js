@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.143 */
+/* xm-fast-shell 0.1.144 */
 (function () {
-  const ASSET_VER = "0.1.143";
+  const ASSET_VER = "0.1.144";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -1114,6 +1114,447 @@
     obs.observe(topbar, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "style", "class"] });
   }
 
+  /* xm-home-ai-diag-begin */
+  window.__xmHomeAiDiag = (function () {
+    const STORAGE_KEY = "xm-home-ai-diag-v1";
+    const COMPARE = {
+      yesterday: "前天",
+      d3: "再往前 3 天",
+      d7: "再往前 7 天",
+      d15: "再往前 15 天",
+      d30: "再往前 30 天",
+      month: "上月",
+      lastMonth: "上上月",
+      year: "去年",
+      custom: "上一段同样天数"
+    };
+
+    function compareLabel(range) {
+      return COMPARE[range] || "上一周期";
+    }
+
+    function defaultStorage() {
+      try {
+        return window.localStorage;
+      } catch (_err) {
+        return null;
+      }
+    }
+
+    function parseTrend(el) {
+      if (!el) {
+        return { pct: null, dir: "", text: "" };
+      }
+      const text = String(el.textContent || "").replace(/\s+/g, " ").trim();
+      const m = text.replace(/,/g, "").match(/([-+]?\d+(?:\.\d+)?)\s*%/);
+      let pct = m ? Number(m[1]) : null;
+      const cls = el.classList;
+      const down = !!(cls && cls.contains && cls.contains("is-down")) || /↘|↓/.test(text);
+      const up = !!(cls && cls.contains && cls.contains("is-up")) || /↗|↑/.test(text);
+      if (pct != null && isFinite(pct)) {
+        pct = down ? -Math.abs(pct) : up ? Math.abs(pct) : pct;
+      } else {
+        pct = null;
+      }
+      return { pct: pct, dir: down ? "down" : up ? "up" : "", text: text };
+    }
+
+    function parseCard(el) {
+      if (!el || !el.querySelector) {
+        return {
+          key: "",
+          label: "",
+          value: "",
+          team: "",
+          teamName: "",
+          trend: { pct: null, dir: "", text: "" }
+        };
+      }
+      const head = el.querySelector(".xm-hm-card-head span");
+      const value = el.querySelector(".xm-hm-value");
+      const trend = el.querySelector(".xm-hm-trend");
+      const teamEl = el.closest ? el.closest(".xm-hm-team") : null;
+      const team = String((el.getAttribute && el.getAttribute("data-team")) || (teamEl && teamEl.getAttribute && teamEl.getAttribute("data-team")) || "").trim();
+      let teamName = "";
+      if (teamEl && teamEl.querySelector) {
+        const h2 = teamEl.querySelector(".xm-hm-team-head h2");
+        teamName = String((h2 && h2.textContent) || "")
+          .replace(/团队\s*$/, "")
+          .trim();
+      }
+      return {
+        key: String((el.getAttribute && el.getAttribute("data-card")) || "").trim(),
+        label: String((head && head.textContent) || "").trim(),
+        value: String((value && value.textContent) || "").trim(),
+        team: team,
+        teamName: teamName || team,
+        trend: parseTrend(trend)
+      };
+    }
+
+    function parseCards(list) {
+      const out = [];
+      const len = list && list.length ? list.length : 0;
+      for (let i = 0; i < len; i += 1) {
+        out.push(parseCard(list[i]));
+      }
+      return out;
+    }
+
+    function readHomeCtx(root) {
+      if (!root || !root.querySelector) {
+        return { skip: true, view: "", range: "", fromTo: "", cards: [] };
+      }
+      const board = root.id === "xm-hm" ? root : root.querySelector("#xm-hm") || root;
+      const cls = board.classList || { contains: function () { return false; } };
+      const viewOn = board.querySelector(".xm-hm-views [data-view].is-on");
+      const rangeOn = board.querySelector(".xm-hm-ranges [data-range].is-on");
+      const view = cls.contains("is-live")
+        ? "live"
+        : cls.contains("is-board")
+          ? "board"
+          : viewOn && viewOn.getAttribute
+            ? viewOn.getAttribute("data-view")
+            : cls.contains("is-team")
+              ? "team"
+              : "company";
+      const skip = view === "live" || view === "board";
+      const range = rangeOn && rangeOn.getAttribute ? rangeOn.getAttribute("data-range") : "custom";
+      const dateEl = board.querySelector("#xm-hm-date-text");
+      const fromTo = dateEl ? String(dateEl.textContent || "").trim() : "";
+      let cardNodes = [];
+      if (!skip && board.querySelectorAll) {
+        cardNodes = cls.contains("is-team")
+          ? board.querySelectorAll(".xm-hm-team-kpis .xm-hm-card")
+          : board.querySelectorAll("#xm-hm-kpis .xm-hm-card, .xm-hm-kpis .xm-hm-card");
+      }
+      return { skip: skip, view: view || "company", range: range || "custom", fromTo: fromTo, cards: parseCards(cardNodes) };
+    }
+
+    function pick(cards, keys, labels) {
+      const list = cards || [];
+      const keyList = keys || [];
+      const labelList = labels || [];
+      for (let i = 0; i < keyList.length; i += 1) {
+        for (let j = 0; j < list.length; j += 1) {
+          if (list[j].key === keyList[i]) {
+            return list[j];
+          }
+        }
+      }
+      for (let i = 0; i < labelList.length; i += 1) {
+        for (let j = 0; j < list.length; j += 1) {
+          if (String(list[j].label || "").indexOf(labelList[i]) !== -1) {
+            return list[j];
+          }
+        }
+      }
+      return null;
+    }
+
+    function shortLabel(label) {
+      const next = String(label || "")
+        .replace(/\s*[\(（][^)）]*[\)）]/g, "")
+        .replace(/\s+/g, "")
+        .trim();
+      return next || String(label || "").trim();
+    }
+
+    function fmtDir(pct) {
+      if (pct == null || !isFinite(pct)) {
+        return "暂无环比";
+      }
+      if (pct === 0) {
+        return "持平";
+      }
+      return (pct > 0 ? "升 " : "降 ") + Math.abs(pct) + "%";
+    }
+
+    function cardsReady(cards) {
+      return (cards || []).some(function (card) {
+        return card && card.value && card.value !== "—";
+      });
+    }
+
+    function topMovers(cards, n) {
+      return (cards || [])
+        .filter(function (card) {
+          return card && card.trend && card.trend.pct != null && isFinite(card.trend.pct);
+        })
+        .slice()
+        .sort(function (a, b) {
+          return Math.abs(b.trend.pct) - Math.abs(a.trend.pct);
+        })
+        .slice(0, n || 3);
+    }
+
+    function advice(pay, profit, ad, refundRate, margin) {
+      const pPay = pay && pay.trend ? pay.trend.pct : null;
+      const pProfit = profit && profit.trend ? profit.trend.pct : null;
+      const pAd = ad && ad.trend ? ad.trend.pct : null;
+      const pRefund = refundRate && refundRate.trend ? refundRate.trend.pct : null;
+      const pMargin = margin && margin.trend ? margin.trend.pct : null;
+      if (pRefund != null && pRefund >= 5) {
+        return "退款率在抬头，先核退款原因再加投。";
+      }
+      if (pPay != null && pProfit != null && pPay > 0 && pProfit < 0) {
+        return "规模在涨、利润在掉，重点看推广和退款。";
+      }
+      if (pAd != null && pPay != null && pAd - pPay >= 8) {
+        return "投放增幅大于成交，费比可能变差。";
+      }
+      if (pMargin != null && pMargin <= -5) {
+        return "大毛利率在下滑，核对货本和费用。";
+      }
+      if (pPay != null && pProfit != null && pPay > 0 && pProfit > 0) {
+        return "量和利都在走，可按现在节奏看投放。";
+      }
+      if (pPay != null && pPay < 0 && pProfit != null && pProfit < 0) {
+        return "量和利都在掉，先看流量和转化再加预算。";
+      }
+      return "先看变化最大的两三张卡，再决定加投还是控费。";
+    }
+
+    function diagnoseCompany(cards, range) {
+      const cmp = compareLabel(range);
+      const pay = pick(cards, ["payAmount"], ["支付金额"]);
+      const profit = pick(cards, ["profit"], ["利润"]);
+      const ad = pick(cards, ["adCost"], ["推广花费"]);
+      const adRatio = pick(cards, ["adRatio"], ["推广花费 (支付预估) 占比"]);
+      const refund = pick(cards, ["refundAmount"], ["退款金额"]);
+      const refundRate = pick(cards, ["refundRate"], ["退款率"]);
+      const margin = pick(cards, ["grossMargin"], ["大毛利率"]);
+      const qty = pick(cards, ["payQty"], ["销售单数"]);
+      const lines = ["对照" + cmp + "看变化，数字来自当前卡片环比。"];
+      const overall = [];
+      if (pay) {
+        overall.push("支付金额 " + pay.value + "，" + fmtDir(pay.trend.pct));
+      }
+      if (profit) {
+        overall.push("利润 " + profit.value + "，" + fmtDir(profit.trend.pct));
+      }
+      if (qty) {
+        overall.push("销售单数 " + qty.value + "，" + fmtDir(qty.trend.pct));
+      }
+      if (overall.length) {
+        lines.push("整体：" + overall.join("。") + "。");
+      }
+      const struct = [];
+      if (ad) {
+        struct.push("推广花费 " + ad.value + "，" + fmtDir(ad.trend.pct));
+      }
+      if (adRatio) {
+        struct.push("推广占比 " + adRatio.value + "，" + fmtDir(adRatio.trend.pct));
+      }
+      if (margin) {
+        struct.push("大毛利率 " + margin.value + "，" + fmtDir(margin.trend.pct));
+      }
+      if (struct.length) {
+        lines.push("结构：" + struct.join("。") + "。");
+      }
+      const risk = [];
+      if (refund) {
+        risk.push("退款金额 " + refund.value + "，" + fmtDir(refund.trend.pct));
+      }
+      if (refundRate) {
+        risk.push("退款率 " + refundRate.value + "，" + fmtDir(refundRate.trend.pct));
+      }
+      const tip = advice(pay, profit, ad, refundRate, margin);
+      if (risk.length) {
+        lines.push("判断：" + risk.join("。") + "。" + tip);
+      } else {
+        lines.push("判断：" + tip);
+      }
+      const movers = topMovers(cards, 3);
+      if (movers.length) {
+        lines.push(
+          "变化最大：" +
+            movers
+              .map(function (card) {
+                return shortLabel(card.label) + fmtDir(card.trend.pct);
+              })
+              .join("，") +
+            "。"
+        );
+      }
+      return lines.join("\n");
+    }
+
+    function diagnoseTeams(cards, range) {
+      const cmp = compareLabel(range);
+      const groups = {};
+      const order = [];
+      (cards || []).forEach(function (card) {
+        const name = card.teamName || card.team || "团队";
+        if (!groups[name]) {
+          groups[name] = [];
+          order.push(name);
+        }
+        groups[name].push(card);
+      });
+      const lines = ["对照" + cmp + "看各团队变化，数字来自当前卡片环比。"];
+      order.forEach(function (name) {
+        const group = groups[name];
+        const pay = pick(group, ["payAmount"], ["支付金额"]);
+        const profit = pick(group, ["profit"], ["利润"]);
+        const bits = [];
+        if (pay) {
+          bits.push("支付 " + fmtDir(pay.trend.pct));
+        }
+        if (profit) {
+          bits.push("利润 " + fmtDir(profit.trend.pct));
+        }
+        if (bits.length) {
+          lines.push(name + "：" + bits.join("，") + "。");
+        }
+      });
+      const movers = topMovers(cards, 3);
+      if (movers.length) {
+        lines.push(
+          "变化最大：" +
+            movers
+              .map(function (card) {
+                return (card.teamName ? card.teamName + "·" : "") + shortLabel(card.label) + fmtDir(card.trend.pct);
+              })
+              .join("，") +
+            "。"
+        );
+      }
+      return lines.join("\n");
+    }
+
+    function diagnose(cards, range) {
+      const list = cards || [];
+      if (!list.length) {
+        return "当前没有可对比的卡片。";
+      }
+      const seen = {};
+      const names = [];
+      for (let i = 0; i < list.length; i += 1) {
+        const name = list[i].teamName || list[i].team;
+        if (name && !seen[name]) {
+          seen[name] = 1;
+          names.push(name);
+        }
+      }
+      return names.length >= 2 ? diagnoseTeams(list, range) : diagnoseCompany(list, range);
+    }
+
+    function cacheKey(view, range, fromTo) {
+      return [view || "", range || "", fromTo || ""].join("|");
+    }
+
+    function snapshotHash(cards) {
+      return (cards || [])
+        .map(function (card) {
+          return [card.team || "", card.key, card.value, card.trend && card.trend.pct != null ? card.trend.pct : ""].join(":");
+        })
+        .join(";");
+    }
+
+    function readStore(storage) {
+      const bag = storage || defaultStorage();
+      if (!bag || !bag.getItem) {
+        return {};
+      }
+      try {
+        const raw = JSON.parse(bag.getItem(STORAGE_KEY) || "{}");
+        return raw && typeof raw === "object" ? raw : {};
+      } catch (_err) {
+        return {};
+      }
+    }
+
+    function writeStore(store, storage) {
+      const bag = storage || defaultStorage();
+      if (!bag || !bag.setItem) {
+        return;
+      }
+      const next = store || {};
+      const keys = Object.keys(next);
+      if (keys.length > 30) {
+        keys.sort(function (a, b) {
+          return (next[a].at || 0) - (next[b].at || 0);
+        });
+        keys.slice(0, keys.length - 30).forEach(function (key) {
+          delete next[key];
+        });
+      }
+      try {
+        bag.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch (_err) {
+        /* ignore quota */
+      }
+    }
+
+    function paint(panel, root, opt, storage) {
+      const options = opt || {};
+      const ctx = readHomeCtx(root);
+      if (!panel) {
+        return { ctx: ctx };
+      }
+      if (ctx.skip) {
+        panel.hidden = true;
+        return { hidden: true, ctx: ctx };
+      }
+      panel.hidden = false;
+      const sub = panel.querySelector ? panel.querySelector("#xm-hm-ai-sub") : null;
+      const body = panel.querySelector ? panel.querySelector("#xm-hm-ai-body") : null;
+      if (!ctx.cards.length || !cardsReady(ctx.cards)) {
+        if (sub) {
+          sub.textContent = "对照" + compareLabel(ctx.range) + " · 等数字";
+        }
+        if (body) {
+          body.textContent = "卡片数字出来后自动诊断。";
+        }
+        return { waiting: true, ctx: ctx };
+      }
+      const key = cacheKey(ctx.view, ctx.range, ctx.fromTo);
+      const hash = snapshotHash(ctx.cards);
+      const store = readStore(storage);
+      const hit = store[key];
+      const useCache = !options.force && hit && hit.hash === hash && hit.text;
+      let text;
+      let status;
+      if (useCache) {
+        text = hit.text;
+        status = "已诊断";
+      } else {
+        text = diagnose(ctx.cards, ctx.range);
+        store[key] = { text: text, hash: hash, at: Date.now() };
+        writeStore(store, storage);
+        status = options.force ? "刚刚刷新" : "已诊断";
+      }
+      if (sub) {
+        sub.textContent = "对照" + compareLabel(ctx.range) + " · " + status;
+      }
+      if (body) {
+        body.textContent = text;
+      }
+      return { text: text, status: status, cached: !!useCache, ctx: ctx };
+    }
+
+    return {
+      STORAGE_KEY: STORAGE_KEY,
+      COMPARE: COMPARE,
+      compareLabel: compareLabel,
+      parseTrend: parseTrend,
+      parseCard: parseCard,
+      parseCards: parseCards,
+      readHomeCtx: readHomeCtx,
+      pick: pick,
+      shortLabel: shortLabel,
+      diagnose: diagnose,
+      cacheKey: cacheKey,
+      snapshotHash: snapshotHash,
+      readStore: readStore,
+      writeStore: writeStore,
+      paint: paint,
+      cardsReady: cardsReady
+    };
+  })();
+  /* xm-home-ai-diag-end */
+
   const PHONE_MQ = "(max-width: 880px)";
 
   function setPhoneNav(open) {
@@ -1156,6 +1597,9 @@
       "#xm-hm .xm-hm-card{min-height:0!important;padding:8px!important;background:var(--xm-card)!important;border:1px solid var(--xm-line)!important;border-radius:8px!important}" +
       "#xm-hm .xm-hm-card-head span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}" +
       "#xm-hm .xm-hm-value{margin-top:6px!important;font-size:16px!important}" +
+      "#xm-hm-ai{margin:10px 0 6px!important;padding:10px!important}" +
+      "#xm-hm-ai-title{font-size:14px!important}" +
+      "#xm-hm-ai-body{font-size:12px!important;line-height:1.65!important}" +
       "}"
     );
   }
@@ -1305,10 +1749,123 @@
     new MutationObserver(attach).observe(document.documentElement, { childList: true, subtree: true });
   }
 
+  function homeAiCssText() {
+    return (
+      "#xm-hm-ai{margin:16px 0 8px;padding:14px 16px;border:1px solid var(--xm-line,#f0f0f0);border-radius:10px;background:var(--xm-card,#fff);box-shadow:var(--xm-shadow)}" +
+      "#xm-hm-ai[hidden]{display:none!important}" +
+      "#xm-hm-ai-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}" +
+      "#xm-hm-ai-title{font-size:15px;font-weight:700;color:var(--xm-ink,#1f1f1f)}" +
+      "#xm-hm-ai-sub{flex:1;min-width:0;font-size:12px;color:var(--xm-muted,#8c8c8c)}" +
+      "#xm-hm-ai-refresh{margin-left:auto;flex:0 0 auto;height:28px;padding:0 10px;border:1px solid var(--xm-line,#f0f0f0);border-radius:6px;background:var(--xm-card,#fff);color:var(--xm-ink,#1f1f1f);font-size:12px;cursor:pointer}" +
+      "#xm-hm-ai-refresh:hover{border-color:var(--xm-primary,#1677ff);color:var(--xm-primary,#1677ff)}" +
+      "#xm-hm-ai-body{font-size:13px;line-height:1.7;color:var(--xm-ink,#1f1f1f);white-space:pre-wrap}" +
+      "@media (max-width:880px){#xm-hm-ai{margin:10px 0 6px;padding:10px}#xm-hm-ai-title{font-size:14px}#xm-hm-ai-body{font-size:12px;line-height:1.65}}"
+    );
+  }
+
+  function ensureHomeAiCss() {
+    let style = document.getElementById("xm-home-ai-css");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "xm-home-ai-css";
+    }
+    style.textContent = homeAiCssText();
+    document.documentElement.appendChild(style);
+  }
+
+  function ensureHomeAiPanel(root) {
+    let panel = document.getElementById("xm-hm-ai");
+    if (panel && root.contains(panel)) {
+      return panel;
+    }
+    panel = document.createElement("section");
+    panel.id = "xm-hm-ai";
+    panel.hidden = true;
+    panel.innerHTML =
+      '<div class="xm-hm-ai-head" id="xm-hm-ai-head">' +
+      '<strong id="xm-hm-ai-title">AI 诊断</strong>' +
+      '<span id="xm-hm-ai-sub"></span>' +
+      '<button type="button" id="xm-hm-ai-refresh">刷新</button>' +
+      '</div><div id="xm-hm-ai-body" class="xm-hm-ai-body"></div>';
+    const note = root.querySelector("#xm-hm-note");
+    if (note && note.parentNode) {
+      note.parentNode.insertBefore(panel, note.nextSibling);
+    } else {
+      root.appendChild(panel);
+    }
+    panel.querySelector("#xm-hm-ai-refresh").addEventListener("click", function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      renderHomeAiDiag(root, { force: true });
+    });
+    return panel;
+  }
+
+  function renderHomeAiDiag(root, opt) {
+    const api = window.__xmHomeAiDiag;
+    if (!api || !root) {
+      return null;
+    }
+    return api.paint(ensureHomeAiPanel(root), root, opt || {});
+  }
+
+  function watchHomeAiDiag() {
+    if (window.__xmHomeAiWatch) {
+      return;
+    }
+    window.__xmHomeAiWatch = 1;
+    ensureHomeAiCss();
+    let timer = 0;
+    const schedule = function () {
+      const root = document.getElementById("xm-hm");
+      if (!root) {
+        return;
+      }
+      if (timer) {
+        window.clearTimeout(timer);
+      }
+      timer = window.setTimeout(function () {
+        timer = 0;
+        renderHomeAiDiag(root, {});
+      }, 400);
+    };
+    const attach = function () {
+      const root = document.getElementById("xm-hm");
+      if (!root) {
+        return;
+      }
+      if (root.dataset.xmHomeAi === "1") {
+        schedule();
+        return;
+      }
+      root.dataset.xmHomeAi = "1";
+      new MutationObserver(function (records) {
+        for (let i = 0; i < records.length; i += 1) {
+          const target = records[i].target;
+          if (target && target.closest && target.closest("#xm-hm-ai")) {
+            continue;
+          }
+          schedule();
+          return;
+        }
+      }).observe(root, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ["class", "hidden"]
+      });
+      schedule();
+    };
+    attach();
+    new MutationObserver(attach).observe(document.documentElement, { childList: true, subtree: true });
+  }
+
   function ensurePhoneChrome() {
     ensurePhonePanelCss();
     watchPhoneHomeDates();
     watchPhoneHomeCal();
+    watchHomeAiDiag();
     const topbar = document.querySelector(".xm-topbar");
     if (!topbar) {
       return;
@@ -1904,6 +2461,7 @@
     bindBrandHome();
     bindMenu(document);
     ensurePhoneChrome();
+    watchHomeAiDiag();
     ensureWorkspace();
     watchTabBar();
     startQueueWatch();
