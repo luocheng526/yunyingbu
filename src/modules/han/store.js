@@ -827,28 +827,34 @@ export function createHanStore(poolOrFactory = getPool) {
       return mapProduct(rows[0]);
     },
 
-    async classifyProducts({ team, store } = {}) {
+    async classifyProducts({ team, store, unified } = {}) {
       const items = await this.listProducts({ team, store });
       const cache = new Map();
       const updated = [];
+      const unifiedRules = unified ? defaultClassifyRules() : null;
       for (const item of items) {
-        const key = String(item.team || team || "") + "\0" + String(item.store || store || "");
-        if (!cache.has(key)) {
-          cache.set(
-            key,
-            await this.getShopRules({
-              team: item.team || team,
-              store: item.store || store || DEFAULT_STORE,
-            }),
-          );
+        let rules;
+        if (unifiedRules) {
+          rules = unifiedRules;
+        } else {
+          const key = String(item.team || team || "") + "\0" + String(item.store || store || "");
+          if (!cache.has(key)) {
+            cache.set(
+              key,
+              await this.getShopRules({
+                team: item.team || team,
+                store: item.store || store || DEFAULT_STORE,
+              }),
+            );
+          }
+          rules = cache.get(key).rules;
         }
-        const shopRules = cache.get(key);
-        const layer = classifyProduct(item, { force: true, rules: shopRules.rules });
+        const layer = classifyProduct(item, { force: true, rules });
         if (layer && layer !== item.layer) {
           updated.push(await this.updateProduct(item.id, { layer }));
         }
       }
-      return { updated, count: updated.length };
+      return { updated, count: updated.length, unified: Boolean(unified) };
     },
 
     async importProducts({ team, store, items, csv, file, filename } = {}) {
@@ -1058,6 +1064,8 @@ export async function dropProbeTasks(poolOrFactory = getPool) {
 }
 
 export const PRODUCT_CSV_FIELDS = [
+  ["store", "店铺"],
+  ["team", "小组"],
   ["layer", "分层"],
   ["image", "主图"],
   ["spu", "SPU"],

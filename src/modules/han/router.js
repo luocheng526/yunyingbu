@@ -233,7 +233,11 @@ export function createHanRouter(store = createHanStore()) {
   hanRouter.post("/products/classify", async (req, res) => {
     try {
       const body = req.body || {};
-      const result = await store.classifyProducts({ team: body.team, store: body.store });
+      const result = await store.classifyProducts({
+        team: body.team,
+        store: body.store,
+        unified: body.unified === true || body.unified === 1 || body.unified === "1" || body.unified === "true",
+      });
       res.json({ ok: true, ...result });
     } catch (err) {
       res.status(err.statusCode || 500).json({ ok: false, error: err.message });

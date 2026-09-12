@@ -78,7 +78,7 @@
     const current = String(team || "").trim();
     return (
       '<nav class="han-tabs han-tabs-sub" aria-label="商品分层小组">' +
-      tabLink("/han/goods", "商品分层", !current) +
+      tabLink("/han/goods", "全部汇总", !current) +
       HAN_GOODS_TEAMS.map(function (name) {
         return tabLink("/han/goods?team=" + encodeURIComponent(name), name, current === name);
       }).join("") +
@@ -453,8 +453,19 @@
       ];
       layers[1].cols = layers[0].cols;
       layers[2].cols = layers[0].cols;
+      const teams = HAN_GOODS_TEAMS;
+      const params = new URLSearchParams(window.location.search);
+      const team = (params.get("team") || "").trim();
+      const shop = (params.get("store") || "").trim();
+      const allShops = !teams.includes(team);
       layers.forEach(function (layer) {
-        layer.cols = [["_layer", "调动"]].concat(layer.cols);
+        const lead = allShops
+          ? [
+              ["store", "店铺"],
+              ["_layer", "调动"],
+            ]
+          : [["_layer", "调动"]];
+        layer.cols = lead.concat(layer.cols);
       });
       const totalCols = layers.reduce(function (sum, layer) {
         return sum + layer.cols.length;
@@ -538,6 +549,14 @@
         if (key === "_layer") {
           return '<td class="han-layer-cell">' + layerSelect(row) + "</td>";
         }
+        if (key === "store") {
+          return (
+            '<td class="han-store-cell">' +
+            '<span class="han-cell-view">' +
+            escapeHtml(row.store || "") +
+            "</span></td>"
+          );
+        }
         const value = row[key] || "";
         if (key === "image") {
           return (
@@ -556,23 +575,7 @@
         );
       }
 
-      const teams = HAN_GOODS_TEAMS;
-      const params = new URLSearchParams(window.location.search);
-      const team = (params.get("team") || "").trim();
-      const shop = (params.get("store") || "").trim();
-      if (!teams.includes(team)) {
-        root.innerHTML = page(
-          "商品分层",
-          "右侧横排切换小组。店铺从组织中心该小组负责人名下抓取。",
-          '<div class="stack"><section class="panel"><h2>商品分层</h2><p class="lead">点小组查看组织中心里对应的店铺。</p></section></div>',
-          teamTabsHtml(""),
-        );
-        return function unmount() {
-          root.innerHTML = "";
-        };
-      }
-
-      if (!shop) {
+      if (!allShops && !shop) {
         root.innerHTML = page(
           team,
           team === "韩梦凯组"
@@ -650,8 +653,10 @@
       })();
 
       root.innerHTML = page(
-        shop,
-        team + " · " + shop + "。本店可自定义分类规则；导入和分类只按本店规则。拖动表格移动，拖表头右边调列宽，双击格子编辑，双击主图看大图。",
+        allShops ? "全部汇总" : shop,
+        allShops
+          ? "汇总六个小组全部店铺，用统一默认规则分头部、中部、尾部。每层最前一列是店铺名。点右侧小组可进单店表。"
+          : team + " · " + shop + "。本店可自定义分类规则；导入和分类只按本店规则。拖动表格移动，拖表头右边调列宽，双击格子编辑，双击主图看大图。",
         '<style>' +
           ".han-sheet-wrap{background:#fff;border:1px solid #c6c6c6}" +
           ".han-sheet-viewbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid #e5e7eb;background:#f8fafc}" +
@@ -666,6 +671,7 @@
           ".han-sheet .han-sheet-group{text-align:center;font-weight:700}" +
           ".han-sheet .han-sheet-hint{white-space:normal;min-width:160px;max-width:220px;font-size:11px;line-height:1.45;color:#444;background:#fafafa}" +
           ".han-sheet .han-sheet-col{background:#f3f3f3;font-weight:600;min-width:72px}" +
+          ".han-store-cell{font-weight:700;background:#fff7ed;min-width:96px}" +
           ".han-col-resizer{position:absolute;top:0;right:-3px;width:7px;height:100%;cursor:col-resize;z-index:2}" +
           ".han-row-resizer{position:absolute;left:0;right:0;bottom:-3px;height:7px;cursor:row-resize;z-index:2}" +
           ".han-cell-view{display:block;min-height:22px;min-width:56px;padding:2px 4px}" +
@@ -715,12 +721,18 @@
           "@media (max-width:900px){.han-plans{grid-template-columns:1fr}}" +
           "</style>" +
           '<div class="han-sheet-toolbar">' +
-          '<button type="button" class="han-rules-btn" id="han-rules-toggle">本店分类规则</button>' +
-          '<button type="button" class="han-class-btn" id="han-classify">按本店规则分类</button>' +
-          '<button type="button" class="han-export-btn" id="han-export">导出</button>' +
-          '<label class="han-import-btn">导入原始数据<input id="han-import" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden /></label>' +
-          '<button type="button" class="han-tpl-btn" id="han-tpl">下载模板</button></div>' +
-          '<div class="han-rules" id="han-rules">' +
+          (allShops
+            ? '<button type="button" class="han-class-btn" id="han-classify">按统一规则分类</button>' +
+              '<button type="button" class="han-export-btn" id="han-export">导出</button>'
+            : '<button type="button" class="han-rules-btn" id="han-rules-toggle">本店分类规则</button>' +
+              '<button type="button" class="han-class-btn" id="han-classify">按本店规则分类</button>' +
+              '<button type="button" class="han-export-btn" id="han-export">导出</button>' +
+              '<label class="han-import-btn">导入原始数据<input id="han-import" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden /></label>' +
+              '<button type="button" class="han-tpl-btn" id="han-tpl">下载模板</button>') +
+          "</div>" +
+          (allShops
+            ? ""
+            : '<div class="han-rules" id="han-rules">' +
           "<h3>本店分类规则</h3>" +
           '<p class="lead" id="han-rules-status">未保存过则用初版默认值，只作用于当前店铺。</p>' +
           '<div class="han-rules-grid">' +
@@ -744,7 +756,7 @@
           "</div>" +
           '<div class="han-rules-actions">' +
           '<button type="button" id="han-rules-save">保存本店规则</button>' +
-          '<button type="button" id="han-rules-reset">恢复默认</button></div></div>' +
+          '<button type="button" id="han-rules-reset">恢复默认</button></div></div>') +
           '<div class="han-sheet-wrap">' +
           '<div class="han-sheet-viewbar">' +
           '<button type="button" class="han-sheet-size-reset" id="han-sheet-size-reset">复位格子</button>' +
@@ -754,16 +766,18 @@
           "<thead></thead><tbody></tbody></table></div></div></div>" +
           '<p class="msg status han-sheet-msg" id="prod-msg"></p>',
         teamTabsHtml(team) + '<div id="han-shop-tabs"></div>',
-        '<div class="han-plans">' +
-          '<section class="han-plan" data-kind="month"><h3>本月任务规划<span>' +
-          escapeHtml(periods.month) +
-          "</span></h3><ul id=\"han-month-list\"></ul>" +
-          '<div class="han-plan-add"><input id="han-month-input" placeholder="添加本月任务" /><button type="button" id="han-month-add">添加</button></div></section>' +
-          '<section class="han-plan" data-kind="week"><h3>本周任务规划<span>' +
-          escapeHtml(periods.week) +
-          "</span></h3><ul id=\"han-week-list\"></ul>" +
-          '<div class="han-plan-add"><input id="han-week-input" placeholder="添加本周任务" /><button type="button" id="han-week-add">添加</button></div></section>' +
-          "</div>",
+        allShops
+          ? ""
+          : '<div class="han-plans">' +
+            '<section class="han-plan" data-kind="month"><h3>本月任务规划<span>' +
+            escapeHtml(periods.month) +
+            "</span></h3><ul id=\"han-month-list\"></ul>" +
+            '<div class="han-plan-add"><input id="han-month-input" placeholder="添加本月任务" /><button type="button" id="han-month-add">添加</button></div></section>' +
+            '<section class="han-plan" data-kind="week"><h3>本周任务规划<span>' +
+            escapeHtml(periods.week) +
+            "</span></h3><ul id=\"han-week-list\"></ul>" +
+            '<div class="han-plan-add"><input id="han-week-input" placeholder="添加本周任务" /><button type="button" id="han-week-add">添加</button></div></section>' +
+            "</div>",
       );
 
       const table = root.querySelector("#han-sheet");
@@ -887,10 +901,10 @@
       function paintHead() {
         const title =
           '<tr><th class="han-sheet-title" colspan="' + totalCols + '">' +
-          escapeHtml(shop) +
-          " · " +
-          escapeHtml(team) +
-          " · 店铺产品分层表</th></tr>";
+          (allShops
+            ? "全部小组 · 店铺产品分层汇总"
+            : escapeHtml(shop) + " · " + escapeHtml(team) + " · 店铺产品分层表") +
+          "</th></tr>";
         const groups = "<tr>" + layers.map(function (layer) {
           return (
             '<th class="han-sheet-group" colspan="' +
@@ -920,6 +934,7 @@
       }
 
       function addRowHtml() {
+        if (allShops) return "";
         return (
           "<tr>" +
           layers
@@ -1003,16 +1018,23 @@
       }
 
       function load() {
-        return Promise.all([
-          jsonFetch(
-            "/api/han/products?team=" + encodeURIComponent(team) + "&store=" + encodeURIComponent(shop),
-          ),
-          jsonFetch("/api/han/shops?team=" + encodeURIComponent(team)),
-        ]).then(function (pair) {
+        const productsUrl = allShops
+          ? "/api/han/products"
+          : "/api/han/products?team=" + encodeURIComponent(team) + "&store=" + encodeURIComponent(shop);
+        const jobs = [jsonFetch(productsUrl)];
+        if (!allShops) jobs.push(jsonFetch("/api/han/shops?team=" + encodeURIComponent(team)));
+        return Promise.all(jobs).then(function (pair) {
           if (dead) return;
           items = pair[0].items || [];
+          if (allShops) {
+            items = items.slice().sort(function (a, b) {
+              const storeCmp = String(a.store || "").localeCompare(String(b.store || ""), "zh");
+              if (storeCmp) return storeCmp;
+              return Number(a.id) - Number(b.id);
+            });
+          }
           const shopTabs = root.querySelector("#han-shop-tabs");
-          if (shopTabs) shopTabs.innerHTML = shopTabsHtml(team, shop, pair[1].items || []);
+          if (shopTabs && pair[1]) shopTabs.innerHTML = shopTabsHtml(team, shop, pair[1].items || []);
           paintBody();
         });
       }
@@ -1079,11 +1101,12 @@
       }
 
       function onExport() {
-        const url =
-          "/api/han/products.csv?team=" +
-          encodeURIComponent(team) +
-          "&store=" +
-          encodeURIComponent(shop);
+        const url = allShops
+          ? "/api/han/products.csv"
+          : "/api/han/products.csv?team=" +
+            encodeURIComponent(team) +
+            "&store=" +
+            encodeURIComponent(shop);
         fetch(url, { credentials: "same-origin" })
           .then(function (res) {
             return res.blob();
@@ -1091,7 +1114,7 @@
           .then(function (blob) {
             const a = document.createElement("a");
             a.href = URL.createObjectURL(blob);
-            a.download = shop + "-分层表.csv";
+            a.download = (allShops ? "全部汇总" : shop) + "-分层表.csv";
             a.click();
             URL.revokeObjectURL(a.href);
           })
@@ -1187,10 +1210,12 @@
         jsonFetch("/api/han/products/classify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ team: team, store: shop }),
+          body: JSON.stringify(allShops ? { unified: true } : { team: team, store: shop }),
         }).then(function (json) {
           if (dead) return;
-          msg.textContent = json.ok ? "已按本店规则调动" + (json.count || 0) + "条" : json.error || "分类失败";
+          msg.textContent = json.ok
+            ? (allShops ? "已按统一规则调动" : "已按本店规则调动") + (json.count || 0) + "条"
+            : json.error || "分类失败";
           if (json.ok) return load();
         });
       }
@@ -1470,32 +1495,42 @@
       viewport.addEventListener("pointerup", onSheetPointerUp);
       viewport.addEventListener("pointercancel", onSheetPointerUp);
       classifyBtn.addEventListener("click", onClassify);
-      rulesToggle.addEventListener("click", onToggleRules);
-      rulesSave.addEventListener("click", onSaveRules);
-      rulesReset.addEventListener("click", onResetRules);
+      if (rulesToggle) rulesToggle.addEventListener("click", onToggleRules);
+      if (rulesSave) rulesSave.addEventListener("click", onSaveRules);
+      if (rulesReset) rulesReset.addEventListener("click", onResetRules);
       exportBtn.addEventListener("click", onExport);
-      tplBtn.addEventListener("click", onTpl);
-      importInput.addEventListener("change", onImport);
-      monthAdd.addEventListener("click", function () {
-        addPlan("month");
-      });
-      weekAdd.addEventListener("click", function () {
-        addPlan("week");
-      });
-      monthInput.addEventListener("keydown", function (e) {
-        if (e.key === "Enter") {
-          e.preventDefault();
+      if (tplBtn) tplBtn.addEventListener("click", onTpl);
+      if (importInput) importInput.addEventListener("change", onImport);
+      if (monthAdd) {
+        monthAdd.addEventListener("click", function () {
           addPlan("month");
-        }
-      });
-      weekInput.addEventListener("keydown", function (e) {
-        if (e.key === "Enter") {
-          e.preventDefault();
+        });
+      }
+      if (weekAdd) {
+        weekAdd.addEventListener("click", function () {
           addPlan("week");
-        }
-      });
-      root.querySelector(".han-plans").addEventListener("click", onPlanClick);
-      Promise.all([load(), loadRules(), loadPlans()]).catch(function (err) {
+        });
+      }
+      if (monthInput) {
+        monthInput.addEventListener("keydown", function (e) {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            addPlan("month");
+          }
+        });
+      }
+      if (weekInput) {
+        weekInput.addEventListener("keydown", function (e) {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            addPlan("week");
+          }
+        });
+      }
+      const plansBox = root.querySelector(".han-plans");
+      if (plansBox) plansBox.addEventListener("click", onPlanClick);
+      const boot = allShops ? [load()] : [load(), loadRules(), loadPlans()];
+      Promise.all(boot).catch(function (err) {
         if (!dead) msg.textContent = String(err);
       });
       return function unmount() {
@@ -1512,12 +1547,12 @@
         viewport.removeEventListener("pointerup", onSheetPointerUp);
         viewport.removeEventListener("pointercancel", onSheetPointerUp);
         classifyBtn.removeEventListener("click", onClassify);
-        rulesToggle.removeEventListener("click", onToggleRules);
-        rulesSave.removeEventListener("click", onSaveRules);
-        rulesReset.removeEventListener("click", onResetRules);
+        if (rulesToggle) rulesToggle.removeEventListener("click", onToggleRules);
+        if (rulesSave) rulesSave.removeEventListener("click", onSaveRules);
+        if (rulesReset) rulesReset.removeEventListener("click", onResetRules);
         exportBtn.removeEventListener("click", onExport);
-        tplBtn.removeEventListener("click", onTpl);
-        importInput.removeEventListener("change", onImport);
+        if (tplBtn) tplBtn.removeEventListener("click", onTpl);
+        if (importInput) importInput.removeEventListener("change", onImport);
         root.innerHTML = "";
       };
     },
