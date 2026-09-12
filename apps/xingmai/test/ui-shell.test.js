@@ -697,8 +697,9 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.match(authJs, /function hashPasswordSync/);
   assert.match(authJs, /dropSession\(sid\)\.catch/);
   assert.doesNotMatch(authJs, /await dropSession\(/);
-  assert.match(authJs, /persistSession\([\s\S]*\)\.catch/);
-  assert.doesNotMatch(authJs, /await persistSession/);
+  assert.match(authJs, /await persistSession/);
+  assert.match(authJs, /function currentUserAsync/);
+  assert.match(authJs, /express\.urlencoded/);
   assert.match(authJs, /connectTimeout: 2000/);
   const meHtml = readFileSync(join(root, "public/me.html"), "utf8");
   assert.match(meHtml, /sessionStorage\.getItem\("xm-me"\)/);

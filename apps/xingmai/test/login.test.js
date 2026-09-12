@@ -90,6 +90,10 @@ test("login page is public", async () => {
   assert.doesNotMatch(html, /\/shared\/layout\.css/);
   assert.match(html, /decoding="async"/);
   assert.match(html, /removeItem\("xm-open-tabs"\)/);
+  assert.match(html, /credentials: "same-origin"/);
+  assert.match(html, /\/api\/auth\/me/);
+  assert.match(html, /URLSearchParams\(window\.location\.search\)/);
+  assert.match(html, /get\("err"\)/);
   assert.match(html, /window\.location\.replace\("\/home"\)/);
   assert.doesNotMatch(html, /window\.location\.replace\("\/data"\)/);
 });
@@ -150,6 +154,35 @@ test("luocheng alias can log in", async () => {
   const data = await res.json();
   assert.equal(data.ok, true);
   assert.equal(data.user.username, "罗成");
+});
+
+test("browser form post logs in and redirects to home", async () => {
+  const res = await fetch(`${base}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: "username=" + encodeURIComponent("罗成") + "&password=" + encodeURIComponent("ChangeMe123!"),
+    redirect: "manual"
+  });
+  assert.equal(res.status, 303);
+  assert.equal(res.headers.get("location"), "/home");
+  const cookie = String(res.headers.get("set-cookie") || "");
+  assert.match(cookie, /mk_sid=/);
+  const home = await fetch(`${base}/home`, { headers: { cookie: cookie.split(";")[0] } });
+  assert.equal(home.status, 200);
+  const html = await home.text();
+  assert.match(html, /nav\.js/);
+  assert.doesNotMatch(html, /id="login-form"/);
+});
+
+test("browser form post without a password returns to login with an error", async () => {
+  const res = await fetch(`${base}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: "username=" + encodeURIComponent("罗成") + "&password=",
+    redirect: "manual"
+  });
+  assert.equal(res.status, 303);
+  assert.match(String(res.headers.get("location") || ""), /\/login\?err=/);
 });
 
 test("wrong password is rejected", async () => {
