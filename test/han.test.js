@@ -472,6 +472,7 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /薛双双组/);
   assert.match(js, /韩梦凯组/);
   assert.match(js, /han-tabs/);
+  assert.match(js, /\.han-tab\.is-active\{background:#0f766e/);
   assert.match(js, /data-han-tab/);
   assert.match(js, /商品分层/);
   assert.match(js, /全部汇总/);
