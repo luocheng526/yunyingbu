@@ -1466,26 +1466,274 @@
     mount: function (root) {
       root.innerHTML = page(
         "实时付费",
-        "投放花费记录。默认负责人韩梦凯。",
-        '<div class="stack"><section class="panel"><h2>新增付费记录</h2>' +
-          '<form id="paid-form"><label for="paid-channel">渠道（必填）</label>' +
-          '<input id="paid-channel" required placeholder="信息流 / 搜索" />' +
-          '<label for="paid-store">店</label><input id="paid-store" placeholder="韩梦凯店" />' +
-          '<label for="paid-amount">金额</label><input id="paid-amount" type="number" step="0.01" placeholder="0.00" />' +
-          '<label for="paid-date">日期</label><input id="paid-date" type="date" />' +
-          '<label for="paid-note">备注</label><input id="paid-note" placeholder="投放说明" />' +
-          '<div class="actions"><button type="submit">添加</button></div>' +
+        "先看全中心汇总，再按小组看各店。数字来自本中心付费记录。",
+        '<style>' +
+          ".han-paid-board{display:flex;flex-direction:column;gap:14px}" +
+          ".han-paid-summary,.han-paid-group,.han-paid-form{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px}" +
+          ".han-paid-charts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}" +
+          ".han-paid-chart{border:1px solid #f3f4f6;border-radius:10px;padding:10px 12px;background:#fafafa}" +
+          ".han-paid-chart header{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;margin-bottom:6px}" +
+          ".han-paid-chart header span{font-weight:500;color:#9ca3af;font-size:12px}" +
+          ".han-paid-chart svg{width:100%;height:88px;display:block}" +
+          ".han-paid-chart .han-paid-delta{margin:6px 0 0;font-size:13px;color:#111827}" +
+          ".han-paid-chart .is-up{color:#16a34a}" +
+          ".han-paid-chart .is-down{color:#dc2626}" +
+          ".han-paid-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}" +
+          ".han-paid-kpi{padding:10px 8px;border-right:1px solid #f3f4f6}" +
+          ".han-paid-kpi:last-child{border-right:0}" +
+          ".han-paid-kpi .lab{font-size:12px;color:#6b7280;margin-bottom:6px}" +
+          ".han-paid-kpi .val{font-size:22px;font-weight:700;letter-spacing:-0.02em}" +
+          ".han-paid-kpi .sub{font-size:12px;color:#9ca3af;margin-top:4px}" +
+          ".han-paid-group h3{margin:0 0 10px;font-size:15px;display:flex;justify-content:space-between;gap:8px}" +
+          ".han-paid-group h3 span{font-size:12px;font-weight:500;color:#6b7280}" +
+          ".han-paid-group table{width:100%;border-collapse:collapse;font-size:13px}" +
+          ".han-paid-group th,.han-paid-group td{padding:8px 6px;border-bottom:1px solid #f3f4f6;text-align:right;white-space:nowrap}" +
+          ".han-paid-group th:nth-child(1),.han-paid-group td:nth-child(1),.han-paid-group th:nth-child(2),.han-paid-group td:nth-child(2){text-align:left}" +
+          ".han-paid-rank{display:inline-flex;width:20px;height:20px;border-radius:50%;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:#e5e7eb;color:#374151}" +
+          ".han-paid-rank.is-1{background:#f59e0b;color:#fff}" +
+          ".han-paid-rank.is-2{background:#9ca3af;color:#fff}" +
+          ".han-paid-rank.is-3{background:#d97706;color:#fff}" +
+          ".han-paid-form h2{margin:0 0 10px;font-size:15px}" +
+          ".han-paid-form .han-paid-form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px 12px}" +
+          ".han-paid-form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#374151}" +
+          ".han-paid-form input{min-height:34px;padding:6px 8px;border:1px solid #d1d5db;border-radius:8px}" +
+          "@media (max-width:980px){.han-paid-charts,.han-paid-kpis{grid-template-columns:1fr 1fr}.han-paid-kpi{border-right:0}}" +
+          "</style>" +
+          '<div class="han-paid-board">' +
+          '<section class="han-paid-summary" id="han-paid-summary">' +
+          '<div class="han-paid-charts">' +
+          '<div class="han-paid-chart"><header>实时指标<span>昨天 / 今天</span></header><svg id="han-paid-chart-a" viewBox="0 0 320 88" preserveAspectRatio="none"></svg><p class="han-paid-delta" id="han-paid-delta-a">—</p></div>' +
+          '<div class="han-paid-chart"><header>实时对比<span>昨天 / 今天</span></header><svg id="han-paid-chart-b" viewBox="0 0 320 88" preserveAspectRatio="none"></svg><p class="han-paid-delta" id="han-paid-delta-b">—</p></div>' +
+          "</div>" +
+          '<div class="han-paid-kpis">' +
+          '<div class="han-paid-kpi"><div class="lab">实时付费金额</div><div class="val" data-kpi="today">0</div><div class="sub" data-kpi-sub="today">今天</div></div>' +
+          '<div class="han-paid-kpi"><div class="lab">昨日付费</div><div class="val" data-kpi="yesterday">0</div><div class="sub" data-kpi-sub="yesterday">昨天</div></div>' +
+          '<div class="han-paid-kpi"><div class="lab">环比</div><div class="val" data-kpi="rate">—</div><div class="sub">较昨天</div></div>' +
+          '<div class="han-paid-kpi"><div class="lab">本月付费</div><div class="val" data-kpi="month">0</div><div class="sub" data-kpi-sub="month">本月累计</div></div>' +
+          '<div class="han-paid-kpi"><div class="lab">店铺数</div><div class="val" data-kpi="shops">0</div><div class="sub">本中心已抓到的店</div></div>' +
+          "</div></section>" +
+          '<div id="han-paid-groups"></div>' +
+          '<section class="han-paid-form"><h2>新增付费记录</h2>' +
+          '<form id="paid-form"><div class="han-paid-form-grid">' +
+          '<label for="paid-channel">渠道（必填）<input id="paid-channel" required placeholder="信息流 / 搜索" /></label>' +
+          '<label for="paid-store">店<input id="paid-store" placeholder="韩梦凯店" /></label>' +
+          '<label for="paid-amount">金额<input id="paid-amount" type="number" step="0.01" placeholder="0.00" /></label>' +
+          '<label for="paid-date">日期<input id="paid-date" type="date" /></label>' +
+          '<label for="paid-note">备注<input id="paid-note" placeholder="投放说明" /></label>' +
+          "</div>" +
+          '<div class="actions" style="margin-top:10px"><button type="submit">添加</button></div>' +
           '<p class="msg status" id="paid-msg"></p></form></section>' +
-          '<section class="panel"><h2>付费列表</h2><table><thead><tr><th>店</th><th>渠道</th><th>金额</th><th>日期</th><th>负责人</th></tr></thead>' +
-          '<tbody id="paid-body"></tbody></table></section></div>',
+          "</div>",
       );
-      const tbody = root.querySelector("#paid-body");
       const msg = root.querySelector("#paid-msg");
       const form = root.querySelector("#paid-form");
+      const groupsEl = root.querySelector("#han-paid-groups");
       let dead = false;
+
+      function pad2(n) {
+        return (n < 10 ? "0" : "") + n;
+      }
+      function ymd(d) {
+        return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+      }
+      function paidDay(row) {
+        return String(row.spentOn || row.createdAt || "").slice(0, 10);
+      }
+      function money(n) {
+        const num = Number(n || 0);
+        return num.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+      function rateText(today, yesterday) {
+        if (!yesterday) return today ? "—" : "0%";
+        const pct = ((today - yesterday) / yesterday) * 100;
+        const sign = pct > 0 ? "+" : "";
+        return sign + pct.toFixed(2) + "%";
+      }
+      function daysBack(from, count) {
+        const out = [];
+        for (let i = count - 1; i >= 0; i -= 1) {
+          const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() - i);
+          out.push(ymd(d));
+        }
+        return out;
+      }
+      function sumByDay(items) {
+        const map = {};
+        (items || []).forEach(function (row) {
+          const day = paidDay(row);
+          if (!day) return;
+          map[day] = (map[day] || 0) + Number(row.amount || 0);
+        });
+        return map;
+      }
+      function series(days, map) {
+        return days.map(function (day) {
+          return map[day] || 0;
+        });
+      }
+      function drawLine(svg, values, color) {
+        if (!svg) return;
+        const w = 320;
+        const h = 88;
+        const max = Math.max.apply(null, values.concat([1]));
+        const step = values.length > 1 ? w / (values.length - 1) : w;
+        const pts = values
+          .map(function (v, i) {
+            const x = i * step;
+            const y = h - 8 - (v / max) * (h - 16);
+            return x.toFixed(1) + "," + y.toFixed(1);
+          })
+          .join(" ");
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+        line.setAttribute("fill", "none");
+        line.setAttribute("stroke", color);
+        line.setAttribute("stroke-width", "2");
+        line.setAttribute("points", pts);
+        svg.appendChild(line);
+      }
+      function paintChart(svg, todayVals, yestVals) {
+        if (!svg) return;
+        svg.innerHTML = "";
+        const axis = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        axis.setAttribute("x1", "0");
+        axis.setAttribute("y1", "80");
+        axis.setAttribute("x2", "320");
+        axis.setAttribute("y2", "80");
+        axis.setAttribute("stroke", "#e5e7eb");
+        svg.appendChild(axis);
+        drawLine(svg, yestVals, "#93c5fd");
+        drawLine(svg, todayVals, "#2563eb");
+      }
+      function setDelta(el, today, yesterday) {
+        if (!el) return;
+        const text = rateText(today, yesterday);
+        el.textContent = "环比 " + text;
+        el.classList.toggle("is-up", yesterday && today > yesterday);
+        el.classList.toggle("is-down", yesterday && today < yesterday);
+      }
+      function storeTeamMap(teamShops) {
+        const map = {};
+        teamShops.forEach(function (block) {
+          (block.items || []).forEach(function (item) {
+            if (item.store) map[item.store] = block.team;
+          });
+        });
+        return map;
+      }
+
+      function paintBoard(items, teamShops) {
+        const now = new Date();
+        const today = ymd(now);
+        const yest = ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
+        const monthPrefix = today.slice(0, 7);
+        const byDay = sumByDay(items);
+        const todayAmt = byDay[today] || 0;
+        const yestAmt = byDay[yest] || 0;
+        const monthAmt = Object.keys(byDay).reduce(function (sum, day) {
+          return day.indexOf(monthPrefix) === 0 ? sum + byDay[day] : sum;
+        }, 0);
+        const thisWeek = daysBack(now, 7);
+        const lastWeekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        const lastWeek = daysBack(lastWeekEnd, 7);
+        const todaySeries = series(thisWeek, byDay);
+        const yestSeries = series(lastWeek, byDay);
+        paintChart(root.querySelector("#han-paid-chart-a"), todaySeries, yestSeries);
+        paintChart(root.querySelector("#han-paid-chart-b"), todaySeries, yestSeries);
+        setDelta(root.querySelector("#han-paid-delta-a"), todayAmt, yestAmt);
+        setDelta(root.querySelector("#han-paid-delta-b"), todayAmt, yestAmt);
+        root.querySelector('[data-kpi="today"]').textContent = money(todayAmt);
+        root.querySelector('[data-kpi="yesterday"]').textContent = money(yestAmt);
+        root.querySelector('[data-kpi="rate"]').textContent = rateText(todayAmt, yestAmt);
+        root.querySelector('[data-kpi="month"]').textContent = money(monthAmt);
+        const shopNames = {};
+        teamShops.forEach(function (block) {
+          (block.items || []).forEach(function (item) {
+            if (item.store) shopNames[item.store] = true;
+          });
+        });
+        (items || []).forEach(function (row) {
+          if (row.store) shopNames[row.store] = true;
+        });
+        root.querySelector('[data-kpi="shops"]').textContent = String(Object.keys(shopNames).length);
+
+        const teamOf = storeTeamMap(teamShops);
+        groupsEl.innerHTML = HAN_GOODS_TEAMS.map(function (team) {
+          const shops = {};
+          (teamShops.find(function (block) {
+            return block.team === team;
+          }) || { items: [] }).items.forEach(function (item) {
+            shops[item.store] = { store: item.store, today: 0, yesterday: 0, month: 0, rows: 0 };
+          });
+          (items || []).forEach(function (row) {
+            const assigned = teamOf[row.store] || "韩梦凯组";
+            if (assigned !== team) return;
+            if (!shops[row.store]) {
+              shops[row.store] = { store: row.store, today: 0, yesterday: 0, month: 0, rows: 0 };
+            }
+            const amt = Number(row.amount || 0);
+            const day = paidDay(row);
+            shops[row.store].rows += 1;
+            shops[row.store].month += day.indexOf(monthPrefix) === 0 ? amt : 0;
+            if (day === today) shops[row.store].today += amt;
+            if (day === yest) shops[row.store].yesterday += amt;
+          });
+          const rows = Object.keys(shops)
+            .map(function (name) {
+              return shops[name];
+            })
+            .sort(function (a, b) {
+              return b.today - a.today || b.month - a.month;
+            });
+          const body = rows.length
+            ? rows
+                .map(function (row, i) {
+                  const rank = i + 1;
+                  return (
+                    "<tr><td><span class=\"han-paid-rank" +
+                    (rank < 4 ? " is-" + rank : "") +
+                    '">' +
+                    rank +
+                    "</span></td><td>" +
+                    escapeHtml(row.store) +
+                    "</td><td>" +
+                    money(row.today) +
+                    "</td><td>" +
+                    money(row.yesterday) +
+                    "</td><td>" +
+                    rateText(row.today, row.yesterday) +
+                    "</td><td>" +
+                    money(row.month) +
+                    "</td><td>" +
+                    row.rows +
+                    "</td></tr>"
+                  );
+                })
+                .join("")
+            : '<tr><td colspan="7" class="empty">该组还没有店铺或付费记录</td></tr>';
+          return (
+            '<section class="han-paid-group"><h3>' +
+            escapeHtml(team) +
+            "<span>" +
+            rows.length +
+            "店</span></h3><table><thead><tr><th>排名</th><th>店铺名称</th><th>实时付费金额</th><th>昨日付费</th><th>环比</th><th>本月付费</th><th>记录数</th></tr></thead><tbody>" +
+            body +
+            "</tbody></table></section>"
+          );
+        }).join("");
+      }
+
       function load() {
-        return jsonFetch("/api/han/paid").then(function (json) {
-          if (!dead) renderRows(tbody, json.items, ["store", "channel", "amount", "spentOn", "owner"], "暂无付费记录");
+        return Promise.all(
+          [jsonFetch("/api/han/paid")].concat(
+            HAN_GOODS_TEAMS.map(function (team) {
+              return jsonFetch("/api/han/shops?team=" + encodeURIComponent(team)).then(function (json) {
+                return { team: team, items: json.items || [] };
+              });
+            }),
+          ),
+        ).then(function (all) {
+          if (dead) return;
+          paintBoard(all[0].items || [], all.slice(1));
         });
       }
       function onSubmit(e) {
