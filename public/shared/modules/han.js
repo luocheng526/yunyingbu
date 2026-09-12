@@ -57,7 +57,7 @@
   function page(title, lead, body, extraTabs) {
     ensureHanChrome();
     return (
-      '<main class="page">' +
+      '<main class="page han-goods-stage">' +
       (extraTabs || "") +
       '<header class="page-head"><p class="kicker">韩梦凯运营中心</p><h1>' +
       escapeHtml(title) +
@@ -789,11 +789,65 @@
     },
   };
 
+  function goodsRoot() {
+    return (
+      document.querySelector("[data-xm-mounted='/han/goods']") ||
+      document.querySelector(".xm-workspace > .xm-pane.is-active") ||
+      document.getElementById("xm-content")
+    );
+  }
+
+  function remountGoods(root) {
+    const prev = root.__hanGoodsUnmount || window.__xmUnmount;
+    if (typeof prev === "function") {
+      try {
+        prev();
+      } catch (_err) {}
+    }
+    if (!window.XmModules || !window.XmModules["/han/goods"]) {
+      return;
+    }
+    const stop = window.XmModules["/han/goods"].mount(root);
+    root.__hanGoodsUnmount = stop;
+    window.__xmUnmount = stop;
+  }
+
+  function animateGoodsSwap(root) {
+    if (!root || window.__hanGoodsBusy) {
+      return;
+    }
+    window.__hanGoodsBusy = 1;
+    const stage = root.querySelector(".han-goods-stage") || root;
+    stage.classList.add("is-leave");
+    window.setTimeout(function () {
+      remountGoods(root);
+      const fresh = root.querySelector(".han-goods-stage");
+      if (fresh) {
+        fresh.classList.add("is-enter");
+        window.requestAnimationFrame(function () {
+          window.requestAnimationFrame(function () {
+            fresh.classList.remove("is-enter");
+          });
+        });
+      }
+      window.__hanGoodsBusy = 0;
+    }, 180);
+  }
+
   function goHanPage(href) {
     const target = String(href || "/han/goods");
     const here = String(location.pathname || "") + String(location.search || "");
     if (here === target || here === target + "/") {
       return;
+    }
+    const path = target.split("?")[0].replace(/\/+$/, "") || "/";
+    if (path === "/han/goods") {
+      history.pushState({ xm: "/han/goods" }, "", target);
+      const root = goodsRoot();
+      if (root) {
+        animateGoodsSwap(root);
+        return;
+      }
     }
     if (typeof window.__xmGo === "function" && target.indexOf("?") < 0) {
       window.__xmGo(target);
@@ -809,11 +863,15 @@
       style.textContent =
         ".han-goods-teams{display:none!important}" +
         ".han-tabs{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 14px}" +
-        ".han-tab{display:inline-flex;align-items:center;min-height:34px;padding:6px 16px;border-radius:999px;background:#f3f4f6;color:#374151;text-decoration:none;font-size:14px;font-weight:600}" +
+        ".han-tab{display:inline-flex;align-items:center;min-height:34px;padding:6px 16px;border-radius:999px;background:#f3f4f6;color:#374151;text-decoration:none;font-size:14px;font-weight:600;transition:background .18s ease,color .18s ease,box-shadow .18s ease,transform .18s ease}" +
         ".han-tab:hover{background:#e5e7eb}" +
+        ".han-tab:active{transform:scale(.98)}" +
         ".han-tab.is-active{background:#fff;color:#111827;box-shadow:0 0 0 1px #e5e7eb}" +
         ".han-tabs-sub .han-tab{min-height:30px;font-size:13px;font-weight:500}" +
-        ".han-team-card{display:inline-block;margin:0 0.5rem 0.5rem 0;padding:0.55rem 0.9rem;border-radius:8px;background:#ccfbf1;color:#134e4a;text-decoration:none;font-weight:600}";
+        ".han-team-card{display:inline-block;margin:0 0.5rem 0.5rem 0;padding:0.55rem 0.9rem;border-radius:8px;background:#ccfbf1;color:#134e4a;text-decoration:none;font-weight:600;transition:transform .18s ease,box-shadow .18s ease}" +
+        ".han-team-card:hover{transform:translateY(-1px)}" +
+        ".han-goods-stage{opacity:1;transform:translate3d(0,0,0);transition:opacity .22s ease,transform .22s ease}" +
+        ".han-goods-stage.is-leave,.han-goods-stage.is-enter{opacity:0;transform:translate3d(0,10px,0)}";
       document.head.appendChild(style);
     }
     const leftover = document.getElementById("han-goods-teams");
@@ -826,6 +884,14 @@
         if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button) return;
         event.preventDefault();
         goHanPage(link.getAttribute("href") || "/han/selection");
+      });
+      window.addEventListener("popstate", function () {
+        const path = String(location.pathname || "").replace(/\/+$/, "") || "/";
+        if (path !== "/han/goods") return;
+        const root = goodsRoot();
+        if (root && root.querySelector(".han-goods-stage")) {
+          animateGoodsSwap(root);
+        }
       });
     }
   }
