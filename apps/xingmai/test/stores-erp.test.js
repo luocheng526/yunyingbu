@@ -9,6 +9,7 @@ import { resetErpCacheForTests, setErpFetchForTests } from "../src/modules/data/
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const storesJs = readFileSync(join(root, "public/shared/modules/stores.js"), "utf8");
+const storesCss = readFileSync(join(root, "public/stores.css"), "utf8");
 
 const prevToken = process.env.XM_ERP_TOKEN;
 const prevBase = process.env.XM_ERP_BASE;
@@ -112,6 +113,9 @@ test("stores module mounts four ERP pages with the screenshot titles", () => {
   assert.doesNotMatch(storesJs, /authInfo/);
   assert.doesNotMatch(storesJs, /xingmai110/);
   assert.doesNotMatch(storesJs, /店铺档案/);
+  assert.match(storesJs, /stores-board/);
+  assert.match(storesCss, /flex-direction: row/);
+  assert.doesNotMatch(storesCss, /grid-template-columns:\s*200px/);
 });
 
 test("stores root still reports the module name", async () => {

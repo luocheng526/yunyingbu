@@ -322,9 +322,8 @@
 
     root.innerHTML =
       '<main class="page stores-page">' +
-      '<header class="page-head"><p class="kicker">店铺维护中心</p><h1 data-title></h1>' +
-      '<p class="lead" data-lead></p></header>' +
-      '<div class="stores-desk">' +
+      '<p class="kicker">店铺维护中心</p>' +
+      '<h1 class="stores-sr" data-title></h1>' +
       '<nav class="stores-subnav" aria-label="店铺维护页面">' +
       PAGES.map(function (item) {
         return (
@@ -336,6 +335,7 @@
         );
       }).join("") +
       "</nav>" +
+      '<p class="lead" data-lead></p>' +
       '<section class="stores-main">' +
       '<div class="kpi-grid" data-kpi></div>' +
       '<form class="stores-toolbar" data-filter>' +
@@ -345,12 +345,12 @@
       '<button type="submit">查询</button>' +
       "</form>" +
       '<p class="status" data-status role="status"></p>' +
-      '<section class="panel"><div class="stores-table-wrap"><table><thead data-head></thead>' +
+      '<section class="panel stores-board"><div class="stores-table-wrap"><table><thead data-head></thead>' +
       '<tbody data-body><tr><td colspan="8" class="empty">正在加载…</td></tr></tbody></table></div>' +
       '<div class="stores-pager"><p data-pager></p>' +
       '<p><button type="button" class="ghost" data-prev>上一页</button> ' +
       '<button type="button" class="ghost" data-next>下一页</button></p></div></section>' +
-      "</section></div></main>";
+      "</section></main>";
 
     var titleEl = root.querySelector("[data-title]");
     var leadEl = root.querySelector("[data-lead]");
@@ -383,7 +383,13 @@
       extraEl.innerHTML = extraFilters(page.id, state);
       headEl.innerHTML = tableHead(page.id);
       root.querySelectorAll("[data-page]").forEach(function (btn) {
-        btn.classList.toggle("is-on", btn.getAttribute("data-page") === page.id);
+        var on = btn.getAttribute("data-page") === page.id;
+        btn.classList.toggle("is-on", on);
+        if (on) {
+          btn.setAttribute("aria-current", "page");
+        } else {
+          btn.removeAttribute("aria-current");
+        }
       });
       filterForm.q.value = state.q;
       shopSelect.value = state.shopId;

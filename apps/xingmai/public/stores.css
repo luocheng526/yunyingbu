@@ -1,42 +1,47 @@
 /* xm-module-stores erp-pages */
-.stores-page .page-head h1 {
-  margin: 0 0 6px;
-  font-size: 22px;
+.stores-page {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 88px);
+}
+
+.stores-page .kicker {
+  margin: 0 0 8px;
+}
+
+.stores-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .stores-page .lead {
-  margin: 0;
-}
-
-.stores-desk {
-  display: grid;
-  grid-template-columns: 200px minmax(0, 1fr);
-  align-items: start;
-  gap: 0;
-  margin-top: 12px;
-  min-height: 560px;
-  background: var(--xm-card);
-  border: 1px solid var(--xm-line);
-  border-radius: 10px;
-  overflow: hidden;
+  margin: 8px 0 10px;
 }
 
 .stores-subnav {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
+  width: 100%;
   background: var(--xm-card);
-  border-right: 1px solid var(--xm-line);
-  min-height: 100%;
+  border: 1px solid var(--xm-line);
+  border-radius: 8px;
 }
 
 .stores-subnav button {
-  display: block;
-  width: 100%;
+  flex: 1 1 140px;
   border: 0;
   background: transparent;
   color: var(--xm-ink);
-  text-align: left;
-  padding: 18px 24px;
+  text-align: center;
+  padding: 12px 16px;
   font: inherit;
   font-size: 14px;
   line-height: 22px;
@@ -45,6 +50,7 @@
 
 .stores-subnav button.is-on {
   background: #f5f5f7;
+  font-weight: 600;
 }
 
 html[data-theme="dark"] .stores-subnav button.is-on {
@@ -56,8 +62,10 @@ html[data-theme="rose"] .stores-subnav button.is-on {
 }
 
 .stores-main {
+  flex: 1;
   min-width: 0;
-  padding: 16px 18px 20px;
+  display: flex;
+  flex-direction: column;
 }
 
 .stores-page .kpi-grid {
@@ -121,8 +129,19 @@ html[data-theme="rose"] .stores-subnav button.is-on {
   color: var(--xm-primary);
 }
 
+.stores-board {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin: 0;
+}
+
 .stores-table-wrap {
+  flex: 1;
   overflow: auto;
+  min-height: 420px;
+  width: 100%;
 }
 
 .stores-page table {
@@ -197,22 +216,4 @@ html[data-theme="rose"] .stores-subnav button.is-on {
 .stores-pill.done {
   background: #f6ffed;
   color: #389e0d;
-}
-
-@media (max-width: 860px) {
-  .stores-desk {
-    grid-template-columns: 1fr;
-  }
-
-  .stores-subnav {
-    flex-direction: row;
-    flex-wrap: wrap;
-    border-right: 0;
-    border-bottom: 1px solid var(--xm-line);
-  }
-
-  .stores-subnav button {
-    width: auto;
-    padding: 12px 16px;
-  }
 }
