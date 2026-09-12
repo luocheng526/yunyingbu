@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.374-home-teamset */
+/* xm-module-home 0.1.375-home-grad */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -955,13 +955,13 @@
       ".xm-hm-body{position:relative;display:flex;flex-direction:column;gap:12px;overflow:visible}" +
       ".xm-hm.is-live .xm-hm-kpis-shell,.xm-hm.is-board .xm-hm-kpis-shell,.xm-hm.is-team .xm-hm-kpis-shell,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
       ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden]{display:none}" +
-      ".xm-hm-kpis-shell,.xm-hm-teams{background:#dceaff;border:2px solid #4d8fd6;border-radius:12px;padding:10px}" +
+      ".xm-hm-kpis-shell,.xm-hm-teams,.xm-hm-team{background:linear-gradient(#dceaff,#f7fbff);border:0;border-radius:12px}" +
+      ".xm-hm-kpis-shell,.xm-hm-teams{padding:10px}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
       ".xm-hm-teams{display:flex;flex-direction:column;gap:10px}" +
       ".xm-hm-teams-bar{display:flex;justify-content:space-between;align-items:center;padding:0 0 8px}" +
       ".xm-hm-teams-grid{display:grid;grid-template-columns:repeat(var(--xm-hm-team-cols,2),minmax(220px,1fr));gap:12px}" +
-      ".xm-hm-team{display:flex;flex-direction:column;gap:10px;min-width:0;background:#dceaff;border:2px solid #4d8fd6;border-radius:12px;padding:12px 12px 10px;box-shadow:0 1px 2px rgba(47,84,235,.08)}" +
-      ".xm-hm-team:nth-child(even){background:#d2e4ff;border-color:#3b7ec4}" +
+      ".xm-hm-team{display:flex;flex-direction:column;gap:10px;min-width:0;padding:12px 12px 10px}" +
       ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start}" +
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border-color:#c5d8f2}" +
       ".xm-hm.is-team .xm-hm-card{min-height:104px;padding:12px 12px 10px;border-radius:8px;cursor:grab}" +
@@ -1105,7 +1105,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.374-home-teamset");
+    board.setAttribute("data-hm-js", "0.1.375-home-grad");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
