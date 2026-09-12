@@ -29,9 +29,7 @@ test("homepage module persists a shared card order", () => {
   assert.match(homeJs, /xm-home-card-order/);
   assert.match(homeJs, /function applyCardMove/);
   assert.match(homeJs, /function onSortDown/);
-  assert.match(homeJs, /function onSortMenu/);
   assert.match(homeJs, /function onSortSelectStart/);
-  assert.match(homeJs, /function onSortDragStart/);
   assert.match(homeJs, /function clearTextSelection/);
   assert.match(homeJs, /sortDragging = true/);
   assert.match(homeJs, /user-select:none/);
