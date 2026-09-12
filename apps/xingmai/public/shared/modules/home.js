@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.401-home-name */
+/* xm-module-home 0.1.402-home-drop */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -630,9 +630,9 @@
       escapeHtml(team.key) +
       '"><div><h2>' +
       escapeHtml(team.name) +
-      '团队</h2></div><button type="button" data-drop-team="' +
+      '团队</h2></div><button type="button" class="xm-hm-drop" data-drop-team="' +
       escapeHtml(team.name) +
-      '">×</button></header>'
+      '" title="删除此团队">×</button></header>'
     );
   }
 
@@ -979,11 +979,13 @@
       ".xm-hm.is-chief .xm-hm-value{margin-top:4px;font-size:13px}" +
       ".xm-hm.is-chief .xm-hm-trend{margin-top:2px;font-size:10px}" +
       ".xm-hm-team-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;min-height:0;padding:0 2px 2px}" +
-      ".xm-hm-team-head h2{margin:0;font-size:16px}" +
+      ".xm-hm-team-head>div{min-width:0;flex:1}" +
+      ".xm-hm-team-head h2{margin:0;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
       ".xm-hm.is-chief .xm-hm-team-head h2{font-size:13px}" +
       ".xm-hm-teams-bar .xm-hm-set{padding:0;font-size:13px;white-space:nowrap}" +
       ".xm-hm-teams-bar span{display:flex;gap:12px}" +
-      "[data-drop-team],[data-show-teams]{border:0;background:0;color:var(--xm-primary);cursor:pointer;padding:0}" +
+      "[data-show-teams]{border:0;background:0;color:var(--xm-primary);cursor:pointer;padding:0;font-size:13px}" +
+      ".xm-hm-drop{flex:0 0 auto;width:20px;height:20px;border:1px solid #d96c6c;border-radius:50%;background:#fff;color:#c45656;font-size:16px;line-height:18px;cursor:pointer;padding:0}" +
       ".xm-hm-ladder{margin-top:4px}" +
       ".xm-hm-ladder h2{margin:16px 0 10px;font-size:16px}" +
       ".xm-hm-podiums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}" +
@@ -1101,7 +1103,7 @@
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
-    board.setAttribute("data-hm-js", "0.1.401-home-name");
+    board.setAttribute("data-hm-js", "0.1.402-home-drop");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2198,6 +2200,7 @@
         if (event.target.closest("[data-show-teams]")) {
           viewKey = state.view || "company";
           saveGone([]);
+          saveHidden([]);
           paint(root, state);
           return;
         }
