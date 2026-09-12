@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.380-home-chiefsq */
+/* xm-module-home 0.1.381-home-shop5 */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -480,10 +480,16 @@
     return String(def.label || "").replace(/\s*\([^)]*\)\s*/g, "").replace(/\s+/g, "");
   }
 
-  function shopCols(hide) {
-    return orderedDefs().filter(function (def) {
-      return (hide || []).indexOf(def.key) === -1;
+  var SHOP_CARD_KEYS = ["adRatio", "profit", "grossMargin", "refundRate", "netGoodsCost"];
+
+  function shopCols() {
+    var map = {};
+    COMPANY_CARD_DEFS.forEach(function (def) {
+      map[def.key] = def;
     });
+    return SHOP_CARD_KEYS.map(function (key) {
+      return map[key];
+    }).filter(Boolean);
   }
 
   function shopMetricsFrom(row) {
@@ -526,7 +532,7 @@
 
   function teamShopsHtml(team, hide) {
     var shops = team.shops || [];
-    var cols = shopCols(hide);
+    var cols = shopCols();
     return (
       '<div class="xm-hm-panel" data-team="' +
       escapeHtml(team.key) +
@@ -866,7 +872,7 @@
       ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,110px));gap:6px;align-content:start}" +
       ".xm-hm-teams.is-many .xm-hm-team-kpis{grid-template-columns:repeat(2,minmax(0,96px))}" +
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border:0;box-shadow:none}" +
-      ".xm-hm-teams .xm-hm-table{min-width:1280px;font-variant-numeric:tabular-nums}" +
+      ".xm-hm-teams .xm-hm-table{min-width:760px;font-variant-numeric:tabular-nums}" +
       ".xm-hm-teams .xm-hm-table .xm-hm-num{text-align:right;white-space:nowrap}" +
       ".xm-hm-teams .xm-hm-table th.xm-hm-num{white-space:normal;max-width:4.8em;line-height:1.25}" +
       ".xm-hm-teams .xm-hm-table th:last-child,.xm-hm-teams .xm-hm-table td:last-child{text-align:left;white-space:nowrap}" +
@@ -1012,7 +1018,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.380-home-chiefsq");
+    board.setAttribute("data-hm-js", "0.1.381-home-shop5");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
