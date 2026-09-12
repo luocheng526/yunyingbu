@@ -57,6 +57,10 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /label: "经理团队"/);
   assert.match(homeJs, /label: "主管团队"/);
   assert.match(homeJs, /function shopOnRoleTeam/);
+  assert.match(homeJs, /<th>排名<\/th><th>店铺名称<\/th><th>运营<\/th><\/tr>/);
+  assert.match(homeJs, /星脉甄选/);
+  assert.match(homeJs, /id="xm-hm-set-team"/);
+  assert.doesNotMatch(homeJs, /<th>运营<\/th><th>实时销售额<\/th>/);
 });
 
 test("homepage money and rates show as rounded integers", () => {

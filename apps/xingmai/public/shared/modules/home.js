@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.371-home-noselect */
+/* xm-module-home 0.1.372-home-shoplist */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -492,22 +492,14 @@
     );
   }
 
-  function shopRowHtml(row, index, withOwner) {
+  function shopRowHtml(row, index) {
     return (
       "<tr><td>" +
       rankMark(index) +
       "</td><td>" +
       escapeHtml(row.shop) +
-      "</td>" +
-      (withOwner ? "<td>" + escapeHtml(row.owner || "—") + "</td>" : "") +
-      "<td>" +
-      escapeHtml(row.liveAmount) +
       "</td><td>" +
-      escapeHtml(row.orders || "—") +
-      "</td><td>" +
-      escapeHtml(row.payAmount || "—") +
-      "</td><td>" +
-      escapeHtml(row.refundRate || "—") +
+      escapeHtml(row.owner || "—") +
       "</td></tr>"
     );
   }
@@ -533,9 +525,9 @@
       '"><h2>责权店铺 <span>' +
       shops.length +
       " 店</span></h2>" +
-      '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th><th>运营</th><th>实时销售额</th><th>销售单数</th><th>支付金额</th><th>退款率</th></tr></thead><tbody>' +
+      '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th><th>运营</th></tr></thead><tbody>' +
       shops.map(function (row, i) {
-        return shopRowHtml(row, i, true);
+        return shopRowHtml(row, i);
       }).join("") +
       "</tbody></table></div>"
     );
@@ -564,11 +556,15 @@
 
   function teamsCompareHtml(teams, hide) {
     var list = teams && teams.length ? teams : blankTeams();
-    return list
-      .map(function (team) {
-        return teamBlockHtml(team, hide);
-      })
-      .join("");
+    return (
+      '<div class="xm-hm-teams-bar"><b>星脉甄选</b><button type="button" class="xm-hm-set" id="xm-hm-set-team">卡片设置</button></div><div class="xm-hm-teams-grid">' +
+      list
+        .map(function (team) {
+          return teamBlockHtml(team, hide);
+        })
+        .join("") +
+      "</div>"
+    );
   }
 
   function standItemHtml(row, place, unit) {
@@ -959,10 +955,12 @@
       ".xm-hm-tip{position:fixed;z-index:2147483646;display:none;box-sizing:border-box;width:max-content;max-width:min(360px,calc(100vw - 24px));padding:10px 12px;background:var(--xm-card,#fff);border:1px solid var(--xm-line,#eadfd0);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.18);color:var(--xm-ink,#1f1b16);font-size:12px;line-height:1.6;white-space:pre-wrap;text-align:left;pointer-events:none}" +
       ".xm-hm-tip.is-on{display:block}" +
       ".xm-hm-body{position:relative;display:flex;flex-direction:column;gap:12px;overflow:visible}" +
-      ".xm-hm.is-live .xm-hm-kpis,.xm-hm.is-board .xm-hm-kpis,.xm-hm.is-team .xm-hm-kpis,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
+      ".xm-hm.is-live .xm-hm-kpis,.xm-hm.is-board .xm-hm-kpis,.xm-hm.is-team .xm-hm-kpis,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-team #xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
       ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden]{display:none}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
-      ".xm-hm-teams{display:grid;grid-template-columns:repeat(var(--xm-hm-team-cols,2),minmax(220px,1fr));gap:12px 16px;align-items:start;position:relative;overflow-x:auto}" +
+      ".xm-hm-teams{display:flex;flex-direction:column;gap:10px}" +
+      ".xm-hm-teams-bar{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#dceaff;border:2px solid #4d8fd6;border-radius:10px}" +
+      ".xm-hm-teams-grid{display:grid;grid-template-columns:repeat(var(--xm-hm-team-cols,2),minmax(220px,1fr));gap:12px}" +
       ".xm-hm-team{display:flex;flex-direction:column;gap:10px;min-width:0;background:#dceaff;border:2px solid #4d8fd6;border-radius:12px;padding:12px 12px 10px;box-shadow:0 1px 2px rgba(47,84,235,.08)}" +
       ".xm-hm-team:nth-child(even){background:#d2e4ff;border-color:#3b7ec4}" +
       ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start}" +
@@ -1043,7 +1041,7 @@
       ".xm-hm-pop h3{margin:0 0 8px;font-size:13px}" +
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{margin:8px 0 0;color:var(--xm-muted);font-size:12px}" +
-      "@media (max-width:1100px){.xm-hm-teams{grid-template-columns:1fr}.xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}" +
+      "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}" +
       "@media (max-width:1200px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
       "@media (max-width:700px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts,.xm-hm-team-kpis{grid-template-columns:1fr}.xm-hm-team-head{flex-direction:column}.xm-hm-cal-months{flex-direction:column}}"
     );
@@ -1109,7 +1107,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.371-home-noselect");
+    board.setAttribute("data-hm-js", "0.1.372-home-shoplist");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2274,7 +2272,7 @@
           pullBoard();
           return;
         }
-        if (event.target.closest("#xm-hm-set")) {
+        if (event.target.closest(".xm-hm-set")) {
           var pop = root.querySelector("#xm-hm-pop");
           pop.hidden = !pop.hidden;
           closeCal();
@@ -2284,7 +2282,7 @@
 
       function onOutsideCardSet(event) {
         var pop = root.querySelector("#xm-hm-pop");
-        if (pop && !pop.hidden && !event.target.closest("#xm-hm-pop") && !event.target.closest("#xm-hm-set")) {
+        if (pop && !pop.hidden && !event.target.closest("#xm-hm-pop") && !event.target.closest(".xm-hm-set")) {
           pop.hidden = true;
         }
         if (calOpen && !event.target.closest("#xm-hm-cal") && !event.target.closest("#xm-hm-dates")) {
