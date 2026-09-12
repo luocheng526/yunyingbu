@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createHanStore, matchOrgStoresForTeam, mergeTeamShops } from "./store.js";
+import { createHanStore, matchOrgStoresForTeam, mergeTeamShops, buildProductCsv } from "./store.js";
 
 async function loadOrgStores(req) {
   const host = req.get("host");
@@ -128,6 +128,34 @@ export function createHanRouter(store = createHanStore()) {
     try {
       const item = await store.createProduct(req.body || {});
       res.status(201).json({ ok: true, item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.get("/products.csv", async (req, res) => {
+    try {
+      const items = await store.listProducts({ team: req.query.team, store: req.query.store });
+      const csv = "\uFEFF" + buildProductCsv(items);
+      const name = encodeURIComponent((req.query.store || req.query.team || "商品") + "-分层表.csv");
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", 'attachment; filename="' + name + '"; filename*=UTF-8\'\'' + name);
+      res.send(csv);
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.post("/products/import", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const result = await store.importProducts({
+        team: body.team,
+        store: body.store,
+        items: body.items,
+        csv: body.csv,
+      });
+      res.status(result.created.length ? 201 : 200).json({ ok: true, ...result });
     } catch (err) {
       res.status(err.statusCode || 500).json({ ok: false, error: err.message });
     }

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
-import { createHanStore, dropProbeTasks, hydrateFromMysql, matchOrgStoresForTeam, mergeTeamShops, HAN_DEFAULT_OWNER, HAN_DEFAULT_STORE } from "../src/modules/han/store.js";
+import { createHanStore, dropProbeTasks, hydrateFromMysql, matchOrgStoresForTeam, mergeTeamShops, buildProductCsv, parseProductCsv, HAN_DEFAULT_OWNER, HAN_DEFAULT_STORE } from "../src/modules/han/store.js";
 import { createHanFakePool } from "./han-fake-pool.js";
 
 async function withServer(fn) {
@@ -268,6 +268,34 @@ test("han selection / products / paid boards are isolated", async () => {
     );
     assert.equal(onlyShop.body.items.some((row) => row.spu === "SHOP-1"), true);
     assert.equal(onlyShop.body.items.every((row) => row.store === "晓曼一店"), true);
+
+    const csv = buildProductCsv([
+      { layer: "测新产品", spu: "CSV-1", firstSku: "SKU-1", listedOn: "2026-09-01" },
+      { layer: "头部产品", spu: "CSV-2", remark: "重点" },
+    ]);
+    const imported = await json(base, "/api/han/products/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ team: "陈晓曼组", store: "晓曼一店", csv }),
+    });
+    assert.equal(imported.res.status, 201);
+    assert.equal(imported.body.created.length, 2);
+    const exported = await fetch(
+      base +
+        "/api/han/products.csv?team=" +
+        encodeURIComponent("陈晓曼组") +
+        "&store=" +
+        encodeURIComponent("晓曼一店"),
+    );
+    const csvText = await exported.text();
+    assert.equal(exported.headers.get("content-type").includes("text/csv"), true);
+    assert.match(csvText, /CSV-1/);
+    assert.match(csvText, /测新产品/);
+    const again = await json(
+      base,
+      "/api/han/products?team=" + encodeURIComponent("陈晓曼组") + "&store=" + encodeURIComponent("晓曼一店"),
+    );
+    assert.equal(again.body.items.some((row) => row.spu === "CSV-1"), true);
   });
 });
 
@@ -328,6 +356,10 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /XmModules\["\/han\/goods"\]/);
   assert.match(js, /店铺产品分层表/);
   assert.match(js, /han-sheet/);
+  assert.match(js, /批量导入/);
+  assert.match(js, /id="han-export"/);
+  assert.match(js, /\/api\/han\/products\/import/);
+  assert.match(js, /\/api\/han\/products\.csv/);
   assert.match(js, /头部产品/);
   assert.match(js, /中部产品/);
   assert.match(js, /尾部产品/);
@@ -482,6 +514,18 @@ test("GET /api/han/shops pulls 组织中心 stores for the team", async () => {
   } finally {
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
+});
+
+test("product csv round-trips layer columns", () => {
+  const csv = buildProductCsv([
+    { layer: "头部产品", spu: "A1", firstSku: "S1", remark: "含,逗号" },
+  ]);
+  const rows = parseProductCsv("\uFEFF" + csv);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].layer, "头部产品");
+  assert.equal(rows[0].spu, "A1");
+  assert.equal(rows[0].firstSku, "S1");
+  assert.equal(rows[0].remark, "含,逗号");
 });
 
 test("han shops map 组织中心 lead to 韩梦凯小组", () => {
