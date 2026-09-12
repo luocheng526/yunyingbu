@@ -45,7 +45,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function teamBlockHtml/);
   assert.doesNotMatch(homeJs, /打开数据总览/);
   assert.doesNotMatch(homeJs, /打开运营中心/);
-  assert.match(homeJs, /\.xm-hm-team-kpis\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
+  assert.match(homeJs, /\.xm-hm-team-kpis\{display:grid;grid-template-columns:repeat\(auto-fill,minmax\(76px,1fr\)\)/);
+  assert.match(homeJs, /\.xm-hm\.is-team \.xm-hm-card\{aspect-ratio:1\/1/);
   assert.match(homeJs, /linear-gradient\(#dceaff,#f7fbff\)/);
   assert.doesNotMatch(homeJs, /border:2px solid #4d8fd6/);
   assert.match(homeJs, /\.xm-hm-bar\{[^}]*border:0\}/);
@@ -56,7 +57,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /\.xm-hm-card,\.xm-hm-pop label\{-webkit-user-select:none;user-select:none/);
   assert.match(homeJs, /--xm-hm-team-cols/);
   assert.match(homeJs, /label: "经理团队"/);
-  assert.match(homeJs, /label: "主管团队"/);
+  assert.match(homeJs, /label: "主管看板"/);
+  assert.doesNotMatch(homeJs, /label: "主管团队"/);
   assert.match(homeJs, /label: "昨天"/);
   assert.match(homeJs, /label: "本月"/);
   assert.doesNotMatch(homeJs, /label: "近3天"/);

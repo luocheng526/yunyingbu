@@ -1,9 +1,9 @@
-/* xm-module-home 0.1.379-home-netcost */
+/* xm-module-home 0.1.380-home-chiefsq */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
     { key: "team", label: "经理团队" },
-    { key: "chief", label: "主管团队" },
+    { key: "chief", label: "主管看板" },
     { key: "live", label: "实时" },
     { key: "board", label: "排行榜" }
   ];
@@ -859,26 +859,27 @@
       ".xm-hm-kpis-shell,.xm-hm-teams,.xm-hm-team{background:linear-gradient(#dceaff,#f7fbff);border:0;outline:0;box-shadow:none;border-radius:12px}" +
       ".xm-hm-kpis-shell,.xm-hm-teams{padding:10px}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
-      ".xm-hm-teams{display:flex;flex-direction:column;gap:10px}" +
+      ".xm-hm-teams{display:flex;flex-direction:column;gap:10px;overflow-x:auto}" +
       ".xm-hm-teams-bar{display:flex;justify-content:space-between;align-items:center;padding:0 0 8px}" +
-      ".xm-hm-teams-grid{display:grid;grid-template-columns:repeat(var(--xm-hm-team-cols,2),minmax(220px,1fr));gap:12px}" +
-      ".xm-hm-team{display:flex;flex-direction:column;gap:10px;min-width:0;padding:12px 12px 10px}" +
-      ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start}" +
+      ".xm-hm-teams-grid{display:grid;grid-template-columns:repeat(var(--xm-hm-team-cols,2),minmax(200px,1fr));gap:10px}" +
+      ".xm-hm-team{display:flex;flex-direction:column;gap:8px;min-width:0;padding:8px 8px 8px}" +
+      ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:6px;align-content:start}" +
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border:0;box-shadow:none}" +
       ".xm-hm-teams .xm-hm-table{min-width:1280px;font-variant-numeric:tabular-nums}" +
       ".xm-hm-teams .xm-hm-table .xm-hm-num{text-align:right;white-space:nowrap}" +
       ".xm-hm-teams .xm-hm-table th.xm-hm-num{white-space:normal;max-width:4.8em;line-height:1.25}" +
       ".xm-hm-teams .xm-hm-table th:last-child,.xm-hm-teams .xm-hm-table td:last-child{text-align:left;white-space:nowrap}" +
-      ".xm-hm.is-team .xm-hm-card{min-height:104px;padding:12px 12px 10px;border-radius:8px;cursor:grab}" +
+      ".xm-hm.is-team .xm-hm-card{aspect-ratio:1/1;min-height:0;min-width:0;padding:6px;border-radius:8px;cursor:grab;display:flex;flex-direction:column}" +
       ".xm-hm.is-team .xm-hm-card.is-hold{cursor:grabbing}" +
-      ".xm-hm.is-team .xm-hm-card-head{font-size:12px}" +
-      ".xm-hm.is-team .xm-hm-card-head .xm-hm-help{width:16px;height:16px;font-size:10px}" +
-      ".xm-hm.is-team .xm-hm-value{margin-top:8px;font-size:20px}" +
-      ".xm-hm.is-team .xm-hm-trend{margin-top:6px;font-size:12px}" +
-      ".xm-hm-team-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;min-height:48px;padding:0 4px 4px}" +
-      ".xm-hm-team-head h2{margin:0;font-size:16px}" +
-      ".xm-hm-team-head p{margin:4px 0 0;color:var(--xm-muted);font-size:12px}" +
-      ".xm-hm-team-head .xm-hm-set{padding:0;font-size:13px;white-space:nowrap}" +
+      ".xm-hm.is-team .xm-hm-card-head{font-size:10px;line-height:1.2;align-items:flex-start;gap:4px}" +
+      ".xm-hm.is-team .xm-hm-card-head span{min-width:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3}" +
+      ".xm-hm.is-team .xm-hm-card-head .xm-hm-help{width:12px;height:12px;font-size:8px;flex:0 0 auto}" +
+      ".xm-hm.is-team .xm-hm-value{margin-top:auto;font-size:13px}" +
+      ".xm-hm.is-team .xm-hm-trend{margin-top:2px;font-size:10px}" +
+      ".xm-hm-team-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;min-height:0;padding:0 2px 2px}" +
+      ".xm-hm-team-head h2{margin:0;font-size:13px}" +
+      ".xm-hm-team-head p{margin:2px 0 0;color:var(--xm-muted);font-size:10px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}" +
+      ".xm-hm-team-head .xm-hm-set{padding:0;font-size:12px;white-space:nowrap}" +
       ".xm-hm-ladder{margin-top:4px}" +
       ".xm-hm-ladder h2{margin:16px 0 10px;font-size:16px}" +
       ".xm-hm-podiums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}" +
@@ -945,7 +946,7 @@
       ".xm-hm-pop h3{margin:0 0 8px;font-size:13px}" +
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{margin:8px 0 0;color:var(--xm-muted);font-size:12px}" +
-      "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}" +
+      "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(auto-fill,minmax(76px,1fr))}}" +
       "@media (max-width:1200px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
       "@media (max-width:700px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts,.xm-hm-team-kpis{grid-template-columns:1fr}.xm-hm-team-head{flex-direction:column}.xm-hm-cal-months{flex-direction:column}}"
     );
@@ -1010,7 +1011,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.379-home-netcost");
+    board.setAttribute("data-hm-js", "0.1.380-home-chiefsq");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
