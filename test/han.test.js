@@ -701,6 +701,7 @@ test("han schema uses prefixed tables", async () => {
   assert.match(sql, /\bspu VARCHAR/);
   assert.match(sql, /team_name/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_team_shops/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS han_shop_rules/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_paid/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_training/);
   assert.match(sql, /store_name/);
