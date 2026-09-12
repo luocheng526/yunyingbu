@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.387-home-coltip */
+/* xm-module-home 0.1.388-home-colw */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -484,6 +484,43 @@
   }
 
   var shopSort = { key: "", dir: "desc" };
+  var shopColW = {};
+
+  function teamTableKey(table) {
+    var box = table && table.closest && table.closest("[data-team]");
+    return box ? box.getAttribute("data-team") || "t" : "t";
+  }
+
+  function applyColW(table, idx, w) {
+    if (!table || !table.rows) {
+      return;
+    }
+    w = Math.max(48, Math.round(w));
+    var rows = table.rows;
+    for (var i = 0; i < rows.length; i += 1) {
+      var cell = rows[i].cells[idx];
+      if (cell) {
+        cell.style.width = w + "px";
+        cell.style.minWidth = w + "px";
+      }
+    }
+    var key = teamTableKey(table);
+    if (!shopColW[key]) {
+      shopColW[key] = [];
+    }
+    shopColW[key][idx] = w;
+  }
+
+  function restoreShopColW(root) {
+    Array.prototype.forEach.call(root.querySelectorAll(".xm-hm-teams .xm-hm-table"), function (table) {
+      var list = shopColW[teamTableKey(table)] || [];
+      for (var i = 0; i < list.length; i += 1) {
+        if (list[i]) {
+          applyColW(table, i, list[i]);
+        }
+      }
+    });
+  }
 
   function metricSortNum(text) {
     return text && text !== "—" ? asNum(String(text).replace(/%/g, "")) : null;
@@ -944,7 +981,7 @@
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border:0;box-shadow:none}" +
       ".xm-hm-teams .xm-hm-table{min-width:760px;font-variant-numeric:tabular-nums;border-collapse:separate;border-spacing:0;table-layout:fixed}" +
       ".xm-hm-teams .xm-hm-table .xm-hm-num{text-align:right;white-space:nowrap}" +
-      ".xm-hm-teams .xm-hm-table th,.xm-hm-teams .xm-hm-table td{border:0;border-right:1px dashed #c8ced8;overflow:hidden;text-overflow:ellipsis}" +
+      ".xm-hm-teams .xm-hm-table th,.xm-hm-teams .xm-hm-table td{border:0;border-right:1px dashed #c8ced8;border-bottom:0;overflow:hidden;text-overflow:ellipsis}" +
       ".xm-hm.is-chief .xm-hm-teams .xm-hm-panel{overflow:hidden}" +
       ".xm-hm.is-chief .xm-hm-teams .xm-hm-table{min-width:0}" +
       ".xm-hm-teams .xm-hm-table th.xm-hm-num{white-space:normal;max-width:6.4em;line-height:1.25}" +
@@ -1026,6 +1063,7 @@
       ".xm-hm-table th{text-align:left;color:var(--xm-muted);font-weight:500;padding:6px 4px;border-bottom:1px solid var(--xm-line)}" +
       ".xm-hm-table td{padding:7px 4px;border-bottom:1px solid var(--xm-line);color:var(--xm-ink)}" +
       ".xm-hm-table td:last-child,.xm-hm-table th:last-child{text-align:right}" +
+      ".xm-hm-teams .xm-hm-table th,.xm-hm-teams .xm-hm-table td{border-bottom:0;border-top:0}" +
       ".xm-hm-cup{display:inline-flex;width:18px;height:18px;border-radius:50%;align-items:center;justify-content:center;color:#fff;font-size:11px}" +
       ".xm-hm-cup.gold{background:#f5a623}" +
       ".xm-hm-cup.silver{background:#8c8c8c}" +
@@ -1097,7 +1135,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.387-home-coltip");
+    board.setAttribute("data-hm-js", "0.1.388-home-colw");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1113,6 +1151,7 @@
     root.querySelector("#xm-hm-teams").hidden = !teamView;
     root.querySelector("#xm-hm-teams").style.setProperty("--xm-hm-team-cols", String(Math.max(teams.length, 1)));
     root.querySelector("#xm-hm-teams").innerHTML = teamsCompareHtml(teams, teamHidden(hide), state.view === "chief");
+    restoreShopColW(root);
     root.querySelector("#xm-hm-live").hidden = state.view !== "live";
     root.querySelector("#xm-hm-board").hidden = state.view !== "board";
     root.querySelector("#xm-hm-live").innerHTML =
@@ -2352,26 +2391,14 @@
         var rect = cell.getBoundingClientRect();
         var x = event.clientX || 0;
         var last = cell.cellIndex >= cell.parentNode.cells.length - 1;
-        if (!last && rect.right - x <= 6) {
+        if (!last && rect.right - x <= 8) {
           return { table: cell.closest("table"), idx: cell.cellIndex, start: cell.offsetWidth, x: x };
         }
-        if (cell.cellIndex > 0 && x - rect.left <= 6) {
+        if (cell.cellIndex > 0 && x - rect.left <= 8) {
           var prev = cell.parentNode.cells[cell.cellIndex - 1];
           return { table: cell.closest("table"), idx: cell.cellIndex - 1, start: prev.offsetWidth, x: x };
         }
         return null;
-      }
-
-      function applyColW(table, idx, w) {
-        w = Math.max(48, Math.round(w));
-        var rows = table.rows;
-        for (var i = 0; i < rows.length; i += 1) {
-          var cell = rows[i].cells[idx];
-          if (cell) {
-            cell.style.width = w + "px";
-            cell.style.minWidth = w + "px";
-          }
-        }
       }
 
       function clearTextSelection() {
