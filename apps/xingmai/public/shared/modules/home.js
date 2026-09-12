@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.395-home-colmid */
+/* xm-module-home 0.1.396-home-oneset */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -596,8 +596,7 @@
       escapeHtml(team.key) +
       '"><div><h2>' +
       escapeHtml(team.name) +
-      "团队</h2><p>责权店对齐 ERP。</p></div>" +
-      '<button type="button" class="xm-hm-set">卡片设置</button></header>'
+      "团队</h2><p>责权店对齐 ERP。</p></div></header>"
     );
   }
 
@@ -667,7 +666,7 @@
   function teamsCompareHtml(teams, hide, simple) {
     var list = teams && teams.length ? teams : simple ? [] : blankTeams();
     return (
-      '<div class="xm-hm-teams-bar"><b>星脉甄选</b></div><div class="xm-hm-teams-grid">' +
+      '<div class="xm-hm-teams-bar"><b>星脉甄选</b><button type="button" class="xm-hm-set">卡片设置</button></div><div class="xm-hm-teams-grid">' +
       list
         .map(function (team) {
           return teamBlockHtml(team, hide, simple);
@@ -969,7 +968,7 @@
       ".xm-hm-teams-grid{display:grid;grid-template-columns:repeat(var(--xm-hm-team-cols,2),minmax(200px,1fr));gap:10px}" +
       ".xm-hm-team{display:flex;flex-direction:column;gap:8px;min-width:0;padding:8px}" +
       ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
-      ".xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}" +
+      ".xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:1fr;gap:6px}" +
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border:0;box-shadow:none}" +
       ".xm-hm-teams .xm-hm-table{min-width:760px;font-variant-numeric:tabular-nums;border-collapse:separate;border-spacing:0;table-layout:fixed}" +
       ".xm-hm-teams .xm-hm-table .xm-hm-num{text-align:center;white-space:nowrap}" +
@@ -989,18 +988,18 @@
       ".xm-hm.is-team .xm-hm-card-head .xm-hm-help{width:16px;height:16px;font-size:10px}" +
       ".xm-hm.is-team .xm-hm-value{margin-top:8px;font-size:20px}" +
       ".xm-hm.is-team .xm-hm-trend{margin-top:6px;font-size:12px}" +
-      ".xm-hm.is-chief .xm-hm-card{aspect-ratio:1/1;min-height:0;min-width:0;padding:6px;display:flex;flex-direction:column}" +
-      ".xm-hm.is-chief .xm-hm-card-head{font-size:10px;line-height:1.2;align-items:flex-start;gap:4px}" +
-      ".xm-hm.is-chief .xm-hm-card-head span{min-width:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3}" +
+      ".xm-hm.is-chief .xm-hm-card{min-height:0;min-width:0;padding:6px}" +
+      ".xm-hm.is-chief .xm-hm-card-head{font-size:10px;line-height:1.2;gap:4px}" +
+      ".xm-hm.is-chief .xm-hm-card-head span{min-width:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}" +
       ".xm-hm.is-chief .xm-hm-card-head .xm-hm-help{width:12px;height:12px;font-size:8px;flex:0 0 auto}" +
-      ".xm-hm.is-chief .xm-hm-value{margin-top:auto;font-size:13px}" +
+      ".xm-hm.is-chief .xm-hm-value{margin-top:4px;font-size:13px}" +
       ".xm-hm.is-chief .xm-hm-trend{margin-top:2px;font-size:10px}" +
       ".xm-hm-team-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;min-height:0;padding:0 2px 2px}" +
       ".xm-hm-team-head h2{margin:0;font-size:16px}" +
       ".xm-hm-team-head p{margin:2px 0 0;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm.is-chief .xm-hm-team-head h2{font-size:13px}" +
       ".xm-hm.is-chief .xm-hm-team-head p{font-size:10px}" +
-      ".xm-hm-team-head .xm-hm-set{padding:0;font-size:13px;white-space:nowrap}" +
+      ".xm-hm-teams-bar .xm-hm-set{padding:0;font-size:13px;white-space:nowrap}" +
       ".xm-hm-ladder{margin-top:4px}" +
       ".xm-hm-ladder h2{margin:16px 0 10px;font-size:16px}" +
       ".xm-hm-podiums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}" +
@@ -1066,7 +1065,7 @@
       ".xm-hm-pop h3{margin:0 0 8px;font-size:13px}" +
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{margin:8px 0 0;color:var(--xm-muted);font-size:12px}" +
-      "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}" +
+      "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:1fr}}" +
       "@media (max-width:1200px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
       "@media (max-width:700px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts,.xm-hm-team-kpis{grid-template-columns:1fr}.xm-hm-team-head{flex-direction:column}.xm-hm-cal-months{flex-direction:column}}"
     );
@@ -1122,7 +1121,7 @@
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.395-home-colmid");
+    board.setAttribute("data-hm-js", "0.1.396-home-oneset");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);

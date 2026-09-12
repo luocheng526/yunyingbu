@@ -46,8 +46,9 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.doesNotMatch(homeJs, /打开数据总览/);
   assert.doesNotMatch(homeJs, /打开运营中心/);
   assert.match(homeJs, /\.xm-hm-team-kpis\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
-  assert.match(homeJs, /\.xm-hm\.is-chief \.xm-hm-team-kpis\{grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
-  assert.match(homeJs, /\.xm-hm\.is-chief \.xm-hm-card\{aspect-ratio:1\/1/);
+  assert.match(homeJs, /\.xm-hm\.is-chief \.xm-hm-team-kpis\{grid-template-columns:1fr/);
+  assert.doesNotMatch(homeJs, /\.xm-hm\.is-chief \.xm-hm-card\{aspect-ratio:1\/1/);
+  assert.match(homeJs, /xm-hm-teams-bar"><b>星脉甄选<\/b><button type="button" class="xm-hm-set">卡片设置/);
   assert.match(homeJs, /classList\.toggle\("is-chief"/);
   assert.match(homeJs, /function filterOwnChiefs/);
   assert.match(homeJs, /function seesAllChiefs/);
@@ -113,7 +114,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.doesNotMatch(homeJs, /#5b9bd5/);
   assert.match(homeJs, /border-right:1px dashed #c8ced8/);
   assert.match(homeJs, /星脉甄选/);
-  assert.match(homeJs, /class="xm-hm-set">卡片设置<\/button><\/header>/);
+  assert.doesNotMatch(homeJs, /class="xm-hm-set">卡片设置<\/button><\/header>/);
+  assert.match(homeJs, /class="xm-hm-set" id="xm-hm-set">卡片设置<\/button><\/div>/);
   assert.match(homeJs, /xm-hm-kpis-shell/);
   assert.doesNotMatch(homeJs, /xm-hm-views">[\s\S]{0,120}卡片设置/);
   assert.doesNotMatch(homeJs, /<th>运营<\/th><th>实时销售额<\/th>/);
