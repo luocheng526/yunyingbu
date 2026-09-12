@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.394-home-colown */
+/* xm-module-home 0.1.395-home-colmid */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -972,14 +972,14 @@
       ".xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}" +
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border:0;box-shadow:none}" +
       ".xm-hm-teams .xm-hm-table{min-width:760px;font-variant-numeric:tabular-nums;border-collapse:separate;border-spacing:0;table-layout:fixed}" +
-      ".xm-hm-teams .xm-hm-table .xm-hm-num{text-align:right;white-space:nowrap}" +
-      ".xm-hm-teams .xm-hm-table th,.xm-hm-teams .xm-hm-table td{border:0;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box}" +
+      ".xm-hm-teams .xm-hm-table .xm-hm-num{text-align:center;white-space:nowrap}" +
+      ".xm-hm-teams .xm-hm-table th,.xm-hm-teams .xm-hm-table td{border:0;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;text-align:center}" +
       ".xm-hm-teams .xm-hm-table th{border-right:1px dashed #c8ced8}" +
       ".xm-hm.is-chief .xm-hm-teams .xm-hm-panel{overflow:hidden}" +
       ".xm-hm.is-chief .xm-hm-teams .xm-hm-table{min-width:0}" +
       ".xm-hm-teams .xm-hm-table th.xm-hm-num{white-space:normal;line-height:1.25}" +
-      ".xm-hm-teams .xm-hm-table th:last-child,.xm-hm-teams .xm-hm-table td:last-child{text-align:left;white-space:nowrap;border-right:0}" +
-      ".xm-hm-sort-h{display:inline-flex;align-items:center;justify-content:flex-end;gap:3px;width:100%}" +
+      ".xm-hm-teams .xm-hm-table th:last-child,.xm-hm-teams .xm-hm-table td:last-child{text-align:center;white-space:nowrap;border-right:0}" +
+      ".xm-hm-sort-h{display:inline-flex;align-items:center;justify-content:center;gap:3px;width:100%}" +
       ".xm-hm-sort-btns{display:inline-flex;flex-direction:column;line-height:1}" +
       ".xm-hm-sort-btns button{border:0;background:0;padding:0;font-size:9px;line-height:1;color:#c0c4cc;cursor:pointer}" +
       ".xm-hm-sort-btns button.is-on{color:#2f54eb}" +
@@ -1122,7 +1122,7 @@
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.394-home-colown");
+    board.setAttribute("data-hm-js", "0.1.395-home-colmid");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
