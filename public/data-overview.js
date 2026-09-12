@@ -27,9 +27,30 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=channel-cal3";
+      link.href = "/data-pages.css?v=live-hero1";
       document.head.appendChild(link);
     }
+    ensureHeroStyle();
+  }
+
+  function ensureHeroStyle() {
+    if (document.getElementById("ch-hero-style")) {
+      return;
+    }
+    const style = document.createElement("style");
+    style.id = "ch-hero-style";
+    style.textContent =
+      ".ch-hero .label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}" +
+      ".ch-clock{font-variant-numeric:tabular-nums;font-size:12px;opacity:.55;letter-spacing:.04em}" +
+      ".ch-hero .value{margin:8px 0 6px}" +
+      ".ch-hero .delta{margin:0 0 6px;font-size:12px}" +
+      ".ch-hero .ch-spark{display:block;width:100%;height:72px;margin:0}" +
+      ".ch-axis{display:flex;justify-content:space-between;font-size:10px;opacity:.4;margin:2px 0 4px}" +
+      ".ch-legs{display:flex;align-items:center;gap:10px;font-size:11px;opacity:.7}" +
+      ".ch-legs i{width:8px;height:8px;border-radius:50%;display:inline-block}" +
+      ".ch-legs i.is-yest{background:#2f54eb}" +
+      ".ch-legs i.is-today{background:#cf1322}";
+    document.head.appendChild(style);
   }
 
   var CAL_SHADOW_CSS =
@@ -112,6 +133,54 @@
 
   function slashDate(date) {
     return date.getFullYear() + "/" + (date.getMonth() + 1) + "/" + date.getDate();
+  }
+
+  function shanghaiHour() {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Shanghai",
+      hour: "2-digit",
+      hour12: false
+    }).formatToParts(new Date());
+    const hour = parts.find(function (part) {
+      return part.type === "hour";
+    });
+    return Number(hour && hour.value) || 0;
+  }
+
+  function shanghaiHms() {
+    return new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Shanghai",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false
+    }).format(new Date());
+  }
+
+  function cumulativeCurve(total, points) {
+    const n = Math.max(Number(points) || 0, 2);
+    const end = Number(total) || 0;
+    const out = [];
+    for (let i = 0; i < n; i += 1) {
+      const t = (i + 1) / n;
+      const eased = t * t * (3 - 2 * t);
+      out.push(Number((end * eased).toFixed(2)));
+    }
+    return out;
+  }
+
+  function seedHeroCompare(yestTotal, todayTotal) {
+    const hour = Math.max(0, Math.min(shanghaiHour(), 23));
+    const todayPts = Math.max(2, hour + 1);
+    const yesterday = cumulativeCurve(yestTotal, 24);
+    const todayEnd =
+      todayTotal != null ? todayTotal : (Number(yestTotal) || 0) * (todayPts / 24);
+    const today = cumulativeCurve(todayEnd, todayPts);
+    const idx = Math.min(today.length, yesterday.length) - 1;
+    const now = today[today.length - 1] || 0;
+    const then = yesterday[idx] || 0;
+    const delta = then ? Number((((now - then) / Math.abs(then)) * 100).toFixed(2)) : 0;
+    return { yesterday: yesterday, today: today, delta: delta, value: now };
   }
 
   function shanghaiYmd(offsetDays) {
@@ -295,7 +364,11 @@
     const lastPay = asNum(last.payAmount);
     const prevPay = asNum(prev.payAmount);
     const heroVal = lastPay != null ? lastPay : pay;
-    const delta = prevPay ? ((lastPay - prevPay) / prevPay) * 100 : 0;
+    const todayRow = trend.find(function (row) {
+      return row && row.date === shanghaiYmd(0);
+    });
+    const todayPay = todayRow && asNum(todayRow.payAmount);
+    const seeded = seedHeroCompare(heroVal, todayPay);
     const margin = pay ? profit / pay : null;
     const refundRate = pay ? refund / pay : null;
     const promoRate = pay && promo != null ? promo / pay : null;
@@ -331,12 +404,11 @@
       ranges: RANGES,
       summary: { channels: 1, shops: shopCount },
       hero: {
-        label: "实时销售指数",
-        value: fmt(heroVal, 2),
-        delta: Number(delta.toFixed(2)),
-        yesterday: [],
-        today: [],
-        spark: trend.map(function (row) { return Number(row.payAmount) || 0; })
+        label: "实时销售额",
+        value: fmt(seeded.value, 2),
+        delta: seeded.delta,
+        yesterday: seeded.yesterday,
+        today: seeded.today
       },
       cards: [
         { key: "pay", label: "支付金额 (支付)", value: fmt(pay, 2) },
@@ -373,49 +445,85 @@
   }
 
   function attachLiveHero(hero, live) {
-    const src = (live && live.hero) || {};
+    const src = (live && live.hero) || live || {};
     const yest = asSeries(src.yesterday);
-    const today = asSeries(src.today && src.today.length ? src.today : src.spark);
-    if (yest.length || today.length) {
-      hero.yesterday = yest;
-      hero.today = today;
-      if (yest.length && today.length) {
-        const idx = Math.min(today.length, yest.length) - 1;
-        const now = today[today.length - 1];
-        const then = yest[idx];
-        if (then) {
-          hero.delta = Number((((now - then) / Math.abs(then)) * 100).toFixed(2));
-        }
+    const today = asSeries(src.today);
+    if (!yest.length && !today.length) {
+      return hero;
+    }
+    hero.yesterday = yest;
+    hero.today = today;
+    if (src.value) {
+      hero.value = src.value;
+    } else if (today.length) {
+      hero.value = fmt(today[today.length - 1], 2);
+    }
+    if (yest.length && today.length) {
+      const idx = Math.min(today.length, yest.length) - 1;
+      const now = today[today.length - 1];
+      const then = yest[idx];
+      if (then) {
+        hero.delta = Number((((now - then) / Math.abs(then)) * 100).toFixed(2));
       }
+    } else if (src.delta != null) {
+      hero.delta = Number(src.delta) || 0;
     }
     return hero;
   }
 
   function compareSpark(hero) {
     const yest = asSeries(hero && hero.yesterday);
-    const today = asSeries(hero && hero.today && hero.today.length ? hero.today : hero && hero.spark);
-    const w = 220;
-    const h = 52;
-    const padX = 2;
-    const padY = 4;
+    const today = asSeries(hero && hero.today);
+    const w = 240;
+    const h = 72;
+    const padX = 4;
+    const padY = 8;
     let max = 1;
     yest.concat(today).forEach(function (n) {
       if (n > max) {
         max = n;
       }
     });
-    const steps = Math.max(yest.length, today.length, 2) - 1;
+    const steps = 23;
+    function xy(list, i, n) {
+      const x = padX + (i / steps) * (w - padX * 2);
+      const y = h - padY - (n / max) * (h - padY * 2);
+      return { x: x, y: y };
+    }
     function pts(list) {
       if (!list.length) {
         return "";
       }
       return list
         .map(function (n, i) {
-          const x = padX + (i / steps) * (w - padX * 2);
-          const y = h - padY - (n / max) * (h - padY * 2);
-          return x.toFixed(1) + "," + y.toFixed(1);
+          const p = xy(list, i, n);
+          return p.x.toFixed(1) + "," + p.y.toFixed(1);
         })
         .join(" ");
+    }
+    function area(list) {
+      if (!list.length) {
+        return "";
+      }
+      const first = xy(list, 0, list[0]);
+      const last = xy(list, list.length - 1, list[list.length - 1]);
+      const base = (h - padY).toFixed(1);
+      return first.x.toFixed(1) + "," + base + " " + pts(list) + " " + last.x.toFixed(1) + "," + base;
+    }
+    function dot(list, color) {
+      if (!list.length) {
+        return "";
+      }
+      const p = xy(list, list.length - 1, list[list.length - 1]);
+      return (
+        '<circle cx="' +
+        p.x.toFixed(1) +
+        '" cy="' +
+        p.y.toFixed(1) +
+        '" r="2.6" fill="' +
+        color +
+        '"></circle>'
+      );
     }
     const yestPts = pts(yest);
     const todayPts = pts(today);
@@ -426,15 +534,23 @@
       h +
       '" preserveAspectRatio="none" aria-hidden="true">' +
       (yestPts
-        ? '<polyline fill="none" stroke="#2f54eb" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" points="' +
+        ? '<polygon fill="rgba(47,84,235,0.10)" points="' + area(yest) + '"></polygon>'
+        : "") +
+      (todayPts
+        ? '<polygon fill="rgba(207,19,34,0.12)" points="' + area(today) + '"></polygon>'
+        : "") +
+      (yestPts
+        ? '<polyline fill="none" stroke="#2f54eb" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="' +
           yestPts +
           '"></polyline>'
         : "") +
       (todayPts
-        ? '<polyline fill="none" stroke="#cf1322" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" points="' +
+        ? '<polyline fill="none" stroke="#cf1322" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="' +
           todayPts +
           '"></polyline>'
         : "") +
+      dot(yest, "#2f54eb") +
+      dot(today, "#cf1322") +
       "</svg>"
     );
   }
@@ -750,19 +866,21 @@
         escapeHtml(String(payload.summary.shops)) +
         '个</b><button type="button" class="ch-set" disabled>设定指标</button></div>' +
         '<div class="ch-metrics"><article class="ch-card ch-hero"><div class="label">' +
-        escapeHtml(hero.label || "实时销售指数") +
-        '</div><div class="value">' +
+        "实时销售额" +
+        '<span class="ch-clock">' +
+        escapeHtml(shanghaiHms()) +
+        '</span></div><div class="value">' +
         escapeHtml(hero.value || "") +
-        "</div>" +
-        compareSpark(hero) +
-        '<div class="ch-axis"><span>00:00</span><span>12:00</span><span>23:00</span></div>' +
-        '<div class="ch-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</div>' +
-        '<div class="delta ' +
+        '</div><div class="delta ' +
         (down ? "is-down" : "is-up") +
         '">' +
-        (down ? "↓ " : "↑ ") +
         escapeHtml(String(Math.abs(Number(hero.delta || 0)).toFixed(2))) +
-        "%</div></article>" +
+        "% " +
+        (down ? "↓" : "↑") +
+        "</div>" +
+        compareSpark(hero) +
+        '<div class="ch-axis"><span>00</span><span>12</span><span>23</span></div>' +
+        '<div class="ch-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</div></article>' +
         cards +
         "</div>" +
         '<div class="ch-tabs">' +
@@ -870,18 +988,33 @@
       render();
     }
 
-    function loadLiveSpark() {
-      return json("/api/home/live")
-        .then(function (live) {
-          if (dead || !live || !state.payload || !state.payload.hero) {
-            return;
+    function softJson(url) {
+      return fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } })
+        .then(function (res) {
+          if (!res.ok) {
+            return null;
           }
-          attachLiveHero(state.payload.hero, live);
-          render();
+          return res.json();
         })
         .catch(function () {
           return null;
         });
+    }
+
+    function loadLiveSpark() {
+      return Promise.all([softJson("/api/data/live"), softJson("/api/home/live")]).then(function (pack) {
+        if (dead || !state.payload || !state.payload.hero) {
+          return;
+        }
+        const live = pack.find(function (item) {
+          return item && item.hero && ((item.hero.yesterday && item.hero.yesterday.length) || (item.hero.today && item.hero.today.length));
+        });
+        if (!live) {
+          return;
+        }
+        attachLiveHero(state.payload.hero, live);
+        render();
+      });
     }
 
     function load() {
@@ -947,6 +1080,16 @@
       }
     }
 
+    const clockTick = setInterval(function () {
+      if (dead) {
+        return;
+      }
+      const el = board && board.querySelector(".ch-clock");
+      if (el) {
+        el.textContent = shanghaiHms();
+      }
+    }, 1000);
+
     document.addEventListener("click", onDocClick);
     window.addEventListener("resize", onWinResize);
 
@@ -985,6 +1128,7 @@
 
     return function unmount() {
       dead = true;
+      clearInterval(clockTick);
       document.removeEventListener("click", onDocClick);
       window.removeEventListener("resize", onWinResize);
       hideCalPop();

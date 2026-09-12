@@ -146,14 +146,17 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /请选择店铺/);
     assert.match(overviewJs.text, /个人默认视图/);
     assert.match(overviewJs.text, /\/api\/data\/overview/);
-    assert.match(overviewJs.text, /实时销售指数/);
+    assert.match(overviewJs.text, /实时销售额/);
     assert.match(overviewJs.text, /range: "日"/);
     assert.match(overviewJs.text, /pickYesterdayRow/);
     assert.match(overviewJs.text, /Asia\/Shanghai/);
     assert.match(overviewJs.text, /\/api\/home\/live/);
+    assert.match(overviewJs.text, /\/api\/data\/live/);
     assert.match(overviewJs.text, /正在加载渠道总览/);
     assert.match(overviewJs.text, /paintErp/);
     assert.match(overviewJs.text, /loadLiveSpark/);
+    assert.match(overviewJs.text, /seedHeroCompare/);
+    assert.match(overviewJs.text, /ch-clock/);
     assert.doesNotMatch(overviewJs.text, /live-demo\.json/);
     assert.match(overviewJs.text, /#2f54eb/);
     assert.match(overviewJs.text, /#cf1322/);
@@ -510,7 +513,7 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /\/data\/paid/);
   assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
   assert.match(dataMod, /restore-v1/);
-  assert.match(dataMod, /data-overview\.js\?v=channel-cal3/);
+  assert.match(dataMod, /data-overview\.js\?v=live-hero1/);
   assert.match(css, /ch-cal-days/);
   assert.match(css, /ch-cal-pop/);
   assert.match(dataMod, /正在加载渠道总览/);
