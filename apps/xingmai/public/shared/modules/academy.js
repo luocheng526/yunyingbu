@@ -638,7 +638,7 @@
           } else if (!courseItems.length) {
             box.insertAdjacentHTML(
               "beforeend",
-              '<p class="academy-empty academy-course-empty">还没有课件。到「文件上传」导入 PPTX。</p>'
+              '<p class="academy-empty academy-course-empty">还没有课件。到「文件上传」导入 PPTX，不提供原件下载。</p>'
             );
           }
           const select = root.querySelector("#academy-course-folder-select");
