@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.345-home-cards */
+/* xm-module-home 0.1.346-home-erp-kpis */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -999,7 +999,7 @@
             : "团队店按人管责权，数字只按店铺id对齐 ERP。")
           : state.view === "board"
             ? "排行榜按人管职务和责权店，只按店铺id对齐 ERP 后汇总支付金额 / 利润。"
-            : "数字来自数据中心 ERP，已取消演示数。平台费用、销售费用、总货款、无效订单、京东仓无接口，显示 —。";
+            : "数字来自星脉 ERP 店铺汇总。净销售额按支付金额减退款。";
     var user = state.user && (state.user.displayName || state.user.username);
     var mark = user || "星脉";
     root.querySelector("#xm-hm-mark").innerHTML = new Array(18)
@@ -1042,15 +1042,15 @@
     { key: "profit", label: "利润 (支付预估)", field: "profit", kind: "money" },
     { key: "payQty", label: "销售单数 (支付)", field: "orderCount", kind: "int" },
     { key: "grossMargin", label: "大毛利率", field: "profitRate", kind: "rate" },
-    { key: "platformFee", label: "平台花费 (支付预估)", field: "", kind: "none" },
-    { key: "saleFee", label: "销售费用 (支付预估)", field: "", kind: "none" },
-    { key: "goodsCost", label: "总货款成本", field: "", kind: "none" },
-    { key: "invalid", label: "无效单金额", field: "", kind: "none" },
+    { key: "platformFee", label: "平台花费 (支付预估)", field: "platformFee", kind: "money" },
+    { key: "saleFee", label: "销售费用 (支付预估)", field: "saleFee", kind: "money" },
+    { key: "goodsCost", label: "总货款成本", field: "goodsCost", kind: "money" },
+    { key: "invalid", label: "无效单金额", field: "invalidAmount", kind: "money" },
     { key: "netSales", label: "净销售额 (支付)", field: "netSales", kind: "money" },
-    { key: "jdOrders", label: "京仓订单数量", field: "", kind: "none" },
-    { key: "jdRatio", label: "京仓订单占比", field: "", kind: "none" },
-    { key: "netQty", label: "净销售件数 (支付)", field: "", kind: "none" },
-    { key: "netGoodsCost", label: "净货款成本 (支付)", field: "", kind: "none" }
+    { key: "jdOrders", label: "京仓订单数量", field: "jdOrders", kind: "int" },
+    { key: "jdRatio", label: "京仓订单占比", field: "jdRatio", kind: "rate" },
+    { key: "netQty", label: "净销售件数 (支付)", field: "netSkuNum", kind: "int" },
+    { key: "netGoodsCost", label: "净货款成本 (支付)", field: "netGoodsCost", kind: "money" }
   ];
 
   function asNum(value) {
@@ -1126,7 +1126,15 @@
       profitRate: sum.profitRate,
       promotionRate: sum.promotionRate,
       refundRate: sum.refundRate,
-      netSales: null
+      platformFee: sum.platformFee,
+      saleFee: sum.saleFee,
+      goodsCost: sum.goodsCost,
+      invalidAmount: sum.invalidAmount,
+      jdOrders: sum.jdOrders,
+      jdRatio: sum.jdRatio,
+      netSkuNum: sum.netSkuNum,
+      netGoodsCost: sum.netGoodsCost,
+      netSales: sum.netSales != null ? sum.netSales : null
     };
     if (next.payAmount != null) {
       if (next.profit != null && next.profitRate == null) {
@@ -1157,7 +1165,14 @@
       orderCount: sumField(pack && pack.records, "orderCount"),
       netOrderCount: sumField(pack && pack.records, "netOrderCount"),
       todayPayAmount: sumField(pack && pack.records, "todayPayAmount"),
-      yesterdayPayAmount: sumField(pack && pack.records, "yesterdayPayAmount")
+      yesterdayPayAmount: sumField(pack && pack.records, "yesterdayPayAmount"),
+      platformFee: sumField(pack && pack.records, "platformFee"),
+      saleFee: sumField(pack && pack.records, "saleFee"),
+      goodsCost: sumField(pack && pack.records, "goodsCost"),
+      invalidAmount: sumField(pack && pack.records, "invalidAmount"),
+      jdOrders: sumField(pack && pack.records, "jdOrders"),
+      netSkuNum: sumField(pack && pack.records, "netSkuNum"),
+      netGoodsCost: sumField(pack && pack.records, "netGoodsCost")
     });
   }
 
@@ -1320,6 +1335,12 @@
         sum[card.key] = card.value;
       }
     });
+    if (sum.totalPromotionCost == null) {
+      sum.totalPromotionCost = sumField(data && data.trend, "promotionCost");
+    }
+    if (sum.totalPromotionCost == null) {
+      sum.totalPromotionCost = sumField(data && data.shops, "totalPromotionCost");
+    }
     return withRates(sum);
   }
 
@@ -1349,15 +1370,23 @@
 
   function fetchRangePack(from, to) {
     var qs = erpQuery(from, to);
-    return api("/api/data/shops?pageSize=1&pageNum=1&currentPage=1&" + qs).then(function (probe) {
-      var row = probe && probe.records && probe.records[0];
-      if (row && (row.payAmount != null || row.totalPromotionCost != null || row.profit != null)) {
-        return fetchShopPages(qs).then(function (pack) {
-          pack.records = withShopIds(pack.records);
-          return pack;
-        });
+    return api("/api/home/erp-kpis?" + qs).then(function (homePack) {
+      if (homePack && homePack.ok && homePack.summary && homePack.summary.payAmount != null) {
+        return {
+          records: withShopIds(homePack.records || []),
+          summary: withRates(homePack.summary)
+        };
       }
-      return fetchOverviewPack(from, to);
+      return api("/api/data/shops?pageSize=1&pageNum=1&currentPage=1&" + qs).then(function (probe) {
+        var row = probe && probe.records && probe.records[0];
+        if (row && (row.payAmount != null || row.totalPromotionCost != null || row.profit != null)) {
+          return fetchShopPages(qs).then(function (pack) {
+            pack.records = withShopIds(pack.records);
+            return pack;
+          });
+        }
+        return fetchOverviewPack(from, to);
+      });
     });
   }
 
