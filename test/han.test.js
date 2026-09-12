@@ -4,7 +4,7 @@ import test from "node:test";
 import { createApp } from "../src/app.js";
 import { createHanStore, dropProbeTasks, hydrateFromMysql, matchOrgStoresForTeam, mergeTeamShops, buildProductCsv, parseProductCsv, classifyProduct, HAN_DEFAULT_OWNER, HAN_DEFAULT_STORE } from "../src/modules/han/store.js";
 import { createHanFakePool } from "./han-fake-pool.js";
-import { makeMinimalXlsx, parseOverviewFilename, parseOverviewWorkbook, headerKey } from "../src/modules/han/import-file.js";
+import { makeMinimalXlsx, parseOverviewFilename, parseOverviewWorkbook, headerKey, paidHeaderKey, parsePaidWorkbook } from "../src/modules/han/import-file.js";
 
 async function withServer(fn) {
   const hanStore = createHanStore(createHanFakePool());
@@ -499,6 +499,9 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /\/api\/han\/selection/);
   assert.match(js, /\/api\/han\/products/);
   assert.match(js, /\/api\/han\/paid/);
+  assert.match(js, /\/api\/han\/paid\/import-file/);
+  assert.match(js, /上传抓取表/);
+  assert.match(js, /id="han-paid-import"/);
   assert.match(js, /\/api\/han\/training/);
   assert.match(js, /店/);
   assert.match(js, /培训系统/);
@@ -812,6 +815,44 @@ test("POST /api/han/products/import-file reads 商品总览 xlsx", async () => {
     assert.equal(body.ok, true);
     assert.equal(body.created[0].layer, "头部产品");
     assert.equal(body.created[0].spu, "SPU-A");
+  });
+});
+
+test("采集中心付费表头能识别并导入", async () => {
+  assert.equal(paidHeaderKey("精准通总花费"), "amount");
+  assert.equal(paidHeaderKey("店铺账号"), "store");
+  assert.equal(paidHeaderKey("采集时间"), "spentOn");
+  const csv = parsePaidWorkbook("店铺,精准通总花费,采集时间\n护肤健康旗舰店,12458.45,2026-09-12\n", "paid.csv");
+  assert.equal(csv.items[0].store, "护肤健康旗舰店");
+  assert.equal(csv.items[0].channel, "精准通");
+  assert.equal(csv.items[0].amount, "12458.45");
+  const buf = makeMinimalXlsx([
+    ["店铺", "成交金额", "精准通总花费", "采集时间"],
+    ["RASW个护健康旗舰店", 0, 12458.45, "2026-09-12"],
+  ]);
+  const parsed = parsePaidWorkbook(buf, "collector.xlsx");
+  assert.equal(parsed.items[0].store, "RASW个护健康旗舰店");
+  assert.equal(parsed.items[0].note, "成交金额 0");
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/api/han/paid/import-file?filename=${encodeURIComponent("collector.xlsx")}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: buf,
+    });
+    const body = await res.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.created.length, 1);
+    assert.equal(body.created[0].store, "RASW个护健康旗舰店");
+    const listed = await json(base, "/api/han/paid");
+    assert.equal(listed.body.items.length, 1);
+    const again = await fetch(`${base}/api/han/paid/import-file?filename=${encodeURIComponent("collector.xlsx")}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: buf,
+    });
+    const dup = await again.json();
+    assert.equal(dup.created.length, 0);
+    assert.equal(dup.skipped, 1);
   });
 });
 

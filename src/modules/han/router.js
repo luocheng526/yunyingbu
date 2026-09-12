@@ -294,6 +294,50 @@ export function createHanRouter(store = createHanStore()) {
     }
   });
 
+  hanRouter.get("/paid.csv", (_req, res) => {
+    const csv = "\uFEFF店铺,渠道,金额,日期,备注\n护肤健康旗舰店,精准通,1200.00,2026-09-12,采集导入";
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="han-paid-template.csv"');
+    res.send(csv);
+  });
+
+  hanRouter.post("/paid/import", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const result = await store.importPaid({
+        items: body.items,
+        csv: body.csv,
+      });
+      res.status(result.created.length ? 201 : 200).json({ ok: true, ...result });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({
+        ok: false,
+        error: err.message,
+        headers: err.headers || [],
+      });
+    }
+  });
+
+  hanRouter.post(
+    "/paid/import-file",
+    express.raw({ type: () => true, limit: "12mb" }),
+    async (req, res) => {
+      try {
+        const result = await store.importPaid({
+          file: req.body,
+          filename: String(req.query.filename || req.get("x-filename") || ""),
+        });
+        res.status(result.created.length ? 201 : 200).json({ ok: true, ...result });
+      } catch (err) {
+        res.status(err.statusCode || 500).json({
+          ok: false,
+          error: err.message,
+          headers: err.headers || [],
+        });
+      }
+    },
+  );
+
   hanRouter.get("/training", async (_req, res) => {
     try {
       res.json({ ok: true, items: await store.listTraining() });
