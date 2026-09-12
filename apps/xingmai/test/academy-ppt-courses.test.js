@@ -137,13 +137,22 @@ test("course title keyboard fallback inserts, replaces, and deletes text", () =>
   const end = js.indexOf("  function examUploadPaneHtml", start);
   assert.ok(start >= 0 && end > start);
   const listeners = {};
+  const listenerCounts = {};
   const inputEvents = [];
+  const attributes = {};
   const input = {
     value: "",
     selectionStart: 0,
     selectionEnd: 0,
     addEventListener(type, handler) {
       listeners[type] = handler;
+      listenerCounts[type] = (listenerCounts[type] || 0) + 1;
+    },
+    getAttribute(name) {
+      return attributes[name] || null;
+    },
+    setAttribute(name, value) {
+      attributes[name] = value;
     },
     setRangeText(text, from, to) {
       this.value = this.value.slice(0, from) + text + this.value.slice(to);
@@ -161,10 +170,14 @@ test("course title keyboard fallback inserts, replaces, and deletes text", () =>
     },
     window: { setTimeout: (fn) => fn() }
   };
-  vm.runInNewContext(`${js.slice(start, end)}; installTitleKeyboardFallback(input);`, {
+  vm.runInNewContext(
+    `${js.slice(start, end)}; installTitleKeyboardFallback(input); installTitleKeyboardFallback(input);`,
+    {
     ...context,
     input
-  });
+    }
+  );
+  assert.deepEqual(listenerCounts, { beforeinput: 1, compositionstart: 1, compositionend: 1, keydown: 1 });
   function key(key, extra = {}) {
     let prevented = false;
     listeners.keydown({
@@ -214,12 +227,19 @@ test("course title keyboard fallback restores missing IME composition text", () 
   const start = js.indexOf("  function replaceTitleSelection");
   const end = js.indexOf("  function examUploadPaneHtml", start);
   const listeners = {};
+  const attributes = {};
   const input = {
     value: "培训",
     selectionStart: 2,
     selectionEnd: 2,
     addEventListener(type, handler) {
       listeners[type] = handler;
+    },
+    getAttribute(name) {
+      return attributes[name] || null;
+    },
+    setAttribute(name, value) {
+      attributes[name] = value;
     },
     setRangeText(text, from, to) {
       this.value = this.value.slice(0, from) + text + this.value.slice(to);
@@ -235,6 +255,15 @@ test("course title keyboard fallback restores missing IME composition text", () 
   listeners.compositionstart();
   listeners.compositionend({ data: "模板" });
   assert.equal(input.value, "培训模板");
+});
+
+test("dynamic course submenu inputs are bound after every render and on focus", () => {
+  assert.match(js, /installTitleKeyboardFallbacks\(box\)/);
+  assert.match(js, /courseTree\.addEventListener\("focusin"/);
+  assert.match(js, /installTitleKeyboardFallbacks\(ev\.target\)/);
+  assert.match(js, /data-title-keyboard-ready/);
+  assert.match(js, /function directCourseSubForm/);
+  assert.doesNotMatch(js, /querySelector\(":scope > \.academy-course-sub-form"\)/);
 });
 
 test("plan is live; old ppt is rejected", async () => {

@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.466 · course-folder-input */
+/* xm-module-academy 0.1.467 · dynamic-course-folder-input */
 (function () {
-  const ASSET_VER = "0.1.466";
+  const ASSET_VER = "0.1.467";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -323,6 +323,10 @@
   }
 
   function installTitleKeyboardFallback(input) {
+    if (!input || input.getAttribute("data-title-keyboard-ready") === "1") {
+      return;
+    }
+    input.setAttribute("data-title-keyboard-ready", "1");
     let composing = false;
     let compositionValue = "";
     let compositionStart = 0;
@@ -395,6 +399,19 @@
         ev.preventDefault();
         replaceTitleSelection(input, "", start, start === end ? Math.min(input.value.length, end + 1) : end);
       }
+    });
+  }
+
+  function installTitleKeyboardFallbacks(scope) {
+    if (!scope) {
+      return;
+    }
+    if (scope.matches && scope.matches(".academy-course-sub-form input")) {
+      installTitleKeyboardFallback(scope);
+      return;
+    }
+    scope.querySelectorAll(".academy-course-sub-form input").forEach(function (input) {
+      installTitleKeyboardFallback(input);
     });
   }
 
@@ -679,6 +696,12 @@
             .join("");
         }
 
+        function directCourseSubForm(group) {
+          return Array.prototype.find.call(group ? group.children : [], function (child) {
+            return child.classList && child.classList.contains("academy-course-sub-form");
+          });
+        }
+
         function renderList(items, folders) {
           const box = root.querySelector("#academy-course-list");
           courseItems = items || [];
@@ -713,9 +736,7 @@
           if (addGroup) {
             addGroup.hidden = !courseEditor;
           }
-          root.querySelectorAll(".academy-course-sub-form input").forEach(function (input) {
-            installTitleKeyboardFallback(input);
-          });
+          installTitleKeyboardFallbacks(box);
         }
 
         function loadList() {
@@ -938,7 +959,7 @@
             ev.preventDefault();
             ev.stopPropagation();
             const group = add.closest(".academy-course-folder");
-            const form = group && group.querySelector(":scope > .academy-course-sub-form");
+            const form = directCourseSubForm(group);
             // #region agent log
             agentDebugLog({
               hypothesisId: "B",
@@ -951,6 +972,7 @@
               form.hidden = !form.hidden;
               const input = form.querySelector("input");
               if (!form.hidden && input) {
+                installTitleKeyboardFallback(input);
                 input.focus();
                 // #region agent log
                 agentDebugLog({
@@ -1058,6 +1080,9 @@
         }
 
         const courseTree = root.querySelector("#academy-course-list");
+        courseTree.addEventListener("focusin", function (ev) {
+          installTitleKeyboardFallbacks(ev.target);
+        });
         courseTree.addEventListener("dragstart", function (ev) {
           if (!courseEditor || ev.target.closest("form") || ev.target.closest("[data-course-add]")) {
             ev.preventDefault();
