@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.377-home-norange */
+/* xm-module-home 0.1.378-home-shopkpi */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -476,13 +476,38 @@
     );
   }
 
-  function shopRowHtml(row, index) {
+  function shopColLabel(def) {
+    return String(def.label || "").replace(/\s*\([^)]*\)\s*/g, "").replace(/\s+/g, "");
+  }
+
+  function shopCols(hide) {
+    return orderedDefs().filter(function (def) {
+      return (hide || []).indexOf(def.key) === -1;
+    });
+  }
+
+  function shopMetricsFrom(row) {
+    var out = {};
+    companyCardsFrom(row ? withRates(row) : {}, {}).forEach(function (card) {
+      out[card.key] = card.value;
+    });
+    return out;
+  }
+
+  function shopRowHtml(row, index, cols) {
+    var metrics = row.metrics || {};
     return (
       "<tr><td>" +
       rankMark(index) +
       "</td><td>" +
       escapeHtml(row.shop) +
-      "</td><td>" +
+      "</td>" +
+      (cols || [])
+        .map(function (def) {
+          return '<td class="xm-hm-num">' + escapeHtml(metrics[def.key] || "—") + "</td>";
+        })
+        .join("") +
+      "<td>" +
       escapeHtml(row.owner || "—") +
       "</td></tr>"
     );
@@ -499,18 +524,27 @@
     );
   }
 
-  function teamShopsHtml(team) {
+  function teamShopsHtml(team, hide) {
     var shops = team.shops || [];
+    var cols = shopCols(hide);
     return (
       '<div class="xm-hm-panel" data-team="' +
       escapeHtml(team.key) +
       '"><h2>责权店铺 <span>' +
       shops.length +
       " 店</span></h2>" +
-      '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th><th>运营</th></tr></thead><tbody>' +
-      shops.map(function (row, i) {
-        return shopRowHtml(row, i);
-      }).join("") +
+      '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th>' +
+      cols
+        .map(function (def) {
+          return '<th class="xm-hm-num" data-shop-card="' + escapeHtml(def.key) + '">' + escapeHtml(shopColLabel(def)) + "</th>";
+        })
+        .join("") +
+      "<th>运营</th></tr></thead><tbody>" +
+      shops
+        .map(function (row, i) {
+          return shopRowHtml(row, i, cols);
+        })
+        .join("") +
       "</tbody></table></div>"
     );
   }
@@ -531,7 +565,7 @@
         })
         .join("") +
       "</div>" +
-      teamShopsHtml(team) +
+      teamShopsHtml(team, hide) +
       "</section>"
     );
   }
@@ -634,33 +668,6 @@
         return card.key === key;
       })[0];
     }).filter(Boolean);
-  }
-
-  function hasVal(value) {
-    return value != null && String(value) !== "" && String(value) !== "—";
-  }
-
-  function fillLiveShopFields(rows, fallbackRows) {
-    var map = {};
-    (fallbackRows || []).forEach(function (row) {
-      map[row.shop] = row;
-    });
-    return (rows || []).map(function (row) {
-      var fb = map[row.shop] || {};
-      return {
-        shop: row.shop,
-        owner: row.owner || fb.owner || "",
-        liveAmount: hasVal(row.liveAmount) ? row.liveAmount : fb.liveAmount || "—",
-        orders: hasVal(row.orders) ? row.orders : fb.orders || "—",
-        payAmount: hasVal(row.payAmount) ? row.payAmount : fb.payAmount || "—",
-        refundRate: hasVal(row.refundRate) ? row.refundRate : fb.refundRate || "—",
-        paidAmount: hasVal(row.paidAmount) ? row.paidAmount : fb.paidAmount || "—",
-        profit: hasVal(row.profit) ? row.profit : fb.profit || "—",
-        roi: hasVal(row.roi) ? row.roi : fb.roi || "—",
-        paidDeal: hasVal(row.paidDeal) ? row.paidDeal : fb.paidDeal || "—",
-        feeRate: hasVal(row.feeRate) ? row.feeRate : fb.feeRate || "—"
-      };
-    });
   }
 
   function readChart(chart, fallback) {
@@ -777,96 +784,6 @@
     );
   }
 
-  function readShopRows(payload) {
-    var table = payload && payload.shopTable;
-    var rows = (table && table.rows) || payload.rows || [];
-    return rows
-      .filter(function (row) {
-        var name = row.name || row.shop || "";
-        return name && name !== "当页汇总" && row.kind !== "sum";
-      })
-      .map(function (row) {
-        var cells = row.cells || [];
-        return {
-          shop: row.name || row.shop,
-          liveAmount: cells[0] || row.liveAmount || row.amount || "—",
-          orders: cells[2] || row.orders || "—",
-          payAmount: cells[4] || row.payAmount || "—",
-          refundRate: cells[7] || row.refundRate || "—",
-          paidAmount: row.paidAmount || row.livePaid || "—",
-          profit: row.liveProfit || row.profit || "—",
-          roi: row.liveRoi || row.roi || "—",
-          paidDeal: row.paidDeal || row.livePay || "—",
-          feeRate: row.feeRate || row.liveFee || "—"
-        };
-      });
-  }
-
-  function assignTeam(pack, name) {
-    var text = String(pack || "") + String(name || "");
-    if (text.indexOf("韩梦凯") !== -1) {
-      return "han";
-    }
-    if (text.indexOf("沈子晗") !== -1) {
-      return "shen";
-    }
-    return "";
-  }
-
-  function overlayShopMetrics(shops, liveRows) {
-    var map = {};
-    (liveRows || []).forEach(function (row) {
-      map[row.shop] = row;
-    });
-    return (shops || []).map(function (row) {
-      var live = map[row.shop];
-      if (!live) {
-        return row;
-      }
-      return {
-        shop: row.shop,
-        owner: row.owner || live.owner || "—",
-        liveAmount: live.liveAmount || row.liveAmount,
-        orders: live.orders || row.orders,
-        payAmount: live.payAmount || row.payAmount,
-        refundRate: live.refundRate || row.refundRate
-      };
-    });
-  }
-
-  function mergePeopleShops(teams, peoplePayload) {
-    var shops = (peoplePayload && peoplePayload.shops) || [];
-    shops.forEach(function (shop) {
-      if (!shop || shop.kind === "店群") {
-        return;
-      }
-      var key = assignTeam(shop.pack, shop.name);
-      if (!key) {
-        return;
-      }
-      var team = teams.filter(function (item) {
-        return item.key === key;
-      })[0];
-      if (!team) {
-        return;
-      }
-      var exists = (team.shops || []).some(function (row) {
-        return row.shop === shop.name;
-      });
-      if (!exists) {
-        team.shops.push({
-          shop: shop.name,
-          owner: team.name,
-          liveAmount: "—",
-          orders: "—",
-          payAmount: "—",
-          refundRate: "—"
-        });
-      }
-    });
-    return teams;
-  }
-
   function mergeLive(target, payload) {
     if (!payload || payload.ok === false) {
       return target;
@@ -948,6 +865,10 @@
       ".xm-hm-team{display:flex;flex-direction:column;gap:10px;min-width:0;padding:12px 12px 10px}" +
       ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start}" +
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border:0;box-shadow:none}" +
+      ".xm-hm-teams .xm-hm-table{min-width:1280px;font-variant-numeric:tabular-nums}" +
+      ".xm-hm-teams .xm-hm-table .xm-hm-num{text-align:right;white-space:nowrap}" +
+      ".xm-hm-teams .xm-hm-table th.xm-hm-num{white-space:normal;max-width:4.8em;line-height:1.25}" +
+      ".xm-hm-teams .xm-hm-table th:last-child,.xm-hm-teams .xm-hm-table td:last-child{text-align:left;white-space:nowrap}" +
       ".xm-hm.is-team .xm-hm-card{min-height:104px;padding:12px 12px 10px;border-radius:8px;cursor:grab}" +
       ".xm-hm.is-team .xm-hm-card.is-hold{cursor:grabbing}" +
       ".xm-hm.is-team .xm-hm-card-head{font-size:12px}" +
@@ -1089,7 +1010,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.377-home-norange");
+    board.setAttribute("data-hm-js", "0.1.378-home-shopkpi");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1933,6 +1854,14 @@
       var matched = [];
       var prevMatched = [];
       var seen = {};
+      function pushShop(label, owner, erpRow, pay) {
+        rows.push({
+          shop: label,
+          owner: owner,
+          metrics: shopMetricsFrom(erpRow),
+          _pay: pay
+        });
+      }
       shops.forEach(function (shop) {
         if (!pred(shop)) {
           return;
@@ -1942,14 +1871,7 @@
         var owner = (shop.owner && String(shop.owner).trim()) || ownerOfShop(shop, grants);
         if (!id) {
           mismatches.push(name + " · " + label + "（人管有店，未填店铺id，店名也对不上 ERP）");
-          rows.push({
-            shop: label,
-            owner: owner,
-            liveAmount: "—",
-            orders: "—",
-            payAmount: "—",
-            refundRate: "—"
-          });
+          pushShop(label, owner, null, -1);
           return;
         }
         var erpRow = erp[id];
@@ -1957,14 +1879,7 @@
           if (!catalog[id]) {
             mismatches.push(name + " · " + label + "（人管有店，ERP 无此店铺id）");
           }
-          rows.push({
-            shop: label,
-            owner: owner,
-            liveAmount: "—",
-            orders: "—",
-            payAmount: catalog[id] ? fmtMoney(0) : "—",
-            refundRate: "—"
-          });
+          pushShop(label, owner, catalog[id] ? { payAmount: 0 } : null, catalog[id] ? 0 : -1);
           return;
         }
         if (!seen[id]) {
@@ -1974,17 +1889,10 @@
             prevMatched.push(prevErp[id]);
           }
         }
-        rows.push({
-          shop: label,
-          owner: owner,
-          liveAmount: fmtMoney(erpRow.todayPayAmount),
-          orders: fmtInt(erpRow.orderCount),
-          payAmount: fmtMoney(erpRow.payAmount),
-          refundRate: fmtRate(erpRow.refundRate)
-        });
+        pushShop(label, owner, erpRow, asNum(erpRow.payAmount));
       });
       rows.sort(function (a, b) {
-        return (asNum(b.payAmount) || 0) - (asNum(a.payAmount) || 0);
+        return (Number(b._pay) || 0) - (Number(a._pay) || 0);
       });
       if (!rows.length && name === "韩梦凯") {
         mismatches.push("韩梦凯 · 整包（人管没有韩梦凯的店铺或店群）");
