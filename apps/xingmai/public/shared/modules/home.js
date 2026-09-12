@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.373-home-brandbox */
+/* xm-module-home 0.1.374-home-teamset */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -510,7 +510,8 @@
       escapeHtml(team.key) +
       '"><div><h2>' +
       escapeHtml(team.name) +
-      "团队</h2><p>店铺按组织中心责权，数字按店铺id或店名对齐星脉 ERP。卡片可拖拽换位。</p></div></header>"
+      "团队</h2><p>店铺按组织中心责权，数字按店铺id或店名对齐星脉 ERP。卡片可拖拽换位。</p></div>" +
+      '<button type="button" class="xm-hm-set">卡片设置</button></header>'
     );
   }
 
@@ -554,7 +555,7 @@
   function teamsCompareHtml(teams, hide) {
     var list = teams && teams.length ? teams : blankTeams();
     return (
-      '<div class="xm-hm-teams-bar"><b>星脉甄选</b><button type="button" class="xm-hm-set" id="xm-hm-set-team">卡片设置</button></div><div class="xm-hm-teams-grid">' +
+      '<div class="xm-hm-teams-bar"><b>星脉甄选</b></div><div class="xm-hm-teams-grid">' +
       list
         .map(function (team) {
           return teamBlockHtml(team, hide);
@@ -972,7 +973,7 @@
       ".xm-hm-team-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;min-height:48px;padding:0 4px 4px}" +
       ".xm-hm-team-head h2{margin:0;font-size:16px}" +
       ".xm-hm-team-head p{margin:4px 0 0;color:var(--xm-muted);font-size:12px}" +
-      ".xm-hm-team-head a{color:var(--xm-primary);text-decoration:none;font-size:13px;white-space:nowrap}" +
+      ".xm-hm-team-head .xm-hm-set{padding:0;font-size:13px;white-space:nowrap}" +
       ".xm-hm-ladder{margin-top:4px}" +
       ".xm-hm-ladder h2{margin:16px 0 10px;font-size:16px}" +
       ".xm-hm-podiums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}" +
@@ -1104,7 +1105,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.373-home-brandbox");
+    board.setAttribute("data-hm-js", "0.1.374-home-teamset");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
