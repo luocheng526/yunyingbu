@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.362-home-relfix */
+/* xm-module-home 0.1.363-home-int */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -443,7 +443,7 @@
       '">环比 ' +
       (up ? "↗" : "↘") +
       " " +
-      Math.abs(n).toFixed(2) +
+      Math.round(Math.abs(n)) +
       "%</div>"
     );
   }
@@ -749,7 +749,7 @@
       '">环比 ' +
       (down ? "↘" : "↗") +
       " " +
-      Math.abs(Number(chart && chart.delta) || 0).toFixed(2) +
+      Math.round(Math.abs(Number(chart && chart.delta) || 0)) +
       "%</div>" +
       compareLineHtml(chart) +
       "</article>"
@@ -1082,7 +1082,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.362-home-relfix");
+    board.setAttribute("data-hm-js", "0.1.363-home-int");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", state.view === "team");
@@ -1248,8 +1248,7 @@
   }
 
   function fmtMoney(value) {
-    var n = asNum(value);
-    return n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return fmtInt(value);
   }
 
   function fmtInt(value) {
@@ -1265,7 +1264,7 @@
     if (Math.abs(n) <= 1) {
       n = n * 100;
     }
-    return n.toFixed(2) + "%";
+    return Math.round(n) + "%";
   }
 
   function fmtRoi(pay, ad) {
@@ -1274,7 +1273,7 @@
     if (p == null || a == null || a === 0) {
       return "—";
     }
-    return (p / a).toFixed(2);
+    return String(Math.round(p / a));
   }
 
   function trendOf(cur, prev) {

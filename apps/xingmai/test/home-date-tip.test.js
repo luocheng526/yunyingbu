@@ -43,6 +43,14 @@ test("team view pairs the same KPI left and right for comparison", () => {
   assert.doesNotMatch(homeJs, /@media \(max-width:900px\)\{\.xm-hm-teams\{grid-template-columns:1fr\}/);
 });
 
+test("homepage money and rates show as rounded integers", () => {
+  assert.match(homeJs, /function fmtMoney\(value\) \{\n    return fmtInt\(value\);/);
+  assert.match(homeJs, /return Math\.round\(n\) \+ "%"/);
+  assert.match(homeJs, /Math\.round\(Math\.abs\(n\)\)/);
+  assert.doesNotMatch(homeJs, /minimumFractionDigits: 2/);
+  assert.doesNotMatch(homeJs, /n\.toFixed\(2\) \+ "%"/);
+});
+
 test("card help uses a body-level tooltip so overflow cannot clip it", () => {
   assert.match(homeJs, /function tipAttr/);
   assert.match(homeJs, /function showCardTip/);
