@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.372-home-shoplist */
+/* xm-module-home 0.1.373-home-brandbox */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -952,11 +952,12 @@
       ".xm-hm-tip{position:fixed;z-index:2147483646;display:none;box-sizing:border-box;width:max-content;max-width:min(360px,calc(100vw - 24px));padding:10px 12px;background:var(--xm-card,#fff);border:1px solid var(--xm-line,#eadfd0);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.18);color:var(--xm-ink,#1f1b16);font-size:12px;line-height:1.6;white-space:pre-wrap;text-align:left;pointer-events:none}" +
       ".xm-hm-tip.is-on{display:block}" +
       ".xm-hm-body{position:relative;display:flex;flex-direction:column;gap:12px;overflow:visible}" +
-      ".xm-hm.is-live .xm-hm-kpis,.xm-hm.is-board .xm-hm-kpis,.xm-hm.is-team .xm-hm-kpis,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-team #xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
+      ".xm-hm.is-live .xm-hm-kpis-shell,.xm-hm.is-board .xm-hm-kpis-shell,.xm-hm.is-team .xm-hm-kpis-shell,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
       ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden]{display:none}" +
+      ".xm-hm-kpis-shell,.xm-hm-teams{background:#dceaff;border:2px solid #4d8fd6;border-radius:12px;padding:10px}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
       ".xm-hm-teams{display:flex;flex-direction:column;gap:10px}" +
-      ".xm-hm-teams-bar{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#dceaff;border:2px solid #4d8fd6;border-radius:10px}" +
+      ".xm-hm-teams-bar{display:flex;justify-content:space-between;align-items:center;padding:0 0 8px}" +
       ".xm-hm-teams-grid{display:grid;grid-template-columns:repeat(var(--xm-hm-team-cols,2),minmax(220px,1fr));gap:12px}" +
       ".xm-hm-team{display:flex;flex-direction:column;gap:10px;min-width:0;background:#dceaff;border:2px solid #4d8fd6;border-radius:12px;padding:12px 12px 10px;box-shadow:0 1px 2px rgba(47,84,235,.08)}" +
       ".xm-hm-team:nth-child(even){background:#d2e4ff;border-color:#3b7ec4}" +
@@ -1060,7 +1061,6 @@
       '<div class="xm-hm-bar">' +
       '<div class="xm-hm-views">' +
       viewBtns +
-      '<button type="button" class="xm-hm-set" id="xm-hm-set">卡片设置</button>' +
       "</div>" +
       '<div class="xm-hm-ranges">' +
       rangeBtns +
@@ -1068,7 +1068,7 @@
       "</div></div>" +
       '<div class="xm-hm-pop" id="xm-hm-pop" hidden><h3>卡片设置</h3><div id="xm-hm-card-opts"></div></div>' +
       '<div class="xm-hm-body">' +
-      '<section class="xm-hm-kpis" id="xm-hm-kpis"></section>' +
+      '<section class="xm-hm-kpis-shell"><div class="xm-hm-teams-bar"><b>星脉甄选</b><button type="button" class="xm-hm-set" id="xm-hm-set">卡片设置</button></div><div class="xm-hm-kpis" id="xm-hm-kpis"></div></section>' +
       '<section class="xm-hm-teams" id="xm-hm-teams" hidden></section>' +
       '<section class="xm-hm-live" id="xm-hm-live" hidden></section>' +
       '<section class="xm-hm-board" id="xm-hm-board" hidden>' +
@@ -1104,7 +1104,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.372-home-shoplist");
+    board.setAttribute("data-hm-js", "0.1.373-home-brandbox");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
