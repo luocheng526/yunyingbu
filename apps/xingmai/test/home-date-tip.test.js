@@ -67,6 +67,9 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function applyColW/);
   assert.match(homeJs, /function onSortSelectStart/);
   assert.match(homeJs, /\.xm-hm-card,\.xm-hm-pop label\{-webkit-user-select:none;user-select:none/);
+  assert.match(homeJs, /\.xm-hm-views button,\.xm-hm-set\{[^}]*-webkit-user-select:none;user-select:none/);
+  assert.match(homeJs, /\.xm-hm-views button::selection,\.xm-hm-ranges button::selection/);
+  assert.match(homeJs, /closest\("\.xm-hm-views button,\.xm-hm-ranges button,\.xm-hm-set,\.xm-hm-dates"\)/);
   assert.match(homeJs, /--xm-hm-team-cols/);
   assert.match(homeJs, /label: "经理团队"/);
   assert.match(homeJs, /label: "主管\/储备"/);
