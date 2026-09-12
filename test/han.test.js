@@ -4,6 +4,7 @@ import test from "node:test";
 import { createApp } from "../src/app.js";
 import { createHanStore, dropProbeTasks, hydrateFromMysql, matchOrgStoresForTeam, mergeTeamShops, buildProductCsv, parseProductCsv, classifyProduct, HAN_DEFAULT_OWNER, HAN_DEFAULT_STORE } from "../src/modules/han/store.js";
 import { createHanFakePool } from "./han-fake-pool.js";
+import { makeMinimalXlsx, parseOverviewFilename, parseOverviewWorkbook } from "../src/modules/han/import-file.js";
 
 async function withServer(fn) {
   const hanStore = createHanStore(createHanFakePool());
@@ -391,6 +392,8 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /han-layer-pick/);
   assert.match(js, /id="han-export"/);
   assert.match(js, /\/api\/han\/products\/import/);
+  assert.match(js, /\/api\/han\/products\/import-file/);
+  assert.match(js, /\.xlsx/);
   assert.match(js, /\/api\/han\/products\.csv/);
   assert.match(js, /头部产品/);
   assert.match(js, /中部产品/);
@@ -676,6 +679,48 @@ test("each shop can save month and week task plans", async () => {
     );
     assert.deepEqual(other.body.monthItems, []);
     assert.deepEqual(other.body.weekItems, []);
+  });
+});
+
+test("京东商品总览 xlsx maps to classify fields", () => {
+  const filename = "商品总览_京东_RASW个护健康旗舰店_2026-08-01_2026-08-31 (1).xlsx";
+  const meta = parseOverviewFilename(filename);
+  assert.equal(meta.shop, "RASW个护健康旗舰店");
+  assert.equal(meta.days, 31);
+  const buf = makeMinimalXlsx([
+    ["商品总览"],
+    ["统计时间：2026-08-01 至 2026-08-31"],
+    ["商品名称", "SPU", "成交金额", "成交单量", "成交转化率", "退货率", "推广花费占比", "评价数"],
+    ["洗发露", "SPU-A", 62000, 20, "8%", "12%", "30%", 2],
+  ]);
+  const parsed = parseOverviewWorkbook(buf, filename);
+  assert.equal(parsed.items.length, 1);
+  assert.equal(parsed.items[0].spu, "SPU-A");
+  assert.equal(parsed.items[0].gmv7d, "2000");
+  assert.equal(parsed.items[0].orders30d, "20");
+  assert.equal(parsed.items[0].convRate, "8%");
+  assert.equal(parsed.items[0].returnM8, "12%");
+});
+
+test("POST /api/han/products/import-file reads 商品总览 xlsx", async () => {
+  await withServer(async (base) => {
+    const filename = "商品总览_京东_RASW个护健康旗舰店_2026-08-01_2026-08-31.xlsx";
+    const buf = makeMinimalXlsx([
+      ["商品名称", "SPU", "成交金额", "成交单量", "成交转化率", "退货率", "推广花费占比"],
+      ["洗发露", "SPU-A", 62000, 20, "8%", "12%", "30%"],
+    ]);
+    const res = await fetch(
+      `${base}/api/han/products/import-file?team=${encodeURIComponent("高明阳组")}&store=${encodeURIComponent("RASW个护健康旗舰店")}&filename=${encodeURIComponent(filename)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: buf,
+      },
+    );
+    const body = await res.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.created[0].layer, "头部产品");
+    assert.equal(body.created[0].spu, "SPU-A");
   });
 });
 

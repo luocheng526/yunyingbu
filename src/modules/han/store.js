@@ -9,6 +9,7 @@ import {
   mergeClassifyRules,
   normalizeProductLayer,
 } from "./classify.js";
+import { parseOverviewWorkbook } from "./import-file.js";
 
 export {
   classifyProduct,
@@ -778,8 +779,14 @@ export function createHanStore(poolOrFactory = getPool) {
       return { updated, count: updated.length };
     },
 
-    async importProducts({ team, store, items, csv } = {}) {
-      const rows = Array.isArray(items) && items.length ? items : parseProductCsv(csv);
+    async importProducts({ team, store, items, csv, file, filename } = {}) {
+      let rows = Array.isArray(items) && items.length ? items : null;
+      if (!rows && file) {
+        rows = parseOverviewWorkbook(file, filename).items;
+      }
+      if (!rows) {
+        rows = parseProductCsv(csv);
+      }
       const created = [];
       const errors = [];
       const shopRules = String(store || "").trim()

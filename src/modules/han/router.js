@@ -1,4 +1,4 @@
-import { Router } from "express";
+import express, { Router } from "express";
 import { createHanStore, matchOrgStoresForTeam, mergeTeamShops, buildProductCsv } from "./store.js";
 
 async function loadOrgStores(req) {
@@ -237,6 +237,24 @@ export function createHanRouter(store = createHanStore()) {
       res.status(err.statusCode || 500).json({ ok: false, error: err.message });
     }
   });
+
+  hanRouter.post(
+    "/products/import-file",
+    express.raw({ type: () => true, limit: "12mb" }),
+    async (req, res) => {
+      try {
+        const result = await store.importProducts({
+          team: req.query.team,
+          store: req.query.store,
+          file: req.body,
+          filename: String(req.query.filename || req.get("x-filename") || ""),
+        });
+        res.status(result.created.length ? 201 : 200).json({ ok: true, ...result });
+      } catch (err) {
+        res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+      }
+    },
+  );
 
   hanRouter.get("/paid", async (_req, res) => {
     try {
