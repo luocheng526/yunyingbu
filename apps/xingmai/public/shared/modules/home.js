@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.370-home-grid4 */
+/* xm-module-home 0.1.371-home-noselect */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -968,8 +968,10 @@
       ".xm-hm-team:nth-child(even){background:#d2e4ff;border-color:#3b7ec4}" +
       ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start}" +
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border-color:#c5d8f2}" +
-      ".xm-hm.is-team .xm-hm-card{min-height:104px;padding:12px 12px 10px;border-radius:8px;cursor:grab}" +
+      ".xm-hm.is-team .xm-hm-card{min-height:104px;padding:12px 12px 10px;border-radius:8px;cursor:grab;-webkit-user-select:none;user-select:none}" +
       ".xm-hm.is-team .xm-hm-card.is-hold{cursor:grabbing}" +
+      ".xm-hm.is-sorting,.xm-hm.is-sorting *{-webkit-user-select:none !important;user-select:none !important}" +
+      ".xm-hm-card::selection,.xm-hm-card *::selection,.xm-hm-pop label::selection,.xm-hm-pop label *::selection{background:transparent;color:inherit}" +
       ".xm-hm.is-team .xm-hm-card-head{font-size:12px}" +
       ".xm-hm.is-team .xm-hm-card-head .xm-hm-help{width:16px;height:16px;font-size:10px}" +
       ".xm-hm.is-team .xm-hm-value{margin-top:8px;font-size:20px}" +
@@ -1012,10 +1014,10 @@
       ".xm-hm-live .xm-hm-table{min-width:960px}" +
       ".xm-hm-live .xm-hm-panel{overflow-x:auto}" +
       ".xm-hm-live .xm-hm-table th:nth-child(n+3),.xm-hm-live .xm-hm-table td:nth-child(n+3){text-align:right}" +
-      ".xm-hm-card{position:relative;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;padding:12px 14px 10px;box-shadow:var(--xm-shadow);min-height:104px;overflow:visible}" +
-      ".xm-hm-card.is-hold,.xm-hm-pop label.is-hold{opacity:.72;cursor:grabbing;user-select:none;pointer-events:none}" +
+      ".xm-hm-card{position:relative;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;padding:12px 14px 10px;box-shadow:var(--xm-shadow);min-height:104px;overflow:visible;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-user-drag:none}" +
+      ".xm-hm-card.is-hold,.xm-hm-pop label.is-hold{opacity:.72;cursor:grabbing;-webkit-user-select:none;user-select:none;pointer-events:none}" +
       ".xm-hm-card.is-over,.xm-hm-pop label.is-over{outline:1px dashed var(--xm-primary)}" +
-      ".xm-hm-pop label{cursor:grab}" +
+      ".xm-hm-pop label{cursor:grab;-webkit-user-select:none;user-select:none}" +
       ".xm-hm-card-head{display:flex;align-items:center;justify-content:space-between;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-value{margin-top:8px;font-size:22px;font-weight:700;letter-spacing:-.02em;color:var(--xm-ink)}" +
       ".xm-hm-value.is-accent{color:var(--xm-primary)}" +
@@ -1108,7 +1110,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.370-home-grid4");
+    board.setAttribute("data-hm-js", "0.1.371-home-noselect");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2418,11 +2420,31 @@
         sortHold = 0;
       }
 
+      function clearTextSelection() {
+        try {
+          var sel = window.getSelection && window.getSelection();
+          if (sel && sel.removeAllRanges) {
+            sel.removeAllRanges();
+          }
+        } catch (err) {}
+      }
+
+      function sortSetSorting(on) {
+        var board = root.querySelector("#xm-hm") || root;
+        if (on) {
+          board.classList.add("is-sorting");
+        } else {
+          board.classList.remove("is-sorting");
+        }
+      }
+
       function sortFinish() {
         sortClearHold();
         sortFrom = "";
         sortDragging = false;
         sortSettings = false;
+        sortSetSorting(false);
+        clearTextSelection();
         Array.prototype.forEach.call(root.querySelectorAll(".is-hold, .is-over"), function (el) {
           el.classList.remove("is-hold", "is-over");
         });
@@ -2461,8 +2483,13 @@
         sortStartX = event.clientX || 0;
         sortStartY = event.clientY || 0;
         if (card && (card.closest("#xm-hm-kpis") || card.closest("#xm-hm-teams"))) {
+          if (event.cancelable) {
+            event.preventDefault();
+          }
           sortFrom = card.getAttribute("data-card") || "";
           sortSettings = false;
+          sortSetSorting(true);
+          clearTextSelection();
           sortHold = window.setTimeout(function () {
             var holds = root.querySelectorAll('.xm-hm-card[data-card="' + sortFrom + '"]');
             if (!sortFrom || !holds.length) {
@@ -2476,14 +2503,38 @@
           return;
         }
         if (row) {
+          if (event.cancelable) {
+            event.preventDefault();
+          }
           sortFrom = row.getAttribute("data-sort") || "";
           sortSettings = true;
+          sortSetSorting(true);
+          clearTextSelection();
+        }
+      }
+
+      function onSortSelectStart(event) {
+        if (sortFrom || sortDragging || sortHold) {
+          event.preventDefault();
+        }
+      }
+
+      function onSortDragStart(event) {
+        if (sortFrom || sortDragging || sortHold) {
+          event.preventDefault();
+          return;
+        }
+        if (event.target && event.target.closest && event.target.closest("#xm-hm .xm-hm-card, #xm-hm-card-opts label")) {
+          event.preventDefault();
         }
       }
 
       function onSortMove(event) {
         var x = event.clientX || 0;
         var y = event.clientY || 0;
+        if (sortFrom || sortDragging || sortHold) {
+          clearTextSelection();
+        }
         if (sortHold && !sortDragging && (Math.abs(x - sortStartX) > 8 || Math.abs(y - sortStartY) > 8)) {
           window.clearTimeout(sortHold);
           sortHold = 0;
@@ -2582,6 +2633,8 @@
       document.addEventListener("pointercancel", onSortUp);
       document.addEventListener("click", onSortClickCapture, true);
       document.addEventListener("contextmenu", onSortMenu);
+      document.addEventListener("selectstart", onSortSelectStart);
+      document.addEventListener("dragstart", onSortDragStart);
 
       pullBoard();
       pullLive();
@@ -2623,6 +2676,8 @@
         document.removeEventListener("pointercancel", onSortUp);
         document.removeEventListener("click", onSortClickCapture, true);
         document.removeEventListener("contextmenu", onSortMenu);
+        document.removeEventListener("selectstart", onSortSelectStart);
+        document.removeEventListener("dragstart", onSortDragStart);
         sortFinish();
         root.innerHTML = "";
       };
