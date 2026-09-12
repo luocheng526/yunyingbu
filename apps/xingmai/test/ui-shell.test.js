@@ -157,7 +157,7 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /\.xm-workspace > \.xm-pane\.is-active/);
   assert.match(jsText, /disposePane\("\/home"\)/);
   assert.doesNotMatch(jsText, /window\.location\.assign\("\/home"\)/);
-  assert.match(jsText, /xm-fast-shell 0\.1\.145/);
+  assert.match(jsText, /xm-fast-shell 0\.1\.146/);
   assert.match(jsText, /\/shared\/modules\/" \+ id \+ "\.js"/);
   assert.doesNotMatch(jsText, /modules\/" \+ id \+ "\.js\?v=/);
   assert.match(jsText, /add\("\/login"\)/);
@@ -370,9 +370,9 @@ test("home page html is the xingmai sider template", async () => {
   assert.match(html, /xm-app-shell/);
   assert.match(html, /<title>星脉甄选运营中心<\/title>/);
   assert.doesNotMatch(html, /<title>数据中心 · 星脉甄选<\/title>/);
-  assert.match(html, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=0\.1\.145"/);
-  assert.match(html, /rel="shortcut icon" href="\/favicon\.ico\?v=0\.1\.145"/);
-  assert.match(html, /rel="apple-touch-icon" sizes="180x180" href="\/apple-touch-icon\.png\?v=0\.1\.145"/);
+  assert.match(html, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=0\.1\.146"/);
+  assert.match(html, /rel="shortcut icon" href="\/favicon\.ico\?v=0\.1\.146"/);
+  assert.match(html, /rel="apple-touch-icon" sizes="180x180" href="\/apple-touch-icon\.png\?v=0\.1\.146"/);
   assert.doesNotMatch(html, /rel="icon"[^>]+href="\/login-logo\.png"/);
   assert.doesNotMatch(html, /rel="apple-touch-icon"[^>]+href="\/login-logo\.png"/);
   assert.doesNotMatch(html, /href="data:image\/png;base64,/);
@@ -663,9 +663,9 @@ test("page renderer injects shared shell onto module html", async () => {
     '<!DOCTYPE html><html><head></head><body class="oc-page"><div class="oc-tab">待上线</div></body></html>'
   );
   assert.match(injected, /\/shared\/layout\.css/);
-  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.145/);
-  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.145"/);
-  assert.match(injected, /\/apple-touch-icon\.png\?v=0\.1\.145/);
+  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.146/);
+  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.146"/);
+  assert.match(injected, /\/apple-touch-icon\.png\?v=0\.1\.146/);
   assert.match(injected, /localStorage.getItem\("xm-theme"\)/);
   const login = withSharedShell('<html><head></head><body class="login-page"></body></html>');
   assert.doesNotMatch(login, /\/shared\/nav\.js/);
@@ -730,9 +730,9 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.match(homeMod, /XmModules\["\/home"\]/);
   const { renderAppShell } = await import("../src/modules/profile/middleware.js");
   const shell = renderAppShell("/data", { username: "罗成", displayName: "罗成" });
-  assert.match(shell, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=0\.1\.145"/);
-  assert.match(shell, /rel="shortcut icon" href="\/favicon\.ico\?v=0\.1\.145"/);
-  assert.match(shell, /rel="apple-touch-icon" sizes="180x180" href="\/apple-touch-icon\.png\?v=0\.1\.145"/);
+  assert.match(shell, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=0\.1\.146"/);
+  assert.match(shell, /rel="shortcut icon" href="\/favicon\.ico\?v=0\.1\.146"/);
+  assert.match(shell, /rel="apple-touch-icon" sizes="180x180" href="\/apple-touch-icon\.png\?v=0\.1\.146"/);
   assert.doesNotMatch(shell, /rel="apple-touch-icon"[^>]+href="\/login-logo\.png"/);
   assert.doesNotMatch(shell, /href="data:image\/png;base64,/);
   assert.match(shell, /<title>星脉甄选运营中心<\/title>/);
