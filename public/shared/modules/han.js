@@ -1302,14 +1302,28 @@
       let sheetDrag = null;
       function onSheetPointerDown(e) {
         if (e.target.closest("input,select,textarea,button,a")) return;
-        sheetDrag = { x: e.clientX, y: e.clientY, ox: sheetView.x, oy: sheetView.y };
-        viewport.classList.add("is-panning");
-        if (viewport.setPointerCapture) viewport.setPointerCapture(e.pointerId);
+        if (e.button) return;
+        sheetDrag = {
+          x: e.clientX,
+          y: e.clientY,
+          ox: sheetView.x,
+          oy: sheetView.y,
+          moved: false,
+          id: e.pointerId,
+        };
       }
       function onSheetPointerMove(e) {
         if (!sheetDrag) return;
-        sheetView.x = sheetDrag.ox + (e.clientX - sheetDrag.x);
-        sheetView.y = sheetDrag.oy + (e.clientY - sheetDrag.y);
+        const dx = e.clientX - sheetDrag.x;
+        const dy = e.clientY - sheetDrag.y;
+        if (!sheetDrag.moved) {
+          if (dx * dx + dy * dy < 25) return;
+          sheetDrag.moved = true;
+          viewport.classList.add("is-panning");
+          if (viewport.setPointerCapture) viewport.setPointerCapture(sheetDrag.id);
+        }
+        sheetView.x = sheetDrag.ox + dx;
+        sheetView.y = sheetDrag.oy + dy;
         applySheetView();
       }
       function onSheetPointerUp() {
