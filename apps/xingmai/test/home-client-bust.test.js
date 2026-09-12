@@ -26,7 +26,8 @@ test("serves /api/home/client.js from current homepage module", async () => {
     const text = await res.text();
     assert.equal(res.status, 200);
     assert.match(String(res.headers.get("cache-control") || ""), /no-store/i);
-    assert.match(text, /xm-module-home 0\.1\.352-home-tips/);
+    assert.match(text, /xm-module-home 0\.1\.354-home-cardset/);
+    assert.match(text, /onOutsideCardSet/);
     assert.match(text, /\/api\/home\/erp-kpis/);
     assert.match(text, /platformFee/);
     assert.match(text, /按支付时间统计的订单金额\(包含无效单、代发单\)/);

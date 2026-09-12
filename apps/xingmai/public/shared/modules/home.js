@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.352-home-tips */
+/* xm-module-home 0.1.354-home-cardset */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -953,7 +953,7 @@
     var hero = readChart(live.hero, blankLive().hero);
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
-    board.setAttribute("data-hm-js", "0.1.352-home-tips");
+    board.setAttribute("data-hm-js", "0.1.354-home-cardset");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", state.view === "team");
@@ -1916,7 +1916,19 @@
         if (event.target.closest("#xm-hm-set")) {
           var pop = root.querySelector("#xm-hm-pop");
           pop.hidden = !pop.hidden;
+          return;
         }
+      }
+
+      function onOutsideCardSet(event) {
+        var pop = root.querySelector("#xm-hm-pop");
+        if (!pop || pop.hidden) {
+          return;
+        }
+        if (event.target.closest("#xm-hm-pop") || event.target.closest("#xm-hm-set")) {
+          return;
+        }
+        pop.hidden = true;
       }
 
       function onChange(event) {
@@ -1943,6 +1955,7 @@
 
       root.addEventListener("click", onClick);
       root.addEventListener("change", onChange);
+      document.addEventListener("mousedown", onOutsideCardSet);
 
       pullBoard();
       pullLive();
@@ -1967,6 +1980,7 @@
         window.clearInterval(poll);
         root.removeEventListener("click", onClick);
         root.removeEventListener("change", onChange);
+        document.removeEventListener("mousedown", onOutsideCardSet);
         root.innerHTML = "";
       };
     }
