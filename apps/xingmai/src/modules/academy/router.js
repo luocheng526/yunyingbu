@@ -21,11 +21,15 @@ import {
   listExamAttempts
 } from "./exam-store.js";
 import {
+  addCourseFolder,
+  assignPptCourseFolder,
   createPptCourse,
+  getCourseFolderTree,
   getPptCourse,
   getPptPage,
   listPptPages,
   mediaType,
+  moveCourseFolder,
   readPptMedia,
   receivePptChunk
 } from "./ppt-store.js";
@@ -104,6 +108,18 @@ function requireHandbookEditor(req, res) {
   return user;
 }
 
+function requireCourseEditor(req, res) {
+  const user = requireUser(req, res);
+  if (!user) {
+    return null;
+  }
+  if (!canEditHandbook(user)) {
+    res.status(403).json({ ok: false, error: "课件分类由罗成、沈子晗、韩梦凯维护" });
+    return null;
+  }
+  return user;
+}
+
 function actorOf(user) {
   return {
     actor: user.username,
@@ -112,22 +128,25 @@ function actorOf(user) {
 }
 
 academyRouter.get("/courses", async (req, res) => {
-  if (!requireUser(req, res)) {
+  const user = requireUser(req, res);
+  if (!user) {
     return;
   }
-  res.json({ ok: true, ...(await courses()) });
+  res.json({ ok: true, canEdit: canEditHandbook(user), ...(await courses()) });
 });
 
 async function pptUploadPayload(req) {
   if (isRawUpload(req)) {
     const title = String(req.query.title || "").trim();
     const category = String(req.query.category || "").trim();
+    const folderId = String(req.query.folderId || "").trim();
     const published = String(req.query.published || "1");
     const filename = String(req.query.filename || "course.pptx").trim() || "course.pptx";
     const buffer = await readRawBody(req);
     return {
       title,
       category,
+      folderId,
       published,
       file: {
         field: "file",
@@ -141,6 +160,7 @@ async function pptUploadPayload(req) {
   return {
     title: fields.title,
     category: fields.category,
+    folderId: fields.folderId,
     published: fields.published,
     file
   };
@@ -170,6 +190,7 @@ academyRouter.post("/courses/chunk", async (req, res) => {
       size: req.query.size,
       title: req.query.title,
       category: req.query.category,
+      folderId: req.query.folderId,
       published: req.query.published,
       filename: req.query.filename,
       buffer,
@@ -196,12 +217,83 @@ academyRouter.post("/courses", async (req, res) => {
     const course = await createPptCourse({
       title: payload.title,
       category: payload.category,
+      folderId: payload.folderId,
       published: payload.published,
       file: payload.file,
       createdBy: user.username
     });
     await logCourseUpload(user, course);
     res.status(201).json({ ok: true, course, download: false });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+academyRouter.post("/courses/folders", async (req, res) => {
+  const user = requireCourseEditor(req, res);
+  if (!user) {
+    return;
+  }
+  try {
+    const folder = await addCourseFolder({
+      parentId: (req.body || {}).parentId,
+      title: (req.body || {}).title
+    });
+    await appendHandbookLog({
+      ...actorOf(user),
+      action: "加课件分类",
+      sectionId: folder.id,
+      sectionTitle: folder.title,
+      detail: "挂在 " + String((req.body || {}).parentId || "顶级")
+    });
+    res.status(201).json({ ok: true, folder, folders: await getCourseFolderTree() });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+academyRouter.post("/courses/folders/reorder", async (req, res) => {
+  const user = requireCourseEditor(req, res);
+  if (!user) {
+    return;
+  }
+  try {
+    const folders = await moveCourseFolder({
+      id: (req.body || {}).id,
+      beforeId: (req.body || {}).beforeId,
+      parentId: (req.body || {}).parentId
+    });
+    await appendHandbookLog({
+      ...actorOf(user),
+      action: "移动课件分类",
+      sectionId: String((req.body || {}).id || ""),
+      sectionTitle: "",
+      detail: "拖拽分类"
+    });
+    res.json({ ok: true, folders });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+academyRouter.post("/courses/:id/move", async (req, res) => {
+  const user = requireCourseEditor(req, res);
+  if (!user) {
+    return;
+  }
+  try {
+    const course = await assignPptCourseFolder({
+      courseId: req.params.id,
+      folderId: (req.body || {}).folderId
+    });
+    await appendHandbookLog({
+      ...actorOf(user),
+      action: "移动课件",
+      sectionId: course.id,
+      sectionTitle: course.title,
+      detail: "移入 " + course.category
+    });
+    res.json({ ok: true, course, folders: await getCourseFolderTree() });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
   }

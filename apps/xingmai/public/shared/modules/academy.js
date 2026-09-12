@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.271 · handbook-move */
+/* xm-module-academy 0.1.467 · dynamic-course-folder-input */
 (function () {
-  const ASSET_VER = "0.1.271";
+  const ASSET_VER = "0.1.467";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -179,7 +179,13 @@
       qs.set("total", String(total));
       qs.set("size", String(file && file.size ? file.size : 0));
       qs.set("title", formEl.title.value);
-      qs.set("category", formEl.category.value);
+      qs.set("folderId", formEl.folderId.value);
+      qs.set(
+        "category",
+        formEl.folderId.options[formEl.folderId.selectedIndex]
+          ? formEl.folderId.options[formEl.folderId.selectedIndex].textContent
+          : ""
+      );
       qs.set("published", formEl.published.checked ? "1" : "0");
       qs.set("filename", file && file.name ? file.name : "course.pptx");
       return fetch("/api/academy/courses/chunk?" + qs.toString(), {
@@ -273,14 +279,9 @@
     return (
       '<div class="academy-console-stage" id="academy-view-upload" hidden>' +
       '<form id="academy-upload" class="academy-toolbar">' +
-      '<label>标题 <input name="title" required maxlength="160" placeholder="课件标题" /></label>' +
-      '<label>分类 <select name="category">' +
-      '<option value="选品与商品">选品与商品</option>' +
-      '<option value="流量与投放">流量与投放</option>' +
-      '<option value="转化与页面">转化与页面</option>' +
-      '<option value="数据与复盘">数据与复盘</option>' +
-      '<option value="大促节奏">大促节奏</option>' +
-      "</select></label>" +
+      '<label>标题 <input name="title" maxlength="160" placeholder="选文件后自动填写" /></label>' +
+      '<label>分类 <select name="folderId" id="academy-course-folder-select" required>' +
+      '<option value="">请先选择分类</option></select></label>' +
       '<label><input type="checkbox" name="published" checked /> 发布</label>' +
       '<label>课件 <input type="file" name="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" required /></label>' +
       '<button type="submit">上传</button>' +
@@ -289,6 +290,97 @@
       "</div>" +
       logPaneHtml()
     );
+  }
+
+  function courseTitleFromFile(file) {
+    return String((file && file.name) || "")
+      .replace(/\.pptx?$/i, "")
+      .trim()
+      .slice(0, 160);
+  }
+
+  function replaceTitleSelection(input, text, start, end) {
+    input.setRangeText(text, start, end, "end");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function isVisibleInputText(text) {
+    return (
+      Boolean(text) &&
+      !Array.from(text).some(function (character) {
+        const code = character.codePointAt(0);
+        return code < 32 || (code >= 127 && code <= 159);
+      })
+    );
+  }
+
+  function installTitleKeyboardFallback(input) {
+    if (!input || input.getAttribute("data-title-keyboard-ready") === "1") {
+      return;
+    }
+    input.setAttribute("data-title-keyboard-ready", "1");
+    let composing = false;
+    let compositionValue = "";
+    let compositionStart = 0;
+    let compositionEnd = 0;
+    input.addEventListener("beforeinput", function (ev) {
+      const text = String(ev.data || "");
+      if (!composing && ev.inputType === "insertText" && isVisibleInputText(text)) {
+        ev.preventDefault();
+        const start = input.selectionStart == null ? input.value.length : input.selectionStart;
+        const end = input.selectionEnd == null ? start : input.selectionEnd;
+        replaceTitleSelection(input, text, start, end);
+      }
+    });
+    input.addEventListener("compositionstart", function () {
+      composing = true;
+      compositionValue = input.value;
+      compositionStart = input.selectionStart == null ? input.value.length : input.selectionStart;
+      compositionEnd = input.selectionEnd == null ? compositionStart : input.selectionEnd;
+    });
+    input.addEventListener("compositionend", function (ev) {
+      composing = false;
+      const text = String(ev.data || "");
+      window.setTimeout(function () {
+        if (isVisibleInputText(text) && input.value === compositionValue) {
+          replaceTitleSelection(input, text, compositionStart, compositionEnd);
+        }
+      }, 0);
+    });
+    input.addEventListener("keydown", function (ev) {
+      if (composing || ev.isComposing || ev.key === "Process" || ev.ctrlKey || ev.metaKey || ev.altKey) {
+        return;
+      }
+      const start = input.selectionStart == null ? input.value.length : input.selectionStart;
+      const end = input.selectionEnd == null ? start : input.selectionEnd;
+      if (ev.key.length === 1 && isVisibleInputText(ev.key)) {
+        ev.preventDefault();
+        replaceTitleSelection(input, ev.key, start, end);
+        return;
+      }
+      if (ev.key === "Backspace") {
+        ev.preventDefault();
+        replaceTitleSelection(input, "", start === end ? Math.max(0, start - 1) : start, end);
+        return;
+      }
+      if (ev.key === "Delete") {
+        ev.preventDefault();
+        replaceTitleSelection(input, "", start, start === end ? Math.min(input.value.length, end + 1) : end);
+      }
+    });
+  }
+
+  function installTitleKeyboardFallbacks(scope) {
+    if (!scope) {
+      return;
+    }
+    if (scope.matches && scope.matches(".academy-course-sub-form input")) {
+      installTitleKeyboardFallback(scope);
+      return;
+    }
+    scope.querySelectorAll(".academy-course-sub-form input").forEach(function (input) {
+      installTitleKeyboardFallback(input);
+    });
   }
 
   function examUploadPaneHtml() {
@@ -406,11 +498,24 @@
     }
     const form = root.querySelector("#academy-upload");
     if (form) {
+      const titleInput = form.querySelector('input[name="title"]');
+      const fileInput = form.querySelector('input[type="file"]');
+      if (fileInput && titleInput) {
+        installTitleKeyboardFallback(titleInput);
+        fileInput.addEventListener("change", function () {
+          const file = fileInput.files && fileInput.files[0];
+          if (!String(titleInput.value || "").trim()) {
+            titleInput.value = courseTitleFromFile(file);
+          }
+        });
+      }
       form.addEventListener("submit", function (ev) {
         ev.preventDefault();
         const status = root.querySelector("#academy-upload-status");
-        const fileInput = form.querySelector('input[type="file"]');
         const file = fileInput && fileInput.files && fileInput.files[0];
+        if (titleInput && !String(titleInput.value || "").trim()) {
+          titleInput.value = courseTitleFromFile(file);
+        }
         if (file && /\.ppt$/i.test(file.name) && !/\.pptx$/i.test(file.name)) {
           status.textContent = "请另存为 .pptx 再上传（不支持旧版 .ppt）";
           status.className = "academy-status error";
@@ -455,8 +560,11 @@
           consoleFrame(
             '<div class="academy-console-body" id="academy-view-courses">' +
               '<aside class="academy-console-side academy-course-pane" id="academy-side">' +
-              '<div class="academy-board-head"><h2>课件</h2></div>' +
-              '<div class="academy-course-list" id="academy-course-list"></div>' +
+              '<div class="academy-board-head"><h2>课件分类</h2></div>' +
+              '<div class="academy-course-list academy-course-tree" id="academy-course-list"></div>' +
+              '<button type="button" class="academy-add-group" id="academy-course-add-group" hidden>新建分类</button>' +
+              '<form id="academy-course-group-form" class="academy-sub-form academy-group-form" hidden>' +
+              '<input name="title" maxlength="64" placeholder="分类名称" /><button type="submit">新建</button></form>' +
               '<div class="academy-thumbs" id="academy-thumbs" hidden></div></aside>' +
               '<section class="academy-console-main" id="academy-viewer"></section>' +
               "</div>" +
@@ -470,6 +578,11 @@
         let pageNo = 1;
         let pages = [];
         let previewOn = false;
+        let courseFolders = [];
+        let courseItems = [];
+        let courseEditor = false;
+        let draggingCourse = "";
+        let draggingFolder = "";
         const showView = bindAcademyChrome(root, "academy-view-courses", function (data) {
           loadList().then(function () {
             if (data.course && data.course.id) {
@@ -478,37 +591,119 @@
           });
         });
 
-        function renderList(items) {
-          const box = root.querySelector("#academy-course-list");
-          if (!items || !items.length) {
-            box.innerHTML = '<p class="academy-empty">还没有课件。到「文件上传」导入 PPTX。不提供原件下载。</p>';
-            return;
-          }
-          box.innerHTML = items
-            .map(function (item) {
+        function folderOptions(nodes, depth) {
+          return (nodes || [])
+            .map(function (folder) {
               return (
-                '<button type="button" class="academy-course' +
-                (item.id === currentId ? " is-on" : "") +
-                '" data-id="' +
-                escapeHtml(item.id) +
-                '"><h3>' +
-                escapeHtml(item.title) +
-                '</h3><p class="academy-meta">' +
-                escapeHtml(item.category) +
-                " · " +
-                escapeHtml(item.pageCount) +
-                " 页 · " +
-                (item.published ? "已发布" : "草稿") +
-                "</p></button>"
+                '<option value="' +
+                escapeHtml(folder.id) +
+                '">' +
+                escapeHtml(new Array((depth || 0) + 1).join("　") + folder.title) +
+                "</option>" +
+                folderOptions(folder.children, (depth || 0) + 1)
               );
             })
             .join("");
         }
 
+        function courseButton(item) {
+          return (
+            '<button type="button" class="academy-course' +
+            (item.id === currentId ? " is-on" : "") +
+            '" data-course-id="' +
+            escapeHtml(item.id) +
+            '"' +
+            (courseEditor ? ' draggable="true"' : "") +
+            '><h3>' +
+            escapeHtml(item.title) +
+            '</h3><p class="academy-meta">' +
+            escapeHtml(item.pageCount) +
+            " 页 · " +
+            (item.published ? "已发布" : "草稿") +
+            "</p></button>"
+          );
+        }
+
+        function courseFolderHtml(nodes, depth) {
+          return (nodes || [])
+            .map(function (folder) {
+              const items = courseItems.filter(function (item) {
+                return item.folderId === folder.id;
+              });
+              return (
+                '<div class="academy-course-folder" data-folder-group="' +
+                escapeHtml(folder.id) +
+                '">' +
+                '<div class="academy-tree-row academy-course-folder-row" data-folder-row="' +
+                escapeHtml(folder.id) +
+                '"' +
+                (courseEditor ? ' draggable="true"' : "") +
+                '><button type="button" class="academy-tree-item is-group">' +
+                escapeHtml(folder.title) +
+                '<span class="academy-folder-count">' +
+                escapeHtml(items.length) +
+                "</span></button>" +
+                (courseEditor
+                  ? '<button type="button" class="academy-tree-add" data-course-add="' +
+                    escapeHtml(folder.id) +
+                    '" title="添加子菜单">+</button>'
+                  : "") +
+                "</div>" +
+                (courseEditor
+                  ? '<form class="academy-sub-form academy-course-sub-form" data-course-parent="' +
+                    escapeHtml(folder.id) +
+                    '" hidden><input name="title" maxlength="64" placeholder="子菜单名称" />' +
+                    '<button type="submit">新建</button></form>'
+                  : "") +
+                '<div class="academy-course-folder-kids">' +
+                courseFolderHtml(folder.children || [], (depth || 0) + 1) +
+                items.map(courseButton).join("") +
+                "</div></div>"
+              );
+            })
+            .join("");
+        }
+
+        function directCourseSubForm(group) {
+          return Array.prototype.find.call(group ? group.children : [], function (child) {
+            return child.classList && child.classList.contains("academy-course-sub-form");
+          });
+        }
+
+        function renderList(items, folders) {
+          const box = root.querySelector("#academy-course-list");
+          courseItems = items || [];
+          courseFolders = folders || [];
+          box.innerHTML = courseFolderHtml(courseFolders, 0);
+          if (!courseFolders.length) {
+            box.innerHTML = '<p class="academy-empty">还没有分类，请先新建分类。</p>';
+          } else if (!courseItems.length) {
+            box.insertAdjacentHTML(
+              "beforeend",
+              '<p class="academy-empty academy-course-empty">还没有课件。到「文件上传」导入 PPTX，不提供原件下载。</p>'
+            );
+          }
+          const select = root.querySelector("#academy-course-folder-select");
+          if (select) {
+            const keep = select.value;
+            select.innerHTML =
+              '<option value="">请选择分类</option>' + folderOptions(courseFolders, 0);
+            if (keep) {
+              select.value = keep;
+            }
+          }
+          const addGroup = root.querySelector("#academy-course-add-group");
+          if (addGroup) {
+            addGroup.hidden = !courseEditor;
+          }
+          installTitleKeyboardFallbacks(box);
+        }
+
         function loadList() {
           return api("/api/academy/courses").then(function (data) {
             if (!dead) {
-              renderList(data.items || []);
+              courseEditor = Boolean(data.canEdit);
+              renderList(data.items || [], data.folders || []);
             }
             return data;
           });
@@ -698,7 +893,7 @@
             pageCount = pages.length;
             pageNo = 1;
             root.querySelectorAll(".academy-course").forEach(function (el) {
-              el.classList.toggle("is-on", el.getAttribute("data-id") === id);
+              el.classList.toggle("is-on", el.getAttribute("data-course-id") === id);
             });
             if (!pages.length) {
               paintMissing(data.course, data.renderError || (data.course && data.course.renderError));
@@ -719,17 +914,167 @@
         });
 
         root.querySelector("#academy-course-list").addEventListener("click", function (ev) {
-          const btn = ev.target.closest("[data-id]");
+          const add = ev.target.closest("[data-course-add]");
+          if (add) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            const group = add.closest(".academy-course-folder");
+            const form = directCourseSubForm(group);
+            if (form) {
+              form.hidden = !form.hidden;
+              const input = form.querySelector("input");
+              if (!form.hidden && input) {
+                installTitleKeyboardFallback(input);
+                input.focus();
+              }
+            }
+            return;
+          }
+          const btn = ev.target.closest("[data-course-id]");
           if (!btn) {
             return;
           }
-          openPreview(btn.getAttribute("data-id")).catch(function (err) {
+          openPreview(btn.getAttribute("data-course-id")).catch(function (err) {
             const panel = root.querySelector("#academy-viewer");
             panel.innerHTML =
               '<div class="academy-board-head"><h2>课件展示</h2></div>' +
               '<p class="academy-status error">' +
               escapeHtml(err.message) +
               "</p>";
+          });
+        });
+
+        function addCourseFolder(parentId, title) {
+          return postJson("/api/academy/courses/folders", {
+            parentId: parentId || "",
+            title: title
+          }).then(loadList);
+        }
+
+        const addCourseGroup = root.querySelector("#academy-course-add-group");
+        const courseGroupForm = root.querySelector("#academy-course-group-form");
+        if (courseGroupForm) {
+          const groupInput = courseGroupForm.querySelector("input");
+          installTitleKeyboardFallback(groupInput);
+          addCourseGroup.addEventListener("click", function () {
+            courseGroupForm.hidden = !courseGroupForm.hidden;
+            if (!courseGroupForm.hidden) {
+              groupInput.focus();
+            }
+          });
+          courseGroupForm.addEventListener("submit", function (ev) {
+            ev.preventDefault();
+            addCourseFolder("", groupInput.value)
+              .then(function () {
+                courseGroupForm.reset();
+                courseGroupForm.hidden = true;
+              })
+              .catch(function (err) {
+                courseGroupForm.hidden = false;
+                courseGroupForm.setAttribute("data-error", err.message);
+              });
+          });
+        }
+
+        root.querySelector("#academy-course-list").addEventListener("submit", function (ev) {
+          const form = ev.target.closest(".academy-course-sub-form");
+          if (!form) {
+            return;
+          }
+          ev.preventDefault();
+          addCourseFolder(form.getAttribute("data-course-parent"), form.title.value).catch(function (err) {
+            form.hidden = false;
+            form.setAttribute("data-error", err.message);
+          });
+        });
+
+        function clearCourseDropMarks() {
+          root.querySelectorAll(".academy-course-folder-row").forEach(function (row) {
+            row.classList.remove("is-drop-before", "is-drop-after", "is-drop-inside");
+          });
+        }
+
+        function folderMovePayload(row, ev) {
+          const targetId = row.getAttribute("data-folder-row");
+          const group = row.closest(".academy-course-folder");
+          const rect = row.getBoundingClientRect();
+          const ratio = rect.height ? (ev.clientY - rect.top) / rect.height : 0.5;
+          if (ratio >= 0.3 && ratio <= 0.7) {
+            return { id: draggingFolder, parentId: targetId };
+          }
+          const parentGroup =
+            group && group.parentElement ? group.parentElement.closest(".academy-course-folder") : null;
+          const parentId = parentGroup ? parentGroup.getAttribute("data-folder-group") : "";
+          if (ratio < 0.3) {
+            return { id: draggingFolder, beforeId: targetId };
+          }
+          const next = group && group.nextElementSibling;
+          if (next && next.classList.contains("academy-course-folder")) {
+            return { id: draggingFolder, beforeId: next.getAttribute("data-folder-group") };
+          }
+          return { id: draggingFolder, parentId: parentId };
+        }
+
+        const courseTree = root.querySelector("#academy-course-list");
+        courseTree.addEventListener("focusin", function (ev) {
+          installTitleKeyboardFallbacks(ev.target);
+        });
+        courseTree.addEventListener("dragstart", function (ev) {
+          if (!courseEditor || ev.target.closest("form") || ev.target.closest("[data-course-add]")) {
+            ev.preventDefault();
+            return;
+          }
+          const course = ev.target.closest("[data-course-id]");
+          const row = ev.target.closest("[data-folder-row]");
+          draggingCourse = course ? course.getAttribute("data-course-id") : "";
+          draggingFolder = !draggingCourse && row ? row.getAttribute("data-folder-row") : "";
+          if (!draggingCourse && !draggingFolder) {
+            ev.preventDefault();
+            return;
+          }
+          ev.dataTransfer.effectAllowed = "move";
+          ev.dataTransfer.setData("text/plain", draggingCourse || draggingFolder);
+        });
+        courseTree.addEventListener("dragend", function () {
+          draggingCourse = "";
+          draggingFolder = "";
+          clearCourseDropMarks();
+        });
+        courseTree.addEventListener("dragover", function (ev) {
+          const row = ev.target.closest("[data-folder-row]");
+          if (!row || (!draggingCourse && !draggingFolder)) {
+            return;
+          }
+          ev.preventDefault();
+          clearCourseDropMarks();
+          if (draggingCourse) {
+            row.classList.add("is-drop-inside");
+            return;
+          }
+          const rect = row.getBoundingClientRect();
+          const ratio = rect.height ? (ev.clientY - rect.top) / rect.height : 0.5;
+          row.classList.add(ratio < 0.3 ? "is-drop-before" : ratio > 0.7 ? "is-drop-after" : "is-drop-inside");
+        });
+        courseTree.addEventListener("drop", function (ev) {
+          const row = ev.target.closest("[data-folder-row]");
+          if (!row || (!draggingCourse && !draggingFolder)) {
+            return;
+          }
+          ev.preventDefault();
+          const targetId = row.getAttribute("data-folder-row");
+          const request = draggingCourse
+            ? postJson("/api/academy/courses/" + encodeURIComponent(draggingCourse) + "/move", {
+                folderId: targetId
+              })
+            : postJson("/api/academy/courses/folders/reorder", folderMovePayload(row, ev));
+          draggingCourse = "";
+          draggingFolder = "";
+          clearCourseDropMarks();
+          request.then(loadList).catch(function (err) {
+            courseTree.insertAdjacentHTML(
+              "beforeend",
+              '<p class="academy-status error">' + escapeHtml(err.message) + "</p>"
+            );
           });
         });
 

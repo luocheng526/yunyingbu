@@ -7,7 +7,7 @@ import {
 } from "./framework.js";
 import { getHandbookTree } from "./handbook-store.js";
 import { listExamPapers } from "./exam-store.js";
-import { courseCategories, listPptCourses } from "./ppt-store.js";
+import { courseCategories, getCourseFolderTree, listPptCourses } from "./ppt-store.js";
 
 const memoryProgress = new Map();
 
@@ -56,12 +56,16 @@ export function frameworkPlan() {
 }
 
 export async function courses() {
-  const items = await listPptCourses({ includeUnpublished: true });
+  const [items, folders] = await Promise.all([
+    listPptCourses({ includeUnpublished: true }),
+    getCourseFolderTree()
+  ]);
   return {
     download: false,
     watermark: true,
     accept: [".pptx"],
     categories: courseCategories(),
+    folders,
     items
   };
 }

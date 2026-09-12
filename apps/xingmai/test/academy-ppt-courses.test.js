@@ -4,10 +4,11 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
+import vm from "node:vm";
 import { createApp } from "../src/app.js";
 import { resetStoreForTests } from "../src/modules/profile/auth.js";
 import { resetHandbookLogsForTests } from "../src/modules/academy/log-store.js";
-import { DATA_DIR, resetPptCoursesForTests } from "../src/modules/academy/ppt-store.js";
+import { DATA_DIR, getCourseFolderTree, resetPptCoursesForTests } from "../src/modules/academy/ppt-store.js";
 
 const server = createApp().listen(0);
 const { port } = server.address();
@@ -89,9 +90,21 @@ test("academy.js enables upload, watermark, and blocks original download", () =>
   assert.match(js, /postCourseFile/);
   assert.match(js, /\/api\/academy\/courses\/chunk/);
   assert.match(js, /文件上传/);
+  assert.match(js, /courseTitleFromFile/);
+  assert.match(js, /installTitleKeyboardFallback/);
+  assert.match(js, /setRangeText/);
+  assert.match(js, /compositionend/);
+  assert.match(js, /选文件后自动填写/);
+  assert.doesNotMatch(js, /name="title" required/);
   assert.match(js, /academy-view-upload/);
   assert.match(js, /academy-thumbs/);
   assert.match(js, /academy-course-pane/);
+  assert.match(js, /academy-course-tree/);
+  assert.match(js, /data-course-add/);
+  assert.match(js, /data-folder-row/);
+  assert.match(js, /\/api\/academy\/courses\/folders/);
+  assert.match(js, /\/api\/academy\/courses\/folders\/reorder/);
+  assert.match(js, /\/move/);
   assert.match(js, /课件展示/);
   assert.match(js, /emptyViewer/);
   assert.match(js, /paintThumbs/);
@@ -114,7 +127,143 @@ test("academy.js enables upload, watermark, and blocks original download", () =>
   assert.match(css, /max-width:\s*none/);
   assert.match(css, /\.academy-console\.is-logs/);
   assert.match(css, /\.academy-course-pane/);
+  assert.match(css, /\.academy-course-folder/);
+  assert.match(css, /\.academy-course-folder-row\.is-drop-inside/);
   assert.doesNotMatch(js, /has-viewer/);
+});
+
+test("course title keyboard fallback inserts, replaces, and deletes text", () => {
+  const start = js.indexOf("  function replaceTitleSelection");
+  const end = js.indexOf("  function examUploadPaneHtml", start);
+  assert.ok(start >= 0 && end > start);
+  const listeners = {};
+  const listenerCounts = {};
+  const inputEvents = [];
+  const attributes = {};
+  const input = {
+    value: "",
+    selectionStart: 0,
+    selectionEnd: 0,
+    addEventListener(type, handler) {
+      listeners[type] = handler;
+      listenerCounts[type] = (listenerCounts[type] || 0) + 1;
+    },
+    getAttribute(name) {
+      return attributes[name] || null;
+    },
+    setAttribute(name, value) {
+      attributes[name] = value;
+    },
+    setRangeText(text, from, to) {
+      this.value = this.value.slice(0, from) + text + this.value.slice(to);
+      this.selectionStart = this.selectionEnd = from + text.length;
+    },
+    dispatchEvent(event) {
+      inputEvents.push(event.type);
+    }
+  };
+  const context = {
+    Event: class Event {
+      constructor(type) {
+        this.type = type;
+      }
+    },
+    window: { setTimeout: (fn) => fn() }
+  };
+  vm.runInNewContext(
+    `${js.slice(start, end)}; installTitleKeyboardFallback(input); installTitleKeyboardFallback(input);`,
+    {
+    ...context,
+    input
+    }
+  );
+  assert.deepEqual(listenerCounts, { beforeinput: 1, compositionstart: 1, compositionend: 1, keydown: 1 });
+  function key(key, extra = {}) {
+    let prevented = false;
+    listeners.keydown({
+      key,
+      isComposing: false,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      preventDefault() {
+        prevented = true;
+      },
+      ...extra
+    });
+    return prevented;
+  }
+  assert.equal(key("a"), true);
+  assert.equal(key("b"), true);
+  assert.equal(input.value, "ab");
+  input.selectionStart = 0;
+  input.selectionEnd = 1;
+  assert.equal(key("课"), true);
+  assert.equal(input.value, "课b");
+  input.selectionStart = input.selectionEnd = input.value.length;
+  assert.equal(key("Backspace"), true);
+  assert.equal(input.value, "课");
+  input.selectionStart = 0;
+  input.selectionEnd = 0;
+  assert.equal(key("Delete"), true);
+  assert.equal(input.value, "");
+  assert.equal(key("\u0000"), false);
+  assert.equal(input.value, "");
+  let beforeInputPrevented = false;
+  listeners.beforeinput({
+    inputType: "insertText",
+    data: "类",
+    preventDefault() {
+      beforeInputPrevented = true;
+    }
+  });
+  assert.equal(beforeInputPrevented, true);
+  assert.equal(input.value, "类");
+  assert.equal(key("v", { ctrlKey: true }), false);
+  assert.deepEqual(inputEvents, ["input", "input", "input", "input", "input", "input"]);
+});
+
+test("course title keyboard fallback restores missing IME composition text", () => {
+  const start = js.indexOf("  function replaceTitleSelection");
+  const end = js.indexOf("  function examUploadPaneHtml", start);
+  const listeners = {};
+  const attributes = {};
+  const input = {
+    value: "培训",
+    selectionStart: 2,
+    selectionEnd: 2,
+    addEventListener(type, handler) {
+      listeners[type] = handler;
+    },
+    getAttribute(name) {
+      return attributes[name] || null;
+    },
+    setAttribute(name, value) {
+      attributes[name] = value;
+    },
+    setRangeText(text, from, to) {
+      this.value = this.value.slice(0, from) + text + this.value.slice(to);
+      this.selectionStart = this.selectionEnd = from + text.length;
+    },
+    dispatchEvent() {}
+  };
+  vm.runInNewContext(`${js.slice(start, end)}; installTitleKeyboardFallback(input);`, {
+    Event: class Event {},
+    window: { setTimeout: (fn) => fn() },
+    input
+  });
+  listeners.compositionstart();
+  listeners.compositionend({ data: "模板" });
+  assert.equal(input.value, "培训模板");
+});
+
+test("dynamic course submenu inputs are bound after every render and on focus", () => {
+  assert.match(js, /installTitleKeyboardFallbacks\(box\)/);
+  assert.match(js, /courseTree\.addEventListener\("focusin"/);
+  assert.match(js, /installTitleKeyboardFallbacks\(ev\.target\)/);
+  assert.match(js, /data-title-keyboard-ready/);
+  assert.match(js, /function directCourseSubForm/);
+  assert.doesNotMatch(js, /querySelector\(":scope > \.academy-course-sub-form"\)/);
 });
 
 test("plan is live; old ppt is rejected", async () => {
@@ -138,6 +287,94 @@ test("plan is live; old ppt is rejected", async () => {
   assert.equal(res.status, 400);
   const data = await res.json();
   assert.match(data.error, /pptx/);
+});
+
+test("course folders can be created, nested, reordered, and assigned", async () => {
+  const cookie = await loginCookie();
+  await resetPptCoursesForTests();
+  const headers = { cookie, Accept: "application/json", "Content-Type": "application/json" };
+  const initial = await (await fetch(`${base}/api/academy/courses`, { headers })).json();
+  assert.equal(initial.canEdit, true);
+  assert.equal(initial.folders.length, 5);
+
+  const invalid = await fetch(`${base}/api/academy/courses/folders`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ title: "\u0000\u0000", parentId: "" })
+  });
+  assert.equal(invalid.status, 400);
+  assert.match((await invalid.json()).error, /分类名称/);
+
+  const topRes = await fetch(`${base}/api/academy/courses/folders`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ title: "直播培训", parentId: "" })
+  });
+  assert.equal(topRes.status, 201);
+  const top = (await topRes.json()).folder;
+  const childRes = await fetch(`${base}/api/academy/courses/folders`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ title: "开播准备", parentId: top.id })
+  });
+  assert.equal(childRes.status, 201);
+  const child = (await childRes.json()).folder;
+
+  const movedFolder = await fetch(`${base}/api/academy/courses/folders/reorder`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ id: "course-folder-5", parentId: top.id })
+  });
+  assert.equal(movedFolder.status, 200);
+  const movedTree = (await movedFolder.json()).folders;
+  const liveFolder = movedTree.find((folder) => folder.id === top.id);
+  assert.ok(liveFolder.children.some((folder) => folder.id === child.id));
+  assert.ok(liveFolder.children.some((folder) => folder.id === "course-folder-5"));
+
+  const buf = await makePptx();
+  const qs = new URLSearchParams({
+    title: "自建培训模板",
+    category: child.title,
+    folderId: child.id,
+    published: "1",
+    filename: "training.pptx"
+  });
+  const upload = await fetch(`${base}/api/academy/courses?${qs}`, {
+    method: "POST",
+    headers: { cookie, Accept: "application/json", "Content-Type": "application/octet-stream" },
+    body: buf
+  });
+  assert.equal(upload.status, 201);
+  const course = (await upload.json()).course;
+  assert.equal(course.folderId, child.id);
+
+  const assigned = await fetch(`${base}/api/academy/courses/${course.id}/move`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ folderId: top.id })
+  });
+  assert.equal(assigned.status, 200);
+  assert.equal((await assigned.json()).course.folderId, top.id);
+  const final = await (await fetch(`${base}/api/academy/courses`, { headers })).json();
+  assert.equal(final.items.find((item) => item.id === course.id).folderId, top.id);
+});
+
+test("course folder catalog removes legacy control-only titles", async () => {
+  await resetPptCoursesForTests();
+  await writeFile(
+    join(DATA_DIR, "catalog.json"),
+    JSON.stringify({
+      folders: [
+        { id: "bad-folder", title: "\u0000\u0000", children: [] },
+        { id: "good-folder", title: "  正常分类  ", children: [] }
+      ],
+      assignments: {}
+    })
+  );
+  assert.deepEqual(await getCourseFolderTree(), [
+    { id: "good-folder", title: "正常分类", children: [] }
+  ]);
+  await resetPptCoursesForTests();
 });
 
 test("upload pptx, turn pages, never serve original", async () => {
