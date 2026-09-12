@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.367-home-team4w */
+/* xm-module-home 0.1.368-home-team4x4 */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -507,7 +507,7 @@
       escapeHtml(team.key) +
       '"><div><h2>' +
       escapeHtml(team.name) +
-      "团队</h2><p>店铺按组织中心责权，数字按店铺id或店名对齐星脉 ERP。</p></div>" +
+      "团队</h2><p>店铺按组织中心责权，数字按店铺id或店名对齐星脉 ERP。卡片可拖拽换位。</p></div>" +
       '<a href="' +
       escapeHtml(team.href || "/data/overview") +
       '">打开数据总览</a></header>'
@@ -949,12 +949,13 @@
       ".xm-hm.is-live .xm-hm-kpis,.xm-hm.is-board .xm-hm-kpis,.xm-hm.is-team .xm-hm-kpis,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
       ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden]{display:none}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
-      ".xm-hm-teams{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 16px;align-items:start;position:relative}" +
-      ".xm-hm-teams::before{content:\"\";position:absolute;inset:0 auto 0 50%;width:1px;background:var(--xm-line);pointer-events:none}" +
-      ".xm-hm-team{display:flex;flex-direction:column;gap:8px;min-width:0}" +
-      ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-content:start}" +
-      ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0}" +
-      ".xm-hm.is-team .xm-hm-card{min-height:104px;padding:12px 12px 10px;border-radius:8px}" +
+      ".xm-hm-teams{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 16px;align-items:start;position:relative}" +
+      ".xm-hm-team{display:flex;flex-direction:column;gap:10px;min-width:0;background:#eef5ff;border:1px solid #7ea8e0;border-radius:12px;padding:12px 12px 10px;box-shadow:0 1px 2px rgba(47,84,235,.08)}" +
+      ".xm-hm-team[data-team=\"han\"]{background:#e7f1ff;border-color:#6f9ad6}" +
+      ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start}" +
+      ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border-color:#c5d8f2}" +
+      ".xm-hm.is-team .xm-hm-card{min-height:104px;padding:12px 12px 10px;border-radius:8px;cursor:grab}" +
+      ".xm-hm.is-team .xm-hm-card.is-hold{cursor:grabbing}" +
       ".xm-hm.is-team .xm-hm-card-head{font-size:12px}" +
       ".xm-hm.is-team .xm-hm-card-head .xm-hm-help{width:16px;height:16px;font-size:10px}" +
       ".xm-hm.is-team .xm-hm-value{margin-top:8px;font-size:20px}" +
@@ -1027,7 +1028,7 @@
       ".xm-hm-pop h3{margin:0 0 8px;font-size:13px}" +
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{margin:8px 0 0;color:var(--xm-muted);font-size:12px}" +
-      "@media (max-width:1100px){.xm-hm-team-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}" +
+      "@media (max-width:1100px){.xm-hm-teams{grid-template-columns:1fr}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}" +
       "@media (max-width:1200px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
       "@media (max-width:700px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts,.xm-hm-team-kpis{grid-template-columns:1fr}.xm-hm-team-head{flex-direction:column}.xm-hm-cal-months{flex-direction:column}}"
     );
@@ -1085,7 +1086,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.367-home-team4w");
+    board.setAttribute("data-hm-js", "0.1.368-home-team4x4");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", state.view === "team");
@@ -2384,8 +2385,13 @@
         var x = event.clientX || 0;
         var y = event.clientY || 0;
         if (sortHold && !sortDragging && (Math.abs(x - sortStartX) > 8 || Math.abs(y - sortStartY) > 8)) {
-          sortClearHold();
-          sortFrom = "";
+          window.clearTimeout(sortHold);
+          sortHold = 0;
+          sortDragging = true;
+          var moving = root.querySelectorAll('.xm-hm-card[data-card="' + sortFrom + '"]');
+          Array.prototype.forEach.call(moving, function (el) {
+            el.classList.add("is-hold");
+          });
         }
         if (sortSettings && sortFrom && !sortDragging && (Math.abs(x - sortStartX) > 6 || Math.abs(y - sortStartY) > 6)) {
           sortDragging = true;

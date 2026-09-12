@@ -41,15 +41,15 @@ test("team KPIs resolve ERP shop id from storeId or shop-options name", () => {
   assert.match(homeJs, /shop\.manager/);
 });
 
-test("team view links to data overview and packs KPIs into four rows", () => {
+test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function teamBlockHtml/);
   assert.match(homeJs, /打开数据总览/);
   assert.match(homeJs, /href: "\/data\/overview"/);
   assert.doesNotMatch(homeJs, /打开运营中心/);
-  assert.match(homeJs, /\.xm-hm-team-kpis\{display:grid;grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
-  assert.match(homeJs, /\.xm-hm\.is-team \.xm-hm-card\{min-height:104px/);
+  assert.match(homeJs, /\.xm-hm-team-kpis\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
+  assert.match(homeJs, /\.xm-hm-team\{display:flex;flex-direction:column;gap:10px;min-width:0;background:#eef5ff/);
+  assert.match(homeJs, /卡片可拖拽换位/);
   assert.match(homeJs, /\.xm-hm-teams\{display:grid;grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)/);
-  assert.match(homeJs, /店铺按组织中心责权，数字按店铺id或店名对齐星脉 ERP/);
 });
 
 test("homepage money and rates show as rounded integers", () => {
