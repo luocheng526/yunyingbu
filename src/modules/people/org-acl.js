@@ -15,7 +15,7 @@ export function scopeOf(actor) {
 }
 
 function teamBlob(row) {
-  return [row.team, row.chief, row.lead].join(" ");
+  return [row.team, row.chief, row.lead, row.manager, row.director, row.supervisor, row.operator].join(" ");
 }
 
 export function rowMatchesScope(row, scope) {
