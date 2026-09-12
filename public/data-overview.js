@@ -138,6 +138,55 @@
     return Boolean(slot && slot.at && Date.now() - slot.at < OV_BOARD_FRESH_MS);
   }
 
+  function readSharedShopMetrics() {
+    try {
+      const all = JSON.parse(localStorage.getItem("xm-data-shops-metrics-v1") || "{}");
+      const slot = all.latest;
+      return slot && Array.isArray(slot.shops) ? slot.shops : [];
+    } catch (_err) {
+      return [];
+    }
+  }
+
+  function overlaySharedShopMetrics(shops) {
+    const extra = readSharedShopMetrics();
+    if (!extra.length) {
+      return shops || [];
+    }
+    const byId = {};
+    extra.forEach(function (shop) {
+      const id = String(shop.shopId || shop.id || "");
+      if (id) {
+        byId[id] = shop;
+      }
+    });
+    const seen = {};
+    const out = (shops || []).map(function (shop) {
+      const id = String(shop.shopId || "");
+      if (id) {
+        seen[id] = true;
+      }
+      const hit = byId[id];
+      if (!hit) {
+        return shop;
+      }
+      const pay = Number(shop.payAmount) || 0;
+      if (pay) {
+        return shop;
+      }
+      return Object.assign({}, shop, hit);
+    });
+    extra.forEach(function (shop) {
+      const id = String(shop.shopId || shop.id || "");
+      if (!id || seen[id]) {
+        return;
+      }
+      seen[id] = true;
+      out.push(shop);
+    });
+    return out;
+  }
+
   function expandCards(cards) {
     const byKey = {};
     (cards || []).forEach(function (card) {
@@ -180,7 +229,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov8";
+      link.href = "/data-pages.css?v=data-ov9";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -1609,6 +1658,10 @@
         state.payload.range = state.range;
         state.payload.dateLabel = span.dateLabel;
         state.payload.ranges = RANGES;
+        if (state.payload.shops && state.payload.shops.length) {
+          state.payload.shops = overlaySharedShopMetrics(state.payload.shops);
+          state.payload.shopTable = shopTableFrom(state.payload.shops);
+        }
       }
       render();
     }
@@ -1650,7 +1703,7 @@
           if (dead || !state.payload || !dir || !dir.length) {
             return;
           }
-          const merged = mergeErpShops(state.payload.shops, dir);
+          const merged = overlaySharedShopMetrics(mergeErpShops(state.payload.shops, dir));
           state.payload.shops = merged;
           state.payload.summary.shops = merged.length;
           state.payload.shopTable = shopTableFrom(merged);
