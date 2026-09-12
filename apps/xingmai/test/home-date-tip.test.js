@@ -47,6 +47,7 @@ test("team view links to data overview and packs KPIs into four rows", () => {
   assert.match(homeJs, /href: "\/data\/overview"/);
   assert.doesNotMatch(homeJs, /打开运营中心/);
   assert.match(homeJs, /\.xm-hm-team-kpis\{display:grid;grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
+  assert.match(homeJs, /\.xm-hm\.is-team \.xm-hm-card\{min-height:104px/);
   assert.match(homeJs, /\.xm-hm-teams\{display:grid;grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)/);
   assert.match(homeJs, /店铺按组织中心责权，数字按店铺id或店名对齐星脉 ERP/);
 });

@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.366-home-team4r */
+/* xm-module-home 0.1.367-home-team4w */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -952,13 +952,13 @@
       ".xm-hm-teams{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 16px;align-items:start;position:relative}" +
       ".xm-hm-teams::before{content:\"\";position:absolute;inset:0 auto 0 50%;width:1px;background:var(--xm-line);pointer-events:none}" +
       ".xm-hm-team{display:flex;flex-direction:column;gap:8px;min-width:0}" +
-      ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;align-content:start}" +
+      ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-content:start}" +
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0}" +
-      ".xm-hm.is-team .xm-hm-card{min-height:88px;padding:10px 10px 8px;border-radius:8px}" +
+      ".xm-hm.is-team .xm-hm-card{min-height:104px;padding:12px 12px 10px;border-radius:8px}" +
       ".xm-hm.is-team .xm-hm-card-head{font-size:12px}" +
       ".xm-hm.is-team .xm-hm-card-head .xm-hm-help{width:16px;height:16px;font-size:10px}" +
-      ".xm-hm.is-team .xm-hm-value{margin-top:6px;font-size:18px}" +
-      ".xm-hm.is-team .xm-hm-trend{margin-top:4px;font-size:12px}" +
+      ".xm-hm.is-team .xm-hm-value{margin-top:8px;font-size:20px}" +
+      ".xm-hm.is-team .xm-hm-trend{margin-top:6px;font-size:12px}" +
       ".xm-hm-team-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;min-height:48px;padding:0 4px 4px}" +
       ".xm-hm-team-head h2{margin:0;font-size:16px}" +
       ".xm-hm-team-head p{margin:4px 0 0;color:var(--xm-muted);font-size:12px}" +
@@ -1085,7 +1085,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.366-home-team4r");
+    board.setAttribute("data-hm-js", "0.1.367-home-team4w");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", state.view === "team");
