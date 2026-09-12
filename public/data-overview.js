@@ -27,8 +27,61 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=channel-cal1";
+      link.href = "/data-pages.css?v=channel-cal2";
       document.head.appendChild(link);
+    }
+    ensureCalStyle();
+  }
+
+  function ensureCalStyle() {
+    if (document.getElementById("ch-cal-pop-style")) {
+      return;
+    }
+    const style = document.createElement("style");
+    style.id = "ch-cal-pop-style";
+    style.textContent =
+      ".ch-cal-pop{position:fixed;z-index:4000;display:none;box-sizing:border-box;width:560px;max-width:calc(100vw - 24px);padding:8px 4px 10px;background:#fff;border:1px solid #e8e8e8;border-radius:4px;box-shadow:0 6px 16px rgba(0,0,0,.12)}" +
+      ".ch-cal-pop.is-open{display:block}" +
+      ".ch-cal-pop .ch-cal{display:flex;flex-wrap:nowrap;width:100%;background:transparent;border:0;box-shadow:none}" +
+      ".ch-cal-pop .ch-cal-month{flex:1;min-width:0;width:50%;padding:4px 12px 6px;box-sizing:border-box}" +
+      ".ch-cal-pop .ch-cal-month + .ch-cal-month{border-left:1px solid #f0f0f0}" +
+      ".ch-cal-pop .ch-cal-head{position:relative;display:flex;align-items:center;justify-content:center;min-height:32px;margin-bottom:2px;color:#262626;font-size:14px;font-weight:400}" +
+      ".ch-cal-pop .ch-cal-head strong{font-weight:400}" +
+      ".ch-cal-pop .ch-cal-head button{position:absolute;top:4px;width:22px;height:22px;padding:0;border:0;background:transparent;color:#8c8c8c;font-size:12px;line-height:22px;cursor:pointer}" +
+      ".ch-cal-pop .ch-cal-head button:hover{color:#262626}" +
+      ".ch-cal-pop .ch-cal-head [data-cal='prev-year']{left:0}" +
+      ".ch-cal-pop .ch-cal-head [data-cal='prev-month']{left:20px}" +
+      ".ch-cal-pop .ch-cal-head [data-cal='next-month']{right:20px}" +
+      ".ch-cal-pop .ch-cal-head [data-cal='next-year']{right:0}" +
+      ".ch-cal-pop .ch-cal-week,.ch-cal-pop .ch-cal-days{display:grid;grid-template-columns:repeat(7,1fr);text-align:center}" +
+      ".ch-cal-pop .ch-cal-week span{height:24px;line-height:24px;font-size:12px;color:#8c8c8c}" +
+      ".ch-cal-pop .ch-cal-days button{height:28px;margin:0;padding:0;border:0;border-radius:2px;background:transparent;color:#262626;font-size:13px;cursor:pointer}" +
+      ".ch-cal-pop .ch-cal-days button:hover:not(:disabled):not(.is-start):not(.is-end){background:#f5f5f5}" +
+      ".ch-cal-pop .ch-cal-days button.is-out,.ch-cal-pop .ch-cal-days button.is-future{color:#bfbfbf}" +
+      ".ch-cal-pop .ch-cal-days button.is-future{cursor:not-allowed}" +
+      ".ch-cal-pop .ch-cal-days button.is-today{color:#cf1322;font-weight:600}" +
+      ".ch-cal-pop .ch-cal-days button.is-in{background:#fff1f0;color:#c62828}" +
+      ".ch-cal-pop .ch-cal-days button.is-start,.ch-cal-pop .ch-cal-days button.is-end{background:#c62828;color:#fff}" +
+      ".ch-cal-pop .ch-cal-err{width:100%;margin:0;padding:4px 12px 0;color:#c62828;font-size:12px}";
+    document.head.appendChild(style);
+  }
+
+  function getCalPop() {
+    let el = document.getElementById("ch-cal-pop");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "ch-cal-pop";
+      el.className = "ch-cal-pop";
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+
+  function hideCalPop() {
+    const el = document.getElementById("ch-cal-pop");
+    if (el) {
+      el.classList.remove("is-open");
+      el.innerHTML = "";
     }
   }
 
@@ -638,7 +691,6 @@
           "</button>"
         );
       }).join("");
-      const custom = state.calOpen ? calendarPanel(state) : "";
       const shopOpts =
         '<option value="">请选择店铺</option>' +
         ((payload.shops || []).map(function (shop) {
@@ -667,9 +719,7 @@
         "）</span>" +
         '<div class="ch-cal-wrap"><div class="ch-ranges">' +
         ranges +
-        "</div>" +
-        custom +
-        "</div></div></div>" +
+        "</div></div></div></div>" +
         '<div class="ch-summary"><span class="ch-sum-title">综合指标</span>' +
         "<b>渠道 " +
         escapeHtml(String(payload.summary.channels)) +
@@ -697,6 +747,92 @@
         tabs +
         "</div>" +
         lists;
+      syncCalPop();
+    }
+
+    function placeCalPop(anchor) {
+      const pop = getCalPop();
+      const box = anchor.getBoundingClientRect();
+      const width = Math.min(560, window.innerWidth - 24);
+      let left = box.right - width;
+      if (left < 12) {
+        left = 12;
+      }
+      let top = box.bottom + 6;
+      if (top + 340 > window.innerHeight && box.top > 360) {
+        top = Math.max(12, box.top - 346);
+      }
+      pop.style.left = left + "px";
+      pop.style.top = top + "px";
+      pop.style.width = width + "px";
+    }
+
+    function applyCalDay(day) {
+      if (!state.customFrom || state.customTo) {
+        state.customFrom = day;
+        state.customTo = "";
+        state.calError = "";
+        render();
+        return;
+      }
+      let from = state.customFrom;
+      let to = day;
+      if (to < from) {
+        const swap = from;
+        from = to;
+        to = swap;
+      }
+      if (inclusiveDays(from, to) > 30) {
+        state.calError = "最多可以选择30天";
+        render();
+        return;
+      }
+      state.customFrom = from;
+      state.customTo = to;
+      state.calError = "";
+      state.calOpen = false;
+      state.range = "自定义";
+      hideCalPop();
+      load();
+    }
+
+    function applyCalNav(act) {
+      const moved = shiftMonth(
+        state.calYear,
+        state.calMonth,
+        act === "prev-year" ? -12 : act === "next-year" ? 12 : act === "prev-month" ? -1 : 1
+      );
+      state.calYear = moved.year;
+      state.calMonth = moved.month;
+      render();
+    }
+
+    function onCalPopClick(event) {
+      event.stopPropagation();
+      const calNav = event.target.closest("[data-cal]");
+      if (calNav) {
+        applyCalNav(calNav.getAttribute("data-cal"));
+        return;
+      }
+      const dayBtn = event.target.closest("[data-day]");
+      if (dayBtn && !dayBtn.disabled) {
+        applyCalDay(dayBtn.getAttribute("data-day"));
+      }
+    }
+
+    function syncCalPop() {
+      const pop = getCalPop();
+      if (!state.calOpen) {
+        hideCalPop();
+        return;
+      }
+      pop.innerHTML = calendarPanel(state);
+      pop.classList.add("is-open");
+      const btn = board.querySelector('button[data-range="自定义"]');
+      if (btn) {
+        placeCalPop(btn);
+      }
+      pop.onclick = onCalPopClick;
     }
 
     function json(url) {
@@ -768,62 +904,47 @@
         });
     }
 
+    function onDocClick(event) {
+      if (!state.calOpen || dead) {
+        return;
+      }
+      const t = event.target;
+      if (t && t.closest && (t.closest("#ch-cal-pop") || t.closest('button[data-range="自定义"]'))) {
+        return;
+      }
+      state.calOpen = false;
+      hideCalPop();
+    }
+
+    function onWinResize() {
+      if (!state.calOpen) {
+        return;
+      }
+      const btn = board && board.querySelector('button[data-range="自定义"]');
+      if (btn) {
+        placeCalPop(btn);
+      }
+    }
+
+    document.addEventListener("click", onDocClick);
+    window.addEventListener("resize", onWinResize);
+
     board.addEventListener("click", function (event) {
-      const calNav = event.target.closest("[data-cal]");
-      if (calNav) {
-        const act = calNav.getAttribute("data-cal");
-        const moved = shiftMonth(
-          state.calYear,
-          state.calMonth,
-          act === "prev-year" ? -12 : act === "next-year" ? 12 : act === "prev-month" ? -1 : 1
-        );
-        state.calYear = moved.year;
-        state.calMonth = moved.month;
-        render();
-        return;
-      }
-      const dayBtn = event.target.closest("[data-day]");
-      if (dayBtn) {
-        const day = dayBtn.getAttribute("data-day");
-        if (!state.customFrom || state.customTo) {
-          state.customFrom = day;
-          state.customTo = "";
-          state.calError = "";
-          render();
-          return;
-        }
-        let from = state.customFrom;
-        let to = day;
-        if (to < from) {
-          const swap = from;
-          from = to;
-          to = swap;
-        }
-        if (inclusiveDays(from, to) > 30) {
-          state.calError = "最多可以选择30天";
-          render();
-          return;
-        }
-        state.customFrom = from;
-        state.customTo = to;
-        state.calError = "";
-        state.calOpen = false;
-        state.range = "自定义";
-        load();
-        return;
-      }
       const rangeBtn = event.target.closest("button[data-range]");
       if (rangeBtn) {
         const next = rangeBtn.getAttribute("data-range");
         if (next === "自定义") {
-          state.range = "自定义";
-          state.calOpen = true;
-          state.calError = "";
+          state.calOpen = !state.calOpen;
+          if (state.calOpen) {
+            state.range = "自定义";
+            state.calError = "";
+          }
           render();
           return;
         }
         state.range = next;
         state.calOpen = false;
+        hideCalPop();
         load();
         return;
       }
@@ -844,6 +965,9 @@
 
     return function unmount() {
       dead = true;
+      document.removeEventListener("click", onDocClick);
+      window.removeEventListener("resize", onWinResize);
+      hideCalPop();
     };
   }
 

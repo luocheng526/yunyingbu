@@ -336,21 +336,37 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
   color: #fff;
   border-color: #c62828;
 }
+.ch-top,
+.ch-right,
+.ch-cal-wrap {
+  overflow: visible;
+}
 .ch-cal-wrap {
   position: relative;
 }
-.ch-cal {
-  position: absolute;
-  right: 0;
-  top: 36px;
-  z-index: 30;
-  display: flex;
-  flex-wrap: wrap;
+.ch-cal-pop {
+  position: fixed;
+  z-index: 4000;
+  display: none;
+  box-sizing: border-box;
   width: 560px;
-  background: var(--ch-card, #fff);
-  border: 1px solid var(--ch-line, #eee);
-  border-radius: 8px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.08);
+  max-width: calc(100vw - 24px);
+  padding: 8px 4px 10px;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+.ch-cal-pop.is-open {
+  display: block;
+}
+.ch-cal {
+  display: flex;
+  flex-wrap: nowrap;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 .ch-cal-month {
   width: 50%;
