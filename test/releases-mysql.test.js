@@ -397,9 +397,9 @@ test("mysql store pages failed tickets and persists return in log", async () => 
   assert.equal(page.items[0].returned, false);
   const sent = await store.returnFailed(created.id);
   assert.equal(sent.already, false);
-  assert.equal(sent.dialog, "甄选商学院对话框");
+  assert.equal(sent.dialog, "版本发布中心");
   assert.equal(sent.item.returned, true);
-  assert.match(sent.item.log, /已发回给「甄选商学院对话框」/);
+  assert.match(sent.item.log, /已发回给「版本发布中心」/);
   const again = await store.returnFailed(created.id);
   assert.equal(again.already, true);
   const queued = await store.returnFailed(created.id + "-missing");

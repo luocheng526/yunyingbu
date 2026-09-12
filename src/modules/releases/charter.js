@@ -15,7 +15,7 @@ export const REQUEUE_LOG =
   "失败未落地，已恢复待审批。按原提交时间排队；点通过才放行；下一条不会自动发。";
 
 export function ticketDialogName(item) {
-  return String(item?.source || item?.applicant || item?.module || "").trim() || "来源对话";
+  return String(item?.module || item?.source || item?.applicant || "").trim() || "来源对话";
 }
 
 export function ticketReturned(item) {

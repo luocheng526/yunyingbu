@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>版本发布中心</title>
-    <link rel="stylesheet" href="/releases.css?v=sc-ui-18" />
+    <link rel="stylesheet" href="/releases.css?v=sc-ui-19" />
     <style>
       #upgrade-mask,
       html > #upgrade-mask {
@@ -1018,7 +1018,7 @@
       }
 
       function ticketDialogName(item) {
-        return String((item && (item.source || item.applicant || item.module)) || "").trim() || "来源对话";
+        return String((item && (item.module || item.source || item.applicant)) || "").trim() || "来源对话";
       }
 
       function renderHistory(result, locked) {

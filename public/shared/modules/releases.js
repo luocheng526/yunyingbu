@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.98-tab-blue */
+/* xm-module-releases 0.1.99-return-module */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -222,7 +222,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-18";
+      link.href = "/releases.css?v=sc-ui-19";
       document.head.appendChild(link);
     }
   }
@@ -978,7 +978,7 @@
       }
 
       function ticketDialogName(item) {
-        return String((item && (item.source || item.applicant || item.module)) || "").trim() || "来源对话";
+        return String((item && (item.module || item.source || item.applicant)) || "").trim() || "来源对话";
       }
 
       function renderHistory(result, locked) {

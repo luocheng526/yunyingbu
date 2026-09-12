@@ -215,8 +215,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /sc-ui-18/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-18/);
+    assert.match(text, /sc-ui-19/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-19/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
     assert.match(text, /id="xm-releases-boot"/);
@@ -316,8 +316,9 @@ test("release board scripts parse so tab refresh can run", () => {
   assert.match(theme, /function finishUpgradeInPlace/);
   assert.match(theme, /return "landed"/);
   assert.doesNotMatch(theme, /location\.replace\("\/releases\?reloaded="/);
-  assert.match(theme, /sc-ui-18/);
-  assert.match(theme, /0\.1\.98-tab-blue/);
+  assert.match(theme, /sc-ui-19/);
+  assert.match(theme, /0\.1\.99-return-module/);
+  assert.match(theme, /item\.module \|\| item\.source \|\| item\.applicant/);
   assert.match(theme, /#1677ff/);
   assert.match(theme, /failed-sum/);
   assert.match(theme, /失败版本/);
@@ -1802,6 +1803,8 @@ test("history and logs board views page slim rows", async () => {
 });
 
 test("returnFailedItem marks a failed ticket for the source dialog", () => {
+  assert.equal(ticketDialogName({ module: "主框架", applicant: "罗成运营部主脑" }), "主框架");
+  assert.equal(ticketDialogName({ module: "数据中心", source: "罗成运营部主脑" }), "数据中心");
   assert.equal(ticketDialogName({ source: "甄选商学院对话框" }), "甄选商学院对话框");
   assert.equal(ticketDialogName({ applicant: "罗成运营部主脑" }), "罗成运营部主脑");
   assert.equal(ticketDialogName({}), "来源对话");
@@ -1811,19 +1814,19 @@ test("returnFailedItem marks a failed ticket for the source dialog", () => {
   assert.equal(success.status, 409);
   const item = {
     status: "failed",
-    source: "甄选商学院对话框",
-    applicant: "甄选商学院",
-    module: "其他",
+    source: "罗成运营部主脑",
+    applicant: "罗成运营部主脑",
+    module: "主框架",
     log: "语法检查失败"
   };
   const first = returnFailedItem(item);
-  assert.equal(first.dialog, "甄选商学院对话框");
+  assert.equal(first.dialog, "主框架");
   assert.equal(item.returned, true);
-  assert.match(item.log, /已发回给「甄选商学院对话框」/);
+  assert.match(item.log, /已发回给「主框架」/);
   assert.match(item.log, /语法检查失败/);
   const again = returnFailedItem(item);
   assert.equal(again.already, true);
-  assert.equal(again.dialog, "甄选商学院对话框");
+  assert.equal(again.dialog, "主框架");
 });
 
 test("failed versions board lists only failed tickets and can return them", async () => {
@@ -1863,11 +1866,11 @@ test("failed versions board lists only failed tickets and can return them", asyn
         body: "{}"
       });
       assert.equal(sent.res.status, 200, sent.body.error);
-      assert.equal(sent.body.dialog, "甄选商学院对话框");
+      assert.equal(sent.body.dialog, "版本发布中心");
       assert.equal(sent.body.already, false);
       assert.equal(sent.body.item.status, "failed");
       assert.equal(sent.body.item.returned, true);
-      assert.match(sent.body.item.log, /已发回给「甄选商学院对话框」/);
+      assert.match(sent.body.item.log, /已发回给「版本发布中心」/);
       const again = await json(base, `/api/releases/${created.body.item.id}/return`, {
         method: "POST",
         body: "{}"
