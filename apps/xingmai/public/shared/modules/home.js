@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.386-home-nodash */
+/* xm-module-home 0.1.387-home-coltip */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -218,16 +218,7 @@
   }
 
   function helpFromEvent(event) {
-    var t = event.target;
-    if (!t || !t.closest) {
-      return null;
-    }
-    var help = t.closest(".xm-hm-help");
-    if (help) {
-      return help;
-    }
-    var head = t.closest(".xm-hm-card-head");
-    return head ? head.querySelector(".xm-hm-help") : null;
+    return event.target && event.target.closest ? event.target.closest(".xm-hm-help") : null;
   }
 
   function calMonthHtml(ym, opts, side) {
@@ -461,7 +452,7 @@
       '<article class="xm-hm-card" data-card="' +
       escapeHtml(card.key) +
       '"' +
-      (teamKey ? ' data-team="' + escapeHtml(teamKey) + '" title="拖拽换位"' : "") +
+      (teamKey ? ' data-team="' + escapeHtml(teamKey) + '"' : "") +
       '><div class="xm-hm-card-head"><span>' +
       escapeHtml(card.label) +
       '</span><button type="button" class="xm-hm-help" data-tip="' +
@@ -576,7 +567,7 @@
       escapeHtml(team.key) +
       '"><div><h2>' +
       escapeHtml(team.name) +
-      "团队</h2><p>责权店对齐 ERP。卡片可拖拽换位。</p></div>" +
+      "团队</h2><p>责权店对齐 ERP。</p></div>" +
       '<button type="button" class="xm-hm-set">卡片设置</button></header>'
     );
   }
@@ -936,7 +927,6 @@
       ".xm-hm-cal-grid button:disabled,.xm-hm-cal-grid button.is-off{color:#c0c4cc;opacity:.7;cursor:not-allowed}" +
       "html[data-theme=dark] .xm-hm-dates,html[data-theme=dark] .xm-hm-cal,html[data-theme=dark] .xm-hm-cal-arrow{background:var(--xm-card);color:var(--xm-ink);border-color:var(--xm-line)}" +
       ".xm-hm-card-head .xm-hm-help{cursor:help;position:relative;z-index:2;width:18px;height:18px;border:1px solid var(--xm-line);border-radius:50%;background:transparent;padding:0;margin:0;font:inherit;font-size:11px;line-height:1;color:var(--xm-muted);display:inline-flex;align-items:center;justify-content:center}" +
-      ".xm-hm-card-head .xm-hm-help::before{content:\"\";position:absolute;inset:-14px}" +
       ".xm-hm-tip{position:fixed;z-index:2147483646;display:none;box-sizing:border-box;width:max-content;max-width:min(360px,calc(100vw - 24px));padding:10px 12px;background:var(--xm-card,#fff);border:1px solid var(--xm-line,#eadfd0);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.18);color:var(--xm-ink,#1f1b16);font-size:12px;line-height:1.6;white-space:pre-wrap;text-align:left;pointer-events:none}" +
       ".xm-hm-tip.is-on{display:block}" +
       ".xm-hm-body{position:relative;display:flex;flex-direction:column;gap:12px;overflow:visible}" +
@@ -952,15 +942,13 @@
       ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
       ".xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}" +
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border:0;box-shadow:none}" +
-      ".xm-hm-teams .xm-hm-table{min-width:760px;font-variant-numeric:tabular-nums;border-collapse:separate;border-spacing:0}" +
+      ".xm-hm-teams .xm-hm-table{min-width:760px;font-variant-numeric:tabular-nums;border-collapse:separate;border-spacing:0;table-layout:fixed}" +
       ".xm-hm-teams .xm-hm-table .xm-hm-num{text-align:right;white-space:nowrap}" +
-      ".xm-hm-teams .xm-hm-table th{border-right:1px dashed #5b9bd5;border-bottom:1px dashed #5b9bd5}" +
-      ".xm-hm-teams .xm-hm-table td{border:0}" +
+      ".xm-hm-teams .xm-hm-table th,.xm-hm-teams .xm-hm-table td{border:0;border-right:1px dashed #c8ced8;overflow:hidden;text-overflow:ellipsis}" +
       ".xm-hm.is-chief .xm-hm-teams .xm-hm-panel{overflow:hidden}" +
       ".xm-hm.is-chief .xm-hm-teams .xm-hm-table{min-width:0}" +
       ".xm-hm-teams .xm-hm-table th.xm-hm-num{white-space:normal;max-width:6.4em;line-height:1.25}" +
-      ".xm-hm-teams .xm-hm-table th:last-child,.xm-hm-teams .xm-hm-table td:last-child{text-align:left;white-space:nowrap}" +
-      ".xm-hm-teams .xm-hm-table th:last-child{border-right:0}" +
+      ".xm-hm-teams .xm-hm-table th:last-child,.xm-hm-teams .xm-hm-table td:last-child{text-align:left;white-space:nowrap;border-right:0}" +
       ".xm-hm-sort-h{display:inline-flex;align-items:center;justify-content:flex-end;gap:3px;width:100%}" +
       ".xm-hm-sort-btns{display:inline-flex;flex-direction:column;line-height:1}" +
       ".xm-hm-sort-btns button{border:0;background:0;padding:0;font-size:9px;line-height:1;color:#c0c4cc;cursor:pointer}" +
@@ -1109,7 +1097,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.386-home-nodash");
+    board.setAttribute("data-hm-js", "0.1.387-home-coltip");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2131,11 +2119,6 @@
       function onClick(event) {
         var help = event.target.closest && event.target.closest(".xm-hm-help");
         if (help) {
-          if (cardTipPinned && cardTipAnchor === help) {
-            hideCardTip(true);
-          } else {
-            showCardTip(help, true);
-          }
           return;
         }
         if (cardTipPinned) {
@@ -2245,26 +2228,22 @@
 
       function onHelpOver(event) {
         var help = helpFromEvent(event);
-        if (!help || cardTipPinned) {
+        if (!help) {
           return;
         }
         showCardTip(help, false);
       }
 
       function onHelpOut(event) {
-        if (cardTipPinned) {
-          return;
-        }
         var help = helpFromEvent(event);
         if (!help) {
           return;
         }
-        var head = help.closest(".xm-hm-card-head");
         var to = event.relatedTarget;
-        if (to && head && head.contains(to)) {
+        if (to && help.contains(to)) {
           return;
         }
-        hideCardTip(false);
+        hideCardTip(true);
       }
 
       function onTipScroll() {
@@ -2363,6 +2342,37 @@
       var sortStartX = 0;
       var sortStartY = 0;
       var sortSwallow = false;
+      var colDrag = null;
+
+      function shopColHit(event) {
+        var cell = event.target.closest && event.target.closest(".xm-hm-teams .xm-hm-table th,.xm-hm-teams .xm-hm-table td");
+        if (!cell) {
+          return null;
+        }
+        var rect = cell.getBoundingClientRect();
+        var x = event.clientX || 0;
+        var last = cell.cellIndex >= cell.parentNode.cells.length - 1;
+        if (!last && rect.right - x <= 6) {
+          return { table: cell.closest("table"), idx: cell.cellIndex, start: cell.offsetWidth, x: x };
+        }
+        if (cell.cellIndex > 0 && x - rect.left <= 6) {
+          var prev = cell.parentNode.cells[cell.cellIndex - 1];
+          return { table: cell.closest("table"), idx: cell.cellIndex - 1, start: prev.offsetWidth, x: x };
+        }
+        return null;
+      }
+
+      function applyColW(table, idx, w) {
+        w = Math.max(48, Math.round(w));
+        var rows = table.rows;
+        for (var i = 0; i < rows.length; i += 1) {
+          var cell = rows[i].cells[idx];
+          if (cell) {
+            cell.style.width = w + "px";
+            cell.style.minWidth = w + "px";
+          }
+        }
+      }
 
       function clearTextSelection() {
         var sel = window.getSelection && window.getSelection();
@@ -2404,6 +2414,15 @@
         if (!event.target.closest || !event.target.closest("#xm-hm")) {
           return;
         }
+        var hit = shopColHit(event);
+        if (hit) {
+          if (event.cancelable) {
+            event.preventDefault();
+          }
+          colDrag = hit;
+          clearTextSelection();
+          return;
+        }
         if (event.target.closest("i") || event.target.closest("input") || event.target.closest("button") || event.target.closest("a")) {
           return;
         }
@@ -2433,6 +2452,17 @@
       function onSortMove(event) {
         var x = event.clientX || 0;
         var y = event.clientY || 0;
+        if (colDrag) {
+          if (event.cancelable) {
+            event.preventDefault();
+          }
+          applyColW(colDrag.table, colDrag.idx, colDrag.start + (x - colDrag.x));
+          document.body.style.cursor = "col-resize";
+          return;
+        }
+        if (!sortFrom && !sortDragging) {
+          document.body.style.cursor = shopColHit(event) ? "col-resize" : "";
+        }
         if (sortFrom || sortDragging) {
           clearTextSelection();
         }
@@ -2465,6 +2495,12 @@
       }
 
       function onSortUp(event) {
+        if (colDrag) {
+          colDrag = null;
+          document.body.style.cursor = "";
+          sortFinish();
+          return;
+        }
         var moved = sortDragging && sortFrom;
         var toEl = hitSortEl(event);
         var toKey = toEl ? toEl.getAttribute(sortSettings ? "data-sort" : "data-card") : "";
