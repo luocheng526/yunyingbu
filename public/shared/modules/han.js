@@ -435,14 +435,15 @@
         );
       }
 
-      function cellHtml(row, key) {
-        if (key === "_layer") {
-          return "<td>" + layerSelect(row) + "</td>";
-        }
-        const value = row[key] || "";
+      function isImageUrl(value) {
+        const text = String(value || "").trim();
+        return /^https?:\/\//i.test(text) || /^\/\//.test(text);
+      }
+
+      function imageInput(id, key, value, extra) {
         return (
-          '<td><input class="han-cell" data-id="' +
-          escapeHtml(row.id) +
+          '<input class="han-cell" data-id="' +
+          escapeHtml(id) +
           '" data-key="' +
           key +
           '" type="' +
@@ -450,9 +451,31 @@
           '" value="' +
           escapeHtml(value) +
           '"' +
-          (key === "image" ? " placeholder=\"主图链接\"" : "") +
-          " /></td>"
+          (extra || "") +
+          " />"
         );
+      }
+
+      function cellHtml(row, key) {
+        if (key === "_layer") {
+          return "<td>" + layerSelect(row) + "</td>";
+        }
+        const value = row[key] || "";
+        if (key === "image") {
+          const src = String(value).trim();
+          const thumb = isImageUrl(src)
+            ? '<img class="han-thumb" src="' +
+              escapeHtml(src) +
+              '" alt="" referrerpolicy="no-referrer" />'
+            : "";
+          return (
+            '<td class="han-img-cell">' +
+            thumb +
+            imageInput(row.id, key, value, ' placeholder="主图链接"') +
+            "</td>"
+          );
+        }
+        return "<td>" + imageInput(row.id, key, value, key === "image" ? ' placeholder="主图链接"' : "") + "</td>";
       }
 
       const teams = HAN_GOODS_TEAMS;
@@ -560,6 +583,9 @@
           ".han-sheet .han-sheet-hint{white-space:normal;min-width:160px;max-width:220px;font-size:11px;line-height:1.45;color:#444;background:#fafafa}" +
           ".han-sheet .han-sheet-col{background:#f3f3f3;font-weight:600}" +
           ".han-sheet input{width:92px;border:0;background:#fffde7;padding:2px 4px}" +
+          ".han-img-cell{min-width:72px;text-align:center}" +
+          ".han-thumb{display:block;width:56px;height:56px;object-fit:cover;margin:0 auto 4px;border:1px solid #d1d5db;background:#fff}" +
+          ".han-img-cell input{width:88px}" +
           ".han-sheet button{font-size:12px;padding:2px 8px}" +
           ".han-sheet-msg{margin:0.5rem 0 0;min-height:1.2em}" +
           ".han-sheet-toolbar{display:flex;justify-content:flex-end;gap:8px;margin:0 0 10px;flex-wrap:wrap}" +
@@ -805,7 +831,9 @@
                     return "<td></td>";
                   }
                   return (
-                    '<td><input data-layer="' +
+                    '<td' +
+                    (key === "image" ? ' class="han-img-cell"' : "") +
+                    '><input data-layer="' +
                     i +
                     '" data-key="' +
                     key +
@@ -1069,6 +1097,26 @@
         savePatch(pick.getAttribute("data-id"), { layer: pick.value });
       }
 
+      function refreshThumb(input) {
+        if (input.getAttribute("data-key") !== "image") return;
+        const td = input.closest("td");
+        if (!td) return;
+        let img = td.querySelector("img.han-thumb");
+        const src = String(input.value || "").trim();
+        if (isImageUrl(src)) {
+          if (!img) {
+            img = document.createElement("img");
+            img.className = "han-thumb";
+            img.alt = "";
+            img.setAttribute("referrerpolicy", "no-referrer");
+            td.insertBefore(img, input);
+          }
+          img.src = src;
+        } else if (img && img.parentNode) {
+          img.parentNode.removeChild(img);
+        }
+      }
+
       function onSheetBlur(e) {
         const input = e.target.closest("input.han-cell");
         if (!input) return;
@@ -1076,6 +1124,7 @@
         const key = input.getAttribute("data-key");
         const patch = {};
         patch[key] = input.value;
+        refreshThumb(input);
         savePatch(id, patch);
       }
 
