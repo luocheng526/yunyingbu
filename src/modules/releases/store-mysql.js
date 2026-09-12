@@ -1,8 +1,9 @@
 import { getPool } from "../../db/pool.js";
-import { QUEUE_LOG, requeueFailedItem } from "./charter.js";
+import { QUEUE_LOG, requeueFailedItem, returnFailedItem } from "./charter.js";
 import { hasApplyReceipt } from "./push.js";
 import { assignSubmitOrder } from "./order.js";
 import { REVIEWER } from "./store-memory.js";
+import { BOARD_PAGE_SIZE, slimFailedItem } from "./board.js";
 
 function toIso(value) {
   if (!value) {
@@ -125,6 +126,150 @@ export function createMysqlStore({ now, pool } = {}) {
         "SELECT * FROM release_tickets WHERE status IN ('success', 'failed', 'rejected') ORDER BY COALESCE(reviewed_at, submitted_at) DESC, id DESC"
       );
       return rows.map(mapTicketRow);
+    },
+    async boardSummary() {
+      const [rows] = await db().query(`
+        SELECT
+          COALESCE(SUM(status = 'queued'), 0) AS queued,
+          COALESCE(SUM(status = 'approved'), 0) AS approved,
+          COALESCE(SUM(status = 'publishing'), 0) AS publishing,
+          COALESCE(SUM(status = 'failed'), 0) AS failed,
+          COALESCE(SUM(status = 'success'), 0) AS success,
+          COALESCE(SUM(CASE WHEN log IS NOT NULL AND log <> '' THEN 1 ELSE 0 END), 0) AS logs
+        FROM release_tickets
+      `);
+      const row = rows[0] || {};
+      return {
+        queued: Number(row.queued) || 0,
+        approved: Number(row.approved) || 0,
+        publishing: Number(row.publishing) || 0,
+        failed: Number(row.failed) || 0,
+        success: Number(row.success) || 0,
+        rolledBack: 0,
+        logs: Number(row.logs) || 0
+      };
+    },
+    async historyPage(page, limit) {
+      const size = Math.min(50, Math.max(1, Number(limit) || BOARD_PAGE_SIZE));
+      const [[countRow]] = await db().query("SELECT COUNT(*) AS n FROM release_tickets WHERE status = 'success'");
+      const total = Number(countRow?.n) || 0;
+      const pageCount = Math.max(1, Math.ceil(total / size) || 1);
+      const current = Math.min(Math.max(1, Number(page) || 1), pageCount);
+      const offset = (current - 1) * size;
+      const [rows] = await db().query(
+        `SELECT id, version, module, summary, status, demo, submitted_at, reviewed_at, publish_finished_at
+         FROM release_tickets
+         WHERE status = 'success'
+         ORDER BY COALESCE(publish_finished_at, reviewed_at, submitted_at) DESC, id DESC
+         LIMIT ? OFFSET ?`,
+        [size, offset]
+      );
+      return {
+        items: rows.map((row) => ({
+          id: row.id,
+          version: row.version,
+          module: row.module,
+          summary: row.summary || "",
+          status: row.status,
+          demo: Boolean(row.demo),
+          publishFinishedAt: toIso(row.publish_finished_at),
+          reviewedAt: toIso(row.reviewed_at),
+          submittedAt: toIso(row.submitted_at),
+          snapshotDir: "",
+          rolledBack: false
+        })),
+        page: current,
+        pageCount,
+        total,
+        limit: size
+      };
+    },
+    async logsPage(page, limit) {
+      const size = Math.min(50, Math.max(1, Number(limit) || BOARD_PAGE_SIZE));
+      const [[countRow]] = await db().query(
+        "SELECT COUNT(*) AS n FROM release_tickets WHERE log IS NOT NULL AND log <> ''"
+      );
+      const total = Number(countRow?.n) || 0;
+      const pageCount = Math.max(1, Math.ceil(total / size) || 1);
+      const current = Math.min(Math.max(1, Number(page) || 1), pageCount);
+      const offset = (current - 1) * size;
+      const [rows] = await db().query(
+        `SELECT id, version, module, status, log, submitted_at, reviewed_at, publish_finished_at
+         FROM release_tickets
+         WHERE log IS NOT NULL AND log <> ''
+         ORDER BY COALESCE(publish_finished_at, reviewed_at, submitted_at) DESC, id DESC
+         LIMIT ? OFFSET ?`,
+        [size, offset]
+      );
+      return {
+        items: rows.map((row) => ({
+          id: row.id,
+          version: row.version,
+          module: row.module,
+          status: row.status,
+          log: row.log || "",
+          publishFinishedAt: toIso(row.publish_finished_at),
+          reviewedAt: toIso(row.reviewed_at),
+          submittedAt: toIso(row.submitted_at)
+        })),
+        page: current,
+        pageCount,
+        total,
+        limit: size
+      };
+    },
+    async failedPage(page, limit) {
+      const size = Math.min(50, Math.max(1, Number(limit) || BOARD_PAGE_SIZE));
+      const [[countRow]] = await db().query("SELECT COUNT(*) AS n FROM release_tickets WHERE status = 'failed'");
+      const total = Number(countRow?.n) || 0;
+      const pageCount = Math.max(1, Math.ceil(total / size) || 1);
+      const current = Math.min(Math.max(1, Number(page) || 1), pageCount);
+      const offset = (current - 1) * size;
+      const [rows] = await db().query(
+        `SELECT id, version, module, source, applicant, summary, files, status, log,
+                submitted_at, reviewed_at, publish_finished_at
+         FROM release_tickets
+         WHERE status = 'failed'
+         ORDER BY COALESCE(publish_finished_at, reviewed_at, submitted_at) DESC, id DESC
+         LIMIT ? OFFSET ?`,
+        [size, offset]
+      );
+      return {
+        items: rows.map((row) =>
+          slimFailedItem({
+            id: row.id,
+            version: row.version,
+            module: row.module,
+            source: row.source || "",
+            applicant: row.applicant || "",
+            summary: row.summary || "",
+            files: parseFiles(row.files),
+            status: row.status,
+            log: row.log || "",
+            publishFinishedAt: toIso(row.publish_finished_at),
+            reviewedAt: toIso(row.reviewed_at),
+            submittedAt: toIso(row.submitted_at)
+          })
+        ),
+        page: current,
+        pageCount,
+        total,
+        limit: size
+      };
+    },
+    async versionRows() {
+      const [rows] = await db().query(
+        "SELECT id, version, status, module, publish_finished_at FROM release_tickets"
+      );
+      return rows.map((row) => ({
+        id: row.id,
+        version: row.version,
+        status: row.status,
+        module: row.module,
+        publishFinishedAt: toIso(row.publish_finished_at),
+        snapshotDir: "",
+        rolledBack: false
+      }));
     },
     async approved() {
       const [rows] = await db().query("SELECT * FROM release_tickets WHERE status = 'approved'");
@@ -290,6 +435,21 @@ export function createMysqlStore({ now, pool } = {}) {
         await persist(row);
       }
       return { item: result.item };
+    },
+    async returnFailed(id) {
+      const item = await this.get(id);
+      const result = returnFailedItem(item);
+      if (result.error) {
+        return result;
+      }
+      if (!result.already) {
+        await persist(result.item);
+      }
+      return {
+        item: slimFailedItem(result.item),
+        already: Boolean(result.already),
+        dialog: result.dialog
+      };
     }
   };
 }

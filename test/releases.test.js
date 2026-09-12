@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { createApp } from "../src/app.js";
-import { parseMainBrainOrder } from "../src/modules/releases/document.js";
+import { parseMainBrainOrder, ticketGuardReason } from "../src/modules/releases/document.js";
 import { filesNeedProcessRestart, ticketNeedsProcessRestart } from "../src/modules/releases/restart.js";
 import {
   allocateReleaseVersion,
@@ -22,7 +22,7 @@ import {
   parseGitRef,
   shouldRejectUnchangedAtCreate
 } from "../src/modules/releases/stage.js";
-import { NOOP_APPLY_ERROR, SMOKE_FAIL_ERROR } from "../src/modules/releases/charter.js";
+import { NOOP_APPLY_ERROR, SMOKE_FAIL_ERROR, returnFailedItem, ticketDialogName } from "../src/modules/releases/charter.js";
 import { collectSmokeImports, smokeCheckSyntax, smokeLoadLive } from "../src/modules/releases/smoke.js";
 import { DEMO_INITIAL_PASSWORD, DEMO_USERNAME } from "../src/modules/profile/auth.js";
 import {
@@ -108,7 +108,7 @@ function apply(slug, applicant, module, summary, extra = {}) {
     applicant,
     module,
     summary,
-    files: extra.files || ["src/app.js"],
+    files: extra.files || ["public/releases.css"],
     acceptance: extra.acceptance || "自动化验收",
     restart: extra.restart ?? false
   };
@@ -176,7 +176,11 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /通过已落地，但健康检查超时/);
     assert.match(text, /正在升级，请勿关闭/);
     assert.match(text, /\/api\/health/);
-    assert.match(text, /location\.replace\("\/releases\?reloaded="/);
+    assert.doesNotMatch(text, /location\.replace\("\/releases\?reloaded="/);
+    assert.match(text, /function waitUntilSiteReady/);
+    assert.match(text, /function probePage/);
+    assert.match(text, /function finishUpgradeOk/);
+    assert.match(text, /return "landed"/);
     assert.match(text, /oc-after-upgrade/);
     assert.match(text, /正在刷新界面/);
     assert.match(text, /consumePendingUpgrade/);
@@ -211,8 +215,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /sc-ui-4/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-4/);
+    assert.match(text, /sc-ui-20/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-20/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
     assert.match(text, /id="xm-releases-boot"/);
@@ -222,8 +226,20 @@ test("GET /releases is the release center page", async () => {
     assert.doesNotMatch(text, /src="\/shared\/nav.js"/);
     assert.match(text, /data-tab="queue"/);
     assert.match(text, /data-tab="history"/);
+    assert.match(text, /data-tab="failed"/);
+    assert.match(text, /失败版本/);
     assert.match(text, /id="tab-queue-count"/);
     assert.match(text, /id="tab-history-count"/);
+    assert.match(text, /id="tab-failed-count"/);
+    assert.match(text, /id="pane-failed"/);
+    assert.match(text, /id="failed-view"/);
+    assert.match(text, /liveEl\("failed-view"\)/);
+    assert.match(text, /\/api\/releases\/failed/);
+    assert.match(text, /发回给/);
+    assert.match(text, /重新修改后再提交/);
+    assert.match(text, /function refreshFailed/);
+    assert.match(text, /function renderFailed/);
+    assert.match(text, /data-act="return"/);
     assert.match(text, /oc-hero-card/);
     assert.doesNotMatch(text, /系统中心/);
     assert.doesNotMatch(text, /同意并发布/);
@@ -242,6 +258,10 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /newestFirst/);
     assert.match(text, /PAGE_SIZE = 20/);
     assert.match(text, /function paginate/);
+    assert.match(text, /\/api\/releases\/history/);
+    assert.match(text, /function refreshHistory/);
+    assert.match(text, /function refreshLogs/);
+    assert.match(text, /\/api\/releases\/summary/);
     assert.match(text, /function renderPager/);
     assert.match(text, /上一页/);
     assert.match(text, /下一页/);
@@ -285,10 +305,52 @@ test("release board scripts parse so tab refresh can run", () => {
   assert.ok(start >= 0 && end > start);
   const inline = html.slice(start + "<script>".length, end);
   assert.doesNotThrow(() => new Function(inline));
+  assert.match(inline, /function isIgnorableConfirmConflict/);
+  assert.match(inline, /function refreshAfterFailedPass/);
+  assert.match(inline, /return "busy"/);
   const theme = fs.readFileSync(path.join(root, "public/shared/modules/releases.js"), "utf8");
   assert.doesNotThrow(() => new Function(theme));
   assert.match(theme, /function autoMountReleases/);
   assert.match(theme, /data-xm-rel-mounted/);
+  assert.match(theme, /function waitUntilSiteReady/);
+  assert.match(theme, /function finishUpgradeInPlace/);
+  assert.match(theme, /return "landed"/);
+  assert.doesNotMatch(theme, /location\.replace\("\/releases\?reloaded="/);
+  assert.match(theme, /sc-ui-20/);
+  assert.match(theme, /0\.1\.100-failed-full/);
+  assert.doesNotMatch(theme, /-webkit-line-clamp/);
+  assert.match(theme, /#failed-view td\.failed-sum \{ width: 16%/);
+  assert.match(theme, /white-space: pre-wrap; overflow: visible; text-overflow: clip/);
+  assert.match(theme, /item\.module \|\| item\.source \|\| item\.applicant/);
+  assert.match(theme, /#1677ff/);
+  assert.match(theme, /failed-sum/);
+  assert.match(theme, /失败版本/);
+  assert.match(theme, /data-tab="failed"/);
+  assert.match(theme, /\/api\/releases\/failed/);
+  assert.match(theme, /发回给/);
+  assert.match(theme, /重新修改后再提交/);
+  assert.match(theme, /function refreshFailed/);
+  assert.match(theme, /data-act="return"/);
+  assert.match(theme, /repeat\(4,/);
+  assert.match(theme, /\/api\/releases\/item\//);
+  assert.match(theme, /function isTransientPassError/);
+  assert.match(theme, /function isIgnorableConfirmConflict/);
+  assert.match(theme, /function refreshAfterFailedPass/);
+  assert.match(theme, /dropIds/);
+  assert.match(theme, /hideUpgrade\(\)/);
+  assert.match(theme, /现在第 1 位是/);
+  assert.match(theme, /__xmUpgradePass/);
+  assert.match(theme, /return "busy"/);
+  assert.match(theme, /Promise\.allSettled/);
+  assert.doesNotMatch(theme, /setTimeout\(function \(\) \{ ac\.abort\(\); \}, 60000\)/);
+  assert.match(theme, /\/api\/releases\/history/);
+  assert.match(theme, /function refreshHistory/);
+  assert.match(theme, /function refreshLogs/);
+  assert.match(theme, /function countsFromBoard/);
+  assert.match(theme, /max-width: none !important/);
+  assert.doesNotMatch(theme, /border: 2px solid #dc2626/);
+  assert.match(theme, /tab\.blur/);
+  assert.match(theme, /-webkit-tap-highlight-color: transparent/);
 });
 
 test("releases.html has no login form and sends users to /login", () => {
@@ -302,7 +364,9 @@ test("releases.html has no login form and sends users to /login", () => {
   assert.doesNotMatch(html, /提交发布申请/);
   assert.match(html, /id="refresh-btn"/);
   assert.match(html, /id="upgrade-mask"/);
-  assert.match(html, /location\.replace\("\/releases\?reloaded="/);
+  assert.doesNotMatch(html, /location\.replace\("\/releases\?reloaded="/);
+  assert.match(html, /function waitUntilSiteReady/);
+  assert.match(html, /tab\.blur/);
   assert.match(html, /oc-after-upgrade/);
   assert.match(html, /正在刷新界面/);
   assert.match(html, /consumePendingUpgrade/);
@@ -360,8 +424,10 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /overflow-y: scroll !important/);
     assert.match(text, /#history-view/);
     assert.match(text, /#logs-view/);
+    assert.match(text, /#failed-view/);
     assert.match(text, /\.xm-content:has\(\.oc-wrap\)/);
-    assert.match(text, /height: 0 !important/);
+    assert.match(text, /height: auto !important/);
+    assert.doesNotMatch(text, /(?<!min-)height:\s*0\s*!important/);
     assert.match(text, /100dvh/);
     assert.match(text, /touch-action: pan-y/);
     assert.match(text, /\.oc-pager/);
@@ -386,9 +452,21 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /\.history-stats/);
     assert.match(text, /\.oc-hero-card/);
     assert.match(text, /\.oc-tab-num/);
+    assert.match(text, /\.oc-tab:not\(\.active\):focus-visible/);
+    assert.match(text, /-webkit-tap-highlight-color:\s*transparent/);
+    assert.match(text, /#1677ff/);
+    assert.match(text, /\.failed-sum/);
+    assert.match(text, /table-layout:\s*fixed/);
+    assert.match(text, /#failed-view td\.failed-sum \{ width: 16%/);
+    assert.match(text, /#failed-view td\.failed-log \{ width: 38%/);
+    assert.match(text, /white-space: pre-wrap/);
+    assert.match(text, /text-overflow: clip/);
+    assert.doesNotMatch(text, /-webkit-line-clamp/);
     assert.match(text, /\.sc-table/);
-    assert.match(text, /--oc-frame:\s*#dc2626/);
-    assert.match(text, /border: 2px solid var\(--oc-frame/);
+    assert.doesNotMatch(text, /--oc-frame:\s*#dc2626/);
+    assert.doesNotMatch(text, /border: 2px solid var\(--oc-frame/);
+    assert.match(text, /max-width:\s*none\s*!important/);
+    assert.match(text, /border:\s*0\s*!important/);
   });
 });
 
@@ -405,6 +483,11 @@ test("injectReleasesCssLink turns the theme preload into a real stylesheet", () 
   assert.match(out, new RegExp(`href="${RELEASES_CSS_HREF.replace("?", "\\?")}"`));
   assert.match(out, new RegExp(RELEASES_MODULE_HREF.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.doesNotMatch(out, /releases\.js\?v=0\.1\.66/);
+  const bare = injectReleasesCssLink(`<!DOCTYPE html><html><head>
+<script src="/shared/modules/releases.js"></script>
+</head><body></body></html>`);
+  assert.match(bare, new RegExp(RELEASES_MODULE_HREF.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.doesNotMatch(bare, /src="\/shared\/modules\/releases\.js"/);
   assert.match(out, new RegExp(`id="${RELEASES_SCROLL_STYLE_ID}"`));
   assert.match(out, new RegExp(`id="${RELEASES_FETCH_PATCH_ID}"`));
   assert.match(out, new RegExp(`id="${RELEASES_BOOT_ID}"`));
@@ -413,7 +496,11 @@ test("injectReleasesCssLink turns the theme preload into a real stylesheet", () 
   assert.match(out, /rel="stylesheet"/);
   assert.match(out, /#history-view/);
   assert.match(out, /#logs-view/);
-  assert.match(out, /overflow-y:scroll/);
+  assert.match(out, /#failed-view/);
+  assert.match(out, /overflow-y:auto/);
+  assert.doesNotMatch(out, /(?<!min-)height:0!important/);
+  assert.match(out, /data-rel-fallback/);
+  assert.match(out, /function clearPending/);
   assert.match(out, /delete init\.signal/);
   assert.match(out, /\/api\/releases/);
   assert.doesNotMatch(out, /rel="preload" href="\/releases\.css/);
@@ -561,8 +648,8 @@ test("queue is submit-time FIFO even when later tickets are foundations", async 
     });
     const shell = await json(base, "/api/releases", {
       method: "POST",
-      body: apply("q-shell", "Home", "首页", "后到的共享壳", {
-        files: ["public/shared/nav.js"],
+      body: apply("q-shell", "Home", "首页", "后到的首页页", {
+        files: ["public/index.html"],
         restart: true
       })
     });
@@ -704,11 +791,17 @@ test("通过 one ticket restarts once and does not auto-publish next", async () 
     async (base) => {
       const first = await json(base, "/api/releases", {
         method: "POST",
-        body: apply("3.0.0", "Ada", "版本发布中心", "本模块", { restart: true })
+        body: apply("3.0.0", "Ada", "版本发布中心", "本模块", {
+          files: ["src/modules/releases/router.js"],
+          restart: true
+        })
       });
       const second = await json(base, "/api/releases", {
         method: "POST",
-        body: apply("3.0.1", "Ada", "版本发布中心", "下一条", { restart: true })
+        body: apply("3.0.1", "Ada", "版本发布中心", "下一条", {
+          files: ["src/modules/releases/board.js"],
+          restart: true
+        })
       });
       const skipped = await json(base, `/api/releases/${second.body.item.id}/confirm`, {
         method: "POST",
@@ -803,7 +896,10 @@ test("通过 writes success to disk before restart", async () => {
     async (base) => {
       const created = await json(base, "/api/releases", {
         method: "POST",
-        body: apply("persist", "Ada", "版本发布中心", "先落盘再重启", { restart: true })
+        body: apply("persist", "Ada", "版本发布中心", "先落盘再重启", {
+          files: ["src/modules/releases/router.js"],
+          restart: true
+        })
       });
       createdId = created.body.item.id;
       const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
@@ -869,8 +965,10 @@ test("second publish while lock held returns 409 禁止抢发", async () => {
         method: "POST",
         body: "{}"
       });
-      assert.equal(again.res.status, 409);
-      assert.match(again.body.error, /禁止抢发/);
+      assert.equal(again.res.status, 200);
+      assert.equal(again.body.ok, true);
+      assert.equal(again.body.already, "publishing");
+      assert.equal(again.body.item.id, first.body.item.id);
 
       releaseHold();
       const done = await firstPublish;
@@ -878,6 +976,38 @@ test("second publish while lock held returns 409 禁止抢发", async () => {
       assert.equal(started, 1);
       const later = await json(base, "/api/releases");
       assert.equal(later.body.items.find((item) => item.id === second.body.item.id).status, "queued");
+    }
+  );
+});
+
+test("confirm of an already-success ticket is idempotent and does not start another job", async () => {
+  let started = 0;
+  await withServer(
+    {
+      async push() {
+        started += 1;
+        return { stdout: "test-push" };
+      }
+    },
+    async (base) => {
+      const created = await json(base, "/api/releases", {
+        method: "POST",
+        body: apply("4.0.2", "Lin", "首页", "重复确认", { restart: false })
+      });
+      const first = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(first.res.status, 200);
+      assert.equal(first.body.item.status, "success");
+      const again = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(again.res.status, 200);
+      assert.equal(again.body.already, "success");
+      assert.equal(again.body.item.status, "success");
+      assert.equal(started, 1);
     }
   );
 });
@@ -1077,7 +1207,7 @@ test("confirm 放行 without 口令; move and reorder are forbidden", async () =
           source: "首页导航与工作台",
           module: "首页",
           summary: "壳",
-          files: ["public/shared/nav.js"],
+          files: ["public/index.html"],
           acceptance: "打开 /",
           restart: false
         })
@@ -1122,7 +1252,7 @@ test("confirm 放行 without 口令; move and reorder are forbidden", async () =
       });
       assert.equal(confirmed.res.status, 200);
       assert.equal(confirmed.body.item.status, "success");
-      assert.deepEqual(pushed, [["public/shared/nav.js"]]);
+      assert.deepEqual(pushed, [["public/index.html"]]);
       const still = await json(base, "/api/releases");
       assert.equal(still.body.items.find((item) => item.id === second.body.item.id).status, "queued");
     }
@@ -1394,7 +1524,7 @@ test("create fetches ref from GitHub into source", async () => {
     async (base) => {
       const created = await json(base, "/api/releases", {
         method: "POST",
-        body: apply("from-ref", "首页", "首页", "按 ref 拉 GitHub", {
+        body: apply("from-ref", "主框架", "主框架", "按 ref 拉 GitHub", {
           files: ["src/server.js"],
           ref: "604188a",
           restart: false
@@ -1407,7 +1537,7 @@ test("create fetches ref from GitHub into source", async () => {
       assert.equal(fs.readFileSync(path.join(source, "src", "server.js"), "utf8"), "KEEPALIVE\n");
       const extra = await json(base, "/api/releases", {
         method: "POST",
-        body: apply("bad-contents-path", "首页", "首页", "正文路径不对", {
+        body: apply("bad-contents-path", "主框架", "主框架", "正文路径不对", {
           files: ["src/server.js"],
           contents: { "public/secret.js": "nope" },
           restart: false
@@ -1463,8 +1593,8 @@ test("confirm keeps source when git ref 404s after contents staged", async () =>
   const state = fs.mkdtempSync(path.join(os.tmpdir(), "rel-state-keep-"));
   fs.mkdirSync(path.join(source, "public", "shared"), { recursive: true });
   fs.mkdirSync(path.join(live, "public", "shared"), { recursive: true });
-  fs.writeFileSync(path.join(source, "public", "shared", "layout.css"), "OLD\n");
-  fs.writeFileSync(path.join(live, "public", "shared", "layout.css"), "OLD\n");
+  fs.writeFileSync(path.join(source, "public", "index.html"), "OLD\n");
+  fs.writeFileSync(path.join(live, "public", "index.html"), "OLD\n");
 
   await withServer(
     {
@@ -1487,21 +1617,21 @@ test("confirm keeps source when git ref 404s after contents staged", async () =>
       const created = await json(base, "/api/releases", {
         method: "POST",
         body: apply("keep-source", "首页", "首页", "正文已写入源目录", {
-          files: ["public/shared/layout.css"],
-          contents: { "public/shared/layout.css": "THEME-CSS\n" },
+          files: ["public/index.html"],
+          contents: { "public/index.html": "THEME-CSS\n" },
           ref: "cursor/cursor-theme-63da",
           restart: false
         })
       });
       assert.equal(created.res.status, 201, created.body.error);
       assert.equal(created.body.item.gitRef, "cursor/cursor-theme-63da");
-      assert.equal(fs.readFileSync(path.join(source, "public", "shared", "layout.css"), "utf8"), "THEME-CSS\n");
+      assert.equal(fs.readFileSync(path.join(source, "public", "index.html"), "utf8"), "THEME-CSS\n");
       const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
         method: "POST",
         body: "{}"
       });
       assert.equal(pub.res.status, 200, pub.body.error);
-      assert.equal(fs.readFileSync(path.join(live, "public", "shared", "layout.css"), "utf8"), "THEME-CSS\n");
+      assert.equal(fs.readFileSync(path.join(live, "public", "index.html"), "utf8"), "THEME-CSS\n");
     }
   );
 });
@@ -1624,6 +1754,189 @@ test("formatExecError keeps stderr for the board", () => {
   });
   assert.match(text, /stderr: no such file/);
   assert.match(text, /code=ENOENT/);
+});
+
+test("history and logs board views page slim rows", async () => {
+  await withServer(async (base) => {
+    const created = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("board-page", "Eve", "版本发布中心", "分页")
+    });
+    const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
+      method: "POST",
+      body: "{}"
+    });
+    assert.equal(pub.res.status, 200, pub.body.error);
+    const summary = await json(base, "/api/releases?view=summary");
+    assert.equal(summary.res.status, 200);
+    assert.ok(summary.body.success >= 1);
+    assert.equal(summary.body.items, undefined);
+    const history = await json(base, "/api/releases?view=history&page=1&limit=20");
+    assert.equal(history.res.status, 200);
+    assert.ok(Array.isArray(history.body.items));
+    assert.equal(history.body.page, 1);
+    assert.ok(history.body.total >= 1);
+    const row = history.body.items.find((item) => item.id === created.body.item.id);
+    assert.ok(row);
+    assert.equal(row.log, undefined);
+    const logs = await json(base, "/api/releases?view=logs&page=1&limit=20");
+    assert.equal(logs.res.status, 200);
+    const logRow = (logs.body.items || []).find((item) => item.id === created.body.item.id);
+    assert.ok(logRow);
+    assert.equal(typeof logRow.log, "string");
+    assert.ok(logRow.log.length > 0);
+    const all = await json(base, "/api/releases");
+    assert.ok((all.body.items || []).some((item) => item.id === created.body.item.id && item.log));
+    const pathSummary = await json(base, "/api/releases/summary");
+    assert.equal(pathSummary.res.status, 200);
+    assert.ok(pathSummary.body.success >= 1);
+    assert.equal(pathSummary.body.items, undefined);
+    const pathHistory = await json(base, "/api/releases/history?page=1&limit=20");
+    assert.equal(pathHistory.res.status, 200);
+    assert.ok(pathHistory.body.total >= 1);
+    const pathLogs = await json(base, "/api/releases/logs?page=1&limit=20");
+    assert.equal(pathLogs.res.status, 200);
+    assert.ok((pathLogs.body.items || []).some((item) => item.id === created.body.item.id));
+    const pathFailed = await json(base, "/api/releases/failed?page=1&limit=20");
+    assert.equal(pathFailed.res.status, 200);
+    assert.equal((pathFailed.body.items || []).some((item) => item.id === created.body.item.id), false);
+    const one = await json(base, "/api/releases/item/" + created.body.item.id);
+    assert.equal(one.res.status, 200);
+    assert.equal(one.body.item.id, created.body.item.id);
+    assert.equal(one.body.item.status, "success");
+    const missing = await json(base, "/api/releases/item/rel-missing");
+    assert.equal(missing.res.status, 404);
+  });
+});
+
+test("returnFailedItem marks a failed ticket for the source dialog", () => {
+  assert.equal(ticketDialogName({ module: "主框架", applicant: "罗成运营部主脑" }), "主框架");
+  assert.equal(ticketDialogName({ module: "数据中心", source: "罗成运营部主脑" }), "数据中心");
+  assert.equal(ticketDialogName({ source: "甄选商学院对话框" }), "甄选商学院对话框");
+  assert.equal(ticketDialogName({ applicant: "罗成运营部主脑" }), "罗成运营部主脑");
+  assert.equal(ticketDialogName({}), "来源对话");
+  const missing = returnFailedItem(null);
+  assert.equal(missing.status, 404);
+  const success = returnFailedItem({ status: "success", source: "首页" });
+  assert.equal(success.status, 409);
+  const item = {
+    status: "failed",
+    source: "罗成运营部主脑",
+    applicant: "罗成运营部主脑",
+    module: "主框架",
+    log: "语法检查失败"
+  };
+  const first = returnFailedItem(item);
+  assert.equal(first.dialog, "主框架");
+  assert.equal(item.returned, true);
+  assert.match(item.log, /已发回给「主框架」/);
+  assert.match(item.log, /语法检查失败/);
+  const again = returnFailedItem(item);
+  assert.equal(again.already, true);
+  assert.equal(again.dialog, "主框架");
+});
+
+test("failed versions board lists only failed tickets and can return them", async () => {
+  await withServer(
+    {
+      async push() {
+        throw Object.assign(new Error("apply failed"), { stderr: "ENOENT", code: "ENOENT" });
+      }
+    },
+    async (base) => {
+      const created = await json(base, "/api/releases", {
+        method: "POST",
+        body: apply("fail-tab", "甄选商学院对话框", "版本发布中心", "失败列表")
+      });
+      assert.equal(created.res.status, 201, created.body.error);
+      const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(pub.res.status, 500);
+      const viewFailed = await json(base, "/api/releases?view=failed&page=1&limit=20");
+      assert.equal(viewFailed.res.status, 200);
+      const viewRow = (viewFailed.body.items || []).find((item) => item.id === created.body.item.id);
+      assert.ok(viewRow);
+      assert.equal(viewRow.status, "failed");
+      assert.equal(viewRow.source, "甄选商学院对话框");
+      const listed = await json(base, "/api/releases/failed?page=1&limit=20");
+      assert.equal(listed.res.status, 200);
+      assert.ok(listed.body.total >= 1);
+      const row = (listed.body.items || []).find((item) => item.id === created.body.item.id);
+      assert.ok(row);
+      assert.equal(row.status, "failed");
+      assert.equal(row.returned, false);
+      assert.ok((listed.body.items || []).every((item) => item.status === "failed"));
+      const sent = await json(base, `/api/releases/${created.body.item.id}/return`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(sent.res.status, 200, sent.body.error);
+      assert.equal(sent.body.dialog, "版本发布中心");
+      assert.equal(sent.body.already, false);
+      assert.equal(sent.body.item.status, "failed");
+      assert.equal(sent.body.item.returned, true);
+      assert.match(sent.body.item.log, /已发回给「版本发布中心」/);
+      const again = await json(base, `/api/releases/${created.body.item.id}/return`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(again.res.status, 200);
+      assert.equal(again.body.already, true);
+      const queue = await json(base, "/api/releases/queue");
+      assert.equal((queue.body.items || []).some((item) => item.id === created.body.item.id), false);
+      const after = await json(base, "/api/releases/failed?page=1&limit=20");
+      const afterRow = (after.body.items || []).find((item) => item.id === created.body.item.id);
+      assert.equal(afterRow.returned, true);
+    }
+  );
+});
+
+test("return on a non-failed ticket is 409", async () => {
+  await withServer(async (base) => {
+    const created = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("return-ok", "版本发布中心", "版本发布中心", "成功单不能发回")
+    });
+    assert.equal(created.res.status, 201, created.body.error);
+    const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
+      method: "POST",
+      body: "{}"
+    });
+    assert.equal(pub.res.status, 200, pub.body.error);
+    const sent = await json(base, `/api/releases/${created.body.item.id}/return`, {
+      method: "POST",
+      body: "{}"
+    });
+    assert.equal(sent.res.status, 409);
+    assert.match(sent.body.error, /只能发回失败的版本/);
+    const missing = await json(base, "/api/releases/rel-missing/return", {
+      method: "POST",
+      body: "{}"
+    });
+    assert.equal(missing.res.status, 404);
+  });
+});
+
+test("ticket guards block thin app.js and shell files from other modules", () => {
+  assert.match(ticketGuardReason({ module: "数据中心", files: ["src/app.js"] }), /禁止提交内核文件|禁止提交 src\/app\.js/);
+  assert.match(ticketGuardReason({ module: "首页", files: ["public/shared/nav.js"] }), /壳只由主框架/);
+  assert.match(
+    ticketGuardReason({ module: "首页", files: ["src/modules/profile/middleware.js"] }),
+    /成套提交/
+  );
+  assert.equal(ticketGuardReason({ module: "版本发布中心", files: ["public/releases.css"] }), "");
+  assert.equal(
+    ticketGuardReason({
+      module: "主框架",
+      files: ["src/app.js"],
+      contents: {
+        "src/app.js": "attachProfile attachHome createReleasesRouter /api/health"
+      }
+    }),
+    ""
+  );
 });
 
 test("successful version cannot be queued again; versions lists current", async () => {
@@ -1863,7 +2176,7 @@ test("confirm does not restart when smoke import fails", async () => {
       const created = await json(base, "/api/releases", {
         method: "POST",
         body: apply("smoke-miss", "首页", "首页", "主题中间件丢掉导出", {
-          files: ["src/modules/profile/middleware.js"],
+          files: ["src/modules/home/pages.js", "src/modules/profile/middleware.js"],
           restart: true
         })
       });

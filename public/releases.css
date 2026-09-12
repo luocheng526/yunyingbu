@@ -11,7 +11,6 @@
   --oc-green: #3f6b3a;
   --oc-green-ink: #3f6b3a;
   --oc-danger: #9f1239;
-  --oc-frame: #dc2626;
   --oc-warn: #6a5420;
   --oc-shadow: var(--xm-shadow, 0 0 0 1px rgba(20, 18, 11, 0.06));
   --oc-radius: var(--xm-radius, 10px);
@@ -73,17 +72,23 @@ html:has(.xm-shell) .oc-top {
 
 .oc-wrap.page,
 .oc-wrap.xm-page {
-  max-width: 1240px;
-  margin: 0 auto;
-  padding: 14px 16px 16px;
+  max-width: none !important;
+  width: 100%;
+  margin: 0 !important;
+  padding: 12px 16px 16px;
   background: var(--oc-card);
-  border: 2px solid var(--oc-frame, #dc2626);
-  border-radius: var(--oc-radius);
+  border: 0 !important;
+  border-radius: 0;
   box-shadow: none;
 }
 html:has(.xm-shell) .oc-wrap.page,
 html:has(.xm-shell) .oc-wrap.xm-page {
-  padding: 12px 14px 14px;
+  padding: 10px 16px 16px;
+}
+html:has(.oc-wrap) .xm-content,
+.xm-content:has(.oc-wrap),
+.xm-shell .xm-content:has(.oc-wrap) {
+  padding: 0 !important;
 }
 
 .oc-hero-card {
@@ -162,7 +167,7 @@ html:has(.xm-shell) .oc-hero .oc-who {
 
 .oc-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: stretch;
   gap: 0;
   padding: 0;
@@ -185,6 +190,28 @@ button.oc-tab,
   border-radius: 0;
   box-shadow: none;
   min-height: 28px;
+  -webkit-tap-highlight-color: transparent;
+}
+.oc-tab:not(.active):hover,
+.oc-tab:not(.active):focus,
+.oc-tab:not(.active):focus-visible,
+.oc-tab:not(.active):active,
+button.oc-tab:not(.active):hover,
+button.oc-tab:not(.active):focus,
+button.oc-tab:not(.active):focus-visible,
+button.oc-tab:not(.active):active,
+.page button.oc-tab:not(.active):hover,
+.page button.oc-tab:not(.active):focus,
+.page button.oc-tab:not(.active):focus-visible,
+.page button.oc-tab:not(.active):active,
+.xm-content button.oc-tab:not(.active):hover,
+.xm-content button.oc-tab:not(.active):focus,
+.xm-content button.oc-tab:not(.active):focus-visible,
+.xm-content button.oc-tab:not(.active):active {
+  background: transparent !important;
+  background-color: transparent !important;
+  outline: none !important;
+  color: inherit;
 }
 .oc-tab + .oc-tab {
   box-shadow: inset 1px 0 0 var(--oc-line);
@@ -215,20 +242,39 @@ button.oc-tab,
   font-size: 11px;
   color: var(--oc-muted);
 }
-.oc-tab.active,
-button.oc-tab.active,
-.page button.oc-tab.active,
-.xm-content button.oc-tab.active {
-  background: transparent;
-  color: var(--oc-text);
-  box-shadow: none;
-  border-bottom-color: var(--oc-accent);
+html body .oc-tab.active,
+html body button.oc-tab.active,
+html body .page button.oc-tab.active,
+html body .xm-content button.oc-tab.active,
+html body .oc-tab.active:hover,
+html body .oc-tab.active:focus,
+html body .oc-tab.active:focus-visible,
+html body .oc-tab.active:active,
+html body .xm-content button.oc-tab.active:hover,
+html body .xm-content button.oc-tab.active:focus,
+html body .xm-content button.oc-tab.active:focus-visible,
+html body .xm-content button.oc-tab.active:active {
+  background: #1677ff !important;
+  background-color: #1677ff !important;
+  background-image: none !important;
+  color: #fff !important;
+  outline: none !important;
+  border-bottom-color: #1677ff;
+  border-radius: 8px 8px 0 0;
 }
 .oc-tab.active + .oc-tab {
-  box-shadow: inset 1px 0 0 var(--oc-line);
+  box-shadow: none;
 }
-.oc-tab.active .oc-tab-num {
-  color: var(--oc-accent);
+html body .oc-tab.active h2,
+html body .oc-tab.active .oc-tab-num,
+html body .oc-tab.active p,
+html body .oc-tab.active span,
+html body .oc-tab.active[data-tab="failed"] .oc-tab-num,
+html body .oc-tab[data-tab="failed"].active .oc-tab-num {
+  color: #fff !important;
+}
+.oc-tab[data-tab="failed"]:not(.active) .oc-tab-num {
+  color: var(--oc-danger);
 }
 
 .oc-card,
@@ -467,7 +513,7 @@ th { color: var(--oc-muted); font-weight: 600; }
 
 /* Theme only preloads this file. The page gate also injects it as a real
    stylesheet plus an inline copy of these scroll rules. Theme body is
-   overflow:hidden; pin the shell and make .xm-content / 版本记录 / 运行日志
+   overflow:hidden; pin the shell and make .xm-content / 版本记录 / 运行日志 / 失败版本
    the actual wheel scrollports. */
 html,
 html body,
@@ -496,12 +542,12 @@ html body:has(.xm-shell) {
 }
 .xm-content,
 .xm-shell .xm-content {
-  flex: 1 1 0% !important;
-  height: 0 !important;
+  flex: 1 1 auto !important;
+  height: auto !important;
   min-height: 0 !important;
   max-height: none !important;
   overflow-x: auto !important;
-  overflow-y: scroll !important;
+  overflow-y: auto !important;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
@@ -535,12 +581,12 @@ html:has(.oc-wrap) body:has(.xm-shell) {
 }
 .xm-content:has(.oc-wrap),
 .xm-shell:has(.oc-wrap) .xm-content {
-  flex: 1 1 0% !important;
-  height: 0 !important;
+  flex: 1 1 auto !important;
+  height: auto !important;
   min-height: 0 !important;
   max-height: none !important;
   overflow-x: auto !important;
-  overflow-y: scroll !important;
+  overflow-y: auto !important;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
@@ -553,8 +599,10 @@ html:has(.oc-wrap) body:has(.xm-shell) {
 }
 #history-view,
 #logs-view,
+#failed-view,
 .xm-content #history-view,
-.xm-content #logs-view {
+.xm-content #logs-view,
+.xm-content #failed-view {
   color: var(--oc-text);
   min-height: 8rem;
   max-height: calc(100dvh - 15rem);
@@ -565,10 +613,48 @@ html:has(.oc-wrap) body:has(.xm-shell) {
   touch-action: pan-y;
 }
 .xm-content #history-view table,
-#history-view table {
+.xm-content #failed-view table,
+#history-view table,
+#failed-view table {
   display: table;
   width: 100%;
   color: inherit;
+}
+#failed-view table,
+.xm-content #failed-view table {
+  table-layout: fixed;
+}
+#failed-view th:nth-child(1),
+#failed-view td:nth-child(1) { width: 9.5rem; }
+#failed-view th:nth-child(2),
+#failed-view td:nth-child(2) { width: 5.2rem; }
+#failed-view th:nth-child(3),
+#failed-view td:nth-child(3) { width: 6.2rem; }
+#failed-view th:nth-child(4),
+#failed-view td.failed-sum { width: 16%; min-width: 10rem; }
+#failed-view th:nth-child(5),
+#failed-view td.failed-log { width: 38%; }
+#failed-view th:nth-child(6),
+#failed-view td:nth-child(6) { width: 8.2rem; }
+#failed-view th:nth-child(7),
+#failed-view td:nth-child(7) { width: 10.5rem; }
+.failed-sum,
+.failed-log {
+  display: table-cell;
+  max-height: none;
+  white-space: pre-wrap;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.failed-sum {
+  color: var(--oc-muted);
+}
+.failed-log {
+  color: var(--oc-danger);
+  max-width: none;
+  min-width: 0;
 }
 .xm-content #logs-view .log-item,
 #logs-view .log-item {

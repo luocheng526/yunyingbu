@@ -1,12 +1,22 @@
 import path from "node:path";
-import { INTERRUPTED_PUBLISH_LOG, QUEUE_LOG, RECEIPT_RECOVER_LOG, requeueFailedItem } from "./charter.js";
+import { INTERRUPTED_PUBLISH_LOG, QUEUE_LOG, RECEIPT_RECOVER_LOG, requeueFailedItem, returnFailedItem } from "./charter.js";
 import { hasApplyReceipt } from "./push.js";
 import { assignSubmitOrder, compareSubmit } from "./order.js";
 import { readJsonFile, writeJsonFile } from "./persist-json.js";
+import {
+  newestFirst,
+  paginateRows,
+  slimFailedItem,
+  slimHistoryItem,
+  slimLogItem,
+  slimVersionItem,
+  summarizeItems
+} from "./board.js";
 
 export const REVIEWER = "运营部主脑";
 
 export const MODULES = [
+  "主框架",
   "首页",
   "数据中心",
   "沈子晗",
@@ -175,6 +185,36 @@ export function createMemoryStore({ now, persistPath } = {}) {
         .filter((item) => HISTORY_STATUSES.has(item.status))
         .sort((a, b) => String(b.reviewedAt || b.submittedAt).localeCompare(String(a.reviewedAt || a.submittedAt)));
     },
+    boardSummary() {
+      return summarizeItems(items);
+    },
+    historyPage(page, limit) {
+      const rows = items
+        .filter((item) => item.status === "success")
+        .slice()
+        .sort(newestFirst)
+        .map(slimHistoryItem);
+      return paginateRows(rows, page, limit);
+    },
+    logsPage(page, limit) {
+      const rows = items
+        .filter((item) => item.log)
+        .slice()
+        .sort(newestFirst)
+        .map(slimLogItem);
+      return paginateRows(rows, page, limit);
+    },
+    failedPage(page, limit) {
+      const rows = items
+        .filter((item) => item.status === "failed")
+        .slice()
+        .sort(newestFirst)
+        .map(slimFailedItem);
+      return paginateRows(rows, page, limit);
+    },
+    versionRows() {
+      return items.map(slimVersionItem);
+    },
     approved() {
       return items.filter((item) => item.status === "approved");
     },
@@ -310,6 +350,19 @@ export function createMemoryStore({ now, persistPath } = {}) {
       assignSubmitOrder(queuedItems());
       persist();
       return { item: result.item };
+    },
+    returnFailed(id) {
+      const item = this.get(id);
+      const result = returnFailedItem(item);
+      if (result.error) {
+        return result;
+      }
+      persist();
+      return {
+        item: slimFailedItem(result.item),
+        already: Boolean(result.already),
+        dialog: result.dialog
+      };
     }
   };
 }

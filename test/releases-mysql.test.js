@@ -125,6 +125,13 @@ function createFakePool() {
         tickets.push(row);
         return [{ affectedRows: 1 }];
       }
+      if (text.includes("FROM release_tickets WHERE status = 'failed'")) {
+        const failed = tickets.filter((row) => row.status === "failed");
+        if (text.startsWith("SELECT COUNT(*)")) {
+          return [[{ n: failed.length }]];
+        }
+        return [failed];
+      }
       if (text.startsWith("UPDATE release_tickets SET")) {
         const id = params[params.length - 1];
         const row = tickets.find((item) => item.id === id);
@@ -365,4 +372,36 @@ test("persist store leftover lock on an already-success ticket only clears the l
   const item = await store.get("rel-33");
   assert.equal(item.status, "success");
   assert.match(item.log, /成功状态已先落盘/);
+});
+
+test("mysql store pages failed tickets and persists return in log", async () => {
+  const store = createMysqlStore({
+    pool: createFakePool(),
+    now: () => "2026-09-12T00:00:00.000Z"
+  });
+  const created = await store.create({
+    version: "0.1.1-fail",
+    applicant: "甄选商学院对话框",
+    source: "甄选商学院对话框",
+    module: "版本发布中心",
+    summary: "失败列表",
+    files: ["public/releases.css"],
+    acceptance: "失败页",
+    restart: false
+  });
+  await store.markFailed(created, "语法检查失败");
+  const page = await store.failedPage(1, 20);
+  assert.equal(page.total, 1);
+  assert.equal(page.items[0].id, created.id);
+  assert.equal(page.items[0].status, "failed");
+  assert.equal(page.items[0].returned, false);
+  const sent = await store.returnFailed(created.id);
+  assert.equal(sent.already, false);
+  assert.equal(sent.dialog, "版本发布中心");
+  assert.equal(sent.item.returned, true);
+  assert.match(sent.item.log, /已发回给「版本发布中心」/);
+  const again = await store.returnFailed(created.id);
+  assert.equal(again.already, true);
+  const queued = await store.returnFailed(created.id + "-missing");
+  assert.equal(queued.status, 404);
 });
