@@ -1,0 +1,204 @@
+{
+  "ok": true,
+  "demo": true,
+  "notice": "示例数据，尚未接入店铺",
+  "title": "商品数据总览",
+  "scope": "商品",
+  "range": "30天",
+  "dateLabel": "2026/9/10",
+  "ranges": [
+    "30天",
+    "7天",
+    "日",
+    "周",
+    "月",
+    "年",
+    "自定义"
+  ],
+  "views": [
+    {
+      "label": "商品数据总览",
+      "href": "/data/goods"
+    }
+  ],
+  "selectedKey": "all",
+  "cardDate": "08/13",
+  "cards": [
+    {
+      "key": "all",
+      "label": "全部",
+      "hint": "",
+      "color": "#8c8c8c",
+      "value": "0",
+      "share": "0.00% 占比",
+      "delta": "0.00% 环比"
+    },
+    {
+      "key": "highMargin",
+      "label": "高毛利高利润单品",
+      "hint": "净商品成本占比(支付) < 30%",
+      "color": "#cf1322",
+      "value": "0",
+      "share": "0.00% 占比",
+      "delta": "0.00% 环比"
+    },
+    {
+      "key": "strategy",
+      "label": "利润/毛利战略单品",
+      "hint": "净商品成本占比 <= 70%",
+      "color": "#d46b08",
+      "value": "0",
+      "share": "0.00% 占比",
+      "delta": "0.00% 环比"
+    },
+    {
+      "key": "refund",
+      "label": "款式/货值高退款",
+      "hint": "推广花费占比 >= 30%",
+      "color": "#d4b106",
+      "value": "0",
+      "share": "0.00% 占比",
+      "delta": "0.00% 环比"
+    },
+    {
+      "key": "loss",
+      "label": "利润亏损链接",
+      "hint": "利润支付额 < 0",
+      "color": "#cf1322",
+      "value": "0",
+      "share": "0.00% 占比",
+      "delta": "0.00% 环比"
+    },
+    {
+      "key": "lowAov",
+      "label": "低客单价",
+      "hint": "真实客单价 < 50",
+      "color": "#eb2f96",
+      "value": "0",
+      "share": "0.00% 占比",
+      "delta": "0.00% 环比"
+    },
+    {
+      "key": "midAov",
+      "label": "中客单价",
+      "hint": "真实客单价 <= 50",
+      "color": "#d46b08",
+      "value": "0",
+      "share": "0.00% 占比",
+      "delta": "0.00% 环比"
+    },
+    {
+      "key": "highAov",
+      "label": "高客单价",
+      "hint": "真实客单价 > 100",
+      "color": "#722ed1",
+      "value": "0",
+      "share": "0.00% 占比",
+      "delta": "0.00% 环比"
+    },
+    {
+      "key": "convLoss",
+      "label": "高转化亏损",
+      "hint": "利润支付额 < 0",
+      "color": "#13c2c2",
+      "value": "0",
+      "share": "0.00% 占比",
+      "delta": "0.00% 环比"
+    },
+    {
+      "key": "searchLoss",
+      "label": "高搜索亏损",
+      "hint": "搜索访客 >= 80%",
+      "color": "#1677c7",
+      "value": "0",
+      "share": "0.00% 占比",
+      "delta": "0.00% 环比"
+    },
+    {
+      "key": "cartLowPay",
+      "label": "高加购低付费",
+      "hint": "加购率 > 10%",
+      "color": "#389e0d",
+      "value": "0",
+      "share": "0.00% 占比",
+      "delta": "0.00% 环比"
+    },
+    {
+      "key": "profitDown",
+      "label": "利润环比下降30%+",
+      "hint": "利润环比 <= -30%",
+      "color": "#cf1322",
+      "value": "0",
+      "share": "0.00% 占比",
+      "delta": "0.00% 环比"
+    },
+    {
+      "key": "profitUp",
+      "label": "利润环比增长30%+",
+      "hint": "利润支付环比 >= 30%",
+      "color": "#cf1322",
+      "value": "0",
+      "share": "0.00% 占比",
+      "delta": "0.00% 环比"
+    },
+    {
+      "key": "feeDown",
+      "label": "费比环比下降5%+",
+      "hint": "推广花费占比环比 <= -5%",
+      "color": "#d46b08",
+      "value": "0",
+      "share": "0.00% 占比",
+      "delta": "0.00% 环比"
+    }
+  ],
+  "goodsTable": {
+    "title": "商品列表",
+    "columns": [
+      "商品",
+      "店铺",
+      "推广SKU",
+      "成长阶段",
+      "销售单数",
+      "净销售单数 (支付)",
+      "支付金额 (支付)",
+      "无效金额 (标注)",
+      "退款金额",
+      "退款率 (移)"
+    ],
+    "rows": [
+      {
+        "name": "当页汇总",
+        "kind": "sum",
+        "store": "",
+        "cells": [
+          "",
+          "--",
+          "--",
+          "28",
+          "28",
+          "8,444.60",
+          "0",
+          "0",
+          "0.00%"
+        ]
+      },
+      {
+        "name": "SPU:10031884709988 SAWAAG德国儿童枕头-12岁护颈枕",
+        "kind": "sku",
+        "thumb": true,
+        "store": "张望跨境专卖店",
+        "cells": [
+          "张望跨境专卖店",
+          "--",
+          "--",
+          "9",
+          "9",
+          "3,177.80",
+          "0",
+          "0",
+          "0.00%"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>实时看板 · 数据中心</title>
+    <link rel="stylesheet" href="/shared/layout.css" />
+    <link rel="stylesheet" href="/data-pages.css?v=live-shops" />
+  </head>
+  <body>
+    <div id="site-nav"></div>
+    <main class="xm-page data-overview-root ch-root">
+      <div id="board"></div>
+    </main>
+    <script src="/data-live.js?v=home-live1"></script>
+    <script src="/shared/nav.js"></script>
+    <script src="/shared/modules/data.js?v=restore-v1"></script>
+    <script>
+      (function () {
+        const n = document.getElementById("site-nav");
+        if (n && !n.querySelector("a[href='/data/paid']")) {
+          n.innerHTML =
+            '<nav class="data-subnav" aria-label="数据中心子菜单">' +
+            '<a href="/data/overview">数据总揽</a>' +
+            '<a href="/data/shops">店铺数据</a>' +
+            '<a href="/data/goods">商品数据</a>' +
+            '<a href="/data/paid">实时付费</a></nav>';
+        }
+      })();
+    </script>
+  </body>
+</html>
