@@ -6,7 +6,7 @@
       title: "评价管理",
       path: "/stores/reviews",
       api: "/api/stores/erp/reviews",
-      lead: "对接星脉 ERP 京东商品。按一星评价从高到低看差评。",
+      lead: "对接星脉 ERP 京东商品。按销量取数后按一星评价从高到低排。",
       kpis: [
         { key: "total", label: "商品总数" },
         { key: "oneStar", label: "本页一星" },

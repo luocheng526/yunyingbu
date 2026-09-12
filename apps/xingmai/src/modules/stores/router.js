@@ -27,12 +27,20 @@ function sendResult(res, result, created) {
   res.status(created ? 201 : 200).json({ ok: true, ...result });
 }
 
+function publicErpError(err) {
+  const raw = String(err?.message || "星脉 ERP 调用失败");
+  if (/SQLSyntaxErrorException|Error querying database|bad SQL grammar|Unknown column/i.test(raw)) {
+    return "星脉 ERP 查询失败，请稍后重试";
+  }
+  return raw.length > 180 ? `${raw.slice(0, 180)}…` : raw;
+}
+
 function sendErp(res, run) {
   return run()
     .then((data) => res.json(data))
     .catch((err) => {
       const status = Number(err.statusCode) || 500;
-      res.status(status).json({ ok: false, error: err.message || "星脉 ERP 调用失败" });
+      res.status(status).json({ ok: false, error: publicErpError(err) });
     });
 }
 

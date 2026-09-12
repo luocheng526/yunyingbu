@@ -185,7 +185,7 @@ test("reviews proxy product page and hide shop auth secrets", async () => {
   assert.equal(JSON.stringify(body).includes("SECRET"), false);
   const productCall = calls.find((item) => String(item.url).includes("/jd/product/page"));
   assert.deepEqual(productCall.body.shopIds, [19852571]);
-  assert.equal(productCall.body.orderBy, "oneStarNum");
+  assert.equal(productCall.body.orderBy, "salesVolume");
   assert.equal(productCall.body.asc, false);
 });
 
@@ -270,6 +270,30 @@ test("inventory flags negative stock as abnormal", async () => {
   assert.equal(body.page, "京东库存监控");
   assert.equal(body.records[0].stockLabel, "库存异常");
   assert.equal(body.summary.abnormal, 1);
+});
+
+test("ERP SQL errors are not leaked to the client", async () => {
+  process.env.XM_ERP_TOKEN = "test-token";
+  mockErp(async (url) => {
+    if (String(url).includes("/jd/shopInfo/page")) {
+      return shopPage();
+    }
+    return {
+      status: 200,
+      json: async () => ({
+        code: 500,
+        message: "Error querying database. Unknown column 'oneStarNum' in 'order clause' bad SQL grammar []"
+      })
+    };
+  });
+  const cookie = await loginCookie();
+  const res = await fetch(`${base}/api/stores/erp/reviews`, { headers: { cookie } });
+  assert.equal(res.status, 502);
+  const body = await res.json();
+  assert.equal(body.ok, false);
+  assert.match(body.error, /星脉 ERP 查询失败/);
+  assert.doesNotMatch(body.error, /Unknown column/);
+  assert.doesNotMatch(body.error, /SQL/);
 });
 
 test("shop list strips JD auth tokens", async () => {

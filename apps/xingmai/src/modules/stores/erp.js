@@ -161,7 +161,8 @@ export async function listErpStoreShops() {
 }
 
 export async function listErpReviews(input = {}) {
-  const page = await productPage(input, { orderBy: "oneStarNum", asc: false });
+  const page = await productPage(input, { orderBy: "salesVolume", asc: false });
+  page.records.sort((a, b) => Number(b.oneStarNum || 0) - Number(a.oneStarNum || 0));
   const oneStar = page.records.filter((row) => Number(row.oneStarNum) > 0).length;
   return {
     ...page,
