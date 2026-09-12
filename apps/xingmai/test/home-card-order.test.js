@@ -30,7 +30,6 @@ test("homepage module persists a shared card order", () => {
   assert.match(homeJs, /function applyCardMove/);
   assert.match(homeJs, /function onSortDown/);
   assert.match(homeJs, /function onSortMenu/);
-  assert.match(homeJs, /0\.1\.355-home-sort/);
 });
 
 test("visible card drag keeps hidden keys in place", () => {

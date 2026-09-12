@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.355-home-sort */
+/* xm-module-home 0.1.356-home-caltip */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -354,6 +354,116 @@
     return { from: y, to: y };
   }
 
+  function parseYmd(ymd) {
+    var p = String(ymd || "").split("-");
+    return new Date(Date.UTC(Number(p[0]) || 1970, (Number(p[1]) || 1) - 1, Number(p[2]) || 1));
+  }
+
+  function ymdFromUtc(date) {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "UTC",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).format(date);
+  }
+
+  function diffYmd(from, to) {
+    return Math.round((parseYmd(to) - parseYmd(from)) / 86400000);
+  }
+
+  function withinDays(from, to, maxInclusive) {
+    return Math.abs(diffYmd(from, to)) + 1 <= (maxInclusive || 30);
+  }
+
+  function formatSlashDate(ymd) {
+    var p = String(ymd || "").split("-");
+    if (p.length < 3 || !p[0]) {
+      return "—";
+    }
+    return Number(p[0]) + "/" + Number(p[1]) + "/" + Number(p[2]);
+  }
+
+  function shiftMonth(ym, delta) {
+    var p = String(ym || "").split("-");
+    var d = new Date(Date.UTC(Number(p[0]) || 1970, (Number(p[1]) || 1) - 1 + (Number(delta) || 0), 1));
+    return ymdFromUtc(d).slice(0, 7);
+  }
+
+  function monthTitle(ym) {
+    var p = String(ym || "").split("-");
+    return Number(p[0]) + "年" + Number(p[1]) + "月";
+  }
+
+  function tipAttr(text) {
+    return escapeHtml(text || "指标").replaceAll("\n", "&#10;");
+  }
+
+  function calMonthHtml(ym, opts) {
+    var first = parseYmd(ym + "-01");
+    var pad = (first.getUTCDay() + 6) % 7;
+    var last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+    var start = opts.start;
+    var end = opts.end || opts.hover;
+    if (start && end && start > end) {
+      var swap = start;
+      start = end;
+      end = swap;
+    }
+    var html =
+      '<div class="xm-hm-cal-month"><div class="xm-hm-cal-caption">' +
+      monthTitle(ym) +
+      '</div><div class="xm-hm-cal-week"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div><div class="xm-hm-cal-grid">';
+    var i;
+    for (i = 0; i < pad; i++) {
+      html += "<i></i>";
+    }
+    for (i = 1; i <= last; i++) {
+      var ymd = ym + "-" + ("0" + i).slice(-2);
+      var cls = [];
+      var disabled = ymd > opts.today || (opts.pick && !withinDays(opts.pick, ymd, 30));
+      if (disabled) {
+        cls.push("is-off");
+      }
+      if (ymd === opts.today) {
+        cls.push("is-today");
+      }
+      if (ymd === opts.start || ymd === opts.end) {
+        cls.push("is-edge");
+      }
+      if (start && end && ymd >= start && ymd <= end) {
+        cls.push("is-in");
+      }
+      if (ymd === start) {
+        cls.push("is-start");
+      }
+      if (ymd === end) {
+        cls.push("is-end");
+      }
+      html +=
+        '<button type="button" data-ymd="' +
+        ymd +
+        '"' +
+        (disabled ? " disabled" : "") +
+        (cls.length ? ' class="' + cls.join(" ") + '"' : "") +
+        ">" +
+        i +
+        "</button>";
+    }
+    return html + "</div></div>";
+  }
+
+  function calPanelHtml(cursor, opts) {
+    return (
+      '<div class="xm-hm-cal-bar"><button type="button" data-cal-nav="-1" aria-label="上个月">‹</button><strong>选择日期</strong><button type="button" data-cal-nav="1" aria-label="下个月">›</button></div>' +
+      '<div class="xm-hm-cal-months">' +
+      calMonthHtml(cursor, opts) +
+      calMonthHtml(shiftMonth(cursor, 1), opts) +
+      "</div>" +
+      '<p class="xm-hm-cal-tip">最多选择 30 天</p>'
+    );
+  }
+
   function readUser() {
     if (window.__xmBootUser && (window.__xmBootUser.displayName || window.__xmBootUser.username)) {
       return window.__xmBootUser;
@@ -514,8 +624,8 @@
       escapeHtml(card.key) +
       '"><div class="xm-hm-card-head"><span>' +
       escapeHtml(card.label) +
-      '</span><i title="' +
-      escapeHtml(card.tip || "指标") +
+      '</span><i data-tip="' +
+      tipAttr(card.tip) +
       '">i</i></div><div class="xm-hm-value' +
       (card.accent ? " is-accent" : "") +
       '">' +
@@ -926,8 +1036,25 @@
       ".xm-hm-ranges{display:flex;flex-wrap:wrap;align-items:center;gap:6px}" +
       ".xm-hm-ranges button{border:1px solid var(--xm-line);background:var(--xm-card);color:var(--xm-ink);padding:5px 10px;border-radius:4px;cursor:pointer;font-size:12px}" +
       ".xm-hm-ranges button.is-on{background:var(--xm-primary);border-color:var(--xm-primary);color:#fff}" +
-      ".xm-hm-dates{display:flex;align-items:center;gap:6px;color:var(--xm-muted);font-size:12px}" +
-      ".xm-hm-dates input{border:1px solid var(--xm-line);background:var(--xm-card);color:var(--xm-ink);border-radius:4px;padding:4px 6px;font-size:12px}" +
+      ".xm-hm-dates{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--xm-line);background:var(--xm-card);color:var(--xm-ink);border-radius:4px;padding:4px 8px;font-size:12px;cursor:pointer}" +
+      ".xm-hm-dates.is-on{border-color:var(--xm-primary);color:var(--xm-primary)}" +
+      ".xm-hm-cal{position:absolute;top:48px;right:10px;z-index:6;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:10px 12px}" +
+      ".xm-hm-cal[hidden]{display:none}" +
+      ".xm-hm-cal-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}" +
+      ".xm-hm-cal-bar button{border:0;background:transparent;color:var(--xm-ink);width:28px;height:28px;cursor:pointer;font-size:18px;line-height:1}" +
+      ".xm-hm-cal-months{display:flex;gap:16px}" +
+      ".xm-hm-cal-caption{text-align:center;font-size:13px;font-weight:600;margin:0 0 6px}" +
+      ".xm-hm-cal-week,.xm-hm-cal-grid{display:grid;grid-template-columns:repeat(7,minmax(28px,1fr));gap:2px;text-align:center}" +
+      ".xm-hm-cal-week{color:var(--xm-muted);font-size:12px;margin-bottom:4px}" +
+      ".xm-hm-cal-grid button{border:0;background:transparent;border-radius:4px;height:28px;font-size:12px;color:var(--xm-ink);cursor:pointer}" +
+      ".xm-hm-cal-grid button.is-in{background:var(--xm-primary-soft)}" +
+      ".xm-hm-cal-grid button.is-start,.xm-hm-cal-grid button.is-end,.xm-hm-cal-grid button.is-edge{background:var(--xm-primary);color:#fff}" +
+      ".xm-hm-cal-grid button.is-today{font-weight:700}" +
+      ".xm-hm-cal-grid button:disabled{color:var(--xm-muted);opacity:.45;cursor:not-allowed}" +
+      ".xm-hm-cal-grid i{height:28px}" +
+      ".xm-hm-cal-tip{margin:8px 0 0;color:var(--xm-muted);font-size:12px;text-align:center}" +
+      ".xm-hm-tip{position:fixed;z-index:30;max-width:280px;padding:8px 10px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:6px;box-shadow:var(--xm-shadow);color:var(--xm-ink);font-size:12px;line-height:1.55;white-space:pre-wrap;pointer-events:none}" +
+      ".xm-hm-card-head i{cursor:help}" +
       ".xm-hm-body{position:relative;display:flex;flex-direction:column;gap:12px;overflow:visible}" +
       ".xm-hm.is-live .xm-hm-kpis,.xm-hm.is-board .xm-hm-kpis,.xm-hm.is-team .xm-hm-kpis,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
       ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden]{display:none}" +
@@ -1003,7 +1130,7 @@
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{margin:8px 0 0;color:var(--xm-muted);font-size:12px}" +
       "@media (max-width:1200px){.xm-hm-kpis,.xm-hm-team-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
-      "@media (max-width:700px){.xm-hm-kpis,.xm-hm-team-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:1fr}.xm-hm-team-head{flex-direction:column}}"
+      "@media (max-width:700px){.xm-hm-kpis,.xm-hm-team-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:1fr}.xm-hm-team-head{flex-direction:column}.xm-hm-cal-months{flex-direction:column}}"
     );
   }
 
@@ -1027,9 +1154,11 @@
       "</div>" +
       '<div class="xm-hm-ranges">' +
       rangeBtns +
-      '<label class="xm-hm-dates"><input type="date" id="xm-hm-from" /><span>至</span><input type="date" id="xm-hm-to" /></label>' +
+      '<button type="button" class="xm-hm-dates" id="xm-hm-dates" aria-haspopup="dialog" aria-expanded="false"><span id="xm-hm-from-text"></span><span>至</span><span id="xm-hm-to-text"></span></button>' +
       "</div></div>" +
       '<div class="xm-hm-pop" id="xm-hm-pop" hidden><h3>卡片设置</h3><div id="xm-hm-card-opts"></div></div>' +
+      '<div class="xm-hm-cal" id="xm-hm-cal" hidden></div>' +
+      '<div class="xm-hm-tip" id="xm-hm-tip" hidden></div>' +
       '<div class="xm-hm-body">' +
       '<section class="xm-hm-kpis" id="xm-hm-kpis"></section>' +
       '<section class="xm-hm-teams" id="xm-hm-teams" hidden></section>' +
@@ -1052,7 +1181,7 @@
     var hero = readChart(live.hero, blankLive().hero);
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
-    board.setAttribute("data-hm-js", "0.1.355-home-sort");
+    board.setAttribute("data-hm-js", "0.1.356-home-caltip");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", state.view === "team");
@@ -1062,8 +1191,12 @@
     Array.prototype.forEach.call(root.querySelectorAll("[data-range]"), function (btn) {
       btn.classList.toggle("is-on", btn.getAttribute("data-range") === state.range);
     });
-    root.querySelector("#xm-hm-from").value = state.from;
-    root.querySelector("#xm-hm-to").value = state.to;
+    root.querySelector("#xm-hm-from-text").textContent = formatSlashDate(state.from);
+    root.querySelector("#xm-hm-to-text").textContent = formatSlashDate(state.to);
+    var tipBox = root.querySelector("#xm-hm-tip");
+    if (tipBox) {
+      tipBox.hidden = true;
+    }
     root.querySelector("#xm-hm-kpis").innerHTML = cards.map(cardHtml).join("");
     root.querySelector("#xm-hm-teams").hidden = state.view !== "team";
     root.querySelector("#xm-hm-teams").innerHTML = teams.map(function (team) {
@@ -1998,6 +2131,8 @@
         if (view) {
           state.view = view.getAttribute("data-view");
           state.mode = state.view === "team" ? "company" : "shop";
+          closeCal();
+          hideCardTip();
           paint(root, state);
           if (state.view === "live") {
             pullLive();
@@ -2010,6 +2145,53 @@
           var next = rangeDates(state.range);
           state.from = next.from;
           state.to = next.to;
+          closeCal();
+          paint(root, state);
+          pullBoard();
+          return;
+        }
+        if (event.target.closest("#xm-hm-dates")) {
+          if (calOpen) {
+            closeCal();
+          } else {
+            openCal();
+          }
+          return;
+        }
+        var calNav = event.target.closest("[data-cal-nav]");
+        if (calNav) {
+          calCursor = shiftMonth(calCursor, Number(calNav.getAttribute("data-cal-nav")) || 0);
+          renderCal();
+          return;
+        }
+        var day = event.target.closest("#xm-hm-cal [data-ymd]");
+        if (day && !day.disabled) {
+          var ymd = day.getAttribute("data-ymd") || "";
+          if (!ymd) {
+            return;
+          }
+          if (!calPick) {
+            calPick = ymd;
+            calHover = "";
+            renderCal();
+            return;
+          }
+          var from = calPick;
+          var to = ymd;
+          if (from > to) {
+            from = ymd;
+            to = calPick;
+          }
+          if (!withinDays(from, to, 30)) {
+            calPick = ymd;
+            calHover = "";
+            renderCal();
+            return;
+          }
+          state.from = from;
+          state.to = to;
+          state.range = "custom";
+          closeCal();
           paint(root, state);
           pullBoard();
           return;
@@ -2017,19 +2199,51 @@
         if (event.target.closest("#xm-hm-set")) {
           var pop = root.querySelector("#xm-hm-pop");
           pop.hidden = !pop.hidden;
+          closeCal();
           return;
         }
       }
 
       function onOutsideCardSet(event) {
         var pop = root.querySelector("#xm-hm-pop");
-        if (!pop || pop.hidden) {
+        if (pop && !pop.hidden && !event.target.closest("#xm-hm-pop") && !event.target.closest("#xm-hm-set")) {
+          pop.hidden = true;
+        }
+        if (calOpen && !event.target.closest("#xm-hm-cal") && !event.target.closest("#xm-hm-dates")) {
+          closeCal();
+        }
+      }
+
+      function onTipOver(event) {
+        var icon = event.target.closest && event.target.closest(".xm-hm-card-head i");
+        if (icon && root.contains(icon)) {
+          showCardTip(icon);
+        }
+      }
+
+      function onTipOut(event) {
+        var icon = event.target.closest && event.target.closest(".xm-hm-card-head i");
+        if (!icon) {
           return;
         }
-        if (event.target.closest("#xm-hm-pop") || event.target.closest("#xm-hm-set")) {
+        var next = event.relatedTarget;
+        if (next && icon.contains(next)) {
           return;
         }
-        pop.hidden = true;
+        hideCardTip();
+      }
+
+      function onCalHover(event) {
+        if (!calOpen || !calPick) {
+          return;
+        }
+        var day = event.target.closest && event.target.closest("#xm-hm-cal [data-ymd]");
+        var ymd = day && !day.disabled ? day.getAttribute("data-ymd") || "" : "";
+        if (ymd === calHover) {
+          return;
+        }
+        calHover = ymd;
+        renderCal();
       }
 
       function syncCardOrderToState() {
@@ -2049,6 +2263,82 @@
         (state.teams || []).forEach(function (team) {
           team.cards = sortCards(team.cards);
         });
+      }
+
+      var calOpen = false;
+      var calCursor = (state.from || shanghaiYmd(1)).slice(0, 7);
+      var calPick = "";
+      var calHover = "";
+
+      function hideCardTip() {
+        var box = root.querySelector("#xm-hm-tip");
+        if (box) {
+          box.hidden = true;
+          box.textContent = "";
+        }
+      }
+
+      function showCardTip(icon) {
+        var box = root.querySelector("#xm-hm-tip");
+        if (!box || !icon) {
+          return;
+        }
+        var text = icon.getAttribute("data-tip") || "";
+        if (!text) {
+          hideCardTip();
+          return;
+        }
+        box.hidden = false;
+        box.textContent = text;
+        var rect = icon.getBoundingClientRect();
+        var width = box.offsetWidth || 200;
+        var height = box.offsetHeight || 40;
+        var left = Math.min(window.innerWidth - width - 8, Math.max(8, rect.left + rect.width / 2 - width / 2));
+        var top = rect.top - height - 8;
+        if (top < 8) {
+          top = rect.bottom + 8;
+        }
+        box.style.left = left + "px";
+        box.style.top = top + "px";
+      }
+
+      function renderCal() {
+        var el = root.querySelector("#xm-hm-cal");
+        var btn = root.querySelector("#xm-hm-dates");
+        if (!el) {
+          return;
+        }
+        el.hidden = !calOpen;
+        if (btn) {
+          btn.classList.toggle("is-on", calOpen);
+          btn.setAttribute("aria-expanded", calOpen ? "true" : "false");
+        }
+        if (!calOpen) {
+          return;
+        }
+        var applied = !calPick && withinDays(state.from, state.to, 30);
+        el.innerHTML = calPanelHtml(calCursor, {
+          today: shanghaiYmd(0),
+          pick: calPick,
+          start: calPick || (applied ? state.from : ""),
+          end: calPick ? "" : applied ? state.to : "",
+          hover: calPick ? calHover : ""
+        });
+      }
+
+      function closeCal() {
+        calOpen = false;
+        calPick = "";
+        calHover = "";
+        renderCal();
+      }
+
+      function openCal() {
+        calOpen = true;
+        calPick = "";
+        calHover = "";
+        calCursor = (state.from || shanghaiYmd(1)).slice(0, 7);
+        renderCal();
       }
 
       var sortHold = 0;
@@ -2115,6 +2405,7 @@
               return;
             }
             sortDragging = true;
+            hideCardTip();
             hold.classList.add("is-hold");
           }, 420);
           return;
@@ -2201,15 +2492,14 @@
           paint(root, state);
           return;
         }
-        if (event.target.id === "xm-hm-from" || event.target.id === "xm-hm-to") {
-          state.from = root.querySelector("#xm-hm-from").value || state.from;
-          state.to = root.querySelector("#xm-hm-to").value || state.to;
-          pullBoard();
-        }
       }
 
       root.addEventListener("click", onClick);
       root.addEventListener("change", onChange);
+      root.addEventListener("pointerover", onTipOver);
+      root.addEventListener("pointerout", onTipOut);
+      root.addEventListener("pointerover", onCalHover);
+      root.addEventListener("scroll", hideCardTip, true);
       document.addEventListener("mousedown", onOutsideCardSet);
       document.addEventListener("pointerdown", onSortDown);
       document.addEventListener("pointermove", onSortMove, { passive: false });
@@ -2241,6 +2531,10 @@
         window.clearInterval(poll);
         root.removeEventListener("click", onClick);
         root.removeEventListener("change", onChange);
+        root.removeEventListener("pointerover", onTipOver);
+        root.removeEventListener("pointerout", onTipOut);
+        root.removeEventListener("pointerover", onCalHover);
+        root.removeEventListener("scroll", hideCardTip, true);
         document.removeEventListener("mousedown", onOutsideCardSet);
         document.removeEventListener("pointerdown", onSortDown);
         document.removeEventListener("pointermove", onSortMove);
