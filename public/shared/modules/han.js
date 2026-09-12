@@ -90,7 +90,8 @@
     { key: "", label: "日常选品", title: "选品数据", lead: "记录观察中的选品。默认负责人韩梦凯。" },
     { key: "trend", label: "趋势选品", title: "趋势选品", lead: "跟趋势、关键词和爆款方向，单独记一板。" },
     { key: "peers", label: "同行竞对", title: "同行竞对", lead: "盯同行店铺和竞品，和日常选品分开。" },
-    { key: "new", label: "全新商品", title: "全新商品", lead: "记录新上架、待测的新品。" },
+    { key: "new", label: "初选商品", title: "初选商品", lead: "先记观察中的初选，还没定入选。" },
+    { key: "chosen", label: "入选商品", title: "入选商品", lead: "初选通过后记到这里，和初选分开。" },
   ];
 
   function selectionTabsHtml(board) {
@@ -254,10 +255,11 @@
       const extras = {
         trend: { label: "趋势 / 关键词", placeholder: "开学季 / 直播热搜" },
         peers: { label: "竞对店铺", placeholder: "同行店名" },
-        new: { label: "上新日期", placeholder: "2026-09-12" },
+        new: { label: "初选日期", placeholder: "2026-09-12" },
+        chosen: { label: "入选日期", placeholder: "2026-09-12" },
       };
       const extra = extras[spec.key];
-      const nameLabel = spec.key === "peers" ? "竞品名称（必填）" : spec.key === "new" ? "商品名称（必填）" : "名称（必填）";
+      const nameLabel = spec.key === "peers" ? "竞品名称（必填）" : spec.key === "new" || spec.key === "chosen" ? "商品名称（必填）" : "名称（必填）";
       const listCols = spec.key
         ? spec.key === "peers"
           ? ["name", "extra", "category", "store", "status"]
@@ -267,7 +269,9 @@
         ? spec.key === "peers"
           ? "<th>竞品</th><th>竞对店铺</th><th>类目</th><th>我方店</th><th>状态</th>"
           : spec.key === "new"
-            ? "<th>名称</th><th>上新日期</th><th>类目</th><th>店</th><th>状态</th>"
+            ? "<th>名称</th><th>初选日期</th><th>类目</th><th>店</th><th>状态</th>"
+            : spec.key === "chosen"
+              ? "<th>名称</th><th>入选日期</th><th>类目</th><th>店</th><th>状态</th>"
             : "<th>名称</th><th>趋势/关键词</th><th>类目</th><th>店</th><th>状态</th>"
         : "<th>名称</th><th>店</th><th>类目</th><th>状态</th><th>负责人</th>";
       root.innerHTML = page(
@@ -288,7 +292,7 @@
               "</label><input id=\"sel-extra\" placeholder=\"" +
               escapeHtml(extra.placeholder) +
               '"' +
-              (spec.key === "new" ? ' type="date"' : "") +
+              (spec.key === "new" || spec.key === "chosen" ? ' type="date"' : "") +
               " />"
             : "") +
           '<label for="sel-store">' +

@@ -23,7 +23,7 @@ const DEFAULT_OWNER = "韩梦凯";
 const DEFAULT_STORE = "韩梦凯店";
 const STATUSES = ["待办", "进行中", "已完成"];
 const SELECTION_STATUSES = ["观察", "入选", "淘汰"];
-const PICK_BOARDS = ["trend", "peers", "new"];
+const PICK_BOARDS = ["trend", "peers", "new", "chosen"];
 const TRAINING_STATUSES = ["待开始", "进行中", "已完成"];
 
 function normalizeProductTeam(team) {

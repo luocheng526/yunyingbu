@@ -231,9 +231,17 @@ test("han selection / products / paid boards are isolated", async () => {
     const listedTrend = await json(base, "/api/han/picks?board=trend");
     const listedPeers = await json(base, "/api/han/picks?board=peers");
     const listedNew = await json(base, "/api/han/picks?board=new");
+    const chosen = await json(base, "/api/han/picks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ board: "chosen", name: "入选喷雾", extra: "2026-09-13" }),
+    });
+    assert.equal(chosen.body.item.board, "chosen");
+    const listedChosen = await json(base, "/api/han/picks?board=chosen");
     assert.equal(listedTrend.body.items.length, 1);
     assert.equal(listedPeers.body.items.length, 1);
     assert.equal(listedNew.body.items.length, 1);
+    assert.equal(listedChosen.body.items.length, 1);
     assert.equal(listedSel.body.items.length, 1);
     assert.equal(
       (await json(base, "/api/han/selection")).body.items.some((row) => row.name === "开学季洗护"),
@@ -421,7 +429,9 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /\/api\/han\/shop-plans/);
   assert.match(js, /趋势选品/);
   assert.match(js, /同行竞对/);
-  assert.match(js, /全新商品/);
+  assert.match(js, /初选商品/);
+  assert.match(js, /入选商品/);
+  assert.doesNotMatch(js, /全新商品/);
   assert.match(js, /\/api\/han\/picks/);
   assert.match(js, /han-layer-pick/);
   assert.match(js, /han-thumb/);
@@ -593,7 +603,8 @@ test("goods page puts 商品分层 teams on a horizontal tab bar", async () => {
   assert.match(root.innerHTML, /日常选品/);
   assert.match(root.innerHTML, /趋势选品/);
   assert.match(root.innerHTML, /同行竞对/);
-  assert.match(root.innerHTML, /全新商品/);
+  assert.match(root.innerHTML, /初选商品/);
+  assert.match(root.innerHTML, /入选商品/);
 });
 
 test("GET /api/han/shops pulls 组织中心 stores for the team", async () => {
