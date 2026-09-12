@@ -299,14 +299,6 @@
       .slice(0, 160);
   }
 
-  function agentDebugLog(payload) {
-    fetch("/__agent-log", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(Object.assign({ timestamp: Date.now() }, payload))
-    }).catch(function () {});
-  }
-
   function replaceTitleSelection(input, text, start, end) {
     input.setRangeText(text, start, end, "end");
     input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -331,24 +323,8 @@
     let compositionValue = "";
     let compositionStart = 0;
     let compositionEnd = 0;
-    // #region agent log
-    agentDebugLog({
-      hypothesisId: "A",
-      location: "academy.js:installTitleKeyboardFallback",
-      message: "install title input listeners",
-      data: { connected: input.isConnected, className: input.parentElement && input.parentElement.className }
-    });
-    // #endregion
     input.addEventListener("beforeinput", function (ev) {
       const text = String(ev.data || "");
-      // #region agent log
-      agentDebugLog({
-        hypothesisId: "C",
-        location: "academy.js:beforeinput",
-        message: "title beforeinput event",
-        data: { inputType: ev.inputType, dataLength: text.length, composing: composing, valueLength: input.value.length }
-      });
-      // #endregion
       if (!composing && ev.inputType === "insertText" && isVisibleInputText(text)) {
         ev.preventDefault();
         const start = input.selectionStart == null ? input.value.length : input.selectionStart;
@@ -372,14 +348,6 @@
       }, 0);
     });
     input.addEventListener("keydown", function (ev) {
-      // #region agent log
-      agentDebugLog({
-        hypothesisId: "C",
-        location: "academy.js:keydown",
-        message: "title keydown event",
-        data: { keyLength: ev.key.length, composing: composing, eventComposing: ev.isComposing, valueLength: input.value.length }
-      });
-      // #endregion
       if (composing || ev.isComposing || ev.key === "Process" || ev.ctrlKey || ev.metaKey || ev.altKey) {
         return;
       }
@@ -707,14 +675,6 @@
           courseItems = items || [];
           courseFolders = folders || [];
           box.innerHTML = courseFolderHtml(courseFolders, 0);
-          // #region agent log
-          agentDebugLog({
-            hypothesisId: "D",
-            location: "academy.js:renderList",
-            message: "course list rendered",
-            data: { folderCount: courseFolders.length, subInputCount: box.querySelectorAll(".academy-course-sub-form input").length }
-          });
-          // #endregion
           if (!courseFolders.length) {
             box.innerHTML = '<p class="academy-empty">还没有分类，请先新建分类。</p>';
           } else if (!courseItems.length) {
@@ -960,28 +920,12 @@
             ev.stopPropagation();
             const group = add.closest(".academy-course-folder");
             const form = directCourseSubForm(group);
-            // #region agent log
-            agentDebugLog({
-              hypothesisId: "B",
-              location: "academy.js:courseAddClick",
-              message: "resolve child form",
-              data: { groupFound: Boolean(group), formFound: Boolean(form), hidden: form ? form.hidden : null }
-            });
-            // #endregion
             if (form) {
               form.hidden = !form.hidden;
               const input = form.querySelector("input");
               if (!form.hidden && input) {
                 installTitleKeyboardFallback(input);
                 input.focus();
-                // #region agent log
-                agentDebugLog({
-                  hypothesisId: "A",
-                  location: "academy.js:courseAddFocus",
-                  message: "focus child title input",
-                  data: { connected: input.isConnected, active: document.activeElement === input, hidden: form.hidden }
-                });
-                // #endregion
               }
             }
             return;
@@ -1038,14 +982,6 @@
             return;
           }
           ev.preventDefault();
-          // #region agent log
-          agentDebugLog({
-            hypothesisId: "E",
-            location: "academy.js:courseSubSubmit",
-            message: "submit child folder",
-            data: { connected: form.isConnected, titleLength: form.title.value.length }
-          });
-          // #endregion
           addCourseFolder(form.getAttribute("data-course-parent"), form.title.value).catch(function (err) {
             form.hidden = false;
             form.setAttribute("data-error", err.message);
