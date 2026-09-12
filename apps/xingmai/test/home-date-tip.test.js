@@ -74,6 +74,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function orderTeams/);
   assert.match(homeJs, /function saveTeamCols/);
   assert.match(homeJs, /data-name="/);
+  assert.match(homeJs, /\.xm-hm-team\{cursor:grab;background:#dceaff;border:1px solid #7ea6dc\}/);
+  assert.match(homeJs, /closest\("\.xm-hm-card,\.xm-hm-table"\)/);
   assert.doesNotMatch(homeJs, /卡片可拖拽换位/);
   assert.doesNotMatch(homeJs, /title="拖拽换位"/);
   assert.match(homeJs, /function shopColHit/);

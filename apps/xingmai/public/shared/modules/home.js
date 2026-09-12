@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.398-home-duty */
+/* xm-module-home 0.1.399-home-box */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -995,15 +995,15 @@
       ".xm-hm.is-live .xm-hm-kpis-shell,.xm-hm.is-board .xm-hm-kpis-shell,.xm-hm.is-team .xm-hm-kpis-shell,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
       ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden]{display:none}" +
       ".xm-hm-kpis-shell,.xm-hm-teams,.xm-hm-team{background:linear-gradient(#dceaff,#f7fbff);border:0;outline:0;box-shadow:none;border-radius:12px}" +
-      ".xm-hm-teams{background:transparent}" +
-      ".xm-hm-team{cursor:grab;box-shadow:0 0 0 1px #c5d8f5}" +
+      ".xm-hm-teams{background:0}" +
+      ".xm-hm-team{cursor:grab;background:#dceaff;border:1px solid #7ea6dc}" +
       ".xm-hm-team.is-hold{cursor:grabbing;opacity:.84}" +
       ".xm-hm-kpis-shell,.xm-hm-teams{padding:10px}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
       ".xm-hm-teams{display:flex;flex-direction:column;gap:10px;overflow-x:auto}" +
       ".xm-hm-teams-bar{display:flex;justify-content:space-between;align-items:center;padding:0 0 8px}" +
-      ".xm-hm-teams-grid{display:grid;grid-template-columns:repeat(var(--xm-hm-team-cols,2),minmax(200px,1fr));gap:10px}" +
-      ".xm-hm-team{display:flex;flex-direction:column;gap:8px;min-width:0;padding:8px}" +
+      ".xm-hm-teams-grid{display:grid;grid-template-columns:repeat(var(--xm-hm-team-cols,2),minmax(200px,1fr));gap:16px}" +
+      ".xm-hm-team{display:flex;flex-direction:column;gap:8px;min-width:0;padding:12px}" +
       ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
       ".xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:1fr;gap:6px}" +
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border:0;box-shadow:none}" +
@@ -1154,7 +1154,7 @@
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.398-home-duty");
+    board.setAttribute("data-hm-js", "0.1.399-home-box");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2431,14 +2431,14 @@
         if (event.target.closest("i") || event.target.closest("input") || event.target.closest("button") || event.target.closest("a")) {
           return;
         }
-        var teamCol = event.target.closest(".xm-hm-team-head");
+        var teamCol = event.target.closest(".xm-hm-team");
         var card = event.target.closest(".xm-hm-card");
         var row = event.target.closest("#xm-hm-card-opts label");
         sortStartX = event.clientX || 0;
         sortStartY = event.clientY || 0;
-        if (teamCol && teamCol.closest(".xm-hm-team")) {
+        if (teamCol && !event.target.closest(".xm-hm-card,.xm-hm-table")) {
           if (event.cancelable) event.preventDefault();
-          sortFrom = teamCol.closest(".xm-hm-team").getAttribute("data-name") || "";
+          sortFrom = teamCol.getAttribute("data-name") || "";
           sortTeam = true;
           sortSettings = false;
           clearTextSelection();
