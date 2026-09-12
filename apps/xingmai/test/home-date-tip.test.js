@@ -57,6 +57,12 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /--xm-hm-team-cols/);
   assert.match(homeJs, /label: "经理团队"/);
   assert.match(homeJs, /label: "主管团队"/);
+  assert.match(homeJs, /label: "昨天"/);
+  assert.match(homeJs, /label: "本月"/);
+  assert.doesNotMatch(homeJs, /label: "近3天"/);
+  assert.doesNotMatch(homeJs, /label: "近7天"/);
+  assert.doesNotMatch(homeJs, /label: "近15天"/);
+  assert.doesNotMatch(homeJs, /label: "近30天"/);
   assert.match(homeJs, /function shopOnRoleTeam/);
   assert.match(homeJs, /<th>排名<\/th><th>店铺名称<\/th><th>运营<\/th><\/tr>/);
   assert.match(homeJs, /星脉甄选/);

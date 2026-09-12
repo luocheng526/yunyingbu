@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.376-home-noline */
+/* xm-module-home 0.1.377-home-norange */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -9,10 +9,6 @@
   ];
   var RANGES = [
     { key: "yesterday", label: "昨天" },
-    { key: "d3", label: "近3天" },
-    { key: "d7", label: "近7天" },
-    { key: "d15", label: "近15天" },
-    { key: "d30", label: "近30天" },
     { key: "month", label: "本月" },
     { key: "lastMonth", label: "上月" },
     { key: "year", label: "今年" }
@@ -48,18 +44,6 @@
   }
 
   function rangeDates(range) {
-    if (range === "d3") {
-      return { from: shanghaiYmd(3), to: shanghaiYmd(1) };
-    }
-    if (range === "d7") {
-      return { from: shanghaiYmd(7), to: shanghaiYmd(1) };
-    }
-    if (range === "d15") {
-      return { from: shanghaiYmd(15), to: shanghaiYmd(1) };
-    }
-    if (range === "d30") {
-      return { from: shanghaiYmd(30), to: shanghaiYmd(1) };
-    }
     if (range === "month") {
       var today = shanghaiYmd(0);
       return { from: today.slice(0, 8) + "01", to: today };
@@ -1105,7 +1089,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.376-home-noline");
+    board.setAttribute("data-hm-js", "0.1.377-home-norange");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
