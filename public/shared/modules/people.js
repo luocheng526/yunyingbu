@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.176-store-upsert";
+    const href = "/people.css?v=0.1.177-people-roles";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -131,9 +131,9 @@
         '<div class="org-filter-pop" id="org-filter-pop" hidden></div></div>' +
         '<div class="org-pane" data-pane="members" hidden>' +
         '<section class="panel"><h2>身份名册</h2>' +
-        '<p class="lead">表头可筛部门、上级、岗位、所属中心、状态。勾选后可统一改密码或删除。点新增人员弹出对话框。</p>' +
+        '<p class="lead">表头可筛总监、经理、主管/储备、运营、助理、状态。勾选后可统一改密码或删除。点新增人员弹出对话框。</p>' +
         '<div class="org-toolbar">' +
-        '<input type="search" id="people-q" placeholder="姓名 / 账号 / 部门" />' +
+        '<input type="search" id="people-q" placeholder="姓名 / 账号 / 经理 / 主管" />' +
         '<button type="button" id="people-search">搜索</button>' +
         '<span class="spacer" id="people-count"></span>' +
         '<button type="button" class="ghost" id="people-template">下载模板</button>' +
@@ -151,10 +151,11 @@
         '<div class="org-table-wrap"><table><thead><tr>' +
         '<th class="org-check"><input type="checkbox" id="people-check-all" title="全选" /></th>' +
         '<th>姓名</th>' +
-        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="department"><span class="org-filter-name">部门</span><span class="org-filter-caret">▾</span></button></th>' +
-        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="managerName"><span class="org-filter-name">上级</span><span class="org-filter-caret">▾</span></button></th>' +
-        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="role"><span class="org-filter-name">岗位</span><span class="org-filter-caret">▾</span></button></th>' +
-        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="center"><span class="org-filter-name">所属中心</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="peopleDirector"><span class="org-filter-name">总监</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="peopleManager"><span class="org-filter-name">经理</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="peopleSupervisor"><span class="org-filter-name">主管/储备</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="peopleOperator"><span class="org-filter-name">运营</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="peopleAssistant"><span class="org-filter-name">助理</span><span class="org-filter-caret">▾</span></button></th>' +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="status"><span class="org-filter-name">状态</span><span class="org-filter-caret">▾</span></button></th>' +
         '<th>账号</th><th>登录密码</th></tr></thead>' +
         '<tbody id="people-tbody"></tbody></table></div>' +
@@ -199,12 +200,10 @@
         '<form class="org-dialog people-form" id="people-form"><h3>新增人员</h3>' +
         '<div class="org-grid">' +
         '<label>姓名<input name="name" required maxlength="40" autocomplete="off" /></label>' +
-        '<label>部门<input name="department" maxlength="64" placeholder="如 沈子晗运营中心" /></label>' +
-        '<label>上级<select name="managerId"><option value="">无</option></select></label>' +
-        '<label>岗位<select name="role"><option>运营</option><option>主管</option><option>经理</option><option>店长</option></select></label>' +
-        '<label>所属中心<select name="center" required><option value="">请选择</option>' +
-        "<option>沈子晗运营中心</option><option>韩梦凯运营中心</option><option>数据中心</option>" +
-        "<option>版本发布中心</option><option>个人中心</option><option>其他</option></select></label>" +
+        '<label>总监<input name="director" maxlength="40" value="罗成" /></label>' +
+        '<label>经理<input name="manager" maxlength="40" placeholder="沈子晗 / 韩梦凯" /></label>' +
+        '<label>主管/储备<input name="supervisor" maxlength="40" /></label>' +
+        '<label>岗位<select name="role"><option>运营</option><option>助理</option><option>主管</option><option>储备</option><option>经理</option><option>总监</option></select></label>' +
         "<label>状态<select name=\"status\"><option>在职</option><option>离职</option></select></label>" +
         '<label>账号<input name="username" maxlength="40" placeholder="与姓名相同" /></label>' +
         '<label>登录密码<input name="password" maxlength="64" value="ChangeMe123!" placeholder="初始密码" /></label>' +
@@ -227,8 +226,8 @@
       const peopleForm = root.querySelector("#people-form");
       const peopleModal = root.querySelector("#people-modal");
       const peopleFormError = root.querySelector("#people-form-error");
-      const PEOPLE_HEADERS = ["姓名", "部门", "上级", "岗位", "所属中心", "状态", "账号", "登录密码"];
-      const PEOPLE_KEYS = ["name", "department", "managerName", "role", "center", "status", "username", "password"];
+      const PEOPLE_HEADERS = ["姓名", "总监", "经理", "主管/储备", "运营", "助理", "状态", "账号", "登录密码"];
+      const PEOPLE_KEYS = ["name", "director", "lineManager", "supervisor", "operator", "assistant", "status", "username", "password"];
       if (peopleForm && peopleForm.name && peopleForm.username) {
         peopleForm.name.addEventListener("input", function () {
           peopleForm.username.value = peopleForm.name.value.trim();
@@ -242,13 +241,9 @@
           }
         }
         showError(peopleFormError, "");
-        fillSelect(
-          peopleForm.managerId,
-          roster.people,
-          function (item) { return String(item.id); },
-          function (item) { return item.name; },
-          "无"
-        );
+        if (peopleForm.director && !peopleForm.director.value) {
+          peopleForm.director.value = "罗成";
+        }
         peopleModal.classList.add("show");
       }
       function closePeopleForm() {
@@ -264,7 +259,7 @@
       let selectedIds = {};
       let memberSelectedIds = {};
       const COLUMN_FILTERS = ["director", "manager", "supervisor", "operator", "assistant", "storeName", "remark"];
-      const MEMBER_FILTERS = ["department", "managerName", "role", "center", "status"];
+      const MEMBER_FILTERS = ["peopleDirector", "peopleManager", "peopleSupervisor", "peopleOperator", "peopleAssistant", "status"];
       const columnPicked = {};
       COLUMN_FILTERS.concat(MEMBER_FILTERS).forEach(function (key) {
         columnPicked[key] = null;
@@ -302,6 +297,7 @@
         "主管/储备",
         "运营",
         "助理",
+        "小组ID",
         "店铺名称",
         "店铺ID",
         "商家id",
@@ -317,6 +313,7 @@
         "supervisor",
         "operator",
         "assistant",
+        "groupId",
         "storeName",
         "storeId",
         "merchantId",
@@ -523,10 +520,15 @@
       }
 
       function personFilterValue(person, key) {
-        if (key === "managerName") {
-          return String(person.managerName || "").trim() || "（空）";
-        }
-        return String(person[key] || "").trim() || "（空）";
+        const mapped = {
+          peopleDirector: person.director,
+          peopleManager: person.lineManager,
+          peopleSupervisor: person.supervisor,
+          peopleOperator: person.operator,
+          peopleAssistant: person.assistant,
+          status: person.status
+        };
+        return String(mapped[key] != null ? mapped[key] : person[key] || "").trim() || "（空）";
       }
 
       function isMemberFilter(key) {
@@ -614,9 +616,12 @@
           const blob = [
             row.name,
             row.username,
-            row.department,
+            row.director,
+            row.lineManager,
+            row.supervisor,
+            row.operator,
+            row.assistant,
             row.role,
-            row.center,
             row.managerName
           ]
             .join(" ")
@@ -977,13 +982,15 @@
             " /></td><td>" +
             escapeHtml(person.name) +
             "</td><td>" +
-            escapeHtml(person.department || "—") +
+            escapeHtml(person.director || "—") +
             "</td><td>" +
-            escapeHtml(person.managerName || "—") +
+            escapeHtml(person.lineManager || "—") +
             "</td><td>" +
-            escapeHtml(person.role) +
+            escapeHtml(person.supervisor || "—") +
             "</td><td>" +
-            escapeHtml(person.center) +
+            escapeHtml(person.operator || "—") +
+            "</td><td>" +
+            escapeHtml(person.assistant || "—") +
             '</td><td><select class="people-status" data-id="' +
             person.id +
             '"><option' +
@@ -1012,13 +1019,6 @@
             return;
           }
           roster.people = peopleData.people || [];
-          fillSelect(
-            peopleForm.managerId,
-            roster.people,
-            function (item) { return String(item.id); },
-            function (item) { return item.name; },
-            "无"
-          );
           renderPeople(applyMemberFilters(roster.people));
         });
       }
@@ -1664,10 +1664,11 @@
           peopleCsvLines([
             {
               name: "示例同事",
-              department: "沈子晗运营中心",
-              managerName: "沈子晗",
-              role: "运营",
-              center: "沈子晗运营中心",
+              director: "罗成",
+              lineManager: "沈子晗",
+              supervisor: "",
+              operator: "示例同事",
+              assistant: "",
               status: "在职",
               username: "示例同事",
               password: "ChangeMe123!"
@@ -1694,14 +1695,25 @@
             if (table.length < 2) {
               throw new Error("模板至少要有表头和一行数据");
             }
+            const aliases = {
+              总监: "总监",
+              经理: "经理",
+              "主管/储备": "主管/储备",
+              主管: "主管/储备",
+              储备: "主管/储备",
+              运营: "运营",
+              助理: "助理",
+              部门: "部门",
+              上级: "上级",
+              岗位: "岗位",
+              所属中心: "所属中心"
+            };
             const headers = table[0].map(function (cell) {
-              return String(cell || "").trim();
+              const raw = String(cell || "").replace(/^\uFEFF/, "").replace(/\s+/g, "").trim();
+              return aliases[raw] || raw;
             });
-            const missing = PEOPLE_HEADERS.filter(function (name) {
-              return headers.indexOf(name) < 0;
-            });
-            if (missing.length) {
-              throw new Error("表头需与表格一致，缺少：" + missing.join("、"));
+            if (headers.indexOf("姓名") < 0) {
+              throw new Error("没认出姓名。请用下载模板，或把 Excel 另存为 CSV 再导。");
             }
             const rows = table.slice(1).map(function (cells) {
               const item = {};
@@ -1958,6 +1970,7 @@
               supervisor: "",
               operator: "示例运营",
               assistant: "",
+              groupId: "示例运营",
               storeName: "示例旗舰店",
               storeId: "10001",
               merchantId: "11009999",

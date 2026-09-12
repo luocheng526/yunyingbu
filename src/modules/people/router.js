@@ -118,6 +118,7 @@ peopleRouter.get("/org/stores/template", (_req, res) => {
     "",
     "示例运营",
     "",
+    "示例运营",
     "示例旗舰店",
     "10001",
     "11009999",
@@ -233,7 +234,7 @@ peopleRouter.get("/", (_req, res) => {
 });
 
 peopleRouter.get("/template", (_req, res) => {
-  const sample = ["示例同事", "沈子晗运营中心", "沈子晗", "运营", "沈子晗运营中心", "在职", "示例同事", "ChangeMe123!"];
+  const sample = ["示例同事", "罗成", "沈子晗", "", "示例同事", "", "在职", "示例同事", "ChangeMe123!"];
   const csv =
     "\uFEFF" +
     PEOPLE_IMPORT_HEADERS.join(",") +

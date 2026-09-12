@@ -670,6 +670,7 @@ export const STORE_IMPORT_HEADERS = [
   "主管/储备",
   "运营",
   "助理",
+  "小组ID",
   "店铺名称",
   "店铺ID",
   "商家id",

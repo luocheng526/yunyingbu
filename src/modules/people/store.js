@@ -182,6 +182,139 @@ function managerNameOf(person) {
   return manager ? manager.name : "";
 }
 
+function mapLineRole(role) {
+  const raw = String(role || "").trim();
+  if (raw === "店长") {
+    return "运营";
+  }
+  if (raw === "主管/储备") {
+    return "主管";
+  }
+  return raw;
+}
+
+function centerOfManager(name) {
+  const raw = String(name || "");
+  if (raw.includes("韩梦凯")) {
+    return "韩梦凯运营中心";
+  }
+  if (raw.includes("沈子晗")) {
+    return "沈子晗运营中心";
+  }
+  return "";
+}
+
+export function orgLineOf(person = {}) {
+  const role = mapLineRole(person.role);
+  const self = String(person.name || "").trim();
+  const line = {
+    director: self === "罗成" || role === "总监" ? self : "罗成",
+    manager: role === "经理" ? self : "",
+    supervisor: role === "主管" || role === "储备" ? self : "",
+    operator: role === "运营" ? self : "",
+    assistant: role === "助理" ? self : ""
+  };
+  let current = person.managerId ? findPerson(person.managerId) : null;
+  const seen = new Set();
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    const parentRole = mapLineRole(current.role);
+    if (parentRole === "总监" && line.director === "罗成") {
+      line.director = current.name;
+    } else if (parentRole === "经理" && !line.manager) {
+      line.manager = current.name;
+    } else if ((parentRole === "主管" || parentRole === "储备") && !line.supervisor) {
+      line.supervisor = current.name;
+    } else if (parentRole === "运营" && !line.operator && role === "助理") {
+      line.operator = current.name;
+    }
+    current = current.managerId ? findPerson(current.managerId) : null;
+  }
+  if (!line.manager) {
+    line.manager = centerOfManager(person.center || person.department)
+      ? (String(person.center || person.department).includes("韩梦凯") ? "韩梦凯" : "沈子晗")
+      : role === "总监"
+        ? ""
+        : line.manager;
+  }
+  return line;
+}
+
+function inferRoleFromLine(name, line, fallback) {
+  if (line.assistant === name) {
+    return "助理";
+  }
+  if (line.operator === name) {
+    return "运营";
+  }
+  if (line.supervisor === name) {
+    return "主管";
+  }
+  if (line.manager === name) {
+    return "经理";
+  }
+  if (line.director === name) {
+    return "总监";
+  }
+  return fallback || "";
+}
+
+function resolveManagerIdByName(managerName) {
+  const name = String(managerName || "").trim();
+  if (!name) {
+    return null;
+  }
+  const hit = people.find((row) => row.name === name);
+  return hit ? hit.id : null;
+}
+
+export function applyOrgLine(input = {}) {
+  const name = String(input.name || input.姓名 || "").trim();
+  const director = String(input.director || input.总监 || "").trim() || "罗成";
+  const lineManager = String(input.lineManager || input.manager || input.经理 || "").trim();
+  const supervisor = String(input.supervisor || input["主管/储备"] || input.主管 || input.储备 || "").trim();
+  const operator = String(input.operator || input.运营 || "").trim();
+  const assistant = String(input.assistant || input.助理 || "").trim();
+  let role = mapLineRole(input.role || input.岗位);
+  if (!role) {
+    role = inferRoleFromLine(name, {
+      director,
+      manager: lineManager,
+      supervisor,
+      operator,
+      assistant
+    });
+  }
+  const center =
+    String(input.center || input.所属中心 || "").trim() ||
+    centerOfManager(lineManager) ||
+    centerOfManager(supervisor) ||
+    "其他";
+  const department = String(input.department || input.部门 || "").trim() || center;
+  const managerName =
+    String(input.managerName || input.上级 || "").trim() ||
+    [supervisor, lineManager, director].find((item) => item && item !== name) ||
+    "";
+  let managerId = input.managerId;
+  if (managerId === "" || managerId == null) {
+    managerId = resolveManagerIdByName(managerName);
+  } else {
+    managerId = Number(managerId);
+  }
+  return {
+    name,
+    role,
+    center,
+    department,
+    managerId,
+    director,
+    lineManager,
+    supervisor,
+    operator,
+    assistant
+  };
+}
+
 function grantActive(grant, person) {
   if (grant.revoked) {
     return false;
@@ -224,9 +357,15 @@ function visibleShopsOf(person) {
 
 function presentPerson(person) {
   const row = withLogin(person);
+  const line = orgLineOf(person);
   return {
     ...clone(row),
     managerName: managerNameOf(person),
+    director: line.director,
+    lineManager: line.manager,
+    supervisor: line.supervisor,
+    operator: line.operator,
+    assistant: line.assistant,
     visibleShops: visibleShopsOf(person)
   };
 }
@@ -271,18 +410,18 @@ export function reconcilePeople() {
 }
 
 export function createPerson(input) {
-  const name = typeof input.name === "string" ? input.name.trim() : "";
-  const role = typeof input.role === "string" ? input.role.trim() : "";
-  const center = typeof input.center === "string" ? input.center.trim() : "";
-  const statusRaw = typeof input.status === "string" ? input.status.trim() : "在职";
+  const line = applyOrgLine(input || {});
+  const name = line.name;
+  const role = line.role;
+  const center = line.center;
+  const statusRaw = typeof input.status === "string" ? input.status.trim() : typeof input.状态 === "string" ? input.状态.trim() : "在职";
   const status = statusRaw || "在职";
   const employeeNo = typeof input.employeeNo === "string" ? input.employeeNo.trim() : "";
-  const department = typeof input.department === "string" ? input.department.trim() : center;
-  const managerRaw = input.managerId;
-  const managerId = managerRaw === "" || managerRaw == null ? null : Number(managerRaw);
+  const department = line.department || center;
+  const managerId = line.managerId;
 
   if (!name || !role || !center) {
-    return { ok: false, statusCode: 400, error: "姓名、角色、所属中心均为必填" };
+    return { ok: false, statusCode: 400, error: "姓名、岗位均为必填" };
   }
   if (!CENTERS.includes(center)) {
     return { ok: false, statusCode: 400, error: "所属中心不在可选列表中" };
@@ -294,8 +433,8 @@ export function createPerson(input) {
     return { ok: false, statusCode: 400, error: "上级不存在" };
   }
 
-  const usernameRaw = typeof input.username === "string" ? input.username.trim() : "";
-  const passwordRaw = typeof input.password === "string" ? input.password.trim() : "";
+  const usernameRaw = typeof input.username === "string" ? input.username.trim() : typeof input.账号 === "string" ? input.账号.trim() : "";
+  const passwordRaw = typeof input.password === "string" ? input.password.trim() : typeof input.登录密码 === "string" ? input.登录密码.trim() : "";
   const person = {
     id: nextPersonId++,
     name,
@@ -314,7 +453,7 @@ export function createPerson(input) {
   return { ok: true, person: presentPerson(person) };
 }
 
-export const PEOPLE_IMPORT_HEADERS = ["姓名", "部门", "上级", "岗位", "所属中心", "状态", "账号", "登录密码"];
+export const PEOPLE_IMPORT_HEADERS = ["姓名", "总监", "经理", "主管/储备", "运营", "助理", "状态", "账号", "登录密码"];
 
 export function importPeople(rows) {
   const list = Array.isArray(rows) ? rows : [];
@@ -327,26 +466,23 @@ export function importPeople(rows) {
   list.forEach((raw, index) => {
     const line = index + 2;
     const item = raw && typeof raw === "object" ? raw : {};
-    const name = String(item.姓名 || item.name || "").trim();
-    const department = String(item.部门 || item.department || "").trim();
-    const managerName = String(item.上级 || item.managerName || "").trim();
-    const role = String(item.岗位 || item.role || "").trim() || "运营";
-    const center = String(item.所属中心 || item.center || "").trim();
+    const org = applyOrgLine(item);
+    const name = org.name;
+    const department = org.department;
+    const role = org.role || "运营";
+    const center = org.center;
     const status = String(item.状态 || item.status || "").trim() || "在职";
     const username = String(item.账号 || item.username || "").trim();
     const password = String(item.登录密码 || item.password || "").trim();
-    if (!name || !center) {
-      failed.push({ line, error: "姓名、所属中心均为必填" });
+    if (!name) {
+      failed.push({ line, error: "姓名为必填" });
       return;
     }
-    let managerId = null;
-    if (managerName) {
-      const manager = people.find((row) => row.name === managerName);
-      if (!manager) {
-        failed.push({ line, error: "上级不存在" });
-        return;
-      }
-      managerId = manager.id;
+    const managerName = String(item.上级 || item.managerName || org.supervisor || org.lineManager || "").trim();
+    let managerId = org.managerId;
+    if (managerName && managerId == null) {
+      failed.push({ line, error: "上级不存在" });
+      return;
     }
     const found = people.find(
       (row) =>

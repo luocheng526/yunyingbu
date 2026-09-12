@@ -119,7 +119,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /与姓名相同/);
     assert.doesNotMatch(jsText, /工号/);
     assert.doesNotMatch(jsText, /name="employeeNo"/);
-    assert.match(jsText, /表头可筛部门、上级、岗位、所属中心、状态/);
+    assert.match(jsText, /表头可筛总监、经理、主管\/储备、运营、助理、状态/);
     assert.match(jsText, /people-cell/);
     assert.match(jsText, /startPersonCellEdit/);
     assert.match(jsText, /people-row-check/);
@@ -135,9 +135,9 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.doesNotMatch(jsText, /id="shop-form"/);
     assert.doesNotMatch(jsText, /id="shop-tbody"/);
     assert.match(jsText, /id="people-filter-pop"/);
-    assert.match(jsText, /data-filter-key="department"/);
-    assert.match(jsText, /data-filter-key="managerName"/);
-    assert.match(jsText, /data-filter-key="center"/);
+    assert.match(jsText, /data-filter-key="peopleManager"/);
+    assert.match(jsText, /data-filter-key="peopleSupervisor"/);
+    assert.match(jsText, /data-filter-key="peopleOperator"/);
     assert.match(jsText, /data-filter-key="status"/);
     assert.match(jsText, /applyMemberFilters/);
     assert.match(jsText, /id="people-modal"/);
@@ -185,6 +185,13 @@ test("GET /api/people returns Shen-line roster and grants", async () => {
     assert.ok(data.people.length >= 16);
     const wang = data.people.find((row) => row.name === "王博");
     assert.equal(wang.visibleShops.length, 2);
+    assert.equal(wang.director, "罗成");
+    assert.equal(wang.lineManager, "沈子晗");
+    assert.equal(wang.operator, "王博");
+    const cui = data.people.find((row) => row.name === "崔安琪");
+    assert.equal(cui.supervisor, "杨润泽");
+    assert.equal(cui.lineManager, "沈子晗");
+    assert.equal(cui.operator, "崔安琪");
     const shops = await fetch(`${base}/api/people/shops`);
     const shopJson = await shops.json();
     assert.ok(shopJson.shops.some((row) => row.name === "RASW家居旗舰店"));
@@ -289,7 +296,7 @@ test("org store board lists demo shops and supports add", async () => {
     const template = await fetch(`${base}/api/people/org/stores/template`);
     const csv = await template.text();
     assert.equal(template.status, 200);
-    assert.match(csv, /总监,经理,主管\/储备,运营,助理,店铺名称,店铺ID,商家id/);
+    assert.match(csv, /总监,经理,主管\/储备,运营,助理,小组ID,店铺名称,店铺ID,商家id/);
 
     const imported = await fetch(`${base}/api/people/org/stores/import`, {
       method: "POST",
@@ -699,7 +706,7 @@ test("people roster template and import upsert by username", async () => {
     const template = await fetch(`${base}/api/people/template`);
     const csv = await template.text();
     assert.equal(template.status, 200);
-    assert.match(csv, /姓名,部门,上级,岗位,所属中心,状态,账号,登录密码/);
+    assert.match(csv, /姓名,总监,经理,主管\/储备,运营,助理,状态,账号,登录密码/);
 
     const imported = await fetch(`${base}/api/people/import`, {
       method: "POST",
@@ -715,18 +722,32 @@ test("people roster template and import upsert by username", async () => {
             状态: "在职",
             账号: "daoru",
             登录密码: "Import1!"
+          },
+          {
+            姓名: "模板同事",
+            总监: "罗成",
+            经理: "沈子晗",
+            "主管/储备": "",
+            运营: "模板同事",
+            助理: "",
+            状态: "在职",
+            账号: "moban",
+            登录密码: "Import2!"
           }
         ]
       })
     });
     const importedJson = await imported.json();
     assert.equal(imported.status, 200, JSON.stringify(importedJson));
-    assert.equal(importedJson.created, 1);
+    assert.equal(importedJson.created, 2, JSON.stringify(importedJson));
     const listed = await fetch(`${base}/api/people`);
     const listedJson = await listed.json();
     const row = listedJson.people.find((item) => item.username === "daoru");
     assert.equal(row.name, "导入同事");
     assert.equal(row.password, "Import1!");
+    const templated = listedJson.people.find((item) => item.username === "moban");
+    assert.equal(templated.lineManager, "沈子晗");
+    assert.equal(templated.operator, "模板同事");
   });
 });
 
