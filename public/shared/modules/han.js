@@ -1514,7 +1514,7 @@
     mount: function (root) {
       root.innerHTML = page(
         "实时付费",
-        "先看全中心汇总，再按小组看各店。数字来自本中心付费记录。",
+        "先看全中心汇总，再按小组看各店。本地采集的 xlsx/csv 点「上传抓取表」，表头有店铺和花费即可。",
         '<style>' +
           ".han-paid-board{display:flex;flex-direction:column;gap:14px}" +
           ".han-paid-summary,.han-paid-group,.han-paid-form{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px}" +
@@ -1541,6 +1541,9 @@
           ".han-paid-rank.is-1{background:#f59e0b;color:#fff}" +
           ".han-paid-rank.is-2{background:#9ca3af;color:#fff}" +
           ".han-paid-rank.is-3{background:#d97706;color:#fff}" +
+          ".han-paid-actions{display:flex;justify-content:flex-end;gap:8px;margin:0 0 12px;flex-wrap:wrap}" +
+          ".han-paid-actions button,.han-paid-actions label{min-height:34px;padding:6px 14px;border:0;border-radius:999px;background:#111827;color:#fff;font-size:13px;font-weight:600;cursor:pointer}" +
+          ".han-paid-actions .han-paid-import-btn{background:#2563eb}" +
           ".han-paid-form h2{margin:0 0 10px;font-size:15px}" +
           ".han-paid-form .han-paid-form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px 12px}" +
           ".han-paid-form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#374151}" +
@@ -1549,6 +1552,9 @@
           "</style>" +
           '<div class="han-paid-board">' +
           '<section class="han-paid-summary" id="han-paid-summary">' +
+          '<div class="han-paid-actions">' +
+          '<label class="han-paid-import-btn">上传抓取表<input id="han-paid-import" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden /></label>' +
+          '<button type="button" id="han-paid-tpl">下载模板</button></div>' +
           '<div class="han-paid-charts">' +
           '<div class="han-paid-chart"><header>实时指标<span>昨天 / 今天</span></header><svg id="han-paid-chart-a" viewBox="0 0 320 88" preserveAspectRatio="none"></svg><p class="han-paid-delta" id="han-paid-delta-a">—</p></div>' +
           '<div class="han-paid-chart"><header>实时对比<span>昨天 / 今天</span></header><svg id="han-paid-chart-b" viewBox="0 0 320 88" preserveAspectRatio="none"></svg><p class="han-paid-delta" id="han-paid-delta-b">—</p></div>' +
@@ -1805,13 +1811,61 @@
           }
         });
       }
+      function onPaidImported(json) {
+        if (dead) return;
+        const n = (json.created || []).length;
+        msg.textContent = json.ok
+          ? "已上传" + n + "条" + (json.skipped ? "，跳过" + json.skipped + "条" : "")
+          : json.error || "上传失败";
+        if (json.ok) return load();
+      }
+      function onPaidImport(e) {
+        const file = e.target.files && e.target.files[0];
+        e.target.value = "";
+        if (!file) return;
+        const name = file.name || "paid.xlsx";
+        if (/\.xlsx$/i.test(name)) {
+          fetch("/api/han/paid/import-file?filename=" + encodeURIComponent(name), {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/octet-stream" },
+            body: file,
+          })
+            .then(function (res) {
+              return res.json();
+            })
+            .then(onPaidImported)
+            .catch(function (err) {
+              if (!dead) msg.textContent = String(err);
+            });
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = function () {
+          jsonFetch("/api/han/paid/import", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ csv: String(reader.result || "") }),
+          }).then(onPaidImported);
+        };
+        reader.readAsText(file, "utf-8");
+      }
+      function onPaidTpl() {
+        location.assign("/api/han/paid.csv");
+      }
+      const importInput = root.querySelector("#han-paid-import");
+      const tplBtn = root.querySelector("#han-paid-tpl");
       form.addEventListener("submit", onSubmit);
+      importInput.addEventListener("change", onPaidImport);
+      tplBtn.addEventListener("click", onPaidTpl);
       load().catch(function (err) {
         if (!dead) msg.textContent = String(err);
       });
       return function unmount() {
         dead = true;
         form.removeEventListener("submit", onSubmit);
+        importInput.removeEventListener("change", onPaidImport);
+        tplBtn.removeEventListener("click", onPaidTpl);
         root.innerHTML = "";
       };
     },
