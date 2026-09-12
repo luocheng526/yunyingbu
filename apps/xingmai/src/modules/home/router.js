@@ -1,8 +1,21 @@
 import { Router } from "express";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { getHomeErpKpis } from "./erp-kpis.js";
+
+const homeJsPath = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../public/shared/modules/home.js"
+);
 
 export function homeRouter() {
   const router = Router();
+
+  router.get("/client.js", (_req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    res.type("application/javascript");
+    res.sendFile(homeJsPath);
+  });
 
   router.get("/erp-kpis", async (req, res) => {
     try {
