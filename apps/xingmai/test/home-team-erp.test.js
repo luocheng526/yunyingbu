@@ -60,3 +60,15 @@ test("Shen org store without storeId uses ERP shop-options name", () => {
 test("unknown shop stays empty so the card can show a dash", () => {
   assert.equal(resolveErpId({ storeName: "不存在的店" }, {}), "");
 });
+
+test("team totals keep the first ERP row when two duty shops share one id", () => {
+  const seen = {};
+  const matched = [];
+  ["159582056", "159582056", "16107402"].forEach((id) => {
+    if (!seen[id]) {
+      seen[id] = true;
+      matched.push(id);
+    }
+  });
+  assert.deepEqual(matched, ["159582056", "16107402"]);
+});

@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.365-home-teamerp */
+/* xm-module-home 0.1.366-home-team4r */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -507,7 +507,7 @@
       escapeHtml(team.key) +
       '"><div><h2>' +
       escapeHtml(team.name) +
-      "团队</h2><p>店铺按人管责权，数字按店铺id对齐数据中心 ERP。</p></div>" +
+      "团队</h2><p>店铺按组织中心责权，数字按店铺id或店名对齐星脉 ERP。</p></div>" +
       '<a href="' +
       escapeHtml(team.href || "/data/overview") +
       '">打开数据总览</a></header>'
@@ -952,13 +952,13 @@
       ".xm-hm-teams{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 16px;align-items:start;position:relative}" +
       ".xm-hm-teams::before{content:\"\";position:absolute;inset:0 auto 0 50%;width:1px;background:var(--xm-line);pointer-events:none}" +
       ".xm-hm-team{display:flex;flex-direction:column;gap:8px;min-width:0}" +
-      ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;align-content:start}" +
+      ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;align-content:start}" +
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0}" +
-      ".xm-hm.is-team .xm-hm-card{min-height:72px;padding:8px 8px 6px;border-radius:6px}" +
-      ".xm-hm.is-team .xm-hm-card-head{font-size:11px}" +
-      ".xm-hm.is-team .xm-hm-card-head .xm-hm-help{width:14px;height:14px;font-size:10px}" +
-      ".xm-hm.is-team .xm-hm-value{margin-top:4px;font-size:16px}" +
-      ".xm-hm.is-team .xm-hm-trend{margin-top:2px;font-size:11px}" +
+      ".xm-hm.is-team .xm-hm-card{min-height:88px;padding:10px 10px 8px;border-radius:8px}" +
+      ".xm-hm.is-team .xm-hm-card-head{font-size:12px}" +
+      ".xm-hm.is-team .xm-hm-card-head .xm-hm-help{width:16px;height:16px;font-size:10px}" +
+      ".xm-hm.is-team .xm-hm-value{margin-top:6px;font-size:18px}" +
+      ".xm-hm.is-team .xm-hm-trend{margin-top:4px;font-size:12px}" +
       ".xm-hm-team-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;min-height:48px;padding:0 4px 4px}" +
       ".xm-hm-team-head h2{margin:0;font-size:16px}" +
       ".xm-hm-team-head p{margin:4px 0 0;color:var(--xm-muted);font-size:12px}" +
@@ -1027,7 +1027,7 @@
       ".xm-hm-pop h3{margin:0 0 8px;font-size:13px}" +
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{margin:8px 0 0;color:var(--xm-muted);font-size:12px}" +
-      "@media (max-width:1400px){.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}" +
+      "@media (max-width:1100px){.xm-hm-team-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}" +
       "@media (max-width:1200px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
       "@media (max-width:700px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts,.xm-hm-team-kpis{grid-template-columns:1fr}.xm-hm-team-head{flex-direction:column}.xm-hm-cal-months{flex-direction:column}}"
     );
@@ -1085,7 +1085,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.365-home-teamerp");
+    board.setAttribute("data-hm-js", "0.1.366-home-team4r");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", state.view === "team");
@@ -1130,7 +1130,7 @@
             ? "人管对不上：" + gapText
             : "团队店按组织中心责权，数字按店铺id或店名对齐星脉 ERP。")
           : state.view === "board"
-            ? "排行榜按人管职务和责权店，只按店铺id对齐 ERP 后汇总支付金额 / 利润。"
+            ? "排行榜按人管职务和责权店，按店铺id或店名对齐 ERP 后汇总支付金额 / 利润。"
             : "数字来自星脉 ERP 店铺汇总。净销售额按支付金额减退款。";
     var user = state.user && (state.user.displayName || state.user.username);
     var mark = user || "星脉";
@@ -1324,6 +1324,9 @@
       netGoodsCost: sum.netGoodsCost,
       netSales: sum.netSales != null ? sum.netSales : null
     };
+    if (next.jdRatio == null && next.jdOrders != null && next.orderCount) {
+      next.jdRatio = next.jdOrders / next.orderCount;
+    }
     if (next.payAmount != null) {
       if (next.profit != null && next.profitRate == null) {
         next.profitRate = next.profit / next.payAmount;
@@ -1859,6 +1862,7 @@
       var rows = [];
       var matched = [];
       var prevMatched = [];
+      var seen = {};
       shops.forEach(function (shop) {
         if (!pred(shop)) {
           return;
@@ -1893,9 +1897,12 @@
           });
           return;
         }
-        matched.push(erpRow);
-        if (prevErp[id]) {
-          prevMatched.push(prevErp[id]);
+        if (!seen[id]) {
+          seen[id] = true;
+          matched.push(erpRow);
+          if (prevErp[id]) {
+            prevMatched.push(prevErp[id]);
+          }
         }
         rows.push({
           shop: label,

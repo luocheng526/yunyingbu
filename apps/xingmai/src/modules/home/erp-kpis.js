@@ -146,6 +146,36 @@ export function mapErpKpis(shopPage, trendRows) {
   return { summary, records };
 }
 
+export async function fetchAllShopPages(erp, range, pageSize = 200) {
+  let pageNum = 1;
+  let merged = null;
+  const records = [];
+  for (;;) {
+    const page = await erp.erpPost("/product/jd/order/shop/page", {
+      pageNum,
+      pageSize,
+      shopIds: [],
+      orderBy: "payAmount",
+      asc: false,
+      filters: [],
+      ...range
+    });
+    if (!merged) {
+      merged = page || {};
+    }
+    const rows = (page && (page.records || page.list)) || [];
+    for (const row of rows) {
+      records.push(row);
+    }
+    const total = Number((page && (page.total ?? page.totalCount)) || 0);
+    if (!rows.length || rows.length < pageSize || (total && records.length >= total) || pageNum >= 20) {
+      break;
+    }
+    pageNum += 1;
+  }
+  return { ...(merged || {}), records };
+}
+
 export async function getHomeErpKpis(query = {}) {
   const erp = await loadErp();
   if (!erp || typeof erp.erpPost !== "function") {
@@ -153,15 +183,7 @@ export async function getHomeErpKpis(query = {}) {
   }
   const range = payRange(query);
   const [shopPage, trendRows] = await Promise.all([
-    erp.erpPost("/product/jd/order/shop/page", {
-      pageNum: 1,
-      pageSize: 50,
-      shopIds: [],
-      orderBy: "payAmount",
-      asc: false,
-      filters: [],
-      ...range
-    }),
+    fetchAllShopPages(erp, range, 200),
     erp.erpPost("/product/board/salesTrend", {
       startDate: range.payTimeStart,
       endDate: range.payTimeEnd

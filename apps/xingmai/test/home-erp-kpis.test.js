@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mapErpKpis } from "../src/modules/home/erp-kpis.js";
+import { fetchAllShopPages, mapErpKpis } from "../src/modules/home/erp-kpis.js";
 
 test("maps Xingmai shop summary onto homepage company fields", () => {
   const shopPage = {
@@ -35,4 +35,21 @@ test("maps Xingmai shop summary onto homepage company fields", () => {
   assert.equal(mapped.summary.netGoodsCost, 21791.6);
   assert.equal(Math.round(mapped.summary.netSales * 100) / 100, 649371.72);
   assert.equal(mapped.records[0].shopId, "25014981");
+});
+
+test("ERP shop pages keep fetching until the last short page", async () => {
+  const calls = [];
+  const erp = {
+    async erpPost(path, body) {
+      calls.push({ path, pageNum: body.pageNum, pageSize: body.pageSize });
+      if (body.pageNum === 1) {
+        return { total: 3, records: [{ shopId: "1" }, { shopId: "2" }] };
+      }
+      return { total: 3, records: [{ shopId: "3" }] };
+    }
+  };
+  const page = await fetchAllShopPages(erp, { payTimeStart: "2026-09-11 00:00:00", payTimeEnd: "2026-09-11 23:59:59" }, 2);
+  assert.equal(page.records.length, 3);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].pageSize, 2);
 });
