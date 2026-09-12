@@ -717,7 +717,7 @@
           '<span class="han-sheet-zoom-label">100%</span>' +
           '<button type="button" class="han-sheet-zoom-in">放大</button>' +
           '<button type="button" class="han-sheet-zoom-reset">复位</button>' +
-          '<span class="han-muted">拖动移动 · 滚轮缩放 · 双击主图看大图</span></div>' +
+          '<span class="han-muted">拖动移动 · 滚轮缩放 · 双击主图看大图 · 双击格子编辑</span></div>' +
           '<div class="han-sheet-viewport" data-han-sheet>' +
           '<div class="han-sheet-pan"><table class="han-sheet" id="han-sheet">' +
           "<thead></thead><tbody></tbody></table></div></div></div>" +
@@ -1301,7 +1301,7 @@
       }
       let sheetDrag = null;
       function onSheetPointerDown(e) {
-        if (e.target.closest("input,select,textarea,button,a,.han-thumb-box")) return;
+        if (e.target.closest("input,select,textarea,button,a,.han-thumb-box,.han-cell,.han-layer-pick")) return;
         if (e.button) return;
         sheetDrag = {
           x: e.clientX,
@@ -1341,6 +1341,15 @@
       }
       function onSheetDblClick(e) {
         if (onSheetImageOpen(e)) return;
+        const edit = e.target.closest("td");
+        if (edit && !e.target.closest(".han-thumb-box")) {
+          const field = edit.querySelector("input.han-cell:not([type='hidden']),select.han-layer-pick");
+          if (field) {
+            field.focus();
+            if (field.select) field.select();
+            return;
+          }
+        }
         const box = e.target.closest(".han-thumb-box");
         if (!box) return;
         const input = box.querySelector('input[data-key="image"]');

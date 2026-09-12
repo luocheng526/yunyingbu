@@ -430,6 +430,7 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /han-sheet-pan/);
   assert.match(js, /han-lightbox/);
   assert.match(js, /openHanLightbox/);
+  assert.match(js, /field\.focus\(\)/);
   assert.match(js, /han-img-cell/);
   assert.match(js, /referrerpolicy/);
   assert.match(js, /type="hidden"/);
