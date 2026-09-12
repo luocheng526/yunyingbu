@@ -305,7 +305,13 @@
   }
 
   function isVisibleInputText(text) {
-    return Boolean(text) && !/[\u0000-\u001f\u007f-\u009f]/.test(text);
+    return (
+      Boolean(text) &&
+      !Array.from(text).some(function (character) {
+        const code = character.codePointAt(0);
+        return code < 32 || (code >= 127 && code <= 159);
+      })
+    );
   }
 
   function installTitleKeyboardFallback(input) {

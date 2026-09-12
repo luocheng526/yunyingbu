@@ -261,8 +261,12 @@ function cloneFolders(nodes) {
 }
 
 function cleanFolderTitle(title) {
-  return String(title || "")
-    .replace(/[\u0000-\u001f\u007f-\u009f]/g, "")
+  return Array.from(String(title || ""))
+    .filter((character) => {
+      const code = character.codePointAt(0);
+      return code >= 32 && (code < 127 || code > 159);
+    })
+    .join("")
     .trim();
 }
 
