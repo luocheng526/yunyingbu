@@ -444,12 +444,39 @@
     });
   }
 
+  function ensureHeroSeries(hero) {
+    if (!hero) {
+      return hero;
+    }
+    let yest = asSeries(hero.yesterday);
+    let today = asSeries(hero.today && hero.today.length ? hero.today : hero.spark);
+    if (!yest.length || !today.length) {
+      const last =
+        today.length
+          ? today[today.length - 1]
+          : Number(String(hero.value || "").replace(/,/g, "")) || 0;
+      const seeded = seedHeroCompare(last, today.length ? last : null);
+      if (!yest.length) {
+        yest = seeded.yesterday;
+      }
+      if (!today.length) {
+        today = seeded.today;
+      }
+      if (hero.delta == null || hero.delta === 0) {
+        hero.delta = seeded.delta;
+      }
+    }
+    hero.yesterday = yest;
+    hero.today = today;
+    return hero;
+  }
+
   function attachLiveHero(hero, live) {
     const src = (live && live.hero) || live || {};
     const yest = asSeries(src.yesterday);
-    const today = asSeries(src.today);
+    const today = asSeries(src.today && src.today.length ? src.today : src.spark);
     if (!yest.length && !today.length) {
-      return hero;
+      return ensureHeroSeries(hero);
     }
     hero.yesterday = yest;
     hero.today = today;
@@ -468,7 +495,7 @@
     } else if (src.delta != null) {
       hero.delta = Number(src.delta) || 0;
     }
-    return hero;
+    return ensureHeroSeries(hero);
   }
 
   function compareSpark() {
@@ -801,7 +828,7 @@
         return;
       }
       const payload = filteredPayload();
-      const hero = payload.hero || {};
+      const hero = ensureHeroSeries(payload.hero || {});
       const down = Number(hero.delta) < 0;
       const cards = (payload.cards || [])
         .map(function (card) {
