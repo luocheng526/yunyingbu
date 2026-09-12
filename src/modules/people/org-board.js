@@ -574,6 +574,21 @@ export function listOrgStores(query = {}, actor) {
   const status = typeof query.status === "string" ? query.status.trim() : "";
   const q = typeof query.q === "string" ? query.q.trim().toLowerCase() : "";
   const scope = scopeOf(actor);
+  rows.forEach((row) => {
+    const roles = syncStoreRoles({}, row);
+    ["director", "manager", "supervisor", "operator", "assistant"].forEach((key) => {
+      if (!String(row[key] || "").trim() && roles[key]) {
+        row[key] = roles[key];
+      }
+    });
+    if (!String(row.owner || "").trim() && roles.owner) {
+      row.owner = roles.owner;
+    }
+    if (!String(row.chief || "").trim() && roles.chief) {
+      row.chief = roles.chief;
+      row.team = roles.team;
+    }
+  });
   return rows
     .filter((row) => rowMatchesScope(row, scope))
     .filter((row) => (team ? row.team === team : true))
