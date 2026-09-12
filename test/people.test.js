@@ -6,6 +6,7 @@ import { createApp } from "../src/app.js";
 import { patchAppSource } from "../src/modules/people/patch-app.js";
 import { mapImportRow, resetOrgBoard } from "../src/modules/people/org-board.js";
 import { resetOrgExtra } from "../src/modules/people/org-extra.js";
+import { canEditRoster } from "../src/modules/people/org-acl.js";
 import { hydrateFromMysql, resetPeopleStore } from "../src/modules/people/store.js";
 
 const PRESET = [
@@ -122,6 +123,11 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /表头可筛总监、经理、主管\/储备、运营、助理、状态/);
     assert.match(jsText, /people-cell/);
     assert.match(jsText, /startPersonCellEdit/);
+    assert.match(jsText, /data-field="director"/);
+    assert.match(jsText, /data-field="lineManager"/);
+    assert.match(jsText, /双击修改/);
+    assert.match(jsText, /仅罗成、韩梦凯、沈子晗能改/);
+    assert.match(jsText, /peopleData.canEdit === true/);
     assert.match(jsText, /people-row-check/);
     assert.match(jsText, /people-check-all/);
     assert.match(jsText, /people-bulk/);
@@ -748,6 +754,67 @@ test("people roster template and import upsert by username", async () => {
     const templated = listedJson.people.find((item) => item.username === "moban");
     assert.equal(templated.lineManager, "沈子晗");
     assert.equal(templated.operator, "模板同事");
+  });
+});
+
+test("roster line cells are editable only by 罗成, 韩梦凯, 沈子晗", async () => {
+  assert.equal(canEditRoster("罗成"), true);
+  assert.equal(canEditRoster("韩梦凯"), true);
+  assert.equal(canEditRoster("沈子晗"), true);
+  assert.equal(canEditRoster("张文静"), false);
+  assert.equal(canEditRoster("管理员"), false);
+
+  await withServer(async (base) => {
+    const listed = await fetch(`${base}/api/people`);
+    const listedJson = await listed.json();
+    assert.equal(listedJson.canEdit, true);
+    const wang = listedJson.people.find((row) => row.name === "王博");
+    assert.ok(wang);
+
+    const deniedList = await fetch(`${base}/api/people?actor=${encodeURIComponent("张文静")}`);
+    const deniedListJson = await deniedList.json();
+    assert.equal(deniedListJson.canEdit, false);
+
+    const denied = await fetch(`${base}/api/people/${wang.id}?actor=${encodeURIComponent("张文静")}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ supervisor: "杨润泽" })
+    });
+    assert.equal(denied.status, 403);
+
+    const byShen = await fetch(`${base}/api/people/${wang.id}?actor=${encodeURIComponent("沈子晗")}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ supervisor: "杨润泽" })
+    });
+    const byShenJson = await byShen.json();
+    assert.equal(byShen.status, 200, JSON.stringify(byShenJson));
+    assert.equal(byShenJson.person.supervisor, "杨润泽");
+
+    const byHan = await fetch(`${base}/api/people/${wang.id}?actor=${encodeURIComponent("韩梦凯")}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lineManager: "韩梦凯" })
+    });
+    const byHanJson = await byHan.json();
+    assert.equal(byHan.status, 200, JSON.stringify(byHanJson));
+    assert.equal(byHanJson.person.lineManager, "韩梦凯");
+
+    const byLuo = await fetch(`${base}/api/people/${wang.id}?actor=${encodeURIComponent("罗成")}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assistant: "小助" })
+    });
+    const byLuoJson = await byLuo.json();
+    assert.equal(byLuo.status, 200, JSON.stringify(byLuoJson));
+    assert.equal(byLuoJson.person.assistant, "小助");
+
+    const blockedCreate = await fetch(`${base}/api/people?actor=${encodeURIComponent("张文静")}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "路人", role: "运营", center: "数据中心", status: "在职" })
+    });
+    assert.equal(blockedCreate.status, 403);
   });
 });
 

@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.177-people-roles";
+    const href = "/people.css?v=0.1.178-people-edit-acl";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -131,7 +131,7 @@
         '<div class="org-filter-pop" id="org-filter-pop" hidden></div></div>' +
         '<div class="org-pane" data-pane="members" hidden>' +
         '<section class="panel"><h2>身份名册</h2>' +
-        '<p class="lead">表头可筛总监、经理、主管/储备、运营、助理、状态。勾选后可统一改密码或删除。点新增人员弹出对话框。</p>' +
+        '<p class="lead">表头可筛总监、经理、主管/储备、运营、助理、状态。总监、经理、主管/储备、运营、助理双击可改，仅罗成、韩梦凯、沈子晗能改，其他人不能改。勾选后可统一改密码或删除。点新增人员弹出对话框。</p>' +
         '<div class="org-toolbar">' +
         '<input type="search" id="people-q" placeholder="姓名 / 账号 / 经理 / 主管" />' +
         '<button type="button" id="people-search">搜索</button>' +
@@ -169,6 +169,7 @@
         '<div class="org-pane" data-pane="acl" hidden>' +
         '<section class="panel"><h2>权限</h2>' +
         "<p>店铺主数据按登录人责权：罗成可改全部，沈子晗只改沈子晗组，韩梦凯只改韩梦凯组。双击单元格保存。</p>" +
+        "<p>成员管理五级线双击可改，仅罗成、韩梦凯、沈子晗能改，其他人不能改。</p>" +
         "<p>智能体只读：GET /api/people、GET /api/people/org/stores、GET /api/people/grants。</p></section></div>" +
         '<div class="org-pane" data-pane="logs" hidden>' +
         '<section class="panel"><h2>改动日志</h2>' +
@@ -234,6 +235,9 @@
         });
       }
       function openPeopleForm() {
+        if (!roster.canEdit) {
+          return;
+        }
         if (peopleForm) {
           peopleForm.reset();
           if (peopleForm.password) {
@@ -251,7 +255,7 @@
       }
       const peopleError = root.querySelector("#people-error");
       const logsTbody = root.querySelector("#logs-tbody");
-      let roster = { people: [], shops: [], grants: [] };
+      let roster = { people: [], shops: [], grants: [], canEdit: false };
       let dead = false;
       let editingId = null;
       let lastStores = [];
@@ -968,9 +972,25 @@
         }
       }
 
+      function peopleLineCell(field, value) {
+        const canEdit = roster.canEdit;
+        return (
+          '<td class="people-cell' +
+          (canEdit ? " can-edit" : "") +
+          '" data-field="' +
+          field +
+          '" title="' +
+          (canEdit ? "双击修改" : "仅罗成、韩梦凯、沈子晗能改") +
+          '">' +
+          escapeHtml(value || "—") +
+          "</td>"
+        );
+      }
+
       function renderPeople(people) {
         lastPeople = people;
         peopleTbody.replaceChildren();
+        const canEdit = roster.canEdit;
         people.forEach(function (person) {
           const tr = document.createElement("tr");
           tr.setAttribute("data-id", String(person.id));
@@ -981,26 +1001,32 @@
             (memberSelectedIds[String(person.id)] ? " checked" : "") +
             " /></td><td>" +
             escapeHtml(person.name) +
-            "</td><td>" +
-            escapeHtml(person.director || "—") +
-            "</td><td>" +
-            escapeHtml(person.lineManager || "—") +
-            "</td><td>" +
-            escapeHtml(person.supervisor || "—") +
-            "</td><td>" +
-            escapeHtml(person.operator || "—") +
-            "</td><td>" +
-            escapeHtml(person.assistant || "—") +
-            '</td><td><select class="people-status" data-id="' +
+            "</td>" +
+            peopleLineCell("director", person.director) +
+            peopleLineCell("lineManager", person.lineManager) +
+            peopleLineCell("supervisor", person.supervisor) +
+            peopleLineCell("operator", person.operator) +
+            peopleLineCell("assistant", person.assistant) +
+            '<td><select class="people-status" data-id="' +
             person.id +
-            '"><option' +
+            '"' +
+            (canEdit ? "" : " disabled") +
+            "><option" +
             (person.status === "在职" ? " selected" : "") +
             ">在职</option><option" +
             (person.status === "离职" ? " selected" : "") +
             ">离职</option></select></td>" +
-            '<td class="people-cell can-edit" data-field="username" title="单击可改">' +
+            '<td class="people-cell' +
+            (canEdit ? " can-edit" : "") +
+            '" data-field="username" title="' +
+            (canEdit ? "单击可改" : "仅罗成、韩梦凯、沈子晗能改") +
+            '">' +
             escapeHtml(person.username || person.name || "—") +
-            '</td><td class="people-cell can-edit" data-field="password" title="单击可改">' +
+            '</td><td class="people-cell' +
+            (canEdit ? " can-edit" : "") +
+            '" data-field="password" title="' +
+            (canEdit ? "单击可改" : "仅罗成、韩梦凯、沈子晗能改") +
+            '">' +
             escapeHtml(person.password || "ChangeMe123!") +
             "</td>";
           peopleTbody.append(tr);
@@ -1019,6 +1045,8 @@
             return;
           }
           roster.people = peopleData.people || [];
+          roster.canEdit = peopleData.canEdit === true;
+          paintRosterAcl();
           renderPeople(applyMemberFilters(roster.people));
         });
       }
@@ -1680,6 +1708,9 @@
         downloadCsv("组织中心-身份名册.csv", peopleCsvLines(lastPeople));
       });
       root.querySelector("#people-import").addEventListener("click", function () {
+        if (!roster.canEdit) {
+          return;
+        }
         root.querySelector("#people-import-file").click();
       });
       root.querySelector("#people-import-file").addEventListener("change", function (event) {
@@ -1760,6 +1791,18 @@
           });
       });
 
+      function paintRosterAcl() {
+        const can = roster.canEdit;
+        ["people-add", "people-import", "people-bulk-apply", "people-bulk-remove"].forEach(function (id) {
+          const el = root.querySelector("#" + id);
+          if (el) {
+            el.disabled = !can;
+          }
+        });
+      }
+
+      const LINE_FIELDS = ["director", "lineManager", "supervisor", "operator", "assistant"];
+
       function savePersonField(id, field, value) {
         return fetch("/api/people/" + id, {
           method: "PATCH",
@@ -1779,7 +1822,7 @@
       }
 
       function startPersonCellEdit(td) {
-        if (!td || td.querySelector("input") || !td.classList.contains("can-edit")) {
+        if (!roster.canEdit || !td || td.querySelector("input") || !td.classList.contains("can-edit")) {
           return;
         }
         const id = td.parentElement && td.parentElement.getAttribute("data-id");
@@ -1790,9 +1833,11 @@
         if (!id || !field || !person) {
           return;
         }
-        const current = field === "username"
-          ? person.username || person.name || ""
-          : person.password || "ChangeMe123!";
+        const current = LINE_FIELDS.indexOf(field) >= 0
+          ? person[field] || ""
+          : field === "username"
+            ? person.username || person.name || ""
+            : person.password || "ChangeMe123!";
         const input = document.createElement("input");
         input.type = "text";
         input.value = current;
@@ -1807,7 +1852,11 @@
           }
           saved = true;
           const next = input.value.trim();
-          if (!next || next === String(current).trim()) {
+          if (next === String(current).trim()) {
+            loadMembers();
+            return;
+          }
+          if (!next && LINE_FIELDS.indexOf(field) < 0) {
             loadMembers();
             return;
           }
@@ -1833,7 +1882,15 @@
         if (event.target.closest("select, input, button")) {
           return;
         }
-        startPersonCellEdit(event.target.closest("td.people-cell"));
+        const td = event.target.closest("td.people-cell");
+        if (!td) {
+          return;
+        }
+        const field = td.getAttribute("data-field");
+        if (LINE_FIELDS.indexOf(field) >= 0) {
+          return;
+        }
+        startPersonCellEdit(td);
       });
       peopleTbody.addEventListener("change", function (event) {
         const box = event.target.closest(".people-row-check");

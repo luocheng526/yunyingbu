@@ -67,6 +67,12 @@ export function canEditStore(actor, row) {
   return rowMatchesScope(row, scopeOf(actor));
 }
 
+/** 成员表五级线：只有罗成、韩梦凯、沈子晗能双击改。 */
+export function canEditRoster(actor) {
+  const name = normalizeGroupId(actor);
+  return name.includes("罗成") || name.includes("沈子晗") || name.includes("韩梦凯");
+}
+
 export function assertCanWrite(actor, row, next = null) {
   if (!canEditStore(actor, row)) {
     return { ok: false, statusCode: 403, error: "超出责权：只能改本小组店铺" };
