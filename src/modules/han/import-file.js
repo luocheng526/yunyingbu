@@ -340,6 +340,118 @@ export function mapOverviewRows(rows, { filename = "" } = {}) {
   return { items, meta, headers: (rows[index] || []).map((cell) => String(cell ?? "").trim()) };
 }
 
+export function paidHeaderKey(label) {
+  const normalized = normalizeHeader(label);
+  if (!normalized) {
+    return "";
+  }
+  if (normalized.includes("精准通") && (normalized.includes("花费") || normalized.includes("付费"))) {
+    return "amount";
+  }
+  if (
+    normalized === "金额" ||
+    normalized === "花费" ||
+    normalized.includes("付费金额") ||
+    normalized === "推广花费" ||
+    normalized === "花费金额"
+  ) {
+    return "amount";
+  }
+  if (normalized.includes("店铺") || normalized === "店" || normalized === "店名") {
+    return "store";
+  }
+  if (normalized.includes("采集时间") || normalized === "日期" || normalized.includes("花费日期") || normalized.includes("付费日期")) {
+    return "spentOn";
+  }
+  if (normalized === "渠道") {
+    return "channel";
+  }
+  if (normalized.includes("成交金额") || normalized === "成交额") {
+    return "gmv";
+  }
+  if (normalized === "备注") {
+    return "note";
+  }
+  return "";
+}
+
+function pickPaidHeaderIndex(rows) {
+  let best = 0;
+  let score = -1;
+  rows.slice(0, 20).forEach((row, i) => {
+    const n = (row || []).reduce((sum, cell) => sum + (paidHeaderKey(cell) ? 1 : 0), 0);
+    if (n > score) {
+      score = n;
+      best = i;
+    }
+  });
+  return { index: best, score };
+}
+
+function parseCsvAoa(text) {
+  return String(text || "")
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .map((line) => line.split(",").map((cell) => cell.replace(/^"|"$/g, "").trim()))
+    .filter((row) => row.some((cell) => cell));
+}
+
+export function mapPaidRows(rows) {
+  const { index, score } = pickPaidHeaderIndex(rows);
+  const header = rows[index] || [];
+  if (score < 1) {
+    const err = new Error("识别不出付费表头，读到：" + header.filter(Boolean).join("、"));
+    err.statusCode = 400;
+    err.headers = header;
+    throw err;
+  }
+  const keys = header.map((cell) => paidHeaderKey(cell));
+  const items = [];
+  rows.slice(index + 1).forEach((row) => {
+    const item = {};
+    keys.forEach((key, i) => {
+      if (!key) {
+        return;
+      }
+      let value = String(row[i] ?? "").trim();
+      if (key === "spentOn") {
+        value = String(excelSerialToDate(value) || "").slice(0, 10);
+      }
+      if (key === "amount" || key === "gmv") {
+        value = value.replace(/[¥￥,\s]/g, "");
+      }
+      item[key] = value;
+    });
+    if (!item.amount) {
+      return;
+    }
+    const bits = [];
+    if (item.gmv) {
+      bits.push("成交金额 " + item.gmv);
+    }
+    if (item.note) {
+      bits.push(item.note);
+    }
+    items.push({
+      store: item.store || "",
+      channel: item.channel || "精准通",
+      amount: item.amount,
+      spentOn: item.spentOn || "",
+      note: bits.join("；"),
+    });
+  });
+  return { items, headers: header.map((cell) => String(cell ?? "").trim()) };
+}
+
+export function parsePaidWorkbook(file, filename = "") {
+  const name = String(filename || "");
+  if (/\.csv$/i.test(name) || typeof file === "string") {
+    const text = Buffer.isBuffer(file) ? file.toString("utf8") : String(file || "");
+    return mapPaidRows(parseCsvAoa(text));
+  }
+  return mapPaidRows(parseXlsxRows(file));
+}
+
 export function parseOverviewWorkbook(file, filename = "") {
   const name = filename || "";
   if (/\.csv$/i.test(name)) {

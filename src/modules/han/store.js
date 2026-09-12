@@ -9,7 +9,7 @@ import {
   mergeClassifyRules,
   normalizeProductLayer,
 } from "./classify.js";
-import { parseOverviewWorkbook } from "./import-file.js";
+import { parseOverviewWorkbook, parsePaidWorkbook } from "./import-file.js";
 
 export {
   classifyProduct,
@@ -886,6 +886,41 @@ export function createHanStore(poolOrFactory = getPool) {
         }
       }
       return { created, skipped: errors.length, errors };
+    },
+
+    async importPaid({ items, csv, file, filename } = {}) {
+      let rows = Array.isArray(items) && items.length ? items : null;
+      if (!rows && file) {
+        rows = parsePaidWorkbook(file, filename).items;
+      }
+      if (!rows && csv) {
+        rows = parsePaidWorkbook(csv, "paid.csv").items;
+      }
+      if (!rows) {
+        rows = [];
+      }
+      const existing = await this.listPaid();
+      const seen = new Set(
+        existing.map((row) => [row.store, row.spentOn, row.channel, String(row.amount || "")].join("\0")),
+      );
+      const created = [];
+      const errors = [];
+      let skipped = 0;
+      for (const row of rows) {
+        const key = [row.store || "", row.spentOn || "", row.channel || "精准通", String(row.amount || "")].join("\0");
+        if (seen.has(key)) {
+          skipped += 1;
+          continue;
+        }
+        try {
+          const item = await this.createPaid(row);
+          seen.add(key);
+          created.push(item);
+        } catch (err) {
+          errors.push({ store: row.store || "", amount: row.amount || "", error: err.message });
+        }
+      }
+      return { created, skipped: skipped + errors.length, errors };
     },
 
     async listPaid() {
