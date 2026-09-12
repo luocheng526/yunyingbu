@@ -92,6 +92,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /双击单元格/);
     assert.match(jsText, /下载模板/);
     assert.match(jsText, /id="org-import"/);
+    assert.match(jsText, /groupId: groupId/);
     assert.match(jsText, /decodeTableText/);
     assert.match(jsText, /gb18030/);
     assert.match(jsText, /normalizeStoreHeader/);
@@ -330,6 +331,113 @@ test("org store board lists demo shops and supports add", async () => {
     const byStoreId = await fetch(`${base}/api/people/org/stores?q=SID188`);
     const byStoreIdJson = await byStoreId.json();
     assert.ok(byStoreIdJson.stores.some((row) => row.storeId === "SID188"));
+  });
+});
+
+test("store import upserts by groupId+shopId and does not touch other groups", async () => {
+  await withServer(async (base) => {
+    const before = await (await fetch(`${base}/api/people/org/stores`)).json();
+    const hanCount = before.stores.filter((row) => row.chief.includes("韩梦凯")).length;
+    const yangCount = before.stores.filter((row) => row.groupId === "杨润泽").length;
+    const health = before.stores.find((row) => row.storeName === "RASW健康电器旗舰店");
+    assert.equal(health.groupId, "郭桂良");
+    assert.equal(health.updatedOn, "9.8更新");
+
+    const first = await fetch(`${base}/api/people/org/stores/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          {
+            经理: "沈子晗",
+            运营: "郭桂良",
+            店铺名称: "RASW健康电器旗舰店",
+            店铺ID: "218330674",
+            商家id: "11001003",
+            店铺情况备注: "运营中"
+          }
+        ]
+      })
+    });
+    const firstJson = await first.json();
+    assert.equal(first.status, 200, JSON.stringify(firstJson));
+    assert.equal(firstJson.created, 0);
+    assert.equal(firstJson.updated, 1);
+
+    const after1 = await (await fetch(`${base}/api/people/org/stores?q=${encodeURIComponent("RASW健康电器旗舰店")}`)).json();
+    const healthRows = after1.stores.filter((row) => row.storeName === "RASW健康电器旗舰店");
+    assert.equal(healthRows.length, 1);
+    assert.equal(healthRows[0].storeId, "218330674");
+    assert.equal(healthRows[0].shopId, "218330674");
+    assert.equal(healthRows[0].groupId, "郭桂良");
+    assert.match(healthRows[0].updatedOn, /更新/);
+    assert.notEqual(healthRows[0].updatedOn, "9.8更新");
+
+    const yangSame = await fetch(`${base}/api/people/org/stores/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          {
+            经理: "沈子晗",
+            "主管/储备": "杨润泽",
+            运营: "崔安琪",
+            店铺名称: "RASW健康电器旗舰店",
+            店铺ID: "218330674",
+            商家id: "99001003"
+          }
+        ]
+      })
+    });
+    const yangJson = await yangSame.json();
+    assert.equal(yangJson.created, 1, JSON.stringify(yangJson));
+
+    const listed = await (await fetch(`${base}/api/people/org/stores`)).json();
+    assert.equal(listed.stores.filter((row) => row.storeId === "218330674").length, 2);
+    assert.equal(listed.stores.filter((row) => row.chief.includes("韩梦凯")).length, hanCount);
+
+    const blocked = await fetch(`${base}/api/people/org/stores/import?actor=${encodeURIComponent("张文静")}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          {
+            "主管/储备": "杨润泽",
+            运营: "崔安琪",
+            店铺名称: "飒望家居日用旗舰店",
+            店铺ID: "should-not-write",
+            商家id: "11001007"
+          }
+        ]
+      })
+    });
+    const blockedJson = await blocked.json();
+    assert.equal(blockedJson.created, 0, JSON.stringify(blockedJson));
+    assert.equal(blockedJson.updated, 0);
+    assert.ok(blockedJson.failed.length >= 1);
+
+    const afterBlock = await (await fetch(`${base}/api/people/org/stores`)).json();
+    const cui = afterBlock.stores.find((row) => row.storeName === "飒望家居日用旗舰店");
+    assert.notEqual(cui.storeId, "should-not-write");
+    assert.equal(afterBlock.stores.filter((row) => row.groupId === "杨润泽").length, yangCount + 1);
+
+    const created = await fetch(`${base}/api/people/org/stores/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          {
+            经理: "沈子晗",
+            运营: "郭桂良",
+            店铺名称: "ABC新店",
+            店铺ID: "999999"
+          }
+        ]
+      })
+    });
+    const createdJson = await created.json();
+    assert.equal(createdJson.created, 1, JSON.stringify(createdJson));
+    assert.equal(createdJson.updated, 0);
   });
 });
 
