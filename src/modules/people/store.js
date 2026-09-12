@@ -556,11 +556,7 @@ export function importPeople(rows) {
       failed.push({ line, error: "上级不存在" });
       return;
     }
-    const found = people.find(
-      (row) =>
-        (username && String(row.username || row.name).trim() === username) ||
-        (!username && row.name === name)
-    );
+    const found = people.find((row) => String(row.name || "").trim() === name);
     if (found) {
       const result = patchPerson(found.id, {
         status,

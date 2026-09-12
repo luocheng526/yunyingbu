@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.178-people-edit-acl";
+    const href = "/people.css?v=0.1.179-import-merge";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -93,7 +93,7 @@
       root.innerHTML =
         '<main class="page people-page">' +
         '<header class="page-head"><h1>组织中心</h1>' +
-        '<p class="lead">双击单元格即可改。罗成改全部；沈子晗只改沈子晗组；韩梦凯只改韩梦凯组。按责权显示。</p>' +
+        '<p class="lead">双击单元格即可改。导入是合并：人员同名覆盖、不同名新增；店铺只有同一家（店铺ID相同，或店名+商家id都相同）才覆盖，对不上就新增。未出现在文件里的原数据一律保留。</p>' +
         '<p class="banner" id="org-scope">当前责权：—</p></header>' +
         '<nav class="org-tabs" id="org-tabs">' +
         '<button type="button" class="org-tab is-active" data-pane="stores">店铺主数据</button>' +
@@ -131,7 +131,7 @@
         '<div class="org-filter-pop" id="org-filter-pop" hidden></div></div>' +
         '<div class="org-pane" data-pane="members" hidden>' +
         '<section class="panel"><h2>身份名册</h2>' +
-        '<p class="lead">表头可筛总监、经理、主管/储备、运营、助理、状态。总监、经理、主管/储备、运营、助理双击可改，仅罗成、韩梦凯、沈子晗能改，其他人不能改。勾选后可统一改密码或删除。点新增人员弹出对话框。</p>' +
+        '<p class="lead">表头可筛总监、经理、主管/储备、运营、助理、状态。总监、经理、主管/储备、运营、助理双击可改，仅罗成、韩梦凯、沈子晗能改，其他人不能改。导入按姓名合并：一模一样的名字覆盖原行，对不上的名字当新员工，不删原名册。勾选后可统一改密码或删除。点新增人员弹出对话框。</p>' +
         '<div class="org-toolbar">' +
         '<input type="search" id="people-q" placeholder="姓名 / 账号 / 经理 / 主管" />' +
         '<button type="button" id="people-search">搜索</button>' +
@@ -170,6 +170,7 @@
         '<section class="panel"><h2>权限</h2>' +
         "<p>店铺主数据按登录人责权：罗成可改全部，沈子晗只改沈子晗组，韩梦凯只改韩梦凯组。双击单元格保存。</p>" +
         "<p>成员管理五级线双击可改，仅罗成、韩梦凯、沈子晗能改，其他人不能改。</p>" +
+        "<p>导入是合并不是换表。人员同名覆盖；店铺同一家才覆盖，其它原店铺保留。</p>" +
         "<p>智能体只读：GET /api/people、GET /api/people/org/stores、GET /api/people/grants。</p></section></div>" +
         '<div class="org-pane" data-pane="logs" hidden>' +
         '<section class="panel"><h2>改动日志</h2>' +
@@ -1772,17 +1773,23 @@
             showError(
               peopleError,
               failed.length
-                ? "导入完成：新增" +
+                ? "合并完成：新增" +
                     result.data.created +
-                    "，更新" +
+                    "，同名覆盖" +
                     result.data.updated +
                     "。失败" +
                     failed.length +
-                    "行"
+                    "行。未导入的原人员保留"
                 : ""
             );
             if (!failed.length) {
-              window.alert("导入完成：新增" + result.data.created + "条，更新" + result.data.updated + "条。");
+              window.alert(
+                "合并完成：新增" +
+                  result.data.created +
+                  "条，同名覆盖" +
+                  result.data.updated +
+                  "条。未导入的原人员保留。"
+              );
             }
             return loadMembers();
           })
@@ -2079,7 +2086,7 @@
               throw new Error("没认出店铺名称。请用下载模板，或把 Excel 另存为 CSV 再导。");
             }
             if (headers.indexOf("运营") < 0 && headers.indexOf("店铺ID") < 0) {
-              throw new Error("请至少提供运营或店铺ID，以便按小组更新原店铺。");
+              throw new Error("请至少提供运营或店铺ID。导入是合并：同一家店才覆盖，其它原店铺保留。");
             }
             const rows = table
               .slice(headerIndex + 1)
@@ -2130,9 +2137,9 @@
             showError(
               errorEl,
               failed.length
-                ? "导入完成：新增" +
+                ? "合并完成：新增" +
                     result.data.created +
-                    "，更新" +
+                    "，同一家覆盖" +
                     result.data.updated +
                     "。失败" +
                     failed.length +
@@ -2142,11 +2149,18 @@
                       .map(function (item) {
                         return "第" + item.line + "行" + item.error;
                       })
-                      .join("；")
+                      .join("；") +
+                    "。未导入的原店铺保留"
                 : ""
             );
             if (!failed.length) {
-              window.alert("导入完成：新增" + result.data.created + "条，更新" + result.data.updated + "条。");
+              window.alert(
+                "合并完成：新增" +
+                  result.data.created +
+                  "条，同一家覆盖" +
+                  result.data.updated +
+                  "条。未导入的原店铺保留。"
+              );
             }
             return loadBoard();
           })
