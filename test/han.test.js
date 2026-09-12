@@ -424,6 +424,9 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /全新商品/);
   assert.match(js, /\/api\/han\/picks/);
   assert.match(js, /han-layer-pick/);
+  assert.match(js, /han-thumb/);
+  assert.match(js, /han-img-cell/);
+  assert.match(js, /referrerpolicy/);
   assert.match(js, /id="han-export"/);
   assert.match(js, /\/api\/han\/products\/import/);
   assert.match(js, /\/api\/han\/products\/import-file/);
