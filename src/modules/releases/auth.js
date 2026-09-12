@@ -3,8 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const COOKIE_NAME = "mk_sid";
-export const RELEASES_CSS_HREF = "/releases.css?v=sc-ui-15";
-export const RELEASES_MODULE_HREF = "/shared/modules/releases.js?v=sc-ui-15";
+export const RELEASES_CSS_HREF = "/releases.css?v=sc-ui-16";
+export const RELEASES_MODULE_HREF = "/shared/modules/releases.js?v=sc-ui-16";
 export const RELEASES_SCROLL_STYLE_ID = "xm-releases-scroll";
 export const RELEASES_FETCH_PATCH_ID = "xm-releases-fetch-patch";
 export const RELEASES_BOOT_ID = "xm-releases-boot";
@@ -101,7 +101,7 @@ export function injectReleasesCssLink(html) {
     }
     return full;
   });
-  out = out.replace(/\/shared\/modules\/releases\.js\?v=[^"']+/g, RELEASES_MODULE_HREF);
+  out = out.replace(/\/shared\/modules\/releases\.js(?:\?v=[^"']+)?/g, RELEASES_MODULE_HREF);
   const extras = [];
   if (!out.includes(`id="${RELEASES_SCROLL_STYLE_ID}"`)) {
     extras.push(releasesScrollStyleTag());

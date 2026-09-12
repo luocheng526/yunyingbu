@@ -215,8 +215,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /sc-ui-15/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-15/);
+    assert.match(text, /sc-ui-16/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-16/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
     assert.match(text, /id="xm-releases-boot"/);
@@ -316,8 +316,8 @@ test("release board scripts parse so tab refresh can run", () => {
   assert.match(theme, /function finishUpgradeInPlace/);
   assert.match(theme, /return "landed"/);
   assert.doesNotMatch(theme, /location\.replace\("\/releases\?reloaded="/);
-  assert.match(theme, /sc-ui-15/);
-  assert.match(theme, /0\.1\.95-failed-tab/);
+  assert.match(theme, /sc-ui-16/);
+  assert.match(theme, /0\.1\.96-failed-tab/);
   assert.match(theme, /失败版本/);
   assert.match(theme, /data-tab="failed"/);
   assert.match(theme, /\/api\/releases\/failed/);
@@ -469,6 +469,11 @@ test("injectReleasesCssLink turns the theme preload into a real stylesheet", () 
   assert.match(out, new RegExp(`href="${RELEASES_CSS_HREF.replace("?", "\\?")}"`));
   assert.match(out, new RegExp(RELEASES_MODULE_HREF.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.doesNotMatch(out, /releases\.js\?v=0\.1\.66/);
+  const bare = injectReleasesCssLink(`<!DOCTYPE html><html><head>
+<script src="/shared/modules/releases.js"></script>
+</head><body></body></html>`);
+  assert.match(bare, new RegExp(RELEASES_MODULE_HREF.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.doesNotMatch(bare, /src="\/shared\/modules\/releases\.js"/);
   assert.match(out, new RegExp(`id="${RELEASES_SCROLL_STYLE_ID}"`));
   assert.match(out, new RegExp(`id="${RELEASES_FETCH_PATCH_ID}"`));
   assert.match(out, new RegExp(`id="${RELEASES_BOOT_ID}"`));

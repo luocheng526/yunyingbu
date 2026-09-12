@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.95-failed-tab */
+/* xm-module-releases 0.1.96-failed-tab */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -205,7 +205,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-15";
+      link.href = "/releases.css?v=sc-ui-16";
       document.head.appendChild(link);
     }
   }
