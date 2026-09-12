@@ -1034,22 +1034,23 @@
   }
 
   var COMPANY_CARD_DEFS = [
-    { key: "payAmount", label: "支付金额（支付）", accent: true, field: "payAmount", kind: "money" },
-    { key: "adCost", label: "推广费（预估）", field: "totalPromotionCost", kind: "money" },
+    { key: "payAmount", label: "支付金额 (支付)", accent: true, field: "payAmount", kind: "money" },
+    { key: "adCost", label: "推广花费 (支付预估)", field: "totalPromotionCost", kind: "money" },
     { key: "refundAmount", label: "退款金额", field: "refundAmount", kind: "money" },
-    { key: "adRatio", label: "推广费占比", field: "promotionRate", kind: "rate" },
-    { key: "refundRate", label: "退款率（按金额）", field: "refundRate", kind: "rate" },
-    { key: "profit", label: "利润（预估）", field: "profit", kind: "money" },
-    { key: "payQty", label: "销售件数（支付）", field: "orderCount", kind: "int" },
+    { key: "adRatio", label: "推广花费 (支付预估) 占比", field: "promotionRate", kind: "rate" },
+    { key: "refundRate", label: "退款率 (按金额)", field: "refundRate", kind: "rate" },
+    { key: "profit", label: "利润 (支付预估)", field: "profit", kind: "money" },
+    { key: "payQty", label: "销售单数 (支付)", field: "orderCount", kind: "int" },
     { key: "grossMargin", label: "大毛利率", field: "profitRate", kind: "rate" },
-    { key: "platformFee", label: "平台费用（预估）", field: "", kind: "none" },
-    { key: "saleFee", label: "销售费用（预估）", field: "", kind: "none" },
-    { key: "goodsCost", label: "总货款", field: "", kind: "none" },
-    { key: "invalid", label: "无效订单金额（件数）", field: "", kind: "none" },
-    { key: "netSales", label: "净销售金额", field: "netSales", kind: "money" },
-    { key: "jdOrders", label: "京东仓订单量", field: "", kind: "none" },
-    { key: "jdRatio", label: "京东仓订单占比", field: "", kind: "none" },
-    { key: "netQty", label: "净销售件数", field: "netOrderCount", kind: "int" }
+    { key: "platformFee", label: "平台花费 (支付预估)", field: "", kind: "none" },
+    { key: "saleFee", label: "销售费用 (支付预估)", field: "", kind: "none" },
+    { key: "goodsCost", label: "总货款成本", field: "", kind: "none" },
+    { key: "invalid", label: "无效单金额", field: "", kind: "none" },
+    { key: "netSales", label: "净销售额 (支付)", field: "netSales", kind: "money" },
+    { key: "jdOrders", label: "京仓订单数量", field: "", kind: "none" },
+    { key: "jdRatio", label: "京仓订单占比", field: "", kind: "none" },
+    { key: "netQty", label: "净销售件数 (支付)", field: "", kind: "none" },
+    { key: "netGoodsCost", label: "净货款成本 (支付)", field: "", kind: "none" }
   ];
 
   function asNum(value) {
