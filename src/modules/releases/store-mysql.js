@@ -1,9 +1,9 @@
 import { getPool } from "../../db/pool.js";
-import { QUEUE_LOG, requeueFailedItem } from "./charter.js";
+import { QUEUE_LOG, requeueFailedItem, returnFailedItem } from "./charter.js";
 import { hasApplyReceipt } from "./push.js";
 import { assignSubmitOrder } from "./order.js";
 import { REVIEWER } from "./store-memory.js";
-import { BOARD_PAGE_SIZE } from "./board.js";
+import { BOARD_PAGE_SIZE, slimFailedItem } from "./board.js";
 
 function toIso(value) {
   if (!value) {
@@ -218,6 +218,45 @@ export function createMysqlStore({ now, pool } = {}) {
         limit: size
       };
     },
+    async failedPage(page, limit) {
+      const size = Math.min(50, Math.max(1, Number(limit) || BOARD_PAGE_SIZE));
+      const [[countRow]] = await db().query("SELECT COUNT(*) AS n FROM release_tickets WHERE status = 'failed'");
+      const total = Number(countRow?.n) || 0;
+      const pageCount = Math.max(1, Math.ceil(total / size) || 1);
+      const current = Math.min(Math.max(1, Number(page) || 1), pageCount);
+      const offset = (current - 1) * size;
+      const [rows] = await db().query(
+        `SELECT id, version, module, source, applicant, summary, files, status, log,
+                submitted_at, reviewed_at, publish_finished_at
+         FROM release_tickets
+         WHERE status = 'failed'
+         ORDER BY COALESCE(publish_finished_at, reviewed_at, submitted_at) DESC, id DESC
+         LIMIT ? OFFSET ?`,
+        [size, offset]
+      );
+      return {
+        items: rows.map((row) =>
+          slimFailedItem({
+            id: row.id,
+            version: row.version,
+            module: row.module,
+            source: row.source || "",
+            applicant: row.applicant || "",
+            summary: row.summary || "",
+            files: parseFiles(row.files),
+            status: row.status,
+            log: row.log || "",
+            publishFinishedAt: toIso(row.publish_finished_at),
+            reviewedAt: toIso(row.reviewed_at),
+            submittedAt: toIso(row.submitted_at)
+          })
+        ),
+        page: current,
+        pageCount,
+        total,
+        limit: size
+      };
+    },
     async versionRows() {
       const [rows] = await db().query(
         "SELECT id, version, status, module, publish_finished_at FROM release_tickets"
@@ -396,6 +435,21 @@ export function createMysqlStore({ now, pool } = {}) {
         await persist(row);
       }
       return { item: result.item };
+    },
+    async returnFailed(id) {
+      const item = await this.get(id);
+      const result = returnFailedItem(item);
+      if (result.error) {
+        return result;
+      }
+      if (!result.already) {
+        await persist(result.item);
+      }
+      return {
+        item: slimFailedItem(result.item),
+        already: Boolean(result.already),
+        dialog: result.dialog
+      };
     }
   };
 }

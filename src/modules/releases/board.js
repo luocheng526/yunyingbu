@@ -83,6 +83,25 @@ export function slimLogItem(item) {
   };
 }
 
+export function slimFailedItem(item) {
+  const log = item.log || "";
+  return {
+    id: item.id,
+    version: item.version,
+    module: item.module,
+    source: item.source || "",
+    applicant: item.applicant || "",
+    summary: item.summary || "",
+    files: Array.isArray(item.files) ? item.files.slice() : [],
+    status: item.status,
+    log,
+    returned: Boolean(item.returned) || /已发回给「/.test(log),
+    publishFinishedAt: item.publishFinishedAt || null,
+    reviewedAt: item.reviewedAt || null,
+    submittedAt: item.submittedAt || null
+  };
+}
+
 export function slimVersionItem(item) {
   return {
     id: item.id,
@@ -126,6 +145,17 @@ export async function readBoardView(store, view, page, limit, listed) {
         .map(slimLogItem);
       return paginateRows(rows, page, limit);
     }
+    if (view === "failed") {
+      if (typeof store.failedPage === "function") {
+        return await store.failedPage(page, limit);
+      }
+      const rows = (await loadAll())
+        .filter((item) => item.status === "failed")
+        .slice()
+        .sort(newestFirst)
+        .map(slimFailedItem);
+      return paginateRows(rows, page, limit);
+    }
   } catch {
     const items = await loadAll();
     if (view === "summary") {
@@ -140,6 +170,13 @@ export async function readBoardView(store, view, page, limit, listed) {
     }
     if (view === "logs") {
       return paginateRows(items.filter((item) => item.log).slice().sort(newestFirst).map(slimLogItem), page, limit);
+    }
+    if (view === "failed") {
+      return paginateRows(
+        items.filter((item) => item.status === "failed").slice().sort(newestFirst).map(slimFailedItem),
+        page,
+        limit
+      );
     }
   }
   return null;

@@ -22,7 +22,7 @@ import {
   parseGitRef,
   shouldRejectUnchangedAtCreate
 } from "../src/modules/releases/stage.js";
-import { NOOP_APPLY_ERROR, SMOKE_FAIL_ERROR } from "../src/modules/releases/charter.js";
+import { NOOP_APPLY_ERROR, SMOKE_FAIL_ERROR, returnFailedItem, ticketDialogName } from "../src/modules/releases/charter.js";
 import { collectSmokeImports, smokeCheckSyntax, smokeLoadLive } from "../src/modules/releases/smoke.js";
 import { DEMO_INITIAL_PASSWORD, DEMO_USERNAME } from "../src/modules/profile/auth.js";
 import {
@@ -215,8 +215,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /sc-ui-14/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-14/);
+    assert.match(text, /sc-ui-15/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-15/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
     assert.match(text, /id="xm-releases-boot"/);
@@ -226,8 +226,20 @@ test("GET /releases is the release center page", async () => {
     assert.doesNotMatch(text, /src="\/shared\/nav.js"/);
     assert.match(text, /data-tab="queue"/);
     assert.match(text, /data-tab="history"/);
+    assert.match(text, /data-tab="failed"/);
+    assert.match(text, /失败版本/);
     assert.match(text, /id="tab-queue-count"/);
     assert.match(text, /id="tab-history-count"/);
+    assert.match(text, /id="tab-failed-count"/);
+    assert.match(text, /id="pane-failed"/);
+    assert.match(text, /id="failed-view"/);
+    assert.match(text, /liveEl\("failed-view"\)/);
+    assert.match(text, /\/api\/releases\/failed/);
+    assert.match(text, /发回给/);
+    assert.match(text, /重新修改后再提交/);
+    assert.match(text, /function refreshFailed/);
+    assert.match(text, /function renderFailed/);
+    assert.match(text, /data-act="return"/);
     assert.match(text, /oc-hero-card/);
     assert.doesNotMatch(text, /系统中心/);
     assert.doesNotMatch(text, /同意并发布/);
@@ -304,7 +316,16 @@ test("release board scripts parse so tab refresh can run", () => {
   assert.match(theme, /function finishUpgradeInPlace/);
   assert.match(theme, /return "landed"/);
   assert.doesNotMatch(theme, /location\.replace\("\/releases\?reloaded="/);
-  assert.match(theme, /sc-ui-14/);
+  assert.match(theme, /sc-ui-15/);
+  assert.match(theme, /0\.1\.95-failed-tab/);
+  assert.match(theme, /失败版本/);
+  assert.match(theme, /data-tab="failed"/);
+  assert.match(theme, /\/api\/releases\/failed/);
+  assert.match(theme, /发回给/);
+  assert.match(theme, /重新修改后再提交/);
+  assert.match(theme, /function refreshFailed/);
+  assert.match(theme, /data-act="return"/);
+  assert.match(theme, /repeat\(4,/);
   assert.match(theme, /\/api\/releases\/item\//);
   assert.match(theme, /function isTransientPassError/);
   assert.match(theme, /function isIgnorableConfirmConflict/);
@@ -397,6 +418,7 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /overflow-y: scroll !important/);
     assert.match(text, /#history-view/);
     assert.match(text, /#logs-view/);
+    assert.match(text, /#failed-view/);
     assert.match(text, /\.xm-content:has\(\.oc-wrap\)/);
     assert.match(text, /height: auto !important/);
     assert.doesNotMatch(text, /(?<!min-)height:\s*0\s*!important/);
@@ -455,6 +477,7 @@ test("injectReleasesCssLink turns the theme preload into a real stylesheet", () 
   assert.match(out, /rel="stylesheet"/);
   assert.match(out, /#history-view/);
   assert.match(out, /#logs-view/);
+  assert.match(out, /#failed-view/);
   assert.match(out, /overflow-y:auto/);
   assert.doesNotMatch(out, /(?<!min-)height:0!important/);
   assert.match(out, /data-rel-fallback/);
@@ -1755,11 +1778,122 @@ test("history and logs board views page slim rows", async () => {
     const pathLogs = await json(base, "/api/releases/logs?page=1&limit=20");
     assert.equal(pathLogs.res.status, 200);
     assert.ok((pathLogs.body.items || []).some((item) => item.id === created.body.item.id));
+    const pathFailed = await json(base, "/api/releases/failed?page=1&limit=20");
+    assert.equal(pathFailed.res.status, 200);
+    assert.equal((pathFailed.body.items || []).some((item) => item.id === created.body.item.id), false);
     const one = await json(base, "/api/releases/item/" + created.body.item.id);
     assert.equal(one.res.status, 200);
     assert.equal(one.body.item.id, created.body.item.id);
     assert.equal(one.body.item.status, "success");
     const missing = await json(base, "/api/releases/item/rel-missing");
+    assert.equal(missing.res.status, 404);
+  });
+});
+
+test("returnFailedItem marks a failed ticket for the source dialog", () => {
+  assert.equal(ticketDialogName({ source: "甄选商学院对话框" }), "甄选商学院对话框");
+  assert.equal(ticketDialogName({ applicant: "罗成运营部主脑" }), "罗成运营部主脑");
+  assert.equal(ticketDialogName({}), "来源对话");
+  const missing = returnFailedItem(null);
+  assert.equal(missing.status, 404);
+  const success = returnFailedItem({ status: "success", source: "首页" });
+  assert.equal(success.status, 409);
+  const item = {
+    status: "failed",
+    source: "甄选商学院对话框",
+    applicant: "甄选商学院",
+    module: "其他",
+    log: "语法检查失败"
+  };
+  const first = returnFailedItem(item);
+  assert.equal(first.dialog, "甄选商学院对话框");
+  assert.equal(item.returned, true);
+  assert.match(item.log, /已发回给「甄选商学院对话框」/);
+  assert.match(item.log, /语法检查失败/);
+  const again = returnFailedItem(item);
+  assert.equal(again.already, true);
+  assert.equal(again.dialog, "甄选商学院对话框");
+});
+
+test("failed versions board lists only failed tickets and can return them", async () => {
+  await withServer(
+    {
+      async push() {
+        throw Object.assign(new Error("apply failed"), { stderr: "ENOENT", code: "ENOENT" });
+      }
+    },
+    async (base) => {
+      const created = await json(base, "/api/releases", {
+        method: "POST",
+        body: apply("fail-tab", "甄选商学院对话框", "版本发布中心", "失败列表")
+      });
+      assert.equal(created.res.status, 201, created.body.error);
+      const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(pub.res.status, 500);
+      const viewFailed = await json(base, "/api/releases?view=failed&page=1&limit=20");
+      assert.equal(viewFailed.res.status, 200);
+      const viewRow = (viewFailed.body.items || []).find((item) => item.id === created.body.item.id);
+      assert.ok(viewRow);
+      assert.equal(viewRow.status, "failed");
+      assert.equal(viewRow.source, "甄选商学院对话框");
+      const listed = await json(base, "/api/releases/failed?page=1&limit=20");
+      assert.equal(listed.res.status, 200);
+      assert.ok(listed.body.total >= 1);
+      const row = (listed.body.items || []).find((item) => item.id === created.body.item.id);
+      assert.ok(row);
+      assert.equal(row.status, "failed");
+      assert.equal(row.returned, false);
+      assert.ok((listed.body.items || []).every((item) => item.status === "failed"));
+      const sent = await json(base, `/api/releases/${created.body.item.id}/return`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(sent.res.status, 200, sent.body.error);
+      assert.equal(sent.body.dialog, "甄选商学院对话框");
+      assert.equal(sent.body.already, false);
+      assert.equal(sent.body.item.status, "failed");
+      assert.equal(sent.body.item.returned, true);
+      assert.match(sent.body.item.log, /已发回给「甄选商学院对话框」/);
+      const again = await json(base, `/api/releases/${created.body.item.id}/return`, {
+        method: "POST",
+        body: "{}"
+      });
+      assert.equal(again.res.status, 200);
+      assert.equal(again.body.already, true);
+      const queue = await json(base, "/api/releases/queue");
+      assert.equal((queue.body.items || []).some((item) => item.id === created.body.item.id), false);
+      const after = await json(base, "/api/releases/failed?page=1&limit=20");
+      const afterRow = (after.body.items || []).find((item) => item.id === created.body.item.id);
+      assert.equal(afterRow.returned, true);
+    }
+  );
+});
+
+test("return on a non-failed ticket is 409", async () => {
+  await withServer(async (base) => {
+    const created = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("return-ok", "版本发布中心", "版本发布中心", "成功单不能发回")
+    });
+    assert.equal(created.res.status, 201, created.body.error);
+    const pub = await json(base, `/api/releases/${created.body.item.id}/confirm`, {
+      method: "POST",
+      body: "{}"
+    });
+    assert.equal(pub.res.status, 200, pub.body.error);
+    const sent = await json(base, `/api/releases/${created.body.item.id}/return`, {
+      method: "POST",
+      body: "{}"
+    });
+    assert.equal(sent.res.status, 409);
+    assert.match(sent.body.error, /只能发回失败的版本/);
+    const missing = await json(base, "/api/releases/rel-missing/return", {
+      method: "POST",
+      body: "{}"
+    });
     assert.equal(missing.res.status, 404);
   });
 });

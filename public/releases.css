@@ -167,7 +167,7 @@ html:has(.xm-shell) .oc-hero .oc-who {
 
 .oc-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: stretch;
   gap: 0;
   padding: 0;
@@ -265,6 +265,10 @@ button.oc-tab.active,
 }
 .oc-tab.active .oc-tab-num {
   color: var(--oc-text);
+}
+.oc-tab[data-tab="failed"] .oc-tab-num,
+.oc-tab.active[data-tab="failed"] .oc-tab-num {
+  color: var(--oc-danger);
 }
 
 .oc-card,
@@ -503,7 +507,7 @@ th { color: var(--oc-muted); font-weight: 600; }
 
 /* Theme only preloads this file. The page gate also injects it as a real
    stylesheet plus an inline copy of these scroll rules. Theme body is
-   overflow:hidden; pin the shell and make .xm-content / 版本记录 / 运行日志
+   overflow:hidden; pin the shell and make .xm-content / 版本记录 / 运行日志 / 失败版本
    the actual wheel scrollports. */
 html,
 html body,
@@ -589,8 +593,10 @@ html:has(.oc-wrap) body:has(.xm-shell) {
 }
 #history-view,
 #logs-view,
+#failed-view,
 .xm-content #history-view,
-.xm-content #logs-view {
+.xm-content #logs-view,
+.xm-content #failed-view {
   color: var(--oc-text);
   min-height: 8rem;
   max-height: calc(100dvh - 15rem);
@@ -601,10 +607,17 @@ html:has(.oc-wrap) body:has(.xm-shell) {
   touch-action: pan-y;
 }
 .xm-content #history-view table,
-#history-view table {
+.xm-content #failed-view table,
+#history-view table,
+#failed-view table {
   display: table;
   width: 100%;
   color: inherit;
+}
+.failed-log {
+  color: var(--oc-danger);
+  white-space: pre-wrap;
+  max-width: 28rem;
 }
 .xm-content #logs-view .log-item,
 #logs-view .log-item {

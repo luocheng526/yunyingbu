@@ -1,11 +1,12 @@
 import path from "node:path";
-import { INTERRUPTED_PUBLISH_LOG, QUEUE_LOG, RECEIPT_RECOVER_LOG, requeueFailedItem } from "./charter.js";
+import { INTERRUPTED_PUBLISH_LOG, QUEUE_LOG, RECEIPT_RECOVER_LOG, requeueFailedItem, returnFailedItem } from "./charter.js";
 import { hasApplyReceipt } from "./push.js";
 import { assignSubmitOrder, compareSubmit } from "./order.js";
 import { readJsonFile, writeJsonFile } from "./persist-json.js";
 import {
   newestFirst,
   paginateRows,
+  slimFailedItem,
   slimHistoryItem,
   slimLogItem,
   slimVersionItem,
@@ -203,6 +204,14 @@ export function createMemoryStore({ now, persistPath } = {}) {
         .map(slimLogItem);
       return paginateRows(rows, page, limit);
     },
+    failedPage(page, limit) {
+      const rows = items
+        .filter((item) => item.status === "failed")
+        .slice()
+        .sort(newestFirst)
+        .map(slimFailedItem);
+      return paginateRows(rows, page, limit);
+    },
     versionRows() {
       return items.map(slimVersionItem);
     },
@@ -341,6 +350,19 @@ export function createMemoryStore({ now, persistPath } = {}) {
       assignSubmitOrder(queuedItems());
       persist();
       return { item: result.item };
+    },
+    returnFailed(id) {
+      const item = this.get(id);
+      const result = returnFailedItem(item);
+      if (result.error) {
+        return result;
+      }
+      persist();
+      return {
+        item: slimFailedItem(result.item),
+        already: Boolean(result.already),
+        dialog: result.dialog
+      };
     }
   };
 }

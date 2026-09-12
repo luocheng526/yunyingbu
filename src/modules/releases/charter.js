@@ -14,6 +14,31 @@ export const QUEUE_LOG =
 export const REQUEUE_LOG =
   "失败未落地，已恢复待审批。按原提交时间排队；点通过才放行；下一条不会自动发。";
 
+export function ticketDialogName(item) {
+  return String(item?.source || item?.applicant || item?.module || "").trim() || "来源对话";
+}
+
+export function ticketReturned(item) {
+  return Boolean(item?.returned) || /已发回给「/.test(String(item?.log || ""));
+}
+
+export function returnFailedItem(item) {
+  if (!item) {
+    return { error: "单据不存在", status: 404 };
+  }
+  if (item.status !== "failed") {
+    return { error: "只能发回失败的版本", status: 409 };
+  }
+  const dialog = ticketDialogName(item);
+  if (ticketReturned(item)) {
+    return { item, already: true, dialog };
+  }
+  item.returned = true;
+  const prev = String(item.log || "").trim();
+  item.log = `已发回给「${dialog}」对话框，请改完后重新交单，不要在本页再点通过。${prev ? ` 原失败：${prev}` : ""}`;
+  return { item, dialog };
+}
+
 export function requeueFailedItem(item, landed) {
   if (!item) {
     return { error: "单据不存在", status: 404 };

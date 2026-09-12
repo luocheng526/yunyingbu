@@ -2,9 +2,9 @@ import express from "express";
 import os from "node:os";
 import path from "node:path";
 import { requireReleasesAuth } from "./auth.js";
-import { INCOMPLETE_ARTIFACT_ERROR, NEED_PASS_ERROR, REORDER_FORBIDDEN, withCharter } from "./charter.js";
+import { INCOMPLETE_ARTIFACT_ERROR, NEED_PASS_ERROR, REORDER_FORBIDDEN, returnFailedItem, withCharter } from "./charter.js";
 import { documentGaps, hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument, ticketGuardReason } from "./document.js";
-import { readBoardView, slimVersionItem } from "./board.js";
+import { readBoardView, slimFailedItem, slimVersionItem } from "./board.js";
 import { assertQueueHead, describeNextVersion, listModuleVersions, resolveReleaseVersion } from "./version.js";
 import { assertSafeRel, attachRollbackMeta, attachRollbackMetaList, formatExecError, listMissingSourceFiles, liveRoot, markSnapshotRolledBack, pathsToSnapshot, pushXingmaiToEcs, restoreSnapshot, sourceRoot } from "./push.js";
 import {
@@ -283,6 +283,10 @@ export function createReleasesRouter(options = {}) {
     await sendBoardView(res, "logs", Number(req.query?.page) || 1, Number(req.query?.limit) || 20);
   });
 
+  router.get("/failed", async (req, res) => {
+    await sendBoardView(res, "failed", Number(req.query?.page) || 1, Number(req.query?.limit) || 20);
+  });
+
   router.get("/queue", async (_req, res) => {
     res.json(withCharter({ ok: true, items: await store.queue() }));
   });
@@ -486,6 +490,28 @@ export function createReleasesRouter(options = {}) {
       return;
     }
     res.json({ ok: true, item: result.item });
+  });
+
+  router.post("/:id/return", async (req, res) => {
+    let result;
+    if (typeof store.returnFailed === "function") {
+      result = await store.returnFailed(req.params.id);
+    } else {
+      result = returnFailedItem(await store.get(req.params.id));
+      if (!result.error && result.item) {
+        result.item = slimFailedItem(result.item);
+      }
+    }
+    if (result.error) {
+      res.status(result.status).json({ ok: false, error: result.error });
+      return;
+    }
+    res.json({
+      ok: true,
+      item: result.item,
+      already: Boolean(result.already),
+      dialog: result.dialog
+    });
   });
 
   router.post("/:id/confirm", async (req, res) => {

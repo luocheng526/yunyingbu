@@ -3,8 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const COOKIE_NAME = "mk_sid";
-export const RELEASES_CSS_HREF = "/releases.css?v=sc-ui-14";
-export const RELEASES_MODULE_HREF = "/shared/modules/releases.js?v=sc-ui-14";
+export const RELEASES_CSS_HREF = "/releases.css?v=sc-ui-15";
+export const RELEASES_MODULE_HREF = "/shared/modules/releases.js?v=sc-ui-15";
 export const RELEASES_SCROLL_STYLE_ID = "xm-releases-scroll";
 export const RELEASES_FETCH_PATCH_ID = "xm-releases-fetch-patch";
 export const RELEASES_BOOT_ID = "xm-releases-boot";
@@ -22,7 +22,7 @@ html:has(.oc-wrap),html:has(.oc-wrap) body,html:has(.oc-wrap) body.xm-app,html:h
 .xm-content:has(.oc-wrap),.xm-shell:has(.oc-wrap) .xm-content{flex:1 1 auto!important;height:auto!important;min-height:0!important;overflow-x:auto!important;overflow-y:auto!important;touch-action:pan-y;}
 .pane,.xm-content .pane,.page .pane{display:none!important;}
 .pane.on,.xm-content .pane.on,.page .pane.on{display:block!important;}
-#history-view,#logs-view,.xm-content #history-view,.xm-content #logs-view{max-height:calc(100dvh - 15rem);overflow-x:auto!important;overflow-y:scroll!important;touch-action:pan-y;}
+#history-view,#logs-view,#failed-view,.xm-content #history-view,.xm-content #logs-view,.xm-content #failed-view{max-height:calc(100dvh - 15rem);overflow-x:auto!important;overflow-y:scroll!important;touch-action:pan-y;}
 </style>`;
 }
 

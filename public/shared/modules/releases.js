@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.94-fail-unmask */
+/* xm-module-releases 0.1.95-failed-tab */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -99,13 +99,14 @@
       .xm-content:has(.oc-wrap), .xm-shell:has(.oc-wrap) .xm-content {
         flex: 1 1 auto !important; height: auto !important; min-height: 0 !important; overflow-y: auto !important; touch-action: pan-y;
       }
-      #history-view, #logs-view {
+      #history-view, #logs-view, #failed-view {
         max-height: calc(100dvh - 15rem); overflow-y: scroll !important; touch-action: pan-y;
       }
       .oc-wrap.page, .oc-wrap.xm-page { max-width: none !important; width: 100%; margin: 0 !important; background: var(--xm-card, #fff); border: 0 !important; border-radius: 0; padding: 10px 16px 16px; }
       html:has(.oc-wrap) .xm-content, .xm-content:has(.oc-wrap) { padding: 0 !important; }
       .oc-hero-card { background: transparent; border: 0; box-shadow: none; padding: 0 0 10px; margin: 0 0 12px; }
-      .oc-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; }
+      .oc-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; }
+      .oc-tab[data-tab="failed"] .oc-tab-num { color: #9f1239; }
       .oc-tab, button.oc-tab { background: transparent !important; outline: none !important; -webkit-tap-highlight-color: transparent; }
       .oc-tab:hover, .oc-tab:focus, .oc-tab:focus-visible, .oc-tab:active, .oc-tab.active,
       button.oc-tab:hover, button.oc-tab:focus, button.oc-tab:focus-visible, button.oc-tab:active, button.oc-tab.active {
@@ -123,7 +124,7 @@
           <div>
             <p class="kicker oc-kicker">RELEASE GATE</p>
             <h1>版本发布中心</h1>
-            <p class="oc-path">待上线 · 版本记录 · 运行日志</p>
+            <p class="oc-path">待上线 · 版本记录 · 运行日志 · 失败版本</p>
           </div>
           <div class="oc-run">
             <span class="pill run">运行 <span class="ver" id="app-version">读取版本中</span></span>
@@ -146,6 +147,11 @@
             <strong class="oc-tab-num oc-tab-num-text">流水</strong>
             <p id="tab-logs-sub">发版流水</p>
           </button>
+          <button type="button" class="oc-tab" data-tab="failed">
+            <h2>失败版本</h2>
+            <strong class="oc-tab-num" id="tab-failed-count">—</strong>
+            <p id="tab-failed-sub">个失败版</p>
+          </button>
         </nav>
       </section>
 
@@ -153,7 +159,7 @@
       <section class="oc-card panel">
         <div class="pane on" id="pane-queue">
           <h3>待上线</h3>
-          <p class="hint lead">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。版本号由本闸门统一发放，全站一条号 0.1.N-说明，各模块不得自领；同一号段不能跨模块再用。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。站点恢复后就地刷新并关升级遮罩，不再整页跳转。有新单据约 15 秒内自动提示，不会自动点通过。待上线、版本记录、运行日志都分页，每页 20 条。版本记录和运行日志按页向服务器取，刷新只读当前页，不再一次拉全表。</p>
+          <p class="hint lead">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。版本号由本闸门统一发放，全站一条号 0.1.N-说明，各模块不得自领；同一号段不能跨模块再用。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。站点恢复后就地刷新并关升级遮罩，不再整页跳转。有新单据约 15 秒内自动提示，不会自动点通过。待上线、版本记录、运行日志、失败版本都分页，每页 20 条。版本记录、运行日志和失败版本按页向服务器取，刷新只读当前页，不再一次拉全表。</p>
           <div class="caps" id="stat-caps"></div>
           <div class="note banner">发布纪律：本页是唯一发版闸门。只执行交来的单据 + 本页「通过」。按提交时间点第 1 位；一把锁，禁止抢发；下一条不会自动发。「帮我上线」无效。新文件只放源目录，不要先拷到线上；点通过才落地。闸门不读 git，也不拉 Cloud 工作区，交单只登记路径。可带 contents（路径→正文）或 ref（分支/提交），闸门会先写入源目录。源目录与线上相同会失败。</div>
           <div id="lock-view" class="lock-box idle">当前空闲，没有发布任务。</div>
@@ -170,6 +176,11 @@
           <h3>运行日志</h3>
           <p class="hint">每张单上的发版流水 log。按页向服务器取，每页 20 条，刷新只读当前页。</p>
           <div id="logs-view" class="log-list"></div>
+        </div>
+        <div class="pane" id="pane-failed">
+          <h3>失败版本</h3>
+          <p class="hint">所有发布失败的版本。失败不占号，也不会再占待上线。点「发回给相应的对话框重新修改后再提交」只记下已发回，不会回到待上线，也不会自动通过。对方须改完后重新交单。</p>
+          <div id="failed-view"></div>
         </div>
       </section>
     </div>
@@ -194,7 +205,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-14";
+      link.href = "/releases.css?v=sc-ui-15";
       document.head.appendChild(link);
     }
   }
@@ -241,14 +252,15 @@
       const tabTitles = {
         queue: "版本发布中心 / 待上线",
         history: "版本发布中心 / 版本记录",
-        logs: "版本发布中心 / 运行日志"
+        logs: "版本发布中心 / 运行日志",
+        failed: "版本发布中心 / 失败版本"
       };
       const WATCH_MS = 15000;
       const PAGE_SIZE = 20;
       const UPGRADE_PENDING_KEY = "oc-after-upgrade";
       let knownQueueIds = null;
       let lastLock = { locked: false };
-      const listPages = { queue: 1, history: 1, logs: 1 };
+      const listPages = { queue: 1, history: 1, logs: 1, failed: 1 };
 
       function setText(idOrEl, text) {
         const el = typeof idOrEl === "string" ? document.getElementById(idOrEl) : idOrEl;
@@ -763,6 +775,8 @@
         setText("tab-history-count", String(success));
         setText("tab-history-sub", success + " 个正式版");
         setText("tab-logs-sub", "发版流水");
+        setText("tab-failed-count", String(failed));
+        setText("tab-failed-sub", failed + " 个失败版");
       }
 
       function successReleases(items) {
@@ -940,8 +954,14 @@
         const raw = (result && result.items) || [];
         const list = key === "history"
           ? raw.filter(function (item) { return item.status === "success"; }).sort(newestFirst)
-          : raw.filter(function (item) { return item.log; }).sort(newestFirst);
+          : key === "failed"
+            ? raw.filter(function (item) { return item.status === "failed"; }).sort(newestFirst)
+            : raw.filter(function (item) { return item.log; }).sort(newestFirst);
         return paginate(list, key);
+      }
+
+      function ticketDialogName(item) {
+        return String((item && (item.source || item.applicant || item.module)) || "").trim() || "来源对话";
       }
 
       function renderHistory(result, locked) {
@@ -973,6 +993,38 @@
             );
           }).join("") +
           "</tbody></table>" + renderPager("history", paged);
+      }
+
+      function renderFailed(result) {
+        const el = document.getElementById("failed-view");
+        if (!el) {
+          return;
+        }
+        const paged = pageInfoFromBoard(result, "failed");
+        if (!paged.total) {
+          el.innerHTML = '<div class="empty">还没有失败的版本</div>';
+          return;
+        }
+        el.innerHTML =
+          "<table><thead><tr><th>版本</th><th>模块</th><th>来源对话</th><th>摘要</th><th>失败原因</th><th>时间</th><th>操作</th></tr></thead><tbody>" +
+          paged.slice.map(function (item) {
+            const dialog = ticketDialogName(item);
+            const returned = item.returned || /已发回给「/.test(item.log || "");
+            const action = returned
+              ? '<span class="badge">已发回</span><div class="sc-meta">等待「' + esc(dialog) + "」改完后重新交单</div>"
+              : '<button class="act secondary" data-act="return">发回给「' + esc(dialog) + "」重新修改后再提交</button>";
+            return (
+              "<tr data-id=\"" + esc(item.id) + "\">" +
+              "<td>" + esc(item.version) + demoBadge(item) + (returned ? '<span class="badge">已发回</span>' : "") + "</td>" +
+              "<td>" + esc(item.module) + "</td>" +
+              "<td>" + esc(dialog) + "</td>" +
+              "<td>" + esc(item.summary || "—") + "</td>" +
+              "<td class=\"failed-log\">" + esc(item.log || "—") + "</td>" +
+              "<td>" + esc(fmt(item.publishFinishedAt || item.reviewedAt || item.submittedAt)) + "</td>" +
+              "<td>" + action + "</td></tr>"
+            );
+          }).join("") +
+          "</tbody></table>" + renderPager("failed", paged);
       }
 
       function renderLogs(result) {
@@ -1012,6 +1064,15 @@
         }
         const result = await api("/api/releases/logs?page=" + listPages.logs + "&limit=" + PAGE_SIZE, apiOpts);
         renderLogs(result);
+      }
+
+      async function refreshFailed(apiOpts) {
+        const el = document.getElementById("failed-view");
+        if (el) {
+          el.innerHTML = '<div class="empty">正在读取本页失败版本…</div>';
+        }
+        const result = await api("/api/releases/failed?page=" + listPages.failed + "&limit=" + PAGE_SIZE, apiOpts);
+        renderFailed(result);
       }
 
       async function refresh(opts) {
@@ -1059,6 +1120,8 @@
             await refreshHistory(apiOpts, lock.locked);
           } else if (tab === "logs") {
             await refreshLogs(apiOpts);
+          } else if (tab === "failed") {
+            await refreshFailed(apiOpts);
           }
         } catch (err) {
           flash(err.message, true);
@@ -1135,9 +1198,9 @@
             pane.classList.toggle("on", pane.id === "pane-" + name);
           });
           if (tabTitles[name]) {
-            document.title = "版本发布中心 · " + (name === "queue" ? "待上线" : name === "history" ? "版本记录" : "运行日志");
+            document.title = "版本发布中心 · " + (name === "queue" ? "待上线" : name === "history" ? "版本记录" : name === "failed" ? "失败版本" : "运行日志");
           }
-          if (name === "history" || name === "logs") {
+          if (name === "history" || name === "logs" || name === "failed") {
             refresh({ tab: name }).catch(function (err) {
               flash(err.message, true);
             });
@@ -1214,6 +1277,15 @@
               btn.disabled = false;
               return;
             }
+          } else if (act === "return") {
+            const data = await api("/api/releases/" + id + "/return", {
+              method: "POST",
+              body: "{}"
+            });
+            const dialog = (data && data.dialog) || "来源对话";
+            flash(data && data.already
+              ? "已经发回给「" + dialog + "」对话框，请等对方改完后重新交单。"
+              : "已发回给「" + dialog + "」对话框，请改完后重新交单，不要在本页再点通过。");
           } else if (act === "rollback") {
             if (!window.confirm("确认按升级前快照回滚该版本的文件？不会自动发下一单。")) {
               btn.disabled = false;
