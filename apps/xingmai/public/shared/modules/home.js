@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.400-home-set */
+/* xm-module-home 0.1.401-home-name */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -636,42 +636,18 @@
     );
   }
 
-  function teamShopsHtml(team, simple) {
-    var shops = sortedShops(team.shops || [], simple ? { key: "", dir: "desc" } : shopSort);
-    if (simple) {
-      return (
-        '<div class="xm-hm-panel" data-team="' +
-        escapeHtml(team.key) +
-        '"><h2>责权店铺 <span>' +
-        shops.length +
-        " 店</span></h2>" +
-        '<table class="xm-hm-table"><thead><tr><th>店铺名称</th></tr></thead><tbody>' +
-        shops
-          .map(function (row) {
-            return "<tr><td>" + escapeHtml(row.shop) + "</td></tr>";
-          })
-          .join("") +
-        "</tbody></table></div>"
-      );
-    }
-    var cols = shopCols();
-    var sort = shopSort;
+  function teamShopsHtml(team) {
+    var shops = sortedShops(team.shops || [], { key: "", dir: "desc" });
     return (
       '<div class="xm-hm-panel" data-team="' +
       escapeHtml(team.key) +
       '"><h2>责权店铺 <span>' +
       shops.length +
       " 店</span></h2>" +
-      '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th>' +
-      cols
-        .map(function (def) {
-          return shopColHead(def, sort);
-        })
-        .join("") +
-      "<th>运营</th></tr></thead><tbody>" +
+      '<table class="xm-hm-table"><thead><tr><th>店铺名称</th></tr></thead><tbody>' +
       shops
-        .map(function (row, i) {
-          return shopRowHtml(row, i, cols);
+        .map(function (row) {
+          return "<tr><td>" + escapeHtml(row.shop) + "</td></tr>";
         })
         .join("") +
       "</tbody></table></div>"
@@ -696,7 +672,7 @@
         })
         .join("") +
       "</div>" +
-      teamShopsHtml(team, simple) +
+      teamShopsHtml(team) +
       "</section>"
     );
   }
@@ -979,7 +955,7 @@
       ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
       ".xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:1fr;gap:6px}" +
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border:0;box-shadow:none}" +
-      ".xm-hm-teams .xm-hm-table{min-width:760px;font-variant-numeric:tabular-nums;border-collapse:separate;border-spacing:0;table-layout:fixed}" +
+      ".xm-hm-teams .xm-hm-table{min-width:0;font-variant-numeric:tabular-nums;border-collapse:separate;border-spacing:0;table-layout:fixed}" +
       ".xm-hm-teams .xm-hm-table .xm-hm-num{text-align:center;white-space:nowrap}" +
       ".xm-hm-teams .xm-hm-table th,.xm-hm-teams .xm-hm-table td{border:0;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;text-align:center}" +
       ".xm-hm-teams .xm-hm-table th{border-right:1px dashed #c8ced8}" +
@@ -1125,7 +1101,7 @@
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
-    board.setAttribute("data-hm-js", "0.1.400-home-set");
+    board.setAttribute("data-hm-js", "0.1.401-home-name");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);

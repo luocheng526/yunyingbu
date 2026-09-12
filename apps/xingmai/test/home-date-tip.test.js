@@ -112,8 +112,9 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /key: "livePaid", label: "实时付费金额"/);
   assert.doesNotMatch(homeJs, /LIVE_CARD_KEYS = \["ad", "profit"/);
   assert.match(homeJs, /data-shop-card=/);
-  assert.match(homeJs, /<th>排名<\/th><th>店铺名称<\/th>/);
-  assert.match(homeJs, /<th>运营<\/th><\/tr>/);
+  assert.match(homeJs, /<th>排名<\/th><th>店铺名称<\/th><th>实时销售额/);
+  assert.doesNotMatch(homeJs, /<th>运营<\/th><\/tr>/);
+  assert.doesNotMatch(homeJs, /<th>排名<\/th><th>店铺名称<\/th>' \+/);
   assert.match(homeJs, /function sortedShops/);
   assert.match(homeJs, /function shopColHead/);
   assert.match(homeJs, /data-shop-sort=/);
