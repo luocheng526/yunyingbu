@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.346-home-erp-kpis */
+/* xm-module-home 0.1.349-home-kpis */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -951,6 +951,7 @@
     var hero = readChart(live.hero, blankLive().hero);
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
+    board.setAttribute("data-hm-js", "0.1.349-home-kpis");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", state.view === "team");
@@ -1029,7 +1030,14 @@
         window.location.href = "/login";
         return null;
       }
-      return res.ok ? res.json() : null;
+      if (!res.ok) {
+        return null;
+      }
+      return res.json().catch(function () {
+        return null;
+      });
+    }).catch(function () {
+      return null;
     });
   }
 
@@ -1174,6 +1182,56 @@
       netSkuNum: sumField(pack && pack.records, "netSkuNum"),
       netGoodsCost: sumField(pack && pack.records, "netGoodsCost")
     });
+  }
+
+  function teamSummaryFrom(rows) {
+    return withRates({
+      payAmount: sumField(rows, "payAmount"),
+      totalPromotionCost: sumField(rows, "totalPromotionCost"),
+      refundAmount: sumField(rows, "refundAmount"),
+      profit: sumField(rows, "profit"),
+      orderCount: sumField(rows, "orderCount"),
+      netOrderCount: sumField(rows, "netOrderCount"),
+      platformFee: sumField(rows, "platformFee"),
+      saleFee: sumField(rows, "saleFee"),
+      goodsCost: sumField(rows, "goodsCost"),
+      invalidAmount: sumField(rows, "invalidAmount"),
+      jdOrders: sumField(rows, "jdOrders"),
+      netSkuNum: sumField(rows, "netSkuNum"),
+      netGoodsCost: sumField(rows, "netGoodsCost")
+    });
+  }
+
+  function mergeSummary(primary, extra) {
+    var out = withRates(primary || {});
+    var src = extra || {};
+    [
+      "payAmount",
+      "totalPromotionCost",
+      "refundAmount",
+      "profit",
+      "orderCount",
+      "profitRate",
+      "promotionRate",
+      "refundRate",
+      "platformFee",
+      "saleFee",
+      "goodsCost",
+      "invalidAmount",
+      "jdOrders",
+      "jdRatio",
+      "netSkuNum",
+      "netGoodsCost",
+      "netSales",
+      "netOrderCount",
+      "todayPayAmount",
+      "yesterdayPayAmount"
+    ].forEach(function (key) {
+      if (out[key] == null && src[key] != null) {
+        out[key] = src[key];
+      }
+    });
+    return withRates(out);
   }
 
   function blankCompanyCards() {
@@ -1368,26 +1426,61 @@
     });
   }
 
+  var packMemo = {};
+
   function fetchRangePack(from, to) {
+    var key = String(from) + "|" + String(to);
+    var now = Date.now();
+    var hit = packMemo[key];
+    if (hit && now - hit.at < 15000) {
+      return hit.promise;
+    }
     var qs = erpQuery(from, to);
-    return api("/api/home/erp-kpis?" + qs).then(function (homePack) {
-      if (homePack && homePack.ok && homePack.summary && homePack.summary.payAmount != null) {
-        return {
-          records: withShopIds(homePack.records || []),
-          summary: withRates(homePack.summary)
-        };
+    var promise = Promise.all([
+      api("/api/home/erp-kpis?" + qs),
+      api("/api/data/overview?" + qs)
+    ]).then(function (pair) {
+      var homePack = pair[0];
+      var overview = pair[1];
+      var overSum = overview && overview.ok ? summaryFromOverview(overview) : {};
+      var records = [];
+      var sum = {};
+      if (homePack && homePack.ok && homePack.summary) {
+        sum = withRates(homePack.summary);
+        records = withShopIds(homePack.records || homePack.shops || []);
+      }
+      if (!records.length && overview && overview.ok) {
+        records = withShopIds(overview.shops || []);
+      }
+      sum = mergeSummary(sum, overSum);
+      if (homePack && homePack.ok && homePack.summary) {
+        return { records: records, summary: sum };
+      }
+      if (sum.payAmount != null) {
+        return { records: records, summary: sum };
       }
       return api("/api/data/shops?pageSize=1&pageNum=1&currentPage=1&" + qs).then(function (probe) {
         var row = probe && probe.records && probe.records[0];
         if (row && (row.payAmount != null || row.totalPromotionCost != null || row.profit != null)) {
           return fetchShopPages(qs).then(function (pack) {
             pack.records = withShopIds(pack.records);
+            pack.summary = mergeSummary(pack.summary, overSum);
             return pack;
           });
+        }
+        if (overview && overview.ok) {
+          return { records: withShopIds(overview.shops || []), summary: overSum };
         }
         return fetchOverviewPack(from, to);
       });
     });
+    packMemo[key] = { at: now, promise: promise };
+    promise.then(function () {}, function () {
+      if (packMemo[key] && packMemo[key].promise === promise) {
+        delete packMemo[key];
+      }
+    });
+    return promise;
   }
 
   function mapByShopId(records) {
@@ -1595,21 +1688,7 @@
         key: key,
         name: name,
         href: href,
-        cards: companyCardsFrom(withRates({
-          payAmount: sumField(matched, "payAmount"),
-          totalPromotionCost: sumField(matched, "totalPromotionCost"),
-          refundAmount: sumField(matched, "refundAmount"),
-          profit: sumField(matched, "profit"),
-          orderCount: sumField(matched, "orderCount"),
-          netOrderCount: sumField(matched, "netOrderCount")
-        }), withRates({
-          payAmount: sumField(prevMatched, "payAmount"),
-          totalPromotionCost: sumField(prevMatched, "totalPromotionCost"),
-          refundAmount: sumField(prevMatched, "refundAmount"),
-          profit: sumField(prevMatched, "profit"),
-          orderCount: sumField(prevMatched, "orderCount"),
-          netOrderCount: sumField(prevMatched, "netOrderCount")
-        })),
+        cards: companyCardsFrom(teamSummaryFrom(matched), teamSummaryFrom(prevMatched)),
         shops: rows
       };
     }
