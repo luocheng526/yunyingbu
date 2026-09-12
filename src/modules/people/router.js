@@ -145,7 +145,7 @@ peopleRouter.post("/org/stores/import", async (req, res) => {
     res.status(400).json({ ok: false, error: "请按模板导入至少一行" });
     return;
   }
-  sendResult(res, importOrgStores(rows, actor), false);
+  sendResult(res, importOrgStores(rows, actor, { groupId: req.body?.groupId || req.body?.group_id || "" }), false);
 });
 
 peopleRouter.post("/org/stores", async (req, res) => {

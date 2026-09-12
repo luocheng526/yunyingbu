@@ -1,4 +1,4 @@
-import { assertCanWrite, canEditStore, rowMatchesScope, scopeOf } from "./org-acl.js";
+import { assertCanImportRow, assertCanWrite, canEditStore, groupIdOf, normalizeGroupId, rowMatchesScope, scopeOf } from "./org-acl.js";
 import { listPeople } from "./store.js";
 
 const STATUSES = {
@@ -68,7 +68,7 @@ function syncStoreRoles(input = {}, previous = {}) {
     }
   }
   const team = teamLabelOf(manager) || take("team") || take("chief");
-  return {
+  const next = {
     director,
     manager,
     supervisor,
@@ -77,8 +77,15 @@ function syncStoreRoles(input = {}, previous = {}) {
     team,
     chief: team,
     lead: supervisor || lead || manager,
-    owner: operator
+    owner: operator,
+    groupId: normalizeGroupId(take("groupId"))
   };
+  next.groupId = next.groupId || groupIdOf(next);
+  return next;
+}
+
+export function importStamp(now = new Date()) {
+  return now.getMonth() + 1 + "." + now.getDate() + "更新";
 }
 
 function seedRows() {
@@ -106,9 +113,12 @@ function seedRows() {
   let id = 1;
   const rows = [];
   for (const [lead, owner, storeName, merchantId] of shen) {
+    const roles = syncStoreRoles({ chief: "沈子晗组", lead, owner, manager: "沈子晗", director: "罗成" });
     rows.push({
       id: id++,
-      ...syncStoreRoles({ chief: "沈子晗组", lead, owner, manager: "沈子晗", director: "罗成" }),
+      ...roles,
+      groupId: groupIdOf(roles),
+      shopId: "",
       storeName,
       storeId: "",
       merchantId,
@@ -122,9 +132,12 @@ function seedRows() {
     });
   }
   for (const [lead, owner, storeName, merchantId] of han) {
+    const roles = syncStoreRoles({ chief: "精铺组 韩梦凯", lead, owner, manager: "韩梦凯", director: "罗成" });
     rows.push({
       id: id++,
-      ...syncStoreRoles({ chief: "精铺组 韩梦凯", lead, owner, manager: "韩梦凯", director: "罗成" }),
+      ...roles,
+      groupId: groupIdOf(roles),
+      shopId: "",
       storeName,
       storeId: "",
       merchantId,
@@ -576,11 +589,17 @@ export function listOrgStores(query = {}, actor) {
   const scope = scopeOf(actor);
   rows.forEach((row) => {
     const roles = syncStoreRoles({}, row);
-    ["director", "manager", "supervisor", "operator", "assistant"].forEach((key) => {
+    ["director", "manager", "supervisor", "operator", "assistant", "groupId"].forEach((key) => {
       if (!String(row[key] || "").trim() && roles[key]) {
         row[key] = roles[key];
       }
     });
+    if (!String(row.groupId || "").trim()) {
+      row.groupId = groupIdOf(row);
+    }
+    if (!String(row.shopId || "").trim() && row.storeId) {
+      row.shopId = row.storeId;
+    }
     if (!String(row.owner || "").trim() && roles.owner) {
       row.owner = roles.owner;
     }
@@ -597,7 +616,7 @@ export function listOrgStores(query = {}, actor) {
       if (!q) {
         return true;
       }
-      const blob = [row.storeName, row.storeId, row.merchantId, row.director, row.manager, row.supervisor, row.operator, row.assistant, row.owner, row.lead, row.chief, row.login]
+      const blob = [row.storeName, row.storeId, row.shopId, row.groupId, row.merchantId, row.director, row.manager, row.supervisor, row.operator, row.assistant, row.owner, row.lead, row.chief, row.login]
         .join(" ")
         .toLowerCase();
       return blob.includes(q);
@@ -622,10 +641,19 @@ function normalize(input, previous = {}) {
     statusKey = "operating";
   }
   const roles = syncStoreRoles(input, previous);
+  const storeId =
+    typeof input.storeId === "string"
+      ? input.storeId.trim()
+      : typeof input.shopId === "string"
+        ? input.shopId.trim()
+        : previous.storeId || previous.shopId || "";
+  const groupId = roles.groupId || groupIdOf({ ...previous, ...roles, groupId: input.groupId || previous.groupId });
   return {
     ...roles,
+    groupId,
+    shopId: storeId,
     storeName: typeof input.storeName === "string" ? input.storeName.trim() : previous.storeName || "",
-    storeId: typeof input.storeId === "string" ? input.storeId.trim() : previous.storeId || "",
+    storeId,
     merchantId: typeof input.merchantId === "string" ? input.merchantId.trim() : previous.merchantId || "",
     remark: remark || STATUSES[statusKey] || "运营中",
     statusKey,
@@ -669,6 +697,11 @@ const HEADER_TO_FIELD = {
   店铺ID: "storeId",
   店铺id: "storeId",
   店铺编号: "storeId",
+  shopId: "storeId",
+  小组ID: "groupId",
+  小组id: "groupId",
+  groupId: "groupId",
+  group_id: "groupId",
   商家id: "merchantId",
   商家ID: "merchantId",
   商家Id: "merchantId",
@@ -681,31 +714,79 @@ const HEADER_TO_FIELD = {
   密码: "password"
 };
 
-function findExistingStore(input) {
-  const storeId = String(input.storeId || "").trim();
+function storeIdOf(row) {
+  return String(row.storeId || row.shopId || "").trim();
+}
+
+function importPool(actor, selectedGroupId = "") {
+  const scope = scopeOf(actor);
+  const forced = normalizeGroupId(selectedGroupId) || (scope.key === "group" ? scope.groupId : "");
+  return rows.filter((row) => {
+    if (forced) {
+      return groupIdOf(row) === forced;
+    }
+    return rowMatchesScope(row, scope);
+  });
+}
+
+function pickUnique(list) {
+  if (list.length === 1) {
+    return { store: list[0] };
+  }
+  if (list.length > 1) {
+    return { error: "同一店铺ID出现在多个小组，请填写主管/储备或运营后再导" };
+  }
+  return { store: null };
+}
+
+function findExistingStore(input, actor, selectedGroupId = "") {
+  const pool = importPool(actor, selectedGroupId);
+  const gid =
+    normalizeGroupId(selectedGroupId) ||
+    (scopeOf(actor).key === "group" ? scopeOf(actor).groupId : "") ||
+    groupIdOf(input);
+  const useGroup = Boolean(gid) && !["罗成", "沈子晗", "韩梦凯"].includes(gid);
+  const storeId = storeIdOf(input);
   if (storeId) {
-    const byStoreId = rows.find((row) => String(row.storeId || "").trim() === storeId);
-    if (byStoreId) {
-      return byStoreId;
+    if (useGroup) {
+      const inGroup = pool.filter((row) => groupIdOf(row) === gid && storeIdOf(row) === storeId);
+      if (inGroup.length) {
+        return pickUnique(inGroup);
+      }
+    } else {
+      const byId = pool.filter((row) => storeIdOf(row) === storeId);
+      if (byId.length) {
+        return pickUnique(byId);
+      }
     }
   }
   const merchantId = String(input.merchantId || "").trim();
-  if (merchantId) {
-    const byMerchant = rows.find((row) => String(row.merchantId || "").trim() === merchantId);
-    if (byMerchant) {
-      return byMerchant;
+  const storeName = String(input.storeName || "").trim();
+  if (merchantId && storeName) {
+    const nameMatches = pool.filter((row) => {
+      const sameShop =
+        String(row.merchantId || "").trim() === merchantId && String(row.storeName || "").trim() === storeName;
+      return sameShop && (!useGroup || groupIdOf(row) === gid);
+    });
+    if (nameMatches.length) {
+      return pickUnique(nameMatches);
     }
   }
-  const storeName = String(input.storeName || "").trim();
-  const owner = String(input.operator || input.owner || "").trim();
-  if (!storeName || !owner) {
+  return { store: null };
+}
+
+function uniqueClash(next, excludeId) {
+  const storeId = String(next.storeId || next.shopId || "").trim();
+  if (!storeId) {
     return null;
   }
+  const gid = groupIdOf(next);
   return (
     rows.find(
       (row) =>
-        String(row.storeName || "").trim() === storeName &&
-        String(row.operator || row.owner || "").trim() === owner
+        row.id !== excludeId &&
+        groupIdOf(row) === gid &&
+        String(row.storeId || row.shopId || "").trim() === storeId
     ) || null
   );
 }
@@ -722,7 +803,7 @@ export function mapImportRow(raw = {}) {
       .trim();
     const field =
       HEADER_TO_FIELD[norm] ||
-      (["director", "manager", "supervisor", "operator", "assistant", "chief", "lead", "owner", "storeName", "storeId", "merchantId", "remark", "updatedOn", "closedOn", "login", "password"].includes(norm)
+      (["director", "manager", "supervisor", "operator", "assistant", "chief", "lead", "owner", "storeName", "storeId", "shopId", "groupId", "merchantId", "remark", "updatedOn", "closedOn", "login", "password"].includes(norm)
         ? norm
         : "");
     if (field) {
@@ -732,22 +813,52 @@ export function mapImportRow(raw = {}) {
   return next;
 }
 
-export function importOrgStores(items, actor) {
+export function importOrgStores(items, actor, options = {}) {
   const list = Array.isArray(items) ? items : [];
+  const selectedGroupId = normalizeGroupId(options.groupId);
+  const scope = scopeOf(actor);
+  const forcedGroup = scope.key === "group" ? scope.groupId : selectedGroupId;
   const created = [];
   const updated = [];
   const failed = [];
+  const stamp = importStamp();
   list.forEach((raw, index) => {
-    const input = mapImportRow(raw);
+    const mapped = mapImportRow(raw);
     const line = index + 2;
-    if (!String(input.storeName || "").trim() || !String(input.operator || input.owner || "").trim()) {
-      failed.push({ line, error: "店铺名称、运营为必填" });
+    if (
+      scope.key === "group" &&
+      !mapped.groupId &&
+      !mapped.operator &&
+      !mapped.owner &&
+      !mapped.supervisor
+    ) {
+      mapped.groupId = scope.groupId;
+      mapped.operator = scope.groupId;
+    }
+    const input = { ...mapped, updatedOn: stamp };
+    const draft = normalize(input);
+    if (!String(draft.storeName || "").trim()) {
+      failed.push({ line, error: "店铺名称为必填" });
       return;
     }
-    const existing = findExistingStore(input);
+    if (!String(draft.operator || "").trim() && !storeIdOf(draft) && !String(draft.merchantId || "").trim()) {
+      failed.push({ line, error: "店铺名称之外请至少提供店铺ID或商家id+运营" });
+      return;
+    }
+    const allowed = assertCanImportRow(actor, draft, forcedGroup);
+    if (!allowed.ok) {
+      failed.push({ line, error: allowed.error, storeName: draft.storeName, groupId: draft.groupId });
+      return;
+    }
+    const found = findExistingStore(draft, actor, forcedGroup);
+    if (found.error) {
+      failed.push({ line, error: found.error, storeName: draft.storeName });
+      return;
+    }
+    const existing = found.store;
     const result = existing ? patchOrgStore(existing.id, input, actor) : createOrgStore(input, actor);
     if (!result.ok) {
-      failed.push({ line, error: result.error || "导入失败", storeName: input.storeName });
+      failed.push({ line, error: result.error || "导入失败", storeName: draft.storeName });
       return;
     }
     if (existing) {
@@ -756,7 +867,7 @@ export function importOrgStores(items, actor) {
       created.push(result.store);
     }
   });
-  addLog("导入", `新增${created.length}条，更新${updated.length}条，失败${failed.length}条`);
+  addLog("导入", `本组新增${created.length}条，更新${updated.length}条，失败${failed.length}条`);
   return {
     ok: true,
     created: created.length,
@@ -775,6 +886,9 @@ export function createOrgStore(input, actor) {
   if (!allowed.ok) {
     return allowed;
   }
+  if (uniqueClash(next)) {
+    return { ok: false, statusCode: 409, error: "本组已有相同店铺ID，请改为更新原记录" };
+  }
   const row = { id: nextId++, demo: false, ...next };
   rows.push(row);
   addLog("新增", row.storeName + " / " + row.owner);
@@ -790,6 +904,9 @@ export function patchOrgStore(id, input, actor) {
   const allowed = assertCanWrite(actor, found, next);
   if (!allowed.ok) {
     return allowed;
+  }
+  if (uniqueClash(next, found.id)) {
+    return { ok: false, statusCode: 409, error: "本组已有相同店铺ID，不能改成重复店铺" };
   }
   Object.assign(found, next);
   addLog("修改", found.storeName + " / " + found.owner);

@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.175-store-roles";
+    const href = "/people.css?v=0.1.176-store-upsert";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -388,6 +388,8 @@
           储备: "主管/储备",
           运营: "运营",
           助理: "助理",
+          小组ID: "小组ID",
+          小组id: "小组ID",
           总负责人: "总负责人",
           小组负责人: "小组负责人",
           店铺所属人员: "运营",
@@ -2003,11 +2005,11 @@
               throw new Error("没认出店铺名称。请用下载模板，或把 Excel 另存为 CSV 再导。");
             }
             const headers = (table[headerIndex] || []).map(normalizeStoreHeader);
-            const missing = ["店铺名称", "运营"].filter(function (name) {
-              return headers.indexOf(name) < 0;
-            });
-            if (missing.length) {
-              throw new Error("没认出店铺名称、运营。请用下载模板，或把 Excel 另存为 CSV 再导。缺：" + missing.join("、"));
+            if (headers.indexOf("店铺名称") < 0) {
+              throw new Error("没认出店铺名称。请用下载模板，或把 Excel 另存为 CSV 再导。");
+            }
+            if (headers.indexOf("运营") < 0 && headers.indexOf("店铺ID") < 0) {
+              throw new Error("请至少提供运营或店铺ID，以便按小组更新原店铺。");
             }
             const rows = table
               .slice(headerIndex + 1)
@@ -2028,11 +2030,22 @@
             if (!rows.length) {
               throw new Error("模板至少要有表头和一行数据");
             }
+            function pickedOnly(key) {
+              const picked = columnPicked[key];
+              if (!picked) {
+                return "";
+              }
+              const on = Object.keys(picked).filter(function (name) {
+                return picked[name] && name !== "（空）";
+              });
+              return on.length === 1 ? String(on[0]).replace(/组$/, "") : "";
+            }
+            const groupId = pickedOnly("supervisor") || pickedOnly("operator") || "";
             return fetch("/api/people/org/stores/import", {
               method: "POST",
               credentials: "same-origin",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ rows: rows })
+              body: JSON.stringify({ rows: rows, groupId: groupId })
             }).then(function (res) {
               return res.json().then(function (data) {
                 return { res: res, data: data };
