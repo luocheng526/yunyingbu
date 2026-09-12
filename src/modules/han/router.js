@@ -178,6 +178,32 @@ export function createHanRouter(store = createHanStore()) {
     }
   });
 
+  hanRouter.get("/shop-plans", async (req, res) => {
+    try {
+      const item = await store.getShopPlans({ team: req.query.team, store: req.query.store });
+      res.json({ ok: true, ...item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.put("/shop-plans", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const item = await store.saveShopPlans({
+        team: body.team,
+        store: body.store,
+        monthItems: body.monthItems,
+        weekItems: body.weekItems,
+        monthPlan: body.monthPlan,
+        weekPlan: body.weekPlan,
+      });
+      res.json({ ok: true, ...item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
   hanRouter.delete("/shop-rules", async (req, res) => {
     try {
       const item = await store.resetShopRules({ team: req.query.team, store: req.query.store });

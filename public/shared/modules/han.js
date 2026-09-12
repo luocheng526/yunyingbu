@@ -54,7 +54,7 @@
     );
   }
 
-  function page(title, lead, body, extraTabs) {
+  function page(title, lead, body, extraTabs, afterLead) {
     ensureHanChrome();
     return (
       '<main class="page han-goods-stage">' +
@@ -63,7 +63,9 @@
       escapeHtml(title) +
       "</h1><p class=\"lead\">" +
       escapeHtml(lead) +
-      "</p></header>" +
+      "</p>" +
+      (afterLead || "") +
+      "</header>" +
       body +
       "</main>"
     );
@@ -456,6 +458,18 @@
         );
       }
 
+      const periods = (function () {
+        const now = new Date();
+        const month = now.getFullYear() + "年" + (now.getMonth() + 1) + "月";
+        const weekday = now.getDay() || 7;
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - weekday + 1);
+        const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+        function md(d) {
+          return d.getMonth() + 1 + "/" + d.getDate();
+        }
+        return { month: month, week: md(start) + "-" + md(end) };
+      })();
+
       root.innerHTML = page(
         shop,
         team + " · " + shop + "。本店可自定义分类规则；导入和分类只按本店规则。格子可改，调动可换层。",
@@ -487,6 +501,19 @@
           ".han-rules .han-rules-actions button{min-height:32px;padding:6px 12px;border:0;border-radius:999px;color:#fff;cursor:pointer}" +
           ".han-rules #han-rules-save{background:#0f766e}" +
           ".han-rules #han-rules-reset{background:#6b7280}" +
+          ".han-plans{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0 0}" +
+          ".han-plan{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px}" +
+          ".han-plan h3{margin:0 0 8px;font-size:14px;display:flex;justify-content:space-between;gap:8px}" +
+          ".han-plan h3 span{font-size:12px;font-weight:500;color:#6b7280}" +
+          ".han-plan ul{list-style:none;margin:0;padding:0;max-height:140px;overflow:auto}" +
+          ".han-plan li{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px}" +
+          ".han-plan li.is-done span{text-decoration:line-through;color:#9ca3af}" +
+          ".han-plan .han-plan-empty{color:#9ca3af}" +
+          ".han-plan .han-plan-del{border:0;background:transparent;color:#9ca3af;cursor:pointer}" +
+          ".han-plan-add{display:flex;gap:6px;margin-top:8px}" +
+          ".han-plan-add input{flex:1;min-height:30px;border:1px solid #d1d5db;border-radius:6px;padding:4px 8px}" +
+          ".han-plan-add button{border:0;border-radius:6px;background:#111827;color:#fff;padding:4px 10px;cursor:pointer}" +
+          "@media (max-width:900px){.han-plans{grid-template-columns:1fr}}" +
           "</style>" +
           '<div class="han-sheet-toolbar">' +
           '<button type="button" class="han-rules-btn" id="han-rules-toggle">本店分类规则</button>' +
@@ -523,14 +550,135 @@
           "<thead></thead><tbody></tbody></table></div>" +
           '<p class="msg status han-sheet-msg" id="prod-msg"></p>',
         teamTabsHtml(team) + '<div id="han-shop-tabs"></div>',
+        '<div class="han-plans">' +
+          '<section class="han-plan" data-kind="month"><h3>本月任务规划<span>' +
+          escapeHtml(periods.month) +
+          "</span></h3><ul id=\"han-month-list\"></ul>" +
+          '<div class="han-plan-add"><input id="han-month-input" placeholder="添加本月任务" /><button type="button" id="han-month-add">添加</button></div></section>' +
+          '<section class="han-plan" data-kind="week"><h3>本周任务规划<span>' +
+          escapeHtml(periods.week) +
+          "</span></h3><ul id=\"han-week-list\"></ul>" +
+          '<div class="han-plan-add"><input id="han-week-input" placeholder="添加本周任务" /><button type="button" id="han-week-add">添加</button></div></section>' +
+          "</div>",
       );
 
       const table = root.querySelector("#han-sheet");
       const thead = table.querySelector("thead");
       const tbody = table.querySelector("tbody");
       const msg = root.querySelector("#prod-msg");
+      const monthList = root.querySelector("#han-month-list");
+      const weekList = root.querySelector("#han-week-list");
+      const monthInput = root.querySelector("#han-month-input");
+      const weekInput = root.querySelector("#han-week-input");
+      const monthAdd = root.querySelector("#han-month-add");
+      const weekAdd = root.querySelector("#han-week-add");
       let items = [];
+      let monthItems = [];
+      let weekItems = [];
       let dead = false;
+
+      function paintPlanList(el, rows) {
+        if (!rows.length) {
+          el.innerHTML = '<li class="han-plan-empty">还没有任务</li>';
+          return;
+        }
+        el.innerHTML = rows
+          .map(function (row) {
+            return (
+              '<li class="' +
+              (row.done ? "is-done" : "") +
+              '" data-id="' +
+              escapeHtml(row.id) +
+              '"><input type="checkbox" class="han-plan-done"' +
+              (row.done ? " checked" : "") +
+              " /><span>" +
+              escapeHtml(row.text) +
+              '</span><button type="button" class="han-plan-del" aria-label="删除">×</button></li>'
+            );
+          })
+          .join("");
+      }
+
+      function paintPlans() {
+        paintPlanList(monthList, monthItems);
+        paintPlanList(weekList, weekItems);
+      }
+
+      function savePlans() {
+        return jsonFetch("/api/han/shop-plans", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            team: team,
+            store: shop,
+            monthItems: monthItems,
+            weekItems: weekItems,
+          }),
+        }).then(function (json) {
+          if (dead) return json;
+          if (!json.ok) {
+            msg.textContent = json.error || "任务规划保存失败";
+            return json;
+          }
+          monthItems = json.monthItems || [];
+          weekItems = json.weekItems || [];
+          paintPlans();
+          return json;
+        });
+      }
+
+      function loadPlans() {
+        return jsonFetch(
+          "/api/han/shop-plans?team=" + encodeURIComponent(team) + "&store=" + encodeURIComponent(shop),
+        ).then(function (json) {
+          if (dead || !json.ok) return json;
+          monthItems = json.monthItems || [];
+          weekItems = json.weekItems || [];
+          paintPlans();
+          return json;
+        });
+      }
+
+      function addPlan(kind) {
+        const input = kind === "month" ? monthInput : weekInput;
+        const text = String(input.value || "").trim();
+        if (!text) return;
+        const row = { id: String(Date.now()), text: text, done: false };
+        if (kind === "month") monthItems = monthItems.concat([row]);
+        else weekItems = weekItems.concat([row]);
+        input.value = "";
+        paintPlans();
+        savePlans();
+      }
+
+      function onPlanClick(e) {
+        const li = e.target.closest("li[data-id]");
+        if (!li) return;
+        const box = e.target.closest(".han-plan");
+        const kind = box && box.getAttribute("data-kind");
+        const id = li.getAttribute("data-id");
+        const list = kind === "week" ? weekItems : monthItems;
+        if (e.target.classList.contains("han-plan-del")) {
+          const next = list.filter(function (row) {
+            return row.id !== id;
+          });
+          if (kind === "week") weekItems = next;
+          else monthItems = next;
+          paintPlans();
+          savePlans();
+          return;
+        }
+        if (e.target.classList.contains("han-plan-done")) {
+          const next = list.map(function (row) {
+            if (row.id !== id) return row;
+            return { id: row.id, text: row.text, done: e.target.checked };
+          });
+          if (kind === "week") weekItems = next;
+          else monthItems = next;
+          paintPlans();
+          savePlans();
+        }
+      }
 
       function paintHead() {
         const title =
@@ -886,7 +1034,26 @@
       exportBtn.addEventListener("click", onExport);
       tplBtn.addEventListener("click", onTpl);
       importInput.addEventListener("change", onImport);
-      Promise.all([load(), loadRules()]).catch(function (err) {
+      monthAdd.addEventListener("click", function () {
+        addPlan("month");
+      });
+      weekAdd.addEventListener("click", function () {
+        addPlan("week");
+      });
+      monthInput.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          addPlan("month");
+        }
+      });
+      weekInput.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          addPlan("week");
+        }
+      });
+      root.querySelector(".han-plans").addEventListener("click", onPlanClick);
+      Promise.all([load(), loadRules(), loadPlans()]).catch(function (err) {
         if (!dead) msg.textContent = String(err);
       });
       return function unmount() {
