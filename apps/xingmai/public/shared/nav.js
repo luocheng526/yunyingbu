@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.138 */
+/* xm-fast-shell 0.1.139 */
 (function () {
-  const ASSET_VER = "0.1.138";
+  const ASSET_VER = "0.1.139";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -1069,6 +1069,7 @@
       history.pushState({ xm: "/home" }, "", "/home");
     }
     current = "/home";
+    setPhoneNav(false);
     disposePane("/home");
     const root = paneFor("/home", true);
     if (root) {
@@ -1108,6 +1109,81 @@
       }, 0);
     });
     obs.observe(topbar, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "style", "class"] });
+  }
+
+  const PHONE_MQ = "(max-width: 880px)";
+
+  function setPhoneNav(open) {
+    document.documentElement.classList.toggle("xm-phone-nav", !!open);
+    const btn = document.getElementById("xm-phone-menu");
+    if (btn) {
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+      btn.setAttribute("aria-label", open ? "关闭菜单" : "打开菜单");
+    }
+  }
+
+  function ensurePhonePanelCss() {
+    if (document.getElementById("xm-phone-panel-css")) {
+      return;
+    }
+    const style = document.createElement("style");
+    style.id = "xm-phone-panel-css";
+    style.textContent =
+      "@media (max-width: 880px){" +
+      "html:has(#xm-hm),html:has(#xm-hm) body{height:100dvh!important;max-height:100dvh!important;overflow:hidden!important}" +
+      "html:has(#xm-hm) .xm-shell{height:100dvh!important;max-height:100dvh!important}" +
+      "html:has(#xm-hm) .xm-workspace>.xm-pane.is-active{overflow:auto!important;-webkit-overflow-scrolling:touch}" +
+      "}";
+    document.head.appendChild(style);
+  }
+
+  function ensurePhoneChrome() {
+    ensurePhonePanelCss();
+    const topbar = document.querySelector(".xm-topbar");
+    if (!topbar) {
+      return;
+    }
+    let btn = document.getElementById("xm-phone-menu");
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.type = "button";
+      btn.id = "xm-phone-menu";
+      btn.className = "xm-phone-menu";
+      btn.setAttribute("aria-label", "打开菜单");
+      btn.setAttribute("aria-expanded", "false");
+      btn.innerHTML = '<i class="xm-phone-menu-bars" aria-hidden="true"></i>';
+      topbar.insertBefore(btn, topbar.firstChild);
+      btn.addEventListener("click", function () {
+        setPhoneNav(!document.documentElement.classList.contains("xm-phone-nav"));
+      });
+    }
+    let mask = document.getElementById("xm-phone-mask");
+    if (!mask) {
+      mask = document.createElement("button");
+      mask.type = "button";
+      mask.id = "xm-phone-mask";
+      mask.className = "xm-phone-mask";
+      mask.setAttribute("aria-label", "关闭菜单");
+      document.body.appendChild(mask);
+      mask.addEventListener("click", function () {
+        setPhoneNav(false);
+      });
+    }
+    if (window.__xmPhoneWatch || !window.matchMedia) {
+      return;
+    }
+    window.__xmPhoneWatch = 1;
+    const mq = window.matchMedia(PHONE_MQ);
+    const onChange = function () {
+      if (!mq.matches) {
+        setPhoneNav(false);
+      }
+    };
+    if (mq.addEventListener) {
+      mq.addEventListener("change", onChange);
+    } else if (mq.addListener) {
+      mq.addListener(onChange);
+    }
   }
 
   function bindBrandHome() {
@@ -1151,6 +1227,7 @@
     if (push !== false) {
       history.pushState({ xm: key }, "", key);
     }
+    setPhoneNav(false);
     current = key;
     openTab(key);
     paintActive(key);
@@ -1656,6 +1733,7 @@
     }
     bindBrandHome();
     bindMenu(document);
+    ensurePhoneChrome();
     ensureWorkspace();
     watchTabBar();
     startQueueWatch();

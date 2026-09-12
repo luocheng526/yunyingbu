@@ -46,8 +46,8 @@ test("login page is public", async () => {
   assert.match(html, /星脉甄选管理系统/);
   assert.match(html, /星脉管理系统/);
   assert.match(html, /<title>星脉甄选运营中心<\/title>/);
-  assert.match(html, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=0\.1\.138"/);
-  assert.match(html, /rel="shortcut icon" href="\/favicon\.ico\?v=0\.1\.138"/);
+  assert.match(html, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=0\.1\.139"/);
+  assert.match(html, /rel="shortcut icon" href="\/favicon\.ico\?v=0\.1\.139"/);
   assert.doesNotMatch(html, /rel="icon"[^>]+href="\/login-logo\.png"/);
   assert.doesNotMatch(html, /href="data:image\/png;base64,/);
   assert.doesNotMatch(html, /ChangeMe123!/);

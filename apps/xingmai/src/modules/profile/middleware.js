@@ -6,10 +6,31 @@ import { navMarkup } from "../home/nav-items.js";
 import { currentUser, publicProfile } from "./auth.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.138
+// xm-fast-shell 0.1.139
 // login.html 不走 HTML 内存缓存；login.css 禁止 immutable。必须和 home/pages.js 成套发。
 
-export const SHELL_ASSET_VER = "0.1.138";
+export const SHELL_ASSET_VER = "0.1.139";
+export const WEB_MANIFEST = {
+  name: "星脉甄选运营中心",
+  short_name: "星脉甄选",
+  start_url: "/home",
+  scope: "/",
+  display: "standalone",
+  background_color: "#f0f2f5",
+  theme_color: "#1677ff",
+  icons: [
+    { src: "/login-logo.png", sizes: "192x192", type: "image/png", purpose: "any" },
+    { src: "/shared/tab-icon.png", sizes: "32x32", type: "image/png", purpose: "any" }
+  ]
+};
+const PHONE_HEAD =
+  '    <meta name="mobile-web-app-capable" content="yes" />\n' +
+  '    <meta name="apple-mobile-web-app-capable" content="yes" />\n' +
+  '    <meta name="apple-mobile-web-app-title" content="星脉甄选" />\n' +
+  '    <meta name="apple-mobile-web-app-status-bar-style" content="default" />\n' +
+  '    <meta name="theme-color" content="#1677ff" />\n' +
+  '    <link rel="apple-touch-icon" href="/login-logo.png" />\n' +
+  '    <link rel="manifest" href="/manifest.webmanifest" />\n';
 export const TAB_TITLE = "星脉甄选运营中心";
 // 浏览器标签图标走真实文件。Chrome 标签栏经常不画 data: 内嵌图，会变成地球。
 // 侧栏品牌条仍用 /login-logo.png，不要改成这个。
@@ -118,8 +139,9 @@ export function renderAppShell(href, user) {
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>${TAB_TITLE}</title>
+${PHONE_HEAD}
     <link rel="icon" type="image/png" sizes="32x32" href="${TAB_ICON}" />
     <link rel="shortcut icon" href="/favicon.ico?v=${SHELL_ASSET_VER}" />
 ${css}    <link rel="preload" href="/shared/modules/${id}.js" as="script" />
@@ -255,7 +277,8 @@ export function isPublicRequest(req) {
       path === "/login.css" ||
       path === "/api/health" ||
       path === "/shared/layout.css" ||
-      path === "/shared/nav.js"
+      path === "/shared/nav.js" ||
+      path === "/manifest.webmanifest"
     ) {
       return true;
     }
@@ -287,6 +310,25 @@ function tabIconTag() {
   return `<link rel="icon" type="image/png" sizes="32x32" href="${TAB_ICON}" /><link rel="shortcut icon" href="/favicon.ico?v=${SHELL_ASSET_VER}" />`;
 }
 
+export function applyPhoneHead(html) {
+  let out = String(html || "");
+  if (/<meta\s+name=["']viewport["']/i.test(out)) {
+    out = out.replace(
+      /<meta\s+name=["']viewport["'][^>]*>/i,
+      '<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />'
+    );
+  } else if (out.includes("</head>")) {
+    out = out.replace(
+      "</head>",
+      '    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />\n  </head>'
+    );
+  }
+  if (!out.includes("manifest.webmanifest") && out.includes("</head>")) {
+    out = out.replace("</head>", PHONE_HEAD + "  </head>");
+  }
+  return out;
+}
+
 export function applyTabIcon(html) {
   const text = String(html || "").replace(/<link\s+rel=["']shortcut icon["'][^>]*>\s*/gi, "");
   if (/<link\s+rel=["']icon["'][^>]*>/i.test(text)) {
@@ -311,7 +353,7 @@ export function withSharedShell(html) {
   if (isLoginHtml(text)) {
     return versionShellAssets(withThemeBoot(applyTabIcon(text)));
   }
-  let out = text;
+  let out = applyPhoneHead(text);
   if (out.includes("</head>")) {
     const extras = [];
     if (!out.includes("/shared/layout.css")) {
@@ -466,6 +508,17 @@ function serveShellAsset(req, res) {
 }
 
 
+function serveWebManifest(req, res) {
+  if (!isReadMethod(req) || normalizedPath(req) !== "/manifest.webmanifest") {
+    return false;
+  }
+  res.status(200);
+  res.setHeader("Content-Type", "application/manifest+json; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+  res.send(JSON.stringify(WEB_MANIFEST));
+  return true;
+}
+
 function serveTabIcon(req, res) {
   if (!isReadMethod(req)) {
     return false;
@@ -537,6 +590,9 @@ export function requireLoginUnlessPublic(req, res, next) {
   attachGzip(req, res);
   if (isPublicRequest(req)) {
     if (serveTabIcon(req, res)) {
+      return;
+    }
+    if (serveWebManifest(req, res)) {
       return;
     }
     if (serveShellAsset(req, res)) {

@@ -5,7 +5,7 @@ import * as profileShell from "../profile/middleware.js";
 import { NAV_ITEMS } from "./nav-items.js";
 
 // xm-upgrade-mask 0.1.52  必须和 profile/middleware.js 成套发。
-// xm-fast-shell 0.1.138
+// xm-fast-shell 0.1.139
 // login.html 不走 HTML 内存缓存，必须和 profile/middleware.js 成套发。
 
 function renderExistingPage(filePath) {
