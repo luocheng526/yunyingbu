@@ -484,41 +484,29 @@
   }
 
   var shopSort = { key: "", dir: "desc" };
-  var shopColW = {};
-
-  function teamTableKey(table) {
-    var box = table && table.closest && table.closest("[data-team]");
-    return box ? box.getAttribute("data-team") || "t" : "t";
-  }
+  var shopColW = [];
 
   function applyColW(table, idx, w) {
     if (!table || !table.rows) {
       return;
     }
     w = Math.max(48, Math.round(w));
-    var rows = table.rows;
-    for (var i = 0; i < rows.length; i += 1) {
-      var cell = rows[i].cells[idx];
+    for (var i = 0; i < table.rows.length; i += 1) {
+      var cell = table.rows[i].cells[idx];
       if (cell) {
-        cell.style.width = w + "px";
-        cell.style.minWidth = w + "px";
+        cell.style.width = cell.style.minWidth = w + "px";
       }
     }
-    var key = teamTableKey(table);
-    if (!shopColW[key]) {
-      shopColW[key] = [];
-    }
-    shopColW[key][idx] = w;
+    shopColW[idx] = w;
   }
 
   function restoreShopColW(root) {
     Array.prototype.forEach.call(root.querySelectorAll(".xm-hm-teams .xm-hm-table"), function (table) {
-      var list = shopColW[teamTableKey(table)] || [];
-      for (var i = 0; i < list.length; i += 1) {
-        if (list[i]) {
-          applyColW(table, i, list[i]);
+      shopColW.forEach(function (w, i) {
+        if (w) {
+          applyColW(table, i, w);
         }
-      }
+      });
     });
   }
 
@@ -981,7 +969,7 @@
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border:0;box-shadow:none}" +
       ".xm-hm-teams .xm-hm-table{min-width:760px;font-variant-numeric:tabular-nums;border-collapse:separate;border-spacing:0;table-layout:fixed}" +
       ".xm-hm-teams .xm-hm-table .xm-hm-num{text-align:right;white-space:nowrap}" +
-      ".xm-hm-teams .xm-hm-table th,.xm-hm-teams .xm-hm-table td{border:0;border-right:1px dashed #c8ced8;border-bottom:0;overflow:hidden;text-overflow:ellipsis}" +
+      ".xm-hm-teams .xm-hm-table th,.xm-hm-teams .xm-hm-table td{border:0;border-right:1px dashed #c8ced8;overflow:hidden;text-overflow:ellipsis}" +
       ".xm-hm.is-chief .xm-hm-teams .xm-hm-panel{overflow:hidden}" +
       ".xm-hm.is-chief .xm-hm-teams .xm-hm-table{min-width:0}" +
       ".xm-hm-teams .xm-hm-table th.xm-hm-num{white-space:normal;max-width:6.4em;line-height:1.25}" +
@@ -1128,12 +1116,6 @@
     var hero = readChart(live.hero, blankLive().hero);
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
-    var keepCard = "";
-    var wasPinned = cardTipPinned;
-    if (cardTipAnchor && cardTipAnchor.closest) {
-      var hold = cardTipAnchor.closest("[data-card]");
-      keepCard = hold ? hold.getAttribute("data-card") || "" : "";
-    }
     hideCardTip(true);
     board.setAttribute("data-hm-js", "0.1.388-home-colw");
     board.classList.toggle("is-board", state.view === "board");
@@ -1202,12 +1184,6 @@
         );
       })
       .join("");
-    if (keepCard) {
-      var nextHelp = root.querySelector('.xm-hm-card[data-card="' + keepCard + '"] .xm-hm-help');
-      if (nextHelp) {
-        showCardTip(nextHelp, wasPinned);
-      }
-    }
   }
 
   function api(path) {
