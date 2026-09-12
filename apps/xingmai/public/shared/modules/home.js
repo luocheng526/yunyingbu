@@ -2458,6 +2458,9 @@
             pop.hidden = false;
           }
           sortSwallow = true;
+          window.setTimeout(function () {
+            sortSwallow = false;
+          }, 400);
         }
         sortFinish();
       }
