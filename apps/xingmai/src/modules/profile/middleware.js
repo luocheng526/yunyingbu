@@ -4,12 +4,13 @@ import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { navMarkup } from "../home/nav-items.js";
 import { currentUser, publicProfile } from "./auth.js";
+import { APP_ICON_PNG } from "./app-icon-png.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.140
+// xm-fast-shell 0.1.141
 // login.html 不走 HTML 内存缓存；login.css 禁止 immutable。必须和 home/pages.js 成套发。
 
-export const SHELL_ASSET_VER = "0.1.140";
+export const SHELL_ASSET_VER = "0.1.141";
 export const WEB_MANIFEST = {
   name: "星脉甄选运营中心",
   short_name: "星脉甄选",
@@ -19,8 +20,8 @@ export const WEB_MANIFEST = {
   background_color: "#f0f2f5",
   theme_color: "#1677ff",
   icons: [
-    { src: "/login-logo.png", sizes: "192x192", type: "image/png", purpose: "any" },
-    { src: "/shared/tab-icon.png", sizes: "32x32", type: "image/png", purpose: "any" }
+    { src: `/apple-touch-icon.png?v=${SHELL_ASSET_VER}`, sizes: "180x180", type: "image/png", purpose: "any" },
+    { src: `/shared/tab-icon.png?v=${SHELL_ASSET_VER}`, sizes: "32x32", type: "image/png", purpose: "any" }
   ]
 };
 const PHONE_HEAD =
@@ -29,8 +30,14 @@ const PHONE_HEAD =
   '    <meta name="apple-mobile-web-app-title" content="星脉甄选" />\n' +
   '    <meta name="apple-mobile-web-app-status-bar-style" content="default" />\n' +
   '    <meta name="theme-color" content="#1677ff" />\n' +
-  '    <link rel="apple-touch-icon" href="/login-logo.png" />\n' +
+  `    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=${SHELL_ASSET_VER}" />\n` +
   '    <link rel="manifest" href="/manifest.webmanifest" />\n';
+const APP_ICON_PATHS = new Set([
+  "/apple-touch-icon.png",
+  "/apple-touch-icon-precomposed.png",
+  "/apple-touch-icon-180x180.png",
+  "/shared/app-icon.png"
+]);
 export const TAB_TITLE = "星脉甄选运营中心";
 // 浏览器标签图标走真实文件。Chrome 标签栏经常不画 data: 内嵌图，会变成地球。
 // 侧栏品牌条仍用 /login-logo.png，不要改成这个。
@@ -351,7 +358,7 @@ export function isLoginHtml(html) {
 export function withSharedShell(html) {
   const text = String(html || "");
   if (isLoginHtml(text)) {
-    return versionShellAssets(withThemeBoot(applyTabIcon(text)));
+    return versionShellAssets(withThemeBoot(applyPhoneHead(applyTabIcon(text))));
   }
   let out = applyPhoneHead(text);
   if (out.includes("</head>")) {
@@ -398,7 +405,7 @@ export function readThemedHtml(filePath) {
   }
   const raw = fs.readFileSync(dest, "utf8");
   const html = loginFile
-    ? versionShellAssets(withThemeBoot(applyTabIcon(raw)))
+    ? versionShellAssets(withThemeBoot(applyPhoneHead(applyTabIcon(raw))))
     : withSharedShell(raw);
   if (!loginFile) {
     htmlFileCache.set(dest, { mtimeMs: stat.mtimeMs, size: stat.size, html, at: now });
@@ -519,6 +526,22 @@ function serveWebManifest(req, res) {
   return true;
 }
 
+function serveAppIcon(req, res) {
+  if (!isReadMethod(req)) {
+    return false;
+  }
+  const dest = normalizedPath(req);
+  if (!APP_ICON_PATHS.has(dest)) {
+    return false;
+  }
+  // 闸门 contents 按 UTF-8 落盘时，latin1 二进制会变成 C2 89 PNG。磁盘上的图即使在也不能信。
+  const versioned = Boolean(req.query && req.query.v);
+  res.setHeader("Cache-Control", versioned ? "public, max-age=86400, immutable" : "no-cache");
+  res.type("png");
+  res.send(APP_ICON_PNG);
+  return true;
+}
+
 function serveTabIcon(req, res) {
   if (!isReadMethod(req)) {
     return false;
@@ -589,6 +612,9 @@ function serveHanApiCache(req, res) {
 export function requireLoginUnlessPublic(req, res, next) {
   attachGzip(req, res);
   if (isPublicRequest(req)) {
+    if (serveAppIcon(req, res)) {
+      return;
+    }
     if (serveTabIcon(req, res)) {
       return;
     }
