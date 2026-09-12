@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.97-failed-tab-paint */
+/* xm-module-releases 0.1.98-tab-blue */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -107,18 +107,25 @@
       .oc-hero-card { background: transparent; border: 0; box-shadow: none; padding: 0 0 10px; margin: 0 0 12px; }
       .oc-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; }
       .oc-tab[data-tab="failed"]:not(.active) .oc-tab-num { color: #9f1239; }
-      .oc-tab, button.oc-tab { background: transparent !important; outline: none !important; -webkit-tap-highlight-color: transparent; }
-      .oc-tab:hover, .oc-tab:focus, .oc-tab:focus-visible, .oc-tab:active,
-      button.oc-tab:hover, button.oc-tab:focus, button.oc-tab:focus-visible, button.oc-tab:active {
+      .oc-tab, button.oc-tab { outline: none !important; -webkit-tap-highlight-color: transparent; }
+      .oc-tab:not(.active), button.oc-tab:not(.active) { background: transparent !important; }
+      .oc-tab:not(.active):hover, .oc-tab:not(.active):focus, .oc-tab:not(.active):focus-visible, .oc-tab:not(.active):active,
+      button.oc-tab:not(.active):hover, button.oc-tab:not(.active):focus, button.oc-tab:not(.active):focus-visible, button.oc-tab:not(.active):active {
         background: transparent !important; background-color: transparent !important; outline: none !important;
       }
-      .oc-tab.active, button.oc-tab.active,
-      .oc-tab.active:hover, .oc-tab.active:focus, .oc-tab.active:focus-visible, .oc-tab.active:active,
-      button.oc-tab.active:hover, button.oc-tab.active:focus, button.oc-tab.active:focus-visible, button.oc-tab.active:active {
-        background: #70b4ff !important; background-color: #70b4ff !important; color: #fff !important; border-radius: 8px 8px 0 0;
+      html body .xm-content button.oc-tab.active,
+      html body .xm-content button.oc-tab.active:hover,
+      html body .xm-content button.oc-tab.active:focus,
+      html body .xm-content button.oc-tab.active:focus-visible,
+      html body .xm-content button.oc-tab.active:active {
+        background: #1677ff !important; background-color: #1677ff !important; background-image: none !important; color: #fff !important; border-radius: 8px 8px 0 0;
       }
       .oc-tab-num { display: block; margin: 0.25rem 0 0.1rem; font-size: 1.35rem; font-weight: 750; }
-      .oc-tab.active, .oc-tab.active h2, .oc-tab.active .oc-tab-num, .oc-tab.active p { color: #fff !important; }
+      html body .xm-content button.oc-tab.active,
+      html body .xm-content button.oc-tab.active h2,
+      html body .xm-content button.oc-tab.active .oc-tab-num,
+      html body .xm-content button.oc-tab.active p,
+      html body .xm-content button.oc-tab.active span { color: #fff !important; }
       .oc-tab p { display: block; margin: 0; font-size: 12px; }
       #failed-view table { table-layout: fixed; width: 100%; }
       #failed-view th:nth-child(4), #failed-view td.failed-sum { width: 7.2rem; }
@@ -215,7 +222,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-17";
+      link.href = "/releases.css?v=sc-ui-18";
       document.head.appendChild(link);
     }
   }

@@ -215,8 +215,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /sc-ui-17/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-17/);
+    assert.match(text, /sc-ui-18/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-18/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
     assert.match(text, /id="xm-releases-boot"/);
@@ -316,9 +316,9 @@ test("release board scripts parse so tab refresh can run", () => {
   assert.match(theme, /function finishUpgradeInPlace/);
   assert.match(theme, /return "landed"/);
   assert.doesNotMatch(theme, /location\.replace\("\/releases\?reloaded="/);
-  assert.match(theme, /sc-ui-17/);
-  assert.match(theme, /0\.1\.97-failed-tab-paint/);
-  assert.match(theme, /#70b4ff/);
+  assert.match(theme, /sc-ui-18/);
+  assert.match(theme, /0\.1\.98-tab-blue/);
+  assert.match(theme, /#1677ff/);
   assert.match(theme, /failed-sum/);
   assert.match(theme, /失败版本/);
   assert.match(theme, /data-tab="failed"/);
@@ -450,7 +450,7 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /\.oc-tab-num/);
     assert.match(text, /\.oc-tab:focus-visible/);
     assert.match(text, /-webkit-tap-highlight-color:\s*transparent/);
-    assert.match(text, /#70b4ff/);
+    assert.match(text, /#1677ff/);
     assert.match(text, /\.failed-sum/);
     assert.match(text, /table-layout:\s*fixed/);
     assert.match(text, /#failed-view td\.failed-log \{ width: 44%/);
