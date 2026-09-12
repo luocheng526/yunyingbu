@@ -45,8 +45,10 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function teamBlockHtml/);
   assert.doesNotMatch(homeJs, /打开数据总览/);
   assert.doesNotMatch(homeJs, /打开运营中心/);
-  assert.match(homeJs, /\.xm-hm-team-kpis\{display:grid;grid-template-columns:repeat\(auto-fill,minmax\(76px,1fr\)\)/);
+  assert.match(homeJs, /\.xm-hm-team-kpis\{display:grid;grid-template-columns:repeat\(4,minmax\(0,110px\)\)/);
+  assert.match(homeJs, /\.xm-hm-teams\.is-many \.xm-hm-team-kpis\{grid-template-columns:repeat\(2,minmax\(0,96px\)\)/);
   assert.match(homeJs, /\.xm-hm\.is-team \.xm-hm-card\{aspect-ratio:1\/1/);
+  assert.match(homeJs, /classList\.toggle\("is-many"/);
   assert.match(homeJs, /linear-gradient\(#dceaff,#f7fbff\)/);
   assert.doesNotMatch(homeJs, /border:2px solid #4d8fd6/);
   assert.match(homeJs, /\.xm-hm-bar\{[^}]*border:0\}/);

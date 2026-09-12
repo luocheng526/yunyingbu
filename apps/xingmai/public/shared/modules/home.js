@@ -863,7 +863,8 @@
       ".xm-hm-teams-bar{display:flex;justify-content:space-between;align-items:center;padding:0 0 8px}" +
       ".xm-hm-teams-grid{display:grid;grid-template-columns:repeat(var(--xm-hm-team-cols,2),minmax(200px,1fr));gap:10px}" +
       ".xm-hm-team{display:flex;flex-direction:column;gap:8px;min-width:0;padding:8px 8px 8px}" +
-      ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:6px;align-content:start}" +
+      ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,110px));gap:6px;align-content:start}" +
+      ".xm-hm-teams.is-many .xm-hm-team-kpis{grid-template-columns:repeat(2,minmax(0,96px))}" +
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border:0;box-shadow:none}" +
       ".xm-hm-teams .xm-hm-table{min-width:1280px;font-variant-numeric:tabular-nums}" +
       ".xm-hm-teams .xm-hm-table .xm-hm-num{text-align:right;white-space:nowrap}" +
@@ -946,7 +947,7 @@
       ".xm-hm-pop h3{margin:0 0 8px;font-size:13px}" +
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{margin:8px 0 0;color:var(--xm-muted);font-size:12px}" +
-      "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(auto-fill,minmax(76px,1fr))}}" +
+      "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,110px))}}" +
       "@media (max-width:1200px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
       "@media (max-width:700px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts,.xm-hm-team-kpis{grid-template-columns:1fr}.xm-hm-team-head{flex-direction:column}.xm-hm-cal-months{flex-direction:column}}"
     );
@@ -1025,6 +1026,7 @@
     root.querySelector("#xm-hm-kpis").innerHTML = cards.map(cardHtml).join("");
     root.querySelector("#xm-hm-teams").hidden = !teamView;
     root.querySelector("#xm-hm-teams").style.setProperty("--xm-hm-team-cols", String(Math.max(teams.length, 1)));
+    root.querySelector("#xm-hm-teams").classList.toggle("is-many", teams.length >= 4);
     root.querySelector("#xm-hm-teams").innerHTML = teamsCompareHtml(teams, teamHidden(hide));
     root.querySelector("#xm-hm-live").hidden = state.view !== "live";
     root.querySelector("#xm-hm-board").hidden = state.view !== "board";
