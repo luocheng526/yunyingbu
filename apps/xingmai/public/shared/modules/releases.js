@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.65 */
+/* xm-module-releases 0.1.95-fail-close */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -72,41 +72,89 @@
         margin: 0;
         z-index: 1;
       }
+      #upgrade-mask.show #upgrade-dismiss,
       #upgrade-mask.can-close #upgrade-dismiss { display: inline-block; }
+      .pane, .xm-content .pane { display: none !important; }
+      .pane.on, .xm-content .pane.on { display: block !important; }
+      html, html body, html body.xm-app, html body.xm-app-shell {
+        height: 100% !important; max-height: 100dvh !important; overflow: hidden !important;
+      }
+      .xm-shell {
+        display: flex !important; height: 100dvh !important; max-height: 100dvh !important; min-height: 0 !important; overflow: hidden !important;
+      }
+      .xm-shell .xm-main {
+        display: flex !important; flex-direction: column !important; flex: 1 1 0% !important; min-height: 0 !important; overflow: hidden !important;
+      }
+      .xm-content, .xm-shell .xm-content {
+        flex: 1 1 auto !important; height: auto !important; min-height: 0 !important; overflow-y: auto !important; touch-action: pan-y;
+      }
+      html:has(.oc-wrap), html:has(.oc-wrap) body, html:has(.oc-wrap) body.xm-app, html:has(.oc-wrap) body.xm-app-shell {
+        height: 100% !important; max-height: 100dvh !important; overflow: hidden !important;
+      }
+      .xm-shell:has(.oc-wrap) {
+        display: flex !important; height: 100dvh !important; max-height: 100dvh !important; min-height: 0 !important; overflow: hidden !important;
+      }
+      .xm-shell:has(.oc-wrap) .xm-main {
+        display: flex !important; flex-direction: column !important; flex: 1 1 0% !important; min-height: 0 !important; overflow: hidden !important;
+      }
+      .xm-content:has(.oc-wrap), .xm-shell:has(.oc-wrap) .xm-content {
+        flex: 1 1 auto !important; height: auto !important; min-height: 0 !important; overflow-y: auto !important; touch-action: pan-y;
+      }
+      #history-view, #logs-view {
+        max-height: calc(100dvh - 15rem); overflow-y: scroll !important; touch-action: pan-y;
+      }
+      .oc-wrap.page, .oc-wrap.xm-page { max-width: none !important; width: 100%; margin: 0 !important; background: var(--xm-card, #fff); border: 0 !important; border-radius: 0; padding: 10px 16px 16px; }
+      html:has(.oc-wrap) .xm-content, .xm-content:has(.oc-wrap) { padding: 0 !important; }
+      .oc-hero-card { background: transparent; border: 0; box-shadow: none; padding: 0 0 10px; margin: 0 0 12px; }
+      .oc-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; }
+      .oc-tab, button.oc-tab { background: transparent !important; outline: none !important; -webkit-tap-highlight-color: transparent; }
+      .oc-tab:hover, .oc-tab:focus, .oc-tab:focus-visible, .oc-tab:active, .oc-tab.active,
+      button.oc-tab:hover, button.oc-tab:focus, button.oc-tab:focus-visible, button.oc-tab:active, button.oc-tab.active {
+        background: transparent !important; background-color: transparent !important; outline: none !important;
+      }
+      .oc-tab-num { display: block; margin: 0.25rem 0 0.1rem; font-size: 1.35rem; font-weight: 750; }
+      .oc-tab.active .oc-tab-num { color: inherit; }
+      .oc-tab p { display: block; margin: 0; font-size: 12px; }
+      .sc-table tr.ticket { border: 0; box-shadow: none; padding: 0; background: transparent; }
+      .sc-ver { font-weight: 650; color: #2563eb; }
     `;
   const HTML = `<div class="oc-wrap page xm-page">
-      <section class="oc-hero">
-        <div>
-          <p class="kicker oc-kicker">RELEASE GATE</p>
-          <h1>版本发布中心</h1>
-        </div>
-        <div class="oc-run">
-          <span class="pill run">运行</span>
-          <span class="ver" id="app-version">读取版本中</span>
-          <button type="button" class="act" id="refresh-btn">刷新</button>
-        </div>
+      <section class="oc-hero-card">
+        <section class="oc-hero">
+          <div>
+            <p class="kicker oc-kicker">RELEASE GATE</p>
+            <h1>版本发布中心</h1>
+            <p class="oc-path">待上线 · 版本记录 · 运行日志</p>
+          </div>
+          <div class="oc-run">
+            <span class="pill run">运行 <span class="ver" id="app-version">读取版本中</span></span>
+            <button type="button" class="act secondary" id="refresh-btn">刷新</button>
+          </div>
+        </section>
+        <nav class="oc-tabs" aria-label="版本发布中心页签">
+          <button type="button" class="oc-tab active" data-tab="queue">
+            <h2>待上线</h2>
+            <strong class="oc-tab-num" id="tab-queue-count">—</strong>
+            <p id="tab-queue-sub">待审批</p>
+          </button>
+          <button type="button" class="oc-tab" data-tab="history">
+            <h2>版本记录</h2>
+            <strong class="oc-tab-num" id="tab-history-count">—</strong>
+            <p id="tab-history-sub">个正式版</p>
+          </button>
+          <button type="button" class="oc-tab" data-tab="logs">
+            <h2>运行日志</h2>
+            <strong class="oc-tab-num oc-tab-num-text">流水</strong>
+            <p id="tab-logs-sub">发版流水</p>
+          </button>
+        </nav>
       </section>
-
-      <nav class="oc-tabs" aria-label="版本发布中心页签">
-        <button type="button" class="oc-tab active" data-tab="queue">
-          <h2>待上线</h2>
-          <p>各对话提交的发版队列</p>
-        </button>
-        <button type="button" class="oc-tab" data-tab="history">
-          <h2>版本记录</h2>
-          <p>当前版本 / 回滚</p>
-        </button>
-        <button type="button" class="oc-tab" data-tab="logs">
-          <h2>运行日志</h2>
-          <p>发版流水 / log</p>
-        </button>
-      </nav>
 
       <div id="flash" class="flash" role="status"></div>
       <section class="oc-card panel">
         <div class="pane on" id="pane-queue">
           <h3>待上线</h3>
-          <p class="hint lead">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。版本号由本闸门统一发放，全站一条号 0.1.N-说明，各模块不得自领；同一号段不能跨模块再用。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。整页刷新并读完新数据后才关升级遮罩。有新单据约 15 秒内自动提示，不会自动点通过。待上线、版本记录、运行日志都分页，每页 20 条。</p>
+          <p class="hint lead">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。版本号由本闸门统一发放，全站一条号 0.1.N-说明，各模块不得自领；同一号段不能跨模块再用。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。站点恢复后就地刷新并关升级遮罩，不再整页跳转。有新单据约 15 秒内自动提示，不会自动点通过。待上线、版本记录、运行日志都分页，每页 20 条。版本记录和运行日志按页向服务器取，刷新只读当前页，不再一次拉全表。</p>
           <div class="caps" id="stat-caps"></div>
           <div class="note banner">发布纪律：本页是唯一发版闸门。只执行交来的单据 + 本页「通过」。按提交时间点第 1 位；一把锁，禁止抢发；下一条不会自动发。「帮我上线」无效。新文件只放源目录，不要先拷到线上；点通过才落地。闸门不读 git，也不拉 Cloud 工作区，交单只登记路径。可带 contents（路径→正文）或 ref（分支/提交），闸门会先写入源目录。源目录与线上相同会失败。</div>
           <div id="lock-view" class="lock-box idle">当前空闲，没有发布任务。</div>
@@ -114,13 +162,14 @@
         </div>
         <div class="pane" id="pane-history">
           <h3>版本记录</h3>
-          <p class="hint">各模块当前版本来自最近一次成功发布。下一号由本闸门发放。版本记录只记每次升级的简要内容，从最新到最老，每页 20 条。详细流水在「运行日志」。有升级前快照的单据可以回滚；回滚占用发布锁，不会自动发下一单。</p>
+          <p class="hint">各模块当前版本来自最近一次成功发布。下一号由本闸门发放。版本记录只记每次升级的简要内容，从最新到最老，每页 20 条，按页向服务器取。上方统计已成功落地的版本数，含已回滚。详细流水在「运行日志」。有升级前快照的单据可以回滚；回滚占用发布锁，不会自动发下一单。</p>
+          <div id="history-stats" class="history-stats">已上线发布 <b>0</b> 个版本</div>
           <div id="current-versions" class="caps"></div>
           <div id="history-view"></div>
         </div>
         <div class="pane" id="pane-logs">
           <h3>运行日志</h3>
-          <p class="hint">每张单上的发版流水 log。记录多时分页查看，每页 20 条。</p>
+          <p class="hint">每张单上的发版流水 log。按页向服务器取，每页 20 条，刷新只读当前页。</p>
           <div id="logs-view" class="log-list"></div>
         </div>
       </section>
@@ -128,7 +177,7 @@
 
     <div id="upgrade-mask" aria-live="assertive" aria-modal="true" role="dialog">
       <div class="upgrade-card">
-        <h2 id="upgrade-title">正在升级，请勿关闭</h2>
+        <h2 id="upgrade-title">正在升级，可关闭此层</h2>
         <button type="button" class="act" id="upgrade-dismiss">关闭</button>
         <ol id="upgrade-steps"></ol>
         <div class="upgrade-bar"><i id="upgrade-bar"></i></div>
@@ -143,10 +192,10 @@
       styleEl.textContent = CSS;
       document.head.appendChild(styleEl);
     }
-    if (!document.querySelector('link[href*="/releases.css"]')) {
+    if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=0.1.66";
+      link.href = "/releases.css?v=sc-ui-14";
       document.head.appendChild(link);
     }
   }
@@ -199,6 +248,7 @@
       const PAGE_SIZE = 20;
       const UPGRADE_PENDING_KEY = "oc-after-upgrade";
       let knownQueueIds = null;
+      let lastLock = { locked: false };
       const listPages = { queue: 1, history: 1, logs: 1 };
 
       function setText(idOrEl, text) {
@@ -219,15 +269,16 @@
         window.location.replace("/login");
       }
       async function api(path, options) {
-        const ac = new AbortController();
-        const timer = setTimeout(function () { ac.abort(); }, 10000);
+        const opts = options || {};
+        const skipLoginRedirect = Boolean(opts.skipLoginRedirect);
+        const fetchOpts = Object.assign({}, opts);
+        delete fetchOpts.skipLoginRedirect;
         let res;
         try {
           res = await fetch(path, {
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
-            signal: ac.signal,
-            ...options
+            ...fetchOpts
           });
         } catch (err) {
           if (err && err.name === "AbortError") {
@@ -236,11 +287,11 @@
             throw timeoutErr;
           }
           throw err;
-        } finally {
-          clearTimeout(timer);
         }
         if (res.status === 401) {
-          goLogin();
+          if (!skipLoginRedirect) {
+            goLogin();
+          }
           const err = new Error("未登录");
           err.status = 401;
           throw err;
@@ -388,10 +439,11 @@
       }
 
       function showUpgrade(keys, active) {
+        window.__xmUpgradeCancel = false;
         const el = pinUpgradeMask();
         clearShellPending();
-        paintMask(el, false);
-        setUpgradeTitle("正在升级，请勿关闭");
+        paintMask(el, true);
+        setUpgradeTitle("正在升级，可关闭此层");
         const upgradeLog = maskPart("upgrade-log");
         if (upgradeLog) {
           upgradeLog.hidden = true;
@@ -401,16 +453,12 @@
         if (upgradeEscapeTimer) {
           clearTimeout(upgradeEscapeTimer);
         }
-        upgradeEscapeTimer = setTimeout(function () {
-          const live = pinUpgradeMask();
-          if (live && live.classList.contains("show") && !live.classList.contains("can-close")) {
-            setUpgradeTitle("仍在处理，可关闭此层");
-            paintMask(live, true);
-          }
-        }, 8000);
+        upgradeEscapeTimer = 0;
       }
 
       function hideUpgrade() {
+        window.__xmUpgradeCancel = true;
+        window.__xmUpgradePass = null;
         if (upgradeEscapeTimer) {
           clearTimeout(upgradeEscapeTimer);
           upgradeEscapeTimer = 0;
@@ -421,7 +469,7 @@
           el.classList.remove("can-close");
           el.style.display = "none";
         }
-        setUpgradeTitle("正在升级，请勿关闭");
+        setUpgradeTitle("正在升级，可关闭此层");
       }
 
       function failUpgrade(keys, message) {
@@ -431,7 +479,8 @@
           clearTimeout(upgradeEscapeTimer);
           upgradeEscapeTimer = 0;
         }
-        setUpgradeTitle("升级未完成");
+        window.__xmUpgradePass = null;
+        setUpgradeTitle("升级未完成，可关闭后点下一单");
         renderUpgradeSteps(keys, "done", "bad");
         const upgradeLog = maskPart("upgrade-log");
         if (upgradeLog) {
@@ -439,6 +488,9 @@
           upgradeLog.textContent = message;
         }
         paintMask(el, true);
+        upgradeEscapeTimer = setTimeout(function () {
+          hideUpgrade();
+        }, 2500);
       }
 
       function finishUpgrade(keys, message) {
@@ -492,35 +544,142 @@
         }
       }
 
+      async function probePage() {
+        const ac = new AbortController();
+        const timer = setTimeout(function () { ac.abort(); }, 8000);
+        try {
+          const res = await fetch("/releases?probe=" + Date.now(), {
+            credentials: "same-origin",
+            cache: "no-store",
+            headers: { Accept: "text/html" },
+            signal: ac.signal
+          });
+          if (res.status !== 200) {
+            return false;
+          }
+          const text = await res.text();
+          return text.indexOf("releases.js") !== -1 || text.indexOf("xm-releases-boot") !== -1 || text.indexOf("upgrade-mask") !== -1;
+        } catch {
+          return false;
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+
+      async function waitUntilSiteReady(needRestart) {
+        if (!needRestart) {
+          return probeHealth();
+        }
+        let okStreak = 0;
+        for (let i = 0; i < 40; i += 1) {
+          const healthy = await probeHealth();
+          const pageOk = healthy ? await probePage() : false;
+          if (healthy && pageOk) {
+            okStreak += 1;
+            if (okStreak >= 2) {
+              return true;
+            }
+          } else {
+            okStreak = 0;
+          }
+          await sleep(700);
+        }
+        return false;
+      }
+
+      async function finishUpgradeInPlace(version) {
+        clearShellPending();
+        renderUpgradeSteps(["reload", "done"], "done", "ok");
+        setUpgradeTitle("升级完成");
+        try {
+          await refresh({ skipLoginRedirect: true });
+        } catch (err) {
+          flash((err && err.message) || "刷新失败", true);
+        }
+        flash("发布成功 · " + (version || ""));
+        hideUpgrade();
+        consumePendingUpgrade();
+      }
+
+      function isTransientPassError(err) {
+        const status = err && err.status;
+        return !status || status === 408 || status === 502 || status === 503 || status >= 500;
+      }
+
+      function isIgnorableConfirmConflict(err, ticket, sawPublishing) {
+        if (!err || err.status === 401) {
+          return false;
+        }
+        if (ticket && (ticket.status === "publishing" || ticket.status === "success")) {
+          return true;
+        }
+        if (!ticket) {
+          return Boolean(sawPublishing || err.status === 409);
+        }
+        return false;
+      }
+
+      function confirmNeverStarted(confirmErr, confirmBody, ticket, sawPublishing) {
+        if (sawPublishing) {
+          return false;
+        }
+        if (ticket && (ticket.status === "publishing" || ticket.status === "success" || ticket.status === "failed")) {
+          return false;
+        }
+        if (confirmErr) {
+          return true;
+        }
+        if (confirmBody && ticket && ticket.status === "queued") {
+          return true;
+        }
+        return false;
+      }
+
       async function loadTicket(id) {
-        const all = await api("/api/releases");
-        return (all.items || []).find(function (item) { return item.id === id; }) || null;
+        const one = await api("/api/releases/item/" + encodeURIComponent(id), { skipLoginRedirect: true });
+        return (one && one.item) || null;
       }
 
       async function runPass(id, needRestart, version) {
+        const stale = window.__xmUpgradePass;
+        if (stale && Date.now() - (stale.started || 0) < 20000) {
+          flash("有发布正在进行，请等当前这一单完成。", true);
+          return "busy";
+        }
+        window.__xmUpgradePass = null;
         const keys = stepKeys(needRestart);
+        window.__xmUpgradePass = { id: id, started: Date.now() };
         showUpgrade(keys, "agree");
         let confirmErr = null;
         let confirmBody = null;
+        let confirmSettled = false;
+        let sawPublishing = false;
+        let queuedAfterConfirm = 0;
         api("/api/releases/" + id + "/confirm", {
           method: "POST",
           body: "{}"
         }).then(function (body) {
           confirmBody = body;
+          confirmSettled = true;
         }).catch(function (err) {
           confirmErr = err;
+          confirmSettled = true;
         });
         renderUpgradeSteps(keys, "sync");
         const deadline = Date.now() + 120000;
         let lastHealth = "尚未返回 200";
         let ticket = null;
+        try {
         while (Date.now() < deadline) {
+          if (window.__xmUpgradeCancel) {
+            hideUpgrade();
+            return "cancelled";
+          }
           pinUpgradeMask();
-          if (confirmErr && confirmErr.status && confirmErr.status !== 502 && confirmErr.status !== 503 && confirmErr.status < 500) {
-            const msg = (confirmErr.status || "") + " " + (confirmErr.message || "通过失败");
-            failUpgrade(keys, msg);
-            flash(msg, true);
-            return "failed";
+          if (confirmErr && confirmErr.status === 401) {
+            failUpgrade(keys, "401 未登录");
+            flash("未登录", true);
+            return "need-login";
           }
           try {
             ticket = await loadTicket(id);
@@ -530,10 +689,34 @@
           if (ticket && ticket.status === "failed") {
             failUpgrade(keys, ticket.log || "发版失败");
             flash(ticket.log || "发版失败", true);
+            await refreshAfterFailedPass(id);
             return "failed";
           }
           if (ticket && ticket.status === "publishing") {
+            sawPublishing = true;
+            queuedAfterConfirm = 0;
             renderUpgradeSteps(keys, needRestart ? "restart" : "sync");
+          }
+          if (confirmSettled && confirmNeverStarted(confirmErr, confirmBody, ticket, sawPublishing)) {
+            if (ticket && ticket.status === "queued") {
+              queuedAfterConfirm += 1;
+            }
+            if (confirmErr || queuedAfterConfirm >= 2) {
+              const msg = confirmErr
+                ? ((confirmErr.status || "") + " " + (confirmErr.message || "通过失败"))
+                : "通过没有真正开始，单据还在待上线。遮罩已打开，可直接点下一单。";
+              failUpgrade(keys, msg);
+              flash(msg, true);
+              await refreshAfterFailedPass("");
+              return "failed";
+            }
+          }
+          if (confirmErr && !isTransientPassError(confirmErr) && !isIgnorableConfirmConflict(confirmErr, ticket, sawPublishing)) {
+            const msg = (confirmErr.status || "") + " " + (confirmErr.message || "通过失败");
+            failUpgrade(keys, msg);
+            flash(msg, true);
+            await refreshAfterFailedPass(ticket && ticket.status === "failed" ? id : "");
+            return "failed";
           }
           if (ticket && ticket.status === "success") {
             renderUpgradeSteps(keys, "health");
@@ -544,8 +727,9 @@
                   version: version || ticket.version,
                   id: id
                 }));
-                window.location.replace("/releases?reloaded=" + Date.now());
-                return "reloading";
+                await waitUntilSiteReady(needRestart);
+                await finishUpgradeInPlace(version || ticket.version);
+                return "landed";
               }
               lastHealth = "健康检查尚未 200";
             } catch (err) {
@@ -559,7 +743,11 @@
           : ((ticket && ticket.log) ? ticket.log + "\n" : "") + "健康检查超时：" + lastHealth;
         failUpgrade(keys, timeoutMsg);
         flash("升级未完成：" + lastHealth, true);
+        await refreshAfterFailedPass(ticket && ticket.status === "failed" ? id : "");
         return "failed";
+        } finally {
+          window.__xmUpgradePass = null;
+        }
       }
 
       function tickClock() {
@@ -570,22 +758,70 @@
         });
       }
 
-      function renderStats(items) {
+      function activeTabName() {
+        const tab = document.querySelector(".oc-tab.active");
+        return (tab && tab.getAttribute("data-tab")) || "queue";
+      }
+
+      function countsFromBoard(payload) {
+        if (payload && typeof payload.queued === "number") {
+          return payload;
+        }
+        const items = (payload && payload.items) || [];
+        const summary = { queued: 0, approved: 0, publishing: 0, failed: 0, success: 0, logs: 0, rolledBack: 0 };
+        items.forEach(function (item) {
+          if (item.status === "queued") summary.queued += 1;
+          else if (item.status === "approved") summary.approved += 1;
+          else if (item.status === "publishing") summary.publishing += 1;
+          else if (item.status === "failed") summary.failed += 1;
+          else if (item.status === "success") {
+            summary.success += 1;
+            if (item.rolledBack) summary.rolledBack += 1;
+          }
+          if (item.log) summary.logs += 1;
+        });
+        return summary;
+      }
+
+      function renderStats(summary, ready) {
         const caps = document.getElementById("stat-caps");
-        if (!caps) {
+        const counts = countsFromBoard(summary);
+        const queued = Number(counts && counts.queued) || 0;
+        const approved = Number(counts && counts.approved) || 0;
+        const publishing = Number(counts && counts.publishing) || 0;
+        const failed = Number(counts && counts.failed) || 0;
+        const success = Number(counts && counts.success) || 0;
+        const runVer = ready && ready.version ? String(ready.version) : "";
+        if (caps) {
+          caps.innerHTML =
+            '<span class="cap wait"><b>' + queued + "</b>待主脑</span>" +
+            '<span class="cap ok"><b>' + approved + "</b>已同意</span>" +
+            '<span class="cap busy"><b>' + publishing + "</b>发布中</span>" +
+            '<span class="cap fail"><b>' + failed + "</b>失败</span>" +
+            '<span class="cap done"><b>' + success + "</b>近已上线</span>" +
+            (runVer ? '<span class="cap done"><b>' + esc(runVer) + "</b>运行版本</span>" : "");
+        }
+        setText("tab-queue-count", String(queued));
+        setText("tab-queue-sub", queued + " 待审批");
+        setText("tab-history-count", String(success));
+        setText("tab-history-sub", success + " 个正式版");
+        setText("tab-logs-sub", "发版流水");
+      }
+
+      function successReleases(items) {
+        return (items || []).filter(function (item) { return item.status === "success"; });
+      }
+
+      function renderHistoryStats(summary) {
+        const el = document.getElementById("history-stats");
+        if (!el) {
           return;
         }
-        const queued = countBy(items, "queued");
-        const approved = countBy(items, "approved");
-        const publishing = countBy(items, "publishing");
-        const failed = countBy(items, "failed");
-        const success = countBy(items, "success");
-        caps.innerHTML =
-          '<span class="cap wait"><b>' + queued + "</b>待主脑</span>" +
-          '<span class="cap ok"><b>' + approved + "</b>已同意</span>" +
-          '<span class="cap busy"><b>' + publishing + "</b>发布中</span>" +
-          '<span class="cap fail"><b>' + failed + "</b>失败</span>" +
-          '<span class="cap done"><b>' + success + "</b>近已上线</span>";
+        const counts = countsFromBoard(summary);
+        const success = Number(counts && counts.success) || 0;
+        const rolled = Number(counts && counts.rolledBack) || 0;
+        el.innerHTML = "已上线发布 <b>" + success + "</b> 个版本" +
+          (rolled ? "（其中 " + rolled + " 个已回滚）" : "");
       }
 
       function renderLock(lock, ready) {
@@ -595,7 +831,7 @@
         }
         if (!lock.locked) {
           el.className = "lock-box idle";
-          el.textContent = "当前空闲。一把锁，点一单才发一单。";
+          el.textContent = "确认发布后先启动新版本，健康检查通过再切换。当前空闲。一把锁，点一单才发一单。";
         } else {
           const cur = lock.current || {};
           el.className = "lock-box";
@@ -684,7 +920,9 @@
           return;
         }
         const paged = paginate(items, "queue");
-        el.innerHTML = paged.slice.map(function (item, index) {
+        el.innerHTML =
+          "<table class=\"sc-table\"><thead><tr><th>位次</th><th>模块</th><th>改动</th><th>版本</th><th>状态</th><th>操作</th></tr></thead><tbody>" +
+          paged.slice.map(function (item, index) {
           const seq = item.queueIndex || (paged.from + index);
           const isHead = Number(seq) === 1;
           let confirmBtn;
@@ -696,22 +934,27 @@
             confirmBtn = "<button class=\"act\" data-act=\"pass\">通过</button>";
           }
           return (
-            "<article class=\"ticket\" data-id=\"" + esc(item.id) + "\" data-restart=\"" + (item.restart ? "1" : "0") + "\" data-version=\"" + esc(item.version) + "\">" +
-            "<h4>第 " + seq + " 位 · " + esc(item.module) + " " + esc(item.version) + demoBadge(item) + "</h4>" +
-            "<dl>" +
-            "<dt>来自对话</dt><dd>" + esc(item.source || item.applicant || "—") + "</dd>" +
-            "<dt>更新了什么</dt><dd>" + esc(item.summary) + "</dd>" +
-            "<dt>文件</dt><dd>" + fileList(item) + "</dd>" +
-            (item.gitRef ? "<dt>git ref</dt><dd>" + esc(item.gitRef) + "</dd>" : "") +
-            "<dt>验收</dt><dd>" + esc(item.acceptance || "—") + "</dd>" +
-            "<dt>排队序号</dt><dd>" + seq + "</dd>" +
-            "</dl>" +
-            "<div class=\"row\">" +
+            "<tr class=\"ticket\" data-id=\"" + esc(item.id) + "\" data-module=\"" + esc(item.module) + "\" data-restart=\"" + (item.restart ? "1" : "0") + "\" data-version=\"" + esc(item.version) + "\">" +
+            "<td class=\"sc-seq\">第 " + seq + " 位</td>" +
+            "<td>" + esc(item.module) + "</td>" +
+            "<td class=\"sc-change\">" +
+            "<div class=\"sc-sum\">" + esc(item.summary) + demoBadge(item) + "</div>" +
+            "<div class=\"sc-meta\">来自对话 · " + esc(item.source || item.applicant || "—") + "</div>" +
+            fileList(item) +
+            (item.gitRef ? "<div class=\"sc-meta\">git ref · " + esc(item.gitRef) + "</div>" : "") +
+            "<div class=\"sc-meta\">验收 · " + esc(item.acceptance || "—") + "</div>" +
+            "<div class=\"sc-meta\">排队序号 · " + seq + "</div>" +
+            "</td>" +
+            "<td><div class=\"sc-ver\">" + esc(item.version) + "</div>" +
+            "<div class=\"sc-meta\">" + (item.restart ? "含后端" : "仅页面") + "</div></td>" +
+            "<td>" + (isHead ? "待上线·发布包已就绪<br>请先点" : "待上线·排队中") + "</td>" +
+            "<td><div class=\"row\">" +
             confirmBtn +
             "<button class=\"act danger\" data-act=\"reject\">驳回</button>" +
-            "</div></article>"
+            "</div></td></tr>"
           );
-        }).join("") + renderPager("queue", paged);
+        }).join("") +
+          "</tbody></table>" + renderPager("queue", paged);
       }
 
       function newestFirst(a, b) {
@@ -720,17 +963,40 @@
         );
       }
 
-      function renderHistory(items, locked) {
+      function pageInfoFromBoard(result, key) {
+        if (result && result.total != null) {
+          const total = Number(result.total) || 0;
+          const pageCount = Math.max(1, Number(result.pageCount) || 1);
+          const page = Math.min(Math.max(1, Number(result.page) || listPages[key] || 1), pageCount);
+          listPages[key] = page;
+          const start = (page - 1) * PAGE_SIZE;
+          const slice = result.items || [];
+          return {
+            slice: slice,
+            page,
+            pageCount,
+            total,
+            from: total ? start + 1 : 0,
+            to: Math.min(start + slice.length, total)
+          };
+        }
+        const raw = (result && result.items) || [];
+        const list = key === "history"
+          ? raw.filter(function (item) { return item.status === "success"; }).sort(newestFirst)
+          : raw.filter(function (item) { return item.log; }).sort(newestFirst);
+        return paginate(list, key);
+      }
+
+      function renderHistory(result, locked) {
         const el = document.getElementById("history-view");
         if (!el) {
           return;
         }
-        const success = items.filter(function (item) { return item.status === "success"; }).slice().sort(newestFirst);
-        if (!success.length) {
+        const paged = pageInfoFromBoard(result, "history");
+        if (!paged.total) {
           el.innerHTML = '<div class="empty">还没有成功发布的版本记录</div>';
           return;
         }
-        const paged = paginate(success, "history");
         el.innerHTML =
           "<table><thead><tr><th>版本</th><th>模块</th><th>摘要</th><th>时间</th><th>回滚</th></tr></thead><tbody>" +
           paged.slice.map(function (item) {
@@ -752,17 +1018,16 @@
           "</tbody></table>" + renderPager("history", paged);
       }
 
-      function renderLogs(items) {
+      function renderLogs(result) {
         const el = document.getElementById("logs-view");
         if (!el) {
           return;
         }
-        const rows = items.filter(function (item) { return item.log; }).slice().sort(newestFirst);
-        if (!rows.length) {
+        const paged = pageInfoFromBoard(result, "logs");
+        if (!paged.total) {
           el.innerHTML = '<div class="empty">暂无发版流水</div>';
           return;
         }
-        const paged = paginate(rows, "logs");
         el.innerHTML = paged.slice.map(function (item) {
           return (
             "<article class=\"log-item\">" +
@@ -774,32 +1039,114 @@
         }).join("") + renderPager("logs", paged);
       }
 
-      async function refresh() {
+      async function refreshHistory(apiOpts, locked) {
+        const el = document.getElementById("history-view");
+        if (el) {
+          el.innerHTML = '<div class="empty">正在读取本页版本记录…</div>';
+        }
+        const result = await api("/api/releases/history?page=" + listPages.history + "&limit=" + PAGE_SIZE, apiOpts);
+        renderHistory(result, locked);
+      }
+
+      async function refreshLogs(apiOpts) {
+        const el = document.getElementById("logs-view");
+        if (el) {
+          el.innerHTML = '<div class="empty">正在读取本页运行日志…</div>';
+        }
+        const result = await api("/api/releases/logs?page=" + listPages.logs + "&limit=" + PAGE_SIZE, apiOpts);
+        renderLogs(result);
+      }
+
+      async function refresh(opts) {
+        const apiOpts = opts && opts.skipLoginRedirect ? { skipLoginRedirect: true } : {};
+        const tab = (opts && opts.tab) || activeTabName();
         clearShellPending();
-        const [all, queue, lock, versions, ready, me] = await Promise.all([
-          api("/api/releases"),
-          api("/api/releases/queue"),
-          api("/api/releases/lock"),
-          api("/api/releases/versions"),
-          api("/api/releases/readyz"),
-          api("/api/auth/me")
+        function settledValue(result, fallback) {
+          return result && result.status === "fulfilled" ? result.value : fallback;
+        }
+        const settled = await Promise.allSettled([
+          api("/api/releases/queue", apiOpts),
+          api("/api/releases/lock", apiOpts),
+          api("/api/releases/readyz", apiOpts),
+          api("/api/auth/me", apiOpts),
+          api("/api/releases/summary", apiOpts),
+          api("/api/releases/versions", apiOpts)
         ]);
-        const items = all.items || [];
+        const failed = settled.filter(function (result) { return result.status === "rejected"; });
+        if (settled[0].status === "rejected") {
+          throw settled[0].reason;
+        }
+        const queue = settledValue(settled[0], { items: [] });
+        const lock = settledValue(settled[1], { locked: false });
+        const ready = settledValue(settled[2], {});
+        const me = settledValue(settled[3], {});
+        const summary = settledValue(settled[4], {});
+        const versions = settledValue(settled[5], { current: [] });
+        lastLock = lock;
         setText("who", me.displayName || me.username || "罗成");
-        renderStats(items);
         renderLock(lock, ready);
+        renderStats(summary, ready);
+        renderHistoryStats(summary);
         renderCurrentVersions(versions);
-        const queued = queue.items || [];
+        const dropIds = (opts && opts.dropIds) || [];
+        const queued = (queue.items || []).filter(function (item) {
+          return dropIds.indexOf(item.id) < 0;
+        });
         knownQueueIds = queued.map(function (item) { return item.id; });
         renderQueue(queued, lock.locked, versions);
-        renderHistory(items, lock.locked);
-        renderLogs(items);
+        if (failed.length) {
+          flash((failed[0].reason && failed[0].reason.message) || "部分刷新失败", true);
+        }
+        try {
+          if (tab === "history") {
+            await refreshHistory(apiOpts, lock.locked);
+          } else if (tab === "logs") {
+            await refreshLogs(apiOpts);
+          }
+        } catch (err) {
+          flash(err.message, true);
+        }
         return lock;
+      }
+
+      async function refreshAfterFailedPass(failedId) {
+        try {
+          for (let i = 0; i < 10; i += 1) {
+            await refresh({
+              skipLoginRedirect: true,
+              dropIds: failedId ? [failedId] : []
+            });
+            if (!failedId || knownQueueIds.indexOf(failedId) < 0) {
+              break;
+            }
+            await sleep(250);
+          }
+          hideUpgrade();
+          const head = document.querySelector("#queue-view [data-id]");
+          const headId = head && head.getAttribute("data-id");
+          const headLabel = head
+            ? ((head.getAttribute("data-module") || "") + " " + (head.getAttribute("data-version") || "")).trim()
+            : "";
+          const leftQueue = !failedId || (headId && headId === failedId);
+          flash(
+            leftQueue
+              ? (headLabel
+                ? "发版未完成。第 1 位仍是 " + headLabel + "。遮罩已关，可再点通过或先点后面能点的单。"
+                : "发版未完成。遮罩已关。")
+              : (headLabel
+                ? "发版失败，该单已离开待上线。现在第 1 位是 " + headLabel + "。请点通过或驳回，后面的单不会自动发。"
+                : "发版失败，该单已离开待上线。待上线已空。"),
+            true
+          );
+        } catch (err) {
+          hideUpgrade();
+          flash((err && err.message) || "刷新队列失败", true);
+        }
       }
 
       async function watchIncoming() {
         const live = maskEl();
-        if (live && live.classList.contains("show")) {
+        if (live && live.classList.contains("show") && !live.classList.contains("can-close")) {
           return;
         }
         try {
@@ -836,7 +1183,17 @@
           document.querySelectorAll(".pane").forEach(function (pane) {
             pane.classList.toggle("on", pane.id === "pane-" + name);
           });
-          setText(crumb, tabTitles[name] || "版本发布中心");
+          if (tabTitles[name]) {
+            document.title = "版本发布中心 · " + (name === "queue" ? "待上线" : name === "history" ? "版本记录" : "运行日志");
+          }
+          if (name === "history" || name === "logs") {
+            refresh({ tab: name }).catch(function (err) {
+              flash(err.message, true);
+            });
+          }
+          if (typeof tab.blur === "function") {
+            tab.blur();
+          }
         });
       });
 
@@ -844,6 +1201,8 @@
       window.__xmPageTimers = window.__xmPageTimers || [];
       window.__xmPageTimers.push(setInterval(tickClock, 1000));
 
+      if (!window.__xmReleasesClicks) {
+      window.__xmReleasesClicks = true;
       document.body.addEventListener("click", async function (event) {
         const pagerBtn = event.target.closest(".oc-pager [data-page]");
         if (pagerBtn && !pagerBtn.disabled) {
@@ -873,9 +1232,16 @@
         if (!id) return;
         const act = btn.getAttribute("data-act");
         if (act === "pass") {
-          showUpgrade(stepKeys(card.getAttribute("data-restart") === "1"), "agree");
+          const pass = window.__xmUpgradePass;
+          if (pass && Date.now() - (pass.started || 0) < 20000) {
+            flash("有发布正在进行，请等当前这一单完成。可先点关闭。", true);
+            return;
+          }
+          window.__xmUpgradePass = null;
+          btn.disabled = true;
+        } else {
+          btn.disabled = true;
         }
-        btn.disabled = true;
         try {
           if (act === "reject") {
             const reason = window.prompt("请填写驳回原因（必填）");
@@ -893,9 +1259,15 @@
             const needRestart = card.getAttribute("data-restart") === "1";
             const version = card.getAttribute("data-version") || "";
             const passResult = await runPass(id, needRestart, version);
-            if (passResult === "reloading") return;
-            if (passResult === "failed") {
+            if (passResult === "reloading" || passResult === "landed") return;
+            if (passResult === "busy" || passResult === "cancelled") {
+              hideUpgrade();
               btn.disabled = false;
+              return;
+            }
+            if (passResult === "failed" || passResult === "need-login") {
+              btn.disabled = false;
+              return;
             }
           } else if (act === "rollback") {
             if (!window.confirm("确认按升级前快照回滚该版本的文件？不会自动发下一单。")) {
@@ -910,11 +1282,14 @@
           }
           await refresh();
         } catch (err) {
-          failUpgrade(stepKeys(true), (err.status || "") + " " + (err.message || "操作失败"));
+          if (act !== "pass") {
+            failUpgrade(stepKeys(true), (err.status || "") + " " + (err.message || "操作失败"));
+          }
           flash((err.status || "") + " " + err.message, true);
-          await refresh();
+          btn.disabled = false;
         }
       });
+      }
 
       const refreshBtn = document.getElementById("refresh-btn");
       if (refreshBtn) refreshBtn.addEventListener("click", async function () {
@@ -927,6 +1302,8 @@
       });
 
       (async function bootReleases() {
+        window.__xmUpgradePass = null;
+        window.__xmUpgradeCancel = false;
         pinUpgradeMask();
         clearShellPending();
         const pending = consumePendingUpgrade();
@@ -964,11 +1341,31 @@
           event.preventDefault();
           event.stopPropagation();
           hideUpgrade();
+          refresh({ skipLoginRedirect: true }).catch(function (err) {
+            flash((err && err.message) || "刷新队列失败", true);
+          });
           return;
         }
-        if (event.target === live && live.classList.contains("can-close")) {
+        if (event.target === live) {
           hideUpgrade();
+          refresh({ skipLoginRedirect: true }).catch(function (err) {
+            flash((err && err.message) || "刷新队列失败", true);
+          });
         }
+      });
+      document.addEventListener("keydown", function (event) {
+        if (event.key !== "Escape") {
+          return;
+        }
+        const live = maskEl();
+        if (!live || !live.classList.contains("show")) {
+          return;
+        }
+        event.preventDefault();
+        hideUpgrade();
+        refresh({ skipLoginRedirect: true }).catch(function (err) {
+          flash((err && err.message) || "刷新队列失败", true);
+        });
       });
     
       } finally {
@@ -978,6 +1375,10 @@
         restoreDocEvents();
       }
       return function unmount() {
+        window.__xmReleasesClicks = false;
+        window.__xmUpgradeCancel = true;
+        window.__xmUpgradePass = null;
+        hideUpgrade();
         timers.forEach(function (item) {
           if (item.kind === "interval") {
             clearInterval(item.id);
@@ -995,4 +1396,34 @@
       };
     }
   };
+
+  function autoMountReleases() {
+    const root = document.getElementById("xm-content") || document.querySelector(".xm-content");
+    const mod = window.XmModules && window.XmModules["/releases"];
+    if (!root || !mod || typeof mod.mount !== "function") {
+      return false;
+    }
+    if (root.getAttribute("data-xm-rel-mounted") === "1") {
+      return true;
+    }
+    root.setAttribute("data-xm-rel-mounted", "1");
+    mod.mount(root);
+    return true;
+  }
+  (function bootMount() {
+    let tries = 0;
+    function tick() {
+      if (autoMountReleases()) {
+        return;
+      }
+      tries += 1;
+      if (tries < 40) {
+        setTimeout(tick, 50);
+      }
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", tick);
+    }
+    tick();
+  })();
 })();
