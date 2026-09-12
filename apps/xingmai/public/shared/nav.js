@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.139 */
+/* xm-fast-shell 0.1.140 */
 (function () {
-  const ASSET_VER = "0.1.139";
+  const ASSET_VER = "0.1.140";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -1025,6 +1025,9 @@
       root.removeAttribute("data-xm-mounted");
       return;
     }
+    if (key === "/home") {
+      ensurePhonePanelCss();
+    }
     showPane(current);
     revealTabBar();
     pinHomeTab();
@@ -1122,19 +1125,34 @@
     }
   }
 
-  function ensurePhonePanelCss() {
-    if (document.getElementById("xm-phone-panel-css")) {
-      return;
-    }
-    const style = document.createElement("style");
-    style.id = "xm-phone-panel-css";
-    style.textContent =
+  function phonePanelCssText() {
+    return (
       "@media (max-width: 880px){" +
       "html:has(#xm-hm),html:has(#xm-hm) body{height:100dvh!important;max-height:100dvh!important;overflow:hidden!important}" +
       "html:has(#xm-hm) .xm-shell{height:100dvh!important;max-height:100dvh!important}" +
       "html:has(#xm-hm) .xm-workspace>.xm-pane.is-active{overflow:auto!important;-webkit-overflow-scrolling:touch}" +
-      "}";
-    document.head.appendChild(style);
+      "#xm-hm .xm-hm-bar{display:flex!important;flex-direction:column!important;flex-wrap:nowrap!important;align-items:stretch!important;justify-content:flex-start!important;gap:8px!important}" +
+      "#xm-hm .xm-hm-views{display:flex!important;flex-wrap:nowrap!important;width:100%!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch;gap:4px!important}" +
+      "#xm-hm .xm-hm-views button,#xm-hm .xm-hm-set{flex:1 0 auto!important;white-space:nowrap!important;padding:5px 8px!important;font-size:13px!important}" +
+      "#xm-hm .xm-hm-ranges{display:flex!important;flex-wrap:nowrap!important;width:100%!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch;gap:6px!important}" +
+      "#xm-hm .xm-hm-ranges button,#xm-hm .xm-hm-dates{flex:0 0 auto!important;white-space:nowrap!important}" +
+      "#xm-hm .xm-hm-kpis,#xm-hm .xm-hm-team-kpis,#xm-hm .xm-hm-live-cards{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important}" +
+      "#xm-hm .xm-hm-card{min-height:0!important;padding:8px!important}" +
+      "#xm-hm .xm-hm-card-head span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}" +
+      "#xm-hm .xm-hm-value{margin-top:6px!important;font-size:16px!important}" +
+      "#xm-hm .xm-hm-cal{left:8px;right:8px;width:auto}" +
+      "}"
+    );
+  }
+
+  function ensurePhonePanelCss() {
+    let style = document.getElementById("xm-phone-panel-css");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "xm-phone-panel-css";
+    }
+    style.textContent = phonePanelCssText();
+    document.documentElement.appendChild(style);
   }
 
   function ensurePhoneChrome() {
