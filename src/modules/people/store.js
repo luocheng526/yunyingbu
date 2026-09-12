@@ -237,7 +237,78 @@ export function orgLineOf(person = {}) {
         ? ""
         : line.manager;
   }
-  return line;
+  return {
+    director: pickStoredLine(person, ["director"], line.director),
+    manager: pickStoredLine(person, ["lineManager", "manager"], line.manager),
+    supervisor: pickStoredLine(person, ["supervisor"], line.supervisor),
+    operator: pickStoredLine(person, ["operator"], line.operator),
+    assistant: pickStoredLine(person, ["assistant"], line.assistant)
+  };
+}
+
+function pickStoredLine(person, keys, derived) {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(person, key) && person[key] != null) {
+      return String(person[key]);
+    }
+  }
+  return derived;
+}
+
+function stampOrgLine(person, line, options = {}) {
+  for (const key of ["director", "lineManager", "supervisor", "operator", "assistant"]) {
+    const value = line[key];
+    if (options.skipEmpty && !String(value || "").trim()) {
+      continue;
+    }
+    person[key] = value;
+  }
+}
+
+function applyLinePatch(found, input) {
+  const aliases = [
+    "director",
+    "lineManager",
+    "supervisor",
+    "operator",
+    "assistant",
+    "manager",
+    "总监",
+    "经理",
+    "主管",
+    "储备",
+    "运营",
+    "助理",
+    "主管/储备"
+  ];
+  if (!aliases.some((key) => Object.prototype.hasOwnProperty.call(input, key))) {
+    return;
+  }
+  const current = orgLineOf(found);
+  const applied = applyOrgLine({
+    name: found.name,
+    role: found.role,
+    center: found.center,
+    department: found.department,
+    director: current.director,
+    lineManager: current.manager,
+    supervisor: current.supervisor,
+    operator: current.operator,
+    assistant: current.assistant,
+    ...input,
+    name: found.name
+  });
+  if (applied.role) {
+    found.role = applied.role;
+  }
+  if (applied.center) {
+    found.center = applied.center;
+  }
+  if (applied.department) {
+    found.department = applied.department;
+  }
+  found.managerId = applied.managerId;
+  stampOrgLine(found, applied);
 }
 
 function inferRoleFromLine(name, line, fallback) {
@@ -448,6 +519,7 @@ export function createPerson(input) {
     username: usernameRaw || name,
     password: passwordRaw || INITIAL_PASSWORD
   };
+  stampOrgLine(person, line, { skipEmpty: true });
   people.push(person);
   rememberLogin(person);
   return { ok: true, person: presentPerson(person) };
@@ -504,6 +576,7 @@ export function importPeople(rows) {
       found.center = center;
       found.department = department || found.department || center;
       found.managerId = managerId;
+      stampOrgLine(found, org, { skipEmpty: true });
       rememberLogin(withLogin(found));
       updated += 1;
       return;
@@ -516,7 +589,12 @@ export function importPeople(rows) {
       department,
       managerId,
       username,
-      password
+      password,
+      director: org.director,
+      lineManager: org.lineManager,
+      supervisor: org.supervisor,
+      operator: org.operator,
+      assistant: org.assistant
     });
     if (!createdRow.ok) {
       failed.push({ line, error: createdRow.error });
@@ -570,6 +648,7 @@ export function patchPerson(id, input) {
   if (typeof input.role === "string" && input.role.trim()) {
     found.role = input.role.trim();
   }
+  applyLinePatch(found, input);
   if (
     Object.prototype.hasOwnProperty.call(input, "username") ||
     Object.prototype.hasOwnProperty.call(input, "password") ||

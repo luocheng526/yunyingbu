@@ -15,7 +15,7 @@ import {
   reconcilePeople,
   removePeople
 } from "./store.js";
-import { scopeOf } from "./org-acl.js";
+import { canEditRoster, scopeOf } from "./org-acl.js";
 import {
   STORE_IMPORT_HEADERS,
   createOrgStore,
@@ -69,6 +69,15 @@ export const PEOPLE_CHARTER = {
   },
   rule: "智能体是只读调用方。在职与店权只认花名册和管辖。"
 };
+
+async function requireRosterEditor(req, res) {
+  const actor = await resolveActor(req);
+  if (!canEditRoster(actor)) {
+    res.status(403).json({ ok: false, error: "只有罗成、韩梦凯、沈子晗能改成员" });
+    return null;
+  }
+  return actor;
+}
 
 function sendResult(res, result, created) {
   if (!result.ok) {
@@ -222,10 +231,13 @@ peopleRouter.get("/reconcile", (_req, res) => {
   res.json({ ok: true, ...reconcilePeople() });
 });
 
-peopleRouter.get("/", (_req, res) => {
+peopleRouter.get("/", async (req, res) => {
+  const actor = await resolveActor(req);
   res.json({
     ok: true,
     demo: true,
+    actor,
+    canEdit: canEditRoster(actor),
     charter: PEOPLE_CHARTER,
     centers: CENTERS,
     posts: POSTS,
@@ -246,25 +258,40 @@ peopleRouter.get("/template", (_req, res) => {
   res.send(csv);
 });
 
-peopleRouter.post("/import", (req, res) => {
+peopleRouter.post("/import", async (req, res) => {
+  if (!(await requireRosterEditor(req, res))) {
+    return;
+  }
   const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
   sendResult(res, importPeople(rows), false);
 });
 
-peopleRouter.patch("/passwords", (req, res) => {
+peopleRouter.patch("/passwords", async (req, res) => {
+  if (!(await requireRosterEditor(req, res))) {
+    return;
+  }
   const body = req.body || {};
   sendResult(res, patchPeoplePasswords(body.ids, body.password), false);
 });
 
 peopleRouter.post("/remove", async (req, res) => {
+  if (!(await requireRosterEditor(req, res))) {
+    return;
+  }
   sendResult(res, await removePeople(req.body?.ids), false);
 });
 
-peopleRouter.patch("/:id", (req, res) => {
+peopleRouter.patch("/:id", async (req, res) => {
+  if (!(await requireRosterEditor(req, res))) {
+    return;
+  }
   sendResult(res, patchPerson(req.params.id, req.body || {}), false);
 });
 
-peopleRouter.post("/", (req, res) => {
+peopleRouter.post("/", async (req, res) => {
+  if (!(await requireRosterEditor(req, res))) {
+    return;
+  }
   const result = createPerson(req.body || {});
   if (!result.ok) {
     res.status(result.statusCode).json({ ok: false, error: result.error });
