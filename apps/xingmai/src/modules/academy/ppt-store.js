@@ -260,6 +260,20 @@ function cloneFolders(nodes) {
   }));
 }
 
+function cleanFolderTitle(title) {
+  return String(title || "")
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, "")
+    .trim();
+}
+
+function cleanFolders(nodes) {
+  return (nodes || []).flatMap((node) => {
+    const title = cleanFolderTitle(node.title);
+    const children = cleanFolders(node.children);
+    return title ? [{ id: node.id, title, children }] : children;
+  });
+}
+
 function walkFolders(nodes, visit, parent = null) {
   for (const node of nodes || []) {
     visit(node, parent);
@@ -314,10 +328,14 @@ async function loadCourseCatalog() {
   await mkdir(DATA_DIR, { recursive: true });
   try {
     const data = JSON.parse(await readFile(CATALOG_FILE, "utf8"));
+    const sourceFolders = Array.isArray(data.folders) ? data.folders : defaultFolders();
     const catalog = {
-      folders: Array.isArray(data.folders) ? data.folders : defaultFolders(),
+      folders: cleanFolders(sourceFolders),
       assignments: data.assignments && typeof data.assignments === "object" ? data.assignments : {}
     };
+    if (JSON.stringify(catalog.folders) !== JSON.stringify(sourceFolders)) {
+      return saveCourseCatalog(catalog);
+    }
     memoryCatalog = catalogPayload(catalog);
     return catalogPayload(catalog);
   } catch {
@@ -342,7 +360,7 @@ export async function getCourseFolderTree() {
 }
 
 export async function addCourseFolder({ parentId, title }) {
-  const name = String(title || "").trim();
+  const name = cleanFolderTitle(title);
   if (!name) {
     throw bad("请填写分类名称");
   }

@@ -8,7 +8,7 @@ import vm from "node:vm";
 import { createApp } from "../src/app.js";
 import { resetStoreForTests } from "../src/modules/profile/auth.js";
 import { resetHandbookLogsForTests } from "../src/modules/academy/log-store.js";
-import { DATA_DIR, resetPptCoursesForTests } from "../src/modules/academy/ppt-store.js";
+import { DATA_DIR, getCourseFolderTree, resetPptCoursesForTests } from "../src/modules/academy/ppt-store.js";
 
 const server = createApp().listen(0);
 const { port } = server.address();
@@ -194,8 +194,20 @@ test("course title keyboard fallback inserts, replaces, and deletes text", () =>
   input.selectionEnd = 0;
   assert.equal(key("Delete"), true);
   assert.equal(input.value, "");
+  assert.equal(key("\u0000"), false);
+  assert.equal(input.value, "");
+  let beforeInputPrevented = false;
+  listeners.beforeinput({
+    inputType: "insertText",
+    data: "类",
+    preventDefault() {
+      beforeInputPrevented = true;
+    }
+  });
+  assert.equal(beforeInputPrevented, true);
+  assert.equal(input.value, "类");
   assert.equal(key("v", { ctrlKey: true }), false);
-  assert.deepEqual(inputEvents, ["input", "input", "input", "input", "input"]);
+  assert.deepEqual(inputEvents, ["input", "input", "input", "input", "input", "input"]);
 });
 
 test("course title keyboard fallback restores missing IME composition text", () => {
@@ -256,6 +268,14 @@ test("course folders can be created, nested, reordered, and assigned", async () 
   assert.equal(initial.canEdit, true);
   assert.equal(initial.folders.length, 5);
 
+  const invalid = await fetch(`${base}/api/academy/courses/folders`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ title: "\u0000\u0000", parentId: "" })
+  });
+  assert.equal(invalid.status, 400);
+  assert.match((await invalid.json()).error, /分类名称/);
+
   const topRes = await fetch(`${base}/api/academy/courses/folders`, {
     method: "POST",
     headers,
@@ -308,6 +328,24 @@ test("course folders can be created, nested, reordered, and assigned", async () 
   assert.equal((await assigned.json()).course.folderId, top.id);
   const final = await (await fetch(`${base}/api/academy/courses`, { headers })).json();
   assert.equal(final.items.find((item) => item.id === course.id).folderId, top.id);
+});
+
+test("course folder catalog removes legacy control-only titles", async () => {
+  await resetPptCoursesForTests();
+  await writeFile(
+    join(DATA_DIR, "catalog.json"),
+    JSON.stringify({
+      folders: [
+        { id: "bad-folder", title: "\u0000\u0000", children: [] },
+        { id: "good-folder", title: "  正常分类  ", children: [] }
+      ],
+      assignments: {}
+    })
+  );
+  assert.deepEqual(await getCourseFolderTree(), [
+    { id: "good-folder", title: "正常分类", children: [] }
+  ]);
+  await resetPptCoursesForTests();
 });
 
 test("upload pptx, turn pages, never serve original", async () => {

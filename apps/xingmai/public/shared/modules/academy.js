@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.465 · course-folders */
+/* xm-module-academy 0.1.466 · course-folder-input */
 (function () {
-  const ASSET_VER = "0.1.465";
+  const ASSET_VER = "0.1.466";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -304,11 +304,24 @@
     input.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
+  function isVisibleInputText(text) {
+    return Boolean(text) && !/[\u0000-\u001f\u007f-\u009f]/.test(text);
+  }
+
   function installTitleKeyboardFallback(input) {
     let composing = false;
     let compositionValue = "";
     let compositionStart = 0;
     let compositionEnd = 0;
+    input.addEventListener("beforeinput", function (ev) {
+      const text = String(ev.data || "");
+      if (!composing && ev.inputType === "insertText" && isVisibleInputText(text)) {
+        ev.preventDefault();
+        const start = input.selectionStart == null ? input.value.length : input.selectionStart;
+        const end = input.selectionEnd == null ? start : input.selectionEnd;
+        replaceTitleSelection(input, text, start, end);
+      }
+    });
     input.addEventListener("compositionstart", function () {
       composing = true;
       compositionValue = input.value;
@@ -319,7 +332,7 @@
       composing = false;
       const text = String(ev.data || "");
       window.setTimeout(function () {
-        if (text && input.value === compositionValue) {
+        if (isVisibleInputText(text) && input.value === compositionValue) {
           replaceTitleSelection(input, text, compositionStart, compositionEnd);
         }
       }, 0);
@@ -330,7 +343,7 @@
       }
       const start = input.selectionStart == null ? input.value.length : input.selectionStart;
       const end = input.selectionEnd == null ? start : input.selectionEnd;
-      if (ev.key.length === 1) {
+      if (ev.key.length === 1 && isVisibleInputText(ev.key)) {
         ev.preventDefault();
         replaceTitleSelection(input, ev.key, start, end);
         return;
