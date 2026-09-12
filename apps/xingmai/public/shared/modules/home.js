@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.384-home-chief3 */
+/* xm-module-home 0.1.385-home-chiefq */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -955,13 +955,14 @@
       ".xm-hm-team{display:flex;flex-direction:column;gap:8px;min-width:0;padding:8px 8px 8px}" +
       ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
       ".xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}" +
-      ".xm-hm.is-chief .xm-hm-table{min-width:0}" +
-      ".xm-hm.is-chief .xm-hm-panel{overflow-x:hidden}" +
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border:0;box-shadow:none}" +
       ".xm-hm-teams .xm-hm-table{min-width:760px;font-variant-numeric:tabular-nums;border-collapse:separate;border-spacing:0}" +
       ".xm-hm-teams .xm-hm-table .xm-hm-num{text-align:right;white-space:nowrap}" +
       ".xm-hm-teams .xm-hm-table th,.xm-hm-teams .xm-hm-table td{border-right:1px dashed #5b9bd5;border-bottom:1px dashed #5b9bd5}" +
       ".xm-hm-teams .xm-hm-table td{padding-top:var(--xm-hm-row-pad);padding-bottom:var(--xm-hm-row-pad)}" +
+      ".xm-hm.is-chief .xm-hm-teams .xm-hm-panel{overflow:hidden}" +
+      ".xm-hm.is-chief .xm-hm-teams .xm-hm-table{min-width:0}" +
+      ".xm-hm.is-chief .xm-hm-teams .xm-hm-table td{border:0}" +
       ".xm-hm-teams .xm-hm-table th.xm-hm-num{white-space:normal;max-width:6.4em;line-height:1.25}" +
       ".xm-hm-teams .xm-hm-table th:last-child,.xm-hm-teams .xm-hm-table td:last-child{text-align:left;white-space:nowrap;border-right:0}" +
       ".xm-hm-rowpad{display:inline-flex;align-items:center;gap:6px;color:var(--xm-muted);font-size:12px;font-weight:400}" +
@@ -1114,7 +1115,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.384-home-chief3");
+    board.setAttribute("data-hm-js", "0.1.385-home-chiefq");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1161,7 +1162,7 @@
           ? (gapText
             ? "人管对不上：" + gapText
             : state.view === "chief"
-              ? "主管/储备按责权；本人登录只看自己的数据。"
+              ? "主管/储备按责权，本人只看自己数据。"
               : "经理团队按责权店对齐 ERP。")
           : state.view === "board"
             ? "排行榜按责权店对齐 ERP。"
