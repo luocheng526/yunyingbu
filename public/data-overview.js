@@ -27,7 +27,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=live-hero1";
+      link.href = "/data-pages.css?v=data-ov1";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -117,7 +117,7 @@
       el.remove();
     });
     Array.prototype.forEach.call(root.querySelectorAll("h1"), function (el) {
-      if (/数据总揽|渠道总览/.test(el.textContent.trim())) {
+      if (/数据总揽|数据总览|渠道总览/.test(el.textContent.trim())) {
         el.remove();
       }
     });
@@ -398,7 +398,7 @@
     return {
       ok: true,
       source: raw.source || "xingmai-erp",
-      title: "渠道总览",
+      title: "数据总览",
       range: rangeLabel,
       dateLabel: dateLabel,
       ranges: RANGES,
@@ -506,6 +506,7 @@
     if (!svg) {
       return;
     }
+    ensureHeroSeries(hero);
     const yest = asSeries(hero && hero.yesterday);
     const today = asSeries(hero && hero.today);
     const w = 240;
@@ -791,10 +792,10 @@
     stripPageChrome(root);
     let board = root.querySelector("#board");
     if (!board) {
-      root.innerHTML = '<main class="xm-page data-overview-root ch-root"><div id="board"><p class="ch-empty">正在加载渠道总览…</p></div></main>';
+      root.innerHTML = '<main class="xm-page data-overview-root ch-root"><div id="board"><p class="ch-empty">正在加载数据总览…</p></div></main>';
       board = root.querySelector("#board");
     } else if (!board.innerHTML.trim()) {
-      board.innerHTML = '<p class="ch-empty">正在加载渠道总览…</p>';
+      board.innerHTML = '<p class="ch-empty">正在加载数据总览…</p>';
     }
     const state = {
       range: "日",
@@ -889,7 +890,7 @@
             )
           : '<p class="ch-empty">「' + escapeHtml(state.section) + "」为示例，尚未接入。</p>";
       board.innerHTML =
-        '<div class="ch-top"><div class="ch-title">渠道总览</div>' +
+        '<div class="ch-top"><div class="ch-title">数据总览</div>' +
         '<div class="ch-right"><span class="ch-time">（统计时间：' +
         escapeHtml(payload.dateLabel || "") +
         "）</span>" +
@@ -1064,7 +1065,7 @@
       params.set("payTimeStart", span.from + " 00:00:00");
       params.set("payTimeEnd", span.to + " 23:59:59");
       if (!state.payload && board) {
-        board.innerHTML = '<p class="ch-empty">正在加载渠道总览…</p>';
+        board.innerHTML = '<p class="ch-empty">正在加载数据总览…</p>';
       }
       return json("/api/data/overview?" + params.toString())
         .then(function (data) {

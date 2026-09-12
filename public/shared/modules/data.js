@@ -145,9 +145,9 @@
     ensureSheet();
     if (root && !root.querySelector("#board")) {
       root.innerHTML =
-        '<main class="xm-page data-overview-root ch-root"><div id="board"><p class="ch-empty">正在加载渠道总览…</p></div></main>';
+        '<main class="xm-page data-overview-root ch-root"><div id="board"><p class="ch-empty">正在加载数据总览…</p></div></main>';
     }
-    return loadScript("/data-overview.js?v=live-hero1").then(function () {
+    return loadScript("/data-overview.js?v=data-ov1").then(function () {
       if (typeof window.XmDataCreateDashboard === "function") {
         return window.XmDataCreateDashboard(root);
       }

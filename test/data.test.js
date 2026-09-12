@@ -152,7 +152,7 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /Asia\/Shanghai/);
     assert.match(overviewJs.text, /\/api\/home\/live/);
     assert.match(overviewJs.text, /\/api\/data\/live/);
-    assert.match(overviewJs.text, /正在加载渠道总览/);
+    assert.match(overviewJs.text, /正在加载数据总览/);
     assert.match(overviewJs.text, /paintErp/);
     assert.match(overviewJs.text, /loadLiveSpark/);
     assert.match(overviewJs.text, /seedHeroCompare/);
@@ -165,7 +165,7 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /#cf1322/);
     assert.match(overviewJs.text, /昨天/);
     assert.match(overviewJs.text, /今天/);
-    assert.match(overviewJs.text, /渠道总览/);
+    assert.match(overviewJs.text, /数据总览/);
     assert.match(overviewJs.text, /自定义费用/);
     assert.match(overviewJs.text, /ch-cal/);
     assert.match(overviewJs.text, /ch-cal-pop/);
@@ -186,7 +186,7 @@ test("data child pages and demo APIs respond", async () => {
     const team = JSON.parse(teamApi.text);
     assert.equal(team.ok, true);
     assert.equal(team.scope, "团队");
-    assert.equal(team.title, "渠道总览");
+    assert.equal(team.title, "数据总览");
     assert.equal(team.cards.length, 8);
     assert.deepEqual(
       team.cards.map((c) => c.label),
@@ -516,10 +516,10 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /\/data\/paid/);
   assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
   assert.match(dataMod, /restore-v1/);
-  assert.match(dataMod, /data-overview\.js\?v=live-hero1/);
+  assert.match(dataMod, /data-overview\.js\?v=data-ov1/);
   assert.match(css, /ch-cal-days/);
   assert.match(css, /ch-cal-pop/);
-  assert.match(dataMod, /正在加载渠道总览/);
+  assert.match(dataMod, /正在加载数据总览/);
   assert.match(css, /#2f54eb/);
   assert.match(css, /#cf1322/);
   assert.match(dataMod, /lockModule/);
