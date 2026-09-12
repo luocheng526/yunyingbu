@@ -473,6 +473,13 @@ test("shared han module fills submenu pages", async () => {
   assert.doesNotMatch(js, /头部产品（高利润）/);
   assert.doesNotMatch(js, /新上架需做单产品/);
   assert.match(js, /XmModules\["\/han\/paid"\]/);
+  assert.match(js, /han-paid-board/);
+  assert.match(js, /han-paid-summary/);
+  assert.match(js, /han-paid-group/);
+  assert.match(js, /实时指标/);
+  assert.match(js, /实时对比/);
+  assert.match(js, /实时付费金额/);
+  assert.match(js, /id="paid-form"/);
   assert.match(js, /XmModules\["\/han\/training"\]/);
   assert.match(js, /\/api\/han\/selection/);
   assert.match(js, /\/api\/han\/products/);
