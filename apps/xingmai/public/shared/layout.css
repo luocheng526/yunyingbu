@@ -1242,6 +1242,9 @@ html[data-theme="dark"] .xm-content [style*="background: white"] {
   #xm-hm .xm-hm-card {
     min-height: 0 !important;
     padding: 8px !important;
+    background: var(--xm-card) !important;
+    border: 1px solid var(--xm-line) !important;
+    border-radius: 8px !important;
   }
 
   #xm-hm .xm-hm-card-head span {

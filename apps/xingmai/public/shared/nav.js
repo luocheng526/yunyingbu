@@ -1137,7 +1137,7 @@
       "#xm-hm .xm-hm-ranges{display:flex!important;flex-wrap:nowrap!important;width:100%!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch;gap:6px!important}" +
       "#xm-hm .xm-hm-ranges button,#xm-hm .xm-hm-dates{flex:0 0 auto!important;white-space:nowrap!important}" +
       "#xm-hm .xm-hm-kpis,#xm-hm .xm-hm-team-kpis,#xm-hm .xm-hm-live-cards{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important}" +
-      "#xm-hm .xm-hm-card{min-height:0!important;padding:8px!important}" +
+      "#xm-hm .xm-hm-card{min-height:0!important;padding:8px!important;background:var(--xm-card)!important;border:1px solid var(--xm-line)!important;border-radius:8px!important}" +
       "#xm-hm .xm-hm-card-head span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}" +
       "#xm-hm .xm-hm-value{margin-top:6px!important;font-size:16px!important}" +
       "#xm-hm .xm-hm-cal{left:8px;right:8px;width:auto}" +
