@@ -11,7 +11,7 @@ test("rewrites immutable homepage script url to no-store client.js", () => {
   const out = rewriteHomeModuleUrl(html);
   assert.equal(out.includes("/shared/modules/home.js"), false);
   assert.equal(out.includes(HOME_CLIENT_JS), true);
-  assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.378-home-shopkpi$/);
+  assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.379-home-netcost$/);
 });
 
 test("serves /api/home/client.js from current homepage module", async () => {
@@ -26,13 +26,14 @@ test("serves /api/home/client.js from current homepage module", async () => {
     const text = await res.text();
     assert.equal(res.status, 200);
     assert.match(String(res.headers.get("cache-control") || ""), /no-store/i);
-    assert.match(text, /xm-module-home 0\.1\.378-home-shopkpi/);
+    assert.match(text, /xm-module-home 0\.1\.379-home-netcost/);
     assert.match(text, /onOutsideCardSet/);
     assert.match(text, /\/api\/home\/erp-kpis/);
     assert.match(text, /platformFee/);
     assert.match(text, /按支付时间统计的订单金额\(包含无效单、代发单\)/);
     assert.match(text, /SPU推广费用/);
     assert.match(text, /京小洁采购单成本\+导入的货品成本/);
+    assert.match(text, /净货品成本占比 \(支付\)/);
   } finally {
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }

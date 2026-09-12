@@ -63,6 +63,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.doesNotMatch(homeJs, /label: "近7天"/);
   assert.doesNotMatch(homeJs, /label: "近15天"/);
   assert.doesNotMatch(homeJs, /label: "近30天"/);
+  assert.match(homeJs, /label: "净货品成本占比 \(支付\)"/);
+  assert.match(homeJs, /field: "netGoodsRate"/);
   assert.match(homeJs, /function shopOnRoleTeam/);
   assert.match(homeJs, /function shopMetricsFrom/);
   assert.match(homeJs, /function shopCols/);

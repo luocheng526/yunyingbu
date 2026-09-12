@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.378-home-shopkpi */
+/* xm-module-home 0.1.379-home-netcost */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1010,7 +1010,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.378-home-shopkpi");
+    board.setAttribute("data-hm-js", "0.1.379-home-netcost");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1165,7 +1165,14 @@
       kind: "int",
       tip: "剔除无效单和退款订单后的商品销售件数(按支付时间统计)\n计算公式:销售件数(支付)-无效单销售件数-普通单退款销售件数-代发单退款件数"
     },
-    { key: "netGoodsCost", label: "净货款成本 (支付)", field: "netGoodsCost", kind: "money", tip: "剔除无效单和退款订单后的货品成本（按支付时间统计）" }
+    { key: "netGoodsCost", label: "净货款成本 (支付)", field: "netGoodsCost", kind: "money", tip: "剔除无效单和退款订单后的货品成本（按支付时间统计）" },
+    {
+      key: "netGoodsRatio",
+      label: "净货品成本占比 (支付)",
+      field: "netGoodsRate",
+      kind: "rate",
+      tip: "净货品成本占支付金额的比例（按支付时间统计）\n计算公式：净货款成本（支付）/支付金额（支付）*100%"
+    }
   ];
 
   function asNum(value) {
@@ -1248,6 +1255,7 @@
       jdRatio: sum.jdRatio,
       netSkuNum: sum.netSkuNum,
       netGoodsCost: sum.netGoodsCost,
+      netGoodsRate: sum.netGoodsRate,
       netSales: sum.netSales != null ? sum.netSales : null
     };
     if (next.jdRatio == null && next.jdOrders != null && next.orderCount) {
@@ -1265,6 +1273,9 @@
         if (next.refundRate == null) {
           next.refundRate = next.refundAmount / next.payAmount;
         }
+      }
+      if (next.netGoodsRate == null && next.netGoodsCost != null && next.payAmount) {
+        next.netGoodsRate = next.netGoodsCost / next.payAmount;
       }
     }
     return next;
@@ -1331,6 +1342,7 @@
       "jdRatio",
       "netSkuNum",
       "netGoodsCost",
+      "netGoodsRate",
       "netSales",
       "netOrderCount",
       "todayPayAmount",
