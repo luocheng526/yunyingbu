@@ -97,6 +97,96 @@
     } catch (_err) {}
   }
 
+  var OV_BOARD_LS = "xm-data-ov-board-v1";
+  var OV_BOARD_FRESH_MS = 60 * 60 * 1000;
+
+  function cloneJson(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  function ovBoardKey(range, span) {
+    return [range || "", (span && span.from) || "", (span && span.to) || ""].join("|");
+  }
+
+  function readOvBoard(range, span) {
+    try {
+      const all = JSON.parse(localStorage.getItem(OV_BOARD_LS) || "{}");
+      const slot = all[ovBoardKey(range, span)] || all.latest;
+      if (!slot || !slot.payload) {
+        return null;
+      }
+      return slot;
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  function writeOvBoard(range, span, payload) {
+    if (!payload) {
+      return;
+    }
+    try {
+      const all = JSON.parse(localStorage.getItem(OV_BOARD_LS) || "{}");
+      const slot = { at: Date.now(), range: range, payload: cloneJson(payload) };
+      all[ovBoardKey(range, span)] = slot;
+      all.latest = slot;
+      localStorage.setItem(OV_BOARD_LS, JSON.stringify(all));
+    } catch (_err) {}
+  }
+
+  function ovBoardFresh(slot) {
+    return Boolean(slot && slot.at && Date.now() - slot.at < OV_BOARD_FRESH_MS);
+  }
+
+  function readSharedShopMetrics() {
+    try {
+      const all = JSON.parse(localStorage.getItem("xm-data-shops-metrics-v1") || "{}");
+      const slot = all.latest;
+      return slot && Array.isArray(slot.shops) ? slot.shops : [];
+    } catch (_err) {
+      return [];
+    }
+  }
+
+  function overlaySharedShopMetrics(shops) {
+    const extra = readSharedShopMetrics();
+    if (!extra.length) {
+      return shops || [];
+    }
+    const byId = {};
+    extra.forEach(function (shop) {
+      const id = String(shop.shopId || shop.id || "");
+      if (id) {
+        byId[id] = shop;
+      }
+    });
+    const seen = {};
+    const out = (shops || []).map(function (shop) {
+      const id = String(shop.shopId || "");
+      if (id) {
+        seen[id] = true;
+      }
+      const hit = byId[id];
+      if (!hit) {
+        return shop;
+      }
+      const pay = Number(shop.payAmount) || 0;
+      if (pay) {
+        return shop;
+      }
+      return Object.assign({}, shop, hit);
+    });
+    extra.forEach(function (shop) {
+      const id = String(shop.shopId || shop.id || "");
+      if (!id || seen[id]) {
+        return;
+      }
+      seen[id] = true;
+      out.push(shop);
+    });
+    return out;
+  }
+
   function expandCards(cards) {
     const byKey = {};
     (cards || []).forEach(function (card) {
@@ -139,7 +229,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov7";
+      link.href = "/data-pages.css?v=data-ov9";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -1562,6 +1652,24 @@
       render();
     }
 
+    function applyCachedBoard(slot, span) {
+      state.payload = cloneJson(slot.payload);
+      if (state.payload) {
+        state.payload.range = state.range;
+        state.payload.dateLabel = span.dateLabel;
+        state.payload.ranges = RANGES;
+        if (state.payload.shops && state.payload.shops.length) {
+          state.payload.shops = overlaySharedShopMetrics(state.payload.shops);
+          state.payload.shopTable = shopTableFrom(state.payload.shops);
+        }
+      }
+      render();
+    }
+
+    function persistBoard(span) {
+      writeOvBoard(state.range, span, state.payload);
+    }
+
     function softJson(url) {
       return fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } })
         .then(function (res) {
@@ -1595,10 +1703,11 @@
           if (dead || !state.payload || !dir || !dir.length) {
             return;
           }
-          const merged = mergeErpShops(state.payload.shops, dir);
+          const merged = overlaySharedShopMetrics(mergeErpShops(state.payload.shops, dir));
           state.payload.shops = merged;
           state.payload.summary.shops = merged.length;
           state.payload.shopTable = shopTableFrom(merged);
+          persistBoard(rangeSpan(state.range, state.customFrom, state.customTo));
           render();
         });
     }
@@ -1619,16 +1728,12 @@
       });
     }
 
-    function load() {
-      const span = rangeSpan(state.range, state.customFrom, state.customTo);
+    function fetchBoard(span) {
       const params = new URLSearchParams();
       params.set("from", span.from + " 00:00:00");
       params.set("to", span.to + " 23:59:59");
       params.set("payTimeStart", span.from + " 00:00:00");
       params.set("payTimeEnd", span.to + " 23:59:59");
-      if (!state.payload && board) {
-        board.innerHTML = '<p class="ch-empty">正在加载数据总览…</p>';
-      }
       return json("/api/data/overview?" + params.toString())
         .then(function (data) {
           if (dead) {
@@ -1636,13 +1741,16 @@
           }
           if (data && data.ok && (data.source === "xingmai-erp" || (data.shops && data.shops.length) || (data.cards || []).some(function (c) { return c.key === "payAmount"; }))) {
             paintErp(data, span);
-            loadLiveSpark();
+            persistBoard(span);
             loadShopDirectory();
             return;
           }
           throw new Error("empty");
         })
         .catch(function () {
+          if (state.payload) {
+            return;
+          }
           return json("/api/data/team")
             .catch(function () {
               return json("/data/team-demo.json");
@@ -1655,11 +1763,28 @@
               demo.dateLabel = span.dateLabel;
               demo.ranges = RANGES;
               state.payload = demo;
+              persistBoard(span);
               render();
-              loadLiveSpark();
               loadShopDirectory();
             });
         });
+    }
+
+    function load(forceBoard) {
+      const span = rangeSpan(state.range, state.customFrom, state.customTo);
+      const cached = readOvBoard(state.range, span);
+      if (cached && cached.payload) {
+        applyCachedBoard(cached, span);
+      } else if (!state.payload && board) {
+        board.innerHTML = '<p class="ch-empty">正在加载数据总览…</p>';
+      }
+      loadLiveSpark();
+      if (!forceBoard && ovBoardFresh(cached)) {
+        return Promise.resolve();
+      }
+      return fetchBoard(span).then(function () {
+        loadLiveSpark();
+      });
     }
 
     function onDocClick(event) {
@@ -1693,6 +1818,18 @@
         el.textContent = shanghaiHms();
       }
     }, 1000);
+
+    const liveTick = setInterval(function () {
+      if (!dead) {
+        loadLiveSpark();
+      }
+    }, 60 * 1000);
+
+    const boardTick = setInterval(function () {
+      if (!dead) {
+        load(true);
+      }
+    }, OV_BOARD_FRESH_MS);
 
     document.addEventListener("click", onDocClick);
     window.addEventListener("resize", onWinResize);
@@ -1739,6 +1876,8 @@
     return function unmount() {
       dead = true;
       clearInterval(clockTick);
+      clearInterval(liveTick);
+      clearInterval(boardTick);
       document.removeEventListener("click", onDocClick);
       window.removeEventListener("resize", onWinResize);
       hideCalPop();
