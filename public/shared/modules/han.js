@@ -448,7 +448,7 @@
 
       root.innerHTML = page(
         shop,
-        team + " · " + shop + "。导入原始数据后按规则自动分层，格子可改，调动可换层。",
+        team + " · " + shop + "。导入后按初版规则自动分层，格子可改，调动可换层。正式分类流程稍后替换。",
         '<style>' +
           ".han-sheet-wrap{overflow-x:auto;background:#fff;border:1px solid #c6c6c6}" +
           ".han-sheet{border-collapse:collapse;font-size:12px;min-width:2200px}" +
@@ -468,7 +468,7 @@
           ".han-sheet select{max-width:88px;border:0;background:#ecfeff;font-size:12px}" +
           "</style>" +
           '<div class="han-sheet-toolbar">' +
-          '<button type="button" class="han-class-btn" id="han-classify">按规则分类</button>' +
+          '<button type="button" class="han-class-btn" id="han-classify">按初版规则分类</button>' +
           '<button type="button" class="han-export-btn" id="han-export">导出</button>' +
           '<label class="han-import-btn">导入原始数据<input id="han-import" type="file" accept=".csv,text/csv" hidden /></label>' +
           '<button type="button" class="han-tpl-btn" id="han-tpl">下载模板</button></div>' +

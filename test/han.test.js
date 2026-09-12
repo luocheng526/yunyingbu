@@ -382,7 +382,7 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /店铺产品分层表/);
   assert.match(js, /han-sheet/);
   assert.match(js, /导入原始数据/);
-  assert.match(js, /按规则分类/);
+  assert.match(js, /按初版规则分类/);
   assert.match(js, /han-layer-pick/);
   assert.match(js, /id="han-export"/);
   assert.match(js, /\/api\/han\/products\/import/);
