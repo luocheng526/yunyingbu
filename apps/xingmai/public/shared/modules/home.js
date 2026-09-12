@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.360-home-tipbody */
+/* xm-module-home 0.1.361-home-compare */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -461,11 +461,13 @@
     return "<span>" + (index + 1) + "</span>";
   }
 
-  function cardHtml(card) {
+  function cardHtml(card, teamKey) {
     return (
       '<article class="xm-hm-card" data-card="' +
       escapeHtml(card.key) +
-      '"><div class="xm-hm-card-head"><span>' +
+      '"' +
+      (teamKey ? ' data-team="' + escapeHtml(teamKey) + '"' : "") +
+      '><div class="xm-hm-card-head"><span>' +
       escapeHtml(card.label) +
       '</span><button type="button" class="xm-hm-help" data-tip="' +
       tipAttr(card.tip) +
@@ -499,32 +501,65 @@
     );
   }
 
-  function teamBlockHtml(team, hide) {
-    var cards = (team.cards || []).filter(function (card) {
-      return hide.indexOf(card.key) === -1;
-    });
-    var shops = team.shops || [];
+  function teamHeadHtml(team) {
     return (
-      '<section class="xm-hm-team" data-team="' +
+      '<header class="xm-hm-team-head" data-team="' +
       escapeHtml(team.key) +
-      '"><header class="xm-hm-team-head"><div><h2>' +
+      '"><div><h2>' +
       escapeHtml(team.name) +
       "团队</h2><p>店铺按人管责权，数字按店铺id对齐数据中心 ERP。</p></div>" +
       '<a href="' +
       escapeHtml(team.href || "#") +
-      '">打开运营中心</a></header>' +
-      '<div class="xm-hm-team-kpis">' +
-      cards.map(cardHtml).join("") +
-      "</div>" +
-      '<div class="xm-hm-panel"><h2>责权店铺 <span>' +
+      '">打开运营中心</a></header>'
+    );
+  }
+
+  function teamShopsHtml(team) {
+    var shops = team.shops || [];
+    return (
+      '<div class="xm-hm-panel" data-team="' +
+      escapeHtml(team.key) +
+      '"><h2>责权店铺 <span>' +
       shops.length +
       " 店</span></h2>" +
       '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th><th>运营</th><th>实时销售额</th><th>销售单数</th><th>支付金额</th><th>退款率</th></tr></thead><tbody>' +
       shops.map(function (row, i) {
         return shopRowHtml(row, i, true);
       }).join("") +
-      "</tbody></table></div></section>"
+      "</tbody></table></div>"
     );
+  }
+
+  function teamCardByKey(team, key) {
+    var list = (team && team.cards) || [];
+    var i;
+    for (i = 0; i < list.length; i++) {
+      if (list[i] && list[i].key === key) {
+        return list[i];
+      }
+    }
+    return { key: key, label: key, value: "—", trend: 0, tip: "" };
+  }
+
+  function teamsCompareHtml(teams, hide) {
+    var left = (teams && teams[0]) || blankTeams()[0];
+    var right = (teams && teams[1]) || blankTeams()[1];
+    var keys = [];
+    var seen = {};
+    ((left.cards || []).concat(right.cards || [])).forEach(function (card) {
+      if (!card || seen[card.key] || hide.indexOf(card.key) !== -1) {
+        return;
+      }
+      seen[card.key] = true;
+      keys.push(card.key);
+    });
+    var out = [teamHeadHtml(left), teamHeadHtml(right)];
+    keys.forEach(function (key) {
+      out.push(cardHtml(teamCardByKey(left, key), left.key));
+      out.push(cardHtml(teamCardByKey(right, key), right.key));
+    });
+    out.push(teamShopsHtml(left), teamShopsHtml(right));
+    return out.join("");
   }
 
   function standItemHtml(row, place, unit) {
@@ -918,12 +953,11 @@
       ".xm-hm-body{position:relative;display:flex;flex-direction:column;gap:12px;overflow:visible}" +
       ".xm-hm.is-live .xm-hm-kpis,.xm-hm.is-board .xm-hm-kpis,.xm-hm.is-team .xm-hm-kpis,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
       ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden]{display:none}" +
-      ".xm-hm-kpis,.xm-hm-team-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
-      ".xm-hm-teams{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}" +
-      ".xm-hm-team{display:flex;flex-direction:column;gap:10px;min-width:0;padding-bottom:8px}" +
-      ".xm-hm-team + .xm-hm-team{border-left:1px solid var(--xm-line);padding-left:12px}" +
-      ".xm-hm-team .xm-hm-panel{overflow-x:auto}" +
-      ".xm-hm-team-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}" +
+      ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
+      ".xm-hm-teams{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 16px;align-items:stretch;position:relative}" +
+      ".xm-hm-teams::before{content:\"\";position:absolute;inset:0 auto 0 50%;width:1px;background:var(--xm-line);pointer-events:none}" +
+      ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0}" +
+      ".xm-hm-team-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;min-height:58px;padding:0 4px 8px}" +
       ".xm-hm-team-head h2{margin:0;font-size:16px}" +
       ".xm-hm-team-head p{margin:4px 0 0;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-team-head a{color:var(--xm-primary);text-decoration:none;font-size:13px;white-space:nowrap}" +
@@ -991,9 +1025,8 @@
       ".xm-hm-pop h3{margin:0 0 8px;font-size:13px}" +
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{margin:8px 0 0;color:var(--xm-muted);font-size:12px}" +
-      "@media (max-width:1200px){.xm-hm-kpis,.xm-hm-team-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
-      "@media (max-width:900px){.xm-hm-teams{grid-template-columns:1fr}.xm-hm-team + .xm-hm-team{border-left:0;padding-left:0}}" +
-      "@media (max-width:700px){.xm-hm-kpis,.xm-hm-team-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:1fr}.xm-hm-team-head{flex-direction:column}.xm-hm-cal-months{flex-direction:column}}"
+      "@media (max-width:1200px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
+      "@media (max-width:700px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:1fr}.xm-hm-team-head{flex-direction:column}.xm-hm-cal-months{flex-direction:column}}"
     );
   }
 
@@ -1049,7 +1082,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.360-home-tipbody");
+    board.setAttribute("data-hm-js", "0.1.361-home-compare");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", state.view === "team");
@@ -1062,9 +1095,7 @@
     root.querySelector("#xm-hm-date-text").textContent = formatDashDate(state.from) + " 至 " + formatDashDate(state.to);
     root.querySelector("#xm-hm-kpis").innerHTML = cards.map(cardHtml).join("");
     root.querySelector("#xm-hm-teams").hidden = state.view !== "team";
-    root.querySelector("#xm-hm-teams").innerHTML = teams.map(function (team) {
-      return teamBlockHtml(team, hide);
-    }).join("");
+    root.querySelector("#xm-hm-teams").innerHTML = teamsCompareHtml(teams, hide);
     root.querySelector("#xm-hm-live").hidden = state.view !== "live";
     root.querySelector("#xm-hm-board").hidden = state.view !== "board";
     root.querySelector("#xm-hm-live").innerHTML =
@@ -2270,16 +2301,18 @@
         sortClearHold();
         sortStartX = event.clientX || 0;
         sortStartY = event.clientY || 0;
-        if (card && (card.closest("#xm-hm-kpis") || card.closest(".xm-hm-team-kpis"))) {
+        if (card && (card.closest("#xm-hm-kpis") || card.closest("#xm-hm-teams"))) {
           sortFrom = card.getAttribute("data-card") || "";
           sortSettings = false;
           sortHold = window.setTimeout(function () {
-            var hold = root.querySelector('.xm-hm-card[data-card="' + sortFrom + '"]');
-            if (!sortFrom || !hold) {
+            var holds = root.querySelectorAll('.xm-hm-card[data-card="' + sortFrom + '"]');
+            if (!sortFrom || !holds.length) {
               return;
             }
             sortDragging = true;
-            hold.classList.add("is-hold");
+            Array.prototype.forEach.call(holds, function (el) {
+              el.classList.add("is-hold");
+            });
           }, 420);
           return;
         }
