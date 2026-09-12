@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>版本发布中心</title>
-    <link rel="stylesheet" href="/releases.css?v=sc-ui-16" />
+    <link rel="stylesheet" href="/releases.css?v=sc-ui-17" />
     <style>
       #upgrade-mask,
       html > #upgrade-mask {
@@ -1075,7 +1075,7 @@
               "<td>" + esc(item.version) + demoBadge(item) + (returned ? '<span class="badge">已发回</span>' : "") + "</td>" +
               "<td>" + esc(item.module) + "</td>" +
               "<td>" + esc(dialog) + "</td>" +
-              "<td>" + esc(item.summary || "—") + "</td>" +
+              "<td class=\"failed-sum\">" + esc(item.summary || "—") + "</td>" +
               "<td class=\"failed-log\">" + esc(item.log || "—") + "</td>" +
               "<td>" + esc(fmt(item.publishFinishedAt || item.reviewedAt || item.submittedAt)) + "</td>" +
               "<td>" + action + "</td></tr>"

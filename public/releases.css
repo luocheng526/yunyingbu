@@ -254,20 +254,24 @@ button.oc-tab.active,
 .xm-content button.oc-tab.active:focus,
 .xm-content button.oc-tab.active:focus-visible,
 .xm-content button.oc-tab.active:active {
-  background: transparent !important;
-  background-color: transparent !important;
-  color: var(--oc-text);
+  background: #70b4ff !important;
+  background-color: #70b4ff !important;
+  color: #fff !important;
   outline: none !important;
-  border-bottom-color: var(--oc-text);
+  border-bottom-color: #70b4ff;
+  border-radius: 8px 8px 0 0;
 }
 .oc-tab.active + .oc-tab {
-  box-shadow: inset 1px 0 0 var(--oc-line);
+  box-shadow: none;
 }
-.oc-tab.active .oc-tab-num {
-  color: var(--oc-text);
+.oc-tab.active h2,
+.oc-tab.active .oc-tab-num,
+.oc-tab.active p,
+.oc-tab.active[data-tab="failed"] .oc-tab-num,
+.oc-tab[data-tab="failed"].active .oc-tab-num {
+  color: #fff !important;
 }
-.oc-tab[data-tab="failed"] .oc-tab-num,
-.oc-tab.active[data-tab="failed"] .oc-tab-num {
+.oc-tab[data-tab="failed"]:not(.active) .oc-tab-num {
   color: var(--oc-danger);
 }
 
@@ -614,10 +618,38 @@ html:has(.oc-wrap) body:has(.xm-shell) {
   width: 100%;
   color: inherit;
 }
+#failed-view table,
+.xm-content #failed-view table {
+  table-layout: fixed;
+}
+#failed-view th:nth-child(1),
+#failed-view td:nth-child(1) { width: 9.5rem; }
+#failed-view th:nth-child(2),
+#failed-view td:nth-child(2) { width: 5.2rem; }
+#failed-view th:nth-child(3),
+#failed-view td:nth-child(3) { width: 6.2rem; }
+#failed-view th:nth-child(4),
+#failed-view td.failed-sum { width: 7.2rem; }
+#failed-view th:nth-child(5),
+#failed-view td.failed-log { width: 44%; }
+#failed-view th:nth-child(6),
+#failed-view td:nth-child(6) { width: 8.2rem; }
+#failed-view th:nth-child(7),
+#failed-view td:nth-child(7) { width: 10.5rem; }
+.failed-sum {
+  color: var(--oc-muted);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
 .failed-log {
   color: var(--oc-danger);
   white-space: pre-wrap;
-  max-width: 28rem;
+  max-width: none;
+  min-width: 0;
+  word-break: break-word;
 }
 .xm-content #logs-view .log-item,
 #logs-view .log-item {

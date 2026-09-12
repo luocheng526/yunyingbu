@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.96-failed-tab */
+/* xm-module-releases 0.1.97-failed-tab-paint */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -106,15 +106,25 @@
       html:has(.oc-wrap) .xm-content, .xm-content:has(.oc-wrap) { padding: 0 !important; }
       .oc-hero-card { background: transparent; border: 0; box-shadow: none; padding: 0 0 10px; margin: 0 0 12px; }
       .oc-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; }
-      .oc-tab[data-tab="failed"] .oc-tab-num { color: #9f1239; }
+      .oc-tab[data-tab="failed"]:not(.active) .oc-tab-num { color: #9f1239; }
       .oc-tab, button.oc-tab { background: transparent !important; outline: none !important; -webkit-tap-highlight-color: transparent; }
-      .oc-tab:hover, .oc-tab:focus, .oc-tab:focus-visible, .oc-tab:active, .oc-tab.active,
-      button.oc-tab:hover, button.oc-tab:focus, button.oc-tab:focus-visible, button.oc-tab:active, button.oc-tab.active {
+      .oc-tab:hover, .oc-tab:focus, .oc-tab:focus-visible, .oc-tab:active,
+      button.oc-tab:hover, button.oc-tab:focus, button.oc-tab:focus-visible, button.oc-tab:active {
         background: transparent !important; background-color: transparent !important; outline: none !important;
       }
+      .oc-tab.active, button.oc-tab.active,
+      .oc-tab.active:hover, .oc-tab.active:focus, .oc-tab.active:focus-visible, .oc-tab.active:active,
+      button.oc-tab.active:hover, button.oc-tab.active:focus, button.oc-tab.active:focus-visible, button.oc-tab.active:active {
+        background: #70b4ff !important; background-color: #70b4ff !important; color: #fff !important; border-radius: 8px 8px 0 0;
+      }
       .oc-tab-num { display: block; margin: 0.25rem 0 0.1rem; font-size: 1.35rem; font-weight: 750; }
-      .oc-tab.active .oc-tab-num { color: inherit; }
+      .oc-tab.active, .oc-tab.active h2, .oc-tab.active .oc-tab-num, .oc-tab.active p { color: #fff !important; }
       .oc-tab p { display: block; margin: 0; font-size: 12px; }
+      #failed-view table { table-layout: fixed; width: 100%; }
+      #failed-view th:nth-child(4), #failed-view td.failed-sum { width: 7.2rem; }
+      #failed-view th:nth-child(5), #failed-view td.failed-log { width: 44%; }
+      .failed-sum { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word; }
+      .failed-log { color: #9f1239; white-space: pre-wrap; max-width: none; word-break: break-word; }
       .sc-table tr.ticket { border: 0; box-shadow: none; padding: 0; background: transparent; }
       .sc-ver { font-weight: 650; color: #2563eb; }
     `;
@@ -205,7 +215,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-16";
+      link.href = "/releases.css?v=sc-ui-17";
       document.head.appendChild(link);
     }
   }
@@ -1018,7 +1028,7 @@
               "<td>" + esc(item.version) + demoBadge(item) + (returned ? '<span class="badge">已发回</span>' : "") + "</td>" +
               "<td>" + esc(item.module) + "</td>" +
               "<td>" + esc(dialog) + "</td>" +
-              "<td>" + esc(item.summary || "—") + "</td>" +
+              "<td class=\"failed-sum\">" + esc(item.summary || "—") + "</td>" +
               "<td class=\"failed-log\">" + esc(item.log || "—") + "</td>" +
               "<td>" + esc(fmt(item.publishFinishedAt || item.reviewedAt || item.submittedAt)) + "</td>" +
               "<td>" + action + "</td></tr>"
