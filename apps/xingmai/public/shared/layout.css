@@ -1042,7 +1042,7 @@ html[data-theme="dark"] .xm-content [style*="background: white"] {
   font-size: 13px;
 }
 
-/* xm-home-ai 0.1.144  首页底部 AI 诊断。 */
+/* xm-home-ai 0.1.145  首页底部 AI 诊断。 */
 #xm-hm-ai {
   margin: 16px 0 8px;
   padding: 14px 16px;
@@ -1101,7 +1101,7 @@ html[data-theme="dark"] .xm-content [style*="background: white"] {
   white-space: pre-wrap;
 }
 
-/* xm-phone-panel 0.1.144  窄屏抽屉；首页卡片三列；时间只留昨天、上月、自定义；自定义日历整屏。 */
+/* xm-phone-panel 0.1.145  窄屏抽屉；首页卡片三列；时间只留昨天、上月、自定义；自定义日历整屏。 */
 .xm-phone-menu,
 .xm-phone-mask {
   display: none;

@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.144 */
+/* xm-fast-shell 0.1.145 */
 (function () {
-  const ASSET_VER = "0.1.144";
+  const ASSET_VER = "0.1.145";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -1027,6 +1027,11 @@
     }
     if (key === "/home") {
       ensurePhonePanelCss();
+      watchHomeAiDiag();
+      const homeBoard = document.getElementById("xm-hm");
+      if (homeBoard) {
+        renderHomeAiDiag(homeBoard, {});
+      }
     }
     showPane(current);
     revealTabBar();
@@ -1173,21 +1178,19 @@
       const head = el.querySelector(".xm-hm-card-head span");
       const value = el.querySelector(".xm-hm-value");
       const trend = el.querySelector(".xm-hm-trend");
-      const teamEl = el.closest ? el.closest(".xm-hm-team") : null;
-      const team = String((el.getAttribute && el.getAttribute("data-team")) || (teamEl && teamEl.getAttribute && teamEl.getAttribute("data-team")) || "").trim();
-      let teamName = "";
-      if (teamEl && teamEl.querySelector) {
-        const h2 = teamEl.querySelector(".xm-hm-team-head h2");
-        teamName = String((h2 && h2.textContent) || "")
-          .replace(/团队\s*$/, "")
-          .trim();
-      }
+      const section = el.closest ? el.closest("section.xm-hm-team") || el.closest(".xm-hm-team") : null;
+      const headTitle = section && section.querySelector ? section.querySelector(".xm-hm-team-head h2") : null;
+      const teamName = String((headTitle && headTitle.textContent) || "")
+        .replace(/团队\s*$/, "")
+        .trim();
+      const sectionTeam = String((section && section.getAttribute && section.getAttribute("data-team")) || "").trim();
+      const team = teamName || (/^\d+$/.test(sectionTeam) ? "" : sectionTeam);
       return {
         key: String((el.getAttribute && el.getAttribute("data-card")) || "").trim(),
         label: String((head && head.textContent) || "").trim(),
         value: String((value && value.textContent) || "").trim(),
         team: team,
-        teamName: teamName || team,
+        teamName: team,
         trend: parseTrend(trend)
       };
     }
@@ -1423,21 +1426,29 @@
       return lines.join("\n");
     }
 
-    function diagnose(cards, range) {
+    function realTeamNames(cards) {
+      const seen = {};
+      const names = [];
+      (cards || []).forEach(function (card) {
+        const name = card.teamName || card.team;
+        if (!name || /^\d+$/.test(name) || seen[name]) {
+          return;
+        }
+        seen[name] = 1;
+        names.push(name);
+      });
+      return names;
+    }
+
+    function diagnose(cards, range, view) {
       const list = cards || [];
       if (!list.length) {
         return "当前没有可对比的卡片。";
       }
-      const seen = {};
-      const names = [];
-      for (let i = 0; i < list.length; i += 1) {
-        const name = list[i].teamName || list[i].team;
-        if (name && !seen[name]) {
-          seen[name] = 1;
-          names.push(name);
-        }
+      if (view === "team" || view === "chief" || (view !== "company" && realTeamNames(list).length >= 2)) {
+        return diagnoseTeams(list, range);
       }
-      return names.length >= 2 ? diagnoseTeams(list, range) : diagnoseCompany(list, range);
+      return diagnoseCompany(list, range);
     }
 
     function cacheKey(view, range, fromTo) {
@@ -1520,7 +1531,7 @@
         text = hit.text;
         status = "已诊断";
       } else {
-        text = diagnose(ctx.cards, ctx.range);
+        text = diagnose(ctx.cards, ctx.range, ctx.view);
         store[key] = { text: text, hash: hash, at: Date.now() };
         writeStore(store, storage);
         status = options.force ? "刚刚刷新" : "已诊断";
@@ -1839,6 +1850,7 @@
         return;
       }
       root.dataset.xmHomeAi = "1";
+      renderHomeAiDiag(root, {});
       new MutationObserver(function (records) {
         for (let i = 0; i < records.length; i += 1) {
           const target = records[i].target;

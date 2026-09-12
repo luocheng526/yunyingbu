@@ -49,7 +49,7 @@ function fakeCard(spec) {
       return "";
     },
     closest(sel) {
-      if (sel === ".xm-hm-team" && spec.team) {
+      if ((sel === ".xm-hm-team" || sel === "section.xm-hm-team") && spec.teamName) {
         return {
           getAttribute(name) {
             return name === "data-team" ? spec.team : "";
@@ -159,6 +159,24 @@ test("pay up and profit down asks to check ads and refunds", () => {
   ]);
   assert.match(api.diagnose(cards, "month"), /对照上月/);
   assert.match(api.diagnose(cards, "month"), /规模在涨、利润在掉/);
+});
+
+test("company cards keep sort data-team indexes out of the report", () => {
+  const api = loadApi();
+  const cards = api.parseCards([
+    fakeCard({ key: "payAmount", label: "支付金额 (支付)", value: "855,933", pct: 2, dir: "down" }),
+    fakeCard({ key: "adCost", label: "推广花费 (支付预估)", value: "362,476", pct: 3, dir: "up", team: "1" }),
+    fakeCard({ key: "profit", label: "利润 (支付预估)", value: "408,494", pct: 47, dir: "up", team: "5" }),
+    fakeCard({ key: "refundRate", label: "退款率 (按金额)", value: "24%", pct: 11, dir: "up", team: "4" })
+  ]);
+  assert.equal(cards[1].team, "");
+  assert.equal(cards[2].teamName, "");
+  const text = api.diagnose(cards, "yesterday", "company");
+  assert.match(text, /对照前天看变化/);
+  assert.doesNotMatch(text, /各团队/);
+  assert.doesNotMatch(text, /5：利润/);
+  assert.match(text, /支付金额 855,933，降 2%/);
+  assert.match(text, /利润 408,494，升 47%/);
 });
 
 test("team view names each team and the biggest movers", () => {
