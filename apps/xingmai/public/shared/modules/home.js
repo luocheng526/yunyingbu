@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.391-home-swaplive */
+/* xm-module-home 0.1.392-home-live4 */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1026,7 +1026,9 @@
       ".xm-hm-legs i.is-yest{background:#2f54eb}" +
       ".xm-hm-legs i.is-today{background:#cf1322}" +
       ".xm-hm-line{display:block;width:100%;height:160px;margin-top:8px}" +
-      ".xm-hm-live-cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}" +
+      ".xm-hm-live-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;width:100%}" +
+      ".xm-hm-live-cards .xm-hm-card{text-align:center}" +
+      ".xm-hm-live-cards .xm-hm-card-head{justify-content:center}" +
       ".xm-hm-live .xm-hm-table{min-width:960px}" +
       ".xm-hm-live .xm-hm-panel{overflow-x:auto}" +
       ".xm-hm-live .xm-hm-table th:nth-child(n+3),.xm-hm-live .xm-hm-table td:nth-child(n+3){text-align:right}" +
@@ -1117,7 +1119,7 @@
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.391-home-swaplive");
+    board.setAttribute("data-hm-js", "0.1.392-home-live4");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
