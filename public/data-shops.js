@@ -46,7 +46,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=shop-wide2";
+      link.href = "/data-pages.css?v=shop-wide3";
       document.head.appendChild(link);
     }
   }
@@ -133,44 +133,109 @@
     );
   }
 
-  function dash() {
-    return "--";
+  function firstNum(obj, keys) {
+    const list = keys || [];
+    for (let i = 0; i < list.length; i += 1) {
+      const n = Number(obj && obj[list[i]]);
+      if (obj && obj[list[i]] != null && obj[list[i]] !== "" && !Number.isNaN(n)) {
+        return n;
+      }
+    }
+    return null;
+  }
+
+  function money(shop, keys) {
+    const n = firstNum(shop, keys);
+    return fmt(n != null ? n : 0, 2);
+  }
+
+  function count(shop, keys) {
+    const n = firstNum(shop, keys);
+    return fmt(n != null ? n : 0, 0);
+  }
+
+  function rate(shop, keys, fallback) {
+    const n = firstNum(shop, keys);
+    if (n != null) {
+      return pct(n);
+    }
+    return fallback != null ? pct(fallback) : "0.00%";
   }
 
   function cellsFromErp(shop, maxProfit) {
     const pay = Number(shop.payAmount) || 0;
     const refund = Number(shop.refundAmount) || 0;
-    const profit = Number(shop.profit) || 0;
+    const profit = firstNum(shop, ["profit"]) != null ? firstNum(shop, ["profit"]) : 0;
+    const promo = firstNum(shop, ["totalPromotionCost", "promotionCost"]) != null
+      ? firstNum(shop, ["totalPromotionCost", "promotionCost"])
+      : 0;
+    const live = firstNum(shop, ["livePayAmount", "todayPayAmount", "realtimePayAmount", "payAmount"]);
+    const invalid = firstNum(shop, ["invalidAmount", "invalidOrderAmount"]);
+    const net = firstNum(shop, ["netSales", "netSalesAmount"]);
+    const newRate = firstNum(shop, ["newRate"]);
     return [
+      fmt(live != null ? live : pay, 2),
+      newRate != null ? (Number(newRate) > 1 ? Number(newRate) : Number(newRate) * 100).toFixed(4) + "%" : "0.0000%",
+      count(shop, ["orderCount"]),
+      count(shop, ["netOrderCount"]),
       fmt(pay, 2),
-      shop.newRate != null ? pct(shop.newRate) : "0.00%",
-      fmt(shop.orderCount, 0),
-      fmt(shop.netOrderCount, 0),
-      fmt(pay, 2),
-      dash(),
+      fmt(invalid != null ? invalid : 0, 2),
       fmt(refund, 2),
-      pct(shop.refundRate != null ? shop.refundRate : pay ? refund / pay : null),
-      fmt(pay - refund, 2),
-      shop.totalMarketing != null ? fmt(shop.totalMarketing, 2) : dash(),
-      shop.siteMarketing != null ? fmt(shop.siteMarketing, 2) : dash(),
-      shop.offsiteMarketing != null ? fmt(shop.offsiteMarketing, 2) : dash(),
-      pct(shop.promotionRate),
+      rate(shop, ["refundRate"], pay ? refund / pay : 0),
+      fmt(net != null ? net : pay - refund, 2),
+      money(shop, ["totalMarketing"]),
+      money(shop, ["siteMarketing"]),
+      money(shop, ["offsiteMarketing"]),
+      rate(shop, ["promotionRate"], pay ? promo / pay : 0),
       { html: profitCell(profit, maxProfit) },
-      pct(shop.profitRate != null ? shop.profitRate : pay ? profit / pay : null),
-      shop.saleFee != null ? fmt(shop.saleFee, 2) : dash(),
-      shop.platformFee != null ? fmt(shop.platformFee, 2) : dash(),
-      shop.goodsCost != null ? fmt(shop.goodsCost, 2) : dash(),
-      shop.dropshipCount != null ? fmt(shop.dropshipCount, 0) : dash(),
-      shop.invalidCount != null ? fmt(shop.invalidCount, 0) : dash(),
-      shop.goodsCostRate != null ? pct(shop.goodsCostRate) : dash(),
-      shop.netGoodsCost != null ? fmt(shop.netGoodsCost, 2) : dash(),
-      shop.netGoodsCostRate != null ? pct(shop.netGoodsCostRate) : dash(),
-      shop.customFee != null ? fmt(shop.customFee, 2) : "0",
-      shop.otherFee != null ? fmt(shop.otherFee, 2) : dash(),
-      shop.materialFee != null ? fmt(shop.materialFee, 2) : dash(),
-      shop.shipMaterialFee != null ? fmt(shop.shipMaterialFee, 2) : dash(),
-      shop.packFee != null ? fmt(shop.packFee, 2) : dash()
+      rate(shop, ["profitRate"], pay ? profit / pay : 0),
+      money(shop, ["saleFee", "salesFee"]),
+      money(shop, ["platformFee", "platformCost"]),
+      money(shop, ["goodsCost", "totalGoodsCost"]),
+      count(shop, ["dropshipCount"]),
+      count(shop, ["invalidCount"]),
+      rate(shop, ["goodsCostRate"]),
+      money(shop, ["netGoodsCost"]),
+      rate(shop, ["netGoodsCostRate"]),
+      money(shop, ["customFee"]),
+      money(shop, ["otherFee"]),
+      money(shop, ["materialFee"]),
+      money(shop, ["shipMaterialFee"]),
+      money(shop, ["packFee"])
     ];
+  }
+
+  function mergeErpShops(metricShops, directory) {
+    const metrics = metricShops || [];
+    const byId = {};
+    metrics.forEach(function (shop) {
+      const id = String(shop.shopId || shop.id || "");
+      if (id) {
+        byId[id] = shop;
+      }
+    });
+    const out = [];
+    const seen = {};
+    (directory || []).forEach(function (row) {
+      const id = String(row.id || row.shopId || "");
+      if (!id || seen[id]) {
+        return;
+      }
+      seen[id] = true;
+      const hit = byId[id] || {};
+      out.push(Object.assign({}, row, hit, {
+        shopId: id,
+        shopName: hit.shopName || row.shopName
+      }));
+    });
+    metrics.forEach(function (shop) {
+      const id = String(shop.shopId || "");
+      if (id && !seen[id]) {
+        seen[id] = true;
+        out.push(shop);
+      }
+    });
+    return out;
   }
 
   function sumShops(shops) {
@@ -181,10 +246,29 @@
         acc.netOrderCount += Number(shop.netOrderCount) || 0;
         acc.refundAmount += Number(shop.refundAmount) || 0;
         acc.profit += Number(shop.profit) || 0;
-        acc.totalPromotionCost += Number(shop.totalPromotionCost) || 0;
+        acc.totalPromotionCost += Number(shop.totalPromotionCost || shop.promotionCost) || 0;
+        acc.invalidAmount += Number(shop.invalidAmount || shop.invalidOrderAmount) || 0;
+        acc.saleFee += Number(shop.saleFee || shop.salesFee) || 0;
+        acc.platformFee += Number(shop.platformFee || shop.platformCost) || 0;
+        acc.goodsCost += Number(shop.goodsCost || shop.totalGoodsCost) || 0;
+        acc.customFee += Number(shop.customFee) || 0;
+        acc.packFee += Number(shop.packFee) || 0;
         return acc;
       },
-      { payAmount: 0, orderCount: 0, netOrderCount: 0, refundAmount: 0, profit: 0, totalPromotionCost: 0 }
+      {
+        payAmount: 0,
+        orderCount: 0,
+        netOrderCount: 0,
+        refundAmount: 0,
+        profit: 0,
+        totalPromotionCost: 0,
+        invalidAmount: 0,
+        saleFee: 0,
+        platformFee: 0,
+        goodsCost: 0,
+        customFee: 0,
+        packFee: 0
+      }
     );
   }
 
@@ -333,7 +417,7 @@
         "</thead><tbody>" +
         body +
         "</tbody></table></div>" +
-        '<p class="sh-hint">表格可左右滑动，后面还有营销额、利润、费用和打包费。</p></section>';
+        '<p class="sh-hint">已对接 ERP 全部店铺；表头字段都会显示，接口没有的记 0。</p></section>';
     }
 
     function json(url) {
@@ -343,6 +427,50 @@
         }
         return res.json();
       });
+    }
+
+    function softJson(url) {
+      return fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } })
+        .then(function (res) {
+          if (!res.ok) {
+            return null;
+          }
+          return res.json();
+        })
+        .catch(function () {
+          return null;
+        });
+    }
+
+    function applyShops(shops) {
+      const mapped = fromErp({ shops: shops || [] });
+      state.shops = mapped.shops;
+      state.rows = mapped.rows;
+      render();
+    }
+
+    function loadShopDirectory(metricShops) {
+      return softJson("/api/data/shop-options")
+        .then(function (opt) {
+          const recs = opt && (opt.records || opt.shops);
+          if (recs && recs.length) {
+            return recs;
+          }
+          return Promise.all([
+            softJson("/api/data/shops?page=1&pageSize=50"),
+            softJson("/api/data/shops?page=2&pageSize=50")
+          ]).then(function (pages) {
+            return pages.reduce(function (acc, pack) {
+              return acc.concat((pack && pack.records) || []);
+            }, []);
+          });
+        })
+        .then(function (dir) {
+          if (dead) {
+            return;
+          }
+          applyShops(mergeErpShops(metricShops, dir && dir.length ? dir : []));
+        });
     }
 
     function load() {
@@ -360,10 +488,8 @@
           }
           if (data && data.ok && data.shops && data.shops.length) {
             try {
-              const mapped = fromErp(data);
-              state.shops = mapped.shops;
-              state.rows = mapped.rows;
-              render();
+              applyShops(data.shops);
+              loadShopDirectory(data.shops);
               return;
             } catch (_err) {
               throw new Error("empty");
