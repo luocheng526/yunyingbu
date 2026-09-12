@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.364-home-teamgrid */
+/* xm-module-home 0.1.365-home-teamerp */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1085,7 +1085,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.364-home-teamgrid");
+    board.setAttribute("data-hm-js", "0.1.365-home-teamerp");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", state.view === "team");
@@ -1128,7 +1128,7 @@
         : state.view === "team"
           ? (gapText
             ? "人管对不上：" + gapText
-            : "团队店按人管责权，数字只按店铺id对齐 ERP。")
+            : "团队店按组织中心责权，数字按店铺id或店名对齐星脉 ERP。")
           : state.view === "board"
             ? "排行榜按人管职务和责权店，只按店铺id对齐 ERP 后汇总支付金额 / 利润。"
             : "数字来自星脉 ERP 店铺汇总。净销售额按支付金额减退款。";
@@ -1596,7 +1596,15 @@
 
   function fetchCatalogPack() {
     return api("/api/data/shop-options").then(function (data) {
-      var records = withShopIds((data && data.records) || []);
+      var records = ((data && data.records) || []).map(function (row) {
+        return {
+          shopId: normShopId(row && (row.shopId || row.id)),
+          shopName: (row && (row.shopName || row.name)) || "",
+          id: row && row.id
+        };
+      }).filter(function (row) {
+        return row.shopId || row.shopName;
+      });
       if (records.length) {
         return { records: records, summary: null };
       }
@@ -1697,6 +1705,36 @@
     return "";
   }
 
+  function normShopName(value) {
+    return String(value == null ? "" : value).replace(/\s+/g, "").toLowerCase();
+  }
+
+  function mapByShopName(records) {
+    var map = {};
+    (records || []).forEach(function (row) {
+      var name = String((row && (row.shopName || row.storeName || row.name)) || "").trim();
+      if (!name) {
+        return;
+      }
+      map[name] = row;
+      map[normShopName(name)] = row;
+    });
+    return map;
+  }
+
+  function resolveErpId(shop, catalogByName) {
+    var id = shopErpId(shop);
+    if (id) {
+      return id;
+    }
+    var name = shopDisplayName(shop);
+    var hit = (catalogByName && (catalogByName[name] || catalogByName[normShopName(name)])) || null;
+    if (!hit) {
+      return "";
+    }
+    return normShopId(hit.shopId || hit.id);
+  }
+
   function dutyShopsFrom(orgPack, peopleShops) {
     if (orgPack && Object.prototype.toString.call(orgPack.stores) === "[object Array]") {
       return orgPack.stores.filter(function (row) {
@@ -1795,7 +1833,16 @@
 
   function teamPredicate(name) {
     return function (shop) {
-      var text = String(shop.team || "") + String(shop.chief || "") + String(shop.pack || "") + String(shop.name || "") + String(shop.storeName || "");
+      if (String(shop.manager || "").trim() === name) {
+        return true;
+      }
+      var text =
+        String(shop.team || "") +
+        String(shop.chief || "") +
+        String(shop.pack || "") +
+        String(shop.lead || "") +
+        String(shop.name || "") +
+        String(shop.storeName || "");
       return text.indexOf(name) !== -1;
     };
   }
@@ -1804,6 +1851,7 @@
     var erp = mapByShopId(rangePack && rangePack.records);
     var prevErp = mapByShopId(prevPack && prevPack.records);
     var catalog = mapByShopId((catalogPack && catalogPack.records) || (rangePack && rangePack.records));
+    var catalogByName = mapByShopName((catalogPack && catalogPack.records) || (rangePack && rangePack.records) || []);
     var shops = dutyShops || [];
     var mismatches = [];
     function oneTeam(key, name, href) {
@@ -1816,10 +1864,10 @@
           return;
         }
         var label = shopDisplayName(shop);
-        var id = shopErpId(shop);
+        var id = resolveErpId(shop, catalogByName);
         var owner = (shop.owner && String(shop.owner).trim()) || ownerOfShop(shop, grants);
         if (!id) {
-          mismatches.push(name + " · " + label + "（人管有店，未填店铺id）");
+          mismatches.push(name + " · " + label + "（人管有店，未填店铺id，店名也对不上 ERP）");
           rows.push({
             shop: label,
             owner: owner,
@@ -1878,8 +1926,9 @@
     };
   }
 
-  function buildLadders(people, dutyShops, rangePack) {
+  function buildLadders(people, dutyShops, rangePack, catalogPack) {
     var erp = mapByShopId(rangePack && rangePack.records);
+    var catalogByName = mapByShopName((catalogPack && catalogPack.records) || []);
     function amount(person, field) {
       var total = 0;
       var ok = false;
@@ -1887,7 +1936,7 @@
         if (!personOwnsShop(person, shop)) {
           return;
         }
-        var id = shopErpId(shop);
+        var id = resolveErpId(shop, catalogByName);
         var row = id ? erp[id] : null;
         var n = row ? asNum(row[field]) : null;
         if (n != null) {
@@ -2017,7 +2066,7 @@
           state.cards = companyCardsFrom(summaryFrom(rangePack), summaryFrom(prevPack));
           var built = buildTeams(dutyShops, grants, rangePack, prevPack, catalogPack);
           state.teams = built.teams;
-          state.ladders = buildLadders(people, dutyShops, rangePack);
+          state.ladders = buildLadders(people, dutyShops, rangePack, catalogPack);
           state.gaps = built.mismatches;
           state.source = (rangePack.summary && rangePack.summary.payAmount != null) || (rangePack.records && rangePack.records.length) ? "xingmai-erp" : "";
           paint(root, state);

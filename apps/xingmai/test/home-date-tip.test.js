@@ -34,6 +34,13 @@ test("custom range allows 30 inclusive days and rejects 31", () => {
   assert.equal(withinDays("2026-09-11", "2026-09-11", 30), true);
 });
 
+test("team KPIs resolve ERP shop id from storeId or shop-options name", () => {
+  assert.match(homeJs, /function resolveErpId/);
+  assert.match(homeJs, /function mapByShopName/);
+  assert.match(homeJs, /function normShopName/);
+  assert.match(homeJs, /shop\.manager/);
+});
+
 test("team view links to data overview and packs KPIs into three compact rows", () => {
   assert.match(homeJs, /function teamBlockHtml/);
   assert.match(homeJs, /打开数据总览/);
