@@ -49,7 +49,10 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /\.xm-hm-team-kpis\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(homeJs, /\.xm-hm-team\{display:flex;flex-direction:column;gap:10px;min-width:0;background:#eef5ff/);
   assert.match(homeJs, /卡片可拖拽换位/);
-  assert.match(homeJs, /\.xm-hm-teams\{display:grid;grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)/);
+  assert.match(homeJs, /--xm-hm-team-cols/);
+  assert.match(homeJs, /label: "经理团队"/);
+  assert.match(homeJs, /label: "主管团队"/);
+  assert.match(homeJs, /function shopOnRoleTeam/);
 });
 
 test("homepage money and rates show as rounded integers", () => {

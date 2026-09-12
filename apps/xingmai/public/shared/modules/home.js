@@ -1,8 +1,9 @@
-/* xm-module-home 0.1.368-home-team4x4 */
+/* xm-module-home 0.1.369-home-chiefs */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
-    { key: "team", label: "团队" },
+    { key: "team", label: "经理团队" },
+    { key: "chief", label: "主管团队" },
     { key: "live", label: "实时" },
     { key: "board", label: "排行榜" }
   ];
@@ -552,9 +553,12 @@
   }
 
   function teamsCompareHtml(teams, hide) {
-    var left = (teams && teams[0]) || blankTeams()[0];
-    var right = (teams && teams[1]) || blankTeams()[1];
-    return teamBlockHtml(left, hide) + teamBlockHtml(right, hide);
+    var list = teams && teams.length ? teams : blankTeams();
+    return list
+      .map(function (team) {
+        return teamBlockHtml(team, hide);
+      })
+      .join("");
   }
 
   function standItemHtml(row, place, unit) {
@@ -949,9 +953,9 @@
       ".xm-hm.is-live .xm-hm-kpis,.xm-hm.is-board .xm-hm-kpis,.xm-hm.is-team .xm-hm-kpis,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
       ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden]{display:none}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
-      ".xm-hm-teams{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 16px;align-items:start;position:relative}" +
+      ".xm-hm-teams{display:grid;grid-template-columns:repeat(var(--xm-hm-team-cols,2),minmax(220px,1fr));gap:12px 16px;align-items:start;position:relative;overflow-x:auto}" +
       ".xm-hm-team{display:flex;flex-direction:column;gap:10px;min-width:0;background:#eef5ff;border:1px solid #7ea8e0;border-radius:12px;padding:12px 12px 10px;box-shadow:0 1px 2px rgba(47,84,235,.08)}" +
-      ".xm-hm-team[data-team=\"han\"]{background:#e7f1ff;border-color:#6f9ad6}" +
+      ".xm-hm-team:nth-child(even){background:#e7f1ff;border-color:#6f9ad6}" +
       ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start}" +
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border-color:#c5d8f2}" +
       ".xm-hm.is-team .xm-hm-card{min-height:104px;padding:12px 12px 10px;border-radius:8px;cursor:grab}" +
@@ -1028,7 +1032,7 @@
       ".xm-hm-pop h3{margin:0 0 8px;font-size:13px}" +
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{margin:8px 0 0;color:var(--xm-muted);font-size:12px}" +
-      "@media (max-width:1100px){.xm-hm-teams{grid-template-columns:1fr}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}" +
+      "@media (max-width:1100px){.xm-hm-teams{grid-template-columns:1fr}.xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}" +
       "@media (max-width:1200px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
       "@media (max-width:700px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts,.xm-hm-team-kpis{grid-template-columns:1fr}.xm-hm-team-head{flex-direction:column}.xm-hm-cal-months{flex-direction:column}}"
     );
@@ -1075,7 +1079,15 @@
     });
     var live = state.live || blankLive();
     var shops = state.shops && state.shops.length ? state.shops : [];
-    var teams = state.teams && state.teams.length ? state.teams : blankTeams();
+    var teamView = state.view === "team" || state.view === "chief";
+    var teams =
+      state.view === "chief"
+        ? state.chiefs && state.chiefs.length
+          ? state.chiefs
+          : blankRoleTeams("主管")
+        : state.teams && state.teams.length
+          ? state.teams
+          : blankTeams();
     var hero = readChart(live.hero, blankLive().hero);
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
@@ -1086,10 +1098,10 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.368-home-team4x4");
+    board.setAttribute("data-hm-js", "0.1.369-home-chiefs");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
-    board.classList.toggle("is-team", state.view === "team");
+    board.classList.toggle("is-team", teamView);
     Array.prototype.forEach.call(root.querySelectorAll("[data-view]"), function (btn) {
       btn.classList.toggle("is-on", btn.getAttribute("data-view") === state.view);
     });
@@ -1098,7 +1110,8 @@
     });
     root.querySelector("#xm-hm-date-text").textContent = formatDashDate(state.from) + " 至 " + formatDashDate(state.to);
     root.querySelector("#xm-hm-kpis").innerHTML = cards.map(cardHtml).join("");
-    root.querySelector("#xm-hm-teams").hidden = state.view !== "team";
+    root.querySelector("#xm-hm-teams").hidden = !teamView;
+    root.querySelector("#xm-hm-teams").style.setProperty("--xm-hm-team-cols", String(Math.max(teams.length, 1)));
     root.querySelector("#xm-hm-teams").innerHTML = teamsCompareHtml(teams, hide);
     root.querySelector("#xm-hm-live").hidden = state.view !== "live";
     root.querySelector("#xm-hm-board").hidden = state.view !== "board";
@@ -1120,16 +1133,16 @@
       }).join("") +
       "</tbody></table></div>";
     root.querySelector("#xm-hm-ladders").innerHTML = (state.ladders || blankLadders()).map(ladderHtml).join("");
-    var gapText = (state.gaps || []).filter(function (item) {
+    var gapText = ((state.view === "chief" ? state.chiefGaps : state.teamGaps) || state.gaps || []).filter(function (item) {
       return item.indexOf("人管有店") !== -1 || item.indexOf("韩梦凯 ·") !== -1;
     }).join("；");
     root.querySelector("#xm-hm-note").textContent =
       state.view === "live"
         ? "实时数字来自数据中心 ERP，每5分钟拉一次。昨今曲线各用当日总额，没有分时点。"
-        : state.view === "team"
+        : state.view === "team" || state.view === "chief"
           ? (gapText
             ? "人管对不上：" + gapText
-            : "团队店按组织中心责权，数字按店铺id或店名对齐星脉 ERP。")
+            : (state.view === "chief" ? "主管" : "经理") + "团队按组织中心责权，数字按店铺id或店名对齐星脉 ERP。")
           : state.view === "board"
             ? "排行榜按人管职务和责权店，按店铺id或店名对齐 ERP 后汇总支付金额 / 利润。"
             : "数字来自星脉 ERP 店铺汇总。净销售额按支付金额减退款。";
@@ -1460,6 +1473,13 @@
   }
 
   function blankTeams() {
+    return blankRoleTeams("经理");
+  }
+
+  function blankRoleTeams(role) {
+    if (role === "主管") {
+      return [{ key: "chief", name: "主管", href: "/data/overview", cards: blankCompanyCards(), shops: [] }];
+    }
     return [
       { key: "shen", name: "沈子晗", href: "/data/overview", cards: blankCompanyCards(), shops: [] },
       { key: "han", name: "韩梦凯", href: "/data/overview", cards: blankCompanyCards(), shops: [] }
@@ -1758,7 +1778,7 @@
     if (!name) {
       return false;
     }
-    if (String(shop.owner || "").trim() === name || String(shop.lead || "").trim() === name) {
+    if (String(shop.owner || "").trim() === name || String(shop.lead || "").trim() === name || String(shop.supervisor || "").trim() === name) {
       return true;
     }
     if (person.role === "经理") {
@@ -1851,15 +1871,73 @@
     };
   }
 
-  function buildTeams(dutyShops, grants, rangePack, prevPack, catalogPack) {
+  function teamLeadNames(people, dutyShops, role) {
+    var seen = {};
+    var names = [];
+    function add(name) {
+      var n = String(name || "").trim();
+      if (!n || n === "管理员" || seen[n]) {
+        return;
+      }
+      seen[n] = true;
+      names.push(n);
+    }
+    (people || []).forEach(function (person) {
+      if (person && person.status === "在职" && person.role === role) {
+        add(person.name);
+      }
+    });
+    (dutyShops || []).forEach(function (shop) {
+      if (role === "经理") {
+        add(shop && shop.manager);
+      }
+      if (role === "主管") {
+        add(shop && shop.supervisor);
+      }
+    });
+    if (!names.length && role === "经理") {
+      add("沈子晗");
+      add("韩梦凯");
+    }
+    return names;
+  }
+
+  function shopOnRoleTeam(shop, name, role, person) {
+    if (!shop || !name) {
+      return false;
+    }
+    if (role === "主管") {
+      if (String(shop.supervisor || "").trim() === name) {
+        return true;
+      }
+      if (String(shop.lead || "").trim() === name) {
+        return true;
+      }
+      if (String(shop.groupId || "").trim() === name) {
+        return true;
+      }
+      return !!(person && (person.visibleShops || []).indexOf(shopDisplayName(shop)) !== -1);
+    }
+    return teamPredicate(name)(shop);
+  }
+
+  function buildTeams(dutyShops, grants, rangePack, prevPack, catalogPack, people, role) {
     var erp = mapByShopId(rangePack && rangePack.records);
     var prevErp = mapByShopId(prevPack && prevPack.records);
     var catalog = mapByShopId((catalogPack && catalogPack.records) || (rangePack && rangePack.records));
     var catalogByName = mapByShopName((catalogPack && catalogPack.records) || (rangePack && rangePack.records) || []);
     var shops = dutyShops || [];
     var mismatches = [];
+    var peopleByName = {};
+    (people || []).forEach(function (person) {
+      if (person && person.name) {
+        peopleByName[person.name] = person;
+      }
+    });
     function oneTeam(key, name, href) {
-      var pred = teamPredicate(name);
+      var pred = function (shop) {
+        return shopOnRoleTeam(shop, name, role || "经理", peopleByName[name]);
+      };
       var rows = [];
       var matched = [];
       var prevMatched = [];
@@ -1929,7 +2007,9 @@
       };
     }
     return {
-      teams: [oneTeam("shen", "沈子晗", "/data/overview"), oneTeam("han", "韩梦凯", "/data/overview")],
+      teams: teamLeadNames(people, shops, role || "经理").map(function (name, index) {
+        return oneTeam("t" + index, name, "/data/overview");
+      }),
       mismatches: mismatches
     };
   }
@@ -2005,6 +2085,9 @@
         live: blankLive(),
         shops: [],
         teams: blankTeams(),
+        chiefs: blankRoleTeams("主管"),
+        teamGaps: [],
+        chiefGaps: [],
         ladders: blankLadders(),
         liveAt: "",
         gaps: [],
@@ -2072,9 +2155,13 @@
           var grants = pack[5] && pack[5].grants ? pack[5].grants : [];
           var dutyShops = dutyShopsFrom(pack[6], peopleShops);
           state.cards = companyCardsFrom(summaryFrom(rangePack), summaryFrom(prevPack));
-          var built = buildTeams(dutyShops, grants, rangePack, prevPack, catalogPack);
+          var built = buildTeams(dutyShops, grants, rangePack, prevPack, catalogPack, people, "经理");
+          var chiefs = buildTeams(dutyShops, grants, rangePack, prevPack, catalogPack, people, "主管");
           state.teams = built.teams;
+          state.chiefs = chiefs.teams;
           state.ladders = buildLadders(people, dutyShops, rangePack, catalogPack);
+          state.teamGaps = built.mismatches;
+          state.chiefGaps = chiefs.mismatches;
           state.gaps = built.mismatches;
           state.source = (rangePack.summary && rangePack.summary.payAmount != null) || (rangePack.records && rangePack.records.length) ? "xingmai-erp" : "";
           paint(root, state);
@@ -2101,7 +2188,7 @@
         var view = event.target.closest("[data-view]");
         if (view) {
           state.view = view.getAttribute("data-view");
-          state.mode = state.view === "team" ? "company" : "shop";
+          state.mode = state.view === "team" || state.view === "chief" ? "company" : "shop";
           closeCal();
           paint(root, state);
           if (state.view === "live") {
@@ -2257,6 +2344,9 @@
         }
         state.cards = sortCards(state.cards && state.cards.length ? state.cards : blankCompanyCards());
         (state.teams || []).forEach(function (team) {
+          team.cards = sortCards(team.cards);
+        });
+        (state.chiefs || []).forEach(function (team) {
           team.cards = sortCards(team.cards);
         });
       }
