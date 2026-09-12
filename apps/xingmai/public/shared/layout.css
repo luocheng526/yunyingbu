@@ -1042,7 +1042,7 @@ html[data-theme="dark"] .xm-content [style*="background: white"] {
   font-size: 13px;
 }
 
-/* xm-phone-panel 0.1.142  窄屏抽屉；首页卡片三列；时间只留昨天、上月、自定义。 */
+/* xm-phone-panel 0.1.143  窄屏抽屉；首页卡片三列；时间只留昨天、上月、自定义；自定义日历整屏。 */
 .xm-phone-menu,
 .xm-phone-mask {
   display: none;
@@ -1295,15 +1295,78 @@ html[data-theme="dark"] .xm-content [style*="background: white"] {
     display: none !important;
   }
 
-  #xm-hm .xm-hm-cal {
+  html.xm-phone-cal,
+  html.xm-phone-cal body {
+    overflow: hidden !important;
+  }
+
+  #xm-hm .xm-hm-cal:not([hidden]) {
+    display: flex !important;
+    flex-direction: column !important;
+    position: fixed !important;
+    inset: 0 !important;
     left: 0 !important;
     right: 0 !important;
-    width: auto !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    z-index: 90 !important;
+    width: 100vw !important;
     max-width: none !important;
+    height: 100dvh !important;
+    margin: 0 !important;
+    padding: 0 0 env(safe-area-inset-bottom) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    overflow: auto !important;
+    -webkit-overflow-scrolling: touch;
+    touch-action: manipulation;
+    background: var(--xm-card, #fff) !important;
+  }
+
+  #xm-hm .xm-hm-cal-arrow {
+    display: none !important;
+  }
+
+  .xm-phone-cal-bar {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: calc(10px + env(safe-area-inset-top)) 14px 10px;
+    background: var(--xm-card, #fff);
+    border-bottom: 1px solid var(--xm-line);
+  }
+
+  .xm-phone-cal-cancel {
+    border: 0;
+    background: transparent;
+    color: var(--xm-primary);
+    font-size: 16px;
+    line-height: 1;
+    padding: 8px 4px;
+    cursor: pointer;
+  }
+
+  .xm-phone-cal-hint {
+    margin: 0;
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--xm-muted);
   }
 
   #xm-hm .xm-hm-cal-months {
+    display: flex !important;
     flex-direction: column !important;
+    flex: 1 1 auto;
+    padding: 4px 8px 20px !important;
+  }
+
+  #xm-hm .xm-hm-cal-month {
+    padding: 16px 6px 8px !important;
   }
 
   #xm-hm .xm-hm-cal-month + .xm-hm-cal-month {
@@ -1311,9 +1374,45 @@ html[data-theme="dark"] .xm-content [style*="background: white"] {
     border-top: 1px solid var(--xm-line) !important;
   }
 
-  #xm-hm .xm-hm-cal-grid button {
+  #xm-hm .xm-hm-cal-caption {
+    grid-template-columns: 80px minmax(0, 1fr) 80px !important;
+  }
+
+  #xm-hm .xm-hm-cal-caption strong {
+    white-space: nowrap !important;
+    font-size: 17px !important;
+  }
+
+  #xm-hm .xm-hm-cal-nav button {
     width: 36px !important;
     height: 36px !important;
+    font-size: 16px !important;
+  }
+
+  #xm-hm .xm-hm-cal-week {
+    font-size: 13px !important;
+    padding: 10px 0 !important;
+  }
+
+  #xm-hm .xm-hm-cal-grid button {
+    width: 100% !important;
+    height: 44px !important;
+    margin: 0 !important;
+    border-radius: 8px !important;
+    font-size: 16px !important;
+    touch-action: manipulation;
+  }
+
+  #xm-hm .xm-hm-cal-grid button.is-start,
+  #xm-hm .xm-hm-cal-grid button.is-end {
+    width: 100% !important;
+    border-radius: 8px !important;
+    background: var(--xm-primary) !important;
+    color: #fff !important;
+  }
+
+  #xm-hm .xm-hm-cal-grid button.is-in {
+    background: var(--xm-primary-soft, #e6f4ff) !important;
   }
 
   #xm-hm .xm-hm-kpis,

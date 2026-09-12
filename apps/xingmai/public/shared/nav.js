@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.142 */
+/* xm-fast-shell 0.1.143 */
 (function () {
-  const ASSET_VER = "0.1.142";
+  const ASSET_VER = "0.1.143";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -1145,15 +1145,17 @@
       "#xm-hm .xm-hm-ranges:has(>[data-range].is-on) .xm-hm-dates-text{font-size:0!important;line-height:0!important;color:transparent!important}" +
       "#xm-hm .xm-hm-ranges:has(>[data-range].is-on) .xm-hm-dates-text::after{content:\"自定义\";font-size:13px!important;line-height:32px!important;color:var(--xm-ink)}" +
       "#xm-hm .xm-hm-ranges:has(>[data-range].is-on) .xm-hm-dates-ico,#xm-hm .xm-hm-ranges:has(>[data-range].is-on) .xm-hm-dates-clear{display:none!important}" +
-      "#xm-hm .xm-hm-cal{left:0!important;right:0!important;width:auto!important;max-width:none!important}" +
+      "html.xm-phone-cal,html.xm-phone-cal body{overflow:hidden!important}" +
+      "#xm-hm .xm-hm-cal:not([hidden]){position:fixed!important;inset:0!important;z-index:90!important;width:100vw!important;max-width:none!important;height:100dvh!important;margin:0!important;border-radius:0!important;overflow:auto!important;background:var(--xm-card,#fff)!important}" +
+      "#xm-hm .xm-hm-cal-arrow{display:none!important}" +
       "#xm-hm .xm-hm-cal-months{flex-direction:column!important}" +
-      "#xm-hm .xm-hm-cal-month+.xm-hm-cal-month{border-left:0!important;border-top:1px solid var(--xm-line)!important}" +
-      "#xm-hm .xm-hm-cal-grid button{width:36px!important;height:36px!important}" +
+      "#xm-hm .xm-hm-cal-caption strong{white-space:nowrap!important}" +
+      "#xm-hm .xm-hm-cal-grid button{width:100%!important;height:44px!important;margin:0!important;border-radius:8px!important}" +
+      "#xm-hm .xm-hm-cal-grid button.is-start,#xm-hm .xm-hm-cal-grid button.is-end{width:100%!important;border-radius:8px!important}" +
       "#xm-hm .xm-hm-kpis,#xm-hm .xm-hm-team-kpis,#xm-hm .xm-hm-live-cards{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important}" +
       "#xm-hm .xm-hm-card{min-height:0!important;padding:8px!important;background:var(--xm-card)!important;border:1px solid var(--xm-line)!important;border-radius:8px!important}" +
       "#xm-hm .xm-hm-card-head span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}" +
       "#xm-hm .xm-hm-value{margin-top:6px!important;font-size:16px!important}" +
-      "#xm-hm .xm-hm-cal{left:8px;right:8px;width:auto}" +
       "}"
     );
   }
@@ -1202,9 +1204,111 @@
     new MutationObserver(attach).observe(document.documentElement, { childList: true, subtree: true });
   }
 
+  function isPhoneMq() {
+    return !!(window.matchMedia && window.matchMedia(PHONE_MQ).matches);
+  }
+
+  function decoratePhoneCal() {
+    const cal = document.getElementById("xm-hm-cal");
+    const open = !!(cal && !cal.hidden && isPhoneMq());
+    document.documentElement.classList.toggle("xm-phone-cal", open);
+    if (!open || !cal) {
+      return;
+    }
+    let bar = cal.querySelector(".xm-phone-cal-bar");
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.className = "xm-phone-cal-bar";
+      bar.innerHTML =
+        '<button type="button" class="xm-phone-cal-cancel">取消</button>' +
+        '<p class="xm-phone-cal-hint">点起始和结束，自动确定 · 连点同一天只看当天</p>';
+      cal.insertBefore(bar, cal.firstChild);
+      bar.querySelector(".xm-phone-cal-cancel").addEventListener("click", function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        const dates = document.getElementById("xm-hm-dates");
+        if (dates) {
+          dates.click();
+        }
+      });
+    }
+    const hint = bar.querySelector(".xm-phone-cal-hint");
+    if (hint) {
+      const picking = cal.querySelector(".is-start") && !cal.querySelector(".is-end");
+      hint.textContent = picking
+        ? "再点结束日自动确定 · 再点这一天只看当天"
+        : "点起始和结束，自动确定 · 连点同一天只看当天";
+    }
+  }
+
+  function armPhoneCalDouble(ymd) {
+    window.setTimeout(function () {
+      const cal = document.getElementById("xm-hm-cal");
+      if (!cal || cal.hidden || !isPhoneMq()) {
+        return;
+      }
+      const again = cal.querySelector('[data-ymd="' + ymd + '"]');
+      if (again && !again.disabled) {
+        again.click();
+      }
+    }, 0);
+  }
+
+  function watchPhoneHomeCal() {
+    if (window.__xmPhoneCalWatch) {
+      return;
+    }
+    window.__xmPhoneCalWatch = 1;
+    let lastYmd = "";
+    let lastAt = 0;
+    document.addEventListener(
+      "pointerup",
+      function (event) {
+        if (!isPhoneMq() || !document.documentElement.classList.contains("xm-phone-cal")) {
+          return;
+        }
+        const day = event.target && event.target.closest && event.target.closest("[data-ymd]");
+        if (!day || day.disabled) {
+          return;
+        }
+        const ymd = day.getAttribute("data-ymd") || "";
+        const now = Date.now();
+        const twice = !!(ymd && ymd === lastYmd && now - lastAt < 400);
+        lastYmd = ymd;
+        lastAt = now;
+        if (twice) {
+          armPhoneCalDouble(ymd);
+        }
+      },
+      true
+    );
+    const attach = function () {
+      const cal = document.getElementById("xm-hm-cal");
+      if (!cal) {
+        decoratePhoneCal();
+        return;
+      }
+      if (cal.dataset.xmPhoneCal === "1") {
+        decoratePhoneCal();
+        return;
+      }
+      cal.dataset.xmPhoneCal = "1";
+      new MutationObserver(decoratePhoneCal).observe(cal, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["hidden", "class"]
+      });
+      decoratePhoneCal();
+    };
+    attach();
+    new MutationObserver(attach).observe(document.documentElement, { childList: true, subtree: true });
+  }
+
   function ensurePhoneChrome() {
     ensurePhonePanelCss();
     watchPhoneHomeDates();
+    watchPhoneHomeCal();
     const topbar = document.querySelector(".xm-topbar");
     if (!topbar) {
       return;
