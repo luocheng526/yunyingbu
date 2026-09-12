@@ -513,8 +513,8 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
   color: #c62828;
 }
 .ch-card {
-  min-height: 118px;
-  padding: 14px 16px 16px;
+  min-height: 128px;
+  padding: 16px 18px 18px;
   background: transparent;
   border: 0;
   border-right: 1px solid var(--ch-line);
@@ -524,19 +524,27 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
 .ch-card:nth-child(6n) {
   border-right: 0;
 }
-.ch-card .label,
-.ch-card .extra {
-  font-size: 12px;
-  opacity: 0.55;
+.ch-card .label {
+  font-size: 13px;
+  line-height: 20px;
+  color: #8c8c8c;
+  opacity: 1;
 }
 .ch-card .value {
-  margin-top: 10px;
-  font-size: 22px;
+  margin-top: 8px;
+  font-size: 28px;
   font-weight: 700;
+  line-height: 1.15;
   letter-spacing: -0.02em;
+  color: #141414;
+  font-variant-numeric: tabular-nums;
 }
 .ch-card .extra {
-  margin-top: 8px;
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 18px;
+  color: #8c8c8c;
+  opacity: 1;
 }
 .ch-hero .label {
   display: flex;

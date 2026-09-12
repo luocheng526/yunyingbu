@@ -27,11 +27,27 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov2";
+      link.href = "/data-pages.css?v=data-ov3";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
     ensureSummaryStyle();
+    ensureCardTypeStyle();
+  }
+
+  function ensureCardTypeStyle() {
+    if (document.getElementById("ch-card-type-style")) {
+      return;
+    }
+    const style = document.createElement("style");
+    style.id = "ch-card-type-style";
+    style.textContent =
+      ".ch-card .label{font-size:13px;line-height:20px;color:#8c8c8c;opacity:1}" +
+      ".ch-card .value{margin-top:8px;font-size:28px;font-weight:700;line-height:1.15;letter-spacing:-.02em;color:#141414;font-variant-numeric:tabular-nums}" +
+      ".ch-card .extra{margin-top:10px;font-size:12px;line-height:18px;color:#8c8c8c;opacity:1}" +
+      ".ch-hero .label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}" +
+      ".ch-clock{font-size:13px;color:#8c8c8c;opacity:1}";
+    document.head.appendChild(style);
   }
 
   function ensureSummaryStyle() {

@@ -517,8 +517,10 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /\/data\/paid/);
   assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
   assert.match(dataMod, /restore-v1/);
-  assert.match(dataMod, /data-overview\.js\?v=data-ov2/);
+  assert.match(dataMod, /data-overview\.js\?v=data-ov3/);
   assert.match(css, /ch-pill/);
+  assert.match(css, /\.ch-card \.value[\s\S]*font-size: 28px/);
+  assert.match(css, /#8c8c8c/);
   assert.match(css, /ch-cal-days/);
   assert.match(css, /ch-cal-pop/);
   assert.match(dataMod, /正在加载数据总览/);
