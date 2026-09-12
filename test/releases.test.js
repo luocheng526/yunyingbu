@@ -33,6 +33,7 @@ import {
   RELEASES_MODULE_HREF,
   RELEASES_SCROLL_STYLE_ID
 } from "../src/modules/releases/auth.js";
+import { MODULES } from "../src/modules/releases/store.js";
 
 const signedInUser = { username: "罗成" };
 let activeCookie = "";
@@ -132,6 +133,23 @@ function publishBody(order = "按这份文档发版") {
   return JSON.stringify({ order });
 }
 
+test("MODULES includes 甄选商学院", () => {
+  assert.equal(MODULES.includes("甄选商学院"), true);
+});
+
+test("POST /api/releases accepts module 甄选商学院", async () => {
+  await withServer(async (base) => {
+    const created = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("college", "学院对话", "甄选商学院", "恢复模块白名单", {
+        files: ["public/releases.css"]
+      })
+    });
+    assert.notEqual(created.body.error, "模块不在允许列表中");
+    assert.equal(created.res.status, 201);
+    assert.equal(created.body.item.module, "甄选商学院");
+  });
+});
 
 test("GET /releases is the release center page", async () => {
   await withServer(async (base) => {

@@ -1,8 +1,12 @@
 import { isMysqlConfigured } from "../../db/pool.js";
-import { createMemoryStore } from "./store-memory.js";
+import { createMemoryStore, MODULES as MEMORY_MODULES } from "./store-memory.js";
 import { createMysqlStore } from "./store-mysql.js";
 
-export { MODULES, REVIEWER } from "./store-memory.js";
+export { REVIEWER } from "./store-memory.js";
+
+export const MODULES = MEMORY_MODULES.includes("甄选商学院")
+  ? MEMORY_MODULES
+  : [...MEMORY_MODULES, "甄选商学院"];
 
 function asyncWrap(store) {
   const wrapped = {};

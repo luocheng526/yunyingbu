@@ -55,7 +55,7 @@ Cookie: 登录会话
   "version": "0.1.N-说明",   // N 来自 /api/releases/next
   "applicant": "你的对话名",
   "source": "你的对话名",
-  "module": "首页|数据中心|沈子晗|韩梦凯|人员管理|版本发布中心|个人中心",
+  "module": "首页|数据中心|沈子晗|韩梦凯|人员管理|版本发布中心|个人中心|甄选商学院",
   "summary": "更新了什么",
   "files": ["public/...", "src/..."],
   "acceptance": "上线后怎么验",
