@@ -15,3 +15,5 @@ window.XmModules["/data"] = { mount: function (root) { /* 只画内容 */ }, unm
 
 `cursor/home-nav-workbench-e50e` 已整支删除。不要重建「每页完整 HTML + 自己带 nav」。
 禁止 SSH、禁止自己发版。做完直接交单。
+
+要加/删/改子菜单：不要改 `nav.js`。摘要写「请主框架：……」，让用户把这句话丢给主框架对话框。只改 `shared/modules/<id>.js` 不要叫升壳。见 [00-shell-bump.md](00-shell-bump.md)。

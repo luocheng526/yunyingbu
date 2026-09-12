@@ -14,7 +14,7 @@
 - `src/modules/profile/`
 - `public/shared/modules/me.js`
 
-【你不能改】壳四件套、`nav-items.js`、人员名册、别人的业务页。
+【你不能改】壳四件套、`nav-items.js`、人员名册、别人的业务页。`pages.js` 与 `middleware.js` 成套改壳时才升 `SHELL_ASSET_VER`。只改登录页不要叫主框架升壳。见 [00-shell-bump.md](00-shell-bump.md)。
 
 【白名单（未登录可访问）】
 - `GET /login` 及登录页静态资源

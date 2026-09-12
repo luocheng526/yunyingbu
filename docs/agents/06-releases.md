@@ -17,7 +17,7 @@
 - `public/shared/modules/releases.js`
 - `src/modules/releases/`（补丁，不是整文件换内核/闸）
 
-【你不能改】壳、`src/app.js`、首页/登录/人员等业务。落地只走本页「通过」，禁止 SSH 自己推生产。
+【你不能改】壳、`src/app.js`、首页/登录/人员等业务。落地只走本页「通过」，禁止 SSH 自己推生产。升壳规矩见 [00-shell-bump.md](00-shell-bump.md)。
 
 【闸必须守住】
 - 空 `files` 拒

@@ -13,7 +13,7 @@
 - `src/modules/agents/`
 - `public/shared/modules/agents.js`
 
-【你不能改】壳、`nav.js`、`nav-items.js`、内核、登录/改密、别人的模块。侧栏入口主框架已经挂好。
+【你不能改】壳、`nav.js`、`nav-items.js`、内核、登录/改密、别人的模块。侧栏入口主框架已经挂好。要改侧栏：摘要写「请主框架：……」。只改 `agents.js` 不要叫升壳。见 [00-shell-bump.md](00-shell-bump.md)。
 
 【对接（已经接上）】
 - 侧栏一级菜单「甄选智能体」→ `/agents`。点击是 `pushState`，不是整页跳。

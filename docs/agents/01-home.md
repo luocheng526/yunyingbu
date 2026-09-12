@@ -13,7 +13,7 @@
 - `src/modules/home/`（`nav-items.js` 除外）
 - 不要改 `public/index.html`（那份是废弃整页，线上 `/` 跳 `/home`）
 
-【你不能改】壳、`nav.js`、`nav-items.js`、内核、登录/改密、别人的模块。侧栏「首页」主框架已经挂在数据中心上面，路径 `/home`。
+【你不能改】壳、`nav.js`、`nav-items.js`、内核、登录/改密、别人的模块。侧栏「首页」主框架已经挂在数据中心上面，路径 `/home`。要改侧栏：摘要写「请主框架：……」。只改 `home.js` 不要叫升壳。见 [00-shell-bump.md](00-shell-bump.md)。
 
 【对接（已经接上）】
 - 侧栏第一项「首页」→ `/home`。点击是 `pushState`，不是整页跳。
