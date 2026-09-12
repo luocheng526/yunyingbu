@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.271 · handbook-move */
+/* xm-module-academy 0.1.463 · upload-title */
 (function () {
-  const ASSET_VER = "0.1.271";
+  const ASSET_VER = "0.1.463";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -273,7 +273,7 @@
     return (
       '<div class="academy-console-stage" id="academy-view-upload" hidden>' +
       '<form id="academy-upload" class="academy-toolbar">' +
-      '<label>标题 <input name="title" required maxlength="160" placeholder="课件标题" /></label>' +
+      '<label>标题 <input name="title" maxlength="160" placeholder="选文件后自动填写" /></label>' +
       '<label>分类 <select name="category">' +
       '<option value="选品与商品">选品与商品</option>' +
       '<option value="流量与投放">流量与投放</option>' +
@@ -289,6 +289,13 @@
       "</div>" +
       logPaneHtml()
     );
+  }
+
+  function courseTitleFromFile(file) {
+    return String((file && file.name) || "")
+      .replace(/\.pptx?$/i, "")
+      .trim()
+      .slice(0, 160);
   }
 
   function examUploadPaneHtml() {
@@ -406,11 +413,23 @@
     }
     const form = root.querySelector("#academy-upload");
     if (form) {
+      const titleInput = form.querySelector('input[name="title"]');
+      const fileInput = form.querySelector('input[type="file"]');
+      if (fileInput && titleInput) {
+        fileInput.addEventListener("change", function () {
+          const file = fileInput.files && fileInput.files[0];
+          if (!String(titleInput.value || "").trim()) {
+            titleInput.value = courseTitleFromFile(file);
+          }
+        });
+      }
       form.addEventListener("submit", function (ev) {
         ev.preventDefault();
         const status = root.querySelector("#academy-upload-status");
-        const fileInput = form.querySelector('input[type="file"]');
         const file = fileInput && fileInput.files && fileInput.files[0];
+        if (titleInput && !String(titleInput.value || "").trim()) {
+          titleInput.value = courseTitleFromFile(file);
+        }
         if (file && /\.ppt$/i.test(file.name) && !/\.pptx$/i.test(file.name)) {
           status.textContent = "请另存为 .pptx 再上传（不支持旧版 .ppt）";
           status.className = "academy-status error";
