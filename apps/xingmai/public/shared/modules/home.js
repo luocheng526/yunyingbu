@@ -973,7 +973,7 @@
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border:0;box-shadow:none}" +
       ".xm-hm-teams .xm-hm-table{min-width:760px;font-variant-numeric:tabular-nums;border-collapse:separate;border-spacing:0;table-layout:fixed}" +
       ".xm-hm-teams .xm-hm-table .xm-hm-num{text-align:right;white-space:nowrap}" +
-      ".xm-hm-teams .xm-hm-table th,.xm-hm-teams .xm-hm-table td{border:0;overflow:hidden;text-overflow:ellipsis}" +
+      ".xm-hm-teams .xm-hm-table th,.xm-hm-teams .xm-hm-table td{border:0;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box}" +
       ".xm-hm-teams .xm-hm-table th{border-right:1px dashed #c8ced8}" +
       ".xm-hm.is-chief .xm-hm-teams .xm-hm-panel{overflow:hidden}" +
       ".xm-hm.is-chief .xm-hm-teams .xm-hm-table{min-width:0}" +
