@@ -46,7 +46,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=shop-wide3";
+      link.href = "/data-pages.css?v=shop-wide4";
       document.head.appendChild(link);
     }
   }
@@ -238,6 +238,53 @@
     return out;
   }
 
+  function shopHasMetrics(shop) {
+    return Boolean(
+      Number(shop && shop.payAmount) ||
+        Number(shop && shop.orderCount) ||
+        Number(shop && shop.refundAmount) ||
+        Number(shop && shop.profit)
+    );
+  }
+
+  function sortShops(shops) {
+    return (shops || []).slice().sort(function (a, b) {
+      const payA = Number(a.payAmount) || 0;
+      const payB = Number(b.payAmount) || 0;
+      if (payB !== payA) {
+        return payB - payA;
+      }
+      return String(a.shopName || "").localeCompare(String(b.shopName || ""), "zh");
+    });
+  }
+
+  function aggregateGoods(records) {
+    const acc = {
+      payAmount: 0,
+      orderCount: 0,
+      netOrderCount: 0,
+      netSales: 0,
+      profit: 0,
+      totalPromotionCost: 0,
+      refundAmount: 0
+    };
+    (records || []).forEach(function (row) {
+      const pay = Number(row.payAmount) || 0;
+      const rate = Number(row.refundRate) || 0;
+      acc.payAmount += pay;
+      acc.orderCount += Number(row.orderCount) || 0;
+      acc.netSales += Number(row.netSalesAmount) || 0;
+      acc.profit += Number(row.profit) || 0;
+      acc.totalPromotionCost += Number(row.promotionCost) || 0;
+      acc.refundAmount += pay * (rate > 1 ? rate / 100 : rate);
+    });
+    acc.netOrderCount = acc.orderCount;
+    acc.refundRate = acc.payAmount ? acc.refundAmount / acc.payAmount : 0;
+    acc.profitRate = acc.payAmount ? acc.profit / acc.payAmount : 0;
+    acc.promotionRate = acc.payAmount ? acc.totalPromotionCost / acc.payAmount : 0;
+    return acc;
+  }
+
   function sumShops(shops) {
     return shops.reduce(
       function (acc, shop) {
@@ -273,7 +320,7 @@
   }
 
   function fromErp(raw) {
-    const shops = raw.shops || [];
+    const shops = sortShops(raw.shops || []);
     const totals = sumShops(shops);
     totals.refundRate = totals.payAmount ? totals.refundAmount / totals.payAmount : 0;
     totals.profitRate = totals.payAmount ? totals.profit / totals.payAmount : 0;
@@ -358,9 +405,13 @@
       customTo: "",
       dateLabel: "",
       rows: [],
-      shops: []
+      shops: [],
+      hint: "正在对接 ERP 店铺指标…",
+      fillDone: 0,
+      fillTotal: 0
     };
     let dead = false;
+    let loadGen = 0;
 
     function render() {
       if (dead || !board) {
@@ -417,7 +468,9 @@
         "</thead><tbody>" +
         body +
         "</tbody></table></div>" +
-        '<p class="sh-hint">已对接 ERP 全部店铺；表头字段都会显示，接口没有的记 0。</p></section>';
+        '<p class="sh-hint">' +
+        escapeHtml(state.hint || "正在对接 ERP 店铺指标…") +
+        "</p></section>";
     }
 
     function json(url) {
@@ -449,7 +502,112 @@
       render();
     }
 
-    function loadShopDirectory(metricShops) {
+    function goodsQuery(shopId, span, page) {
+      const params = new URLSearchParams();
+      params.set("shopId", shopId);
+      params.set("page", String(page || 1));
+      params.set("pageSize", "50");
+      if (span && span.from && span.to) {
+        params.set("from", span.from + " 00:00:00");
+        params.set("to", span.to + " 23:59:59");
+        params.set("payTimeStart", span.from + " 00:00:00");
+        params.set("payTimeEnd", span.to + " 23:59:59");
+      }
+      return "/api/data/goods?" + params.toString();
+    }
+
+    function fetchShopGoods(shopId, span) {
+      return softJson(goodsQuery(shopId, span, 1)).then(function (first) {
+        if (!first || !first.ok) {
+          return null;
+        }
+        const recs = (first.records || []).slice();
+        const pages = Number(first.totalPages) || 1;
+        let chain = Promise.resolve();
+        for (let page = 2; page <= pages; page += 1) {
+          chain = chain.then(function () {
+            return softJson(goodsQuery(shopId, span, page)).then(function (pack) {
+              recs.push.apply(recs, (pack && pack.records) || []);
+            });
+          });
+        }
+        return chain.then(function () {
+          return aggregateGoods(recs);
+        });
+      });
+    }
+
+    function mapLimit(items, limit, worker) {
+      return new Promise(function (resolve) {
+        let index = 0;
+        let active = 0;
+        const out = new Array(items.length);
+        function pump() {
+          if (index >= items.length && active === 0) {
+            resolve(out);
+            return;
+          }
+          while (active < limit && index < items.length) {
+            const cur = index;
+            index += 1;
+            active += 1;
+            Promise.resolve(worker(items[cur], cur))
+              .then(function (val) {
+                out[cur] = val;
+              })
+              .catch(function () {
+                out[cur] = null;
+              })
+              .then(function () {
+                active -= 1;
+                pump();
+              });
+          }
+        }
+        if (!items.length) {
+          resolve(out);
+          return;
+        }
+        pump();
+      });
+    }
+
+    function fillShopMetrics(shops, span, gen) {
+      const pending = (shops || []).filter(function (shop) {
+        return shop.shopId && !shopHasMetrics(shop);
+      });
+      state.fillTotal = pending.length;
+      state.fillDone = 0;
+      if (!pending.length) {
+        state.hint = "已对接 ERP 全部店铺指标。";
+        render();
+        return Promise.resolve();
+      }
+      state.hint = "正在按商品接口补全其余店铺 0/" + pending.length;
+      render();
+      return mapLimit(pending, 4, function (shop) {
+        if (dead || gen !== loadGen) {
+          return null;
+        }
+        return fetchShopGoods(shop.shopId, span).then(function (metrics) {
+          if (dead || gen !== loadGen) {
+            return null;
+          }
+          if (metrics) {
+            Object.assign(shop, metrics);
+          }
+          state.fillDone += 1;
+          state.hint =
+            state.fillDone >= pending.length
+              ? "已对接 ERP 全部店铺指标。"
+              : "正在按商品接口补全其余店铺 " + state.fillDone + "/" + pending.length;
+          applyShops(shops);
+          return metrics;
+        });
+      });
+    }
+
+    function loadShopDirectory(metricShops, span, gen) {
       return softJson("/api/data/shop-options")
         .then(function (opt) {
           const recs = opt && (opt.records || opt.shops);
@@ -466,16 +624,20 @@
           });
         })
         .then(function (dir) {
-          if (dead) {
+          if (dead || gen !== loadGen) {
             return;
           }
-          applyShops(mergeErpShops(metricShops, dir && dir.length ? dir : []));
+          const merged = mergeErpShops(metricShops, dir && dir.length ? dir : []);
+          applyShops(merged);
+          return fillShopMetrics(merged, span, gen);
         });
     }
 
     function load() {
       const span = rangeSpan(state.range, state.customFrom, state.customTo);
+      const gen = (loadGen += 1);
       state.dateLabel = span.dateLabel;
+      state.hint = "正在对接 ERP 店铺指标…";
       const params = new URLSearchParams();
       params.set("from", span.from + " 00:00:00");
       params.set("to", span.to + " 23:59:59");
@@ -483,13 +645,13 @@
       params.set("payTimeEnd", span.to + " 23:59:59");
       return json("/api/data/overview?" + params.toString())
         .then(function (data) {
-          if (dead) {
+          if (dead || gen !== loadGen) {
             return;
           }
           if (data && data.ok && data.shops && data.shops.length) {
             try {
               applyShops(data.shops);
-              loadShopDirectory(data.shops);
+              loadShopDirectory(data.shops, span, gen);
               return;
             } catch (_err) {
               throw new Error("empty");
