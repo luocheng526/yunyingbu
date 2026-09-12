@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.397-home-chiefs */
+/* xm-module-home 0.1.398-home-duty */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -609,10 +609,10 @@
         '"><h2>责权店铺 <span>' +
         shops.length +
         " 店</span></h2>" +
-        '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th><th class="xm-hm-num">数量</th></tr></thead><tbody>' +
+        '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th></tr></thead><tbody>' +
         shops
           .map(function (row, i) {
-            return "<tr><td>" + rankMark(i) + "</td><td>" + escapeHtml(row.shop) + '</td><td class="xm-hm-num">' + escapeHtml((row.metrics || {}).payQty || "—") + "</td></tr>";
+            return "<tr><td>" + rankMark(i) + "</td><td>" + escapeHtml(row.shop) + "</td></tr>";
           })
           .join("") +
         "</tbody></table></div>"
@@ -1121,7 +1121,7 @@
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.397-home-chiefs");
+    board.setAttribute("data-hm-js", "0.1.398-home-duty");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1863,16 +1863,16 @@
       seen[n] = true;
       names.push(n);
     }
-    function addChief(name) {
+    function staffRole(name) {
       var p = byName[String(name || "").trim()];
-      if (p && /运营|助理|经理/.test(String(p.role || ""))) {
-        return;
-      }
-      add(name);
+      return p ? String(p.role || "") : "";
+    }
+    function skipStaff(name) {
+      return /运营|助理|经理/.test(staffRole(name));
     }
     (people || []).forEach(function (person) {
       if (person && person.name) {
-        byName[person.name] = person;
+        byName[String(person.name).trim()] = person;
       }
       if (person && person.status === "在职" && (person.role === role || (role === "主管" && person.role === "储备"))) {
         add(person.name);
@@ -1882,9 +1882,16 @@
       if (role === "经理") {
         add(shop && shop.manager);
       }
-      if (role === "主管") {
-        addChief(shop && shop.supervisor);
-        addChief(shop && shop.assistant);
+      if (role === "主管" && shop) {
+        var sup = String(shop.supervisor || "").trim();
+        var asst = String(shop.assistant || "").trim();
+        var op = String(shop.operator || "").trim();
+        if (sup && !skipStaff(sup)) {
+          add(sup);
+        }
+        if (asst && asst !== op && !skipStaff(asst)) {
+          add(asst);
+        }
       }
     });
     if (!names.length && role === "经理") {
@@ -1901,9 +1908,9 @@
     if (role !== "主管") {
       return teamPredicate(name)(shop);
     }
-    return [shop.supervisor, shop.assistant].some(function (v) {
-      return String(v || "").trim() === name;
-    });
+    var asst = String(shop.assistant || "").trim();
+    var op = String(shop.operator || "").trim();
+    return String(shop.supervisor || "").trim() === name || (asst === name && asst !== op);
   }
 
   function buildTeams(dutyShops, grants, rangePack, prevPack, catalogPack, people, role) {

@@ -53,7 +53,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function filterOwnChiefs/);
   assert.match(homeJs, /function seesAllChiefs/);
   assert.match(homeJs, /shop\.assistant/);
-  assert.match(homeJs, /<th class="xm-hm-num">数量<\/th>/);
+  assert.match(homeJs, /<th>排名<\/th><th>店铺名称<\/th><\/tr>/);
+  assert.doesNotMatch(homeJs, /<th class="xm-hm-num">数量<\/th>/);
   assert.match(homeJs, /\.xm-hm\.is-chief \.xm-hm-teams \.xm-hm-table\{min-width:0/);
   assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table th,\.xm-hm-teams \.xm-hm-table td\{border:0;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;text-align:center\}/);
   assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table \.xm-hm-num\{text-align:center/);
@@ -225,13 +226,18 @@ test("chief columns keep 主管/储备 duty and drop 运营 助理 经理", () =
     { name: "张助理", role: "助理", status: "在职" }
   ];
   const shops = [
-    { supervisor: "杨润泽", assistant: "翁琴" },
-    { supervisor: "高丽男", assistant: "陈晓曼" },
-    { supervisor: "韩梦凯", assistant: "张助理", lead: "高丽男" }
+    { supervisor: "杨润泽", assistant: "翁琴", operator: "崔安琪" },
+    { supervisor: "高丽男", assistant: "陈晓曼", operator: "陈晓曼" },
+    { supervisor: "韩梦凯", assistant: "张助理", operator: "张助理", lead: "高丽男" },
+    { supervisor: "段坤孝", assistant: "黄欣然", operator: "黄欣然" },
+    { supervisor: "陈晓曼", assistant: "潘梦玉", operator: "刘璇" }
   ];
-  assert.deepEqual(fns.teamLeadNames(people, shops, "主管"), ["杨润泽", "翁琴", "陈晓曼"]);
+  assert.deepEqual(fns.teamLeadNames(people, shops, "主管"), ["杨润泽", "翁琴", "段坤孝", "陈晓曼", "潘梦玉"]);
   assert.equal(fns.shopOnRoleTeam(shops[0], "杨润泽", "主管"), true);
   assert.equal(fns.shopOnRoleTeam(shops[2], "高丽男", "主管"), false);
+  assert.equal(fns.shopOnRoleTeam(shops[1], "陈晓曼", "主管"), false);
+  assert.equal(fns.shopOnRoleTeam(shops[4], "陈晓曼", "主管"), true);
+  assert.equal(fns.shopOnRoleTeam(shops[4], "潘梦玉", "主管"), true);
 });
 
 test("card help uses a body-level tooltip so overflow cannot clip it", () => {
