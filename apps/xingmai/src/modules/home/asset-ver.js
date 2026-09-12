@@ -1,5 +1,5 @@
 /** Homepage script URL. Must not use /shared/modules/home.js?v=… — that URL is immutable for 24h. */
-export const HOME_CLIENT_JS = "/api/home/client.js?v=0.1.369-home-chiefs";
+export const HOME_CLIENT_JS = "/api/home/client.js?v=0.1.370-home-grid4";
 
 export function rewriteHomeModuleUrl(html) {
   return String(html || "").replace(

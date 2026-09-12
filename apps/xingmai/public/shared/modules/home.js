@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.369-home-chiefs */
+/* xm-module-home 0.1.370-home-grid4 */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -330,6 +330,16 @@
     }
   }
 
+  function teamHidden(hide) {
+    var out = (hide || []).slice();
+    try {
+      if (localStorage.getItem("xm-home-hidden-cards") == null && out.indexOf("netQty") === -1) {
+        out.push("netQty");
+      }
+    } catch (_err) {}
+    return out;
+  }
+
   function saveHidden(list) {
     try {
       localStorage.setItem("xm-home-hidden-cards", JSON.stringify(list));
@@ -467,7 +477,7 @@
       '<article class="xm-hm-card" data-card="' +
       escapeHtml(card.key) +
       '"' +
-      (teamKey ? ' data-team="' + escapeHtml(teamKey) + '"' : "") +
+      (teamKey ? ' data-team="' + escapeHtml(teamKey) + '" title="拖拽换位"' : "") +
       '><div class="xm-hm-card-head"><span>' +
       escapeHtml(card.label) +
       '</span><button type="button" class="xm-hm-help" data-tip="' +
@@ -954,8 +964,8 @@
       ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden]{display:none}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
       ".xm-hm-teams{display:grid;grid-template-columns:repeat(var(--xm-hm-team-cols,2),minmax(220px,1fr));gap:12px 16px;align-items:start;position:relative;overflow-x:auto}" +
-      ".xm-hm-team{display:flex;flex-direction:column;gap:10px;min-width:0;background:#eef5ff;border:1px solid #7ea8e0;border-radius:12px;padding:12px 12px 10px;box-shadow:0 1px 2px rgba(47,84,235,.08)}" +
-      ".xm-hm-team:nth-child(even){background:#e7f1ff;border-color:#6f9ad6}" +
+      ".xm-hm-team{display:flex;flex-direction:column;gap:10px;min-width:0;background:#dceaff;border:2px solid #4d8fd6;border-radius:12px;padding:12px 12px 10px;box-shadow:0 1px 2px rgba(47,84,235,.08)}" +
+      ".xm-hm-team:nth-child(even){background:#d2e4ff;border-color:#3b7ec4}" +
       ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start}" +
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border-color:#c5d8f2}" +
       ".xm-hm.is-team .xm-hm-card{min-height:104px;padding:12px 12px 10px;border-radius:8px;cursor:grab}" +
@@ -1098,7 +1108,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.369-home-chiefs");
+    board.setAttribute("data-hm-js", "0.1.370-home-grid4");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1112,7 +1122,7 @@
     root.querySelector("#xm-hm-kpis").innerHTML = cards.map(cardHtml).join("");
     root.querySelector("#xm-hm-teams").hidden = !teamView;
     root.querySelector("#xm-hm-teams").style.setProperty("--xm-hm-team-cols", String(Math.max(teams.length, 1)));
-    root.querySelector("#xm-hm-teams").innerHTML = teamsCompareHtml(teams, hide);
+    root.querySelector("#xm-hm-teams").innerHTML = teamsCompareHtml(teams, teamHidden(hide));
     root.querySelector("#xm-hm-live").hidden = state.view !== "live";
     root.querySelector("#xm-hm-board").hidden = state.view !== "board";
     root.querySelector("#xm-hm-live").innerHTML =
