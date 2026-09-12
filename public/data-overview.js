@@ -14,6 +14,25 @@
     "退款率 (按金额)",
     "净销售额 (支付)"
   ];
+  var KPI_CARDS = [
+    { key: "payAmount", label: "支付金额 (支付)", kind: "money", fields: ["payAmount"], accent: true },
+    { key: "adCost", label: "推广花费 (支付预估)", kind: "money", fields: ["totalPromotionCost", "promotionCost", "adCost"] },
+    { key: "refundAmount", label: "退款金额", kind: "money", fields: ["refundAmount"] },
+    { key: "adRate", label: "推广花费 (支付预估) 占比", kind: "rate", fields: ["promotionRate"] },
+    { key: "refundRate", label: "退款率 (按金额)", kind: "rate", fields: ["refundRate"] },
+    { key: "profit", label: "利润 (支付预估)", kind: "money", fields: ["profit"] },
+    { key: "orderCount", label: "销售单数 (支付)", kind: "int", fields: ["orderCount"] },
+    { key: "grossMargin", label: "大毛利率", kind: "rate", fields: ["profitRate"] },
+    { key: "platformFee", label: "平台花费 (支付预估)", kind: "money", fields: ["platformFee", "platformCost"] },
+    { key: "saleFee", label: "销售费用 (支付预估)", kind: "money", fields: ["saleFee", "salesFee"] },
+    { key: "goodsCost", label: "总货款成本", kind: "money", fields: ["goodsCost", "totalGoodsCost"] },
+    { key: "invalidAmount", label: "无效单金额", kind: "money", fields: ["invalidAmount", "invalidOrderAmount"] },
+    { key: "netSales", label: "净销售额 (支付)", kind: "money", fields: ["netSales", "netSalesAmount"] },
+    { key: "jdOrders", label: "京仓订单数量", kind: "int", fields: ["jdWarehouseOrderCount", "jingCangOrderCount", "jdOrders"] },
+    { key: "jdRate", label: "京仓订单占比", kind: "rate", fields: ["jdWarehouseRate", "jdRatio"] },
+    { key: "netQty", label: "净销售件数 (支付)", kind: "int", fields: ["netSkuNum", "netSalesQty"] },
+    { key: "netGoodsCost", label: "净货款成本 (支付)", kind: "money", fields: ["netGoodsCost"] }
+  ];
 
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -27,7 +46,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=channel-erp1";
+      link.href = "/data-pages.css?v=kpi17";
       document.head.appendChild(link);
     }
   }
@@ -107,6 +126,64 @@
     }) || {};
   }
 
+  function asNum(value) {
+    if (value == null || value === "" || value === "--" || value === "—") {
+      return null;
+    }
+    const n = Number(value);
+    return Number.isNaN(n) ? null : n;
+  }
+
+  function firstNum(obj, keys) {
+    if (!obj) {
+      return null;
+    }
+    for (let i = 0; i < keys.length; i += 1) {
+      const n = asNum(obj[keys[i]]);
+      if (n != null) {
+        return n;
+      }
+    }
+    return null;
+  }
+
+  function sumField(rows, keys) {
+    let total = 0;
+    let ok = false;
+    (rows || []).forEach(function (row) {
+      const n = firstNum(row, keys);
+      if (n != null) {
+        total += n;
+        ok = true;
+      }
+    });
+    return ok ? total : null;
+  }
+
+  function kpiValue(kind, n) {
+    if (n == null) {
+      return "—";
+    }
+    if (kind === "money") {
+      return fmt(n, 2);
+    }
+    if (kind === "int") {
+      return fmt(n, 0);
+    }
+    return pct(n);
+  }
+
+  function buildKpiCards(totals) {
+    return KPI_CARDS.map(function (def) {
+      return {
+        key: def.key,
+        label: def.label,
+        value: kpiValue(def.kind, firstNum(totals, [def.key].concat(def.fields))),
+        accent: !!def.accent
+      };
+    });
+  }
+
   function metricRow(shop) {
     const pay = Number(shop.payAmount) || 0;
     const refund = Number(shop.refundAmount) || 0;
@@ -127,21 +204,47 @@
     const cardsIn = raw.cards || [];
     const shops = raw.shops || [];
     const trend = raw.trend || [];
-    const pay = Number(cardOf(cardsIn, "payAmount").value) || shops.reduce(function (s, r) { return s + (Number(r.payAmount) || 0); }, 0);
-    const orders = Number(cardOf(cardsIn, "orderCount").value) || shops.reduce(function (s, r) { return s + (Number(r.orderCount) || 0); }, 0);
-    const profit = Number(cardOf(cardsIn, "profit").value) || shops.reduce(function (s, r) { return s + (Number(r.profit) || 0); }, 0);
-    const refund = Number(cardOf(cardsIn, "refundAmount").value) || shops.reduce(function (s, r) { return s + (Number(r.refundAmount) || 0); }, 0);
-    const promo = shops.reduce(function (s, r) { return s + (Number(r.totalPromotionCost) || 0); }, 0)
-      || trend.reduce(function (s, r) { return s + (Number(r.promotionCost) || 0); }, 0);
+    const pay = asNum(cardOf(cardsIn, "payAmount").value) != null ? asNum(cardOf(cardsIn, "payAmount").value) : sumField(shops, ["payAmount"]) || 0;
+    const orders = asNum(cardOf(cardsIn, "orderCount").value) != null ? asNum(cardOf(cardsIn, "orderCount").value) : sumField(shops, ["orderCount"]) || 0;
+    const profit = asNum(cardOf(cardsIn, "profit").value) != null ? asNum(cardOf(cardsIn, "profit").value) : sumField(shops, ["profit"]) || 0;
+    const refund = asNum(cardOf(cardsIn, "refundAmount").value) != null ? asNum(cardOf(cardsIn, "refundAmount").value) : sumField(shops, ["refundAmount"]) || 0;
+    const promo = sumField(shops, ["totalPromotionCost", "promotionCost"]) != null
+      ? sumField(shops, ["totalPromotionCost", "promotionCost"])
+      : sumField(trend, ["promotionCost"]);
     const last = trend[trend.length - 1] || {};
     const prev = trend[trend.length - 2] || last;
     const lastPay = Number(last.payAmount);
     const prevPay = Number(prev.payAmount);
     const heroVal = lastPay || pay;
     const delta = prevPay ? ((lastPay - prevPay) / prevPay) * 100 : 0;
-    const margin = pay ? profit / pay : 0;
-    const refundRate = pay ? refund / pay : 0;
-    const promoRate = pay ? promo / pay : 0;
+    const margin = pay ? profit / pay : null;
+    const refundRate = pay ? refund / pay : null;
+    const promoRate = pay && promo != null ? promo / pay : null;
+    const kpiTotals = {
+      payAmount: pay,
+      adCost: promo,
+      totalPromotionCost: promo,
+      refundAmount: refund,
+      adRate: promoRate,
+      promotionRate: promoRate,
+      refundRate: refundRate,
+      profit: profit,
+      orderCount: orders,
+      grossMargin: margin,
+      profitRate: firstNum(shops[0], ["profitRate"]) != null ? (pay ? profit / pay : null) : margin,
+      platformFee: sumField(shops, ["platformFee", "platformCost"]),
+      saleFee: sumField(shops, ["saleFee", "salesFee"]),
+      goodsCost: sumField(shops, ["goodsCost", "totalGoodsCost"]),
+      invalidAmount: sumField(shops, ["invalidAmount", "invalidOrderAmount"]),
+      netSales: sumField(shops, ["netSales", "netSalesAmount"]) != null ? sumField(shops, ["netSales", "netSalesAmount"]) : (pay != null && refund != null ? pay - refund : null),
+      jdOrders: sumField(shops, ["jdWarehouseOrderCount", "jingCangOrderCount", "jdOrders"]),
+      jdRate: null,
+      netQty: sumField(shops, ["netSkuNum", "netSalesQty"]),
+      netGoodsCost: sumField(shops, ["netGoodsCost"])
+    };
+    if (kpiTotals.jdOrders != null && orders) {
+      kpiTotals.jdRate = kpiTotals.jdOrders / orders;
+    }
     const shopCount = Number(raw.shopTotal) || shops.length;
     const channelCells = metricRow({
       payAmount: pay,
@@ -173,16 +276,7 @@
         delta: Number(delta.toFixed(2)),
         spark: trend.map(function (row) { return Number(row.payAmount) || 0; })
       },
-      cards: [
-        { key: "pay", label: "支付金额 (支付)", value: fmt(pay, 2) },
-        { key: "orders", label: "销售单数 (支付)", value: fmt(orders, 0) },
-        { key: "ad", label: "推广花费 (支付预估)", value: fmt(promo, 2), extra: "推广占比 " + pct(promoRate) },
-        { key: "profit", label: "利润 (支付预估)", value: fmt(profit, 2), extra: "毛利率 " + pct(margin) },
-        { key: "margin", label: "大毛利率", value: pct(margin) },
-        { key: "custom", label: "自定义费用", value: "0" },
-        { key: "refundRate", label: "退款率 (按金额)", value: pct(refundRate) },
-        { key: "adRate", label: "推广花费占比 (支付预估)", value: pct(promoRate) }
-      ],
+      cards: buildKpiCards(kpiTotals),
       sections: SECTIONS,
       shops: shops,
       channelTable: {
@@ -339,13 +433,13 @@
       const cards = (payload.cards || [])
         .map(function (card) {
           return (
-            '<article class="ch-card"><div class="label">' +
+            '<article class="ch-card' +
+            (card.accent || card.key === "payAmount" ? " is-pay" : "") +
+            '"><div class="label">' +
             escapeHtml(card.label) +
             '</div><div class="value">' +
             escapeHtml(card.value) +
-            "</div>" +
-            (card.extra ? '<div class="extra">' + escapeHtml(card.extra) + "</div>" : "") +
-            "</article>"
+            "</div></article>"
           );
         })
         .join("");
@@ -418,7 +512,7 @@
         "<b>店铺 " +
         escapeHtml(String(payload.summary.shops)) +
         '个</b><button type="button" class="ch-set" disabled>设定指标</button></div>' +
-        '<div class="ch-metrics"><article class="ch-card ch-hero"><div class="label">' +
+        '<div class="ch-metrics ch-metrics-hero"><article class="ch-card ch-hero"><div class="label">' +
         escapeHtml(hero.label || "实时销售指数") +
         '</div><div class="value">' +
         escapeHtml(hero.value || "") +
@@ -430,7 +524,8 @@
         '">' +
         (down ? "↓ " : "↑ ") +
         escapeHtml(String(Math.abs(Number(hero.delta || 0)).toFixed(2))) +
-        "%</div></article>" +
+        "%</div></article></div>" +
+        '<div class="ch-kpi">' +
         cards +
         "</div>" +
         '<div class="ch-tabs">' +

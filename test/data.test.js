@@ -148,6 +148,11 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /\/api\/data\/overview/);
     assert.match(overviewJs.text, /实时销售指数/);
     assert.match(overviewJs.text, /渠道总览/);
+    assert.match(overviewJs.text, /京仓订单数量/);
+    assert.match(overviewJs.text, /推广花费 \(支付预估\) 占比/);
+    assert.match(overviewJs.text, /平台花费 \(支付预估\)/);
+    assert.match(overviewJs.text, /净货款成本 \(支付\)/);
+    assert.doesNotMatch(overviewJs.text, /自定义费用/);
     assert.doesNotMatch(overviewPage.text, /公司/);
     const teamApi = await get(base, "/api/data/team");
     assert.equal(teamApi.res.status, 200);
@@ -155,8 +160,30 @@ test("data child pages and demo APIs respond", async () => {
     assert.equal(team.ok, true);
     assert.equal(team.scope, "团队");
     assert.equal(team.title, "渠道总览");
-    assert.equal(team.cards.length, 8);
-    assert.equal(team.cards.find((c) => c.key === "profit").extra, "毛利率 49.58%");
+    assert.equal(team.cards.length, 17);
+    assert.deepEqual(
+      team.cards.map((c) => c.label),
+      [
+        "支付金额 (支付)",
+        "推广花费 (支付预估)",
+        "退款金额",
+        "推广花费 (支付预估) 占比",
+        "退款率 (按金额)",
+        "利润 (支付预估)",
+        "销售单数 (支付)",
+        "大毛利率",
+        "平台花费 (支付预估)",
+        "销售费用 (支付预估)",
+        "总货款成本",
+        "无效单金额",
+        "净销售额 (支付)",
+        "京仓订单数量",
+        "京仓订单占比",
+        "净销售件数 (支付)",
+        "净货款成本 (支付)"
+      ]
+    );
+    assert.doesNotMatch(JSON.stringify(team.cards), /自定义费用|推广费（预估）|京东仓订单量|净销售金额/);
     assert.equal(team.summary.shops, 46);
     assert.match(JSON.stringify(team), /RASW家居旗舰店/);
     assert.match(JSON.stringify(team), /京东/);
@@ -164,7 +191,7 @@ test("data child pages and demo APIs respond", async () => {
     const demoFile = await get(base, "/data/team-demo.json");
     assert.equal(demoFile.res.status, 200);
     const demo = JSON.parse(demoFile.text);
-    assert.equal(demo.cards.length, 8);
+    assert.equal(demo.cards.length, 17);
     for (const pathName of ["/data/shops", "/data/goods", "/data/paid"]) {
       const page = await get(base, pathName);
       assert.equal(page.res.status, 200, pathName);
@@ -468,6 +495,7 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /\/data\/paid/);
   assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
   assert.match(dataMod, /restore-v1/);
+  assert.match(dataMod, /data-overview\.js\?v=kpi17/);
   assert.match(dataMod, /lockModule/);
   assert.doesNotMatch(dataMod, /0\.1\.72/);
     assert.match(dataMod, /data-goods\.js\?v=goods-erp1/);
@@ -478,7 +506,8 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /实时看板/);
   assert.doesNotMatch(dataMod, /实时明细/);
   const demo = JSON.parse(fs.readFileSync(path.join(repoRoot, "public/data/team-demo.json"), "utf8"));
-  assert.equal(demo.cards.length, 8);
+  assert.equal(demo.cards.length, 17);
+  assert.equal(demo.cards[13].label, "京仓订单数量");
   assert.equal(demo.scope, "团队");
   assert.throws(() => assertDataOnlyPaths(["src/app.js"]), /src\/app\.js/);
   const apply = fs.readFileSync(path.join(repoRoot, "scripts/apply-data-to-mengkai.mjs"), "utf8");

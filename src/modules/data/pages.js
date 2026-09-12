@@ -92,14 +92,23 @@ export function getTeamOverview() {
       spark: [28, 30, 26, 32, 31, 36, 34, 40, 38, 48, 46, 58]
     },
     cards: [
-      { key: "pay", label: "支付金额 (支付)", value: "837,247.17" },
-      { key: "orders", label: "销售单数 (支付)", value: "3,174" },
-      { key: "ad", label: "推广花费 (支付预估)", value: "348,174.63", extra: "推广占比 41.59%" },
-      { key: "profit", label: "利润 (支付预估)", value: "415,136.64", extra: "毛利率 49.58%" },
-      { key: "margin", label: "大毛利率", value: "49.58%" },
-      { key: "custom", label: "自定义费用", value: "0" },
-      { key: "refundRate", label: "退款率 (按金额)", value: "27.02%" },
-      { key: "adRate", label: "推广花费占比 (支付预估)", value: "41.59%" }
+      { key: "payAmount", label: "支付金额 (支付)", value: "855,933.41", accent: true },
+      { key: "adCost", label: "推广花费 (支付预估)", value: "362,476.05" },
+      { key: "refundAmount", label: "退款金额", value: "206,561.69" },
+      { key: "adRate", label: "推广花费 (支付预估) 占比", value: "42.35%" },
+      { key: "refundRate", label: "退款率 (按金额)", value: "24.13%" },
+      { key: "profit", label: "利润 (支付预估)", value: "415,784.53" },
+      { key: "orderCount", label: "销售单数 (支付)", value: "3,241" },
+      { key: "grossMargin", label: "大毛利率", value: "48.58%" },
+      { key: "platformFee", label: "平台花费 (支付预估)", value: "47,718.34" },
+      { key: "saleFee", label: "销售费用 (支付预估)", value: "410,194.39" },
+      { key: "goodsCost", label: "总货款成本", value: "20,600.33" },
+      { key: "invalidAmount", label: "无效单金额", value: "266" },
+      { key: "netSales", label: "净销售额 (支付)", value: "846,543.22" },
+      { key: "jdOrders", label: "京仓订单数量", value: "2,218" },
+      { key: "jdRate", label: "京仓订单占比", value: "68.44%" },
+      { key: "netQty", label: "净销售件数 (支付)", value: "3,788" },
+      { key: "netGoodsCost", label: "净货款成本 (支付)", value: "20,564.33" }
     ],
     sections: ["渠道列表", "店铺分组", "经营数据", "竞对对比", "品类分析", "热销商品"],
     channelTable: {
