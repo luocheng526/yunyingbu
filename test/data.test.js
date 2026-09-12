@@ -261,7 +261,8 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(shopsJs.text, /shop-wide6/);
     assert.match(shopsJs.text, /xm-data-shops-metrics-v1/);
     assert.match(shopsJs.text, /60 \* 60 \* 1000/);
-    assert.match(shopsJs.text, /!forceBoard && cacheIsFresh/);
+    assert.match(shopsJs.text, /!forceBoard && shopCacheComplete/);
+    assert.match(shopsJs.text, /function shopCacheComplete/);
     assert.match(shopsJs.text, /已显示最近店铺数据/);
     assert.match(shopsJs.text, /正在加载店铺数据|XmDataCreateShopDashboard/);
     const dataModShops = await get(base, "/shared/modules/data.js");

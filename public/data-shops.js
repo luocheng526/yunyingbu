@@ -347,6 +347,17 @@
     return Boolean(slot && slot.at && Date.now() - slot.at < SHOP_CACHE_FRESH_MS);
   }
 
+  function shopCacheComplete(slot) {
+    return Boolean(
+      cacheIsFresh(slot) &&
+        slot.shops &&
+        slot.shops.length &&
+        !slot.shops.some(function (shop) {
+          return shop.shopId && !shopHasMetrics(shop) && !shop.goodsEmpty;
+        })
+    );
+  }
+
   function overlayCachedMetrics(shops, cachedShops) {
     const byId = {};
     (cachedShops || []).forEach(function (shop) {
@@ -766,7 +777,7 @@
       } else {
         state.hint = "正在对接 ERP 店铺指标…";
       }
-      if (!forceBoard && cacheIsFresh(cached)) {
+      if (!forceBoard && shopCacheComplete(cached)) {
         return Promise.resolve();
       }
       const params = new URLSearchParams();
