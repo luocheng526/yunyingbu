@@ -27,51 +27,44 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=channel-cal2";
+      link.href = "/data-pages.css?v=channel-cal3";
       document.head.appendChild(link);
     }
-    ensureCalStyle();
   }
 
-  function ensureCalStyle() {
-    if (document.getElementById("ch-cal-pop-style")) {
-      return;
-    }
-    const style = document.createElement("style");
-    style.id = "ch-cal-pop-style";
-    style.textContent =
-      ".ch-cal-pop{position:fixed;z-index:4000;display:none;box-sizing:border-box;width:560px;max-width:calc(100vw - 24px);padding:8px 4px 10px;background:#fff;border:1px solid #e8e8e8;border-radius:4px;box-shadow:0 6px 16px rgba(0,0,0,.12)}" +
-      ".ch-cal-pop.is-open{display:block}" +
-      ".ch-cal-pop .ch-cal{display:flex;flex-wrap:nowrap;width:100%;background:transparent;border:0;box-shadow:none}" +
-      ".ch-cal-pop .ch-cal-month{flex:1;min-width:0;width:50%;padding:4px 12px 6px;box-sizing:border-box}" +
-      ".ch-cal-pop .ch-cal-month + .ch-cal-month{border-left:1px solid #f0f0f0}" +
-      ".ch-cal-pop .ch-cal-head{position:relative;display:flex;align-items:center;justify-content:center;min-height:32px;margin-bottom:2px;color:#262626;font-size:14px;font-weight:400}" +
-      ".ch-cal-pop .ch-cal-head strong{font-weight:400}" +
-      ".ch-cal-pop .ch-cal-head button{position:absolute;top:4px;width:22px;height:22px;padding:0;border:0;background:transparent;color:#8c8c8c;font-size:12px;line-height:22px;cursor:pointer}" +
-      ".ch-cal-pop .ch-cal-head button:hover{color:#262626}" +
-      ".ch-cal-pop .ch-cal-head [data-cal='prev-year']{left:0}" +
-      ".ch-cal-pop .ch-cal-head [data-cal='prev-month']{left:20px}" +
-      ".ch-cal-pop .ch-cal-head [data-cal='next-month']{right:20px}" +
-      ".ch-cal-pop .ch-cal-head [data-cal='next-year']{right:0}" +
-      ".ch-cal-pop .ch-cal-week,.ch-cal-pop .ch-cal-days{display:grid;grid-template-columns:repeat(7,1fr);text-align:center}" +
-      ".ch-cal-pop .ch-cal-week span{height:24px;line-height:24px;font-size:12px;color:#8c8c8c}" +
-      ".ch-cal-pop .ch-cal-days button{height:28px;margin:0;padding:0;border:0;border-radius:2px;background:transparent;color:#262626;font-size:13px;cursor:pointer}" +
-      ".ch-cal-pop .ch-cal-days button:hover:not(:disabled):not(.is-start):not(.is-end){background:#f5f5f5}" +
-      ".ch-cal-pop .ch-cal-days button.is-out,.ch-cal-pop .ch-cal-days button.is-future{color:#bfbfbf}" +
-      ".ch-cal-pop .ch-cal-days button.is-future{cursor:not-allowed}" +
-      ".ch-cal-pop .ch-cal-days button.is-today{color:#cf1322;font-weight:600}" +
-      ".ch-cal-pop .ch-cal-days button.is-in{background:#fff1f0;color:#c62828}" +
-      ".ch-cal-pop .ch-cal-days button.is-start,.ch-cal-pop .ch-cal-days button.is-end{background:#c62828;color:#fff}" +
-      ".ch-cal-pop .ch-cal-err{width:100%;margin:0;padding:4px 12px 0;color:#c62828;font-size:12px}";
-    document.head.appendChild(style);
-  }
+  var CAL_SHADOW_CSS =
+    ":host{position:fixed;z-index:4000;display:none;box-sizing:border-box;width:560px;background:#fff;border:1px solid #e8e8e8;border-radius:4px;box-shadow:0 6px 16px rgba(0,0,0,.12);color:#262626;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif}" +
+    ":host(.is-open){display:block}" +
+    ".ch-cal{display:flex;width:560px}" +
+    ".ch-cal-month{width:280px;padding:8px 12px 10px;box-sizing:border-box}" +
+    ".ch-cal-month + .ch-cal-month{border-left:1px solid #f0f0f0}" +
+    ".ch-cal-head{position:relative;height:32px;line-height:32px;text-align:center;font-size:14px}" +
+    ".ch-cal-head button{position:absolute;top:4px;width:22px;height:22px;padding:0;border:0;background:transparent;color:#8c8c8c;font-size:12px;line-height:22px;cursor:pointer}" +
+    ".ch-cal-head [data-cal='prev-year']{left:0}" +
+    ".ch-cal-head [data-cal='prev-month']{left:20px}" +
+    ".ch-cal-head [data-cal='next-month']{right:20px}" +
+    ".ch-cal-head [data-cal='next-year']{right:0}" +
+    "table{width:100%;border-collapse:collapse;table-layout:fixed}" +
+    "th{height:24px;font-size:12px;font-weight:400;color:#8c8c8c}" +
+    "td{height:28px;padding:0;text-align:center}" +
+    "td button{display:block;width:100%;height:28px;margin:0;padding:0;border:0;border-radius:2px;background:transparent;color:#262626;font:13px/28px inherit;cursor:pointer}" +
+    "td button:hover:not(:disabled):not(.is-start):not(.is-end){background:#f5f5f5}" +
+    "td button.is-out,td button.is-over,td button.is-future,td button:disabled{color:#bfbfbf;cursor:default}" +
+    "td button.is-today{color:#cf1322;font-weight:600}" +
+    "td button.is-in{background:#fff1f0;color:#c62828}" +
+    "td button.is-start,td button.is-end{background:#c62828;color:#fff}";
 
   function getCalPop() {
     let el = document.getElementById("ch-cal-pop");
+    if (el && !el.shadowRoot) {
+      el.remove();
+      el = null;
+    }
     if (!el) {
       el = document.createElement("div");
       el.id = "ch-cal-pop";
       el.className = "ch-cal-pop";
+      el.attachShadow({ mode: "open" });
       document.body.appendChild(el);
     }
     return el;
@@ -81,8 +74,21 @@
     const el = document.getElementById("ch-cal-pop");
     if (el) {
       el.classList.remove("is-open");
-      el.innerHTML = "";
+      if (el.shadowRoot) {
+        el.shadowRoot.innerHTML = "";
+      }
     }
+  }
+
+  function pathEl(event, attr) {
+    const path = event.composedPath ? event.composedPath() : [];
+    for (let i = 0; i < path.length; i += 1) {
+      const node = path[i];
+      if (node && node.getAttribute && node.getAttribute(attr) != null) {
+        return node;
+      }
+    }
+    return null;
   }
 
   function stripPageChrome(root) {
@@ -539,38 +545,56 @@
     return cells;
   }
 
+  function dayOverLimit(from, to, value) {
+    return Boolean(from && !to && inclusiveDays(from, value) > 30);
+  }
+
   function calendarMonthHtml(year, month, from, to, today, side) {
-    const week = ["一", "二", "三", "四", "五", "六", "日"]
-      .map(function (name) {
-        return "<span>" + name + "</span>";
-      })
-      .join("");
-    const cells = monthCells(year, month)
-      .map(function (cell) {
-        const value = cell.y + "-" + pad(cell.m + 1) + "-" + pad(cell.d);
-        const future = value > today;
-        const cls = [
-          cell.out ? "is-out" : "",
-          future ? "is-future" : "",
-          value === today ? "is-today" : "",
-          from && to && value >= from && value <= to ? "is-in" : "",
-          value === from ? "is-start" : "",
-          value === to ? "is-end" : ""
-        ]
-          .filter(Boolean)
-          .join(" ");
-        return (
-          '<button type="button" data-day="' +
-          value +
-          '"' +
-          (future ? " disabled" : "") +
-          (cls ? ' class="' + cls + '"' : "") +
-          ">" +
-          cell.d +
-          "</button>"
-        );
-      })
-      .join("");
+    const week =
+      "<tr>" +
+      ["一", "二", "三", "四", "五", "六", "日"]
+        .map(function (name) {
+          return "<th>" + name + "</th>";
+        })
+        .join("") +
+      "</tr>";
+    const cells = monthCells(year, month);
+    let rows = "";
+    for (let i = 0; i < cells.length; i += 7) {
+      rows +=
+        "<tr>" +
+        cells
+          .slice(i, i + 7)
+          .map(function (cell) {
+            const value = cell.y + "-" + pad(cell.m + 1) + "-" + pad(cell.d);
+            const future = value > today;
+            const over = dayOverLimit(from, to, value);
+            const blocked = future || over;
+            const cls = [
+              cell.out ? "is-out" : "",
+              future ? "is-future" : "",
+              over ? "is-over" : "",
+              !blocked && value === today ? "is-today" : "",
+              from && to && value >= from && value <= to ? "is-in" : "",
+              value === from ? "is-start" : "",
+              value === to ? "is-end" : ""
+            ]
+              .filter(Boolean)
+              .join(" ");
+            return (
+              "<td><button type=\"button\" data-day=\"" +
+              value +
+              "\"" +
+              (blocked ? " disabled" : "") +
+              (cls ? ' class="' + cls + '"' : "") +
+              ">" +
+              cell.d +
+              "</button></td>"
+            );
+          })
+          .join("") +
+        "</tr>";
+    }
     const leftNav =
       side === "left"
         ? '<button type="button" data-cal="prev-year" aria-label="上一年">«</button><button type="button" data-cal="prev-month" aria-label="上一月">‹</button>'
@@ -584,15 +608,15 @@
       leftNav +
       "<strong>" +
       year +
-      "年 " +
+      "年" +
       (month + 1) +
       "月</strong>" +
       rightNav +
-      '</div><div class="ch-cal-week">' +
+      "</div><table><thead>" +
       week +
-      '</div><div class="ch-cal-days">' +
-      cells +
-      "</div></div>"
+      "</thead><tbody class=\"ch-cal-days\">" +
+      rows +
+      "</tbody></table></div>"
     );
   }
 
@@ -604,7 +628,6 @@
       '<div class="ch-cal" data-calendar="1">' +
       calendarMonthHtml(left.year, left.month, state.customFrom, state.customTo, today, "left") +
       calendarMonthHtml(right.year, right.month, state.customFrom, state.customTo, today, "right") +
-      (state.calError ? '<p class="ch-cal-err">' + escapeHtml(state.calError) + "</p>" : "") +
       "</div>"
     );
   }
@@ -628,8 +651,7 @@
       payload: null,
       calOpen: false,
       calYear: Number(shanghaiYmd(0).slice(0, 4)),
-      calMonth: Number(shanghaiYmd(0).slice(5, 7)) - 1,
-      calError: ""
+      calMonth: Number(shanghaiYmd(0).slice(5, 7)) - 1
     };
     let dead = false;
 
@@ -771,8 +793,10 @@
       if (!state.customFrom || state.customTo) {
         state.customFrom = day;
         state.customTo = "";
-        state.calError = "";
         render();
+        return;
+      }
+      if (inclusiveDays(state.customFrom, day) > 30) {
         return;
       }
       let from = state.customFrom;
@@ -782,14 +806,8 @@
         from = to;
         to = swap;
       }
-      if (inclusiveDays(from, to) > 30) {
-        state.calError = "最多可以选择30天";
-        render();
-        return;
-      }
       state.customFrom = from;
       state.customTo = to;
-      state.calError = "";
       state.calOpen = false;
       state.range = "自定义";
       hideCalPop();
@@ -809,12 +827,12 @@
 
     function onCalPopClick(event) {
       event.stopPropagation();
-      const calNav = event.target.closest("[data-cal]");
+      const calNav = pathEl(event, "data-cal");
       if (calNav) {
         applyCalNav(calNav.getAttribute("data-cal"));
         return;
       }
-      const dayBtn = event.target.closest("[data-day]");
+      const dayBtn = pathEl(event, "data-day");
       if (dayBtn && !dayBtn.disabled) {
         applyCalDay(dayBtn.getAttribute("data-day"));
       }
@@ -826,13 +844,16 @@
         hideCalPop();
         return;
       }
-      pop.innerHTML = calendarPanel(state);
+      pop.shadowRoot.innerHTML = "<style>" + CAL_SHADOW_CSS + "</style>" + calendarPanel(state);
       pop.classList.add("is-open");
+      pop.style.width = "560px";
+      pop.style.minWidth = "560px";
       const btn = board.querySelector('button[data-range="自定义"]');
       if (btn) {
         placeCalPop(btn);
       }
-      pop.onclick = onCalPopClick;
+      pop.removeEventListener("click", onCalPopClick);
+      pop.addEventListener("click", onCalPopClick);
     }
 
     function json(url) {
@@ -937,7 +958,6 @@
           state.calOpen = !state.calOpen;
           if (state.calOpen) {
             state.range = "自定义";
-            state.calError = "";
           }
           render();
           return;

@@ -163,7 +163,10 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /自定义费用/);
     assert.match(overviewJs.text, /ch-cal/);
     assert.match(overviewJs.text, /ch-cal-pop/);
-    assert.match(overviewJs.text, /最多可以选择30天/);
+    assert.match(overviewJs.text, /dayOverLimit/);
+    assert.match(overviewJs.text, /is-over/);
+    assert.match(overviewJs.text, /attachShadow/);
+    assert.doesNotMatch(overviewJs.text, /最多可以选择30天/);
     assert.match(overviewJs.text, /data-calendar/);
     assert.match(overviewJs.text, /prev-year/);
     assert.doesNotMatch(overviewJs.text, /input type="date"/);
@@ -507,7 +510,7 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /\/data\/paid/);
   assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
   assert.match(dataMod, /restore-v1/);
-  assert.match(dataMod, /data-overview\.js\?v=channel-cal2/);
+  assert.match(dataMod, /data-overview\.js\?v=channel-cal3/);
   assert.match(css, /ch-cal-days/);
   assert.match(css, /ch-cal-pop/);
   assert.match(dataMod, /正在加载渠道总览/);

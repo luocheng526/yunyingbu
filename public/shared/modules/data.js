@@ -147,7 +147,7 @@
       root.innerHTML =
         '<main class="xm-page data-overview-root ch-root"><div id="board"><p class="ch-empty">正在加载渠道总览…</p></div></main>';
     }
-    return loadScript("/data-overview.js?v=channel-cal2").then(function () {
+    return loadScript("/data-overview.js?v=channel-cal3").then(function () {
       if (typeof window.XmDataCreateDashboard === "function") {
         return window.XmDataCreateDashboard(root);
       }
