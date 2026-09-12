@@ -3,7 +3,7 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { navMarkup } from "../home/nav-items.js";
-import { currentUser, publicProfile } from "./auth.js";
+import { currentUserAsync, publicProfile } from "./auth.js";
 import { APP_ICON_PNG } from "./app-icon-png.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
@@ -627,29 +627,32 @@ export function requireLoginUnlessPublic(req, res, next) {
     next();
     return;
   }
-  const user = currentUser(req);
-  if (user) {
-    req.user = user;
-    dropHanApiCache(req);
-    if (serveHomeIndex(req, res)) {
-      return;
-    }
-    if (serveHanApiCache(req, res)) {
-      return;
-    }
-    next();
-    return;
-  }
-  if (normalizedPath(req).startsWith("/api/")) {
-    res.status(401).json({ ok: false, error: "未登录" });
-    return;
-  }
-  // 主屏幕独立 App 打开 /home 时，302 到 /login 在 iOS 会白屏。未登录直接 200 出登录页。
-  if (isReadMethod(req)) {
-    sendLoginPage(res);
-    return;
-  }
-  res.redirect("/login");
+  Promise.resolve(currentUserAsync(req))
+    .then(function (user) {
+      if (user) {
+        req.user = user;
+        dropHanApiCache(req);
+        if (serveHomeIndex(req, res)) {
+          return;
+        }
+        if (serveHanApiCache(req, res)) {
+          return;
+        }
+        next();
+        return;
+      }
+      if (normalizedPath(req).startsWith("/api/")) {
+        res.status(401).json({ ok: false, error: "未登录" });
+        return;
+      }
+      // 主屏幕独立 App 打开 /home 时，302 到 /login 在 iOS 会白屏。未登录直接 200 出登录页。
+      if (isReadMethod(req)) {
+        sendLoginPage(res);
+        return;
+      }
+      res.redirect("/login");
+    })
+    .catch(next);
 }
 
 function sendLoginPage(res) {

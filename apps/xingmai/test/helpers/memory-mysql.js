@@ -264,6 +264,16 @@ export function createMemoryPool() {
       tables.xm_sessions = tables.xm_sessions.filter((row) => Number(row.expires_at) >= limit);
       return [{ affectedRows: before - tables.xm_sessions.length }, undefined];
     }
+    if (s.includes("FROM xm_sessions WHERE sid =")) {
+      const sid = params[0];
+      const limit = Number(params[1]) || 0;
+      return [
+        tables.xm_sessions
+          .filter((row) => row.sid === sid && Number(row.expires_at) >= limit)
+          .map(clone),
+        undefined
+      ];
+    }
     if (s.startsWith("SELECT sid, username, created_at, expires_at FROM xm_sessions")) {
       const limit = Number(params[0]) || 0;
       return [

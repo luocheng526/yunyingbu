@@ -1,6 +1,6 @@
 import { promisify } from "node:util";
 import { randomBytes, scrypt, scryptSync, timingSafeEqual } from "node:crypto";
-import { Router } from "express";
+import express, { Router } from "express";
 
 let mysqlLib = null;
 
@@ -417,9 +417,6 @@ async function hydrateSessionsFromMysql() {
   }
   const now = Date.now();
   await query("DELETE FROM xm_sessions WHERE expires_at < ?", [now]);
-  await query(
-    "DELETE FROM xm_sessions WHERE sid NOT IN (SELECT sid FROM (SELECT sid FROM xm_sessions ORDER BY expires_at DESC LIMIT 8) keep)"
-  );
   const [rows] = await query(
     "SELECT sid, username, created_at, expires_at FROM xm_sessions WHERE expires_at >= ?",
     [now]
@@ -646,10 +643,8 @@ function parseCookies(req) {
   return out;
 }
 
-export function currentUser(req) {
-  const sid = parseCookies(req)[COOKIE_NAME];
-  const session = sid ? sessions.get(sid) : null;
-  if (!session) {
+function userFromSession(sid, session) {
+  if (!sid || !session) {
     return null;
   }
   if (session.expiresAt && Number(session.expiresAt) < Date.now()) {
@@ -661,6 +656,49 @@ export function currentUser(req) {
     return null;
   }
   return user;
+}
+
+async function loadSessionFromMysql(sid) {
+  if (dbMode() !== "mysql" || !sid) {
+    return null;
+  }
+  try {
+    const [rows] = await query(
+      "SELECT sid, username, created_at, expires_at FROM xm_sessions WHERE sid = ? AND expires_at >= ? LIMIT 1",
+      [sid, Date.now()]
+    );
+    const row = rows && rows[0];
+    if (!row) {
+      return null;
+    }
+    const session = {
+      username: row.username,
+      createdAt: Number(row.created_at),
+      expiresAt: Number(row.expires_at)
+    };
+    sessions.set(String(sid), session);
+    return session;
+  } catch (err) {
+    console.error("session lookup failed", err);
+    return null;
+  }
+}
+
+export function currentUser(req) {
+  const sid = parseCookies(req)[COOKIE_NAME];
+  return userFromSession(sid, sid ? sessions.get(sid) : null);
+}
+
+export async function currentUserAsync(req) {
+  const sid = parseCookies(req)[COOKIE_NAME];
+  if (!sid) {
+    return null;
+  }
+  let session = sessions.get(sid);
+  if (!session) {
+    session = await loadSessionFromMysql(sid);
+  }
+  return userFromSession(sid, session);
 }
 
 function cookieSecure(req) {
@@ -705,16 +743,37 @@ function sendProfile(res, user) {
 }
 
 export function requireAuth(req, res, next) {
-  const user = currentUser(req);
-  if (!user) {
-    res.status(401).json({ ok: false, error: "未登录" });
+  Promise.resolve(currentUserAsync(req))
+    .then(function (user) {
+      if (!user) {
+        res.status(401).json({ ok: false, error: "未登录" });
+        return;
+      }
+      req.user = user;
+      next();
+    })
+    .catch(next);
+}
+
+function wantsFormRedirect(req) {
+  return /application\/x-www-form-urlencoded/i.test(String(req.headers["content-type"] || ""));
+}
+
+function readRemember(body) {
+  const value = body && body.remember;
+  return value === true || value === "on" || value === "1" || value === "true";
+}
+
+function sendLoginError(req, res, status, error) {
+  if (wantsFormRedirect(req)) {
+    res.redirect(303, "/login?err=" + encodeURIComponent(error));
     return;
   }
-  req.user = user;
-  next();
+  res.status(status).json({ ok: false, error });
 }
 
 export const authRouter = Router();
+authRouter.use(express.urlencoded({ extended: false }));
 
 async function attachRosterLogin(username) {
   if (!rosterLookup || isPlatformAdminName(username)) {
@@ -748,7 +807,7 @@ authRouter.post("/login", async (req, res) => {
   const username = typeof req.body?.username === "string" ? req.body.username.trim() : "";
   const password = typeof req.body?.password === "string" ? req.body.password : "";
   if (!username || !password) {
-    res.status(401).json({ ok: false, error: "请输入用户名和密码" });
+    sendLoginError(req, res, 401, "请输入用户名和密码");
     return;
   }
   let user = resolveUser(username);
@@ -756,26 +815,29 @@ authRouter.post("/login", async (req, res) => {
     user = (await attachRosterLogin(username)) || user;
   }
   if (!user || user.disabled) {
-    res.status(401).json({
-      ok: false,
-      error: user && user.disabled ? "账号已停用，无法登录" : "用户名或密码错误"
-    });
+    sendLoginError(req, res, 401, user && user.disabled ? "账号已停用，无法登录" : "用户名或密码错误");
     return;
   }
   if (!(await verifyPassword(password, user.passwordHash))) {
-    res.status(401).json({ ok: false, error: "用户名或密码错误" });
+    sendLoginError(req, res, 401, "用户名或密码错误");
     return;
   }
   const sid = `${Date.now().toString(36)}-${randomBytes(12).toString("hex")}`;
   const createdAt = Date.now();
-  const remember = Boolean(req.body?.remember);
+  const remember = readRemember(req.body);
   const maxAgeMs = remember ? SESSION_MS_REMEMBER : SESSION_MS_DEFAULT;
   const expiresAt = createdAt + maxAgeMs;
   sessions.set(sid, { username: user.username, createdAt, expiresAt });
   setSessionCookie(res, req, sid, Math.floor(maxAgeMs / 1000));
-  persistSession(sid, user.username, createdAt, expiresAt).catch(function (err) {
+  try {
+    await persistSession(sid, user.username, createdAt, expiresAt);
+  } catch (err) {
     console.error("session persist failed", err);
-  });
+  }
+  if (wantsFormRedirect(req)) {
+    res.redirect(303, "/home");
+    return;
+  }
   res.json({ ok: true, remember, user: publicProfile(user) });
 });
 
@@ -791,13 +853,16 @@ authRouter.post("/logout", (req, res) => {
   res.json({ ok: true });
 });
 
-authRouter.get("/me", (req, res) => {
-  const user = currentUser(req);
-  if (!user) {
-    res.status(401).json({ ok: false, error: "未登录" });
-    return;
-  }
-  sendProfile(res, user);
+authRouter.get("/me", (req, res, next) => {
+  Promise.resolve(currentUserAsync(req))
+    .then(function (user) {
+      if (!user) {
+        res.status(401).json({ ok: false, error: "未登录" });
+        return;
+      }
+      sendProfile(res, user);
+    })
+    .catch(next);
 });
 
 export const profileRouter = Router();

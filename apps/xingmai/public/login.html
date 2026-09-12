@@ -196,6 +196,14 @@
           error.hidden = false;
         });
 
+        try {
+          var bootErr = new URLSearchParams(window.location.search).get("err");
+          if (bootErr) {
+            error.textContent = bootErr;
+            error.hidden = false;
+          }
+        } catch (_) {}
+
         form.addEventListener("submit", async function (event) {
           event.preventDefault();
           error.hidden = true;
@@ -203,14 +211,18 @@
           try {
             var res = await fetch("/api/auth/login", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json", Accept: "application/json" },
               body: JSON.stringify({
                 username: username.value.trim(),
                 password: password.value,
                 remember: remember.checked
               })
             });
-            var data = await res.json();
+            var data = {};
+            try {
+              data = await res.json();
+            } catch (_) {}
             if (!res.ok) throw new Error(data.error || "登录失败");
             if (remember.checked) localStorage.setItem(KEY, username.value.trim());
             else localStorage.removeItem(KEY);
@@ -218,6 +230,13 @@
               localStorage.removeItem("xm-open-tabs");
               sessionStorage.removeItem("xm-open-tabs");
             } catch (_) {}
+            var me = await fetch("/api/auth/me", {
+              credentials: "same-origin",
+              headers: { Accept: "application/json" }
+            });
+            if (!me.ok) {
+              throw new Error("登录成功，但这台浏览器没有带上会话。请用 https://zx.xingmaierp.cc/login 打开后再试。");
+            }
             window.location.replace("/home");
           } catch (err) {
             error.textContent = err.message || "连不上服务器。请确认地址是 https://zx.xingmaierp.cc/login。";
