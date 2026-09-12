@@ -27,7 +27,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=channel-1to1";
+      link.href = "/data-pages.css?v=channel-compare1";
       document.head.appendChild(link);
     }
   }
@@ -221,6 +221,8 @@
         label: "实时销售指数",
         value: fmt(heroVal, 2),
         delta: Number(delta.toFixed(2)),
+        yesterday: [],
+        today: [],
         spark: trend.map(function (row) { return Number(row.payAmount) || 0; })
       },
       cards: [
@@ -251,28 +253,76 @@
     };
   }
 
-  function sparkSvg(points) {
-    const vals = points && points.length ? points : [20, 24, 22, 30, 28, 36];
-    const w = 140;
-    const h = 40;
-    const min = Math.min.apply(null, vals);
-    const max = Math.max.apply(null, vals);
-    const span = max - min || 1;
-    const d = vals
-      .map(function (v, i) {
-        const x = (i / (vals.length - 1)) * w;
-        const y = h - ((v - min) / span) * (h - 6) - 3;
-        return (i === 0 ? "M" : "L") + x.toFixed(1) + " " + y.toFixed(1);
-      })
-      .join(" ");
+  function asSeries(list) {
+    return (list || []).map(function (n) {
+      return Number(n) || 0;
+    });
+  }
+
+  function attachLiveHero(hero, live) {
+    const src = (live && live.hero) || {};
+    const yest = asSeries(src.yesterday);
+    const today = asSeries(src.today && src.today.length ? src.today : src.spark);
+    if (yest.length || today.length) {
+      hero.yesterday = yest;
+      hero.today = today;
+      if (yest.length && today.length) {
+        const idx = Math.min(today.length, yest.length) - 1;
+        const now = today[today.length - 1];
+        const then = yest[idx];
+        if (then) {
+          hero.delta = Number((((now - then) / Math.abs(then)) * 100).toFixed(2));
+        }
+      }
+    }
+    return hero;
+  }
+
+  function compareSpark(hero) {
+    const yest = asSeries(hero && hero.yesterday);
+    const today = asSeries(hero && hero.today && hero.today.length ? hero.today : hero && hero.spark);
+    const w = 220;
+    const h = 52;
+    const padX = 2;
+    const padY = 4;
+    let max = 1;
+    yest.concat(today).forEach(function (n) {
+      if (n > max) {
+        max = n;
+      }
+    });
+    const steps = Math.max(yest.length, today.length, 2) - 1;
+    function pts(list) {
+      if (!list.length) {
+        return "";
+      }
+      return list
+        .map(function (n, i) {
+          const x = padX + (i / steps) * (w - padX * 2);
+          const y = h - padY - (n / max) * (h - padY * 2);
+          return x.toFixed(1) + "," + y.toFixed(1);
+        })
+        .join(" ");
+    }
+    const yestPts = pts(yest);
+    const todayPts = pts(today);
     return (
       '<svg class="ch-spark" viewBox="0 0 ' +
       w +
       " " +
       h +
-      '" preserveAspectRatio="none" aria-hidden="true"><path d="' +
-      d +
-      '" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>'
+      '" preserveAspectRatio="none" aria-hidden="true">' +
+      (yestPts
+        ? '<polyline fill="none" stroke="#2f54eb" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" points="' +
+          yestPts +
+          '"></polyline>'
+        : "") +
+      (todayPts
+        ? '<polyline fill="none" stroke="#cf1322" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" points="' +
+          todayPts +
+          '"></polyline>'
+        : "") +
+      "</svg>"
     );
   }
 
@@ -473,8 +523,9 @@
         '</div><div class="value">' +
         escapeHtml(hero.value || "") +
         "</div>" +
-        sparkSvg(hero.spark) +
+        compareSpark(hero) +
         '<div class="ch-axis"><span>00:00</span><span>12:00</span><span>23:00</span></div>' +
+        '<div class="ch-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</div>' +
         '<div class="delta ' +
         (down ? "is-down" : "is-up") +
         '">' +
@@ -505,33 +556,46 @@
       params.set("to", span.to + " 23:59:59");
       params.set("payTimeStart", span.from + " 00:00:00");
       params.set("payTimeEnd", span.to + " 23:59:59");
+      const liveReq = json("/api/home/live").catch(function () {
+        return json("/data/live-demo.json");
+      }).catch(function () {
+        return null;
+      });
       return json("/api/data/overview?" + params.toString())
         .then(function (data) {
           if (dead) {
             return;
           }
           if (data && data.ok && (data.source === "xingmai-erp" || (data.shops && data.shops.length) || (data.cards || []).some(function (c) { return c.key === "payAmount"; }))) {
-            state.payload = fromErp(data, state.range, span.dateLabel);
-            render();
-            return;
+            return liveReq.then(function (live) {
+              if (dead) {
+                return;
+              }
+              state.payload = fromErp(data, state.range, span.dateLabel);
+              attachLiveHero(state.payload.hero, live);
+              render();
+            });
           }
           throw new Error("empty");
         })
         .catch(function () {
-          return json("/api/data/team")
-            .catch(function () {
+          return Promise.all([
+            json("/api/data/team").catch(function () {
               return json("/data/team-demo.json");
-            })
-            .then(function (demo) {
-              if (dead || !demo) {
-                return;
-              }
-              demo.range = state.range;
-              demo.dateLabel = span.dateLabel;
-              demo.ranges = RANGES;
-              state.payload = demo;
-              render();
-            });
+            }),
+            liveReq
+          ]).then(function (pair) {
+            const demo = pair[0];
+            if (dead || !demo) {
+              return;
+            }
+            demo.range = state.range;
+            demo.dateLabel = span.dateLabel;
+            demo.ranges = RANGES;
+            attachLiveHero(demo.hero || (demo.hero = { label: "实时销售指数", value: "--", delta: 0 }), pair[1]);
+            state.payload = demo;
+            render();
+          });
         });
     }
 

@@ -143,7 +143,7 @@
 
   function mountOverview(root) {
     ensureSheet();
-    return loadScript("/data-overview.js?v=channel-1to1").then(function () {
+    return loadScript("/data-overview.js?v=channel-compare1").then(function () {
       if (typeof window.XmDataCreateDashboard === "function") {
         return window.XmDataCreateDashboard(root);
       }
