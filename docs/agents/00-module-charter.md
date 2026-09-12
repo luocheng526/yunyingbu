@@ -23,6 +23,7 @@
 - 给登录页加 `nav.js`
 - 空 `files` 全量同步
 - 复活已删的 `cursor/home-nav-workbench-e50e` 全页壳（瘦 `app.js`、prefetch 整页、「项目」分组）
+- 视频预览、图片预览、自动截图或录屏。只有用户亲口说需要预览时才拍
 
 ### 业务模块要做
 
@@ -100,3 +101,4 @@ cd apps/xingmai && node --test test/app.test.js test/home.test.js test/theme.tes
 本地测试种子仍是 `ChangeMe123!`；线上交单用 `jingdong220`，见 [00-prod-admin.md](00-prod-admin.md)。
 `src/app.js` 必须同时有 `attachProfile`、`attachHome`、`createReleasesRouter`、`/api/health`。
 登录页 HTML 不得出现 `nav.js`。
+不要做视频预览或图片预览，除非用户亲口说需要。验收用测试、curl 或打开页面。

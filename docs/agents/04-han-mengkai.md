@@ -22,4 +22,4 @@
 2. API：`GET/POST /api/han/tasks`，`GET/PUT /api/han/brief`。
 
 【验收】韩梦凯中心加的任务不会出现在 `/api/shen/tasks`。页面嵌在壳里。
-【不要做】不要重构全站；不要删除 notes 演示接口。
+【不要做】不要重构全站；不要删除 notes 演示接口。不要做视频预览或图片预览，除非用户亲口说需要。

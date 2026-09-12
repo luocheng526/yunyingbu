@@ -17,4 +17,4 @@
 做完：用 `罗成` / `luocheng` + `jingdong220` 登录 → `GET /api/releases/next` → `POST /api/releases`（`files` + `contents`）→ 等队首「通过」。
 不要再用演示账号 / `ChangeMe123!`。见 [00-prod-admin.md](00-prod-admin.md)。
 
-常规发布不录像。只有用户点名要预览图时才截图。
+不要做视频预览，也不要做图片预览。只有用户亲口说需要预览时才截图或录屏。没说不要为了交单、验收、走查自动拍。

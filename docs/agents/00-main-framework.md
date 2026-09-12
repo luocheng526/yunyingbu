@@ -20,6 +20,7 @@
 - `public/shared/modules/*.js`（各业务模块自己的嵌入脚本）
 - `src/modules/{home,data,shen,han,people,stores,academy,agents}/**`（`nav-items.js` 除外）
 - 用仓库里的简化 `releases/router.js` 整文件覆盖线上 `/opt/mengkai`
+- 视频预览、图片预览。只有用户亲口说需要预览时才截图或录屏
 
 ## 现行结构（对）
 
