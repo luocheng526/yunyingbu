@@ -213,6 +213,27 @@ test("chief board keeps admins on all columns and others on their own duty", () 
   );
 });
 
+test("chief columns keep 主管/储备 duty and drop 运营 助理 经理", () => {
+  const start = homeJs.indexOf("function teamPredicate");
+  const end = homeJs.indexOf("function buildTeams");
+  const fns = new Function(homeJs.slice(start, end) + "return {teamLeadNames, shopOnRoleTeam};")();
+  const people = [
+    { name: "杨润泽", role: "主管", status: "在职" },
+    { name: "翁琴", role: "储备", status: "在职" },
+    { name: "高丽男", role: "运营", status: "在职" },
+    { name: "韩梦凯", role: "经理", status: "在职" },
+    { name: "张助理", role: "助理", status: "在职" }
+  ];
+  const shops = [
+    { supervisor: "杨润泽", assistant: "翁琴" },
+    { supervisor: "高丽男", assistant: "陈晓曼" },
+    { supervisor: "韩梦凯", assistant: "张助理", lead: "高丽男" }
+  ];
+  assert.deepEqual(fns.teamLeadNames(people, shops, "主管"), ["杨润泽", "翁琴", "陈晓曼"]);
+  assert.equal(fns.shopOnRoleTeam(shops[0], "杨润泽", "主管"), true);
+  assert.equal(fns.shopOnRoleTeam(shops[2], "高丽男", "主管"), false);
+});
+
 test("card help uses a body-level tooltip so overflow cannot clip it", () => {
   assert.match(homeJs, /function tipAttr/);
   assert.match(homeJs, /function showCardTip/);

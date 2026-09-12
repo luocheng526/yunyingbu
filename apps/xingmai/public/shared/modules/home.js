@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.396-home-oneset */
+/* xm-module-home 0.1.397-home-chiefs */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1121,7 +1121,7 @@
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.396-home-oneset");
+    board.setAttribute("data-hm-js", "0.1.397-home-chiefs");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1854,6 +1854,7 @@
   function teamLeadNames(people, dutyShops, role) {
     var seen = {};
     var names = [];
+    var byName = {};
     function add(name) {
       var n = String(name || "").trim();
       if (!n || n === "管理员" || seen[n]) {
@@ -1862,7 +1863,17 @@
       seen[n] = true;
       names.push(n);
     }
+    function addChief(name) {
+      var p = byName[String(name || "").trim()];
+      if (p && /运营|助理|经理/.test(String(p.role || ""))) {
+        return;
+      }
+      add(name);
+    }
     (people || []).forEach(function (person) {
+      if (person && person.name) {
+        byName[person.name] = person;
+      }
       if (person && person.status === "在职" && (person.role === role || (role === "主管" && person.role === "储备"))) {
         add(person.name);
       }
@@ -1872,8 +1883,8 @@
         add(shop && shop.manager);
       }
       if (role === "主管") {
-        add(shop && shop.supervisor);
-        add(shop && shop.assistant);
+        addChief(shop && shop.supervisor);
+        addChief(shop && shop.assistant);
       }
     });
     if (!names.length && role === "经理") {
@@ -1883,19 +1894,16 @@
     return names;
   }
 
-  function shopOnRoleTeam(shop, name, role, person) {
+  function shopOnRoleTeam(shop, name, role) {
     if (!shop || !name) {
       return false;
     }
     if (role !== "主管") {
       return teamPredicate(name)(shop);
     }
-    if ([shop.supervisor, shop.assistant, shop.lead, shop.groupId].some(function (v) {
+    return [shop.supervisor, shop.assistant].some(function (v) {
       return String(v || "").trim() === name;
-    })) {
-      return true;
-    }
-    return !!(person && (person.visibleShops || []).indexOf(shopDisplayName(shop)) !== -1);
+    });
   }
 
   function buildTeams(dutyShops, grants, rangePack, prevPack, catalogPack, people, role) {
@@ -1905,15 +1913,9 @@
     var catalogByName = mapByShopName((catalogPack && catalogPack.records) || (rangePack && rangePack.records) || []);
     var shops = dutyShops || [];
     var mismatches = [];
-    var peopleByName = {};
-    (people || []).forEach(function (person) {
-      if (person && person.name) {
-        peopleByName[person.name] = person;
-      }
-    });
     function oneTeam(key, name, href) {
       var pred = function (shop) {
-        return shopOnRoleTeam(shop, name, role || "经理", peopleByName[name]);
+        return shopOnRoleTeam(shop, name, role || "经理");
       };
       var rows = [];
       var matched = [];
