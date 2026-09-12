@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.359-home-tipfix */
+/* xm-module-home 0.1.360-home-tipbody */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -163,6 +163,86 @@
 
   function tipAttr(text) {
     return escapeHtml(text || "指标").replaceAll("\n", "&#10;");
+  }
+
+  var cardTipEl = null;
+  var cardTipAnchor = null;
+  var cardTipPinned = false;
+
+  function cardTipText(el) {
+    return String((el && el.getAttribute("data-tip")) || "").replace(/&#10;/g, "\n");
+  }
+
+  function cardTipNode() {
+    if (cardTipEl && document.body.contains(cardTipEl)) {
+      return cardTipEl;
+    }
+    cardTipEl = document.createElement("div");
+    cardTipEl.id = "xm-hm-tip";
+    cardTipEl.className = "xm-hm-tip";
+    cardTipEl.setAttribute("role", "tooltip");
+    document.body.appendChild(cardTipEl);
+    return cardTipEl;
+  }
+
+  function hideCardTip(force) {
+    if (cardTipPinned && !force) {
+      return;
+    }
+    cardTipPinned = false;
+    cardTipAnchor = null;
+    if (cardTipEl) {
+      cardTipEl.classList.remove("is-on");
+      cardTipEl.textContent = "";
+    }
+  }
+
+  function placeCardTip(anchor) {
+    var tip = cardTipNode();
+    var box = anchor.getBoundingClientRect();
+    tip.classList.add("is-on");
+    var tw = tip.offsetWidth || 280;
+    var th = tip.offsetHeight || 80;
+    var left = box.right - tw;
+    if (left < 8) {
+      left = 8;
+    }
+    if (left + tw > window.innerWidth - 8) {
+      left = Math.max(8, window.innerWidth - tw - 8);
+    }
+    var top = box.bottom + 8;
+    if (top + th > window.innerHeight - 8 && box.top - th - 8 >= 8) {
+      top = box.top - th - 8;
+    }
+    if (top < 8) {
+      top = 8;
+    }
+    tip.style.left = Math.round(left) + "px";
+    tip.style.top = Math.round(top) + "px";
+  }
+
+  function showCardTip(anchor, pinned) {
+    var text = cardTipText(anchor);
+    if (!text) {
+      return;
+    }
+    cardTipAnchor = anchor;
+    cardTipPinned = !!pinned;
+    cardTipNode().textContent = text;
+    placeCardTip(anchor);
+  }
+
+  function helpFromEvent(event) {
+    var t = event.target;
+    if (!t || !t.closest) {
+      return null;
+    }
+    var help = t.closest(".xm-hm-help");
+    if (help) {
+      return help;
+    }
+    var head = t.closest(".xm-hm-card-head");
+    return head ? head.querySelector(".xm-hm-help") : null;
   }
 
   function calMonthHtml(ym, opts, side) {
@@ -387,9 +467,9 @@
       escapeHtml(card.key) +
       '"><div class="xm-hm-card-head"><span>' +
       escapeHtml(card.label) +
-      '</span><i data-tip="' +
+      '</span><button type="button" class="xm-hm-help" data-tip="' +
       tipAttr(card.tip) +
-      '" tabindex="0">i</i></div><div class="xm-hm-value' +
+      '" aria-label="指标说明">i</button></div><div class="xm-hm-value' +
       (card.accent ? " is-accent" : "") +
       '">' +
       escapeHtml(card.value) +
@@ -831,11 +911,10 @@
       "html[data-theme=dark] .xm-hm-cal-month + .xm-hm-cal-month{border-color:var(--xm-line)}" +
       "html[data-theme=dark] .xm-hm-cal-caption,html[data-theme=dark] .xm-hm-cal-caption button{color:var(--xm-ink)}" +
       ".xm-hm-card{overflow:visible}" +
-      ".xm-hm-card:has(i:hover),.xm-hm-card:has(i:focus){z-index:8}" +
-      ".xm-hm-card-head i{cursor:help;position:relative}" +
-      ".xm-hm-card-head i::before{content:\"\";position:absolute;inset:-10px}" +
-      ".xm-hm-card-head i::after{content:attr(data-tip);position:absolute;top:calc(100% + 8px);right:0;z-index:20;display:none;width:max-content;max-width:min(280px,70vw);padding:8px 10px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);color:var(--xm-ink);font-size:12px;font-style:normal;font-weight:400;line-height:1.55;white-space:pre-wrap;text-align:left;pointer-events:none}" +
-      ".xm-hm-card-head i:hover::after,.xm-hm-card-head i:focus::after{display:block}" +
+      ".xm-hm-card-head .xm-hm-help{cursor:help;position:relative;z-index:2;width:18px;height:18px;border:1px solid var(--xm-line);border-radius:50%;background:transparent;padding:0;margin:0;font:inherit;font-size:11px;line-height:1;color:var(--xm-muted);display:inline-flex;align-items:center;justify-content:center}" +
+      ".xm-hm-card-head .xm-hm-help::before{content:\"\";position:absolute;inset:-14px}" +
+      ".xm-hm-tip{position:fixed;z-index:2147483646;display:none;box-sizing:border-box;width:max-content;max-width:min(360px,calc(100vw - 24px));padding:10px 12px;background:var(--xm-card,#fff);border:1px solid var(--xm-line,#eadfd0);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.18);color:var(--xm-ink,#1f1b16);font-size:12px;line-height:1.6;white-space:pre-wrap;text-align:left;pointer-events:none}" +
+      ".xm-hm-tip.is-on{display:block}" +
       ".xm-hm-body{position:relative;display:flex;flex-direction:column;gap:12px;overflow:visible}" +
       ".xm-hm.is-live .xm-hm-kpis,.xm-hm.is-board .xm-hm-kpis,.xm-hm.is-team .xm-hm-kpis,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
       ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden]{display:none}" +
@@ -887,7 +966,6 @@
       ".xm-hm-card.is-over,.xm-hm-pop label.is-over{outline:1px dashed var(--xm-primary)}" +
       ".xm-hm-pop label{cursor:grab}" +
       ".xm-hm-card-head{display:flex;align-items:center;justify-content:space-between;color:var(--xm-muted);font-size:12px}" +
-      ".xm-hm-card-head i{width:16px;height:16px;border:1px solid var(--xm-line);border-radius:50%;font-style:normal;font-size:10px;display:inline-flex;align-items:center;justify-content:center;color:var(--xm-muted)}" +
       ".xm-hm-value{margin-top:8px;font-size:22px;font-weight:700;letter-spacing:-.02em;color:var(--xm-ink)}" +
       ".xm-hm-value.is-accent{color:var(--xm-primary)}" +
       ".xm-hm-trend{margin-top:6px;font-size:12px;color:var(--xm-muted)}" +
@@ -964,7 +1042,14 @@
     var hero = readChart(live.hero, blankLive().hero);
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
-    board.setAttribute("data-hm-js", "0.1.359-home-tipfix");
+    var keepCard = "";
+    var wasPinned = cardTipPinned;
+    if (cardTipAnchor && cardTipAnchor.closest) {
+      var hold = cardTipAnchor.closest("[data-card]");
+      keepCard = hold ? hold.getAttribute("data-card") || "" : "";
+    }
+    hideCardTip(true);
+    board.setAttribute("data-hm-js", "0.1.360-home-tipbody");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", state.view === "team");
@@ -1036,6 +1121,12 @@
         );
       })
       .join("");
+    if (keepCard) {
+      var nextHelp = root.querySelector('.xm-hm-card[data-card="' + keepCard + '"] .xm-hm-help');
+      if (nextHelp) {
+        showCardTip(nextHelp, wasPinned);
+      }
+    }
   }
 
   function api(path) {
@@ -1905,6 +1996,18 @@
       }
 
       function onClick(event) {
+        var help = event.target.closest && event.target.closest(".xm-hm-help");
+        if (help) {
+          if (cardTipPinned && cardTipAnchor === help) {
+            hideCardTip(true);
+          } else {
+            showCardTip(help, true);
+          }
+          return;
+        }
+        if (cardTipPinned) {
+          hideCardTip(true);
+        }
         var view = event.target.closest("[data-view]");
         if (view) {
           state.view = view.getAttribute("data-view");
@@ -1999,6 +2102,41 @@
         if (calOpen && !event.target.closest("#xm-hm-cal") && !event.target.closest("#xm-hm-dates")) {
           closeCal();
         }
+      }
+
+      function onHelpOver(event) {
+        var help = helpFromEvent(event);
+        if (!help || cardTipPinned) {
+          return;
+        }
+        showCardTip(help, false);
+      }
+
+      function onHelpOut(event) {
+        if (cardTipPinned) {
+          return;
+        }
+        var help = helpFromEvent(event);
+        if (!help) {
+          return;
+        }
+        var head = help.closest(".xm-hm-card-head");
+        var to = event.relatedTarget;
+        if (to && head && head.contains(to)) {
+          return;
+        }
+        hideCardTip(false);
+      }
+
+      function onTipScroll() {
+        if (!cardTipAnchor || !cardTipEl || !cardTipEl.classList.contains("is-on")) {
+          return;
+        }
+        if (!document.body.contains(cardTipAnchor)) {
+          hideCardTip(true);
+          return;
+        }
+        placeCardTip(cardTipAnchor);
       }
 
       function onCalHover(event) {
@@ -2232,9 +2370,14 @@
         }
       }
 
+      var scroller = document.getElementById("xm-content") || root;
       root.addEventListener("click", onClick);
       root.addEventListener("change", onChange);
       root.addEventListener("pointerover", onCalHover);
+      root.addEventListener("mouseover", onHelpOver);
+      root.addEventListener("mouseout", onHelpOut);
+      scroller.addEventListener("scroll", onTipScroll, true);
+      window.addEventListener("resize", onTipScroll);
       document.addEventListener("mousedown", onOutsideCardSet);
       document.addEventListener("pointerdown", onSortDown);
       document.addEventListener("pointermove", onSortMove, { passive: false });
@@ -2267,6 +2410,15 @@
         root.removeEventListener("click", onClick);
         root.removeEventListener("change", onChange);
         root.removeEventListener("pointerover", onCalHover);
+        root.removeEventListener("mouseover", onHelpOver);
+        root.removeEventListener("mouseout", onHelpOut);
+        scroller.removeEventListener("scroll", onTipScroll, true);
+        window.removeEventListener("resize", onTipScroll);
+        hideCardTip(true);
+        if (cardTipEl && cardTipEl.parentNode) {
+          cardTipEl.parentNode.removeChild(cardTipEl);
+        }
+        cardTipEl = null;
         document.removeEventListener("mousedown", onOutsideCardSet);
         document.removeEventListener("pointerdown", onSortDown);
         document.removeEventListener("pointermove", onSortMove);

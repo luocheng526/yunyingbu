@@ -39,12 +39,14 @@ test("team view splits two people side by side", () => {
   assert.match(homeJs, /@media \(max-width:900px\)\{\.xm-hm-teams\{grid-template-columns:1fr\}/);
 });
 
-test("card help uses data-tip so multiline ERP copy can show", () => {
+test("card help uses a body-level tooltip so overflow cannot clip it", () => {
   assert.match(homeJs, /function tipAttr/);
-  assert.match(homeJs, /data-tip="/);
-  assert.match(homeJs, /content:attr\(data-tip\)/);
-  assert.match(homeJs, /i:hover::after/);
+  assert.match(homeJs, /function showCardTip/);
+  assert.match(homeJs, /class="xm-hm-help"/);
+  assert.match(homeJs, /cardTipEl\.id = "xm-hm-tip"/);
+  assert.match(homeJs, /position:fixed/);
   assert.match(homeJs, /white-space:pre-wrap/);
   assert.doesNotMatch(homeJs, /<i title="/);
+  assert.doesNotMatch(homeJs, /content:attr\(data-tip\)/);
   assert.match(homeJs, /&#10;/);
 });
