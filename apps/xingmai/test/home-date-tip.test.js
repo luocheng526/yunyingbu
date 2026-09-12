@@ -54,7 +54,7 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /shop\.assistant/);
   assert.match(homeJs, /<th class="xm-hm-num">数量<\/th>/);
   assert.match(homeJs, /\.xm-hm\.is-chief \.xm-hm-teams \.xm-hm-table\{min-width:0/);
-  assert.match(homeJs, /\.xm-hm\.is-chief \.xm-hm-teams \.xm-hm-table td\{border:0\}/);
+  assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table td\{border:0\}/);
   assert.match(homeJs, /linear-gradient\(#dceaff,#f7fbff\)/);
   assert.doesNotMatch(homeJs, /border:2px solid #4d8fd6/);
   assert.match(homeJs, /\.xm-hm-bar\{[^}]*border:0\}/);
@@ -90,10 +90,10 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /data-dir="desc"/);
   assert.match(homeJs, /aria-label="升序"/);
   assert.match(homeJs, /aria-label="降序"/);
-  assert.match(homeJs, /data-shop-pad/);
-  assert.match(homeJs, /行距/);
-  assert.match(homeJs, /border-bottom:1px dashed #5b9bd5/);
-  assert.match(homeJs, /--xm-hm-row-pad/);
+  assert.doesNotMatch(homeJs, /data-shop-pad/);
+  assert.doesNotMatch(homeJs, /行距/);
+  assert.doesNotMatch(homeJs, /--xm-hm-row-pad/);
+  assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table th\{border-right:1px dashed #5b9bd5;border-bottom:1px dashed #5b9bd5\}/);
   assert.match(homeJs, /星脉甄选/);
   assert.match(homeJs, /class="xm-hm-set">卡片设置<\/button><\/header>/);
   assert.match(homeJs, /xm-hm-kpis-shell/);

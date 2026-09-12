@@ -11,7 +11,7 @@ test("rewrites immutable homepage script url to no-store client.js", () => {
   const out = rewriteHomeModuleUrl(html);
   assert.equal(out.includes("/shared/modules/home.js"), false);
   assert.equal(out.includes(HOME_CLIENT_JS), true);
-  assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.385-home-chiefq$/);
+  assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.386-home-nodash$/);
 });
 
 test("serves /api/home/client.js from current homepage module", async () => {

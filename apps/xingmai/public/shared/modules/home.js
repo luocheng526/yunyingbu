@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.385-home-chiefq */
+/* xm-module-home 0.1.386-home-nodash */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -493,7 +493,6 @@
   }
 
   var shopSort = { key: "", dir: "desc" };
-  var shopPad = 8;
 
   function metricSortNum(text) {
     return text && text !== "—" ? asNum(String(text).replace(/%/g, "")) : null;
@@ -602,15 +601,12 @@
     }
     var cols = shopCols();
     var sort = shopSort;
-    var pad = shopPad;
     return (
       '<div class="xm-hm-panel" data-team="' +
       escapeHtml(team.key) +
-      '"><h2><span>责权店铺 <span>' +
+      '"><h2>责权店铺 <span>' +
       shops.length +
-      ' 店</span></span><label class="xm-hm-rowpad">行距<input type="range" min="2" max="20" value="' +
-      pad +
-      '" data-shop-pad></label></h2>' +
+      " 店</span></h2>" +
       '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th>' +
       cols
         .map(function (def) {
@@ -949,7 +945,7 @@
       ".xm-hm-kpis-shell,.xm-hm-teams,.xm-hm-team{background:linear-gradient(#dceaff,#f7fbff);border:0;outline:0;box-shadow:none;border-radius:12px}" +
       ".xm-hm-kpis-shell,.xm-hm-teams{padding:10px}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
-      ".xm-hm-teams{display:flex;flex-direction:column;gap:10px;overflow-x:auto;--xm-hm-row-pad:8px}" +
+      ".xm-hm-teams{display:flex;flex-direction:column;gap:10px;overflow-x:auto}" +
       ".xm-hm-teams-bar{display:flex;justify-content:space-between;align-items:center;padding:0 0 8px}" +
       ".xm-hm-teams-grid{display:grid;grid-template-columns:repeat(var(--xm-hm-team-cols,2),minmax(200px,1fr));gap:10px}" +
       ".xm-hm-team{display:flex;flex-direction:column;gap:8px;min-width:0;padding:8px 8px 8px}" +
@@ -958,15 +954,13 @@
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border:0;box-shadow:none}" +
       ".xm-hm-teams .xm-hm-table{min-width:760px;font-variant-numeric:tabular-nums;border-collapse:separate;border-spacing:0}" +
       ".xm-hm-teams .xm-hm-table .xm-hm-num{text-align:right;white-space:nowrap}" +
-      ".xm-hm-teams .xm-hm-table th,.xm-hm-teams .xm-hm-table td{border-right:1px dashed #5b9bd5;border-bottom:1px dashed #5b9bd5}" +
-      ".xm-hm-teams .xm-hm-table td{padding-top:var(--xm-hm-row-pad);padding-bottom:var(--xm-hm-row-pad)}" +
+      ".xm-hm-teams .xm-hm-table th{border-right:1px dashed #5b9bd5;border-bottom:1px dashed #5b9bd5}" +
+      ".xm-hm-teams .xm-hm-table td{border:0}" +
       ".xm-hm.is-chief .xm-hm-teams .xm-hm-panel{overflow:hidden}" +
       ".xm-hm.is-chief .xm-hm-teams .xm-hm-table{min-width:0}" +
-      ".xm-hm.is-chief .xm-hm-teams .xm-hm-table td{border:0}" +
       ".xm-hm-teams .xm-hm-table th.xm-hm-num{white-space:normal;max-width:6.4em;line-height:1.25}" +
-      ".xm-hm-teams .xm-hm-table th:last-child,.xm-hm-teams .xm-hm-table td:last-child{text-align:left;white-space:nowrap;border-right:0}" +
-      ".xm-hm-rowpad{display:inline-flex;align-items:center;gap:6px;color:var(--xm-muted);font-size:12px;font-weight:400}" +
-      ".xm-hm-rowpad input{width:72px}" +
+      ".xm-hm-teams .xm-hm-table th:last-child,.xm-hm-teams .xm-hm-table td:last-child{text-align:left;white-space:nowrap}" +
+      ".xm-hm-teams .xm-hm-table th:last-child{border-right:0}" +
       ".xm-hm-sort-h{display:inline-flex;align-items:center;justify-content:flex-end;gap:3px;width:100%}" +
       ".xm-hm-sort-btns{display:inline-flex;flex-direction:column;line-height:1}" +
       ".xm-hm-sort-btns button{border:0;background:0;padding:0;font-size:9px;line-height:1;color:#c0c4cc;cursor:pointer}" +
@@ -1115,7 +1109,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.385-home-chiefq");
+    board.setAttribute("data-hm-js", "0.1.386-home-nodash");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1130,7 +1124,6 @@
     root.querySelector("#xm-hm-kpis").innerHTML = cards.map(cardHtml).join("");
     root.querySelector("#xm-hm-teams").hidden = !teamView;
     root.querySelector("#xm-hm-teams").style.setProperty("--xm-hm-team-cols", String(Math.max(teams.length, 1)));
-    root.querySelector("#xm-hm-teams").style.setProperty("--xm-hm-row-pad", shopPad + "px");
     root.querySelector("#xm-hm-teams").innerHTML = teamsCompareHtml(teams, teamHidden(hide), state.view === "chief");
     root.querySelector("#xm-hm-live").hidden = state.view !== "live";
     root.querySelector("#xm-hm-board").hidden = state.view !== "board";
@@ -2501,31 +2494,7 @@
         event.stopPropagation();
       }
 
-      function applyRowPad(n) {
-        n = Number(n);
-        shopPad = isFinite(n) ? Math.max(2, Math.min(20, Math.round(n))) : 8;
-        var box = root.querySelector("#xm-hm-teams");
-        if (box) {
-          box.style.setProperty("--xm-hm-row-pad", shopPad + "px");
-        }
-        Array.prototype.forEach.call(root.querySelectorAll("[data-shop-pad]"), function (el) {
-          if (el.value !== String(shopPad)) {
-            el.value = String(shopPad);
-          }
-        });
-      }
-
-      function onPadInput(event) {
-        if (event.target && event.target.getAttribute("data-shop-pad") != null) {
-          applyRowPad(event.target.value);
-        }
-      }
-
       function onChange(event) {
-        if (event.target && event.target.getAttribute("data-shop-pad") != null) {
-          applyRowPad(event.target.value);
-          return;
-        }
         var hideKey = event.target.getAttribute("data-hide");
         if (hideKey) {
           var list = hiddenCards();
@@ -2544,7 +2513,6 @@
 
       var scroller = document.getElementById("xm-content") || root;
       root.addEventListener("click", onClick);
-      root.addEventListener("input", onPadInput);
       root.addEventListener("change", onChange);
       root.addEventListener("pointerover", onCalHover);
       root.addEventListener("mouseover", onHelpOver);
@@ -2583,7 +2551,6 @@
         dead = true;
         window.clearInterval(poll);
         root.removeEventListener("click", onClick);
-        root.removeEventListener("input", onPadInput);
         root.removeEventListener("change", onChange);
         root.removeEventListener("pointerover", onCalHover);
         root.removeEventListener("mouseover", onHelpOver);
