@@ -510,10 +510,7 @@
       escapeHtml(team.key) +
       '"><div><h2>' +
       escapeHtml(team.name) +
-      "团队</h2><p>店铺按组织中心责权，数字按店铺id或店名对齐星脉 ERP。卡片可拖拽换位。</p></div>" +
-      '<a href="' +
-      escapeHtml(team.href || "/data/overview") +
-      '">打开数据总览</a></header>'
+      "团队</h2><p>店铺按组织中心责权，数字按店铺id或店名对齐星脉 ERP。卡片可拖拽换位。</p></div></header>"
     );
   }
 

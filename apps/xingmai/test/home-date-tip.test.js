@@ -43,8 +43,7 @@ test("team KPIs resolve ERP shop id from storeId or shop-options name", () => {
 
 test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function teamBlockHtml/);
-  assert.match(homeJs, /打开数据总览/);
-  assert.match(homeJs, /href: "\/data\/overview"/);
+  assert.doesNotMatch(homeJs, /打开数据总览/);
   assert.doesNotMatch(homeJs, /打开运营中心/);
   assert.match(homeJs, /\.xm-hm-team-kpis\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(homeJs, /\.xm-hm-team\{display:flex;flex-direction:column;gap:10px;min-width:0;background:#dceaff/);
