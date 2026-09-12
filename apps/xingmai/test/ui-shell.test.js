@@ -144,7 +144,7 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /\.xm-workspace > \.xm-pane\.is-active/);
   assert.match(jsText, /disposePane\("\/home"\)/);
   assert.doesNotMatch(jsText, /window\.location\.assign\("\/home"\)/);
-  assert.match(jsText, /xm-fast-shell 0\.1\.140/);
+  assert.match(jsText, /xm-fast-shell 0\.1\.142/);
   assert.match(jsText, /\/shared\/modules\/" \+ id \+ "\.js"/);
   assert.doesNotMatch(jsText, /modules\/" \+ id \+ "\.js\?v=/);
   assert.match(jsText, /add\("\/login"\)/);
