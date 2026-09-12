@@ -19,11 +19,13 @@ import { canEditRoster, scopeOf } from "./org-acl.js";
 import {
   STORE_IMPORT_HEADERS,
   createOrgStore,
+  hydrateOrgStores,
   importOrgStores,
   listOrgLogs,
   listOrgStores,
   listRightsBoard,
   listTeams,
+  orgStoresPersistMode,
   patchOrgStore,
   pinRightsName,
   removeOrgStore,
@@ -92,6 +94,7 @@ peopleRouter.get("/charter", (_req, res) => {
 });
 
 peopleRouter.get("/org/summary", async (req, res) => {
+  await hydrateOrgStores();
   const actor = await resolveActor(req);
   const scope = scopeOf(actor);
   res.json({
@@ -100,12 +103,14 @@ peopleRouter.get("/org/summary", async (req, res) => {
     actor,
     scope: scope.key,
     scopeLabel: scope.label,
+    persist: orgStoresPersistMode(),
     teams: listTeams(),
     summary: summarizeOrg(actor)
   });
 });
 
 peopleRouter.get("/org/stores", async (req, res) => {
+  await hydrateOrgStores();
   const actor = await resolveActor(req);
   const scope = scopeOf(actor);
   res.json({
@@ -114,6 +119,7 @@ peopleRouter.get("/org/stores", async (req, res) => {
     actor,
     scope: scope.key,
     scopeLabel: scope.label,
+    persist: orgStoresPersistMode(),
     canCreate: scope.key !== "none",
     teams: listTeams(),
     stores: listOrgStores(req.query || {}, actor)
@@ -149,29 +155,34 @@ peopleRouter.get("/org/stores/template", (_req, res) => {
 });
 
 peopleRouter.post("/org/stores/import", async (req, res) => {
+  await hydrateOrgStores();
   const actor = await resolveActor(req);
   const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
   if (!rows.length) {
     res.status(400).json({ ok: false, error: "请按模板导入至少一行" });
     return;
   }
-  sendResult(res, importOrgStores(rows, actor, { groupId: req.body?.groupId || req.body?.group_id || "" }), false);
+  sendResult(res, await importOrgStores(rows, actor, { groupId: req.body?.groupId || req.body?.group_id || "" }), false);
 });
 
 peopleRouter.post("/org/stores", async (req, res) => {
-  sendResult(res, createOrgStore(req.body || {}, await resolveActor(req)), true);
+  await hydrateOrgStores();
+  sendResult(res, await createOrgStore(req.body || {}, await resolveActor(req)), true);
 });
 
 peopleRouter.patch("/org/stores/:id", async (req, res) => {
-  sendResult(res, patchOrgStore(req.params.id, req.body || {}, await resolveActor(req)), false);
+  await hydrateOrgStores();
+  sendResult(res, await patchOrgStore(req.params.id, req.body || {}, await resolveActor(req)), false);
 });
 
 peopleRouter.delete("/org/stores/:id", async (req, res) => {
-  sendResult(res, removeOrgStore(req.params.id, await resolveActor(req)), false);
+  await hydrateOrgStores();
+  sendResult(res, await removeOrgStore(req.params.id, await resolveActor(req)), false);
 });
 
-peopleRouter.get("/org/logs", (_req, res) => {
-  res.json({ ok: true, logs: listOrgLogs() });
+peopleRouter.get("/org/logs", async (_req, res) => {
+  await hydrateOrgStores();
+  res.json({ ok: true, persist: orgStoresPersistMode(), logs: listOrgLogs() });
 });
 
 peopleRouter.get("/org/rights-board", (_req, res) => {

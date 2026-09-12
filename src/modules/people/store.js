@@ -818,6 +818,8 @@ export async function hydrateFromMysql() {
     if (typeof auth.dbMode !== "function" || auth.dbMode() !== "mysql" || typeof auth.query !== "function") {
       loginOverlay = { ...loadLoginOverlay(), ...loginOverlay };
       applyLoginOverlay();
+      const { hydrateOrgStores } = await import("./org-board.js");
+      await hydrateOrgStores();
       return { ok: true, mode: "memory" };
     }
     const { query } = auth;
@@ -842,10 +844,18 @@ export async function hydrateFromMysql() {
     }
     loginOverlay = { ...loadLoginOverlay(), ...loginOverlay };
     applyLoginOverlay();
-    return { ok: true, mode: "mysql", people: people.length, shops: shops.length, grants: grants.length };
+    const { hydrateOrgStores } = await import("./org-board.js");
+    const org = await hydrateOrgStores();
+    return { ok: true, mode: "mysql", people: people.length, shops: shops.length, grants: grants.length, stores: org.stores };
   } catch {
     loginOverlay = { ...loadLoginOverlay(), ...loginOverlay };
     applyLoginOverlay();
+    try {
+      const { hydrateOrgStores } = await import("./org-board.js");
+      await hydrateOrgStores();
+    } catch {
+      /* org board stays on memory seed */
+    }
     return { ok: true, mode: "memory" };
   }
 }

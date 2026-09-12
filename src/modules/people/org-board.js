@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { assertCanImportRow, assertCanWrite, canEditStore, groupIdOf, normalizeGroupId, rowMatchesScope, scopeOf } from "./org-acl.js";
 import { listPeople } from "./store.js";
 
@@ -168,6 +171,152 @@ let logs = [
   }
 ];
 let logId = 2;
+let persistMode = "memory";
+let hydrated = false;
+const persistFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "data", "org-stores.json");
+
+function runningUnderNodeTest() {
+  return Boolean(process.env.NODE_TEST_CONTEXT) || process.execArgv.includes("--test") || process.argv.includes("--test");
+}
+
+function snapshotBoard() {
+  return { rows, nextId, logs, logId, rightsPins };
+}
+
+function applyBoardSnapshot(data) {
+  if (!data || !Array.isArray(data.rows) || !data.rows.length) {
+    return false;
+  }
+  rows = data.rows.map((row) => ({ ...row }));
+  nextId = Number(data.nextId) || rows.reduce((max, row) => Math.max(max, Number(row.id) || 0), 0) + 1;
+  logs = Array.isArray(data.logs) && data.logs.length ? data.logs.map((item) => ({ ...item })) : logs;
+  logId = Number(data.logId) || logs.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1;
+  if (data.rightsPins && typeof data.rightsPins === "object") {
+    rightsPins = { ...data.rightsPins };
+  }
+  return true;
+}
+
+function readPersistFile() {
+  if (runningUnderNodeTest()) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(fs.readFileSync(persistFile, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writePersistFile() {
+  if (runningUnderNodeTest()) {
+    return false;
+  }
+  try {
+    fs.mkdirSync(path.dirname(persistFile), { recursive: true });
+    fs.writeFileSync(persistFile, JSON.stringify(snapshotBoard()) + "\n", "utf8");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function mysqlAuth() {
+  try {
+    const auth = await import("../profile/auth.js");
+    if (typeof auth.dbMode === "function" && auth.dbMode() === "mysql" && typeof auth.query === "function") {
+      return auth;
+    }
+  } catch {
+    /* local / test has no profile auth */
+  }
+  return null;
+}
+
+async function readMysqlBoard() {
+  const auth = await mysqlAuth();
+  if (!auth) {
+    return null;
+  }
+  const { query } = auth;
+  await query(
+    "CREATE TABLE IF NOT EXISTS org_store_board (id TINYINT NOT NULL PRIMARY KEY, payload LONGTEXT NOT NULL, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)"
+  );
+  const [boardRows] = await query("SELECT payload FROM org_store_board WHERE id = 1");
+  const raw = boardRows && boardRows[0] ? boardRows[0].payload : "";
+  if (!raw) {
+    return null;
+  }
+  const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+  return parsed && typeof parsed === "object" ? parsed : null;
+}
+
+async function writeMysqlBoard() {
+  const auth = await mysqlAuth();
+  if (!auth) {
+    return false;
+  }
+  const { query } = auth;
+  const payload = JSON.stringify(snapshotBoard());
+  await query(
+    "CREATE TABLE IF NOT EXISTS org_store_board (id TINYINT NOT NULL PRIMARY KEY, payload LONGTEXT NOT NULL, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)"
+  );
+  await query("INSERT INTO org_store_board (id, payload) VALUES (1, ?) ON DUPLICATE KEY UPDATE payload = VALUES(payload)", [
+    payload
+  ]);
+  return true;
+}
+
+export function orgStoresPersistMode() {
+  return persistMode;
+}
+
+export async function hydrateOrgStores() {
+  if (hydrated || runningUnderNodeTest()) {
+    persistMode = persistMode || "memory";
+    hydrated = true;
+    return { ok: true, mode: persistMode, stores: rows.length };
+  }
+  hydrated = true;
+  try {
+    const fromMysql = await readMysqlBoard();
+    if (applyBoardSnapshot(fromMysql)) {
+      persistMode = "mysql";
+      return { ok: true, mode: persistMode, stores: rows.length };
+    }
+  } catch {
+    /* fall through to file / memory */
+  }
+  if (applyBoardSnapshot(readPersistFile())) {
+    persistMode = "file";
+    return { ok: true, mode: persistMode, stores: rows.length };
+  }
+  persistMode = "memory";
+  return { ok: true, mode: persistMode, stores: rows.length };
+}
+
+export async function persistOrgStores() {
+  if (runningUnderNodeTest()) {
+    persistMode = "memory";
+    return { ok: true, mode: persistMode };
+  }
+  try {
+    if (await writeMysqlBoard()) {
+      persistMode = "mysql";
+      writePersistFile();
+      return { ok: true, mode: persistMode };
+    }
+  } catch {
+    /* keep file fallback */
+  }
+  if (writePersistFile()) {
+    persistMode = "file";
+    return { ok: true, mode: persistMode };
+  }
+  persistMode = "memory";
+  return { ok: true, mode: persistMode };
+}
 
 function addLog(action, detail) {
   logs.unshift({
@@ -546,6 +695,8 @@ export function unpinRightsName(name) {
 }
 
 export function resetOrgBoard() {
+  persistMode = "memory";
+  hydrated = true;
   rightsPins = { ...DEFAULT_PINS };
   seeded = seedRows();
   rows = seeded.rows;
@@ -828,7 +979,7 @@ export function mapImportRow(raw = {}) {
   return next;
 }
 
-export function importOrgStores(items, actor, options = {}) {
+export async function importOrgStores(items, actor, options = {}) {
   const list = Array.isArray(items) ? items : [];
   const selectedGroupId = normalizeGroupId(options.groupId);
   const scope = scopeOf(actor);
@@ -872,8 +1023,8 @@ export function importOrgStores(items, actor, options = {}) {
     }
     const existing = found.store;
     const result = existing
-      ? patchOrgStore(existing.id, filledImport({ ...input, updatedOn: stamp }), actor)
-      : createOrgStore(input, actor);
+      ? applyPatchOrgStore(existing.id, filledImport({ ...input, updatedOn: stamp }), actor)
+      : applyCreateOrgStore(input, actor);
     if (!result.ok) {
       failed.push({ line, error: result.error || "导入失败", storeName: draft.storeName });
       return;
@@ -885,16 +1036,18 @@ export function importOrgStores(items, actor, options = {}) {
     }
   });
   addLog("导入", `本组新增${created.length}条，更新${updated.length}条，失败${failed.length}条`);
+  await persistOrgStores();
   return {
     ok: true,
     created: created.length,
     updated: updated.length,
     failed,
+    persist: persistMode,
     stores: [...created, ...updated]
   };
 }
 
-export function createOrgStore(input, actor) {
+function applyCreateOrgStore(input, actor) {
   const next = normalize(input || {});
   if (!next.storeName || !next.operator) {
     return { ok: false, statusCode: 400, error: "店铺名称、运营为必填" };
@@ -912,7 +1065,7 @@ export function createOrgStore(input, actor) {
   return { ok: true, store: { ...clone(row), canEdit: true } };
 }
 
-export function patchOrgStore(id, input, actor) {
+function applyPatchOrgStore(id, input, actor) {
   const found = rows.find((row) => row.id === Number(id));
   if (!found) {
     return { ok: false, statusCode: 404, error: "店铺行不存在" };
@@ -930,7 +1083,23 @@ export function patchOrgStore(id, input, actor) {
   return { ok: true, store: { ...clone(found), canEdit: true } };
 }
 
-export function removeOrgStore(id, actor) {
+export async function createOrgStore(input, actor) {
+  const result = applyCreateOrgStore(input, actor);
+  if (result.ok) {
+    await persistOrgStores();
+  }
+  return result;
+}
+
+export async function patchOrgStore(id, input, actor) {
+  const result = applyPatchOrgStore(id, input, actor);
+  if (result.ok) {
+    await persistOrgStores();
+  }
+  return result;
+}
+
+export async function removeOrgStore(id, actor) {
   const index = rows.findIndex((row) => row.id === Number(id));
   if (index < 0) {
     return { ok: false, statusCode: 404, error: "店铺行不存在" };
@@ -941,5 +1110,6 @@ export function removeOrgStore(id, actor) {
   }
   const [removed] = rows.splice(index, 1);
   addLog("移除", removed.storeName);
+  await persistOrgStores();
   return { ok: true, store: clone(removed) };
 }

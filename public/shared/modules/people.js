@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.179-import-merge";
+    const href = "/people.css?v=0.1.180-store-persist";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -93,7 +93,7 @@
       root.innerHTML =
         '<main class="page people-page">' +
         '<header class="page-head"><h1>组织中心</h1>' +
-        '<p class="lead">双击单元格即可改。导入是合并：人员同名覆盖、不同名新增；店铺只有同一家（店铺ID相同，或店名+商家id都相同）才覆盖，对不上就新增。未出现在文件里的原数据一律保留。</p>' +
+        '<p class="lead">双击单元格即可改。导入是合并：人员同名覆盖、不同名新增；店铺只有同一家才覆盖。店铺导入会落盘，强制刷新还在，不是一套全新演示表。</p>' +
         '<p class="banner" id="org-scope">当前责权：—</p></header>' +
         '<nav class="org-tabs" id="org-tabs">' +
         '<button type="button" class="org-tab is-active" data-pane="stores">店铺主数据</button>' +
