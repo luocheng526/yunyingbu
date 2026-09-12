@@ -27,7 +27,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=channel-yest1";
+      link.href = "/data-pages.css?v=channel-fast1";
       document.head.appendChild(link);
     }
   }
@@ -456,8 +456,10 @@
     stripPageChrome(root);
     let board = root.querySelector("#board");
     if (!board) {
-      root.innerHTML = '<main class="xm-page data-overview-root ch-root"><div id="board"></div></main>';
+      root.innerHTML = '<main class="xm-page data-overview-root ch-root"><div id="board"><p class="ch-empty">正在加载渠道总览…</p></div></main>';
       board = root.querySelector("#board");
+    } else if (!board.innerHTML.trim()) {
+      board.innerHTML = '<p class="ch-empty">正在加载渠道总览…</p>';
     }
     const state = {
       range: "日",
@@ -603,6 +605,25 @@
       });
     }
 
+    function paintErp(data, span) {
+      state.payload = fromErp(data, state.range, span.dateLabel);
+      render();
+    }
+
+    function loadLiveSpark() {
+      return json("/api/home/live")
+        .then(function (live) {
+          if (dead || !live || !state.payload || !state.payload.hero) {
+            return;
+          }
+          attachLiveHero(state.payload.hero, live);
+          render();
+        })
+        .catch(function () {
+          return null;
+        });
+    }
+
     function load() {
       const span = rangeSpan(state.range, state.customFrom, state.customTo);
       const params = new URLSearchParams();
@@ -610,46 +631,37 @@
       params.set("to", span.to + " 23:59:59");
       params.set("payTimeStart", span.from + " 00:00:00");
       params.set("payTimeEnd", span.to + " 23:59:59");
-      const liveReq = json("/api/home/live").catch(function () {
-        return json("/data/live-demo.json");
-      }).catch(function () {
-        return null;
-      });
+      if (!state.payload && board) {
+        board.innerHTML = '<p class="ch-empty">正在加载渠道总览…</p>';
+      }
       return json("/api/data/overview?" + params.toString())
         .then(function (data) {
           if (dead) {
             return;
           }
           if (data && data.ok && (data.source === "xingmai-erp" || (data.shops && data.shops.length) || (data.cards || []).some(function (c) { return c.key === "payAmount"; }))) {
-            return liveReq.then(function (live) {
-              if (dead) {
-                return;
-              }
-              state.payload = fromErp(data, state.range, span.dateLabel);
-              attachLiveHero(state.payload.hero, live);
-              render();
-            });
+            paintErp(data, span);
+            loadLiveSpark();
+            return;
           }
           throw new Error("empty");
         })
         .catch(function () {
-          return Promise.all([
-            json("/api/data/team").catch(function () {
+          return json("/api/data/team")
+            .catch(function () {
               return json("/data/team-demo.json");
-            }),
-            liveReq
-          ]).then(function (pair) {
-            const demo = pair[0];
-            if (dead || !demo) {
-              return;
-            }
-            demo.range = state.range;
-            demo.dateLabel = span.dateLabel;
-            demo.ranges = RANGES;
-            attachLiveHero(demo.hero || (demo.hero = { label: "实时销售指数", value: "--", delta: 0 }), pair[1]);
-            state.payload = demo;
-            render();
-          });
+            })
+            .then(function (demo) {
+              if (dead || !demo) {
+                return;
+              }
+              demo.range = state.range;
+              demo.dateLabel = span.dateLabel;
+              demo.ranges = RANGES;
+              state.payload = demo;
+              render();
+              loadLiveSpark();
+            });
         });
     }
 

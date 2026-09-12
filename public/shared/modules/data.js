@@ -143,7 +143,11 @@
 
   function mountOverview(root) {
     ensureSheet();
-    return loadScript("/data-overview.js?v=channel-yest1").then(function () {
+    if (root && !root.querySelector("#board")) {
+      root.innerHTML =
+        '<main class="xm-page data-overview-root ch-root"><div id="board"><p class="ch-empty">正在加载渠道总览…</p></div></main>';
+    }
+    return loadScript("/data-overview.js?v=channel-fast1").then(function () {
       if (typeof window.XmDataCreateDashboard === "function") {
         return window.XmDataCreateDashboard(root);
       }
@@ -308,7 +312,7 @@
   }
 
   restoreModules();
-  setInterval(restoreModules, 1500);
+  setInterval(restoreModules, 8000);
 
   watchPaidNav();
 })();

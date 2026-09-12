@@ -151,6 +151,10 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /pickYesterdayRow/);
     assert.match(overviewJs.text, /Asia\/Shanghai/);
     assert.match(overviewJs.text, /\/api\/home\/live/);
+    assert.match(overviewJs.text, /正在加载渠道总览/);
+    assert.match(overviewJs.text, /paintErp/);
+    assert.match(overviewJs.text, /loadLiveSpark/);
+    assert.doesNotMatch(overviewJs.text, /live-demo\.json/);
     assert.match(overviewJs.text, /#2f54eb/);
     assert.match(overviewJs.text, /#cf1322/);
     assert.match(overviewJs.text, /昨天/);
@@ -497,7 +501,8 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /\/data\/paid/);
   assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
   assert.match(dataMod, /restore-v1/);
-  assert.match(dataMod, /data-overview\.js\?v=channel-yest1/);
+  assert.match(dataMod, /data-overview\.js\?v=channel-fast1/);
+  assert.match(dataMod, /正在加载渠道总览/);
   assert.match(css, /#2f54eb/);
   assert.match(css, /#cf1322/);
   assert.match(dataMod, /lockModule/);
