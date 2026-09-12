@@ -84,6 +84,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function shopMetricsFrom/);
   assert.match(homeJs, /function shopCols/);
   assert.match(homeJs, /SHOP_CARD_KEYS = \["adRatio", "profit", "grossMargin", "refundRate", "netGoodsCost"\]/);
+  assert.match(homeJs, /LIVE_CARD_KEYS = \["ad", "roi", "livePay", "liveFee"\]/);
+  assert.doesNotMatch(homeJs, /LIVE_CARD_KEYS = \["ad", "profit"/);
   assert.match(homeJs, /data-shop-card=/);
   assert.match(homeJs, /<th>排名<\/th><th>店铺名称<\/th>/);
   assert.match(homeJs, /<th>运营<\/th><\/tr>/);
