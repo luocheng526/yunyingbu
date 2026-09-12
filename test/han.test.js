@@ -427,12 +427,17 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /han-thumb/);
   assert.match(js, /han-thumb-box/);
   assert.match(js, /han-sheet-viewport/);
+  assert.match(js, /han-cell-view/);
+  assert.match(js, /beginCellEdit/);
+  assert.match(js, /han-col-resizer/);
+  assert.match(js, /han-row-resizer/);
+  assert.doesNotMatch(js, /han-sheet-zoom-in/);
   assert.match(js, /han-sheet-pan/);
   assert.match(js, /han-lightbox/);
   assert.match(js, /openHanLightbox/);
   assert.match(js, /han-lightbox-css/);
   assert.match(js, /双击看大图/);
-  assert.match(js, /field\.focus\(\)/);
+  assert.match(js, /input\.focus\(\)/);
   assert.match(js, /han-img-cell/);
   assert.match(js, /referrerpolicy/);
   assert.match(js, /type="hidden"/);
