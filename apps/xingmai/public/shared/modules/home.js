@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.349-home-kpis */
+/* xm-module-home 0.1.352-home-tips */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -418,7 +418,9 @@
       escapeHtml(card.key) +
       '"><div class="xm-hm-card-head"><span>' +
       escapeHtml(card.label) +
-      '</span><i title="指标">i</i></div><div class="xm-hm-value' +
+      '</span><i title="' +
+      escapeHtml(card.tip || "指标") +
+      '">i</i></div><div class="xm-hm-value' +
       (card.accent ? " is-accent" : "") +
       '">' +
       escapeHtml(card.value) +
@@ -951,7 +953,7 @@
     var hero = readChart(live.hero, blankLive().hero);
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
-    board.setAttribute("data-hm-js", "0.1.349-home-kpis");
+    board.setAttribute("data-hm-js", "0.1.352-home-tips");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", state.view === "team");
@@ -1042,23 +1044,65 @@
   }
 
   var COMPANY_CARD_DEFS = [
-    { key: "payAmount", label: "支付金额 (支付)", accent: true, field: "payAmount", kind: "money" },
-    { key: "adCost", label: "推广花费 (支付预估)", field: "totalPromotionCost", kind: "money" },
-    { key: "refundAmount", label: "退款金额", field: "refundAmount", kind: "money" },
-    { key: "adRatio", label: "推广花费 (支付预估) 占比", field: "promotionRate", kind: "rate" },
-    { key: "refundRate", label: "退款率 (按金额)", field: "refundRate", kind: "rate" },
-    { key: "profit", label: "利润 (支付预估)", field: "profit", kind: "money" },
-    { key: "payQty", label: "销售单数 (支付)", field: "orderCount", kind: "int" },
-    { key: "grossMargin", label: "大毛利率", field: "profitRate", kind: "rate" },
-    { key: "platformFee", label: "平台花费 (支付预估)", field: "platformFee", kind: "money" },
-    { key: "saleFee", label: "销售费用 (支付预估)", field: "saleFee", kind: "money" },
-    { key: "goodsCost", label: "总货款成本", field: "goodsCost", kind: "money" },
-    { key: "invalid", label: "无效单金额", field: "invalidAmount", kind: "money" },
-    { key: "netSales", label: "净销售额 (支付)", field: "netSales", kind: "money" },
-    { key: "jdOrders", label: "京仓订单数量", field: "jdOrders", kind: "int" },
-    { key: "jdRatio", label: "京仓订单占比", field: "jdRatio", kind: "rate" },
-    { key: "netQty", label: "净销售件数 (支付)", field: "netSkuNum", kind: "int" },
-    { key: "netGoodsCost", label: "净货款成本 (支付)", field: "netGoodsCost", kind: "money" }
+    { key: "payAmount", label: "支付金额 (支付)", accent: true, field: "payAmount", kind: "money", tip: "按支付时间统计的订单金额(包含无效单、代发单)" },
+    { key: "adCost", label: "推广花费 (支付预估)", field: "totalPromotionCost", kind: "money", tip: "SPU推广费用" },
+    { key: "refundAmount", label: "退款金额", field: "refundAmount", kind: "money", tip: "按退款成功时间统计的金额(包含未发货退款、已发货仅退款和已发货退货退款)" },
+    {
+      key: "adRatio",
+      label: "推广花费 (支付预估) 占比",
+      field: "promotionRate",
+      kind: "rate",
+      tip: "推广花费占支付金额的比例（按支付时间统计）\n计算公式：推广花费（支付预估）/支付金额（支付）100%（推广花费≤0时，按0计算：支付金额≤0时，按1计算）"
+    },
+    {
+      key: "refundRate",
+      label: "退款率 (按金额)",
+      field: "refundRate",
+      kind: "rate",
+      tip: "按订单金额计算的退款率\n计算公式:退款金额/支付金额(支付)*100%"
+    },
+    {
+      key: "profit",
+      label: "利润 (支付预估)",
+      field: "profit",
+      kind: "money",
+      tip: "统计时间内产生的利润（按支付时间统计）\n计算公式：净销售额（支付）-净货品成本（支付）-销售费用（支付）-发货费用（支付）-其他费用-自定义费用"
+    },
+    {
+      key: "payQty",
+      label: "销售单数 (支付)",
+      field: "orderCount",
+      kind: "int",
+      tip: "剔除无效单和退款订单后的订单数(按支付时间统计)\n计算公式:销售单数(支付)-无效单订单数-普通单退款单数-代发单退款单数"
+    },
+    { key: "grossMargin", label: "大毛利率", field: "profitRate", kind: "rate", tip: "利润/支付金额" },
+    { key: "platformFee", label: "平台花费 (支付预估)", field: "platformFee", kind: "money", tip: "支付金额（支付）对应的预估平台花费" },
+    {
+      key: "saleFee",
+      label: "销售费用 (支付预估)",
+      field: "saleFee",
+      kind: "money",
+      tip: "支付金额（支付）对应的预估销售费用\n计算公式：推广花费（支付预估）+平台花费（支付预估）+无效单佣金"
+    },
+    { key: "goodsCost", label: "总货款成本", field: "goodsCost", kind: "money", tip: "京小洁采购单成本+导入的货品成本" },
+    { key: "invalid", label: "无效单金额", field: "invalidAmount", kind: "money", tip: "标记为无效单的订单支付金额" },
+    { key: "netSales", label: "净销售额 (支付)", field: "netSales", kind: "money", tip: "净销售数对应的订单金额合计" },
+    { key: "jdOrders", label: "京仓订单数量", field: "jdOrders", kind: "int", tip: "京仓订单数量（按支付时间统计）" },
+    {
+      key: "jdRatio",
+      label: "京仓订单占比",
+      field: "jdRatio",
+      kind: "rate",
+      tip: "京仓订单数量占销售订单数量的比例(按支付时间统计)\n计算公式:京仓订单数量（支付）/销售单数（支付）*100%"
+    },
+    {
+      key: "netQty",
+      label: "净销售件数 (支付)",
+      field: "netSkuNum",
+      kind: "int",
+      tip: "剔除无效单和退款订单后的商品销售件数(按支付时间统计)\n计算公式:销售件数(支付)-无效单销售件数-普通单退款销售件数-代发单退款件数"
+    },
+    { key: "netGoodsCost", label: "净货款成本 (支付)", field: "netGoodsCost", kind: "money", tip: "剔除无效单和退款订单后的货品成本（按支付时间统计）" }
   ];
 
   function asNum(value) {
@@ -1236,7 +1280,7 @@
 
   function blankCompanyCards() {
     return COMPANY_CARD_DEFS.map(function (def) {
-      return { key: def.key, label: def.label, value: "—", accent: !!def.accent, trend: 0 };
+      return { key: def.key, label: def.label, value: "—", accent: !!def.accent, trend: 0, tip: def.tip || "" };
     });
   }
 
@@ -1254,7 +1298,7 @@
       } else if (def.kind === "rate") {
         value = fmtRate(cur);
       }
-      return { key: def.key, label: def.label, value: value, accent: !!def.accent, trend: trendOf(cur, old) };
+      return { key: def.key, label: def.label, value: value, accent: !!def.accent, trend: trendOf(cur, old), tip: def.tip || "" };
     });
   }
 
