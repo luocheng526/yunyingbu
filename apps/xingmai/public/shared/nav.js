@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.137 */
+/* xm-fast-shell 0.1.138 */
 (function () {
-  const ASSET_VER = "0.1.137";
+  const ASSET_VER = "0.1.138";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -702,6 +702,8 @@
       const href = tab.getAttribute("data-href");
       if (href && href !== current) {
         go(href);
+      } else if (href === "/home" && homePaneEmpty()) {
+        goHomeRefresh();
       }
     });
     bar.addEventListener("dblclick", function (event) {
@@ -763,7 +765,7 @@
     if (!content.getAttribute("data-xm-href")) {
       content.setAttribute("data-xm-href", current);
     }
-    if (content.childNodes.length && !content.getAttribute("data-xm-mounted")) {
+    if (paneHasModule(content) && !content.getAttribute("data-xm-mounted")) {
       content.setAttribute("data-xm-mounted", content.getAttribute("data-xm-href") || current);
     }
     if (!unmounts[current] && typeof window.__xmUnmount === "function") {
@@ -778,8 +780,22 @@
     restoreSavedPage(pendingActive);
   }
 
-  function alreadyMounted(root, href) {
+  function paneHasModule(root) {
     if (!root) {
+      return false;
+    }
+    if (
+      root.querySelector(
+        "#xm-hm, .xm-hm, .home-page, #home-dashboard, .page, .oc-wrap, .people-page, .agents-page, .academy-page, .me-page"
+      )
+    ) {
+      return true;
+    }
+    return String(root.textContent || "").replace(/\s+/g, "").length > 0;
+  }
+
+  function alreadyMounted(root, href) {
+    if (!root || !paneHasModule(root)) {
       return false;
     }
     if (root.getAttribute("data-xm-mounted") === href) {
@@ -789,6 +805,12 @@
       return true;
     }
     return false;
+  }
+
+  function homePaneEmpty() {
+    const root =
+      document.querySelector('.xm-pane[data-xm-href="/home"]') || document.getElementById("xm-content");
+    return !alreadyMounted(root, "/home");
   }
 
   function paintQueueBadge(count) {
@@ -883,9 +905,49 @@
     document.head.appendChild(link);
   }
 
+  function moduleReady(href) {
+    const mod = window.XmModules && window.XmModules[href];
+    return !!(mod && typeof mod.mount === "function");
+  }
+
+  function scriptHasFinished(el) {
+    if (!el) {
+      return false;
+    }
+    if (el.getAttribute("data-xm-loaded") === "1") {
+      return true;
+    }
+    if (document.readyState === "complete") {
+      return true;
+    }
+    if (!el.async && document.readyState !== "loading") {
+      return true;
+    }
+    return false;
+  }
+
+  function injectModuleScript(id, href, resolve) {
+    if (moduleReady(href)) {
+      resolve();
+      return;
+    }
+    const src = "/shared/modules/" + id + ".js";
+    const script = document.createElement("script");
+    script.src = src + (document.querySelector('script[src^="' + src + '"]') ? "?r=" + Date.now() : "");
+    script.setAttribute("data-xm-mod", href);
+    script.onload = function () {
+      script.setAttribute("data-xm-loaded", "1");
+      resolve();
+    };
+    script.onerror = function () {
+      resolve();
+    };
+    document.head.appendChild(script);
+  }
+
   function loadModuleScript(href) {
     return new Promise(function (resolve) {
-      if (window.XmModules && window.XmModules[href]) {
+      if (moduleReady(href)) {
         resolve();
         return;
       }
@@ -895,29 +957,38 @@
         return;
       }
       const src = "/shared/modules/" + id + ".js";
-      const existing = document.querySelector('script[src^="' + src + '"]');
+      const existing = document.querySelector(
+        'script[src^="' + src + '"], script[data-xm-mod="' + href + '"], script[src*="/api/' + id + '/client.js"]'
+      );
       if (existing) {
-        if (window.XmModules && window.XmModules[href]) {
+        if (moduleReady(href)) {
           resolve();
           return;
         }
-        existing.addEventListener("load", function () {
-          resolve();
-        });
-        existing.addEventListener("error", function () {
-          resolve();
-        });
+        if (scriptHasFinished(existing)) {
+          injectModuleScript(id, href, resolve);
+          return;
+        }
+        let settled = 0;
+        const once = function () {
+          if (settled) {
+            return;
+          }
+          settled = 1;
+          if (moduleReady(href)) {
+            resolve();
+            return;
+          }
+          injectModuleScript(id, href, resolve);
+        };
+        existing.addEventListener("load", once);
+        existing.addEventListener("error", once);
+        if (scriptHasFinished(existing) || document.readyState !== "loading") {
+          setTimeout(once, 0);
+        }
         return;
       }
-      const script = document.createElement("script");
-      script.src = src;
-      script.onload = function () {
-        resolve();
-      };
-      script.onerror = function () {
-        resolve();
-      };
-      document.head.appendChild(script);
+      injectModuleScript(id, href, resolve);
     });
   }
 
@@ -940,14 +1011,19 @@
     if (!mod || typeof mod.mount !== "function") {
       return;
     }
-    root.setAttribute("data-xm-mounted", key);
-    if (key === "/releases") {
-      root.setAttribute("data-xm-rel-mounted", "1");
-    }
-    const stop = mod.mount(root);
-    unmounts[key] = stop;
-    if (key === current) {
-      window.__xmUnmount = stop;
+    try {
+      const stop = mod.mount(root);
+      root.setAttribute("data-xm-mounted", key);
+      if (key === "/releases") {
+        root.setAttribute("data-xm-rel-mounted", "1");
+      }
+      unmounts[key] = stop;
+      if (key === current) {
+        window.__xmUnmount = stop;
+      }
+    } catch (_err) {
+      root.removeAttribute("data-xm-mounted");
+      return;
     }
     showPane(current);
     revealTabBar();
@@ -967,6 +1043,20 @@
     }
     loadModuleScript(current).then(function () {
       mountRoute(current);
+      bootHomePane();
+    });
+  }
+
+  function bootHomePane() {
+    if (current === "/home") {
+      return;
+    }
+    paneFor("/home", true);
+    if (alreadyMounted(paneFor("/home", false), "/home")) {
+      return;
+    }
+    loadModuleScript("/home").then(function () {
+      mountRoute("/home");
     });
   }
 
@@ -1355,6 +1445,9 @@
         }
         if (isActive(href)) {
           event.preventDefault();
+          if (href === "/home" && homePaneEmpty()) {
+            goHomeRefresh();
+          }
           return;
         }
         if (href === "/" || !MODULES[href]) {

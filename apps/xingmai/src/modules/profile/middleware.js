@@ -6,10 +6,10 @@ import { navMarkup } from "../home/nav-items.js";
 import { currentUser, publicProfile } from "./auth.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.137
+// xm-fast-shell 0.1.138
 // login.html 不走 HTML 内存缓存；login.css 禁止 immutable。必须和 home/pages.js 成套发。
 
-export const SHELL_ASSET_VER = "0.1.137";
+export const SHELL_ASSET_VER = "0.1.138";
 export const TAB_TITLE = "星脉甄选运营中心";
 // 浏览器标签图标走真实文件。Chrome 标签栏经常不画 data: 内嵌图，会变成地球。
 // 侧栏品牌条仍用 /login-logo.png，不要改成这个。
@@ -146,12 +146,19 @@ ${boot}    <script src="/shared/modules/${id}.js" defer data-xm-mod="${key}"></s
         var key = ${JSON.stringify(key)};
         var root = document.getElementById("xm-content");
         if (!root || key === "/") return;
-        if (root.getAttribute("data-xm-mounted") || root.getAttribute("data-xm-rel-mounted") === "1") return;
+        var href = root.getAttribute("data-xm-href") || key;
+        if (href !== key) return;
+        if (root.getAttribute("data-xm-mounted") === key && root.children.length) return;
         var mod = window.XmModules && window.XmModules[key];
         if (!mod || typeof mod.mount !== "function") return;
-        root.setAttribute("data-xm-mounted", key);
-        if (key === "/releases") root.setAttribute("data-xm-rel-mounted", "1");
-        window.__xmUnmount = mod.mount(root);
+        try {
+          var stop = mod.mount(root);
+          root.setAttribute("data-xm-mounted", key);
+          if (key === "/releases") root.setAttribute("data-xm-rel-mounted", "1");
+          window.__xmUnmount = stop;
+        } catch (_err) {
+          root.removeAttribute("data-xm-mounted");
+        }
       });
     </script>
   </body>
