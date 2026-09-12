@@ -519,7 +519,7 @@
           '<button type="button" class="han-rules-btn" id="han-rules-toggle">本店分类规则</button>' +
           '<button type="button" class="han-class-btn" id="han-classify">按本店规则分类</button>' +
           '<button type="button" class="han-export-btn" id="han-export">导出</button>' +
-          '<label class="han-import-btn">导入原始数据<input id="han-import" type="file" accept=".csv,text/csv" hidden /></label>' +
+          '<label class="han-import-btn">导入原始数据<input id="han-import" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden /></label>' +
           '<button type="button" class="han-tpl-btn" id="han-tpl">下载模板</button></div>' +
           '<div class="han-rules" id="han-rules">' +
           "<h3>本店分类规则</h3>" +
@@ -1001,24 +1001,50 @@
         savePatch(id, patch);
       }
 
+      function onImported(json) {
+        if (dead) return;
+        const n = (json.created || []).length;
+        msg.textContent = json.ok
+          ? "已按本店规则导入" + n + "条" + (json.skipped ? "，跳过" + json.skipped + "条" : "")
+          : json.error || "导入失败";
+        if (json.ok) return load();
+      }
+
       function onImport(e) {
         const file = e.target.files && e.target.files[0];
         e.target.value = "";
         if (!file) return;
+        const name = file.name || "";
+        if (/\.xlsx$/i.test(name)) {
+          const url =
+            "/api/han/products/import-file?team=" +
+            encodeURIComponent(team) +
+            "&store=" +
+            encodeURIComponent(shop) +
+            "&filename=" +
+            encodeURIComponent(name);
+          fetch(url, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/octet-stream" },
+            body: file,
+          })
+            .then(function (res) {
+              return res.json();
+            })
+            .then(onImported)
+            .catch(function (err) {
+              if (!dead) msg.textContent = String(err);
+            });
+          return;
+        }
         const reader = new FileReader();
         reader.onload = function () {
           jsonFetch("/api/han/products/import", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ team: team, store: shop, csv: String(reader.result || "") }),
-          }).then(function (json) {
-            if (dead) return;
-            const n = (json.created || []).length;
-            msg.textContent = json.ok
-              ? "已按本店规则导入" + n + "条" + (json.skipped ? "，跳过" + json.skipped + "条" : "")
-              : json.error || "导入失败";
-            if (json.ok) return load();
-          });
+          }).then(onImported);
         };
         reader.readAsText(file, "utf-8");
       }
