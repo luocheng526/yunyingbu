@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.358-home-calui */
+/* xm-module-home 0.1.359-home-tipfix */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -389,7 +389,7 @@
       escapeHtml(card.label) +
       '</span><i data-tip="' +
       tipAttr(card.tip) +
-      '">i</i></div><div class="xm-hm-value' +
+      '" tabindex="0">i</i></div><div class="xm-hm-value' +
       (card.accent ? " is-accent" : "") +
       '">' +
       escapeHtml(card.value) +
@@ -830,8 +830,12 @@
       "html[data-theme=dark] .xm-hm-cal-arrow{background:var(--xm-card)}" +
       "html[data-theme=dark] .xm-hm-cal-month + .xm-hm-cal-month{border-color:var(--xm-line)}" +
       "html[data-theme=dark] .xm-hm-cal-caption,html[data-theme=dark] .xm-hm-cal-caption button{color:var(--xm-ink)}" +
-      ".xm-hm-tip{position:fixed;z-index:30;max-width:280px;padding:8px 10px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:6px;box-shadow:var(--xm-shadow);color:var(--xm-ink);font-size:12px;line-height:1.55;white-space:pre-wrap;pointer-events:none}" +
-      ".xm-hm-card-head i{cursor:help}" +
+      ".xm-hm-card{overflow:visible}" +
+      ".xm-hm-card:has(i:hover),.xm-hm-card:has(i:focus){z-index:8}" +
+      ".xm-hm-card-head i{cursor:help;position:relative}" +
+      ".xm-hm-card-head i::before{content:\"\";position:absolute;inset:-10px}" +
+      ".xm-hm-card-head i::after{content:attr(data-tip);position:absolute;top:calc(100% + 8px);right:0;z-index:20;display:none;width:max-content;max-width:min(280px,70vw);padding:8px 10px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);color:var(--xm-ink);font-size:12px;font-style:normal;font-weight:400;line-height:1.55;white-space:pre-wrap;text-align:left;pointer-events:none}" +
+      ".xm-hm-card-head i:hover::after,.xm-hm-card-head i:focus::after{display:block}" +
       ".xm-hm-body{position:relative;display:flex;flex-direction:column;gap:12px;overflow:visible}" +
       ".xm-hm.is-live .xm-hm-kpis,.xm-hm.is-board .xm-hm-kpis,.xm-hm.is-team .xm-hm-kpis,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
       ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden]{display:none}" +
@@ -878,12 +882,12 @@
       ".xm-hm-live .xm-hm-table{min-width:960px}" +
       ".xm-hm-live .xm-hm-panel{overflow-x:auto}" +
       ".xm-hm-live .xm-hm-table th:nth-child(n+3),.xm-hm-live .xm-hm-table td:nth-child(n+3){text-align:right}" +
-      ".xm-hm-card{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;padding:12px 14px 10px;box-shadow:var(--xm-shadow);min-height:104px}" +
+      ".xm-hm-card{position:relative;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;padding:12px 14px 10px;box-shadow:var(--xm-shadow);min-height:104px;overflow:visible}" +
       ".xm-hm-card.is-hold,.xm-hm-pop label.is-hold{opacity:.72;cursor:grabbing;user-select:none;pointer-events:none}" +
       ".xm-hm-card.is-over,.xm-hm-pop label.is-over{outline:1px dashed var(--xm-primary)}" +
       ".xm-hm-pop label{cursor:grab}" +
       ".xm-hm-card-head{display:flex;align-items:center;justify-content:space-between;color:var(--xm-muted);font-size:12px}" +
-      ".xm-hm-card-head i{width:14px;height:14px;border:1px solid var(--xm-line);border-radius:50%;font-style:normal;font-size:10px;display:inline-flex;align-items:center;justify-content:center;color:var(--xm-muted)}" +
+      ".xm-hm-card-head i{width:16px;height:16px;border:1px solid var(--xm-line);border-radius:50%;font-style:normal;font-size:10px;display:inline-flex;align-items:center;justify-content:center;color:var(--xm-muted)}" +
       ".xm-hm-value{margin-top:8px;font-size:22px;font-weight:700;letter-spacing:-.02em;color:var(--xm-ink)}" +
       ".xm-hm-value.is-accent{color:var(--xm-primary)}" +
       ".xm-hm-trend{margin-top:6px;font-size:12px;color:var(--xm-muted)}" +
@@ -938,7 +942,6 @@
       '<div class="xm-hm-datewrap"><div class="xm-hm-dates" id="xm-hm-dates" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-description="最多选择30天"><span class="xm-hm-dates-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3.5v4M16 3.5v4"/></svg></span><span class="xm-hm-dates-text" id="xm-hm-date-text"></span><button type="button" class="xm-hm-dates-clear" id="xm-hm-date-clear" aria-label="清除日期"><svg viewBox="0 0 16 16" width="12" height="12"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor"/><path d="M5.6 5.6l4.8 4.8M10.4 5.6l-4.8 4.8" stroke="currentColor" stroke-width="1.2" fill="none"/></svg></button></div><div class="xm-hm-cal" id="xm-hm-cal" hidden></div></div>' +
       "</div></div>" +
       '<div class="xm-hm-pop" id="xm-hm-pop" hidden><h3>卡片设置</h3><div id="xm-hm-card-opts"></div></div>' +
-      '<div class="xm-hm-tip" id="xm-hm-tip" hidden></div>' +
       '<div class="xm-hm-body">' +
       '<section class="xm-hm-kpis" id="xm-hm-kpis"></section>' +
       '<section class="xm-hm-teams" id="xm-hm-teams" hidden></section>' +
@@ -961,7 +964,7 @@
     var hero = readChart(live.hero, blankLive().hero);
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
-    board.setAttribute("data-hm-js", "0.1.358-home-calui");
+    board.setAttribute("data-hm-js", "0.1.359-home-tipfix");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", state.view === "team");
@@ -972,10 +975,6 @@
       btn.classList.toggle("is-on", btn.getAttribute("data-range") === state.range);
     });
     root.querySelector("#xm-hm-date-text").textContent = formatDashDate(state.from) + " 至 " + formatDashDate(state.to);
-    var tipBox = root.querySelector("#xm-hm-tip");
-    if (tipBox) {
-      tipBox.hidden = true;
-    }
     root.querySelector("#xm-hm-kpis").innerHTML = cards.map(cardHtml).join("");
     root.querySelector("#xm-hm-teams").hidden = state.view !== "team";
     root.querySelector("#xm-hm-teams").innerHTML = teams.map(function (team) {
@@ -1911,7 +1910,6 @@
           state.view = view.getAttribute("data-view");
           state.mode = state.view === "team" ? "company" : "shop";
           closeCal();
-          hideCardTip();
           paint(root, state);
           if (state.view === "live") {
             pullLive();
@@ -2003,25 +2001,6 @@
         }
       }
 
-      function onTipOver(event) {
-        var icon = event.target.closest && event.target.closest(".xm-hm-card-head i");
-        if (icon && root.contains(icon)) {
-          showCardTip(icon);
-        }
-      }
-
-      function onTipOut(event) {
-        var icon = event.target.closest && event.target.closest(".xm-hm-card-head i");
-        if (!icon) {
-          return;
-        }
-        var next = event.relatedTarget;
-        if (next && icon.contains(next)) {
-          return;
-        }
-        hideCardTip();
-      }
-
       function onCalHover(event) {
         if (!calOpen || !calPick) {
           return;
@@ -2058,38 +2037,6 @@
       var calCursor = (state.from || shanghaiYmd(1)).slice(0, 7);
       var calPick = "";
       var calHover = "";
-
-      function hideCardTip() {
-        var box = root.querySelector("#xm-hm-tip");
-        if (box) {
-          box.hidden = true;
-          box.textContent = "";
-        }
-      }
-
-      function showCardTip(icon) {
-        var box = root.querySelector("#xm-hm-tip");
-        if (!box || !icon) {
-          return;
-        }
-        var text = icon.getAttribute("data-tip") || "";
-        if (!text) {
-          hideCardTip();
-          return;
-        }
-        box.hidden = false;
-        box.textContent = text;
-        var rect = icon.getBoundingClientRect();
-        var width = box.offsetWidth || 200;
-        var height = box.offsetHeight || 40;
-        var left = Math.min(window.innerWidth - width - 8, Math.max(8, rect.left + rect.width / 2 - width / 2));
-        var top = rect.top - height - 8;
-        if (top < 8) {
-          top = rect.bottom + 8;
-        }
-        box.style.left = left + "px";
-        box.style.top = top + "px";
-      }
 
       function renderCal() {
         var el = root.querySelector("#xm-hm-cal");
@@ -2194,7 +2141,6 @@
               return;
             }
             sortDragging = true;
-            hideCardTip();
             hold.classList.add("is-hold");
           }, 420);
           return;
@@ -2288,10 +2234,7 @@
 
       root.addEventListener("click", onClick);
       root.addEventListener("change", onChange);
-      root.addEventListener("pointerover", onTipOver);
-      root.addEventListener("pointerout", onTipOut);
       root.addEventListener("pointerover", onCalHover);
-      root.addEventListener("scroll", hideCardTip, true);
       document.addEventListener("mousedown", onOutsideCardSet);
       document.addEventListener("pointerdown", onSortDown);
       document.addEventListener("pointermove", onSortMove, { passive: false });
@@ -2323,10 +2266,7 @@
         window.clearInterval(poll);
         root.removeEventListener("click", onClick);
         root.removeEventListener("change", onChange);
-        root.removeEventListener("pointerover", onTipOver);
-        root.removeEventListener("pointerout", onTipOut);
         root.removeEventListener("pointerover", onCalHover);
-        root.removeEventListener("scroll", hideCardTip, true);
         document.removeEventListener("mousedown", onOutsideCardSet);
         document.removeEventListener("pointerdown", onSortDown);
         document.removeEventListener("pointermove", onSortMove);

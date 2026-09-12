@@ -42,7 +42,8 @@ test("team view splits two people side by side", () => {
 test("card help uses data-tip so multiline ERP copy can show", () => {
   assert.match(homeJs, /function tipAttr/);
   assert.match(homeJs, /data-tip="/);
-  assert.match(homeJs, /id="xm-hm-tip"/);
+  assert.match(homeJs, /content:attr\(data-tip\)/);
+  assert.match(homeJs, /i:hover::after/);
   assert.match(homeJs, /white-space:pre-wrap/);
   assert.doesNotMatch(homeJs, /<i title="/);
   assert.match(homeJs, /&#10;/);
