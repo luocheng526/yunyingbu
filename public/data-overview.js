@@ -27,7 +27,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov3";
+      link.href = "/data-pages.css?v=data-ov4";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -42,10 +42,12 @@
     const style = document.createElement("style");
     style.id = "ch-card-type-style";
     style.textContent =
-      ".ch-card .label{font-size:13px;line-height:20px;color:#8c8c8c;opacity:1}" +
-      ".ch-card .value{margin-top:8px;font-size:28px;font-weight:700;line-height:1.15;letter-spacing:-.02em;color:#141414;font-variant-numeric:tabular-nums}" +
-      ".ch-card .extra{margin-top:10px;font-size:12px;line-height:18px;color:#8c8c8c;opacity:1}" +
+      ".ch-card .label{font-size:13px;line-height:22px;color:#8c8c8c;opacity:1}" +
+      ".ch-card .value{margin-top:16px;font-size:28px;font-weight:700;line-height:1.3;letter-spacing:-.02em;color:#141414;font-variant-numeric:tabular-nums}" +
+      ".ch-card .extra{margin-top:14px;font-size:12px;line-height:20px;color:#8c8c8c;opacity:1}" +
       ".ch-hero .label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}" +
+      ".ch-hero .value{margin:16px 0 12px}" +
+      ".ch-hero .delta{margin:0 0 12px}" +
       ".ch-clock{font-size:13px;color:#8c8c8c;opacity:1}";
     document.head.appendChild(style);
   }
@@ -293,6 +295,17 @@
     });
   }
 
+  function fmtInt(value) {
+    if (value == null || value === "" || value === "--" || value === "—") {
+      return "--";
+    }
+    const n = Number(String(value).replace(/,/g, ""));
+    if (Number.isNaN(n)) {
+      return String(value);
+    }
+    return Math.round(n).toLocaleString("zh-CN");
+  }
+
   function pct(value) {
     if (value == null || Number.isNaN(Number(value))) {
       return "--";
@@ -436,16 +449,16 @@
       summary: { channels: 1, shops: shopCount },
       hero: {
         label: "实时销售额",
-        value: fmt(seeded.value, 2),
+        value: fmtInt(seeded.value),
         delta: seeded.delta,
         yesterday: seeded.yesterday,
         today: seeded.today
       },
       cards: [
-        { key: "pay", label: "支付金额 (支付)", value: fmt(pay, 2) },
+        { key: "pay", label: "支付金额 (支付)", value: fmtInt(pay) },
         { key: "orders", label: "销售单数 (支付)", value: fmt(netOrders, 0) },
-        { key: "ad", label: "推广花费 (支付预估)", value: fmt(promo, 2), extra: "推广花费占比 " + pct(promoRate) },
-        { key: "profit", label: "利润 (支付预估)", value: fmt(profit, 2), extra: "毛利率 " + pct(margin) },
+        { key: "ad", label: "推广花费 (支付预估)", value: fmtInt(promo), extra: "推广花费占比 " + pct(promoRate) },
+        { key: "profit", label: "利润 (支付预估)", value: fmtInt(profit), extra: "毛利率 " + pct(margin) },
         { key: "margin", label: "大毛利率", value: pct(margin) },
         { key: "custom", label: "自定义费用", value: fmt(customFee != null ? customFee : 0, 0) },
         { key: "refundRate", label: "退款率 (按金额)", value: pct(refundRate) },
@@ -512,9 +525,9 @@
     hero.yesterday = yest;
     hero.today = today;
     if (src.value) {
-      hero.value = src.value;
+      hero.value = fmtInt(src.value);
     } else if (today.length) {
-      hero.value = fmt(today[today.length - 1], 2);
+      hero.value = fmtInt(today[today.length - 1]);
     }
     if (yest.length && today.length) {
       const idx = Math.min(today.length, yest.length) - 1;
@@ -868,7 +881,7 @@
             '<article class="ch-card"><div class="label">' +
             escapeHtml(card.label) +
             '</div><div class="value">' +
-            escapeHtml(card.value) +
+            escapeHtml(/%/.test(String(card.value || "")) ? card.value : fmtInt(card.value)) +
             "</div>" +
             (card.extra ? '<div class="extra">' + escapeHtml(card.extra) + "</div>" : "") +
             "</article>"
@@ -940,7 +953,7 @@
         '<span class="ch-clock">' +
         escapeHtml(shanghaiHms()) +
         '</span></div><div class="value">' +
-        escapeHtml(hero.value || "") +
+        escapeHtml(fmtInt(hero.value)) +
         '</div><div class="delta ' +
         (down ? "is-down" : "is-up") +
         '">' +
