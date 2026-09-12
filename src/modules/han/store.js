@@ -263,6 +263,15 @@ export function createHanStore(poolOrFactory = getPool) {
             }
           }
         }
+        try {
+          await pool.query(
+            "CREATE TABLE IF NOT EXISTS han_shop_rules (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, team_name VARCHAR(64) NOT NULL, store_name VARCHAR(128) NOT NULL, rules_json MEDIUMTEXT NOT NULL, updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3), PRIMARY KEY (id), UNIQUE KEY uk_han_shop_rules (team_name, store_name)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+          );
+        } catch (err) {
+          if (!err || (err.code !== "ER_TABLE_EXISTS_ERROR" && err.errno !== 1050)) {
+            throw err;
+          }
+        }
       })();
     }
     try {
