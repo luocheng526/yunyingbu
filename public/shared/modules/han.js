@@ -602,10 +602,10 @@
         summaryView ? (team || "全部汇总") : shop,
         summaryView
           ? team
-            ? "先看「" +
+            ? "直接抓「" +
               escapeHtml(team) +
-              "」全部店铺的分层，店铺从组织中心抓取。点下面店铺名再进单店表，可改本店规则和导入。"
-            : "汇总六个小组全部店铺，用统一默认规则分头部、中部、尾部。每层最前一列是店铺名。点右侧小组看该组全部店。"
+              "」各店已经分好的头部、中部、尾部，不重算。店铺从组织中心抓取。点下面店铺名再进单店表，可改本店规则和导入。"
+            : "直接抓六个小组各店已经分好的头部、中部、尾部，不重算。每层最前一列是店铺名。点右侧小组看该组全部店。"
           : team + " · " + shop + "。本店可自定义分类规则；导入和分类只按本店规则。拖动表格移动，拖表头右边调列宽，双击格子编辑，双击主图看大图。",
         '<style>' +
           ".han-sheet-wrap{background:#fff;border:1px solid #c6c6c6}" +
@@ -672,8 +672,7 @@
           "</style>" +
           '<div class="han-sheet-toolbar">' +
           (summaryView
-            ? '<button type="button" class="han-class-btn" id="han-classify">按统一规则分类</button>' +
-              '<button type="button" class="han-export-btn" id="han-export">导出</button>'
+            ? '<button type="button" class="han-export-btn" id="han-export">导出</button>'
             : '<button type="button" class="han-rules-btn" id="han-rules-toggle">本店分类规则</button>' +
               '<button type="button" class="han-class-btn" id="han-classify">按本店规则分类</button>' +
               '<button type="button" class="han-export-btn" id="han-export">导出</button>' +
@@ -1163,21 +1162,14 @@
       }
 
       function onClassify() {
+        if (summaryView) return;
         jsonFetch("/api/han/products/classify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            summaryView
-              ? team
-                ? { team: team, unified: true }
-                : { unified: true }
-              : { team: team, store: shop },
-          ),
+          body: JSON.stringify({ team: team, store: shop }),
         }).then(function (json) {
           if (dead) return;
-          msg.textContent = json.ok
-            ? (summaryView ? "已按统一规则调动" : "已按本店规则调动") + (json.count || 0) + "条"
-            : json.error || "分类失败";
+          msg.textContent = json.ok ? "已按本店规则调动" + (json.count || 0) + "条" : json.error || "分类失败";
           if (json.ok) return load();
         });
       }
@@ -1456,7 +1448,7 @@
       viewport.addEventListener("pointermove", onSheetPointerMove);
       viewport.addEventListener("pointerup", onSheetPointerUp);
       viewport.addEventListener("pointercancel", onSheetPointerUp);
-      classifyBtn.addEventListener("click", onClassify);
+      if (classifyBtn) classifyBtn.addEventListener("click", onClassify);
       if (rulesToggle) rulesToggle.addEventListener("click", onToggleRules);
       if (rulesSave) rulesSave.addEventListener("click", onSaveRules);
       if (rulesReset) rulesReset.addEventListener("click", onResetRules);
@@ -1508,7 +1500,7 @@
         viewport.removeEventListener("pointermove", onSheetPointerMove);
         viewport.removeEventListener("pointerup", onSheetPointerUp);
         viewport.removeEventListener("pointercancel", onSheetPointerUp);
-        classifyBtn.removeEventListener("click", onClassify);
+        if (classifyBtn) classifyBtn.removeEventListener("click", onClassify);
         if (rulesToggle) rulesToggle.removeEventListener("click", onToggleRules);
         if (rulesSave) rulesSave.removeEventListener("click", onSaveRules);
         if (rulesReset) rulesReset.removeEventListener("click", onResetRules);

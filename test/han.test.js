@@ -479,7 +479,8 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /本组产品分层汇总/);
   assert.doesNotMatch(js, /本小组店铺/);
   assert.match(js, /han-store-cell/);
-  assert.match(js, /unified: true/);
+  assert.match(js, /已经分好/);
+  assert.doesNotMatch(js, /按统一规则分类/);
   assert.match(js, /function goHanPage/);
   assert.match(js, /window\.__xmGo/);
   assert.match(js, /history\.pushState/);
@@ -627,8 +628,9 @@ test("goods page puts 商品分层 teams on a horizontal tab bar", async () => {
   sandbox.window.XmModules["/han/goods"].mount(root);
   assert.match(root.innerHTML, /class="han-tabs han-tabs-sub"/);
   assert.match(root.innerHTML, /全部汇总/);
-  assert.match(root.innerHTML, /汇总六个小组/);
-  assert.match(root.innerHTML, /按统一规则分类/);
+  assert.match(root.innerHTML, /已经分好/);
+  assert.match(root.innerHTML, /id="han-export"/);
+  assert.doesNotMatch(root.innerHTML, /按统一规则分类/);
   assert.match(js, /店铺产品分层汇总/);
   assert.match(root.innerHTML, /陈晓曼组/);
   assert.match(root.innerHTML, /薛双双组/);
@@ -636,8 +638,8 @@ test("goods page puts 商品分层 teams on a horizontal tab bar", async () => {
   sandbox.window.location.search = "?team=" + encodeURIComponent("陈晓曼组");
   sandbox.location.search = sandbox.window.location.search;
   sandbox.window.XmModules["/han/goods"].mount(root);
-  assert.match(root.innerHTML, /全部店铺的分层/);
-  assert.match(root.innerHTML, /按统一规则分类/);
+  assert.match(root.innerHTML, /已经分好/);
+  assert.doesNotMatch(root.innerHTML, /按统一规则分类/);
   assert.doesNotMatch(root.innerHTML, /本小组店铺/);
   assert.doesNotMatch(root.innerHTML, /本店分类规则/);
   assert.doesNotMatch(root.innerHTML, /data-han-tab="\/han\/selection"/);
