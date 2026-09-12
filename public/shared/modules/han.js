@@ -423,7 +423,15 @@
           ".han-sheet input{width:92px;border:0;background:#fffde7;padding:2px 4px}" +
           ".han-sheet button{font-size:12px;padding:2px 8px}" +
           ".han-sheet-msg{margin:0.5rem 0 0;min-height:1.2em}" +
+          ".han-sheet-toolbar{display:flex;justify-content:flex-end;gap:8px;margin:0 0 10px;flex-wrap:wrap}" +
+          ".han-sheet-toolbar button,.han-sheet-toolbar label{min-height:34px;padding:6px 14px;border:0;border-radius:999px;background:#111827;color:#fff;font-size:13px;font-weight:600;cursor:pointer}" +
+          ".han-sheet-toolbar .han-export-btn{background:#2563eb}" +
+          ".han-sheet-toolbar .han-tpl-btn{background:#6b7280}" +
           "</style>" +
+          '<div class="han-sheet-toolbar">' +
+          '<button type="button" class="han-export-btn" id="han-export">导出</button>' +
+          '<label class="han-import-btn">批量导入<input id="han-import" type="file" accept=".csv,text/csv" hidden /></label>' +
+          '<button type="button" class="han-tpl-btn" id="han-tpl">下载模板</button></div>' +
           '<div class="han-sheet-wrap"><table class="han-sheet" id="han-sheet">' +
           "<thead></thead><tbody></tbody></table></div>" +
           '<p class="msg status han-sheet-msg" id="prod-msg"></p>',
@@ -581,14 +589,83 @@
         });
       }
 
+      const exportBtn = root.querySelector("#han-export");
+      const importInput = root.querySelector("#han-import");
+      const tplBtn = root.querySelector("#han-tpl");
+      const csvHeader =
+        "分层,主图,SPU,第一个sku,全网热销,评价数,晒单数,问答/视频logo,BI 5月退货率,BI 6月退货率,BI 7月退货率,BI 8月退货率,近30天真实单量,京仓/线下/拍单/无锡中转,京仓库存,价格,上架时间,是否有新品标,需做单数量和时间,备注";
+
+      function downloadText(name, text) {
+        const blob = new Blob(["\uFEFF" + text], { type: "text/csv; charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = name;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+
+      function onExport() {
+        const url =
+          "/api/han/products.csv?team=" +
+          encodeURIComponent(team) +
+          "&store=" +
+          encodeURIComponent(shop);
+        fetch(url, { credentials: "same-origin" })
+          .then(function (res) {
+            return res.blob();
+          })
+          .then(function (blob) {
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = shop + "-分层表.csv";
+            a.click();
+            URL.revokeObjectURL(a.href);
+          })
+          .catch(function (err) {
+            if (!dead) msg.textContent = String(err);
+          });
+      }
+
+      function onTpl() {
+        downloadText("商品分层导入模板.csv", csvHeader + "\n");
+      }
+
+      function onImport(e) {
+        const file = e.target.files && e.target.files[0];
+        e.target.value = "";
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function () {
+          jsonFetch("/api/han/products/import", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ team: team, store: shop, csv: String(reader.result || "") }),
+          }).then(function (json) {
+            if (dead) return;
+            const n = (json.created || []).length;
+            msg.textContent = json.ok
+              ? "已导入" + n + "条" + (json.skipped ? "，跳过" + json.skipped + "条" : "")
+              : json.error || "导入失败";
+            if (json.ok) return load();
+          });
+        };
+        reader.readAsText(file, "utf-8");
+      }
+
       paintHead();
       table.addEventListener("click", onAdd);
+      exportBtn.addEventListener("click", onExport);
+      tplBtn.addEventListener("click", onTpl);
+      importInput.addEventListener("change", onImport);
       load().catch(function (err) {
         if (!dead) msg.textContent = String(err);
       });
       return function unmount() {
         dead = true;
         table.removeEventListener("click", onAdd);
+        exportBtn.removeEventListener("click", onExport);
+        tplBtn.removeEventListener("click", onTpl);
+        importInput.removeEventListener("change", onImport);
         root.innerHTML = "";
       };
     },

@@ -490,6 +490,30 @@ export function createHanStore(poolOrFactory = getPool) {
       return mapProduct(rows[0]);
     },
 
+    async importProducts({ team, store, items, csv } = {}) {
+      const rows = Array.isArray(items) && items.length ? items : parseProductCsv(csv);
+      const created = [];
+      const errors = [];
+      for (const row of rows) {
+        try {
+          created.push(
+            await this.createProduct({
+              ...row,
+              team: team || row.team,
+              store: store || row.store,
+            }),
+          );
+        } catch (err) {
+          errors.push({
+            spu: row.spu || row.name || "",
+            layer: row.layer || "",
+            error: err.message,
+          });
+        }
+      }
+      return { created, skipped: errors.length, errors };
+    },
+
     async listPaid() {
       await ensure();
       const [rows] = await db().query(
@@ -622,6 +646,104 @@ export async function dropProbeTasks(poolOrFactory = getPool) {
     }
     throw err;
   }
+}
+
+export const PRODUCT_CSV_FIELDS = [
+  ["layer", "分层"],
+  ["image", "主图"],
+  ["spu", "SPU"],
+  ["firstSku", "第一个sku"],
+  ["hotSell", "全网热销"],
+  ["reviewCount", "评价数"],
+  ["shareCount", "晒单数"],
+  ["qaVideo", "问答/视频logo"],
+  ["returnM5", "BI 5月退货率"],
+  ["returnM6", "BI 6月退货率"],
+  ["returnM7", "BI 7月退货率"],
+  ["returnM8", "BI 8月退货率"],
+  ["orders30d", "近30天真实单量"],
+  ["fulfillNote", "京仓/线下/拍单/无锡中转"],
+  ["jdStock", "京仓库存"],
+  ["price", "价格"],
+  ["listedOn", "上架时间"],
+  ["hasNewBadge", "是否有新品标"],
+  ["needOrder", "需做单数量和时间"],
+  ["remark", "备注"],
+];
+
+function csvEscape(value) {
+  const text = String(value ?? "");
+  if (/[",\n\r]/.test(text)) {
+    return '"' + text.replace(/"/g, '""') + '"';
+  }
+  return text;
+}
+
+function splitCsvLine(line) {
+  const out = [];
+  let current = "";
+  let quoted = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (quoted) {
+      if (ch === '"' && line[i + 1] === '"') {
+        current += '"';
+        i += 1;
+      } else if (ch === '"') {
+        quoted = false;
+      } else {
+        current += ch;
+      }
+    } else if (ch === '"') {
+      quoted = true;
+    } else if (ch === ",") {
+      out.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  out.push(current);
+  return out;
+}
+
+export function buildProductCsv(items) {
+  const header = PRODUCT_CSV_FIELDS.map((pair) => pair[1]).join(",");
+  const lines = (items || []).map((row) =>
+    PRODUCT_CSV_FIELDS.map((pair) => csvEscape(row[pair[0]] ?? "")).join(","),
+  );
+  return [header, ...lines].join("\n");
+}
+
+export function parseProductCsv(text) {
+  const raw = String(text || "")
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .trim();
+  if (!raw) {
+    return [];
+  }
+  const lines = raw.split("\n").filter((line) => line.trim());
+  if (!lines.length) {
+    return [];
+  }
+  const headers = splitCsvLine(lines[0]).map((cell) => cell.trim());
+  const keyOf = new Map(PRODUCT_CSV_FIELDS.map((pair) => [pair[0], pair[0]]));
+  PRODUCT_CSV_FIELDS.forEach((pair) => {
+    keyOf.set(pair[1], pair[0]);
+  });
+  const keys = headers.map((header) => keyOf.get(header) || "");
+  return lines.slice(1).map((line) => {
+    const cells = splitCsvLine(line);
+    const row = {};
+    keys.forEach((key, i) => {
+      if (key) {
+        row[key] = String(cells[i] ?? "").trim();
+      }
+    });
+    return row;
+  });
 }
 
 export function teamLeadName(team) {
