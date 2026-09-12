@@ -49,16 +49,9 @@
 }
 
 .stores-subnav button.is-on {
-  background: #f5f5f7;
+  background: var(--xm-primary-soft);
+  color: var(--xm-primary);
   font-weight: 600;
-}
-
-html[data-theme="dark"] .stores-subnav button.is-on {
-  background: #2a2820;
-}
-
-html[data-theme="rose"] .stores-subnav button.is-on {
-  background: #ffe8f0;
 }
 
 .stores-main {

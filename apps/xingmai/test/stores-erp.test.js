@@ -115,6 +115,8 @@ test("stores module mounts four ERP pages with the screenshot titles", () => {
   assert.doesNotMatch(storesJs, /店铺档案/);
   assert.match(storesJs, /stores-board/);
   assert.match(storesCss, /flex-direction: row/);
+  assert.match(storesCss, /--xm-primary-soft/);
+  assert.doesNotMatch(storesCss, /#f5f5f7/);
   assert.doesNotMatch(storesCss, /grid-template-columns:\s*200px/);
 });
 
