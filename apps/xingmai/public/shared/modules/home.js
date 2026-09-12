@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.390-home-noprof */
+/* xm-module-home 0.1.391-home-swaplive */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -759,7 +759,7 @@
     );
   }
 
-  var LIVE_CARD_KEYS = ["ad", "roi", "livePay", "liveFee"];
+  var LIVE_CARD_KEYS = ["ad", "roi", "livePay", "livePaid"];
 
   function pickLiveCards(cards) {
     var map = {};
@@ -1117,7 +1117,7 @@
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.390-home-noprof");
+    board.setAttribute("data-hm-js", "0.1.391-home-swaplive");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1439,12 +1439,12 @@
       title: "实时看板",
       summary: { channels: 1, shops: 0 },
       hero: { label: "实时销售指数", value: "—", delta: 0, yesterday: [], today: [] },
-      paid: { label: "实时付费金额", value: "—", delta: 0, yesterday: [], today: [] },
+      paid: { label: "实时费比", value: "—", delta: 0, yesterday: [], today: [] },
       cards: [
         { key: "ad", label: "推广花费 (支付预估)", value: "—" },
         { key: "roi", label: "付费成交ROI", value: "—" },
         { key: "livePay", label: "实时付费成交额", value: "—" },
-        { key: "liveFee", label: "实时费比", value: "—" }
+        { key: "livePaid", label: "实时付费金额", value: "—" }
       ],
       shops: []
     };
@@ -1781,18 +1781,20 @@
       yesterday: yestPay == null ? [] : [yestPay, yestPay],
       today: todayPay == null ? [] : [todayPay, todayPay]
     };
+    var todayFee = todaySum.promotionRate != null ? todaySum.promotionRate : snap.promotionRate;
+    var yestFee = yestSum.promotionRate;
     live.paid = {
-      label: "实时付费金额",
-      value: fmtMoney(todayAd),
-      delta: trendOf(todayAd, yestAd),
-      yesterday: yestAd == null ? [] : [yestAd, yestAd],
-      today: todayAd == null ? [] : [todayAd, todayAd]
+      label: "实时费比",
+      value: fmtRate(todayFee),
+      delta: trendOf(todayFee, yestFee),
+      yesterday: yestFee == null ? [] : [yestFee, yestFee],
+      today: todayFee == null ? [] : [todayFee, todayFee]
     };
     live.cards = [
       { key: "ad", label: "推广花费 (支付预估)", value: fmtMoney(todayAd), extra: todaySum.promotionRate != null ? "推广占比 " + fmtRate(todaySum.promotionRate) : "" },
       { key: "roi", label: "付费成交ROI", value: fmtRoi(todaySum.payAmount != null ? todaySum.payAmount : todayPay, todayAd) },
       { key: "livePay", label: "实时付费成交额", value: fmtMoney(todayPay) },
-      { key: "liveFee", label: "实时费比", value: fmtRate(todaySum.promotionRate != null ? todaySum.promotionRate : snap.promotionRate) }
+      { key: "livePaid", label: "实时付费金额", value: fmtMoney(todayAd) }
     ];
     var rows = (todayPack && todayPack.records && todayPack.records.length ? todayPack.records : snapPack && snapPack.records) || [];
     live.shops = rows
