@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.344-home-cards */
+/* xm-module-home 0.1.345-home-cards */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
