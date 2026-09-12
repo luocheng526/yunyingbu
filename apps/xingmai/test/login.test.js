@@ -39,6 +39,17 @@ test("app.js keeps login, health, and releases so a thin overwrite cannot ship",
   assert.equal(loginPage.status, 200);
 });
 
+test("unauthenticated home screen start url serves login html", async () => {
+  const res = await fetch(`${base}/home`, { redirect: "manual" });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("location"), null);
+  const html = await res.text();
+  assert.match(html, /login-page/);
+  assert.match(html, /login\.css/);
+  assert.match(html, /apple-mobile-web-app-capable/);
+  assert.doesNotMatch(html, /\/shared\/nav\.js/);
+});
+
 test("login page is public", async () => {
   const res = await fetch(`${base}/login`);
   assert.equal(res.status, 200);

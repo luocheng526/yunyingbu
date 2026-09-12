@@ -677,6 +677,8 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.match(mid, /磁盘上的图即使在也不能信/);
   assert.match(mid, /TAB_ICON_ICO/);
   assert.match(mid, /SHELL_ASSET_VER = "0\.1\.143"/);
+  assert.match(mid, /function sendLoginPage/);
+  assert.match(mid, /302 到 \/login 在 iOS 会白屏/);
   assert.match(mid, /APP_ICON_PNG/);
   assert.match(mid, /\/apple-touch-icon\.png/);
   assert.match(mid, /woff2\?/);

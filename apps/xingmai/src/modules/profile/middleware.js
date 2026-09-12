@@ -644,5 +644,15 @@ export function requireLoginUnlessPublic(req, res, next) {
     res.status(401).json({ ok: false, error: "未登录" });
     return;
   }
+  // 主屏幕独立 App 打开 /home 时，302 到 /login 在 iOS 会白屏。未登录直接 200 出登录页。
+  if (isReadMethod(req)) {
+    sendLoginPage(res);
+    return;
+  }
   res.redirect("/login");
+}
+
+function sendLoginPage(res) {
+  const html = readThemedHtml(path.join(publicDir, "login.html"));
+  res.status(200).type("html").set("Cache-Control", "private, no-store").send(html);
 }
