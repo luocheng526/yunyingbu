@@ -2011,8 +2011,10 @@
         ".han-tab{display:inline-flex;align-items:center;min-height:34px;padding:6px 16px;border-radius:999px;background:#f3f4f6;color:#374151;text-decoration:none;font-size:14px;font-weight:600;transition:background .18s ease,color .18s ease,box-shadow .18s ease,transform .18s ease}" +
         ".han-tab:hover{background:#e5e7eb}" +
         ".han-tab:active{transform:scale(.98)}" +
-        ".han-tab.is-active{background:#fff;color:#111827;box-shadow:0 0 0 1px #e5e7eb}" +
+        ".han-tab.is-active{background:#0f766e;color:#fff;box-shadow:0 0 0 2px #99f6e4}" +
+        ".han-tab.is-active:hover{background:#0d9488;color:#fff}" +
         ".han-tabs-sub .han-tab{min-height:30px;font-size:13px;font-weight:500}" +
+        ".han-tabs-sub .han-tab.is-active{font-weight:700}" +
         ".han-team-card{display:inline-block;margin:0 0.5rem 0.5rem 0;padding:0.55rem 0.9rem;border-radius:8px;background:#ccfbf1;color:#134e4a;text-decoration:none;font-weight:600;transition:transform .18s ease,box-shadow .18s ease}" +
         ".han-team-card:hover{transform:translateY(-1px)}" +
         ".han-goods-stage{opacity:1;transform:translate3d(0,0,0);transition:opacity .22s ease,transform .22s ease}" +
