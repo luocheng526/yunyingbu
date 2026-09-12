@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.357-home-team */
+/* xm-module-home 0.1.358-home-calui */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -107,12 +107,12 @@
     return Math.abs(diffYmd(from, to)) + 1 <= (maxInclusive || 30);
   }
 
-  function formatSlashDate(ymd) {
+  function formatDashDate(ymd) {
     var p = String(ymd || "").split("-");
     if (p.length < 3 || !p[0]) {
       return "—";
     }
-    return Number(p[0]) + "/" + Number(p[1]) + "/" + Number(p[2]);
+    return ("0000" + Number(p[0])).slice(-4) + "-" + ("0" + Number(p[1])).slice(-2) + "-" + ("0" + Number(p[2])).slice(-2);
   }
 
   function shiftMonth(ym, delta) {
@@ -123,17 +123,15 @@
 
   function monthTitle(ym) {
     var p = String(ym || "").split("-");
-    return Number(p[0]) + "年" + Number(p[1]) + "月";
+    return Number(p[0]) + "年 " + Number(p[1]) + "月";
   }
 
-  function tipAttr(text) {
-    return escapeHtml(text || "指标").replaceAll("\n", "&#10;");
-  }
-
-  function calMonthHtml(ym, opts) {
+  function monthLastDay(ym) {
     var first = parseYmd(ym + "-01");
-    var pad = (first.getUTCDay() + 6) % 7;
-    var last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+    return new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+  }
+
+  function calDayClass(ymd, opts, other) {
     var start = opts.start;
     var end = opts.end || opts.hover;
     if (start && end && start > end) {
@@ -141,57 +139,91 @@
       start = end;
       end = swap;
     }
-    var html =
-      '<div class="xm-hm-cal-month"><div class="xm-hm-cal-caption">' +
-      monthTitle(ym) +
-      '</div><div class="xm-hm-cal-week"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div><div class="xm-hm-cal-grid">';
+    var cls = [];
+    if (other) {
+      cls.push("is-other");
+    }
+    if (ymd > opts.today || (opts.pick && !withinDays(opts.pick, ymd, 30))) {
+      cls.push("is-off");
+    }
+    if (ymd === opts.today) {
+      cls.push("is-today");
+    }
+    if (start && end && ymd >= start && ymd <= end) {
+      cls.push("is-in");
+    }
+    if (ymd === start) {
+      cls.push("is-start");
+    }
+    if (ymd === end) {
+      cls.push("is-end");
+    }
+    return cls;
+  }
+
+  function tipAttr(text) {
+    return escapeHtml(text || "指标").replaceAll("\n", "&#10;");
+  }
+
+  function calMonthHtml(ym, opts, side) {
+    var first = parseYmd(ym + "-01");
+    var pad = (first.getUTCDay() + 6) % 7;
+    var last = monthLastDay(ym);
+    var prevYm = shiftMonth(ym, -1);
+    var nextYm = shiftMonth(ym, 1);
+    var prevLast = monthLastDay(prevYm);
+    var cells = [];
     var i;
     for (i = 0; i < pad; i++) {
-      html += "<i></i>";
+      cells.push({ ymd: prevYm + "-" + ("0" + (prevLast - pad + 1 + i)).slice(-2), num: prevLast - pad + 1 + i, other: true });
     }
     for (i = 1; i <= last; i++) {
-      var ymd = ym + "-" + ("0" + i).slice(-2);
-      var cls = [];
-      var disabled = ymd > opts.today || (opts.pick && !withinDays(opts.pick, ymd, 30));
-      if (disabled) {
-        cls.push("is-off");
-      }
-      if (ymd === opts.today) {
-        cls.push("is-today");
-      }
-      if (ymd === opts.start || ymd === opts.end) {
-        cls.push("is-edge");
-      }
-      if (start && end && ymd >= start && ymd <= end) {
-        cls.push("is-in");
-      }
-      if (ymd === start) {
-        cls.push("is-start");
-      }
-      if (ymd === end) {
-        cls.push("is-end");
-      }
+      cells.push({ ymd: ym + "-" + ("0" + i).slice(-2), num: i, other: false });
+    }
+    i = 1;
+    while (cells.length < 42) {
+      cells.push({ ymd: nextYm + "-" + ("0" + i).slice(-2), num: i, other: true });
+      i += 1;
+    }
+    var navLeft =
+      side === "left"
+        ? '<button type="button" data-cal-nav="-12" aria-label="上一年">《</button><button type="button" data-cal-nav="-1" aria-label="上个月">&lt;</button>'
+        : "";
+    var navRight =
+      side === "right"
+        ? '<button type="button" data-cal-nav="1" aria-label="下个月">&gt;</button><button type="button" data-cal-nav="12" aria-label="下一年">》</button>'
+        : "";
+    var html =
+      '<div class="xm-hm-cal-month"><div class="xm-hm-cal-caption"><div class="xm-hm-cal-nav">' +
+      navLeft +
+      "</div><strong>" +
+      monthTitle(ym) +
+      '</strong><div class="xm-hm-cal-nav is-end">' +
+      navRight +
+      '</div></div><div class="xm-hm-cal-week"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div><div class="xm-hm-cal-grid">';
+    cells.forEach(function (cell) {
+      var cls = calDayClass(cell.ymd, opts, cell.other);
+      var disabled = cls.indexOf("is-off") !== -1;
       html +=
         '<button type="button" data-ymd="' +
-        ymd +
+        cell.ymd +
         '"' +
         (disabled ? " disabled" : "") +
         (cls.length ? ' class="' + cls.join(" ") + '"' : "") +
         ">" +
-        i +
+        cell.num +
         "</button>";
-    }
+    });
     return html + "</div></div>";
   }
 
   function calPanelHtml(cursor, opts) {
     return (
-      '<div class="xm-hm-cal-bar"><button type="button" data-cal-nav="-1" aria-label="上个月">‹</button><strong>选择日期</strong><button type="button" data-cal-nav="1" aria-label="下个月">›</button></div>' +
+      '<div class="xm-hm-cal-arrow" aria-hidden="true"></div>' +
       '<div class="xm-hm-cal-months">' +
-      calMonthHtml(cursor, opts) +
-      calMonthHtml(shiftMonth(cursor, 1), opts) +
-      "</div>" +
-      '<p class="xm-hm-cal-tip">最多选择 30 天</p>'
+      calMonthHtml(cursor, opts, "left") +
+      calMonthHtml(shiftMonth(cursor, 1), opts, "right") +
+      "</div>"
     );
   }
 
@@ -767,23 +799,37 @@
       ".xm-hm-ranges{display:flex;flex-wrap:wrap;align-items:center;gap:6px}" +
       ".xm-hm-ranges button{border:1px solid var(--xm-line);background:var(--xm-card);color:var(--xm-ink);padding:5px 10px;border-radius:4px;cursor:pointer;font-size:12px}" +
       ".xm-hm-ranges button.is-on{background:var(--xm-primary);border-color:var(--xm-primary);color:#fff}" +
-      ".xm-hm-dates{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--xm-line);background:var(--xm-card);color:var(--xm-ink);border-radius:4px;padding:4px 8px;font-size:12px;cursor:pointer}" +
-      ".xm-hm-dates.is-on{border-color:var(--xm-primary);color:var(--xm-primary)}" +
-      ".xm-hm-cal{position:absolute;top:48px;right:10px;z-index:6;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:10px 12px}" +
+      ".xm-hm-datewrap{position:relative}" +
+      ".xm-hm-dates{display:inline-flex;align-items:center;gap:8px;min-width:248px;height:32px;padding:0 10px 0 12px;border:1px solid #dcdfe6;background:#fff;color:#303133;border-radius:20px;cursor:pointer;font-size:13px;line-height:1}" +
+      ".xm-hm-dates.is-on{border-color:#c0c4cc;box-shadow:0 0 0 1px rgba(192,196,204,.35)}" +
+      ".xm-hm-dates-ico,.xm-hm-dates-clear{display:inline-flex;color:#c0c4cc;flex:0 0 auto}" +
+      ".xm-hm-dates-ico svg,.xm-hm-dates-clear svg{display:block}" +
+      ".xm-hm-dates-text{flex:1 1 auto;text-align:left;white-space:nowrap}" +
+      ".xm-hm-dates-clear{border:0;background:transparent;padding:0;width:16px;height:16px;border-radius:50%;cursor:pointer;align-items:center;justify-content:center}" +
+      ".xm-hm-dates-clear:hover{color:#909399}" +
+      ".xm-hm-cal{position:absolute;top:calc(100% + 10px);right:0;z-index:8;width:646px;max-width:min(646px,calc(100vw - 24px));background:#fff;border-radius:4px;box-shadow:0 2px 12px rgba(0,0,0,.12);padding:8px 8px 12px}" +
       ".xm-hm-cal[hidden]{display:none}" +
-      ".xm-hm-cal-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}" +
-      ".xm-hm-cal-bar button{border:0;background:transparent;color:var(--xm-ink);width:28px;height:28px;cursor:pointer;font-size:18px;line-height:1}" +
-      ".xm-hm-cal-months{display:flex;gap:16px}" +
-      ".xm-hm-cal-caption{text-align:center;font-size:13px;font-weight:600;margin:0 0 6px}" +
-      ".xm-hm-cal-week,.xm-hm-cal-grid{display:grid;grid-template-columns:repeat(7,minmax(28px,1fr));gap:2px;text-align:center}" +
-      ".xm-hm-cal-week{color:var(--xm-muted);font-size:12px;margin-bottom:4px}" +
-      ".xm-hm-cal-grid button{border:0;background:transparent;border-radius:4px;height:28px;font-size:12px;color:var(--xm-ink);cursor:pointer}" +
-      ".xm-hm-cal-grid button.is-in{background:var(--xm-primary-soft)}" +
-      ".xm-hm-cal-grid button.is-start,.xm-hm-cal-grid button.is-end,.xm-hm-cal-grid button.is-edge{background:var(--xm-primary);color:#fff}" +
-      ".xm-hm-cal-grid button.is-today{font-weight:700}" +
-      ".xm-hm-cal-grid button:disabled{color:var(--xm-muted);opacity:.45;cursor:not-allowed}" +
-      ".xm-hm-cal-grid i{height:28px}" +
-      ".xm-hm-cal-tip{margin:8px 0 0;color:var(--xm-muted);font-size:12px;text-align:center}" +
+      ".xm-hm-cal-arrow{position:absolute;top:-6px;right:48px;width:10px;height:10px;background:#fff;transform:rotate(45deg);box-shadow:-1px -1px 1px rgba(0,0,0,.04)}" +
+      ".xm-hm-cal-months{display:flex}" +
+      ".xm-hm-cal-month{flex:1 1 50%;min-width:0;padding:4px 12px 0}" +
+      ".xm-hm-cal-month + .xm-hm-cal-month{border-left:1px solid #ebeef5}" +
+      ".xm-hm-cal-caption{display:grid;grid-template-columns:56px 1fr 56px;align-items:center;min-height:32px;margin:0 0 4px;color:#303133}" +
+      ".xm-hm-cal-caption strong{text-align:center;font-size:16px;font-weight:500}" +
+      ".xm-hm-cal-nav{display:flex;align-items:center;gap:2px}" +
+      ".xm-hm-cal-nav.is-end{justify-content:flex-end}" +
+      ".xm-hm-cal-nav button{border:0;background:transparent;color:#303133;width:22px;height:22px;padding:0;cursor:pointer;font-size:13px;line-height:1}" +
+      ".xm-hm-cal-week,.xm-hm-cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));text-align:center}" +
+      ".xm-hm-cal-week{color:#606266;font-size:12px;padding:6px 0}" +
+      ".xm-hm-cal-grid button{border:0;background:transparent;width:32px;height:32px;margin:2px auto;border-radius:50%;font-size:12px;color:#606266;cursor:pointer}" +
+      ".xm-hm-cal-grid button.is-other{color:#c0c4cc}" +
+      ".xm-hm-cal-grid button.is-in{background:#fde2e2;border-radius:0;width:100%}" +
+      ".xm-hm-cal-grid button.is-today{color:#f56c6c}" +
+      ".xm-hm-cal-grid button.is-start,.xm-hm-cal-grid button.is-end{background:#f56c6c;color:#fff;border-radius:50%;width:32px}" +
+      ".xm-hm-cal-grid button:disabled,.xm-hm-cal-grid button.is-off{color:#c0c4cc;opacity:.7;cursor:not-allowed}" +
+      "html[data-theme=dark] .xm-hm-dates,html[data-theme=dark] .xm-hm-cal{background:var(--xm-card);color:var(--xm-ink);border-color:var(--xm-line)}" +
+      "html[data-theme=dark] .xm-hm-cal-arrow{background:var(--xm-card)}" +
+      "html[data-theme=dark] .xm-hm-cal-month + .xm-hm-cal-month{border-color:var(--xm-line)}" +
+      "html[data-theme=dark] .xm-hm-cal-caption,html[data-theme=dark] .xm-hm-cal-caption button{color:var(--xm-ink)}" +
       ".xm-hm-tip{position:fixed;z-index:30;max-width:280px;padding:8px 10px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:6px;box-shadow:var(--xm-shadow);color:var(--xm-ink);font-size:12px;line-height:1.55;white-space:pre-wrap;pointer-events:none}" +
       ".xm-hm-card-head i{cursor:help}" +
       ".xm-hm-body{position:relative;display:flex;flex-direction:column;gap:12px;overflow:visible}" +
@@ -889,10 +935,9 @@
       "</div>" +
       '<div class="xm-hm-ranges">' +
       rangeBtns +
-      '<button type="button" class="xm-hm-dates" id="xm-hm-dates" aria-haspopup="dialog" aria-expanded="false"><span id="xm-hm-from-text"></span><span>至</span><span id="xm-hm-to-text"></span></button>' +
+      '<div class="xm-hm-datewrap"><div class="xm-hm-dates" id="xm-hm-dates" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-description="最多选择30天"><span class="xm-hm-dates-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3.5v4M16 3.5v4"/></svg></span><span class="xm-hm-dates-text" id="xm-hm-date-text"></span><button type="button" class="xm-hm-dates-clear" id="xm-hm-date-clear" aria-label="清除日期"><svg viewBox="0 0 16 16" width="12" height="12"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor"/><path d="M5.6 5.6l4.8 4.8M10.4 5.6l-4.8 4.8" stroke="currentColor" stroke-width="1.2" fill="none"/></svg></button></div><div class="xm-hm-cal" id="xm-hm-cal" hidden></div></div>' +
       "</div></div>" +
       '<div class="xm-hm-pop" id="xm-hm-pop" hidden><h3>卡片设置</h3><div id="xm-hm-card-opts"></div></div>' +
-      '<div class="xm-hm-cal" id="xm-hm-cal" hidden></div>' +
       '<div class="xm-hm-tip" id="xm-hm-tip" hidden></div>' +
       '<div class="xm-hm-body">' +
       '<section class="xm-hm-kpis" id="xm-hm-kpis"></section>' +
@@ -916,7 +961,7 @@
     var hero = readChart(live.hero, blankLive().hero);
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
-    board.setAttribute("data-hm-js", "0.1.357-home-team");
+    board.setAttribute("data-hm-js", "0.1.358-home-calui");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", state.view === "team");
@@ -926,8 +971,7 @@
     Array.prototype.forEach.call(root.querySelectorAll("[data-range]"), function (btn) {
       btn.classList.toggle("is-on", btn.getAttribute("data-range") === state.range);
     });
-    root.querySelector("#xm-hm-from-text").textContent = formatSlashDate(state.from);
-    root.querySelector("#xm-hm-to-text").textContent = formatSlashDate(state.to);
+    root.querySelector("#xm-hm-date-text").textContent = formatDashDate(state.from) + " 至 " + formatDashDate(state.to);
     var tipBox = root.querySelector("#xm-hm-tip");
     if (tipBox) {
       tipBox.hidden = true;
@@ -1880,6 +1924,16 @@
           var next = rangeDates(state.range);
           state.from = next.from;
           state.to = next.to;
+          closeCal();
+          paint(root, state);
+          pullBoard();
+          return;
+        }
+        if (event.target.closest("#xm-hm-date-clear")) {
+          var yest = rangeDates("yesterday");
+          state.range = "yesterday";
+          state.from = yest.from;
+          state.to = yest.to;
           closeCal();
           paint(root, state);
           pullBoard();

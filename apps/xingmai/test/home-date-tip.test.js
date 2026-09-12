@@ -20,8 +20,11 @@ function withinDays(from, to, maxInclusive) {
 test("homepage opens a custom calendar instead of native date inputs", () => {
   assert.match(homeJs, /id="xm-hm-dates"/);
   assert.match(homeJs, /id="xm-hm-cal"/);
-  assert.match(homeJs, /最多选择 30 天/);
+  assert.match(homeJs, /id="xm-hm-date-clear"/);
+  assert.match(homeJs, /最多选择30天/);
   assert.match(homeJs, /function withinDays/);
+  assert.match(homeJs, /function formatDashDate/);
+  assert.match(homeJs, /data-cal-nav="-12"/);
   assert.doesNotMatch(homeJs, /<input type="date"/);
 });
 
