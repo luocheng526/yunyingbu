@@ -182,6 +182,42 @@ body:has(.people-page) .xm-tabs {
   border-radius: 8px;
 }
 
+.people-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-top: 12px;
+}
+
+.people-pager-sizes,
+.people-pager-pages {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.people-page-size,
+.people-page-num {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--xm-line, #d9d9d9);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--xm-ink, #1f1f1f);
+  cursor: pointer;
+}
+
+.people-page-size.is-active,
+.people-page-num.is-active {
+  background: var(--xm-primary, #1677ff);
+  border-color: var(--xm-primary, #1677ff);
+  color: #fff;
+}
+
 .people-page table {
   width: 100%;
   border-collapse: separate;

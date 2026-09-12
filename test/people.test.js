@@ -162,6 +162,13 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /第" \+ item.line \+ "行" \+ item.error/);
     assert.match(jsText, /id="people-modal"/);
     assert.match(jsText, /id="people-add"/);
+    assert.match(jsText, /10人\/页/);
+    assert.match(jsText, /20人\/页/);
+    assert.match(jsText, /50人\/页/);
+    assert.match(jsText, /100人\/页/);
+    assert.match(jsText, /id="people-pager"/);
+    assert.match(jsText, /people-page-num/);
+    assert.match(jsText, /data-page/);
     assert.match(jsText, /id="people-template"/);
     assert.match(jsText, /组织中心-身份名册模板/);
     assert.match(jsText, /\/api\/people\/import/);

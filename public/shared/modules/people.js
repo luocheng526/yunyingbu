@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.184-people-noscroll";
+    const href = "/people.css?v=0.1.185-people-pager";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -159,6 +159,15 @@
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="status"><span class="org-filter-name">状态</span><span class="org-filter-caret">▾</span></button></th>' +
         '<th>账号</th><th>登录密码</th></tr></thead>' +
         '<tbody id="people-tbody"></tbody></table></div>' +
+        '<div class="people-pager" id="people-pager">' +
+        '<div class="people-pager-sizes">' +
+        '<button type="button" class="people-page-size" data-size="10">10人/页</button>' +
+        '<button type="button" class="people-page-size" data-size="20">20人/页</button>' +
+        '<button type="button" class="people-page-size" data-size="50">50人/页</button>' +
+        '<button type="button" class="people-page-size" data-size="100">100人/页</button>' +
+        "</div>" +
+        '<div class="people-pager-pages" id="people-pager-pages"></div>' +
+        "</div>" +
         '<div class="org-filter-pop" id="people-filter-pop" hidden></div></section></div>' +
         '<div class="org-pane" data-pane="rights" hidden>' +
         '<section class="panel rights-fit-panel"><h2>管辖</h2>' +
@@ -277,6 +286,8 @@
         }
       });
       let lastPeople = [];
+      let peoplePageSize = 20;
+      let peoplePage = 1;
       let openFilterBtn = null;
       let openFilterKey = "";
       let boardMeta = { actor: "罗成", scope: "all", canCreate: true };
@@ -1025,11 +1036,41 @@
         );
       }
 
+      function paintPeoplePager() {
+        const host = root.querySelector("#people-pager-pages");
+        const total = lastPeople.length;
+        const pages = Math.max(1, Math.ceil(total / peoplePageSize) || 1);
+        if (peoplePage > pages) {
+          peoplePage = pages;
+        }
+        root.querySelectorAll(".people-page-size").forEach(function (btn) {
+          btn.classList.toggle("is-active", Number(btn.getAttribute("data-size")) === peoplePageSize);
+        });
+        if (!host) {
+          return;
+        }
+        host.replaceChildren();
+        for (let i = 1; i <= pages; i += 1) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "people-page-num" + (i === peoplePage ? " is-active" : "");
+          btn.setAttribute("data-page", String(i));
+          btn.textContent = String(i);
+          host.append(btn);
+        }
+      }
+
       function renderPeople(people) {
         lastPeople = people;
+        const pages = Math.max(1, Math.ceil(people.length / peoplePageSize) || 1);
+        if (peoplePage > pages) {
+          peoplePage = pages;
+        }
+        const start = (peoplePage - 1) * peoplePageSize;
+        const pageRows = people.slice(start, start + peoplePageSize);
         peopleTbody.replaceChildren();
         const canEdit = roster.canEdit;
-        people.forEach(function (person) {
+        pageRows.forEach(function (person) {
           const tr = document.createElement("tr");
           tr.setAttribute("data-id", String(person.id));
           tr.innerHTML =
@@ -1071,6 +1112,7 @@
         });
         paintMemberBar();
         paintFilterCarets();
+        paintPeoplePager();
         const peopleCount = root.querySelector("#people-count");
         if (peopleCount) {
           peopleCount.textContent = "筛选 " + people.length + " 人";
@@ -1487,6 +1529,7 @@
           return;
         }
         if (isMemberFilter(key)) {
+          peoplePage = 1;
           renderPeople(applyMemberFilters(roster.people));
         } else {
           renderStores(applyColumnFilters(rawStores));
@@ -1672,7 +1715,25 @@
       }
 
       function rerenderPeople() {
+        peoplePage = 1;
         renderPeople(applyMemberFilters(roster.people));
+      }
+      const peoplePager = root.querySelector("#people-pager");
+      if (peoplePager) {
+        peoplePager.addEventListener("click", function (event) {
+          const sizeBtn = event.target.closest(".people-page-size");
+          if (sizeBtn) {
+            peoplePageSize = Number(sizeBtn.getAttribute("data-size")) || 20;
+            peoplePage = 1;
+            renderPeople(lastPeople);
+            return;
+          }
+          const pageBtn = event.target.closest(".people-page-num");
+          if (pageBtn) {
+            peoplePage = Number(pageBtn.getAttribute("data-page")) || 1;
+            renderPeople(lastPeople);
+          }
+        });
       }
       root.querySelector("#people-search").addEventListener("click", rerenderPeople);
       root.querySelector("#people-q").addEventListener("keydown", function (event) {
