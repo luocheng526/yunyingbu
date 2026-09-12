@@ -532,7 +532,7 @@
 
       function cellHtml(row, key) {
         if (key === "_layer") {
-          return "<td>" + layerSelect(row) + "</td>";
+          return '<td class="han-layer-cell">' + layerSelect(row) + "</td>";
         }
         const value = row[key] || "";
         if (key === "image") {
@@ -542,7 +542,14 @@
             "</td>"
           );
         }
-        return "<td>" + imageInput(row.id, key, value, "") + "</td>";
+        return (
+          '<td class="han-plain-cell">' +
+          '<span class="han-cell-view">' +
+          escapeHtml(value) +
+          "</span>" +
+          imageInput(row.id, key, value, "") +
+          '<i class="han-row-resizer"></i></td>'
+        );
       }
 
       const teams = HAN_GOODS_TEAMS;
@@ -640,22 +647,26 @@
 
       root.innerHTML = page(
         shop,
-        team + " · " + shop + "。本店可自定义分类规则；导入和分类只按本店规则。格子可改，调动可换层。拖动表格移动，滚轮缩放，双击主图看大图。",
+        team + " · " + shop + "。本店可自定义分类规则；导入和分类只按本店规则。拖动表格移动，拖表头右边调列宽，双击格子编辑，双击主图看大图。",
         '<style>' +
           ".han-sheet-wrap{background:#fff;border:1px solid #c6c6c6}" +
           ".han-sheet-viewbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid #e5e7eb;background:#f8fafc}" +
-          ".han-sheet-viewbar button{min-height:30px;padding:4px 12px;border:0;border-radius:999px;background:#111827;color:#fff;font-size:12px;cursor:pointer}" +
-          ".han-sheet-zoom-label{min-width:48px;font-size:12px;color:#374151}" +
           ".han-sheet-viewbar .han-muted{font-size:12px;color:#6b7280}" +
-          ".han-sheet-viewport{overflow:hidden;cursor:grab;background:#f4f6f9;height:min(72vh,860px);min-height:420px;position:relative}" +
+          ".han-sheet-viewport{overflow:auto;cursor:grab;background:#f4f6f9;height:min(72vh,860px);min-height:420px;position:relative}" +
           ".han-sheet-viewport.is-panning{cursor:grabbing}" +
-          ".han-sheet-pan{transform-origin:0 0;will-change:transform;width:max-content}" +
-          ".han-sheet{border-collapse:collapse;font-size:12px;min-width:2200px;background:#fff}" +
-          ".han-sheet th,.han-sheet td{border:1px solid #b1b1b1;padding:4px 6px;white-space:nowrap;vertical-align:middle}" +
+          ".han-sheet-pan{width:max-content}" +
+          ".han-sheet{border-collapse:collapse;font-size:12px;min-width:2200px;background:#fff;table-layout:fixed}" +
+          ".han-sheet th,.han-sheet td{border:1px solid #b1b1b1;padding:4px 6px;white-space:nowrap;vertical-align:middle;position:relative}" +
           ".han-sheet .han-sheet-title{text-align:center;font-size:20px;font-weight:700;background:#fff2cc}" +
           ".han-sheet .han-sheet-group{text-align:center;font-weight:700}" +
           ".han-sheet .han-sheet-hint{white-space:normal;min-width:160px;max-width:220px;font-size:11px;line-height:1.45;color:#444;background:#fafafa}" +
-          ".han-sheet .han-sheet-col{background:#f3f3f3;font-weight:600}" +
+          ".han-sheet .han-sheet-col{background:#f3f3f3;font-weight:600;min-width:72px}" +
+          ".han-col-resizer{position:absolute;top:0;right:-3px;width:7px;height:100%;cursor:col-resize;z-index:2}" +
+          ".han-row-resizer{position:absolute;left:0;right:0;bottom:-3px;height:7px;cursor:row-resize;z-index:2}" +
+          ".han-cell-view{display:block;min-height:22px;min-width:56px;padding:2px 4px}" +
+          ".han-plain-cell .han-cell{display:none;width:100%;min-width:56px;border:0;background:#fffde7;padding:2px 4px}" +
+          ".han-plain-cell.is-editing .han-cell-view{display:none}" +
+          ".han-plain-cell.is-editing .han-cell{display:block}" +
           ".han-sheet input{width:92px;border:0;background:#fffde7;padding:2px 4px}" +
           ".han-img-cell{width:64px;min-width:64px;text-align:center;padding:4px}" +
           ".han-thumb-box{width:56px;height:56px;margin:0 auto;display:flex;align-items:center;justify-content:center;background:#fff}" +
@@ -731,11 +742,7 @@
           '<button type="button" id="han-rules-reset">恢复默认</button></div></div>' +
           '<div class="han-sheet-wrap">' +
           '<div class="han-sheet-viewbar">' +
-          '<button type="button" class="han-sheet-zoom-out">缩小</button>' +
-          '<span class="han-sheet-zoom-label">100%</span>' +
-          '<button type="button" class="han-sheet-zoom-in">放大</button>' +
-          '<button type="button" class="han-sheet-zoom-reset">复位</button>' +
-          '<span class="han-muted">拖动移动 · 滚轮缩放 · 双击主图看大图 · 双击格子编辑</span></div>' +
+          '<span class="han-muted">拖动移动 · 拖表头右边调列宽 · 拖行底调行高 · 双击格子编辑 · 双击主图看大图</span></div>' +
           '<div class="han-sheet-viewport" data-han-sheet>' +
           '<div class="han-sheet-pan"><table class="han-sheet" id="han-sheet">' +
           "<thead></thead><tbody></tbody></table></div></div></div>" +
@@ -900,7 +907,7 @@
         }).join("") + "</tr>";
         const cols = "<tr>" + layers.map(function (layer) {
           return layer.cols.map(function (pair) {
-            return '<th class="han-sheet-col">' + escapeHtml(pair[1]) + "</th>";
+            return '<th class="han-sheet-col">' + escapeHtml(pair[1]) + '<i class="han-col-resizer"></i></th>';
           }).join("");
         }).join("") + "</tr>";
         thead.innerHTML = title + groups + hints + cols;
@@ -1227,15 +1234,57 @@
         if (id) savePatch(id, { image: input.value });
       }
 
+      function endCellEdit(td, save) {
+        if (!td || !td.classList.contains("is-editing")) return;
+        const input = td.querySelector("input.han-cell");
+        const view = td.querySelector(".han-cell-view");
+        td.classList.remove("is-editing");
+        if (!input) return;
+        if (save === false) {
+          input.value = view ? view.textContent : input.value;
+          return;
+        }
+        if (view) view.textContent = input.value;
+        const id = input.getAttribute("data-id");
+        const key = input.getAttribute("data-key");
+        if (!id || !key) return;
+        const patch = {};
+        patch[key] = input.value;
+        savePatch(id, patch);
+      }
+      function beginCellEdit(td) {
+        if (!td || !td.classList.contains("han-plain-cell")) return;
+        root.querySelectorAll(".han-plain-cell.is-editing").forEach(function (open) {
+          if (open !== td) endCellEdit(open, true);
+        });
+        td.classList.add("is-editing");
+        const input = td.querySelector("input.han-cell");
+        if (!input) return;
+        input.focus();
+        if (input.select) input.select();
+      }
       function onSheetBlur(e) {
         const input = e.target.closest("input.han-cell");
         if (!input) return;
-        const id = input.getAttribute("data-id");
-        const key = input.getAttribute("data-key");
-        const patch = {};
-        patch[key] = input.value;
-        refreshThumb(input);
-        savePatch(id, patch);
+        if (input.getAttribute("data-key") === "image") {
+          refreshThumb(input);
+          const id = input.getAttribute("data-id");
+          if (id) savePatch(id, { image: input.value });
+          return;
+        }
+        endCellEdit(input.closest(".han-plain-cell"), true);
+      }
+      function onSheetKeydown(e) {
+        const input = e.target.closest(".han-plain-cell.is-editing input.han-cell");
+        if (!input) return;
+        if (e.key === "Enter") {
+          e.preventDefault();
+          input.blur();
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          endCellEdit(input.closest(".han-plain-cell"), false);
+        }
       }
 
       function onImported(json) {
@@ -1287,50 +1336,51 @@
       }
 
       const viewport = root.querySelector("[data-han-sheet]");
-      const pan = root.querySelector(".han-sheet-pan");
-      const zoomLabel = root.querySelector(".han-sheet-zoom-label");
-      const sheetView = { x: 16, y: 12, scale: 1 };
-      function applySheetView() {
-        pan.style.transform =
-          "translate(" + sheetView.x + "px," + sheetView.y + "px) scale(" + sheetView.scale + ")";
-        if (zoomLabel) zoomLabel.textContent = Math.round(sheetView.scale * 100) + "%";
-      }
-      function zoomSheet(next) {
-        sheetView.scale = Math.min(2.4, Math.max(0.35, next));
-        applySheetView();
-      }
-      applySheetView();
-
-      function onZoomIn() {
-        zoomSheet(sheetView.scale + 0.1);
-      }
-      function onZoomOut() {
-        zoomSheet(sheetView.scale - 0.1);
-      }
-      function onZoomReset() {
-        sheetView.x = 16;
-        sheetView.y = 12;
-        sheetView.scale = 1;
-        applySheetView();
-      }
-      function onSheetWheel(e) {
-        e.preventDefault();
-        zoomSheet(sheetView.scale + (e.deltaY > 0 ? -0.08 : 0.08));
-      }
       let sheetDrag = null;
+      let sizeDrag = null;
       function onSheetPointerDown(e) {
-        if (e.target.closest("input,select,textarea,button,a,.han-thumb-box,.han-cell,.han-layer-pick")) return;
+        if (e.button) return;
+        const colHandle = e.target.closest(".han-col-resizer");
+        const rowHandle = e.target.closest(".han-row-resizer");
+        if (colHandle) {
+          const th = colHandle.closest("th");
+          sizeDrag = { kind: "col", el: th, start: e.clientX, size: th.offsetWidth, id: e.pointerId };
+          e.preventDefault();
+          e.stopPropagation();
+          if (viewport.setPointerCapture) viewport.setPointerCapture(e.pointerId);
+          return;
+        }
+        if (rowHandle) {
+          const tr = rowHandle.closest("tr");
+          sizeDrag = { kind: "row", el: tr, start: e.clientY, size: tr.offsetHeight, id: e.pointerId };
+          e.preventDefault();
+          e.stopPropagation();
+          if (viewport.setPointerCapture) viewport.setPointerCapture(e.pointerId);
+          return;
+        }
+        if (e.target.closest("input,select,textarea,button,a,.han-thumb-box,.han-plain-cell.is-editing")) return;
         if (e.button) return;
         sheetDrag = {
           x: e.clientX,
           y: e.clientY,
-          ox: sheetView.x,
-          oy: sheetView.y,
+          sl: viewport.scrollLeft,
+          st: viewport.scrollTop,
           moved: false,
           id: e.pointerId,
         };
       }
       function onSheetPointerMove(e) {
+        if (sizeDrag) {
+          if (sizeDrag.kind === "col") {
+            const width = Math.max(48, sizeDrag.size + (e.clientX - sizeDrag.start));
+            sizeDrag.el.style.width = width + "px";
+            sizeDrag.el.style.minWidth = width + "px";
+          } else {
+            const height = Math.max(28, sizeDrag.size + (e.clientY - sizeDrag.start));
+            sizeDrag.el.style.height = height + "px";
+          }
+          return;
+        }
         if (!sheetDrag) return;
         const dx = e.clientX - sheetDrag.x;
         const dy = e.clientY - sheetDrag.y;
@@ -1340,9 +1390,8 @@
           viewport.classList.add("is-panning");
           if (viewport.setPointerCapture) viewport.setPointerCapture(sheetDrag.id);
         }
-        sheetView.x = sheetDrag.ox + dx;
-        sheetView.y = sheetDrag.oy + dy;
-        applySheetView();
+        viewport.scrollLeft = sheetDrag.sl - dx;
+        viewport.scrollTop = sheetDrag.st - dy;
       }
       let lastThumbTap = { t: 0, el: null };
       function thumbFromEvent(e) {
@@ -1352,6 +1401,7 @@
       }
       function onSheetPointerUp(e) {
         sheetDrag = null;
+        sizeDrag = null;
         viewport.classList.remove("is-panning");
         const img = thumbFromEvent(e);
         if (!img || !img.src) return;
@@ -1374,14 +1424,11 @@
       }
       function onSheetDblClick(e) {
         if (onSheetImageOpen(e)) return;
-        const edit = e.target.closest("td");
-        if (edit && !e.target.closest(".han-thumb-box")) {
-          const field = edit.querySelector("input.han-cell:not([type='hidden']),select.han-layer-pick");
-          if (field) {
-            field.focus();
-            if (field.select) field.select();
-            return;
-          }
+        const plain = e.target.closest(".han-plain-cell");
+        if (plain) {
+          e.preventDefault();
+          beginCellEdit(plain);
+          return;
         }
         const box = e.target.closest(".han-thumb-box");
         if (!box) return;
@@ -1400,11 +1447,8 @@
       table.addEventListener("click", onSheetClick);
       table.addEventListener("change", onSheetChange);
       table.addEventListener("focusout", onSheetBlur);
+      table.addEventListener("keydown", onSheetKeydown);
       table.addEventListener("dblclick", onSheetDblClick);
-      root.querySelector(".han-sheet-zoom-in").addEventListener("click", onZoomIn);
-      root.querySelector(".han-sheet-zoom-out").addEventListener("click", onZoomOut);
-      root.querySelector(".han-sheet-zoom-reset").addEventListener("click", onZoomReset);
-      viewport.addEventListener("wheel", onSheetWheel, { passive: false });
       viewport.addEventListener("pointerdown", onSheetPointerDown);
       viewport.addEventListener("pointermove", onSheetPointerMove);
       viewport.addEventListener("pointerup", onSheetPointerUp);
@@ -1444,8 +1488,8 @@
         table.removeEventListener("click", onSheetClick);
         table.removeEventListener("change", onSheetChange);
         table.removeEventListener("focusout", onSheetBlur);
+        table.removeEventListener("keydown", onSheetKeydown);
         table.removeEventListener("dblclick", onSheetDblClick);
-        viewport.removeEventListener("wheel", onSheetWheel);
         viewport.removeEventListener("pointerdown", onSheetPointerDown);
         viewport.removeEventListener("pointermove", onSheetPointerMove);
         viewport.removeEventListener("pointerup", onSheetPointerUp);
