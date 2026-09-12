@@ -181,6 +181,8 @@ test("card help uses a body-level tooltip so overflow cannot clip it", () => {
   assert.match(homeJs, /function tipAttr/);
   assert.match(homeJs, /function showCardTip/);
   assert.match(homeJs, /class="xm-hm-help"/);
+  assert.match(homeJs, />!<\/button>/);
+  assert.doesNotMatch(homeJs, />i<\/button>/);
   assert.match(homeJs, /function helpFromEvent/);
   assert.match(homeJs, /event\.target\.closest\("\.xm-hm-help"\)/);
   assert.doesNotMatch(homeJs, /closest\("\.xm-hm-card-head"\)/);

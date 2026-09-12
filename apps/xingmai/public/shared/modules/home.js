@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.388-home-colw */
+/* xm-module-home 0.1.389-home-bang */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -457,7 +457,7 @@
       escapeHtml(card.label) +
       '</span><button type="button" class="xm-hm-help" data-tip="' +
       tipAttr(card.tip) +
-      '" aria-label="指标说明">i</button></div><div class="xm-hm-value' +
+      '" aria-label="指标说明">!</button></div><div class="xm-hm-value' +
       (card.accent ? " is-accent" : "") +
       '">' +
       escapeHtml(card.value) +
@@ -1117,7 +1117,7 @@
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.388-home-colw");
+    board.setAttribute("data-hm-js", "0.1.389-home-bang");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
