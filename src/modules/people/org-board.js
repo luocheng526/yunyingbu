@@ -719,6 +719,20 @@ function storeIdOf(row) {
   return String(row.storeId || row.shopId || "").trim();
 }
 
+function filledImport(input = {}) {
+  const next = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (value == null) {
+      continue;
+    }
+    if (typeof value === "string" && !value.trim()) {
+      continue;
+    }
+    next[key] = value;
+  }
+  return next;
+}
+
 function importPool(actor, selectedGroupId = "") {
   const scope = scopeOf(actor);
   const forced = normalizeGroupId(selectedGroupId) || (scope.key === "group" ? scope.groupId : "");
@@ -857,7 +871,9 @@ export function importOrgStores(items, actor, options = {}) {
       return;
     }
     const existing = found.store;
-    const result = existing ? patchOrgStore(existing.id, input, actor) : createOrgStore(input, actor);
+    const result = existing
+      ? patchOrgStore(existing.id, filledImport({ ...input, updatedOn: stamp }), actor)
+      : createOrgStore(input, actor);
     if (!result.ok) {
       failed.push({ line, error: result.error || "导入失败", storeName: draft.storeName });
       return;

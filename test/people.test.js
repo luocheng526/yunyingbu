@@ -146,6 +146,10 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /data-filter-key="peopleOperator"/);
     assert.match(jsText, /data-filter-key="status"/);
     assert.match(jsText, /applyMemberFilters/);
+    assert.match(jsText, /导入按姓名合并/);
+    assert.match(jsText, /一模一样的名字覆盖原行/);
+    assert.match(jsText, /导入是合并不是换表/);
+    assert.match(jsText, /同一家店才覆盖/);
     assert.match(jsText, /id="people-modal"/);
     assert.match(jsText, /id="people-add"/);
     assert.match(jsText, /id="people-template"/);
@@ -451,6 +455,35 @@ test("store import upserts by groupId+shopId and does not touch other groups", a
     const createdJson = await created.json();
     assert.equal(createdJson.created, 1, JSON.stringify(createdJson));
     assert.equal(createdJson.updated, 0);
+
+    const afterCreate = await (await fetch(`${base}/api/people/org/stores`)).json();
+    assert.equal(afterCreate.stores.length, listed.stores.length + 1);
+    assert.ok(afterCreate.stores.some((row) => row.storeName === "RASW家居旗舰店"));
+
+    const keepPassword = healthRows[0].password;
+    const blankPatch = await fetch(`${base}/api/people/org/stores/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          {
+            经理: "沈子晗",
+            运营: "郭桂良",
+            店铺名称: "RASW健康电器旗舰店",
+            店铺ID: "218330674",
+            商家id: "11001003",
+            密码: ""
+          }
+        ]
+      })
+    });
+    const blankJson = await blankPatch.json();
+    assert.equal(blankJson.updated, 1, JSON.stringify(blankJson));
+    assert.equal(blankJson.created, 0);
+    const afterBlank = await (await fetch(`${base}/api/people/org/stores?q=${encodeURIComponent("RASW健康电器旗舰店")}`)).json();
+    const healthKept = afterBlank.stores.find((row) => row.groupId === "郭桂良");
+    assert.equal(healthKept.password, keepPassword);
+    assert.equal(afterBlank.stores.filter((row) => row.storeName === "RASW健康电器旗舰店").length, 2);
   });
 });
 
@@ -707,12 +740,16 @@ test("POST /api/people/remove deletes selected staff and their grants", async ()
   });
 });
 
-test("people roster template and import upsert by username", async () => {
+test("people roster template and import merges by exact name", async () => {
   await withServer(async (base) => {
     const template = await fetch(`${base}/api/people/template`);
     const csv = await template.text();
     assert.equal(template.status, 200);
     assert.match(csv, /姓名,总监,经理,主管\/储备,运营,助理,状态,账号,登录密码/);
+
+    const before = await (await fetch(`${base}/api/people`)).json();
+    const seedCount = before.people.length;
+    const wang = before.people.find((row) => row.name === "王博");
 
     const imported = await fetch(`${base}/api/people/import`, {
       method: "POST",
@@ -754,6 +791,61 @@ test("people roster template and import upsert by username", async () => {
     const templated = listedJson.people.find((item) => item.username === "moban");
     assert.equal(templated.lineManager, "沈子晗");
     assert.equal(templated.operator, "模板同事");
+    assert.equal(listedJson.people.length, seedCount + 2);
+    assert.ok(listedJson.people.some((item) => item.name === "王博"));
+
+    const overwrite = await fetch(`${base}/api/people/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          {
+            姓名: "王博",
+            总监: "罗成",
+            经理: "沈子晗",
+            运营: "王博",
+            状态: "在职",
+            账号: "wangbo-import",
+            登录密码: "Overwrite1!"
+          }
+        ]
+      })
+    });
+    const overwriteJson = await overwrite.json();
+    assert.equal(overwrite.status, 200, JSON.stringify(overwriteJson));
+    assert.equal(overwriteJson.created, 0);
+    assert.equal(overwriteJson.updated, 1);
+    const afterOverwrite = await (await fetch(`${base}/api/people`)).json();
+    assert.equal(afterOverwrite.people.length, seedCount + 2);
+    const wangAfter = afterOverwrite.people.find((item) => item.id === wang.id);
+    assert.equal(wangAfter.name, "王博");
+    assert.equal(wangAfter.username, "wangbo-import");
+    assert.equal(wangAfter.password, "Overwrite1!");
+
+    const fresh = await fetch(`${base}/api/people/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          {
+            姓名: "全新同事",
+            总监: "罗成",
+            经理: "韩梦凯",
+            运营: "全新同事",
+            状态: "在职",
+            账号: "quanxin",
+            登录密码: "NewStaff1!"
+          }
+        ]
+      })
+    });
+    const freshJson = await fresh.json();
+    assert.equal(freshJson.created, 1);
+    assert.equal(freshJson.updated, 0);
+    const afterFresh = await (await fetch(`${base}/api/people`)).json();
+    assert.equal(afterFresh.people.length, seedCount + 3);
+    assert.ok(afterFresh.people.some((item) => item.name === "导入同事"));
+    assert.ok(afterFresh.people.some((item) => item.name === "王博"));
   });
 });
 
