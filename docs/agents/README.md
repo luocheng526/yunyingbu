@@ -12,6 +12,7 @@
 | [00-module-charter.md](00-module-charter.md) | **所有人先读**（嵌入式合同 + 边界 + 闸） |
 | [00-release-rules.md](00-release-rules.md) | 交单格式、闸、排队 |
 | [00-main-framework.md](00-main-framework.md) | 主框架（壳 + 内核 + 闸） |
+| [00-shell-bump.md](00-shell-bump.md) | 什么时候升壳、怎么通知主框架 |
 | [00-left-nav-others.md](00-left-nav-others.md) | 非主框架：不要重做侧栏 |
 | [01-home.md](01-home.md) | 首页 |
 | [02-data-center.md](02-data-center.md) | 数据中心 |

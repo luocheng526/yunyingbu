@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.136 */
+/* xm-fast-shell 0.1.137 */
 (function () {
-  const ASSET_VER = "0.1.136";
+  const ASSET_VER = "0.1.137";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -894,8 +894,8 @@
         resolve();
         return;
       }
-      const src = "/shared/modules/" + id + ".js?v=" + ASSET_VER;
-      const existing = document.querySelector('script[src="' + src + '"]');
+      const src = "/shared/modules/" + id + ".js";
+      const existing = document.querySelector('script[src^="' + src + '"]');
       if (existing) {
         if (window.XmModules && window.XmModules[href]) {
           resolve();

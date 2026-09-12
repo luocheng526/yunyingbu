@@ -30,6 +30,7 @@
 5. 模块之间点击：`history.pushState` + 加载对应 `public/shared/modules/<id>.js`，不要整页跳、不要预取全部模块。
 6. 侧栏：窄 `200px`、无「项目」分组、无顶栏退出/暗色按钮。主区是首页 / 数据中心 / 沈 / 韩 / 甄选商学院 / 甄选智能体。底部是版本发布中心 / 组织中心 / 个人中心 / 退出登录 / 版本号。首页路径 `/home`，`/` 跳 `/home`。
 7. 主框架必须认识「甄选商学院」（子菜单：培训课程 / 培训考试 / 运营手册）和「甄选智能体」：`NAV_MAIN`、`APP_MODULES`、`MODULES`、章程。新对话框只填内容，不要再铺菜单。
+8. **升壳职责**见 [00-shell-bump.md](00-shell-bump.md)。每次对话先读线上 `/api/releases`：摘要含「请主框架」或要加/删/改子菜单的，立刻改壳、升 `SHELL_ASSET_VER`、交主框架单，不要等用户再说「升壳」。`public/shared/modules/*.js` 不再跟壳版本号走，业务内容更新不要为它升壳。
 
 `cursor/home-nav-workbench-e50e` 已整支删除。不要在仓库根再铺一套全页壳。
 

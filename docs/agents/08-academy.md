@@ -13,7 +13,7 @@
 - `src/modules/academy/`
 - `public/shared/modules/academy.js`
 
-【你不能改】壳、`nav.js`、`nav-items.js`、内核、登录/改密、别人的模块。侧栏入口主框架已经挂好。
+【你不能改】壳、`nav.js`、`nav-items.js`、内核、登录/改密、别人的模块。侧栏入口主框架已经挂好。要加/删/改子菜单：摘要写「请主框架：……」。只改 `academy.js` 不要叫升壳。见 [00-shell-bump.md](00-shell-bump.md)。
 
 【对接（已经接上）】
 - 侧栏「甄选商学院」展开三个子菜单：培训课程 `/academy/courses`、培训考试 `/academy/exams`、运营手册 `/academy/handbook`。点击叶子是 `pushState`，不是整页跳。`/academy` 会转到培训课程。

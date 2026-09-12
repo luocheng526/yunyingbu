@@ -6,10 +6,10 @@ import { navMarkup } from "../home/nav-items.js";
 import { currentUser, publicProfile } from "./auth.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.136
+// xm-fast-shell 0.1.137
 // login.html 不走 HTML 内存缓存；login.css 禁止 immutable。必须和 home/pages.js 成套发。
 
-export const SHELL_ASSET_VER = "0.1.136";
+export const SHELL_ASSET_VER = "0.1.137";
 export const TAB_TITLE = "星脉甄选运营中心";
 // 浏览器标签图标走真实文件。Chrome 标签栏经常不画 data: 内嵌图，会变成地球。
 // 侧栏品牌条仍用 /login-logo.png，不要改成这个。
@@ -122,8 +122,8 @@ export function renderAppShell(href, user) {
     <title>${TAB_TITLE}</title>
     <link rel="icon" type="image/png" sizes="32x32" href="${TAB_ICON}" />
     <link rel="shortcut icon" href="/favicon.ico?v=${SHELL_ASSET_VER}" />
-${css}    <link rel="preload" href="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" as="script" />
-${boot}    <script src="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" defer data-xm-mod="${key}"></script>
+${css}    <link rel="preload" href="/shared/modules/${id}.js" as="script" />
+${boot}    <script src="/shared/modules/${id}.js" defer data-xm-mod="${key}"></script>
   </head>
   <body class="xm-app xm-app-shell">
     <div class="xm-shell">
@@ -229,7 +229,7 @@ function versionShellAssets(text) {
   return String(text || "")
     .replace(/\/shared\/layout\.css(?:\?[^"'>\s]*)?/g, `/shared/layout.css?v=${SHELL_ASSET_VER}`)
     .replace(/\/shared\/nav\.js(?:\?[^"'>\s]*)?/g, `/shared/nav.js?v=${SHELL_ASSET_VER}`)
-    .replace(/\/shared\/modules\/([a-z]+)\.js(?:\?[^"'>\s]*)?/g, `/shared/modules/$1.js?v=${SHELL_ASSET_VER}`)
+    .replace(/\/shared\/modules\/([a-z]+)\.js(?:\?[^"'>\s]*)?/g, `/shared/modules/$1.js`)
     .replace(/\/releases\.css(?:\?[^"'>\s]*)?/g, `/releases.css?v=${SHELL_ASSET_VER}`);
 }
 
