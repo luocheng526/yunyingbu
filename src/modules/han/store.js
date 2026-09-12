@@ -87,6 +87,42 @@ function storeOrDefault(store) {
   return store && String(store).trim() ? String(store).trim() : DEFAULT_STORE;
 }
 
+function requireShopKey({ team, store } = {}) {
+  const teamName = normalizeProductTeam(team);
+  const shop = String(store || "").trim();
+  if (!shop) {
+    const err = new Error("store required");
+    err.statusCode = 400;
+    throw err;
+  }
+  return { teamName, shop };
+}
+
+function parsePlanItems(raw) {
+  if (Array.isArray(raw)) {
+    return raw
+      .map((item, i) => ({
+        id: String(item?.id || i + 1),
+        text: String(item?.text || "").trim(),
+        done: Boolean(item?.done),
+      }))
+      .filter((item) => item.text);
+  }
+  const text = raw == null ? "" : String(raw).trim();
+  if (!text) {
+    return [];
+  }
+  try {
+    return parsePlanItems(JSON.parse(text));
+  } catch {
+    return text.split(/\r?\n/).map((line, i) => ({ id: String(i + 1), text: line.trim(), done: false })).filter((item) => item.text);
+  }
+}
+
+function serializePlanItems(items) {
+  return JSON.stringify(parsePlanItems(items));
+}
+
 function nextDay(yyyyMmDd) {
   const d = new Date(`${yyyyMmDd}T00:00:00.000Z`);
   d.setUTCDate(d.getUTCDate() + 1);
@@ -263,13 +299,16 @@ export function createHanStore(poolOrFactory = getPool) {
             }
           }
         }
-        try {
-          await pool.query(
-            "CREATE TABLE IF NOT EXISTS han_shop_rules (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, team_name VARCHAR(64) NOT NULL, store_name VARCHAR(128) NOT NULL, rules_json MEDIUMTEXT NOT NULL, updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3), PRIMARY KEY (id), UNIQUE KEY uk_han_shop_rules (team_name, store_name)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-          );
-        } catch (err) {
-          if (!err || (err.code !== "ER_TABLE_EXISTS_ERROR" && err.errno !== 1050)) {
-            throw err;
+        for (const stmt of [
+          "CREATE TABLE IF NOT EXISTS han_shop_rules (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, team_name VARCHAR(64) NOT NULL, store_name VARCHAR(128) NOT NULL, rules_json MEDIUMTEXT NOT NULL, updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3), PRIMARY KEY (id), UNIQUE KEY uk_han_shop_rules (team_name, store_name)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+          "CREATE TABLE IF NOT EXISTS han_shop_plans (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, team_name VARCHAR(64) NOT NULL, store_name VARCHAR(128) NOT NULL, month_plan MEDIUMTEXT NOT NULL, week_plan MEDIUMTEXT NOT NULL, updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3), PRIMARY KEY (id), UNIQUE KEY uk_han_shop_plans (team_name, store_name)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        ]) {
+          try {
+            await pool.query(stmt);
+          } catch (err) {
+            if (!err || (err.code !== "ER_TABLE_EXISTS_ERROR" && err.errno !== 1050)) {
+              throw err;
+            }
           }
         }
       })();
@@ -499,6 +538,49 @@ export function createHanStore(poolOrFactory = getPool) {
       }
       await db().query("DELETE FROM han_shop_rules WHERE team_name = ? AND store_name = ?", [teamName, shop]);
       return this.getShopRules({ team: teamName, store: shop });
+    },
+
+    async getShopPlans({ team, store } = {}) {
+      await ensure();
+      const { teamName, shop } = requireShopKey({ team, store });
+      const [rows] = await db().query(
+        "SELECT id, team_name, store_name, month_plan, week_plan, updated_at FROM han_shop_plans WHERE team_name = ? AND store_name = ?",
+        [teamName, shop],
+      );
+      if (!rows.length) {
+        return { team: teamName, store: shop, monthItems: [], weekItems: [] };
+      }
+      return {
+        team: teamName,
+        store: shop,
+        monthItems: parsePlanItems(rows[0].month_plan),
+        weekItems: parsePlanItems(rows[0].week_plan),
+        updatedAt: toIso(rows[0].updated_at),
+      };
+    },
+
+    async saveShopPlans({ team, store, monthItems, weekItems, monthPlan, weekPlan } = {}) {
+      await ensure();
+      const { teamName, shop } = requireShopKey({ team, store });
+      const month = serializePlanItems(monthItems != null ? monthItems : monthPlan);
+      const week = serializePlanItems(weekItems != null ? weekItems : weekPlan);
+      const [found] = await db().query("SELECT id FROM han_shop_plans WHERE team_name = ? AND store_name = ?", [
+        teamName,
+        shop,
+      ]);
+      if (found.length) {
+        await db().query("UPDATE han_shop_plans SET month_plan = ?, week_plan = ? WHERE id = ?", [
+          month,
+          week,
+          found[0].id,
+        ]);
+      } else {
+        await db().query(
+          "INSERT INTO han_shop_plans (team_name, store_name, month_plan, week_plan) VALUES (?, ?, ?, ?)",
+          [teamName, shop, month, week],
+        );
+      }
+      return this.getShopPlans({ team: teamName, store: shop });
     },
 
     async createProduct({

@@ -9,6 +9,7 @@ export function createHanFakePool() {
     han_training: [],
     han_team_shops: [],
     han_shop_rules: [],
+    han_shop_plans: [],
   };
   let nextId = 1;
   let briefRow = null;
@@ -55,13 +56,14 @@ export function createHanFakePool() {
       }
 
       const byShop = normalized.match(
-        /^SELECT .+ FROM han_shop_rules WHERE team_name = \? AND store_name = \?$/i,
+        /^SELECT .+ FROM (han_shop_rules|han_shop_plans) WHERE team_name = \? AND store_name = \?$/i,
       );
       if (byShop) {
+        const name = byShop[1];
         const team = String(params[0] ?? "");
         const shop = String(params[1] ?? "");
         return [
-          (tables.han_shop_rules || [])
+          (tables[name] || [])
             .filter((row) => String(row.team_name || "") === team && String(row.store_name || "") === shop)
             .map(clone),
           undefined,

@@ -385,6 +385,9 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /按本店规则分类/);
   assert.match(js, /本店分类规则/);
   assert.match(js, /\/api\/han\/shop-rules/);
+  assert.match(js, /本月任务规划/);
+  assert.match(js, /本周任务规划/);
+  assert.match(js, /\/api\/han\/shop-plans/);
   assert.match(js, /han-layer-pick/);
   assert.match(js, /id="han-export"/);
   assert.match(js, /\/api\/han\/products\/import/);
@@ -644,6 +647,38 @@ test("each shop can save its own classify rules", async () => {
   });
 });
 
+test("each shop can save month and week task plans", async () => {
+  await withServer(async (base) => {
+    const empty = await json(
+      base,
+      "/api/han/shop-plans?team=" + encodeURIComponent("高明阳组") + "&store=" + encodeURIComponent("SAWAAA个护健康旗舰店"),
+    );
+    assert.equal(empty.body.ok, true);
+    assert.deepEqual(empty.body.monthItems, []);
+    assert.deepEqual(empty.body.weekItems, []);
+
+    const saved = await json(base, "/api/han/shop-plans", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        team: "高明阳组",
+        store: "SAWAAA个护健康旗舰店",
+        monthItems: [{ id: "m1", text: "冲头部", done: false }],
+        weekItems: [{ id: "w1", text: "测新3个", done: true }],
+      }),
+    });
+    assert.equal(saved.body.monthItems[0].text, "冲头部");
+    assert.equal(saved.body.weekItems[0].done, true);
+
+    const other = await json(
+      base,
+      "/api/han/shop-plans?team=" + encodeURIComponent("高明阳组") + "&store=" + encodeURIComponent("二号店"),
+    );
+    assert.deepEqual(other.body.monthItems, []);
+    assert.deepEqual(other.body.weekItems, []);
+  });
+});
+
 test("product csv round-trips layer columns", () => {
   const csv = buildProductCsv([
     { layer: "头部产品", spu: "A1", firstSku: "S1", remark: "含,逗号" },
@@ -702,6 +737,7 @@ test("han schema uses prefixed tables", async () => {
   assert.match(sql, /team_name/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_team_shops/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_shop_rules/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS han_shop_plans/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_paid/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_training/);
   assert.match(sql, /store_name/);
