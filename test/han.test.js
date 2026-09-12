@@ -474,6 +474,9 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /han-tabs/);
   assert.match(js, /data-han-tab/);
   assert.match(js, /商品分层/);
+  assert.match(js, /全部汇总/);
+  assert.match(js, /han-store-cell/);
+  assert.match(js, /unified: true/);
   assert.match(js, /function goHanPage/);
   assert.match(js, /window\.__xmGo/);
   assert.match(js, /history\.pushState/);
@@ -552,10 +555,30 @@ test("goods page puts 商品分层 teams on a horizontal tab bar", async () => {
   const js = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
   const leftover = { id: "han-goods-teams", parentNode: { removeChild() { leftover.gone = true; } } };
   const styles = [];
+  function el() {
+    return {
+      innerHTML: "",
+      textContent: "",
+      classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
+      style: {},
+      addEventListener() {},
+      removeEventListener() {},
+      querySelector() {
+        return el();
+      },
+      querySelectorAll() {
+        return [];
+      },
+      setAttribute() {},
+    };
+  }
   const root = {
     innerHTML: "",
     querySelector() {
-      return { innerHTML: "", addEventListener() {} };
+      return el();
+    },
+    querySelectorAll() {
+      return [];
     },
   };
   const document = {
@@ -574,6 +597,9 @@ test("goods page puts 商品分层 teams on a horizontal tab bar", async () => {
       return { tagName: tag, id: "", textContent: "" };
     },
     addEventListener() {},
+    querySelector() {
+      return null;
+    },
   };
   const sandbox = {
     URLSearchParams,
@@ -590,16 +616,20 @@ test("goods page puts 商品分层 teams on a horizontal tab bar", async () => {
     location: { pathname: "/han/goods", search: "", assign() {} },
     history: { pushState() {} },
     fetch() {
-      return Promise.resolve({ json: () => Promise.resolve({ items: [] }) });
+      return Promise.resolve({ json: () => Promise.resolve({ ok: true, items: [] }) });
     },
   };
   sandbox.window.document = document;
   runInNewContext(js, sandbox);
   sandbox.window.XmModules["/han/goods"].mount(root);
   assert.match(root.innerHTML, /class="han-tabs han-tabs-sub"/);
-  assert.match(root.innerHTML, /商品分层/);
+  assert.match(root.innerHTML, /全部汇总/);
+  assert.match(root.innerHTML, /汇总六个小组/);
+  assert.match(root.innerHTML, /按统一规则分类/);
+  assert.match(js, /店铺产品分层汇总/);
   assert.match(root.innerHTML, /陈晓曼组/);
   assert.match(root.innerHTML, /薛双双组/);
+  assert.doesNotMatch(root.innerHTML, /本店分类规则/);
   assert.doesNotMatch(root.innerHTML, /data-han-tab="\/han\/selection"/);
   assert.equal(leftover.gone, true);
   assert.doesNotMatch(styles[0].textContent, /xm-submenu/);
@@ -727,6 +757,55 @@ test("each shop can save its own classify rules", async () => {
     );
     assert.equal(reset.body.custom, false);
     assert.equal(reset.body.rules.head.gmvMin, 2000);
+  });
+});
+
+test("POST /api/han/products/classify unified uses default rules for all shops", async () => {
+  await withServer(async (base) => {
+    const metrics = {
+      returnM8: "12%",
+      spendRate: "30%",
+      gmv7d: "2500",
+      convRate: "8%",
+      orders30d: "20",
+    };
+    await json(base, "/api/han/shop-rules", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        team: "陈晓曼组",
+        store: "一号店",
+        rules: { head: { gmvMin: 9000 } },
+      }),
+    });
+    const tight = await json(base, "/api/han/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ team: "陈晓曼组", store: "一号店", spu: "ALL-A", ...metrics }),
+    });
+    const loose = await json(base, "/api/han/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ team: "高明阳组", store: "阳店", spu: "ALL-B", ...metrics }),
+    });
+    assert.equal(tight.body.item.layer, "中部产品");
+    assert.equal(loose.body.item.layer, "头部产品");
+
+    const listed = await json(base, "/api/han/products");
+    assert.equal(listed.body.items.some((row) => row.spu === "ALL-A" && row.store === "一号店"), true);
+    assert.equal(listed.body.items.some((row) => row.spu === "ALL-B" && row.store === "阳店"), true);
+
+    const classified = await json(base, "/api/han/products/classify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ unified: true }),
+    });
+    assert.equal(classified.body.ok, true);
+    assert.equal(classified.body.unified, true);
+    assert.equal(classified.body.count >= 1, true);
+    const after = await json(base, "/api/han/products");
+    assert.equal(after.body.items.find((row) => row.spu === "ALL-A").layer, "头部产品");
+    assert.equal(after.body.items.find((row) => row.spu === "ALL-B").layer, "头部产品");
   });
 });
 
