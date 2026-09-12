@@ -347,8 +347,8 @@
       if (!teams.includes(team)) {
         root.innerHTML = page(
           "商品分层",
-          "右侧横排切换小组。点小组后添加店铺，再进该店分层表。",
-          '<div class="stack"><section class="panel"><h2>商品分层</h2><p class="lead">用上面的小组标签进入各团队店铺。</p></section></div>',
+          "右侧横排切换小组。店铺从组织中心该小组负责人名下抓取。",
+          '<div class="stack"><section class="panel"><h2>商品分层</h2><p class="lead">点小组查看组织中心里对应的店铺。</p></section></div>',
           teamTabsHtml(""),
         );
         return function unmount() {
@@ -359,16 +359,14 @@
       if (!shop) {
         root.innerHTML = page(
           team,
-          "先添加本小组的店铺，再点店铺看商品分层。一组大约 5 到 8 家店。",
-          '<div class="stack"><section class="panel"><h2>添加店铺</h2>' +
-            '<form id="shop-form"><label for="shop-name">店铺名称（必填）</label>' +
-            '<input id="shop-name" required placeholder="例如：京东旗舰店" />' +
-            '<div class="actions"><button type="submit">添加店铺</button></div>' +
-            '<p class="msg status" id="shop-msg"></p></form></section>' +
-            '<section class="panel"><h2>本小组店铺</h2><div id="shop-list" class="actions" style="flex-wrap:wrap"></div></section></div>',
+          "店铺从组织中心抓取，对应小组负责人「" +
+            escapeHtml(String(team).replace(/组$/, "")) +
+            "」。点店铺进入分层表。",
+          '<div class="stack"><section class="panel"><h2>本小组店铺</h2>' +
+            '<p class="msg status" id="shop-msg"></p>' +
+            '<div id="shop-list" class="actions" style="flex-wrap:wrap"></div></section></div>',
           teamTabsHtml(team) + '<div id="han-shop-tabs"></div>',
         );
-        const form = root.querySelector("#shop-form");
         const list = root.querySelector("#shop-list");
         const msg = root.querySelector("#shop-msg");
         let dead = false;
@@ -376,7 +374,7 @@
           const shopTabs = root.querySelector("#han-shop-tabs");
           if (shopTabs) shopTabs.innerHTML = shopTabsHtml(team, "", items);
           if (!items.length) {
-            list.innerHTML = '<p class="lead">还没有店铺，先在上面添加。</p>';
+            list.innerHTML = '<p class="lead">组织中心还没有该组店铺。</p>';
             return;
           }
           list.innerHTML = items
@@ -402,28 +400,11 @@
             if (!dead) paintShops(json.items || []);
           });
         }
-        function onSubmit(e) {
-          e.preventDefault();
-          jsonFetch("/api/han/shops", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ team: team, store: root.querySelector("#shop-name").value }),
-          }).then(function (json) {
-            if (dead) return;
-            msg.textContent = json.ok ? "已添加店铺" : json.error || "失败";
-            if (json.ok) {
-              form.reset();
-              return loadShops();
-            }
-          });
-        }
-        form.addEventListener("submit", onSubmit);
         loadShops().catch(function (err) {
           if (!dead) msg.textContent = String(err);
         });
         return function unmount() {
           dead = true;
-          form.removeEventListener("submit", onSubmit);
           root.innerHTML = "";
         };
       }
