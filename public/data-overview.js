@@ -471,7 +471,14 @@
     return hero;
   }
 
-  function compareSpark(hero) {
+  function compareSpark() {
+    return '<svg class="ch-spark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 72" preserveAspectRatio="none" aria-hidden="true"></svg>';
+  }
+
+  function paintSparkSvg(svg, hero) {
+    if (!svg) {
+      return;
+    }
     const yest = asSeries(hero && hero.yesterday);
     const today = asSeries(hero && hero.today);
     const w = 240;
@@ -485,74 +492,78 @@
       }
     });
     const steps = 23;
-    function xy(list, i, n) {
-      const x = padX + (i / steps) * (w - padX * 2);
-      const y = h - padY - (n / max) * (h - padY * 2);
-      return { x: x, y: y };
+    const ns = "http://www.w3.org/2000/svg";
+    function xy(i, n) {
+      return {
+        x: padX + (i / steps) * (w - padX * 2),
+        y: h - padY - (n / max) * (h - padY * 2)
+      };
     }
-    function pts(list) {
-      if (!list.length) {
-        return "";
-      }
+    function add(name, attrs) {
+      const el = document.createElementNS(ns, name);
+      Object.keys(attrs).forEach(function (key) {
+        el.setAttribute(key, attrs[key]);
+      });
+      svg.appendChild(el);
+      return el;
+    }
+    function linePts(list) {
       return list
         .map(function (n, i) {
-          const p = xy(list, i, n);
+          const p = xy(i, n);
           return p.x.toFixed(1) + "," + p.y.toFixed(1);
         })
         .join(" ");
     }
-    function area(list) {
-      if (!list.length) {
-        return "";
-      }
-      const first = xy(list, 0, list[0]);
-      const last = xy(list, list.length - 1, list[list.length - 1]);
+    function areaD(list) {
+      const first = xy(0, list[0]);
+      const last = xy(list.length - 1, list[list.length - 1]);
       const base = (h - padY).toFixed(1);
-      return first.x.toFixed(1) + "," + base + " " + pts(list) + " " + last.x.toFixed(1) + "," + base;
+      const line = list
+        .map(function (n, i) {
+          const p = xy(i, n);
+          return p.x.toFixed(1) + " " + p.y.toFixed(1);
+        })
+        .join(" L ");
+      return "M " + first.x.toFixed(1) + " " + base + " L " + line + " L " + last.x.toFixed(1) + " " + base + " Z";
     }
-    function dot(list, color) {
-      if (!list.length) {
-        return "";
-      }
-      const p = xy(list, list.length - 1, list[list.length - 1]);
-      return (
-        '<circle cx="' +
-        p.x.toFixed(1) +
-        '" cy="' +
-        p.y.toFixed(1) +
-        '" r="2.6" fill="' +
-        color +
-        '"></circle>'
-      );
+    while (svg.firstChild) {
+      svg.removeChild(svg.firstChild);
     }
-    const yestPts = pts(yest);
-    const todayPts = pts(today);
-    return (
-      '<svg class="ch-spark" viewBox="0 0 ' +
-      w +
-      " " +
-      h +
-      '" preserveAspectRatio="none" aria-hidden="true">' +
-      (yestPts
-        ? '<polygon fill="rgba(47,84,235,0.10)" points="' + area(yest) + '"></polygon>'
-        : "") +
-      (todayPts
-        ? '<polygon fill="rgba(207,19,34,0.12)" points="' + area(today) + '"></polygon>'
-        : "") +
-      (yestPts
-        ? '<polyline fill="none" stroke="#2f54eb" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="' +
-          yestPts +
-          '"></polyline>'
-        : "") +
-      (todayPts
-        ? '<polyline fill="none" stroke="#cf1322" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="' +
-          todayPts +
-          '"></polyline>'
-        : "") +
-      dot(yest, "#2f54eb") +
-      dot(today, "#cf1322") +
-      "</svg>"
-    );
+    if (yest.length) {
+      add("path", { fill: "#2f54eb", "fill-opacity": "0.12", d: areaD(yest) });
+    }
+    if (today.length) {
+      add("path", { fill: "#cf1322", "fill-opacity": "0.14", d: areaD(today) });
+    }
+    if (yest.length) {
+      add("polyline", {
+        fill: "none",
+        stroke: "#2f54eb",
+        "stroke-width": "2",
+        "stroke-linejoin": "round",
+        "stroke-linecap": "round",
+        points: linePts(yest)
+      });
+    }
+    if (today.length) {
+      add("polyline", {
+        fill: "none",
+        stroke: "#cf1322",
+        "stroke-width": "2",
+        "stroke-linejoin": "round",
+        "stroke-linecap": "round",
+        points: linePts(today)
+      });
+    }
+    if (yest.length) {
+      const p = xy(yest.length - 1, yest[yest.length - 1]);
+      add("circle", { cx: p.x.toFixed(1), cy: p.y.toFixed(1), r: "2.6", fill: "#2f54eb" });
+    }
+    if (today.length) {
+      const p = xy(today.length - 1, today[today.length - 1]);
+      add("circle", { cx: p.x.toFixed(1), cy: p.y.toFixed(1), r: "2.6", fill: "#cf1322" });
+    }
   }
 
   function nameCell(row) {
@@ -887,6 +898,7 @@
         tabs +
         "</div>" +
         lists;
+      paintSparkSvg(board.querySelector(".ch-spark"), hero);
       syncCalPop();
     }
 

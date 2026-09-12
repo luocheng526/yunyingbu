@@ -157,6 +157,8 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /loadLiveSpark/);
     assert.match(overviewJs.text, /seedHeroCompare/);
     assert.match(overviewJs.text, /ch-clock/);
+    assert.match(overviewJs.text, /paintSparkSvg/);
+    assert.match(overviewJs.text, /createElementNS/);
     assert.doesNotMatch(overviewJs.text, /live-demo\.json/);
     assert.match(overviewJs.text, /#2f54eb/);
     assert.match(overviewJs.text, /#cf1322/);
