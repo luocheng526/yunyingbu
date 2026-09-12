@@ -191,7 +191,9 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /无效单金额/);
     assert.match(overviewJs.text, /ch-mpick/);
     assert.match(overviewJs.text, /请输入关键字/);
-    assert.match(overviewJs.text, /class="ch-set">设定指标/);
+    assert.match(overviewJs.text, /data-metrics="open"/);
+    assert.match(overviewJs.text, /METRIC_SEEN_LS/);
+    assert.match(overviewJs.text, /设定指标/);
     assert.doesNotMatch(overviewPage.text, /公司/);
     const teamApi = await get(base, "/api/data/team");
     assert.equal(teamApi.res.status, 200);
@@ -537,7 +539,7 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /\/data\/paid/);
   assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
   assert.match(dataMod, /restore-v1/);
-  assert.match(dataMod, /data-overview\.js\?v=data-ov6/);
+  assert.match(dataMod, /data-overview\.js\?v=data-ov7/);
   assert.match(css, /ch-pill/);
   assert.match(css, /\.ch-card \.value[\s\S]*font-size: 28px/);
   assert.match(css, /#8c8c8c/);

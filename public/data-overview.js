@@ -16,6 +16,7 @@
   ];
 
   var METRIC_LS = "xm-data-ov-metrics";
+  var METRIC_SEEN_LS = "xm-data-ov-metrics-seen";
   var METRIC_CATALOG = [
     { key: "pay", label: "支付金额 (支付)" },
     { key: "orders", label: "销售单数 (支付)" },
@@ -50,13 +51,25 @@
     );
   }
 
+  function rememberMetricCatalog() {
+    try {
+      localStorage.setItem(METRIC_SEEN_LS, JSON.stringify(catalogKeys()));
+    } catch (_err) {}
+  }
+
   function loadMetricKeys() {
     const all = catalogKeys();
     try {
       const raw = localStorage.getItem(METRIC_LS);
+      const seenRaw = localStorage.getItem(METRIC_SEEN_LS);
+      const seen = seenRaw ? JSON.parse(seenRaw) : [];
+      const seenList = Array.isArray(seen) ? seen : [];
+      const newcomers = all.filter(function (key) {
+        return seenList.indexOf(key) < 0;
+      });
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length) {
+        if (Array.isArray(parsed)) {
           const allow = {};
           all.forEach(function (key) {
             allow[key] = true;
@@ -64,10 +77,13 @@
           const kept = parsed.filter(function (key) {
             return allow[key];
           });
-          const extra = all.filter(function (key) {
-            return kept.indexOf(key) < 0;
+          newcomers.forEach(function (key) {
+            if (kept.indexOf(key) < 0) {
+              kept.push(key);
+            }
           });
-          return kept.concat(extra);
+          rememberMetricCatalog();
+          return kept;
         }
       }
     } catch (_err) {}
@@ -77,6 +93,7 @@
   function saveMetricKeys(keys) {
     try {
       localStorage.setItem(METRIC_LS, JSON.stringify(keys));
+      rememberMetricCatalog();
     } catch (_err) {}
   }
 
@@ -122,7 +139,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov6";
+      link.href = "/data-pages.css?v=data-ov7";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -1417,7 +1434,7 @@
         "个</span>" +
         '<span class="ch-pill">店铺' +
         escapeHtml(String(payload.summary.shops)) +
-        '个</span><button type="button" class="ch-set">设定指标</button></div>' +
+        '个</span><button type="button" class="ch-set" data-metrics="open">设定指标</button></div>' +
         '<div class="ch-metrics"><article class="ch-card ch-hero"><div class="label">' +
         "实时销售额" +
         '<span class="ch-clock">' +
@@ -1681,6 +1698,12 @@
     window.addEventListener("resize", onWinResize);
 
     board.addEventListener("click", function (event) {
+      const setBtn = event.target.closest("[data-metrics='open'], .ch-set");
+      if (setBtn) {
+        event.preventDefault();
+        openPicker();
+        return;
+      }
       const rangeBtn = event.target.closest("button[data-range]");
       if (rangeBtn) {
         const next = rangeBtn.getAttribute("data-range");
@@ -1696,11 +1719,6 @@
         state.calOpen = false;
         hideCalPop();
         load();
-        return;
-      }
-      const setBtn = event.target.closest(".ch-set");
-      if (setBtn) {
-        openPicker();
         return;
       }
       const secBtn = event.target.closest("button[data-section]");
