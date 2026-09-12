@@ -101,7 +101,16 @@ export function getTeamOverview() {
       { key: "margin", label: "大毛利率", value: "48.39%" },
       { key: "custom", label: "自定义费用", value: "0" },
       { key: "refundRate", label: "退款率 (按金额)", value: "24.13%" },
-      { key: "adRate", label: "推广花费占比 (支付预估)", value: "42.35%" }
+      { key: "adRate", label: "推广花费占比 (支付预估)", value: "42.35%" },
+      { key: "netSales", label: "净销售额 (支付)", value: "650,374" },
+      { key: "refundAmount", label: "退款金额", value: "205,560" },
+      { key: "platformFee", label: "平台花费 (支付预估)", value: "47,818" },
+      { key: "goodsCost", label: "总货品成本", value: "230,304" },
+      { key: "saleFee", label: "销售费用 (支付预估)", value: "410,194" },
+      { key: "jdWarehouseRate", label: "京仓订单占比", value: "68.00%" },
+      { key: "netGoodsCostRate", label: "净货品成本占比 (支付)", value: "3.00%" },
+      { key: "invalidAmount", label: "无效单金额", value: "266" },
+      { key: "jdWarehouseCount", label: "京仓订单数量", value: "2,218" }
     ],
     sections: ["渠道列表", "店铺分组", "经营数据", "竞对对比", "品类分析", "热销商品"],
     channelTable: {

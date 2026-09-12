@@ -15,6 +15,101 @@
     "净销售额 (支付)"
   ];
 
+  var METRIC_LS = "xm-data-ov-metrics";
+  var METRIC_CATALOG = [
+    { key: "pay", label: "支付金额 (支付)" },
+    { key: "orders", label: "销售单数 (支付)" },
+    { key: "ad", label: "推广花费 (支付预估)" },
+    { key: "profit", label: "利润 (支付预估)" },
+    { key: "margin", label: "大毛利率" },
+    { key: "custom", label: "自定义费用" },
+    { key: "refundRate", label: "退款率 (按金额)" },
+    { key: "adRate", label: "推广花费占比 (支付预估)" },
+    { key: "netSales", label: "净销售额 (支付)" },
+    { key: "refundAmount", label: "退款金额" },
+    { key: "platformFee", label: "平台花费 (支付预估)" },
+    { key: "goodsCost", label: "总货品成本" },
+    { key: "saleFee", label: "销售费用 (支付预估)" },
+    { key: "jdWarehouseRate", label: "京仓订单占比" },
+    { key: "netGoodsCostRate", label: "净货品成本占比 (支付)" },
+    { key: "invalidAmount", label: "无效单金额" },
+    { key: "jdWarehouseCount", label: "京仓订单数量" }
+  ];
+
+  function catalogKeys() {
+    return METRIC_CATALOG.map(function (item) {
+      return item.key;
+    });
+  }
+
+  function metricOf(key) {
+    return (
+      METRIC_CATALOG.find(function (item) {
+        return item.key === key;
+      }) || { key: key, label: key }
+    );
+  }
+
+  function loadMetricKeys() {
+    const all = catalogKeys();
+    try {
+      const raw = localStorage.getItem(METRIC_LS);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length) {
+          const allow = {};
+          all.forEach(function (key) {
+            allow[key] = true;
+          });
+          const kept = parsed.filter(function (key) {
+            return allow[key];
+          });
+          const extra = all.filter(function (key) {
+            return kept.indexOf(key) < 0;
+          });
+          return kept.concat(extra);
+        }
+      }
+    } catch (_err) {}
+    return all.slice();
+  }
+
+  function saveMetricKeys(keys) {
+    try {
+      localStorage.setItem(METRIC_LS, JSON.stringify(keys));
+    } catch (_err) {}
+  }
+
+  function expandCards(cards) {
+    const byKey = {};
+    (cards || []).forEach(function (card) {
+      if (card && card.key) {
+        byKey[card.key] = card;
+      }
+    });
+    return METRIC_CATALOG.map(function (item) {
+      return (
+        byKey[item.key] || {
+          key: item.key,
+          label: item.label,
+          value: /占比|利率|退款率/.test(item.label) ? "0.00%" : "0"
+        }
+      );
+    });
+  }
+
+  function visibleCards(cards, keys) {
+    const byKey = {};
+    expandCards(cards).forEach(function (card) {
+      byKey[card.key] = card;
+    });
+    return (keys || catalogKeys())
+      .map(function (key) {
+        return byKey[key];
+      })
+      .filter(Boolean);
+  }
+
   function escapeHtml(value) {
     return String(value == null ? "" : value)
       .replaceAll("&", "&amp;")
@@ -27,12 +122,42 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov5";
+      link.href = "/data-pages.css?v=data-ov6";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
     ensureSummaryStyle();
     ensureCardTypeStyle();
+    ensurePickStyle();
+  }
+
+  function ensurePickStyle() {
+    if (document.getElementById("ch-mpick-style")) {
+      return;
+    }
+    const style = document.createElement("style");
+    style.id = "ch-mpick-style";
+    style.textContent =
+      ".ch-mpick-mask{position:fixed;inset:0;z-index:4200;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.45)}" +
+      ".ch-mpick{display:flex;flex-direction:column;width:min(1080px,100%);height:min(640px,100%);background:#fff;border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,.18);color:#262626;overflow:hidden}" +
+      ".ch-mpick-head{display:flex;align-items:center;justify-content:space-between;height:48px;padding:0 20px;border-bottom:1px solid #f0f0f0;font-size:16px}" +
+      ".ch-mpick-x{width:28px;height:28px;border:0;background:transparent;color:#8c8c8c;font-size:20px;line-height:28px;cursor:pointer}" +
+      ".ch-mpick-body{display:flex;flex:1;min-height:0}" +
+      ".ch-mpick-left{flex:1;min-width:0;padding:16px 20px;overflow:auto}" +
+      ".ch-mpick-search input{width:100%;height:36px;padding:0 12px;border:1px solid #d9d9d9;border-radius:6px;box-sizing:border-box}" +
+      ".ch-mpick-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 20px;margin-top:18px}" +
+      ".ch-mpick-opt{display:flex;align-items:center;gap:8px;color:#2f54eb;font-size:14px;cursor:pointer}" +
+      ".ch-mpick-opt input{accent-color:#2f54eb}" +
+      ".ch-mpick-right{width:280px;flex:none;padding:16px 16px 12px;background:#f7f8fa;border-left:1px solid #f0f0f0;overflow:auto}" +
+      ".ch-mpick-right-top{display:flex;align-items:center;justify-content:space-between;font-size:13px}" +
+      ".ch-mpick-right-top button{border:0;background:transparent;color:#2f54eb;cursor:pointer}" +
+      ".ch-mpick-hint{margin:10px 0 12px;color:#8c8c8c;font-size:12px}" +
+      ".ch-mpick-item{display:flex;align-items:center;gap:8px;height:36px;margin-bottom:8px;padding:0 10px;background:#fff;border:1px solid #f0f0f0;border-radius:6px;font-size:13px;cursor:grab}" +
+      ".ch-mpick-handle{width:12px;height:12px;background:linear-gradient(#bfbfbf,#bfbfbf) 0 2px/12px 2px no-repeat,linear-gradient(#bfbfbf,#bfbfbf) 0 5px/12px 2px no-repeat,linear-gradient(#bfbfbf,#bfbfbf) 0 8px/12px 2px no-repeat}" +
+      ".ch-mpick-foot{display:flex;gap:8px;padding:12px 20px;border-top:1px solid #f0f0f0}" +
+      ".ch-mpick-ok{height:32px;padding:0 16px;border:0;border-radius:4px;background:#2f54eb;color:#fff;cursor:pointer}" +
+      ".ch-mpick-foot [data-mpick='cancel']{height:32px;padding:0 16px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;cursor:pointer}";
+    document.head.appendChild(style);
   }
 
   function ensureCardTypeStyle() {
@@ -513,7 +638,97 @@
         { key: "margin", label: "大毛利率", value: pct(margin) },
         { key: "custom", label: "自定义费用", value: fmt(customFee != null ? customFee : 0, 0) },
         { key: "refundRate", label: "退款率 (按金额)", value: pct(refundRate) },
-        { key: "adRate", label: "推广花费占比 (支付预估)", value: pct(promoRate) }
+        { key: "adRate", label: "推广花费占比 (支付预估)", value: pct(promoRate) },
+        {
+          key: "netSales",
+          label: "净销售额 (支付)",
+          value: fmtInt(
+            firstNum(raw, ["netSales", "netSalesAmount"]) != null
+              ? firstNum(raw, ["netSales", "netSalesAmount"])
+              : sumField(shops, ["netSales", "netSalesAmount"]) != null
+                ? sumField(shops, ["netSales", "netSalesAmount"])
+                : pay - refund
+          )
+        },
+        { key: "refundAmount", label: "退款金额", value: fmtInt(refund) },
+        {
+          key: "platformFee",
+          label: "平台花费 (支付预估)",
+          value: fmtInt(
+            firstNum(raw, ["platformFee", "platformCost"]) != null
+              ? firstNum(raw, ["platformFee", "platformCost"])
+              : sumField(shops, ["platformFee", "platformCost"]) != null
+                ? sumField(shops, ["platformFee", "platformCost"])
+                : 0
+          )
+        },
+        {
+          key: "goodsCost",
+          label: "总货品成本",
+          value: fmtInt(
+            firstNum(raw, ["goodsCost", "totalGoodsCost"]) != null
+              ? firstNum(raw, ["goodsCost", "totalGoodsCost"])
+              : sumField(shops, ["goodsCost", "totalGoodsCost"]) != null
+                ? sumField(shops, ["goodsCost", "totalGoodsCost"])
+                : 0
+          )
+        },
+        {
+          key: "saleFee",
+          label: "销售费用 (支付预估)",
+          value: fmtInt(
+            firstNum(raw, ["saleFee", "salesFee"]) != null
+              ? firstNum(raw, ["saleFee", "salesFee"])
+              : sumField(shops, ["saleFee", "salesFee"]) != null
+                ? sumField(shops, ["saleFee", "salesFee"])
+                : 0
+          )
+        },
+        {
+          key: "jdWarehouseRate",
+          label: "京仓订单占比",
+          value: pct(
+            firstNum(raw, ["jdWarehouseRate"]) != null
+              ? firstNum(raw, ["jdWarehouseRate"])
+              : sumField(shops, ["jdWarehouseRate"]) != null
+                ? sumField(shops, ["jdWarehouseRate"])
+                : 0
+          )
+        },
+        {
+          key: "netGoodsCostRate",
+          label: "净货品成本占比 (支付)",
+          value: pct(
+            firstNum(raw, ["netGoodsCostRate"]) != null
+              ? firstNum(raw, ["netGoodsCostRate"])
+              : sumField(shops, ["netGoodsCostRate"]) != null
+                ? sumField(shops, ["netGoodsCostRate"])
+                : 0
+          )
+        },
+        {
+          key: "invalidAmount",
+          label: "无效单金额",
+          value: fmtInt(
+            firstNum(raw, ["invalidAmount"]) != null
+              ? firstNum(raw, ["invalidAmount"])
+              : sumField(shops, ["invalidAmount", "invalidOrderAmount"]) != null
+                ? sumField(shops, ["invalidAmount", "invalidOrderAmount"])
+                : 0
+          )
+        },
+        {
+          key: "jdWarehouseCount",
+          label: "京仓订单数量",
+          value: fmt(
+            firstNum(raw, ["jdWarehouseCount"]) != null
+              ? firstNum(raw, ["jdWarehouseCount"])
+              : sumField(shops, ["jdWarehouseCount"]) != null
+                ? sumField(shops, ["jdWarehouseCount"])
+                : 0,
+            0
+          )
+        }
       ],
       sections: SECTIONS,
       shops: shops,
@@ -897,9 +1112,217 @@
       payload: null,
       calOpen: false,
       calYear: Number(shanghaiYmd(0).slice(0, 4)),
-      calMonth: Number(shanghaiYmd(0).slice(5, 7)) - 1
+      calMonth: Number(shanghaiYmd(0).slice(5, 7)) - 1,
+      pickOpen: false,
+      pickDraft: loadMetricKeys(),
+      pickQuery: "",
+      pickDrag: ""
     };
     let dead = false;
+
+    function pickerRoot() {
+      let el = document.getElementById("ch-mpick-root");
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "ch-mpick-root";
+        document.body.appendChild(el);
+        el.addEventListener("click", onPickClick);
+        el.addEventListener("input", onPickInput);
+        el.addEventListener("change", onPickChange);
+        el.addEventListener("dragstart", onPickDragStart);
+        el.addEventListener("dragover", onPickDragOver);
+        el.addEventListener("drop", onPickDrop);
+      }
+      return el;
+    }
+
+    function closePicker() {
+      state.pickOpen = false;
+      state.pickQuery = "";
+      const el = document.getElementById("ch-mpick-root");
+      if (el) {
+        el.innerHTML = "";
+      }
+    }
+
+    function openPicker() {
+      state.pickOpen = true;
+      state.pickDraft = loadMetricKeys().slice();
+      state.pickQuery = "";
+      paintPicker(true);
+    }
+
+    function pickerGridHtml() {
+      const selected = {};
+      state.pickDraft.forEach(function (key) {
+        selected[key] = true;
+      });
+      const q = String(state.pickQuery || "").trim();
+      return METRIC_CATALOG.filter(function (item) {
+        return !q || item.label.indexOf(q) >= 0;
+      })
+        .map(function (item) {
+          return (
+            '<label class="ch-mpick-opt"><input type="checkbox" data-mpick-key="' +
+            escapeHtml(item.key) +
+            '"' +
+            (selected[item.key] ? " checked" : "") +
+            "> " +
+            escapeHtml(item.label) +
+            "</label>"
+          );
+        })
+        .join("");
+    }
+
+    function pickerSelHtml() {
+      return state.pickDraft
+        .map(function (key) {
+          const item = metricOf(key);
+          return (
+            '<div class="ch-mpick-item" draggable="true" data-mpick-drag="' +
+            escapeHtml(item.key) +
+            '"><i class="ch-mpick-handle"></i>' +
+            escapeHtml(item.label) +
+            "</div>"
+          );
+        })
+        .join("");
+    }
+
+    function paintPicker(force) {
+      const el = pickerRoot();
+      if (!state.pickOpen) {
+        el.innerHTML = "";
+        return;
+      }
+      const n = state.pickDraft.length;
+      const tot = METRIC_CATALOG.length;
+      if (force || !el.querySelector(".ch-mpick")) {
+        el.innerHTML =
+          '<div class="ch-mpick-mask" data-mpick-mask>' +
+          '<div class="ch-mpick" role="dialog" aria-label="设定指标">' +
+          '<div class="ch-mpick-head"><span data-mpick-title>设定指标（' +
+          n +
+          "/" +
+          tot +
+          '）</span><button type="button" class="ch-mpick-x" data-mpick="close" aria-label="关闭">×</button></div>' +
+          '<div class="ch-mpick-body"><div class="ch-mpick-left">' +
+          '<div class="ch-mpick-search"><input data-mpick-q type="search" placeholder="请输入关键字" value="' +
+          escapeHtml(state.pickQuery) +
+          '"></div>' +
+          '<div class="ch-mpick-grid">' +
+          pickerGridHtml() +
+          "</div></div>" +
+          '<aside class="ch-mpick-right"><div class="ch-mpick-right-top"><span data-mpick-count>已选' +
+          n +
+          "/" +
+          tot +
+          '</span><button type="button" data-mpick="clear">清空</button></div>' +
+          '<p class="ch-mpick-hint">拖动以下字段进行排序</p>' +
+          '<div class="ch-mpick-sel">' +
+          pickerSelHtml() +
+          "</div></aside></div>" +
+          '<footer class="ch-mpick-foot"><button type="button" class="ch-mpick-ok" data-mpick="ok">确定</button>' +
+          '<button type="button" data-mpick="cancel">取消</button></footer></div></div>';
+        return;
+      }
+      const title = el.querySelector("[data-mpick-title]");
+      const count = el.querySelector("[data-mpick-count]");
+      const grid = el.querySelector(".ch-mpick-grid");
+      const sel = el.querySelector(".ch-mpick-sel");
+      if (title) {
+        title.textContent = "设定指标（" + n + "/" + tot + "）";
+      }
+      if (count) {
+        count.textContent = "已选" + n + "/" + tot;
+      }
+      if (grid) {
+        grid.innerHTML = pickerGridHtml();
+      }
+      if (sel) {
+        sel.innerHTML = pickerSelHtml();
+      }
+    }
+
+    function onPickClick(event) {
+      const actEl = event.target.closest("[data-mpick]");
+      const act = actEl ? actEl.getAttribute("data-mpick") : "";
+      if (event.target.hasAttribute("data-mpick-mask") || act === "close" || act === "cancel") {
+        closePicker();
+        return;
+      }
+      if (act === "clear") {
+        state.pickDraft = [];
+        paintPicker();
+        return;
+      }
+      if (act === "ok") {
+        saveMetricKeys(state.pickDraft.slice());
+        closePicker();
+        render();
+      }
+    }
+
+    function onPickInput(event) {
+      if (!event.target.matches("[data-mpick-q]")) {
+        return;
+      }
+      state.pickQuery = event.target.value;
+      const grid = pickerRoot().querySelector(".ch-mpick-grid");
+      if (grid) {
+        grid.innerHTML = pickerGridHtml();
+      }
+    }
+
+    function onPickChange(event) {
+      const box = event.target.closest("[data-mpick-key]");
+      if (!box) {
+        return;
+      }
+      const key = box.getAttribute("data-mpick-key");
+      const idx = state.pickDraft.indexOf(key);
+      if (box.checked && idx < 0) {
+        state.pickDraft.push(key);
+      } else if (!box.checked && idx >= 0) {
+        state.pickDraft.splice(idx, 1);
+      }
+      paintPicker();
+    }
+
+    function onPickDragStart(event) {
+      const row = event.target.closest("[data-mpick-drag]");
+      if (!row) {
+        return;
+      }
+      state.pickDrag = row.getAttribute("data-mpick-drag");
+      event.dataTransfer.effectAllowed = "move";
+    }
+
+    function onPickDragOver(event) {
+      if (event.target.closest("[data-mpick-drag]")) {
+        event.preventDefault();
+      }
+    }
+
+    function onPickDrop(event) {
+      const row = event.target.closest("[data-mpick-drag]");
+      if (!row || !state.pickDrag) {
+        return;
+      }
+      event.preventDefault();
+      const from = state.pickDraft.indexOf(state.pickDrag);
+      const to = state.pickDraft.indexOf(row.getAttribute("data-mpick-drag"));
+      if (from < 0 || to < 0 || from === to) {
+        return;
+      }
+      const next = state.pickDraft.slice();
+      const moved = next.splice(from, 1)[0];
+      next.splice(to, 0, moved);
+      state.pickDraft = next;
+      state.pickDrag = "";
+      paintPicker();
+    }
 
     function filteredPayload() {
       const payload = state.payload;
@@ -922,7 +1345,7 @@
       const payload = filteredPayload();
       const hero = ensureHeroSeries(payload.hero || {});
       const down = Number(hero.delta) < 0;
-      const cards = (payload.cards || [])
+      const cards = visibleCards(payload.cards, loadMetricKeys())
         .map(function (card) {
           return (
             '<article class="ch-card"><div class="label">' +
@@ -994,7 +1417,7 @@
         "个</span>" +
         '<span class="ch-pill">店铺' +
         escapeHtml(String(payload.summary.shops)) +
-        '个</span><button type="button" class="ch-set" disabled>设定指标</button></div>' +
+        '个</span><button type="button" class="ch-set">设定指标</button></div>' +
         '<div class="ch-metrics"><article class="ch-card ch-hero"><div class="label">' +
         "实时销售额" +
         '<span class="ch-clock">' +
@@ -1019,6 +1442,9 @@
         lists;
       paintSparkSvg(board.querySelector(".ch-spark"), hero);
       syncCalPop();
+      if (state.pickOpen) {
+        paintPicker();
+      }
     }
 
     function placeCalPop(anchor) {
@@ -1272,6 +1698,11 @@
         load();
         return;
       }
+      const setBtn = event.target.closest(".ch-set");
+      if (setBtn) {
+        openPicker();
+        return;
+      }
       const secBtn = event.target.closest("button[data-section]");
       if (secBtn) {
         state.section = secBtn.getAttribute("data-section");
@@ -1293,6 +1724,11 @@
       document.removeEventListener("click", onDocClick);
       window.removeEventListener("resize", onWinResize);
       hideCalPop();
+      closePicker();
+      const pickEl = document.getElementById("ch-mpick-root");
+      if (pickEl) {
+        pickEl.remove();
+      }
     };
   }
 
