@@ -100,8 +100,10 @@ let people = PEOPLE_SEED.map(clone);
 let shops = SHOP_SEED.map(clone);
 let grants = GRANT_SEED.map(clone);
 const loginFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "data", "people-logins.json");
+const rosterFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "data", "people-roster.json");
 let loginOverlay = loadLoginOverlay();
 applyLoginOverlay();
+let rosterPersistMode = "memory";
 
 function loadLoginOverlay() {
   try {
@@ -152,6 +154,7 @@ function applyLoginOverlay() {
 }
 
 export function resetPeopleStore() {
+  rosterPersistMode = "memory";
   nextPersonId = 17;
   nextShopId = 18;
   nextGrantId = 19;
@@ -164,6 +167,159 @@ export function resetPeopleStore() {
   } catch {
     /* no overlay file */
   }
+}
+
+function runningUnderNodeTest() {
+  return Boolean(process.env.NODE_TEST_CONTEXT) || process.execArgv.includes("--test") || process.argv.includes("--test");
+}
+
+function snapshotRoster() {
+  return {
+    people,
+    shops,
+    grants,
+    loginOverlay,
+    nextPersonId,
+    nextShopId,
+    nextGrantId
+  };
+}
+
+function applyRosterSnapshot(data) {
+  if (!data || !Array.isArray(data.people) || !data.people.length) {
+    return false;
+  }
+  people = data.people.map(clone);
+  shops = Array.isArray(data.shops) ? data.shops.map(clone) : shops;
+  grants = Array.isArray(data.grants) ? data.grants.map(clone) : grants;
+  nextPersonId = Number(data.nextPersonId) || people.reduce((max, row) => Math.max(max, Number(row.id) || 0), 0) + 1;
+  nextShopId = Number(data.nextShopId) || (shops.reduce((max, row) => Math.max(max, Number(row.id) || 0), 0) + 1);
+  nextGrantId = Number(data.nextGrantId) || (grants.reduce((max, row) => Math.max(max, Number(row.id) || 0), 0) + 1);
+  if (data.loginOverlay && typeof data.loginOverlay === "object") {
+    loginOverlay = { ...data.loginOverlay };
+    applyLoginOverlay();
+  }
+  return true;
+}
+
+function readRosterFile() {
+  if (runningUnderNodeTest()) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(fs.readFileSync(rosterFile, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeRosterFile() {
+  if (runningUnderNodeTest()) {
+    return false;
+  }
+  try {
+    fs.mkdirSync(path.dirname(rosterFile), { recursive: true });
+    fs.writeFileSync(rosterFile, JSON.stringify(snapshotRoster()) + "\n", "utf8");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function mysqlAuth() {
+  try {
+    const auth = await import("../profile/auth.js");
+    if (typeof auth.dbMode === "function" && auth.dbMode() === "mysql" && typeof auth.query === "function") {
+      return auth;
+    }
+  } catch {
+    /* local / test has no profile auth */
+  }
+  return null;
+}
+
+async function readMysqlRoster() {
+  const auth = await mysqlAuth();
+  if (!auth) {
+    return null;
+  }
+  const { query } = auth;
+  await query(
+    "CREATE TABLE IF NOT EXISTS people_roster_board (id TINYINT NOT NULL PRIMARY KEY, payload LONGTEXT NOT NULL, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)"
+  );
+  const [boardRows] = await query("SELECT payload FROM people_roster_board WHERE id = 1");
+  const raw = boardRows && boardRows[0] ? boardRows[0].payload : "";
+  if (!raw) {
+    return null;
+  }
+  const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+  return parsed && typeof parsed === "object" ? parsed : null;
+}
+
+async function writeMysqlRoster() {
+  const auth = await mysqlAuth();
+  if (!auth) {
+    return false;
+  }
+  const { query } = auth;
+  const payload = JSON.stringify(snapshotRoster());
+  await query(
+    "CREATE TABLE IF NOT EXISTS people_roster_board (id TINYINT NOT NULL PRIMARY KEY, payload LONGTEXT NOT NULL, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)"
+  );
+  await query(
+    "INSERT INTO people_roster_board (id, payload) VALUES (1, ?) ON DUPLICATE KEY UPDATE payload = VALUES(payload)",
+    [payload]
+  );
+  return true;
+}
+
+export function peopleRosterPersistMode() {
+  return rosterPersistMode;
+}
+
+export async function hydratePeopleRoster() {
+  if (runningUnderNodeTest()) {
+    rosterPersistMode = "memory";
+    return { ok: true, mode: rosterPersistMode, people: people.length };
+  }
+  try {
+    const fromMysql = await readMysqlRoster();
+    if (applyRosterSnapshot(fromMysql)) {
+      rosterPersistMode = "mysql";
+      return { ok: true, mode: rosterPersistMode, people: people.length };
+    }
+  } catch {
+    /* fall through */
+  }
+  if (applyRosterSnapshot(readRosterFile())) {
+    rosterPersistMode = "file";
+    return { ok: true, mode: rosterPersistMode, people: people.length };
+  }
+  rosterPersistMode = "memory";
+  return { ok: true, mode: rosterPersistMode, people: people.length };
+}
+
+export async function persistPeopleRoster() {
+  if (runningUnderNodeTest()) {
+    rosterPersistMode = "memory";
+    return { ok: true, mode: rosterPersistMode };
+  }
+  try {
+    if (await writeMysqlRoster()) {
+      rosterPersistMode = "mysql";
+      writeRosterFile();
+      return { ok: true, mode: rosterPersistMode };
+    }
+  } catch {
+    /* file fallback */
+  }
+  if (writeRosterFile()) {
+    rosterPersistMode = "file";
+    return { ok: true, mode: rosterPersistMode };
+  }
+  rosterPersistMode = "memory";
+  return { ok: true, mode: rosterPersistMode };
 }
 
 function findPerson(id) {
@@ -484,7 +640,7 @@ export function reconcilePeople() {
   return { employedNoGrant, grantOnLeft };
 }
 
-export function createPerson(input) {
+function applyCreatePerson(input) {
   const line = applyOrgLine(input || {});
   const name = line.name;
   const role = line.role || "运营";
@@ -526,9 +682,17 @@ export function createPerson(input) {
   return { ok: true, person: presentPerson(person) };
 }
 
+export async function createPerson(input) {
+  const result = applyCreatePerson(input);
+  if (result.ok) {
+    await persistPeopleRoster();
+  }
+  return result;
+}
+
 export const PEOPLE_IMPORT_HEADERS = ["姓名", "总监", "经理", "主管/储备", "运营", "助理", "状态", "账号", "登录密码"];
 
-export function importPeople(rows) {
+export async function importPeople(rows) {
   const list = Array.isArray(rows) ? rows : [];
   if (!list.length) {
     return { ok: false, statusCode: 400, error: "请按模板导入至少一行" };
@@ -557,7 +721,7 @@ export function importPeople(rows) {
     }
     const found = people.find((row) => String(row.name || "").trim() === name);
     if (found) {
-      const result = patchPerson(found.id, {
+      const result = applyPatchPerson(found.id, {
         status,
         username: username || found.username || found.name,
         ...(password ? { password } : {})
@@ -576,7 +740,7 @@ export function importPeople(rows) {
       updated += 1;
       return;
     }
-    const createdRow = createPerson({
+    const createdRow = applyCreatePerson({
       name,
       role,
       center,
@@ -597,10 +761,11 @@ export function importPeople(rows) {
     }
     created += 1;
   });
-  return { ok: true, created, updated, failed };
+  await persistPeopleRoster();
+  return { ok: true, created, updated, failed, persist: rosterPersistMode };
 }
 
-export function patchPerson(id, input) {
+function applyPatchPerson(id, input) {
   const found = findPerson(id);
   if (!found) {
     return { ok: false, statusCode: 404, error: "人员不存在" };
@@ -654,7 +819,15 @@ export function patchPerson(id, input) {
   return { ok: true, person: presentPerson(found) };
 }
 
-export function patchPeoplePasswords(ids, password) {
+export async function patchPerson(id, input) {
+  const result = applyPatchPerson(id, input);
+  if (result.ok) {
+    await persistPeopleRoster();
+  }
+  return result;
+}
+
+export async function patchPeoplePasswords(ids, password) {
   const next = typeof password === "string" ? password.trim() : "";
   if (!next) {
     return { ok: false, statusCode: 400, error: "密码不能为空" };
@@ -676,6 +849,7 @@ export function patchPeoplePasswords(ids, password) {
   if (!updated.length) {
     return { ok: false, statusCode: 404, error: "人员不存在" };
   }
+  await persistPeopleRoster();
   return { ok: true, updated: updated.length, people: updated };
 }
 
@@ -729,6 +903,7 @@ export async function removePeople(ids) {
   }
   saveLoginOverlay();
   await persistRemovedPeople(removed.map((row) => row.id));
+  await persistPeopleRoster();
   return { ok: true, removed: removed.length, people: removed, skipped };
 }
 
@@ -817,9 +992,16 @@ export async function hydrateFromMysql() {
     if (typeof auth.dbMode !== "function" || auth.dbMode() !== "mysql" || typeof auth.query !== "function") {
       loginOverlay = { ...loadLoginOverlay(), ...loginOverlay };
       applyLoginOverlay();
+      await hydratePeopleRoster();
       const { hydrateOrgStores } = await import("./org-board.js");
       await hydrateOrgStores();
       return { ok: true, mode: "memory" };
+    }
+    const roster = await hydratePeopleRoster();
+    if (roster.mode === "mysql" || roster.mode === "file") {
+      const { hydrateOrgStores } = await import("./org-board.js");
+      const org = await hydrateOrgStores();
+      return { ok: true, mode: roster.mode, people: people.length, shops: shops.length, grants: grants.length, stores: org.stores };
     }
     const { query } = auth;
     const [personRows] = await query(
