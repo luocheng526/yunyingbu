@@ -215,8 +215,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /sc-ui-19/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-19/);
+    assert.match(text, /sc-ui-20/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-20/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
     assert.match(text, /id="xm-releases-boot"/);
@@ -316,8 +316,11 @@ test("release board scripts parse so tab refresh can run", () => {
   assert.match(theme, /function finishUpgradeInPlace/);
   assert.match(theme, /return "landed"/);
   assert.doesNotMatch(theme, /location\.replace\("\/releases\?reloaded="/);
-  assert.match(theme, /sc-ui-19/);
-  assert.match(theme, /0\.1\.99-return-module/);
+  assert.match(theme, /sc-ui-20/);
+  assert.match(theme, /0\.1\.100-failed-full/);
+  assert.doesNotMatch(theme, /-webkit-line-clamp/);
+  assert.match(theme, /#failed-view td\.failed-sum \{ width: 16%/);
+  assert.match(theme, /white-space: pre-wrap; overflow: visible; text-overflow: clip/);
   assert.match(theme, /item\.module \|\| item\.source \|\| item\.applicant/);
   assert.match(theme, /#1677ff/);
   assert.match(theme, /failed-sum/);
@@ -454,7 +457,11 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /#1677ff/);
     assert.match(text, /\.failed-sum/);
     assert.match(text, /table-layout:\s*fixed/);
-    assert.match(text, /#failed-view td\.failed-log \{ width: 44%/);
+    assert.match(text, /#failed-view td\.failed-sum \{ width: 16%/);
+    assert.match(text, /#failed-view td\.failed-log \{ width: 38%/);
+    assert.match(text, /white-space: pre-wrap/);
+    assert.match(text, /text-overflow: clip/);
+    assert.doesNotMatch(text, /-webkit-line-clamp/);
     assert.match(text, /\.sc-table/);
     assert.doesNotMatch(text, /--oc-frame:\s*#dc2626/);
     assert.doesNotMatch(text, /border: 2px solid var\(--oc-frame/);

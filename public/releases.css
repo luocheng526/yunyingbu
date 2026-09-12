@@ -631,27 +631,30 @@ html:has(.oc-wrap) body:has(.xm-shell) {
 #failed-view th:nth-child(3),
 #failed-view td:nth-child(3) { width: 6.2rem; }
 #failed-view th:nth-child(4),
-#failed-view td.failed-sum { width: 7.2rem; }
+#failed-view td.failed-sum { width: 16%; min-width: 10rem; }
 #failed-view th:nth-child(5),
-#failed-view td.failed-log { width: 44%; }
+#failed-view td.failed-log { width: 38%; }
 #failed-view th:nth-child(6),
 #failed-view td:nth-child(6) { width: 8.2rem; }
 #failed-view th:nth-child(7),
 #failed-view td:nth-child(7) { width: 10.5rem; }
+.failed-sum,
+.failed-log {
+  display: table-cell;
+  max-height: none;
+  white-space: pre-wrap;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
 .failed-sum {
   color: var(--oc-muted);
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  word-break: break-word;
 }
 .failed-log {
   color: var(--oc-danger);
-  white-space: pre-wrap;
   max-width: none;
   min-width: 0;
-  word-break: break-word;
 }
 .xm-content #logs-view .log-item,
 #logs-view .log-item {
