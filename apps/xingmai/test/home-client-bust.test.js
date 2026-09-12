@@ -26,7 +26,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     const text = await res.text();
     assert.equal(res.status, 200);
     assert.match(String(res.headers.get("cache-control") || ""), /no-store/i);
-    assert.match(text, /xm-module-home 0\.1\.385-home-chiefq/);
+    assert.match(text, /xm-module-home 0\.1\.386-home-nodash/);
     assert.match(text, /onOutsideCardSet/);
     assert.match(text, /\/api\/home\/erp-kpis/);
     assert.match(text, /platformFee/);
