@@ -1042,7 +1042,7 @@ html[data-theme="dark"] .xm-content [style*="background: white"] {
   font-size: 13px;
 }
 
-/* xm-phone-panel 0.1.139  窄屏收侧栏、让出中间面板，方便加到手机桌面。 */
+/* xm-phone-panel 0.1.140  窄屏抽屉；首页卡片三列，公司/团队一行，时间一行。 */
 .xm-phone-menu,
 .xm-phone-mask {
   display: none;
@@ -1190,6 +1190,73 @@ html[data-theme="dark"] .xm-content [style*="background: white"] {
 
   .page {
     padding: 8px 10px 24px;
+  }
+
+  #xm-hm .xm-hm-bar {
+    display: flex !important;
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+  }
+
+  #xm-hm .xm-hm-views {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    width: 100% !important;
+    overflow-x: auto;
+    gap: 4px !important;
+  }
+
+  #xm-hm .xm-hm-views button,
+  #xm-hm .xm-hm-set {
+    flex: 1 0 auto !important;
+    white-space: nowrap !important;
+    padding: 5px 8px !important;
+    font-size: 13px !important;
+  }
+
+  #xm-hm .xm-hm-ranges {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    width: 100% !important;
+    overflow-x: auto;
+    gap: 6px !important;
+  }
+
+  #xm-hm .xm-hm-ranges button,
+  #xm-hm .xm-hm-dates {
+    flex: 0 0 auto !important;
+    white-space: nowrap !important;
+  }
+
+  #xm-hm .xm-hm-kpis,
+  #xm-hm .xm-hm-team-kpis,
+  #xm-hm .xm-hm-live-cards {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  #xm-hm .xm-hm-card {
+    min-height: 0 !important;
+    padding: 8px !important;
+    background: var(--xm-card) !important;
+    border: 1px solid var(--xm-line) !important;
+    border-radius: 8px !important;
+  }
+
+  #xm-hm .xm-hm-card-head span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  #xm-hm .xm-hm-value {
+    margin-top: 6px !important;
+    font-size: 16px !important;
   }
 }
 
