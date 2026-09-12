@@ -27,7 +27,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov4";
+      link.href = "/data-pages.css?v=data-ov5";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -357,21 +357,81 @@
   function metricRow(shop, liveSales) {
     const pay = Number(shop.payAmount) || 0;
     const refund = Number(shop.refundAmount) || 0;
-    const live = liveSales != null ? liveSales : firstNum(shop, ["livePayAmount", "todayPayAmount", "realtimePayAmount"]);
+    const orders = Number(shop.orderCount) || 0;
+    const netOrders = shop.netOrderCount != null ? Number(shop.netOrderCount) || 0 : 0;
+    const live = liveSales != null ? liveSales : firstNum(shop, ["livePayAmount", "todayPayAmount", "realtimePayAmount", "payAmount"]);
     const invalid = firstNum(shop, ["invalidAmount", "invalidOrderAmount"]);
     const net = firstNum(shop, ["netSales", "netSalesAmount"]);
     const newRate = firstNum(shop, ["newRate"]);
     return [
-      live != null ? fmt(live, 2) : "--",
-      newRate != null ? (Number(newRate) * (Number(newRate) > 1 ? 1 : 100)).toFixed(4) + "%" : "--",
-      fmt(shop.orderCount, 0),
-      fmt(shop.netOrderCount, 0),
-      fmt(pay, 2),
-      invalid != null ? fmt(invalid, 0) : "--",
-      fmt(refund, 2),
-      pct(shop.refundRate != null ? shop.refundRate : pay ? refund / pay : null),
-      net != null ? fmt(net, 2) : "--"
+      fmtInt(live != null ? live : 0),
+      newRate != null ? (Number(newRate) * (Number(newRate) > 1 ? 1 : 100)).toFixed(4) + "%" : "0.0000%",
+      fmt(orders, 0),
+      fmt(netOrders, 0),
+      fmtInt(pay),
+      fmtInt(invalid != null ? invalid : 0),
+      fmtInt(refund),
+      pct(shop.refundRate != null ? shop.refundRate : pay ? refund / pay : 0),
+      fmtInt(net != null ? net : pay - refund)
     ];
+  }
+
+  function mergeErpShops(metricShops, directory) {
+    const metrics = metricShops || [];
+    const byId = {};
+    metrics.forEach(function (shop) {
+      const id = String(shop.shopId || shop.id || "");
+      if (id) {
+        byId[id] = shop;
+      }
+    });
+    const out = [];
+    const seen = {};
+    (directory || []).forEach(function (row) {
+      const id = String(row.id || row.shopId || "");
+      if (!id || seen[id]) {
+        return;
+      }
+      seen[id] = true;
+      const hit = byId[id] || {};
+      out.push(Object.assign({}, row, hit, {
+        shopId: id,
+        shopName: hit.shopName || row.shopName
+      }));
+    });
+    metrics.forEach(function (shop) {
+      const id = String(shop.shopId || "");
+      if (id && !seen[id]) {
+        seen[id] = true;
+        out.push(shop);
+      }
+    });
+    return out;
+  }
+
+  function shopTableFrom(shops) {
+    const list = shops || [];
+    const tot = list.reduce(
+      function (acc, row) {
+        acc.payAmount += Number(row.payAmount) || 0;
+        acc.orderCount += Number(row.orderCount) || 0;
+        acc.netOrderCount += Number(row.netOrderCount) || 0;
+        acc.refundAmount += Number(row.refundAmount) || 0;
+        return acc;
+      },
+      { payAmount: 0, orderCount: 0, netOrderCount: 0, refundAmount: 0 }
+    );
+    tot.refundRate = tot.payAmount ? tot.refundAmount / tot.payAmount : 0;
+    tot.netSales = tot.payAmount - tot.refundAmount;
+    return {
+      title: "店铺列表",
+      columns: ["店铺"].concat(TABLE_COLS),
+      rows: [{ name: "当页汇总", kind: "sum", cells: metricRow(tot) }].concat(
+        list.map(function (shop) {
+          return { name: shop.shopName, kind: "shop", shopId: shop.shopId, cells: metricRow(shop) };
+        })
+      )
+    };
   }
 
   function fromErp(raw, rangeLabel, dateLabel) {
@@ -430,15 +490,6 @@
       },
       heroVal
     );
-    const shopRows = shops.map(function (shop) {
-      return { name: shop.shopName, kind: "shop", shopId: shop.shopId, cells: metricRow(shop) };
-    });
-    const pageSum = metricRow({
-      payAmount: shops.reduce(function (s, r) { return s + (Number(r.payAmount) || 0); }, 0),
-      orderCount: shops.reduce(function (s, r) { return s + (Number(r.orderCount) || 0); }, 0),
-      netOrderCount: shops.reduce(function (s, r) { return s + (Number(r.netOrderCount) || 0); }, 0),
-      refundAmount: shops.reduce(function (s, r) { return s + (Number(r.refundAmount) || 0); }, 0)
-    });
     return {
       ok: true,
       source: raw.source || "xingmai-erp",
@@ -474,11 +525,7 @@
           { name: "京东", kind: "jd", cells: channelCells }
         ]
       },
-      shopTable: {
-        title: "店铺列表",
-        columns: ["店铺"].concat(TABLE_COLS),
-        rows: [{ name: "当页汇总", kind: "sum", cells: pageSum }].concat(shopRows)
-      }
+      shopTable: shopTableFrom(shops)
     };
   }
 
@@ -1085,6 +1132,34 @@
         });
     }
 
+    function loadShopDirectory() {
+      return softJson("/api/data/shop-options")
+        .then(function (opt) {
+          const recs = opt && (opt.records || opt.shops);
+          if (recs && recs.length) {
+            return recs;
+          }
+          return Promise.all([
+            softJson("/api/data/shops?page=1&pageSize=50"),
+            softJson("/api/data/shops?page=2&pageSize=50")
+          ]).then(function (pages) {
+            return pages.reduce(function (acc, pack) {
+              return acc.concat((pack && pack.records) || []);
+            }, []);
+          });
+        })
+        .then(function (dir) {
+          if (dead || !state.payload || !dir || !dir.length) {
+            return;
+          }
+          const merged = mergeErpShops(state.payload.shops, dir);
+          state.payload.shops = merged;
+          state.payload.summary.shops = merged.length;
+          state.payload.shopTable = shopTableFrom(merged);
+          render();
+        });
+    }
+
     function loadLiveSpark() {
       return Promise.all([softJson("/api/data/live"), softJson("/api/home/live")]).then(function (pack) {
         if (dead || !state.payload || !state.payload.hero) {
@@ -1119,6 +1194,7 @@
           if (data && data.ok && (data.source === "xingmai-erp" || (data.shops && data.shops.length) || (data.cards || []).some(function (c) { return c.key === "payAmount"; }))) {
             paintErp(data, span);
             loadLiveSpark();
+            loadShopDirectory();
             return;
           }
           throw new Error("empty");
@@ -1138,6 +1214,7 @@
               state.payload = demo;
               render();
               loadLiveSpark();
+              loadShopDirectory();
             });
         });
     }

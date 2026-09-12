@@ -168,6 +168,9 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /数据总览/);
     assert.match(overviewJs.text, /ch-pill/);
     assert.match(overviewJs.text, /function fmtInt/);
+    assert.match(overviewJs.text, /mergeErpShops/);
+    assert.match(overviewJs.text, /\/api\/data\/shop-options/);
+    assert.match(overviewJs.text, /0\.0000%/);
     assert.match(overviewJs.text, /Math\.round/);
     assert.match(overviewJs.text, /自定义费用/);
     assert.match(overviewJs.text, /ch-cal/);
@@ -519,7 +522,7 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /\/data\/paid/);
   assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
   assert.match(dataMod, /restore-v1/);
-  assert.match(dataMod, /data-overview\.js\?v=data-ov4/);
+  assert.match(dataMod, /data-overview\.js\?v=data-ov5/);
   assert.match(css, /ch-pill/);
   assert.match(css, /\.ch-card \.value[\s\S]*font-size: 28px/);
   assert.match(css, /#8c8c8c/);
