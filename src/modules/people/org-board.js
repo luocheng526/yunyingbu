@@ -273,16 +273,16 @@ export function orgStoresPersistMode() {
 }
 
 export async function hydrateOrgStores() {
-  if (hydrated || runningUnderNodeTest()) {
-    persistMode = persistMode || "memory";
+  if (runningUnderNodeTest()) {
+    persistMode = "memory";
     hydrated = true;
     return { ok: true, mode: persistMode, stores: rows.length };
   }
-  hydrated = true;
   try {
     const fromMysql = await readMysqlBoard();
     if (applyBoardSnapshot(fromMysql)) {
       persistMode = "mysql";
+      hydrated = true;
       return { ok: true, mode: persistMode, stores: rows.length };
     }
   } catch {
@@ -290,9 +290,11 @@ export async function hydrateOrgStores() {
   }
   if (applyBoardSnapshot(readPersistFile())) {
     persistMode = "file";
+    hydrated = true;
     return { ok: true, mode: persistMode, stores: rows.length };
   }
-  persistMode = "memory";
+  persistMode = persistMode || "memory";
+  hydrated = true;
   return { ok: true, mode: persistMode, stores: rows.length };
 }
 

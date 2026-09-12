@@ -1,6 +1,7 @@
 node_modules/
 src/modules/people/data/people-logins.json
 src/modules/people/data/org-stores.json
+src/modules/people/data/people-roster.json
 .DS_Store
 *.pem
 *.key

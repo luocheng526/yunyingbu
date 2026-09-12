@@ -121,6 +121,8 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.doesNotMatch(jsText, /工号/);
     assert.doesNotMatch(jsText, /name="employeeNo"/);
     assert.match(jsText, /表头可筛总监、经理、主管\/储备、运营、助理、状态/);
+    assert.match(jsText, /导入按姓名合并/);
+    assert.match(jsText, /并落盘，强制刷新还在/);
     assert.match(jsText, /people-cell/);
     assert.match(jsText, /startPersonCellEdit/);
     assert.match(jsText, /peopleLineCell\("director"/);
@@ -197,6 +199,7 @@ test("GET /api/people returns Shen-line roster and grants", async () => {
     const data = await res.json();
     assert.equal(res.status, 200);
     assert.equal(data.ok, true);
+    assert.equal(data.persist, "memory");
     assert.equal(data.demo, true);
     assert.equal(data.charter.agentAccess, "read-only");
     assert.ok(data.people.length >= 16);

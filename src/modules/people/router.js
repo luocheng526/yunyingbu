@@ -5,12 +5,14 @@ import {
   createGrant,
   createPerson,
   createShop,
+  hydratePeopleRoster,
   importPeople,
   listGrants,
   listPeople,
   listShops,
   patchPerson,
   patchPeoplePasswords,
+  peopleRosterPersistMode,
   PEOPLE_IMPORT_HEADERS,
   reconcilePeople,
   removePeople
@@ -243,12 +245,14 @@ peopleRouter.get("/reconcile", (_req, res) => {
 });
 
 peopleRouter.get("/", async (req, res) => {
+  await hydratePeopleRoster();
   const actor = await resolveActor(req);
   res.json({
     ok: true,
     demo: true,
     actor,
     canEdit: canEditRoster(actor),
+    persist: peopleRosterPersistMode(),
     charter: PEOPLE_CHARTER,
     centers: CENTERS,
     posts: POSTS,
@@ -273,22 +277,25 @@ peopleRouter.post("/import", async (req, res) => {
   if (!(await requireRosterEditor(req, res))) {
     return;
   }
+  await hydratePeopleRoster();
   const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
-  sendResult(res, importPeople(rows), false);
+  sendResult(res, await importPeople(rows), false);
 });
 
 peopleRouter.patch("/passwords", async (req, res) => {
   if (!(await requireRosterEditor(req, res))) {
     return;
   }
+  await hydratePeopleRoster();
   const body = req.body || {};
-  sendResult(res, patchPeoplePasswords(body.ids, body.password), false);
+  sendResult(res, await patchPeoplePasswords(body.ids, body.password), false);
 });
 
 peopleRouter.post("/remove", async (req, res) => {
   if (!(await requireRosterEditor(req, res))) {
     return;
   }
+  await hydratePeopleRoster();
   sendResult(res, await removePeople(req.body?.ids), false);
 });
 
@@ -296,14 +303,16 @@ peopleRouter.patch("/:id", async (req, res) => {
   if (!(await requireRosterEditor(req, res))) {
     return;
   }
-  sendResult(res, patchPerson(req.params.id, req.body || {}), false);
+  await hydratePeopleRoster();
+  sendResult(res, await patchPerson(req.params.id, req.body || {}), false);
 });
 
 peopleRouter.post("/", async (req, res) => {
   if (!(await requireRosterEditor(req, res))) {
     return;
   }
-  const result = createPerson(req.body || {});
+  await hydratePeopleRoster();
+  const result = await createPerson(req.body || {});
   if (!result.ok) {
     res.status(result.statusCode).json({ ok: false, error: result.error });
     return;
