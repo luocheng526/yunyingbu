@@ -1,9 +1,9 @@
-/* xm-module-home 0.1.383-home-shopsort */
+/* xm-module-home 0.1.384-home-chief3 */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
     { key: "team", label: "经理团队" },
-    { key: "chief", label: "主管看板" },
+    { key: "chief", label: "主管/储备" },
     { key: "live", label: "实时" },
     { key: "board", label: "排行榜" }
   ];
@@ -252,11 +252,11 @@
     }
     var navLeft =
       side === "left"
-        ? '<button type="button" data-cal-nav="-12" aria-label="上一年">《</button><button type="button" data-cal-nav="-1" aria-label="上个月">&lt;</button>'
+        ? '<button type="button" data-cal-nav="-12">《</button><button type="button" data-cal-nav="-1">&lt;</button>'
         : "";
     var navRight =
       side === "right"
-        ? '<button type="button" data-cal-nav="1" aria-label="下个月">&gt;</button><button type="button" data-cal-nav="12" aria-label="下一年">》</button>'
+        ? '<button type="button" data-cal-nav="1">&gt;</button><button type="button" data-cal-nav="12">》</button>'
         : "";
     var html =
       '<div class="xm-hm-cal-month"><div class="xm-hm-cal-caption"><div class="xm-hm-cal-nav">' +
@@ -577,15 +577,31 @@
       escapeHtml(team.key) +
       '"><div><h2>' +
       escapeHtml(team.name) +
-      "团队</h2><p>店铺按组织中心责权，数字按店铺id或店名对齐星脉 ERP。卡片可拖拽换位。</p></div>" +
+      "团队</h2><p>责权店对齐 ERP。卡片可拖拽换位。</p></div>" +
       '<button type="button" class="xm-hm-set">卡片设置</button></header>'
     );
   }
 
-  function teamShopsHtml(team) {
+  function teamShopsHtml(team, simple) {
+    var shops = sortedShops(team.shops || [], simple ? { key: "", dir: "desc" } : shopSort);
+    if (simple) {
+      return (
+        '<div class="xm-hm-panel" data-team="' +
+        escapeHtml(team.key) +
+        '"><h2>责权店铺 <span>' +
+        shops.length +
+        " 店</span></h2>" +
+        '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th><th class="xm-hm-num">数量</th></tr></thead><tbody>' +
+        shops
+          .map(function (row, i) {
+            return "<tr><td>" + rankMark(i) + "</td><td>" + escapeHtml(row.shop) + '</td><td class="xm-hm-num">' + escapeHtml((row.metrics || {}).payQty || "—") + "</td></tr>";
+          })
+          .join("") +
+        "</tbody></table></div>"
+      );
+    }
     var cols = shopCols();
     var sort = shopSort;
-    var shops = sortedShops(team.shops || [], sort);
     var pad = shopPad;
     return (
       '<div class="xm-hm-panel" data-team="' +
@@ -611,7 +627,7 @@
     );
   }
 
-  function teamBlockHtml(team, hide) {
+  function teamBlockHtml(team, hide, simple) {
     var cards = (team.cards || []).filter(function (card) {
       return hide.indexOf(card.key) === -1;
     });
@@ -627,22 +643,40 @@
         })
         .join("") +
       "</div>" +
-      teamShopsHtml(team) +
+      teamShopsHtml(team, simple) +
       "</section>"
     );
   }
 
-  function teamsCompareHtml(teams, hide) {
-    var list = teams && teams.length ? teams : blankTeams();
+  function teamsCompareHtml(teams, hide, simple) {
+    var list = teams && teams.length ? teams : simple ? [] : blankTeams();
     return (
       '<div class="xm-hm-teams-bar"><b>星脉甄选</b></div><div class="xm-hm-teams-grid">' +
       list
         .map(function (team) {
-          return teamBlockHtml(team, hide);
+          return teamBlockHtml(team, hide, simple);
         })
         .join("") +
       "</div>"
     );
+  }
+
+  function seesAllChiefs(user) {
+    user = user || {};
+    return /超级|管理员|经理|全平台/.test(String(user.role || "") + String(user.title || "") + String(user.dataScope || ""));
+  }
+
+  function filterOwnChiefs(teams, user) {
+    teams = teams || [];
+    if (seesAllChiefs(user)) {
+      return teams;
+    }
+    var name = String((user && (user.displayName || user.username)) || "").trim();
+    return name
+      ? teams.filter(function (team) {
+          return team && team.name === name;
+        })
+      : teams;
   }
 
   function standItemHtml(row, place, unit) {
@@ -882,7 +916,6 @@
       ".xm-hm-dates{display:inline-flex;align-items:center;gap:8px;min-width:248px;height:32px;padding:0 10px 0 12px;border:1px solid #dcdfe6;background:#fff;color:#303133;border-radius:20px;cursor:pointer;font-size:13px;line-height:1}" +
       ".xm-hm-dates.is-on{border-color:#c0c4cc;box-shadow:0 0 0 1px rgba(192,196,204,.35)}" +
       ".xm-hm-dates-ico,.xm-hm-dates-clear{display:inline-flex;color:#c0c4cc;flex:0 0 auto}" +
-      ".xm-hm-dates-ico svg,.xm-hm-dates-clear svg{display:block}" +
       ".xm-hm-dates-text{flex:1 1 auto;text-align:left;white-space:nowrap}" +
       ".xm-hm-dates-clear{border:0;background:transparent;padding:0;width:16px;height:16px;border-radius:50%;cursor:pointer;align-items:center;justify-content:center}" +
       ".xm-hm-dates-clear:hover{color:#909399}" +
@@ -905,10 +938,7 @@
       ".xm-hm-cal-grid button.is-today{color:#f56c6c}" +
       ".xm-hm-cal-grid button.is-start,.xm-hm-cal-grid button.is-end{background:#f56c6c;color:#fff;border-radius:50%;width:32px}" +
       ".xm-hm-cal-grid button:disabled,.xm-hm-cal-grid button.is-off{color:#c0c4cc;opacity:.7;cursor:not-allowed}" +
-      "html[data-theme=dark] .xm-hm-dates,html[data-theme=dark] .xm-hm-cal{background:var(--xm-card);color:var(--xm-ink);border-color:var(--xm-line)}" +
-      "html[data-theme=dark] .xm-hm-cal-arrow{background:var(--xm-card)}" +
-      "html[data-theme=dark] .xm-hm-cal-month + .xm-hm-cal-month{border-color:var(--xm-line)}" +
-      "html[data-theme=dark] .xm-hm-cal-caption,html[data-theme=dark] .xm-hm-cal-caption button{color:var(--xm-ink)}" +
+      "html[data-theme=dark] .xm-hm-dates,html[data-theme=dark] .xm-hm-cal,html[data-theme=dark] .xm-hm-cal-arrow{background:var(--xm-card);color:var(--xm-ink);border-color:var(--xm-line)}" +
       ".xm-hm-card-head .xm-hm-help{cursor:help;position:relative;z-index:2;width:18px;height:18px;border:1px solid var(--xm-line);border-radius:50%;background:transparent;padding:0;margin:0;font:inherit;font-size:11px;line-height:1;color:var(--xm-muted);display:inline-flex;align-items:center;justify-content:center}" +
       ".xm-hm-card-head .xm-hm-help::before{content:\"\";position:absolute;inset:-14px}" +
       ".xm-hm-tip{position:fixed;z-index:2147483646;display:none;box-sizing:border-box;width:max-content;max-width:min(360px,calc(100vw - 24px));padding:10px 12px;background:var(--xm-card,#fff);border:1px solid var(--xm-line,#eadfd0);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.18);color:var(--xm-ink,#1f1b16);font-size:12px;line-height:1.6;white-space:pre-wrap;text-align:left;pointer-events:none}" +
@@ -924,8 +954,9 @@
       ".xm-hm-teams-grid{display:grid;grid-template-columns:repeat(var(--xm-hm-team-cols,2),minmax(200px,1fr));gap:10px}" +
       ".xm-hm-team{display:flex;flex-direction:column;gap:8px;min-width:0;padding:8px 8px 8px}" +
       ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
-      ".xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,110px));gap:6px}" +
-      ".xm-hm.is-chief .xm-hm-teams.is-many .xm-hm-team-kpis{grid-template-columns:repeat(2,minmax(0,96px))}" +
+      ".xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}" +
+      ".xm-hm.is-chief .xm-hm-table{min-width:0}" +
+      ".xm-hm.is-chief .xm-hm-panel{overflow-x:hidden}" +
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border:0;box-shadow:none}" +
       ".xm-hm-teams .xm-hm-table{min-width:760px;font-variant-numeric:tabular-nums;border-collapse:separate;border-spacing:0}" +
       ".xm-hm-teams .xm-hm-table .xm-hm-num{text-align:right;white-space:nowrap}" +
@@ -955,7 +986,7 @@
       ".xm-hm-team-head h2{margin:0;font-size:16px}" +
       ".xm-hm-team-head p{margin:2px 0 0;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm.is-chief .xm-hm-team-head h2{font-size:13px}" +
-      ".xm-hm.is-chief .xm-hm-team-head p{font-size:10px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}" +
+      ".xm-hm.is-chief .xm-hm-team-head p{font-size:10px}" +
       ".xm-hm-team-head .xm-hm-set{padding:0;font-size:13px;white-space:nowrap}" +
       ".xm-hm-ladder{margin-top:4px}" +
       ".xm-hm-ladder h2{margin:16px 0 10px;font-size:16px}" +
@@ -1021,7 +1052,7 @@
       ".xm-hm-pop h3{margin:0 0 8px;font-size:13px}" +
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{margin:8px 0 0;color:var(--xm-muted);font-size:12px}" +
-      "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,110px))}}" +
+      "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}" +
       "@media (max-width:1200px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
       "@media (max-width:700px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts,.xm-hm-team-kpis{grid-template-columns:1fr}.xm-hm-team-head{flex-direction:column}.xm-hm-cal-months{flex-direction:column}}"
     );
@@ -1054,7 +1085,7 @@
       '<section class="xm-hm-live" id="xm-hm-live" hidden></section>' +
       '<section class="xm-hm-board" id="xm-hm-board" hidden>' +
       '<div id="xm-hm-ladders"></div></section>' +
-      '</div><p class="xm-hm-note" id="xm-hm-note">数字来自数据中心 ERP，已取消演示数。</p></div>'
+      '</div><p class="xm-hm-note" id="xm-hm-note">数字来自星脉 ERP。</p></div>'
     );
   }
 
@@ -1069,9 +1100,7 @@
     var teamView = state.view === "team" || state.view === "chief";
     var teams =
       state.view === "chief"
-        ? state.chiefs && state.chiefs.length
-          ? state.chiefs
-          : blankRoleTeams("主管")
+        ? filterOwnChiefs(state.chiefs && state.chiefs.length ? state.chiefs : blankRoleTeams("主管"), state.user)
         : state.teams && state.teams.length
           ? state.teams
           : blankTeams();
@@ -1085,7 +1114,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.383-home-shopsort");
+    board.setAttribute("data-hm-js", "0.1.384-home-chief3");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1101,12 +1130,11 @@
     root.querySelector("#xm-hm-teams").hidden = !teamView;
     root.querySelector("#xm-hm-teams").style.setProperty("--xm-hm-team-cols", String(Math.max(teams.length, 1)));
     root.querySelector("#xm-hm-teams").style.setProperty("--xm-hm-row-pad", shopPad + "px");
-    root.querySelector("#xm-hm-teams").classList.toggle("is-many", teams.length >= 4);
-    root.querySelector("#xm-hm-teams").innerHTML = teamsCompareHtml(teams, teamHidden(hide));
+    root.querySelector("#xm-hm-teams").innerHTML = teamsCompareHtml(teams, teamHidden(hide), state.view === "chief");
     root.querySelector("#xm-hm-live").hidden = state.view !== "live";
     root.querySelector("#xm-hm-board").hidden = state.view !== "board";
     root.querySelector("#xm-hm-live").innerHTML =
-      '<div class="xm-hm-live-clock">每5分钟自动刷新' +
+      '<div class="xm-hm-live-clock">每5分钟刷新' +
       (state.liveAt ? " · 上次 " + escapeHtml(state.liveAt) : "") +
       '</div><div class="xm-hm-live-charts">' +
       liveChartHtml(hero) +
@@ -1128,14 +1156,16 @@
     }).join("；");
     root.querySelector("#xm-hm-note").textContent =
       state.view === "live"
-        ? "实时数字来自数据中心 ERP，每5分钟拉一次。昨今曲线各用当日总额，没有分时点。"
+        ? "实时来自 ERP，每5分钟拉一次。"
         : state.view === "team" || state.view === "chief"
           ? (gapText
             ? "人管对不上：" + gapText
-            : (state.view === "chief" ? "主管" : "经理") + "团队按组织中心责权，数字按店铺id或店名对齐星脉 ERP。")
+            : state.view === "chief"
+              ? "主管/储备按责权；本人登录只看自己的数据。"
+              : "经理团队按责权店对齐 ERP。")
           : state.view === "board"
-            ? "排行榜按人管职务和责权店，按店铺id或店名对齐 ERP 后汇总支付金额 / 利润。"
-            : "数字来自星脉 ERP 店铺汇总。净销售额按支付金额减退款。";
+            ? "排行榜按责权店对齐 ERP。"
+            : "数字来自星脉 ERP。净销售额=支付-退款。";
     root.querySelector("#xm-hm-card-opts").innerHTML = (state.cards || blankCompanyCards())
       .map(function (card) {
         return (
@@ -1351,23 +1381,7 @@
     return next;
   }
 
-  var SUM_ADD = [
-    "payAmount",
-    "totalPromotionCost",
-    "refundAmount",
-    "profit",
-    "orderCount",
-    "netOrderCount",
-    "todayPayAmount",
-    "yesterdayPayAmount",
-    "platformFee",
-    "saleFee",
-    "goodsCost",
-    "invalidAmount",
-    "jdOrders",
-    "netSkuNum",
-    "netGoodsCost"
-  ];
+  var SUM_ADD = ["payAmount", "totalPromotionCost", "refundAmount", "profit", "orderCount", "netOrderCount", "todayPayAmount", "yesterdayPayAmount", "platformFee", "saleFee", "goodsCost", "invalidAmount", "jdOrders", "netSkuNum", "netGoodsCost"];
 
   function sumPack(rows) {
     var out = {};
@@ -1691,10 +1705,7 @@
       }
     }
     var shopId = normShopId(shop.shopId);
-    if (shopId && shopId !== String(shop.id == null ? "" : shop.id)) {
-      return shopId;
-    }
-    return "";
+    return shopId && shopId !== String(shop.id == null ? "" : shop.id) ? shopId : "";
   }
 
   function normShopName(value) {
@@ -1746,7 +1757,7 @@
     if (!name) {
       return false;
     }
-    if (String(shop.owner || "").trim() === name || String(shop.lead || "").trim() === name || String(shop.supervisor || "").trim() === name) {
+    if (String(shop.owner || "").trim() === name || String(shop.lead || "").trim() === name || String(shop.supervisor || "").trim() === name || String(shop.assistant || "").trim() === name) {
       return true;
     }
     if (person.role === "经理") {
@@ -1851,7 +1862,7 @@
       names.push(n);
     }
     (people || []).forEach(function (person) {
-      if (person && person.status === "在职" && person.role === role) {
+      if (person && person.status === "在职" && (person.role === role || (role === "主管" && person.role === "储备"))) {
         add(person.name);
       }
     });
@@ -1861,6 +1872,7 @@
       }
       if (role === "主管") {
         add(shop && shop.supervisor);
+        add(shop && shop.assistant);
       }
     });
     if (!names.length && role === "经理") {
@@ -1874,19 +1886,15 @@
     if (!shop || !name) {
       return false;
     }
-    if (role === "主管") {
-      if (String(shop.supervisor || "").trim() === name) {
-        return true;
-      }
-      if (String(shop.lead || "").trim() === name) {
-        return true;
-      }
-      if (String(shop.groupId || "").trim() === name) {
-        return true;
-      }
-      return !!(person && (person.visibleShops || []).indexOf(shopDisplayName(shop)) !== -1);
+    if (role !== "主管") {
+      return teamPredicate(name)(shop);
     }
-    return teamPredicate(name)(shop);
+    if ([shop.supervisor, shop.assistant, shop.lead, shop.groupId].some(function (v) {
+      return String(v || "").trim() === name;
+    })) {
+      return true;
+    }
+    return !!(person && (person.visibleShops || []).indexOf(shopDisplayName(shop)) !== -1);
   }
 
   function buildTeams(dutyShops, grants, rangePack, prevPack, catalogPack, people, role) {
@@ -2600,5 +2608,4 @@
       };
     }
   };
-  window.XmModules["/"] = window.XmModules["/home"];
 })();

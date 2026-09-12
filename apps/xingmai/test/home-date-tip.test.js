@@ -46,9 +46,13 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.doesNotMatch(homeJs, /打开数据总览/);
   assert.doesNotMatch(homeJs, /打开运营中心/);
   assert.match(homeJs, /\.xm-hm-team-kpis\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
-  assert.match(homeJs, /\.xm-hm\.is-chief \.xm-hm-team-kpis\{grid-template-columns:repeat\(4,minmax\(0,110px\)\)/);
+  assert.match(homeJs, /\.xm-hm\.is-chief \.xm-hm-team-kpis\{grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
   assert.match(homeJs, /\.xm-hm\.is-chief \.xm-hm-card\{aspect-ratio:1\/1/);
   assert.match(homeJs, /classList\.toggle\("is-chief"/);
+  assert.match(homeJs, /function filterOwnChiefs/);
+  assert.match(homeJs, /function seesAllChiefs/);
+  assert.match(homeJs, /shop\.assistant/);
+  assert.match(homeJs, /<th class="xm-hm-num">数量<\/th>/);
   assert.match(homeJs, /linear-gradient\(#dceaff,#f7fbff\)/);
   assert.doesNotMatch(homeJs, /border:2px solid #4d8fd6/);
   assert.match(homeJs, /\.xm-hm-bar\{[^}]*border:0\}/);
@@ -59,7 +63,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /\.xm-hm-card,\.xm-hm-pop label\{-webkit-user-select:none;user-select:none/);
   assert.match(homeJs, /--xm-hm-team-cols/);
   assert.match(homeJs, /label: "经理团队"/);
-  assert.match(homeJs, /label: "主管看板"/);
+  assert.match(homeJs, /label: "主管\/储备"/);
+  assert.doesNotMatch(homeJs, /label: "主管看板"/);
   assert.doesNotMatch(homeJs, /label: "主管团队"/);
   assert.match(homeJs, /label: "昨天"/);
   assert.match(homeJs, /label: "本月"/);
@@ -132,6 +137,36 @@ test("duty shop rows sort by metric arrows and keep empty values last", () => {
   assert.deepEqual(
     fns.sortedShops(rows, { key: "profit", dir: "desc" }).map((row) => row.shop),
     ["C", "A", "D", "B"]
+  );
+});
+
+test("chief board keeps admins on all columns and others on their own duty", () => {
+  const pick = (name) => {
+    const start = homeJs.indexOf("function " + name);
+    assert.notEqual(start, -1, name);
+    let depth = 0;
+    for (let i = start; i < homeJs.length; i += 1) {
+      if (homeJs[i] === "{") depth += 1;
+      if (homeJs[i] === "}") {
+        depth -= 1;
+        if (depth === 0) return homeJs.slice(start, i + 1);
+      }
+    }
+    throw new Error("unclosed " + name);
+  };
+  const fns = new Function(
+    pick("seesAllChiefs") + pick("filterOwnChiefs") + ";return {filterOwnChiefs, seesAllChiefs};"
+  )();
+  const teams = [{ name: "杨润泽" }, { name: "陈晓曼" }, { name: "翁琴" }];
+  assert.equal(fns.seesAllChiefs({ role: "超级管理员", dataScope: "全平台数据" }), true);
+  assert.equal(fns.seesAllChiefs({ role: "主管", displayName: "杨润泽" }), false);
+  assert.deepEqual(
+    fns.filterOwnChiefs(teams, { role: "超级管理员" }).map((row) => row.name),
+    ["杨润泽", "陈晓曼", "翁琴"]
+  );
+  assert.deepEqual(
+    fns.filterOwnChiefs(teams, { displayName: "杨润泽", role: "主管" }).map((row) => row.name),
+    ["杨润泽"]
   );
 });
 
