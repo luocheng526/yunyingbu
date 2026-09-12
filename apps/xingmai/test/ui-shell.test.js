@@ -89,6 +89,17 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /function homePaneEmpty/);
   assert.match(jsText, /function bootHomePane/);
   assert.match(jsText, /function injectModuleScript/);
+  const manifest = await fetch(`${base}/manifest.webmanifest`);
+  assert.equal(manifest.status, 200);
+  const manifestJson = await manifest.json();
+  assert.equal(manifestJson.start_url, "/home");
+  assert.equal(manifestJson.display, "standalone");
+  assert.match(jsText, /function ensurePhoneChrome/);
+  assert.match(jsText, /function setPhoneNav/);
+  assert.match(jsText, /xm-phone-menu/);
+  assert.match(cssText, /xm-phone-panel 0\.1\.139/);
+  assert.match(cssText, /@media \(max-width: 880px\)/);
+  assert.match(cssText, /html\.xm-phone-nav \.xm-sider/);
   assert.match(jsText, /function scriptHasFinished/);
   assert.match(jsText, /#xm-hm, \.xm-hm/);
   assert.match(jsText, /href === "\/home" && homePaneEmpty/);
@@ -109,7 +120,7 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /\.xm-workspace > \.xm-pane\.is-active/);
   assert.match(jsText, /disposePane\("\/home"\)/);
   assert.doesNotMatch(jsText, /window\.location\.assign\("\/home"\)/);
-  assert.match(jsText, /xm-fast-shell 0\.1\.138/);
+  assert.match(jsText, /xm-fast-shell 0\.1\.139/);
   assert.match(jsText, /\/shared\/modules\/" \+ id \+ "\.js"/);
   assert.doesNotMatch(jsText, /modules\/" \+ id \+ "\.js\?v=/);
   assert.match(jsText, /add\("\/login"\)/);
@@ -293,7 +304,7 @@ test("home page html is the xingmai sider template", async () => {
   assert.match(html, /培训系统/);
   assert.match(html, /xm-menu-parent/);
   assert.match(html, /xm-caret/);
-  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.138/);
+  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.139/);
   assert.match(html, /xm-tab-close/);
   assert.match(html, /data-href="\/data\/overview"/);
   assert.match(homePageHtml, /xm-tab is-active is-pinned/);
@@ -319,8 +330,8 @@ test("home page html is the xingmai sider template", async () => {
   assert.match(html, /xm-app-shell/);
   assert.match(html, /<title>星脉甄选运营中心<\/title>/);
   assert.doesNotMatch(html, /<title>数据中心 · 星脉甄选<\/title>/);
-  assert.match(html, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=0\.1\.138"/);
-  assert.match(html, /rel="shortcut icon" href="\/favicon\.ico\?v=0\.1\.138"/);
+  assert.match(html, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=0\.1\.139"/);
+  assert.match(html, /rel="shortcut icon" href="\/favicon\.ico\?v=0\.1\.139"/);
   assert.doesNotMatch(html, /rel="icon"[^>]+href="\/login-logo\.png"/);
   assert.doesNotMatch(html, /href="data:image\/png;base64,/);
 });
@@ -596,8 +607,8 @@ test("page renderer injects shared shell onto module html", async () => {
     '<!DOCTYPE html><html><head></head><body class="oc-page"><div class="oc-tab">待上线</div></body></html>'
   );
   assert.match(injected, /\/shared\/layout\.css/);
-  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.138/);
-  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.138"/);
+  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.139/);
+  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.139"/);
   assert.match(injected, /localStorage.getItem\("xm-theme"\)/);
   const login = withSharedShell('<html><head></head><body class="login-page"></body></html>');
   assert.doesNotMatch(login, /\/shared\/nav\.js/);
@@ -631,7 +642,7 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.doesNotMatch(mid, /\/shared\/modules\/\$1\.js\?v=/);
   assert.match(mid, /磁盘上的图即使在也不能信/);
   assert.match(mid, /TAB_ICON_ICO/);
-  assert.match(mid, /SHELL_ASSET_VER = "0\.1\.138"/);
+  assert.match(mid, /SHELL_ASSET_VER = "0\.1\.139"/);
   assert.match(mid, /woff2\?/);
   const navItems = readFileSync(join(root, "src/modules/home/nav-items.js"), "utf8");
   assert.match(navItems, /xm-logo" href="\/home"/);
@@ -657,8 +668,8 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.match(homeMod, /XmModules\["\/home"\]/);
   const { renderAppShell } = await import("../src/modules/profile/middleware.js");
   const shell = renderAppShell("/data", { username: "罗成", displayName: "罗成" });
-  assert.match(shell, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=0\.1\.138"/);
-  assert.match(shell, /rel="shortcut icon" href="\/favicon\.ico\?v=0\.1\.138"/);
+  assert.match(shell, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=0\.1\.139"/);
+  assert.match(shell, /rel="shortcut icon" href="\/favicon\.ico\?v=0\.1\.139"/);
   assert.doesNotMatch(shell, /href="data:image\/png;base64,/);
   assert.match(shell, /<title>星脉甄选运营中心<\/title>/);
   assert.match(shell, /xm-app-shell/);
@@ -677,6 +688,9 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.match(shell, /XmModules/);
   assert.match(shell, /getAttribute\("data-xm-href"\)/);
   assert.match(shell, /href !== key/);
+  assert.match(shell, /manifest\.webmanifest/);
+  assert.match(shell, /apple-mobile-web-app-capable/);
+  assert.match(shell, /viewport-fit=cover/);
   assert.doesNotMatch(shell, /\/shared\/modules\/releases\.js/);
   assert.doesNotMatch(shell, /\/shared\/modules\/home\.js/);
   assert.doesNotMatch(shell, /releases\.css/);

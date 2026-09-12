@@ -1041,3 +1041,162 @@ html[data-theme="dark"] .xm-content [style*="background: white"] {
   color: var(--xm-muted);
   font-size: 13px;
 }
+
+/* xm-phone-panel 0.1.139  窄屏收侧栏、让出中间面板，方便加到手机桌面。 */
+.xm-phone-menu,
+.xm-phone-mask {
+  display: none;
+}
+
+.xm-phone-menu {
+  border: 0;
+  background: transparent;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  color: var(--xm-ink);
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 36px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.xm-phone-menu-bars,
+.xm-phone-menu-bars::before,
+.xm-phone-menu-bars::after {
+  display: block;
+  width: 16px;
+  height: 2px;
+  background: currentColor;
+  border-radius: 1px;
+}
+
+.xm-phone-menu-bars {
+  position: relative;
+}
+
+.xm-phone-menu-bars::before,
+.xm-phone-menu-bars::after {
+  content: "";
+  position: absolute;
+  left: 0;
+}
+
+.xm-phone-menu-bars::before {
+  top: -5px;
+}
+
+.xm-phone-menu-bars::after {
+  top: 5px;
+}
+
+.xm-phone-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  border: 0;
+  padding: 0;
+  background: rgba(15, 23, 42, 0.36);
+}
+
+@media (max-width: 880px) {
+  .xm-shell {
+    min-height: 100dvh;
+    height: 100dvh;
+  }
+
+  .xm-sider {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 80;
+    width: min(84vw, 280px);
+    flex: 0 0 min(84vw, 280px);
+    transform: translateX(-105%);
+    transition: transform 0.2s ease;
+    box-shadow: none;
+  }
+
+  html.xm-collapsed .xm-sider {
+    width: min(84vw, 280px);
+    flex-basis: min(84vw, 280px);
+  }
+
+  html.xm-collapsed .xm-menu-item span,
+  html.xm-collapsed .xm-menu-label,
+  html.xm-collapsed .xm-version,
+  html.xm-collapsed .xm-caret {
+    display: inline;
+  }
+
+  html.xm-collapsed .xm-submenu {
+    display: none;
+  }
+
+  html.xm-collapsed .xm-menu-group.is-open > .xm-submenu {
+    display: flex;
+  }
+
+  html.xm-collapsed .xm-logo img {
+    max-width: 148px;
+  }
+
+  html.xm-phone-nav .xm-sider {
+    transform: none;
+    box-shadow: 16px 0 40px rgba(15, 23, 42, 0.18);
+  }
+
+  .xm-phone-menu {
+    display: inline-flex;
+  }
+
+  html.xm-phone-nav .xm-phone-mask {
+    display: block;
+  }
+
+  .xm-topbar {
+    gap: 8px;
+    padding: 0 8px;
+    padding-left: max(8px, env(safe-area-inset-left));
+    padding-right: max(8px, env(safe-area-inset-right));
+  }
+
+  .xm-date,
+  .xm-styles {
+    display: none;
+  }
+
+  .xm-refresh {
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  .xm-notice-bar {
+    min-height: 32px;
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+
+  .xm-notice-kicker {
+    display: none;
+  }
+
+  .xm-workspace > .xm-pane.is-active {
+    overflow: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .page {
+    padding: 8px 10px 24px;
+  }
+}
+
+@media (max-width: 880px) and (display-mode: standalone) {
+  .xm-topbar {
+    height: calc(48px + env(safe-area-inset-top));
+    flex-basis: calc(48px + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+  }
+}
