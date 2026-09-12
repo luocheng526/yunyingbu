@@ -440,6 +440,8 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /han-cell-view/);
   assert.match(js, /beginCellEdit/);
   assert.match(js, /han-col-resizer/);
+  assert.match(js, /han-sheet-size-reset/);
+  assert.match(js, /复位格子/);
   assert.match(js, /han-row-resizer/);
   assert.doesNotMatch(js, /han-sheet-zoom-in/);
   assert.match(js, /han-sheet-pan/);

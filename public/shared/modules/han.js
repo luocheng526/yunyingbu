@@ -656,6 +656,7 @@
           ".han-sheet-wrap{background:#fff;border:1px solid #c6c6c6}" +
           ".han-sheet-viewbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid #e5e7eb;background:#f8fafc}" +
           ".han-sheet-viewbar .han-muted{font-size:12px;color:#6b7280}" +
+          ".han-sheet-viewbar .han-sheet-size-reset{min-height:30px;padding:4px 12px;border:0;border-radius:999px;background:#111827;color:#fff;font-size:12px;cursor:pointer}" +
           ".han-sheet-viewport{overflow:auto;cursor:grab;background:#f4f6f9;height:min(72vh,860px);min-height:420px;position:relative}" +
           ".han-sheet-viewport.is-panning{cursor:grabbing}" +
           ".han-sheet-pan{width:max-content}" +
@@ -746,7 +747,8 @@
           '<button type="button" id="han-rules-reset">恢复默认</button></div></div>' +
           '<div class="han-sheet-wrap">' +
           '<div class="han-sheet-viewbar">' +
-          '<span class="han-muted">拖动移动 · 拖表头右边调列宽 · 拖行底调行高 · 双击格子编辑 · 双击主图看大图</span></div>' +
+          '<button type="button" class="han-sheet-size-reset" id="han-sheet-size-reset">复位格子</button>' +
+          '<span class="han-muted">拖动移动 · 拖表头右边调列宽 · 拖行底调行高 · 点复位回到原始大小 · 双击格子编辑 · 双击主图看大图</span></div>' +
           '<div class="han-sheet-viewport" data-han-sheet>' +
           '<div class="han-sheet-pan"><table class="han-sheet" id="han-sheet">' +
           "<thead></thead><tbody></tbody></table></div></div></div>" +
@@ -1403,6 +1405,14 @@
         if (!box) return null;
         return box.querySelector("img.han-thumb");
       }
+      function resetSheetSizes() {
+        table.querySelectorAll("th,td,tr").forEach(function (el) {
+          el.style.width = "";
+          el.style.minWidth = "";
+          el.style.maxWidth = "";
+          el.style.height = "";
+        });
+      }
       function onSheetPointerUp(e) {
         sheetDrag = null;
         sizeDrag = null;
@@ -1453,6 +1463,8 @@
       table.addEventListener("focusout", onSheetBlur);
       table.addEventListener("keydown", onSheetKeydown);
       table.addEventListener("dblclick", onSheetDblClick);
+      const sizeResetBtn = root.querySelector("#han-sheet-size-reset");
+      sizeResetBtn.addEventListener("click", resetSheetSizes);
       viewport.addEventListener("pointerdown", onSheetPointerDown);
       viewport.addEventListener("pointermove", onSheetPointerMove);
       viewport.addEventListener("pointerup", onSheetPointerUp);
@@ -1494,6 +1506,7 @@
         table.removeEventListener("focusout", onSheetBlur);
         table.removeEventListener("keydown", onSheetKeydown);
         table.removeEventListener("dblclick", onSheetDblClick);
+        sizeResetBtn.removeEventListener("click", resetSheetSizes);
         viewport.removeEventListener("pointerdown", onSheetPointerDown);
         viewport.removeEventListener("pointermove", onSheetPointerMove);
         viewport.removeEventListener("pointerup", onSheetPointerUp);
