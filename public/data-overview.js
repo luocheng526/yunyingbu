@@ -27,7 +27,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=channel-fast1";
+      link.href = "/data-pages.css?v=channel-cal1";
       document.head.appendChild(link);
     }
   }
@@ -451,6 +451,111 @@
     );
   }
 
+  function inclusiveDays(from, to) {
+    const a = Date.parse(from + "T00:00:00+08:00");
+    const b = Date.parse(to + "T00:00:00+08:00");
+    if (!Number.isFinite(a) || !Number.isFinite(b)) {
+      return 0;
+    }
+    return Math.round(Math.abs(b - a) / 86400000) + 1;
+  }
+
+  function shiftMonth(year, month, delta) {
+    const next = new Date(year, month + delta, 1);
+    return { year: next.getFullYear(), month: next.getMonth() };
+  }
+
+  function monthCells(year, month) {
+    const first = new Date(year, month, 1);
+    let lead = first.getDay();
+    lead = lead === 0 ? 6 : lead - 1;
+    const days = new Date(year, month + 1, 0).getDate();
+    const cells = [];
+    const prevDays = new Date(year, month, 0).getDate();
+    for (let i = lead; i > 0; i -= 1) {
+      const dt = new Date(year, month, 1 - i);
+      cells.push({ y: dt.getFullYear(), m: dt.getMonth(), d: dt.getDate(), out: true });
+    }
+    for (let d = 1; d <= days; d += 1) {
+      cells.push({ y: year, m: month, d: d, out: false });
+    }
+    while (cells.length < 42) {
+      const dt = new Date(year, month, days + (cells.length - lead - days) + 1);
+      cells.push({ y: dt.getFullYear(), m: dt.getMonth(), d: dt.getDate(), out: true });
+    }
+    return cells;
+  }
+
+  function calendarMonthHtml(year, month, from, to, today, side) {
+    const week = ["一", "二", "三", "四", "五", "六", "日"]
+      .map(function (name) {
+        return "<span>" + name + "</span>";
+      })
+      .join("");
+    const cells = monthCells(year, month)
+      .map(function (cell) {
+        const value = cell.y + "-" + pad(cell.m + 1) + "-" + pad(cell.d);
+        const future = value > today;
+        const cls = [
+          cell.out ? "is-out" : "",
+          future ? "is-future" : "",
+          value === today ? "is-today" : "",
+          from && to && value >= from && value <= to ? "is-in" : "",
+          value === from ? "is-start" : "",
+          value === to ? "is-end" : ""
+        ]
+          .filter(Boolean)
+          .join(" ");
+        return (
+          '<button type="button" data-day="' +
+          value +
+          '"' +
+          (future ? " disabled" : "") +
+          (cls ? ' class="' + cls + '"' : "") +
+          ">" +
+          cell.d +
+          "</button>"
+        );
+      })
+      .join("");
+    const leftNav =
+      side === "left"
+        ? '<button type="button" data-cal="prev-year" aria-label="上一年">«</button><button type="button" data-cal="prev-month" aria-label="上一月">‹</button>'
+        : "";
+    const rightNav =
+      side === "right"
+        ? '<button type="button" data-cal="next-month" aria-label="下一月">›</button><button type="button" data-cal="next-year" aria-label="下一年">»</button>'
+        : "";
+    return (
+      '<div class="ch-cal-month"><div class="ch-cal-head">' +
+      leftNav +
+      "<strong>" +
+      year +
+      "年 " +
+      (month + 1) +
+      "月</strong>" +
+      rightNav +
+      '</div><div class="ch-cal-week">' +
+      week +
+      '</div><div class="ch-cal-days">' +
+      cells +
+      "</div></div>"
+    );
+  }
+
+  function calendarPanel(state) {
+    const today = shanghaiYmd(0);
+    const left = { year: state.calYear, month: state.calMonth };
+    const right = shiftMonth(state.calYear, state.calMonth, 1);
+    return (
+      '<div class="ch-cal" data-calendar="1">' +
+      calendarMonthHtml(left.year, left.month, state.customFrom, state.customTo, today, "left") +
+      calendarMonthHtml(right.year, right.month, state.customFrom, state.customTo, today, "right") +
+      (state.calError ? '<p class="ch-cal-err">' + escapeHtml(state.calError) + "</p>" : "") +
+      "</div>"
+    );
+  }
+
   function createDashboard(root) {
     ensureCss();
     stripPageChrome(root);
@@ -467,7 +572,11 @@
       customTo: "",
       shopId: "",
       section: "渠道列表",
-      payload: null
+      payload: null,
+      calOpen: false,
+      calYear: Number(shanghaiYmd(0).slice(0, 4)),
+      calMonth: Number(shanghaiYmd(0).slice(5, 7)) - 1,
+      calError: ""
     };
     let dead = false;
 
@@ -529,14 +638,7 @@
           "</button>"
         );
       }).join("");
-      const custom =
-        state.range === "自定义"
-          ? '<label class="ch-pick">从 <input type="date" data-from value="' +
-            escapeHtml(state.customFrom) +
-            '" /></label><label class="ch-pick">至 <input type="date" data-to value="' +
-            escapeHtml(state.customTo) +
-            '" /></label>'
-          : "";
+      const custom = state.calOpen ? calendarPanel(state) : "";
       const shopOpts =
         '<option value="">请选择店铺</option>' +
         ((payload.shops || []).map(function (shop) {
@@ -563,8 +665,9 @@
         '<div class="ch-right"><span class="ch-time">（统计时间：' +
         escapeHtml(payload.dateLabel || "") +
         "）</span>" +
-        '<div class="ch-ranges">' +
+        '<div class="ch-cal-wrap"><div class="ch-ranges">' +
         ranges +
+        "</div>" +
         custom +
         "</div></div></div>" +
         '<div class="ch-summary"><span class="ch-sum-title">综合指标</span>' +
@@ -666,9 +769,61 @@
     }
 
     board.addEventListener("click", function (event) {
+      const calNav = event.target.closest("[data-cal]");
+      if (calNav) {
+        const act = calNav.getAttribute("data-cal");
+        const moved = shiftMonth(
+          state.calYear,
+          state.calMonth,
+          act === "prev-year" ? -12 : act === "next-year" ? 12 : act === "prev-month" ? -1 : 1
+        );
+        state.calYear = moved.year;
+        state.calMonth = moved.month;
+        render();
+        return;
+      }
+      const dayBtn = event.target.closest("[data-day]");
+      if (dayBtn) {
+        const day = dayBtn.getAttribute("data-day");
+        if (!state.customFrom || state.customTo) {
+          state.customFrom = day;
+          state.customTo = "";
+          state.calError = "";
+          render();
+          return;
+        }
+        let from = state.customFrom;
+        let to = day;
+        if (to < from) {
+          const swap = from;
+          from = to;
+          to = swap;
+        }
+        if (inclusiveDays(from, to) > 30) {
+          state.calError = "最多可以选择30天";
+          render();
+          return;
+        }
+        state.customFrom = from;
+        state.customTo = to;
+        state.calError = "";
+        state.calOpen = false;
+        state.range = "自定义";
+        load();
+        return;
+      }
       const rangeBtn = event.target.closest("button[data-range]");
       if (rangeBtn) {
-        state.range = rangeBtn.getAttribute("data-range");
+        const next = rangeBtn.getAttribute("data-range");
+        if (next === "自定义") {
+          state.range = "自定义";
+          state.calOpen = true;
+          state.calError = "";
+          render();
+          return;
+        }
+        state.range = next;
+        state.calOpen = false;
         load();
         return;
       }
@@ -682,16 +837,6 @@
       if (event.target.matches("[data-shop]")) {
         state.shopId = event.target.value;
         render();
-        return;
-      }
-      if (event.target.matches("[data-from]")) {
-        state.customFrom = event.target.value;
-        load();
-        return;
-      }
-      if (event.target.matches("[data-to]")) {
-        state.customTo = event.target.value;
-        load();
       }
     });
 
