@@ -1,0 +1,36 @@
+{
+  "items": [
+    {
+      "id": "n-anniversary",
+      "title": "公司周年庆典",
+      "summary": "一路同行，感谢伙伴。周年庆安排与到场确认请看正文。",
+      "body": "各位同事：公司周年庆典即将举行。请按公告中心安排到场，并在截止日期前确认是否参加。后续如有调整，以本公告更新为准。",
+      "status": "active",
+      "level": "important",
+      "category": "anniversary",
+      "categoryLabel": "周年庆",
+      "author": "陈丹华",
+      "images": 1,
+      "popup": true,
+      "banner": true,
+      "createdAt": "2026-09-01T08:00:00.000Z",
+      "updatedAt": "2026-09-10T02:00:00.000Z"
+    },
+    {
+      "id": "n-promotion",
+      "title": "员工晋升报",
+      "summary": "本期晋升名单与岗位说明已发布，请相关同事查阅。",
+      "body": "本期员工晋升报已发布。请各部门负责人转达本人，并于本周内完成谈话记录。详细名单与岗位说明见公告正文附件说明。",
+      "status": "active",
+      "level": "normal",
+      "category": "promotion",
+      "categoryLabel": "晋升报",
+      "author": "陈丹华",
+      "images": 0,
+      "popup": false,
+      "banner": true,
+      "createdAt": "2026-09-08T08:00:00.000Z",
+      "updatedAt": "2026-09-10T02:00:00.000Z"
+    }
+  ]
+}
