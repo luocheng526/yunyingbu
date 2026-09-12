@@ -99,6 +99,12 @@ test("academy.js enables upload, watermark, and blocks original download", () =>
   assert.match(js, /academy-view-upload/);
   assert.match(js, /academy-thumbs/);
   assert.match(js, /academy-course-pane/);
+  assert.match(js, /academy-course-tree/);
+  assert.match(js, /data-course-add/);
+  assert.match(js, /data-folder-row/);
+  assert.match(js, /\/api\/academy\/courses\/folders/);
+  assert.match(js, /\/api\/academy\/courses\/folders\/reorder/);
+  assert.match(js, /\/move/);
   assert.match(js, /课件展示/);
   assert.match(js, /emptyViewer/);
   assert.match(js, /paintThumbs/);
@@ -121,6 +127,8 @@ test("academy.js enables upload, watermark, and blocks original download", () =>
   assert.match(css, /max-width:\s*none/);
   assert.match(css, /\.academy-console\.is-logs/);
   assert.match(css, /\.academy-course-pane/);
+  assert.match(css, /\.academy-course-folder/);
+  assert.match(css, /\.academy-course-folder-row\.is-drop-inside/);
   assert.doesNotMatch(js, /has-viewer/);
 });
 
@@ -238,6 +246,68 @@ test("plan is live; old ppt is rejected", async () => {
   assert.equal(res.status, 400);
   const data = await res.json();
   assert.match(data.error, /pptx/);
+});
+
+test("course folders can be created, nested, reordered, and assigned", async () => {
+  const cookie = await loginCookie();
+  await resetPptCoursesForTests();
+  const headers = { cookie, Accept: "application/json", "Content-Type": "application/json" };
+  const initial = await (await fetch(`${base}/api/academy/courses`, { headers })).json();
+  assert.equal(initial.canEdit, true);
+  assert.equal(initial.folders.length, 5);
+
+  const topRes = await fetch(`${base}/api/academy/courses/folders`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ title: "直播培训", parentId: "" })
+  });
+  assert.equal(topRes.status, 201);
+  const top = (await topRes.json()).folder;
+  const childRes = await fetch(`${base}/api/academy/courses/folders`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ title: "开播准备", parentId: top.id })
+  });
+  assert.equal(childRes.status, 201);
+  const child = (await childRes.json()).folder;
+
+  const movedFolder = await fetch(`${base}/api/academy/courses/folders/reorder`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ id: "course-folder-5", parentId: top.id })
+  });
+  assert.equal(movedFolder.status, 200);
+  const movedTree = (await movedFolder.json()).folders;
+  const liveFolder = movedTree.find((folder) => folder.id === top.id);
+  assert.ok(liveFolder.children.some((folder) => folder.id === child.id));
+  assert.ok(liveFolder.children.some((folder) => folder.id === "course-folder-5"));
+
+  const buf = await makePptx();
+  const qs = new URLSearchParams({
+    title: "自建培训模板",
+    category: child.title,
+    folderId: child.id,
+    published: "1",
+    filename: "training.pptx"
+  });
+  const upload = await fetch(`${base}/api/academy/courses?${qs}`, {
+    method: "POST",
+    headers: { cookie, Accept: "application/json", "Content-Type": "application/octet-stream" },
+    body: buf
+  });
+  assert.equal(upload.status, 201);
+  const course = (await upload.json()).course;
+  assert.equal(course.folderId, child.id);
+
+  const assigned = await fetch(`${base}/api/academy/courses/${course.id}/move`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ folderId: top.id })
+  });
+  assert.equal(assigned.status, 200);
+  assert.equal((await assigned.json()).course.folderId, top.id);
+  const final = await (await fetch(`${base}/api/academy/courses`, { headers })).json();
+  assert.equal(final.items.find((item) => item.id === course.id).folderId, top.id);
 });
 
 test("upload pptx, turn pages, never serve original", async () => {

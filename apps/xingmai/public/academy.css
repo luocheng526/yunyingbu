@@ -1,4 +1,4 @@
-/* xm-academy 0.1.227 · logs-page-v2 */
+/* xm-academy 0.1.228 · course-folders */
 #xm-content > .academy-page,
 #xm-content > main.page.academy-page,
 .xm-content > .academy-page,
@@ -436,6 +436,46 @@ main.page.academy-page,
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.academy-course-tree {
+  gap: 0;
+}
+
+.academy-course-folder,
+.academy-course-folder-kids {
+  display: flex;
+  flex-direction: column;
+}
+
+.academy-course-folder-kids {
+  padding-left: 10px;
+}
+
+.academy-course-folder-row {
+  min-height: 32px;
+}
+
+.academy-course-folder-row.is-drop-inside {
+  outline: 2px solid var(--xm-primary);
+  outline-offset: -2px;
+  background: var(--xm-primary-soft);
+}
+
+.academy-folder-count {
+  margin-left: auto;
+  color: var(--xm-muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.academy-course-folder-kids > .academy-course {
+  margin: 2px 8px 2px 4px;
+  width: auto;
+}
+
+.academy-course-empty {
+  padding: 10px 8px;
 }
 
 .academy-course {

@@ -214,6 +214,7 @@ const READ_PPTX_PY = [
 const execFileAsync = promisify(execFile);
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(ROOT, "data", "courses");
+const CATALOG_FILE = join(DATA_DIR, "catalog.json");
 const READER = join(ROOT, "read-pptx.py");
 const CATEGORIES = ["选品与商品", "流量与投放", "转化与页面", "数据与复盘", "大促节奏"];
 
@@ -222,16 +223,18 @@ async function ensureReader() {
 }
 
 let memory = [];
+let memoryCatalog = null;
 
 function nowSql() {
   return new Date().toISOString().slice(0, 19).replace("T", " ");
 }
 
-function publicCourse(row) {
+function publicCourse(row, folderId = "") {
   return {
     id: row.id,
     title: row.title,
     category: row.category,
+    folderId,
     published: Boolean(row.published),
     pageCount: Number(row.pageCount) || 0,
     originalName: row.originalName,
@@ -239,6 +242,207 @@ function publicCourse(row) {
     download: false,
     watermark: true
   };
+}
+
+function defaultFolders() {
+  return CATEGORIES.map((title, index) => ({
+    id: `course-folder-${index + 1}`,
+    title,
+    children: []
+  }));
+}
+
+function cloneFolders(nodes) {
+  return (nodes || []).map((node) => ({
+    id: node.id,
+    title: node.title,
+    children: cloneFolders(node.children)
+  }));
+}
+
+function walkFolders(nodes, visit, parent = null) {
+  for (const node of nodes || []) {
+    visit(node, parent);
+    walkFolders(node.children, visit, node);
+  }
+}
+
+function findFolder(nodes, id) {
+  let hit = null;
+  walkFolders(nodes, (node) => {
+    if (node.id === id) {
+      hit = node;
+    }
+  });
+  return hit;
+}
+
+function findFolderByTitle(nodes, title) {
+  let hit = null;
+  walkFolders(nodes, (node) => {
+    if (!hit && node.title === title) {
+      hit = node;
+    }
+  });
+  return hit;
+}
+
+function safeFolderId(id) {
+  const value = String(id || "");
+  return /^[a-z0-9][a-z0-9-]{0,63}$/i.test(value) ? value : "";
+}
+
+function catalogPayload(catalog) {
+  return {
+    folders: cloneFolders(catalog.folders),
+    assignments: { ...(catalog.assignments || {}) }
+  };
+}
+
+async function saveCourseCatalog(catalog) {
+  const next = catalogPayload(catalog);
+  memoryCatalog = next;
+  await mkdir(DATA_DIR, { recursive: true });
+  await writeFile(CATALOG_FILE, JSON.stringify(next, null, 2));
+  return catalogPayload(next);
+}
+
+async function loadCourseCatalog() {
+  if (memoryCatalog) {
+    return catalogPayload(memoryCatalog);
+  }
+  await mkdir(DATA_DIR, { recursive: true });
+  try {
+    const data = JSON.parse(await readFile(CATALOG_FILE, "utf8"));
+    const catalog = {
+      folders: Array.isArray(data.folders) ? data.folders : defaultFolders(),
+      assignments: data.assignments && typeof data.assignments === "object" ? data.assignments : {}
+    };
+    memoryCatalog = catalogPayload(catalog);
+    return catalogPayload(catalog);
+  } catch {
+    return saveCourseCatalog({ folders: defaultFolders(), assignments: {} });
+  }
+}
+
+function folderForCourse(catalog, row) {
+  const assigned = findFolder(catalog.folders, catalog.assignments[row.id]);
+  return assigned || findFolderByTitle(catalog.folders, row.category) || catalog.folders[0] || null;
+}
+
+function bad(message, statusCode = 400) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+export async function getCourseFolderTree() {
+  const catalog = await loadCourseCatalog();
+  return cloneFolders(catalog.folders);
+}
+
+export async function addCourseFolder({ parentId, title }) {
+  const name = String(title || "").trim();
+  if (!name) {
+    throw bad("请填写分类名称");
+  }
+  const catalog = await loadCourseCatalog();
+  const pid = safeFolderId(parentId);
+  const node = { id: `course-${randomUUID()}`, title: name.slice(0, 64), children: [] };
+  if (pid) {
+    const parent = findFolder(catalog.folders, pid);
+    if (!parent) {
+      throw bad("没有这个上级分类", 404);
+    }
+    parent.children = parent.children || [];
+    parent.children.push(node);
+  } else {
+    catalog.folders.push(node);
+  }
+  await saveCourseCatalog(catalog);
+  return node;
+}
+
+function findFolderParent(nodes, id) {
+  let parent;
+  walkFolders(nodes, (node, owner) => {
+    if (node.id === id) {
+      parent = owner;
+    }
+  });
+  return parent;
+}
+
+function takeFolder(nodes, id) {
+  for (let index = 0; index < (nodes || []).length; index += 1) {
+    if (nodes[index].id === id) {
+      return nodes.splice(index, 1)[0];
+    }
+    const nested = takeFolder(nodes[index].children || [], id);
+    if (nested) {
+      return nested;
+    }
+  }
+  return null;
+}
+
+function folderContains(node, id) {
+  return Boolean(findFolder(node.children || [], id));
+}
+
+export async function moveCourseFolder({ id, beforeId, parentId }) {
+  const catalog = await loadCourseCatalog();
+  const sid = safeFolderId(id);
+  const moving = findFolder(catalog.folders, sid);
+  if (!moving) {
+    throw bad("没有这个分类", 404);
+  }
+  const before = safeFolderId(beforeId);
+  if (before === sid) {
+    return cloneFolders(catalog.folders);
+  }
+  let destinationParent = null;
+  let destination = catalog.folders;
+  if (before) {
+    if (!findFolder(catalog.folders, before)) {
+      throw bad("放不下这个位置");
+    }
+    destinationParent = findFolderParent(catalog.folders, before);
+    destination = destinationParent ? destinationParent.children : catalog.folders;
+  } else if (safeFolderId(parentId)) {
+    destinationParent = findFolder(catalog.folders, safeFolderId(parentId));
+    if (!destinationParent) {
+      throw bad("没有这个上级分类", 404);
+    }
+    destination = destinationParent.children || (destinationParent.children = []);
+  }
+  if (destinationParent && (destinationParent.id === sid || folderContains(moving, destinationParent.id))) {
+    throw bad("不能拖进自己的下级");
+  }
+  const taken = takeFolder(catalog.folders, sid);
+  if (!taken) {
+    throw bad("没有这个分类", 404);
+  }
+  const index = before ? destination.findIndex((node) => node.id === before) : destination.length;
+  destination.splice(index < 0 ? destination.length : index, 0, taken);
+  await saveCourseCatalog(catalog);
+  return cloneFolders(catalog.folders);
+}
+
+export async function assignPptCourseFolder({ courseId, folderId }) {
+  const catalog = await loadCourseCatalog();
+  const folder = findFolder(catalog.folders, safeFolderId(folderId));
+  if (!folder) {
+    throw bad("没有这个课件分类", 404);
+  }
+  const rows = await listPptCourses({ includeUnpublished: true });
+  const course = rows.find((item) => item.id === safeCourseId(courseId));
+  if (!course) {
+    throw bad("课件不存在", 404);
+  }
+  catalog.assignments[course.id] = folder.id;
+  await saveCourseCatalog(catalog);
+  return { ...course, folderId: folder.id, category: folder.title };
 }
 
 async function ensureCoursesTable() {
@@ -284,6 +488,7 @@ export function courseCategories() {
 }
 
 export async function listPptCourses({ includeUnpublished = true } = {}) {
+  const catalog = await loadCourseCatalog();
   if ((await dbMode()) === "mysql") {
     await ensureCoursesTable();
     const [rows] = await query(
@@ -299,12 +504,15 @@ export async function listPptCourses({ includeUnpublished = true } = {}) {
           pageCount: row.page_count,
           originalName: row.original_name,
           createdAt: row.created_at
-        })
+        }, (folderForCourse(catalog, {
+          id: row.id,
+          category: row.category
+        }) || {}).id)
       )
       .filter((item) => includeUnpublished || item.published);
   }
   return memory
-    .map((item) => publicCourse(item))
+    .map((item) => publicCourse(item, (folderForCourse(catalog, item) || {}).id))
     .filter((item) => includeUnpublished || item.published);
 }
 
@@ -477,16 +685,20 @@ function isPptx(filename, buffer) {
   return name.endsWith(".pptx") && buffer && buffer.length > 4 && buffer[0] === 0x50 && buffer[1] === 0x4b;
 }
 
-export async function createPptCourse({ title, category, published = true, file, createdBy }) {
+export async function createPptCourse({ title, category, folderId, published = true, file, createdBy }) {
   const name = String(title || "").trim();
-  const cat = String(category || "").trim();
+  const catalog = await loadCourseCatalog();
+  const folder =
+    findFolder(catalog.folders, safeFolderId(folderId)) ||
+    findFolderByTitle(catalog.folders, String(category || "").trim());
+  const cat = folder ? folder.title : String(category || "").trim();
   if (!name) {
     const error = new Error("请填写课件标题");
     error.statusCode = 400;
     throw error;
   }
-  if (!CATEGORIES.includes(cat)) {
-    const error = new Error("请选择运营分类");
+  if (!folder) {
+    const error = new Error("请选择课件分类");
     error.statusCode = 400;
     throw error;
   }
@@ -548,7 +760,9 @@ export async function createPptCourse({ title, category, published = true, file,
   } else {
     memory.unshift(row);
   }
-  return publicCourse(row);
+  catalog.assignments[row.id] = folder.id;
+  await saveCourseCatalog(catalog);
+  return publicCourse(row, folder.id);
 }
 
 const CHUNK_MAX = 128 * 1024;
@@ -569,6 +783,7 @@ export async function receivePptChunk({
   category,
   published,
   filename,
+  folderId,
   buffer,
   createdBy
 }) {
@@ -603,6 +818,7 @@ export async function receivePptChunk({
       category,
       published,
       filename,
+      folderId,
       size: bytes,
       total: n,
       createdBy,
@@ -625,6 +841,7 @@ export async function receivePptChunk({
   const course = await createPptCourse({
     title: session.title,
     category: session.category,
+    folderId: session.folderId,
     published: session.published,
     file: { filename: session.filename || "course.pptx", buffer: assembled },
     createdBy: session.createdBy
@@ -634,6 +851,7 @@ export async function receivePptChunk({
 
 export async function resetPptCoursesForTests() {
   memory = [];
+  memoryCatalog = null;
   uploads.clear();
   await rm(DATA_DIR, { recursive: true, force: true });
   await mkdir(DATA_DIR, { recursive: true });
