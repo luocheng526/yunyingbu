@@ -27,6 +27,7 @@ function applyCardMove(full, hide, fromKey, toKey, visibleOnly) {
 
 test("homepage module persists a shared card order", () => {
   assert.match(homeJs, /xm-home-card-order/);
+  assert.match(homeJs, /function viewStore/);
   assert.match(homeJs, /function applyCardMove/);
   assert.match(homeJs, /function onSortDown/);
   assert.match(homeJs, /function onSortSelectStart/);

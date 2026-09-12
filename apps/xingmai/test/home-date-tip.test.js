@@ -69,6 +69,11 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.doesNotMatch(homeJs, /border:2px solid #4d8fd6/);
   assert.match(homeJs, /\.xm-hm-bar\{[^}]*border:0\}/);
   assert.match(homeJs, /function teamHidden/);
+  assert.match(homeJs, /function viewStore/);
+  assert.match(homeJs, /xm-home-" \+ viewKey \+ "-"/);
+  assert.match(homeJs, /function orderTeams/);
+  assert.match(homeJs, /function saveTeamCols/);
+  assert.match(homeJs, /data-name="/);
   assert.doesNotMatch(homeJs, /卡片可拖拽换位/);
   assert.doesNotMatch(homeJs, /title="拖拽换位"/);
   assert.match(homeJs, /function shopColHit/);

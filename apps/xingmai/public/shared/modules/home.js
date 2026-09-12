@@ -268,7 +268,6 @@
 
   function calPanelHtml(cursor, opts) {
     return (
-      '<div class="xm-hm-cal-arrow" aria-hidden="true"></div>' +
       '<div class="xm-hm-cal-months">' +
       calMonthHtml(cursor, opts, "left") +
       calMonthHtml(shiftMonth(cursor, 1), opts, "right") +
@@ -289,9 +288,17 @@
     return null;
   }
 
+  var viewKey = "company";
+  function viewStore(kind) {
+    return viewKey === "team" || viewKey === "chief"
+      ? "xm-home-" + viewKey + "-" + kind
+      : kind === "hide"
+        ? "xm-home-hidden-cards"
+        : "xm-home-card-order";
+  }
   function hiddenCards() {
     try {
-      var raw = localStorage.getItem("xm-home-hidden-cards");
+      var raw = localStorage.getItem(viewStore("hide"));
       return raw ? JSON.parse(raw) : [];
     } catch (_err) {
       return [];
@@ -301,7 +308,7 @@
   function teamHidden(hide) {
     var out = (hide || []).slice();
     try {
-      if (localStorage.getItem("xm-home-hidden-cards") == null && out.indexOf("netQty") === -1) {
+      if (localStorage.getItem(viewStore("hide")) == null && out.indexOf("netQty") === -1) {
         out.push("netQty");
       }
     } catch (_err) {}
@@ -310,7 +317,7 @@
 
   function saveHidden(list) {
     try {
-      localStorage.setItem("xm-home-hidden-cards", JSON.stringify(list));
+      localStorage.setItem(viewStore("hide"), JSON.stringify(list));
     } catch (_err) {}
   }
 
@@ -324,7 +331,7 @@
     var defs = defaultCardKeys();
     var saved = [];
     try {
-      saved = JSON.parse(localStorage.getItem("xm-home-card-order") || "[]");
+      saved = JSON.parse(localStorage.getItem(viewStore("order")) || "[]");
     } catch (_err) {
       saved = [];
     }
@@ -349,7 +356,7 @@
 
   function saveCardOrder(keys) {
     try {
-      localStorage.setItem("xm-home-card-order", JSON.stringify(cardOrderFrom(keys)));
+      localStorage.setItem(viewStore("order"), JSON.stringify(cardOrderFrom(keys)));
     } catch (_err) {}
   }
 
@@ -398,16 +405,67 @@
     });
   }
 
-  function orderedDefs() {
+  function arrangeCards(cards) {
     var map = {};
-    COMPANY_CARD_DEFS.forEach(function (def) {
-      map[def.key] = def;
+    (cards || []).forEach(function (card) {
+      if (card) {
+        map[card.key] = card;
+      }
     });
     return cardOrder()
       .map(function (key) {
         return map[key];
       })
       .filter(Boolean);
+  }
+
+  function colOrderKey(simple) {
+    return simple ? "xm-home-chief-cols" : "xm-home-mgr-cols";
+  }
+
+  function orderTeams(teams, simple) {
+    var list = teams || [];
+    var saved = [];
+    try {
+      saved = JSON.parse(localStorage.getItem(colOrderKey(simple)) || "[]");
+    } catch (_err) {
+      saved = [];
+    }
+    var by = {};
+    list.forEach(function (team) {
+      if (team && team.name) {
+        by[team.name] = team;
+      }
+    });
+    var out = [];
+    saved.forEach(function (name) {
+      if (by[name]) {
+        out.push(by[name]);
+        delete by[name];
+      }
+    });
+    list.forEach(function (team) {
+      if (team && by[team.name]) {
+        out.push(team);
+      }
+    });
+    return out;
+  }
+
+  function saveTeamCols(fromName, toName, simple) {
+    var names = Array.prototype.map.call(document.querySelectorAll(".xm-hm-team[data-name]"), function (el) {
+      return el.getAttribute("data-name");
+    });
+    var from = names.indexOf(fromName);
+    var to = names.indexOf(toName);
+    if (from < 0 || to < 0 || from === to) {
+      return;
+    }
+    names.splice(from, 1);
+    names.splice(to, 0, fromName);
+    try {
+      localStorage.setItem(colOrderKey(simple), JSON.stringify(names));
+    } catch (_err) {}
   }
 
   function trendHtml(trend) {
@@ -649,6 +707,8 @@
     return (
       '<section class="xm-hm-team" data-team="' +
       escapeHtml(team.key) +
+      '" data-name="' +
+      escapeHtml(team.name) +
       '">' +
       teamHeadHtml(team) +
       '<div class="xm-hm-team-kpis">' +
@@ -664,12 +724,12 @@
   }
 
   function teamsCompareHtml(teams, hide, simple) {
-    var list = teams && teams.length ? teams : simple ? [] : blankTeams();
+    var list = orderTeams(teams && teams.length ? teams : simple ? [] : blankTeams(), simple);
     return (
       '<div class="xm-hm-teams-bar"><b>星脉甄选</b><button type="button" class="xm-hm-set">卡片设置</button></div><div class="xm-hm-teams-grid">' +
       list
         .map(function (team) {
-          return teamBlockHtml(team, hide, simple);
+          return teamBlockHtml({ key: team.key, name: team.name, cards: arrangeCards(team.cards), shops: team.shops }, hide, simple);
         })
         .join("") +
       "</div>"
@@ -828,16 +888,8 @@
       " " +
       height +
       '" preserveAspectRatio="none" aria-hidden="true">' +
-      (yestPts
-        ? '<polyline fill="none" stroke="#2f54eb" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" points="' +
-          yestPts +
-          '"></polyline>'
-        : "") +
-      (todayPts
-        ? '<polyline fill="none" stroke="#cf1322" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" points="' +
-          todayPts +
-          '"></polyline>'
-        : "") +
+      (yestPts ? '<polyline fill="none" stroke="#2f54eb" stroke-width="2.4" points="' + yestPts + '"></polyline>' : "") +
+      (todayPts ? '<polyline fill="none" stroke="#cf1322" stroke-width="2.4" points="' + todayPts + '"></polyline>' : "") +
       "</svg>"
     );
   }
@@ -895,21 +947,6 @@
     );
   }
 
-  function mergeLive(target, payload) {
-    if (!payload || payload.ok === false) {
-      return target;
-    }
-    return {
-      title: payload.title || target.title,
-      dateLabel: payload.dateLabel || target.dateLabel,
-      range: payload.range || target.range,
-      summary: payload.summary || target.summary,
-      hero: readChart(payload.hero, target.hero),
-      paid: readChart(payload.paid || payload.paidHero, target.paid),
-      cards: pickLiveCards(payload.cards && payload.cards.length ? payload.cards : target.cards)
-    };
-  }
-
   function cssText() {
     return (
       "html:has(#xm-hm),html:has(#xm-hm) body{height:100%!important;max-height:100%!important;overflow:hidden!important}" +
@@ -934,7 +971,6 @@
       ".xm-hm-dates-clear:hover{color:#909399}" +
       ".xm-hm-cal{position:absolute;top:calc(100% + 10px);right:0;z-index:8;width:646px;max-width:min(646px,calc(100vw - 24px));background:#fff;border-radius:4px;box-shadow:0 2px 12px rgba(0,0,0,.12);padding:8px 8px 12px}" +
       ".xm-hm-cal[hidden]{display:none}" +
-      ".xm-hm-cal-arrow{position:absolute;top:-6px;right:48px;width:10px;height:10px;background:#fff;transform:rotate(45deg);box-shadow:-1px -1px 1px rgba(0,0,0,.04)}" +
       ".xm-hm-cal-months{display:flex}" +
       ".xm-hm-cal-month{flex:1 1 50%;min-width:0;padding:4px 12px 0}" +
       ".xm-hm-cal-month + .xm-hm-cal-month{border-left:1px solid #ebeef5}" +
@@ -951,7 +987,7 @@
       ".xm-hm-cal-grid button.is-today{color:#f56c6c}" +
       ".xm-hm-cal-grid button.is-start,.xm-hm-cal-grid button.is-end{background:#f56c6c;color:#fff;border-radius:50%;width:32px}" +
       ".xm-hm-cal-grid button:disabled,.xm-hm-cal-grid button.is-off{color:#c0c4cc;opacity:.7;cursor:not-allowed}" +
-      "html[data-theme=dark] .xm-hm-dates,html[data-theme=dark] .xm-hm-cal,html[data-theme=dark] .xm-hm-cal-arrow{background:var(--xm-card);color:var(--xm-ink);border-color:var(--xm-line)}" +
+      "html[data-theme=dark] .xm-hm-dates,html[data-theme=dark] .xm-hm-cal{background:var(--xm-card);color:var(--xm-ink);border-color:var(--xm-line)}" +
       ".xm-hm-card-head .xm-hm-help{cursor:help;position:relative;z-index:2;width:18px;height:18px;border:1px solid var(--xm-line);border-radius:50%;background:transparent;padding:0;margin:0;font:inherit;font-size:11px;line-height:1;color:var(--xm-muted);display:inline-flex;align-items:center;justify-content:center}" +
       ".xm-hm-tip{position:fixed;z-index:9;display:none;box-sizing:border-box;width:max-content;max-width:min(360px,calc(100vw - 24px));padding:10px 12px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.18);color:var(--xm-ink);font-size:12px;line-height:1.6;white-space:pre-wrap;text-align:left;pointer-events:none}" +
       ".xm-hm-tip.is-on{display:block}" +
@@ -959,6 +995,9 @@
       ".xm-hm.is-live .xm-hm-kpis-shell,.xm-hm.is-board .xm-hm-kpis-shell,.xm-hm.is-team .xm-hm-kpis-shell,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
       ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden]{display:none}" +
       ".xm-hm-kpis-shell,.xm-hm-teams,.xm-hm-team{background:linear-gradient(#dceaff,#f7fbff);border:0;outline:0;box-shadow:none;border-radius:12px}" +
+      ".xm-hm-teams{background:transparent}" +
+      ".xm-hm-team{cursor:grab;box-shadow:0 0 0 1px #c5d8f5}" +
+      ".xm-hm-team.is-hold{cursor:grabbing;opacity:.84}" +
       ".xm-hm-kpis-shell,.xm-hm-teams{padding:10px}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
       ".xm-hm-teams{display:flex;flex-direction:column;gap:10px;overflow-x:auto}" +
@@ -1017,8 +1056,6 @@
       ".xm-hm-rest span{color:var(--xm-muted);width:22px}" +
       ".xm-hm-rest b{flex:1;font-weight:500}" +
       ".xm-hm-rest em{font-style:normal;font-variant-numeric:tabular-nums}" +
-      "html[data-theme=dark] .xm-hm-stand-item{background:#2a2418}" +
-      "html[data-theme=dark] .xm-hm-stand-item.is-1{background:#3a3018}" +
       ".xm-hm-live-clock{margin:0 0 8px;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-live-charts{display:grid;grid-template-columns:1fr 1fr;gap:10px}" +
       ".xm-hm-chart{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:14px 16px 10px;min-width:0}" +
@@ -1044,8 +1081,6 @@
       ".xm-hm-trend{margin-top:6px;font-size:12px;color:var(--xm-muted)}" +
       ".xm-hm-trend.is-up{color:#cf1322}" +
       ".xm-hm-trend.is-down{color:#389e0d}" +
-      "html[data-theme=dark] .xm-hm-trend.is-up{color:#ff7875}" +
-      "html[data-theme=dark] .xm-hm-trend.is-down{color:#73d13d}" +
       ".xm-hm-panel{width:100%;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:12px 12px 8px;min-height:0}" +
       ".xm-hm-panel h2{margin:0;font-size:14px;display:flex;align-items:center;justify-content:space-between;gap:8px}" +
       ".xm-hm-index-num{margin:8px 0 6px;font-size:28px;font-weight:700;color:var(--xm-primary)}" +
@@ -1101,8 +1136,9 @@
 
   function paint(root, state) {
     var board = root.querySelector("#xm-hm");
+    viewKey = state.view || "company";
     var hide = hiddenCards();
-    var cards = (state.cards || blankCompanyCards()).filter(function (card) {
+    var cards = arrangeCards(state.cards || blankCompanyCards()).filter(function (card) {
       return hide.indexOf(card.key) === -1;
     });
     var live = state.live || blankLive();
@@ -1170,7 +1206,7 @@
           : state.view === "board"
             ? "排行榜按责权店对齐 ERP。"
             : "数字来自星脉 ERP。净销售额=支付-退款。";
-    root.querySelector("#xm-hm-card-opts").innerHTML = (state.cards || blankCompanyCards())
+    root.querySelector("#xm-hm-card-opts").innerHTML = arrangeCards(state.cards || blankCompanyCards())
       .map(function (card) {
         return (
           '<label data-sort="' +
@@ -1396,10 +1432,6 @@
     return sumPack(pack && pack.records);
   }
 
-  function teamSummaryFrom(rows) {
-    return sumPack(rows);
-  }
-
   function mergeSummary(primary, extra) {
     var out = withRates(primary || {});
     var src = extra || {};
@@ -1412,7 +1444,7 @@
   }
 
   function blankCompanyCards() {
-    return orderedDefs().map(function (def) {
+    return COMPANY_CARD_DEFS.map(function (def) {
       return { key: def.key, label: def.label, value: "—", accent: !!def.accent, trend: 0, tip: def.tip || "" };
     });
   }
@@ -1420,7 +1452,7 @@
   function companyCardsFrom(sum, prev) {
     sum = sum || {};
     prev = prev || {};
-    return orderedDefs().map(function (def) {
+    return COMPANY_CARD_DEFS.map(function (def) {
       var cur = def.kind === "none" ? null : sum[def.field];
       var old = def.kind === "none" ? null : prev[def.field];
       var value = "—";
@@ -1560,12 +1592,6 @@
         return row;
       }
       return Object.assign({}, row, { shopId: id });
-    });
-  }
-
-  function packHasStats(pack) {
-    return ((pack && pack.records) || []).some(function (row) {
-      return row && (row.payAmount != null || row.totalPromotionCost != null || row.profit != null);
     });
   }
 
@@ -1968,7 +1994,7 @@
       return {
         key: key,
         name: name,
-        cards: companyCardsFrom(teamSummaryFrom(matched), teamSummaryFrom(prevMatched)),
+        cards: companyCardsFrom(sumPack(matched), sumPack(prevMatched)),
         shops: rows
       };
     }
@@ -2063,16 +2089,7 @@
       paint(root, state);
 
       function shanghaiClock() {
-        return new Intl.DateTimeFormat("zh-CN", {
-          timeZone: "Asia/Shanghai",
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hour12: false
-        }).format(new Date());
+        return new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
       }
 
       function pullLive() {
@@ -2289,28 +2306,6 @@
         renderCal();
       }
 
-      function syncCardOrderToState() {
-        var keys = cardOrder();
-        function sortCards(list) {
-          var map = {};
-          (list || []).forEach(function (card) {
-            map[card.key] = card;
-          });
-          return keys
-            .map(function (key) {
-              return map[key];
-            })
-            .filter(Boolean);
-        }
-        state.cards = sortCards(state.cards && state.cards.length ? state.cards : blankCompanyCards());
-        (state.teams || []).forEach(function (team) {
-          team.cards = sortCards(team.cards);
-        });
-        (state.chiefs || []).forEach(function (team) {
-          team.cards = sortCards(team.cards);
-        });
-      }
-
       var calOpen = false;
       var calCursor = (state.from || shanghaiYmd(1)).slice(0, 7);
       var calPick = "";
@@ -2358,6 +2353,7 @@
       var sortFrom = "";
       var sortDragging = false;
       var sortSettings = false;
+      var sortTeam = false;
       var sortStartX = 0;
       var sortStartY = 0;
       var sortSwallow = false;
@@ -2387,6 +2383,7 @@
         sortFrom = "";
         sortDragging = false;
         sortSettings = false;
+        sortTeam = false;
         clearTextSelection();
         Array.prototype.forEach.call(root.querySelectorAll(".is-hold, .is-over"), function (el) {
           el.classList.remove("is-hold", "is-over");
@@ -2407,7 +2404,11 @@
         if (!el || !el.closest || !root.contains(el)) {
           return null;
         }
-        return sortSettings ? el.closest("#xm-hm-card-opts label") : el.closest(".xm-hm-card");
+        return sortTeam
+          ? el.closest(".xm-hm-team")
+          : sortSettings
+            ? el.closest("#xm-hm-card-opts label")
+            : el.closest(".xm-hm-card");
       }
 
       function onSortDown(event) {
@@ -2430,10 +2431,19 @@
         if (event.target.closest("i") || event.target.closest("input") || event.target.closest("button") || event.target.closest("a")) {
           return;
         }
+        var teamCol = event.target.closest(".xm-hm-team-head");
         var card = event.target.closest(".xm-hm-card");
         var row = event.target.closest("#xm-hm-card-opts label");
         sortStartX = event.clientX || 0;
         sortStartY = event.clientY || 0;
+        if (teamCol && teamCol.closest(".xm-hm-team")) {
+          if (event.cancelable) event.preventDefault();
+          sortFrom = teamCol.closest(".xm-hm-team").getAttribute("data-name") || "";
+          sortTeam = true;
+          sortSettings = false;
+          clearTextSelection();
+          return;
+        }
         if (card && (card.closest("#xm-hm-kpis") || card.closest("#xm-hm-teams"))) {
           if (event.cancelable) event.preventDefault();
           sortFrom = card.getAttribute("data-card") || "";
@@ -2473,7 +2483,9 @@
         }
         if (sortFrom && !sortDragging && (Math.abs(x - sortStartX) > 8 || Math.abs(y - sortStartY) > 8)) {
           sortDragging = true;
-          var moving = root.querySelectorAll('.xm-hm-card[data-card="' + sortFrom + '"]');
+          var moving = sortTeam
+            ? root.querySelectorAll('.xm-hm-team[data-name="' + sortFrom + '"]')
+            : root.querySelectorAll('.xm-hm-card[data-card="' + sortFrom + '"]');
           Array.prototype.forEach.call(moving, function (el) {
             el.classList.add("is-hold");
           });
@@ -2492,7 +2504,10 @@
           event.preventDefault();
         }
         var over = hitSortEl(event);
-        if (over && (over.getAttribute("data-sort") || over.getAttribute("data-card")) !== sortFrom) {
+        var overKey = over
+          ? over.getAttribute(sortTeam ? "data-name" : sortSettings ? "data-sort" : "data-card")
+          : "";
+        if (over && overKey && overKey !== sortFrom) {
           sortMarkOver(over);
         } else {
           sortMarkOver(null);
@@ -2508,10 +2523,15 @@
         }
         var moved = sortDragging && sortFrom;
         var toEl = hitSortEl(event);
-        var toKey = toEl ? toEl.getAttribute(sortSettings ? "data-sort" : "data-card") : "";
+        var toKey = toEl
+          ? toEl.getAttribute(sortTeam ? "data-name" : sortSettings ? "data-sort" : "data-card")
+          : "";
         if (moved && toKey && toKey !== sortFrom) {
-          saveCardOrder(applyCardMove(sortFrom, toKey, !sortSettings));
-          syncCardOrderToState();
+          if (sortTeam) {
+            saveTeamCols(sortFrom, toKey, state.view === "chief");
+          } else {
+            saveCardOrder(applyCardMove(sortFrom, toKey, !sortSettings));
+          }
           var pop = root.querySelector("#xm-hm-pop");
           var popOpen = pop && !pop.hidden;
           paint(root, state);
