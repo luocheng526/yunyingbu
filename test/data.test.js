@@ -194,6 +194,9 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /data-metrics="open"/);
     assert.match(overviewJs.text, /METRIC_SEEN_LS/);
     assert.match(overviewJs.text, /设定指标/);
+    assert.match(overviewJs.text, /xm-data-ov-board-v1/);
+    assert.match(overviewJs.text, /OV_BOARD_FRESH_MS/);
+    assert.match(overviewJs.text, /60 \* 60 \* 1000/);
     assert.doesNotMatch(overviewPage.text, /公司/);
     const teamApi = await get(base, "/api/data/team");
     assert.equal(teamApi.res.status, 200);
@@ -252,11 +255,11 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(shopsJs.text, /打包费/);
     assert.match(shopsJs.text, /\/api\/data\/overview/);
     assert.match(shopsJs.text, /data-hscroll/);
-    assert.match(shopsJs.text, /shop-wide2/);
+    assert.match(shopsJs.text, /shop-wide2|shop-wide5/);
     assert.match(shopsJs.text, /正在加载店铺数据|XmDataCreateShopDashboard/);
     const dataModShops = await get(base, "/shared/modules/data.js");
     assert.match(dataModShops.text, /restore-v1/);
-    assert.match(dataModShops.text, /data-shops\.js\?v=shop-wide2/);
+    assert.match(dataModShops.text, /data-shops\.js\?v=shop-wide5/);
     assert.match(dataModShops.text, /正在加载店铺数据/);
     assert.doesNotMatch(shopsJs.text, /渠道总览/);
     const shopsApi = await get(base, "/api/data/shops");
@@ -539,7 +542,7 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /\/data\/paid/);
   assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
   assert.match(dataMod, /restore-v1/);
-  assert.match(dataMod, /data-overview\.js\?v=data-ov7/);
+  assert.match(dataMod, /data-overview\.js\?v=data-ov8/);
   assert.match(css, /ch-pill/);
   assert.match(css, /\.ch-card \.value[\s\S]*font-size: 28px/);
   assert.match(css, /#8c8c8c/);
