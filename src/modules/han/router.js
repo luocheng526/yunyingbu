@@ -1,5 +1,29 @@
 import { Router } from "express";
-import { createHanStore } from "./store.js";
+import { createHanStore, matchOrgStoresForTeam, mergeTeamShops } from "./store.js";
+
+async function loadOrgStores(req) {
+  const host = req.get("host");
+  if (!host) {
+    return [];
+  }
+  const proto = req.protocol === "https" ? "https" : "http";
+  const url = `${proto}://${host}/api/people/org/stores`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+        cookie: req.headers.cookie || "",
+      },
+    });
+    if (!res.ok) {
+      return [];
+    }
+    const data = await res.json();
+    return data && data.ok ? data.stores || [] : [];
+  } catch {
+    return [];
+  }
+}
 
 export function createHanRouter(store = createHanStore()) {
   const hanRouter = Router();
@@ -82,7 +106,10 @@ export function createHanRouter(store = createHanStore()) {
 
   hanRouter.get("/shops", async (req, res) => {
     try {
-      res.json({ ok: true, items: await store.listShops({ team: req.query.team }) });
+      const team = req.query.team;
+      const local = await store.listShops({ team });
+      const org = matchOrgStoresForTeam(await loadOrgStores(req), team);
+      res.json({ ok: true, items: mergeTeamShops(org, local) });
     } catch (err) {
       res.status(err.statusCode || 500).json({ ok: false, error: err.message });
     }

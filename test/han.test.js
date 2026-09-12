@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
-import { createHanStore, dropProbeTasks, hydrateFromMysql, HAN_DEFAULT_OWNER, HAN_DEFAULT_STORE } from "../src/modules/han/store.js";
+import { createHanStore, dropProbeTasks, hydrateFromMysql, matchOrgStoresForTeam, mergeTeamShops, HAN_DEFAULT_OWNER, HAN_DEFAULT_STORE } from "../src/modules/han/store.js";
 import { createHanFakePool } from "./han-fake-pool.js";
 
 async function withServer(fn) {
@@ -348,7 +348,8 @@ test("shared han module fills submenu pages", async () => {
   assert.doesNotMatch(js, /han-fold-parent/);
   assert.doesNotMatch(js, /goods\.remove\(/);
   assert.match(js, /\/api\/han\/shops/);
-  assert.match(js, /添加店铺/);
+  assert.match(js, /组织中心/);
+  assert.doesNotMatch(js, /添加店铺/);
   assert.doesNotMatch(js, /han-layer-bar/);
   assert.doesNotMatch(js, /头部产品（高利润）/);
   assert.doesNotMatch(js, /新上架需做单产品/);
@@ -453,6 +454,54 @@ test("goods page puts 商品分层 teams on a horizontal tab bar", async () => {
   assert.doesNotMatch(styles[0].textContent, /xm-submenu/);
   sandbox.window.XmModules["/han/selection"].mount(root);
   assert.doesNotMatch(root.innerHTML, /class="han-tabs"/);
+});
+
+test("GET /api/han/shops pulls 组织中心 stores for the team", async () => {
+  const hanStore = createHanStore(createHanFakePool());
+  const app = createApp({ hanStore });
+  app.get("/api/people/org/stores", (_req, res) => {
+    res.json({
+      ok: true,
+      stores: [
+        { id: 7, lead: "段坤孝", storeName: "段组旗舰店", remark: "运营中" },
+        { id: 8, lead: "陈晓曼", storeName: "不该出现", remark: "运营中" },
+      ],
+    });
+  });
+  const server = http.createServer(app);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  try {
+    const listed = await json(base, "/api/han/shops?team=" + encodeURIComponent("段坤孝组"));
+    assert.equal(listed.res.status, 200);
+    assert.deepEqual(
+      listed.body.items.map((row) => row.store),
+      ["段组旗舰店"],
+    );
+  } finally {
+    await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
+});
+
+test("han shops map 组织中心 lead to 韩梦凯小组", () => {
+  const stores = [
+    { id: 16, lead: "陈晓曼", storeName: "ZYUO洗护旗舰店", remark: "运营中" },
+    { id: 18, lead: "陈晓曼", storeName: "京贝优驱蚊专营店", remark: "运营中" },
+    { id: 99, lead: "陈晓曼", storeName: "已关店", remark: "已退店", statusKey: "closed" },
+    { id: 26, lead: "毛永超", storeName: "DIKTT家居旗舰店", remark: "运营中" },
+  ];
+  const xiaoman = matchOrgStoresForTeam(stores, "陈晓曼组");
+  assert.deepEqual(
+    xiaoman.map((row) => row.store),
+    ["ZYUO洗护旗舰店", "京贝优驱蚊专营店"],
+  );
+  assert.equal(xiaoman.every((row) => row.team === "陈晓曼组" && row.source === "org"), true);
+  assert.equal(matchOrgStoresForTeam(stores, "毛永超组").length, 1);
+  assert.deepEqual(
+    mergeTeamShops(xiaoman, [{ store: "ZYUO洗护旗舰店" }, { store: "手工补的店" }]).map((row) => row.store),
+    ["ZYUO洗护旗舰店", "京贝优驱蚊专营店", "手工补的店"],
+  );
 });
 
 test("han store keeps dropProbeTasks and hydrateFromMysql exports", async () => {

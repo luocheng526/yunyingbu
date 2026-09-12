@@ -624,6 +624,57 @@ export async function dropProbeTasks(poolOrFactory = getPool) {
   }
 }
 
+export function teamLeadName(team) {
+  return String(team || "").trim().replace(/组$/, "");
+}
+
+export function matchOrgStoresForTeam(stores, team) {
+  const teamName = normalizeProductTeam(team);
+  if (!teamName) {
+    return [];
+  }
+  const lead = teamLeadName(teamName);
+  const seen = new Set();
+  const items = [];
+  (stores || []).forEach((row) => {
+    const rowLead = String(row.lead || "").trim();
+    const remark = String(row.remark || "");
+    const status = String(row.statusKey || "");
+    if (status === "closed" || remark === "已退店") {
+      return;
+    }
+    if (rowLead !== lead && rowLead !== teamName) {
+      return;
+    }
+    const shop = String(row.storeName || row.store || row.name || "").trim();
+    if (!shop || seen.has(shop)) {
+      return;
+    }
+    seen.add(shop);
+    items.push({
+      id: row.id != null ? "org-" + row.id : "org-" + shop,
+      team: teamName,
+      store: shop,
+      source: "org",
+    });
+  });
+  return items;
+}
+
+export function mergeTeamShops(orgItems, localItems) {
+  const seen = new Set();
+  const out = [];
+  [].concat(orgItems || [], localItems || []).forEach((row) => {
+    const shop = String(row.store || "").trim();
+    if (!shop || seen.has(shop)) {
+      return;
+    }
+    seen.add(shop);
+    out.push(row);
+  });
+  return out;
+}
+
 export const HAN_DEFAULT_OWNER = DEFAULT_OWNER;
 export const HAN_DEFAULT_STORE = DEFAULT_STORE;
 export const HAN_STATUSES = STATUSES;
