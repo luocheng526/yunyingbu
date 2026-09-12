@@ -76,6 +76,17 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /data-shop-card=/);
   assert.match(homeJs, /<th>排名<\/th><th>店铺名称<\/th>/);
   assert.match(homeJs, /<th>运营<\/th><\/tr>/);
+  assert.match(homeJs, /function sortedShops/);
+  assert.match(homeJs, /function shopColHead/);
+  assert.match(homeJs, /data-shop-sort=/);
+  assert.match(homeJs, /data-dir="asc"/);
+  assert.match(homeJs, /data-dir="desc"/);
+  assert.match(homeJs, /aria-label="升序"/);
+  assert.match(homeJs, /aria-label="降序"/);
+  assert.match(homeJs, /data-shop-pad/);
+  assert.match(homeJs, /行距/);
+  assert.match(homeJs, /border-bottom:1px dashed #5b9bd5/);
+  assert.match(homeJs, /--xm-hm-row-pad/);
   assert.match(homeJs, /星脉甄选/);
   assert.match(homeJs, /class="xm-hm-set">卡片设置<\/button><\/header>/);
   assert.match(homeJs, /xm-hm-kpis-shell/);
@@ -89,6 +100,39 @@ test("homepage money and rates show as rounded integers", () => {
   assert.match(homeJs, /Math\.round\(Math\.abs\(n\)\)/);
   assert.doesNotMatch(homeJs, /minimumFractionDigits: 2/);
   assert.doesNotMatch(homeJs, /n\.toFixed\(2\) \+ "%"/);
+});
+
+test("duty shop rows sort by metric arrows and keep empty values last", () => {
+  const pick = (name) => {
+    const start = homeJs.indexOf("function " + name);
+    assert.notEqual(start, -1, name);
+    let depth = 0;
+    for (let i = start; i < homeJs.length; i += 1) {
+      if (homeJs[i] === "{") depth += 1;
+      if (homeJs[i] === "}") {
+        depth -= 1;
+        if (depth === 0) return homeJs.slice(start, i + 1);
+      }
+    }
+    throw new Error("unclosed " + name);
+  };
+  const fns = new Function(
+    pick("asNum") + pick("metricSortNum") + pick("sortedShops") + ";return {sortedShops};"
+  )();
+  const rows = [
+    { shop: "A", metrics: { profit: "10" }, _pay: 3 },
+    { shop: "B", metrics: { profit: "—" }, _pay: 9 },
+    { shop: "C", metrics: { profit: "41,004" }, _pay: 1 },
+    { shop: "D", metrics: { profit: "2%" }, _pay: 8 }
+  ];
+  assert.deepEqual(
+    fns.sortedShops(rows, { key: "profit", dir: "asc" }).map((row) => row.shop),
+    ["D", "A", "C", "B"]
+  );
+  assert.deepEqual(
+    fns.sortedShops(rows, { key: "profit", dir: "desc" }).map((row) => row.shop),
+    ["C", "A", "D", "B"]
+  );
 });
 
 test("card help uses a body-level tooltip so overflow cannot clip it", () => {

@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.382-home-mgr4 */
+/* xm-module-home 0.1.383-home-shopsort */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -492,6 +492,58 @@
     }).filter(Boolean);
   }
 
+  var shopSort = { key: "", dir: "desc" };
+  var shopPad = 8;
+
+  function metricSortNum(text) {
+    return text && text !== "—" ? asNum(String(text).replace(/%/g, "")) : null;
+  }
+
+  function sortedShops(shops, sort) {
+    var list = (shops || []).slice();
+    var key = sort && sort.key;
+    var dir = sort && sort.dir === "asc" ? 1 : -1;
+    list.sort(function (a, b) {
+      var pay = (Number(b._pay) || 0) - (Number(a._pay) || 0);
+      if (!key) {
+        return pay;
+      }
+      var av = metricSortNum(a.metrics && a.metrics[key]);
+      var bv = metricSortNum(b.metrics && b.metrics[key]);
+      if (av == null && bv == null || av === bv) {
+        return pay;
+      }
+      if (av == null) {
+        return 1;
+      }
+      if (bv == null) {
+        return -1;
+      }
+      return av > bv ? dir : -dir;
+    });
+    return list;
+  }
+
+  function shopColHead(def, sort) {
+    var k = def.key;
+    var on = sort && sort.key === k ? sort.dir : "";
+    return (
+      '<th class="xm-hm-num xm-hm-sort" data-shop-card="' +
+      escapeHtml(k) +
+      '"><span class="xm-hm-sort-h"><span>' +
+      escapeHtml(shopColLabel(def)) +
+      '</span><span class="xm-hm-sort-btns"><button type="button" class="xm-hm-sort-up' +
+      (on === "asc" ? " is-on" : "") +
+      '" data-shop-sort="' +
+      escapeHtml(k) +
+      '" data-dir="asc" aria-label="升序">▲</button><button type="button" class="xm-hm-sort-dn' +
+      (on === "desc" ? " is-on" : "") +
+      '" data-shop-sort="' +
+      escapeHtml(k) +
+      '" data-dir="desc" aria-label="降序">▼</button></span></span></th>'
+    );
+  }
+
   function shopMetricsFrom(row) {
     var out = {};
     companyCardsFrom(row ? withRates(row) : {}, {}).forEach(function (card) {
@@ -530,19 +582,23 @@
     );
   }
 
-  function teamShopsHtml(team, hide) {
-    var shops = team.shops || [];
+  function teamShopsHtml(team) {
     var cols = shopCols();
+    var sort = shopSort;
+    var shops = sortedShops(team.shops || [], sort);
+    var pad = shopPad;
     return (
       '<div class="xm-hm-panel" data-team="' +
       escapeHtml(team.key) +
-      '"><h2>责权店铺 <span>' +
+      '"><h2><span>责权店铺 <span>' +
       shops.length +
-      " 店</span></h2>" +
+      ' 店</span></span><label class="xm-hm-rowpad">行距<input type="range" min="2" max="20" value="' +
+      pad +
+      '" data-shop-pad></label></h2>' +
       '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th>' +
       cols
         .map(function (def) {
-          return '<th class="xm-hm-num" data-shop-card="' + escapeHtml(def.key) + '">' + escapeHtml(shopColLabel(def)) + "</th>";
+          return shopColHead(def, sort);
         })
         .join("") +
       "<th>运营</th></tr></thead><tbody>" +
@@ -571,7 +627,7 @@
         })
         .join("") +
       "</div>" +
-      teamShopsHtml(team, hide) +
+      teamShopsHtml(team) +
       "</section>"
     );
   }
@@ -814,8 +870,6 @@
       ".xm-main{min-height:0!important;overflow:hidden!important;flex:1 1 auto!important}" +
       ".xm-content,#xm-content{min-height:0!important;flex:1 1 auto!important;overflow:auto!important;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}" +
       ".xm-hm{position:relative;display:block;box-sizing:border-box;min-height:min-content;height:auto;max-height:none;padding:10px 12px 24px;color:var(--xm-ink);overflow:visible}" +
-      ".xm-hm-mark{pointer-events:none;position:absolute;inset:0;overflow:hidden;opacity:.045;font-size:42px;font-weight:700;letter-spacing:.4em;display:flex;flex-wrap:wrap;align-content:flex-start;gap:48px 64px;padding:40px 20px;color:var(--xm-ink)}" +
-      ".xm-hm-mark span{transform:rotate(-18deg)}" +
       ".xm-hm-bar{position:relative;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:8px 2px;margin-bottom:10px;background:transparent;border:0}" +
       ".xm-hm-views{display:flex;align-items:center;gap:6px}" +
       ".xm-hm-views button,.xm-hm-set{border:0;background:transparent;color:var(--xm-muted);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:13px}" +
@@ -865,7 +919,7 @@
       ".xm-hm-kpis-shell,.xm-hm-teams,.xm-hm-team{background:linear-gradient(#dceaff,#f7fbff);border:0;outline:0;box-shadow:none;border-radius:12px}" +
       ".xm-hm-kpis-shell,.xm-hm-teams{padding:10px}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
-      ".xm-hm-teams{display:flex;flex-direction:column;gap:10px;overflow-x:auto}" +
+      ".xm-hm-teams{display:flex;flex-direction:column;gap:10px;overflow-x:auto;--xm-hm-row-pad:8px}" +
       ".xm-hm-teams-bar{display:flex;justify-content:space-between;align-items:center;padding:0 0 8px}" +
       ".xm-hm-teams-grid{display:grid;grid-template-columns:repeat(var(--xm-hm-team-cols,2),minmax(200px,1fr));gap:10px}" +
       ".xm-hm-team{display:flex;flex-direction:column;gap:8px;min-width:0;padding:8px 8px 8px}" +
@@ -873,10 +927,18 @@
       ".xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,110px));gap:6px}" +
       ".xm-hm.is-chief .xm-hm-teams.is-many .xm-hm-team-kpis{grid-template-columns:repeat(2,minmax(0,96px))}" +
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border:0;box-shadow:none}" +
-      ".xm-hm-teams .xm-hm-table{min-width:760px;font-variant-numeric:tabular-nums}" +
+      ".xm-hm-teams .xm-hm-table{min-width:760px;font-variant-numeric:tabular-nums;border-collapse:separate;border-spacing:0}" +
       ".xm-hm-teams .xm-hm-table .xm-hm-num{text-align:right;white-space:nowrap}" +
-      ".xm-hm-teams .xm-hm-table th.xm-hm-num{white-space:normal;max-width:4.8em;line-height:1.25}" +
-      ".xm-hm-teams .xm-hm-table th:last-child,.xm-hm-teams .xm-hm-table td:last-child{text-align:left;white-space:nowrap}" +
+      ".xm-hm-teams .xm-hm-table th,.xm-hm-teams .xm-hm-table td{border-right:1px dashed #5b9bd5;border-bottom:1px dashed #5b9bd5}" +
+      ".xm-hm-teams .xm-hm-table td{padding-top:var(--xm-hm-row-pad);padding-bottom:var(--xm-hm-row-pad)}" +
+      ".xm-hm-teams .xm-hm-table th.xm-hm-num{white-space:normal;max-width:6.4em;line-height:1.25}" +
+      ".xm-hm-teams .xm-hm-table th:last-child,.xm-hm-teams .xm-hm-table td:last-child{text-align:left;white-space:nowrap;border-right:0}" +
+      ".xm-hm-rowpad{display:inline-flex;align-items:center;gap:6px;color:var(--xm-muted);font-size:12px;font-weight:400}" +
+      ".xm-hm-rowpad input{width:72px}" +
+      ".xm-hm-sort-h{display:inline-flex;align-items:center;justify-content:flex-end;gap:3px;width:100%}" +
+      ".xm-hm-sort-btns{display:inline-flex;flex-direction:column;line-height:1}" +
+      ".xm-hm-sort-btns button{border:0;background:0;padding:0;font-size:9px;line-height:1;color:#c0c4cc;cursor:pointer}" +
+      ".xm-hm-sort-btns button.is-on{color:#2f54eb}" +
       ".xm-hm.is-team .xm-hm-card{min-height:104px;padding:12px 12px 10px;border-radius:8px;cursor:grab}" +
       ".xm-hm.is-team .xm-hm-card.is-hold{cursor:grabbing}" +
       ".xm-hm.is-team .xm-hm-card-head{font-size:12px}" +
@@ -946,8 +1008,6 @@
       ".xm-hm-panel{width:100%;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:12px 12px 8px;min-height:0}" +
       ".xm-hm-panel h2{margin:0;font-size:14px;display:flex;align-items:center;justify-content:space-between;gap:8px}" +
       ".xm-hm-index-num{margin:8px 0 6px;font-size:28px;font-weight:700;color:var(--xm-primary)}" +
-      ".xm-hm-modes{display:flex;gap:12px;margin:0 0 8px;font-size:12px;color:var(--xm-muted)}" +
-      ".xm-hm-modes label{cursor:pointer}" +
       ".xm-hm-table{width:100%;border-collapse:collapse;font-size:12px}" +
       ".xm-hm-table th{text-align:left;color:var(--xm-muted);font-weight:500;padding:6px 4px;border-bottom:1px solid var(--xm-line)}" +
       ".xm-hm-table td{padding:7px 4px;border-bottom:1px solid var(--xm-line);color:var(--xm-ink)}" +
@@ -979,14 +1039,13 @@
       cssText() +
       "</style>" +
       '<div class="xm-hm" id="xm-hm">' +
-      '<div class="xm-hm-mark" id="xm-hm-mark" aria-hidden="true"></div>' +
       '<div class="xm-hm-bar">' +
       '<div class="xm-hm-views">' +
       viewBtns +
       "</div>" +
       '<div class="xm-hm-ranges">' +
       rangeBtns +
-      '<div class="xm-hm-datewrap"><div class="xm-hm-dates" id="xm-hm-dates" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-description="最多选择30天"><span class="xm-hm-dates-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3.5v4M16 3.5v4"/></svg></span><span class="xm-hm-dates-text" id="xm-hm-date-text"></span><button type="button" class="xm-hm-dates-clear" id="xm-hm-date-clear" aria-label="清除日期"><svg viewBox="0 0 16 16" width="12" height="12"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor"/><path d="M5.6 5.6l4.8 4.8M10.4 5.6l-4.8 4.8" stroke="currentColor" stroke-width="1.2" fill="none"/></svg></button></div><div class="xm-hm-cal" id="xm-hm-cal" hidden></div></div>' +
+      '<div class="xm-hm-datewrap"><div class="xm-hm-dates" id="xm-hm-dates" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-description="最多选择30天"><span class="xm-hm-dates-ico" aria-hidden="true">日</span><span class="xm-hm-dates-text" id="xm-hm-date-text"></span><button type="button" class="xm-hm-dates-clear" id="xm-hm-date-clear" aria-label="清除日期">×</button></div><div class="xm-hm-cal" id="xm-hm-cal" hidden></div></div>' +
       "</div></div>" +
       '<div class="xm-hm-pop" id="xm-hm-pop" hidden><h3>卡片设置</h3><div id="xm-hm-card-opts"></div></div>' +
       '<div class="xm-hm-body">' +
@@ -1026,7 +1085,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.382-home-mgr4");
+    board.setAttribute("data-hm-js", "0.1.383-home-shopsort");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1041,6 +1100,7 @@
     root.querySelector("#xm-hm-kpis").innerHTML = cards.map(cardHtml).join("");
     root.querySelector("#xm-hm-teams").hidden = !teamView;
     root.querySelector("#xm-hm-teams").style.setProperty("--xm-hm-team-cols", String(Math.max(teams.length, 1)));
+    root.querySelector("#xm-hm-teams").style.setProperty("--xm-hm-row-pad", shopPad + "px");
     root.querySelector("#xm-hm-teams").classList.toggle("is-many", teams.length >= 4);
     root.querySelector("#xm-hm-teams").innerHTML = teamsCompareHtml(teams, teamHidden(hide));
     root.querySelector("#xm-hm-live").hidden = state.view !== "live";
@@ -1076,14 +1136,6 @@
           : state.view === "board"
             ? "排行榜按人管职务和责权店，按店铺id或店名对齐 ERP 后汇总支付金额 / 利润。"
             : "数字来自星脉 ERP 店铺汇总。净销售额按支付金额减退款。";
-    var user = state.user && (state.user.displayName || state.user.username);
-    var mark = user || "星脉";
-    root.querySelector("#xm-hm-mark").innerHTML = new Array(18)
-      .fill(0)
-      .map(function () {
-        return "<span>" + escapeHtml(mark) + "</span>";
-      })
-      .join("");
     root.querySelector("#xm-hm-card-opts").innerHTML = (state.cards || blankCompanyCards())
       .map(function (card) {
         return (
@@ -1299,73 +1351,47 @@
     return next;
   }
 
+  var SUM_ADD = [
+    "payAmount",
+    "totalPromotionCost",
+    "refundAmount",
+    "profit",
+    "orderCount",
+    "netOrderCount",
+    "todayPayAmount",
+    "yesterdayPayAmount",
+    "platformFee",
+    "saleFee",
+    "goodsCost",
+    "invalidAmount",
+    "jdOrders",
+    "netSkuNum",
+    "netGoodsCost"
+  ];
+
+  function sumPack(rows) {
+    var out = {};
+    SUM_ADD.forEach(function (key) {
+      out[key] = sumField(rows, key);
+    });
+    return withRates(out);
+  }
+
   function summaryFrom(pack) {
     if (pack && pack.summary && pack.summary.payAmount != null) {
       return withRates(pack.summary);
     }
-    return withRates({
-      payAmount: sumField(pack && pack.records, "payAmount"),
-      totalPromotionCost: sumField(pack && pack.records, "totalPromotionCost"),
-      refundAmount: sumField(pack && pack.records, "refundAmount"),
-      profit: sumField(pack && pack.records, "profit"),
-      orderCount: sumField(pack && pack.records, "orderCount"),
-      netOrderCount: sumField(pack && pack.records, "netOrderCount"),
-      todayPayAmount: sumField(pack && pack.records, "todayPayAmount"),
-      yesterdayPayAmount: sumField(pack && pack.records, "yesterdayPayAmount"),
-      platformFee: sumField(pack && pack.records, "platformFee"),
-      saleFee: sumField(pack && pack.records, "saleFee"),
-      goodsCost: sumField(pack && pack.records, "goodsCost"),
-      invalidAmount: sumField(pack && pack.records, "invalidAmount"),
-      jdOrders: sumField(pack && pack.records, "jdOrders"),
-      netSkuNum: sumField(pack && pack.records, "netSkuNum"),
-      netGoodsCost: sumField(pack && pack.records, "netGoodsCost")
-    });
+    return sumPack(pack && pack.records);
   }
 
   function teamSummaryFrom(rows) {
-    return withRates({
-      payAmount: sumField(rows, "payAmount"),
-      totalPromotionCost: sumField(rows, "totalPromotionCost"),
-      refundAmount: sumField(rows, "refundAmount"),
-      profit: sumField(rows, "profit"),
-      orderCount: sumField(rows, "orderCount"),
-      netOrderCount: sumField(rows, "netOrderCount"),
-      platformFee: sumField(rows, "platformFee"),
-      saleFee: sumField(rows, "saleFee"),
-      goodsCost: sumField(rows, "goodsCost"),
-      invalidAmount: sumField(rows, "invalidAmount"),
-      jdOrders: sumField(rows, "jdOrders"),
-      netSkuNum: sumField(rows, "netSkuNum"),
-      netGoodsCost: sumField(rows, "netGoodsCost")
-    });
+    return sumPack(rows);
   }
 
   function mergeSummary(primary, extra) {
     var out = withRates(primary || {});
     var src = extra || {};
-    [
-      "payAmount",
-      "totalPromotionCost",
-      "refundAmount",
-      "profit",
-      "orderCount",
-      "profitRate",
-      "promotionRate",
-      "refundRate",
-      "platformFee",
-      "saleFee",
-      "goodsCost",
-      "invalidAmount",
-      "jdOrders",
-      "jdRatio",
-      "netSkuNum",
-      "netGoodsCost",
-      "netGoodsRate",
-      "netSales",
-      "netOrderCount",
-      "todayPayAmount",
-      "yesterdayPayAmount"
-    ].forEach(function (key) {
+    Object.keys(src).forEach(function (key) {
       if (out[key] == null && src[key] != null) {
         out[key] = src[key];
       }
@@ -2010,7 +2036,6 @@
         to: dates.to,
         user: readUser(),
         cards: blankCompanyCards(),
-        tiger: { title: "龙虎榜", rows: [] },
         live: blankLive(),
         shops: [],
         teams: blankTeams(),
@@ -2196,6 +2221,12 @@
           var pop = root.querySelector("#xm-hm-pop");
           pop.hidden = !pop.hidden;
           closeCal();
+          return;
+        }
+        var sortBtn = event.target.closest("[data-shop-sort]");
+        if (sortBtn) {
+          shopSort = { key: sortBtn.getAttribute("data-shop-sort") || "", dir: sortBtn.getAttribute("data-dir") || "desc" };
+          paint(root, state);
           return;
         }
       }
@@ -2461,7 +2492,31 @@
         event.stopPropagation();
       }
 
+      function applyRowPad(n) {
+        n = Number(n);
+        shopPad = isFinite(n) ? Math.max(2, Math.min(20, Math.round(n))) : 8;
+        var box = root.querySelector("#xm-hm-teams");
+        if (box) {
+          box.style.setProperty("--xm-hm-row-pad", shopPad + "px");
+        }
+        Array.prototype.forEach.call(root.querySelectorAll("[data-shop-pad]"), function (el) {
+          if (el.value !== String(shopPad)) {
+            el.value = String(shopPad);
+          }
+        });
+      }
+
+      function onPadInput(event) {
+        if (event.target && event.target.getAttribute("data-shop-pad") != null) {
+          applyRowPad(event.target.value);
+        }
+      }
+
       function onChange(event) {
+        if (event.target && event.target.getAttribute("data-shop-pad") != null) {
+          applyRowPad(event.target.value);
+          return;
+        }
         var hideKey = event.target.getAttribute("data-hide");
         if (hideKey) {
           var list = hiddenCards();
@@ -2480,6 +2535,7 @@
 
       var scroller = document.getElementById("xm-content") || root;
       root.addEventListener("click", onClick);
+      root.addEventListener("input", onPadInput);
       root.addEventListener("change", onChange);
       root.addEventListener("pointerover", onCalHover);
       root.addEventListener("mouseover", onHelpOver);
@@ -2518,6 +2574,7 @@
         dead = true;
         window.clearInterval(poll);
         root.removeEventListener("click", onClick);
+        root.removeEventListener("input", onPadInput);
         root.removeEventListener("change", onChange);
         root.removeEventListener("pointerover", onCalHover);
         root.removeEventListener("mouseover", onHelpOver);
