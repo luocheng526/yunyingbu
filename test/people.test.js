@@ -4,7 +4,7 @@ import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { patchAppSource } from "../src/modules/people/patch-app.js";
-import { mapImportRow, resetOrgBoard } from "../src/modules/people/org-board.js";
+import { hydrateOrgStores, mapImportRow, orgStoresPersistMode, resetOrgBoard } from "../src/modules/people/org-board.js";
 import { resetOrgExtra } from "../src/modules/people/org-extra.js";
 import { canEditRoster } from "../src/modules/people/org-acl.js";
 import { hydrateFromMysql, resetPeopleStore } from "../src/modules/people/store.js";
@@ -150,6 +150,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /一模一样的名字覆盖原行/);
     assert.match(jsText, /导入是合并不是换表/);
     assert.match(jsText, /同一家店才覆盖/);
+    assert.match(jsText, /店铺导入会落盘/);
     assert.match(jsText, /id="people-modal"/);
     assert.match(jsText, /id="people-add"/);
     assert.match(jsText, /id="people-template"/);
@@ -250,6 +251,7 @@ test("org store board lists demo shops and supports add", async () => {
     const listedJson = await listed.json();
     assert.equal(listed.status, 200);
     assert.equal(listedJson.ok, true);
+    assert.equal(listedJson.persist, "memory");
     assert.ok(listedJson.stores.length >= 15);
     assert.ok(listedJson.stores.some((row) => row.storeName === "RASW家居旗舰店"));
     const home = listedJson.stores.find((row) => row.storeName === "RASW家居旗舰店");
@@ -928,6 +930,9 @@ test("people store exports hydrateFromMysql for notes-store boot", async () => {
   const result = await hydrateFromMysql();
   assert.equal(result.ok, true);
   assert.equal(result.mode, "memory");
+  const org = await hydrateOrgStores();
+  assert.equal(org.ok, true);
+  assert.equal(orgStoresPersistMode(), "memory");
 });
 
 test("patchAppSource only inserts people router mount", () => {
