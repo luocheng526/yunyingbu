@@ -235,9 +235,11 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(shopsJs.text, /打包费/);
     assert.match(shopsJs.text, /\/api\/data\/overview/);
     assert.match(shopsJs.text, /data-hscroll/);
-    assert.match(shopsJs.text, /shop-wide4/);
+    assert.match(shopsJs.text, /shop-wide5/);
     assert.match(shopsJs.text, /mergeErpShops/);
     assert.match(shopsJs.text, /aggregateGoods/);
+    assert.match(shopsJs.text, /xm-data-shops-metrics-v1/);
+    assert.match(shopsJs.text, /已显示最近店铺数据/);
     assert.match(shopsJs.text, /\/api\/data\/shop-options/);
     assert.match(shopsJs.text, /\/api\/data\/goods/);
     assert.match(shopsJs.text, /0\.0000%/);
@@ -245,7 +247,7 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(shopsJs.text, /正在加载店铺数据|XmDataCreateShopDashboard/);
     const dataModShops = await get(base, "/shared/modules/data.js");
     assert.match(dataModShops.text, /restore-v1/);
-    assert.match(dataModShops.text, /data-shops\.js\?v=shop-wide4/);
+    assert.match(dataModShops.text, /data-shops\.js\?v=shop-wide5/);
     assert.match(dataModShops.text, /正在加载店铺数据/);
     assert.doesNotMatch(shopsJs.text, /渠道总览/);
     const shopsApi = await get(base, "/api/data/shops");

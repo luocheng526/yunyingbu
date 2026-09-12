@@ -115,7 +115,7 @@
       root.innerHTML =
         '<main class="xm-page data-overview-root ch-root"><div id="board"><p class="ch-empty">正在加载店铺数据…</p></div></main>';
     }
-    return loadScript("/data-shops.js?v=shop-wide4").then(function () {
+    return loadScript("/data-shops.js?v=shop-wide5").then(function () {
       if (typeof window.XmDataCreateShopDashboard === "function") {
         return window.XmDataCreateShopDashboard(root);
       }

@@ -46,7 +46,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=shop-wide4";
+      link.href = "/data-pages.css?v=shop-wide5";
       document.head.appendChild(link);
     }
   }
@@ -285,6 +285,90 @@
     return acc;
   }
 
+  var SHOP_CACHE_LS = "xm-data-shops-metrics-v1";
+  var SHOP_CACHE_FRESH_MS = 30 * 60 * 1000;
+  var SHOP_METRIC_KEYS = [
+    "shopId",
+    "shopName",
+    "payAmount",
+    "orderCount",
+    "netOrderCount",
+    "netSales",
+    "profit",
+    "totalPromotionCost",
+    "refundAmount",
+    "refundRate",
+    "profitRate",
+    "promotionRate",
+    "goodsEmpty"
+  ];
+
+  function cacheSlotKey(span) {
+    return String((span && span.from) || "") + "_" + String((span && span.to) || "");
+  }
+
+  function pickShopCache(shop) {
+    const out = {};
+    SHOP_METRIC_KEYS.forEach(function (key) {
+      if (shop && shop[key] != null) {
+        out[key] = shop[key];
+      }
+    });
+    return out;
+  }
+
+  function readShopCache(span) {
+    try {
+      const all = JSON.parse(localStorage.getItem(SHOP_CACHE_LS) || "{}");
+      const slot = all[cacheSlotKey(span)] || all.latest;
+      if (!slot || !Array.isArray(slot.shops) || !slot.shops.length) {
+        return null;
+      }
+      return slot;
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  function writeShopCache(span, shops) {
+    try {
+      const all = JSON.parse(localStorage.getItem(SHOP_CACHE_LS) || "{}");
+      const slot = {
+        at: Date.now(),
+        shops: (shops || []).map(pickShopCache)
+      };
+      all[cacheSlotKey(span)] = slot;
+      all.latest = slot;
+      localStorage.setItem(SHOP_CACHE_LS, JSON.stringify(all));
+    } catch (_err) {}
+  }
+
+  function cacheIsFresh(slot) {
+    return Boolean(slot && slot.at && Date.now() - slot.at < SHOP_CACHE_FRESH_MS);
+  }
+
+  function overlayCachedMetrics(shops, cachedShops) {
+    const byId = {};
+    (cachedShops || []).forEach(function (shop) {
+      const id = String(shop.shopId || shop.id || "");
+      if (id) {
+        byId[id] = shop;
+      }
+    });
+    (shops || []).forEach(function (shop) {
+      const hit = byId[String(shop.shopId || "")];
+      if (!hit) {
+        return;
+      }
+      if (!shopHasMetrics(shop)) {
+        Object.assign(shop, hit);
+      } else if (hit.goodsEmpty) {
+        shop.goodsEmpty = true;
+      }
+    });
+    return shops;
+  }
+
   function sumShops(shops) {
     return shops.reduce(
       function (acc, shop) {
@@ -502,6 +586,25 @@
       render();
     }
 
+    let applyTimer = 0;
+    function applyShopsSoon(shops, immediate) {
+      if (immediate) {
+        if (applyTimer) {
+          clearTimeout(applyTimer);
+          applyTimer = 0;
+        }
+        applyShops(shops);
+        return;
+      }
+      if (applyTimer) {
+        return;
+      }
+      applyTimer = setTimeout(function () {
+        applyTimer = 0;
+        applyShops(shops);
+      }, 400);
+    }
+
     function goodsQuery(shopId, span, page) {
       const params = new URLSearchParams();
       params.set("shopId", shopId);
@@ -574,18 +677,19 @@
 
     function fillShopMetrics(shops, span, gen) {
       const pending = (shops || []).filter(function (shop) {
-        return shop.shopId && !shopHasMetrics(shop);
+        return shop.shopId && !shopHasMetrics(shop) && !shop.goodsEmpty;
       });
       state.fillTotal = pending.length;
       state.fillDone = 0;
       if (!pending.length) {
-        state.hint = "已对接 ERP 全部店铺指标。";
+        state.hint = "已显示最近店铺数据";
+        writeShopCache(span, shops);
         render();
         return Promise.resolve();
       }
-      state.hint = "正在按商品接口补全其余店铺 0/" + pending.length;
+      state.hint = "后台补全新店指标，表格已可查看";
       render();
-      return mapLimit(pending, 4, function (shop) {
+      return mapLimit(pending, 8, function (shop) {
         if (dead || gen !== loadGen) {
           return null;
         }
@@ -593,21 +697,28 @@
           if (dead || gen !== loadGen) {
             return null;
           }
-          if (metrics) {
+          if (metrics && shopHasMetrics(metrics)) {
             Object.assign(shop, metrics);
+          } else if (metrics) {
+            shop.goodsEmpty = true;
           }
           state.fillDone += 1;
-          state.hint =
-            state.fillDone >= pending.length
-              ? "已对接 ERP 全部店铺指标。"
-              : "正在按商品接口补全其余店铺 " + state.fillDone + "/" + pending.length;
-          applyShops(shops);
+          if (state.fillDone >= pending.length) {
+            state.hint = "已显示最近店铺数据";
+            writeShopCache(span, shops);
+            applyShopsSoon(shops, true);
+          } else {
+            if (state.fillDone === 1 || state.fillDone % 6 === 0) {
+              writeShopCache(span, shops);
+            }
+            applyShopsSoon(shops, false);
+          }
           return metrics;
         });
       });
     }
 
-    function loadShopDirectory(metricShops, span, gen) {
+    function loadShopDirectory(metricShops, span, gen, cached) {
       return softJson("/api/data/shop-options")
         .then(function (opt) {
           const recs = opt && (opt.records || opt.shops);
@@ -627,8 +738,18 @@
           if (dead || gen !== loadGen) {
             return;
           }
-          const merged = mergeErpShops(metricShops, dir && dir.length ? dir : []);
-          applyShops(merged);
+          const merged = overlayCachedMetrics(
+            mergeErpShops(metricShops, dir && dir.length ? dir : []),
+            cached && cached.shops
+          );
+          applyShopsSoon(merged, true);
+          if (cacheIsFresh(cached) && !merged.some(function (shop) {
+            return shop.shopId && !shopHasMetrics(shop) && !shop.goodsEmpty;
+          })) {
+            state.hint = "已显示最近店铺数据";
+            render();
+            return;
+          }
           return fillShopMetrics(merged, span, gen);
         });
     }
@@ -637,7 +758,14 @@
       const span = rangeSpan(state.range, state.customFrom, state.customTo);
       const gen = (loadGen += 1);
       state.dateLabel = span.dateLabel;
-      state.hint = "正在对接 ERP 店铺指标…";
+      const cached = readShopCache(span);
+      if (cached && cached.shops.length) {
+        applyShops(cached.shops);
+        state.hint = cacheIsFresh(cached) ? "已显示最近店铺数据" : "已显示缓存，正在核对最新";
+        render();
+      } else {
+        state.hint = "正在对接 ERP 店铺指标…";
+      }
       const params = new URLSearchParams();
       params.set("from", span.from + " 00:00:00");
       params.set("to", span.to + " 23:59:59");
@@ -650,8 +778,11 @@
           }
           if (data && data.ok && data.shops && data.shops.length) {
             try {
-              applyShops(data.shops);
-              loadShopDirectory(data.shops, span, gen);
+              const seeded = overlayCachedMetrics(data.shops.slice(), cached && cached.shops);
+              if (!(cached && cached.shops.length)) {
+                applyShops(seeded);
+              }
+              loadShopDirectory(data.shops, span, gen, cached);
               return;
             } catch (_err) {
               throw new Error("empty");
@@ -701,6 +832,9 @@
 
     return function unmount() {
       dead = true;
+      if (applyTimer) {
+        clearTimeout(applyTimer);
+      }
     };
   }
 
