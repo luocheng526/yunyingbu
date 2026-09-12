@@ -210,6 +210,36 @@ test("han selection / products / paid boards are isolated", async () => {
     assert.equal(listedProd.body.items[0].name, "防晒衣-白");
     assert.equal(listedSel.body.items[0].store, HAN_DEFAULT_STORE);
 
+    const trend = await json(base, "/api/han/picks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ board: "trend", name: "开学季洗护", extra: "开学季" }),
+    });
+    const peers = await json(base, "/api/han/picks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ board: "peers", name: "竞品A", extra: "同行旗舰店" }),
+    });
+    const fresh = await json(base, "/api/han/picks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ board: "new", name: "新品喷雾", extra: "2026-09-12" }),
+    });
+    assert.equal(trend.body.item.board, "trend");
+    assert.equal(peers.body.item.extra, "同行旗舰店");
+    assert.equal(fresh.body.item.board, "new");
+    const listedTrend = await json(base, "/api/han/picks?board=trend");
+    const listedPeers = await json(base, "/api/han/picks?board=peers");
+    const listedNew = await json(base, "/api/han/picks?board=new");
+    assert.equal(listedTrend.body.items.length, 1);
+    assert.equal(listedPeers.body.items.length, 1);
+    assert.equal(listedNew.body.items.length, 1);
+    assert.equal(listedSel.body.items.length, 1);
+    assert.equal(
+      (await json(base, "/api/han/selection")).body.items.some((row) => row.name === "开学季洗护"),
+      false,
+    );
+
     const layered = await json(base, "/api/han/products", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -389,6 +419,10 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /本月任务规划/);
   assert.match(js, /本周任务规划/);
   assert.match(js, /\/api\/han\/shop-plans/);
+  assert.match(js, /趋势选品/);
+  assert.match(js, /同行竞对/);
+  assert.match(js, /全新商品/);
+  assert.match(js, /\/api\/han\/picks/);
   assert.match(js, /han-layer-pick/);
   assert.match(js, /id="han-export"/);
   assert.match(js, /\/api\/han\/products\/import/);
@@ -529,7 +563,11 @@ test("goods page puts 商品分层 teams on a horizontal tab bar", async () => {
   assert.equal(leftover.gone, true);
   assert.doesNotMatch(styles[0].textContent, /xm-submenu/);
   sandbox.window.XmModules["/han/selection"].mount(root);
-  assert.doesNotMatch(root.innerHTML, /class="han-tabs"/);
+  assert.match(root.innerHTML, /class="han-tabs han-tabs-sub"/);
+  assert.match(root.innerHTML, /日常选品/);
+  assert.match(root.innerHTML, /趋势选品/);
+  assert.match(root.innerHTML, /同行竞对/);
+  assert.match(root.innerHTML, /全新商品/);
 });
 
 test("GET /api/han/shops pulls 组织中心 stores for the team", async () => {
@@ -783,6 +821,7 @@ test("han schema uses prefixed tables", async () => {
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_team_shops/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_shop_rules/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_shop_plans/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS han_picks/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_paid/);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS han_training/);
   assert.match(sql, /store_name/);

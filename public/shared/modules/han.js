@@ -37,6 +37,25 @@
     );
   }
 
+  const HAN_PICK_BOARDS = [
+    { key: "", label: "日常选品", title: "选品数据", lead: "记录观察中的选品。默认负责人韩梦凯。" },
+    { key: "trend", label: "趋势选品", title: "趋势选品", lead: "跟趋势、关键词和爆款方向，单独记一板。" },
+    { key: "peers", label: "同行竞对", title: "同行竞对", lead: "盯同行店铺和竞品，和日常选品分开。" },
+    { key: "new", label: "全新商品", title: "全新商品", lead: "记录新上架、待测的新品。" },
+  ];
+
+  function selectionTabsHtml(board) {
+    const current = String(board || "").trim();
+    return (
+      '<nav class="han-tabs han-tabs-sub" aria-label="选品板块">' +
+      HAN_PICK_BOARDS.map(function (item) {
+        const href = item.key ? "/han/selection?board=" + encodeURIComponent(item.key) : "/han/selection";
+        return tabLink(href, item.label, current === item.key);
+      }).join("") +
+      "</nav>"
+    );
+  }
+
   function shopTabsHtml(team, shop, shops) {
     if (!team || !shops || !shops.length) {
       return "";
@@ -177,40 +196,97 @@
 
   window.XmModules["/han/selection"] = {
     mount: function (root) {
+      const params = new URLSearchParams(window.location.search);
+      const board = String(params.get("board") || "").trim();
+      const spec =
+        HAN_PICK_BOARDS.filter(function (item) {
+          return item.key === board;
+        })[0] || HAN_PICK_BOARDS[0];
+      const extras = {
+        trend: { label: "趋势 / 关键词", placeholder: "开学季 / 直播热搜" },
+        peers: { label: "竞对店铺", placeholder: "同行店名" },
+        new: { label: "上新日期", placeholder: "2026-09-12" },
+      };
+      const extra = extras[spec.key];
+      const nameLabel = spec.key === "peers" ? "竞品名称（必填）" : spec.key === "new" ? "商品名称（必填）" : "名称（必填）";
+      const listCols = spec.key
+        ? spec.key === "peers"
+          ? ["name", "extra", "category", "store", "status"]
+          : ["name", "extra", "category", "store", "status"]
+        : ["name", "store", "category", "status", "owner"];
+      const listHeads = spec.key
+        ? spec.key === "peers"
+          ? "<th>竞品</th><th>竞对店铺</th><th>类目</th><th>我方店</th><th>状态</th>"
+          : spec.key === "new"
+            ? "<th>名称</th><th>上新日期</th><th>类目</th><th>店</th><th>状态</th>"
+            : "<th>名称</th><th>趋势/关键词</th><th>类目</th><th>店</th><th>状态</th>"
+        : "<th>名称</th><th>店</th><th>类目</th><th>状态</th><th>负责人</th>";
       root.innerHTML = page(
-        "选品数据",
-        "记录观察中的选品。默认负责人韩梦凯。",
-        '<div class="stack"><section class="panel"><h2>新增选品</h2>' +
-          '<form id="sel-form"><label for="sel-name">名称（必填）</label>' +
-          '<input id="sel-name" required placeholder="选品名称" />' +
-          '<label for="sel-store">店</label><input id="sel-store" placeholder="韩梦凯店" />' +
+        spec.title,
+        spec.lead,
+        '<div class="stack"><section class="panel"><h2>新增' +
+          escapeHtml(spec.label) +
+          "</h2>" +
+          '<form id="sel-form"><label for="sel-name">' +
+          escapeHtml(nameLabel) +
+          "</label>" +
+          '<input id="sel-name" required placeholder="' +
+          escapeHtml(spec.label) +
+          '" />' +
+          (extra
+            ? "<label for=\"sel-extra\">" +
+              escapeHtml(extra.label) +
+              "</label><input id=\"sel-extra\" placeholder=\"" +
+              escapeHtml(extra.placeholder) +
+              '"' +
+              (spec.key === "new" ? ' type="date"' : "") +
+              " />"
+            : "") +
+          '<label for="sel-store">' +
+          (spec.key === "peers" ? "我方店" : "店") +
+          '</label><input id="sel-store" placeholder="韩梦凯店" />' +
           '<label for="sel-category">类目</label><input id="sel-category" placeholder="类目" />' +
           '<label for="sel-note">备注</label><input id="sel-note" placeholder="卖点 / 风险" />' +
           '<div class="actions"><button type="submit">添加</button></div>' +
           '<p class="msg status" id="sel-msg"></p></form></section>' +
-          '<section class="panel"><h2>选品列表</h2><table><thead><tr><th>名称</th><th>店</th><th>类目</th><th>状态</th><th>负责人</th></tr></thead>' +
-          '<tbody id="sel-body"></tbody></table></section></div>',
+          '<section class="panel"><h2>' +
+          escapeHtml(spec.label) +
+          "列表</h2><table><thead><tr>" +
+          listHeads +
+          '</tr></thead><tbody id="sel-body"></tbody></table></section></div>',
+        selectionTabsHtml(spec.key),
       );
       const body = root.querySelector("#sel-body");
       const msg = root.querySelector("#sel-msg");
       const form = root.querySelector("#sel-form");
       let dead = false;
+      function loadUrl() {
+        return spec.key
+          ? "/api/han/picks?board=" + encodeURIComponent(spec.key)
+          : "/api/han/selection";
+      }
       function load() {
-        return jsonFetch("/api/han/selection").then(function (json) {
-          if (!dead) renderRows(body, json.items, ["name", "store", "category", "status", "owner"], "暂无选品");
+        return jsonFetch(loadUrl()).then(function (json) {
+          if (!dead) renderRows(body, json.items, listCols, "暂无" + spec.label);
         });
       }
       function onSubmit(e) {
         e.preventDefault();
-        jsonFetch("/api/han/selection", {
+        const extraEl = root.querySelector("#sel-extra");
+        const payload = {
+          name: root.querySelector("#sel-name").value,
+          store: root.querySelector("#sel-store").value,
+          category: root.querySelector("#sel-category").value,
+          note: root.querySelector("#sel-note").value,
+        };
+        if (spec.key) {
+          payload.board = spec.key;
+          payload.extra = extraEl ? extraEl.value : "";
+        }
+        jsonFetch(spec.key ? "/api/han/picks" : "/api/han/selection", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: root.querySelector("#sel-name").value,
-            store: root.querySelector("#sel-store").value,
-            category: root.querySelector("#sel-category").value,
-            note: root.querySelector("#sel-note").value,
-          }),
+          body: JSON.stringify(payload),
         }).then(function (json) {
           if (dead) return;
           msg.textContent = json.ok ? "已添加" : json.error || "失败";
@@ -1225,22 +1301,23 @@
     );
   }
 
-  function remountGoods(root) {
+  function remountGoods(root, path) {
+    const modulePath = path || "/han/goods";
     const prev = root.__hanGoodsUnmount || window.__xmUnmount;
     if (typeof prev === "function") {
       try {
         prev();
       } catch (_err) {}
     }
-    if (!window.XmModules || !window.XmModules["/han/goods"]) {
+    if (!window.XmModules || !window.XmModules[modulePath]) {
       return;
     }
-    const stop = window.XmModules["/han/goods"].mount(root);
+    const stop = window.XmModules[modulePath].mount(root);
     root.__hanGoodsUnmount = stop;
     window.__xmUnmount = stop;
   }
 
-  function animateGoodsSwap(root) {
+  function animateGoodsSwap(root, path) {
     if (!root || window.__hanGoodsBusy) {
       return;
     }
@@ -1248,7 +1325,7 @@
     const stage = root.querySelector(".han-goods-stage") || root;
     stage.classList.add("is-leave");
     window.setTimeout(function () {
-      remountGoods(root);
+      remountGoods(root, path);
       const fresh = root.querySelector(".han-goods-stage");
       if (fresh) {
         fresh.classList.add("is-enter");
@@ -1269,11 +1346,12 @@
       return;
     }
     const path = target.split("?")[0].replace(/\/+$/, "") || "/";
-    if (path === "/han/goods") {
-      history.pushState({ xm: "/han/goods" }, "", target);
-      const root = goodsRoot();
+    if (path === "/han/goods" || path === "/han/selection") {
+      history.pushState({ xm: path }, "", target);
+      const root =
+        document.querySelector("[data-xm-mounted='" + path + "']") || goodsRoot();
       if (root) {
-        animateGoodsSwap(root);
+        animateGoodsSwap(root, path);
         return;
       }
     }
@@ -1315,10 +1393,10 @@
       });
       window.addEventListener("popstate", function () {
         const path = String(location.pathname || "").replace(/\/+$/, "") || "/";
-        if (path !== "/han/goods") return;
-        const root = goodsRoot();
+        if (path !== "/han/goods" && path !== "/han/selection") return;
+        const root = document.querySelector("[data-xm-mounted='" + path + "']") || goodsRoot();
         if (root && root.querySelector(".han-goods-stage")) {
-          animateGoodsSwap(root);
+          animateGoodsSwap(root, path);
         }
       });
     }

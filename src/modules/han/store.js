@@ -23,6 +23,7 @@ const DEFAULT_OWNER = "韩梦凯";
 const DEFAULT_STORE = "韩梦凯店";
 const STATUSES = ["待办", "进行中", "已完成"];
 const SELECTION_STATUSES = ["观察", "入选", "淘汰"];
+const PICK_BOARDS = ["trend", "peers", "new"];
 const TRAINING_STATUSES = ["待开始", "进行中", "已完成"];
 
 function normalizeProductTeam(team) {
@@ -145,6 +146,26 @@ function mapSelection(row) {
   return {
     id: String(row.id),
     name: row.name,
+    category: row.category || "",
+    note: row.note || "",
+    status: row.status,
+    owner: row.owner,
+    store: row.store_name || DEFAULT_STORE,
+    createdAt: toIso(row.created_at),
+  };
+}
+
+function normalizePickBoard(board) {
+  const key = String(board || "").trim();
+  return PICK_BOARDS.includes(key) ? key : "";
+}
+
+function mapPick(row) {
+  return {
+    id: String(row.id),
+    board: row.board,
+    name: row.name,
+    extra: row.extra || "",
     category: row.category || "",
     note: row.note || "",
     status: row.status,
@@ -303,6 +324,7 @@ export function createHanStore(poolOrFactory = getPool) {
         for (const stmt of [
           "CREATE TABLE IF NOT EXISTS han_shop_rules (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, team_name VARCHAR(64) NOT NULL, store_name VARCHAR(128) NOT NULL, rules_json MEDIUMTEXT NOT NULL, updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3), PRIMARY KEY (id), UNIQUE KEY uk_han_shop_rules (team_name, store_name)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
           "CREATE TABLE IF NOT EXISTS han_shop_plans (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, team_name VARCHAR(64) NOT NULL, store_name VARCHAR(128) NOT NULL, month_plan MEDIUMTEXT NOT NULL, week_plan MEDIUMTEXT NOT NULL, updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3), PRIMARY KEY (id), UNIQUE KEY uk_han_shop_plans (team_name, store_name)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+          "CREATE TABLE IF NOT EXISTS han_picks (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, board VARCHAR(32) NOT NULL, name VARCHAR(512) NOT NULL, extra VARCHAR(256) NOT NULL DEFAULT '', category VARCHAR(128) NOT NULL DEFAULT '', note VARCHAR(1024) NOT NULL DEFAULT '', status VARCHAR(32) NOT NULL DEFAULT '观察', owner VARCHAR(64) NOT NULL DEFAULT '韩梦凯', store_name VARCHAR(128) NOT NULL DEFAULT '韩梦凯店', created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), PRIMARY KEY (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
         ]) {
           try {
             await pool.query(stmt);
@@ -394,6 +416,55 @@ export function createHanStore(poolOrFactory = getPool) {
         [result.insertId],
       );
       return mapSelection(rows[0]);
+    },
+
+    async listPicks({ board } = {}) {
+      await ensure();
+      const key = normalizePickBoard(board);
+      if (!key) {
+        const err = new Error("board required");
+        err.statusCode = 400;
+        throw err;
+      }
+      const [rows] = await db().query(
+        "SELECT id, board, name, extra, category, note, status, owner, store_name, created_at FROM han_picks ORDER BY id ASC",
+      );
+      return rows.map(mapPick).filter((row) => row.board === key);
+    },
+
+    async createPick({ board, name, extra, category, note, status, owner, store } = {}) {
+      await ensure();
+      const key = normalizePickBoard(board);
+      if (!key) {
+        const err = new Error("unknown board");
+        err.statusCode = 400;
+        throw err;
+      }
+      const trimmed = String(name || "").trim();
+      if (!trimmed) {
+        const err = new Error("name required");
+        err.statusCode = 400;
+        throw err;
+      }
+      const st = SELECTION_STATUSES.includes(status) ? status : "观察";
+      const [result] = await db().query(
+        "INSERT INTO han_picks (board, name, extra, category, note, status, owner, store_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+          key,
+          trimmed,
+          String(extra || "").trim(),
+          String(category || "").trim(),
+          String(note || "").trim(),
+          st,
+          ownerOrDefault(owner),
+          storeOrDefault(store),
+        ],
+      );
+      const [rows] = await db().query(
+        "SELECT id, board, name, extra, category, note, status, owner, store_name, created_at FROM han_picks WHERE id = ?",
+        [result.insertId],
+      );
+      return mapPick(rows[0]);
     },
 
     async listProducts({ team, store } = {}) {
