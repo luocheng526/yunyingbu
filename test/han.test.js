@@ -440,6 +440,7 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /毛永超组/);
   assert.match(js, /段坤孝组/);
   assert.match(js, /薛双双组/);
+  assert.match(js, /韩梦凯组/);
   assert.match(js, /han-tabs/);
   assert.match(js, /data-han-tab/);
   assert.match(js, /商品分层/);
@@ -796,6 +797,9 @@ test("han shops map 组织中心 lead to 韩梦凯小组", () => {
     { id: 18, lead: "陈晓曼", storeName: "京贝优驱蚊专营店", remark: "运营中" },
     { id: 99, lead: "陈晓曼", storeName: "已关店", remark: "已退店", statusKey: "closed" },
     { id: 26, lead: "毛永超", storeName: "DIKTT家居旗舰店", remark: "运营中" },
+    { id: 40, lead: "", storeName: "直管一店", remark: "运营中", chief: "韩梦凯" },
+    { id: 41, lead: "韩梦凯", storeName: "直管二店", remark: "运营中" },
+    { id: 42, lead: "", storeName: "别人的店", remark: "运营中", chief: "别人" },
   ];
   const xiaoman = matchOrgStoresForTeam(stores, "陈晓曼组");
   assert.deepEqual(
@@ -804,6 +808,12 @@ test("han shops map 组织中心 lead to 韩梦凯小组", () => {
   );
   assert.equal(xiaoman.every((row) => row.team === "陈晓曼组" && row.source === "org"), true);
   assert.equal(matchOrgStoresForTeam(stores, "毛永超组").length, 1);
+  const direct = matchOrgStoresForTeam(stores, "韩梦凯组");
+  assert.deepEqual(
+    direct.map((row) => row.store),
+    ["直管一店", "直管二店"],
+  );
+  assert.equal(direct.every((row) => row.team === "韩梦凯组"), true);
   assert.deepEqual(
     mergeTeamShops(xiaoman, [{ store: "ZYUO洗护旗舰店" }, { store: "手工补的店" }]).map((row) => row.store),
     ["ZYUO洗护旗舰店", "京贝优驱蚊专营店", "手工补的店"],

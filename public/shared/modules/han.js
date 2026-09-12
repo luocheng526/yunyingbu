@@ -9,7 +9,7 @@
 
   window.XmModules = window.XmModules || {};
 
-  const HAN_GOODS_TEAMS = ["陈晓曼组", "高明阳组", "毛永超组", "段坤孝组", "薛双双组"];
+  const HAN_GOODS_TEAMS = ["陈晓曼组", "高明阳组", "毛永超组", "段坤孝组", "薛双双组", "韩梦凯组"];
 
   function tabLink(href, label, on) {
     return (
@@ -474,9 +474,11 @@
       if (!shop) {
         root.innerHTML = page(
           team,
-          "店铺从组织中心抓取，对应小组负责人「" +
-            escapeHtml(String(team).replace(/组$/, "")) +
-            "」。点店铺进入分层表。",
+          team === "韩梦凯组"
+            ? "没有对应主管的店直接挂在韩梦凯下面，从组织中心抓到本页。点店铺进入分层表。"
+            : "店铺从组织中心抓取，对应小组负责人「" +
+              escapeHtml(String(team).replace(/组$/, "")) +
+              "」。点店铺进入分层表。",
           '<div class="stack"><section class="panel"><h2>本小组店铺</h2>' +
             '<p class="msg status" id="shop-msg"></p>' +
             '<div id="shop-list" class="actions" style="flex-wrap:wrap"></div></section></div>',

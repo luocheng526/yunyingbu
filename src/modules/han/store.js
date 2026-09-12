@@ -55,7 +55,8 @@ const PRODUCT_LAYER_COLUMNS = [
   ["gmv_7d", "VARCHAR(64) NOT NULL DEFAULT ''"],
   ["conv_rate", "VARCHAR(64) NOT NULL DEFAULT ''"],
 ];
-const PRODUCT_TEAMS = ["陈晓曼组", "高明阳组", "毛永超组", "段坤孝组", "薛双双组"];
+const PRODUCT_TEAMS = ["陈晓曼组", "高明阳组", "毛永超组", "段坤孝组", "薛双双组", "韩梦凯组"];
+const GROUP_LEADS = ["陈晓曼", "高明阳", "毛永超", "段坤孝", "薛双双"];
 const PRODUCT_SELECT =
   "id, name, sku, price, stock, owner, store_name, layer, image_url, spu, first_sku, hot_sell, review_count, share_count, qa_video, return_m5, return_m6, return_m7, return_m8, orders_30d, fulfill_note, jd_stock, listed_on, has_new_badge, need_order, remark, team_name, spend_rate, gmv_7d, conv_rate, created_at";
 const SCHEMA_PATH = fileURLToPath(new URL("./schema.sql", import.meta.url));
@@ -1138,22 +1139,44 @@ export function teamLeadName(team) {
   return String(team || "").trim().replace(/组$/, "");
 }
 
+function isClosedStore(row) {
+  const remark = String(row.remark || "");
+  const status = String(row.statusKey || "");
+  return status === "closed" || remark === "已退店";
+}
+
+function isHanDirectStore(row) {
+  const rowLead = String(row.lead || "").trim();
+  const chief = String(row.chief || "").trim();
+  if (chief && chief !== "韩梦凯") {
+    return false;
+  }
+  const leadName = rowLead.replace(/组$/, "");
+  if (GROUP_LEADS.includes(leadName)) {
+    return false;
+  }
+  return true;
+}
+
 export function matchOrgStoresForTeam(stores, team) {
   const teamName = normalizeProductTeam(team);
   if (!teamName) {
     return [];
   }
   const lead = teamLeadName(teamName);
+  const direct = teamName === "韩梦凯组";
   const seen = new Set();
   const items = [];
   (stores || []).forEach((row) => {
     const rowLead = String(row.lead || "").trim();
-    const remark = String(row.remark || "");
-    const status = String(row.statusKey || "");
-    if (status === "closed" || remark === "已退店") {
+    if (isClosedStore(row)) {
       return;
     }
-    if (rowLead !== lead && rowLead !== teamName) {
+    if (direct) {
+      if (!isHanDirectStore(row)) {
+        return;
+      }
+    } else if (rowLead !== lead && rowLead !== teamName) {
       return;
     }
     const shop = String(row.storeName || row.store || row.name || "").trim();
