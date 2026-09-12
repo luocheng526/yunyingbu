@@ -11,6 +11,7 @@ import { shenRouter } from "./modules/shen/router.js";
 import { peopleRouter } from "./modules/people/router.js";
 import { academyRouter } from "./modules/academy/router.js";
 import { agentsRouter } from "./modules/agents/router.js";
+import { storesRouter } from "./modules/stores/router.js";
 import { dataRouter } from "./modules/data/router.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -46,6 +47,7 @@ export function createApp() {
   app.use("/api/people", peopleRouter);
   app.use("/api/academy", academyRouter);
   app.use("/api/agents", agentsRouter);
+  app.use("/api/stores", storesRouter);
   app.use("/api/data", dataRouter);
   app.use(
     express.static(join(__dirname, "..", "public"), {

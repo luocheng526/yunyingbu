@@ -26,9 +26,9 @@ async function loginCookie() {
 test("shell HTML is versioned so browsers drop the old full-reload nav.js", async () => {
   const cookie = await loginCookie();
   const html = await (await fetch(`${base}/data/overview`, { headers: { cookie } })).text();
-  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.145/);
-  assert.match(html, /\/shared\/layout\.css\?v=0\.1\.145/);
-  assert.match(html, /\/apple-touch-icon\.png\?v=0\.1\.145/);
+  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.146/);
+  assert.match(html, /\/shared\/layout\.css\?v=0\.1\.146/);
+  assert.match(html, /\/apple-touch-icon\.png\?v=0\.1\.146/);
   assert.match(html, /\/shared\/modules\/data\.js/);
   assert.doesNotMatch(html, /\/shared\/modules\/data\.js\?v=/);
   assert.match(html, /xm-tab-close/);
@@ -51,14 +51,14 @@ test("sidebar HTML stays fast when the same process is reused", async () => {
   const headers = { cookie, Accept: "text/html" };
   await fetch(`${base}/`, { headers });
   const samples = [];
-  for (const path of ["/home", "/data/overview", "/shen/product", "/han/selection", "/me", "/han/goods", "/releases", "/academy/courses", "/agents"]) {
+  for (const path of ["/home", "/data/overview", "/shen/product", "/han/selection", "/me", "/han/goods", "/releases", "/stores", "/academy/courses", "/agents"]) {
     const t0 = performance.now();
     const res = await fetch(`${base}${path}`, { headers });
     const ms = performance.now() - t0;
     assert.equal(res.status, 200);
     samples.push(ms);
     const html = await res.text();
-    assert.match(html, /\/shared\/nav\.js\?v=0\.1\.145/);
+    assert.match(html, /\/shared\/nav\.js\?v=0\.1\.146/);
     assert.match(html, /\/shared\/modules\//);
     assert.match(html, /<span>首页<\/span>/);
   }

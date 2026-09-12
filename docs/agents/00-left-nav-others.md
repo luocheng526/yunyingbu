@@ -11,7 +11,7 @@ window.XmModules = window.XmModules || {};
 window.XmModules["/data"] = { mount: function (root) { /* 只画内容 */ }, unmount: function () {} };
 ```
 
-路径按你自己的模块换成 `/shen` `/han` `/people` `/academy` `/agents` `/releases` `/me`。
+路径按你自己的模块换成 `/shen` `/han` `/people` `/stores` `/academy` `/agents` `/releases` `/me`。
 
 `cursor/home-nav-workbench-e50e` 已整支删除。不要重建「每页完整 HTML + 自己带 nav」。
 禁止 SSH、禁止自己发版。做完直接交单。
