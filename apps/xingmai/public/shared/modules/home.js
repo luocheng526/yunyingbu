@@ -903,8 +903,6 @@
       title: payload.title || target.title,
       dateLabel: payload.dateLabel || target.dateLabel,
       range: payload.range || target.range,
-      source: "数据中心",
-      href: "/data/paid",
       summary: payload.summary || target.summary,
       hero: readChart(payload.hero, target.hero),
       paid: readChart(payload.paid || payload.paidHero, target.paid),
@@ -976,7 +974,6 @@
       ".xm-hm-teams .xm-hm-table th{border-right:1px dashed #c8ced8}" +
       ".xm-hm.is-chief .xm-hm-teams .xm-hm-panel{overflow:hidden}" +
       ".xm-hm.is-chief .xm-hm-teams .xm-hm-table{min-width:0}" +
-      ".xm-hm-teams .xm-hm-table th.xm-hm-num{white-space:normal;line-height:1.25}" +
       ".xm-hm-teams .xm-hm-table th:last-child,.xm-hm-teams .xm-hm-table td:last-child{text-align:center;white-space:nowrap;border-right:0}" +
       ".xm-hm-sort-h{display:inline-flex;align-items:center;justify-content:center;gap:3px;width:100%}" +
       ".xm-hm-sort-btns{display:inline-flex;flex-direction:column;line-height:1}" +
@@ -1460,11 +1457,11 @@
 
   function blankRoleTeams(role) {
     if (role === "主管") {
-      return [{ key: "chief", name: "主管", href: "/data/overview", cards: blankCompanyCards(), shops: [] }];
+      return [{ key: "chief", name: "主管", cards: blankCompanyCards(), shops: [] }];
     }
     return [
-      { key: "shen", name: "沈子晗", href: "/data/overview", cards: blankCompanyCards(), shops: [] },
-      { key: "han", name: "韩梦凯", href: "/data/overview", cards: blankCompanyCards(), shops: [] }
+      { key: "shen", name: "沈子晗", cards: blankCompanyCards(), shops: [] },
+      { key: "han", name: "韩梦凯", cards: blankCompanyCards(), shops: [] }
     ];
   }
 
@@ -1863,12 +1860,9 @@
       seen[n] = true;
       names.push(n);
     }
-    function staffRole(name) {
-      var p = byName[String(name || "").trim()];
-      return p ? String(p.role || "") : "";
-    }
     function skipStaff(name) {
-      return /运营|助理|经理/.test(staffRole(name));
+      var p = byName[String(name || "").trim()];
+      return p && /运营|助理|经理/.test(String(p.role || ""));
     }
     (people || []).forEach(function (person) {
       if (person && person.name) {
@@ -1920,7 +1914,7 @@
     var catalogByName = mapByShopName((catalogPack && catalogPack.records) || (rangePack && rangePack.records) || []);
     var shops = dutyShops || [];
     var mismatches = [];
-    function oneTeam(key, name, href) {
+    function oneTeam(key, name) {
       var pred = function (shop) {
         return shopOnRoleTeam(shop, name, role || "经理");
       };
@@ -1944,7 +1938,7 @@
         var id = resolveErpId(shop, catalogByName);
         var owner = (shop.owner && String(shop.owner).trim()) || ownerOfShop(shop, grants);
         if (!id) {
-          mismatches.push(name + " · " + label + "（人管有店，未填店铺id，店名也对不上 ERP）");
+          mismatches.push(name + " · " + label + "（人管有店，无店铺id）");
           pushShop(label, owner, null, -1);
           return;
         }
@@ -1969,19 +1963,18 @@
         return (Number(b._pay) || 0) - (Number(a._pay) || 0);
       });
       if (!rows.length && name === "韩梦凯") {
-        mismatches.push("韩梦凯 · 整包（人管没有韩梦凯的店铺或店群）");
+        mismatches.push("韩梦凯 · 整包");
       }
       return {
         key: key,
         name: name,
-        href: href,
         cards: companyCardsFrom(teamSummaryFrom(matched), teamSummaryFrom(prevMatched)),
         shops: rows
       };
     }
     return {
       teams: teamLeadNames(people, shops, role || "经理").map(function (name, index) {
-        return oneTeam("t" + index, name, "/data/overview");
+        return oneTeam("t" + index, name);
       }),
       mismatches: mismatches
     };
