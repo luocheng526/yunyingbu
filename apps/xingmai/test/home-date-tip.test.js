@@ -54,9 +54,13 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /shop\.assistant/);
   assert.match(homeJs, /<th class="xm-hm-num">数量<\/th>/);
   assert.match(homeJs, /\.xm-hm\.is-chief \.xm-hm-teams \.xm-hm-table\{min-width:0/);
-  assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table th,\.xm-hm-teams \.xm-hm-table td\{border:0;border-right:1px dashed #c8ced8/);
-  assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table th,\.xm-hm-teams \.xm-hm-table td\{border-bottom:0;border-top:0\}/);
+  assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table th,\.xm-hm-teams \.xm-hm-table td\{border:0;overflow:hidden/);
+  assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table th\{border-right:1px dashed #c8ced8\}/);
+  assert.doesNotMatch(homeJs, /\.xm-hm-teams \.xm-hm-table th,\.xm-hm-teams \.xm-hm-table td\{border:0;border-right:1px dashed/);
+  assert.match(homeJs, /function colKey/);
   assert.match(homeJs, /function restoreShopColW/);
+  assert.match(homeJs, /table\.style\.width = table\.style\.minWidth = table\.style\.maxWidth = sum/);
+  assert.match(homeJs, /cell\.style\.width = cell\.style\.minWidth = cell\.style\.maxWidth = cw/);
   assert.match(homeJs, /linear-gradient\(#dceaff,#f7fbff\)/);
   assert.doesNotMatch(homeJs, /border:2px solid #4d8fd6/);
   assert.match(homeJs, /\.xm-hm-bar\{[^}]*border:0\}/);
@@ -111,6 +115,27 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /xm-hm-kpis-shell/);
   assert.doesNotMatch(homeJs, /xm-hm-views">[\s\S]{0,120}卡片设置/);
   assert.doesNotMatch(homeJs, /<th>运营<\/th><th>实时销售额<\/th>/);
+});
+
+test("shop column drag locks every column and only changes the grabbed one", () => {
+  const start = homeJs.indexOf("var shopColW");
+  const end = homeJs.indexOf("function metricSortNum");
+  assert.ok(start !== -1 && end > start);
+  const fns = new Function(homeJs.slice(start, end) + "return {applyColW};")();
+  const cell = (w) => ({ offsetWidth: w, style: {} });
+  const widths = [40, 120, 80, 70, 70, 70, 80, 60];
+  const table = {
+    rows: [{ cells: widths.map(cell) }, { cells: widths.map(cell) }],
+    style: {},
+    closest: () => ({ getAttribute: () => "沈子晗" })
+  };
+  fns.applyColW(table, 2, 160, 1);
+  assert.equal(table.rows[0].cells[2].style.width, "160px");
+  assert.equal(table.rows[0].cells[1].style.width, "120px");
+  assert.equal(table.rows[0].cells[3].style.maxWidth, "70px");
+  assert.equal(table.rows[1].cells[2].style.minWidth, "160px");
+  assert.equal(table.style.width, "670px");
+  assert.equal(table.style.maxWidth, "670px");
 });
 
 test("homepage money and rates show as rounded integers", () => {
