@@ -123,8 +123,8 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /表头可筛总监、经理、主管\/储备、运营、助理、状态/);
     assert.match(jsText, /people-cell/);
     assert.match(jsText, /startPersonCellEdit/);
-    assert.match(jsText, /data-field="director"/);
-    assert.match(jsText, /data-field="lineManager"/);
+    assert.match(jsText, /peopleLineCell\("director"/);
+    assert.match(jsText, /peopleLineCell\("lineManager"/);
     assert.match(jsText, /双击修改/);
     assert.match(jsText, /仅罗成、韩梦凯、沈子晗能改/);
     assert.match(jsText, /peopleData.canEdit === true/);

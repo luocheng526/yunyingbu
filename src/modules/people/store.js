@@ -255,12 +255,14 @@ function pickStoredLine(person, keys, derived) {
   return derived;
 }
 
-function stampOrgLine(person, line) {
-  person.director = line.director;
-  person.lineManager = line.lineManager;
-  person.supervisor = line.supervisor;
-  person.operator = line.operator;
-  person.assistant = line.assistant;
+function stampOrgLine(person, line, options = {}) {
+  for (const key of ["director", "lineManager", "supervisor", "operator", "assistant"]) {
+    const value = line[key];
+    if (options.skipEmpty && !String(value || "").trim()) {
+      continue;
+    }
+    person[key] = value;
+  }
 }
 
 function applyLinePatch(found, input) {
@@ -515,13 +517,9 @@ export function createPerson(input) {
     department,
     managerId,
     username: usernameRaw || name,
-    password: passwordRaw || INITIAL_PASSWORD,
-    director: line.director,
-    lineManager: line.lineManager,
-    supervisor: line.supervisor,
-    operator: line.operator,
-    assistant: line.assistant
+    password: passwordRaw || INITIAL_PASSWORD
   };
+  stampOrgLine(person, line, { skipEmpty: true });
   people.push(person);
   rememberLogin(person);
   return { ok: true, person: presentPerson(person) };
@@ -578,7 +576,7 @@ export function importPeople(rows) {
       found.center = center;
       found.department = department || found.department || center;
       found.managerId = managerId;
-      stampOrgLine(found, org);
+      stampOrgLine(found, org, { skipEmpty: true });
       rememberLogin(withLogin(found));
       updated += 1;
       return;
@@ -591,7 +589,12 @@ export function importPeople(rows) {
       department,
       managerId,
       username,
-      password
+      password,
+      director: org.director,
+      lineManager: org.lineManager,
+      supervisor: org.supervisor,
+      operator: org.operator,
+      assistant: org.assistant
     });
     if (!createdRow.ok) {
       failed.push({ line, error: createdRow.error });
