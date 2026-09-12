@@ -113,9 +113,11 @@ peopleRouter.get("/org/stores", async (req, res) => {
 
 peopleRouter.get("/org/stores/template", (_req, res) => {
   const sample = [
-    "沈子晗组",
-    "张文静",
+    "罗成",
+    "沈子晗",
+    "",
     "示例运营",
+    "",
     "示例旗舰店",
     "10001",
     "11009999",

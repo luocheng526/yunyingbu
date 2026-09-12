@@ -12,6 +12,75 @@ function clone(row) {
   return { ...row };
 }
 
+function inferManagerName(...parts) {
+  const blob = parts.map((item) => String(item || "")).join(" ");
+  if (blob.includes("韩梦凯")) {
+    return "韩梦凯";
+  }
+  if (blob.includes("沈子晗")) {
+    return "沈子晗";
+  }
+  return "";
+}
+
+function teamLabelOf(manager) {
+  if (String(manager).includes("韩梦凯")) {
+    return "精铺组 韩梦凯";
+  }
+  if (String(manager).includes("沈子晗")) {
+    return "沈子晗组";
+  }
+  return String(manager || "").trim();
+}
+
+function rosterRoleOf(name) {
+  if (name === "罗成") {
+    return "总监";
+  }
+  if (name === "沈子晗" || name === "韩梦凯") {
+    return "经理";
+  }
+  const hit = listPeople().find((row) => row.name === name);
+  return hit ? String(hit.role || "") : "";
+}
+
+function syncStoreRoles(input = {}, previous = {}) {
+  const take = (key) => {
+    if (typeof input[key] === "string") {
+      return input[key].trim();
+    }
+    return String(previous[key] || "").trim();
+  };
+  const director = take("director") || "罗成";
+  const manager = take("manager") || inferManagerName(take("chief"), take("lead"), take("owner"), take("operator"), previous.team);
+  const lead = take("lead");
+  let supervisor = take("supervisor");
+  let operator = take("operator") || take("owner");
+  let assistant = take("assistant");
+  if (!supervisor && lead && lead !== manager && lead !== director) {
+    const role = rosterRoleOf(lead);
+    if (role === "主管" || role === "储备") {
+      supervisor = lead;
+    } else if (role === "助理" && !assistant) {
+      assistant = lead;
+    } else if (!role && lead !== operator) {
+      supervisor = lead;
+    }
+  }
+  const team = teamLabelOf(manager) || take("team") || take("chief");
+  return {
+    director,
+    manager,
+    supervisor,
+    operator,
+    assistant,
+    team,
+    chief: team,
+    lead: supervisor || lead || manager,
+    owner: operator
+  };
+}
+
 function seedRows() {
   const shen = [
     ["沈子晗", "张文静", "RASW家居旗舰店", "11001001"],
@@ -39,10 +108,7 @@ function seedRows() {
   for (const [lead, owner, storeName, merchantId] of shen) {
     rows.push({
       id: id++,
-      team: "沈子晗组",
-      chief: "沈子晗组",
-      lead,
-      owner,
+      ...syncStoreRoles({ chief: "沈子晗组", lead, owner, manager: "沈子晗", director: "罗成" }),
       storeName,
       storeId: "",
       merchantId,
@@ -58,10 +124,7 @@ function seedRows() {
   for (const [lead, owner, storeName, merchantId] of han) {
     rows.push({
       id: id++,
-      team: "精铺组 韩梦凯",
-      chief: "精铺组 韩梦凯",
-      lead,
-      owner,
+      ...syncStoreRoles({ chief: "精铺组 韩梦凯", lead, owner, manager: "韩梦凯", director: "罗成" }),
       storeName,
       storeId: "",
       merchantId,
@@ -121,20 +184,20 @@ function mapBoardRole(role) {
 
 function namesFromStore(row) {
   const names = [];
-  [row.lead, row.owner].forEach((value) => {
+  [row.director, row.manager, row.supervisor, row.operator, row.assistant, row.lead, row.owner].forEach((value) => {
     const name = String(value || "").trim();
     if (name) {
       names.push(name);
     }
   });
-  const chief = String(row.chief || row.team || "");
+  const chief = String(row.chief || row.team || row.manager || "");
   if (chief.includes("沈子晗")) {
     names.push("沈子晗");
   }
   if (chief.includes("韩梦凯")) {
     names.push("韩梦凯");
   }
-  if (chief.includes("罗成")) {
+  if (chief.includes("罗成") || String(row.director || "").includes("罗成")) {
     names.push("罗成");
   }
   return names;
@@ -153,7 +216,7 @@ function roleOfName(name, byName) {
 }
 
 function managerBranchOfStore(row) {
-  const blob = [row.chief, row.team, row.lead, row.owner].join(" ");
+  const blob = [row.chief, row.team, row.lead, row.owner, row.manager, row.director, row.supervisor, row.operator].join(" ");
   if (blob.includes("韩梦凯")) {
     return "韩梦凯";
   }
@@ -258,7 +321,7 @@ function buildRightsTree(stores, roster, byName) {
   });
   stores.forEach((row) => {
     const branch = managerBranchOfStore(row);
-    [row.lead, row.owner].forEach((value) => {
+    [row.supervisor, row.operator, row.assistant, row.lead, row.owner].forEach((value) => {
       const name = String(value || "").trim();
       if (name) {
         place(name, branch);
@@ -267,8 +330,8 @@ function buildRightsTree(stores, roster, byName) {
   });
 
   stores.forEach((row) => {
-    const owner = String(row.owner || "").trim();
-    const lead = String(row.lead || "").trim();
+    const owner = String(row.operator || row.owner || "").trim();
+    const lead = String(row.supervisor || row.lead || "").trim();
     const target = (owner && nodes[owner]) || (lead && nodes[lead]) || branches[managerBranchOfStore(row)] || shen;
     target.stores.push({
       id: row.id,
@@ -298,23 +361,28 @@ function buildRightsWatch(stores, roster, byName, tree) {
   const rosterNames = new Set(roster.map((row) => row.name));
   rosterNames.add("罗成");
   stores.forEach((row) => {
-    ["owner", "lead"].forEach((field) => {
+    [
+      ["operator", "运营"],
+      ["supervisor", "主管/储备"],
+      ["assistant", "助理"],
+      ["manager", "经理"]
+    ].forEach(([field, label]) => {
       const name = String(row[field] || "").trim();
       if (name && !rosterNames.has(name) && !["罗成", "沈子晗", "韩梦凯"].includes(name)) {
         issues.push({
           kind: "人员对不上",
           level: "warn",
           title: name + " 不在花名册",
-          detail: (field === "owner" ? "店铺所属人员" : "小组负责人") + "「" + name + "」出现在「" + row.storeName + "」，成员管理没有这个人。"
+          detail: label + "「" + name + "」出现在「" + row.storeName + "」，成员管理没有这个人。"
         });
       }
     });
-    if (!String(row.owner || "").trim()) {
+    if (!String(row.operator || row.owner || "").trim()) {
       issues.push({
         kind: "店铺对不上",
         level: "error",
-        title: row.storeName + " 缺所属人员",
-        detail: "店铺主数据没有店铺所属人员，挂不到树上。"
+        title: row.storeName + " 缺运营",
+        detail: "店铺主数据没有运营，挂不到树上。"
       });
     }
     if (!managerBranchOfStore(row)) {
@@ -497,7 +565,7 @@ export function summarizeOrg(actor) {
     missingMerchant: stores.filter((row) => !String(row.merchantId || "").trim()).length,
     missingLogin: stores.filter((row) => !String(row.login || "").trim()).length,
     missingPassword: stores.filter((row) => !String(row.password || "").trim()).length,
-    missingOwner: stores.filter((row) => !String(row.owner || "").trim()).length
+    missingOwner: stores.filter((row) => !String(row.operator || row.owner || "").trim()).length
   };
 }
 
@@ -506,6 +574,21 @@ export function listOrgStores(query = {}, actor) {
   const status = typeof query.status === "string" ? query.status.trim() : "";
   const q = typeof query.q === "string" ? query.q.trim().toLowerCase() : "";
   const scope = scopeOf(actor);
+  rows.forEach((row) => {
+    const roles = syncStoreRoles({}, row);
+    ["director", "manager", "supervisor", "operator", "assistant"].forEach((key) => {
+      if (!String(row[key] || "").trim() && roles[key]) {
+        row[key] = roles[key];
+      }
+    });
+    if (!String(row.owner || "").trim() && roles.owner) {
+      row.owner = roles.owner;
+    }
+    if (!String(row.chief || "").trim() && roles.chief) {
+      row.chief = roles.chief;
+      row.team = roles.team;
+    }
+  });
   return rows
     .filter((row) => rowMatchesScope(row, scope))
     .filter((row) => (team ? row.team === team : true))
@@ -514,7 +597,7 @@ export function listOrgStores(query = {}, actor) {
       if (!q) {
         return true;
       }
-      const blob = [row.storeName, row.storeId, row.merchantId, row.owner, row.lead, row.chief, row.login]
+      const blob = [row.storeName, row.storeId, row.merchantId, row.director, row.manager, row.supervisor, row.operator, row.assistant, row.owner, row.lead, row.chief, row.login]
         .join(" ")
         .toLowerCase();
       return blob.includes(q);
@@ -538,13 +621,9 @@ function normalize(input, previous = {}) {
   } else if (remark.includes("运营") || remark.includes("在做") || remark.includes("正常")) {
     statusKey = "operating";
   }
-  const chief = typeof input.chief === "string" ? input.chief.trim() : previous.chief || "";
-  const team = typeof input.team === "string" && input.team.trim() ? input.team.trim() : chief;
+  const roles = syncStoreRoles(input, previous);
   return {
-    team,
-    chief,
-    lead: typeof input.lead === "string" ? input.lead.trim() : previous.lead || "",
-    owner: typeof input.owner === "string" ? input.owner.trim() : previous.owner || "",
+    ...roles,
     storeName: typeof input.storeName === "string" ? input.storeName.trim() : previous.storeName || "",
     storeId: typeof input.storeId === "string" ? input.storeId.trim() : previous.storeId || "",
     merchantId: typeof input.merchantId === "string" ? input.merchantId.trim() : previous.merchantId || "",
@@ -558,9 +637,11 @@ function normalize(input, previous = {}) {
 }
 
 export const STORE_IMPORT_HEADERS = [
-  "总负责人",
-  "小组负责人",
-  "店铺所属人员",
+  "总监",
+  "经理",
+  "主管/储备",
+  "运营",
+  "助理",
   "店铺名称",
   "店铺ID",
   "商家id",
@@ -572,6 +653,13 @@ export const STORE_IMPORT_HEADERS = [
 ];
 
 const HEADER_TO_FIELD = {
+  总监: "director",
+  经理: "manager",
+  "主管/储备": "supervisor",
+  主管: "supervisor",
+  储备: "supervisor",
+  运营: "operator",
+  助理: "assistant",
   总负责人: "chief",
   小组负责人: "lead",
   店铺所属人员: "owner",
@@ -609,13 +697,15 @@ function findExistingStore(input) {
     }
   }
   const storeName = String(input.storeName || "").trim();
-  const owner = String(input.owner || "").trim();
+  const owner = String(input.operator || input.owner || "").trim();
   if (!storeName || !owner) {
     return null;
   }
   return (
     rows.find(
-      (row) => String(row.storeName || "").trim() === storeName && String(row.owner || "").trim() === owner
+      (row) =>
+        String(row.storeName || "").trim() === storeName &&
+        String(row.operator || row.owner || "").trim() === owner
     ) || null
   );
 }
@@ -632,7 +722,7 @@ export function mapImportRow(raw = {}) {
       .trim();
     const field =
       HEADER_TO_FIELD[norm] ||
-      (["chief", "lead", "owner", "storeName", "storeId", "merchantId", "remark", "updatedOn", "closedOn", "login", "password"].includes(norm)
+      (["director", "manager", "supervisor", "operator", "assistant", "chief", "lead", "owner", "storeName", "storeId", "merchantId", "remark", "updatedOn", "closedOn", "login", "password"].includes(norm)
         ? norm
         : "");
     if (field) {
@@ -650,8 +740,8 @@ export function importOrgStores(items, actor) {
   list.forEach((raw, index) => {
     const input = mapImportRow(raw);
     const line = index + 2;
-    if (!String(input.storeName || "").trim() || !String(input.owner || "").trim()) {
-      failed.push({ line, error: "店铺名称、店铺所属人员为必填" });
+    if (!String(input.storeName || "").trim() || !String(input.operator || input.owner || "").trim()) {
+      failed.push({ line, error: "店铺名称、运营为必填" });
       return;
     }
     const existing = findExistingStore(input);
@@ -678,8 +768,8 @@ export function importOrgStores(items, actor) {
 
 export function createOrgStore(input, actor) {
   const next = normalize(input || {});
-  if (!next.storeName || !next.owner) {
-    return { ok: false, statusCode: 400, error: "店铺名称、店铺所属人员为必填" };
+  if (!next.storeName || !next.operator) {
+    return { ok: false, statusCode: 400, error: "店铺名称、运营为必填" };
   }
   const allowed = assertCanWrite(actor, next);
   if (!allowed.ok) {

@@ -80,7 +80,11 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(cssText, /position:\s*sticky/);
     assert.match(jsText, /onPeopleWheel/);
     assert.match(jsText, /店铺主数据/);
-    assert.match(jsText, /总负责人/);
+    assert.match(jsText, /总监/);
+    assert.match(jsText, /主管\/储备/);
+    assert.match(jsText, /org-filter-name">经理/);
+    assert.match(jsText, /org-filter-name">运营/);
+    assert.match(jsText, /org-filter-name">助理/);
     assert.match(jsText, /登录主账号/);
     assert.doesNotMatch(jsText, /id="org-team"/);
     assert.doesNotMatch(jsText, /id="org-status"/);
@@ -95,14 +99,16 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /组织中心-店铺主数据模板/);
     assert.match(jsText, /org-check-all/);
     assert.match(jsText, /org-filter-btn/);
-    assert.match(jsText, /data-filter-key="chief"/);
+    assert.match(jsText, /data-filter-key="director"/);
+    assert.match(jsText, /data-filter-key="supervisor"/);
+    assert.match(jsText, /data-filter-key="operator"/);
     assert.match(jsText, />全选</);
     assert.match(jsText, /key === "remark"/);
     assert.match(jsText, /org-row-check/);
     assert.match(jsText, /店铺ID/);
     assert.match(jsText, /缺店铺ID/);
     assert.match(jsText, /缺密码/);
-    assert.match(jsText, /缺所属人员/);
+    assert.match(jsText, /缺运营/);
     assert.match(jsText, /运营中/);
     assert.match(jsText, /闲置中/);
     assert.match(jsText, /退店中/);
@@ -228,6 +234,13 @@ test("org store board lists demo shops and supports add", async () => {
     assert.equal(listedJson.ok, true);
     assert.ok(listedJson.stores.length >= 15);
     assert.ok(listedJson.stores.some((row) => row.storeName === "RASW家居旗舰店"));
+    const home = listedJson.stores.find((row) => row.storeName === "RASW家居旗舰店");
+    assert.equal(home.director, "罗成");
+    assert.equal(home.manager, "沈子晗");
+    assert.equal(home.operator, "张文静");
+    const yang = listedJson.stores.find((row) => row.storeName === "飒望家居日用旗舰店");
+    assert.equal(yang.supervisor, "杨润泽");
+    assert.equal(yang.operator, "崔安琪");
 
     const created = await fetch(`${base}/api/people/org/stores`, {
       method: "POST",
@@ -275,7 +288,7 @@ test("org store board lists demo shops and supports add", async () => {
     const template = await fetch(`${base}/api/people/org/stores/template`);
     const csv = await template.text();
     assert.equal(template.status, 200);
-    assert.match(csv, /总负责人,小组负责人,店铺所属人员,店铺名称,店铺ID,商家id/);
+    assert.match(csv, /总监,经理,主管\/储备,运营,助理,店铺名称,店铺ID,商家id/);
 
     const imported = await fetch(`${base}/api/people/org/stores/import`, {
       method: "POST",
@@ -304,7 +317,15 @@ test("org store board lists demo shops and supports add", async () => {
     const listedAfter = await fetch(`${base}/api/people/org/stores?q=${encodeURIComponent("导入旗舰店")}`);
     const listedAfterJson = await listedAfter.json();
     assert.ok(
-      listedAfterJson.stores.some((row) => row.storeName === "导入旗舰店" && row.owner === "导入同事" && row.storeId === "SID188")
+      listedAfterJson.stores.some(
+        (row) =>
+          row.storeName === "导入旗舰店" &&
+          row.owner === "导入同事" &&
+          row.operator === "导入同事" &&
+          row.director === "罗成" &&
+          row.manager === "沈子晗" &&
+          row.storeId === "SID188"
+      )
     );
     const byStoreId = await fetch(`${base}/api/people/org/stores?q=SID188`);
     const byStoreIdJson = await byStoreId.json();

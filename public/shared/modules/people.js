@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.174-store-import";
+    const href = "/people.css?v=0.1.175-store-roles";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -117,9 +117,11 @@
         '<p class="status error" id="org-error" hidden></p>' +
         '<div class="org-table-wrap"><table><thead><tr>' +
         '<th class="org-check"><input type="checkbox" id="org-check-all" title="全选本筛" /></th>' +
-        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="chief"><span class="org-filter-name">总负责人</span><span class="org-filter-caret">▾</span></button></th>' +
-        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="lead"><span class="org-filter-name">小组负责人</span><span class="org-filter-caret">▾</span></button></th>' +
-        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="owner"><span class="org-filter-name">店铺所属人员</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="director"><span class="org-filter-name">总监</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="manager"><span class="org-filter-name">经理</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="supervisor"><span class="org-filter-name">主管/储备</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="operator"><span class="org-filter-name">运营</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="assistant"><span class="org-filter-name">助理</span><span class="org-filter-caret">▾</span></button></th>' +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="storeName"><span class="org-filter-name">店铺名称</span><span class="org-filter-caret">▾</span></button></th>' +
         "<th>店铺ID</th>" +
         "<th>商家id</th>" +
@@ -174,9 +176,11 @@
         '<div class="org-modal" id="org-modal">' +
         '<form class="org-dialog" id="org-form"><h3 id="org-form-title">新增店铺</h3>' +
         '<div class="org-grid">' +
-        '<label>总负责人<input name="chief" required /></label>' +
-        '<label>小组负责人<input name="lead" required /></label>' +
-        '<label>店铺所属人员<input name="owner" required /></label>' +
+        '<label>总监<input name="director" required /></label>' +
+        '<label>经理<input name="manager" required /></label>' +
+        '<label>主管/储备<input name="supervisor" /></label>' +
+        '<label>运营<input name="operator" required /></label>' +
+        '<label>助理<input name="assistant" /></label>' +
         '<label>店铺名称<input name="storeName" required /></label>' +
         '<label>店铺ID<input name="storeId" /></label>' +
         '<label>商家id<input name="merchantId" /></label>' +
@@ -259,7 +263,7 @@
       let rawStores = [];
       let selectedIds = {};
       let memberSelectedIds = {};
-      const COLUMN_FILTERS = ["chief", "lead", "owner", "storeName", "remark"];
+      const COLUMN_FILTERS = ["director", "manager", "supervisor", "operator", "assistant", "storeName", "remark"];
       const MEMBER_FILTERS = ["department", "managerName", "role", "center", "status"];
       const columnPicked = {};
       COLUMN_FILTERS.concat(MEMBER_FILTERS).forEach(function (key) {
@@ -277,9 +281,11 @@
       let openFilterKey = "";
       let boardMeta = { actor: "罗成", scope: "all", canCreate: true };
       const CELL_FIELDS = [
-        { key: "chief", type: "text" },
-        { key: "lead", type: "text" },
-        { key: "owner", type: "text" },
+        { key: "director", type: "text" },
+        { key: "manager", type: "text" },
+        { key: "supervisor", type: "text" },
+        { key: "operator", type: "text" },
+        { key: "assistant", type: "text" },
         { key: "storeName", type: "text" },
         { key: "storeId", type: "text" },
         { key: "merchantId", type: "text" },
@@ -291,9 +297,11 @@
       ];
       const REMARKS = ["运营中", "闲置中", "退店中", "已退店"];
       const STORE_HEADERS = [
-        "总负责人",
-        "小组负责人",
-        "店铺所属人员",
+        "总监",
+        "经理",
+        "主管/储备",
+        "运营",
+        "助理",
         "店铺名称",
         "店铺ID",
         "商家id",
@@ -304,9 +312,11 @@
         "密码"
       ];
       const STORE_KEYS = [
-        "chief",
-        "lead",
-        "owner",
+        "director",
+        "manager",
+        "supervisor",
+        "operator",
+        "assistant",
         "storeName",
         "storeId",
         "merchantId",
@@ -354,12 +364,12 @@
           return new TextDecoder("utf-16be").decode(bytes);
         }
         const utf8 = new TextDecoder("utf-8").decode(bytes);
-        if (/店铺名称|店名|总负责人|姓名/.test(utf8)) {
+        if (/店铺名称|店名|总负责人|总监|经理|运营|姓名/.test(utf8)) {
           return utf8;
         }
         try {
           const gbk = new TextDecoder("gb18030").decode(bytes);
-          if (/店铺名称|店名|总负责人|姓名/.test(gbk)) {
+          if (/店铺名称|店名|总负责人|总监|经理|运营|姓名/.test(gbk)) {
             return gbk;
           }
         } catch (err) {
@@ -371,10 +381,17 @@
       function normalizeStoreHeader(name) {
         const raw = String(name || "").replace(/^\uFEFF/, "").replace(/\s+/g, "").trim();
         const aliases = {
+          总监: "总监",
+          经理: "经理",
+          "主管/储备": "主管/储备",
+          主管: "主管/储备",
+          储备: "主管/储备",
+          运营: "运营",
+          助理: "助理",
           总负责人: "总负责人",
           小组负责人: "小组负责人",
-          店铺所属人员: "店铺所属人员",
-          所属人员: "店铺所属人员",
+          店铺所属人员: "运营",
+          所属人员: "运营",
           店铺名称: "店铺名称",
           店名: "店铺名称",
           店铺ID: "店铺ID",
@@ -470,7 +487,7 @@
           ["缺商家ID", summary.missingMerchant],
           ["缺主账号", summary.missingLogin],
           ["缺密码", summary.missingPassword],
-          ["缺所属人员", summary.missingOwner]
+          ["缺运营", summary.missingOwner]
         ];
         kpis.innerHTML = items
           .map(function (item) {
@@ -493,7 +510,7 @@
         if (field.key === "storeName") {
           return '<span class="org-link">' + escapeHtml(raw || "点击填写") + "</span>";
         }
-        if (field.key === "owner") {
+        if (field.key === "operator") {
           return escapeHtml(raw || "点击填写");
         }
         return escapeHtml(raw || (field.key === "closedOn" || field.key === "updatedOn" ? "—" : "点击填写"));
@@ -773,9 +790,11 @@
         editingId = row ? row.id : null;
         root.querySelector("#org-form-title").textContent = row ? "编辑店铺" : "新增店铺";
         showError(formError, "");
-        form.chief.value = row ? row.chief : "";
-        form.lead.value = row ? row.lead : "";
-        form.owner.value = row ? row.owner : "";
+        form.director.value = row && row.director ? row.director : "罗成";
+        form.manager.value = row ? row.manager || "" : "";
+        form.supervisor.value = row ? row.supervisor || "" : "";
+        form.operator.value = row ? row.operator || row.owner || "" : "";
+        form.assistant.value = row ? row.assistant || "" : "";
         form.storeName.value = row ? row.storeName : "";
         form.storeId.value = row && row.storeId ? row.storeId : "";
         form.merchantId.value = row ? row.merchantId : "";
@@ -1932,9 +1951,11 @@
           "组织中心-店铺主数据模板.csv",
           storeCsvLines([
             {
-              chief: "沈子晗组",
-              lead: "张文静",
-              owner: "示例运营",
+              director: "罗成",
+              manager: "沈子晗",
+              supervisor: "",
+              operator: "示例运营",
+              assistant: "",
               storeName: "示例旗舰店",
               storeId: "10001",
               merchantId: "11009999",
@@ -1982,11 +2003,11 @@
               throw new Error("没认出店铺名称。请用下载模板，或把 Excel 另存为 CSV 再导。");
             }
             const headers = (table[headerIndex] || []).map(normalizeStoreHeader);
-            const missing = ["店铺名称", "店铺所属人员"].filter(function (name) {
+            const missing = ["店铺名称", "运营"].filter(function (name) {
               return headers.indexOf(name) < 0;
             });
             if (missing.length) {
-              throw new Error("没认出店铺名称、店铺所属人员。请用下载模板，或把 Excel 另存为 CSV 再导。缺：" + missing.join("、"));
+              throw new Error("没认出店铺名称、运营。请用下载模板，或把 Excel 另存为 CSV 再导。缺：" + missing.join("、"));
             }
             const rows = table
               .slice(headerIndex + 1)
