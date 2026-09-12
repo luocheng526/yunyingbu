@@ -51,7 +51,7 @@ test("sidebar HTML stays fast when the same process is reused", async () => {
   const headers = { cookie, Accept: "text/html" };
   await fetch(`${base}/`, { headers });
   const samples = [];
-  for (const path of ["/home", "/data/overview", "/shen/product", "/han/selection", "/me", "/han/goods", "/releases", "/academy/courses", "/agents"]) {
+  for (const path of ["/home", "/data/overview", "/shen/product", "/han/selection", "/me", "/han/goods", "/releases", "/stores", "/academy/courses", "/agents"]) {
     const t0 = performance.now();
     const res = await fetch(`${base}${path}`, { headers });
     const ms = performance.now() - t0;
