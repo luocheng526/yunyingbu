@@ -7,6 +7,37 @@
       .replace(/>/g, "&gt;");
   }
 
+  function openHanLightbox(src) {
+    const url = String(src || "").trim();
+    if (!url) return;
+    let box = document.querySelector(".han-lightbox");
+    if (!box) {
+      box = document.createElement("div");
+      box.className = "han-lightbox";
+      box.innerHTML =
+        '<img alt="" referrerpolicy="no-referrer" /><button type="button" class="han-lightbox-close">关闭</button>';
+      document.body.appendChild(box);
+      box.addEventListener("click", function (event) {
+        if (event.target === box || event.target.closest(".han-lightbox-close")) {
+          box.classList.remove("is-open");
+          const img = box.querySelector("img");
+          if (img) img.removeAttribute("src");
+        }
+      });
+    }
+    const img = box.querySelector("img");
+    if (img) img.src = url;
+    box.classList.add("is-open");
+  }
+
+  function closeHanLightbox() {
+    const box = document.querySelector(".han-lightbox");
+    if (!box) return;
+    box.classList.remove("is-open");
+    const img = box.querySelector("img");
+    if (img) img.removeAttribute("src");
+  }
+
   window.XmModules = window.XmModules || {};
 
   const HAN_GOODS_TEAMS = ["陈晓曼组", "高明阳组", "毛永超组", "段坤孝组", "薛双双组", "韩梦凯组"];
@@ -456,26 +487,44 @@
         );
       }
 
+      function thumbBoxHtml(attrs, value) {
+        const src = String(value || "").trim();
+        const hidden =
+          '<input class="han-cell" type="hidden" ' +
+          attrs +
+          ' data-key="image" value="' +
+          escapeHtml(src) +
+          '" />';
+        if (isImageUrl(src)) {
+          return (
+            '<div class="han-thumb-box">' +
+            hidden +
+            '<img class="han-thumb" src="' +
+            escapeHtml(src) +
+            '" alt="" referrerpolicy="no-referrer" decoding="async" />' +
+            "</div>"
+          );
+        }
+        return (
+          '<div class="han-thumb-box han-thumb-empty" title="双击粘贴主图链接">' +
+          hidden +
+          "<span>无图</span></div>"
+        );
+      }
+
       function cellHtml(row, key) {
         if (key === "_layer") {
           return "<td>" + layerSelect(row) + "</td>";
         }
         const value = row[key] || "";
         if (key === "image") {
-          const src = String(value).trim();
-          const thumb = isImageUrl(src)
-            ? '<img class="han-thumb" src="' +
-              escapeHtml(src) +
-              '" alt="" referrerpolicy="no-referrer" />'
-            : "";
           return (
             '<td class="han-img-cell">' +
-            thumb +
-            imageInput(row.id, key, value, ' placeholder="主图链接"') +
+            thumbBoxHtml('data-id="' + escapeHtml(row.id) + '"', value) +
             "</td>"
           );
         }
-        return "<td>" + imageInput(row.id, key, value, key === "image" ? ' placeholder="主图链接"' : "") + "</td>";
+        return "<td>" + imageInput(row.id, key, value, "") + "</td>";
       }
 
       const teams = HAN_GOODS_TEAMS;
@@ -573,19 +622,31 @@
 
       root.innerHTML = page(
         shop,
-        team + " · " + shop + "。本店可自定义分类规则；导入和分类只按本店规则。格子可改，调动可换层。",
+        team + " · " + shop + "。本店可自定义分类规则；导入和分类只按本店规则。格子可改，调动可换层。拖动表格移动，滚轮缩放，双击主图看大图。",
         '<style>' +
-          ".han-sheet-wrap{overflow-x:auto;background:#fff;border:1px solid #c6c6c6}" +
-          ".han-sheet{border-collapse:collapse;font-size:12px;min-width:2200px}" +
+          ".han-sheet-wrap{background:#fff;border:1px solid #c6c6c6}" +
+          ".han-sheet-viewbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid #e5e7eb;background:#f8fafc}" +
+          ".han-sheet-viewbar button{min-height:30px;padding:4px 12px;border:0;border-radius:999px;background:#111827;color:#fff;font-size:12px;cursor:pointer}" +
+          ".han-sheet-zoom-label{min-width:48px;font-size:12px;color:#374151}" +
+          ".han-sheet-viewbar .han-muted{font-size:12px;color:#6b7280}" +
+          ".han-sheet-viewport{overflow:hidden;cursor:grab;background:#f4f6f9;height:min(72vh,860px);min-height:420px;position:relative}" +
+          ".han-sheet-viewport.is-panning{cursor:grabbing}" +
+          ".han-sheet-pan{transform-origin:0 0;will-change:transform;width:max-content}" +
+          ".han-sheet{border-collapse:collapse;font-size:12px;min-width:2200px;background:#fff}" +
           ".han-sheet th,.han-sheet td{border:1px solid #b1b1b1;padding:4px 6px;white-space:nowrap;vertical-align:middle}" +
           ".han-sheet .han-sheet-title{text-align:center;font-size:20px;font-weight:700;background:#fff2cc}" +
           ".han-sheet .han-sheet-group{text-align:center;font-weight:700}" +
           ".han-sheet .han-sheet-hint{white-space:normal;min-width:160px;max-width:220px;font-size:11px;line-height:1.45;color:#444;background:#fafafa}" +
           ".han-sheet .han-sheet-col{background:#f3f3f3;font-weight:600}" +
           ".han-sheet input{width:92px;border:0;background:#fffde7;padding:2px 4px}" +
-          ".han-img-cell{min-width:72px;text-align:center}" +
-          ".han-thumb{display:block;width:56px;height:56px;object-fit:cover;margin:0 auto 4px;border:1px solid #d1d5db;background:#fff}" +
-          ".han-img-cell input{width:88px}" +
+          ".han-img-cell{width:64px;min-width:64px;text-align:center;padding:4px}" +
+          ".han-thumb-box{width:56px;height:56px;margin:0 auto;display:flex;align-items:center;justify-content:center;background:#fff}" +
+          ".han-thumb{display:block;width:56px;height:56px;object-fit:cover;border:1px solid #d1d5db;background:#fff}" +
+          ".han-thumb-empty{border:1px dashed #d1d5db;color:#9ca3af;font-size:11px}" +
+          ".han-lightbox{display:none;position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.72);align-items:center;justify-content:center}" +
+          ".han-lightbox.is-open{display:flex}" +
+          ".han-lightbox img{max-width:90vw;max-height:86vh;box-shadow:0 12px 40px rgba(0,0,0,.35);background:#fff}" +
+          ".han-lightbox-close{position:absolute;top:16px;right:16px;border:0;border-radius:999px;padding:8px 14px;background:#fff;cursor:pointer}" +
           ".han-sheet button{font-size:12px;padding:2px 8px}" +
           ".han-sheet-msg{margin:0.5rem 0 0;min-height:1.2em}" +
           ".han-sheet-toolbar{display:flex;justify-content:flex-end;gap:8px;margin:0 0 10px;flex-wrap:wrap}" +
@@ -650,8 +711,16 @@
           '<div class="han-rules-actions">' +
           '<button type="button" id="han-rules-save">保存本店规则</button>' +
           '<button type="button" id="han-rules-reset">恢复默认</button></div></div>' +
-          '<div class="han-sheet-wrap"><table class="han-sheet" id="han-sheet">' +
-          "<thead></thead><tbody></tbody></table></div>" +
+          '<div class="han-sheet-wrap">' +
+          '<div class="han-sheet-viewbar">' +
+          '<button type="button" class="han-sheet-zoom-out">缩小</button>' +
+          '<span class="han-sheet-zoom-label">100%</span>' +
+          '<button type="button" class="han-sheet-zoom-in">放大</button>' +
+          '<button type="button" class="han-sheet-zoom-reset">复位</button>' +
+          '<span class="han-muted">拖动移动 · 滚轮缩放 · 双击主图看大图</span></div>' +
+          '<div class="han-sheet-viewport" data-han-sheet>' +
+          '<div class="han-sheet-pan"><table class="han-sheet" id="han-sheet">' +
+          "<thead></thead><tbody></tbody></table></div></div></div>" +
           '<p class="msg status han-sheet-msg" id="prod-msg"></p>',
         teamTabsHtml(team) + '<div id="han-shop-tabs"></div>',
         '<div class="han-plans">' +
@@ -830,18 +899,22 @@
                   if (key === "_layer") {
                     return "<td></td>";
                   }
+                  if (key === "image") {
+                    return (
+                      '<td class="han-img-cell">' +
+                      thumbBoxHtml('data-layer="' + i + '"', "") +
+                      "</td>"
+                    );
+                  }
                   return (
-                    '<td' +
-                    (key === "image" ? ' class="han-img-cell"' : "") +
-                    '><input data-layer="' +
+                    "<td><input data-layer=\"" +
                     i +
                     '" data-key="' +
                     key +
                     '" type="' +
                     inputType(key) +
                     '"' +
-                    (key === "spu" ? " placeholder=\"SPU\"" : "") +
-                    (key === "image" ? " placeholder=\"主图链接\"" : "") +
+                    (key === "spu" ? ' placeholder="SPU"' : "") +
                     " /></td>"
                   );
                 })
@@ -1099,22 +1172,41 @@
 
       function refreshThumb(input) {
         if (input.getAttribute("data-key") !== "image") return;
-        const td = input.closest("td");
-        if (!td) return;
-        let img = td.querySelector("img.han-thumb");
+        const box = input.closest(".han-thumb-box") || input.parentNode;
+        if (!box) return;
         const src = String(input.value || "").trim();
+        let img = box.querySelector("img.han-thumb");
+        const empty = box.querySelector("span");
         if (isImageUrl(src)) {
+          box.classList.remove("han-thumb-empty");
+          box.removeAttribute("title");
+          if (empty && empty.parentNode) empty.parentNode.removeChild(empty);
           if (!img) {
             img = document.createElement("img");
             img.className = "han-thumb";
             img.alt = "";
             img.setAttribute("referrerpolicy", "no-referrer");
-            td.insertBefore(img, input);
+            img.setAttribute("decoding", "async");
+            box.appendChild(img);
           }
           img.src = src;
-        } else if (img && img.parentNode) {
-          img.parentNode.removeChild(img);
+        } else {
+          box.classList.add("han-thumb-empty");
+          box.setAttribute("title", "双击粘贴主图链接");
+          if (img && img.parentNode) img.parentNode.removeChild(img);
+          if (!box.querySelector("span")) {
+            const mark = document.createElement("span");
+            mark.textContent = "无图";
+            box.appendChild(mark);
+          }
         }
+      }
+
+      function setImageUrl(input, src) {
+        input.value = String(src || "").trim();
+        refreshThumb(input);
+        const id = input.getAttribute("data-id");
+        if (id) savePatch(id, { image: input.value });
       }
 
       function onSheetBlur(e) {
@@ -1176,10 +1268,82 @@
         reader.readAsText(file, "utf-8");
       }
 
+      const viewport = root.querySelector("[data-han-sheet]");
+      const pan = root.querySelector(".han-sheet-pan");
+      const zoomLabel = root.querySelector(".han-sheet-zoom-label");
+      const sheetView = { x: 16, y: 12, scale: 1 };
+      function applySheetView() {
+        pan.style.transform =
+          "translate(" + sheetView.x + "px," + sheetView.y + "px) scale(" + sheetView.scale + ")";
+        if (zoomLabel) zoomLabel.textContent = Math.round(sheetView.scale * 100) + "%";
+      }
+      function zoomSheet(next) {
+        sheetView.scale = Math.min(2.4, Math.max(0.35, next));
+        applySheetView();
+      }
+      applySheetView();
+
+      function onZoomIn() {
+        zoomSheet(sheetView.scale + 0.1);
+      }
+      function onZoomOut() {
+        zoomSheet(sheetView.scale - 0.1);
+      }
+      function onZoomReset() {
+        sheetView.x = 16;
+        sheetView.y = 12;
+        sheetView.scale = 1;
+        applySheetView();
+      }
+      function onSheetWheel(e) {
+        e.preventDefault();
+        zoomSheet(sheetView.scale + (e.deltaY > 0 ? -0.08 : 0.08));
+      }
+      let sheetDrag = null;
+      function onSheetPointerDown(e) {
+        if (e.target.closest("input,select,textarea,button,a")) return;
+        sheetDrag = { x: e.clientX, y: e.clientY, ox: sheetView.x, oy: sheetView.y };
+        viewport.classList.add("is-panning");
+        if (viewport.setPointerCapture) viewport.setPointerCapture(e.pointerId);
+      }
+      function onSheetPointerMove(e) {
+        if (!sheetDrag) return;
+        sheetView.x = sheetDrag.ox + (e.clientX - sheetDrag.x);
+        sheetView.y = sheetDrag.oy + (e.clientY - sheetDrag.y);
+        applySheetView();
+      }
+      function onSheetPointerUp() {
+        sheetDrag = null;
+        viewport.classList.remove("is-panning");
+      }
+      function onSheetDblClick(e) {
+        const img = e.target.closest(".han-thumb");
+        if (img && img.src) {
+          openHanLightbox(img.src);
+          return;
+        }
+        const box = e.target.closest(".han-thumb-box");
+        if (!box) return;
+        const input = box.querySelector('input[data-key="image"]');
+        if (!input) return;
+        const next = window.prompt("粘贴主图链接", input.value || "");
+        if (next == null) return;
+        setImageUrl(input, next);
+      }
+
       paintHead();
       table.addEventListener("click", onAdd);
       table.addEventListener("change", onSheetChange);
       table.addEventListener("focusout", onSheetBlur);
+      table.addEventListener("dblclick", onSheetDblClick);
+      root.querySelector(".han-sheet-zoom-in").addEventListener("click", onZoomIn);
+      root.querySelector(".han-sheet-zoom-out").addEventListener("click", onZoomOut);
+      root.querySelector(".han-sheet-zoom-reset").addEventListener("click", onZoomReset);
+      viewport.addEventListener("wheel", onSheetWheel, { passive: false });
+      viewport.addEventListener("pointerdown", onSheetPointerDown);
+      viewport.addEventListener("pointermove", onSheetPointerMove);
+      viewport.addEventListener("pointerup", onSheetPointerUp);
+      viewport.addEventListener("pointercancel", onSheetPointerUp);
       classifyBtn.addEventListener("click", onClassify);
       rulesToggle.addEventListener("click", onToggleRules);
       rulesSave.addEventListener("click", onSaveRules);
@@ -1211,9 +1375,16 @@
       });
       return function unmount() {
         dead = true;
+        closeHanLightbox();
         table.removeEventListener("click", onAdd);
         table.removeEventListener("change", onSheetChange);
         table.removeEventListener("focusout", onSheetBlur);
+        table.removeEventListener("dblclick", onSheetDblClick);
+        viewport.removeEventListener("wheel", onSheetWheel);
+        viewport.removeEventListener("pointerdown", onSheetPointerDown);
+        viewport.removeEventListener("pointermove", onSheetPointerMove);
+        viewport.removeEventListener("pointerup", onSheetPointerUp);
+        viewport.removeEventListener("pointercancel", onSheetPointerUp);
         classifyBtn.removeEventListener("click", onClassify);
         rulesToggle.removeEventListener("click", onToggleRules);
         rulesSave.removeEventListener("click", onSaveRules);
