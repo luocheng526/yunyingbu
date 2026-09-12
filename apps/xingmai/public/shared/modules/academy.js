@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.463 · upload-title */
+/* xm-module-academy 0.1.464 · editable-upload-title */
 (function () {
-  const ASSET_VER = "0.1.463";
+  const ASSET_VER = "0.1.464";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -298,6 +298,54 @@
       .slice(0, 160);
   }
 
+  function replaceTitleSelection(input, text, start, end) {
+    input.setRangeText(text, start, end, "end");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function installTitleKeyboardFallback(input) {
+    let composing = false;
+    let compositionValue = "";
+    let compositionStart = 0;
+    let compositionEnd = 0;
+    input.addEventListener("compositionstart", function () {
+      composing = true;
+      compositionValue = input.value;
+      compositionStart = input.selectionStart == null ? input.value.length : input.selectionStart;
+      compositionEnd = input.selectionEnd == null ? compositionStart : input.selectionEnd;
+    });
+    input.addEventListener("compositionend", function (ev) {
+      composing = false;
+      const text = String(ev.data || "");
+      window.setTimeout(function () {
+        if (text && input.value === compositionValue) {
+          replaceTitleSelection(input, text, compositionStart, compositionEnd);
+        }
+      }, 0);
+    });
+    input.addEventListener("keydown", function (ev) {
+      if (composing || ev.isComposing || ev.key === "Process" || ev.ctrlKey || ev.metaKey || ev.altKey) {
+        return;
+      }
+      const start = input.selectionStart == null ? input.value.length : input.selectionStart;
+      const end = input.selectionEnd == null ? start : input.selectionEnd;
+      if (ev.key.length === 1) {
+        ev.preventDefault();
+        replaceTitleSelection(input, ev.key, start, end);
+        return;
+      }
+      if (ev.key === "Backspace") {
+        ev.preventDefault();
+        replaceTitleSelection(input, "", start === end ? Math.max(0, start - 1) : start, end);
+        return;
+      }
+      if (ev.key === "Delete") {
+        ev.preventDefault();
+        replaceTitleSelection(input, "", start, start === end ? Math.min(input.value.length, end + 1) : end);
+      }
+    });
+  }
+
   function examUploadPaneHtml() {
     return (
       '<div class="academy-console-stage" id="academy-view-upload" hidden>' +
@@ -416,6 +464,7 @@
       const titleInput = form.querySelector('input[name="title"]');
       const fileInput = form.querySelector('input[type="file"]');
       if (fileInput && titleInput) {
+        installTitleKeyboardFallback(titleInput);
         fileInput.addEventListener("change", function () {
           const file = fileInput.files && fileInput.files[0];
           if (!String(titleInput.value || "").trim()) {

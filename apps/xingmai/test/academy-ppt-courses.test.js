@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
+import vm from "node:vm";
 import { createApp } from "../src/app.js";
 import { resetStoreForTests } from "../src/modules/profile/auth.js";
 import { resetHandbookLogsForTests } from "../src/modules/academy/log-store.js";
@@ -90,6 +91,9 @@ test("academy.js enables upload, watermark, and blocks original download", () =>
   assert.match(js, /\/api\/academy\/courses\/chunk/);
   assert.match(js, /文件上传/);
   assert.match(js, /courseTitleFromFile/);
+  assert.match(js, /installTitleKeyboardFallback/);
+  assert.match(js, /setRangeText/);
+  assert.match(js, /compositionend/);
   assert.match(js, /选文件后自动填写/);
   assert.doesNotMatch(js, /name="title" required/);
   assert.match(js, /academy-view-upload/);
@@ -118,6 +122,99 @@ test("academy.js enables upload, watermark, and blocks original download", () =>
   assert.match(css, /\.academy-console\.is-logs/);
   assert.match(css, /\.academy-course-pane/);
   assert.doesNotMatch(js, /has-viewer/);
+});
+
+test("course title keyboard fallback inserts, replaces, and deletes text", () => {
+  const start = js.indexOf("  function replaceTitleSelection");
+  const end = js.indexOf("  function examUploadPaneHtml", start);
+  assert.ok(start >= 0 && end > start);
+  const listeners = {};
+  const inputEvents = [];
+  const input = {
+    value: "",
+    selectionStart: 0,
+    selectionEnd: 0,
+    addEventListener(type, handler) {
+      listeners[type] = handler;
+    },
+    setRangeText(text, from, to) {
+      this.value = this.value.slice(0, from) + text + this.value.slice(to);
+      this.selectionStart = this.selectionEnd = from + text.length;
+    },
+    dispatchEvent(event) {
+      inputEvents.push(event.type);
+    }
+  };
+  const context = {
+    Event: class Event {
+      constructor(type) {
+        this.type = type;
+      }
+    },
+    window: { setTimeout: (fn) => fn() }
+  };
+  vm.runInNewContext(`${js.slice(start, end)}; installTitleKeyboardFallback(input);`, {
+    ...context,
+    input
+  });
+  function key(key, extra = {}) {
+    let prevented = false;
+    listeners.keydown({
+      key,
+      isComposing: false,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      preventDefault() {
+        prevented = true;
+      },
+      ...extra
+    });
+    return prevented;
+  }
+  assert.equal(key("a"), true);
+  assert.equal(key("b"), true);
+  assert.equal(input.value, "ab");
+  input.selectionStart = 0;
+  input.selectionEnd = 1;
+  assert.equal(key("课"), true);
+  assert.equal(input.value, "课b");
+  input.selectionStart = input.selectionEnd = input.value.length;
+  assert.equal(key("Backspace"), true);
+  assert.equal(input.value, "课");
+  input.selectionStart = 0;
+  input.selectionEnd = 0;
+  assert.equal(key("Delete"), true);
+  assert.equal(input.value, "");
+  assert.equal(key("v", { ctrlKey: true }), false);
+  assert.deepEqual(inputEvents, ["input", "input", "input", "input", "input"]);
+});
+
+test("course title keyboard fallback restores missing IME composition text", () => {
+  const start = js.indexOf("  function replaceTitleSelection");
+  const end = js.indexOf("  function examUploadPaneHtml", start);
+  const listeners = {};
+  const input = {
+    value: "培训",
+    selectionStart: 2,
+    selectionEnd: 2,
+    addEventListener(type, handler) {
+      listeners[type] = handler;
+    },
+    setRangeText(text, from, to) {
+      this.value = this.value.slice(0, from) + text + this.value.slice(to);
+      this.selectionStart = this.selectionEnd = from + text.length;
+    },
+    dispatchEvent() {}
+  };
+  vm.runInNewContext(`${js.slice(start, end)}; installTitleKeyboardFallback(input);`, {
+    Event: class Event {},
+    window: { setTimeout: (fn) => fn() },
+    input
+  });
+  listeners.compositionstart();
+  listeners.compositionend({ data: "模板" });
+  assert.equal(input.value, "培训模板");
 });
 
 test("plan is live; old ppt is rejected", async () => {
