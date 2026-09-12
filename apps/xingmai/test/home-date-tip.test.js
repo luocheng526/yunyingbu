@@ -48,13 +48,18 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /\.xm-hm-team-kpis\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(homeJs, /\.xm-hm\.is-chief \.xm-hm-team-kpis\{grid-template-columns:1fr/);
   assert.doesNotMatch(homeJs, /\.xm-hm\.is-chief \.xm-hm-card\{aspect-ratio:1\/1/);
-  assert.match(homeJs, /xm-hm-teams-bar"><b>星脉甄选<\/b><button type="button" class="xm-hm-set">卡片设置/);
+  assert.match(homeJs, /xm-hm-teams-bar"><b>星脉甄选<\/b><span><button type="button" data-show-teams>显示全部<\/button><button type="button" class="xm-hm-set">卡片设置/);
+  assert.match(homeJs, /data-drop-team="/);
+  assert.match(homeJs, /function goneTeams/);
+  assert.match(homeJs, /function saveGone/);
   assert.match(homeJs, /classList\.toggle\("is-chief"/);
   assert.match(homeJs, /function filterOwnChiefs/);
   assert.match(homeJs, /function seesAllChiefs/);
   assert.match(homeJs, /shop\.assistant/);
-  assert.match(homeJs, /<th>排名<\/th><th>店铺名称<\/th><\/tr>/);
+  assert.match(homeJs, /<th>店铺名称<\/th><\/tr><\/thead><tbody>/);
+  assert.doesNotMatch(homeJs, /<th>排名<\/th><th>店铺名称<\/th><\/tr>/);
   assert.doesNotMatch(homeJs, /<th class="xm-hm-num">数量<\/th>/);
+  assert.match(homeJs, /卡片设置 · /);
   assert.match(homeJs, /\.xm-hm\.is-chief \.xm-hm-teams \.xm-hm-table\{min-width:0/);
   assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table th,\.xm-hm-teams \.xm-hm-table td\{border:0;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;text-align:center\}/);
   assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table \.xm-hm-num\{text-align:center/);
@@ -219,6 +224,43 @@ test("chief board keeps admins on all columns and others on their own duty", () 
     fns.filterOwnChiefs(teams, { displayName: "杨润泽", role: "主管" }).map((row) => row.name),
     ["杨润泽"]
   );
+});
+
+test("card settings persist separately for 公司 经理团队 and 主管/储备", () => {
+  const start = homeJs.indexOf("var viewKey");
+  const end = homeJs.indexOf("function defaultCardKeys");
+  const store = {};
+  const fns = new Function(
+    "localStorage",
+    homeJs.slice(start, end) +
+      "return {viewStore, hiddenCards, saveHidden, goneTeams, saveGone, set: function (v) { viewKey = v; }};"
+  )({
+    getItem: (key) => (Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null),
+    setItem: (key, value) => {
+      store[key] = String(value);
+    }
+  });
+  fns.set("company");
+  assert.equal(fns.viewStore("hide"), "xm-home-hidden-cards");
+  assert.equal(fns.viewStore("order"), "xm-home-card-order");
+  fns.saveHidden(["payAmount"]);
+  fns.set("team");
+  assert.equal(fns.viewStore("hide"), "xm-home-team-hide");
+  assert.equal(fns.viewStore("order"), "xm-home-team-order");
+  assert.deepEqual(fns.hiddenCards(), []);
+  fns.saveHidden(["adCost"]);
+  fns.saveGone(["沈子晗"]);
+  fns.set("chief");
+  assert.equal(fns.viewStore("hide"), "xm-home-chief-hide");
+  assert.equal(fns.viewStore("order"), "xm-home-chief-order");
+  assert.deepEqual(fns.hiddenCards(), []);
+  assert.deepEqual(fns.goneTeams(), []);
+  fns.saveHidden(["refundRate"]);
+  fns.set("company");
+  assert.deepEqual(fns.hiddenCards(), ["payAmount"]);
+  fns.set("team");
+  assert.deepEqual(fns.hiddenCards(), ["adCost"]);
+  assert.deepEqual(fns.goneTeams(), ["沈子晗"]);
 });
 
 test("chief columns keep 主管/储备 duty and drop 运营 助理 经理", () => {

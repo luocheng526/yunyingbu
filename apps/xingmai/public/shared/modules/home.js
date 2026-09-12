@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.399-home-box */
+/* xm-module-home 0.1.400-home-set */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -21,26 +21,18 @@
       .replaceAll('"', "&quot;");
   }
 
+  function ymdFmt(tz, date) {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+  }
+
   function shanghaiYmd(daysAgo) {
-    var today = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Shanghai",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit"
-    }).format(new Date());
+    var today = ymdFmt("Asia/Shanghai", new Date());
     var shift = Number(daysAgo) || 0;
     if (!shift) {
       return today;
     }
-    var parts = today.split("-").map(function (item) {
-      return Number(item);
-    });
-    return new Intl.DateTimeFormat("en-CA", {
-      timeZone: "UTC",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit"
-    }).format(new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] - shift)));
+    var parts = today.split("-").map(Number);
+    return ymdFmt("UTC", new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] - shift)));
   }
 
   function rangeDates(range) {
@@ -53,15 +45,7 @@
       var parts = first.split("-").map(Number);
       var prev = new Date(Date.UTC(parts[0], parts[1] - 2, 1));
       var last = new Date(Date.UTC(parts[0], parts[1] - 1, 0));
-      var fmt = function (d) {
-        return new Intl.DateTimeFormat("en-CA", {
-          timeZone: "UTC",
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit"
-        }).format(d);
-      };
-      return { from: fmt(prev), to: fmt(last) };
+      return { from: ymdFmt("UTC", prev), to: ymdFmt("UTC", last) };
     }
     if (range === "year") {
       return { from: shanghaiYmd(0).slice(0, 4) + "-01-01", to: shanghaiYmd(0) };
@@ -76,12 +60,7 @@
   }
 
   function ymdFromUtc(date) {
-    return new Intl.DateTimeFormat("en-CA", {
-      timeZone: "UTC",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit"
-    }).format(date);
+    return ymdFmt("UTC", date);
   }
 
   function diffYmd(from, to) {
@@ -182,20 +161,10 @@
     tip.classList.add("is-on");
     var tw = tip.offsetWidth || 280;
     var th = tip.offsetHeight || 80;
-    var left = box.right - tw;
-    if (left < 8) {
-      left = 8;
-    }
-    if (left + tw > window.innerWidth - 8) {
-      left = Math.max(8, window.innerWidth - tw - 8);
-    }
+    var left = Math.max(8, Math.min(box.right - tw, window.innerWidth - tw - 8));
     var top = box.bottom + 8;
-    if (top + th > window.innerHeight - 8 && box.top - th - 8 >= 8) {
-      top = box.top - th - 8;
-    }
-    if (top < 8) {
-      top = 8;
-    }
+    if (top + th > window.innerHeight - 8 && box.top - th - 8 >= 8) top = box.top - th - 8;
+    if (top < 8) top = 8;
     tip.style.left = Math.round(left) + "px";
     tip.style.top = Math.round(top) + "px";
   }
@@ -318,6 +287,20 @@
   function saveHidden(list) {
     try {
       localStorage.setItem(viewStore("hide"), JSON.stringify(list));
+    } catch (_err) {}
+  }
+
+  function goneTeams() {
+    try {
+      return viewKey === "team" || viewKey === "chief" ? JSON.parse(localStorage.getItem(viewStore("gone")) || "[]") || [] : [];
+    } catch (_err) {
+      return [];
+    }
+  }
+
+  function saveGone(list) {
+    try {
+      if (viewKey === "team" || viewKey === "chief") localStorage.setItem(viewStore("gone"), JSON.stringify(list || []));
     } catch (_err) {}
   }
 
@@ -486,16 +469,9 @@
   }
 
   function rankMark(index) {
-    if (index === 0) {
-      return '<b class="xm-hm-cup gold">1</b>';
-    }
-    if (index === 1) {
-      return '<b class="xm-hm-cup silver">2</b>';
-    }
-    if (index === 2) {
-      return '<b class="xm-hm-cup bronze">3</b>';
-    }
-    return "<span>" + (index + 1) + "</span>";
+    return index < 3
+      ? '<b class="xm-hm-cup ' + ["gold", "silver", "bronze"][index] + '">' + (index + 1) + "</b>"
+      : "<span>" + (index + 1) + "</span>";
   }
 
   function cardHtml(card, teamKey) {
@@ -654,7 +630,9 @@
       escapeHtml(team.key) +
       '"><div><h2>' +
       escapeHtml(team.name) +
-      "团队</h2><p>责权店对齐 ERP。</p></div></header>"
+      '团队</h2></div><button type="button" data-drop-team="' +
+      escapeHtml(team.name) +
+      '">×</button></header>'
     );
   }
 
@@ -667,10 +645,10 @@
         '"><h2>责权店铺 <span>' +
         shops.length +
         " 店</span></h2>" +
-        '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th></tr></thead><tbody>' +
+        '<table class="xm-hm-table"><thead><tr><th>店铺名称</th></tr></thead><tbody>' +
         shops
-          .map(function (row, i) {
-            return "<tr><td>" + rankMark(i) + "</td><td>" + escapeHtml(row.shop) + "</td></tr>";
+          .map(function (row) {
+            return "<tr><td>" + escapeHtml(row.shop) + "</td></tr>";
           })
           .join("") +
         "</tbody></table></div>"
@@ -724,9 +702,12 @@
   }
 
   function teamsCompareHtml(teams, hide, simple) {
-    var list = orderTeams(teams && teams.length ? teams : simple ? [] : blankTeams(), simple);
+    var gone = goneTeams();
+    var list = orderTeams(teams && teams.length ? teams : simple ? [] : blankTeams(), simple).filter(function (team) {
+      return gone.indexOf(team.name) === -1;
+    });
     return (
-      '<div class="xm-hm-teams-bar"><b>星脉甄选</b><button type="button" class="xm-hm-set">卡片设置</button></div><div class="xm-hm-teams-grid">' +
+      '<div class="xm-hm-teams-bar"><b>星脉甄选</b><span><button type="button" data-show-teams>显示全部</button><button type="button" class="xm-hm-set">卡片设置</button></span></div><div class="xm-hm-teams-grid">' +
       list
         .map(function (team) {
           return teamBlockHtml({ key: team.key, name: team.name, cards: arrangeCards(team.cards), shops: team.shops }, hide, simple);
@@ -827,17 +808,11 @@
   function pickLiveCards(cards) {
     var map = {};
     (cards || []).forEach(function (card) {
-      if (card && card.key) {
-        map[card.key] = card;
-      }
+      if (card && card.key) map[card.key] = card;
     });
+    var blank = blankLive().cards;
     return LIVE_CARD_KEYS.map(function (key) {
-      if (map[key]) {
-        return map[key];
-      }
-      return blankLive().cards.filter(function (card) {
-        return card.key === key;
-      })[0];
+      return map[key] || blank.filter(function (card) { return card.key === key; })[0];
     }).filter(Boolean);
   }
 
@@ -887,7 +862,7 @@
       width +
       " " +
       height +
-      '" preserveAspectRatio="none" aria-hidden="true">' +
+      '">' +
       (yestPts ? '<polyline fill="none" stroke="#2f54eb" stroke-width="2.4" points="' + yestPts + '"></polyline>' : "") +
       (todayPts ? '<polyline fill="none" stroke="#cf1322" stroke-width="2.4" points="' + todayPts + '"></polyline>' : "") +
       "</svg>"
@@ -964,11 +939,9 @@
       ".xm-hm-ranges button.is-on{background:var(--xm-primary);border-color:var(--xm-primary);color:#fff}" +
       ".xm-hm-datewrap{position:relative}" +
       ".xm-hm-dates{display:inline-flex;align-items:center;gap:8px;min-width:248px;height:32px;padding:0 10px 0 12px;border:1px solid #dcdfe6;background:#fff;color:#303133;border-radius:20px;cursor:pointer;font-size:13px;line-height:1}" +
-      ".xm-hm-dates.is-on{border-color:#c0c4cc}" +
       ".xm-hm-dates-ico,.xm-hm-dates-clear{display:inline-flex;color:#c0c4cc;flex:0 0 auto}" +
       ".xm-hm-dates-text{flex:1 1 auto;text-align:left;white-space:nowrap}" +
       ".xm-hm-dates-clear{border:0;background:transparent;padding:0;width:16px;height:16px;border-radius:50%;cursor:pointer;align-items:center;justify-content:center}" +
-      ".xm-hm-dates-clear:hover{color:#909399}" +
       ".xm-hm-cal{position:absolute;top:calc(100% + 10px);right:0;z-index:8;width:646px;max-width:min(646px,calc(100vw - 24px));background:#fff;border-radius:4px;box-shadow:0 2px 12px rgba(0,0,0,.12);padding:8px 8px 12px}" +
       ".xm-hm-cal[hidden]{display:none}" +
       ".xm-hm-cal-months{display:flex}" +
@@ -987,7 +960,6 @@
       ".xm-hm-cal-grid button.is-today{color:#f56c6c}" +
       ".xm-hm-cal-grid button.is-start,.xm-hm-cal-grid button.is-end{background:#f56c6c;color:#fff;border-radius:50%;width:32px}" +
       ".xm-hm-cal-grid button:disabled,.xm-hm-cal-grid button.is-off{color:#c0c4cc;opacity:.7;cursor:not-allowed}" +
-      "html[data-theme=dark] .xm-hm-dates,html[data-theme=dark] .xm-hm-cal{background:var(--xm-card);color:var(--xm-ink);border-color:var(--xm-line)}" +
       ".xm-hm-card-head .xm-hm-help{cursor:help;position:relative;z-index:2;width:18px;height:18px;border:1px solid var(--xm-line);border-radius:50%;background:transparent;padding:0;margin:0;font:inherit;font-size:11px;line-height:1;color:var(--xm-muted);display:inline-flex;align-items:center;justify-content:center}" +
       ".xm-hm-tip{position:fixed;z-index:9;display:none;box-sizing:border-box;width:max-content;max-width:min(360px,calc(100vw - 24px));padding:10px 12px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.18);color:var(--xm-ink);font-size:12px;line-height:1.6;white-space:pre-wrap;text-align:left;pointer-events:none}" +
       ".xm-hm-tip.is-on{display:block}" +
@@ -1032,10 +1004,10 @@
       ".xm-hm.is-chief .xm-hm-trend{margin-top:2px;font-size:10px}" +
       ".xm-hm-team-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;min-height:0;padding:0 2px 2px}" +
       ".xm-hm-team-head h2{margin:0;font-size:16px}" +
-      ".xm-hm-team-head p{margin:2px 0 0;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm.is-chief .xm-hm-team-head h2{font-size:13px}" +
-      ".xm-hm.is-chief .xm-hm-team-head p{font-size:10px}" +
       ".xm-hm-teams-bar .xm-hm-set{padding:0;font-size:13px;white-space:nowrap}" +
+      ".xm-hm-teams-bar span{display:flex;gap:12px}" +
+      "[data-drop-team],[data-show-teams]{border:0;background:0;color:var(--xm-primary);cursor:pointer;padding:0}" +
       ".xm-hm-ladder{margin-top:4px}" +
       ".xm-hm-ladder h2{margin:16px 0 10px;font-size:16px}" +
       ".xm-hm-podiums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}" +
@@ -1098,7 +1070,6 @@
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{margin:8px 0 0;color:var(--xm-muted);font-size:12px}" +
       "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:1fr}}" +
-      "@media (max-width:1200px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
       "@media (max-width:700px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts,.xm-hm-team-kpis{grid-template-columns:1fr}.xm-hm-team-head{flex-direction:column}.xm-hm-cal-months{flex-direction:column}}"
     );
   }
@@ -1121,7 +1092,7 @@
       "</div>" +
       '<div class="xm-hm-ranges">' +
       rangeBtns +
-      '<div class="xm-hm-datewrap"><div class="xm-hm-dates" id="xm-hm-dates" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-description="最多选择30天"><span class="xm-hm-dates-ico" aria-hidden="true">日</span><span class="xm-hm-dates-text" id="xm-hm-date-text"></span><button type="button" class="xm-hm-dates-clear" id="xm-hm-date-clear" aria-label="清除日期">×</button></div><div class="xm-hm-cal" id="xm-hm-cal" hidden></div></div>' +
+      '<div class="xm-hm-datewrap"><div class="xm-hm-dates" id="xm-hm-dates" title="最多选择30天"><span class="xm-hm-dates-ico">日</span><span class="xm-hm-dates-text" id="xm-hm-date-text"></span><button type="button" class="xm-hm-dates-clear" id="xm-hm-date-clear">×</button></div><div class="xm-hm-cal" id="xm-hm-cal" hidden></div></div>' +
       "</div></div>" +
       '<div class="xm-hm-pop" id="xm-hm-pop" hidden><h3>卡片设置</h3><div id="xm-hm-card-opts"></div></div>' +
       '<div class="xm-hm-body">' +
@@ -1137,13 +1108,13 @@
   function paint(root, state) {
     var board = root.querySelector("#xm-hm");
     viewKey = state.view || "company";
-    var hide = hiddenCards();
+    var teamView = state.view === "team" || state.view === "chief";
+    var hide = teamView ? teamHidden(hiddenCards()) : hiddenCards();
     var cards = arrangeCards(state.cards || blankCompanyCards()).filter(function (card) {
       return hide.indexOf(card.key) === -1;
     });
     var live = state.live || blankLive();
     var shops = state.shops && state.shops.length ? state.shops : [];
-    var teamView = state.view === "team" || state.view === "chief";
     var teams =
       state.view === "chief"
         ? filterOwnChiefs(state.chiefs && state.chiefs.length ? state.chiefs : blankRoleTeams("主管"), state.user)
@@ -1153,8 +1124,8 @@
     var hero = readChart(live.hero, blankLive().hero);
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
-    hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.399-home-box");
+    hideCardTip();
+    board.setAttribute("data-hm-js", "0.1.400-home-set");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1167,9 +1138,10 @@
     });
     root.querySelector("#xm-hm-date-text").textContent = formatDashDate(state.from) + " 至 " + formatDashDate(state.to);
     root.querySelector("#xm-hm-kpis").innerHTML = cards.map(cardHtml).join("");
-    root.querySelector("#xm-hm-teams").hidden = !teamView;
-    root.querySelector("#xm-hm-teams").style.setProperty("--xm-hm-team-cols", String(Math.max(teams.length, 1)));
-    root.querySelector("#xm-hm-teams").innerHTML = teamsCompareHtml(teams, teamHidden(hide), state.view === "chief");
+    var teamBox = root.querySelector("#xm-hm-teams");
+    teamBox.hidden = !teamView;
+    teamBox.innerHTML = teamsCompareHtml(teams, hide, state.view === "chief");
+    teamBox.style.setProperty("--xm-hm-team-cols", String(Math.max(teamBox.querySelectorAll(".xm-hm-team").length, 1)));
     restoreShopColW(root);
     root.querySelector("#xm-hm-live").hidden = state.view !== "live";
     root.querySelector("#xm-hm-board").hidden = state.view !== "board";
@@ -1194,18 +1166,13 @@
     var gapText = ((state.view === "chief" ? state.chiefGaps : state.teamGaps) || state.gaps || []).filter(function (item) {
       return item.indexOf("人管有店") !== -1 || item.indexOf("韩梦凯 ·") !== -1;
     }).join("；");
-    root.querySelector("#xm-hm-note").textContent =
-      state.view === "live"
+    root.querySelector("#xm-hm-note").textContent = gapText
+      ? "人管对不上：" + gapText
+      : state.view === "live"
         ? "实时来自 ERP，每5分钟拉一次。"
-        : state.view === "team" || state.view === "chief"
-          ? (gapText
-            ? "人管对不上：" + gapText
-            : state.view === "chief"
-              ? "主管/储备按责权，本人只看自己数据。"
-              : "经理团队按责权店对齐 ERP。")
-          : state.view === "board"
-            ? "排行榜按责权店对齐 ERP。"
-            : "数字来自星脉 ERP。净销售额=支付-退款。";
+        : "数字来自星脉 ERP。";
+    root.querySelector("#xm-hm-pop h3").textContent =
+      "卡片设置 · " + (state.view === "team" ? "经理团队" : state.view === "chief" ? "主管/储备" : "公司");
     root.querySelector("#xm-hm-card-opts").innerHTML = arrangeCards(state.cards || blankCompanyCards())
       .map(function (card) {
         return (
@@ -2162,9 +2129,11 @@
         var view = event.target.closest("[data-view]");
         if (view) {
           state.view = view.getAttribute("data-view");
+          viewKey = state.view || "company";
           state.mode = state.view === "team" || state.view === "chief" ? "company" : "shop";
           closeCal();
           clearTextSelection();
+          root.querySelector("#xm-hm-pop").hidden = true;
           paint(root, state);
           if (state.view === "live") {
             pullLive();
@@ -2238,7 +2207,26 @@
           pullBoard();
           return;
         }
+        var drop = event.target.closest("[data-drop-team]");
+        if (drop) {
+          viewKey = state.view || "company";
+          var n = drop.getAttribute("data-drop-team") || "";
+          var g = goneTeams();
+          if (n && g.indexOf(n) < 0) {
+            g.push(n);
+            saveGone(g);
+          }
+          paint(root, state);
+          return;
+        }
+        if (event.target.closest("[data-show-teams]")) {
+          viewKey = state.view || "company";
+          saveGone([]);
+          paint(root, state);
+          return;
+        }
         if (event.target.closest(".xm-hm-set")) {
+          viewKey = state.view || "company";
           var pop = root.querySelector("#xm-hm-pop");
           pop.hidden = !pop.hidden;
           closeCal();
@@ -2279,7 +2267,7 @@
         if (to && help.contains(to)) {
           return;
         }
-        hideCardTip(true);
+        hideCardTip();
       }
 
       function onTipScroll() {
@@ -2287,7 +2275,7 @@
           return;
         }
         if (!document.body.contains(cardTipAnchor)) {
-          hideCardTip(true);
+          hideCardTip();
           return;
         }
         placeCardTip(cardTipAnchor);
@@ -2558,6 +2546,7 @@
       function onChange(event) {
         var hideKey = event.target.getAttribute("data-hide");
         if (hideKey) {
+          viewKey = state.view || "company";
           var list = hiddenCards();
           if (event.target.checked) {
             list = list.filter(function (item) {
@@ -2618,7 +2607,7 @@
         root.removeEventListener("mouseout", onHelpOut);
         scroller.removeEventListener("scroll", onTipScroll, true);
         window.removeEventListener("resize", onTipScroll);
-        hideCardTip(true);
+        hideCardTip();
         if (cardTipEl && cardTipEl.parentNode) {
           cardTipEl.parentNode.removeChild(cardTipEl);
         }
