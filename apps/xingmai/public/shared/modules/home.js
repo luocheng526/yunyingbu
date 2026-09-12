@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.363-home-int */
+/* xm-module-home 0.1.364-home-teamgrid */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -509,8 +509,8 @@
       escapeHtml(team.name) +
       "团队</h2><p>店铺按人管责权，数字按店铺id对齐数据中心 ERP。</p></div>" +
       '<a href="' +
-      escapeHtml(team.href || "#") +
-      '">打开运营中心</a></header>'
+      escapeHtml(team.href || "/data/overview") +
+      '">打开数据总览</a></header>'
     );
   }
 
@@ -530,36 +530,31 @@
     );
   }
 
-  function teamCardByKey(team, key) {
-    var list = (team && team.cards) || [];
-    var i;
-    for (i = 0; i < list.length; i++) {
-      if (list[i] && list[i].key === key) {
-        return list[i];
-      }
-    }
-    return { key: key, label: key, value: "—", trend: 0, tip: "" };
+  function teamBlockHtml(team, hide) {
+    var cards = (team.cards || []).filter(function (card) {
+      return hide.indexOf(card.key) === -1;
+    });
+    return (
+      '<section class="xm-hm-team" data-team="' +
+      escapeHtml(team.key) +
+      '">' +
+      teamHeadHtml(team) +
+      '<div class="xm-hm-team-kpis">' +
+      cards
+        .map(function (card) {
+          return cardHtml(card, team.key);
+        })
+        .join("") +
+      "</div>" +
+      teamShopsHtml(team) +
+      "</section>"
+    );
   }
 
   function teamsCompareHtml(teams, hide) {
     var left = (teams && teams[0]) || blankTeams()[0];
     var right = (teams && teams[1]) || blankTeams()[1];
-    var keys = [];
-    var seen = {};
-    ((left.cards || []).concat(right.cards || [])).forEach(function (card) {
-      if (!card || seen[card.key] || hide.indexOf(card.key) !== -1) {
-        return;
-      }
-      seen[card.key] = true;
-      keys.push(card.key);
-    });
-    var out = [teamHeadHtml(left), teamHeadHtml(right)];
-    keys.forEach(function (key) {
-      out.push(cardHtml(teamCardByKey(left, key), left.key));
-      out.push(cardHtml(teamCardByKey(right, key), right.key));
-    });
-    out.push(teamShopsHtml(left), teamShopsHtml(right));
-    return out.join("");
+    return teamBlockHtml(left, hide) + teamBlockHtml(right, hide);
   }
 
   function standItemHtml(row, place, unit) {
@@ -954,10 +949,17 @@
       ".xm-hm.is-live .xm-hm-kpis,.xm-hm.is-board .xm-hm-kpis,.xm-hm.is-team .xm-hm-kpis,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
       ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden]{display:none}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
-      ".xm-hm-teams{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 16px;align-items:stretch;position:relative}" +
+      ".xm-hm-teams{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 16px;align-items:start;position:relative}" +
       ".xm-hm-teams::before{content:\"\";position:absolute;inset:0 auto 0 50%;width:1px;background:var(--xm-line);pointer-events:none}" +
+      ".xm-hm-team{display:flex;flex-direction:column;gap:8px;min-width:0}" +
+      ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;align-content:start}" +
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0}" +
-      ".xm-hm-team-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;min-height:58px;padding:0 4px 8px}" +
+      ".xm-hm.is-team .xm-hm-card{min-height:72px;padding:8px 8px 6px;border-radius:6px}" +
+      ".xm-hm.is-team .xm-hm-card-head{font-size:11px}" +
+      ".xm-hm.is-team .xm-hm-card-head .xm-hm-help{width:14px;height:14px;font-size:10px}" +
+      ".xm-hm.is-team .xm-hm-value{margin-top:4px;font-size:16px}" +
+      ".xm-hm.is-team .xm-hm-trend{margin-top:2px;font-size:11px}" +
+      ".xm-hm-team-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;min-height:48px;padding:0 4px 4px}" +
       ".xm-hm-team-head h2{margin:0;font-size:16px}" +
       ".xm-hm-team-head p{margin:4px 0 0;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-team-head a{color:var(--xm-primary);text-decoration:none;font-size:13px;white-space:nowrap}" +
@@ -1025,8 +1027,9 @@
       ".xm-hm-pop h3{margin:0 0 8px;font-size:13px}" +
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{margin:8px 0 0;color:var(--xm-muted);font-size:12px}" +
+      "@media (max-width:1400px){.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}" +
       "@media (max-width:1200px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
-      "@media (max-width:700px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts{grid-template-columns:1fr}.xm-hm-team-head{flex-direction:column}.xm-hm-cal-months{flex-direction:column}}"
+      "@media (max-width:700px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts,.xm-hm-team-kpis{grid-template-columns:1fr}.xm-hm-team-head{flex-direction:column}.xm-hm-cal-months{flex-direction:column}}"
     );
   }
 
@@ -1082,7 +1085,7 @@
       keepCard = hold ? hold.getAttribute("data-card") || "" : "";
     }
     hideCardTip(true);
-    board.setAttribute("data-hm-js", "0.1.363-home-int");
+    board.setAttribute("data-hm-js", "0.1.364-home-teamgrid");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", state.view === "team");
@@ -1454,8 +1457,8 @@
 
   function blankTeams() {
     return [
-      { key: "shen", name: "沈子晗", href: "/shen", cards: blankCompanyCards(), shops: [] },
-      { key: "han", name: "韩梦凯", href: "/han", cards: blankCompanyCards(), shops: [] }
+      { key: "shen", name: "沈子晗", href: "/data/overview", cards: blankCompanyCards(), shops: [] },
+      { key: "han", name: "韩梦凯", href: "/data/overview", cards: blankCompanyCards(), shops: [] }
     ];
   }
 
@@ -1870,7 +1873,7 @@
       };
     }
     return {
-      teams: [oneTeam("shen", "沈子晗", "/shen"), oneTeam("han", "韩梦凯", "/han")],
+      teams: [oneTeam("shen", "沈子晗", "/data/overview"), oneTeam("han", "韩梦凯", "/data/overview")],
       mismatches: mismatches
     };
   }

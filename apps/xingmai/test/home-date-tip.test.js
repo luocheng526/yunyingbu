@@ -34,13 +34,13 @@ test("custom range allows 30 inclusive days and rejects 31", () => {
   assert.equal(withinDays("2026-09-11", "2026-09-11", 30), true);
 });
 
-test("team view pairs the same KPI left and right for comparison", () => {
-  assert.match(homeJs, /function teamsCompareHtml/);
-  assert.match(homeJs, /function teamHeadHtml/);
-  assert.match(homeJs, /function teamShopsHtml/);
-  assert.doesNotMatch(homeJs, /function teamBlockHtml/);
+test("team view links to data overview and packs KPIs into three compact rows", () => {
+  assert.match(homeJs, /function teamBlockHtml/);
+  assert.match(homeJs, /打开数据总览/);
+  assert.match(homeJs, /href: "\/data\/overview"/);
+  assert.doesNotMatch(homeJs, /打开运营中心/);
+  assert.match(homeJs, /\.xm-hm-team-kpis\{display:grid;grid-template-columns:repeat\(6,minmax\(0,1fr\)\)/);
   assert.match(homeJs, /\.xm-hm-teams\{display:grid;grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)/);
-  assert.doesNotMatch(homeJs, /@media \(max-width:900px\)\{\.xm-hm-teams\{grid-template-columns:1fr\}/);
 });
 
 test("homepage money and rates show as rounded integers", () => {
