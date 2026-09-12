@@ -81,7 +81,7 @@ export function getTeamOverview() {
     notice: "示例数据，尚未接入店铺",
     title: "渠道总览",
     scope: "团队",
-    range: "30天",
+    range: "日",
     dateLabel: "2026年9月11日",
     ranges: ["7天", "30天", "日", "周", "月", "年", "自定义"],
     summary: { channels: 1, shops: 45 },

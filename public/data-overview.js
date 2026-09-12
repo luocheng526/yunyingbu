@@ -27,7 +27,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=channel-compare1";
+      link.href = "/data-pages.css?v=channel-yest1";
       document.head.appendChild(link);
     }
   }
@@ -55,6 +55,43 @@
     return date.getFullYear() + "/" + (date.getMonth() + 1) + "/" + date.getDate();
   }
 
+  function shanghaiYmd(offsetDays) {
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Shanghai",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).format(new Date());
+    const parts = today.split("-").map(Number);
+    const utc = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + (offsetDays || 0)));
+    return utc.toISOString().slice(0, 10);
+  }
+
+  function cnDateLabel(ymdStr) {
+    const parts = String(ymdStr || "").split("-");
+    if (parts.length < 3) {
+      return ymdStr;
+    }
+    return Number(parts[0]) + "年" + Number(parts[1]) + "月" + Number(parts[2]) + "日";
+  }
+
+  function pickYesterdayRow(trend) {
+    const yest = shanghaiYmd(-1);
+    const today = shanghaiYmd(0);
+    const rows = trend || [];
+    const hit = rows.find(function (row) {
+      return row && row.date === yest;
+    });
+    if (hit) {
+      return hit;
+    }
+    const last = rows[rows.length - 1];
+    if (last && last.date === today && rows.length >= 2) {
+      return rows[rows.length - 2];
+    }
+    return last || null;
+  }
+
   function rangeSpan(label, customFrom, customTo) {
     const to = new Date();
     to.setHours(0, 0, 0, 0);
@@ -62,8 +99,8 @@
     if (label === "30天") {
       from.setDate(from.getDate() - 29);
     } else if (label === "日") {
-      from.setDate(from.getDate() - 1);
-      to.setTime(from.getTime());
+      const yest = shanghaiYmd(-1);
+      return { from: yest, to: yest, dateLabel: cnDateLabel(yest) };
     } else if (label === "周") {
       const day = from.getDay() || 7;
       from.setDate(from.getDate() - day + 1);
@@ -169,16 +206,33 @@
     const cardsIn = raw.cards || [];
     const shops = raw.shops || [];
     const trend = raw.trend || [];
-    const pay = asNum(cardOf(cardsIn, "payAmount").value) != null ? asNum(cardOf(cardsIn, "payAmount").value) : sumField(shops, ["payAmount"]) || 0;
-    const orders = asNum(cardOf(cardsIn, "orderCount").value) != null ? asNum(cardOf(cardsIn, "orderCount").value) : sumField(shops, ["orderCount"]) || 0;
-    const profit = asNum(cardOf(cardsIn, "profit").value) != null ? asNum(cardOf(cardsIn, "profit").value) : sumField(shops, ["profit"]) || 0;
-    const refund = asNum(cardOf(cardsIn, "refundAmount").value) != null ? asNum(cardOf(cardsIn, "refundAmount").value) : sumField(shops, ["refundAmount"]) || 0;
-    const netOrders = sumField(shops, ["netOrderCount"]) != null ? sumField(shops, ["netOrderCount"]) : orders;
-    const promo = sumField(shops, ["totalPromotionCost", "promotionCost"]) != null
-      ? sumField(shops, ["totalPromotionCost", "promotionCost"])
-      : sumField(trend, ["promotionCost"]);
-    const last = trend[trend.length - 1] || {};
-    const prev = trend[trend.length - 2] || last;
+    const dayRow = rangeLabel === "日" ? pickYesterdayRow(trend) : null;
+    const pay = dayRow && asNum(dayRow.payAmount) != null
+      ? asNum(dayRow.payAmount)
+      : asNum(cardOf(cardsIn, "payAmount").value) != null ? asNum(cardOf(cardsIn, "payAmount").value) : sumField(shops, ["payAmount"]) || 0;
+    const orders = dayRow && asNum(dayRow.orderCount) != null
+      ? asNum(dayRow.orderCount)
+      : asNum(cardOf(cardsIn, "orderCount").value) != null ? asNum(cardOf(cardsIn, "orderCount").value) : sumField(shops, ["orderCount"]) || 0;
+    const profit = dayRow && asNum(dayRow.profit) != null
+      ? asNum(dayRow.profit)
+      : asNum(cardOf(cardsIn, "profit").value) != null ? asNum(cardOf(cardsIn, "profit").value) : sumField(shops, ["profit"]) || 0;
+    const refund = dayRow && asNum(dayRow.refundAmount) != null
+      ? asNum(dayRow.refundAmount)
+      : asNum(cardOf(cardsIn, "refundAmount").value) != null ? asNum(cardOf(cardsIn, "refundAmount").value) : sumField(shops, ["refundAmount"]) || 0;
+    const netOrders = dayRow ? orders : (sumField(shops, ["netOrderCount"]) != null ? sumField(shops, ["netOrderCount"]) : orders);
+    const promo = dayRow && asNum(dayRow.promotionCost) != null
+      ? asNum(dayRow.promotionCost)
+      : sumField(shops, ["totalPromotionCost", "promotionCost"]) != null
+        ? sumField(shops, ["totalPromotionCost", "promotionCost"])
+        : sumField(trend, ["promotionCost"]);
+    const last = dayRow || trend[trend.length - 1] || {};
+    const prev = (function () {
+      const idx = trend.indexOf(last);
+      if (idx > 0) {
+        return trend[idx - 1];
+      }
+      return trend[trend.length - 2] || last;
+    })();
     const lastPay = asNum(last.payAmount);
     const prevPay = asNum(prev.payAmount);
     const heroVal = lastPay != null ? lastPay : pay;
@@ -406,7 +460,7 @@
       board = root.querySelector("#board");
     }
     const state = {
-      range: "30天",
+      range: "日",
       customFrom: "",
       customTo: "",
       shopId: "",
