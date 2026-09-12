@@ -448,7 +448,7 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /\.history-stats/);
     assert.match(text, /\.oc-hero-card/);
     assert.match(text, /\.oc-tab-num/);
-    assert.match(text, /\.oc-tab:focus-visible/);
+    assert.match(text, /\.oc-tab:not\(\.active\):focus-visible/);
     assert.match(text, /-webkit-tap-highlight-color:\s*transparent/);
     assert.match(text, /#1677ff/);
     assert.match(text, /\.failed-sum/);
