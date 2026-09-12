@@ -268,7 +268,11 @@ export function createHanRouter(store = createHanStore()) {
         });
         res.status(result.created.length ? 201 : 200).json({ ok: true, ...result });
       } catch (err) {
-        res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+        res.status(err.statusCode || 500).json({
+          ok: false,
+          error: err.message,
+          headers: err.headers || [],
+        });
       }
     },
   );

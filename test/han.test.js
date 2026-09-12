@@ -4,7 +4,7 @@ import test from "node:test";
 import { createApp } from "../src/app.js";
 import { createHanStore, dropProbeTasks, hydrateFromMysql, matchOrgStoresForTeam, mergeTeamShops, buildProductCsv, parseProductCsv, classifyProduct, HAN_DEFAULT_OWNER, HAN_DEFAULT_STORE } from "../src/modules/han/store.js";
 import { createHanFakePool } from "./han-fake-pool.js";
-import { makeMinimalXlsx, parseOverviewFilename, parseOverviewWorkbook } from "../src/modules/han/import-file.js";
+import { makeMinimalXlsx, parseOverviewFilename, parseOverviewWorkbook, headerKey } from "../src/modules/han/import-file.js";
 
 async function withServer(fn) {
   const hanStore = createHanStore(createHanFakePool());
@@ -738,6 +738,22 @@ test("京东商品总览 xlsx maps to classify fields", () => {
   assert.equal(parsed.items[0].orders30d, "20");
   assert.equal(parsed.items[0].convRate, "8%");
   assert.equal(parsed.items[0].returnM8, "12%");
+});
+
+test("京东表头带单位也能识别", () => {
+  assert.equal(headerKey("成交金额(元)"), "periodGmv");
+  assert.equal(headerKey("成交转化率(%)"), "convRate");
+  assert.equal(headerKey("SPU编码"), "spu");
+  assert.equal(headerKey("成交订单数"), "orders30d");
+  const filename = "商品总览_京东_RASW个护健康旗舰店_2026-08-01_2026-08-31.xlsx";
+  const buf = makeMinimalXlsx([
+    ["商品名称", "SPU编码", "成交金额(元)", "成交订单数", "成交转化率(%)", "退货率(%)", "推广花费占比(%)"],
+    ["洗发露", "SPU-A", 62000, 20, "8%", "12%", "30%"],
+  ]);
+  const parsed = parseOverviewWorkbook(buf, filename);
+  assert.equal(parsed.items[0].spu, "SPU-A");
+  assert.equal(parsed.items[0].gmv7d, "2000");
+  assert.equal(parsed.items[0].orders30d, "20");
 });
 
 test("POST /api/han/products/import-file reads 商品总览 xlsx", async () => {

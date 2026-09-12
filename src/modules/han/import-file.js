@@ -27,8 +27,14 @@ const HEADER_ALIASES = [
 
 export function normalizeHeader(value) {
   return String(value ?? "")
+    .replace(/\r?\n/g, "")
+    .replace(/（[^）]*）/g, "")
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\[[^\]]*\]/g, "")
+    .replace(/【[^】]*】/g, "")
+    .replace(/[_-]?本期|_环比|_同比/g, "")
+    .replace(/元|万元/g, "")
     .replace(/\s+/g, "")
-    .replace(/[()（）\[\]【】]/g, "")
     .replace(/%/g, "")
     .replace(/[:：].*$/g, "")
     .toLowerCase();
@@ -36,21 +42,35 @@ export function normalizeHeader(value) {
 
 export function parseOverviewFilename(name = "") {
   const text = String(name || "").replace(/\\/g, "/").split("/").pop();
-  const match = text.match(/商品总览[_-]?京东[_-](.+?)[_-](\d{4}-\d{2}-\d{2})[_-](\d{4}-\d{2}-\d{2})/);
+  const match =
+    text.match(/商品总览[_-]?京东[_-](.+?)[_-](\d{4}-\d{2}-\d{2})[_-](\d{4}-\d{2}-\d{2})/) ||
+    text.match(/(\d{4}-\d{2}-\d{2}).{0,8}(\d{4}-\d{2}-\d{2})/);
   if (!match) {
     return { shop: "", from: "", to: "", days: 0 };
   }
+  if (!match[3]) {
+    return {
+      shop: "",
+      from: match[1],
+      to: match[2],
+      days: dateSpan(match[1], match[2]),
+    };
+  }
   const from = match[2];
   const to = match[3];
-  const start = new Date(`${from}T00:00:00Z`);
-  const end = new Date(`${to}T00:00:00Z`);
-  const days = Number.isFinite(start.getTime()) && Number.isFinite(end.getTime())
-    ? Math.max(1, Math.round((end - start) / 86400000) + 1)
-    : 0;
-  return { shop: match[1], from, to, days };
+  return { shop: match[1], from, to, days: dateSpan(from, to) };
 }
 
-function headerKey(label) {
+function dateSpan(from, to) {
+  const start = new Date(`${from}T00:00:00Z`);
+  const end = new Date(`${to}T00:00:00Z`);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) {
+    return 0;
+  }
+  return Math.max(1, Math.round((end - start) / 86400000) + 1);
+}
+
+export function headerKey(label) {
   const normalized = normalizeHeader(label);
   if (!normalized) {
     return "";
@@ -60,6 +80,26 @@ function headerKey(label) {
       return key;
     }
   }
+  if (normalized.includes("日成交") || normalized.includes("日均成交")) return "gmv7d";
+  if (normalized.includes("近7天成交") || normalized.includes("近7日成交")) return "weekGmv";
+  if (normalized.includes("成交金额") || normalized.includes("成交额") || normalized === "gmv" || normalized.includes("销售额")) {
+    return "periodGmv";
+  }
+  if (normalized.includes("花费占比") || normalized.includes("推广费") || normalized.includes("费比")) return "spendRate";
+  if (normalized.includes("转化")) return "convRate";
+  if (normalized.includes("退货") || normalized.includes("退款率") || normalized.includes("售后率")) return "returnM8";
+  if (normalized.includes("成交单") || normalized.includes("成交订单") || normalized.includes("订单量") || normalized.includes("成交笔")) {
+    return "orders30d";
+  }
+  if (normalized.includes("评价") || normalized.includes("评论")) return "reviewCount";
+  if (normalized.includes("商品名称") || normalized.includes("商品标题") || normalized === "标题") return "name";
+  if (normalized.includes("spu") || normalized.includes("商品编码") || normalized.includes("商品编号") || normalized.includes("商品id")) {
+    return "spu";
+  }
+  if (normalized.includes("sku")) return "firstSku";
+  if (normalized.includes("主图") || normalized.includes("图片")) return "image";
+  if (normalized.includes("上架") || normalized.includes("上柜")) return "listedOn";
+  if (normalized.includes("库存")) return "jdStock";
   return "";
 }
 
@@ -80,11 +120,16 @@ function xmlDecode(text) {
     .replace(/&amp;/g, "&");
 }
 
+function stripXmlNs(xml) {
+  return String(xml || "").replace(/(<\/?)([\w.-]+:)/g, "$1");
+}
+
 function parseSharedStrings(xml) {
   const out = [];
-  const blocks = String(xml || "").match(/<si\b[\s\S]*?<\/si>/g) || [];
+  const blocks = stripXmlNs(xml).match(/<si\b[\s\S]*?<\/si>/g) || [];
   blocks.forEach((block) => {
-    const texts = [...block.matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((m) => xmlDecode(m[1]));
+    const cleaned = block.replace(/<rPh\b[\s\S]*?<\/rPh>/g, "").replace(/<phoneticPr\b[\s\S]*?\/>/g, "");
+    const texts = [...cleaned.matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((m) => xmlDecode(m[1]));
     out.push(texts.join(""));
   });
   return out;
@@ -92,7 +137,7 @@ function parseSharedStrings(xml) {
 
 function parseSheetRows(xml, shared) {
   const rows = [];
-  const rowBlocks = String(xml || "").match(/<row\b[\s\S]*?<\/row>/g) || [];
+  const rowBlocks = stripXmlNs(xml).match(/<row\b[\s\S]*?<\/row>/g) || [];
   rowBlocks.forEach((block) => {
     const rowMatch = block.match(/<row\b[^>]*\br="(\d+)"/);
     const rowIndex = rowMatch ? Number(rowMatch[1]) - 1 : rows.length;
@@ -188,21 +233,35 @@ function readZip(buffer) {
   return files;
 }
 
-function firstSheetPath(files) {
-  const sheetNames = Object.keys(files)
-    .filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/i.test(name))
+function sheetPaths(files) {
+  return Object.keys(files)
+    .filter((name) => /^xl\/worksheets\/sheet\d*\.xml$/i.test(name))
     .sort();
-  return sheetNames[0] || "";
+}
+
+function sharedStringsXml(files) {
+  const name = Object.keys(files).find((key) => /sharedstrings\.xml$/i.test(key));
+  return name ? files[name] : "";
 }
 
 export function parseXlsxRows(buffer) {
   const files = readZip(buffer);
-  const sheetPath = firstSheetPath(files);
-  if (!sheetPath) {
+  const sheets = sheetPaths(files);
+  if (!sheets.length) {
     throw Object.assign(new Error("xlsx 里没有工作表"), { statusCode: 400 });
   }
-  const shared = parseSharedStrings(files["xl/sharedStrings.xml"] || "");
-  return parseSheetRows(files[sheetPath], shared);
+  const shared = parseSharedStrings(sharedStringsXml(files));
+  let best = [];
+  let bestScore = -1;
+  sheets.forEach((path) => {
+    const rows = parseSheetRows(files[path], shared);
+    const score = pickHeaderIndex(rows).score;
+    if (score > bestScore) {
+      best = rows;
+      bestScore = score;
+    }
+  });
+  return best;
 }
 
 function scoreHeaderRow(row) {
@@ -240,8 +299,9 @@ function dailyGmv(row, days) {
     return String(Math.round((week / 7) * 100) / 100);
   }
   const period = Number(String(row.periodGmv || "").replace(/,/g, ""));
-  if (Number.isFinite(period) && period > 0 && days > 0) {
-    return String(Math.round((period / days) * 100) / 100);
+  const span = days > 0 ? days : 30;
+  if (Number.isFinite(period) && period > 0) {
+    return String(Math.round((period / span) * 100) / 100);
   }
   return "";
 }
@@ -249,9 +309,12 @@ function dailyGmv(row, days) {
 export function mapOverviewRows(rows, { filename = "" } = {}) {
   const meta = parseOverviewFilename(filename);
   const { index, score } = pickHeaderIndex(rows);
-  if (score < 2) {
-    const err = new Error("识别不出商品总览表头，请确认是京东商品总览导出");
+  const rawHeaders = (rows[index] || []).map((cell) => String(cell ?? "").trim());
+  if (score < 1) {
+    const seen = rawHeaders.filter(Boolean).slice(0, 12).join("、") || "空表";
+    const err = new Error("识别不出商品总览表头，读到：" + seen);
     err.statusCode = 400;
+    err.headers = rawHeaders;
     throw err;
   }
   const headers = (rows[index] || []).map((cell) => headerKey(cell));
