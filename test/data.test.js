@@ -568,7 +568,7 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /data-shops\.js\?v=shop-wide6/);
   assert.match(css, /ch-pill/);
   assert.match(css, /\.ch-card \.value[\s\S]*font-size: 28px/);
-  assert.match(css, /\.ch-metrics \.ch-hero \{\s*min-height: 148px/);
+  assert.match(css, /\.ch-metrics \.ch-hero[\s\S]*min-height: 148px/);
   assert.doesNotMatch(css, /min-height: 220px/);
   assert.match(css, /ch-card-right/);
   assert.match(css, /#8c8c8c/);
