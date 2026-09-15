@@ -133,6 +133,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function compareBarsHtml/);
   assert.match(homeJs, /function hourFromBarEvent/);
   assert.match(homeJs, /柱：分时金额/);
+  assert.match(homeJs, /柱：分时费比/);
+  assert.match(homeJs, /function repeatHours/);
   assert.match(homeJs, /preserveAspectRatio="none"/);
   assert.match(homeJs, /noDots: true/);
   assert.match(homeJs, /function companySetCards/);
@@ -445,13 +447,30 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
     hours: 24
   });
   assert.match(liveHtml, /实时销售指数/);
-  assert.match(liveHtml, /data-hours="48"/);
+  assert.match(liveHtml, /data-hours="24"/);
+  assert.match(liveHtml, /data-chart="sales"/);
   assert.doesNotMatch(liveHtml, /<circle/);
-  const liveBlue = liveHtml.match(/stroke="#2f54eb"[^>]*points="([^"]+)"/);
-  const liveRed = liveHtml.match(/stroke="#cf1322"[^>]*points="([^"]+)"/);
+  assert.equal((liveHtml.match(/class="xm-hm-col is-yest"/g) || []).length, 24);
+  assert.equal((liveHtml.match(/class="xm-hm-col is-today"/g) || []).length, 3);
+  const liveBlue = liveHtml.match(/class="xm-hm-cum is-yest"[^>]*points="([^"]+)"/);
+  const liveRed = liveHtml.match(/class="xm-hm-cum is-today"[^>]*points="([^"]+)"/);
   assert.ok(liveBlue && liveRed);
-  assert.equal(liveBlue[1].trim().split(/\s+/).length, 48);
-  assert.equal(liveRed[1].trim().split(/\s+/).length, 6);
+  assert.equal(liveBlue[1].trim().split(/\s+/).length, 24);
+  assert.equal(liveRed[1].trim().split(/\s+/).length, 3);
+  const feeHtml = fns.liveChartHtml({
+    label: "实时费比",
+    value: "12%",
+    delta: -1,
+    yesterdayHour: Array.from({ length: 24 }, () => 0.1),
+    todayHour: [0.2, 0.2, 0.2],
+    unit: "rate",
+    lineMode: "flat"
+  });
+  assert.match(feeHtml, /data-chart="fee"/);
+  assert.match(feeHtml, /data-unit="rate"/);
+  assert.match(feeHtml, /data-hours="24"/);
+  assert.equal((feeHtml.match(/class="xm-hm-col is-yest"/g) || []).length, 24);
+  assert.equal((feeHtml.match(/class="xm-hm-col is-today"/g) || []).length, 3);
 });
 
 test("live sales chart keeps 24-hour axis and hides future today points", () => {

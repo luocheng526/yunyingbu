@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.533-home-combo */
+/* xm-module-home 0.1.534-home-livecombo */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -183,26 +183,29 @@
       guide.setAttribute("visibility", "hidden");
     });
   }
-  function lineTipHtml(hour, yestHour, yestCum, todayHour, todayOk, todayCum, label, part) {
+  function tipNum(value, unit) {
+    return unit === "rate" ? fmtRate(value) : fmtMoney(value);
+  }
+  function lineTipHtml(hour, yestHour, yestCum, todayHour, todayOk, todayCum, label, part, unit) {
     return (
       "<b>" +
       escapeHtml(label != null && label !== "" ? label : String(hour + 1)) +
       "</b>" +
       '<div class="xm-hm-line-row"><span><i class="is-yest"></i>昨天</span><em>' +
-      escapeHtml(fmtMoney(yestCum)) +
+      escapeHtml(tipNum(yestCum, unit)) +
       "</em></div>" +
       '<div class="xm-hm-line-sub"><span>' +
       escapeHtml(part || "本小时") +
       "</span><span>" +
-      escapeHtml(fmtMoney(yestHour)) +
+      escapeHtml(tipNum(yestHour, unit)) +
       "</span></div>" +
       '<div class="xm-hm-line-row"><span><i class="is-today"></i>实时</span><em>' +
-      (todayOk ? escapeHtml(fmtMoney(todayCum)) : "—") +
+      (todayOk ? escapeHtml(tipNum(todayCum, unit)) : "—") +
       "</em></div>" +
       '<div class="xm-hm-line-sub"><span>' +
       escapeHtml(part || "本小时") +
       "</span><span>" +
-      (todayOk ? escapeHtml(fmtMoney(todayHour)) : "—") +
+      (todayOk ? escapeHtml(tipNum(todayHour, unit)) : "—") +
       "</span></div>"
     );
   }
@@ -958,7 +961,8 @@
       "</svg>"
     );
   }
-  function compareBarsHtml(yestHour, todayHour) {
+  function compareBarsHtml(yestHour, todayHour, opt) {
+    opt = opt || {};
     var width = 640;
     var height = 300;
     var padTop = 12;
@@ -975,8 +979,8 @@
     }
     var today = todayHour || [];
     var barMax = 1;
-    var yestCum = cumHours(yest);
-    var todayCum = cumHours(today);
+    var yestCum = opt.yesterdayLine && opt.yesterdayLine.length ? opt.yesterdayLine.slice() : cumHours(yest);
+    var todayCum = opt.todayLine && opt.todayLine.length ? opt.todayLine.slice() : cumHours(today);
     var lineMax = 1;
     yest.concat(today).forEach(function (n) {
       var v = Number(n) || 0;
@@ -1060,7 +1064,9 @@
       width +
       " " +
       height +
-      '" preserveAspectRatio="none" data-bars="24">' +
+      '" preserveAspectRatio="none" data-bars="24"' +
+      (opt.unit ? ' data-unit="' + opt.unit + '"' : "") +
+      ">" +
       '<rect class="xm-hm-bar-guide" x="0" y="' +
       padTop +
       '" width="' +
@@ -1109,10 +1115,25 @@
   }
   function liveChartHtml(chart) {
     var down = Number(chart && chart.delta) < 0;
-    var line = halfSalesChart(chart);
+    var yestHour = (chart && chart.yesterdayHour) || [];
+    var todayHour = (chart && chart.todayHour) || [];
+    var hasHour = yestHour.length > 2 || todayHour.length > 2;
+    var unit = (chart && chart.unit) || "";
+    var kind = unit === "rate" ? "fee" : "sales";
+    var sub =
+      unit === "rate"
+        ? "柱：分时费比 · 线：当天费比"
+        : "柱：分时金额（2点=1-2点） · 线：累计（23点=1-23点）";
+    var comboOpt =
+      (chart && chart.lineMode) === "flat"
+        ? { unit: unit, yesterdayLine: yestHour, todayLine: todayHour }
+        : { unit: unit };
     return (
-      '<article class="xm-hm-chart"' +
-      hoursAttr(line.hours) +
+      '<article class="xm-hm-chart" data-chart="' +
+      kind +
+      '"' +
+      (unit ? ' data-unit="' + unit + '"' : "") +
+      hoursAttr(hasHour ? 24 : chart && chart.hours) +
       '><div class="xm-hm-card-head"><span>' +
       escapeHtml((chart && chart.label) || "实时指标") +
       '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
@@ -1124,7 +1145,7 @@
       " " +
       Math.round(Math.abs(Number(chart && chart.delta) || 0)) +
       "%</div>" +
-      compareLineHtml(line) +
+      (hasHour ? '<div class="xm-hm-chart-sub">' + sub + "</div>" + compareBarsHtml(yestHour, todayHour, comboOpt) : compareLineHtml(halfSalesChart(chart))) +
       "</article>"
     );
   }
@@ -1140,7 +1161,7 @@
       halfSalesChart(chart)
     );
     return (
-      '<article class="xm-hm-chart xm-hm-sales-chart"' +
+      '<article class="xm-hm-chart xm-hm-sales-chart" data-chart="sales"' +
       hoursAttr(hasHour ? 24 : sales.hours) +
       '><div class="xm-hm-card-head"><span>' +
       escapeHtml(sales.label) +
@@ -1237,7 +1258,8 @@
       ".xm-hm-sales{margin:0 0 10px}" +
       ".xm-hm-sales-chart{width:100%}" +
       ".xm-hm-sales-chart .xm-hm-line,.xm-hm-live .xm-hm-line{height:320px}" +
-      ".xm-hm-sales-chart .xm-hm-bars{display:block;width:100%;height:380px;margin-top:6px;cursor:crosshair}" +
+      ".xm-hm-sales-chart .xm-hm-bars,.xm-hm-live .xm-hm-bars{display:block;width:100%;height:380px;margin-top:6px;cursor:crosshair}" +
+      ".xm-hm-live .xm-hm-bars{height:280px}" +
       ".xm-hm-chart-sub{margin:10px 0 0;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
       ".xm-hm-teams{display:flex;flex-direction:column;gap:10px;overflow-x:auto}" +
@@ -1432,7 +1454,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.533-home-combo");
+    board.setAttribute("data-hm-js", "0.1.534-home-livecombo");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2048,6 +2070,14 @@
   function shanghaiHour() {
     return Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Shanghai", hour: "2-digit", hour12: false }).format(new Date()).slice(0, 2)) || 0;
   }
+  function repeatHours(value, slots) {
+    var out = [];
+    var i;
+    for (i = 0; i < (slots || 24); i += 1) {
+      out.push(Number(value) || 0);
+    }
+    return out;
+  }
   function padHours(hourly, slots) {
     slots = slots || 24;
     var src = hourly && hourly.length ? hourly.slice() : [];
@@ -2097,12 +2127,19 @@
     };
     var todayFee = todaySum.promotionRate != null ? todaySum.promotionRate : snap.promotionRate;
     var yestFee = yestSum.promotionRate;
+    var yestFeeH = yestFee == null ? [] : repeatHours(yestFee, 24);
+    var todayFeeH = todayFee == null ? [] : todayHours(repeatHours(todayFee, 24));
     live.paid = {
       label: "实时费比",
       value: fmtRate(todayFee),
       delta: trendOf(todayFee, yestFee),
-      yesterday: yestFee == null ? [] : [yestFee, yestFee],
-      today: todayFee == null ? [] : [todayFee, todayFee]
+      yesterday: todayFeeH.length || yestFeeH.length ? yestFeeH : yestFee == null ? [] : [yestFee, yestFee],
+      today: todayFeeH.length || yestFeeH.length ? todayFeeH : todayFee == null ? [] : [todayFee, todayFee],
+      yesterdayHour: yestFeeH,
+      todayHour: todayFeeH,
+      hours: yestFeeH.length || todayFeeH.length ? 24 : 0,
+      unit: "rate",
+      lineMode: "flat"
     };
     live.cards = [
       { key: "ad", label: "推广花费 (支付预估)", value: fmtMoney(todayAd), extra: todaySum.promotionRate != null ? "推广占比 " + fmtRate(todaySum.promotionRate) : "" },
@@ -2624,24 +2661,32 @@
         var chartEl = event.target && event.target.closest ? event.target.closest(".xm-hm-chart[data-hours]") : null;
         var svg = event.target && event.target.closest ? event.target.closest(".xm-hm-line") : null;
         if (barSvg) {
-          var barHero = (state.live && state.live.hero) || {};
-          var barYest = padHours(barHero.yesterdayHour || [], 24);
-          var barToday = barHero.todayHour || [];
+          var barBox = barSvg.closest ? barSvg.closest(".xm-hm-chart") : null;
+          var barKind = (barBox && barBox.getAttribute("data-chart")) || "sales";
+          var barUnit = (barSvg.getAttribute("data-unit") || (barBox && barBox.getAttribute("data-unit")) || "");
+          var barSrc =
+            barKind === "fee"
+              ? (state.live && state.live.paid) || {}
+              : (state.live && state.live.hero) || {};
+          var barYest = padHours(barSrc.yesterdayHour || [], 24);
+          var barToday = barSrc.todayHour || [];
           if (!barYest.length && !barToday.length) {
             hideLineTip(root);
             return;
           }
+          var barFlat = barSrc.lineMode === "flat" || barUnit === "rate";
           var barI = hourFromBarEvent(barSvg, event);
           var barTip = lineTipNode();
           barTip.innerHTML = lineTipHtml(
             barI,
             barYest[barI],
-            cumHours(barYest)[barI],
+            barFlat ? barYest[barI] : cumHours(barYest)[barI],
             barToday[barI],
             barI < barToday.length,
-            cumHours(barToday)[barI],
+            barFlat ? barToday[barI] : cumHours(barToday)[barI],
             String(barI + 1),
-            "本小时"
+            barFlat ? "费比" : "本小时",
+            barUnit
           );
           barTip.classList.add("is-on");
           placeLineTip(barTip, event);
