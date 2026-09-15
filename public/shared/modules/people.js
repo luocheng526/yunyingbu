@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.185-people-pager";
+    const href = "/people.css?v=0.1.186-filter-counts";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -588,6 +588,23 @@
         return MEMBER_FILTERS.indexOf(key) >= 0;
       }
 
+      function columnValueCounts(key) {
+        const counts = {};
+        function add(value) {
+          counts[value] = (counts[value] || 0) + 1;
+        }
+        if (isMemberFilter(key)) {
+          roster.people.forEach(function (row) {
+            add(personFilterValue(row, key));
+          });
+          return counts;
+        }
+        rawStores.forEach(function (row) {
+          add(cellFilterValue(row, key));
+        });
+        return counts;
+      }
+
       function uniqueColumnValues(key) {
         const seen = {};
         const list = [];
@@ -751,12 +768,20 @@
         const selected = values.filter(function (value) {
           return picked[value];
         }).length;
+        const counts = columnValueCounts(key);
+        const unit = isMemberFilter(key) ? "人" : "家";
+        const total = isMemberFilter(key) ? roster.people.length : rawStores.length;
+        function countBadge(n) {
+          return '<span class="org-filter-count">（' + n + unit + "）</span>";
+        }
         pop.hidden = false;
         pop.innerHTML =
           '<label class="org-filter-item org-filter-all"><input type="checkbox" id="org-filter-all"' +
           (selected === values.length && values.length ? " checked" : "") +
           (selected > 0 && selected < values.length ? " data-mid=1" : "") +
-          " />全选</label><div class=\"org-filter-list\">" +
+          " />全选" +
+          countBadge(total) +
+          "</label><div class=\"org-filter-list\">" +
           (values.length
             ? values
                 .map(function (value) {
@@ -767,6 +792,7 @@
                     (picked[value] ? " checked" : "") +
                     " />" +
                     escapeHtml(value) +
+                    countBadge(counts[value] || 0) +
                     "</label>"
                   );
                 })
