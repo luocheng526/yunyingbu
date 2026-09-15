@@ -48,7 +48,7 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /\.xm-hm-team-kpis\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(homeJs, /\.xm-hm\.is-chief \.xm-hm-team-kpis\{grid-template-columns:1fr/);
   assert.doesNotMatch(homeJs, /\.xm-hm\.is-chief \.xm-hm-card\{aspect-ratio:1\/1/);
-  assert.match(homeJs, /xm-hm-teams-bar"><b>星脉甄选<\/b><span><button type="button" data-show-teams>恢复所有卡片<\/button><button type="button" class="xm-hm-set">卡片设置/);
+  assert.match(homeJs, /xm-hm-teams-bar"><b>星脉甄选<\/b><span><button type="button" data-show-teams>恢复所有团队的卡片<\/button><button type="button" class="xm-hm-set">卡片设置/);
   assert.match(homeJs, /data-drop-team="/);
   assert.doesNotMatch(homeJs, /data-drop-card="/);
   assert.match(homeJs, /class="xm-hm-drop"/);
@@ -57,7 +57,10 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function teamHeadHtml\(team, simple\)/);
   assert.match(homeJs, /function goneTeams/);
   assert.match(homeJs, /function saveGone/);
-  assert.match(homeJs, /saveGone\(\[\]\);\n          saveHidden\(\[\]\);/);
+  assert.match(homeJs, /data-show-teams[\s\S]{0,180}saveGone\(\[\]\);/);
+  assert.doesNotMatch(homeJs, /saveGone\(\[\]\);\n          saveHidden\(\[\]\);/);
+  assert.match(homeJs, /data-hide-all/);
+  assert.match(homeJs, /全选<\/label>/);
   assert.match(homeJs, /classList\.toggle\("is-chief"/);
   assert.match(homeJs, /function filterOwnChiefs/);
   assert.match(homeJs, /function seesAllChiefs/);
