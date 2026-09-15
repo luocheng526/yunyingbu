@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.534-home-livecombo */
+/* xm-module-home 0.1.535-home-pills */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1216,10 +1216,10 @@
       ".xm-content,#xm-content{min-height:0!important;flex:1 1 auto!important;overflow:auto!important}" +
       ".xm-hm{position:relative;display:block;box-sizing:border-box;min-height:min-content;height:auto;max-height:none;padding:10px 12px 24px;color:var(--xm-ink);overflow:visible}" +
       ".xm-hm-bar{position:relative;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:8px 2px;margin-bottom:10px;background:transparent;border:0}" +
-      ".xm-hm-views{display:flex;align-items:center;gap:6px}" +
-      ".xm-hm-views button,.xm-hm-set{border:0;background:transparent;color:var(--xm-muted);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:13px;-webkit-user-select:none;user-select:none}" +
-      ".xm-hm-views button.is-on{color:var(--xm-primary);background:var(--xm-primary-soft);font-weight:600}" +
-      ".xm-hm-set{color:var(--xm-primary)}" +
+      ".xm-hm-views{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:transparent}" +
+      ".xm-hm-views button{border:1px solid var(--xm-primary);background:var(--xm-card);color:var(--xm-primary);padding:6px 16px;min-height:32px;border-radius:999px;cursor:pointer;font-size:13px;line-height:1.4;-webkit-user-select:none;user-select:none}" +
+      ".xm-hm-views button.is-on{background:var(--xm-primary);border-color:var(--xm-primary);color:#fff;font-weight:600}" +
+      ".xm-hm-set{border:0;background:transparent;color:var(--xm-primary);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:13px;-webkit-user-select:none;user-select:none}" +
       ".xm-hm-ranges{display:flex;flex-wrap:wrap;align-items:center;gap:6px}" +
       ".xm-hm-ranges button{border:1px solid var(--xm-line);background:var(--xm-card);color:var(--xm-ink);padding:5px 10px;border-radius:4px;cursor:pointer;font-size:12px;-webkit-user-select:none;user-select:none}" +
       ".xm-hm-ranges button.is-on{background:var(--xm-primary);border-color:var(--xm-primary);color:#fff}" +
@@ -1456,7 +1456,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.534-home-livecombo");
+    board.setAttribute("data-hm-js", "0.1.535-home-pills");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
