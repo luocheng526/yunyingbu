@@ -352,6 +352,14 @@ test("paid ingest upserts and lists by store + day", async () => {
     assert.equal(missing.res.status, 400);
     assert.match(missing.json.error, /rows/);
 
+    const asArray = await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([{ 店铺名称: "数组店", date: "2026-09-14", 京准通花费: 1 }])
+    });
+    assert.equal(asArray.res.status, 201);
+    assert.equal(asArray.json.received, 1);
+
     const noStore = await request(base, "/api/shen/paid/ingest", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

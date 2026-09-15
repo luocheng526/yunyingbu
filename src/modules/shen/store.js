@@ -507,20 +507,22 @@ function summarizePaidRows(rows) {
 }
 
 export async function ingestPaid(body) {
-  if (body == null || typeof body !== "object" || Array.isArray(body)) {
+  const payload = Array.isArray(body) ? { rows: body } : body;
+  if (payload == null || typeof payload !== "object") {
     throw httpError(400, "请求体必须是对象");
   }
-  const defaultStore = clipText(pickField(body, ["店铺名称", "store", "店铺名"]) || "", 64, "店铺名称");
-  const defaultDayRaw = pickField(body, ["date", "day", "日期"]);
+  const defaultStore = clipText(pickField(payload, ["店铺名称", "store", "店铺名"]) || "", 64, "店铺名称");
+  const defaultDayRaw = pickField(payload, ["date", "day", "日期"]);
   const defaultDay = defaultDayRaw ? asDay(defaultDayRaw, "date") : "";
-  const source = clipText(pickField(body, ["source", "来源"]) || "local", 64, "来源") || "local";
-  if (!Array.isArray(body.rows) || body.rows.length === 0) {
+  const source = clipText(pickField(payload, ["source", "来源"]) || "local", 64, "来源") || "local";
+  const incoming = payload.rows || payload.data || payload.list;
+  if (!Array.isArray(incoming) || incoming.length === 0) {
     throw httpError(400, "rows 必填");
   }
-  if (body.rows.length > MAX_PAID_ROWS) {
+  if (incoming.length > MAX_PAID_ROWS) {
     throw httpError(400, `一次最多回传 ${MAX_PAID_ROWS} 行`);
   }
-  const rows = body.rows.map((row, index) => {
+  const rows = incoming.map((row, index) => {
     const parsed = parsePaidRow(row, defaultStore, defaultDay, source);
     if (!parsed.seq) {
       parsed.seq = index + 1;

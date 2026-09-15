@@ -56,7 +56,7 @@ shenRouter.put("/brief", async (req, res) => {
   }
 });
 
-// 本地程序跑完付费数据后回传。同一店铺名 + 日期再传会覆盖。
+// 本地程序跑完付费数据后回传。同一店铺名称 + 日期再传会覆盖。
 shenRouter.post("/paid/ingest", async (req, res) => {
   try {
     res.status(201).json(await ingestPaid(req.body));
