@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.534-home-pills */
+/* xm-module-home 0.1.536-home-softshort */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -961,7 +961,7 @@
       today: flat ? todayHour : cumHours(todayHour),
       hours: 24,
       noDots: true,
-      height: 160
+      height: 128
     };
   }
   function halfSalesChart(chart) {
@@ -973,7 +973,7 @@
       today: hasHalf ? cumHours(toHalfIncrements(todayHour)) : (chart && chart.today) || [],
       hours: hasHalf ? 48 : Number(chart && chart.hours) || 0,
       noDots: true,
-      height: 160
+      height: 128
     };
   }
   function hoursAttr(hours) {
@@ -1069,7 +1069,7 @@
       ".xm-hm{position:relative;display:block;box-sizing:border-box;min-height:min-content;height:auto;max-height:none;padding:10px 12px 24px;color:var(--xm-ink);overflow:visible}" +
       ".xm-hm-bar{position:relative;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:8px 2px;margin-bottom:10px;background:transparent;border:0}" +
       ".xm-hm-views{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:transparent}" +
-      ".xm-hm-views button{border:1px solid var(--xm-primary);background:var(--xm-card);color:var(--xm-primary);padding:8px 20px;min-height:36px;border-radius:999px;cursor:pointer;font-size:14px;line-height:1.4;-webkit-user-select:none;user-select:none}" +
+      ".xm-hm-views button{border:1px solid var(--xm-primary);background:var(--xm-card);color:var(--xm-primary);padding:8px 20px;min-height:36px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1.4;-webkit-user-select:none;user-select:none}" +
       ".xm-hm-views button.is-on{background:var(--xm-primary);border-color:var(--xm-primary);color:#fff;font-weight:600}" +
       ".xm-hm-set{border:0;background:transparent;color:var(--xm-primary);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:13px;-webkit-user-select:none;user-select:none}" +
       ".xm-hm-ranges{display:flex;flex-wrap:wrap;align-items:center;gap:6px}" +
@@ -1111,7 +1111,7 @@
       ".xm-hm-kpis-shell,.xm-hm-teams{padding:10px}" +
       ".xm-hm-sales{margin:0 0 10px}" +
       ".xm-hm-sales-chart{width:100%}" +
-      ".xm-hm-sales-chart .xm-hm-line,.xm-hm-live .xm-hm-line{display:block;width:100%;height:200px;cursor:crosshair}" +
+      ".xm-hm-sales-chart .xm-hm-line,.xm-hm-live .xm-hm-line{display:block;width:100%;height:148px;cursor:crosshair}" +
       ".xm-hm-chart-sub{margin:10px 0 0;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
       ".xm-hm-teams{display:flex;flex-direction:column;gap:10px;overflow-x:auto}" +
@@ -1306,7 +1306,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.534-home-pills");
+    board.setAttribute("data-hm-js", "0.1.536-home-softshort");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
