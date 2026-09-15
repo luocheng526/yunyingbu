@@ -2,12 +2,6 @@
   window.XmModules = window.XmModules || {};
 
   var LIVE_CARD_KEYS = ["ad", "profit", "roi", "livePay", "liveFee"];
-  var HOME_VIEWS = [
-    { key: "company", label: "公司", href: "/home" },
-    { key: "team", label: "团队", href: "/home" },
-    { key: "live", label: "实时", href: "/data/paid" },
-    { key: "board", label: "排行榜", href: "/home" }
-  ];
 
   function escapeHtml(value) {
     return String(value)
@@ -22,10 +16,8 @@
       ".xm-hm{position:relative;display:block;box-sizing:border-box;padding:10px 12px 24px;color:var(--xm-ink)}" +
       ".xm-hm-mark{pointer-events:none;position:absolute;inset:0;overflow:hidden;opacity:.045;font-size:42px;font-weight:700;letter-spacing:.4em;display:flex;flex-wrap:wrap;align-content:flex-start;gap:48px 64px;padding:40px 20px;color:var(--xm-ink)}" +
       ".xm-hm-mark span{transform:rotate(-18deg)}" +
-      ".xm-hm-bar{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:8px 10px;margin-bottom:10px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow)}" +
-      ".xm-hm-views{display:flex;align-items:center;gap:6px}" +
-      ".xm-hm-views a,.xm-hm-views button{border:0;background:transparent;color:var(--xm-muted);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:13px;text-decoration:none}" +
-      ".xm-hm-views a.is-on,.xm-hm-views button.is-on{color:var(--xm-primary);background:var(--xm-primary-soft);font-weight:600}" +
+      ".xm-hm-bar{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 12px;margin-bottom:10px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow)}" +
+      ".xm-hm-title{margin:0;font-size:18px;font-weight:650;color:var(--xm-ink)}" +
       ".xm-hm-live-clock{margin:0 0 8px;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-live-charts{display:grid;grid-template-columns:1fr 1fr;gap:10px}" +
       ".xm-hm-chart{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:14px 16px 10px;min-width:0}" +
@@ -302,20 +294,6 @@
       const shops = payload.shops || [];
       const liveCards = pickLiveCards(payload.cards);
       const shopCount = (payload.summary && payload.summary.shops) || shops.length;
-      const viewBtns = HOME_VIEWS.map(function (item) {
-        const on = item.key === "live" ? " is-on" : "";
-        return (
-          '<a href="' +
-          escapeHtml(item.href) +
-          '" data-view="' +
-          escapeHtml(item.key) +
-          '" class="' +
-          on.trim() +
-          '">' +
-          escapeHtml(item.label) +
-          "</a>"
-        );
-      }).join("");
       board.innerHTML =
         '<div class="xm-hm" id="xm-hm">' +
         '<div class="xm-hm-mark" aria-hidden="true">' +
@@ -326,9 +304,7 @@
           })
           .join("") +
         "</div>" +
-        '<div class="xm-hm-bar"><div class="xm-hm-views">' +
-        viewBtns +
-        "</div></div>" +
+        '<div class="xm-hm-bar"><h1 class="xm-hm-title">实时看板</h1></div>' +
         '<section class="xm-hm-live">' +
         '<div class="xm-hm-live-clock">每5分钟自动刷新' +
         (liveAt ? " · 上次 " + escapeHtml(liveAt) : "") +

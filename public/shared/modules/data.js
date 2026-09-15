@@ -97,7 +97,7 @@
 
   function mountLiveDashboard(root) {
     ensureSheet();
-    return loadScript("/data-live.js?v=home-live1").then(function () {
+    return loadScript("/data-live.js?v=home-live2").then(function () {
       if (typeof window.XmDataCreateLiveDashboard === "function") {
         return window.XmDataCreateLiveDashboard(root);
       }
