@@ -112,7 +112,7 @@
       }
 
       function fillWho(user) {
-        const name = user.displayName || user.username || "";
+        const name = user.username || user.displayName || "";
         root.querySelector("#who-username").textContent = user.username || "";
         root.querySelector("#who-name").textContent = name;
         root.querySelector("#who-phone").textContent = user.phone || "";

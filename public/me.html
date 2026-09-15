@@ -231,7 +231,7 @@
         }
         function fillWho(user) {
           document.getElementById("who-username").textContent = user.username || "";
-          document.getElementById("who-name").textContent = user.displayName || user.username || "";
+          document.getElementById("who-name").textContent = user.username || user.displayName || "";
           document.getElementById("who-phone").textContent = user.phone || "";
           document.getElementById("who-email").textContent = user.email || "";
           document.getElementById("who-dept").textContent = user.department || "星脉集团/河西星脉甄选";
