@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.520-home-hr24 */
+/* xm-module-home 0.1.524-home-hrtip */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -116,6 +116,7 @@
     return escapeHtml(text || "指标").replaceAll("\n", "&#10;");
   }
   var cardTipEl = null;
+  var lineTipEl = null;
   var cardTipAnchor = null;
   function cardTipText(el) {
     return String((el && el.getAttribute("data-tip")) || "").replace(/&#10;/g, "\n");
@@ -161,6 +162,45 @@
   }
   function helpFromEvent(event) {
     return event.target && event.target.closest ? event.target.closest(".xm-hm-help") : null;
+  }
+  function lineTipNode() {
+    if (lineTipEl && document.body.contains(lineTipEl)) {
+      return lineTipEl;
+    }
+    lineTipEl = document.createElement("div");
+    lineTipEl.id = "xm-hm-line-tip";
+    lineTipEl.className = "xm-hm-line-tip";
+    document.body.appendChild(lineTipEl);
+    return lineTipEl;
+  }
+  function hideLineTip(root) {
+    if (lineTipEl) {
+      lineTipEl.classList.remove("is-on");
+      lineTipEl.innerHTML = "";
+    }
+    var guide = root && root.querySelector ? root.querySelector(".xm-hm-line-guide") : null;
+    if (guide) {
+      guide.setAttribute("visibility", "hidden");
+    }
+  }
+  function lineTipHtml(hour, yestHour, yestCum, todayHour, todayOk, todayCum) {
+    return (
+      "<b>" +
+      (hour + 1) +
+      "</b>" +
+      '<div class="xm-hm-line-row"><span><i class="is-yest"></i>昨天</span><em>' +
+      escapeHtml(fmtMoney(yestCum)) +
+      "</em></div>" +
+      '<div class="xm-hm-line-sub"><span>本小时</span><span>' +
+      escapeHtml(fmtMoney(yestHour)) +
+      "</span></div>" +
+      '<div class="xm-hm-line-row"><span><i class="is-today"></i>实时</span><em>' +
+      (todayOk ? escapeHtml(fmtMoney(todayCum)) : "—") +
+      "</em></div>" +
+      '<div class="xm-hm-line-sub"><span>本小时</span><span>' +
+      (todayOk ? escapeHtml(fmtMoney(todayHour)) : "—") +
+      "</span></div>"
+    );
   }
   function calMonthHtml(ym, opts, side) {
     var first = parseYmd(ym + "-01");
@@ -764,13 +804,33 @@
       value: src.value || base.value,
       delta: src.delta != null ? src.delta : base.delta,
       yesterday: src.yesterday && src.yesterday.length ? src.yesterday : base.yesterday,
-      today: src.today && src.today.length ? src.today : src.spark && src.spark.length ? src.spark : base.today
+      today: src.today && src.today.length ? src.today : src.spark && src.spark.length ? src.spark : base.today,
+      yesterdayHour: src.yesterdayHour && src.yesterdayHour.length ? src.yesterdayHour : base.yesterdayHour || [],
+      todayHour: src.todayHour && src.todayHour.length ? src.todayHour : base.todayHour || [],
+      hours: src.hours || base.hours || 0
     };
+  }
+  function hourX(i, slots) {
+    return 10 + (i / Math.max((Number(slots) || 24) - 1, 1)) * 620;
+  }
+  function hourFromEvent(svg, event, slots) {
+    if (!svg || !event) {
+      return 0;
+    }
+    var box = svg.getBoundingClientRect();
+    var x = ((event.clientX - box.left) / (box.width || 1)) * 640;
+    var i = Math.round(((x - 10) / 620) * Math.max((slots || 24) - 1, 1));
+    if (i < 0) {
+      return 0;
+    }
+    if (i > (slots || 24) - 1) {
+      return (slots || 24) - 1;
+    }
+    return i;
   }
   function compareLineHtml(chart) {
     var width = 640;
     var height = 184;
-    var padX = 10;
     var padTop = 12;
     var padBot = 22;
     var yest = (chart && chart.yesterday) || [];
@@ -783,24 +843,20 @@
         max = v;
       }
     });
-    var steps = Math.max(slots - 1, 1);
-    function xAt(i) {
-      return padX + (i / steps) * (width - padX * 2);
-    }
     function yAt(n) {
       return height - padBot - ((Number(n) || 0) / max) * (height - padTop - padBot);
     }
     function pts(list) {
       return list
         .map(function (n, i) {
-          return xAt(i).toFixed(1) + "," + yAt(n).toFixed(1);
+          return hourX(i, slots).toFixed(1) + "," + yAt(n).toFixed(1);
         })
         .join(" ");
     }
     function dots(list, color) {
       return list
         .map(function (n, i) {
-          return '<circle cx="' + xAt(i).toFixed(1) + '" cy="' + yAt(n).toFixed(1) + '" r="2.4" fill="' + color + '"></circle>';
+          return '<circle cx="' + hourX(i, slots).toFixed(1) + '" cy="' + yAt(n).toFixed(1) + '" r="2.4" fill="' + color + '"></circle>';
         })
         .join("");
     }
@@ -812,7 +868,7 @@
       for (var h = 1; h <= 24; h += 1) {
         out.push(
           '<text x="' +
-            xAt(h - 1).toFixed(1) +
+            hourX(h - 1, slots).toFixed(1) +
             '" y="' +
             (height - 5) +
             '" text-anchor="middle" fill="#8c8c8c" font-size="8">' +
@@ -834,6 +890,13 @@
       (todayPts ? '<polyline fill="none" stroke="#cf1322" stroke-width="2.4" points="' + todayPts + '"></polyline>' : "") +
       (yest.length ? dots(yest, "#2f54eb") : "") +
       (today.length ? dots(today, "#cf1322") : "") +
+      (slots === 24
+        ? '<line class="xm-hm-line-guide" x1="0" y1="' +
+          padTop +
+          '" x2="0" y2="' +
+          (height - padBot) +
+          '" stroke="#c0c4cc" stroke-dasharray="3 3" visibility="hidden"></line>'
+        : "") +
       axis() +
       "</svg>"
     );
@@ -841,7 +904,9 @@
   function liveChartHtml(chart) {
     var down = Number(chart && chart.delta) < 0;
     return (
-      '<article class="xm-hm-chart"><div class="xm-hm-card-head"><span>' +
+      '<article class="xm-hm-chart"' +
+      (Number(chart && chart.hours) === 24 ? ' data-hours="24"' : "") +
+      '><div class="xm-hm-card-head"><span>' +
       escapeHtml((chart && chart.label) || "实时指标") +
       '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
       escapeHtml((chart && chart.value) || "—") +
@@ -1005,6 +1070,16 @@
       ".xm-hm-legs i.is-yest{background:#2f54eb}" +
       ".xm-hm-legs i.is-today{background:#cf1322}" +
       ".xm-hm-line{display:block;width:100%;height:180px;margin-top:8px}" +
+      '.xm-hm-chart[data-hours="24"] .xm-hm-line{cursor:crosshair}' +
+      ".xm-hm-line-tip{position:fixed;z-index:20;display:none;box-sizing:border-box;min-width:168px;padding:8px 10px;background:#1f1f1f;color:#fff;border-radius:6px;font-size:12px;line-height:1.5;pointer-events:none}" +
+      ".xm-hm-line-tip.is-on{display:block}" +
+      ".xm-hm-line-tip b{display:block;margin:0 0 6px;font-size:13px}" +
+      ".xm-hm-line-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:4px}" +
+      ".xm-hm-line-row i{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}" +
+      ".xm-hm-line-tip i.is-yest{background:#2f54eb}" +
+      ".xm-hm-line-tip i.is-today{background:#cf1322}" +
+      ".xm-hm-line-row em{font-style:normal;font-variant-numeric:tabular-nums}" +
+      ".xm-hm-line-sub{padding:0 0 0 14px;color:#c0c4cc;font-size:11px;display:flex;justify-content:space-between;gap:12px}" +
       ".xm-hm-live-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;width:100%}" +
       ".xm-hm-live-cards .xm-hm-card{text-align:center}" +
       ".xm-hm-live .xm-hm-table{min-width:960px}" +
@@ -1119,7 +1194,8 @@
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
-    board.setAttribute("data-hm-js", "0.1.520-home-hr24");
+    hideLineTip(root);
+    board.setAttribute("data-hm-js", "0.1.524-home-hrtip");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1434,7 +1510,7 @@
     return {
       title: "实时看板",
       summary: { channels: 1, shops: 0 },
-      hero: { label: "实时销售指数", value: "—", delta: 0, yesterday: [], today: [] },
+      hero: { label: "实时销售指数", value: "—", delta: 0, yesterday: [], today: [], yesterdayHour: [], todayHour: [], hours: 0 },
       paid: { label: "实时费比", value: "—", delta: 0, yesterday: [], today: [] },
       cards: [
         { key: "ad", label: "推广花费 (支付预估)", value: "—" },
@@ -1744,6 +1820,13 @@
   function todayHours(hourly) {
     return padHours(hourly, 24).slice(0, Math.min(24, shanghaiHour() + 1));
   }
+  function cumHours(list) {
+    var sum = 0;
+    return (list || []).map(function (n) {
+      sum += Number(n) || 0;
+      return sum;
+    });
+  }
   function seriesOf(hourly, fallback) {
     if (hourly && hourly.length) {
       return hourly;
@@ -1761,12 +1844,16 @@
     var yestAd = yestSum.totalPromotionCost;
     var hourly = (todayPack && todayPack.hourly) || (snapPack && snapPack.hourly) || {};
     var hasHourly = hourly.todayPay && hourly.todayPay.length > 2;
+    var yestHour = hasHourly ? padHours(hourly.yesterdayPay, 24) : seriesOf(hourly.yesterdayPay, yestPay);
+    var todayHour = hasHourly ? todayHours(hourly.todayPay) : seriesOf(hourly.todayPay, todayPay);
     live.hero = {
       label: "实时销售指数",
       value: fmtMoney(todayPay),
       delta: trendOf(todayPay, yestPay),
-      yesterday: hasHourly ? padHours(hourly.yesterdayPay, 24) : seriesOf(hourly.yesterdayPay, yestPay),
-      today: hasHourly ? todayHours(hourly.todayPay) : seriesOf(hourly.todayPay, todayPay),
+      yesterday: hasHourly ? cumHours(yestHour) : yestHour,
+      today: hasHourly ? cumHours(todayHour) : todayHour,
+      yesterdayHour: hasHourly ? yestHour : [],
+      todayHour: hasHourly ? todayHour : [],
       hours: hasHourly ? 24 : 0
     };
     var todayFee = todaySum.promotionRate != null ? todaySum.promotionRate : snap.promotionRate;
@@ -2273,7 +2360,61 @@
         }
         hideCardTip();
       }
+      function onLineTipMove(event) {
+        var svg = event.target && event.target.closest ? event.target.closest('.xm-hm-chart[data-hours="24"] .xm-hm-line') : null;
+        if (!svg) {
+          hideLineTip(root);
+          return;
+        }
+        var hero = (state.live && state.live.hero) || {};
+        var yestHour = hero.yesterdayHour || [];
+        var todayHour = hero.todayHour || [];
+        var yestCum = hero.yesterday || [];
+        var todayCum = hero.today || [];
+        if (!yestHour.length && !yestCum.length) {
+          hideLineTip(root);
+          return;
+        }
+        var i = hourFromEvent(svg, event, 24);
+        var todayOk = i < todayHour.length;
+        var tip = lineTipNode();
+        tip.innerHTML = lineTipHtml(
+          i,
+          yestHour[i],
+          yestCum[i],
+          todayHour[i],
+          todayOk,
+          todayCum[i]
+        );
+        tip.classList.add("is-on");
+        var tw = tip.offsetWidth || 180;
+        var th = tip.offsetHeight || 96;
+        var left = event.clientX + 12;
+        var top = event.clientY + 14;
+        if (left + tw > window.innerWidth - 8) {
+          left = event.clientX - tw - 12;
+        }
+        if (top + th > window.innerHeight - 8) {
+          top = event.clientY - th - 12;
+        }
+        if (left < 8) {
+          left = 8;
+        }
+        if (top < 8) {
+          top = 8;
+        }
+        tip.style.left = Math.round(left) + "px";
+        tip.style.top = Math.round(top) + "px";
+        var guide = svg.querySelector(".xm-hm-line-guide");
+        if (guide) {
+          var x = hourX(i, 24).toFixed(1);
+          guide.setAttribute("x1", x);
+          guide.setAttribute("x2", x);
+          guide.setAttribute("visibility", "visible");
+        }
+      }
       function onTipScroll() {
+        hideLineTip(root);
         placeCardPop(root);
         if (!cardTipAnchor || !cardTipEl || !cardTipEl.classList.contains("is-on")) {
           return;
@@ -2563,6 +2704,11 @@
       root.addEventListener("click", onClick);
       root.addEventListener("change", onChange);
       root.addEventListener("pointerover", onCalHover);
+      function onLineTipLeave() {
+        hideLineTip(root);
+      }
+      root.addEventListener("mousemove", onLineTipMove);
+      root.addEventListener("mouseleave", onLineTipLeave);
       root.addEventListener("mouseover", onHelpOver);
       root.addEventListener("mouseout", onHelpOut);
       scroller.addEventListener("scroll", onTipScroll, true);
@@ -2598,15 +2744,22 @@
         root.removeEventListener("click", onClick);
         root.removeEventListener("change", onChange);
         root.removeEventListener("pointerover", onCalHover);
+        root.removeEventListener("mousemove", onLineTipMove);
+        root.removeEventListener("mouseleave", onLineTipLeave);
         root.removeEventListener("mouseover", onHelpOver);
         root.removeEventListener("mouseout", onHelpOut);
         scroller.removeEventListener("scroll", onTipScroll, true);
         window.removeEventListener("resize", onTipScroll);
         hideCardTip();
+        hideLineTip(root);
         if (cardTipEl && cardTipEl.parentNode) {
           cardTipEl.parentNode.removeChild(cardTipEl);
         }
         cardTipEl = null;
+        if (lineTipEl && lineTipEl.parentNode) {
+          lineTipEl.parentNode.removeChild(lineTipEl);
+        }
+        lineTipEl = null;
         document.removeEventListener("mousedown", onOutsideCardSet);
         document.removeEventListener("pointerdown", onSortDown);
         document.removeEventListener("pointermove", onSortMove);

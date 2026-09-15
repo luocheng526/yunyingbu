@@ -125,6 +125,15 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function seriesOf/);
   assert.match(homeJs, /function todayHours/);
   assert.match(homeJs, /function padHours/);
+  assert.match(homeJs, /function cumHours/);
+  assert.match(homeJs, /function hourFromEvent/);
+  assert.match(homeJs, /function onLineTipMove/);
+  assert.match(homeJs, /function lineTipHtml/);
+  assert.match(homeJs, /lineTipEl\.id = "xm-hm-line-tip"/);
+  assert.match(homeJs, /data-hours="24"/);
+  assert.match(homeJs, /yesterday: hasHourly \? cumHours\(yestHour\)/);
+  assert.match(homeJs, /today: hasHourly \? cumHours\(todayHour\)/);
+  assert.match(homeJs, /<i class="is-today"><\/i>实时/);
   assert.match(homeJs, /hourly\.todayPay/);
   assert.match(homeJs, /hours: hasHourly \? 24 : 0/);
   assert.doesNotMatch(homeJs, /LIVE_CARD_KEYS = \["ad", "profit"/);
@@ -354,7 +363,7 @@ test("card settings pop sits under the clicked 卡片设置 button", () => {
 });
 
 test("live sales chart keeps 24-hour axis and hides future today points", () => {
-  const start = homeJs.indexOf("function compareLineHtml");
+  const start = homeJs.indexOf("function hourX");
   const end = homeJs.indexOf("function liveChartHtml");
   assert.ok(start !== -1 && end > start);
   const fns = new Function(homeJs.slice(start, end) + "return {compareLineHtml};")();
@@ -372,8 +381,14 @@ test("live sales chart keeps 24-hour axis and hides future today points", () => 
   assert.ok(redEnd < blueEnd - 10);
   const hourStart = homeJs.indexOf("function shanghaiHour");
   const hourEnd = homeJs.indexOf("function seriesOf");
-  const hours = new Function(homeJs.slice(hourStart, hourEnd) + "return {todayHours, padHours};")();
+  const hours = new Function(homeJs.slice(hourStart, hourEnd) + "return {todayHours, padHours, cumHours};")();
   assert.equal(hours.padHours([1, 2], 24).length, 24);
+  assert.deepEqual(hours.cumHours([1, 2, 3]), [1, 3, 6]);
   const now = hours.todayHours(Array.from({ length: 24 }, (_, i) => i + 1));
   assert.ok(now.length >= 1 && now.length <= 24);
+  const fromEnd = homeJs.indexOf("function compareLineHtml");
+  const fromEv = new Function(homeJs.slice(homeJs.indexOf("function hourX"), fromEnd) + "return {hourFromEvent};")();
+  const svg = { getBoundingClientRect: () => ({ left: 0, width: 640 }) };
+  assert.equal(fromEv.hourFromEvent(svg, { clientX: 10 }, 24), 0);
+  assert.equal(fromEv.hourFromEvent(svg, { clientX: 10 + 620 * (7 / 23) }, 24), 7);
 });
