@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.544-home-teamair */
+/* xm-module-home 0.1.545-home-setclick */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -281,6 +281,7 @@
     return null;
   }
   var viewKey = "company";
+  var cardSetOpen = false;
   function viewStore(kind) {
     return viewKey === "team" || viewKey === "chief"
       ? "xm-home-" + viewKey + "-" + kind
@@ -1257,6 +1258,16 @@
     }
     return null;
   }
+  function syncCardPop(root, btn) {
+    var pop = root.querySelector("#xm-hm-pop");
+    if (!pop) {
+      return;
+    }
+    pop.hidden = !cardSetOpen;
+    if (cardSetOpen) {
+      placeCardPop(root, btn);
+    }
+  }
   function placeCardPop(root, btn) {
     var pop = root.querySelector("#xm-hm-pop");
     var box = root.querySelector("#xm-hm");
@@ -1298,7 +1309,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.544-home-teamair");
+    board.setAttribute("data-hm-js", "0.1.545-home-setclick");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1377,10 +1388,7 @@
     if (allBox) {
       allBox.indeterminate = someOn && !allOn;
     }
-    var pop = root.querySelector("#xm-hm-pop");
-    if (pop && !pop.hidden) {
-      placeCardPop(root);
-    }
+    syncCardPop(root);
   }
   function api(path) {
     return fetch(path, { credentials: "same-origin", headers: { Accept: "application/json" } }).then(function (res) {
@@ -2246,6 +2254,7 @@
       };
       var poll = 0;
       var LIVE_REFRESH_MS = 5 * 60 * 1000;
+      cardSetOpen = false;
       paint(root, state);
       function shanghaiClock() {
         return new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
@@ -2342,7 +2351,7 @@
           state.mode = state.view === "team" || state.view === "chief" ? "company" : "shop";
           closeCal();
           clearTextSelection();
-          root.querySelector("#xm-hm-pop").hidden = true;
+          cardSetOpen = false;
           paint(root, state);
           if (state.view === "live" || state.view === "company") {
             pullLive();
@@ -2436,12 +2445,8 @@
         }
         if (event.target.closest(".xm-hm-set")) {
           viewKey = state.view || "company";
-          var pop = root.querySelector("#xm-hm-pop");
-          var setBtn = event.target.closest(".xm-hm-set");
-          pop.hidden = !pop.hidden;
-          if (!pop.hidden) {
-            placeCardPop(root, setBtn);
-          }
+          cardSetOpen = !cardSetOpen;
+          syncCardPop(root, event.target.closest(".xm-hm-set"));
           closeCal();
           return;
         }
@@ -2453,9 +2458,10 @@
         }
       }
       function onOutsideCardSet(event) {
-        var pop = root.querySelector("#xm-hm-pop");
-        if (pop && !pop.hidden && !event.target.closest("#xm-hm-pop") && !event.target.closest(".xm-hm-set")) {
-          pop.hidden = true;
+        var onPop = event.target.closest && (event.target.closest("#xm-hm-pop") || event.target.closest(".xm-hm-set"));
+        if (cardSetOpen && !onPop) {
+          cardSetOpen = false;
+          syncCardPop(root);
         }
         if (calOpen && !event.target.closest("#xm-hm-cal") && !event.target.closest("#xm-hm-dates")) {
           closeCal();
@@ -2786,12 +2792,7 @@
           } else {
             saveCardOrder(applyCardMove(sortFrom, toKey, !sortSettings));
           }
-          var pop = root.querySelector("#xm-hm-pop");
-          var popOpen = pop && !pop.hidden;
           paint(root, state);
-          if (pop && popOpen) {
-            pop.hidden = false;
-          }
           sortSwallow = true;
           window.setTimeout(function () {
             sortSwallow = false;
@@ -2852,6 +2853,7 @@
       scroller.addEventListener("scroll", onTipScroll, true);
       window.addEventListener("resize", onTipScroll);
       document.addEventListener("mousedown", onOutsideCardSet);
+      document.addEventListener("click", onOutsideCardSet);
       document.addEventListener("pointerdown", onSortDown);
       document.addEventListener("pointermove", onSortMove, { passive: false });
       document.addEventListener("pointerup", onSortUp);
@@ -2899,6 +2901,7 @@
         }
         lineTipEl = null;
         document.removeEventListener("mousedown", onOutsideCardSet);
+        document.removeEventListener("click", onOutsideCardSet);
         document.removeEventListener("pointerdown", onSortDown);
         document.removeEventListener("pointermove", onSortMove);
         document.removeEventListener("pointerup", onSortUp);

@@ -381,6 +381,16 @@ test("card help uses a body-level tooltip so overflow cannot clip it", () => {
   assert.match(homeJs, /&#10;/);
 });
 
+test("card settings open only from 卡片设置 and close on blank click", () => {
+  assert.match(homeJs, /var cardSetOpen = false;/);
+  assert.match(homeJs, /function syncCardPop/);
+  assert.match(homeJs, /cardSetOpen = !cardSetOpen;/);
+  assert.match(homeJs, /cardSetOpen = false;\n      paint\(root, state\)/);
+  assert.match(homeJs, /syncCardPop\(root\);/);
+  assert.doesNotMatch(homeJs, /pop\.hidden = !pop\.hidden/);
+  assert.doesNotMatch(homeJs, /if \(pop && popOpen\) \{\n            pop\.hidden = false;/);
+});
+
 test("card settings pop sits under the clicked 卡片设置 button", () => {
   const start = homeJs.indexOf("function visibleSetBtn");
   const end = homeJs.indexOf("function paint");
