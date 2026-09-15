@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>星脉管理系统</title>
+    <link rel="stylesheet" href="/login.css" />
+  </head>
+  <body class="login-page">
+    <div class="login-backdrop" aria-hidden="true"></div>
+    <main class="login-card">
+      <h1>星脉管理系统</h1>
+      <form id="login-form" autocomplete="on">
+        <div class="field">
+          <svg class="icon icon-left" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor" d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
+          </svg>
+          <input id="username" name="username" type="text" placeholder="用户名" required autocomplete="username" />
+        </div>
+        <div class="field">
+          <svg class="icon icon-left" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor" d="M17 8h-1V6a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zm-7-2a2 2 0 1 1 4 0v2h-4V6zm4 11h-4v-2h4v2z" />
+          </svg>
+          <input id="password" name="password" type="password" placeholder="密码" required autocomplete="current-password" />
+          <button class="icon icon-right" id="toggle-password" type="button" aria-label="显示密码">
+            <svg id="eye-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+              <path fill="currentColor" d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2.5A2.5 2.5 0 1 0 12 9a2.5 2.5 0 0 0 0 5z" />
+            </svg>
+          </button>
+        </div>
+        <label class="remember">
+          <input id="remember" type="checkbox" />
+          <span>记住密码</span>
+        </label>
+        <button class="login-submit" type="submit">登录</button>
+        <p id="login-error" class="login-error" role="alert"></p>
+      </form>
+    </main>
+    <script>
+      (function () {
+        var REMEMBER_KEY = "xingmai.rememberUsername";
+        var form = document.getElementById("login-form");
+        var userEl = document.getElementById("username");
+        var passEl = document.getElementById("password");
+        var rememberEl = document.getElementById("remember");
+        var errorEl = document.getElementById("login-error");
+        var toggle = document.getElementById("toggle-password");
+        var saved = localStorage.getItem(REMEMBER_KEY);
+        if (saved) {
+          userEl.value = saved;
+          rememberEl.checked = true;
+        }
+
+        toggle.addEventListener("click", function () {
+          var hidden = passEl.type === "password";
+          passEl.type = hidden ? "text" : "password";
+          toggle.setAttribute("aria-label", hidden ? "隐藏密码" : "显示密码");
+        });
+
+        form.addEventListener("submit", async function (event) {
+          event.preventDefault();
+          errorEl.textContent = "";
+          var username = userEl.value.trim();
+          var password = passEl.value;
+          var remember = rememberEl.checked;
+          var res = await fetch("/api/auth/login", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: username, password: password, remember: remember })
+          });
+          passEl.value = "";
+          var data = {};
+          try {
+            data = await res.json();
+          } catch (_err) {
+            data = {};
+          }
+          if (!res.ok) {
+            errorEl.textContent = data.error || "用户名或密码错误";
+            return;
+          }
+          if (remember) {
+            localStorage.setItem(REMEMBER_KEY, username);
+          } else {
+            localStorage.removeItem(REMEMBER_KEY);
+          }
+          window.location.href = "/";
+        });
+      })();
+    </script>
+  </body>
+</html>

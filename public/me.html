@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>个人中心 · 运营部</title>
+    <link rel="stylesheet" href="/shared/layout.css" />
+    <style>
+      body {
+        display: flex;
+        align-items: stretch;
+        min-height: 100vh;
+        background: #f3f4f6;
+      }
+      #site-nav,
+      .site-sidebar,
+      aside.site-sidebar,
+      header.site-header {
+        flex: 0 0 220px;
+        width: 220px;
+        min-height: 100vh;
+        border-right: 1px solid var(--line, #e7e5e4);
+        background: #fff;
+        position: sticky;
+        top: 0;
+        align-self: flex-start;
+      }
+      .site-header__inner,
+      .site-sidebar__inner {
+        max-width: none;
+        margin: 0;
+        padding: 1.1rem 0.9rem 1.5rem;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.85rem;
+      }
+      .site-nav { display: flex; flex-direction: column; gap: 0.2rem; }
+      .site-nav a { border-radius: 10px; }
+      main.page {
+        flex: 1;
+        max-width: none;
+        margin: 0;
+        padding: 1.25rem 1.25rem 2rem;
+        min-width: 0;
+      }
+      .me-grid {
+        display: grid;
+        grid-template-columns: 300px minmax(0, 1fr);
+        gap: 1rem;
+        align-items: start;
+      }
+      @media (max-width: 960px) {
+        .me-grid { grid-template-columns: 1fr; }
+      }
+      .card {
+        background: #fff;
+        border-radius: 12px;
+        padding: 1.15rem 1.2rem 1.2rem;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+      }
+      .card + .card { margin-top: 1rem; }
+      .who {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #f0f0f0;
+      }
+      .me-avatar {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 148px;
+        margin: 0;
+        cursor: pointer;
+        color: #262626;
+      }
+      .me-avatar img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; }
+      .me-ico { width: 16px; height: 16px; flex: 0 0 16px; display: block; }
+      .kv em { display: inline-flex; align-items: center; gap: 8px; font-style: normal; }
+      .badge {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        background: #111827;
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-size: 1.05rem;
+        flex-shrink: 0;
+      }
+      .who h2 { margin: 0; font-size: 1.05rem; }
+      .who p { margin: 0.2rem 0 0; color: #6b7280; font-size: 0.85rem; }
+      .kv { display: grid; font-size: 0.92rem; }
+      .kv div {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 13px 0;
+        border-top: 1px solid #f0f0f0;
+        color: #262626;
+      }
+      .kv strong { color: #262626; font-weight: 400; }
+      .card h3 { margin: 0 0 0.85rem; font-size: 1rem; }
+      .card input {
+        display: block;
+        width: 100%;
+        margin: 0 0 0.65rem;
+        padding: 0.62rem 0.7rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        font: inherit;
+        background: #fff;
+      }
+      .btn {
+        display: block;
+        width: 100%;
+        border: 0;
+        border-radius: 8px;
+        padding: 0.7rem 1rem;
+        font: inherit;
+        background: #2563eb;
+        color: #fff;
+        cursor: pointer;
+      }
+      .btn-logout {
+        margin-top: 0.65rem;
+        background: #e11d48;
+      }
+      .btn-logout:hover { background: #be123c; }
+      .status { min-height: 1.25rem; margin: 0 0 0.7rem; font-size: 0.9rem; }
+      .status.error { color: #b91c1c; }
+      .status.ok { color: #047857; }
+      .rights-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: baseline;
+        margin-bottom: 0.35rem;
+      }
+      .rights-head h3 { margin: 0; }
+      .hint { color: #9ca3af; font-size: 0.82rem; }
+      .group { margin-top: 1.05rem; }
+      .group h4 { margin: 0 0 0.5rem; font-size: 0.92rem; font-weight: 600; }
+      .tags { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.28rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.82rem;
+        background: #d1fae5;
+        color: #065f46;
+      }
+      .tag.off { background: #e5e7eb; color: #9ca3af; }
+      .tag i { font-style: normal; font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <div id="site-nav">
+      <aside class="site-sidebar">
+        <div class="site-sidebar__inner">
+          <a class="site-brand" href="/">运营部</a>
+          <nav class="site-nav" aria-label="全站导航">
+            <a href="/">首页</a>
+            <a href="/data">数据中心</a>
+            <a href="/shen">沈子晗运营中心</a>
+            <a href="/han">韩梦凯运营中心</a>
+            <a href="/people">人员管理</a>
+            <a href="/releases">版本发布中心</a>
+            <a href="/me" aria-current="page">个人中心</a>
+          </nav>
+        </div>
+      </aside>
+    </div>
+    <main class="page">
+      <div class="me-grid">
+        <section>
+          <div class="card" id="who-card">
+            <div class="who">
+              <h2 id="who-title" style="margin:0;font-size:1rem;font-weight:500">个人信息</h2>
+              <span id="who-username" hidden></span>
+            </div>
+            <label class="me-avatar" id="who-avatar">
+              <img id="who-avatar-img" alt="" hidden />
+              <span id="who-avatar-hint">点击上传头像</span>
+              <input id="who-avatar-file" type="file" accept="image/*" style="display:none" />
+            </label>
+            <div class="kv">
+              <div><em><svg class="me-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.2"/><path d="M5 19c.8-3.2 3.5-5 7-5s6.2 1.8 7 5"/></svg>用户名称</em><strong id="who-name"></strong></div>
+              <div><em><svg class="me-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7.5" y="2.5" width="9" height="19" rx="2"/><path d="M11 19.5h2"/></svg>手机号码</em><strong id="who-phone"></strong></div>
+              <div><em><svg class="me-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg>用户邮箱</em><strong id="who-email"></strong></div>
+              <div><em><svg class="me-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V9l8-5 8 5v11"/><path d="M10 20v-7h4v7"/></svg>所属部门</em><strong id="who-dept"></strong></div>
+              <div><em><svg class="me-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="4.5" width="17" height="16" rx="2"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/></svg>创建日期</em><strong id="who-created"></strong></div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>修改密码</h3>
+            <p id="status" class="status" role="status"></p>
+            <form id="password-form" autocomplete="off">
+              <input id="current-password" type="password" required placeholder="当前密码" />
+              <input id="new-password" type="password" required minlength="8" placeholder="新密码（至少 8 位）" />
+              <input id="confirm-password" type="password" required minlength="8" placeholder="再次输入新密码" />
+              <button class="btn" type="submit">保存新密码</button>
+            </form>
+            <form id="logout-form">
+              <button class="btn btn-logout" type="submit">退出登录</button>
+            </form>
+          </div>
+        </section>
+        <section class="card">
+          <div class="rights-head">
+            <h3>我的责权清单</h3>
+            <p class="hint">灰色表示当前角色未授予</p>
+          </div>
+          <div id="duties"></div>
+        </section>
+      </div>
+    </main>
+    <script src="/shared/nav.js"></script>
+    <script>
+      (function () {
+        var statusEl = document.getElementById("status");
+        function setStatus(message, kind) {
+          statusEl.textContent = message || "";
+          statusEl.className = "status" + (kind ? " " + kind : "");
+        }
+        function fillWho(user) {
+          document.getElementById("who-username").textContent = user.username || "";
+          document.getElementById("who-name").textContent = user.username || user.displayName || "";
+          document.getElementById("who-phone").textContent = user.phone || "";
+          document.getElementById("who-email").textContent = user.email || "";
+          document.getElementById("who-dept").textContent = user.department || "星脉集团/河西星脉甄选";
+          document.getElementById("who-created").textContent = user.createdAt || "2026-01-01 00:00:00";
+          try {
+            var src = sessionStorage.getItem("xm-me-avatar-" + (user.username || ""));
+            var img = document.getElementById("who-avatar-img");
+            var hint = document.getElementById("who-avatar-hint");
+            if (src) { img.src = src; img.hidden = false; hint.hidden = true; }
+          } catch (_e) {}
+        }
+        function fillDuties(groups) {
+          var root = document.getElementById("duties");
+          root.innerHTML = (groups || []).map(function (group) {
+            var tags = (group.items || []).map(function (item) {
+              var cls = item.granted ? "tag" : "tag off";
+              var mark = item.granted ? "✓" : "–";
+              return '<span class="' + cls + '"><i>' + mark + "</i>" + item.label + "</span>";
+            }).join("");
+            return '<div class="group"><h4>' + group.name + '</h4><div class="tags">' + tags + "</div></div>";
+          }).join("");
+        }
+        async function api(path, options) {
+          var res = await fetch(path, Object.assign({ credentials: "same-origin" }, options));
+          if (res.status === 401) {
+            window.location.href = "/login";
+            return { res: res, data: {} };
+          }
+          var data = {};
+          try { data = await res.json(); } catch (_e) { data = {}; }
+          return { res: res, data: data };
+        }
+        api("/api/profile/duties").then(function (result) {
+          if (!result.res || !result.res.ok) return;
+          fillWho(result.data.identity || result.data);
+          fillDuties(result.data.groups);
+        });
+        document.getElementById("password-form").addEventListener("submit", async function (event) {
+          event.preventDefault();
+          var result = await api("/api/profile/password", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              currentPassword: document.getElementById("current-password").value,
+              newPassword: document.getElementById("new-password").value,
+              confirmPassword: document.getElementById("confirm-password").value
+            })
+          });
+          document.getElementById("current-password").value = "";
+          document.getElementById("new-password").value = "";
+          document.getElementById("confirm-password").value = "";
+          if (!result.res.ok) {
+            setStatus(result.data.error || "改密失败", "error");
+            return;
+          }
+          setStatus(result.data.message || "密码已更新", "ok");
+        });
+        document.getElementById("who-avatar-file").addEventListener("change", function (event) {
+          var file = event.target.files && event.target.files[0];
+          event.target.value = "";
+          if (!file || !file.type || file.type.indexOf("image/") !== 0) return;
+          if (file.size > 512 * 1024) { setStatus("头像请小于 512KB", "error"); return; }
+          var reader = new FileReader();
+          reader.onload = function () {
+            var src = String(reader.result || "");
+            var img = document.getElementById("who-avatar-img");
+            var hint = document.getElementById("who-avatar-hint");
+            img.src = src; img.hidden = false; hint.hidden = true;
+            try { sessionStorage.setItem("xm-me-avatar-" + (document.getElementById("who-username").textContent || ""), src); } catch (_e) {}
+          };
+          reader.readAsDataURL(file);
+        });
+        document.getElementById("logout-form").addEventListener("submit", async function (event) {
+          event.preventDefault();
+          await api("/api/auth/logout", { method: "POST" });
+          window.location.replace("/login?out=1");
+        });
+      })();
+    </script>
+  </body>
+</html>
