@@ -120,7 +120,9 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function shopCols/);
   assert.match(homeJs, /SHOP_CARD_KEYS = \["adRatio", "profit", "grossMargin", "refundRate", "netGoodsCost"\]/);
   assert.match(homeJs, /LIVE_CARD_KEYS = \["ad", "roi", "livePay", "livePaid"\]/);
-  assert.match(homeJs, /\.xm-hm-live-cards\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
+  assert.match(homeJs, /\.xm-hm-live\{display:flex;flex-direction:column;gap:20px\}/);
+  assert.match(homeJs, /\.xm-hm-live-charts\{display:grid;grid-template-columns:1fr 1fr;gap:20px\}/);
+  assert.match(homeJs, /\.xm-hm-live-cards\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\);gap:20px/);
   assert.match(homeJs, /paid: \{ label: "实时费比"/);
   assert.match(homeJs, /key: "livePaid", label: "实时付费金额"/);
   assert.match(homeJs, /\/api\/home\/erp-paid/);

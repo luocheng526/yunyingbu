@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.538-home-nosales */
+/* xm-module-home 0.1.540-home-livegap */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1093,6 +1093,7 @@
       ".xm-hm-body{position:relative;display:flex;flex-direction:column;gap:12px;overflow:visible}" +
       ".xm-hm.is-live .xm-hm-kpis-shell,.xm-hm.is-board .xm-hm-kpis-shell,.xm-hm.is-team .xm-hm-kpis-shell,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
       ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden]{display:none}" +
+      ".xm-hm-live{display:flex;flex-direction:column;gap:20px}" +
       ".xm-hm-kpis-shell,.xm-hm-teams,.xm-hm-team{background:linear-gradient(#dceaff,#f7fbff);border:0;outline:0;box-shadow:none;border-radius:12px}" +
       ".xm-hm-teams{background:0}" +
       ".xm-hm-team{cursor:grab;background:#dceaff;border:1px solid #7ea6dc}" +
@@ -1162,8 +1163,8 @@
       ".xm-hm-rest span{color:var(--xm-muted);width:22px}" +
       ".xm-hm-rest b{flex:1;font-weight:500}" +
       ".xm-hm-rest em{font-style:normal;font-variant-numeric:tabular-nums}" +
-      ".xm-hm-live-clock{margin:0 0 8px;color:var(--xm-muted);font-size:12px}" +
-      ".xm-hm-live-charts{display:grid;grid-template-columns:1fr 1fr;gap:10px}" +
+      ".xm-hm-live-clock{margin:0;color:var(--xm-muted);font-size:12px}" +
+      ".xm-hm-live-charts{display:grid;grid-template-columns:1fr 1fr;gap:20px}" +
       ".xm-hm-chart{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:14px 16px 10px;min-width:0}" +
       ".xm-hm-legs{display:inline-flex;align-items:center;gap:10px;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-legs i{width:10px;height:10px;border-radius:50%;display:inline-block}" +
@@ -1180,7 +1181,7 @@
       ".xm-hm-line-tip i.is-today{background:#ffa39e}" +
       ".xm-hm-line-row em{font-style:normal;font-variant-numeric:tabular-nums}" +
       ".xm-hm-line-sub{padding:0 0 0 14px;color:#c0c4cc;font-size:11px;display:flex;justify-content:space-between;gap:12px}" +
-      ".xm-hm-live-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;width:100%}" +
+      ".xm-hm-live-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;width:100%}" +
       ".xm-hm-live-cards .xm-hm-card{text-align:center}" +
       ".xm-hm-live .xm-hm-table{min-width:960px}" +
       ".xm-hm-live .xm-hm-panel{overflow-x:auto}" +
@@ -1295,7 +1296,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.538-home-nosales");
+    board.setAttribute("data-hm-js", "0.1.540-home-livegap");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
