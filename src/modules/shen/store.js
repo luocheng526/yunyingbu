@@ -13,41 +13,47 @@ export const SQL = {
   setBrief: `INSERT INTO shen_brief (id, text) VALUES (1, ?) ON DUPLICATE KEY UPDATE text = VALUES(text)`,
   resetTasks: `DELETE FROM shen_tasks`,
   resetBrief: `UPDATE shen_brief SET text = '' WHERE id = 1`,
-  createPaidTable: `CREATE TABLE IF NOT EXISTS shen_paid_rows (
+  createPaidTable: `CREATE TABLE IF NOT EXISTS shen_paid_daily (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  seq INT UNSIGNED NOT NULL DEFAULT 0,
   store VARCHAR(64) NOT NULL,
   day DATE NOT NULL,
-  campaign VARCHAR(128) NOT NULL DEFAULT '',
-  sku VARCHAR(64) NOT NULL DEFAULT '',
   spend DECIMAL(14,2) NOT NULL DEFAULT 0,
-  gmv DECIMAL(14,2) NOT NULL DEFAULT 0,
-  orders INT NOT NULL DEFAULT 0,
   clicks INT NOT NULL DEFAULT 0,
-  impressions INT NOT NULL DEFAULT 0,
+  ctr DECIMAL(12,4) NOT NULL DEFAULT 0,
+  cpc DECIMAL(14,4) NOT NULL DEFAULT 0,
+  cvr DECIMAL(12,4) NOT NULL DEFAULT 0,
+  cpa DECIMAL(14,4) NOT NULL DEFAULT 0,
+  roi DECIMAL(12,4) NOT NULL DEFAULT 0,
+  paid_gmv DECIMAL(14,2) NOT NULL DEFAULT 0,
+  store_gmv DECIMAL(14,2) NOT NULL DEFAULT 0,
   source VARCHAR(64) NOT NULL DEFAULT 'local',
-  payload JSON NULL,
   ingested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uk_shen_paid_slice (store, day, campaign, sku),
-  KEY idx_shen_paid_store_day (store, day)
+  UNIQUE KEY uk_shen_paid_daily (store, day),
+  KEY idx_shen_paid_daily_day (day)
 )`,
-  upsertPaid: `INSERT INTO shen_paid_rows (store, day, campaign, sku, spend, gmv, orders, clicks, impressions, source, payload)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  upsertPaid: `INSERT INTO shen_paid_daily (seq, store, day, spend, clicks, ctr, cpc, cvr, cpa, roi, paid_gmv, store_gmv, source)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON DUPLICATE KEY UPDATE
+  seq = VALUES(seq),
   spend = VALUES(spend),
-  gmv = VALUES(gmv),
-  orders = VALUES(orders),
   clicks = VALUES(clicks),
-  impressions = VALUES(impressions),
+  ctr = VALUES(ctr),
+  cpc = VALUES(cpc),
+  cvr = VALUES(cvr),
+  cpa = VALUES(cpa),
+  roi = VALUES(roi),
+  paid_gmv = VALUES(paid_gmv),
+  store_gmv = VALUES(store_gmv),
   source = VALUES(source),
-  payload = VALUES(payload),
   ingested_at = CURRENT_TIMESTAMP`,
-  listPaid: `SELECT id, store, day, campaign, sku, spend, gmv, orders, clicks, impressions, source, ingested_at
-FROM shen_paid_rows
+  listPaid: `SELECT id, seq, store, day, spend, clicks, ctr, cpc, cvr, cpa, roi, paid_gmv, store_gmv, source, ingested_at
+FROM shen_paid_daily
 WHERE (? = 1 OR store = ?) AND day >= ? AND day <= ?
-ORDER BY day DESC, id DESC
+ORDER BY day DESC, seq ASC, id ASC
 LIMIT ?`,
-  summarizePaid: `SELECT COALESCE(SUM(spend), 0) AS spend, COALESCE(SUM(gmv), 0) AS gmv, COALESCE(SUM(orders), 0) AS orders, COALESCE(SUM(clicks), 0) AS clicks, COALESCE(SUM(impressions), 0) AS impressions, COUNT(*) AS cnt
-FROM shen_paid_rows
+  summarizePaid: `SELECT COALESCE(SUM(spend), 0) AS spend, COALESCE(SUM(clicks), 0) AS clicks, COALESCE(SUM(paid_gmv), 0) AS paid_gmv, COALESCE(SUM(store_gmv), 0) AS store_gmv, COUNT(*) AS cnt
+FROM shen_paid_daily
 WHERE (? = 1 OR store = ?) AND day >= ? AND day <= ?`
 };
 
@@ -209,23 +215,50 @@ function asCount(value, label) {
   return Math.round(number);
 }
 
+function asRate(value, label) {
+  if (value == null || value === "") {
+    return 0;
+  }
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) {
+    throw httpError(400, `${label}必须是大于等于 0 的数字`);
+  }
+  return Math.round(number * 10000) / 10000;
+}
+
+function pickField(raw, keys) {
+  for (const key of keys) {
+    if (raw[key] != null && raw[key] !== "") {
+      return raw[key];
+    }
+  }
+  return undefined;
+}
+
+function todayDay() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" });
+}
+
 function paidKey(row) {
-  return `${row.store}\t${row.day}\t${row.campaign}\t${row.sku}`;
+  return `${row.store}\t${row.day}`;
 }
 
 function mapPaid(row) {
   const day = typeof row.day === "string" ? row.day.slice(0, 10) : asDay(row.day, "day");
   return {
     id: Number(row.id),
+    seq: Number(row.seq) || 0,
     store: row.store || "",
     date: day,
-    campaign: row.campaign || "",
-    sku: row.sku || "",
     spend: Number(row.spend) || 0,
-    gmv: Number(row.gmv) || 0,
-    orders: Number(row.orders) || 0,
     clicks: Number(row.clicks) || 0,
-    impressions: Number(row.impressions) || 0,
+    ctr: Number(row.ctr) || 0,
+    cpc: Number(row.cpc) || 0,
+    cvr: Number(row.cvr) || 0,
+    cpa: Number(row.cpa) || 0,
+    roi: Number(row.roi) || 0,
+    paidGmv: Number(row.paid_gmv ?? row.paidGmv) || 0,
+    storeGmv: Number(row.store_gmv ?? row.storeGmv) || 0,
     source: row.source || "local",
     ingestedAt: row.ingested_at || row.ingestedAt || ""
   };
@@ -264,38 +297,29 @@ function parsePaidRange({ store, from, to, limit }) {
   };
 }
 
-function parsePaidRow(raw, defaultStore, source) {
+function parsePaidRow(raw, defaultStore, defaultDay, source) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw httpError(400, "rows 里必须是对象");
   }
-  const store = clipText(raw.store || defaultStore, 64, "store");
+  const store = clipText(pickField(raw, ["store", "店铺名", "店铺"]) || defaultStore, 64, "店铺名");
   if (!store) {
-    throw httpError(400, "必须指定店");
+    throw httpError(400, "必须指定店铺名");
   }
-  const extra = { ...raw };
-  delete extra.store;
-  delete extra.date;
-  delete extra.day;
-  delete extra.campaign;
-  delete extra.sku;
-  delete extra.spend;
-  delete extra.gmv;
-  delete extra.orders;
-  delete extra.clicks;
-  delete extra.impressions;
-  delete extra.source;
+  const dayRaw = pickField(raw, ["date", "day", "日期"]) || defaultDay || todayDay();
   return {
+    seq: asCount(pickField(raw, ["seq", "序列号"]), "序列号"),
     store,
-    day: asDay(raw.date ?? raw.day, "date"),
-    campaign: clipText(raw.campaign, 128, "campaign"),
-    sku: clipText(raw.sku, 64, "sku"),
-    spend: asMoney(raw.spend, "spend"),
-    gmv: asMoney(raw.gmv, "gmv"),
-    orders: asCount(raw.orders, "orders"),
-    clicks: asCount(raw.clicks, "clicks"),
-    impressions: asCount(raw.impressions, "impressions"),
-    source: clipText(raw.source || source, 64, "source") || "local",
-    payload: extra
+    day: asDay(dayRaw, "date"),
+    spend: asMoney(pickField(raw, ["spend", "花费"]), "花费"),
+    clicks: asCount(pickField(raw, ["clicks", "点击数"]), "点击数"),
+    ctr: asRate(pickField(raw, ["ctr", "点击率"]), "点击率"),
+    cpc: asRate(pickField(raw, ["cpc", "平均点击成本"]), "平均点击成本"),
+    cvr: asRate(pickField(raw, ["cvr", "转化率"]), "转化率"),
+    cpa: asRate(pickField(raw, ["cpa", "平均订单成本"]), "平均订单成本"),
+    roi: asRate(pickField(raw, ["roi", "投产比"]), "投产比"),
+    paidGmv: asMoney(pickField(raw, ["paidGmv", "paid_gmv", "付费成交金额"]), "付费成交金额"),
+    storeGmv: asMoney(pickField(raw, ["storeGmv", "store_gmv", "店铺成交金额"]), "店铺成交金额"),
+    source: clipText(pickField(raw, ["source", "来源"]) || source, 64, "来源") || "local"
   };
 }
 
@@ -419,13 +443,12 @@ export async function setBrief(text) {
 }
 
 function summarizePaidRows(rows) {
-  const totals = { spend: 0, gmv: 0, orders: 0, clicks: 0, impressions: 0, count: rows.length };
+  const totals = { spend: 0, clicks: 0, paidGmv: 0, storeGmv: 0, count: rows.length };
   for (const row of rows) {
-    totals.spend = asMoney(totals.spend + (Number(row.spend) || 0), "spend");
-    totals.gmv = asMoney(totals.gmv + (Number(row.gmv) || 0), "gmv");
-    totals.orders += Number(row.orders) || 0;
+    totals.spend = asMoney(totals.spend + (Number(row.spend) || 0), "花费");
     totals.clicks += Number(row.clicks) || 0;
-    totals.impressions += Number(row.impressions) || 0;
+    totals.paidGmv = asMoney(totals.paidGmv + (Number(row.paidGmv ?? row.paid_gmv) || 0), "付费成交金额");
+    totals.storeGmv = asMoney(totals.storeGmv + (Number(row.storeGmv ?? row.store_gmv) || 0), "店铺成交金额");
   }
   return totals;
 }
@@ -434,46 +457,58 @@ export async function ingestPaid(body) {
   if (body == null || typeof body !== "object" || Array.isArray(body)) {
     throw httpError(400, "请求体必须是对象");
   }
-  const defaultStore = clipText(body.store, 64, "store");
-  const source = clipText(body.source || "local", 64, "source") || "local";
+  const defaultStore = clipText(pickField(body, ["store", "店铺名"]) || "", 64, "店铺名");
+  const defaultDayRaw = pickField(body, ["date", "day", "日期"]);
+  const defaultDay = defaultDayRaw ? asDay(defaultDayRaw, "date") : "";
+  const source = clipText(pickField(body, ["source", "来源"]) || "local", 64, "来源") || "local";
   if (!Array.isArray(body.rows) || body.rows.length === 0) {
     throw httpError(400, "rows 必填");
   }
   if (body.rows.length > MAX_PAID_ROWS) {
     throw httpError(400, `一次最多回传 ${MAX_PAID_ROWS} 行`);
   }
-  const rows = body.rows.map((row) => parsePaidRow(row, defaultStore, source));
+  const rows = body.rows.map((row, index) => {
+    const parsed = parsePaidRow(row, defaultStore, defaultDay, source);
+    if (!parsed.seq) {
+      parsed.seq = index + 1;
+    }
+    return parsed;
+  });
   await ensurePaidTable();
   const ingestedAt = new Date().toISOString().slice(0, 19).replace("T", " ");
   for (const row of rows) {
-    const payload = JSON.stringify(row.payload || {});
     const result = await mysqlQuery(SQL.upsertPaid, [
+      row.seq,
       row.store,
       row.day,
-      row.campaign,
-      row.sku,
       row.spend,
-      row.gmv,
-      row.orders,
       row.clicks,
-      row.impressions,
-      row.source,
-      payload
+      row.ctr,
+      row.cpc,
+      row.cvr,
+      row.cpa,
+      row.roi,
+      row.paidGmv,
+      row.storeGmv,
+      row.source
     ]);
     if (result) {
       continue;
     }
     const mapped = {
       id: nextPaidId,
+      seq: row.seq,
       store: row.store,
       day: row.day,
-      campaign: row.campaign,
-      sku: row.sku,
       spend: row.spend,
-      gmv: row.gmv,
-      orders: row.orders,
       clicks: row.clicks,
-      impressions: row.impressions,
+      ctr: row.ctr,
+      cpc: row.cpc,
+      cvr: row.cvr,
+      cpa: row.cpa,
+      roi: row.roi,
+      paid_gmv: row.paidGmv,
+      store_gmv: row.storeGmv,
       source: row.source,
       ingested_at: ingestedAt
     };
@@ -518,7 +553,12 @@ export async function listPaid(query) {
         }
         return row.day >= parsed.fromDay && row.day <= parsed.toDay;
       })
-      .sort((a, b) => (a.day === b.day ? b.id - a.id : a.day < b.day ? 1 : -1))
+      .sort((a, b) => {
+        if (a.day !== b.day) {
+          return a.day < b.day ? 1 : -1;
+        }
+        return (a.seq || 0) - (b.seq || 0) || a.id - b.id;
+      })
       .slice(0, parsed.limit)
       .map(mapPaid);
   }
@@ -546,10 +586,9 @@ export async function getPaidSummary(query) {
     const row = result[0][0] || {};
     totals = {
       spend: Number(row.spend) || 0,
-      gmv: Number(row.gmv) || 0,
-      orders: Number(row.orders) || 0,
       clicks: Number(row.clicks) || 0,
-      impressions: Number(row.impressions) || 0,
+      paidGmv: Number(row.paid_gmv) || 0,
+      storeGmv: Number(row.store_gmv) || 0,
       count: Number(row.cnt) || 0
     };
   } else {

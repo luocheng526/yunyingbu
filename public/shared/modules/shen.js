@@ -37,7 +37,7 @@
       root.innerHTML =
         '<main class="page">' +
         '<header class="page-head"><p class="kicker">沈子晗运营中心</p><h1>付费中心</h1>' +
-        '<p class="lead">本地程序跑完后回传到 <code>POST /api/shen/paid/ingest</code>，同一店、日期、计划、SKU 再传会覆盖。</p></header>' +
+        '<p class="lead">本地程序跑完后回传到 <code>POST /api/shen/paid/ingest</code>，同一店铺名 + 日期再传会覆盖。</p></header>' +
         '<div class="stack">' +
         '<section class="panel" aria-labelledby="paid-filter-heading"><h2 id="paid-filter-heading">回传记录</h2>' +
         '<form id="paid-filter"><div class="row">' +
@@ -70,6 +70,10 @@
         return (Number(value) || 0).toFixed(2);
       }
 
+      function rate(value) {
+        return (Number(value) || 0).toFixed(2);
+      }
+
       function render(data) {
         const totals = data.totals || {};
         totalsEl.textContent =
@@ -77,40 +81,53 @@
           (totals.count || 0) +
           " 行 · 花费 " +
           money(totals.spend) +
-          " · 成交 " +
-          money(totals.gmv) +
-          " · 订单 " +
-          (totals.orders || 0);
+          " · 点击 " +
+          (totals.clicks || 0) +
+          " · 付费成交 " +
+          money(totals.paidGmv) +
+          " · 店铺成交 " +
+          money(totals.storeGmv);
         const rows = data.rows || [];
         if (!rows.length) {
           tableWrap.innerHTML = '<p class="empty">暂无回传数据</p>';
           return;
         }
         const body = rows
-          .map(function (row) {
+          .map(function (row, index) {
+            const seq = row.seq || index + 1;
             return (
               "<tr><td>" +
-              escapeHtml(row.date) +
+              escapeHtml(seq) +
               "</td><td>" +
               escapeHtml(row.store) +
               "</td><td>" +
-              escapeHtml(row.campaign) +
-              "</td><td>" +
-              escapeHtml(row.sku) +
-              "</td><td>" +
               money(row.spend) +
               "</td><td>" +
-              money(row.gmv) +
+              escapeHtml(row.clicks) +
               "</td><td>" +
-              escapeHtml(row.orders) +
+              rate(row.ctr) +
               "</td><td>" +
-              escapeHtml(row.source) +
+              money(row.cpc) +
+              "</td><td>" +
+              rate(row.cvr) +
+              "</td><td>" +
+              money(row.cpa) +
+              "</td><td>" +
+              rate(row.roi) +
+              "</td><td>" +
+              money(row.paidGmv) +
+              "</td><td>" +
+              money(row.storeGmv) +
               "</td></tr>"
             );
           })
           .join("");
         tableWrap.innerHTML =
-          "<table><thead><tr><th>日期</th><th>店</th><th>计划</th><th>SKU</th><th>花费</th><th>成交</th><th>订单</th><th>来源</th></tr></thead><tbody>" +
+          "<table><thead><tr>" +
+          "<th>序列号</th><th>店铺名</th><th>花费</th><th>点击数</th><th>点击率</th>" +
+          "<th>平均点击成本</th><th>转化率</th><th>平均订单成本</th><th>投产比</th>" +
+          "<th>付费成交金额</th><th>店铺成交金额</th>" +
+          "</tr></thead><tbody>" +
           body +
           "</tbody></table>";
       }

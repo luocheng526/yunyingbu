@@ -23,20 +23,22 @@ INSERT IGNORE INTO shen_brief (id, text) VALUES (1, '');
 -- 付费中心：本地程序跑完后回传。其他智能体不要直连本表。
 -- 写入：POST /api/shen/paid/ingest
 -- 读取：GET /api/shen/paid 、 GET /api/shen/paid/summary
-CREATE TABLE IF NOT EXISTS shen_paid_rows (
+CREATE TABLE IF NOT EXISTS shen_paid_daily (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  seq INT UNSIGNED NOT NULL DEFAULT 0,
   store VARCHAR(64) NOT NULL,
   day DATE NOT NULL,
-  campaign VARCHAR(128) NOT NULL DEFAULT '',
-  sku VARCHAR(64) NOT NULL DEFAULT '',
   spend DECIMAL(14,2) NOT NULL DEFAULT 0,
-  gmv DECIMAL(14,2) NOT NULL DEFAULT 0,
-  orders INT NOT NULL DEFAULT 0,
   clicks INT NOT NULL DEFAULT 0,
-  impressions INT NOT NULL DEFAULT 0,
+  ctr DECIMAL(12,4) NOT NULL DEFAULT 0,
+  cpc DECIMAL(14,4) NOT NULL DEFAULT 0,
+  cvr DECIMAL(12,4) NOT NULL DEFAULT 0,
+  cpa DECIMAL(14,4) NOT NULL DEFAULT 0,
+  roi DECIMAL(12,4) NOT NULL DEFAULT 0,
+  paid_gmv DECIMAL(14,2) NOT NULL DEFAULT 0,
+  store_gmv DECIMAL(14,2) NOT NULL DEFAULT 0,
   source VARCHAR(64) NOT NULL DEFAULT 'local',
-  payload JSON NULL,
   ingested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uk_shen_paid_slice (store, day, campaign, sku),
-  KEY idx_shen_paid_store_day (store, day)
+  UNIQUE KEY uk_shen_paid_daily (store, day),
+  KEY idx_shen_paid_daily_day (day)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
