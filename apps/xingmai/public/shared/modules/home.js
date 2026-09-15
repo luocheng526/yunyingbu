@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.532-home-half */
+/* xm-module-home 0.1.533-home-bars */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -178,10 +178,10 @@
       lineTipEl.classList.remove("is-on");
       lineTipEl.innerHTML = "";
     }
-    var guide = root && root.querySelector ? root.querySelector(".xm-hm-line-guide") : null;
-    if (guide) {
+    var guides = root && root.querySelectorAll ? root.querySelectorAll(".xm-hm-line-guide, .xm-hm-bar-guide") : [];
+    Array.prototype.forEach.call(guides, function (guide) {
       guide.setAttribute("visibility", "hidden");
-    }
+    });
   }
   function lineTipHtml(hour, yestHour, yestCum, todayHour, todayOk, todayCum, label, part) {
     return (
@@ -854,6 +854,21 @@
     }
     return m ? h + ":30" : String(h);
   }
+  function hourFromBarEvent(svg, event) {
+    if (!svg || !event) {
+      return 0;
+    }
+    var box = svg.getBoundingClientRect();
+    var x = ((event.clientX - box.left) / (box.width || 1)) * 640;
+    var i = Math.floor((x - 10) / (620 / 24));
+    if (i < 0) {
+      return 0;
+    }
+    if (i > 23) {
+      return 23;
+    }
+    return i;
+  }
   function hourFromEvent(svg, event, slots) {
     if (!svg || !event) {
       return 0;
@@ -943,6 +958,106 @@
       "</svg>"
     );
   }
+  function compareBarsHtml(yestHour, todayHour) {
+    var width = 640;
+    var height = 220;
+    var padTop = 12;
+    var padBot = 22;
+    var padX = 10;
+    var inner = 620;
+    var slots = 24;
+    var slot = inner / slots;
+    var barW = Math.min(9, slot * 0.32);
+    var yest = [];
+    var i;
+    for (i = 0; i < slots; i += 1) {
+      yest.push(Number(yestHour && yestHour[i]) || 0);
+    }
+    var today = todayHour || [];
+    var max = 1;
+    yest.concat(today).forEach(function (n) {
+      var v = Number(n) || 0;
+      if (v > max) {
+        max = v;
+      }
+    });
+    function yAt(n) {
+      return height - padBot - ((Number(n) || 0) / max) * (height - padTop - padBot);
+    }
+    var base = height - padBot;
+    var bars = [];
+    for (i = 0; i < slots; i += 1) {
+      var cx = padX + slot * i + slot / 2;
+      var y1 = yAt(yest[i]);
+      bars.push(
+        '<rect class="xm-hm-col is-yest" data-hour="' +
+          (i + 1) +
+          '" x="' +
+          (cx - barW - 1).toFixed(1) +
+          '" y="' +
+          y1.toFixed(1) +
+          '" width="' +
+          barW.toFixed(1) +
+          '" height="' +
+          Math.max(base - y1, 0).toFixed(1) +
+          '" rx="1" fill="#2f54eb"></rect>'
+      );
+      if (i < today.length) {
+        var y2 = yAt(Number(today[i]) || 0);
+        bars.push(
+          '<rect class="xm-hm-col is-today" data-hour="' +
+            (i + 1) +
+            '" x="' +
+            (cx + 1).toFixed(1) +
+            '" y="' +
+            y2.toFixed(1) +
+            '" width="' +
+            barW.toFixed(1) +
+            '" height="' +
+            Math.max(base - y2, 0).toFixed(1) +
+            '" rx="1" fill="#cf1322"></rect>'
+        );
+      }
+    }
+    var axis = [];
+    for (i = 1; i <= slots; i += 1) {
+      axis.push(
+        '<text x="' +
+          (padX + slot * (i - 1) + slot / 2).toFixed(1) +
+          '" y="' +
+          (height - 5) +
+          '" text-anchor="middle" fill="#8c8c8c" font-size="8">' +
+          i +
+          "</text>"
+      );
+    }
+    return (
+      '<svg class="xm-hm-bars" viewBox="0 0 ' +
+      width +
+      " " +
+      height +
+      '" data-bars="24">' +
+      '<rect class="xm-hm-bar-guide" x="0" y="' +
+      padTop +
+      '" width="' +
+      slot.toFixed(1) +
+      '" height="' +
+      (height - padTop - padBot) +
+      '" fill="rgba(0,0,0,.05)" visibility="hidden"></rect>' +
+      '<line x1="' +
+      padX +
+      '" y1="' +
+      base +
+      '" x2="' +
+      (padX + inner) +
+      '" y2="' +
+      base +
+      '" stroke="#ebeef5"></line>' +
+      bars.join("") +
+      axis.join("") +
+      "</svg>"
+    );
+  }
   function halfSalesChart(chart) {
     var yestHour = (chart && chart.yesterdayHour) || [];
     var todayHour = (chart && chart.todayHour) || [];
@@ -980,6 +1095,9 @@
     );
   }
   function companySalesHtml(chart) {
+    var yestHour = (chart && chart.yesterdayHour) || [];
+    var todayHour = (chart && chart.todayHour) || [];
+    var hasHour = yestHour.length > 2 || todayHour.length > 2;
     var sales = Object.assign(
       {
         label: "实时销售金额",
@@ -995,6 +1113,8 @@
       '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
       escapeHtml(sales.value) +
       "</div>" +
+      (hasHour ? '<div class="xm-hm-chart-sub">分时对比</div>' + compareBarsHtml(yestHour, todayHour) : "") +
+      (hasHour ? '<div class="xm-hm-chart-sub">累计走势</div>' : "") +
       compareLineHtml(sales) +
       "</article>"
     );
@@ -1083,6 +1203,8 @@
       ".xm-hm-sales{margin:0 0 10px}" +
       ".xm-hm-sales-chart{width:100%}" +
       ".xm-hm-sales-chart .xm-hm-line,.xm-hm-live .xm-hm-line{height:320px}" +
+      ".xm-hm-sales-chart .xm-hm-bars{display:block;width:100%;height:240px;margin-top:6px;cursor:crosshair}" +
+      ".xm-hm-chart-sub{margin:10px 0 0;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
       ".xm-hm-teams{display:flex;flex-direction:column;gap:10px;overflow-x:auto}" +
       ".xm-hm-teams-bar{display:flex;justify-content:space-between;align-items:center;padding:0 0 8px}" +
@@ -1276,7 +1398,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.532-home-half");
+    board.setAttribute("data-hm-js", "0.1.533-home-bars");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2443,9 +2565,63 @@
         }
         hideCardTip();
       }
+      function placeLineTip(tip, event) {
+        var tw = tip.offsetWidth || 180;
+        var th = tip.offsetHeight || 96;
+        var left = event.clientX + 12;
+        var top = event.clientY + 14;
+        if (left + tw > window.innerWidth - 8) {
+          left = event.clientX - tw - 12;
+        }
+        if (top + th > window.innerHeight - 8) {
+          top = event.clientY - th - 12;
+        }
+        if (left < 8) {
+          left = 8;
+        }
+        if (top < 8) {
+          top = 8;
+        }
+        tip.style.left = Math.round(left) + "px";
+        tip.style.top = Math.round(top) + "px";
+      }
       function onLineTipMove(event) {
+        var barSvg = event.target && event.target.closest ? event.target.closest(".xm-hm-bars") : null;
         var chartEl = event.target && event.target.closest ? event.target.closest(".xm-hm-chart[data-hours]") : null;
         var svg = event.target && event.target.closest ? event.target.closest(".xm-hm-line") : null;
+        if (barSvg) {
+          var barHero = (state.live && state.live.hero) || {};
+          var barYest = padHours(barHero.yesterdayHour || [], 24);
+          var barToday = barHero.todayHour || [];
+          if (!barYest.length && !barToday.length) {
+            hideLineTip(root);
+            return;
+          }
+          var barI = hourFromBarEvent(barSvg, event);
+          var barTip = lineTipNode();
+          barTip.innerHTML = lineTipHtml(
+            barI,
+            barYest[barI],
+            cumHours(barYest)[barI],
+            barToday[barI],
+            barI < barToday.length,
+            cumHours(barToday)[barI],
+            String(barI + 1),
+            "本小时"
+          );
+          barTip.classList.add("is-on");
+          placeLineTip(barTip, event);
+          var barGuide = barSvg.querySelector(".xm-hm-bar-guide");
+          if (barGuide) {
+            barGuide.setAttribute("x", (10 + (620 / 24) * barI).toFixed(1));
+            barGuide.setAttribute("visibility", "visible");
+          }
+          var lineGuide = root.querySelector(".xm-hm-line-guide");
+          if (lineGuide) {
+            lineGuide.setAttribute("visibility", "hidden");
+          }
+          return;
+        }
         if (!chartEl || !svg || !chartEl.contains(svg)) {
           hideLineTip(root);
           return;
@@ -2484,24 +2660,11 @@
           part
         );
         tip.classList.add("is-on");
-        var tw = tip.offsetWidth || 180;
-        var th = tip.offsetHeight || 96;
-        var left = event.clientX + 12;
-        var top = event.clientY + 14;
-        if (left + tw > window.innerWidth - 8) {
-          left = event.clientX - tw - 12;
+        placeLineTip(tip, event);
+        var barGuideOff = root.querySelector(".xm-hm-bar-guide");
+        if (barGuideOff) {
+          barGuideOff.setAttribute("visibility", "hidden");
         }
-        if (top + th > window.innerHeight - 8) {
-          top = event.clientY - th - 12;
-        }
-        if (left < 8) {
-          left = 8;
-        }
-        if (top < 8) {
-          top = 8;
-        }
-        tip.style.left = Math.round(left) + "px";
-        tip.style.top = Math.round(top) + "px";
         var guide = svg.querySelector(".xm-hm-line-guide");
         if (guide) {
           var x = hourX(i, slots).toFixed(1);

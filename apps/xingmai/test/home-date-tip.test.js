@@ -130,6 +130,10 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function halfTipLabel/);
   assert.match(homeJs, /function halfSalesChart/);
   assert.match(homeJs, /function hoursAttr/);
+  assert.match(homeJs, /function compareBarsHtml/);
+  assert.match(homeJs, /function hourFromBarEvent/);
+  assert.match(homeJs, /分时对比/);
+  assert.match(homeJs, /累计走势/);
   assert.match(homeJs, /noDots: true/);
   assert.match(homeJs, /function companySetCards/);
   assert.match(homeJs, /function liveSalesCard/);
@@ -421,6 +425,11 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
   assert.equal(blue[1].trim().split(/\s+/).length, 48);
   assert.match(html, />1<\/text>/);
   assert.match(html, />24<\/text>/);
+  assert.match(html, /分时对比/);
+  assert.match(html, /累计走势/);
+  assert.match(html, /data-bars="24"/);
+  assert.equal((html.match(/class="xm-hm-col is-yest"/g) || []).length, 24);
+  assert.equal((html.match(/class="xm-hm-col is-today"/g) || []).length, 3);
   const liveHtml = fns.liveChartHtml({
     label: "实时销售指数",
     value: "12,345",
@@ -468,8 +477,10 @@ test("live sales chart keeps 24-hour axis and hides future today points", () => 
   const now = hours.todayHours(Array.from({ length: 24 }, (_, i) => i + 1));
   assert.ok(now.length >= 1 && now.length <= 24);
   const fromEnd = homeJs.indexOf("function compareLineHtml");
-  const fromEv = new Function(homeJs.slice(homeJs.indexOf("function hourX"), fromEnd) + "return {hourFromEvent};")();
+  const fromEv = new Function(homeJs.slice(homeJs.indexOf("function hourX"), fromEnd) + "return {hourFromEvent, hourFromBarEvent};")();
   const svg = { getBoundingClientRect: () => ({ left: 0, width: 640 }) };
   assert.equal(fromEv.hourFromEvent(svg, { clientX: 10 }, 24), 0);
   assert.equal(fromEv.hourFromEvent(svg, { clientX: 10 + 620 * (7 / 23) }, 24), 7);
+  assert.equal(fromEv.hourFromBarEvent(svg, { clientX: 10 + 4 }), 0);
+  assert.equal(fromEv.hourFromBarEvent(svg, { clientX: 10 + (620 / 24) * 7.2 }), 7);
 });
