@@ -69,8 +69,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.doesNotMatch(homeJs, /<th>排名<\/th><th>店铺名称<\/th><\/tr>/);
   assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table\{min-width:760px/);
   assert.match(homeJs, /\.xm-hm\.is-team:not\(\.is-chief\) \.xm-hm-team\{min-width:760px\}/);
-  assert.match(homeJs, /\.xm-hm\.is-team:not\(\.is-chief\) \.xm-hm-teams-grid\{gap:32px\}/);
-  assert.match(homeJs, /\.xm-hm\.is-team:not\(\.is-chief\) \.xm-hm-team \.xm-hm-panel\{margin-top:24px\}/);
+  assert.match(homeJs, /\.xm-hm\.is-team:not\(\.is-chief\) \.xm-hm-teams-grid\{gap:72px\}/);
+  assert.match(homeJs, /\.xm-hm\.is-team:not\(\.is-chief\) \.xm-hm-team \.xm-hm-panel\{margin-top:48px\}/);
   assert.doesNotMatch(homeJs, /<th class="xm-hm-num">数量<\/th>/);
   assert.match(homeJs, /卡片设置 · /);
   assert.match(homeJs, /\.xm-hm\.is-chief \.xm-hm-teams \.xm-hm-table\{min-width:0/);

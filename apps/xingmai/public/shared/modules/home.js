@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.543-home-teamgap */
+/* xm-module-home 0.1.544-home-teamair */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1107,10 +1107,10 @@
       ".xm-hm-teams{display:flex;flex-direction:column;gap:10px;overflow-x:auto}" +
       ".xm-hm-teams-bar{display:flex;justify-content:space-between;align-items:center;padding:0 0 8px}" +
       ".xm-hm-teams-grid{display:grid;grid-template-columns:repeat(var(--xm-hm-team-cols,2),minmax(200px,1fr));gap:16px}" +
-      ".xm-hm.is-team:not(.is-chief) .xm-hm-teams-grid{gap:32px}" +
+      ".xm-hm.is-team:not(.is-chief) .xm-hm-teams-grid{gap:72px}" +
       ".xm-hm-team{display:flex;flex-direction:column;gap:8px;min-width:0;padding:12px}" +
       ".xm-hm.is-team:not(.is-chief) .xm-hm-team{min-width:760px}" +
-      ".xm-hm.is-team:not(.is-chief) .xm-hm-team .xm-hm-panel{margin-top:24px}" +
+      ".xm-hm.is-team:not(.is-chief) .xm-hm-team .xm-hm-panel{margin-top:48px}" +
       ".xm-hm-team-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
       ".xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:1fr;gap:6px}" +
       ".xm-hm-teams .xm-hm-panel{overflow-x:auto;min-width:0;background:#fff;border:0;box-shadow:none}" +
@@ -1298,7 +1298,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.543-home-teamgap");
+    board.setAttribute("data-hm-js", "0.1.544-home-teamair");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
