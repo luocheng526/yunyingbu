@@ -14,7 +14,16 @@ function createFakePool() {
   let nextPaidId = 1;
   return {
     async query(sql, params = []) {
-      if (sql === SQL.addStoreColumn || sql === SQL.addCreatedAtColumn || sql === SQL.createPaidTable) {
+      if (
+        sql === SQL.addStoreColumn ||
+        sql === SQL.addCreatedAtColumn ||
+        sql === SQL.createPaidTable ||
+        sql === SQL.addPaidAccountColumn ||
+        sql === SQL.addPaidOrdersColumn ||
+        sql === SQL.addPaidJingmaiColumn ||
+        sql === SQL.addPaidTotalOrderColumn ||
+        sql === SQL.addPaidFeeRatioColumn
+      ) {
         return [{}];
       }
       if (sql === SQL.listTasks) {
@@ -65,22 +74,40 @@ function createFakePool() {
         return [{ affectedRows: 1 }];
       }
       if (sql === SQL.upsertPaid) {
-        const [seq, store, day, spend, clicks, ctr, cpc, cvr, cpa, roi, paidGmv, storeGmv, source] = params;
+        const [
+          seq,
+          store,
+          accountId,
+          day,
+          spend,
+          paidOrders,
+          roi,
+          cvr,
+          cpc,
+          jingmaiGmv,
+          clicks,
+          ctr,
+          totalOrderAmount,
+          realFeeRatio,
+          source
+        ] = params;
         const key = `${store}\t${day}`;
         const row = {
           id: nextPaidId,
           seq,
           store,
+          account_id: accountId,
           day,
           spend,
+          paid_orders: paidOrders,
+          roi,
+          cvr,
+          cpc,
+          jingmai_gmv: jingmaiGmv,
           clicks,
           ctr,
-          cpc,
-          cvr,
-          cpa,
-          roi,
-          paid_gmv: paidGmv,
-          store_gmv: storeGmv,
+          total_order_amount: totalOrderAmount,
+          real_fee_ratio: realFeeRatio,
           source,
           ingested_at: "2026-09-15 12:00:00"
         };
@@ -107,12 +134,20 @@ function createFakePool() {
         const rows = paid.filter(
           (row) => (allStores === 1 || row.store === store) && row.day >= fromDay && row.day <= toDay
         );
-        const totals = { spend: 0, clicks: 0, paid_gmv: 0, store_gmv: 0, cnt: rows.length };
+        const totals = {
+          spend: 0,
+          paid_orders: 0,
+          jingmai_gmv: 0,
+          clicks: 0,
+          total_order_amount: 0,
+          cnt: rows.length
+        };
         for (const row of rows) {
           totals.spend += Number(row.spend) || 0;
+          totals.paid_orders += Number(row.paid_orders) || 0;
+          totals.jingmai_gmv += Number(row.jingmai_gmv) || 0;
           totals.clicks += Number(row.clicks) || 0;
-          totals.paid_gmv += Number(row.paid_gmv) || 0;
-          totals.store_gmv += Number(row.store_gmv) || 0;
+          totals.total_order_amount += Number(row.total_order_amount) || 0;
         }
         return [[totals]];
       }
@@ -191,8 +226,8 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /XmModules\["\/shen\/product\/chengzhang"\]/);
     assert.match(embed.text, /XmModules\["\/shen\/paid"\]/);
     assert.match(embed.text, /\/api\/shen\/paid/);
-    assert.match(embed.text, /序列号/);
-    assert.match(embed.text, /店铺成交金额/);
+    assert.match(embed.text, /京准通主账户ID/);
+    assert.match(embed.text, /真实费比/);
     assert.match(embed.text, /waitPage\("选品"\)/);
     assert.match(embed.text, /waitPage\("优化"\)/);
     assert.match(embed.text, /waitPage\("产品成长"\)/);
@@ -333,19 +368,21 @@ test("paid ingest upserts and lists by store + day", async () => {
         source: "local",
         rows: [
           {
-            序列号: 1,
-            店铺名: "旗舰店",
-            花费: 120.5,
-            点击数: 40,
-            点击率: 2.5,
-            平均点击成本: 3.01,
-            转化率: 1.2,
-            平均订单成本: 40.1,
-            投产比: 4.2,
-            付费成交金额: 880,
-            店铺成交金额: 1200
+            表格行号: 1,
+            店铺名称: "旗舰店",
+            京准通主账户ID: "10001",
+            京准通花费: 120.5,
+            京准通付费订单数: 3,
+            京准通付费投产比: 4.2,
+            京准通付费转化率: 1.2,
+            京准通平均点击成本: 3.01,
+            京麦成交金额: 1200,
+            京准通点击数: 40,
+            京准通点击率: 2.5,
+            京准通总订单金额: 880,
+            真实费比: 8.1
           },
-          { date: "2026-09-15", 店铺名: "专营店", 花费: 20, 点击数: 8, 付费成交金额: 50, 店铺成交金额: 80 }
+          { date: "2026-09-15", 店铺名称: "专营店", 京准通花费: 20, 京准通点击数: 8, 京麦成交金额: 80, 京准通总订单金额: 50 }
         ]
       })
     });
@@ -359,7 +396,16 @@ test("paid ingest upserts and lists by store + day", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         date: "2026-09-15",
-        rows: [{ 店铺名: "旗舰店", 花费: 200, 点击数: 50, 付费成交金额: 900, 店铺成交金额: 1300, 投产比: 4.5 }]
+        rows: [
+          {
+            店铺名称: "旗舰店",
+            京准通花费: 200,
+            京准通点击数: 50,
+            京麦成交金额: 1300,
+            京准通总订单金额: 900,
+            京准通付费投产比: 4.5
+          }
+        ]
       })
     });
     assert.equal(again.res.status, 201);
@@ -372,8 +418,8 @@ test("paid ingest upserts and lists by store + day", async () => {
     assert.equal(listed.json.rows.length, 1);
     assert.equal(listed.json.rows[0].spend, 200);
     assert.equal(listed.json.rows[0].clicks, 50);
-    assert.equal(listed.json.rows[0].paidGmv, 900);
-    assert.equal(listed.json.rows[0].storeGmv, 1300);
+    assert.equal(listed.json.rows[0].jingmaiGmv, 1300);
+    assert.equal(listed.json.rows[0].totalOrderAmount, 900);
     assert.equal(listed.json.rows[0].roi, 4.5);
     assert.equal(listed.json.totals.spend, 200);
     assert.equal(JSON.stringify(listed.json).includes("shen_paid_daily"), false);
@@ -389,7 +435,8 @@ test("paid ingest upserts and lists by store + day", async () => {
     assert.equal(summary.res.status, 200);
     assert.equal(summary.json.paid.count, 1);
     assert.equal(summary.json.paid.spend, 200);
-    assert.equal(summary.json.paid.paidGmv, 900);
+    assert.equal(summary.json.paid.totalOrderAmount, 900);
+    assert.equal(summary.json.paid.jingmaiGmv, 1300);
   });
 });
 

@@ -37,7 +37,7 @@
       root.innerHTML =
         '<main class="page">' +
         '<header class="page-head"><p class="kicker">沈子晗运营中心</p><h1>付费中心</h1>' +
-        '<p class="lead">本地程序跑完后回传到 <code>POST /api/shen/paid/ingest</code>，同一店铺名 + 日期再传会覆盖。</p></header>' +
+        '<p class="lead">本地程序跑完后回传到 <code>POST /api/shen/paid/ingest</code>，同一店铺名称 + 日期再传会覆盖。</p></header>' +
         '<div class="stack">' +
         '<section class="panel" aria-labelledby="paid-filter-heading"><h2 id="paid-filter-heading">回传记录</h2>' +
         '<form id="paid-filter"><div class="row">' +
@@ -79,14 +79,14 @@
         totalsEl.textContent =
           "合计 " +
           (totals.count || 0) +
-          " 行 · 花费 " +
+          " 行 · 京准通花费 " +
           money(totals.spend) +
-          " · 点击 " +
-          (totals.clicks || 0) +
-          " · 付费成交 " +
-          money(totals.paidGmv) +
-          " · 店铺成交 " +
-          money(totals.storeGmv);
+          " · 付费订单 " +
+          (totals.paidOrders || 0) +
+          " · 京麦成交 " +
+          money(totals.jingmaiGmv) +
+          " · 总订单金额 " +
+          money(totals.totalOrderAmount);
         const rows = data.rows || [];
         if (!rows.length) {
           tableWrap.innerHTML = '<p class="empty">暂无回传数据</p>';
@@ -97,36 +97,41 @@
             const seq = row.seq || index + 1;
             return (
               "<tr><td>" +
-              escapeHtml(seq) +
-              "</td><td>" +
               escapeHtml(row.store) +
               "</td><td>" +
+              escapeHtml(row.accountId) +
+              "</td><td>" +
+              escapeHtml(seq) +
+              "</td><td>" +
               money(row.spend) +
+              "</td><td>" +
+              escapeHtml(row.paidOrders) +
+              "</td><td>" +
+              rate(row.roi) +
+              "</td><td>" +
+              rate(row.cvr) +
+              "</td><td>" +
+              money(row.cpc) +
+              "</td><td>" +
+              money(row.jingmaiGmv) +
               "</td><td>" +
               escapeHtml(row.clicks) +
               "</td><td>" +
               rate(row.ctr) +
               "</td><td>" +
-              money(row.cpc) +
+              money(row.totalOrderAmount) +
               "</td><td>" +
-              rate(row.cvr) +
-              "</td><td>" +
-              money(row.cpa) +
-              "</td><td>" +
-              rate(row.roi) +
-              "</td><td>" +
-              money(row.paidGmv) +
-              "</td><td>" +
-              money(row.storeGmv) +
+              rate(row.realFeeRatio) +
               "</td></tr>"
             );
           })
           .join("");
         tableWrap.innerHTML =
           "<table><thead><tr>" +
-          "<th>序列号</th><th>店铺名</th><th>花费</th><th>点击数</th><th>点击率</th>" +
-          "<th>平均点击成本</th><th>转化率</th><th>平均订单成本</th><th>投产比</th>" +
-          "<th>付费成交金额</th><th>店铺成交金额</th>" +
+          "<th>店铺名称</th><th>京准通主账户ID</th><th>表格行号</th><th>京准通花费</th>" +
+          "<th>京准通付费订单数</th><th>京准通付费投产比</th><th>京准通付费转化率</th>" +
+          "<th>京准通平均点击成本</th><th>京麦成交金额</th><th>京准通点击数</th>" +
+          "<th>京准通点击率</th><th>京准通总订单金额</th><th>真实费比</th>" +
           "</tr></thead><tbody>" +
           body +
           "</tbody></table>";

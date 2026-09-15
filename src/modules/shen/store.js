@@ -17,42 +17,51 @@ export const SQL = {
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   seq INT UNSIGNED NOT NULL DEFAULT 0,
   store VARCHAR(64) NOT NULL,
+  account_id VARCHAR(64) NOT NULL DEFAULT '',
   day DATE NOT NULL,
   spend DECIMAL(14,2) NOT NULL DEFAULT 0,
+  paid_orders INT NOT NULL DEFAULT 0,
+  roi DECIMAL(12,4) NOT NULL DEFAULT 0,
+  cvr DECIMAL(12,4) NOT NULL DEFAULT 0,
+  cpc DECIMAL(14,4) NOT NULL DEFAULT 0,
+  jingmai_gmv DECIMAL(14,2) NOT NULL DEFAULT 0,
   clicks INT NOT NULL DEFAULT 0,
   ctr DECIMAL(12,4) NOT NULL DEFAULT 0,
-  cpc DECIMAL(14,4) NOT NULL DEFAULT 0,
-  cvr DECIMAL(12,4) NOT NULL DEFAULT 0,
-  cpa DECIMAL(14,4) NOT NULL DEFAULT 0,
-  roi DECIMAL(12,4) NOT NULL DEFAULT 0,
-  paid_gmv DECIMAL(14,2) NOT NULL DEFAULT 0,
-  store_gmv DECIMAL(14,2) NOT NULL DEFAULT 0,
+  total_order_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+  real_fee_ratio DECIMAL(12,4) NOT NULL DEFAULT 0,
   source VARCHAR(64) NOT NULL DEFAULT 'local',
   ingested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uk_shen_paid_daily (store, day),
   KEY idx_shen_paid_daily_day (day)
 )`,
-  upsertPaid: `INSERT INTO shen_paid_daily (seq, store, day, spend, clicks, ctr, cpc, cvr, cpa, roi, paid_gmv, store_gmv, source)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  addPaidAccountColumn: `ALTER TABLE shen_paid_daily ADD COLUMN account_id VARCHAR(64) NOT NULL DEFAULT ''`,
+  addPaidOrdersColumn: `ALTER TABLE shen_paid_daily ADD COLUMN paid_orders INT NOT NULL DEFAULT 0`,
+  addPaidJingmaiColumn: `ALTER TABLE shen_paid_daily ADD COLUMN jingmai_gmv DECIMAL(14,2) NOT NULL DEFAULT 0`,
+  addPaidTotalOrderColumn: `ALTER TABLE shen_paid_daily ADD COLUMN total_order_amount DECIMAL(14,2) NOT NULL DEFAULT 0`,
+  addPaidFeeRatioColumn: `ALTER TABLE shen_paid_daily ADD COLUMN real_fee_ratio DECIMAL(12,4) NOT NULL DEFAULT 0`,
+  upsertPaid: `INSERT INTO shen_paid_daily (seq, store, account_id, day, spend, paid_orders, roi, cvr, cpc, jingmai_gmv, clicks, ctr, total_order_amount, real_fee_ratio, source)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON DUPLICATE KEY UPDATE
   seq = VALUES(seq),
+  account_id = VALUES(account_id),
   spend = VALUES(spend),
+  paid_orders = VALUES(paid_orders),
+  roi = VALUES(roi),
+  cvr = VALUES(cvr),
+  cpc = VALUES(cpc),
+  jingmai_gmv = VALUES(jingmai_gmv),
   clicks = VALUES(clicks),
   ctr = VALUES(ctr),
-  cpc = VALUES(cpc),
-  cvr = VALUES(cvr),
-  cpa = VALUES(cpa),
-  roi = VALUES(roi),
-  paid_gmv = VALUES(paid_gmv),
-  store_gmv = VALUES(store_gmv),
+  total_order_amount = VALUES(total_order_amount),
+  real_fee_ratio = VALUES(real_fee_ratio),
   source = VALUES(source),
   ingested_at = CURRENT_TIMESTAMP`,
-  listPaid: `SELECT id, seq, store, day, spend, clicks, ctr, cpc, cvr, cpa, roi, paid_gmv, store_gmv, source, ingested_at
+  listPaid: `SELECT id, seq, store, account_id, day, spend, paid_orders, roi, cvr, cpc, jingmai_gmv, clicks, ctr, total_order_amount, real_fee_ratio, source, ingested_at
 FROM shen_paid_daily
 WHERE (? = 1 OR store = ?) AND day >= ? AND day <= ?
 ORDER BY day DESC, seq ASC, id ASC
 LIMIT ?`,
-  summarizePaid: `SELECT COALESCE(SUM(spend), 0) AS spend, COALESCE(SUM(clicks), 0) AS clicks, COALESCE(SUM(paid_gmv), 0) AS paid_gmv, COALESCE(SUM(store_gmv), 0) AS store_gmv, COUNT(*) AS cnt
+  summarizePaid: `SELECT COALESCE(SUM(spend), 0) AS spend, COALESCE(SUM(paid_orders), 0) AS paid_orders, COALESCE(SUM(jingmai_gmv), 0) AS jingmai_gmv, COALESCE(SUM(clicks), 0) AS clicks, COALESCE(SUM(total_order_amount), 0) AS total_order_amount, COUNT(*) AS cnt
 FROM shen_paid_daily
 WHERE (? = 1 OR store = ?) AND day >= ? AND day <= ?`
 };
@@ -193,11 +202,25 @@ function asDay(value, label = "date") {
   return day;
 }
 
-function asMoney(value, label) {
+function toFiniteNumber(value) {
   if (value == null || value === "") {
+    return null;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : NaN;
+  }
+  const text = String(value).trim().replace(/,/g, "").replace(/%/g, "");
+  if (!text) {
+    return null;
+  }
+  return Number(text);
+}
+
+function asMoney(value, label) {
+  const number = toFiniteNumber(value);
+  if (number == null) {
     return 0;
   }
-  const number = Number(value);
   if (!Number.isFinite(number) || number < 0) {
     throw httpError(400, `${label}必须是大于等于 0 的数字`);
   }
@@ -205,10 +228,10 @@ function asMoney(value, label) {
 }
 
 function asCount(value, label) {
-  if (value == null || value === "") {
+  const number = toFiniteNumber(value);
+  if (number == null) {
     return 0;
   }
-  const number = Number(value);
   if (!Number.isFinite(number) || number < 0) {
     throw httpError(400, `${label}必须是大于等于 0 的数字`);
   }
@@ -216,10 +239,10 @@ function asCount(value, label) {
 }
 
 function asRate(value, label) {
-  if (value == null || value === "") {
+  const number = toFiniteNumber(value);
+  if (number == null) {
     return 0;
   }
-  const number = Number(value);
   if (!Number.isFinite(number) || number < 0) {
     throw httpError(400, `${label}必须是大于等于 0 的数字`);
   }
@@ -249,16 +272,18 @@ function mapPaid(row) {
     id: Number(row.id),
     seq: Number(row.seq) || 0,
     store: row.store || "",
+    accountId: row.account_id || row.accountId || "",
     date: day,
     spend: Number(row.spend) || 0,
+    paidOrders: Number(row.paid_orders ?? row.paidOrders) || 0,
+    roi: Number(row.roi) || 0,
+    cvr: Number(row.cvr) || 0,
+    cpc: Number(row.cpc) || 0,
+    jingmaiGmv: Number(row.jingmai_gmv ?? row.jingmaiGmv) || 0,
     clicks: Number(row.clicks) || 0,
     ctr: Number(row.ctr) || 0,
-    cpc: Number(row.cpc) || 0,
-    cvr: Number(row.cvr) || 0,
-    cpa: Number(row.cpa) || 0,
-    roi: Number(row.roi) || 0,
-    paidGmv: Number(row.paid_gmv ?? row.paidGmv) || 0,
-    storeGmv: Number(row.store_gmv ?? row.storeGmv) || 0,
+    totalOrderAmount: Number(row.total_order_amount ?? row.totalOrderAmount) || 0,
+    realFeeRatio: Number(row.real_fee_ratio ?? row.realFeeRatio) || 0,
     source: row.source || "local",
     ingestedAt: row.ingested_at || row.ingestedAt || ""
   };
@@ -301,32 +326,53 @@ function parsePaidRow(raw, defaultStore, defaultDay, source) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw httpError(400, "rows 里必须是对象");
   }
-  const store = clipText(pickField(raw, ["store", "店铺名", "店铺"]) || defaultStore, 64, "店铺名");
+  const store = clipText(
+    pickField(raw, ["店铺名称", "store", "店铺名", "店铺"]) || defaultStore,
+    64,
+    "店铺名称"
+  );
   if (!store) {
-    throw httpError(400, "必须指定店铺名");
+    throw httpError(400, "必须指定店铺名称");
   }
   const dayRaw = pickField(raw, ["date", "day", "日期"]) || defaultDay || todayDay();
   return {
-    seq: asCount(pickField(raw, ["seq", "序列号"]), "序列号"),
+    seq: asCount(pickField(raw, ["表格行号", "seq", "序列号"]), "表格行号"),
     store,
+    accountId: clipText(pickField(raw, ["京准通主账户ID", "accountId", "jztAccountId"]), 64, "京准通主账户ID"),
     day: asDay(dayRaw, "date"),
-    spend: asMoney(pickField(raw, ["spend", "花费"]), "花费"),
-    clicks: asCount(pickField(raw, ["clicks", "点击数"]), "点击数"),
-    ctr: asRate(pickField(raw, ["ctr", "点击率"]), "点击率"),
-    cpc: asRate(pickField(raw, ["cpc", "平均点击成本"]), "平均点击成本"),
-    cvr: asRate(pickField(raw, ["cvr", "转化率"]), "转化率"),
-    cpa: asRate(pickField(raw, ["cpa", "平均订单成本"]), "平均订单成本"),
-    roi: asRate(pickField(raw, ["roi", "投产比"]), "投产比"),
-    paidGmv: asMoney(pickField(raw, ["paidGmv", "paid_gmv", "付费成交金额"]), "付费成交金额"),
-    storeGmv: asMoney(pickField(raw, ["storeGmv", "store_gmv", "店铺成交金额"]), "店铺成交金额"),
+    spend: asMoney(pickField(raw, ["京准通花费", "spend", "花费"]), "京准通花费"),
+    paidOrders: asCount(pickField(raw, ["京准通付费订单数", "paidOrders"]), "京准通付费订单数"),
+    roi: asRate(pickField(raw, ["京准通付费投产比", "roi", "投产比"]), "京准通付费投产比"),
+    cvr: asRate(pickField(raw, ["京准通付费转化率", "cvr", "转化率"]), "京准通付费转化率"),
+    cpc: asRate(pickField(raw, ["京准通平均点击成本", "cpc", "平均点击成本"]), "京准通平均点击成本"),
+    jingmaiGmv: asMoney(pickField(raw, ["京麦成交金额", "jingmaiGmv"]), "京麦成交金额"),
+    clicks: asCount(pickField(raw, ["京准通点击数", "clicks", "点击数"]), "京准通点击数"),
+    ctr: asRate(pickField(raw, ["京准通点击率", "ctr", "点击率"]), "京准通点击率"),
+    totalOrderAmount: asMoney(pickField(raw, ["京准通总订单金额", "totalOrderAmount"]), "京准通总订单金额"),
+    realFeeRatio: asRate(pickField(raw, ["真实费比", "realFeeRatio"]), "真实费比"),
     source: clipText(pickField(raw, ["source", "来源"]) || source, 64, "来源") || "local"
   };
 }
 
 async function ensurePaidTable() {
-  const result = await mysqlQuery(SQL.createPaidTable);
-  if (!result && !poolOverride) {
+  const created = await mysqlQuery(SQL.createPaidTable);
+  if (!created && !poolOverride) {
     return;
+  }
+  for (const sql of [
+    SQL.addPaidAccountColumn,
+    SQL.addPaidOrdersColumn,
+    SQL.addPaidJingmaiColumn,
+    SQL.addPaidTotalOrderColumn,
+    SQL.addPaidFeeRatioColumn
+  ]) {
+    try {
+      await mysqlQuery(sql);
+    } catch (err) {
+      if (!isDuplicateColumnError(err)) {
+        throw err;
+      }
+    }
   }
 }
 
@@ -443,12 +489,19 @@ export async function setBrief(text) {
 }
 
 function summarizePaidRows(rows) {
-  const totals = { spend: 0, clicks: 0, paidGmv: 0, storeGmv: 0, count: rows.length };
+  const totals = { spend: 0, paidOrders: 0, jingmaiGmv: 0, clicks: 0, totalOrderAmount: 0, count: rows.length };
   for (const row of rows) {
-    totals.spend = asMoney(totals.spend + (Number(row.spend) || 0), "花费");
+    totals.spend = asMoney(totals.spend + (Number(row.spend) || 0), "京准通花费");
+    totals.paidOrders += Number(row.paidOrders ?? row.paid_orders) || 0;
+    totals.jingmaiGmv = asMoney(
+      totals.jingmaiGmv + (Number(row.jingmaiGmv ?? row.jingmai_gmv) || 0),
+      "京麦成交金额"
+    );
     totals.clicks += Number(row.clicks) || 0;
-    totals.paidGmv = asMoney(totals.paidGmv + (Number(row.paidGmv ?? row.paid_gmv) || 0), "付费成交金额");
-    totals.storeGmv = asMoney(totals.storeGmv + (Number(row.storeGmv ?? row.store_gmv) || 0), "店铺成交金额");
+    totals.totalOrderAmount = asMoney(
+      totals.totalOrderAmount + (Number(row.totalOrderAmount ?? row.total_order_amount) || 0),
+      "京准通总订单金额"
+    );
   }
   return totals;
 }
@@ -457,7 +510,7 @@ export async function ingestPaid(body) {
   if (body == null || typeof body !== "object" || Array.isArray(body)) {
     throw httpError(400, "请求体必须是对象");
   }
-  const defaultStore = clipText(pickField(body, ["store", "店铺名"]) || "", 64, "店铺名");
+  const defaultStore = clipText(pickField(body, ["店铺名称", "store", "店铺名"]) || "", 64, "店铺名称");
   const defaultDayRaw = pickField(body, ["date", "day", "日期"]);
   const defaultDay = defaultDayRaw ? asDay(defaultDayRaw, "date") : "";
   const source = clipText(pickField(body, ["source", "来源"]) || "local", 64, "来源") || "local";
@@ -480,16 +533,18 @@ export async function ingestPaid(body) {
     const result = await mysqlQuery(SQL.upsertPaid, [
       row.seq,
       row.store,
+      row.accountId,
       row.day,
       row.spend,
+      row.paidOrders,
+      row.roi,
+      row.cvr,
+      row.cpc,
+      row.jingmaiGmv,
       row.clicks,
       row.ctr,
-      row.cpc,
-      row.cvr,
-      row.cpa,
-      row.roi,
-      row.paidGmv,
-      row.storeGmv,
+      row.totalOrderAmount,
+      row.realFeeRatio,
       row.source
     ]);
     if (result) {
@@ -499,16 +554,18 @@ export async function ingestPaid(body) {
       id: nextPaidId,
       seq: row.seq,
       store: row.store,
+      account_id: row.accountId,
       day: row.day,
       spend: row.spend,
+      paid_orders: row.paidOrders,
+      roi: row.roi,
+      cvr: row.cvr,
+      cpc: row.cpc,
+      jingmai_gmv: row.jingmaiGmv,
       clicks: row.clicks,
       ctr: row.ctr,
-      cpc: row.cpc,
-      cvr: row.cvr,
-      cpa: row.cpa,
-      roi: row.roi,
-      paid_gmv: row.paidGmv,
-      store_gmv: row.storeGmv,
+      total_order_amount: row.totalOrderAmount,
+      real_fee_ratio: row.realFeeRatio,
       source: row.source,
       ingested_at: ingestedAt
     };
@@ -586,9 +643,10 @@ export async function getPaidSummary(query) {
     const row = result[0][0] || {};
     totals = {
       spend: Number(row.spend) || 0,
+      paidOrders: Number(row.paid_orders) || 0,
+      jingmaiGmv: Number(row.jingmai_gmv) || 0,
       clicks: Number(row.clicks) || 0,
-      paidGmv: Number(row.paid_gmv) || 0,
-      storeGmv: Number(row.store_gmv) || 0,
+      totalOrderAmount: Number(row.total_order_amount) || 0,
       count: Number(row.cnt) || 0
     };
   } else {
