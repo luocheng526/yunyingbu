@@ -241,6 +241,8 @@ function identityDefaults(username, displayName) {
     dataScope: isDemo ? "全平台数据" : "",
     role: isDemo ? "超级管理员" : "",
     badge: isDemo ? "系" : (displayName || username || "系").slice(0, 1),
+    department: isDemo ? "星脉集团/河西星脉甄选" : "",
+    createdAt: isDemo ? "2026-01-01 00:00:00" : "",
     dutyIds: isDemo ? "*" : []
   };
 }
@@ -398,6 +400,8 @@ export function publicProfile(user) {
     dataScope: user.dataScope || "",
     role: user.role || "",
     badge: user.badge || (user.displayName || user.username || "系").slice(0, 1),
+    department: user.department || "",
+    createdAt: user.createdAt || "",
     grantedCount: duties.grantedCount,
     dutyTotal: duties.total
   };

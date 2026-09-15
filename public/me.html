@@ -164,15 +164,21 @@
       <div class="me-grid">
         <section>
           <div class="card" id="who-card">
-            <div class="who">
-              <div class="badge" id="who-badge">系</div>
-              <div>
-                <h2 id="who-title">个人中心</h2>
-                <p id="who-subtitle"></p>
-              </div>
+            <div class="who" style="justify-content:space-between">
+              <h2 id="who-title" style="margin:0;font-size:1rem">个人信息</h2>
+              <span id="who-username"></span>
             </div>
+            <label class="me-avatar" id="who-avatar" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:92px;margin:0 0 12px;border:1px dashed #e5e7eb;border-radius:8px;cursor:pointer;color:#6b7280">
+              <img id="who-avatar-img" alt="" hidden />
+              <span id="who-avatar-hint">点击上传头像</span>
+              <input id="who-avatar-file" type="file" accept="image/*" style="display:none" />
+            </label>
             <div class="kv">
-              <div>登录账号<strong id="who-username"></strong></div>
+              <div>用户名称<strong id="who-name"></strong></div>
+              <div>手机号码<strong id="who-phone"></strong></div>
+              <div>用户邮箱<strong id="who-email"></strong></div>
+              <div>所属部门<strong id="who-dept"></strong></div>
+              <div>创建日期<strong id="who-created"></strong></div>
               <div>数据范围<strong id="who-scope"></strong></div>
               <div>角色<strong id="who-role"></strong></div>
               <div>权限项<strong id="who-count"></strong></div>
@@ -210,10 +216,12 @@
           statusEl.className = "status" + (kind ? " " + kind : "");
         }
         function fillWho(user) {
-          document.getElementById("who-badge").textContent = user.badge || "系";
-          document.getElementById("who-title").textContent = user.title || user.displayName || "个人中心";
-          document.getElementById("who-subtitle").textContent = user.subtitle || "";
           document.getElementById("who-username").textContent = user.username || "";
+          document.getElementById("who-name").textContent = user.displayName || user.username || "";
+          document.getElementById("who-phone").textContent = user.phone || "";
+          document.getElementById("who-email").textContent = user.email || "";
+          document.getElementById("who-dept").textContent = user.department || "星脉集团/河西星脉甄选";
+          document.getElementById("who-created").textContent = user.createdAt || "2026-01-01 00:00:00";
           document.getElementById("who-scope").textContent = user.dataScope || "";
           document.getElementById("who-role").textContent = user.role || "";
           var count = user.grantedCount != null ? user.grantedCount : 0;

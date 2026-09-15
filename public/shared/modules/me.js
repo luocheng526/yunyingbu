@@ -21,13 +21,16 @@
       "@media (max-width:960px){.me-grid{grid-template-columns:1fr;}}" +
       ".me-page .panel{min-height:0;}" +
       ".me-page .panel + .panel{margin-top:12px;}" +
-      ".me-who{display:flex;gap:12px;align-items:center;margin-bottom:14px;}" +
-      ".me-badge{width:40px;height:40px;border-radius:8px;background:var(--xm-primary,#1677ff);color:#fff;display:grid;place-items:center;font-size:16px;flex-shrink:0;}" +
-      ".me-who h2{margin:0;font-size:16px;}" +
-      ".me-who p{margin:4px 0 0;color:var(--xm-muted,#8c8c8c);font-size:13px;}" +
-      ".me-kv{display:grid;gap:8px;font-size:13px;}" +
-      ".me-kv div{display:flex;justify-content:space-between;gap:12px;color:var(--xm-muted,#8c8c8c);}" +
-      ".me-kv strong{color:var(--xm-ink,#111);font-weight:600;}" +
+      ".me-info-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px;}" +
+      ".me-info-head h2{margin:0;font-size:15px;font-weight:600;}" +
+      ".me-info-head span{color:var(--xm-muted,#8c8c8c);font-size:13px;}" +
+      ".me-avatar{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:92px;margin:8px 0 12px;border:1px dashed var(--xm-line,#e5e7eb);border-radius:8px;cursor:pointer;color:var(--xm-muted,#8c8c8c);font-size:13px;background:transparent;width:100%;}" +
+      ".me-avatar img{width:72px;height:72px;border-radius:50%;object-fit:cover;}" +
+      ".me-avatar input{display:none;}" +
+      ".me-kv{display:grid;font-size:13px;}" +
+      ".me-kv div{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--xm-line,#f0f0f0);color:var(--xm-muted,#8c8c8c);}" +
+      ".me-kv strong{color:var(--xm-ink,#111);font-weight:500;text-align:right;}" +
+      ".me-kv em{display:inline-flex;align-items:center;gap:6px;font-style:normal;}" +
       ".me-page input{display:block;width:100%;margin:0 0 10px;padding:8px 10px;border:1px solid var(--xm-line,#e5e7eb);border-radius:8px;font:inherit;background:var(--xm-card,#fff);color:inherit;box-sizing:border-box;}" +
       ".me-page button.me-btn{display:block;width:100%;border:0;border-radius:8px;padding:9px 12px;font:inherit;background:var(--xm-primary,#1677ff);color:#fff;cursor:pointer;}" +
       ".me-page button.me-btn-logout{margin-top:10px;background:#e11d48;}" +
@@ -56,13 +59,21 @@
         '<div class="me-grid">' +
         "<section>" +
         '<div class="panel" id="who-card">' +
-        '<div class="me-who"><div class="me-badge" id="who-badge">系</div>' +
-        '<div><h2 id="who-title">个人中心</h2><p id="who-subtitle"></p></div></div>' +
+        '<div class="me-info-head"><h2>个人信息</h2><span id="who-username"></span></div>' +
+        '<label class="me-avatar" id="who-avatar">' +
+        '<img id="who-avatar-img" alt="" hidden />' +
+        '<span id="who-avatar-hint">点击上传头像</span>' +
+        '<input id="who-avatar-file" type="file" accept="image/*" />' +
+        "</label>" +
         '<div class="me-kv">' +
-        '<div>登录账号<strong id="who-username"></strong></div>' +
-        '<div>数据范围<strong id="who-scope"></strong></div>' +
-        '<div>角色<strong id="who-role"></strong></div>' +
-        '<div>权限项<strong id="who-count"></strong></div>' +
+        '<div><em>用户名称</em><strong id="who-name"></strong></div>' +
+        '<div><em>手机号码</em><strong id="who-phone"></strong></div>' +
+        '<div><em>用户邮箱</em><strong id="who-email"></strong></div>' +
+        '<div><em>所属部门</em><strong id="who-dept"></strong></div>' +
+        '<div><em>创建日期</em><strong id="who-created"></strong></div>' +
+        '<div><em>数据范围</em><strong id="who-scope"></strong></div>' +
+        '<div><em>角色</em><strong id="who-role"></strong></div>' +
+        '<div><em>权限项</em><strong id="who-count"></strong></div>' +
         "</div></div>" +
         '<div class="panel"><h2>修改密码</h2>' +
         '<p id="status" class="status" role="status"></p>' +
@@ -88,16 +99,38 @@
         statusEl.className = "status" + (kind ? " " + kind : "");
       }
 
+      function showAvatar(src) {
+        const img = root.querySelector("#who-avatar-img");
+        const hint = root.querySelector("#who-avatar-hint");
+        if (src) {
+          img.src = src;
+          img.hidden = false;
+          hint.hidden = true;
+        } else {
+          img.removeAttribute("src");
+          img.hidden = true;
+          hint.hidden = false;
+        }
+      }
+
       function fillWho(user) {
-        root.querySelector("#who-badge").textContent = user.badge || "系";
-        root.querySelector("#who-title").textContent = user.title || user.displayName || "个人中心";
-        root.querySelector("#who-subtitle").textContent = user.subtitle || "";
+        const name = user.displayName || user.username || "";
         root.querySelector("#who-username").textContent = user.username || "";
+        root.querySelector("#who-name").textContent = name;
+        root.querySelector("#who-phone").textContent = user.phone || "";
+        root.querySelector("#who-email").textContent = user.email || "";
+        root.querySelector("#who-dept").textContent = user.department || "星脉集团/河西星脉甄选";
+        root.querySelector("#who-created").textContent = user.createdAt || "2026-01-01 00:00:00";
         root.querySelector("#who-scope").textContent = user.dataScope || "";
         root.querySelector("#who-role").textContent = user.role || "";
         const count = user.grantedCount != null ? user.grantedCount : 0;
         const total = user.dutyTotal != null ? user.dutyTotal : count;
         root.querySelector("#who-count").textContent = count + " 项" + (total ? " / " + total : "");
+        try {
+          showAvatar(sessionStorage.getItem("xm-me-avatar-" + (user.username || "")));
+        } catch (_e) {
+          showAvatar("");
+        }
       }
 
       function fillDuties(groups) {
@@ -177,6 +210,27 @@
         });
       }
 
+      root.querySelector("#who-avatar-file").addEventListener("change", function (event) {
+        const file = event.target.files && event.target.files[0];
+        event.target.value = "";
+        if (!file || !file.type || file.type.indexOf("image/") !== 0) {
+          return;
+        }
+        if (file.size > 512 * 1024) {
+          setStatus("头像请小于 512KB", "error");
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = function () {
+          const src = String(reader.result || "");
+          showAvatar(src);
+          try {
+            const who = root.querySelector("#who-username").textContent || "";
+            sessionStorage.setItem("xm-me-avatar-" + who, src);
+          } catch (_e) {}
+        };
+        reader.readAsDataURL(file);
+      });
       root.querySelector("#password-form").addEventListener("submit", onPassword);
       root.querySelector("#logout-form").addEventListener("submit", function (event) {
         event.preventDefault();

@@ -123,6 +123,10 @@ test("login 罗成 sets cookie; GET /api/auth/me 200; wrong password 401", async
     assert.match(page.text, /<aside class="site-sidebar">/);
     assert.match(page.text, /<main class="page">/);
     assert.match(page.text, /我的责权清单/);
+    assert.match(page.text, /个人信息/);
+    assert.match(page.text, /点击上传头像/);
+    assert.match(page.text, /所属部门/);
+    assert.match(page.text, /创建日期/);
     assert.match(page.text, /修改密码/);
     assert.match(page.text, /退出登录/);
     assert.match(page.text, /btn-logout/);
@@ -131,6 +135,9 @@ test("login 罗成 sets cookie; GET /api/auth/me 200; wrong password 401", async
     const moduleJs = await request(base, "/shared/modules/me.js", { redirect: "follow" });
     assert.equal(moduleJs.res.status, 200);
     assert.match(moduleJs.text, /XmModules\["\/me"\]/);
+    assert.match(moduleJs.text, /个人信息/);
+    assert.match(moduleJs.text, /点击上传头像/);
+    assert.match(moduleJs.text, /所属部门/);
     assert.match(moduleJs.text, /我的责权清单/);
     assert.match(moduleJs.text, /\/api\/profile\/duties/);
     assert.match(moduleJs.text, /退出登录/);
@@ -161,6 +168,8 @@ test("duty catalog lists granted items and can register a new duty", async () =>
       "个人中心"
     ]);
     assert.equal(duties.json.identity.username, "罗成");
+    assert.equal(duties.json.identity.department, "星脉集团/河西星脉甄选");
+    assert.equal(duties.json.identity.createdAt, "2026-01-01 00:00:00");
     const before = duties.json.total;
     const added = await request(base, "/api/profile/duties", {
       method: "POST",
