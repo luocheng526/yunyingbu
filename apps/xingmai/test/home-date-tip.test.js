@@ -118,6 +118,9 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /\.xm-hm-live-cards\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(homeJs, /paid: \{ label: "实时费比"/);
   assert.match(homeJs, /key: "livePaid", label: "实时付费金额"/);
+  assert.match(homeJs, /\/api\/home\/erp-paid/);
+  assert.match(homeJs, /function seriesOf/);
+  assert.match(homeJs, /hourly\.todayPay/);
   assert.doesNotMatch(homeJs, /LIVE_CARD_KEYS = \["ad", "profit"/);
   assert.match(homeJs, /data-shop-card=/);
   assert.match(homeJs, /<th>排名<\/th><th>店铺名称<\/th><th>实时销售额/);

@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.505-home-chiefx */
+/* xm-module-home 0.1.506-home-erplive */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1058,7 +1058,7 @@
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
-    board.setAttribute("data-hm-js", "0.1.505-home-chiefx");
+    board.setAttribute("data-hm-js", "0.1.506-home-erplive");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1102,7 +1102,7 @@
     root.querySelector("#xm-hm-note").textContent = gapText
       ? "人管对不上：" + gapText
       : state.view === "live"
-        ? "实时来自 ERP，每5分钟拉一次。"
+        ? "实时销售额和实时付费都走星脉 ERP，每5分钟拉一次。"
         : "数字来自星脉 ERP。";
     root.querySelector("#xm-hm-pop h3").textContent =
       "卡片设置 · " + (state.view === "team" ? "经理团队" : state.view === "chief" ? "主管/储备" : "公司");
@@ -1650,6 +1650,12 @@
     }
     return (person.visibleShops || []).indexOf(shopDisplayName(shop)) !== -1;
   }
+  function seriesOf(hourly, fallback) {
+    if (hourly && hourly.length) {
+      return hourly;
+    }
+    return fallback == null ? [] : [fallback, fallback];
+  }
   function liveFromErp(todayPack, yestPack, snapPack) {
     var live = blankLive();
     var todaySum = summaryFrom(todayPack);
@@ -1659,12 +1665,13 @@
     var yestPay = snap.yesterdayPayAmount != null ? snap.yesterdayPayAmount : yestSum.payAmount;
     var todayAd = todaySum.totalPromotionCost;
     var yestAd = yestSum.totalPromotionCost;
+    var hourly = (todayPack && todayPack.hourly) || (snapPack && snapPack.hourly) || {};
     live.hero = {
       label: "实时销售指数",
       value: fmtMoney(todayPay),
       delta: trendOf(todayPay, yestPay),
-      yesterday: yestPay == null ? [] : [yestPay, yestPay],
-      today: todayPay == null ? [] : [todayPay, todayPay]
+      yesterday: seriesOf(hourly.yesterdayPay, yestPay),
+      today: seriesOf(hourly.todayPay, todayPay)
     };
     var todayFee = todaySum.promotionRate != null ? todaySum.promotionRate : snap.promotionRate;
     var yestFee = yestSum.promotionRate;
@@ -1941,7 +1948,14 @@
       function shanghaiClock() {
         return new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
       }
-      function pullLive() {
+      function applyLive(todayPack, yestPack, snapPack) {
+        state.live = liveFromErp(todayPack, yestPack, snapPack);
+        state.shops = state.live.shops;
+        state.liveAt = shanghaiClock();
+        state.source = "xingmai-erp";
+        paint(root, state);
+      }
+      function pullLiveKpis() {
         var today = shanghaiYmd(0);
         var yest = shanghaiYmd(1);
         return Promise.all([
@@ -1949,17 +1963,30 @@
           fetchRangePack(yest, yest),
           fetchCatalogPack()
         ]).then(function (pack) {
-          if (dead) {
-            return;
+          if (!dead) {
+            applyLive(pack[0], pack[1], pack[2]);
           }
-          state.live = liveFromErp(pack[0], pack[1], pack[2]);
-          state.shops = state.live.shops;
-          state.liveAt = shanghaiClock();
-          state.source = "xingmai-erp";
-          paint(root, state);
         }).catch(function () {
           if (!dead) {
             paint(root, state);
+          }
+        });
+      }
+      function pullLive() {
+        return api("/api/home/erp-paid").then(function (data) {
+          if (dead) {
+            return;
+          }
+          if (data && data.ok && (data.summary || (data.records && data.records.length))) {
+            var todayPack = { records: data.records || [], summary: data.summary || {}, hourly: data.hourly };
+            var yestPack = { records: [], summary: data.yesterday || {}, hourly: data.hourly };
+            applyLive(todayPack, yestPack, todayPack);
+            return;
+          }
+          return pullLiveKpis();
+        }).catch(function () {
+          if (!dead) {
+            return pullLiveKpis();
           }
         });
       }

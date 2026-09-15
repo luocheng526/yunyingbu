@@ -2,6 +2,7 @@ import { Router } from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getHomeErpKpis } from "./erp-kpis.js";
+import { getHomeErpPaid } from "./erp-paid.js";
 
 const homeJsPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -28,6 +29,21 @@ export function homeRouter() {
       return res.status(Number(err.statusCode) || 502).json({
         ok: false,
         error: err.message || "星脉 ERP 调用失败"
+      });
+    }
+  });
+
+  router.get("/erp-paid", async (_req, res) => {
+    try {
+      const data = await getHomeErpPaid();
+      if (!data.ok) {
+        return res.status(503).json(data);
+      }
+      return res.json(data);
+    } catch (err) {
+      return res.status(Number(err.statusCode) || 502).json({
+        ok: false,
+        error: err.message || "星脉 ERP 实时付费调用失败"
       });
     }
   });
