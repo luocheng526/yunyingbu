@@ -139,6 +139,9 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.doesNotMatch(homeJs, /柱：分时费比/);
   assert.match(homeJs, /线：累计（23点=1-23点）/);
   assert.match(homeJs, /线：当天费比/);
+  assert.match(homeJs, /stroke="#91caff"/);
+  assert.match(homeJs, /stroke="#ffa39e"/);
+  assert.match(homeJs, /\.xm-hm-sales-chart \.xm-hm-line,\.xm-hm-live \.xm-hm-line\{[^}]*height:200px/);
   assert.match(homeJs, /function repeatHours/);
   assert.match(homeJs, /unit: src\.unit \|\| base\.unit/);
   assert.match(homeJs, /lineMode: src\.lineMode \|\| base\.lineMode/);
@@ -429,8 +432,8 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
   assert.doesNotMatch(html, /<circle/);
   assert.doesNotMatch(html, /xm-hm-bars/);
   assert.doesNotMatch(html, /xm-hm-col/);
-  const red = html.match(/stroke="#cf1322"[^>]*points="([^"]+)"/);
-  const blue = html.match(/stroke="#2f54eb"[^>]*points="([^"]+)"/);
+  const red = html.match(/stroke="#ffa39e"[^>]*points="([^"]+)"/);
+  const blue = html.match(/stroke="#91caff"[^>]*points="([^"]+)"/);
   assert.ok(red && blue);
   assert.equal(red[1].trim().split(/\s+/).length, 3);
   assert.equal(blue[1].trim().split(/\s+/).length, 24);
@@ -457,8 +460,8 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
   assert.match(liveHtml, /data-chart="sales"/);
   assert.doesNotMatch(liveHtml, /<circle/);
   assert.doesNotMatch(liveHtml, /xm-hm-col/);
-  const liveBlue = liveHtml.match(/stroke="#2f54eb"[^>]*points="([^"]+)"/);
-  const liveRed = liveHtml.match(/stroke="#cf1322"[^>]*points="([^"]+)"/);
+  const liveBlue = liveHtml.match(/stroke="#91caff"[^>]*points="([^"]+)"/);
+  const liveRed = liveHtml.match(/stroke="#ffa39e"[^>]*points="([^"]+)"/);
   assert.ok(liveBlue && liveRed);
   assert.equal(liveBlue[1].trim().split(/\s+/).length, 24);
   assert.equal(liveRed[1].trim().split(/\s+/).length, 3);
@@ -485,8 +488,8 @@ test("live sales chart keeps 24-hour axis and hides future today points", () => 
   const fns = new Function(homeJs.slice(start, end) + "return {compareLineHtml};")();
   const yest = Array.from({ length: 24 }, (_, i) => i + 1);
   const html = fns.compareLineHtml({ yesterday: yest, today: [10, 20, 30], hours: 24 });
-  const red = html.match(/stroke="#cf1322"[^>]*points="([^"]+)"/);
-  const blue = html.match(/stroke="#2f54eb"[^>]*points="([^"]+)"/);
+  const red = html.match(/stroke="#ffa39e"[^>]*points="([^"]+)"/);
+  const blue = html.match(/stroke="#91caff"[^>]*points="([^"]+)"/);
   assert.ok(red && blue);
   assert.equal(red[1].trim().split(/\s+/).length, 3);
   assert.equal(blue[1].trim().split(/\s+/).length, 24);

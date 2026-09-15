@@ -933,10 +933,10 @@
       " " +
       height +
       '" preserveAspectRatio="none">' +
-      (yestPts ? '<polyline fill="none" stroke="#2f54eb" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="' + yestPts + '"></polyline>' : "") +
-      (todayPts ? '<polyline fill="none" stroke="#cf1322" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="' + todayPts + '"></polyline>' : "") +
-      (drawDots && yest.length ? dots(yest, "#2f54eb") : "") +
-      (drawDots && today.length ? dots(today, "#cf1322") : "") +
+      (yestPts ? '<polyline fill="none" stroke="#91caff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" points="' + yestPts + '"></polyline>' : "") +
+      (todayPts ? '<polyline fill="none" stroke="#ffa39e" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" points="' + todayPts + '"></polyline>' : "") +
+      (drawDots && yest.length ? dots(yest, "#91caff") : "") +
+      (drawDots && today.length ? dots(today, "#ffa39e") : "") +
       (slots === 24 || slots === 48
         ? '<line class="xm-hm-line-guide" x1="0" y1="' +
           padTop +
@@ -961,7 +961,7 @@
       today: flat ? todayHour : cumHours(todayHour),
       hours: 24,
       noDots: true,
-      height: 268
+      height: 160
     };
   }
   function halfSalesChart(chart) {
@@ -973,7 +973,7 @@
       today: hasHalf ? cumHours(toHalfIncrements(todayHour)) : (chart && chart.today) || [],
       hours: hasHalf ? 48 : Number(chart && chart.hours) || 0,
       noDots: true,
-      height: 268
+      height: 160
     };
   }
   function hoursAttr(hours) {
@@ -1111,7 +1111,7 @@
       ".xm-hm-kpis-shell,.xm-hm-teams{padding:10px}" +
       ".xm-hm-sales{margin:0 0 10px}" +
       ".xm-hm-sales-chart{width:100%}" +
-      ".xm-hm-sales-chart .xm-hm-line,.xm-hm-live .xm-hm-line{display:block;width:100%;height:320px;cursor:crosshair}" +
+      ".xm-hm-sales-chart .xm-hm-line,.xm-hm-live .xm-hm-line{display:block;width:100%;height:200px;cursor:crosshair}" +
       ".xm-hm-chart-sub{margin:10px 0 0;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
       ".xm-hm-teams{display:flex;flex-direction:column;gap:10px;overflow-x:auto}" +
@@ -1178,8 +1178,8 @@
       ".xm-hm-chart{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:14px 16px 10px;min-width:0}" +
       ".xm-hm-legs{display:inline-flex;align-items:center;gap:10px;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-legs i{width:10px;height:10px;border-radius:50%;display:inline-block}" +
-      ".xm-hm-legs i.is-yest{background:#2f54eb}" +
-      ".xm-hm-legs i.is-today{background:#cf1322}" +
+      ".xm-hm-legs i.is-yest{background:#91caff}" +
+      ".xm-hm-legs i.is-today{background:#ffa39e}" +
       ".xm-hm-line{display:block;width:100%;height:180px;margin-top:8px}" +
       ".xm-hm-chart[data-hours] .xm-hm-line{cursor:crosshair}" +
       ".xm-hm-line-tip{position:fixed;z-index:20;display:none;box-sizing:border-box;min-width:168px;padding:8px 10px;background:#1f1f1f;color:#fff;border-radius:6px;font-size:12px;line-height:1.5;pointer-events:none}" +
@@ -1187,8 +1187,8 @@
       ".xm-hm-line-tip b{display:block;margin:0 0 6px;font-size:13px}" +
       ".xm-hm-line-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:4px}" +
       ".xm-hm-line-row i{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}" +
-      ".xm-hm-line-tip i.is-yest{background:#2f54eb}" +
-      ".xm-hm-line-tip i.is-today{background:#cf1322}" +
+      ".xm-hm-line-tip i.is-yest{background:#91caff}" +
+      ".xm-hm-line-tip i.is-today{background:#ffa39e}" +
       ".xm-hm-line-row em{font-style:normal;font-variant-numeric:tabular-nums}" +
       ".xm-hm-line-sub{padding:0 0 0 14px;color:#c0c4cc;font-size:11px;display:flex;justify-content:space-between;gap:12px}" +
       ".xm-hm-live-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;width:100%}" +
