@@ -229,7 +229,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov10";
+      link.href = "/data-pages.css?v=data-ov11";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -277,9 +277,11 @@
       ".ch-card .label{font-size:13px;line-height:22px;color:#8c8c8c;opacity:1}" +
       ".ch-card .value{margin-top:16px;font-size:28px;font-weight:700;line-height:1.3;letter-spacing:-.02em;color:#141414;font-variant-numeric:tabular-nums}" +
       ".ch-card .extra{margin-top:14px;font-size:12px;line-height:20px;color:#8c8c8c;opacity:1}" +
+      ".ch-metrics{align-items:stretch}" +
+      ".ch-metrics .ch-card{min-height:132px;height:100%;box-sizing:border-box}" +
       ".ch-hero .label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}" +
-      ".ch-hero .value{margin:16px 0 12px}" +
-      ".ch-hero .delta{margin:0 0 12px}" +
+      ".ch-hero .value{margin-top:16px}" +
+      ".ch-hero .delta{margin-top:14px;font-size:12px;line-height:20px}" +
       ".ch-clock{font-size:13px;color:#8c8c8c;opacity:1}";
     document.head.appendChild(style);
   }
@@ -307,14 +309,8 @@
     style.textContent =
       ".ch-hero .label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}" +
       ".ch-clock{font-variant-numeric:tabular-nums;font-size:12px;opacity:.55;letter-spacing:.04em}" +
-      ".ch-hero .value{margin:8px 0 6px}" +
-      ".ch-hero .delta{margin:0 0 6px;font-size:12px}" +
-      ".ch-hero .ch-spark{display:block;width:100%;height:72px;margin:0}" +
-      ".ch-axis{display:flex;justify-content:space-between;font-size:10px;opacity:.4;margin:2px 0 4px}" +
-      ".ch-legs{display:flex;align-items:center;gap:10px;font-size:11px;opacity:.7}" +
-      ".ch-legs i{width:8px;height:8px;border-radius:50%;display:inline-block}" +
-      ".ch-legs i.is-yest{background:#2f54eb}" +
-      ".ch-legs i.is-today{background:#cf1322}";
+      ".ch-hero .value{margin-top:16px}" +
+      ".ch-hero .delta{margin-top:14px;font-size:12px;line-height:20px}";
     document.head.appendChild(style);
   }
 
@@ -920,102 +916,6 @@
     return ensureHeroSeries(hero);
   }
 
-  function compareSpark() {
-    return '<svg class="ch-spark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 72" preserveAspectRatio="none" aria-hidden="true"></svg>';
-  }
-
-  function paintSparkSvg(svg, hero) {
-    if (!svg) {
-      return;
-    }
-    ensureHeroSeries(hero);
-    const yest = asSeries(hero && hero.yesterday);
-    const today = asSeries(hero && hero.today);
-    const w = 240;
-    const h = 72;
-    const padX = 4;
-    const padY = 8;
-    let max = 1;
-    yest.concat(today).forEach(function (n) {
-      if (n > max) {
-        max = n;
-      }
-    });
-    const steps = 23;
-    const ns = "http://www.w3.org/2000/svg";
-    function xy(i, n) {
-      return {
-        x: padX + (i / steps) * (w - padX * 2),
-        y: h - padY - (n / max) * (h - padY * 2)
-      };
-    }
-    function add(name, attrs) {
-      const el = document.createElementNS(ns, name);
-      Object.keys(attrs).forEach(function (key) {
-        el.setAttribute(key, attrs[key]);
-      });
-      svg.appendChild(el);
-      return el;
-    }
-    function linePts(list) {
-      return list
-        .map(function (n, i) {
-          const p = xy(i, n);
-          return p.x.toFixed(1) + "," + p.y.toFixed(1);
-        })
-        .join(" ");
-    }
-    function areaD(list) {
-      const first = xy(0, list[0]);
-      const last = xy(list.length - 1, list[list.length - 1]);
-      const base = (h - padY).toFixed(1);
-      const line = list
-        .map(function (n, i) {
-          const p = xy(i, n);
-          return p.x.toFixed(1) + " " + p.y.toFixed(1);
-        })
-        .join(" L ");
-      return "M " + first.x.toFixed(1) + " " + base + " L " + line + " L " + last.x.toFixed(1) + " " + base + " Z";
-    }
-    while (svg.firstChild) {
-      svg.removeChild(svg.firstChild);
-    }
-    if (yest.length) {
-      add("path", { fill: "#2f54eb", "fill-opacity": "0.12", d: areaD(yest) });
-    }
-    if (today.length) {
-      add("path", { fill: "#cf1322", "fill-opacity": "0.14", d: areaD(today) });
-    }
-    if (yest.length) {
-      add("polyline", {
-        fill: "none",
-        stroke: "#2f54eb",
-        "stroke-width": "2",
-        "stroke-linejoin": "round",
-        "stroke-linecap": "round",
-        points: linePts(yest)
-      });
-    }
-    if (today.length) {
-      add("polyline", {
-        fill: "none",
-        stroke: "#cf1322",
-        "stroke-width": "2",
-        "stroke-linejoin": "round",
-        "stroke-linecap": "round",
-        points: linePts(today)
-      });
-    }
-    if (yest.length) {
-      const p = xy(yest.length - 1, yest[yest.length - 1]);
-      add("circle", { cx: p.x.toFixed(1), cy: p.y.toFixed(1), r: "2.6", fill: "#2f54eb" });
-    }
-    if (today.length) {
-      const p = xy(today.length - 1, today[today.length - 1]);
-      add("circle", { cx: p.x.toFixed(1), cy: p.y.toFixed(1), r: "2.6", fill: "#cf1322" });
-    }
-  }
-
   function nameCell(row) {
     const kind = row.kind || "";
     const mark =
@@ -1546,17 +1446,13 @@
         escapeHtml(String(Math.abs(Number(hero.delta || 0)).toFixed(2))) +
         "% " +
         (down ? "↓" : "↑") +
-        "</div>" +
-        compareSpark(hero) +
-        '<div class="ch-axis"><span>00</span><span>12</span><span>23</span></div>' +
-        '<div class="ch-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</div></article>' +
+        "</div></article>" +
         cards +
         "</div>" +
         '<div class="ch-tabs">' +
         tabs +
         "</div>" +
         lists;
-      paintSparkSvg(board.querySelector(".ch-spark"), hero);
       syncCalPop();
       if (state.pickOpen) {
         paintPicker();
