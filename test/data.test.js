@@ -209,7 +209,10 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /60 \* 60 \* 1000/);
     assert.match(overviewJs.text, /xm-data-shops-metrics-v1/);
     assert.match(overviewJs.text, /overlaySharedShopMetrics/);
-    assert.match(overviewJs.text, /data-ov15/);
+    assert.match(overviewJs.text, /data-ov16/);
+    assert.match(overviewJs.text, /points: linePts\(yest\)/);
+    assert.match(overviewJs.text, /points: linePts\(today\)/);
+    assert.doesNotMatch(overviewJs.text, /linePtsRange\(yest, join/);
     assert.match(overviewJs.text, /00<\/span>/);
     assert.match(overviewJs.text, /fmtHeroMoney/);
     assert.match(overviewJs.text, /xm-data-ov-card-order/);
@@ -567,7 +570,7 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /\/data\/paid/);
   assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
   assert.match(dataMod, /restore-v1/);
-  assert.match(dataMod, /data-overview\.js\?v=data-ov15/);
+  assert.match(dataMod, /data-overview\.js\?v=data-ov16/);
   assert.match(dataMod, /data-shops\.js\?v=shop-wide6/);
   assert.match(css, /ch-pill/);
   assert.match(css, /\.ch-card \.value[\s\S]*font-size: 28px/);

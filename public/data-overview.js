@@ -312,7 +312,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov15";
+      link.href = "/data-pages.css?v=data-ov16";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -1097,7 +1097,6 @@
     const steps = 23;
     const nowT = Math.min(23, shanghaiHour() + shanghaiMinute() / 60);
     const nowX = padX + (nowT / steps) * (w - padX * 2);
-    const join = Math.max(0, Math.min(today.length ? today.length - 1 : Math.round(nowT), yest.length ? yest.length - 1 : 0));
     const ns = "http://www.w3.org/2000/svg";
     function xy(i, n) {
       return {
@@ -1113,14 +1112,13 @@
       svg.appendChild(el);
       return el;
     }
-    function linePtsRange(list, from, to) {
-      const out = [];
-      let i = from;
-      for (i = from; i <= to && i < list.length; i += 1) {
-        const p = xy(i, list[i]);
-        out.push(p.x.toFixed(1) + "," + p.y.toFixed(1));
-      }
-      return out.join(" ");
+    function linePts(list) {
+      return list
+        .map(function (n, i) {
+          const p = xy(i, n);
+          return p.x.toFixed(1) + "," + p.y.toFixed(1);
+        })
+        .join(" ");
     }
     while (svg.firstChild) {
       svg.removeChild(svg.firstChild);
@@ -1133,14 +1131,14 @@
       height: String(h),
       fill: "#f0f5ff"
     });
-    if (yest.length > join) {
+    if (yest.length) {
       add("polyline", {
         fill: "none",
         stroke: "#2f54eb",
         "stroke-width": "2",
         "stroke-linejoin": "round",
         "stroke-linecap": "round",
-        points: linePtsRange(yest, join, yest.length - 1)
+        points: linePts(yest)
       });
     }
     if (today.length) {
@@ -1150,7 +1148,7 @@
         "stroke-width": "2",
         "stroke-linejoin": "round",
         "stroke-linecap": "round",
-        points: linePtsRange(today, 0, today.length - 1)
+        points: linePts(today)
       });
     }
   }
