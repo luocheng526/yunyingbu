@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.506-home-erplive */
+/* xm-module-home 0.1.512-home-setpop */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1000,7 +1000,7 @@
       ".xm-hm-cup.gold{background:#f5a623}" +
       ".xm-hm-cup.silver{background:#8c8c8c}" +
       ".xm-hm-cup.bronze{background:#d46b08}" +
-      ".xm-hm-pop{position:absolute;top:48px;left:10px;z-index:3;width:280px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:10px}" +
+      ".xm-hm-pop{position:absolute;top:0;left:0;z-index:8;width:280px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:10px}" +
       ".xm-hm-pop[hidden]{display:none}" +
       ".xm-hm-pop h3{margin:0 0 8px;font-size:13px}" +
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
@@ -1038,6 +1038,35 @@
       '</div><p class="xm-hm-note" id="xm-hm-note">数字来自星脉 ERP。</p></div>'
     );
   }
+  function visibleSetBtn(root) {
+    var list = root.querySelectorAll(".xm-hm-set");
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].offsetParent) {
+        return list[i];
+      }
+    }
+    return null;
+  }
+  function placeCardPop(root, btn) {
+    var pop = root.querySelector("#xm-hm-pop");
+    var box = root.querySelector("#xm-hm");
+    btn = btn || visibleSetBtn(root);
+    if (!pop || pop.hidden || !btn || !box) {
+      return;
+    }
+    var b = btn.getBoundingClientRect();
+    var p = box.getBoundingClientRect();
+    var top = b.bottom - p.top + 8;
+    var left = b.right - p.left - pop.offsetWidth;
+    if (left < 8) {
+      left = 8;
+    }
+    if (left + pop.offsetWidth > p.width - 8) {
+      left = Math.max(8, p.width - pop.offsetWidth - 8);
+    }
+    pop.style.top = Math.round(top) + "px";
+    pop.style.left = Math.round(left) + "px";
+  }
   function paint(root, state) {
     var board = root.querySelector("#xm-hm");
     viewKey = state.view || "company";
@@ -1058,7 +1087,7 @@
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
-    board.setAttribute("data-hm-js", "0.1.506-home-erplive");
+    board.setAttribute("data-hm-js", "0.1.512-home-setpop");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1121,6 +1150,10 @@
         );
       })
       .join("");
+    var pop = root.querySelector("#xm-hm-pop");
+    if (pop && !pop.hidden) {
+      placeCardPop(root);
+    }
   }
   function api(path) {
     return fetch(path, { credentials: "same-origin", headers: { Accept: "application/json" } }).then(function (res) {
@@ -2148,7 +2181,11 @@
         if (event.target.closest(".xm-hm-set")) {
           viewKey = state.view || "company";
           var pop = root.querySelector("#xm-hm-pop");
+          var setBtn = event.target.closest(".xm-hm-set");
           pop.hidden = !pop.hidden;
+          if (!pop.hidden) {
+            placeCardPop(root, setBtn);
+          }
           closeCal();
           return;
         }
@@ -2187,6 +2224,7 @@
         hideCardTip();
       }
       function onTipScroll() {
+        placeCardPop(root);
         if (!cardTipAnchor || !cardTipEl || !cardTipEl.classList.contains("is-on")) {
           return;
         }

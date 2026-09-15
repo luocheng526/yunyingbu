@@ -144,6 +144,10 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /xm-hm-kpis-shell/);
   assert.doesNotMatch(homeJs, /xm-hm-views">[\s\S]{0,120}卡片设置/);
   assert.doesNotMatch(homeJs, /<th>运营<\/th><th>实时销售额<\/th>/);
+  assert.match(homeJs, /function placeCardPop/);
+  assert.match(homeJs, /function visibleSetBtn/);
+  assert.match(homeJs, /b\.bottom - p\.top \+ 8/);
+  assert.doesNotMatch(homeJs, /\.xm-hm-pop\{position:absolute;top:48px;left:10px/);
 });
 
 test("shop column drag locks every column and only changes the grabbed one", () => {
@@ -317,4 +321,28 @@ test("card help uses a body-level tooltip so overflow cannot clip it", () => {
   assert.doesNotMatch(homeJs, /<i title="/);
   assert.doesNotMatch(homeJs, /content:attr\(data-tip\)/);
   assert.match(homeJs, /&#10;/);
+});
+
+test("card settings pop sits under the clicked 卡片设置 button", () => {
+  const start = homeJs.indexOf("function visibleSetBtn");
+  const end = homeJs.indexOf("function paint");
+  assert.ok(start !== -1 && end > start);
+  const fns = new Function(homeJs.slice(start, end) + "return {placeCardPop};")();
+  const pop = { hidden: false, offsetWidth: 280, style: {} };
+  const btn = { getBoundingClientRect: () => ({ bottom: 120, right: 900, top: 100, left: 840 }) };
+  const box = { getBoundingClientRect: () => ({ top: 20, left: 200, width: 1000 }) };
+  const root = {
+    querySelector(sel) {
+      if (sel === "#xm-hm-pop") {
+        return pop;
+      }
+      if (sel === "#xm-hm") {
+        return box;
+      }
+      return null;
+    }
+  };
+  fns.placeCardPop(root, btn);
+  assert.equal(pop.style.top, "108px");
+  assert.equal(pop.style.left, "420px");
 });
