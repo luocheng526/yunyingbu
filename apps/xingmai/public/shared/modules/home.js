@@ -20,11 +20,9 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;");
   }
-
   function ymdFmt(tz, date) {
     return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
   }
-
   function shanghaiYmd(daysAgo) {
     var today = ymdFmt("Asia/Shanghai", new Date());
     var shift = Number(daysAgo) || 0;
@@ -34,7 +32,6 @@
     var parts = today.split("-").map(Number);
     return ymdFmt("UTC", new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] - shift)));
   }
-
   function rangeDates(range) {
     if (range === "month") {
       var today = shanghaiYmd(0);
@@ -53,24 +50,19 @@
     var y = shanghaiYmd(1);
     return { from: y, to: y };
   }
-
   function parseYmd(ymd) {
     var p = String(ymd || "").split("-");
     return new Date(Date.UTC(Number(p[0]) || 1970, (Number(p[1]) || 1) - 1, Number(p[2]) || 1));
   }
-
   function ymdFromUtc(date) {
     return ymdFmt("UTC", date);
   }
-
   function diffYmd(from, to) {
     return Math.round((parseYmd(to) - parseYmd(from)) / 86400000);
   }
-
   function withinDays(from, to, maxInclusive) {
     return Math.abs(diffYmd(from, to)) + 1 <= (maxInclusive || 30);
   }
-
   function formatDashDate(ymd) {
     var p = String(ymd || "").split("-");
     if (p.length < 3 || !p[0]) {
@@ -78,23 +70,19 @@
     }
     return ("0000" + Number(p[0])).slice(-4) + "-" + ("0" + Number(p[1])).slice(-2) + "-" + ("0" + Number(p[2])).slice(-2);
   }
-
   function shiftMonth(ym, delta) {
     var p = String(ym || "").split("-");
     var d = new Date(Date.UTC(Number(p[0]) || 1970, (Number(p[1]) || 1) - 1 + (Number(delta) || 0), 1));
     return ymdFromUtc(d).slice(0, 7);
   }
-
   function monthTitle(ym) {
     var p = String(ym || "").split("-");
     return Number(p[0]) + "年 " + Number(p[1]) + "月";
   }
-
   function monthLastDay(ym) {
     var first = parseYmd(ym + "-01");
     return new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
   }
-
   function calDayClass(ymd, opts, other) {
     var start = opts.start;
     var end = opts.end || opts.hover;
@@ -124,18 +112,14 @@
     }
     return cls;
   }
-
   function tipAttr(text) {
     return escapeHtml(text || "指标").replaceAll("\n", "&#10;");
   }
-
   var cardTipEl = null;
   var cardTipAnchor = null;
-
   function cardTipText(el) {
     return String((el && el.getAttribute("data-tip")) || "").replace(/&#10;/g, "\n");
   }
-
   function cardTipNode() {
     if (cardTipEl && document.body.contains(cardTipEl)) {
       return cardTipEl;
@@ -146,7 +130,6 @@
     document.body.appendChild(cardTipEl);
     return cardTipEl;
   }
-
   function hideCardTip() {
     cardTipAnchor = null;
     if (cardTipEl) {
@@ -154,7 +137,6 @@
       cardTipEl.textContent = "";
     }
   }
-
   function placeCardTip(anchor) {
     var tip = cardTipNode();
     var box = anchor.getBoundingClientRect();
@@ -168,7 +150,6 @@
     tip.style.left = Math.round(left) + "px";
     tip.style.top = Math.round(top) + "px";
   }
-
   function showCardTip(anchor) {
     var text = cardTipText(anchor);
     if (!text) {
@@ -178,11 +159,9 @@
     cardTipNode().textContent = text;
     placeCardTip(anchor);
   }
-
   function helpFromEvent(event) {
     return event.target && event.target.closest ? event.target.closest(".xm-hm-help") : null;
   }
-
   function calMonthHtml(ym, opts, side) {
     var first = parseYmd(ym + "-01");
     var pad = (first.getUTCDay() + 6) % 7;
@@ -234,7 +213,6 @@
     });
     return html + "</div></div>";
   }
-
   function calPanelHtml(cursor, opts) {
     return (
       '<div class="xm-hm-cal-months">' +
@@ -243,7 +221,6 @@
       "</div>"
     );
   }
-
   function readUser() {
     if (window.__xmBootUser && (window.__xmBootUser.displayName || window.__xmBootUser.username)) {
       return window.__xmBootUser;
@@ -256,7 +233,6 @@
     } catch (_err) {}
     return null;
   }
-
   var viewKey = "company";
   function viewStore(kind) {
     return viewKey === "team" || viewKey === "chief"
@@ -273,7 +249,6 @@
       return [];
     }
   }
-
   function teamHidden(hide) {
     var out = (hide || []).slice();
     try {
@@ -283,13 +258,11 @@
     } catch (_err) {}
     return out;
   }
-
   function saveHidden(list) {
     try {
       localStorage.setItem(viewStore("hide"), JSON.stringify(list));
     } catch (_err) {}
   }
-
   function goneTeams() {
     try {
       return viewKey === "team" || viewKey === "chief" ? JSON.parse(localStorage.getItem(viewStore("gone")) || "[]") || [] : [];
@@ -297,19 +270,16 @@
       return [];
     }
   }
-
   function saveGone(list) {
     try {
       if (viewKey === "team" || viewKey === "chief") localStorage.setItem(viewStore("gone"), JSON.stringify(list || []));
     } catch (_err) {}
   }
-
   function defaultCardKeys() {
     return COMPANY_CARD_DEFS.map(function (def) {
       return def.key;
     });
   }
-
   function cardOrder() {
     var defs = defaultCardKeys();
     var saved = [];
@@ -336,13 +306,11 @@
     });
     return out;
   }
-
   function saveCardOrder(keys) {
     try {
       localStorage.setItem(viewStore("order"), JSON.stringify(cardOrderFrom(keys)));
     } catch (_err) {}
   }
-
   function cardOrderFrom(keys) {
     var defs = defaultCardKeys();
     var seen = {};
@@ -360,7 +328,6 @@
     });
     return out;
   }
-
   function applyCardMove(fromKey, toKey, visibleOnly) {
     var full = cardOrder();
     var hide = hiddenCards();
@@ -387,7 +354,6 @@
       return seq[i++];
     });
   }
-
   function arrangeCards(cards) {
     var map = {};
     (cards || []).forEach(function (card) {
@@ -401,11 +367,9 @@
       })
       .filter(Boolean);
   }
-
   function colOrderKey(simple) {
     return simple ? "xm-home-chief-cols" : "xm-home-mgr-cols";
   }
-
   function orderTeams(teams, simple) {
     var list = teams || [];
     var saved = [];
@@ -434,7 +398,6 @@
     });
     return out;
   }
-
   function saveTeamCols(fromName, toName, simple) {
     var names = Array.prototype.map.call(document.querySelectorAll(".xm-hm-team[data-name]"), function (el) {
       return el.getAttribute("data-name");
@@ -450,7 +413,6 @@
       localStorage.setItem(colOrderKey(simple), JSON.stringify(names));
     } catch (_err) {}
   }
-
   function trendHtml(trend) {
     if (trend == null || trend === "") {
       return "";
@@ -467,13 +429,11 @@
       "%</div>"
     );
   }
-
   function rankMark(index) {
     return index < 3
       ? '<b class="xm-hm-cup ' + ["gold", "silver", "bronze"][index] + '">' + (index + 1) + "</b>"
       : "<span>" + (index + 1) + "</span>";
   }
-
   function cardHtml(card, teamKey) {
     return (
       '<article class="xm-hm-card" data-card="' +
@@ -493,13 +453,10 @@
       "</article>"
     );
   }
-
   function shopColLabel(def) {
     return String(def.label || "").replace(/\s*\([^)]*\)\s*/g, "").replace(/\s+/g, "");
   }
-
   var SHOP_CARD_KEYS = ["adRatio", "profit", "grossMargin", "refundRate", "netGoodsCost"];
-
   function shopCols() {
     var map = {};
     COMPANY_CARD_DEFS.forEach(function (def) {
@@ -509,15 +466,12 @@
       return map[key];
     }).filter(Boolean);
   }
-
   var shopSort = { key: "", dir: "desc" };
   var shopColW = {};
-
   function colKey(table) {
     var box = table && table.closest && table.closest("[data-team]");
     return box ? box.getAttribute("data-team") || "t" : "t";
   }
-
   function applyColW(table, idx, w, snap) {
     if (!table || !table.rows || !table.rows[0]) return;
     var key = colKey(table);
@@ -541,17 +495,14 @@
     }
     if (sum) table.style.width = table.style.minWidth = table.style.maxWidth = sum + "px";
   }
-
   function restoreShopColW(root) {
     Array.prototype.forEach.call(root.querySelectorAll(".xm-hm-teams .xm-hm-table"), function (table) {
       if (shopColW[colKey(table)]) applyColW(table);
     });
   }
-
   function metricSortNum(text) {
     return text && text !== "—" ? asNum(String(text).replace(/%/g, "")) : null;
   }
-
   function sortedShops(shops, sort) {
     var list = (shops || []).slice();
     var key = sort && sort.key;
@@ -576,7 +527,6 @@
     });
     return list;
   }
-
   function shopColHead(def, sort) {
     var k = def.key;
     var on = sort && sort.key === k ? sort.dir : "";
@@ -596,7 +546,6 @@
       '" data-dir="desc" aria-label="降序">▼</button></span></span></th>'
     );
   }
-
   function shopMetricsFrom(row) {
     var out = {};
     companyCardsFrom(row ? withRates(row) : {}, {}).forEach(function (card) {
@@ -604,7 +553,6 @@
     });
     return out;
   }
-
   function shopRowHtml(row, index, cols) {
     var metrics = row.metrics || {};
     return (
@@ -623,7 +571,6 @@
       "</td></tr>"
     );
   }
-
   function teamHeadHtml(team) {
     return (
       '<header class="xm-hm-team-head" data-team="' +
@@ -635,7 +582,6 @@
       '" title="删除此团队">×</button></header>'
     );
   }
-
   function teamShopsHtml(team, simple) {
     var shops = sortedShops(team.shops || [], simple ? { key: "", dir: "desc" } : shopSort);
     if (simple) {
@@ -677,7 +623,6 @@
       "</tbody></table></div>"
     );
   }
-
   function teamBlockHtml(team, hide, simple) {
     var cards = (team.cards || []).filter(function (card) {
       return hide.indexOf(card.key) === -1;
@@ -700,7 +645,6 @@
       "</section>"
     );
   }
-
   function teamsCompareHtml(teams, hide, simple) {
     var gone = goneTeams();
     var list = orderTeams(teams && teams.length ? teams : simple ? [] : blankTeams(), simple).filter(function (team) {
@@ -716,12 +660,10 @@
       "</div>"
     );
   }
-
   function seesAllChiefs(user) {
     user = user || {};
     return /超级|管理员|经理|全平台/.test(String(user.role || "") + String(user.title || "") + String(user.dataScope || ""));
   }
-
   function filterOwnChiefs(teams, user) {
     teams = teams || [];
     if (seesAllChiefs(user)) {
@@ -734,7 +676,6 @@
         })
       : teams;
   }
-
   function standItemHtml(row, place, unit) {
     var rank = place === 1 ? "01" : place === 2 ? "02" : "03";
     return (
@@ -753,7 +694,6 @@
       "</small></div>"
     );
   }
-
   function podiumColumnHtml(column, unit) {
     var rows = column.rows || [];
     var first = rows[0] || { name: "—", amount: "—" };
@@ -785,7 +725,6 @@
       "</ol></article>"
     );
   }
-
   function ladderHtml(ladder) {
     var unit = ladder.unit || "指数";
     return (
@@ -802,9 +741,7 @@
       "</div></section>"
     );
   }
-
   var LIVE_CARD_KEYS = ["ad", "roi", "livePay", "livePaid"];
-
   function pickLiveCards(cards) {
     var map = {};
     (cards || []).forEach(function (card) {
@@ -815,7 +752,6 @@
       return map[key] || blank.filter(function (card) { return card.key === key; })[0];
     }).filter(Boolean);
   }
-
   function readChart(chart, fallback) {
     var src = chart || {};
     var base = fallback || {};
@@ -827,7 +763,6 @@
       today: src.today && src.today.length ? src.today : src.spark && src.spark.length ? src.spark : base.today
     };
   }
-
   function compareLineHtml(chart) {
     var width = 640;
     var height = 168;
@@ -868,7 +803,6 @@
       "</svg>"
     );
   }
-
   function liveChartHtml(chart) {
     var down = Number(chart && chart.delta) < 0;
     return (
@@ -887,7 +821,6 @@
       "</article>"
     );
   }
-
   function liveShopRowHtml(row, index) {
     return (
       "<tr><td>" +
@@ -909,7 +842,6 @@
       "</td></tr>"
     );
   }
-
   function liveCardHtml(card) {
     return (
       '<article class="xm-hm-card"><div class="xm-hm-card-head"><span>' +
@@ -921,7 +853,6 @@
       "</article>"
     );
   }
-
   function cssText() {
     return (
       "html:has(#xm-hm),html:has(#xm-hm) body{height:100%!important;max-height:100%!important;overflow:hidden!important}" +
@@ -1072,11 +1003,10 @@
       ".xm-hm-pop h3{margin:0 0 8px;font-size:13px}" +
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{margin:8px 0 0;color:var(--xm-muted);font-size:12px}" +
-      "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:1fr}}" +
+      "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm.is-chief .xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:1fr}}" +
       "@media (max-width:700px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts,.xm-hm-team-kpis{grid-template-columns:1fr}.xm-hm-team-head{flex-direction:column}.xm-hm-cal-months{flex-direction:column}}"
     );
   }
-
   function frameHtml() {
     var viewBtns = VIEWS.map(function (item) {
       return '<button type="button" data-view="' + item.key + '">' + item.label + "</button>";
@@ -1107,7 +1037,6 @@
       '</div><p class="xm-hm-note" id="xm-hm-note">数字来自星脉 ERP。</p></div>'
     );
   }
-
   function paint(root, state) {
     var board = root.querySelector("#xm-hm");
     viewKey = state.view || "company";
@@ -1192,7 +1121,6 @@
       })
       .join("");
   }
-
   function api(path) {
     return fetch(path, { credentials: "same-origin", headers: { Accept: "application/json" } }).then(function (res) {
       if (res.status === 401) {
@@ -1209,7 +1137,6 @@
       return null;
     });
   }
-
   var COMPANY_CARD_DEFS = [
     { key: "payAmount", label: "支付金额 (支付)", accent: true, field: "payAmount", kind: "money", tip: "按支付时间统计的订单金额(包含无效单、代发单)" },
     { key: "adCost", label: "推广花费 (支付预估)", field: "totalPromotionCost", kind: "money", tip: "SPU推广费用" },
@@ -1278,7 +1205,6 @@
       tip: "净货品成本占支付金额的比例（按支付时间统计）\n计算公式：净货款成本（支付）/支付金额（支付）*100%"
     }
   ];
-
   function asNum(value) {
     if (value == null || value === "" || value === "—") {
       return null;
@@ -1286,16 +1212,13 @@
     var n = Number(String(value).replace(/,/g, ""));
     return isFinite(n) ? n : null;
   }
-
   function fmtMoney(value) {
     return fmtInt(value);
   }
-
   function fmtInt(value) {
     var n = asNum(value);
     return n == null ? "—" : Math.round(n).toLocaleString("en-US");
   }
-
   function fmtRate(value) {
     var n = asNum(value);
     if (n == null) {
@@ -1306,7 +1229,6 @@
     }
     return Math.round(n) + "%";
   }
-
   function fmtRoi(pay, ad) {
     var p = asNum(pay);
     var a = asNum(ad);
@@ -1315,7 +1237,6 @@
     }
     return String(Math.round(p / a));
   }
-
   function trendOf(cur, prev) {
     var c = asNum(cur);
     var p = asNum(prev);
@@ -1324,7 +1245,6 @@
     }
     return ((c - p) / Math.abs(p)) * 100;
   }
-
   function sumField(rows, key) {
     var total = 0;
     var ok = false;
@@ -1337,7 +1257,6 @@
     });
     return ok ? total : null;
   }
-
   function withRates(sum) {
     var next = {
       payAmount: sum.payAmount,
@@ -1384,9 +1303,7 @@
     }
     return next;
   }
-
   var SUM_ADD = ["payAmount", "totalPromotionCost", "refundAmount", "profit", "orderCount", "netOrderCount", "todayPayAmount", "yesterdayPayAmount", "platformFee", "saleFee", "goodsCost", "invalidAmount", "jdOrders", "netSkuNum", "netGoodsCost"];
-
   function sumPack(rows) {
     var out = {};
     SUM_ADD.forEach(function (key) {
@@ -1394,14 +1311,12 @@
     });
     return withRates(out);
   }
-
   function summaryFrom(pack) {
     if (pack && pack.summary && pack.summary.payAmount != null) {
       return withRates(pack.summary);
     }
     return sumPack(pack && pack.records);
   }
-
   function mergeSummary(primary, extra) {
     var out = withRates(primary || {});
     var src = extra || {};
@@ -1412,13 +1327,11 @@
     });
     return withRates(out);
   }
-
   function blankCompanyCards() {
     return COMPANY_CARD_DEFS.map(function (def) {
       return { key: def.key, label: def.label, value: "—", accent: !!def.accent, trend: 0, tip: def.tip || "" };
     });
   }
-
   function companyCardsFrom(sum, prev) {
     sum = sum || {};
     prev = prev || {};
@@ -1436,7 +1349,6 @@
       return { key: def.key, label: def.label, value: value, accent: !!def.accent, trend: trendOf(cur, old), tip: def.tip || "" };
     });
   }
-
   function blankLive() {
     return {
       title: "实时看板",
@@ -1452,11 +1364,9 @@
       shops: []
     };
   }
-
   function blankTeams() {
     return blankRoleTeams("经理");
   }
-
   function blankRoleTeams(role) {
     if (role === "主管") {
       return [{ key: "chief", name: "主管", cards: blankCompanyCards(), shops: [] }];
@@ -1466,7 +1376,6 @@
       { key: "han", name: "韩梦凯", cards: blankCompanyCards(), shops: [] }
     ];
   }
-
   function blankLadders() {
     var cols = [
       { title: "运营排行榜", rows: [] },
@@ -1480,7 +1389,6 @@
       }) }
     ];
   }
-
   function erpQuery(from, to) {
     return (
       "payTimeStart=" +
@@ -1489,7 +1397,6 @@
       encodeURIComponent(to + " 23:59:59")
     );
   }
-
   function shiftYmd(ymd, days) {
     var parts = String(ymd || "").split("-").map(Number);
     return new Intl.DateTimeFormat("en-CA", {
@@ -1499,7 +1406,6 @@
       day: "2-digit"
     }).format(new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + days)));
   }
-
   function previousDates(from, to) {
     var start = new Date(from + "T00:00:00+08:00").getTime();
     var end = new Date(to + "T00:00:00+08:00").getTime();
@@ -1507,7 +1413,6 @@
     var prevTo = shiftYmd(from, -1);
     return { from: shiftYmd(prevTo, -(days - 1)), to: prevTo };
   }
-
   function uniqShops(records) {
     var seen = {};
     return (records || []).filter(function (row) {
@@ -1519,7 +1424,6 @@
       return true;
     });
   }
-
   function fetchShopPages(qs) {
     var acc = [];
     var summary = null;
@@ -1545,16 +1449,13 @@
     }
     return page(1);
   }
-
   function normShopId(value) {
     var id = String(value == null ? "" : value).trim();
     return id;
   }
-
   function erpRecordId(row) {
     return normShopId(row && (row.shopId || row.id));
   }
-
   function withShopIds(records) {
     return (records || []).map(function (row) {
       var id = erpRecordId(row);
@@ -1564,7 +1465,6 @@
       return Object.assign({}, row, { shopId: id });
     });
   }
-
   function summaryFromOverview(data) {
     var sum = {};
     ((data && data.cards) || []).forEach(function (card) {
@@ -1580,7 +1480,6 @@
     }
     return withRates(sum);
   }
-
   function fetchOverviewPack(from, to) {
     return api("/api/data/overview?" + erpQuery(from, to)).then(function (data) {
       if (!data || !data.ok) {
@@ -1592,7 +1491,6 @@
       };
     });
   }
-
   function fetchCatalogPack() {
     return api("/api/data/shop-options").then(function (data) {
       var records = ((data && data.records) || []).map(function (row) {
@@ -1612,9 +1510,7 @@
       });
     });
   }
-
   var packMemo = {};
-
   function fetchRangePack(from, to) {
     var key = String(from) + "|" + String(to);
     var now = Date.now();
@@ -1669,7 +1565,6 @@
     });
     return promise;
   }
-
   function mapByShopId(records) {
     var map = {};
     (records || []).forEach(function (row) {
@@ -1680,11 +1575,9 @@
     });
     return map;
   }
-
   function shopDisplayName(shop) {
     return (shop && (shop.storeName || shop.name || shop.shopName)) || "—";
   }
-
   function shopErpId(shop) {
     if (!shop) {
       return "";
@@ -1700,11 +1593,9 @@
     var shopId = normShopId(shop.shopId);
     return shopId && shopId !== String(shop.id == null ? "" : shop.id) ? shopId : "";
   }
-
   function normShopName(value) {
     return String(value == null ? "" : value).replace(/\s+/g, "").toLowerCase();
   }
-
   function mapByShopName(records) {
     var map = {};
     (records || []).forEach(function (row) {
@@ -1717,7 +1608,6 @@
     });
     return map;
   }
-
   function resolveErpId(shop, catalogByName) {
     var id = shopErpId(shop);
     if (id) {
@@ -1730,7 +1620,6 @@
     }
     return normShopId(hit.shopId || hit.id);
   }
-
   function dutyShopsFrom(orgPack, peopleShops) {
     if (orgPack && Object.prototype.toString.call(orgPack.stores) === "[object Array]") {
       return orgPack.stores.filter(function (row) {
@@ -1741,7 +1630,6 @@
       return shop && shop.kind !== "店群";
     });
   }
-
   function personOwnsShop(person, shop) {
     if (!person || !shop) {
       return false;
@@ -1761,7 +1649,6 @@
     }
     return (person.visibleShops || []).indexOf(shopDisplayName(shop)) !== -1;
   }
-
   function liveFromErp(todayPack, yestPack, snapPack) {
     var live = blankLive();
     var todaySum = summaryFrom(todayPack);
@@ -1814,7 +1701,6 @@
     live.summary = { channels: 1, shops: live.shops.length };
     return live;
   }
-
   function ownerOfShop(shopMeta, grants) {
     if (!shopMeta) {
       return "—";
@@ -1827,7 +1713,6 @@
     })[0];
     return (op || hit[0] || {}).personName || "—";
   }
-
   function teamPredicate(name) {
     return function (shop) {
       if (String(shop.manager || "").trim() === name) {
@@ -1843,7 +1728,6 @@
       return text.indexOf(name) !== -1;
     };
   }
-
   function teamLeadNames(people, dutyShops, role) {
     var seen = {};
     var names = [];
@@ -1890,7 +1774,6 @@
     }
     return names;
   }
-
   function shopOnRoleTeam(shop, name, role) {
     if (!shop || !name) {
       return false;
@@ -1902,7 +1785,6 @@
     var op = String(shop.operator || "").trim();
     return String(shop.supervisor || "").trim() === name || (asst === name && asst !== op);
   }
-
   function buildTeams(dutyShops, grants, rangePack, prevPack, catalogPack, people, role) {
     var erp = mapByShopId(rangePack && rangePack.records);
     var prevErp = mapByShopId(prevPack && prevPack.records);
@@ -1975,7 +1857,6 @@
       mismatches: mismatches
     };
   }
-
   function buildLadders(people, dutyShops, rangePack, catalogPack) {
     var erp = mapByShopId(rangePack && rangePack.records);
     var catalogByName = mapByShopName((catalogPack && catalogPack.records) || []);
@@ -2028,7 +1909,6 @@
       }
     ];
   }
-
   window.XmModules = window.XmModules || {};
   window.XmModules["/home"] = {
     mount: function (root) {
@@ -2057,11 +1937,9 @@
       var poll = 0;
       var LIVE_REFRESH_MS = 5 * 60 * 1000;
       paint(root, state);
-
       function shanghaiClock() {
         return new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
       }
-
       function pullLive() {
         var today = shanghaiYmd(0);
         var yest = shanghaiYmd(1);
@@ -2084,7 +1962,6 @@
           }
         });
       }
-
       function pullBoard() {
         var prev = previousDates(state.from, state.to);
         return Promise.all([
@@ -2123,7 +2000,6 @@
           }
         });
       }
-
       function onClick(event) {
         var help = event.target.closest && event.target.closest(".xm-hm-help");
         if (help) {
@@ -2243,7 +2119,6 @@
           return;
         }
       }
-
       function onOutsideCardSet(event) {
         var pop = root.querySelector("#xm-hm-pop");
         if (pop && !pop.hidden && !event.target.closest("#xm-hm-pop") && !event.target.closest(".xm-hm-set")) {
@@ -2253,7 +2128,6 @@
           closeCal();
         }
       }
-
       function onHelpOver(event) {
         var help = helpFromEvent(event);
         if (!help) {
@@ -2261,7 +2135,6 @@
         }
         showCardTip(help);
       }
-
       function onHelpOut(event) {
         var help = helpFromEvent(event);
         if (!help) {
@@ -2273,7 +2146,6 @@
         }
         hideCardTip();
       }
-
       function onTipScroll() {
         if (!cardTipAnchor || !cardTipEl || !cardTipEl.classList.contains("is-on")) {
           return;
@@ -2284,7 +2156,6 @@
         }
         placeCardTip(cardTipAnchor);
       }
-
       function onCalHover(event) {
         if (!calOpen || !calPick) {
           return;
@@ -2297,12 +2168,10 @@
         calHover = ymd;
         renderCal();
       }
-
       var calOpen = false;
       var calCursor = (state.from || shanghaiYmd(1)).slice(0, 7);
       var calPick = "";
       var calHover = "";
-
       function renderCal() {
         var el = root.querySelector("#xm-hm-cal");
         var btn = root.querySelector("#xm-hm-dates");
@@ -2326,14 +2195,12 @@
           hover: calPick ? calHover : ""
         });
       }
-
       function closeCal() {
         calOpen = false;
         calPick = "";
         calHover = "";
         renderCal();
       }
-
       function openCal() {
         calOpen = true;
         calPick = "";
@@ -2341,7 +2208,6 @@
         calCursor = (state.from || shanghaiYmd(1)).slice(0, 7);
         renderCal();
       }
-
       var sortFrom = "";
       var sortDragging = false;
       var sortSettings = false;
@@ -2350,7 +2216,6 @@
       var sortStartY = 0;
       var sortSwallow = false;
       var colDrag = null;
-
       function shopColHit(event) {
         var cell = event.target.closest && event.target.closest(".xm-hm-teams .xm-hm-table th");
         if (!cell) return null;
@@ -2365,12 +2230,10 @@
         }
         return null;
       }
-
       function clearTextSelection() {
         var sel = window.getSelection && window.getSelection();
         if (sel && sel.removeAllRanges) sel.removeAllRanges();
       }
-
       function sortFinish() {
         sortFrom = "";
         sortDragging = false;
@@ -2381,7 +2244,6 @@
           el.classList.remove("is-hold", "is-over");
         });
       }
-
       function sortMarkOver(el) {
         Array.prototype.forEach.call(root.querySelectorAll(".is-over"), function (item) {
           item.classList.remove("is-over");
@@ -2390,7 +2252,6 @@
           el.classList.add("is-over");
         }
       }
-
       function hitSortEl(event) {
         var el = document.elementFromPoint(event.clientX || 0, event.clientY || 0);
         if (!el || !el.closest || !root.contains(el)) {
@@ -2402,7 +2263,6 @@
             ? el.closest("#xm-hm-card-opts label")
             : el.closest(".xm-hm-card");
       }
-
       function onSortDown(event) {
         if (event.button && event.button !== 0) {
           return;
@@ -2450,12 +2310,10 @@
           clearTextSelection();
         }
       }
-
       function onSortSelectStart(event) {
         var tab = event.target.closest && event.target.closest(".xm-hm-views button,.xm-hm-ranges button,.xm-hm-set,.xm-hm-dates");
         if (sortFrom || sortDragging || tab) event.preventDefault();
       }
-
       function onSortMove(event) {
         var x = event.clientX || 0;
         var y = event.clientY || 0;
@@ -2505,7 +2363,6 @@
           sortMarkOver(null);
         }
       }
-
       function onSortUp(event) {
         if (colDrag) {
           colDrag = null;
@@ -2537,7 +2394,6 @@
         }
         sortFinish();
       }
-
       function onSortClickCapture(event) {
         if (!sortSwallow) {
           return;
@@ -2546,7 +2402,6 @@
         event.preventDefault();
         event.stopPropagation();
       }
-
       function onChange(event) {
         var hideKey = event.target.getAttribute("data-hide");
         if (hideKey) {
@@ -2564,7 +2419,6 @@
           return;
         }
       }
-
       var scroller = document.getElementById("xm-content") || root;
       root.addEventListener("click", onClick);
       root.addEventListener("change", onChange);
@@ -2582,7 +2436,6 @@
       document.addEventListener("contextmenu", onSortSelectStart);
       document.addEventListener("selectstart", onSortSelectStart);
       document.addEventListener("dragstart", onSortSelectStart);
-
       pullBoard();
       pullLive();
       poll = window.setInterval(function () {
@@ -2590,7 +2443,6 @@
           pullLive();
         }
       }, LIVE_REFRESH_MS);
-
       if (!state.user || !state.user.username) {
         api("/api/auth/me").then(function (user) {
           if (dead || !user) {
@@ -2600,7 +2452,6 @@
           paint(root, state);
         });
       }
-
       return function unmount() {
         dead = true;
         window.clearInterval(poll);
