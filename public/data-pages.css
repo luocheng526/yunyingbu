@@ -500,6 +500,7 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
   height: 100%;
   box-sizing: border-box;
   cursor: grab;
+  user-select: none;
 }
 .ch-metrics .ch-card.is-drag {
   opacity: 0.55;

@@ -213,7 +213,8 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /xm-data-ov-card-order/);
     assert.match(overviewJs.text, /data-card-key/);
     assert.match(overviewJs.text, /ch-card-right/);
-    assert.match(overviewJs.text, /draggable="true"/);
+    assert.match(overviewJs.text, /applyBoardMove/);
+    assert.match(overviewJs.text, /pointerdown/);
     assert.doesNotMatch(overviewPage.text, /公司/);
     const teamApi = await get(base, "/api/data/team");
     assert.equal(teamApi.res.status, 200);

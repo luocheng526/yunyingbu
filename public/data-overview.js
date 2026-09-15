@@ -361,7 +361,7 @@
       ".ch-card .value{margin-top:16px;font-size:28px;font-weight:700;line-height:1.3;letter-spacing:-.02em;color:#141414;font-variant-numeric:tabular-nums}" +
       ".ch-card .extra{margin-top:14px;font-size:12px;line-height:20px;color:#8c8c8c;opacity:1}" +
       ".ch-metrics{align-items:stretch}" +
-      ".ch-metrics .ch-card,.ch-metrics .ch-hero{min-height:148px;height:100%;box-sizing:border-box;cursor:grab}" +
+      ".ch-metrics .ch-card,.ch-metrics .ch-hero{min-height:148px;height:100%;box-sizing:border-box;cursor:grab;user-select:none}" +
       ".ch-metrics .ch-card.is-drag{opacity:.55;cursor:grabbing}" +
       ".ch-metrics .ch-card.is-over{outline:1px solid #2f54eb;background:#f5f8ff}" +
       ".ch-hero .ch-spark,.ch-axis{display:none!important;height:0;margin:0;overflow:hidden}" +
@@ -1650,7 +1650,7 @@
               (Number(hero.delta || 0) > 0 ? "+" : Number(hero.delta || 0) < 0 ? "-" : "") +
               Math.abs(Number(hero.delta || 0)).toFixed(2);
             return (
-              '<article class="ch-card ch-hero" draggable="true" data-card-key="' +
+              '<article class="ch-card ch-hero" data-card-key="' +
               LIVE_KEY +
               '"><div class="label"><span>实时销售指数<span class="ch-clock">' +
               escapeHtml(shanghaiHms()) +
@@ -1673,7 +1673,7 @@
           }
           const tip = card.tip || metricOf(card.key).tip || "";
           return (
-            '<article class="ch-card" draggable="true" data-card-key="' +
+            '<article class="ch-card" data-card-key="' +
             escapeHtml(card.key) +
             '"><div class="label"><span>' +
             escapeHtml(card.label) +
@@ -2117,6 +2117,8 @@
     });
 
     let boardDragKey = "";
+    let boardDragMoved = false;
+    let boardDragOrigin = null;
     function metricsRoot() {
       return board.querySelector(".ch-metrics");
     }
@@ -2149,6 +2151,8 @@
     }
     function clearBoardDrag() {
       boardDragKey = "";
+      boardDragMoved = false;
+      boardDragOrigin = null;
       board.querySelectorAll(".ch-card").forEach(function (card) {
         card.classList.remove("is-drag", "is-over");
       });
@@ -2176,41 +2180,6 @@
       const pointed = cardFromPoint(event.clientX, event.clientY) || closestCard(event.target);
       return (marked && marked.getAttribute("data-card-key")) || (pointed && pointed.getAttribute("data-card-key")) || "";
     }
-    board.addEventListener("dragstart", function (event) {
-      const startEl = asEl(event.target);
-      if (startEl && startEl.closest && startEl.closest(".ch-help, button, select, input, a")) {
-        event.preventDefault();
-        return;
-      }
-      const metrics = metricsRoot();
-      const card = closestCard(event.target);
-      if (!metrics || !card || !metrics.contains(card)) {
-        return;
-      }
-      boardDragKey = card.getAttribute("data-card-key") || "";
-      card.classList.add("is-drag");
-      if (event.dataTransfer) {
-        event.dataTransfer.effectAllowed = "move";
-        event.dataTransfer.setData("text/plain", boardDragKey);
-      }
-    });
-    board.addEventListener("dragend", function (event) {
-      applyBoardMove(overKeyAt(event));
-    });
-    board.addEventListener("dragover", function (event) {
-      if (!boardDragKey || !metricsRoot()) {
-        return;
-      }
-      event.preventDefault();
-      markOver(cardFromPoint(event.clientX, event.clientY) || closestCard(event.target));
-      if (event.dataTransfer) {
-        event.dataTransfer.dropEffect = "move";
-      }
-    });
-    board.addEventListener("drop", function (event) {
-      event.preventDefault();
-      applyBoardMove(overKeyAt(event));
-    });
     board.addEventListener("pointerdown", function (event) {
       if (event.button !== 0) {
         return;
@@ -2225,10 +2194,23 @@
         return;
       }
       boardDragKey = card.getAttribute("data-card-key") || "";
+      boardDragMoved = false;
+      boardDragOrigin = { x: event.clientX, y: event.clientY };
       card.classList.add("is-drag");
+      try {
+        board.setPointerCapture(event.pointerId);
+      } catch (_err) {}
     });
     board.addEventListener("pointermove", function (event) {
-      if (!boardDragKey || (event.buttons & 1) === 0) {
+      if (!boardDragKey || !boardDragOrigin) {
+        return;
+      }
+      const dx = event.clientX - boardDragOrigin.x;
+      const dy = event.clientY - boardDragOrigin.y;
+      if (dx * dx + dy * dy > 64) {
+        boardDragMoved = true;
+      }
+      if (!boardDragMoved) {
         return;
       }
       markOver(cardFromPoint(event.clientX, event.clientY));
@@ -2237,9 +2219,19 @@
       if (!boardDragKey) {
         return;
       }
+      if (!boardDragMoved) {
+        clearBoardDrag();
+        return;
+      }
       applyBoardMove(overKeyAt(event));
     }
+    function onBoardPointerCancel() {
+      if (boardDragKey) {
+        clearBoardDrag();
+      }
+    }
     window.addEventListener("pointerup", onBoardPointerUp);
+    window.addEventListener("pointercancel", onBoardPointerCancel);
 
     load();
 
@@ -2251,6 +2243,7 @@
       document.removeEventListener("click", onDocClick);
       window.removeEventListener("resize", onWinResize);
       window.removeEventListener("pointerup", onBoardPointerUp);
+      window.removeEventListener("pointercancel", onBoardPointerCancel);
       hideCalPop();
       hideMetricTip();
       if (tipEl) {
