@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.540-home-livegap */
+/* xm-module-home 0.1.542-home-livegap */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1296,7 +1296,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.540-home-livegap");
+    board.setAttribute("data-hm-js", "0.1.542-home-livegap");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
