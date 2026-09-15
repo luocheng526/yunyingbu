@@ -312,7 +312,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov14";
+      link.href = "/data-pages.css?v=data-ov15";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -361,14 +361,16 @@
       ".ch-card .value{margin-top:16px;font-size:28px;font-weight:700;line-height:1.3;letter-spacing:-.02em;color:#141414;font-variant-numeric:tabular-nums}" +
       ".ch-card .extra{margin-top:14px;font-size:12px;line-height:20px;color:#8c8c8c;opacity:1}" +
       ".ch-metrics{align-items:stretch}" +
-      ".ch-metrics .ch-card,.ch-metrics .ch-hero{min-height:148px;height:100%;box-sizing:border-box;cursor:grab;user-select:none}" +
+      ".ch-metrics .ch-card{min-height:148px;height:100%;box-sizing:border-box;cursor:grab;user-select:none}" +
+      ".ch-metrics .ch-hero{min-height:216px;height:100%;box-sizing:border-box;cursor:grab;user-select:none}" +
       ".ch-metrics .ch-card.is-drag{opacity:.55;cursor:grabbing}" +
       ".ch-metrics .ch-card.is-over{outline:1px solid #2f54eb;background:#f5f8ff}" +
-      ".ch-hero .ch-spark,.ch-axis{display:none!important;height:0;margin:0;overflow:hidden}" +
-      ".ch-hero .value{margin-top:16px}" +
+      ".ch-hero .ch-spark{display:block;width:100%;height:72px;margin:8px 0 0}" +
+      ".ch-axis{display:flex;justify-content:space-between;font-size:10px;opacity:.4;margin-top:2px}" +
+      ".ch-hero .value{margin:8px 0 0}" +
       ".ch-card-right{display:inline-flex;align-items:center;gap:6px;margin-left:auto;flex:none}" +
-      ".ch-hero .delta{margin:0;font-size:12px;line-height:16px;white-space:nowrap}" +
-      ".ch-clock{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:10px;background:#f0f5ff;color:#2f54eb;font-size:12px;opacity:1}" +
+      ".ch-hero .delta{margin:4px 0 0;font-size:12px;line-height:16px;white-space:nowrap}" +
+      ".ch-hero .ch-clock{margin-left:2px;padding:0;height:auto;border-radius:0;background:transparent;color:#8c8c8c;font-size:12px;font-variant-numeric:tabular-nums;opacity:1}" +
       ".ch-card .label{display:flex;align-items:center;justify-content:space-between;gap:8px}" +
       ".ch-help{flex:none;width:16px;height:16px;border:1px solid var(--xm-line,#d9d9d9);border-radius:3px;background:#fff;color:#8c8c8c;font-size:11px;line-height:14px;cursor:help;padding:0}" +
       ".ch-tip{position:fixed;z-index:4300;max-width:320px;padding:10px 12px;background:#fff;border:1px solid #f0f0f0;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.12);color:#262626;font-size:12px;line-height:1.6;white-space:pre-wrap;display:none}" +
@@ -398,11 +400,11 @@
     style.id = "ch-hero-style";
     style.textContent =
       ".ch-hero .label{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:nowrap}" +
-      ".ch-clock{font-variant-numeric:tabular-nums;letter-spacing:.04em}" +
-      ".ch-clock{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:10px;background:#f0f5ff;color:#2f54eb;font-size:12px;opacity:1}" +
-      ".ch-hero .value{margin-top:16px}" +
-      ".ch-hero .delta{margin:0;font-size:12px;line-height:16px}" +
-      ".ch-hero .ch-spark,.ch-axis{display:none!important}";
+      ".ch-hero .ch-clock{font-variant-numeric:tabular-nums}" +
+      ".ch-hero .value{margin:8px 0 0}" +
+      ".ch-hero .delta{margin:4px 0 0;font-size:12px}" +
+      ".ch-hero .ch-spark{display:block;width:100%;height:72px;margin:8px 0 0}" +
+      ".ch-axis{display:flex;justify-content:space-between;font-size:10px;opacity:.4;margin-top:2px}";
     document.head.appendChild(style);
   }
 
@@ -486,6 +488,17 @@
 
   function slashDate(date) {
     return date.getFullYear() + "/" + (date.getMonth() + 1) + "/" + date.getDate();
+  }
+
+  function shanghaiMinute() {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Shanghai",
+      minute: "2-digit"
+    }).formatToParts(new Date());
+    const minute = parts.find(function (part) {
+      return part.type === "minute";
+    });
+    return Number(minute && minute.value) || 0;
   }
 
   function shanghaiHour() {
@@ -623,6 +636,17 @@
       return String(value);
     }
     return Math.round(n).toLocaleString("zh-CN");
+  }
+
+  function fmtHeroMoney(value) {
+    if (value == null || value === "" || value === "--" || value === "—") {
+      return "--";
+    }
+    const n = Number(String(value).replace(/,/g, ""));
+    if (Number.isNaN(n)) {
+      return String(value);
+    }
+    return n.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   function pct(value) {
@@ -971,7 +995,7 @@
       }
     }
     if (hero.todayPay != null) {
-      hero.value = fmtInt(hero.todayPay);
+      hero.value = fmtHeroMoney(hero.todayPay);
     }
     hero.yesterday = yest;
     hero.today = today;
@@ -996,6 +1020,16 @@
     return out;
   }
 
+  function padHours(list, slots) {
+    const out = (list || []).map(function (n) {
+      return Number(n) || 0;
+    });
+    while (out.length < (slots || 24)) {
+      out.push(0);
+    }
+    return out.slice(0, slots || 24);
+  }
+
   function cumulativeHours(list) {
     const out = [];
     let sum = 0;
@@ -1006,12 +1040,8 @@
     return out;
   }
 
-  function cutHourly(list) {
-    let end = Math.min((list && list.length) || 0, shanghaiHour() + 1);
-    while (end > 2 && list && !(Number(list[end - 1]) > 0)) {
-      end -= 1;
-    }
-    return (list || []).slice(0, Math.max(end, 0));
+  function todayHours(list) {
+    return padHours(list, 24).slice(0, Math.min(24, shanghaiHour() + 1));
   }
 
   function heroFromErpPaid(data) {
@@ -1025,15 +1055,20 @@
     if (todayPay == null) {
       return null;
     }
-    const todayH = cutHourly(hourList(hourly.todayPay, sum.todayHourlyData));
-    const yestH = hourList(hourly.yesterdayPay, sum.yesterdayHourlyData);
+    const rawToday = hourList(hourly.todayPay, sum.todayHourlyData);
+    const rawYest = hourList(hourly.yesterdayPay, sum.yesterdayHourlyData);
+    const hasHourly = rawToday.length > 2;
+    const todayH = hasHourly ? todayHours(rawToday) : rawToday;
+    const yestH = hasHourly ? padHours(rawYest, 24) : rawYest;
     const delta = yestPay ? Number((((todayPay - yestPay) / Math.abs(yestPay)) * 100).toFixed(2)) : 0;
     return {
       label: "实时销售指数",
-      value: fmtInt(todayPay),
+      value: fmtHeroMoney(todayPay),
       todayPay: todayPay,
       yestPay: yestPay,
       delta: delta,
+      yesterdayHour: hasHourly ? yestH : [],
+      todayHour: hasHourly ? todayH : [],
       yesterday: cumulativeHours(yestH),
       today: cumulativeHours(todayH)
     };
@@ -1060,6 +1095,9 @@
       }
     });
     const steps = 23;
+    const nowT = Math.min(23, shanghaiHour() + shanghaiMinute() / 60);
+    const nowX = padX + (nowT / steps) * (w - padX * 2);
+    const join = Math.max(0, Math.min(today.length ? today.length - 1 : Math.round(nowT), yest.length ? yest.length - 1 : 0));
     const ns = "http://www.w3.org/2000/svg";
     function xy(i, n) {
       return {
@@ -1075,55 +1113,45 @@
       svg.appendChild(el);
       return el;
     }
-    function linePts(list) {
-      return list
-        .map(function (n, i) {
-          const p = xy(i, n);
-          return p.x.toFixed(1) + "," + p.y.toFixed(1);
-        })
-        .join(" ");
-    }
-    function areaD(list) {
-      if (!list.length) {
-        return "";
+    function linePtsRange(list, from, to) {
+      const out = [];
+      let i = from;
+      for (i = from; i <= to && i < list.length; i += 1) {
+        const p = xy(i, list[i]);
+        out.push(p.x.toFixed(1) + "," + p.y.toFixed(1));
       }
-      const first = xy(0, list[0]);
-      const last = xy(list.length - 1, list[list.length - 1]);
-      const base = (h - padY).toFixed(1);
-      const line = list
-        .map(function (n, i) {
-          const p = xy(i, n);
-          return p.x.toFixed(1) + " " + p.y.toFixed(1);
-        })
-        .join(" L ");
-      return "M " + first.x.toFixed(1) + " " + base + " L " + line + " L " + last.x.toFixed(1) + " " + base + " Z";
+      return out.join(" ");
     }
     while (svg.firstChild) {
       svg.removeChild(svg.firstChild);
     }
-    if (yest.length) {
-      add("path", { fill: "#2f54eb", "fill-opacity": "0.12", d: areaD(yest) });
+    add("rect", { x: "0", y: "0", width: nowX.toFixed(1), height: String(h), fill: "#f5f5f5" });
+    add("rect", {
+      x: nowX.toFixed(1),
+      y: "0",
+      width: Math.max(0, w - nowX).toFixed(1),
+      height: String(h),
+      fill: "#f0f5ff"
+    });
+    if (yest.length > join) {
       add("polyline", {
         fill: "none",
         stroke: "#2f54eb",
         "stroke-width": "2",
         "stroke-linejoin": "round",
         "stroke-linecap": "round",
-        points: linePts(yest)
+        points: linePtsRange(yest, join, yest.length - 1)
       });
     }
     if (today.length) {
-      add("path", { fill: "#cf1322", "fill-opacity": "0.14", d: areaD(today) });
       add("polyline", {
         fill: "none",
         stroke: "#cf1322",
         "stroke-width": "2",
         "stroke-linejoin": "round",
         "stroke-linecap": "round",
-        points: linePts(today)
+        points: linePtsRange(today, 0, today.length - 1)
       });
-      const p = xy(today.length - 1, today[today.length - 1]);
-      add("circle", { cx: p.x.toFixed(1), cy: p.y.toFixed(1), r: "3.2", fill: "#cf1322" });
     }
   }
 
@@ -1133,16 +1161,16 @@
     const today = asSeries(src.today && src.today.length ? src.today : src.spark);
     if (!yest.length && !today.length) {
       if (hero.todayPay != null) {
-        hero.value = fmtInt(hero.todayPay);
+        hero.value = fmtHeroMoney(hero.todayPay);
       }
       return ensureHeroSeries(hero);
     }
     hero.yesterday = yest;
     hero.today = today;
     if (src.value) {
-      hero.value = fmtInt(src.value);
+      hero.value = fmtHeroMoney(src.value);
     } else if (today.length) {
-      hero.value = fmtInt(today[today.length - 1]);
+      hero.value = fmtHeroMoney(today[today.length - 1]);
     }
     if (yest.length && today.length) {
       const idx = Math.min(today.length, yest.length) - 1;
@@ -1654,17 +1682,19 @@
               LIVE_KEY +
               '"><div class="label"><span>实时销售指数<span class="ch-clock">' +
               escapeHtml(shanghaiHms()) +
-              '</span></span><span class="ch-card-right"><span class="delta ' +
+              "</span></span>" +
+              helpBtn(HERO_TIP) +
+              '</div><div class="value">' +
+              escapeHtml(/[.,]\d/.test(String(hero.value || "")) ? hero.value : fmtHeroMoney(hero.value)) +
+              '</div><div class="delta ' +
               (down ? "is-down" : "is-up") +
               '">' +
               escapeHtml(sign) +
               "% " +
               (down ? "↓" : "↑") +
-              "</span>" +
-              helpBtn(HERO_TIP) +
-              '</span></div><div class="value">' +
-              escapeHtml(fmtInt(hero.value)) +
-              '</div><div class="extra">&nbsp;</div></article>'
+              "</div>" +
+              compareSpark() +
+              '<div class="ch-axis"><span>00</span><span>12</span><span>23</span></div></article>'
             );
           }
           const card = byKey[key];
@@ -1758,6 +1788,7 @@
       if (state.pickOpen) {
         paintPicker();
       }
+      paintSparkSvg(board.querySelector(".ch-hero .ch-spark"), hero);
     }
 
     function placeCalPop(anchor) {
@@ -1869,7 +1900,7 @@
           state.payload.shopTable = shopTableFrom(state.payload.shops);
         }
         if (state.payload.hero && Number(state.payload.hero.todayPay) > 0) {
-          state.payload.hero.value = fmtInt(state.payload.hero.todayPay);
+          state.payload.hero.value = fmtHeroMoney(state.payload.hero.todayPay);
         }
       }
       render();

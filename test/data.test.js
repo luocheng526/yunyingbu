@@ -209,7 +209,9 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /60 \* 60 \* 1000/);
     assert.match(overviewJs.text, /xm-data-shops-metrics-v1/);
     assert.match(overviewJs.text, /overlaySharedShopMetrics/);
-    assert.match(overviewJs.text, /data-ov14/);
+    assert.match(overviewJs.text, /data-ov15/);
+    assert.match(overviewJs.text, /00<\/span>/);
+    assert.match(overviewJs.text, /fmtHeroMoney/);
     assert.match(overviewJs.text, /xm-data-ov-card-order/);
     assert.match(overviewJs.text, /data-card-key/);
     assert.match(overviewJs.text, /ch-card-right/);
@@ -565,11 +567,11 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /\/data\/paid/);
   assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
   assert.match(dataMod, /restore-v1/);
-  assert.match(dataMod, /data-overview\.js\?v=data-ov14/);
+  assert.match(dataMod, /data-overview\.js\?v=data-ov15/);
   assert.match(dataMod, /data-shops\.js\?v=shop-wide6/);
   assert.match(css, /ch-pill/);
   assert.match(css, /\.ch-card \.value[\s\S]*font-size: 28px/);
-  assert.match(css, /\.ch-metrics \.ch-hero[\s\S]*min-height: 148px/);
+  assert.match(css, /\.ch-metrics \.ch-hero \{\s*min-height: 216px/);
   assert.doesNotMatch(css, /min-height: 220px/);
   assert.match(css, /ch-card-right/);
   assert.match(css, /#8c8c8c/);
