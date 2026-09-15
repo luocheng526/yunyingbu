@@ -61,6 +61,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /shop\.assistant/);
   assert.match(homeJs, /<th>店铺名称<\/th><\/tr><\/thead><tbody>/);
   assert.doesNotMatch(homeJs, /<th>排名<\/th><th>店铺名称<\/th><\/tr>/);
+  assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table\{min-width:760px/);
+  assert.match(homeJs, /\.xm-hm\.is-team:not\(\.is-chief\) \.xm-hm-team\{min-width:760px\}/);
   assert.doesNotMatch(homeJs, /<th class="xm-hm-num">数量<\/th>/);
   assert.match(homeJs, /卡片设置 · /);
   assert.match(homeJs, /\.xm-hm\.is-chief \.xm-hm-teams \.xm-hm-table\{min-width:0/);
@@ -116,8 +118,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.doesNotMatch(homeJs, /LIVE_CARD_KEYS = \["ad", "profit"/);
   assert.match(homeJs, /data-shop-card=/);
   assert.match(homeJs, /<th>排名<\/th><th>店铺名称<\/th><th>实时销售额/);
-  assert.doesNotMatch(homeJs, /<th>运营<\/th><\/tr>/);
-  assert.doesNotMatch(homeJs, /<th>排名<\/th><th>店铺名称<\/th>' \+/);
+  assert.match(homeJs, /<th>运营<\/th><\/tr>/);
+  assert.match(homeJs, /<th>排名<\/th><th>店铺名称<\/th>' \+/);
   assert.match(homeJs, /function sortedShops/);
   assert.match(homeJs, /function shopColHead/);
   assert.match(homeJs, /data-shop-sort=/);
