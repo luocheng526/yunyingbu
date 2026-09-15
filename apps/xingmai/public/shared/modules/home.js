@@ -1650,11 +1650,22 @@
     }
     return (person.visibleShops || []).indexOf(shopDisplayName(shop)) !== -1;
   }
-  function seriesOf(hourly, fallback) {
-    if (hourly && hourly.length) {
-      return hourly;
+  function shanghaiHour() {
+    return Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Shanghai", hour: "2-digit", hour12: false }).format(new Date()).slice(0, 2)) || 0;
+  }
+  function seriesCut(hourly) {
+    var end = Math.min((hourly && hourly.length) || 0, shanghaiHour() + 1);
+    while (end > 2 && hourly && !(Number(hourly[end - 1]) > 0)) {
+      end -= 1;
     }
-    return fallback == null ? [] : [fallback, fallback];
+    return end;
+  }
+  function seriesOf(hourly, fallback, end) {
+    var src = hourly && hourly.length ? hourly : fallback == null ? [] : [fallback, fallback];
+    if (hourly && hourly.length > 2) {
+      return src.slice(0, Math.min(src.length, end || seriesCut(hourly)));
+    }
+    return src;
   }
   function liveFromErp(todayPack, yestPack, snapPack) {
     var live = blankLive();
@@ -1666,12 +1677,13 @@
     var todayAd = todaySum.totalPromotionCost;
     var yestAd = yestSum.totalPromotionCost;
     var hourly = (todayPack && todayPack.hourly) || (snapPack && snapPack.hourly) || {};
+    var hourEnd = seriesCut(hourly.todayPay);
     live.hero = {
       label: "实时销售指数",
       value: fmtMoney(todayPay),
       delta: trendOf(todayPay, yestPay),
-      yesterday: seriesOf(hourly.yesterdayPay, yestPay),
-      today: seriesOf(hourly.todayPay, todayPay)
+      yesterday: seriesOf(hourly.yesterdayPay, yestPay, hourEnd),
+      today: seriesOf(hourly.todayPay, todayPay, hourEnd)
     };
     var todayFee = todaySum.promotionRate != null ? todaySum.promotionRate : snap.promotionRate;
     var yestFee = yestSum.promotionRate;
