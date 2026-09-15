@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.403-home-mgrtbl */
+/* xm-module-home 0.1.503-home-mgrtbl */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1128,7 +1128,7 @@
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
-    board.setAttribute("data-hm-js", "0.1.403-home-mgrtbl");
+    board.setAttribute("data-hm-js", "0.1.503-home-mgrtbl");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
