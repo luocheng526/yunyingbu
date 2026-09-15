@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.531-home-salecard */
+/* xm-module-home 0.1.532-home-half */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -183,21 +183,25 @@
       guide.setAttribute("visibility", "hidden");
     }
   }
-  function lineTipHtml(hour, yestHour, yestCum, todayHour, todayOk, todayCum) {
+  function lineTipHtml(hour, yestHour, yestCum, todayHour, todayOk, todayCum, label, part) {
     return (
       "<b>" +
-      (hour + 1) +
+      escapeHtml(label != null && label !== "" ? label : String(hour + 1)) +
       "</b>" +
       '<div class="xm-hm-line-row"><span><i class="is-yest"></i>昨天</span><em>' +
       escapeHtml(fmtMoney(yestCum)) +
       "</em></div>" +
-      '<div class="xm-hm-line-sub"><span>本小时</span><span>' +
+      '<div class="xm-hm-line-sub"><span>' +
+      escapeHtml(part || "本小时") +
+      "</span><span>" +
       escapeHtml(fmtMoney(yestHour)) +
       "</span></div>" +
       '<div class="xm-hm-line-row"><span><i class="is-today"></i>实时</span><em>' +
       (todayOk ? escapeHtml(fmtMoney(todayCum)) : "—") +
       "</em></div>" +
-      '<div class="xm-hm-line-sub"><span>本小时</span><span>' +
+      '<div class="xm-hm-line-sub"><span>' +
+      escapeHtml(part || "本小时") +
+      "</span><span>" +
       (todayOk ? escapeHtml(fmtMoney(todayHour)) : "—") +
       "</span></div>"
     );
@@ -832,6 +836,24 @@
   function hourX(i, slots) {
     return 10 + (i / Math.max((Number(slots) || 24) - 1, 1)) * 620;
   }
+  function toHalfIncrements(hourly) {
+    var out = [];
+    (hourly || []).forEach(function (n) {
+      var v = Number(n) || 0;
+      out.push(v / 2);
+      out.push(v / 2);
+    });
+    return out;
+  }
+  function halfTipLabel(i) {
+    var minutes = (Number(i) + 1) * 30;
+    var h = Math.floor(minutes / 60);
+    var m = minutes % 60;
+    if (!h) {
+      return "0:30";
+    }
+    return m ? h + ":30" : String(h);
+  }
   function hourFromEvent(svg, event, slots) {
     if (!svg || !event) {
       return 0;
@@ -849,12 +871,13 @@
   }
   function compareLineHtml(chart) {
     var width = 640;
-    var height = 184;
+    var height = Number(chart && chart.height) > 160 ? Number(chart.height) : 184;
     var padTop = 12;
     var padBot = 22;
     var yest = (chart && chart.yesterday) || [];
     var today = (chart && chart.today) || [];
     var slots = Number(chart && chart.hours) > 2 ? Number(chart.hours) : Math.max(yest.length, today.length, 2);
+    var drawDots = !(chart && chart.noDots);
     var max = 1;
     yest.concat(today).forEach(function (n) {
       var v = Number(n) || 0;
@@ -880,14 +903,14 @@
         .join("");
     }
     function axis() {
-      if (slots !== 24) {
+      if (slots !== 24 && slots !== 48) {
         return "";
       }
       var out = [];
       for (var h = 1; h <= 24; h += 1) {
         out.push(
           '<text x="' +
-            hourX(h - 1, slots).toFixed(1) +
+            hourX(slots === 48 ? h * 2 - 1 : h - 1, slots).toFixed(1) +
             '" y="' +
             (height - 5) +
             '" text-anchor="middle" fill="#8c8c8c" font-size="8">' +
@@ -905,11 +928,11 @@
       " " +
       height +
       '">' +
-      (yestPts ? '<polyline fill="none" stroke="#2f54eb" stroke-width="2.4" points="' + yestPts + '"></polyline>' : "") +
-      (todayPts ? '<polyline fill="none" stroke="#cf1322" stroke-width="2.4" points="' + todayPts + '"></polyline>' : "") +
-      (yest.length ? dots(yest, "#2f54eb") : "") +
-      (today.length ? dots(today, "#cf1322") : "") +
-      (slots === 24
+      (yestPts ? '<polyline fill="none" stroke="#2f54eb" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="' + yestPts + '"></polyline>' : "") +
+      (todayPts ? '<polyline fill="none" stroke="#cf1322" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="' + todayPts + '"></polyline>' : "") +
+      (drawDots && yest.length ? dots(yest, "#2f54eb") : "") +
+      (drawDots && today.length ? dots(today, "#cf1322") : "") +
+      (slots === 24 || slots === 48
         ? '<line class="xm-hm-line-guide" x1="0" y1="' +
           padTop +
           '" x2="0" y2="' +
@@ -936,23 +959,37 @@
       " " +
       Math.round(Math.abs(Number(chart && chart.delta) || 0)) +
       "%</div>" +
-      compareLineHtml(chart) +
+      compareLineHtml({
+        label: chart && chart.label,
+        value: chart && chart.value,
+        delta: chart && chart.delta,
+        yesterday: chart && chart.yesterday,
+        today: chart && chart.today,
+        hours: chart && chart.hours,
+        noDots: true,
+        height: Number(chart && chart.hours) === 24 ? 220 : 184
+      }) +
       "</article>"
     );
   }
   function companySalesHtml(chart) {
+    var yestHour = (chart && chart.yesterdayHour) || [];
+    var todayHour = (chart && chart.todayHour) || [];
+    var hasHalf = yestHour.length > 2 || todayHour.length > 2;
+    var yestHalf = hasHalf ? toHalfIncrements(yestHour) : [];
+    var todayHalf = hasHalf ? toHalfIncrements(todayHour) : [];
     var sales = {
       label: "实时销售金额",
       value: (chart && chart.value) || "—",
-      yesterday: (chart && chart.yesterday) || [],
-      today: (chart && chart.today) || [],
-      yesterdayHour: (chart && chart.yesterdayHour) || [],
-      todayHour: (chart && chart.todayHour) || [],
-      hours: (chart && chart.hours) || 0
+      yesterday: hasHalf ? cumHours(yestHalf) : (chart && chart.yesterday) || [],
+      today: hasHalf ? cumHours(todayHalf) : (chart && chart.today) || [],
+      hours: hasHalf ? 48 : (chart && chart.hours) || 0,
+      noDots: true,
+      height: 268
     };
     return (
       '<article class="xm-hm-chart xm-hm-sales-chart"' +
-      (Number(sales.hours) === 24 ? ' data-hours="24"' : "") +
+      (Number(sales.hours) === 48 || Number(sales.hours) === 24 ? ' data-hours="' + sales.hours + '"' : "") +
       '><div class="xm-hm-card-head"><span>' +
       escapeHtml(sales.label) +
       '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
@@ -1045,7 +1082,8 @@
       ".xm-hm-kpis-shell,.xm-hm-teams{padding:10px}" +
       ".xm-hm-sales{margin:0 0 10px}" +
       ".xm-hm-sales-chart{width:100%}" +
-      ".xm-hm-sales-chart .xm-hm-line{height:200px}" +
+      ".xm-hm-sales-chart .xm-hm-line{height:320px}" +
+      '.xm-hm-live .xm-hm-chart[data-hours="24"] .xm-hm-line{height:240px}' +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
       ".xm-hm-teams{display:flex;flex-direction:column;gap:10px;overflow-x:auto}" +
       ".xm-hm-teams-bar{display:flex;justify-content:space-between;align-items:center;padding:0 0 8px}" +
@@ -1114,7 +1152,7 @@
       ".xm-hm-legs i.is-yest{background:#2f54eb}" +
       ".xm-hm-legs i.is-today{background:#cf1322}" +
       ".xm-hm-line{display:block;width:100%;height:180px;margin-top:8px}" +
-      '.xm-hm-chart[data-hours="24"] .xm-hm-line{cursor:crosshair}' +
+      ".xm-hm-chart[data-hours] .xm-hm-line{cursor:crosshair}" +
       ".xm-hm-line-tip{position:fixed;z-index:20;display:none;box-sizing:border-box;min-width:168px;padding:8px 10px;background:#1f1f1f;color:#fff;border-radius:6px;font-size:12px;line-height:1.5;pointer-events:none}" +
       ".xm-hm-line-tip.is-on{display:block}" +
       ".xm-hm-line-tip b{display:block;margin:0 0 6px;font-size:13px}" +
@@ -1239,7 +1277,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.531-home-salecard");
+    board.setAttribute("data-hm-js", "0.1.532-home-half");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2407,11 +2445,13 @@
         hideCardTip();
       }
       function onLineTipMove(event) {
-        var svg = event.target && event.target.closest ? event.target.closest('.xm-hm-chart[data-hours="24"] .xm-hm-line') : null;
-        if (!svg) {
+        var chartEl = event.target && event.target.closest ? event.target.closest(".xm-hm-chart[data-hours]") : null;
+        var svg = event.target && event.target.closest ? event.target.closest(".xm-hm-line") : null;
+        if (!chartEl || !svg || !chartEl.contains(svg)) {
           hideLineTip(root);
           return;
         }
+        var slots = Number(chartEl.getAttribute("data-hours")) || 24;
         var hero = (state.live && state.live.hero) || {};
         var yestHour = hero.yesterdayHour || [];
         var todayHour = hero.todayHour || [];
@@ -2421,7 +2461,17 @@
           hideLineTip(root);
           return;
         }
-        var i = hourFromEvent(svg, event, 24);
+        var i = hourFromEvent(svg, event, slots);
+        var label = "";
+        var part = "本小时";
+        if (slots === 48) {
+          yestHour = toHalfIncrements(yestHour);
+          todayHour = toHalfIncrements(todayHour);
+          yestCum = cumHours(yestHour);
+          todayCum = cumHours(todayHour);
+          label = halfTipLabel(i);
+          part = "半小时";
+        }
         var todayOk = i < todayHour.length;
         var tip = lineTipNode();
         tip.innerHTML = lineTipHtml(
@@ -2430,7 +2480,9 @@
           yestCum[i],
           todayHour[i],
           todayOk,
-          todayCum[i]
+          todayCum[i],
+          label,
+          part
         );
         tip.classList.add("is-on");
         var tw = tip.offsetWidth || 180;
@@ -2453,7 +2505,7 @@
         tip.style.top = Math.round(top) + "px";
         var guide = svg.querySelector(".xm-hm-line-guide");
         if (guide) {
-          var x = hourX(i, 24).toFixed(1);
+          var x = hourX(i, slots).toFixed(1);
           guide.setAttribute("x1", x);
           guide.setAttribute("x2", x);
           guide.setAttribute("visibility", "visible");

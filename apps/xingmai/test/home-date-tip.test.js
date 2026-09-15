@@ -126,6 +126,10 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function todayHours/);
   assert.match(homeJs, /function padHours/);
   assert.match(homeJs, /function companySalesHtml/);
+  assert.match(homeJs, /function toHalfIncrements/);
+  assert.match(homeJs, /function halfTipLabel/);
+  assert.match(homeJs, /data-hours="' \+ sales\.hours/);
+  assert.match(homeJs, /noDots: true/);
   assert.match(homeJs, /function companySetCards/);
   assert.match(homeJs, /function liveSalesCard/);
   assert.match(homeJs, /LIVE_SALES_KEY = "liveSales"/);
@@ -383,11 +387,17 @@ test("card settings pop sits under the clicked 卡片设置 button", () => {
 test("company tab puts a realtime sales row above the KPI cards", () => {
   const start = homeJs.indexOf("function hourX");
   const end = homeJs.indexOf("function liveShopRowHtml");
-  assert.ok(start !== -1 && end > start);
+  const cum = homeJs.slice(homeJs.indexOf("function cumHours"), homeJs.indexOf("function seriesOf"));
+  assert.ok(start !== -1 && end > start && cum.indexOf("function cumHours") === 0);
   const fns = new Function(
     "escapeHtml",
-    homeJs.slice(start, end) + "return {companySalesHtml, compareLineHtml};"
+    cum + homeJs.slice(start, end) + "return {companySalesHtml, compareLineHtml, toHalfIncrements, halfTipLabel};"
   )((value) => String(value == null ? "" : value));
+  assert.deepEqual(fns.toHalfIncrements([2, 4]), [1, 1, 2, 2]);
+  assert.equal(fns.halfTipLabel(0), "0:30");
+  assert.equal(fns.halfTipLabel(1), "1");
+  assert.equal(fns.halfTipLabel(14), "7:30");
+  assert.equal(fns.halfTipLabel(15), "8");
   const yest = Array.from({ length: 24 }, (_, i) => (i + 1) * 10);
   const today = [10, 30, 60];
   const html = fns.companySalesHtml({
@@ -400,13 +410,14 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
   });
   assert.match(html, /实时销售金额/);
   assert.match(html, />12,345</);
-  assert.match(html, /data-hours="24"/);
+  assert.match(html, /data-hours="48"/);
   assert.doesNotMatch(html, /环比/);
+  assert.doesNotMatch(html, /<circle/);
   const red = html.match(/stroke="#cf1322"[^>]*points="([^"]+)"/);
   const blue = html.match(/stroke="#2f54eb"[^>]*points="([^"]+)"/);
   assert.ok(red && blue);
-  assert.equal(red[1].trim().split(/\s+/).length, 3);
-  assert.equal(blue[1].trim().split(/\s+/).length, 24);
+  assert.equal(red[1].trim().split(/\s+/).length, 6);
+  assert.equal(blue[1].trim().split(/\s+/).length, 48);
   assert.match(html, />1<\/text>/);
   assert.match(html, />24<\/text>/);
 });
@@ -428,6 +439,8 @@ test("live sales chart keeps 24-hour axis and hides future today points", () => 
   const redEnd = Number(red[1].trim().split(/\s+/).pop().split(",")[0]);
   const blueEnd = Number(blue[1].trim().split(/\s+/).pop().split(",")[0]);
   assert.ok(redEnd < blueEnd - 10);
+  const plain = fns.compareLineHtml({ yesterday: yest, today: [10, 20, 30], hours: 24, noDots: true });
+  assert.doesNotMatch(plain, /<circle/);
   const hourStart = homeJs.indexOf("function shanghaiHour");
   const hourEnd = homeJs.indexOf("function seriesOf");
   const hours = new Function(homeJs.slice(hourStart, hourEnd) + "return {todayHours, padHours, cumHours};")();
