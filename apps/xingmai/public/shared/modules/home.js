@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.503-home-mgrtbl */
+/* xm-module-home 0.1.504-home-cardx */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -442,9 +442,11 @@
       (teamKey ? ' data-team="' + escapeHtml(teamKey) + '"' : "") +
       '><div class="xm-hm-card-head"><span>' +
       escapeHtml(card.label) +
-      '</span><button type="button" class="xm-hm-help" data-tip="' +
+      '</span><span class="xm-hm-card-tools"><button type="button" class="xm-hm-help" data-tip="' +
       tipAttr(card.tip) +
-      '" aria-label="指标说明">!</button></div><div class="xm-hm-value' +
+      '" aria-label="指标说明">!</button><button type="button" class="xm-hm-drop" data-drop-card="' +
+      escapeHtml(card.key) +
+      '" title="删除此卡片">×</button></span></div><div class="xm-hm-value' +
       (card.accent ? " is-accent" : "") +
       '">' +
       escapeHtml(card.value) +
@@ -651,7 +653,7 @@
       return gone.indexOf(team.name) === -1;
     });
     return (
-      '<div class="xm-hm-teams-bar"><b>星脉甄选</b><span><button type="button" data-show-teams>显示全部</button><button type="button" class="xm-hm-set">卡片设置</button></span></div><div class="xm-hm-teams-grid">' +
+      '<div class="xm-hm-teams-bar"><b>星脉甄选</b><span><button type="button" data-show-teams>恢复所有卡片</button><button type="button" class="xm-hm-set">卡片设置</button></span></div><div class="xm-hm-teams-grid">' +
       list
         .map(function (team) {
           return teamBlockHtml({ key: team.key, name: team.name, cards: arrangeCards(team.cards), shops: team.shops }, hide, simple);
@@ -870,7 +872,7 @@
       ".xm-hm-ranges button.is-on{background:var(--xm-primary);border-color:var(--xm-primary);color:#fff}" +
       ".xm-hm-datewrap{position:relative}" +
       ".xm-hm-dates{display:inline-flex;align-items:center;gap:8px;min-width:248px;height:32px;padding:0 10px 0 12px;border:1px solid #dcdfe6;background:#fff;color:#303133;border-radius:20px;cursor:pointer;font-size:13px;line-height:1}" +
-      ".xm-hm-dates-ico,.xm-hm-dates-clear{display:inline-flex;color:#c0c4cc;flex:0 0 auto}" +
+      ".xm-hm-dates-ico,.xm-hm-dates-clear{color:#c0c4cc}" +
       ".xm-hm-dates-text{flex:1 1 auto;text-align:left;white-space:nowrap}" +
       ".xm-hm-dates-clear{border:0;background:transparent;padding:0;width:16px;height:16px;border-radius:50%;cursor:pointer;align-items:center;justify-content:center}" +
       ".xm-hm-cal{position:absolute;top:calc(100% + 10px);right:0;z-index:8;width:646px;max-width:min(646px,calc(100vw - 24px));background:#fff;border-radius:4px;box-shadow:0 2px 12px rgba(0,0,0,.12);padding:8px 8px 12px}" +
@@ -892,7 +894,7 @@
       ".xm-hm-cal-grid button.is-start,.xm-hm-cal-grid button.is-end{background:#f56c6c;color:#fff;border-radius:50%;width:32px}" +
       ".xm-hm-cal-grid button:disabled,.xm-hm-cal-grid button.is-off{color:#c0c4cc;opacity:.7;cursor:not-allowed}" +
       ".xm-hm-card-head .xm-hm-help{cursor:help;position:relative;z-index:2;width:18px;height:18px;border:1px solid var(--xm-line);border-radius:50%;background:transparent;padding:0;margin:0;font:inherit;font-size:11px;line-height:1;color:var(--xm-muted);display:inline-flex;align-items:center;justify-content:center}" +
-      ".xm-hm-tip{position:fixed;z-index:9;display:none;box-sizing:border-box;width:max-content;max-width:min(360px,calc(100vw - 24px));padding:10px 12px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.18);color:var(--xm-ink);font-size:12px;line-height:1.6;white-space:pre-wrap;text-align:left;pointer-events:none}" +
+      ".xm-hm-tip{position:fixed;z-index:9;display:none;box-sizing:border-box;width:max-content;max-width:360px;padding:10px 12px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;color:var(--xm-ink);font-size:12px;line-height:1.6;white-space:pre-wrap;pointer-events:none}" +
       ".xm-hm-tip.is-on{display:block}" +
       ".xm-hm-body{position:relative;display:flex;flex-direction:column;gap:12px;overflow:visible}" +
       ".xm-hm.is-live .xm-hm-kpis-shell,.xm-hm.is-board .xm-hm-kpis-shell,.xm-hm.is-team .xm-hm-kpis-shell,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
@@ -941,7 +943,8 @@
       ".xm-hm-teams-bar .xm-hm-set{padding:0;font-size:13px;white-space:nowrap}" +
       ".xm-hm-teams-bar span{display:flex;gap:12px}" +
       "[data-show-teams]{border:0;background:0;color:var(--xm-primary);cursor:pointer;padding:0;font-size:13px}" +
-      ".xm-hm-drop{flex:0 0 auto;width:20px;height:20px;border:1px solid #d96c6c;border-radius:50%;background:#fff;color:#c45656;font-size:16px;line-height:18px;cursor:pointer;padding:0}" +
+      ".xm-hm-drop{width:20px;height:20px;border:1px solid #d96c6c;border-radius:50%;background:#fff;color:#c45656;font-size:16px;line-height:18px;cursor:pointer;padding:0}" +
+      ".xm-hm-card-tools{display:flex;gap:4px}" +
       ".xm-hm-ladder{margin-top:4px}" +
       ".xm-hm-ladder h2{margin:16px 0 10px;font-size:16px}" +
       ".xm-hm-podiums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}" +
@@ -972,10 +975,8 @@
       ".xm-hm-line{display:block;width:100%;height:160px;margin-top:8px}" +
       ".xm-hm-live-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;width:100%}" +
       ".xm-hm-live-cards .xm-hm-card{text-align:center}" +
-      ".xm-hm-live-cards .xm-hm-card-head{justify-content:center}" +
       ".xm-hm-live .xm-hm-table{min-width:960px}" +
       ".xm-hm-live .xm-hm-panel{overflow-x:auto}" +
-      ".xm-hm-live .xm-hm-table th:nth-child(n+3),.xm-hm-live .xm-hm-table td:nth-child(n+3){text-align:right}" +
       ".xm-hm-card,.xm-hm-pop label{-webkit-user-select:none;user-select:none}" +
       ".xm-hm-card{position:relative;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;padding:12px 14px 10px;box-shadow:var(--xm-shadow);min-height:104px;overflow:visible}" +
       ".xm-hm-card.is-hold,.xm-hm-pop label.is-hold{opacity:.72;cursor:grabbing;pointer-events:none}" +
@@ -1002,9 +1003,8 @@
       ".xm-hm-pop[hidden]{display:none}" +
       ".xm-hm-pop h3{margin:0 0 8px;font-size:13px}" +
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
-      ".xm-hm-note{margin:8px 0 0;color:var(--xm-muted);font-size:12px}" +
-      "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm.is-chief .xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:1fr}}" +
-      "@media (max-width:700px){.xm-hm-kpis,.xm-hm-live-cards,.xm-hm-podiums,.xm-hm-live-charts,.xm-hm-team-kpis{grid-template-columns:1fr}.xm-hm-team-head{flex-direction:column}.xm-hm-cal-months{flex-direction:column}}"
+      ".xm-hm-note{color:var(--xm-muted);font-size:12px}" +
+      "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm.is-chief .xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:1fr}}"
     );
   }
   function frameHtml() {
@@ -1029,7 +1029,7 @@
       "</div></div>" +
       '<div class="xm-hm-pop" id="xm-hm-pop" hidden><h3>卡片设置</h3><div id="xm-hm-card-opts"></div></div>' +
       '<div class="xm-hm-body">' +
-      '<section class="xm-hm-kpis-shell"><div class="xm-hm-teams-bar"><b>星脉甄选</b><button type="button" class="xm-hm-set" id="xm-hm-set">卡片设置</button></div><div class="xm-hm-kpis" id="xm-hm-kpis"></div></section>' +
+      '<section class="xm-hm-kpis-shell"><div class="xm-hm-teams-bar"><b>星脉甄选</b><span><button type="button" data-show-teams>恢复所有卡片</button><button type="button" class="xm-hm-set" id="xm-hm-set">卡片设置</button></span></div><div class="xm-hm-kpis" id="xm-hm-kpis"></div></section>' +
       '<section class="xm-hm-teams" id="xm-hm-teams" hidden></section>' +
       '<section class="xm-hm-live" id="xm-hm-live" hidden></section>' +
       '<section class="xm-hm-board" id="xm-hm-board" hidden>' +
@@ -1057,7 +1057,7 @@
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
-    board.setAttribute("data-hm-js", "0.1.503-home-mgrtbl");
+    board.setAttribute("data-hm-js", "0.1.504-home-cardx");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2086,14 +2086,18 @@
           pullBoard();
           return;
         }
+        var dropCard = event.target.closest("[data-drop-card]");
         var drop = event.target.closest("[data-drop-team]");
-        if (drop) {
+        if (dropCard || drop) {
           viewKey = state.view || "company";
-          var n = drop.getAttribute("data-drop-team") || "";
-          var g = goneTeams();
-          if (n && g.indexOf(n) < 0) {
-            g.push(n);
-            saveGone(g);
+          if (dropCard) {
+            var ck = dropCard.getAttribute("data-drop-card") || "";
+            var hid = hiddenCards();
+            if (ck && hid.indexOf(ck) < 0) hid.push(ck), saveHidden(hid);
+          } else {
+            var n = drop.getAttribute("data-drop-team") || "";
+            var g = goneTeams();
+            if (n && g.indexOf(n) < 0) g.push(n), saveGone(g);
           }
           paint(root, state);
           return;
