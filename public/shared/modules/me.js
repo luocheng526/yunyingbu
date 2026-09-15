@@ -21,16 +21,17 @@
       "@media (max-width:960px){.me-grid{grid-template-columns:1fr;}}" +
       ".me-page .panel{min-height:0;}" +
       ".me-page .panel + .panel{margin-top:12px;}" +
-      ".me-info-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px;}" +
-      ".me-info-head h2{margin:0;font-size:15px;font-weight:600;}" +
-      ".me-info-head span{color:var(--xm-muted,#8c8c8c);font-size:13px;}" +
-      ".me-avatar{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:92px;margin:8px 0 12px;border:1px dashed var(--xm-line,#e5e7eb);border-radius:8px;cursor:pointer;color:var(--xm-muted,#8c8c8c);font-size:13px;background:transparent;width:100%;}" +
+      ".me-info-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--xm-line,#f0f0f0);}" +
+      ".me-info-head h2{margin:0;font-size:15px;font-weight:500;}" +
+      ".me-info-head span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);}" +
+      ".me-avatar{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:148px;margin:0;border:0;cursor:pointer;color:var(--xm-ink,#262626);font-size:14px;background:transparent;width:100%;}" +
       ".me-avatar img{width:72px;height:72px;border-radius:50%;object-fit:cover;}" +
       ".me-avatar input{display:none;}" +
-      ".me-kv{display:grid;font-size:13px;}" +
-      ".me-kv div{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--xm-line,#f0f0f0);color:var(--xm-muted,#8c8c8c);}" +
-      ".me-kv strong{color:var(--xm-ink,#111);font-weight:500;text-align:right;}" +
-      ".me-kv em{display:inline-flex;align-items:center;gap:6px;font-style:normal;}" +
+      ".me-kv{display:grid;font-size:14px;}" +
+      ".me-kv div{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 0;border-top:1px solid var(--xm-line,#f0f0f0);color:var(--xm-ink,#262626);}" +
+      ".me-kv strong{color:var(--xm-ink,#262626);font-weight:400;text-align:right;}" +
+      ".me-kv em{display:inline-flex;align-items:center;gap:8px;font-style:normal;}" +
+      ".me-ico{width:16px;height:16px;flex:0 0 16px;display:block;}" +
       ".me-page input{display:block;width:100%;margin:0 0 10px;padding:8px 10px;border:1px solid var(--xm-line,#e5e7eb);border-radius:8px;font:inherit;background:var(--xm-card,#fff);color:inherit;box-sizing:border-box;}" +
       ".me-page button.me-btn{display:block;width:100%;border:0;border-radius:8px;padding:9px 12px;font:inherit;background:var(--xm-primary,#1677ff);color:#fff;cursor:pointer;}" +
       ".me-page button.me-btn-logout{margin-top:10px;background:#e11d48;}" +
@@ -66,14 +67,11 @@
         '<input id="who-avatar-file" type="file" accept="image/*" />' +
         "</label>" +
         '<div class="me-kv">' +
-        '<div><em>用户名称</em><strong id="who-name"></strong></div>' +
-        '<div><em>手机号码</em><strong id="who-phone"></strong></div>' +
-        '<div><em>用户邮箱</em><strong id="who-email"></strong></div>' +
-        '<div><em>所属部门</em><strong id="who-dept"></strong></div>' +
-        '<div><em>创建日期</em><strong id="who-created"></strong></div>' +
-        '<div><em>数据范围</em><strong id="who-scope"></strong></div>' +
-        '<div><em>角色</em><strong id="who-role"></strong></div>' +
-        '<div><em>权限项</em><strong id="who-count"></strong></div>' +
+        '<div><em><svg class="me-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.2"/><path d="M5 19c.8-3.2 3.5-5 7-5s6.2 1.8 7 5"/></svg>用户名称</em><strong id="who-name"></strong></div>' +
+        '<div><em><svg class="me-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7.5" y="2.5" width="9" height="19" rx="2"/><path d="M11 19.5h2"/></svg>手机号码</em><strong id="who-phone"></strong></div>' +
+        '<div><em><svg class="me-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg>用户邮箱</em><strong id="who-email"></strong></div>' +
+        '<div><em><svg class="me-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V9l8-5 8 5v11"/><path d="M10 20v-7h4v7"/></svg>所属部门</em><strong id="who-dept"></strong></div>' +
+        '<div><em><svg class="me-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="4.5" width="17" height="16" rx="2"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/></svg>创建日期</em><strong id="who-created"></strong></div>' +
         "</div></div>" +
         '<div class="panel"><h2>修改密码</h2>' +
         '<p id="status" class="status" role="status"></p>' +
@@ -121,11 +119,6 @@
         root.querySelector("#who-email").textContent = user.email || "";
         root.querySelector("#who-dept").textContent = user.department || "星脉集团/河西星脉甄选";
         root.querySelector("#who-created").textContent = user.createdAt || "2026-01-01 00:00:00";
-        root.querySelector("#who-scope").textContent = user.dataScope || "";
-        root.querySelector("#who-role").textContent = user.role || "";
-        const count = user.grantedCount != null ? user.grantedCount : 0;
-        const total = user.dutyTotal != null ? user.dutyTotal : count;
-        root.querySelector("#who-count").textContent = count + " 项" + (total ? " / " + total : "");
         try {
           showAvatar(sessionStorage.getItem("xm-me-avatar-" + (user.username || "")));
         } catch (_e) {

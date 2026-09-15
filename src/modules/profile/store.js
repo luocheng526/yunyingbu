@@ -33,7 +33,9 @@ export function publicProfile(user) {
     username: user.username,
     displayName: user.displayName,
     email: user.email,
-    phone: user.phone
+    phone: user.phone,
+    department: user.department || (user.username === DEMO_USERNAME ? "星脉集团/河西星脉甄选" : ""),
+    createdAt: user.createdAt || (user.username === DEMO_USERNAME ? "2026-01-01 00:00:00" : "")
   };
 }
 

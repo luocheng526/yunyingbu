@@ -62,10 +62,24 @@
       .card + .card { margin-top: 1rem; }
       .who {
         display: flex;
-        gap: 0.75rem;
+        justify-content: space-between;
         align-items: center;
-        margin-bottom: 1rem;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #f0f0f0;
       }
+      .me-avatar {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 148px;
+        margin: 0;
+        cursor: pointer;
+        color: #262626;
+      }
+      .me-avatar img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; }
+      .me-ico { width: 16px; height: 16px; flex: 0 0 16px; display: block; }
+      .kv em { display: inline-flex; align-items: center; gap: 8px; font-style: normal; }
       .badge {
         width: 40px;
         height: 40px;
@@ -79,14 +93,17 @@
       }
       .who h2 { margin: 0; font-size: 1.05rem; }
       .who p { margin: 0.2rem 0 0; color: #6b7280; font-size: 0.85rem; }
-      .kv { display: grid; gap: 0.55rem; font-size: 0.92rem; }
+      .kv { display: grid; font-size: 0.92rem; }
       .kv div {
         display: flex;
         justify-content: space-between;
+        align-items: center;
         gap: 0.75rem;
-        color: #6b7280;
+        padding: 13px 0;
+        border-top: 1px solid #f0f0f0;
+        color: #262626;
       }
-      .kv strong { color: #111827; font-weight: 600; }
+      .kv strong { color: #262626; font-weight: 400; }
       .card h3 { margin: 0 0 0.85rem; font-size: 1rem; }
       .card input {
         display: block;
@@ -164,24 +181,21 @@
       <div class="me-grid">
         <section>
           <div class="card" id="who-card">
-            <div class="who" style="justify-content:space-between">
-              <h2 id="who-title" style="margin:0;font-size:1rem">个人信息</h2>
-              <span id="who-username"></span>
+            <div class="who">
+              <h2 id="who-title" style="margin:0;font-size:1rem;font-weight:500">个人信息</h2>
+              <span id="who-username" hidden></span>
             </div>
-            <label class="me-avatar" id="who-avatar" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:92px;margin:0 0 12px;border:1px dashed #e5e7eb;border-radius:8px;cursor:pointer;color:#6b7280">
+            <label class="me-avatar" id="who-avatar">
               <img id="who-avatar-img" alt="" hidden />
               <span id="who-avatar-hint">点击上传头像</span>
               <input id="who-avatar-file" type="file" accept="image/*" style="display:none" />
             </label>
             <div class="kv">
-              <div>用户名称<strong id="who-name"></strong></div>
-              <div>手机号码<strong id="who-phone"></strong></div>
-              <div>用户邮箱<strong id="who-email"></strong></div>
-              <div>所属部门<strong id="who-dept"></strong></div>
-              <div>创建日期<strong id="who-created"></strong></div>
-              <div>数据范围<strong id="who-scope"></strong></div>
-              <div>角色<strong id="who-role"></strong></div>
-              <div>权限项<strong id="who-count"></strong></div>
+              <div><em><svg class="me-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.2"/><path d="M5 19c.8-3.2 3.5-5 7-5s6.2 1.8 7 5"/></svg>用户名称</em><strong id="who-name"></strong></div>
+              <div><em><svg class="me-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7.5" y="2.5" width="9" height="19" rx="2"/><path d="M11 19.5h2"/></svg>手机号码</em><strong id="who-phone"></strong></div>
+              <div><em><svg class="me-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg>用户邮箱</em><strong id="who-email"></strong></div>
+              <div><em><svg class="me-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V9l8-5 8 5v11"/><path d="M10 20v-7h4v7"/></svg>所属部门</em><strong id="who-dept"></strong></div>
+              <div><em><svg class="me-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="4.5" width="17" height="16" rx="2"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/></svg>创建日期</em><strong id="who-created"></strong></div>
             </div>
           </div>
           <div class="card">
@@ -222,11 +236,12 @@
           document.getElementById("who-email").textContent = user.email || "";
           document.getElementById("who-dept").textContent = user.department || "星脉集团/河西星脉甄选";
           document.getElementById("who-created").textContent = user.createdAt || "2026-01-01 00:00:00";
-          document.getElementById("who-scope").textContent = user.dataScope || "";
-          document.getElementById("who-role").textContent = user.role || "";
-          var count = user.grantedCount != null ? user.grantedCount : 0;
-          var total = user.dutyTotal != null ? user.dutyTotal : count;
-          document.getElementById("who-count").textContent = count + " 项" + (total ? " / " + total : "");
+          try {
+            var src = sessionStorage.getItem("xm-me-avatar-" + (user.username || ""));
+            var img = document.getElementById("who-avatar-img");
+            var hint = document.getElementById("who-avatar-hint");
+            if (src) { img.src = src; img.hidden = false; hint.hidden = true; }
+          } catch (_e) {}
         }
         function fillDuties(groups) {
           var root = document.getElementById("duties");
@@ -273,6 +288,21 @@
             return;
           }
           setStatus(result.data.message || "密码已更新", "ok");
+        });
+        document.getElementById("who-avatar-file").addEventListener("change", function (event) {
+          var file = event.target.files && event.target.files[0];
+          event.target.value = "";
+          if (!file || !file.type || file.type.indexOf("image/") !== 0) return;
+          if (file.size > 512 * 1024) { setStatus("头像请小于 512KB", "error"); return; }
+          var reader = new FileReader();
+          reader.onload = function () {
+            var src = String(reader.result || "");
+            var img = document.getElementById("who-avatar-img");
+            var hint = document.getElementById("who-avatar-hint");
+            img.src = src; img.hidden = false; hint.hidden = true;
+            try { sessionStorage.setItem("xm-me-avatar-" + (document.getElementById("who-username").textContent || ""), src); } catch (_e) {}
+          };
+          reader.readAsDataURL(file);
         });
         document.getElementById("logout-form").addEventListener("submit", async function (event) {
           event.preventDefault();

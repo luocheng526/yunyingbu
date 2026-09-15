@@ -400,8 +400,8 @@ export function publicProfile(user) {
     dataScope: user.dataScope || "",
     role: user.role || "",
     badge: user.badge || (user.displayName || user.username || "系").slice(0, 1),
-    department: user.department || "",
-    createdAt: user.createdAt || "",
+    department: user.department || identityDefaults(user.username, user.displayName).department,
+    createdAt: user.createdAt || identityDefaults(user.username, user.displayName).createdAt,
     grantedCount: duties.grantedCount,
     dutyTotal: duties.total
   };
