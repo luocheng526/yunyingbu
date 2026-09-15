@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.530-home-cosales */
+/* xm-module-home 0.1.531-home-salecard */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -406,6 +406,25 @@
         return map[key];
       })
       .filter(Boolean);
+  }
+  var LIVE_SALES_KEY = "liveSales";
+  function liveSalesCard() {
+    return {
+      key: LIVE_SALES_KEY,
+      label: "实时销售金额",
+      value: "—",
+      tip: "今日实时销售金额，按小时累计对比昨天"
+    };
+  }
+  function companySetCards(cards) {
+    return [liveSalesCard()].concat(arrangeCards(cards || blankCompanyCards()));
+  }
+  function companyHideKeys(cards) {
+    return [LIVE_SALES_KEY].concat(
+      arrangeCards(cards || blankCompanyCards()).map(function (card) {
+        return card.key;
+      })
+    );
   }
   function colOrderKey(simple) {
     return simple ? "xm-home-chief-cols" : "xm-home-mgr-cols";
@@ -1220,7 +1239,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.530-home-cosales");
+    board.setAttribute("data-hm-js", "0.1.531-home-salecard");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1232,7 +1251,8 @@
       btn.classList.toggle("is-on", btn.getAttribute("data-range") === state.range);
     });
     root.querySelector("#xm-hm-date-text").textContent = formatDashDate(state.from) + " 至 " + formatDashDate(state.to);
-    root.querySelector("#xm-hm-sales").innerHTML = state.view === "company" ? companySalesHtml(hero) : "";
+    root.querySelector("#xm-hm-sales").innerHTML =
+      state.view === "company" && hide.indexOf(LIVE_SALES_KEY) === -1 ? companySalesHtml(hero) : "";
     root.querySelector("#xm-hm-kpis").innerHTML = cards.map(cardHtml).join("");
     var teamBox = root.querySelector("#xm-hm-teams");
     teamBox.hidden = !teamView;
@@ -1269,7 +1289,7 @@
         : "数字来自星脉 ERP。";
     root.querySelector("#xm-hm-pop h3").textContent =
       "卡片设置 · " + (state.view === "team" ? "经理团队" : state.view === "chief" ? "主管/储备" : "公司");
-    var setCards = arrangeCards(state.cards || blankCompanyCards());
+    var setCards = state.view === "company" ? companySetCards(state.cards) : arrangeCards(state.cards || blankCompanyCards());
     var allOn = setCards.length > 0 && setCards.every(function (card) {
       return hide.indexOf(card.key) === -1;
     });
@@ -2703,9 +2723,11 @@
           saveHidden(
             event.target.checked
               ? []
-              : arrangeCards(state.cards || blankCompanyCards()).map(function (card) {
-                  return card.key;
-                })
+              : state.view === "company"
+                ? companyHideKeys(state.cards)
+                : arrangeCards(state.cards || blankCompanyCards()).map(function (card) {
+                    return card.key;
+                  })
           );
           paint(root, state);
           return;

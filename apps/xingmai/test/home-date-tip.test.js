@@ -126,9 +126,15 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function todayHours/);
   assert.match(homeJs, /function padHours/);
   assert.match(homeJs, /function companySalesHtml/);
+  assert.match(homeJs, /function companySetCards/);
+  assert.match(homeJs, /function liveSalesCard/);
+  assert.match(homeJs, /LIVE_SALES_KEY = "liveSales"/);
   assert.match(homeJs, /id="xm-hm-sales"/);
   assert.match(homeJs, /实时销售金额/);
   assert.match(homeJs, /companySalesHtml\(hero\)/);
+  assert.match(homeJs, /hide\.indexOf\(LIVE_SALES_KEY\) === -1/);
+  assert.match(homeJs, /state\.view === "company" \? companySetCards\(state\.cards\)/);
+  assert.match(homeJs, /companyHideKeys\(state\.cards\)/);
   assert.match(homeJs, /xm-hm-sales-chart/);
   assert.match(homeJs, /state\.view === "live" \|\| state\.view === "company"/);
   assert.match(homeJs, /function cumHours/);
@@ -261,6 +267,12 @@ test("chief board keeps admins on all columns and others on their own duty", () 
     fns.filterOwnChiefs(teams, { displayName: "杨润泽", role: "主管" }).map((row) => row.name),
     ["杨润泽"]
   );
+});
+
+test("company card settings list starts with 实时销售金额", () => {
+  assert.match(homeJs, /function companySetCards\(cards\) \{\n    return \[liveSalesCard\(\)\]\.concat\(arrangeCards/);
+  assert.match(homeJs, /key: LIVE_SALES_KEY,\n      label: "实时销售金额"/);
+  assert.doesNotMatch(homeJs, /COMPANY_CARD_DEFS = \[\n    \{ key: "liveSales"/);
 });
 
 test("card settings persist separately for 公司 经理团队 and 主管/储备", () => {
