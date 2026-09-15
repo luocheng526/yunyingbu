@@ -132,10 +132,13 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function halfTipLabel/);
   assert.match(homeJs, /function halfSalesChart/);
   assert.match(homeJs, /function hoursAttr/);
-  assert.match(homeJs, /function compareBarsHtml/);
-  assert.match(homeJs, /function hourFromBarEvent/);
-  assert.match(homeJs, /柱：分时金额/);
-  assert.match(homeJs, /柱：分时费比/);
+  assert.match(homeJs, /function lineChartOf/);
+  assert.doesNotMatch(homeJs, /function compareBarsHtml/);
+  assert.doesNotMatch(homeJs, /function hourFromBarEvent/);
+  assert.doesNotMatch(homeJs, /柱：分时金额/);
+  assert.doesNotMatch(homeJs, /柱：分时费比/);
+  assert.match(homeJs, /线：累计（23点=1-23点）/);
+  assert.match(homeJs, /线：当天费比/);
   assert.match(homeJs, /function repeatHours/);
   assert.match(homeJs, /unit: src\.unit \|\| base\.unit/);
   assert.match(homeJs, /lineMode: src\.lineMode \|\| base\.lineMode/);
@@ -424,8 +427,10 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
   assert.match(html, /data-hours="24"/);
   assert.doesNotMatch(html, /环比/);
   assert.doesNotMatch(html, /<circle/);
-  const red = html.match(/class="xm-hm-cum is-today"[^>]*points="([^"]+)"/);
-  const blue = html.match(/class="xm-hm-cum is-yest"[^>]*points="([^"]+)"/);
+  assert.doesNotMatch(html, /xm-hm-bars/);
+  assert.doesNotMatch(html, /xm-hm-col/);
+  const red = html.match(/stroke="#cf1322"[^>]*points="([^"]+)"/);
+  const blue = html.match(/stroke="#2f54eb"[^>]*points="([^"]+)"/);
   assert.ok(red && blue);
   assert.equal(red[1].trim().split(/\s+/).length, 3);
   assert.equal(blue[1].trim().split(/\s+/).length, 24);
@@ -435,11 +440,8 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
   assert.ok(lastX > 600);
   assert.match(html, />1<\/text>/);
   assert.match(html, />24<\/text>/);
-  assert.match(html, /柱：分时金额/);
-  assert.match(html, /data-bars="24"/);
+  assert.match(html, /线：累计（23点=1-23点）/);
   assert.match(html, /preserveAspectRatio="none"/);
-  assert.equal((html.match(/class="xm-hm-col is-yest"/g) || []).length, 24);
-  assert.equal((html.match(/class="xm-hm-col is-today"/g) || []).length, 3);
   const liveHtml = fns.liveChartHtml({
     label: "实时销售指数",
     value: "12,345",
@@ -454,10 +456,9 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
   assert.match(liveHtml, /data-hours="24"/);
   assert.match(liveHtml, /data-chart="sales"/);
   assert.doesNotMatch(liveHtml, /<circle/);
-  assert.equal((liveHtml.match(/class="xm-hm-col is-yest"/g) || []).length, 24);
-  assert.equal((liveHtml.match(/class="xm-hm-col is-today"/g) || []).length, 3);
-  const liveBlue = liveHtml.match(/class="xm-hm-cum is-yest"[^>]*points="([^"]+)"/);
-  const liveRed = liveHtml.match(/class="xm-hm-cum is-today"[^>]*points="([^"]+)"/);
+  assert.doesNotMatch(liveHtml, /xm-hm-col/);
+  const liveBlue = liveHtml.match(/stroke="#2f54eb"[^>]*points="([^"]+)"/);
+  const liveRed = liveHtml.match(/stroke="#cf1322"[^>]*points="([^"]+)"/);
   assert.ok(liveBlue && liveRed);
   assert.equal(liveBlue[1].trim().split(/\s+/).length, 24);
   assert.equal(liveRed[1].trim().split(/\s+/).length, 3);
@@ -473,8 +474,8 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
   assert.match(feeHtml, /data-chart="fee"/);
   assert.match(feeHtml, /data-unit="rate"/);
   assert.match(feeHtml, /data-hours="24"/);
-  assert.equal((feeHtml.match(/class="xm-hm-col is-yest"/g) || []).length, 24);
-  assert.equal((feeHtml.match(/class="xm-hm-col is-today"/g) || []).length, 3);
+  assert.match(feeHtml, /线：当天费比/);
+  assert.doesNotMatch(feeHtml, /xm-hm-col/);
 });
 
 test("live sales chart keeps 24-hour axis and hides future today points", () => {
@@ -504,10 +505,8 @@ test("live sales chart keeps 24-hour axis and hides future today points", () => 
   const now = hours.todayHours(Array.from({ length: 24 }, (_, i) => i + 1));
   assert.ok(now.length >= 1 && now.length <= 24);
   const fromEnd = homeJs.indexOf("function compareLineHtml");
-  const fromEv = new Function(homeJs.slice(homeJs.indexOf("function hourX"), fromEnd) + "return {hourFromEvent, hourFromBarEvent};")();
+  const fromEv = new Function(homeJs.slice(homeJs.indexOf("function hourX"), fromEnd) + "return {hourFromEvent};")();
   const svg = { getBoundingClientRect: () => ({ left: 0, width: 640 }) };
   assert.equal(fromEv.hourFromEvent(svg, { clientX: 10 }, 24), 0);
   assert.equal(fromEv.hourFromEvent(svg, { clientX: 10 + 620 * (7 / 23) }, 24), 7);
-  assert.equal(fromEv.hourFromBarEvent(svg, { clientX: 10 + 4 }), 0);
-  assert.equal(fromEv.hourFromBarEvent(svg, { clientX: 10 + (620 / 24) * 7.2 }), 7);
 });
