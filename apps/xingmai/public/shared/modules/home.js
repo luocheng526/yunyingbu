@@ -833,7 +833,9 @@
       today: src.today && src.today.length ? src.today : src.spark && src.spark.length ? src.spark : base.today,
       yesterdayHour: src.yesterdayHour && src.yesterdayHour.length ? src.yesterdayHour : base.yesterdayHour || [],
       todayHour: src.todayHour && src.todayHour.length ? src.todayHour : base.todayHour || [],
-      hours: src.hours || base.hours || 0
+      hours: src.hours || base.hours || 0,
+      unit: src.unit || base.unit || "",
+      lineMode: src.lineMode || base.lineMode || ""
     };
   }
   function hourX(i, slots) {
@@ -1772,7 +1774,7 @@
       title: "实时看板",
       summary: { channels: 1, shops: 0 },
       hero: { label: "实时销售指数", value: "—", delta: 0, yesterday: [], today: [], yesterdayHour: [], todayHour: [], hours: 0 },
-      paid: { label: "实时费比", value: "—", delta: 0, yesterday: [], today: [] },
+      paid: { label: "实时费比", value: "—", delta: 0, yesterday: [], today: [], yesterdayHour: [], todayHour: [], hours: 0, unit: "rate", lineMode: "flat" },
       cards: [
         { key: "ad", label: "推广花费 (支付预估)", value: "—" },
         { key: "roi", label: "付费成交ROI", value: "—" },

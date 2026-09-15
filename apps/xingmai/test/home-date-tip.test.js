@@ -135,6 +135,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /柱：分时金额/);
   assert.match(homeJs, /柱：分时费比/);
   assert.match(homeJs, /function repeatHours/);
+  assert.match(homeJs, /unit: src\.unit \|\| base\.unit/);
+  assert.match(homeJs, /lineMode: src\.lineMode \|\| base\.lineMode/);
   assert.match(homeJs, /preserveAspectRatio="none"/);
   assert.match(homeJs, /noDots: true/);
   assert.match(homeJs, /function companySetCards/);
