@@ -289,6 +289,15 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(liveJs.text, /昨天/);
     assert.match(liveJs.text, /今天/);
     assert.match(liveJs.text, /\/api\/home\/live/);
+    assert.match(liveJs.text, /xm-hm-title/);
+    assert.match(liveJs.text, /实时看板/);
+    assert.match(liveJs.text, /卡片设置/);
+    assert.match(liveJs.text, /feeRateChart/);
+    assert.match(liveJs.text, /salesChart/);
+    assert.match(liveJs.text, /xm-data-live-cards/);
+    assert.doesNotMatch(liveJs.text, /HOME_VIEWS/);
+    assert.doesNotMatch(liveJs.text, /排行榜/);
+    assert.doesNotMatch(liveJs.text, /data-view/);
     assert.doesNotMatch(liveJs.text, /统计时间/);
     assert.doesNotMatch(liveJs.text, /渠道总览/);
     assert.doesNotMatch(paidPage.text, /实时明细/);
@@ -536,7 +545,7 @@ test("release allowlist never includes the live site entrypoint", () => {
     assert.match(dataMod, /data-goods\.js\?v=goods-erp1/);
   assert.doesNotMatch(dataMod, /店铺周报/);
   assert.doesNotMatch(dataMod, /商品周报/);
-  assert.match(dataMod, /data-live\.js/);
+  assert.match(dataMod, /data-live\.js\?v=home-live3/);
   assert.match(dataMod, /renameDataPaidNav/);
   assert.match(dataMod, /实时看板/);
   assert.doesNotMatch(dataMod, /实时明细/);
