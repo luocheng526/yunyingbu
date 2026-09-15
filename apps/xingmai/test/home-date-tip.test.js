@@ -123,7 +123,10 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /key: "livePaid", label: "实时付费金额"/);
   assert.match(homeJs, /\/api\/home\/erp-paid/);
   assert.match(homeJs, /function seriesOf/);
+  assert.match(homeJs, /function todayHours/);
+  assert.match(homeJs, /function padHours/);
   assert.match(homeJs, /hourly\.todayPay/);
+  assert.match(homeJs, /hours: hasHourly \? 24 : 0/);
   assert.doesNotMatch(homeJs, /LIVE_CARD_KEYS = \["ad", "profit"/);
   assert.match(homeJs, /data-shop-card=/);
   assert.match(homeJs, /<th>排名<\/th><th>店铺名称<\/th><th>实时销售额/);
@@ -348,4 +351,29 @@ test("card settings pop sits under the clicked 卡片设置 button", () => {
   fns.placeCardPop(root, btn);
   assert.equal(pop.style.top, "108px");
   assert.equal(pop.style.left, "420px");
+});
+
+test("live sales chart keeps 24-hour axis and hides future today points", () => {
+  const start = homeJs.indexOf("function compareLineHtml");
+  const end = homeJs.indexOf("function liveChartHtml");
+  assert.ok(start !== -1 && end > start);
+  const fns = new Function(homeJs.slice(start, end) + "return {compareLineHtml};")();
+  const yest = Array.from({ length: 24 }, (_, i) => i + 1);
+  const html = fns.compareLineHtml({ yesterday: yest, today: [10, 20, 30], hours: 24 });
+  const red = html.match(/stroke="#cf1322"[^>]*points="([^"]+)"/);
+  const blue = html.match(/stroke="#2f54eb"[^>]*points="([^"]+)"/);
+  assert.ok(red && blue);
+  assert.equal(red[1].trim().split(/\s+/).length, 3);
+  assert.equal(blue[1].trim().split(/\s+/).length, 24);
+  assert.match(html, />1<\/text>/);
+  assert.match(html, />24<\/text>/);
+  const redEnd = Number(red[1].trim().split(/\s+/).pop().split(",")[0]);
+  const blueEnd = Number(blue[1].trim().split(/\s+/).pop().split(",")[0]);
+  assert.ok(redEnd < blueEnd - 10);
+  const hourStart = homeJs.indexOf("function shanghaiHour");
+  const hourEnd = homeJs.indexOf("function seriesOf");
+  const hours = new Function(homeJs.slice(hourStart, hourEnd) + "return {todayHours, padHours};")();
+  assert.equal(hours.padHours([1, 2], 24).length, 24);
+  const now = hours.todayHours(Array.from({ length: 24 }, (_, i) => i + 1));
+  assert.ok(now.length >= 1 && now.length <= 24);
 });

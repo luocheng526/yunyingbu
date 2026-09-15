@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.518-home-teamrs */
+/* xm-module-home 0.1.520-home-hr24 */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -769,11 +769,13 @@
   }
   function compareLineHtml(chart) {
     var width = 640;
-    var height = 168;
-    var padX = 8;
-    var padY = 14;
+    var height = 184;
+    var padX = 10;
+    var padTop = 12;
+    var padBot = 22;
     var yest = (chart && chart.yesterday) || [];
     var today = (chart && chart.today) || [];
+    var slots = Number(chart && chart.hours) > 2 ? Number(chart.hours) : Math.max(yest.length, today.length, 2);
     var max = 1;
     yest.concat(today).forEach(function (n) {
       var v = Number(n) || 0;
@@ -781,21 +783,47 @@
         max = v;
       }
     });
-    var steps = Math.max(yest.length, today.length, 2) - 1;
+    var steps = Math.max(slots - 1, 1);
+    function xAt(i) {
+      return padX + (i / steps) * (width - padX * 2);
+    }
+    function yAt(n) {
+      return height - padBot - ((Number(n) || 0) / max) * (height - padTop - padBot);
+    }
     function pts(list) {
-      if (!list.length) {
-        return "";
-      }
       return list
         .map(function (n, i) {
-          var x = padX + (i / steps) * (width - padX * 2);
-          var y = height - padY - ((Number(n) || 0) / max) * (height - padY * 2);
-          return x.toFixed(1) + "," + y.toFixed(1);
+          return xAt(i).toFixed(1) + "," + yAt(n).toFixed(1);
         })
         .join(" ");
     }
-    var yestPts = pts(yest);
-    var todayPts = pts(today);
+    function dots(list, color) {
+      return list
+        .map(function (n, i) {
+          return '<circle cx="' + xAt(i).toFixed(1) + '" cy="' + yAt(n).toFixed(1) + '" r="2.4" fill="' + color + '"></circle>';
+        })
+        .join("");
+    }
+    function axis() {
+      if (slots !== 24) {
+        return "";
+      }
+      var out = [];
+      for (var h = 1; h <= 24; h += 1) {
+        out.push(
+          '<text x="' +
+            xAt(h - 1).toFixed(1) +
+            '" y="' +
+            (height - 5) +
+            '" text-anchor="middle" fill="#8c8c8c" font-size="8">' +
+            h +
+            "</text>"
+        );
+      }
+      return out.join("");
+    }
+    var yestPts = yest.length ? pts(yest) : "";
+    var todayPts = today.length ? pts(today) : "";
     return (
       '<svg class="xm-hm-line" viewBox="0 0 ' +
       width +
@@ -804,6 +832,9 @@
       '">' +
       (yestPts ? '<polyline fill="none" stroke="#2f54eb" stroke-width="2.4" points="' + yestPts + '"></polyline>' : "") +
       (todayPts ? '<polyline fill="none" stroke="#cf1322" stroke-width="2.4" points="' + todayPts + '"></polyline>' : "") +
+      (yest.length ? dots(yest, "#2f54eb") : "") +
+      (today.length ? dots(today, "#cf1322") : "") +
+      axis() +
       "</svg>"
     );
   }
@@ -973,7 +1004,7 @@
       ".xm-hm-legs i{width:10px;height:10px;border-radius:50%;display:inline-block}" +
       ".xm-hm-legs i.is-yest{background:#2f54eb}" +
       ".xm-hm-legs i.is-today{background:#cf1322}" +
-      ".xm-hm-line{display:block;width:100%;height:160px;margin-top:8px}" +
+      ".xm-hm-line{display:block;width:100%;height:180px;margin-top:8px}" +
       ".xm-hm-live-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;width:100%}" +
       ".xm-hm-live-cards .xm-hm-card{text-align:center}" +
       ".xm-hm-live .xm-hm-table{min-width:960px}" +
@@ -1088,7 +1119,7 @@
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
-    board.setAttribute("data-hm-js", "0.1.518-home-teamrs");
+    board.setAttribute("data-hm-js", "0.1.520-home-hr24");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1702,19 +1733,22 @@
   function shanghaiHour() {
     return Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Shanghai", hour: "2-digit", hour12: false }).format(new Date()).slice(0, 2)) || 0;
   }
-  function seriesCut(hourly) {
-    var end = Math.min((hourly && hourly.length) || 0, shanghaiHour() + 1);
-    while (end > 2 && hourly && !(Number(hourly[end - 1]) > 0)) {
-      end -= 1;
+  function padHours(hourly, slots) {
+    slots = slots || 24;
+    var src = hourly && hourly.length ? hourly.slice() : [];
+    while (src.length < slots) {
+      src.push(0);
     }
-    return end;
+    return src.slice(0, slots);
   }
-  function seriesOf(hourly, fallback, end) {
-    var src = hourly && hourly.length ? hourly : fallback == null ? [] : [fallback, fallback];
-    if (hourly && hourly.length > 2) {
-      return src.slice(0, Math.min(src.length, end || seriesCut(hourly)));
+  function todayHours(hourly) {
+    return padHours(hourly, 24).slice(0, Math.min(24, shanghaiHour() + 1));
+  }
+  function seriesOf(hourly, fallback) {
+    if (hourly && hourly.length) {
+      return hourly;
     }
-    return src;
+    return fallback == null ? [] : [fallback, fallback];
   }
   function liveFromErp(todayPack, yestPack, snapPack) {
     var live = blankLive();
@@ -1726,13 +1760,14 @@
     var todayAd = todaySum.totalPromotionCost;
     var yestAd = yestSum.totalPromotionCost;
     var hourly = (todayPack && todayPack.hourly) || (snapPack && snapPack.hourly) || {};
-    var hourEnd = seriesCut(hourly.todayPay);
+    var hasHourly = hourly.todayPay && hourly.todayPay.length > 2;
     live.hero = {
       label: "实时销售指数",
       value: fmtMoney(todayPay),
       delta: trendOf(todayPay, yestPay),
-      yesterday: seriesOf(hourly.yesterdayPay, yestPay, hourEnd),
-      today: seriesOf(hourly.todayPay, todayPay, hourEnd)
+      yesterday: hasHourly ? padHours(hourly.yesterdayPay, 24) : seriesOf(hourly.yesterdayPay, yestPay),
+      today: hasHourly ? todayHours(hourly.todayPay) : seriesOf(hourly.todayPay, todayPay),
+      hours: hasHourly ? 24 : 0
     };
     var todayFee = todaySum.promotionRate != null ? todaySum.promotionRate : snap.promotionRate;
     var yestFee = yestSum.promotionRate;
