@@ -128,7 +128,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function companySalesHtml/);
   assert.match(homeJs, /function toHalfIncrements/);
   assert.match(homeJs, /function halfTipLabel/);
-  assert.match(homeJs, /data-hours="' \+ sales\.hours/);
+  assert.match(homeJs, /function halfSalesChart/);
+  assert.match(homeJs, /function hoursAttr/);
   assert.match(homeJs, /noDots: true/);
   assert.match(homeJs, /function companySetCards/);
   assert.match(homeJs, /function liveSalesCard/);
@@ -146,7 +147,7 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function onLineTipMove/);
   assert.match(homeJs, /function lineTipHtml/);
   assert.match(homeJs, /lineTipEl\.id = "xm-hm-line-tip"/);
-  assert.match(homeJs, /data-hours="24"/);
+  assert.match(homeJs, /data-hours="' \+ hours \+ '"/);
   assert.match(homeJs, /yesterday: hasHourly \? cumHours\(yestHour\)/);
   assert.match(homeJs, /today: hasHourly \? cumHours\(todayHour\)/);
   assert.match(homeJs, /<i class="is-today"><\/i>实时/);
@@ -391,7 +392,7 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
   assert.ok(start !== -1 && end > start && cum.indexOf("function cumHours") === 0);
   const fns = new Function(
     "escapeHtml",
-    cum + homeJs.slice(start, end) + "return {companySalesHtml, compareLineHtml, toHalfIncrements, halfTipLabel};"
+    cum + homeJs.slice(start, end) + "return {companySalesHtml, liveChartHtml, compareLineHtml, toHalfIncrements, halfTipLabel};"
   )((value) => String(value == null ? "" : value));
   assert.deepEqual(fns.toHalfIncrements([2, 4]), [1, 1, 2, 2]);
   assert.equal(fns.halfTipLabel(0), "0:30");
@@ -420,6 +421,24 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
   assert.equal(blue[1].trim().split(/\s+/).length, 48);
   assert.match(html, />1<\/text>/);
   assert.match(html, />24<\/text>/);
+  const liveHtml = fns.liveChartHtml({
+    label: "实时销售指数",
+    value: "12,345",
+    delta: 8,
+    yesterday: yest,
+    today: today,
+    yesterdayHour: yest,
+    todayHour: today,
+    hours: 24
+  });
+  assert.match(liveHtml, /实时销售指数/);
+  assert.match(liveHtml, /data-hours="48"/);
+  assert.doesNotMatch(liveHtml, /<circle/);
+  const liveBlue = liveHtml.match(/stroke="#2f54eb"[^>]*points="([^"]+)"/);
+  const liveRed = liveHtml.match(/stroke="#cf1322"[^>]*points="([^"]+)"/);
+  assert.ok(liveBlue && liveRed);
+  assert.equal(liveBlue[1].trim().split(/\s+/).length, 48);
+  assert.equal(liveRed[1].trim().split(/\s+/).length, 6);
 });
 
 test("live sales chart keeps 24-hour axis and hides future today points", () => {

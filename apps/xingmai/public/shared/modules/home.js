@@ -943,11 +943,27 @@
       "</svg>"
     );
   }
+  function halfSalesChart(chart) {
+    var yestHour = (chart && chart.yesterdayHour) || [];
+    var todayHour = (chart && chart.todayHour) || [];
+    var hasHalf = yestHour.length > 2 || todayHour.length > 2;
+    return {
+      yesterday: hasHalf ? cumHours(toHalfIncrements(yestHour)) : (chart && chart.yesterday) || [],
+      today: hasHalf ? cumHours(toHalfIncrements(todayHour)) : (chart && chart.today) || [],
+      hours: hasHalf ? 48 : Number(chart && chart.hours) || 0,
+      noDots: true,
+      height: 268
+    };
+  }
+  function hoursAttr(hours) {
+    return Number(hours) === 48 || Number(hours) === 24 ? ' data-hours="' + hours + '"' : "";
+  }
   function liveChartHtml(chart) {
     var down = Number(chart && chart.delta) < 0;
+    var line = halfSalesChart(chart);
     return (
       '<article class="xm-hm-chart"' +
-      (Number(chart && chart.hours) === 24 ? ' data-hours="24"' : "") +
+      hoursAttr(line.hours) +
       '><div class="xm-hm-card-head"><span>' +
       escapeHtml((chart && chart.label) || "实时指标") +
       '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
@@ -959,37 +975,21 @@
       " " +
       Math.round(Math.abs(Number(chart && chart.delta) || 0)) +
       "%</div>" +
-      compareLineHtml({
-        label: chart && chart.label,
-        value: chart && chart.value,
-        delta: chart && chart.delta,
-        yesterday: chart && chart.yesterday,
-        today: chart && chart.today,
-        hours: chart && chart.hours,
-        noDots: true,
-        height: Number(chart && chart.hours) === 24 ? 220 : 184
-      }) +
+      compareLineHtml(line) +
       "</article>"
     );
   }
   function companySalesHtml(chart) {
-    var yestHour = (chart && chart.yesterdayHour) || [];
-    var todayHour = (chart && chart.todayHour) || [];
-    var hasHalf = yestHour.length > 2 || todayHour.length > 2;
-    var yestHalf = hasHalf ? toHalfIncrements(yestHour) : [];
-    var todayHalf = hasHalf ? toHalfIncrements(todayHour) : [];
-    var sales = {
-      label: "实时销售金额",
-      value: (chart && chart.value) || "—",
-      yesterday: hasHalf ? cumHours(yestHalf) : (chart && chart.yesterday) || [],
-      today: hasHalf ? cumHours(todayHalf) : (chart && chart.today) || [],
-      hours: hasHalf ? 48 : (chart && chart.hours) || 0,
-      noDots: true,
-      height: 268
-    };
+    var sales = Object.assign(
+      {
+        label: "实时销售金额",
+        value: (chart && chart.value) || "—"
+      },
+      halfSalesChart(chart)
+    );
     return (
       '<article class="xm-hm-chart xm-hm-sales-chart"' +
-      (Number(sales.hours) === 48 || Number(sales.hours) === 24 ? ' data-hours="' + sales.hours + '"' : "") +
+      hoursAttr(sales.hours) +
       '><div class="xm-hm-card-head"><span>' +
       escapeHtml(sales.label) +
       '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
@@ -1082,8 +1082,7 @@
       ".xm-hm-kpis-shell,.xm-hm-teams{padding:10px}" +
       ".xm-hm-sales{margin:0 0 10px}" +
       ".xm-hm-sales-chart{width:100%}" +
-      ".xm-hm-sales-chart .xm-hm-line{height:320px}" +
-      '.xm-hm-live .xm-hm-chart[data-hours="24"] .xm-hm-line{height:240px}' +
+      ".xm-hm-sales-chart .xm-hm-line,.xm-hm-live .xm-hm-line{height:320px}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
       ".xm-hm-teams{display:flex;flex-direction:column;gap:10px;overflow-x:auto}" +
       ".xm-hm-teams-bar{display:flex;justify-content:space-between;align-items:center;padding:0 0 8px}" +
