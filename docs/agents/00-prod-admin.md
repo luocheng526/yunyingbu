@@ -19,3 +19,9 @@
 ## 本对话备忘
 
 仅用于 Cloud 对闸门交单，不上登录页、不写进单据正文。
+
+## 升壳
+
+`/me` 由主框架壳挂载 `/shared/modules/me.js`。个人中心只交模块和接口，**不改** `nav.js` / `layout.css` / `nav-items.js` / 壳 HTML。
+
+需要用户立刻看到新 `me.js` 时（壳对 `/shared` 有长缓存，或 `me.js` 没带 `?v=`），**只给主框架说一声**，请它升 `SHELL_ASSET_VER` 并给 `me.js` 加上与 `nav.js` 相同的 `?v=`。不要自己改壳，也不要指挥其它板块。
