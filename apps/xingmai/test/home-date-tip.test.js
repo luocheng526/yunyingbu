@@ -50,10 +50,11 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.doesNotMatch(homeJs, /\.xm-hm\.is-chief \.xm-hm-card\{aspect-ratio:1\/1/);
   assert.match(homeJs, /xm-hm-teams-bar"><b>星脉甄选<\/b><span><button type="button" data-show-teams>恢复所有卡片<\/button><button type="button" class="xm-hm-set">卡片设置/);
   assert.match(homeJs, /data-drop-team="/);
-  assert.match(homeJs, /data-drop-card="/);
+  assert.doesNotMatch(homeJs, /data-drop-card="/);
   assert.match(homeJs, /class="xm-hm-drop"/);
   assert.match(homeJs, /title="删除此团队"/);
-  assert.match(homeJs, /title="删除此卡片"/);
+  assert.doesNotMatch(homeJs, /title="删除此卡片"/);
+  assert.match(homeJs, /function teamHeadHtml\(team, simple\)/);
   assert.match(homeJs, /function goneTeams/);
   assert.match(homeJs, /function saveGone/);
   assert.match(homeJs, /saveGone\(\[\]\);\n          saveHidden\(\[\]\);/);

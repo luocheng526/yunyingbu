@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.504-home-cardx */
+/* xm-module-home 0.1.505-home-chiefx */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -442,11 +442,9 @@
       (teamKey ? ' data-team="' + escapeHtml(teamKey) + '"' : "") +
       '><div class="xm-hm-card-head"><span>' +
       escapeHtml(card.label) +
-      '</span><span class="xm-hm-card-tools"><button type="button" class="xm-hm-help" data-tip="' +
+      '</span><button type="button" class="xm-hm-help" data-tip="' +
       tipAttr(card.tip) +
-      '" aria-label="指标说明">!</button><button type="button" class="xm-hm-drop" data-drop-card="' +
-      escapeHtml(card.key) +
-      '" title="删除此卡片">×</button></span></div><div class="xm-hm-value' +
+      '" aria-label="指标说明">!</button></div><div class="xm-hm-value' +
       (card.accent ? " is-accent" : "") +
       '">' +
       escapeHtml(card.value) +
@@ -573,15 +571,19 @@
       "</td></tr>"
     );
   }
-  function teamHeadHtml(team) {
+  function teamHeadHtml(team, simple) {
     return (
       '<header class="xm-hm-team-head" data-team="' +
       escapeHtml(team.key) +
       '"><div><h2>' +
       escapeHtml(team.name) +
-      '团队</h2></div><button type="button" class="xm-hm-drop" data-drop-team="' +
-      escapeHtml(team.name) +
-      '" title="删除此团队">×</button></header>'
+      "团队</h2></div>" +
+      (simple
+        ? '<button type="button" class="xm-hm-drop" data-drop-team="' +
+          escapeHtml(team.name) +
+          '" title="删除此团队">×</button>'
+        : "") +
+      "</header>"
     );
   }
   function teamShopsHtml(team, simple) {
@@ -635,7 +637,7 @@
       '" data-name="' +
       escapeHtml(team.name) +
       '">' +
-      teamHeadHtml(team) +
+      teamHeadHtml(team, simple) +
       '<div class="xm-hm-team-kpis">' +
       cards
         .map(function (card) {
@@ -944,7 +946,6 @@
       ".xm-hm-teams-bar span{display:flex;gap:12px}" +
       "[data-show-teams]{border:0;background:0;color:var(--xm-primary);cursor:pointer;padding:0;font-size:13px}" +
       ".xm-hm-drop{width:20px;height:20px;border:1px solid #d96c6c;border-radius:50%;background:#fff;color:#c45656;font-size:16px;line-height:18px;cursor:pointer;padding:0}" +
-      ".xm-hm-card-tools{display:flex;gap:4px}" +
       ".xm-hm-ladder{margin-top:4px}" +
       ".xm-hm-ladder h2{margin:16px 0 10px;font-size:16px}" +
       ".xm-hm-podiums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}" +
@@ -1029,7 +1030,7 @@
       "</div></div>" +
       '<div class="xm-hm-pop" id="xm-hm-pop" hidden><h3>卡片设置</h3><div id="xm-hm-card-opts"></div></div>' +
       '<div class="xm-hm-body">' +
-      '<section class="xm-hm-kpis-shell"><div class="xm-hm-teams-bar"><b>星脉甄选</b><span><button type="button" data-show-teams>恢复所有卡片</button><button type="button" class="xm-hm-set" id="xm-hm-set">卡片设置</button></span></div><div class="xm-hm-kpis" id="xm-hm-kpis"></div></section>' +
+      '<section class="xm-hm-kpis-shell"><div class="xm-hm-teams-bar"><b>星脉甄选</b><button type="button" class="xm-hm-set" id="xm-hm-set">卡片设置</button></div><div class="xm-hm-kpis" id="xm-hm-kpis"></div></section>' +
       '<section class="xm-hm-teams" id="xm-hm-teams" hidden></section>' +
       '<section class="xm-hm-live" id="xm-hm-live" hidden></section>' +
       '<section class="xm-hm-board" id="xm-hm-board" hidden>' +
@@ -1057,7 +1058,7 @@
     var paid = readChart(live.paid, blankLive().paid);
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
-    board.setAttribute("data-hm-js", "0.1.504-home-cardx");
+    board.setAttribute("data-hm-js", "0.1.505-home-chiefx");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2086,18 +2087,14 @@
           pullBoard();
           return;
         }
-        var dropCard = event.target.closest("[data-drop-card]");
         var drop = event.target.closest("[data-drop-team]");
-        if (dropCard || drop) {
+        if (drop) {
           viewKey = state.view || "company";
-          if (dropCard) {
-            var ck = dropCard.getAttribute("data-drop-card") || "";
-            var hid = hiddenCards();
-            if (ck && hid.indexOf(ck) < 0) hid.push(ck), saveHidden(hid);
-          } else {
-            var n = drop.getAttribute("data-drop-team") || "";
-            var g = goneTeams();
-            if (n && g.indexOf(n) < 0) g.push(n), saveGone(g);
+          var n = drop.getAttribute("data-drop-team") || "";
+          var g = goneTeams();
+          if (n && g.indexOf(n) < 0) {
+            g.push(n);
+            saveGone(g);
           }
           paint(root, state);
           return;
