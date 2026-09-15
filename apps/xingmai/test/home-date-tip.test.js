@@ -148,15 +148,14 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /preserveAspectRatio="none"/);
   assert.match(homeJs, /noDots: true/);
   assert.match(homeJs, /function companySetCards/);
-  assert.match(homeJs, /function liveSalesCard/);
-  assert.match(homeJs, /LIVE_SALES_KEY = "liveSales"/);
+  assert.doesNotMatch(homeJs, /function liveSalesCard/);
+  assert.doesNotMatch(homeJs, /LIVE_SALES_KEY = "liveSales"/);
   assert.match(homeJs, /id="xm-hm-sales"/);
-  assert.match(homeJs, /实时销售金额/);
-  assert.match(homeJs, /companySalesHtml\(hero\)/);
-  assert.match(homeJs, /hide\.indexOf\(LIVE_SALES_KEY\) === -1/);
+  assert.match(homeJs, /#xm-hm-sales"\)\.innerHTML = ""/);
+  assert.doesNotMatch(homeJs, /companySalesHtml\(hero\)/);
   assert.match(homeJs, /state\.view === "company" \? companySetCards\(state\.cards\)/);
   assert.match(homeJs, /companyHideKeys\(state\.cards\)/);
-  assert.match(homeJs, /xm-hm-sales-chart/);
+  assert.match(homeJs, /\.xm-hm-sales\{display:none/);
   assert.match(homeJs, /state\.view === "live" \|\| state\.view === "company"/);
   assert.match(homeJs, /function cumHours/);
   assert.match(homeJs, /function hourFromEvent/);
@@ -290,9 +289,10 @@ test("chief board keeps admins on all columns and others on their own duty", () 
   );
 });
 
-test("company card settings list starts with 实时销售金额", () => {
-  assert.match(homeJs, /function companySetCards\(cards\) \{\n    return \[liveSalesCard\(\)\]\.concat\(arrangeCards/);
-  assert.match(homeJs, /key: LIVE_SALES_KEY,\n      label: "实时销售金额"/);
+test("company card settings no longer include 实时销售金额", () => {
+  assert.match(homeJs, /function companySetCards\(cards\) \{\n    return arrangeCards\(cards \|\| blankCompanyCards\(\)\);/);
+  assert.doesNotMatch(homeJs, /function liveSalesCard/);
+  assert.doesNotMatch(homeJs, /LIVE_SALES_KEY/);
   assert.doesNotMatch(homeJs, /COMPANY_CARD_DEFS = \[\n    \{ key: "liveSales"/);
 });
 

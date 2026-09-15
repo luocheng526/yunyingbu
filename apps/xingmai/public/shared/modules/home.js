@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.536-home-softshort */
+/* xm-module-home 0.1.537-home-nosales */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -414,24 +414,13 @@
       })
       .filter(Boolean);
   }
-  var LIVE_SALES_KEY = "liveSales";
-  function liveSalesCard() {
-    return {
-      key: LIVE_SALES_KEY,
-      label: "实时销售金额",
-      value: "—",
-      tip: "今日实时销售金额，按小时累计对比昨天"
-    };
-  }
   function companySetCards(cards) {
-    return [liveSalesCard()].concat(arrangeCards(cards || blankCompanyCards()));
+    return arrangeCards(cards || blankCompanyCards());
   }
   function companyHideKeys(cards) {
-    return [LIVE_SALES_KEY].concat(
-      arrangeCards(cards || blankCompanyCards()).map(function (card) {
-        return card.key;
-      })
-    );
+    return arrangeCards(cards || blankCompanyCards()).map(function (card) {
+      return card.key;
+    });
   }
   function colOrderKey(simple) {
     return simple ? "xm-home-chief-cols" : "xm-home-mgr-cols";
@@ -1109,7 +1098,7 @@
       ".xm-hm-team{cursor:grab;background:#dceaff;border:1px solid #7ea6dc}" +
       ".xm-hm-team.is-hold{cursor:grabbing;opacity:.84}" +
       ".xm-hm-kpis-shell,.xm-hm-teams{padding:10px}" +
-      ".xm-hm-sales{margin:0 0 10px}" +
+      ".xm-hm-sales{display:none;margin:0}" +
       ".xm-hm-sales-chart{width:100%}" +
       ".xm-hm-sales-chart .xm-hm-line,.xm-hm-live .xm-hm-line{display:block;width:100%;height:148px;cursor:crosshair}" +
       ".xm-hm-chart-sub{margin:10px 0 0;color:var(--xm-muted);font-size:12px}" +
@@ -1306,7 +1295,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.536-home-softshort");
+    board.setAttribute("data-hm-js", "0.1.537-home-nosales");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1318,8 +1307,7 @@
       btn.classList.toggle("is-on", btn.getAttribute("data-range") === state.range);
     });
     root.querySelector("#xm-hm-date-text").textContent = formatDashDate(state.from) + " 至 " + formatDashDate(state.to);
-    root.querySelector("#xm-hm-sales").innerHTML =
-      state.view === "company" && hide.indexOf(LIVE_SALES_KEY) === -1 ? companySalesHtml(hero) : "";
+    root.querySelector("#xm-hm-sales").innerHTML = "";
     root.querySelector("#xm-hm-kpis").innerHTML = cards.map(cardHtml).join("");
     var teamBox = root.querySelector("#xm-hm-teams");
     teamBox.hidden = !teamView;
