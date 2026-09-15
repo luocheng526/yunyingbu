@@ -1,6 +1,41 @@
-import { fetchAllShopPages, mapErpKpis } from "./erp-kpis.js";
-
 const HOURS = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, "0")}:00`);
+
+async function fetchAllShopPages(erp, range, pageSize = 200) {
+  let pageNum = 1;
+  let merged = null;
+  const records = [];
+  for (;;) {
+    const page = await erp.erpPost("/product/jd/order/shop/page", {
+      pageNum,
+      pageSize,
+      shopIds: [],
+      orderBy: "payAmount",
+      asc: false,
+      filters: [],
+      ...range
+    });
+    if (!merged) {
+      merged = page || {};
+    }
+    const rows = (page && (page.records || page.list)) || [];
+    for (const row of rows) {
+      records.push(row);
+    }
+    const total = Number((page && (page.total ?? page.totalCount)) || 0);
+    if (!rows.length || rows.length < pageSize || (total && records.length >= total) || pageNum >= 20) {
+      break;
+    }
+    pageNum += 1;
+  }
+  return { ...(merged || {}), records };
+}
+
+function shopPageMap(shopPage) {
+  return {
+    summary: (shopPage && shopPage.summary) || {},
+    records: (shopPage && shopPage.records) || []
+  };
+}
 
 function asNum(value) {
   if (value == null || value === "" || value === "—") {
@@ -77,8 +112,8 @@ function shopKey(row) {
 }
 
 export function mapErpPaid(shopToday, shopYesterday, realtimeRows) {
-  const todayMapped = mapErpKpis(shopToday || {}, []);
-  const yestMapped = mapErpKpis(shopYesterday || {}, []);
+  const todayMapped = shopPageMap(shopToday || {});
+  const yestMapped = shopPageMap(shopYesterday || {});
   const todayById = {};
   for (const row of todayMapped.records || []) {
     const id = shopKey(row);
