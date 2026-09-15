@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { addTask, getBrief, getStoreSummary, listTasks, setBrief } from "./store.js";
+import { addTask, getBrief, getPaidSummary, getStoreSummary, ingestPaid, listPaid, listTasks, setBrief } from "./store.js";
 
 export const shenRouter = Router();
 
@@ -53,5 +53,43 @@ shenRouter.put("/brief", async (req, res) => {
     res.json(await setBrief(req.body.text));
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message || "无法保存简报" });
+  }
+});
+
+// 本地程序跑完付费数据后回传。同一店 + 日期 + 计划 + SKU 再传会覆盖。
+shenRouter.post("/paid/ingest", async (req, res) => {
+  try {
+    res.status(201).json(await ingestPaid(req.body));
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.message || "无法回传付费数据" });
+  }
+});
+
+shenRouter.get("/paid/summary", async (req, res) => {
+  try {
+    res.json(
+      await getPaidSummary({
+        store: req.query.store,
+        from: req.query.from,
+        to: req.query.to
+      })
+    );
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "无法加载付费汇总" });
+  }
+});
+
+shenRouter.get("/paid", async (req, res) => {
+  try {
+    res.json(
+      await listPaid({
+        store: req.query.store,
+        from: req.query.from,
+        to: req.query.to,
+        limit: req.query.limit
+      })
+    );
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "无法加载付费数据" });
   }
 });

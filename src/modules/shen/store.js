@@ -12,13 +12,54 @@ export const SQL = {
   getBrief: `SELECT text FROM shen_brief WHERE id = 1`,
   setBrief: `INSERT INTO shen_brief (id, text) VALUES (1, ?) ON DUPLICATE KEY UPDATE text = VALUES(text)`,
   resetTasks: `DELETE FROM shen_tasks`,
-  resetBrief: `UPDATE shen_brief SET text = '' WHERE id = 1`
+  resetBrief: `UPDATE shen_brief SET text = '' WHERE id = 1`,
+  createPaidTable: `CREATE TABLE IF NOT EXISTS shen_paid_rows (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  store VARCHAR(64) NOT NULL,
+  day DATE NOT NULL,
+  campaign VARCHAR(128) NOT NULL DEFAULT '',
+  sku VARCHAR(64) NOT NULL DEFAULT '',
+  spend DECIMAL(14,2) NOT NULL DEFAULT 0,
+  gmv DECIMAL(14,2) NOT NULL DEFAULT 0,
+  orders INT NOT NULL DEFAULT 0,
+  clicks INT NOT NULL DEFAULT 0,
+  impressions INT NOT NULL DEFAULT 0,
+  source VARCHAR(64) NOT NULL DEFAULT 'local',
+  payload JSON NULL,
+  ingested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_shen_paid_slice (store, day, campaign, sku),
+  KEY idx_shen_paid_store_day (store, day)
+)`,
+  upsertPaid: `INSERT INTO shen_paid_rows (store, day, campaign, sku, spend, gmv, orders, clicks, impressions, source, payload)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON DUPLICATE KEY UPDATE
+  spend = VALUES(spend),
+  gmv = VALUES(gmv),
+  orders = VALUES(orders),
+  clicks = VALUES(clicks),
+  impressions = VALUES(impressions),
+  source = VALUES(source),
+  payload = VALUES(payload),
+  ingested_at = CURRENT_TIMESTAMP`,
+  listPaid: `SELECT id, store, day, campaign, sku, spend, gmv, orders, clicks, impressions, source, ingested_at
+FROM shen_paid_rows
+WHERE (? = 1 OR store = ?) AND day >= ? AND day <= ?
+ORDER BY day DESC, id DESC
+LIMIT ?`,
+  summarizePaid: `SELECT COALESCE(SUM(spend), 0) AS spend, COALESCE(SUM(gmv), 0) AS gmv, COALESCE(SUM(orders), 0) AS orders, COALESCE(SUM(clicks), 0) AS clicks, COALESCE(SUM(impressions), 0) AS impressions, COUNT(*) AS cnt
+FROM shen_paid_rows
+WHERE (? = 1 OR store = ?) AND day >= ? AND day <= ?`
 };
+
+const MAX_PAID_ROWS = 2000;
+const MAX_PAID_LIST = 1000;
 
 let poolOverride = null;
 let nextId = 1;
 let memoryTasks = [];
 let memoryBrief = "";
+let nextPaidId = 1;
+let memoryPaid = [];
 
 export function setPool(pool) {
   poolOverride = pool;
@@ -126,14 +167,156 @@ function summarizeRows(rows) {
   return { total, byStatus };
 }
 
+function clipText(value, max, label) {
+  const text = String(value ?? "").trim();
+  if (text.length > max) {
+    throw httpError(400, `${label}不能超过 ${max} 个字`);
+  }
+  return text;
+}
+
+function asDay(value, label = "date") {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  const text = String(value ?? "").trim();
+  const day = DATE_RE.test(text) ? text : text.slice(0, 10);
+  if (!DATE_RE.test(day)) {
+    throw httpError(400, `${label} 必须是 YYYY-MM-DD`);
+  }
+  return day;
+}
+
+function asMoney(value, label) {
+  if (value == null || value === "") {
+    return 0;
+  }
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) {
+    throw httpError(400, `${label}必须是大于等于 0 的数字`);
+  }
+  return Math.round(number * 100) / 100;
+}
+
+function asCount(value, label) {
+  if (value == null || value === "") {
+    return 0;
+  }
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) {
+    throw httpError(400, `${label}必须是大于等于 0 的数字`);
+  }
+  return Math.round(number);
+}
+
+function paidKey(row) {
+  return `${row.store}\t${row.day}\t${row.campaign}\t${row.sku}`;
+}
+
+function mapPaid(row) {
+  const day = typeof row.day === "string" ? row.day.slice(0, 10) : asDay(row.day, "day");
+  return {
+    id: Number(row.id),
+    store: row.store || "",
+    date: day,
+    campaign: row.campaign || "",
+    sku: row.sku || "",
+    spend: Number(row.spend) || 0,
+    gmv: Number(row.gmv) || 0,
+    orders: Number(row.orders) || 0,
+    clicks: Number(row.clicks) || 0,
+    impressions: Number(row.impressions) || 0,
+    source: row.source || "local",
+    ingestedAt: row.ingested_at || row.ingestedAt || ""
+  };
+}
+
+function parsePaidRange({ store, from, to, limit }) {
+  const storeName = String(store ?? "").trim();
+  const fromRaw = String(from ?? "").trim();
+  const toRaw = String(to ?? "").trim();
+  if ((fromRaw && !toRaw) || (!fromRaw && toRaw)) {
+    throw httpError(400, "from、to 必须成对出现");
+  }
+  let fromDay = "0000-01-01";
+  let toDay = "9999-12-31";
+  if (fromRaw || toRaw) {
+    const parsed = parseSummaryQuery({
+      store: storeName || "全部",
+      from: fromRaw,
+      to: toRaw
+    });
+    fromDay = parsed.from;
+    toDay = parsed.to;
+  }
+  const rawLimit = limit == null || limit === "" ? 200 : Number(limit);
+  if (!Number.isFinite(rawLimit) || rawLimit < 1) {
+    throw httpError(400, "limit 必须是正整数");
+  }
+  return {
+    store: storeName,
+    allStores: storeName ? 0 : 1,
+    from: fromRaw ? fromDay : "",
+    to: toRaw ? toDay : "",
+    fromDay,
+    toDay,
+    limit: Math.min(Math.round(rawLimit), MAX_PAID_LIST)
+  };
+}
+
+function parsePaidRow(raw, defaultStore, source) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw httpError(400, "rows 里必须是对象");
+  }
+  const store = clipText(raw.store || defaultStore, 64, "store");
+  if (!store) {
+    throw httpError(400, "必须指定店");
+  }
+  const extra = { ...raw };
+  delete extra.store;
+  delete extra.date;
+  delete extra.day;
+  delete extra.campaign;
+  delete extra.sku;
+  delete extra.spend;
+  delete extra.gmv;
+  delete extra.orders;
+  delete extra.clicks;
+  delete extra.impressions;
+  delete extra.source;
+  return {
+    store,
+    day: asDay(raw.date ?? raw.day, "date"),
+    campaign: clipText(raw.campaign, 128, "campaign"),
+    sku: clipText(raw.sku, 64, "sku"),
+    spend: asMoney(raw.spend, "spend"),
+    gmv: asMoney(raw.gmv, "gmv"),
+    orders: asCount(raw.orders, "orders"),
+    clicks: asCount(raw.clicks, "clicks"),
+    impressions: asCount(raw.impressions, "impressions"),
+    source: clipText(raw.source || source, 64, "source") || "local",
+    payload: extra
+  };
+}
+
+async function ensurePaidTable() {
+  const result = await mysqlQuery(SQL.createPaidTable);
+  if (!result && !poolOverride) {
+    return;
+  }
+}
+
 export function resetStore() {
   nextId = 1;
   memoryTasks = [];
   memoryBrief = "";
+  nextPaidId = 1;
+  memoryPaid = [];
 }
 
 export async function hydrateFromMysql() {
   await ensureStoreColumns();
+  await ensurePaidTable();
   const listed = await mysqlQuery(SQL.listTasks);
   if (!listed) {
     return;
@@ -235,4 +418,156 @@ export async function setBrief(text) {
   return { text: memoryBrief };
 }
 
-export { STATUSES, DEFAULT_OWNER };
+function summarizePaidRows(rows) {
+  const totals = { spend: 0, gmv: 0, orders: 0, clicks: 0, impressions: 0, count: rows.length };
+  for (const row of rows) {
+    totals.spend = asMoney(totals.spend + (Number(row.spend) || 0), "spend");
+    totals.gmv = asMoney(totals.gmv + (Number(row.gmv) || 0), "gmv");
+    totals.orders += Number(row.orders) || 0;
+    totals.clicks += Number(row.clicks) || 0;
+    totals.impressions += Number(row.impressions) || 0;
+  }
+  return totals;
+}
+
+export async function ingestPaid(body) {
+  if (body == null || typeof body !== "object" || Array.isArray(body)) {
+    throw httpError(400, "请求体必须是对象");
+  }
+  const defaultStore = clipText(body.store, 64, "store");
+  const source = clipText(body.source || "local", 64, "source") || "local";
+  if (!Array.isArray(body.rows) || body.rows.length === 0) {
+    throw httpError(400, "rows 必填");
+  }
+  if (body.rows.length > MAX_PAID_ROWS) {
+    throw httpError(400, `一次最多回传 ${MAX_PAID_ROWS} 行`);
+  }
+  const rows = body.rows.map((row) => parsePaidRow(row, defaultStore, source));
+  await ensurePaidTable();
+  const ingestedAt = new Date().toISOString().slice(0, 19).replace("T", " ");
+  for (const row of rows) {
+    const payload = JSON.stringify(row.payload || {});
+    const result = await mysqlQuery(SQL.upsertPaid, [
+      row.store,
+      row.day,
+      row.campaign,
+      row.sku,
+      row.spend,
+      row.gmv,
+      row.orders,
+      row.clicks,
+      row.impressions,
+      row.source,
+      payload
+    ]);
+    if (result) {
+      continue;
+    }
+    const mapped = {
+      id: nextPaidId,
+      store: row.store,
+      day: row.day,
+      campaign: row.campaign,
+      sku: row.sku,
+      spend: row.spend,
+      gmv: row.gmv,
+      orders: row.orders,
+      clicks: row.clicks,
+      impressions: row.impressions,
+      source: row.source,
+      ingested_at: ingestedAt
+    };
+    const key = paidKey(mapped);
+    const existing = memoryPaid.findIndex((item) => paidKey(item) === key);
+    if (existing >= 0) {
+      mapped.id = memoryPaid[existing].id;
+      memoryPaid[existing] = mapped;
+    } else {
+      nextPaidId += 1;
+      memoryPaid.push(mapped);
+    }
+  }
+  return {
+    ok: true,
+    store: defaultStore || rows[0].store,
+    source,
+    received: rows.length,
+    upserted: rows.length,
+    ingestedAt
+  };
+}
+
+export async function listPaid(query) {
+  const parsed = parsePaidRange(query);
+  await ensurePaidTable();
+  const result = await mysqlQuery(SQL.listPaid, [
+    parsed.allStores,
+    parsed.store,
+    parsed.fromDay,
+    parsed.toDay,
+    parsed.limit
+  ]);
+  let rows;
+  if (result) {
+    rows = result[0].map(mapPaid);
+  } else {
+    rows = memoryPaid
+      .filter((row) => {
+        if (!parsed.allStores && row.store !== parsed.store) {
+          return false;
+        }
+        return row.day >= parsed.fromDay && row.day <= parsed.toDay;
+      })
+      .sort((a, b) => (a.day === b.day ? b.id - a.id : a.day < b.day ? 1 : -1))
+      .slice(0, parsed.limit)
+      .map(mapPaid);
+  }
+  return {
+    ok: true,
+    store: parsed.store,
+    from: parsed.from,
+    to: parsed.to,
+    rows,
+    totals: summarizePaidRows(rows)
+  };
+}
+
+export async function getPaidSummary(query) {
+  const parsed = parsePaidRange({ ...query, limit: 1 });
+  await ensurePaidTable();
+  const result = await mysqlQuery(SQL.summarizePaid, [
+    parsed.allStores,
+    parsed.store,
+    parsed.fromDay,
+    parsed.toDay
+  ]);
+  let totals;
+  if (result) {
+    const row = result[0][0] || {};
+    totals = {
+      spend: Number(row.spend) || 0,
+      gmv: Number(row.gmv) || 0,
+      orders: Number(row.orders) || 0,
+      clicks: Number(row.clicks) || 0,
+      impressions: Number(row.impressions) || 0,
+      count: Number(row.cnt) || 0
+    };
+  } else {
+    const rows = memoryPaid.filter((row) => {
+      if (!parsed.allStores && row.store !== parsed.store) {
+        return false;
+      }
+      return row.day >= parsed.fromDay && row.day <= parsed.toDay;
+    });
+    totals = summarizePaidRows(rows);
+  }
+  return {
+    ok: true,
+    store: parsed.store,
+    from: parsed.from,
+    to: parsed.to,
+    paid: totals
+  };
+}
+
+export { STATUSES, DEFAULT_OWNER, MAX_PAID_ROWS };

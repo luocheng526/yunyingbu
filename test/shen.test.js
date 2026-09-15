@@ -10,9 +10,11 @@ function createFakePool() {
   const tasks = [];
   let nextId = 1;
   let brief = "";
+  const paid = [];
+  let nextPaidId = 1;
   return {
     async query(sql, params = []) {
-      if (sql === SQL.addStoreColumn || sql === SQL.addCreatedAtColumn) {
+      if (sql === SQL.addStoreColumn || sql === SQL.addCreatedAtColumn || sql === SQL.createPaidTable) {
         return [{}];
       }
       if (sql === SQL.listTasks) {
@@ -62,6 +64,58 @@ function createFakePool() {
         brief = "";
         return [{ affectedRows: 1 }];
       }
+      if (sql === SQL.upsertPaid) {
+        const [store, day, campaign, sku, spend, gmv, orders, clicks, impressions, source] = params;
+        const key = `${store}\t${day}\t${campaign}\t${sku}`;
+        const row = {
+          id: nextPaidId,
+          store,
+          day,
+          campaign,
+          sku,
+          spend,
+          gmv,
+          orders,
+          clicks,
+          impressions,
+          source,
+          ingested_at: "2026-09-15 12:00:00"
+        };
+        const idx = paid.findIndex(
+          (item) => `${item.store}\t${item.day}\t${item.campaign}\t${item.sku}` === key
+        );
+        if (idx >= 0) {
+          row.id = paid[idx].id;
+          paid[idx] = row;
+          return [{ insertId: row.id, affectedRows: 2 }];
+        }
+        nextPaidId += 1;
+        paid.push(row);
+        return [{ insertId: row.id, affectedRows: 1 }];
+      }
+      if (sql === SQL.listPaid) {
+        const [allStores, store, fromDay, toDay, limit] = params;
+        const rows = paid
+          .filter((row) => (allStores === 1 || row.store === store) && row.day >= fromDay && row.day <= toDay)
+          .sort((a, b) => (a.day === b.day ? b.id - a.id : a.day < b.day ? 1 : -1))
+          .slice(0, Number(limit) || 200);
+        return [rows.map((row) => ({ ...row }))];
+      }
+      if (sql === SQL.summarizePaid) {
+        const [allStores, store, fromDay, toDay] = params;
+        const rows = paid.filter(
+          (row) => (allStores === 1 || row.store === store) && row.day >= fromDay && row.day <= toDay
+        );
+        const totals = { spend: 0, gmv: 0, orders: 0, clicks: 0, impressions: 0, cnt: rows.length };
+        for (const row of rows) {
+          totals.spend += Number(row.spend) || 0;
+          totals.gmv += Number(row.gmv) || 0;
+          totals.orders += Number(row.orders) || 0;
+          totals.clicks += Number(row.clicks) || 0;
+          totals.impressions += Number(row.impressions) || 0;
+        }
+        return [[totals]];
+      }
       throw new Error(`unexpected sql: ${sql}`);
     }
   };
@@ -107,7 +161,7 @@ test("submenu pages use 产品中心 and 付费中心", async () => {
       assert.equal(res.status, 200, item.href);
       assert.match(text, new RegExp(item.label));
       assert.equal(text.includes("/shared/nav.js"), false, item.href);
-      if (item.slug !== "tasks") {
+      if (item.slug !== "tasks" && item.slug !== "paid") {
         assert.match(text, /内容待开发/);
       }
     }
@@ -136,10 +190,11 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /XmModules\["\/shen\/product\/youhua"\]/);
     assert.match(embed.text, /XmModules\["\/shen\/product\/chengzhang"\]/);
     assert.match(embed.text, /XmModules\["\/shen\/paid"\]/);
+    assert.match(embed.text, /\/api\/shen\/paid/);
     assert.match(embed.text, /waitPage\("选品"\)/);
     assert.match(embed.text, /waitPage\("优化"\)/);
     assert.match(embed.text, /waitPage\("产品成长"\)/);
-    assert.match(embed.text, /waitPage\("付费中心"\)/);
+    assert.equal(embed.text.includes('waitPage("付费中心")'), false);
     assert.equal(embed.text.includes("relabelOfficialShenMenu"), false);
     assert.equal(embed.text.includes("MutationObserver"), false);
     assert.equal(embed.text.includes("shen-product-tab"), false);
@@ -247,6 +302,77 @@ test("read-only summary is store + date range aggregates only", async () => {
       "/api/shen/summary?store=%E6%97%97%E8%88%B0%E5%BA%97&from=2026-09-01&to=2026-09-08"
     );
     assert.equal(otherDay.json.tasks.total, 0);
+  });
+});
+
+test("paid ingest upserts and lists by store + day", async () => {
+  await withServer(async (base) => {
+    const missing = await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ store: "旗舰店" })
+    });
+    assert.equal(missing.res.status, 400);
+    assert.match(missing.json.error, /rows/);
+
+    const noStore = await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: [{ date: "2026-09-15", spend: 10 }] })
+    });
+    assert.equal(noStore.res.status, 400);
+    assert.match(noStore.json.error, /店/);
+
+    const created = await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        store: "旗舰店",
+        source: "local",
+        rows: [
+          { date: "2026-09-15", campaign: "主推", spend: 120.5, gmv: 880, orders: 3, clicks: 40, impressions: 900 },
+          { date: "2026-09-15", store: "专营店", spend: 20, gmv: 50, orders: 1 }
+        ]
+      })
+    });
+    assert.equal(created.res.status, 201);
+    assert.equal(created.json.ok, true);
+    assert.equal(created.json.received, 2);
+    assert.equal(created.json.upserted, 2);
+
+    const again = await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        store: "旗舰店",
+        rows: [{ date: "2026-09-15", campaign: "主推", spend: 200, gmv: 900, orders: 4 }]
+      })
+    });
+    assert.equal(again.res.status, 201);
+
+    const listed = await request(
+      base,
+      "/api/shen/paid?store=%E6%97%97%E8%88%B0%E5%BA%97&from=2026-09-15&to=2026-09-15"
+    );
+    assert.equal(listed.res.status, 200);
+    assert.equal(listed.json.rows.length, 1);
+    assert.equal(listed.json.rows[0].spend, 200);
+    assert.equal(listed.json.rows[0].orders, 4);
+    assert.equal(listed.json.totals.spend, 200);
+    assert.equal(JSON.stringify(listed.json).includes("shen_paid_rows"), false);
+
+    const other = await request(base, "/api/shen/paid?store=%E4%B8%93%E8%90%A5%E5%BA%97&from=2026-09-15&to=2026-09-15");
+    assert.equal(other.json.rows.length, 1);
+    assert.equal(other.json.rows[0].spend, 20);
+
+    const summary = await request(
+      base,
+      "/api/shen/paid/summary?store=%E6%97%97%E8%88%B0%E5%BA%97&from=2026-09-15&to=2026-09-15"
+    );
+    assert.equal(summary.res.status, 200);
+    assert.equal(summary.json.paid.count, 1);
+    assert.equal(summary.json.paid.spend, 200);
+    assert.equal(JSON.stringify(summary.json).includes("主推"), false);
   });
 });
 
