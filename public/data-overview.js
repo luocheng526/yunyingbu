@@ -229,7 +229,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov9";
+      link.href = "/data-pages.css?v=data-ov10";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -438,11 +438,10 @@
     const hour = Math.max(0, Math.min(shanghaiHour(), 23));
     const todayPts = Math.max(2, hour + 1);
     const yesterday = cumulativeCurve(yestTotal, 24);
-    const todayEnd =
-      todayTotal != null ? todayTotal : (Number(yestTotal) || 0) * (todayPts / 24);
+    const todayEnd = todayTotal != null ? Number(todayTotal) || 0 : 0;
     const today = cumulativeCurve(todayEnd, todayPts);
     const idx = Math.min(today.length, yesterday.length) - 1;
-    const now = today[today.length - 1] || 0;
+    const now = todayEnd;
     const then = yesterday[idx] || 0;
     const delta = then ? Number((((now - then) / Math.abs(then)) * 100).toFixed(2)) : 0;
     return { yesterday: yesterday, today: today, delta: delta, value: now };
@@ -732,7 +731,9 @@
       summary: { channels: 1, shops: shopCount },
       hero: {
         label: "实时销售额",
-        value: fmtInt(seeded.value),
+        value: fmtInt(todayPay != null ? todayPay : 0),
+        todayPay: todayPay,
+        yestPay: heroVal,
         delta: seeded.delta,
         yesterday: seeded.yesterday,
         today: seeded.today
@@ -864,11 +865,13 @@
     let yest = asSeries(hero.yesterday);
     let today = asSeries(hero.today && hero.today.length ? hero.today : hero.spark);
     if (!yest.length || !today.length) {
-      const last =
-        today.length
-          ? today[today.length - 1]
-          : Number(String(hero.value || "").replace(/,/g, "")) || 0;
-      const seeded = seedHeroCompare(last, today.length ? last : null);
+      const yestTotal = yest.length ? yest[yest.length - 1] : Number(hero.yestPay) || 0;
+      const todayTotal = today.length
+        ? today[today.length - 1]
+        : hero.todayPay != null
+          ? Number(hero.todayPay) || 0
+          : 0;
+      const seeded = seedHeroCompare(yestTotal, todayTotal);
       if (!yest.length) {
         yest = seeded.yesterday;
       }
@@ -878,6 +881,9 @@
       if (hero.delta == null || hero.delta === 0) {
         hero.delta = seeded.delta;
       }
+    }
+    if (hero.todayPay != null) {
+      hero.value = fmtInt(hero.todayPay);
     }
     hero.yesterday = yest;
     hero.today = today;
@@ -889,6 +895,9 @@
     const yest = asSeries(src.yesterday);
     const today = asSeries(src.today && src.today.length ? src.today : src.spark);
     if (!yest.length && !today.length) {
+      if (hero.todayPay != null) {
+        hero.value = fmtInt(hero.todayPay);
+      }
       return ensureHeroSeries(hero);
     }
     hero.yesterday = yest;
@@ -1662,6 +1671,9 @@
           state.payload.shops = overlaySharedShopMetrics(state.payload.shops);
           state.payload.shopTable = shopTableFrom(state.payload.shops);
         }
+        if (state.payload.hero && state.payload.hero.todayPay != null) {
+          state.payload.hero.value = fmtInt(state.payload.hero.todayPay);
+        }
       }
       render();
     }
@@ -1779,7 +1791,8 @@
         board.innerHTML = '<p class="ch-empty">正在加载数据总览…</p>';
       }
       loadLiveSpark();
-      if (!forceBoard && ovBoardFresh(cached)) {
+      const heroReady = cached && cached.payload && cached.payload.hero && cached.payload.hero.todayPay != null;
+      if (!forceBoard && ovBoardFresh(cached) && heroReady) {
         return Promise.resolve();
       }
       return fetchBoard(span).then(function () {
