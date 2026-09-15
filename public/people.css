@@ -378,6 +378,15 @@ body:has(.people-page) .xm-tabs {
   cursor: pointer;
 }
 
+.org-filter-count {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 10px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--xm-muted, #8c8c8c);
+}
+
 .org-filter-all {
   border-bottom: 1px solid var(--xm-line, #f0f0f0);
   margin-bottom: 6px;
