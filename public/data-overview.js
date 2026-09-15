@@ -145,6 +145,41 @@
     } catch (_err) {}
   }
 
+  var LIVE_KEY = "live";
+  var BOARD_ORDER_LS = "xm-data-ov-card-order";
+
+  function defaultBoardOrder() {
+    return [LIVE_KEY].concat(catalogKeys());
+  }
+
+  function loadBoardOrder(selected) {
+    const allow = {};
+    allow[LIVE_KEY] = true;
+    (selected || []).forEach(function (key) {
+      allow[key] = true;
+    });
+    let stored = [];
+    try {
+      const parsed = JSON.parse(localStorage.getItem(BOARD_ORDER_LS) || "[]");
+      if (Array.isArray(parsed)) {
+        stored = parsed;
+      }
+    } catch (_err) {}
+    const out = [];
+    stored.concat(defaultBoardOrder()).forEach(function (key) {
+      if (allow[key] && out.indexOf(key) < 0) {
+        out.push(key);
+      }
+    });
+    return out;
+  }
+
+  function saveBoardOrder(keys) {
+    try {
+      localStorage.setItem(BOARD_ORDER_LS, JSON.stringify(keys));
+    } catch (_err) {}
+  }
+
   var OV_BOARD_LS = "xm-data-ov-board-v1";
   var OV_BOARD_FRESH_MS = 60 * 60 * 1000;
 
@@ -277,7 +312,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov13";
+      link.href = "/data-pages.css?v=data-ov14";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -326,11 +361,13 @@
       ".ch-card .value{margin-top:16px;font-size:28px;font-weight:700;line-height:1.3;letter-spacing:-.02em;color:#141414;font-variant-numeric:tabular-nums}" +
       ".ch-card .extra{margin-top:14px;font-size:12px;line-height:20px;color:#8c8c8c;opacity:1}" +
       ".ch-metrics{align-items:stretch}" +
-      ".ch-metrics .ch-card{min-height:132px;height:100%;box-sizing:border-box}" +
-      ".ch-metrics .ch-hero{min-height:220px}" +
-      ".ch-hero .label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}" +
-      ".ch-hero .value{margin:8px 0 6px}" +
-      ".ch-hero .delta{margin:0 0 6px;font-size:12px}" +
+      ".ch-metrics .ch-card,.ch-metrics .ch-hero{min-height:148px;height:100%;box-sizing:border-box;cursor:grab}" +
+      ".ch-metrics .ch-card.is-drag{opacity:.55;cursor:grabbing}" +
+      ".ch-metrics .ch-card.is-over{outline:1px solid #2f54eb;background:#f5f8ff}" +
+      ".ch-hero .ch-spark,.ch-axis{display:none!important;height:0;margin:0;overflow:hidden}" +
+      ".ch-hero .value{margin-top:16px}" +
+      ".ch-card-right{display:inline-flex;align-items:center;gap:6px;margin-left:auto;flex:none}" +
+      ".ch-hero .delta{margin:0;font-size:12px;line-height:16px;white-space:nowrap}" +
       ".ch-clock{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:10px;background:#f0f5ff;color:#2f54eb;font-size:12px;opacity:1}" +
       ".ch-card .label{display:flex;align-items:center;justify-content:space-between;gap:8px}" +
       ".ch-help{flex:none;width:16px;height:16px;border:1px solid var(--xm-line,#d9d9d9);border-radius:3px;background:#fff;color:#8c8c8c;font-size:11px;line-height:14px;cursor:help;padding:0}" +
@@ -360,13 +397,12 @@
     const style = document.createElement("style");
     style.id = "ch-hero-style";
     style.textContent =
-      ".ch-hero .label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}" +
-      ".ch-clock{font-variant-numeric:tabular-nums;font-size:12px;opacity:.55;letter-spacing:.04em}" +
+      ".ch-hero .label{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:nowrap}" +
+      ".ch-clock{font-variant-numeric:tabular-nums;letter-spacing:.04em}" +
       ".ch-clock{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:10px;background:#f0f5ff;color:#2f54eb;font-size:12px;opacity:1}" +
-      ".ch-hero .value{margin:8px 0 6px}" +
-      ".ch-hero .delta{margin:0 0 6px;font-size:12px}" +
-      ".ch-hero .ch-spark{display:block;width:100%;height:72px;margin:0}" +
-      ".ch-axis{display:flex;justify-content:space-between;font-size:10px;opacity:.4;margin:2px 0 0}";
+      ".ch-hero .value{margin-top:16px}" +
+      ".ch-hero .delta{margin:0;font-size:12px;line-height:16px}" +
+      ".ch-hero .ch-spark,.ch-axis{display:none!important}";
     document.head.appendChild(style);
   }
 
@@ -1515,6 +1551,7 @@
       }
       if (act === "ok") {
         saveMetricKeys(state.pickDraft.slice());
+        saveBoardOrder(loadBoardOrder(state.pickDraft.slice()));
         closePicker();
         render();
       }
@@ -1601,19 +1638,52 @@
       const payload = filteredPayload();
       const hero = ensureHeroSeries(payload.hero || {});
       const down = Number(hero.delta) < 0;
-      const cards = visibleCards(payload.cards, loadMetricKeys())
-        .map(function (card) {
+      const selected = loadMetricKeys();
+      const byKey = {};
+      visibleCards(payload.cards, selected).forEach(function (card) {
+        byKey[card.key] = card;
+      });
+      const cards = loadBoardOrder(selected)
+        .map(function (key) {
+          if (key === LIVE_KEY) {
+            const sign =
+              (Number(hero.delta || 0) > 0 ? "+" : Number(hero.delta || 0) < 0 ? "-" : "") +
+              Math.abs(Number(hero.delta || 0)).toFixed(2);
+            return (
+              '<article class="ch-card ch-hero" draggable="true" data-card-key="' +
+              LIVE_KEY +
+              '"><div class="label"><span>实时销售指数<span class="ch-clock">' +
+              escapeHtml(shanghaiHms()) +
+              '</span></span><span class="ch-card-right"><span class="delta ' +
+              (down ? "is-down" : "is-up") +
+              '">' +
+              escapeHtml(sign) +
+              "% " +
+              (down ? "↓" : "↑") +
+              "</span>" +
+              helpBtn(HERO_TIP) +
+              '</span></div><div class="value">' +
+              escapeHtml(fmtInt(hero.value)) +
+              '</div><div class="extra">&nbsp;</div></article>'
+            );
+          }
+          const card = byKey[key];
+          if (!card) {
+            return "";
+          }
           const tip = card.tip || metricOf(card.key).tip || "";
           return (
-            '<article class="ch-card"><div class="label"><span>' +
+            '<article class="ch-card" draggable="true" data-card-key="' +
+            escapeHtml(card.key) +
+            '"><div class="label"><span>' +
             escapeHtml(card.label) +
             "</span>" +
             helpBtn(tip) +
             '</div><div class="value">' +
             escapeHtml(/%/.test(String(card.value || "")) ? card.value : fmtInt(card.value)) +
-            "</div>" +
-            (card.extra ? '<div class="extra">' + escapeHtml(card.extra) + "</div>" : "") +
-            "</article>"
+            '</div><div class="extra">' +
+            (card.extra ? escapeHtml(card.extra) : "&nbsp;") +
+            "</div></article>"
           );
         })
         .join("");
@@ -1677,29 +1747,13 @@
         '<span class="ch-pill">店铺' +
         escapeHtml(String(payload.summary.shops)) +
         '个</span><button type="button" class="ch-set" data-metrics="open">设定指标</button></div>' +
-        '<div class="ch-metrics"><article class="ch-card ch-hero"><div class="label"><span>实时销售指数' +
-        '<span class="ch-clock">' +
-        escapeHtml(shanghaiHms()) +
-        "</span></span>" +
-        helpBtn(HERO_TIP) +
-        '</div><div class="value">' +
-        escapeHtml(fmtInt(hero.value)) +
-        '</div><div class="delta ' +
-        (down ? "is-down" : "is-up") +
-        '">' +
-        escapeHtml((Number(hero.delta || 0) > 0 ? "+" : Number(hero.delta || 0) < 0 ? "-" : "") + Math.abs(Number(hero.delta || 0)).toFixed(2)) +
-        "% " +
-        (down ? "↓" : "↑") +
-        "</div>" +
-        compareSpark() +
-        '<div class="ch-axis"><span>00</span><span>12</span><span>23</span></div></article>' +
+        '<div class="ch-metrics">' +
         cards +
         "</div>" +
         '<div class="ch-tabs">' +
         tabs +
         "</div>" +
         lists;
-      paintSparkSvg(board.querySelector(".ch-spark"), hero);
       syncCalPop();
       if (state.pickOpen) {
         paintPicker();
@@ -2060,6 +2114,72 @@
         state.shopId = event.target.value;
         render();
       }
+    });
+
+    let boardDragKey = "";
+    function metricsRoot() {
+      return board.querySelector(".ch-metrics");
+    }
+    function clearBoardDrag() {
+      boardDragKey = "";
+      board.querySelectorAll(".ch-card").forEach(function (card) {
+        card.classList.remove("is-drag", "is-over");
+      });
+    }
+    board.addEventListener("dragstart", function (event) {
+      if (event.target.closest && event.target.closest(".ch-help")) {
+        event.preventDefault();
+        return;
+      }
+      const metrics = metricsRoot();
+      const card = event.target.closest && event.target.closest(".ch-card[data-card-key]");
+      if (!metrics || !card || !metrics.contains(card)) {
+        return;
+      }
+      boardDragKey = card.getAttribute("data-card-key") || "";
+      card.classList.add("is-drag");
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", boardDragKey);
+      }
+    });
+    board.addEventListener("dragend", function () {
+      clearBoardDrag();
+    });
+    board.addEventListener("dragover", function (event) {
+      const metrics = metricsRoot();
+      const over = event.target.closest && event.target.closest(".ch-card[data-card-key]");
+      if (!metrics || !over || !metrics.contains(over) || !boardDragKey) {
+        return;
+      }
+      event.preventDefault();
+      board.querySelectorAll(".ch-card").forEach(function (card) {
+        card.classList.toggle("is-over", card === over);
+      });
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = "move";
+      }
+    });
+    board.addEventListener("drop", function (event) {
+      const metrics = metricsRoot();
+      const over = event.target.closest && event.target.closest(".ch-card[data-card-key]");
+      const overKey = over ? over.getAttribute("data-card-key") || "" : "";
+      event.preventDefault();
+      if (!metrics || !over || !metrics.contains(over) || !boardDragKey || !overKey || boardDragKey === overKey) {
+        clearBoardDrag();
+        return;
+      }
+      const order = loadBoardOrder(loadMetricKeys());
+      const from = order.indexOf(boardDragKey);
+      const to = order.indexOf(overKey);
+      clearBoardDrag();
+      if (from < 0 || to < 0) {
+        return;
+      }
+      order.splice(from, 1);
+      order.splice(to, 0, boardDragKey);
+      saveBoardOrder(order);
+      render();
     });
 
     load();
