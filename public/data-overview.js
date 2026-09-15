@@ -17,24 +17,57 @@
 
   var METRIC_LS = "xm-data-ov-metrics";
   var METRIC_SEEN_LS = "xm-data-ov-metrics-seen";
+  var HERO_TIP = "当天按支付时间累计的销售额，与首页实时销售指数同源（星脉 ERP 支付流水）";
   var METRIC_CATALOG = [
-    { key: "pay", label: "支付金额 (支付)" },
-    { key: "orders", label: "销售单数 (支付)" },
-    { key: "ad", label: "推广花费 (支付预估)" },
-    { key: "profit", label: "利润 (支付预估)" },
-    { key: "margin", label: "大毛利率" },
-    { key: "custom", label: "自定义费用" },
-    { key: "refundRate", label: "退款率 (按金额)" },
-    { key: "adRate", label: "推广花费占比 (支付预估)" },
-    { key: "netSales", label: "净销售额 (支付)" },
-    { key: "refundAmount", label: "退款金额" },
-    { key: "platformFee", label: "平台花费 (支付预估)" },
-    { key: "goodsCost", label: "总货品成本" },
-    { key: "saleFee", label: "销售费用 (支付预估)" },
-    { key: "jdWarehouseRate", label: "京仓订单占比" },
-    { key: "netGoodsCostRate", label: "净货品成本占比 (支付)" },
-    { key: "invalidAmount", label: "无效单金额" },
-    { key: "jdWarehouseCount", label: "京仓订单数量" }
+    { key: "pay", label: "支付金额 (支付)", tip: "按支付时间统计的订单金额(包含无效单、代发单)" },
+    {
+      key: "orders",
+      label: "销售单数 (支付)",
+      tip: "剔除无效单和退款订单后的订单数(按支付时间统计)\n计算公式:销售单数(支付)-无效单订单数-普通单退款单数-代发单退款单数"
+    },
+    { key: "ad", label: "推广花费 (支付预估)", tip: "SPU推广费用" },
+    {
+      key: "profit",
+      label: "利润 (支付预估)",
+      tip: "统计时间内产生的利润（按支付时间统计）\n计算公式：净销售额（支付）-净货品成本（支付）-销售费用（支付）-发货费用（支付）-其他费用-自定义费用"
+    },
+    { key: "margin", label: "大毛利率", tip: "利润/支付金额" },
+    { key: "custom", label: "自定义费用", tip: "店铺或运营录入的自定义费用，利润计算时会扣除" },
+    {
+      key: "refundRate",
+      label: "退款率 (按金额)",
+      tip: "按订单金额计算的退款率\n计算公式:退款金额/支付金额(支付)*100%"
+    },
+    {
+      key: "adRate",
+      label: "推广花费占比 (支付预估)",
+      tip: "推广花费占支付金额的比例（按支付时间统计）\n计算公式：推广花费（支付预估）/支付金额（支付）100%（推广花费≤0时，按0计算：支付金额≤0时，按1计算）"
+    },
+    { key: "netSales", label: "净销售额 (支付)", tip: "净销售数对应的订单金额合计" },
+    {
+      key: "refundAmount",
+      label: "退款金额",
+      tip: "按退款成功时间统计的金额(包含未发货退款、已发货仅退款和已发货退货退款)"
+    },
+    { key: "platformFee", label: "平台花费 (支付预估)", tip: "支付金额（支付）对应的预估平台花费" },
+    { key: "goodsCost", label: "总货品成本", tip: "京小洁采购单成本+导入的货品成本" },
+    {
+      key: "saleFee",
+      label: "销售费用 (支付预估)",
+      tip: "支付金额（支付）对应的预估销售费用\n计算公式：推广花费（支付预估）+平台花费（支付预估）+无效单佣金"
+    },
+    {
+      key: "jdWarehouseRate",
+      label: "京仓订单占比",
+      tip: "京仓订单数量占销售订单数量的比例(按支付时间统计)\n计算公式:京仓订单数量（支付）/销售单数（支付）*100%"
+    },
+    {
+      key: "netGoodsCostRate",
+      label: "净货品成本占比 (支付)",
+      tip: "净货品成本占支付金额的比例（按支付时间统计）\n计算公式：净货款成本（支付）/支付金额（支付）*100%"
+    },
+    { key: "invalidAmount", label: "无效单金额", tip: "标记为无效单的订单支付金额" },
+    { key: "jdWarehouseCount", label: "京仓订单数量", tip: "京仓订单数量（按支付时间统计）" }
   ];
 
   function catalogKeys() {
@@ -48,6 +81,21 @@
       METRIC_CATALOG.find(function (item) {
         return item.key === key;
       }) || { key: key, label: key }
+    );
+  }
+
+  function tipAttr(text) {
+    return escapeHtml(text || "指标说明").replaceAll("\n", "&#10;");
+  }
+
+  function helpBtn(tip) {
+    if (!tip) {
+      return "";
+    }
+    return (
+      '<button type="button" class="ch-help" data-tip="' +
+      tipAttr(tip) +
+      '" aria-label="指标说明">?</button>'
     );
   }
 
@@ -229,7 +277,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov12";
+      link.href = "/data-pages.css?v=data-ov13";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -283,7 +331,11 @@
       ".ch-hero .label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}" +
       ".ch-hero .value{margin:8px 0 6px}" +
       ".ch-hero .delta{margin:0 0 6px;font-size:12px}" +
-      ".ch-clock{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:10px;background:#f0f5ff;color:#2f54eb;font-size:12px;opacity:1}";
+      ".ch-clock{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:10px;background:#f0f5ff;color:#2f54eb;font-size:12px;opacity:1}" +
+      ".ch-card .label{display:flex;align-items:center;justify-content:space-between;gap:8px}" +
+      ".ch-help{flex:none;width:16px;height:16px;border:1px solid var(--xm-line,#d9d9d9);border-radius:3px;background:#fff;color:#8c8c8c;font-size:11px;line-height:14px;cursor:help;padding:0}" +
+      ".ch-tip{position:fixed;z-index:4300;max-width:320px;padding:10px 12px;background:#fff;border:1px solid #f0f0f0;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.12);color:#262626;font-size:12px;line-height:1.6;white-space:pre-wrap;display:none}" +
+      ".ch-tip.is-on{display:block}";
     document.head.appendChild(style);
   }
 
@@ -1288,6 +1340,41 @@
       pickDrag: ""
     };
     let dead = false;
+    let tipEl = null;
+
+    function hideMetricTip() {
+      if (tipEl) {
+        tipEl.classList.remove("is-on");
+        tipEl.textContent = "";
+      }
+    }
+
+    function showMetricTip(anchor) {
+      const raw = String((anchor && anchor.getAttribute("data-tip")) || "").replace(/&#10;/g, "\n");
+      if (!raw) {
+        return;
+      }
+      if (!tipEl || !document.body.contains(tipEl)) {
+        tipEl = document.createElement("div");
+        tipEl.className = "ch-tip";
+        document.body.appendChild(tipEl);
+      }
+      tipEl.textContent = raw;
+      tipEl.classList.add("is-on");
+      const box = anchor.getBoundingClientRect();
+      const tw = tipEl.offsetWidth || 280;
+      const th = tipEl.offsetHeight || 80;
+      let left = Math.max(8, Math.min(box.right - tw, window.innerWidth - tw - 8));
+      let top = box.bottom + 8;
+      if (top + th > window.innerHeight - 8 && box.top - th - 8 >= 8) {
+        top = box.top - th - 8;
+      }
+      if (top < 8) {
+        top = 8;
+      }
+      tipEl.style.left = Math.round(left) + "px";
+      tipEl.style.top = Math.round(top) + "px";
+    }
 
     function pickerRoot() {
       let el = document.getElementById("ch-mpick-root");
@@ -1516,9 +1603,12 @@
       const down = Number(hero.delta) < 0;
       const cards = visibleCards(payload.cards, loadMetricKeys())
         .map(function (card) {
+          const tip = card.tip || metricOf(card.key).tip || "";
           return (
-            '<article class="ch-card"><div class="label">' +
+            '<article class="ch-card"><div class="label"><span>' +
             escapeHtml(card.label) +
+            "</span>" +
+            helpBtn(tip) +
             '</div><div class="value">' +
             escapeHtml(/%/.test(String(card.value || "")) ? card.value : fmtInt(card.value)) +
             "</div>" +
@@ -1587,11 +1677,12 @@
         '<span class="ch-pill">店铺' +
         escapeHtml(String(payload.summary.shops)) +
         '个</span><button type="button" class="ch-set" data-metrics="open">设定指标</button></div>' +
-        '<div class="ch-metrics"><article class="ch-card ch-hero"><div class="label">' +
-        "实时销售指数" +
+        '<div class="ch-metrics"><article class="ch-card ch-hero"><div class="label"><span>实时销售指数' +
         '<span class="ch-clock">' +
         escapeHtml(shanghaiHms()) +
-        '</span></div><div class="value">' +
+        "</span></span>" +
+        helpBtn(HERO_TIP) +
+        '</div><div class="value">' +
         escapeHtml(fmtInt(hero.value)) +
         '</div><div class="delta ' +
         (down ? "is-down" : "is-up") +
@@ -1909,7 +2000,32 @@
     document.addEventListener("click", onDocClick);
     window.addEventListener("resize", onWinResize);
 
+    board.addEventListener("mouseover", function (event) {
+      const help = event.target.closest && event.target.closest(".ch-help");
+      if (help) {
+        showMetricTip(help);
+      }
+    });
+    board.addEventListener("mouseout", function (event) {
+      const help = event.target.closest && event.target.closest(".ch-help");
+      if (!help) {
+        return;
+      }
+      const to = event.relatedTarget;
+      if (to && help.contains(to)) {
+        return;
+      }
+      hideMetricTip();
+    });
+
     board.addEventListener("click", function (event) {
+      const help = event.target.closest && event.target.closest(".ch-help");
+      if (help) {
+        event.preventDefault();
+        event.stopPropagation();
+        showMetricTip(help);
+        return;
+      }
       const setBtn = event.target.closest("[data-metrics='open'], .ch-set");
       if (setBtn) {
         event.preventDefault();
@@ -1956,6 +2072,11 @@
       document.removeEventListener("click", onDocClick);
       window.removeEventListener("resize", onWinResize);
       hideCalPop();
+      hideMetricTip();
+      if (tipEl) {
+        tipEl.remove();
+        tipEl = null;
+      }
       closePicker();
       const pickEl = document.getElementById("ch-mpick-root");
       if (pickEl) {
