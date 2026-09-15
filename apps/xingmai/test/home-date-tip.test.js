@@ -125,6 +125,12 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function seriesOf/);
   assert.match(homeJs, /function todayHours/);
   assert.match(homeJs, /function padHours/);
+  assert.match(homeJs, /function companySalesHtml/);
+  assert.match(homeJs, /id="xm-hm-sales"/);
+  assert.match(homeJs, /实时销售金额/);
+  assert.match(homeJs, /companySalesHtml\(hero\)/);
+  assert.match(homeJs, /xm-hm-sales-chart/);
+  assert.match(homeJs, /state\.view === "live" \|\| state\.view === "company"/);
   assert.match(homeJs, /function cumHours/);
   assert.match(homeJs, /function hourFromEvent/);
   assert.match(homeJs, /function onLineTipMove/);
@@ -360,6 +366,37 @@ test("card settings pop sits under the clicked 卡片设置 button", () => {
   fns.placeCardPop(root, btn);
   assert.equal(pop.style.top, "108px");
   assert.equal(pop.style.left, "420px");
+});
+
+test("company tab puts a realtime sales row above the KPI cards", () => {
+  const start = homeJs.indexOf("function hourX");
+  const end = homeJs.indexOf("function liveShopRowHtml");
+  assert.ok(start !== -1 && end > start);
+  const fns = new Function(
+    "escapeHtml",
+    homeJs.slice(start, end) + "return {companySalesHtml, compareLineHtml};"
+  )((value) => String(value == null ? "" : value));
+  const yest = Array.from({ length: 24 }, (_, i) => (i + 1) * 10);
+  const today = [10, 30, 60];
+  const html = fns.companySalesHtml({
+    value: "12,345",
+    yesterday: yest,
+    today: today,
+    yesterdayHour: yest,
+    todayHour: today,
+    hours: 24
+  });
+  assert.match(html, /实时销售金额/);
+  assert.match(html, />12,345</);
+  assert.match(html, /data-hours="24"/);
+  assert.doesNotMatch(html, /环比/);
+  const red = html.match(/stroke="#cf1322"[^>]*points="([^"]+)"/);
+  const blue = html.match(/stroke="#2f54eb"[^>]*points="([^"]+)"/);
+  assert.ok(red && blue);
+  assert.equal(red[1].trim().split(/\s+/).length, 3);
+  assert.equal(blue[1].trim().split(/\s+/).length, 24);
+  assert.match(html, />1<\/text>/);
+  assert.match(html, />24<\/text>/);
 });
 
 test("live sales chart keeps 24-hour axis and hides future today points", () => {

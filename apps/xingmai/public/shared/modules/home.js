@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.527-home-hrtip */
+/* xm-module-home 0.1.528-home-cosales */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -921,6 +921,28 @@
       "</article>"
     );
   }
+  function companySalesHtml(chart) {
+    var sales = {
+      label: "实时销售金额",
+      value: (chart && chart.value) || "—",
+      yesterday: (chart && chart.yesterday) || [],
+      today: (chart && chart.today) || [],
+      yesterdayHour: (chart && chart.yesterdayHour) || [],
+      todayHour: (chart && chart.todayHour) || [],
+      hours: (chart && chart.hours) || 0
+    };
+    return (
+      '<article class="xm-hm-chart xm-hm-sales-chart"' +
+      (Number(sales.hours) === 24 ? ' data-hours="24"' : "") +
+      '><div class="xm-hm-card-head"><span>' +
+      escapeHtml(sales.label) +
+      '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
+      escapeHtml(sales.value) +
+      "</div>" +
+      compareLineHtml(sales) +
+      "</article>"
+    );
+  }
   function liveShopRowHtml(row, index) {
     return (
       "<tr><td>" +
@@ -1002,6 +1024,9 @@
       ".xm-hm-team{cursor:grab;background:#dceaff;border:1px solid #7ea6dc}" +
       ".xm-hm-team.is-hold{cursor:grabbing;opacity:.84}" +
       ".xm-hm-kpis-shell,.xm-hm-teams{padding:10px}" +
+      ".xm-hm-sales{margin:0 0 10px}" +
+      ".xm-hm-sales-chart{width:100%}" +
+      ".xm-hm-sales-chart .xm-hm-line{height:200px}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
       ".xm-hm-teams{display:flex;flex-direction:column;gap:10px;overflow-x:auto}" +
       ".xm-hm-teams-bar{display:flex;justify-content:space-between;align-items:center;padding:0 0 8px}" +
@@ -1137,7 +1162,7 @@
       "</div></div>" +
       '<div class="xm-hm-pop" id="xm-hm-pop" hidden><h3>卡片设置</h3><div id="xm-hm-card-opts"></div></div>' +
       '<div class="xm-hm-body">' +
-      '<section class="xm-hm-kpis-shell"><div class="xm-hm-teams-bar"><b>星脉甄选</b><button type="button" class="xm-hm-set" id="xm-hm-set">卡片设置</button></div><div class="xm-hm-kpis" id="xm-hm-kpis"></div></section>' +
+      '<section class="xm-hm-kpis-shell"><div class="xm-hm-teams-bar"><b>星脉甄选</b><button type="button" class="xm-hm-set" id="xm-hm-set">卡片设置</button></div><div class="xm-hm-sales" id="xm-hm-sales"></div><div class="xm-hm-kpis" id="xm-hm-kpis"></div></section>' +
       '<section class="xm-hm-teams" id="xm-hm-teams" hidden></section>' +
       '<section class="xm-hm-live" id="xm-hm-live" hidden></section>' +
       '<section class="xm-hm-board" id="xm-hm-board" hidden>' +
@@ -1195,7 +1220,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.527-home-hrtip");
+    board.setAttribute("data-hm-js", "0.1.528-home-cosales");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1207,6 +1232,7 @@
       btn.classList.toggle("is-on", btn.getAttribute("data-range") === state.range);
     });
     root.querySelector("#xm-hm-date-text").textContent = formatDashDate(state.from) + " 至 " + formatDashDate(state.to);
+    root.querySelector("#xm-hm-sales").innerHTML = state.view === "company" ? companySalesHtml(hero) : "";
     root.querySelector("#xm-hm-kpis").innerHTML = cards.map(cardHtml).join("");
     var teamBox = root.querySelector("#xm-hm-teams");
     teamBox.hidden = !teamView;
@@ -2225,7 +2251,7 @@
           clearTextSelection();
           root.querySelector("#xm-hm-pop").hidden = true;
           paint(root, state);
-          if (state.view === "live") {
+          if (state.view === "live" || state.view === "company") {
             pullLive();
           }
           return;
@@ -2725,7 +2751,7 @@
       pullBoard();
       pullLive();
       poll = window.setInterval(function () {
-        if (state.view === "live") {
+        if (state.view === "live" || state.view === "company") {
           pullLive();
         }
       }, LIVE_REFRESH_MS);
