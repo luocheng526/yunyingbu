@@ -229,7 +229,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov11";
+      link.href = "/data-pages.css?v=data-ov12";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -279,10 +279,11 @@
       ".ch-card .extra{margin-top:14px;font-size:12px;line-height:20px;color:#8c8c8c;opacity:1}" +
       ".ch-metrics{align-items:stretch}" +
       ".ch-metrics .ch-card{min-height:132px;height:100%;box-sizing:border-box}" +
+      ".ch-metrics .ch-hero{min-height:220px}" +
       ".ch-hero .label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}" +
-      ".ch-hero .value{margin-top:16px}" +
-      ".ch-hero .delta{margin-top:14px;font-size:12px;line-height:20px}" +
-      ".ch-clock{font-size:13px;color:#8c8c8c;opacity:1}";
+      ".ch-hero .value{margin:8px 0 6px}" +
+      ".ch-hero .delta{margin:0 0 6px;font-size:12px}" +
+      ".ch-clock{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:10px;background:#f0f5ff;color:#2f54eb;font-size:12px;opacity:1}";
     document.head.appendChild(style);
   }
 
@@ -309,8 +310,11 @@
     style.textContent =
       ".ch-hero .label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}" +
       ".ch-clock{font-variant-numeric:tabular-nums;font-size:12px;opacity:.55;letter-spacing:.04em}" +
-      ".ch-hero .value{margin-top:16px}" +
-      ".ch-hero .delta{margin-top:14px;font-size:12px;line-height:20px}";
+      ".ch-clock{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:10px;background:#f0f5ff;color:#2f54eb;font-size:12px;opacity:1}" +
+      ".ch-hero .value{margin:8px 0 6px}" +
+      ".ch-hero .delta{margin:0 0 6px;font-size:12px}" +
+      ".ch-hero .ch-spark{display:block;width:100%;height:72px;margin:0}" +
+      ".ch-axis{display:flex;justify-content:space-between;font-size:10px;opacity:.4;margin:2px 0 0}";
     document.head.appendChild(style);
   }
 
@@ -726,7 +730,7 @@
       ranges: RANGES,
       summary: { channels: 1, shops: shopCount },
       hero: {
-        label: "实时销售额",
+        label: "实时销售指数",
         value: fmtInt(todayPay != null ? todayPay : 0),
         todayPay: todayPay,
         yestPay: heroVal,
@@ -884,6 +888,155 @@
     hero.yesterday = yest;
     hero.today = today;
     return hero;
+  }
+
+  function hourList(list, keyed) {
+    if (list && list.length) {
+      return list.map(function (n) {
+        return Number(n) || 0;
+      });
+    }
+    if (!keyed || typeof keyed !== "object") {
+      return [];
+    }
+    const out = [];
+    let h = 0;
+    for (h = 0; h < 24; h += 1) {
+      const key = (h < 10 ? "0" : "") + h + ":00";
+      out.push(Number(keyed[key]) || 0);
+    }
+    return out;
+  }
+
+  function cumulativeHours(list) {
+    const out = [];
+    let sum = 0;
+    (list || []).forEach(function (n) {
+      sum += Number(n) || 0;
+      out.push(sum);
+    });
+    return out;
+  }
+
+  function cutHourly(list) {
+    let end = Math.min((list && list.length) || 0, shanghaiHour() + 1);
+    while (end > 2 && list && !(Number(list[end - 1]) > 0)) {
+      end -= 1;
+    }
+    return (list || []).slice(0, Math.max(end, 0));
+  }
+
+  function heroFromErpPaid(data) {
+    if (!data || !data.ok) {
+      return null;
+    }
+    const sum = data.summary || {};
+    const hourly = data.hourly || {};
+    const todayPay = asNum(sum.todayPayAmount != null ? sum.todayPayAmount : sum.payAmount);
+    const yestPay = asNum(sum.yesterdayPayAmount);
+    if (todayPay == null) {
+      return null;
+    }
+    const todayH = cutHourly(hourList(hourly.todayPay, sum.todayHourlyData));
+    const yestH = hourList(hourly.yesterdayPay, sum.yesterdayHourlyData);
+    const delta = yestPay ? Number((((todayPay - yestPay) / Math.abs(yestPay)) * 100).toFixed(2)) : 0;
+    return {
+      label: "实时销售指数",
+      value: fmtInt(todayPay),
+      todayPay: todayPay,
+      yestPay: yestPay,
+      delta: delta,
+      yesterday: cumulativeHours(yestH),
+      today: cumulativeHours(todayH)
+    };
+  }
+
+  function compareSpark() {
+    return '<svg class="ch-spark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 72" preserveAspectRatio="none" aria-hidden="true"></svg>';
+  }
+
+  function paintSparkSvg(svg, hero) {
+    if (!svg) {
+      return;
+    }
+    const yest = asSeries(hero && hero.yesterday);
+    const today = asSeries(hero && hero.today);
+    const w = 240;
+    const h = 72;
+    const padX = 4;
+    const padY = 8;
+    let max = 1;
+    yest.concat(today).forEach(function (n) {
+      if (n > max) {
+        max = n;
+      }
+    });
+    const steps = 23;
+    const ns = "http://www.w3.org/2000/svg";
+    function xy(i, n) {
+      return {
+        x: padX + (i / steps) * (w - padX * 2),
+        y: h - padY - (n / max) * (h - padY * 2)
+      };
+    }
+    function add(name, attrs) {
+      const el = document.createElementNS(ns, name);
+      Object.keys(attrs).forEach(function (key) {
+        el.setAttribute(key, attrs[key]);
+      });
+      svg.appendChild(el);
+      return el;
+    }
+    function linePts(list) {
+      return list
+        .map(function (n, i) {
+          const p = xy(i, n);
+          return p.x.toFixed(1) + "," + p.y.toFixed(1);
+        })
+        .join(" ");
+    }
+    function areaD(list) {
+      if (!list.length) {
+        return "";
+      }
+      const first = xy(0, list[0]);
+      const last = xy(list.length - 1, list[list.length - 1]);
+      const base = (h - padY).toFixed(1);
+      const line = list
+        .map(function (n, i) {
+          const p = xy(i, n);
+          return p.x.toFixed(1) + " " + p.y.toFixed(1);
+        })
+        .join(" L ");
+      return "M " + first.x.toFixed(1) + " " + base + " L " + line + " L " + last.x.toFixed(1) + " " + base + " Z";
+    }
+    while (svg.firstChild) {
+      svg.removeChild(svg.firstChild);
+    }
+    if (yest.length) {
+      add("path", { fill: "#2f54eb", "fill-opacity": "0.12", d: areaD(yest) });
+      add("polyline", {
+        fill: "none",
+        stroke: "#2f54eb",
+        "stroke-width": "2",
+        "stroke-linejoin": "round",
+        "stroke-linecap": "round",
+        points: linePts(yest)
+      });
+    }
+    if (today.length) {
+      add("path", { fill: "#cf1322", "fill-opacity": "0.14", d: areaD(today) });
+      add("polyline", {
+        fill: "none",
+        stroke: "#cf1322",
+        "stroke-width": "2",
+        "stroke-linejoin": "round",
+        "stroke-linecap": "round",
+        points: linePts(today)
+      });
+      const p = xy(today.length - 1, today[today.length - 1]);
+      add("circle", { cx: p.x.toFixed(1), cy: p.y.toFixed(1), r: "3.2", fill: "#cf1322" });
+    }
   }
 
   function attachLiveHero(hero, live) {
@@ -1435,7 +1588,7 @@
         escapeHtml(String(payload.summary.shops)) +
         '个</span><button type="button" class="ch-set" data-metrics="open">设定指标</button></div>' +
         '<div class="ch-metrics"><article class="ch-card ch-hero"><div class="label">' +
-        "实时销售额" +
+        "实时销售指数" +
         '<span class="ch-clock">' +
         escapeHtml(shanghaiHms()) +
         '</span></div><div class="value">' +
@@ -1443,16 +1596,19 @@
         '</div><div class="delta ' +
         (down ? "is-down" : "is-up") +
         '">' +
-        escapeHtml(String(Math.abs(Number(hero.delta || 0)).toFixed(2))) +
+        escapeHtml((Number(hero.delta || 0) > 0 ? "+" : Number(hero.delta || 0) < 0 ? "-" : "") + Math.abs(Number(hero.delta || 0)).toFixed(2)) +
         "% " +
         (down ? "↓" : "↑") +
-        "</div></article>" +
+        "</div>" +
+        compareSpark() +
+        '<div class="ch-axis"><span>00</span><span>12</span><span>23</span></div></article>' +
         cards +
         "</div>" +
         '<div class="ch-tabs">' +
         tabs +
         "</div>" +
         lists;
+      paintSparkSvg(board.querySelector(".ch-spark"), hero);
       syncCalPop();
       if (state.pickOpen) {
         paintPicker();
@@ -1567,7 +1723,7 @@
           state.payload.shops = overlaySharedShopMetrics(state.payload.shops);
           state.payload.shopTable = shopTableFrom(state.payload.shops);
         }
-        if (state.payload.hero && state.payload.hero.todayPay != null) {
+        if (state.payload.hero && Number(state.payload.hero.todayPay) > 0) {
           state.payload.hero.value = fmtInt(state.payload.hero.todayPay);
         }
       }
@@ -1621,8 +1777,18 @@
     }
 
     function loadLiveSpark() {
-      return Promise.all([softJson("/api/data/live"), softJson("/api/home/live")]).then(function (pack) {
+      return Promise.all([
+        softJson("/api/home/erp-paid"),
+        softJson("/api/data/live"),
+        softJson("/api/home/live")
+      ]).then(function (pack) {
         if (dead || !state.payload || !state.payload.hero) {
+          return;
+        }
+        const fromPaid = heroFromErpPaid(pack[0]);
+        if (fromPaid) {
+          state.payload.hero = Object.assign({}, state.payload.hero, fromPaid);
+          render();
           return;
         }
         const live = pack.find(function (item) {
@@ -1687,7 +1853,7 @@
         board.innerHTML = '<p class="ch-empty">正在加载数据总览…</p>';
       }
       loadLiveSpark();
-      const heroReady = cached && cached.payload && cached.payload.hero && cached.payload.hero.todayPay != null;
+      const heroReady = cached && cached.payload && cached.payload.hero && Number(cached.payload.hero.todayPay) > 0;
       if (!forceBoard && ovBoardFresh(cached) && heroReady) {
         return Promise.resolve();
       }

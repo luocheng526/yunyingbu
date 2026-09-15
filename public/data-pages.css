@@ -499,6 +499,9 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
   height: 100%;
   box-sizing: border-box;
 }
+.ch-metrics .ch-hero {
+  min-height: 220px;
+}
 .ch-metrics-hero {
   grid-template-columns: 1fr;
 }
@@ -562,10 +565,32 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
   font-size: 12px;
   opacity: 0.55;
 }
-.ch-hero .ch-spark,
-.ch-axis,
+.ch-hero .ch-spark {
+  display: block;
+  width: 100%;
+  height: 72px;
+  margin: 0;
+}
+.ch-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  opacity: 0.4;
+  margin-top: 2px;
+}
 .ch-legs {
   display: none;
+}
+.ch-clock {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background: #f0f5ff;
+  color: #2f54eb;
+  font-size: 12px;
+  opacity: 1;
 }
 .ch-hero .delta.is-down {
   color: #389e0d;
