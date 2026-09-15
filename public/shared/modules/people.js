@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.186-filter-counts";
+    const href = "/people.css?v=0.1.187-filter-counts";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -769,7 +769,7 @@
           return picked[value];
         }).length;
         const counts = columnValueCounts(key);
-        const unit = isMemberFilter(key) ? "人" : "家";
+        const unit = isMemberFilter(key) ? "人" : "家店铺";
         const total = isMemberFilter(key) ? roster.people.length : rawStores.length;
         function countBadge(n) {
           return '<span class="org-filter-count">（' + n + unit + "）</span>";
