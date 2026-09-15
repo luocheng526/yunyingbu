@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.533-home-bars */
+/* xm-module-home 0.1.533-home-combo */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -942,7 +942,7 @@
       width +
       " " +
       height +
-      '">' +
+      '" preserveAspectRatio="none">' +
       (yestPts ? '<polyline fill="none" stroke="#2f54eb" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="' + yestPts + '"></polyline>' : "") +
       (todayPts ? '<polyline fill="none" stroke="#cf1322" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="' + todayPts + '"></polyline>' : "") +
       (drawDots && yest.length ? dots(yest, "#2f54eb") : "") +
@@ -960,35 +960,50 @@
   }
   function compareBarsHtml(yestHour, todayHour) {
     var width = 640;
-    var height = 220;
+    var height = 300;
     var padTop = 12;
     var padBot = 22;
     var padX = 10;
     var inner = 620;
     var slots = 24;
     var slot = inner / slots;
-    var barW = Math.min(9, slot * 0.32);
+    var barW = Math.min(8, slot * 0.3);
     var yest = [];
     var i;
     for (i = 0; i < slots; i += 1) {
       yest.push(Number(yestHour && yestHour[i]) || 0);
     }
     var today = todayHour || [];
-    var max = 1;
+    var barMax = 1;
+    var yestCum = cumHours(yest);
+    var todayCum = cumHours(today);
+    var lineMax = 1;
     yest.concat(today).forEach(function (n) {
       var v = Number(n) || 0;
-      if (v > max) {
-        max = v;
+      if (v > barMax) {
+        barMax = v;
       }
     });
-    function yAt(n) {
-      return height - padBot - ((Number(n) || 0) / max) * (height - padTop - padBot);
+    yestCum.concat(todayCum).forEach(function (n) {
+      var v = Number(n) || 0;
+      if (v > lineMax) {
+        lineMax = v;
+      }
+    });
+    function yBar(n) {
+      return height - padBot - ((Number(n) || 0) / barMax) * (height - padTop - padBot);
+    }
+    function yLine(n) {
+      return height - padBot - ((Number(n) || 0) / lineMax) * (height - padTop - padBot);
+    }
+    function xAt(index) {
+      return padX + slot * index + slot / 2;
     }
     var base = height - padBot;
     var bars = [];
     for (i = 0; i < slots; i += 1) {
-      var cx = padX + slot * i + slot / 2;
-      var y1 = yAt(yest[i]);
+      var cx = xAt(i);
+      var y1 = yBar(yest[i]);
       bars.push(
         '<rect class="xm-hm-col is-yest" data-hour="' +
           (i + 1) +
@@ -1003,7 +1018,7 @@
           '" rx="1" fill="#2f54eb"></rect>'
       );
       if (i < today.length) {
-        var y2 = yAt(Number(today[i]) || 0);
+        var y2 = yBar(Number(today[i]) || 0);
         bars.push(
           '<rect class="xm-hm-col is-today" data-hour="' +
             (i + 1) +
@@ -1019,11 +1034,20 @@
         );
       }
     }
+    function pts(list) {
+      return list
+        .map(function (n, idx) {
+          return xAt(idx).toFixed(1) + "," + yLine(n).toFixed(1);
+        })
+        .join(" ");
+    }
+    var yestPts = yestCum.length ? pts(yestCum) : "";
+    var todayPts = todayCum.length ? pts(todayCum) : "";
     var axis = [];
     for (i = 1; i <= slots; i += 1) {
       axis.push(
         '<text x="' +
-          (padX + slot * (i - 1) + slot / 2).toFixed(1) +
+          xAt(i - 1).toFixed(1) +
           '" y="' +
           (height - 5) +
           '" text-anchor="middle" fill="#8c8c8c" font-size="8">' +
@@ -1036,7 +1060,7 @@
       width +
       " " +
       height +
-      '" data-bars="24">' +
+      '" preserveAspectRatio="none" data-bars="24">' +
       '<rect class="xm-hm-bar-guide" x="0" y="' +
       padTop +
       '" width="' +
@@ -1054,6 +1078,16 @@
       base +
       '" stroke="#ebeef5"></line>' +
       bars.join("") +
+      (yestPts
+        ? '<polyline class="xm-hm-cum is-yest" fill="none" stroke="#2f54eb" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="' +
+          yestPts +
+          '"></polyline>'
+        : "") +
+      (todayPts
+        ? '<polyline class="xm-hm-cum is-today" fill="none" stroke="#cf1322" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="' +
+          todayPts +
+          '"></polyline>'
+        : "") +
       axis.join("") +
       "</svg>"
     );
@@ -1107,15 +1141,15 @@
     );
     return (
       '<article class="xm-hm-chart xm-hm-sales-chart"' +
-      hoursAttr(sales.hours) +
+      hoursAttr(hasHour ? 24 : sales.hours) +
       '><div class="xm-hm-card-head"><span>' +
       escapeHtml(sales.label) +
       '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
       escapeHtml(sales.value) +
       "</div>" +
-      (hasHour ? '<div class="xm-hm-chart-sub">分时对比</div>' + compareBarsHtml(yestHour, todayHour) : "") +
-      (hasHour ? '<div class="xm-hm-chart-sub">累计走势</div>' : "") +
-      compareLineHtml(sales) +
+      (hasHour
+        ? '<div class="xm-hm-chart-sub">柱：分时金额（2点=1-2点） · 线：累计（23点=1-23点）</div>' + compareBarsHtml(yestHour, todayHour)
+        : compareLineHtml(sales)) +
       "</article>"
     );
   }
@@ -1203,7 +1237,7 @@
       ".xm-hm-sales{margin:0 0 10px}" +
       ".xm-hm-sales-chart{width:100%}" +
       ".xm-hm-sales-chart .xm-hm-line,.xm-hm-live .xm-hm-line{height:320px}" +
-      ".xm-hm-sales-chart .xm-hm-bars{display:block;width:100%;height:240px;margin-top:6px;cursor:crosshair}" +
+      ".xm-hm-sales-chart .xm-hm-bars{display:block;width:100%;height:380px;margin-top:6px;cursor:crosshair}" +
       ".xm-hm-chart-sub{margin:10px 0 0;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
       ".xm-hm-teams{display:flex;flex-direction:column;gap:10px;overflow-x:auto}" +
@@ -1398,7 +1432,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.533-home-bars");
+    board.setAttribute("data-hm-js", "0.1.533-home-combo");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
