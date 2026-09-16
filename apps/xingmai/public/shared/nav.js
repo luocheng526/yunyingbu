@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.624 */
+/* xm-fast-shell 0.1.625 */
 (function () {
-  const ASSET_VER = "0.1.624";
+  const ASSET_VER = "0.1.625";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",

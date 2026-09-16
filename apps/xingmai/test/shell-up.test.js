@@ -10,15 +10,15 @@ const middleware = readFileSync(join(root, "src/modules/profile/middleware.js"),
 const nav = readFileSync(join(root, "public/shared/nav.js"), "utf8");
 const layout = readFileSync(join(root, "public/shared/layout.css"), "utf8");
 
-test("shell pair shares 0.1.624 and does not import currentUserAsync", () => {
-  assert.match(pages, /xm-fast-shell 0\.1\.624/);
-  assert.match(middleware, /xm-fast-shell 0\.1\.624/);
-  assert.match(middleware, /export const SHELL_ASSET_VER = "0\.1\.624"/);
+test("shell pair shares 0.1.625 and does not import currentUserAsync", () => {
+  assert.match(pages, /xm-fast-shell 0\.1\.625/);
+  assert.match(middleware, /xm-fast-shell 0\.1\.625/);
+  assert.match(middleware, /export const SHELL_ASSET_VER = "0\.1\.625"/);
   assert.match(middleware, /import \{ currentUser, publicProfile \} from "\.\/auth\.js"/);
   assert.doesNotMatch(middleware, /currentUserAsync/);
-  assert.match(nav, /xm-fast-shell 0\.1\.624/);
-  assert.match(nav, /const ASSET_VER = "0\.1\.624"/);
-  assert.match(layout, /xm-sider-narrow 0\.1\.624/);
+  assert.match(nav, /xm-fast-shell 0\.1\.625/);
+  assert.match(nav, /const ASSET_VER = "0\.1\.625"/);
+  assert.match(layout, /xm-sider-narrow 0\.1\.625/);
 });
 
 test("shell HTML pins module scripts so data.js cache-busts with the shell", () => {
