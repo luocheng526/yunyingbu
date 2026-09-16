@@ -360,13 +360,36 @@ function centerOfManager(name) {
   return "";
 }
 
+function roleOfStoredName(name) {
+  const who = String(name || "").trim();
+  if (!who) {
+    return "";
+  }
+  const hit = people.find((row) => row.name === who);
+  return mapLineRole(hit && hit.role);
+}
+
+function splitLeadFields(supervisor, reserve) {
+  let nextSupervisor = String(supervisor || "").trim();
+  let nextReserve = String(reserve || "").trim();
+  if (!nextReserve && nextSupervisor && (nextSupervisor === "储备" || roleOfStoredName(nextSupervisor) === "储备")) {
+    nextReserve = nextSupervisor;
+    nextSupervisor = "";
+  }
+  if (nextSupervisor === "主管/储备") {
+    nextSupervisor = "主管";
+  }
+  return { supervisor: nextSupervisor, reserve: nextReserve };
+}
+
 export function orgLineOf(person = {}) {
   const role = mapLineRole(person.role);
   const self = String(person.name || "").trim();
   const line = {
     director: self === "罗成" || role === "总监" ? self : "罗成",
     manager: role === "经理" ? self : "",
-    supervisor: role === "主管" || role === "储备" ? self : "",
+    supervisor: role === "主管" ? self : "",
+    reserve: role === "储备" ? self : "",
     operator: role === "运营" ? self : "",
     assistant: role === "助理" ? self : ""
   };
@@ -379,8 +402,10 @@ export function orgLineOf(person = {}) {
       line.director = current.name;
     } else if (parentRole === "经理" && !line.manager) {
       line.manager = current.name;
-    } else if ((parentRole === "主管" || parentRole === "储备") && !line.supervisor) {
+    } else if (parentRole === "主管" && !line.supervisor) {
       line.supervisor = current.name;
+    } else if (parentRole === "储备" && !line.reserve) {
+      line.reserve = current.name;
     } else if (parentRole === "运营" && !line.operator && role === "助理") {
       line.operator = current.name;
     }
@@ -393,10 +418,15 @@ export function orgLineOf(person = {}) {
         ? ""
         : line.manager;
   }
+  const stored = splitLeadFields(
+    pickStoredLine(person, ["supervisor"], line.supervisor),
+    pickStoredLine(person, ["reserve"], line.reserve)
+  );
   return {
     director: pickStoredLine(person, ["director"], line.director),
     manager: pickStoredLine(person, ["lineManager", "manager"], line.manager),
-    supervisor: pickStoredLine(person, ["supervisor"], line.supervisor),
+    supervisor: stored.supervisor,
+    reserve: stored.reserve,
     operator: pickStoredLine(person, ["operator"], line.operator),
     assistant: pickStoredLine(person, ["assistant"], line.assistant)
   };
@@ -412,7 +442,7 @@ function pickStoredLine(person, keys, derived) {
 }
 
 function stampOrgLine(person, line, options = {}) {
-  for (const key of ["director", "lineManager", "supervisor", "operator", "assistant"]) {
+  for (const key of ["director", "lineManager", "supervisor", "reserve", "operator", "assistant"]) {
     const value = line[key];
     if (options.skipEmpty && !String(value || "").trim()) {
       continue;
@@ -426,6 +456,7 @@ function applyLinePatch(found, input) {
     "director",
     "lineManager",
     "supervisor",
+    "reserve",
     "operator",
     "assistant",
     "manager",
@@ -449,6 +480,7 @@ function applyLinePatch(found, input) {
     director: current.director,
     lineManager: current.manager,
     supervisor: current.supervisor,
+    reserve: current.reserve,
     operator: current.operator,
     assistant: current.assistant,
     ...input,
@@ -473,6 +505,9 @@ function inferRoleFromLine(name, line, fallback) {
   }
   if (line.operator === name) {
     return "运营";
+  }
+  if (line.reserve === name) {
+    return "储备";
   }
   if (line.supervisor === name) {
     return "主管";
@@ -503,7 +538,12 @@ export function applyOrgLine(input = {}) {
   const name = String(input.name || input.姓名 || "").trim();
   const director = String(input.director || input.总监 || "").trim() || "罗成";
   const lineManager = String(input.lineManager || input.manager || input.经理 || "").trim();
-  const supervisor = String(input.supervisor || input["主管/储备"] || input.主管 || input.储备 || "").trim();
+  const leads = splitLeadFields(
+    String(input.supervisor || input.主管 || input["主管/储备"] || "").trim(),
+    String(input.reserve || input.储备 || "").trim()
+  );
+  const supervisor = leads.supervisor;
+  const reserve = leads.reserve;
   const operator = String(input.operator || input.运营 || "").trim();
   const assistant = String(input.assistant || input.助理 || "").trim();
   let role = mapLineRole(input.role || input.岗位);
@@ -512,6 +552,7 @@ export function applyOrgLine(input = {}) {
       director,
       manager: lineManager,
       supervisor,
+      reserve,
       operator,
       assistant
     });
@@ -520,11 +561,12 @@ export function applyOrgLine(input = {}) {
     String(input.center || input.所属中心 || "").trim() ||
     centerOfManager(lineManager) ||
     centerOfManager(supervisor) ||
+    centerOfManager(reserve) ||
     "其他";
   const department = String(input.department || input.部门 || "").trim() || center;
   const managerName =
     String(input.managerName || input.上级 || "").trim() ||
-    [supervisor, lineManager, director].find((item) => item && item !== name && !String(item).includes("罗成")) ||
+    [supervisor, reserve, lineManager, director].find((item) => item && item !== name && !String(item).includes("罗成")) ||
     "";
   let managerId = input.managerId;
   if (managerId === "" || managerId == null) {
@@ -541,6 +583,7 @@ export function applyOrgLine(input = {}) {
     director,
     lineManager,
     supervisor,
+    reserve,
     operator,
     assistant
   };
@@ -595,6 +638,7 @@ function presentPerson(person) {
     director: line.director,
     lineManager: line.manager,
     supervisor: line.supervisor,
+    reserve: line.reserve,
     operator: line.operator,
     assistant: line.assistant,
     visibleShops: visibleShopsOf(person)
@@ -690,7 +734,7 @@ export async function createPerson(input) {
   return result;
 }
 
-export const PEOPLE_IMPORT_HEADERS = ["姓名", "总监", "经理", "主管/储备", "运营", "助理", "状态", "账号", "登录密码"];
+export const PEOPLE_IMPORT_HEADERS = ["姓名", "总监", "经理", "主管", "储备", "运营", "助理", "状态", "账号", "登录密码"];
 
 export async function importPeople(rows) {
   const list = Array.isArray(rows) ? rows : [];
@@ -752,6 +796,7 @@ export async function importPeople(rows) {
       director: org.director,
       lineManager: org.lineManager,
       supervisor: org.supervisor,
+      reserve: org.reserve,
       operator: org.operator,
       assistant: org.assistant
     });

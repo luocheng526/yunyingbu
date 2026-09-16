@@ -155,13 +155,14 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /与姓名相同/);
     assert.doesNotMatch(jsText, /工号/);
     assert.doesNotMatch(jsText, /name="employeeNo"/);
-    assert.match(jsText, /表头可筛总监、经理、主管\/储备、运营、助理、状态/);
+    assert.match(jsText, /表头可筛总监、经理、主管、储备、运营、助理、状态/);
     assert.match(jsText, /导入按姓名合并/);
     assert.match(jsText, /并落盘，强制刷新还在/);
     assert.match(jsText, /people-cell/);
     assert.match(jsText, /startPersonCellEdit/);
     assert.match(jsText, /peopleLineCell\("director"/);
     assert.match(jsText, /peopleLineCell\("lineManager"/);
+    assert.match(jsText, /peopleLineCell\("reserve"/);
     assert.match(jsText, /双击修改/);
     assert.match(jsText, /仅罗成、韩梦凯、沈子晗能改/);
     assert.match(jsText, /peopleData.canEdit === true/);
@@ -180,6 +181,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /id="people-filter-pop"/);
     assert.match(jsText, /data-filter-key="peopleManager"/);
     assert.match(jsText, /data-filter-key="peopleSupervisor"/);
+    assert.match(jsText, /data-filter-key="peopleReserve"/);
     assert.match(jsText, /data-filter-key="peopleOperator"/);
     assert.match(jsText, /data-filter-key="status"/);
     assert.match(jsText, /applyMemberFilters/);
@@ -261,13 +263,16 @@ function uniqueLineKpiNames(people, key, seat) {
     if (seat === "助理" && raw === "助理") {
       name = self;
     }
-    if (seat === "主管/储备" && (raw === "主管" || raw === "储备" || raw === "主管/储备")) {
+    if (seat === "主管" && (raw === "主管" || raw === "主管/储备")) {
+      name = self;
+    }
+    if (seat === "储备" && raw === "储备") {
       name = self;
     }
     if (!name || skip.has(name)) {
       continue;
     }
-    if (seat === "主管/储备" && leaders.has(name)) {
+    if ((seat === "主管" || seat === "储备") && leaders.has(name)) {
       continue;
     }
     if (seat === "经理" && name === "罗成") {
@@ -286,7 +291,8 @@ function peopleLineKpiCounts(people) {
   return {
     总监: directors.length,
     经理: uniqueLineKpiNames(people, "lineManager", "经理").length,
-    "主管/储备": uniqueLineKpiNames(people, "supervisor", "主管/储备").length,
+    主管: uniqueLineKpiNames(people, "supervisor", "主管").length,
+    储备: uniqueLineKpiNames(people, "reserve", "储备").length,
     运营: uniqueLineKpiNames(people, "operator", "运营").length,
     助理: uniqueLineKpiNames(people, "assistant", "助理").length
   };
@@ -297,6 +303,7 @@ test("member KPI cards count unique 在职 names in the five line columns", asyn
     const js = await fetch(`${base}/shared/modules/people.js`);
     const jsText = await js.text();
     assert.match(jsText, /uniqueLineKpiNames\(people, "supervisor"/);
+    assert.match(jsText, /uniqueLineKpiNames\(people, "reserve"/);
     assert.match(jsText, /raw === "助理"/);
     assert.match(jsText, /LINE_KPI_LEADERS/);
     const res = await fetch(`${base}/api/people`);
@@ -304,7 +311,8 @@ test("member KPI cards count unique 在职 names in the five line columns", asyn
     assert.deepEqual(peopleLineKpiCounts(data.people), {
       总监: 1,
       经理: 2,
-      "主管/储备": 1,
+      主管: 1,
+      储备: 0,
       运营: 12,
       助理: 0
     });
@@ -317,12 +325,14 @@ test("member KPI cards count unique 在职 names in the five line columns", asyn
         { name: "李继双", status: "在职", director: "罗成", lineManager: "韩梦凯", supervisor: "陈晓曼", operator: "运营", assistant: "无" },
         { name: "张嘉庆", status: "在职", director: "罗成", lineManager: "韩梦凯", supervisor: "陈晓曼", operator: "无", assistant: "助理" },
         { name: "林晓彬", status: "在职", director: "罗成", lineManager: "韩梦凯", supervisor: "韩梦凯", operator: "运营", assistant: "无" },
+        { name: "储备甲", status: "在职", director: "罗成", lineManager: "韩梦凯", supervisor: "", reserve: "储备甲", operator: "", assistant: "" },
         { name: "管理员", status: "在职", director: "罗成", lineManager: "管理员", supervisor: "张文静", operator: "张文静", assistant: "" }
       ]),
       {
         总监: 1,
         经理: 2,
-        "主管/储备": 4,
+        主管: 4,
+        储备: 1,
         运营: 5,
         助理: 1
       }
@@ -919,7 +929,7 @@ test("people roster template and import merges by exact name", async () => {
     const template = await fetch(`${base}/api/people/template`);
     const csv = await template.text();
     assert.equal(template.status, 200);
-    assert.match(csv, /姓名,总监,经理,主管\/储备,运营,助理,状态,账号,登录密码/);
+    assert.match(csv, /姓名,总监,经理,主管,储备,运营,助理,状态,账号,登录密码/);
 
     const before = await (await fetch(`${base}/api/people`)).json();
     const seedCount = before.people.length;

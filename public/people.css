@@ -836,7 +836,7 @@ body:has(.people-page) .xm-tabs {
 
 .rights-mod-head-rest {
   display: grid;
-  grid-template-columns: 148px minmax(0, 1fr);
+  grid-template-columns: 110px 110px minmax(0, 1fr);
   gap: 8px;
   min-width: 0;
 }
@@ -888,11 +888,18 @@ body:has(.people-page) .xm-tabs {
 
 .rights-mod-lead {
   display: grid;
-  grid-template-columns: 148px minmax(0, 1fr);
+  grid-template-columns: 110px 110px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   background: #e6f4ff;
   border: 1px solid #69b1ff;
+}
+
+.rights-mod-lead-seat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
 }
 
 .rights-mod-chain {

@@ -261,7 +261,7 @@ peopleRouter.get("/", async (req, res) => {
 });
 
 peopleRouter.get("/template", (_req, res) => {
-  const sample = ["示例同事", "罗成", "沈子晗", "", "示例同事", "", "在职", "示例同事", "ChangeMe123!"];
+  const sample = ["示例同事", "罗成", "沈子晗", "", "", "示例同事", "", "在职", "示例同事", "ChangeMe123!"];
   const csv =
     "\uFEFF" +
     PEOPLE_IMPORT_HEADERS.join(",") +
