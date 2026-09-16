@@ -400,7 +400,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov23";
+      link.href = "/data-pages.css?v=data-ov24";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -1488,7 +1488,7 @@
         ? '<label class="ch-zero"><input type="checkbox" data-show-pl' +
           (showPl ? " checked" : "") +
           " /> 显示盈亏</label>"
-        : '<label class="ch-zero"><input type="checkbox" disabled /> 显示数字</label>') +
+        : "") +
       toolButtons() +
       "</div>" +
       '<div class="ch-table-wrap"><table><thead>' +
