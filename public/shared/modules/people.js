@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.190-type-search";
+    const href = "/people.css?v=0.1.191-rights-tree";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -179,7 +179,7 @@
         '<div class="org-filter-pop" id="people-filter-pop" hidden></div></section></div>' +
         '<div class="org-pane" data-pane="rights" hidden>' +
         '<section class="panel rights-fit-panel"><h2>管辖</h2>' +
-        '<p class="lead">只读对照。按模块铺：总监、经理、主管、运营、助理、店铺。人在成员管理改，店在店铺主数据改，这里对上就行。</p>' +
+        '<p class="lead">只读对照。树按总监 → 经理 → 主管/储备 → 运营 → 助理 → 店铺。人和店分别对照成员管理、店铺主数据，不对再开一套权。</p>' +
         '<div class="rights-watch" id="rights-watch"></div>' +
         '<div class="rights-tree-toolbar"><button type="button" id="rights-refresh">刷新树和看板</button><span class="muted" id="rights-checked">检查时间：—</span></div>' +
         '<div class="rights-tree-chart" id="rights-tree-chart"></div></section></div>' +
@@ -1327,151 +1327,42 @@
         paintWatchIssues();
       }
 
-      function rightsModCard(role, name) {
+      function rightsRoleLabel(role) {
+        if (role === "主管" || role === "储备") {
+          return "主管/储备";
+        }
+        return role || "";
+      }
+
+      function renderRightsTreeNode(node) {
+        const role = rightsRoleLabel(node.role);
+        const kids = (node.children || []).map(renderRightsTreeNode).join("");
+        const stores = (node.stores || [])
+          .map(function (store) {
+            return '<div class="rights-tree-store">' + escapeHtml(store.storeName) + "</div>";
+          })
+          .join("");
         return (
-          '<div class="rights-mod-card" data-role="' +
-          escapeHtml(role) +
-          '"><em>' +
+          '<div class="rights-tree-node" data-role="' +
+          escapeHtml(node.role || "") +
+          '"><div class="rights-tree-self"><div class="rights-tree-card"><em>' +
           escapeHtml(role) +
           "</em><strong>" +
-          escapeHtml(name) +
-          "</strong></div>"
-        );
-      }
-
-      function flattenRightsModules(tree) {
-        const bands = [];
-        (tree && tree.children ? tree.children : []).forEach(function (manager) {
-          const leads = (manager.children || []).filter(function (child) {
-            return child.role === "主管";
-          });
-          const direct = (manager.children || []).filter(function (child) {
-            return child.role !== "主管";
-          });
-          const groups = leads.length ? leads.slice() : [];
-          if (direct.length) {
-            groups.push({
-              name: manager.name + "直属",
-              role: "主管",
-              synthetic: true,
-              children: direct,
-              stores: manager.stores || []
-            });
-          }
-          if (!groups.length) {
-            groups.push({
-              name: manager.name + "组",
-              role: "主管",
-              synthetic: true,
-              children: [],
-              stores: manager.stores || []
-            });
-          }
-          bands.push({
-            manager: { name: manager.name, role: "经理" },
-            leads: groups.map(function (lead) {
-              const ops = [];
-              const assistants = [];
-              const shops = (lead.stores || []).map(function (store) {
-                return store.storeName;
-              });
-              (lead.children || []).forEach(function (child) {
-                if (child.role === "助理") {
-                  assistants.push(child.name);
-                  (child.stores || []).forEach(function (store) {
-                    shops.push(store.storeName);
-                  });
-                  return;
-                }
-                ops.push(child.name);
-                (child.children || []).forEach(function (kid) {
-                  if (kid.role === "助理") {
-                    assistants.push(kid.name);
-                  }
-                  (kid.stores || []).forEach(function (store) {
-                    shops.push(store.storeName);
-                  });
-                });
-                (child.stores || []).forEach(function (store) {
-                  shops.push(store.storeName);
-                });
-              });
-              return {
-                name: lead.name,
-                ops: ops,
-                assistants: assistants,
-                shops: shops
-              };
-            })
-          });
-        });
-        return {
-          director: tree ? { name: tree.name, role: "总监" } : { name: "罗成", role: "总监" },
-          bands: bands
-        };
-      }
-
-      function renderRightsModules(tree) {
-        const data = flattenRightsModules(tree);
-        return (
-          '<div class="rights-modules" id="rights-tree-fit">' +
-          '<aside class="rights-mod rights-mod-director">' +
-          rightsModCard(data.director.role, data.director.name) +
-          "</aside>" +
-          '<div class="rights-mod-bands">' +
-          data.bands
-            .map(function (band) {
-              return (
-                '<section class="rights-mod-band" data-manager="' +
-                escapeHtml(band.manager.name) +
-                '">' +
-                '<article class="rights-mod rights-mod-manager">' +
-                rightsModCard(band.manager.role, band.manager.name) +
-                "</article>" +
-                '<div class="rights-mod-leads">' +
-                band.leads
-                  .map(function (lead) {
-                    return (
-                      '<article class="rights-mod rights-mod-lead"><div class="rights-mod-lead-name">' +
-                      rightsModCard("主管", lead.name) +
-                      '</div><div class="rights-mod-chain">' +
-                      '<div class="rights-mod-col" data-mod="运营"><span class="rights-mod-h">运营</span>' +
-                      (lead.ops.length
-                        ? lead.ops.map(function (name) { return rightsModCard("运营", name); }).join("")
-                        : '<div class="rights-mod-empty">—</div>') +
-                      '</div><div class="rights-mod-col" data-mod="助理"><span class="rights-mod-h">助理</span>' +
-                      (lead.assistants.length
-                        ? lead.assistants.map(function (name) { return rightsModCard("助理", name); }).join("")
-                        : '<div class="rights-mod-empty">—</div>') +
-                      '</div><div class="rights-mod-col" data-mod="店铺"><span class="rights-mod-h">店铺</span>' +
-                      (lead.shops.length
-                        ? lead.shops.map(function (name) { return '<div class="rights-mod-shop">' + escapeHtml(name) + "</div>"; }).join("")
-                        : '<div class="rights-mod-empty">—</div>') +
-                      "</div></div></article>"
-                    );
-                  })
-                  .join("") +
-                "</div></section>"
-              );
-            })
-            .join("") +
-          "</div></div>"
+          escapeHtml(node.name) +
+          "</strong></div>" +
+          (stores ? '<div class="rights-tree-stores">' + stores + "</div>" : "") +
+          "</div>" +
+          (kids ? '<div class="rights-tree-kids">' + kids + "</div>" : "") +
+          "</div>"
         );
       }
 
       function fitRightsTree() {
         const host = root.querySelector("#rights-tree-chart");
         const fit = host && host.querySelector("#rights-tree-fit");
-        if (!host || !fit) {
-          return;
+        if (fit) {
+          fit.style.transform = "none";
         }
-        fit.style.transform = "none";
-        const aw = Math.max(host.clientWidth - 16, 80);
-        const ah = Math.max(host.clientHeight - 16, 80);
-        const bw = Math.max(fit.scrollWidth, 1);
-        const bh = Math.max(fit.scrollHeight, 1);
-        const scale = Math.min(1, aw / bw, ah / bh);
-        fit.style.transform = "scale(" + scale + ")";
       }
 
       function renderRightsTreeChart(tree) {
@@ -1480,7 +1371,7 @@
           return;
         }
         host.innerHTML = tree
-          ? renderRightsModules(tree)
+          ? '<div class="rights-tree-fit" id="rights-tree-fit">' + renderRightsTreeNode(tree) + "</div>"
           : '<p class="rights-empty">还没有树。先在成员管理和店铺主数据里对上人和店。</p>';
         requestAnimationFrame(function () {
           requestAnimationFrame(fitRightsTree);
