@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.191-rights-tree";
+    const href = "/people.css?v=0.1.192-search-ok";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -109,10 +109,10 @@
         '<div class="org-pane" data-pane="stores">' +
         '<div class="org-kpis" id="org-kpis"></div>' +
         '<div class="org-toolbar">' +
-        '<form class="org-search-form" id="org-search-form" action="javascript:void(0)">' +
-        '<input type="text" id="org-q" name="q" placeholder="店铺ID / 商家ID / 店铺名 / 人员" autocomplete="off" spellcheck="false" />' +
-        '<button type="submit" id="org-search">搜索</button>' +
-        "</form>" +
+        '<div class="org-search-form" id="org-search-form">' +
+        '<input type="text" id="org-q" placeholder="店铺ID / 商家ID / 店铺名 / 人员" autocomplete="off" spellcheck="false" oninput="window.__xmSearchStores&&window.__xmSearchStores()" onkeyup="window.__xmSearchStores&&window.__xmSearchStores()" />' +
+        '<button type="button" id="org-search" onclick="window.__xmSearchStores&&window.__xmSearchStores()">搜索</button>' +
+        "</div>" +
         '<span class="spacer" id="org-count"></span>' +
         '<button type="button" class="ghost" id="org-template">下载模板</button>' +
         '<button type="button" class="ghost" id="org-import">导入</button>' +
@@ -139,10 +139,10 @@
         '<section class="panel"><h2>身份名册</h2>' +
         '<p class="lead">表头可筛总监、经理、主管/储备、运营、助理、状态。总监、经理、主管/储备、运营、助理双击可改，仅罗成、韩梦凯、沈子晗能改，其他人不能改。导入按姓名合并：一模一样的名字覆盖原行，对不上的名字当新员工，并落盘，强制刷新还在。勾选后可统一改密码或删除。点新增人员弹出对话框。</p>' +
         '<div class="org-toolbar">' +
-        '<form class="org-search-form" id="people-search-form" action="javascript:void(0)">' +
-        '<input type="text" id="people-q" name="q" placeholder="姓名 / 账号 / 经理 / 主管" autocomplete="off" spellcheck="false" />' +
-        '<button type="submit" id="people-search">搜索</button>' +
-        "</form>" +
+        '<div class="org-search-form" id="people-search-form">' +
+        '<input type="text" id="people-q" placeholder="姓名 / 账号 / 经理 / 主管" autocomplete="off" spellcheck="false" oninput="window.__xmSearchPeople&&window.__xmSearchPeople()" onkeyup="window.__xmSearchPeople&&window.__xmSearchPeople()" />' +
+        '<button type="button" id="people-search" onclick="window.__xmSearchPeople&&window.__xmSearchPeople()">搜索</button>' +
+        "</div>" +
         '<span class="spacer" id="people-count"></span>' +
         '<button type="button" class="ghost" id="people-template">下载模板</button>' +
         '<button type="button" class="ghost" id="people-import">导入</button>' +
@@ -1533,6 +1533,8 @@
         }
         input.disabled = false;
         input.readOnly = false;
+        input.removeAttribute("readonly");
+        input.removeAttribute("disabled");
         input.addEventListener("mousedown", function (event) {
           event.stopPropagation();
         });
@@ -1546,13 +1548,37 @@
           });
         });
         if (form) {
-          form.addEventListener("submit", function (event) {
-            event.preventDefault();
-            run();
+          form.addEventListener("click", function (event) {
+            if (event.target && event.target.id && event.target.id.indexOf("search") >= 0 && event.target.tagName === "BUTTON") {
+              run();
+            }
           });
         }
       }
-      bindLiveSearch(root.querySelector("#org-search-form"), qInput, paintStores);
+      function runStoreSearch() {
+        if (!dead) {
+          paintStores();
+        }
+      }
+      function runPeopleSearch() {
+        if (!dead) {
+          rerenderPeople();
+        }
+      }
+      window.__xmSearchStores = runStoreSearch;
+      window.__xmSearchPeople = runPeopleSearch;
+      function onSearchCapture(event) {
+        const id = event.target && event.target.id;
+        if (id === "org-q") {
+          runStoreSearch();
+        }
+        if (id === "people-q") {
+          runPeopleSearch();
+        }
+      }
+      document.addEventListener("input", onSearchCapture, true);
+      document.addEventListener("keyup", onSearchCapture, true);
+      bindLiveSearch(root.querySelector("#org-search-form"), qInput, runStoreSearch);
       root.querySelector("#org-add").addEventListener("click", function () {
         openForm(null);
       });
@@ -1737,7 +1763,7 @@
           }
         });
       }
-      bindLiveSearch(root.querySelector("#people-search-form"), root.querySelector("#people-q"), rerenderPeople);
+      bindLiveSearch(root.querySelector("#people-search-form"), root.querySelector("#people-q"), runPeopleSearch);
       root.querySelector("#people-add").addEventListener("click", openPeopleForm);
       root.querySelector("#people-cancel").addEventListener("click", closePeopleForm);
       peopleModal.addEventListener("click", function (event) {
@@ -2297,6 +2323,14 @@
 
       return function unmount() {
         dead = true;
+        document.removeEventListener("input", onSearchCapture, true);
+        document.removeEventListener("keyup", onSearchCapture, true);
+        if (window.__xmSearchStores === runStoreSearch) {
+          delete window.__xmSearchStores;
+        }
+        if (window.__xmSearchPeople === runPeopleSearch) {
+          delete window.__xmSearchPeople;
+        }
         document.removeEventListener("wheel", onPeopleWheel, true);
         window.removeEventListener("resize", fitRightsTree);
         document.removeEventListener("click", onDocFilterClose);
