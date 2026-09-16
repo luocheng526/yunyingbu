@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.575-home-rangeblank */
+/* xm-module-home 0.1.607-home-rangeblank */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1339,7 +1339,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.575-home-rangeblank");
+    board.setAttribute("data-hm-js", "0.1.607-home-rangeblank");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
