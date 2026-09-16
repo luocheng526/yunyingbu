@@ -33,7 +33,7 @@ const SMOKE = `<!doctype html>
         document.querySelector('[data-pane="members"]').click();
         await sleep(500);
         const kpiText = (document.getElementById("people-kpis") && document.getElementById("people-kpis").textContent) || "";
-        const kpiOk = kpiText.indexOf("总监") >= 0 && kpiText.indexOf("经理") >= 0 && kpiText.indexOf("主管/储备") >= 0 && kpiText.indexOf("运营") >= 0 && kpiText.indexOf("助理") >= 0;
+        const kpiOk = kpiText.indexOf("总监") >= 0 && kpiText.indexOf("经理") >= 0 && kpiText.indexOf("主管") >= 0 && kpiText.indexOf("储备") >= 0 && kpiText.indexOf("运营") >= 0 && kpiText.indexOf("助理") >= 0;
         document.body.setAttribute("data-kpis", kpiText.replace(/\\s+/g, " ").trim());
         const peopleQ = document.getElementById("people-q");
         peopleQ.focus();

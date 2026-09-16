@@ -137,7 +137,7 @@
         '<div class="org-filter-pop" id="org-filter-pop" hidden></div></div>' +
         '<div class="org-pane" data-pane="members" hidden>' +
         '<section class="panel"><h2>身份名册</h2>' +
-        '<p class="lead">表头可筛总监、经理、主管/储备、运营、助理、状态。总监、经理、主管/储备、运营、助理双击可改，仅罗成、韩梦凯、沈子晗能改，其他人不能改。导入按姓名合并：一模一样的名字覆盖原行，对不上的名字当新员工，并落盘，强制刷新还在。勾选后可统一改密码或删除。点新增人员弹出对话框。</p>' +
+        '<p class="lead">表头可筛总监、经理、主管、储备、运营、助理、状态。总监、经理、主管、储备、运营、助理双击可改，仅罗成、韩梦凯、沈子晗能改，其他人不能改。导入按姓名合并：一模一样的名字覆盖原行，对不上的名字当新员工，并落盘，强制刷新还在。勾选后可统一改密码或删除。点新增人员弹出对话框。</p>' +
         '<div class="org-kpis" id="people-kpis"></div>' +
         '<div class="org-toolbar">' +
         '<div class="org-search-form" id="people-search-form">' +
@@ -162,7 +162,8 @@
         '<th>姓名</th>' +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="peopleDirector"><span class="org-filter-name">总监</span><span class="org-filter-caret">▾</span></button></th>' +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="peopleManager"><span class="org-filter-name">经理</span><span class="org-filter-caret">▾</span></button></th>' +
-        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="peopleSupervisor"><span class="org-filter-name">主管/储备</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="peopleSupervisor"><span class="org-filter-name">主管</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="peopleReserve"><span class="org-filter-name">储备</span><span class="org-filter-caret">▾</span></button></th>' +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="peopleOperator"><span class="org-filter-name">运营</span><span class="org-filter-caret">▾</span></button></th>' +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="peopleAssistant"><span class="org-filter-name">助理</span><span class="org-filter-caret">▾</span></button></th>' +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="status"><span class="org-filter-name">状态</span><span class="org-filter-caret">▾</span></button></th>' +
@@ -180,7 +181,7 @@
         '<div class="org-filter-pop" id="people-filter-pop" hidden></div></section></div>' +
         '<div class="org-pane" data-pane="rights" hidden>' +
         '<section class="panel rights-fit-panel"><h2>管辖</h2>' +
-        '<p class="lead">只读对照。表头统一是经理、主管/储备、运营、助理、店铺。卡片只写名字，不再重复运营/助理/店铺。没有助理写无。人和店分别对照成员管理、店铺主数据。</p>' +
+        '<p class="lead">只读对照。表头统一是经理、主管、储备、运营、助理、店铺。卡片只写名字。没有助理写无。人和店分别对照成员管理、店铺主数据。</p>' +
         '<div class="rights-watch" id="rights-watch"></div>' +
         '<div class="rights-tree-toolbar"><button type="button" id="rights-refresh">刷新树和看板</button><span class="muted" id="rights-checked">检查时间：—</span></div>' +
         '<div class="rights-tree-chart" id="rights-tree-chart"></div></section></div>' +
@@ -222,7 +223,8 @@
         '<label>姓名<input name="name" required maxlength="40" autocomplete="off" /></label>' +
         '<label>总监<input name="director" maxlength="40" value="罗成" /></label>' +
         '<label>经理<input name="manager" maxlength="40" placeholder="沈子晗 / 韩梦凯" /></label>' +
-        '<label>主管/储备<input name="supervisor" maxlength="40" /></label>' +
+        '<label>主管<input name="supervisor" maxlength="40" /></label>' +
+        '<label>储备<input name="reserve" maxlength="40" /></label>' +
         '<label>岗位<select name="role"><option>运营</option><option>助理</option><option>主管</option><option>储备</option><option>经理</option><option>总监</option></select></label>' +
         "<label>状态<select name=\"status\"><option>在职</option><option>离职</option></select></label>" +
         '<label>账号<input name="username" maxlength="40" placeholder="与姓名相同" /></label>' +
@@ -259,8 +261,8 @@
       const peopleForm = root.querySelector("#people-form");
       const peopleModal = root.querySelector("#people-modal");
       const peopleFormError = root.querySelector("#people-form-error");
-      const PEOPLE_HEADERS = ["姓名", "总监", "经理", "主管/储备", "运营", "助理", "状态", "账号", "登录密码"];
-      const PEOPLE_KEYS = ["name", "director", "lineManager", "supervisor", "operator", "assistant", "status", "username", "password"];
+      const PEOPLE_HEADERS = ["姓名", "总监", "经理", "主管", "储备", "运营", "助理", "状态", "账号", "登录密码"];
+      const PEOPLE_KEYS = ["name", "director", "lineManager", "supervisor", "reserve", "operator", "assistant", "status", "username", "password"];
       if (peopleForm && peopleForm.name && peopleForm.username) {
         peopleForm.name.addEventListener("input", function () {
           peopleForm.username.value = peopleForm.name.value.trim();
@@ -295,7 +297,7 @@
       let selectedIds = {};
       let memberSelectedIds = {};
       const COLUMN_FILTERS = ["director", "manager", "supervisor", "operator", "assistant", "storeName", "remark"];
-      const MEMBER_FILTERS = ["peopleDirector", "peopleManager", "peopleSupervisor", "peopleOperator", "peopleAssistant", "status"];
+      const MEMBER_FILTERS = ["peopleDirector", "peopleManager", "peopleSupervisor", "peopleReserve", "peopleOperator", "peopleAssistant", "status"];
       const columnPicked = {};
       COLUMN_FILTERS.concat(MEMBER_FILTERS).forEach(function (key) {
         columnPicked[key] = null;
@@ -464,9 +466,9 @@
         const aliases = {
           总监: "总监",
           经理: "经理",
-          "主管/储备": "主管/储备",
-          主管: "主管/储备",
-          储备: "主管/储备",
+          "主管/储备": "主管",
+          主管: "主管",
+          储备: "储备",
           运营: "运营",
           助理: "助理",
           状态: "状态",
@@ -574,13 +576,16 @@
           if (seat === "助理" && raw === "助理") {
             name = cleanLineKpiName(self);
           }
-          if (seat === "主管/储备" && (raw === "主管" || raw === "储备" || raw === "主管/储备")) {
+          if (seat === "主管" && (raw === "主管" || raw === "主管/储备")) {
+            name = cleanLineKpiName(self);
+          }
+          if (seat === "储备" && raw === "储备") {
             name = cleanLineKpiName(self);
           }
           if (!name) {
             return;
           }
-          if (seat === "主管/储备" && LINE_KPI_LEADERS[name]) {
+          if ((seat === "主管" || seat === "储备") && LINE_KPI_LEADERS[name]) {
             return;
           }
           if (seat === "经理" && name === "罗成") {
@@ -599,7 +604,8 @@
         return {
           总监: directors.length,
           经理: uniqueLineKpiNames(people, "lineManager", "经理").length,
-          "主管/储备": uniqueLineKpiNames(people, "supervisor", "主管/储备").length,
+          主管: uniqueLineKpiNames(people, "supervisor", "主管").length,
+          储备: uniqueLineKpiNames(people, "reserve", "储备").length,
           运营: uniqueLineKpiNames(people, "operator", "运营").length,
           助理: uniqueLineKpiNames(people, "assistant", "助理").length
         };
@@ -614,7 +620,8 @@
         host.innerHTML = [
           ["总监", counts.总监],
           ["经理", counts.经理],
-          ["主管/储备", counts["主管/储备"]],
+          ["主管", counts.主管],
+          ["储备", counts.储备],
           ["运营", counts.运营],
           ["助理", counts.助理]
         ]
@@ -680,6 +687,7 @@
           peopleDirector: person.director,
           peopleManager: person.lineManager,
           peopleSupervisor: person.supervisor,
+          peopleReserve: person.reserve,
           peopleOperator: person.operator,
           peopleAssistant: person.assistant,
           status: person.status
@@ -831,6 +839,7 @@
             row.director,
             row.lineManager,
             row.supervisor,
+            row.reserve,
             row.operator,
             row.assistant,
             row.role,
@@ -1261,6 +1270,7 @@
             peopleLineCell("director", person.director) +
             peopleLineCell("lineManager", person.lineManager) +
             peopleLineCell("supervisor", person.supervisor) +
+            peopleLineCell("reserve", person.reserve) +
             peopleLineCell("operator", person.operator) +
             peopleLineCell("assistant", person.assistant) +
             '<td><select class="people-status" data-id="' +
@@ -1446,7 +1456,8 @@
           '<div class="rights-mod-head">' +
           cell("经理") +
           '<div class="rights-mod-head-rest">' +
-          cell("主管/储备") +
+          cell("主管") +
+          cell("储备") +
           '<div class="rights-mod-head-chain">' +
           cell("运营") +
           cell("助理") +
@@ -1521,9 +1532,15 @@
             );
           })
           .join("");
+        const isReserve = lead.role === "储备";
         return (
           '<div class="rights-mod-lead">' +
-          renderRightsModCard(lead.role || "主管", lead.name) +
+          '<div class="rights-mod-lead-seat">' +
+          (isReserve ? renderRightsModEmpty("—") : renderRightsModCard(lead.role || "主管", lead.name)) +
+          "</div>" +
+          '<div class="rights-mod-lead-seat">' +
+          (isReserve ? renderRightsModCard("储备", lead.name) : renderRightsModEmpty("—")) +
+          "</div>" +
           '<div class="rights-mod-chain">' +
           rows +
           "</div></div>"
@@ -2007,6 +2024,7 @@
               director: "罗成",
               lineManager: "沈子晗",
               supervisor: "",
+              reserve: "",
               operator: "示例同事",
               assistant: "",
               status: "在职",
@@ -2144,7 +2162,7 @@
         });
       }
 
-      const LINE_FIELDS = ["director", "lineManager", "supervisor", "operator", "assistant"];
+      const LINE_FIELDS = ["director", "lineManager", "supervisor", "reserve", "operator", "assistant"];
 
       function savePersonField(id, field, value) {
         return fetch("/api/people/" + id, {
