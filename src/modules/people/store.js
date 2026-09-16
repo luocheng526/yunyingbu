@@ -189,7 +189,13 @@ function applyRosterSnapshot(data) {
   if (!data || !Array.isArray(data.people) || !data.people.length) {
     return false;
   }
-  people = data.people.map(clone);
+  people = data.people.map((row) => {
+    const next = clone(row);
+    if (next.reserve == null) {
+      next.reserve = "";
+    }
+    return next;
+  });
   shops = Array.isArray(data.shops) ? data.shops.map(clone) : shops;
   grants = Array.isArray(data.grants) ? data.grants.map(clone) : grants;
   nextPersonId = Number(data.nextPersonId) || people.reduce((max, row) => Math.max(max, Number(row.id) || 0), 0) + 1;
@@ -497,6 +503,10 @@ function applyLinePatch(found, input) {
   }
   found.managerId = applied.managerId;
   stampOrgLine(found, applied);
+  if (Object.prototype.hasOwnProperty.call(input, "reserve") || Object.prototype.hasOwnProperty.call(input, "储备")) {
+    const raw = Object.prototype.hasOwnProperty.call(input, "reserve") ? input.reserve : input.储备;
+    found.reserve = String(raw == null ? "" : raw).trim();
+  }
 }
 
 function inferRoleFromLine(name, line, fallback) {
@@ -638,7 +648,7 @@ function presentPerson(person) {
     director: line.director,
     lineManager: line.manager,
     supervisor: line.supervisor,
-    reserve: line.reserve,
+    reserve: line.reserve || "",
     operator: line.operator,
     assistant: line.assistant,
     visibleShops: visibleShopsOf(person)
