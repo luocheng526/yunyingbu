@@ -400,7 +400,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov24";
+      link.href = "/data-pages.css?v=data-ov25";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -417,7 +417,7 @@
     const style = document.createElement("style");
     style.id = "ch-tabs-style";
     style.textContent =
-      ".ch-split{height:3px;margin:16px 0 0;background:#2f54eb;border:0}" +
+      ".ch-split{height:2px;margin:8px 0;background:#2f54eb;border:0}" +
       ".ch-tabs{display:flex;flex-wrap:wrap;align-items:center;gap:0;margin:0;padding:0 8px;background:#2f54eb;border-bottom:0}" +
       ".ch-tabs button{height:40px;padding:0 16px;border:0;border-bottom:2px solid transparent;background:transparent;color:#fff;cursor:pointer;font-size:13px;opacity:.85}" +
       ".ch-tabs button.is-active{opacity:1;font-weight:600;color:#fff;border-bottom-color:#fff;background:rgba(255,255,255,.14)}" +

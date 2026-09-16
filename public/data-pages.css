@@ -488,7 +488,7 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
   grid-template-columns: repeat(6, minmax(0, 1fr));
   align-items: stretch;
   gap: 0;
-  margin-bottom: 8px;
+  margin-bottom: 0;
   background: var(--ch-card);
   border: 1px solid var(--ch-line);
   border-radius: 6px;
@@ -665,8 +665,8 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
   margin-top: 4px;
 }
 .ch-split {
-  height: 3px;
-  margin: 16px 0 0;
+  height: 2px;
+  margin: 8px 0;
   background: #2f54eb;
   border: 0;
 }
