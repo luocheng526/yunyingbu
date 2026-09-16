@@ -1314,6 +1314,7 @@ html[data-theme="pink"] .gd-card {
 .data-overview-root.is-wait .ch-card .value,
 .data-overview-root.is-wait .ch-card .extra,
 .data-overview-root.is-wait .ch-hero .delta,
+.data-overview-root.is-wait .ch-metrics .value,
 .data-overview-root.is-wait .op-kpi .val,
 .data-overview-root.is-wait .ch-table td {
   color: #fff;

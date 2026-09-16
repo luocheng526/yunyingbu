@@ -227,6 +227,7 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /function monthBounds/);
     assert.match(overviewJs.text, /function setWait/);
     assert.match(overviewJs.text, /is-wait/);
+    assert.match(overviewJs.text, /state\.wait/);
     assert.match(overviewJs.text, /function commitShopDraft/);
     assert.match(overviewJs.text, /shopDraft/);
     assert.match(overviewJs.text, /data-team-all/);

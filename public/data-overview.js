@@ -410,7 +410,9 @@
       ".ch-metrics{grid-auto-rows:minmax(216px,auto)}" +
       ".ch-card-right{display:inline-flex}" +
       ".ch-shop-menu{display:none;position:fixed}" +
-      ".ch-shop-menu.is-open{display:block}";
+      ".ch-shop-menu.is-open{display:block}" +
+      ".is-wait .ch-metrics .value,.is-wait .ch-metrics .extra,.is-wait .ch-hero .delta{color:#fff}" +
+      ".is-wait .ch-hero .ch-spark{opacity:0}";
     document.head.appendChild(style);
   }
 
@@ -1584,6 +1586,7 @@
       teamIds: null,
       teamDraft: undefined,
       shopPickOpen: false,
+      wait: false,
       showPl: false,
       people: [],
       dutyOpen: "",
@@ -2156,7 +2159,7 @@
     }
 
     function render() {
-      if (dead || !state.payload || !board) {
+      if (dead || !state.payload || !board || state.wait) {
         return;
       }
       const payload = filteredPayload();
@@ -2402,9 +2405,13 @@
     }
 
     function setWait(on) {
+      state.wait = !!on;
       const root = board && (board.closest(".data-overview-root") || board);
       if (root) {
-        root.classList.toggle("is-wait", !!on);
+        root.classList.toggle("is-wait", state.wait);
+      }
+      if (board) {
+        board.classList.toggle("is-wait", state.wait);
       }
     }
 
@@ -2455,7 +2462,7 @@
           return;
         }
         state.people = (pack && pack.people) || [];
-        if (state.payload) {
+        if (state.payload && !state.wait) {
           render();
         }
       });
@@ -2486,7 +2493,9 @@
           state.payload.summary.shops = merged.length;
           state.payload.shopTable = shopTableFrom(merged);
           persistBoard(rangeSpan(state.range, state.customFrom, state.customTo));
-          render();
+          if (!state.wait) {
+            render();
+          }
         });
     }
 
@@ -2502,7 +2511,9 @@
         const fromPaid = heroFromErpPaid(pack[0]);
         if (fromPaid) {
           state.payload.hero = Object.assign({}, state.payload.hero, fromPaid);
-          render();
+          if (!state.wait) {
+            render();
+          }
           return;
         }
         const live = pack.find(function (item) {
@@ -2512,7 +2523,9 @@
           return;
         }
         attachLiveHero(state.payload.hero, live);
-        render();
+        if (!state.wait) {
+          render();
+        }
       });
     }
 
@@ -2569,15 +2582,17 @@
         loadLiveSpark();
         return Promise.resolve();
       }
-      if (painted) {
+      if (painted || state.payload) {
         setWait(true);
       } else if (cached && cached.payload) {
         applyCachedBoard(cached, span);
         setWait(true);
-      } else if (!state.payload && board) {
+      } else if (board) {
         board.innerHTML = '<p class="ch-empty">正在加载数据总览…</p>';
       }
-      loadLiveSpark();
+      if (!state.wait) {
+        loadLiveSpark();
+      }
       return fetchBoard(span).then(function () {
         loadLiveSpark();
       });
@@ -2732,6 +2747,7 @@
       if (rangeBtn) {
         const next = rangeBtn.getAttribute("data-range");
         if (next === "自定义" || next === "周" || next === "月") {
+          setWait(false);
           state.calOpen = !state.calOpen || state.range !== next;
           state.range = next;
           render();
@@ -2740,6 +2756,9 @@
         state.range = next;
         state.calOpen = false;
         hideCalPop();
+        if (board.querySelector(".ch-metrics")) {
+          setWait(true);
+        }
         load();
         return;
       }
