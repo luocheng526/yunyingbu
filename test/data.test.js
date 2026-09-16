@@ -225,7 +225,6 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /sortByPay/);
     assert.match(overviewJs.text, /function weekBounds/);
     assert.match(overviewJs.text, /function monthBounds/);
-    assert.match(overviewJs.text, /data-month/);
     assert.match(overviewJs.text, /function setWait/);
     assert.match(overviewJs.text, /is-wait/);
     assert.match(overviewJs.text, /function commitShopDraft/);
@@ -235,6 +234,7 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /请选择团队/);
     assert.match(overviewJs.text, /function teamMenuItemsHtml/);
     const opsJs = await get(base, "/data-ops.js");
+    assert.match(opsJs.text, /data-month/);
     assert.match(opsJs.text, /XmDataOps/);
     assert.match(opsJs.text, /推广花费销售额占比/);
     assert.match(opsJs.text, /真实支付转化率/);

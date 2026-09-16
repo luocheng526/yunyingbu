@@ -492,10 +492,6 @@
     return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate());
   }
 
-  function slashDate(date) {
-    return date.getFullYear() + "/" + (date.getMonth() + 1) + "/" + date.getDate();
-  }
-
   function shanghaiMinute() {
     const parts = new Intl.DateTimeFormat("en-GB", {
       timeZone: "Asia/Shanghai",
@@ -592,24 +588,11 @@
   }
 
   function weekBounds(day) {
-    const parts = String(day || "").split("-").map(Number);
-    const utc = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
-    let wd = utc.getUTCDay();
-    if (wd === 0) {
-      wd = 7;
-    }
-    const mon = new Date(utc);
-    mon.setUTCDate(utc.getUTCDate() - wd + 1);
-    const sun = new Date(mon);
-    sun.setUTCDate(mon.getUTCDate() + 6);
-    return { from: mon.toISOString().slice(0, 10), to: sun.toISOString().slice(0, 10) };
+    return window.XmDataOps.weekBounds(day);
   }
 
   function monthBounds(ym) {
-    const parts = String(ym || "").split("-").map(Number);
-    const from = parts[0] + "-" + pad(parts[1]) + "-01";
-    const last = new Date(Date.UTC(parts[0], parts[1], 0));
-    return { from: from, to: last.toISOString().slice(0, 10) };
+    return window.XmDataOps.monthBounds(ym);
   }
 
   function rangeSpan(label, customFrom, customTo) {
@@ -1562,30 +1545,7 @@
   }
 
   function calendarYearHtml(year, selected) {
-    const now = shanghaiYmd(0).slice(0, 7);
-    const hit = String(selected || "").slice(0, 7);
-    let cells = "";
-    for (let m = 1; m <= 12; m += 1) {
-      const ym = year + "-" + pad(m);
-      cells +=
-        '<button type="button" data-month="' +
-        ym +
-        '"' +
-        (ym > now ? " disabled" : "") +
-        (ym === hit ? ' class="is-start"' : "") +
-        ">" +
-        m +
-        "月</button>";
-    }
-    return (
-      '<div class="ch-cal is-months" data-calendar="1"><div class="ch-cal-month" style="width:100%"><div class="ch-cal-head">' +
-      '<button type="button" data-cal="prev-year" aria-label="上一年">«</button><strong>' +
-      year +
-      '年</strong><button type="button" data-cal="next-year" aria-label="下一年">»</button></div>' +
-      '<div class="ch-cal-months">' +
-      cells +
-      "</div></div></div>"
-    );
+    return window.XmDataOps.yearCal(year, selected, shanghaiYmd(0).slice(0, 7));
   }
 
   function calendarPanel(state) {
@@ -2052,27 +2012,13 @@
     }
 
     function teamMenuItemsHtml() {
-      const allOn = isDraftAllTeams();
-      const ids = draftTeamIds();
-      return (
-        '<label class="ch-shop-opt"><input type="checkbox" data-team-all' +
-        (allOn ? " checked" : "") +
-        ">全选</label>" +
-        dutyLeaders(state.people)
-          .map(function (person) {
-            const tid = String(person.id || person.name);
-            const duty = personDuty(person, state.people) || String(person.role || "主管");
-            return (
-              '<label class="ch-shop-opt"><input type="checkbox" data-team-id="' +
-              escapeHtml(tid) +
-              '"' +
-              (allOn || ids.indexOf(tid) >= 0 ? " checked" : "") +
-              ">" +
-              escapeHtml(dutyTitle(person.name, duty)) +
-              "</label>"
-            );
-          })
-          .join("")
+      return window.XmDataOps.teamMenu(
+        state.people,
+        state.teamIds,
+        state.teamDraft,
+        escapeHtml,
+        dutyTitle,
+        personDuty
       );
     }
 

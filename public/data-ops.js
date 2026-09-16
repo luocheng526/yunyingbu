@@ -444,6 +444,91 @@
     };
   }
 
+  function weekBounds(day) {
+    const parts = String(day || "").split("-").map(Number);
+    const utc = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+    let wd = utc.getUTCDay();
+    if (wd === 0) {
+      wd = 7;
+    }
+    const mon = new Date(utc);
+    mon.setUTCDate(utc.getUTCDate() - wd + 1);
+    const sun = new Date(mon);
+    sun.setUTCDate(mon.getUTCDate() + 6);
+    return { from: mon.toISOString().slice(0, 10), to: sun.toISOString().slice(0, 10) };
+  }
+
+  function monthBounds(ym) {
+    const parts = String(ym || "").split("-").map(Number);
+    const mm = String(parts[1]).padStart(2, "0");
+    const last = new Date(Date.UTC(parts[0], parts[1], 0));
+    return { from: parts[0] + "-" + mm + "-01", to: last.toISOString().slice(0, 10) };
+  }
+
+  function teamMenu(people, teamIds, teamDraft, esc, titleFn, dutyFn) {
+    const list = leaders(people);
+    const all = list.map(function (person) {
+      return String(person.id || person.name);
+    });
+    function draft() {
+      if (teamDraft === undefined) {
+        return teamIds == null ? all.slice() : teamIds.slice();
+      }
+      if (teamDraft == null) {
+        return all.slice();
+      }
+      return teamDraft.slice();
+    }
+    const ids = draft();
+    const allOn = (teamDraft === undefined ? teamIds : teamDraft) == null || (all.length > 0 && ids.length === all.length);
+    return (
+      '<label class="ch-shop-opt"><input type="checkbox" data-team-all' +
+      (allOn ? " checked" : "") +
+      ">全选</label>" +
+      list
+        .map(function (person) {
+          const tid = String(person.id || person.name);
+          const duty = dutyFn(person, people) || String(person.role || "主管");
+          return (
+            '<label class="ch-shop-opt"><input type="checkbox" data-team-id="' +
+            esc(tid) +
+            '"' +
+            (allOn || ids.indexOf(tid) >= 0 ? " checked" : "") +
+            ">" +
+            esc(titleFn(person.name, duty)) +
+            "</label>"
+          );
+        })
+        .join("")
+    );
+  }
+
+  function yearCal(year, selected, nowYm) {
+    const hit = String(selected || "").slice(0, 7);
+    let cells = "";
+    for (let m = 1; m <= 12; m += 1) {
+      const ym = year + "-" + String(m).padStart(2, "0");
+      cells +=
+        '<button type="button" data-month="' +
+        ym +
+        '"' +
+        (ym > nowYm ? " disabled" : "") +
+        (ym === hit ? ' class="is-start"' : "") +
+        ">" +
+        m +
+        "月</button>";
+    }
+    return (
+      '<div class="ch-cal is-months" data-calendar="1"><div class="ch-cal-month" style="width:100%"><div class="ch-cal-head">' +
+      '<button type="button" data-cal="prev-year" aria-label="上一年">«</button><strong>' +
+      year +
+      '年</strong><button type="button" data-cal="next-year" aria-label="下一年">»</button></div>' +
+      '<div class="ch-cal-months">' +
+      cells +
+      "</div></div></div>"
+    );
+  }
+
   window.XmDataOps = {
     panel: panel,
     paint: paint,
@@ -451,6 +536,10 @@
     calCss: CAL_CSS,
     personDuty: personDuty,
     leaders: leaders,
-    dutyTable: dutyTable
+    dutyTable: dutyTable,
+    weekBounds: weekBounds,
+    monthBounds: monthBounds,
+    yearCal: yearCal,
+    teamMenu: teamMenu
   };
 })();
