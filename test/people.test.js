@@ -115,6 +115,8 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /org-filter-btn/);
     assert.match(jsText, /data-filter-key="director"/);
     assert.match(jsText, /data-filter-key="supervisor"/);
+    assert.match(jsText, /data-filter-key="reserve"/);
+    assert.match(jsText, /blankStaffName/);
     assert.match(jsText, /data-filter-key="operator"/);
     assert.match(jsText, />全选/);
     assert.match(jsText, /keepTableTextSelectable/);
@@ -431,6 +433,20 @@ test("org store board lists demo shops and supports add", async () => {
     const yang = listedJson.stores.find((row) => row.storeName === "飒望家居日用旗舰店");
     assert.equal(yang.supervisor, "杨润泽");
     assert.equal(yang.operator, "崔安琪");
+    assert.equal(yang.reserve, "");
+    const clearedLead = await fetch(`${base}/api/people/org/stores/${yang.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ supervisor: "", assistant: "" })
+    });
+    const clearedLeadJson = await clearedLead.json();
+    assert.equal(clearedLead.status, 200, JSON.stringify(clearedLeadJson));
+    assert.equal(clearedLeadJson.store.supervisor, "");
+    assert.equal(clearedLeadJson.store.assistant, "");
+    const afterClear = await (await fetch(`${base}/api/people/org/stores`)).json();
+    const yangCleared = afterClear.stores.find((row) => row.id === yang.id);
+    assert.equal(yangCleared.supervisor, "");
+    assert.equal(yangCleared.operator, "崔安琪");
     const searched = await fetch(`${base}/api/people/org/stores?q=${encodeURIComponent("RASW家居旗舰店")}`);
     const searchedJson = await searched.json();
     assert.equal(searched.status, 200);
@@ -483,7 +499,7 @@ test("org store board lists demo shops and supports add", async () => {
     const template = await fetch(`${base}/api/people/org/stores/template`);
     const csv = await template.text();
     assert.equal(template.status, 200);
-    assert.match(csv, /总监,经理,主管\/储备,运营,助理,小组ID,店铺名称,店铺ID,商家id/);
+    assert.match(csv, /总监,经理,主管,储备,运营,助理,小组ID,店铺名称,店铺ID,商家id/);
 
     const imported = await fetch(`${base}/api/people/org/stores/import`, {
       method: "POST",
@@ -714,14 +730,11 @@ test("rights board groups store staff under 总监经理主管运营", async () 
     assert.ok(cui);
     assert.equal(cui.role, "运营");
     assert.ok((yang.stores || []).length + (yang.children || []).reduce((sum, child) => sum + (child.stores || []).length, 0) >= 1);
-    assert.ok(!(shen.children || []).some((row) => row.role === "运营"));
+    assert.ok((shen.children || []).some((row) => row.name === "张文静" && row.role === "运营"));
     const han = tree.children.find((row) => row.name === "韩梦凯");
-    const hanLeads = han.children || [];
-    assert.ok(hanLeads.length >= 1);
-    assert.ok(hanLeads.every((row) => row.role === "主管" || row.role === "储备"));
-    const hanOps = hanLeads.flatMap((row) => row.children || []);
-    assert.ok(hanOps.some((row) => row.name === "陈晓曼"));
-    assert.ok(hanOps.every((row) => row.role === "运营" || row.role === "助理"));
+    const hanKids = han.children || [];
+    assert.ok(hanKids.some((row) => row.name === "陈晓曼" && row.role === "运营"));
+    assert.ok(hanKids.every((row) => row.role === "主管" || row.role === "储备" || row.role === "运营" || row.role === "助理"));
     const flattenStores = (node) =>
       (node.stores || [])
         .map((row) => row.storeName)

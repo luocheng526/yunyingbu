@@ -47,22 +47,34 @@ function rosterRoleOf(name) {
   return hit ? String(hit.role || "") : "";
 }
 
+function blankStaffName(value) {
+  const raw = String(value == null ? "" : value).trim();
+  if (!raw || raw === "—" || raw === "-" || raw === "点击填写" || raw === "无") {
+    return "";
+  }
+  return raw;
+}
+
 function syncStoreRoles(input = {}, previous = {}) {
+  const has = (key) => Object.prototype.hasOwnProperty.call(input, key);
   const take = (key) => {
-    if (typeof input[key] === "string") {
-      return input[key].trim();
+    if (has(key)) {
+      return blankStaffName(input[key]);
     }
-    return String(previous[key] || "").trim();
+    return blankStaffName(previous[key]);
   };
   const director = take("director") || "罗成";
   const manager = take("manager") || inferManagerName(take("chief"), take("lead"), take("owner"), take("operator"), previous.team);
   const lead = take("lead");
   let supervisor = take("supervisor");
-  let operator = take("operator") || take("owner");
+  let reserve = take("reserve");
+  let operator = has("operator") ? blankStaffName(input.operator) : take("operator") || take("owner");
   let assistant = take("assistant");
-  if (!supervisor && lead && lead !== manager && lead !== director) {
+  if (!has("supervisor") && !has("reserve") && !supervisor && !reserve && lead && lead !== manager && lead !== director) {
     const role = rosterRoleOf(lead);
-    if (role === "主管" || role === "储备") {
+    if (role === "储备") {
+      reserve = lead;
+    } else if (role === "主管") {
       supervisor = lead;
     } else if (role === "助理" && !assistant) {
       assistant = lead;
@@ -70,16 +82,21 @@ function syncStoreRoles(input = {}, previous = {}) {
       supervisor = lead;
     }
   }
+  if (!reserve && (supervisor === "储备" || rosterRoleOf(supervisor) === "储备")) {
+    reserve = supervisor;
+    supervisor = "";
+  }
   const team = teamLabelOf(manager) || take("team") || take("chief");
   const next = {
     director,
     manager,
     supervisor,
+    reserve,
     operator,
     assistant,
     team,
     chief: team,
-    lead: supervisor || lead || manager,
+    lead: supervisor || reserve || (has("supervisor") || has("reserve") ? "" : lead) || manager,
     owner: operator,
     groupId: normalizeGroupId(take("groupId"))
   };
@@ -187,7 +204,7 @@ function applyBoardSnapshot(data) {
   if (!data || !Array.isArray(data.rows) || !data.rows.length) {
     return false;
   }
-  rows = data.rows.map((row) => ({ ...row }));
+  rows = data.rows.map((row) => ({ reserve: "", ...row, reserve: blankStaffName(row.reserve) }));
   nextId = Number(data.nextId) || rows.reduce((max, row) => Math.max(max, Number(row.id) || 0), 0) + 1;
   logs = Array.isArray(data.logs) && data.logs.length ? data.logs.map((item) => ({ ...item })) : logs;
   logId = Number(data.logId) || logs.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1;
@@ -352,7 +369,7 @@ function mapBoardRole(role) {
 
 function namesFromStore(row) {
   const names = [];
-  [row.director, row.manager, row.supervisor, row.operator, row.assistant, row.lead, row.owner].forEach((value) => {
+  [row.director, row.manager, row.supervisor, row.reserve, row.operator, row.assistant, row.lead, row.owner].forEach((value) => {
     const name = String(value || "").trim();
     if (name) {
       names.push(name);
@@ -384,7 +401,7 @@ function roleOfName(name, byName) {
 }
 
 function managerBranchOfStore(row) {
-  const blob = [row.chief, row.team, row.lead, row.owner, row.manager, row.director, row.supervisor, row.operator].join(" ");
+  const blob = [row.chief, row.team, row.lead, row.owner, row.manager, row.director, row.supervisor, row.reserve, row.operator].join(" ");
   if (blob.includes("韩梦凯")) {
     return "韩梦凯";
   }
@@ -486,7 +503,6 @@ function buildRightsTree(stores, roster, byName) {
   link(director, han);
   link(director, shen);
   const nodes = { 罗成: director, 韩梦凯: han, 沈子晗: shen };
-  const vacant = {};
 
   function managerNode(name, fallbackRow) {
     const key = managerKeyOf(name) || managerKeyOf(fallbackRow && fallbackRow.manager) || managerBranchOfStore(fallbackRow || {}) || "沈子晗";
@@ -514,24 +530,20 @@ function buildRightsTree(stores, roster, byName) {
     return nodes[who];
   }
 
-  function vacantLead(mgr) {
-    const key = mgr.name;
-    if (!vacant[key]) {
-      vacant[key] = makeNode("未指定主管/储备", "主管", { synthetic: true });
-      link(mgr, vacant[key]);
-    }
-    return vacant[key];
-  }
-
   function attachLine(input) {
     const mgr = managerNode(input.manager, input.row);
     let supervisor = cleanName(input.supervisor);
+    let reserve = cleanName(input.reserve);
     if (supervisor === mgr.name || supervisor === "罗成") {
       supervisor = "";
+    }
+    if (reserve === mgr.name || reserve === "罗成" || reserve === supervisor) {
+      reserve = "";
     }
     const operator = cleanName(input.operator);
     const assistant = cleanName(input.assistant);
     let lead = null;
+    let reserveNode = null;
     if (supervisor) {
       const leadRole = isLeadRole(roleOfName(supervisor, byName)) ? roleOfName(supervisor, byName) : "主管";
       lead = ensure(supervisor, leadRole);
@@ -540,21 +552,27 @@ function buildRightsTree(stores, roster, byName) {
       }
       link(mgr, lead);
     }
+    if (reserve) {
+      reserveNode = ensure(reserve, "储备");
+      reserveNode.role = "储备";
+      link(mgr, reserveNode);
+    }
+    const hang = lead || reserveNode || mgr;
     let op = null;
-    if (operator && operator !== supervisor && operator !== mgr.name && operator !== "罗成") {
+    if (operator && operator !== supervisor && operator !== reserve && operator !== mgr.name && operator !== "罗成") {
       op = ensure(operator, "运营");
       if (!isLeadRole(op.role) && op.role !== "助理") {
         op.role = "运营";
       }
-      link(lead || vacantLead(mgr), op);
+      link(hang, op);
     }
     let asst = null;
-    if (assistant && assistant !== operator && assistant !== supervisor && assistant !== mgr.name && assistant !== "罗成") {
+    if (assistant && assistant !== operator && assistant !== supervisor && assistant !== reserve && assistant !== mgr.name && assistant !== "罗成") {
       asst = ensure(assistant, "助理");
       asst.role = "助理";
-      link(op || lead || vacantLead(mgr), asst);
+      link(op || hang, asst);
     }
-    return { mgr, lead, op, asst };
+    return { mgr, lead, reserve: reserveNode, op, asst };
   }
 
   roster.forEach((person) => {
@@ -565,13 +583,19 @@ function buildRightsTree(stores, roster, byName) {
     const role = roleOfName(person.name, byName);
     const manager = managerKeyOf(line.manager) || branchOfPerson(person.name, person, stores) || "沈子晗";
     if (isLeadRole(role)) {
-      attachLine({ manager, supervisor: person.name, row: { manager } });
+      attachLine({
+        manager,
+        supervisor: role === "主管" ? person.name : line.supervisor,
+        reserve: role === "储备" ? person.name : line.reserve,
+        row: { manager }
+      });
       return;
     }
     if (role === "助理") {
       attachLine({
         manager,
         supervisor: line.supervisor,
+        reserve: line.reserve,
         operator: line.operator,
         assistant: person.name,
         row: { manager }
@@ -581,6 +605,7 @@ function buildRightsTree(stores, roster, byName) {
     attachLine({
       manager,
       supervisor: line.supervisor,
+      reserve: line.reserve,
       operator: person.name,
       row: { manager }
     });
@@ -593,18 +618,24 @@ function buildRightsTree(stores, roster, byName) {
     const placed = attachLine({
       manager: row.manager,
       supervisor: row.supervisor,
+      reserve: row.reserve,
       operator: row.operator || row.owner,
       assistant: row.assistant,
       row
     });
-    const target = placed.op || placed.lead || vacantLead(placed.mgr);
-    target.stores.push({
+    const target = placed.op || placed.lead || placed.reserve || placed.mgr;
+    const shop = {
       id: row.id,
       storeName: row.storeName,
       storeId: row.storeId || "",
       merchantId: row.merchantId || "",
-      hanging: !placed.op
-    });
+      hanging: !placed.op,
+      shared:
+        [row.manager, row.supervisor, row.reserve, row.operator || row.owner, row.assistant].filter((name) =>
+          blankStaffName(name)
+        ).length > 1
+    };
+    target.stores.push(shop);
   });
 
   [han, shen].forEach((mgr) => {
@@ -630,7 +661,8 @@ function buildRightsWatch(stores, roster, byName, tree) {
     }
     [
       ["operator", "运营"],
-      ["supervisor", "主管/储备"],
+      ["supervisor", "主管"],
+      ["reserve", "储备"],
       ["assistant", "助理"],
       ["manager", "经理"]
     ].forEach(([field, label]) => {
@@ -644,14 +676,6 @@ function buildRightsWatch(stores, roster, byName, tree) {
         });
       }
     });
-    if (!String(row.operator || row.owner || "").trim()) {
-      issues.push({
-        kind: "店铺对不上",
-        level: "error",
-        title: row.storeName + " 缺运营",
-        detail: "店铺主数据没有运营，挂不到树上。"
-      });
-    }
     if (!managerBranchOfStore(row)) {
       issues.push({
         kind: "店铺对不上",
@@ -876,7 +900,7 @@ export function listOrgStores(query = {}, actor) {
       if (!q) {
         return true;
       }
-      const blob = [row.storeName, row.storeId, row.shopId, row.groupId, row.merchantId, row.director, row.manager, row.supervisor, row.operator, row.assistant, row.owner, row.lead, row.chief, row.login]
+      const blob = [row.storeName, row.storeId, row.shopId, row.groupId, row.merchantId, row.director, row.manager, row.supervisor, row.reserve, row.operator, row.assistant, row.owner, row.lead, row.chief, row.login]
         .join(" ")
         .toLowerCase();
       return blob.includes(q);
@@ -927,7 +951,8 @@ function normalize(input, previous = {}) {
 export const STORE_IMPORT_HEADERS = [
   "总监",
   "经理",
-  "主管/储备",
+  "主管",
+  "储备",
   "运营",
   "助理",
   "小组ID",
@@ -946,7 +971,7 @@ const HEADER_TO_FIELD = {
   经理: "manager",
   "主管/储备": "supervisor",
   主管: "supervisor",
-  储备: "supervisor",
+  储备: "reserve",
   运营: "operator",
   助理: "assistant",
   总负责人: "chief",
@@ -1078,7 +1103,7 @@ export function mapImportRow(raw = {}) {
       .trim();
     const field =
       HEADER_TO_FIELD[norm] ||
-      (["director", "manager", "supervisor", "operator", "assistant", "chief", "lead", "owner", "storeName", "storeId", "shopId", "groupId", "merchantId", "remark", "updatedOn", "closedOn", "login", "password"].includes(norm)
+      (["director", "manager", "supervisor", "reserve", "operator", "assistant", "chief", "lead", "owner", "storeName", "storeId", "shopId", "groupId", "merchantId", "remark", "updatedOn", "closedOn", "login", "password"].includes(norm)
         ? norm
         : "");
     if (field) {
@@ -1158,8 +1183,8 @@ export async function importOrgStores(items, actor, options = {}) {
 
 function applyCreateOrgStore(input, actor) {
   const next = normalize(input || {});
-  if (!next.storeName || !next.operator) {
-    return { ok: false, statusCode: 400, error: "店铺名称、运营为必填" };
+  if (!next.storeName) {
+    return { ok: false, statusCode: 400, error: "店铺名称为必填" };
   }
   const allowed = assertCanWrite(actor, next);
   if (!allowed.ok) {
