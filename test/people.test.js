@@ -246,17 +246,22 @@ function uniqueLineKpiNames(people, key, seat) {
     if (String(person.status || "") === "离职") {
       continue;
     }
-    const name = String(person[key] || "").trim();
+    const raw = String(person[key] || "").trim();
+    const self = String(person.name || "").trim();
+    let name = raw;
+    if (seat === "运营" && raw === "运营") {
+      name = self;
+    }
+    if (seat === "助理" && raw === "助理") {
+      name = self;
+    }
+    if (seat === "主管/储备" && (raw === "主管" || raw === "储备" || raw === "主管/储备")) {
+      name = self;
+    }
     if (!name || skip.has(name)) {
       continue;
     }
-    if (seat === "运营" && name === "运营") {
-      continue;
-    }
-    if (seat === "助理" && (name === "助理" || name === "运营")) {
-      continue;
-    }
-    if (seat === "主管/储备" && (leaders.has(name) || name === "主管" || name === "储备" || name === "主管/储备")) {
+    if (seat === "主管/储备" && leaders.has(name)) {
       continue;
     }
     if (seat === "经理" && name === "罗成") {
@@ -286,6 +291,7 @@ test("member KPI cards count unique 在职 names in the five line columns", asyn
     const js = await fetch(`${base}/shared/modules/people.js`);
     const jsText = await js.text();
     assert.match(jsText, /uniqueLineKpiNames\(people, "supervisor"/);
+    assert.match(jsText, /raw === "助理"/);
     assert.match(jsText, /LINE_KPI_LEADERS/);
     const res = await fetch(`${base}/api/people`);
     const data = await res.json();
@@ -311,8 +317,8 @@ test("member KPI cards count unique 在职 names in the five line columns", asyn
         总监: 1,
         经理: 2,
         "主管/储备": 4,
-        运营: 2,
-        助理: 0
+        运营: 5,
+        助理: 1
       }
     );
   });
