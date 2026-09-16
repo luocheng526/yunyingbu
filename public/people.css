@@ -897,6 +897,13 @@ body:has(.people-page) .xm-tabs {
   display: flex;
   align-items: center;
   justify-content: center;
+  align-self: start;
+  min-height: 26px;
+  padding: 3px 6px;
+  background: #fff2f0;
+  border: 1px solid #ffa39e;
+  border-radius: 4px;
+  box-sizing: border-box;
 }
 
 .rights-mod-leads {
@@ -918,6 +925,20 @@ body:has(.people-page) .xm-tabs {
   align-items: center;
   justify-content: center;
   min-height: 26px;
+  padding: 3px 6px;
+  border: 1px solid;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.rights-mod-lead-seat:nth-child(1) {
+  background: #fff7e6;
+  border-color: #ffd591;
+}
+
+.rights-mod-lead-seat:nth-child(2) {
+  background: #fafafa;
+  border-color: #d9d9d9;
 }
 
 .rights-mod-chain {
@@ -937,6 +958,26 @@ body:has(.people-page) .xm-tabs {
 .rights-mod-col {
   min-height: 26px;
   min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.rights-mod-row > .rights-mod-col:nth-child(1) {
+  background: #e6f4ff;
+  border-color: #91caff;
+}
+
+.rights-mod-row > .rights-mod-col:nth-child(2) {
+  background: #fffdf5;
+  border-color: #e8dfc8;
+}
+
+.rights-mod-row > .rights-mod-col:nth-child(3) {
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
 }
 
 .rights-mod-h {
@@ -951,10 +992,10 @@ body:has(.people-page) .xm-tabs {
   align-items: center;
   gap: 6px;
   margin: 0;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: #fff;
-  border: 1px solid #f0f0f0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
   font-size: 12px;
   white-space: nowrap;
 }
@@ -976,25 +1017,21 @@ body:has(.people-page) .xm-tabs {
 }
 
 .rights-mod-card[data-role="经理"] {
-  background: #ffccc7;
-  border-color: #ffa39e;
+  background: transparent;
 }
 
 .rights-mod-card[data-role="主管"],
 .rights-mod-card[data-role="储备"] {
-  background: #91d5ff;
-  border-color: #69b1ff;
+  background: transparent;
 }
 
 .rights-mod-card[data-role="运营"],
 .rights-mod-card[data-role="店长"] {
-  background: #87e8de;
-  border-color: #5cdbd3;
+  background: transparent;
 }
 
 .rights-mod-card[data-role="助理"] {
-  background: #e6fffb;
-  border-color: #87e8de;
+  background: transparent;
 }
 
 .rights-mod-shop {

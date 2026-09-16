@@ -88,12 +88,13 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(cssText, /\.rights-mod-lead \{/);
     assert.match(cssText, /min-height: 0/);
     assert.doesNotMatch(cssText, /\.rights-mod-lead\s*\{[^}]*background:/);
-    assert.doesNotMatch(cssText, /\.rights-mod-manager\s*\{[^}]*background:/);
     assert.match(cssText, /\.rights-mod-col \{[\s\S]*?min-height: 26px/);
-    assert.match(cssText, /data-role="主管"/);
-    assert.match(cssText, /background: #91d5ff/);
-    assert.match(cssText, /data-role="运营"/);
-    assert.match(cssText, /background: #87e8de/);
+    assert.match(cssText, /\.rights-mod-manager\s*\{[\s\S]*?background: #fff2f0/);
+    assert.match(cssText, /\.rights-mod-lead-seat:nth-child\(1\)\s*\{[\s\S]*?background: #fff7e6/);
+    assert.match(cssText, /\.rights-mod-lead-seat:nth-child\(2\)\s*\{[\s\S]*?background: #fafafa/);
+    assert.match(cssText, /\.rights-mod-row > \.rights-mod-col:nth-child\(1\)\s*\{[\s\S]*?background: #e6f4ff/);
+    assert.match(cssText, /\.rights-mod-row > \.rights-mod-col:nth-child\(2\)\s*\{[\s\S]*?background: #fffdf5/);
+    assert.match(cssText, /\.rights-mod-row > \.rights-mod-col:nth-child\(3\)\s*\{[\s\S]*?background: transparent/);
     assert.match(jsText, /onPeopleWheel/);
     assert.match(jsText, /店铺主数据/);
     assert.match(jsText, /总监/);
