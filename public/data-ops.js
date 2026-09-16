@@ -292,6 +292,11 @@
     })) {
       return "储备";
     }
+    if (name && (people || []).some(function (item) {
+      return String((item && item.supervisor) || "").trim() === name;
+    })) {
+      return "主管";
+    }
     if (role === "主管") {
       return "主管";
     }
@@ -347,8 +352,9 @@
     return out;
   }
 
-  function teamShopNames(leader, duty, people) {
+  function teamShopNames(leader, duty, people, shops) {
     const names = {};
+    const ops = {};
     function add(list) {
       (list || []).forEach(function (item) {
         const name = shopNameOf(item);
@@ -360,6 +366,9 @@
     add(leader && leader.visibleShops);
     const lead = String((leader && leader.name) || "");
     const center = String((leader && leader.center) || "");
+    if (lead) {
+      ops[lead] = true;
+    }
     (people || []).forEach(function (person) {
       const belong =
         (duty === "经理" && (person.lineManager === lead || person.center === center || person.center === lead + "运营中心")) ||
@@ -367,13 +376,23 @@
         (duty === "储备" && (person.reserve === lead || person.name === lead));
       if (belong) {
         add(person.visibleShops);
+        const nm = String(person.name || "").trim();
+        if (nm) {
+          ops[nm] = true;
+        }
+      }
+    });
+    (shops || []).forEach(function (shop) {
+      const op = String((shop && shop.operateName) || "").trim();
+      if (op && ops[op]) {
+        add([shop.shopName]);
       }
     });
     return names;
   }
 
-  function covers(person, shop, duty, people) {
-    const map = teamShopNames(person, duty || personDuty(person, people), people);
+  function covers(person, shop, duty, people, shops) {
+    const map = teamShopNames(person, duty || personDuty(person, people), people, shops);
     const key = String((shop && shop.shopName) || "").replace(/\s+/g, "");
     return Boolean(key && map[key]);
   }
@@ -394,8 +413,10 @@
     leaders(people)
       .map(function (person) {
         const duty = personDuty(person, people) || String(person.role || "储备");
+        const map = teamShopNames(person, duty, people, list);
         const members = api.sortByPay(list.filter(function (shop) {
-          return covers(person, shop, duty, people);
+          const key = String((shop && shop.shopName) || "").replace(/\s+/g, "");
+          return Boolean(key && map[key]);
         }));
         const sum = api.sum(members);
         return { person: person, members: members, duty: duty, sum: sum, pay: api.payOf(sum) };

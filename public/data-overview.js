@@ -326,6 +326,35 @@
     return out;
   }
 
+  function attachOperate(shops, paid) {
+    const recs = (paid && paid.records) || [];
+    if (!shops || !recs.length) {
+      return shops || [];
+    }
+    const byId = {};
+    const byName = {};
+    recs.forEach(function (row) {
+      const op = String((row && row.operateName) || "").trim();
+      if (!op) {
+        return;
+      }
+      if (row.shopId) {
+        byId[String(row.shopId)] = op;
+      }
+      if (row.shopName) {
+        byName[String(row.shopName).replace(/\s+/g, "")] = op;
+      }
+    });
+    shops.forEach(function (shop) {
+      shop.operateName =
+        shop.operateName ||
+        byId[String(shop.shopId || "")] ||
+        byName[String((shop.shopName || "").replace(/\s+/g, ""))] ||
+        "";
+    });
+    return shops;
+  }
+
   function expandCards(cards) {
     const byKey = {};
     (cards || []).forEach(function (card) {
@@ -368,7 +397,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov32";
+      link.href = "/data-pages.css?v=data-ov33";
       document.head.appendChild(link);
     }
     ensureCardTypeStyle();
@@ -1498,6 +1527,7 @@
       wait: false,
       showPl: false,
       people: [],
+      paid: null,
       dutyOpen: "",
       section: "渠道列表",
       payload: null,
@@ -2402,7 +2432,7 @@
           if (dead || !state.payload || !dir || !dir.length) {
             return;
           }
-          const merged = overlaySharedShopMetrics(mergeErpShops(state.payload.shops, dir));
+          const merged = attachOperate(overlaySharedShopMetrics(mergeErpShops(state.payload.shops, dir)), state.paid);
           state.payload.shops = merged;
           state.payload.summary.shops = merged.length;
           state.payload.shopTable = shopTableFrom(merged);
@@ -2422,6 +2452,8 @@
         if (dead || !state.payload || !state.payload.hero) {
           return;
         }
+        state.paid = pack[0];
+        attachOperate(state.payload.shops, state.paid);
         const fromPaid = heroFromErpPaid(pack[0]);
         if (fromPaid) {
           state.payload.hero = Object.assign({}, state.payload.hero, fromPaid);
