@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.568-home-twoboard */
+/* xm-module-home 0.1.569-home-dutyladder */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1336,7 +1336,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.568-home-twoboard");
+    board.setAttribute("data-hm-js", "0.1.569-home-dutyladder");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2185,34 +2185,44 @@
       mismatches: mismatches
     };
   }
+  function namesFromShopDuty(shops, field) {
+    var seen = {};
+    var names = [];
+    (shops || []).forEach(function (shop) {
+      var n = String((shop && shop[field]) || "").trim();
+      if (!n || n === "管理员" || seen[n]) {
+        return;
+      }
+      seen[n] = true;
+      names.push(n);
+    });
+    return names;
+  }
+  function sumDutyMetric(shops, name, field, erp, catalogByName, metric) {
+    var total = 0;
+    var ok = false;
+    (shops || []).forEach(function (shop) {
+      if (String((shop && shop[field]) || "").trim() !== name) {
+        return;
+      }
+      var id = resolveErpId(shop, catalogByName);
+      var row = id ? erp[id] : null;
+      var n = row ? asNum(row[metric]) : null;
+      if (n != null) {
+        total += n;
+        ok = true;
+      }
+    });
+    return ok ? total : 0;
+  }
   function buildLadders(people, dutyShops, rangePack, catalogPack) {
     var erp = mapByShopId(rangePack && rangePack.records);
     var catalogByName = mapByShopName((catalogPack && catalogPack.records) || []);
-    function amount(person, field) {
-      var total = 0;
-      var ok = false;
-      (dutyShops || []).forEach(function (shop) {
-        if (!personOwnsShop(person, shop)) {
-          return;
-        }
-        var id = resolveErpId(shop, catalogByName);
-        var row = id ? erp[id] : null;
-        var n = row ? asNum(row[field]) : null;
-        if (n != null) {
-          total += n;
-          ok = true;
-        }
-      });
-      return ok ? total : 0;
-    }
-    function column(title, role, field) {
-      var rows = (people || [])
-        .filter(function (person) {
-          return person.status === "在职" && person.role === role && person.name !== "管理员";
-        })
-        .map(function (person) {
-          var n = amount(person, field);
-          return { name: person.name, amount: fmtMoney(n), _n: n };
+    function column(title, dutyField, field) {
+      var rows = namesFromShopDuty(dutyShops, dutyField)
+        .map(function (name) {
+          var n = sumDutyMetric(dutyShops, name, dutyField, erp, catalogByName, field);
+          return { name: name, amount: fmtMoney(n), _n: n };
         })
         .sort(function (a, b) {
           return b._n - a._n;
@@ -2227,13 +2237,13 @@
         key: "perf",
         title: "业绩排行榜",
         unit: "支付金额",
-        columns: [column("主管排行榜", "主管", "payAmount"), column("运营排行榜", "运营", "payAmount")]
+        columns: [column("主管排行榜", "supervisor", "payAmount"), column("运营排行榜", "operator", "payAmount")]
       },
       {
         key: "profit",
         title: "利润排行榜",
         unit: "利润",
-        columns: [column("主管排行榜", "主管", "profit"), column("运营排行榜", "运营", "profit")]
+        columns: [column("主管排行榜", "supervisor", "profit"), column("运营排行榜", "operator", "profit")]
       }
     ];
   }

@@ -387,8 +387,10 @@ test("board has 业绩 and 利润 ladders with 主管 运营 columns and ranks 1
   assert.match(homeJs, /while \(out\.length < 7\)/);
   assert.match(homeJs, /key: "profit"/);
   assert.match(homeJs, /title: "利润排行榜"/);
-  assert.match(homeJs, /column\("主管排行榜", "主管", "payAmount"\), column\("运营排行榜", "运营", "payAmount"\)/);
-  assert.match(homeJs, /column\("主管排行榜", "主管", "profit"\), column\("运营排行榜", "运营", "profit"\)/);
+  assert.match(homeJs, /column\("主管排行榜", "supervisor", "payAmount"\), column\("运营排行榜", "operator", "payAmount"\)/);
+  assert.match(homeJs, /column\("主管排行榜", "supervisor", "profit"\), column\("运营排行榜", "operator", "profit"\)/);
+  assert.match(homeJs, /function namesFromShopDuty/);
+  assert.doesNotMatch(homeJs, /person\.status === "在职" && person\.role === role/);
   assert.doesNotMatch(homeJs, /column\("经理排行榜"/);
   const start = homeJs.indexOf("function standItemHtml");
   const end = homeJs.indexOf("var LIVE_CARD_KEYS");
@@ -414,6 +416,20 @@ test("board has 业绩 and 利润 ladders with 主管 运营 columns and ranks 1
   assert.equal(html.includes("经理排行榜"), false);
   assert.equal((html.match(/>04</g) || []).length, 2);
   assert.equal((html.match(/>10</g) || []).length, 2);
+});
+
+test("ladder names follow shop supervisor and operator duty not people role", () => {
+  const start = homeJs.indexOf("function namesFromShopDuty");
+  const end = homeJs.indexOf("function buildLadders");
+  const fns = new Function(homeJs.slice(start, end) + "return {namesFromShopDuty};")();
+  const shops = [
+    { supervisor: "高丽男", operator: "杨禄" },
+    { supervisor: "张文静", operator: "崔安琪" },
+    { supervisor: "杨润泽", operator: "高丽男" },
+    { supervisor: "管理员", operator: "" }
+  ];
+  assert.deepEqual(fns.namesFromShopDuty(shops, "supervisor"), ["高丽男", "张文静", "杨润泽"]);
+  assert.deepEqual(fns.namesFromShopDuty(shops, "operator"), ["杨禄", "崔安琪", "高丽男"]);
 });
 
 test("card help uses a body-level tooltip so overflow cannot clip it", () => {
