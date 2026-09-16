@@ -626,6 +626,42 @@
     );
   }
 
+  function yearBounds(y, today) {
+    const year = String(y || "").slice(0, 4);
+    const from = year + "-01-01";
+    const last = year + "-12-31";
+    return { from: from, to: today && last > today ? today : last };
+  }
+
+  function yearPick(start, selected, nowYear) {
+    const base = Math.floor(Number(start || nowYear) / 10) * 10;
+    const hit = String(selected || "").slice(0, 4);
+    let cells = "";
+    for (let i = 0; i < 12; i += 1) {
+      const y = base + i;
+      cells +=
+        '<button type="button" data-year="' +
+        y +
+        '"' +
+        (y > nowYear ? " disabled" : "") +
+        (String(y) === hit ? ' class="is-start"' : "") +
+        ">" +
+        y +
+        "</button>";
+    }
+    return (
+      '<div class="ch-cal is-months is-years" data-calendar="1"><div class="ch-cal-month" style="width:100%"><div class="ch-cal-head">' +
+      '<button type="button" data-cal="prev-year" aria-label="上一页">«</button><strong>' +
+      base +
+      "-" +
+      (base + 9) +
+      '</strong><button type="button" data-cal="next-year" aria-label="下一页">»</button></div>' +
+      '<div class="ch-cal-months">' +
+      cells +
+      "</div></div></div>"
+    );
+  }
+
   function yearCal(year, selected, nowYm) {
     const hit = String(selected || "").slice(0, 7);
     let cells = "";
@@ -663,6 +699,8 @@
     weekBounds: weekBounds,
     monthBounds: monthBounds,
     yearCal: yearCal,
+    yearPick: yearPick,
+    yearBounds: yearBounds,
     monthCal: monthCal,
     teamMenu: teamMenu
   };

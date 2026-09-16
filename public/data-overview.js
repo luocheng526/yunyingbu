@@ -397,7 +397,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov35";
+      link.href = "/data-pages.css?v=data-ov36";
       document.head.appendChild(link);
     }
     ensureCardTypeStyle();
@@ -630,9 +630,12 @@
     const to = new Date();
     to.setHours(0, 0, 0, 0);
     const from = new Date(to);
-    if ((label === "日" || label === "周" || label === "月" || label === "自定义") && customFrom && customTo) {
+    if ((label === "日" || label === "周" || label === "月" || label === "年" || label === "自定义") && customFrom && customTo) {
       if (label === "日") {
         return { from: customFrom, to: customFrom, dateLabel: cnDateLabel(customFrom) };
+      }
+      if (label === "年") {
+        return { from: customFrom, to: customTo, dateLabel: customFrom.slice(0, 4) + "年" };
       }
       return { from: customFrom, to: customTo, dateLabel: customFrom.replaceAll("-", "/") + " - " + customTo.replaceAll("-", "/") };
     }
@@ -644,7 +647,8 @@
     } else if (label === "月") {
       from.setDate(1);
     } else if (label === "年") {
-      from.setMonth(0, 1);
+      const y = shanghaiYmd(0).slice(0, 4);
+      return { from: y + "-01-01", to: shanghaiYmd(0), dateLabel: y + "年" };
     } else {
       from.setDate(from.getDate() - 6);
     }
@@ -1492,6 +1496,13 @@
     if (state.range === "月") {
       return calendarYearHtml(state.calYear, state.customFrom);
     }
+    if (state.range === "年") {
+      return window.XmDataOps.yearPick(
+        state.calYear,
+        (state.customFrom || "").slice(0, 4) || state.calYear,
+        Number(shanghaiYmd(0).slice(0, 4))
+      );
+    }
     const left = { year: state.calYear, month: state.calMonth };
     const right = shiftMonth(state.calYear, state.calMonth, 1);
     const week = state.range === "周";
@@ -2296,6 +2307,11 @@
     }
 
     function applyCalNav(act) {
+      if (state.range === "年") {
+        state.calYear += act.indexOf("prev") >= 0 ? -10 : 10;
+        render();
+        return;
+      }
       const moved = shiftMonth(
         state.calYear,
         state.calMonth,
@@ -2311,6 +2327,17 @@
       const calNav = pathEl(event, "data-cal");
       if (calNav) {
         applyCalNav(calNav.getAttribute("data-cal"));
+        return;
+      }
+      const yearBtn = pathEl(event, "data-year");
+      if (yearBtn && !yearBtn.disabled) {
+        const span = window.XmDataOps.yearBounds(yearBtn.getAttribute("data-year"), shanghaiYmd(0));
+        state.customFrom = span.from;
+        state.customTo = span.to;
+        state.range = "年";
+        state.calOpen = false;
+        hideCalPop();
+        load();
         return;
       }
       const monthBtn = pathEl(event, "data-month");
@@ -2338,8 +2365,8 @@
       }
       pop.shadowRoot.innerHTML = "<style>" + CAL_SHADOW_CSS + "</style>" + calendarPanel(state);
       pop.classList.add("is-open");
-      pop.classList.toggle("is-months", state.range === "月");
-      const monthPick = state.range === "月";
+      pop.classList.toggle("is-months", state.range === "月" || state.range === "年");
+      const monthPick = state.range === "月" || state.range === "年";
       pop.style.width = monthPick ? "280px" : "560px";
       pop.style.minWidth = monthPick ? "280px" : "560px";
       pop.style.border = monthPick ? "1px solid #f0f0f0" : "";
@@ -2590,7 +2617,7 @@
         t &&
         t.closest &&
         (t.closest("#ch-cal-pop") ||
-          t.closest('button[data-range="自定义"],button[data-range="日"],button[data-range="周"],button[data-range="月"]'))
+          t.closest('button[data-range="自定义"],button[data-range="日"],button[data-range="周"],button[data-range="月"],button[data-range="年"]'))
       ) {
         return;
       }
@@ -2717,7 +2744,7 @@
       const rangeBtn = event.target.closest("button[data-range]");
       if (rangeBtn) {
         const next = rangeBtn.getAttribute("data-range");
-        if (next === "日" || next === "自定义" || next === "周" || next === "月") {
+        if (next === "日" || next === "自定义" || next === "周" || next === "月" || next === "年") {
           setWait(false);
           const switched = state.range !== next;
           if (switched) {
