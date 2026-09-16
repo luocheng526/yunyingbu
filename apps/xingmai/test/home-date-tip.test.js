@@ -32,6 +32,17 @@ test("custom range allows 30 inclusive days and rejects 31", () => {
   assert.equal(withinDays("2026-09-01", "2026-09-30", 30), true);
   assert.equal(withinDays("2026-09-01", "2026-10-01", 30), false);
   assert.equal(withinDays("2026-09-11", "2026-09-11", 30), true);
+  assert.equal(withinDays("2026-09-01", "2026-09-15", 30), true);
+});
+
+test("calendar picks a range by clicking start then end", () => {
+  assert.match(homeJs, /function applyCalDay/);
+  assert.match(homeJs, /function paintCalHover/);
+  assert.match(homeJs, /function onCalPointerDown/);
+  assert.match(homeJs, /先点开始日期，再点结束日期，最多连续30天/);
+  assert.match(homeJs, /calLockAt/);
+  assert.match(homeJs, /state\.range = "custom"/);
+  assert.doesNotMatch(homeJs, /if \(!calPick\) \{\n            calPick = ymd;\n            calHover = "";\n            renderCal\(\);/);
 });
 
 test("team KPIs resolve ERP shop id from storeId or shop-options name", () => {

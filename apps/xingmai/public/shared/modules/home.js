@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.545-home-setclick */
+/* xm-module-home 0.1.549-home-calspan */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -265,7 +265,7 @@
       '<div class="xm-hm-cal-months">' +
       calMonthHtml(cursor, opts, "left") +
       calMonthHtml(shiftMonth(cursor, 1), opts, "right") +
-      "</div>"
+      '</div><p class="xm-hm-cal-hint">先点开始日期，再点结束日期，最多连续30天</p>'
     );
   }
   function readUser() {
@@ -1088,6 +1088,7 @@
       ".xm-hm-cal-grid button.is-today{color:#f56c6c}" +
       ".xm-hm-cal-grid button.is-start,.xm-hm-cal-grid button.is-end{background:#f56c6c;color:#fff;border-radius:50%;width:32px}" +
       ".xm-hm-cal-grid button:disabled,.xm-hm-cal-grid button.is-off{color:#c0c4cc;opacity:.7;cursor:not-allowed}" +
+      ".xm-hm-cal-hint{margin:8px 12px 0;color:#909399;font-size:12px;line-height:1.4}" +
       ".xm-hm-card-head .xm-hm-help{cursor:help;position:relative;z-index:2;width:18px;height:18px;border:1px solid var(--xm-line);border-radius:50%;background:transparent;padding:0;margin:0;font:inherit;font-size:11px;line-height:1;color:var(--xm-muted);display:inline-flex;align-items:center;justify-content:center}" +
       ".xm-hm-tip{position:fixed;z-index:9;display:none;box-sizing:border-box;width:max-content;max-width:360px;padding:10px 12px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;color:var(--xm-ink);font-size:12px;line-height:1.6;white-space:pre-wrap;pointer-events:none}" +
       ".xm-hm-tip.is-on{display:block}" +
@@ -1309,7 +1310,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.545-home-setclick");
+    board.setAttribute("data-hm-js", "0.1.549-home-calspan");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2393,36 +2394,7 @@
           renderCal();
           return;
         }
-        var day = event.target.closest("#xm-hm-cal [data-ymd]");
-        if (day && !day.disabled) {
-          var ymd = day.getAttribute("data-ymd") || "";
-          if (!ymd) {
-            return;
-          }
-          if (!calPick) {
-            calPick = ymd;
-            calHover = "";
-            renderCal();
-            return;
-          }
-          var from = calPick;
-          var to = ymd;
-          if (from > to) {
-            from = ymd;
-            to = calPick;
-          }
-          if (!withinDays(from, to, 30)) {
-            calPick = ymd;
-            calHover = "";
-            renderCal();
-            return;
-          }
-          state.from = from;
-          state.to = to;
-          state.range = "custom";
-          closeCal();
-          paint(root, state);
-          pullBoard();
+        if (event.target.closest("#xm-hm-cal [data-ymd]")) {
           return;
         }
         var drop = event.target.closest("[data-drop-team]");
@@ -2458,12 +2430,13 @@
         }
       }
       function onOutsideCardSet(event) {
-        var onPop = event.target.closest && (event.target.closest("#xm-hm-pop") || event.target.closest(".xm-hm-set"));
+        var t = event.target && event.target.closest ? event.target : null;
+        var onPop = t && (t.closest("#xm-hm-pop") || t.closest(".xm-hm-set"));
         if (cardSetOpen && !onPop) {
           cardSetOpen = false;
           syncCardPop(root);
         }
-        if (calOpen && !event.target.closest("#xm-hm-cal") && !event.target.closest("#xm-hm-dates")) {
+        if (calOpen && Date.now() - calLockAt > 400 && t && !t.closest("#xm-hm-cal") && !t.closest("#xm-hm-dates")) {
           closeCal();
         }
       }
@@ -2577,12 +2550,71 @@
           return;
         }
         calHover = ymd;
-        renderCal();
+        paintCalHover();
+      }
+      function onCalPointerDown(event) {
+        var day = event.target.closest && event.target.closest("#xm-hm-cal [data-ymd]");
+        if (!calOpen || !day || day.disabled) {
+          return;
+        }
+        var ymd = day.getAttribute("data-ymd") || "";
+        if (!ymd) {
+          return;
+        }
+        if (event.cancelable) {
+          event.preventDefault();
+        }
+        applyCalDay(ymd);
       }
       var calOpen = false;
       var calCursor = (state.from || shanghaiYmd(1)).slice(0, 7);
       var calPick = "";
       var calHover = "";
+      var calLockAt = 0;
+      function calOpts() {
+        var applied = !calPick && withinDays(state.from, state.to, 30);
+        return {
+          today: shanghaiYmd(0),
+          pick: calPick,
+          start: calPick || (applied ? state.from : ""),
+          end: calPick ? calHover : applied ? state.to : "",
+          hover: calPick ? calHover : ""
+        };
+      }
+      function paintCalHover() {
+        var el = root.querySelector("#xm-hm-cal");
+        if (!el) {
+          return;
+        }
+        var opts = calOpts();
+        Array.prototype.forEach.call(el.querySelectorAll("[data-ymd]"), function (btn) {
+          var ymd = btn.getAttribute("data-ymd") || "";
+          var other = btn.classList.contains("is-other");
+          var cls = calDayClass(ymd, opts, other);
+          btn.className = cls.join(" ");
+          btn.disabled = cls.indexOf("is-off") !== -1;
+        });
+      }
+      function applyCalDay(ymd) {
+        calLockAt = Date.now();
+        if (!calPick) {
+          calPick = ymd;
+          calHover = "";
+          renderCal();
+          return;
+        }
+        var from = calPick < ymd ? calPick : ymd;
+        var to = calPick < ymd ? ymd : calPick;
+        if (!withinDays(from, to, 30)) {
+          return;
+        }
+        state.from = from;
+        state.to = to;
+        state.range = "custom";
+        closeCal();
+        paint(root, state);
+        pullBoard();
+      }
       function renderCal() {
         var el = root.querySelector("#xm-hm-cal");
         var btn = root.querySelector("#xm-hm-dates");
@@ -2597,14 +2629,7 @@
         if (!calOpen) {
           return;
         }
-        var applied = !calPick && withinDays(state.from, state.to, 30);
-        el.innerHTML = calPanelHtml(calCursor, {
-          today: shanghaiYmd(0),
-          pick: calPick,
-          start: calPick || (applied ? state.from : ""),
-          end: calPick ? "" : applied ? state.to : "",
-          hover: calPick ? calHover : ""
-        });
+        el.innerHTML = calPanelHtml(calCursor, calOpts());
       }
       function closeCal() {
         calOpen = false;
@@ -2842,6 +2867,7 @@
       var scroller = document.getElementById("xm-content") || root;
       root.addEventListener("click", onClick);
       root.addEventListener("change", onChange);
+      root.addEventListener("pointerdown", onCalPointerDown);
       root.addEventListener("pointerover", onCalHover);
       function onLineTipLeave() {
         hideLineTip(root);
@@ -2883,6 +2909,7 @@
         window.clearInterval(poll);
         root.removeEventListener("click", onClick);
         root.removeEventListener("change", onChange);
+        root.removeEventListener("pointerdown", onCalPointerDown);
         root.removeEventListener("pointerover", onCalHover);
         root.removeEventListener("mousemove", onLineTipMove);
         root.removeEventListener("mouseleave", onLineTipLeave);
