@@ -709,6 +709,21 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
 .ch-table.sh-wide {
   overflow: visible;
 }
+.ch-table tr.is-team {
+  cursor: pointer;
+}
+.ch-table tr.is-team.is-open {
+  background: #f5f8ff;
+}
+.ch-table tr.is-child .ch-name {
+  padding-left: 22px;
+}
+.ch-caret {
+  display: inline-block;
+  width: 14px;
+  margin-right: 4px;
+  color: #8c8c8c;
+}
 .ch-table.is-pl tr.is-gain td {
   background: #fff1f0;
 }
@@ -1296,11 +1311,71 @@ html[data-theme="pink"] .gd-card {
   padding: 12px 20px;
   border-top: 1px solid var(--ch-line, #f0f0f0);
 }
+.op-kpis {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  background: var(--ch-card, #fff);
+  border: 1px solid var(--ch-line, #ececec);
+}
+.op-kpi {
+  min-height: 88px;
+  padding: 14px 10px 16px;
+  border-right: 1px solid var(--ch-line, #f0f0f0);
+  border-bottom: 1px solid var(--ch-line, #f0f0f0);
+  box-sizing: border-box;
+}
+.op-kpi:nth-child(9n) {
+  border-right: 0;
+}
+.op-kpi .lab {
+  font-size: 12px;
+  color: #8c8c8c;
+  line-height: 18px;
+}
+.op-kpi .val {
+  margin-top: 10px;
+  font-size: 20px;
+  font-weight: 600;
+  color: #141414;
+  font-variant-numeric: tabular-nums;
+}
+.op-kpi .val.is-gain {
+  color: #d46b08;
+}
+.op-chart {
+  margin: 12px 0 0;
+  padding: 10px 12px 8px;
+  background: var(--ch-card, #fff);
+  border: 1px solid var(--ch-line, #ececec);
+}
+.op-chart-leg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  color: #8c8c8c;
+  font-size: 12px;
+}
+.op-chart-leg i {
+  width: 10px;
+  height: 10px;
+  background: #2f54eb;
+}
+.op-chart svg {
+  display: block;
+  width: 100%;
+  height: 220px;
+}
+.op-table .op-gain {
+  color: #d46b08;
+  font-weight: 600;
+}
 
 @media (max-width: 1100px) {
   .ch-metrics,
   .gd-metrics,
-  .ch-kpi {
+  .ch-kpi,
+  .op-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .ch-card:nth-child(6n) {

@@ -3,7 +3,6 @@
 
   var RANGES = ["7天", "30天", "日", "周", "月", "年", "自定义"];
   var SECTIONS = ["渠道列表", "店铺分组", "经营数据", "竞对对比", "品类分析", "热销商品"];
-  var DUTY_GROUPS = ["经理组", "主管组", "储备组"];
   var TABLE_COLS = [
     "实时销售额 (支付)",
     "店铺上新成功率",
@@ -50,57 +49,25 @@
     { key: "shipMaterialFee", label: "耗材费 (发货)", fields: ["shipMaterialFee"], kind: "money" },
     { key: "packFee", label: "打包费", fields: ["packFee"], kind: "money" }
   ];
-  var HERO_TIP = "当天按支付时间累计的销售额，与首页实时销售指数同源（星脉 ERP 支付流水）";
+  var HERO_TIP = "当天支付流水，与首页实时销售同源";
   var METRIC_CATALOG = [
-    { key: "pay", label: "支付金额 (支付)", tip: "按支付时间统计的订单金额(包含无效单、代发单)" },
-    {
-      key: "orders",
-      label: "销售单数 (支付)",
-      tip: "剔除无效单和退款订单后的订单数(按支付时间统计)\n计算公式:销售单数(支付)-无效单订单数-普通单退款单数-代发单退款单数"
-    },
+    { key: "pay", label: "支付金额 (支付)", tip: "含无效单、代发单的支付金额" },
+    { key: "orders", label: "销售单数 (支付)", tip: "剔除无效单和退款后的支付订单数" },
     { key: "ad", label: "推广花费 (支付预估)", tip: "SPU推广费用" },
-    {
-      key: "profit",
-      label: "利润 (支付预估)",
-      tip: "统计时间内产生的利润（按支付时间统计）\n计算公式：净销售额（支付）-净货品成本（支付）-销售费用（支付）-发货费用（支付）-其他费用-自定义费用"
-    },
+    { key: "profit", label: "利润 (支付预估)", tip: "净销售额减成本与费用" },
     { key: "margin", label: "大毛利率", tip: "利润/支付金额" },
-    { key: "custom", label: "自定义费用", tip: "店铺或运营录入的自定义费用，利润计算时会扣除" },
-    {
-      key: "refundRate",
-      label: "退款率 (按金额)",
-      tip: "按订单金额计算的退款率\n计算公式:退款金额/支付金额(支付)*100%"
-    },
-    {
-      key: "adRate",
-      label: "推广花费占比 (支付预估)",
-      tip: "推广花费占支付金额的比例（按支付时间统计）\n计算公式：推广花费（支付预估）/支付金额（支付）100%（推广花费≤0时，按0计算：支付金额≤0时，按1计算）"
-    },
-    { key: "netSales", label: "净销售额 (支付)", tip: "净销售数对应的订单金额合计" },
-    {
-      key: "refundAmount",
-      label: "退款金额",
-      tip: "按退款成功时间统计的金额(包含未发货退款、已发货仅退款和已发货退货退款)"
-    },
-    { key: "platformFee", label: "平台花费 (支付预估)", tip: "支付金额（支付）对应的预估平台花费" },
-    { key: "goodsCost", label: "总货品成本", tip: "京小洁采购单成本+导入的货品成本" },
-    {
-      key: "saleFee",
-      label: "销售费用 (支付预估)",
-      tip: "支付金额（支付）对应的预估销售费用\n计算公式：推广花费（支付预估）+平台花费（支付预估）+无效单佣金"
-    },
-    {
-      key: "jdWarehouseRate",
-      label: "京仓订单占比",
-      tip: "京仓订单数量占销售订单数量的比例(按支付时间统计)\n计算公式:京仓订单数量（支付）/销售单数（支付）*100%"
-    },
-    {
-      key: "netGoodsCostRate",
-      label: "净货品成本占比 (支付)",
-      tip: "净货品成本占支付金额的比例（按支付时间统计）\n计算公式：净货款成本（支付）/支付金额（支付）*100%"
-    },
-    { key: "invalidAmount", label: "无效单金额", tip: "标记为无效单的订单支付金额" },
-    { key: "jdWarehouseCount", label: "京仓订单数量", tip: "京仓订单数量（按支付时间统计）" }
+    { key: "custom", label: "自定义费用", tip: "利润计算时扣除" },
+    { key: "refundRate", label: "退款率 (按金额)", tip: "退款金额/支付金额" },
+    { key: "adRate", label: "推广花费占比 (支付预估)", tip: "推广花费/支付金额" },
+    { key: "netSales", label: "净销售额 (支付)", tip: "净销售数对应金额" },
+    { key: "refundAmount", label: "退款金额", tip: "按退款成功时间统计" },
+    { key: "platformFee", label: "平台花费 (支付预估)", tip: "支付金额对应预估平台花费" },
+    { key: "goodsCost", label: "总货品成本", tip: "采购单成本+导入成本" },
+    { key: "saleFee", label: "销售费用 (支付预估)", tip: "推广+平台+无效单佣金" },
+    { key: "jdWarehouseRate", label: "京仓订单占比", tip: "京仓订单数量/销售单数" },
+    { key: "netGoodsCostRate", label: "净货品成本占比 (支付)", tip: "净货款成本/支付金额" },
+    { key: "invalidAmount", label: "无效单金额", tip: "无效单支付金额" },
+    { key: "jdWarehouseCount", label: "京仓订单数量", tip: "京仓订单数量" }
   ];
 
   function catalogKeys() {
@@ -401,7 +368,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov28";
+      link.href = "/data-pages.css?v=data-ov30";
       document.head.appendChild(link);
     }
     ensureCardTypeStyle();
@@ -833,14 +800,24 @@
     }
     if (col.key === "netSales") {
       const net = firstNum(shop, col.fields);
-      return fmt(net != null ? net : pay - refund, 2);
+      return fmtInt(net != null ? net : pay - refund);
     }
     if (col.kind === "int") {
       const count = firstNum(shop, col.fields);
-      return fmt(count != null ? count : 0, 0);
+      return fmtInt(count != null ? count : 0);
     }
     const money = firstNum(shop, col.fields);
-    return fmt(money != null ? money : 0, 2);
+    return fmtInt(money != null ? money : 0);
+  }
+
+  function payOf(shop) {
+    return Number(shop && shop.payAmount) || 0;
+  }
+
+  function sortByPay(list) {
+    return (list || []).slice().sort(function (a, b) {
+      return payOf(b) - payOf(a);
+    });
   }
 
   function sumShopTotals(list) {
@@ -945,39 +922,57 @@
     return Boolean(oid && person && String(person.id) === oid);
   }
 
-  function shopDutyFlags(shop, people) {
-    const flags = { 经理组: false, 主管组: false, 储备组: false };
-    const reserves = {};
-    (people || []).forEach(function (person) {
-      const name = String((person && person.reserve) || "").trim();
-      if (name && name !== "无") {
-        reserves[name] = true;
+  function personDuty(person, people) {
+    const role = String((person && person.role) || "");
+    if (role === "经理" || role === "主管" || role === "储备") {
+      return role;
+    }
+    const name = String((person && person.name) || "").trim();
+    if (!name) {
+      return "";
+    }
+    for (let i = 0; i < (people || []).length; i += 1) {
+      const reserve = String(people[i].reserve || "").trim();
+      if (reserve && reserve !== "无" && reserve === name) {
+        return "储备";
       }
-    });
-    (people || []).forEach(function (person) {
-      if (!personCoversShop(person, shop)) {
-        return;
-      }
-      const role = String(person.role || "");
-      if (role === "经理") {
-        flags.经理组 = true;
-      }
-      if (role === "主管") {
-        flags.主管组 = true;
-      }
-      const reserve = String(person.reserve || "").trim();
-      if (role === "储备" || reserves[person.name] || (reserve && reserve !== "无")) {
-        flags.储备组 = true;
-      }
-    });
-    return flags;
+    }
+    return "";
   }
 
-  function dutyTableFrom(shops, people) {
+  function dutyLeaders(people) {
+    const list = people || [];
+    const seen = {};
+    const out = [];
+    list.forEach(function (person) {
+      const duty = personDuty(person, list);
+      const name = String((person && person.name) || "").trim();
+      if (!duty || !name || seen[name + duty]) {
+        return;
+      }
+      seen[name + duty] = true;
+      out.push(person);
+    });
+    list.forEach(function (person) {
+      const reserve = String((person && person.reserve) || "").trim();
+      if (!reserve || reserve === "无" || seen[reserve + "储备"]) {
+        return;
+      }
+      const hit = list.find(function (item) {
+        return String(item.name || "").trim() === reserve;
+      });
+      seen[reserve + "储备"] = true;
+      out.push(hit || { id: "rs-" + reserve, name: reserve, role: "储备", visibleShops: [] });
+    });
+    return out;
+  }
+
+  function dutyTableFrom(shops, people, openId) {
     const list = shops || [];
     const keys = loadShopColKeys();
     const cols = keys.map(shopColOf);
     const tot = sumShopTotals(list);
+    const rank = { 经理: 0, 主管: 1, 储备: 2 };
     const rows = [{
       name: "当页汇总",
       kind: "sum",
@@ -986,23 +981,52 @@
         return shopColCell(tot, col);
       })
     }];
-    DUTY_GROUPS.forEach(function (group) {
-      const members = list.filter(function (shop) {
-        return shopDutyFlags(shop, people)[group];
+    dutyLeaders(people)
+      .map(function (person) {
+        const members = sortByPay(list.filter(function (shop) {
+          return personCoversShop(person, shop);
+        }));
+        const duty = personDuty(person, people) || String(person.role || "储备");
+        const sum = sumShopTotals(members);
+        return { person: person, members: members, duty: duty, sum: sum, pay: payOf(sum) };
+      })
+      .filter(function (item) {
+        return item.members.length;
+      })
+      .sort(function (a, b) {
+        const d = (rank[a.duty] || 9) - (rank[b.duty] || 9);
+        return d !== 0 ? d : b.pay - a.pay;
+      })
+      .forEach(function (item) {
+        const tid = String(item.person.id || item.person.name);
+        rows.push({
+          name: item.person.name + item.duty + "团队",
+          kind: "team",
+          teamId: tid,
+          open: String(openId) === tid,
+          profit: firstNum(item.sum, ["profit"]),
+          cells: cols.map(function (col) {
+            return shopColCell(item.sum, col);
+          })
+        });
+        if (String(openId) === tid) {
+          item.members.forEach(function (shop) {
+            rows.push({
+              name: shop.shopName,
+              kind: "shop",
+              child: true,
+              shopId: shop.shopId,
+              profit: firstNum(shop, ["profit"]),
+              cells: cols.map(function (col) {
+                return shopColCell(shop, col);
+              })
+            });
+          });
+        }
       });
-      const sum = sumShopTotals(members);
-      rows.push({
-        name: group,
-        kind: "group",
-        profit: firstNum(sum, ["profit"]),
-        cells: cols.map(function (col) {
-          return shopColCell(sum, col);
-        })
-      });
-    });
     return {
       title: "店铺分组",
-      columns: ["责权分组"].concat(cols.map(function (col) {
+      columns: ["团队"].concat(cols.map(function (col) {
         return col.label;
       })),
       rows: rows
@@ -1010,7 +1034,7 @@
   }
 
   function shopTableFrom(shops) {
-    const list = shops || [];
+    const list = sortByPay(shops);
     const keys = loadShopColKeys();
     const cols = keys.map(shopColOf);
     const tot = sumShopTotals(list);
@@ -1220,8 +1244,19 @@
           { name: "京东", kind: "jd", cells: channelCells }
         ]
       },
-      shopTable: shopTableFrom(shops)
+      shopTable: shopTableFrom(shops),
+      trend: trend
     };
+  }
+
+  function opsPanelHtml(payload, shops) {
+    return window.XmDataOps ? window.XmDataOps.panel(payload, shops) : "";
+  }
+
+  function paintOpsBars(svg, days) {
+    if (window.XmDataOps) {
+      window.XmDataOps.paint(svg, days);
+    }
   }
 
   function asSeries(list) {
@@ -1448,9 +1483,11 @@
     const mark =
       kind === "jd"
         ? '<span class="ch-logo ch-logo-jd" aria-hidden="true">京</span>'
-        : kind === "shop"
-          ? '<span class="ch-logo" style="background:#e53935" aria-hidden="true"></span>'
-          : "";
+        : kind === "team"
+          ? '<span class="ch-caret" aria-hidden="true">' + (row.open ? "▾" : "▸") + "</span>"
+          : kind === "shop"
+            ? '<span class="ch-logo" style="background:#e53935" aria-hidden="true"></span>'
+            : "";
     return (
       '<td class="ch-name"><span class="ch-bar"></span>' +
       mark +
@@ -1486,19 +1523,29 @@
       "</tr>";
     const body = (block.rows || [])
       .map(function (row) {
-        let cls = "";
+        const cls = [];
+        if (row.kind === "team") {
+          cls.push("is-team");
+          if (row.open) {
+            cls.push("is-open");
+          }
+        }
+        if (row.child) {
+          cls.push("is-child");
+        }
         if (showPl && row.kind === "shop") {
           const raw = row.profit;
           const n = Number(raw);
           if (raw != null && raw !== "" && Number.isFinite(n) && n > 0) {
-            cls = ' class="is-gain"';
+            cls.push("is-gain");
           } else if (raw != null && raw !== "" && Number.isFinite(n) && n < 0) {
-            cls = ' class="is-loss"';
+            cls.push("is-loss");
           }
         }
         return (
           "<tr" +
-          cls +
+          (cls.length ? ' class="' + cls.join(" ") + '"' : "") +
+          (row.kind === "team" ? ' data-team="' + escapeHtml(row.teamId || "") + '"' : "") +
           ">" +
           nameCell(row) +
           (row.cells || [])
@@ -1678,6 +1725,7 @@
       shopPickOpen: false,
       showPl: false,
       people: [],
+      dutyOpen: "",
       section: "渠道列表",
       payload: null,
       calOpen: false,
@@ -2223,12 +2271,14 @@
             tableHtml(payload.shopTable, shopTools, "sh-wide", state.showPl)
           : state.section === "店铺分组"
             ? tableHtml(
-                dutyTableFrom(visibleShops(state.payload), state.people),
+                dutyTableFrom(visibleShops(state.payload), state.people, state.dutyOpen),
                 shopTools,
                 "sh-wide",
                 state.showPl
               )
-            : '<p class="ch-empty">「' + escapeHtml(state.section) + "」为示例，尚未接入。</p>";
+            : state.section === "经营数据"
+              ? opsPanelHtml(state.payload, visibleShops(state.payload))
+              : '<p class="ch-empty">「' + escapeHtml(state.section) + "」为示例，尚未接入。</p>";
       board.innerHTML =
         '<div class="ch-top"><div class="ch-title">数据总览</div>' +
         '<div class="ch-right"><span class="ch-time">（统计时间：' +
@@ -2257,6 +2307,9 @@
         paintPicker();
       }
       paintSparkSvg(board.querySelector(".ch-hero .ch-spark"), hero);
+      if (state.section === "经营数据") {
+        paintOpsBars(board.querySelector(".op-bars"), (state.payload && state.payload.trend) || []);
+      }
       syncShopMenu();
     }
 
@@ -2666,6 +2719,13 @@
         state.calOpen = false;
         hideCalPop();
         load();
+        return;
+      }
+      const teamRow = event.target.closest("tr[data-team]");
+      if (teamRow && board.contains(teamRow)) {
+        const tid = teamRow.getAttribute("data-team") || "";
+        state.dutyOpen = state.dutyOpen === tid ? "" : tid;
+        render();
         return;
       }
       const secBtn = event.target.closest("button[data-section]");
