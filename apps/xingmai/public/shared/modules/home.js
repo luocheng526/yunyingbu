@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.556-home-text-copy */
+/* xm-module-home 0.1.564-org-idle-skip-erp */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1311,7 +1311,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-      board.setAttribute("data-hm-js", "0.1.556-home-text-copy");
+      board.setAttribute("data-hm-js", "0.1.564-org-idle-skip-erp");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1660,13 +1660,20 @@
       }) }
     ];
   }
-  function erpQuery(from, to) {
-    return (
+  function erpQuery(from, to, opts) {
+    var qs =
       "payTimeStart=" +
       encodeURIComponent(from + " 00:00:00") +
       "&payTimeEnd=" +
-      encodeURIComponent(to + " 23:59:59")
-    );
+      encodeURIComponent(to + " 23:59:59");
+    opts = opts || {};
+    if (opts.shopIds && opts.shopIds.length) {
+      qs += "&shopIds=" + encodeURIComponent(opts.shopIds.join(","));
+    }
+    if (opts.excludeShopIds && opts.excludeShopIds.length) {
+      qs += "&excludeShopIds=" + encodeURIComponent(opts.excludeShopIds.join(","));
+    }
+    return qs;
   }
   function shiftYmd(ymd, days) {
     var parts = String(ymd || "").split("-").map(Number);
@@ -1782,17 +1789,22 @@
     });
   }
   var packMemo = {};
-  function fetchRangePack(from, to) {
-    var key = String(from) + "|" + String(to);
+  function fetchRangePack(from, to, opts) {
+    opts = opts || {};
+    if (opts.skipErp) {
+      return Promise.resolve({ records: [], summary: {}, skippedErp: true });
+    }
+    var key = String(from) + "|" + String(to) + "|" + ((opts.shopIds || []).join(",") || "all");
     var now = Date.now();
     var hit = packMemo[key];
     if (hit && now - hit.at < 15000) {
       return hit.promise;
     }
-    var qs = erpQuery(from, to);
+    var qs = erpQuery(from, to, opts);
+    var scoped = Boolean(opts.shopIds && opts.shopIds.length);
     var promise = Promise.all([
       api("/api/home/erp-kpis?" + qs),
-      api("/api/data/overview?" + qs)
+      scoped ? Promise.resolve({ ok: false }) : api("/api/data/overview?" + qs)
     ]).then(function (pair) {
       var homePack = pair[0];
       var overview = pair[1];
@@ -1810,7 +1822,7 @@
       if (homePack && homePack.ok && homePack.summary) {
         return { records: records, summary: sum };
       }
-      if (sum.payAmount != null) {
+      if (sum.payAmount != null || scoped) {
         return { records: records, summary: sum };
       }
       return api("/api/data/shops?pageSize=1&pageNum=1&currentPage=1&" + qs).then(function (probe) {
@@ -1891,15 +1903,75 @@
     }
     return normShopId(hit.shopId || hit.id);
   }
+  function isInactiveOrgStore(row) {
+    if (!row) {
+      return true;
+    }
+    var key = String(row.statusKey || "").trim();
+    if (key === "idle" || key === "closing" || key === "closed") {
+      return true;
+    }
+    var remark = String(row.remark || "").trim();
+    return remark === "闲置中" || remark === "退店中" || remark === "已退店";
+  }
   function dutyShopsFrom(orgPack, peopleShops) {
     if (orgPack && Object.prototype.toString.call(orgPack.stores) === "[object Array]") {
       return orgPack.stores.filter(function (row) {
-        return row && row.statusKey !== "closed" && row.kind !== "店群";
+        return row && row.kind !== "店群" && !isInactiveOrgStore(row);
       });
     }
     return ((peopleShops && peopleShops.shops) || []).filter(function (shop) {
-      return shop && shop.kind !== "店群";
+      return shop && shop.kind !== "店群" && !isInactiveOrgStore(shop);
     });
+  }
+  function dutyShopErpIds(dutyShops, catalogByName) {
+    var seen = {};
+    var ids = [];
+    (dutyShops || []).forEach(function (shop) {
+      var id = resolveErpId(shop, catalogByName);
+      if (id && !seen[id]) {
+        seen[id] = true;
+        ids.push(id);
+      }
+    });
+    return ids;
+  }
+  function dutyMatchedRecords(dutyShops, pack, catalogPack) {
+    var erp = mapByShopId(pack && pack.records);
+    var catalogByName = mapByShopName((catalogPack && catalogPack.records) || (pack && pack.records) || []);
+    var seen = {};
+    var matched = [];
+    (dutyShops || []).forEach(function (shop) {
+      var id = resolveErpId(shop, catalogByName);
+      if (!id || seen[id]) {
+        return;
+      }
+      var row = erp[id];
+      if (row) {
+        seen[id] = true;
+        matched.push(row);
+      }
+    });
+    return matched;
+  }
+  function filterPackByDuty(pack, dutyShops, catalogPack) {
+    var records = (pack && pack.records) || [];
+    if (!records.length) {
+      return { records: [], summary: pack && pack.summary, hourly: pack && pack.hourly, skippedErp: pack && pack.skippedErp };
+    }
+    var matched = dutyMatchedRecords(dutyShops, pack, catalogPack);
+    return { records: matched, summary: sumPack(matched), hourly: pack && pack.hourly, skippedErp: pack && pack.skippedErp };
+  }
+  function erpScopeFromOrg(orgPack, peopleShops, catalogPack) {
+    var orgLoaded = orgPack && Object.prototype.toString.call(orgPack.stores) === "[object Array]";
+    var dutyShops = dutyShopsFrom(orgPack, peopleShops);
+    var catalogByName = mapByShopName((catalogPack && catalogPack.records) || []);
+    var shopIds = dutyShopErpIds(dutyShops, catalogByName);
+    return {
+      dutyShops: dutyShops,
+      shopIds: shopIds,
+      opts: orgLoaded ? { shopIds: shopIds, skipErp: shopIds.length === 0 } : {}
+    };
   }
   function personOwnsShop(person, shop) {
     if (!person || !shop) {
@@ -2256,13 +2328,23 @@
         var today = shanghaiYmd(0);
         var yest = shanghaiYmd(1);
         return Promise.all([
-          fetchRangePack(today, today),
-          fetchRangePack(yest, yest),
-          fetchCatalogPack()
+          fetchCatalogPack(),
+          api("/api/people/org/stores")
         ]).then(function (pack) {
-          if (!dead) {
-            applyLive(pack[0], pack[1], pack[2]);
-          }
+          var catalogPack = pack[0] || { records: [], summary: null };
+          var scope = erpScopeFromOrg(pack[1], null, catalogPack);
+          return Promise.all([
+            fetchRangePack(today, today, scope.opts),
+            fetchRangePack(yest, yest, scope.opts)
+          ]).then(function (erpPack) {
+            if (!dead) {
+              applyLive(
+                filterPackByDuty(erpPack[0], scope.dutyShops, catalogPack),
+                filterPackByDuty(erpPack[1], scope.dutyShops, catalogPack),
+                catalogPack
+              );
+            }
+          });
         }).catch(function () {
           if (!dead) {
             paint(root, state);
@@ -2270,14 +2352,29 @@
         });
       }
       function pullLive() {
-        return api("/api/home/erp-paid").then(function (data) {
+        return Promise.all([
+          api("/api/home/erp-paid"),
+          api("/api/people/org/stores"),
+          fetchCatalogPack()
+        ]).then(function (pack) {
           if (dead) {
             return;
           }
+          var data = pack[0];
+          var catalogPack = pack[2] || { records: [], summary: null };
+          var scope = erpScopeFromOrg(pack[1], null, catalogPack);
           if (data && data.ok && (data.summary || (data.records && data.records.length))) {
-            var todayPack = { records: data.records || [], summary: data.summary || {}, hourly: data.hourly };
-            var yestPack = { records: [], summary: data.yesterday || {}, hourly: data.hourly };
-            applyLive(todayPack, yestPack, todayPack);
+            var todayPack = filterPackByDuty(
+              { records: data.records || [], summary: data.summary || {}, hourly: data.hourly },
+              scope.dutyShops,
+              catalogPack
+            );
+            var yestPack = filterPackByDuty(
+              { records: [], summary: data.yesterday || {}, hourly: data.hourly },
+              scope.dutyShops,
+              catalogPack
+            );
+            applyLive(todayPack, yestPack, catalogPack);
             return;
           }
           return pullLiveKpis();
@@ -2290,35 +2387,39 @@
       function pullBoard() {
         var prev = previousDates(state.from, state.to);
         return Promise.all([
-          fetchRangePack(state.from, state.to),
-          fetchRangePack(prev.from, prev.to),
           fetchCatalogPack(),
           api("/api/people"),
           api("/api/people/shops"),
           api("/api/people/grants"),
           api("/api/people/org/stores")
         ]).then(function (pack) {
-          if (dead) {
-            return;
-          }
-          var rangePack = pack[0] || { records: [], summary: null };
-          var prevPack = pack[1] || { records: [], summary: null };
-          var catalogPack = pack[2] || { records: [], summary: null };
-          var people = pack[3] && pack[3].people ? pack[3].people : [];
-          var peopleShops = pack[4] || { shops: [] };
-          var grants = pack[5] && pack[5].grants ? pack[5].grants : [];
-          var dutyShops = dutyShopsFrom(pack[6], peopleShops);
-          state.cards = companyCardsFrom(summaryFrom(rangePack), summaryFrom(prevPack));
-          var built = buildTeams(dutyShops, grants, rangePack, prevPack, catalogPack, people, "经理");
-          var chiefs = buildTeams(dutyShops, grants, rangePack, prevPack, catalogPack, people, "主管");
-          state.teams = built.teams;
-          state.chiefs = chiefs.teams;
-          state.ladders = buildLadders(people, dutyShops, rangePack, catalogPack);
-          state.teamGaps = built.mismatches;
-          state.chiefGaps = chiefs.mismatches;
-          state.gaps = built.mismatches;
-          state.source = (rangePack.summary && rangePack.summary.payAmount != null) || (rangePack.records && rangePack.records.length) ? "xingmai-erp" : "";
-          paint(root, state);
+          var catalogPack = pack[0] || { records: [], summary: null };
+          var people = pack[1] && pack[1].people ? pack[1].people : [];
+          var peopleShops = pack[2] || { shops: [] };
+          var grants = pack[3] && pack[3].grants ? pack[3].grants : [];
+          var scope = erpScopeFromOrg(pack[4], peopleShops, catalogPack);
+          return Promise.all([
+            fetchRangePack(state.from, state.to, scope.opts),
+            fetchRangePack(prev.from, prev.to, scope.opts)
+          ]).then(function (erpPack) {
+            if (dead) {
+              return;
+            }
+            var rangePack = filterPackByDuty(erpPack[0] || { records: [], summary: null }, scope.dutyShops, catalogPack);
+            var prevPack = filterPackByDuty(erpPack[1] || { records: [], summary: null }, scope.dutyShops, catalogPack);
+            var dutyShops = scope.dutyShops;
+            state.cards = companyCardsFrom(rangePack.summary, prevPack.summary);
+            var built = buildTeams(dutyShops, grants, rangePack, prevPack, catalogPack, people, "经理");
+            var chiefs = buildTeams(dutyShops, grants, rangePack, prevPack, catalogPack, people, "主管");
+            state.teams = built.teams;
+            state.chiefs = chiefs.teams;
+            state.ladders = buildLadders(people, dutyShops, rangePack, catalogPack);
+            state.teamGaps = built.mismatches;
+            state.chiefGaps = chiefs.mismatches;
+            state.gaps = built.mismatches;
+            state.source = (rangePack.summary && rangePack.summary.payAmount != null) || (rangePack.records && rangePack.records.length) ? "xingmai-erp" : "";
+            paint(root, state);
+          });
         }).catch(function () {
           if (!dead) {
             paint(root, state);

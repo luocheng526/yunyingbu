@@ -10,7 +10,7 @@ const homeJs = readFileSync(
 );
 
 test("home allows copying table text and only clears selection while dragging", () => {
-  assert.match(homeJs, /0\.1\.556-home-text-copy/);
+  assert.match(homeJs, /0\.1\.564-org-idle-skip-erp/);
   assert.match(homeJs, /\.xm-hm-table th,\.xm-hm \.xm-hm-table td[\s\S]{0,80}user-select:text/);
   assert.match(homeJs, /#xm-hm-kpis \.xm-hm-card,#xm-hm-teams \.xm-hm-card,\.xm-hm-pop label\{[^}]*user-select:none/);
   assert.match(homeJs, /if \(!sortFrom && !sortDragging\) \{\s*return;/);
