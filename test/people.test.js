@@ -116,7 +116,9 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /bindLiveSearch/);
     assert.match(jsText, /id="people-kpis"/);
     assert.match(jsText, /renderPeopleKpis/);
-    assert.match(jsText, /peopleRoleBucket/);
+    assert.match(jsText, /peopleLineKpiCounts/);
+    assert.match(jsText, /uniqueLineKpiNames/);
+    assert.doesNotMatch(jsText, /peopleRoleBucket/);
     assert.match(jsText, /__xmSearchStores/);
     assert.match(jsText, /__xmSearchPeople/);
     assert.match(jsText, /onSearchCapture/);
@@ -221,6 +223,86 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.doesNotMatch(jsText, /主数据治理/);
     assert.doesNotMatch(jsText, /全部公司/);
     assert.doesNotMatch(jsText, />缺口</);
+  });
+});
+
+function uniqueLineKpiNames(people, key, seat) {
+  const skip = new Set(["管理员", "无", "—", "点击填写"]);
+  const leaders = new Set(["罗成", "韩梦凯", "沈子晗"]);
+  const names = new Set();
+  for (const person of people || []) {
+    if (String(person.status || "") === "离职") {
+      continue;
+    }
+    const name = String(person[key] || "").trim();
+    if (!name || skip.has(name)) {
+      continue;
+    }
+    if (seat === "运营" && name === "运营") {
+      continue;
+    }
+    if (seat === "助理" && (name === "助理" || name === "运营")) {
+      continue;
+    }
+    if (seat === "主管/储备" && (leaders.has(name) || name === "主管" || name === "储备" || name === "主管/储备")) {
+      continue;
+    }
+    if (seat === "经理" && name === "罗成") {
+      continue;
+    }
+    names.add(name);
+  }
+  return [...names];
+}
+
+function peopleLineKpiCounts(people) {
+  const directors = uniqueLineKpiNames(people, "director", "总监");
+  if (!directors.includes("罗成")) {
+    directors.push("罗成");
+  }
+  return {
+    总监: directors.length,
+    经理: uniqueLineKpiNames(people, "lineManager", "经理").length,
+    "主管/储备": uniqueLineKpiNames(people, "supervisor", "主管/储备").length,
+    运营: uniqueLineKpiNames(people, "operator", "运营").length,
+    助理: uniqueLineKpiNames(people, "assistant", "助理").length
+  };
+}
+
+test("member KPI cards count unique 在职 names in the five line columns", async () => {
+  await withServer(async (base) => {
+    const js = await fetch(`${base}/shared/modules/people.js`);
+    const jsText = await js.text();
+    assert.match(jsText, /uniqueLineKpiNames\(people, "supervisor"/);
+    assert.match(jsText, /LINE_KPI_LEADERS/);
+    const res = await fetch(`${base}/api/people`);
+    const data = await res.json();
+    assert.deepEqual(peopleLineKpiCounts(data.people), {
+      总监: 1,
+      经理: 2,
+      "主管/储备": 1,
+      运营: 12,
+      助理: 0
+    });
+    assert.deepEqual(
+      peopleLineKpiCounts([
+        { name: "杨润泽", status: "在职", director: "罗成", lineManager: "沈子晗", supervisor: "杨润泽", operator: "", assistant: "" },
+        { name: "张文静", status: "在职", director: "罗成", lineManager: "沈子晗", supervisor: "张文静", operator: "张文静", assistant: "" },
+        { name: "陈明婧", status: "在职", director: "罗成", lineManager: "沈子晗", supervisor: "张文静", operator: "陈明婧", assistant: "" },
+        { name: "高传颖", status: "在职", director: "罗成", lineManager: "韩梦凯", supervisor: "高传颖", operator: "运营", assistant: "无" },
+        { name: "李继双", status: "在职", director: "罗成", lineManager: "韩梦凯", supervisor: "陈晓曼", operator: "运营", assistant: "无" },
+        { name: "张嘉庆", status: "在职", director: "罗成", lineManager: "韩梦凯", supervisor: "陈晓曼", operator: "无", assistant: "助理" },
+        { name: "林晓彬", status: "在职", director: "罗成", lineManager: "韩梦凯", supervisor: "韩梦凯", operator: "运营", assistant: "无" },
+        { name: "管理员", status: "在职", director: "罗成", lineManager: "管理员", supervisor: "张文静", operator: "张文静", assistant: "" }
+      ]),
+      {
+        总监: 1,
+        经理: 2,
+        "主管/储备": 4,
+        运营: 2,
+        助理: 0
+      }
+    );
   });
 });
 

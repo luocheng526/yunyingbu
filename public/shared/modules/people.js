@@ -548,28 +548,56 @@
         return {};
       }
 
-      function peopleRoleBucket(person) {
-        const name = String(person.name || "").trim();
-        const role = String(person.role || "").trim();
-        if (name === "管理员" || person.center === "人员管理") {
+      const LINE_KPI_SKIP = { 管理员: 1, 无: 1, "—": 1, "点击填写": 1 };
+      const LINE_KPI_LEADERS = { 罗成: 1, 韩梦凯: 1, 沈子晗: 1 };
+
+      function cleanLineKpiName(value) {
+        const name = String(value || "").trim();
+        if (!name || LINE_KPI_SKIP[name]) {
           return "";
         }
-        if (name === "罗成" || role === "总监") {
-          return "总监";
+        return name;
+      }
+
+      function uniqueLineKpiNames(people, key, seat) {
+        const names = {};
+        (people || []).forEach(function (person) {
+          if (String(person.status || "") === "离职") {
+            return;
+          }
+          const name = cleanLineKpiName(person[key]);
+          if (!name) {
+            return;
+          }
+          if (seat === "运营" && name === "运营") {
+            return;
+          }
+          if (seat === "助理" && (name === "助理" || name === "运营")) {
+            return;
+          }
+          if (seat === "主管/储备" && (LINE_KPI_LEADERS[name] || name === "主管" || name === "储备" || name === "主管/储备")) {
+            return;
+          }
+          if (seat === "经理" && name === "罗成") {
+            return;
+          }
+          names[name] = true;
+        });
+        return Object.keys(names);
+      }
+
+      function peopleLineKpiCounts(people) {
+        const directors = uniqueLineKpiNames(people, "director", "总监");
+        if (directors.indexOf("罗成") < 0) {
+          directors.push("罗成");
         }
-        if (name === "韩梦凯" || name === "沈子晗" || role === "经理") {
-          return "经理";
-        }
-        if (role === "主管" || role === "储备" || role === "主管/储备") {
-          return "主管/储备";
-        }
-        if (role === "助理") {
-          return "助理";
-        }
-        if (role === "运营" || role === "店长") {
-          return "运营";
-        }
-        return "";
+        return {
+          总监: directors.length,
+          经理: uniqueLineKpiNames(people, "lineManager", "经理").length,
+          "主管/储备": uniqueLineKpiNames(people, "supervisor", "主管/储备").length,
+          运营: uniqueLineKpiNames(people, "operator", "运营").length,
+          助理: uniqueLineKpiNames(people, "assistant", "助理").length
+        };
       }
 
       function renderPeopleKpis(people) {
@@ -577,19 +605,7 @@
         if (!host) {
           return;
         }
-        const counts = { 总监: 0, 经理: 0, "主管/储备": 0, 运营: 0, 助理: 0 };
-        (people || []).forEach(function (person) {
-          if (String(person.status || "") === "离职") {
-            return;
-          }
-          const bucket = peopleRoleBucket(person);
-          if (bucket) {
-            counts[bucket] += 1;
-          }
-        });
-        if (counts.总监 === 0) {
-          counts.总监 = 1;
-        }
+        const counts = peopleLineKpiCounts(people);
         host.innerHTML = [
           ["总监", counts.总监],
           ["经理", counts.经理],
