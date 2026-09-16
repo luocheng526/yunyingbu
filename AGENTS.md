@@ -11,7 +11,7 @@
 2. `POST /api/releases` 入队（`contents` 为路径→正文；`files` 只写路径字符串）
 3. 告知单据号，等 `https://zx.xingmaierp.cc/releases` 第 1 位「通过」
 
-纪律全文：`docs/agents/00-release-rules.md`。禁止 SSH、禁止自己上 ECS、禁止自己点通过。
+纪律全文：`docs/agents/00-release-rules.md`。演示号已停用，线上只准用罗成，见 `docs/agents/00-prod-admin.md`。禁止 SSH、禁止自己上 ECS、禁止自己点通过。
 
 ## 禁止提交会挂站的瘦 app.js
 
@@ -24,3 +24,8 @@
 壳文件只许模块名填「主框架」的单据包含：`public/shared/nav.js`、`public/shared/layout.css`、`public/shared/xingmai-logo.png`、`src/modules/home/nav-items.js`。首页、数据中心、沈子晗、韩梦凯、人员管理、版本发布中心、个人中心交这些路径会被闸门 400 拒绝。其它模块只引用壳，不要覆盖。侧栏底部固定「版本发布中心 / 组织中心 / 个人中心 / 退出登录」和版本号；不要顶栏「退出」「暗色」。
 
 点「通过」时闸门再验一遍内核和壳，空 `files` 禁止全量落地。`src/app.js` / `server.js` / `boot-dirs.js` 只许主框架；`auth.js` 只许主框架或个人中心；`pages.js` 必须和 `middleware.js` 成套交。
+
+## 验收录屏
+
+不要主动录制操作视频。用户需要时会说明，多数情况只要预览图。
+未明确要求时，只用截图、接口或本地核对，不要用 RecordScreen。

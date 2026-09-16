@@ -2,7 +2,7 @@
 
 【纪律】
 - 站点：`https://zx.xingmaierp.cc/home`
-- 交单模块名：`首页`。申请人 `罗成运营部主脑`。做完直接交单。
+- 交单模块名：`首页`。申请人 `罗成运营部主脑`。做完直接交单。演示号已停用，只准用罗成，见 [00-prod-admin.md](00-prod-admin.md)。
 - 版本号 `0.1.N-说明`，先 `GET /api/releases/next`。
 - 嵌入式：`public/shared/modules/home.js` 挂 `XmModules["/home"]`。不要自画侧栏，不要交壳，不要交 `src/app.js`。
 - 颜色跟 `--xm-*` / `data-theme`。不要抄 e50e 全页壳。
