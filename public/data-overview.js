@@ -1665,6 +1665,7 @@
       customTo: "",
       shopId: "",
       shopIds: null,
+      shopDraft: undefined,
       shopPickOpen: false,
       showPl: false,
       people: [],
@@ -1988,10 +1989,36 @@
       return "已选" + ids.length + "家";
     }
 
+    function draftShopIds(payload) {
+      if (state.shopDraft === undefined) {
+        return selectedShopIds(payload);
+      }
+      if (state.shopDraft == null) {
+        return allShopIds(payload);
+      }
+      return state.shopDraft.slice();
+    }
+
+    function isDraftAll(payload) {
+      if (state.shopDraft === undefined) {
+        return isAllShops(payload);
+      }
+      const all = allShopIds(payload);
+      return state.shopDraft == null || (all.length > 0 && state.shopDraft.length === all.length);
+    }
+
+    function commitShopDraft() {
+      if (state.shopDraft !== undefined) {
+        state.shopIds = state.shopDraft;
+        state.shopId = Array.isArray(state.shopDraft) && state.shopDraft.length === 1 ? state.shopDraft[0] : "";
+        state.shopDraft = undefined;
+      }
+    }
+
     function shopMenuItemsHtml(payload) {
       const shops = (payload && payload.shops) || [];
-      const ids = selectedShopIds(payload);
-      const allOn = isAllShops(payload);
+      const ids = draftShopIds(payload);
+      const allOn = isDraftAll(payload);
       return (
         '<label class="ch-shop-opt"><input type="checkbox" data-shop-all' +
         (allOn ? " checked" : "") +
@@ -2063,15 +2090,15 @@
       const menu = getShopMenu();
       shopMenuScroll = menu.scrollTop;
       if (target.matches("[data-shop-all]")) {
-        state.shopIds = target.checked ? null : [];
+        state.shopDraft = target.checked ? null : [];
         state.shopPickOpen = true;
-        render();
+        syncShopMenu();
         return;
       }
       if (target.matches("[data-shop-id]")) {
         const id = target.getAttribute("data-shop-id") || "";
         const all = allShopIds(state.payload);
-        let cur = selectedShopIds(state.payload);
+        let cur = draftShopIds(state.payload);
         if (target.checked) {
           if (cur.indexOf(id) < 0) {
             cur.push(id);
@@ -2081,10 +2108,9 @@
             return item !== id;
           });
         }
-        state.shopIds = cur.length === all.length ? null : cur;
-        state.shopId = cur.length === 1 ? cur[0] : "";
+        state.shopDraft = cur.length === all.length ? null : cur;
         state.shopPickOpen = true;
-        render();
+        syncShopMenu();
       }
     }
 
@@ -2544,6 +2570,7 @@
             shopEl.closest("[data-shop-pick], .ch-shop-opt, #ch-shop-menu, [data-shop-menu]")));
       if (state.shopPickOpen && !inShopPick) {
         state.shopPickOpen = false;
+        commitShopDraft();
         hideShopMenu();
         if (state.payload) {
           render();
@@ -2644,6 +2671,14 @@
       if (shopToggle) {
         event.preventDefault();
         state.shopPickOpen = !state.shopPickOpen;
+        if (state.shopPickOpen) {
+          state.shopDraft = state.shopIds == null ? null : state.shopIds.slice();
+        } else {
+          commitShopDraft();
+          if (state.payload) {
+            render();
+          }
+        }
         const wrap = board.querySelector("[data-shop-pick]");
         if (wrap) {
           wrap.classList.toggle("is-open", state.shopPickOpen);
