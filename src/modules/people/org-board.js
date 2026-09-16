@@ -1204,7 +1204,7 @@ function applyPatchOrgStore(id, input, actor) {
   if (!found) {
     return { ok: false, statusCode: 404, error: "店铺行不存在" };
   }
-  const next = normalize(input || {}, found);
+  const next = normalize({ ...(input || {}), updatedOn: importStamp() }, found);
   const allowed = assertCanWrite(actor, found, next);
   if (!allowed.ok) {
     return allowed;
