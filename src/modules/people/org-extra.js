@@ -43,7 +43,7 @@ export function listLeaderboard(actor) {
   const byOwner = new Map();
   const byTeam = new Map();
   for (const row of stores) {
-    if (row.statusKey === "closed") {
+    if (row.statusKey === "closed" || row.statusKey === "idle" || row.statusKey === "closing") {
       continue;
     }
     const owner = row.owner || "未指定";

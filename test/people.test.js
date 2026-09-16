@@ -138,6 +138,8 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /org-filter-count/);
     assert.match(jsText, /columnValueCounts/);
     assert.match(jsText, /"家店铺"/);
+    assert.match(jsText, /countsInStoreStats/);
+    assert.doesNotMatch(jsText, /\["闲置中", summary.idle\]/);
     assert.match(jsText, /key === "remark"/);
     assert.match(jsText, /org-row-check/);
     assert.match(jsText, /店铺ID/);
@@ -386,6 +388,10 @@ test("org store board lists demo shops and supports add", async () => {
     assert.equal(typeof summaryJson.summary.missingOwner, "number");
     assert.equal(typeof summaryJson.summary.missingStoreId, "number");
     assert.ok(summaryJson.summary.missingStoreId >= 15);
+    assert.equal(summaryJson.summary.total, summaryJson.summary.operating);
+    assert.equal(summaryJson.summary.idle, 0);
+    assert.equal(summaryJson.summary.closing, 0);
+    assert.equal(summaryJson.summary.closed, 0);
 
     const listed = await fetch(`${base}/api/people/org/stores`);
     const listedJson = await listed.json();
@@ -393,6 +399,8 @@ test("org store board lists demo shops and supports add", async () => {
     assert.equal(listedJson.ok, true);
     assert.equal(listedJson.persist, "memory");
     assert.ok(listedJson.stores.length >= 15);
+    assert.ok(listedJson.stores.some((row) => row.statusKey === "idle"));
+    assert.ok(listedJson.stores.length > summaryJson.summary.total);
     assert.ok(listedJson.stores.some((row) => row.storeName === "RASW家居旗舰店"));
     const home = listedJson.stores.find((row) => row.storeName === "RASW家居旗舰店");
     assert.equal(home.director, "罗成");
@@ -692,6 +700,11 @@ test("rights board groups store staff under 总监经理主管运营", async () 
     const hanOps = hanLeads.flatMap((row) => row.children || []);
     assert.ok(hanOps.some((row) => row.name === "陈晓曼"));
     assert.ok(hanOps.every((row) => row.role === "运营" || row.role === "助理"));
+    const flattenStores = (node) =>
+      (node.stores || [])
+        .map((row) => row.storeName)
+        .concat((node.children || []).flatMap(flattenStores));
+    assert.ok(!flattenStores(tree).includes("SAWAA个护健康旗舰店"));
     const watch = data.watch;
     assert.equal(typeof watch.checkedAt, "string");
     assert.ok(watch.kpis.some((item) => item.label === "在营店铺" && item.value >= 15));

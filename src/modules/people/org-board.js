@@ -331,6 +331,10 @@ function addLog(action, detail) {
   logs = logs.slice(0, 80);
 }
 
+export function countsInStoreStats(row = {}) {
+  return String(row.statusKey || "") === "operating";
+}
+
 export const RIGHTS_ROLES = ["总监", "经理", "主管", "储备", "运营", "助理"];
 const DEFAULT_PINS = { 罗成: "总监", 沈子晗: "经理", 韩梦凯: "经理" };
 let rightsPins = { ...DEFAULT_PINS };
@@ -368,7 +372,7 @@ function namesFromStore(row) {
 }
 
 function storeCountOf(name, stores) {
-  return stores.filter((row) => namesFromStore(row).includes(name)).length;
+  return stores.filter((row) => countsInStoreStats(row) && namesFromStore(row).includes(name)).length;
 }
 
 function collectRoster() {
@@ -583,6 +587,9 @@ function buildRightsTree(stores, roster, byName) {
   });
 
   stores.forEach((row) => {
+    if (!countsInStoreStats(row)) {
+      return;
+    }
     const placed = attachLine({
       manager: row.manager,
       supervisor: row.supervisor,
@@ -618,6 +625,9 @@ function buildRightsWatch(stores, roster, byName, tree) {
   const rosterNames = new Set(roster.map((row) => row.name));
   rosterNames.add("罗成");
   stores.forEach((row) => {
+    if (!countsInStoreStats(row)) {
+      return;
+    }
     [
       ["operator", "运营"],
       ["supervisor", "主管/储备"],
@@ -721,6 +731,9 @@ export function listRightsBoard() {
   const roster = collectRoster();
   const names = new Set(Object.keys(rightsPins));
   stores.forEach((row) => {
+    if (!countsInStoreStats(row)) {
+      return;
+    }
     namesFromStore(row).forEach((name) => names.add(name));
   });
   const byName = {};
@@ -814,17 +827,18 @@ export function listTeams() {
 
 export function summarizeOrg(actor) {
   const stores = listOrgStores({}, actor);
+  const counted = stores.filter(countsInStoreStats);
   return {
-    total: stores.length,
-    operating: stores.filter((row) => row.statusKey === "operating").length,
-    idle: stores.filter((row) => row.statusKey === "idle").length,
-    closing: stores.filter((row) => row.statusKey === "closing").length,
-    closed: stores.filter((row) => row.statusKey === "closed").length,
-    missingStoreId: stores.filter((row) => !String(row.storeId || "").trim()).length,
-    missingMerchant: stores.filter((row) => !String(row.merchantId || "").trim()).length,
-    missingLogin: stores.filter((row) => !String(row.login || "").trim()).length,
-    missingPassword: stores.filter((row) => !String(row.password || "").trim()).length,
-    missingOwner: stores.filter((row) => !String(row.operator || row.owner || "").trim()).length
+    total: counted.length,
+    operating: counted.length,
+    idle: 0,
+    closing: 0,
+    closed: 0,
+    missingStoreId: counted.filter((row) => !String(row.storeId || "").trim()).length,
+    missingMerchant: counted.filter((row) => !String(row.merchantId || "").trim()).length,
+    missingLogin: counted.filter((row) => !String(row.login || "").trim()).length,
+    missingPassword: counted.filter((row) => !String(row.password || "").trim()).length,
+    missingOwner: counted.filter((row) => !String(row.operator || row.owner || "").trim()).length
   };
 }
 
