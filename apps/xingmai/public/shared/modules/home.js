@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.554-home-boardcard */
+/* xm-module-home 0.1.567-home-boardcard */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1336,7 +1336,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.554-home-boardcard");
+    board.setAttribute("data-hm-js", "0.1.567-home-boardcard");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
