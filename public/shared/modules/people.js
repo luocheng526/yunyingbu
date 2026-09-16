@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.188-copy-select";
+    const href = "/people.css?v=0.1.189-type-search";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -40,7 +40,8 @@
       "body:has(.xm-shell):has(.people-page) .xm-main{height:100vh;max-height:100vh;overflow-x:hidden!important;overflow-y:auto!important;min-height:0;display:flex;flex-direction:column;}" +
       "body:has(.people-page) .xm-content,#xm-content:has(.people-page){flex:0 0 auto;height:auto;overflow:visible!important;}" +
       ".people-page{overflow:visible;padding-bottom:24px;}" +
-      ".people-page,.people-page table,.people-page th,.people-page td,.people-page .org-cell,.people-page .org-link,.people-page .tag{-webkit-user-select:text!important;user-select:text!important;-webkit-user-drag:none;}" +
+      ".people-page table,.people-page th,.people-page td,.people-page .org-cell,.people-page .org-link,.people-page .tag{-webkit-user-select:text!important;user-select:text!important;-webkit-user-drag:none;}" +
+      ".people-page input,.people-page textarea{-webkit-user-select:text!important;user-select:text!important;-webkit-user-drag:auto;pointer-events:auto!important;}" +
       ".people-page .org-table-wrap{overflow:visible!important;max-height:none!important;}" +
       ".people-page table{border-collapse:separate;border-spacing:0;}" +
       ".people-page th{position:sticky;top:0;z-index:4;background:#fafafa;}";
@@ -537,9 +538,7 @@
       }
 
       function query() {
-        return {
-          q: qInput.value.trim()
-        };
+        return {};
       }
 
       function renderKpis(summary) {
@@ -677,6 +676,40 @@
             return Boolean(picked[cellFilterValue(row, key)]);
           });
         });
+      }
+
+      function applyStoreQuery(stores) {
+        const q = String((qInput && qInput.value) || "")
+          .trim()
+          .toLowerCase();
+        if (!q) {
+          return stores;
+        }
+        return stores.filter(function (row) {
+          const blob = [
+            row.storeName,
+            row.storeId,
+            row.shopId,
+            row.groupId,
+            row.merchantId,
+            row.director,
+            row.manager,
+            row.supervisor,
+            row.operator,
+            row.assistant,
+            row.owner,
+            row.lead,
+            row.chief,
+            row.login
+          ]
+            .join(" ")
+            .toLowerCase();
+          return blob.indexOf(q) >= 0;
+        });
+      }
+
+      function paintStores() {
+        renderStores(applyColumnFilters(applyStoreQuery(rawStores)));
       }
 
       function applyMemberFilters(people) {
@@ -945,7 +978,7 @@
           }
           renderKpis(summaryData.summary);
           rawStores = storeData.stores || [];
-          renderStores(applyColumnFilters(rawStores));
+          paintStores();
           paintFilterCarets();
         });
       }
@@ -1572,7 +1605,7 @@
           peoplePage = 1;
           renderPeople(applyMemberFilters(roster.people));
         } else {
-          renderStores(applyColumnFilters(rawStores));
+          paintStores();
         }
         paintFilterCarets();
         const btn = root.querySelector('.org-filter-btn[data-filter-key="' + key + '"]');
@@ -1586,10 +1619,27 @@
       if (peopleFilterPop) {
         peopleFilterPop.addEventListener("change", onFilterChange);
       }
+      function onStoreQueryType(event) {
+        if (event && (event.isComposing || event.keyCode === 229)) {
+          return;
+        }
+        paintStores();
+      }
+      qInput.addEventListener("input", onStoreQueryType);
+      qInput.addEventListener("compositionend", function () {
+        paintStores();
+      });
+      qInput.addEventListener("search", function () {
+        paintStores();
+      });
+      qInput.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          paintStores();
+        }
+      });
       root.querySelector("#org-search").addEventListener("click", function () {
-        loadBoard().catch(function (err) {
-          showError(errorEl, err.message);
-        });
+        paintStores();
       });
       root.querySelector("#org-add").addEventListener("click", function () {
         openForm(null);
@@ -1776,7 +1826,16 @@
         });
       }
       root.querySelector("#people-search").addEventListener("click", rerenderPeople);
-      root.querySelector("#people-q").addEventListener("keydown", function (event) {
+      const peopleQ = root.querySelector("#people-q");
+      peopleQ.addEventListener("input", function (event) {
+        if (event.isComposing || event.keyCode === 229) {
+          return;
+        }
+        rerenderPeople();
+      });
+      peopleQ.addEventListener("compositionend", rerenderPeople);
+      peopleQ.addEventListener("search", rerenderPeople);
+      peopleQ.addEventListener("keydown", function (event) {
         if (event.key === "Enter") {
           event.preventDefault();
           rerenderPeople();

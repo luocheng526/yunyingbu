@@ -110,6 +110,9 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /keepTableTextSelectable/);
     assert.match(jsText, /user-select:text/);
     assert.match(jsText, /单元格可按住划选后复制/);
+    assert.match(jsText, /applyStoreQuery/);
+    assert.match(jsText, /onStoreQueryType/);
+    assert.match(jsText, /compositionend/);
     assert.match(jsText, /org-filter-count/);
     assert.match(jsText, /columnValueCounts/);
     assert.match(jsText, /"家店铺"/);
