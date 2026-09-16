@@ -378,6 +378,48 @@ test("chief columns follow every org 主管/储备 supervisor including 经理",
   assert.equal(fns.shopOnRoleTeam(shops[4], "潘梦玉", "主管"), true);
 });
 
+test("board puts 业绩排行榜 in a centered card and keeps 04 05 plus manager profit", () => {
+  assert.match(homeJs, /class="xm-hm-ladder-card"/);
+  assert.match(homeJs, /\.xm-hm-ladder-head\{display:flex;justify-content:center/);
+  assert.match(homeJs, /\.xm-hm-ladder-card\{[^}]*font-size:24px/);
+  assert.match(homeJs, /function restRows/);
+  assert.match(homeJs, /while \(out\.length < 2\)/);
+  assert.match(homeJs, /label: "业绩"/);
+  assert.match(homeJs, /label: "利润"/);
+  assert.doesNotMatch(homeJs, /key: "profit",\n        title: "利润排行榜"/);
+  const start = homeJs.indexOf("function standItemHtml");
+  const end = homeJs.indexOf("var LIVE_CARD_KEYS");
+  const fns = new Function(
+    "function escapeHtml(s){return String(s||\"\");}" + homeJs.slice(start, end) + "return {ladderHtml,podiumColumnHtml,restRows};"
+  )();
+  assert.deepEqual(fns.restRows([]).map((row) => row.name), ["—", "—"]);
+  assert.deepEqual(fns.restRows([{ name: "a" }, { name: "b" }, { name: "c" }, { name: "d" }]).map((row) => row.name), ["d", "—"]);
+  const html = fns.ladderHtml({
+    key: "perf",
+    title: "业绩排行榜",
+    unit: "支付金额",
+    columns: [
+      { title: "运营排行榜", rows: [] },
+      { title: "主管排行榜", rows: [] },
+      {
+        title: "经理排行榜",
+        blocks: [
+          { label: "业绩", unit: "支付金额", rows: [{ name: "韩梦凯", amount: "1" }] },
+          { label: "利润", unit: "利润", rows: [{ name: "沈子晗", amount: "2" }] }
+        ]
+      }
+    ]
+  });
+  assert.match(html, /xm-hm-ladder-card">业绩排行榜</);
+  assert.equal(html.includes("<h2>"), false);
+  assert.equal((html.match(/>04</g) || []).length, 4);
+  assert.equal((html.match(/>05</g) || []).length, 4);
+  assert.match(html, /xm-hm-podium-sub">业绩</);
+  assert.match(html, /xm-hm-podium-sub">利润</);
+  assert.match(html, /韩梦凯/);
+  assert.match(html, /沈子晗/);
+});
+
 test("card help uses a body-level tooltip so overflow cannot clip it", () => {
   assert.match(homeJs, /function tipAttr/);
   assert.match(homeJs, /function showCardTip/);

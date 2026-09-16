@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.553-home-teamgutter */
+/* xm-module-home 0.1.554-home-boardcard */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -754,21 +754,27 @@
       "</small></div>"
     );
   }
-  function podiumColumnHtml(column, unit) {
-    var rows = column.rows || [];
-    var first = rows[0] || { name: "—", amount: "—" };
-    var second = rows[1] || { name: "—", amount: "—" };
-    var third = rows[2] || { name: "—", amount: "—" };
-    var rest = rows.slice(3, 10);
+  function restRows(rows) {
+    var rest = (rows || []).slice(3, 10);
+    var out = rest.slice();
+    while (out.length < 2) {
+      out.push({ name: "—", amount: "—" });
+    }
+    return out;
+  }
+  function podiumBodyHtml(rows, unit, label) {
+    var list = rows || [];
+    var first = list[0] || { name: "—", amount: "—" };
+    var second = list[1] || { name: "—", amount: "—" };
+    var third = list[2] || { name: "—", amount: "—" };
     return (
-      '<article class="xm-hm-podium"><h3>' +
-      escapeHtml(column.title) +
-      '</h3><div class="xm-hm-stand">' +
+      (label ? '<h4 class="xm-hm-podium-sub">' + escapeHtml(label) + "</h4>" : "") +
+      '<div class="xm-hm-stand">' +
       standItemHtml(second, 2, unit) +
       standItemHtml(first, 1, unit) +
       standItemHtml(third, 3, unit) +
-      "</div><ol class=\"xm-hm-rest\">" +
-      rest
+      '</div><ol class="xm-hm-rest">' +
+      restRows(list)
         .map(function (row, i) {
           var n = i + 4;
           return (
@@ -782,7 +788,24 @@
           );
         })
         .join("") +
-      "</ol></article>"
+      "</ol>"
+    );
+  }
+  function podiumColumnHtml(column, unit) {
+    var blocks =
+      column.blocks && column.blocks.length
+        ? column.blocks
+        : [{ rows: column.rows || [], unit: unit }];
+    return (
+      '<article class="xm-hm-podium"><h3>' +
+      escapeHtml(column.title) +
+      "</h3>" +
+      blocks
+        .map(function (block) {
+          return podiumBodyHtml(block.rows, block.unit || unit, block.label);
+        })
+        .join("") +
+      "</article>"
     );
   }
   function ladderHtml(ladder) {
@@ -790,9 +813,9 @@
     return (
       '<section class="xm-hm-ladder" data-ladder="' +
       escapeHtml(ladder.key) +
-      '"><h2>' +
+      '"><div class="xm-hm-ladder-head"><div class="xm-hm-ladder-card">' +
       escapeHtml(ladder.title) +
-      '</h2><div class="xm-hm-podiums">' +
+      '</div></div><div class="xm-hm-podiums">' +
       (ladder.columns || [])
         .map(function (column) {
           return podiumColumnHtml(column, unit);
@@ -1148,10 +1171,13 @@
       "[data-show-teams]{border:0;background:0;color:var(--xm-primary);cursor:pointer;padding:0;font-size:13px}" +
       ".xm-hm-drop{width:20px;height:20px;border:1px solid #d96c6c;border-radius:50%;background:#fff;color:#c45656;font-size:16px;line-height:18px;cursor:pointer;padding:0}" +
       ".xm-hm-ladder{margin-top:4px}" +
-      ".xm-hm-ladder h2{margin:16px 0 10px;font-size:16px}" +
-      ".xm-hm-podiums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}" +
+      ".xm-hm-ladder-head{display:flex;justify-content:center;margin:8px 0 16px}" +
+      ".xm-hm-ladder-card{display:inline-flex;align-items:center;justify-content:center;min-width:168px;padding:12px 28px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);font-size:24px;font-weight:700;color:var(--xm-ink);letter-spacing:.04em}" +
+      ".xm-hm-podiums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start}" +
       ".xm-hm-podium{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:12px 12px 8px}" +
       ".xm-hm-podium h3{margin:0 0 10px;text-align:center;font-size:13px;color:var(--xm-muted);font-weight:600}" +
+      ".xm-hm-podium-sub{margin:14px 0 8px;text-align:center;font-size:15px;font-weight:700;color:var(--xm-ink)}" +
+      ".xm-hm-podium-sub:first-of-type{margin-top:0}" +
       ".xm-hm-stand{display:grid;grid-template-columns:1fr 1.15fr 1fr;align-items:end;gap:6px;min-height:168px}" +
       ".xm-hm-stand-item{display:flex;flex-direction:column;align-items:center;text-align:center;background:#f6f1e8;border-radius:8px 8px 0 0;padding:10px 6px 8px}" +
       ".xm-hm-stand-item.is-1{background:#fff4d6;padding-top:16px;min-height:150px}" +
@@ -1310,7 +1336,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.553-home-teamgutter");
+    board.setAttribute("data-hm-js", "0.1.554-home-boardcard");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1647,16 +1673,23 @@
     ];
   }
   function blankLadders() {
-    var cols = [
-      { title: "运营排行榜", rows: [] },
-      { title: "主管排行榜", rows: [] },
-      { title: "经理排行榜", rows: [] }
-    ];
     return [
-      { key: "perf", title: "业绩排行榜", unit: "支付金额", columns: cols },
-      { key: "profit", title: "利润排行榜", unit: "利润", columns: cols.map(function (col) {
-        return { title: col.title, rows: [] };
-      }) }
+      {
+        key: "perf",
+        title: "业绩排行榜",
+        unit: "支付金额",
+        columns: [
+          { title: "运营排行榜", rows: [] },
+          { title: "主管排行榜", rows: [] },
+          {
+            title: "经理排行榜",
+            blocks: [
+              { label: "业绩", unit: "支付金额", rows: [] },
+              { label: "利润", unit: "利润", rows: [] }
+            ]
+          }
+        ]
+      }
     ];
   }
   function erpQuery(from, to) {
@@ -2202,13 +2235,17 @@
         key: "perf",
         title: "业绩排行榜",
         unit: "支付金额",
-        columns: [column("运营排行榜", "运营", "payAmount"), column("主管排行榜", "主管", "payAmount"), column("经理排行榜", "经理", "payAmount")]
-      },
-      {
-        key: "profit",
-        title: "利润排行榜",
-        unit: "利润",
-        columns: [column("运营排行榜", "运营", "profit"), column("主管排行榜", "主管", "profit"), column("经理排行榜", "经理", "profit")]
+        columns: [
+          column("运营排行榜", "运营", "payAmount"),
+          column("主管排行榜", "主管", "payAmount"),
+          {
+            title: "经理排行榜",
+            blocks: [
+              { label: "业绩", unit: "支付金额", rows: column("经理排行榜", "经理", "payAmount").rows },
+              { label: "利润", unit: "利润", rows: column("经理排行榜", "经理", "profit").rows }
+            ]
+          }
+        ]
       }
     ];
   }
