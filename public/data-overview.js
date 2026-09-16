@@ -397,7 +397,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov33";
+      link.href = "/data-pages.css?v=data-ov34";
       document.head.appendChild(link);
     }
     ensureCardTypeStyle();
@@ -637,8 +637,7 @@
       const yest = shanghaiYmd(-1);
       return { from: yest, to: yest, dateLabel: cnDateLabel(yest) };
     } else if (label === "周") {
-      const day = from.getDay() || 7;
-      from.setDate(from.getDate() - day + 1);
+      from.setDate(from.getDate() - from.getDay());
     } else if (label === "月") {
       from.setDate(1);
     } else if (label === "年") {

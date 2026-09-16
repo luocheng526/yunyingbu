@@ -264,13 +264,13 @@
     "td button.is-today{color:#cf1322;font-weight:600}" +
     "td button.is-in{background:#fff1f0;color:#c62828}" +
     "td button.is-start,td button.is-end{background:#c62828;color:#fff}" +
-    ".ch-cal.is-weeks tr:hover td button:not(:disabled){background:#e6efff;color:#2f54eb}" +
-    ".ch-cal.is-weeks tr.is-week td button{background:#2f54eb;color:#fff}" +
-    ".ch-cal.is-months{width:300px;border:2px solid #2f54eb}" +
-    ".ch-cal-months{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 8px 16px}" +
-    ".ch-cal-months button{height:36px;border:1px solid #f0f0f0;background:#fff;cursor:pointer}" +
-    ".ch-cal-months button.is-start{background:#2f54eb;color:#fff}" +
-    ".ch-cal-months button:disabled{color:#bfbfbf;cursor:default}";
+    ".ch-cal.is-weeks tr:hover td button:not(:disabled){background:#e6f4ff;color:#1677ff}" +
+    ".ch-cal.is-weeks tr.is-week td button{background:#1677ff;color:#fff}" +
+    ".ch-cal.is-months{width:280px;border:0}" +
+    ".ch-cal-months{display:grid;grid-template-columns:repeat(4,1fr);gap:16px 4px;padding:20px 12px 24px}" +
+    ".ch-cal-months button{height:32px;border:0;border-radius:16px;background:transparent;cursor:pointer}" +
+    ".ch-cal-months button.is-start{background:#1677ff;color:#fff}" +
+    ".ch-cal-months button:disabled{color:#d9d9d9;cursor:default}";
 
   function shopNameOf(item) {
     if (!item) {
@@ -471,15 +471,11 @@
   function weekBounds(day) {
     const parts = String(day || "").split("-").map(Number);
     const utc = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
-    let wd = utc.getUTCDay();
-    if (wd === 0) {
-      wd = 7;
-    }
-    const mon = new Date(utc);
-    mon.setUTCDate(utc.getUTCDate() - wd + 1);
-    const sun = new Date(mon);
-    sun.setUTCDate(mon.getUTCDate() + 6);
-    return { from: mon.toISOString().slice(0, 10), to: sun.toISOString().slice(0, 10) };
+    const sun = new Date(utc);
+    sun.setUTCDate(utc.getUTCDate() - utc.getUTCDay());
+    const sat = new Date(sun);
+    sat.setUTCDate(sun.getUTCDate() + 6);
+    return { from: sun.toISOString().slice(0, 10), to: sat.toISOString().slice(0, 10) };
   }
 
   function monthBounds(ym) {
@@ -531,10 +527,12 @@
     return n < 10 ? "0" + n : String(n);
   }
 
-  function monthCells(year, month) {
+  function monthCells(year, month, sunFirst) {
     const first = new Date(year, month, 1);
     let lead = first.getDay();
-    lead = lead === 0 ? 6 : lead - 1;
+    if (!sunFirst) {
+      lead = lead === 0 ? 6 : lead - 1;
+    }
     const days = new Date(year, month + 1, 0).getDate();
     const cells = [];
     for (let i = lead; i > 0; i -= 1) {
@@ -554,13 +552,13 @@
   function monthCal(year, month, from, to, today, side, weekMode) {
     const weekHead =
       "<tr>" +
-      ["一", "二", "三", "四", "五", "六", "日"]
+      (weekMode ? ["日", "一", "二", "三", "四", "五", "六"] : ["一", "二", "三", "四", "五", "六", "日"])
         .map(function (name) {
           return "<th>" + name + "</th>";
         })
         .join("") +
       "</tr>";
-    const cells = monthCells(year, month);
+    const cells = monthCells(year, month, weekMode);
     let rows = "";
     for (let i = 0; i < cells.length; i += 7) {
       const slice = cells.slice(i, i + 7);
@@ -639,7 +637,7 @@
         (ym > nowYm ? " disabled" : "") +
         (ym === hit ? ' class="is-start"' : "") +
         ">" +
-        m +
+        ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "十二"][m - 1] +
         "月</button>";
     }
     return (
