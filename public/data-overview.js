@@ -1,7 +1,7 @@
 (function () {
   window.XmModules = window.XmModules || {};
 
-  var RANGES = ["7天", "30天", "日", "周", "月", "年", "自定义"];
+  var RANGES = ["日", "周", "月", "年", "自定义"];
   var SECTIONS = ["渠道列表", "店铺分组", "经营数据", "竞对对比", "品类分析", "热销商品"];
   var TABLE_COLS = [
     "实时销售额 (支付)",
@@ -368,7 +368,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov31";
+      link.href = "/data-pages.css?v=data-ov32";
       document.head.appendChild(link);
     }
     ensureCardTypeStyle();
@@ -604,9 +604,7 @@
     if ((label === "周" || label === "月" || label === "自定义") && customFrom && customTo) {
       return { from: customFrom, to: customTo, dateLabel: customFrom.replaceAll("-", "/") + " - " + customTo.replaceAll("-", "/") };
     }
-    if (label === "30天") {
-      from.setDate(from.getDate() - 29);
-    } else if (label === "日") {
+    if (label === "日") {
       const yest = shanghaiYmd(-1);
       return { from: yest, to: yest, dateLabel: cnDateLabel(yest) };
     } else if (label === "周") {
@@ -1450,100 +1448,8 @@
     return { year: next.getFullYear(), month: next.getMonth() };
   }
 
-  function monthCells(year, month) {
-    const first = new Date(year, month, 1);
-    let lead = first.getDay();
-    lead = lead === 0 ? 6 : lead - 1;
-    const days = new Date(year, month + 1, 0).getDate();
-    const cells = [];
-    const prevDays = new Date(year, month, 0).getDate();
-    for (let i = lead; i > 0; i -= 1) {
-      const dt = new Date(year, month, 1 - i);
-      cells.push({ y: dt.getFullYear(), m: dt.getMonth(), d: dt.getDate(), out: true });
-    }
-    for (let d = 1; d <= days; d += 1) {
-      cells.push({ y: year, m: month, d: d, out: false });
-    }
-    while (cells.length < 42) {
-      const dt = new Date(year, month, days + (cells.length - lead - days) + 1);
-      cells.push({ y: dt.getFullYear(), m: dt.getMonth(), d: dt.getDate(), out: true });
-    }
-    return cells;
-  }
-
-  function dayOverLimit(from, to, value) {
-    return Boolean(from && !to && inclusiveDays(from, value) > 30);
-  }
-
   function calendarMonthHtml(year, month, from, to, today, side, noLimit) {
-    const week =
-      "<tr>" +
-      ["一", "二", "三", "四", "五", "六", "日"]
-        .map(function (name) {
-          return "<th>" + name + "</th>";
-        })
-        .join("") +
-      "</tr>";
-    const cells = monthCells(year, month);
-    let rows = "";
-    for (let i = 0; i < cells.length; i += 7) {
-      rows +=
-        "<tr>" +
-        cells
-          .slice(i, i + 7)
-          .map(function (cell) {
-            const value = cell.y + "-" + pad(cell.m + 1) + "-" + pad(cell.d);
-            const future = value > today;
-            const over = !noLimit && dayOverLimit(from, to, value);
-            const blocked = future || over;
-            const cls = [
-              cell.out ? "is-out" : "",
-              future ? "is-future" : "",
-              over ? "is-over" : "",
-              !blocked && value === today ? "is-today" : "",
-              from && to && value >= from && value <= to ? "is-in" : "",
-              value === from ? "is-start" : "",
-              value === to ? "is-end" : ""
-            ]
-              .filter(Boolean)
-              .join(" ");
-            return (
-              "<td><button type=\"button\" data-day=\"" +
-              value +
-              "\"" +
-              (blocked ? " disabled" : "") +
-              (cls ? ' class="' + cls + '"' : "") +
-              ">" +
-              cell.d +
-              "</button></td>"
-            );
-          })
-          .join("") +
-        "</tr>";
-    }
-    const leftNav =
-      side === "left"
-        ? '<button type="button" data-cal="prev-year" aria-label="上一年">«</button><button type="button" data-cal="prev-month" aria-label="上一月">‹</button>'
-        : "";
-    const rightNav =
-      side === "right"
-        ? '<button type="button" data-cal="next-month" aria-label="下一月">›</button><button type="button" data-cal="next-year" aria-label="下一年">»</button>'
-        : "";
-    return (
-      '<div class="ch-cal-month"><div class="ch-cal-head">' +
-      leftNav +
-      "<strong>" +
-      year +
-      "年" +
-      (month + 1) +
-      "月</strong>" +
-      rightNav +
-      "</div><table><thead>" +
-      week +
-      "</thead><tbody class=\"ch-cal-days\">" +
-      rows +
-      "</tbody></table></div>"
-    );
+    return window.XmDataOps.monthCal(year, month, from, to, today, side, noLimit);
   }
 
   function calendarYearHtml(year, selected) {
@@ -1559,7 +1465,9 @@
     const right = shiftMonth(state.calYear, state.calMonth, 1);
     const week = state.range === "周";
     return (
-      '<div class="ch-cal" data-calendar="1">' +
+      '<div class="ch-cal' +
+      (week ? " is-weeks" : "") +
+      '" data-calendar="1">' +
       calendarMonthHtml(left.year, left.month, state.customFrom, state.customTo, today, "left", week) +
       calendarMonthHtml(right.year, right.month, state.customFrom, state.customTo, today, "right", week) +
       "</div>"
@@ -2299,7 +2207,7 @@
     function placeCalPop(anchor) {
       const pop = getCalPop();
       const box = anchor.getBoundingClientRect();
-      const width = Math.min(560, window.innerWidth - 24);
+      const width = Math.min(state.range === "月" ? 300 : 560, window.innerWidth - 24);
       let left = box.right - width;
       if (left < 12) {
         left = 12;
@@ -2390,9 +2298,10 @@
       }
       pop.shadowRoot.innerHTML = "<style>" + CAL_SHADOW_CSS + "</style>" + calendarPanel(state);
       pop.classList.add("is-open");
-      pop.style.width = "560px";
-      pop.style.minWidth = "560px";
-      const btn = board.querySelector('button[data-range="自定义"]');
+      const monthPick = state.range === "月";
+      pop.style.width = monthPick ? "300px" : "560px";
+      pop.style.minWidth = monthPick ? "300px" : "560px";
+      const btn = board.querySelector('button[data-range="' + state.range + '"]');
       if (btn) {
         placeCalPop(btn);
       }
@@ -2632,7 +2541,11 @@
       if (!state.calOpen || dead) {
         return;
       }
-      if (t && t.closest && (t.closest("#ch-cal-pop") || t.closest('button[data-range="自定义"]'))) {
+      if (
+        t &&
+        t.closest &&
+        (t.closest("#ch-cal-pop") || t.closest('button[data-range="自定义"],button[data-range="周"],button[data-range="月"]'))
+      ) {
         return;
       }
       state.calOpen = false;
@@ -2646,7 +2559,7 @@
       if (!state.calOpen) {
         return;
       }
-      const btn = board && board.querySelector('button[data-range="自定义"]');
+      const btn = board && board.querySelector('button[data-range="' + state.range + '"]');
       if (btn) {
         placeCalPop(btn);
       }
@@ -2760,6 +2673,10 @@
         const next = rangeBtn.getAttribute("data-range");
         if (next === "自定义" || next === "周" || next === "月") {
           setWait(false);
+          if (state.range !== next) {
+            state.customFrom = "";
+            state.customTo = "";
+          }
           state.calOpen = !state.calOpen || state.range !== next;
           state.range = next;
           render();

@@ -264,9 +264,12 @@
     "td button.is-today{color:#cf1322;font-weight:600}" +
     "td button.is-in{background:#fff1f0;color:#c62828}" +
     "td button.is-start,td button.is-end{background:#c62828;color:#fff}" +
+    ".ch-cal.is-weeks tr:hover td button:not(:disabled){background:#e6efff;color:#2f54eb}" +
+    ".ch-cal.is-weeks tr.is-week td button{background:#2f54eb;color:#fff}" +
+    ".ch-cal.is-months{width:300px;border:2px solid #2f54eb}" +
     ".ch-cal-months{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 8px 16px}" +
     ".ch-cal-months button{height:36px;border:1px solid #f0f0f0;background:#fff;cursor:pointer}" +
-    ".ch-cal-months button.is-start{background:#c62828;color:#fff}" +
+    ".ch-cal-months button.is-start{background:#2f54eb;color:#fff}" +
     ".ch-cal-months button:disabled{color:#bfbfbf;cursor:default}";
 
   function shopNameOf(item) {
@@ -503,6 +506,106 @@
     );
   }
 
+  function p2(n) {
+    return n < 10 ? "0" + n : String(n);
+  }
+
+  function monthCells(year, month) {
+    const first = new Date(year, month, 1);
+    let lead = first.getDay();
+    lead = lead === 0 ? 6 : lead - 1;
+    const days = new Date(year, month + 1, 0).getDate();
+    const cells = [];
+    for (let i = lead; i > 0; i -= 1) {
+      const dt = new Date(year, month, 1 - i);
+      cells.push({ y: dt.getFullYear(), m: dt.getMonth(), d: dt.getDate(), out: true });
+    }
+    for (let d = 1; d <= days; d += 1) {
+      cells.push({ y: year, m: month, d: d, out: false });
+    }
+    while (cells.length < 42) {
+      const dt = new Date(year, month, days + (cells.length - lead - days) + 1);
+      cells.push({ y: dt.getFullYear(), m: dt.getMonth(), d: dt.getDate(), out: true });
+    }
+    return cells;
+  }
+
+  function monthCal(year, month, from, to, today, side, weekMode) {
+    const weekHead =
+      "<tr>" +
+      ["一", "二", "三", "四", "五", "六", "日"]
+        .map(function (name) {
+          return "<th>" + name + "</th>";
+        })
+        .join("") +
+      "</tr>";
+    const cells = monthCells(year, month);
+    let rows = "";
+    for (let i = 0; i < cells.length; i += 7) {
+      const slice = cells.slice(i, i + 7);
+      const mon = slice[0];
+      const monVal = mon.y + "-" + p2(mon.m + 1) + "-" + p2(mon.d);
+      const weekOn = weekMode && from && to && weekBounds(monVal).from === from;
+      rows +=
+        "<tr" +
+        (weekOn ? ' class="is-week"' : "") +
+        ">" +
+        slice
+          .map(function (cell) {
+            const value = cell.y + "-" + p2(cell.m + 1) + "-" + p2(cell.d);
+            const future = value > today;
+            const over =
+              !weekMode &&
+              from &&
+              !to &&
+              Math.round(Math.abs(Date.parse(value + "T00:00:00+08:00") - Date.parse(from + "T00:00:00+08:00")) / 86400000) + 1 > 30;
+            const blocked = future || over;
+            const cls = [
+              cell.out ? "is-out" : "",
+              future ? "is-future" : "",
+              over ? "is-over" : "",
+              !blocked && value === today ? "is-today" : "",
+              from && to && value >= from && value <= to ? "is-in" : "",
+              !weekMode && value === from ? "is-start" : "",
+              !weekMode && value === to ? "is-end" : ""
+            ]
+              .filter(Boolean)
+              .join(" ");
+            return (
+              '<td><button type="button" data-day="' +
+              value +
+              '"' +
+              (blocked ? " disabled" : "") +
+              (cls ? ' class="' + cls + '"' : "") +
+              ">" +
+              cell.d +
+              "</button></td>"
+            );
+          })
+          .join("") +
+        "</tr>";
+    }
+    return (
+      '<div class="ch-cal-month"><div class="ch-cal-head">' +
+      (side === "left"
+        ? '<button type="button" data-cal="prev-year" aria-label="上一年">«</button><button type="button" data-cal="prev-month" aria-label="上一月">‹</button>'
+        : "") +
+      "<strong>" +
+      year +
+      "年" +
+      (month + 1) +
+      "月</strong>" +
+      (side === "right"
+        ? '<button type="button" data-cal="next-month" aria-label="下一月">›</button><button type="button" data-cal="next-year" aria-label="下一年">»</button>'
+        : "") +
+      '</div><table><thead>' +
+      weekHead +
+      '</thead><tbody class="ch-cal-days">' +
+      rows +
+      "</tbody></table></div>"
+    );
+  }
+
   function yearCal(year, selected, nowYm) {
     const hit = String(selected || "").slice(0, 7);
     let cells = "";
@@ -540,6 +643,7 @@
     weekBounds: weekBounds,
     monthBounds: monthBounds,
     yearCal: yearCal,
+    monthCal: monthCal,
     teamMenu: teamMenu
   };
 })();
