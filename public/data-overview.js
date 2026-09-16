@@ -312,7 +312,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov17";
+      link.href = "/data-pages.css?v=data-ov18";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -374,7 +374,15 @@
       ".ch-card .label{display:flex;align-items:center;justify-content:space-between;gap:8px}" +
       ".ch-help{flex:none;width:16px;height:16px;border:1px solid var(--xm-line,#d9d9d9);border-radius:3px;background:#fff;color:#8c8c8c;font-size:11px;line-height:14px;cursor:help;padding:0}" +
       ".ch-tip{position:fixed;z-index:4300;max-width:320px;padding:10px 12px;background:#fff;border:1px solid #f0f0f0;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.12);color:#262626;font-size:12px;line-height:1.6;white-space:pre-wrap;display:none}" +
-      ".ch-tip.is-on{display:block}";
+      ".ch-tip.is-on{display:block}" +
+      ".ch-shop-pick{position:relative;display:inline-block;min-width:160px}" +
+      ".ch-shop-pick-btn{display:block;width:100%;height:26px;padding:0 24px 0 8px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;color:#262626;font-size:12px;text-align:left;cursor:pointer}" +
+      ".ch-shop-pick-btn:after{content:'';position:absolute;right:8px;top:11px;border:4px solid transparent;border-top-color:#8c8c8c}" +
+      ".ch-shop-menu{display:none;position:absolute;z-index:80;top:28px;left:0;min-width:220px;max-height:280px;overflow:auto;padding:6px 0;background:#fff;border:1px solid #f0f0f0;border-radius:4px;box-shadow:0 8px 24px rgba(0,0,0,.12)}" +
+      ".ch-shop-pick.is-open .ch-shop-menu{display:block}" +
+      ".ch-shop-opt{display:flex;align-items:center;gap:8px;margin:0;padding:5px 12px;color:#262626;font-size:13px;cursor:pointer;white-space:nowrap}" +
+      ".ch-shop-opt:hover{background:#f5f8ff}" +
+      ".ch-shop-opt input{flex:none;width:14px;height:14px;margin:0;accent-color:#2f54eb}";
     document.head.appendChild(style);
   }
 
@@ -1391,6 +1399,8 @@
       customFrom: "",
       customTo: "",
       shopId: "",
+      shopIds: null,
+      shopPickOpen: false,
       section: "渠道列表",
       payload: null,
       calOpen: false,
@@ -1403,6 +1413,7 @@
     };
     let dead = false;
     let tipEl = null;
+    let shopMenuScroll = 0;
 
     function hideMetricTip() {
       if (tipEl) {
@@ -1643,14 +1654,90 @@
       paintPicker();
     }
 
+    function allShopIds(payload) {
+      return ((payload && payload.shops) || []).map(function (shop) {
+        return shop.shopId;
+      }).filter(Boolean);
+    }
+
+    function selectedShopIds(payload) {
+      if (state.shopIds == null) {
+        return allShopIds(payload);
+      }
+      return state.shopIds.slice();
+    }
+
+    function isAllShops(payload) {
+      const all = allShopIds(payload);
+      return state.shopIds == null || (all.length > 0 && state.shopIds.length === all.length);
+    }
+
+    function shopPickLabel(payload) {
+      const shops = (payload && payload.shops) || [];
+      const ids = selectedShopIds(payload);
+      if (isAllShops(payload)) {
+        return "全选";
+      }
+      if (!ids.length) {
+        return "请选择店铺";
+      }
+      if (ids.length === 1) {
+        const hit = shops.find(function (shop) {
+          return shop.shopId === ids[0];
+        });
+        return hit ? hit.shopName : "已选1家";
+      }
+      return "已选" + ids.length + "家";
+    }
+
+    function shopPickHtml(payload) {
+      const shops = (payload && payload.shops) || [];
+      const ids = selectedShopIds(payload);
+      const allOn = isAllShops(payload);
+      const items =
+        '<label class="ch-shop-opt"><input type="checkbox" data-shop-all' +
+        (allOn ? " checked" : "") +
+        ">全选</label>" +
+        shops
+          .map(function (shop) {
+            const on = allOn || ids.indexOf(shop.shopId) >= 0;
+            return (
+              '<label class="ch-shop-opt"><input type="checkbox" data-shop-id="' +
+              escapeHtml(shop.shopId) +
+              '"' +
+              (on ? " checked" : "") +
+              ">" +
+              escapeHtml(shop.shopName) +
+              "</label>"
+            );
+          })
+          .join("");
+      return (
+        '<div class="ch-shop-pick' +
+        (state.shopPickOpen ? " is-open" : "") +
+        '" data-shop-pick><button type="button" class="ch-shop-pick-btn" data-shop-pick-toggle>' +
+        escapeHtml(shopPickLabel(payload)) +
+        '</button><div class="ch-shop-menu">' +
+        items +
+        "</div></div>"
+      );
+    }
+
     function filteredPayload() {
       const payload = state.payload;
-      if (!payload || !state.shopId) {
+      if (!payload) {
         return payload;
       }
+      if (isAllShops(payload)) {
+        return payload;
+      }
+      const allow = {};
+      selectedShopIds(payload).forEach(function (id) {
+        allow[id] = true;
+      });
       const shopTable = payload.shopTable || {};
       const rows = (shopTable.rows || []).filter(function (row) {
-        return row.kind === "sum" || row.shopId === state.shopId;
+        return row.kind === "sum" || allow[row.shopId];
       });
       return Object.assign({}, payload, {
         shopTable: Object.assign({}, shopTable, { rows: rows })
@@ -1739,26 +1826,10 @@
           "</button>"
         );
       }).join("");
-      const shopOpts =
-        '<option value="">全选</option>' +
-        ((payload.shops || []).map(function (shop) {
-          return (
-            '<option value="' +
-            escapeHtml(shop.shopId) +
-            '"' +
-            (shop.shopId === state.shopId ? " selected" : "") +
-            ">" +
-            escapeHtml(shop.shopName) +
-            "</option>"
-          );
-        }).join(""));
       const lists =
         state.section === "渠道列表"
           ? tableHtml(payload.channelTable) +
-            tableHtml(
-              payload.shopTable,
-              '<label class="ch-pick"><select data-shop>' + shopOpts + "</select></label>"
-            )
+            tableHtml(payload.shopTable, '<label class="ch-pick">' + shopPickHtml(state.payload) + "</label>")
           : '<p class="ch-empty">「' + escapeHtml(state.section) + "」为示例，尚未接入。</p>";
       board.innerHTML =
         '<div class="ch-top"><div class="ch-title">数据总览</div>' +
@@ -1787,6 +1858,10 @@
         paintPicker();
       }
       paintSparkSvg(board.querySelector(".ch-hero .ch-spark"), hero);
+      const menu = board.querySelector(".ch-shop-menu");
+      if (menu && state.shopPickOpen) {
+        menu.scrollTop = shopMenuScroll;
+      }
     }
 
     function placeCalPop(anchor) {
@@ -2037,10 +2112,22 @@
     }
 
     function onDocClick(event) {
+      const t = event.target;
+      const shopEl = t && t.nodeType === 1 ? t : t && t.parentElement;
+      const inShopPick =
+        shopEl &&
+        ((shopEl.matches &&
+          shopEl.matches("[data-shop-pick], [data-shop-pick-toggle], [data-shop-all], [data-shop-id], .ch-shop-opt, .ch-shop-menu")) ||
+          (shopEl.closest && shopEl.closest("[data-shop-pick], .ch-shop-opt")));
+      if (state.shopPickOpen && !inShopPick) {
+        state.shopPickOpen = false;
+        if (state.payload) {
+          render();
+        }
+      }
       if (!state.calOpen || dead) {
         return;
       }
-      const t = event.target;
       if (t && t.closest && (t.closest("#ch-cal-pop") || t.closest('button[data-range="自定义"]'))) {
         return;
       }
@@ -2109,6 +2196,16 @@
         showMetricTip(help);
         return;
       }
+      const shopToggle = event.target.closest("[data-shop-pick-toggle]");
+      if (shopToggle) {
+        event.preventDefault();
+        state.shopPickOpen = !state.shopPickOpen;
+        const wrap = board.querySelector("[data-shop-pick]");
+        if (wrap) {
+          wrap.classList.toggle("is-open", state.shopPickOpen);
+        }
+        return;
+      }
       const setBtn = event.target.closest("[data-metrics='open'], .ch-set");
       if (setBtn) {
         event.preventDefault();
@@ -2141,6 +2238,36 @@
     board.addEventListener("change", function (event) {
       if (event.target.matches("[data-shop]")) {
         state.shopId = event.target.value;
+        state.shopIds = event.target.value ? [event.target.value] : null;
+        render();
+        return;
+      }
+      const menu = board.querySelector(".ch-shop-menu");
+      if (menu) {
+        shopMenuScroll = menu.scrollTop;
+      }
+      if (event.target.matches("[data-shop-all]")) {
+        state.shopIds = event.target.checked ? null : [];
+        state.shopPickOpen = true;
+        render();
+        return;
+      }
+      if (event.target.matches("[data-shop-id]")) {
+        const id = event.target.getAttribute("data-shop-id") || "";
+        const all = allShopIds(state.payload);
+        let cur = selectedShopIds(state.payload);
+        if (event.target.checked) {
+          if (cur.indexOf(id) < 0) {
+            cur.push(id);
+          }
+        } else {
+          cur = cur.filter(function (item) {
+            return item !== id;
+          });
+        }
+        state.shopIds = cur.length === all.length ? null : cur;
+        state.shopId = cur.length === 1 ? cur[0] : "";
+        state.shopPickOpen = true;
         render();
       }
     });

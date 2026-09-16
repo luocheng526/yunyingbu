@@ -717,6 +717,71 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
   color: var(--ch-ink);
   border-color: var(--ch-line);
 }
+.ch-shop-pick {
+  position: relative;
+  display: inline-block;
+  min-width: 160px;
+}
+.ch-shop-pick-btn {
+  display: block;
+  width: 100%;
+  height: 26px;
+  padding: 0 24px 0 8px;
+  border: 1px solid var(--ch-line, #d9d9d9);
+  border-radius: 4px;
+  background: var(--ch-card, #fff);
+  color: var(--ch-ink, #262626);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.ch-shop-pick-btn:after {
+  content: "";
+  position: absolute;
+  right: 8px;
+  top: 11px;
+  border: 4px solid transparent;
+  border-top-color: #8c8c8c;
+}
+.ch-shop-menu {
+  display: none;
+  position: absolute;
+  z-index: 80;
+  top: 28px;
+  left: 0;
+  min-width: 220px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 6px 0;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.ch-shop-pick.is-open .ch-shop-menu {
+  display: block;
+}
+.ch-shop-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 5px 12px;
+  color: #262626;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ch-shop-opt:hover {
+  background: #f5f8ff;
+}
+.ch-shop-opt input {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #2f54eb;
+}
 .ch-zero {
   display: inline-flex;
   align-items: center;
