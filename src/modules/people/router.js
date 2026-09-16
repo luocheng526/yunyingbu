@@ -133,6 +133,7 @@ peopleRouter.get("/org/stores/template", (_req, res) => {
     "罗成",
     "沈子晗",
     "",
+    "",
     "示例运营",
     "",
     "示例运营",

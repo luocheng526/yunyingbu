@@ -8,6 +8,14 @@
       .replaceAll('"', "&quot;");
   }
 
+  function blankStaffName(value) {
+    const raw = String(value == null ? "" : value).trim();
+    if (!raw || raw === "—" || raw === "-" || raw === "点击填写" || raw === "无") {
+      return "";
+    }
+    return raw;
+  }
+
   function pinCellBox(td) {
     const rect = td.getBoundingClientRect();
     td.classList.add("is-editing");
@@ -83,7 +91,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.202-cell-box";
+    const href = "/people.css?v=0.1.203-empty-dash";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -201,7 +209,8 @@
         '<th class="org-check"><input type="checkbox" id="org-check-all" title="全选本筛" /></th>' +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="director"><span class="org-filter-name">总监</span><span class="org-filter-caret">▾</span></button></th>' +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="manager"><span class="org-filter-name">经理</span><span class="org-filter-caret">▾</span></button></th>' +
-        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="supervisor"><span class="org-filter-name">主管/储备</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="supervisor"><span class="org-filter-name">主管</span><span class="org-filter-caret">▾</span></button></th>' +
+        '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="reserve"><span class="org-filter-name">储备</span><span class="org-filter-caret">▾</span></button></th>' +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="operator"><span class="org-filter-name">运营</span><span class="org-filter-caret">▾</span></button></th>' +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="assistant"><span class="org-filter-name">助理</span><span class="org-filter-caret">▾</span></button></th>' +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="storeName"><span class="org-filter-name">店铺名称</span><span class="org-filter-caret">▾</span></button></th>' +
@@ -276,8 +285,9 @@
         '<div class="org-grid">' +
         '<label>总监<input name="director" required /></label>' +
         '<label>经理<input name="manager" required /></label>' +
-        '<label>主管/储备<input name="supervisor" /></label>' +
-        '<label>运营<input name="operator" required /></label>' +
+        '<label>主管<input name="supervisor" /></label>' +
+        '<label>储备<input name="reserve" /></label>' +
+        '<label>运营<input name="operator" /></label>' +
         '<label>助理<input name="assistant" /></label>' +
         '<label>店铺名称<input name="storeName" required /></label>' +
         '<label>店铺ID<input name="storeId" /></label>' +
@@ -395,6 +405,7 @@
         { key: "director", type: "text" },
         { key: "manager", type: "text" },
         { key: "supervisor", type: "text" },
+        { key: "reserve", type: "text" },
         { key: "operator", type: "text" },
         { key: "assistant", type: "text" },
         { key: "storeName", type: "text" },
@@ -410,7 +421,8 @@
       const STORE_HEADERS = [
         "总监",
         "经理",
-        "主管/储备",
+        "主管",
+        "储备",
         "运营",
         "助理",
         "小组ID",
@@ -427,6 +439,7 @@
         "director",
         "manager",
         "supervisor",
+        "reserve",
         "operator",
         "assistant",
         "groupId",
@@ -496,9 +509,9 @@
         const aliases = {
           总监: "总监",
           经理: "经理",
-          "主管/储备": "主管/储备",
-          主管: "主管/储备",
-          储备: "主管/储备",
+          "主管/储备": "主管",
+          主管: "主管",
+          储备: "储备",
           运营: "运营",
           助理: "助理",
           小组ID: "小组ID",
@@ -746,12 +759,9 @@
           return '<span class="' + tagClass(row.statusKey) + '">' + escapeHtml(raw || "—") + "</span>";
         }
         if (field.key === "storeName") {
-          return '<span class="org-link">' + escapeHtml(raw || "点击填写") + "</span>";
+          return '<span class="org-link">' + escapeHtml(blankStaffName(raw) || "—") + "</span>";
         }
-        if (field.key === "operator") {
-          return escapeHtml(raw || "点击填写");
-        }
-        return escapeHtml(raw || (field.key === "closedOn" || field.key === "updatedOn" ? "—" : "点击填写"));
+        return escapeHtml(blankStaffName(raw) || "—");
       }
 
       function cellFilterValue(row, key) {
@@ -1066,7 +1076,7 @@
           (qLabel ? " · 搜「" + qLabel + "」" : "");
         root.querySelector("#org-add").hidden = !boardMeta.canCreate;
         if (!stores.length) {
-          tbody.innerHTML = '<tr><td colspan="13" class="org-empty">暂无店铺</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="14" class="org-empty">暂无店铺</td></tr>';
           syncCheckAll();
           return;
         }
@@ -1115,6 +1125,7 @@
         form.director.value = row && row.director ? row.director : "罗成";
         form.manager.value = row ? row.manager || "" : "";
         form.supervisor.value = row ? row.supervisor || "" : "";
+        form.reserve.value = row ? row.reserve || "" : "";
         form.operator.value = row ? row.operator || row.owner || "" : "";
         form.assistant.value = row ? row.assistant || "" : "";
         form.storeName.value = row ? row.storeName : "";
@@ -1186,6 +1197,10 @@
           if (!result.res.ok || !result.data.ok) {
             throw new Error(result.data.error || "保存失败");
           }
+          const echoed = result.data.store || {};
+          if (String(blankStaffName(echoed[field])) !== String(blankStaffName(value)) && field !== "remark") {
+            throw new Error("保存失败，服务端未写入" + field);
+          }
           return loadBoard();
         });
       }
@@ -1202,7 +1217,7 @@
         if (!id || !field || !row || !row.canEdit) {
           return;
         }
-        const current = row[field] || "";
+        const current = field === "remark" ? row[field] || "" : blankStaffName(row[field]);
         pinCellBox(td);
         if (field === "remark") {
           const select = document.createElement("select");
@@ -1284,7 +1299,7 @@
           '" title="' +
           (canEdit ? "双击修改，点别处保存" : "仅罗成、韩梦凯、沈子晗能改") +
           '">' +
-          escapeHtml(value || "—") +
+          escapeHtml(blankStaffName(value) || "—") +
           "</td>"
         );
       }
@@ -1599,13 +1614,14 @@
           })
           .join("");
         const isReserve = lead.role === "储备";
+        const emptyLead = lead.synthetic || !lead.name;
         return (
           '<div class="rights-mod-lead">' +
           '<div class="rights-mod-lead-seat">' +
-          (isReserve ? renderRightsModEmpty("—") : renderRightsModCard(lead.role || "主管", lead.name)) +
+          (emptyLead || isReserve ? renderRightsModEmpty("—") : renderRightsModCard(lead.role || "主管", lead.name)) +
           "</div>" +
           '<div class="rights-mod-lead-seat">' +
-          (isReserve ? renderRightsModCard("储备", lead.name) : renderRightsModEmpty("—")) +
+          (!emptyLead && isReserve ? renderRightsModCard("储备", lead.name) : renderRightsModEmpty("—")) +
           "</div>" +
           '<div class="rights-mod-chain">' +
           rows +
@@ -1614,12 +1630,26 @@
       }
 
       function renderRightsManagerBand(manager) {
-        const leads = (manager.children || []).filter(function (child) {
+        const kids = manager.children || [];
+        const leads = kids.filter(function (child) {
           return rightsIsLead(child.role) || child.synthetic;
         });
-        const boxes = leads.length
-          ? leads.map(renderRightsLeadBox).join("")
-          : renderRightsLeadBox({ name: "未指定主管/储备", role: "主管", children: [], stores: [], synthetic: true });
+        const direct = kids.filter(function (child) {
+          return !rightsIsLead(child.role) && !child.synthetic;
+        });
+        let boxes = leads.map(renderRightsLeadBox).join("");
+        if (direct.length || (manager.stores || []).length) {
+          boxes += renderRightsLeadBox({
+            name: "",
+            role: "主管",
+            synthetic: true,
+            children: direct,
+            stores: manager.stores || []
+          });
+        }
+        if (!boxes) {
+          boxes = renderRightsLeadBox({ name: "", role: "主管", synthetic: true, children: [], stores: [] });
+        }
         return (
           '<div class="rights-mod-band">' +
           '<div class="rights-mod-manager">' +
@@ -2246,7 +2276,7 @@
             throw new Error(result.data.error || "保存失败");
           }
           const echoed = result.data.person || {};
-          if (TEXT_FIELDS.indexOf(field) >= 0 && String(echoed[field] || "") !== String(value)) {
+          if (TEXT_FIELDS.indexOf(field) >= 0 && blankStaffName(echoed[field]) !== blankStaffName(value)) {
             throw new Error("保存失败，服务端未写入" + field);
           }
           return loadMembers();
@@ -2266,14 +2296,14 @@
           return;
         }
         const current = TEXT_FIELDS.indexOf(field) >= 0
-          ? person[field] || ""
+          ? blankStaffName(person[field])
           : field === "username"
             ? person.username || person.name || ""
             : person.password || "ChangeMe123!";
         pinCellBox(td);
         const input = document.createElement("input");
         input.type = "text";
-        input.value = current === "—" ? "" : current;
+        input.value = current;
         td.textContent = "";
         td.append(input);
         focusNameInput(input);
