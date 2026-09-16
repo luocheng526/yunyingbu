@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.572-home-opduty */
+/* xm-module-home 0.1.573-home-boardwrap */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -813,9 +813,9 @@
     return (
       '<section class="xm-hm-ladder" data-ladder="' +
       escapeHtml(ladder.key) +
-      '"><div class="xm-hm-ladder-head"><div class="xm-hm-ladder-card">' +
+      '"><h2 class="xm-hm-ladder-title">' +
       escapeHtml(ladder.title) +
-      '</div></div><div class="xm-hm-podiums">' +
+      '</h2><div class="xm-hm-podiums">' +
       (ladder.columns || [])
         .map(function (column) {
           return podiumColumnHtml(column, unit);
@@ -1170,9 +1170,9 @@
       ".xm-hm-teams-bar span{display:flex;gap:12px}" +
       "[data-show-teams]{border:0;background:0;color:var(--xm-primary);cursor:pointer;padding:0;font-size:13px}" +
       ".xm-hm-drop{width:20px;height:20px;border:1px solid #d96c6c;border-radius:50%;background:#fff;color:#c45656;font-size:16px;line-height:18px;cursor:pointer;padding:0}" +
-      ".xm-hm-ladder{margin-top:4px}" +
-      ".xm-hm-ladder-head{display:flex;justify-content:center;margin:8px 0 16px}" +
-      ".xm-hm-ladder-card{display:inline-flex;align-items:center;justify-content:center;min-width:168px;padding:12px 28px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);font-size:24px;font-weight:700;color:var(--xm-ink);letter-spacing:.04em}" +
+      "#xm-hm-ladders{display:flex;flex-direction:column;gap:16px}" +
+      ".xm-hm-ladder{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:12px;box-shadow:var(--xm-shadow);padding:16px 16px 12px}" +
+      ".xm-hm-ladder-title{margin:0 0 16px;text-align:center;font-size:22px;font-weight:700;color:var(--xm-ink)}" +
       ".xm-hm-podiums{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}" +
       ".xm-hm-podium{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:12px 12px 8px}" +
       ".xm-hm-podium h3{margin:0 0 10px;text-align:center;font-size:13px;color:var(--xm-muted);font-weight:600}" +
@@ -1336,7 +1336,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.572-home-opduty");
+    board.setAttribute("data-hm-js", "0.1.573-home-boardwrap");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);

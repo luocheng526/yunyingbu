@@ -379,9 +379,10 @@ test("chief columns follow every org 主管/储备 supervisor including 经理",
 });
 
 test("board has 业绩 and 利润 ladders with 主管 运营 columns and ranks 1-10", () => {
-  assert.match(homeJs, /class="xm-hm-ladder-card"/);
-  assert.match(homeJs, /\.xm-hm-ladder-head\{display:flex;justify-content:center/);
-  assert.match(homeJs, /\.xm-hm-ladder-card\{[^}]*font-size:24px/);
+  assert.match(homeJs, /class="xm-hm-ladder-title"/);
+  assert.match(homeJs, /\.xm-hm-ladder\{background:var\(--xm-card\)/);
+  assert.match(homeJs, /\.xm-hm-ladder-title\{[^}]*font-size:22px/);
+  assert.doesNotMatch(homeJs, /class="xm-hm-ladder-card"/);
   assert.match(homeJs, /\.xm-hm-podiums\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(homeJs, /function restRows/);
   assert.match(homeJs, /while \(out\.length < 7\)/);
@@ -410,7 +411,7 @@ test("board has 业绩 and 利润 ladders with 主管 运营 columns and ranks 1
       { title: "运营排行榜", rows: [{ name: "高丽男", amount: "2" }] }
     ]
   });
-  assert.match(html, /xm-hm-ladder-card">业绩排行榜</);
+  assert.match(html, /xm-hm-ladder-title">业绩排行榜</);
   assert.match(html, /主管排行榜/);
   assert.match(html, /运营排行榜/);
   assert.equal(html.includes("经理排行榜"), false);
