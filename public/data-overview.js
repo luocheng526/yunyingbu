@@ -400,7 +400,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov20";
+      link.href = "/data-pages.css?v=data-ov21";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -465,11 +465,11 @@
       ".ch-tip.is-on{display:block}" +
       ".ch-table.sh-wide{overflow:visible}" +
       ".ch-shop-pick{position:relative;display:inline-block;min-width:160px;opacity:1;z-index:30}" +
-      ".ch-shop-pick-btn{display:block;width:100%;height:26px;padding:0 24px 0 8px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;color:#262626;font-size:12px;text-align:left;cursor:pointer}" +
+      ".ch-shop-pick-btn{position:relative;display:block;width:100%;height:26px;padding:0 24px 0 8px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;color:#262626;font-size:12px;text-align:left;cursor:pointer}" +
       ".ch-shop-pick-btn:after{content:'';position:absolute;right:8px;top:11px;border:4px solid transparent;border-top-color:#8c8c8c}" +
-      ".ch-shop-menu{display:none;position:absolute;z-index:2600;top:28px;left:0;min-width:220px;max-height:280px;overflow:auto;padding:6px 0;background:#fff;opacity:1;border:1px solid #f0f0f0;border-radius:4px;box-shadow:0 8px 24px rgba(0,0,0,.12)}" +
-      ".ch-shop-pick.is-open .ch-shop-menu{display:block}" +
-      ".ch-shop-opt{display:flex;align-items:center;gap:8px;margin:0;padding:5px 12px;color:#262626;font-size:13px;cursor:pointer;white-space:nowrap}" +
+      ".ch-shop-menu{display:none;position:fixed;z-index:5200;min-width:220px;max-height:280px;overflow:auto;padding:6px 0;background:#fff;opacity:1;pointer-events:auto;border:1px solid #d9d9d9;border-radius:4px;box-shadow:0 8px 24px rgba(0,0,0,.18)}" +
+      ".ch-shop-menu.is-open{display:block}" +
+      ".ch-shop-opt{display:flex;align-items:center;gap:8px;margin:0;padding:5px 12px;color:#262626;background:#fff;font-size:13px;cursor:pointer;white-space:nowrap}" +
       ".ch-shop-opt:hover{background:#f5f8ff}" +
       ".ch-shop-opt input{flex:none;width:14px;height:14px;margin:0;accent-color:#2f54eb}";
     document.head.appendChild(style);
@@ -541,6 +541,26 @@
       document.body.appendChild(el);
     }
     return el;
+  }
+
+  function getShopMenu() {
+    let el = document.getElementById("ch-shop-menu");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "ch-shop-menu";
+      el.className = "ch-shop-menu";
+      el.setAttribute("data-shop-menu", "");
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+
+  function hideShopMenu() {
+    const el = document.getElementById("ch-shop-menu");
+    if (el) {
+      el.classList.remove("is-open");
+      el.innerHTML = "";
+    }
   }
 
   function hideCalPop() {
@@ -1899,11 +1919,11 @@
       return "已选" + ids.length + "家";
     }
 
-    function shopPickHtml(payload) {
+    function shopMenuItemsHtml(payload) {
       const shops = (payload && payload.shops) || [];
       const ids = selectedShopIds(payload);
       const allOn = isAllShops(payload);
-      const items =
+      return (
         '<label class="ch-shop-opt"><input type="checkbox" data-shop-all' +
         (allOn ? " checked" : "") +
         ">全选</label>" +
@@ -1920,16 +1940,83 @@
               "</label>"
             );
           })
-          .join("");
+          .join("")
+      );
+    }
+
+    function shopPickHtml(payload) {
       return (
         '<div class="ch-shop-pick' +
         (state.shopPickOpen ? " is-open" : "") +
         '" data-shop-pick><button type="button" class="ch-shop-pick-btn" data-shop-pick-toggle>' +
         escapeHtml(shopPickLabel(payload)) +
-        '</button><div class="ch-shop-menu">' +
-        items +
-        "</div></div>"
+        "</button></div>"
       );
+    }
+
+    function placeShopMenu() {
+      const el = getShopMenu();
+      const btn = board && board.querySelector("[data-shop-pick-toggle]");
+      if (!btn) {
+        return;
+      }
+      const box = btn.getBoundingClientRect();
+      const width = Math.max(220, Math.round(box.width));
+      let left = box.left;
+      if (left + width > window.innerWidth - 8) {
+        left = Math.max(8, window.innerWidth - width - 8);
+      }
+      let top = box.bottom + 4;
+      if (top + 160 > window.innerHeight && box.top > 180) {
+        top = Math.max(8, box.top - 284);
+      }
+      el.style.left = Math.round(left) + "px";
+      el.style.top = Math.round(top) + "px";
+      el.style.minWidth = width + "px";
+    }
+
+    function syncShopMenu() {
+      const el = getShopMenu();
+      if (!state.shopPickOpen || !state.payload) {
+        hideShopMenu();
+        return;
+      }
+      el.innerHTML = shopMenuItemsHtml(state.payload);
+      placeShopMenu();
+      el.classList.add("is-open");
+      el.scrollTop = shopMenuScroll;
+    }
+
+    function applyShopMenuChange(target) {
+      if (!target || !target.matches) {
+        return;
+      }
+      const menu = getShopMenu();
+      shopMenuScroll = menu.scrollTop;
+      if (target.matches("[data-shop-all]")) {
+        state.shopIds = target.checked ? null : [];
+        state.shopPickOpen = true;
+        render();
+        return;
+      }
+      if (target.matches("[data-shop-id]")) {
+        const id = target.getAttribute("data-shop-id") || "";
+        const all = allShopIds(state.payload);
+        let cur = selectedShopIds(state.payload);
+        if (target.checked) {
+          if (cur.indexOf(id) < 0) {
+            cur.push(id);
+          }
+        } else {
+          cur = cur.filter(function (item) {
+            return item !== id;
+          });
+        }
+        state.shopIds = cur.length === all.length ? null : cur;
+        state.shopId = cur.length === 1 ? cur[0] : "";
+        state.shopPickOpen = true;
+        render();
+      }
     }
 
     function filteredPayload() {
@@ -2072,10 +2159,7 @@
         paintPicker();
       }
       paintSparkSvg(board.querySelector(".ch-hero .ch-spark"), hero);
-      const menu = board.querySelector(".ch-shop-menu");
-      if (menu && state.shopPickOpen) {
-        menu.scrollTop = shopMenuScroll;
-      }
+      syncShopMenu();
     }
 
     function placeCalPop(anchor) {
@@ -2331,10 +2415,14 @@
       const inShopPick =
         shopEl &&
         ((shopEl.matches &&
-          shopEl.matches("[data-shop-pick], [data-shop-pick-toggle], [data-shop-all], [data-shop-id], .ch-shop-opt, .ch-shop-menu")) ||
-          (shopEl.closest && shopEl.closest("[data-shop-pick], .ch-shop-opt")));
+          shopEl.matches(
+            "[data-shop-pick], [data-shop-pick-toggle], [data-shop-all], [data-shop-id], .ch-shop-opt, .ch-shop-menu, #ch-shop-menu, [data-shop-menu]"
+          )) ||
+          (shopEl.closest &&
+            shopEl.closest("[data-shop-pick], .ch-shop-opt, #ch-shop-menu, [data-shop-menu]")));
       if (state.shopPickOpen && !inShopPick) {
         state.shopPickOpen = false;
+        hideShopMenu();
         if (state.payload) {
           render();
         }
@@ -2350,12 +2438,21 @@
     }
 
     function onWinResize() {
+      if (state.shopPickOpen) {
+        placeShopMenu();
+      }
       if (!state.calOpen) {
         return;
       }
       const btn = board && board.querySelector('button[data-range="自定义"]');
       if (btn) {
         placeCalPop(btn);
+      }
+    }
+
+    function onWinScroll() {
+      if (state.shopPickOpen) {
+        placeShopMenu();
       }
     }
 
@@ -2381,8 +2478,19 @@
       }
     }, OV_BOARD_FRESH_MS);
 
+    const shopMenuEl = getShopMenu();
+    function onShopMenuChange(event) {
+      applyShopMenuChange(event.target);
+    }
+    function onShopMenuClick(event) {
+      event.stopPropagation();
+    }
+    shopMenuEl.addEventListener("change", onShopMenuChange);
+    shopMenuEl.addEventListener("click", onShopMenuClick);
+
     document.addEventListener("click", onDocClick);
     window.addEventListener("resize", onWinResize);
+    window.addEventListener("scroll", onWinScroll, true);
 
     board.addEventListener("mouseover", function (event) {
       const help = event.target.closest && event.target.closest(".ch-help");
@@ -2418,6 +2526,7 @@
         if (wrap) {
           wrap.classList.toggle("is-open", state.shopPickOpen);
         }
+        syncShopMenu();
         return;
       }
       const colBtn = event.target.closest("[data-shop-cols='open']");
@@ -2462,34 +2571,7 @@
         render();
         return;
       }
-      const menu = board.querySelector(".ch-shop-menu");
-      if (menu) {
-        shopMenuScroll = menu.scrollTop;
-      }
-      if (event.target.matches("[data-shop-all]")) {
-        state.shopIds = event.target.checked ? null : [];
-        state.shopPickOpen = true;
-        render();
-        return;
-      }
-      if (event.target.matches("[data-shop-id]")) {
-        const id = event.target.getAttribute("data-shop-id") || "";
-        const all = allShopIds(state.payload);
-        let cur = selectedShopIds(state.payload);
-        if (event.target.checked) {
-          if (cur.indexOf(id) < 0) {
-            cur.push(id);
-          }
-        } else {
-          cur = cur.filter(function (item) {
-            return item !== id;
-          });
-        }
-        state.shopIds = cur.length === all.length ? null : cur;
-        state.shopId = cur.length === 1 ? cur[0] : "";
-        state.shopPickOpen = true;
-        render();
-      }
+      applyShopMenuChange(event.target);
     });
 
     let boardDragKey = "";
@@ -2618,8 +2700,12 @@
       clearInterval(boardTick);
       document.removeEventListener("click", onDocClick);
       window.removeEventListener("resize", onWinResize);
+      window.removeEventListener("scroll", onWinScroll, true);
+      shopMenuEl.removeEventListener("change", onShopMenuChange);
+      shopMenuEl.removeEventListener("click", onShopMenuClick);
       window.removeEventListener("pointerup", onBoardPointerUp);
       window.removeEventListener("pointercancel", onBoardPointerCancel);
+      hideShopMenu();
       hideCalPop();
       hideMetricTip();
       if (tipEl) {

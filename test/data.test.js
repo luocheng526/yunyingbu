@@ -212,7 +212,12 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /60 \* 60 \* 1000/);
     assert.match(overviewJs.text, /xm-data-shops-metrics-v1/);
     assert.match(overviewJs.text, /overlaySharedShopMetrics/);
-    assert.match(overviewJs.text, /data-ov20/);
+    assert.match(overviewJs.text, /data-ov21/);
+    assert.match(overviewJs.text, /function getShopMenu/);
+    assert.match(overviewJs.text, /id = "ch-shop-menu"/);
+    assert.match(overviewJs.text, /\.ch-shop-menu\{display:none;position:fixed/);
+    assert.match(overviewJs.text, /\.ch-shop-menu\.is-open\{display:block\}/);
+    assert.doesNotMatch(overviewJs.text, /button><div class="ch-shop-menu">/);
     assert.match(overviewJs.text, /sh-wide/);
     assert.match(overviewJs.text, /SHOP_COL_CATALOG/);
     assert.match(overviewJs.text, /设定表头/);
@@ -579,8 +584,10 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /\/data\/paid/);
   assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
   assert.match(dataMod, /restore-v1/);
-  assert.match(dataMod, /data-overview\.js\?v=data-ov20/);
+  assert.match(dataMod, /data-overview\.js\?v=data-ov21/);
   assert.match(css, /ch-shop-opt/);
+  assert.match(css, /\.ch-shop-menu \{\s*display: none;\s*position: fixed;/);
+  assert.match(css, /\.ch-shop-menu\.is-open \{\s*display: block;/);
   assert.match(dataMod, /data-shops\.js\?v=shop-wide6/);
   assert.match(css, /ch-pill/);
   assert.match(css, /\.ch-card \.value[\s\S]*font-size: 28px/);
