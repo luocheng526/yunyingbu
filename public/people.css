@@ -225,6 +225,27 @@ body:has(.people-page) .xm-tabs {
   font-size: 13px;
 }
 
+.people-page,
+.people-page table,
+.people-page th,
+.people-page td,
+.people-page .org-cell,
+.people-page .people-cell,
+.people-page .org-link,
+.people-page .tag {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-user-drag: none;
+}
+
+.people-page button,
+.people-page input[type="checkbox"],
+.people-page input[type="radio"],
+.people-page .org-filter-btn {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .people-page th,
 .people-page td {
   text-align: left;
@@ -423,7 +444,7 @@ body:has(.people-page) .xm-tabs {
 
 .org-link {
   color: #1677ff;
-  cursor: pointer;
+  cursor: text;
 }
 
 .org-cell.can-edit,
