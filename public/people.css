@@ -797,28 +797,63 @@ body:has(.people-page) .xm-tabs {
 .rights-tree-fit,
 .rights-modules {
   display: flex;
+  flex-direction: column;
   align-items: stretch;
-  gap: 12px;
+  gap: 10px;
   min-width: 100%;
   transform: none;
 }
 
-.rights-mod-director,
+.rights-mod-head,
+.rights-mod-band {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px;
+}
+
+.rights-mod-head {
+  align-items: center;
+  min-height: 0;
+  background: #fff;
+  border: 1px solid #d9d9d9;
+  border-radius: 12px;
+}
+
+.rights-mod-head-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 6px 10px;
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  color: #595959;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rights-mod-head-rest {
+  display: grid;
+  grid-template-columns: 148px minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+}
+
+.rights-mod-head-chain {
+  display: grid;
+  grid-template-columns: 1fr 0.8fr 1.4fr;
+  gap: 8px;
+  min-width: 0;
+}
+
 .rights-mod-manager,
 .rights-mod-lead {
   background: #fff;
   border: 1px solid #f0f0f0;
   border-radius: 10px;
   padding: 10px;
-}
-
-.rights-mod-director {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 96px;
-  border-color: #cf1322;
-  background: #fff1f0;
 }
 
 .rights-mod-bands {
@@ -830,11 +865,7 @@ body:has(.people-page) .xm-tabs {
 }
 
 .rights-mod-band {
-  display: grid;
-  grid-template-columns: 132px minmax(0, 1fr);
-  gap: 10px;
   min-height: 140px;
-  padding: 10px;
   background: #fff;
   border: 1px solid #ff4d4f;
   border-radius: 12px;
