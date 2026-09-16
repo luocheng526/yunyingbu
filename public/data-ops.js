@@ -246,6 +246,7 @@
   var CAL_CSS =
     ":host{position:fixed;z-index:4000;display:none;width:560px;background:#fff;border:1px solid #e8e8e8;box-shadow:0 6px 16px rgba(0,0,0,.12)}" +
     ":host(.is-open){display:block}" +
+    ":host(.is-months){width:280px;border:1px solid #f0f0f0;box-shadow:0 6px 16px rgba(0,0,0,.08)}" +
     ".ch-cal{display:flex;width:560px}" +
     ".ch-cal-month{width:280px;padding:8px 12px}" +
     ".ch-cal-month + .ch-cal-month{border-left:1px solid #f0f0f0}" +

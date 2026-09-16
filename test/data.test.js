@@ -211,7 +211,9 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /60 \* 60 \* 1000/);
     assert.match(overviewJs.text, /xm-data-shops-metrics-v1/);
     assert.match(overviewJs.text, /overlaySharedShopMetrics/);
-    assert.match(overviewJs.text, /data-ov34/);
+    assert.match(overviewJs.text, /data-ov35/);
+    assert.match(overviewJs.text, /next === "日"/);
+    assert.match(overviewJs.text, /shanghaiYmd\(-1\)/);
     assert.match(overviewJs.text, /function attachOperate/);
     assert.match(overviewJs.text, /operateName/);
     assert.match(overviewJs.text, /RANGES = \["日", "周", "月"/);
@@ -246,6 +248,7 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(opsJs.text, /is-weeks/);
     assert.match(opsJs.text, /一月/);
     assert.match(opsJs.text, /repeat\(4,1fr\)/);
+    assert.match(opsJs.text, /:host\(\.is-months\)/);
     assert.match(opsJs.text, /operateName/);
     assert.match(opsJs.text, /item\.supervisor/);
     assert.match(opsJs.text, /monthCal/);
@@ -643,8 +646,8 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /\/data\/paid/);
   assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
   assert.match(dataMod, /restore-v1/);
-  assert.match(dataMod, /data-overview\.js\?v=data-ov34/);
-  assert.match(dataMod, /data-ops\.js\?v=data-ov34/);
+  assert.match(dataMod, /data-overview\.js\?v=data-ov35/);
+  assert.match(dataMod, /data-ops\.js\?v=data-ov35/);
   assert.match(css, /\.op-kpis \{/);
   assert.match(css, /\.data-overview-root\.is-wait/);
   assert.match(css, /\.op-chart \{/);

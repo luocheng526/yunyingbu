@@ -397,7 +397,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov34";
+      link.href = "/data-pages.css?v=data-ov35";
       document.head.appendChild(link);
     }
     ensureCardTypeStyle();
@@ -486,7 +486,7 @@
   function hideCalPop() {
     const el = document.getElementById("ch-cal-pop");
     if (el) {
-      el.classList.remove("is-open");
+      el.classList.remove("is-open", "is-months");
       if (el.shadowRoot) {
         el.shadowRoot.innerHTML = "";
       }
@@ -630,7 +630,10 @@
     const to = new Date();
     to.setHours(0, 0, 0, 0);
     const from = new Date(to);
-    if ((label === "周" || label === "月" || label === "自定义") && customFrom && customTo) {
+    if ((label === "日" || label === "周" || label === "月" || label === "自定义") && customFrom && customTo) {
+      if (label === "日") {
+        return { from: customFrom, to: customFrom, dateLabel: cnDateLabel(customFrom) };
+      }
       return { from: customFrom, to: customTo, dateLabel: customFrom.replaceAll("-", "/") + " - " + customTo.replaceAll("-", "/") };
     }
     if (label === "日") {
@@ -2251,6 +2254,14 @@
     }
 
     function applyCalDay(day) {
+      if (state.range === "日") {
+        state.customFrom = day;
+        state.customTo = day;
+        state.calOpen = false;
+        hideCalPop();
+        load();
+        return;
+      }
       if (state.range === "周") {
         const span = weekBounds(day);
         state.customFrom = span.from;
@@ -2327,9 +2338,12 @@
       }
       pop.shadowRoot.innerHTML = "<style>" + CAL_SHADOW_CSS + "</style>" + calendarPanel(state);
       pop.classList.add("is-open");
+      pop.classList.toggle("is-months", state.range === "月");
       const monthPick = state.range === "月";
-      pop.style.width = monthPick ? "300px" : "560px";
-      pop.style.minWidth = monthPick ? "300px" : "560px";
+      pop.style.width = monthPick ? "280px" : "560px";
+      pop.style.minWidth = monthPick ? "280px" : "560px";
+      pop.style.border = monthPick ? "1px solid #f0f0f0" : "";
+      pop.style.boxShadow = monthPick ? "0 6px 16px rgba(0,0,0,.08)" : "";
       const btn = board.querySelector('button[data-range="' + state.range + '"]');
       if (btn) {
         placeCalPop(btn);
@@ -2575,7 +2589,8 @@
       if (
         t &&
         t.closest &&
-        (t.closest("#ch-cal-pop") || t.closest('button[data-range="自定义"],button[data-range="周"],button[data-range="月"]'))
+        (t.closest("#ch-cal-pop") ||
+          t.closest('button[data-range="自定义"],button[data-range="日"],button[data-range="周"],button[data-range="月"]'))
       ) {
         return;
       }
@@ -2702,15 +2717,25 @@
       const rangeBtn = event.target.closest("button[data-range]");
       if (rangeBtn) {
         const next = rangeBtn.getAttribute("data-range");
-        if (next === "自定义" || next === "周" || next === "月") {
+        if (next === "日" || next === "自定义" || next === "周" || next === "月") {
           setWait(false);
-          if (state.range !== next) {
-            state.customFrom = "";
-            state.customTo = "";
+          const switched = state.range !== next;
+          if (switched) {
+            if (next === "日") {
+              const yest = shanghaiYmd(-1);
+              state.customFrom = yest;
+              state.customTo = yest;
+            } else {
+              state.customFrom = "";
+              state.customTo = "";
+            }
           }
-          state.calOpen = !state.calOpen || state.range !== next;
+          state.calOpen = !state.calOpen || switched;
           state.range = next;
           render();
+          if (next === "日" && switched) {
+            load();
+          }
           return;
         }
         state.range = next;
