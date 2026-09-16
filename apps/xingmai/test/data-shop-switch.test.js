@@ -11,7 +11,7 @@ const goodsJs = readFileSync(join(root, "public/data-goods.js"), "utf8");
 const overviewJs = readFileSync(join(root, "public/data-overview.js"), "utf8");
 
 test("data.js resets each pane to its own board before loading scripts", () => {
-  assert.match(dataJs, /0\.1\.593-data-shop-switch/);
+  assert.match(dataJs, /0\.1\.595-data-shop-switch/);
   assert.match(dataJs, /function resetDataPage\(root, kind, label\)/);
   assert.match(dataJs, /resetDataPage\(root, "shops", "正在加载店铺数据…"\)/);
   assert.match(dataJs, /resetDataPage\(root, "goods", "正在加载商品数据…"\)/);

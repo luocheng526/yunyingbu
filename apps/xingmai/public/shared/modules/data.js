@@ -1,4 +1,4 @@
-/* xm-module-data 0.1.593-data-shop-switch — isolate data panes so shops/goods/overview do not share #board */
+/* xm-module-data 0.1.595-data-shop-switch — isolate data panes so shops/goods/overview do not share #board */
 (function () {
   function escapeHtml(value) {
     return String(value)
