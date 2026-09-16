@@ -17,6 +17,38 @@
 
   var METRIC_LS = "xm-data-ov-metrics";
   var METRIC_SEEN_LS = "xm-data-ov-metrics-seen";
+  var SHOP_COL_LS = "xm-data-ov-shop-cols";
+  var SHOP_COL_SEEN_LS = "xm-data-ov-shop-cols-seen";
+  var SHOP_COL_CATALOG = [
+    { key: "live", label: "实时销售额 (支付)", fields: ["livePayAmount", "todayPayAmount", "realtimePayAmount", "payAmount"], kind: "money" },
+    { key: "newRate", label: "店铺上新成功率", fields: ["newRate"], kind: "rate4" },
+    { key: "orders", label: "销售单数", fields: ["orderCount"], kind: "int" },
+    { key: "netOrders", label: "净销售单数 (支付)", fields: ["netOrderCount"], kind: "int" },
+    { key: "pay", label: "支付金额 (支付)", fields: ["payAmount"], kind: "money" },
+    { key: "invalidAmount", label: "无效单金额 (标注)", fields: ["invalidAmount", "invalidOrderAmount"], kind: "money" },
+    { key: "refund", label: "退款金额", fields: ["refundAmount"], kind: "money" },
+    { key: "refundRate", label: "退款率 (按金额)", fields: ["refundRate"], kind: "rate" },
+    { key: "netSales", label: "净销售额 (支付)", fields: ["netSales", "netSalesAmount"], kind: "money" },
+    { key: "totalMarketing", label: "总营销额", fields: ["totalMarketing"], kind: "money" },
+    { key: "siteMarketing", label: "全站营销额", fields: ["siteMarketing"], kind: "money" },
+    { key: "offsiteMarketing", label: "非全站营销额", fields: ["offsiteMarketing"], kind: "money" },
+    { key: "adRate", label: "推广花费占比 (支付预估)", fields: ["promotionRate"], kind: "rate" },
+    { key: "profit", label: "利润 (支付预估)", fields: ["profit"], kind: "money" },
+    { key: "margin", label: "大毛利率", fields: ["profitRate"], kind: "rate" },
+    { key: "saleFee", label: "销售费用 (支付预估)", fields: ["saleFee", "salesFee"], kind: "money" },
+    { key: "platformFee", label: "平台费用 (支付预估)", fields: ["platformFee", "platformCost"], kind: "money" },
+    { key: "goodsCost", label: "总货款成本", fields: ["goodsCost", "totalGoodsCost"], kind: "money" },
+    { key: "dropshipCount", label: "代发单量", fields: ["dropshipCount"], kind: "int" },
+    { key: "invalidCount", label: "无效单量", fields: ["invalidCount"], kind: "int" },
+    { key: "goodsCostRate", label: "总货款成本占比", fields: ["goodsCostRate"], kind: "rate" },
+    { key: "netGoodsCost", label: "净货款成本 (支付)", fields: ["netGoodsCost"], kind: "money" },
+    { key: "netGoodsCostRate", label: "净货品成本占比 (支付)", fields: ["netGoodsCostRate"], kind: "rate" },
+    { key: "custom", label: "自定义费用", fields: ["customFee"], kind: "money" },
+    { key: "otherFee", label: "其他费用", fields: ["otherFee"], kind: "money" },
+    { key: "materialFee", label: "耗材费", fields: ["materialFee"], kind: "money" },
+    { key: "shipMaterialFee", label: "耗材费 (发货)", fields: ["shipMaterialFee"], kind: "money" },
+    { key: "packFee", label: "打包费", fields: ["packFee"], kind: "money" }
+  ];
   var HERO_TIP = "当天按支付时间累计的销售额，与首页实时销售指数同源（星脉 ERP 支付流水）";
   var METRIC_CATALOG = [
     { key: "pay", label: "支付金额 (支付)", tip: "按支付时间统计的订单金额(包含无效单、代发单)" },
@@ -142,6 +174,63 @@
     try {
       localStorage.setItem(METRIC_LS, JSON.stringify(keys));
       rememberMetricCatalog();
+    } catch (_err) {}
+  }
+
+  function shopColKeys() {
+    return SHOP_COL_CATALOG.map(function (item) {
+      return item.key;
+    });
+  }
+
+  function shopColOf(key) {
+    return (
+      SHOP_COL_CATALOG.find(function (item) {
+        return item.key === key;
+      }) || { key: key, label: key, fields: [key], kind: "money" }
+    );
+  }
+
+  function rememberShopCols() {
+    try {
+      localStorage.setItem(SHOP_COL_SEEN_LS, JSON.stringify(shopColKeys()));
+    } catch (_err) {}
+  }
+
+  function loadShopColKeys() {
+    const all = shopColKeys();
+    try {
+      const raw = localStorage.getItem(SHOP_COL_LS);
+      const seenRaw = localStorage.getItem(SHOP_COL_SEEN_LS);
+      const seen = seenRaw ? JSON.parse(seenRaw) : [];
+      const seenList = Array.isArray(seen) ? seen : [];
+      const newcomers = all.filter(function (key) {
+        return seenList.indexOf(key) < 0;
+      });
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          const keep = parsed.filter(function (key) {
+            return all.indexOf(key) >= 0;
+          });
+          newcomers.forEach(function (key) {
+            if (keep.indexOf(key) < 0) {
+              keep.push(key);
+            }
+          });
+          rememberShopCols();
+          return keep.length ? keep : all.slice();
+        }
+      }
+    } catch (_err) {}
+    rememberShopCols();
+    return all.slice();
+  }
+
+  function saveShopColKeys(keys) {
+    try {
+      localStorage.setItem(SHOP_COL_LS, JSON.stringify(keys));
+      rememberShopCols();
     } catch (_err) {}
   }
 
@@ -312,7 +401,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov18";
+      link.href = "/data-pages.css?v=data-ov19";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -705,6 +794,89 @@
     return ok ? total : null;
   }
 
+  function shopRateText(shop, fields, fallback, digits) {
+    const n = firstNum(shop, fields);
+    const raw = n != null ? n : fallback;
+    if (raw == null) {
+      return (digits === 4 ? "0.0000" : "0.00") + "%";
+    }
+    const pctn = Number(raw) > 1 ? Number(raw) : Number(raw) * 100;
+    return pctn.toFixed(digits == null ? 2 : digits) + "%";
+  }
+
+  function shopColCell(shop, col) {
+    const pay = Number(shop.payAmount) || 0;
+    const refund = Number(shop.refundAmount) || 0;
+    const profit = firstNum(shop, ["profit"]) != null ? firstNum(shop, ["profit"]) : 0;
+    const promo =
+      firstNum(shop, ["totalPromotionCost", "promotionCost"]) != null
+        ? firstNum(shop, ["totalPromotionCost", "promotionCost"])
+        : 0;
+    if (col.key === "newRate") {
+      return shopRateText(shop, col.fields, 0, 4);
+    }
+    if (col.key === "refundRate") {
+      return shopRateText(shop, col.fields, pay ? refund / pay : 0, 2);
+    }
+    if (col.key === "adRate") {
+      return shopRateText(shop, col.fields, pay ? promo / pay : 0, 2);
+    }
+    if (col.key === "margin") {
+      return shopRateText(shop, col.fields, pay ? profit / pay : 0, 2);
+    }
+    if (col.key === "goodsCostRate") {
+      const cost = firstNum(shop, ["goodsCost", "totalGoodsCost"]);
+      return shopRateText(shop, col.fields, pay && cost != null ? cost / pay : 0, 2);
+    }
+    if (col.key === "netGoodsCostRate") {
+      const cost = firstNum(shop, ["netGoodsCost"]);
+      return shopRateText(shop, col.fields, pay && cost != null ? cost / pay : 0, 2);
+    }
+    if (col.key === "netSales") {
+      const net = firstNum(shop, col.fields);
+      return fmtInt(net != null ? net : pay - refund);
+    }
+    if (col.kind === "int") {
+      const count = firstNum(shop, col.fields);
+      return fmt(count != null ? count : 0, 0);
+    }
+    const money = firstNum(shop, col.fields);
+    return fmtInt(money != null ? money : 0);
+  }
+
+  function sumShopTotals(list) {
+    const tot = {};
+    SHOP_COL_CATALOG.forEach(function (col) {
+      if (col.kind === "money" || col.kind === "int") {
+        tot[col.fields[0]] = 0;
+      }
+    });
+    tot.payAmount = 0;
+    tot.refundAmount = 0;
+    tot.profit = 0;
+    tot.totalPromotionCost = 0;
+    (list || []).forEach(function (shop) {
+      SHOP_COL_CATALOG.forEach(function (col) {
+        if (col.kind !== "money" && col.kind !== "int") {
+          return;
+        }
+        const n = firstNum(shop, col.fields);
+        if (n != null) {
+          tot[col.fields[0]] += n;
+        }
+      });
+      tot.payAmount += Number(shop.payAmount) || 0;
+      tot.refundAmount += Number(shop.refundAmount) || 0;
+      tot.profit += Number(shop.profit) || 0;
+      tot.totalPromotionCost += Number(shop.totalPromotionCost || shop.promotionCost) || 0;
+    });
+    tot.refundRate = tot.payAmount ? tot.refundAmount / tot.payAmount : 0;
+    tot.profitRate = tot.payAmount ? tot.profit / tot.payAmount : 0;
+    tot.promotionRate = tot.payAmount ? tot.totalPromotionCost / tot.payAmount : 0;
+    tot.netSales = tot.netSales || tot.payAmount - tot.refundAmount;
+    return tot;
+  }
+
   function metricRow(shop, liveSales) {
     const pay = Number(shop.payAmount) || 0;
     const refund = Number(shop.refundAmount) || 0;
@@ -762,24 +934,26 @@
 
   function shopTableFrom(shops) {
     const list = shops || [];
-    const tot = list.reduce(
-      function (acc, row) {
-        acc.payAmount += Number(row.payAmount) || 0;
-        acc.orderCount += Number(row.orderCount) || 0;
-        acc.netOrderCount += Number(row.netOrderCount) || 0;
-        acc.refundAmount += Number(row.refundAmount) || 0;
-        return acc;
-      },
-      { payAmount: 0, orderCount: 0, netOrderCount: 0, refundAmount: 0 }
-    );
-    tot.refundRate = tot.payAmount ? tot.refundAmount / tot.payAmount : 0;
-    tot.netSales = tot.payAmount - tot.refundAmount;
+    const keys = loadShopColKeys();
+    const cols = keys.map(shopColOf);
+    const tot = sumShopTotals(list);
     return {
       title: "店铺列表",
-      columns: ["店铺"].concat(TABLE_COLS),
-      rows: [{ name: "当页汇总", kind: "sum", cells: metricRow(tot) }].concat(
+      columns: ["店铺"].concat(cols.map(function (col) {
+        return col.label;
+      })),
+      rows: [{ name: "当页汇总", kind: "sum", cells: cols.map(function (col) {
+        return shopColCell(tot, col);
+      }) }].concat(
         list.map(function (shop) {
-          return { name: shop.shopName, kind: "shop", shopId: shop.shopId, cells: metricRow(shop) };
+          return {
+            name: shop.shopName,
+            kind: "shop",
+            shopId: shop.shopId,
+            cells: cols.map(function (col) {
+              return shopColCell(shop, col);
+            })
+          };
         })
       )
     };
@@ -1407,6 +1581,7 @@
       calYear: Number(shanghaiYmd(0).slice(0, 4)),
       calMonth: Number(shanghaiYmd(0).slice(5, 7)) - 1,
       pickOpen: false,
+      pickKind: "metrics",
       pickDraft: loadMetricKeys(),
       pickQuery: "",
       pickDrag: ""
@@ -1474,9 +1649,30 @@
       }
     }
 
+    function pickCatalog() {
+      return state.pickKind === "cols" ? SHOP_COL_CATALOG : METRIC_CATALOG;
+    }
+
+    function pickItemOf(key) {
+      return state.pickKind === "cols" ? shopColOf(key) : metricOf(key);
+    }
+
+    function pickTitle() {
+      return state.pickKind === "cols" ? "设定表头" : "设定指标";
+    }
+
     function openPicker() {
+      state.pickKind = "metrics";
       state.pickOpen = true;
       state.pickDraft = loadMetricKeys().slice();
+      state.pickQuery = "";
+      paintPicker(true);
+    }
+
+    function openColPicker() {
+      state.pickKind = "cols";
+      state.pickOpen = true;
+      state.pickDraft = loadShopColKeys().slice();
       state.pickQuery = "";
       paintPicker(true);
     }
@@ -1487,7 +1683,7 @@
         selected[key] = true;
       });
       const q = String(state.pickQuery || "").trim();
-      return METRIC_CATALOG.filter(function (item) {
+      return pickCatalog().filter(function (item) {
         return !q || item.label.indexOf(q) >= 0;
       })
         .map(function (item) {
@@ -1507,7 +1703,7 @@
     function pickerSelHtml() {
       return state.pickDraft
         .map(function (key) {
-          const item = metricOf(key);
+          const item = pickItemOf(key);
           return (
             '<div class="ch-mpick-item" draggable="true" data-mpick-drag="' +
             escapeHtml(item.key) +
@@ -1526,12 +1722,16 @@
         return;
       }
       const n = state.pickDraft.length;
-      const tot = METRIC_CATALOG.length;
+      const tot = pickCatalog().length;
       if (force || !el.querySelector(".ch-mpick")) {
         el.innerHTML =
           '<div class="ch-mpick-mask" data-mpick-mask>' +
-          '<div class="ch-mpick" role="dialog" aria-label="设定指标">' +
-          '<div class="ch-mpick-head"><span data-mpick-title>设定指标（' +
+          '<div class="ch-mpick" role="dialog" aria-label="' +
+          pickTitle() +
+          '">' +
+          '<div class="ch-mpick-head"><span data-mpick-title>' +
+          pickTitle() +
+          "（" +
           n +
           "/" +
           tot +
@@ -1561,7 +1761,7 @@
       const grid = el.querySelector(".ch-mpick-grid");
       const sel = el.querySelector(".ch-mpick-sel");
       if (title) {
-        title.textContent = "设定指标（" + n + "/" + tot + "）";
+        title.textContent = pickTitle() + "（" + n + "/" + tot + "）";
       }
       if (count) {
         count.textContent = "已选" + n + "/" + tot;
@@ -1587,8 +1787,12 @@
         return;
       }
       if (act === "ok") {
-        saveMetricKeys(state.pickDraft.slice());
-        saveBoardOrder(loadBoardOrder(state.pickDraft.slice()));
+        if (state.pickKind === "cols") {
+          saveShopColKeys(state.pickDraft.slice());
+        } else {
+          saveMetricKeys(state.pickDraft.slice());
+          saveBoardOrder(loadBoardOrder(state.pickDraft.slice()));
+        }
         closePicker();
         render();
       }
@@ -1829,7 +2033,12 @@
       const lists =
         state.section === "渠道列表"
           ? tableHtml(payload.channelTable) +
-            tableHtml(payload.shopTable, '<label class="ch-pick">' + shopPickHtml(state.payload) + "</label>")
+            tableHtml(
+              payload.shopTable,
+              '<label class="ch-pick">' +
+                shopPickHtml(state.payload) +
+                '</label><button type="button" class="ch-set" data-shop-cols="open">设定表头</button>'
+            )
           : '<p class="ch-empty">「' + escapeHtml(state.section) + "」为示例，尚未接入。</p>";
       board.innerHTML =
         '<div class="ch-top"><div class="ch-title">数据总览</div>' +
@@ -2204,6 +2413,12 @@
         if (wrap) {
           wrap.classList.toggle("is-open", state.shopPickOpen);
         }
+        return;
+      }
+      const colBtn = event.target.closest("[data-shop-cols='open']");
+      if (colBtn) {
+        event.preventDefault();
+        openColPicker();
         return;
       }
       const setBtn = event.target.closest("[data-metrics='open'], .ch-set");
