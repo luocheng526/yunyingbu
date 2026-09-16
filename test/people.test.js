@@ -169,6 +169,8 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /点别处保存/);
     assert.match(jsText, /pinCellBox/);
     assert.match(jsText, /bindImeSafeCommit/);
+    assert.match(jsText, /onOutsidePointerDown/);
+    assert.match(jsText, /document\.addEventListener\("pointerdown", onOutsidePointerDown, true\)/);
     assert.doesNotMatch(jsText, /min-width: 88px/);
     assert.match(jsText, /服务端未写入/);
     assert.match(jsText, /event.isComposing/);

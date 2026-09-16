@@ -42,13 +42,36 @@
   function bindImeSafeCommit(input, onCommit, onCancel) {
     let locked = false;
     let composing = false;
+    function removeOutsideListeners() {
+      document.removeEventListener("pointerdown", onOutsidePointerDown, true);
+      document.removeEventListener("mousedown", onOutsidePointerDown, true);
+    }
     function run(fn) {
       if (locked) {
         return;
       }
       locked = true;
+      removeOutsideListeners();
       fn();
     }
+    function onOutsidePointerDown(event) {
+      if (input === event.target || input.contains(event.target)) {
+        return;
+      }
+      if (composing) {
+        input.addEventListener(
+          "compositionend",
+          function () {
+            run(onCommit);
+          },
+          { once: true }
+        );
+        return;
+      }
+      run(onCommit);
+    }
+    document.addEventListener("pointerdown", onOutsidePointerDown, true);
+    document.addEventListener("mousedown", onOutsidePointerDown, true);
     input.addEventListener("compositionstart", function () {
       composing = true;
     });
@@ -91,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.203-empty-dash";
+    const href = "/people.css?v=0.1.204-cell-commit";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -2330,17 +2353,6 @@
         );
       }
 
-      function onDocCellCommit(event) {
-        const editing = root.querySelector("td.people-cell input, td.org-cell input, td.org-cell select");
-        if (!editing || editing.contains(event.target) || editing === event.target) {
-          return;
-        }
-        if (editing.isComposing) {
-          return;
-        }
-        editing.blur();
-      }
-      document.addEventListener("mousedown", onDocCellCommit, true);
       peopleTbody.addEventListener("change", function (event) {
         const box = event.target.closest(".people-row-check");
         if (!box) {
@@ -2630,7 +2642,6 @@
         }
         document.removeEventListener("wheel", onPeopleWheel, true);
         window.removeEventListener("resize", fitRightsTree);
-        document.removeEventListener("mousedown", onDocCellCommit, true);
         document.removeEventListener("click", onDocFilterClose);
         window.removeEventListener("scroll", onFilterPin, true);
         window.removeEventListener("resize", onFilterPin);
