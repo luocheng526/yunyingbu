@@ -3,6 +3,7 @@
 
   var RANGES = ["7天", "30天", "日", "周", "月", "年", "自定义"];
   var SECTIONS = ["渠道列表", "店铺分组", "经营数据", "竞对对比", "品类分析", "热销商品"];
+  var DUTY_GROUPS = ["经理组", "主管组", "储备组"];
   var TABLE_COLS = [
     "实时销售额 (支付)",
     "店铺上新成功率",
@@ -400,7 +401,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov26";
+      link.href = "/data-pages.css?v=data-ov27";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -969,6 +970,91 @@
       }
     });
     return out;
+  }
+
+  function sameShopName(a, b) {
+    return String(a || "").replace(/\s+/g, "") === String(b || "").replace(/\s+/g, "");
+  }
+
+  function personCoversShop(person, shop) {
+    const name = shop && shop.shopName;
+    const shops = (person && person.visibleShops) || [];
+    if (name && shops.some(function (item) {
+      return sameShopName(item, name);
+    })) {
+      return true;
+    }
+    const oid = shop && shop.operatorId != null ? String(shop.operatorId) : "";
+    return Boolean(oid && person && String(person.id) === oid);
+  }
+
+  function reserveNames(people) {
+    const out = {};
+    (people || []).forEach(function (person) {
+      const name = String((person && person.reserve) || "").trim();
+      if (name && name !== "无") {
+        out[name] = true;
+      }
+    });
+    return out;
+  }
+
+  function shopDutyFlags(shop, people) {
+    const flags = { 经理组: false, 主管组: false, 储备组: false };
+    const reserves = reserveNames(people);
+    (people || []).forEach(function (person) {
+      if (!personCoversShop(person, shop)) {
+        return;
+      }
+      const role = String(person.role || "");
+      if (role === "经理") {
+        flags.经理组 = true;
+      }
+      if (role === "主管") {
+        flags.主管组 = true;
+      }
+      const reserve = String(person.reserve || "").trim();
+      if (role === "储备" || reserves[person.name] || (reserve && reserve !== "无")) {
+        flags.储备组 = true;
+      }
+    });
+    return flags;
+  }
+
+  function dutyTableFrom(shops, people) {
+    const list = shops || [];
+    const keys = loadShopColKeys();
+    const cols = keys.map(shopColOf);
+    const tot = sumShopTotals(list);
+    const rows = [{
+      name: "当页汇总",
+      kind: "sum",
+      profit: firstNum(tot, ["profit"]),
+      cells: cols.map(function (col) {
+        return shopColCell(tot, col);
+      })
+    }];
+    DUTY_GROUPS.forEach(function (group) {
+      const members = list.filter(function (shop) {
+        return shopDutyFlags(shop, people)[group];
+      });
+      const sum = sumShopTotals(members);
+      rows.push({
+        name: group,
+        kind: "group",
+        profit: firstNum(sum, ["profit"]),
+        cells: cols.map(function (col) {
+          return shopColCell(sum, col);
+        })
+      });
+    });
+    return {
+      title: "店铺分组",
+      columns: ["责权分组"].concat(cols.map(function (col) {
+        return col.label;
+      })),
+      rows: rows
+    };
   }
 
   function shopTableFrom(shops) {
@@ -1639,6 +1725,7 @@
       shopIds: null,
       shopPickOpen: false,
       showPl: false,
+      people: [],
       section: "渠道列表",
       payload: null,
       calOpen: false,
@@ -2058,6 +2145,20 @@
       }
     }
 
+    function visibleShops(payload) {
+      const shops = (payload && payload.shops) || [];
+      if (isAllShops(payload)) {
+        return shops;
+      }
+      const allow = {};
+      selectedShopIds(payload).forEach(function (id) {
+        allow[id] = true;
+      });
+      return shops.filter(function (shop) {
+        return allow[shop.shopId];
+      });
+    }
+
     function filteredPayload() {
       const payload = state.payload;
       if (!payload) {
@@ -2161,17 +2262,21 @@
           "</button>"
         );
       }).join("");
+      const shopTools =
+        shopPickHtml(state.payload) +
+        '<button type="button" class="ch-set" data-shop-cols="open">设定表头</button>';
       const lists =
         state.section === "渠道列表"
           ? tableHtml(payload.channelTable) +
-            tableHtml(
-              payload.shopTable,
-              shopPickHtml(state.payload) +
-                '<button type="button" class="ch-set" data-shop-cols="open">设定表头</button>',
-              "sh-wide",
-              state.showPl
-            )
-          : '<p class="ch-empty">「' + escapeHtml(state.section) + "」为示例，尚未接入。</p>";
+            tableHtml(payload.shopTable, shopTools, "sh-wide", state.showPl)
+          : state.section === "店铺分组"
+            ? tableHtml(
+                dutyTableFrom(visibleShops(state.payload), state.people),
+                shopTools,
+                "sh-wide",
+                state.showPl
+              )
+            : '<p class="ch-empty">「' + escapeHtml(state.section) + "」为示例，尚未接入。</p>";
       board.innerHTML =
         '<div class="ch-top"><div class="ch-title">数据总览</div>' +
         '<div class="ch-right"><span class="ch-time">（统计时间：' +
@@ -2333,6 +2438,18 @@
         .catch(function () {
           return null;
         });
+    }
+
+    function loadPeople() {
+      return softJson("/api/people").then(function (pack) {
+        if (dead) {
+          return;
+        }
+        state.people = (pack && pack.people) || [];
+        if (state.payload) {
+          render();
+        }
+      });
     }
 
     function loadShopDirectory() {
@@ -2738,6 +2855,7 @@
     window.addEventListener("pointercancel", onBoardPointerCancel);
 
     load();
+    loadPeople();
 
     return function unmount() {
       dead = true;

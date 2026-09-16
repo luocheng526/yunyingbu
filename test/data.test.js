@@ -212,7 +212,13 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /60 \* 60 \* 1000/);
     assert.match(overviewJs.text, /xm-data-shops-metrics-v1/);
     assert.match(overviewJs.text, /overlaySharedShopMetrics/);
-    assert.match(overviewJs.text, /data-ov26/);
+    assert.match(overviewJs.text, /data-ov27/);
+    assert.match(overviewJs.text, /经理组/);
+    assert.match(overviewJs.text, /主管组/);
+    assert.match(overviewJs.text, /储备组/);
+    assert.match(overviewJs.text, /function dutyTableFrom/);
+    assert.match(overviewJs.text, /\/api\/people/);
+    assert.match(overviewJs.text, /visibleShops/);
     assert.match(overviewJs.text, /\.ch-split\{height:2px;margin:8px 0;background:#2f54eb/);
     assert.match(overviewJs.text, /显示盈亏/);
     assert.match(overviewJs.text, /data-show-pl/);
@@ -594,7 +600,7 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /\/data\/paid/);
   assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
   assert.match(dataMod, /restore-v1/);
-  assert.match(dataMod, /data-overview\.js\?v=data-ov26/);
+  assert.match(dataMod, /data-overview\.js\?v=data-ov27/);
   assert.match(css, /is-gain/);
   assert.match(css, /#f6ffed/);
   assert.match(css, /\.ch-split \{\s*height: 2px;/);
