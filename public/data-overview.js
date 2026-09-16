@@ -400,7 +400,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov25";
+      link.href = "/data-pages.css?v=data-ov26";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -418,9 +418,9 @@
     style.id = "ch-tabs-style";
     style.textContent =
       ".ch-split{height:2px;margin:8px 0;background:#2f54eb;border:0}" +
-      ".ch-tabs{display:flex;flex-wrap:wrap;align-items:center;gap:0;margin:0;padding:0 8px;background:#2f54eb;border-bottom:0}" +
-      ".ch-tabs button{height:40px;padding:0 16px;border:0;border-bottom:2px solid transparent;background:transparent;color:#fff;cursor:pointer;font-size:13px;opacity:.85}" +
-      ".ch-tabs button.is-active{opacity:1;font-weight:600;color:#fff;border-bottom-color:#fff;background:rgba(255,255,255,.14)}" +
+      ".ch-tabs{display:flex;flex-wrap:wrap;align-items:center;gap:0;margin:0;padding:0;background:transparent;border-bottom:1px solid #f0f0f0}" +
+      ".ch-tabs button{height:36px;padding:0 16px;border:0;background:transparent;color:#262626;cursor:pointer;font-size:13px}" +
+      ".ch-tabs button.is-active{font-weight:600;color:#fff;background:#2f54eb}" +
       ".ch-table.is-pl tr.is-gain td{background:#fff1f0}" +
       ".ch-table.is-pl tr.is-loss td{background:#f6ffed}" +
       ".sh-wide.is-pl tr.is-gain td:first-child{background:#fff1f0}" +
