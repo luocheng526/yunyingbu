@@ -51,7 +51,7 @@
   ];
   var HERO_TIP = "当天支付流水，与首页实时销售同源";
   var METRIC_CATALOG = [
-    { key: "pay", label: "支付金额 (支付)", tip: "含无效单、代发单的支付金额" },
+    { key: "pay", label: "支付金额 (支付)", tip: "按支付时间统计的订单金额(包含无效单、代发单)" },
     { key: "orders", label: "销售单数 (支付)", tip: "剔除无效单和退款后的支付订单数" },
     { key: "ad", label: "推广花费 (支付预估)", tip: "SPU推广费用" },
     { key: "profit", label: "利润 (支付预估)", tip: "净销售额减成本与费用" },
@@ -1000,7 +1000,7 @@
       .forEach(function (item) {
         const tid = String(item.person.id || item.person.name);
         rows.push({
-          name: item.person.name + item.duty + "团队",
+          name: item.person.name + (item.duty === "经理" ? "经理团队" : item.duty === "主管" ? "主管团队" : "储备团队"),
           kind: "team",
           teamId: tid,
           open: String(openId) === tid,
