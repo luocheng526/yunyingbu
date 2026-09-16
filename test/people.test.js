@@ -166,7 +166,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /双击修改/);
     assert.match(jsText, /单击修改/);
     assert.match(jsText, /bindImeSafeCommit/);
-    assert.match(jsText, /event.keyCode === 229/);
+    assert.match(jsText, /event.isComposing/);
     assert.match(jsText, /仅罗成、韩梦凯、沈子晗能改/);
     assert.match(jsText, /peopleData.canEdit === true/);
     assert.match(jsText, /people-row-check/);

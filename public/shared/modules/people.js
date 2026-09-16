@@ -42,7 +42,7 @@
       input.focus();
     });
     input.addEventListener("keydown", function (event) {
-      if (event.isComposing || event.keyCode === 229 || composing) {
+      if (event.isComposing || composing) {
         return;
       }
       if (event.key === "Enter") {
