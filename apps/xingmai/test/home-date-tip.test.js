@@ -79,8 +79,10 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /<th>店铺名称<\/th><\/tr><\/thead><tbody>/);
   assert.doesNotMatch(homeJs, /<th>排名<\/th><th>店铺名称<\/th><\/tr>/);
   assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table\{min-width:760px/);
-  assert.match(homeJs, /\.xm-hm\.is-team:not\(\.is-chief\) \.xm-hm-team\{min-width:760px\}/);
-  assert.match(homeJs, /\.xm-hm\.is-team:not\(\.is-chief\) \.xm-hm-teams-grid\{gap:72px\}/);
+  assert.match(homeJs, /\.xm-hm\.is-team:not\(\.is-chief\) \.xm-hm-team\{min-width:0;width:100%\}/);
+  assert.match(homeJs, /\.xm-hm\.is-team:not\(\.is-chief\) \.xm-hm-teams-grid\{grid-template-columns:repeat\(var\(--xm-hm-team-cols,2\),minmax\(0,1fr\)\);gap:20px\}/);
+  assert.doesNotMatch(homeJs, /\.xm-hm\.is-team:not\(\.is-chief\) \.xm-hm-teams-grid\{gap:72px\}/);
+  assert.doesNotMatch(homeJs, /\.xm-hm\.is-team:not\(\.is-chief\) \.xm-hm-team\{min-width:760px\}/);
   assert.match(homeJs, /\.xm-hm\.is-team:not\(\.is-chief\) \.xm-hm-team \.xm-hm-panel\{margin-top:48px\}/);
   assert.doesNotMatch(homeJs, /<th class="xm-hm-num">数量<\/th>/);
   assert.match(homeJs, /卡片设置 · /);
