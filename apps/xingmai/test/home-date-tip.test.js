@@ -600,3 +600,80 @@ test("live sales chart keeps 24-hour axis and hides future today points", () => 
   assert.equal(fromEv.hourFromEvent(svg, { clientX: 10 }, 24), 0);
   assert.equal(fromEv.hourFromEvent(svg, { clientX: 10 + 620 * (7 / 23) }, 24), 7);
 });
+
+test("range change blanks every shown number before the new pack paints", () => {
+  assert.match(homeJs, /function clearRangeData/);
+  assert.match(homeJs, /function clearLiveShown/);
+  assert.match(homeJs, /function refreshRange/);
+  assert.match(homeJs, /function blankShownCards/);
+  assert.match(homeJs, /var boardSeq = 0/);
+  assert.match(homeJs, /seq !== boardSeq/);
+  assert.match(homeJs, /pullLive\(true\)/);
+  assert.match(homeJs, /closeCal\(\);\n          refreshRange\(\);/);
+  assert.match(homeJs, /state\.range = "custom";\n        closeCal\(\);\n        refreshRange\(\);/);
+  assert.doesNotMatch(homeJs, /closeCal\(\);\n          paint\(root, state\);\n          pullBoard\(\);/);
+  assert.match(homeJs, /value: "", accent: !!def\.accent, trend: ""/);
+  assert.match(homeJs, /metrics\[def\.key\] == null \? "—" : metrics\[def\.key\]/);
+  const start = homeJs.indexOf("function blankShownCards");
+  const end = homeJs.indexOf("function erpQuery");
+  assert.ok(start !== -1 && end > start);
+  const fns = new Function(
+    "SHOP_CARD_KEYS",
+    "blankCompanyCards",
+    "blankLadders",
+    "blankLive",
+    homeJs.slice(start, end) + "return {clearRangeData,clearLiveShown};"
+  )(
+    ["adRatio", "profit"],
+    () => [{ key: "pay", label: "支付金额", value: "1", trend: 8 }],
+    () => [{ key: "perf", columns: [{ title: "主管", rows: [{ name: "杨润泽", amount: "9" }] }] }],
+    () => ({
+      hero: { value: "—" },
+      paid: { value: "—" },
+      cards: [{ key: "ad", value: "—" }]
+    })
+  );
+  const state = fns.clearRangeData({
+    cards: [{ key: "pay", label: "支付金额", value: "27,536", trend: 7 }],
+    teams: [
+      {
+        name: "沈子晗",
+        cards: [{ key: "pay", value: "12,000", trend: 3 }],
+        shops: [{ shop: "A", metrics: { adRatio: "10%", profit: "1" } }]
+      }
+    ],
+    chiefs: [
+      {
+        name: "高丽男",
+        cards: [{ key: "pay", value: "8,000", trend: -2 }],
+        shops: [{ shop: "B", metrics: { adRatio: "8%", profit: "2" } }]
+      }
+    ],
+    ladders: [
+      {
+        key: "perf",
+        columns: [{ title: "主管排行榜", rows: [{ name: "杨润泽", amount: "1,234" }] }]
+      }
+    ]
+  });
+  assert.equal(state.cards[0].value, "");
+  assert.equal(state.cards[0].trend, "");
+  assert.equal(state.teams[0].cards[0].value, "");
+  assert.equal(state.teams[0].shops[0].metrics.profit, "");
+  assert.equal(state.chiefs[0].cards[0].value, "");
+  assert.equal(state.chiefs[0].shops[0].metrics.adRatio, "");
+  assert.equal(state.ladders[0].columns[0].rows[0].amount, "");
+  assert.equal(state.ladders[0].columns[0].rows[0].name, "杨润泽");
+  const live = fns.clearLiveShown({
+    live: {
+      hero: { value: "12,345", delta: 8 },
+      paid: { value: "12%", delta: -1 },
+      cards: [{ key: "ad", label: "推广花费", value: "100" }]
+    },
+    shops: [{ shop: "A", liveAmount: "9", paidAmount: "8" }]
+  });
+  assert.equal(live.live.hero.value, "");
+  assert.equal(live.live.hero.delta, "");
+  assert.equal(live.live.cards[0].value, "");
+  assert.equal(live.shops[0].liveAmount, "");
+});

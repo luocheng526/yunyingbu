@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.574-home-boardwrap */
+/* xm-module-home 0.1.575-home-rangeblank */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -471,7 +471,7 @@
   }
   function trendHtml(trend) {
     if (trend == null || trend === "") {
-      return "";
+      return '<div class="xm-hm-trend"></div>';
     }
     var n = Number(trend);
     var up = n >= 0;
@@ -619,7 +619,7 @@
       "</td>" +
       (cols || [])
         .map(function (def) {
-          return '<td class="xm-hm-num">' + escapeHtml(metrics[def.key] || "—") + "</td>";
+          return '<td class="xm-hm-num">' + escapeHtml(metrics[def.key] == null ? "—" : metrics[def.key]) + "</td>";
         })
         .join("") +
       "<td>" +
@@ -840,7 +840,7 @@
     var base = fallback || {};
     return {
       label: src.label || base.label,
-      value: src.value || base.value,
+      value: src.value != null ? src.value : base.value,
       delta: src.delta != null ? src.delta : base.delta,
       yesterday: src.yesterday && src.yesterday.length ? src.yesterday : base.yesterday,
       today: src.today && src.today.length ? src.today : src.spark && src.spark.length ? src.spark : base.today,
@@ -1007,14 +1007,17 @@
       '><div class="xm-hm-card-head"><span>' +
       escapeHtml((chart && chart.label) || "实时指标") +
       '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
-      escapeHtml((chart && chart.value) || "—") +
-      '</div><div class="xm-hm-trend ' +
-      (down ? "is-down" : "is-up") +
-      '">环比 ' +
-      (down ? "↘" : "↗") +
-      " " +
-      Math.round(Math.abs(Number(chart && chart.delta) || 0)) +
-      "%</div>" +
+      escapeHtml(chart && chart.value != null ? chart.value : "—") +
+      "</div>" +
+      (chart && (chart.delta == null || chart.delta === "")
+        ? '<div class="xm-hm-trend"></div>'
+        : '<div class="xm-hm-trend ' +
+          (down ? "is-down" : "is-up") +
+          '">环比 ' +
+          (down ? "↘" : "↗") +
+          " " +
+          Math.round(Math.abs(Number(chart && chart.delta) || 0)) +
+          "%</div>") +
       (line.hours ? '<div class="xm-hm-chart-sub">' + sub + "</div>" : "") +
       compareLineHtml(line) +
       "</article>"
@@ -1048,17 +1051,17 @@
       "</td><td>" +
       escapeHtml(row.shop) +
       "</td><td>" +
-      escapeHtml(row.liveAmount || "—") +
+      escapeHtml(row.liveAmount == null ? "—" : row.liveAmount) +
       "</td><td>" +
-      escapeHtml(row.paidAmount || "—") +
+      escapeHtml(row.paidAmount == null ? "—" : row.paidAmount) +
       "</td><td>" +
-      escapeHtml(row.profit || "—") +
+      escapeHtml(row.profit == null ? "—" : row.profit) +
       "</td><td>" +
-      escapeHtml(row.roi || "—") +
+      escapeHtml(row.roi == null ? "—" : row.roi) +
       "</td><td>" +
-      escapeHtml(row.paidDeal || "—") +
+      escapeHtml(row.paidDeal == null ? "—" : row.paidDeal) +
       "</td><td>" +
-      escapeHtml(row.feeRate || "—") +
+      escapeHtml(row.feeRate == null ? "—" : row.feeRate) +
       "</td></tr>"
     );
   }
@@ -1221,9 +1224,9 @@
       ".xm-hm-card.is-over,.xm-hm-pop label.is-over{outline:1px dashed var(--xm-primary)}" +
       ".xm-hm-pop label{cursor:grab}" +
       ".xm-hm-card-head{display:flex;align-items:center;justify-content:space-between;color:var(--xm-muted);font-size:12px}" +
-      ".xm-hm-value{margin-top:8px;font-size:22px;font-weight:700;color:var(--xm-ink)}" +
+      ".xm-hm-value{margin-top:8px;min-height:1.2em;font-size:22px;font-weight:700;color:var(--xm-ink)}" +
       ".xm-hm-value.is-accent{color:var(--xm-primary)}" +
-      ".xm-hm-trend{margin-top:6px;font-size:12px;color:var(--xm-muted)}" +
+      ".xm-hm-trend{margin-top:6px;min-height:1.2em;font-size:12px;color:var(--xm-muted)}" +
       ".xm-hm-trend.is-up{color:#cf1322}" +
       ".xm-hm-trend.is-down{color:#389e0d}" +
       ".xm-hm-panel{width:100%;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:12px 12px 8px;min-height:0}" +
@@ -1336,7 +1339,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.574-home-boardwrap");
+    board.setAttribute("data-hm-js", "0.1.575-home-rangeblank");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1625,7 +1628,7 @@
   }
   function blankCompanyCards() {
     return COMPANY_CARD_DEFS.map(function (def) {
-      return { key: def.key, label: def.label, value: "—", accent: !!def.accent, trend: 0, tip: def.tip || "" };
+      return { key: def.key, label: def.label, value: "", accent: !!def.accent, trend: "", tip: def.tip || "" };
     });
   }
   function companyCardsFrom(sum, prev) {
@@ -1683,6 +1686,80 @@
         return { title: col.title, rows: [] };
       }) }
     ];
+  }
+  function blankShownCards(cards) {
+    return (cards || []).map(function (card) {
+      return Object.assign({}, card, { value: "", trend: "" });
+    });
+  }
+  function blankShownShops(shops) {
+    return (shops || []).map(function (shop) {
+      var metrics = {};
+      SHOP_CARD_KEYS.forEach(function (key) {
+        metrics[key] = "";
+      });
+      return Object.assign({}, shop, { metrics: metrics });
+    });
+  }
+  function blankShownRows(rows) {
+    return (rows || []).map(function (row) {
+      return Object.assign({}, row, { amount: "" });
+    });
+  }
+  function blankShownLadders(ladders) {
+    return (ladders || []).map(function (ladder) {
+      return Object.assign({}, ladder, {
+        columns: (ladder.columns || []).map(function (col) {
+          return Object.assign({}, col, {
+            rows: blankShownRows(col.rows),
+            blocks: (col.blocks || []).map(function (block) {
+              return Object.assign({}, block, { rows: blankShownRows(block.rows) });
+            })
+          });
+        })
+      });
+    });
+  }
+  function blankShownTeam(team) {
+    return Object.assign({}, team, {
+      cards: blankShownCards(team && team.cards),
+      shops: blankShownShops(team && team.shops)
+    });
+  }
+  function clearRangeData(state) {
+    if (!state) {
+      return state;
+    }
+    state.cards = blankShownCards(state.cards && state.cards.length ? state.cards : blankCompanyCards());
+    state.teams = (state.teams || []).map(blankShownTeam);
+    state.chiefs = (state.chiefs || []).map(blankShownTeam);
+    state.ladders = blankShownLadders(state.ladders && state.ladders.length ? state.ladders : blankLadders());
+    return state;
+  }
+  function clearLiveShown(state) {
+    if (!state) {
+      return state;
+    }
+    var blank = blankLive();
+    var live = state.live || blank;
+    state.live = Object.assign({}, live, {
+      hero: Object.assign({}, live.hero || {}, { value: "", delta: "" }),
+      paid: Object.assign({}, live.paid || {}, { value: "", delta: "" }),
+      cards: (live.cards && live.cards.length ? live.cards : blank.cards).map(function (card) {
+        return Object.assign({}, card, { value: "", extra: "" });
+      })
+    });
+    state.shops = (state.shops || []).map(function (row) {
+      return Object.assign({}, row, {
+        liveAmount: "",
+        paidAmount: "",
+        profit: "",
+        roi: "",
+        paidDeal: "",
+        feeRate: ""
+      });
+    });
+    return state;
   }
   function erpQuery(from, to) {
     return (
@@ -2322,7 +2399,20 @@
           }
         });
       }
-      function pullLive() {
+      var boardSeq = 0;
+      function refreshRange() {
+        clearRangeData(state);
+        if (state.view === "live") {
+          clearLiveShown(state);
+        }
+        paint(root, state);
+        return pullBoard();
+      }
+      function pullLive(blankFirst) {
+        if (blankFirst) {
+          clearLiveShown(state);
+          paint(root, state);
+        }
         return api("/api/home/erp-paid").then(function (data) {
           if (dead) {
             return;
@@ -2341,6 +2431,7 @@
         });
       }
       function pullBoard() {
+        var seq = ++boardSeq;
         var prev = previousDates(state.from, state.to);
         return Promise.all([
           fetchRangePack(state.from, state.to),
@@ -2351,7 +2442,7 @@
           api("/api/people/grants"),
           api("/api/people/org/stores")
         ]).then(function (pack) {
-          if (dead) {
+          if (dead || seq !== boardSeq) {
             return;
           }
           var rangePack = pack[0] || { records: [], summary: null };
@@ -2373,7 +2464,7 @@
           state.source = (rangePack.summary && rangePack.summary.payAmount != null) || (rangePack.records && rangePack.records.length) ? "xingmai-erp" : "";
           paint(root, state);
         }).catch(function () {
-          if (!dead) {
+          if (!dead && seq === boardSeq) {
             paint(root, state);
           }
         });
@@ -2393,7 +2484,7 @@
           cardSetOpen = false;
           paint(root, state);
           if (state.view === "live" || state.view === "company") {
-            pullLive();
+            pullLive(true);
           }
           return;
         }
@@ -2404,8 +2495,7 @@
           state.from = next.from;
           state.to = next.to;
           closeCal();
-          paint(root, state);
-          pullBoard();
+          refreshRange();
           return;
         }
         if (event.target.closest("#xm-hm-date-clear")) {
@@ -2414,8 +2504,7 @@
           state.from = yest.from;
           state.to = yest.to;
           closeCal();
-          paint(root, state);
-          pullBoard();
+          refreshRange();
           return;
         }
         if (event.target.closest("#xm-hm-dates")) {
@@ -2650,8 +2739,7 @@
         state.to = to;
         state.range = "custom";
         closeCal();
-        paint(root, state);
-        pullBoard();
+        refreshRange();
       }
       function renderCal() {
         var el = root.querySelector("#xm-hm-cal");
