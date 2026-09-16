@@ -378,46 +378,42 @@ test("chief columns follow every org 主管/储备 supervisor including 经理",
   assert.equal(fns.shopOnRoleTeam(shops[4], "潘梦玉", "主管"), true);
 });
 
-test("board puts 业绩排行榜 in a centered card and keeps 04 05 plus manager profit", () => {
+test("board has 业绩 and 利润 ladders with 主管 运营 columns and ranks 1-10", () => {
   assert.match(homeJs, /class="xm-hm-ladder-card"/);
   assert.match(homeJs, /\.xm-hm-ladder-head\{display:flex;justify-content:center/);
   assert.match(homeJs, /\.xm-hm-ladder-card\{[^}]*font-size:24px/);
+  assert.match(homeJs, /\.xm-hm-podiums\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(homeJs, /function restRows/);
-  assert.match(homeJs, /while \(out\.length < 2\)/);
-  assert.match(homeJs, /label: "业绩"/);
-  assert.match(homeJs, /label: "利润"/);
-  assert.doesNotMatch(homeJs, /key: "profit",\n        title: "利润排行榜"/);
+  assert.match(homeJs, /while \(out\.length < 7\)/);
+  assert.match(homeJs, /key: "profit"/);
+  assert.match(homeJs, /title: "利润排行榜"/);
+  assert.match(homeJs, /column\("主管排行榜", "主管", "payAmount"\), column\("运营排行榜", "运营", "payAmount"\)/);
+  assert.match(homeJs, /column\("主管排行榜", "主管", "profit"\), column\("运营排行榜", "运营", "profit"\)/);
+  assert.doesNotMatch(homeJs, /column\("经理排行榜"/);
   const start = homeJs.indexOf("function standItemHtml");
   const end = homeJs.indexOf("var LIVE_CARD_KEYS");
   const fns = new Function(
-    "function escapeHtml(s){return String(s||\"\");}" + homeJs.slice(start, end) + "return {ladderHtml,podiumColumnHtml,restRows};"
+    "function escapeHtml(s){return String(s||\"\");}" + homeJs.slice(start, end) + "return {ladderHtml,restRows};"
   )();
-  assert.deepEqual(fns.restRows([]).map((row) => row.name), ["—", "—"]);
-  assert.deepEqual(fns.restRows([{ name: "a" }, { name: "b" }, { name: "c" }, { name: "d" }]).map((row) => row.name), ["d", "—"]);
+  assert.equal(fns.restRows([]).length, 7);
+  assert.deepEqual(fns.restRows([{ name: "a" }, { name: "b" }, { name: "c" }, { name: "d" }]).map((row) => row.name), [
+    "d", "—", "—", "—", "—", "—", "—"
+  ]);
   const html = fns.ladderHtml({
     key: "perf",
     title: "业绩排行榜",
     unit: "支付金额",
     columns: [
-      { title: "运营排行榜", rows: [] },
-      { title: "主管排行榜", rows: [] },
-      {
-        title: "经理排行榜",
-        blocks: [
-          { label: "业绩", unit: "支付金额", rows: [{ name: "韩梦凯", amount: "1" }] },
-          { label: "利润", unit: "利润", rows: [{ name: "沈子晗", amount: "2" }] }
-        ]
-      }
+      { title: "主管排行榜", rows: [{ name: "杨润泽", amount: "1" }] },
+      { title: "运营排行榜", rows: [{ name: "高丽男", amount: "2" }] }
     ]
   });
   assert.match(html, /xm-hm-ladder-card">业绩排行榜</);
-  assert.equal(html.includes("<h2>"), false);
-  assert.equal((html.match(/>04</g) || []).length, 4);
-  assert.equal((html.match(/>05</g) || []).length, 4);
-  assert.match(html, /xm-hm-podium-sub">业绩</);
-  assert.match(html, /xm-hm-podium-sub">利润</);
-  assert.match(html, /韩梦凯/);
-  assert.match(html, /沈子晗/);
+  assert.match(html, /主管排行榜/);
+  assert.match(html, /运营排行榜/);
+  assert.equal(html.includes("经理排行榜"), false);
+  assert.equal((html.match(/>04</g) || []).length, 2);
+  assert.equal((html.match(/>10</g) || []).length, 2);
 });
 
 test("card help uses a body-level tooltip so overflow cannot clip it", () => {

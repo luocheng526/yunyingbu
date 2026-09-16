@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.567-home-boardcard */
+/* xm-module-home 0.1.568-home-twoboard */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -757,7 +757,7 @@
   function restRows(rows) {
     var rest = (rows || []).slice(3, 10);
     var out = rest.slice();
-    while (out.length < 2) {
+    while (out.length < 7) {
       out.push({ name: "—", amount: "—" });
     }
     return out;
@@ -1173,7 +1173,7 @@
       ".xm-hm-ladder{margin-top:4px}" +
       ".xm-hm-ladder-head{display:flex;justify-content:center;margin:8px 0 16px}" +
       ".xm-hm-ladder-card{display:inline-flex;align-items:center;justify-content:center;min-width:168px;padding:12px 28px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);font-size:24px;font-weight:700;color:var(--xm-ink);letter-spacing:.04em}" +
-      ".xm-hm-podiums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start}" +
+      ".xm-hm-podiums{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}" +
       ".xm-hm-podium{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:12px 12px 8px}" +
       ".xm-hm-podium h3{margin:0 0 10px;text-align:center;font-size:13px;color:var(--xm-muted);font-weight:600}" +
       ".xm-hm-podium-sub{margin:14px 0 8px;text-align:center;font-size:15px;font-weight:700;color:var(--xm-ink)}" +
@@ -1336,7 +1336,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.567-home-boardcard");
+    board.setAttribute("data-hm-js", "0.1.568-home-twoboard");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1673,23 +1673,15 @@
     ];
   }
   function blankLadders() {
+    var cols = [
+      { title: "主管排行榜", rows: [] },
+      { title: "运营排行榜", rows: [] }
+    ];
     return [
-      {
-        key: "perf",
-        title: "业绩排行榜",
-        unit: "支付金额",
-        columns: [
-          { title: "运营排行榜", rows: [] },
-          { title: "主管排行榜", rows: [] },
-          {
-            title: "经理排行榜",
-            blocks: [
-              { label: "业绩", unit: "支付金额", rows: [] },
-              { label: "利润", unit: "利润", rows: [] }
-            ]
-          }
-        ]
-      }
+      { key: "perf", title: "业绩排行榜", unit: "支付金额", columns: cols },
+      { key: "profit", title: "利润排行榜", unit: "利润", columns: cols.map(function (col) {
+        return { title: col.title, rows: [] };
+      }) }
     ];
   }
   function erpQuery(from, to) {
@@ -2235,17 +2227,13 @@
         key: "perf",
         title: "业绩排行榜",
         unit: "支付金额",
-        columns: [
-          column("运营排行榜", "运营", "payAmount"),
-          column("主管排行榜", "主管", "payAmount"),
-          {
-            title: "经理排行榜",
-            blocks: [
-              { label: "业绩", unit: "支付金额", rows: column("经理排行榜", "经理", "payAmount").rows },
-              { label: "利润", unit: "利润", rows: column("经理排行榜", "经理", "profit").rows }
-            ]
-          }
-        ]
+        columns: [column("主管排行榜", "主管", "payAmount"), column("运营排行榜", "运营", "payAmount")]
+      },
+      {
+        key: "profit",
+        title: "利润排行榜",
+        unit: "利润",
+        columns: [column("主管排行榜", "主管", "profit"), column("运营排行榜", "运营", "profit")]
       }
     ];
   }
