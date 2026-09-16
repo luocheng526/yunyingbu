@@ -1,3 +1,4 @@
+/* xm-data-overview 0.1.612-data-range-blank — range change blanks numbers before new data */
 (function () {
   window.XmModules = window.XmModules || {};
 
@@ -49,57 +50,25 @@
     { key: "shipMaterialFee", label: "耗材费 (发货)", fields: ["shipMaterialFee"], kind: "money" },
     { key: "packFee", label: "打包费", fields: ["packFee"], kind: "money" }
   ];
-  var HERO_TIP = "当天按支付时间累计的销售额，与首页实时销售指数同源（星脉 ERP 支付流水）";
+  var HERO_TIP = "当天支付流水，与首页实时销售同源";
   var METRIC_CATALOG = [
     { key: "pay", label: "支付金额 (支付)", tip: "按支付时间统计的订单金额(包含无效单、代发单)" },
-    {
-      key: "orders",
-      label: "销售单数 (支付)",
-      tip: "剔除无效单和退款订单后的订单数(按支付时间统计)\n计算公式:销售单数(支付)-无效单订单数-普通单退款单数-代发单退款单数"
-    },
+    { key: "orders", label: "销售单数 (支付)", tip: "剔除无效单和退款后的支付订单数" },
     { key: "ad", label: "推广花费 (支付预估)", tip: "SPU推广费用" },
-    {
-      key: "profit",
-      label: "利润 (支付预估)",
-      tip: "统计时间内产生的利润（按支付时间统计）\n计算公式：净销售额（支付）-净货品成本（支付）-销售费用（支付）-发货费用（支付）-其他费用-自定义费用"
-    },
+    { key: "profit", label: "利润 (支付预估)", tip: "净销售额减成本与费用" },
     { key: "margin", label: "大毛利率", tip: "利润/支付金额" },
-    { key: "custom", label: "自定义费用", tip: "店铺或运营录入的自定义费用，利润计算时会扣除" },
-    {
-      key: "refundRate",
-      label: "退款率 (按金额)",
-      tip: "按订单金额计算的退款率\n计算公式:退款金额/支付金额(支付)*100%"
-    },
-    {
-      key: "adRate",
-      label: "推广花费占比 (支付预估)",
-      tip: "推广花费占支付金额的比例（按支付时间统计）\n计算公式：推广花费（支付预估）/支付金额（支付）100%（推广花费≤0时，按0计算：支付金额≤0时，按1计算）"
-    },
-    { key: "netSales", label: "净销售额 (支付)", tip: "净销售数对应的订单金额合计" },
-    {
-      key: "refundAmount",
-      label: "退款金额",
-      tip: "按退款成功时间统计的金额(包含未发货退款、已发货仅退款和已发货退货退款)"
-    },
-    { key: "platformFee", label: "平台花费 (支付预估)", tip: "支付金额（支付）对应的预估平台花费" },
-    { key: "goodsCost", label: "总货品成本", tip: "京小洁采购单成本+导入的货品成本" },
-    {
-      key: "saleFee",
-      label: "销售费用 (支付预估)",
-      tip: "支付金额（支付）对应的预估销售费用\n计算公式：推广花费（支付预估）+平台花费（支付预估）+无效单佣金"
-    },
-    {
-      key: "jdWarehouseRate",
-      label: "京仓订单占比",
-      tip: "京仓订单数量占销售订单数量的比例(按支付时间统计)\n计算公式:京仓订单数量（支付）/销售单数（支付）*100%"
-    },
-    {
-      key: "netGoodsCostRate",
-      label: "净货品成本占比 (支付)",
-      tip: "净货品成本占支付金额的比例（按支付时间统计）\n计算公式：净货款成本（支付）/支付金额（支付）*100%"
-    },
-    { key: "invalidAmount", label: "无效单金额", tip: "标记为无效单的订单支付金额" },
-    { key: "jdWarehouseCount", label: "京仓订单数量", tip: "京仓订单数量（按支付时间统计）" }
+    { key: "custom", label: "自定义费用", tip: "利润计算时扣除" },
+    { key: "refundRate", label: "退款率 (按金额)", tip: "退款金额/支付金额" },
+    { key: "adRate", label: "推广花费占比 (支付预估)", tip: "推广花费/支付金额" },
+    { key: "netSales", label: "净销售额 (支付)", tip: "净销售数对应金额" },
+    { key: "refundAmount", label: "退款金额", tip: "按退款成功时间统计" },
+    { key: "platformFee", label: "平台花费 (支付预估)", tip: "支付金额对应预估平台花费" },
+    { key: "goodsCost", label: "总货品成本", tip: "采购单成本+导入成本" },
+    { key: "saleFee", label: "销售费用 (支付预估)", tip: "推广+平台+无效单佣金" },
+    { key: "jdWarehouseRate", label: "京仓订单占比", tip: "京仓订单数量/销售单数" },
+    { key: "netGoodsCostRate", label: "净货品成本占比 (支付)", tip: "净货款成本/支付金额" },
+    { key: "invalidAmount", label: "无效单金额", tip: "无效单支付金额" },
+    { key: "jdWarehouseCount", label: "京仓订单数量", tip: "京仓订单数量" }
   ];
 
   function catalogKeys() {
@@ -400,11 +369,9 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov26";
+      link.href = "/data-pages.css?v=0.1.612-data-range-blank";
       document.head.appendChild(link);
     }
-    ensureHeroStyle();
-    ensureSummaryStyle();
     ensureCardTypeStyle();
     ensurePickStyle();
     ensureTabsStyle();
@@ -417,14 +384,10 @@
     const style = document.createElement("style");
     style.id = "ch-tabs-style";
     style.textContent =
-      ".ch-split{height:2px;margin:8px 0;background:#2f54eb;border:0}" +
-      ".ch-tabs{display:flex;flex-wrap:wrap;align-items:center;gap:0;margin:0;padding:0;background:transparent;border-bottom:1px solid #f0f0f0}" +
-      ".ch-tabs button{height:36px;padding:0 16px;border:0;background:transparent;color:#262626;cursor:pointer;font-size:13px}" +
-      ".ch-tabs button.is-active{font-weight:600;color:#fff;background:#2f54eb}" +
-      ".ch-table.is-pl tr.is-gain td{background:#fff1f0}" +
-      ".ch-table.is-pl tr.is-loss td{background:#f6ffed}" +
-      ".sh-wide.is-pl tr.is-gain td:first-child{background:#fff1f0}" +
-      ".sh-wide.is-pl tr.is-loss td:first-child{background:#f6ffed}";
+      ".ch-split{height:2px;margin:8px 0;background:#2f54eb}" +
+      ".ch-tabs{display:flex;background:transparent;border-bottom:1px solid #f0f0f0}" +
+      ".ch-tabs button{height:36px;border:0;background:transparent;color:#262626}" +
+      ".ch-tabs button.is-active{color:#fff;background:#2f54eb}";
     document.head.appendChild(style);
   }
 
@@ -434,26 +397,7 @@
     }
     const style = document.createElement("style");
     style.id = "ch-mpick-style";
-    style.textContent =
-      ".ch-mpick-mask{position:fixed;inset:0;z-index:4200;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.45)}" +
-      ".ch-mpick{display:flex;flex-direction:column;width:min(1080px,100%);height:min(640px,100%);background:#fff;border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,.18);color:#262626;overflow:hidden}" +
-      ".ch-mpick-head{display:flex;align-items:center;justify-content:space-between;height:48px;padding:0 20px;border-bottom:1px solid #f0f0f0;font-size:16px}" +
-      ".ch-mpick-x{width:28px;height:28px;border:0;background:transparent;color:#8c8c8c;font-size:20px;line-height:28px;cursor:pointer}" +
-      ".ch-mpick-body{display:flex;flex:1;min-height:0}" +
-      ".ch-mpick-left{flex:1;min-width:0;padding:16px 20px;overflow:auto}" +
-      ".ch-mpick-search input{width:100%;height:36px;padding:0 12px;border:1px solid #d9d9d9;border-radius:6px;box-sizing:border-box}" +
-      ".ch-mpick-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 20px;margin-top:18px}" +
-      ".ch-mpick-opt{display:flex;align-items:center;gap:8px;color:#2f54eb;font-size:14px;cursor:pointer}" +
-      ".ch-mpick-opt input{accent-color:#2f54eb}" +
-      ".ch-mpick-right{width:280px;flex:none;padding:16px 16px 12px;background:#f7f8fa;border-left:1px solid #f0f0f0;overflow:auto}" +
-      ".ch-mpick-right-top{display:flex;align-items:center;justify-content:space-between;font-size:13px}" +
-      ".ch-mpick-right-top button{border:0;background:transparent;color:#2f54eb;cursor:pointer}" +
-      ".ch-mpick-hint{margin:10px 0 12px;color:#8c8c8c;font-size:12px}" +
-      ".ch-mpick-item{display:flex;align-items:center;gap:8px;height:36px;margin-bottom:8px;padding:0 10px;background:#fff;border:1px solid #f0f0f0;border-radius:6px;font-size:13px;cursor:grab}" +
-      ".ch-mpick-handle{width:12px;height:12px;background:linear-gradient(#bfbfbf,#bfbfbf) 0 2px/12px 2px no-repeat,linear-gradient(#bfbfbf,#bfbfbf) 0 5px/12px 2px no-repeat,linear-gradient(#bfbfbf,#bfbfbf) 0 8px/12px 2px no-repeat}" +
-      ".ch-mpick-foot{display:flex;gap:8px;padding:12px 20px;border-top:1px solid #f0f0f0}" +
-      ".ch-mpick-ok{height:32px;padding:0 16px;border:0;border-radius:4px;background:#2f54eb;color:#fff;cursor:pointer}" +
-      ".ch-mpick-foot [data-mpick='cancel']{height:32px;padding:0 16px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;cursor:pointer}";
+    style.textContent = ".ch-mpick{display:flex}";
     document.head.appendChild(style);
   }
 
@@ -464,87 +408,14 @@
     const style = document.createElement("style");
     style.id = "ch-card-type-style";
     style.textContent =
-      ".ch-card .label{font-size:13px;line-height:22px;color:#8c8c8c;opacity:1}" +
-      ".ch-card .value{margin-top:16px;font-size:28px;font-weight:700;line-height:1.3;letter-spacing:-.02em;color:#141414;font-variant-numeric:tabular-nums}" +
-      ".ch-card .extra{margin-top:14px;font-size:12px;line-height:20px;color:#8c8c8c;opacity:1}" +
-      ".ch-metrics{align-items:stretch}" +
-      ".ch-metrics .ch-card{min-height:148px;height:100%;box-sizing:border-box;cursor:grab;user-select:none}" +
-      ".ch-metrics .ch-hero{min-height:216px;height:100%;box-sizing:border-box;cursor:grab;user-select:none}" +
-      ".ch-metrics .ch-card.is-drag{opacity:.55;cursor:grabbing}" +
-      ".ch-metrics .ch-card.is-over{outline:1px solid #2f54eb;background:#f5f8ff}" +
-      ".ch-hero .ch-spark{display:block;width:100%;height:72px;margin:8px 0 0}" +
-      ".ch-axis{display:flex;justify-content:space-between;font-size:10px;opacity:.4;margin-top:2px}" +
-      ".ch-hero .value{margin:8px 0 0}" +
-      ".ch-card-right{display:inline-flex;align-items:center;gap:6px;margin-left:auto;flex:none}" +
-      ".ch-hero .delta{margin:4px 0 0;font-size:12px;line-height:16px;white-space:nowrap}" +
-      ".ch-hero .ch-clock{margin-left:2px;padding:0;height:auto;border-radius:0;background:transparent;color:#8c8c8c;font-size:12px;font-variant-numeric:tabular-nums;opacity:1}" +
-      ".ch-card .label{display:flex;align-items:center;justify-content:space-between;gap:8px}" +
-      ".ch-help{flex:none;width:16px;height:16px;border:1px solid var(--xm-line,#d9d9d9);border-radius:3px;background:#fff;color:#8c8c8c;font-size:11px;line-height:14px;cursor:help;padding:0}" +
-      ".ch-tip{position:fixed;z-index:4300;max-width:320px;padding:10px 12px;background:#fff;border:1px solid #f0f0f0;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.12);color:#262626;font-size:12px;line-height:1.6;white-space:pre-wrap;display:none}" +
-      ".ch-tip.is-on{display:block}" +
-      ".ch-table.sh-wide{overflow:visible}" +
-      ".ch-shop-pick{position:relative;display:inline-block;min-width:160px;opacity:1;z-index:30}" +
-      ".ch-shop-pick-btn{position:relative;display:block;width:100%;height:26px;padding:0 24px 0 8px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;color:#262626;font-size:12px;text-align:left;cursor:pointer}" +
-      ".ch-shop-pick-btn:after{content:'';position:absolute;right:8px;top:11px;border:4px solid transparent;border-top-color:#8c8c8c}" +
-      ".ch-shop-menu{display:none;position:fixed;z-index:5200;min-width:220px;max-height:280px;overflow:auto;padding:6px 0;background:#fff;opacity:1;pointer-events:auto;border:1px solid #d9d9d9;border-radius:4px;box-shadow:0 8px 24px rgba(0,0,0,.18)}" +
-      ".ch-shop-menu.is-open{display:block}" +
-      ".ch-shop-opt{display:flex;align-items:center;gap:8px;margin:0;padding:5px 12px;color:#262626;background:#fff;font-size:13px;cursor:pointer;white-space:nowrap}" +
-      ".ch-shop-opt:hover{background:#f5f8ff}" +
-      ".ch-shop-opt input{flex:none;width:14px;height:14px;margin:0;accent-color:#2f54eb}";
+      ".ch-metrics{grid-auto-rows:minmax(216px,auto)}" +
+      ".ch-card-right{display:inline-flex}" +
+      ".ch-shop-menu{display:none;position:fixed}" +
+      ".ch-shop-menu.is-open{display:block}";
     document.head.appendChild(style);
   }
 
-  function ensureSummaryStyle() {
-    if (document.getElementById("ch-sum-style")) {
-      return;
-    }
-    const style = document.createElement("style");
-    style.id = "ch-sum-style";
-    style.textContent =
-      ".ch-summary{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:2px 0 12px;margin:0 0 10px;border-bottom:1px solid var(--xm-line,#eee);font-size:13px}" +
-      ".ch-sum-title{font-size:18px;font-weight:700;color:var(--xm-ink,#1f1f1f);line-height:28px}" +
-      ".ch-pill{display:inline-flex;align-items:center;height:28px;padding:0 14px;border-radius:14px;background:#2f54eb;color:#fff;font-size:13px;line-height:28px;white-space:nowrap}" +
-      ".ch-summary .ch-set{margin-left:auto}";
-    document.head.appendChild(style);
-  }
-
-  function ensureHeroStyle() {
-    if (document.getElementById("ch-hero-style")) {
-      return;
-    }
-    const style = document.createElement("style");
-    style.id = "ch-hero-style";
-    style.textContent =
-      ".ch-hero .label{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:nowrap}" +
-      ".ch-hero .ch-clock{font-variant-numeric:tabular-nums}" +
-      ".ch-hero .value{margin:8px 0 0}" +
-      ".ch-hero .delta{margin:4px 0 0;font-size:12px}" +
-      ".ch-hero .ch-spark{display:block;width:100%;height:72px;margin:8px 0 0}" +
-      ".ch-axis{display:flex;justify-content:space-between;font-size:10px;opacity:.4;margin-top:2px}";
-    document.head.appendChild(style);
-  }
-
-  var CAL_SHADOW_CSS =
-    ":host{position:fixed;z-index:4000;display:none;box-sizing:border-box;width:560px;background:#fff;border:1px solid #e8e8e8;border-radius:4px;box-shadow:0 6px 16px rgba(0,0,0,.12);color:#262626;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif}" +
-    ":host(.is-open){display:block}" +
-    ".ch-cal{display:flex;width:560px}" +
-    ".ch-cal-month{width:280px;padding:8px 12px 10px;box-sizing:border-box}" +
-    ".ch-cal-month + .ch-cal-month{border-left:1px solid #f0f0f0}" +
-    ".ch-cal-head{position:relative;height:32px;line-height:32px;text-align:center;font-size:14px}" +
-    ".ch-cal-head button{position:absolute;top:4px;width:22px;height:22px;padding:0;border:0;background:transparent;color:#8c8c8c;font-size:12px;line-height:22px;cursor:pointer}" +
-    ".ch-cal-head [data-cal='prev-year']{left:0}" +
-    ".ch-cal-head [data-cal='prev-month']{left:20px}" +
-    ".ch-cal-head [data-cal='next-month']{right:20px}" +
-    ".ch-cal-head [data-cal='next-year']{right:0}" +
-    "table{width:100%;border-collapse:collapse;table-layout:fixed}" +
-    "th{height:24px;font-size:12px;font-weight:400;color:#8c8c8c}" +
-    "td{height:28px;padding:0;text-align:center}" +
-    "td button{display:block;width:100%;height:28px;margin:0;padding:0;border:0;border-radius:2px;background:transparent;color:#262626;font:13px/28px inherit;cursor:pointer}" +
-    "td button:hover:not(:disabled):not(.is-start):not(.is-end){background:#f5f5f5}" +
-    "td button.is-out,td button.is-over,td button.is-future,td button:disabled{color:#bfbfbf;cursor:default}" +
-    "td button.is-today{color:#cf1322;font-weight:600}" +
-    "td button.is-in{background:#fff1f0;color:#c62828}" +
-    "td button.is-start,td button.is-end{background:#c62828;color:#fff}";
+  var CAL_SHADOW_CSS = window.XmDataOps && window.XmDataOps.calCss ? window.XmDataOps.calCss : "";
 
   function getCalPop() {
     let el = document.getElementById("ch-cal-pop");
@@ -873,14 +744,24 @@
     }
     if (col.key === "netSales") {
       const net = firstNum(shop, col.fields);
-      return fmt(net != null ? net : pay - refund, 2);
+      return fmtInt(net != null ? net : pay - refund);
     }
     if (col.kind === "int") {
       const count = firstNum(shop, col.fields);
-      return fmt(count != null ? count : 0, 0);
+      return fmtInt(count != null ? count : 0);
     }
     const money = firstNum(shop, col.fields);
-    return fmt(money != null ? money : 0, 2);
+    return fmtInt(money != null ? money : 0);
+  }
+
+  function payOf(shop) {
+    return Number(shop && shop.payAmount) || 0;
+  }
+
+  function sortByPay(list) {
+    return (list || []).slice().sort(function (a, b) {
+      return payOf(b) - payOf(a);
+    });
   }
 
   function sumShopTotals(list) {
@@ -971,8 +852,35 @@
     return out;
   }
 
+  function dutyTitle(name, duty) {
+    return String(name || "") + (duty === "经理" ? "经理团队" : duty === "主管" ? "主管团队" : "储备团队");
+  }
+
+  function personDuty(person, people) {
+    return window.XmDataOps ? window.XmDataOps.personDuty(person, people) : "";
+  }
+
+  function dutyLeaders(people) {
+    return window.XmDataOps ? window.XmDataOps.leaders(people) : [];
+  }
+
+  function dutyTableFrom(shops, people, openId, teamIds) {
+    if (!window.XmDataOps || !window.XmDataOps.dutyTable) {
+      return { title: "店铺分组", columns: ["团队"], rows: [] };
+    }
+    return window.XmDataOps.dutyTable(shops, people, openId, teamIds, {
+      cols: loadShopColKeys().map(shopColOf),
+      sum: sumShopTotals,
+      cell: shopColCell,
+      firstNum: firstNum,
+      sortByPay: sortByPay,
+      payOf: payOf,
+      title: dutyTitle
+    });
+  }
+
   function shopTableFrom(shops) {
-    const list = shops || [];
+    const list = sortByPay(shops);
     const keys = loadShopColKeys();
     const cols = keys.map(shopColOf);
     const tot = sumShopTotals(list);
@@ -1182,8 +1090,19 @@
           { name: "京东", kind: "jd", cells: channelCells }
         ]
       },
-      shopTable: shopTableFrom(shops)
+      shopTable: shopTableFrom(shops),
+      trend: trend
     };
+  }
+
+  function opsPanelHtml(payload, shops) {
+    return window.XmDataOps ? window.XmDataOps.panel(payload, shops) : "";
+  }
+
+  function paintOpsBars(svg, days) {
+    if (window.XmDataOps) {
+      window.XmDataOps.paint(svg, days);
+    }
   }
 
   function asSeries(list) {
@@ -1410,9 +1329,11 @@
     const mark =
       kind === "jd"
         ? '<span class="ch-logo ch-logo-jd" aria-hidden="true">京</span>'
-        : kind === "shop"
-          ? '<span class="ch-logo" style="background:#e53935" aria-hidden="true"></span>'
-          : "";
+        : kind === "team"
+          ? '<span class="ch-caret" aria-hidden="true">' + (row.open ? "▾" : "▸") + "</span>"
+          : kind === "shop"
+            ? '<span class="ch-logo" style="background:#e53935" aria-hidden="true"></span>'
+            : "";
     return (
       '<td class="ch-name"><span class="ch-bar"></span>' +
       mark +
@@ -1448,19 +1369,29 @@
       "</tr>";
     const body = (block.rows || [])
       .map(function (row) {
-        let cls = "";
+        const cls = [];
+        if (row.kind === "team") {
+          cls.push("is-team");
+          if (row.open) {
+            cls.push("is-open");
+          }
+        }
+        if (row.child) {
+          cls.push("is-child");
+        }
         if (showPl && row.kind === "shop") {
           const raw = row.profit;
           const n = Number(raw);
           if (raw != null && raw !== "" && Number.isFinite(n) && n > 0) {
-            cls = ' class="is-gain"';
+            cls.push("is-gain");
           } else if (raw != null && raw !== "" && Number.isFinite(n) && n < 0) {
-            cls = ' class="is-loss"';
+            cls.push("is-loss");
           }
         }
         return (
           "<tr" +
-          cls +
+          (cls.length ? ' class="' + cls.join(" ") + '"' : "") +
+          (row.kind === "team" ? ' data-team="' + escapeHtml(row.teamId || "") + '"' : "") +
           ">" +
           nameCell(row) +
           (row.cells || [])
@@ -1627,7 +1558,9 @@
     }
     return (
       root.querySelector('[data-board="' + kind + '"]') ||
-      (root.getAttribute && root.getAttribute("data-board") === kind ? root : null)
+      (root.getAttribute && root.getAttribute("data-board") === kind ? root : null) ||
+      root.querySelector("#board-" + kind) ||
+      root.querySelector("#board")
     );
   }
 
@@ -1644,6 +1577,16 @@
     return root.querySelector('[data-board="overview"]');
   }
 
+  function afterPaint(fn) {
+    return new Promise(function (resolve) {
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          resolve(typeof fn === "function" ? fn() : undefined);
+        });
+      });
+    });
+  }
+
   function createDashboard(root) {
     ensureCss();
     stripPageChrome(root);
@@ -1657,8 +1600,13 @@
       customTo: "",
       shopId: "",
       shopIds: null,
+      shopDraft: undefined,
+      teamIds: null,
+      teamDraft: undefined,
       shopPickOpen: false,
       showPl: false,
+      people: [],
+      dutyOpen: "",
       section: "渠道列表",
       payload: null,
       calOpen: false,
@@ -1978,10 +1926,40 @@
       return "已选" + ids.length + "家";
     }
 
+    function draftShopIds(payload) {
+      if (state.shopDraft === undefined) {
+        return selectedShopIds(payload);
+      }
+      if (state.shopDraft == null) {
+        return allShopIds(payload);
+      }
+      return state.shopDraft.slice();
+    }
+
+    function isDraftAll(payload) {
+      if (state.shopDraft === undefined) {
+        return isAllShops(payload);
+      }
+      const all = allShopIds(payload);
+      return state.shopDraft == null || (all.length > 0 && state.shopDraft.length === all.length);
+    }
+
+    function commitShopDraft() {
+      if (state.shopDraft !== undefined) {
+        state.shopIds = state.shopDraft;
+        state.shopId = Array.isArray(state.shopDraft) && state.shopDraft.length === 1 ? state.shopDraft[0] : "";
+        state.shopDraft = undefined;
+      }
+      if (state.teamDraft !== undefined) {
+        state.teamIds = state.teamDraft;
+        state.teamDraft = undefined;
+      }
+    }
+
     function shopMenuItemsHtml(payload) {
       const shops = (payload && payload.shops) || [];
-      const ids = selectedShopIds(payload);
-      const allOn = isAllShops(payload);
+      const ids = draftShopIds(payload);
+      const allOn = isDraftAll(payload);
       return (
         '<label class="ch-shop-opt"><input type="checkbox" data-shop-all' +
         (allOn ? " checked" : "") +
@@ -2013,6 +1991,81 @@
       );
     }
 
+    function allTeamIds() {
+      return dutyLeaders(state.people).map(function (person) {
+        return String(person.id || person.name);
+      });
+    }
+
+    function draftTeamIds() {
+      if (state.teamDraft === undefined) {
+        return state.teamIds == null ? allTeamIds() : state.teamIds.slice();
+      }
+      if (state.teamDraft == null) {
+        return allTeamIds();
+      }
+      return state.teamDraft.slice();
+    }
+
+    function isDraftAllTeams() {
+      const all = allTeamIds();
+      const cur = draftTeamIds();
+      return (state.teamDraft === undefined ? state.teamIds : state.teamDraft) == null || (all.length > 0 && cur.length === all.length);
+    }
+
+    function teamPickLabel() {
+      const all = allTeamIds();
+      const ids = state.teamIds == null ? all : state.teamIds;
+      if (state.teamIds == null || (all.length && ids.length === all.length)) {
+        return "全选";
+      }
+      if (!ids.length) {
+        return "请选择团队";
+      }
+      if (ids.length === 1) {
+        const hit = dutyLeaders(state.people).find(function (person) {
+          return String(person.id || person.name) === ids[0];
+        });
+        return hit ? dutyTitle(hit.name, personDuty(hit, state.people) || String(hit.role || "主管")) : "已选1个团队";
+      }
+      return "已选" + ids.length + "个团队";
+    }
+
+    function teamMenuItemsHtml() {
+      const allOn = isDraftAllTeams();
+      const ids = draftTeamIds();
+      return (
+        '<label class="ch-shop-opt"><input type="checkbox" data-team-all' +
+        (allOn ? " checked" : "") +
+        ">全选</label>" +
+        dutyLeaders(state.people)
+          .map(function (person) {
+            const tid = String(person.id || person.name);
+            const duty = personDuty(person, state.people) || String(person.role || "主管");
+            return (
+              '<label class="ch-shop-opt"><input type="checkbox" data-team-id="' +
+              escapeHtml(tid) +
+              '"' +
+              (allOn || ids.indexOf(tid) >= 0 ? " checked" : "") +
+              ">" +
+              escapeHtml(dutyTitle(person.name, duty)) +
+              "</label>"
+            );
+          })
+          .join("")
+      );
+    }
+
+    function teamPickHtml() {
+      return (
+        '<div class="ch-shop-pick' +
+        (state.shopPickOpen ? " is-open" : "") +
+        '" data-shop-pick data-team-pick><button type="button" class="ch-shop-pick-btn" data-shop-pick-toggle>' +
+        escapeHtml(teamPickLabel()) +
+        "</button></div>"
+      );
+    }
+
     function placeShopMenu() {
       const el = getShopMenu();
       const btn = board && board.querySelector("[data-shop-pick-toggle]");
@@ -2040,7 +2093,7 @@
         hideShopMenu();
         return;
       }
-      el.innerHTML = shopMenuItemsHtml(state.payload);
+      el.innerHTML = state.section === "店铺分组" ? teamMenuItemsHtml() : shopMenuItemsHtml(state.payload);
       placeShopMenu();
       el.classList.add("is-open");
       el.scrollTop = shopMenuScroll;
@@ -2052,16 +2105,16 @@
       }
       const menu = getShopMenu();
       shopMenuScroll = menu.scrollTop;
-      if (target.matches("[data-shop-all]")) {
-        state.shopIds = target.checked ? null : [];
+      if (target.matches("[data-team-all]")) {
+        state.teamDraft = target.checked ? null : [];
         state.shopPickOpen = true;
-        render();
+        syncShopMenu();
         return;
       }
-      if (target.matches("[data-shop-id]")) {
-        const id = target.getAttribute("data-shop-id") || "";
-        const all = allShopIds(state.payload);
-        let cur = selectedShopIds(state.payload);
+      if (target.matches("[data-team-id]")) {
+        const id = target.getAttribute("data-team-id") || "";
+        const all = allTeamIds();
+        let cur = draftTeamIds();
         if (target.checked) {
           if (cur.indexOf(id) < 0) {
             cur.push(id);
@@ -2071,11 +2124,48 @@
             return item !== id;
           });
         }
-        state.shopIds = cur.length === all.length ? null : cur;
-        state.shopId = cur.length === 1 ? cur[0] : "";
+        state.teamDraft = cur.length === all.length ? null : cur;
         state.shopPickOpen = true;
-        render();
+        syncShopMenu();
+        return;
       }
+      if (target.matches("[data-shop-all]")) {
+        state.shopDraft = target.checked ? null : [];
+        state.shopPickOpen = true;
+        syncShopMenu();
+        return;
+      }
+      if (target.matches("[data-shop-id]")) {
+        const id = target.getAttribute("data-shop-id") || "";
+        const all = allShopIds(state.payload);
+        let cur = draftShopIds(state.payload);
+        if (target.checked) {
+          if (cur.indexOf(id) < 0) {
+            cur.push(id);
+          }
+        } else {
+          cur = cur.filter(function (item) {
+            return item !== id;
+          });
+        }
+        state.shopDraft = cur.length === all.length ? null : cur;
+        state.shopPickOpen = true;
+        syncShopMenu();
+      }
+    }
+
+    function visibleShops(payload) {
+      const shops = (payload && payload.shops) || [];
+      if (isAllShops(payload)) {
+        return shops;
+      }
+      const allow = {};
+      selectedShopIds(payload).forEach(function (id) {
+        allow[id] = true;
+      });
+      return shops.filter(function (shop) {
+        return allow[shop.shopId];
+      });
     }
 
     function filteredPayload() {
@@ -2181,17 +2271,23 @@
           "</button>"
         );
       }).join("");
+      const shopTools =
+        (state.section === "店铺分组" ? teamPickHtml() : shopPickHtml(state.payload)) +
+        '<button type="button" class="ch-set" data-shop-cols="open">设定表头</button>';
       const lists =
         state.section === "渠道列表"
           ? tableHtml(payload.channelTable) +
-            tableHtml(
-              payload.shopTable,
-              shopPickHtml(state.payload) +
-                '<button type="button" class="ch-set" data-shop-cols="open">设定表头</button>',
-              "sh-wide",
-              state.showPl
-            )
-          : '<p class="ch-empty">「' + escapeHtml(state.section) + "」为示例，尚未接入。</p>";
+            tableHtml(payload.shopTable, shopTools, "sh-wide", state.showPl)
+          : state.section === "店铺分组"
+            ? tableHtml(
+                dutyTableFrom((state.payload && state.payload.shops) || [], state.people, state.dutyOpen, state.teamIds),
+                shopTools,
+                "sh-wide",
+                state.showPl
+              )
+            : state.section === "经营数据"
+              ? opsPanelHtml(state.payload, visibleShops(state.payload))
+              : '<p class="ch-empty">「' + escapeHtml(state.section) + "」为示例，尚未接入。</p>";
       board.innerHTML =
         '<div class="ch-top"><div class="ch-title">数据总览</div>' +
         '<div class="ch-right"><span class="ch-time">（统计时间：' +
@@ -2220,6 +2316,9 @@
         paintPicker();
       }
       paintSparkSvg(board.querySelector(".ch-hero .ch-spark"), hero);
+      if (state.section === "经营数据") {
+        paintOpsBars(board.querySelector(".op-bars"), (state.payload && state.payload.trend) || []);
+      }
       syncShopMenu();
     }
 
@@ -2262,7 +2361,7 @@
       state.calOpen = false;
       state.range = "自定义";
       hideCalPop();
-      load();
+      beginRangeLoad();
     }
 
     function applyCalNav(act) {
@@ -2316,8 +2415,29 @@
       });
     }
 
+    function setWait(on) {
+      const root = board && (board.closest(".data-overview-root") || board);
+      if (root) {
+        root.classList.toggle("is-wait", !!on);
+      }
+    }
+
+    function beginRangeLoad() {
+      if (state.payload) {
+        const span = rangeSpan(state.range, state.customFrom, state.customTo);
+        state.payload.range = state.range;
+        state.payload.dateLabel = span.dateLabel;
+        render();
+      }
+      setWait(true);
+      return afterPaint(function () {
+        return load(true, { wait: true });
+      });
+    }
+
     function paintErp(data, span) {
       state.payload = fromErp(data, state.range, span.dateLabel);
+      setWait(false);
       render();
     }
 
@@ -2335,6 +2455,7 @@
           state.payload.hero.value = fmtHeroMoney(state.payload.hero.todayPay);
         }
       }
+      setWait(false);
       render();
     }
 
@@ -2353,6 +2474,18 @@
         .catch(function () {
           return null;
         });
+    }
+
+    function loadPeople() {
+      return softJson("/api/people").then(function (pack) {
+        if (dead) {
+          return;
+        }
+        state.people = (pack && pack.people) || [];
+        if (state.payload) {
+          render();
+        }
+      });
     }
 
     function loadShopDirectory() {
@@ -2431,6 +2564,7 @@
         })
         .catch(function () {
           if (state.payload) {
+            setWait(false);
             return;
           }
           return json("/api/data/team")
@@ -2452,19 +2586,25 @@
         });
     }
 
-    function load(forceBoard) {
+    function load(forceBoard, opts) {
+      const wait = !!(opts && opts.wait);
       const span = rangeSpan(state.range, state.customFrom, state.customTo);
       const cached = readOvBoard(state.range, span);
-      if (cached && cached.payload) {
+      const painted = board && board.querySelector(".ch-metrics");
+      const heroReady = cached && cached.payload && cached.payload.hero && Number(cached.payload.hero.todayPay) > 0;
+      if (!wait && !forceBoard && ovBoardFresh(cached) && heroReady) {
+        applyCachedBoard(cached, span);
+        loadLiveSpark();
+        return Promise.resolve();
+      }
+      if (wait) {
+        setWait(true);
+      } else if (!painted && cached && cached.payload) {
         applyCachedBoard(cached, span);
       } else if (!state.payload && board) {
         board.innerHTML = '<p class="ch-empty">正在加载数据总览…</p>';
       }
       loadLiveSpark();
-      const heroReady = cached && cached.payload && cached.payload.hero && Number(cached.payload.hero.todayPay) > 0;
-      if (!forceBoard && ovBoardFresh(cached) && heroReady) {
-        return Promise.resolve();
-      }
       return fetchBoard(span).then(function () {
         loadLiveSpark();
       });
@@ -2477,12 +2617,13 @@
         shopEl &&
         ((shopEl.matches &&
           shopEl.matches(
-            "[data-shop-pick], [data-shop-pick-toggle], [data-shop-all], [data-shop-id], .ch-shop-opt, .ch-shop-menu, #ch-shop-menu, [data-shop-menu]"
+            "[data-shop-pick], [data-shop-pick-toggle], [data-shop-all], [data-shop-id], [data-team-all], [data-team-id], .ch-shop-opt, .ch-shop-menu, #ch-shop-menu, [data-shop-menu]"
           )) ||
           (shopEl.closest &&
             shopEl.closest("[data-shop-pick], .ch-shop-opt, #ch-shop-menu, [data-shop-menu]")));
       if (state.shopPickOpen && !inShopPick) {
         state.shopPickOpen = false;
+        commitShopDraft();
         hideShopMenu();
         if (state.payload) {
           render();
@@ -2583,6 +2724,18 @@
       if (shopToggle) {
         event.preventDefault();
         state.shopPickOpen = !state.shopPickOpen;
+        if (state.shopPickOpen) {
+          if (state.section === "店铺分组") {
+            state.teamDraft = state.teamIds == null ? null : state.teamIds.slice();
+          } else {
+            state.shopDraft = state.shopIds == null ? null : state.shopIds.slice();
+          }
+        } else {
+          commitShopDraft();
+          if (state.payload) {
+            render();
+          }
+        }
         const wrap = board.querySelector("[data-shop-pick]");
         if (wrap) {
           wrap.classList.toggle("is-open", state.shopPickOpen);
@@ -2616,7 +2769,14 @@
         state.range = next;
         state.calOpen = false;
         hideCalPop();
-        load();
+        beginRangeLoad();
+        return;
+      }
+      const teamRow = event.target.closest("tr[data-team]");
+      if (teamRow && board.contains(teamRow)) {
+        const tid = teamRow.getAttribute("data-team") || "";
+        state.dutyOpen = state.dutyOpen === tid ? "" : tid;
+        render();
         return;
       }
       const secBtn = event.target.closest("button[data-section]");
@@ -2758,6 +2918,7 @@
     window.addEventListener("pointercancel", onBoardPointerCancel);
 
     load();
+    loadPeople();
 
     return function unmount() {
       dead = true;

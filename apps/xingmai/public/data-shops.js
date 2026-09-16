@@ -1,3 +1,4 @@
+/* xm-data-shops 0.1.612-data-range-blank — range change blanks numbers before new data */
 (function () {
   window.XmModules = window.XmModules || {};
 
@@ -46,7 +47,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=shop-wide6";
+      link.href = "/data-pages.css?v=0.1.612-data-range-blank";
       document.head.appendChild(link);
     }
   }
@@ -128,7 +129,7 @@
       '<span class="sh-profit"><i style="width:' +
       width.toFixed(1) +
       '%"></i><em>' +
-      escapeHtml(sign + fmt(n, 2)) +
+      escapeHtml(sign + fmt(n, 0)) +
       "</em></span>"
     );
   }
@@ -146,7 +147,7 @@
 
   function money(shop, keys) {
     const n = firstNum(shop, keys);
-    return fmt(n != null ? n : 0, 2);
+    return fmt(n != null ? n : 0, 0);
   }
 
   function count(shop, keys) {
@@ -174,15 +175,15 @@
     const net = firstNum(shop, ["netSales", "netSalesAmount"]);
     const newRate = firstNum(shop, ["newRate"]);
     return [
-      fmt(live != null ? live : pay, 2),
+      fmt(live != null ? live : pay, 0),
       newRate != null ? (Number(newRate) > 1 ? Number(newRate) : Number(newRate) * 100).toFixed(4) + "%" : "0.0000%",
       count(shop, ["orderCount"]),
       count(shop, ["netOrderCount"]),
-      fmt(pay, 2),
-      fmt(invalid != null ? invalid : 0, 2),
-      fmt(refund, 2),
+      fmt(pay, 0),
+      fmt(invalid != null ? invalid : 0, 0),
+      fmt(refund, 0),
       rate(shop, ["refundRate"], pay ? refund / pay : 0),
-      fmt(net != null ? net : pay - refund, 2),
+      fmt(net != null ? net : pay - refund, 0),
       money(shop, ["totalMarketing"]),
       money(shop, ["siteMarketing"]),
       money(shop, ["offsiteMarketing"]),
@@ -492,7 +493,9 @@
     }
     return (
       root.querySelector('[data-board="' + kind + '"]') ||
-      (root.getAttribute && root.getAttribute("data-board") === kind ? root : null)
+      (root.getAttribute && root.getAttribute("data-board") === kind ? root : null) ||
+      root.querySelector("#board-" + kind) ||
+      root.querySelector("#board")
     );
   }
 
@@ -504,6 +507,16 @@
     root.innerHTML =
       '<main class="xm-page data-overview-root ch-root" data-xm-data-page="shops"><div data-board="shops" id="board-shops"></div></main>';
     return root.querySelector('[data-board="shops"]');
+  }
+
+  function afterPaint(fn) {
+    return new Promise(function (resolve) {
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          resolve(typeof fn === "function" ? fn() : undefined);
+        });
+      });
+    });
   }
 
   function createShopDashboard(root) {
@@ -609,10 +622,31 @@
         });
     }
 
+    function setWait(on) {
+      const rootEl = board && (board.closest(".data-overview-root") || board);
+      if (rootEl) {
+        rootEl.classList.toggle("is-wait", !!on);
+      }
+    }
+
+    function beginRangeLoad() {
+      const span = rangeSpan(state.range, state.customFrom, state.customTo);
+      state.dateLabel = span.dateLabel;
+      state.rows = [];
+      state.shops = [];
+      state.hint = "";
+      render();
+      setWait(true);
+      return afterPaint(function () {
+        return load(true, { wait: true });
+      });
+    }
+
     function applyShops(shops) {
       const mapped = fromErp({ shops: shops || [] });
       state.shops = mapped.shops;
       state.rows = mapped.rows;
+      setWait(false);
       render();
     }
 
@@ -784,15 +818,18 @@
         });
     }
 
-    function load(forceBoard) {
+    function load(forceBoard, opts) {
+      const wait = !!(opts && opts.wait);
       const span = rangeSpan(state.range, state.customFrom, state.customTo);
       const gen = (loadGen += 1);
       state.dateLabel = span.dateLabel;
       const cached = readShopCache(span);
-      if (cached && cached.shops.length) {
+      if (!wait && cached && cached.shops.length) {
         applyShops(cached.shops);
         state.hint = cacheIsFresh(cached) ? "已显示最近店铺数据" : "已显示缓存，正在核对最新";
         render();
+      } else if (wait) {
+        setWait(true);
       } else {
         state.hint = "正在对接 ERP 店铺指标…";
       }
@@ -812,7 +849,7 @@
           if (data && data.ok && data.shops && data.shops.length) {
             try {
               const seeded = overlayCachedMetrics(data.shops.slice(), cached && cached.shops);
-              if (!(cached && cached.shops.length)) {
+              if (wait || !(cached && cached.shops.length)) {
                 applyShops(seeded);
               }
               loadShopDirectory(data.shops, span, gen, cached);
@@ -836,6 +873,7 @@
               state.rows = ((demo.shopTable && demo.shopTable.rows) || []).map(function (row) {
                 return { name: row.name, kind: row.kind, color: row.color, cells: padCells(row.cells) };
               });
+              setWait(false);
               render();
             });
         });
@@ -845,18 +883,18 @@
       const rangeBtn = event.target.closest("button[data-range]");
       if (rangeBtn) {
         state.range = rangeBtn.getAttribute("data-range");
-        load();
+        beginRangeLoad();
       }
     });
     board.addEventListener("change", function (event) {
       if (event.target.matches("[data-from]")) {
         state.customFrom = event.target.value;
-        load();
+        beginRangeLoad();
         return;
       }
       if (event.target.matches("[data-to]")) {
         state.customTo = event.target.value;
-        load();
+        beginRangeLoad();
       }
     });
 

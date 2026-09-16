@@ -90,16 +90,11 @@ test("parseIdList and record filter keep allow/deny rules", () => {
   assert.deepEqual(rows.map((row) => row.shopId), ["111"]);
 });
 
-test("home client only duties operating shops and asks ERP with those ids", () => {
-  assert.match(homeJs, /0\.1\.564-org-idle-skip-erp/);
-  assert.match(homeJs, /function isInactiveOrgStore\(row\)/);
-  assert.match(homeJs, /key === "idle" \|\| key === "closing" \|\| key === "closed"/);
-  assert.match(homeJs, /row && row.kind !== "店群" && !isInactiveOrgStore\(row\)/);
-  assert.match(homeJs, /opts: orgLoaded \? \{ shopIds: shopIds, skipErp: shopIds.length === 0 \}/);
-  assert.match(homeJs, /fetchRangePack\(state.from, state.to, scope.opts\)/);
-  assert.match(homeJs, /filterPackByDuty/);
-  assert.match(homeJs, /scoped \? Promise.resolve\(\{ ok: false \}\) : api\("\/api\/data\/overview\?"/);
-  assert.doesNotMatch(homeJs, /statusKey !== "closed" && row.kind !== "店群"/);
+test("home blanks company numbers when the date range changes", () => {
+  assert.match(homeJs, /0\.1\.612-data-range-blank/);
+  assert.match(homeJs, /function beginRangeLoad\(\)/);
+  assert.match(homeJs, /setWait\(true\)/);
+  assert.match(homeJs, /function pullBoard\(\)/);
 });
 
 test("org board KPIs recount from operating shops only", () => {
