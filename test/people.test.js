@@ -86,7 +86,10 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(cssText, /\.rights-mod-band \{/);
     assert.match(cssText, /border: 1px solid #ff4d4f/);
     assert.match(cssText, /\.rights-mod-lead \{/);
-    assert.match(cssText, /background: #e6f4ff/);
+    assert.match(cssText, /min-height: 0/);
+    assert.doesNotMatch(cssText, /\.rights-mod-lead\s*\{[^}]*background:/);
+    assert.doesNotMatch(cssText, /\.rights-mod-manager\s*\{[^}]*background:/);
+    assert.match(cssText, /\.rights-mod-col \{[\s\S]*?min-height: 26px/);
     assert.match(cssText, /data-role="主管"/);
     assert.match(cssText, /background: #91d5ff/);
     assert.match(cssText, /data-role="运营"/);
