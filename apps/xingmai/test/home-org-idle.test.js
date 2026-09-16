@@ -91,7 +91,7 @@ test("parseIdList and record filter keep allow/deny rules", () => {
 });
 
 test("home client only duties operating shops and asks ERP with those ids", () => {
-  assert.match(homeJs, /0\.1\.563-org-idle-skip-erp/);
+  assert.match(homeJs, /0\.1\.564-org-idle-skip-erp/);
   assert.match(homeJs, /function isInactiveOrgStore\(row\)/);
   assert.match(homeJs, /key === "idle" \|\| key === "closing" \|\| key === "closed"/);
   assert.match(homeJs, /row && row.kind !== "店群" && !isInactiveOrgStore\(row\)/);
@@ -103,7 +103,7 @@ test("home client only duties operating shops and asks ERP with those ids", () =
 });
 
 test("org board KPIs recount from operating shops only", () => {
-  assert.match(peopleJs, /0\.1\.563-org-idle-skip-erp/);
+  assert.match(peopleJs, /0\.1\.564-org-idle-skip-erp/);
   assert.match(peopleJs, /function summaryFromActiveStores\(stores\)/);
   assert.match(peopleJs, /renderKpis\(summaryFromActiveStores\(rawStores\)\)/);
   assert.match(peopleJs, /return key === "operating"/);
