@@ -57,10 +57,15 @@ const SMOKE = `<!doctype html>
         });
         const peopleOk = peopleNames.some(function (name) { return name.indexOf("杨润泽") >= 0; }) && peopleNames.length >= 1 && peopleNames.length < 16;
         const storeOk = storeText.some(function (text) { return text.indexOf("ZYUO") >= 0; }) && storeText.length >= 1 && storeText.length < 15;
+        document.querySelector('[data-pane="rights"]').click();
+        await sleep(600);
+        const rightsHtml = (document.getElementById("rights-tree-chart") && document.getElementById("rights-tree-chart").innerHTML) || "";
+        const rightsOk = rightsHtml.indexOf("rights-mod-band") >= 0 && rightsHtml.indexOf("rights-mod-lead") >= 0 && rightsHtml.indexOf("韩梦凯") >= 0 && rightsHtml.indexOf("杨润泽") >= 0 && rightsHtml.indexOf("data-role=\"主管\"") >= 0 && rightsHtml.indexOf("data-role=\"运营\"") >= 0 && rightsHtml.indexOf("填写对应的店铺") >= 0;
         document.body.setAttribute("data-people-n", String(peopleNames.length));
         document.body.setAttribute("data-people-names", peopleNames.join(","));
         document.body.setAttribute("data-store-n", String(storeText.length));
-        document.body.setAttribute("data-ok", peopleOk && storeOk && kpiOk ? "1" : "0");
+        document.body.setAttribute("data-rights", rightsOk ? "1" : "0");
+        document.body.setAttribute("data-ok", peopleOk && storeOk && kpiOk && rightsOk ? "1" : "0");
       })();
     </script>
   </body>
