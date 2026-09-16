@@ -486,6 +486,7 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
 .ch-metrics {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-auto-rows: minmax(216px, auto);
   align-items: stretch;
   gap: 0;
   margin-bottom: 0;
@@ -494,13 +495,7 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
   border-radius: 6px;
   overflow: hidden;
 }
-.ch-metrics .ch-card {
-  min-height: 148px;
-  height: 100%;
-  box-sizing: border-box;
-  cursor: grab;
-  user-select: none;
-}
+.ch-metrics .ch-card,
 .ch-metrics .ch-hero {
   min-height: 216px;
   height: 100%;

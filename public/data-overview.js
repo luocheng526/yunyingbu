@@ -401,7 +401,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov27";
+      link.href = "/data-pages.css?v=data-ov28";
       document.head.appendChild(link);
     }
     ensureCardTypeStyle();
@@ -463,8 +463,8 @@
       ".ch-card .value{margin-top:16px;font-size:28px;font-weight:700;line-height:1.3;letter-spacing:-.02em;color:#141414;font-variant-numeric:tabular-nums}" +
       ".ch-card .extra{margin-top:14px;font-size:12px;line-height:20px;color:#8c8c8c;opacity:1}" +
       ".ch-metrics{align-items:stretch}" +
-      ".ch-metrics .ch-card{min-height:148px;height:100%;box-sizing:border-box;cursor:grab;user-select:none}" +
-      ".ch-metrics .ch-hero{min-height:216px;height:100%;box-sizing:border-box;cursor:grab;user-select:none}" +
+      ".ch-metrics{grid-auto-rows:minmax(216px,auto)}" +
+      ".ch-metrics .ch-card,.ch-metrics .ch-hero{min-height:216px;height:100%;box-sizing:border-box;cursor:grab;user-select:none}" +
       ".ch-metrics .ch-card.is-drag{opacity:.55;cursor:grabbing}" +
       ".ch-metrics .ch-card.is-over{outline:1px solid #2f54eb;background:#f5f8ff}" +
       ".ch-hero .ch-spark{display:block;width:100%;height:72px;margin:8px 0 0}" +

@@ -212,7 +212,8 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /60 \* 60 \* 1000/);
     assert.match(overviewJs.text, /xm-data-shops-metrics-v1/);
     assert.match(overviewJs.text, /overlaySharedShopMetrics/);
-    assert.match(overviewJs.text, /data-ov27/);
+    assert.match(overviewJs.text, /data-ov28/);
+    assert.match(overviewJs.text, /grid-auto-rows:minmax\(216px,auto\)/);
     assert.match(overviewJs.text, /经理组/);
     assert.match(overviewJs.text, /主管组/);
     assert.match(overviewJs.text, /储备组/);
@@ -600,7 +601,7 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /\/data\/paid/);
   assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
   assert.match(dataMod, /restore-v1/);
-  assert.match(dataMod, /data-overview\.js\?v=data-ov27/);
+  assert.match(dataMod, /data-overview\.js\?v=data-ov28/);
   assert.match(css, /is-gain/);
   assert.match(css, /#f6ffed/);
   assert.match(css, /\.ch-split \{\s*height: 2px;/);
@@ -613,7 +614,8 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /data-shops\.js\?v=shop-wide6/);
   assert.match(css, /ch-pill/);
   assert.match(css, /\.ch-card \.value[\s\S]*font-size: 28px/);
-  assert.match(css, /\.ch-metrics \.ch-hero \{\s*min-height: 216px/);
+  assert.match(css, /grid-auto-rows: minmax\(216px, auto\)/);
+  assert.match(css, /\.ch-metrics \.ch-card,\s*\.ch-metrics \.ch-hero \{\s*min-height: 216px/);
   assert.doesNotMatch(css, /min-height: 220px/);
   assert.match(css, /ch-card-right/);
   assert.match(css, /#8c8c8c/);
