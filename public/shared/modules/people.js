@@ -180,7 +180,7 @@
         '<div class="org-filter-pop" id="people-filter-pop" hidden></div></section></div>' +
         '<div class="org-pane" data-pane="rights" hidden>' +
         '<section class="panel rights-fit-panel"><h2>管辖</h2>' +
-        '<p class="lead">只读对照。红框是经理线，蓝框是主管/储备组；框里运营、助理、店铺各用各的颜色。没有助理写无，店铺填对应店名。人和店分别对照成员管理、店铺主数据。</p>' +
+        '<p class="lead">只读对照。表头统一是经理、主管/储备、运营、助理、店铺。卡片只写名字，不再重复运营/助理/店铺。没有助理写无。人和店分别对照成员管理、店铺主数据。</p>' +
         '<div class="rights-watch" id="rights-watch"></div>' +
         '<div class="rights-tree-toolbar"><button type="button" id="rights-refresh">刷新树和看板</button><span class="muted" id="rights-checked">检查时间：—</span></div>' +
         '<div class="rights-tree-chart" id="rights-tree-chart"></div></section></div>' +
@@ -1432,11 +1432,26 @@
         return (
           '<span class="rights-mod-card" data-role="' +
           escapeHtml(role || "") +
-          '"><em>' +
-          escapeHtml(rightsRoleLabel(role)) +
-          "</em><strong>" +
+          '"><strong>' +
           escapeHtml(name) +
           "</strong></span>"
+        );
+      }
+
+      function renderRightsModHead() {
+        function cell(label) {
+          return '<div class="rights-mod-head-cell">' + escapeHtml(label) + "</div>";
+        }
+        return (
+          '<div class="rights-mod-head">' +
+          cell("经理") +
+          '<div class="rights-mod-head-rest">' +
+          cell("主管/储备") +
+          '<div class="rights-mod-head-chain">' +
+          cell("运营") +
+          cell("助理") +
+          cell("店铺") +
+          "</div></div></div>"
         );
       }
 
@@ -1494,13 +1509,13 @@
               : renderRightsModEmpty("无");
             return (
               '<div class="rights-mod-row">' +
-              '<div class="rights-mod-col"><span class="rights-mod-h">运营</span>' +
+              '<div class="rights-mod-col">' +
               opHtml +
               "</div>" +
-              '<div class="rights-mod-col"><span class="rights-mod-h">助理</span>' +
+              '<div class="rights-mod-col">' +
               asstHtml +
               "</div>" +
-              '<div class="rights-mod-col"><span class="rights-mod-h">店铺</span>' +
+              '<div class="rights-mod-col">' +
               renderRightsModShops(row.stores) +
               "</div></div>"
             );
@@ -1548,9 +1563,8 @@
         });
         host.innerHTML =
           '<div class="rights-modules" id="rights-tree-fit">' +
-          '<div class="rights-mod-director">' +
-          renderRightsModCard("总监", tree.name) +
-          '</div><div class="rights-mod-bands">' +
+          renderRightsModHead() +
+          '<div class="rights-mod-bands">' +
           managers.map(renderRightsManagerBand).join("") +
           "</div></div>";
       }
