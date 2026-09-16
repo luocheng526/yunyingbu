@@ -265,5 +265,188 @@
     "td button.is-in{background:#fff1f0;color:#c62828}" +
     "td button.is-start,td button.is-end{background:#c62828;color:#fff}";
 
-  window.XmDataOps = { panel: panel, paint: paint, fill: fill, calCss: CAL_CSS };
+  function shopNameOf(item) {
+    if (!item) {
+      return "";
+    }
+    return String(typeof item === "string" ? item : item.shopName || item.name || "").trim();
+  }
+
+  function personDuty(person, people) {
+    const name = String((person && person.name) || "").trim();
+    const role = String((person && person.role) || "");
+    const center = String((person && person.center) || "");
+    if (role === "经理" && /运营中心$/.test(center)) {
+      return "经理";
+    }
+    if (name && (people || []).some(function (item) {
+      const reserve = String((item && item.reserve) || "").trim();
+      return reserve && reserve !== "无" && reserve === name;
+    })) {
+      return "储备";
+    }
+    if (role === "主管") {
+      return "主管";
+    }
+    return "";
+  }
+
+  function leaders(people) {
+    const list = people || [];
+    const seen = {};
+    const out = [];
+    function add(person, duty) {
+      const name = String((person && person.name) || "").trim();
+      if (!name || seen[name]) {
+        return;
+      }
+      seen[name] = duty;
+      out.push(person);
+    }
+    list.forEach(function (person) {
+      if (personDuty(person, list) === "经理") {
+        add(person, "经理");
+      }
+    });
+    const mgr = {};
+    list.forEach(function (person) {
+      if (personDuty(person, list) === "经理") {
+        mgr[String(person.name || "")] = true;
+      }
+    });
+    list.forEach(function (person) {
+      const sup = String((person && person.supervisor) || "").trim();
+      if (sup && !mgr[sup] && seen[sup] !== "储备") {
+        const hit = list.find(function (item) {
+          return String(item.name || "").trim() === sup;
+        });
+        if (!hit || personDuty(hit, list) !== "储备") {
+          add(hit || { id: "sup-" + sup, name: sup, role: "主管", visibleShops: [] }, "主管");
+        }
+      }
+      if (personDuty(person, list) === "主管") {
+        add(person, "主管");
+      }
+    });
+    list.forEach(function (person) {
+      const reserve = String((person && person.reserve) || "").trim();
+      if (reserve && reserve !== "无") {
+        const hit = list.find(function (item) {
+          return String(item.name || "").trim() === reserve;
+        });
+        add(hit || { id: "rs-" + reserve, name: reserve, role: "储备", visibleShops: [] }, "储备");
+      }
+    });
+    return out;
+  }
+
+  function teamShopNames(leader, duty, people) {
+    const names = {};
+    function add(list) {
+      (list || []).forEach(function (item) {
+        const name = shopNameOf(item);
+        if (name) {
+          names[name.replace(/\s+/g, "")] = name;
+        }
+      });
+    }
+    add(leader && leader.visibleShops);
+    const lead = String((leader && leader.name) || "");
+    const center = String((leader && leader.center) || "");
+    (people || []).forEach(function (person) {
+      const belong =
+        (duty === "经理" && (person.lineManager === lead || person.center === center || person.center === lead + "运营中心")) ||
+        (duty === "主管" && (person.supervisor === lead || person.name === lead)) ||
+        (duty === "储备" && (person.reserve === lead || person.name === lead));
+      if (belong) {
+        add(person.visibleShops);
+      }
+    });
+    return names;
+  }
+
+  function covers(person, shop, duty, people) {
+    const map = teamShopNames(person, duty || personDuty(person, people), people);
+    const key = String((shop && shop.shopName) || "").replace(/\s+/g, "");
+    return Boolean(key && map[key]);
+  }
+
+  function dutyTable(shops, people, openId, teamIds, api) {
+    const list = shops || [];
+    const cols = api.cols;
+    const tot = api.sum(list);
+    const rank = { 经理: 0, 主管: 1, 储备: 2 };
+    const rows = [{
+      name: "当页汇总",
+      kind: "sum",
+      profit: api.firstNum(tot, ["profit"]),
+      cells: cols.map(function (col) {
+        return api.cell(tot, col);
+      })
+    }];
+    leaders(people)
+      .map(function (person) {
+        const duty = personDuty(person, people) || String(person.role || "储备");
+        const members = api.sortByPay(list.filter(function (shop) {
+          return covers(person, shop, duty, people);
+        }));
+        const sum = api.sum(members);
+        return { person: person, members: members, duty: duty, sum: sum, pay: api.payOf(sum) };
+      })
+      .filter(function (item) {
+        if (teamIds && teamIds.length) {
+          const tid = String(item.person.id || item.person.name);
+          return teamIds.indexOf(tid) >= 0 || teamIds.indexOf(item.person.name) >= 0;
+        }
+        return teamIds == null;
+      })
+      .sort(function (a, b) {
+        const d = (rank[a.duty] || 9) - (rank[b.duty] || 9);
+        return d !== 0 ? d : b.pay - a.pay;
+      })
+      .forEach(function (item) {
+        const tid = String(item.person.id || item.person.name);
+        rows.push({
+          name: api.title(item.person.name, item.duty),
+          kind: "team",
+          teamId: tid,
+          open: String(openId) === tid,
+          profit: api.firstNum(item.sum, ["profit"]),
+          cells: cols.map(function (col) {
+            return api.cell(item.sum, col);
+          })
+        });
+        if (String(openId) === tid) {
+          item.members.forEach(function (shop) {
+            rows.push({
+              name: shop.shopName,
+              kind: "shop",
+              child: true,
+              shopId: shop.shopId,
+              profit: api.firstNum(shop, ["profit"]),
+              cells: cols.map(function (col) {
+                return api.cell(shop, col);
+              })
+            });
+          });
+        }
+      });
+    return {
+      title: "店铺分组",
+      columns: ["团队"].concat(cols.map(function (col) {
+        return col.label;
+      })),
+      rows: rows
+    };
+  }
+
+  window.XmDataOps = {
+    panel: panel,
+    paint: paint,
+    fill: fill,
+    calCss: CAL_CSS,
+    personDuty: personDuty,
+    leaders: leaders,
+    dutyTable: dutyTable
+  };
 })();

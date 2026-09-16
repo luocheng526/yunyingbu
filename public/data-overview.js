@@ -851,129 +851,31 @@
     return out;
   }
 
-  function sameShopName(a, b) {
-    return String(a || "").replace(/\s+/g, "") === String(b || "").replace(/\s+/g, "");
-  }
-
-  function personCoversShop(person, shop) {
-    const name = shop && shop.shopName;
-    const shops = (person && person.visibleShops) || [];
-    if (name && shops.some(function (item) { return sameShopName(item, name); })) {
-      return true;
-    }
-    const oid = shop && shop.operatorId != null ? String(shop.operatorId) : "";
-    return Boolean(oid && person && String(person.id) === oid);
+  function dutyTitle(name, duty) {
+    return String(name || "") + (duty === "经理" ? "经理团队" : duty === "主管" ? "主管团队" : "储备团队");
   }
 
   function personDuty(person, people) {
-    const role = String((person && person.role) || "");
-    if (role === "经理" || role === "主管" || role === "储备") {
-      return role;
-    }
-    const name = String((person && person.name) || "").trim();
-    if (!name) {
-      return "";
-    }
-    for (let i = 0; i < (people || []).length; i += 1) {
-      const reserve = String(people[i].reserve || "").trim();
-      if (reserve && reserve !== "无" && reserve === name) {
-        return "储备";
-      }
-    }
-    return "";
+    return window.XmDataOps ? window.XmDataOps.personDuty(person, people) : "";
   }
 
   function dutyLeaders(people) {
-    const list = people || [];
-    const seen = {};
-    const out = [];
-    list.forEach(function (person) {
-      const duty = personDuty(person, list);
-      const name = String((person && person.name) || "").trim();
-      if (!duty || !name || seen[name + duty]) {
-        return;
-      }
-      seen[name + duty] = true;
-      out.push(person);
-    });
-    list.forEach(function (person) {
-      const reserve = String((person && person.reserve) || "").trim();
-      if (!reserve || reserve === "无" || seen[reserve + "储备"]) {
-        return;
-      }
-      const hit = list.find(function (item) {
-        return String(item.name || "").trim() === reserve;
-      });
-      seen[reserve + "储备"] = true;
-      out.push(hit || { id: "rs-" + reserve, name: reserve, role: "储备", visibleShops: [] });
-    });
-    return out;
+    return window.XmDataOps ? window.XmDataOps.leaders(people) : [];
   }
 
-  function dutyTableFrom(shops, people, openId) {
-    const list = shops || [];
-    const keys = loadShopColKeys();
-    const cols = keys.map(shopColOf);
-    const tot = sumShopTotals(list);
-    const rank = { 经理: 0, 主管: 1, 储备: 2 };
-    const rows = [{
-      name: "当页汇总",
-      kind: "sum",
-      profit: firstNum(tot, ["profit"]),
-      cells: cols.map(function (col) {
-        return shopColCell(tot, col);
-      })
-    }];
-    dutyLeaders(people)
-      .map(function (person) {
-        const members = sortByPay(list.filter(function (shop) {
-          return personCoversShop(person, shop);
-        }));
-        const duty = personDuty(person, people) || String(person.role || "储备");
-        const sum = sumShopTotals(members);
-        return { person: person, members: members, duty: duty, sum: sum, pay: payOf(sum) };
-      })
-      .filter(function (item) {
-        return item.members.length;
-      })
-      .sort(function (a, b) {
-        const d = (rank[a.duty] || 9) - (rank[b.duty] || 9);
-        return d !== 0 ? d : b.pay - a.pay;
-      })
-      .forEach(function (item) {
-        const tid = String(item.person.id || item.person.name);
-        rows.push({
-          name: item.person.name + (item.duty === "经理" ? "经理团队" : item.duty === "主管" ? "主管团队" : "储备团队"),
-          kind: "team",
-          teamId: tid,
-          open: String(openId) === tid,
-          profit: firstNum(item.sum, ["profit"]),
-          cells: cols.map(function (col) {
-            return shopColCell(item.sum, col);
-          })
-        });
-        if (String(openId) === tid) {
-          item.members.forEach(function (shop) {
-            rows.push({
-              name: shop.shopName,
-              kind: "shop",
-              child: true,
-              shopId: shop.shopId,
-              profit: firstNum(shop, ["profit"]),
-              cells: cols.map(function (col) {
-                return shopColCell(shop, col);
-              })
-            });
-          });
-        }
-      });
-    return {
-      title: "店铺分组",
-      columns: ["团队"].concat(cols.map(function (col) {
-        return col.label;
-      })),
-      rows: rows
-    };
+  function dutyTableFrom(shops, people, openId, teamIds) {
+    if (!window.XmDataOps || !window.XmDataOps.dutyTable) {
+      return { title: "店铺分组", columns: ["团队"], rows: [] };
+    }
+    return window.XmDataOps.dutyTable(shops, people, openId, teamIds, {
+      cols: loadShopColKeys().map(shopColOf),
+      sum: sumShopTotals,
+      cell: shopColCell,
+      firstNum: firstNum,
+      sortByPay: sortByPay,
+      payOf: payOf,
+      title: dutyTitle
+    });
   }
 
   function shopTableFrom(shops) {
@@ -1666,6 +1568,8 @@
       shopId: "",
       shopIds: null,
       shopDraft: undefined,
+      teamIds: null,
+      teamDraft: undefined,
       shopPickOpen: false,
       showPl: false,
       people: [],
@@ -2013,6 +1917,10 @@
         state.shopId = Array.isArray(state.shopDraft) && state.shopDraft.length === 1 ? state.shopDraft[0] : "";
         state.shopDraft = undefined;
       }
+      if (state.teamDraft !== undefined) {
+        state.teamIds = state.teamDraft;
+        state.teamDraft = undefined;
+      }
     }
 
     function shopMenuItemsHtml(payload) {
@@ -2050,6 +1958,81 @@
       );
     }
 
+    function allTeamIds() {
+      return dutyLeaders(state.people).map(function (person) {
+        return String(person.id || person.name);
+      });
+    }
+
+    function draftTeamIds() {
+      if (state.teamDraft === undefined) {
+        return state.teamIds == null ? allTeamIds() : state.teamIds.slice();
+      }
+      if (state.teamDraft == null) {
+        return allTeamIds();
+      }
+      return state.teamDraft.slice();
+    }
+
+    function isDraftAllTeams() {
+      const all = allTeamIds();
+      const cur = draftTeamIds();
+      return (state.teamDraft === undefined ? state.teamIds : state.teamDraft) == null || (all.length > 0 && cur.length === all.length);
+    }
+
+    function teamPickLabel() {
+      const all = allTeamIds();
+      const ids = state.teamIds == null ? all : state.teamIds;
+      if (state.teamIds == null || (all.length && ids.length === all.length)) {
+        return "全选";
+      }
+      if (!ids.length) {
+        return "请选择团队";
+      }
+      if (ids.length === 1) {
+        const hit = dutyLeaders(state.people).find(function (person) {
+          return String(person.id || person.name) === ids[0];
+        });
+        return hit ? dutyTitle(hit.name, personDuty(hit, state.people) || String(hit.role || "主管")) : "已选1个团队";
+      }
+      return "已选" + ids.length + "个团队";
+    }
+
+    function teamMenuItemsHtml() {
+      const allOn = isDraftAllTeams();
+      const ids = draftTeamIds();
+      return (
+        '<label class="ch-shop-opt"><input type="checkbox" data-team-all' +
+        (allOn ? " checked" : "") +
+        ">全选</label>" +
+        dutyLeaders(state.people)
+          .map(function (person) {
+            const tid = String(person.id || person.name);
+            const duty = personDuty(person, state.people) || String(person.role || "主管");
+            return (
+              '<label class="ch-shop-opt"><input type="checkbox" data-team-id="' +
+              escapeHtml(tid) +
+              '"' +
+              (allOn || ids.indexOf(tid) >= 0 ? " checked" : "") +
+              ">" +
+              escapeHtml(dutyTitle(person.name, duty)) +
+              "</label>"
+            );
+          })
+          .join("")
+      );
+    }
+
+    function teamPickHtml() {
+      return (
+        '<div class="ch-shop-pick' +
+        (state.shopPickOpen ? " is-open" : "") +
+        '" data-shop-pick data-team-pick><button type="button" class="ch-shop-pick-btn" data-shop-pick-toggle>' +
+        escapeHtml(teamPickLabel()) +
+        "</button></div>"
+      );
+    }
+
     function placeShopMenu() {
       const el = getShopMenu();
       const btn = board && board.querySelector("[data-shop-pick-toggle]");
@@ -2077,7 +2060,7 @@
         hideShopMenu();
         return;
       }
-      el.innerHTML = shopMenuItemsHtml(state.payload);
+      el.innerHTML = state.section === "店铺分组" ? teamMenuItemsHtml() : shopMenuItemsHtml(state.payload);
       placeShopMenu();
       el.classList.add("is-open");
       el.scrollTop = shopMenuScroll;
@@ -2089,6 +2072,30 @@
       }
       const menu = getShopMenu();
       shopMenuScroll = menu.scrollTop;
+      if (target.matches("[data-team-all]")) {
+        state.teamDraft = target.checked ? null : [];
+        state.shopPickOpen = true;
+        syncShopMenu();
+        return;
+      }
+      if (target.matches("[data-team-id]")) {
+        const id = target.getAttribute("data-team-id") || "";
+        const all = allTeamIds();
+        let cur = draftTeamIds();
+        if (target.checked) {
+          if (cur.indexOf(id) < 0) {
+            cur.push(id);
+          }
+        } else {
+          cur = cur.filter(function (item) {
+            return item !== id;
+          });
+        }
+        state.teamDraft = cur.length === all.length ? null : cur;
+        state.shopPickOpen = true;
+        syncShopMenu();
+        return;
+      }
       if (target.matches("[data-shop-all]")) {
         state.shopDraft = target.checked ? null : [];
         state.shopPickOpen = true;
@@ -2232,7 +2239,7 @@
         );
       }).join("");
       const shopTools =
-        shopPickHtml(state.payload) +
+        (state.section === "店铺分组" ? teamPickHtml() : shopPickHtml(state.payload)) +
         '<button type="button" class="ch-set" data-shop-cols="open">设定表头</button>';
       const lists =
         state.section === "渠道列表"
@@ -2240,7 +2247,7 @@
             tableHtml(payload.shopTable, shopTools, "sh-wide", state.showPl)
           : state.section === "店铺分组"
             ? tableHtml(
-                dutyTableFrom(visibleShops(state.payload), state.people, state.dutyOpen),
+                dutyTableFrom((state.payload && state.payload.shops) || [], state.people, state.dutyOpen, state.teamIds),
                 shopTools,
                 "sh-wide",
                 state.showPl
@@ -2564,7 +2571,7 @@
         shopEl &&
         ((shopEl.matches &&
           shopEl.matches(
-            "[data-shop-pick], [data-shop-pick-toggle], [data-shop-all], [data-shop-id], .ch-shop-opt, .ch-shop-menu, #ch-shop-menu, [data-shop-menu]"
+            "[data-shop-pick], [data-shop-pick-toggle], [data-shop-all], [data-shop-id], [data-team-all], [data-team-id], .ch-shop-opt, .ch-shop-menu, #ch-shop-menu, [data-shop-menu]"
           )) ||
           (shopEl.closest &&
             shopEl.closest("[data-shop-pick], .ch-shop-opt, #ch-shop-menu, [data-shop-menu]")));
@@ -2672,7 +2679,11 @@
         event.preventDefault();
         state.shopPickOpen = !state.shopPickOpen;
         if (state.shopPickOpen) {
-          state.shopDraft = state.shopIds == null ? null : state.shopIds.slice();
+          if (state.section === "店铺分组") {
+            state.teamDraft = state.teamIds == null ? null : state.teamIds.slice();
+          } else {
+            state.shopDraft = state.shopIds == null ? null : state.shopIds.slice();
+          }
         } else {
           commitShopDraft();
           if (state.payload) {

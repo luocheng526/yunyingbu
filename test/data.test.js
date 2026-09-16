@@ -227,6 +227,10 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /is-wait/);
     assert.match(overviewJs.text, /function commitShopDraft/);
     assert.match(overviewJs.text, /shopDraft/);
+    assert.match(overviewJs.text, /data-team-all/);
+    assert.match(overviewJs.text, /data-team-id/);
+    assert.match(overviewJs.text, /请选择团队/);
+    assert.match(overviewJs.text, /function teamMenuItemsHtml/);
     const opsJs = await get(base, "/data-ops.js");
     assert.match(opsJs.text, /XmDataOps/);
     assert.match(opsJs.text, /推广花费销售额占比/);
