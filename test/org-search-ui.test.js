@@ -32,6 +32,9 @@ const SMOKE = `<!doctype html>
         await sleep(800);
         document.querySelector('[data-pane="members"]').click();
         await sleep(500);
+        const kpiText = (document.getElementById("people-kpis") && document.getElementById("people-kpis").textContent) || "";
+        const kpiOk = kpiText.indexOf("总监") >= 0 && kpiText.indexOf("经理") >= 0 && kpiText.indexOf("主管/储备") >= 0 && kpiText.indexOf("运营") >= 0 && kpiText.indexOf("助理") >= 0;
+        document.body.setAttribute("data-kpis", kpiText.replace(/\\s+/g, " ").trim());
         const peopleQ = document.getElementById("people-q");
         peopleQ.focus();
         peopleQ.value = "杨润泽";
@@ -57,7 +60,7 @@ const SMOKE = `<!doctype html>
         document.body.setAttribute("data-people-n", String(peopleNames.length));
         document.body.setAttribute("data-people-names", peopleNames.join(","));
         document.body.setAttribute("data-store-n", String(storeText.length));
-        document.body.setAttribute("data-ok", peopleOk && storeOk ? "1" : "0");
+        document.body.setAttribute("data-ok", peopleOk && storeOk && kpiOk ? "1" : "0");
       })();
     </script>
   </body>

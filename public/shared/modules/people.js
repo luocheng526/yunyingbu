@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.192-search-ok";
+    const href = "/people.css?v=0.1.193-people-kpis";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -138,6 +138,7 @@
         '<div class="org-pane" data-pane="members" hidden>' +
         '<section class="panel"><h2>身份名册</h2>' +
         '<p class="lead">表头可筛总监、经理、主管/储备、运营、助理、状态。总监、经理、主管/储备、运营、助理双击可改，仅罗成、韩梦凯、沈子晗能改，其他人不能改。导入按姓名合并：一模一样的名字覆盖原行，对不上的名字当新员工，并落盘，强制刷新还在。勾选后可统一改密码或删除。点新增人员弹出对话框。</p>' +
+        '<div class="org-kpis" id="people-kpis"></div>' +
         '<div class="org-toolbar">' +
         '<div class="org-search-form" id="people-search-form">' +
         '<input type="text" id="people-q" placeholder="姓名 / 账号 / 经理 / 主管" autocomplete="off" spellcheck="false" oninput="window.__xmSearchPeople&&window.__xmSearchPeople()" onkeyup="window.__xmSearchPeople&&window.__xmSearchPeople()" />' +
@@ -545,6 +546,67 @@
 
       function query() {
         return {};
+      }
+
+      function peopleRoleBucket(person) {
+        const name = String(person.name || "").trim();
+        const role = String(person.role || "").trim();
+        if (name === "管理员" || person.center === "人员管理") {
+          return "";
+        }
+        if (name === "罗成" || role === "总监") {
+          return "总监";
+        }
+        if (name === "韩梦凯" || name === "沈子晗" || role === "经理") {
+          return "经理";
+        }
+        if (role === "主管" || role === "储备" || role === "主管/储备") {
+          return "主管/储备";
+        }
+        if (role === "助理") {
+          return "助理";
+        }
+        if (role === "运营" || role === "店长") {
+          return "运营";
+        }
+        return "";
+      }
+
+      function renderPeopleKpis(people) {
+        const host = root.querySelector("#people-kpis");
+        if (!host) {
+          return;
+        }
+        const counts = { 总监: 0, 经理: 0, "主管/储备": 0, 运营: 0, 助理: 0 };
+        (people || []).forEach(function (person) {
+          if (String(person.status || "") === "离职") {
+            return;
+          }
+          const bucket = peopleRoleBucket(person);
+          if (bucket) {
+            counts[bucket] += 1;
+          }
+        });
+        if (counts.总监 === 0) {
+          counts.总监 = 1;
+        }
+        host.innerHTML = [
+          ["总监", counts.总监],
+          ["经理", counts.经理],
+          ["主管/储备", counts["主管/储备"]],
+          ["运营", counts.运营],
+          ["助理", counts.助理]
+        ]
+          .map(function (item) {
+            return (
+              '<article class="org-kpi"><div class="label">' +
+              escapeHtml(item[0]) +
+              '</div><div class="value">' +
+              escapeHtml(item[1]) +
+              "</div></article>"
+            );
+          })
+          .join("");
       }
 
       function renderKpis(summary) {
@@ -1217,6 +1279,7 @@
           roster.people = peopleData.people || [];
           roster.canEdit = peopleData.canEdit === true;
           paintRosterAcl();
+          renderPeopleKpis(roster.people);
           renderPeople(applyMemberFilters(roster.people));
         });
       }

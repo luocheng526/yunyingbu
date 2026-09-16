@@ -114,6 +114,9 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /单元格可按住划选后复制/);
     assert.match(jsText, /applyStoreQuery/);
     assert.match(jsText, /bindLiveSearch/);
+    assert.match(jsText, /id="people-kpis"/);
+    assert.match(jsText, /renderPeopleKpis/);
+    assert.match(jsText, /peopleRoleBucket/);
     assert.match(jsText, /__xmSearchStores/);
     assert.match(jsText, /__xmSearchPeople/);
     assert.match(jsText, /onSearchCapture/);
