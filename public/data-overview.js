@@ -591,10 +591,34 @@
     return last || null;
   }
 
+  function weekBounds(day) {
+    const parts = String(day || "").split("-").map(Number);
+    const utc = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+    let wd = utc.getUTCDay();
+    if (wd === 0) {
+      wd = 7;
+    }
+    const mon = new Date(utc);
+    mon.setUTCDate(utc.getUTCDate() - wd + 1);
+    const sun = new Date(mon);
+    sun.setUTCDate(mon.getUTCDate() + 6);
+    return { from: mon.toISOString().slice(0, 10), to: sun.toISOString().slice(0, 10) };
+  }
+
+  function monthBounds(ym) {
+    const parts = String(ym || "").split("-").map(Number);
+    const from = parts[0] + "-" + pad(parts[1]) + "-01";
+    const last = new Date(Date.UTC(parts[0], parts[1], 0));
+    return { from: from, to: last.toISOString().slice(0, 10) };
+  }
+
   function rangeSpan(label, customFrom, customTo) {
     const to = new Date();
     to.setHours(0, 0, 0, 0);
     const from = new Date(to);
+    if ((label === "周" || label === "月" || label === "自定义") && customFrom && customTo) {
+      return { from: customFrom, to: customTo, dateLabel: customFrom.replaceAll("-", "/") + " - " + customTo.replaceAll("-", "/") };
+    }
     if (label === "30天") {
       from.setDate(from.getDate() - 29);
     } else if (label === "日") {
@@ -607,8 +631,6 @@
       from.setDate(1);
     } else if (label === "年") {
       from.setMonth(0, 1);
-    } else if (label === "自定义" && customFrom && customTo) {
-      return { from: customFrom, to: customTo, dateLabel: customFrom.replaceAll("-", "/") + " - " + customTo.replaceAll("-", "/") };
     } else {
       from.setDate(from.getDate() - 6);
     }
@@ -652,7 +674,7 @@
     if (Number.isNaN(n)) {
       return String(value);
     }
-    return n.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return fmtInt(n);
   }
 
   function pct(value) {
@@ -1468,7 +1490,7 @@
     return Boolean(from && !to && inclusiveDays(from, value) > 30);
   }
 
-  function calendarMonthHtml(year, month, from, to, today, side) {
+  function calendarMonthHtml(year, month, from, to, today, side, noLimit) {
     const week =
       "<tr>" +
       ["一", "二", "三", "四", "五", "六", "日"]
@@ -1487,7 +1509,7 @@
           .map(function (cell) {
             const value = cell.y + "-" + pad(cell.m + 1) + "-" + pad(cell.d);
             const future = value > today;
-            const over = dayOverLimit(from, to, value);
+            const over = !noLimit && dayOverLimit(from, to, value);
             const blocked = future || over;
             const cls = [
               cell.out ? "is-out" : "",
@@ -1539,14 +1561,45 @@
     );
   }
 
+  function calendarYearHtml(year, selected) {
+    const now = shanghaiYmd(0).slice(0, 7);
+    const hit = String(selected || "").slice(0, 7);
+    let cells = "";
+    for (let m = 1; m <= 12; m += 1) {
+      const ym = year + "-" + pad(m);
+      cells +=
+        '<button type="button" data-month="' +
+        ym +
+        '"' +
+        (ym > now ? " disabled" : "") +
+        (ym === hit ? ' class="is-start"' : "") +
+        ">" +
+        m +
+        "月</button>";
+    }
+    return (
+      '<div class="ch-cal is-months" data-calendar="1"><div class="ch-cal-month" style="width:100%"><div class="ch-cal-head">' +
+      '<button type="button" data-cal="prev-year" aria-label="上一年">«</button><strong>' +
+      year +
+      '年</strong><button type="button" data-cal="next-year" aria-label="下一年">»</button></div>' +
+      '<div class="ch-cal-months">' +
+      cells +
+      "</div></div></div>"
+    );
+  }
+
   function calendarPanel(state) {
     const today = shanghaiYmd(0);
+    if (state.range === "月") {
+      return calendarYearHtml(state.calYear, state.customFrom);
+    }
     const left = { year: state.calYear, month: state.calMonth };
     const right = shiftMonth(state.calYear, state.calMonth, 1);
+    const week = state.range === "周";
     return (
       '<div class="ch-cal" data-calendar="1">' +
-      calendarMonthHtml(left.year, left.month, state.customFrom, state.customTo, today, "left") +
-      calendarMonthHtml(right.year, right.month, state.customFrom, state.customTo, today, "right") +
+      calendarMonthHtml(left.year, left.month, state.customFrom, state.customTo, today, "left", week) +
+      calendarMonthHtml(right.year, right.month, state.customFrom, state.customTo, today, "right", week) +
       "</div>"
     );
   }
@@ -2307,6 +2360,15 @@
     }
 
     function applyCalDay(day) {
+      if (state.range === "周") {
+        const span = weekBounds(day);
+        state.customFrom = span.from;
+        state.customTo = span.to;
+        state.calOpen = false;
+        hideCalPop();
+        load();
+        return;
+      }
       if (!state.customFrom || state.customTo) {
         state.customFrom = day;
         state.customTo = "";
@@ -2347,6 +2409,17 @@
       const calNav = pathEl(event, "data-cal");
       if (calNav) {
         applyCalNav(calNav.getAttribute("data-cal"));
+        return;
+      }
+      const monthBtn = pathEl(event, "data-month");
+      if (monthBtn && !monthBtn.disabled) {
+        const span = monthBounds(monthBtn.getAttribute("data-month"));
+        state.customFrom = span.from;
+        state.customTo = span.to;
+        state.range = "月";
+        state.calOpen = false;
+        hideCalPop();
+        load();
         return;
       }
       const dayBtn = pathEl(event, "data-day");
@@ -2712,11 +2785,9 @@
       const rangeBtn = event.target.closest("button[data-range]");
       if (rangeBtn) {
         const next = rangeBtn.getAttribute("data-range");
-        if (next === "自定义") {
-          state.calOpen = !state.calOpen;
-          if (state.calOpen) {
-            state.range = "自定义";
-          }
+        if (next === "自定义" || next === "周" || next === "月") {
+          state.calOpen = !state.calOpen || state.range !== next;
+          state.range = next;
           render();
           return;
         }

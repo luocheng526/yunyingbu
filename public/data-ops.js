@@ -263,7 +263,11 @@
     "td button.is-out,td button.is-over,td button.is-future,td button:disabled{color:#bfbfbf;cursor:default}" +
     "td button.is-today{color:#cf1322;font-weight:600}" +
     "td button.is-in{background:#fff1f0;color:#c62828}" +
-    "td button.is-start,td button.is-end{background:#c62828;color:#fff}";
+    "td button.is-start,td button.is-end{background:#c62828;color:#fff}" +
+    ".ch-cal-months{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 8px 16px}" +
+    ".ch-cal-months button{height:36px;border:1px solid #f0f0f0;background:#fff;cursor:pointer}" +
+    ".ch-cal-months button.is-start{background:#c62828;color:#fff}" +
+    ".ch-cal-months button:disabled{color:#bfbfbf;cursor:default}";
 
   function shopNameOf(item) {
     if (!item) {
