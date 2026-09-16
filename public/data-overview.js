@@ -2057,14 +2057,31 @@
       el.style.minWidth = width + "px";
     }
 
+    function togDraft(cur, id, on) {
+      if (on) {
+        if (cur.indexOf(id) < 0) {
+          cur.push(id);
+        }
+        return cur;
+      }
+      return cur.filter(function (item) {
+        return item !== id;
+      });
+    }
+
     function paintMenuChecks() {
       const team = state.section === "店铺分组";
-      window.XmDataOps.paintChecks(
-        getShopMenu(),
-        team ? "team" : "shop",
-        team ? isDraftAllTeams() : isDraftAll(state.payload),
-        team ? draftTeamIds() : draftShopIds(state.payload)
-      );
+      const allOn = team ? isDraftAllTeams() : isDraftAll(state.payload);
+      const ids = team ? draftTeamIds() : draftShopIds(state.payload);
+      const attr = team ? "data-team-id" : "data-shop-id";
+      const el = getShopMenu();
+      const allBox = el.querySelector(team ? "[data-team-all]" : "[data-shop-all]");
+      if (allBox) {
+        allBox.checked = allOn;
+      }
+      el.querySelectorAll("[" + attr + "]").forEach(function (box) {
+        box.checked = allOn || ids.indexOf(box.getAttribute(attr) || "") >= 0;
+      });
     }
 
     function syncShopMenu() {
@@ -2093,7 +2110,7 @@
       }
       if (target.matches("[data-team-id]")) {
         const all = allTeamIds();
-        const cur = window.XmDataOps.toggleId(draftTeamIds(), target.getAttribute("data-team-id") || "", target.checked);
+        const cur = togDraft(draftTeamIds(), target.getAttribute("data-team-id") || "", target.checked);
         state.teamDraft = cur.length === all.length ? null : cur;
         paintMenuChecks();
         return;
@@ -2105,7 +2122,7 @@
       }
       if (target.matches("[data-shop-id]")) {
         const all = allShopIds(state.payload);
-        const cur = window.XmDataOps.toggleId(draftShopIds(state.payload), target.getAttribute("data-shop-id") || "", target.checked);
+        const cur = togDraft(draftShopIds(state.payload), target.getAttribute("data-shop-id") || "", target.checked);
         state.shopDraft = cur.length === all.length ? null : cur;
         paintMenuChecks();
       }

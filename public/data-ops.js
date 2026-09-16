@@ -529,29 +529,6 @@
     );
   }
 
-  function paintChecks(el, kind, allOn, ids) {
-    const attr = kind === "team" ? "data-team-id" : "data-shop-id";
-    const allBox = el.querySelector(kind === "team" ? "[data-team-all]" : "[data-shop-all]");
-    if (allBox) {
-      allBox.checked = allOn;
-    }
-    el.querySelectorAll("[" + attr + "]").forEach(function (box) {
-      box.checked = allOn || ids.indexOf(box.getAttribute(attr) || "") >= 0;
-    });
-  }
-
-  function toggleId(cur, id, on) {
-    if (on) {
-      if (cur.indexOf(id) < 0) {
-        cur.push(id);
-      }
-      return cur;
-    }
-    return cur.filter(function (item) {
-      return item !== id;
-    });
-  }
-
   window.XmDataOps = {
     panel: panel,
     paint: paint,
@@ -563,8 +540,6 @@
     weekBounds: weekBounds,
     monthBounds: monthBounds,
     yearCal: yearCal,
-    teamMenu: teamMenu,
-    paintChecks: paintChecks,
-    toggleId: toggleId
+    teamMenu: teamMenu
   };
 })();
