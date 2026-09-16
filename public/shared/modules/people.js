@@ -8,6 +8,19 @@
       .replaceAll('"', "&quot;");
   }
 
+  function pinCellBox(td) {
+    const rect = td.getBoundingClientRect();
+    td.classList.add("is-editing");
+    td.style.boxSizing = "border-box";
+    td.style.position = "relative";
+    td.style.width = rect.width + "px";
+    td.style.minWidth = rect.width + "px";
+    td.style.maxWidth = rect.width + "px";
+    td.style.height = rect.height + "px";
+    td.style.minHeight = rect.height + "px";
+    td.style.maxHeight = rect.height + "px";
+  }
+
   function focusNameInput(input) {
     input.focus();
     try {
@@ -70,7 +83,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.193-people-kpis";
+    const href = "/people.css?v=0.1.202-cell-box";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -107,7 +120,9 @@
       ".people-page .org-filter-pop[hidden]{display:none!important;}" +
       ".people-page .org-table-wrap{overflow:visible!important;max-height:none!important;}" +
       ".people-page table{border-collapse:separate;border-spacing:0;}" +
-      ".people-page th{position:sticky;top:0;z-index:4;background:#fafafa;}";
+      ".people-page th{position:sticky;top:0;z-index:4;background:#fafafa;}" +
+      ".people-page td.people-cell.is-editing,.people-page td.org-cell.is-editing{overflow:hidden;position:relative;}" +
+      ".people-page td.people-cell.is-editing input,.people-page td.org-cell.is-editing input,.people-page td.org-cell.is-editing select{position:absolute;inset:3px;width:auto;height:auto;min-width:0;max-width:none;margin:0;padding:0 4px;box-sizing:border-box;font:inherit;}";
   }
 
   function showShellTab() {
@@ -249,7 +264,7 @@
         '<div class="org-pane" data-pane="acl" hidden>' +
         '<section class="panel"><h2>权限</h2>' +
         "<p>店铺主数据按登录人责权：罗成可改全部，沈子晗只改沈子晗组，韩梦凯只改韩梦凯组。双击单元格保存。</p>" +
-        "<p>成员管理五级线双击可改，仅罗成、韩梦凯、沈子晗能改，其他人不能改。</p>" +
+        "<p>成员管理整表双击改格子，框不拉长，点别处就保存。仅罗成、韩梦凯、沈子晗能改，其他人不能改。</p>" +
         "<p>导入是合并不是换表。人员同名覆盖；店铺同一家才覆盖，其它原店铺保留。</p>" +
         "<p>智能体只读：GET /api/people、GET /api/people/org/stores、GET /api/people/grants。</p></section></div>" +
         '<div class="org-pane" data-pane="logs" hidden>' +
@@ -1188,6 +1203,7 @@
           return;
         }
         const current = row[field] || "";
+        pinCellBox(td);
         if (field === "remark") {
           const select = document.createElement("select");
           REMARKS.forEach(function (item) {
@@ -1215,6 +1231,7 @@
           });
           return;
         }
+        pinCellBox(td);
         const input = document.createElement("input");
         input.type = "text";
         input.value = current;
@@ -1265,7 +1282,7 @@
           '" data-field="' +
           field +
           '" title="' +
-          (canEdit ? "单击修改" : "仅罗成、韩梦凯、沈子晗能改") +
+          (canEdit ? "双击修改，点别处保存" : "仅罗成、韩梦凯、沈子晗能改") +
           '">' +
           escapeHtml(value || "—") +
           "</td>"
@@ -1314,9 +1331,8 @@
             person.id +
             '"' +
             (memberSelectedIds[String(person.id)] ? " checked" : "") +
-            " /></td><td>" +
-            escapeHtml(person.name) +
-            "</td>" +
+            " /></td>" +
+            peopleLineCell("name", person.name) +
             peopleLineCell("director", person.director) +
             peopleLineCell("lineManager", person.lineManager) +
             peopleLineCell("supervisor", person.supervisor) +
@@ -1335,13 +1351,13 @@
             '<td class="people-cell' +
             (canEdit ? " can-edit" : "") +
             '" data-field="username" title="' +
-            (canEdit ? "单击可改" : "仅罗成、韩梦凯、沈子晗能改") +
+            (canEdit ? "双击修改，点别处保存" : "仅罗成、韩梦凯、沈子晗能改") +
             '">' +
             escapeHtml(person.username || person.name || "—") +
             '</td><td class="people-cell' +
             (canEdit ? " can-edit" : "") +
             '" data-field="password" title="' +
-            (canEdit ? "单击可改" : "仅罗成、韩梦凯、沈子晗能改") +
+            (canEdit ? "双击修改，点别处保存" : "仅罗成、韩梦凯、沈子晗能改") +
             '">' +
             escapeHtml(person.password || "ChangeMe123!") +
             "</td>";
@@ -2213,6 +2229,7 @@
       }
 
       const LINE_FIELDS = ["director", "lineManager", "supervisor", "reserve", "operator", "assistant"];
+      const TEXT_FIELDS = ["name"].concat(LINE_FIELDS);
 
       function savePersonField(id, field, value) {
         return fetch("/api/people/" + id, {
@@ -2229,7 +2246,7 @@
             throw new Error(result.data.error || "保存失败");
           }
           const echoed = result.data.person || {};
-          if (LINE_FIELDS.indexOf(field) >= 0 && String(echoed[field] || "") !== String(value)) {
+          if (TEXT_FIELDS.indexOf(field) >= 0 && String(echoed[field] || "") !== String(value)) {
             throw new Error("保存失败，服务端未写入" + field);
           }
           return loadMembers();
@@ -2248,14 +2265,15 @@
         if (!id || !field || !person) {
           return;
         }
-        const current = LINE_FIELDS.indexOf(field) >= 0
+        const current = TEXT_FIELDS.indexOf(field) >= 0
           ? person[field] || ""
           : field === "username"
             ? person.username || person.name || ""
             : person.password || "ChangeMe123!";
+        pinCellBox(td);
         const input = document.createElement("input");
         input.type = "text";
-        input.value = current;
+        input.value = current === "—" ? "" : current;
         td.textContent = "";
         td.append(input);
         focusNameInput(input);
@@ -2282,16 +2300,17 @@
         );
       }
 
-      peopleTbody.addEventListener("click", function (event) {
-        if (event.target.closest("select, input, button")) {
+      function onDocCellCommit(event) {
+        const editing = root.querySelector("td.people-cell input, td.org-cell input, td.org-cell select");
+        if (!editing || editing.contains(event.target) || editing === event.target) {
           return;
         }
-        const td = event.target.closest("td.people-cell");
-        if (!td) {
+        if (editing.isComposing) {
           return;
         }
-        startPersonCellEdit(td);
-      });
+        editing.blur();
+      }
+      document.addEventListener("mousedown", onDocCellCommit, true);
       peopleTbody.addEventListener("change", function (event) {
         const box = event.target.closest(".people-row-check");
         if (!box) {
@@ -2581,6 +2600,7 @@
         }
         document.removeEventListener("wheel", onPeopleWheel, true);
         window.removeEventListener("resize", fitRightsTree);
+        document.removeEventListener("mousedown", onDocCellCommit, true);
         document.removeEventListener("click", onDocFilterClose);
         window.removeEventListener("scroll", onFilterPin, true);
         window.removeEventListener("resize", onFilterPin);

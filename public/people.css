@@ -495,8 +495,31 @@ body:has(.people-page) .xm-tabs {
 .org-cell select,
 .people-cell input {
   width: 100%;
-  min-width: 88px;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 0 4px;
+  border: 1px solid #1677ff;
+  border-radius: 2px;
+  font: inherit;
+  line-height: 18px;
   box-sizing: border-box;
+}
+
+.people-page td.people-cell.is-editing,
+.people-page td.org-cell.is-editing {
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.people-page td.people-cell.is-editing input,
+.people-page td.org-cell.is-editing input,
+.people-page td.org-cell.is-editing select {
+  position: absolute;
+  inset: 3px;
+  width: auto;
+  height: auto;
+  max-width: none;
 }
 
 .org-locked {
