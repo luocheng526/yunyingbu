@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.550-home-chiefduty */
+/* xm-module-home 0.1.551-home-chieflist */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1310,7 +1310,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.550-home-chiefduty");
+    board.setAttribute("data-hm-js", "0.1.551-home-chieflist");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2050,7 +2050,6 @@
   function teamLeadNames(people, dutyShops, role) {
     var seen = {};
     var names = [];
-    var byName = {};
     function add(name) {
       var n = String(name || "").trim();
       if (!n || n === "管理员" || seen[n]) {
@@ -2059,14 +2058,7 @@
       seen[n] = true;
       names.push(n);
     }
-    function skipStaff(name) {
-      var p = byName[String(name || "").trim()];
-      return p && /经理/.test(String(p.role || ""));
-    }
     (people || []).forEach(function (person) {
-      if (person && person.name) {
-        byName[String(person.name).trim()] = person;
-      }
       if (person && person.status === "在职" && (person.role === role || (role === "主管" && person.role === "储备"))) {
         add(person.name);
       }
@@ -2076,15 +2068,7 @@
         add(shop && shop.manager);
       }
       if (role === "主管" && shop) {
-        var sup = String(shop.supervisor || "").trim();
-        var asst = String(shop.assistant || "").trim();
-        var op = String(shop.operator || "").trim();
-        if (sup && !skipStaff(sup)) {
-          add(sup);
-        }
-        if (asst && asst !== op && !skipStaff(asst)) {
-          add(asst);
-        }
+        add(shop.supervisor);
       }
     });
     if (!names.length && role === "经理") {

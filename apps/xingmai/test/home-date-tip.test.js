@@ -348,7 +348,7 @@ test("card settings persist separately for 公司 经理团队 and 主管/储备
   assert.deepEqual(fns.goneTeams(), ["沈子晗"]);
 });
 
-test("chief columns follow 主管/储备 shop duty and still drop 经理", () => {
+test("chief columns follow every org 主管/储备 supervisor including 经理", () => {
   const start = homeJs.indexOf("function teamPredicate");
   const end = homeJs.indexOf("function buildTeams");
   const fns = new Function(homeJs.slice(start, end) + "return {teamLeadNames, shopOnRoleTeam};")();
@@ -366,7 +366,7 @@ test("chief columns follow 主管/储备 shop duty and still drop 经理", () =>
     { supervisor: "段坤孝", assistant: "黄欣然", operator: "黄欣然" },
     { supervisor: "陈晓曼", assistant: "潘梦玉", operator: "刘璇" }
   ];
-  assert.deepEqual(fns.teamLeadNames(people, shops, "主管"), ["杨润泽", "翁琴", "高丽男", "段坤孝", "陈晓曼", "潘梦玉"]);
+  assert.deepEqual(fns.teamLeadNames(people, shops, "主管"), ["杨润泽", "翁琴", "高丽男", "韩梦凯", "段坤孝", "陈晓曼"]);
   assert.equal(fns.shopOnRoleTeam(shops[0], "杨润泽", "主管"), true);
   assert.equal(fns.shopOnRoleTeam(shops[1], "高丽男", "主管"), true);
   assert.equal(fns.shopOnRoleTeam(shops[2], "高丽男", "主管"), false);
