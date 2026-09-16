@@ -223,6 +223,8 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /function dutyLeaders/);
     assert.match(overviewJs.text, /data-team/);
     assert.match(overviewJs.text, /sortByPay/);
+    assert.match(overviewJs.text, /function setWait/);
+    assert.match(overviewJs.text, /is-wait/);
     const opsJs = await get(base, "/data-ops.js");
     assert.match(opsJs.text, /XmDataOps/);
     assert.match(opsJs.text, /推广花费销售额占比/);
@@ -618,6 +620,7 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /data-overview\.js\?v=data-ov30/);
   assert.match(dataMod, /data-ops\.js\?v=data-ov30/);
   assert.match(css, /\.op-kpis \{/);
+  assert.match(css, /\.data-overview-root\.is-wait/);
   assert.match(css, /\.op-chart \{/);
   assert.match(css, /is-gain/);
   assert.match(css, /#f6ffed/);

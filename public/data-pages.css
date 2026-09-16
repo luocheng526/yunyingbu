@@ -1311,6 +1311,17 @@ html[data-theme="pink"] .gd-card {
   padding: 12px 20px;
   border-top: 1px solid var(--ch-line, #f0f0f0);
 }
+.data-overview-root.is-wait .ch-card .value,
+.data-overview-root.is-wait .ch-card .extra,
+.data-overview-root.is-wait .ch-hero .delta,
+.data-overview-root.is-wait .op-kpi .val,
+.data-overview-root.is-wait .ch-table td {
+  color: #fff;
+}
+.data-overview-root.is-wait .ch-hero .ch-spark,
+.data-overview-root.is-wait .op-bars {
+  opacity: 0;
+}
 .op-kpis {
   display: grid;
   grid-template-columns: repeat(9, minmax(0, 1fr));

@@ -2349,8 +2349,16 @@
       });
     }
 
+    function setWait(on) {
+      const root = board && (board.closest(".data-overview-root") || board);
+      if (root) {
+        root.classList.toggle("is-wait", !!on);
+      }
+    }
+
     function paintErp(data, span) {
       state.payload = fromErp(data, state.range, span.dateLabel);
+      setWait(false);
       render();
     }
 
@@ -2368,6 +2376,7 @@
           state.payload.hero.value = fmtHeroMoney(state.payload.hero.todayPay);
         }
       }
+      setWait(false);
       render();
     }
 
@@ -2476,6 +2485,7 @@
         })
         .catch(function () {
           if (state.payload) {
+            setWait(false);
             return;
           }
           return json("/api/data/team")
@@ -2500,16 +2510,22 @@
     function load(forceBoard) {
       const span = rangeSpan(state.range, state.customFrom, state.customTo);
       const cached = readOvBoard(state.range, span);
-      if (cached && cached.payload) {
+      const painted = board && board.querySelector(".ch-metrics");
+      const heroReady = cached && cached.payload && cached.payload.hero && Number(cached.payload.hero.todayPay) > 0;
+      if (!forceBoard && ovBoardFresh(cached) && heroReady) {
         applyCachedBoard(cached, span);
+        loadLiveSpark();
+        return Promise.resolve();
+      }
+      if (painted) {
+        setWait(true);
+      } else if (cached && cached.payload) {
+        applyCachedBoard(cached, span);
+        setWait(true);
       } else if (!state.payload && board) {
         board.innerHTML = '<p class="ch-empty">正在加载数据总览…</p>';
       }
       loadLiveSpark();
-      const heroReady = cached && cached.payload && cached.payload.hero && Number(cached.payload.hero.todayPay) > 0;
-      if (!forceBoard && ovBoardFresh(cached) && heroReady) {
-        return Promise.resolve();
-      }
       return fetchBoard(span).then(function () {
         loadLiveSpark();
       });
