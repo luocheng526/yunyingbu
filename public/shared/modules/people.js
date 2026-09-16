@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.189-type-search";
+    const href = "/people.css?v=0.1.190-type-search";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -42,6 +42,8 @@
       ".people-page{overflow:visible;padding-bottom:24px;}" +
       ".people-page table,.people-page th,.people-page td,.people-page .org-cell,.people-page .org-link,.people-page .tag{-webkit-user-select:text!important;user-select:text!important;-webkit-user-drag:none;}" +
       ".people-page input,.people-page textarea{-webkit-user-select:text!important;user-select:text!important;-webkit-user-drag:auto;pointer-events:auto!important;}" +
+      ".people-page .org-toolbar{position:sticky;top:0;z-index:8;background:var(--xm-bg,#f0f2f5);}" +
+      ".people-page .org-filter-pop[hidden]{display:none!important;}" +
       ".people-page .org-table-wrap{overflow:visible!important;max-height:none!important;}" +
       ".people-page table{border-collapse:separate;border-spacing:0;}" +
       ".people-page th{position:sticky;top:0;z-index:4;background:#fafafa;}";
@@ -107,8 +109,10 @@
         '<div class="org-pane" data-pane="stores">' +
         '<div class="org-kpis" id="org-kpis"></div>' +
         '<div class="org-toolbar">' +
-        '<input type="search" id="org-q" placeholder="店铺ID / 商家ID / 店铺名 / 人员" />' +
-        '<button type="button" id="org-search">搜索</button>' +
+        '<form class="org-search-form" id="org-search-form" action="javascript:void(0)">' +
+        '<input type="text" id="org-q" name="q" placeholder="店铺ID / 商家ID / 店铺名 / 人员" autocomplete="off" spellcheck="false" />' +
+        '<button type="submit" id="org-search">搜索</button>' +
+        "</form>" +
         '<span class="spacer" id="org-count"></span>' +
         '<button type="button" class="ghost" id="org-template">下载模板</button>' +
         '<button type="button" class="ghost" id="org-import">导入</button>' +
@@ -135,8 +139,10 @@
         '<section class="panel"><h2>身份名册</h2>' +
         '<p class="lead">表头可筛总监、经理、主管/储备、运营、助理、状态。总监、经理、主管/储备、运营、助理双击可改，仅罗成、韩梦凯、沈子晗能改，其他人不能改。导入按姓名合并：一模一样的名字覆盖原行，对不上的名字当新员工，并落盘，强制刷新还在。勾选后可统一改密码或删除。点新增人员弹出对话框。</p>' +
         '<div class="org-toolbar">' +
-        '<input type="search" id="people-q" placeholder="姓名 / 账号 / 经理 / 主管" />' +
-        '<button type="button" id="people-search">搜索</button>' +
+        '<form class="org-search-form" id="people-search-form" action="javascript:void(0)">' +
+        '<input type="text" id="people-q" name="q" placeholder="姓名 / 账号 / 经理 / 主管" autocomplete="off" spellcheck="false" />' +
+        '<button type="submit" id="people-search">搜索</button>' +
+        "</form>" +
         '<span class="spacer" id="people-count"></span>' +
         '<button type="button" class="ghost" id="people-template">下载模板</button>' +
         '<button type="button" class="ghost" id="people-import">导入</button>' +
@@ -700,7 +706,9 @@
             row.owner,
             row.lead,
             row.chief,
-            row.login
+            row.login,
+            row.remark,
+            row.password
           ]
             .join(" ")
             .toLowerCase();
@@ -874,7 +882,14 @@
       function renderStores(stores) {
         lastStores = stores;
         tbody.replaceChildren();
-        countEl.textContent = "筛选 " + stores.length + " 条 · 已选 " + selectedCount() + " 条";
+        const qLabel = String((qInput && qInput.value) || "").trim();
+        countEl.textContent =
+          "筛选 " +
+          stores.length +
+          " 条 · 已选 " +
+          selectedCount() +
+          " 条" +
+          (qLabel ? " · 搜「" + qLabel + "」" : "");
         root.querySelector("#org-add").hidden = !boardMeta.canCreate;
         if (!stores.length) {
           tbody.innerHTML = '<tr><td colspan="13" class="org-empty">暂无店铺</td></tr>';
@@ -1188,7 +1203,9 @@
         paintPeoplePager();
         const peopleCount = root.querySelector("#people-count");
         if (peopleCount) {
-          peopleCount.textContent = "筛选 " + people.length + " 人";
+          const peopleQ = String((root.querySelector("#people-q") || {}).value || "").trim();
+          peopleCount.textContent =
+            "筛选 " + people.length + " 人" + (peopleQ ? " · 搜「" + peopleQ + "」" : "");
         }
       }
 
@@ -1619,28 +1636,32 @@
       if (peopleFilterPop) {
         peopleFilterPop.addEventListener("change", onFilterChange);
       }
-      function onStoreQueryType(event) {
-        if (event && (event.isComposing || event.keyCode === 229)) {
+      function bindLiveSearch(form, input, run) {
+        if (!input) {
           return;
         }
-        paintStores();
-      }
-      qInput.addEventListener("input", onStoreQueryType);
-      qInput.addEventListener("compositionend", function () {
-        paintStores();
-      });
-      qInput.addEventListener("search", function () {
-        paintStores();
-      });
-      qInput.addEventListener("keydown", function (event) {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          paintStores();
+        input.disabled = false;
+        input.readOnly = false;
+        input.addEventListener("mousedown", function (event) {
+          event.stopPropagation();
+        });
+        input.addEventListener("click", function (event) {
+          event.stopPropagation();
+          input.focus();
+        });
+        ["input", "keyup", "change", "paste", "compositionend"].forEach(function (name) {
+          input.addEventListener(name, function () {
+            run();
+          });
+        });
+        if (form) {
+          form.addEventListener("submit", function (event) {
+            event.preventDefault();
+            run();
+          });
         }
-      });
-      root.querySelector("#org-search").addEventListener("click", function () {
-        paintStores();
-      });
+      }
+      bindLiveSearch(root.querySelector("#org-search-form"), qInput, paintStores);
       root.querySelector("#org-add").addEventListener("click", function () {
         openForm(null);
       });
@@ -1825,22 +1846,7 @@
           }
         });
       }
-      root.querySelector("#people-search").addEventListener("click", rerenderPeople);
-      const peopleQ = root.querySelector("#people-q");
-      peopleQ.addEventListener("input", function (event) {
-        if (event.isComposing || event.keyCode === 229) {
-          return;
-        }
-        rerenderPeople();
-      });
-      peopleQ.addEventListener("compositionend", rerenderPeople);
-      peopleQ.addEventListener("search", rerenderPeople);
-      peopleQ.addEventListener("keydown", function (event) {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          rerenderPeople();
-        }
-      });
+      bindLiveSearch(root.querySelector("#people-search-form"), root.querySelector("#people-q"), rerenderPeople);
       root.querySelector("#people-add").addEventListener("click", openPeopleForm);
       root.querySelector("#people-cancel").addEventListener("click", closePeopleForm);
       peopleModal.addEventListener("click", function (event) {

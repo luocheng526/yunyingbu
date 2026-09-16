@@ -152,14 +152,28 @@ body:has(.people-page) .xm-tabs {
 }
 
 .org-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 8;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
   margin-bottom: 12px;
+  padding: 8px 0;
+  background: var(--xm-bg, #f0f2f5);
+}
+
+.org-search-form {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .org-toolbar input[type="search"],
+.org-toolbar input[type="text"],
 .org-toolbar select {
   min-width: 280px;
   height: 32px;
@@ -169,6 +183,10 @@ body:has(.people-page) .xm-tabs {
   background: #fff;
   color: var(--xm-ink, #1f1f1f);
   font-size: 13px;
+}
+
+.org-filter-pop[hidden] {
+  display: none !important;
 }
 
 .org-toolbar .spacer {
