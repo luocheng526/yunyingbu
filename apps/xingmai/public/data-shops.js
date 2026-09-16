@@ -1,4 +1,4 @@
-/* xm-data-shops 0.1.607-data-range-blank — range change blanks numbers before new data */
+/* xm-data-shops 0.1.611-data-range-blank — range change blanks numbers before new data */
 (function () {
   window.XmModules = window.XmModules || {};
 
@@ -47,7 +47,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=0.1.607-data-range-blank";
+      link.href = "/data-pages.css?v=0.1.611-data-range-blank";
       document.head.appendChild(link);
     }
   }

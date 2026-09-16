@@ -13,11 +13,11 @@ const goodsJs = readFileSync(join(root, "public/data-goods.js"), "utf8");
 const css = readFileSync(join(root, "public/data-pages.css"), "utf8");
 
 test("range change blanks numbers on home overview shops and goods", () => {
-  assert.match(homeJs, /0\.1\.607-data-range-blank/);
-  assert.match(overviewJs, /0\.1\.607-data-range-blank/);
-  assert.match(shopsJs, /0\.1\.607-data-range-blank/);
-  assert.match(goodsJs, /0\.1\.607-data-range-blank/);
-  assert.match(dataJs, /0\.1\.607-data-range-blank/);
+  assert.match(homeJs, /0\.1\.611-data-range-blank/);
+  assert.match(overviewJs, /0\.1\.611-data-range-blank/);
+  assert.match(shopsJs, /0\.1\.611-data-range-blank/);
+  assert.match(goodsJs, /0\.1\.611-data-range-blank/);
+  assert.match(dataJs, /0\.1\.611-data-range-blank/);
   assert.match(homeJs, /function beginRangeLoad\(\)/);
   assert.match(overviewJs, /function beginRangeLoad\(\)/);
   assert.match(shopsJs, /function beginRangeLoad\(\)/);
