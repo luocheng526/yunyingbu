@@ -503,9 +503,21 @@ function applyLinePatch(found, input) {
   }
   found.managerId = applied.managerId;
   stampOrgLine(found, applied);
-  if (Object.prototype.hasOwnProperty.call(input, "reserve") || Object.prototype.hasOwnProperty.call(input, "储备")) {
-    const raw = Object.prototype.hasOwnProperty.call(input, "reserve") ? input.reserve : input.储备;
-    found.reserve = String(raw == null ? "" : raw).trim();
+  const forced = [
+    ["director", ["director", "总监"]],
+    ["lineManager", ["lineManager", "经理"]],
+    ["supervisor", ["supervisor", "主管"]],
+    ["reserve", ["reserve", "储备"]],
+    ["operator", ["operator", "运营"]],
+    ["assistant", ["assistant", "助理"]]
+  ];
+  for (const [field, keys] of forced) {
+    for (const key of keys) {
+      if (Object.prototype.hasOwnProperty.call(input, key)) {
+        found[field] = String(input[key] == null ? "" : input[key]).trim();
+        break;
+      }
+    }
   }
 }
 
@@ -859,6 +871,17 @@ function applyPatchPerson(id, input) {
       return { ok: false, statusCode: 400, error: "密码不能为空" };
     }
     found.password = password;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, "name") || Object.prototype.hasOwnProperty.call(input, "姓名")) {
+    const name = String(input.name || input.姓名 || "").trim();
+    if (!name) {
+      return { ok: false, statusCode: 400, error: "姓名不能为空" };
+    }
+    const taken = people.some((row) => row.id !== found.id && row.name === name);
+    if (taken) {
+      return { ok: false, statusCode: 400, error: "姓名已被占用" };
+    }
+    found.name = name;
   }
   if (typeof input.role === "string" && input.role.trim()) {
     found.role = input.role.trim();

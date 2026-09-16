@@ -178,22 +178,28 @@ const RESERVE_SMOKE = `<!doctype html>
           return;
         }
         const id = row.getAttribute("data-id");
+        function dbl(el) {
+          el.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+        }
         const cell = row.querySelector('td[data-field="reserve"]');
-        cell.click();
+        const beforeBox = cell.getBoundingClientRect();
+        dbl(cell);
         await sleep(80);
         const input = cell.querySelector("input");
         if (!input) {
           document.body.setAttribute("data-ok", "no-input");
           return;
         }
+        const afterBox = cell.getBoundingClientRect();
+        const grew = afterBox.width > beforeBox.width + 8 || afterBox.height > beforeBox.height + 8;
         input.focus();
         input.value = "张文静";
         input.dispatchEvent(new CompositionEvent("compositionend", { data: "张文静" }));
-        input.blur();
+        document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
         await sleep(900);
         const cell2 = document.querySelector('#people-tbody tr[data-id="' + id + '"] td[data-field="reserve"]');
         const afterFill = (cell2 && cell2.textContent) || "";
-        cell2.click();
+        dbl(cell2);
         await sleep(80);
         const input2 = cell2.querySelector("input");
         if (!input2) {
@@ -204,13 +210,32 @@ const RESERVE_SMOKE = `<!doctype html>
         input2.focus();
         input2.value = "杨润泽";
         input2.dispatchEvent(new CompositionEvent("compositionend", { data: "杨润泽" }));
-        input2.blur();
+        document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
         await sleep(900);
         const cell3 = document.querySelector('#people-tbody tr[data-id="' + id + '"] td[data-field="reserve"]');
         const afterChange = (cell3 && cell3.textContent) || "";
+        const assist = document.querySelector('#people-tbody tr[data-id="' + id + '"] td[data-field="assistant"]');
+        const assistBefore = assist.getBoundingClientRect();
+        dbl(assist);
+        await sleep(80);
+        const assistInput = assist.querySelector("input");
+        const assistBox = assist.getBoundingClientRect();
+        const assistGrew = assistBox.width > assistBefore.width + 8 || assistBox.height > assistBefore.height + 8;
+        if (!assistInput) {
+          document.body.setAttribute("data-ok", "no-assist");
+          return;
+        }
+        assistInput.value = "小助";
+        assistInput.dispatchEvent(new CompositionEvent("compositionend", { data: "小助" }));
+        document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+        await sleep(900);
+        const assistAfter = document.querySelector('#people-tbody tr[data-id="' + id + '"] td[data-field="assistant"]');
+        const assistText = (assistAfter && assistAfter.textContent) || "";
         document.body.setAttribute("data-after", afterFill);
         document.body.setAttribute("data-changed", afterChange);
-        document.body.setAttribute("data-ok", afterFill.indexOf("张文静") >= 0 && afterChange.indexOf("杨润泽") >= 0 ? "1" : "0");
+        document.body.setAttribute("data-assist", assistText);
+        document.body.setAttribute("data-grew", grew || assistGrew ? "1" : "0");
+        document.body.setAttribute("data-ok", !grew && !assistGrew && afterFill.indexOf("张文静") >= 0 && afterChange.indexOf("杨润泽") >= 0 && assistText.indexOf("小助") >= 0 ? "1" : "0");
       })();
     </script>
   </body>
@@ -236,6 +261,8 @@ test("headless chrome can fill and change 储备", async () => {
     assert.match(html, /data-ok="1"/, html.includes("data-ok=") ? html.slice(html.indexOf("data-ok="), html.indexOf("data-ok=") + 120) : html.slice(-400));
     assert.match(html, /data-after="张文静"/);
     assert.match(html, /data-changed="杨润泽"/);
+    assert.match(html, /data-assist="小助"/);
+    assert.match(html, /data-grew="0"/);
   } finally {
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }

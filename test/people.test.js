@@ -164,8 +164,10 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /peopleLineCell\("lineManager"/);
     assert.match(jsText, /peopleLineCell\("reserve"/);
     assert.match(jsText, /双击修改/);
-    assert.match(jsText, /单击修改/);
+    assert.match(jsText, /点别处保存/);
+    assert.match(jsText, /pinCellBox/);
     assert.match(jsText, /bindImeSafeCommit/);
+    assert.doesNotMatch(jsText, /min-width: 88px/);
     assert.match(jsText, /服务端未写入/);
     assert.match(jsText, /event.isComposing/);
     assert.match(jsText, /仅罗成、韩梦凯、沈子晗能改/);
@@ -1090,6 +1092,20 @@ test("roster line cells are editable only by 罗成, 韩梦凯, 沈子晗", asyn
     const byLuoJson = await byLuo.json();
     assert.equal(byLuo.status, 200, JSON.stringify(byLuoJson));
     assert.equal(byLuoJson.person.assistant, "小助");
+
+    const namePatch = await fetch(`${base}/api/people/${wang.id}?actor=${encodeURIComponent("罗成")}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "王博改" })
+    });
+    const nameJson = await namePatch.json();
+    assert.equal(namePatch.status, 200, JSON.stringify(nameJson));
+    assert.equal(nameJson.person.name, "王博改");
+    await fetch(`${base}/api/people/${wang.id}?actor=${encodeURIComponent("罗成")}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "王博" })
+    });
 
     const reservePatch = await fetch(`${base}/api/people/${wang.id}?actor=${encodeURIComponent("罗成")}`, {
       method: "PATCH",
