@@ -161,7 +161,14 @@ body:has(.people-page) .xm-tabs {
 
 .org-toolbar input[type="search"],
 .org-toolbar select {
-  min-width: 160px;
+  min-width: 280px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--xm-line, #d9d9d9);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--xm-ink, #1f1f1f);
+  font-size: 13px;
 }
 
 .org-toolbar .spacer {
@@ -225,7 +232,6 @@ body:has(.people-page) .xm-tabs {
   font-size: 13px;
 }
 
-.people-page,
 .people-page table,
 .people-page th,
 .people-page td,
@@ -236,6 +242,16 @@ body:has(.people-page) .xm-tabs {
   -webkit-user-select: text !important;
   user-select: text !important;
   -webkit-user-drag: none;
+}
+
+.people-page input[type="search"],
+.people-page input[type="text"],
+.people-page input[type="password"],
+.people-page textarea {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-user-drag: auto;
+  pointer-events: auto !important;
 }
 
 .people-page button,
