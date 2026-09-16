@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.607-home-rangeblank */
+/* xm-module-home 0.1.613-home-refreshteams */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -282,6 +282,7 @@
   }
   var viewKey = "company";
   var cardSetOpen = false;
+  var teamsRefreshing = false;
   function viewStore(kind) {
     return viewKey === "team" || viewKey === "chief"
       ? "xm-home-" + viewKey + "-" + kind
@@ -711,7 +712,11 @@
       return gone.indexOf(team.name) === -1;
     });
     return (
-      '<div class="xm-hm-teams-bar"><b>星脉甄选</b><span><button type="button" data-show-teams>恢复所有团队的卡片</button><button type="button" class="xm-hm-set">卡片设置</button></span></div><div class="xm-hm-teams-grid">' +
+      '<div class="xm-hm-teams-bar"><b>星脉甄选</b><span><button type="button" data-refresh-teams' +
+      (teamsRefreshing ? " disabled" : "") +
+      ">" +
+      (teamsRefreshing ? "更新中…" : "更新团队") +
+      '</button><button type="button" data-show-teams>恢复所有团队的卡片</button><button type="button" class="xm-hm-set">卡片设置</button></span></div><div class="xm-hm-teams-grid">' +
       list
         .map(function (team) {
           return teamBlockHtml({ key: team.key, name: team.name, cards: arrangeCards(team.cards), shops: team.shops }, hide, simple);
@@ -1170,8 +1175,9 @@
       ".xm-hm-team-head h2{margin:0;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
       ".xm-hm.is-chief .xm-hm-team-head h2{font-size:13px}" +
       ".xm-hm-teams-bar .xm-hm-set{padding:0;font-size:13px;white-space:nowrap}" +
-      ".xm-hm-teams-bar span{display:flex;gap:12px}" +
-      "[data-show-teams]{border:0;background:0;color:var(--xm-primary);cursor:pointer;padding:0;font-size:13px}" +
+      ".xm-hm-teams-bar span{display:flex;gap:12px;align-items:center}" +
+      "[data-refresh-teams],[data-show-teams]{border:0;background:0;color:var(--xm-primary);cursor:pointer;padding:0;font-size:13px}" +
+      "[data-refresh-teams]:disabled{opacity:.55;cursor:wait}" +
       ".xm-hm-drop{width:20px;height:20px;border:1px solid #d96c6c;border-radius:50%;background:#fff;color:#c45656;font-size:16px;line-height:18px;cursor:pointer;padding:0}" +
       "#xm-hm-ladders{display:flex;flex-direction:column;gap:16px}" +
       ".xm-hm-ladder{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:12px;box-shadow:var(--xm-shadow);padding:16px 16px 12px}" +
@@ -1339,7 +1345,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.607-home-rangeblank");
+    board.setAttribute("data-hm-js", "0.1.613-home-refreshteams");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2149,6 +2155,20 @@
       return text.indexOf(name) !== -1;
     };
   }
+  function dutyShopOwner(shop, grants) {
+    if (!shop) {
+      return "—";
+    }
+    var op = shopDutyName(shop, "operator");
+    if (op) {
+      return op;
+    }
+    var owner = String(shop.owner || "").trim();
+    if (owner && owner !== "管理员") {
+      return owner;
+    }
+    return ownerOfShop(shop, grants);
+  }
   function teamLeadNames(people, dutyShops, role) {
     var seen = {};
     var names = [];
@@ -2183,12 +2203,16 @@
     if (!shop || !name) {
       return false;
     }
-    if (role !== "主管") {
-      return teamPredicate(name)(shop);
+    if (role === "主管") {
+      var asst = String(shop.assistant || "").trim();
+      var op = String(shop.operator || "").trim();
+      return String(shop.supervisor || "").trim() === name || (asst === name && asst !== op);
     }
-    var asst = String(shop.assistant || "").trim();
-    var op = String(shop.operator || "").trim();
-    return String(shop.supervisor || "").trim() === name || (asst === name && asst !== op);
+    var manager = String(shop.manager || "").trim();
+    if (manager) {
+      return manager === name;
+    }
+    return teamPredicate(name)(shop);
   }
   function buildTeams(dutyShops, grants, rangePack, prevPack, catalogPack, people, role) {
     var erp = mapByShopId(rangePack && rangePack.records);
@@ -2219,7 +2243,7 @@
         }
         var label = shopDisplayName(shop);
         var id = resolveErpId(shop, catalogByName);
-        var owner = (shop.owner && String(shop.owner).trim()) || ownerOfShop(shop, grants);
+        var owner = dutyShopOwner(shop, grants);
         if (!id) {
           mismatches.push(name + " · " + label + "（人管有店，无店铺id）");
           pushShop(label, owner, null, -1);
@@ -2408,6 +2432,29 @@
         paint(root, state);
         return pullBoard();
       }
+      function refreshTeams() {
+        if (teamsRefreshing) {
+          return;
+        }
+        viewKey = state.view || "company";
+        saveGone([]);
+        closeCal();
+        cardSetOpen = false;
+        teamsRefreshing = true;
+        clearRangeData(state);
+        paint(root, state);
+        return pullBoard().then(function () {
+          teamsRefreshing = false;
+          if (!dead) {
+            paint(root, state);
+          }
+        }).catch(function () {
+          teamsRefreshing = false;
+          if (!dead) {
+            paint(root, state);
+          }
+        });
+      }
       function pullLive(blankFirst) {
         if (blankFirst) {
           clearLiveShown(state);
@@ -2534,6 +2581,10 @@
             saveGone(g);
           }
           paint(root, state);
+          return;
+        }
+        if (event.target.closest("[data-refresh-teams]")) {
+          refreshTeams();
           return;
         }
         if (event.target.closest("[data-show-teams]")) {
@@ -2873,7 +2924,7 @@
         }
       }
       function onSortSelectStart(event) {
-        var tab = event.target.closest && event.target.closest(".xm-hm-views button,.xm-hm-ranges button,.xm-hm-set,.xm-hm-dates");
+        var tab = event.target.closest && event.target.closest(".xm-hm-views button,.xm-hm-ranges button,.xm-hm-set,.xm-hm-dates,[data-refresh-teams],[data-show-teams]");
         if (sortFrom || sortDragging || tab) event.preventDefault();
       }
       function onSortMove(event) {

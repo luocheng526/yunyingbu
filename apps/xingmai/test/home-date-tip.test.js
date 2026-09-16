@@ -59,7 +59,10 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /\.xm-hm-team-kpis\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(homeJs, /\.xm-hm\.is-chief \.xm-hm-team-kpis\{grid-template-columns:1fr/);
   assert.doesNotMatch(homeJs, /\.xm-hm\.is-chief \.xm-hm-card\{aspect-ratio:1\/1/);
-  assert.match(homeJs, /xm-hm-teams-bar"><b>星脉甄选<\/b><span><button type="button" data-show-teams>恢复所有团队的卡片<\/button><button type="button" class="xm-hm-set">卡片设置/);
+  assert.match(homeJs, /xm-hm-teams-bar"><b>星脉甄选<\/b><span><button type="button" data-refresh-teams/);
+  assert.match(homeJs, /更新团队/);
+  assert.match(homeJs, /更新中…/);
+  assert.match(homeJs, /data-show-teams>恢复所有团队的卡片<\/button><button type="button" class="xm-hm-set">卡片设置/);
   assert.match(homeJs, /data-drop-team="/);
   assert.doesNotMatch(homeJs, /data-drop-card="/);
   assert.match(homeJs, /class="xm-hm-drop"/);
@@ -116,7 +119,7 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /\.xm-hm-views button\{[^}]*border-radius:4px/);
   assert.match(homeJs, /\.xm-hm-views button\.is-on\{background:var\(--xm-primary\)/);
   assert.match(homeJs, /\.xm-hm-set\{border:0;background:transparent;color:var\(--xm-primary\)/);
-  assert.match(homeJs, /closest\("\.xm-hm-views button,\.xm-hm-ranges button,\.xm-hm-set,\.xm-hm-dates"\)/);
+  assert.match(homeJs, /closest\("\.xm-hm-views button,\.xm-hm-ranges button,\.xm-hm-set,\.xm-hm-dates,\[data-refresh-teams\],\[data-show-teams\]"\)/);
   assert.match(homeJs, /--xm-hm-team-cols/);
   assert.match(homeJs, /label: "经理团队"/);
   assert.match(homeJs, /label: "主管\/储备"/);
@@ -376,6 +379,9 @@ test("chief columns follow every org 主管/储备 supervisor including 经理",
   assert.equal(fns.shopOnRoleTeam(shops[1], "陈晓曼", "主管"), false);
   assert.equal(fns.shopOnRoleTeam(shops[4], "陈晓曼", "主管"), true);
   assert.equal(fns.shopOnRoleTeam(shops[4], "潘梦玉", "主管"), true);
+  assert.equal(fns.shopOnRoleTeam({ manager: "沈子晗", lead: "杨润泽", storeName: "杨润泽店" }, "沈子晗", "经理"), true);
+  assert.equal(fns.shopOnRoleTeam({ manager: "沈子晗", lead: "杨润泽", storeName: "杨润泽店" }, "杨润泽", "经理"), false);
+  assert.equal(fns.shopOnRoleTeam({ manager: "", team: "沈子晗组" }, "沈子晗", "经理"), true);
 });
 
 test("board has 业绩 and 利润 ladders with 主管 运营 columns and ranks 1-10", () => {
@@ -676,4 +682,28 @@ test("range change blanks every shown number before the new pack paints", () => 
   assert.equal(live.live.hero.delta, "");
   assert.equal(live.live.cards[0].value, "");
   assert.equal(live.shops[0].liveAmount, "");
+});
+
+test("更新团队 rebuilds duty shops from org store 责权人员", () => {
+  assert.match(homeJs, /function refreshTeams/);
+  assert.match(homeJs, /function dutyShopOwner/);
+  assert.match(homeJs, /data-refresh-teams[\s\S]{0,80}refreshTeams\(\)/);
+  assert.match(homeJs, /teamsRefreshing = true/);
+  assert.match(homeJs, /var manager = String\(shop\.manager \|\| ""\)\.trim\(\);/);
+  const ownerStart = homeJs.indexOf("function ownerOfShop");
+  const predStart = homeJs.indexOf("function teamPredicate");
+  const dutyOwnerStart = homeJs.indexOf("function dutyShopOwner");
+  const leadStart = homeJs.indexOf("function teamLeadNames");
+  const dutyNameStart = homeJs.indexOf("function shopDutyName");
+  const namesStart = homeJs.indexOf("function namesFromShopDuty");
+  assert.ok(ownerStart !== -1 && dutyOwnerStart !== -1 && dutyNameStart !== -1);
+  const fns = new Function(
+    homeJs.slice(ownerStart, predStart) +
+      homeJs.slice(dutyOwnerStart, leadStart) +
+      homeJs.slice(dutyNameStart, namesStart) +
+      "return {dutyShopOwner};"
+  )();
+  assert.equal(fns.dutyShopOwner({ operator: "崔安琪", supervisor: "杨润泽", owner: "别人" }, []), "崔安琪");
+  assert.equal(fns.dutyShopOwner({ operator: "杨润泽", supervisor: "杨润泽", owner: "杨润泽" }, []), "杨润泽");
+  assert.equal(fns.dutyShopOwner({ operator: "", supervisor: "韩梦凯", owner: "翁琴" }, []), "翁琴");
 });
