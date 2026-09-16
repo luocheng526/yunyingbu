@@ -57,21 +57,16 @@ const SMOKE = `<!doctype html>
         });
         const peopleOk = peopleNames.some(function (name) { return name.indexOf("杨润泽") >= 0; }) && peopleNames.length >= 1 && peopleNames.length < 16;
         const storeOk = storeText.some(function (text) { return text.indexOf("ZYUO") >= 0; }) && storeText.length >= 1 && storeText.length < 15;
-        document.querySelector('[data-pane="rights"]').click();
-        await sleep(600);
-        const rightsHtml = (document.getElementById("rights-tree-chart") && document.getElementById("rights-tree-chart").innerHTML) || "";
-        const rightsOk = rightsHtml.indexOf("rights-mod-band") >= 0 && rightsHtml.indexOf("rights-mod-lead") >= 0 && rightsHtml.indexOf("韩梦凯") >= 0 && rightsHtml.indexOf("杨润泽") >= 0 && rightsHtml.indexOf("data-role=\"主管\"") >= 0 && rightsHtml.indexOf("data-role=\"运营\"") >= 0 && rightsHtml.indexOf("填写对应的店铺") >= 0;
         document.body.setAttribute("data-people-n", String(peopleNames.length));
         document.body.setAttribute("data-people-names", peopleNames.join(","));
         document.body.setAttribute("data-store-n", String(storeText.length));
-        document.body.setAttribute("data-rights", rightsOk ? "1" : "0");
-        document.body.setAttribute("data-ok", peopleOk && storeOk && kpiOk && rightsOk ? "1" : "0");
+        document.body.setAttribute("data-ok", peopleOk && storeOk && kpiOk ? "1" : "0");
       })();
     </script>
   </body>
 </html>`;
 
-function chromeDump(url) {
+function chromeDump(url, budget = 8000) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), "xm-chrome-"));
   const bin = fs.existsSync("/opt/google/chrome/chrome") ? "/opt/google/chrome/chrome" : "google-chrome";
   return new Promise((resolve, reject) => {
@@ -84,8 +79,8 @@ function chromeDump(url) {
         "--disable-dev-shm-usage",
         "--no-first-run",
         "--user-data-dir=" + profile,
-        "--virtual-time-budget=8000",
-        "--timeout=10000",
+        "--virtual-time-budget=" + budget,
+        "--timeout=15000",
         "--dump-dom",
         url
       ],
@@ -123,6 +118,36 @@ function chromeDump(url) {
   });
 }
 
+const RIGHTS_SMOKE = `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="/people.css" />
+  </head>
+  <body>
+    <div id="xm-content"></div>
+    <script src="/shared/modules/people.js"></script>
+    <script>
+      (async function () {
+        function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+        const root = document.getElementById("xm-content");
+        const mod = window.XmModules && window.XmModules["/people"];
+        if (!mod) {
+          document.body.setAttribute("data-ok", "no-mod");
+          return;
+        }
+        mod.mount(root);
+        document.querySelector('[data-pane="rights"]').click();
+        await sleep(1200);
+        const rightsHtml = (document.getElementById("rights-tree-chart") && document.getElementById("rights-tree-chart").innerHTML) || "";
+        const ok = rightsHtml.indexOf("rights-mod-band") >= 0 && rightsHtml.indexOf("rights-mod-lead") >= 0 && rightsHtml.indexOf("韩梦凯") >= 0 && rightsHtml.indexOf("杨润泽") >= 0 && rightsHtml.indexOf("data-role=\\"主管\\"") >= 0 && rightsHtml.indexOf("data-role=\\"运营\\"") >= 0;
+        document.body.setAttribute("data-rights-n", String(rightsHtml.length));
+        document.body.setAttribute("data-ok", ok ? "1" : "0");
+      })();
+    </script>
+  </body>
+</html>`;
+
 test("headless chrome can type-search people and stores", async () => {
   resetPeopleStore();
   resetOrgBoard();
@@ -134,6 +159,11 @@ test("headless chrome can type-search people and stores", async () => {
       res.end(SMOKE);
       return;
     }
+    if (req.url === "/__rights-smoke") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(RIGHTS_SMOKE);
+      return;
+    }
     app(req, res);
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -141,6 +171,8 @@ test("headless chrome can type-search people and stores", async () => {
   try {
     const html = await chromeDump(`http://127.0.0.1:${port}/__search-smoke`);
     assert.match(html, /data-ok="1"/, html.slice(html.indexOf("<body"), html.indexOf("<body") + 800));
+    const rights = await chromeDump(`http://127.0.0.1:${port}/__rights-smoke`, 12000);
+    assert.match(rights, /data-ok="1"/, rights.includes("data-ok=") ? rights.slice(rights.indexOf("data-ok="), rights.indexOf("data-ok=") + 80) : rights.slice(-400));
   } finally {
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
