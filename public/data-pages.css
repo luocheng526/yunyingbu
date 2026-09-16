@@ -717,6 +717,18 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
 .ch-table.sh-wide {
   overflow: visible;
 }
+.ch-table.is-pl tr.is-gain td {
+  background: #fff1f0;
+}
+.ch-table.is-pl tr.is-loss td {
+  background: #f6ffed;
+}
+.sh-wide.is-pl tr.is-gain td:first-child {
+  background: #fff1f0;
+}
+.sh-wide.is-pl tr.is-loss td:first-child {
+  background: #f6ffed;
+}
 .ch-pick {
   display: inline-flex;
   align-items: center;

@@ -400,7 +400,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov22";
+      link.href = "/data-pages.css?v=data-ov23";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -420,7 +420,11 @@
       ".ch-split{height:3px;margin:16px 0 0;background:#2f54eb;border:0}" +
       ".ch-tabs{display:flex;flex-wrap:wrap;align-items:center;gap:0;margin:0;padding:0 8px;background:#2f54eb;border-bottom:0}" +
       ".ch-tabs button{height:40px;padding:0 16px;border:0;border-bottom:2px solid transparent;background:transparent;color:#fff;cursor:pointer;font-size:13px;opacity:.85}" +
-      ".ch-tabs button.is-active{opacity:1;font-weight:600;color:#fff;border-bottom-color:#fff;background:rgba(255,255,255,.14)}";
+      ".ch-tabs button.is-active{opacity:1;font-weight:600;color:#fff;border-bottom-color:#fff;background:rgba(255,255,255,.14)}" +
+      ".ch-table.is-pl tr.is-gain td{background:#fff1f0}" +
+      ".ch-table.is-pl tr.is-loss td{background:#f6ffed}" +
+      ".sh-wide.is-pl tr.is-gain td:first-child{background:#fff1f0}" +
+      ".sh-wide.is-pl tr.is-loss td:first-child{background:#f6ffed}";
     document.head.appendChild(style);
   }
 
@@ -985,6 +989,7 @@
             name: shop.shopName,
             kind: "shop",
             shopId: shop.shopId,
+            profit: firstNum(shop, ["profit"]),
             cells: cols.map(function (col) {
               return shopColCell(shop, col);
             })
@@ -1431,7 +1436,8 @@
     );
   }
 
-  function tableHtml(block, extraLeft, extraClass) {
+  function tableHtml(block, extraLeft, extraClass, showPl) {
+    const isShop = extraClass && String(extraClass).indexOf("sh-wide") >= 0;
     const head =
       "<tr>" +
       (block.columns || [])
@@ -1442,8 +1448,20 @@
       "</tr>";
     const body = (block.rows || [])
       .map(function (row) {
+        let cls = "";
+        if (showPl && row.kind === "shop") {
+          const raw = row.profit;
+          const n = Number(raw);
+          if (raw != null && raw !== "" && Number.isFinite(n) && n > 0) {
+            cls = ' class="is-gain"';
+          } else if (raw != null && raw !== "" && Number.isFinite(n) && n < 0) {
+            cls = ' class="is-loss"';
+          }
+        }
         return (
-          "<tr>" +
+          "<tr" +
+          cls +
+          ">" +
           nameCell(row) +
           (row.cells || [])
             .map(function (cell) {
@@ -1460,12 +1478,17 @@
     return (
       '<section class="ch-table' +
       (extraClass ? " " + extraClass : "") +
+      (isShop && showPl ? " is-pl" : "") +
       '">' +
       '<div class="ch-table-bar"><strong>' +
       escapeHtml(block.title) +
       "</strong>" +
       (extraLeft || "") +
-      '<label class="ch-zero"><input type="checkbox" disabled /> 显示数字</label>' +
+      (isShop
+        ? '<label class="ch-zero"><input type="checkbox" data-show-pl' +
+          (showPl ? " checked" : "") +
+          " /> 显示盈亏</label>"
+        : '<label class="ch-zero"><input type="checkbox" disabled /> 显示数字</label>') +
       toolButtons() +
       "</div>" +
       '<div class="ch-table-wrap"><table><thead>' +
@@ -1615,6 +1638,7 @@
       shopId: "",
       shopIds: null,
       shopPickOpen: false,
+      showPl: false,
       section: "渠道列表",
       payload: null,
       calOpen: false,
@@ -2144,7 +2168,8 @@
               payload.shopTable,
               shopPickHtml(state.payload) +
                 '<button type="button" class="ch-set" data-shop-cols="open">设定表头</button>',
-              "sh-wide"
+              "sh-wide",
+              state.showPl
             )
           : '<p class="ch-empty">「' + escapeHtml(state.section) + "」为示例，尚未接入。</p>";
       board.innerHTML =
@@ -2581,6 +2606,11 @@
       }
     });
     board.addEventListener("change", function (event) {
+      if (event.target.matches("[data-show-pl]")) {
+        state.showPl = event.target.checked;
+        render();
+        return;
+      }
       if (event.target.matches("[data-shop]")) {
         state.shopId = event.target.value;
         state.shopIds = event.target.value ? [event.target.value] : null;
