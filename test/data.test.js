@@ -212,7 +212,7 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /60 \* 60 \* 1000/);
     assert.match(overviewJs.text, /xm-data-shops-metrics-v1/);
     assert.match(overviewJs.text, /overlaySharedShopMetrics/);
-    assert.match(overviewJs.text, /data-ov30/);
+    assert.match(overviewJs.text, /data-ov31/);
     assert.match(overviewJs.text, /function opsPanelHtml/);
     assert.match(overviewJs.text, /XmDataOps/);
     assert.match(overviewJs.text, /grid-auto-rows:minmax\(216px,auto\)/);
@@ -230,6 +230,8 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /state\.wait/);
     assert.match(overviewJs.text, /function commitShopDraft/);
     assert.match(overviewJs.text, /shopDraft/);
+    assert.match(overviewJs.text, /shopPickGuard/);
+    assert.match(overviewJs.text, /function paintMenuChecks/);
     assert.match(overviewJs.text, /data-team-all/);
     assert.match(overviewJs.text, /data-team-id/);
     assert.match(overviewJs.text, /请选择团队/);
@@ -237,6 +239,8 @@ test("data child pages and demo APIs respond", async () => {
     const opsJs = await get(base, "/data-ops.js");
     assert.match(opsJs.text, /data-month/);
     assert.match(opsJs.text, /XmDataOps/);
+    assert.match(opsJs.text, /paintChecks/);
+    assert.match(opsJs.text, /toggleId/);
     assert.match(opsJs.text, /推广花费销售额占比/);
     assert.match(opsJs.text, /真实支付转化率/);
     assert.match(opsJs.text, /毛利润 \(支付预估\)/);
@@ -629,8 +633,8 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /\/data\/paid/);
   assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
   assert.match(dataMod, /restore-v1/);
-  assert.match(dataMod, /data-overview\.js\?v=data-ov30/);
-  assert.match(dataMod, /data-ops\.js\?v=data-ov30/);
+  assert.match(dataMod, /data-overview\.js\?v=data-ov31/);
+  assert.match(dataMod, /data-ops\.js\?v=data-ov31/);
   assert.match(css, /\.op-kpis \{/);
   assert.match(css, /\.data-overview-root\.is-wait/);
   assert.match(css, /\.op-chart \{/);

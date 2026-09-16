@@ -368,7 +368,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov30";
+      link.href = "/data-pages.css?v=data-ov31";
       document.head.appendChild(link);
     }
     ensureCardTypeStyle();
@@ -1586,6 +1586,7 @@
       teamIds: null,
       teamDraft: undefined,
       shopPickOpen: false,
+      shopPickGuard: false,
       wait: false,
       showPl: false,
       people: [],
@@ -2056,6 +2057,16 @@
       el.style.minWidth = width + "px";
     }
 
+    function paintMenuChecks() {
+      const team = state.section === "店铺分组";
+      window.XmDataOps.paintChecks(
+        getShopMenu(),
+        team ? "team" : "shop",
+        team ? isDraftAllTeams() : isDraftAll(state.payload),
+        team ? draftTeamIds() : draftShopIds(state.payload)
+      );
+    }
+
     function syncShopMenu() {
       const el = getShopMenu();
       if (!state.shopPickOpen || !state.payload) {
@@ -2072,54 +2083,31 @@
       if (!target || !target.matches) {
         return;
       }
-      const menu = getShopMenu();
-      shopMenuScroll = menu.scrollTop;
+      shopMenuScroll = getShopMenu().scrollTop;
+      state.shopPickGuard = true;
+      state.shopPickOpen = true;
       if (target.matches("[data-team-all]")) {
         state.teamDraft = target.checked ? null : [];
-        state.shopPickOpen = true;
-        syncShopMenu();
+        paintMenuChecks();
         return;
       }
       if (target.matches("[data-team-id]")) {
-        const id = target.getAttribute("data-team-id") || "";
         const all = allTeamIds();
-        let cur = draftTeamIds();
-        if (target.checked) {
-          if (cur.indexOf(id) < 0) {
-            cur.push(id);
-          }
-        } else {
-          cur = cur.filter(function (item) {
-            return item !== id;
-          });
-        }
+        const cur = window.XmDataOps.toggleId(draftTeamIds(), target.getAttribute("data-team-id") || "", target.checked);
         state.teamDraft = cur.length === all.length ? null : cur;
-        state.shopPickOpen = true;
-        syncShopMenu();
+        paintMenuChecks();
         return;
       }
       if (target.matches("[data-shop-all]")) {
         state.shopDraft = target.checked ? null : [];
-        state.shopPickOpen = true;
-        syncShopMenu();
+        paintMenuChecks();
         return;
       }
       if (target.matches("[data-shop-id]")) {
-        const id = target.getAttribute("data-shop-id") || "";
         const all = allShopIds(state.payload);
-        let cur = draftShopIds(state.payload);
-        if (target.checked) {
-          if (cur.indexOf(id) < 0) {
-            cur.push(id);
-          }
-        } else {
-          cur = cur.filter(function (item) {
-            return item !== id;
-          });
-        }
+        const cur = window.XmDataOps.toggleId(draftShopIds(state.payload), target.getAttribute("data-shop-id") || "", target.checked);
         state.shopDraft = cur.length === all.length ? null : cur;
-        state.shopPickOpen = true;
-        syncShopMenu();
+        paintMenuChecks();
       }
     }
 
@@ -2602,13 +2590,20 @@
       const t = event.target;
       const shopEl = t && t.nodeType === 1 ? t : t && t.parentElement;
       const inShopPick =
-        shopEl &&
-        ((shopEl.matches &&
-          shopEl.matches(
-            "[data-shop-pick], [data-shop-pick-toggle], [data-shop-all], [data-shop-id], [data-team-all], [data-team-id], .ch-shop-opt, .ch-shop-menu, #ch-shop-menu, [data-shop-menu]"
-          )) ||
-          (shopEl.closest &&
-            shopEl.closest("[data-shop-pick], .ch-shop-opt, #ch-shop-menu, [data-shop-menu]")));
+        (shopEl && !shopEl.isConnected) ||
+        (shopEl &&
+          ((shopEl.matches &&
+            shopEl.matches(
+              "[data-shop-pick], [data-shop-pick-toggle], [data-shop-all], [data-shop-id], [data-team-all], [data-team-id], .ch-shop-opt, .ch-shop-menu, #ch-shop-menu, [data-shop-menu]"
+            )) ||
+            (shopEl.closest &&
+              shopEl.closest("[data-shop-pick], .ch-shop-opt, #ch-shop-menu, [data-shop-menu]"))));
+      if (state.shopPickGuard) {
+        state.shopPickGuard = false;
+        if (inShopPick) {
+          return;
+        }
+      }
       if (state.shopPickOpen && !inShopPick) {
         state.shopPickOpen = false;
         commitShopDraft();
