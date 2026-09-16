@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.569-home-dutyladder */
+/* xm-module-home 0.1.570-home-dutyladder */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1336,7 +1336,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.569-home-dutyladder");
+    board.setAttribute("data-hm-js", "0.1.570-home-dutyladder");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
