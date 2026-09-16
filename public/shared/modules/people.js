@@ -630,13 +630,14 @@
           .join("");
       }
 
+      function countsInStoreStats(row) {
+        return String((row && row.statusKey) || "") === "operating";
+      }
+
       function renderKpis(summary) {
         const items = [
           ["店铺总数", summary.total],
           ["运营中", summary.operating],
-          ["闲置中", summary.idle],
-          ["退店中", summary.closing],
-          ["已退店", summary.closed],
           ["缺店铺ID", summary.missingStoreId],
           ["缺商家ID", summary.missingMerchant],
           ["缺主账号", summary.missingLogin],
@@ -702,6 +703,9 @@
           return counts;
         }
         rawStores.forEach(function (row) {
+          if (!countsInStoreStats(row)) {
+            return;
+          }
           add(cellFilterValue(row, key));
         });
         return counts;
@@ -908,7 +912,9 @@
         }).length;
         const counts = columnValueCounts(key);
         const unit = isMemberFilter(key) ? "人" : "家店铺";
-        const total = isMemberFilter(key) ? roster.people.length : rawStores.length;
+        const total = isMemberFilter(key)
+          ? roster.people.length
+          : rawStores.filter(countsInStoreStats).length;
         function countBadge(n) {
           return '<span class="org-filter-count">（' + n + unit + "）</span>";
         }
