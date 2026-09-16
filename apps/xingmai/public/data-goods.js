@@ -1,3 +1,4 @@
+/* xm-data-goods 0.1.607-data-range-blank — range change blanks numbers before new data */
 (function () {
   window.XmModules = window.XmModules || {};
 
@@ -43,7 +44,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=goods-erp1";
+      link.href = "/data-pages.css?v=0.1.607-data-range-blank";
       document.head.appendChild(link);
     }
   }
@@ -304,9 +305,48 @@
       });
     }
 
+    function setWait(on) {
+      const rootEl = board && (board.closest(".data-overview-root") || board);
+      if (rootEl) {
+        rootEl.classList.toggle("is-wait", !!on);
+      }
+    }
+
+    function afterPaint(fn) {
+      return new Promise(function (resolve) {
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            resolve(typeof fn === "function" ? fn() : undefined);
+          });
+        });
+      });
+    }
+
+    function blankGoods() {
+      state.rows = [];
+      state.total = "";
+      state.pages = "";
+      state.cards = CARD_DEFS.map(function (def) {
+        return Object.assign({}, def, { value: "", share: "", delta: "" });
+      });
+    }
+
+    function beginRangeLoad() {
+      const span = rangeSpan(state.range, state.customFrom, state.customTo);
+      state.from = span.from;
+      state.to = span.to;
+      state.dateLabel = span.dateLabel;
+      blankGoods();
+      render();
+      setWait(true);
+      return afterPaint(function () {
+        return load();
+      });
+    }
+
     function tableHtml() {
       const shown = visibleRows();
-      const bodyRows = [sumRow(shown)].concat(shown);
+      const bodyRows = shown.length ? [sumRow(shown)].concat(shown) : [];
       const shopOpts =
         '<option value="">全部店铺</option>' +
         state.shops
@@ -478,6 +518,7 @@
         return row;
       });
       state.cards = buildCards(records, state.total);
+      setWait(false);
     }
 
     function load() {
@@ -526,6 +567,7 @@
               });
               state.total = state.rows.length;
               state.pages = 1;
+              setWait(false);
               render();
             });
         });
@@ -554,7 +596,7 @@
       if (rangeBtn) {
         state.range = rangeBtn.getAttribute("data-range");
         state.page = 1;
-        load();
+        beginRangeLoad();
         return;
       }
       const card = event.target.closest("article[data-card]");
@@ -583,13 +625,13 @@
       if (event.target.matches("[data-from]")) {
         state.customFrom = event.target.value;
         state.page = 1;
-        load();
+        beginRangeLoad();
         return;
       }
       if (event.target.matches("[data-to]")) {
         state.customTo = event.target.value;
         state.page = 1;
-        load();
+        beginRangeLoad();
       }
     });
     board.addEventListener("input", function (event) {
