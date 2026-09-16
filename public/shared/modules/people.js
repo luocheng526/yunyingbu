@@ -180,7 +180,7 @@
         '<div class="org-filter-pop" id="people-filter-pop" hidden></div></section></div>' +
         '<div class="org-pane" data-pane="rights" hidden>' +
         '<section class="panel rights-fit-panel"><h2>管辖</h2>' +
-        '<p class="lead">只读对照。树按总监 → 经理 → 主管/储备 → 运营 → 助理 → 店铺。人和店分别对照成员管理、店铺主数据，不对再开一套权。</p>' +
+        '<p class="lead">只读对照。红框是经理线，蓝框是主管/储备组；框里运营、助理、店铺各用各的颜色。没有助理写无，店铺填对应店名。人和店分别对照成员管理、店铺主数据。</p>' +
         '<div class="rights-watch" id="rights-watch"></div>' +
         '<div class="rights-tree-toolbar"><button type="button" id="rights-refresh">刷新树和看板</button><span class="muted" id="rights-checked">检查时间：—</span></div>' +
         '<div class="rights-tree-chart" id="rights-tree-chart"></div></section></div>' +
@@ -1413,48 +1413,135 @@
         return role || "";
       }
 
-      function renderRightsTreeNode(node) {
-        const role = rightsRoleLabel(node.role);
-        const kids = (node.children || []).map(renderRightsTreeNode).join("");
-        const stores = (node.stores || [])
-          .map(function (store) {
-            return '<div class="rights-tree-store">' + escapeHtml(store.storeName) + "</div>";
-          })
-          .join("");
+      function rightsIsLead(role) {
+        return role === "主管" || role === "储备";
+      }
+
+      function renderRightsModCard(role, name) {
         return (
-          '<div class="rights-tree-node" data-role="' +
-          escapeHtml(node.role || "") +
-          '"><div class="rights-tree-self"><div class="rights-tree-card"><em>' +
-          escapeHtml(role) +
+          '<span class="rights-mod-card" data-role="' +
+          escapeHtml(role || "") +
+          '"><em>' +
+          escapeHtml(rightsRoleLabel(role)) +
           "</em><strong>" +
-          escapeHtml(node.name) +
-          "</strong></div>" +
-          (stores ? '<div class="rights-tree-stores">' + stores + "</div>" : "") +
-          "</div>" +
-          (kids ? '<div class="rights-tree-kids">' + kids + "</div>" : "") +
-          "</div>"
+          escapeHtml(name) +
+          "</strong></span>"
         );
       }
 
-      function fitRightsTree() {
-        const host = root.querySelector("#rights-tree-chart");
-        const fit = host && host.querySelector("#rights-tree-fit");
-        if (fit) {
-          fit.style.transform = "none";
-        }
+      function renderRightsModEmpty(text) {
+        return '<span class="rights-mod-empty">' + escapeHtml(text) + "</span>";
       }
+
+      function renderRightsModShops(stores) {
+        if (!stores || !stores.length) {
+          return '<div class="rights-mod-shop is-placeholder">填写对应的店铺</div>';
+        }
+        return stores
+          .map(function (store) {
+            return '<div class="rights-mod-shop">' + escapeHtml(store.storeName) + "</div>";
+          })
+          .join("");
+      }
+
+      function rightsLeadRows(lead) {
+        const kids = lead.children || [];
+        const ops = kids.filter(function (child) {
+          return child.role === "运营" || child.role === "店长";
+        });
+        const looseAsst = kids.filter(function (child) {
+          return child.role === "助理";
+        });
+        const rows = ops.map(function (op) {
+          return {
+            op: op,
+            asst: (op.children || []).filter(function (child) {
+              return child.role === "助理";
+            }),
+            stores: op.stores || []
+          };
+        });
+        if ((lead.stores || []).length || (looseAsst.length && !ops.length)) {
+          rows.push({ op: null, asst: looseAsst, stores: lead.stores || [] });
+        }
+        if (!rows.length) {
+          rows.push({ op: null, asst: [], stores: [] });
+        }
+        return rows;
+      }
+
+      function renderRightsLeadBox(lead) {
+        const rows = rightsLeadRows(lead)
+          .map(function (row) {
+            const opHtml = row.op ? renderRightsModCard(row.op.role, row.op.name) : renderRightsModEmpty("无");
+            const asstHtml = row.asst.length
+              ? row.asst
+                  .map(function (person) {
+                    return renderRightsModCard("助理", person.name);
+                  })
+                  .join("")
+              : renderRightsModEmpty("无");
+            return (
+              '<div class="rights-mod-row">' +
+              '<div class="rights-mod-col"><span class="rights-mod-h">运营</span>' +
+              opHtml +
+              "</div>" +
+              '<div class="rights-mod-col"><span class="rights-mod-h">助理</span>' +
+              asstHtml +
+              "</div>" +
+              '<div class="rights-mod-col"><span class="rights-mod-h">店铺</span>' +
+              renderRightsModShops(row.stores) +
+              "</div></div>"
+            );
+          })
+          .join("");
+        return (
+          '<div class="rights-mod-lead">' +
+          renderRightsModCard(lead.role || "主管", lead.name) +
+          '<div class="rights-mod-chain">' +
+          rows +
+          "</div></div>"
+        );
+      }
+
+      function renderRightsManagerBand(manager) {
+        const leads = (manager.children || []).filter(function (child) {
+          return rightsIsLead(child.role) || child.synthetic;
+        });
+        const boxes = leads.length
+          ? leads.map(renderRightsLeadBox).join("")
+          : renderRightsLeadBox({ name: "未指定主管/储备", role: "主管", children: [], stores: [], synthetic: true });
+        return (
+          '<div class="rights-mod-band">' +
+          '<div class="rights-mod-manager">' +
+          renderRightsModCard("经理", manager.name) +
+          '</div><div class="rights-mod-leads">' +
+          boxes +
+          "</div></div>"
+        );
+      }
+
+      function fitRightsTree() {}
 
       function renderRightsTreeChart(tree) {
         const host = root.querySelector("#rights-tree-chart");
         if (!host) {
           return;
         }
-        host.innerHTML = tree
-          ? '<div class="rights-tree-fit" id="rights-tree-fit">' + renderRightsTreeNode(tree) + "</div>"
-          : '<p class="rights-empty">还没有树。先在成员管理和店铺主数据里对上人和店。</p>';
-        requestAnimationFrame(function () {
-          requestAnimationFrame(fitRightsTree);
+        if (!tree) {
+          host.innerHTML = '<p class="rights-empty">还没有树。先在成员管理和店铺主数据里对上人和店。</p>';
+          return;
+        }
+        const managers = (tree.children || []).filter(function (child) {
+          return child.role === "经理";
         });
+        host.innerHTML =
+          '<div class="rights-modules" id="rights-tree-fit">' +
+          '<div class="rights-mod-director">' +
+          renderRightsModCard("总监", tree.name) +
+          '</div><div class="rights-mod-bands">' +
+          managers.map(renderRightsManagerBand).join("") +
+          "</div></div>";
       }
 
       function loadRights() {

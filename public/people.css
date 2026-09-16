@@ -796,7 +796,9 @@ body:has(.people-page) .xm-tabs {
 
 .rights-tree-fit,
 .rights-modules {
-  display: block;
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
   min-width: 100%;
   transform: none;
 }
@@ -813,8 +815,10 @@ body:has(.people-page) .xm-tabs {
 .rights-mod-director {
   display: flex;
   align-items: center;
-  min-width: 88px;
+  justify-content: center;
+  min-width: 96px;
   border-color: #cf1322;
+  background: #fff1f0;
 }
 
 .rights-mod-bands {
@@ -832,7 +836,7 @@ body:has(.people-page) .xm-tabs {
   min-height: 140px;
   padding: 10px;
   background: #fff;
-  border: 1px solid #ffccc7;
+  border: 1px solid #ff4d4f;
   border-radius: 12px;
 }
 
@@ -853,15 +857,23 @@ body:has(.people-page) .xm-tabs {
 
 .rights-mod-lead {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
+  grid-template-columns: 148px minmax(0, 1fr);
+  align-items: center;
   gap: 8px;
-  background: #f6ffed;
-  border-color: #b7eb8f;
+  background: #e6f4ff;
+  border: 1px solid #69b1ff;
 }
 
 .rights-mod-chain {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rights-mod-row {
   display: grid;
-  grid-template-columns: 1fr 0.7fr 1.3fr;
+  grid-template-columns: 1fr 0.8fr 1.4fr;
   gap: 8px;
   min-width: 0;
 }
@@ -915,12 +927,14 @@ body:has(.people-page) .xm-tabs {
   border-color: #ffa39e;
 }
 
-.rights-mod-card[data-role="主管"] {
-  background: #b7eb8f;
-  border-color: #95de64;
+.rights-mod-card[data-role="主管"],
+.rights-mod-card[data-role="储备"] {
+  background: #91d5ff;
+  border-color: #69b1ff;
 }
 
-.rights-mod-card[data-role="运营"] {
+.rights-mod-card[data-role="运营"],
+.rights-mod-card[data-role="店长"] {
   background: #87e8de;
   border-color: #5cdbd3;
 }
@@ -938,6 +952,11 @@ body:has(.people-page) .xm-tabs {
   border-radius: 8px;
   font-size: 12px;
   color: #595959;
+}
+
+.rights-mod-shop.is-placeholder {
+  color: #bfbfbf;
+  border-style: dashed;
 }
 
 .rights-mod-empty {
