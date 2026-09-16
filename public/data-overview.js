@@ -342,11 +342,10 @@
       if (!hit) {
         return shop;
       }
-      const pay = Number(shop.payAmount) || 0;
-      if (pay) {
-        return shop;
-      }
-      return Object.assign({}, shop, hit);
+      return Object.assign({}, shop, hit, {
+        shopName: shop.shopName || hit.shopName,
+        shopId: id
+      });
     });
     extra.forEach(function (shop) {
       const id = String(shop.shopId || shop.id || "");
@@ -401,7 +400,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov19";
+      link.href = "/data-pages.css?v=data-ov20";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -464,10 +463,11 @@
       ".ch-help{flex:none;width:16px;height:16px;border:1px solid var(--xm-line,#d9d9d9);border-radius:3px;background:#fff;color:#8c8c8c;font-size:11px;line-height:14px;cursor:help;padding:0}" +
       ".ch-tip{position:fixed;z-index:4300;max-width:320px;padding:10px 12px;background:#fff;border:1px solid #f0f0f0;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.12);color:#262626;font-size:12px;line-height:1.6;white-space:pre-wrap;display:none}" +
       ".ch-tip.is-on{display:block}" +
-      ".ch-shop-pick{position:relative;display:inline-block;min-width:160px}" +
+      ".ch-table.sh-wide{overflow:visible}" +
+      ".ch-shop-pick{position:relative;display:inline-block;min-width:160px;opacity:1;z-index:30}" +
       ".ch-shop-pick-btn{display:block;width:100%;height:26px;padding:0 24px 0 8px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;color:#262626;font-size:12px;text-align:left;cursor:pointer}" +
       ".ch-shop-pick-btn:after{content:'';position:absolute;right:8px;top:11px;border:4px solid transparent;border-top-color:#8c8c8c}" +
-      ".ch-shop-menu{display:none;position:absolute;z-index:80;top:28px;left:0;min-width:220px;max-height:280px;overflow:auto;padding:6px 0;background:#fff;border:1px solid #f0f0f0;border-radius:4px;box-shadow:0 8px 24px rgba(0,0,0,.12)}" +
+      ".ch-shop-menu{display:none;position:absolute;z-index:2600;top:28px;left:0;min-width:220px;max-height:280px;overflow:auto;padding:6px 0;background:#fff;opacity:1;border:1px solid #f0f0f0;border-radius:4px;box-shadow:0 8px 24px rgba(0,0,0,.12)}" +
       ".ch-shop-pick.is-open .ch-shop-menu{display:block}" +
       ".ch-shop-opt{display:flex;align-items:center;gap:8px;margin:0;padding:5px 12px;color:#262626;font-size:13px;cursor:pointer;white-space:nowrap}" +
       ".ch-shop-opt:hover{background:#f5f8ff}" +
@@ -834,14 +834,14 @@
     }
     if (col.key === "netSales") {
       const net = firstNum(shop, col.fields);
-      return fmtInt(net != null ? net : pay - refund);
+      return fmt(net != null ? net : pay - refund, 2);
     }
     if (col.kind === "int") {
       const count = firstNum(shop, col.fields);
       return fmt(count != null ? count : 0, 0);
     }
     const money = firstNum(shop, col.fields);
-    return fmtInt(money != null ? money : 0);
+    return fmt(money != null ? money : 0, 2);
   }
 
   function sumShopTotals(list) {
@@ -1371,7 +1371,7 @@
       kind === "jd"
         ? '<span class="ch-logo ch-logo-jd" aria-hidden="true">京</span>'
         : kind === "shop"
-          ? '<span class="ch-logo ch-logo-shop" aria-hidden="true"></span>'
+          ? '<span class="ch-logo" style="background:#e53935" aria-hidden="true"></span>'
           : "";
     return (
       '<td class="ch-name"><span class="ch-bar"></span>' +
@@ -1396,7 +1396,7 @@
     );
   }
 
-  function tableHtml(block, extraLeft) {
+  function tableHtml(block, extraLeft, extraClass) {
     const head =
       "<tr>" +
       (block.columns || [])
@@ -1412,6 +1412,9 @@
           nameCell(row) +
           (row.cells || [])
             .map(function (cell) {
+              if (cell && typeof cell === "object" && cell.html) {
+                return "<td>" + cell.html + "</td>";
+              }
               return "<td>" + escapeHtml(cell) + "</td>";
             })
             .join("") +
@@ -1420,7 +1423,9 @@
       })
       .join("");
     return (
-      '<section class="ch-table">' +
+      '<section class="ch-table' +
+      (extraClass ? " " + extraClass : "") +
+      '">' +
       '<div class="ch-table-bar"><strong>' +
       escapeHtml(block.title) +
       "</strong>" +
@@ -2035,9 +2040,9 @@
           ? tableHtml(payload.channelTable) +
             tableHtml(
               payload.shopTable,
-              '<label class="ch-pick">' +
-                shopPickHtml(state.payload) +
-                '</label><button type="button" class="ch-set" data-shop-cols="open">设定表头</button>'
+              shopPickHtml(state.payload) +
+                '<button type="button" class="ch-set" data-shop-cols="open">设定表头</button>',
+              "sh-wide"
             )
           : '<p class="ch-empty">「' + escapeHtml(state.section) + "」为示例，尚未接入。</p>";
       board.innerHTML =
