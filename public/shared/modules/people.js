@@ -565,17 +565,22 @@
           if (String(person.status || "") === "离职") {
             return;
           }
-          const name = cleanLineKpiName(person[key]);
+          const raw = String(person[key] || "").trim();
+          const self = String(person.name || "").trim();
+          let name = cleanLineKpiName(raw);
+          if (seat === "运营" && raw === "运营") {
+            name = cleanLineKpiName(self);
+          }
+          if (seat === "助理" && raw === "助理") {
+            name = cleanLineKpiName(self);
+          }
+          if (seat === "主管/储备" && (raw === "主管" || raw === "储备" || raw === "主管/储备")) {
+            name = cleanLineKpiName(self);
+          }
           if (!name) {
             return;
           }
-          if (seat === "运营" && name === "运营") {
-            return;
-          }
-          if (seat === "助理" && (name === "助理" || name === "运营")) {
-            return;
-          }
-          if (seat === "主管/储备" && (LINE_KPI_LEADERS[name] || name === "主管" || name === "储备" || name === "主管/储备")) {
+          if (seat === "主管/储备" && LINE_KPI_LEADERS[name]) {
             return;
           }
           if (seat === "经理" && name === "罗成") {
