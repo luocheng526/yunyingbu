@@ -166,6 +166,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /双击修改/);
     assert.match(jsText, /单击修改/);
     assert.match(jsText, /bindImeSafeCommit/);
+    assert.match(jsText, /服务端未写入/);
     assert.match(jsText, /event.isComposing/);
     assert.match(jsText, /仅罗成、韩梦凯、沈子晗能改/);
     assert.match(jsText, /peopleData.canEdit === true/);
@@ -358,6 +359,8 @@ test("GET /api/people returns Shen-line roster and grants", async () => {
     assert.equal(wang.director, "罗成");
     assert.equal(wang.lineManager, "沈子晗");
     assert.equal(wang.operator, "王博");
+    assert.equal(Object.prototype.hasOwnProperty.call(wang, "reserve"), true);
+    assert.equal(wang.reserve, "");
     const cui = data.people.find((row) => row.name === "崔安琪");
     assert.equal(cui.supervisor, "杨润泽");
     assert.equal(cui.lineManager, "沈子晗");

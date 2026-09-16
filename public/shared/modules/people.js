@@ -2228,6 +2228,10 @@
           if (!result.res.ok || !result.data.ok) {
             throw new Error(result.data.error || "保存失败");
           }
+          const echoed = result.data.person || {};
+          if (LINE_FIELDS.indexOf(field) >= 0 && String(echoed[field] || "") !== String(value)) {
+            throw new Error("保存失败，服务端未写入" + field);
+          }
           return loadMembers();
         });
       }
