@@ -404,8 +404,6 @@
       link.href = "/data-pages.css?v=data-ov27";
       document.head.appendChild(link);
     }
-    ensureHeroStyle();
-    ensureSummaryStyle();
     ensureCardTypeStyle();
     ensurePickStyle();
     ensureTabsStyle();
@@ -447,7 +445,7 @@
       ".ch-mpick-right-top button{border:0;background:transparent;color:#2f54eb;cursor:pointer}" +
       ".ch-mpick-hint{margin:10px 0 12px;color:#8c8c8c;font-size:12px}" +
       ".ch-mpick-item{display:flex;align-items:center;gap:8px;height:36px;margin-bottom:8px;padding:0 10px;background:#fff;border:1px solid #f0f0f0;border-radius:6px;font-size:13px;cursor:grab}" +
-      ".ch-mpick-handle{width:12px;height:12px;background:linear-gradient(#bfbfbf,#bfbfbf) 0 2px/12px 2px no-repeat,linear-gradient(#bfbfbf,#bfbfbf) 0 5px/12px 2px no-repeat,linear-gradient(#bfbfbf,#bfbfbf) 0 8px/12px 2px no-repeat}" +
+      ".ch-mpick-handle{width:12px;height:12px;opacity:.45}" +
       ".ch-mpick-foot{display:flex;gap:8px;padding:12px 20px;border-top:1px solid #f0f0f0}" +
       ".ch-mpick-ok{height:32px;padding:0 16px;border:0;border-radius:4px;background:#2f54eb;color:#fff;cursor:pointer}" +
       ".ch-mpick-foot [data-mpick='cancel']{height:32px;padding:0 16px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;cursor:pointer}";
@@ -480,44 +478,9 @@
       ".ch-tip{position:fixed;z-index:4300;max-width:320px;padding:10px 12px;background:#fff;border:1px solid #f0f0f0;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.12);color:#262626;font-size:12px;line-height:1.6;white-space:pre-wrap;display:none}" +
       ".ch-tip.is-on{display:block}" +
       ".ch-table.sh-wide{overflow:visible}" +
-      ".ch-shop-pick{position:relative;display:inline-block;min-width:160px;opacity:1;z-index:30}" +
-      ".ch-shop-pick-btn{position:relative;display:block;width:100%;height:26px;padding:0 24px 0 8px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;color:#262626;font-size:12px;text-align:left;cursor:pointer}" +
-      ".ch-shop-pick-btn:after{content:'';position:absolute;right:8px;top:11px;border:4px solid transparent;border-top-color:#8c8c8c}" +
-      ".ch-shop-menu{display:none;position:fixed;z-index:5200;min-width:220px;max-height:280px;overflow:auto;padding:6px 0;background:#fff;opacity:1;pointer-events:auto;border:1px solid #d9d9d9;border-radius:4px;box-shadow:0 8px 24px rgba(0,0,0,.18)}" +
+      ".ch-shop-menu{display:none;position:fixed;z-index:5200;min-width:220px;max-height:280px;overflow:auto;padding:6px 0;background:#fff;border:1px solid #d9d9d9}" +
       ".ch-shop-menu.is-open{display:block}" +
-      ".ch-shop-opt{display:flex;align-items:center;gap:8px;margin:0;padding:5px 12px;color:#262626;background:#fff;font-size:13px;cursor:pointer;white-space:nowrap}" +
-      ".ch-shop-opt:hover{background:#f5f8ff}" +
-      ".ch-shop-opt input{flex:none;width:14px;height:14px;margin:0;accent-color:#2f54eb}";
-    document.head.appendChild(style);
-  }
-
-  function ensureSummaryStyle() {
-    if (document.getElementById("ch-sum-style")) {
-      return;
-    }
-    const style = document.createElement("style");
-    style.id = "ch-sum-style";
-    style.textContent =
-      ".ch-summary{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:2px 0 12px;margin:0 0 10px;border-bottom:1px solid var(--xm-line,#eee);font-size:13px}" +
-      ".ch-sum-title{font-size:18px;font-weight:700;color:var(--xm-ink,#1f1f1f);line-height:28px}" +
-      ".ch-pill{display:inline-flex;align-items:center;height:28px;padding:0 14px;border-radius:14px;background:#2f54eb;color:#fff;font-size:13px;line-height:28px;white-space:nowrap}" +
-      ".ch-summary .ch-set{margin-left:auto}";
-    document.head.appendChild(style);
-  }
-
-  function ensureHeroStyle() {
-    if (document.getElementById("ch-hero-style")) {
-      return;
-    }
-    const style = document.createElement("style");
-    style.id = "ch-hero-style";
-    style.textContent =
-      ".ch-hero .label{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:nowrap}" +
-      ".ch-hero .ch-clock{font-variant-numeric:tabular-nums}" +
-      ".ch-hero .value{margin:8px 0 0}" +
-      ".ch-hero .delta{margin:4px 0 0;font-size:12px}" +
-      ".ch-hero .ch-spark{display:block;width:100%;height:72px;margin:8px 0 0}" +
-      ".ch-axis{display:flex;justify-content:space-between;font-size:10px;opacity:.4;margin-top:2px}";
+      ".ch-shop-opt{display:flex;align-items:center;gap:8px;padding:5px 12px;color:#262626;background:#fff;cursor:pointer}";
     document.head.appendChild(style);
   }
 
