@@ -8,6 +8,67 @@
       .replaceAll('"', "&quot;");
   }
 
+  function focusNameInput(input) {
+    input.focus();
+    try {
+      const end = String(input.value || "").length;
+      input.setSelectionRange(end, end);
+    } catch (_err) {
+      /* ignore */
+    }
+  }
+
+  function bindImeSafeCommit(input, onCommit, onCancel) {
+    let locked = false;
+    let composing = false;
+    function run(fn) {
+      if (locked) {
+        return;
+      }
+      locked = true;
+      fn();
+    }
+    input.addEventListener("compositionstart", function () {
+      composing = true;
+    });
+    input.addEventListener("compositionend", function () {
+      composing = false;
+    });
+    input.addEventListener("mousedown", function (event) {
+      event.stopPropagation();
+    });
+    input.addEventListener("click", function (event) {
+      event.stopPropagation();
+      input.focus();
+    });
+    input.addEventListener("keydown", function (event) {
+      if (event.isComposing || event.keyCode === 229 || composing) {
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        run(onCommit);
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        run(onCancel);
+      }
+    });
+    input.addEventListener("blur", function () {
+      if (composing) {
+        input.addEventListener(
+          "compositionend",
+          function () {
+            run(onCommit);
+          },
+          { once: true }
+        );
+        return;
+      }
+      run(onCommit);
+    });
+  }
+
   function ensureCss() {
     const href = "/people.css?v=0.1.193-people-kpis";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
@@ -1159,35 +1220,24 @@
         input.value = current;
         td.textContent = "";
         td.append(input);
-        input.focus();
-        input.select();
-        let saved = false;
-        function commit() {
-          if (saved) {
-            return;
-          }
-          saved = true;
-          const next = input.value.trim();
-          if (next === String(current).trim()) {
-            loadBoard();
-            return;
-          }
-          saveCell(id, field, next).catch(function (err) {
-            showError(errorEl, err.message);
-            return loadBoard();
-          });
-        }
-        input.addEventListener("keydown", function (event) {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            commit();
-          }
-          if (event.key === "Escape") {
-            saved = true;
+        focusNameInput(input);
+        bindImeSafeCommit(
+          input,
+          function () {
+            const next = input.value.trim();
+            if (next === String(current).trim()) {
+              loadBoard();
+              return;
+            }
+            saveCell(id, field, next).catch(function (err) {
+              showError(errorEl, err.message);
+              return loadBoard();
+            });
+          },
+          function () {
             loadBoard();
           }
-        });
-        input.addEventListener("blur", commit);
+        );
       }
 
       function fillSelect(select, items, getValue, getLabel, emptyLabel) {
@@ -1215,7 +1265,7 @@
           '" data-field="' +
           field +
           '" title="' +
-          (canEdit ? "双击修改" : "仅罗成、韩梦凯、沈子晗能改") +
+          (canEdit ? "单击修改" : "仅罗成、韩梦凯、沈子晗能改") +
           '">' +
           escapeHtml(value || "—") +
           "</td>"
@@ -2204,39 +2254,28 @@
         input.value = current;
         td.textContent = "";
         td.append(input);
-        input.focus();
-        input.select();
-        let saved = false;
-        function commit() {
-          if (saved) {
-            return;
-          }
-          saved = true;
-          const next = input.value.trim();
-          if (next === String(current).trim()) {
-            loadMembers();
-            return;
-          }
-          if (!next && LINE_FIELDS.indexOf(field) < 0) {
-            loadMembers();
-            return;
-          }
-          savePersonField(id, field, next).catch(function (err) {
-            showError(peopleError, err.message);
-            return loadMembers();
-          });
-        }
-        input.addEventListener("keydown", function (event) {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            commit();
-          }
-          if (event.key === "Escape") {
-            saved = true;
+        focusNameInput(input);
+        bindImeSafeCommit(
+          input,
+          function () {
+            const next = input.value.trim();
+            if (next === String(current).trim()) {
+              loadMembers();
+              return;
+            }
+            if (!next && LINE_FIELDS.indexOf(field) < 0) {
+              loadMembers();
+              return;
+            }
+            savePersonField(id, field, next).catch(function (err) {
+              showError(peopleError, err.message);
+              return loadMembers();
+            });
+          },
+          function () {
             loadMembers();
           }
-        });
-        input.addEventListener("blur", commit);
+        );
       }
 
       peopleTbody.addEventListener("click", function (event) {
@@ -2245,10 +2284,6 @@
         }
         const td = event.target.closest("td.people-cell");
         if (!td) {
-          return;
-        }
-        const field = td.getAttribute("data-field");
-        if (LINE_FIELDS.indexOf(field) >= 0) {
           return;
         }
         startPersonCellEdit(td);

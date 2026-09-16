@@ -164,6 +164,9 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /peopleLineCell\("lineManager"/);
     assert.match(jsText, /peopleLineCell\("reserve"/);
     assert.match(jsText, /双击修改/);
+    assert.match(jsText, /单击修改/);
+    assert.match(jsText, /bindImeSafeCommit/);
+    assert.match(jsText, /event.keyCode === 229/);
     assert.match(jsText, /仅罗成、韩梦凯、沈子晗能改/);
     assert.match(jsText, /peopleData.canEdit === true/);
     assert.match(jsText, /people-row-check/);
@@ -1084,6 +1087,26 @@ test("roster line cells are editable only by 罗成, 韩梦凯, 沈子晗", asyn
     const byLuoJson = await byLuo.json();
     assert.equal(byLuo.status, 200, JSON.stringify(byLuoJson));
     assert.equal(byLuoJson.person.assistant, "小助");
+
+    const reservePatch = await fetch(`${base}/api/people/${wang.id}?actor=${encodeURIComponent("罗成")}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reserve: "张文静" })
+    });
+    const reserveJson = await reservePatch.json();
+    assert.equal(reservePatch.status, 200, JSON.stringify(reserveJson));
+    assert.equal(reserveJson.person.reserve, "张文静");
+    const afterReserve = await (await fetch(`${base}/api/people`)).json();
+    const wangReserve = afterReserve.people.find((row) => row.id === wang.id);
+    assert.equal(wangReserve.reserve, "张文静");
+    const reserveAgain = await fetch(`${base}/api/people/${wang.id}?actor=${encodeURIComponent("沈子晗")}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reserve: "杨润泽" })
+    });
+    const reserveAgainJson = await reserveAgain.json();
+    assert.equal(reserveAgain.status, 200, JSON.stringify(reserveAgainJson));
+    assert.equal(reserveAgainJson.person.reserve, "杨润泽");
 
     const blockedCreate = await fetch(`${base}/api/people?actor=${encodeURIComponent("张文静")}`, {
       method: "POST",
