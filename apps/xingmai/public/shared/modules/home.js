@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.549-home-calspan */
+/* xm-module-home 0.1.550-home-chiefduty */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1310,7 +1310,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.549-home-calspan");
+    board.setAttribute("data-hm-js", "0.1.550-home-chiefduty");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2061,7 +2061,7 @@
     }
     function skipStaff(name) {
       var p = byName[String(name || "").trim()];
-      return p && /运营|助理|经理/.test(String(p.role || ""));
+      return p && /经理/.test(String(p.role || ""));
     }
     (people || []).forEach(function (person) {
       if (person && person.name) {
