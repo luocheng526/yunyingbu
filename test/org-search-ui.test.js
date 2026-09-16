@@ -148,6 +148,99 @@ const RIGHTS_SMOKE = `<!doctype html>
   </body>
 </html>`;
 
+const RESERVE_SMOKE = `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="/people.css" />
+  </head>
+  <body>
+    <div id="xm-content"></div>
+    <script src="/shared/modules/people.js"></script>
+    <script>
+      (async function () {
+        function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+        const root = document.getElementById("xm-content");
+        const mod = window.XmModules && window.XmModules["/people"];
+        if (!mod) {
+          document.body.setAttribute("data-ok", "no-mod");
+          return;
+        }
+        mod.mount(root);
+        await sleep(400);
+        document.querySelector('[data-pane="members"]').click();
+        await sleep(600);
+        const row = Array.prototype.find.call(document.querySelectorAll("#people-tbody tr"), function (tr) {
+          return tr.cells[1] && tr.cells[1].textContent.indexOf("陈明婧") >= 0;
+        });
+        if (!row) {
+          document.body.setAttribute("data-ok", "no-row");
+          return;
+        }
+        const id = row.getAttribute("data-id");
+        const cell = row.querySelector('td[data-field="reserve"]');
+        cell.click();
+        await sleep(80);
+        const input = cell.querySelector("input");
+        if (!input) {
+          document.body.setAttribute("data-ok", "no-input");
+          return;
+        }
+        input.focus();
+        input.value = "张文静";
+        input.dispatchEvent(new CompositionEvent("compositionend", { data: "张文静" }));
+        input.blur();
+        await sleep(900);
+        const cell2 = document.querySelector('#people-tbody tr[data-id="' + id + '"] td[data-field="reserve"]');
+        const afterFill = (cell2 && cell2.textContent) || "";
+        cell2.click();
+        await sleep(80);
+        const input2 = cell2.querySelector("input");
+        if (!input2) {
+          document.body.setAttribute("data-after", afterFill);
+          document.body.setAttribute("data-ok", "no-reedit");
+          return;
+        }
+        input2.focus();
+        input2.value = "杨润泽";
+        input2.dispatchEvent(new CompositionEvent("compositionend", { data: "杨润泽" }));
+        input2.blur();
+        await sleep(900);
+        const cell3 = document.querySelector('#people-tbody tr[data-id="' + id + '"] td[data-field="reserve"]');
+        const afterChange = (cell3 && cell3.textContent) || "";
+        document.body.setAttribute("data-after", afterFill);
+        document.body.setAttribute("data-changed", afterChange);
+        document.body.setAttribute("data-ok", afterFill.indexOf("张文静") >= 0 && afterChange.indexOf("杨润泽") >= 0 ? "1" : "0");
+      })();
+    </script>
+  </body>
+</html>`;
+
+test("headless chrome can fill and change 储备", async () => {
+  resetPeopleStore();
+  resetOrgBoard();
+  resetOrgExtra();
+  const app = createApp();
+  const server = http.createServer((req, res) => {
+    if (req.url === "/__reserve-smoke") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(RESERVE_SMOKE);
+      return;
+    }
+    app(req, res);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  try {
+    const html = await chromeDump(`http://127.0.0.1:${port}/__reserve-smoke`, 12000);
+    assert.match(html, /data-ok="1"/, html.includes("data-ok=") ? html.slice(html.indexOf("data-ok="), html.indexOf("data-ok=") + 120) : html.slice(-400));
+    assert.match(html, /data-after="张文静"/);
+    assert.match(html, /data-changed="杨润泽"/);
+  } finally {
+    await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
+});
+
 test("headless chrome can type-search people and stores", async () => {
   resetPeopleStore();
   resetOrgBoard();
