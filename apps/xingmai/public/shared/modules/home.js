@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.570-home-dutyladder */
+/* xm-module-home 0.1.571-home-opduty */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1336,7 +1336,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.570-home-dutyladder");
+    board.setAttribute("data-hm-js", "0.1.571-home-opduty");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2185,12 +2185,31 @@
       mismatches: mismatches
     };
   }
+  function shopDutyName(shop, field) {
+    var n = String((shop && shop[field]) || "").trim();
+    if (!n || n === "管理员") {
+      return "";
+    }
+    if (field === "operator" && n === String((shop && shop.supervisor) || "").trim()) {
+      return "";
+    }
+    return n;
+  }
   function namesFromShopDuty(shops, field) {
+    var blocked = {};
+    if (field === "operator") {
+      (shops || []).forEach(function (shop) {
+        var sup = String((shop && shop.supervisor) || "").trim();
+        if (sup && sup !== "管理员") {
+          blocked[sup] = true;
+        }
+      });
+    }
     var seen = {};
     var names = [];
     (shops || []).forEach(function (shop) {
-      var n = String((shop && shop[field]) || "").trim();
-      if (!n || n === "管理员" || seen[n]) {
+      var n = shopDutyName(shop, field);
+      if (!n || seen[n] || blocked[n]) {
         return;
       }
       seen[n] = true;
@@ -2202,7 +2221,7 @@
     var total = 0;
     var ok = false;
     (shops || []).forEach(function (shop) {
-      if (String((shop && shop[field]) || "").trim() !== name) {
+      if (shopDutyName(shop, field) !== name) {
         return;
       }
       var id = resolveErpId(shop, catalogByName);

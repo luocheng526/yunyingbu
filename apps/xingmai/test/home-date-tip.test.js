@@ -419,17 +419,20 @@ test("board has 业绩 and 利润 ladders with 主管 运营 columns and ranks 1
 });
 
 test("ladder names follow shop supervisor and operator duty not people role", () => {
-  const start = homeJs.indexOf("function namesFromShopDuty");
+  const start = homeJs.indexOf("function shopDutyName");
   const end = homeJs.indexOf("function buildLadders");
-  const fns = new Function(homeJs.slice(start, end) + "return {namesFromShopDuty};")();
+  const fns = new Function(homeJs.slice(start, end) + "return {namesFromShopDuty,shopDutyName};")();
   const shops = [
     { supervisor: "高丽男", operator: "杨禄" },
-    { supervisor: "张文静", operator: "崔安琪" },
+    { supervisor: "张文静", operator: "张文静" },
+    { supervisor: "薛双双", operator: "薛双双" },
     { supervisor: "杨润泽", operator: "高丽男" },
     { supervisor: "管理员", operator: "" }
   ];
-  assert.deepEqual(fns.namesFromShopDuty(shops, "supervisor"), ["高丽男", "张文静", "杨润泽"]);
-  assert.deepEqual(fns.namesFromShopDuty(shops, "operator"), ["杨禄", "崔安琪", "高丽男"]);
+  assert.deepEqual(fns.namesFromShopDuty(shops, "supervisor"), ["高丽男", "张文静", "薛双双", "杨润泽"]);
+  assert.deepEqual(fns.namesFromShopDuty(shops, "operator"), ["杨禄"]);
+  assert.equal(fns.shopDutyName({ supervisor: "薛双双", operator: "薛双双" }, "operator"), "");
+  assert.equal(fns.shopDutyName({ supervisor: "韩梦凯", operator: "翁琴" }, "operator"), "翁琴");
 });
 
 test("card help uses a body-level tooltip so overflow cannot clip it", () => {
