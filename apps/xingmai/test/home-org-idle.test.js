@@ -91,7 +91,7 @@ test("parseIdList and record filter keep allow/deny rules", () => {
 });
 
 test("home blanks company numbers when the date range changes", () => {
-  assert.match(homeJs, /0\.1\.611-data-range-blank/);
+  assert.match(homeJs, /0\.1\.612-data-range-blank/);
   assert.match(homeJs, /function beginRangeLoad\(\)/);
   assert.match(homeJs, /setWait\(true\)/);
   assert.match(homeJs, /function pullBoard\(\)/);

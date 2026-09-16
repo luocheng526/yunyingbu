@@ -1,4 +1,4 @@
-/* xm-module-data 0.1.611-data-range-blank — isolate panes; range change blanks numbers before new data */
+/* xm-module-data 0.1.612-data-range-blank — isolate panes; range change blanks numbers before new data */
 (function () {
   function escapeHtml(value) {
     return String(value)
@@ -36,7 +36,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=0.1.611-data-range-blank";
+      link.href = "/data-pages.css?v=0.1.612-data-range-blank";
       document.head.appendChild(link);
     }
   }
@@ -129,7 +129,7 @@
   function mountShopDashboard(root) {
     ensureSheet();
     resetDataPage(root, "shops", "正在加载店铺数据…");
-    return loadScript("/data-shops.js?v=0.1.611-data-range-blank").then(function () {
+    return loadScript("/data-shops.js?v=0.1.612-data-range-blank").then(function () {
       if (typeof window.XmDataCreateShopDashboard === "function") {
         return window.XmDataCreateShopDashboard(root);
       }
@@ -144,7 +144,7 @@
   function mountGoodsDashboard(root) {
     ensureSheet();
     resetDataPage(root, "goods", "正在加载商品数据…");
-    return loadScript("/data-goods.js?v=0.1.611-data-range-blank").then(function () {
+    return loadScript("/data-goods.js?v=0.1.612-data-range-blank").then(function () {
       if (typeof window.XmDataCreateGoodsDashboard === "function") {
         return window.XmDataCreateGoodsDashboard(root);
       }
@@ -160,7 +160,7 @@
     ensureSheet();
     resetDataPage(root, "overview", "正在加载数据总览…");
     return loadScript("/data-ops.js?v=data-ov30").then(function () {
-      return loadScript("/data-overview.js?v=0.1.611-data-range-blank");
+      return loadScript("/data-overview.js?v=0.1.612-data-range-blank");
     }).then(function () {
       if (typeof window.XmDataCreateDashboard === "function") {
         return window.XmDataCreateDashboard(root);
