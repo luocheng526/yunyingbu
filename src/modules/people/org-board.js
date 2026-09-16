@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertCanImportRow, assertCanWrite, canEditStore, groupIdOf, normalizeGroupId, rowMatchesScope, scopeOf } from "./org-acl.js";
-import { listPeople } from "./store.js";
+import { listPeople, orgLineOf } from "./store.js";
 
 const STATUSES = {
   operating: "运营中",
@@ -442,78 +442,171 @@ function countTreePeople(node) {
   return (node.synthetic ? 0 : 1) + node.children.reduce((sum, child) => sum + countTreePeople(child), 0);
 }
 
+function cleanName(value) {
+  return String(value || "").trim();
+}
+
+function isLeadRole(role) {
+  return role === "主管" || role === "储备";
+}
+
+function managerKeyOf(name) {
+  const raw = cleanName(name);
+  if (raw.includes("韩梦凯")) {
+    return "韩梦凯";
+  }
+  if (raw.includes("沈子晗")) {
+    return "沈子晗";
+  }
+  return "";
+}
+
 function buildRightsTree(stores, roster, byName) {
   const director = makeNode("罗成", "总监");
   const han = makeNode("韩梦凯", "经理", { id: byName["韩梦凯"] ? byName["韩梦凯"].id : null });
   const shen = makeNode("沈子晗", "经理", { id: byName["沈子晗"] ? byName["沈子晗"].id : null });
-  attachChild(director, han);
-  attachChild(director, shen);
-  const nodes = { 罗成: director, 韩梦凯: han, 沈子晗: shen };
-  const branches = { 韩梦凯: han, 沈子晗: shen, 罗成: director };
-
-  function ensure(name) {
-    if (nodes[name]) {
-      return nodes[name];
+  const parentOf = new Map();
+  function link(parent, child) {
+    if (!parent || !child || parent === child) {
+      return;
     }
-    nodes[name] = makeNode(name, roleOfName(name, byName), { id: byName[name] ? byName[name].id : null });
-    return nodes[name];
+    const prev = parentOf.get(child);
+    if (prev && prev !== parent) {
+      prev.children = prev.children.filter((item) => item !== child);
+    }
+    parentOf.set(child, parent);
+    if (!parent.children.includes(child)) {
+      parent.children.push(child);
+    }
+  }
+  link(director, han);
+  link(director, shen);
+  const nodes = { 罗成: director, 韩梦凯: han, 沈子晗: shen };
+  const vacant = {};
+
+  function managerNode(name, fallbackRow) {
+    const key = managerKeyOf(name) || managerKeyOf(fallbackRow && fallbackRow.manager) || managerBranchOfStore(fallbackRow || {}) || "沈子晗";
+    return key === "韩梦凯" ? han : shen;
   }
 
-  function place(name, hintBranch) {
-    if (name === "罗成" || name === "韩梦凯" || name === "沈子晗") {
-      return nodes[name];
+  function ensure(name, roleHint) {
+    const who = cleanName(name);
+    if (!who || who === "罗成") {
+      return director;
     }
-    const node = ensure(name);
-    const person = byName[name];
-    const manager = person && person.managerId ? roster.find((row) => row.id === person.managerId) : null;
-    if (manager && manager.name !== name) {
-      const parent = ensure(manager.name);
-      attachChild(parent, node);
-      if (parent.role === "主管" || parent.role === "储备") {
-        const branch = branchOfPerson(parent.name, byName[parent.name], stores) || hintBranch || "沈子晗";
-        attachChild(branches[branch] || shen, parent);
+    if (who === "韩梦凯") {
+      return han;
+    }
+    if (who === "沈子晗") {
+      return shen;
+    }
+    if (!nodes[who]) {
+      nodes[who] = makeNode(who, roleHint || roleOfName(who, byName) || "运营", { id: byName[who] ? byName[who].id : null });
+    } else if (isLeadRole(roleHint) && !isLeadRole(nodes[who].role) && nodes[who].role !== "经理") {
+      nodes[who].role = roleHint;
+    } else if (roleHint === "助理" && nodes[who].role === "运营") {
+      nodes[who].role = "助理";
+    }
+    return nodes[who];
+  }
+
+  function vacantLead(mgr) {
+    const key = mgr.name;
+    if (!vacant[key]) {
+      vacant[key] = makeNode("未指定主管/储备", "主管", { synthetic: true });
+      link(mgr, vacant[key]);
+    }
+    return vacant[key];
+  }
+
+  function attachLine(input) {
+    const mgr = managerNode(input.manager, input.row);
+    let supervisor = cleanName(input.supervisor);
+    if (supervisor === mgr.name || supervisor === "罗成") {
+      supervisor = "";
+    }
+    const operator = cleanName(input.operator);
+    const assistant = cleanName(input.assistant);
+    let lead = null;
+    if (supervisor) {
+      const leadRole = isLeadRole(roleOfName(supervisor, byName)) ? roleOfName(supervisor, byName) : "主管";
+      lead = ensure(supervisor, leadRole);
+      if (!isLeadRole(lead.role)) {
+        lead.role = "主管";
       }
-      return node;
+      link(mgr, lead);
     }
-    const branch = hintBranch || branchOfPerson(name, person, stores) || "沈子晗";
-    attachChild(branches[branch] || shen, node);
-    return node;
+    let op = null;
+    if (operator && operator !== supervisor && operator !== mgr.name && operator !== "罗成") {
+      op = ensure(operator, "运营");
+      if (!isLeadRole(op.role) && op.role !== "助理") {
+        op.role = "运营";
+      }
+      link(lead || vacantLead(mgr), op);
+    }
+    let asst = null;
+    if (assistant && assistant !== operator && assistant !== supervisor && assistant !== mgr.name && assistant !== "罗成") {
+      asst = ensure(assistant, "助理");
+      asst.role = "助理";
+      link(op || lead || vacantLead(mgr), asst);
+    }
+    return { mgr, lead, op, asst };
   }
 
   roster.forEach((person) => {
-    place(person.name);
-  });
-  stores.forEach((row) => {
-    const branch = managerBranchOfStore(row);
-    [row.supervisor, row.operator, row.assistant, row.lead, row.owner].forEach((value) => {
-      const name = String(value || "").trim();
-      if (name) {
-        place(name, branch);
-      }
+    if (person.name === "罗成" || person.name === "韩梦凯" || person.name === "沈子晗") {
+      return;
+    }
+    const line = orgLineOf(person);
+    const role = roleOfName(person.name, byName);
+    const manager = managerKeyOf(line.manager) || branchOfPerson(person.name, person, stores) || "沈子晗";
+    if (isLeadRole(role)) {
+      attachLine({ manager, supervisor: person.name, row: { manager } });
+      return;
+    }
+    if (role === "助理") {
+      attachLine({
+        manager,
+        supervisor: line.supervisor,
+        operator: line.operator,
+        assistant: person.name,
+        row: { manager }
+      });
+      return;
+    }
+    attachLine({
+      manager,
+      supervisor: line.supervisor,
+      operator: person.name,
+      row: { manager }
     });
   });
 
   stores.forEach((row) => {
-    const owner = String(row.operator || row.owner || "").trim();
-    const lead = String(row.supervisor || row.lead || "").trim();
-    const target = (owner && nodes[owner]) || (lead && nodes[lead]) || branches[managerBranchOfStore(row)] || shen;
+    const placed = attachLine({
+      manager: row.manager,
+      supervisor: row.supervisor,
+      operator: row.operator || row.owner,
+      assistant: row.assistant,
+      row
+    });
+    const target = placed.op || placed.lead || vacantLead(placed.mgr);
     target.stores.push({
       id: row.id,
       storeName: row.storeName,
       storeId: row.storeId || "",
       merchantId: row.merchantId || "",
-      hanging: !(owner && nodes[owner])
+      hanging: !placed.op
     });
   });
 
   [han, shen].forEach((mgr) => {
-    const leads = mgr.children.filter((child) => child.role === "主管");
-    const rest = mgr.children.filter((child) => child.role !== "主管");
-    if (!leads.length && rest.length) {
-      const group = makeNode(mgr.name + "组", "主管", { synthetic: true });
-      rest.forEach((child) => attachChild(group, child));
-      mgr.children = [group];
-    }
+    mgr.children = mgr.children.filter((child) => {
+      if (child.synthetic && !child.children.length && !child.stores.length) {
+        return false;
+      }
+      return true;
+    });
   });
 
   sortTree(director);
