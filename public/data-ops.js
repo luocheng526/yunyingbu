@@ -243,5 +243,27 @@
     });
   }
 
-  window.XmDataOps = { panel: panel, paint: paint, fill: fill };
+  var CAL_CSS =
+    ":host{position:fixed;z-index:4000;display:none;width:560px;background:#fff;border:1px solid #e8e8e8;box-shadow:0 6px 16px rgba(0,0,0,.12)}" +
+    ":host(.is-open){display:block}" +
+    ".ch-cal{display:flex;width:560px}" +
+    ".ch-cal-month{width:280px;padding:8px 12px}" +
+    ".ch-cal-month + .ch-cal-month{border-left:1px solid #f0f0f0}" +
+    ".ch-cal-head{position:relative;height:32px;text-align:center}" +
+    ".ch-cal-head button{position:absolute;top:4px;width:22px;height:22px;border:0;background:transparent;cursor:pointer}" +
+    ".ch-cal-head [data-cal='prev-year']{left:0}" +
+    ".ch-cal-head [data-cal='prev-month']{left:20px}" +
+    ".ch-cal-head [data-cal='next-month']{right:20px}" +
+    ".ch-cal-head [data-cal='next-year']{right:0}" +
+    "table{width:100%;border-collapse:collapse;table-layout:fixed}" +
+    "th{height:24px;font-size:12px;color:#8c8c8c}" +
+    "td{height:28px;padding:0;text-align:center}" +
+    "td button{display:block;width:100%;height:28px;margin:0;padding:0;border:0;border-radius:2px;background:transparent;color:#262626;font:13px/28px inherit;cursor:pointer}" +
+    "td button:hover:not(:disabled):not(.is-start):not(.is-end){background:#f5f5f5}" +
+    "td button.is-out,td button.is-over,td button.is-future,td button:disabled{color:#bfbfbf;cursor:default}" +
+    "td button.is-today{color:#cf1322;font-weight:600}" +
+    "td button.is-in{background:#fff1f0;color:#c62828}" +
+    "td button.is-start,td button.is-end{background:#c62828;color:#fff}";
+
+  window.XmDataOps = { panel: panel, paint: paint, fill: fill, calCss: CAL_CSS };
 })();
