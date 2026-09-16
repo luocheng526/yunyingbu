@@ -312,7 +312,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov16";
+      link.href = "/data-pages.css?v=data-ov17";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -1740,7 +1740,7 @@
         );
       }).join("");
       const shopOpts =
-        '<option value="">请选择店铺</option>' +
+        '<option value="">全选</option>' +
         ((payload.shops || []).map(function (shop) {
           return (
             '<option value="' +

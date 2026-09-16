@@ -143,7 +143,8 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /XmModules/);
     assert.match(overviewJs.text, /\/data\/overview/);
     assert.match(overviewJs.text, /显示数字/);
-    assert.match(overviewJs.text, /请选择店铺/);
+    assert.match(overviewJs.text, /全选/);
+    assert.doesNotMatch(overviewJs.text, /请选择店铺/);
     assert.match(overviewJs.text, /个人默认视图/);
     assert.match(overviewJs.text, /\/api\/data\/overview/);
     assert.match(overviewJs.text, /实时销售额/);
@@ -209,7 +210,7 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /60 \* 60 \* 1000/);
     assert.match(overviewJs.text, /xm-data-shops-metrics-v1/);
     assert.match(overviewJs.text, /overlaySharedShopMetrics/);
-    assert.match(overviewJs.text, /data-ov16/);
+    assert.match(overviewJs.text, /data-ov17/);
     assert.match(overviewJs.text, /points: linePts\(yest\)/);
     assert.match(overviewJs.text, /points: linePts\(today\)/);
     assert.doesNotMatch(overviewJs.text, /linePtsRange\(yest, join/);
@@ -570,7 +571,7 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /\/data\/paid/);
   assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
   assert.match(dataMod, /restore-v1/);
-  assert.match(dataMod, /data-overview\.js\?v=data-ov16/);
+  assert.match(dataMod, /data-overview\.js\?v=data-ov17/);
   assert.match(dataMod, /data-shops\.js\?v=shop-wide6/);
   assert.match(css, /ch-pill/);
   assert.match(css, /\.ch-card \.value[\s\S]*font-size: 28px/);
