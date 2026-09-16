@@ -418,14 +418,10 @@
     const style = document.createElement("style");
     style.id = "ch-tabs-style";
     style.textContent =
-      ".ch-split{height:2px;margin:8px 0;background:#2f54eb;border:0}" +
-      ".ch-tabs{display:flex;flex-wrap:wrap;align-items:center;gap:0;margin:0;padding:0;background:transparent;border-bottom:1px solid #f0f0f0}" +
-      ".ch-tabs button{height:36px;padding:0 16px;border:0;background:transparent;color:#262626;cursor:pointer;font-size:13px}" +
-      ".ch-tabs button.is-active{font-weight:600;color:#fff;background:#2f54eb}" +
-      ".ch-table.is-pl tr.is-gain td{background:#fff1f0}" +
-      ".ch-table.is-pl tr.is-loss td{background:#f6ffed}" +
-      ".sh-wide.is-pl tr.is-gain td:first-child{background:#fff1f0}" +
-      ".sh-wide.is-pl tr.is-loss td:first-child{background:#f6ffed}";
+      ".ch-split{height:2px;margin:8px 0;background:#2f54eb}" +
+      ".ch-tabs{display:flex;background:transparent;border-bottom:1px solid #f0f0f0}" +
+      ".ch-tabs button{height:36px;border:0;background:transparent;color:#262626}" +
+      ".ch-tabs button.is-active{color:#fff;background:#2f54eb}";
     document.head.appendChild(style);
   }
 
@@ -979,29 +975,22 @@
   function personCoversShop(person, shop) {
     const name = shop && shop.shopName;
     const shops = (person && person.visibleShops) || [];
-    if (name && shops.some(function (item) {
-      return sameShopName(item, name);
-    })) {
+    if (name && shops.some(function (item) { return sameShopName(item, name); })) {
       return true;
     }
     const oid = shop && shop.operatorId != null ? String(shop.operatorId) : "";
     return Boolean(oid && person && String(person.id) === oid);
   }
 
-  function reserveNames(people) {
-    const out = {};
+  function shopDutyFlags(shop, people) {
+    const flags = { 经理组: false, 主管组: false, 储备组: false };
+    const reserves = {};
     (people || []).forEach(function (person) {
       const name = String((person && person.reserve) || "").trim();
       if (name && name !== "无") {
-        out[name] = true;
+        reserves[name] = true;
       }
     });
-    return out;
-  }
-
-  function shopDutyFlags(shop, people) {
-    const flags = { 经理组: false, 主管组: false, 储备组: false };
-    const reserves = reserveNames(people);
     (people || []).forEach(function (person) {
       if (!personCoversShop(person, shop)) {
         return;
