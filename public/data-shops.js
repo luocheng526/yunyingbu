@@ -128,7 +128,7 @@
       '<span class="sh-profit"><i style="width:' +
       width.toFixed(1) +
       '%"></i><em>' +
-      escapeHtml(sign + fmt(n, 2)) +
+      escapeHtml(sign + fmt(n, 0)) +
       "</em></span>"
     );
   }
@@ -146,7 +146,7 @@
 
   function money(shop, keys) {
     const n = firstNum(shop, keys);
-    return fmt(n != null ? n : 0, 2);
+    return fmt(n != null ? n : 0, 0);
   }
 
   function count(shop, keys) {
@@ -174,15 +174,15 @@
     const net = firstNum(shop, ["netSales", "netSalesAmount"]);
     const newRate = firstNum(shop, ["newRate"]);
     return [
-      fmt(live != null ? live : pay, 2),
+      fmt(live != null ? live : pay, 0),
       newRate != null ? (Number(newRate) > 1 ? Number(newRate) : Number(newRate) * 100).toFixed(4) + "%" : "0.0000%",
       count(shop, ["orderCount"]),
       count(shop, ["netOrderCount"]),
-      fmt(pay, 2),
-      fmt(invalid != null ? invalid : 0, 2),
-      fmt(refund, 2),
+      fmt(pay, 0),
+      fmt(invalid != null ? invalid : 0, 0),
+      fmt(refund, 0),
       rate(shop, ["refundRate"], pay ? refund / pay : 0),
-      fmt(net != null ? net : pay - refund, 2),
+      fmt(net != null ? net : pay - refund, 0),
       money(shop, ["totalMarketing"]),
       money(shop, ["siteMarketing"]),
       money(shop, ["offsiteMarketing"]),

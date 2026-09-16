@@ -97,7 +97,7 @@
 
   function mountLiveDashboard(root) {
     ensureSheet();
-    return loadScript("/data-live.js?v=home-live1").then(function () {
+    return loadScript("/data-live.js?v=home-live3").then(function () {
       if (typeof window.XmDataCreateLiveDashboard === "function") {
         return window.XmDataCreateLiveDashboard(root);
       }
@@ -147,12 +147,14 @@
       root.innerHTML =
         '<main class="xm-page data-overview-root ch-root"><div id="board"><p class="ch-empty">正在加载数据总览…</p></div></main>';
     }
-    return loadScript("/data-overview.js?v=data-ov9").then(function () {
+    return loadScript("/data-ops.js?v=data-ov36").then(function () {
+      return loadScript("/data-overview.js?v=data-ov36");
+    }).then(function () {
       if (typeof window.XmDataCreateDashboard === "function") {
         return window.XmDataCreateDashboard(root);
       }
-          root.innerHTML =
-            '<main class="xm-page data-fill data-overview-root"><p class="lead">示例数据，尚未接入店铺。</p></main>';
+      root.innerHTML =
+        '<main class="xm-page data-fill data-overview-root"><p class="lead">示例数据，尚未接入店铺。</p></main>';
       return function unmount() {
         root.innerHTML = "";
       };
