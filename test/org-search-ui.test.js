@@ -241,6 +241,79 @@ const RESERVE_SMOKE = `<!doctype html>
   </body>
 </html>`;
 
+const STORE_CLEAR_SMOKE = `<!doctype html>
+<html lang="zh-CN">
+  <head><meta charset="utf-8" /><link rel="stylesheet" href="/people.css" /></head>
+  <body>
+    <div id="xm-content"></div>
+    <script src="/shared/modules/people.js"></script>
+    <script>
+      (async function () {
+        function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+        window.XmModules["/people"].mount(document.getElementById("xm-content"));
+        await sleep(700);
+        const row = document.querySelector("#org-tbody tr[data-id]");
+        const id = row && row.getAttribute("data-id");
+        const cell = row && row.querySelector('td[data-field="operator"]');
+        if (!cell) {
+          document.body.setAttribute("data-ok", "no-cell");
+          return;
+        }
+        cell.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+        await sleep(80);
+        const input = cell.querySelector("input");
+        if (!input) {
+          document.body.setAttribute("data-ok", "no-input");
+          return;
+        }
+        input.value = "";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        document.getElementById("org-count").dispatchEvent(
+          new PointerEvent("pointerdown", { bubbles: true, cancelable: true })
+        );
+        await sleep(900);
+        const savedCell = document.querySelector(
+          '#org-tbody tr[data-id="' + id + '"] td[data-field="operator"]'
+        );
+        const listed = await fetch("/api/people/org/stores").then(function (res) { return res.json(); });
+        const stored = (listed.stores || []).find(function (item) { return String(item.id) === String(id); });
+        const text = (savedCell && savedCell.textContent || "").trim();
+        document.body.setAttribute("data-cell", text);
+        document.body.setAttribute("data-stored", stored && stored.operator || "");
+        document.body.setAttribute(
+          "data-ok",
+          text === "—" && stored && stored.operator === "" && !savedCell.querySelector("input") ? "1" : "0"
+        );
+      })();
+    </script>
+  </body>
+</html>`;
+
+test("headless chrome saves a cleared store cell on outside pointer", async () => {
+  resetPeopleStore();
+  resetOrgBoard();
+  resetOrgExtra();
+  const app = createApp();
+  const server = http.createServer((req, res) => {
+    if (req.url === "/__store-clear-smoke") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(STORE_CLEAR_SMOKE);
+      return;
+    }
+    app(req, res);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  try {
+    const html = await chromeDump(`http://127.0.0.1:${port}/__store-clear-smoke`, 10000);
+    assert.match(html, /data-ok="1"/, html.includes("data-ok=") ? html.slice(html.indexOf("data-ok="), html.indexOf("data-ok=") + 120) : html.slice(-400));
+    assert.match(html, /data-cell="—"/);
+    assert.match(html, /data-stored=""/);
+  } finally {
+    await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
+});
+
 test("headless chrome can fill and change 储备", async () => {
   resetPeopleStore();
   resetOrgBoard();
