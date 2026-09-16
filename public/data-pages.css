@@ -664,30 +664,39 @@ html[data-theme="pink"] .data-subnav a[aria-current="page"] {
   font-size: 12px;
   margin-top: 4px;
 }
+.ch-split {
+  height: 3px;
+  margin: 16px 0 0;
+  background: #2f54eb;
+  border: 0;
+}
 .ch-tabs {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0;
-  margin: 16px 0 0;
-  border-bottom: 1px solid var(--ch-line);
+  margin: 0;
+  padding: 0 8px;
+  background: #2f54eb;
+  border-bottom: 0;
 }
 .ch-tabs button {
-  height: 36px;
-  padding: 0 14px;
+  height: 40px;
+  padding: 0 16px;
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
-  color: var(--ch-ink);
+  color: #fff;
   cursor: pointer;
   font-size: 13px;
-  opacity: 0.7;
+  opacity: 0.85;
 }
 .ch-tabs button.is-active {
   opacity: 1;
   font-weight: 600;
-  color: var(--ch-primary);
-  border-bottom-color: var(--ch-primary);
-  background: transparent;
+  color: #fff;
+  border-bottom-color: #fff;
+  background: rgba(255, 255, 255, 0.14);
 }
 .ch-table {
   margin: 0 0 18px;
