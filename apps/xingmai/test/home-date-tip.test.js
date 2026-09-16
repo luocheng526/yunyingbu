@@ -101,7 +101,7 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /cell\.style\.width = cell\.style\.minWidth = cell\.style\.maxWidth = cw/);
   assert.match(homeJs, /linear-gradient\(#dceaff,#f7fbff\)/);
   assert.doesNotMatch(homeJs, /border:2px solid #4d8fd6/);
-  assert.match(homeJs, /\.xm-hm-bar\{[^}]*border:0\}/);
+  assert.match(homeJs, /\.xm-hm-bar\{[^}]*border-bottom:1px solid #e4e7ed\}/);
   assert.match(homeJs, /function teamHidden/);
   assert.match(homeJs, /function viewStore/);
   assert.match(homeJs, /xm-home-" \+ viewKey \+ "-"/);
@@ -116,8 +116,13 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function applyColW/);
   assert.match(homeJs, /function onSortSelectStart/);
   assert.match(homeJs, /\.xm-hm-card,\.xm-hm-pop label\{-webkit-user-select:none;user-select:none/);
-  assert.match(homeJs, /\.xm-hm-views button\{[^}]*border-radius:4px/);
-  assert.match(homeJs, /\.xm-hm-views button\.is-on\{background:var\(--xm-primary\)/);
+  assert.match(homeJs, /\.xm-hm-views button\{[^}]*border-bottom:2px solid transparent/);
+  assert.match(homeJs, /\.xm-hm-views button\.is-on\{background:transparent;border-bottom-color:var\(--xm-primary\)/);
+  assert.doesNotMatch(homeJs, /\.xm-hm-views button\{border:1px solid var\(--xm-primary\)/);
+  assert.doesNotMatch(homeJs, /\.xm-hm-views button\.is-on\{background:var\(--xm-primary\)/);
+  assert.match(homeJs, /label: "公司"/);
+  assert.match(homeJs, /label: "实时"/);
+  assert.match(homeJs, /label: "排行榜"/);
   assert.match(homeJs, /\.xm-hm-set\{border:0;background:transparent;color:var\(--xm-primary\)/);
   assert.match(homeJs, /closest\("\.xm-hm-views button,\.xm-hm-ranges button,\.xm-hm-set,\.xm-hm-dates,\[data-refresh-teams\],\[data-show-teams\]"\)/);
   assert.match(homeJs, /--xm-hm-team-cols/);
