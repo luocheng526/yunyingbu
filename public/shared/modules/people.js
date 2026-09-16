@@ -9,7 +9,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.187-filter-counts";
+    const href = "/people.css?v=0.1.188-copy-select";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -40,6 +40,7 @@
       "body:has(.xm-shell):has(.people-page) .xm-main{height:100vh;max-height:100vh;overflow-x:hidden!important;overflow-y:auto!important;min-height:0;display:flex;flex-direction:column;}" +
       "body:has(.people-page) .xm-content,#xm-content:has(.people-page){flex:0 0 auto;height:auto;overflow:visible!important;}" +
       ".people-page{overflow:visible;padding-bottom:24px;}" +
+      ".people-page,.people-page table,.people-page th,.people-page td,.people-page .org-cell,.people-page .org-link,.people-page .tag{-webkit-user-select:text!important;user-select:text!important;-webkit-user-drag:none;}" +
       ".people-page .org-table-wrap{overflow:visible!important;max-height:none!important;}" +
       ".people-page table{border-collapse:separate;border-spacing:0;}" +
       ".people-page th{position:sticky;top:0;z-index:4;background:#fafafa;}";
@@ -93,7 +94,7 @@
       root.innerHTML =
         '<main class="page people-page">' +
         '<header class="page-head"><h1>组织中心</h1>' +
-        '<p class="lead">双击单元格即可改。导入是合并：人员同名覆盖、不同名新增；店铺只有同一家才覆盖。店铺导入会落盘，强制刷新还在，不是一套全新演示表。</p>' +
+        '<p class="lead">单元格可按住划选后复制。双击单元格即可改。导入是合并：人员同名覆盖、不同名新增；店铺只有同一家才覆盖。店铺导入会落盘，强制刷新还在，不是一套全新演示表。</p>' +
         '<p class="banner" id="org-scope">当前责权：—</p></header>' +
         '<nav class="org-tabs" id="org-tabs">' +
         '<button type="button" class="org-tab is-active" data-pane="stores">店铺主数据</button>' +
@@ -234,6 +235,19 @@
       const form = root.querySelector("#org-form");
       const formError = root.querySelector("#org-form-error");
       const peopleTbody = root.querySelector("#people-tbody");
+      function keepTableTextSelectable(tableEl) {
+        if (!tableEl) {
+          return;
+        }
+        tableEl.addEventListener("dragstart", function (event) {
+          if (event.target && event.target.closest && event.target.closest("input,textarea,select,button,a[href]")) {
+            return;
+          }
+          event.preventDefault();
+        });
+      }
+      keepTableTextSelectable(tbody && tbody.closest("table"));
+      keepTableTextSelectable(peopleTbody && peopleTbody.closest("table"));
       const peopleForm = root.querySelector("#people-form");
       const peopleModal = root.querySelector("#people-modal");
       const peopleFormError = root.querySelector("#people-form-error");

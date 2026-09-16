@@ -66,6 +66,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     const css = await fetch(`${base}/people.css`);
     const cssText = await css.text();
     assert.match(cssText, /overflow-y:\s*auto\s*!important/);
+    assert.match(cssText, /user-select:\s*text\s*!important/);
     assert.match(cssText, /\.xm-main/);
     assert.doesNotMatch(text, /class="site-sidebar"/);
     assert.doesNotMatch(text, /<header class="site-header">/);
@@ -106,6 +107,9 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /data-filter-key="supervisor"/);
     assert.match(jsText, /data-filter-key="operator"/);
     assert.match(jsText, />全选/);
+    assert.match(jsText, /keepTableTextSelectable/);
+    assert.match(jsText, /user-select:text/);
+    assert.match(jsText, /单元格可按住划选后复制/);
     assert.match(jsText, /org-filter-count/);
     assert.match(jsText, /columnValueCounts/);
     assert.match(jsText, /"家店铺"/);
