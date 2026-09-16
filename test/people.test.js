@@ -67,6 +67,8 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     const cssText = await css.text();
     assert.match(cssText, /overflow-y:\s*auto\s*!important/);
     assert.match(cssText, /user-select:\s*text\s*!important/);
+    assert.match(cssText, /\.org-search-form/);
+    assert.match(cssText, /\.org-filter-pop\[hidden\]/);
     assert.match(cssText, /\.xm-main/);
     assert.doesNotMatch(text, /class="site-sidebar"/);
     assert.doesNotMatch(text, /<header class="site-header">/);
@@ -111,7 +113,11 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /user-select:text/);
     assert.match(jsText, /单元格可按住划选后复制/);
     assert.match(jsText, /applyStoreQuery/);
-    assert.match(jsText, /onStoreQueryType/);
+    assert.match(jsText, /bindLiveSearch/);
+    assert.match(jsText, /org-search-form/);
+    assert.match(jsText, /people-search-form/);
+    assert.match(jsText, /type="text" id="org-q"/);
+    assert.doesNotMatch(jsText, /keyCode === 229/);
     assert.match(jsText, /compositionend/);
     assert.match(jsText, /org-filter-count/);
     assert.match(jsText, /columnValueCounts/);
@@ -288,6 +294,11 @@ test("org store board lists demo shops and supports add", async () => {
     const yang = listedJson.stores.find((row) => row.storeName === "飒望家居日用旗舰店");
     assert.equal(yang.supervisor, "杨润泽");
     assert.equal(yang.operator, "崔安琪");
+    const searched = await fetch(`${base}/api/people/org/stores?q=${encodeURIComponent("RASW家居旗舰店")}`);
+    const searchedJson = await searched.json();
+    assert.equal(searched.status, 200);
+    assert.ok(searchedJson.stores.length >= 1);
+    assert.ok(searchedJson.stores.every((row) => String(row.storeName || "").includes("RASW家居旗舰店") || String(row.login || "").toLowerCase().includes("rasw")));
 
     const created = await fetch(`${base}/api/people/org/stores`, {
       method: "POST",
