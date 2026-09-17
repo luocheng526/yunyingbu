@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.209-search-ime";
+    const href = "/people.css?v=0.1.210-people-form";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -377,6 +377,25 @@
           peopleForm.username.value = peopleForm.name.value.trim();
         });
       }
+      function keepPeopleFormTyping(event) {
+        event.stopPropagation();
+      }
+      if (peopleForm) {
+        [
+          "pointerdown",
+          "mousedown",
+          "click",
+          "keydown",
+          "keyup",
+          "beforeinput",
+          "input",
+          "compositionstart",
+          "compositionupdate",
+          "compositionend"
+        ].forEach(function (name) {
+          peopleForm.addEventListener(name, keepPeopleFormTyping);
+        });
+      }
       function openPeopleForm() {
         if (!roster.canEdit) {
           return;
@@ -392,6 +411,10 @@
           peopleForm.director.value = "罗成";
         }
         peopleModal.classList.add("show");
+        const nameInput = peopleForm && peopleForm.elements && peopleForm.elements.namedItem("name");
+        if (nameInput) {
+          nameInput.focus({ preventScroll: true });
+        }
       }
       function closePeopleForm() {
         peopleModal.classList.remove("show");
