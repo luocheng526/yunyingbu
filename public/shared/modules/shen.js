@@ -245,6 +245,7 @@
         leadEl.textContent = "该店循环抓取进来的历史明细，以及充值记录。";
         asofEl.textContent = (latest.accountId ? "京准通主账户 " + latest.accountId + " · " : "") + rows.length + " 次抓取";
         renderKpis({
+          detail: true,
           stores: rows.length,
           spend: metrics.spend,
           jingmaiGmv: metrics.jingmaiGmv,
