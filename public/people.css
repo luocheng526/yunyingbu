@@ -408,9 +408,19 @@ body:has(.people-page) .xm-tabs {
   color: inherit;
 }
 
+.people-page th.org-th-filter.is-on,
+.org-th-filter.is-on {
+  background: #d9d9d9;
+  color: #262626;
+}
+
+.people-page th.org-th-filter.is-on .org-filter-btn,
+.people-page th.org-th-filter.is-on .org-filter-name,
+.people-page th.org-th-filter.is-on .org-filter-caret,
 .org-filter-btn.is-on,
-.org-filter-btn.is-on .org-filter-name {
-  color: #1677ff;
+.org-filter-btn.is-on .org-filter-name,
+.org-filter-btn.is-on .org-filter-caret {
+  color: #262626;
 }
 
 .org-filter-caret {
