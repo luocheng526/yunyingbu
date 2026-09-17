@@ -19,36 +19,32 @@ test("nav keeps 0.1.625 pin and does not use currentUserAsync", () => {
   assert.doesNotMatch(nav, /currentUserAsync/);
 });
 
-test("login notice is not created or kept on /people", () => {
-  assert.match(nav, /0\.1\.654-org-mask-off/);
-  assert.match(nav, /function isPeopleRoute\(/);
+test("login notice mask is never mounted", () => {
+  assert.match(nav, /0\.1\.656-site-open/);
   assert.match(nav, /function closeNoticePopup\(/);
-  assert.match(nav, /function relaxNoticeForPeople\(/);
+  assert.match(nav, /function showNoticePopup\(/);
   assert.match(nav, /function watchNoticeMask\(/);
   assert.match(nav, /watchNoticeMask\(\)/);
-  assert.match(nav, /relaxNoticeForPeople\(\)/);
   assert.match(nav, /function fillNoticeBar\(/);
-  assert.match(nav, /id="xm-notice-bar"|getElementById\("xm-notice-bar"\)/);
+  assert.match(nav, /getElementById\("xm-notice-bar"\)/);
   assert.doesNotMatch(nav, /asToast/);
   assert.doesNotMatch(nav, /data-xm-toast/);
   assert.doesNotMatch(nav, /function disarmNoticeDialog\(/);
-  assert.doesNotMatch(nav, /function ensureNoticeToastCss\(/);
+  assert.doesNotMatch(nav, /id="xm-notice-mask"/);
 });
 
-test("showNoticePopup returns before creating a mask on /people", () => {
+test("showNoticePopup only closes an existing mask", () => {
   const body = sliceFn("showNoticePopup", "bootNoticePopup");
-  const returnIdx = body.search(/if \(isPeopleRoute\(\)\) \{\s*return;/);
-  const createIdx = body.indexOf('document.createElement("div")');
-  assert.ok(returnIdx >= 0, "early-return on people route");
-  assert.ok(createIdx > returnIdx, "mask is created only after the people early-return");
-  assert.match(body, /role="dialog" aria-modal="true"/);
+  assert.match(body, /closeNoticePopup\(\)/);
+  assert.doesNotMatch(body, /document\.createElement/);
+  assert.doesNotMatch(body, /appendChild/);
+  assert.doesNotMatch(body, /role="dialog"/);
 });
 
-test("relaxNoticeForPeople removes an existing mask", () => {
-  const body = sliceFn("relaxNoticeForPeople", "watchNoticeMask");
-  assert.match(body, /if \(!isPeopleRoute\(\)\) \{\s*return;/);
+test("watchNoticeMask strips leftover masks on every route", () => {
+  const body = sliceFn("watchNoticeMask", "showNoticePopup");
   assert.match(body, /closeNoticePopup\(\)/);
-  assert.doesNotMatch(body, /disarmNoticeDialog/);
+  assert.doesNotMatch(body, /isPeopleRoute/);
 });
 
 test("parkPeopleHosts keeps people-page by href, not only is-active", () => {
