@@ -331,10 +331,10 @@
           detail: true,
           subs: true,
           stores: accounts.length || rows.length,
-          spend: subTotals.spend || (paid.metrics || {}).spend,
-          jingmaiGmv: (paid.metrics || {}).jingmaiGmv,
-          totalOrderAmount: subTotals.totalOrderAmount || (paid.metrics || {}).totalOrderAmount,
-          paidOrders: subTotals.paidOrders || (paid.metrics || {}).paidOrders,
+          spend: subTotals.spend || latest.spend,
+          jingmaiGmv: latest.jingmaiGmv,
+          totalOrderAmount: subTotals.totalOrderAmount || latest.totalOrderAmount,
+          paidOrders: subTotals.paidOrders || latest.paidOrders,
           successCount: (paid.metrics || {}).successCount
         });
         const rechargeRows = recharge.rows || [];

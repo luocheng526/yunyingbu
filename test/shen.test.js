@@ -359,6 +359,8 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /子账号/);
     assert.match(embed.text, /\/api\/shen\/paid\/subaccounts/);
     assert.match(embed.text, /view=latest/);
+    assert.match(embed.text, /jingmaiGmv: latest\.jingmaiGmv/);
+    assert.equal(embed.text.includes("jingmaiGmv: (paid.metrics || {}).jingmaiGmv"), false);
     assert.equal(embed.text.includes("表格行号"), false);
     assert.equal(embed.text.includes("模板行号"), false);
     assert.match(embed.text, /waitPage\("选品"\)/);
