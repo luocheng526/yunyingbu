@@ -24,6 +24,20 @@ body:has(.xm-shell):has(.people-page) .xm-main {
   flex-direction: column;
 }
 
+body:has(.people-page) #xm-notice-mask {
+  align-items: flex-start !important;
+  justify-content: flex-end !important;
+  padding: 64px 16px 16px 100px !important;
+  background: transparent !important;
+  pointer-events: none !important;
+}
+
+body:has(.people-page) #xm-notice-mask .xm-notice-dialog {
+  max-width: 380px;
+  pointer-events: auto !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
 body:has(.people-page) .xm-content,
 #xm-content:has(.people-page) {
   flex: 0 0 auto;
