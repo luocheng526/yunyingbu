@@ -243,6 +243,70 @@ const RESERVE_SMOKE = `<!doctype html>
   </body>
 </html>`;
 
+const DEFERRED_FILTER_SMOKE = `<!doctype html>
+<html lang="zh-CN">
+  <head><meta charset="utf-8" /><link rel="stylesheet" href="/people.css" /></head>
+  <body>
+    <div id="xm-content"></div>
+    <script src="/shared/modules/people.js"></script>
+    <script>
+      (async function () {
+        function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+        window.XmModules["/people"].mount(document.getElementById("xm-content"));
+        await sleep(700);
+        const before = document.querySelectorAll("#org-tbody tr[data-id]").length;
+        document.querySelector('.org-filter-btn[data-filter-key="manager"]').click();
+        await sleep(50);
+        const first = document.querySelector("#org-filter-pop .org-filter-value");
+        first.checked = false;
+        first.dispatchEvent(new Event("change", { bubbles: true }));
+        await sleep(80);
+        const during = document.querySelectorAll("#org-tbody tr[data-id]").length;
+        const popOpen = !document.getElementById("org-filter-pop").hidden;
+        document.getElementById("org-count").click();
+        await sleep(120);
+        const after = document.querySelectorAll("#org-tbody tr[data-id]").length;
+        const popClosed = document.getElementById("org-filter-pop").hidden;
+        document.body.setAttribute("data-before", String(before));
+        document.body.setAttribute("data-during", String(during));
+        document.body.setAttribute("data-after", String(after));
+        document.body.setAttribute(
+          "data-ok",
+          popOpen && popClosed && during === before && after < before ? "1" : "0"
+        );
+      })();
+    </script>
+  </body>
+</html>`;
+
+test("headless chrome applies column filters only after popup closes", async () => {
+  resetPeopleStore();
+  resetOrgBoard();
+  resetOrgExtra();
+  const app = createApp();
+  const server = http.createServer((req, res) => {
+    if (req.url === "/__deferred-filter-smoke") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(DEFERRED_FILTER_SMOKE);
+      return;
+    }
+    app(req, res);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  try {
+    const html = await chromeDump(`http://127.0.0.1:${port}/__deferred-filter-smoke`, 10000);
+    assert.match(html, /data-ok="1"/, html.includes("data-ok=") ? html.slice(html.indexOf("data-ok="), html.indexOf("data-ok=") + 180) : html.slice(-400));
+    const before = Number(html.match(/data-before="(\d+)"/)?.[1]);
+    const during = Number(html.match(/data-during="(\d+)"/)?.[1]);
+    const after = Number(html.match(/data-after="(\d+)"/)?.[1]);
+    assert.equal(during, before);
+    assert.ok(after < before);
+  } finally {
+    await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
+});
+
 const PEOPLE_FORM_SMOKE = `<!doctype html>
 <html lang="zh-CN">
   <head><meta charset="utf-8" /><link rel="stylesheet" href="/people.css" /></head>

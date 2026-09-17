@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.211-modal-z";
+    const href = "/people.css?v=0.1.212-filter-close";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -428,7 +428,7 @@
       let rawStores = [];
       let selectedIds = {};
       let memberSelectedIds = {};
-      const COLUMN_FILTERS = ["director", "manager", "supervisor", "operator", "assistant", "storeName", "remark"];
+      const COLUMN_FILTERS = ["director", "manager", "supervisor", "reserve", "operator", "assistant", "storeName", "remark"];
       const MEMBER_FILTERS = ["peopleDirector", "peopleManager", "peopleSupervisor", "peopleReserve", "peopleOperator", "peopleAssistant", "status"];
       const columnPicked = {};
       COLUMN_FILTERS.concat(MEMBER_FILTERS).forEach(function (key) {
@@ -446,6 +446,7 @@
       let peoplePage = 1;
       let openFilterBtn = null;
       let openFilterKey = "";
+      let filterDraft = null;
       let boardMeta = { actor: "罗成", scope: "all", canCreate: true };
       const CELL_FIELDS = [
         { key: "director", type: "text" },
@@ -994,7 +995,27 @@
         return isMemberFilter(key) ? peopleFilterPop : filterPop;
       }
 
+      function applyFilterDraft() {
+        const key = openFilterKey;
+        if (!key || !filterDraft) {
+          return;
+        }
+        columnPicked[key] = { ...filterDraft };
+        filterDraft = null;
+        if (dead) {
+          return;
+        }
+        if (isMemberFilter(key)) {
+          peoplePage = 1;
+          renderPeople(applyMemberFilters(roster.people));
+        } else {
+          paintStores();
+        }
+        paintFilterCarets();
+      }
+
       function closeFilterPop() {
+        applyFilterDraft();
         openFilterKey = "";
         openFilterBtn = null;
         [filterPop, peopleFilterPop].forEach(function (pop) {
@@ -1047,7 +1068,8 @@
             columnPicked[key][value] = true;
           }
         });
-        const picked = columnPicked[key];
+        filterDraft = { ...columnPicked[key] };
+        const picked = filterDraft;
         const selected = values.filter(function (value) {
           return picked[value];
         }).length;
@@ -1842,33 +1864,30 @@
       }
       function onFilterChange(event) {
         const key = openFilterKey;
-        if (!key) {
+        if (!key || !filterDraft) {
           return;
         }
         const values = uniqueColumnValues(key);
-        if (!columnPicked[key]) {
-          columnPicked[key] = {};
-        }
         if (event.target.id === "org-filter-all") {
           const on = event.target.checked;
           values.forEach(function (value) {
-            columnPicked[key][value] = on;
+            filterDraft[value] = on;
+          });
+          filterPopFor(key).querySelectorAll(".org-filter-value").forEach(function (box) {
+            box.checked = on;
           });
         } else if (event.target.classList.contains("org-filter-value")) {
-          columnPicked[key][event.target.getAttribute("data-value")] = event.target.checked;
+          filterDraft[event.target.getAttribute("data-value")] = event.target.checked;
         } else {
           return;
         }
-        if (isMemberFilter(key)) {
-          peoplePage = 1;
-          renderPeople(applyMemberFilters(roster.people));
-        } else {
-          paintStores();
-        }
-        paintFilterCarets();
-        const btn = root.querySelector('.org-filter-btn[data-filter-key="' + key + '"]');
-        if (btn) {
-          fillFilterPop(key, btn);
+        const selected = values.filter(function (value) {
+          return filterDraft[value];
+        }).length;
+        const allBox = filterPopFor(key).querySelector("#org-filter-all");
+        if (allBox) {
+          allBox.checked = values.length > 0 && selected === values.length;
+          allBox.indeterminate = selected > 0 && selected < values.length;
         }
       }
       if (filterPop) {
