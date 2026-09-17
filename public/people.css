@@ -560,6 +560,10 @@ body:has(.people-page) .xm-tabs {
   display: flex;
 }
 
+.people-page .org-modal.show {
+  z-index: 90;
+}
+
 .org-dialog {
   width: min(720px, calc(100vw - 32px));
   background: #fff;
