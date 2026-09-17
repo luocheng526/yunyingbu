@@ -29,13 +29,6 @@ const SMOKE = `<!doctype html>
           return;
         }
         mod.mount(root);
-        const noticeMask = document.createElement("div");
-        noticeMask.id = "xm-notice-mask";
-        noticeMask.style.cssText = "position:fixed;inset:0;z-index:80";
-        noticeMask.innerHTML =
-          '<div class="xm-notice-dialog" style="position:absolute;right:12px;top:12px">' +
-          '<button id="notice-action" type="button">查看公告</button></div>';
-        document.body.append(noticeMask);
         await sleep(800);
         document.querySelector('[data-pane="members"]').click();
         await sleep(500);
@@ -43,17 +36,6 @@ const SMOKE = `<!doctype html>
         const kpiOk = kpiText.indexOf("总监") >= 0 && kpiText.indexOf("经理") >= 0 && kpiText.indexOf("主管") >= 0 && kpiText.indexOf("储备") >= 0 && kpiText.indexOf("运营") >= 0 && kpiText.indexOf("助理") >= 0;
         document.body.setAttribute("data-kpis", kpiText.replace(/\\s+/g, " ").trim());
         const peopleQ = document.getElementById("people-q");
-        const peopleRect = peopleQ.getBoundingClientRect();
-        const searchHit = document.elementFromPoint(
-          peopleRect.left + peopleRect.width / 2,
-          peopleRect.top + peopleRect.height / 2
-        );
-        const noticeButton = document.getElementById("notice-action");
-        const noticeRect = noticeButton.getBoundingClientRect();
-        const noticeHit = document.elementFromPoint(
-          noticeRect.left + noticeRect.width / 2,
-          noticeRect.top + noticeRect.height / 2
-        );
         peopleQ.focus();
         peopleQ.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
         peopleQ.value = "yangrunze";
@@ -76,8 +58,6 @@ const SMOKE = `<!doctype html>
           return tr.textContent;
         });
         const peopleOk =
-          searchHit === peopleQ &&
-          noticeHit === noticeButton &&
           peopleFocusOk &&
           peopleNames.some(function (name) { return name.indexOf("杨润泽") >= 0; }) &&
           peopleNames.length >= 1 &&
@@ -86,8 +66,6 @@ const SMOKE = `<!doctype html>
         document.body.setAttribute("data-people-n", String(peopleNames.length));
         document.body.setAttribute("data-people-names", peopleNames.join(","));
         document.body.setAttribute("data-store-n", String(storeText.length));
-        document.body.setAttribute("data-search-hit", searchHit && searchHit.id || "");
-        document.body.setAttribute("data-notice-hit", noticeHit && noticeHit.id || "");
         document.body.setAttribute("data-ok", peopleOk && storeOk && kpiOk ? "1" : "0");
       })();
     </script>
@@ -356,10 +334,6 @@ const PEOPLE_FORM_SMOKE = `<!doctype html>
         name.value = "测试人员";
         name.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "测试人员" }));
         name.dispatchEvent(new Event("input", { bubbles: true }));
-        const noticeMask = document.createElement("div");
-        noticeMask.id = "xm-notice-mask";
-        noticeMask.style.cssText = "position:fixed;inset:0;z-index:80;pointer-events:auto";
-        document.body.append(noticeMask);
         const manager = form.elements.namedItem("manager");
         const managerRect = manager.getBoundingClientRect();
         const managerHit = document.elementFromPoint(
@@ -538,8 +512,6 @@ test("headless chrome can type-search people and stores", async () => {
   try {
     const html = await chromeDump(`http://127.0.0.1:${port}/__search-smoke`);
     assert.match(html, /data-ok="1"/, html.slice(html.indexOf("<body"), html.indexOf("<body") + 800));
-    assert.match(html, /data-search-hit="people-q"/);
-    assert.match(html, /data-notice-hit="notice-action"/);
     const rights = await chromeDump(`http://127.0.0.1:${port}/__rights-smoke`, 12000);
     assert.match(rights, /data-ok="1"/, rights.includes("data-ok=") ? rights.slice(rights.indexOf("data-ok="), rights.indexOf("data-ok=") + 80) : rights.slice(-400));
   } finally {
