@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.214-popup-only";
+    const href = "/people.css?v=0.1.215-loose-assistant";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -1647,7 +1647,7 @@
             stores: op.stores || []
           };
         });
-        if ((lead.stores || []).length || (looseAsst.length && !ops.length)) {
+        if ((lead.stores || []).length || looseAsst.length) {
           rows.push({ op: null, asst: looseAsst, stores: lead.stores || [] });
         }
         if (!rows.length) {
