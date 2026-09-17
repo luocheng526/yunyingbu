@@ -152,6 +152,8 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /compositionend/);
     assert.match(jsText, /org-filter-count/);
     assert.match(jsText, /columnValueCounts/);
+    assert.match(jsText, /filterDraft/);
+    assert.match(jsText, /applyFilterDraft/);
     assert.match(jsText, /"家店铺"/);
     assert.match(jsText, /countsInStoreStats/);
     assert.doesNotMatch(jsText, /\["闲置中", summary.idle\]/);
