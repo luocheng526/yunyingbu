@@ -95,6 +95,9 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(cssText, /\.rights-mod-row > \.rights-mod-col:nth-child\(1\)\s*\{[\s\S]*?background: #e6f4ff/);
     assert.match(cssText, /\.rights-mod-row > \.rights-mod-col:nth-child\(2\)\s*\{[\s\S]*?background: #fffdf5/);
     assert.match(cssText, /\.rights-mod-row > \.rights-mod-col:nth-child\(3\)\s*\{[\s\S]*?background: transparent/);
+    assert.match(cssText, /\.rights-mod-manager\s*\{[\s\S]*?text-align: center/);
+    assert.match(cssText, /\.rights-mod-col\s*\{[\s\S]*?justify-content: center/);
+    assert.match(cssText, /\.rights-mod-card\s*\{[\s\S]*?justify-content: center/);
     assert.match(jsText, /onPeopleWheel/);
     assert.match(jsText, /店铺主数据/);
     assert.match(jsText, /总监/);
