@@ -34,32 +34,31 @@
   window.XmModules["/shen/growth"] = waitPage("产品成长");
   window.XmModules["/shen/paid"] = {
     mount: function (root) {
-      root.innerHTML =
-        '<main class="page">' +
-        '<header class="page-head"><p class="kicker">沈子晗运营中心</p><h1>付费中心</h1>' +
-        '<p class="lead">本地程序跑完后回传到 <code>POST /api/shen/paid/ingest</code>，同一店铺名称 + 日期再传会覆盖。</p></header>' +
-        '<div class="stack">' +
-        '<section class="panel" aria-labelledby="paid-filter-heading"><h2 id="paid-filter-heading">回传记录</h2>' +
-        '<form id="paid-filter"><div class="row">' +
-        '<label for="paid-store">店</label>' +
-        '<input id="paid-store" name="store" type="text" maxlength="64" placeholder="可选，留空看全部" />' +
-        '<label for="paid-from">从</label>' +
-        '<input id="paid-from" name="from" type="date" />' +
-        '<label for="paid-to">到</label>' +
-        '<input id="paid-to" name="to" type="date" />' +
-        '<button type="submit">查询</button></div></form>' +
-        '<p id="paid-totals" class="lead"></p>' +
-        '<p id="paid-status" class="status" role="status"></p>' +
-        '<div id="paid-table-wrap"><p class="empty">暂无回传数据</p></div></section></div></main>';
+      if (!document.querySelector('link[href^="/shared/shen-paid.css"]')) {
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = "/shared/shen-paid.css";
+        document.head.appendChild(link);
+      }
 
-      const form = root.querySelector("#paid-filter");
-      const storeInput = root.querySelector("#paid-store");
-      const fromInput = root.querySelector("#paid-from");
-      const toInput = root.querySelector("#paid-to");
-      const totalsEl = root.querySelector("#paid-totals");
+      root.innerHTML =
+        '<main class="page xm-paid">' +
+        '<header class="page-head"><div><h1>付费中心</h1>' +
+        '<p class="lead" id="paid-lead">最新一次回传的全店快照。点店铺名称下钻查看历史抓取和充值记录。</p></div>' +
+        '<div class="xm-paid-meta"><span class="xm-paid-dot" aria-hidden="true"></span>' +
+        '<span id="paid-asof">等待回传</span></div></header>' +
+        '<section class="kpi-grid" id="paid-kpis"></section>' +
+        '<div id="paid-body"></div>' +
+        '<p id="paid-status" class="status" role="status"></p></main>';
+
+      const leadEl = root.querySelector("#paid-lead");
+      const asofEl = root.querySelector("#paid-asof");
+      const kpiEl = root.querySelector("#paid-kpis");
+      const bodyEl = root.querySelector("#paid-body");
       const statusEl = root.querySelector("#paid-status");
-      const tableWrap = root.querySelector("#paid-table-wrap");
       let dead = false;
+      let overviewRows = [];
+      let keyword = "";
 
       function setStatus(message, isError) {
         statusEl.textContent = message || "";
@@ -67,102 +66,298 @@
       }
 
       function money(value) {
-        return (Number(value) || 0).toFixed(2);
+        return (Number(value) || 0).toLocaleString("zh-CN", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        });
+      }
+
+      function integer(value) {
+        return (Number(value) || 0).toLocaleString("zh-CN");
       }
 
       function rate(value) {
         return (Number(value) || 0).toFixed(2);
       }
 
-      function render(data) {
-        const totals = data.totals || {};
-        totalsEl.textContent =
-          "合计 " +
-          (totals.count || 0) +
-          " 行 · 京准通花费 " +
-          money(totals.spend) +
-          " · 付费订单 " +
-          (totals.paidOrders || 0) +
-          " · 京麦成交 " +
-          money(totals.jingmaiGmv) +
-          " · 总订单金额 " +
-          money(totals.totalOrderAmount);
-        const rows = data.rows || [];
-        if (!rows.length) {
-          tableWrap.innerHTML = '<p class="empty">暂无回传数据</p>';
+      function successTag(value) {
+        if (value === "是") {
+          return '<span class="xm-paid-tag is-yes">是</span>';
+        }
+        if (value === "否") {
+          return '<span class="xm-paid-tag is-no">否</span>';
+        }
+        return '<span class="xm-paid-tag is-empty">' + escapeHtml(value || "—") + "</span>";
+      }
+
+      function currentStore() {
+        const hash = String(location.hash || "").replace(/^#/, "");
+        return new URLSearchParams(hash).get("store") || "";
+      }
+
+      function setStore(store) {
+        if (!store) {
+          history.replaceState(null, "", location.pathname + location.search);
           return;
         }
-        const body = rows
-          .map(function (row) {
+        location.hash = "store=" + encodeURIComponent(store);
+      }
+
+      function renderKpis(metrics) {
+        const cards = [
+          {
+            label: metrics.detail ? "抓取天数" : "店铺数",
+            value: integer(metrics.stores),
+            unit: metrics.detail ? "天" : "家"
+          },
+          { label: "京准通花费", value: money(metrics.spend) },
+          { label: "京麦成交", value: money(metrics.jingmaiGmv) },
+          { label: "总订单金额", value: money(metrics.totalOrderAmount) },
+          { label: "付费订单", value: integer(metrics.paidOrders), unit: "单" },
+          {
+            label: metrics.detail ? "成功回传" : "回传成功",
+            value: integer(metrics.successCount),
+            unit: metrics.detail ? "天" : "店"
+          }
+        ];
+        kpiEl.innerHTML = cards
+          .map(function (card) {
             return (
-              "<tr><td>" +
-              escapeHtml(row.store) +
-              "</td><td>" +
-              escapeHtml(row.accountId) +
-              "</td><td>" +
-              money(row.spend) +
-              "</td><td>" +
-              escapeHtml(row.paidOrders) +
-              "</td><td>" +
-              rate(row.roi) +
-              "</td><td>" +
-              rate(row.cvr) +
-              "</td><td>" +
-              money(row.cpc) +
-              "</td><td>" +
-              money(row.jingmaiGmv) +
-              "</td><td>" +
-              escapeHtml(row.clicks) +
-              "</td><td>" +
-              rate(row.ctr) +
-              "</td><td>" +
-              money(row.totalOrderAmount) +
-              "</td><td>" +
-              rate(row.realFeeRatio) +
-              "</td><td>" +
-              escapeHtml(row.success) +
-              "</td></tr>"
+              '<article class="kpi-card"><div class="label">' +
+              escapeHtml(card.label) +
+              '</div><div class="value">' +
+              card.value +
+              (card.unit ? '<span class="unit">' + escapeHtml(card.unit) + "</span>" : "") +
+              "</div></article>"
             );
           })
           .join("");
-        tableWrap.innerHTML =
-          "<table><thead><tr>" +
-          "<th>店铺名称</th><th>京准通主账户ID</th><th>京准通花费</th>" +
+      }
+
+      function metricCells(row) {
+        return (
+          "<td>" +
+          escapeHtml(row.accountId || "—") +
+          "</td><td>" +
+          money(row.spend) +
+          "</td><td>" +
+          integer(row.paidOrders) +
+          "</td><td>" +
+          rate(row.roi) +
+          "</td><td>" +
+          rate(row.cvr) +
+          "</td><td>" +
+          money(row.cpc) +
+          "</td><td>" +
+          money(row.jingmaiGmv) +
+          "</td><td>" +
+          integer(row.clicks) +
+          "</td><td>" +
+          rate(row.ctr) +
+          "</td><td>" +
+          money(row.totalOrderAmount) +
+          "</td><td>" +
+          rate(row.realFeeRatio) +
+          "</td><td>" +
+          successTag(row.success) +
+          "</td>"
+        );
+      }
+
+      function headerRow(first) {
+        return (
+          "<thead><tr><th>" +
+          first +
+          "</th><th>京准通主账户ID</th><th>京准通花费</th>" +
           "<th>京准通付费订单数</th><th>京准通付费投产比</th><th>京准通付费转化率</th>" +
           "<th>京准通平均点击成本</th><th>京麦成交金额</th><th>京准通点击数</th>" +
           "<th>京准通点击率</th><th>京准通总订单金额</th><th>真实费比</th><th>是否成功</th>" +
-          "</tr></thead><tbody>" +
-          body +
-          "</tbody></table>";
+          "</tr></thead>"
+        );
+      }
+
+      function isZeroRow(row) {
+        return !(Number(row.spend) || Number(row.paidOrders) || Number(row.jingmaiGmv) || Number(row.clicks));
+      }
+
+      function renderOverviewTable(rows) {
+        const filtered = keyword
+          ? rows.filter(function (row) {
+              return String(row.store || "").indexOf(keyword) >= 0;
+            })
+          : rows;
+        if (!filtered.length) {
+          return '<p class="empty">暂无回传数据</p>';
+        }
+        const body = filtered
+          .map(function (row) {
+            return (
+              '<tr class="' +
+              (isZeroRow(row) ? "is-zero" : "") +
+              '"><td><a class="xm-paid-store" href="#store=' +
+              encodeURIComponent(row.store) +
+              '">' +
+              escapeHtml(row.store) +
+              '</a><span class="xm-paid-date">' +
+              escapeHtml(row.date) +
+              "</span></td>" +
+              metricCells(row) +
+              "</tr>"
+            );
+          })
+          .join("");
+        return (
+          '<div class="xm-paid-table-wrap"><table>' + headerRow("店铺名称") + "<tbody>" + body + "</tbody></table></div>"
+        );
+      }
+
+      function renderOverview(data) {
+        overviewRows = data.rows || [];
+        const metrics = data.metrics || {};
+        leadEl.textContent = "最新一次回传的全店快照。点店铺名称下钻查看历史抓取和充值记录。";
+        asofEl.textContent = data.asOf ? "最新回传 " + data.asOf + " · " + (metrics.stores || 0) + " 店" : "等待回传";
+        renderKpis(metrics);
+        bodyEl.innerHTML =
+          '<section class="panel" aria-labelledby="paid-latest-heading">' +
+          '<div class="xm-paid-toolbar"><h2 id="paid-latest-heading">本次回传</h2>' +
+          '<div class="row"><input id="paid-store-filter" type="search" maxlength="64" placeholder="搜索店铺名称" />' +
+          "</div></div>" +
+          '<div id="paid-table-wrap">' +
+          renderOverviewTable(overviewRows) +
+          "</div></section>";
+        const filter = root.querySelector("#paid-store-filter");
+        if (filter) {
+          filter.value = keyword;
+          filter.addEventListener("input", function () {
+            keyword = filter.value.trim();
+            const wrap = root.querySelector("#paid-table-wrap");
+            if (wrap) {
+              wrap.innerHTML = renderOverviewTable(overviewRows);
+            }
+          });
+        }
+      }
+
+      function renderDetail(store, paid, recharge) {
+        const rows = paid.rows || [];
+        const latest = rows[0] || { store: store };
+        const metrics = paid.metrics || {};
+        leadEl.textContent = "该店循环抓取进来的历史明细，以及充值记录。";
+        asofEl.textContent = (latest.accountId ? "京准通主账户 " + latest.accountId + " · " : "") + rows.length + " 次抓取";
+        renderKpis({
+          stores: rows.length,
+          spend: metrics.spend,
+          jingmaiGmv: metrics.jingmaiGmv,
+          totalOrderAmount: metrics.totalOrderAmount,
+          paidOrders: metrics.paidOrders,
+          successCount: metrics.successCount
+        });
+        const history = rows.length
+          ? '<div class="xm-paid-table-wrap"><table>' +
+            headerRow("日期") +
+            "<tbody>" +
+            rows
+              .map(function (row) {
+                return (
+                  '<tr class="' +
+                  (isZeroRow(row) ? "is-zero" : "") +
+                  '"><td>' +
+                  escapeHtml(row.date) +
+                  "</td>" +
+                  metricCells(row) +
+                  "</tr>"
+                );
+              })
+              .join("") +
+            "</tbody></table></div>"
+          : '<p class="empty">暂无历史抓取</p>';
+        const rechargeRows = recharge.rows || [];
+        const rechargeTable = rechargeRows.length
+          ? '<div class="xm-paid-table-wrap"><table><thead><tr>' +
+            "<th>充值日期</th><th>充值时间</th><th>充值金额</th><th>账户余额</th><th>渠道</th><th>备注</th>" +
+            "</tr></thead><tbody>" +
+            rechargeRows
+              .map(function (row) {
+                return (
+                  "<tr><td>" +
+                  escapeHtml(row.date) +
+                  "</td><td>" +
+                  escapeHtml(row.chargedAt || "—") +
+                  "</td><td>" +
+                  money(row.amount) +
+                  "</td><td>" +
+                  money(row.balance) +
+                  "</td><td>" +
+                  escapeHtml(row.channel || "—") +
+                  "</td><td>" +
+                  escapeHtml(row.remark || "—") +
+                  "</td></tr>"
+                );
+              })
+              .join("") +
+            "</tbody></table></div>"
+          : '<p class="empty">暂无充值记录，本地程序回传后在此展示</p>';
+        bodyEl.innerHTML =
+          '<section class="panel"><div class="xm-paid-toolbar">' +
+          '<button type="button" class="xm-paid-back" id="paid-back">返回付费中心</button>' +
+          "<h2>" +
+          escapeHtml(store) +
+          "</h2></div></section>" +
+          '<div class="xm-paid-detail-grid">' +
+          '<section class="panel"><h2>循环抓取明细</h2>' +
+          history +
+          "</section>" +
+          '<section class="panel"><h2>充值记录</h2><p class="lead">累计充值 ' +
+          money((recharge.totals || {}).amount) +
+          " · " +
+          integer((recharge.totals || {}).count) +
+          " 笔</p>" +
+          rechargeTable +
+          "</section></div>";
+        const back = root.querySelector("#paid-back");
+        if (back) {
+          back.addEventListener("click", function () {
+            setStore("");
+            load();
+          });
+        }
+      }
+
+      function getJson(url) {
+        return fetch(url, { credentials: "same-origin" }).then(function (res) {
+          return res.json().catch(function () { return {}; }).then(function (data) {
+            if (!res.ok) {
+              throw new Error(data.error || "无法加载付费数据");
+            }
+            return data;
+          });
+        });
       }
 
       function load() {
-        const params = new URLSearchParams();
-        const store = storeInput.value.trim();
-        const from = fromInput.value;
-        const to = toInput.value;
-        if (store) {
-          params.set("store", store);
-        }
-        if (from) {
-          params.set("from", from);
-        }
-        if (to) {
-          params.set("to", to);
-        }
+        const store = currentStore();
         setStatus("正在加载…");
-        return fetch("/api/shen/paid?" + params.toString(), { credentials: "same-origin" })
-          .then(function (res) {
-            return res.json().catch(function () { return {}; }).then(function (data) {
-              if (!res.ok) {
-                throw new Error(data.error || "无法加载付费数据");
+        if (store) {
+          return Promise.all([
+            getJson("/api/shen/paid?store=" + encodeURIComponent(store) + "&limit=1000"),
+            getJson("/api/shen/paid/recharges?store=" + encodeURIComponent(store) + "&limit=1000")
+          ])
+            .then(function (pair) {
+              if (!dead) {
+                renderDetail(store, pair[0], pair[1]);
+                setStatus("已更新");
               }
-              return data;
+            })
+            .catch(function (err) {
+              if (!dead) {
+                setStatus(err.message || "加载失败", true);
+              }
             });
-          })
+        }
+        return getJson("/api/shen/paid?view=latest&limit=500")
           .then(function (data) {
             if (!dead) {
-              render(data);
+              renderOverview(data);
               setStatus("已更新");
             }
           })
@@ -173,16 +368,15 @@
           });
       }
 
-      function onFilter(event) {
-        event.preventDefault();
+      function onHash() {
         load();
       }
 
-      form.addEventListener("submit", onFilter);
+      window.addEventListener("hashchange", onHash);
       load();
       return function unmount() {
         dead = true;
-        form.removeEventListener("submit", onFilter);
+        window.removeEventListener("hashchange", onHash);
         root.innerHTML = "";
       };
     }

@@ -66,7 +66,46 @@ ORDER BY day DESC, id ASC
 LIMIT ?`,
   summarizePaid: `SELECT COALESCE(SUM(spend), 0) AS spend, COALESCE(SUM(paid_orders), 0) AS paid_orders, COALESCE(SUM(jingmai_gmv), 0) AS jingmai_gmv, COALESCE(SUM(clicks), 0) AS clicks, COALESCE(SUM(total_order_amount), 0) AS total_order_amount, COUNT(*) AS cnt
 FROM shen_paid_daily
-WHERE (? = 1 OR store = ?) AND day >= ? AND day <= ?`
+WHERE (? = 1 OR store = ?) AND day >= ? AND day <= ?`,
+  listPaidLatest: `SELECT p.id, p.seq, p.store, p.account_id, p.day, p.spend, p.paid_orders, p.roi, p.cvr, p.cpc, p.jingmai_gmv, p.clicks, p.ctr, p.total_order_amount, p.real_fee_ratio, p.success_flag, p.source, p.ingested_at
+FROM shen_paid_daily p
+INNER JOIN (
+  SELECT store, MAX(day) AS day
+  FROM shen_paid_daily
+  WHERE (? = 1 OR store = ?) AND day >= ? AND day <= ?
+  GROUP BY store
+) latest ON latest.store = p.store AND latest.day = p.day
+ORDER BY p.store ASC
+LIMIT ?`,
+  createRechargeTable: `CREATE TABLE IF NOT EXISTS shen_paid_recharge (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  store VARCHAR(64) NOT NULL,
+  account_id VARCHAR(64) NOT NULL DEFAULT '',
+  day DATE NOT NULL,
+  charged_at VARCHAR(32) NOT NULL DEFAULT '',
+  amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+  balance DECIMAL(14,2) NOT NULL DEFAULT 0,
+  channel VARCHAR(64) NOT NULL DEFAULT '',
+  remark VARCHAR(200) NOT NULL DEFAULT '',
+  source VARCHAR(64) NOT NULL DEFAULT 'local',
+  ingested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_shen_paid_recharge (store, day, charged_at, amount),
+  KEY idx_shen_paid_recharge_store_day (store, day)
+)`,
+  upsertRecharge: `INSERT INTO shen_paid_recharge (store, account_id, day, charged_at, amount, balance, channel, remark, source)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON DUPLICATE KEY UPDATE
+  account_id = VALUES(account_id),
+  balance = VALUES(balance),
+  channel = VALUES(channel),
+  remark = VALUES(remark),
+  source = VALUES(source),
+  ingested_at = CURRENT_TIMESTAMP`,
+  listRecharge: `SELECT id, store, account_id, day, charged_at, amount, balance, channel, remark, source, ingested_at
+FROM shen_paid_recharge
+WHERE (? = 1 OR store = ?) AND day >= ? AND day <= ?
+ORDER BY day DESC, id DESC
+LIMIT ?`
 };
 
 const MAX_PAID_ROWS = 2000;
@@ -78,6 +117,8 @@ let memoryTasks = [];
 let memoryBrief = "";
 let nextPaidId = 1;
 let memoryPaid = [];
+let nextRechargeId = 1;
+let memoryRecharge = [];
 
 export function setPool(pool) {
   poolOverride = pool;
@@ -290,6 +331,50 @@ function paidKey(row) {
   return `${row.store}\t${row.day}`;
 }
 
+function rechargeKey(row) {
+  return `${row.store}\t${row.day}\t${row.charged_at || row.chargedAt || ""}\t${Number(row.amount) || 0}`;
+}
+
+function isLatestView(query) {
+  const view = String(query?.view ?? "").trim().toLowerCase();
+  const latest = String(query?.latest ?? "").trim();
+  return view === "latest" || latest === "1" || latest === "true";
+}
+
+function pickLatestPaidRows(rows) {
+  const byStore = new Map();
+  for (const row of rows) {
+    const prev = byStore.get(row.store);
+    if (!prev || row.date > prev.date || (row.date === prev.date && row.id > prev.id)) {
+      byStore.set(row.store, row);
+    }
+  }
+  return [...byStore.values()].sort((a, b) => a.store.localeCompare(b.store, "zh"));
+}
+
+function asOfDay(rows) {
+  return rows.reduce((max, row) => (row.date > max ? row.date : max), "");
+}
+
+function paidMetrics(rows, totals) {
+  const successCount = rows.filter((row) => row.success === "是").length;
+  const feeRatio =
+    totals.totalOrderAmount > 0
+      ? Math.round((totals.spend / totals.totalOrderAmount) * 10000) / 100
+      : 0;
+  return {
+    stores: rows.length,
+    successCount,
+    failCount: rows.length - successCount,
+    feeRatio,
+    spend: totals.spend,
+    paidOrders: totals.paidOrders,
+    jingmaiGmv: totals.jingmaiGmv,
+    clicks: totals.clicks,
+    totalOrderAmount: totals.totalOrderAmount
+  };
+}
+
 function mapPaid(row) {
   const day = typeof row.day === "string" ? row.day.slice(0, 10) : asDay(row.day, "day");
   return {
@@ -380,6 +465,109 @@ function parsePaidRow(raw, defaultStore, defaultDay, source) {
   };
 }
 
+function mapRecharge(row) {
+  const day = typeof row.day === "string" ? row.day.slice(0, 10) : asDay(row.day, "day");
+  return {
+    id: Number(row.id),
+    store: row.store || "",
+    accountId: row.account_id || row.accountId || "",
+    date: day,
+    chargedAt: row.charged_at || row.chargedAt || "",
+    amount: Number(row.amount) || 0,
+    balance: Number(row.balance) || 0,
+    channel: row.channel || "",
+    remark: row.remark || "",
+    source: row.source || "local",
+    ingestedAt: row.ingested_at || row.ingestedAt || ""
+  };
+}
+
+function parseRechargeRow(raw, defaultStore, defaultDay, source) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw httpError(400, "充值记录必须是对象");
+  }
+  const store = clipText(
+    pickField(raw, ["店铺名称", "store", "店铺名", "店铺"]) || defaultStore,
+    64,
+    "店铺名称"
+  );
+  if (!store) {
+    throw httpError(400, "充值记录必须指定店铺名称");
+  }
+  const dayRaw = pickField(raw, ["date", "day", "日期", "充值日期"]) || defaultDay || todayDay();
+  return {
+    store,
+    accountId: clipText(pickField(raw, ["京准通主账户ID", "accountId", "jztAccountId"]), 64, "京准通主账户ID"),
+    day: asDay(dayRaw, "date"),
+    chargedAt: clipText(pickField(raw, ["充值时间", "chargedAt", "time"]) || "", 32, "充值时间"),
+    amount: asMoney(pickField(raw, ["充值金额", "amount", "金额"]), "充值金额"),
+    balance: asMoney(pickField(raw, ["账户余额", "balance", "余额"]), "账户余额"),
+    channel: clipText(pickField(raw, ["渠道", "channel"]) || "", 64, "渠道"),
+    remark: clipText(pickField(raw, ["备注", "remark", "说明"]) || "", 200, "备注"),
+    source: clipText(pickField(raw, ["source", "来源"]) || source, 64, "来源") || "local"
+  };
+}
+
+function collectRechargeRaws(payload, rows) {
+  const collected = [];
+  const top = payload.recharges || payload.充值记录;
+  if (Array.isArray(top)) {
+    collected.push(...top);
+  }
+  for (const row of rows) {
+    const nested = row?.充值记录 || row?.recharges;
+    if (Array.isArray(nested)) {
+      for (const item of nested) {
+        if (item && typeof item === "object" && !item.店铺名称 && !item.store) {
+          collected.push({ ...item, 店铺名称: row.店铺名称 || row.store, store: row.store });
+        } else {
+          collected.push(item);
+        }
+      }
+    }
+  }
+  return collected;
+}
+
+async function persistRecharge(row, ingestedAt) {
+  const result = await mysqlQuery(SQL.upsertRecharge, [
+    row.store,
+    row.accountId,
+    row.day,
+    row.chargedAt,
+    row.amount,
+    row.balance,
+    row.channel,
+    row.remark,
+    row.source
+  ]);
+  if (result) {
+    return;
+  }
+  const mapped = {
+    id: nextRechargeId,
+    store: row.store,
+    account_id: row.accountId,
+    day: row.day,
+    charged_at: row.chargedAt,
+    amount: row.amount,
+    balance: row.balance,
+    channel: row.channel,
+    remark: row.remark,
+    source: row.source,
+    ingested_at: ingestedAt
+  };
+  const key = rechargeKey(mapped);
+  const existing = memoryRecharge.findIndex((item) => rechargeKey(item) === key);
+  if (existing >= 0) {
+    mapped.id = memoryRecharge[existing].id;
+    memoryRecharge[existing] = mapped;
+  } else {
+    nextRechargeId += 1;
+    memoryRecharge.push(mapped);
+  }
+}
+
 async function ensurePaidTable() {
   const created = await mysqlQuery(SQL.createPaidTable);
   if (!created && !poolOverride) {
@@ -391,7 +579,8 @@ async function ensurePaidTable() {
     SQL.addPaidJingmaiColumn,
     SQL.addPaidTotalOrderColumn,
     SQL.addPaidFeeRatioColumn,
-    SQL.addPaidSuccessColumn
+    SQL.addPaidSuccessColumn,
+    SQL.createRechargeTable
   ]) {
     try {
       await mysqlQuery(sql);
@@ -409,6 +598,8 @@ export function resetStore() {
   memoryBrief = "";
   nextPaidId = 1;
   memoryPaid = [];
+  nextRechargeId = 1;
+  memoryRecharge = [];
 }
 
 export async function hydrateFromMysql() {
@@ -542,14 +733,22 @@ export async function ingestPaid(body) {
   const defaultDayRaw = pickField(payload, ["date", "day", "日期"]);
   const defaultDay = defaultDayRaw ? asDay(defaultDayRaw, "date") : "";
   const source = clipText(pickField(payload, ["source", "来源"]) || "local", 64, "来源") || "local";
-  const incoming = payload.rows || payload.data || payload.list;
-  if (!Array.isArray(incoming) || incoming.length === 0) {
-    throw httpError(400, "rows 必填");
+  const incoming = payload.rows || payload.data || payload.list || [];
+  if (!Array.isArray(incoming)) {
+    throw httpError(400, "rows 必须是数组");
+  }
+  const rechargeRaws = collectRechargeRaws(payload, incoming);
+  if (incoming.length === 0 && rechargeRaws.length === 0) {
+    throw httpError(400, "rows 或 充值记录 必填");
   }
   if (incoming.length > MAX_PAID_ROWS) {
     throw httpError(400, `一次最多回传 ${MAX_PAID_ROWS} 行`);
   }
+  if (rechargeRaws.length > MAX_PAID_ROWS) {
+    throw httpError(400, `一次最多回传 ${MAX_PAID_ROWS} 条充值记录`);
+  }
   const rows = incoming.map((row) => parsePaidRow(row, defaultStore, defaultDay, source));
+  const recharges = rechargeRaws.map((row) => parseRechargeRow(row, defaultStore || rows[0]?.store, defaultDay, source));
   await ensurePaidTable();
   const ingestedAt = new Date().toISOString().slice(0, 19).replace("T", " ");
   for (const row of rows) {
@@ -604,20 +803,41 @@ export async function ingestPaid(body) {
       memoryPaid.push(mapped);
     }
   }
+  for (const row of recharges) {
+    await persistRecharge(row, ingestedAt);
+  }
   return {
     ok: true,
-    store: defaultStore || rows[0].store,
+    store: defaultStore || rows[0]?.store || recharges[0]?.store || "",
     source,
     received: rows.length,
     upserted: rows.length,
+    recharges: recharges.length,
     ingestedAt
   };
 }
 
+export async function ingestRecharge(body) {
+  const payload = Array.isArray(body) ? { recharges: body } : body;
+  if (payload == null || typeof payload !== "object") {
+    throw httpError(400, "请求体必须是对象");
+  }
+  return ingestPaid({
+    店铺名称: payload.店铺名称 || payload.store,
+    store: payload.store,
+    date: payload.date || payload.day || payload.日期,
+    source: payload.source || payload.来源,
+    rows: [],
+    recharges: payload.recharges || payload.充值记录 || payload.list || payload.data || []
+  });
+}
+
 export async function listPaid(query) {
   const parsed = parsePaidRange(query);
+  const latest = isLatestView(query);
   await ensurePaidTable();
-  const result = await mysqlQuery(SQL.listPaid, [
+  const sql = latest ? SQL.listPaidLatest : SQL.listPaid;
+  const result = await mysqlQuery(sql, [
     parsed.allStores,
     parsed.store,
     parsed.fromDay,
@@ -641,16 +861,64 @@ export async function listPaid(query) {
         }
         return (a.seq || 0) - (b.seq || 0) || a.id - b.id;
       })
-      .slice(0, parsed.limit)
       .map(mapPaid);
+    if (latest) {
+      rows = pickLatestPaidRows(rows);
+    }
+    rows = rows.slice(0, parsed.limit);
   }
+  const totals = summarizePaidRows(rows);
+  return {
+    ok: true,
+    view: latest ? "latest" : "history",
+    store: parsed.store,
+    from: parsed.from,
+    to: parsed.to,
+    asOf: asOfDay(rows),
+    rows,
+    totals,
+    metrics: paidMetrics(rows, totals)
+  };
+}
+
+export async function listRecharge(query) {
+  const parsed = parsePaidRange(query);
+  await ensurePaidTable();
+  const result = await mysqlQuery(SQL.listRecharge, [
+    parsed.allStores,
+    parsed.store,
+    parsed.fromDay,
+    parsed.toDay,
+    parsed.limit
+  ]);
+  let rows;
+  if (result) {
+    rows = result[0].map(mapRecharge);
+  } else {
+    rows = memoryRecharge
+      .filter((row) => {
+        if (!parsed.allStores && row.store !== parsed.store) {
+          return false;
+        }
+        return row.day >= parsed.fromDay && row.day <= parsed.toDay;
+      })
+      .sort((a, b) => {
+        if (a.day !== b.day) {
+          return a.day < b.day ? 1 : -1;
+        }
+        return (b.id || 0) - (a.id || 0);
+      })
+      .slice(0, parsed.limit)
+      .map(mapRecharge);
+  }
+  const amount = rows.reduce((sum, row) => asMoney(sum + (Number(row.amount) || 0), "充值金额"), 0);
   return {
     ok: true,
     store: parsed.store,
     from: parsed.from,
     to: parsed.to,
     rows,
-    totals: summarizePaidRows(rows)
+    totals: { amount, count: rows.length }
   };
 }
 

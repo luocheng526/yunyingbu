@@ -12,6 +12,8 @@ function createFakePool() {
   let brief = "";
   const paid = [];
   let nextPaidId = 1;
+  const recharges = [];
+  let nextRechargeId = 1;
   return {
     async query(sql, params = []) {
       if (
@@ -23,7 +25,8 @@ function createFakePool() {
         sql === SQL.addPaidJingmaiColumn ||
         sql === SQL.addPaidTotalOrderColumn ||
         sql === SQL.addPaidFeeRatioColumn ||
-        sql === SQL.addPaidSuccessColumn
+        sql === SQL.addPaidSuccessColumn ||
+        sql === SQL.createRechargeTable
       ) {
         return [{}];
       }
@@ -124,11 +127,58 @@ function createFakePool() {
         paid.push(row);
         return [{ insertId: row.id, affectedRows: 1 }];
       }
-      if (sql === SQL.listPaid) {
+      if (sql === SQL.listPaid || sql === SQL.listPaidLatest) {
         const [allStores, store, fromDay, toDay, limit] = params;
-        const rows = paid
+        let rows = paid.filter(
+          (row) => (allStores === 1 || row.store === store) && row.day >= fromDay && row.day <= toDay
+        );
+        if (sql === SQL.listPaidLatest) {
+          const latest = new Map();
+          for (const row of rows) {
+            const prev = latest.get(row.store);
+            if (!prev || row.day > prev.day || (row.day === prev.day && row.id > prev.id)) {
+              latest.set(row.store, row);
+            }
+          }
+          rows = [...latest.values()].sort((a, b) => String(a.store).localeCompare(String(b.store), "zh"));
+        } else {
+          rows = rows.sort((a, b) => (a.day === b.day ? (a.seq || 0) - (b.seq || 0) : a.day < b.day ? 1 : -1));
+        }
+        return [rows.slice(0, Number(limit) || 200).map((row) => ({ ...row }))];
+      }
+      if (sql === SQL.upsertRecharge) {
+        const [store, accountId, day, chargedAt, amount, balance, channel, remark, source] = params;
+        const key = `${store}\t${day}\t${chargedAt}\t${Number(amount) || 0}`;
+        const row = {
+          id: nextRechargeId,
+          store,
+          account_id: accountId,
+          day,
+          charged_at: chargedAt,
+          amount,
+          balance,
+          channel,
+          remark,
+          source,
+          ingested_at: "2026-09-17 12:00:00"
+        };
+        const idx = recharges.findIndex(
+          (item) => `${item.store}\t${item.day}\t${item.charged_at}\t${Number(item.amount) || 0}` === key
+        );
+        if (idx >= 0) {
+          row.id = recharges[idx].id;
+          recharges[idx] = row;
+          return [{ insertId: row.id, affectedRows: 2 }];
+        }
+        nextRechargeId += 1;
+        recharges.push(row);
+        return [{ insertId: row.id, affectedRows: 1 }];
+      }
+      if (sql === SQL.listRecharge) {
+        const [allStores, store, fromDay, toDay, limit] = params;
+        const rows = recharges
           .filter((row) => (allStores === 1 || row.store === store) && row.day >= fromDay && row.day <= toDay)
-          .sort((a, b) => (a.day === b.day ? (a.seq || 0) - (b.seq || 0) : a.day < b.day ? 1 : -1))
+          .sort((a, b) => (a.day === b.day ? b.id - a.id : a.day < b.day ? 1 : -1))
           .slice(0, Number(limit) || 200);
         return [rows.map((row) => ({ ...row }))];
       }
@@ -232,6 +282,10 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /京准通主账户ID/);
     assert.match(embed.text, /真实费比/);
     assert.match(embed.text, /是否成功/);
+    assert.match(embed.text, /kpi-grid/);
+    assert.match(embed.text, /xm-paid-store/);
+    assert.match(embed.text, /充值记录/);
+    assert.match(embed.text, /view=latest/);
     assert.equal(embed.text.includes("表格行号"), false);
     assert.equal(embed.text.includes("模板行号"), false);
     assert.match(embed.text, /waitPage\("选品"\)/);
@@ -356,7 +410,7 @@ test("paid ingest upserts and lists by store + day", async () => {
       body: JSON.stringify({ store: "旗舰店" })
     });
     assert.equal(missing.res.status, 400);
-    assert.match(missing.json.error, /rows/);
+    assert.match(missing.json.error, /rows|充值记录/);
 
     const asArray = await request(base, "/api/shen/paid/ingest", {
       method: "POST",
@@ -462,6 +516,59 @@ test("paid ingest upserts and lists by store + day", async () => {
     assert.equal(summary.json.paid.spend, 200);
     assert.equal(summary.json.paid.totalOrderAmount, 900);
     assert.equal(summary.json.paid.jingmaiGmv, 1300);
+  });
+});
+
+test("paid latest snapshot and store drill-down keep history plus recharges", async () => {
+  await withServer(async (base) => {
+    await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: "2026-09-16",
+        rows: [{ 店铺名称: "旗舰店", 京准通花费: 80, 京麦成交金额: 400, 是否成功: "是" }]
+      })
+    });
+    await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: "2026-09-17",
+        rows: [
+          {
+            店铺名称: "旗舰店",
+            京准通花费: 120,
+            京麦成交金额: 600,
+            是否成功: "是",
+            充值记录: [{ 充值金额: 500, 充值时间: "10:00", 账户余额: 800, 渠道: "京准通" }]
+          },
+          { 店铺名称: "专营店", 京准通花费: 20, 是否成功: "否" }
+        ]
+      })
+    });
+
+    const latest = await request(base, "/api/shen/paid?view=latest");
+    assert.equal(latest.res.status, 200);
+    assert.equal(latest.json.view, "latest");
+    assert.equal(latest.json.rows.length, 2);
+    assert.equal(latest.json.asOf, "2026-09-17");
+    const flagship = latest.json.rows.find((row) => row.store === "旗舰店");
+    assert.equal(flagship.spend, 120);
+    assert.equal(flagship.date, "2026-09-17");
+    assert.equal(latest.json.metrics.stores, 2);
+    assert.equal(latest.json.metrics.successCount, 1);
+
+    const history = await request(base, "/api/shen/paid?store=%E6%97%97%E8%88%B0%E5%BA%97");
+    assert.equal(history.json.rows.length, 2);
+    assert.equal(history.json.rows[0].date, "2026-09-17");
+    assert.equal(history.json.rows[1].date, "2026-09-16");
+    assert.equal(history.json.rows[1].spend, 80);
+
+    const recharges = await request(base, "/api/shen/paid/recharges?store=%E6%97%97%E8%88%B0%E5%BA%97");
+    assert.equal(recharges.res.status, 200);
+    assert.equal(recharges.json.rows.length, 1);
+    assert.equal(recharges.json.rows[0].amount, 500);
+    assert.equal(recharges.json.totals.amount, 500);
   });
 });
 

@@ -1,5 +1,16 @@
 import { Router } from "express";
-import { addTask, getBrief, getPaidSummary, getStoreSummary, ingestPaid, listPaid, listTasks, setBrief } from "./store.js";
+import {
+  addTask,
+  getBrief,
+  getPaidSummary,
+  getStoreSummary,
+  ingestPaid,
+  ingestRecharge,
+  listPaid,
+  listRecharge,
+  listTasks,
+  setBrief
+} from "./store.js";
 
 export const shenRouter = Router();
 
@@ -65,6 +76,29 @@ shenRouter.post("/paid/ingest", async (req, res) => {
   }
 });
 
+shenRouter.post("/paid/recharge/ingest", async (req, res) => {
+  try {
+    res.status(201).json(await ingestRecharge(req.body));
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.message || "无法回传充值记录" });
+  }
+});
+
+shenRouter.get("/paid/recharges", async (req, res) => {
+  try {
+    res.json(
+      await listRecharge({
+        store: req.query.store,
+        from: req.query.from,
+        to: req.query.to,
+        limit: req.query.limit
+      })
+    );
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "无法加载充值记录" });
+  }
+});
+
 shenRouter.get("/paid/summary", async (req, res) => {
   try {
     res.json(
@@ -86,7 +120,9 @@ shenRouter.get("/paid", async (req, res) => {
         store: req.query.store,
         from: req.query.from,
         to: req.query.to,
-        limit: req.query.limit
+        limit: req.query.limit,
+        view: req.query.view,
+        latest: req.query.latest
       })
     );
   } catch (err) {

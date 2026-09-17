@@ -45,3 +45,20 @@ CREATE TABLE IF NOT EXISTS shen_paid_daily (
   UNIQUE KEY uk_shen_paid_daily (store, day),
   KEY idx_shen_paid_daily_day (day)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 店铺下钻：循环抓取之外的充值流水。写入可跟付费回传一起带 充值记录，或单独 POST /api/shen/paid/recharge/ingest
+CREATE TABLE IF NOT EXISTS shen_paid_recharge (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  store VARCHAR(64) NOT NULL,
+  account_id VARCHAR(64) NOT NULL DEFAULT '',
+  day DATE NOT NULL,
+  charged_at VARCHAR(32) NOT NULL DEFAULT '',
+  amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+  balance DECIMAL(14,2) NOT NULL DEFAULT 0,
+  channel VARCHAR(64) NOT NULL DEFAULT '',
+  remark VARCHAR(200) NOT NULL DEFAULT '',
+  source VARCHAR(64) NOT NULL DEFAULT 'local',
+  ingested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_shen_paid_recharge (store, day, charged_at, amount),
+  KEY idx_shen_paid_recharge_store_day (store, day)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
