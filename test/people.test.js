@@ -772,6 +772,48 @@ test("rights board groups store staff under 总监经理主管运营", async () 
   });
 });
 
+test("rights tree follows assistant column when stored role still says 运营", async () => {
+  await withServer(async (base) => {
+    const created = await fetch(`${base}/api/people`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "助理对照",
+        role: "运营",
+        center: "韩梦凯运营中心",
+        lineManager: "韩梦凯",
+        supervisor: "陈晓曼",
+        operator: "无",
+        assistant: "助理对照",
+        status: "在职"
+      })
+    });
+    const createdJson = await created.json();
+    assert.equal(created.status, 201, JSON.stringify(createdJson));
+
+    const board = await fetch(`${base}/api/people/org/rights-board`);
+    const boardJson = await board.json();
+    const assistantColumn = boardJson.columns.find((column) => column.role === "助理");
+    assert.ok(assistantColumn.people.some((person) => person.name === "助理对照"));
+
+    let found = null;
+    function walk(node, path = []) {
+      if (!node || found) {
+        return;
+      }
+      if (node.name === "助理对照") {
+        found = { node, path };
+        return;
+      }
+      (node.children || []).forEach((child) => walk(child, path.concat(node.name)));
+    }
+    walk(boardJson.tree);
+    assert.ok(found);
+    assert.equal(found.node.role, "助理");
+    assert.ok(!found.path.includes("无"));
+  });
+});
+
 test("org board scopes edit by 责权", async () => {
   await withServer(async (base) => {
     const shen = await fetch(`${base}/api/people/org/stores?actor=${encodeURIComponent("沈子晗")}`);

@@ -464,11 +464,39 @@ function countTreePeople(node) {
 }
 
 function cleanName(value) {
-  return String(value || "").trim();
+  const raw = String(value || "").trim();
+  if (!raw || raw === "无" || raw === "—" || raw === "-" || raw === "点击填写") {
+    return "";
+  }
+  return raw;
 }
 
 function isLeadRole(role) {
   return role === "主管" || role === "储备";
+}
+
+function rosterLineRole(person, line, byName) {
+  const name = cleanName(person && person.name);
+  if (rightsPins[name]) {
+    return rightsPins[name];
+  }
+  const owns = (value, seat) => {
+    const raw = String(value || "").trim();
+    return raw === name || raw === seat || (seat === "主管" && raw === "主管/储备");
+  };
+  if (owns(line.assistant, "助理")) {
+    return "助理";
+  }
+  if (owns(line.operator, "运营")) {
+    return "运营";
+  }
+  if (owns(line.reserve, "储备")) {
+    return "储备";
+  }
+  if (owns(line.supervisor, "主管")) {
+    return "主管";
+  }
+  return roleOfName(name, byName);
 }
 
 function managerKeyOf(name) {
@@ -580,7 +608,7 @@ function buildRightsTree(stores, roster, byName) {
       return;
     }
     const line = orgLineOf(person);
-    const role = roleOfName(person.name, byName);
+    const role = rosterLineRole(person, line, byName);
     const manager = managerKeyOf(line.manager) || branchOfPerson(person.name, person, stores) || "沈子晗";
     if (isLeadRole(role)) {
       attachLine({
@@ -702,7 +730,7 @@ function buildRightsWatch(stores, roster, byName, tree) {
     }
   });
   roster.forEach((person) => {
-    const role = roleOfName(person.name, byName);
+    const role = rosterLineRole(person, orgLineOf(person), byName);
     if ((role === "运营" || role === "店长" || role === "助理") && storeCountOf(person.name, stores) === 0) {
       issues.push({
         kind: "店铺对不上",
@@ -763,6 +791,7 @@ export function listRightsBoard() {
   const byName = {};
   roster.forEach((row) => {
     byName[row.name] = row;
+    names.add(row.name);
   });
   const columns = {};
   RIGHTS_ROLES.forEach((role) => {
@@ -770,7 +799,9 @@ export function listRightsBoard() {
   });
   names.forEach((name) => {
     const person = byName[name];
-    const role = rightsPins[name] || mapBoardRole(person && person.role) || "运营";
+    const role = person
+      ? rosterLineRole(person, orgLineOf(person), byName)
+      : rightsPins[name] || "运营";
     columns[role].push({
       name,
       role,
@@ -786,7 +817,9 @@ export function listRightsBoard() {
     .sort((a, b) => a.localeCompare(b, "zh"))
     .map((name) => ({
       name,
-      role: rightsPins[name] || mapBoardRole(byName[name] && byName[name].role) || "运营"
+      role: byName[name]
+        ? rosterLineRole(byName[name], orgLineOf(byName[name]), byName)
+        : rightsPins[name] || "运营"
     }));
   const tree = buildRightsTree(stores, roster, byName);
   return {
