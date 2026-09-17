@@ -81,6 +81,8 @@ LIMIT ?`,
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   store VARCHAR(64) NOT NULL,
   account_id VARCHAR(64) NOT NULL DEFAULT '',
+  sub_account_id VARCHAR(64) NOT NULL DEFAULT '',
+  sub_account_name VARCHAR(128) NOT NULL DEFAULT '',
   day DATE NOT NULL,
   charged_at VARCHAR(40) NOT NULL DEFAULT '',
   amount DECIMAL(14,2) NOT NULL DEFAULT 0,
@@ -93,20 +95,33 @@ LIMIT ?`,
   KEY idx_shen_paid_recharge_store_day (store, day)
 )`,
   widenPaidRechargeChargedAt: `ALTER TABLE shen_paid_recharge MODIFY charged_at VARCHAR(40) NOT NULL DEFAULT ''`,
-  upsertRecharge: `INSERT INTO shen_paid_recharge (store, account_id, day, charged_at, amount, balance, channel, remark, source)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  addPaidRechargeSubIdColumn: `ALTER TABLE shen_paid_recharge ADD COLUMN sub_account_id VARCHAR(64) NOT NULL DEFAULT ''`,
+  addPaidRechargeSubNameColumn: `ALTER TABLE shen_paid_recharge ADD COLUMN sub_account_name VARCHAR(128) NOT NULL DEFAULT ''`,
+  upsertRecharge: `INSERT INTO shen_paid_recharge (store, account_id, sub_account_id, sub_account_name, day, charged_at, amount, balance, channel, remark, source)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON DUPLICATE KEY UPDATE
   account_id = VALUES(account_id),
+  sub_account_id = VALUES(sub_account_id),
+  sub_account_name = VALUES(sub_account_name),
   balance = VALUES(balance),
   channel = VALUES(channel),
   remark = VALUES(remark),
   source = VALUES(source),
   ingested_at = CURRENT_TIMESTAMP`,
-  listRecharge: `SELECT id, store, account_id, day, charged_at, amount, balance, channel, remark, source, ingested_at
+  listRecharge: `SELECT id, store, account_id, sub_account_id, sub_account_name, day, charged_at, amount, balance, channel, remark, source, ingested_at
 FROM shen_paid_recharge
 WHERE (? = 1 OR store = ?) AND day >= ? AND day <= ?
 ORDER BY day DESC, id DESC
 LIMIT ?`,
+  createEnabledStoreTable: `CREATE TABLE IF NOT EXISTS shen_paid_enabled_store (
+  store VARCHAR(64) NOT NULL PRIMARY KEY,
+  source VARCHAR(64) NOT NULL DEFAULT 'local',
+  ingested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)`,
+  clearEnabledStores: `DELETE FROM shen_paid_enabled_store`,
+  insertEnabledStore: `INSERT INTO shen_paid_enabled_store (store, source) VALUES (?, ?)
+ON DUPLICATE KEY UPDATE source = VALUES(source), ingested_at = CURRENT_TIMESTAMP`,
+  listEnabledStores: `SELECT store FROM shen_paid_enabled_store ORDER BY store ASC`,
   createSubaccountTable: `CREATE TABLE IF NOT EXISTS shen_paid_subaccount (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   store VARCHAR(64) NOT NULL,
@@ -157,6 +172,7 @@ LIMIT ?`
 
 const MAX_PAID_ROWS = 2000;
 const MAX_PAID_LIST = 1000;
+const MAX_ENABLED_STORES = 200;
 
 let poolOverride = null;
 let nextId = 1;
@@ -168,6 +184,7 @@ let nextRechargeId = 1;
 let memoryRecharge = [];
 let nextSubId = 1;
 let memorySub = [];
+let memoryEnabled = [];
 
 export function setPool(pool) {
   poolOverride = pool;
@@ -438,6 +455,79 @@ function isLatestView(query) {
   return view === "latest" || latest === "1" || latest === "true";
 }
 
+function isAllStoreScope(query) {
+  const scope = String(query?.scope ?? "").trim().toLowerCase();
+  const enabled = String(query?.enabled ?? "").trim().toLowerCase();
+  return scope === "all" || scope === "history" || enabled === "0" || enabled === "false";
+}
+
+function parseEnabledStores(payload) {
+  const keys = ["启用店铺", "enabledStores", "启用店铺名单", "店铺名单"];
+  let raw;
+  let found = false;
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(payload, key)) {
+      raw = payload[key];
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    return null;
+  }
+  if (!Array.isArray(raw)) {
+    throw httpError(400, "启用店铺必须是字符串数组");
+  }
+  if (raw.length > MAX_ENABLED_STORES) {
+    throw httpError(400, `启用店铺一次最多 ${MAX_ENABLED_STORES} 家`);
+  }
+  const names = [];
+  const seen = new Set();
+  for (const item of raw) {
+    const name = clipText(
+      item && typeof item === "object" && !Array.isArray(item)
+        ? pickField(item, ["店铺名称", "store", "店铺名", "店铺"])
+        : item,
+      64,
+      "启用店铺"
+    );
+    if (!name || seen.has(name)) {
+      continue;
+    }
+    seen.add(name);
+    names.push(name);
+  }
+  return names;
+}
+
+async function loadEnabledStoreNames() {
+  const result = await mysqlQuery(SQL.listEnabledStores);
+  if (result) {
+    return result[0].map((row) => String(row.store || "").trim()).filter(Boolean);
+  }
+  return [...memoryEnabled];
+}
+
+async function replaceEnabledStores(names, source) {
+  const result = await mysqlQuery(SQL.clearEnabledStores);
+  if (result) {
+    for (const name of names) {
+      await mysqlQuery(SQL.insertEnabledStore, [name, source]);
+    }
+    return names;
+  }
+  memoryEnabled = [...names];
+  return names;
+}
+
+function applyEnabledStoreFilter(rows, roster, { store, allScope }) {
+  if (store || allScope || !roster.length) {
+    return rows;
+  }
+  const allow = new Set(roster);
+  return rows.filter((row) => allow.has(row.store));
+}
+
 function pickLatestPaidRows(rows) {
   const byStore = new Map();
   for (const row of rows) {
@@ -568,6 +658,8 @@ function mapRecharge(row) {
     id: Number(row.id),
     store: row.store || "",
     accountId: row.account_id || row.accountId || "",
+    subAccountId: row.sub_account_id || row.subAccountId || "",
+    subAccountName: row.sub_account_name || row.subAccountName || "",
     date: day,
     chargedAt: row.charged_at || row.chargedAt || "",
     amount: Number(row.amount) || 0,
@@ -601,6 +693,8 @@ function parseRechargeRow(raw, defaultStore, defaultDay, source) {
   return {
     store,
     accountId: clipText(pickField(raw, ["京准通主账户ID", "accountId", "jztAccountId"]), 64, "京准通主账户ID"),
+    subAccountId: clipText(pickField(raw, ["子账号ID", "subAccountId", "subId"]), 64, "子账号ID"),
+    subAccountName: clipText(pickField(raw, ["子账号名称", "subAccountName", "账户名称"]), 128, "子账号名称"),
     day: asDay(dayRaw, "date"),
     chargedAt,
     amount: asMoney(pickField(raw, ["充值金额", "amount", "金额"]), "充值金额"),
@@ -771,6 +865,8 @@ async function persistRecharge(row, ingestedAt) {
   const result = await mysqlQuery(SQL.upsertRecharge, [
     row.store,
     row.accountId,
+    row.subAccountId,
+    row.subAccountName,
     row.day,
     row.chargedAt,
     row.amount,
@@ -786,6 +882,8 @@ async function persistRecharge(row, ingestedAt) {
     id: nextRechargeId,
     store: row.store,
     account_id: row.accountId,
+    sub_account_id: row.subAccountId,
+    sub_account_name: row.subAccountName,
     day: row.day,
     charged_at: row.chargedAt,
     amount: row.amount,
@@ -875,7 +973,10 @@ async function ensurePaidTable() {
     SQL.addPaidSuccessColumn,
     SQL.createRechargeTable,
     SQL.widenPaidRechargeChargedAt,
-    SQL.createSubaccountTable
+    SQL.addPaidRechargeSubIdColumn,
+    SQL.addPaidRechargeSubNameColumn,
+    SQL.createSubaccountTable,
+    SQL.createEnabledStoreTable
   ]) {
     try {
       await mysqlQuery(sql);
@@ -897,6 +998,7 @@ export function resetStore() {
   memoryRecharge = [];
   nextSubId = 1;
   memorySub = [];
+  memoryEnabled = [];
 }
 
 export async function hydrateFromMysql() {
@@ -1036,8 +1138,9 @@ export async function ingestPaid(body) {
   }
   const rechargeRaws = collectRechargeRaws(payload, incoming);
   const subRaws = collectSubaccountRaws(payload, incoming);
-  if (incoming.length === 0 && rechargeRaws.length === 0 && subRaws.length === 0) {
-    throw httpError(400, "rows、子账号或充值记录必填");
+  const enabledStores = parseEnabledStores(payload);
+  if (incoming.length === 0 && rechargeRaws.length === 0 && subRaws.length === 0 && enabledStores == null) {
+    throw httpError(400, "rows、子账号、充值记录或启用店铺必填");
   }
   if (incoming.length > MAX_PAID_ROWS) {
     throw httpError(400, `一次最多回传 ${MAX_PAID_ROWS} 行`);
@@ -1114,10 +1217,15 @@ export async function ingestPaid(body) {
   for (const row of subaccounts) {
     await persistSubaccount(row, ingestedAt);
   }
+  if (enabledStores) {
+    await replaceEnabledStores(enabledStores, source);
+  }
+  const roster = enabledStores || (await loadEnabledStoreNames());
   const counts = {
     rows: rows.length,
     subaccounts: subaccounts.length,
-    recharges: recharges.length
+    recharges: recharges.length,
+    enabledStores: enabledStores ? enabledStores.length : 0
   };
   return {
     ok: true,
@@ -1125,6 +1233,7 @@ export async function ingestPaid(body) {
     source,
     received: counts,
     upserted: counts,
+    enabledStores: roster,
     ingestedAt
   };
 }
@@ -1179,14 +1288,19 @@ export async function listPaid(query) {
     }
     rows = rows.slice(0, parsed.limit);
   }
+  const roster = await loadEnabledStoreNames();
+  const allScope = isAllStoreScope(query);
+  rows = applyEnabledStoreFilter(rows, roster, { store: parsed.store, allScope });
   const totals = summarizePaidRows(rows);
   return {
     ok: true,
     view: latest ? "latest" : "history",
+    scope: parsed.store ? "store" : allScope || !roster.length ? "all" : "enabled",
     store: parsed.store,
     from: parsed.from,
     to: parsed.to,
     asOf: asOfDay(rows),
+    enabledStores: roster,
     rows,
     totals,
     metrics: paidMetrics(rows, totals)
@@ -1288,6 +1402,20 @@ export async function listSubaccounts(query) {
 export async function getPaidSummary(query) {
   const parsed = parsePaidRange({ ...query, limit: 1 });
   await ensurePaidTable();
+  const roster = await loadEnabledStoreNames();
+  const allScope = isAllStoreScope(query);
+  if (!parsed.store && roster.length && !allScope) {
+    const listed = await listPaid({ ...query, limit: MAX_PAID_LIST, view: query?.view, latest: query?.latest });
+    return {
+      ok: true,
+      store: parsed.store,
+      from: parsed.from,
+      to: parsed.to,
+      scope: "enabled",
+      enabledStores: roster,
+      paid: listed.totals
+    };
+  }
   const result = await mysqlQuery(SQL.summarizePaid, [
     parsed.allStores,
     parsed.store,
@@ -1319,6 +1447,8 @@ export async function getPaidSummary(query) {
     store: parsed.store,
     from: parsed.from,
     to: parsed.to,
+    scope: parsed.store ? "store" : "all",
+    enabledStores: roster,
     paid: totals
   };
 }

@@ -121,7 +121,11 @@ shenRouter.get("/paid/summary", async (req, res) => {
       await getPaidSummary({
         store: req.query.store,
         from: req.query.from,
-        to: req.query.to
+        to: req.query.to,
+        scope: req.query.scope,
+        enabled: req.query.enabled,
+        view: req.query.view,
+        latest: req.query.latest
       })
     );
   } catch (err) {
@@ -138,7 +142,9 @@ shenRouter.get("/paid", async (req, res) => {
         to: req.query.to,
         limit: req.query.limit,
         view: req.query.view,
-        latest: req.query.latest
+        latest: req.query.latest,
+        scope: req.query.scope,
+        enabled: req.query.enabled
       })
     );
   } catch (err) {

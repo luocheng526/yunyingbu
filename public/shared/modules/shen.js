@@ -59,6 +59,7 @@
       let dead = false;
       let overviewRows = [];
       let keyword = "";
+      let includeHistory = false;
 
       function setStatus(message, isError) {
         statusEl.textContent = message || "";
@@ -214,13 +215,28 @@
       function renderOverview(data) {
         overviewRows = data.rows || [];
         const metrics = data.metrics || {};
-        leadEl.textContent = "最新一次回传的全店快照。点店铺名称下钻查看该店全部子账号。";
-        asofEl.textContent = data.asOf ? "最新回传 " + data.asOf + " · " + (metrics.stores || 0) + " 店" : "等待回传";
+        const roster = data.enabledStores || [];
+        leadEl.textContent = roster.length
+          ? "默认只展示当前启用店铺。历史回传保留，可点「含历史店铺」查看。"
+          : "最新一次回传的全店快照。点店铺名称下钻查看该店全部子账号。";
+        asofEl.textContent = data.asOf
+          ? "最新回传 " +
+            data.asOf +
+            " · " +
+            (data.scope === "all" && roster.length ? "含历史 " : roster.length ? "当前启用 " : "") +
+            (metrics.stores || 0) +
+            " 店"
+          : "等待回传";
         renderKpis(metrics);
         bodyEl.innerHTML =
           '<section class="panel" aria-labelledby="paid-latest-heading">' +
           '<div class="xm-paid-toolbar"><h2 id="paid-latest-heading">本次回传</h2>' +
           '<div class="row"><input id="paid-store-filter" type="search" maxlength="64" placeholder="搜索店铺名称" />' +
+          (roster.length
+            ? '<button type="button" class="xm-paid-scope" id="paid-scope">' +
+              (includeHistory ? "只看启用店铺" : "含历史店铺") +
+              "</button>"
+            : "") +
           "</div></div>" +
           '<div id="paid-table-wrap">' +
           renderOverviewTable(overviewRows) +
@@ -234,6 +250,13 @@
             if (wrap) {
               wrap.innerHTML = renderOverviewTable(overviewRows);
             }
+          });
+        }
+        const scopeBtn = root.querySelector("#paid-scope");
+        if (scopeBtn) {
+          scopeBtn.addEventListener("click", function () {
+            includeHistory = !includeHistory;
+            load();
           });
         }
       }
@@ -340,7 +363,7 @@
         const rechargeRows = recharge.rows || [];
         const rechargeTable = rechargeRows.length
           ? '<div class="xm-paid-table-wrap"><table><thead><tr>' +
-            "<th>充值日期</th><th>充值时间</th><th>充值金额</th><th>账户余额</th><th>渠道</th><th>备注</th>" +
+            "<th>充值日期</th><th>充值时间</th><th>子账号ID</th><th>子账号名称</th><th>充值金额</th><th>账户余额</th><th>渠道</th><th>备注</th>" +
             "</tr></thead><tbody>" +
             rechargeRows
               .map(function (row) {
@@ -349,6 +372,10 @@
                   escapeHtml(row.date) +
                   "</td><td>" +
                   escapeHtml(row.chargedAt || "—") +
+                  "</td><td>" +
+                  escapeHtml(row.subAccountId || "—") +
+                  "</td><td>" +
+                  escapeHtml(row.subAccountName || "—") +
                   "</td><td>" +
                   money(row.amount) +
                   "</td><td>" +
@@ -434,7 +461,7 @@
               }
             });
         }
-        return getJson("/api/shen/paid?view=latest&limit=500")
+        return getJson("/api/shen/paid?view=latest&limit=500" + (includeHistory ? "&scope=all" : ""))
           .then(function (data) {
             if (!dead) {
               renderOverview(data);

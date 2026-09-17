@@ -23,6 +23,7 @@ function createFakePool() {
   let nextRechargeId = 1;
   const subs = [];
   let nextSubId = 1;
+  const enabled = [];
   return {
     async query(sql, params = []) {
       if (
@@ -37,7 +38,10 @@ function createFakePool() {
         sql === SQL.addPaidSuccessColumn ||
         sql === SQL.createRechargeTable ||
         sql === SQL.widenPaidRechargeChargedAt ||
-        sql === SQL.createSubaccountTable
+        sql === SQL.addPaidRechargeSubIdColumn ||
+        sql === SQL.addPaidRechargeSubNameColumn ||
+        sql === SQL.createSubaccountTable ||
+        sql === SQL.createEnabledStoreTable
       ) {
         return [{}];
       }
@@ -157,13 +161,34 @@ function createFakePool() {
         }
         return [rows.slice(0, Number(limit) || 200).map((row) => ({ ...row, day: asMysqlDate(row.day) }))];
       }
+      if (sql === SQL.clearEnabledStores) {
+        enabled.length = 0;
+        return [{ affectedRows: 1 }];
+      }
+      if (sql === SQL.insertEnabledStore) {
+        const [store, source] = params;
+        const idx = enabled.findIndex((item) => item.store === store);
+        const row = { store, source };
+        if (idx >= 0) {
+          enabled[idx] = row;
+        } else {
+          enabled.push(row);
+        }
+        return [{ affectedRows: 1 }];
+      }
+      if (sql === SQL.listEnabledStores) {
+        return [enabled.map((row) => ({ ...row })).sort((a, b) => String(a.store).localeCompare(String(b.store), "zh"))];
+      }
       if (sql === SQL.upsertRecharge) {
-        const [store, accountId, day, chargedAt, amount, balance, channel, remark, source] = params;
+        const [store, accountId, subAccountId, subAccountName, day, chargedAt, amount, balance, channel, remark, source] =
+          params;
         const key = `${store}\t${day}\t${chargedAt}\t${Number(amount) || 0}`;
         const row = {
           id: nextRechargeId,
           store,
           account_id: accountId,
+          sub_account_id: subAccountId,
+          sub_account_name: subAccountName,
           day,
           charged_at: chargedAt,
           amount,
@@ -359,6 +384,10 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /子账号/);
     assert.match(embed.text, /\/api\/shen\/paid\/subaccounts/);
     assert.match(embed.text, /view=latest/);
+    assert.match(embed.text, /启用店铺/);
+    assert.match(embed.text, /含历史店铺/);
+    assert.match(embed.text, /subAccountId/);
+    assert.match(embed.text, /子账号名称/);
     assert.match(embed.text, /jingmaiGmv: latest\.jingmaiGmv/);
     assert.equal(embed.text.includes("jingmaiGmv: (paid.metrics || {}).jingmaiGmv"), false);
     assert.equal(embed.text.includes("表格行号"), false);
@@ -485,7 +514,7 @@ test("paid ingest upserts and lists by store + day", async () => {
       body: JSON.stringify({ store: "旗舰店" })
     });
     assert.equal(missing.res.status, 400);
-    assert.match(missing.json.error, /rows|充值记录/);
+    assert.match(missing.json.error, /rows|充值记录|启用店铺/);
 
     const asArray = await request(base, "/api/shen/paid/ingest", {
       method: "POST",
@@ -769,8 +798,8 @@ test("paid ingest keeps sibling counts, Shanghai dates, and recharge upserts", a
       body: JSON.stringify(payload)
     });
     assert.equal(created.res.status, 201);
-    assert.deepEqual(created.json.received, { rows: 2, subaccounts: 1, recharges: 1 });
-    assert.deepEqual(created.json.upserted, { rows: 2, subaccounts: 1, recharges: 1 });
+    assert.deepEqual(created.json.received, { rows: 2, subaccounts: 1, recharges: 1, enabledStores: 0 });
+    assert.deepEqual(created.json.upserted, { rows: 2, subaccounts: 1, recharges: 1, enabledStores: 0 });
 
     const again = await request(base, "/api/shen/paid/ingest", {
       method: "POST",
@@ -789,7 +818,7 @@ test("paid ingest keeps sibling counts, Shanghai dates, and recharge upserts", a
       })
     });
     assert.equal(again.res.status, 201);
-    assert.deepEqual(again.json.received, { rows: 2, subaccounts: 1, recharges: 1 });
+    assert.deepEqual(again.json.received, { rows: 2, subaccounts: 1, recharges: 1, enabledStores: 0 });
 
     const listed = await request(base, "/api/shen/paid?view=latest");
     assert.equal(listed.json.asOf, "2026-09-17");
@@ -816,6 +845,121 @@ test("paid ingest keeps sibling counts, Shanghai dates, and recharge upserts", a
     assert.equal(subs.json.accounts[0].latest.date, "2026-09-17");
     assert.equal(subs.json.accounts[0].latest.spend, 80);
     assert.equal(subs.json.accounts[0].latest.clicks, 0);
+  });
+});
+
+test("paid ingest keeps enabled-store roster and recharge subaccount target", async () => {
+  await withServer(async (base) => {
+    const enabled = [
+      "DIKTT个护健康旗舰店",
+      "HYEGIIR养生器械旗舰店",
+      "MGXEK旗舰店",
+      "RASW生活电器旗舰店",
+      "SAWAAG生活日用旗舰店",
+      "飒望居家旗舰店",
+      "飒望旗舰店",
+      "店八",
+      "店九",
+      "店十",
+      "店十一"
+    ];
+    const history = [
+      ...enabled.map((store) => ({ 店铺名称: store, 京准通花费: 10, 是否成功: "采集成功" })),
+      { 店铺名称: "RASW护眼照明旗舰", 京准通花费: 2140.56, 京麦成交金额: 2572.89, 是否成功: "采集成功" },
+      { 店铺名称: "RASW潮流生活京选菀瑶专卖店", 京准通花费: 20, 是否成功: "采集成功" }
+    ];
+    await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date: "2026-09-17", rows: history })
+    });
+    const before = await request(base, "/api/shen/paid?view=latest");
+    assert.equal(before.json.rows.length, 13);
+    assert.equal(before.json.scope, "all");
+
+    const roster = await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: "2026-09-17",
+        启用店铺: enabled,
+        rows: enabled.map((store) => ({ 店铺名称: store, 京准通花费: 11, 是否成功: "采集成功" }))
+      })
+    });
+    assert.equal(roster.res.status, 201);
+    assert.equal(roster.json.received.enabledStores, 11);
+    assert.deepEqual(roster.json.enabledStores, enabled);
+
+    const latest = await request(base, "/api/shen/paid?view=latest");
+    assert.equal(latest.json.scope, "enabled");
+    assert.equal(latest.json.rows.length, 11);
+    assert.equal(latest.json.metrics.stores, 11);
+    assert.equal(
+      latest.json.rows.some((row) => row.store === "RASW护眼照明旗舰" || row.store === "RASW潮流生活京选菀瑶专卖店"),
+      false
+    );
+
+    const today = await request(base, "/api/shen/paid?from=2026-09-17&to=2026-09-17");
+    assert.equal(today.json.rows.length, 11);
+
+    const all = await request(base, "/api/shen/paid?view=latest&scope=all");
+    assert.equal(all.json.scope, "all");
+    assert.equal(all.json.rows.length, 13);
+    assert.equal(all.json.rows.some((row) => row.store === "RASW护眼照明旗舰"), true);
+
+    const historyStore = await request(
+      base,
+      "/api/shen/paid?store=" + encodeURIComponent("RASW护眼照明旗舰") + "&from=2026-09-17&to=2026-09-17"
+    );
+    assert.equal(historyStore.json.rows.length, 1);
+    assert.equal(historyStore.json.rows[0].spend, 2140.56);
+
+    const charged = await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        充值记录: [
+          {
+            店铺名称: "DIKTT个护健康旗舰店",
+            京准通主账户ID: "995225226",
+            子账号ID: "88001",
+            子账号名称: "投放1",
+            充值时间: "2026-09-17T09:30:00+08:00",
+            充值金额: 500,
+            账户余额: 1800
+          }
+        ]
+      })
+    });
+    assert.equal(charged.res.status, 201);
+    assert.equal(charged.json.received.recharges, 1);
+
+    await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        充值记录: [
+          {
+            店铺名称: "DIKTT个护健康旗舰店",
+            京准通主账户ID: "995225226",
+            子账号ID: "88001",
+            子账号名称: "投放1-回填",
+            充值时间: "2026-09-17T09:30:00+08:00",
+            充值金额: 500,
+            账户余额: 1800
+          }
+        ]
+      })
+    });
+    const recharges = await request(
+      base,
+      "/api/shen/paid/recharges?store=" + encodeURIComponent("DIKTT个护健康旗舰店")
+    );
+    assert.equal(recharges.json.rows.length, 1);
+    assert.equal(recharges.json.totals.amount, 500);
+    assert.equal(recharges.json.rows[0].accountId, "995225226");
+    assert.equal(recharges.json.rows[0].subAccountId, "88001");
+    assert.equal(recharges.json.rows[0].subAccountName, "投放1-回填");
   });
 });
 

@@ -107,6 +107,17 @@
   color: var(--xm-ink);
 }
 
+.xm-paid-scope {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--xm-line);
+  border-radius: 6px;
+  background: var(--xm-card);
+  color: var(--xm-ink);
+  font-size: 13px;
+  cursor: pointer;
+}
+
 .xm-paid-table-wrap {
   overflow: auto;
   max-height: calc(100vh - 360px);
