@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS shen_paid_enabled_store (
   ingested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 子账号明细，与店铺汇总分表。覆盖键：日期 + 京准通主账户ID + 子账号ID
+-- 子账号明细，与店铺汇总分表。覆盖键：日期 + 京准通主账户ID + 子账号ID + 抓取时间
 -- 写入：POST /api/shen/paid/ingest 的 子账号 数组
 -- 读取：GET /api/shen/paid/subaccounts?store=
 CREATE TABLE IF NOT EXISTS shen_paid_subaccount (
@@ -83,6 +83,7 @@ CREATE TABLE IF NOT EXISTS shen_paid_subaccount (
   sub_account_id VARCHAR(64) NOT NULL,
   sub_account_name VARCHAR(128) NOT NULL DEFAULT '',
   day DATE NOT NULL,
+  captured_at VARCHAR(40) NOT NULL DEFAULT '',
   balance DECIMAL(14,2) NOT NULL DEFAULT 0,
   remark VARCHAR(200) NOT NULL DEFAULT '',
   spend DECIMAL(14,2) NOT NULL DEFAULT 0,
@@ -96,6 +97,6 @@ CREATE TABLE IF NOT EXISTS shen_paid_subaccount (
   cpm DECIMAL(14,4) NOT NULL DEFAULT 0,
   source VARCHAR(64) NOT NULL DEFAULT 'local',
   ingested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uk_shen_paid_subaccount (day, account_id, sub_account_id),
+  UNIQUE KEY uk_shen_paid_subaccount (day, account_id, sub_account_id, captured_at),
   KEY idx_shen_paid_sub_store_day (store, day)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

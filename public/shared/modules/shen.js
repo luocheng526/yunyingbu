@@ -86,6 +86,38 @@
         return text ? escapeHtml(text) : "未记录";
       }
 
+      function shortStamp(value) {
+        const text = String(value == null ? "" : value).trim();
+        if (!text) {
+          return "未记录";
+        }
+        if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+          return Number(text.slice(5, 7)) + "." + Number(text.slice(8, 10));
+        }
+        const match = text.match(/(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
+        if (match) {
+          return Number(match[2]) + "." + Number(match[3]) + "-" + match[4] + ":" + match[5];
+        }
+        const parsed = new Date(text);
+        if (Number.isNaN(parsed.getTime())) {
+          return text;
+        }
+        const parts = new Intl.DateTimeFormat("en-US", {
+          timeZone: "Asia/Shanghai",
+          month: "numeric",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hourCycle: "h23"
+        }).formatToParts(parsed);
+        const get = function (type) {
+          return (parts.find(function (part) {
+            return part.type === type;
+          }) || {}).value;
+        };
+        return Number(get("month")) + "." + Number(get("day")) + "-" + get("hour") + ":" + get("minute");
+      }
+
       function successTag(value) {
         if (value === "是") {
           return '<span class="xm-paid-tag is-yes">是</span>';
@@ -304,7 +336,7 @@
               .map(function (row) {
                 return (
                   "<tr><td>" +
-                  escapeHtml(row.date) +
+                  escapeHtml(shortStamp(row.capturedAt || row.ingestedAt || row.date)) +
                   "</td>" +
                   subCells(row) +
                   "</tr>"
@@ -320,14 +352,14 @@
               escapeHtml(group.subAccountName || group.subAccountId) +
               '</span><span class="xm-paid-date">' +
               escapeHtml(group.subAccountId) +
-              (latest.date ? " · " + latest.date : "") +
+              (latest.capturedAt || latest.date ? " · " + shortStamp(latest.capturedAt || latest.date) : "") +
               "</span></td>" +
               subCells(latest) +
               "</tr>" +
               '<tr class="xm-paid-sub-history" data-sub-index="' +
               index +
               '" hidden><td colspan="11"><div class="xm-paid-nested"><p class="lead">该子账号各时间段明细</p><table><thead><tr>' +
-              "<th>日期</th><th>余额</th><th>账户备注</th><th>花费</th><th>投产比</th><th>单量</th>" +
+              "<th>时间段</th><th>余额</th><th>账户备注</th><th>花费</th><th>投产比</th><th>单量</th>" +
               "<th>订单金额</th><th>展现数</th><th>点击数</th><th>点击率</th><th>平均点击成本</th>" +
               "</tr></thead><tbody>" +
               dayRows +
@@ -368,27 +400,19 @@
         const rechargeRows = recharge.rows || [];
         const rechargeTable = rechargeRows.length
           ? '<div class="xm-paid-table-wrap"><table><thead><tr>' +
-            "<th>充值日期</th><th>充值时间</th><th>子账号ID</th><th>子账号名称</th><th>充值金额</th><th>账户余额</th><th>渠道</th><th>备注</th>" +
+            "<th>充值时间</th><th>子账号名称</th><th>充值金额</th><th>账户余额</th>" +
             "</tr></thead><tbody>" +
             rechargeRows
               .map(function (row) {
                 return (
                   "<tr><td>" +
-                  escapeHtml(row.date) +
-                  "</td><td>" +
-                  escapeHtml(row.chargedAt || "—") +
-                  "</td><td>" +
-                  recorded(row.subAccountId) +
+                  escapeHtml(shortStamp(row.chargedAt || row.date)) +
                   "</td><td>" +
                   recorded(row.subAccountName) +
                   "</td><td>" +
                   money(row.amount) +
                   "</td><td>" +
                   money(row.balance) +
-                  "</td><td>" +
-                  escapeHtml(row.channel || "—") +
-                  "</td><td>" +
-                  escapeHtml(row.remark || "—") +
                   "</td></tr>"
                 );
               })

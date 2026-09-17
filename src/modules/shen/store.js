@@ -129,6 +129,7 @@ ON DUPLICATE KEY UPDATE source = VALUES(source), ingested_at = CURRENT_TIMESTAMP
   sub_account_id VARCHAR(64) NOT NULL,
   sub_account_name VARCHAR(128) NOT NULL DEFAULT '',
   day DATE NOT NULL,
+  captured_at VARCHAR(40) NOT NULL DEFAULT '',
   balance DECIMAL(14,2) NOT NULL DEFAULT 0,
   remark VARCHAR(200) NOT NULL DEFAULT '',
   spend DECIMAL(14,2) NOT NULL DEFAULT 0,
@@ -142,11 +143,14 @@ ON DUPLICATE KEY UPDATE source = VALUES(source), ingested_at = CURRENT_TIMESTAMP
   cpm DECIMAL(14,4) NOT NULL DEFAULT 0,
   source VARCHAR(64) NOT NULL DEFAULT 'local',
   ingested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uk_shen_paid_subaccount (day, account_id, sub_account_id),
+  UNIQUE KEY uk_shen_paid_subaccount (day, account_id, sub_account_id, captured_at),
   KEY idx_shen_paid_sub_store_day (store, day)
 )`,
-  upsertSubaccount: `INSERT INTO shen_paid_subaccount (store, account_id, sub_account_id, sub_account_name, day, balance, remark, spend, roi, paid_orders, total_order_amount, clicks, impressions, ctr, cpc, cpm, source)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  addPaidSubCapturedAtColumn: `ALTER TABLE shen_paid_subaccount ADD COLUMN captured_at VARCHAR(40) NOT NULL DEFAULT ''`,
+  dropPaidSubUnique: `ALTER TABLE shen_paid_subaccount DROP INDEX uk_shen_paid_subaccount`,
+  addPaidSubUniqueWithCaptured: `ALTER TABLE shen_paid_subaccount ADD UNIQUE KEY uk_shen_paid_subaccount (day, account_id, sub_account_id, captured_at)`,
+  upsertSubaccount: `INSERT INTO shen_paid_subaccount (store, account_id, sub_account_id, sub_account_name, day, captured_at, balance, remark, spend, roi, paid_orders, total_order_amount, clicks, impressions, ctr, cpc, cpm, source)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON DUPLICATE KEY UPDATE
   store = VALUES(store),
   sub_account_name = VALUES(sub_account_name),
@@ -163,10 +167,10 @@ ON DUPLICATE KEY UPDATE
   cpm = VALUES(cpm),
   source = VALUES(source),
   ingested_at = CURRENT_TIMESTAMP`,
-  listSubaccount: `SELECT id, store, account_id, sub_account_id, sub_account_name, day, balance, remark, spend, roi, paid_orders, total_order_amount, clicks, impressions, ctr, cpc, cpm, source, ingested_at
+  listSubaccount: `SELECT id, store, account_id, sub_account_id, sub_account_name, day, captured_at, balance, remark, spend, roi, paid_orders, total_order_amount, clicks, impressions, ctr, cpc, cpm, source, ingested_at
 FROM shen_paid_subaccount
 WHERE (? = 1 OR store = ?) AND day >= ? AND day <= ?
-ORDER BY day DESC, sub_account_name ASC, id ASC
+ORDER BY day DESC, captured_at DESC, id DESC
 LIMIT ?`
 };
 
@@ -200,6 +204,22 @@ function isDuplicateColumnError(err) {
   const code = err?.code || err?.errno;
   const message = String(err?.message || "");
   return code === "ER_DUP_FIELDNAME" || code === 1060 || /duplicate column/i.test(message);
+}
+
+function isIgnorableSchemaError(err) {
+  if (isDuplicateColumnError(err)) {
+    return true;
+  }
+  const code = err?.code || err?.errno;
+  const message = String(err?.message || "");
+  return (
+    code === "ER_CANT_DROP_FIELD_OR_KEY" ||
+    code === 1091 ||
+    code === "ER_DUP_KEYNAME" ||
+    code === 1061 ||
+    /can't drop/i.test(message) ||
+    /duplicate key name/i.test(message)
+  );
 }
 
 function mapTask(row) {
@@ -477,7 +497,9 @@ function rechargeKey(row) {
 }
 
 function subKey(row) {
-  return `${row.day}\t${row.account_id || row.accountId || ""}\t${row.sub_account_id || row.subAccountId || ""}`;
+  return `${row.day}\t${row.account_id || row.accountId || ""}\t${row.sub_account_id || row.subAccountId || ""}\t${
+    row.captured_at || row.capturedAt || ""
+  }`;
 }
 
 function isLatestView(query) {
@@ -759,6 +781,7 @@ function mapSubaccount(row) {
     subAccountId: row.sub_account_id || row.subAccountId || "",
     subAccountName: row.sub_account_name || row.subAccountName || "",
     date: day,
+    capturedAt: row.captured_at || row.capturedAt || "",
     balance: Number(row.balance) || 0,
     remark: row.remark || "",
     spend: Number(row.spend) || 0,
@@ -775,7 +798,7 @@ function mapSubaccount(row) {
   };
 }
 
-function parseSubaccountRow(raw, defaultStore, defaultAccountId, defaultDay, source) {
+function parseSubaccountRow(raw, defaultStore, defaultAccountId, defaultDay, source, defaultCaptured) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw httpError(400, "子账号必须是对象");
   }
@@ -801,6 +824,10 @@ function parseSubaccountRow(raw, defaultStore, defaultAccountId, defaultDay, sou
     throw httpError(400, "子账号必须指定子账号ID");
   }
   const dayRaw = pickField(raw, ["date", "day", "日期"]) || defaultDay || todayDay();
+  const capturedAt =
+    normalizeChargedAt(pickField(raw, ["抓取时间", "capturedAt", "采集时间", "scrapeAt"]) || "") ||
+    defaultCaptured ||
+    shanghaiDateTime(new Date());
   return {
     store,
     accountId,
@@ -811,6 +838,7 @@ function parseSubaccountRow(raw, defaultStore, defaultAccountId, defaultDay, sou
       "子账号名称"
     ),
     day: asDay(dayRaw, "date"),
+    capturedAt,
     balance: asMoney(pickField(raw, ["余额", "balance", "账户余额"]), "余额"),
     remark: clipText(pickField(raw, ["账户备注", "remark", "备注"]) || "", 200, "账户备注"),
     spend: asMoney(pickField(raw, ["京准通花费", "spend", "花费"]), "花费"),
@@ -846,6 +874,7 @@ function collectSubaccountRaws(payload, rows) {
           店铺名称: item.店铺名称 || item.store || row.店铺名称 || row.store,
           京准通主账户ID: item.京准通主账户ID || item.accountId || row.京准通主账户ID || row.accountId,
           date: item.date || item.day || item.日期 || row.date || row.day || row.日期,
+          抓取时间: item.抓取时间 || item.capturedAt || row.抓取时间 || row.capturedAt,
           ...item
         });
       } else {
@@ -872,13 +901,28 @@ function groupSubaccounts(rows) {
     }
     const group = byId.get(key);
     group.days.push(row);
-    if (row.date > group.latest.date || (row.date === group.latest.date && row.id > group.latest.id)) {
+    const newer =
+      row.date > group.latest.date ||
+      (row.date === group.latest.date &&
+        (row.capturedAt || "") > (group.latest.capturedAt || "")) ||
+      (row.date === group.latest.date &&
+        (row.capturedAt || "") === (group.latest.capturedAt || "") &&
+        row.id > group.latest.id);
+    if (newer) {
       group.latest = row;
       group.subAccountName = row.subAccountName || group.subAccountName;
     }
   }
   const accounts = [...byId.values()].map((group) => {
-    group.days.sort((a, b) => (a.date === b.date ? b.id - a.id : a.date < b.date ? 1 : -1));
+    group.days.sort((a, b) => {
+      if (a.date !== b.date) {
+        return a.date < b.date ? 1 : -1;
+      }
+      if ((a.capturedAt || "") !== (b.capturedAt || "")) {
+        return (a.capturedAt || "") < (b.capturedAt || "") ? 1 : -1;
+      }
+      return b.id - a.id;
+    });
     return group;
   });
   accounts.sort((a, b) => String(a.subAccountName || a.subAccountId).localeCompare(String(b.subAccountName || b.subAccountId), "zh"));
@@ -956,6 +1000,7 @@ async function persistSubaccount(row, ingestedAt) {
     row.subAccountId,
     row.subAccountName,
     row.day,
+    row.capturedAt,
     row.balance,
     row.remark,
     row.spend,
@@ -979,6 +1024,7 @@ async function persistSubaccount(row, ingestedAt) {
     sub_account_id: row.subAccountId,
     sub_account_name: row.subAccountName,
     day: row.day,
+    captured_at: row.capturedAt,
     balance: row.balance,
     remark: row.remark,
     spend: row.spend,
@@ -1021,12 +1067,15 @@ async function ensurePaidTable() {
     SQL.addPaidRechargeSubIdColumn,
     SQL.addPaidRechargeSubNameColumn,
     SQL.createSubaccountTable,
+    SQL.addPaidSubCapturedAtColumn,
+    SQL.dropPaidSubUnique,
+    SQL.addPaidSubUniqueWithCaptured,
     SQL.createEnabledStoreTable
   ]) {
     try {
       await mysqlQuery(sql);
     } catch (err) {
-      if (!isDuplicateColumnError(err)) {
+      if (!isIgnorableSchemaError(err)) {
         throw err;
       }
     }
@@ -1198,9 +1247,13 @@ export async function ingestPaid(body) {
   }
   const rows = incoming.map((row) => parsePaidRow(row, defaultStore, defaultDay, source));
   const defaultAccountId = rows[0]?.accountId || "";
+  const now = new Date();
+  const batchCaptured =
+    normalizeChargedAt(pickField(payload, ["抓取时间", "capturedAt", "采集时间"]) || "") ||
+    `${shanghaiDateTime(now).replace("+08:00", "")}.${String(now.getMilliseconds()).padStart(3, "0")}+08:00`;
   const recharges = rechargeRaws.map((row) => parseRechargeRow(row, defaultStore || rows[0]?.store, defaultDay, source));
   const subaccounts = subRaws.map((row) =>
-    parseSubaccountRow(row, defaultStore || rows[0]?.store, defaultAccountId, defaultDay, source)
+    parseSubaccountRow(row, defaultStore || rows[0]?.store, defaultAccountId, defaultDay, source, batchCaptured)
   );
   await ensurePaidTable();
   const ingestedAt = new Date().toISOString().slice(0, 19).replace("T", " ");

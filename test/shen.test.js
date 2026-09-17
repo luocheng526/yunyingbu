@@ -41,6 +41,9 @@ function createFakePool() {
         sql === SQL.addPaidRechargeSubIdColumn ||
         sql === SQL.addPaidRechargeSubNameColumn ||
         sql === SQL.createSubaccountTable ||
+        sql === SQL.addPaidSubCapturedAtColumn ||
+        sql === SQL.dropPaidSubUnique ||
+        sql === SQL.addPaidSubUniqueWithCaptured ||
         sql === SQL.createEnabledStoreTable
       ) {
         return [{}];
@@ -217,6 +220,7 @@ function createFakePool() {
           subAccountId,
           subAccountName,
           day,
+          capturedAt,
           balance,
           remark,
           spend,
@@ -230,7 +234,7 @@ function createFakePool() {
           cpm,
           source
         ] = params;
-        const key = `${day}\t${accountId}\t${subAccountId}`;
+        const key = `${day}\t${accountId}\t${subAccountId}\t${capturedAt || ""}`;
         const row = {
           id: nextSubId,
           store,
@@ -238,6 +242,7 @@ function createFakePool() {
           sub_account_id: subAccountId,
           sub_account_name: subAccountName,
           day,
+          captured_at: capturedAt || "",
           balance,
           remark,
           spend,
@@ -252,7 +257,9 @@ function createFakePool() {
           source,
           ingested_at: "2026-09-17 12:00:00"
         };
-        const idx = subs.findIndex((item) => `${item.day}\t${item.account_id}\t${item.sub_account_id}` === key);
+        const idx = subs.findIndex(
+          (item) => `${item.day}\t${item.account_id}\t${item.sub_account_id}\t${item.captured_at || ""}` === key
+        );
         if (idx >= 0) {
           row.id = subs[idx].id;
           subs[idx] = row;
@@ -389,6 +396,10 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /subAccountId/);
     assert.match(embed.text, /子账号名称/);
     assert.match(embed.text, /未记录/);
+    assert.match(embed.text, /时间段/);
+    assert.equal(embed.text.includes("<th>充值日期</th>"), false);
+    assert.equal(embed.text.includes("<th>子账号ID</th>"), false);
+    assert.equal(embed.text.includes("<th>渠道</th>"), false);
     assert.equal(embed.text.includes('row.subAccountId || "—"'), false);
     assert.equal(embed.text.includes("row.accountId || row.subAccountId"), false);
     assert.match(embed.text, /jingmaiGmv: latest\.jingmaiGmv/);
@@ -753,6 +764,48 @@ test("paid subaccounts are stored apart from store totals and expand by day", as
     assert.equal(first.days.length, 2);
     assert.equal(first.days[1].spend, 50);
     assert.equal(subs.json.totals.count, 2);
+  });
+});
+
+test("paid subaccount rounds on the same day stay as separate snapshots", async () => {
+  await withServer(async (base) => {
+    const body = (capturedAt, spend) => ({
+      date: "2026-09-17",
+      抓取时间: capturedAt,
+      rows: [{ 店铺名称: "旗舰店", 京准通主账户ID: "995225226", 京准通花费: spend, 是否成功: "采集成功" }],
+      子账号: [
+        {
+          店铺名称: "旗舰店",
+          京准通主账户ID: "995225226",
+          子账号ID: "A1",
+          子账号名称: "京选快1",
+          花费: spend,
+          抓取时间: capturedAt
+        }
+      ]
+    });
+    await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body("2026-09-17T10:00:00+08:00", 50))
+    });
+    await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body("2026-09-17T14:00:00+08:00", 80))
+    });
+    await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body("2026-09-17T14:00:00+08:00", 90))
+    });
+    const subs = await request(base, "/api/shen/paid/subaccounts?store=" + encodeURIComponent("旗舰店"));
+    assert.equal(subs.json.accounts.length, 1);
+    assert.equal(subs.json.accounts[0].days.length, 2);
+    assert.equal(subs.json.accounts[0].latest.spend, 90);
+    assert.equal(subs.json.accounts[0].latest.capturedAt, "2026-09-17T14:00:00+08:00");
+    assert.equal(subs.json.accounts[0].days[1].spend, 50);
+    assert.equal(subs.json.accounts[0].days[1].capturedAt, "2026-09-17T10:00:00+08:00");
   });
 });
 
