@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.218-notice-blocking";
+    const href = "/people.css?v=0.1.219-no-sticky";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -147,11 +147,11 @@
       ".people-page{overflow:visible;padding-bottom:24px;}" +
       ".people-page table,.people-page th,.people-page td,.people-page .org-cell,.people-page .org-link,.people-page .tag{-webkit-user-select:text!important;user-select:text!important;-webkit-user-drag:none;}" +
       ".people-page input,.people-page textarea{-webkit-user-select:text!important;user-select:text!important;-webkit-user-drag:auto;pointer-events:auto!important;}" +
-      ".people-page .org-toolbar{position:sticky;top:0;z-index:8;background:var(--xm-bg,#f0f2f5);}" +
+      ".people-page .org-toolbar{position:static;background:var(--xm-bg,#f0f2f5);}" +
       ".people-page .org-filter-pop[hidden]{display:none!important;}" +
       ".people-page .org-table-wrap{overflow:visible!important;max-height:none!important;}" +
       ".people-page table{border-collapse:separate;border-spacing:0;}" +
-      ".people-page th{position:sticky;top:0;z-index:4;background:#fafafa;}" +
+      ".people-page th{position:static;background:#fafafa;}" +
       ".people-page td.people-cell.is-editing,.people-page td.org-cell.is-editing{overflow:hidden;position:relative;}" +
       ".people-page td.people-cell.is-editing input,.people-page td.org-cell.is-editing input,.people-page td.org-cell.is-editing select{position:absolute;inset:3px;width:auto;height:auto;min-width:0;max-width:none;margin:0;padding:0 4px;box-sizing:border-box;font:inherit;}";
   }

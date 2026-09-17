@@ -166,9 +166,7 @@ body:has(.people-page) .xm-tabs {
 }
 
 .org-toolbar {
-  position: sticky;
-  top: 0;
-  z-index: 8;
+  position: static;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -304,9 +302,7 @@ body:has(.people-page) .xm-tabs {
 }
 
 .people-page th {
-  position: sticky;
-  top: 0;
-  z-index: 4;
+  position: static;
   background: #fafafa;
   color: var(--xm-muted, #8c8c8c);
   font-weight: 600;

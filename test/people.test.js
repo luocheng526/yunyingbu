@@ -80,9 +80,11 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /overflow-y:auto!important/);
     assert.match(jsText, /org-table-wrap\{overflow:visible!important/);
     assert.match(jsText, /max-height:none!important/);
-    assert.match(jsText, /position:sticky/);
+    assert.match(jsText, /org-toolbar\{position:static/);
+    assert.match(jsText, /\.people-page th\{position:static/);
     assert.match(cssText, /org-table-wrap/);
-    assert.match(cssText, /position:\s*sticky/);
+    assert.match(cssText, /\.org-toolbar\s*\{[\s\S]*?position:\s*static/);
+    assert.match(cssText, /\.people-page th\s*\{[\s\S]*?position:\s*static/);
     assert.match(cssText, /#xm-notice-mask\s*\{[\s\S]*?background: rgba\(0, 0, 0, 0\.24\) !important/);
     assert.match(cssText, /#xm-notice-mask\s*\{[\s\S]*?pointer-events: auto !important/);
     assert.match(cssText, /#xm-notice-mask \.xm-notice-dialog\s*\{[\s\S]*?pointer-events: auto !important/);
