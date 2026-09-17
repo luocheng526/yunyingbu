@@ -682,6 +682,7 @@ export function buildRightsTree(stores, roster, byName) {
       storeName: row.storeName,
       storeId: row.storeId || "",
       merchantId: row.merchantId || "",
+      operatorName: cleanName(row.operator || row.owner),
       hanging: !placed.op,
       shared:
         [row.manager, row.supervisor, row.reserve, row.operator || row.owner, row.assistant].filter((name) =>

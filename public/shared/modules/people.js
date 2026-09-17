@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.221-notice-blocking-final";
+    const href = "/people.css?v=0.1.222-self-operator";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -1655,8 +1655,27 @@
             stores: op.stores || []
           };
         });
-        if ((lead.stores || []).length || looseAsst.length) {
-          rows.push({ op: null, asst: looseAsst, stores: lead.stores || [] });
+        const ownerName = String(lead.name || lead.ownerName || "").trim();
+        const leadStores = lead.stores || [];
+        const selfStores = ownerName
+          ? leadStores.filter(function (store) {
+              return String(store.operatorName || "").trim() === ownerName;
+            })
+          : [];
+        const directStores = leadStores.filter(function (store) {
+          return selfStores.indexOf(store) < 0;
+        });
+        let directAssistants = looseAsst;
+        if (selfStores.length) {
+          rows.push({
+            op: { role: "运营", name: ownerName, synthetic: true },
+            asst: looseAsst,
+            stores: selfStores
+          });
+          directAssistants = [];
+        }
+        if (directStores.length || directAssistants.length) {
+          rows.push({ op: null, asst: directAssistants, stores: directStores });
         }
         if (!rows.length) {
           rows.push({ op: null, asst: [], stores: [] });
@@ -1717,6 +1736,7 @@
         if (direct.length || (manager.stores || []).length) {
           boxes += renderRightsLeadBox({
             name: "",
+            ownerName: manager.name,
             role: "主管",
             synthetic: true,
             children: direct,

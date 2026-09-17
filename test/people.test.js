@@ -251,7 +251,8 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /fitRightsTree/);
     assert.match(jsText, /renderRightsManagerBand/);
     assert.match(jsText, /renderRightsLeadBox/);
-    assert.match(jsText, /\(lead\.stores \|\| \[\]\)\.length \|\| looseAsst\.length/);
+    assert.match(jsText, /selfStores/);
+    assert.match(jsText, /directAssistants/);
     assert.doesNotMatch(jsText, /looseAsst\.length && !ops\.length/);
     assert.match(jsText, /人员对不上/);
     assert.match(jsText, /店铺对不上/);
@@ -759,6 +760,7 @@ test("rights board groups store staff under 总监经理主管运营", async () 
     const cui = (yang.children || []).find((row) => row.name === "崔安琪");
     assert.ok(cui);
     assert.equal(cui.role, "运营");
+    assert.ok((yang.stores || []).some((store) => store.operatorName === "杨润泽"));
     assert.ok((yang.stores || []).length + (yang.children || []).reduce((sum, child) => sum + (child.stores || []).length, 0) >= 1);
     assert.ok((shen.children || []).some((row) => row.name === "张文静" && row.role === "运营"));
     const han = tree.children.find((row) => row.name === "韩梦凯");

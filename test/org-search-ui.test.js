@@ -146,7 +146,20 @@ const RIGHTS_SMOKE = `<!doctype html>
         document.querySelector('[data-pane="rights"]').click();
         await sleep(1200);
         const rightsHtml = (document.getElementById("rights-tree-chart") && document.getElementById("rights-tree-chart").innerHTML) || "";
-        const ok = rightsHtml.indexOf("rights-mod-band") >= 0 && rightsHtml.indexOf("rights-mod-lead") >= 0 && rightsHtml.indexOf("韩梦凯") >= 0 && rightsHtml.indexOf("杨润泽") >= 0 && rightsHtml.indexOf("data-role=\\"主管\\"") >= 0 && rightsHtml.indexOf("data-role=\\"运营\\"") >= 0;
+        const yangLead = Array.prototype.find.call(
+          document.querySelectorAll(".rights-mod-lead"),
+          function (lead) {
+            const supervisor = lead.querySelector('.rights-mod-card[data-role="主管"]');
+            return supervisor && supervisor.textContent.trim() === "杨润泽";
+          }
+        );
+        const yangSelfOperator =
+          yangLead && Array.prototype.some.call(
+            yangLead.querySelectorAll('.rights-mod-card[data-role="运营"]'),
+            function (card) { return card.textContent.trim() === "杨润泽"; }
+          );
+        const ok = rightsHtml.indexOf("rights-mod-band") >= 0 && rightsHtml.indexOf("rights-mod-lead") >= 0 && rightsHtml.indexOf("韩梦凯") >= 0 && rightsHtml.indexOf("杨润泽") >= 0 && rightsHtml.indexOf("data-role=\\"主管\\"") >= 0 && rightsHtml.indexOf("data-role=\\"运营\\"") >= 0 && yangSelfOperator;
+        document.body.setAttribute("data-self-operator", yangSelfOperator ? "1" : "0");
         document.body.setAttribute("data-rights-n", String(rightsHtml.length));
         document.body.setAttribute("data-ok", ok ? "1" : "0");
       })();
@@ -581,6 +594,7 @@ test("headless chrome can type-search people and stores", async () => {
     assert.match(html, /data-ok="1"/, html.slice(html.indexOf("<body"), html.indexOf("<body") + 800));
     const rights = await chromeDump(`http://127.0.0.1:${port}/__rights-smoke`, 12000);
     assert.match(rights, /data-ok="1"/, rights.includes("data-ok=") ? rights.slice(rights.indexOf("data-ok="), rights.indexOf("data-ok=") + 80) : rights.slice(-400));
+    assert.match(rights, /data-self-operator="1"/);
   } finally {
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
