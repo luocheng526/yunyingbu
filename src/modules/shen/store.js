@@ -82,7 +82,7 @@ LIMIT ?`,
   store VARCHAR(64) NOT NULL,
   account_id VARCHAR(64) NOT NULL DEFAULT '',
   day DATE NOT NULL,
-  charged_at VARCHAR(32) NOT NULL DEFAULT '',
+  charged_at VARCHAR(40) NOT NULL DEFAULT '',
   amount DECIMAL(14,2) NOT NULL DEFAULT 0,
   balance DECIMAL(14,2) NOT NULL DEFAULT 0,
   channel VARCHAR(64) NOT NULL DEFAULT '',
@@ -92,6 +92,7 @@ LIMIT ?`,
   UNIQUE KEY uk_shen_paid_recharge (store, day, charged_at, amount),
   KEY idx_shen_paid_recharge_store_day (store, day)
 )`,
+  widenPaidRechargeChargedAt: `ALTER TABLE shen_paid_recharge MODIFY charged_at VARCHAR(40) NOT NULL DEFAULT ''`,
   upsertRecharge: `INSERT INTO shen_paid_recharge (store, account_id, day, charged_at, amount, balance, channel, remark, source)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON DUPLICATE KEY UPDATE
@@ -282,16 +283,60 @@ function clipText(value, max, label) {
   return text;
 }
 
-function asDay(value, label = "date") {
+function shanghaiDay(value) {
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return value.toISOString().slice(0, 10);
+    return value.toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" });
   }
   const text = String(value ?? "").trim();
-  const day = DATE_RE.test(text) ? text : text.slice(0, 10);
+  if (DATE_RE.test(text)) {
+    return text;
+  }
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" });
+  }
+  const day = text.slice(0, 10);
+  return DATE_RE.test(day) ? day : "";
+}
+
+function asDay(value, label = "date") {
+  const day = shanghaiDay(value);
   if (!DATE_RE.test(day)) {
     throw httpError(400, `${label} 必须是 YYYY-MM-DD`);
   }
   return day;
+}
+
+function mapDay(value) {
+  const day = shanghaiDay(value);
+  return DATE_RE.test(day) ? day : "";
+}
+
+function shanghaiDateTime(value) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(value);
+  const get = (type) => parts.find((part) => part.type === type)?.value || "";
+  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}:${get("second")}+08:00`;
+}
+
+function normalizeChargedAt(value) {
+  const text = String(value ?? "").trim();
+  if (!text) {
+    return "";
+  }
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) {
+    return clipText(text, 40, "充值时间");
+  }
+  return clipText(shanghaiDateTime(parsed), 40, "充值时间");
 }
 
 function toFiniteNumber(value) {
@@ -342,10 +387,10 @@ function asSuccess(value) {
   }
   const text = String(value).trim();
   const key = text.toLowerCase();
-  if (["1", "true", "yes", "y", "ok", "成功", "是"].includes(key)) {
+  if (["1", "true", "yes", "y", "ok", "成功", "是", "采集成功"].includes(key)) {
     return "是";
   }
-  if (["0", "false", "no", "n", "失败", "否"].includes(key)) {
+  if (["0", "false", "no", "n", "失败", "否", "采集失败"].includes(key)) {
     return "否";
   }
   return clipText(text, 16, "是否成功");
@@ -428,7 +473,7 @@ function paidMetrics(rows, totals) {
 }
 
 function mapPaid(row) {
-  const day = typeof row.day === "string" ? row.day.slice(0, 10) : asDay(row.day, "day");
+  const day = mapDay(row.day);
   return {
     id: Number(row.id),
     seq: Number(row.seq) || 0,
@@ -518,7 +563,7 @@ function parsePaidRow(raw, defaultStore, defaultDay, source) {
 }
 
 function mapRecharge(row) {
-  const day = typeof row.day === "string" ? row.day.slice(0, 10) : asDay(row.day, "day");
+  const day = mapDay(row.day);
   return {
     id: Number(row.id),
     store: row.store || "",
@@ -546,12 +591,18 @@ function parseRechargeRow(raw, defaultStore, defaultDay, source) {
   if (!store) {
     throw httpError(400, "充值记录必须指定店铺名称");
   }
-  const dayRaw = pickField(raw, ["date", "day", "日期", "充值日期"]) || defaultDay || todayDay();
+  const chargedAt = normalizeChargedAt(pickField(raw, ["充值时间", "chargedAt", "time"]) || "");
+  const chargedDay = chargedAt ? shanghaiDay(chargedAt) : "";
+  const dayRaw =
+    (DATE_RE.test(chargedDay) ? chargedDay : "") ||
+    pickField(raw, ["date", "day", "日期", "充值日期"]) ||
+    defaultDay ||
+    todayDay();
   return {
     store,
     accountId: clipText(pickField(raw, ["京准通主账户ID", "accountId", "jztAccountId"]), 64, "京准通主账户ID"),
     day: asDay(dayRaw, "date"),
-    chargedAt: clipText(pickField(raw, ["充值时间", "chargedAt", "time"]) || "", 32, "充值时间"),
+    chargedAt,
     amount: asMoney(pickField(raw, ["充值金额", "amount", "金额"]), "充值金额"),
     balance: asMoney(pickField(raw, ["账户余额", "balance", "余额"]), "账户余额"),
     channel: clipText(pickField(raw, ["渠道", "channel"]) || "", 64, "渠道"),
@@ -561,7 +612,7 @@ function parseRechargeRow(raw, defaultStore, defaultDay, source) {
 }
 
 function mapSubaccount(row) {
-  const day = typeof row.day === "string" ? row.day.slice(0, 10) : asDay(row.day, "day");
+  const day = mapDay(row.day);
   return {
     id: Number(row.id),
     store: row.store || "",
@@ -823,6 +874,7 @@ async function ensurePaidTable() {
     SQL.addPaidFeeRatioColumn,
     SQL.addPaidSuccessColumn,
     SQL.createRechargeTable,
+    SQL.widenPaidRechargeChargedAt,
     SQL.createSubaccountTable
   ]) {
     try {
@@ -1062,14 +1114,17 @@ export async function ingestPaid(body) {
   for (const row of subaccounts) {
     await persistSubaccount(row, ingestedAt);
   }
+  const counts = {
+    rows: rows.length,
+    subaccounts: subaccounts.length,
+    recharges: recharges.length
+  };
   return {
     ok: true,
     store: defaultStore || rows[0]?.store || subaccounts[0]?.store || recharges[0]?.store || "",
     source,
-    received: rows.length,
-    upserted: rows.length,
-    subaccounts: subaccounts.length,
-    recharges: recharges.length,
+    received: counts,
+    upserted: counts,
     ingestedAt
   };
 }

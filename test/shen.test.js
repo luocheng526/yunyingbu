@@ -6,6 +6,13 @@ import { patchAppSource } from "../src/modules/shen/patch-app.js";
 import { SQL, hydrateFromMysql, resetStore, setPool } from "../src/modules/shen/store.js";
 import { SHEN_LEGACY_REDIRECTS, SHEN_SUBMENUS } from "../src/modules/shen/submenu.js";
 
+function asMysqlDate(day) {
+  if (typeof day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    return new Date(`${day}T00:00:00+08:00`);
+  }
+  return day;
+}
+
 function createFakePool() {
   const tasks = [];
   let nextId = 1;
@@ -29,6 +36,7 @@ function createFakePool() {
         sql === SQL.addPaidFeeRatioColumn ||
         sql === SQL.addPaidSuccessColumn ||
         sql === SQL.createRechargeTable ||
+        sql === SQL.widenPaidRechargeChargedAt ||
         sql === SQL.createSubaccountTable
       ) {
         return [{}];
@@ -147,7 +155,7 @@ function createFakePool() {
         } else {
           rows = rows.sort((a, b) => (a.day === b.day ? (a.seq || 0) - (b.seq || 0) : a.day < b.day ? 1 : -1));
         }
-        return [rows.slice(0, Number(limit) || 200).map((row) => ({ ...row }))];
+        return [rows.slice(0, Number(limit) || 200).map((row) => ({ ...row, day: asMysqlDate(row.day) }))];
       }
       if (sql === SQL.upsertRecharge) {
         const [store, accountId, day, chargedAt, amount, balance, channel, remark, source] = params;
@@ -235,7 +243,7 @@ function createFakePool() {
           .filter((row) => (allStores === 1 || row.store === store) && row.day >= fromDay && row.day <= toDay)
           .sort((a, b) => (a.day === b.day ? String(a.sub_account_name).localeCompare(String(b.sub_account_name)) : a.day < b.day ? 1 : -1))
           .slice(0, Number(limit) || 2000);
-        return [rows.map((row) => ({ ...row }))];
+        return [rows.map((row) => ({ ...row, day: asMysqlDate(row.day) }))];
       }
       if (sql === SQL.listRecharge) {
         const [allStores, store, fromDay, toDay, limit] = params;
@@ -243,7 +251,7 @@ function createFakePool() {
           .filter((row) => (allStores === 1 || row.store === store) && row.day >= fromDay && row.day <= toDay)
           .sort((a, b) => (a.day === b.day ? b.id - a.id : a.day < b.day ? 1 : -1))
           .slice(0, Number(limit) || 200);
-        return [rows.map((row) => ({ ...row }))];
+        return [rows.map((row) => ({ ...row, day: asMysqlDate(row.day) }))];
       }
       if (sql === SQL.summarizePaid) {
         const [allStores, store, fromDay, toDay] = params;
@@ -483,7 +491,9 @@ test("paid ingest upserts and lists by store + day", async () => {
       body: JSON.stringify([{ 店铺名称: "数组店", date: "2026-09-14", 京准通花费: 1 }])
     });
     assert.equal(asArray.res.status, 201);
-    assert.equal(asArray.json.received, 1);
+    assert.equal(asArray.json.received.rows, 1);
+    assert.equal(asArray.json.received.subaccounts, 0);
+    assert.equal(asArray.json.received.recharges, 0);
 
     const noStore = await request(base, "/api/shen/paid/ingest", {
       method: "POST",
@@ -529,8 +539,10 @@ test("paid ingest upserts and lists by store + day", async () => {
     });
     assert.equal(created.res.status, 201);
     assert.equal(created.json.ok, true);
-    assert.equal(created.json.received, 2);
-    assert.equal(created.json.upserted, 2);
+    assert.equal(created.json.received.rows, 2);
+    assert.equal(created.json.upserted.rows, 2);
+    assert.equal(created.json.received.subaccounts, 0);
+    assert.equal(created.json.received.recharges, 0);
 
     const again = await request(base, "/api/shen/paid/ingest", {
       method: "POST",
@@ -661,7 +673,8 @@ test("paid subaccounts are stored apart from store totals and expand by day", as
       })
     });
     assert.equal(created.res.status, 201);
-    assert.equal(created.json.subaccounts, 1);
+    assert.equal(created.json.received.subaccounts, 1);
+    assert.equal(created.json.upserted.subaccounts, 1);
 
     await request(base, "/api/shen/paid/ingest", {
       method: "POST",
@@ -706,6 +719,101 @@ test("paid subaccounts are stored apart from store totals and expand by day", as
     assert.equal(first.days.length, 2);
     assert.equal(first.days[1].spend, 50);
     assert.equal(subs.json.totals.count, 2);
+  });
+});
+
+test("paid ingest keeps sibling counts, Shanghai dates, and recharge upserts", async () => {
+  await withServer(async (base) => {
+    const payload = {
+      date: "2026-09-17",
+      rows: [
+        {
+          店铺名称: "旗舰店",
+          京准通主账户ID: 995225226,
+          京准通花费: 120,
+          京麦成交金额: 600,
+          是否成功: "采集成功"
+        },
+        {
+          店铺名称: "专营店",
+          京准通主账户ID: "88002",
+          京准通花费: 0,
+          是否成功: "采集失败"
+        }
+      ],
+      子账号: [
+        {
+          店铺名称: "旗舰店",
+          京准通主账户ID: 995225226,
+          子账号ID: 88001,
+          子账号名称: "投放1",
+          花费: 80
+        }
+      ],
+      充值记录: [
+        {
+          店铺名称: "旗舰店",
+          京准通主账户ID: "995225226",
+          充值时间: "2026-09-17T09:30:00+08:00",
+          充值金额: 500,
+          账户余额: 1800
+        }
+      ]
+    };
+
+    const created = await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    assert.equal(created.res.status, 201);
+    assert.deepEqual(created.json.received, { rows: 2, subaccounts: 1, recharges: 1 });
+    assert.deepEqual(created.json.upserted, { rows: 2, subaccounts: 1, recharges: 1 });
+
+    const again = await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...payload,
+        充值记录: [
+          {
+            店铺名称: "旗舰店",
+            京准通主账户ID: "995225226",
+            充值时间: "2026-09-17T01:30:00.000Z",
+            充值金额: 500,
+            账户余额: 1800
+          }
+        ]
+      })
+    });
+    assert.equal(again.res.status, 201);
+    assert.deepEqual(again.json.received, { rows: 2, subaccounts: 1, recharges: 1 });
+
+    const listed = await request(base, "/api/shen/paid?view=latest");
+    assert.equal(listed.json.asOf, "2026-09-17");
+    const flagship = listed.json.rows.find((row) => row.store === "旗舰店");
+    const outlet = listed.json.rows.find((row) => row.store === "专营店");
+    assert.equal(flagship.date, "2026-09-17");
+    assert.equal(flagship.success, "是");
+    assert.equal(flagship.accountId, "995225226");
+    assert.equal(typeof flagship.accountId, "string");
+    assert.equal(outlet.date, "2026-09-17");
+    assert.equal(outlet.success, "否");
+
+    const recharges = await request(base, "/api/shen/paid/recharges?store=%E6%97%97%E8%88%B0%E5%BA%97");
+    assert.equal(recharges.json.rows.length, 1);
+    assert.equal(recharges.json.rows[0].date, "2026-09-17");
+    assert.equal(recharges.json.rows[0].chargedAt, "2026-09-17T09:30:00+08:00");
+    assert.equal(recharges.json.rows[0].amount, 500);
+    assert.equal(recharges.json.rows[0].balance, 1800);
+
+    const subs = await request(base, "/api/shen/paid/subaccounts?store=%E6%97%97%E8%88%B0%E5%BA%97");
+    assert.equal(subs.json.accounts.length, 1);
+    assert.equal(subs.json.accounts[0].subAccountId, "88001");
+    assert.equal(typeof subs.json.accounts[0].subAccountId, "string");
+    assert.equal(subs.json.accounts[0].latest.date, "2026-09-17");
+    assert.equal(subs.json.accounts[0].latest.spend, 80);
+    assert.equal(subs.json.accounts[0].latest.clicks, 0);
   });
 });
 
