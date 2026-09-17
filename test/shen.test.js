@@ -14,6 +14,8 @@ function createFakePool() {
   let nextPaidId = 1;
   const recharges = [];
   let nextRechargeId = 1;
+  const subs = [];
+  let nextSubId = 1;
   return {
     async query(sql, params = []) {
       if (
@@ -26,7 +28,8 @@ function createFakePool() {
         sql === SQL.addPaidTotalOrderColumn ||
         sql === SQL.addPaidFeeRatioColumn ||
         sql === SQL.addPaidSuccessColumn ||
-        sql === SQL.createRechargeTable
+        sql === SQL.createRechargeTable ||
+        sql === SQL.createSubaccountTable
       ) {
         return [{}];
       }
@@ -174,6 +177,66 @@ function createFakePool() {
         recharges.push(row);
         return [{ insertId: row.id, affectedRows: 1 }];
       }
+      if (sql === SQL.upsertSubaccount) {
+        const [
+          store,
+          accountId,
+          subAccountId,
+          subAccountName,
+          day,
+          balance,
+          remark,
+          spend,
+          roi,
+          paidOrders,
+          totalOrderAmount,
+          clicks,
+          impressions,
+          ctr,
+          cpc,
+          cpm,
+          source
+        ] = params;
+        const key = `${day}\t${accountId}\t${subAccountId}`;
+        const row = {
+          id: nextSubId,
+          store,
+          account_id: accountId,
+          sub_account_id: subAccountId,
+          sub_account_name: subAccountName,
+          day,
+          balance,
+          remark,
+          spend,
+          roi,
+          paid_orders: paidOrders,
+          total_order_amount: totalOrderAmount,
+          clicks,
+          impressions,
+          ctr,
+          cpc,
+          cpm,
+          source,
+          ingested_at: "2026-09-17 12:00:00"
+        };
+        const idx = subs.findIndex((item) => `${item.day}\t${item.account_id}\t${item.sub_account_id}` === key);
+        if (idx >= 0) {
+          row.id = subs[idx].id;
+          subs[idx] = row;
+          return [{ insertId: row.id, affectedRows: 2 }];
+        }
+        nextSubId += 1;
+        subs.push(row);
+        return [{ insertId: row.id, affectedRows: 1 }];
+      }
+      if (sql === SQL.listSubaccount) {
+        const [allStores, store, fromDay, toDay, limit] = params;
+        const rows = subs
+          .filter((row) => (allStores === 1 || row.store === store) && row.day >= fromDay && row.day <= toDay)
+          .sort((a, b) => (a.day === b.day ? String(a.sub_account_name).localeCompare(String(b.sub_account_name)) : a.day < b.day ? 1 : -1))
+          .slice(0, Number(limit) || 2000);
+        return [rows.map((row) => ({ ...row }))];
+      }
       if (sql === SQL.listRecharge) {
         const [allStores, store, fromDay, toDay, limit] = params;
         const rows = recharges
@@ -285,6 +348,8 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /kpi-grid/);
     assert.match(embed.text, /xm-paid-store/);
     assert.match(embed.text, /充值记录/);
+    assert.match(embed.text, /子账号/);
+    assert.match(embed.text, /\/api\/shen\/paid\/subaccounts/);
     assert.match(embed.text, /view=latest/);
     assert.equal(embed.text.includes("表格行号"), false);
     assert.equal(embed.text.includes("模板行号"), false);
@@ -569,6 +634,78 @@ test("paid latest snapshot and store drill-down keep history plus recharges", as
     assert.equal(recharges.json.rows.length, 1);
     assert.equal(recharges.json.rows[0].amount, 500);
     assert.equal(recharges.json.totals.amount, 500);
+  });
+});
+
+test("paid subaccounts are stored apart from store totals and expand by day", async () => {
+  await withServer(async (base) => {
+    const created = await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: "2026-09-16",
+        rows: [{ 店铺名称: "旗舰店", 京准通主账户ID: "995225226", 京准通花费: 80, 是否成功: "是" }],
+        子账号: [
+          {
+            店铺名称: "旗舰店",
+            京准通主账户ID: "995225226",
+            子账号ID: "A1",
+            子账号名称: "投放1",
+            花费: 50,
+            投产比: 1.2,
+            单量: 2,
+            订单金额: 80,
+            余额: 300
+          }
+        ]
+      })
+    });
+    assert.equal(created.res.status, 201);
+    assert.equal(created.json.subaccounts, 1);
+
+    await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: "2026-09-17",
+        rows: [{ 店铺名称: "旗舰店", 京准通主账户ID: "995225226", 京准通花费: 200, 是否成功: "是" }],
+        子账号: [
+          {
+            京准通主账户ID: "995225226",
+            子账号ID: "A1",
+            子账号名称: "投放1",
+            花费: 120,
+            投产比: 1.8,
+            单量: 4,
+            订单金额: 220,
+            余额: 180
+          },
+          {
+            京准通主账户ID: "995225226",
+            子账号ID: "A2",
+            子账号名称: "投放2",
+            花费: 80,
+            单量: 1,
+            订单金额: 40,
+            余额: 90
+          }
+        ]
+      })
+    });
+
+    const listed = await request(base, "/api/shen/paid?store=%E6%97%97%E8%88%B0%E5%BA%97&from=2026-09-17&to=2026-09-17");
+    assert.equal(listed.json.rows.length, 1);
+    assert.equal(listed.json.rows[0].spend, 200);
+
+    const subs = await request(base, "/api/shen/paid/subaccounts?store=%E6%97%97%E8%88%B0%E5%BA%97");
+    assert.equal(subs.res.status, 200);
+    assert.equal(subs.json.accounts.length, 2);
+    const first = subs.json.accounts.find((item) => item.subAccountId === "A1");
+    assert.equal(first.latest.spend, 120);
+    assert.equal(first.latest.date, "2026-09-17");
+    assert.equal(first.days.length, 2);
+    assert.equal(first.days[1].spend, 50);
+    assert.equal(subs.json.totals.count, 2);
   });
 });
 

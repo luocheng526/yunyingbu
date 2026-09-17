@@ -44,7 +44,7 @@
       root.innerHTML =
         '<main class="page xm-paid">' +
         '<header class="page-head"><div><h1>付费中心</h1>' +
-        '<p class="lead" id="paid-lead">最新一次回传的全店快照。点店铺名称下钻查看历史抓取和充值记录。</p></div>' +
+        '<p class="lead" id="paid-lead">最新一次回传的全店快照。点店铺名称下钻查看子账号和充值记录。</p></div>' +
         '<div class="xm-paid-meta"><span class="xm-paid-dot" aria-hidden="true"></span>' +
         '<span id="paid-asof">等待回传</span></div></header>' +
         '<section class="kpi-grid" id="paid-kpis"></section>' +
@@ -106,9 +106,9 @@
       function renderKpis(metrics) {
         const cards = [
           {
-            label: metrics.detail ? "抓取天数" : "店铺数",
+            label: metrics.subs ? "子账号" : metrics.detail ? "抓取天数" : "店铺数",
             value: integer(metrics.stores),
-            unit: metrics.detail ? "天" : "家"
+            unit: metrics.subs ? "个" : metrics.detail ? "天" : "家"
           },
           { label: "京准通花费", value: money(metrics.spend) },
           { label: "京麦成交", value: money(metrics.jingmaiGmv) },
@@ -214,7 +214,7 @@
       function renderOverview(data) {
         overviewRows = data.rows || [];
         const metrics = data.metrics || {};
-        leadEl.textContent = "最新一次回传的全店快照。点店铺名称下钻查看历史抓取和充值记录。";
+        leadEl.textContent = "最新一次回传的全店快照。点店铺名称下钻查看该店全部子账号。";
         asofEl.textContent = data.asOf ? "最新回传 " + data.asOf + " · " + (metrics.stores || 0) + " 店" : "等待回传";
         renderKpis(metrics);
         bodyEl.innerHTML =
@@ -238,40 +238,105 @@
         }
       }
 
-      function renderDetail(store, paid, recharge) {
-        const rows = paid.rows || [];
-        const latest = rows[0] || { store: store };
-        const metrics = paid.metrics || {};
-        leadEl.textContent = "该店循环抓取进来的历史明细，以及充值记录。";
-        asofEl.textContent = (latest.accountId ? "京准通主账户 " + latest.accountId + " · " : "") + rows.length + " 次抓取";
-        renderKpis({
-          detail: true,
-          stores: rows.length,
-          spend: metrics.spend,
-          jingmaiGmv: metrics.jingmaiGmv,
-          totalOrderAmount: metrics.totalOrderAmount,
-          paidOrders: metrics.paidOrders,
-          successCount: metrics.successCount
-        });
-        const history = rows.length
-          ? '<div class="xm-paid-table-wrap"><table>' +
-            headerRow("日期") +
-            "<tbody>" +
-            rows
+      function subCells(row) {
+        return (
+          "<td>" +
+          money(row.balance) +
+          "</td><td>" +
+          escapeHtml(row.remark || "—") +
+          "</td><td>" +
+          money(row.spend) +
+          "</td><td>" +
+          rate(row.roi) +
+          "</td><td>" +
+          integer(row.paidOrders) +
+          "</td><td>" +
+          money(row.totalOrderAmount) +
+          "</td><td>" +
+          integer(row.impressions) +
+          "</td><td>" +
+          integer(row.clicks) +
+          "</td><td>" +
+          rate(row.ctr) +
+          "</td><td>" +
+          money(row.cpc) +
+          "</td>"
+        );
+      }
+
+      function renderSubaccounts(accounts) {
+        if (!accounts.length) {
+          return '<p class="empty">本地程序尚未回传子账号明细</p>';
+        }
+        const body = accounts
+          .map(function (group, index) {
+            const latest = group.latest || {};
+            const days = group.days || [];
+            const dayRows = days
               .map(function (row) {
                 return (
-                  '<tr class="' +
-                  (isZeroRow(row) ? "is-zero" : "") +
-                  '"><td>' +
+                  "<tr><td>" +
                   escapeHtml(row.date) +
                   "</td>" +
-                  metricCells(row) +
+                  subCells(row) +
                   "</tr>"
                 );
               })
-              .join("") +
-            "</tbody></table></div>"
-          : '<p class="empty">暂无历史抓取</p>';
+              .join("");
+            return (
+              '<tr class="xm-paid-sub-row" data-sub-index="' +
+              index +
+              '"><td><button type="button" class="xm-paid-expand" aria-expanded="false" data-sub-index="' +
+              index +
+              '">▸</button><span class="xm-paid-sub-name">' +
+              escapeHtml(group.subAccountName || group.subAccountId) +
+              '</span><span class="xm-paid-date">' +
+              escapeHtml(group.subAccountId) +
+              (latest.date ? " · " + latest.date : "") +
+              "</span></td>" +
+              subCells(latest) +
+              "</tr>" +
+              '<tr class="xm-paid-sub-history" data-sub-index="' +
+              index +
+              '" hidden><td colspan="11"><div class="xm-paid-nested"><p class="lead">该子账号各时间段明细</p><table><thead><tr>' +
+              "<th>日期</th><th>余额</th><th>账户备注</th><th>花费</th><th>投产比</th><th>单量</th>" +
+              "<th>订单金额</th><th>展现数</th><th>点击数</th><th>点击率</th><th>平均点击成本</th>" +
+              "</tr></thead><tbody>" +
+              dayRows +
+              "</tbody></table></div></td></tr>"
+            );
+          })
+          .join("");
+        return (
+          '<div class="xm-paid-table-wrap"><table><thead><tr>' +
+          "<th>子账号</th><th>余额</th><th>账户备注</th><th>花费</th><th>投产比</th><th>单量</th>" +
+          "<th>订单金额</th><th>展现数</th><th>点击数</th><th>点击率</th><th>平均点击成本</th>" +
+          "</tr></thead><tbody>" +
+          body +
+          "</tbody></table></div>"
+        );
+      }
+
+      function renderDetail(store, paid, subaccounts, recharge) {
+        const rows = paid.rows || [];
+        const latest = rows[0] || { store: store };
+        const accounts = subaccounts.accounts || [];
+        const subTotals = subaccounts.totals || {};
+        leadEl.textContent = "该店全部子账号。点左侧箭头展开每个时间段的明细。";
+        asofEl.textContent =
+          (latest.accountId ? "京准通主账户 " + latest.accountId + " · " : "") +
+          (accounts.length || 0) +
+          " 个子账号";
+        renderKpis({
+          detail: true,
+          subs: true,
+          stores: accounts.length || rows.length,
+          spend: subTotals.spend || (paid.metrics || {}).spend,
+          jingmaiGmv: (paid.metrics || {}).jingmaiGmv,
+          totalOrderAmount: subTotals.totalOrderAmount || (paid.metrics || {}).totalOrderAmount,
+          paidOrders: subTotals.paidOrders || (paid.metrics || {}).paidOrders,
+          successCount: (paid.metrics || {}).successCount
+        });
         const rechargeRows = recharge.rows || [];
         const rechargeTable = rechargeRows.length
           ? '<div class="xm-paid-table-wrap"><table><thead><tr>' +
@@ -305,8 +370,8 @@
           escapeHtml(store) +
           "</h2></div></div></section>" +
           '<div class="xm-paid-detail-grid">' +
-          '<section class="panel"><h2>循环抓取明细</h2>' +
-          history +
+          '<section class="panel"><h2>子账号</h2>' +
+          renderSubaccounts(accounts) +
           "</section>" +
           '<section class="panel"><h2>充值记录</h2><p class="lead">累计充值 ' +
           money((recharge.totals || {}).amount) +
@@ -322,6 +387,19 @@
             load();
           });
         }
+        Array.prototype.forEach.call(root.querySelectorAll(".xm-paid-expand"), function (btn) {
+          btn.addEventListener("click", function () {
+            const index = btn.getAttribute("data-sub-index");
+            const history = root.querySelector('.xm-paid-sub-history[data-sub-index="' + index + '"]');
+            if (!history) {
+              return;
+            }
+            const open = history.hasAttribute("hidden");
+            history.toggleAttribute("hidden", !open);
+            btn.setAttribute("aria-expanded", open ? "true" : "false");
+            btn.textContent = open ? "▾" : "▸";
+          });
+        });
       }
 
       function getJson(url) {
@@ -341,11 +419,12 @@
         if (store) {
           return Promise.all([
             getJson("/api/shen/paid?store=" + encodeURIComponent(store) + "&limit=1000"),
+            getJson("/api/shen/paid/subaccounts?store=" + encodeURIComponent(store) + "&limit=2000"),
             getJson("/api/shen/paid/recharges?store=" + encodeURIComponent(store) + "&limit=1000")
           ])
             .then(function (pair) {
               if (!dead) {
-                renderDetail(store, pair[0], pair[1]);
+                renderDetail(store, pair[0], pair[1], pair[2]);
                 setStatus("已更新");
               }
             })

@@ -8,6 +8,7 @@ import {
   ingestRecharge,
   listPaid,
   listRecharge,
+  listSubaccounts,
   listTasks,
   setBrief
 } from "./store.js";
@@ -81,6 +82,21 @@ shenRouter.post("/paid/recharge/ingest", async (req, res) => {
     res.status(201).json(await ingestRecharge(req.body));
   } catch (err) {
     res.status(err.statusCode || 400).json({ error: err.message || "无法回传充值记录" });
+  }
+});
+
+shenRouter.get("/paid/subaccounts", async (req, res) => {
+  try {
+    res.json(
+      await listSubaccounts({
+        store: req.query.store,
+        from: req.query.from,
+        to: req.query.to,
+        limit: req.query.limit
+      })
+    );
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "无法加载子账号" });
   }
 });
 

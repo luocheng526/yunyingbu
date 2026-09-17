@@ -105,6 +105,52 @@ ON DUPLICATE KEY UPDATE
 FROM shen_paid_recharge
 WHERE (? = 1 OR store = ?) AND day >= ? AND day <= ?
 ORDER BY day DESC, id DESC
+LIMIT ?`,
+  createSubaccountTable: `CREATE TABLE IF NOT EXISTS shen_paid_subaccount (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  store VARCHAR(64) NOT NULL,
+  account_id VARCHAR(64) NOT NULL DEFAULT '',
+  sub_account_id VARCHAR(64) NOT NULL,
+  sub_account_name VARCHAR(128) NOT NULL DEFAULT '',
+  day DATE NOT NULL,
+  balance DECIMAL(14,2) NOT NULL DEFAULT 0,
+  remark VARCHAR(200) NOT NULL DEFAULT '',
+  spend DECIMAL(14,2) NOT NULL DEFAULT 0,
+  roi DECIMAL(12,4) NOT NULL DEFAULT 0,
+  paid_orders INT NOT NULL DEFAULT 0,
+  total_order_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+  clicks INT NOT NULL DEFAULT 0,
+  impressions INT NOT NULL DEFAULT 0,
+  ctr DECIMAL(12,4) NOT NULL DEFAULT 0,
+  cpc DECIMAL(14,4) NOT NULL DEFAULT 0,
+  cpm DECIMAL(14,4) NOT NULL DEFAULT 0,
+  source VARCHAR(64) NOT NULL DEFAULT 'local',
+  ingested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_shen_paid_subaccount (day, account_id, sub_account_id),
+  KEY idx_shen_paid_sub_store_day (store, day)
+)`,
+  upsertSubaccount: `INSERT INTO shen_paid_subaccount (store, account_id, sub_account_id, sub_account_name, day, balance, remark, spend, roi, paid_orders, total_order_amount, clicks, impressions, ctr, cpc, cpm, source)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON DUPLICATE KEY UPDATE
+  store = VALUES(store),
+  sub_account_name = VALUES(sub_account_name),
+  balance = VALUES(balance),
+  remark = VALUES(remark),
+  spend = VALUES(spend),
+  roi = VALUES(roi),
+  paid_orders = VALUES(paid_orders),
+  total_order_amount = VALUES(total_order_amount),
+  clicks = VALUES(clicks),
+  impressions = VALUES(impressions),
+  ctr = VALUES(ctr),
+  cpc = VALUES(cpc),
+  cpm = VALUES(cpm),
+  source = VALUES(source),
+  ingested_at = CURRENT_TIMESTAMP`,
+  listSubaccount: `SELECT id, store, account_id, sub_account_id, sub_account_name, day, balance, remark, spend, roi, paid_orders, total_order_amount, clicks, impressions, ctr, cpc, cpm, source, ingested_at
+FROM shen_paid_subaccount
+WHERE (? = 1 OR store = ?) AND day >= ? AND day <= ?
+ORDER BY day DESC, sub_account_name ASC, id ASC
 LIMIT ?`
 };
 
@@ -119,6 +165,8 @@ let nextPaidId = 1;
 let memoryPaid = [];
 let nextRechargeId = 1;
 let memoryRecharge = [];
+let nextSubId = 1;
+let memorySub = [];
 
 export function setPool(pool) {
   poolOverride = pool;
@@ -335,6 +383,10 @@ function rechargeKey(row) {
   return `${row.store}\t${row.day}\t${row.charged_at || row.chargedAt || ""}\t${Number(row.amount) || 0}`;
 }
 
+function subKey(row) {
+  return `${row.day}\t${row.account_id || row.accountId || ""}\t${row.sub_account_id || row.subAccountId || ""}`;
+}
+
 function isLatestView(query) {
   const view = String(query?.view ?? "").trim().toLowerCase();
   const latest = String(query?.latest ?? "").trim();
@@ -508,6 +560,141 @@ function parseRechargeRow(raw, defaultStore, defaultDay, source) {
   };
 }
 
+function mapSubaccount(row) {
+  const day = typeof row.day === "string" ? row.day.slice(0, 10) : asDay(row.day, "day");
+  return {
+    id: Number(row.id),
+    store: row.store || "",
+    accountId: row.account_id || row.accountId || "",
+    subAccountId: row.sub_account_id || row.subAccountId || "",
+    subAccountName: row.sub_account_name || row.subAccountName || "",
+    date: day,
+    balance: Number(row.balance) || 0,
+    remark: row.remark || "",
+    spend: Number(row.spend) || 0,
+    roi: Number(row.roi) || 0,
+    paidOrders: Number(row.paid_orders ?? row.paidOrders) || 0,
+    totalOrderAmount: Number(row.total_order_amount ?? row.totalOrderAmount) || 0,
+    clicks: Number(row.clicks) || 0,
+    impressions: Number(row.impressions) || 0,
+    ctr: Number(row.ctr) || 0,
+    cpc: Number(row.cpc) || 0,
+    cpm: Number(row.cpm) || 0,
+    source: row.source || "local",
+    ingestedAt: row.ingested_at || row.ingestedAt || ""
+  };
+}
+
+function parseSubaccountRow(raw, defaultStore, defaultAccountId, defaultDay, source) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw httpError(400, "子账号必须是对象");
+  }
+  const store = clipText(
+    pickField(raw, ["店铺名称", "store", "店铺名", "店铺"]) || defaultStore,
+    64,
+    "店铺名称"
+  );
+  const accountId = clipText(
+    pickField(raw, ["京准通主账户ID", "accountId", "jztAccountId", "主账户ID"]) || defaultAccountId || store,
+    64,
+    "京准通主账户ID"
+  );
+  const subAccountId = clipText(
+    pickField(raw, ["子账号ID", "subAccountId", "subId", "账户ID"]),
+    64,
+    "子账号ID"
+  );
+  if (!store) {
+    throw httpError(400, "子账号必须指定店铺名称");
+  }
+  if (!subAccountId) {
+    throw httpError(400, "子账号必须指定子账号ID");
+  }
+  const dayRaw = pickField(raw, ["date", "day", "日期"]) || defaultDay || todayDay();
+  return {
+    store,
+    accountId,
+    subAccountId,
+    subAccountName: clipText(
+      pickField(raw, ["子账号名称", "subAccountName", "账户名称", "名称"]) || subAccountId,
+      128,
+      "子账号名称"
+    ),
+    day: asDay(dayRaw, "date"),
+    balance: asMoney(pickField(raw, ["余额", "balance", "账户余额"]), "余额"),
+    remark: clipText(pickField(raw, ["账户备注", "remark", "备注"]) || "", 200, "账户备注"),
+    spend: asMoney(pickField(raw, ["京准通花费", "spend", "花费"]), "花费"),
+    roi: asRate(pickField(raw, ["京准通付费投产比", "roi", "投产比"]), "投产比"),
+    paidOrders: asCount(pickField(raw, ["京准通付费订单数", "paidOrders", "单量", "订单数"]), "单量"),
+    totalOrderAmount: asMoney(
+      pickField(raw, ["京准通总订单金额", "totalOrderAmount", "订单金额"]),
+      "订单金额"
+    ),
+    clicks: asCount(pickField(raw, ["京准通点击数", "clicks", "点击数"]), "点击数"),
+    impressions: asCount(pickField(raw, ["展现数", "impressions", "曝光数"]), "展现数"),
+    ctr: asRate(pickField(raw, ["京准通点击率", "ctr", "点击率"]), "点击率"),
+    cpc: asRate(pickField(raw, ["京准通平均点击成本", "cpc", "平均点击成本"]), "平均点击成本"),
+    cpm: asRate(pickField(raw, ["千次展现成本", "cpm"]), "千次展现成本"),
+    source: clipText(pickField(raw, ["source", "来源"]) || source, 64, "来源") || "local"
+  };
+}
+
+function collectSubaccountRaws(payload, rows) {
+  const collected = [];
+  const top = payload.subaccounts || payload.子账号 || payload.accounts;
+  if (Array.isArray(top)) {
+    collected.push(...top);
+  }
+  for (const row of rows) {
+    const nested = row?.子账号 || row?.subaccounts || row?.accounts;
+    if (!Array.isArray(nested)) {
+      continue;
+    }
+    for (const item of nested) {
+      if (item && typeof item === "object") {
+        collected.push({
+          店铺名称: item.店铺名称 || item.store || row.店铺名称 || row.store,
+          京准通主账户ID: item.京准通主账户ID || item.accountId || row.京准通主账户ID || row.accountId,
+          date: item.date || item.day || item.日期 || row.date || row.day || row.日期,
+          ...item
+        });
+      } else {
+        collected.push(item);
+      }
+    }
+  }
+  return collected;
+}
+
+function groupSubaccounts(rows) {
+  const byId = new Map();
+  for (const row of rows) {
+    const key = `${row.accountId}\t${row.subAccountId}`;
+    if (!byId.has(key)) {
+      byId.set(key, {
+        accountId: row.accountId,
+        subAccountId: row.subAccountId,
+        subAccountName: row.subAccountName,
+        store: row.store,
+        latest: row,
+        days: []
+      });
+    }
+    const group = byId.get(key);
+    group.days.push(row);
+    if (row.date > group.latest.date || (row.date === group.latest.date && row.id > group.latest.id)) {
+      group.latest = row;
+      group.subAccountName = row.subAccountName || group.subAccountName;
+    }
+  }
+  const accounts = [...byId.values()].map((group) => {
+    group.days.sort((a, b) => (a.date === b.date ? b.id - a.id : a.date < b.date ? 1 : -1));
+    return group;
+  });
+  accounts.sort((a, b) => String(a.subAccountName || a.subAccountId).localeCompare(String(b.subAccountName || b.subAccountId), "zh"));
+  return accounts;
+}
+
 function collectRechargeRaws(payload, rows) {
   const collected = [];
   const top = payload.recharges || payload.充值记录;
@@ -568,6 +755,61 @@ async function persistRecharge(row, ingestedAt) {
   }
 }
 
+async function persistSubaccount(row, ingestedAt) {
+  const result = await mysqlQuery(SQL.upsertSubaccount, [
+    row.store,
+    row.accountId,
+    row.subAccountId,
+    row.subAccountName,
+    row.day,
+    row.balance,
+    row.remark,
+    row.spend,
+    row.roi,
+    row.paidOrders,
+    row.totalOrderAmount,
+    row.clicks,
+    row.impressions,
+    row.ctr,
+    row.cpc,
+    row.cpm,
+    row.source
+  ]);
+  if (result) {
+    return;
+  }
+  const mapped = {
+    id: nextSubId,
+    store: row.store,
+    account_id: row.accountId,
+    sub_account_id: row.subAccountId,
+    sub_account_name: row.subAccountName,
+    day: row.day,
+    balance: row.balance,
+    remark: row.remark,
+    spend: row.spend,
+    roi: row.roi,
+    paid_orders: row.paidOrders,
+    total_order_amount: row.totalOrderAmount,
+    clicks: row.clicks,
+    impressions: row.impressions,
+    ctr: row.ctr,
+    cpc: row.cpc,
+    cpm: row.cpm,
+    source: row.source,
+    ingested_at: ingestedAt
+  };
+  const key = subKey(mapped);
+  const existing = memorySub.findIndex((item) => subKey(item) === key);
+  if (existing >= 0) {
+    mapped.id = memorySub[existing].id;
+    memorySub[existing] = mapped;
+  } else {
+    nextSubId += 1;
+    memorySub.push(mapped);
+  }
+}
+
 async function ensurePaidTable() {
   const created = await mysqlQuery(SQL.createPaidTable);
   if (!created && !poolOverride) {
@@ -580,7 +822,8 @@ async function ensurePaidTable() {
     SQL.addPaidTotalOrderColumn,
     SQL.addPaidFeeRatioColumn,
     SQL.addPaidSuccessColumn,
-    SQL.createRechargeTable
+    SQL.createRechargeTable,
+    SQL.createSubaccountTable
   ]) {
     try {
       await mysqlQuery(sql);
@@ -600,6 +843,8 @@ export function resetStore() {
   memoryPaid = [];
   nextRechargeId = 1;
   memoryRecharge = [];
+  nextSubId = 1;
+  memorySub = [];
 }
 
 export async function hydrateFromMysql() {
@@ -738,8 +983,9 @@ export async function ingestPaid(body) {
     throw httpError(400, "rows 必须是数组");
   }
   const rechargeRaws = collectRechargeRaws(payload, incoming);
-  if (incoming.length === 0 && rechargeRaws.length === 0) {
-    throw httpError(400, "rows 或 充值记录 必填");
+  const subRaws = collectSubaccountRaws(payload, incoming);
+  if (incoming.length === 0 && rechargeRaws.length === 0 && subRaws.length === 0) {
+    throw httpError(400, "rows、子账号或充值记录必填");
   }
   if (incoming.length > MAX_PAID_ROWS) {
     throw httpError(400, `一次最多回传 ${MAX_PAID_ROWS} 行`);
@@ -747,8 +993,15 @@ export async function ingestPaid(body) {
   if (rechargeRaws.length > MAX_PAID_ROWS) {
     throw httpError(400, `一次最多回传 ${MAX_PAID_ROWS} 条充值记录`);
   }
+  if (subRaws.length > MAX_PAID_ROWS) {
+    throw httpError(400, `一次最多回传 ${MAX_PAID_ROWS} 条子账号`);
+  }
   const rows = incoming.map((row) => parsePaidRow(row, defaultStore, defaultDay, source));
+  const defaultAccountId = rows[0]?.accountId || "";
   const recharges = rechargeRaws.map((row) => parseRechargeRow(row, defaultStore || rows[0]?.store, defaultDay, source));
+  const subaccounts = subRaws.map((row) =>
+    parseSubaccountRow(row, defaultStore || rows[0]?.store, defaultAccountId, defaultDay, source)
+  );
   await ensurePaidTable();
   const ingestedAt = new Date().toISOString().slice(0, 19).replace("T", " ");
   for (const row of rows) {
@@ -806,12 +1059,16 @@ export async function ingestPaid(body) {
   for (const row of recharges) {
     await persistRecharge(row, ingestedAt);
   }
+  for (const row of subaccounts) {
+    await persistSubaccount(row, ingestedAt);
+  }
   return {
     ok: true,
-    store: defaultStore || rows[0]?.store || recharges[0]?.store || "",
+    store: defaultStore || rows[0]?.store || subaccounts[0]?.store || recharges[0]?.store || "",
     source,
     received: rows.length,
     upserted: rows.length,
+    subaccounts: subaccounts.length,
     recharges: recharges.length,
     ingestedAt
   };
@@ -919,6 +1176,57 @@ export async function listRecharge(query) {
     to: parsed.to,
     rows,
     totals: { amount, count: rows.length }
+  };
+}
+
+export async function listSubaccounts(query) {
+  const parsed = parsePaidRange({ ...query, limit: query?.limit || 2000 });
+  await ensurePaidTable();
+  const result = await mysqlQuery(SQL.listSubaccount, [
+    parsed.allStores,
+    parsed.store,
+    parsed.fromDay,
+    parsed.toDay,
+    parsed.limit
+  ]);
+  let rows;
+  if (result) {
+    rows = result[0].map(mapSubaccount);
+  } else {
+    rows = memorySub
+      .filter((row) => {
+        if (!parsed.allStores && row.store !== parsed.store) {
+          return false;
+        }
+        return row.day >= parsed.fromDay && row.day <= parsed.toDay;
+      })
+      .sort((a, b) => {
+        if (a.day !== b.day) {
+          return a.day < b.day ? 1 : -1;
+        }
+        return String(a.sub_account_name || "").localeCompare(String(b.sub_account_name || ""), "zh") || a.id - b.id;
+      })
+      .slice(0, parsed.limit)
+      .map(mapSubaccount);
+  }
+  const accounts = groupSubaccounts(rows);
+  const latest = accounts.map((item) => item.latest);
+  const totals = {
+    spend: latest.reduce((sum, row) => asMoney(sum + (Number(row.spend) || 0), "花费"), 0),
+    paidOrders: latest.reduce((sum, row) => sum + (Number(row.paidOrders) || 0), 0),
+    totalOrderAmount: latest.reduce((sum, row) => asMoney(sum + (Number(row.totalOrderAmount) || 0), "订单金额"), 0),
+    balance: latest.reduce((sum, row) => asMoney(sum + (Number(row.balance) || 0), "余额"), 0),
+    count: accounts.length
+  };
+  return {
+    ok: true,
+    store: parsed.store,
+    from: parsed.from,
+    to: parsed.to,
+    asOf: asOfDay(rows),
+    rows,
+    accounts,
+    totals
   };
 }
 

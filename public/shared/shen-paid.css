@@ -222,6 +222,45 @@
   gap: 12px;
 }
 
+.xm-paid-expand {
+  width: 22px;
+  height: 22px;
+  margin-right: 8px;
+  padding: 0;
+  border: 1px solid var(--xm-line);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--xm-muted);
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.xm-paid-expand[aria-expanded="true"] {
+  color: var(--xm-primary);
+  border-color: var(--xm-primary);
+  background: var(--xm-primary-soft, #e6f4ff);
+}
+
+.xm-paid-sub-name {
+  font-weight: 600;
+}
+
+.xm-paid-sub-history td {
+  text-align: left !important;
+  background: #fafafa;
+  padding: 0 12px 12px;
+}
+
+.xm-paid-nested {
+  padding-top: 8px;
+}
+
+.xm-paid-nested table {
+  background: #fff;
+  border: 1px solid var(--xm-line);
+  border-radius: 6px;
+}
+
 .xm-paid .empty {
   margin: 24px 0;
   text-align: center;
