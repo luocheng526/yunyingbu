@@ -1,4 +1,4 @@
-/* xm-fast-shell 0.1.654-org-mask-off — /people never keeps #xm-notice-mask; anniversary stays on the notice bar */
+/* xm-fast-shell 0.1.656-site-open — never mount #xm-notice-mask; anniversary stays on the notice bar */
 (function () {
   const ASSET_VER = "0.1.625";
   const TAB_TITLE = "星脉甄选运营中心";
@@ -2159,9 +2159,6 @@
   }
 
   function relaxNoticeForPeople() {
-    if (!isPeopleRoute()) {
-      return;
-    }
     closeNoticePopup();
   }
 
@@ -2174,65 +2171,12 @@
       return;
     }
     new MutationObserver(function () {
-      if (isPeopleRoute()) {
-        relaxNoticeForPeople();
-      }
+      closeNoticePopup();
     }).observe(document.body, { childList: true });
   }
 
-  function showNoticePopup(item) {
-    if (!item || !item.id || document.getElementById("xm-notice-mask")) {
-      return;
-    }
-    if (isPeopleRoute()) {
-      return;
-    }
-    try {
-      if (sessionStorage.getItem("xm-notice-popup") === item.id) {
-        return;
-      }
-    } catch (_err) {
-      /* ignore */
-    }
-    const mask = document.createElement("div");
-    mask.id = "xm-notice-mask";
-    mask.className = "xm-notice-mask";
-    mask.innerHTML =
-      '<div class="xm-notice-dialog' +
-      (item.level === "important" ? " is-important" : "") +
-      '" role="dialog" aria-modal="true" aria-labelledby="xm-notice-pop-title">' +
-      '<p class="xm-notice-kicker">登录提醒</p>' +
-      '<h2 id="xm-notice-pop-title"></h2>' +
-      '<p class="xm-notice-pop-lead"></p>' +
-      '<div class="xm-notice-pop-actions">' +
-      '<button type="button" class="xm-notice-pop-close">稍后再看</button>' +
-      '<button type="button" class="xm-notice-pop-open">查看公告</button></div></div>';
-    mask.querySelector("#xm-notice-pop-title").textContent = item.title || "公告";
-    mask.querySelector(".xm-notice-pop-lead").textContent = item.summary || item.body || "";
-    mask.querySelector(".xm-notice-pop-close").addEventListener("click", function () {
-      try {
-        sessionStorage.setItem("xm-notice-popup", item.id);
-      } catch (_err) {
-        /* ignore */
-      }
-      closeNoticePopup();
-    });
-    mask.querySelector(".xm-notice-pop-open").addEventListener("click", function () {
-      try {
-        sessionStorage.setItem("xm-notice-popup", item.id);
-      } catch (_err2) {
-        /* ignore */
-      }
-      closeNoticePopup();
-      openNotice(item.id);
-    });
-    mask.addEventListener("click", function (event) {
-      if (event.target === mask) {
-        closeNoticePopup();
-      }
-    });
-    ensureImportantNoticeCss();
-    document.body.appendChild(mask);
+  function showNoticePopup() {
+    closeNoticePopup();
   }
 
   function bootNoticePopup() {
