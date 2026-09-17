@@ -490,7 +490,7 @@ function mapPaid(row) {
     ctr: Number(row.ctr) || 0,
     totalOrderAmount: Number(row.total_order_amount ?? row.totalOrderAmount) || 0,
     realFeeRatio: Number(row.real_fee_ratio ?? row.realFeeRatio) || 0,
-    success: row.success_flag || row.success || "",
+    success: asSuccess(row.success_flag || row.success || ""),
     source: row.source || "local",
     ingestedAt: row.ingested_at || row.ingestedAt || ""
   };
