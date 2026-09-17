@@ -249,6 +249,8 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /renderRightsLeadBox/);
     assert.match(jsText, /\(lead\.stores \|\| \[\]\)\.length \|\| looseAsst\.length/);
     assert.doesNotMatch(jsText, /looseAsst\.length && !ops\.length/);
+    assert.match(jsText, /人员对不上/);
+    assert.match(jsText, /店铺对不上/);
     assert.match(jsText, /主管\/储备/);
     assert.match(jsText, /rights-mod-band/);
     assert.match(jsText, /rights-mod-lead/);
@@ -796,6 +798,9 @@ test("rights tree follows assistant column when stored role still says 运营", 
     const boardJson = await board.json();
     const assistantColumn = boardJson.columns.find((column) => column.role === "助理");
     assert.ok(assistantColumn.people.some((person) => person.name === "助理对照"));
+    assert.ok(boardJson.watch.kpis.some((item) => item.label === "助理对照" && item.value === "1/1"));
+    assert.ok(boardJson.watch.kpis.some((item) => item.label === "人员对不上"));
+    assert.ok(boardJson.watch.kpis.some((item) => item.label === "店铺对不上"));
 
     let found = null;
     function walk(node, path = []) {

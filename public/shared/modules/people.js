@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.215-loose-assistant";
+    const href = "/people.css?v=0.1.216-rights-audit";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -1477,6 +1477,9 @@
         if (label === "待补全") {
           return "待补全";
         }
+        if (label === "人员对不上" || label === "店铺对不上") {
+          return label;
+        }
         if (label === "待处理" || label === "冲突类型") {
           return "冲突";
         }
@@ -1493,6 +1496,11 @@
         if (open === "冲突") {
           return issues.filter(function (item) {
             return item.kind !== "待补全";
+          });
+        }
+        if (open === "人员对不上" || open === "店铺对不上") {
+          return issues.filter(function (item) {
+            return item.kind === open;
           });
         }
         return [];
