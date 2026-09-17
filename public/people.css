@@ -24,6 +24,14 @@ body:has(.xm-shell):has(.people-page) .xm-main {
   flex-direction: column;
 }
 
+body:has(.people-page) #xm-notice-mask {
+  pointer-events: none !important;
+}
+
+body:has(.people-page) #xm-notice-mask .xm-notice-dialog {
+  pointer-events: auto !important;
+}
+
 body:has(.people-page) .xm-content,
 #xm-content:has(.people-page) {
   flex: 0 0 auto;
