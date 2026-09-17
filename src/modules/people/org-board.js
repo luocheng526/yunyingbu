@@ -463,6 +463,17 @@ function countTreePeople(node) {
   return (node.synthetic ? 0 : 1) + node.children.reduce((sum, child) => sum + countTreePeople(child), 0);
 }
 
+function treeRoleNames(node, role, names = new Set()) {
+  if (!node) {
+    return names;
+  }
+  if (!node.synthetic && node.role === role && cleanName(node.name)) {
+    names.add(cleanName(node.name));
+  }
+  (node.children || []).forEach((child) => treeRoleNames(child, role, names));
+  return names;
+}
+
 function cleanName(value) {
   const raw = String(value || "").trim();
   if (!raw || raw === "无" || raw === "—" || raw === "-" || raw === "点击填写") {
@@ -499,6 +510,20 @@ function rosterLineRole(person, line, byName) {
   return roleOfName(name, byName);
 }
 
+function rosterSeatNames(roster, field, seat) {
+  const names = new Set();
+  roster.forEach((person) => {
+    const raw = String(person[field] || "").trim();
+    const name = raw === seat || (seat === "主管" && raw === "主管/储备")
+      ? cleanName(person.name)
+      : cleanName(raw);
+    if (name) {
+      names.add(name);
+    }
+  });
+  return names;
+}
+
 function managerKeyOf(name) {
   const raw = cleanName(name);
   if (raw.includes("韩梦凯")) {
@@ -510,7 +535,7 @@ function managerKeyOf(name) {
   return "";
 }
 
-function buildRightsTree(stores, roster, byName) {
+export function buildRightsTree(stores, roster, byName) {
   const director = makeNode("罗成", "总监");
   const han = makeNode("韩梦凯", "经理", { id: byName["韩梦凯"] ? byName["韩梦凯"].id : null });
   const shen = makeNode("沈子晗", "经理", { id: byName["沈子晗"] ? byName["沈子晗"].id : null });
@@ -682,6 +707,7 @@ function buildRightsTree(stores, roster, byName) {
 function buildRightsWatch(stores, roster, byName, tree) {
   const issues = [];
   const rosterNames = new Set(roster.map((row) => row.name));
+  const rosterAssistants = rosterSeatNames(roster, "assistant", "助理");
   rosterNames.add("罗成");
   stores.forEach((row) => {
     if (!countsInStoreStats(row)) {
@@ -701,6 +727,14 @@ function buildRightsWatch(stores, roster, byName, tree) {
           level: "warn",
           title: name + " 不在花名册",
           detail: label + "「" + name + "」出现在「" + row.storeName + "」，成员管理没有这个人。"
+        });
+      }
+      if (field === "assistant" && cleanName(name) && rosterNames.has(name) && !rosterAssistants.has(name)) {
+        issues.push({
+          kind: "店铺对不上",
+          level: "warn",
+          title: row.storeName + " 的助理「" + name + "」与成员管理不一致",
+          detail: "店铺主数据把「" + name + "」写在助理列，但成员管理助理列没有这个人。"
         });
       }
     });
@@ -748,6 +782,27 @@ function buildRightsWatch(stores, roster, byName, tree) {
       });
     }
   });
+  const treeAssistants = treeRoleNames(tree, "助理");
+  rosterAssistants.forEach((name) => {
+    if (!treeAssistants.has(name)) {
+      issues.push({
+        kind: "人员对不上",
+        level: "error",
+        title: name + " 未进入助理树",
+        detail: "成员管理助理列有「" + name + "」，但责权树没有该助理。"
+      });
+    }
+  });
+  treeAssistants.forEach((name) => {
+    if (!rosterAssistants.has(name)) {
+      issues.push({
+        kind: "店铺对不上",
+        level: "error",
+        title: "责权树多出助理「" + name + "」",
+        detail: "责权树或店铺主数据把「" + name + "」作为助理，但成员管理助理列没有这个人。"
+      });
+    }
+  });
   const seen = new Set();
   const unique = issues.filter((item) => {
     const key = item.kind + item.title;
@@ -760,6 +815,8 @@ function buildRightsWatch(stores, roster, byName, tree) {
   const kinds = [...new Set(unique.map((item) => item.kind))];
   const pending = unique.filter((item) => item.kind !== "待补全").length;
   const fill = unique.filter((item) => item.kind === "待补全").length;
+  const peopleMismatch = unique.filter((item) => item.kind === "人员对不上").length;
+  const storeMismatch = unique.filter((item) => item.kind === "店铺对不上").length;
   const departments = new Set(roster.map((row) => String(row.department || row.center || "").trim()).filter(Boolean));
   return {
     checkedAt: new Date().toISOString().slice(0, 19).replace("T", " "),
@@ -770,6 +827,9 @@ function buildRightsWatch(stores, roster, byName, tree) {
       { label: "部门", value: departments.size },
       { label: "在职员工", value: roster.length + (byName["罗成"] ? 0 : 1) },
       { label: "树上人数", value: countTreePeople(tree) },
+      { label: "助理对照", value: treeAssistants.size + "/" + rosterAssistants.size },
+      { label: "人员对不上", value: peopleMismatch },
+      { label: "店铺对不上", value: storeMismatch },
       { label: "待处理", value: pending },
       { label: "冲突类型", value: kinds.filter((kind) => kind !== "待补全").length },
       { label: "待补全", value: fill }
