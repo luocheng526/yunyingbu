@@ -266,13 +266,32 @@ const PEOPLE_FORM_SMOKE = `<!doctype html>
         name.value = "测试人员";
         name.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "测试人员" }));
         name.dispatchEvent(new Event("input", { bubbles: true }));
+        const noticeMask = document.createElement("div");
+        noticeMask.id = "xm-notice-mask";
+        noticeMask.style.cssText = "position:fixed;inset:0;z-index:80;pointer-events:auto";
+        document.body.append(noticeMask);
+        const manager = form.elements.namedItem("manager");
+        const managerRect = manager.getBoundingClientRect();
+        const managerHit = document.elementFromPoint(
+          managerRect.left + managerRect.width / 2,
+          managerRect.top + managerRect.height / 2
+        );
+        if (managerHit === manager) {
+          manager.focus();
+          manager.value = "测试经理";
+          manager.dispatchEvent(new Event("input", { bubbles: true }));
+        }
         await sleep(80);
         const ok =
-          document.activeElement === name &&
           name.value === "测试人员" &&
-          form.elements.namedItem("username").value === "测试人员";
+          form.elements.namedItem("username").value === "测试人员" &&
+          managerHit === manager &&
+          document.activeElement === manager &&
+          manager.value === "测试经理";
         document.body.setAttribute("data-name", name.value);
         document.body.setAttribute("data-account", form.elements.namedItem("username").value);
+        document.body.setAttribute("data-manager", manager.value);
+        document.body.setAttribute("data-hit", managerHit && managerHit.name || managerHit && managerHit.id || "");
         document.body.setAttribute("data-ok", ok ? "1" : "0");
       })();
     </script>
@@ -299,6 +318,8 @@ test("headless chrome can type Chinese in add-person form", async () => {
     assert.match(html, /data-ok="1"/, html.includes("data-ok=") ? html.slice(html.indexOf("data-ok="), html.indexOf("data-ok=") + 160) : html.slice(-400));
     assert.match(html, /data-name="测试人员"/);
     assert.match(html, /data-account="测试人员"/);
+    assert.match(html, /data-manager="测试经理"/);
+    assert.match(html, /data-hit="manager"/);
   } finally {
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
