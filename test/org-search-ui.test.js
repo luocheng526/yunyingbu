@@ -37,10 +37,13 @@ const SMOKE = `<!doctype html>
         document.body.setAttribute("data-kpis", kpiText.replace(/\\s+/g, " ").trim());
         const peopleQ = document.getElementById("people-q");
         peopleQ.focus();
-        peopleQ.value = "杨润泽";
+        peopleQ.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+        peopleQ.value = "yangrunze";
         peopleQ.dispatchEvent(new Event("input", { bubbles: true }));
-        if (window.__xmSearchPeople) { window.__xmSearchPeople(); }
+        peopleQ.value = "杨润泽";
+        peopleQ.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "杨润泽" }));
         await sleep(200);
+        const peopleFocusOk = document.activeElement === peopleQ;
         const peopleNames = Array.prototype.map.call(document.querySelectorAll("#people-tbody tr"), function (tr) {
           return (tr.cells[1] && tr.cells[1].textContent) || "";
         });
@@ -50,12 +53,11 @@ const SMOKE = `<!doctype html>
         storeQ.focus();
         storeQ.value = "ZYUO";
         storeQ.dispatchEvent(new Event("input", { bubbles: true }));
-        if (window.__xmSearchStores) { window.__xmSearchStores(); }
         await sleep(200);
         const storeText = Array.prototype.map.call(document.querySelectorAll("#org-tbody tr"), function (tr) {
           return tr.textContent;
         });
-        const peopleOk = peopleNames.some(function (name) { return name.indexOf("杨润泽") >= 0; }) && peopleNames.length >= 1 && peopleNames.length < 16;
+        const peopleOk = peopleFocusOk && peopleNames.some(function (name) { return name.indexOf("杨润泽") >= 0; }) && peopleNames.length >= 1 && peopleNames.length < 16;
         const storeOk = storeText.some(function (text) { return text.indexOf("ZYUO") >= 0; }) && storeText.length >= 1 && storeText.length < 15;
         document.body.setAttribute("data-people-n", String(peopleNames.length));
         document.body.setAttribute("data-people-names", peopleNames.join(","));
