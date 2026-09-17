@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.208-reserve-frame";
+    const href = "/people.css?v=0.1.209-search-ime";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -217,8 +217,8 @@
         '<div class="org-kpis" id="org-kpis"></div>' +
         '<div class="org-toolbar">' +
         '<div class="org-search-form" id="org-search-form">' +
-        '<input type="text" id="org-q" placeholder="店铺ID / 商家ID / 店铺名 / 人员" autocomplete="off" spellcheck="false" oninput="window.__xmSearchStores&&window.__xmSearchStores()" onkeyup="window.__xmSearchStores&&window.__xmSearchStores()" />' +
-        '<button type="button" id="org-search" onclick="window.__xmSearchStores&&window.__xmSearchStores()">搜索</button>' +
+        '<input type="text" id="org-q" placeholder="店铺ID / 商家ID / 店铺名 / 人员" autocomplete="off" spellcheck="false" />' +
+        '<button type="button" id="org-search">搜索</button>' +
         "</div>" +
         '<span class="spacer" id="org-count"></span>' +
         '<button type="button" class="ghost" id="org-template">下载模板</button>' +
@@ -249,8 +249,8 @@
         '<div class="org-kpis" id="people-kpis"></div>' +
         '<div class="org-toolbar">' +
         '<div class="org-search-form" id="people-search-form">' +
-        '<input type="text" id="people-q" placeholder="姓名 / 账号 / 经理 / 主管" autocomplete="off" spellcheck="false" oninput="window.__xmSearchPeople&&window.__xmSearchPeople()" onkeyup="window.__xmSearchPeople&&window.__xmSearchPeople()" />' +
-        '<button type="button" id="people-search" onclick="window.__xmSearchPeople&&window.__xmSearchPeople()">搜索</button>' +
+        '<input type="text" id="people-q" placeholder="姓名 / 账号 / 经理 / 主管" autocomplete="off" spellcheck="false" />' +
+        '<button type="button" id="people-search">搜索</button>' +
         "</div>" +
         '<span class="spacer" id="people-count"></span>' +
         '<button type="button" class="ghost" id="people-template">下载模板</button>' +
@@ -1858,26 +1858,46 @@
         if (!input) {
           return;
         }
+        let composing = false;
+        let timer = 0;
+        function schedule() {
+          if (timer) {
+            return;
+          }
+          timer = window.setTimeout(function () {
+            timer = 0;
+            run();
+          }, 0);
+        }
         input.disabled = false;
         input.readOnly = false;
         input.removeAttribute("readonly");
         input.removeAttribute("disabled");
+        input.addEventListener("pointerdown", function (event) {
+          event.stopPropagation();
+        });
         input.addEventListener("mousedown", function (event) {
           event.stopPropagation();
         });
         input.addEventListener("click", function (event) {
           event.stopPropagation();
-          input.focus();
         });
-        ["input", "keyup", "change", "paste", "compositionend"].forEach(function (name) {
-          input.addEventListener(name, function () {
-            run();
-          });
+        input.addEventListener("compositionstart", function () {
+          composing = true;
+        });
+        input.addEventListener("compositionend", function () {
+          composing = false;
+          schedule();
+        });
+        input.addEventListener("input", function () {
+          if (!composing) {
+            schedule();
+          }
         });
         if (form) {
           form.addEventListener("click", function (event) {
-            if (event.target && event.target.id && event.target.id.indexOf("search") >= 0 && event.target.tagName === "BUTTON") {
-              run();
+            if (event.target && event.target.tagName === "BUTTON") {
+              schedule();
             }
           });
         }
@@ -1894,17 +1914,6 @@
       }
       window.__xmSearchStores = runStoreSearch;
       window.__xmSearchPeople = runPeopleSearch;
-      function onSearchCapture(event) {
-        const id = event.target && event.target.id;
-        if (id === "org-q") {
-          runStoreSearch();
-        }
-        if (id === "people-q") {
-          runPeopleSearch();
-        }
-      }
-      document.addEventListener("input", onSearchCapture, true);
-      document.addEventListener("keyup", onSearchCapture, true);
       bindLiveSearch(root.querySelector("#org-search-form"), qInput, runStoreSearch);
       root.querySelector("#org-add").addEventListener("click", function () {
         openForm(null);
@@ -2632,8 +2641,6 @@
 
       return function unmount() {
         dead = true;
-        document.removeEventListener("input", onSearchCapture, true);
-        document.removeEventListener("keyup", onSearchCapture, true);
         if (window.__xmSearchStores === runStoreSearch) {
           delete window.__xmSearchStores;
         }

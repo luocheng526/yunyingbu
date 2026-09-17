@@ -139,7 +139,11 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.doesNotMatch(jsText, /peopleRoleBucket/);
     assert.match(jsText, /__xmSearchStores/);
     assert.match(jsText, /__xmSearchPeople/);
-    assert.match(jsText, /onSearchCapture/);
+    assert.doesNotMatch(jsText, /onSearchCapture/);
+    assert.match(jsText, /compositionstart/);
+    assert.match(jsText, /timer = window\.setTimeout/);
+    assert.doesNotMatch(jsText, /oninput="window\.__xmSearch/);
+    assert.doesNotMatch(jsText, /onkeyup="window\.__xmSearch/);
     assert.match(jsText, /org-search-form/);
     assert.match(jsText, /people-search-form/);
     assert.match(jsText, /type="text" id="org-q"/);
