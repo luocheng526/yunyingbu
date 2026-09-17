@@ -247,7 +247,7 @@ const RESERVE_SMOKE = `<!doctype html>
   </body>
 </html>`;
 
-const BLOCKING_NOTICE_SMOKE = `<!doctype html>
+const NONBLOCKING_NOTICE_SMOKE = `<!doctype html>
 <html lang="zh-CN">
   <head><meta charset="utf-8" /><link rel="stylesheet" href="/people.css" /></head>
   <body>
@@ -282,22 +282,22 @@ const BLOCKING_NOTICE_SMOKE = `<!doctype html>
         document.body.setAttribute("data-notice-hit", noticeHit && noticeHit.id || "");
         document.body.setAttribute(
           "data-ok",
-          searchHit === mask && noticeHit === noticeButton ? "1" : "0"
+          searchHit === search && noticeHit === noticeButton ? "1" : "0"
         );
       })();
     </script>
   </body>
 </html>`;
 
-test("headless chrome keeps explicit login notices blocking", async () => {
+test("headless chrome lets search receive clicks while notice stays usable", async () => {
   resetPeopleStore();
   resetOrgBoard();
   resetOrgExtra();
   const app = createApp();
   const server = http.createServer((req, res) => {
-    if (req.url === "/__blocking-notice-smoke") {
+    if (req.url === "/__nonblocking-notice-smoke") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      res.end(BLOCKING_NOTICE_SMOKE);
+      res.end(NONBLOCKING_NOTICE_SMOKE);
       return;
     }
     app(req, res);
@@ -305,9 +305,9 @@ test("headless chrome keeps explicit login notices blocking", async () => {
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address();
   try {
-    const html = await chromeDump(`http://127.0.0.1:${port}/__blocking-notice-smoke`, 10000);
+    const html = await chromeDump(`http://127.0.0.1:${port}/__nonblocking-notice-smoke`, 10000);
     assert.match(html, /data-ok="1"/, html.includes("data-ok=") ? html.slice(html.indexOf("data-ok="), html.indexOf("data-ok=") + 180) : html.slice(-400));
-    assert.match(html, /data-search-hit="xm-notice-mask"/);
+    assert.match(html, /data-search-hit="people-q"/);
     assert.match(html, /data-notice-hit="notice-action"/);
   } finally {
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
