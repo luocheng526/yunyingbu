@@ -159,6 +159,13 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /columnValueCounts/);
     assert.match(jsText, /filterDraft/);
     assert.match(jsText, /applyFilterDraft/);
+    assert.match(jsText, /pickedForColumn/);
+    assert.match(jsText, /th\.classList\.toggle\("is-on"/);
+    assert.match(jsText, /th\.org-th-filter\.is-on\{background:#d9d9d9;color:#262626;\}/);
+    assert.match(cssText, /\.people-page th\.org-th-filter\.is-on/);
+    assert.match(cssText, /background: #d9d9d9/);
+    assert.match(cssText, /color: #262626/);
+    assert.doesNotMatch(cssText, /\.org-filter-btn\.is-on,\s*\.org-filter-btn\.is-on \.org-filter-name \{\s*color: #1677ff/);
     assert.match(jsText, /"家店铺"/);
     assert.match(jsText, /countsInStoreStats/);
     assert.doesNotMatch(jsText, /\["闲置中", summary.idle\]/);

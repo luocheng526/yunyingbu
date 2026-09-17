@@ -363,6 +363,53 @@ const DEFERRED_FILTER_SMOKE = `<!doctype html>
   </body>
 </html>`;
 
+const FILTER_HEADER_ON_SMOKE = `<!doctype html>
+<html lang="zh-CN">
+  <head><meta charset="utf-8" /><link rel="stylesheet" href="/people.css" /></head>
+  <body>
+    <div id="xm-content"></div>
+    <script src="/shared/modules/people.js"></script>
+    <script>
+      (async function () {
+        function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+        function snap(prefix, btn) {
+          const th = btn.closest("th");
+          const name = btn.querySelector(".org-filter-name");
+          const thCs = getComputedStyle(th);
+          const nameCs = getComputedStyle(name);
+          document.body.setAttribute("data-" + prefix + "-on", btn.classList.contains("is-on") && th.classList.contains("is-on") ? "1" : "0");
+          document.body.setAttribute("data-" + prefix + "-bg", thCs.backgroundColor.replace(/\\s+/g, ""));
+          document.body.setAttribute("data-" + prefix + "-color", nameCs.color.replace(/\\s+/g, ""));
+        }
+        window.XmModules["/people"].mount(document.getElementById("xm-content"));
+        await sleep(700);
+        const reserveBtn = document.querySelector('.org-filter-btn[data-filter-key="reserve"]');
+        const managerBtn = document.querySelector('.org-filter-btn[data-filter-key="manager"]');
+        snap("before", reserveBtn);
+        reserveBtn.click();
+        await sleep(50);
+        const first = document.querySelector("#org-filter-pop .org-filter-value");
+        first.checked = false;
+        first.dispatchEvent(new Event("change", { bubbles: true }));
+        await sleep(80);
+        snap("during", reserveBtn);
+        document.getElementById("org-count").click();
+        await sleep(120);
+        snap("after", reserveBtn);
+        snap("manager", managerBtn);
+        const ok =
+          document.body.getAttribute("data-before-on") === "0" &&
+          document.body.getAttribute("data-during-on") === "1" &&
+          document.body.getAttribute("data-after-on") === "1" &&
+          document.body.getAttribute("data-manager-on") === "0" &&
+          document.body.getAttribute("data-after-bg") === "rgb(217,217,217)" &&
+          document.body.getAttribute("data-after-color") === "rgb(38,38,38)";
+        document.body.setAttribute("data-ok", ok ? "1" : "0");
+      })();
+    </script>
+  </body>
+</html>`;
+
 test("headless chrome applies column filters only after popup closes", async () => {
   resetPeopleStore();
   resetOrgBoard();
@@ -386,6 +433,39 @@ test("headless chrome applies column filters only after popup closes", async () 
     const after = Number(html.match(/data-after="(\d+)"/)?.[1]);
     assert.equal(during, before);
     assert.ok(after < before);
+  } finally {
+    await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
+});
+
+test("headless chrome darkens filtered 储备 header", async () => {
+  resetPeopleStore();
+  resetOrgBoard();
+  resetOrgExtra();
+  const app = createApp();
+  const server = http.createServer((req, res) => {
+    if (req.url === "/__filter-header-on-smoke") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(FILTER_HEADER_ON_SMOKE);
+      return;
+    }
+    app(req, res);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  try {
+    const html = await chromeDump(`http://127.0.0.1:${port}/__filter-header-on-smoke`, 10000);
+    assert.match(
+      html,
+      /data-ok="1"/,
+      html.includes("data-ok=") ? html.slice(html.indexOf("data-ok="), html.indexOf("data-ok=") + 280) : html.slice(-400)
+    );
+    assert.match(html, /data-before-on="0"/);
+    assert.match(html, /data-during-on="1"/);
+    assert.match(html, /data-after-on="1"/);
+    assert.match(html, /data-manager-on="0"/);
+    assert.match(html, /data-after-bg="rgb\(217,217,217\)"/);
+    assert.match(html, /data-after-color="rgb\(38,38,38\)"/);
   } finally {
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }

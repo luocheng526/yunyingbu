@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.222-self-operator";
+    const href = "/people.css?v=0.1.223-filter-on";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -152,6 +152,7 @@
       ".people-page .org-table-wrap{overflow:visible!important;max-height:none!important;}" +
       ".people-page table{border-collapse:separate;border-spacing:0;}" +
       ".people-page th{position:static;background:#fafafa;}" +
+      ".people-page th.org-th-filter.is-on{background:#d9d9d9;color:#262626;}" +
       ".people-page td.people-cell.is-editing,.people-page td.org-cell.is-editing{overflow:hidden;position:relative;}" +
       ".people-page td.people-cell.is-editing input,.people-page td.org-cell.is-editing input,.people-page td.org-cell.is-editing select{position:absolute;inset:3px;width:auto;height:auto;min-width:0;max-width:none;margin:0;padding:0 4px;box-sizing:border-box;font:inherit;}";
   }
@@ -889,8 +890,15 @@
         return list;
       }
 
+      function pickedForColumn(key) {
+        if (openFilterKey === key && filterDraft) {
+          return filterDraft;
+        }
+        return columnPicked[key];
+      }
+
       function isColumnFiltered(key) {
-        const picked = columnPicked[key];
+        const picked = pickedForColumn(key);
         const all = uniqueColumnValues(key);
         if (!picked) {
           return false;
@@ -987,7 +995,12 @@
       function paintFilterCarets() {
         root.querySelectorAll(".org-filter-btn").forEach(function (btn) {
           const key = btn.getAttribute("data-filter-key");
-          btn.classList.toggle("is-on", isColumnFiltered(key));
+          const on = isColumnFiltered(key);
+          btn.classList.toggle("is-on", on);
+          const th = btn.closest("th");
+          if (th) {
+            th.classList.toggle("is-on", on);
+          }
         });
       }
 
@@ -1917,6 +1930,7 @@
           allBox.checked = values.length > 0 && selected === values.length;
           allBox.indeterminate = selected > 0 && selected < values.length;
         }
+        paintFilterCarets();
       }
       if (filterPop) {
         filterPop.addEventListener("change", onFilterChange);
