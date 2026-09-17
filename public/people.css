@@ -916,7 +916,7 @@ body:has(.people-page) .xm-tabs {
 .rights-mod-lead {
   display: grid;
   grid-template-columns: 110px 110px minmax(0, 1fr);
-  align-items: center;
+  align-items: stretch;
   gap: 4px;
 }
 
