@@ -81,6 +81,11 @@
         return (Number(value) || 0).toFixed(2);
       }
 
+      function recorded(value) {
+        const text = String(value == null ? "" : value).trim();
+        return text ? escapeHtml(text) : "未记录";
+      }
+
       function successTag(value) {
         if (value === "是") {
           return '<span class="xm-paid-tag is-yes">是</span>';
@@ -373,9 +378,9 @@
                   "</td><td>" +
                   escapeHtml(row.chargedAt || "—") +
                   "</td><td>" +
-                  escapeHtml(row.subAccountId || "—") +
+                  recorded(row.subAccountId) +
                   "</td><td>" +
-                  escapeHtml(row.subAccountName || "—") +
+                  recorded(row.subAccountName) +
                   "</td><td>" +
                   money(row.amount) +
                   "</td><td>" +

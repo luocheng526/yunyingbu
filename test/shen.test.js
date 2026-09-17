@@ -388,6 +388,9 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /含历史店铺/);
     assert.match(embed.text, /subAccountId/);
     assert.match(embed.text, /子账号名称/);
+    assert.match(embed.text, /未记录/);
+    assert.equal(embed.text.includes('row.subAccountId || "—"'), false);
+    assert.equal(embed.text.includes("row.accountId || row.subAccountId"), false);
     assert.match(embed.text, /jingmaiGmv: latest\.jingmaiGmv/);
     assert.equal(embed.text.includes("jingmaiGmv: (paid.metrics || {}).jingmaiGmv"), false);
     assert.equal(embed.text.includes("表格行号"), false);
@@ -960,6 +963,63 @@ test("paid ingest keeps enabled-store roster and recharge subaccount target", as
     assert.equal(recharges.json.rows[0].accountId, "995225226");
     assert.equal(recharges.json.rows[0].subAccountId, "88001");
     assert.equal(recharges.json.rows[0].subAccountName, "投放1-回填");
+    assert.notEqual(recharges.json.rows[0].subAccountId, recharges.json.rows[0].accountId);
+
+    const alias = await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        充值记录: [
+          {
+            店铺名称: "DIKTT个护健康旗舰店",
+            京准通主账户ID: "995225226",
+            子账户ID: "99002",
+            子账户名称: "投放2",
+            充值时间: "2026-09-17T10:00:00+08:00",
+            充值金额: 80,
+            账户余额: 100
+          }
+        ]
+      })
+    });
+    assert.equal(alias.res.status, 201);
+    const listed = await request(
+      base,
+      "/api/shen/paid/recharges?store=" + encodeURIComponent("DIKTT个护健康旗舰店")
+    );
+    const second = listed.json.rows.find((row) => row.amount === 80);
+    assert.equal(second.accountId, "995225226");
+    assert.equal(second.subAccountId, "99002");
+    assert.equal(second.subAccountName, "投放2");
+
+    const oldOnlyMain = listed.json.rows.find((row) => row.amount === 500);
+    assert.equal(oldOnlyMain.subAccountId, "88001");
+
+    await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        充值记录: [
+          {
+            店铺名称: "DIKTT个护健康旗舰店",
+            京准通主账户ID: "995225226",
+            充值时间: "2026-09-17T11:00:00+08:00",
+            充值金额: 1,
+            账户余额: 2
+          }
+        ]
+      })
+    });
+    const afterMainOnly = await request(
+      base,
+      "/api/shen/paid/recharges?store=" + encodeURIComponent("DIKTT个护健康旗舰店")
+    );
+    const unknown = afterMainOnly.json.rows.find((row) => row.amount === 1);
+    assert.equal(unknown.accountId, "995225226");
+    assert.equal(unknown.subAccountId, "");
+    assert.equal(unknown.subAccountName, "");
+    assert.equal(afterMainOnly.json.totals.count, 3);
+    assert.equal(afterMainOnly.json.totals.amount, 581);
   });
 });
 

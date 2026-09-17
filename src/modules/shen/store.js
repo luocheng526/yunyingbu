@@ -425,12 +425,43 @@ function asRate(value, label) {
 }
 
 function pickField(raw, keys) {
+  if (!raw || typeof raw !== "object") {
+    return undefined;
+  }
   for (const key of keys) {
     if (raw[key] != null && raw[key] !== "") {
       return raw[key];
     }
   }
   return undefined;
+}
+
+function compactKey(value) {
+  return String(value ?? "").replace(/\s+/g, "");
+}
+
+function pickLooseField(raw, keys, accept) {
+  const direct = pickField(raw, keys);
+  if (direct != null && direct !== "") {
+    return direct;
+  }
+  if (!raw || typeof raw !== "object") {
+    return undefined;
+  }
+  for (const [key, value] of Object.entries(raw)) {
+    if (value == null || value === "") {
+      continue;
+    }
+    const compact = compactKey(key);
+    if (keys.some((item) => compactKey(item) === compact) || (accept && accept(compact))) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function isMainAccountKey(compact) {
+  return /主账户|主帐号|jztAccountId|^accountId$/i.test(compact);
 }
 
 function todayDay() {
@@ -693,8 +724,22 @@ function parseRechargeRow(raw, defaultStore, defaultDay, source) {
   return {
     store,
     accountId: clipText(pickField(raw, ["京准通主账户ID", "accountId", "jztAccountId"]), 64, "京准通主账户ID"),
-    subAccountId: clipText(pickField(raw, ["子账号ID", "subAccountId", "subId"]), 64, "子账号ID"),
-    subAccountName: clipText(pickField(raw, ["子账号名称", "subAccountName", "账户名称"]), 128, "子账号名称"),
+    subAccountId: clipText(
+      pickLooseField(raw, ["子账号ID", "子帐号ID", "子账户ID", "充值子账号ID", "目标子账号ID", "subAccountId", "subId"], (key) => {
+        return !isMainAccountKey(key) && /^(子账号|子帐号|子账户)ID$|^subAccountId$|^subId$/i.test(key);
+      }),
+      64,
+      "子账号ID"
+    ),
+    subAccountName: clipText(
+      pickLooseField(
+        raw,
+        ["子账号名称", "子帐号名称", "子账户名称", "充值子账号名称", "目标子账号名称", "subAccountName"],
+        (key) => !isMainAccountKey(key) && /^(子账号|子帐号|子账户)名称$|^subAccountName$/i.test(key)
+      ),
+      128,
+      "子账号名称"
+    ),
     day: asDay(dayRaw, "date"),
     chargedAt,
     amount: asMoney(pickField(raw, ["充值金额", "amount", "金额"]), "充值金额"),
