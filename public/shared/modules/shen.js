@@ -299,11 +299,11 @@
             "</tbody></table></div>"
           : '<p class="empty">暂无充值记录，本地程序回传后在此展示</p>';
         bodyEl.innerHTML =
-          '<section class="panel"><div class="xm-paid-toolbar">' +
+          '<section class="panel"><div class="xm-paid-toolbar"><div class="xm-paid-toolbar-left">' +
           '<button type="button" class="xm-paid-back" id="paid-back">返回付费中心</button>' +
           "<h2>" +
           escapeHtml(store) +
-          "</h2></div></section>" +
+          "</h2></div></div></section>" +
           '<div class="xm-paid-detail-grid">' +
           '<section class="panel"><h2>循环抓取明细</h2>' +
           history +
