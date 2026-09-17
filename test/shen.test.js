@@ -22,7 +22,8 @@ function createFakePool() {
         sql === SQL.addPaidOrdersColumn ||
         sql === SQL.addPaidJingmaiColumn ||
         sql === SQL.addPaidTotalOrderColumn ||
-        sql === SQL.addPaidFeeRatioColumn
+        sql === SQL.addPaidFeeRatioColumn ||
+        sql === SQL.addPaidSuccessColumn
       ) {
         return [{}];
       }
@@ -89,6 +90,7 @@ function createFakePool() {
           ctr,
           totalOrderAmount,
           realFeeRatio,
+          successFlag,
           source
         ] = params;
         const key = `${store}\t${day}`;
@@ -108,6 +110,7 @@ function createFakePool() {
           ctr,
           total_order_amount: totalOrderAmount,
           real_fee_ratio: realFeeRatio,
+          success_flag: successFlag,
           source,
           ingested_at: "2026-09-15 12:00:00"
         };
@@ -228,6 +231,9 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /\/api\/shen\/paid/);
     assert.match(embed.text, /京准通主账户ID/);
     assert.match(embed.text, /真实费比/);
+    assert.match(embed.text, /是否成功/);
+    assert.equal(embed.text.includes("表格行号"), false);
+    assert.equal(embed.text.includes("模板行号"), false);
     assert.match(embed.text, /waitPage\("选品"\)/);
     assert.match(embed.text, /waitPage\("优化"\)/);
     assert.match(embed.text, /waitPage\("产品成长"\)/);
@@ -376,7 +382,6 @@ test("paid ingest upserts and lists by store + day", async () => {
         source: "local",
         rows: [
           {
-            表格行号: 1,
             店铺名称: "旗舰店",
             京准通主账户ID: "10001",
             京准通花费: 120.5,
@@ -388,9 +393,18 @@ test("paid ingest upserts and lists by store + day", async () => {
             京准通点击数: 40,
             京准通点击率: 2.5,
             京准通总订单金额: 880,
-            真实费比: 8.1
+            真实费比: 8.1,
+            是否成功: "成功"
           },
-          { date: "2026-09-15", 店铺名称: "专营店", 京准通花费: 20, 京准通点击数: 8, 京麦成交金额: 80, 京准通总订单金额: 50 }
+          {
+            date: "2026-09-15",
+            店铺名称: "专营店",
+            京准通花费: 20,
+            京准通点击数: 8,
+            京麦成交金额: 80,
+            京准通总订单金额: 50,
+            是否成功: "失败"
+          }
         ]
       })
     });
@@ -411,7 +425,8 @@ test("paid ingest upserts and lists by store + day", async () => {
             京准通点击数: 50,
             京麦成交金额: 1300,
             京准通总订单金额: 900,
-            京准通付费投产比: 4.5
+            京准通付费投产比: 4.5,
+            是否成功: "是"
           }
         ]
       })
@@ -429,12 +444,14 @@ test("paid ingest upserts and lists by store + day", async () => {
     assert.equal(listed.json.rows[0].jingmaiGmv, 1300);
     assert.equal(listed.json.rows[0].totalOrderAmount, 900);
     assert.equal(listed.json.rows[0].roi, 4.5);
+    assert.equal(listed.json.rows[0].success, "是");
     assert.equal(listed.json.totals.spend, 200);
     assert.equal(JSON.stringify(listed.json).includes("shen_paid_daily"), false);
 
     const other = await request(base, "/api/shen/paid?store=%E4%B8%93%E8%90%A5%E5%BA%97&from=2026-09-15&to=2026-09-15");
     assert.equal(other.json.rows.length, 1);
     assert.equal(other.json.rows[0].spend, 20);
+    assert.equal(other.json.rows[0].success, "否");
 
     const summary = await request(
       base,

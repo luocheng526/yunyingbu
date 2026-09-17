@@ -29,6 +29,7 @@ export const SQL = {
   ctr DECIMAL(12,4) NOT NULL DEFAULT 0,
   total_order_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
   real_fee_ratio DECIMAL(12,4) NOT NULL DEFAULT 0,
+  success_flag VARCHAR(16) NOT NULL DEFAULT '',
   source VARCHAR(64) NOT NULL DEFAULT 'local',
   ingested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uk_shen_paid_daily (store, day),
@@ -39,8 +40,9 @@ export const SQL = {
   addPaidJingmaiColumn: `ALTER TABLE shen_paid_daily ADD COLUMN jingmai_gmv DECIMAL(14,2) NOT NULL DEFAULT 0`,
   addPaidTotalOrderColumn: `ALTER TABLE shen_paid_daily ADD COLUMN total_order_amount DECIMAL(14,2) NOT NULL DEFAULT 0`,
   addPaidFeeRatioColumn: `ALTER TABLE shen_paid_daily ADD COLUMN real_fee_ratio DECIMAL(12,4) NOT NULL DEFAULT 0`,
-  upsertPaid: `INSERT INTO shen_paid_daily (seq, store, account_id, day, spend, paid_orders, roi, cvr, cpc, jingmai_gmv, clicks, ctr, total_order_amount, real_fee_ratio, source)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  addPaidSuccessColumn: `ALTER TABLE shen_paid_daily ADD COLUMN success_flag VARCHAR(16) NOT NULL DEFAULT ''`,
+  upsertPaid: `INSERT INTO shen_paid_daily (seq, store, account_id, day, spend, paid_orders, roi, cvr, cpc, jingmai_gmv, clicks, ctr, total_order_amount, real_fee_ratio, success_flag, source)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON DUPLICATE KEY UPDATE
   seq = VALUES(seq),
   account_id = VALUES(account_id),
@@ -54,12 +56,13 @@ ON DUPLICATE KEY UPDATE
   ctr = VALUES(ctr),
   total_order_amount = VALUES(total_order_amount),
   real_fee_ratio = VALUES(real_fee_ratio),
+  success_flag = VALUES(success_flag),
   source = VALUES(source),
   ingested_at = CURRENT_TIMESTAMP`,
-  listPaid: `SELECT id, seq, store, account_id, day, spend, paid_orders, roi, cvr, cpc, jingmai_gmv, clicks, ctr, total_order_amount, real_fee_ratio, source, ingested_at
+  listPaid: `SELECT id, seq, store, account_id, day, spend, paid_orders, roi, cvr, cpc, jingmai_gmv, clicks, ctr, total_order_amount, real_fee_ratio, success_flag, source, ingested_at
 FROM shen_paid_daily
 WHERE (? = 1 OR store = ?) AND day >= ? AND day <= ?
-ORDER BY day DESC, seq ASC, id ASC
+ORDER BY day DESC, id ASC
 LIMIT ?`,
   summarizePaid: `SELECT COALESCE(SUM(spend), 0) AS spend, COALESCE(SUM(paid_orders), 0) AS paid_orders, COALESCE(SUM(jingmai_gmv), 0) AS jingmai_gmv, COALESCE(SUM(clicks), 0) AS clicks, COALESCE(SUM(total_order_amount), 0) AS total_order_amount, COUNT(*) AS cnt
 FROM shen_paid_daily
@@ -238,6 +241,27 @@ function asCount(value, label) {
   return Math.round(number);
 }
 
+function asSuccess(value) {
+  if (value == null || value === "") {
+    return "";
+  }
+  if (value === true || value === 1) {
+    return "是";
+  }
+  if (value === false || value === 0) {
+    return "否";
+  }
+  const text = String(value).trim();
+  const key = text.toLowerCase();
+  if (["1", "true", "yes", "y", "ok", "成功", "是"].includes(key)) {
+    return "是";
+  }
+  if (["0", "false", "no", "n", "失败", "否"].includes(key)) {
+    return "否";
+  }
+  return clipText(text, 16, "是否成功");
+}
+
 function asRate(value, label) {
   const number = toFiniteNumber(value);
   if (number == null) {
@@ -284,6 +308,7 @@ function mapPaid(row) {
     ctr: Number(row.ctr) || 0,
     totalOrderAmount: Number(row.total_order_amount ?? row.totalOrderAmount) || 0,
     realFeeRatio: Number(row.real_fee_ratio ?? row.realFeeRatio) || 0,
+    success: row.success_flag || row.success || "",
     source: row.source || "local",
     ingestedAt: row.ingested_at || row.ingestedAt || ""
   };
@@ -336,7 +361,7 @@ function parsePaidRow(raw, defaultStore, defaultDay, source) {
   }
   const dayRaw = pickField(raw, ["date", "day", "日期"]) || defaultDay || todayDay();
   return {
-    seq: asCount(pickField(raw, ["表格行号", "seq", "序列号"]), "表格行号"),
+    seq: 0,
     store,
     accountId: clipText(pickField(raw, ["京准通主账户ID", "accountId", "jztAccountId"]), 64, "京准通主账户ID"),
     day: asDay(dayRaw, "date"),
@@ -350,6 +375,7 @@ function parsePaidRow(raw, defaultStore, defaultDay, source) {
     ctr: asRate(pickField(raw, ["京准通点击率", "ctr", "点击率"]), "京准通点击率"),
     totalOrderAmount: asMoney(pickField(raw, ["京准通总订单金额", "totalOrderAmount"]), "京准通总订单金额"),
     realFeeRatio: asRate(pickField(raw, ["真实费比", "realFeeRatio"]), "真实费比"),
+    success: asSuccess(pickField(raw, ["是否成功", "success", "ok", "succeeded"])),
     source: clipText(pickField(raw, ["source", "来源"]) || source, 64, "来源") || "local"
   };
 }
@@ -364,7 +390,8 @@ async function ensurePaidTable() {
     SQL.addPaidOrdersColumn,
     SQL.addPaidJingmaiColumn,
     SQL.addPaidTotalOrderColumn,
-    SQL.addPaidFeeRatioColumn
+    SQL.addPaidFeeRatioColumn,
+    SQL.addPaidSuccessColumn
   ]) {
     try {
       await mysqlQuery(sql);
@@ -522,13 +549,7 @@ export async function ingestPaid(body) {
   if (incoming.length > MAX_PAID_ROWS) {
     throw httpError(400, `一次最多回传 ${MAX_PAID_ROWS} 行`);
   }
-  const rows = incoming.map((row, index) => {
-    const parsed = parsePaidRow(row, defaultStore, defaultDay, source);
-    if (!parsed.seq) {
-      parsed.seq = index + 1;
-    }
-    return parsed;
-  });
+  const rows = incoming.map((row) => parsePaidRow(row, defaultStore, defaultDay, source));
   await ensurePaidTable();
   const ingestedAt = new Date().toISOString().slice(0, 19).replace("T", " ");
   for (const row of rows) {
@@ -547,6 +568,7 @@ export async function ingestPaid(body) {
       row.ctr,
       row.totalOrderAmount,
       row.realFeeRatio,
+      row.success,
       row.source
     ]);
     if (result) {
@@ -568,6 +590,7 @@ export async function ingestPaid(body) {
       ctr: row.ctr,
       total_order_amount: row.totalOrderAmount,
       real_fee_ratio: row.realFeeRatio,
+      success_flag: row.success,
       source: row.source,
       ingested_at: ingestedAt
     };

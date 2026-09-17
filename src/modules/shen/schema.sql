@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS shen_paid_daily (
   ctr DECIMAL(12,4) NOT NULL DEFAULT 0,
   total_order_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
   real_fee_ratio DECIMAL(12,4) NOT NULL DEFAULT 0,
+  success_flag VARCHAR(16) NOT NULL DEFAULT '',
   source VARCHAR(64) NOT NULL DEFAULT 'local',
   ingested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uk_shen_paid_daily (store, day),

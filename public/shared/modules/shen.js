@@ -93,15 +93,12 @@
           return;
         }
         const body = rows
-          .map(function (row, index) {
-            const seq = row.seq || index + 1;
+          .map(function (row) {
             return (
               "<tr><td>" +
               escapeHtml(row.store) +
               "</td><td>" +
               escapeHtml(row.accountId) +
-              "</td><td>" +
-              escapeHtml(seq) +
               "</td><td>" +
               money(row.spend) +
               "</td><td>" +
@@ -122,16 +119,18 @@
               money(row.totalOrderAmount) +
               "</td><td>" +
               rate(row.realFeeRatio) +
+              "</td><td>" +
+              escapeHtml(row.success) +
               "</td></tr>"
             );
           })
           .join("");
         tableWrap.innerHTML =
           "<table><thead><tr>" +
-          "<th>店铺名称</th><th>京准通主账户ID</th><th>表格行号</th><th>京准通花费</th>" +
+          "<th>店铺名称</th><th>京准通主账户ID</th><th>京准通花费</th>" +
           "<th>京准通付费订单数</th><th>京准通付费投产比</th><th>京准通付费转化率</th>" +
           "<th>京准通平均点击成本</th><th>京麦成交金额</th><th>京准通点击数</th>" +
-          "<th>京准通点击率</th><th>京准通总订单金额</th><th>真实费比</th>" +
+          "<th>京准通点击率</th><th>京准通总订单金额</th><th>真实费比</th><th>是否成功</th>" +
           "</tr></thead><tbody>" +
           body +
           "</tbody></table>";
