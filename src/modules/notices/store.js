@@ -98,9 +98,13 @@ export function bannerNotices() {
   return items.filter((item) => item.banner).slice(0, 5);
 }
 
+export function selectPopupNotice(items = []) {
+  return items.find((item) => item.status === "active" && item.popup === true) || null;
+}
+
 export function popupNotice() {
   const { items } = listNotices({ status: "active" });
-  return items.find((item) => item.popup) || items[0] || null;
+  return selectPopupNotice(items);
 }
 
 export function getNotice(id) {
