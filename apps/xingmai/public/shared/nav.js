@@ -1,4 +1,4 @@
-/* xm-fast-shell 0.1.651-org-search-type — people search can type; login notice is not a modal on /people */
+/* xm-fast-shell 0.1.654-org-mask-off — /people never keeps #xm-notice-mask; anniversary stays on the notice bar */
 (function () {
   const ASSET_VER = "0.1.625";
   const TAB_TITLE = "星脉甄选运营中心";
@@ -2158,46 +2158,11 @@
     }
   }
 
-  function ensureNoticeToastCss() {
-    if (document.getElementById("xm-notice-toast-css")) {
-      return;
-    }
-    const style = document.createElement("style");
-    style.id = "xm-notice-toast-css";
-    style.textContent =
-      ".xm-notice-mask[data-xm-toast='1']{align-items:flex-start!important;justify-content:flex-end!important;padding:64px 16px 16px 100px!important;background:transparent!important;pointer-events:none!important;}" +
-      ".xm-notice-mask[data-xm-toast='1'] .xm-notice-dialog{pointer-events:auto!important;max-width:380px;box-shadow:0 10px 30px rgba(0,0,0,.2);}";
-    document.head.appendChild(style);
-  }
-
-  function disarmNoticeDialog(root) {
-    if (!root) {
-      return;
-    }
-    ensureNoticeToastCss();
-    root.setAttribute("data-xm-toast", "1");
-    const dialog = root.querySelector(".xm-notice-dialog, [role='dialog']");
-    if (dialog) {
-      dialog.removeAttribute("role");
-      dialog.removeAttribute("aria-modal");
-    }
-    if (root.contains(document.activeElement)) {
-      try {
-        document.activeElement.blur();
-      } catch (_err) {
-        /* ignore */
-      }
-    }
-  }
-
   function relaxNoticeForPeople() {
     if (!isPeopleRoute()) {
       return;
     }
-    const mask = document.getElementById("xm-notice-mask");
-    if (mask) {
-      disarmNoticeDialog(mask);
-    }
+    closeNoticePopup();
   }
 
   function watchNoticeMask() {
@@ -2219,6 +2184,9 @@
     if (!item || !item.id || document.getElementById("xm-notice-mask")) {
       return;
     }
+    if (isPeopleRoute()) {
+      return;
+    }
     try {
       if (sessionStorage.getItem("xm-notice-popup") === item.id) {
         return;
@@ -2229,13 +2197,10 @@
     const mask = document.createElement("div");
     mask.id = "xm-notice-mask";
     mask.className = "xm-notice-mask";
-    const asToast = isPeopleRoute();
     mask.innerHTML =
       '<div class="xm-notice-dialog' +
       (item.level === "important" ? " is-important" : "") +
-      '"' +
-      (asToast ? "" : ' role="dialog" aria-modal="true"') +
-      ' aria-labelledby="xm-notice-pop-title">' +
+      '" role="dialog" aria-modal="true" aria-labelledby="xm-notice-pop-title">' +
       '<p class="xm-notice-kicker">登录提醒</p>' +
       '<h2 id="xm-notice-pop-title"></h2>' +
       '<p class="xm-notice-pop-lead"></p>' +
@@ -2268,9 +2233,6 @@
     });
     ensureImportantNoticeCss();
     document.body.appendChild(mask);
-    if (asToast) {
-      disarmNoticeDialog(mask);
-    }
   }
 
   function bootNoticePopup() {
