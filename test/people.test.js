@@ -192,6 +192,8 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /people-check-all/);
     assert.match(jsText, /people-bulk/);
     assert.match(jsText, /people-bulk-remove/);
+    assert.match(jsText, /keepPeopleFormTyping/);
+    assert.match(jsText, /nameInput\.focus\(\{ preventScroll: true \}\)/);
     assert.match(jsText, /\/api\/people\/passwords/);
     assert.match(jsText, /\/api\/people\/remove/);
     assert.doesNotMatch(jsText, /能看见的店/);
