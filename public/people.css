@@ -28,8 +28,8 @@ body:has(.people-page) #xm-notice-mask {
   align-items: flex-start !important;
   justify-content: flex-end !important;
   padding: 64px 16px 16px 100px !important;
-  background: rgba(0, 0, 0, 0.24) !important;
-  pointer-events: auto !important;
+  background: transparent !important;
+  pointer-events: none !important;
 }
 
 body:has(.people-page) #xm-notice-mask .xm-notice-dialog {
