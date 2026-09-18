@@ -1,0 +1,194 @@
+# 沈子晗充值规则接口
+
+网站只保存规则和修改历史，不保存京准通 / 京麦 Cookie，也不直接发起充值。本地工作机拉到完整有效配置并 ACK 成功后，才按京小洁数据判断是否打开京准通充值。接口异常时，本地必须继续使用上一次校验成功的规则。
+
+夜间 23:55 转出、00:05 启动是独立规则，本页不改。
+
+## 权限
+
+- 网页接口按登录用户过滤店铺。超级管理员 / 全平台数据可看全部。
+- 其他人只看组织中心 `visibleShops` 与 `POST /api/shen/paid/recharge-config/owners` 写入的归属。
+- 后端校验店铺归属，前端隐藏不能当权限。
+- 主账户ID、子账号ID按字符串保存，拒绝小数和科学计数法。
+
+## 默认规则
+
+新账号未保存时按此档位展示（保存后才进版本号）：
+
+1. `1 ≤ 花费 < 1000` 且 `ROI ≥ 计划ROI` 且 `余额 ≤ 100`：充值 100。
+2. `花费 ≥ 1000` 且 `ROI ≥ 计划ROI` 且 `余额 ≤ 50`：充值 150，不回退第一档。
+3. `ROI < 计划ROI` 且比上次有效查询上涨：不看余额，充值 100。
+4. 以上成功充值统一计数；连续 3 次单量未涨，第 4 次前暂停 30 分钟。
+5. 暂停期间单量上涨可提前解除；否则 30 分钟后解除。
+6. 解除后计数清零，重新判断，不因解除直接充值。
+
+## 网页接口
+
+### `GET /api/shen/paid/recharge-config/editor?store=&q=&enabled=1`
+
+当前用户可编辑的子账号规则（未保存行带默认档位）。
+
+```json
+{
+  "ok": true,
+  "version": 28,
+  "actor": "沈子晗",
+  "scope": "assigned",
+  "syncStatus": "待同步",
+  "rows": [
+    {
+      "store": "飒望旗舰店",
+      "accountId": "99931330021",
+      "subAccountId": "99945558065",
+      "subAccountName": "飒望旗舰-测试放大2",
+      "autoRecharge": true,
+      "plannedRoi": 2.3,
+      "tier1MinSpend": 1,
+      "tier1MaxSpend": 1000,
+      "tier1Balance": 100,
+      "tier1Amount": 100,
+      "tier2MinSpend": 1000,
+      "tier2Balance": 50,
+      "tier2Amount": 150,
+      "roiRiseAmount": 100,
+      "noOrderTimes": 3,
+      "pauseMinutes": 30,
+      "version": 28,
+      "updatedBy": "沈子晗",
+      "updatedAt": "2026-09-18T23:55:00+08:00",
+      "syncStatus": "待同步",
+      "syncedAt": ""
+    }
+  ]
+}
+```
+
+### `PUT /api/shen/paid/recharge-config`
+
+同一批保存共用一个递增 `version`。`patch=roi` 只改勾选子账号的计划ROI。
+
+```json
+{
+  "patch": "roi",
+  "changeSummary": "批量设置计划ROI",
+  "rows": [
+    {
+      "店铺名称": "飒望旗舰店",
+      "京准通主账户ID": "99931330021",
+      "子账号ID": "99945558065",
+      "子账号名称": "飒望旗舰-测试放大2",
+      "计划ROI": 2.3
+    }
+  ]
+}
+```
+
+成功：`{ "ok": true, "version": 28, "updatedAt": "...", "updatedBy": "沈子晗", "saved": 1 }`
+
+### `GET /api/shen/paid/recharge-config/history?store=&subAccountId=&limit=100`
+
+谁在什么时间改了哪个字段。
+
+## 本地机接口
+
+### `GET /api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=27`
+
+只返回该机 / 绑定用户有权限的店铺。无新版本：
+
+```json
+{ "changed": false, "version": 27 }
+```
+
+有更新时返回**完整当前有效配置**，不要本地拼接：
+
+```json
+{
+  "changed": true,
+  "version": 28,
+  "updatedAt": "2026-09-18T23:55:00+08:00",
+  "shops": [
+    {
+      "店铺名称": "飒望旗舰店",
+      "京准通主账户ID": "99931330021",
+      "启用": true,
+      "子账号": [
+        {
+          "子账号ID": "99945558065",
+          "子账号名称": "飒望旗舰-测试放大2",
+          "自动充值": true,
+          "计划ROI": 2.3,
+          "第一档花费下限": 1,
+          "第一档花费上限": 1000,
+          "第一档余额阈值": 100,
+          "第一档充值金额": 100,
+          "第二档花费下限": 1000,
+          "第二档余额阈值": 50,
+          "第二档充值金额": 150,
+          "ROI上涨充值金额": 100,
+          "连续充值未增单次数": 3,
+          "暂停分钟数": 30
+        }
+      ]
+    }
+  ]
+}
+```
+
+首次拉取需能识别执行人（登录会话或 `x-shen-user` / `x-shen-role`）。`machineId` 会记下执行人和权限范围，后续无会话也能按绑定人过滤店铺。
+
+尚未保存过规则时 `version` 为 0，接口仍返回当前有效默认档位（`changed: true`），方便本地机落地。已保存后若 `sinceVersion` 已是最新版本：
+
+```http
+GET /api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=28&http304=1
+```
+
+可返回 `304`。不带 `http304=1` 时返回 `{ "changed": false, "version": 28 }`。
+
+### `POST /api/shen/paid/recharge-config/ack`
+
+```json
+{
+  "machineId": "paid-worker-01",
+  "version": 28,
+  "status": "success",
+  "receivedAt": "2026-09-18T23:55:10+08:00",
+  "message": "已校验并启用28版规则"
+}
+```
+
+失败：`"status": "failed"`。页面据此显示待同步 / 已同步 / 同步失败。
+
+## 充值执行回传
+
+现有 `POST /api/shen/paid/ingest` 覆盖规则不变。可选多带：
+
+- `executionId`：唯一。重复上传不新增第二笔。
+- `configVersion` / `ruleCode`
+- `plannedRoi`、当时花费 / ROI / 单量、`result`
+
+没有 `executionId` 时仍按店铺 + 日期 + 充值时间 + 金额去重。有 `executionId` 时按该编号去重，重复上传不会新增第二笔。
+
+可选字段示例：
+
+```json
+{
+  "充值记录": [
+    {
+      "店铺名称": "飒望旗舰店",
+      "京准通主账户ID": "99931330021",
+      "子账号ID": "99945558065",
+      "子账号名称": "飒望旗舰-测试放大2",
+      "充值时间": "2026-09-18T10:12:00+08:00",
+      "充值金额": 100,
+      "executionId": "paid-worker-01-28-tier1-20260918101200",
+      "configVersion": 28,
+      "ruleCode": "tier1",
+      "plannedRoi": 2.3,
+      "execSpend": 860,
+      "execRoi": 2.41,
+      "execPaidOrders": 12,
+      "result": "success"
+    }
+  ]
+}
+```

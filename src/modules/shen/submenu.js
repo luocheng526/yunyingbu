@@ -4,6 +4,7 @@ export const SHEN_SUBMENUS = [
   { slug: "product/chengzhang", href: "/shen/product/chengzhang", label: "产品成长" },
   { slug: "product", href: "/shen/product", label: "产品中心" },
   { slug: "paid", href: "/shen/paid", label: "付费中心" },
+  { slug: "recharge-rules", href: "/shen/recharge-rules", label: "充值规则" },
   { slug: "training", href: "/shen/training", label: "培训系统" },
   { slug: "tasks", href: "/shen/tasks", label: "任务管理" }
 ];
