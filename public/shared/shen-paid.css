@@ -1,0 +1,293 @@
+/* 沈子晗付费中心：总览 + 店铺下钻。不改全局壳子。 */
+.xm-paid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.xm-paid .page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 0 0 4px;
+}
+
+.xm-paid .page-head h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.xm-paid .page-head .lead {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+
+.xm-paid-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--xm-muted);
+  font-size: 13px;
+}
+
+.xm-paid-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #52c41a;
+  box-shadow: 0 0 0 4px rgba(82, 196, 26, 0.12);
+}
+
+.xm-paid .kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 0;
+}
+
+.xm-paid .kpi-card {
+  background: var(--xm-card, #fff);
+  border-radius: 8px;
+  box-shadow: var(--xm-shadow, 0 1px 2px rgba(0, 0, 0, 0.03), 0 8px 24px rgba(0, 0, 0, 0.04));
+  min-height: 86px;
+  padding: 14px 16px 12px;
+}
+
+.xm-paid .kpi-card .value {
+  font-size: 22px;
+}
+
+.xm-paid .panel {
+  min-height: 0;
+  background: var(--xm-card, #fff);
+  border-radius: 8px;
+  box-shadow: var(--xm-shadow, 0 1px 2px rgba(0, 0, 0, 0.03), 0 8px 24px rgba(0, 0, 0, 0.04));
+  padding: 14px 16px 16px;
+}
+
+.xm-paid-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.xm-paid-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.xm-paid-toolbar h2 {
+  margin: 0;
+}
+
+.xm-paid-toolbar .row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.xm-paid-toolbar input[type="search"],
+.xm-paid-toolbar input[type="text"] {
+  min-width: 220px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--xm-line);
+  border-radius: 6px;
+  background: var(--xm-card);
+  color: var(--xm-ink);
+}
+
+.xm-paid-scope {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--xm-line);
+  border-radius: 6px;
+  background: var(--xm-card);
+  color: var(--xm-ink);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.xm-paid-table-wrap {
+  overflow: auto;
+  max-height: calc(100vh - 360px);
+  border: 1px solid var(--xm-line);
+  border-radius: 8px;
+}
+
+.xm-paid table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+
+.xm-paid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #fafafa;
+  color: var(--xm-muted);
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--xm-line);
+  text-align: right;
+}
+
+.xm-paid thead th:first-child,
+.xm-paid thead th:nth-child(2),
+.xm-paid td:first-child,
+.xm-paid td:nth-child(2) {
+  text-align: left;
+}
+
+.xm-paid tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--xm-line);
+  white-space: nowrap;
+  text-align: right;
+  color: var(--xm-ink);
+}
+
+.xm-paid tbody tr:hover td {
+  background: #f8fbff;
+}
+
+.xm-paid tbody tr.is-zero td {
+  color: var(--xm-muted);
+}
+
+.xm-paid-store {
+  color: var(--xm-primary);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.xm-paid-store:hover {
+  text-decoration: underline;
+}
+
+.xm-paid-date {
+  display: block;
+  margin-top: 2px;
+  color: var(--xm-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.xm-paid-tag {
+  display: inline-flex;
+  align-items: center;
+  min-width: 36px;
+  justify-content: center;
+  padding: 0 8px;
+  height: 22px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.xm-paid-tag.is-yes {
+  background: #f6ffed;
+  color: #389e0d;
+}
+
+.xm-paid-tag.is-no {
+  background: #fff2f0;
+  color: #cf1322;
+}
+
+.xm-paid-tag.is-empty {
+  background: #f5f5f5;
+  color: var(--xm-muted);
+}
+
+.xm-paid-back {
+  border: 0;
+  background: transparent;
+  color: var(--xm-primary);
+  padding: 0;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.xm-paid-back:hover {
+  text-decoration: underline;
+}
+
+.xm-paid-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.8fr);
+  gap: 12px;
+}
+
+.xm-paid-expand {
+  width: 22px;
+  height: 22px;
+  margin-right: 8px;
+  padding: 0;
+  border: 1px solid var(--xm-line);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--xm-muted);
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.xm-paid-expand[aria-expanded="true"] {
+  color: var(--xm-primary);
+  border-color: var(--xm-primary);
+  background: var(--xm-primary-soft, #e6f4ff);
+}
+
+.xm-paid-sub-name {
+  font-weight: 600;
+}
+
+.xm-paid-sub-history td {
+  text-align: left !important;
+  background: #fafafa;
+  padding: 0 12px 12px;
+}
+
+.xm-paid-nested {
+  padding-top: 8px;
+}
+
+.xm-paid-nested table {
+  background: #fff;
+  border: 1px solid var(--xm-line);
+  border-radius: 6px;
+}
+
+.xm-paid .empty {
+  margin: 24px 0;
+  text-align: center;
+  color: var(--xm-muted);
+}
+
+.xm-paid .status {
+  margin: 0;
+  font-size: 12px;
+}
+
+@media (max-width: 1200px) {
+  .xm-paid .kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .xm-paid-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
