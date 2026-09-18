@@ -573,12 +573,29 @@ async function replaceEnabledStores(names, source) {
   return names;
 }
 
+const HIDDEN_PAID_OVERVIEW_STORES = new Set(["RASW潮流生活京选菀瑶专卖店"]);
+
 function applyEnabledStoreFilter(rows, roster, { store, allScope }) {
   if (store || allScope || !roster.length) {
     return rows;
   }
   const allow = new Set(roster);
   return rows.filter((row) => allow.has(row.store));
+}
+
+function applyHiddenOverviewStores(rows, { store }) {
+  if (store) {
+    return rows;
+  }
+  return rows.filter((row) => !HIDDEN_PAID_OVERVIEW_STORES.has(row.store));
+}
+
+function applyLatestAsOfFilter(rows, { store, latest }) {
+  if (!latest || store || !rows.length) {
+    return rows;
+  }
+  const asOf = asOfDay(rows);
+  return rows.filter((row) => row.date === asOf);
 }
 
 function pickLatestPaidRows(rows) {
@@ -1389,6 +1406,8 @@ export async function listPaid(query) {
   const roster = await loadEnabledStoreNames();
   const allScope = isAllStoreScope(query);
   rows = applyEnabledStoreFilter(rows, roster, { store: parsed.store, allScope });
+  rows = applyHiddenOverviewStores(rows, { store: parsed.store });
+  rows = applyLatestAsOfFilter(rows, { store: parsed.store, latest });
   const totals = summarizePaidRows(rows);
   return {
     ok: true,

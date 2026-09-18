@@ -930,8 +930,12 @@ test("paid ingest keeps enabled-store roster and recharge subaccount target", as
       body: JSON.stringify({ date: "2026-09-17", rows: history })
     });
     const before = await request(base, "/api/shen/paid?view=latest");
-    assert.equal(before.json.rows.length, 13);
+    assert.equal(before.json.rows.length, 12);
     assert.equal(before.json.scope, "all");
+    assert.equal(
+      before.json.rows.some((row) => row.store === "RASW潮流生活京选菀瑶专卖店"),
+      false
+    );
 
     const roster = await request(base, "/api/shen/paid/ingest", {
       method: "POST",
@@ -960,8 +964,12 @@ test("paid ingest keeps enabled-store roster and recharge subaccount target", as
 
     const all = await request(base, "/api/shen/paid?view=latest&scope=all");
     assert.equal(all.json.scope, "all");
-    assert.equal(all.json.rows.length, 13);
+    assert.equal(all.json.rows.length, 12);
     assert.equal(all.json.rows.some((row) => row.store === "RASW护眼照明旗舰"), true);
+    assert.equal(
+      all.json.rows.some((row) => row.store === "RASW潮流生活京选菀瑶专卖店"),
+      false
+    );
 
     const historyStore = await request(
       base,
@@ -969,6 +977,13 @@ test("paid ingest keeps enabled-store roster and recharge subaccount target", as
     );
     assert.equal(historyStore.json.rows.length, 1);
     assert.equal(historyStore.json.rows[0].spend, 2140.56);
+
+    const renamedStore = await request(
+      base,
+      "/api/shen/paid?store=" + encodeURIComponent("RASW潮流生活京选菀瑶专卖店") + "&from=2026-09-17&to=2026-09-17"
+    );
+    assert.equal(renamedStore.json.rows.length, 1);
+    assert.equal(renamedStore.json.rows[0].spend, 20);
 
     const charged = await request(base, "/api/shen/paid/ingest", {
       method: "POST",
@@ -1073,6 +1088,80 @@ test("paid ingest keeps enabled-store roster and recharge subaccount target", as
     assert.equal(unknown.subAccountName, "");
     assert.equal(afterMainOnly.json.totals.count, 3);
     assert.equal(afterMainOnly.json.totals.amount, 581);
+  });
+});
+
+test("paid latest overview hides renamed RASW store and stale asOf rows", async () => {
+  await withServer(async (base) => {
+    await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: "2026-09-15",
+        rows: [
+          {
+            店铺名称: "RASW潮流生活京选菀瑶专卖店",
+            京准通主账户ID: "99922484897",
+            京准通花费: 3354.39,
+            是否成功: "采集成功"
+          },
+          {
+            店铺名称: "RASW护眼照明旗舰",
+            京准通花费: 100,
+            是否成功: "采集成功"
+          }
+        ]
+      })
+    });
+    await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: "2026-09-17",
+        rows: [
+          {
+            店铺名称: "RASW潮流生活旗舰店",
+            京准通主账户ID: "99922484897",
+            京准通花费: 0,
+            是否成功: "采集成功"
+          },
+          {
+            店铺名称: "RASW生活电器旗舰店",
+            京准通花费: 14050.29,
+            是否成功: "采集成功"
+          }
+        ]
+      })
+    });
+
+    const latest = await request(base, "/api/shen/paid?view=latest");
+    assert.equal(latest.res.status, 200);
+    assert.equal(latest.json.asOf, "2026-09-17");
+    assert.equal(latest.json.rows.length, 2);
+    assert.equal(latest.json.metrics.stores, 2);
+    assert.deepEqual(
+      latest.json.rows.map((row) => row.store).sort(),
+      ["RASW潮流生活旗舰店", "RASW生活电器旗舰店"]
+    );
+    assert.equal(
+      latest.json.rows.some((row) => row.store === "RASW潮流生活京选菀瑶专卖店" || row.date === "2026-09-15"),
+      false
+    );
+
+    const withHistory = await request(base, "/api/shen/paid?view=latest&scope=all");
+    assert.equal(
+      withHistory.json.rows.some((row) => row.store === "RASW潮流生活京选菀瑶专卖店"),
+      false
+    );
+
+    const named = await request(
+      base,
+      "/api/shen/paid?store=" + encodeURIComponent("RASW潮流生活京选菀瑶专卖店")
+    );
+    assert.equal(named.json.rows.length, 1);
+    assert.equal(named.json.rows[0].date, "2026-09-15");
+    assert.equal(named.json.rows[0].spend, 3354.39);
+    assert.equal(named.json.rows[0].accountId, "99922484897");
   });
 });
 
