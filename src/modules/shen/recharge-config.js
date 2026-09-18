@@ -494,8 +494,9 @@ function formatValue(key, value) {
 
 function diffRule(prev, next) {
   const changes = [];
+  const baseline = applyDefault(prev || {});
   for (const [key, label] of RULE_FIELDS) {
-    const before = prev ? prev[key] : "";
+    const before = baseline[key];
     const after = next[key];
     if (String(before) !== String(after)) {
       changes.push({ field: label, key, oldValue: formatValue(key, before), newValue: formatValue(key, after) });
