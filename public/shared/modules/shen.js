@@ -518,7 +518,7 @@
       };
     }
   };
-  window.XmModules["/shen/recharge-rules"] = {
+  window.XmModules["/shen/recharge-rules"] = window.XmModules["/shen/recharge-rules/index.html"] = {
     mount: function (root) {
       if (!document.querySelector('link[href^="/shared/shen-paid.css"]')) {
         const link = document.createElement("link");
@@ -979,11 +979,11 @@
     const links = document.querySelectorAll("a[href='/shen/paid'], a[href=\"/shen/paid\"]");
     links.forEach(function (paid) {
       const parent = paid.parentElement;
-      if (!parent || parent.querySelector("a[href='/shen/recharge-rules']")) {
+      if (!parent || parent.querySelector("a[href='/shen/recharge-rules']") || parent.querySelector("a[href='/shen/recharge-rules/index.html']")) {
         return;
       }
       const next = paid.cloneNode(true);
-      next.setAttribute("href", "/shen/recharge-rules");
+      next.setAttribute("href", "/shen/recharge-rules/index.html");
       next.textContent = "充值规则";
       if (paid.nextSibling) {
         parent.insertBefore(next, paid.nextSibling);
