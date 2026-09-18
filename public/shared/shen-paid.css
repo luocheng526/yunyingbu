@@ -291,3 +291,42 @@
     grid-template-columns: 1fr;
   }
 }
+
+.xm-rules .xm-paid-table-wrap {
+  max-height: calc(100vh - 280px);
+}
+
+.xm-rules select,
+.xm-rules-num,
+.xm-rules input[type="number"] {
+  height: 32px;
+  min-width: 88px;
+  padding: 0 8px;
+  border: 1px solid var(--xm-line);
+  border-radius: 6px;
+  background: var(--xm-card);
+  color: var(--xm-ink);
+}
+
+.xm-rules-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.xm-rules-save {
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--xm-primary, #1677ff);
+  color: #fff;
+  cursor: pointer;
+}
+
+.xm-rules thead th:first-child,
+.xm-rules td:first-child {
+  text-align: center;
+}

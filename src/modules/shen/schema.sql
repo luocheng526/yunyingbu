@@ -60,8 +60,17 @@ CREATE TABLE IF NOT EXISTS shen_paid_recharge (
   channel VARCHAR(64) NOT NULL DEFAULT '',
   remark VARCHAR(200) NOT NULL DEFAULT '',
   source VARCHAR(64) NOT NULL DEFAULT 'local',
+  config_version INT UNSIGNED NOT NULL DEFAULT 0,
+  rule_code VARCHAR(32) NOT NULL DEFAULT '',
+  planned_roi DECIMAL(12,4) NOT NULL DEFAULT 0,
+  exec_spend DECIMAL(14,2) NOT NULL DEFAULT 0,
+  exec_roi DECIMAL(12,4) NOT NULL DEFAULT 0,
+  exec_paid_orders INT NOT NULL DEFAULT 0,
+  result_flag VARCHAR(32) NOT NULL DEFAULT '',
+  execution_id VARCHAR(64) NULL DEFAULT NULL,
   ingested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uk_shen_paid_recharge (store, day, charged_at, amount),
+  UNIQUE KEY uk_shen_paid_recharge_exec (execution_id),
   KEY idx_shen_paid_recharge_store_day (store, day)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -99,4 +108,71 @@ CREATE TABLE IF NOT EXISTS shen_paid_subaccount (
   ingested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uk_shen_paid_subaccount (day, account_id, sub_account_id, captured_at),
   KEY idx_shen_paid_sub_store_day (store, day)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 充值规则：网站只配置，不发起京准通充值。本地机 GET /api/shen/paid/recharge-config 拉全量有效配置。
+CREATE TABLE IF NOT EXISTS shen_paid_recharge_rule (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  store VARCHAR(64) NOT NULL,
+  account_id VARCHAR(64) NOT NULL DEFAULT '',
+  sub_account_id VARCHAR(64) NOT NULL,
+  sub_account_name VARCHAR(128) NOT NULL DEFAULT '',
+  shop_enabled TINYINT NOT NULL DEFAULT 1,
+  auto_recharge TINYINT NOT NULL DEFAULT 1,
+  planned_roi DECIMAL(12,4) NOT NULL DEFAULT 0,
+  tier1_min DECIMAL(14,2) NOT NULL DEFAULT 1,
+  tier1_max DECIMAL(14,2) NOT NULL DEFAULT 1000,
+  tier1_balance DECIMAL(14,2) NOT NULL DEFAULT 100,
+  tier1_amount DECIMAL(14,2) NOT NULL DEFAULT 100,
+  tier2_min DECIMAL(14,2) NOT NULL DEFAULT 1000,
+  tier2_balance DECIMAL(14,2) NOT NULL DEFAULT 50,
+  tier2_amount DECIMAL(14,2) NOT NULL DEFAULT 150,
+  roi_rise_amount DECIMAL(14,2) NOT NULL DEFAULT 100,
+  no_order_times INT NOT NULL DEFAULT 3,
+  pause_minutes INT NOT NULL DEFAULT 30,
+  version INT UNSIGNED NOT NULL DEFAULT 0,
+  updated_by VARCHAR(64) NOT NULL DEFAULT '',
+  updated_at VARCHAR(40) NOT NULL DEFAULT '',
+  UNIQUE KEY uk_shen_paid_recharge_rule (store, account_id, sub_account_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS shen_paid_recharge_rule_meta (
+  id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+  version INT UNSIGNED NOT NULL DEFAULT 0,
+  updated_by VARCHAR(64) NOT NULL DEFAULT '',
+  updated_at VARCHAR(40) NOT NULL DEFAULT '',
+  change_summary VARCHAR(200) NOT NULL DEFAULT ''
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS shen_paid_recharge_rule_history (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  version INT UNSIGNED NOT NULL,
+  store VARCHAR(64) NOT NULL,
+  account_id VARCHAR(64) NOT NULL DEFAULT '',
+  sub_account_id VARCHAR(64) NOT NULL DEFAULT '',
+  field_name VARCHAR(64) NOT NULL,
+  old_value VARCHAR(128) NOT NULL DEFAULT '',
+  new_value VARCHAR(128) NOT NULL DEFAULT '',
+  updated_by VARCHAR(64) NOT NULL DEFAULT '',
+  updated_at VARCHAR(40) NOT NULL DEFAULT '',
+  change_summary VARCHAR(200) NOT NULL DEFAULT '',
+  KEY idx_shen_rule_hist_store (store, sub_account_id, version)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS shen_paid_store_owner (
+  username VARCHAR(64) NOT NULL,
+  store VARCHAR(64) NOT NULL,
+  PRIMARY KEY (username, store)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS shen_paid_recharge_machine (
+  machine_id VARCHAR(64) NOT NULL PRIMARY KEY,
+  username VARCHAR(64) NOT NULL DEFAULT '',
+  role VARCHAR(64) NOT NULL DEFAULT '',
+  data_scope VARCHAR(64) NOT NULL DEFAULT '',
+  last_version INT UNSIGNED NOT NULL DEFAULT 0,
+  status VARCHAR(16) NOT NULL DEFAULT '',
+  message VARCHAR(200) NOT NULL DEFAULT '',
+  received_at VARCHAR(40) NOT NULL DEFAULT '',
+  synced_at VARCHAR(40) NOT NULL DEFAULT ''
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -4,6 +4,7 @@ import test from "node:test";
 import { createApp } from "../src/app.js";
 import { patchAppSource } from "../src/modules/shen/patch-app.js";
 import { SQL, hydrateFromMysql, resetStore, setPool } from "../src/modules/shen/store.js";
+import { RULE_SQL, resetRechargeConfig } from "../src/modules/shen/recharge-config.js";
 import { SHEN_LEGACY_REDIRECTS, SHEN_SUBMENUS } from "../src/modules/shen/submenu.js";
 
 function asMysqlDate(day) {
@@ -44,7 +45,23 @@ function createFakePool() {
         sql === SQL.addPaidSubCapturedAtColumn ||
         sql === SQL.dropPaidSubUnique ||
         sql === SQL.addPaidSubUniqueWithCaptured ||
-        sql === SQL.createEnabledStoreTable
+        sql === SQL.createEnabledStoreTable ||
+        sql === SQL.addPaidRechargeConfigVersion ||
+        sql === SQL.addPaidRechargeRuleCode ||
+        sql === SQL.addPaidRechargePlannedRoi ||
+        sql === SQL.addPaidRechargeExecSpend ||
+        sql === SQL.addPaidRechargeExecRoi ||
+        sql === SQL.addPaidRechargeExecOrders ||
+        sql === SQL.addPaidRechargeResult ||
+        sql === SQL.addPaidRechargeExecutionId ||
+        sql === SQL.addPaidRechargeExecutionUnique ||
+        sql === RULE_SQL.createRuleTable ||
+        sql === RULE_SQL.createMetaTable ||
+        sql === RULE_SQL.createHistoryTable ||
+        sql === RULE_SQL.createOwnerTable ||
+        sql === RULE_SQL.createMachineTable ||
+        sql === RULE_SQL.addMachineRole ||
+        sql === RULE_SQL.addMachineScope
       ) {
         return [{}];
       }
@@ -183,8 +200,27 @@ function createFakePool() {
         return [enabled.map((row) => ({ ...row })).sort((a, b) => String(a.store).localeCompare(String(b.store), "zh"))];
       }
       if (sql === SQL.upsertRecharge) {
-        const [store, accountId, subAccountId, subAccountName, day, chargedAt, amount, balance, channel, remark, source] =
-          params;
+        const [
+          store,
+          accountId,
+          subAccountId,
+          subAccountName,
+          day,
+          chargedAt,
+          amount,
+          balance,
+          channel,
+          remark,
+          source,
+          configVersion,
+          ruleCode,
+          plannedRoi,
+          execSpend,
+          execRoi,
+          execPaidOrders,
+          resultFlag,
+          executionId
+        ] = params;
         const key = `${store}\t${day}\t${chargedAt}\t${Number(amount) || 0}`;
         const row = {
           id: nextRechargeId,
@@ -199,11 +235,25 @@ function createFakePool() {
           channel,
           remark,
           source,
-          ingested_at: "2026-09-17 12:00:00"
+          ingested_at: "2026-09-17 12:00:00",
+          config_version: configVersion || 0,
+          rule_code: ruleCode || "",
+          planned_roi: plannedRoi || 0,
+          exec_spend: execSpend || 0,
+          exec_roi: execRoi || 0,
+          exec_paid_orders: execPaidOrders || 0,
+          result_flag: resultFlag || "",
+          execution_id: executionId || ""
         };
-        const idx = recharges.findIndex(
-          (item) => `${item.store}\t${item.day}\t${item.charged_at}\t${Number(item.amount) || 0}` === key
-        );
+        const byExec = executionId
+          ? recharges.findIndex((item) => item.execution_id && item.execution_id === executionId)
+          : -1;
+        const idx =
+          byExec >= 0
+            ? byExec
+            : recharges.findIndex(
+                (item) => `${item.store}\t${item.day}\t${item.charged_at}\t${Number(item.amount) || 0}` === key
+              );
         if (idx >= 0) {
           row.id = recharges[idx].id;
           recharges[idx] = row;
@@ -269,6 +319,24 @@ function createFakePool() {
         subs.push(row);
         return [{ insertId: row.id, affectedRows: 1 }];
       }
+      if (sql === SQL.listSubaccountIdentities) {
+        const latest = new Map();
+        for (const row of subs) {
+          const key = `${row.store}\t${row.account_id}\t${row.sub_account_id}`;
+          const prev = latest.get(key);
+          if (!prev || Number(row.id) > Number(prev.id)) {
+            latest.set(key, row);
+          }
+        }
+        return [
+          [...latest.values()].map((row) => ({
+            store: row.store,
+            account_id: row.account_id,
+            sub_account_id: row.sub_account_id,
+            sub_account_name: row.sub_account_name
+          }))
+        ];
+      }
       if (sql === SQL.listSubaccount) {
         const [allStores, store, fromDay, toDay, limit] = params;
         const rows = subs
@@ -307,6 +375,22 @@ function createFakePool() {
         }
         return [[totals]];
       }
+      if (
+        sql === RULE_SQL.listRules ||
+        sql === RULE_SQL.upsertRule ||
+        sql === RULE_SQL.getMeta ||
+        sql === RULE_SQL.upsertMeta ||
+        sql === RULE_SQL.insertHistory ||
+        sql === RULE_SQL.listHistory ||
+        sql === RULE_SQL.listOwners ||
+        sql === RULE_SQL.clearOwners ||
+        sql === RULE_SQL.insertOwner ||
+        sql === RULE_SQL.getMachine ||
+        sql === RULE_SQL.listMachines ||
+        sql === RULE_SQL.upsertMachine
+      ) {
+        return null;
+      }
       throw new Error(`unexpected sql: ${sql}`);
     }
   };
@@ -314,7 +398,8 @@ function createFakePool() {
 
 async function withServer(fn) {
   setPool(createFakePool());
-  await resetStore();
+  resetStore();
+  resetRechargeConfig();
   const server = http.createServer(createApp());
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address();
@@ -352,10 +437,13 @@ test("submenu pages use 产品中心 and 付费中心", async () => {
       assert.equal(res.status, 200, item.href);
       assert.match(text, new RegExp(item.label));
       assert.equal(text.includes("/shared/nav.js"), false, item.href);
-      if (item.slug !== "tasks" && item.slug !== "paid") {
+      if (item.slug !== "tasks" && item.slug !== "paid" && item.slug !== "recharge-rules") {
         assert.match(text, /内容待开发/);
       }
     }
+    const rulesPage = await request(base, "/shen/recharge-rules");
+    assert.match(rulesPage.text, /充值规则/);
+    assert.equal(rulesPage.text.includes("/shared/nav.js"), false);
     const tasks = await request(base, "/shen/tasks");
     assert.match(tasks.text, /任务列表/);
     assert.match(tasks.text, /今日简报/);
@@ -381,6 +469,8 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /XmModules\["\/shen\/product\/youhua"\]/);
     assert.match(embed.text, /XmModules\["\/shen\/product\/chengzhang"\]/);
     assert.match(embed.text, /XmModules\["\/shen\/paid"\]/);
+    assert.match(embed.text, /XmModules\["\/shen\/recharge-rules"\]/);
+    assert.match(embed.text, /\/api\/shen\/paid\/recharge-config/);
     assert.match(embed.text, /\/api\/shen\/paid/);
     assert.match(embed.text, /京准通主账户ID/);
     assert.match(embed.text, /真实费比/);
@@ -398,7 +488,7 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /未记录/);
     assert.match(embed.text, /时间段/);
     assert.equal(embed.text.includes("<th>充值日期</th>"), false);
-    assert.equal(embed.text.includes("<th>子账号ID</th>"), false);
+    assert.match(embed.text, /<th>子账号ID<\/th>/);
     assert.equal(embed.text.includes("<th>渠道</th>"), false);
     assert.equal(embed.text.includes('row.subAccountId || "—"'), false);
     assert.equal(embed.text.includes("row.accountId || row.subAccountId"), false);
@@ -1181,6 +1271,358 @@ test("brief GET/PUT round-trip", async () => {
 
     const loaded = await request(base, "/api/shen/brief");
     assert.equal(loaded.json.text, "今日完成排期核对。");
+  });
+});
+
+function shenHeaders(user = "沈子晗", role = "超级管理员", scope = "全平台数据") {
+  return {
+    "Content-Type": "application/json",
+    "x-shen-user": encodeURIComponent(user),
+    "x-shen-role": encodeURIComponent(role),
+    "x-shen-scope": encodeURIComponent(scope)
+  };
+}
+
+async function seedRechargeShops(base) {
+  const created = await request(base, "/api/shen/paid/ingest", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      date: "2026-09-18",
+      rows: [
+        { 店铺名称: "飒望旗舰店", 京准通主账户ID: "99931330021", 京准通花费: 10, 是否成功: "采集成功" },
+        { 店铺名称: "专营店", 京准通主账户ID: "88002", 京准通花费: 5, 是否成功: "采集成功" }
+      ],
+      子账号: [
+        {
+          店铺名称: "飒望旗舰店",
+          京准通主账户ID: "99931330021",
+          子账号ID: "99945558065",
+          子账号名称: "飒望旗舰-测试放大2",
+          花费: 8
+        },
+        {
+          店铺名称: "飒望旗舰店",
+          京准通主账户ID: "99931330021",
+          子账号ID: "99945558066",
+          子账号名称: "飒望旗舰-测试放大3",
+          花费: 2
+        },
+        {
+          店铺名称: "专营店",
+          京准通主账户ID: "88002",
+          子账号ID: "88002001",
+          子账号名称: "专营投放1",
+          花费: 5
+        }
+      ]
+    })
+  });
+  assert.equal(created.res.status, 201);
+}
+
+test("recharge rules editor, worker pull, ack, permissions and executionId", async () => {
+  await withServer(async (base) => {
+    await seedRechargeShops(base);
+
+    const editor = await request(base, "/api/shen/paid/recharge-config/editor", {
+      headers: shenHeaders()
+    });
+    assert.equal(editor.res.status, 200);
+    assert.equal(editor.json.ok, true);
+    assert.equal(editor.json.version, 0);
+    assert.equal(editor.json.rows.length, 3);
+    const first = editor.json.rows.find((row) => row.subAccountId === "99945558065");
+    assert.equal(first.store, "飒望旗舰店");
+    assert.equal(first.accountId, "99931330021");
+    assert.equal(typeof first.accountId, "string");
+    assert.equal(first.autoRecharge, true);
+    assert.equal(first.tier1MinSpend, 1);
+    assert.equal(first.tier1MaxSpend, 1000);
+    assert.equal(first.tier1Balance, 100);
+    assert.equal(first.tier1Amount, 100);
+    assert.equal(first.tier2MinSpend, 1000);
+    assert.equal(first.tier2Balance, 50);
+    assert.equal(first.tier2Amount, 150);
+    assert.equal(first.roiRiseAmount, 100);
+    assert.equal(first.noOrderTimes, 3);
+    assert.equal(first.pauseMinutes, 30);
+    assert.equal(first.syncStatus, "待同步");
+
+    const saved = await request(base, "/api/shen/paid/recharge-config", {
+      method: "PUT",
+      headers: shenHeaders(),
+      body: JSON.stringify({
+        changeSummary: "保存充值规则",
+        rows: [
+          {
+            店铺名称: "飒望旗舰店",
+            京准通主账户ID: "99931330021",
+            子账号ID: "99945558065",
+            子账号名称: "飒望旗舰-测试放大2",
+            自动充值: true,
+            计划ROI: 2.3
+          },
+          {
+            店铺名称: "飒望旗舰店",
+            京准通主账户ID: "99931330021",
+            子账号ID: "99945558066",
+            子账号名称: "飒望旗舰-测试放大3",
+            自动充值: true,
+            计划ROI: 1.8
+          }
+        ]
+      })
+    });
+    assert.equal(saved.res.status, 200, saved.text);
+    assert.equal(saved.json.ok, true);
+    assert.equal(saved.json.version, 1);
+    assert.equal(saved.json.saved, 2);
+    assert.equal(saved.json.updatedBy, "沈子晗");
+
+    const roiOnly = await request(base, "/api/shen/paid/recharge-config", {
+      method: "PUT",
+      headers: shenHeaders(),
+      body: JSON.stringify({
+        patch: "roi",
+        changeSummary: "批量设置计划ROI",
+        rows: [
+          {
+            店铺名称: "飒望旗舰店",
+            京准通主账户ID: "99931330021",
+            子账号ID: "99945558065",
+            计划ROI: 2.5,
+            第一档充值金额: 999
+          }
+        ]
+      })
+    });
+    assert.equal(roiOnly.res.status, 200);
+    assert.equal(roiOnly.json.version, 2);
+
+    const afterRoi = await request(base, "/api/shen/paid/recharge-config/editor?store=" + encodeURIComponent("飒望旗舰店"), {
+      headers: shenHeaders()
+    });
+    const kept = afterRoi.json.rows.find((row) => row.subAccountId === "99945558065");
+    assert.equal(kept.plannedRoi, 2.5);
+    assert.equal(kept.tier1Amount, 100);
+    assert.equal(afterRoi.json.rows.find((row) => row.subAccountId === "99945558066").plannedRoi, 1.8);
+
+    const history = await request(base, "/api/shen/paid/recharge-config/history?store=" + encodeURIComponent("飒望旗舰店"), {
+      headers: shenHeaders()
+    });
+    assert.equal(history.res.status, 200);
+    assert.equal(history.json.rows.some((row) => row.field === "计划ROI" && row.newValue === "2.5" && row.version === 2), true);
+    assert.equal(history.json.rows.every((row) => row.store === "飒望旗舰店"), true);
+
+    const scientific = await request(base, "/api/shen/paid/recharge-config", {
+      method: "PUT",
+      headers: shenHeaders(),
+      body: JSON.stringify({
+        rows: [
+          {
+            店铺名称: "飒望旗舰店",
+            京准通主账户ID: "9.99e10",
+            子账号ID: "99945558065",
+            计划ROI: 2
+          }
+        ]
+      })
+    });
+    assert.equal(scientific.res.status, 400);
+    assert.match(scientific.json.error, /字符串|科学计数/);
+
+    const negative = await request(base, "/api/shen/paid/recharge-config", {
+      method: "PUT",
+      headers: shenHeaders(),
+      body: JSON.stringify({
+        rows: [
+          {
+            店铺名称: "飒望旗舰店",
+            京准通主账户ID: "99931330021",
+            子账号ID: "99945558065",
+            计划ROI: -1
+          }
+        ]
+      })
+    });
+    assert.equal(negative.res.status, 400);
+    assert.match(negative.json.error, /负数/);
+
+    const badRange = await request(base, "/api/shen/paid/recharge-config", {
+      method: "PUT",
+      headers: shenHeaders(),
+      body: JSON.stringify({
+        rows: [
+          {
+            店铺名称: "飒望旗舰店",
+            京准通主账户ID: "99931330021",
+            子账号ID: "99945558065",
+            第一档花费下限: 1000,
+            第一档花费上限: 1000
+          }
+        ]
+      })
+    });
+    assert.equal(badRange.res.status, 400);
+    assert.match(badRange.json.error, /上限必须大于/);
+
+    await request(base, "/api/shen/paid/recharge-config/owners", {
+      method: "POST",
+      headers: shenHeaders(),
+      body: JSON.stringify({ username: "小王", stores: ["飒望旗舰店"] })
+    });
+    const forbidden = await request(base, "/api/shen/paid/recharge-config", {
+      method: "PUT",
+      headers: shenHeaders("小王", "运营", "本店"),
+      body: JSON.stringify({
+        rows: [
+          {
+            店铺名称: "专营店",
+            京准通主账户ID: "88002",
+            子账号ID: "88002001",
+            计划ROI: 1
+          }
+        ]
+      })
+    });
+    assert.equal(forbidden.res.status, 403);
+    assert.match(forbidden.json.error, /无权/);
+
+    const scoped = await request(base, "/api/shen/paid/recharge-config/editor", {
+      headers: shenHeaders("小王", "运营", "本店")
+    });
+    assert.equal(scoped.json.scope, "assigned");
+    assert.deepEqual(scoped.json.shops, ["飒望旗舰店"]);
+    assert.equal(scoped.json.rows.every((row) => row.store === "飒望旗舰店"), true);
+
+    const worker = await request(
+      base,
+      "/api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=0",
+      { headers: shenHeaders() }
+    );
+    assert.equal(worker.res.status, 200);
+    assert.equal(worker.json.changed, true);
+    assert.equal(worker.json.version, 2);
+    assert.equal(typeof worker.json.shops[0].京准通主账户ID, "string");
+    const sawa = worker.json.shops.find((shop) => shop.店铺名称 === "飒望旗舰店");
+    const sub = sawa.子账号.find((item) => item.子账号ID === "99945558065");
+    assert.equal(sub.计划ROI, 2.5);
+    assert.equal(sub.第一档充值金额, 100);
+    assert.equal(sub.自动充值, true);
+    assert.equal(sawa.启用, true);
+
+    const scopedWorker = await request(
+      base,
+      "/api/shen/paid/recharge-config?machineId=paid-worker-wang&sinceVersion=0",
+      { headers: shenHeaders("小王", "运营", "本店") }
+    );
+    assert.equal(scopedWorker.json.changed, true);
+    assert.deepEqual(
+      scopedWorker.json.shops.map((shop) => shop.店铺名称),
+      ["飒望旗舰店"]
+    );
+
+    const unchanged = await request(
+      base,
+      "/api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=2",
+      { headers: shenHeaders() }
+    );
+    assert.equal(unchanged.res.status, 200);
+    assert.deepEqual(unchanged.json, { changed: false, version: 2, updatedAt: unchanged.json.updatedAt });
+
+    const notModified = await request(
+      base,
+      "/api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=2&http304=1",
+      { headers: shenHeaders() }
+    );
+    assert.equal(notModified.res.status, 304);
+
+    const ack = await request(base, "/api/shen/paid/recharge-config/ack", {
+      method: "POST",
+      headers: shenHeaders(),
+      body: JSON.stringify({
+        machineId: "paid-worker-01",
+        version: 2,
+        status: "success",
+        receivedAt: "2026-09-18T23:55:10+08:00",
+        message: "已校验并启用2版规则"
+      })
+    });
+    assert.equal(ack.res.status, 200);
+    assert.equal(ack.json.status, "已同步");
+
+    const synced = await request(base, "/api/shen/paid/recharge-config/editor", {
+      headers: shenHeaders()
+    });
+    assert.equal(synced.json.syncStatus, "已同步");
+
+    const failedAck = await request(base, "/api/shen/paid/recharge-config/ack", {
+      method: "POST",
+      headers: shenHeaders(),
+      body: JSON.stringify({
+        machineId: "paid-worker-01",
+        version: 2,
+        status: "failed",
+        message: "子账号99945558065的计划ROI无效"
+      })
+    });
+    assert.equal(failedAck.json.status, "同步失败");
+    const failedEditor = await request(base, "/api/shen/paid/recharge-config/editor", {
+      headers: shenHeaders()
+    });
+    assert.equal(failedEditor.json.syncStatus, "同步失败");
+
+    const execBody = {
+      充值记录: [
+        {
+          店铺名称: "飒望旗舰店",
+          京准通主账户ID: "99931330021",
+          子账号ID: "99945558065",
+          子账号名称: "飒望旗舰-测试放大2",
+          充值时间: "2026-09-18T10:12:00+08:00",
+          充值金额: 100,
+          executionId: "paid-worker-01-2-tier1-1",
+          configVersion: 2,
+          ruleCode: "tier1",
+          plannedRoi: 2.5,
+          execSpend: 860,
+          execRoi: 2.41,
+          execPaidOrders: 12,
+          result: "success"
+        }
+      ]
+    };
+    const firstExec = await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(execBody)
+    });
+    assert.equal(firstExec.res.status, 201);
+    assert.equal(firstExec.json.received.recharges, 1);
+    const retryExec = await request(base, "/api/shen/paid/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        充值记录: [
+          {
+            ...execBody.充值记录[0],
+            充值时间: "2026-09-18T10:13:00+08:00",
+            充值金额: 150
+          }
+        ]
+      })
+    });
+    assert.equal(retryExec.res.status, 201);
+    const listed = await request(base, "/api/shen/paid/recharges?store=" + encodeURIComponent("飒望旗舰店"));
+    assert.equal(listed.json.rows.length, 1);
+    assert.equal(listed.json.rows[0].executionId, "paid-worker-01-2-tier1-1");
+    assert.equal(listed.json.rows[0].configVersion, 2);
+    assert.equal(listed.json.rows[0].ruleCode, "tier1");
+    assert.equal(listed.json.rows[0].plannedRoi, 2.5);
+    assert.equal(listed.json.rows[0].execSpend, 860);
+    assert.equal(listed.json.rows[0].result, "success");
+    assert.equal(listed.json.rows[0].subAccountId, "99945558065");
   });
 });
 

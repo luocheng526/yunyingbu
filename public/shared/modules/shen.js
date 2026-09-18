@@ -34,6 +34,7 @@
   window.XmModules["/shen/growth"] = waitPage("产品成长");
   window.XmModules["/shen/paid"] = {
     mount: function (root) {
+      ensureRechargeRulesNav();
       if (!document.querySelector('link[href^="/shared/shen-paid.css"]')) {
         const link = document.createElement("link");
         link.rel = "stylesheet";
@@ -517,8 +518,480 @@
       };
     }
   };
+  window.XmModules["/shen/recharge-rules"] = {
+    mount: function (root) {
+      if (!document.querySelector('link[href^="/shared/shen-paid.css"]')) {
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = "/shared/shen-paid.css";
+        document.head.appendChild(link);
+      }
+      ensureRechargeRulesNav();
+      root.innerHTML =
+        '<main class="page xm-paid xm-rules">' +
+        '<header class="page-head"><div><h1>充值规则</h1>' +
+        '<p class="lead" id="rules-lead">只配置自己名下店铺和子账号。网站不保存京准通 Cookie，也不直接充值。</p></div>' +
+        '<div class="xm-paid-meta"><span class="xm-paid-dot" aria-hidden="true"></span>' +
+        '<span id="rules-asof">等待配置</span></div></header>' +
+        '<section class="panel">' +
+        '<div class="xm-paid-toolbar"><h2>子账号规则</h2><div class="row" id="rules-toolbar"></div></div>' +
+        '<div id="rules-table-wrap"><p class="empty">加载中…</p></div>' +
+        "</section>" +
+        '<section class="panel" id="rules-history-wrap" hidden>' +
+        "<h2>修改历史</h2><div id=\"rules-history\"></div></section>" +
+        '<p id="rules-status" class="status" role="status"></p></main>';
+
+      const statusEl = root.querySelector("#rules-status");
+      const asofEl = root.querySelector("#rules-asof");
+      const toolbarEl = root.querySelector("#rules-toolbar");
+      const tableWrap = root.querySelector("#rules-table-wrap");
+      const historyWrap = root.querySelector("#rules-history-wrap");
+      const historyEl = root.querySelector("#rules-history");
+      let dead = false;
+      let rows = [];
+      let selected = new Set();
+      let shop = "";
+      let keyword = "";
+      let enabledOnly = false;
+      let lastMeta = { shops: [] };
+
+      function authHeaders(extra) {
+        const headers = extra ? Object.assign({}, extra) : {};
+        if (location.hostname === "127.0.0.1" || location.hostname === "localhost") {
+          headers["x-shen-user"] = headers["x-shen-user"] || encodeURIComponent("沈子晗");
+          headers["x-shen-role"] = headers["x-shen-role"] || encodeURIComponent("超级管理员");
+          headers["x-shen-scope"] = headers["x-shen-scope"] || encodeURIComponent("全平台数据");
+        }
+        return headers;
+      }
+
+      function visibleRows() {
+        if (!keyword) {
+          return rows;
+        }
+        return rows.filter(function (row) {
+          return (String(row.subAccountName || "") + " " + String(row.subAccountId || "")).indexOf(keyword) >= 0;
+        });
+      }
+
+      function setStatus(message, isError) {
+        statusEl.textContent = message || "";
+        statusEl.className = "status" + (isError ? " error" : message ? " ok" : "");
+      }
+
+      function money(value) {
+        return String(value ?? "");
+      }
+
+      function yesNo(value) {
+        return value ? "是" : "否";
+      }
+
+      function headers() {
+        return [
+          "选择",
+          "店铺名称",
+          "京准通主账户ID",
+          "子账号名称",
+          "子账号ID",
+          "自动充值",
+          "计划ROI",
+          "第一档花费下限",
+          "第一档花费上限",
+          "第一档余额阈值",
+          "第一档充值金额",
+          "第二档花费下限",
+          "第二档余额阈值",
+          "第二档充值金额",
+          "ROI上涨充值金额",
+          "连续充值未增单次数",
+          "暂停分钟数",
+          "配置版本",
+          "最后修改人",
+          "最后修改时间",
+          "本地机状态",
+          "本地机最后同步时间"
+        ];
+      }
+
+      function rowKey(row) {
+        return row.store + "\t" + row.accountId + "\t" + row.subAccountId;
+      }
+
+      function numInput(row, field, step) {
+        return (
+          '<input class="xm-rules-num" data-key="' +
+          escapeHtml(rowKey(row)) +
+          '" data-field="' +
+          field +
+          '" type="number" min="0" step="' +
+          (step || "1") +
+          '" value="' +
+          escapeHtml(money(row[field])) +
+          '" />'
+        );
+      }
+
+      function renderToolbar(data) {
+        lastMeta = data || lastMeta;
+        const shops = ["<option value=\"\">全部店铺</option>"].concat(
+          (lastMeta.shops || []).map(function (name) {
+            return (
+              '<option value="' +
+              escapeHtml(name) +
+              '"' +
+              (shop === name ? " selected" : "") +
+              ">" +
+              escapeHtml(name) +
+              "</option>"
+            );
+          })
+        );
+        toolbarEl.innerHTML =
+          '<label>店铺选择 <select id="rules-shop">' +
+          shops.join("") +
+          "</select></label>" +
+          '<input id="rules-q" type="search" maxlength="64" placeholder="子账号名称/ID搜索" value="' +
+          escapeHtml(keyword) +
+          '" />' +
+          '<label class="xm-rules-check"><input id="rules-enabled" type="checkbox"' +
+          (enabledOnly ? " checked" : "") +
+          " /> 只看已启用</label>" +
+          '<input id="rules-batch-roi" type="number" min="0" step="0.01" placeholder="批量计划ROI" />' +
+          '<button type="button" id="rules-apply-roi">批量设置计划ROI</button>' +
+          '<button type="button" id="rules-on">批量启用</button>' +
+          '<button type="button" id="rules-off">批量暂停</button>' +
+          '<button type="button" class="xm-rules-save" id="rules-save">保存</button>' +
+          '<button type="button" id="rules-history-btn">修改历史</button>';
+        root.querySelector("#rules-shop").addEventListener("change", function (event) {
+          shop = event.target.value;
+          load();
+        });
+        root.querySelector("#rules-q").addEventListener("input", function (event) {
+          keyword = event.target.value.trim();
+          renderTable();
+        });
+        root.querySelector("#rules-enabled").addEventListener("change", function (event) {
+          enabledOnly = event.target.checked;
+          load();
+        });
+        root.querySelector("#rules-apply-roi").addEventListener("click", function () {
+          batchRoi();
+        });
+        root.querySelector("#rules-on").addEventListener("click", function () {
+          batchAuto(true);
+        });
+        root.querySelector("#rules-off").addEventListener("click", function () {
+          batchAuto(false);
+        });
+        root.querySelector("#rules-save").addEventListener("click", function () {
+          save("full", "保存充值规则");
+        });
+        root.querySelector("#rules-history-btn").addEventListener("click", function () {
+          loadHistory();
+        });
+      }
+
+      function collectEdits() {
+        root.querySelectorAll(".xm-rules-num").forEach(function (input) {
+          const row = rows.find(function (item) {
+            return rowKey(item) === input.getAttribute("data-key");
+          });
+          if (row) {
+            row[input.getAttribute("data-field")] = input.value;
+          }
+        });
+        root.querySelectorAll(".xm-rules-auto").forEach(function (input) {
+          const row = rows.find(function (item) {
+            return rowKey(item) === input.getAttribute("data-key");
+          });
+          if (row) {
+            row.autoRecharge = input.checked;
+          }
+        });
+      }
+
+      function checkedRows() {
+        collectEdits();
+        return rows.filter(function (row) {
+          return selected.has(rowKey(row));
+        });
+      }
+
+      function batchRoi() {
+        const value = root.querySelector("#rules-batch-roi").value;
+        const picked = checkedRows();
+        if (!picked.length) {
+          setStatus("请先勾选要改计划ROI的子账号", true);
+          return;
+        }
+        if (value === "") {
+          setStatus("请填写批量计划ROI", true);
+          return;
+        }
+        picked.forEach(function (row) {
+          row.plannedRoi = value;
+        });
+        save("roi", "批量设置计划ROI", picked);
+      }
+
+      function batchAuto(on) {
+        const picked = checkedRows();
+        if (!picked.length) {
+          setStatus("请先勾选要启用或暂停的子账号", true);
+          return;
+        }
+        picked.forEach(function (row) {
+          row.autoRecharge = on;
+        });
+        save("auto", on ? "批量启用自动充值" : "批量暂停自动充值", picked);
+      }
+
+      function payloadRows(list) {
+        return list.map(function (row) {
+          return {
+            店铺名称: row.store,
+            京准通主账户ID: String(row.accountId || ""),
+            子账号ID: String(row.subAccountId || ""),
+            子账号名称: row.subAccountName || "",
+            自动充值: row.autoRecharge,
+            计划ROI: row.plannedRoi,
+            第一档花费下限: row.tier1MinSpend,
+            第一档花费上限: row.tier1MaxSpend,
+            第一档余额阈值: row.tier1Balance,
+            第一档充值金额: row.tier1Amount,
+            第二档花费下限: row.tier2MinSpend,
+            第二档余额阈值: row.tier2Balance,
+            第二档充值金额: row.tier2Amount,
+            ROI上涨充值金额: row.roiRiseAmount,
+            连续充值未增单次数: row.noOrderTimes,
+            暂停分钟数: row.pauseMinutes
+          };
+        });
+      }
+
+      function renderTable() {
+        const list = visibleRows();
+        if (!list.length) {
+          tableWrap.innerHTML = rows.length
+            ? '<p class="empty">没有匹配的子账号。</p>'
+            : '<p class="empty">暂无自己名下的子账号。先在付费中心回传子账号，或确认店铺已分配给你。</p>';
+          return;
+        }
+        const body = list
+          .map(function (row) {
+            const key = rowKey(row);
+            return (
+              "<tr><td><input type=\"checkbox\" data-check=\"" +
+              escapeHtml(key) +
+              "\"" +
+              (selected.has(key) ? " checked" : "") +
+              " /></td><td>" +
+              escapeHtml(row.store) +
+              "</td><td>" +
+              escapeHtml(String(row.accountId || "")) +
+              "</td><td>" +
+              escapeHtml(row.subAccountName || "") +
+              "</td><td>" +
+              escapeHtml(String(row.subAccountId || "")) +
+              '</td><td><label class="xm-rules-check"><input class="xm-rules-auto" data-key="' +
+              escapeHtml(key) +
+              '" type="checkbox"' +
+              (row.autoRecharge ? " checked" : "") +
+              " /> " +
+              yesNo(row.autoRecharge) +
+              "</label></td><td>" +
+              numInput(row, "plannedRoi", "0.01") +
+              "</td><td>" +
+              numInput(row, "tier1MinSpend") +
+              "</td><td>" +
+              numInput(row, "tier1MaxSpend") +
+              "</td><td>" +
+              numInput(row, "tier1Balance") +
+              "</td><td>" +
+              numInput(row, "tier1Amount") +
+              "</td><td>" +
+              numInput(row, "tier2MinSpend") +
+              "</td><td>" +
+              numInput(row, "tier2Balance") +
+              "</td><td>" +
+              numInput(row, "tier2Amount") +
+              "</td><td>" +
+              numInput(row, "roiRiseAmount") +
+              "</td><td>" +
+              numInput(row, "noOrderTimes") +
+              "</td><td>" +
+              numInput(row, "pauseMinutes") +
+              "</td><td>" +
+              escapeHtml(String(row.version || 0)) +
+              "</td><td>" +
+              escapeHtml(row.updatedBy || "—") +
+              "</td><td>" +
+              escapeHtml(row.updatedAt || "—") +
+              "</td><td>" +
+              escapeHtml(row.syncStatus || "待同步") +
+              "</td><td>" +
+              escapeHtml(row.syncedAt || "—") +
+              "</td></tr>"
+            );
+          })
+          .join("");
+        tableWrap.innerHTML =
+          '<div class="xm-paid-table-wrap"><table><thead><tr>' +
+          headers()
+            .map(function (title) {
+              return "<th>" + title + "</th>";
+            })
+            .join("") +
+          "</tr></thead><tbody>" +
+          body +
+          "</tbody></table></div>";
+        tableWrap.querySelectorAll("[data-check]").forEach(function (box) {
+          box.addEventListener("change", function () {
+            const key = box.getAttribute("data-check");
+            if (box.checked) {
+              selected.add(key);
+            } else {
+              selected.delete(key);
+            }
+          });
+        });
+      }
+
+      async function load() {
+        setStatus("加载规则…");
+        try {
+          const query =
+            "/api/shen/paid/recharge-config/editor?store=" +
+            encodeURIComponent(shop) +
+            "&q=" +
+            encodeURIComponent(keyword) +
+            (enabledOnly ? "&enabled=1" : "");
+          const res = await fetch(query, { credentials: "same-origin", headers: authHeaders() });
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error || "无法加载充值规则");
+          }
+          if (dead) {
+            return;
+          }
+          rows = data.rows || [];
+          asofEl.textContent = data.version
+            ? "配置版本 " + data.version + " · " + (data.syncStatus || "待同步")
+            : "尚未保存过规则，显示默认档位";
+          renderToolbar(data);
+          renderTable();
+          setStatus(rows.length ? "已加载 " + rows.length + " 个子账号" : "");
+        } catch (err) {
+          if (!dead) {
+            setStatus(err.message || "无法加载充值规则", true);
+          }
+        }
+      }
+
+      async function save(patch, summary, list) {
+        collectEdits();
+        const target = list || rows;
+        if (!target.length) {
+          setStatus("没有可保存的规则", true);
+          return;
+        }
+        setStatus("保存中…");
+        try {
+          const res = await fetch("/api/shen/paid/recharge-config", {
+            method: "PUT",
+            credentials: "same-origin",
+            headers: authHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify({ patch: patch, changeSummary: summary, rows: payloadRows(target) })
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error || "保存失败");
+          }
+          setStatus("已保存版本 " + data.version);
+          await load();
+        } catch (err) {
+          setStatus(err.message || "保存失败", true);
+        }
+      }
+
+      async function loadHistory() {
+        historyWrap.hidden = false;
+        historyEl.innerHTML = "<p class=\"empty\">加载历史…</p>";
+        try {
+          const res = await fetch(
+            "/api/shen/paid/recharge-config/history?store=" + encodeURIComponent(shop) + "&limit=100",
+            { credentials: "same-origin", headers: authHeaders() }
+          );
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error || "无法加载历史");
+          }
+          const items = data.rows || [];
+          if (!items.length) {
+            historyEl.innerHTML = '<p class="empty">还没有修改记录。</p>';
+            return;
+          }
+          historyEl.innerHTML =
+            "<table><thead><tr><th>版本</th><th>店铺</th><th>子账号ID</th><th>字段</th><th>旧值</th><th>新值</th><th>修改人</th><th>时间</th><th>摘要</th></tr></thead><tbody>" +
+            items
+              .map(function (row) {
+                return (
+                  "<tr><td>" +
+                  escapeHtml(String(row.version)) +
+                  "</td><td>" +
+                  escapeHtml(row.store) +
+                  "</td><td>" +
+                  escapeHtml(String(row.subAccountId || "")) +
+                  "</td><td>" +
+                  escapeHtml(row.field) +
+                  "</td><td>" +
+                  escapeHtml(row.oldValue) +
+                  "</td><td>" +
+                  escapeHtml(row.newValue) +
+                  "</td><td>" +
+                  escapeHtml(row.updatedBy) +
+                  "</td><td>" +
+                  escapeHtml(row.updatedAt) +
+                  "</td><td>" +
+                  escapeHtml(row.changeSummary || "") +
+                  "</td></tr>"
+                );
+              })
+              .join("") +
+            "</tbody></table>";
+        } catch (err) {
+          historyEl.innerHTML = '<p class="empty">' + escapeHtml(err.message || "无法加载历史") + "</p>";
+        }
+      }
+
+      load();
+      return function unmount() {
+        dead = true;
+        root.innerHTML = "";
+      };
+    }
+  };
   window.XmModules["/shen/training"] = waitPage("培训系统");
   window.XmModules["/shen/tasks"] = waitPage("任务管理");
+
+  function ensureRechargeRulesNav() {
+    const links = document.querySelectorAll("a[href='/shen/paid'], a[href=\"/shen/paid\"]");
+    links.forEach(function (paid) {
+      const parent = paid.parentElement;
+      if (!parent || parent.querySelector("a[href='/shen/recharge-rules']")) {
+        return;
+      }
+      const next = paid.cloneNode(true);
+      next.setAttribute("href", "/shen/recharge-rules");
+      next.textContent = "充值规则";
+      if (paid.nextSibling) {
+        parent.insertBefore(next, paid.nextSibling);
+      } else {
+        parent.appendChild(next);
+      }
+    });
+  }
 
   window.XmModules["/shen"] = {
     mount: function (root) {
