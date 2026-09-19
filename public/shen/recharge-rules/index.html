@@ -2,49 +2,12 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>充值规则 · 沈子晗运营中心</title>
-    <link rel="stylesheet" href="/shared/shen-paid.css" />
-    <style>
-      body {
-        margin: 0;
-        font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        color: #1f1f1f;
-        background: #f5f6f8;
-      }
-      .page {
-        max-width: 1400px;
-        margin: 0 auto;
-        padding: 20px 16px 40px;
-      }
-      .kicker {
-        margin: 0 0 4px;
-        color: #8c8c8c;
-        font-size: 12px;
-      }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>充值规则 · 星脉甄选运营中心</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/shared/tab-icon.png?v=0.1.660" />
+    <link rel="stylesheet" href="/shared/layout.css?v=0.1.660" />
+    <script src="/shared/modules/shen.js?v=0.1.660" defer data-xm-mod="/shen/recharge-rules/index.html"></script>
+    <script src="/shared/nav.js?v=0.1.660" defer></script>
   </head>
-  <body>
-    <div id="rules-root">
-      <main class="page">
-        <header class="page-head">
-          <p class="kicker">沈子晗运营中心</p>
-          <h1>充值规则</h1>
-          <p class="lead">配置自己名下店铺和子账号的自动充值规则。本地工作机启动一次并保持运行，店铺启停由本页控制。网站只保存规则，不保存京准通 Cookie，也不直接充值。</p>
-        </header>
-      </main>
-    </div>
-    <script src="/shared/modules/shen.js"></script>
-    <script>
-      (function () {
-        if (document.querySelector("#site-nav") || document.querySelector(".site-sidebar")) {
-          return;
-        }
-        const mount = window.XmModules && window.XmModules["/shen/recharge-rules"];
-        if (mount && typeof mount.mount === "function") {
-          mount.mount(document.getElementById("rules-root"));
-        }
-      })();
-    </script>
-  </body>
+  <body class="xm-app xm-app-shell"></body>
 </html>
