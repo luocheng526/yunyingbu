@@ -530,12 +530,12 @@
       root.innerHTML =
         '<main class="page xm-paid xm-rules">' +
         '<header class="page-head"><div><h1>充值规则</h1>' +
-        '<p class="lead" id="rules-lead">只配置自己名下店铺和子账号。勾选要跑的店铺并保存后，本地机只跑这些店。自动充值账号的计划ROI必须大于0，默认2。网站不保存京准通 Cookie，也不直接充值。</p></div>' +
+        '<p class="lead" id="rules-lead">只配置自己名下店铺和子账号。本地工作机只需启动一次并保持运行，以后所有店铺启停和充值规则均由本页面控制。自动充值账号的计划ROI必须大于0，默认2。网站不保存京准通 Cookie，也不直接充值。</p></div>' +
         '<div class="xm-paid-meta"><span class="xm-paid-dot" aria-hidden="true"></span>' +
         '<span id="rules-asof">等待配置</span></div></header>' +
         '<section class="panel" id="rules-run-panel">' +
-        '<div class="xm-paid-toolbar"><h2>本次执行店铺</h2><div class="row" id="rules-run-actions"></div></div>' +
-        '<p class="xm-rules-hint" id="rules-run-hint">未保存过执行名单时，本地机仍拉你权限内的全部店。保存后只跑勾选的店。第二台机器以后可指定执行机，现在留空表示任意已绑定机都可跑。</p>' +
+        '<div class="xm-paid-toolbar"><h2>工作机运行店铺</h2><div class="row" id="rules-run-actions"></div></div>' +
+        '<p class="xm-rules-hint" id="rules-run-hint">本地工作机只需启动一次并保持运行，以后所有店铺启停和充值规则均由本页面控制。勾选=开启持续运行；取消=停止，本地完成当前转账及弹窗后不再开新一轮。全部取消时工作机在线待机。</p>' +
         '<div id="rules-run-shops" class="xm-rules-shops"></div></section>' +
         '<section class="panel">' +
         '<div class="xm-paid-toolbar"><h2>子账号规则</h2><div class="row" id="rules-toolbar"></div></div>' +
@@ -706,9 +706,12 @@
           return;
         }
         const shops = data.shops || [];
-        hint.textContent = data.runListSaved
-          ? "已保存执行名单。本地机只跑勾选的店；未勾选的店不拉、不充。"
-          : "尚未保存执行名单，本地机仍会拉你权限内的全部店。勾选后点「保存要跑的店铺」，之后只跑选中的店。";
+        const runByStore = {};
+        (data.shopRuns || []).forEach(function (row) {
+          runByStore[row.store] = row;
+        });
+        hint.textContent =
+          "本地工作机只需启动一次并保持运行，以后所有店铺启停和充值规则均由本页面控制。勾选=开启，取消=停止。已开启会持续循环采集、回传并按规则充值；已停止不得再开新一轮；停止中表示本地正在完成已开始的安全收尾。全部取消时 runShops=[]，工作机在线待机。停止不强杀正在提交的转账。";
         const machines = data.machines || [];
         actions.innerHTML =
           (machines.length
@@ -720,20 +723,26 @@
                 .join("、") +
               "</span>"
             : "<span class=\"xm-rules-machines\">还没有本地机 ACK。第一台用 machineId=paid-worker-01，第二台换新的 machineId。</span>") +
-          '<button type="button" class="xm-rules-save" id="rules-run-save">保存要跑的店铺</button>';
+          '<button type="button" class="xm-rules-save" id="rules-run-save">保存运行状态</button>';
         if (!shops.length) {
           box.innerHTML = '<p class="empty">暂无自己名下的店铺。</p>';
         } else {
           box.innerHTML = shops
             .map(function (name) {
+              const status = (runByStore[name] && runByStore[name].status) || (runSelected.has(name) ? "已开启" : "已停止");
+              const tone = status === "已开启" ? "on" : status === "停止中" ? "stopping" : "off";
               return (
                 '<label class="xm-rules-shop"><input type="checkbox" data-run-shop="' +
                 escapeHtml(name) +
                 '"' +
                 (runSelected.has(name) ? " checked" : "") +
-                " /> " +
+                " /> <span>" +
                 escapeHtml(name) +
-                "</label>"
+                '</span><span class="xm-rules-run-status is-' +
+                tone +
+                '">' +
+                escapeHtml(status) +
+                "</span></label>"
               );
             })
             .join("");
@@ -759,7 +768,7 @@
         const runShops = shops.filter(function (name) {
           return runSelected.has(name);
         });
-        setStatus("保存要跑的店铺…");
+        setStatus("保存运行状态…");
         try {
           const res = await fetch("/api/shen/paid/recharge-config", {
             method: "PUT",
@@ -767,7 +776,7 @@
             headers: authHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({
               patch: "run",
-              changeSummary: "选择本次执行店铺",
+              changeSummary: "保存运行状态",
               runShops: runShops
             })
           });
@@ -775,7 +784,7 @@
           if (!res.ok) {
             throw new Error(data.error || "保存失败");
           }
-          setStatus("已保存版本 " + data.version + "，本地机将只跑 " + (data.runShops || runShops).length + " 家店");
+          setStatus("已保存版本 " + data.version + "，已开启 " + (data.runShops || runShops).length + " 家店");
           runSelected = new Set();
           await load();
         } catch (err) {
