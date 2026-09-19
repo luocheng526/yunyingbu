@@ -62,7 +62,8 @@ function createFakePool() {
         sql === RULE_SQL.createMachineTable ||
         sql === RULE_SQL.addMachineRole ||
         sql === RULE_SQL.addMachineScope ||
-        sql === RULE_SQL.createShopRunTable
+        sql === RULE_SQL.createShopRunTable ||
+        sql === RULE_SQL.addShopRunStoppingSince
       ) {
         return [{}];
       }
@@ -474,8 +475,11 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /XmModules\["\/shen\/paid"\]/);
     assert.match(embed.text, /XmModules\["\/shen\/recharge-rules"\]/);
     assert.match(embed.text, /\/api\/shen\/paid\/recharge-config/);
-    assert.match(embed.text, /本次执行店铺/);
-    assert.match(embed.text, /保存要跑的店铺/);
+    assert.match(embed.text, /工作机运行店铺/);
+    assert.match(embed.text, /保存运行状态/);
+    assert.match(embed.text, /已开启/);
+    assert.match(embed.text, /停止中/);
+    assert.match(embed.text, /已停止/);
     assert.match(embed.text, /patch:\s*"run"/);
     assert.match(embed.text, /\/api\/shen\/paid/);
     assert.match(embed.text, /京准通主账户ID/);
@@ -1545,7 +1549,7 @@ test("recharge rules editor, worker pull, ack, permissions and executionId", asy
       headers: shenHeaders(),
       body: JSON.stringify({
         patch: "run",
-        changeSummary: "选择本次执行店铺",
+        changeSummary: "保存运行状态",
         runShops: ["飒望旗舰店"]
       })
     });
@@ -1559,6 +1563,28 @@ test("recharge rules editor, worker pull, ack, permissions and executionId", asy
     assert.equal(runEditor.json.runListSaved, true);
     assert.deepEqual(runEditor.json.runShops, ["飒望旗舰店"]);
     assert.equal(runEditor.json.shopRuns.find((row) => row.store === "专营店").enabled, false);
+    assert.equal(runEditor.json.shopRuns.find((row) => row.store === "飒望旗舰店").status, "已开启");
+    assert.equal(runEditor.json.shopRuns.find((row) => row.store === "专营店").status, "停止中");
+    assert.equal(runEditor.json.syncStatus, "待同步");
+
+    const stopAck = await request(base, "/api/shen/paid/recharge-config/ack", {
+      method: "POST",
+      headers: shenHeaders(),
+      body: JSON.stringify({
+        machineId: "paid-worker-01",
+        version: 3,
+        status: "success",
+        receivedAt: "2026-09-18T23:54:00+08:00",
+        message: "已校验并启用3版规则"
+      })
+    });
+    assert.equal(stopAck.json.status, "已同步");
+    const afterStopAck = await request(base, "/api/shen/paid/recharge-config/editor", {
+      headers: shenHeaders()
+    });
+    assert.equal(afterStopAck.json.syncStatus, "已同步");
+    assert.equal(afterStopAck.json.shopRuns.find((row) => row.store === "专营店").status, "已停止");
+    assert.equal(afterStopAck.json.shopRuns.find((row) => row.store === "飒望旗舰店").status, "已开启");
 
     const runWorker = await request(
       base,
@@ -1578,6 +1604,11 @@ test("recharge rules editor, worker pull, ack, permissions and executionId", asy
     });
     assert.equal(emptyRun.json.version, 4);
     assert.deepEqual(emptyRun.json.runShops, []);
+    const emptyEditor = await request(base, "/api/shen/paid/recharge-config/editor", {
+      headers: shenHeaders()
+    });
+    assert.equal(emptyEditor.json.shopRuns.find((row) => row.store === "飒望旗舰店").status, "停止中");
+    assert.equal(emptyEditor.json.syncStatus, "待同步");
     const emptyWorker = await request(
       base,
       "/api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=0",

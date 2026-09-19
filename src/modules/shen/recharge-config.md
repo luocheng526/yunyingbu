@@ -89,19 +89,25 @@
 
 谁在什么时间改了哪个字段。
 
-## 本次执行店铺
+## 工作机运行店铺
 
-网页「充值规则」上方勾选要跑的店，点「保存要跑的店铺」。
+这是本地工作机的持续运行控制，不是一次性任务。本地机只需启动一次并保持运行，以后店铺启停和规则都由本页保存后升版本下发。
 
-- 还没保存过执行名单：本地机仍拉权限范围内全部店（兼容旧行为）。
-- 保存后：本地机 `shops` / `runShops` **只含勾选的店**。空名单表示一台店都不跑，禁止回退到本地店单。
+网页「充值规则」上方勾选要开启的店，点「保存运行状态」。
+
+- 还没保存过运行状态：本地机仍拉权限范围内全部店（默认已开启）。
+- 保存后：本地机 `shops` / `runShops` **只含已开启的店**。空名单 `runShops=[]` 表示工作机在线待机，禁止回退到本地店单。
+- 已开启：本地持续循环采集、回传并按规则充值。
+- 已停止：本地不得再启动该店的新一轮采集或充值。
+- 停止中：刚从开启改为停止，本地正在完成已开始的安全收尾。停止不强杀正在提交的转账；完成本笔及弹窗后不再开下一笔或下一轮。
+- 每次店铺启停或规则修改并保存，都必须递增 `version`。
 - `执行机` 为空：任意已绑定机都可跑这店。填了 `machineId`：只有该机跑。第二台机器换新的 `machineId` 即可。
 
 ```json
 PUT /api/shen/paid/recharge-config
 {
   "patch": "run",
-  "changeSummary": "选择本次执行店铺",
+  "changeSummary": "保存运行状态",
   "runShops": ["飒望旗舰店", "RASW潮流生活旗舰店"]
 }
 ```
@@ -122,7 +128,7 @@ PUT /api/shen/paid/recharge-config
 
 ### `GET /api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=27`
 
-只返回该机这次该跑的店铺。无新版本：
+只返回该机当前已开启的店铺。已停止的店不得再放进 `runShops`。无新版本：
 
 ```json
 { "changed": false, "version": 27, "machineId": "paid-worker-01" }
@@ -227,16 +233,16 @@ GET /api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=28&http
 
 ## 发给本地程序
 
-把下面整段原样发给本地 Codex / 工作机，按此对齐。网站地址 `https://zx.xingmaierp.cc`。网站不存京准通 / 京麦 Cookie，也不发起充值。店铺由网站勾选，本机不要自己决定跑哪些店。
+把下面整段原样发给本地 Codex / 工作机，按此对齐。网站地址 `https://zx.xingmaierp.cc`。网站不存京准通 / 京麦 Cookie，也不发起充值。这是持续运行控制，不是一次性任务。本机启动一次并保持在线，店铺启停和规则都听网站。
 
 1. 本机固定一个 `machineId`。第一台用 `paid-worker-01`（现网已绑定罗成）。以后第二台必须换新的，例如 `paid-worker-02`。不要两台共用一个号。
-2. 每次开跑先 `GET https://zx.xingmaierp.cc/api/shen/paid/recharge-config?machineId=<本机>&sinceVersion=<上次成功ACK的版本>`。第一次 `sinceVersion=0`。
+2. 保持循环：`GET https://zx.xingmaierp.cc/api/shen/paid/recharge-config?machineId=<本机>&sinceVersion=<上次成功ACK的版本>`。第一次 `sinceVersion=0`。
 3. 首次请求带登录会话 cookie `mk_sid`，或请求头 `x-shen-user` / `x-shen-role` / `x-shen-scope`（中文要 URI 编码）。网站会把这台机绑到这个人的店铺权限上。已经绑过的机后续无会话也能按绑定人过滤。
-4. `changed: false` 或 HTTP 304：规则没变，继续用本机上次校验成功的配置，不要重新发明规则。
-5. `changed: true`：整包替换本机配置。只跑返回体里的 `runShops` / `shops`。某店没出现在这次包里，本机这轮就不采、不充、不回传该店。`runShops` 为空数组 = 一台都不跑，禁止回退到本地店单或上次店单。网站还没点过「保存要跑的店铺」时，会返回权限内全部店；保存后只剩勾选的店。
+4. `changed: false` 或 HTTP 304：配置没变，继续按本机上次校验成功的配置循环。不要重新发明规则。
+5. `changed: true`：整包替换本机配置。只持续运行返回体里的 `runShops` / `shops`。某店没出现在这次包里 = 已停止或正在停止：完成本店已开始的转账及弹窗后停止该店，不再开新一轮采集或充值。不要强杀正在提交的资金操作。`runShops` 为空数组 = 全部停止，本机保持在线待机，禁止回退本地店单。
 6. 每个子账号还要看 `自动充值`。`false` 的子账号只采集不充值。档位、计划 ROI、暂停次数以网站包为准，不要本地改公式。
 7. 接口异常时继续用上一次校验成功的规则。夜间 23:55 / 00:05 独立规则，本页不管。
-8. 本机校验并启用这版规则后立刻 `POST /api/shen/paid/recharge-config/ack`：`{ "machineId": "paid-worker-01", "version": 28, "status": "success", "receivedAt": "2026-09-19T10:00:00+08:00", "message": "已校验并启用28版规则" }`。失败把 `status` 改成 `failed`。页面用它显示待同步 / 已同步 / 同步失败。
+8. 本机校验并启用这版规则后立刻 `POST /api/shen/paid/recharge-config/ack`：`{ "machineId": "paid-worker-01", "version": 28, "status": "success", "receivedAt": "2026-09-19T10:00:00+08:00", "message": "已校验并启用28版规则" }`。失败把 `status` 改成 `failed`。页面用它显示待同步 / 已同步 / 同步失败。ACK 前刚被移出 `runShops` 的店在网页上显示停止中。
 9. 付费回传仍是现有 `POST /api/shen/paid/ingest`，一次带齐同级 `rows`、`子账号`、`充值记录`，可选 `启用店铺`、`抓取时间`。充值必须是打款成功的流水。补传不重复：无 `executionId` 时按店铺+日期+充值时间+金额覆盖；有 `executionId` 时按该号去重。ID 一律字符串，不要科学计数法。充值记录建议再带 `executionId`、`configVersion`、`ruleCode`、`plannedRoi`、当时花费 / ROI / 单量、`result`。
-10. 第二台机只换 `machineId`，协议不变。店铺上 `执行机` 为空 = 已绑定的机都能跑选中的店；填了 `machineId` = 只有该机跑。
-11. 验收闭合：网站 Ctrl+F5 打开 `/shen/recharge-rules/index.html` → 勾选 1～2 家店并点「保存要跑的店铺」→ 本机 GET 的 `runShops` 只有这些店 → 只跑这些店 → ACK 成功 → 页面变已同步 → ingest 回来的充值带 `executionId`+`configVersion`。再加一台机时只换 `machineId`。
+10. 第二台机只换 `machineId`，协议不变。店铺上 `执行机` 为空 = 已绑定的机都能跑开启的店；填了 `machineId` = 只有该机跑。
+11. 验收闭合：网站 Ctrl+F5 打开 `/shen/recharge-rules/index.html` → 勾选店铺并点「保存运行状态」→ version 递增 → 本机 GET 的 `runShops` 只有已开启的店 → 持续只跑这些店 → ACK 成功 → 页面变已同步。取消勾选后该店离开 `runShops`，页面先停止中，ACK 后已停止。全部取消时本机待机。

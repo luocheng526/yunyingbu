@@ -150,15 +150,18 @@ ON DUPLICATE KEY UPDATE
   store VARCHAR(64) NOT NULL PRIMARY KEY,
   run_enabled TINYINT NOT NULL DEFAULT 0,
   machine_id VARCHAR(64) NOT NULL DEFAULT '',
+  stopping_since INT UNSIGNED NOT NULL DEFAULT 0,
   updated_by VARCHAR(64) NOT NULL DEFAULT '',
   updated_at VARCHAR(40) NOT NULL DEFAULT ''
 )`,
-  listShopRuns: `SELECT store, run_enabled, machine_id, updated_by, updated_at FROM shen_paid_recharge_shop_run`,
-  upsertShopRun: `INSERT INTO shen_paid_recharge_shop_run (store, run_enabled, machine_id, updated_by, updated_at)
-VALUES (?, ?, ?, ?, ?)
+  addShopRunStoppingSince: `ALTER TABLE shen_paid_recharge_shop_run ADD COLUMN stopping_since INT UNSIGNED NOT NULL DEFAULT 0`,
+  listShopRuns: `SELECT store, run_enabled, machine_id, stopping_since, updated_by, updated_at FROM shen_paid_recharge_shop_run`,
+  upsertShopRun: `INSERT INTO shen_paid_recharge_shop_run (store, run_enabled, machine_id, stopping_since, updated_by, updated_at)
+VALUES (?, ?, ?, ?, ?, ?)
 ON DUPLICATE KEY UPDATE
   run_enabled = VALUES(run_enabled),
   machine_id = VALUES(machine_id),
+  stopping_since = VALUES(stopping_since),
   updated_by = VALUES(updated_by),
   updated_at = VALUES(updated_at)`
 };
@@ -190,7 +193,8 @@ export async function ensureRechargeConfigTables() {
     RULE_SQL.createMachineTable,
     RULE_SQL.addMachineRole,
     RULE_SQL.addMachineScope,
-    RULE_SQL.createShopRunTable
+    RULE_SQL.createShopRunTable,
+    RULE_SQL.addShopRunStoppingSince
   ]) {
     try {
       await queryShen(sql);
@@ -468,6 +472,7 @@ function mapShopRun(row) {
     store: row.store || "",
     enabled: Number(row.run_enabled ?? row.enabled ?? 0) === 1,
     machineId: String(row.machine_id || row.machineId || ""),
+    stoppingSince: Number(row.stopping_since ?? row.stoppingSince ?? 0) || 0,
     updatedBy: row.updated_by || row.updatedBy || "",
     updatedAt: row.updated_at || row.updatedAt || ""
   };
@@ -487,6 +492,7 @@ async function persistShopRun(row) {
     row.store,
     row.enabled ? 1 : 0,
     row.machineId || "",
+    Number(row.stoppingSince) || 0,
     row.updatedBy || "",
     row.updatedAt || ""
   ]);
@@ -499,6 +505,22 @@ async function persistShopRun(row) {
   } else {
     memoryShopRuns.push({ ...row });
   }
+}
+
+function shopRunStatus(run, machines) {
+  if (run?.enabled) {
+    return "已开启";
+  }
+  const stoppingSince = Number(run?.stoppingSince) || 0;
+  if (!stoppingSince) {
+    return "已停止";
+  }
+  const watch = machines || [];
+  if (!watch.length) {
+    return "已停止";
+  }
+  const allApplied = watch.every((machine) => machine.status === "success" && Number(machine.lastVersion) >= stoppingSince);
+  return allApplied ? "已停止" : "停止中";
 }
 
 function shopRunnable(run, machineId) {
@@ -764,10 +786,16 @@ export async function listEditorConfig(query, actor) {
   const runListSaved = shopRuns.length > 0;
   const shopRunRows = shops.map((name) => {
     const run = runMap.get(name);
-    return {
+    const enabled = runListSaved ? Boolean(run?.enabled) : true;
+    const row = {
       store: name,
-      enabled: runListSaved ? Boolean(run?.enabled) : true,
-      machineId: run?.machineId || ""
+      enabled,
+      machineId: run?.machineId || "",
+      stoppingSince: run?.stoppingSince || 0
+    };
+    return {
+      ...row,
+      status: runListSaved ? shopRunStatus(row, machines) : "已开启"
     };
   });
   return {
@@ -798,12 +826,12 @@ export async function listEditorConfig(query, actor) {
 
 function isRunPatch(body) {
   const patch = String(body?.patch || "").toLowerCase();
-  return patch === "run" || patch === "shops" || patch === "本次执行";
+  return patch === "run" || patch === "shops" || patch === "本次执行" || patch === "运行状态" || patch === "运行";
 }
 
 export async function saveShopRunList(body, actor) {
   if (!actor?.username) {
-    throw shenHttpError(401, "未登录，无法保存要跑的店铺");
+    throw shenHttpError(401, "未登录，无法保存运行状态");
   }
   if (body == null || typeof body !== "object") {
     throw shenHttpError(400, "请求体必须是对象");
@@ -825,7 +853,7 @@ export async function saveShopRunList(body, actor) {
   const nextMap = new Map(known.map((store) => [store, { store, enabled: false, machineId: "" }]));
   if (Array.isArray(names)) {
     if (names.length > 200) {
-      throw shenHttpError(400, "本次执行店铺一次最多 200 家");
+      throw shenHttpError(400, "运行店铺一次最多 200 家");
     }
     for (const item of names) {
       const store = clip(typeof item === "string" ? item : item?.store || item?.店铺名称, 64, "店铺名称");
@@ -838,7 +866,7 @@ export async function saveShopRunList(body, actor) {
   }
   if (Array.isArray(named)) {
     if (named.length > 200) {
-      throw shenHttpError(400, "本次执行店铺一次最多 200 家");
+      throw shenHttpError(400, "运行店铺一次最多 200 家");
     }
     for (const raw of named) {
       const store = clip(pick(raw, ["店铺名称", "store"]) || "", 64, "店铺名称");
@@ -848,7 +876,7 @@ export async function saveShopRunList(body, actor) {
       assertStoreAllowed(store, allowed);
       nextMap.set(store, {
         store,
-        enabled: asBool(pick(raw, ["启用", "enabled", "本次执行"]), true),
+        enabled: asBool(pick(raw, ["启用", "enabled", "本次执行", "运行"]), true),
         machineId: clip(pick(raw, ["执行机", "machineId"]) || "", 64, "执行机")
       });
     }
@@ -856,12 +884,24 @@ export async function saveShopRunList(body, actor) {
   const version = meta.version + 1;
   const updatedAt = nowShanghai();
   const updatedBy = actor.displayName || actor.username;
-  const changeSummary = clip(body.changeSummary || body.摘要 || "选择本次执行店铺", 200, "变更摘要");
+  const changeSummary = clip(body.changeSummary || body.摘要 || "保存运行状态", 200, "变更摘要");
   const prevMap = new Map(currentRuns.map((row) => [row.store, row]));
+  const implicitPrevEnabled = currentRuns.length === 0;
   const saved = [];
   for (const next of nextMap.values()) {
-    const prev = prevMap.get(next.store) || { store: next.store, enabled: false, machineId: "" };
-    const row = { ...next, updatedBy, updatedAt };
+    const prev = prevMap.get(next.store) || {
+      store: next.store,
+      enabled: implicitPrevEnabled,
+      machineId: "",
+      stoppingSince: 0
+    };
+    let stoppingSince = Number(prev.stoppingSince) || 0;
+    if (next.enabled) {
+      stoppingSince = 0;
+    } else if (prev.enabled && !next.enabled) {
+      stoppingSince = version;
+    }
+    const row = { ...next, stoppingSince, updatedBy, updatedAt };
     await persistShopRun(row);
     if (Boolean(prev.enabled) !== Boolean(next.enabled)) {
       await persistHistory({
@@ -869,9 +909,9 @@ export async function saveShopRunList(body, actor) {
         store: next.store,
         accountId: "",
         subAccountId: "",
-        field: "本次执行",
-        oldValue: prev.enabled ? "是" : "否",
-        newValue: next.enabled ? "是" : "否",
+        field: "运行状态",
+        oldValue: prev.enabled ? "已开启" : "已停止",
+        newValue: next.enabled ? "已开启" : "已停止",
         updatedBy,
         updatedAt,
         changeSummary
