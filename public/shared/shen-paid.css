@@ -502,8 +502,52 @@
   min-width: 160px;
 }
 
-.xm-rules-shop-table {
+.xm-rules-shop-wrap {
   width: 100%;
+}
+
+.xm-rules-shop-wrap .xm-paid-table-wrap,
+.xm-rules .xm-rules-shop-grid-wrap {
+  width: 100%;
+  max-height: none;
+  overflow: hidden;
+}
+
+.xm-rules table.xm-rules-shop-table {
+  width: 100% !important;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.xm-rules .xm-rules-shop-table col.c-check { width: 40px; }
+.xm-rules .xm-rules-shop-table col.c-store { width: 16%; }
+.xm-rules .xm-rules-shop-table col.c-id { width: 110px; }
+.xm-rules .xm-rules-shop-table col.c-machine { width: 72px; }
+.xm-rules .xm-rules-shop-table col.c-run { width: 72px; }
+.xm-rules .xm-rules-shop-table col.c-cookie { width: 92px; }
+.xm-rules .xm-rules-shop-table col.c-heart { width: 20%; }
+.xm-rules .xm-rules-shop-table col.c-err { width: 10%; }
+.xm-rules .xm-rules-shop-table col.c-ops { width: 88px; }
+
+.xm-rules .xm-rules-shop-table thead th,
+.xm-rules .xm-rules-shop-table tbody td {
+  padding: 6px 8px !important;
+  white-space: nowrap;
+  vertical-align: middle;
+  text-align: center !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.xm-rules .xm-rules-shop-table thead th {
+  white-space: nowrap !important;
+  font-size: 12px;
+}
+
+.xm-rules .xm-rules-shop-table td:nth-child(2),
+.xm-rules .xm-rules-shop-table th:nth-child(2) {
+  text-align: left !important;
 }
 
 .xm-rules tr.is-deleted td {

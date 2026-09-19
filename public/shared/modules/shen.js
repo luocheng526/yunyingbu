@@ -38,7 +38,7 @@
       if (!document.querySelector('link[href^="/shared/shen-paid.css"]')) {
         const link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href = "/shared/shen-paid.css?v=0.1.672";
+        link.href = "/shared/shen-paid.css?v=0.1.673";
         document.head.appendChild(link);
       }
 
@@ -523,7 +523,7 @@
       if (!document.querySelector('link[href^="/shared/shen-paid.css"]')) {
         const link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href = "/shared/shen-paid.css?v=0.1.672";
+        link.href = "/shared/shen-paid.css?v=0.1.673";
         document.head.appendChild(link);
       }
       ensureRechargeRulesNav();
@@ -537,7 +537,7 @@
         '<div class="xm-paid-toolbar"><h2>店铺主档 / 工作机运行店铺</h2><div class="row" id="rules-run-actions"></div></div>' +
         '<p class="xm-rules-hint" id="rules-run-hint">勾选=开启持续运行；取消=停止，本地完成已开始的转账及弹窗后再停该店。全部取消时 runShops=[]，工作机在线待机。Cookie 状态只显示本地机回报，本页没有 Cookie 输入框。</p>' +
         '<div id="rules-shop-form" class="xm-rules-form" hidden></div>' +
-        '<div id="rules-run-shops" class="xm-rules-shops"></div></section>' +
+        '<div id="rules-run-shops" class="xm-rules-shop-wrap"></div></section>' +
         '<section class="panel">' +
         '<div class="xm-paid-toolbar"><h2>子账号规则</h2><div class="row" id="rules-toolbar"></div></div>' +
         '<div id="rules-sub-form" class="xm-rules-form" hidden></div>' +
@@ -576,10 +576,13 @@
       }
 
       function visibleRows() {
-        if (!keyword) {
-          return rows;
-        }
         return rows.filter(function (row) {
+          if (shop && String(row.store || "").trim() !== String(shop).trim()) {
+            return false;
+          }
+          if (!keyword) {
+            return true;
+          }
           return (String(row.subAccountName || "") + " " + String(row.subAccountId || "")).indexOf(keyword) >= 0;
         });
       }
@@ -686,7 +689,7 @@
           '<button type="button" id="rules-history-btn">修改历史</button>';
         root.querySelector("#rules-shop").addEventListener("change", function (event) {
           shop = event.target.value;
-          load();
+          renderTable();
         });
         root.querySelector("#rules-q").addEventListener("input", function (event) {
           keyword = event.target.value.trim();
@@ -762,22 +765,25 @@
           box.innerHTML = '<p class="empty">暂无自己名下的店铺。请先新增店铺。</p>';
         } else {
           box.innerHTML =
-            '<div class="xm-paid-table-wrap"><table class="xm-rules-shop-table"><thead><tr>' +
+            '<div class="xm-paid-table-wrap xm-rules-shop-grid-wrap"><table class="xm-rules-shop-table"><colgroup>' +
+            '<col class="c-check"><col class="c-store"><col class="c-id"><col class="c-machine"><col class="c-run">' +
+            '<col class="c-cookie"><col class="c-cookie"><col class="c-run"><col class="c-heart"><col class="c-err"><col class="c-ops">' +
+            "</colgroup><thead><tr>" +
             [
-              "运行",
-              "店铺名称",
-              "京准通主账户ID",
-              "执行机",
-              "运行控制",
-              "京准通Cookie",
-              "京麦Cookie",
-              "执行状态",
-              "最后心跳时间",
-              "最后错误",
-              "操作"
+              ["勾选", "勾选后保存即开启持续运行"],
+              ["店铺", "店铺名称"],
+              ["主账户ID", "京准通主账户ID"],
+              ["执行机", "执行机"],
+              ["运行状态", "运行控制"],
+              ["京准通Cookie", "京准通Cookie"],
+              ["京麦Cookie", "京麦Cookie"],
+              ["执行状态", "执行状态"],
+              ["最后心跳", "最后心跳时间"],
+              ["最后错误", "最后错误"],
+              ["操作", "操作"]
             ]
-              .map(function (title) {
-                return "<th>" + title + "</th>";
+              .map(function (item) {
+                return '<th title="' + escapeHtml(item[1]) + '">' + escapeHtml(item[0]) + "</th>";
               })
               .join("") +
             "</tr></thead><tbody>" +
@@ -1283,9 +1289,7 @@
         setStatus("加载规则…");
         try {
           const query =
-            "/api/shen/paid/recharge-config/editor?store=" +
-            encodeURIComponent(shop) +
-            "&q=" +
+            "/api/shen/paid/recharge-config/editor?q=" +
             encodeURIComponent(keyword) +
             (enabledOnly ? "&enabled=1" : "") +
             (showDeleted ? "&deleted=1" : "");
