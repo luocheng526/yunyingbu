@@ -38,7 +38,7 @@
       if (!document.querySelector('link[href^="/shared/shen-paid.css"]')) {
         const link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href = "/shared/shen-paid.css";
+        link.href = "/shared/shen-paid.css?v=0.1.670";
         document.head.appendChild(link);
       }
 
@@ -523,7 +523,7 @@
       if (!document.querySelector('link[href^="/shared/shen-paid.css"]')) {
         const link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href = "/shared/shen-paid.css";
+        link.href = "/shared/shen-paid.css?v=0.1.670";
         document.head.appendChild(link);
       }
       ensureRechargeRulesNav();
