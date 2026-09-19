@@ -186,6 +186,44 @@ CREATE TABLE IF NOT EXISTS shen_paid_recharge_shop_run (
   run_enabled TINYINT NOT NULL DEFAULT 0,
   machine_id VARCHAR(64) NOT NULL DEFAULT '',
   stopping_since INT UNSIGNED NOT NULL DEFAULT 0,
+  account_id VARCHAR(64) NOT NULL DEFAULT '',
   updated_by VARCHAR(64) NOT NULL DEFAULT '',
   updated_at VARCHAR(40) NOT NULL DEFAULT ''
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 店铺 / 子账号主档。网站是唯一主档，本地 Excel 只作迁移备份。软删除，不删历史采集和充值。
+-- 店铺唯一键：京准通主账户ID。子账号唯一键：主账户ID + 子账号ID。ID 一律字符串。
+CREATE TABLE IF NOT EXISTS shen_paid_shop_master (
+  account_id VARCHAR(64) NOT NULL PRIMARY KEY,
+  store VARCHAR(64) NOT NULL,
+  machine_id VARCHAR(64) NOT NULL DEFAULT '',
+  deleted TINYINT NOT NULL DEFAULT 0,
+  updated_by VARCHAR(64) NOT NULL DEFAULT '',
+  updated_at VARCHAR(40) NOT NULL DEFAULT ''
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS shen_paid_sub_master (
+  account_id VARCHAR(64) NOT NULL,
+  sub_account_id VARCHAR(64) NOT NULL,
+  store VARCHAR(64) NOT NULL DEFAULT '',
+  sub_account_name VARCHAR(128) NOT NULL DEFAULT '',
+  deleted TINYINT NOT NULL DEFAULT 0,
+  updated_by VARCHAR(64) NOT NULL DEFAULT '',
+  updated_at VARCHAR(40) NOT NULL DEFAULT '',
+  PRIMARY KEY (account_id, sub_account_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 本地机回报的 Cookie 状态和心跳。网站不接收、不保存 Cookie 正文。
+CREATE TABLE IF NOT EXISTS shen_paid_shop_status (
+  account_id VARCHAR(64) NOT NULL PRIMARY KEY,
+  machine_id VARCHAR(64) NOT NULL DEFAULT '',
+  jzt_cookie_status VARCHAR(16) NOT NULL DEFAULT '待录',
+  jzt_cookie_updated_at VARCHAR(40) NOT NULL DEFAULT '',
+  jm_cookie_status VARCHAR(16) NOT NULL DEFAULT '待录',
+  jm_cookie_updated_at VARCHAR(40) NOT NULL DEFAULT '',
+  run_status VARCHAR(16) NOT NULL DEFAULT '已停止',
+  last_error VARCHAR(200) NOT NULL DEFAULT '',
+  heartbeat_at VARCHAR(40) NOT NULL DEFAULT '',
+  worker_status VARCHAR(16) NOT NULL DEFAULT '',
+  config_version INT UNSIGNED NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
