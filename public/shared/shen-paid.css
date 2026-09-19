@@ -330,3 +330,29 @@
 .xm-rules td:first-child {
   text-align: center;
 }
+
+.xm-rules-hint,
+.xm-rules-machines {
+  margin: 0 0 10px;
+  color: var(--xm-muted, #8c8c8c);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.xm-rules-shops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.xm-rules-shop {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--xm-line);
+  border-radius: 6px;
+  background: var(--xm-card);
+  font-size: 13px;
+}

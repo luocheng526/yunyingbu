@@ -176,3 +176,13 @@ CREATE TABLE IF NOT EXISTS shen_paid_recharge_machine (
   received_at VARCHAR(40) NOT NULL DEFAULT '',
   synced_at VARCHAR(40) NOT NULL DEFAULT ''
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 本次执行店铺。未写过任何行时，本地机仍拉权限范围内全部店。保存后只跑勾选的店。
+-- 执行机为空表示任意已绑定机都可跑；填了 machineId 则只有该机跑。
+CREATE TABLE IF NOT EXISTS shen_paid_recharge_shop_run (
+  store VARCHAR(64) NOT NULL PRIMARY KEY,
+  run_enabled TINYINT NOT NULL DEFAULT 0,
+  machine_id VARCHAR(64) NOT NULL DEFAULT '',
+  updated_by VARCHAR(64) NOT NULL DEFAULT '',
+  updated_at VARCHAR(40) NOT NULL DEFAULT ''
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

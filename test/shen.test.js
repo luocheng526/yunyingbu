@@ -61,7 +61,8 @@ function createFakePool() {
         sql === RULE_SQL.createOwnerTable ||
         sql === RULE_SQL.createMachineTable ||
         sql === RULE_SQL.addMachineRole ||
-        sql === RULE_SQL.addMachineScope
+        sql === RULE_SQL.addMachineScope ||
+        sql === RULE_SQL.createShopRunTable
       ) {
         return [{}];
       }
@@ -387,7 +388,9 @@ function createFakePool() {
         sql === RULE_SQL.insertOwner ||
         sql === RULE_SQL.getMachine ||
         sql === RULE_SQL.listMachines ||
-        sql === RULE_SQL.upsertMachine
+        sql === RULE_SQL.upsertMachine ||
+        sql === RULE_SQL.listShopRuns ||
+        sql === RULE_SQL.upsertShopRun
       ) {
         return null;
       }
@@ -471,6 +474,9 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /XmModules\["\/shen\/paid"\]/);
     assert.match(embed.text, /XmModules\["\/shen\/recharge-rules"\]/);
     assert.match(embed.text, /\/api\/shen\/paid\/recharge-config/);
+    assert.match(embed.text, /本次执行店铺/);
+    assert.match(embed.text, /保存要跑的店铺/);
+    assert.match(embed.text, /patch:\s*"run"/);
     assert.match(embed.text, /\/api\/shen\/paid/);
     assert.match(embed.text, /京准通主账户ID/);
     assert.match(embed.text, /真实费比/);
@@ -1511,6 +1517,90 @@ test("recharge rules editor, worker pull, ack, permissions and executionId", asy
     assert.equal(sub.第一档充值金额, 100);
     assert.equal(sub.自动充值, true);
     assert.equal(sawa.启用, true);
+    assert.equal(worker.json.machineId, "paid-worker-01");
+    assert.deepEqual(worker.json.runShops.sort(), ["专营店", "飒望旗舰店"]);
+
+    const runSaved = await request(base, "/api/shen/paid/recharge-config", {
+      method: "PUT",
+      headers: shenHeaders(),
+      body: JSON.stringify({
+        patch: "run",
+        changeSummary: "选择本次执行店铺",
+        runShops: ["飒望旗舰店"]
+      })
+    });
+    assert.equal(runSaved.res.status, 200);
+    assert.equal(runSaved.json.version, 3);
+    assert.deepEqual(runSaved.json.runShops, ["飒望旗舰店"]);
+
+    const runEditor = await request(base, "/api/shen/paid/recharge-config/editor", {
+      headers: shenHeaders()
+    });
+    assert.equal(runEditor.json.runListSaved, true);
+    assert.deepEqual(runEditor.json.runShops, ["飒望旗舰店"]);
+    assert.equal(runEditor.json.shopRuns.find((row) => row.store === "专营店").enabled, false);
+
+    const runWorker = await request(
+      base,
+      "/api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=0",
+      { headers: shenHeaders() }
+    );
+    assert.deepEqual(runWorker.json.runShops, ["飒望旗舰店"]);
+    assert.deepEqual(
+      runWorker.json.shops.map((shop) => shop.店铺名称),
+      ["飒望旗舰店"]
+    );
+
+    const emptyRun = await request(base, "/api/shen/paid/recharge-config", {
+      method: "PUT",
+      headers: shenHeaders(),
+      body: JSON.stringify({ patch: "run", runShops: [] })
+    });
+    assert.equal(emptyRun.json.version, 4);
+    assert.deepEqual(emptyRun.json.runShops, []);
+    const emptyWorker = await request(
+      base,
+      "/api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=0",
+      { headers: shenHeaders() }
+    );
+    assert.deepEqual(emptyWorker.json.shops, []);
+    assert.deepEqual(emptyWorker.json.runShops, []);
+
+    const splitRun = await request(base, "/api/shen/paid/recharge-config", {
+      method: "PUT",
+      headers: shenHeaders(),
+      body: JSON.stringify({
+        patch: "run",
+        shopRuns: [
+          { 店铺名称: "飒望旗舰店", 启用: true, 执行机: "" },
+          { 店铺名称: "专营店", 启用: true, 执行机: "paid-worker-02" }
+        ]
+      })
+    });
+    assert.equal(splitRun.json.version, 5);
+    const firstMachine = await request(
+      base,
+      "/api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=0",
+      { headers: shenHeaders() }
+    );
+    assert.deepEqual(firstMachine.json.runShops, ["飒望旗舰店"]);
+    const secondMachine = await request(
+      base,
+      "/api/shen/paid/recharge-config?machineId=paid-worker-02&sinceVersion=0",
+      { headers: shenHeaders() }
+    );
+    assert.deepEqual(secondMachine.json.runShops.sort(), ["专营店", "飒望旗舰店"]);
+    assert.equal(
+      secondMachine.json.shops.find((shop) => shop.店铺名称 === "专营店").执行机,
+      "paid-worker-02"
+    );
+
+    const wangRun = await request(base, "/api/shen/paid/recharge-config", {
+      method: "PUT",
+      headers: shenHeaders("小王", "运营", "本店"),
+      body: JSON.stringify({ patch: "run", runShops: ["专营店"] })
+    });
+    assert.equal(wangRun.res.status, 403);
 
     const scopedWorker = await request(
       base,
@@ -1525,15 +1615,20 @@ test("recharge rules editor, worker pull, ack, permissions and executionId", asy
 
     const unchanged = await request(
       base,
-      "/api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=2",
+      "/api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=5",
       { headers: shenHeaders() }
     );
     assert.equal(unchanged.res.status, 200);
-    assert.deepEqual(unchanged.json, { changed: false, version: 2, updatedAt: unchanged.json.updatedAt });
+    assert.deepEqual(unchanged.json, {
+      changed: false,
+      version: 5,
+      updatedAt: unchanged.json.updatedAt,
+      machineId: "paid-worker-01"
+    });
 
     const notModified = await request(
       base,
-      "/api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=2&http304=1",
+      "/api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=5&http304=1",
       { headers: shenHeaders() }
     );
     assert.equal(notModified.res.status, 304);
@@ -1543,10 +1638,10 @@ test("recharge rules editor, worker pull, ack, permissions and executionId", asy
       headers: shenHeaders(),
       body: JSON.stringify({
         machineId: "paid-worker-01",
-        version: 2,
+        version: 5,
         status: "success",
         receivedAt: "2026-09-18T23:55:10+08:00",
-        message: "已校验并启用2版规则"
+        message: "已校验并启用5版规则"
       })
     });
     assert.equal(ack.res.status, 200);
@@ -1562,7 +1657,7 @@ test("recharge rules editor, worker pull, ack, permissions and executionId", asy
       headers: shenHeaders(),
       body: JSON.stringify({
         machineId: "paid-worker-01",
-        version: 2,
+        version: 5,
         status: "failed",
         message: "子账号99945558065的计划ROI无效"
       })
