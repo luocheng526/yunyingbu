@@ -507,7 +507,9 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /\/api\/shen\/paid\/worker-status/);
     assert.match(embed.text, /\/api\/shen\/paid\/shops/);
     assert.match(embed.text, /xm-rules-grid/);
+    assert.match(embed.text, /<col class="c-num">/);
     assert.match(embed.text, /inputmode="decimal"/);
+    assert.match(embed.text, /type="text"/);
     assert.match(embed.text, /本地机尚未接收/);
     assert.match(embed.text, /\/api\/shen\/paid/);
     assert.match(embed.text, /京准通主账户ID/);

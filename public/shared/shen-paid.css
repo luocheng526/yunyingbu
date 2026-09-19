@@ -298,7 +298,7 @@
 
 .xm-rules .xm-rules-grid-wrap {
   max-height: none;
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 .xm-rules select,
@@ -330,53 +330,64 @@
 }
 
 .xm-rules table.xm-rules-grid {
-  width: max-content !important;
-  max-width: none;
-  table-layout: auto;
+  width: 100% !important;
+  max-width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 12px;
 }
 
+.xm-rules .xm-rules-grid col.c-check { width: 32px; }
+.xm-rules .xm-rules-grid col.c-store { width: 11%; }
+.xm-rules .xm-rules-grid col.c-id { width: 86px; }
+.xm-rules .xm-rules-grid col.c-sub { width: 9%; }
+.xm-rules .xm-rules-grid col.c-auto { width: 40px; }
+.xm-rules .xm-rules-grid col.c-num { width: 4.8%; }
+.xm-rules .xm-rules-grid col.c-ver { width: 36px; }
+.xm-rules .xm-rules-grid col.c-sync { width: 48px; }
+.xm-rules .xm-rules-grid col.c-ops { width: 72px; }
+
 .xm-rules .xm-rules-grid thead th,
 .xm-rules .xm-rules-grid tbody td {
-  padding: 4px 5px;
+  padding: 3px 2px !important;
   white-space: nowrap;
   vertical-align: middle;
-  text-align: center;
+  text-align: center !important;
   border-bottom: 1px solid var(--xm-line);
+  overflow: hidden;
 }
 
 .xm-rules .xm-rules-grid thead th {
-  white-space: normal;
-  line-height: 1.25;
-  max-width: 58px;
-  font-size: 12px;
+  white-space: normal !important;
+  line-height: 1.2;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .xm-rules .xm-rules-grid td:nth-child(2),
 .xm-rules .xm-rules-grid td:nth-child(4),
 .xm-rules .xm-rules-grid th:nth-child(2),
 .xm-rules .xm-rules-grid th:nth-child(4) {
-  text-align: left;
-  max-width: 120px;
-  overflow: hidden;
+  text-align: left !important;
   text-overflow: ellipsis;
 }
 
-.xm-rules .xm-rules-grid input.xm-rules-num {
+.xm-rules .xm-rules-grid input.xm-rules-num,
+.xm-rules table.xm-rules-grid input[type="text"] {
   display: block;
   box-sizing: border-box;
-  width: 52px !important;
-  min-width: 52px !important;
-  max-width: 56px !important;
-  height: 26px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  height: 24px !important;
   margin: 0 auto;
-  padding: 0 4px !important;
+  padding: 0 2px !important;
   border: 1px solid var(--xm-line);
-  border-radius: 4px !important;
+  border-radius: 3px !important;
   background: #fff;
   color: var(--xm-ink);
   font-size: 12px;
+  line-height: 22px;
   text-align: center;
   -moz-appearance: textfield;
   appearance: textfield;

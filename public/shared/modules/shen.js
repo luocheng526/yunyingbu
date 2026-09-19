@@ -38,7 +38,7 @@
       if (!document.querySelector('link[href^="/shared/shen-paid.css"]')) {
         const link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href = "/shared/shen-paid.css?v=0.1.671";
+        link.href = "/shared/shen-paid.css?v=0.1.672";
         document.head.appendChild(link);
       }
 
@@ -523,7 +523,7 @@
       if (!document.querySelector('link[href^="/shared/shen-paid.css"]')) {
         const link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href = "/shared/shen-paid.css?v=0.1.671";
+        link.href = "/shared/shen-paid.css?v=0.1.672";
         document.head.appendChild(link);
       }
       ensureRechargeRulesNav();
@@ -614,18 +614,18 @@
           ["主账户ID", "京准通主账户ID"],
           ["子账号", "子账号名称"],
           ["子账号ID", "子账号ID"],
-          ["自动充值", "自动充值"],
-          ["计划ROI", "计划ROI"],
-          ["一档花费≥", "第一档花费下限"],
-          ["一档花费<", "第一档花费上限"],
-          ["一档余额≤", "第一档余额阈值"],
-          ["一档充值", "第一档充值金额"],
-          ["二档花费≥", "第二档花费下限"],
-          ["二档余额≤", "第二档余额阈值"],
-          ["二档充值", "第二档充值金额"],
-          ["ROI涨充值", "ROI上涨充值金额"],
-          ["未增单次", "连续充值未增单次数"],
-          ["暂停分", "暂停分钟数"],
+          ["自动", "自动充值"],
+          ["计划\nROI", "计划ROI"],
+          ["一档\n花费≥", "第一档花费下限"],
+          ["一档\n花费<", "第一档花费上限"],
+          ["一档\n余额≤", "第一档余额阈值"],
+          ["一档\n充值", "第一档充值金额"],
+          ["二档\n花费≥", "第二档花费下限"],
+          ["二档\n余额≤", "第二档余额阈值"],
+          ["二档\n充值", "第二档充值金额"],
+          ["ROI\n涨充值", "ROI上涨充值金额"],
+          ["未增\n单次", "连续充值未增单次数"],
+          ["暂停\n分", "暂停分钟数"],
           ["版本", "配置版本"],
           ["本地机", "本地机状态"],
           ["操作", "操作"]
@@ -1162,13 +1162,13 @@
               escapeHtml(row.subAccountName || "") +
               "</td><td>" +
               escapeHtml(String(row.subAccountId || "")) +
-              '</td><td><label class="xm-rules-check"><input class="xm-rules-auto" data-key="' +
+              '</td><td><label class="xm-rules-check" title="' +
+              yesNo(row.autoRecharge) +
+              '"><input class="xm-rules-auto" data-key="' +
               escapeHtml(key) +
               '" type="checkbox"' +
               (row.autoRecharge ? " checked" : "") +
-              " /> " +
-              yesNo(row.autoRecharge) +
-              "</label></td><td>" +
+              " /></label></td><td>" +
               numInput(row, "plannedRoi") +
               "</td><td>" +
               numInput(row, "tier1MinSpend") +
@@ -1207,10 +1207,21 @@
           })
           .join("");
         tableWrap.innerHTML =
-          '<div class="xm-paid-table-wrap xm-rules-grid-wrap"><table class="xm-rules-grid"><thead><tr>' +
+          '<div class="xm-paid-table-wrap xm-rules-grid-wrap"><table class="xm-rules-grid"><colgroup>' +
+          '<col class="c-check"><col class="c-store"><col class="c-id"><col class="c-sub"><col class="c-id"><col class="c-auto">' +
+          '<col class="c-num"><col class="c-num"><col class="c-num"><col class="c-num"><col class="c-num">' +
+          '<col class="c-num"><col class="c-num"><col class="c-num"><col class="c-num"><col class="c-num">' +
+          '<col class="c-ver"><col class="c-sync"><col class="c-ops">' +
+          "</colgroup><thead><tr>" +
           headers()
             .map(function (item) {
-              return '<th title="' + escapeHtml(item[1]) + '">' + escapeHtml(item[0]) + "</th>";
+              return (
+                '<th title="' +
+                escapeHtml(item[1]) +
+                '">' +
+                escapeHtml(item[0]).replaceAll("\n", "<br>") +
+                "</th>"
+              );
             })
             .join("") +
           "</tr></thead><tbody>" +
