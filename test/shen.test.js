@@ -440,14 +440,21 @@ test("submenu pages use 产品中心 and 付费中心", async () => {
       const { res, text } = await request(base, item.href);
       assert.equal(res.status, 200, item.href);
       assert.match(text, new RegExp(item.label));
-      assert.equal(text.includes("/shared/nav.js"), false, item.href);
+      if (item.slug === "recharge-rules") {
+        assert.match(text, /\/shared\/nav\.js/);
+        assert.match(text, /xm-app-shell/);
+        assert.equal(text.includes("id=\"rules-root\""), false);
+      } else {
+        assert.equal(text.includes("/shared/nav.js"), false, item.href);
+      }
       if (item.slug !== "tasks" && item.slug !== "paid" && item.slug !== "recharge-rules") {
         assert.match(text, /内容待开发/);
       }
     }
     const rulesPage = await request(base, "/shen/recharge-rules");
     assert.match(rulesPage.text, /充值规则/);
-    assert.equal(rulesPage.text.includes("/shared/nav.js"), false);
+    assert.match(rulesPage.text, /\/shared\/nav\.js/);
+    assert.match(rulesPage.text, /data-xm-mod="\/shen\/recharge-rules\/index.html"/);
     const tasks = await request(base, "/shen/tasks");
     assert.match(tasks.text, /任务列表/);
     assert.match(tasks.text, /今日简报/);
