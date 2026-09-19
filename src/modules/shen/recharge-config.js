@@ -2,7 +2,7 @@ import { listLatestSubIdentities, nowShanghai, queryShen, shenHttpError } from "
 
 export const DEFAULT_RECHARGE_RULE = {
   autoRecharge: true,
-  plannedRoi: 0,
+  plannedRoi: 2,
   tier1MinSpend: 1,
   tier1MaxSpend: 1000,
   tier1Balance: 100,
@@ -356,6 +356,9 @@ function validateRule(rule) {
   }
   if (rule.tier2MinSpend < rule.tier1MaxSpend) {
     throw shenHttpError(400, "第二档花费下限不能小于第一档花费上限");
+  }
+  if (rule.autoRecharge && !(Number(rule.plannedRoi) > 0)) {
+    throw shenHttpError(400, "自动充值账号的计划ROI必须大于0");
   }
   return rule;
 }

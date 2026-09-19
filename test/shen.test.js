@@ -1343,6 +1343,7 @@ test("recharge rules editor, worker pull, ack, permissions and executionId", asy
     assert.equal(first.accountId, "99931330021");
     assert.equal(typeof first.accountId, "string");
     assert.equal(first.autoRecharge, true);
+    assert.equal(first.plannedRoi, 2);
     assert.equal(first.tier1MinSpend, 1);
     assert.equal(first.tier1MaxSpend, 1000);
     assert.equal(first.tier1Balance, 100);
@@ -1354,6 +1355,7 @@ test("recharge rules editor, worker pull, ack, permissions and executionId", asy
     assert.equal(first.noOrderTimes, 3);
     assert.equal(first.pauseMinutes, 30);
     assert.equal(first.syncStatus, "待同步");
+    assert.equal(editor.json.defaults.plannedRoi, 2);
 
     const saved = await request(base, "/api/shen/paid/recharge-config", {
       method: "PUT",
@@ -1454,6 +1456,24 @@ test("recharge rules editor, worker pull, ack, permissions and executionId", asy
     });
     assert.equal(negative.res.status, 400);
     assert.match(negative.json.error, /负数/);
+
+    const zeroRoi = await request(base, "/api/shen/paid/recharge-config", {
+      method: "PUT",
+      headers: shenHeaders(),
+      body: JSON.stringify({
+        rows: [
+          {
+            店铺名称: "飒望旗舰店",
+            京准通主账户ID: "99931330021",
+            子账号ID: "99945558065",
+            自动充值: true,
+            计划ROI: 0
+          }
+        ]
+      })
+    });
+    assert.equal(zeroRoi.res.status, 400);
+    assert.match(zeroRoi.json.error, /计划ROI必须大于0/);
 
     const badRange = await request(base, "/api/shen/paid/recharge-config", {
       method: "PUT",

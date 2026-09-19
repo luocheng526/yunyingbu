@@ -530,7 +530,7 @@
       root.innerHTML =
         '<main class="page xm-paid xm-rules">' +
         '<header class="page-head"><div><h1>充值规则</h1>' +
-        '<p class="lead" id="rules-lead">只配置自己名下店铺和子账号。勾选要跑的店铺并保存后，本地机只跑这些店。网站不保存京准通 Cookie，也不直接充值。</p></div>' +
+        '<p class="lead" id="rules-lead">只配置自己名下店铺和子账号。勾选要跑的店铺并保存后，本地机只跑这些店。自动充值账号的计划ROI必须大于0，默认2。网站不保存京准通 Cookie，也不直接充值。</p></div>' +
         '<div class="xm-paid-meta"><span class="xm-paid-dot" aria-hidden="true"></span>' +
         '<span id="rules-asof">等待配置</span></div></header>' +
         '<section class="panel" id="rules-run-panel">' +
