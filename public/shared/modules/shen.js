@@ -38,7 +38,7 @@
       if (!document.querySelector('link[href^="/shared/shen-paid.css"]')) {
         const link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href = "/shared/shen-paid.css?v=0.1.670";
+        link.href = "/shared/shen-paid.css?v=0.1.671";
         document.head.appendChild(link);
       }
 
@@ -523,7 +523,7 @@
       if (!document.querySelector('link[href^="/shared/shen-paid.css"]')) {
         const link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href = "/shared/shen-paid.css?v=0.1.670";
+        link.href = "/shared/shen-paid.css?v=0.1.671";
         document.head.appendChild(link);
       }
       ensureRechargeRulesNav();
@@ -541,6 +541,7 @@
         '<section class="panel">' +
         '<div class="xm-paid-toolbar"><h2>子账号规则</h2><div class="row" id="rules-toolbar"></div></div>' +
         '<div id="rules-sub-form" class="xm-rules-form" hidden></div>' +
+        '<p id="rules-sync-banner" class="xm-rules-sync-banner" hidden></p>' +
         '<div id="rules-table-wrap"><p class="empty">加载中…</p></div>' +
         "</section>" +
         '<section class="panel" id="rules-history-wrap" hidden>' +
@@ -562,6 +563,7 @@
       let lastMeta = { shops: [], shopRuns: [], machines: [], runListSaved: false, newSubDefaults: { autoRecharge: false, plannedRoi: 2 } };
       let runSelected = new Set();
       let showDeleted = false;
+      let pendingSyncHint = "";
 
       function authHeaders(extra) {
         const headers = extra ? Object.assign({}, extra) : {};
@@ -587,6 +589,16 @@
         statusEl.className = "status" + (isError ? " error" : message ? " ok" : "");
       }
 
+      function setSyncBanner(text, tone) {
+        const banner = root.querySelector("#rules-sync-banner");
+        if (!banner) {
+          return;
+        }
+        banner.hidden = !text;
+        banner.textContent = text || "";
+        banner.className = "xm-rules-sync-banner" + (tone ? " is-" + tone : "");
+      }
+
       function money(value) {
         return String(value ?? "");
       }
@@ -597,29 +609,26 @@
 
       function headers() {
         return [
-          "选择",
-          "店铺名称",
-          "京准通主账户ID",
-          "子账号名称",
-          "子账号ID",
-          "自动充值",
-          "计划ROI",
-          "第一档花费下限",
-          "第一档花费上限",
-          "第一档余额阈值",
-          "第一档充值金额",
-          "第二档花费下限",
-          "第二档余额阈值",
-          "第二档充值金额",
-          "ROI上涨充值金额",
-          "连续充值未增单次数",
-          "暂停分钟数",
-          "配置版本",
-          "最后修改人",
-          "最后修改时间",
-          "本地机状态",
-          "本地机最后同步时间",
-          "操作"
+          ["选择", "选择"],
+          ["店铺", "店铺名称"],
+          ["主账户ID", "京准通主账户ID"],
+          ["子账号", "子账号名称"],
+          ["子账号ID", "子账号ID"],
+          ["自动充值", "自动充值"],
+          ["计划ROI", "计划ROI"],
+          ["一档花费≥", "第一档花费下限"],
+          ["一档花费<", "第一档花费上限"],
+          ["一档余额≤", "第一档余额阈值"],
+          ["一档充值", "第一档充值金额"],
+          ["二档花费≥", "第二档花费下限"],
+          ["二档余额≤", "第二档余额阈值"],
+          ["二档充值", "第二档充值金额"],
+          ["ROI涨充值", "ROI上涨充值金额"],
+          ["未增单次", "连续充值未增单次数"],
+          ["暂停分", "暂停分钟数"],
+          ["版本", "配置版本"],
+          ["本地机", "本地机状态"],
+          ["操作", "操作"]
         ];
       }
 
@@ -627,15 +636,13 @@
         return row.store + "\t" + row.accountId + "\t" + row.subAccountId;
       }
 
-      function numInput(row, field, step) {
+      function numInput(row, field) {
         return (
           '<input class="xm-rules-num" data-key="' +
           escapeHtml(rowKey(row)) +
           '" data-field="' +
           field +
-          '" type="number" min="0" step="' +
-          (step || "1") +
-          '" value="' +
+          '" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" value="' +
           escapeHtml(money(row[field])) +
           '" />'
         );
@@ -995,7 +1002,8 @@
           if (!res.ok) {
             throw new Error(data.error || "保存失败");
           }
-          setStatus("已保存版本 " + data.version + "，" + summary);
+          pendingSyncHint = "已保存版本 " + data.version + "，本地机尚未接收（待同步）。本机 GET 并 ACK 后才会变成已同步。";
+          setStatus(pendingSyncHint);
           const shopForm = root.querySelector("#rules-shop-form");
           const subForm = root.querySelector("#rules-sub-form");
           if (shopForm) {
@@ -1036,7 +1044,13 @@
           if (!res.ok) {
             throw new Error(data.error || "保存失败");
           }
-          setStatus("已保存版本 " + data.version + "，已开启 " + (data.runShops || runShops).length + " 家店");
+          pendingSyncHint =
+            "已保存版本 " +
+            data.version +
+            "，本地机尚未接收（待同步）。已开启 " +
+            (data.runShops || runShops).length +
+            " 家店。本机 GET 并 ACK 后才会变成已同步。";
+          setStatus(pendingSyncHint);
           runSelected = new Set();
           await load();
         } catch (err) {
@@ -1155,7 +1169,7 @@
               " /> " +
               yesNo(row.autoRecharge) +
               "</label></td><td>" +
-              numInput(row, "plannedRoi", "0.01") +
+              numInput(row, "plannedRoi") +
               "</td><td>" +
               numInput(row, "tier1MinSpend") +
               "</td><td>" +
@@ -1179,13 +1193,7 @@
               "</td><td>" +
               escapeHtml(String(row.version || 0)) +
               "</td><td>" +
-              escapeHtml(row.updatedBy || "—") +
-              "</td><td>" +
-              escapeHtml(row.updatedAt || "—") +
-              "</td><td>" +
               escapeHtml(row.syncStatus || "待同步") +
-              "</td><td>" +
-              escapeHtml(row.syncedAt || "—") +
               "</td><td>" +
               (row.deleted
                 ? '<button type="button" data-sub-restore="' + escapeHtml(key) + '">恢复</button>'
@@ -1199,10 +1207,10 @@
           })
           .join("");
         tableWrap.innerHTML =
-          '<div class="xm-paid-table-wrap"><table><thead><tr>' +
+          '<div class="xm-paid-table-wrap xm-rules-grid-wrap"><table class="xm-rules-grid"><thead><tr>' +
           headers()
-            .map(function (title) {
-              return "<th>" + title + "</th>";
+            .map(function (item) {
+              return '<th title="' + escapeHtml(item[1]) + '">' + escapeHtml(item[0]) + "</th>";
             })
             .join("") +
           "</tr></thead><tbody>" +
@@ -1298,7 +1306,22 @@
             : "尚未保存过规则，显示默认档位";
           renderToolbar(data);
           renderTable();
-          setStatus(rows.length ? "已加载 " + rows.length + " 个子账号" : "");
+          if (pendingSyncHint && data.syncStatus !== "已同步") {
+            setSyncBanner(pendingSyncHint, "wait");
+            setStatus(pendingSyncHint);
+          } else if (data.syncStatus === "待同步" && data.version) {
+            const waitText = "配置版本 " + data.version + " 本地机尚未接收（待同步）。本机 GET 并 ACK 后才会变成已同步。";
+            setSyncBanner(waitText, "wait");
+            setStatus(waitText);
+          } else if (data.syncStatus === "同步失败") {
+            const failText = "配置版本 " + data.version + " 本地机同步失败。请看本机 ACK 失败原因后重试。";
+            setSyncBanner(failText, "error");
+            setStatus(failText, true);
+          } else {
+            pendingSyncHint = "";
+            setSyncBanner("");
+            setStatus(rows.length ? "已加载 " + rows.length + " 个子账号" : "");
+          }
         } catch (err) {
           if (!dead) {
             setStatus(err.message || "无法加载充值规则", true);
@@ -1325,7 +1348,8 @@
           if (!res.ok) {
             throw new Error(data.error || "保存失败");
           }
-          setStatus("已保存版本 " + data.version);
+          pendingSyncHint = "已保存版本 " + data.version + "，本地机尚未接收（待同步）。本机 GET 并 ACK 后才会变成已同步。";
+          setStatus(pendingSyncHint);
           await load();
         } catch (err) {
           setStatus(err.message || "保存失败", true);
