@@ -145,7 +145,22 @@ ON DUPLICATE KEY UPDATE
   status = VALUES(status),
   message = VALUES(message),
   received_at = VALUES(received_at),
-  synced_at = VALUES(synced_at)`
+  synced_at = VALUES(synced_at)`,
+  createShopRunTable: `CREATE TABLE IF NOT EXISTS shen_paid_recharge_shop_run (
+  store VARCHAR(64) NOT NULL PRIMARY KEY,
+  run_enabled TINYINT NOT NULL DEFAULT 0,
+  machine_id VARCHAR(64) NOT NULL DEFAULT '',
+  updated_by VARCHAR(64) NOT NULL DEFAULT '',
+  updated_at VARCHAR(40) NOT NULL DEFAULT ''
+)`,
+  listShopRuns: `SELECT store, run_enabled, machine_id, updated_by, updated_at FROM shen_paid_recharge_shop_run`,
+  upsertShopRun: `INSERT INTO shen_paid_recharge_shop_run (store, run_enabled, machine_id, updated_by, updated_at)
+VALUES (?, ?, ?, ?, ?)
+ON DUPLICATE KEY UPDATE
+  run_enabled = VALUES(run_enabled),
+  machine_id = VALUES(machine_id),
+  updated_by = VALUES(updated_by),
+  updated_at = VALUES(updated_at)`
 };
 
 let memoryRules = [];
@@ -153,6 +168,7 @@ let memoryMeta = { version: 0, updatedBy: "", updatedAt: "", changeSummary: "" }
 let memoryHistory = [];
 let memoryOwners = [];
 let memoryMachines = [];
+let memoryShopRuns = [];
 let nextHistoryId = 1;
 
 export function resetRechargeConfig() {
@@ -161,6 +177,7 @@ export function resetRechargeConfig() {
   memoryHistory = [];
   memoryOwners = [];
   memoryMachines = [];
+  memoryShopRuns = [];
   nextHistoryId = 1;
 }
 
@@ -172,7 +189,8 @@ export async function ensureRechargeConfigTables() {
     RULE_SQL.createOwnerTable,
     RULE_SQL.createMachineTable,
     RULE_SQL.addMachineRole,
-    RULE_SQL.addMachineScope
+    RULE_SQL.addMachineScope,
+    RULE_SQL.createShopRunTable
   ]) {
     try {
       await queryShen(sql);
@@ -442,6 +460,54 @@ async function loadMachines() {
   return memoryMachines.map((row) => ({ ...row }));
 }
 
+function mapShopRun(row) {
+  return {
+    store: row.store || "",
+    enabled: Number(row.run_enabled ?? row.enabled ?? 0) === 1,
+    machineId: String(row.machine_id || row.machineId || ""),
+    updatedBy: row.updated_by || row.updatedBy || "",
+    updatedAt: row.updated_at || row.updatedAt || ""
+  };
+}
+
+async function loadShopRuns() {
+  await ensureRechargeConfigTables();
+  const result = await queryShen(RULE_SQL.listShopRuns);
+  if (result) {
+    return result[0].map(mapShopRun);
+  }
+  return memoryShopRuns.map((row) => ({ ...row }));
+}
+
+async function persistShopRun(row) {
+  const result = await queryShen(RULE_SQL.upsertShopRun, [
+    row.store,
+    row.enabled ? 1 : 0,
+    row.machineId || "",
+    row.updatedBy || "",
+    row.updatedAt || ""
+  ]);
+  if (result) {
+    return;
+  }
+  const idx = memoryShopRuns.findIndex((item) => item.store === row.store);
+  if (idx >= 0) {
+    memoryShopRuns[idx] = { ...row };
+  } else {
+    memoryShopRuns.push({ ...row });
+  }
+}
+
+function shopRunnable(run, machineId) {
+  if (!run || !run.enabled) {
+    return false;
+  }
+  if (!run.machineId) {
+    return true;
+  }
+  return run.machineId === machineId;
+}
+
 async function loadPeopleShops(username) {
   try {
     const people = await import("../people/store.js");
@@ -668,16 +734,19 @@ export async function listEditorConfig(query, actor) {
   const storeFilter = clip(query?.store || "", 64, "店铺名称");
   const keyword = String(query?.q || query?.keyword || "").trim();
   const enabledOnly = String(query?.enabled || "") === "1" || query?.enabled === true;
-  const [identities, rules, meta, machines] = await Promise.all([
+  const [identities, rules, meta, machines, shopRuns] = await Promise.all([
     listLatestSubIdentities(),
     loadRules(),
     loadMeta(),
-    loadMachines()
+    loadMachines(),
+    loadShopRuns()
   ]);
   const ruleMap = new Map(rules.map((row) => [ruleKey(row), row]));
+  const runMap = new Map(shopRuns.map((row) => [row.store, row]));
   const sync = syncStatusFor(meta.version, machines, actor.username, allowed);
-  let rows = identities
-    .filter((item) => !allowed || allowed.includes(item.store))
+  const scopedIdentities = identities.filter((item) => !allowed || allowed.includes(item.store));
+  const shops = [...new Set(scopedIdentities.map((item) => item.store))];
+  let rows = scopedIdentities
     .filter((item) => !storeFilter || item.store === storeFilter)
     .map((item) => toEditorRow(item, ruleMap.get(`${item.store}\t${item.accountId}\t${item.subAccountId}`), meta, sync))
     .filter((row) => {
@@ -689,7 +758,15 @@ export async function listEditorConfig(query, actor) {
       }
       return `${row.subAccountName} ${row.subAccountId}`.includes(keyword);
     });
-  const shops = [...new Set(rows.map((row) => row.store))];
+  const runListSaved = shopRuns.length > 0;
+  const shopRunRows = shops.map((name) => {
+    const run = runMap.get(name);
+    return {
+      store: name,
+      enabled: runListSaved ? Boolean(run?.enabled) : true,
+      machineId: run?.machineId || ""
+    };
+  });
   return {
     ok: true,
     version: meta.version,
@@ -699,10 +776,129 @@ export async function listEditorConfig(query, actor) {
     actor: actor.username,
     scope: allowed ? "assigned" : "all",
     shops,
+    runListSaved,
+    runShops: shopRunRows.filter((row) => row.enabled).map((row) => row.store),
+    shopRuns: shopRunRows,
+    machines: machines.map((item) => ({
+      machineId: item.machineId,
+      username: item.username,
+      status: item.status === "success" ? "已同步" : item.status === "failed" ? "同步失败" : "待同步",
+      lastVersion: item.lastVersion,
+      syncedAt: item.syncedAt || ""
+    })),
     defaults: DEFAULT_RECHARGE_RULE,
     syncStatus: sync.status,
     syncedAt: sync.syncedAt,
     rows
+  };
+}
+
+function isRunPatch(body) {
+  const patch = String(body?.patch || "").toLowerCase();
+  return patch === "run" || patch === "shops" || patch === "本次执行";
+}
+
+export async function saveShopRunList(body, actor) {
+  if (!actor?.username) {
+    throw shenHttpError(401, "未登录，无法保存要跑的店铺");
+  }
+  if (body == null || typeof body !== "object") {
+    throw shenHttpError(400, "请求体必须是对象");
+  }
+  const named = body.shopRuns || body.店铺执行 || (Array.isArray(body.rows) && isRunPatch(body) ? body.rows : null);
+  const names = body.runShops ?? body.本次执行 ?? body.shops;
+  if (!Array.isArray(named) && !Array.isArray(names)) {
+    throw shenHttpError(400, "必须指定 runShops 或 shopRuns");
+  }
+  const allowed = await listAssignedStores(actor);
+  const [identities, currentRuns, meta] = await Promise.all([listLatestSubIdentities(), loadShopRuns(), loadMeta()]);
+  const known = [
+    ...new Set(
+      identities
+        .map((item) => item.store)
+        .filter((store) => !allowed || allowed.includes(store))
+    )
+  ];
+  const nextMap = new Map(known.map((store) => [store, { store, enabled: false, machineId: "" }]));
+  if (Array.isArray(names)) {
+    if (names.length > 200) {
+      throw shenHttpError(400, "本次执行店铺一次最多 200 家");
+    }
+    for (const item of names) {
+      const store = clip(typeof item === "string" ? item : item?.store || item?.店铺名称, 64, "店铺名称");
+      if (!store) {
+        continue;
+      }
+      assertStoreAllowed(store, allowed);
+      nextMap.set(store, { store, enabled: true, machineId: nextMap.get(store)?.machineId || "" });
+    }
+  }
+  if (Array.isArray(named)) {
+    if (named.length > 200) {
+      throw shenHttpError(400, "本次执行店铺一次最多 200 家");
+    }
+    for (const raw of named) {
+      const store = clip(pick(raw, ["店铺名称", "store"]) || "", 64, "店铺名称");
+      if (!store) {
+        continue;
+      }
+      assertStoreAllowed(store, allowed);
+      nextMap.set(store, {
+        store,
+        enabled: asBool(pick(raw, ["启用", "enabled", "本次执行"]), true),
+        machineId: clip(pick(raw, ["执行机", "machineId"]) || "", 64, "执行机")
+      });
+    }
+  }
+  const version = meta.version + 1;
+  const updatedAt = nowShanghai();
+  const updatedBy = actor.displayName || actor.username;
+  const changeSummary = clip(body.changeSummary || body.摘要 || "选择本次执行店铺", 200, "变更摘要");
+  const prevMap = new Map(currentRuns.map((row) => [row.store, row]));
+  const saved = [];
+  for (const next of nextMap.values()) {
+    const prev = prevMap.get(next.store) || { store: next.store, enabled: false, machineId: "" };
+    const row = { ...next, updatedBy, updatedAt };
+    await persistShopRun(row);
+    if (Boolean(prev.enabled) !== Boolean(next.enabled)) {
+      await persistHistory({
+        version,
+        store: next.store,
+        accountId: "",
+        subAccountId: "",
+        field: "本次执行",
+        oldValue: prev.enabled ? "是" : "否",
+        newValue: next.enabled ? "是" : "否",
+        updatedBy,
+        updatedAt,
+        changeSummary
+      });
+    }
+    if (String(prev.machineId || "") !== String(next.machineId || "")) {
+      await persistHistory({
+        version,
+        store: next.store,
+        accountId: "",
+        subAccountId: "",
+        field: "执行机",
+        oldValue: prev.machineId || "任意机",
+        newValue: next.machineId || "任意机",
+        updatedBy,
+        updatedAt,
+        changeSummary
+      });
+    }
+    saved.push(row);
+  }
+  await persistMeta({ version, updatedBy, updatedAt, changeSummary });
+  return {
+    ok: true,
+    version,
+    updatedAt,
+    updatedBy,
+    changeSummary,
+    saved: saved.length,
+    runShops: saved.filter((row) => row.enabled).map((row) => row.store)
   };
 }
 
@@ -712,6 +908,9 @@ export async function saveEditorConfig(body, actor) {
   }
   if (body == null || typeof body !== "object") {
     throw shenHttpError(400, "请求体必须是对象");
+  }
+  if (isRunPatch(body) || Array.isArray(body.runShops) || Array.isArray(body.本次执行) || Array.isArray(body.shopRuns)) {
+    return saveShopRunList(body, actor);
   }
   const incoming = body.rows || body.子账号 || body.list || [];
   if (!Array.isArray(incoming) || incoming.length === 0) {
@@ -862,18 +1061,30 @@ export async function pullWorkerConfig(query, actor) {
   };
   const allowed = await listAssignedStores(isAllScope(actor) ? actor : machineActor);
   const sinceVersion = Number(query?.sinceVersion ?? query?.version ?? 0) || 0;
-  const [identities, rules, meta] = await Promise.all([listLatestSubIdentities(), loadRules(), loadMeta()]);
+  const [identities, rules, meta, shopRuns] = await Promise.all([
+    listLatestSubIdentities(),
+    loadRules(),
+    loadMeta(),
+    loadShopRuns()
+  ]);
   if (meta.version > 0 && meta.version <= sinceVersion) {
     return {
       changed: false,
       version: meta.version,
-      updatedAt: meta.updatedAt
+      updatedAt: meta.updatedAt,
+      machineId: machine.machineId
     };
   }
   const ruleMap = new Map(rules.map((row) => [ruleKey(row), row]));
+  const runMap = new Map(shopRuns.map((row) => [row.store, row]));
+  const runListSaved = shopRuns.length > 0;
   const byShop = new Map();
   for (const identity of identities) {
     if (allowed && !allowed.includes(identity.store)) {
+      continue;
+    }
+    const run = runMap.get(identity.store);
+    if (runListSaved && !shopRunnable(run, machine.machineId)) {
       continue;
     }
     const rule = applyDefault(ruleMap.get(`${identity.store}\t${identity.accountId}\t${identity.subAccountId}`) || {
@@ -886,7 +1097,8 @@ export async function pullWorkerConfig(query, actor) {
       byShop.set(identity.store, {
         店铺名称: identity.store,
         京准通主账户ID: String(identity.accountId || ""),
-        启用: rule.shopEnabled,
+        启用: true,
+        执行机: run?.machineId || "",
         子账号: []
       });
     }
@@ -896,11 +1108,14 @@ export async function pullWorkerConfig(query, actor) {
     }
     shop.子账号.push(toWorkerSub({ ...rule, ...identity, subAccountName: identity.subAccountName || rule.subAccountName }));
   }
+  const shops = [...byShop.values()];
   return {
     changed: true,
     version: meta.version,
     updatedAt: meta.updatedAt,
-    shops: [...byShop.values()]
+    machineId: machine.machineId,
+    runShops: shops.map((shop) => shop.店铺名称),
+    shops
   };
 }
 
