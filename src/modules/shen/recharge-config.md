@@ -1,6 +1,6 @@
 # 沈子晗充值规则接口
 
-网站只保存规则和修改历史，不保存京准通 / 京麦 Cookie，也不直接发起充值。本地工作机拉到完整有效配置并 ACK 成功后，才按京小洁数据判断是否打开京准通充值。接口异常时，本地必须继续使用上一次校验成功的规则。
+网站是店铺、子账号和充值规则的唯一主档。本地 Excel 只作迁移备份。网站不保存、不接收、不返回任何京准通 / 京麦 Cookie 或密码，也不直接发起充值。本地工作机拉到完整配置快照并 ACK 成功后，才按京小洁数据判断是否打开京准通充值。接口异常时，本地必须继续使用上一次校验成功的规则。
 
 夜间 23:55 转出、00:05 启动是独立规则，本页不改。
 
@@ -95,8 +95,9 @@
 
 网页「充值规则」上方勾选要开启的店，点「保存运行状态」。
 
-- 还没保存过运行状态：本地机仍拉权限范围内全部店（默认已开启）。
-- 保存后：本地机 `shops` / `runShops` **只含已开启的店**。空名单 `runShops=[]` 表示工作机在线待机，禁止回退到本地店单。
+- 还没保存过运行状态：`runShops` 含权限范围内全部未删除店（默认已开启）。
+- 保存后：`runShops` 只含当前要求本地执行的**京准通主账户ID**。空名单 `runShops=[]` 表示白天任务全部待机，禁止回退到本地旧名单。
+- `shops` 始终返回权限内全部未删除店铺，不只返回勾选运行的店。已停止的店仍在 `shops` 里，`启用=false`。
 - 已开启：本地持续循环采集、回传并按规则充值。
 - 已停止：本地不得再启动该店的新一轮采集或充值。
 - 停止中：刚从开启改为停止，本地正在完成已开始的安全收尾。停止不强杀正在提交的转账；完成本笔及弹窗后不再开下一笔或下一轮。
@@ -108,7 +109,7 @@ PUT /api/shen/paid/recharge-config
 {
   "patch": "run",
   "changeSummary": "保存运行状态",
-  "runShops": ["飒望旗舰店", "RASW潮流生活旗舰店"]
+  "runShops": ["99931330021", "88002"]
 }
 ```
 
@@ -128,7 +129,7 @@ PUT /api/shen/paid/recharge-config
 
 ### `GET /api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=27`
 
-只返回该机当前已开启的店铺。已停止的店不得再放进 `runShops`。无新版本：
+返回完整配置快照。`shops` 是权限内全部未删除店铺；`runShops` 只含当前要求本机执行的主账户ID。无新版本：
 
 ```json
 { "changed": false, "version": 27, "machineId": "paid-worker-01" }
@@ -142,7 +143,8 @@ PUT /api/shen/paid/recharge-config
   "version": 28,
   "updatedAt": "2026-09-18T23:55:00+08:00",
   "machineId": "paid-worker-01",
-  "runShops": ["飒望旗舰店"],
+  "fullSnapshot": true,
+  "runShops": ["99931330021"],
   "shops": [
     {
       "店铺名称": "飒望旗舰店",
@@ -168,7 +170,9 @@ PUT /api/shen/paid/recharge-config
         }
       ]
     }
-  ]
+  ],
+  "deletedShopIds": [],
+  "deletedSubAccounts": []
 }
 ```
 
@@ -231,6 +235,159 @@ GET /api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=28&http
 }
 ```
 
+## 店铺 / 子账号主档
+
+唯一键：店铺=`京准通主账户ID`，子账号=`京准通主账户ID + 子账号ID`。全部按字符串保存。软删除，不删历史采集和充值记录。主账户ID不可改，更换时删除旧店再新建。改名仍按主账户ID关联。
+
+新增子账号默认 `自动充值=false`、计划ROI=2。
+
+```json
+POST /api/shen/paid/shops
+{ "action": "create", "店铺名称": "RASW健康电器旗舰店", "京准通主账户ID": "99952255226", "执行机": "paid-worker-01" }
+```
+
+`action` 还可以是 `update` / `delete` / `restore`。编辑只改店铺名称和执行机。
+
+```json
+POST /api/shen/paid/subs
+{ "action": "create", "京准通主账户ID": "99952255226", "子账号ID": "99952255999", "子账号名称": "健康电器-投放1" }
+```
+
+也可以 `PUT /api/shen/paid/recharge-config`，带 `patch: "shop"` 或 `patch: "sub"`。
+
+## 本地机状态
+
+`POST /api/shen/paid/worker-status` 只收状态枚举和心跳，**不接收 Cookie 正文**。按 `machineId` + 主账户ID 更新。超过 5 分钟无心跳，页面显示离线。某店缺 Cookie 只把该店标成等待Cookie，不影响其他店。
+
+请求：
+
+```json
+{
+  "machineId": "paid-worker-01",
+  "configVersion": 4,
+  "heartbeatAt": "2026-09-19T12:00:00+08:00",
+  "workerStatus": "online",
+  "shops": [
+    {
+      "京准通主账户ID": "99952255226",
+      "京准通Cookie状态": "正常",
+      "京准通Cookie更新时间": "2026-09-18T10:00:00+08:00",
+      "京麦Cookie状态": "待录",
+      "京麦Cookie更新时间": null,
+      "执行状态": "等待Cookie",
+      "最后错误": ""
+    }
+  ]
+}
+```
+
+响应：
+
+```json
+{
+  "ok": true,
+  "machineId": "paid-worker-01",
+  "heartbeatAt": "2026-09-19T12:00:00+08:00",
+  "workerStatus": "在线",
+  "configVersion": 4,
+  "saved": 1,
+  "shops": [
+    {
+      "accountId": "99952255226",
+      "jztCookieStatus": "正常",
+      "jmCookieStatus": "待录",
+      "runStatus": "等待Cookie",
+      "lastError": "",
+      "heartbeatAt": "2026-09-19T12:00:00+08:00",
+      "workerStatus": "在线"
+    }
+  ]
+}
+```
+
+Cookie 状态只能是：待录 / 正常 / 过期 / 身份不符。执行状态只能是：运行中 / 已停止 / 等待Cookie / 异常。
+
+## recharge-config 完整快照样例
+
+店铺、子账号、规则、执行名单任一变更都会让 `version` +1。`fullSnapshot` 始终为 true。
+
+### 新增店铺后
+
+```json
+{
+  "changed": true,
+  "version": 4,
+  "machineId": "paid-worker-01",
+  "fullSnapshot": true,
+  "runShops": ["99952255226"],
+  "shops": [
+    {
+      "店铺名称": "RASW健康电器旗舰店",
+      "京准通主账户ID": "99952255226",
+      "启用": true,
+      "执行机": "paid-worker-01",
+      "子账号": []
+    }
+  ],
+  "deletedShopIds": [],
+  "deletedSubAccounts": []
+}
+```
+
+### 删除店铺后
+
+```json
+{
+  "changed": true,
+  "version": 5,
+  "machineId": "paid-worker-01",
+  "fullSnapshot": true,
+  "runShops": [],
+  "shops": [],
+  "deletedShopIds": ["99952255226"],
+  "deletedSubAccounts": []
+}
+```
+
+删除只停止后续执行，不删历史采集和充值。本地先完成已经开始的转账和弹窗，再停该店。
+
+### 空运行名单（白天待机）
+
+```json
+{
+  "changed": true,
+  "version": 6,
+  "machineId": "paid-worker-01",
+  "fullSnapshot": true,
+  "runShops": [],
+  "shops": [
+    {
+      "店铺名称": "RASW健康电器旗舰店",
+      "京准通主账户ID": "99952255226",
+      "启用": false,
+      "执行机": "paid-worker-01",
+      "子账号": []
+    }
+  ],
+  "deletedShopIds": [],
+  "deletedSubAccounts": []
+}
+```
+
+`runShops=[]` 表示全部待机，禁止本地回退旧名单。`shops` 仍返回未删除主档。
+
+## 版本变化
+
+| 操作 | version |
+| --- | --- |
+| 新增店铺 | +1，新店进入 `shops`；未保存过运行名单时也进入 `runShops` |
+| 删除店铺 | +1，主账户ID进入 `deletedShopIds`，离开 `shops` / `runShops` |
+| 新增子账号 | +1，默认自动充值=false、计划ROI=2，出现在该店 `子账号` |
+| 删除子账号 | +1，进入 `deletedSubAccounts`，不再开始新充值，已提交资金动作允许收尾 |
+| 改名 / 改执行机 / 改规则 / 改运行名单 | 各 +1 |
+
+ACK 仍是 `POST /api/shen/paid/recharge-config/ack`。采集和充值回传仍是 `POST /api/shen/paid/ingest`。
+
 ## 发给本地程序
 
 把下面整段原样发给本地 Codex / 工作机，按此对齐。网站地址 `https://zx.xingmaierp.cc`。网站不存京准通 / 京麦 Cookie，也不发起充值。这是持续运行控制，不是一次性任务。本机启动一次并保持在线，店铺启停和规则都听网站。
@@ -239,10 +396,10 @@ GET /api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=28&http
 2. 保持循环：`GET https://zx.xingmaierp.cc/api/shen/paid/recharge-config?machineId=<本机>&sinceVersion=<上次成功ACK的版本>`。第一次 `sinceVersion=0`。
 3. 首次请求带登录会话 cookie `mk_sid`，或请求头 `x-shen-user` / `x-shen-role` / `x-shen-scope`（中文要 URI 编码）。网站会把这台机绑到这个人的店铺权限上。已经绑过的机后续无会话也能按绑定人过滤。
 4. `changed: false` 或 HTTP 304：配置没变，继续按本机上次校验成功的配置循环。不要重新发明规则。
-5. `changed: true`：整包替换本机配置。只持续运行返回体里的 `runShops` / `shops`。某店没出现在这次包里 = 已停止或正在停止：完成本店已开始的转账及弹窗后停止该店，不再开新一轮采集或充值。不要强杀正在提交的资金操作。`runShops` 为空数组 = 全部停止，本机保持在线待机，禁止回退本地店单。
+5. `changed: true`：整包替换本机配置，`fullSnapshot=true`。`shops` 是权限内全部未删除店铺；只持续运行 `runShops` 里的主账户ID。某店在 `shops` 但 `启用=false` 或不在 `runShops` = 已停止：完成本店已开始的转账及弹窗后停止该店，不再开新一轮。`deletedShopIds` / `deletedSubAccounts` 里的店和子账号同样只收尾、不再新开。不要强杀正在提交的资金操作。`runShops=[]` = 白天任务全部待机，禁止回退本地旧名单。缺 Cookie 只把该店标成等待Cookie，不影响其他店。本机用 `POST /api/shen/paid/worker-status` 回报 Cookie 状态、执行状态和心跳，不要上传 Cookie 正文。
 6. 每个子账号还要看 `自动充值`。`false` 的子账号只采集不充值。档位、计划 ROI、暂停次数以网站包为准，不要本地改公式。
 7. 接口异常时继续用上一次校验成功的规则。夜间 23:55 / 00:05 独立规则，本页不管。
 8. 本机校验并启用这版规则后立刻 `POST /api/shen/paid/recharge-config/ack`：`{ "machineId": "paid-worker-01", "version": 28, "status": "success", "receivedAt": "2026-09-19T10:00:00+08:00", "message": "已校验并启用28版规则" }`。失败把 `status` 改成 `failed`。页面用它显示待同步 / 已同步 / 同步失败。ACK 前刚被移出 `runShops` 的店在网页上显示停止中。
 9. 付费回传仍是现有 `POST /api/shen/paid/ingest`，一次带齐同级 `rows`、`子账号`、`充值记录`，可选 `启用店铺`、`抓取时间`。充值必须是打款成功的流水。补传不重复：无 `executionId` 时按店铺+日期+充值时间+金额覆盖；有 `executionId` 时按该号去重。ID 一律字符串，不要科学计数法。充值记录建议再带 `executionId`、`configVersion`、`ruleCode`、`plannedRoi`、当时花费 / ROI / 单量、`result`。
 10. 第二台机只换 `machineId`，协议不变。店铺上 `执行机` 为空 = 已绑定的机都能跑开启的店；填了 `machineId` = 只有该机跑。
-11. 验收闭合：网站 Ctrl+F5 打开 `/shen/recharge-rules/index.html` → 勾选店铺并点「保存运行状态」→ version 递增 → 本机 GET 的 `runShops` 只有已开启的店 → 持续只跑这些店 → ACK 成功 → 页面变已同步。取消勾选后该店离开 `runShops`，页面先停止中，ACK 后已停止。全部取消时本机待机。
+11. 验收闭合：网站 Ctrl+F5 打开 `/shen/recharge-rules/index.html` → 新增/编辑店铺和子账号、勾选运行并保存 → version 递增 → 本机 GET 的 `shops` 含全部未删除店、`runShops` 只有已开启主账户ID → 持续只跑这些店 → ACK 成功 → 页面变已同步。取消勾选后该店离开 `runShops`，页面先停止中，ACK 后已停止。全部取消时本机待机。POST worker-status 后页面显示 Cookie / 执行状态 / 心跳。

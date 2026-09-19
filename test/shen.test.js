@@ -5,6 +5,7 @@ import { createApp } from "../src/app.js";
 import { patchAppSource } from "../src/modules/shen/patch-app.js";
 import { SQL, hydrateFromMysql, resetStore, setPool } from "../src/modules/shen/store.js";
 import { RULE_SQL, resetRechargeConfig } from "../src/modules/shen/recharge-config.js";
+import { MASTER_SQL } from "../src/modules/shen/recharge-master.js";
 import { SHEN_LEGACY_REDIRECTS, SHEN_SUBMENUS } from "../src/modules/shen/submenu.js";
 
 function asMysqlDate(day) {
@@ -63,7 +64,11 @@ function createFakePool() {
         sql === RULE_SQL.addMachineRole ||
         sql === RULE_SQL.addMachineScope ||
         sql === RULE_SQL.createShopRunTable ||
-        sql === RULE_SQL.addShopRunStoppingSince
+        sql === RULE_SQL.addShopRunStoppingSince ||
+        sql === RULE_SQL.addShopRunAccount ||
+        sql === MASTER_SQL.createShopTable ||
+        sql === MASTER_SQL.createSubTable ||
+        sql === MASTER_SQL.createStatusTable
       ) {
         return [{}];
       }
@@ -391,7 +396,16 @@ function createFakePool() {
         sql === RULE_SQL.listMachines ||
         sql === RULE_SQL.upsertMachine ||
         sql === RULE_SQL.listShopRuns ||
-        sql === RULE_SQL.upsertShopRun
+        sql === RULE_SQL.upsertShopRun ||
+        sql === RULE_SQL.renameOwnerStore ||
+        sql === RULE_SQL.renameShopRunStore ||
+        sql === RULE_SQL.renameRuleStore ||
+        sql === MASTER_SQL.listShops ||
+        sql === MASTER_SQL.upsertShop ||
+        sql === MASTER_SQL.listSubs ||
+        sql === MASTER_SQL.upsertSub ||
+        sql === MASTER_SQL.listStatuses ||
+        sql === MASTER_SQL.upsertStatus
       ) {
         return null;
       }
@@ -488,6 +502,18 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /停止中/);
     assert.match(embed.text, /已停止/);
     assert.match(embed.text, /patch:\s*"run"/);
+    assert.match(embed.text, /新增店铺/);
+    assert.match(embed.text, /京准通Cookie/);
+    assert.match(embed.text, /\/api\/shen\/paid\/worker-status/);
+    assert.match(embed.text, /\/api\/shen\/paid\/shops/);
+    assert.match(embed.text, /xm-rules-grid/);
+    assert.match(embed.text, /row.store/);
+    assert.match(embed.text, /xm-rules-shop-wrap/);
+    assert.match(embed.text, /xm-rules-shop-table/);
+    assert.match(embed.text, /<col class="c-num">/);
+    assert.match(embed.text, /inputmode="decimal"/);
+    assert.match(embed.text, /type="text"/);
+    assert.match(embed.text, /本地机尚未接收/);
     assert.match(embed.text, /\/api\/shen\/paid/);
     assert.match(embed.text, /京准通主账户ID/);
     assert.match(embed.text, /真实费比/);
@@ -1549,7 +1575,11 @@ test("recharge rules editor, worker pull, ack, permissions and executionId", asy
     assert.equal(sub.自动充值, true);
     assert.equal(sawa.启用, true);
     assert.equal(worker.json.machineId, "paid-worker-01");
-    assert.deepEqual(worker.json.runShops.sort(), ["专营店", "飒望旗舰店"]);
+    assert.equal(worker.json.fullSnapshot, true);
+    assert.deepEqual(worker.json.deletedShopIds, []);
+    assert.deepEqual(worker.json.deletedSubAccounts, []);
+    assert.deepEqual(worker.json.runShops.sort(), ["88002", "99931330021"]);
+    assert.deepEqual(worker.json.shops.map((shop) => shop.京准通主账户ID).sort(), ["88002", "99931330021"]);
 
     const runSaved = await request(base, "/api/shen/paid/recharge-config", {
       method: "PUT",
@@ -1562,13 +1592,13 @@ test("recharge rules editor, worker pull, ack, permissions and executionId", asy
     });
     assert.equal(runSaved.res.status, 200);
     assert.equal(runSaved.json.version, 3);
-    assert.deepEqual(runSaved.json.runShops, ["飒望旗舰店"]);
+    assert.deepEqual(runSaved.json.runShops, ["99931330021"]);
 
     const runEditor = await request(base, "/api/shen/paid/recharge-config/editor", {
       headers: shenHeaders()
     });
     assert.equal(runEditor.json.runListSaved, true);
-    assert.deepEqual(runEditor.json.runShops, ["飒望旗舰店"]);
+    assert.deepEqual(runEditor.json.runShops, ["99931330021"]);
     assert.equal(runEditor.json.shopRuns.find((row) => row.store === "专营店").enabled, false);
     assert.equal(runEditor.json.shopRuns.find((row) => row.store === "飒望旗舰店").status, "已开启");
     assert.equal(runEditor.json.shopRuns.find((row) => row.store === "专营店").status, "停止中");
@@ -1598,11 +1628,14 @@ test("recharge rules editor, worker pull, ack, permissions and executionId", asy
       "/api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=0",
       { headers: shenHeaders() }
     );
-    assert.deepEqual(runWorker.json.runShops, ["飒望旗舰店"]);
+    assert.deepEqual(runWorker.json.runShops, ["99931330021"]);
+    assert.equal(runWorker.json.fullSnapshot, true);
     assert.deepEqual(
-      runWorker.json.shops.map((shop) => shop.店铺名称),
-      ["飒望旗舰店"]
+      runWorker.json.shops.map((shop) => shop.店铺名称).sort(),
+      ["专营店", "飒望旗舰店"]
     );
+    assert.equal(runWorker.json.shops.find((shop) => shop.店铺名称 === "飒望旗舰店").启用, true);
+    assert.equal(runWorker.json.shops.find((shop) => shop.店铺名称 === "专营店").启用, false);
 
     const emptyRun = await request(base, "/api/shen/paid/recharge-config", {
       method: "PUT",
@@ -1621,7 +1654,8 @@ test("recharge rules editor, worker pull, ack, permissions and executionId", asy
       "/api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=0",
       { headers: shenHeaders() }
     );
-    assert.deepEqual(emptyWorker.json.shops, []);
+    assert.equal(emptyWorker.json.shops.length, 2);
+    assert.equal(emptyWorker.json.shops.every((shop) => shop.启用 === false), true);
     assert.deepEqual(emptyWorker.json.runShops, []);
 
     const splitRun = await request(base, "/api/shen/paid/recharge-config", {
@@ -1641,13 +1675,14 @@ test("recharge rules editor, worker pull, ack, permissions and executionId", asy
       "/api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=0",
       { headers: shenHeaders() }
     );
-    assert.deepEqual(firstMachine.json.runShops, ["飒望旗舰店"]);
+    assert.deepEqual(firstMachine.json.runShops, ["99931330021"]);
+    assert.equal(firstMachine.json.shops.length, 2);
     const secondMachine = await request(
       base,
       "/api/shen/paid/recharge-config?machineId=paid-worker-02&sinceVersion=0",
       { headers: shenHeaders() }
     );
-    assert.deepEqual(secondMachine.json.runShops.sort(), ["专营店", "飒望旗舰店"]);
+    assert.deepEqual(secondMachine.json.runShops.sort(), ["88002", "99931330021"]);
     assert.equal(
       secondMachine.json.shops.find((shop) => shop.店铺名称 === "专营店").执行机,
       "paid-worker-02"
@@ -1776,6 +1811,222 @@ test("recharge rules editor, worker pull, ack, permissions and executionId", asy
     assert.equal(listed.json.rows[0].execSpend, 860);
     assert.equal(listed.json.rows[0].result, "success");
     assert.equal(listed.json.rows[0].subAccountId, "99945558065");
+  });
+});
+
+test("shop and sub master, worker-status, version and history stay", async () => {
+  await withServer(async (base) => {
+    await seedRechargeShops(base);
+    await request(base, "/api/shen/paid/recharge-config/editor", { headers: shenHeaders() });
+
+    const createdShop = await request(base, "/api/shen/paid/shops", {
+      method: "POST",
+      headers: shenHeaders(),
+      body: JSON.stringify({
+        action: "create",
+        店铺名称: "RASW健康电器旗舰店",
+        京准通主账户ID: "99952255226",
+        执行机: "paid-worker-01"
+      })
+    });
+    assert.equal(createdShop.res.status, 200, createdShop.text);
+    assert.equal(createdShop.json.version, 1);
+    assert.equal(createdShop.json.shop.accountId, "99952255226");
+    assert.equal(typeof createdShop.json.shop.accountId, "string");
+
+    const afterCreate = await request(
+      base,
+      "/api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=0",
+      { headers: shenHeaders() }
+    );
+    assert.equal(afterCreate.json.fullSnapshot, true);
+    assert.equal(afterCreate.json.version, 1);
+    assert.ok(afterCreate.json.shops.some((shop) => shop.京准通主账户ID === "99952255226"));
+    assert.ok(afterCreate.json.runShops.includes("99952255226"));
+    assert.deepEqual(afterCreate.json.deletedShopIds, []);
+
+    const rename = await request(base, "/api/shen/paid/shops", {
+      method: "POST",
+      headers: shenHeaders(),
+      body: JSON.stringify({
+        action: "update",
+        京准通主账户ID: "99952255226",
+        店铺名称: "RASW健康电器旗舰店改名"
+      })
+    });
+    assert.equal(rename.json.version, 2);
+    assert.equal(rename.json.shop.accountId, "99952255226");
+    assert.equal(rename.json.shop.store, "RASW健康电器旗舰店改名");
+
+    const changeId = await request(base, "/api/shen/paid/shops", {
+      method: "POST",
+      headers: shenHeaders(),
+      body: JSON.stringify({
+        action: "update",
+        京准通主账户ID: "11111111111",
+        店铺名称: "RASW健康电器旗舰店改名"
+      })
+    });
+    assert.equal(changeId.res.status, 400);
+    assert.match(changeId.json.error, /主账户ID不可直接修改/);
+
+    const createdSub = await request(base, "/api/shen/paid/subs", {
+      method: "POST",
+      headers: shenHeaders(),
+      body: JSON.stringify({
+        action: "create",
+        京准通主账户ID: "99952255226",
+        子账号ID: "99952255999",
+        子账号名称: "健康电器-投放1"
+      })
+    });
+    assert.equal(createdSub.res.status, 200, createdSub.text);
+    assert.equal(createdSub.json.version, 3);
+    const editorAfterSub = await request(base, "/api/shen/paid/recharge-config/editor", {
+      headers: shenHeaders()
+    });
+    const newSub = editorAfterSub.json.rows.find((row) => row.subAccountId === "99952255999");
+    assert.equal(newSub.autoRecharge, false);
+    assert.equal(newSub.plannedRoi, 2);
+    assert.equal(newSub.store, "RASW健康电器旗舰店改名");
+
+    const workerAfterSub = await request(
+      base,
+      "/api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=0",
+      { headers: shenHeaders() }
+    );
+    const health = workerAfterSub.json.shops.find((shop) => shop.京准通主账户ID === "99952255226");
+    assert.equal(health.店铺名称, "RASW健康电器旗舰店改名");
+    assert.equal(health.子账号[0].子账号ID, "99952255999");
+    assert.equal(health.子账号[0].自动充值, false);
+    assert.equal(health.子账号[0].计划ROI, 2);
+
+    const deletedSub = await request(base, "/api/shen/paid/subs", {
+      method: "POST",
+      headers: shenHeaders(),
+      body: JSON.stringify({
+        action: "delete",
+        京准通主账户ID: "99952255226",
+        子账号ID: "99952255999"
+      })
+    });
+    assert.equal(deletedSub.json.version, 4);
+    const workerAfterDelSub = await request(
+      base,
+      "/api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=0",
+      { headers: shenHeaders() }
+    );
+    assert.deepEqual(workerAfterDelSub.json.deletedSubAccounts, [
+      { 京准通主账户ID: "99952255226", 子账号ID: "99952255999" }
+    ]);
+    assert.equal(
+      workerAfterDelSub.json.shops.find((shop) => shop.京准通主账户ID === "99952255226").子账号.length,
+      0
+    );
+
+    const statusPosted = await request(base, "/api/shen/paid/worker-status", {
+      method: "POST",
+      headers: shenHeaders(),
+      body: JSON.stringify({
+        machineId: "paid-worker-01",
+        configVersion: 4,
+        heartbeatAt: "2026-09-19T12:00:00+08:00",
+        workerStatus: "online",
+        shops: [
+          {
+            京准通主账户ID: "99952255226",
+            京准通Cookie状态: "正常",
+            京准通Cookie更新时间: "2026-09-18T10:00:00+08:00",
+            京麦Cookie状态: "待录",
+            京麦Cookie更新时间: null,
+            执行状态: "等待Cookie",
+            最后错误: ""
+          }
+        ]
+      })
+    });
+    assert.equal(statusPosted.res.status, 200, statusPosted.text);
+    assert.equal(statusPosted.json.ok, true);
+    assert.equal(statusPosted.json.machineId, "paid-worker-01");
+    assert.equal(statusPosted.json.saved, 1);
+    assert.equal(statusPosted.json.shops[0].jztCookieStatus, "正常");
+    assert.equal(statusPosted.json.shops[0].jmCookieStatus, "待录");
+    assert.equal(statusPosted.json.shops[0].runStatus, "等待Cookie");
+    assert.equal(statusPosted.json.workerStatus, "在线");
+
+    const cookieBody = await request(base, "/api/shen/paid/worker-status", {
+      method: "POST",
+      headers: shenHeaders(),
+      body: JSON.stringify({
+        machineId: "paid-worker-01",
+        shops: [
+          {
+            京准通主账户ID: "99952255226",
+            京准通Cookie: "pt_key=AAJxxxxxxxxxxxxxxxxxxxxxxxxxx; pin=healthshop;"
+          }
+        ]
+      })
+    });
+    assert.equal(cookieBody.res.status, 400);
+    assert.match(cookieBody.json.error, /不接收 Cookie/);
+
+    const editorStatus = await request(base, "/api/shen/paid/recharge-config/editor", {
+      headers: shenHeaders()
+    });
+    const healthRun = editorStatus.json.shopRuns.find((row) => row.accountId === "99952255226");
+    assert.equal(healthRun.jztCookieStatus, "正常");
+    assert.equal(healthRun.jmCookieStatus, "待录");
+    assert.equal(healthRun.runStatus, "等待Cookie");
+
+    const deletedShop = await request(base, "/api/shen/paid/shops", {
+      method: "POST",
+      headers: shenHeaders(),
+      body: JSON.stringify({
+        action: "delete",
+        京准通主账户ID: "99952255226"
+      })
+    });
+    assert.equal(deletedShop.json.version, 5);
+    const workerAfterDelShop = await request(
+      base,
+      "/api/shen/paid/recharge-config?machineId=paid-worker-01&sinceVersion=0",
+      { headers: shenHeaders() }
+    );
+    assert.ok(workerAfterDelShop.json.deletedShopIds.includes("99952255226"));
+    assert.equal(
+      workerAfterDelShop.json.shops.some((shop) => shop.京准通主账户ID === "99952255226"),
+      false
+    );
+    assert.equal(workerAfterDelShop.json.runShops.includes("99952255226"), false);
+
+    const historyPaid = await request(base, "/api/shen/paid?store=" + encodeURIComponent("飒望旗舰店"));
+    assert.ok(historyPaid.json.rows.length >= 1);
+    const historyRecharge = await request(
+      base,
+      "/api/shen/paid/recharges?store=" + encodeURIComponent("飒望旗舰店")
+    );
+    assert.equal(historyRecharge.res.status, 200);
+
+    const scientificShop = await request(base, "/api/shen/paid/shops", {
+      method: "POST",
+      headers: shenHeaders(),
+      body: JSON.stringify({
+        action: "create",
+        店铺名称: "科学计数店",
+        京准通主账户ID: "9.99e10"
+      })
+    });
+    assert.equal(scientificShop.res.status, 400);
+
+    const scopedCreate = await request(base, "/api/shen/paid/shops", {
+      method: "POST",
+      headers: shenHeaders("小王", "运营", "本店"),
+      body: JSON.stringify({
+        action: "delete",
+        京准通主账户ID: "99931330021"
+      })
+    });
+    assert.equal(scopedCreate.res.status, 403);
   });
 });
 

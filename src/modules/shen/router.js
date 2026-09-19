@@ -18,8 +18,11 @@ import {
   listRuleHistory,
   pullWorkerConfig,
   replaceStoreOwners,
+  reportWorkerStatus,
   resolveActor,
-  saveEditorConfig
+  saveEditorConfig,
+  saveMasterShop,
+  saveMasterSub
 } from "./recharge-config.js";
 
 export const shenRouter = Router();
@@ -197,6 +200,30 @@ shenRouter.post("/paid/recharge-config/ack", async (req, res) => {
     res.json(await ackWorkerConfig(req.body, resolveActor(req)));
   } catch (err) {
     res.status(err.statusCode || 400).json({ error: err.message || "无法确认同步" });
+  }
+});
+
+shenRouter.post("/paid/shops", async (req, res) => {
+  try {
+    res.json(await saveMasterShop(req.body, resolveActor(req)));
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.message || "无法维护店铺" });
+  }
+});
+
+shenRouter.post("/paid/subs", async (req, res) => {
+  try {
+    res.json(await saveMasterSub(req.body, resolveActor(req)));
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.message || "无法维护子账号" });
+  }
+});
+
+shenRouter.post("/paid/worker-status", async (req, res) => {
+  try {
+    res.json(await reportWorkerStatus(req.body, resolveActor(req)));
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.message || "无法更新工作机状态" });
   }
 });
 

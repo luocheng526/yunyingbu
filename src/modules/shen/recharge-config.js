@@ -1,4 +1,32 @@
-import { listLatestSubIdentities, nowShanghai, queryShen, shenHttpError } from "./store.js";
+import { nowShanghai, queryShen, shenHttpError } from "./store.js";
+import {
+  applyShopPatch,
+  applySubPatch,
+  applyWorkerStatus,
+  ensureMasterTables,
+  loadMasterShops,
+  loadMasterSubs,
+  loadShopStatuses,
+  resetMaster,
+  seedMasterFromIdentities,
+  shopHeartbeatView
+} from "./recharge-master.js";
+
+export const NEW_SUB_DEFAULT = {
+  autoRecharge: false,
+  plannedRoi: 2,
+  tier1MinSpend: 1,
+  tier1MaxSpend: 1000,
+  tier1Balance: 100,
+  tier1Amount: 100,
+  tier2MinSpend: 1000,
+  tier2Balance: 50,
+  tier2Amount: 150,
+  roiRiseAmount: 100,
+  noOrderTimes: 3,
+  pauseMinutes: 30,
+  shopEnabled: true
+};
 
 export const DEFAULT_RECHARGE_RULE = {
   autoRecharge: true,
@@ -151,17 +179,23 @@ ON DUPLICATE KEY UPDATE
   run_enabled TINYINT NOT NULL DEFAULT 0,
   machine_id VARCHAR(64) NOT NULL DEFAULT '',
   stopping_since INT UNSIGNED NOT NULL DEFAULT 0,
+  account_id VARCHAR(64) NOT NULL DEFAULT '',
   updated_by VARCHAR(64) NOT NULL DEFAULT '',
   updated_at VARCHAR(40) NOT NULL DEFAULT ''
 )`,
   addShopRunStoppingSince: `ALTER TABLE shen_paid_recharge_shop_run ADD COLUMN stopping_since INT UNSIGNED NOT NULL DEFAULT 0`,
-  listShopRuns: `SELECT store, run_enabled, machine_id, stopping_since, updated_by, updated_at FROM shen_paid_recharge_shop_run`,
-  upsertShopRun: `INSERT INTO shen_paid_recharge_shop_run (store, run_enabled, machine_id, stopping_since, updated_by, updated_at)
-VALUES (?, ?, ?, ?, ?, ?)
+  addShopRunAccount: `ALTER TABLE shen_paid_recharge_shop_run ADD COLUMN account_id VARCHAR(64) NOT NULL DEFAULT ''`,
+  renameOwnerStore: `UPDATE shen_paid_store_owner SET store = ? WHERE store = ?`,
+  renameShopRunStore: `UPDATE shen_paid_recharge_shop_run SET store = ? WHERE store = ?`,
+  renameRuleStore: `UPDATE shen_paid_recharge_rule SET store = ? WHERE store = ? AND account_id = ?`,
+  listShopRuns: `SELECT store, run_enabled, machine_id, stopping_since, account_id, updated_by, updated_at FROM shen_paid_recharge_shop_run`,
+  upsertShopRun: `INSERT INTO shen_paid_recharge_shop_run (store, run_enabled, machine_id, stopping_since, account_id, updated_by, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 ON DUPLICATE KEY UPDATE
   run_enabled = VALUES(run_enabled),
   machine_id = VALUES(machine_id),
   stopping_since = VALUES(stopping_since),
+  account_id = VALUES(account_id),
   updated_by = VALUES(updated_by),
   updated_at = VALUES(updated_at)`
 };
@@ -182,6 +216,7 @@ export function resetRechargeConfig() {
   memoryMachines = [];
   memoryShopRuns = [];
   nextHistoryId = 1;
+  resetMaster();
 }
 
 export async function ensureRechargeConfigTables() {
@@ -194,7 +229,8 @@ export async function ensureRechargeConfigTables() {
     RULE_SQL.addMachineRole,
     RULE_SQL.addMachineScope,
     RULE_SQL.createShopRunTable,
-    RULE_SQL.addShopRunStoppingSince
+    RULE_SQL.addShopRunStoppingSince,
+    RULE_SQL.addShopRunAccount
   ]) {
     try {
       await queryShen(sql);
@@ -212,6 +248,7 @@ export async function ensureRechargeConfigTables() {
       }
     }
   }
+  await ensureMasterTables();
 }
 
 function decodeHeader(value) {
@@ -470,6 +507,7 @@ async function loadMachines() {
 function mapShopRun(row) {
   return {
     store: row.store || "",
+    accountId: String(row.account_id || row.accountId || ""),
     enabled: Number(row.run_enabled ?? row.enabled ?? 0) === 1,
     machineId: String(row.machine_id || row.machineId || ""),
     stoppingSince: Number(row.stopping_since ?? row.stoppingSince ?? 0) || 0,
@@ -493,6 +531,7 @@ async function persistShopRun(row) {
     row.enabled ? 1 : 0,
     row.machineId || "",
     Number(row.stoppingSince) || 0,
+    row.accountId || "",
     row.updatedBy || "",
     row.updatedAt || ""
   ]);
@@ -759,21 +798,39 @@ export async function listEditorConfig(query, actor) {
   const storeFilter = clip(query?.store || "", 64, "店铺名称");
   const keyword = String(query?.q || query?.keyword || "").trim();
   const enabledOnly = String(query?.enabled || "") === "1" || query?.enabled === true;
-  const [identities, rules, meta, machines, shopRuns] = await Promise.all([
-    listLatestSubIdentities(),
+  const includeDeleted = String(query?.deleted || "") === "1" || query?.includeDeleted === true;
+  await seedMasterFromIdentities();
+  const [masterShops, masterSubs, rules, meta, machines, shopRuns, statuses] = await Promise.all([
+    loadMasterShops(),
+    loadMasterSubs(),
     loadRules(),
     loadMeta(),
     loadMachines(),
-    loadShopRuns()
+    loadShopRuns(),
+    loadShopStatuses()
   ]);
   const ruleMap = new Map(rules.map((row) => [ruleKey(row), row]));
-  const runMap = new Map(shopRuns.map((row) => [row.store, row]));
+  const runByAccount = new Map(shopRuns.filter((row) => row.accountId).map((row) => [row.accountId, row]));
+  const runByStore = new Map(shopRuns.map((row) => [row.store, row]));
+  const statusMap = new Map(statuses.map((row) => [row.accountId, row]));
   const sync = syncStatusFor(meta.version, machines, actor.username, allowed);
-  const scopedIdentities = identities.filter((item) => !allowed || allowed.includes(item.store));
-  const shops = [...new Set(scopedIdentities.map((item) => item.store))];
-  let rows = scopedIdentities
+  const scopedShops = masterShops.filter((item) => (!allowed || allowed.includes(item.store)) && (includeDeleted || !item.deleted));
+  const shops = scopedShops.filter((item) => !item.deleted).map((item) => item.store);
+  const identities = masterSubs
+    .filter((item) => (includeDeleted || !item.deleted) && scopedShops.some((shop) => shop.accountId === item.accountId))
+    .map((item) => ({
+      store: item.store,
+      accountId: item.accountId,
+      subAccountId: item.subAccountId,
+      subAccountName: item.subAccountName,
+      deleted: item.deleted
+    }));
+  let rows = identities
     .filter((item) => !storeFilter || item.store === storeFilter)
-    .map((item) => toEditorRow(item, ruleMap.get(`${item.store}\t${item.accountId}\t${item.subAccountId}`), meta, sync))
+    .map((item) => ({
+      ...toEditorRow(item, ruleMap.get(`${item.store}\t${item.accountId}\t${item.subAccountId}`), meta, sync),
+      deleted: Boolean(item.deleted)
+    }))
     .filter((row) => {
       if (enabledOnly && !row.autoRecharge) {
         return false;
@@ -784,18 +841,22 @@ export async function listEditorConfig(query, actor) {
       return `${row.subAccountName} ${row.subAccountId}`.includes(keyword);
     });
   const runListSaved = shopRuns.length > 0;
-  const shopRunRows = shops.map((name) => {
-    const run = runMap.get(name);
-    const enabled = runListSaved ? Boolean(run?.enabled) : true;
+  const shopRunRows = scopedShops.map((shop) => {
+    const run = runByAccount.get(shop.accountId) || runByStore.get(shop.store);
+    const enabled = shop.deleted ? false : runListSaved ? Boolean(run?.enabled) : true;
+    const heartbeat = shopHeartbeatView(statusMap.get(shop.accountId));
     const row = {
-      store: name,
+      store: shop.store,
+      accountId: shop.accountId,
+      deleted: shop.deleted,
       enabled,
-      machineId: run?.machineId || "",
+      machineId: shop.machineId || run?.machineId || "",
       stoppingSince: run?.stoppingSince || 0
     };
     return {
       ...row,
-      status: runListSaved ? shopRunStatus(row, machines) : "已开启"
+      status: shop.deleted ? "已停止" : runListSaved ? shopRunStatus(row, machines) : "已开启",
+      ...heartbeat
     };
   });
   return {
@@ -808,8 +869,9 @@ export async function listEditorConfig(query, actor) {
     scope: allowed ? "assigned" : "all",
     shops,
     runListSaved,
-    runShops: shopRunRows.filter((row) => row.enabled).map((row) => row.store),
+    runShops: shopRunRows.filter((row) => row.enabled && !row.deleted).map((row) => row.accountId),
     shopRuns: shopRunRows,
+    newSubDefaults: NEW_SUB_DEFAULT,
     machines: machines.map((item) => ({
       machineId: item.machineId,
       username: item.username,
@@ -829,6 +891,182 @@ function isRunPatch(body) {
   return patch === "run" || patch === "shops" || patch === "本次执行" || patch === "运行状态" || patch === "运行";
 }
 
+function isShopPatch(body) {
+  const patch = String(body?.patch || "").toLowerCase();
+  return patch === "shop" || patch === "店铺" || patch === "店铺主档";
+}
+
+function isSubPatch(body) {
+  const patch = String(body?.patch || "").toLowerCase();
+  return patch === "sub" || patch === "子账号" || patch === "子账号主档";
+}
+
+async function finishMasterChange(actor, body, result, extra = {}) {
+  const meta = await loadMeta();
+  const version = meta.version + 1;
+  const updatedAt = nowShanghai();
+  const updatedBy = actor.displayName || actor.username;
+  const changeSummary = clip(body.changeSummary || body.摘要 || extra.summary || "维护店铺主档", 200, "变更摘要");
+  for (const row of result.histories || []) {
+    await persistHistory({
+      version,
+      store: row.store || "",
+      accountId: row.accountId || "",
+      subAccountId: row.subAccountId || "",
+      field: row.field,
+      oldValue: row.oldValue || "",
+      newValue: row.newValue || "",
+      updatedBy,
+      updatedAt,
+      changeSummary
+    });
+  }
+  await persistMeta({ version, updatedBy, updatedAt, changeSummary });
+  return {
+    ok: true,
+    version,
+    updatedAt,
+    updatedBy,
+    changeSummary,
+    action: result.action,
+    shop: result.shop || null,
+    sub: result.sub || null,
+    ...extra
+  };
+}
+
+async function renameStoreKeys(oldName, newName, accountId) {
+  if (!oldName || !newName || oldName === newName) {
+    return;
+  }
+  const renamedOwners = await queryShen(RULE_SQL.renameOwnerStore, [newName, oldName]);
+  if (!renamedOwners) {
+    memoryOwners.forEach((row) => {
+      if (row.store === oldName) {
+        row.store = newName;
+      }
+    });
+  }
+  const renamedRuns = await queryShen(RULE_SQL.renameShopRunStore, [newName, oldName]);
+  if (!renamedRuns) {
+    memoryShopRuns.forEach((row) => {
+      if (row.store === oldName) {
+        row.store = newName;
+      }
+    });
+  }
+  const renamedRules = await queryShen(RULE_SQL.renameRuleStore, [newName, oldName, accountId || ""]);
+  if (!renamedRules) {
+    memoryRules.forEach((row) => {
+      if (row.store === oldName && (!accountId || row.accountId === accountId)) {
+        row.store = newName;
+      }
+    });
+  }
+}
+
+export async function saveMasterShop(body, actor) {
+  if (!actor?.username) {
+    throw shenHttpError(401, "未登录，无法维护店铺");
+  }
+  const allowed = await listAssignedStores(actor);
+  const raw = body?.shop || body?.店铺 || body;
+  const action = String(body?.action || body?.操作 || "create").toLowerCase();
+  if (action !== "create" && action !== "add" && action !== "新增") {
+    const current = (await loadMasterShops()).find((item) => {
+      const accountId = asIdString(pick(raw, ["京准通主账户ID", "accountId"]) || "", "京准通主账户ID");
+      const store = clip(pick(raw, ["店铺名称", "store"]) || "", 64, "店铺名称");
+      return (accountId && item.accountId === accountId) || (store && item.store === store);
+    });
+    if (current) {
+      assertStoreAllowed(current.store, allowed);
+    }
+  }
+  const result = await applyShopPatch(body, actor);
+  if (result.action === "create") {
+    if (allowed && !allowed.includes(result.shop.store)) {
+      await replaceStoreOwners(actor.username, [...allowed, result.shop.store]);
+    }
+  }
+  if (result.action === "update" && result.histories?.some((row) => row.field === "店铺名称")) {
+    const oldName = result.histories.find((row) => row.field === "店铺名称")?.oldValue;
+    await renameStoreKeys(oldName, result.shop.store, result.shop.accountId);
+  }
+  if (result.action === "delete") {
+    const meta = await loadMeta();
+    const runs = await loadShopRuns();
+    const run = runs.find((row) => row.accountId === result.shop.accountId || row.store === result.shop.store);
+    if (run?.enabled) {
+      await persistShopRun({
+        ...run,
+        store: result.shop.store,
+        accountId: result.shop.accountId,
+        enabled: false,
+        stoppingSince: meta.version + 1,
+        updatedBy: actor.displayName || actor.username,
+        updatedAt: nowShanghai()
+      });
+    }
+  }
+  return finishMasterChange(actor, body, result, { summary: "维护店铺主档" });
+}
+
+export async function saveMasterSub(body, actor) {
+  if (!actor?.username) {
+    throw shenHttpError(401, "未登录，无法维护子账号");
+  }
+  const allowed = await listAssignedStores(actor);
+  const rawHint = body?.sub || body?.子账号 || body;
+  const shops = await loadMasterShops();
+  const hintedShop = shops.find((item) => {
+    const accountId = asIdString(pick(rawHint, ["京准通主账户ID", "accountId"]) || "", "京准通主账户ID");
+    const store = clip(pick(rawHint, ["店铺名称", "store"]) || "", 64, "店铺名称");
+    return (accountId && item.accountId === accountId) || (store && item.store === store);
+  });
+  if (hintedShop) {
+    assertStoreAllowed(hintedShop.store, allowed);
+  }
+  const result = await applySubPatch(body, actor);
+  if (result.action === "create") {
+    const raw = body?.sub || body?.子账号 || body;
+    const parsed = parseRulePatch(
+      { ...raw, 店铺名称: result.shop.store, 京准通主账户ID: result.shop.accountId, 子账号ID: result.sub.subAccountId },
+      { ...NEW_SUB_DEFAULT, store: result.shop.store, accountId: result.shop.accountId, subAccountId: result.sub.subAccountId }
+    );
+    parsed.autoRecharge = raw.自动充值 != null || raw.autoRecharge != null ? parsed.autoRecharge : false;
+    parsed.plannedRoi = raw.计划ROI != null || raw.plannedRoi != null ? parsed.plannedRoi : 2;
+    const meta = await loadMeta();
+    await persistRule({
+      ...parsed,
+      version: meta.version + 1,
+      updatedBy: actor.displayName || actor.username,
+      updatedAt: nowShanghai()
+    });
+  }
+  return finishMasterChange(actor, body, result, { summary: "维护子账号主档" });
+}
+
+export async function reportWorkerStatus(body, actor) {
+  return applyWorkerStatus(body, actor || {});
+}
+
+function resolveShopRef(item, shops) {
+  if (item == null) {
+    return null;
+  }
+  if (typeof item === "string" || typeof item === "number") {
+    const text = String(item).trim();
+    return shops.find((shop) => shop.accountId === text) || shops.find((shop) => shop.store === text) || null;
+  }
+  const accountId = asIdString(pick(item, ["京准通主账户ID", "accountId"]) || "", "京准通主账户ID");
+  const store = clip(pick(item, ["店铺名称", "store"]) || "", 64, "店铺名称");
+  return (
+    shops.find((shop) => accountId && shop.accountId === accountId) ||
+    shops.find((shop) => store && shop.store === store) ||
+    null
+  );
+}
+
 export async function saveShopRunList(body, actor) {
   if (!actor?.username) {
     throw shenHttpError(401, "未登录，无法保存运行状态");
@@ -837,31 +1075,42 @@ export async function saveShopRunList(body, actor) {
     throw shenHttpError(400, "请求体必须是对象");
   }
   const named = body.shopRuns || body.店铺执行 || (Array.isArray(body.rows) && isRunPatch(body) ? body.rows : null);
-  const names = body.runShops ?? body.本次执行 ?? body.shops;
+  const names = body.runShops ?? body.本次执行 ?? (isRunPatch(body) ? body.shops : null);
   if (!Array.isArray(named) && !Array.isArray(names)) {
     throw shenHttpError(400, "必须指定 runShops 或 shopRuns");
   }
   const allowed = await listAssignedStores(actor);
-  const [identities, currentRuns, meta] = await Promise.all([listLatestSubIdentities(), loadShopRuns(), loadMeta()]);
-  const known = [
-    ...new Set(
-      identities
-        .map((item) => item.store)
-        .filter((store) => !allowed || allowed.includes(store))
-    )
-  ];
-  const nextMap = new Map(known.map((store) => [store, { store, enabled: false, machineId: "" }]));
+  await seedMasterFromIdentities();
+  const [masterShops, currentRuns, meta] = await Promise.all([loadMasterShops(), loadShopRuns(), loadMeta()]);
+  const liveShops = masterShops.filter((item) => !item.deleted);
+  const known = liveShops.filter((item) => !allowed || allowed.includes(item.store));
+  const nextMap = new Map(
+    known.map((shop) => [
+      shop.accountId,
+      { store: shop.store, accountId: shop.accountId, enabled: false, machineId: shop.machineId || "" }
+    ])
+  );
+  const requireShop = (item) => {
+    const shop = resolveShopRef(item, liveShops);
+    if (!shop) {
+      throw shenHttpError(400, "运行名单只能选择已有店铺");
+    }
+    assertStoreAllowed(shop.store, allowed);
+    return shop;
+  };
   if (Array.isArray(names)) {
     if (names.length > 200) {
       throw shenHttpError(400, "运行店铺一次最多 200 家");
     }
     for (const item of names) {
-      const store = clip(typeof item === "string" ? item : item?.store || item?.店铺名称, 64, "店铺名称");
-      if (!store) {
-        continue;
-      }
-      assertStoreAllowed(store, allowed);
-      nextMap.set(store, { store, enabled: true, machineId: nextMap.get(store)?.machineId || "" });
+      const shop = requireShop(item);
+      const prev = nextMap.get(shop.accountId);
+      nextMap.set(shop.accountId, {
+        store: shop.store,
+        accountId: shop.accountId,
+        enabled: true,
+        machineId: prev?.machineId || shop.machineId || ""
+      });
     }
   }
   if (Array.isArray(named)) {
@@ -869,15 +1118,12 @@ export async function saveShopRunList(body, actor) {
       throw shenHttpError(400, "运行店铺一次最多 200 家");
     }
     for (const raw of named) {
-      const store = clip(pick(raw, ["店铺名称", "store"]) || "", 64, "店铺名称");
-      if (!store) {
-        continue;
-      }
-      assertStoreAllowed(store, allowed);
-      nextMap.set(store, {
-        store,
+      const shop = requireShop(raw);
+      nextMap.set(shop.accountId, {
+        store: shop.store,
+        accountId: shop.accountId,
         enabled: asBool(pick(raw, ["启用", "enabled", "本次执行", "运行"]), true),
-        machineId: clip(pick(raw, ["执行机", "machineId"]) || "", 64, "执行机")
+        machineId: clip(pick(raw, ["执行机", "machineId"]) ?? shop.machineId ?? "", 64, "执行机")
       });
     }
   }
@@ -885,16 +1131,20 @@ export async function saveShopRunList(body, actor) {
   const updatedAt = nowShanghai();
   const updatedBy = actor.displayName || actor.username;
   const changeSummary = clip(body.changeSummary || body.摘要 || "保存运行状态", 200, "变更摘要");
-  const prevMap = new Map(currentRuns.map((row) => [row.store, row]));
+  const prevMap = new Map(
+    currentRuns.map((row) => [row.accountId || row.store, row]).concat(currentRuns.map((row) => [row.store, row]))
+  );
   const implicitPrevEnabled = currentRuns.length === 0;
   const saved = [];
   for (const next of nextMap.values()) {
-    const prev = prevMap.get(next.store) || {
-      store: next.store,
-      enabled: implicitPrevEnabled,
-      machineId: "",
-      stoppingSince: 0
-    };
+    const prev = prevMap.get(next.accountId) ||
+      prevMap.get(next.store) || {
+        store: next.store,
+        accountId: next.accountId,
+        enabled: implicitPrevEnabled,
+        machineId: "",
+        stoppingSince: 0
+      };
     let stoppingSince = Number(prev.stoppingSince) || 0;
     if (next.enabled) {
       stoppingSince = 0;
@@ -907,7 +1157,7 @@ export async function saveShopRunList(body, actor) {
       await persistHistory({
         version,
         store: next.store,
-        accountId: "",
+        accountId: next.accountId,
         subAccountId: "",
         field: "运行状态",
         oldValue: prev.enabled ? "已开启" : "已停止",
@@ -921,7 +1171,7 @@ export async function saveShopRunList(body, actor) {
       await persistHistory({
         version,
         store: next.store,
-        accountId: "",
+        accountId: next.accountId,
         subAccountId: "",
         field: "执行机",
         oldValue: prev.machineId || "任意机",
@@ -941,7 +1191,7 @@ export async function saveShopRunList(body, actor) {
     updatedBy,
     changeSummary,
     saved: saved.length,
-    runShops: saved.filter((row) => row.enabled).map((row) => row.store)
+    runShops: saved.filter((row) => row.enabled).map((row) => String(row.accountId))
   };
 }
 
@@ -951,6 +1201,12 @@ export async function saveEditorConfig(body, actor) {
   }
   if (body == null || typeof body !== "object") {
     throw shenHttpError(400, "请求体必须是对象");
+  }
+  if (isShopPatch(body)) {
+    return saveMasterShop(body, actor);
+  }
+  if (isSubPatch(body)) {
+    return saveMasterSub(body, actor);
   }
   if (isRunPatch(body) || Array.isArray(body.runShops) || Array.isArray(body.本次执行) || Array.isArray(body.shopRuns)) {
     return saveShopRunList(body, actor);
@@ -1104,8 +1360,10 @@ export async function pullWorkerConfig(query, actor) {
   };
   const allowed = await listAssignedStores(isAllScope(actor) ? actor : machineActor);
   const sinceVersion = Number(query?.sinceVersion ?? query?.version ?? 0) || 0;
-  const [identities, rules, meta, shopRuns] = await Promise.all([
-    listLatestSubIdentities(),
+  await seedMasterFromIdentities();
+  const [masterShops, masterSubs, rules, meta, shopRuns] = await Promise.all([
+    loadMasterShops(),
+    loadMasterSubs(),
     loadRules(),
     loadMeta(),
     loadShopRuns()
@@ -1119,46 +1377,52 @@ export async function pullWorkerConfig(query, actor) {
     };
   }
   const ruleMap = new Map(rules.map((row) => [ruleKey(row), row]));
-  const runMap = new Map(shopRuns.map((row) => [row.store, row]));
+  const runByAccount = new Map(shopRuns.filter((row) => row.accountId).map((row) => [row.accountId, row]));
+  const runByStore = new Map(shopRuns.map((row) => [row.store, row]));
   const runListSaved = shopRuns.length > 0;
-  const byShop = new Map();
-  for (const identity of identities) {
-    if (allowed && !allowed.includes(identity.store)) {
-      continue;
-    }
-    const run = runMap.get(identity.store);
-    if (runListSaved && !shopRunnable(run, machine.machineId)) {
-      continue;
-    }
-    const rule = applyDefault(ruleMap.get(`${identity.store}\t${identity.accountId}\t${identity.subAccountId}`) || {
-      store: identity.store,
-      accountId: identity.accountId,
-      subAccountId: identity.subAccountId,
-      subAccountName: identity.subAccountName
-    });
-    if (!byShop.has(identity.store)) {
-      byShop.set(identity.store, {
-        店铺名称: identity.store,
-        京准通主账户ID: String(identity.accountId || ""),
-        启用: true,
-        执行机: run?.machineId || "",
-        子账号: []
-      });
-    }
-    const shop = byShop.get(identity.store);
-    if (identity.accountId) {
-      shop.京准通主账户ID = String(identity.accountId);
-    }
-    shop.子账号.push(toWorkerSub({ ...rule, ...identity, subAccountName: identity.subAccountName || rule.subAccountName }));
-  }
-  const shops = [...byShop.values()];
+  const scoped = masterShops.filter((item) => !allowed || allowed.includes(item.store));
+  const liveShops = scoped.filter((item) => !item.deleted);
+  const shops = liveShops.map((shop) => {
+    const run = runByAccount.get(shop.accountId) || runByStore.get(shop.store);
+    const machineId = shop.machineId || run?.machineId || "";
+    const enabled = runListSaved
+      ? shopRunnable({ enabled: Boolean(run?.enabled), machineId }, machine.machineId)
+      : !machineId || machineId === machine.machineId;
+    const subs = masterSubs.filter((item) => item.accountId === shop.accountId && !item.deleted);
+    return {
+      店铺名称: shop.store,
+      京准通主账户ID: String(shop.accountId || ""),
+      启用: Boolean(enabled),
+      执行机: machineId,
+      子账号: subs.map((sub) => {
+        const rule = applyDefault(
+          ruleMap.get(`${shop.store}\t${shop.accountId}\t${sub.subAccountId}`) || {
+            store: shop.store,
+            accountId: shop.accountId,
+            subAccountId: sub.subAccountId,
+            subAccountName: sub.subAccountName
+          }
+        );
+        return toWorkerSub({ ...rule, ...sub, subAccountName: sub.subAccountName || rule.subAccountName });
+      })
+    };
+  });
+  const deletedSubAccounts = masterSubs
+    .filter((item) => item.deleted && (!allowed || allowed.includes(item.store) || scoped.some((shop) => shop.accountId === item.accountId)))
+    .map((item) => ({
+      京准通主账户ID: String(item.accountId || ""),
+      子账号ID: String(item.subAccountId || "")
+    }));
   return {
     changed: true,
     version: meta.version,
     updatedAt: meta.updatedAt,
     machineId: machine.machineId,
-    runShops: shops.map((shop) => shop.店铺名称),
-    shops
+    fullSnapshot: true,
+    runShops: shops.filter((shop) => shop.启用).map((shop) => shop.京准通主账户ID),
+    shops,
+    deletedShopIds: scoped.filter((item) => item.deleted).map((item) => String(item.accountId || "")),
+    deletedSubAccounts
   };
 }
 

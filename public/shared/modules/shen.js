@@ -38,7 +38,7 @@
       if (!document.querySelector('link[href^="/shared/shen-paid.css"]')) {
         const link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href = "/shared/shen-paid.css";
+        link.href = "/shared/shen-paid.css?v=0.1.673";
         document.head.appendChild(link);
       }
 
@@ -523,22 +523,25 @@
       if (!document.querySelector('link[href^="/shared/shen-paid.css"]')) {
         const link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href = "/shared/shen-paid.css";
+        link.href = "/shared/shen-paid.css?v=0.1.673";
         document.head.appendChild(link);
       }
       ensureRechargeRulesNav();
       root.innerHTML =
         '<main class="page xm-paid xm-rules">' +
         '<header class="page-head"><div><h1>充值规则</h1>' +
-        '<p class="lead" id="rules-lead">只配置自己名下店铺和子账号。本地工作机只需启动一次并保持运行，以后所有店铺启停和充值规则均由本页面控制。自动充值账号的计划ROI必须大于0，默认2。网站不保存京准通 Cookie，也不直接充值。</p></div>' +
+        '<p class="lead" id="rules-lead">网站是店铺、子账号和充值规则的唯一主档。本地工作机只需启动一次并保持运行，以后店铺启停、主档和规则都由本页控制。本地机用 POST /api/shen/paid/worker-status 回报 Cookie 状态和心跳。网站不保存、不接收、不返回京准通/京麦 Cookie 或密码，也不直接充值。</p></div>' +
         '<div class="xm-paid-meta"><span class="xm-paid-dot" aria-hidden="true"></span>' +
         '<span id="rules-asof">等待配置</span></div></header>' +
         '<section class="panel" id="rules-run-panel">' +
-        '<div class="xm-paid-toolbar"><h2>工作机运行店铺</h2><div class="row" id="rules-run-actions"></div></div>' +
-        '<p class="xm-rules-hint" id="rules-run-hint">本地工作机只需启动一次并保持运行，以后所有店铺启停和充值规则均由本页面控制。勾选=开启持续运行；取消=停止，本地完成当前转账及弹窗后不再开新一轮。全部取消时工作机在线待机。</p>' +
-        '<div id="rules-run-shops" class="xm-rules-shops"></div></section>' +
+        '<div class="xm-paid-toolbar"><h2>店铺主档 / 工作机运行店铺</h2><div class="row" id="rules-run-actions"></div></div>' +
+        '<p class="xm-rules-hint" id="rules-run-hint">勾选=开启持续运行；取消=停止，本地完成已开始的转账及弹窗后再停该店。全部取消时 runShops=[]，工作机在线待机。Cookie 状态只显示本地机回报，本页没有 Cookie 输入框。</p>' +
+        '<div id="rules-shop-form" class="xm-rules-form" hidden></div>' +
+        '<div id="rules-run-shops" class="xm-rules-shop-wrap"></div></section>' +
         '<section class="panel">' +
         '<div class="xm-paid-toolbar"><h2>子账号规则</h2><div class="row" id="rules-toolbar"></div></div>' +
+        '<div id="rules-sub-form" class="xm-rules-form" hidden></div>' +
+        '<p id="rules-sync-banner" class="xm-rules-sync-banner" hidden></p>' +
         '<div id="rules-table-wrap"><p class="empty">加载中…</p></div>' +
         "</section>" +
         '<section class="panel" id="rules-history-wrap" hidden>' +
@@ -557,8 +560,10 @@
       let shop = "";
       let keyword = "";
       let enabledOnly = false;
-      let lastMeta = { shops: [], shopRuns: [], machines: [], runListSaved: false };
+      let lastMeta = { shops: [], shopRuns: [], machines: [], runListSaved: false, newSubDefaults: { autoRecharge: false, plannedRoi: 2 } };
       let runSelected = new Set();
+      let showDeleted = false;
+      let pendingSyncHint = "";
 
       function authHeaders(extra) {
         const headers = extra ? Object.assign({}, extra) : {};
@@ -571,10 +576,13 @@
       }
 
       function visibleRows() {
-        if (!keyword) {
-          return rows;
-        }
         return rows.filter(function (row) {
+          if (shop && String(row.store || "").trim() !== String(shop).trim()) {
+            return false;
+          }
+          if (!keyword) {
+            return true;
+          }
           return (String(row.subAccountName || "") + " " + String(row.subAccountId || "")).indexOf(keyword) >= 0;
         });
       }
@@ -582,6 +590,16 @@
       function setStatus(message, isError) {
         statusEl.textContent = message || "";
         statusEl.className = "status" + (isError ? " error" : message ? " ok" : "");
+      }
+
+      function setSyncBanner(text, tone) {
+        const banner = root.querySelector("#rules-sync-banner");
+        if (!banner) {
+          return;
+        }
+        banner.hidden = !text;
+        banner.textContent = text || "";
+        banner.className = "xm-rules-sync-banner" + (tone ? " is-" + tone : "");
       }
 
       function money(value) {
@@ -594,28 +612,26 @@
 
       function headers() {
         return [
-          "选择",
-          "店铺名称",
-          "京准通主账户ID",
-          "子账号名称",
-          "子账号ID",
-          "自动充值",
-          "计划ROI",
-          "第一档花费下限",
-          "第一档花费上限",
-          "第一档余额阈值",
-          "第一档充值金额",
-          "第二档花费下限",
-          "第二档余额阈值",
-          "第二档充值金额",
-          "ROI上涨充值金额",
-          "连续充值未增单次数",
-          "暂停分钟数",
-          "配置版本",
-          "最后修改人",
-          "最后修改时间",
-          "本地机状态",
-          "本地机最后同步时间"
+          ["选择", "选择"],
+          ["店铺", "店铺名称"],
+          ["主账户ID", "京准通主账户ID"],
+          ["子账号", "子账号名称"],
+          ["子账号ID", "子账号ID"],
+          ["自动", "自动充值"],
+          ["计划\nROI", "计划ROI"],
+          ["一档\n花费≥", "第一档花费下限"],
+          ["一档\n花费<", "第一档花费上限"],
+          ["一档\n余额≤", "第一档余额阈值"],
+          ["一档\n充值", "第一档充值金额"],
+          ["二档\n花费≥", "第二档花费下限"],
+          ["二档\n余额≤", "第二档余额阈值"],
+          ["二档\n充值", "第二档充值金额"],
+          ["ROI\n涨充值", "ROI上涨充值金额"],
+          ["未增\n单次", "连续充值未增单次数"],
+          ["暂停\n分", "暂停分钟数"],
+          ["版本", "配置版本"],
+          ["本地机", "本地机状态"],
+          ["操作", "操作"]
         ];
       }
 
@@ -623,15 +639,13 @@
         return row.store + "\t" + row.accountId + "\t" + row.subAccountId;
       }
 
-      function numInput(row, field, step) {
+      function numInput(row, field) {
         return (
           '<input class="xm-rules-num" data-key="' +
           escapeHtml(rowKey(row)) +
           '" data-field="' +
           field +
-          '" type="number" min="0" step="' +
-          (step || "1") +
-          '" value="' +
+          '" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" value="' +
           escapeHtml(money(row[field])) +
           '" />'
         );
@@ -667,10 +681,15 @@
           '<button type="button" id="rules-on">批量启用</button>' +
           '<button type="button" id="rules-off">批量暂停</button>' +
           '<button type="button" class="xm-rules-save" id="rules-save">保存</button>' +
+          '<button type="button" id="rules-add-shop">新增店铺</button>' +
+          '<button type="button" id="rules-add-sub">新增子账号</button>' +
+          '<label class="xm-rules-check"><input id="rules-deleted" type="checkbox"' +
+          (showDeleted ? " checked" : "") +
+          " /> 显示已删除</label>" +
           '<button type="button" id="rules-history-btn">修改历史</button>';
         root.querySelector("#rules-shop").addEventListener("change", function (event) {
           shop = event.target.value;
-          load();
+          renderTable();
         });
         root.querySelector("#rules-q").addEventListener("input", function (event) {
           keyword = event.target.value.trim();
@@ -695,7 +714,27 @@
         root.querySelector("#rules-history-btn").addEventListener("click", function () {
           loadHistory();
         });
+        root.querySelector("#rules-add-shop").addEventListener("click", function () {
+          toggleShopForm("create");
+        });
+        root.querySelector("#rules-add-sub").addEventListener("click", function () {
+          toggleSubForm("create");
+        });
+        root.querySelector("#rules-deleted").addEventListener("change", function (event) {
+          showDeleted = event.target.checked;
+          load();
+        });
         renderRunShops(lastMeta);
+      }
+
+      function statusTone(status) {
+        if (status === "已开启" || status === "运行中" || status === "正常" || status === "在线") {
+          return "on";
+        }
+        if (status === "停止中" || status === "等待Cookie" || status === "过期" || status === "身份不符") {
+          return "stopping";
+        }
+        return "off";
       }
 
       function renderRunShops(data) {
@@ -705,13 +744,11 @@
         if (!box || !actions) {
           return;
         }
-        const shops = data.shops || [];
-        const runByStore = {};
-        (data.shopRuns || []).forEach(function (row) {
-          runByStore[row.store] = row;
+        const shopRows = (data.shopRuns || []).filter(function (row) {
+          return showDeleted || !row.deleted;
         });
         hint.textContent =
-          "本地工作机只需启动一次并保持运行，以后所有店铺启停和充值规则均由本页面控制。勾选=开启，取消=停止。已开启会持续循环采集、回传并按规则充值；已停止不得再开新一轮；停止中表示本地正在完成已开始的安全收尾。全部取消时 runShops=[]，工作机在线待机。停止不强杀正在提交的转账。";
+          "网站是店铺和子账号的唯一主档。勾选=开启持续运行；取消=停止，本地完成已开始的转账及弹窗后再停该店。已开启会持续循环采集、回传并按规则充值；已停止不得再开新一轮；停止中表示本地正在收尾。全部取消时 runShops=[]，工作机在线待机。Cookie 状态只显示本地机回报。";
         const machines = data.machines || [];
         actions.innerHTML =
           (machines.length
@@ -724,37 +761,108 @@
               "</span>"
             : "<span class=\"xm-rules-machines\">还没有本地机 ACK。第一台用 machineId=paid-worker-01，第二台换新的 machineId。</span>") +
           '<button type="button" class="xm-rules-save" id="rules-run-save">保存运行状态</button>';
-        if (!shops.length) {
-          box.innerHTML = '<p class="empty">暂无自己名下的店铺。</p>';
+        if (!shopRows.length) {
+          box.innerHTML = '<p class="empty">暂无自己名下的店铺。请先新增店铺。</p>';
         } else {
-          box.innerHTML = shops
-            .map(function (name) {
-              const status = (runByStore[name] && runByStore[name].status) || (runSelected.has(name) ? "已开启" : "已停止");
-              const tone = status === "已开启" ? "on" : status === "停止中" ? "stopping" : "off";
-              return (
-                '<label class="xm-rules-shop"><input type="checkbox" data-run-shop="' +
-                escapeHtml(name) +
-                '"' +
-                (runSelected.has(name) ? " checked" : "") +
-                " /> <span>" +
-                escapeHtml(name) +
-                '</span><span class="xm-rules-run-status is-' +
-                tone +
-                '">' +
-                escapeHtml(status) +
-                "</span></label>"
-              );
-            })
-            .join("");
+          box.innerHTML =
+            '<div class="xm-paid-table-wrap xm-rules-shop-grid-wrap"><table class="xm-rules-shop-table"><colgroup>' +
+            '<col class="c-check"><col class="c-store"><col class="c-id"><col class="c-machine"><col class="c-run">' +
+            '<col class="c-cookie"><col class="c-cookie"><col class="c-run"><col class="c-heart"><col class="c-err"><col class="c-ops">' +
+            "</colgroup><thead><tr>" +
+            [
+              ["勾选", "勾选后保存即开启持续运行"],
+              ["店铺", "店铺名称"],
+              ["主账户ID", "京准通主账户ID"],
+              ["执行机", "执行机"],
+              ["运行状态", "运行控制"],
+              ["京准通Cookie", "京准通Cookie"],
+              ["京麦Cookie", "京麦Cookie"],
+              ["执行状态", "执行状态"],
+              ["最后心跳", "最后心跳时间"],
+              ["最后错误", "最后错误"],
+              ["操作", "操作"]
+            ]
+              .map(function (item) {
+                return '<th title="' + escapeHtml(item[1]) + '">' + escapeHtml(item[0]) + "</th>";
+              })
+              .join("") +
+            "</tr></thead><tbody>" +
+            shopRows
+              .map(function (row) {
+                const accountId = String(row.accountId || "");
+                const runStatus = row.status || (runSelected.has(accountId) ? "已开启" : "已停止");
+                return (
+                  '<tr class="' +
+                  (row.deleted ? "is-deleted" : "") +
+                  '"><td><input type="checkbox" data-run-shop="' +
+                  escapeHtml(accountId) +
+                  '"' +
+                  (runSelected.has(accountId) && !row.deleted ? " checked" : "") +
+                  (row.deleted ? " disabled" : "") +
+                  ' /></td><td>' +
+                  escapeHtml(row.store || "") +
+                  "</td><td>" +
+                  escapeHtml(accountId) +
+                  "</td><td>" +
+                  escapeHtml(row.machineId || "任意机") +
+                  '</td><td><span class="xm-rules-run-status is-' +
+                  statusTone(runStatus) +
+                  '">' +
+                  escapeHtml(runStatus) +
+                  '</span></td><td><span class="xm-rules-run-status is-' +
+                  statusTone(row.jztCookieStatus || "待录") +
+                  '">' +
+                  escapeHtml(row.jztCookieStatus || "待录") +
+                  '</span></td><td><span class="xm-rules-run-status is-' +
+                  statusTone(row.jmCookieStatus || "待录") +
+                  '">' +
+                  escapeHtml(row.jmCookieStatus || "待录") +
+                  '</span></td><td><span class="xm-rules-run-status is-' +
+                  statusTone(row.runStatus || "已停止") +
+                  '">' +
+                  escapeHtml(row.runStatus || "已停止") +
+                  "</span></td><td>" +
+                  escapeHtml(row.heartbeatAt || "—") +
+                  (row.workerStatus ? "（" + escapeHtml(row.workerStatus) + "）" : "") +
+                  "</td><td>" +
+                  escapeHtml(row.lastError || "—") +
+                  "</td><td>" +
+                  (row.deleted
+                    ? '<button type="button" data-shop-restore="' + escapeHtml(accountId) + '">恢复</button>'
+                    : '<button type="button" data-shop-edit="' +
+                      escapeHtml(accountId) +
+                      '">编辑</button> <button type="button" data-shop-del="' +
+                      escapeHtml(accountId) +
+                      '">删除</button>') +
+                  "</td></tr>"
+                );
+              })
+              .join("") +
+            "</tbody></table></div>";
         }
         box.querySelectorAll("[data-run-shop]").forEach(function (input) {
           input.addEventListener("change", function () {
-            const name = input.getAttribute("data-run-shop");
+            const accountId = input.getAttribute("data-run-shop");
             if (input.checked) {
-              runSelected.add(name);
+              runSelected.add(accountId);
             } else {
-              runSelected.delete(name);
+              runSelected.delete(accountId);
             }
+          });
+        });
+        box.querySelectorAll("[data-shop-edit]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            toggleShopForm("update", btn.getAttribute("data-shop-edit"));
+          });
+        });
+        box.querySelectorAll("[data-shop-del]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            saveMaster("shop", "delete", { 京准通主账户ID: btn.getAttribute("data-shop-del") }, "删除店铺");
+          });
+        });
+        box.querySelectorAll("[data-shop-restore]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            saveMaster("shop", "restore", { 京准通主账户ID: btn.getAttribute("data-shop-restore") }, "恢复店铺");
           });
         });
         const saveBtn = root.querySelector("#rules-run-save");
@@ -763,11 +871,169 @@
         }
       }
 
-      async function saveRunShops() {
-        const shops = lastMeta.shops || [];
-        const runShops = shops.filter(function (name) {
-          return runSelected.has(name);
+      function findShopRow(accountId) {
+        return (lastMeta.shopRuns || []).find(function (row) {
+          return String(row.accountId || "") === String(accountId || "");
         });
+      }
+
+      function toggleShopForm(action, accountId) {
+        const box = root.querySelector("#rules-shop-form");
+        if (!box) {
+          return;
+        }
+        if (!box.hidden && box.getAttribute("data-action") === action && box.getAttribute("data-id") === String(accountId || "")) {
+          box.hidden = true;
+          box.innerHTML = "";
+          return;
+        }
+        const current = findShopRow(accountId) || {};
+        box.hidden = false;
+        box.setAttribute("data-action", action);
+        box.setAttribute("data-id", accountId || "");
+        box.innerHTML =
+          "<h3>" +
+          (action === "create" ? "新增店铺" : "编辑店铺") +
+          "</h3>" +
+          '<label>店铺名称 <input id="shop-name" maxlength="64" value="' +
+          escapeHtml(current.store || "") +
+          '" /></label>' +
+          '<label>京准通主账户ID <input id="shop-account" maxlength="64" value="' +
+          escapeHtml(current.accountId || "") +
+          '"' +
+          (action === "update" ? " readonly" : "") +
+          " /></label>" +
+          '<label>执行机 <input id="shop-machine" maxlength="64" placeholder="空=任意已绑定机" value="' +
+          escapeHtml(current.machineId || "") +
+          '" /></label>' +
+          '<button type="button" class="xm-rules-save" id="shop-form-save">保存店铺</button>' +
+          '<p class="xm-rules-hint">主账户ID创建后不可改。更换时请删除旧店再新建。本页不接收 Cookie 正文。</p>';
+        root.querySelector("#shop-form-save").addEventListener("click", function () {
+          saveMaster(
+            "shop",
+            action,
+            {
+              店铺名称: root.querySelector("#shop-name").value,
+              京准通主账户ID: root.querySelector("#shop-account").value,
+              执行机: root.querySelector("#shop-machine").value
+            },
+            action === "create" ? "新增店铺" : "编辑店铺"
+          );
+        });
+      }
+
+      function toggleSubForm(action, row) {
+        const box = root.querySelector("#rules-sub-form");
+        if (!box) {
+          return;
+        }
+        const current = row || {};
+        if (!box.hidden && action === "create" && !row) {
+          box.hidden = true;
+          box.innerHTML = "";
+          return;
+        }
+        const shops = lastMeta.shopRuns || lastMeta.shops || [];
+        const shopOptions = (Array.isArray(shops) ? shops : [])
+          .filter(function (item) {
+            return typeof item === "string" ? true : !item.deleted;
+          })
+          .map(function (item) {
+            const name = typeof item === "string" ? item : item.store;
+            const accountId = typeof item === "string" ? "" : String(item.accountId || "");
+            const selected = accountId && accountId === String(current.accountId || "") ? " selected" : shop && name === shop ? " selected" : "";
+            return (
+              '<option value="' +
+              escapeHtml(accountId || name) +
+              '"' +
+              selected +
+              ">" +
+              escapeHtml(name) +
+              (accountId ? "（" + escapeHtml(accountId) + "）" : "") +
+              "</option>"
+            );
+          });
+        const defaults = lastMeta.newSubDefaults || { autoRecharge: false, plannedRoi: 2 };
+        box.hidden = false;
+        box.innerHTML =
+          "<h3>" +
+          (action === "create" ? "新增子账号" : "编辑子账号") +
+          "</h3>" +
+          "<label>店铺 <select id=\"sub-shop\">" +
+          shopOptions.join("") +
+          "</select></label>" +
+          '<label>子账号ID <input id="sub-id" maxlength="64" value="' +
+          escapeHtml(String(current.subAccountId || "")) +
+          '"' +
+          (action === "update" ? " readonly" : "") +
+          " /></label>" +
+          '<label>子账号名称 <input id="sub-name" maxlength="128" value="' +
+          escapeHtml(current.subAccountName || "") +
+          '" /></label>' +
+          '<label class="xm-rules-check"><input id="sub-auto" type="checkbox"' +
+          (current.autoRecharge != null ? (current.autoRecharge ? " checked" : "") : defaults.autoRecharge ? " checked" : "") +
+          " /> 自动充值</label>" +
+          '<label>计划ROI <input id="sub-roi" type="number" min="0" step="0.01" value="' +
+          escapeHtml(String(current.plannedRoi != null ? current.plannedRoi : defaults.plannedRoi)) +
+          '" /></label>' +
+          '<button type="button" class="xm-rules-save" id="sub-form-save">保存子账号</button>' +
+          '<p class="xm-rules-hint">新增子账号默认自动充值=否、计划ROI=2。完整档位仍在下方表格编辑。</p>';
+        root.querySelector("#sub-form-save").addEventListener("click", function () {
+          saveMaster(
+            "sub",
+            action,
+            {
+              京准通主账户ID: root.querySelector("#sub-shop").value,
+              子账号ID: root.querySelector("#sub-id").value,
+              子账号名称: root.querySelector("#sub-name").value,
+              自动充值: root.querySelector("#sub-auto").checked,
+              计划ROI: root.querySelector("#sub-roi").value
+            },
+            action === "create" ? "新增子账号" : "编辑子账号"
+          );
+        });
+      }
+
+      async function saveMaster(patch, action, payload, summary) {
+        setStatus(summary + "…");
+        try {
+          const path = patch === "shop" ? "/api/shen/paid/shops" : "/api/shen/paid/subs";
+          const res = await fetch(path, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: authHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify(Object.assign({ action: action, changeSummary: summary }, payload))
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error || "保存失败");
+          }
+          pendingSyncHint = "已保存版本 " + data.version + "，本地机尚未接收（待同步）。本机 GET 并 ACK 后才会变成已同步。";
+          setStatus(pendingSyncHint);
+          const shopForm = root.querySelector("#rules-shop-form");
+          const subForm = root.querySelector("#rules-sub-form");
+          if (shopForm) {
+            shopForm.hidden = true;
+            shopForm.innerHTML = "";
+          }
+          if (subForm) {
+            subForm.hidden = true;
+            subForm.innerHTML = "";
+          }
+          await load();
+        } catch (err) {
+          setStatus(err.message || "保存失败", true);
+        }
+      }
+
+      async function saveRunShops() {
+        const runShops = (lastMeta.shopRuns || [])
+          .filter(function (row) {
+            return !row.deleted && runSelected.has(String(row.accountId || ""));
+          })
+          .map(function (row) {
+            return String(row.accountId || "");
+          });
         setStatus("保存运行状态…");
         try {
           const res = await fetch("/api/shen/paid/recharge-config", {
@@ -784,7 +1050,13 @@
           if (!res.ok) {
             throw new Error(data.error || "保存失败");
           }
-          setStatus("已保存版本 " + data.version + "，已开启 " + (data.runShops || runShops).length + " 家店");
+          pendingSyncHint =
+            "已保存版本 " +
+            data.version +
+            "，本地机尚未接收（待同步）。已开启 " +
+            (data.runShops || runShops).length +
+            " 家店。本机 GET 并 ACK 后才会变成已同步。";
+          setStatus(pendingSyncHint);
           runSelected = new Set();
           await load();
         } catch (err) {
@@ -875,14 +1147,16 @@
         if (!list.length) {
           tableWrap.innerHTML = rows.length
             ? '<p class="empty">没有匹配的子账号。</p>'
-            : '<p class="empty">暂无自己名下的子账号。先在付费中心回传子账号，或确认店铺已分配给你。</p>';
+            : '<p class="empty">暂无自己名下的子账号。请先新增店铺和子账号，或确认店铺已分配给你。</p>';
           return;
         }
         const body = list
           .map(function (row) {
             const key = rowKey(row);
             return (
-              "<tr><td><input type=\"checkbox\" data-check=\"" +
+              "<tr class=\"" +
+              (row.deleted ? "is-deleted" : "") +
+              "\"><td><input type=\"checkbox\" data-check=\"" +
               escapeHtml(key) +
               "\"" +
               (selected.has(key) ? " checked" : "") +
@@ -894,14 +1168,14 @@
               escapeHtml(row.subAccountName || "") +
               "</td><td>" +
               escapeHtml(String(row.subAccountId || "")) +
-              '</td><td><label class="xm-rules-check"><input class="xm-rules-auto" data-key="' +
+              '</td><td><label class="xm-rules-check" title="' +
+              yesNo(row.autoRecharge) +
+              '"><input class="xm-rules-auto" data-key="' +
               escapeHtml(key) +
               '" type="checkbox"' +
               (row.autoRecharge ? " checked" : "") +
-              " /> " +
-              yesNo(row.autoRecharge) +
-              "</label></td><td>" +
-              numInput(row, "plannedRoi", "0.01") +
+              " /></label></td><td>" +
+              numInput(row, "plannedRoi") +
               "</td><td>" +
               numInput(row, "tier1MinSpend") +
               "</td><td>" +
@@ -925,22 +1199,35 @@
               "</td><td>" +
               escapeHtml(String(row.version || 0)) +
               "</td><td>" +
-              escapeHtml(row.updatedBy || "—") +
-              "</td><td>" +
-              escapeHtml(row.updatedAt || "—") +
-              "</td><td>" +
               escapeHtml(row.syncStatus || "待同步") +
               "</td><td>" +
-              escapeHtml(row.syncedAt || "—") +
+              (row.deleted
+                ? '<button type="button" data-sub-restore="' + escapeHtml(key) + '">恢复</button>'
+                : '<button type="button" data-sub-edit="' +
+                  escapeHtml(key) +
+                  '">编辑</button> <button type="button" data-sub-del="' +
+                  escapeHtml(key) +
+                  '">删除</button>') +
               "</td></tr>"
             );
           })
           .join("");
         tableWrap.innerHTML =
-          '<div class="xm-paid-table-wrap"><table><thead><tr>' +
+          '<div class="xm-paid-table-wrap xm-rules-grid-wrap"><table class="xm-rules-grid"><colgroup>' +
+          '<col class="c-check"><col class="c-store"><col class="c-id"><col class="c-sub"><col class="c-id"><col class="c-auto">' +
+          '<col class="c-num"><col class="c-num"><col class="c-num"><col class="c-num"><col class="c-num">' +
+          '<col class="c-num"><col class="c-num"><col class="c-num"><col class="c-num"><col class="c-num">' +
+          '<col class="c-ver"><col class="c-sync"><col class="c-ops">' +
+          "</colgroup><thead><tr>" +
           headers()
-            .map(function (title) {
-              return "<th>" + title + "</th>";
+            .map(function (item) {
+              return (
+                '<th title="' +
+                escapeHtml(item[1]) +
+                '">' +
+                escapeHtml(item[0]).replaceAll("\n", "<br>") +
+                "</th>"
+              );
             })
             .join("") +
           "</tr></thead><tbody>" +
@@ -956,17 +1243,56 @@
             }
           });
         });
+        tableWrap.querySelectorAll("[data-sub-edit]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            const row = rows.find(function (item) {
+              return rowKey(item) === btn.getAttribute("data-sub-edit");
+            });
+            if (row) {
+              toggleSubForm("update", row);
+            }
+          });
+        });
+        tableWrap.querySelectorAll("[data-sub-del]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            const row = rows.find(function (item) {
+              return rowKey(item) === btn.getAttribute("data-sub-del");
+            });
+            if (row) {
+              saveMaster(
+                "sub",
+                "delete",
+                { 京准通主账户ID: row.accountId, 子账号ID: row.subAccountId },
+                "删除子账号"
+              );
+            }
+          });
+        });
+        tableWrap.querySelectorAll("[data-sub-restore]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            const row = rows.find(function (item) {
+              return rowKey(item) === btn.getAttribute("data-sub-restore");
+            });
+            if (row) {
+              saveMaster(
+                "sub",
+                "restore",
+                { 京准通主账户ID: row.accountId, 子账号ID: row.subAccountId },
+                "恢复子账号"
+              );
+            }
+          });
+        });
       }
 
       async function load() {
         setStatus("加载规则…");
         try {
           const query =
-            "/api/shen/paid/recharge-config/editor?store=" +
-            encodeURIComponent(shop) +
-            "&q=" +
+            "/api/shen/paid/recharge-config/editor?q=" +
             encodeURIComponent(keyword) +
-            (enabledOnly ? "&enabled=1" : "");
+            (enabledOnly ? "&enabled=1" : "") +
+            (showDeleted ? "&deleted=1" : "");
           const res = await fetch(query, { credentials: "same-origin", headers: authHeaders() });
           const data = await res.json();
           if (!res.ok) {
@@ -979,13 +1305,15 @@
           lastMeta = data;
           runSelected = new Set();
           (data.shopRuns || []).forEach(function (row) {
-            if (row.enabled) {
-              runSelected.add(row.store);
+            if (row.enabled && !row.deleted) {
+              runSelected.add(String(row.accountId || ""));
             }
           });
           if (!data.runListSaved) {
-            (data.shops || []).forEach(function (name) {
-              runSelected.add(name);
+            (data.shopRuns || []).forEach(function (row) {
+              if (!row.deleted) {
+                runSelected.add(String(row.accountId || ""));
+              }
             });
           }
           asofEl.textContent = data.version
@@ -993,7 +1321,22 @@
             : "尚未保存过规则，显示默认档位";
           renderToolbar(data);
           renderTable();
-          setStatus(rows.length ? "已加载 " + rows.length + " 个子账号" : "");
+          if (pendingSyncHint && data.syncStatus !== "已同步") {
+            setSyncBanner(pendingSyncHint, "wait");
+            setStatus(pendingSyncHint);
+          } else if (data.syncStatus === "待同步" && data.version) {
+            const waitText = "配置版本 " + data.version + " 本地机尚未接收（待同步）。本机 GET 并 ACK 后才会变成已同步。";
+            setSyncBanner(waitText, "wait");
+            setStatus(waitText);
+          } else if (data.syncStatus === "同步失败") {
+            const failText = "配置版本 " + data.version + " 本地机同步失败。请看本机 ACK 失败原因后重试。";
+            setSyncBanner(failText, "error");
+            setStatus(failText, true);
+          } else {
+            pendingSyncHint = "";
+            setSyncBanner("");
+            setStatus(rows.length ? "已加载 " + rows.length + " 个子账号" : "");
+          }
         } catch (err) {
           if (!dead) {
             setStatus(err.message || "无法加载充值规则", true);
@@ -1020,7 +1363,8 @@
           if (!res.ok) {
             throw new Error(data.error || "保存失败");
           }
-          setStatus("已保存版本 " + data.version);
+          pendingSyncHint = "已保存版本 " + data.version + "，本地机尚未接收（待同步）。本机 GET 并 ACK 后才会变成已同步。";
+          setStatus(pendingSyncHint);
           await load();
         } catch (err) {
           setStatus(err.message || "保存失败", true);
