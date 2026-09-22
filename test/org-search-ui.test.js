@@ -167,6 +167,61 @@ const RIGHTS_SMOKE = `<!doctype html>
   </body>
 </html>`;
 
+const SPLIT_OPS_SMOKE = `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="/people.css" />
+  </head>
+  <body>
+    <div id="xm-content"></div>
+    <script src="/shared/modules/people.js"></script>
+    <script>
+      (async function () {
+        function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+        async function post(url, body) {
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+          });
+          return res.json();
+        }
+        await post("/api/people", { name: "刘璇", role: "运营", center: "韩梦凯运营中心", lineManager: "韩梦凯", supervisor: "陈晓曼", operator: "刘璇", status: "在职" });
+        await post("/api/people", { name: "潘梦玉", role: "运营", center: "韩梦凯运营中心", lineManager: "韩梦凯", supervisor: "陈晓曼", operator: "", assistant: "潘梦玉", status: "在职" });
+        await post("/api/people/org/stores", { storeName: "飒望生活日用旗舰店", manager: "韩梦凯", supervisor: "陈晓曼", operator: "刘璇", assistant: "潘梦玉", remark: "运营中" });
+        await post("/api/people/org/stores", { storeName: "ZYUO驱蚊驱虫旗舰店", manager: "韩梦凯", supervisor: "陈晓曼", operator: "刘璇", assistant: "", remark: "运营中" });
+        await post("/api/people/org/stores", { storeName: "无运营对照店", manager: "韩梦凯", supervisor: "陈晓曼", operator: "", assistant: "", remark: "运营中" });
+        window.XmModules["/people"].mount(document.getElementById("xm-content"));
+        document.querySelector('[data-pane="rights"]').click();
+        await sleep(1200);
+        const chenLead = Array.prototype.find.call(document.querySelectorAll(".rights-mod-lead"), function (lead) {
+          const supervisor = lead.querySelector('.rights-mod-card[data-role="主管"]');
+          return supervisor && supervisor.textContent.trim() === "陈晓曼";
+        });
+        const rows = chenLead ? Array.prototype.map.call(chenLead.querySelectorAll(".rights-mod-row"), function (row) {
+          const cols = row.querySelectorAll(".rights-mod-col");
+          return {
+            op: ((cols[0] && cols[0].textContent) || "").replace(/\\s+/g, " ").trim(),
+            asst: ((cols[1] && cols[1].textContent) || "").replace(/\\s+/g, " ").trim(),
+            shops: ((cols[2] && cols[2].textContent) || "").replace(/\\s+/g, " ").trim()
+          };
+        }) : [];
+        const panRow = rows.find(function (row) { return row.asst.indexOf("潘梦玉") >= 0; });
+        const liuSolo = rows.find(function (row) { return row.op.indexOf("刘璇") >= 0 && row.asst.indexOf("潘梦玉") < 0; });
+        const chenOp = rows.find(function (row) { return row.op.indexOf("陈晓曼") >= 0 && row.shops.indexOf("无运营对照店") >= 0; });
+        const panAlone = panRow && panRow.shops.indexOf("飒望生活日用旗舰店") >= 0 && panRow.shops.indexOf("ZYUO驱蚊驱虫旗舰店") < 0;
+        const liuAlone = liuSolo && liuSolo.shops.indexOf("ZYUO驱蚊驱虫旗舰店") >= 0 && liuSolo.shops.indexOf("飒望生活日用旗舰店") < 0;
+        document.body.setAttribute("data-rows", JSON.stringify(rows));
+        document.body.setAttribute("data-pan", panAlone ? "1" : "0");
+        document.body.setAttribute("data-liu", liuAlone ? "1" : "0");
+        document.body.setAttribute("data-fallback", chenOp ? "1" : "0");
+        document.body.setAttribute("data-ok", panAlone && liuAlone && chenOp ? "1" : "0");
+      })();
+    </script>
+  </body>
+</html>`;
+
 const RESERVE_SMOKE = `<!doctype html>
 <html lang="zh-CN">
   <head>
@@ -675,6 +730,36 @@ test("headless chrome can type-search people and stores", async () => {
     const rights = await chromeDump(`http://127.0.0.1:${port}/__rights-smoke`, 12000);
     assert.match(rights, /data-ok="1"/, rights.includes("data-ok=") ? rights.slice(rights.indexOf("data-ok="), rights.indexOf("data-ok=") + 80) : rights.slice(-400));
     assert.match(rights, /data-self-operator="1"/);
+  } finally {
+    await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
+});
+
+test("headless chrome splits 潘梦玉 and 刘璇 operator cards", async () => {
+  resetPeopleStore();
+  resetOrgBoard();
+  resetOrgExtra();
+  const app = createApp();
+  const server = http.createServer((req, res) => {
+    if (req.url === "/__split-ops-smoke") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(SPLIT_OPS_SMOKE);
+      return;
+    }
+    app(req, res);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  try {
+    const html = await chromeDump(`http://127.0.0.1:${port}/__split-ops-smoke`, 14000);
+    assert.match(
+      html,
+      /data-ok="1"/,
+      html.includes("data-ok=") ? html.slice(html.indexOf("data-ok="), html.indexOf("data-ok=") + 400) : html.slice(-500)
+    );
+    assert.match(html, /data-pan="1"/);
+    assert.match(html, /data-liu="1"/);
+    assert.match(html, /data-fallback="1"/);
   } finally {
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }

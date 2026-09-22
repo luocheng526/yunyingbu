@@ -482,6 +482,19 @@ function cleanName(value) {
   return raw;
 }
 
+export function effectiveStoreOperator(row = {}) {
+  const dedicated = cleanName(row.operator);
+  if (dedicated) {
+    return dedicated;
+  }
+  const owner = cleanName(row.owner);
+  const assistant = cleanName(row.assistant);
+  if (owner && owner !== assistant) {
+    return owner;
+  }
+  return cleanName(row.supervisor) || cleanName(row.reserve) || cleanName(row.manager) || "";
+}
+
 function isLeadRole(role) {
   return role === "主管" || role === "储备";
 }
@@ -682,7 +695,12 @@ export function buildRightsTree(stores, roster, byName) {
       storeName: row.storeName,
       storeId: row.storeId || "",
       merchantId: row.merchantId || "",
-      operatorName: cleanName(row.operator || row.owner),
+      operatorName: cleanName(row.operator),
+      assistantName: cleanName(row.assistant),
+      supervisorName: cleanName(row.supervisor),
+      reserveName: cleanName(row.reserve),
+      managerName: cleanName(row.manager),
+      effectiveOperator: effectiveStoreOperator(row),
       hanging: !placed.op,
       shared:
         [row.manager, row.supervisor, row.reserve, row.operator || row.owner, row.assistant].filter((name) =>

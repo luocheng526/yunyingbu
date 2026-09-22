@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.223-filter-on";
+    const href = "/people.css?v=0.1.224-split-ops";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -1651,45 +1651,74 @@
           .join("");
       }
 
+      function blankRightsName(value) {
+        const raw = String(value == null ? "" : value).trim();
+        if (!raw || raw === "—" || raw === "-" || raw === "无" || raw === "点击填写") {
+          return "";
+        }
+        return raw;
+      }
+
+      function storeEffectiveOperator(store, lead) {
+        const ready = blankRightsName(store && store.effectiveOperator);
+        if (ready) {
+          return ready;
+        }
+        const dedicated = blankRightsName(store && store.operatorName);
+        if (dedicated) {
+          return dedicated;
+        }
+        const supervisor = blankRightsName(store && store.supervisorName) || (lead && lead.role === "主管" ? blankRightsName(lead.name) : "");
+        if (supervisor) {
+          return supervisor;
+        }
+        const reserve = blankRightsName(store && store.reserveName) || (lead && lead.role === "储备" ? blankRightsName(lead.name) : "");
+        if (reserve) {
+          return reserve;
+        }
+        return (
+          blankRightsName(store && store.managerName) ||
+          blankRightsName(lead && lead.ownerName) ||
+          blankRightsName(lead && lead.name)
+        );
+      }
+
+      function collectLeadStores(lead) {
+        const list = (lead.stores || []).slice();
+        (lead.children || []).forEach(function (child) {
+          if (child.role === "运营" || child.role === "店长") {
+            (child.stores || []).forEach(function (store) {
+              list.push(store);
+            });
+          }
+        });
+        return list;
+      }
+
       function rightsLeadRows(lead) {
-        const kids = lead.children || [];
-        const ops = kids.filter(function (child) {
-          return child.role === "运营" || child.role === "店长";
+        const groups = {};
+        const order = [];
+        collectLeadStores(lead).forEach(function (store) {
+          const opName = storeEffectiveOperator(store, lead);
+          const asstName = blankRightsName(store && store.assistantName);
+          const key = opName + "\t" + asstName;
+          if (!groups[key]) {
+            const leadName = blankRightsName(lead && (lead.name || lead.ownerName));
+            groups[key] = {
+              op: opName ? { role: "运营", name: opName, synthetic: Boolean(leadName && opName === leadName) } : null,
+              asst: asstName ? [{ role: "助理", name: asstName }] : [],
+              stores: []
+            };
+            order.push(key);
+          }
+          groups[key].stores.push(store);
         });
-        const looseAsst = kids.filter(function (child) {
-          return child.role === "助理";
+        order.sort(function (a, b) {
+          return a.localeCompare(b, "zh");
         });
-        const rows = ops.map(function (op) {
-          return {
-            op: op,
-            asst: (op.children || []).filter(function (child) {
-              return child.role === "助理";
-            }),
-            stores: op.stores || []
-          };
+        const rows = order.map(function (key) {
+          return groups[key];
         });
-        const ownerName = String(lead.name || lead.ownerName || "").trim();
-        const leadStores = lead.stores || [];
-        const selfStores = ownerName
-          ? leadStores.filter(function (store) {
-              return String(store.operatorName || "").trim() === ownerName;
-            })
-          : [];
-        const directStores = leadStores.filter(function (store) {
-          return selfStores.indexOf(store) < 0;
-        });
-        let directAssistants = looseAsst;
-        if (selfStores.length) {
-          rows.push({
-            op: { role: "运营", name: ownerName, synthetic: true },
-            asst: looseAsst,
-            stores: selfStores
-          });
-          directAssistants = [];
-        }
-        if (directStores.length || directAssistants.length) {
-          rows.push({ op: null, asst: directAssistants, stores: directStores });
-        }
         if (!rows.length) {
           rows.push({ op: null, asst: [], stores: [] });
         }
