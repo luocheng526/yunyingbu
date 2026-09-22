@@ -4,7 +4,7 @@ import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { patchAppSource } from "../src/modules/people/patch-app.js";
-import { hydrateOrgStores, importStamp, mapImportRow, orgStoresPersistMode, resetOrgBoard } from "../src/modules/people/org-board.js";
+import { effectiveStoreOperator, hydrateOrgStores, importStamp, mapImportRow, orgStoresPersistMode, resetOrgBoard } from "../src/modules/people/org-board.js";
 import { resetOrgExtra } from "../src/modules/people/org-extra.js";
 import { canEditRoster } from "../src/modules/people/org-acl.js";
 import { hydrateFromMysql, resetPeopleStore } from "../src/modules/people/store.js";
@@ -160,6 +160,8 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /filterDraft/);
     assert.match(jsText, /applyFilterDraft/);
     assert.match(jsText, /pickedForColumn/);
+    assert.match(jsText, /storeEffectiveOperator/);
+    assert.match(jsText, /assistantName/);
     assert.match(jsText, /th\.classList\.toggle\("is-on"/);
     assert.match(jsText, /th\.org-th-filter\.is-on\{background:#d9d9d9;color:#262626;\}/);
     assert.match(cssText, /\.people-page th\.org-th-filter\.is-on/);
@@ -830,6 +832,102 @@ test("rights tree follows assistant column when stored role still says 运营", 
     assert.ok(found);
     assert.equal(found.node.role, "助理");
     assert.ok(!found.path.includes("无"));
+  });
+});
+
+test("effectiveStoreOperator falls back to 主管/储备/经理", () => {
+  assert.equal(effectiveStoreOperator({ operator: "刘璇", supervisor: "陈晓曼" }), "刘璇");
+  assert.equal(effectiveStoreOperator({ operator: "", supervisor: "陈晓曼", manager: "韩梦凯" }), "陈晓曼");
+  assert.equal(effectiveStoreOperator({ operator: "无", reserve: "张文静", manager: "沈子晗" }), "张文静");
+  assert.equal(effectiveStoreOperator({ operator: "", supervisor: "", reserve: "", manager: "韩梦凯" }), "韩梦凯");
+  assert.equal(effectiveStoreOperator({ operator: "", owner: "陈晓曼", assistant: "张嘉庆", supervisor: "陈晓曼" }), "陈晓曼");
+  assert.equal(effectiveStoreOperator({ operator: "", owner: "张嘉庆", assistant: "张嘉庆", supervisor: "陈晓曼" }), "陈晓曼");
+});
+
+test("rights tree splits operator cards by store and assistant", async () => {
+  await withServer(async (base) => {
+    for (const person of [
+      { name: "刘璇", role: "运营", center: "韩梦凯运营中心", lineManager: "韩梦凯", supervisor: "陈晓曼", operator: "刘璇" },
+      { name: "潘梦玉", role: "运营", center: "韩梦凯运营中心", lineManager: "韩梦凯", supervisor: "陈晓曼", operator: "", assistant: "潘梦玉" }
+    ]) {
+      const created = await fetch(`${base}/api/people`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...person, status: "在职" })
+      });
+      assert.equal(created.status, 201, await created.text());
+    }
+    const payload = [
+      {
+        storeName: "飒望生活日用旗舰店",
+        manager: "韩梦凯",
+        supervisor: "陈晓曼",
+        operator: "刘璇",
+        assistant: "潘梦玉",
+        remark: "运营中"
+      },
+      {
+        storeName: "ZYUO驱蚊驱虫旗舰店",
+        manager: "韩梦凯",
+        supervisor: "陈晓曼",
+        operator: "刘璇",
+        assistant: "",
+        remark: "运营中"
+      },
+      {
+        storeName: "无运营对照店",
+        manager: "韩梦凯",
+        supervisor: "陈晓曼",
+        operator: "",
+        assistant: "",
+        remark: "运营中"
+      }
+    ];
+    for (const body of payload) {
+      const created = await fetch(`${base}/api/people/org/stores`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const json = await created.json();
+      assert.equal(created.status, 201, JSON.stringify(json));
+    }
+    const board = await fetch(`${base}/api/people/org/rights-board`);
+    const data = await board.json();
+    assert.equal(board.status, 200);
+    function find(node, name) {
+      if (!node) {
+        return null;
+      }
+      if (node.name === name) {
+        return node;
+      }
+      for (const child of node.children || []) {
+        const hit = find(child, name);
+        if (hit) {
+          return hit;
+        }
+      }
+      return null;
+    }
+    const liu = find(data.tree, "刘璇");
+    assert.ok(liu);
+    assert.equal(liu.role, "运营");
+    const liuStores = liu.stores || [];
+    const daily = liuStores.find((row) => row.storeName === "飒望生活日用旗舰店");
+    const mosquito = liuStores.find((row) => row.storeName === "ZYUO驱蚊驱虫旗舰店");
+    assert.ok(daily);
+    assert.ok(mosquito);
+    assert.equal(daily.assistantName, "潘梦玉");
+    assert.equal(daily.effectiveOperator, "刘璇");
+    assert.equal(mosquito.assistantName, "");
+    assert.equal(mosquito.effectiveOperator, "刘璇");
+    const chen = find(data.tree, "陈晓曼");
+    assert.ok(chen);
+    const hanging = (chen.stores || []).find((row) => row.storeName === "无运营对照店");
+    assert.ok(hanging);
+    assert.equal(hanging.operatorName, "");
+    assert.equal(hanging.effectiveOperator, "陈晓曼");
   });
 });
 
