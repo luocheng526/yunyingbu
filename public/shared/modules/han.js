@@ -1512,9 +1512,8 @@
     },
   };
 
-  window.XmModules["/han/paid"] = {
-    mount: function (root) {
-      const board = new URLSearchParams(window.location.search).get("board") || "";
+  function mountHanPaid(root, forcedBoard) {
+      const board = forcedBoard || new URLSearchParams(window.location.search).get("board") || "";
       if (board === "center" || board === "rules") {
         root.innerHTML = page(board === "rules" ? "充值规则" : "付费中心", "正在打开…", "");
         let stop = function () {};
@@ -1896,6 +1895,21 @@
         tplBtn.removeEventListener("click", onPaidTpl);
         root.innerHTML = "";
       };
+  }
+
+  window.XmModules["/han/paid"] = {
+    mount: function (root) {
+      return mountHanPaid(root, "");
+    },
+  };
+  window.XmModules["/han/paid-center"] = {
+    mount: function (root) {
+      return mountHanPaid(root, "center");
+    },
+  };
+  window.XmModules["/han/recharge-rules"] = {
+    mount: function (root) {
+      return mountHanPaid(root, "rules");
     },
   };
 
@@ -2060,21 +2074,31 @@
     if (!window.__hanCenterLinks) {
       window.__hanCenterLinks = 1;
     }
-    const paidLink = document.querySelector('a[href="/han/paid"]');
-    if (paidLink && paidLink.parentNode && !paidLink.parentNode.querySelector("[data-han-center='1']")) {
+    const paidLinks =
+      typeof document.querySelectorAll === "function" ? document.querySelectorAll('a[href="/han/paid"]') : [];
+    let paidLink = null;
+    Array.prototype.forEach.call(paidLinks, function (anchor) {
+      if (!paidLink && anchor.closest && anchor.closest(".xm-submenu, .xm-menu-group, .han-nav-sub")) paidLink = anchor;
+    });
+    if (!paidLink && paidLinks.length) paidLink = paidLinks[0];
+    if (
+      paidLink &&
+      paidLink.parentNode &&
+      !document.querySelector('a[href="/han/paid-center"]')
+    ) {
       [
-        ["center", "付费中心"],
-        ["rules", "充值规则"],
+        ["/han/paid-center", "付费中心"],
+        ["/han/recharge-rules", "充值规则"],
       ].forEach(function (pair) {
         const anchor = document.createElement("a");
-        anchor.className = paidLink.className;
-        anchor.href = "/han/paid?board=" + pair[0];
-        anchor.setAttribute("data-han-tab", anchor.href);
-        anchor.setAttribute("data-han-center", "1");
+        anchor.className = paidLink.className.replace(" is-active", "");
+        anchor.href = pair[0];
+        anchor.removeAttribute("aria-current");
         const label = document.createElement("span");
         label.textContent = pair[1];
         anchor.appendChild(label);
-        paidLink.parentNode.appendChild(anchor);
+        paidLink.insertAdjacentElement("afterend", anchor);
+        paidLink = anchor;
       });
     }
     if (!window.__hanTabBound) {

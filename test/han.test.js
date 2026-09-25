@@ -498,6 +498,8 @@ test("shared han module fills submenu pages", async () => {
   assert.doesNotMatch(js, /头部产品（高利润）/);
   assert.doesNotMatch(js, /新上架需做单产品/);
   assert.match(js, /XmModules\["\/han\/paid"\]/);
+  assert.match(js, /XmModules\["\/han\/paid-center"\]/);
+  assert.match(js, /XmModules\["\/han\/recharge-rules"\]/);
   assert.match(js, /han-paid-board/);
   assert.match(js, /han-paid-summary/);
   assert.match(js, /han-paid-group/);
@@ -1065,6 +1067,20 @@ test("GET/POST /api/han/worker feeds 付费中心 and 充值规则", async () =>
     const history = await json(base, "/api/han/worker?view=history");
     assert.equal(history.body.items.some((row) => row.summary === "保存充值规则"), true);
   });
+});
+
+test("韩梦凯侧栏包含付费中心和充值规则", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const nav = await readFile(new URL("../public/shared/nav.js", import.meta.url), "utf8");
+  const hanStart = nav.indexOf("const HAN_CHILDREN");
+  const hanEnd = nav.indexOf("const ACADEMY_CHILDREN");
+  const block = nav.slice(hanStart, hanEnd);
+  assert.match(block, /\/han\/paid-center/);
+  assert.match(block, /付费中心/);
+  assert.match(block, /\/han\/recharge-rules/);
+  assert.match(block, /充值规则/);
+  assert.match(nav, /"\/han\/paid-center": "han"/);
+  assert.match(nav, /"\/han\/recharge-rules": "han"/);
 });
 
 test("han schema uses prefixed tables", async () => {
