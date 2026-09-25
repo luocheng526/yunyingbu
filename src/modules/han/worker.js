@@ -1,6 +1,7 @@
 /**
  * 韩梦凯付费中心 / 充值规则。
- * 本地机只连 GET/POST /api/han/worker。网站保存规则和回传快照，不保存京准通 Cookie，也不直接充值。
+ * 本地机只连 GET/POST /api/han/worker。网站下发规则、保存回传，不登录京小洁，不保存京准通 Cookie，也不直接充值。
+ * 花费、ROI、余额由本地机在充值前向京小洁查询；成交金额和充值由本地机执行后回传。
  */
 
 const DOC_ID_SQL = "SELECT id, doc FROM han_worker_doc ORDER BY id ASC";
@@ -13,6 +14,23 @@ function httpError(statusCode, message) {
 
 function text(value, max = 128) {
   return String(value ?? "").trim().slice(0, max);
+}
+
+function idText(value, label, max = 64) {
+  if (value == null || value === "") {
+    return "";
+  }
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value)) {
+      throw httpError(400, `${label}必须是字符串，不能用科学计数法`);
+    }
+    return String(value);
+  }
+  const raw = String(value).trim();
+  if (/^[+-]?\d+(\.\d+)?[eE][+-]?\d+$/.test(raw)) {
+    throw httpError(400, `${label}不能使用科学计数法`);
+  }
+  return raw.slice(0, max);
 }
 
 function num(value, fallback = 0) {
@@ -96,25 +114,25 @@ function parseShop(row, capturedAt) {
   }
   return {
     store,
-    accountId: text(pick(row, ["京准通主账户ID", "accountId", "主账户ID"]), 32),
+    accountId: idText(pick(row, ["京准通主账户ID", "accountId", "主账户ID"]), "京准通主账户ID"),
     spend: num(pick(row, ["花费", "spend", "付费金额", "精准通总花费"])),
     orders: num(pick(row, ["成交单量", "orders", "单量"])),
     roi: num(pick(row, ["ROI", "roi"])),
     balance: num(pick(row, ["余额", "balance"])),
-    gmv: num(pick(row, ["成交金额", "gmv"])),
+    gmv: num(pick(row, ["京麦成交金额", "成交金额", "gmv"])),
     capturedAt: text(pick(row, ["抓取时间", "capturedAt", "采集时间"]) || capturedAt, 40),
   };
 }
 
 function parseSub(row, fallbackStore, capturedAt) {
   const store = text(pick(row, ["店铺名称", "store"]) || fallbackStore, 64);
-  const subAccountId = text(pick(row, ["子账号ID", "subAccountId"]), 32);
+  const subAccountId = idText(pick(row, ["子账号ID", "subAccountId"]), "子账号ID");
   if (!store || !subAccountId) {
     return null;
   }
   return {
     store,
-    accountId: text(pick(row, ["京准通主账户ID", "accountId"]), 32),
+    accountId: idText(pick(row, ["京准通主账户ID", "accountId"]), "京准通主账户ID"),
     subAccountId,
     subAccountName: text(pick(row, ["子账号名称", "subAccountName"]), 64),
     spend: num(pick(row, ["花费", "spend"])),
@@ -133,20 +151,56 @@ function parseRecharge(row, fallbackStore) {
   }
   return {
     store,
-    subAccountId: text(pick(row, ["子账号ID", "subAccountId"]), 32),
+    accountId: idText(pick(row, ["京准通主账户ID", "accountId"]), "京准通主账户ID"),
+    subAccountId: idText(pick(row, ["子账号ID", "subAccountId"]), "子账号ID"),
     subAccountName: text(pick(row, ["子账号名称", "subAccountName"]), 64),
     amount,
     chargedAt: text(pick(row, ["时间", "chargedAt", "充值时间", "日期"]), 40),
-    note: text(pick(row, ["备注", "note"]), 200),
+    note: text(pick(row, ["备注", "note", "remark"]), 200),
+    executionId: idText(pick(row, ["executionId", "执行编号"]), "executionId"),
+    configVersion: num(pick(row, ["configVersion", "配置版本"])),
+    ruleCode: text(pick(row, ["ruleCode", "命中规则", "规则"]), 32),
+    plannedRoi: num(pick(row, ["plannedRoi", "当时计划ROI", "计划ROI"])),
+    execSpend: num(pick(row, ["execSpend", "当时花费"])),
+    execRoi: num(pick(row, ["execRoi", "当时ROI"])),
+    execOrders: num(pick(row, ["execPaidOrders", "当时单量"])),
+    result: text(pick(row, ["result", "执行结果"]), 32),
   };
+}
+
+function rechargeKey(row) {
+  if (row.executionId) {
+    return `id\0${row.executionId}`;
+  }
+  return ["at", row.store, row.subAccountId, row.chargedAt, row.amount].join("\0");
+}
+
+function collectSubRows(body, shopRows) {
+  const rows = [];
+  if (Array.isArray(body.subaccounts)) {
+    rows.push(...body.subaccounts);
+  } else if (Array.isArray(body.子账号)) {
+    rows.push(...body.子账号);
+  }
+  for (const shop of shopRows) {
+    const nested = shop?.子账号 || shop?.subaccounts;
+    if (!Array.isArray(nested)) {
+      continue;
+    }
+    const store = pick(shop, ["店铺名称", "store", "店铺", "店名"]);
+    for (const row of nested) {
+      rows.push({ ...row, 店铺名称: pick(row, ["店铺名称", "store"]) || store });
+    }
+  }
+  return rows;
 }
 
 function readRulePatch(raw, current) {
   const next = defaultRule(current);
   const source = raw && typeof raw === "object" ? raw : {};
   next.store = text(pick(source, ["店铺名称", "store"]) || next.store, 64);
-  next.accountId = text(pick(source, ["京准通主账户ID", "accountId"]) || next.accountId, 32);
-  next.subAccountId = text(pick(source, ["子账号ID", "subAccountId"]) || next.subAccountId, 32);
+  next.accountId = idText(pick(source, ["京准通主账户ID", "accountId"]) || next.accountId, "京准通主账户ID");
+  next.subAccountId = idText(pick(source, ["子账号ID", "subAccountId"]) || next.subAccountId, "子账号ID");
   next.subAccountName = text(pick(source, ["子账号名称", "subAccountName"]) || next.subAccountName, 64);
   if (pick(source, ["自动充值", "autoRecharge"]) !== "") {
     const flag = pick(source, ["自动充值", "autoRecharge"]);
@@ -316,23 +370,19 @@ export function createWorkerMethods(db, ensure) {
         machineId: machine,
         runShops: shops.map((shop) => shop.店铺名称),
         shops,
-        note: "网站只下发规则。本地机按规则充值，不要把京准通 Cookie 回传。",
+        note: "网站只下发规则。本地机用京小洁的花费、ROI、余额命中规则，再执行充值，并把花费、ROI、余额、京麦成交金额和充值记录回传。不要把京准通 Cookie 回传。",
       };
     },
 
     async pushWorker(body = {}) {
       const action = text(body.action || body.type, 32);
-      if (action === "ack" || body.status) {
+      if (action === "ack") {
         return this.ackWorker(body);
       }
       const state = await load();
       const capturedAt = text(pick(body, ["抓取时间", "capturedAt", "采集时间"]) || new Date().toISOString(), 40);
       const shopRows = Array.isArray(body.rows) ? body.rows : Array.isArray(body.shops) ? body.shops : [];
-      const subRows = Array.isArray(body.subaccounts)
-        ? body.subaccounts
-        : Array.isArray(body.子账号)
-          ? body.子账号
-          : [];
+      const subRows = collectSubRows(body, shopRows);
       const rechargeRows = Array.isArray(body.recharges)
         ? body.recharges
         : Array.isArray(body.充值记录)
@@ -346,9 +396,13 @@ export function createWorkerMethods(db, ensure) {
       const recharges = rechargeRows.map((row) => parseRecharge(row, shops[0]?.store || subs[0]?.store || "")).filter(Boolean);
       const shopNames = new Set(shops.map((row) => row.store));
       state.shops = state.shops.filter((row) => !shopNames.has(row.store)).concat(shops);
-      const subKeys = new Set(subs.map((row) => ruleKey(row)));
-      state.subs = state.subs.filter((row) => !subKeys.has(ruleKey(row))).concat(subs);
-      state.recharges = state.recharges.concat(recharges).slice(-500);
+      const touchedSubs = new Set(subs.map((row) => row.store));
+      state.subs = state.subs.filter((row) => !touchedSubs.has(row.store)).concat(subs);
+      const rechargeMap = new Map(state.recharges.map((row) => [rechargeKey(row), row]));
+      for (const row of recharges) {
+        rechargeMap.set(rechargeKey(row), row);
+      }
+      state.recharges = [...rechargeMap.values()].slice(-500);
       await save(state);
       return {
         ok: true,
@@ -361,13 +415,15 @@ export function createWorkerMethods(db, ensure) {
       const state = await load();
       const machineId = text(body.machineId, 64) || "local";
       const version = num(body.version, state.version);
-      const status = text(body.status, 16).toLowerCase() === "failed" ? "failed" : "success";
-      state.machines = state.machines.filter((row) => row.machineId !== machineId).concat([
-        { machineId, version, status, syncedAt: new Date().toISOString() },
-      ]);
-      if (status === "success") {
-        state.syncStatus = "已同步";
+      const statusText = text(body.status, 16).toLowerCase();
+      if (statusText !== "success" && statusText !== "failed") {
+        throw httpError(400, "status 必须是 success 或 failed");
       }
+      const status = statusText;
+      state.machines = state.machines.filter((row) => row.machineId !== machineId).concat([
+        { machineId, version, status, syncedAt: new Date().toISOString(), message: text(body.message, 200) },
+      ]);
+      state.syncStatus = status === "success" ? "已同步" : "同步失败";
       await save(state);
       return { ok: true, machineId, version, status: status === "success" ? "已同步" : "同步失败" };
     },
@@ -383,16 +439,33 @@ export function createWorkerMethods(db, ensure) {
       if (action === "run") {
         const names = Array.isArray(body.runShops) ? body.runShops.map((name) => text(name, 64)).filter(Boolean) : [];
         const known = new Set(state.subs.map((row) => row.store).concat(state.shops.map((row) => row.store)));
-        state.runs = [...known].map((store) => ({
-          store,
-          enabled: names.includes(store),
-          machineId: text(body.machineId, 64),
-        }));
+        const previous = new Map(state.runs.map((row) => [row.store, row]));
+        const named = Array.isArray(body.shopRuns) ? body.shopRuns : null;
+        state.runs = named
+          ? named
+              .map((row) => {
+                const store = text(pick(row, ["店铺名称", "store"]), 64);
+                if (!store) {
+                  return null;
+                }
+                const enabledFlag = pick(row, ["启用", "enabled"]);
+                return {
+                  store,
+                  enabled: enabledFlag === "" ? true : enabledFlag === true || enabledFlag === 1 || enabledFlag === "1" || enabledFlag === "true",
+                  machineId: text(pick(row, ["执行机", "machineId"]), 64),
+                };
+              })
+              .filter(Boolean)
+          : [...known].map((store) => ({
+              store,
+              enabled: names.includes(store),
+              machineId: text(body.machineId, 64) || previous.get(store)?.machineId || "",
+            }));
         state.history.push({
           at: state.updatedAt,
           actor,
           summary: text(body.changeSummary, 200) || "保存运行状态",
-          runShops: names,
+          runShops: state.runs.filter((row) => row.enabled).map((row) => row.store),
         });
       } else {
         const incoming = Array.isArray(body.rows) ? body.rows : [];

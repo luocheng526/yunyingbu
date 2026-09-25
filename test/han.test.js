@@ -1066,6 +1066,43 @@ test("GET/POST /api/han/worker feeds 付费中心 and 充值规则", async () =>
 
     const history = await json(base, "/api/han/worker?view=history");
     assert.equal(history.body.items.some((row) => row.summary === "保存充值规则"), true);
+
+    const same304 = await fetch(base + "/api/han/worker?machineId=han-local&sinceVersion=2&http304=1");
+    assert.equal(same304.status, 304);
+
+    const posted = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [{ 店铺名称: "德系甄选好物企官店", 京麦成交金额: 3600, 花费: 900, 子账号: [
+          { 子账号ID: "200", 子账号名称: "企官-主投", 花费: 900, ROI: 2.5, 余额: 30 },
+        ] }],
+        充值记录: [
+          { 店铺名称: "德系甄选好物企官店", 子账号ID: "200", 充值金额: 100, 充值时间: "2026-09-25 11:00", executionId: "han-1", ruleCode: "tier1", result: "success", configVersion: 2 },
+          { 店铺名称: "德系甄选好物企官店", 子账号ID: "200", 充值金额: 100, 充值时间: "2026-09-25 11:00", executionId: "han-1", ruleCode: "tier1", result: "success", configVersion: 2 },
+        ],
+      }),
+    });
+    assert.equal(posted.res.status, 201);
+    const again = await json(base, "/api/han/worker?view=shop&store=" + encodeURIComponent("德系甄选好物企官店"));
+    assert.equal(again.body.shop.gmv, 3600);
+    assert.equal(again.body.subaccounts.length, 1);
+    assert.equal(again.body.subaccounts[0].spend, 900);
+    assert.equal(again.body.recharges.filter((row) => row.executionId === "han-1").length, 1);
+
+    const badId = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subaccounts: [{ 店铺名称: "德系甄选好物企官店", 子账号ID: "1e+21" }] }),
+    });
+    assert.equal(badId.res.status, 400);
+
+    const failed = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "ack", machineId: "han-local", version: 2, status: "failed" }),
+    });
+    assert.equal(failed.body.status, "同步失败");
   });
 });
 

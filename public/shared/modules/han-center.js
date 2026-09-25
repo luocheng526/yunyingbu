@@ -33,7 +33,7 @@
   function mountCenter(root) {
     root.innerHTML = page(
       "付费中心",
-      "最新一次本地机回传的全店快照。点店铺名称查看子账号和充值记录。",
+      "本地机回传的最新快照。花费、投产比、余额是本地机充值前向京小洁查的。成交金额和充值记录由本地机执行后回传。",
       '<style>' +
         ".han-center-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 14px}" +
         ".han-center-kpi,.han-center-panel{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px}" +
@@ -124,7 +124,7 @@
               })
               .join("")
           : '<tr><td colspan="5">没有子账号</td></tr>') +
-        '</tbody></table></section><section class="han-center-panel" style="margin-top:12px"><h2>充值记录</h2><table><thead><tr><th>子账号</th><th>金额</th><th>时间</th><th>备注</th></tr></thead><tbody>' +
+        '</tbody></table></section><section class="han-center-panel" style="margin-top:12px"><h2>充值记录</h2><table><thead><tr><th>子账号</th><th>金额</th><th>时间</th><th>命中规则</th><th>结果</th></tr></thead><tbody>' +
         (recharges.length
           ? recharges
               .map(function (row) {
@@ -136,12 +136,14 @@
                   "</td><td>" +
                   escapeHtml(row.chargedAt) +
                   "</td><td>" +
-                  escapeHtml(row.note) +
+                  escapeHtml(row.ruleCode || row.note) +
+                  "</td><td>" +
+                  escapeHtml(row.result) +
                   "</td></tr>"
                 );
               })
               .join("")
-          : '<tr><td colspan="4">没有充值记录</td></tr>') +
+          : '<tr><td colspan="5">没有充值记录</td></tr>') +
         "</tbody></table></section>";
     }
 
@@ -184,7 +186,7 @@
   function mountRules(root) {
     root.innerHTML = page(
       "充值规则",
-      "只保存自己名下店铺和子账号的规则、计划 ROI、哪些店在跑、修改记录。网站不保存京准通 Cookie，也不直接充值。本地机拉 GET /api/han/worker 后自己跑。",
+      "只保存规则、计划 ROI 和哪些店在跑。本地机拉 GET /api/han/worker 后自己查京小洁、自己充值，再把结果回传。",
       '<style>' +
         ".han-rules-bar{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}" +
         ".han-rules-bar button{border:0;border-radius:999px;background:#0f766e;color:#fff;padding:6px 14px;cursor:pointer}" +
