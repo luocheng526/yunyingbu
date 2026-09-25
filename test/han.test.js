@@ -1081,6 +1081,12 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(block, /充值规则/);
   assert.match(nav, /"\/han\/paid-center": "han"/);
   assert.match(nav, /"\/han\/recharge-rules": "han"/);
+  const han = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
+  assert.match(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
+  assert.match(han, /\["\/han\/paid\?board=rules", "充值规则", "rules"\]/);
+  assert.match(han, /insertAdjacentElement\("afterend"/);
+  assert.match(han, /data-xm-group"\) !== "\/han"/);
+  assert.doesNotMatch(han, /anchor\.href = "\/han\/paid-center"/);
 });
 
 test("han schema uses prefixed tables", async () => {
