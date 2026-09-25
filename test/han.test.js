@@ -1001,6 +1001,72 @@ test("han store keeps dropProbeTasks and hydrateFromMysql exports", async () => 
   assert.equal(hydrated.ok, true);
 });
 
+test("GET/POST /api/han/worker feeds 付费中心 and 充值规则", async () => {
+  await withServer(async (base) => {
+    const pushed = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        capturedAt: "2026-09-25T10:00:00+08:00",
+        rows: [{ 店铺名称: "德系甄选好物企官店", 京准通主账户ID: "100", 花费: 800, 成交单量: 20, ROI: 2.4, 余额: 40, 成交金额: 3000 }],
+        subaccounts: [
+          { 店铺名称: "德系甄选好物企官店", 京准通主账户ID: "100", 子账号ID: "200", 子账号名称: "企官-主投", 花费: 800, ROI: 2.4, 余额: 40, 单量: 20 },
+        ],
+        recharges: [{ 店铺名称: "德系甄选好物企官店", 子账号ID: "200", 子账号名称: "企官-主投", 金额: 100, 时间: "2026-09-25 09:00", 备注: "一档" }],
+      }),
+    });
+    assert.equal(pushed.res.status, 201);
+    assert.equal(pushed.body.received.shops, 1);
+    assert.equal(pushed.body.received.subaccounts, 1);
+
+    const overview = await json(base, "/api/han/worker?view=overview");
+    assert.equal(overview.body.shops[0].store, "德系甄选好物企官店");
+    assert.equal(overview.body.totals.spend, 800);
+
+    const shop = await json(base, "/api/han/worker?view=shop&store=" + encodeURIComponent("德系甄选好物企官店"));
+    assert.equal(shop.body.subaccounts[0].subAccountName, "企官-主投");
+    assert.equal(shop.body.recharges[0].amount, 100);
+
+    const saved = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "rules",
+        changeSummary: "保存充值规则",
+        rows: [{ store: "德系甄选好物企官店", accountId: "100", subAccountId: "200", plannedRoi: 2.3, autoRecharge: true }],
+      }),
+    });
+    assert.equal(saved.body.ok, true);
+    assert.equal(saved.body.version, 1);
+
+    const run = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "run", runShops: ["德系甄选好物企官店"], changeSummary: "保存运行状态" }),
+    });
+    assert.equal(run.body.version, 2);
+
+    const config = await json(base, "/api/han/worker?machineId=han-local");
+    assert.equal(config.body.changed, true);
+    assert.equal(config.body.runShops[0], "德系甄选好物企官店");
+    assert.equal(config.body.shops[0].子账号[0].计划ROI, 2.3);
+    assert.equal(config.body.shops[0].子账号[0].自动充值, true);
+
+    const same = await json(base, "/api/han/worker?machineId=han-local&sinceVersion=2");
+    assert.equal(same.body.changed, false);
+
+    const ack = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "ack", machineId: "han-local", version: 2, status: "success" }),
+    });
+    assert.equal(ack.body.status, "已同步");
+
+    const history = await json(base, "/api/han/worker?view=history");
+    assert.equal(history.body.items.some((row) => row.summary === "保存充值规则"), true);
+  });
+});
+
 test("han schema uses prefixed tables", async () => {
   const { readFile } = await import("node:fs/promises");
   const sql = await readFile(new URL("../src/modules/han/schema.sql", import.meta.url), "utf8");

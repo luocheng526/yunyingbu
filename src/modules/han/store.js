@@ -10,6 +10,7 @@ import {
   normalizeProductLayer,
 } from "./classify.js";
 import { parseOverviewWorkbook, parsePaidWorkbook } from "./import-file.js";
+import { createWorkerMethods } from "./worker.js";
 
 export {
   classifyProduct,
@@ -326,6 +327,7 @@ export function createHanStore(poolOrFactory = getPool) {
           "CREATE TABLE IF NOT EXISTS han_shop_rules (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, team_name VARCHAR(64) NOT NULL, store_name VARCHAR(128) NOT NULL, rules_json MEDIUMTEXT NOT NULL, updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3), PRIMARY KEY (id), UNIQUE KEY uk_han_shop_rules (team_name, store_name)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
           "CREATE TABLE IF NOT EXISTS han_shop_plans (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, team_name VARCHAR(64) NOT NULL, store_name VARCHAR(128) NOT NULL, month_plan MEDIUMTEXT NOT NULL, week_plan MEDIUMTEXT NOT NULL, updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3), PRIMARY KEY (id), UNIQUE KEY uk_han_shop_plans (team_name, store_name)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
           "CREATE TABLE IF NOT EXISTS han_picks (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, board VARCHAR(32) NOT NULL, name VARCHAR(512) NOT NULL, extra VARCHAR(256) NOT NULL DEFAULT '', category VARCHAR(128) NOT NULL DEFAULT '', note VARCHAR(1024) NOT NULL DEFAULT '', status VARCHAR(32) NOT NULL DEFAULT '观察', owner VARCHAR(64) NOT NULL DEFAULT '韩梦凯', store_name VARCHAR(128) NOT NULL DEFAULT '韩梦凯店', created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), PRIMARY KEY (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+          "CREATE TABLE IF NOT EXISTS han_worker_doc (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, doc MEDIUMTEXT NOT NULL, PRIMARY KEY (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
         ]) {
           try {
             await pool.query(stmt);
@@ -345,7 +347,17 @@ export function createHanStore(poolOrFactory = getPool) {
     }
   }
 
+  const worker = createWorkerMethods(db, ensure);
+
   return {
+    pullWorker: worker.pullWorker,
+    pushWorker: worker.pushWorker,
+    ackWorker: worker.ackWorker,
+    saveWorker: worker.saveWorker,
+    workerOverview: worker.workerOverview,
+    workerShop: worker.workerShop,
+    workerRules: worker.workerRules,
+    workerHistory: worker.workerHistory,
     async listTasks() {
       await ensure();
       const [rows] = await db().query(

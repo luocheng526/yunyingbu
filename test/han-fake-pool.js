@@ -11,6 +11,7 @@ export function createHanFakePool() {
     han_shop_rules: [],
     han_shop_plans: [],
     han_picks: [],
+    han_worker_doc: [],
   };
   let nextId = 1;
   let briefRow = null;

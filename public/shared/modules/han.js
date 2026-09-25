@@ -1514,6 +1514,32 @@
 
   window.XmModules["/han/paid"] = {
     mount: function (root) {
+      const board = new URLSearchParams(window.location.search).get("board") || "";
+      if (board === "center" || board === "rules") {
+        root.innerHTML = page(board === "rules" ? "充值规则" : "付费中心", "正在打开…", "");
+        let stop = function () {};
+        let dead = false;
+        function start() {
+          if (dead || !window.HanCenter) return;
+          stop = window.HanCenter.mount(root, board) || function () {};
+        }
+        if (window.HanCenter) {
+          start();
+        } else {
+          const script = document.createElement("script");
+          script.src = "/shared/modules/han-center.js";
+          script.onload = start;
+          script.onerror = function () {
+            if (!dead) root.innerHTML = page("付费中心", "页面脚本没有加载出来。", "");
+          };
+          document.head.appendChild(script);
+        }
+        return function unmount() {
+          dead = true;
+          if (typeof stop === "function") stop();
+          root.innerHTML = "";
+        };
+      }
       root.innerHTML = page(
         "实时付费",
         "先看全中心汇总，再按小组看各店。本地采集的 xlsx/csv 点「上传抓取表」，表头有店铺和花费即可。",
@@ -1985,6 +2011,14 @@
       return;
     }
     const path = target.split("?")[0].replace(/\/+$/, "") || "/";
+    if (path === "/han/paid" && target.indexOf("board=") >= 0) {
+      const paidRoot = document.querySelector("[data-xm-mounted='/han/paid']");
+      if (paidRoot && window.XmModules["/han/paid"]) {
+        history.pushState({ xm: path }, "", target);
+        remountGoods(paidRoot, "/han/paid");
+        return;
+      }
+    }
     if (path === "/han/goods" || path === "/han/selection") {
       history.pushState({ xm: path }, "", target);
       const root =
@@ -2023,6 +2057,26 @@
     }
     const leftover = document.getElementById("han-goods-teams");
     if (leftover && leftover.parentNode) leftover.parentNode.removeChild(leftover);
+    if (!window.__hanCenterLinks) {
+      window.__hanCenterLinks = 1;
+    }
+    const paidLink = document.querySelector('a[href="/han/paid"]');
+    if (paidLink && paidLink.parentNode && !paidLink.parentNode.querySelector("[data-han-center='1']")) {
+      [
+        ["center", "付费中心"],
+        ["rules", "充值规则"],
+      ].forEach(function (pair) {
+        const anchor = document.createElement("a");
+        anchor.className = paidLink.className;
+        anchor.href = "/han/paid?board=" + pair[0];
+        anchor.setAttribute("data-han-tab", anchor.href);
+        anchor.setAttribute("data-han-center", "1");
+        const label = document.createElement("span");
+        label.textContent = pair[1];
+        anchor.appendChild(label);
+        paidLink.parentNode.appendChild(anchor);
+      });
+    }
     if (!window.__hanTabBound) {
       window.__hanTabBound = 1;
       document.addEventListener("click", function (event) {
