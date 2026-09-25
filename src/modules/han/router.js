@@ -281,6 +281,53 @@ export function createHanRouter(store = createHanStore()) {
     },
   );
 
+  hanRouter.get("/worker", async (req, res) => {
+    try {
+      const view = String(req.query.view || "config");
+      if (view === "overview") {
+        res.json(await store.workerOverview());
+        return;
+      }
+      if (view === "shop") {
+        res.json(await store.workerShop(req.query.store));
+        return;
+      }
+      if (view === "rules") {
+        res.json(await store.workerRules());
+        return;
+      }
+      if (view === "history") {
+        res.json(await store.workerHistory());
+        return;
+      }
+      res.json(
+        await store.pullWorker({
+          machineId: req.query.machineId,
+          sinceVersion: req.query.sinceVersion || req.query.version,
+        }),
+      );
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.post("/worker", async (req, res) => {
+    try {
+      const result = await store.pushWorker(req.body || {});
+      res.status(201).json(result);
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.put("/worker", async (req, res) => {
+    try {
+      res.json(await store.saveWorker(req.body || {}));
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
   hanRouter.get("/paid", async (_req, res) => {
     try {
       res.json({ ok: true, items: await store.listPaid() });

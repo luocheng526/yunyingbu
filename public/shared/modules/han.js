@@ -1512,8 +1512,33 @@
     },
   };
 
-  window.XmModules["/han/paid"] = {
-    mount: function (root) {
+  function mountHanPaid(root, forcedBoard) {
+      const board = forcedBoard || new URLSearchParams(window.location.search).get("board") || "";
+      if (board === "center" || board === "rules") {
+        root.innerHTML = page(board === "rules" ? "充值规则" : "付费中心", "正在打开…", "");
+        let stop = function () {};
+        let dead = false;
+        function start() {
+          if (dead || !window.HanCenter) return;
+          stop = window.HanCenter.mount(root, board) || function () {};
+        }
+        if (window.HanCenter) {
+          start();
+        } else {
+          const script = document.createElement("script");
+          script.src = "/shared/modules/han-center.js";
+          script.onload = start;
+          script.onerror = function () {
+            if (!dead) root.innerHTML = page("付费中心", "页面脚本没有加载出来。", "");
+          };
+          document.head.appendChild(script);
+        }
+        return function unmount() {
+          dead = true;
+          if (typeof stop === "function") stop();
+          root.innerHTML = "";
+        };
+      }
       root.innerHTML = page(
         "实时付费",
         "先看全中心汇总，再按小组看各店。本地采集的 xlsx/csv 点「上传抓取表」，表头有店铺和花费即可。",
@@ -1870,6 +1895,21 @@
         tplBtn.removeEventListener("click", onPaidTpl);
         root.innerHTML = "";
       };
+  }
+
+  window.XmModules["/han/paid"] = {
+    mount: function (root) {
+      return mountHanPaid(root, "");
+    },
+  };
+  window.XmModules["/han/paid-center"] = {
+    mount: function (root) {
+      return mountHanPaid(root, "center");
+    },
+  };
+  window.XmModules["/han/recharge-rules"] = {
+    mount: function (root) {
+      return mountHanPaid(root, "rules");
     },
   };
 
@@ -1985,6 +2025,15 @@
       return;
     }
     const path = target.split("?")[0].replace(/\/+$/, "") || "/";
+    if (path === "/han/paid") {
+      const paidRoot = document.querySelector("[data-xm-mounted='/han/paid']");
+      if (paidRoot && window.XmModules["/han/paid"]) {
+        history.pushState({ xm: path }, "", target);
+        remountGoods(paidRoot, "/han/paid");
+        ensureHanChrome();
+        return;
+      }
+    }
     if (path === "/han/goods" || path === "/han/selection") {
       history.pushState({ xm: path }, "", target);
       const root =
@@ -2023,34 +2072,103 @@
     }
     const leftover = document.getElementById("han-goods-teams");
     if (leftover && leftover.parentNode) leftover.parentNode.removeChild(leftover);
+    const paidLink = hanPaidAnchor();
+    if (paidLink && paidLink.insertAdjacentElement) {
+      const specs = [
+        ["/han/paid?board=center", "付费中心", "center"],
+        ["/han/paid?board=rules", "充值规则", "rules"],
+      ];
+      const board = new URLSearchParams(location.search || "").get("board") || "";
+      let after = paidLink;
+      specs.forEach(function (spec) {
+        let anchor = paidLink.parentNode.querySelector('a[data-han-center="' + spec[2] + '"]');
+        if (!anchor) {
+          anchor = document.createElement("a");
+          anchor.className = "xm-menu-item xm-menu-child";
+          anchor.href = spec[0];
+          anchor.setAttribute("data-han-center", spec[2]);
+          anchor.setAttribute("data-han-tab", spec[0]);
+          const label = document.createElement("span");
+          label.textContent = spec[1];
+          anchor.appendChild(label);
+          after.insertAdjacentElement("afterend", anchor);
+        }
+        after = anchor;
+        const on = board === spec[2];
+        anchor.classList.toggle("is-active", on);
+        if (on) anchor.setAttribute("aria-current", "page");
+        else anchor.removeAttribute("aria-current");
+      });
+      if (board === "center" || board === "rules") {
+        paidLink.classList.remove("is-active");
+        paidLink.removeAttribute("aria-current");
+      }
+    }
     if (!window.__hanTabBound) {
       window.__hanTabBound = 1;
       document.addEventListener("click", function (event) {
-        const link = event.target.closest ? event.target.closest("a[data-han-tab]") : null;
-        if (!link) return;
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button) return;
+        const link = event.target.closest ? event.target.closest("a") : null;
+        if (!link || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button) return;
+        const menu = link.closest(".xm-submenu, .han-nav-sub");
+        if (menu && (link.getAttribute("data-han-center") || (link.getAttribute("href") === "/han/paid" && /[?&]board=/.test(location.search || "")))) {
+          event.preventDefault();
+          event.stopPropagation();
+          goHanPage(link.getAttribute("data-han-center") ? link.getAttribute("href") : "/han/paid");
+          ensureHanChrome();
+          return;
+        }
+        const tab = link.closest("a[data-han-tab]");
+        if (!tab || (tab.closest && tab.closest(".xm-submenu, .han-nav-sub"))) return;
         event.preventDefault();
-        goHanPage(link.getAttribute("href") || "/han/selection");
-      });
+        goHanPage(tab.getAttribute("href") || "/han/selection");
+      }, true);
       window.addEventListener("popstate", function () {
         const path = String(location.pathname || "").replace(/\/+$/, "") || "/";
+        if (path === "/han/paid") {
+          const paidRoot = document.querySelector("[data-xm-mounted='/han/paid']");
+          if (paidRoot && window.XmModules["/han/paid"]) remountGoods(paidRoot, "/han/paid");
+          ensureHanChrome();
+          return;
+        }
         if (path !== "/han/goods" && path !== "/han/selection") return;
         const root = document.querySelector("[data-xm-mounted='" + path + "']") || goodsRoot();
-        if (root && root.querySelector(".han-goods-stage")) {
-          animateGoodsSwap(root, path);
-        }
+        if (root && root.querySelector(".han-goods-stage")) animateGoodsSwap(root, path);
       });
     }
   }
 
+  function hanPaidAnchor() {
+    if (!document || typeof document.querySelectorAll !== "function") return null;
+    const groups = document.querySelectorAll(".xm-menu-group");
+    for (let i = 0; i < groups.length; i++) {
+      const group = groups[i];
+      if (!group.getAttribute || group.getAttribute("data-xm-group") !== "/han") continue;
+      const sub = group.querySelector(".xm-submenu") || group.querySelector(".han-nav-sub");
+      const paid = sub && sub.querySelector('a[href="/han/paid"]');
+      if (paid) return paid;
+    }
+    const links = document.querySelectorAll('a[href="/han/paid"]');
+    for (let i = 0; i < links.length; i++) {
+      if (links[i].closest && links[i].closest(".xm-submenu, .han-nav-sub")) return links[i];
+    }
+    return links[0] || null;
+  }
+
   function watchHanChrome() {
     ensureHanChrome();
-    let n = 0;
-    const timer = setInterval(function () {
-      n += 1;
-      ensureHanChrome();
-      if (n > 40) clearInterval(timer);
-    }, 200);
+    if (window.__hanCenterWatch) return;
+    window.__hanCenterWatch = 1;
+    const Observer = window.MutationObserver;
+    if (typeof Observer !== "function") return;
+    let queued = 0;
+    new Observer(function () {
+      if (queued) return;
+      queued = 1;
+      setTimeout(function () {
+        queued = 0;
+        ensureHanChrome();
+      }, 30);
+    }).observe(document.documentElement, { childList: true, subtree: true });
   }
 
   if (document.readyState === "loading") {
