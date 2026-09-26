@@ -1522,11 +1522,12 @@
           if (dead || !window.HanCenter) return;
           stop = window.HanCenter.mount(root, board) || function () {};
         }
-        if (window.HanCenter) {
+        const centerVer = "20260926-master";
+        if (window.HanCenter && window.HanCenter.version === centerVer) {
           start();
         } else {
           const script = document.createElement("script");
-          script.src = "/shared/modules/han-center.js";
+          script.src = "/shared/modules/han-center.js?v=" + centerVer;
           script.onload = start;
           script.onerror = function () {
             if (!dead) root.innerHTML = page("付费中心", "页面脚本没有加载出来。", "");

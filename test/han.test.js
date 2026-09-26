@@ -1024,10 +1024,47 @@ test("GET/POST /api/han/worker feeds 付费中心 and 充值规则", async () =>
     const overview = await json(base, "/api/han/worker?view=overview");
     assert.equal(overview.body.shops[0].store, "德系甄选好物企官店");
     assert.equal(overview.body.totals.spend, 800);
+    assert.equal(overview.body.shops[0].jingmaiGmv, 3000);
+    assert.equal(overview.body.metrics.jingmaiGmv, 3000);
+    assert.equal(overview.body.metrics.paidOrders, 20);
 
     const shop = await json(base, "/api/han/worker?view=shop&store=" + encodeURIComponent("德系甄选好物企官店"));
     assert.equal(shop.body.subaccounts[0].subAccountName, "企官-主投");
     assert.equal(shop.body.recharges[0].amount, 100);
+
+    const freshRules = await json(base, "/api/han/worker?view=rules");
+    assert.equal(freshRules.body.version, 0);
+    assert.equal(freshRules.body.runListSaved, false);
+    assert.equal(freshRules.body.rows[0].plannedRoi, 2);
+    assert.equal(freshRules.body.rows[0].autoRecharge, true);
+    assert.equal(freshRules.body.rows[0].tier1MinSpend, 1);
+    assert.equal(freshRules.body.rows[0].tier1MaxSpend, 1000);
+    assert.equal(freshRules.body.rows[0].tier1Balance, 100);
+    assert.equal(freshRules.body.rows[0].tier1Amount, 100);
+    assert.equal(freshRules.body.rows[0].tier2MinSpend, 1000);
+    assert.equal(freshRules.body.rows[0].tier2Balance, 50);
+    assert.equal(freshRules.body.rows[0].tier2Amount, 150);
+    assert.equal(freshRules.body.rows[0].roiRiseAmount, 100);
+    assert.equal(freshRules.body.rows[0].noOrderTimes, 3);
+    assert.equal(freshRules.body.rows[0].pauseMinutes, 30);
+    assert.equal(freshRules.body.shopRuns[0].enabled, true);
+    assert.equal(freshRules.body.shopRuns[0].accountId, "100");
+    assert.equal(freshRules.body.shopRuns[0].jztCookieStatus, "待录");
+
+    const fresh = await json(base, "/api/han/worker?machineId=han-worker-01");
+    const freshSub = fresh.body.shops[0].子账号[0];
+    assert.equal(freshSub.计划ROI, 2);
+    assert.equal(freshSub.自动充值, true);
+    assert.equal(freshSub.第一档花费下限, 1);
+    assert.equal(freshSub.第一档花费上限, 1000);
+    assert.equal(freshSub.第一档余额阈值, 100);
+    assert.equal(freshSub.第一档充值金额, 100);
+    assert.equal(freshSub.第二档花费下限, 1000);
+    assert.equal(freshSub.第二档余额阈值, 50);
+    assert.equal(freshSub.第二档充值金额, 150);
+    assert.equal(freshSub.ROI上涨充值金额, 100);
+    assert.equal(freshSub.连续充值未增单次数, 3);
+    assert.equal(freshSub.暂停分钟数, 30);
 
     const saved = await json(base, "/api/han/worker", {
       method: "PUT",
@@ -1053,6 +1090,8 @@ test("GET/POST /api/han/worker feeds 付费中心 and 充值规则", async () =>
     assert.equal(config.body.runShops[0], "德系甄选好物企官店");
     assert.equal(config.body.shops[0].子账号[0].计划ROI, 2.3);
     assert.equal(config.body.shops[0].子账号[0].自动充值, true);
+    assert.equal(config.body.shops[0].子账号[0].第一档充值金额, 100);
+    assert.equal(config.body.shops[0].子账号[0].第二档充值金额, 150);
 
     const same = await json(base, "/api/han/worker?machineId=han-local&sinceVersion=2");
     assert.equal(same.body.changed, false);
@@ -1066,6 +1105,110 @@ test("GET/POST /api/han/worker feeds 付费中心 and 充值规则", async () =>
 
     const history = await json(base, "/api/han/worker?view=history");
     assert.equal(history.body.items.some((row) => row.summary === "保存充值规则"), true);
+
+    const same304 = await fetch(base + "/api/han/worker?machineId=han-local&sinceVersion=2&http304=1");
+    assert.equal(same304.status, 304);
+
+    const posted = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [{ 店铺名称: "德系甄选好物企官店", 京麦成交金额: 3600, 花费: 900, 子账号: [
+          { 子账号ID: "200", 子账号名称: "企官-主投", 花费: 900, ROI: 2.5, 余额: 30 },
+        ] }],
+        充值记录: [
+          { 店铺名称: "德系甄选好物企官店", 子账号ID: "200", 充值金额: 100, 充值时间: "2026-09-25 11:00", executionId: "han-1", ruleCode: "tier1", result: "success", configVersion: 2 },
+          { 店铺名称: "德系甄选好物企官店", 子账号ID: "200", 充值金额: 100, 充值时间: "2026-09-25 11:00", executionId: "han-1", ruleCode: "tier1", result: "success", configVersion: 2 },
+        ],
+      }),
+    });
+    assert.equal(posted.res.status, 201);
+    const again = await json(base, "/api/han/worker?view=shop&store=" + encodeURIComponent("德系甄选好物企官店"));
+    assert.equal(again.body.shop.gmv, 3600);
+    assert.equal(again.body.subaccounts.length, 1);
+    assert.equal(again.body.subaccounts[0].spend, 900);
+    assert.equal(again.body.recharges.filter((row) => row.executionId === "han-1").length, 1);
+
+    const badId = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subaccounts: [{ 店铺名称: "德系甄选好物企官店", 子账号ID: "1e+21" }] }),
+    });
+    assert.equal(badId.res.status, 400);
+
+    const failed = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "ack", machineId: "han-local", version: 2, status: "failed" }),
+    });
+    assert.equal(failed.body.status, "同步失败");
+
+    const zeroAmounts = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "rules",
+        rows: [{
+          store: "德系甄选好物企官店",
+          accountId: "100",
+          subAccountId: "200",
+          autoRecharge: true,
+          plannedRoi: 2,
+          tier1Amount: 0,
+          tier2Amount: 0,
+          roiRiseAmount: 0,
+        }],
+      }),
+    });
+    assert.equal(zeroAmounts.res.status, 400);
+    const still = await json(base, "/api/han/worker?machineId=han-worker-01&sinceVersion=0");
+    assert.equal(still.body.shops[0].子账号[0].第一档充值金额, 100);
+    assert.equal(still.body.shops[0].子账号[0].自动充值, true);
+
+    const createdShop = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "shop", op: "create", 店铺名称: "新建测试店", 京准通主账户ID: "9001", 执行机: "han-worker-01" }),
+    });
+    assert.equal(createdShop.body.ok, true);
+    const createdSub = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "sub", op: "create", 京准通主账户ID: "9001", 子账号ID: "9002", 子账号名称: "测试子账号", 自动充值: false, 计划ROI: 2 }),
+    });
+    assert.equal(createdSub.body.ok, true);
+    const withMaster = await json(base, "/api/han/worker?view=rules");
+    const added = withMaster.body.rows.find((row) => row.subAccountId === "9002");
+    assert.equal(added.autoRecharge, false);
+    assert.equal(added.plannedRoi, 2);
+    assert.equal(added.tier1Amount, 100);
+    assert.equal(withMaster.body.shopRuns.some((row) => row.accountId === "9001" && row.machineId === "han-worker-01"), true);
+
+    const removed = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "sub", op: "delete", 京准通主账户ID: "9001", 子账号ID: "9002" }),
+    });
+    assert.equal(removed.body.ok, true);
+    const hidden = await json(base, "/api/han/worker?view=rules");
+    assert.equal(hidden.body.rows.find((row) => row.subAccountId === "9002"), undefined);
+    const shown = await json(base, "/api/han/worker?view=rules&deleted=1");
+    assert.equal(shown.body.rows.find((row) => row.subAccountId === "9002").deleted, true);
+
+    const cookie = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "status", 京准通主账户ID: "9001", 京准通Cookie状态: "正常", 京麦Cookie状态: "正常", 执行状态: "已停止", 在线状态: "离线" }),
+    });
+    assert.equal(cookie.body.ok, true);
+    const reported = await json(base, "/api/han/worker?view=rules");
+    assert.equal(reported.body.shopRuns.find((row) => row.accountId === "9001").jztCookieStatus, "正常");
+    const secret = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "status", 京准通主账户ID: "9001", 京准通Cookie状态: "pt_key=this-is-a-cookie-body-not-a-status" }),
+    });
+    assert.equal(secret.res.status, 400);
   });
 });
 
