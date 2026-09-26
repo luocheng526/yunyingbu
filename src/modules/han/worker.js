@@ -149,7 +149,227 @@ function emptyState() {
     runs: [],
     history: [],
     machines: [],
+    shopMasters: [],
+    subMasters: [],
+    shopStatuses: [],
   };
+}
+
+const COOKIE_STATUSES = new Set(["待录", "正常", "过期", "身份不符"]);
+
+function cookieStatus(value) {
+  const raw = text(value, 32);
+  if (!raw) {
+    return "待录";
+  }
+  if (!COOKIE_STATUSES.has(raw)) {
+    throw httpError(400, "Cookie状态只能是待录、正常、过期、身份不符，不能回传 Cookie 正文");
+  }
+  return raw;
+}
+
+function ruleIdentities(state, includeDeleted = false) {
+  const masters = Array.isArray(state.subMasters) ? state.subMasters : [];
+  const deadStores = new Set((state.shopMasters || []).filter((row) => row.deleted).map((row) => row.store));
+  const masterKeys = new Set(masters.map((row) => ruleKey(row)));
+  const rows = [];
+  for (const master of masters) {
+    if (!includeDeleted && (master.deleted || deadStores.has(master.store))) {
+      continue;
+    }
+    rows.push({ ...master, deleted: Boolean(master.deleted || deadStores.has(master.store)) });
+  }
+  for (const sub of state.subs || []) {
+    if (masterKeys.has(ruleKey(sub))) {
+      continue;
+    }
+    if (!includeDeleted && deadStores.has(sub.store)) {
+      continue;
+    }
+    rows.push({ ...sub, deleted: deadStores.has(sub.store) });
+  }
+  return rows;
+}
+
+function applyShopStatuses(state, body) {
+  const incoming = Array.isArray(body.店铺状态)
+    ? body.店铺状态
+    : Array.isArray(body.statuses)
+      ? body.statuses
+      : body.accountId || body.京准通主账户ID
+        ? [body]
+        : [];
+  if (!incoming.length) {
+    throw httpError(400, "店铺状态必填");
+  }
+  const current = new Map((state.shopStatuses || []).map((row) => [row.accountId, row]));
+  for (const raw of incoming) {
+    const accountId = idText(pick(raw, ["京准通主账户ID", "accountId"]), "京准通主账户ID");
+    if (!accountId) {
+      throw httpError(400, "店铺状态必须带京准通主账户ID");
+    }
+    const prev = current.get(accountId) || {};
+    current.set(accountId, {
+      accountId,
+      machineId: text(pick(raw, ["执行机", "machineId"]) || prev.machineId, 64),
+      jztCookieStatus: cookieStatus(pick(raw, ["京准通Cookie状态", "jztCookieStatus"]) || prev.jztCookieStatus),
+      jmCookieStatus: cookieStatus(pick(raw, ["京麦Cookie状态", "jmCookieStatus"]) || prev.jmCookieStatus),
+      runStatus: text(pick(raw, ["执行状态", "runStatus"]) || prev.runStatus || "已停止", 16),
+      lastError: text(pick(raw, ["最后错误", "lastError"]) || "", 200),
+      heartbeatAt: text(pick(raw, ["最后心跳", "heartbeatAt"]) || new Date().toISOString(), 40),
+      workerStatus: text(pick(raw, ["在线状态", "workerStatus"]) || prev.workerStatus, 16),
+    });
+  }
+  state.shopStatuses = [...current.values()];
+}
+
+function rememberHistory(state, actor, summary, extra = {}) {
+  state.history.push({
+    at: state.updatedAt,
+    actor,
+    version: state.version,
+    summary,
+    ...extra,
+  });
+}
+
+function saveShopMaster(state, body, actor) {
+  const op = text(body.op || body.操作, 16) || "create";
+  const store = text(pick(body, ["店铺名称", "store"]), 64);
+  const accountId = idText(pick(body, ["京准通主账户ID", "accountId"]), "京准通主账户ID");
+  const machineId = text(pick(body, ["执行机", "machineId"]), 64);
+  state.shopMasters = Array.isArray(state.shopMasters) ? state.shopMasters : [];
+  const index = state.shopMasters.findIndex((row) => (accountId && row.accountId === accountId) || (store && row.store === store));
+  if (op === "delete" || op === "restore") {
+    if (index < 0) {
+      throw httpError(400, "找不到要修改的店铺");
+    }
+    state.shopMasters[index].deleted = op === "delete";
+    if (op === "delete") {
+      state.runs = state.runs.map((row) => (row.store === state.shopMasters[index].store ? { ...row, enabled: false } : row));
+    }
+    rememberHistory(state, actor, text(body.changeSummary, 200) || (op === "delete" ? "删除店铺" : "恢复店铺"), {
+      store: state.shopMasters[index].store,
+    });
+    return;
+  }
+  if (!store || !accountId) {
+    throw httpError(400, "必须填写店铺名称和京准通主账户ID");
+  }
+  if (op === "update") {
+    if (index < 0) {
+      throw httpError(400, "找不到要编辑的店铺");
+    }
+    const current = state.shopMasters[index];
+    if (current.accountId && current.accountId !== accountId) {
+      throw httpError(400, "主账户ID创建后不可改");
+    }
+    const previous = current.store;
+    current.store = store;
+    current.machineId = machineId;
+    if (previous !== store) {
+      state.runs = state.runs.map((row) => (row.store === previous ? { ...row, store } : row));
+      state.subs = state.subs.map((row) => (row.store === previous ? { ...row, store } : row));
+      state.subMasters = (state.subMasters || []).map((row) => (row.store === previous ? { ...row, store } : row));
+      state.rules = state.rules.map((row) => (row.store === previous ? { ...row, store } : row));
+    }
+  } else if (index >= 0) {
+    throw httpError(400, "这个主账户ID已经有店铺");
+  } else {
+    state.shopMasters.push({ store, accountId, machineId, deleted: false });
+  }
+  rememberHistory(state, actor, text(body.changeSummary, 200) || (op === "update" ? "编辑店铺" : "新增店铺"), { store });
+}
+
+function saveSubMaster(state, body, actor) {
+  const op = text(body.op || body.操作, 16) || "create";
+  const accountId = idText(pick(body, ["京准通主账户ID", "accountId"]), "京准通主账户ID");
+  const subAccountId = idText(pick(body, ["子账号ID", "subAccountId"]), "子账号ID");
+  const subAccountName = text(pick(body, ["子账号名称", "subAccountName"]), 64);
+  state.subMasters = Array.isArray(state.subMasters) ? state.subMasters : [];
+  const shop = (state.shopMasters || []).find((row) => row.accountId === accountId) || shopDirectory(state).find((row) => row.accountId === accountId);
+  if (!shop && op !== "delete" && op !== "restore") {
+    throw httpError(400, "请先选择已有店铺");
+  }
+  const store = shop?.store || text(pick(body, ["店铺名称", "store"]), 64);
+  const index = state.subMasters.findIndex((row) => row.accountId === accountId && row.subAccountId === subAccountId);
+  if (op === "delete" || op === "restore") {
+    if (!subAccountId) {
+      throw httpError(400, "必须指定子账号ID");
+    }
+    if (index < 0) {
+      const posted = (state.subs || []).find((row) => row.accountId === accountId && row.subAccountId === subAccountId);
+      if (!posted) {
+        throw httpError(400, "找不到要修改的子账号");
+      }
+      state.subMasters.push({
+        store: posted.store,
+        accountId,
+        subAccountId,
+        subAccountName: posted.subAccountName,
+        deleted: op === "delete",
+      });
+    } else {
+      state.subMasters[index].deleted = op === "delete";
+    }
+    rememberHistory(state, actor, text(body.changeSummary, 200) || (op === "delete" ? "删除子账号" : "恢复子账号"), {
+      store,
+      subAccountId,
+    });
+    return;
+  }
+  if (!accountId || !subAccountId) {
+    throw httpError(400, "必须填写店铺和子账号ID");
+  }
+  if (op === "update") {
+    if (index < 0) {
+      throw httpError(400, "找不到要编辑的子账号");
+    }
+    state.subMasters[index].subAccountName = subAccountName || state.subMasters[index].subAccountName;
+  } else if (index >= 0 || (state.subs || []).some((row) => row.accountId === accountId && row.subAccountId === subAccountId)) {
+    throw httpError(400, "这个子账号已经存在");
+  } else {
+    state.subMasters.push({ store, accountId, subAccountId, subAccountName, deleted: false });
+    const autoRecharge = flagOn(pick(body, ["自动充值", "autoRecharge"]), false);
+    const plannedRoi = num(pick(body, ["计划ROI", "plannedRoi"]), 2);
+    state.rules.push(assertRule(defaultRule({
+      store,
+      accountId,
+      subAccountId,
+      subAccountName,
+      autoRecharge,
+      plannedRoi,
+    })));
+  }
+  rememberHistory(state, actor, text(body.changeSummary, 200) || (op === "update" ? "编辑子账号" : "新增子账号"), {
+    store,
+    subAccountId,
+  });
+}
+
+function shopDirectory(state) {
+  const masters = Array.isArray(state.shopMasters) ? state.shopMasters : [];
+  const seen = new Set(masters.map((row) => row.accountId || row.store));
+  const rows = masters.map((row) => ({ ...row }));
+  const discovered = new Map();
+  for (const sub of state.subs || []) {
+    if (sub.store && !discovered.has(sub.store)) {
+      discovered.set(sub.store, sub.accountId || "");
+    }
+  }
+  for (const shop of state.shops || []) {
+    if (shop.store && !discovered.has(shop.store)) {
+      discovered.set(shop.store, shop.accountId || "");
+    }
+  }
+  for (const [store, accountId] of discovered) {
+    const key = accountId || store;
+    if (seen.has(key) || masters.some((row) => row.store === store)) {
+      continue;
+    }
+    rows.push({ store, accountId, machineId: "", deleted: false });
+  }
+  return rows;
 }
 
 function ruleKey(row) {
@@ -419,15 +639,16 @@ export function createWorkerMethods(db, ensure) {
     return { status: state.syncStatus || "待同步", syncedAt: latest?.syncedAt || "" };
   }
 
-  function editorRows(state) {
+  function editorRows(state, includeDeleted = false) {
     const rules = new Map(state.rules.map((row) => [ruleKey(row), row]));
     const sync = latestSync(state);
-    return state.subs.map((sub) => {
+    return ruleIdentities(state, includeDeleted).map((sub) => {
       const saved = rules.get(ruleKey(sub));
       const rule = materializeRule(saved || { store: sub.store, accountId: sub.accountId, subAccountId: sub.subAccountId, subAccountName: sub.subAccountName });
       return {
         ...rule,
         subAccountName: sub.subAccountName || rule.subAccountName,
+        deleted: Boolean(sub.deleted),
         spend: sub.spend,
         roi: sub.roi,
         balance: sub.balance,
@@ -442,17 +663,26 @@ export function createWorkerMethods(db, ensure) {
   }
 
   function shopRuns(state) {
-    const names = [...new Set(state.subs.map((row) => row.store).concat(state.shops.map((row) => row.store)))];
     const saved = new Map(state.runs.map((row) => [row.store, row]));
+    const statusByAccount = new Map((state.shopStatuses || []).map((row) => [row.accountId, row]));
     const runListSaved = state.runs.length > 0;
-    return names.map((store) => {
-      const run = saved.get(store);
-      const enabled = run ? Boolean(run.enabled) : !runListSaved;
+    return shopDirectory(state).map((shop) => {
+      const run = saved.get(shop.store);
+      const enabled = shop.deleted ? false : run ? Boolean(run.enabled) : !runListSaved;
+      const reported = statusByAccount.get(shop.accountId) || {};
       return {
-        store,
+        store: shop.store,
+        accountId: shop.accountId || "",
+        deleted: Boolean(shop.deleted),
         enabled,
-        machineId: run?.machineId || "",
-        status: enabled ? "已开启" : "已停止",
+        machineId: shop.machineId || run?.machineId || reported.machineId || "",
+        status: shop.deleted ? "已停止" : enabled ? "已开启" : "已停止",
+        jztCookieStatus: reported.jztCookieStatus || "待录",
+        jmCookieStatus: reported.jmCookieStatus || "待录",
+        runStatus: reported.runStatus || "已停止",
+        heartbeatAt: reported.heartbeatAt || "",
+        workerStatus: reported.workerStatus || "",
+        lastError: reported.lastError || "",
       };
     });
   }
@@ -491,9 +721,10 @@ export function createWorkerMethods(db, ensure) {
       };
     },
 
-    async workerRules() {
+    async workerRules(query = {}) {
       const state = await load();
-      const runs = shopRuns(state);
+      const includeDeleted = String(query.deleted || "") === "1";
+      const runs = shopRuns(state).filter((row) => includeDeleted || !row.deleted);
       return {
         ok: true,
         view: "rules",
@@ -509,9 +740,10 @@ export function createWorkerMethods(db, ensure) {
           ...row,
           status: row.status === "success" ? "已同步" : row.status === "failed" ? "同步失败" : row.status || "待同步",
         })),
-        rows: editorRows(state),
+        rows: editorRows(state, includeDeleted),
         stores: runs.map((row) => row.store),
         shops: runs.map((row) => row.store),
+        newSubDefaults: { autoRecharge: false, plannedRoi: 2 },
       };
     },
 
@@ -532,7 +764,7 @@ export function createWorkerMethods(db, ensure) {
       const enabled = new Set(state.runs.filter((row) => row.enabled).map((row) => row.store));
       const rules = new Map(state.rules.map((row) => [ruleKey(row), row]));
       const byShop = new Map();
-      for (const sub of state.subs) {
+      for (const sub of ruleIdentities(state)) {
         if (runSaved && !enabled.has(sub.store)) {
           continue;
         }
@@ -572,6 +804,12 @@ export function createWorkerMethods(db, ensure) {
       if (action === "ack") {
         return this.ackWorker(body);
       }
+      if (action === "status") {
+        const state = await load();
+        applyShopStatuses(state, body);
+        await save(state);
+        return { ok: true, statuses: state.shopStatuses.length };
+      }
       const state = await load();
       const capturedAt = text(pick(body, ["抓取时间", "capturedAt", "采集时间"]) || new Date().toISOString(), 40);
       const shopRows = Array.isArray(body.rows) ? body.rows : Array.isArray(body.shops) ? body.shops : [];
@@ -596,6 +834,9 @@ export function createWorkerMethods(db, ensure) {
         rechargeMap.set(rechargeKey(row), row);
       }
       state.recharges = [...rechargeMap.values()].slice(-500);
+      if (Array.isArray(body.店铺状态) || Array.isArray(body.statuses)) {
+        applyShopStatuses(state, body);
+      }
       await save(state);
       return {
         ok: true,
@@ -629,9 +870,18 @@ export function createWorkerMethods(db, ensure) {
       state.updatedAt = new Date().toISOString();
       state.updatedBy = actor;
       state.syncStatus = "待同步";
-      if (action === "run") {
+      if (action === "shop") {
+        saveShopMaster(state, body, actor);
+      } else if (action === "sub") {
+        saveSubMaster(state, body, actor);
+      } else if (action === "run") {
         const names = Array.isArray(body.runShops) ? body.runShops.map((name) => text(name, 64)).filter(Boolean) : [];
-        const known = new Set(state.subs.map((row) => row.store).concat(state.shops.map((row) => row.store)));
+        const known = new Set(
+          state.subs
+            .map((row) => row.store)
+            .concat(state.shops.map((row) => row.store))
+            .concat((state.shopMasters || []).filter((row) => !row.deleted).map((row) => row.store)),
+        );
         const previous = new Map(state.runs.map((row) => [row.store, row]));
         const named = Array.isArray(body.shopRuns) ? body.shopRuns : null;
         state.runs = named

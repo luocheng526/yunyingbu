@@ -1048,6 +1048,8 @@ test("GET/POST /api/han/worker feeds 付费中心 and 充值规则", async () =>
     assert.equal(freshRules.body.rows[0].noOrderTimes, 3);
     assert.equal(freshRules.body.rows[0].pauseMinutes, 30);
     assert.equal(freshRules.body.shopRuns[0].enabled, true);
+    assert.equal(freshRules.body.shopRuns[0].accountId, "100");
+    assert.equal(freshRules.body.shopRuns[0].jztCookieStatus, "待录");
 
     const fresh = await json(base, "/api/han/worker?machineId=han-worker-01");
     const freshSub = fresh.body.shops[0].子账号[0];
@@ -1162,6 +1164,51 @@ test("GET/POST /api/han/worker feeds 付费中心 and 充值规则", async () =>
     const still = await json(base, "/api/han/worker?machineId=han-worker-01&sinceVersion=0");
     assert.equal(still.body.shops[0].子账号[0].第一档充值金额, 100);
     assert.equal(still.body.shops[0].子账号[0].自动充值, true);
+
+    const createdShop = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "shop", op: "create", 店铺名称: "新建测试店", 京准通主账户ID: "9001", 执行机: "han-worker-01" }),
+    });
+    assert.equal(createdShop.body.ok, true);
+    const createdSub = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "sub", op: "create", 京准通主账户ID: "9001", 子账号ID: "9002", 子账号名称: "测试子账号", 自动充值: false, 计划ROI: 2 }),
+    });
+    assert.equal(createdSub.body.ok, true);
+    const withMaster = await json(base, "/api/han/worker?view=rules");
+    const added = withMaster.body.rows.find((row) => row.subAccountId === "9002");
+    assert.equal(added.autoRecharge, false);
+    assert.equal(added.plannedRoi, 2);
+    assert.equal(added.tier1Amount, 100);
+    assert.equal(withMaster.body.shopRuns.some((row) => row.accountId === "9001" && row.machineId === "han-worker-01"), true);
+
+    const removed = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "sub", op: "delete", 京准通主账户ID: "9001", 子账号ID: "9002" }),
+    });
+    assert.equal(removed.body.ok, true);
+    const hidden = await json(base, "/api/han/worker?view=rules");
+    assert.equal(hidden.body.rows.find((row) => row.subAccountId === "9002"), undefined);
+    const shown = await json(base, "/api/han/worker?view=rules&deleted=1");
+    assert.equal(shown.body.rows.find((row) => row.subAccountId === "9002").deleted, true);
+
+    const cookie = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "status", 京准通主账户ID: "9001", 京准通Cookie状态: "正常", 京麦Cookie状态: "正常", 执行状态: "已停止", 在线状态: "离线" }),
+    });
+    assert.equal(cookie.body.ok, true);
+    const reported = await json(base, "/api/han/worker?view=rules");
+    assert.equal(reported.body.shopRuns.find((row) => row.accountId === "9001").jztCookieStatus, "正常");
+    const secret = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "status", 京准通主账户ID: "9001", 京准通Cookie状态: "pt_key=this-is-a-cookie-body-not-a-status" }),
+    });
+    assert.equal(secret.res.status, 400);
   });
 });
 

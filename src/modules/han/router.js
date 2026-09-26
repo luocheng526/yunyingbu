@@ -293,7 +293,7 @@ export function createHanRouter(store = createHanStore()) {
         return;
       }
       if (view === "rules") {
-        res.json(await store.workerRules());
+        res.json(await store.workerRules(req.query));
         return;
       }
       if (view === "history") {
