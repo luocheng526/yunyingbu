@@ -34,7 +34,11 @@ function idText(value, label, max = 64) {
 }
 
 function num(value, fallback = 0) {
-  const n = Number(String(value ?? "").replace(/[¥￥,\s%]/g, ""));
+  const raw = String(value ?? "").replace(/[¥￥,\s%]/g, "");
+  if (!raw) {
+    return fallback;
+  }
+  const n = Number(raw);
   return Number.isFinite(n) ? n : fallback;
 }
 
@@ -47,25 +51,89 @@ function pick(row, keys) {
   return "";
 }
 
+const DEFAULT_RECHARGE_RULE = {
+  autoRecharge: true,
+  plannedRoi: 2,
+  tier1MinSpend: 1,
+  tier1MaxSpend: 1000,
+  tier1Balance: 100,
+  tier1Amount: 100,
+  tier2MinSpend: 1000,
+  tier2Balance: 50,
+  tier2Amount: 150,
+  roiRiseAmount: 100,
+  noOrderTimes: 3,
+  pauseMinutes: 30,
+};
+
+const RULE_FIELDS = [
+  ["autoRecharge", "自动充值"],
+  ["plannedRoi", "计划ROI"],
+  ["tier1MinSpend", "第一档花费下限"],
+  ["tier1MaxSpend", "第一档花费上限"],
+  ["tier1Balance", "第一档余额阈值"],
+  ["tier1Amount", "第一档充值金额"],
+  ["tier2MinSpend", "第二档花费下限"],
+  ["tier2Balance", "第二档余额阈值"],
+  ["tier2Amount", "第二档充值金额"],
+  ["roiRiseAmount", "ROI上涨充值金额"],
+  ["noOrderTimes", "连续充值未增单次数"],
+  ["pauseMinutes", "暂停分钟数"],
+];
+
+function flagOn(value, fallback) {
+  if (value == null || value === "") {
+    return fallback;
+  }
+  return value === true || value === 1 || value === "1" || value === "true";
+}
+
 function defaultRule(base = {}) {
   return {
     store: text(base.store, 64),
-    accountId: text(base.accountId, 32),
-    subAccountId: text(base.subAccountId, 32),
+    accountId: text(base.accountId, 64),
+    subAccountId: text(base.subAccountId, 64),
     subAccountName: text(base.subAccountName, 64),
-    autoRecharge: base.autoRecharge !== false,
-    plannedRoi: num(base.plannedRoi, 2) || 2,
-    tier1MinSpend: num(base.tier1MinSpend, 1),
-    tier1MaxSpend: num(base.tier1MaxSpend, 1000),
-    tier1Balance: num(base.tier1Balance, 100),
-    tier1Amount: num(base.tier1Amount, 100),
-    tier2MinSpend: num(base.tier2MinSpend, 1000),
-    tier2Balance: num(base.tier2Balance, 50),
-    tier2Amount: num(base.tier2Amount, 150),
-    roiRiseAmount: num(base.roiRiseAmount, 100),
-    noOrderTimes: num(base.noOrderTimes, 3),
-    pauseMinutes: num(base.pauseMinutes, 30),
+    autoRecharge: flagOn(base.autoRecharge, DEFAULT_RECHARGE_RULE.autoRecharge),
+    plannedRoi: num(base.plannedRoi, DEFAULT_RECHARGE_RULE.plannedRoi),
+    tier1MinSpend: num(base.tier1MinSpend, DEFAULT_RECHARGE_RULE.tier1MinSpend),
+    tier1MaxSpend: num(base.tier1MaxSpend, DEFAULT_RECHARGE_RULE.tier1MaxSpend),
+    tier1Balance: num(base.tier1Balance, DEFAULT_RECHARGE_RULE.tier1Balance),
+    tier1Amount: num(base.tier1Amount, DEFAULT_RECHARGE_RULE.tier1Amount),
+    tier2MinSpend: num(base.tier2MinSpend, DEFAULT_RECHARGE_RULE.tier2MinSpend),
+    tier2Balance: num(base.tier2Balance, DEFAULT_RECHARGE_RULE.tier2Balance),
+    tier2Amount: num(base.tier2Amount, DEFAULT_RECHARGE_RULE.tier2Amount),
+    roiRiseAmount: num(base.roiRiseAmount, DEFAULT_RECHARGE_RULE.roiRiseAmount),
+    noOrderTimes: Math.round(num(base.noOrderTimes, DEFAULT_RECHARGE_RULE.noOrderTimes)),
+    pauseMinutes: Math.round(num(base.pauseMinutes, DEFAULT_RECHARGE_RULE.pauseMinutes)),
   };
+}
+
+function materializeRule(base = {}) {
+  const rule = defaultRule(base);
+  if (rule.autoRecharge && !(rule.plannedRoi > 0)) {
+    rule.autoRecharge = false;
+  }
+  if (rule.autoRecharge && !(rule.tier1Amount > 0) && !(rule.tier2Amount > 0)) {
+    rule.autoRecharge = false;
+  }
+  return rule;
+}
+
+function assertRule(rule) {
+  if (rule.tier1MaxSpend <= rule.tier1MinSpend) {
+    throw httpError(400, "第一档花费上限必须大于第一档下限");
+  }
+  if (rule.tier2MinSpend < rule.tier1MaxSpend) {
+    throw httpError(400, "第二档花费下限不能小于第一档花费上限");
+  }
+  if (rule.autoRecharge && !(rule.plannedRoi > 0)) {
+    throw httpError(400, "自动充值时计划ROI必须大于0");
+  }
+  if (rule.autoRecharge && !(rule.tier1Amount > 0) && !(rule.tier2Amount > 0)) {
+    throw httpError(400, "自动充值时第一档或第二档充值金额必须大于0");
+  }
+  return rule;
 }
 
 function emptyState() {
@@ -112,14 +180,27 @@ function parseShop(row, capturedAt) {
   if (!store) {
     return null;
   }
+  const paidOrders = num(pick(row, ["京准通付费订单数", "paidOrders", "成交单量", "orders", "单量"]));
+  const jingmaiGmv = num(pick(row, ["京麦成交金额", "jingmaiGmv", "成交金额", "gmv"]));
+  const success = text(pick(row, ["是否成功", "success"]), 8);
   return {
     store,
     accountId: idText(pick(row, ["京准通主账户ID", "accountId", "主账户ID"]), "京准通主账户ID"),
-    spend: num(pick(row, ["花费", "spend", "付费金额", "精准通总花费"])),
-    orders: num(pick(row, ["成交单量", "orders", "单量"])),
-    roi: num(pick(row, ["ROI", "roi"])),
+    spend: num(pick(row, ["京准通花费", "花费", "spend", "付费金额", "精准通总花费"])),
+    paidOrders,
+    orders: paidOrders,
+    roi: num(pick(row, ["京准通付费投产比", "ROI", "roi", "投产比"])),
+    cvr: num(pick(row, ["京准通付费转化率", "cvr", "转化率"])),
+    cpc: num(pick(row, ["京准通平均点击成本", "cpc", "平均点击成本"])),
+    jingmaiGmv,
+    gmv: jingmaiGmv,
+    clicks: num(pick(row, ["京准通点击数", "clicks", "点击数"])),
+    ctr: num(pick(row, ["京准通点击率", "ctr", "点击率"])),
+    totalOrderAmount: num(pick(row, ["京准通总订单金额", "totalOrderAmount"])),
+    realFeeRatio: num(pick(row, ["真实费比", "realFeeRatio"])),
     balance: num(pick(row, ["余额", "balance"])),
-    gmv: num(pick(row, ["京麦成交金额", "成交金额", "gmv"])),
+    success: success === "否" ? "否" : "是",
+    date: text(pick(row, ["date", "日期"]), 10),
     capturedAt: text(pick(row, ["抓取时间", "capturedAt", "采集时间"]) || capturedAt, 40),
   };
 }
@@ -130,16 +211,24 @@ function parseSub(row, fallbackStore, capturedAt) {
   if (!store || !subAccountId) {
     return null;
   }
+  const paidOrders = num(pick(row, ["京准通付费订单数", "paidOrders", "单量", "orders", "成交单量"]));
   return {
     store,
     accountId: idText(pick(row, ["京准通主账户ID", "accountId"]), "京准通主账户ID"),
     subAccountId,
     subAccountName: text(pick(row, ["子账号名称", "subAccountName"]), 64),
-    spend: num(pick(row, ["花费", "spend"])),
-    roi: num(pick(row, ["ROI", "roi"])),
-    balance: num(pick(row, ["余额", "balance"])),
-    orders: num(pick(row, ["单量", "orders", "成交单量"])),
-    capturedAt: text(capturedAt, 40),
+    spend: num(pick(row, ["京准通花费", "花费", "spend"])),
+    roi: num(pick(row, ["京准通付费投产比", "ROI", "roi", "投产比"])),
+    balance: num(pick(row, ["余额", "balance", "账户余额"])),
+    paidOrders,
+    orders: paidOrders,
+    totalOrderAmount: num(pick(row, ["京准通总订单金额", "totalOrderAmount", "订单金额"])),
+    impressions: num(pick(row, ["展现数", "impressions", "曝光数"])),
+    clicks: num(pick(row, ["京准通点击数", "clicks", "点击数"])),
+    ctr: num(pick(row, ["京准通点击率", "ctr", "点击率"])),
+    cpc: num(pick(row, ["京准通平均点击成本", "cpc", "平均点击成本"])),
+    remark: text(pick(row, ["账户备注", "remark"]), 200),
+    capturedAt: text(pick(row, ["抓取时间", "capturedAt", "采集时间"]) || capturedAt, 40),
   };
 }
 
@@ -155,6 +244,7 @@ function parseRecharge(row, fallbackStore) {
     subAccountId: idText(pick(row, ["子账号ID", "subAccountId"]), "子账号ID"),
     subAccountName: text(pick(row, ["子账号名称", "subAccountName"]), 64),
     amount,
+    balance: num(pick(row, ["余额", "balance", "账户余额"])),
     chargedAt: text(pick(row, ["时间", "chargedAt", "充值时间", "日期"]), 40),
     note: text(pick(row, ["备注", "note", "remark"]), 200),
     executionId: idText(pick(row, ["executionId", "执行编号"]), "executionId"),
@@ -225,12 +315,12 @@ function readRulePatch(raw, current) {
     const value = pick(source, [label, key]);
     if (value !== "") {
       next[key] = num(value, next[key]);
+      if (key === "noOrderTimes" || key === "pauseMinutes") {
+        next[key] = Math.round(next[key]);
+      }
     }
   }
-  if (next.autoRecharge && !(next.plannedRoi > 0)) {
-    throw httpError(400, "自动充值时计划ROI必须大于0");
-  }
-  return next;
+  return assertRule(next);
 }
 
 export function createWorkerMethods(db, ensure) {
@@ -257,24 +347,113 @@ export function createWorkerMethods(db, ensure) {
     await db().query("UPDATE han_worker_doc SET doc = ? WHERE id = ?", [doc, rows[0].id]);
   }
 
+  function presentShop(row) {
+    const paidOrders = num(row.paidOrders ?? row.orders);
+    const jingmaiGmv = num(row.jingmaiGmv ?? row.gmv);
+    return {
+      ...row,
+      paidOrders,
+      orders: paidOrders,
+      jingmaiGmv,
+      gmv: jingmaiGmv,
+      totalOrderAmount: num(row.totalOrderAmount),
+      clicks: num(row.clicks),
+      ctr: num(row.ctr),
+      cvr: num(row.cvr),
+      cpc: num(row.cpc),
+      realFeeRatio: num(row.realFeeRatio),
+      success: row.success === "否" ? "否" : "是",
+      date: row.date || String(row.capturedAt || "").slice(0, 10),
+    };
+  }
+
+  function presentSub(row) {
+    const paidOrders = num(row.paidOrders ?? row.orders);
+    return {
+      ...row,
+      paidOrders,
+      orders: paidOrders,
+      totalOrderAmount: num(row.totalOrderAmount),
+      impressions: num(row.impressions),
+      clicks: num(row.clicks),
+      ctr: num(row.ctr),
+      cpc: num(row.cpc),
+      remark: row.remark || "",
+    };
+  }
+
   function totals(shops) {
     return shops.reduce(
       (sum, row) => {
-        sum.spend += Number(row.spend) || 0;
-        sum.orders += Number(row.orders) || 0;
-        sum.gmv += Number(row.gmv) || 0;
-        sum.balance += Number(row.balance) || 0;
+        const shop = presentShop(row);
+        sum.spend += shop.spend;
+        sum.orders += shop.paidOrders;
+        sum.paidOrders += shop.paidOrders;
+        sum.gmv += shop.jingmaiGmv;
+        sum.jingmaiGmv += shop.jingmaiGmv;
+        sum.totalOrderAmount += shop.totalOrderAmount;
+        sum.balance += num(shop.balance);
+        if (shop.success !== "否") {
+          sum.successCount += 1;
+        }
         return sum;
       },
-      { shops: shops.length, spend: 0, orders: 0, gmv: 0, balance: 0 },
+      {
+        shops: shops.length,
+        stores: shops.length,
+        spend: 0,
+        orders: 0,
+        paidOrders: 0,
+        gmv: 0,
+        jingmaiGmv: 0,
+        totalOrderAmount: 0,
+        balance: 0,
+        successCount: 0,
+      },
     );
+  }
+
+  function latestSync(state) {
+    const machines = state.machines || [];
+    const latest = machines.reduce((best, row) => (!best || String(row.syncedAt || "") > String(best.syncedAt || "") ? row : best), null);
+    return { status: state.syncStatus || "待同步", syncedAt: latest?.syncedAt || "" };
   }
 
   function editorRows(state) {
     const rules = new Map(state.rules.map((row) => [ruleKey(row), row]));
+    const sync = latestSync(state);
     return state.subs.map((sub) => {
-      const rule = defaultRule(rules.get(ruleKey(sub)) || sub);
-      return { ...rule, spend: sub.spend, roi: sub.roi, balance: sub.balance, orders: sub.orders };
+      const saved = rules.get(ruleKey(sub));
+      const rule = materializeRule(saved || { store: sub.store, accountId: sub.accountId, subAccountId: sub.subAccountId, subAccountName: sub.subAccountName });
+      return {
+        ...rule,
+        subAccountName: sub.subAccountName || rule.subAccountName,
+        spend: sub.spend,
+        roi: sub.roi,
+        balance: sub.balance,
+        orders: sub.orders,
+        version: saved ? state.version : 0,
+        updatedBy: saved ? state.updatedBy : "",
+        updatedAt: saved ? state.updatedAt : "",
+        syncStatus: sync.status,
+        syncedAt: sync.syncedAt,
+      };
+    });
+  }
+
+  function shopRuns(state) {
+    const names = [...new Set(state.subs.map((row) => row.store).concat(state.shops.map((row) => row.store)))];
+    const saved = new Map(state.runs.map((row) => [row.store, row]));
+    const runListSaved = state.runs.length > 0;
+    return names.map((store) => {
+      const run = saved.get(store);
+      const enabled = run ? Boolean(run.enabled) : !runListSaved;
+      return {
+        store,
+        enabled,
+        machineId: run?.machineId || "",
+        status: enabled ? "已开启" : "已停止",
+      };
     });
   }
 
@@ -282,13 +461,17 @@ export function createWorkerMethods(db, ensure) {
     async workerOverview() {
       const state = await load();
       const capturedAt = state.shops.reduce((latest, row) => (row.capturedAt > latest ? row.capturedAt : latest), "");
+      const shops = state.shops.map(presentShop);
+      const metrics = totals(shops);
       return {
         ok: true,
         view: "overview",
         capturedAt,
+        asOf: capturedAt,
         version: state.version,
-        totals: totals(state.shops),
-        shops: state.shops,
+        totals: metrics,
+        metrics,
+        shops,
       };
     },
 
@@ -302,24 +485,33 @@ export function createWorkerMethods(db, ensure) {
         ok: true,
         view: "shop",
         store: shop,
-        shop: state.shops.find((row) => row.store === shop) || null,
-        subaccounts: state.subs.filter((row) => row.store === shop),
+        shop: state.shops.filter((row) => row.store === shop).map(presentShop)[0] || null,
+        subaccounts: state.subs.filter((row) => row.store === shop).map(presentSub),
         recharges: state.recharges.filter((row) => row.store === shop),
       };
     },
 
     async workerRules() {
       const state = await load();
+      const runs = shopRuns(state);
       return {
         ok: true,
         view: "rules",
         version: state.version,
         updatedAt: state.updatedAt,
+        updatedBy: state.updatedBy,
         syncStatus: state.syncStatus,
-        runShops: state.runs.filter((row) => row.enabled).map((row) => row.store),
-        runs: state.runs,
+        runListSaved: state.runs.length > 0,
+        runShops: runs.filter((row) => row.enabled).map((row) => row.store),
+        shopRuns: runs,
+        runs,
+        machines: (state.machines || []).map((row) => ({
+          ...row,
+          status: row.status === "success" ? "已同步" : row.status === "failed" ? "同步失败" : row.status || "待同步",
+        })),
         rows: editorRows(state),
-        stores: [...new Set(state.subs.map((row) => row.store).concat(state.shops.map((row) => row.store)))],
+        stores: runs.map((row) => row.store),
+        shops: runs.map((row) => row.store),
       };
     },
 
@@ -358,7 +550,8 @@ export function createWorkerMethods(db, ensure) {
           });
         }
         const shop = byShop.get(sub.store);
-        const rule = defaultRule(rules.get(ruleKey(sub)) || sub);
+        const saved = rules.get(ruleKey(sub));
+        const rule = materializeRule(saved || { store: sub.store, accountId: sub.accountId, subAccountId: sub.subAccountId, subAccountName: sub.subAccountName });
         shop.子账号.push(toWorkerSub({ ...rule, subAccountName: sub.subAccountName || rule.subAccountName }));
       }
       const shops = [...byShop.values()];
@@ -475,17 +668,41 @@ export function createWorkerMethods(db, ensure) {
         const current = new Map(state.rules.map((row) => [ruleKey(row), row]));
         const saved = incoming.map((row) => readRulePatch(row, current.get(ruleKey({
           store: text(pick(row, ["店铺名称", "store"]), 64),
-          accountId: text(pick(row, ["京准通主账户ID", "accountId"]), 32),
-          subAccountId: text(pick(row, ["子账号ID", "subAccountId"]), 32),
+          accountId: text(pick(row, ["京准通主账户ID", "accountId"]), 64),
+          subAccountId: text(pick(row, ["子账号ID", "subAccountId"]), 64),
         })) || {}));
+        const summary = text(body.changeSummary, 200) || "保存充值规则";
         for (const rule of saved) {
+          const before = materializeRule(current.get(ruleKey(rule)) || {
+            store: rule.store,
+            accountId: rule.accountId,
+            subAccountId: rule.subAccountId,
+            subAccountName: rule.subAccountName,
+          });
+          for (const [key, label] of RULE_FIELDS) {
+            if (String(before[key]) === String(rule[key])) {
+              continue;
+            }
+            state.history.push({
+              at: state.updatedAt,
+              actor,
+              version: state.version,
+              store: rule.store,
+              subAccountId: rule.subAccountId,
+              field: label,
+              oldValue: String(before[key]),
+              newValue: String(rule[key]),
+              summary,
+            });
+          }
           current.set(ruleKey(rule), rule);
         }
         state.rules = [...current.values()];
         state.history.push({
           at: state.updatedAt,
           actor,
-          summary: text(body.changeSummary, 200) || "保存充值规则",
+          version: state.version,
+          summary,
           saved: saved.length,
         });
       }
