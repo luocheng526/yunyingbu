@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.702-home-jingcol */
+/* xm-module-home 0.1.703-home-shoplist */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1743,7 +1743,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.702-home-jingcol");
+    board.setAttribute("data-hm-js", "0.1.703-home-shoplist");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
