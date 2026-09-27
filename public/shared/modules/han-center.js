@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20260927-window";
+  var VERSION = "20260927-page";
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -94,17 +94,19 @@
     ".han-roi-field{min-width:120px;height:32px;padding:0 8px;border:1px solid #faad14;border-radius:6px;background:#fffbe6;font-weight:700}" +
     ".han-rules tr.is-deleted td{color:#8c8c8c;text-decoration:line-through}" +
     ".han-rules tr.is-deleted td:last-child{text-decoration:none}" +
-    ".han-rules .han-paid-table-wrap{max-height:calc(100vh - 240px)}" +
-    ".han-rules .han-rules-scroller{max-height:min(640px,calc(100vh - 280px));min-height:320px;overflow:auto}" +
-    ".han-rules table.han-rules-grid thead th{position:sticky;top:0;z-index:1;background:#fff}" +
+    ".han-rules .han-paid-table-wrap{max-height:none;overflow:visible}" +
+    ".han-rules .han-rules-sheet{overflow:visible;max-height:none}" +
+    ".han-rules table.han-rules-grid{width:100%}" +
     ".han-rules table.han-rules-grid tbody tr{height:44px}" +
-    ".han-rules table.han-rules-grid tbody tr.han-rules-pad{height:auto}" +
     ".han-rules table.han-rules-grid tbody td{height:44px;box-sizing:border-box}" +
+    ".han-rules-batch{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 10px}" +
+    ".han-rules-picked{color:#595959;font-size:13px}" +
+    ".han-rules-pager{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 0}" +
+    ".han-rules-pager button[disabled]{opacity:.45}" +
     ".han-rules table.han-rules-grid span.han-rules-cell{display:block;box-sizing:border-box;width:76px;height:28px;margin:0 auto;padding:0 4px;border:1px solid #faad14;border-radius:4px;background:#fffbe6;color:#111827;font-weight:600;font-size:13px;line-height:26px;text-align:center;cursor:text}" +
     ".han-rules table.han-rules-grid span.han-rules-text{width:120px;margin:0;text-align:left;font-weight:500}" +
     ".han-rules table.han-rules-grid input.han-rules-live{display:block;box-sizing:border-box;width:76px;height:28px;margin:0 auto;padding:0 4px;border:1px solid #1677ff;border-radius:4px;background:#fff;color:#111827;font-weight:600;font-size:13px;line-height:26px;text-align:center;outline:2px solid #1677ff}" +
     ".han-rules table.han-rules-grid input.han-rules-live.han-rules-text{width:120px;margin:0;text-align:left;font-weight:500}" +
-    ".han-rules tr.han-rules-pad td{height:auto;padding:0;border:0;line-height:0}" +
     "@media (max-width:1100px){.han-paid .kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}" +
     "@media (max-width:700px){.han-paid .kpi-grid{grid-template-columns:1fr 1fr}}";
 
@@ -314,7 +316,8 @@
       '<div id="han-rules-run-shops"></div></section>' +
       '<section class="panel"><div class="han-paid-toolbar"><h2>子账号规则</h2><div class="row" id="han-rules-toolbar"></div></div>' +
       '<div id="han-sub-form" class="han-rules-form" hidden></div>' +
-      '<p class="han-rules-hint">黄框点一下直接改：计划ROI、两档花费、余额、充值金额、上涨充值、未增单次数、暂停分钟，以及子账号名称。点中后输入新数字，点别处或按回车保存这一条。表格只画出当前屏幕里的行，在表内滚动看其余子账号。不用先停店。</p>' +
+      '<div class="han-rules-batch" id="han-rules-batch"></div>' +
+      '<p class="han-rules-hint">黄框点一下直接改单个数字：计划ROI、两档花费、余额、充值金额。回车保存这一条。要改很多账号，先勾选或点全选账号，再批量改ROI、充值金额或付费。表格按页切换。不用先停店。</p>' +
       '<p id="han-rules-sync" class="han-rules-sync" hidden></p>' +
       '<div id="han-rules-table"><p class="empty">加载中…</p></div></section>' +
       '<section class="panel" id="han-rules-history-wrap" hidden><h2>修改历史</h2><div id="han-rules-history"></div></section>' +
@@ -338,11 +341,10 @@
     var lastMeta = { shops: [], shopRuns: [], machines: [], runListSaved: false, newSubDefaults: { autoRecharge: false, plannedRoi: 2 } };
     var runSelected = new Set();
     var listCache = [];
-    var winStart = -1;
-    var winEnd = -1;
     var searchTimer = 0;
+    var rulePage = 1;
+    var PAGE_SIZE = 10;
     var ROW_H = 44;
-    var rowMeasured = false;
 
     function setStatus(message, isError) {
       statusEl.textContent = message || "";
@@ -623,10 +625,6 @@
         "<label>店铺选择 <select id=\"han-rules-shop\">" + shops.join("") + "</select></label>" +
         '<input id="han-rules-q" type="search" maxlength="64" placeholder="子账号名称/ID搜索" value="' + escapeHtml(keyword) + '" />' +
         '<label><input id="han-rules-enabled" type="checkbox"' + (enabledOnly ? " checked" : "") + " /> 只看已启用</label>" +
-        '<input id="han-rules-batch-roi" class="han-roi-field" type="text" inputmode="decimal" autocomplete="off" placeholder="直接填写计划ROI，例如 2.1" />' +
-        '<button type="button" id="han-rules-apply-roi">批量设置计划ROI</button>' +
-        '<button type="button" id="han-rules-on">批量启用</button>' +
-        '<button type="button" id="han-rules-off">批量暂停</button>' +
         '<button type="button" class="han-rules-save" id="han-rules-save">保存</button>' +
         '<button type="button" id="han-rules-add-shop">新增店铺</button>' +
         '<button type="button" id="han-rules-add-sub">新增子账号</button>' +
@@ -651,9 +649,6 @@
         enabledOnly = event.target.checked;
         renderTable(true);
       });
-      root.querySelector("#han-rules-apply-roi").addEventListener("click", batchRoi);
-      root.querySelector("#han-rules-on").addEventListener("click", function () { batchAuto(true); });
-      root.querySelector("#han-rules-off").addEventListener("click", function () { batchAuto(false); });
       root.querySelector("#han-rules-save").addEventListener("click", function () { saveRules(rows, "保存充值规则"); });
       root.querySelector("#han-rules-add-shop").addEventListener("click", function () { toggleShopForm("create"); });
       root.querySelector("#han-rules-add-sub").addEventListener("click", function () { toggleSubForm("create"); });
@@ -662,7 +657,28 @@
         load();
       });
       root.querySelector("#han-rules-history-btn").addEventListener("click", loadHistory);
+      var batchEl = root.querySelector("#han-rules-batch");
+      batchEl.innerHTML =
+        '<label><input id="han-rules-check-all" type="checkbox" /> 全选账号</label>' +
+        '<span class="han-rules-picked" id="han-rules-picked">已选 0</span>' +
+        '<input id="han-rules-batch-roi" class="han-roi-field" type="text" inputmode="decimal" autocomplete="off" placeholder="计划ROI，例如 2.1" />' +
+        '<button type="button" id="han-rules-apply-roi">批量改ROI</button>' +
+        '<select id="han-rules-amount-field">' +
+        '<option value="tier1Amount">一档充值</option>' +
+        '<option value="tier2Amount">二档充值</option>' +
+        '<option value="roiRiseAmount">ROI涨充值</option>' +
+        "</select>" +
+        '<input id="han-rules-batch-amount" class="han-roi-field" type="text" inputmode="decimal" autocomplete="off" placeholder="金额" />' +
+        '<button type="button" id="han-rules-apply-amount">批量改金额</button>' +
+        '<button type="button" id="han-rules-on">批量开付费</button>' +
+        '<button type="button" id="han-rules-off">批量关付费</button>';
+      root.querySelector("#han-rules-check-all").addEventListener("change", function (event) { toggleAll(event.target.checked); });
+      root.querySelector("#han-rules-apply-roi").addEventListener("click", batchRoi);
+      root.querySelector("#han-rules-apply-amount").addEventListener("click", batchAmount);
+      root.querySelector("#han-rules-on").addEventListener("click", function () { batchAuto(true); });
+      root.querySelector("#han-rules-off").addEventListener("click", function () { batchAuto(false); });
       renderRunShops();
+      syncPickUi();
     }
 
     function rowHtml(row) {
@@ -684,83 +700,58 @@
         "</td></tr>";
     }
 
-    function padRow(px) {
-      if (px <= 0) return "";
-      return '<tr class="han-rules-pad" aria-hidden="true"><td colspan="' + headers().length + '" style="height:' + px + 'px;padding:0;border:0"></td></tr>';
+    function pageCount() {
+      return Math.max(1, Math.ceil(listCache.length / PAGE_SIZE));
     }
 
-    function windowRange(scroller) {
-      var total = listCache.length;
-      var view = scroller.clientHeight || 640;
-      var start = Math.max(0, Math.floor(scroller.scrollTop / ROW_H) - 8);
-      var end = Math.min(total, start + Math.ceil(view / ROW_H) + 16);
-      return { start: start, end: end };
+    function selectableRows() {
+      return visibleRows().filter(function (row) { return !row.deleted; });
     }
 
-    function ensureScroller() {
-      var scroller = tableWrap.querySelector(".han-rules-scroller");
-      if (scroller) return scroller;
-      tableWrap.innerHTML = '<div class="han-paid-table-wrap han-rules-scroller"><table class="han-rules-grid"><thead><tr>' + headers().map(function (item) {
-        return '<th title="' + escapeHtml(item[1]) + '">' + escapeHtml(item[0]).split("\n").join("<br>") + "</th>";
-      }).join("") + "</tr></thead><tbody></tbody></table></div>";
-      scroller = tableWrap.querySelector(".han-rules-scroller");
-      scroller.addEventListener("scroll", function () {
-        if (scroller.dataset.ticking === "1") return;
-        scroller.dataset.ticking = "1";
-        requestAnimationFrame(function () {
-          scroller.dataset.ticking = "";
-          var range = windowRange(scroller);
-          if (range.start === winStart && range.end === winEnd) return;
-          paintBody();
-        });
+    function syncPickUi() {
+      var list = selectableRows();
+      var picked = list.filter(function (row) { return selected.has(rowKey(row)); }).length;
+      var all = list.length > 0 && picked === list.length;
+      [root.querySelector("#han-rules-check-all"), tableWrap.querySelector("[data-check-all]")].forEach(function (box) {
+        if (!box) return;
+        box.checked = all;
+        box.indeterminate = picked > 0 && !all;
       });
-      return scroller;
+      var label = root.querySelector("#han-rules-picked");
+      if (label) label.textContent = "已选 " + picked + " / " + list.length;
     }
 
-    var painting = false;
-
-    function paintBody(pass) {
-      if (painting) return;
-      painting = true;
-      var live = tableWrap.querySelector("input.han-rules-live");
-      if (live) live.blur();
-      var scroller = ensureScroller();
-      var range = windowRange(scroller);
-      winStart = range.start;
-      winEnd = range.end;
-      var html = padRow(winStart * ROW_H);
-      for (var i = winStart; i < winEnd; i++) html += rowHtml(listCache[i]);
-      html += padRow((listCache.length - winEnd) * ROW_H);
-      scroller.querySelector("tbody").innerHTML = html;
-      painting = false;
-      if (!rowMeasured) {
-        var sample = scroller.querySelector("tbody tr:not(.han-rules-pad)");
-        var h = sample ? sample.getBoundingClientRect().height : 0;
-        rowMeasured = true;
-        if (h > 20 && Math.abs(h - ROW_H) > 1) {
-          ROW_H = h;
-          winStart = -1;
-          paintBody(true);
-          return;
-        }
-      }
-      if (!pass) {
-        var again = windowRange(scroller);
-        if (again.start !== winStart || again.end !== winEnd) paintBody(true);
-      }
+    function toggleAll(on) {
+      selectableRows().forEach(function (row) {
+        var key = rowKey(row);
+        if (on) selected.add(key);
+        else selected.delete(key);
+      });
+      renderTable(false);
     }
 
-    function renderTable(resetScroll) {
+    function renderTable(resetPage) {
       listCache = visibleRows();
-      winStart = -1;
-      winEnd = -1;
+      if (resetPage) rulePage = 1;
+      if (rulePage > pageCount()) rulePage = pageCount();
       if (!listCache.length) {
         tableWrap.innerHTML = rows.length ? '<p class="empty">没有匹配的子账号。</p>' : '<p class="empty">暂无自己名下的子账号。请先新增店铺和子账号，或等本地机回传。</p>';
+        syncPickUi();
         return;
       }
-      var scroller = ensureScroller();
-      if (resetScroll) scroller.scrollTop = 0;
-      paintBody();
+      var start = (rulePage - 1) * PAGE_SIZE;
+      var slice = listCache.slice(start, start + PAGE_SIZE);
+      var pages = pageCount();
+      var head = headers().map(function (item, index) {
+        if (index === 0) return '<th><input type="checkbox" data-check-all="1" title="全选账号" /></th>';
+        return '<th title="' + escapeHtml(item[1]) + '">' + escapeHtml(item[0]).split("\n").join("<br>") + "</th>";
+      }).join("");
+      var pager = '<div class="han-rules-pager"><button type="button" data-page="prev"' + (rulePage <= 1 ? " disabled" : "") + ">上一页</button>" +
+        "<span>第 " + rulePage + " / " + pages + " 页 · 共 " + listCache.length + " 个</span>" +
+        '<button type="button" data-page="next"' + (rulePage >= pages ? " disabled" : "") + ">下一页</button></div>";
+      tableWrap.innerHTML = pager + '<div class="han-paid-table-wrap han-rules-sheet"><table class="han-rules-grid"><thead><tr>' + head +
+        "</tr></thead><tbody>" + slice.map(rowHtml).join("") + "</tbody></table></div>" + pager;
+      syncPickUi();
     }
 
     function normalizeCell(field, raw) {
@@ -852,10 +843,15 @@
       tableWrap.addEventListener("change", function (event) {
         var target = event.target;
         if (!target || !tableWrap.contains(target)) return;
+        if (target.hasAttribute("data-check-all")) {
+          toggleAll(target.checked);
+          return;
+        }
         if (target.hasAttribute("data-check")) {
           var checkKey = target.getAttribute("data-check");
           if (target.checked) selected.add(checkKey);
           else selected.delete(checkKey);
+          syncPickUi();
           return;
         }
         if (!target.classList.contains("han-rules-auto")) return;
@@ -865,6 +861,13 @@
         saveRules([autoRow], "修改充值规则");
       });
       tableWrap.addEventListener("click", function (event) {
+        var pageBtn = event.target && event.target.closest && event.target.closest("[data-page]");
+        if (pageBtn && tableWrap.contains(pageBtn) && !pageBtn.disabled) {
+          if (pageBtn.getAttribute("data-page") === "prev" && rulePage > 1) rulePage -= 1;
+          if (pageBtn.getAttribute("data-page") === "next" && rulePage < pageCount()) rulePage += 1;
+          renderTable(false);
+          return;
+        }
         var target = event.target && event.target.closest && event.target.closest("[data-sub-edit],[data-sub-del],[data-sub-restore]");
         if (!target || !tableWrap.contains(target)) return;
         var editKey = target.getAttribute("data-sub-edit");
@@ -880,7 +883,7 @@
 
     function checkedRows() {
       collectEdits();
-      return rows.filter(function (row) { return selected.has(rowKey(row)); });
+      return selectableRows().filter(function (row) { return selected.has(rowKey(row)); });
     }
 
     var saveQueue = Promise.resolve();
@@ -948,20 +951,32 @@
       return job;
     }
 
-    function batchRoi() {
-      var value = root.querySelector("#han-rules-batch-roi").value;
+    function applyBatch(field, raw, summary) {
+      var typed = normalizeCell(field, raw);
       var picked = checkedRows();
-      if (!picked.length) { setStatus("请先勾选要改计划ROI的子账号", true); return; }
-      if (value === "") { setStatus("请填写批量计划ROI", true); return; }
-      picked.forEach(function (row) { row.plannedRoi = value; });
-      saveRules(picked, "批量设置计划ROI");
+      if (!picked.length) { setStatus("请先勾选子账号，或点全选账号", true); return; }
+      if (typed == null) { setStatus("请直接填写数字", true); return; }
+      picked.forEach(function (row) { row[field] = typed; });
+      renderTable(false);
+      saveRules(picked, summary);
+    }
+
+    function batchRoi() {
+      applyBatch("plannedRoi", root.querySelector("#han-rules-batch-roi").value, "批量改ROI");
+    }
+
+    function batchAmount() {
+      var field = root.querySelector("#han-rules-amount-field").value;
+      var label = root.querySelector("#han-rules-amount-field").selectedOptions[0].textContent;
+      applyBatch(field, root.querySelector("#han-rules-batch-amount").value, "批量改" + label);
     }
 
     function batchAuto(on) {
       var picked = checkedRows();
-      if (!picked.length) { setStatus("请先勾选要启用或暂停的子账号", true); return; }
+      if (!picked.length) { setStatus("请先勾选子账号，或点全选账号", true); return; }
       picked.forEach(function (row) { row.autoRecharge = on; });
-      saveRules(picked, on ? "批量启用自动充值" : "批量暂停自动充值");
+      renderTable(false);
+      saveRules(picked, on ? "批量开付费" : "批量关付费");
     }
 
     function saveRunShops() {
