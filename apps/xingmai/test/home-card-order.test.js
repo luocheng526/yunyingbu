@@ -86,8 +86,11 @@ test("live page has fee target, warning and update time", () => {
 test("live paid table headers can shrink row spacing", () => {
   assert.match(homeJs, /function liveRowHit/);
   assert.match(homeJs, /function saveLiveRowPad/);
+  assert.match(homeJs, /function saveLiveColW/);
+  assert.match(homeJs, /xm-home-live-cols/);
   assert.match(homeJs, /--xm-hm-live-row/);
-  assert.match(homeJs, /\.xm-hm-live \.xm-hm-table th,.xm-hm-live \.xm-hm-table td\{padding:var\(--xm-hm-live-row,4px\) 6px/);
-  assert.match(homeJs, /white-space:nowrap/);
+  assert.match(homeJs, /\.xm-hm-live \.xm-hm-table th\{border-right:1px dashed #c8ced8\}/);
+  assert.match(homeJs, /\.xm-hm-live \.xm-hm-table \.xm-hm-num\{text-align:center;white-space:nowrap\}/);
+  assert.match(homeJs, /\.xm-hm-table th\{text-align:center/);
   assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table th, \.xm-hm-live \.xm-hm-table th/);
 });

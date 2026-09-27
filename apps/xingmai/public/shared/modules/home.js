@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.693-home-livefee */
+/* xm-module-home 0.1.695-home-livetbl */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -556,9 +556,30 @@
     if (sum) table.style.width = table.style.minWidth = table.style.maxWidth = sum + "px";
   }
   function restoreShopColW(root) {
+    loadLiveColW();
     Array.prototype.forEach.call(root.querySelectorAll(".xm-hm-teams .xm-hm-table, .xm-hm-live .xm-hm-table"), function (table) {
       if (shopColW[colKey(table)]) applyColW(table);
     });
+  }
+  function loadLiveColW() {
+    if (shopColW.live && shopColW.live.length) {
+      return;
+    }
+    try {
+      var list = JSON.parse(localStorage.getItem("xm-home-live-cols") || "[]");
+      if (Object.prototype.toString.call(list) === "[object Array]" && list.length) {
+        shopColW.live = list.map(function (n) {
+          return Math.max(48, Math.round(Number(n) || 48));
+        });
+      }
+    } catch (_err) {}
+  }
+  function saveLiveColW() {
+    try {
+      if (shopColW.live && shopColW.live.length) {
+        localStorage.setItem("xm-home-live-cols", JSON.stringify(shopColW.live));
+      }
+    } catch (_err) {}
   }
   function metricSortNum(text) {
     return text && text !== "—" ? asNum(String(text).replace(/%/g, "")) : null;
@@ -1193,23 +1214,23 @@
   }
   function liveShopRowHtml(row, index) {
     return (
-      "<tr><td>" +
+      "<tr><td class=\"xm-hm-num\">" +
       rankMark(index) +
       "</td><td>" +
       escapeHtml(row.shop) +
-      "</td><td>" +
+      '</td><td class="xm-hm-num">' +
       escapeHtml(row.liveAmount == null ? "—" : row.liveAmount) +
-      "</td><td>" +
+      '</td><td class="xm-hm-num">' +
       escapeHtml(row.paidAmount == null ? "—" : row.paidAmount) +
-      "</td><td>" +
+      '</td><td class="xm-hm-num">' +
       escapeHtml(row.profit == null ? "—" : row.profit) +
-      "</td><td>" +
+      '</td><td class="xm-hm-num">' +
       escapeHtml(row.roi == null ? "—" : row.roi) +
-      "</td><td>" +
+      '</td><td class="xm-hm-num">' +
       escapeHtml(row.paidDeal == null ? "—" : row.paidDeal) +
-      "</td><td" +
-      (feeOverTarget(row.feeRate) ? ' class="is-fee-warn"' : "") +
-      ">" +
+      '</td><td class="xm-hm-num' +
+      (feeOverTarget(row.feeRate) ? " is-fee-warn" : "") +
+      '">' +
       escapeHtml(row.feeRate == null ? "—" : row.feeRate) +
       "</td></tr>"
     );
@@ -1378,9 +1399,10 @@
       ".xm-hm-live-cards .xm-hm-card{text-align:center;cursor:grab}" +
       ".xm-hm-live-cards .xm-hm-card.is-hold{cursor:grabbing}" +
       ".xm-hm-live .xm-hm-table{min-width:960px;table-layout:fixed;border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums}" +
-      ".xm-hm-live .xm-hm-table th,.xm-hm-live .xm-hm-table td{padding:var(--xm-hm-live-row,4px) 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2;box-sizing:border-box}" +
+      ".xm-hm-live .xm-hm-table .xm-hm-num{text-align:center;white-space:nowrap}" +
+      ".xm-hm-live .xm-hm-table th,.xm-hm-live .xm-hm-table td{border:0;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;text-align:center;padding:var(--xm-hm-live-row,4px) 6px;line-height:1.2}" +
       ".xm-hm-live .xm-hm-table th{border-right:1px dashed #c8ced8}" +
-      ".xm-hm-live .xm-hm-table th:last-child,.xm-hm-live .xm-hm-table td:last-child{border-right:0}" +
+      ".xm-hm-live .xm-hm-table th:last-child,.xm-hm-live .xm-hm-table td:last-child{text-align:center;border-right:0}" +
       ".xm-hm-live .xm-hm-panel{overflow-x:auto}" +
       ".xm-hm-card,.xm-hm-pop label{-webkit-user-select:none;user-select:none}" +
       ".xm-hm-card{position:relative;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;padding:12px 14px 10px;box-shadow:var(--xm-shadow);min-height:104px;overflow:visible}" +
@@ -1397,9 +1419,9 @@
       ".xm-hm-panel h2{margin:0;font-size:14px;display:flex;align-items:center;justify-content:space-between;gap:8px}" +
       ".xm-hm-index-num{margin:8px 0 6px;font-size:28px;font-weight:700;color:var(--xm-primary)}" +
       ".xm-hm-table{width:100%;border-collapse:collapse;font-size:12px}" +
-      ".xm-hm-table th{text-align:left;color:var(--xm-muted);font-weight:500;padding:6px 4px;border-bottom:1px solid var(--xm-line)}" +
+      ".xm-hm-table th{text-align:center;color:var(--xm-muted);font-weight:500;padding:6px 4px;border-bottom:1px solid var(--xm-line)}" +
       ".xm-hm-table td{padding:7px 4px;border-bottom:1px solid var(--xm-line);color:var(--xm-ink)}" +
-      ".xm-hm-table td:last-child,.xm-hm-table th:last-child{text-align:right}" +
+      ".xm-hm-table td:last-child,.xm-hm-table th:last-child{text-align:center}" +
       ".xm-hm-cup{display:inline-flex;width:18px;height:18px;border-radius:50%;align-items:center;justify-content:center;color:#fff;font-size:11px}" +
       ".xm-hm-cup.gold{background:#f5a623}" +
       ".xm-hm-cup.silver{background:#8c8c8c}" +
@@ -1503,7 +1525,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.693-home-livefee");
+    board.setAttribute("data-hm-js", "0.1.695-home-livetbl");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -3174,6 +3196,9 @@
       }
       function onSortUp(event) {
         if (colDrag) {
+          if (colKey(colDrag.table) === "live") {
+            saveLiveColW();
+          }
           colDrag = null;
           document.body.style.cursor = "";
           sortFinish();
