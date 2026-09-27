@@ -140,12 +140,14 @@ function applyLiveHeadMove(full, fromKey, toKey) {
 
 test("live shop rows stay light pink after click until remount", () => {
   assert.match(homeJs, /function markLiveRowPicked/);
+  assert.match(homeJs, /function toggleLiveRowPicked/);
   assert.match(homeJs, /function clearLiveRowPicked/);
   assert.match(homeJs, /is-picked/);
   assert.match(homeJs, /#ffe4ec/);
   assert.match(homeJs, /data-live-shop/);
   assert.match(homeJs, /clearLiveRowPicked\(\)/);
-  assert.match(homeJs, /liveRow\.classList\.add\("is-picked"\)/);
+  assert.match(homeJs, /liveRow\.classList\.toggle\("is-picked", picked\)/);
+  assert.match(homeJs, /nextView !== state.view/);
 });
 
 test("live shop headers can drag left and right", () => {
@@ -156,7 +158,9 @@ test("live shop headers can drag left and right", () => {
   assert.match(homeJs, /sortHead/);
   assert.match(homeJs, /function hitLiveHead/);
   assert.match(homeJs, /fromKey === "rank" \|\| toKey === "rank"/);
-  assert.match(homeJs, /cellIndex >= cell.parentNode.cells.length - 2/);
+  assert.match(homeJs, /cellIndex >= cell.parentNode.cells.length - 3/);
+  assert.match(homeJs, /function liveFeeHead/);
+  assert.match(homeJs, /key === "feeWarn" \|\| key === "feeGoal"/);
   assert.match(homeJs, /table.querySelectorAll\("col"\)/);
   assert.deepEqual(
     applyLiveHeadMove(["rank", "shop", "liveAmount", "paidAmount"], "paidAmount", "shop"),

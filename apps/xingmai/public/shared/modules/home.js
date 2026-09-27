@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.707-home-headdrag */
+/* xm-module-home 0.1.708-home-colsame */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1481,6 +1481,18 @@
       livePicked[key] = true;
     }
   }
+  function toggleLiveRowPicked(shop) {
+    var key = String(shop || "");
+    if (!key) {
+      return false;
+    }
+    if (livePicked[key]) {
+      delete livePicked[key];
+      return false;
+    }
+    livePicked[key] = true;
+    return true;
+  }
   function clearLiveRowPicked() {
     livePicked = {};
   }
@@ -1882,7 +1894,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.707-home-headdrag");
+    board.setAttribute("data-hm-js", "0.1.708-home-colsame");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -3080,7 +3092,11 @@
         }
         var view = event.target.closest("[data-view]");
         if (view) {
-          state.view = view.getAttribute("data-view");
+          var nextView = view.getAttribute("data-view");
+          if (nextView !== state.view) {
+            clearLiveRowPicked();
+          }
+          state.view = nextView;
           viewKey = state.view || "company";
           state.mode = state.view === "team" || state.view === "chief" ? "company" : "shop";
           closeCal();
@@ -3169,8 +3185,8 @@
         }
         var liveRow = event.target.closest(".xm-hm-live .xm-hm-table tbody tr");
         if (liveRow && !event.target.closest("input,select,button,textarea,a")) {
-          markLiveRowPicked(liveRow.getAttribute("data-live-shop"));
-          liveRow.classList.add("is-picked");
+          var picked = toggleLiveRowPicked(liveRow.getAttribute("data-live-shop"));
+          liveRow.classList.toggle("is-picked", picked);
         }
       }
       function onOutsideCardSet(event) {
@@ -3412,6 +3428,10 @@
         }
         return null;
       }
+      function liveFeeHead(cell) {
+        var key = cell && cell.getAttribute ? cell.getAttribute("data-live-col") : "";
+        return key === "feeWarn" || key === "feeGoal" || key === "liveAt";
+      }
       function liveRowHit(event) {
         if (shopColHit(event)) {
           return null;
@@ -3420,7 +3440,7 @@
         if (!cell || !cell.parentNode || !cell.parentNode.cells) {
           return null;
         }
-        if (cell.cellIndex >= cell.parentNode.cells.length - 2) {
+        if (liveFeeHead(cell) || cell.cellIndex >= cell.parentNode.cells.length - 3) {
           return null;
         }
         var rect = cell.getBoundingClientRect();
