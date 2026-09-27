@@ -1,4 +1,6 @@
 import { Router } from "express";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   CENTERS,
   POSTS,
@@ -71,6 +73,14 @@ async function resolveActor(req) {
 }
 
 export const peopleRouter = Router();
+
+const peopleJsPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public/shared/modules/people.js");
+
+peopleRouter.get("/client.js", (_req, res) => {
+  res.setHeader("Cache-Control", "private, no-store");
+  res.type("application/javascript");
+  res.sendFile(peopleJsPath);
+});
 
 export const PEOPLE_CHARTER = {
   agentAccess: "read-only",
