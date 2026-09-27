@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { randomBytes, scrypt, scryptSync, timingSafeEqual } from "node:crypto";
 import { Router } from "express";
@@ -198,6 +201,7 @@ const users = new Map();
 const sessions = new Map();
 const peopleRoster = new Map();
 let peopleRowCache = { at: 0, rows: null };
+let peopleListLoader = null;
 
 function hashPasswordSync(password) {
   const salt = randomBytes(16);
@@ -273,6 +277,10 @@ function resolveUser(username) {
 
 function peopleKey(username) {
   return String(username || "").trim();
+}
+
+export function setPeopleListLoaderForTests(fn) {
+  peopleListLoader = typeof fn === "function" ? fn : null;
 }
 
 export function setPeopleLoginForTests(rows) {
@@ -423,6 +431,34 @@ async function loadPeopleRowsFromMysql() {
   return out;
 }
 
+async function listOrgPeople() {
+  if (peopleListLoader) {
+    try {
+      return (await peopleListLoader()) || [];
+    } catch {
+      return [];
+    }
+  }
+  try {
+    const peopleMod = await import("../people/store.js");
+    if (typeof peopleMod.listPeople === "function") {
+      return peopleMod.listPeople() || [];
+    }
+  } catch {
+    /* this workspace overlay has no people store */
+  }
+  try {
+    const file = path.join(path.dirname(fileURLToPath(import.meta.url)), "../people/data/people-logins.json");
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return Object.values(parsed);
+    }
+  } catch {
+    /* overlay file is optional */
+  }
+  return [];
+}
+
 async function findPeopleCredential(username) {
   const trimmed = peopleKey(username);
   if (!trimmed) {
@@ -430,13 +466,24 @@ async function findPeopleCredential(username) {
   }
   const aliases =
     trimmed.toLowerCase() === "luocheng" ? [trimmed, DEMO_USERNAME] : [trimmed];
-  if (dbMode() !== "mysql") {
+  for (const key of aliases) {
+    const hit = peopleRoster.get(key);
+    if (hit) {
+      return hit;
+    }
+  }
+  try {
+    const orgRows = (await listOrgPeople()).map(normalizePersonRow).filter(Boolean);
     for (const key of aliases) {
-      const hit = peopleRoster.get(key);
+      const hit = pickPersonRow(orgRows, key);
       if (hit) {
         return hit;
       }
     }
+  } catch (err) {
+    console.error("people module login lookup failed", err);
+  }
+  if (dbMode() !== "mysql") {
     return null;
   }
   try {
@@ -604,6 +651,7 @@ export function resetStoreForTests() {
   sessions.clear();
   peopleRoster.clear();
   peopleRowCache = { at: 0, rows: null };
+  peopleListLoader = null;
   resetDutyCatalogForTests();
   seed();
 }

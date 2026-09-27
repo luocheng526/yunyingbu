@@ -9,6 +9,7 @@ import {
   query,
   resetStoreForTests,
   setPeopleLoginForTests,
+  setPeopleListLoaderForTests,
   setPoolForTests
 } from "../src/modules/profile/auth.js";
 import { patchAppSource } from "../src/modules/profile/patch-app.js";
@@ -264,6 +265,29 @@ test("people login reads pack json when people table has no username column", as
     const me = await request(base, "/api/auth/me", { cookie: ok.cookie, redirect: "follow" });
     assert.equal(me.res.status, 200);
     assert.equal(me.json.username, "张文静");
+  });
+});
+
+test("people login uses organization listPeople overlay not mysql columns", async () => {
+  setPeopleListLoaderForTests(() => [
+    {
+      id: 4,
+      name: "张文静",
+      username: "张文静",
+      password: "OrgLogin-test1",
+      status: "在职",
+      role: "运营",
+      department: "韩梦凯运营中心"
+    }
+  ]);
+  await withServer(async (base) => {
+    const ok = await request(base, "/api/auth/login", {
+      method: "POST",
+      body: { username: "张文静", password: "OrgLogin-test1" },
+      redirect: "follow"
+    });
+    assert.equal(ok.res.status, 200);
+    assert.equal(ok.json.user.username, "张文静");
   });
 });
 
