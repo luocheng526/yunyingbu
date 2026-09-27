@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.706-home-livefresh */
+/* xm-module-home 0.1.707-home-headdrag */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1431,6 +1431,11 @@
             next.push(key);
           }
         });
+        var rankAt = next.indexOf("rank");
+        if (rankAt > 0) {
+          next.splice(rankAt, 1);
+          next.unshift("rank");
+        }
         return next;
       }
     } catch (_err) {}
@@ -1443,6 +1448,9 @@
   }
   function applyLiveHeadMove(fromKey, toKey) {
     var seq = liveHeadKeys();
+    if (fromKey === "rank" || toKey === "rank") {
+      return seq;
+    }
     var from = seq.indexOf(fromKey);
     var to = seq.indexOf(toKey);
     if (from < 0 || to < 0 || from === to) {
@@ -1739,6 +1747,7 @@
       ".xm-hm-live .xm-hm-table tbody tr{cursor:pointer}" +
       ".xm-hm-live .xm-hm-table tbody tr.is-picked td{background:#ffe4ec}" +
       ".xm-hm-live .xm-hm-table th[data-live-col]{cursor:grab}" +
+      ".xm-hm-live .xm-hm-table th[data-live-col=\"rank\"]{cursor:default}" +
       ".xm-hm-live .xm-hm-table th[data-live-col].is-hold{cursor:grabbing;opacity:.72}" +
       ".xm-hm-live .xm-hm-table th[data-live-col].is-over{outline:1px dashed var(--xm-primary)}" +
       ".xm-hm-live .xm-hm-table th{border-right:1px dashed #c8ced8;text-align:center}" +
@@ -1869,7 +1878,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.706-home-livefresh");
+    board.setAttribute("data-hm-js", "0.1.707-home-headdrag");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -3390,7 +3399,7 @@
         if (!cell) return null;
         var rect = cell.getBoundingClientRect();
         var x = event.clientX || 0;
-        if (cell.cellIndex < cell.parentNode.cells.length - 1 && rect.right - x <= 8) {
+        if (rect.right - x <= 8) {
           return { table: cell.closest("table"), idx: cell.cellIndex, start: cell.offsetWidth, x: x };
         }
         if (cell.cellIndex > 0 && x - rect.left <= 8) {
@@ -3404,7 +3413,10 @@
           return null;
         }
         var cell = event.target.closest && event.target.closest(".xm-hm-live .xm-hm-table th");
-        if (!cell) {
+        if (!cell || !cell.parentNode || !cell.parentNode.cells) {
+          return null;
+        }
+        if (cell.cellIndex >= cell.parentNode.cells.length - 2) {
           return null;
         }
         var rect = cell.getBoundingClientRect();
@@ -3496,7 +3508,7 @@
           return;
         }
         var liveHead = event.target.closest && event.target.closest(".xm-hm-live .xm-hm-table th[data-live-col]");
-        if (liveHead) {
+        if (liveHead && liveHead.getAttribute("data-live-col") !== "rank") {
           if (event.cancelable) {
             event.preventDefault();
           }
