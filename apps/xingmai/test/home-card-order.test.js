@@ -84,6 +84,8 @@ test("live shop table can filter by duty team or shop", () => {
   assert.match(homeJs, /optgroup label="店铺"/);
   assert.match(homeJs, /function parseLiveFilterValue/);
   assert.match(homeJs, /data-refresh-live/);
+  assert.match(homeJs, /data-live-heads>表头设置/);
+  assert.match(homeJs, /京准通主账户ID/);
   assert.match(homeJs, /function refreshLive/);
   assert.match(homeJs, /xm-hm-live-refresh/);
 });

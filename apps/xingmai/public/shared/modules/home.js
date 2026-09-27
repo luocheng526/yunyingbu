@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.718-home-feeinput */
+/* xm-module-home 0.1.719-home-headset */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -282,6 +282,7 @@
   }
   var viewKey = "company";
   var cardSetOpen = false;
+  var headSetOpen = false;
   var teamsRefreshing = false;
   var liveRefreshing = false;
   function viewStore(kind) {
@@ -1315,11 +1316,13 @@
           "</optgroup>"
         : "") +
       "</select></span></div>" +
+      '<div class="xm-hm-live-filter-right">' +
+      '<button type="button" class="xm-hm-live-heads" data-live-heads>表头设置</button>' +
       '<button type="button" class="xm-hm-live-refresh" data-refresh-live' +
       (liveRefreshing ? " disabled" : "") +
       ">" +
       (liveRefreshing ? "刷新中…" : "刷新") +
-      "</button></div>"
+      "</button></div></div>"
     );
   }
   function liveMetaHtml(state) {
@@ -1553,7 +1556,7 @@
       "</article>"
     );
   }
-  var LIVE_SHOP_HEADS = [
+  var LIVE_CORE_HEADS = [
     { key: "rank", label: "排名", w: "56px" },
     { key: "shop", label: "店铺名称", w: "16%" },
     { key: "liveAmount", label: "京麦面板实时金额" },
@@ -1565,6 +1568,46 @@
     { key: "feeGoal", label: "费比目标设置", w: "124px" },
     { key: "liveAt", label: "更新时间", w: "150px" }
   ];
+  var LIVE_EXTRA_HEADS = [
+    { key: "jzAccount", label: "京准通主账户ID", extra: true, w: "140px" },
+    { key: "jzSpend", label: "京准通花费", extra: true },
+    { key: "jzPaidOrders", label: "京准通付费订单数", extra: true },
+    { key: "jzPaidRoi", label: "京准通付费投产比", extra: true },
+    { key: "jzPaidCvr", label: "京准通付费转化率", extra: true },
+    { key: "jzCpc", label: "京准通平均点击成本", extra: true },
+    { key: "jzDeal", label: "京麦成交金额", extra: true },
+    { key: "jzClicks", label: "京准通点击数", extra: true },
+    { key: "jzCtr", label: "京准通点击率", extra: true },
+    { key: "jzOrderAmt", label: "京准通总订单金额", extra: true },
+    { key: "jzRealFee", label: "真实费比", extra: true },
+    { key: "jzOk", label: "是否成功", extra: true }
+  ];
+  var LIVE_SHOP_HEADS = LIVE_CORE_HEADS.concat(LIVE_EXTRA_HEADS);
+  var LIVE_LOCK_HEADS = { rank: true, shop: true };
+  function liveHiddenHeads() {
+    try {
+      var raw = JSON.parse(localStorage.getItem("xm-home-live-head-hide") || "[]");
+      if (Object.prototype.toString.call(raw) === "[object Array]") {
+        return raw.filter(function (key) {
+          return key && !LIVE_LOCK_HEADS[key];
+        });
+      }
+    } catch (_err) {}
+    return [];
+  }
+  function saveLiveHiddenHeads(keys) {
+    try {
+      localStorage.setItem("xm-home-live-head-hide", JSON.stringify(keys || []));
+    } catch (_err) {}
+  }
+  function liveHeadToggleList() {
+    return LIVE_SHOP_HEADS.filter(function (col) {
+      return col && !LIVE_LOCK_HEADS[col.key];
+    });
+  }
+  function liveTableMinW() {
+    return Math.max(1280, liveCols().length * 118);
+  }
   var livePicked = {};
   function liveColMap() {
     var map = {};
@@ -1623,11 +1666,14 @@
   }
   function liveCols() {
     var map = liveColMap();
+    var hide = liveHiddenHeads();
     return liveHeadKeys()
       .map(function (key) {
         return map[key];
       })
-      .filter(Boolean);
+      .filter(function (col) {
+        return col && hide.indexOf(col.key) === -1;
+      });
   }
   function liveRowPicked(shop) {
     return !!livePicked[String(shop || "")];
@@ -1884,8 +1930,15 @@
       ".xm-hm-live-filter-left{display:flex;align-items:center;gap:12px;min-width:0}" +
       ".xm-hm-live-filter-lab{font-size:16px;font-weight:600;color:var(--xm-ink);line-height:40px;white-space:nowrap}" +
       ".xm-hm-live-filter-box{position:relative;flex:0 1 320px;min-width:220px;max-width:100%}" +
-      ".xm-hm-live-refresh{border:0;background:transparent;color:var(--xm-primary);cursor:pointer;padding:0 2px;font:inherit;font-size:14px;line-height:40px;white-space:nowrap}" +
+      ".xm-hm-live-filter-right{display:flex;align-items:center;gap:16px;flex:0 0 auto}" +
+      ".xm-hm-live-heads,.xm-hm-live-refresh{border:0;background:transparent;color:var(--xm-primary);cursor:pointer;padding:0 2px;font:inherit;font-size:14px;line-height:40px;white-space:nowrap}" +
       ".xm-hm-live-refresh:disabled{opacity:.55;cursor:wait}" +
+      ".xm-hm-head-pop{position:absolute;top:0;left:0;z-index:9;width:280px;max-height:min(72vh,560px);overflow:auto;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:10px}" +
+      ".xm-hm-head-pop[hidden]{display:none}" +
+      ".xm-hm-head-pop h3{margin:0 0 8px;font-size:13px}" +
+      ".xm-hm-head-pop .xm-hm-head-hint{margin:0 0 8px;color:var(--xm-muted);font-size:12px;line-height:1.5}" +
+      ".xm-hm-head-pop .xm-hm-head-sec{margin:8px 0 4px;color:var(--xm-muted);font-size:12px;font-weight:600}" +
+      ".xm-hm-head-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink);cursor:pointer;-webkit-user-select:none;user-select:none}" +
       ".xm-hm-live-filter select{width:100%;height:40px;box-sizing:border-box;border:1px solid #e4e7ed;border-radius:8px;padding:0 36px 0 14px;font:inherit;font-size:14px;color:var(--xm-ink);background:#fff;-webkit-appearance:none;appearance:none}" +
       ".xm-hm-live-filter-box:after{content:\"\";position:absolute;right:14px;top:50%;width:8px;height:8px;margin-top:-6px;border-right:2px solid #8c8c8c;border-bottom:2px solid #8c8c8c;transform:rotate(45deg);pointer-events:none}" +
       ".xm-hm-fee-goal{display:inline-flex;align-items:center;justify-content:center;gap:4px;width:100%;color:var(--xm-ink);font-size:12px;cursor:text;-webkit-user-select:text;user-select:text;pointer-events:auto}" +
@@ -1984,6 +2037,7 @@
       '<div class="xm-hm-datewrap"><div class="xm-hm-dates" id="xm-hm-dates" title="最多选择30天"><span class="xm-hm-dates-ico">日</span><span class="xm-hm-dates-text" id="xm-hm-date-text"></span><button type="button" class="xm-hm-dates-clear" id="xm-hm-date-clear">×</button></div><div class="xm-hm-cal" id="xm-hm-cal" hidden></div></div>' +
       "</div></div>" +
       '<div class="xm-hm-pop" id="xm-hm-pop" hidden><h3>卡片设置</h3><div id="xm-hm-card-opts"></div></div>' +
+      '<div class="xm-hm-head-pop" id="xm-hm-head-pop" hidden><h3>表头设置</h3><p class="xm-hm-head-hint">付费中心表头先挂上，数据稍后对接。</p><div id="xm-hm-head-opts"></div></div>' +
       '<div class="xm-hm-body">' +
       '<section class="xm-hm-kpis-shell"><div class="xm-hm-teams-bar"><b>星脉甄选</b><button type="button" class="xm-hm-set" id="xm-hm-set">卡片设置</button></div><div class="xm-hm-sales" id="xm-hm-sales"></div><div class="xm-hm-kpis" id="xm-hm-kpis"></div></section>' +
       '<section class="xm-hm-teams" id="xm-hm-teams" hidden></section>' +
@@ -2032,6 +2086,79 @@
     pop.style.top = Math.round(top) + "px";
     pop.style.left = Math.round(left) + "px";
   }
+  function liveHeadOptsHtml() {
+    var hide = liveHiddenHeads();
+    var list = liveHeadToggleList();
+    var extras = list.filter(function (col) {
+      return col.extra;
+    });
+    var cores = list.filter(function (col) {
+      return !col.extra;
+    });
+    var allOn = list.length > 0 && list.every(function (col) {
+      return hide.indexOf(col.key) === -1;
+    });
+    function row(col) {
+      return (
+        '<label><input type="checkbox" data-live-head="' +
+        escapeHtml(col.key) +
+        '"' +
+        (hide.indexOf(col.key) === -1 ? " checked" : "") +
+        " /> " +
+        escapeHtml(col.label) +
+        "</label>"
+      );
+    }
+    return (
+      '<label class="xm-hm-pop-all"><input type="checkbox" data-live-head-all' +
+      (allOn ? " checked" : "") +
+      " /> 全选</label>" +
+      '<div class="xm-hm-head-sec">实时</div>' +
+      cores.map(row).join("") +
+      '<div class="xm-hm-head-sec">付费中心（数据待对接）</div>' +
+      extras.map(row).join("")
+    );
+  }
+  function syncHeadPop(root, btn) {
+    var pop = root.querySelector("#xm-hm-head-pop");
+    if (!pop) {
+      return;
+    }
+    pop.hidden = !headSetOpen;
+    if (!headSetOpen) {
+      return;
+    }
+    var opts = root.querySelector("#xm-hm-head-opts");
+    if (opts) {
+      opts.innerHTML = liveHeadOptsHtml();
+    }
+    var allBox = root.querySelector("[data-live-head-all]");
+    var hide = liveHiddenHeads();
+    var list = liveHeadToggleList();
+    if (allBox) {
+      var someOn = list.some(function (col) {
+        return hide.indexOf(col.key) === -1;
+      });
+      allBox.indeterminate = someOn && hide.length > 0;
+    }
+    btn = btn || root.querySelector("[data-live-heads]");
+    var box = root.querySelector("#xm-hm");
+    if (!btn || !box || !btn.offsetParent) {
+      return;
+    }
+    var b = btn.getBoundingClientRect();
+    var p = box.getBoundingClientRect();
+    var top = b.bottom - p.top + 8;
+    var left = b.right - p.left - pop.offsetWidth;
+    if (left < 8) {
+      left = 8;
+    }
+    if (left + pop.offsetWidth > p.width - 8) {
+      left = Math.max(8, p.width - pop.offsetWidth - 8);
+    }
+    pop.style.top = Math.round(top) + "px";
+    pop.style.left = Math.round(left) + "px";
+  }
   function paint(root, state) {
     var board = root.querySelector("#xm-hm");
     var allow = allowedHomeViews(state.user, state.people, state.dutyShops);
@@ -2064,7 +2191,7 @@
     hideCardTip();
     hideLineTip(root);
     var feeDraft = liveFeeDraft(root);
-    board.setAttribute("data-hm-js", "0.1.718-home-feeinput");
+    board.setAttribute("data-hm-js", "0.1.719-home-headset");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2095,7 +2222,9 @@
       liveCards.map(liveCardHtml).join("") +
       '</div><div class="xm-hm-panel">' +
       liveFilterHtml(allShops, state) +
-      '<table class="xm-hm-table">' +
+      '<table class="xm-hm-table" style="min-width:' +
+      liveTableMinW() +
+      'px">' +
       liveColgroupHtml() +
       liveTheadHtml() +
       "<tbody>" +
@@ -2147,6 +2276,7 @@
       allBox.indeterminate = someOn && !allOn;
     }
     syncCardPop(root);
+    syncHeadPop(root);
     restoreLiveFeeDraft(root, feeDraft);
   }
   function api(path) {
@@ -3274,6 +3404,7 @@
         saveGone([]);
         closeCal();
         cardSetOpen = false;
+        headSetOpen = false;
         teamsRefreshing = true;
         clearRangeData(state);
         paint(root, state);
@@ -3399,6 +3530,7 @@
           closeCal();
           clearTextSelection();
           cardSetOpen = false;
+          headSetOpen = false;
           paint(root, state);
           if (state.view === "live" || state.view === "company") {
             pullLive(true);
@@ -3467,9 +3599,19 @@
           paint(root, state);
           return;
         }
+        if (event.target.closest("[data-live-heads]")) {
+          headSetOpen = !headSetOpen;
+          cardSetOpen = false;
+          syncCardPop(root);
+          syncHeadPop(root, event.target.closest("[data-live-heads]"));
+          closeCal();
+          return;
+        }
         if (event.target.closest(".xm-hm-set")) {
           viewKey = state.view || "company";
           cardSetOpen = !cardSetOpen;
+          headSetOpen = false;
+          syncHeadPop(root);
           syncCardPop(root, event.target.closest(".xm-hm-set"));
           closeCal();
           return;
@@ -3492,6 +3634,11 @@
         if (cardSetOpen && !onPop) {
           cardSetOpen = false;
           syncCardPop(root);
+        }
+        var onHead = t && (t.closest("#xm-hm-head-pop") || t.closest("[data-live-heads]"));
+        if (headSetOpen && !onHead) {
+          headSetOpen = false;
+          syncHeadPop(root);
         }
         if (calOpen && Date.now() - calLockAt > 400 && t && !t.closest("#xm-hm-cal") && !t.closest("#xm-hm-dates")) {
           closeCal();
@@ -3887,7 +4034,7 @@
         if (isFeeTyping(event.target)) {
           return;
         }
-        var tab = event.target.closest && event.target.closest(".xm-hm-views button,.xm-hm-ranges button,.xm-hm-set,.xm-hm-dates,[data-refresh-teams],[data-show-teams],[data-refresh-live]");
+        var tab = event.target.closest && event.target.closest(".xm-hm-views button,.xm-hm-ranges button,.xm-hm-set,.xm-hm-dates,[data-refresh-teams],[data-show-teams],[data-refresh-live],[data-live-heads]");
         if (sortFrom || sortDragging || tab) event.preventDefault();
       }
       function onSortMove(event) {
@@ -4014,6 +4161,31 @@
         }
       }
       function onChange(event) {
+        if (event.target.getAttribute("data-live-head-all") != null) {
+          saveLiveHiddenHeads(
+            event.target.checked
+              ? []
+              : liveHeadToggleList().map(function (col) {
+                  return col.key;
+                })
+          );
+          paint(root, state);
+          return;
+        }
+        var liveHead = event.target.getAttribute("data-live-head");
+        if (liveHead && !LIVE_LOCK_HEADS[liveHead]) {
+          var heads = liveHiddenHeads();
+          if (event.target.checked) {
+            heads = heads.filter(function (item) {
+              return item !== liveHead;
+            });
+          } else if (heads.indexOf(liveHead) === -1) {
+            heads.push(liveHead);
+          }
+          saveLiveHiddenHeads(heads);
+          paint(root, state);
+          return;
+        }
         if (event.target.getAttribute("data-live-filter") === "pick") {
           saveLiveFilter(parseLiveFilterValue(event.target.value));
           paint(root, state);

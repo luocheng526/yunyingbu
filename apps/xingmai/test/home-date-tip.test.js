@@ -129,7 +129,7 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /label: "实时"/);
   assert.match(homeJs, /label: "排行榜"/);
   assert.match(homeJs, /\.xm-hm-set\{border:0;background:transparent;color:var\(--xm-primary\)/);
-  assert.match(homeJs, /closest\("\.xm-hm-views button,\.xm-hm-ranges button,\.xm-hm-set,\.xm-hm-dates,\[data-refresh-teams\],\[data-show-teams\],\[data-refresh-live\]"\)/);
+  assert.match(homeJs, /closest\("\.xm-hm-views button,\.xm-hm-ranges button,\.xm-hm-set,\.xm-hm-dates,\[data-refresh-teams\],\[data-show-teams\],\[data-refresh-live\],\[data-live-heads\]"\)/);
   assert.match(homeJs, /--xm-hm-team-cols/);
   assert.match(homeJs, /label: "经理团队"/);
   assert.match(homeJs, /label: "主管\/储备"/);
@@ -1004,4 +1004,67 @@ test("fee target is a text field and 费比监控 uses ±2%", () => {
   assert.equal(fns.isHomeFormField({ closest: (sel) => (sel.indexOf("input") >= 0 ? {} : null) }), true);
   assert.equal(fns.isFeeTyping({ closest: (sel) => (sel.indexOf("input") >= 0 ? {} : null) }), true);
   assert.equal(fns.isFeeTyping({ closest: (sel) => (sel.indexOf("button") >= 0 ? {} : null) }), false);
+});
+
+test("live header settings add 付费中心 columns without wiring data", () => {
+  assert.match(homeJs, /data-live-heads>表头设置/);
+  assert.match(homeJs, /function liveHeadOptsHtml/);
+  assert.match(homeJs, /function syncHeadPop/);
+  assert.match(homeJs, /xm-home-live-head-hide/);
+  assert.match(homeJs, /LIVE_EXTRA_HEADS/);
+  assert.match(homeJs, /京准通主账户ID/);
+  assert.match(homeJs, /京准通花费/);
+  assert.match(homeJs, /京准通付费订单数/);
+  assert.match(homeJs, /京准通付费投产比/);
+  assert.match(homeJs, /京准通付费转化率/);
+  assert.match(homeJs, /京准通平均点击成本/);
+  assert.match(homeJs, /京麦成交金额/);
+  assert.match(homeJs, /京准通点击数/);
+  assert.match(homeJs, /京准通点击率/);
+  assert.match(homeJs, /京准通总订单金额/);
+  assert.match(homeJs, /真实费比/);
+  assert.match(homeJs, /是否成功/);
+  assert.match(homeJs, /付费中心（数据待对接）/);
+  assert.match(homeJs, /data-live-head/);
+  const pick = (name) => {
+    const start = homeJs.indexOf("function " + name);
+    assert.notEqual(start, -1, name);
+    let depth = 0;
+    for (let i = start; i < homeJs.length; i += 1) {
+      if (homeJs[i] === "{") depth += 1;
+      if (homeJs[i] === "}") {
+        depth -= 1;
+        if (depth === 0) return homeJs.slice(start, i + 1);
+      }
+    }
+    throw new Error("unclosed " + name);
+  };
+  const start = homeJs.indexOf("var LIVE_CORE_HEADS");
+  const end = homeJs.indexOf("function liveRowPicked");
+  const store = {};
+  const fns = new Function(
+    "localStorage",
+    pick("escapeHtml") +
+      pick("liveHeadOptsHtml") +
+      homeJs.slice(start, end) +
+      "return {liveCols,liveHiddenHeads,saveLiveHiddenHeads,liveHeadOptsHtml,LIVE_EXTRA_HEADS};"
+  )({
+    getItem(key) {
+      return Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null;
+    },
+    setItem(key, value) {
+      store[key] = String(value);
+    }
+  });
+  const labels = fns.liveCols().map((col) => col.label);
+  assert.equal(labels.includes("京准通主账户ID"), true);
+  assert.equal(labels.includes("真实费比"), true);
+  assert.equal(labels.includes("是否成功"), true);
+  fns.saveLiveHiddenHeads(fns.LIVE_EXTRA_HEADS.map((col) => col.key));
+  const hidden = fns.liveCols().map((col) => col.label);
+  assert.equal(hidden.includes("京准通主账户ID"), false);
+  assert.equal(hidden.includes("店铺名称"), true);
+  const html = fns.liveHeadOptsHtml();
+  assert.match(html, /京准通主账户ID/);
+  assert.match(html, /data-live-head="jzAccount"/);
 });
