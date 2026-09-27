@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20260926-master";
+  var VERSION = "20260927-cell";
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -26,7 +26,7 @@
     return fetch(url, Object.assign({ credentials: "same-origin" }, options || {})).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (data) {
         if (!res.ok) {
-          throw new Error((data && data.error) || "请求失败");
+          throw new Error((data && data.error) || (res.status === 413 ? "一次提交太多，请只改当前子账号" : "请求失败"));
         }
         return data;
       });
@@ -89,7 +89,9 @@
     ".han-rules table.han-shop-table th,.han-rules table.han-shop-table td,.han-rules table.han-rules-grid th,.han-rules table.han-rules-grid td{padding:6px 4px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}" +
     ".han-rules table.han-shop-table td:nth-child(2),.han-rules table.han-shop-table th:nth-child(2),.han-rules table.han-rules-grid td:nth-child(2),.han-rules table.han-rules-grid td:nth-child(4){text-align:left}" +
     ".han-rules table.han-rules-grid thead th{white-space:normal;line-height:1.2;font-size:11px}" +
-    ".han-rules table.han-rules-grid input{width:100%;min-width:0;height:24px;padding:0 2px;text-align:center;border:1px solid #e5e7eb;border-radius:3px}" +
+    ".han-rules table.han-rules-grid td:has(input){overflow:visible}" +
+    ".han-rules table.han-rules-grid input.han-rules-num{display:block;box-sizing:border-box;width:100%;min-width:0;height:26px;padding:0 4px;text-align:center;border:1px solid #91caff;border-radius:4px;background:#fff;color:#111827}" +
+    ".han-rules table.han-rules-grid input.han-rules-num:focus{outline:2px solid #1677ff;border-color:#1677ff}" +
     ".han-rules tr.is-deleted td{color:#8c8c8c;text-decoration:line-through}" +
     ".han-rules tr.is-deleted td:last-child{text-decoration:none}" +
     ".han-rules .han-paid-table-wrap{max-height:none}" +
@@ -294,7 +296,7 @@
   function mountRules(root) {
     root.innerHTML = page(
       "充值规则",
-      "网站是店铺、子账号和充值规则的唯一主档。本地工作机只需启动一次并保持运行，以后店铺启停、主档和规则都由本页控制。本地机回报 Cookie 状态和心跳。网站不保存、不接收、不返回京准通/京麦 Cookie 或密码，也不直接充值。",
+      "网站随时可以改计划ROI和充值档位，不用先停店。本地机保持运行并领取新版本，在下一批开始时使用最新规则。网站不保存、不接收、不返回京准通/京麦 Cookie 或密码，也不直接充值。",
       '<div class="han-paid-meta"><span class="han-paid-dot"></span><span id="han-rules-asof">等待配置</span></div></header>' +
       '<section class="panel"><div class="han-paid-toolbar"><h2>店铺主档 / 工作机运行店铺</h2><div class="row" id="han-rules-run-actions"></div></div>' +
       '<p class="han-rules-hint" id="han-rules-run-hint">勾选=开启持续运行；取消=停止，本地完成已开始的转账及弹窗后再停该店。全部取消时本地机在线待机。Cookie 状态只显示本地机回报，本页没有 Cookie 输入框。</p>' +
@@ -302,6 +304,7 @@
       '<div id="han-rules-run-shops"></div></section>' +
       '<section class="panel"><div class="han-paid-toolbar"><h2>子账号规则</h2><div class="row" id="han-rules-toolbar"></div></div>' +
       '<div id="han-sub-form" class="han-rules-form" hidden></div>' +
+      '<p class="han-rules-hint">表格里的计划ROI和各档金额可以直接改，离开输入框即保存当前子账号。不用先停店。本地机下次领取后，在下一批开始时按新规则执行。</p>' +
       '<p id="han-rules-sync" class="han-rules-sync" hidden></p>' +
       '<div id="han-rules-table"><p class="empty">加载中…</p></div></section>' +
       '<section class="panel" id="han-rules-history-wrap" hidden><h2>修改历史</h2><div id="han-rules-history"></div></section>' +
@@ -316,6 +319,7 @@
     var historyEl = root.querySelector("#han-rules-history");
     var dead = false;
     var rows = [];
+    var baseline = new Map();
     var selected = new Set();
     var shop = "";
     var keyword = "";
@@ -399,6 +403,20 @@
         var row = rows.find(function (item) { return rowKey(item) === input.getAttribute("data-key"); });
         if (row) row.autoRecharge = input.checked;
       });
+    }
+
+    function ruleSignature(row) {
+      var item = payloadRows([row])[0];
+      ["计划ROI", "第一档花费下限", "第一档花费上限", "第一档余额阈值", "第一档充值金额", "第二档花费下限", "第二档余额阈值", "第二档充值金额", "ROI上涨充值金额", "连续充值未增单次数", "暂停分钟数"].forEach(function (key) {
+        item[key] = Number(item[key]);
+      });
+      item.自动充值 = item.自动充值 === true;
+      return JSON.stringify(item);
+    }
+
+    function rememberBaseline() {
+      baseline = new Map();
+      rows.forEach(function (row) { baseline.set(rowKey(row), ruleSignature(row)); });
     }
 
     function payloadRows(list) {
@@ -669,6 +687,18 @@
           if (row) saveMaster("sub", "restore", { 京准通主账户ID: row.accountId, 子账号ID: row.subAccountId }, "恢复子账号");
         });
       });
+      tableWrap.querySelectorAll(".han-rules-num, .han-rules-auto").forEach(function (input) {
+        input.addEventListener("keydown", function (event) {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            input.blur();
+          }
+        });
+        input.addEventListener("change", function () {
+          var row = rows.find(function (item) { return rowKey(item) === input.getAttribute("data-key"); });
+          if (row && !row.deleted) saveRules([row], "修改充值规则");
+        });
+      });
     }
 
     function checkedRows() {
@@ -678,19 +708,31 @@
 
     function saveRules(list, summary) {
       collectEdits();
-      var target = list || rows;
+      var target = (list || rows).filter(function (row) {
+        return row && !row.deleted && ruleSignature(row) !== baseline.get(rowKey(row));
+      });
       if (!target.length) {
-        setStatus("没有可保存的规则", true);
-        return;
+        setStatus(list ? "没有修改" : "没有要保存的修改");
+        return Promise.resolve();
       }
+      var chunks = [];
+      for (var i = 0; i < target.length; i += 30) chunks.push(target.slice(i, i + 30));
       setStatus("保存中…");
-      jsonFetch("/api/han/worker", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "rules", changeSummary: summary, rows: payloadRows(target) })
-      }).then(function (data) {
-        setSyncBanner("配置版本 " + data.version + " 本地机尚未接收（待同步）。本机 GET 并 ACK 后才会变成已同步。");
-        return load().then(function () { setStatus("已保存版本 " + data.version + "，本地机尚未接收（待同步）。"); });
+      var chain = Promise.resolve(null);
+      chunks.forEach(function (chunk) {
+        chain = chain.then(function () {
+          return jsonFetch("/api/han/worker", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "rules", changeSummary: summary, rows: payloadRows(chunk) })
+          });
+        });
+      });
+      return chain.then(function (data) {
+        setSyncBanner("配置版本 " + data.version + " 已保存。不用停店，本地机下次领取后在下一批开始时使用。ACK 后本页变为已同步。");
+        return load().then(function () {
+          setStatus("已保存版本 " + data.version + "。店铺继续运行，本地机下一批使用新规则。");
+        });
       }).catch(function (err) {
         if (!dead) setStatus(err.message || "保存失败", true);
       });
@@ -722,9 +764,9 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "run", changeSummary: "保存运行状态", runShops: runShops })
       }).then(function (data) {
-        setSyncBanner("配置版本 " + data.version + " 本地机尚未接收（待同步）。已开启 " + runShops.length + " 家店。本机 GET 并 ACK 后才会变成已同步。");
+        setSyncBanner("运行状态已保存为版本 " + data.version + "。已开启 " + runShops.length + " 家店。改规则不用停店，本地机下一批使用最新规则。");
         return load().then(function () {
-          setStatus("已保存版本 " + data.version + "，已开启 " + runShops.length + " 家店，本地机尚未接收（待同步）。");
+          setStatus("已保存版本 " + data.version + "，已开启 " + runShops.length + " 家店。");
         });
       }).catch(function (err) {
         if (!dead) setStatus(err.message || "保存失败", true);
@@ -758,6 +800,7 @@
       return jsonFetch("/api/han/worker?view=rules" + (showDeleted ? "&deleted=1" : "")).then(function (data) {
         if (dead) return;
         rows = data.rows || [];
+        rememberBaseline();
         lastMeta = data;
         lastMeta.shops = data.shops || data.stores || [];
         runSelected = new Set();

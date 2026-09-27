@@ -1318,6 +1318,45 @@ test("stopped shops still deliver full subaccount rules and sync only issued row
   });
 });
 
+test("running shop still receives an edited ROI on the next pull", async () => {
+  await withServer(async (base) => {
+    const pushed = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [{ 店铺名称: "松郁", 京准通主账户ID: "88001", 花费: 10 }],
+        subaccounts: [
+          { 店铺名称: "松郁", 京准通主账户ID: "88001", 子账号ID: "88011", 子账号名称: "松郁-主投", 花费: 10, ROI: 1, 余额: 20 },
+        ],
+      }),
+    });
+    assert.equal(pushed.res.status, 201);
+    const run = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "run", runShops: ["松郁"], changeSummary: "开启松郁" }),
+    });
+    assert.equal(run.body.ok, true);
+    const saved = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "rules",
+        changeSummary: "运行中改计划ROI",
+        rows: [{ store: "松郁", accountId: "88001", subAccountId: "88011", 计划ROI: 2.1, 自动充值: true }],
+      }),
+    });
+    assert.equal(saved.res.status, 200);
+    assert.ok(saved.body.version > run.body.version);
+    const config = await json(base, "/api/han/worker?machineId=han-worker-01");
+    assert.deepEqual(config.body.runShops, ["88001"]);
+    const shop = config.body.shops.find((item) => item.店铺名称 === "松郁");
+    assert.equal(shop.启用, true);
+    assert.equal(shop.子账号[0].计划ROI, 2.1);
+    assert.match(config.body.note, /不用停店/);
+  });
+});
+
 test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   const { readFile } = await import("node:fs/promises");
   const nav = await readFile(new URL("../public/shared/nav.js", import.meta.url), "utf8");
@@ -1333,6 +1372,11 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   const han = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
   assert.match(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
   assert.match(han, /\["\/han\/paid\?board=rules", "充值规则", "rules"\]/);
+  assert.match(han, /20260927-cell/);
+  const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
+  assert.match(center, /不用先停店/);
+  assert.match(center, /ruleSignature/);
+  assert.match(center, /i \+= 30/);
   assert.match(han, /insertAdjacentElement\("afterend"/);
   assert.match(han, /data-xm-group"\) !== "\/han"/);
   assert.doesNotMatch(han, /anchor\.href = "\/han\/paid-center"/);

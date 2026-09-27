@@ -850,7 +850,7 @@ export function createWorkerMethods(db, ensure) {
         machineId: machine,
         runShops,
         shops,
-        note: "shops 始终包含未删除店铺和完整子账号规则。runShops 是当前要运行的京准通主账户ID；为空表示在线待机、不执行充值。网站不接收京准通 Cookie。",
+        note: "shops 始终带未删除店铺和完整子账号规则，店铺正在运行时也返回。改计划ROI或档位不用停店。本机下次 GET 拿到新版本后，在下一批开始时使用最新规则。runShops 只是当前要运行的京准通主账户ID；为空表示在线待机。网站不接收京准通 Cookie。",
       };
     },
 
