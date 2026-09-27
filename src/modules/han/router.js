@@ -293,19 +293,22 @@ export function createHanRouter(store = createHanStore()) {
         return;
       }
       if (view === "rules") {
-        res.json(await store.workerRules());
+        res.json(await store.workerRules(req.query));
         return;
       }
       if (view === "history") {
         res.json(await store.workerHistory());
         return;
       }
-      res.json(
-        await store.pullWorker({
-          machineId: req.query.machineId,
-          sinceVersion: req.query.sinceVersion || req.query.version,
-        }),
-      );
+      const payload = await store.pullWorker({
+        machineId: req.query.machineId,
+        sinceVersion: req.query.sinceVersion || req.query.version,
+      });
+      if (payload.changed === false && String(req.query.http304 || "") === "1") {
+        res.status(304).end();
+        return;
+      }
+      res.json(payload);
     } catch (err) {
       res.status(err.statusCode || 500).json({ ok: false, error: err.message });
     }
