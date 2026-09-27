@@ -112,6 +112,7 @@ test("live paid table headers can shrink row spacing", () => {
   assert.match(homeJs, /function saveLiveColW/);
   assert.match(homeJs, /xm-home-live-cols/);
   assert.match(homeJs, /--xm-hm-live-row/);
+  assert.match(homeJs, /--xm-hm-live-row,10px/);
   assert.match(homeJs, /\.xm-hm-live \.xm-hm-table th\{border-right:1px dashed #c8ced8;text-align:center\}/);
   assert.match(homeJs, /\.xm-hm-live \.xm-hm-table \.xm-hm-num\{text-align:center;white-space:nowrap\}/);
   assert.match(homeJs, /\.xm-hm-table th\{text-align:center/);
@@ -120,4 +121,38 @@ test("live paid table headers can shrink row spacing", () => {
   assert.match(homeJs, /\.xm-hm-live \.xm-hm-table th span\{display:block;width:100%;text-align:center\}/);
   assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table th span\{display:block;width:100%;text-align:center\}/);
   assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table th, \.xm-hm-live \.xm-hm-table th/);
+});
+
+function applyLiveHeadMove(full, fromKey, toKey) {
+  const seq = full.slice();
+  const from = seq.indexOf(fromKey);
+  const to = seq.indexOf(toKey);
+  if (from < 0 || to < 0 || from === to) {
+    return seq;
+  }
+  seq.splice(from, 1);
+  seq.splice(to, 0, fromKey);
+  return seq;
+}
+
+test("live shop rows stay light pink after click until remount", () => {
+  assert.match(homeJs, /function markLiveRowPicked/);
+  assert.match(homeJs, /function clearLiveRowPicked/);
+  assert.match(homeJs, /is-picked/);
+  assert.match(homeJs, /#ffe4ec/);
+  assert.match(homeJs, /data-live-shop/);
+  assert.match(homeJs, /clearLiveRowPicked\(\)/);
+  assert.match(homeJs, /liveRow\.classList\.add\("is-picked"\)/);
+});
+
+test("live shop headers can drag left and right", () => {
+  assert.match(homeJs, /xm-home-live-head-order/);
+  assert.match(homeJs, /function applyLiveHeadMove/);
+  assert.match(homeJs, /function saveLiveHeadOrder/);
+  assert.match(homeJs, /data-live-col/);
+  assert.match(homeJs, /sortHead/);
+  assert.deepEqual(
+    applyLiveHeadMove(["rank", "shop", "liveAmount", "paidAmount"], "paidAmount", "shop"),
+    ["rank", "paidAmount", "shop", "liveAmount"]
+  );
 });

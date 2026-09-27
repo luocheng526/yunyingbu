@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.704-home-noprofit */
+/* xm-module-home 0.1.705-home-rowpick */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -902,15 +902,19 @@
   function liveRowPadClamp(n) {
     var v = Number(n);
     if (!isFinite(v)) {
-      return 4;
+      return 10;
     }
-    return Math.max(1, Math.min(16, Math.round(v)));
+    return Math.max(4, Math.min(20, Math.round(v)));
   }
   function liveRowPad() {
     try {
-      return liveRowPadClamp(localStorage.getItem("xm-home-live-row") || 4);
+      var raw = localStorage.getItem("xm-home-live-row");
+      if (raw == null || raw === "" || Number(raw) <= 4) {
+        return 10;
+      }
+      return liveRowPadClamp(raw);
     } catch (_err) {
-      return 4;
+      return 10;
     }
   }
   function saveLiveRowPad(n) {
@@ -1382,21 +1386,89 @@
     );
   }
   var LIVE_SHOP_HEADS = [
-    { label: "排名", w: "56px" },
-    { label: "店铺名称", w: "16%" },
-    { label: "京麦面板实时金额" },
-    { label: "实时付费金额" },
-    { label: "实时付费ROI" },
-    { label: "实时付费成交额" },
-    { label: "实时费比" },
-    { label: "费比预警", w: "88px" },
-    { label: "费比目标设置", w: "124px" },
-    { label: "更新时间", w: "150px" }
+    { key: "rank", label: "排名", w: "56px" },
+    { key: "shop", label: "店铺名称", w: "16%" },
+    { key: "liveAmount", label: "京麦面板实时金额" },
+    { key: "paidAmount", label: "实时付费金额" },
+    { key: "roi", label: "实时付费ROI" },
+    { key: "paidDeal", label: "实时付费成交额" },
+    { key: "feeRate", label: "实时费比" },
+    { key: "feeWarn", label: "费比预警", w: "88px" },
+    { key: "feeGoal", label: "费比目标设置", w: "124px" },
+    { key: "liveAt", label: "更新时间", w: "150px" }
   ];
+  var livePicked = {};
+  function liveColMap() {
+    var map = {};
+    LIVE_SHOP_HEADS.forEach(function (col) {
+      map[col.key] = col;
+    });
+    return map;
+  }
+  function liveHeadKeys() {
+    var map = liveColMap();
+    var keys = LIVE_SHOP_HEADS.map(function (col) {
+      return col.key;
+    });
+    try {
+      var saved = JSON.parse(localStorage.getItem("xm-home-live-head-order") || "[]");
+      if (Object.prototype.toString.call(saved) === "[object Array]" && saved.length) {
+        var next = [];
+        saved.forEach(function (key) {
+          if (map[key] && next.indexOf(key) < 0) {
+            next.push(key);
+          }
+        });
+        keys.forEach(function (key) {
+          if (next.indexOf(key) < 0) {
+            next.push(key);
+          }
+        });
+        return next;
+      }
+    } catch (_err) {}
+    return keys;
+  }
+  function saveLiveHeadOrder(keys) {
+    try {
+      localStorage.setItem("xm-home-live-head-order", JSON.stringify(keys || liveHeadKeys()));
+    } catch (_err) {}
+  }
+  function applyLiveHeadMove(fromKey, toKey) {
+    var seq = liveHeadKeys();
+    var from = seq.indexOf(fromKey);
+    var to = seq.indexOf(toKey);
+    if (from < 0 || to < 0 || from === to) {
+      return seq;
+    }
+    seq.splice(from, 1);
+    seq.splice(to, 0, fromKey);
+    return seq;
+  }
+  function liveCols() {
+    var map = liveColMap();
+    return liveHeadKeys()
+      .map(function (key) {
+        return map[key];
+      })
+      .filter(Boolean);
+  }
+  function liveRowPicked(shop) {
+    return !!livePicked[String(shop || "")];
+  }
+  function markLiveRowPicked(shop) {
+    var key = String(shop || "");
+    if (key) {
+      livePicked[key] = true;
+    }
+  }
+  function clearLiveRowPicked() {
+    livePicked = {};
+  }
   function liveColgroupHtml() {
     return (
       "<colgroup>" +
-      LIVE_SHOP_HEADS.map(function (col) {
+      liveCols().map(function (col) {
         return col.w ? '<col style="width:' + col.w + '" />' : "<col />";
       }).join("") +
       "</colgroup>"
@@ -1405,41 +1477,80 @@
   function liveTheadHtml() {
     return (
       "<thead><tr>" +
-      LIVE_SHOP_HEADS.map(function (col) {
-        return "<th><span>" + escapeHtml(col.label) + "</span></th>";
+      liveCols().map(function (col) {
+        return (
+          '<th data-live-col="' +
+          escapeHtml(col.key) +
+          '"><span>' +
+          escapeHtml(col.label) +
+          "</span></th>"
+        );
       }).join("") +
       "</tr></thead>"
     );
   }
-  function liveShopRowHtml(row, index, liveAt) {
+  function liveShopCellHtml(col, row, index, liveAt) {
     var shop = row && row.shop;
     var warn = feeWarnLabel(row && row.feeRate, shop);
+    var key = col && col.key;
+    if (key === "rank") {
+      return '<td class="xm-hm-num">' + rankMark(index) + "</td>";
+    }
+    if (key === "shop") {
+      return "<td>" + escapeHtml(shop) + "</td>";
+    }
+    if (key === "liveAmount") {
+      return '<td class="xm-hm-num">' + escapeHtml(row.liveAmount == null ? "—" : row.liveAmount) + "</td>";
+    }
+    if (key === "paidAmount") {
+      return '<td class="xm-hm-num">' + escapeHtml(row.paidAmount == null ? "—" : row.paidAmount) + "</td>";
+    }
+    if (key === "roi") {
+      return '<td class="xm-hm-num">' + escapeHtml(row.roi == null ? "—" : row.roi) + "</td>";
+    }
+    if (key === "paidDeal") {
+      return '<td class="xm-hm-num">' + escapeHtml(row.paidDeal == null ? "—" : row.paidDeal) + "</td>";
+    }
+    if (key === "feeRate") {
+      return (
+        '<td class="xm-hm-num' +
+        (feeOverTarget(row.feeRate, shop) ? " is-fee-warn" : "") +
+        '">' +
+        escapeHtml(row.feeRate == null ? "—" : row.feeRate) +
+        "</td>"
+      );
+    }
+    if (key === "feeWarn") {
+      return (
+        '<td class="xm-hm-num' +
+        (warn === "超标" ? " is-fee-warn" : "") +
+        '">' +
+        escapeHtml(warn) +
+        "</td>"
+      );
+    }
+    if (key === "feeGoal") {
+      return '<td class="xm-hm-num">' + feeGoalCellHtml(shop) + "</td>";
+    }
+    if (key === "liveAt") {
+      return '<td class="xm-hm-num">' + escapeHtml(liveAtText(liveAt)) + "</td>";
+    }
+    return "<td>—</td>";
+  }
+  function liveShopRowHtml(row, index, liveAt) {
+    var shop = row && row.shop;
     return (
-      "<tr><td class=\"xm-hm-num\">" +
-      rankMark(index) +
-      "</td><td>" +
+      '<tr class="xm-hm-live-row' +
+      (liveRowPicked(shop) ? " is-picked" : "") +
+      '" data-live-shop="' +
       escapeHtml(shop) +
-      '</td><td class="xm-hm-num">' +
-      escapeHtml(row.liveAmount == null ? "—" : row.liveAmount) +
-      '</td><td class="xm-hm-num">' +
-      escapeHtml(row.paidAmount == null ? "—" : row.paidAmount) +
-      '</td><td class="xm-hm-num">' +
-      escapeHtml(row.roi == null ? "—" : row.roi) +
-      '</td><td class="xm-hm-num">' +
-      escapeHtml(row.paidDeal == null ? "—" : row.paidDeal) +
-      '</td><td class="xm-hm-num' +
-      (feeOverTarget(row.feeRate, shop) ? " is-fee-warn" : "") +
       '">' +
-      escapeHtml(row.feeRate == null ? "—" : row.feeRate) +
-      '</td><td class="xm-hm-num' +
-      (warn === "超标" ? " is-fee-warn" : "") +
-      '">' +
-      escapeHtml(warn) +
-      '</td><td class="xm-hm-num">' +
-      feeGoalCellHtml(shop) +
-      '</td><td class="xm-hm-num">' +
-      escapeHtml(liveAtText(liveAt)) +
-      "</td></tr>"
+      liveCols()
+        .map(function (col) {
+          return liveShopCellHtml(col, row, index, liveAt);
+        })
+        .join("") +
+      "</tr>"
     );
   }
   function liveCardHtml(card) {
@@ -1614,7 +1725,12 @@
       ".xm-hm-live .xm-hm-table{min-width:1280px;table-layout:fixed;border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums}" +
       ".xm-hm-live .xm-hm-panel h2 .xm-hm-fee-goal{margin-left:auto}" +
       ".xm-hm-live .xm-hm-table .xm-hm-num{text-align:center;white-space:nowrap}" +
-      ".xm-hm-live .xm-hm-table th,.xm-hm-live .xm-hm-table td{border:0;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;text-align:center;padding:var(--xm-hm-live-row,4px) 6px;line-height:1.2}" +
+      ".xm-hm-live .xm-hm-table th,.xm-hm-live .xm-hm-table td{border:0;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;text-align:center;padding:var(--xm-hm-live-row,10px) 8px;line-height:1.45}" +
+      ".xm-hm-live .xm-hm-table tbody tr{cursor:pointer}" +
+      ".xm-hm-live .xm-hm-table tbody tr.is-picked td{background:#ffe4ec}" +
+      ".xm-hm-live .xm-hm-table th[data-live-col]{cursor:grab}" +
+      ".xm-hm-live .xm-hm-table th[data-live-col].is-hold{cursor:grabbing;opacity:.72}" +
+      ".xm-hm-live .xm-hm-table th[data-live-col].is-over{outline:1px dashed var(--xm-primary)}" +
       ".xm-hm-live .xm-hm-table th{border-right:1px dashed #c8ced8;text-align:center}" +
       ".xm-hm-live .xm-hm-table th span{display:block;width:100%;text-align:center}" +
       ".xm-hm-live .xm-hm-table th:last-child,.xm-hm-live .xm-hm-table td:last-child{text-align:center;border-right:0}" +
@@ -1743,7 +1859,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.704-home-noprofit");
+    board.setAttribute("data-hm-js", "0.1.705-home-rowpick");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -3005,6 +3121,11 @@
           paint(root, state);
           return;
         }
+        var liveRow = event.target.closest(".xm-hm-live .xm-hm-table tbody tr");
+        if (liveRow && !event.target.closest("input,select,button,textarea,a")) {
+          markLiveRowPicked(liveRow.getAttribute("data-live-shop"));
+          liveRow.classList.add("is-picked");
+        }
       }
       function onOutsideCardSet(event) {
         var t = event.target && event.target.closest ? event.target : null;
@@ -3225,6 +3346,7 @@
       var sortSettings = false;
       var sortTeam = false;
       var sortLive = false;
+      var sortHead = false;
       var sortStartX = 0;
       var sortStartY = 0;
       var sortSwallow = false;
@@ -3268,6 +3390,7 @@
         sortSettings = false;
         sortTeam = false;
         sortLive = false;
+        sortHead = false;
         clearTextSelection();
         Array.prototype.forEach.call(root.querySelectorAll(".is-hold, .is-over"), function (el) {
           el.classList.remove("is-hold", "is-over");
@@ -3286,11 +3409,13 @@
         if (!el || !el.closest || !root.contains(el)) {
           return null;
         }
-        return sortTeam
-          ? el.closest(".xm-hm-team")
-          : sortSettings
-            ? el.closest("#xm-hm-card-opts label")
-            : el.closest(".xm-hm-card");
+        return sortHead
+          ? el.closest(".xm-hm-live .xm-hm-table th[data-live-col]")
+          : sortTeam
+            ? el.closest(".xm-hm-team")
+            : sortSettings
+              ? el.closest("#xm-hm-card-opts label")
+              : el.closest(".xm-hm-card");
       }
       function onSortDown(event) {
         if (event.button && event.button !== 0) {
@@ -3315,6 +3440,21 @@
             event.preventDefault();
           }
           rowDrag = rowHit;
+          clearTextSelection();
+          return;
+        }
+        var liveHead = event.target.closest && event.target.closest(".xm-hm-live .xm-hm-table th[data-live-col]");
+        if (liveHead) {
+          if (event.cancelable) {
+            event.preventDefault();
+          }
+          sortFrom = liveHead.getAttribute("data-live-col") || "";
+          sortHead = true;
+          sortLive = false;
+          sortTeam = false;
+          sortSettings = false;
+          sortStartX = event.clientX || 0;
+          sortStartY = event.clientY || 0;
           clearTextSelection();
           return;
         }
@@ -3383,12 +3523,19 @@
         }
         if (sortFrom && !sortDragging && (Math.abs(x - sortStartX) > 8 || Math.abs(y - sortStartY) > 8)) {
           sortDragging = true;
-          var moving = sortTeam
-            ? root.querySelectorAll('.xm-hm-team[data-name="' + sortFrom + '"]')
-            : root.querySelectorAll('.xm-hm-card[data-card="' + sortFrom + '"]');
-          Array.prototype.forEach.call(moving, function (el) {
-            el.classList.add("is-hold");
-          });
+          if (sortHead) {
+            var movingHead = root.querySelector('.xm-hm-live .xm-hm-table th[data-live-col="' + sortFrom + '"]');
+            if (movingHead) {
+              movingHead.classList.add("is-hold");
+            }
+          } else {
+            var moving = sortTeam
+              ? root.querySelectorAll('.xm-hm-team[data-name="' + sortFrom + '"]')
+              : root.querySelectorAll('.xm-hm-card[data-card="' + sortFrom + '"]');
+            Array.prototype.forEach.call(moving, function (el) {
+              el.classList.add("is-hold");
+            });
+          }
         }
         if (sortSettings && sortFrom && !sortDragging && (Math.abs(x - sortStartX) > 6 || Math.abs(y - sortStartY) > 6)) {
           sortDragging = true;
@@ -3405,7 +3552,7 @@
         }
         var over = hitSortEl(event);
         var overKey = over
-          ? over.getAttribute(sortTeam ? "data-name" : sortSettings ? "data-sort" : "data-card")
+          ? over.getAttribute(sortHead ? "data-live-col" : sortTeam ? "data-name" : sortSettings ? "data-sort" : "data-card")
           : "";
         if (over && overKey && overKey !== sortFrom) {
           sortMarkOver(over);
@@ -3432,10 +3579,12 @@
         var moved = sortDragging && sortFrom;
         var toEl = hitSortEl(event);
         var toKey = toEl
-          ? toEl.getAttribute(sortTeam ? "data-name" : sortSettings ? "data-sort" : "data-card")
+          ? toEl.getAttribute(sortHead ? "data-live-col" : sortTeam ? "data-name" : sortSettings ? "data-sort" : "data-card")
           : "";
         if (moved && toKey && toKey !== sortFrom) {
-          if (sortTeam) {
+          if (sortHead) {
+            saveLiveHeadOrder(applyLiveHeadMove(sortFrom, toKey));
+          } else if (sortTeam) {
             saveTeamCols(sortFrom, toKey, state.view === "chief");
           } else if (sortLive) {
             saveLiveCardOrder(applyLiveCardMove(sortFrom, toKey));
@@ -3541,6 +3690,7 @@
       }
       return function unmount() {
         dead = true;
+        clearLiveRowPicked();
         window.clearInterval(poll);
         root.removeEventListener("click", onClick);
         root.removeEventListener("change", onChange);
