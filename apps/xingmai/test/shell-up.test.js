@@ -11,7 +11,9 @@ import {
   filterCenterPayload,
   navMarkup,
   orgNavFlags,
-  shopKey
+  shopKey,
+  shopNameOf,
+  skipCenterFilter
 } from "../src/modules/home/nav-items.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -20,11 +22,11 @@ const items = readFileSync(join(root, "src/modules/home/nav-items.js"), "utf8");
 const pages = readFileSync(join(root, "src/modules/home/pages.js"), "utf8");
 const middleware = readFileSync(join(root, "src/modules/profile/middleware.js"), "utf8");
 
-test("shell pin is 0.1.727 and menus stay collapsed by default", () => {
-  assert.match(nav, /const ASSET_VER = "0\.1\.727"/);
-  assert.match(nav, /0\.1\.727-center-scope/);
-  assert.match(pages, /xm-fast-shell 0\.1\.727/);
-  assert.match(middleware, /export const SHELL_ASSET_VER = "0\.1\.727"/);
+test("shell pin is 0.1.732 and menus stay collapsed by default", () => {
+  assert.match(nav, /const ASSET_VER = "0\.1\.732"/);
+  assert.match(nav, /0\.1\.732-center-duty/);
+  assert.match(pages, /xm-fast-shell 0\.1\.732/);
+  assert.match(middleware, /export const SHELL_ASSET_VER = "0\.1\.732"/);
   assert.match(middleware, /import \{ currentUser, publicProfile \} from "\.\/auth\.js"/);
   assert.match(nav, /group\.classList\.toggle\("is-open", open\)/);
   assert.match(items, /const open = childActive\(item, activeHref\)/);
@@ -124,4 +126,42 @@ test("Shen and Han shop lists stay on their own org and duty line", () => {
   assert.equal(paid.metrics.stores, 1);
   assert.match(nav, /installCenterFetchGuard/);
   assert.match(nav, /window\.XmOrgScope/);
+  assert.match(nav, /isCenterUiWorkerView/);
+  assert.equal(shopNameOf({ 店铺名称: "帕华汽车用品专营店" }), "帕华汽车用品专营店");
+  assert.equal(skipCenterFilter("/api/han/worker", "GET"), true);
+  assert.equal(skipCenterFilter("/api/han/worker?view=overview", "GET"), false);
+  assert.equal(skipCenterFilter("/api/han/worker?view=rules", "GET"), false);
+  assert.equal(skipCenterFilter("/api/han/worker?view=shop&store=ZYUO洗护旗舰店", "GET"), false);
+  assert.equal(skipCenterFilter("/api/han/worker?view=history", "GET"), false);
+  assert.equal(skipCenterFilter("/api/shen/paid/worker-status", "GET"), true);
+  assert.equal(skipCenterFilter("/api/han/worker?view=overview", "POST"), true);
+  const overview = filterCenterPayload(
+    {
+      shops: [
+        { store: "ZYUO洗护旗舰店", spend: 10 },
+        { store: "RASW家居旗舰店", spend: 8 },
+        { store: "帕华汽车用品专营店", spend: 3 }
+      ],
+      stores: ["ZYUO洗护旗舰店", "RASW家居旗舰店", "帕华汽车用品专营店"],
+      shopRuns: [{ store: "ZYUO洗护旗舰店" }, { store: "RASW家居旗舰店" }],
+      runs: [{ store: "ZYUO洗护旗舰店" }],
+      metrics: { stores: 3, shops: 3, spend: 21 },
+      totals: { stores: 3, spend: 21 }
+    },
+    (name) => allowCenterShop(name, "han", han, {}, true)
+  );
+  assert.deepEqual(overview.stores, ["ZYUO洗护旗舰店"]);
+  assert.equal(overview.shops.length, 1);
+  assert.equal(overview.shops[0].store, "ZYUO洗护旗舰店");
+  assert.equal(overview.shopRuns.length, 1);
+  assert.equal(overview.metrics.stores, 1);
+  assert.equal(overview.metrics.spend, 10);
+  const denied = filterCenterPayload(
+    { store: "RASW家居旗舰店", shop: { store: "RASW家居旗舰店" }, subaccounts: [{ store: "RASW家居旗舰店" }] },
+    (name) => allowCenterShop(name, "han", han, {}, true),
+    "RASW家居旗舰店"
+  );
+  assert.equal(denied.forbidden, true);
+  assert.equal(denied.store, "");
+  assert.deepEqual(denied.subaccounts, []);
 });

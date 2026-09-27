@@ -80,7 +80,52 @@ export function shopNameOf(row) {
   if (!row || typeof row !== "object") {
     return "";
   }
-  return String(row.store || row.storeName || row.shopName || row.shop || row.name || "").trim();
+  return String(
+    row.store || row.storeName || row.shopName || row.shop || row["店铺名称"] || row["店铺"] || row.name || ""
+  ).trim();
+}
+
+export function queryValue(url, key) {
+  const raw = String(url || "");
+  const qIdx = raw.indexOf("?");
+  const q = qIdx >= 0 ? raw.slice(qIdx + 1) : "";
+  const match = q.match(new RegExp(`(?:^|&)${String(key || "")}=([^&]*)`, "i"));
+  if (!match) {
+    return "";
+  }
+  try {
+    return decodeURIComponent(match[1].replace(/\+/g, " "));
+  } catch {
+    return match[1];
+  }
+}
+
+export function isCenterUiWorkerView(url) {
+  const raw = String(url || "");
+  const path = raw.split("?")[0];
+  if (!/\/api\/(?:han|shen)\/worker\/?$/i.test(path)) {
+    return false;
+  }
+  return /^(overview|shop|rules|history)$/i.test(queryValue(raw, "view"));
+}
+
+export function skipCenterFilter(url, method) {
+  const verb = String(method || "GET").toUpperCase();
+  if (verb !== "GET") {
+    return true;
+  }
+  const raw = String(url || "");
+  const path = raw.split("?")[0];
+  if (!centerOfApiPath(path) || path.indexOf("/api/") !== 0) {
+    return true;
+  }
+  if (/\.csv$/i.test(path)) {
+    return true;
+  }
+  if (/worker/i.test(path) && !isCenterUiWorkerView(raw)) {
+    return true;
+  }
+  return false;
 }
 
 export function centerOfApiPath(url) {
@@ -176,25 +221,105 @@ function keepCenterRow(row, allow) {
   return allow(name);
 }
 
-export function filterCenterPayload(data, allow) {
+const SHOP_LIST_KEYS = [
+  "enabledStores",
+  "shops",
+  "stores",
+  "rows",
+  "items",
+  "shopRuns",
+  "records",
+  "runs",
+  "runShops",
+  "subaccounts",
+  "recharges"
+];
+
+function blankDeniedShop(data) {
+  const next = { ...data, store: "", shop: {}, forbidden: true };
+  SHOP_LIST_KEYS.forEach((key) => {
+    if (Array.isArray(next[key])) {
+      next[key] = [];
+    }
+  });
+  if (next.metrics && typeof next.metrics === "object") {
+    next.metrics = { ...next.metrics, stores: 0, shops: 0 };
+  }
+  if (next.totals && typeof next.totals === "object") {
+    next.totals = { ...next.totals, stores: 0, shops: 0 };
+  }
+  return next;
+}
+
+function recountCenterMetrics(next) {
+  const list = Array.isArray(next.enabledStores)
+    ? next.enabledStores
+    : Array.isArray(next.shops)
+      ? next.shops
+      : Array.isArray(next.stores)
+        ? next.stores
+        : Array.isArray(next.rows)
+          ? next.rows
+          : null;
+  if (!list) {
+    return;
+  }
+  const patch = { stores: list.length, shops: list.length };
+  if (list.length && typeof list[0] === "object") {
+    const add = (key) => list.reduce((sum, row) => sum + (Number(row && row[key]) || 0), 0);
+    if (next.metrics && typeof next.metrics === "object") {
+      if ("spend" in next.metrics) {
+        patch.spend = add("spend");
+      }
+      if ("paidOrders" in next.metrics) {
+        patch.paidOrders = add("paidOrders");
+      }
+      if ("orders" in next.metrics) {
+        patch.orders = add("orders");
+      }
+      if ("jingmaiGmv" in next.metrics) {
+        patch.jingmaiGmv = add("jingmaiGmv");
+      }
+      if ("gmv" in next.metrics) {
+        patch.gmv = add("gmv");
+      }
+      if ("totalOrderAmount" in next.metrics) {
+        patch.totalOrderAmount = add("totalOrderAmount");
+      }
+      if ("balance" in next.metrics) {
+        patch.balance = add("balance");
+      }
+    }
+  }
+  if (next.metrics && typeof next.metrics === "object") {
+    next.metrics = { ...next.metrics, ...patch };
+  }
+  if (next.totals && typeof next.totals === "object") {
+    next.totals = { ...next.totals, ...patch };
+  }
+}
+
+export function filterCenterPayload(data, allow, storeQuery) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     return data;
   }
+  const asked = String(storeQuery || data.store || "").trim();
+  if (asked && !allow(asked)) {
+    return blankDeniedShop(data);
+  }
   const next = { ...data };
-  ["enabledStores", "shops"].forEach((key) => {
-    if (Array.isArray(next[key]) && next[key].every((item) => typeof item === "string")) {
-      next[key] = next[key].filter((name) => allow(name));
-    }
-  });
-  ["rows", "items", "shopRuns", "records"].forEach((key) => {
+  SHOP_LIST_KEYS.forEach((key) => {
     if (Array.isArray(next[key])) {
       next[key] = next[key].filter((row) => keepCenterRow(row, allow));
     }
   });
-  if (next.metrics && typeof next.metrics === "object") {
-    const stores = Array.isArray(next.enabledStores) ? next.enabledStores.length : Array.isArray(next.rows) ? next.rows.length : next.metrics.stores;
-    next.metrics = { ...next.metrics, stores };
+  if (next.shop && typeof next.shop === "object" && !Array.isArray(next.shop)) {
+    const name = shopNameOf(next.shop);
+    if (name && !allow(name)) {
+      return blankDeniedShop(next);
+    }
   }
+  recountCenterMetrics(next);
   return next;
 }
 
