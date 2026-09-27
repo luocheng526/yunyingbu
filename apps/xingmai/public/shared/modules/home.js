@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.714-home-dutyscope */
+/* xm-module-home 0.1.717-home-chiefladder */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -2003,7 +2003,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.714-home-dutyscope");
+    board.setAttribute("data-hm-js", "0.1.717-home-chiefladder");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2344,7 +2344,7 @@
   }
   function blankLadders() {
     var cols = [
-      { title: "主管排行榜", rows: [] },
+      { title: "主管储备排行榜", rows: [] },
       { title: "运营排行榜", rows: [] }
     ];
     return [
@@ -2976,42 +2976,90 @@
     };
   }
   function shopDutyName(shop, field) {
+    if (field === "supervisor") {
+      return shopSupervisorName(shop);
+    }
+    if (field === "reserve") {
+      return shopReserveName(shop);
+    }
     var n = String((shop && shop[field]) || "").trim();
-    if (!n || n === "管理员") {
+    if (!n || n === "管理员" || n === "无") {
       return "";
     }
-    if (field === "operator" && n === String((shop && shop.supervisor) || "").trim()) {
+    if (field === "operator" && (n === shopSupervisorName(shop) || n === shopReserveName(shop))) {
       return "";
     }
     return n;
   }
-  function namesFromShopDuty(shops, field) {
+  function reserveNameSet(shops, people) {
+    var blocked = {};
+    (shops || []).forEach(function (shop) {
+      var n = shopReserveName(shop);
+      if (n) {
+        blocked[n] = true;
+      }
+    });
+    (people || []).forEach(function (person) {
+      if (!person || person.status !== "在职") {
+        return;
+      }
+      var n = String(person.name || "").trim();
+      if (!n) {
+        return;
+      }
+      if (person.role === "储备" || String(person.reserve || "").trim() === n) {
+        blocked[n] = true;
+      }
+    });
+    return blocked;
+  }
+  function namesFromShopDuty(shops, field, people) {
     var blocked = {};
     if (field === "operator") {
       (shops || []).forEach(function (shop) {
-        var sup = String((shop && shop.supervisor) || "").trim();
-        if (sup && sup !== "管理员") {
+        var sup = shopSupervisorName(shop);
+        if (sup) {
           blocked[sup] = true;
         }
       });
+      Object.assign(blocked, reserveNameSet(shops, people));
     }
     var seen = {};
     var names = [];
-    (shops || []).forEach(function (shop) {
-      var n = shopDutyName(shop, field);
-      if (!n || seen[n] || blocked[n]) {
+    function add(name) {
+      var n = String(name || "").trim();
+      if (!n || n === "管理员" || seen[n] || blocked[n]) {
         return;
       }
       seen[n] = true;
       names.push(n);
+    }
+    if (field === "chief") {
+      (shops || []).forEach(function (shop) {
+        add(shopSupervisorName(shop));
+        add(shopReserveName(shop));
+      });
+      return names;
+    }
+    (shops || []).forEach(function (shop) {
+      add(shopDutyName(shop, field));
     });
     return names;
+  }
+  function shopMatchesDuty(shop, name, field) {
+    if (!shop || !name) {
+      return false;
+    }
+    if (field === "chief") {
+      return shopSupervisorName(shop) === name || shopReserveName(shop) === name;
+    }
+    return shopDutyName(shop, field) === name;
   }
   function sumDutyMetric(shops, name, field, erp, catalogByName, metric) {
     var total = 0;
     var ok = false;
     (shops || []).forEach(function (shop) {
-      if (shopDutyName(shop, field) !== name) {
+      if (!shopMatchesDuty(shop, name, field)) {
         return;
       }
       var id = resolveErpId(shop, catalogByName);
@@ -3028,7 +3076,7 @@
     var erp = mapByShopId(rangePack && rangePack.records);
     var catalogByName = mapByShopName((catalogPack && catalogPack.records) || []);
     function column(title, dutyField, field) {
-      var rows = namesFromShopDuty(dutyShops, dutyField)
+      var rows = namesFromShopDuty(dutyShops, dutyField, people)
         .map(function (name) {
           var n = sumDutyMetric(dutyShops, name, dutyField, erp, catalogByName, field);
           return { name: name, amount: fmtMoney(n), _n: n };
@@ -3046,13 +3094,13 @@
         key: "perf",
         title: "业绩排行榜",
         unit: "支付金额",
-        columns: [column("主管排行榜", "supervisor", "payAmount"), column("运营排行榜", "operator", "payAmount")]
+        columns: [column("主管储备排行榜", "chief", "payAmount"), column("运营排行榜", "operator", "payAmount")]
       },
       {
         key: "profit",
         title: "利润排行榜",
         unit: "利润",
-        columns: [column("主管排行榜", "supervisor", "profit"), column("运营排行榜", "operator", "profit")]
+        columns: [column("主管储备排行榜", "chief", "profit"), column("运营排行榜", "operator", "profit")]
       }
     ];
   }

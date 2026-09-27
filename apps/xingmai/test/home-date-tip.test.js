@@ -564,8 +564,9 @@ test("board has 业绩 and 利润 ladders with 主管 运营 columns and ranks 1
   assert.match(homeJs, /while \(out\.length < 7\)/);
   assert.match(homeJs, /key: "profit"/);
   assert.match(homeJs, /title: "利润排行榜"/);
-  assert.match(homeJs, /column\("主管排行榜", "supervisor", "payAmount"\), column\("运营排行榜", "operator", "payAmount"\)/);
-  assert.match(homeJs, /column\("主管排行榜", "supervisor", "profit"\), column\("运营排行榜", "operator", "profit"\)/);
+  assert.match(homeJs, /column\("主管储备排行榜", "chief", "payAmount"\), column\("运营排行榜", "operator", "payAmount"\)/);
+  assert.match(homeJs, /column\("主管储备排行榜", "chief", "profit"\), column\("运营排行榜", "operator", "profit"\)/);
+  assert.doesNotMatch(homeJs, /column\("主管排行榜"/);
   assert.match(homeJs, /function namesFromShopDuty/);
   assert.match(homeJs, /function personIsChief/);
   assert.match(homeJs, /person\.reserve/);
@@ -584,12 +585,12 @@ test("board has 业绩 and 利润 ladders with 主管 运营 columns and ranks 1
     title: "业绩排行榜",
     unit: "支付金额",
     columns: [
-      { title: "主管排行榜", rows: [{ name: "杨润泽", amount: "1" }] },
+      { title: "主管储备排行榜", rows: [{ name: "杨润泽", amount: "1" }] },
       { title: "运营排行榜", rows: [{ name: "高丽男", amount: "2" }] }
     ]
   });
   assert.match(html, /xm-hm-ladder-title">业绩排行榜</);
-  assert.match(html, /主管排行榜/);
+  assert.match(html, /主管储备排行榜/);
   assert.match(html, /运营排行榜/);
   assert.equal(html.includes("经理排行榜"), false);
   assert.equal((html.match(/>04</g) || []).length, 2);
@@ -597,9 +598,28 @@ test("board has 业绩 and 利润 ladders with 主管 运营 columns and ranks 1
 });
 
 test("ladder names follow shop supervisor and operator duty not people role", () => {
+  const pick = (name) => {
+    const start = homeJs.indexOf("function " + name);
+    assert.notEqual(start, -1, name);
+    let depth = 0;
+    for (let i = start; i < homeJs.length; i += 1) {
+      if (homeJs[i] === "{") depth += 1;
+      if (homeJs[i] === "}") {
+        depth -= 1;
+        if (depth === 0) return homeJs.slice(start, i + 1);
+      }
+    }
+    throw new Error("unclosed " + name);
+  };
   const start = homeJs.indexOf("function shopDutyName");
   const end = homeJs.indexOf("function buildLadders");
-  const fns = new Function(homeJs.slice(start, end) + "return {namesFromShopDuty,shopDutyName};")();
+  const fns = new Function(
+    pick("dutyPersonName") +
+      pick("shopSupervisorName") +
+      pick("shopReserveName") +
+      homeJs.slice(start, end) +
+      "return {namesFromShopDuty,shopDutyName};"
+  )();
   const shops = [
     { supervisor: "高丽男", operator: "杨禄" },
     { supervisor: "张文静", operator: "张文静" },
@@ -611,6 +631,43 @@ test("ladder names follow shop supervisor and operator duty not people role", ()
   assert.deepEqual(fns.namesFromShopDuty(shops, "operator"), ["杨禄"]);
   assert.equal(fns.shopDutyName({ supervisor: "薛双双", operator: "薛双双" }, "operator"), "");
   assert.equal(fns.shopDutyName({ supervisor: "韩梦凯", operator: "翁琴" }, "operator"), "翁琴");
+});
+
+test("reserve 张文静 ranks on 主管储备 and not on 运营", () => {
+  const pick = (name) => {
+    const start = homeJs.indexOf("function " + name);
+    assert.notEqual(start, -1, name);
+    let depth = 0;
+    for (let i = start; i < homeJs.length; i += 1) {
+      if (homeJs[i] === "{") depth += 1;
+      if (homeJs[i] === "}") {
+        depth -= 1;
+        if (depth === 0) return homeJs.slice(start, i + 1);
+      }
+    }
+    throw new Error("unclosed " + name);
+  };
+  const start = homeJs.indexOf("function shopDutyName");
+  const end = homeJs.indexOf("function buildLadders");
+  const fns = new Function(
+    pick("dutyPersonName") +
+      pick("shopSupervisorName") +
+      pick("shopReserveName") +
+      homeJs.slice(start, end) +
+      "return {namesFromShopDuty,shopDutyName,shopMatchesDuty};"
+  )();
+  const shops = [
+    { supervisor: "", reserve: "张文静", operator: "张文静", storeName: "RASW家居旗舰店" },
+    { supervisor: "", reserve: "张文静", operator: "王博", storeName: "飒望居家旗舰店" },
+    { supervisor: "杨润泽", reserve: "", operator: "崔安琪", storeName: "杨润泽店" }
+  ];
+  const people = [{ name: "张文静", role: "运营", status: "在职", reserve: "张文静" }];
+  assert.deepEqual(fns.namesFromShopDuty(shops, "chief", people), ["张文静", "杨润泽"]);
+  assert.deepEqual(fns.namesFromShopDuty(shops, "operator", people), ["王博", "崔安琪"]);
+  assert.equal(fns.shopDutyName(shops[0], "operator"), "");
+  assert.equal(fns.shopMatchesDuty(shops[0], "张文静", "chief"), true);
+  assert.equal(fns.shopMatchesDuty(shops[1], "张文静", "chief"), true);
+  assert.equal(fns.shopMatchesDuty(shops[2], "张文静", "chief"), false);
 });
 
 test("card help uses a body-level tooltip so overflow cannot clip it", () => {

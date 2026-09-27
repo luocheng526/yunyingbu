@@ -1,5 +1,5 @@
 /** Homepage script URL. Must not use /shared/modules/home.js?v=… — that URL is immutable for 24h. */
-export const HOME_CLIENT_JS = "/api/home/client.js?v=0.1.714-home-dutyscope";
+export const HOME_CLIENT_JS = "/api/home/client.js?v=0.1.717-home-chiefladder";
 
 export function rewriteHomeModuleUrl(html) {
   return String(html || "").replace(
