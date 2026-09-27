@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.696-home-feecols */
+/* xm-module-home 0.1.697-home-thmid */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -676,7 +676,7 @@
         '"><h2>责权店铺 <span>' +
         shops.length +
         " 店</span></h2>" +
-        '<table class="xm-hm-table"><thead><tr><th>店铺名称</th></tr></thead><tbody>' +
+        '<table class="xm-hm-table"><thead><tr><th><span>店铺名称</span></th></tr></thead><tbody>' +
         shops
           .map(function (row) {
             return "<tr><td>" + escapeHtml(row.shop) + "</td></tr>";
@@ -693,13 +693,13 @@
       '"><h2>责权店铺 <span>' +
       shops.length +
       " 店</span></h2>" +
-      '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th>' +
+      '<table class="xm-hm-table"><thead><tr><th><span>排名</span></th><th><span>店铺名称</span></th>' +
       cols
         .map(function (def) {
           return shopColHead(def, sort);
         })
         .join("") +
-      "<th>运营</th></tr></thead><tbody>" +
+      "<th><span>运营</span></th></tr></thead><tbody>" +
       shops
         .map(function (row, i) {
           return shopRowHtml(row, i, cols);
@@ -1231,6 +1231,36 @@
       "</article>"
     );
   }
+  var LIVE_SHOP_HEADS = [
+    { label: "排名", w: "56px" },
+    { label: "店铺名称", w: "16%" },
+    { label: "实时销售额" },
+    { label: "实时付费金额" },
+    { label: "实时利润" },
+    { label: "实时付费ROI" },
+    { label: "实时付费成交额" },
+    { label: "实时费比" },
+    { label: "费比预警", w: "88px" },
+    { label: "更新时间", w: "150px" }
+  ];
+  function liveColgroupHtml() {
+    return (
+      "<colgroup>" +
+      LIVE_SHOP_HEADS.map(function (col) {
+        return col.w ? '<col style="width:' + col.w + '" />' : "<col />";
+      }).join("") +
+      "</colgroup>"
+    );
+  }
+  function liveTheadHtml() {
+    return (
+      "<thead><tr>" +
+      LIVE_SHOP_HEADS.map(function (col) {
+        return "<th><span>" + escapeHtml(col.label) + "</span></th>";
+      }).join("") +
+      "</tr></thead>"
+    );
+  }
   function liveShopRowHtml(row, index, liveAt) {
     var warn = feeWarnLabel(row && row.feeRate);
     return (
@@ -1344,7 +1374,8 @@
       ".xm-hm-teams .xm-hm-table{min-width:760px;font-variant-numeric:tabular-nums;border-collapse:separate;border-spacing:0;table-layout:fixed}" +
       ".xm-hm-teams .xm-hm-table .xm-hm-num{text-align:center;white-space:nowrap}" +
       ".xm-hm-teams .xm-hm-table th,.xm-hm-teams .xm-hm-table td{border:0;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;text-align:center}" +
-      ".xm-hm-teams .xm-hm-table th{border-right:1px dashed #c8ced8}" +
+      ".xm-hm-teams .xm-hm-table th{border-right:1px dashed #c8ced8;text-align:center}" +
+      ".xm-hm-teams .xm-hm-table th span{display:block;width:100%;text-align:center}" +
       ".xm-hm.is-chief .xm-hm-teams .xm-hm-panel{overflow:hidden}" +
       ".xm-hm.is-chief .xm-hm-teams .xm-hm-table{min-width:0}" +
       ".xm-hm-teams .xm-hm-table th:last-child,.xm-hm-teams .xm-hm-table td:last-child{text-align:center;white-space:nowrap;border-right:0}" +
@@ -1428,7 +1459,8 @@
       ".xm-hm-live .xm-hm-panel h2 .xm-hm-fee-goal{margin-left:auto}" +
       ".xm-hm-live .xm-hm-table .xm-hm-num{text-align:center;white-space:nowrap}" +
       ".xm-hm-live .xm-hm-table th,.xm-hm-live .xm-hm-table td{border:0;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;text-align:center;padding:var(--xm-hm-live-row,4px) 6px;line-height:1.2}" +
-      ".xm-hm-live .xm-hm-table th{border-right:1px dashed #c8ced8}" +
+      ".xm-hm-live .xm-hm-table th{border-right:1px dashed #c8ced8;text-align:center}" +
+      ".xm-hm-live .xm-hm-table th span{display:block;width:100%;text-align:center}" +
       ".xm-hm-live .xm-hm-table th:last-child,.xm-hm-live .xm-hm-table td:last-child{text-align:center;border-right:0}" +
       ".xm-hm-live .xm-hm-panel{overflow-x:auto}" +
       ".xm-hm-card,.xm-hm-pop label{-webkit-user-select:none;user-select:none}" +
@@ -1447,7 +1479,9 @@
       ".xm-hm-index-num{margin:8px 0 6px;font-size:28px;font-weight:700;color:var(--xm-primary)}" +
       ".xm-hm-table{width:100%;border-collapse:collapse;font-size:12px}" +
       ".xm-hm-table th{text-align:center;color:var(--xm-muted);font-weight:500;padding:6px 4px;border-bottom:1px solid var(--xm-line)}" +
-      ".xm-hm-table td{padding:7px 4px;border-bottom:1px solid var(--xm-line);color:var(--xm-ink)}" +
+      ".xm-hm-table thead th{text-align:center}" +
+      ".xm-hm-table thead th span{display:block;width:100%;text-align:center}" +
+      ".xm-hm-table td{padding:7px 4px;border-bottom:1px solid var(--xm-line);color:var(--xm-ink);text-align:center}" +
       ".xm-hm-table td:last-child,.xm-hm-table th:last-child{text-align:center}" +
       ".xm-hm-cup{display:inline-flex;width:18px;height:18px;border-radius:50%;align-items:center;justify-content:center;color:#fff;font-size:11px}" +
       ".xm-hm-cup.gold{background:#f5a623}" +
@@ -1552,7 +1586,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.696-home-feecols");
+    board.setAttribute("data-hm-js", "0.1.697-home-thmid");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1584,7 +1618,9 @@
       " 店</span>" +
       feeGoalLabelHtml() +
       "</h2>" +
-      '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th><th>实时销售额</th><th>实时付费金额</th><th>实时利润</th><th>实时付费ROI</th><th>实时付费成交额</th><th>实时费比</th><th>费比预警</th><th>更新时间</th></tr></thead>' +
+      '<table class="xm-hm-table">' +
+      liveColgroupHtml() +
+      liveTheadHtml() +
       "<tbody>" +
       shops.map(function (row, i) {
         return liveShopRowHtml(row, i, state.liveAt);

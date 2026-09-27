@@ -79,7 +79,7 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function filterOwnChiefs/);
   assert.match(homeJs, /function seesAllChiefs/);
   assert.match(homeJs, /shop\.assistant/);
-  assert.match(homeJs, /<th>店铺名称<\/th><\/tr><\/thead><tbody>/);
+  assert.match(homeJs, /<th><span>店铺名称<\/span><\/th><\/tr><\/thead><tbody>/);
   assert.doesNotMatch(homeJs, /<th>排名<\/th><th>店铺名称<\/th><\/tr>/);
   assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table\{min-width:760px/);
   assert.match(homeJs, /\.xm-hm\.is-team:not\(\.is-chief\) \.xm-hm-team\{min-width:0;width:100%\}/);
@@ -93,7 +93,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table th,\.xm-hm-teams \.xm-hm-table td\{border:0;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;text-align:center\}/);
   assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table \.xm-hm-num\{text-align:center/);
   assert.match(homeJs, /\.xm-hm-sort-h\{display:inline-flex;align-items:center;justify-content:center/);
-  assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table th\{border-right:1px dashed #c8ced8\}/);
+  assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table th\{border-right:1px dashed #c8ced8;text-align:center\}/);
+  assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table th span\{display:block;width:100%;text-align:center\}/);
   assert.doesNotMatch(homeJs, /\.xm-hm-teams \.xm-hm-table th,\.xm-hm-teams \.xm-hm-table td\{border:0;border-right:1px dashed/);
   assert.match(homeJs, /function colKey/);
   assert.match(homeJs, /function restoreShopColW/);
@@ -148,7 +149,7 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function liveRowPad/);
   assert.match(homeJs, /--xm-hm-live-row/);
   assert.match(homeJs, /closest\("\.xm-hm-live-cards"\)/);
-  assert.match(homeJs, /\.xm-hm-live \.xm-hm-table th\{border-right:1px dashed #c8ced8\}/);
+  assert.match(homeJs, /\.xm-hm-live \.xm-hm-table th\{border-right:1px dashed #c8ced8;text-align:center\}/);
   assert.match(homeJs, /data-card="'\s*\+\s*escapeHtml\(card\.key\)/);
   assert.match(homeJs, /function liveMetaHtml/);
   assert.match(homeJs, /function feeWarnText/);
@@ -209,9 +210,10 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /hours: hasHourly \? 24 : 0/);
   assert.doesNotMatch(homeJs, /LIVE_CARD_KEYS = \["ad", "profit"/);
   assert.match(homeJs, /data-shop-card=/);
-  assert.match(homeJs, /<th>排名<\/th><th>店铺名称<\/th><th>实时销售额/);
-  assert.match(homeJs, /<th>运营<\/th><\/tr>/);
-  assert.match(homeJs, /<th>排名<\/th><th>店铺名称<\/th>' \+/);
+  assert.match(homeJs, /function liveTheadHtml/);
+  assert.match(homeJs, /label: "实时销售额"/);
+  assert.match(homeJs, /<th><span>运营<\/span><\/th><\/tr>/);
+  assert.match(homeJs, /<th><span>排名<\/span><\/th><th><span>店铺名称<\/span><\/th>' \+/);
   assert.match(homeJs, /function sortedShops/);
   assert.match(homeJs, /function shopColHead/);
   assert.match(homeJs, /data-shop-sort=/);

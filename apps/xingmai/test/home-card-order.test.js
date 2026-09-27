@@ -80,7 +80,9 @@ test("live page has fee target, warning and update time", () => {
   assert.match(homeJs, /function feeGoalLabelHtml/);
   assert.match(homeJs, /data-fee-target/);
   assert.match(homeJs, /费比目标设置/);
-  assert.match(homeJs, /<th>费比预警<\/th><th>更新时间<\/th>/);
+  assert.match(homeJs, /label: "费比预警"/);
+  assert.match(homeJs, /label: "更新时间"/);
+  assert.match(homeJs, /function liveTheadHtml/);
   assert.match(homeJs, /费比预警：当前 /);
   assert.match(homeJs, /更新时间 /);
   assert.match(homeJs, /is-warn/);
@@ -93,8 +95,12 @@ test("live paid table headers can shrink row spacing", () => {
   assert.match(homeJs, /function saveLiveColW/);
   assert.match(homeJs, /xm-home-live-cols/);
   assert.match(homeJs, /--xm-hm-live-row/);
-  assert.match(homeJs, /\.xm-hm-live \.xm-hm-table th\{border-right:1px dashed #c8ced8\}/);
+  assert.match(homeJs, /\.xm-hm-live \.xm-hm-table th\{border-right:1px dashed #c8ced8;text-align:center\}/);
   assert.match(homeJs, /\.xm-hm-live \.xm-hm-table \.xm-hm-num\{text-align:center;white-space:nowrap\}/);
   assert.match(homeJs, /\.xm-hm-table th\{text-align:center/);
+  assert.match(homeJs, /\.xm-hm-table thead th\{text-align:center\}/);
+  assert.match(homeJs, /function liveTheadHtml/);
+  assert.match(homeJs, /\.xm-hm-live \.xm-hm-table th span\{display:block;width:100%;text-align:center\}/);
+  assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table th span\{display:block;width:100%;text-align:center\}/);
   assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table th, \.xm-hm-live \.xm-hm-table th/);
 });
