@@ -97,7 +97,9 @@
 
   function mountLiveDashboard(root) {
     ensureSheet();
-    return loadScript("/data-live.js?v=home-live1").then(function () {
+    return loadScript("/data-scope.js?v=scope1").then(function () {
+      return loadScript("/data-live.js?v=home-live1");
+    }).then(function () {
       if (typeof window.XmDataCreateLiveDashboard === "function") {
         return window.XmDataCreateLiveDashboard(root);
       }
@@ -115,7 +117,9 @@
       root.innerHTML =
         '<main class="xm-page data-overview-root ch-root"><div id="board"><p class="ch-empty">正在加载店铺数据…</p></div></main>';
     }
-    return loadScript("/data-shops.js?v=shop-wide2").then(function () {
+    return loadScript("/data-scope.js?v=scope1").then(function () {
+      return loadScript("/data-shops.js?v=shop-wide2");
+    }).then(function () {
       if (typeof window.XmDataCreateShopDashboard === "function") {
         return window.XmDataCreateShopDashboard(root);
       }
@@ -129,7 +133,9 @@
 
   function mountGoodsDashboard(root) {
     ensureSheet();
-    return loadScript("/data-goods.js?v=goods-erp1").then(function () {
+    return loadScript("/data-scope.js?v=scope1").then(function () {
+      return loadScript("/data-goods.js?v=goods-erp1");
+    }).then(function () {
       if (typeof window.XmDataCreateGoodsDashboard === "function") {
         return window.XmDataCreateGoodsDashboard(root);
       }
@@ -147,7 +153,9 @@
       root.innerHTML =
         '<main class="xm-page data-overview-root ch-root"><div id="board"><p class="ch-empty">正在加载数据总览…</p></div></main>';
     }
-    return loadScript("/data-overview.js?v=data-ov5").then(function () {
+    return loadScript("/data-scope.js?v=scope1").then(function () {
+      return loadScript("/data-overview.js?v=data-ov6");
+    }).then(function () {
       if (typeof window.XmDataCreateDashboard === "function") {
         return window.XmDataCreateDashboard(root);
       }

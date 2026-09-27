@@ -27,7 +27,7 @@
     if (!document.querySelector('link[href^="/data-pages.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/data-pages.css?v=data-ov5";
+      link.href = "/data-pages.css?v=data-ov6";
       document.head.appendChild(link);
     }
     ensureHeroStyle();
@@ -1114,9 +1114,81 @@
       });
     }
 
+    function applyDuty(payload) {
+      const api = window.XmDataScope;
+      if (!payload || !api) {
+        return Promise.resolve(payload);
+      }
+      return api.ready().then(function (pack) {
+        const shops = api.limitShops(payload.shops, pack);
+        payload.shops = shops;
+        payload.shopTable = shopTableFrom(shops);
+        payload.summary.shops = shops.length;
+        if (pack.scope && !pack.scope.all) {
+          const pay = shops.reduce(function (n, shop) {
+            return n + (Number(shop.payAmount) || 0);
+          }, 0);
+          const refund = shops.reduce(function (n, shop) {
+            return n + (Number(shop.refundAmount) || 0);
+          }, 0);
+          const orders = shops.reduce(function (n, shop) {
+            return n + (Number(shop.orderCount) || 0);
+          }, 0);
+          const netOrders = shops.reduce(function (n, shop) {
+            return n + (Number(shop.netOrderCount) || 0);
+          }, 0);
+          const profit = shops.reduce(function (n, shop) {
+            return n + (Number(shop.profit) || 0);
+          }, 0);
+          const promo = shops.reduce(function (n, shop) {
+            return n + (Number(shop.totalPromotionCost || shop.promotionCost) || 0);
+          }, 0);
+          payload.cards = (payload.cards || []).map(function (card) {
+            if (card.key === "pay") {
+              return Object.assign({}, card, { value: fmtInt(pay) });
+            }
+            if (card.key === "orders") {
+              return Object.assign({}, card, { value: fmt(netOrders || orders, 0) });
+            }
+            if (card.key === "profit") {
+              return Object.assign({}, card, { value: fmtInt(profit) });
+            }
+            if (card.key === "refundRate") {
+              return Object.assign({}, card, { value: pct(pay ? refund / pay : 0) });
+            }
+            if (card.key === "ad") {
+              return Object.assign({}, card, { value: fmtInt(promo) });
+            }
+            if (card.key === "adRate") {
+              return Object.assign({}, card, { value: pct(pay && promo ? promo / pay : 0) });
+            }
+            if (card.key === "margin") {
+              return Object.assign({}, card, { value: pct(pay ? profit / pay : 0) });
+            }
+            return card;
+          });
+          payload.channelTable = {
+            title: "渠道列表",
+            columns: ["渠道"].concat(TABLE_COLS),
+            rows: [
+              { name: "汇总", kind: "sum", cells: metricRow({ payAmount: pay, orderCount: orders, netOrderCount: netOrders, refundAmount: refund }) },
+              { name: "京东", kind: "jd", cells: metricRow({ payAmount: pay, orderCount: orders, netOrderCount: netOrders, refundAmount: refund }) }
+            ]
+          };
+        }
+        return payload;
+      });
+    }
+
     function paintErp(data, span) {
-      state.payload = fromErp(data, state.range, span.dateLabel);
-      render();
+      const payload = fromErp(data, state.range, span.dateLabel);
+      applyDuty(payload).then(function (next) {
+        if (dead) {
+          return;
+        }
+        state.payload = next;
+        render();
+      });
     }
 
     function softJson(url) {
@@ -1154,9 +1226,13 @@
           }
           const merged = mergeErpShops(state.payload.shops, dir);
           state.payload.shops = merged;
-          state.payload.summary.shops = merged.length;
-          state.payload.shopTable = shopTableFrom(merged);
-          render();
+          applyDuty(state.payload).then(function (next) {
+            if (dead) {
+              return;
+            }
+            state.payload = next;
+            render();
+          });
         });
     }
 

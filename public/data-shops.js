@@ -360,10 +360,22 @@
           }
           if (data && data.ok && data.shops && data.shops.length) {
             try {
-              const mapped = fromErp(data);
-              state.shops = mapped.shops;
-              state.rows = mapped.rows;
-              render();
+              const api = window.XmDataScope;
+              const finish = function (raw) {
+                const mapped = fromErp({ shops: raw });
+                state.shops = mapped.shops;
+                state.rows = mapped.rows;
+                render();
+              };
+              if (api) {
+                return api.ready().then(function (pack) {
+                  if (dead) {
+                    return;
+                  }
+                  finish(api.limitShops(data.shops, pack));
+                });
+              }
+              finish(data.shops);
               return;
             } catch (_err) {
               throw new Error("empty");
