@@ -735,6 +735,92 @@ test("headless chrome can type-search people and stores", async () => {
   }
 });
 
+const LEFTOVER_PEOPLE_SMOKE = `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="/people.css" />
+  </head>
+  <body>
+    <div id="xm-content"></div>
+    <script src="/shared/modules/people.js"></script>
+    <script>
+      (async function () {
+        function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+        async function post(url, body) {
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+          });
+          return res.json();
+        }
+        await post("/api/people", { name: "张航", role: "运营", center: "沈子晗运营中心", lineManager: "沈子晗", operator: "张航", status: "在职" });
+        await post("/api/people", { name: "贾孜怡", role: "助理", center: "沈子晗运营中心", lineManager: "沈子晗", operator: "", assistant: "贾孜怡", status: "在职" });
+        await post("/api/people", { name: "王煜斐", role: "助理", center: "沈子晗运营中心", lineManager: "沈子晗", operator: "", assistant: "王煜斐", status: "在职" });
+        await post("/api/people", { name: "赵庆举", role: "助理", center: "沈子晗运营中心", lineManager: "沈子晗", operator: "", assistant: "赵庆举", status: "在职" });
+        window.XmModules["/people"].mount(document.getElementById("xm-content"));
+        document.querySelector('[data-pane="rights"]').click();
+        await sleep(1400);
+        const shenBand = Array.prototype.find.call(document.querySelectorAll(".rights-mod-band"), function (band) {
+          const manager = band.querySelector('.rights-mod-card[data-role="经理"]');
+          return manager && manager.textContent.trim() === "沈子晗";
+        });
+        const leftover = shenBand && Array.prototype.find.call(shenBand.querySelectorAll(".rights-mod-lead"), function (lead) {
+          const supervisor = lead.querySelector('.rights-mod-card[data-role="主管"]');
+          const reserve = lead.querySelector('.rights-mod-card[data-role="储备"]');
+          const hang = ((lead.querySelector(".rights-mod-chain") && lead.querySelector(".rights-mod-chain").textContent) || "").replace(/\\s+/g, " ");
+          return !supervisor && !reserve && hang.indexOf("张航") >= 0;
+        });
+        const leftoverText = leftover ? leftover.textContent.replace(/\\s+/g, " ").trim() : "";
+        const blankLeads = shenBand ? Array.prototype.filter.call(shenBand.querySelectorAll(".rights-mod-lead"), function (lead) {
+          const text = lead.textContent.replace(/\\s+/g, " ").trim();
+          return text.indexOf("填写对应的店铺") >= 0 || /^[—\\-\\s无]+$/.test(text) || (text.indexOf("无") >= 0 && text.indexOf("填写") >= 0 && !lead.querySelector(".rights-mod-card"));
+        }).length : -1;
+        const hasZhang = leftoverText.indexOf("张航") >= 0;
+        const hasJia = leftoverText.indexOf("贾孜怡") >= 0;
+        const hasWang = leftoverText.indexOf("王煜斐") >= 0;
+        const hasZhao = leftoverText.indexOf("赵庆举") >= 0;
+        const hasUnassigned = leftoverText.indexOf("未分配店铺") >= 0;
+        document.body.setAttribute("data-hang", leftoverText);
+        document.body.setAttribute("data-blank", String(blankLeads));
+        document.body.setAttribute("data-ok", leftover && hasZhang && hasJia && hasWang && hasZhao && hasUnassigned && blankLeads === 0 ? "1" : "0");
+      })();
+    </script>
+  </body>
+</html>`;
+
+test("headless chrome shows leftover people instead of a blank rights row", async () => {
+  resetPeopleStore();
+  resetOrgBoard();
+  resetOrgExtra();
+  const app = createApp();
+  const server = http.createServer((req, res) => {
+    if (req.url === "/__leftover-people-smoke") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(LEFTOVER_PEOPLE_SMOKE);
+      return;
+    }
+    app(req, res);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  try {
+    const html = await chromeDump(`http://127.0.0.1:${port}/__leftover-people-smoke`, 14000);
+    assert.match(
+      html,
+      /data-ok="1"/,
+      html.includes("data-ok=") ? html.slice(html.indexOf("data-ok="), html.indexOf("data-ok=") + 400) : html.slice(-500)
+    );
+    assert.match(html, /data-blank="0"/);
+    assert.match(html, /张航/);
+    assert.match(html, /贾孜怡/);
+    assert.match(html, /未分配店铺/);
+  } finally {
+    await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
+});
+
 test("headless chrome splits 潘梦玉 and 刘璇 operator cards", async () => {
   resetPeopleStore();
   resetOrgBoard();
