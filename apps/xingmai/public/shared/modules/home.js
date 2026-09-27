@@ -568,12 +568,16 @@
     });
   }
   function loadLiveColW() {
+    var need = liveCols().length;
+    if (shopColW.live && shopColW.live.length && shopColW.live.length !== need) {
+      delete shopColW.live;
+    }
     if (shopColW.live && shopColW.live.length) {
       return;
     }
     try {
       var list = JSON.parse(localStorage.getItem("xm-home-live-cols") || "[]");
-      if (Object.prototype.toString.call(list) === "[object Array]" && list.length) {
+      if (Object.prototype.toString.call(list) === "[object Array]" && list.length === need) {
         shopColW.live = list.map(function (n) {
           return Math.max(48, Math.round(Number(n) || 48));
         });
@@ -1933,7 +1937,7 @@
       ".xm-hm-live-filter-right{display:flex;align-items:center;gap:16px;flex:0 0 auto}" +
       ".xm-hm-live-heads,.xm-hm-live-refresh{border:0;background:transparent;color:var(--xm-primary);cursor:pointer;padding:0 2px;font:inherit;font-size:14px;line-height:40px;white-space:nowrap}" +
       ".xm-hm-live-refresh:disabled{opacity:.55;cursor:wait}" +
-      ".xm-hm-head-pop{position:absolute;top:0;left:0;z-index:9;width:280px;max-height:min(72vh,560px);overflow:auto;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:10px}" +
+      ".xm-hm-head-pop{position:absolute;top:0;left:0;z-index:9;width:300px;max-height:min(72vh,560px);overflow:auto;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:10px}" +
       ".xm-hm-head-pop[hidden]{display:none}" +
       ".xm-hm-head-pop h3{margin:0 0 8px;font-size:13px}" +
       ".xm-hm-head-pop .xm-hm-head-hint{margin:0 0 8px;color:var(--xm-muted);font-size:12px;line-height:1.5}" +
