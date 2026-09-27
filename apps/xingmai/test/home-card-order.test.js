@@ -72,6 +72,17 @@ test("live cards persist their own drag order", () => {
   ]);
 });
 
+test("live page has fee target, warning and update time", () => {
+  assert.match(homeJs, /function liveMetaHtml/);
+  assert.match(homeJs, /function feeWarnText/);
+  assert.match(homeJs, /function saveFeeTarget/);
+  assert.match(homeJs, /data-fee-target/);
+  assert.match(homeJs, /费比预警：当前 /);
+  assert.match(homeJs, /更新时间 /);
+  assert.match(homeJs, /is-warn/);
+  assert.match(homeJs, /is-fee-warn/);
+});
+
 test("live paid table headers can shrink row spacing", () => {
   assert.match(homeJs, /function liveRowHit/);
   assert.match(homeJs, /function saveLiveRowPad/);

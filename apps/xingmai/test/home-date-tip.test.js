@@ -150,6 +150,11 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /closest\("\.xm-hm-live-cards"\)/);
   assert.match(homeJs, /\.xm-hm-live \.xm-hm-table th\{border-right:1px dashed #c8ced8\}/);
   assert.match(homeJs, /data-card="'\s*\+\s*escapeHtml\(card\.key\)/);
+  assert.match(homeJs, /function liveMetaHtml/);
+  assert.match(homeJs, /function feeWarnText/);
+  assert.match(homeJs, /费比目标/);
+  assert.match(homeJs, /更新时间 /);
+  assert.match(homeJs, /data-fee-target/);
   assert.match(homeJs, /\.xm-hm-live\{display:flex;flex-direction:column;gap:20px\}/);
   assert.match(homeJs, /\.xm-hm-live-charts\{display:grid;grid-template-columns:1fr 1fr;gap:20px\}/);
   assert.match(homeJs, /\.xm-hm-live-cards\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\);gap:20px/);
@@ -515,7 +520,10 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
   assert.ok(start !== -1 && end > start && cum.indexOf("function cumHours") === 0);
   const fns = new Function(
     "escapeHtml",
-    cum + homeJs.slice(start, end) + "return {companySalesHtml, liveChartHtml, compareLineHtml, toHalfIncrements, halfTipLabel};"
+    "function feeWarnText(){return \"\";}" +
+      cum +
+      homeJs.slice(start, end) +
+      "return {companySalesHtml, liveChartHtml, compareLineHtml, toHalfIncrements, halfTipLabel};"
   )((value) => String(value == null ? "" : value));
   assert.deepEqual(fns.toHalfIncrements([2, 4]), [1, 1, 2, 2]);
   assert.equal(fns.halfTipLabel(0), "0:30");

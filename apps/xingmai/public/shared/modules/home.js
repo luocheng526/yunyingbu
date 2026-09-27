@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.692-home-livepack */
+/* xm-module-home 0.1.693-home-livefee */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -903,6 +903,73 @@
       box.style.setProperty("--xm-hm-live-row", liveRowPad() + "px");
     }
   }
+  function feePct(value) {
+    var n = asNum(String(value == null ? "" : value).replace(/%/g, ""));
+    if (n == null) {
+      return null;
+    }
+    if (Math.abs(n) <= 1) {
+      n = n * 100;
+    }
+    return n;
+  }
+  function feeTarget() {
+    try {
+      var raw = localStorage.getItem("xm-home-fee-target");
+      if (raw == null || raw === "") {
+        return null;
+      }
+      var n = Number(raw);
+      if (!isFinite(n)) {
+        return null;
+      }
+      return Math.max(0, Math.min(100, n));
+    } catch (_err) {
+      return null;
+    }
+  }
+  function saveFeeTarget(raw) {
+    try {
+      if (raw == null || raw === "") {
+        localStorage.removeItem("xm-home-fee-target");
+        return;
+      }
+      var n = Number(raw);
+      if (!isFinite(n)) {
+        return;
+      }
+      localStorage.setItem("xm-home-fee-target", String(Math.max(0, Math.min(100, n))));
+    } catch (_err) {}
+  }
+  function feeOverTarget(value) {
+    var cur = feePct(value);
+    var goal = feeTarget();
+    return cur != null && goal != null && cur > goal;
+  }
+  function feeWarnText(value) {
+    if (!feeOverTarget(value)) {
+      return "";
+    }
+    return "费比预警：当前 " + Math.round(feePct(value)) + "% 超过目标 " + Math.round(feeTarget()) + "%";
+  }
+  function liveMetaHtml(state, paid) {
+    var goal = feeTarget();
+    var warn = feeWarnText(paid && paid.value);
+    return (
+      '<div class="xm-hm-live-bar">' +
+      '<span class="xm-hm-live-clock">每5分钟刷新 · 更新时间 ' +
+      escapeHtml(state && state.liveAt ? state.liveAt : "—") +
+      '</span><label class="xm-hm-fee-goal">费比目标 <input type="number" min="0" max="100" step="1" data-fee-target' +
+      (goal == null ? "" : ' value="' + escapeHtml(String(goal)) + '"') +
+      " /> %</label>" +
+      (warn
+        ? '<strong class="xm-hm-fee-warn">' + escapeHtml(warn) + "</strong>"
+        : '<span class="xm-hm-fee-hint">' +
+          (goal == null ? "设置目标后超标会预警" : "费比未超目标") +
+          "</span>") +
+      "</div>"
+    );
+  }
   function pickLiveCards(cards) {
     var map = {};
     (cards || []).forEach(function (card) {
@@ -1077,7 +1144,9 @@
     var line = lineChartOf(chart);
     var sub = unit === "rate" ? "线：当天费比" : "线：累计（23点=1-23点）";
     return (
-      '<article class="xm-hm-chart" data-chart="' +
+      '<article class="xm-hm-chart' +
+      (kind === "fee" && feeWarnText(chart && chart.value) ? " is-warn" : "") +
+      '" data-chart="' +
       kind +
       '"' +
       (unit ? ' data-unit="' + unit + '"' : "") +
@@ -1138,7 +1207,9 @@
       escapeHtml(row.roi == null ? "—" : row.roi) +
       "</td><td>" +
       escapeHtml(row.paidDeal == null ? "—" : row.paidDeal) +
-      "</td><td>" +
+      "</td><td" +
+      (feeOverTarget(row.feeRate) ? ' class="is-fee-warn"' : "") +
+      ">" +
       escapeHtml(row.feeRate == null ? "—" : row.feeRate) +
       "</td></tr>"
     );
@@ -1278,7 +1349,14 @@
       ".xm-hm-rest span{color:var(--xm-muted);width:22px}" +
       ".xm-hm-rest b{flex:1;font-weight:500}" +
       ".xm-hm-rest em{font-style:normal;font-variant-numeric:tabular-nums}" +
+      ".xm-hm-live-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}" +
       ".xm-hm-live-clock{margin:0;color:var(--xm-muted);font-size:12px}" +
+      ".xm-hm-fee-goal{display:inline-flex;align-items:center;gap:6px;color:var(--xm-ink);font-size:12px}" +
+      ".xm-hm-fee-goal input{width:64px;height:28px;box-sizing:border-box;border:1px solid var(--xm-line);border-radius:4px;padding:0 8px;font:inherit}" +
+      ".xm-hm-fee-warn{color:#cf1322;font-size:13px;font-weight:600}" +
+      ".xm-hm-fee-hint{color:var(--xm-muted);font-size:12px}" +
+      ".xm-hm-chart.is-warn{border-color:#ff7875}" +
+      ".xm-hm-live .xm-hm-table td.is-fee-warn{color:#cf1322;font-weight:600}" +
       ".xm-hm-live-charts{display:grid;grid-template-columns:1fr 1fr;gap:20px}" +
       ".xm-hm-chart{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:14px 16px 10px;min-width:0}" +
       ".xm-hm-legs{display:inline-flex;align-items:center;gap:10px;color:var(--xm-muted);font-size:12px}" +
@@ -1425,7 +1503,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.692-home-livepack");
+    board.setAttribute("data-hm-js", "0.1.693-home-livefee");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1446,9 +1524,8 @@
     root.querySelector("#xm-hm-live").hidden = state.view !== "live";
     root.querySelector("#xm-hm-board").hidden = state.view !== "board";
     root.querySelector("#xm-hm-live").innerHTML =
-      '<div class="xm-hm-live-clock">每5分钟刷新' +
-      (state.liveAt ? " · 上次 " + escapeHtml(state.liveAt) : "") +
-      '</div><div class="xm-hm-live-charts">' +
+      liveMetaHtml(state, paid) +
+      '<div class="xm-hm-live-charts">' +
       liveChartHtml(hero) +
       liveChartHtml(paid) +
       '</div><div class="xm-hm-live-cards">' +
@@ -3138,6 +3215,11 @@
         event.stopPropagation();
       }
       function onChange(event) {
+        if (event.target.getAttribute("data-fee-target") != null) {
+          saveFeeTarget(event.target.value);
+          paint(root, state);
+          return;
+        }
         if (event.target.getAttribute("data-hide-all") != null) {
           viewKey = state.view || "company";
           saveHidden(

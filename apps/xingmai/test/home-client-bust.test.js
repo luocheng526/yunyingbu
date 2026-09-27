@@ -11,7 +11,7 @@ test("rewrites immutable homepage script url to no-store client.js", () => {
   const out = rewriteHomeModuleUrl(html);
   assert.equal(out.includes("/shared/modules/home.js"), false);
   assert.equal(out.includes(HOME_CLIENT_JS), true);
-  assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.692-home-livepack$/);
+  assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.693-home-livefee$/);
 });
 
 test("serves /api/home/client.js from current homepage module", async () => {
@@ -26,11 +26,14 @@ test("serves /api/home/client.js from current homepage module", async () => {
     const text = await res.text();
     assert.equal(res.status, 200);
     assert.match(String(res.headers.get("cache-control") || ""), /no-store/i);
-    assert.match(text, /xm-module-home 0\.1\.692-home-livepack/);
+    assert.match(text, /xm-module-home 0\.1\.693-home-livefee/);
     assert.match(text, /京麦面板实时金额/);
     assert.doesNotMatch(text, /实时销售指数/);
     assert.match(text, /xm-home-live-card-order/);
     assert.match(text, /xm-home-live-row/);
+    assert.match(text, /xm-home-fee-target/);
+    assert.match(text, /费比预警/);
+    assert.match(text, /更新时间 /);
     assert.match(text, /onOutsideCardSet/);
     assert.match(text, /\/api\/home\/erp-paid/);
     assert.match(text, /\/api\/home\/erp-kpis/);
