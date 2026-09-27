@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.709-home-untint */
+/* xm-module-home 0.1.710-home-zhangteam */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -545,7 +545,7 @@
     }
     if (idx != null && w != null) list[idx] = Math.max(48, Math.round(w));
     shopColW[key] = list;
-    var cols = table.querySelectorAll("col");
+    var cols = table.querySelectorAll ? table.querySelectorAll("col") : [];
     for (i = 0; i < list.length; i += 1) {
       cw = list[i];
       if (!cw) continue;
@@ -1894,7 +1894,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.709-home-untint");
+    board.setAttribute("data-hm-js", "0.1.710-home-zhangteam");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2719,6 +2719,16 @@
     }
     return ownerOfShop(shop, grants);
   }
+  function personIsChief(person) {
+    if (!person || person.status !== "在职") {
+      return false;
+    }
+    if (person.role === "主管" || person.role === "储备") {
+      return true;
+    }
+    var n = String(person.name || "").trim();
+    return !!(n && String(person.reserve || "").trim() === n);
+  }
   function teamLeadNames(people, dutyShops, role) {
     var seen = {};
     var names = [];
@@ -2731,7 +2741,7 @@
       names.push(n);
     }
     (people || []).forEach(function (person) {
-      if (person && person.status === "在职" && (person.role === role || (role === "主管" && person.role === "储备"))) {
+      if (role === "主管" ? personIsChief(person) : person && person.status === "在职" && person.role === role) {
         add(person.name);
       }
     });
@@ -2741,6 +2751,7 @@
       }
       if (role === "主管" && shop) {
         add(shop.supervisor);
+        add(shop.reserve);
       }
     });
     if (!names.length && role === "经理") {
@@ -2756,7 +2767,8 @@
     if (role === "主管") {
       var asst = String(shop.assistant || "").trim();
       var op = String(shop.operator || "").trim();
-      return String(shop.supervisor || "").trim() === name || (asst === name && asst !== op);
+      var reserve = String(shop.reserve || "").trim();
+      return String(shop.supervisor || "").trim() === name || reserve === name || (asst === name && asst !== op);
     }
     var manager = String(shop.manager || "").trim();
     if (manager) {

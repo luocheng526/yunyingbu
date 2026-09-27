@@ -125,7 +125,7 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /label: "实时"/);
   assert.match(homeJs, /label: "排行榜"/);
   assert.match(homeJs, /\.xm-hm-set\{border:0;background:transparent;color:var\(--xm-primary\)/);
-  assert.match(homeJs, /closest\("\.xm-hm-views button,\.xm-hm-ranges button,\.xm-hm-set,\.xm-hm-dates,\[data-refresh-teams\],\[data-show-teams\]"\)/);
+  assert.match(homeJs, /closest\("\.xm-hm-views button,\.xm-hm-ranges button,\.xm-hm-set,\.xm-hm-dates,\[data-refresh-teams\],\[data-show-teams\],\[data-refresh-live\]"\)/);
   assert.match(homeJs, /--xm-hm-team-cols/);
   assert.match(homeJs, /label: "经理团队"/);
   assert.match(homeJs, /label: "主管\/储备"/);
@@ -388,16 +388,27 @@ test("chief columns follow every org 主管/储备 supervisor including 经理",
     { name: "翁琴", role: "储备", status: "在职" },
     { name: "高丽男", role: "运营", status: "在职" },
     { name: "韩梦凯", role: "经理", status: "在职" },
-    { name: "张助理", role: "助理", status: "在职" }
+    { name: "张助理", role: "助理", status: "在职" },
+    { name: "张文静", role: "运营", status: "在职", reserve: "张文静" }
   ];
   const shops = [
     { supervisor: "杨润泽", assistant: "翁琴", operator: "崔安琪" },
     { supervisor: "高丽男", assistant: "陈晓曼", operator: "陈晓曼" },
     { supervisor: "韩梦凯", assistant: "张助理", operator: "张助理", lead: "高丽男" },
     { supervisor: "段坤孝", assistant: "黄欣然", operator: "黄欣然" },
-    { supervisor: "陈晓曼", assistant: "潘梦玉", operator: "刘璇" }
+    { supervisor: "陈晓曼", assistant: "潘梦玉", operator: "刘璇" },
+    { manager: "沈子晗", reserve: "张文静", operator: "张文静", storeName: "RASW家居旗舰店" },
+    { manager: "沈子晗", reserve: "张文静", operator: "王博", storeName: "飒望居家旗舰店" }
   ];
-  assert.deepEqual(fns.teamLeadNames(people, shops, "主管"), ["杨润泽", "翁琴", "高丽男", "韩梦凯", "段坤孝", "陈晓曼"]);
+  assert.deepEqual(fns.teamLeadNames(people, shops, "主管"), [
+    "杨润泽",
+    "翁琴",
+    "张文静",
+    "高丽男",
+    "韩梦凯",
+    "段坤孝",
+    "陈晓曼"
+  ]);
   assert.equal(fns.shopOnRoleTeam(shops[0], "杨润泽", "主管"), true);
   assert.equal(fns.shopOnRoleTeam(shops[1], "高丽男", "主管"), true);
   assert.equal(fns.shopOnRoleTeam(shops[2], "高丽男", "主管"), false);
@@ -405,6 +416,9 @@ test("chief columns follow every org 主管/储备 supervisor including 经理",
   assert.equal(fns.shopOnRoleTeam(shops[1], "陈晓曼", "主管"), false);
   assert.equal(fns.shopOnRoleTeam(shops[4], "陈晓曼", "主管"), true);
   assert.equal(fns.shopOnRoleTeam(shops[4], "潘梦玉", "主管"), true);
+  assert.equal(fns.shopOnRoleTeam(shops[5], "张文静", "主管"), true);
+  assert.equal(fns.shopOnRoleTeam(shops[6], "张文静", "主管"), true);
+  assert.equal(fns.shopOnRoleTeam(shops[5], "沈子晗", "主管"), false);
   assert.equal(fns.shopOnRoleTeam({ manager: "沈子晗", lead: "杨润泽", storeName: "杨润泽店" }, "沈子晗", "经理"), true);
   assert.equal(fns.shopOnRoleTeam({ manager: "沈子晗", lead: "杨润泽", storeName: "杨润泽店" }, "杨润泽", "经理"), false);
   assert.equal(fns.shopOnRoleTeam({ manager: "", team: "沈子晗组" }, "沈子晗", "经理"), true);
@@ -423,7 +437,8 @@ test("board has 业绩 and 利润 ladders with 主管 运营 columns and ranks 1
   assert.match(homeJs, /column\("主管排行榜", "supervisor", "payAmount"\), column\("运营排行榜", "operator", "payAmount"\)/);
   assert.match(homeJs, /column\("主管排行榜", "supervisor", "profit"\), column\("运营排行榜", "operator", "profit"\)/);
   assert.match(homeJs, /function namesFromShopDuty/);
-  assert.doesNotMatch(homeJs, /person\.status === "在职" && person\.role === role/);
+  assert.match(homeJs, /function personIsChief/);
+  assert.match(homeJs, /person\.reserve/);
   assert.doesNotMatch(homeJs, /column\("经理排行榜"/);
   const start = homeJs.indexOf("function standItemHtml");
   const end = homeJs.indexOf("var LIVE_CARD_KEYS");
@@ -716,6 +731,9 @@ test("range change blanks every shown number before the new pack paints", () => 
 test("更新团队 rebuilds duty shops from org store 责权人员", () => {
   assert.match(homeJs, /function refreshTeams/);
   assert.match(homeJs, /function dutyShopOwner/);
+  assert.match(homeJs, /function personIsChief/);
+  assert.match(homeJs, /add\(shop.reserve\)/);
+  assert.match(homeJs, /reserve === name/);
   assert.match(homeJs, /data-refresh-teams[\s\S]{0,80}refreshTeams\(\)/);
   assert.match(homeJs, /teamsRefreshing = true/);
   assert.match(homeJs, /var manager = String\(shop\.manager \|\| ""\)\.trim\(\);/);
