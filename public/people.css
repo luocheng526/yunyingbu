@@ -1343,77 +1343,227 @@ body:has(.people-page) .xm-tabs {
   font-size: 12px;
 }
 
+.site-acl-panel {
+  padding: 0 !important;
+  overflow: hidden;
+  border: 1px solid #e5e6eb;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.site-acl-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 18px 20px 16px;
+  border-bottom: 1px solid #eef0f4;
+  background: linear-gradient(180deg, #f7faff 0%, #fff 100%);
+}
+
+.site-acl-hero h2 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: 0.02em;
+}
+
+.site-acl-hero .lead {
+  max-width: 640px;
+  margin: 6px 0 0;
+  line-height: 1.6;
+}
+
+.site-acl-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(88px, 1fr));
+  gap: 8px;
+  min-width: 420px;
+}
+
+.site-acl-kpis article {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #e8eef8;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.site-acl-kpis span {
+  display: block;
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+.site-acl-kpis b {
+  display: block;
+  margin-top: 2px;
+  color: #1f1f1f;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.site-acl-kpis article:last-child b {
+  font-size: 13px;
+  font-weight: 650;
+}
+
 .site-acl {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  gap: 12px;
-  margin-top: 12px;
-  min-height: 420px;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 0;
+  min-height: 620px;
 }
 
 .site-acl-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
-  padding: 8px;
-  background: #fafafa;
-  border: 1px solid #f0f0f0;
-  border-radius: 10px;
+  padding: 14px 12px 12px;
+  background: #f7f8fb;
+  border-right: 1px solid #eef0f4;
 }
 
+.site-acl-list-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px;
+  color: #1f1f1f;
+  font-size: 13px;
+}
+
+.site-acl-list-head span {
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+.people-page .site-acl-list input,
 .site-acl-list input {
   width: 100%;
   box-sizing: border-box;
+  height: 36px;
+  border-color: #dce3ee;
+  background: #fff;
 }
 
 #site-acl-people {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   overflow: auto;
-  max-height: 640px;
+  min-height: 0;
+  max-height: 680px;
+  padding-right: 2px;
 }
 
+.people-page button.site-acl-person,
 .site-acl-person {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 2px 8px;
-  padding: 8px;
-  border: 1px solid #f0f0f0;
-  border-radius: 8px;
-  background: #fff;
-  color: inherit;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #1f1f1f;
   text-align: left;
-  cursor: pointer;
+  box-shadow: none;
 }
 
-.site-acl-person strong {
-  grid-column: 1;
+.people-page button.site-acl-person:hover,
+.site-acl-person:hover {
+  background: #fff;
+  border-color: #e5e6eb;
+}
+
+.people-page button.site-acl-person.is-on,
+.site-acl-person.is-on {
+  background: #fff;
+  border-color: #91caff;
+  box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.08);
+}
+
+.site-acl-avatar,
+.people-page .site-acl-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #e6f4ff;
+  color: #1677ff;
+  font-size: 13px;
+  font-weight: 700;
+  font-style: normal;
 }
 
 .site-acl-person span {
-  grid-column: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.site-acl-person strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.site-acl-person small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: #8c8c8c;
   font-size: 12px;
 }
 
 .site-acl-person em {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  align-self: center;
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #f0f0f0;
   color: #8c8c8c;
-  font-size: 12px;
+  font-size: 11px;
   font-style: normal;
+  line-height: 20px;
 }
 
-.site-acl-person.is-on {
-  border-color: #1677ff;
-  background: #e6f4ff;
+.site-acl-person.is-set em {
+  background: #f6ffed;
+  color: #389e0d;
 }
 
 .site-acl-sheet {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 18px 20px;
+  background: #fff;
+}
+
+.site-acl-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 420px;
+  color: #8c8c8c;
+  text-align: center;
+}
+
+.site-acl-empty strong {
+  color: #1f1f1f;
+  font-size: 16px;
+}
+
+.site-acl-empty[hidden] {
+  display: none;
 }
 
 .site-acl-head {
@@ -1421,73 +1571,164 @@ body:has(.people-page) .xm-tabs {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  margin-bottom: 8px;
+  margin-bottom: 14px;
+}
+
+.site-acl-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.site-acl-who .site-acl-avatar {
+  width: 40px;
+  height: 40px;
+  font-size: 16px;
 }
 
 .site-acl-head h3 {
   margin: 0;
+  font-size: 18px;
 }
 
-.site-acl-mod,
-.site-acl-store,
-.site-acl-feature {
+.site-acl-head-actions {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  padding: 8px 10px;
-  border: 1px solid #f0f0f0;
-  border-radius: 8px;
-  margin-bottom: 6px;
+  gap: 10px;
+}
+
+.people-page button.site-acl-view,
+.site-acl-view {
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  color: #434343;
+  box-shadow: none;
+}
+
+.people-page button.site-acl-view.is-on,
+.site-acl-view.is-on {
+  border-color: #1677ff;
+  background: #1677ff;
+  color: #fff;
+}
+
+.site-acl-views {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
 }
 
 .site-acl-mod {
-  flex-direction: column;
-  align-items: stretch;
-  background: #fafafa;
-}
-
-.site-acl-mod-head,
-.site-acl-feature,
-.site-acl-store {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.site-acl-feature {
+  margin-bottom: 12px;
+  border: 1px solid #eef0f4;
+  border-radius: 10px;
+  overflow: hidden;
   background: #fff;
 }
 
-.site-acl-store span,
-.site-acl-feature span {
+.people-page .site-acl-matrix,
+.site-acl-matrix {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.site-acl-matrix caption {
+  padding: 10px 14px;
+  background: #f7faff;
+  color: #1f1f1f;
+  font-weight: 650;
+  text-align: left;
+}
+
+.people-page .site-acl-matrix th,
+.people-page .site-acl-matrix td,
+.site-acl-matrix th,
+.site-acl-matrix td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f0f2f5;
+  vertical-align: middle;
+}
+
+.site-acl-matrix thead th {
   color: #8c8c8c;
   font-size: 12px;
+  font-weight: 600;
+  background: #fff;
 }
 
-.site-acl-store div:first-child {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.site-acl-matrix thead th:not(:first-child),
+.site-acl-cell {
+  width: 88px;
+  text-align: center;
 }
 
-.site-acl-caps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
+.site-acl-mod-row th,
+.site-acl-feature th,
+.site-acl-store th {
+  color: #1f1f1f;
+  font-weight: 500;
+  text-align: left;
+}
+
+.site-acl-mod-row th {
+  font-weight: 650;
+}
+
+.site-acl-feature th {
+  padding-left: 28px;
+  color: #434343;
+}
+
+.site-acl-store th {
+  display: table-cell;
+}
+
+.site-acl-store th span {
+  display: block;
+  color: #8c8c8c;
+  font-size: 12px;
+  font-weight: 400;
 }
 
 .site-acl-cap {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  color: #262626;
-  font-size: 13px;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin: 0 auto;
 }
 
-@media (max-width: 900px) {
+.site-acl-cap input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #1677ff;
+}
+
+@media (max-width: 1100px) {
+  .site-acl-hero,
   .site-acl {
     grid-template-columns: 1fr;
+  }
+
+  .site-acl-hero {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .site-acl-kpis {
+    min-width: 0;
+  }
+
+  .site-acl-list {
+    border-right: 0;
+    border-bottom: 1px solid #eef0f4;
+  }
+
+  #site-acl-people {
+    max-height: 280px;
   }
 }

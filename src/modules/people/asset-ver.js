@@ -1,5 +1,5 @@
 /** 组织中心脚本。/shared/modules/people.js?v=… 会被浏览器按版本锁 24 小时。 */
-export const PEOPLE_CLIENT_VER = "0.1.228-site-acl";
+export const PEOPLE_CLIENT_VER = "0.1.229-site-acl-ui";
 export const PEOPLE_CLIENT_JS = `/api/people/client.js?v=${PEOPLE_CLIENT_VER}`;
 
 export function rewritePeopleModuleUrl(html) {

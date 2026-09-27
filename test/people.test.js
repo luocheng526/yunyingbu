@@ -58,14 +58,16 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(text, /src="\/shared\/nav\.js"/);
     assert.match(text, /id="site-nav"/);
     assert.match(text, /href="\/people\.css"/);
-    assert.match(text, /\/api\/people\/client\.js\?v=0\.1\.228-site-acl/);
+    assert.match(text, new RegExp(PEOPLE_CLIENT_JS.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     assert.doesNotMatch(text, /\/shared\/modules\/people\.js/);
-    const clientJs = await fetch(`${base}/api/people/client.js?v=0.1.228-site-acl`);
+    const clientJs = await fetch(`${base}${PEOPLE_CLIENT_JS}`);
     const clientText = await clientJs.text();
     assert.equal(clientJs.status, 200);
     assert.match(clientJs.headers.get("cache-control") || "", /no-store/);
-    assert.match(clientText, /data-site-acl-js="0\.1\.228-site-acl"/);
+    assert.match(clientText, /data-site-acl-js="0\.1\.229-site-acl-ui"/);
     assert.match(clientText, /site-acl-people/);
+    assert.match(clientText, /site-acl-matrix/);
+    assert.doesNotMatch(clientText, /智能体只读：GET \/api\/people/);
     const noticesJs = await fetch(`${base}/shared/modules/notices.js`);
     const noticesText = await noticesJs.text();
     assert.equal(noticesJs.status, 200);
@@ -80,6 +82,8 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(cssText, /\.org-search-form/);
     assert.match(cssText, /\.org-filter-pop\[hidden\]/);
     assert.match(cssText, /\.xm-main/);
+    assert.match(cssText, /\.site-acl-matrix/);
+    assert.match(cssText, /\.people-page button\.site-acl-person/);
     assert.doesNotMatch(text, /class="site-sidebar"/);
     assert.doesNotMatch(text, /<header class="site-header">/);
     assert.match(text, /组织中心/);
@@ -241,8 +245,8 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /applyMemberFilters/);
     assert.match(jsText, /导入按姓名合并/);
     assert.match(jsText, /一模一样的名字覆盖原行/);
-    assert.match(jsText, /导入是合并不是换表/);
-    assert.match(jsText, /同一家店才覆盖/);
+    assert.match(jsText, /导入是合并：人员同名覆盖/);
+    assert.match(jsText, /店铺只有同一家才覆盖/);
     assert.match(jsText, /店铺导入会落盘/);
     assert.match(jsText, /normalizePeopleHeader/);
     assert.match(jsText, /endsWith\("姓名"\)/);
@@ -288,6 +292,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /未分配店铺/);
     assert.match(jsText, /leftoverLeadPeople/);
     assert.match(jsText, /site-acl/);
+    assert.match(jsText, /site-acl-matrix/);
     assert.match(jsText, /看得见/);
     assert.match(jsText, /进得去/);
     assert.match(jsText, /改得了/);
