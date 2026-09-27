@@ -7,10 +7,10 @@ import { currentUser, publicProfile } from "./auth.js";
 import { APP_ICON_PNG } from "./app-icon-png.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.693
+// xm-fast-shell 0.1.699
 // login.html 不走 HTML 内存缓存；login.css 禁止 immutable。必须和 home/pages.js 成套发。
 
-export const SHELL_ASSET_VER = "0.1.693";
+export const SHELL_ASSET_VER = "0.1.699";
 export const WEB_MANIFEST = {
   name: "星脉甄选运营中心",
   short_name: "星脉甄选",
@@ -62,12 +62,16 @@ export const APP_MODULES = {
   "/shen/selection": "shen",
   "/shen/growth": "shen",
   "/shen/paid": "shen",
+  "/shen/recharge-rules": "shen",
+  "/shen/recharge-rules/index.html": "shen",
   "/shen/training": "shen",
   "/shen/tasks": "shen",
   "/han": "han",
   "/han/selection": "han",
   "/han/goods": "han",
   "/han/paid": "han",
+  "/han/recharge-rules": "han",
+  "/han/paid-center": "han",
   "/han/training": "han",
   "/people": "people",
   "/stores": "stores",
@@ -92,12 +96,16 @@ const SHELL_TITLES = {
   "/shen/selection": "产品中心",
   "/shen/growth": "产品中心",
   "/shen/paid": "付费中心",
+  "/shen/recharge-rules": "充值规则",
+  "/shen/recharge-rules/index.html": "充值规则",
   "/shen/training": "培训系统",
   "/shen/tasks": "任务管理",
   "/han": "韩梦凯运营中心",
   "/han/selection": "选品数据",
   "/han/goods": "商品数据",
   "/han/paid": "实时付费",
+  "/han/recharge-rules": "充值规则",
+  "/han/paid-center": "付费中心",
   "/han/training": "培训系统",
   "/people": "组织中心",
   "/stores": "店铺维护中心",
@@ -158,7 +166,7 @@ ${boot}    <script src="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" defer dat
   </head>
   <body class="xm-app xm-app-shell">
     <div class="xm-shell">
-      ${navMarkup(key)}
+      ${navMarkup(key, user)}
       <div class="xm-main">
         <header class="xm-topbar">
           <div class="xm-tabs" role="tablist" aria-label="页签"><div class="xm-tab is-active${key === "/home" ? " is-pinned" : ""}" role="tab" data-href="${key}" aria-selected="true"${key === "/home" ? "" : ` title="双击关闭"`}><span class="xm-tab-label">${title}</span>${key === "/home" ? "" : `<button type="button" class="xm-tab-close" aria-label="关闭 ${title}">×</button>`}</div></div>

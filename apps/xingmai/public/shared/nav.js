@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.693-shell-up — pin only; keep submenu collapsed until parent opens */
+/* xm-fast-shell 0.1.699-sider-rules — 沈/韩首次展开即带充值规则；版本中心/组织中心仅罗成韩梦凯沈子晗可见 */
 (function () {
-  const ASSET_VER = "0.1.693";
+  const ASSET_VER = "0.1.699";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -22,6 +22,8 @@
     "/han/selection": "han",
     "/han/goods": "han",
     "/han/paid": "han",
+    "/han/recharge-rules": "han",
+    "/han/paid-center": "han",
     "/han/training": "han",
     "/people": "people",
     "/stores": "stores",
@@ -43,16 +45,19 @@
   const SHEN_CHILDREN = [
     { href: "/shen/product", label: "产品中心" },
     { href: "/shen/paid", label: "付费中心" },
-    { href: "/shen/recharge-rules/index.html", label: "充值规则" },
+    { href: "/shen/recharge-rules", label: "充值规则" },
     { href: "/shen/training", label: "培训系统" },
     { href: "/shen/tasks", label: "任务管理" }
   ];
   const HAN_CHILDREN = [
     { href: "/han/selection", label: "选品数据" },
     { href: "/han/goods", label: "商品数据" },
-    { href: "/han/paid", label: "实时付费" },
+    { href: "/han/paid", label: "实时付费", attrs: { "data-han-center": "center" } },
+    { href: "/han/recharge-rules", label: "充值规则", attrs: { "data-han-center": "rules" } },
     { href: "/han/training", label: "培训系统" }
   ];
+  const STAFF_NAV = { "/releases": 1, "/people": 1 };
+  const STAFF_NAV_NAMES = { "罗成": 1, "韩梦凯": 1, "沈子晗": 1, luocheng: 1 };
   const ACADEMY_CHILDREN = [
     { href: "/academy/courses", label: "培训课程" },
     { href: "/academy/exams", label: "培训考试" },
@@ -121,8 +126,49 @@
   };
 
   function normalize(href) {
-    const key = String(href || "/").replace(/\/+$/, "") || "/";
-    return ROUTE_ALIAS[key] || key;
+    const raw = String(href || "/");
+    const q = raw.indexOf("?");
+    const pathOnly = (q >= 0 ? raw.slice(0, q) : raw).replace(/\/index\.html$/i, "").replace(/\/+$/, "") || "/";
+    return ROUTE_ALIAS[pathOnly] || pathOnly;
+  }
+
+  function canSeeStaffNav(user) {
+    if (!user) {
+      return false;
+    }
+    if (typeof user === "string") {
+      const name = user.trim();
+      return !!(STAFF_NAV_NAMES[name] || STAFF_NAV_NAMES[name.toLowerCase()]);
+    }
+    const names = [user.username, user.displayName, user.name];
+    for (let i = 0; i < names.length; i += 1) {
+      const name = String(names[i] || "").trim();
+      if (name && (STAFF_NAV_NAMES[name] || STAFF_NAV_NAMES[name.toLowerCase()])) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function currentStaffUser() {
+    return window.__xmBootUser || null;
+  }
+
+  function footVisible(user) {
+    const show = canSeeStaffNav(user);
+    return FOOT.filter(function (item) {
+      return show || !STAFF_NAV[item.href];
+    });
+  }
+
+  function itemAttrs(item) {
+    const attrs = item.attrs || {};
+    const keys = Object.keys(attrs);
+    let out = "";
+    for (let i = 0; i < keys.length; i += 1) {
+      out += " " + keys[i] + '="' + String(attrs[keys[i]]).replace(/"/g, "") + '"';
+    }
+    return out;
   }
 
   function isActive(href) {
@@ -182,6 +228,7 @@
       item.href +
       '"' +
       cur +
+      itemAttrs(item) +
       ">" +
       ico(item.href) +
       "<span>" +
@@ -234,7 +281,7 @@
       mainHtml() +
       "</nav>" +
       '<nav class="xm-menu xm-menu-foot">' +
-      FOOT.map(function (item) {
+      footVisible(currentStaffUser()).map(function (item) {
         return item.children ? groupHtml(item) : itemHtml(item);
       }).join("") +
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout">' +
@@ -2393,7 +2440,77 @@
     }
   }
 
-  function bindChrome(userLabel) {
+  function rememberStaffUser(user, userLabel) {
+    if (user && (user.username || user.displayName || user.name)) {
+      window.__xmBootUser = user;
+      return;
+    }
+    if (userLabel && !window.__xmBootUser) {
+      window.__xmBootUser = { username: userLabel, displayName: userLabel };
+    }
+  }
+
+  function applyStaffNav(user) {
+    if (!user) {
+      return;
+    }
+    const show = canSeeStaffNav(user);
+    const releases = document.querySelector('.xm-menu a[href="/releases"]');
+    if (releases) {
+      releases.hidden = !show;
+    }
+    const people = document.querySelector('.xm-menu-group[data-xm-group="/people"]');
+    if (people) {
+      people.hidden = !show;
+    }
+  }
+
+  function syncSiderChildren() {
+    items.forEach(function (item) {
+      if (!item.children || !item.children.length) {
+        return;
+      }
+      const group = document.querySelector('.xm-menu-group[data-xm-group="' + item.href + '"]');
+      if (!group) {
+        return;
+      }
+      const sub = group.querySelector(".xm-submenu");
+      if (!sub) {
+        return;
+      }
+      let last = null;
+      item.children.forEach(function (child) {
+        let link =
+          sub.querySelector('a[href="' + child.href + '"]') ||
+          (child.href === "/shen/recharge-rules"
+            ? sub.querySelector('a[href="/shen/recharge-rules/index.html"]')
+            : null);
+        if (!link) {
+          const wrap = document.createElement("div");
+          wrap.innerHTML = itemHtml(child, "xm-menu-child");
+          link = wrap.firstElementChild;
+          if (last && last.nextSibling) {
+            sub.insertBefore(link, last.nextSibling);
+          } else if (last) {
+            sub.appendChild(link);
+          } else {
+            sub.insertBefore(link, sub.firstChild);
+          }
+        }
+        if (child.attrs) {
+          Object.keys(child.attrs).forEach(function (key) {
+            link.setAttribute(key, child.attrs[key]);
+          });
+        }
+        last = link;
+      });
+    });
+  }
+
+  function bindChrome(userLabel, user) {
+    rememberStaffUser(user, userLabel);
+    applyStaffNav(currentStaffUser());
+    syncSiderChildren();
     ensureUserTools();
     const nameEl = document.getElementById("xm-username");
     if (nameEl && userLabel) {
@@ -2536,7 +2653,7 @@
     mountShell();
     const boot = window.__xmBootUser;
     if (boot && (boot.displayName || boot.username)) {
-      bindChrome(boot.displayName || boot.username);
+      bindChrome(boot.displayName || boot.username, boot);
     } else {
       fetch("/api/auth/me", { credentials: "same-origin", headers: { Accept: "application/json" } })
         .then(function (res) {
@@ -2553,7 +2670,7 @@
           if (!payload) {
             return;
           }
-          bindChrome(payload.displayName || payload.username || "用户");
+          bindChrome(payload.displayName || payload.username || "用户", payload);
         })
         .catch(function () {
           /* keep painted shell */

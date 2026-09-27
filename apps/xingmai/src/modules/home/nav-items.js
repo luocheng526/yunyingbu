@@ -10,6 +10,7 @@ export const DATA_CHILDREN = [
 export const SHEN_CHILDREN = [
   { href: "/shen/product", label: "产品中心" },
   { href: "/shen/paid", label: "付费中心" },
+  { href: "/shen/recharge-rules", label: "充值规则" },
   { href: "/shen/training", label: "培训系统" },
   { href: "/shen/tasks", label: "任务管理" }
 ];
@@ -17,9 +18,34 @@ export const SHEN_CHILDREN = [
 export const HAN_CHILDREN = [
   { href: "/han/selection", label: "选品数据" },
   { href: "/han/goods", label: "商品数据" },
-  { href: "/han/paid", label: "实时付费" },
+  { href: "/han/paid", label: "实时付费", attrs: { "data-han-center": "center" } },
+  { href: "/han/recharge-rules", label: "充值规则", attrs: { "data-han-center": "rules" } },
   { href: "/han/training", label: "培训系统" }
 ];
+
+const STAFF_NAV_HREFS = new Set(["/releases", "/people"]);
+const STAFF_NAV_NAMES = new Set(["罗成", "韩梦凯", "沈子晗", "luocheng"]);
+
+export function canSeeStaffNav(user) {
+  if (!user) {
+    return false;
+  }
+  if (typeof user === "string") {
+    const name = user.trim();
+    return STAFF_NAV_NAMES.has(name) || STAFF_NAV_NAMES.has(name.toLowerCase());
+  }
+  return [user.username, user.displayName, user.name].some((value) => {
+    const name = String(value || "").trim();
+    return Boolean(name) && (STAFF_NAV_NAMES.has(name) || STAFF_NAV_NAMES.has(name.toLowerCase()));
+  });
+}
+
+function footItemsFor(user) {
+  if (canSeeStaffNav(user)) {
+    return NAV_FOOT;
+  }
+  return NAV_FOOT.filter((item) => !STAFF_NAV_HREFS.has(item.href));
+}
 
 export const ACADEMY_CHILDREN = [
   { href: "/academy/courses", label: "培训课程" },
@@ -85,12 +111,22 @@ function ico(name) {
   return `<i class="xm-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${path}</svg></i>`;
 }
 
+function hrefKey(href) {
+  return String(href || "/")
+    .replace(/\/index\.html$/i, "")
+    .replace(/\/+$/, "") || "/";
+}
+
 function childActive(item, activeHref) {
-  const key = String(activeHref || "");
+  const key = hrefKey(activeHref);
   if (!item.children) {
     return false;
   }
-  return item.children.some((child) => child.href === key) || key === item.href || key.startsWith(`${item.href}/`);
+  return (
+    item.children.some((child) => hrefKey(child.href) === key || key.startsWith(`${hrefKey(child.href)}/`)) ||
+    key === item.href ||
+    key.startsWith(`${item.href}/`)
+  );
 }
 
 function queueBadge(item) {
@@ -100,11 +136,19 @@ function queueBadge(item) {
   return '<b class="xm-queue-badge" data-xm-queue-badge hidden>0</b>';
 }
 
+function attrMarkup(item) {
+  const attrs = item.attrs || {};
+  return Object.entries(attrs)
+    .map(([key, value]) => ` ${key}="${String(value).replaceAll("&", "&amp;").replaceAll('"', "&quot;")}"`)
+    .join("");
+}
+
 function itemLink(item, activeHref, extraClass) {
-  const current = item.href === activeHref ? ' aria-current="page"' : "";
-  const active = item.href === activeHref ? " is-active" : "";
+  const on = hrefKey(item.href) === hrefKey(activeHref);
+  const current = on ? ' aria-current="page"' : "";
+  const active = on ? " is-active" : "";
   const extra = extraClass ? ` ${extraClass}` : "";
-  return `<a class="xm-menu-item${extra}${active}" href="${item.href}"${current}>${ico(item.href)}<span>${item.label}</span>${queueBadge(item)}</a>`;
+  return `<a class="xm-menu-item${extra}${active}" href="${item.href}"${current}${attrMarkup(item)}>${ico(item.href)}<span>${item.label}</span>${queueBadge(item)}</a>`;
 }
 
 function groupMarkup(item, activeHref) {
@@ -113,10 +157,12 @@ function groupMarkup(item, activeHref) {
   return `<div class="xm-menu-group${open ? " is-open" : ""}" data-xm-group="${item.href}"><button type="button" class="xm-menu-item xm-menu-parent" aria-expanded="${open ? "true" : "false"}">${ico(item.href)}<span>${item.label}</span>${CARET}</button><div class="xm-submenu">${kids}</div></div>`;
 }
 
-export function navMarkup(activeHref) {
+export function navMarkup(activeHref, user) {
   const main = NAV_MAIN.map((item) =>
     item.children ? groupMarkup(item, activeHref) : itemLink(item, activeHref)
   ).join("");
-  const foot = NAV_FOOT.map((item) => (item.children ? groupMarkup(item, activeHref) : itemLink(item, activeHref))).join("");
+  const foot = footItemsFor(user)
+    .map((item) => (item.children ? groupMarkup(item, activeHref) : itemLink(item, activeHref)))
+    .join("");
   return `<aside class="xm-sider" aria-label="侧栏导航"><div class="xm-brand"><a class="xm-logo" href="/home" title="回到首页"><img src="/login-logo.png" alt="星脉甄选" onerror="this.onerror=null;this.src='/shared/xingmai-logo.png'" /></a><button type="button" class="xm-collapse" id="xm-collapse" aria-label="折叠侧栏">‹</button></div><nav class="xm-menu xm-menu-main">${main}</nav><nav class="xm-menu xm-menu-foot">${foot}<button type="button" class="xm-menu-item xm-logout" id="xm-logout">${ico("logout")}<span>退出登录</span></button><p class="xm-version">${NAV_VERSION}</p></nav></aside>`;
 }
