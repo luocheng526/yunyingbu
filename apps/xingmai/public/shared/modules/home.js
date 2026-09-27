@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.710-home-zhangteam */
+/* xm-module-home 0.1.718-home-feeinput */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -673,23 +673,10 @@
     );
   }
   function teamShopsHtml(team, simple) {
-    var shops = sortedShops(team.shops || [], simple ? { key: "", dir: "desc" } : shopSort);
     if (simple) {
-      return (
-        '<div class="xm-hm-panel" data-team="' +
-        escapeHtml(team.key) +
-        '"><h2>责权店铺 <span>' +
-        shops.length +
-        " 店</span></h2>" +
-        '<table class="xm-hm-table"><thead><tr><th><span>店铺名称</span></th></tr></thead><tbody>' +
-        shops
-          .map(function (row) {
-            return "<tr><td>" + escapeHtml(row.shop) + "</td></tr>";
-          })
-          .join("") +
-        "</tbody></table></div>"
-      );
+      return "";
     }
+    var shops = sortedShops(team.shops || [], shopSort);
     var cols = shopCols();
     var sort = shopSort;
     return (
@@ -754,21 +741,133 @@
       "</div>"
     );
   }
-  function seesAllChiefs(user) {
-    user = user || {};
-    return /超级|管理员|经理|全平台/.test(String(user.role || "") + String(user.title || "") + String(user.dataScope || ""));
+  function homeUserName(user) {
+    return String((user && (user.displayName || user.username)) || "").trim();
   }
-  function filterOwnChiefs(teams, user) {
-    teams = teams || [];
-    if (seesAllChiefs(user)) {
-      return teams;
+  function isHomeBoss(user) {
+    var n = homeUserName(user);
+    return n === "罗成" || n === "韩梦凯" || n === "沈子晗";
+  }
+  function findRosterPerson(people, user) {
+    var n = homeUserName(user);
+    if (!n) {
+      return null;
     }
-    var name = String((user && (user.displayName || user.username)) || "").trim();
-    return name
-      ? teams.filter(function (team) {
-          return team && team.name === name;
-        })
-      : teams;
+    var list = people || [];
+    var i;
+    for (i = 0; i < list.length; i += 1) {
+      var person = list[i];
+      if (!person) {
+        continue;
+      }
+      if (String(person.name || "").trim() === n || String(person.username || "").trim() === n) {
+        return person;
+      }
+    }
+    return null;
+  }
+  function shopOnUserDuty(shop, user) {
+    var n = homeUserName(user);
+    if (!shop || !n) {
+      return false;
+    }
+    return (
+      String(shop.manager || "").trim() === n ||
+      shopSupervisorName(shop) === n ||
+      shopReserveName(shop) === n ||
+      String(shop.operator || "").trim() === n ||
+      String(shop.assistant || "").trim() === n
+    );
+  }
+  function userIsChief(user, people, shops) {
+    if (isHomeBoss(user)) {
+      return true;
+    }
+    var role = String((user && user.role) || "").trim();
+    if (role === "主管" || role === "储备") {
+      return true;
+    }
+    if (personIsChief(findRosterPerson(people, user))) {
+      return true;
+    }
+    var n = homeUserName(user);
+    if (!n) {
+      return false;
+    }
+    return (shops || []).some(function (shop) {
+      return shopSupervisorName(shop) === n || shopReserveName(shop) === n;
+    });
+  }
+  function canSeeTeamView(user) {
+    return isHomeBoss(user);
+  }
+  function canSeeChiefView(user, people, shops) {
+    return userIsChief(user, people, shops);
+  }
+  function allowedHomeViews(user, people, shops) {
+    return {
+      company: true,
+      team: canSeeTeamView(user),
+      chief: canSeeChiefView(user, people, shops),
+      live: true,
+      board: true
+    };
+  }
+  function seesAllChiefs(user) {
+    return canSeeChiefView(user);
+  }
+  function filterOwnChiefs(teams, user, people, shops) {
+    return canSeeChiefView(user, people, shops) ? teams || [] : [];
+  }
+  function dutyShopKeys(shops, user) {
+    if (!homeUserName(user)) {
+      return {};
+    }
+    if (isHomeBoss(user)) {
+      return null;
+    }
+    var keys = {};
+    (shops || []).forEach(function (shop) {
+      if (!shopOnUserDuty(shop, user)) {
+        return;
+      }
+      var id = shopErpId(shop) || normShopId(shop.shopId);
+      var name = normShopName(shopDisplayName(shop));
+      if (id) {
+        keys["id:" + id] = true;
+      }
+      if (name && name !== "—") {
+        keys["name:" + name] = true;
+      }
+    });
+    return keys;
+  }
+  function recordOnDuty(row, keys) {
+    if (!keys) {
+      return true;
+    }
+    if (!row) {
+      return false;
+    }
+    var id = erpRecordId(row) || normShopId(row.shopId || row.id);
+    var name = normShopName(row.shopName || row.storeName || row.name);
+    return !!((id && keys["id:" + id]) || (name && keys["name:" + name]));
+  }
+  function scopeRecords(records, keys) {
+    if (!keys) {
+      return records || [];
+    }
+    return (records || []).filter(function (row) {
+      return recordOnDuty(row, keys);
+    });
+  }
+  function scopePack(pack, keys) {
+    pack = pack || {};
+    if (!keys) {
+      return pack;
+    }
+    var records = scopeRecords(pack.records, keys);
+    return { records: records, summary: sumPack(records), hourly: null };
   }
   function standItemHtml(row, place, unit) {
     var rank = place === 1 ? "01" : place === 2 ? "02" : "03";
@@ -981,25 +1080,83 @@
       localStorage.setItem("xm-home-fee-targets", JSON.stringify(map));
     } catch (_err) {}
   }
-  function feeOverTarget(value, shop) {
-    var cur = feePct(value);
+  function feeMonitorOf(feeRate, shop) {
     var goal = feeTargetFor(shop);
-    return cur != null && goal != null && cur > goal;
+    var cur = feePct(feeRate);
+    if (goal == null) {
+      return { label: "未设目标", kind: "" };
+    }
+    if (cur == null) {
+      return { label: "—", kind: "" };
+    }
+    if (cur > goal + 2) {
+      return { label: "控制费比", kind: "hot" };
+    }
+    if (cur < goal - 2) {
+      return { label: "放大付费", kind: "cold" };
+    }
+    return { label: "正常", kind: "ok" };
+  }
+  function feeOverTarget(value, shop) {
+    return feeMonitorOf(value, shop).kind === "hot";
   }
   function feeWarnText(value, shop) {
     if (!feeOverTarget(value, shop)) {
       return "";
     }
-    return "费比预警：当前 " + Math.round(feePct(value)) + "% 超过目标 " + Math.round(feeTargetFor(shop)) + "%";
+    return "费比监控：当前 " + Math.round(feePct(value)) + "% 超过目标 " + Math.round(feeTargetFor(shop)) + "%";
   }
   function feeWarnLabel(feeRate, shop) {
-    if (feeTargetFor(shop) == null) {
-      return "未设目标";
+    return feeMonitorOf(feeRate, shop).label;
+  }
+  function feeMonitorClass(kind) {
+    if (kind === "hot") {
+      return " is-fee-warn is-fee-hot";
     }
-    if (feePct(feeRate) == null) {
-      return "—";
+    if (kind === "cold") {
+      return " is-fee-cold";
     }
-    return feeOverTarget(feeRate, shop) ? "超标" : "正常";
+    return "";
+  }
+  function isHomeFormField(el) {
+    return !!(el && el.closest && el.closest("input,select,textarea,button,a,[data-fee-target],.xm-hm-fee-goal"));
+  }
+  function isFeeTyping(el) {
+    return !!(el && el.closest && el.closest("input,textarea,select,[data-fee-target],.xm-hm-fee-goal"));
+  }
+  function liveFeeDraft(root) {
+    var el = root && root.querySelector ? root.querySelector("[data-fee-target]:focus") : null;
+    if (!el) {
+      return null;
+    }
+    return {
+      shop: String(el.getAttribute("data-fee-shop") || ""),
+      value: el.value,
+      start: el.selectionStart,
+      end: el.selectionEnd
+    };
+  }
+  function restoreLiveFeeDraft(root, draft) {
+    if (!root || !draft || !draft.shop) {
+      return;
+    }
+    var list = root.querySelectorAll("[data-fee-target]");
+    var i;
+    var el;
+    for (i = 0; i < list.length; i += 1) {
+      el = list[i];
+      if (el.getAttribute("data-fee-shop") !== draft.shop) {
+        continue;
+      }
+      el.value = draft.value;
+      el.focus();
+      try {
+        if (typeof el.setSelectionRange === "function") {
+          el.setSelectionRange(draft.start == null ? el.value.length : draft.start, draft.end == null ? el.value.length : draft.end);
+        }
+      } catch (_err) {}
+      return;
+    }
   }
   function liveAtText(liveAt) {
     var raw = String(liveAt || "").trim();
@@ -1008,11 +1165,11 @@
   function feeGoalCellHtml(shop) {
     var goal = feeTargetFor(shop);
     return (
-      '<label class="xm-hm-fee-goal"><input type="number" min="0" max="100" step="1" data-fee-target data-fee-shop="' +
+      '<label class="xm-hm-fee-goal" onpointerdown="event.stopPropagation()" onmousedown="event.stopPropagation()"><input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" data-fee-target data-fee-shop="' +
       escapeHtml(String(shop || "")) +
       '"' +
       (goal == null ? "" : ' value="' + escapeHtml(String(goal)) + '"') +
-      " /> %</label>"
+      ' onpointerdown="event.stopPropagation()" onmousedown="event.stopPropagation()" /> %</label>'
     );
   }
   function liveFilter() {
@@ -1404,7 +1561,7 @@
     { key: "roi", label: "实时付费ROI" },
     { key: "paidDeal", label: "实时付费成交额" },
     { key: "feeRate", label: "实时费比" },
-    { key: "feeWarn", label: "费比预警", w: "88px" },
+    { key: "feeWarn", label: "费比监控", w: "108px" },
     { key: "feeGoal", label: "费比目标设置", w: "124px" },
     { key: "liveAt", label: "更新时间", w: "150px" }
   ];
@@ -1522,7 +1679,7 @@
   }
   function liveShopCellHtml(col, row, index, liveAt) {
     var shop = row && row.shop;
-    var warn = feeWarnLabel(row && row.feeRate, shop);
+    var mon = feeMonitorOf(row && row.feeRate, shop);
     var key = col && col.key;
     if (key === "rank") {
       return '<td class="xm-hm-num">' + rankMark(index) + "</td>";
@@ -1545,7 +1702,7 @@
     if (key === "feeRate") {
       return (
         '<td class="xm-hm-num' +
-        (feeOverTarget(row.feeRate, shop) ? " is-fee-warn" : "") +
+        feeMonitorClass(mon.kind) +
         '">' +
         escapeHtml(row.feeRate == null ? "—" : row.feeRate) +
         "</td>"
@@ -1554,9 +1711,9 @@
     if (key === "feeWarn") {
       return (
         '<td class="xm-hm-num' +
-        (warn === "超标" ? " is-fee-warn" : "") +
+        feeMonitorClass(mon.kind) +
         '">' +
-        escapeHtml(warn) +
+        escapeHtml(mon.label) +
         "</td>"
       );
     }
@@ -1609,6 +1766,7 @@
       ".xm-hm-views button{border:0;border-bottom:2px solid transparent;background:transparent;color:#303133;padding:12px 20px;min-height:40px;border-radius:0;margin-bottom:-1px;cursor:pointer;font-size:14px;line-height:22px;-webkit-user-select:none;user-select:none}" +
       ".xm-hm-views button:hover{color:var(--xm-primary)}" +
       ".xm-hm-views button.is-on{background:transparent;border-bottom-color:var(--xm-primary);color:var(--xm-primary);font-weight:500}" +
+      ".xm-hm-views button[hidden]{display:none}" +
       ".xm-hm-set{border:0;background:transparent;color:var(--xm-primary);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:13px;-webkit-user-select:none;user-select:none}" +
       ".xm-hm-ranges{display:flex;flex-wrap:wrap;align-items:center;gap:6px}" +
       ".xm-hm-ranges button{border:1px solid var(--xm-line);background:var(--xm-card);color:var(--xm-ink);padding:5px 10px;border-radius:4px;cursor:pointer;font-size:12px;-webkit-user-select:none;user-select:none}" +
@@ -1730,12 +1888,14 @@
       ".xm-hm-live-refresh:disabled{opacity:.55;cursor:wait}" +
       ".xm-hm-live-filter select{width:100%;height:40px;box-sizing:border-box;border:1px solid #e4e7ed;border-radius:8px;padding:0 36px 0 14px;font:inherit;font-size:14px;color:var(--xm-ink);background:#fff;-webkit-appearance:none;appearance:none}" +
       ".xm-hm-live-filter-box:after{content:\"\";position:absolute;right:14px;top:50%;width:8px;height:8px;margin-top:-6px;border-right:2px solid #8c8c8c;border-bottom:2px solid #8c8c8c;transform:rotate(45deg);pointer-events:none}" +
-      ".xm-hm-fee-goal{display:inline-flex;align-items:center;justify-content:center;gap:4px;width:100%;color:var(--xm-ink);font-size:12px}" +
-      ".xm-hm-fee-goal input{width:56px;height:24px;box-sizing:border-box;border:1px solid var(--xm-line);border-radius:4px;padding:0 6px;font:inherit;text-align:center}" +
+      ".xm-hm-fee-goal{display:inline-flex;align-items:center;justify-content:center;gap:4px;width:100%;color:var(--xm-ink);font-size:12px;cursor:text;-webkit-user-select:text;user-select:text;pointer-events:auto}" +
+      ".xm-hm-fee-goal input{width:64px;height:28px;box-sizing:border-box;border:1px solid var(--xm-line);border-radius:4px;padding:0 6px;font:inherit;text-align:center;cursor:text;pointer-events:auto;-webkit-user-select:text;user-select:text}" +
       ".xm-hm-fee-warn{color:#cf1322;font-size:13px;font-weight:600}" +
       ".xm-hm-fee-hint{color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-chart.is-warn{border-color:#ff7875}" +
-      ".xm-hm-live .xm-hm-table td.is-fee-warn{color:#cf1322;font-weight:600}" +
+      ".xm-hm-live .xm-hm-table td.is-fee-warn,.xm-hm-live .xm-hm-table td.is-fee-hot{color:#cf1322;font-weight:600}" +
+      ".xm-hm-live .xm-hm-table td.is-fee-cold{color:#1677ff;font-weight:600}" +
+      ".xm-hm-live .xm-hm-table td:has(.xm-hm-fee-goal){overflow:visible}" +
       ".xm-hm-live-charts{display:grid;grid-template-columns:1fr 1fr;gap:20px}" +
       ".xm-hm-chart{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:14px 16px 10px;min-width:0}" +
       ".xm-hm-legs{display:inline-flex;align-items:center;gap:10px;color:var(--xm-muted);font-size:12px}" +
@@ -1874,10 +2034,19 @@
   }
   function paint(root, state) {
     var board = root.querySelector("#xm-hm");
+    var allow = allowedHomeViews(state.user, state.people, state.dutyShops);
+    if (!allow[state.view]) {
+      state.view = "company";
+    }
     viewKey = state.view || "company";
     var teamView = state.view === "team" || state.view === "chief";
     var hide = teamView ? teamHidden(hiddenCards()) : hiddenCards();
-    var cards = arrangeCards(state.cards || blankCompanyCards()).filter(function (card) {
+    var companySrc = !homeUserName(state.user)
+      ? blankCompanyCards()
+      : isHomeBoss(state.user)
+        ? state.cards || blankCompanyCards()
+        : state.ownCards || blankCompanyCards();
+    var cards = arrangeCards(companySrc).filter(function (card) {
       return hide.indexOf(card.key) === -1;
     });
     var live = state.live || blankLive();
@@ -1885,7 +2054,7 @@
     var shops = filterLiveShops(allShops, state);
     var teams =
       state.view === "chief"
-        ? filterOwnChiefs(state.chiefs && state.chiefs.length ? state.chiefs : blankRoleTeams("主管"), state.user)
+        ? filterOwnChiefs(state.chiefs && state.chiefs.length ? state.chiefs : blankRoleTeams("主管"), state.user, state.people, state.dutyShops)
         : state.teams && state.teams.length
           ? state.teams
           : blankTeams();
@@ -1894,13 +2063,16 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.710-home-zhangteam");
+    var feeDraft = liveFeeDraft(root);
+    board.setAttribute("data-hm-js", "0.1.718-home-feeinput");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
     board.classList.toggle("is-chief", state.view === "chief");
     Array.prototype.forEach.call(root.querySelectorAll("[data-view]"), function (btn) {
-      btn.classList.toggle("is-on", btn.getAttribute("data-view") === state.view);
+      var key = btn.getAttribute("data-view");
+      btn.hidden = !allow[key];
+      btn.classList.toggle("is-on", key === state.view);
     });
     Array.prototype.forEach.call(root.querySelectorAll("[data-range]"), function (btn) {
       btn.classList.toggle("is-on", btn.getAttribute("data-range") === state.range);
@@ -1975,6 +2147,7 @@
       allBox.indeterminate = someOn && !allOn;
     }
     syncCardPop(root);
+    restoreLiveFeeDraft(root, feeDraft);
   }
   function api(path) {
     return fetch(path, { credentials: "same-origin", headers: { Accept: "application/json" } }).then(function (res) {
@@ -2233,7 +2406,7 @@
   }
   function blankLadders() {
     var cols = [
-      { title: "主管排行榜", rows: [] },
+      { title: "主管储备排行榜", rows: [] },
       { title: "运营排行榜", rows: [] }
     ];
     return [
@@ -2729,6 +2902,23 @@
     var n = String(person.name || "").trim();
     return !!(n && String(person.reserve || "").trim() === n);
   }
+  function dutyPersonName(shop, keys) {
+    var list = keys || [];
+    var i;
+    for (i = 0; i < list.length; i += 1) {
+      var n = String((shop && shop[list[i]]) || "").trim();
+      if (n && n !== "管理员" && n !== "无") {
+        return n;
+      }
+    }
+    return "";
+  }
+  function shopSupervisorName(shop) {
+    return dutyPersonName(shop, ["supervisor", "supervisorName"]);
+  }
+  function shopReserveName(shop) {
+    return dutyPersonName(shop, ["reserve", "reserveName", "chuBei", "backup"]);
+  }
   function teamLeadNames(people, dutyShops, role) {
     var seen = {};
     var names = [];
@@ -2750,8 +2940,8 @@
         add(shop && shop.manager);
       }
       if (role === "主管" && shop) {
-        add(shop.supervisor);
-        add(shop.reserve);
+        add(shopSupervisorName(shop));
+        add(shopReserveName(shop));
       }
     });
     if (!names.length && role === "经理") {
@@ -2767,8 +2957,7 @@
     if (role === "主管") {
       var asst = String(shop.assistant || "").trim();
       var op = String(shop.operator || "").trim();
-      var reserve = String(shop.reserve || "").trim();
-      return String(shop.supervisor || "").trim() === name || reserve === name || (asst === name && asst !== op);
+      return shopSupervisorName(shop) === name || shopReserveName(shop) === name || (asst === name && asst !== op);
     }
     var manager = String(shop.manager || "").trim();
     if (manager) {
@@ -2849,42 +3038,90 @@
     };
   }
   function shopDutyName(shop, field) {
+    if (field === "supervisor") {
+      return shopSupervisorName(shop);
+    }
+    if (field === "reserve") {
+      return shopReserveName(shop);
+    }
     var n = String((shop && shop[field]) || "").trim();
-    if (!n || n === "管理员") {
+    if (!n || n === "管理员" || n === "无") {
       return "";
     }
-    if (field === "operator" && n === String((shop && shop.supervisor) || "").trim()) {
+    if (field === "operator" && (n === shopSupervisorName(shop) || n === shopReserveName(shop))) {
       return "";
     }
     return n;
   }
-  function namesFromShopDuty(shops, field) {
+  function reserveNameSet(shops, people) {
+    var blocked = {};
+    (shops || []).forEach(function (shop) {
+      var n = shopReserveName(shop);
+      if (n) {
+        blocked[n] = true;
+      }
+    });
+    (people || []).forEach(function (person) {
+      if (!person || person.status !== "在职") {
+        return;
+      }
+      var n = String(person.name || "").trim();
+      if (!n) {
+        return;
+      }
+      if (person.role === "储备" || String(person.reserve || "").trim() === n) {
+        blocked[n] = true;
+      }
+    });
+    return blocked;
+  }
+  function namesFromShopDuty(shops, field, people) {
     var blocked = {};
     if (field === "operator") {
       (shops || []).forEach(function (shop) {
-        var sup = String((shop && shop.supervisor) || "").trim();
-        if (sup && sup !== "管理员") {
+        var sup = shopSupervisorName(shop);
+        if (sup) {
           blocked[sup] = true;
         }
       });
+      Object.assign(blocked, reserveNameSet(shops, people));
     }
     var seen = {};
     var names = [];
-    (shops || []).forEach(function (shop) {
-      var n = shopDutyName(shop, field);
-      if (!n || seen[n] || blocked[n]) {
+    function add(name) {
+      var n = String(name || "").trim();
+      if (!n || n === "管理员" || seen[n] || blocked[n]) {
         return;
       }
       seen[n] = true;
       names.push(n);
+    }
+    if (field === "chief") {
+      (shops || []).forEach(function (shop) {
+        add(shopSupervisorName(shop));
+        add(shopReserveName(shop));
+      });
+      return names;
+    }
+    (shops || []).forEach(function (shop) {
+      add(shopDutyName(shop, field));
     });
     return names;
+  }
+  function shopMatchesDuty(shop, name, field) {
+    if (!shop || !name) {
+      return false;
+    }
+    if (field === "chief") {
+      return shopSupervisorName(shop) === name || shopReserveName(shop) === name;
+    }
+    return shopDutyName(shop, field) === name;
   }
   function sumDutyMetric(shops, name, field, erp, catalogByName, metric) {
     var total = 0;
     var ok = false;
     (shops || []).forEach(function (shop) {
-      if (shopDutyName(shop, field) !== name) {
+      if (!shopMatchesDuty(shop, name, field)) {
         return;
       }
       var id = resolveErpId(shop, catalogByName);
@@ -2901,7 +3138,7 @@
     var erp = mapByShopId(rangePack && rangePack.records);
     var catalogByName = mapByShopName((catalogPack && catalogPack.records) || []);
     function column(title, dutyField, field) {
-      var rows = namesFromShopDuty(dutyShops, dutyField)
+      var rows = namesFromShopDuty(dutyShops, dutyField, people)
         .map(function (name) {
           var n = sumDutyMetric(dutyShops, name, dutyField, erp, catalogByName, field);
           return { name: name, amount: fmtMoney(n), _n: n };
@@ -2919,13 +3156,13 @@
         key: "perf",
         title: "业绩排行榜",
         unit: "支付金额",
-        columns: [column("主管排行榜", "supervisor", "payAmount"), column("运营排行榜", "operator", "payAmount")]
+        columns: [column("主管储备排行榜", "chief", "payAmount"), column("运营排行榜", "operator", "payAmount")]
       },
       {
         key: "profit",
         title: "利润排行榜",
         unit: "利润",
-        columns: [column("主管排行榜", "supervisor", "profit"), column("运营排行榜", "operator", "profit")]
+        columns: [column("主管储备排行榜", "chief", "profit"), column("运营排行榜", "operator", "profit")]
       }
     ];
   }
@@ -2948,6 +3185,14 @@
         shops: [],
         teams: blankTeams(),
         chiefs: blankRoleTeams("主管"),
+        people: [],
+        dutyShops: [],
+        dutyKeys: null,
+        dutyReady: false,
+        ownCards: blankCompanyCards(),
+        livePacks: null,
+        rangePack: null,
+        prevPack: null,
         teamGaps: [],
         chiefGaps: [],
         ladders: blankLadders(),
@@ -2962,8 +3207,34 @@
       function shanghaiClock() {
         return new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
       }
+      function liveScopeKeys() {
+        if (!homeUserName(state.user)) {
+          return {};
+        }
+        if (isHomeBoss(state.user)) {
+          return null;
+        }
+        return state.dutyReady ? state.dutyKeys || {} : {};
+      }
+      function applyDutyCards() {
+        if (!state.rangePack) {
+          return;
+        }
+        var keys = liveScopeKeys();
+        state.cards = companyCardsFrom(summaryFrom(state.rangePack), summaryFrom(state.prevPack));
+        if (keys) {
+          state.ownCards = companyCardsFrom(summaryFrom(scopePack(state.rangePack, keys)), summaryFrom(scopePack(state.prevPack, keys)));
+        } else {
+          state.ownCards = state.cards;
+        }
+      }
       function applyLive(todayPack, yestPack, snapPack) {
-        state.live = liveFromErp(todayPack, yestPack, snapPack);
+        state.livePacks = { today: todayPack, yest: yestPack, snap: snapPack };
+        var keys = liveScopeKeys();
+        var today = scopePack(todayPack, keys);
+        var yest = scopePack(yestPack, keys);
+        var snap = scopePack(snapPack, keys);
+        state.live = liveFromErp(today, yest, snap);
         state.shops = state.live.shops;
         state.liveAt = shanghaiClock();
         state.source = "xingmai-erp";
@@ -3069,7 +3340,7 @@
           api("/api/people"),
           api("/api/people/shops"),
           api("/api/people/grants"),
-          api("/api/people/org/stores")
+          api("/api/people/org/stores?_=" + Date.now())
         ]).then(function (pack) {
           if (dead || seq !== boardSeq) {
             return;
@@ -3081,7 +3352,13 @@
           var peopleShops = pack[4] || { shops: [] };
           var grants = pack[5] && pack[5].grants ? pack[5].grants : [];
           var dutyShops = dutyShopsFrom(pack[6], peopleShops);
-          state.cards = companyCardsFrom(summaryFrom(rangePack), summaryFrom(prevPack));
+          state.people = people;
+          state.dutyShops = dutyShops;
+          state.rangePack = rangePack;
+          state.prevPack = prevPack;
+          state.dutyReady = true;
+          state.dutyKeys = dutyShopKeys(dutyShops, state.user);
+          applyDutyCards();
           var built = buildTeams(dutyShops, grants, rangePack, prevPack, catalogPack, people, "经理");
           var chiefs = buildTeams(dutyShops, grants, rangePack, prevPack, catalogPack, people, "主管");
           state.teams = built.teams;
@@ -3091,6 +3368,10 @@
           state.chiefGaps = chiefs.mismatches;
           state.gaps = built.mismatches;
           state.source = (rangePack.summary && rangePack.summary.payAmount != null) || (rangePack.records && rangePack.records.length) ? "xingmai-erp" : "";
+          if (state.livePacks) {
+            applyLive(state.livePacks.today, state.livePacks.yest, state.livePacks.snap);
+            return;
+          }
           paint(root, state);
         }).catch(function () {
           if (!dead && seq === boardSeq) {
@@ -3106,6 +3387,9 @@
         var view = event.target.closest("[data-view]");
         if (view) {
           var nextView = view.getAttribute("data-view");
+          if (!allowedHomeViews(state.user, state.people, state.dutyShops)[nextView]) {
+            return;
+          }
           if (nextView !== state.view) {
             clearLiveRowPicked();
           }
@@ -3197,7 +3481,7 @@
           return;
         }
         var liveRow = event.target.closest(".xm-hm-live .xm-hm-table tbody tr");
-        if (liveRow && !event.target.closest("input,select,button,textarea,a")) {
+        if (liveRow && !isHomeFormField(event.target)) {
           var picked = toggleLiveRowPicked(liveRow.getAttribute("data-live-shop"));
           liveRow.classList.toggle("is-picked", picked);
         }
@@ -3463,6 +3747,10 @@
         return null;
       }
       function clearTextSelection() {
+        var ae = document.activeElement;
+        if (isFeeTyping(ae)) {
+          return;
+        }
         var sel = window.getSelection && window.getSelection();
         if (sel && sel.removeAllRanges) sel.removeAllRanges();
       }
@@ -3520,6 +3808,9 @@
       }
       function onSortDown(event) {
         if (event.button && event.button !== 0) {
+          return;
+        }
+        if (isHomeFormField(event.target)) {
           return;
         }
         if (!event.target.closest || !event.target.closest("#xm-hm")) {
@@ -3593,10 +3884,16 @@
         }
       }
       function onSortSelectStart(event) {
+        if (isFeeTyping(event.target)) {
+          return;
+        }
         var tab = event.target.closest && event.target.closest(".xm-hm-views button,.xm-hm-ranges button,.xm-hm-set,.xm-hm-dates,[data-refresh-teams],[data-show-teams],[data-refresh-live]");
         if (sortFrom || sortDragging || tab) event.preventDefault();
       }
       function onSortMove(event) {
+        if (isFeeTyping(event.target) || isFeeTyping(document.activeElement)) {
+          return;
+        }
         var x = event.clientX || 0;
         var y = event.clientY || 0;
         if (colDrag) {
@@ -3708,6 +4005,14 @@
         event.preventDefault();
         event.stopPropagation();
       }
+      function onFeeKey(event) {
+        if (event.target.getAttribute("data-fee-target") == null) {
+          return;
+        }
+        if (event.key === "Enter") {
+          event.target.blur();
+        }
+      }
       function onChange(event) {
         if (event.target.getAttribute("data-live-filter") === "pick") {
           saveLiveFilter(parseLiveFilterValue(event.target.value));
@@ -3751,6 +4056,7 @@
       }
       var scroller = document.getElementById("xm-content") || root;
       root.addEventListener("click", onClick);
+      root.addEventListener("keydown", onFeeKey);
       root.addEventListener("change", onChange);
       root.addEventListener("pointerdown", onCalPointerDown);
       root.addEventListener("pointerover", onCalHover);
@@ -3786,6 +4092,12 @@
             return;
           }
           state.user = user;
+          state.dutyKeys = dutyShopKeys(state.dutyShops, state.user);
+          applyDutyCards();
+          if (state.livePacks) {
+            applyLive(state.livePacks.today, state.livePacks.yest, state.livePacks.snap);
+            return;
+          }
           paint(root, state);
         });
       }
@@ -3794,6 +4106,7 @@
         clearLiveRowPicked();
         window.clearInterval(poll);
         root.removeEventListener("click", onClick);
+        root.removeEventListener("keydown", onFeeKey);
         root.removeEventListener("change", onChange);
         root.removeEventListener("pointerdown", onCalPointerDown);
         root.removeEventListener("pointerover", onCalHover);
