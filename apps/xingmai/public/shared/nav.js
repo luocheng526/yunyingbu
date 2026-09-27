@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.699-sider-rules — 沈/韩首次展开即带充值规则；版本中心/组织中心仅罗成韩梦凯沈子晗可见 */
+/* xm-fast-shell 0.1.713-org-nav — 沈/韩中心按组织可见；三人看全部；版本中心/组织中心仍仅三人 */
 (function () {
-  const ASSET_VER = "0.1.699";
+  const ASSET_VER = "0.1.713";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -267,8 +267,40 @@
     );
   }
 
+  function orgFlagsFromUser(user) {
+    if (canSeeStaffNav(user)) {
+      return { shen: true, han: true, known: true };
+    }
+    if (!user) {
+      return { shen: false, han: false, known: false };
+    }
+    const bag = [user.center, user.department, user.lineManager, user.director, user.managerName]
+      .map(function (value) {
+        return String(value || "");
+      })
+      .join(" ");
+    const shen = bag.indexOf("沈子晗") >= 0;
+    const han = bag.indexOf("韩梦凯") >= 0;
+    return { shen: shen, han: han, known: shen || han };
+  }
+
+  let orgFlags = { shen: true, han: true, known: false, resolved: false };
+
+  function mainVisible(user, flags) {
+    const next = flags || orgFlagsFromUser(user);
+    return MAIN.filter(function (item) {
+      if (item.href === "/shen") {
+        return next.shen || !next.known;
+      }
+      if (item.href === "/han") {
+        return next.han || !next.known;
+      }
+      return true;
+    });
+  }
+
   function mainHtml() {
-    return MAIN.map(function (item) {
+    return mainVisible(currentStaffUser(), orgFlags).map(function (item) {
       return item.children ? groupHtml(item) : itemHtml(item);
     }).join("");
   }
@@ -2018,6 +2050,14 @@
       window.location.replace("/home");
       return;
     }
+    const which = centerOfPath(key);
+    if (which && !allowCenter(which)) {
+      const fallback = homeForOrg();
+      if (normalize(fallback) !== key) {
+        go(fallback, push);
+      }
+      return;
+    }
     if (!MODULES[key]) {
       window.location.assign(key);
       return;
@@ -2467,6 +2507,142 @@
     }
   }
 
+  function ensureOrgNavCss() {
+    if (document.getElementById("xm-org-nav-css")) {
+      return;
+    }
+    const style = document.createElement("style");
+    style.id = "xm-org-nav-css";
+    style.textContent =
+      'html[data-xm-org-pending] .xm-menu-group[data-xm-group="/shen"],' +
+      'html[data-xm-org-pending] .xm-menu-group[data-xm-group="/han"]{display:none!important}';
+    document.documentElement.appendChild(style);
+  }
+
+  function centerOfPath(href) {
+    const key = normalize(href);
+    if (key === "/shen" || key.indexOf("/shen/") === 0) {
+      return "shen";
+    }
+    if (key === "/han" || key.indexOf("/han/") === 0) {
+      return "han";
+    }
+    return "";
+  }
+
+  function homeForOrg() {
+    if (orgFlags.shen && !orgFlags.han) {
+      return "/shen/product";
+    }
+    if (orgFlags.han && !orgFlags.shen) {
+      return "/han/selection";
+    }
+    return "/home";
+  }
+
+  function allowCenter(which) {
+    if (!which) {
+      return true;
+    }
+    if (!orgFlags.resolved && !orgFlags.known) {
+      return true;
+    }
+    return !!orgFlags[which];
+  }
+
+  function applyOrgNav(flags) {
+    ensureOrgNavCss();
+    if (flags) {
+      orgFlags = flags;
+    }
+    const user = currentStaffUser();
+    if (canSeeStaffNav(user)) {
+      document.documentElement.removeAttribute("data-xm-org-pending");
+      orgFlags = { shen: true, han: true, known: true, resolved: true };
+      return;
+    }
+    if (!orgFlags.resolved && !orgFlags.known) {
+      document.documentElement.setAttribute("data-xm-org-pending", "1");
+    } else {
+      document.documentElement.removeAttribute("data-xm-org-pending");
+    }
+    if (orgFlags.resolved || orgFlags.known) {
+      if (!orgFlags.shen) {
+        const shen = document.querySelector('.xm-menu-group[data-xm-group="/shen"]');
+        if (shen) {
+          shen.remove();
+        }
+      }
+      if (!orgFlags.han) {
+        const han = document.querySelector('.xm-menu-group[data-xm-group="/han"]');
+        if (han) {
+          han.remove();
+        }
+      }
+    }
+    const here = centerOfPath(current);
+    if (orgFlags.resolved && here && !orgFlags[here] && typeof window.__xmGo === "function") {
+      window.__xmGo(homeForOrg());
+    }
+  }
+
+  function loadOrgAndApply(user) {
+    if (canSeeStaffNav(user)) {
+      applyOrgNav({ shen: true, han: true, known: true, resolved: true });
+      return;
+    }
+    const quick = orgFlagsFromUser(user);
+    applyOrgNav({
+      shen: quick.shen,
+      han: quick.han,
+      known: quick.known,
+      resolved: quick.known
+    });
+    if (window.__xmOrgLoaded) {
+      return;
+    }
+    window.__xmOrgLoaded = 1;
+    fetch("/api/people", { credentials: "same-origin", headers: { Accept: "application/json" } })
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .then(function (data) {
+        const list = (data && data.people) || [];
+        const names = [user && user.username, user && user.displayName, user && user.name];
+        let row = null;
+        for (let i = 0; i < list.length; i += 1) {
+          const person = list[i] || {};
+          if (names.indexOf(person.username) >= 0 || names.indexOf(person.name) >= 0) {
+            row = {
+              center: person.center,
+              department: person.department,
+              lineManager: person.lineManager,
+              director: person.director,
+              managerName: person.managerName,
+              username: person.username,
+              name: person.name
+            };
+            break;
+          }
+        }
+        const merged = Object.assign({}, user || {}, row || {});
+        if (canSeeStaffNav(merged)) {
+          applyOrgNav({ shen: true, han: true, known: true, resolved: true });
+          return;
+        }
+        const next = orgFlagsFromUser(merged);
+        applyOrgNav({
+          shen: next.shen,
+          han: next.han,
+          known: Boolean(next.known || row),
+          resolved: true
+        });
+      })
+      .catch(function () {
+        applyOrgNav({ shen: false, han: false, known: true, resolved: true });
+      });
+  }
+
   function syncSiderChildren() {
     items.forEach(function (item) {
       if (!item.children || !item.children.length) {
@@ -2512,6 +2688,7 @@
   function bindChrome(userLabel, user) {
     rememberStaffUser(user, userLabel);
     applyStaffNav(currentStaffUser());
+    loadOrgAndApply(currentStaffUser());
     syncSiderChildren();
     ensureUserTools();
     const nameEl = document.getElementById("xm-username");

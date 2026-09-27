@@ -2,10 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as profileShell from "../profile/middleware.js";
-import { NAV_ITEMS } from "./nav-items.js";
+import { NAV_ITEMS, orgNavFlags } from "./nav-items.js";
 
 // xm-upgrade-mask 0.1.52  必须和 profile/middleware.js 成套发。
-// xm-fast-shell 0.1.699
+// xm-fast-shell 0.1.713
 // xm-login-session 登录会话回读必须和 profile/middleware.js 成套发。
 // login.html 不走 HTML 内存缓存，必须和 profile/middleware.js 成套发。
 
@@ -71,10 +71,32 @@ for (const item of NAV_ITEMS) {
   }
 }
 
+function bounceOtherCenter(req, res, dest) {
+  const flags = orgNavFlags(req.user);
+  if (!flags.known) {
+    return false;
+  }
+  if (dest === "shen" && !flags.shen) {
+    res.redirect(302, flags.han ? "/han/selection" : "/home");
+    return true;
+  }
+  if (dest === "han" && !flags.han) {
+    res.redirect(302, flags.shen ? "/shen/product" : "/home");
+    return true;
+  }
+  return false;
+}
+
 export function registerPageRoutes(app) {
   app.use((req, res, next) => {
     const method = String(req.method || "GET").toUpperCase();
     const path = String(req.path || "").replace(/\/+$/, "") || "/";
+    if ((method === "GET" || method === "HEAD") && path.startsWith("/shen") && bounceOtherCenter(req, res, "shen")) {
+      return;
+    }
+    if ((method === "GET" || method === "HEAD") && path.startsWith("/han") && bounceOtherCenter(req, res, "han")) {
+      return;
+    }
     if ((method === "GET" || method === "HEAD") && (path === "/" || path === "/index.html")) {
       res.redirect(302, "/home");
       return;

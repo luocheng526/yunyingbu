@@ -40,11 +40,39 @@ export function canSeeStaffNav(user) {
   });
 }
 
+export function orgNavFlags(user) {
+  if (canSeeStaffNav(user)) {
+    return { shen: true, han: true, staff: true, known: true };
+  }
+  if (!user) {
+    return { shen: false, han: false, staff: false, known: false };
+  }
+  const bag = [user.center, user.department, user.lineManager, user.director, user.managerName]
+    .map((value) => String(value || ""))
+    .join(" ");
+  const shen = bag.includes("沈子晗");
+  const han = bag.includes("韩梦凯");
+  return { shen, han, staff: false, known: shen || han };
+}
+
 function footItemsFor(user) {
   if (canSeeStaffNav(user)) {
     return NAV_FOOT;
   }
   return NAV_FOOT.filter((item) => !STAFF_NAV_HREFS.has(item.href));
+}
+
+function mainItemsFor(user) {
+  const flags = orgNavFlags(user);
+  return NAV_MAIN.filter((item) => {
+    if (item.href === "/shen") {
+      return flags.shen || !flags.known;
+    }
+    if (item.href === "/han") {
+      return flags.han || !flags.known;
+    }
+    return true;
+  });
 }
 
 export const ACADEMY_CHILDREN = [
@@ -158,9 +186,9 @@ function groupMarkup(item, activeHref) {
 }
 
 export function navMarkup(activeHref, user) {
-  const main = NAV_MAIN.map((item) =>
-    item.children ? groupMarkup(item, activeHref) : itemLink(item, activeHref)
-  ).join("");
+  const main = mainItemsFor(user)
+    .map((item) => (item.children ? groupMarkup(item, activeHref) : itemLink(item, activeHref)))
+    .join("");
   const foot = footItemsFor(user)
     .map((item) => (item.children ? groupMarkup(item, activeHref) : itemLink(item, activeHref)))
     .join("");
