@@ -1073,12 +1073,16 @@ export async function hydrateFromMysql() {
       await hydratePeopleRoster();
       const { hydrateOrgStores } = await import("./org-board.js");
       await hydrateOrgStores();
+      const { hydrateSiteAcl } = await import("./site-acl.js");
+      await hydrateSiteAcl();
       return { ok: true, mode: "memory" };
     }
     const roster = await hydratePeopleRoster();
     if (roster.mode === "mysql" || roster.mode === "file") {
       const { hydrateOrgStores } = await import("./org-board.js");
       const org = await hydrateOrgStores();
+      const { hydrateSiteAcl } = await import("./site-acl.js");
+      await hydrateSiteAcl();
       return { ok: true, mode: roster.mode, people: people.length, shops: shops.length, grants: grants.length, stores: org.stores };
     }
     const { query } = auth;
@@ -1105,6 +1109,8 @@ export async function hydrateFromMysql() {
     applyLoginOverlay();
     const { hydrateOrgStores } = await import("./org-board.js");
     const org = await hydrateOrgStores();
+    const { hydrateSiteAcl } = await import("./site-acl.js");
+    await hydrateSiteAcl();
     return { ok: true, mode: "mysql", people: people.length, shops: shops.length, grants: grants.length, stores: org.stores };
   } catch {
     loginOverlay = { ...loadLoginOverlay(), ...loginOverlay };
@@ -1112,6 +1118,8 @@ export async function hydrateFromMysql() {
     try {
       const { hydrateOrgStores } = await import("./org-board.js");
       await hydrateOrgStores();
+      const { hydrateSiteAcl } = await import("./site-acl.js");
+      await hydrateSiteAcl();
     } catch {
       /* org board stays on memory seed */
     }

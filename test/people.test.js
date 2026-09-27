@@ -6,8 +6,9 @@ import { createApp } from "../src/app.js";
 import { patchAppSource } from "../src/modules/people/patch-app.js";
 import { effectiveStoreOperator, hydrateOrgStores, importStamp, mapImportRow, orgStoresPersistMode, resetOrgBoard, storeOwners } from "../src/modules/people/org-board.js";
 import { resetOrgExtra } from "../src/modules/people/org-extra.js";
-import { canEditRoster } from "../src/modules/people/org-acl.js";
+import { canAssignPerson, canAssignSiteAcl, canEditRoster } from "../src/modules/people/org-acl.js";
 import { hydrateFromMysql, resetPeopleStore } from "../src/modules/people/store.js";
+import { featureAllowed, resetSiteAcl } from "../src/modules/people/site-acl.js";
 
 const PRESET = [
   { name: "沈子晗", role: "经理", center: "沈子晗运营中心", status: "在职" },
@@ -19,6 +20,7 @@ test.beforeEach(() => {
   resetPeopleStore();
   resetOrgBoard();
   resetOrgExtra();
+  resetSiteAcl();
 });
 
 test("mapImportRow accepts Excel-style store headers", () => {
@@ -277,6 +279,11 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.doesNotMatch(jsText, /rights-mod-h">运营/);
     assert.match(jsText, /未分配店铺/);
     assert.match(jsText, /leftoverLeadPeople/);
+    assert.match(jsText, /site-acl/);
+    assert.match(jsText, /看得见/);
+    assert.match(jsText, /进得去/);
+    assert.match(jsText, /改得了/);
+    assert.match(jsText, /\/api\/people\/org\/site-acl/);
     assert.doesNotMatch(jsText, /填写对应的店铺/);
     assert.match(jsText, /renderRightsModEmpty\("无"\)/);
     assert.match(jsText, /renderRightsTreeChart/);
@@ -1477,4 +1484,99 @@ export function createApp() {
   assert.match(patched, /import \{ peopleRouter \} from "\.\/modules\/people\/router\.js";/);
   assert.match(patched, /app\.use\("\/api\/people", peopleRouter\);\n  return app;/);
   assert.equal(patchAppSource(patched), patched);
+});
+
+test("unconfigured people default all-off and only line leaders assign their group", () => {
+  assert.equal(canAssignSiteAcl("罗成"), true);
+  assert.equal(canAssignSiteAcl("沈子晗"), true);
+  assert.equal(canAssignSiteAcl("韩梦凯"), true);
+  assert.equal(canAssignSiteAcl("张文静"), false);
+  assert.equal(canAssignPerson("沈子晗", { name: "张文静", lineManager: "沈子晗", center: "沈子晗运营中心" }), true);
+  assert.equal(canAssignPerson("韩梦凯", { name: "张文静", lineManager: "沈子晗", center: "沈子晗运营中心" }), false);
+  assert.equal(canAssignPerson("沈子晗", { name: "罗成" }), false);
+  assert.equal(featureAllowed("张文静", "home.workbench", "see"), false);
+  assert.equal(featureAllowed("张文静", "people.stores", "edit"), false);
+  assert.equal(featureAllowed("罗成", "people.acl", "edit"), true);
+  assert.equal(featureAllowed("沈子晗", "people.acl", "edit"), true);
+  assert.equal(featureAllowed("沈子晗", "home.workbench", "see"), false);
+});
+
+test("site acl assigns split module and store caps by roster and store board", async () => {
+  await withServer(async (base) => {
+    const created = await fetch(`${base}/api/people`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "刘璇",
+        role: "运营",
+        center: "韩梦凯运营中心",
+        lineManager: "韩梦凯",
+        operator: "刘璇",
+        status: "在职"
+      })
+    });
+    assert.equal(created.status, 201, await created.text());
+
+    const board = await fetch(`${base}/api/people/org/site-acl?actor=${encodeURIComponent("罗成")}`);
+    const boardJson = await board.json();
+    assert.equal(board.status, 200);
+    assert.equal(boardJson.canAssign, true);
+    assert.ok(boardJson.catalog.some((mod) => mod.id === "people" && mod.features.some((item) => item.id === "people.acl")));
+    assert.ok(boardJson.people.some((row) => row.name === "张文静" && row.configured === false));
+    assert.ok(boardJson.people.some((row) => row.name === "刘璇"));
+    const rasw = boardJson.stores.find((row) => row.storeName === "RASW家居旗舰店");
+    assert.ok(rasw);
+
+    const shenBoard = await fetch(`${base}/api/people/org/site-acl?actor=${encodeURIComponent("沈子晗")}`);
+    const shenJson = await shenBoard.json();
+    assert.ok(shenJson.people.some((row) => row.name === "张文静"));
+    assert.ok(!shenJson.people.some((row) => row.name === "刘璇"));
+
+    const hanDenied = await fetch(`${base}/api/people/org/site-acl/${encodeURIComponent("张文静")}?actor=${encodeURIComponent("韩梦凯")}`);
+    assert.equal(hanDenied.status, 403);
+
+    const saved = await fetch(`${base}/api/people/org/site-acl/${encodeURIComponent("张文静")}?actor=${encodeURIComponent("沈子晗")}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        modules: {
+          home: {
+            see: true,
+            enter: true,
+            edit: false,
+            features: { "home.workbench": { see: true, enter: true, edit: false }, "home.realtime": { see: true, enter: false, edit: false } }
+          },
+          people: {
+            see: true,
+            enter: true,
+            edit: true,
+            features: { "people.stores": { see: true, enter: true, edit: true } }
+          }
+        },
+        stores: { [String(rasw.id)]: { see: true, enter: true, edit: false } }
+      })
+    });
+    const savedJson = await saved.json();
+    assert.equal(saved.status, 200, JSON.stringify(savedJson));
+    assert.equal(savedJson.sheet.configured, true);
+    assert.equal(savedJson.sheet.modules.home.features["home.workbench"].enter, true);
+    assert.equal(savedJson.sheet.modules.home.features["home.realtime"].enter, false);
+    assert.equal(savedJson.sheet.modules.home.features["home.team"].see, false);
+    assert.equal(savedJson.sheet.stores[String(rasw.id)].see, true);
+    assert.equal(savedJson.sheet.stores[String(rasw.id)].edit, false);
+
+    const me = await fetch(`${base}/api/people/org/site-acl/me?actor=${encodeURIComponent("张文静")}`);
+    const meJson = await me.json();
+    assert.equal(me.status, 200);
+    assert.equal(meJson.me.configured, true);
+    assert.equal(meJson.me.modules.home.features["home.workbench"].enter, true);
+    assert.equal(meJson.me.modules.releases.features["releases.gate"].see, false);
+
+    const blocked = await fetch(`${base}/api/people/org/site-acl/${encodeURIComponent("刘璇")}?actor=${encodeURIComponent("张文静")}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ modules: {}, stores: {} })
+    });
+    assert.equal(blocked.status, 403);
+  });
 });
