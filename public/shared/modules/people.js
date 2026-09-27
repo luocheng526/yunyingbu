@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.226-no-blank-row";
+    const href = "/people.css?v=0.1.227-site-acl";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -299,7 +299,23 @@
         "<p>店铺主数据按登录人责权：罗成可改全部，沈子晗只改沈子晗组，韩梦凯只改韩梦凯组。双击单元格保存。</p>" +
         "<p>成员管理整表双击改格子，框不拉长，点别处就保存。仅罗成、韩梦凯、沈子晗能改，其他人不能改。</p>" +
         "<p>导入是合并不是换表。人员同名覆盖；店铺同一家才覆盖，其它原店铺保留。</p>" +
-        "<p>智能体只读：GET /api/people、GET /api/people/org/stores、GET /api/people/grants。</p></section></div>" +
+        "<p>智能体只读：GET /api/people、GET /api/people/org/stores、GET /api/people/grants。</p>" +
+        '<p class="lead">现有表格责权不变。下面按成员管理的人、店铺主数据的店，逐个分配网站权限。没配过的人默认全关。模块和功能拆开，勾看得见 / 进得去 / 改得了。罗成管全部；沈子晗、韩梦凯只配自己组。</p>' +
+        '<div class="site-acl" id="site-acl">' +
+        '<aside class="site-acl-list">' +
+        '<input type="text" id="site-acl-q" placeholder="姓名 / 经理 / 主管" autocomplete="off" spellcheck="false" />' +
+        '<div id="site-acl-people"></div></aside>' +
+        '<div class="site-acl-sheet">' +
+        '<p class="muted" id="site-acl-empty">点左侧的人，打开模块、功能和店铺明细。</p>' +
+        '<div id="site-acl-detail" hidden>' +
+        '<div class="site-acl-head"><div><h3 id="site-acl-name"></h3><p class="muted" id="site-acl-meta"></p></div>' +
+        '<button type="button" id="site-acl-save">保存</button></div>' +
+        '<p class="status error" id="site-acl-error" hidden></p>' +
+        '<p class="status" id="site-acl-ok" hidden></p>' +
+        "<h4>网站模块和功能</h4>" +
+        '<div id="site-acl-modules"></div>' +
+        "<h4>店铺明细</h4>" +
+        '<div id="site-acl-stores"></div></div></div></div></section></div>' +
         '<div class="org-pane" data-pane="logs" hidden>' +
         '<section class="panel"><h2>改动日志</h2>' +
         '<div class="org-table-wrap"><table><thead><tr><th>时间</th><th>动作</th><th>摘要</th></tr></thead>' +
@@ -1892,6 +1908,258 @@
           });
       }
 
+      let siteAclBoard = null;
+      let siteAclName = "";
+      let siteAclDraft = null;
+
+      function siteAclCap(value) {
+        const edit = Boolean(value && value.edit);
+        const enter = Boolean(value && value.enter) || edit;
+        const see = Boolean(value && value.see) || enter;
+        return { see: see, enter: enter, edit: edit };
+      }
+
+      function siteAclBoxes(kind, id, cap) {
+        return ["see", "enter", "edit"]
+          .map(function (key) {
+            const label = key === "see" ? "看得见" : key === "enter" ? "进得去" : "改得了";
+            return (
+              '<label class="site-acl-cap"><input type="checkbox" data-acl-kind="' +
+              kind +
+              '" data-acl-id="' +
+              escapeHtml(id) +
+              '" data-acl-cap="' +
+              key +
+              '"' +
+              (cap[key] ? " checked" : "") +
+              " />" +
+              label +
+              "</label>"
+            );
+          })
+          .join("");
+      }
+
+      function paintSiteAclPeople() {
+        const host = root.querySelector("#site-acl-people");
+        if (!host || !siteAclBoard) {
+          return;
+        }
+        const q = String((root.querySelector("#site-acl-q") && root.querySelector("#site-acl-q").value) || "")
+          .trim()
+          .toLowerCase();
+        const rows = (siteAclBoard.people || []).filter(function (person) {
+          if (!q) {
+            return true;
+          }
+          return [person.name, person.role, person.lineManager, person.supervisor, person.center].join(" ").toLowerCase().indexOf(q) >= 0;
+        });
+        host.innerHTML = rows
+          .map(function (person) {
+            return (
+              '<button type="button" class="site-acl-person' +
+              (person.name === siteAclName ? " is-on" : "") +
+              '" data-acl-person="' +
+              escapeHtml(person.name) +
+              '"><strong>' +
+              escapeHtml(person.name) +
+              "</strong><span>" +
+              escapeHtml(person.role || "") +
+              " · " +
+              escapeHtml(person.lineManager || person.center || "") +
+              '</span><em>' +
+              (person.configured ? "已配" : "未配·全关") +
+              "</em></button>"
+            );
+          })
+          .join("");
+      }
+
+      function paintSiteAclSheet() {
+        const empty = root.querySelector("#site-acl-empty");
+        const detail = root.querySelector("#site-acl-detail");
+        if (!siteAclDraft) {
+          empty.hidden = false;
+          detail.hidden = true;
+          return;
+        }
+        empty.hidden = true;
+        detail.hidden = false;
+        const person = siteAclDraft.person || {};
+        root.querySelector("#site-acl-name").textContent = person.name || siteAclName;
+        root.querySelector("#site-acl-meta").textContent =
+          [person.role, person.lineManager || person.center, person.configured ? "已配" : "未配，默认全关"].filter(Boolean).join(" · ");
+        const modules = (siteAclBoard.catalog || [])
+          .map(function (mod) {
+            const sheet = siteAclDraft.sheet.modules[mod.id] || { see: false, enter: false, edit: false, features: {} };
+            const feats = (mod.features || [])
+              .map(function (feature) {
+                const cap = siteAclCap(sheet.features && sheet.features[feature.id]);
+                return (
+                  '<div class="site-acl-feature"><span>' +
+                  escapeHtml(feature.name) +
+                  "</span><div class=\"site-acl-caps\">" +
+                  siteAclBoxes("feature", feature.id, cap) +
+                  "</div></div>"
+                );
+              })
+              .join("");
+            return (
+              '<article class="site-acl-mod"><div class="site-acl-mod-head"><strong>' +
+              escapeHtml(mod.name) +
+              '</strong><div class="site-acl-caps">' +
+              siteAclBoxes("module", mod.id, siteAclCap(sheet)) +
+              "</div></div>" +
+              feats +
+              "</article>"
+            );
+          })
+          .join("");
+        root.querySelector("#site-acl-modules").innerHTML = modules;
+        const stores = (siteAclDraft.stores || [])
+          .map(function (store) {
+            const cap = siteAclCap(siteAclDraft.sheet.stores && siteAclDraft.sheet.stores[String(store.id)]);
+            return (
+              '<div class="site-acl-store"><div><strong>' +
+              escapeHtml(store.storeName) +
+              "</strong><span>" +
+              escapeHtml([store.operator || store.supervisor || store.manager, store.storeId].filter(Boolean).join(" · ")) +
+              '</span></div><div class="site-acl-caps">' +
+              siteAclBoxes("store", String(store.id), cap) +
+              "</div></div>"
+            );
+          })
+          .join("");
+        root.querySelector("#site-acl-stores").innerHTML = stores || '<p class="muted">这一组还没有店铺明细。</p>';
+      }
+
+      function applySiteAclCheck(kind, id, cap, on) {
+        if (!siteAclDraft || !siteAclDraft.sheet) {
+          return;
+        }
+        function write(target) {
+          const next = siteAclCap(target);
+          if (cap === "see") {
+            next.see = on;
+            if (!on) {
+              next.enter = false;
+              next.edit = false;
+            }
+          } else if (cap === "enter") {
+            next.enter = on;
+            if (on) {
+              next.see = true;
+            } else {
+              next.edit = false;
+            }
+          } else {
+            next.edit = on;
+            if (on) {
+              next.see = true;
+              next.enter = true;
+            }
+          }
+          return next;
+        }
+        if (kind === "store") {
+          siteAclDraft.sheet.stores[id] = write(siteAclDraft.sheet.stores[id]);
+          return;
+        }
+        if (kind === "module") {
+          const mod = siteAclDraft.sheet.modules[id];
+          if (!mod) {
+            return;
+          }
+          const next = write(mod);
+          next.features = mod.features || {};
+          Object.keys(next.features).forEach(function (fid) {
+            next.features[fid] = write(next.features[fid]);
+          });
+          siteAclDraft.sheet.modules[id] = next;
+          return;
+        }
+        (siteAclBoard.catalog || []).forEach(function (mod) {
+          const sheet = siteAclDraft.sheet.modules[mod.id];
+          if (!sheet || !sheet.features || !sheet.features[id]) {
+            return;
+          }
+          sheet.features[id] = write(sheet.features[id]);
+        });
+      }
+
+      function openSiteAclPerson(name) {
+        siteAclName = name;
+        showError(root.querySelector("#site-acl-error"), "");
+        root.querySelector("#site-acl-ok").hidden = true;
+        return fetch("/api/people/org/site-acl/" + encodeURIComponent(name), { credentials: "same-origin" })
+          .then(function (res) {
+            return res.json();
+          })
+          .then(function (data) {
+            if (dead) {
+              return;
+            }
+            if (!data.ok) {
+              showError(root.querySelector("#site-acl-error"), data.error || "打不开这个人");
+              return;
+            }
+            siteAclDraft = {
+              person: data.person,
+              stores: data.stores || siteAclBoard.stores || [],
+              sheet: data.sheet
+            };
+            paintSiteAclPeople();
+            paintSiteAclSheet();
+          });
+      }
+
+      function loadSiteAcl() {
+        return fetch("/api/people/org/site-acl", { credentials: "same-origin" })
+          .then(function (res) {
+            return res.json();
+          })
+          .then(function (board) {
+            if (dead) {
+              return;
+            }
+            siteAclBoard = board;
+            paintSiteAclPeople();
+            if (siteAclName) {
+              return openSiteAclPerson(siteAclName);
+            }
+            paintSiteAclSheet();
+          });
+      }
+
+      function saveSiteAcl() {
+        if (!siteAclName || !siteAclDraft) {
+          return;
+        }
+        showError(root.querySelector("#site-acl-error"), "");
+        root.querySelector("#site-acl-ok").hidden = true;
+        return fetch("/api/people/org/site-acl/" + encodeURIComponent(siteAclName), {
+          method: "PUT",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            modules: siteAclDraft.sheet.modules,
+            stores: siteAclDraft.sheet.stores
+          })
+        })
+          .then(function (res) {
+            return res.json();
+          })
+          .then(function (data) {
+            if (!data.ok) {
+              showError(root.querySelector("#site-acl-error"), data.error || "保存失败");
+              return;
+            }
+            root.querySelector("#site-acl-ok").hidden = false;
+            root.querySelector("#site-acl-ok").textContent = "已保存 " + siteAclName;
+            return loadSiteAcl();
+          });
+      }
+
       function loadLogs() {
         return fetch("/api/people/org/logs", { credentials: "same-origin" })
           .then(function (res) {
@@ -1931,6 +2199,31 @@
         loadRights();
       });
       window.addEventListener("resize", fitRightsTree);
+      root.querySelector("#site-acl-people").addEventListener("click", function (event) {
+        const btn = event.target.closest("[data-acl-person]");
+        if (btn) {
+          openSiteAclPerson(btn.getAttribute("data-acl-person"));
+        }
+      });
+      root.querySelector("#site-acl-q").addEventListener("input", function () {
+        paintSiteAclPeople();
+      });
+      root.querySelector("#site-acl-save").addEventListener("click", function () {
+        saveSiteAcl();
+      });
+      root.querySelector("#site-acl-detail").addEventListener("change", function (event) {
+        const input = event.target.closest("input[data-acl-kind]");
+        if (!input) {
+          return;
+        }
+        applySiteAclCheck(
+          input.getAttribute("data-acl-kind"),
+          input.getAttribute("data-acl-id"),
+          input.getAttribute("data-acl-cap"),
+          input.checked
+        );
+        paintSiteAclSheet();
+      });
 
       root.querySelector("#org-tabs").addEventListener("click", function (event) {
         const tab = event.target.closest(".org-tab");
@@ -1947,6 +2240,9 @@
         }
         if (pane === "logs") {
           loadLogs();
+        }
+        if (pane === "acl") {
+          loadSiteAcl();
         }
       });
 

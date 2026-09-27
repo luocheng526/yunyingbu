@@ -17,7 +17,14 @@ import {
   reconcilePeople,
   removePeople
 } from "./store.js";
-import { canEditRoster, scopeOf } from "./org-acl.js";
+import { canAssignSiteAcl, canEditRoster, scopeOf } from "./org-acl.js";
+import {
+  hydrateSiteAcl,
+  listSiteAclBoard,
+  readPersonSiteAcl,
+  savePersonSiteAcl,
+  siteAclPersistMode
+} from "./site-acl.js";
 import {
   STORE_IMPORT_HEADERS,
   createOrgStore,
@@ -186,6 +193,44 @@ peopleRouter.delete("/org/stores/:id", async (req, res) => {
 peopleRouter.get("/org/logs", async (_req, res) => {
   await hydrateOrgStores();
   res.json({ ok: true, persist: orgStoresPersistMode(), logs: listOrgLogs() });
+});
+
+peopleRouter.get("/org/site-acl/me", async (req, res) => {
+  await hydratePeopleRoster();
+  await hydrateOrgStores();
+  await hydrateSiteAcl();
+  const actor = await resolveActor(req);
+  const board = listSiteAclBoard(actor);
+  res.json({ ok: true, persist: siteAclPersistMode(), actor, me: board.me, catalog: board.catalog });
+});
+
+peopleRouter.get("/org/site-acl/:name", async (req, res) => {
+  await hydratePeopleRoster();
+  await hydrateOrgStores();
+  await hydrateSiteAcl();
+  const actor = await resolveActor(req);
+  if (!canAssignSiteAcl(actor)) {
+    res.status(403).json({ ok: false, error: "只有罗成、韩梦凯、沈子晗能配网站权限" });
+    return;
+  }
+  sendResult(res, readPersonSiteAcl(actor, req.params.name), false);
+});
+
+peopleRouter.put("/org/site-acl/:name", async (req, res) => {
+  await hydratePeopleRoster();
+  await hydrateOrgStores();
+  await hydrateSiteAcl();
+  const actor = await resolveActor(req);
+  sendResult(res, await savePersonSiteAcl(actor, req.params.name, req.body || {}), false);
+});
+
+peopleRouter.get("/org/site-acl", async (req, res) => {
+  await hydratePeopleRoster();
+  await hydrateOrgStores();
+  await hydrateSiteAcl();
+  const actor = await resolveActor(req);
+  const board = listSiteAclBoard(actor);
+  res.json({ ok: true, persist: siteAclPersistMode(), ...board });
 });
 
 peopleRouter.get("/org/rights-board", (_req, res) => {

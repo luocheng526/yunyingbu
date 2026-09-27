@@ -9,6 +9,11 @@ import { createApp } from "../src/app.js";
 import { resetOrgBoard } from "../src/modules/people/org-board.js";
 import { resetOrgExtra } from "../src/modules/people/org-extra.js";
 import { resetPeopleStore } from "../src/modules/people/store.js";
+import { resetSiteAcl } from "../src/modules/people/site-acl.js";
+
+test.beforeEach(() => {
+  resetSiteAcl();
+});
 
 const SMOKE = `<!doctype html>
 <html lang="zh-CN">
@@ -846,6 +851,90 @@ test("headless chrome splits 潘梦玉 and 刘璇 operator cards", async () => {
     assert.match(html, /data-pan="1"/);
     assert.match(html, /data-liu="1"/);
     assert.match(html, /data-fallback="1"/);
+  } finally {
+    await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
+});
+
+const SITE_ACL_SMOKE = `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="/people.css" />
+  </head>
+  <body>
+    <div id="xm-content"></div>
+    <script src="/shared/modules/people.js"></script>
+    <script>
+      (async function () {
+        function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+        window.XmModules["/people"].mount(document.getElementById("xm-content"));
+        document.querySelector('[data-pane="acl"]').click();
+        await sleep(900);
+        const person = Array.prototype.find.call(document.querySelectorAll("[data-acl-person]"), function (btn) {
+          return btn.getAttribute("data-acl-person") === "张文静";
+        });
+        if (!person) {
+          document.body.setAttribute("data-ok", "no-person");
+          return;
+        }
+        person.click();
+        await sleep(500);
+        const workbench = document.querySelector('input[data-acl-kind="feature"][data-acl-id="home.workbench"][data-acl-cap="see"]');
+        const storeSee = document.querySelector('input[data-acl-kind="store"][data-acl-cap="see"]');
+        if (!workbench || !storeSee) {
+          document.body.setAttribute("data-ok", "no-box");
+          return;
+        }
+        const storeId = storeSee.getAttribute("data-acl-id");
+        workbench.click();
+        const enter = document.querySelector('input[data-acl-kind="feature"][data-acl-id="home.workbench"][data-acl-cap="enter"]');
+        if (enter) {
+          enter.click();
+        }
+        const storeSee2 = document.querySelector('input[data-acl-kind="store"][data-acl-id="' + storeId + '"][data-acl-cap="see"]');
+        if (storeSee2) {
+          storeSee2.click();
+        }
+        document.getElementById("site-acl-save").click();
+        await sleep(700);
+        const after = await fetch("/api/people/org/site-acl/me?actor=" + encodeURIComponent("张文静")).then(function (res) { return res.json(); });
+        const homeOk = after.me && after.me.modules.home && after.me.modules.home.features["home.workbench"].enter;
+        const storeOk = after.me && after.me.stores && after.me.stores[storeId] && after.me.stores[storeId].see;
+        const gateOff = after.me && after.me.modules.releases && after.me.modules.releases.features["releases.gate"].see === false;
+        document.body.setAttribute("data-home", homeOk ? "1" : "0");
+        document.body.setAttribute("data-store", storeOk ? "1" : "0");
+        document.body.setAttribute("data-ok", person && homeOk && storeOk && gateOff ? "1" : "0");
+      })();
+    </script>
+  </body>
+</html>`;
+
+test("headless chrome assigns website see/enter/edit for a roster person", async () => {
+  resetPeopleStore();
+  resetOrgBoard();
+  resetOrgExtra();
+  resetSiteAcl();
+  const app = createApp();
+  const server = http.createServer((req, res) => {
+    if (req.url === "/__site-acl-smoke") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(SITE_ACL_SMOKE);
+      return;
+    }
+    app(req, res);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  try {
+    const html = await chromeDump(`http://127.0.0.1:${port}/__site-acl-smoke`, 16000);
+    assert.match(
+      html,
+      /data-ok="1"/,
+      html.includes("data-ok=") ? html.slice(html.indexOf("data-ok="), html.indexOf("data-ok=") + 240) : html.slice(-400)
+    );
+    assert.match(html, /data-home="1"/);
+    assert.match(html, /data-store="1"/);
   } finally {
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }

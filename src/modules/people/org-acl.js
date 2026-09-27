@@ -73,6 +73,55 @@ export function canEditRoster(actor) {
   return name.includes("罗成") || name.includes("沈子晗") || name.includes("韩梦凯");
 }
 
+export function canAssignSiteAcl(actor) {
+  return canEditRoster(actor);
+}
+
+export function personBranch(person) {
+  const name = normalizeGroupId(person && person.name != null ? person.name : person);
+  if (name.includes("罗成") || name === "管理员") {
+    return "all";
+  }
+  if (name.includes("韩梦凯")) {
+    return "han";
+  }
+  if (name.includes("沈子晗")) {
+    return "shen";
+  }
+  const blob = [
+    person && person.lineManager,
+    person && person.manager,
+    person && person.center,
+    person && person.department,
+    person && person.director
+  ].join(" ");
+  if (blob.includes("韩梦凯")) {
+    return "han";
+  }
+  if (blob.includes("沈子晗")) {
+    return "shen";
+  }
+  return "";
+}
+
+export function canAssignPerson(actor, person) {
+  if (!canAssignSiteAcl(actor)) {
+    return false;
+  }
+  const scope = scopeOf(actor);
+  if (scope.key === "all") {
+    return true;
+  }
+  const branch = personBranch(person);
+  if (scope.key === "shen") {
+    return branch === "shen";
+  }
+  if (scope.key === "han") {
+    return branch === "han";
+  }
+  return false;
+}
+
 export function assertCanWrite(actor, row, next = null) {
   if (!canEditStore(actor, row)) {
     return { ok: false, statusCode: 403, error: "超出责权：只能改本小组店铺" };

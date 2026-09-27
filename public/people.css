@@ -1342,3 +1342,152 @@ body:has(.people-page) .xm-tabs {
   color: var(--xm-muted, #8c8c8c);
   font-size: 12px;
 }
+
+.site-acl {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+  min-height: 420px;
+}
+
+.site-acl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 10px;
+}
+
+.site-acl-list input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#site-acl-people {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: auto;
+  max-height: 640px;
+}
+
+.site-acl-person {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  padding: 8px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.site-acl-person strong {
+  grid-column: 1;
+}
+
+.site-acl-person span {
+  grid-column: 1;
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+.site-acl-person em {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: #8c8c8c;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.site-acl-person.is-on {
+  border-color: #1677ff;
+  background: #e6f4ff;
+}
+
+.site-acl-sheet {
+  min-width: 0;
+}
+
+.site-acl-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.site-acl-head h3 {
+  margin: 0;
+}
+
+.site-acl-mod,
+.site-acl-store,
+.site-acl-feature {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  margin-bottom: 6px;
+}
+
+.site-acl-mod {
+  flex-direction: column;
+  align-items: stretch;
+  background: #fafafa;
+}
+
+.site-acl-mod-head,
+.site-acl-feature,
+.site-acl-store {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.site-acl-feature {
+  background: #fff;
+}
+
+.site-acl-store span,
+.site-acl-feature span {
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+.site-acl-store div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.site-acl-caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.site-acl-cap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #262626;
+  font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  .site-acl {
+    grid-template-columns: 1fr;
+  }
+}
