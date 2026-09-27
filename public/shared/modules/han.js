@@ -1522,7 +1522,7 @@
           if (dead || !window.HanCenter) return;
           stop = window.HanCenter.mount(root, board) || function () {};
         }
-        const centerVer = "20260927-edit";
+        const centerVer = "20260927-window";
         if (window.HanCenter && window.HanCenter.version === centerVer) {
           start();
         } else {
