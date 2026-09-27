@@ -148,6 +148,7 @@ test("live shop rows stay light pink after click until remount", () => {
   assert.match(homeJs, /clearLiveRowPicked\(\)/);
   assert.match(homeJs, /liveRow\.classList\.toggle\("is-picked", picked\)/);
   assert.match(homeJs, /nextView !== state.view/);
+  assert.match(homeJs, /mount: function \(root\) \{\s*clearLiveRowPicked\(\);/s);
 });
 
 test("live shop headers can drag left and right", () => {

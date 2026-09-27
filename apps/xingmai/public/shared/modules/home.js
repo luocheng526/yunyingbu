@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.708-home-colsame */
+/* xm-module-home 0.1.709-home-untint */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1894,7 +1894,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.708-home-colsame");
+    board.setAttribute("data-hm-js", "0.1.709-home-untint");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2920,6 +2920,7 @@
   window.XmModules = window.XmModules || {};
   window.XmModules["/home"] = {
     mount: function (root) {
+      clearLiveRowPicked();
       root.innerHTML = frameHtml();
       var dead = false;
       var dates = rangeDates("yesterday");

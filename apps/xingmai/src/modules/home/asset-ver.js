@@ -1,5 +1,5 @@
 /** Homepage script URL. Must not use /shared/modules/home.js?v=… — that URL is immutable for 24h. */
-export const HOME_CLIENT_JS = "/api/home/client.js?v=0.1.708-home-colsame";
+export const HOME_CLIENT_JS = "/api/home/client.js?v=0.1.709-home-untint";
 
 export function rewriteHomeModuleUrl(html) {
   return String(html || "").replace(
