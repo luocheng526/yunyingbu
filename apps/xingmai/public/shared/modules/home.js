@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.717-home-chiefladder */
+/* xm-module-home 0.1.718-home-feeinput */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1080,25 +1080,83 @@
       localStorage.setItem("xm-home-fee-targets", JSON.stringify(map));
     } catch (_err) {}
   }
-  function feeOverTarget(value, shop) {
-    var cur = feePct(value);
+  function feeMonitorOf(feeRate, shop) {
     var goal = feeTargetFor(shop);
-    return cur != null && goal != null && cur > goal;
+    var cur = feePct(feeRate);
+    if (goal == null) {
+      return { label: "未设目标", kind: "" };
+    }
+    if (cur == null) {
+      return { label: "—", kind: "" };
+    }
+    if (cur > goal + 2) {
+      return { label: "控制费比", kind: "hot" };
+    }
+    if (cur < goal - 2) {
+      return { label: "放大付费", kind: "cold" };
+    }
+    return { label: "正常", kind: "ok" };
+  }
+  function feeOverTarget(value, shop) {
+    return feeMonitorOf(value, shop).kind === "hot";
   }
   function feeWarnText(value, shop) {
     if (!feeOverTarget(value, shop)) {
       return "";
     }
-    return "费比预警：当前 " + Math.round(feePct(value)) + "% 超过目标 " + Math.round(feeTargetFor(shop)) + "%";
+    return "费比监控：当前 " + Math.round(feePct(value)) + "% 超过目标 " + Math.round(feeTargetFor(shop)) + "%";
   }
   function feeWarnLabel(feeRate, shop) {
-    if (feeTargetFor(shop) == null) {
-      return "未设目标";
+    return feeMonitorOf(feeRate, shop).label;
+  }
+  function feeMonitorClass(kind) {
+    if (kind === "hot") {
+      return " is-fee-warn is-fee-hot";
     }
-    if (feePct(feeRate) == null) {
-      return "—";
+    if (kind === "cold") {
+      return " is-fee-cold";
     }
-    return feeOverTarget(feeRate, shop) ? "超标" : "正常";
+    return "";
+  }
+  function isHomeFormField(el) {
+    return !!(el && el.closest && el.closest("input,select,textarea,button,a,[data-fee-target],.xm-hm-fee-goal"));
+  }
+  function isFeeTyping(el) {
+    return !!(el && el.closest && el.closest("input,textarea,select,[data-fee-target],.xm-hm-fee-goal"));
+  }
+  function liveFeeDraft(root) {
+    var el = root && root.querySelector ? root.querySelector("[data-fee-target]:focus") : null;
+    if (!el) {
+      return null;
+    }
+    return {
+      shop: String(el.getAttribute("data-fee-shop") || ""),
+      value: el.value,
+      start: el.selectionStart,
+      end: el.selectionEnd
+    };
+  }
+  function restoreLiveFeeDraft(root, draft) {
+    if (!root || !draft || !draft.shop) {
+      return;
+    }
+    var list = root.querySelectorAll("[data-fee-target]");
+    var i;
+    var el;
+    for (i = 0; i < list.length; i += 1) {
+      el = list[i];
+      if (el.getAttribute("data-fee-shop") !== draft.shop) {
+        continue;
+      }
+      el.value = draft.value;
+      el.focus();
+      try {
+        if (typeof el.setSelectionRange === "function") {
+          el.setSelectionRange(draft.start == null ? el.value.length : draft.start, draft.end == null ? el.value.length : draft.end);
+        }
+      } catch (_err) {}
+      return;
+    }
   }
   function liveAtText(liveAt) {
     var raw = String(liveAt || "").trim();
@@ -1107,11 +1165,11 @@
   function feeGoalCellHtml(shop) {
     var goal = feeTargetFor(shop);
     return (
-      '<label class="xm-hm-fee-goal"><input type="number" min="0" max="100" step="1" data-fee-target data-fee-shop="' +
+      '<label class="xm-hm-fee-goal" onpointerdown="event.stopPropagation()" onmousedown="event.stopPropagation()"><input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" data-fee-target data-fee-shop="' +
       escapeHtml(String(shop || "")) +
       '"' +
       (goal == null ? "" : ' value="' + escapeHtml(String(goal)) + '"') +
-      " /> %</label>"
+      ' onpointerdown="event.stopPropagation()" onmousedown="event.stopPropagation()" /> %</label>'
     );
   }
   function liveFilter() {
@@ -1503,7 +1561,7 @@
     { key: "roi", label: "实时付费ROI" },
     { key: "paidDeal", label: "实时付费成交额" },
     { key: "feeRate", label: "实时费比" },
-    { key: "feeWarn", label: "费比预警", w: "88px" },
+    { key: "feeWarn", label: "费比监控", w: "108px" },
     { key: "feeGoal", label: "费比目标设置", w: "124px" },
     { key: "liveAt", label: "更新时间", w: "150px" }
   ];
@@ -1621,7 +1679,7 @@
   }
   function liveShopCellHtml(col, row, index, liveAt) {
     var shop = row && row.shop;
-    var warn = feeWarnLabel(row && row.feeRate, shop);
+    var mon = feeMonitorOf(row && row.feeRate, shop);
     var key = col && col.key;
     if (key === "rank") {
       return '<td class="xm-hm-num">' + rankMark(index) + "</td>";
@@ -1644,7 +1702,7 @@
     if (key === "feeRate") {
       return (
         '<td class="xm-hm-num' +
-        (feeOverTarget(row.feeRate, shop) ? " is-fee-warn" : "") +
+        feeMonitorClass(mon.kind) +
         '">' +
         escapeHtml(row.feeRate == null ? "—" : row.feeRate) +
         "</td>"
@@ -1653,9 +1711,9 @@
     if (key === "feeWarn") {
       return (
         '<td class="xm-hm-num' +
-        (warn === "超标" ? " is-fee-warn" : "") +
+        feeMonitorClass(mon.kind) +
         '">' +
-        escapeHtml(warn) +
+        escapeHtml(mon.label) +
         "</td>"
       );
     }
@@ -1830,12 +1888,14 @@
       ".xm-hm-live-refresh:disabled{opacity:.55;cursor:wait}" +
       ".xm-hm-live-filter select{width:100%;height:40px;box-sizing:border-box;border:1px solid #e4e7ed;border-radius:8px;padding:0 36px 0 14px;font:inherit;font-size:14px;color:var(--xm-ink);background:#fff;-webkit-appearance:none;appearance:none}" +
       ".xm-hm-live-filter-box:after{content:\"\";position:absolute;right:14px;top:50%;width:8px;height:8px;margin-top:-6px;border-right:2px solid #8c8c8c;border-bottom:2px solid #8c8c8c;transform:rotate(45deg);pointer-events:none}" +
-      ".xm-hm-fee-goal{display:inline-flex;align-items:center;justify-content:center;gap:4px;width:100%;color:var(--xm-ink);font-size:12px}" +
-      ".xm-hm-fee-goal input{width:56px;height:24px;box-sizing:border-box;border:1px solid var(--xm-line);border-radius:4px;padding:0 6px;font:inherit;text-align:center}" +
+      ".xm-hm-fee-goal{display:inline-flex;align-items:center;justify-content:center;gap:4px;width:100%;color:var(--xm-ink);font-size:12px;cursor:text;-webkit-user-select:text;user-select:text;pointer-events:auto}" +
+      ".xm-hm-fee-goal input{width:64px;height:28px;box-sizing:border-box;border:1px solid var(--xm-line);border-radius:4px;padding:0 6px;font:inherit;text-align:center;cursor:text;pointer-events:auto;-webkit-user-select:text;user-select:text}" +
       ".xm-hm-fee-warn{color:#cf1322;font-size:13px;font-weight:600}" +
       ".xm-hm-fee-hint{color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-chart.is-warn{border-color:#ff7875}" +
-      ".xm-hm-live .xm-hm-table td.is-fee-warn{color:#cf1322;font-weight:600}" +
+      ".xm-hm-live .xm-hm-table td.is-fee-warn,.xm-hm-live .xm-hm-table td.is-fee-hot{color:#cf1322;font-weight:600}" +
+      ".xm-hm-live .xm-hm-table td.is-fee-cold{color:#1677ff;font-weight:600}" +
+      ".xm-hm-live .xm-hm-table td:has(.xm-hm-fee-goal){overflow:visible}" +
       ".xm-hm-live-charts{display:grid;grid-template-columns:1fr 1fr;gap:20px}" +
       ".xm-hm-chart{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:14px 16px 10px;min-width:0}" +
       ".xm-hm-legs{display:inline-flex;align-items:center;gap:10px;color:var(--xm-muted);font-size:12px}" +
@@ -2003,7 +2063,8 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.717-home-chiefladder");
+    var feeDraft = liveFeeDraft(root);
+    board.setAttribute("data-hm-js", "0.1.718-home-feeinput");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2086,6 +2147,7 @@
       allBox.indeterminate = someOn && !allOn;
     }
     syncCardPop(root);
+    restoreLiveFeeDraft(root, feeDraft);
   }
   function api(path) {
     return fetch(path, { credentials: "same-origin", headers: { Accept: "application/json" } }).then(function (res) {
@@ -3419,7 +3481,7 @@
           return;
         }
         var liveRow = event.target.closest(".xm-hm-live .xm-hm-table tbody tr");
-        if (liveRow && !event.target.closest("input,select,button,textarea,a")) {
+        if (liveRow && !isHomeFormField(event.target)) {
           var picked = toggleLiveRowPicked(liveRow.getAttribute("data-live-shop"));
           liveRow.classList.toggle("is-picked", picked);
         }
@@ -3685,6 +3747,10 @@
         return null;
       }
       function clearTextSelection() {
+        var ae = document.activeElement;
+        if (isFeeTyping(ae)) {
+          return;
+        }
         var sel = window.getSelection && window.getSelection();
         if (sel && sel.removeAllRanges) sel.removeAllRanges();
       }
@@ -3742,6 +3808,9 @@
       }
       function onSortDown(event) {
         if (event.button && event.button !== 0) {
+          return;
+        }
+        if (isHomeFormField(event.target)) {
           return;
         }
         if (!event.target.closest || !event.target.closest("#xm-hm")) {
@@ -3815,10 +3884,16 @@
         }
       }
       function onSortSelectStart(event) {
+        if (isFeeTyping(event.target)) {
+          return;
+        }
         var tab = event.target.closest && event.target.closest(".xm-hm-views button,.xm-hm-ranges button,.xm-hm-set,.xm-hm-dates,[data-refresh-teams],[data-show-teams],[data-refresh-live]");
         if (sortFrom || sortDragging || tab) event.preventDefault();
       }
       function onSortMove(event) {
+        if (isFeeTyping(event.target) || isFeeTyping(document.activeElement)) {
+          return;
+        }
         var x = event.clientX || 0;
         var y = event.clientY || 0;
         if (colDrag) {
@@ -3930,6 +4005,14 @@
         event.preventDefault();
         event.stopPropagation();
       }
+      function onFeeKey(event) {
+        if (event.target.getAttribute("data-fee-target") == null) {
+          return;
+        }
+        if (event.key === "Enter") {
+          event.target.blur();
+        }
+      }
       function onChange(event) {
         if (event.target.getAttribute("data-live-filter") === "pick") {
           saveLiveFilter(parseLiveFilterValue(event.target.value));
@@ -3973,6 +4056,7 @@
       }
       var scroller = document.getElementById("xm-content") || root;
       root.addEventListener("click", onClick);
+      root.addEventListener("keydown", onFeeKey);
       root.addEventListener("change", onChange);
       root.addEventListener("pointerdown", onCalPointerDown);
       root.addEventListener("pointerover", onCalHover);
@@ -4022,6 +4106,7 @@
         clearLiveRowPicked();
         window.clearInterval(poll);
         root.removeEventListener("click", onClick);
+        root.removeEventListener("keydown", onFeeKey);
         root.removeEventListener("change", onChange);
         root.removeEventListener("pointerdown", onCalPointerDown);
         root.removeEventListener("pointerover", onCalHover);
