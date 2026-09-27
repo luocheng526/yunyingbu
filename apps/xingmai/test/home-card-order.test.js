@@ -93,7 +93,7 @@ test("live page has fee target, warning and update time", () => {
   assert.match(homeJs, /function feeGoalCellHtml/);
   assert.match(homeJs, /data-fee-target/);
   assert.match(homeJs, /data-fee-shop/);
-  assert.match(homeJs, /label: "费比目标"/);
+  assert.match(homeJs, /label: "费比目标设置"/);
   assert.match(homeJs, /label: "费比预警"/);
   assert.doesNotMatch(homeJs, /label: "实时利润"/);
   assert.doesNotMatch(homeJs, /label: "实时销售额"/);

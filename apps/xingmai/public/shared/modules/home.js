@@ -1389,8 +1389,8 @@
     { label: "实时付费ROI" },
     { label: "实时付费成交额" },
     { label: "实时费比" },
-    { label: "费比目标", w: "108px" },
     { label: "费比预警", w: "88px" },
+    { label: "费比目标设置", w: "124px" },
     { label: "更新时间", w: "150px" }
   ];
   function liveColgroupHtml() {
@@ -1431,12 +1431,12 @@
       (feeOverTarget(row.feeRate, shop) ? " is-fee-warn" : "") +
       '">' +
       escapeHtml(row.feeRate == null ? "—" : row.feeRate) +
-      '</td><td class="xm-hm-num">' +
-      feeGoalCellHtml(shop) +
       '</td><td class="xm-hm-num' +
       (warn === "超标" ? " is-fee-warn" : "") +
       '">' +
       escapeHtml(warn) +
+      '</td><td class="xm-hm-num">' +
+      feeGoalCellHtml(shop) +
       '</td><td class="xm-hm-num">' +
       escapeHtml(liveAtText(liveAt)) +
       "</td></tr>"
