@@ -77,9 +77,13 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /全选<\/label>/);
   assert.match(homeJs, /classList\.toggle\("is-chief"/);
   assert.match(homeJs, /function filterOwnChiefs/);
-  assert.match(homeJs, /function seesAllChiefs/);
+  assert.match(homeJs, /function isHomeBoss/);
+  assert.match(homeJs, /function canSeeTeamView/);
+  assert.match(homeJs, /function canSeeChiefView/);
+  assert.match(homeJs, /function shopOnUserDuty/);
   assert.match(homeJs, /shop\.assistant/);
-  assert.match(homeJs, /<th><span>店铺名称<\/span><\/th><\/tr><\/thead><tbody>/);
+  assert.match(homeJs, /if \(simple\) \{\n      return "";/);
+  assert.doesNotMatch(homeJs, /<th><span>店铺名称<\/span><\/th><\/tr><\/thead><tbody>/);
   assert.doesNotMatch(homeJs, /<th>排名<\/th><th>店铺名称<\/th><\/tr>/);
   assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table\{min-width:760px/);
   assert.match(homeJs, /\.xm-hm\.is-team:not\(\.is-chief\) \.xm-hm-team\{min-width:0;width:100%\}/);
@@ -305,7 +309,7 @@ test("duty shop rows sort by metric arrows and keep empty values last", () => {
   );
 });
 
-test("chief board keeps admins on all columns and others on their own duty", () => {
+test("homepage views: bosses see all, chiefs see 主管/储备, operators do not", () => {
   const pick = (name) => {
     const start = homeJs.indexOf("function " + name);
     assert.notEqual(start, -1, name);
@@ -320,19 +324,118 @@ test("chief board keeps admins on all columns and others on their own duty", () 
     throw new Error("unclosed " + name);
   };
   const fns = new Function(
-    pick("seesAllChiefs") + pick("filterOwnChiefs") + ";return {filterOwnChiefs, seesAllChiefs};"
+    pick("personIsChief") +
+      pick("dutyPersonName") +
+      pick("shopSupervisorName") +
+      pick("shopReserveName") +
+      pick("homeUserName") +
+      pick("isHomeBoss") +
+      pick("findRosterPerson") +
+      pick("shopOnUserDuty") +
+      pick("userIsChief") +
+      pick("canSeeTeamView") +
+      pick("canSeeChiefView") +
+      pick("allowedHomeViews") +
+      pick("filterOwnChiefs") +
+      ";return {isHomeBoss, canSeeTeamView, canSeeChiefView, allowedHomeViews, filterOwnChiefs, shopOnUserDuty, userIsChief};"
   )();
-  const teams = [{ name: "杨润泽" }, { name: "陈晓曼" }, { name: "翁琴" }];
-  assert.equal(fns.seesAllChiefs({ role: "超级管理员", dataScope: "全平台数据" }), true);
-  assert.equal(fns.seesAllChiefs({ role: "主管", displayName: "杨润泽" }), false);
+  const teams = [{ name: "杨润泽" }, { name: "高传颖" }, { name: "毛永超" }];
+  const people = [
+    { name: "高传颖", role: "主管", status: "在职", reserve: "高传颖" },
+    { name: "张文静", role: "运营", status: "在职", reserve: "张文静" },
+    { name: "索一龙", role: "运营", status: "在职" }
+  ];
+  const shops = [
+    { storeName: "SAWAAG居家旗舰店", supervisor: "毛永超", reserve: "高传颖", operator: "索一龙" },
+    { storeName: "飒望日用旗舰店", supervisor: "毛永超", reserve: "高传颖", operator: "高传颖" }
+  ];
+  assert.equal(fns.isHomeBoss({ displayName: "罗成" }), true);
+  assert.equal(fns.isHomeBoss({ displayName: "韩梦凯" }), true);
+  assert.equal(fns.isHomeBoss({ displayName: "沈子晗" }), true);
+  assert.equal(fns.isHomeBoss({ displayName: "高传颖", role: "主管" }), false);
+  assert.equal(fns.canSeeTeamView({ displayName: "罗成" }), true);
+  assert.equal(fns.canSeeTeamView({ displayName: "高传颖", role: "主管" }), false);
+  assert.equal(fns.canSeeChiefView({ displayName: "高传颖", role: "主管" }, people, shops), true);
+  assert.equal(fns.canSeeChiefView({ displayName: "张文静", role: "运营" }, people, shops), true);
+  assert.equal(fns.canSeeChiefView({ displayName: "索一龙", role: "运营" }, people, shops), false);
+  assert.equal(fns.shopOnUserDuty(shops[0], { displayName: "高传颖" }), true);
+  assert.equal(fns.shopOnUserDuty(shops[0], { displayName: "索一龙" }), true);
+  assert.equal(fns.shopOnUserDuty(shops[1], { displayName: "索一龙" }), false);
+  assert.deepEqual(fns.allowedHomeViews({ displayName: "罗成" }, people, shops), {
+    company: true,
+    team: true,
+    chief: true,
+    live: true,
+    board: true
+  });
+  assert.deepEqual(fns.allowedHomeViews({ displayName: "高传颖", role: "主管" }, people, shops), {
+    company: true,
+    team: false,
+    chief: true,
+    live: true,
+    board: true
+  });
+  assert.deepEqual(fns.allowedHomeViews({ displayName: "索一龙", role: "运营" }, people, shops), {
+    company: true,
+    team: false,
+    chief: false,
+    live: true,
+    board: true
+  });
   assert.deepEqual(
-    fns.filterOwnChiefs(teams, { role: "超级管理员" }).map((row) => row.name),
-    ["杨润泽", "陈晓曼", "翁琴"]
+    fns.filterOwnChiefs(teams, { displayName: "高传颖", role: "主管" }, people, shops).map((row) => row.name),
+    ["杨润泽", "高传颖", "毛永超"]
   );
-  assert.deepEqual(
-    fns.filterOwnChiefs(teams, { displayName: "杨润泽", role: "主管" }).map((row) => row.name),
-    ["杨润泽"]
-  );
+  assert.deepEqual(fns.filterOwnChiefs(teams, { displayName: "索一龙", role: "运营" }, people, shops), []);
+});
+
+test("company and live packs keep only the signed-in person's duty shops", () => {
+  const pick = (name) => {
+    const start = homeJs.indexOf("function " + name);
+    assert.notEqual(start, -1, name);
+    let depth = 0;
+    for (let i = start; i < homeJs.length; i += 1) {
+      if (homeJs[i] === "{") depth += 1;
+      if (homeJs[i] === "}") {
+        depth -= 1;
+        if (depth === 0) return homeJs.slice(start, i + 1);
+      }
+    }
+    throw new Error("unclosed " + name);
+  };
+  const fns = new Function(
+    pick("normShopId") +
+      pick("erpRecordId") +
+      pick("normShopName") +
+      pick("shopDisplayName") +
+      pick("shopErpId") +
+      pick("dutyPersonName") +
+      pick("shopSupervisorName") +
+      pick("shopReserveName") +
+      pick("homeUserName") +
+      pick("isHomeBoss") +
+      pick("shopOnUserDuty") +
+      pick("dutyShopKeys") +
+      pick("recordOnDuty") +
+      pick("scopeRecords") +
+      ";return {dutyShopKeys, scopeRecords, isHomeBoss};"
+  )();
+  const shops = [
+    { storeName: "SAWAAG居家旗舰店", shopId: "16091983", storeId: "16091983", supervisor: "毛永超", reserve: "高传颖", operator: "索一龙" },
+    { storeName: "飒望日用旗舰店", shopId: "12286853", storeId: "12286853", supervisor: "毛永超", reserve: "高传颖", operator: "高传颖" },
+    { storeName: "DIKTT家居旗舰店", shopId: "3", storeId: "3", supervisor: "毛永超", reserve: "", operator: "李华" }
+  ];
+  const rows = [
+    { shopId: "16091983", shopName: "SAWAAG居家旗舰店", payAmount: 18600 },
+    { shopId: "12286853", shopName: "飒望日用旗舰店", payAmount: 12400 },
+    { shopId: "3", shopName: "DIKTT家居旗舰店", payAmount: 9800 }
+  ];
+  assert.equal(fns.dutyShopKeys(shops, { displayName: "罗成" }), null);
+  const gao = fns.dutyShopKeys(shops, { displayName: "高传颖" });
+  assert.equal(fns.scopeRecords(rows, gao).map((row) => row.shopName).join(","), "SAWAAG居家旗舰店,飒望日用旗舰店");
+  const suo = fns.dutyShopKeys(shops, { displayName: "索一龙" });
+  assert.equal(fns.scopeRecords(rows, suo).map((row) => row.shopName).join(","), "SAWAAG居家旗舰店");
+  assert.equal(fns.scopeRecords(rows, null).length, 3);
 });
 
 test("company card settings no longer include 实时销售金额", () => {
@@ -389,7 +492,8 @@ test("chief columns follow every org 主管/储备 supervisor including 经理",
     { name: "高丽男", role: "运营", status: "在职" },
     { name: "韩梦凯", role: "经理", status: "在职" },
     { name: "张助理", role: "助理", status: "在职" },
-    { name: "张文静", role: "运营", status: "在职", reserve: "张文静" }
+    { name: "张文静", role: "运营", status: "在职", reserve: "张文静" },
+    { name: "高传颖", role: "主管", status: "在职", reserve: "高传颖" }
   ];
   const shops = [
     { supervisor: "杨润泽", assistant: "翁琴", operator: "崔安琪" },
@@ -398,16 +502,36 @@ test("chief columns follow every org 主管/储备 supervisor including 经理",
     { supervisor: "段坤孝", assistant: "黄欣然", operator: "黄欣然" },
     { supervisor: "陈晓曼", assistant: "潘梦玉", operator: "刘璇" },
     { manager: "沈子晗", reserve: "张文静", operator: "张文静", storeName: "RASW家居旗舰店" },
-    { manager: "沈子晗", reserve: "张文静", operator: "王博", storeName: "飒望居家旗舰店" }
+    { manager: "沈子晗", reserve: "张文静", operator: "王博", storeName: "飒望居家旗舰店" },
+    {
+      storeName: "SAWAAG居家旗舰店",
+      shopId: "16091983",
+      manager: "韩梦凯",
+      supervisor: "毛永超",
+      reserve: "高传颖",
+      operator: "索一龙",
+      statusKey: "operating"
+    },
+    {
+      storeName: "飒望日用旗舰店",
+      shopId: "12286853",
+      manager: "韩梦凯",
+      supervisor: "毛永超",
+      reserve: "高传颖",
+      operator: "高传颖",
+      statusKey: "operating"
+    }
   ];
   assert.deepEqual(fns.teamLeadNames(people, shops, "主管"), [
     "杨润泽",
     "翁琴",
     "张文静",
+    "高传颖",
     "高丽男",
     "韩梦凯",
     "段坤孝",
-    "陈晓曼"
+    "陈晓曼",
+    "毛永超"
   ]);
   assert.equal(fns.shopOnRoleTeam(shops[0], "杨润泽", "主管"), true);
   assert.equal(fns.shopOnRoleTeam(shops[1], "高丽男", "主管"), true);
@@ -419,6 +543,12 @@ test("chief columns follow every org 主管/储备 supervisor including 经理",
   assert.equal(fns.shopOnRoleTeam(shops[5], "张文静", "主管"), true);
   assert.equal(fns.shopOnRoleTeam(shops[6], "张文静", "主管"), true);
   assert.equal(fns.shopOnRoleTeam(shops[5], "沈子晗", "主管"), false);
+  assert.equal(fns.shopOnRoleTeam(shops[7], "高传颖", "主管"), true);
+  assert.equal(fns.shopOnRoleTeam(shops[8], "高传颖", "主管"), true);
+  assert.equal(fns.shopOnRoleTeam(shops[7], "毛永超", "主管"), true);
+  assert.equal(fns.shopOnRoleTeam(shops[8], "毛永超", "主管"), true);
+  assert.equal(fns.shopOnRoleTeam(shops[7], "索一龙", "主管"), false);
+  assert.equal(fns.shopOnRoleTeam({ supervisor: "毛永超", reserveName: "高传颖", storeName: "别名储备" }, "高传颖", "主管"), true);
   assert.equal(fns.shopOnRoleTeam({ manager: "沈子晗", lead: "杨润泽", storeName: "杨润泽店" }, "沈子晗", "经理"), true);
   assert.equal(fns.shopOnRoleTeam({ manager: "沈子晗", lead: "杨润泽", storeName: "杨润泽店" }, "杨润泽", "经理"), false);
   assert.equal(fns.shopOnRoleTeam({ manager: "", team: "沈子晗组" }, "沈子晗", "经理"), true);
@@ -732,8 +862,10 @@ test("更新团队 rebuilds duty shops from org store 责权人员", () => {
   assert.match(homeJs, /function refreshTeams/);
   assert.match(homeJs, /function dutyShopOwner/);
   assert.match(homeJs, /function personIsChief/);
-  assert.match(homeJs, /add\(shop.reserve\)/);
-  assert.match(homeJs, /reserve === name/);
+  assert.match(homeJs, /function shopReserveName/);
+  assert.match(homeJs, /function shopSupervisorName/);
+  assert.match(homeJs, /shopReserveName\(shop\) === name/);
+  assert.match(homeJs, /\/api\/people\/org\/stores\?_=/);
   assert.match(homeJs, /data-refresh-teams[\s\S]{0,80}refreshTeams\(\)/);
   assert.match(homeJs, /teamsRefreshing = true/);
   assert.match(homeJs, /var manager = String\(shop\.manager \|\| ""\)\.trim\(\);/);
