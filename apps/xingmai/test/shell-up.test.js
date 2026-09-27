@@ -3,7 +3,16 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { canSeeStaffNav, navMarkup, orgNavFlags } from "../src/modules/home/nav-items.js";
+import {
+  allowCenterShop,
+  canSeeStaffNav,
+  centerNameSet,
+  dutyNameSet,
+  filterCenterPayload,
+  navMarkup,
+  orgNavFlags,
+  shopKey
+} from "../src/modules/home/nav-items.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const nav = readFileSync(join(root, "public/shared/nav.js"), "utf8");
@@ -11,11 +20,11 @@ const items = readFileSync(join(root, "src/modules/home/nav-items.js"), "utf8");
 const pages = readFileSync(join(root, "src/modules/home/pages.js"), "utf8");
 const middleware = readFileSync(join(root, "src/modules/profile/middleware.js"), "utf8");
 
-test("shell pin is 0.1.713 and menus stay collapsed by default", () => {
-  assert.match(nav, /const ASSET_VER = "0\.1\.713"/);
-  assert.match(nav, /0\.1\.713-org-nav/);
-  assert.match(pages, /xm-fast-shell 0\.1\.713/);
-  assert.match(middleware, /export const SHELL_ASSET_VER = "0\.1\.713"/);
+test("shell pin is 0.1.723 and menus stay collapsed by default", () => {
+  assert.match(nav, /const ASSET_VER = "0\.1\.723"/);
+  assert.match(nav, /0\.1\.723-center-scope/);
+  assert.match(pages, /xm-fast-shell 0\.1\.723/);
+  assert.match(middleware, /export const SHELL_ASSET_VER = "0\.1\.723"/);
   assert.match(middleware, /import \{ currentUser, publicProfile \} from "\.\/auth\.js"/);
   assert.match(nav, /group\.classList\.toggle\("is-open", open\)/);
   assert.match(items, /const open = childActive\(item, activeHref\)/);
@@ -75,4 +84,44 @@ test("Shen and Han centers are org-scoped; the three bosses see both", () => {
   assert.equal(orgNavFlags({ username: "张文静", center: "沈子晗运营中心" }).han, false);
   assert.equal(orgNavFlags({ username: "林晓彬", lineManager: "韩梦凯" }).han, true);
   assert.equal(orgNavFlags({ username: "韩梦凯" }).shen, true);
+});
+
+test("Shen and Han shop lists stay on their own org and duty line", () => {
+  const stores = [
+    { storeName: "RASW家居旗舰店", manager: "沈子晗", reserve: "张文静", operator: "张文静" },
+    { storeName: "飒望旗舰店", manager: "沈子晗", supervisor: "杨润泽" },
+    { storeName: "ZYUO洗护旗舰店", manager: "韩梦凯", supervisor: "陈晓曼", operator: "陈晓曼" },
+    { storeName: "飒望玩具旗舰店", manager: "韩梦凯", operator: "林晓彬" }
+  ];
+  const people = [
+    { name: "张文静", username: "张文静", visibleShops: ["RASW家居旗舰店"] },
+    { name: "林晓彬", username: "林晓彬", visibleShops: [] }
+  ];
+  const shen = centerNameSet(stores, "shen");
+  const han = centerNameSet(stores, "han");
+  assert.equal(!!shen[shopKey("RASW家居旗舰店")], true);
+  assert.equal(!!shen[shopKey("ZYUO洗护旗舰店")], false);
+  assert.equal(!!han[shopKey("ZYUO洗护旗舰店")], true);
+  assert.equal(allowCenterShop("RASW家居旗舰店", "shen", shen, {}, true), true);
+  assert.equal(allowCenterShop("ZYUO洗护旗舰店", "shen", shen, {}, true), false);
+  assert.equal(allowCenterShop("ZYUO洗护旗舰店", "han", han, {}, true), true);
+  const jingDuty = dutyNameSet({ username: "张文静" }, stores, people);
+  assert.equal(allowCenterShop("RASW家居旗舰店", "shen", shen, jingDuty, false), true);
+  assert.equal(allowCenterShop("飒望旗舰店", "shen", shen, jingDuty, false), false);
+  const linDuty = dutyNameSet({ username: "林晓彬" }, stores, people);
+  assert.equal(allowCenterShop("飒望玩具旗舰店", "han", han, linDuty, false), true);
+  assert.equal(allowCenterShop("ZYUO洗护旗舰店", "han", han, linDuty, false), false);
+  const paid = filterCenterPayload(
+    {
+      enabledStores: ["RASW家居旗舰店", "ZYUO洗护旗舰店"],
+      rows: [{ store: "RASW家居旗舰店" }, { store: "ZYUO洗护旗舰店" }],
+      metrics: { stores: 2 }
+    },
+    (name) => allowCenterShop(name, "shen", shen, {}, true)
+  );
+  assert.deepEqual(paid.enabledStores, ["RASW家居旗舰店"]);
+  assert.equal(paid.rows.length, 1);
+  assert.equal(paid.metrics.stores, 1);
+  assert.match(nav, /installCenterFetchGuard/);
+  assert.match(nav, /window\.XmOrgScope/);
 });

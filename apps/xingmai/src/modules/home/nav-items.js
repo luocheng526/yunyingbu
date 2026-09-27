@@ -55,6 +55,149 @@ export function orgNavFlags(user) {
   return { shen, han, staff: false, known: shen || han };
 }
 
+export function actorName(user) {
+  if (!user) {
+    return "";
+  }
+  if (typeof user === "string") {
+    return user.trim();
+  }
+  return String(user.displayName || user.name || user.username || "").trim();
+}
+
+export function shopKey(name) {
+  return String(name || "")
+    .replace(/\s+/g, "")
+    .replace(/旗舰店$/g, "旗舰")
+    .replace(/店$/g, "")
+    .toLowerCase();
+}
+
+export function shopNameOf(row) {
+  if (typeof row === "string") {
+    return row;
+  }
+  if (!row || typeof row !== "object") {
+    return "";
+  }
+  return String(row.store || row.storeName || row.shopName || row.shop || row.name || "").trim();
+}
+
+export function centerOfApiPath(url) {
+  const path = String(url || "").split("?")[0];
+  if (path.indexOf("/api/shen") === 0 || path.indexOf("/shen") === 0) {
+    return "shen";
+  }
+  if (path.indexOf("/api/han") === 0 || path.indexOf("/han") === 0) {
+    return "han";
+  }
+  return "";
+}
+
+export function storeMatchesCenter(store, which) {
+  const manager = which === "shen" ? "沈子晗" : which === "han" ? "韩梦凯" : "";
+  if (!manager || !store) {
+    return false;
+  }
+  const bag = [store.manager, store.team, store.chief, store.lead, store.director, store.groupId]
+    .map((value) => String(value || ""))
+    .join(" ");
+  return bag.includes(manager);
+}
+
+export function centerNameSet(stores, which) {
+  const names = {};
+  (stores || []).forEach((store) => {
+    if (!storeMatchesCenter(store, which)) {
+      return;
+    }
+    const key = shopKey(store.storeName || store.shopName || store.name);
+    if (key) {
+      names[key] = true;
+    }
+  });
+  return names;
+}
+
+export function dutyNameSet(user, stores, people) {
+  const names = {};
+  const me = actorName(user);
+  if (!me) {
+    return names;
+  }
+  const add = (value) => {
+    const key = shopKey(value);
+    if (key) {
+      names[key] = true;
+    }
+  };
+  const person = (people || []).find((row) => {
+    const name = String((row && row.name) || "").trim();
+    const username = String((row && row.username) || "").trim();
+    return name === me || username === me;
+  });
+  if (person) {
+    (person.visibleShops || []).forEach(add);
+  }
+  (stores || []).forEach((store) => {
+    const roles = [store.manager, store.supervisor, store.reserve, store.operator, store.assistant, store.lead, store.chief];
+    if (roles.some((role) => String(role || "").trim() === me)) {
+      add(store.storeName || store.shopName || store.name);
+    }
+  });
+  return names;
+}
+
+export function allowCenterShop(name, which, centerSet, dutySet, full) {
+  const key = shopKey(name);
+  if (!key) {
+    return false;
+  }
+  if (centerSet && Object.keys(centerSet).length && !centerSet[key]) {
+    return false;
+  }
+  if (full) {
+    return true;
+  }
+  if (!dutySet || !Object.keys(dutySet).length) {
+    return false;
+  }
+  return Boolean(dutySet[key]);
+}
+
+function keepCenterRow(row, allow) {
+  if (typeof row === "string") {
+    return allow(row);
+  }
+  const name = shopNameOf(row);
+  if (!name) {
+    return true;
+  }
+  return allow(name);
+}
+
+export function filterCenterPayload(data, allow) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return data;
+  }
+  const next = { ...data };
+  ["enabledStores", "shops"].forEach((key) => {
+    if (Array.isArray(next[key]) && next[key].every((item) => typeof item === "string")) {
+      next[key] = next[key].filter((name) => allow(name));
+    }
+  });
+  ["rows", "items", "shopRuns", "records"].forEach((key) => {
+    if (Array.isArray(next[key])) {
+      next[key] = next[key].filter((row) => keepCenterRow(row, allow));
+    }
+  });
+  if (next.metrics && typeof next.metrics === "object") {
+    const stores = Array.isArray(next.enabledStores) ? next.enabledStores.length : Array.isArray(next.rows) ? next.rows.length : next.metrics.stores;
+    next.metrics = { ...next.metrics, stores };
+  }
+  return next;
+}
+
 function footItemsFor(user) {
   if (canSeeStaffNav(user)) {
     return NAV_FOOT;

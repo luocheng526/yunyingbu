@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.713-org-nav — 沈/韩中心按组织可见；三人看全部；版本中心/组织中心仍仅三人 */
+/* xm-fast-shell 0.1.723-center-scope — 沈/韩中心按组织可见；店和数据按中心+责权过滤；三人看全部 */
 (function () {
-  const ASSET_VER = "0.1.713";
+  const ASSET_VER = "0.1.723";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -283,6 +283,286 @@
     const han = bag.indexOf("韩梦凯") >= 0;
     return { shen: shen, han: han, known: shen || han };
   }
+
+  function actorName(user) {
+    if (!user) {
+      return "";
+    }
+    if (typeof user === "string") {
+      return user.trim();
+    }
+    return String(user.displayName || user.name || user.username || "").trim();
+  }
+
+  function shopKey(name) {
+    return String(name || "")
+      .replace(/\s+/g, "")
+      .replace(/旗舰店$/g, "旗舰")
+      .replace(/店$/g, "")
+      .toLowerCase();
+  }
+
+  function shopNameOf(row) {
+    if (typeof row === "string") {
+      return row;
+    }
+    if (!row || typeof row !== "object") {
+      return "";
+    }
+    return String(row.store || row.storeName || row.shopName || row.shop || row.name || "").trim();
+  }
+
+  function centerOfApiPath(url) {
+    const path = String(url || "").split("?")[0];
+    if (path.indexOf("/api/shen") === 0) {
+      return "shen";
+    }
+    if (path.indexOf("/api/han") === 0) {
+      return "han";
+    }
+    return "";
+  }
+
+  function skipCenterFilter(url, method) {
+    const verb = String(method || "GET").toUpperCase();
+    if (verb !== "GET") {
+      return true;
+    }
+    const path = String(url || "").split("?")[0];
+    if (!centerOfApiPath(path)) {
+      return true;
+    }
+    if (/\.csv$/i.test(path) || /worker/i.test(path)) {
+      return true;
+    }
+    return false;
+  }
+
+  function storeMatchesCenter(store, which) {
+    const manager = which === "shen" ? "沈子晗" : which === "han" ? "韩梦凯" : "";
+    if (!manager || !store) {
+      return false;
+    }
+    const bag = [store.manager, store.team, store.chief, store.lead, store.director, store.groupId]
+      .map(function (value) {
+        return String(value || "");
+      })
+      .join(" ");
+    return bag.indexOf(manager) >= 0;
+  }
+
+  function centerNameSet(stores, which) {
+    const names = {};
+    (stores || []).forEach(function (store) {
+      if (!storeMatchesCenter(store, which)) {
+        return;
+      }
+      const key = shopKey(store.storeName || store.shopName || store.name);
+      if (key) {
+        names[key] = true;
+      }
+    });
+    return names;
+  }
+
+  function dutyNameSet(user, stores, people) {
+    const names = {};
+    const me = actorName(user);
+    if (!me) {
+      return names;
+    }
+    function add(value) {
+      const key = shopKey(value);
+      if (key) {
+        names[key] = true;
+      }
+    }
+    let person = null;
+    (people || []).some(function (row) {
+      const name = String((row && row.name) || "").trim();
+      const username = String((row && row.username) || "").trim();
+      if (name === me || username === me) {
+        person = row;
+        return true;
+      }
+      return false;
+    });
+    if (person) {
+      (person.visibleShops || []).forEach(add);
+    }
+    (stores || []).forEach(function (store) {
+      const roles = [store.manager, store.supervisor, store.reserve, store.operator, store.assistant, store.lead, store.chief];
+      if (
+        roles.some(function (role) {
+          return String(role || "").trim() === me;
+        })
+      ) {
+        add(store.storeName || store.shopName || store.name);
+      }
+    });
+    return names;
+  }
+
+  function allowCenterShop(name, which, centerSet, dutySet, full) {
+    const key = shopKey(name);
+    if (!key) {
+      return false;
+    }
+    if (centerSet && Object.keys(centerSet).length && !centerSet[key]) {
+      return false;
+    }
+    if (full) {
+      return true;
+    }
+    if (!dutySet || !Object.keys(dutySet).length) {
+      return false;
+    }
+    return !!dutySet[key];
+  }
+
+  function keepCenterRow(row, allow) {
+    if (typeof row === "string") {
+      return allow(row);
+    }
+    const name = shopNameOf(row);
+    if (!name) {
+      return true;
+    }
+    return allow(name);
+  }
+
+  function filterCenterPayload(data, allow) {
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      return data;
+    }
+    const next = Object.assign({}, data);
+    ["enabledStores", "shops"].forEach(function (key) {
+      if (Array.isArray(next[key]) && next[key].every(function (item) { return typeof item === "string"; })) {
+        next[key] = next[key].filter(function (name) {
+          return allow(name);
+        });
+      }
+    });
+    ["rows", "items", "shopRuns", "records"].forEach(function (key) {
+      if (Array.isArray(next[key])) {
+        next[key] = next[key].filter(function (row) {
+          return keepCenterRow(row, allow);
+        });
+      }
+    });
+    if (next.metrics && typeof next.metrics === "object") {
+      const stores = Array.isArray(next.enabledStores)
+        ? next.enabledStores.length
+        : Array.isArray(next.rows)
+          ? next.rows.length
+          : next.metrics.stores;
+      next.metrics = Object.assign({}, next.metrics, { stores: stores });
+    }
+    return next;
+  }
+
+  function nativeJsonSoft(url) {
+    const send = window.__xmNativeFetch || window.fetch;
+    return send(url, { credentials: "same-origin", headers: { Accept: "application/json" } })
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  let centerScopePack = null;
+  let centerScopePending = null;
+
+  function loadCenterScope() {
+    if (centerScopePack) {
+      return Promise.resolve(centerScopePack);
+    }
+    if (centerScopePending) {
+      return centerScopePending;
+    }
+    centerScopePending = Promise.all([
+      nativeJsonSoft("/api/auth/me"),
+      nativeJsonSoft("/api/people"),
+      nativeJsonSoft("/api/people/org/stores")
+    ]).then(function (pack) {
+      const raw = pack[0];
+      const user = (raw && (raw.user || raw)) || currentStaffUser();
+      const people = (pack[1] && pack[1].people) || [];
+      const stores = (pack[2] && (pack[2].stores || pack[2].items || pack[2].rows)) || [];
+      centerScopePack = {
+        user: user,
+        people: people,
+        stores: stores,
+        full: canSeeStaffNav(user),
+        shen: centerNameSet(stores, "shen"),
+        han: centerNameSet(stores, "han"),
+        duty: dutyNameSet(user, stores, people)
+      };
+      return centerScopePack;
+    });
+    return centerScopePending;
+  }
+
+  function allowFromPack(name, which, pack) {
+    if (!pack) {
+      return canSeeStaffNav(currentStaffUser());
+    }
+    const centerSet = which === "shen" ? pack.shen : which === "han" ? pack.han : null;
+    return allowCenterShop(name, which, centerSet, pack.duty, pack.full);
+  }
+
+  function rewriteJsonResponse(res, data) {
+    return new Response(JSON.stringify(data), {
+      status: res.status,
+      statusText: res.statusText,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+
+  function installCenterFetchGuard() {
+    if (window.__xmCenterFetchGuard) {
+      return;
+    }
+    window.__xmCenterFetchGuard = 1;
+    const nativeFetch = window.fetch;
+    if (typeof nativeFetch !== "function") {
+      return;
+    }
+    window.__xmNativeFetch = nativeFetch;
+    window.fetch = function (input, init) {
+      const url = typeof input === "string" ? input : input && input.url;
+      const method = (init && init.method) || (input && input.method) || "GET";
+      if (skipCenterFilter(url, method)) {
+        return nativeFetch.apply(this, arguments);
+      }
+      const which = centerOfApiPath(url);
+      return nativeFetch.apply(this, arguments).then(function (res) {
+        const type = String((res && res.headers && res.headers.get("content-type")) || "");
+        if (!res || !res.ok || type.indexOf("json") < 0) {
+          return res;
+        }
+        return Promise.all([res.json(), loadCenterScope()]).then(function (pair) {
+          const data = pair[0];
+          const pack = pair[1];
+          return rewriteJsonResponse(res, filterCenterPayload(data, function (name) {
+            return allowFromPack(name, which, pack);
+          }));
+        });
+      });
+    };
+    window.XmOrgScope = {
+      load: loadCenterScope,
+      shopKey: shopKey,
+      allowCenterShop: allowCenterShop,
+      filterCenterPayload: filterCenterPayload,
+      centerNameSet: centerNameSet,
+      dutyNameSet: dutyNameSet
+    };
+  }
+
+  installCenterFetchGuard();
 
   let orgFlags = { shen: true, han: true, known: false, resolved: false };
 
