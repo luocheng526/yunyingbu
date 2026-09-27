@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.225-owner-audit";
+    const href = "/people.css?v=0.1.226-no-blank-row";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -1642,7 +1642,7 @@
 
       function renderRightsModShops(stores) {
         if (!stores || !stores.length) {
-          return '<div class="rights-mod-shop is-placeholder">填写对应的店铺</div>';
+          return '<div class="rights-mod-shop is-placeholder">未分配店铺</div>';
         }
         return stores
           .map(function (store) {
@@ -1695,12 +1695,52 @@
         return list;
       }
 
+      function leftoverLeadPeople(lead, usedOps, usedAssts) {
+        const ops = [];
+        const assts = [];
+        const seen = {};
+        function walk(node) {
+          if (!node) {
+            return;
+          }
+          const name = blankRightsName(node.name);
+          const role = node.role;
+          const key = name + "\t" + role;
+          if (name && !seen[key]) {
+            if ((role === "运营" || role === "店长") && !usedOps[name]) {
+              seen[key] = true;
+              ops.push({ role: role === "店长" ? "店长" : "运营", name: name });
+            } else if (role === "助理" && !usedAssts[name]) {
+              seen[key] = true;
+              assts.push({ role: "助理", name: name });
+            }
+          }
+          (node.children || []).forEach(walk);
+        }
+        (lead.children || []).forEach(walk);
+        ops.sort(function (a, b) {
+          return a.name.localeCompare(b.name, "zh");
+        });
+        assts.sort(function (a, b) {
+          return a.name.localeCompare(b.name, "zh");
+        });
+        return { ops: ops, assts: assts };
+      }
+
       function rightsLeadRows(lead) {
         const groups = {};
         const order = [];
+        const usedOps = {};
+        const usedAssts = {};
         collectLeadStores(lead).forEach(function (store) {
           const opName = storeEffectiveOperator(store, lead);
           const asstName = blankRightsName(store && store.assistantName);
+          if (opName) {
+            usedOps[opName] = true;
+          }
+          if (asstName) {
+            usedAssts[asstName] = true;
+          }
           const key = opName + "\t" + asstName;
           if (!groups[key]) {
             const leadName = blankRightsName(lead && (lead.name || lead.ownerName));
@@ -1719,16 +1759,37 @@
         const rows = order.map(function (key) {
           return groups[key];
         });
-        if (!rows.length) {
-          rows.push({ op: null, asst: [], stores: [] });
+        const leftover = leftoverLeadPeople(lead, usedOps, usedAssts);
+        if (leftover.ops.length || leftover.assts.length) {
+          rows.push({
+            ops: leftover.ops,
+            op: leftover.ops[0] || null,
+            asst: leftover.assts,
+            stores: [],
+            unassigned: true
+          });
+        }
+        if (!rows.length && !lead.synthetic) {
+          rows.push({ op: null, asst: [], stores: [], unassigned: true });
         }
         return rows;
       }
 
       function renderRightsLeadBox(lead) {
-        const rows = rightsLeadRows(lead)
+        const rowList = rightsLeadRows(lead);
+        if (!rowList.length) {
+          return "";
+        }
+        const rows = rowList
           .map(function (row) {
-            const opHtml = row.op ? renderRightsModCard(row.op.role, row.op.name) : renderRightsModEmpty("无");
+            const ops = row.ops && row.ops.length ? row.ops : row.op ? [row.op] : [];
+            const opHtml = ops.length
+              ? ops
+                  .map(function (person) {
+                    return renderRightsModCard(person.role || "运营", person.name);
+                  })
+                  .join("")
+              : renderRightsModEmpty("无");
             const asstHtml = row.asst.length
               ? row.asst
                   .map(function (person) {
@@ -1784,9 +1845,6 @@
             children: direct,
             stores: manager.stores || []
           });
-        }
-        if (!boxes) {
-          boxes = renderRightsLeadBox({ name: "", role: "主管", synthetic: true, children: [], stores: [] });
         }
         return (
           '<div class="rights-mod-band">' +

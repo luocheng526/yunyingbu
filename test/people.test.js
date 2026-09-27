@@ -275,7 +275,9 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /renderRightsModHead/);
     assert.doesNotMatch(jsText, /rights-mod-director/);
     assert.doesNotMatch(jsText, /rights-mod-h">运营/);
-    assert.match(jsText, /填写对应的店铺/);
+    assert.match(jsText, /未分配店铺/);
+    assert.match(jsText, /leftoverLeadPeople/);
+    assert.doesNotMatch(jsText, /填写对应的店铺/);
     assert.match(jsText, /renderRightsModEmpty\("无"\)/);
     assert.match(jsText, /renderRightsTreeChart/);
     assert.match(jsText, /只读对照/);
@@ -988,6 +990,8 @@ test("rights watch keeps people without stores off 店铺对不上 and still lis
     const newbie = find(data.tree, "新人未分店");
     assert.ok(newbie, "roster person without a store still appears on the rights tree");
     assert.equal((newbie.stores || []).length, 0);
+    const han = (data.tree.children || []).find((row) => row.name === "韩梦凯");
+    assert.ok((han.children || []).some((row) => row.name === "新人未分店" && row.role === "运营"));
   });
 });
 
