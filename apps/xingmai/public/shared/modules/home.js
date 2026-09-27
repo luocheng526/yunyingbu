@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.710-home-zhangteam */
+/* xm-module-home 0.1.710-home-gaoteam */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1894,7 +1894,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.710-home-zhangteam");
+    board.setAttribute("data-hm-js", "0.1.710-home-gaoteam");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2729,6 +2729,23 @@
     var n = String(person.name || "").trim();
     return !!(n && String(person.reserve || "").trim() === n);
   }
+  function dutyPersonName(shop, keys) {
+    var list = keys || [];
+    var i;
+    for (i = 0; i < list.length; i += 1) {
+      var n = String((shop && shop[list[i]]) || "").trim();
+      if (n && n !== "管理员" && n !== "无") {
+        return n;
+      }
+    }
+    return "";
+  }
+  function shopSupervisorName(shop) {
+    return dutyPersonName(shop, ["supervisor", "supervisorName"]);
+  }
+  function shopReserveName(shop) {
+    return dutyPersonName(shop, ["reserve", "reserveName", "chuBei", "backup"]);
+  }
   function teamLeadNames(people, dutyShops, role) {
     var seen = {};
     var names = [];
@@ -2750,8 +2767,8 @@
         add(shop && shop.manager);
       }
       if (role === "主管" && shop) {
-        add(shop.supervisor);
-        add(shop.reserve);
+        add(shopSupervisorName(shop));
+        add(shopReserveName(shop));
       }
     });
     if (!names.length && role === "经理") {
@@ -2767,8 +2784,7 @@
     if (role === "主管") {
       var asst = String(shop.assistant || "").trim();
       var op = String(shop.operator || "").trim();
-      var reserve = String(shop.reserve || "").trim();
-      return String(shop.supervisor || "").trim() === name || reserve === name || (asst === name && asst !== op);
+      return shopSupervisorName(shop) === name || shopReserveName(shop) === name || (asst === name && asst !== op);
     }
     var manager = String(shop.manager || "").trim();
     if (manager) {
@@ -3069,7 +3085,7 @@
           api("/api/people"),
           api("/api/people/shops"),
           api("/api/people/grants"),
-          api("/api/people/org/stores")
+          api("/api/people/org/stores?_=" + Date.now())
         ]).then(function (pack) {
           if (dead || seq !== boardSeq) {
             return;
