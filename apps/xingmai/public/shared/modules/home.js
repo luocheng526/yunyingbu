@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.710-home-zhangteam */
+/* xm-module-home 0.1.717-home-chiefladder */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -673,23 +673,10 @@
     );
   }
   function teamShopsHtml(team, simple) {
-    var shops = sortedShops(team.shops || [], simple ? { key: "", dir: "desc" } : shopSort);
     if (simple) {
-      return (
-        '<div class="xm-hm-panel" data-team="' +
-        escapeHtml(team.key) +
-        '"><h2>责权店铺 <span>' +
-        shops.length +
-        " 店</span></h2>" +
-        '<table class="xm-hm-table"><thead><tr><th><span>店铺名称</span></th></tr></thead><tbody>' +
-        shops
-          .map(function (row) {
-            return "<tr><td>" + escapeHtml(row.shop) + "</td></tr>";
-          })
-          .join("") +
-        "</tbody></table></div>"
-      );
+      return "";
     }
+    var shops = sortedShops(team.shops || [], shopSort);
     var cols = shopCols();
     var sort = shopSort;
     return (
@@ -754,21 +741,133 @@
       "</div>"
     );
   }
-  function seesAllChiefs(user) {
-    user = user || {};
-    return /超级|管理员|经理|全平台/.test(String(user.role || "") + String(user.title || "") + String(user.dataScope || ""));
+  function homeUserName(user) {
+    return String((user && (user.displayName || user.username)) || "").trim();
   }
-  function filterOwnChiefs(teams, user) {
-    teams = teams || [];
-    if (seesAllChiefs(user)) {
-      return teams;
+  function isHomeBoss(user) {
+    var n = homeUserName(user);
+    return n === "罗成" || n === "韩梦凯" || n === "沈子晗";
+  }
+  function findRosterPerson(people, user) {
+    var n = homeUserName(user);
+    if (!n) {
+      return null;
     }
-    var name = String((user && (user.displayName || user.username)) || "").trim();
-    return name
-      ? teams.filter(function (team) {
-          return team && team.name === name;
-        })
-      : teams;
+    var list = people || [];
+    var i;
+    for (i = 0; i < list.length; i += 1) {
+      var person = list[i];
+      if (!person) {
+        continue;
+      }
+      if (String(person.name || "").trim() === n || String(person.username || "").trim() === n) {
+        return person;
+      }
+    }
+    return null;
+  }
+  function shopOnUserDuty(shop, user) {
+    var n = homeUserName(user);
+    if (!shop || !n) {
+      return false;
+    }
+    return (
+      String(shop.manager || "").trim() === n ||
+      shopSupervisorName(shop) === n ||
+      shopReserveName(shop) === n ||
+      String(shop.operator || "").trim() === n ||
+      String(shop.assistant || "").trim() === n
+    );
+  }
+  function userIsChief(user, people, shops) {
+    if (isHomeBoss(user)) {
+      return true;
+    }
+    var role = String((user && user.role) || "").trim();
+    if (role === "主管" || role === "储备") {
+      return true;
+    }
+    if (personIsChief(findRosterPerson(people, user))) {
+      return true;
+    }
+    var n = homeUserName(user);
+    if (!n) {
+      return false;
+    }
+    return (shops || []).some(function (shop) {
+      return shopSupervisorName(shop) === n || shopReserveName(shop) === n;
+    });
+  }
+  function canSeeTeamView(user) {
+    return isHomeBoss(user);
+  }
+  function canSeeChiefView(user, people, shops) {
+    return userIsChief(user, people, shops);
+  }
+  function allowedHomeViews(user, people, shops) {
+    return {
+      company: true,
+      team: canSeeTeamView(user),
+      chief: canSeeChiefView(user, people, shops),
+      live: true,
+      board: true
+    };
+  }
+  function seesAllChiefs(user) {
+    return canSeeChiefView(user);
+  }
+  function filterOwnChiefs(teams, user, people, shops) {
+    return canSeeChiefView(user, people, shops) ? teams || [] : [];
+  }
+  function dutyShopKeys(shops, user) {
+    if (!homeUserName(user)) {
+      return {};
+    }
+    if (isHomeBoss(user)) {
+      return null;
+    }
+    var keys = {};
+    (shops || []).forEach(function (shop) {
+      if (!shopOnUserDuty(shop, user)) {
+        return;
+      }
+      var id = shopErpId(shop) || normShopId(shop.shopId);
+      var name = normShopName(shopDisplayName(shop));
+      if (id) {
+        keys["id:" + id] = true;
+      }
+      if (name && name !== "—") {
+        keys["name:" + name] = true;
+      }
+    });
+    return keys;
+  }
+  function recordOnDuty(row, keys) {
+    if (!keys) {
+      return true;
+    }
+    if (!row) {
+      return false;
+    }
+    var id = erpRecordId(row) || normShopId(row.shopId || row.id);
+    var name = normShopName(row.shopName || row.storeName || row.name);
+    return !!((id && keys["id:" + id]) || (name && keys["name:" + name]));
+  }
+  function scopeRecords(records, keys) {
+    if (!keys) {
+      return records || [];
+    }
+    return (records || []).filter(function (row) {
+      return recordOnDuty(row, keys);
+    });
+  }
+  function scopePack(pack, keys) {
+    pack = pack || {};
+    if (!keys) {
+      return pack;
+    }
+    var records = scopeRecords(pack.records, keys);
+    return { records: records, summary: sumPack(records), hourly: null };
   }
   function standItemHtml(row, place, unit) {
     var rank = place === 1 ? "01" : place === 2 ? "02" : "03";
@@ -1609,6 +1708,7 @@
       ".xm-hm-views button{border:0;border-bottom:2px solid transparent;background:transparent;color:#303133;padding:12px 20px;min-height:40px;border-radius:0;margin-bottom:-1px;cursor:pointer;font-size:14px;line-height:22px;-webkit-user-select:none;user-select:none}" +
       ".xm-hm-views button:hover{color:var(--xm-primary)}" +
       ".xm-hm-views button.is-on{background:transparent;border-bottom-color:var(--xm-primary);color:var(--xm-primary);font-weight:500}" +
+      ".xm-hm-views button[hidden]{display:none}" +
       ".xm-hm-set{border:0;background:transparent;color:var(--xm-primary);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:13px;-webkit-user-select:none;user-select:none}" +
       ".xm-hm-ranges{display:flex;flex-wrap:wrap;align-items:center;gap:6px}" +
       ".xm-hm-ranges button{border:1px solid var(--xm-line);background:var(--xm-card);color:var(--xm-ink);padding:5px 10px;border-radius:4px;cursor:pointer;font-size:12px;-webkit-user-select:none;user-select:none}" +
@@ -1874,10 +1974,19 @@
   }
   function paint(root, state) {
     var board = root.querySelector("#xm-hm");
+    var allow = allowedHomeViews(state.user, state.people, state.dutyShops);
+    if (!allow[state.view]) {
+      state.view = "company";
+    }
     viewKey = state.view || "company";
     var teamView = state.view === "team" || state.view === "chief";
     var hide = teamView ? teamHidden(hiddenCards()) : hiddenCards();
-    var cards = arrangeCards(state.cards || blankCompanyCards()).filter(function (card) {
+    var companySrc = !homeUserName(state.user)
+      ? blankCompanyCards()
+      : isHomeBoss(state.user)
+        ? state.cards || blankCompanyCards()
+        : state.ownCards || blankCompanyCards();
+    var cards = arrangeCards(companySrc).filter(function (card) {
       return hide.indexOf(card.key) === -1;
     });
     var live = state.live || blankLive();
@@ -1885,7 +1994,7 @@
     var shops = filterLiveShops(allShops, state);
     var teams =
       state.view === "chief"
-        ? filterOwnChiefs(state.chiefs && state.chiefs.length ? state.chiefs : blankRoleTeams("主管"), state.user)
+        ? filterOwnChiefs(state.chiefs && state.chiefs.length ? state.chiefs : blankRoleTeams("主管"), state.user, state.people, state.dutyShops)
         : state.teams && state.teams.length
           ? state.teams
           : blankTeams();
@@ -1894,13 +2003,15 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.710-home-zhangteam");
+    board.setAttribute("data-hm-js", "0.1.717-home-chiefladder");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
     board.classList.toggle("is-chief", state.view === "chief");
     Array.prototype.forEach.call(root.querySelectorAll("[data-view]"), function (btn) {
-      btn.classList.toggle("is-on", btn.getAttribute("data-view") === state.view);
+      var key = btn.getAttribute("data-view");
+      btn.hidden = !allow[key];
+      btn.classList.toggle("is-on", key === state.view);
     });
     Array.prototype.forEach.call(root.querySelectorAll("[data-range]"), function (btn) {
       btn.classList.toggle("is-on", btn.getAttribute("data-range") === state.range);
@@ -2233,7 +2344,7 @@
   }
   function blankLadders() {
     var cols = [
-      { title: "主管排行榜", rows: [] },
+      { title: "主管储备排行榜", rows: [] },
       { title: "运营排行榜", rows: [] }
     ];
     return [
@@ -2729,6 +2840,23 @@
     var n = String(person.name || "").trim();
     return !!(n && String(person.reserve || "").trim() === n);
   }
+  function dutyPersonName(shop, keys) {
+    var list = keys || [];
+    var i;
+    for (i = 0; i < list.length; i += 1) {
+      var n = String((shop && shop[list[i]]) || "").trim();
+      if (n && n !== "管理员" && n !== "无") {
+        return n;
+      }
+    }
+    return "";
+  }
+  function shopSupervisorName(shop) {
+    return dutyPersonName(shop, ["supervisor", "supervisorName"]);
+  }
+  function shopReserveName(shop) {
+    return dutyPersonName(shop, ["reserve", "reserveName", "chuBei", "backup"]);
+  }
   function teamLeadNames(people, dutyShops, role) {
     var seen = {};
     var names = [];
@@ -2750,8 +2878,8 @@
         add(shop && shop.manager);
       }
       if (role === "主管" && shop) {
-        add(shop.supervisor);
-        add(shop.reserve);
+        add(shopSupervisorName(shop));
+        add(shopReserveName(shop));
       }
     });
     if (!names.length && role === "经理") {
@@ -2767,8 +2895,7 @@
     if (role === "主管") {
       var asst = String(shop.assistant || "").trim();
       var op = String(shop.operator || "").trim();
-      var reserve = String(shop.reserve || "").trim();
-      return String(shop.supervisor || "").trim() === name || reserve === name || (asst === name && asst !== op);
+      return shopSupervisorName(shop) === name || shopReserveName(shop) === name || (asst === name && asst !== op);
     }
     var manager = String(shop.manager || "").trim();
     if (manager) {
@@ -2849,42 +2976,90 @@
     };
   }
   function shopDutyName(shop, field) {
+    if (field === "supervisor") {
+      return shopSupervisorName(shop);
+    }
+    if (field === "reserve") {
+      return shopReserveName(shop);
+    }
     var n = String((shop && shop[field]) || "").trim();
-    if (!n || n === "管理员") {
+    if (!n || n === "管理员" || n === "无") {
       return "";
     }
-    if (field === "operator" && n === String((shop && shop.supervisor) || "").trim()) {
+    if (field === "operator" && (n === shopSupervisorName(shop) || n === shopReserveName(shop))) {
       return "";
     }
     return n;
   }
-  function namesFromShopDuty(shops, field) {
+  function reserveNameSet(shops, people) {
+    var blocked = {};
+    (shops || []).forEach(function (shop) {
+      var n = shopReserveName(shop);
+      if (n) {
+        blocked[n] = true;
+      }
+    });
+    (people || []).forEach(function (person) {
+      if (!person || person.status !== "在职") {
+        return;
+      }
+      var n = String(person.name || "").trim();
+      if (!n) {
+        return;
+      }
+      if (person.role === "储备" || String(person.reserve || "").trim() === n) {
+        blocked[n] = true;
+      }
+    });
+    return blocked;
+  }
+  function namesFromShopDuty(shops, field, people) {
     var blocked = {};
     if (field === "operator") {
       (shops || []).forEach(function (shop) {
-        var sup = String((shop && shop.supervisor) || "").trim();
-        if (sup && sup !== "管理员") {
+        var sup = shopSupervisorName(shop);
+        if (sup) {
           blocked[sup] = true;
         }
       });
+      Object.assign(blocked, reserveNameSet(shops, people));
     }
     var seen = {};
     var names = [];
-    (shops || []).forEach(function (shop) {
-      var n = shopDutyName(shop, field);
-      if (!n || seen[n] || blocked[n]) {
+    function add(name) {
+      var n = String(name || "").trim();
+      if (!n || n === "管理员" || seen[n] || blocked[n]) {
         return;
       }
       seen[n] = true;
       names.push(n);
+    }
+    if (field === "chief") {
+      (shops || []).forEach(function (shop) {
+        add(shopSupervisorName(shop));
+        add(shopReserveName(shop));
+      });
+      return names;
+    }
+    (shops || []).forEach(function (shop) {
+      add(shopDutyName(shop, field));
     });
     return names;
+  }
+  function shopMatchesDuty(shop, name, field) {
+    if (!shop || !name) {
+      return false;
+    }
+    if (field === "chief") {
+      return shopSupervisorName(shop) === name || shopReserveName(shop) === name;
+    }
+    return shopDutyName(shop, field) === name;
   }
   function sumDutyMetric(shops, name, field, erp, catalogByName, metric) {
     var total = 0;
     var ok = false;
     (shops || []).forEach(function (shop) {
-      if (shopDutyName(shop, field) !== name) {
+      if (!shopMatchesDuty(shop, name, field)) {
         return;
       }
       var id = resolveErpId(shop, catalogByName);
@@ -2901,7 +3076,7 @@
     var erp = mapByShopId(rangePack && rangePack.records);
     var catalogByName = mapByShopName((catalogPack && catalogPack.records) || []);
     function column(title, dutyField, field) {
-      var rows = namesFromShopDuty(dutyShops, dutyField)
+      var rows = namesFromShopDuty(dutyShops, dutyField, people)
         .map(function (name) {
           var n = sumDutyMetric(dutyShops, name, dutyField, erp, catalogByName, field);
           return { name: name, amount: fmtMoney(n), _n: n };
@@ -2919,13 +3094,13 @@
         key: "perf",
         title: "业绩排行榜",
         unit: "支付金额",
-        columns: [column("主管排行榜", "supervisor", "payAmount"), column("运营排行榜", "operator", "payAmount")]
+        columns: [column("主管储备排行榜", "chief", "payAmount"), column("运营排行榜", "operator", "payAmount")]
       },
       {
         key: "profit",
         title: "利润排行榜",
         unit: "利润",
-        columns: [column("主管排行榜", "supervisor", "profit"), column("运营排行榜", "operator", "profit")]
+        columns: [column("主管储备排行榜", "chief", "profit"), column("运营排行榜", "operator", "profit")]
       }
     ];
   }
@@ -2948,6 +3123,14 @@
         shops: [],
         teams: blankTeams(),
         chiefs: blankRoleTeams("主管"),
+        people: [],
+        dutyShops: [],
+        dutyKeys: null,
+        dutyReady: false,
+        ownCards: blankCompanyCards(),
+        livePacks: null,
+        rangePack: null,
+        prevPack: null,
         teamGaps: [],
         chiefGaps: [],
         ladders: blankLadders(),
@@ -2962,8 +3145,34 @@
       function shanghaiClock() {
         return new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
       }
+      function liveScopeKeys() {
+        if (!homeUserName(state.user)) {
+          return {};
+        }
+        if (isHomeBoss(state.user)) {
+          return null;
+        }
+        return state.dutyReady ? state.dutyKeys || {} : {};
+      }
+      function applyDutyCards() {
+        if (!state.rangePack) {
+          return;
+        }
+        var keys = liveScopeKeys();
+        state.cards = companyCardsFrom(summaryFrom(state.rangePack), summaryFrom(state.prevPack));
+        if (keys) {
+          state.ownCards = companyCardsFrom(summaryFrom(scopePack(state.rangePack, keys)), summaryFrom(scopePack(state.prevPack, keys)));
+        } else {
+          state.ownCards = state.cards;
+        }
+      }
       function applyLive(todayPack, yestPack, snapPack) {
-        state.live = liveFromErp(todayPack, yestPack, snapPack);
+        state.livePacks = { today: todayPack, yest: yestPack, snap: snapPack };
+        var keys = liveScopeKeys();
+        var today = scopePack(todayPack, keys);
+        var yest = scopePack(yestPack, keys);
+        var snap = scopePack(snapPack, keys);
+        state.live = liveFromErp(today, yest, snap);
         state.shops = state.live.shops;
         state.liveAt = shanghaiClock();
         state.source = "xingmai-erp";
@@ -3069,7 +3278,7 @@
           api("/api/people"),
           api("/api/people/shops"),
           api("/api/people/grants"),
-          api("/api/people/org/stores")
+          api("/api/people/org/stores?_=" + Date.now())
         ]).then(function (pack) {
           if (dead || seq !== boardSeq) {
             return;
@@ -3081,7 +3290,13 @@
           var peopleShops = pack[4] || { shops: [] };
           var grants = pack[5] && pack[5].grants ? pack[5].grants : [];
           var dutyShops = dutyShopsFrom(pack[6], peopleShops);
-          state.cards = companyCardsFrom(summaryFrom(rangePack), summaryFrom(prevPack));
+          state.people = people;
+          state.dutyShops = dutyShops;
+          state.rangePack = rangePack;
+          state.prevPack = prevPack;
+          state.dutyReady = true;
+          state.dutyKeys = dutyShopKeys(dutyShops, state.user);
+          applyDutyCards();
           var built = buildTeams(dutyShops, grants, rangePack, prevPack, catalogPack, people, "经理");
           var chiefs = buildTeams(dutyShops, grants, rangePack, prevPack, catalogPack, people, "主管");
           state.teams = built.teams;
@@ -3091,6 +3306,10 @@
           state.chiefGaps = chiefs.mismatches;
           state.gaps = built.mismatches;
           state.source = (rangePack.summary && rangePack.summary.payAmount != null) || (rangePack.records && rangePack.records.length) ? "xingmai-erp" : "";
+          if (state.livePacks) {
+            applyLive(state.livePacks.today, state.livePacks.yest, state.livePacks.snap);
+            return;
+          }
           paint(root, state);
         }).catch(function () {
           if (!dead && seq === boardSeq) {
@@ -3106,6 +3325,9 @@
         var view = event.target.closest("[data-view]");
         if (view) {
           var nextView = view.getAttribute("data-view");
+          if (!allowedHomeViews(state.user, state.people, state.dutyShops)[nextView]) {
+            return;
+          }
           if (nextView !== state.view) {
             clearLiveRowPicked();
           }
@@ -3786,6 +4008,12 @@
             return;
           }
           state.user = user;
+          state.dutyKeys = dutyShopKeys(state.dutyShops, state.user);
+          applyDutyCards();
+          if (state.livePacks) {
+            applyLive(state.livePacks.today, state.livePacks.yest, state.livePacks.snap);
+            return;
+          }
           paint(root, state);
         });
       }
