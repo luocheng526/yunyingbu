@@ -151,6 +151,7 @@ test("live shop headers can drag left and right", () => {
   assert.match(homeJs, /function saveLiveHeadOrder/);
   assert.match(homeJs, /data-live-col/);
   assert.match(homeJs, /sortHead/);
+  assert.match(homeJs, /function hitLiveHead/);
   assert.deepEqual(
     applyLiveHeadMove(["rank", "shop", "liveAmount", "paidAmount"], "paidAmount", "shop"),
     ["rank", "paidAmount", "shop", "liveAmount"]

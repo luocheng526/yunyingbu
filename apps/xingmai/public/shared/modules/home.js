@@ -3404,18 +3404,37 @@
           el.classList.add("is-over");
         }
       }
+      function hitLiveHead(event) {
+        var x = event.clientX || 0;
+        var y = event.clientY || 0;
+        var el = document.elementFromPoint(x, y);
+        var th = el && el.closest ? el.closest(".xm-hm-live .xm-hm-table th[data-live-col]") : null;
+        if (th && root.contains(th)) {
+          return th;
+        }
+        var heads = root.querySelectorAll(".xm-hm-live .xm-hm-table th[data-live-col]");
+        var i, rect;
+        for (i = 0; i < heads.length; i += 1) {
+          rect = heads[i].getBoundingClientRect();
+          if (x >= rect.left && x <= rect.right && y >= rect.top - 12 && y <= rect.bottom + 12) {
+            return heads[i];
+          }
+        }
+        return null;
+      }
       function hitSortEl(event) {
+        if (sortHead) {
+          return hitLiveHead(event);
+        }
         var el = document.elementFromPoint(event.clientX || 0, event.clientY || 0);
         if (!el || !el.closest || !root.contains(el)) {
           return null;
         }
-        return sortHead
-          ? el.closest(".xm-hm-live .xm-hm-table th[data-live-col]")
-          : sortTeam
-            ? el.closest(".xm-hm-team")
-            : sortSettings
-              ? el.closest("#xm-hm-card-opts label")
-              : el.closest(".xm-hm-card");
+        return sortTeam
+          ? el.closest(".xm-hm-team")
+          : sortSettings
+            ? el.closest("#xm-hm-card-opts label")
+            : el.closest(".xm-hm-card");
       }
       function onSortDown(event) {
         if (event.button && event.button !== 0) {
