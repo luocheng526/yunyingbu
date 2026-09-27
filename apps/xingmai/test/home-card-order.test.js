@@ -77,11 +77,12 @@ test("live shop table can filter by duty team or shop", () => {
   assert.match(homeJs, /function liveFilterHtml/);
   assert.match(homeJs, /function filterLiveShops/);
   assert.match(homeJs, /function dutyTeamList/);
-  assert.match(homeJs, /data-live-filter="team"/);
-  assert.match(homeJs, /data-live-filter="shop"/);
-  assert.match(homeJs, /全部团队/);
-  assert.match(homeJs, /全部店铺/);
-  assert.match(homeJs, /责权团队/);
+  assert.match(homeJs, /data-live-filter="pick"/);
+  assert.match(homeJs, /店铺列表/);
+  assert.match(homeJs, /全选/);
+  assert.match(homeJs, /optgroup label="责权团队"/);
+  assert.match(homeJs, /optgroup label="店铺"/);
+  assert.match(homeJs, /function parseLiveFilterValue/);
 });
 
 test("live page has fee target, warning and update time", () => {

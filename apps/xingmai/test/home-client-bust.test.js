@@ -29,7 +29,8 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /xm-module-home 0\.1\.702-home-jingcol/);
     assert.match(text, /function liveTheadHtml/);
     assert.match(text, /function liveFilterHtml/);
-    assert.match(text, /data-live-filter="team"/);
+    assert.match(text, /data-live-filter="pick"/);
+    assert.match(text, /店铺列表/);
     assert.match(text, /\.xm-hm-table thead th\{text-align:center\}/);
     assert.match(text, /label: "费比预警"/);
     assert.match(text, /label: "更新时间"/);

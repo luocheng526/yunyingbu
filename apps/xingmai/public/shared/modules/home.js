@@ -1076,9 +1076,7 @@
       return true;
     });
   }
-  function liveFilterShopNames(allShops, state) {
-    var pick = liveFilter();
-    var teamMap = pick.team ? shopsInDutyTeam(state, pick.team) : null;
+  function liveFilterShopNames(allShops) {
     var names = [];
     var seen = {};
     (allShops || []).forEach(function (row) {
@@ -1086,16 +1084,29 @@
       if (!name || seen[name]) {
         return;
       }
-      if (teamMap && !teamMap[normShopName(name)]) {
-        return;
-      }
       seen[name] = true;
       names.push(name);
     });
-    if (pick.shop && names.indexOf(pick.shop) === -1) {
-      names.unshift(pick.shop);
-    }
     return names;
+  }
+  function liveFilterValue(pick) {
+    if (pick && pick.shop) {
+      return "shop:" + pick.shop;
+    }
+    if (pick && pick.team) {
+      return "team:" + pick.team;
+    }
+    return "";
+  }
+  function parseLiveFilterValue(raw) {
+    var v = String(raw || "");
+    if (v.indexOf("shop:") === 0) {
+      return { team: "", shop: v.slice(5) };
+    }
+    if (v.indexOf("team:") === 0) {
+      return { team: v.slice(5), shop: "" };
+    }
+    return { team: "", shop: "" };
   }
   function liveFilterOption(value, label, selected) {
     return (
@@ -1110,26 +1121,33 @@
   }
   function liveFilterHtml(allShops, state) {
     var pick = liveFilter();
+    var cur = liveFilterValue(pick);
     var teams = dutyTeamList(state);
-    var shops = liveFilterShopNames(allShops, state);
+    var shops = liveFilterShopNames(allShops);
     return (
       '<div class="xm-hm-live-filter">' +
-      '<label>责权团队 <select data-live-filter="team">' +
-      liveFilterOption("", "全部团队", !pick.team) +
-      teams
-        .map(function (team) {
-          return liveFilterOption(team.name, dutyTeamLabel(team.name), pick.team === team.name);
-        })
-        .join("") +
-      "</select></label>" +
-      '<label>店铺 <select data-live-filter="shop">' +
-      liveFilterOption("", "全部店铺", !pick.shop) +
-      shops
-        .map(function (name) {
-          return liveFilterOption(name, name, pick.shop === name);
-        })
-        .join("") +
-      "</select></label></div>"
+      '<strong class="xm-hm-live-filter-lab">店铺列表</strong>' +
+      '<span class="xm-hm-live-filter-box"><select data-live-filter="pick">' +
+      liveFilterOption("", "全选", !cur) +
+      (teams.length
+        ? '<optgroup label="责权团队">' +
+          teams
+            .map(function (team) {
+              return liveFilterOption("team:" + team.name, dutyTeamLabel(team.name), cur === "team:" + team.name);
+            })
+            .join("") +
+          "</optgroup>"
+        : "") +
+      (shops.length
+        ? '<optgroup label="店铺">' +
+          shops
+            .map(function (name) {
+              return liveFilterOption("shop:" + name, name, cur === "shop:" + name);
+            })
+            .join("") +
+          "</optgroup>"
+        : "") +
+      "</select></span></div>"
     );
   }
   function liveMetaHtml(state) {
@@ -1562,9 +1580,11 @@
       ".xm-hm-rest em{font-style:normal;font-variant-numeric:tabular-nums}" +
       ".xm-hm-live-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}" +
       ".xm-hm-live-clock{margin:0;color:var(--xm-muted);font-size:12px}" +
-      ".xm-hm-live-filter{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin:10px 0 8px;padding:8px 0 6px;border-bottom:1px solid var(--xm-line)}" +
-      ".xm-hm-live-filter label{display:inline-flex;align-items:center;gap:6px;color:var(--xm-ink);font-size:12px}" +
-      ".xm-hm-live-filter select{min-width:168px;height:28px;box-sizing:border-box;border:1px solid var(--xm-line);border-radius:4px;padding:0 8px;font:inherit;background:#fff;color:var(--xm-ink)}" +
+      ".xm-hm-live-filter{display:flex;align-items:center;gap:12px;margin:0 0 12px;padding:0;border:0}" +
+      ".xm-hm-live-filter-lab{font-size:16px;font-weight:600;color:var(--xm-ink);line-height:40px;white-space:nowrap}" +
+      ".xm-hm-live-filter-box{position:relative;flex:0 1 320px;min-width:220px;max-width:100%}" +
+      ".xm-hm-live-filter select{width:100%;height:40px;box-sizing:border-box;border:1px solid #e4e7ed;border-radius:8px;padding:0 36px 0 14px;font:inherit;font-size:14px;color:var(--xm-ink);background:#fff;-webkit-appearance:none;appearance:none}" +
+      ".xm-hm-live-filter-box:after{content:\"\";position:absolute;right:14px;top:50%;width:8px;height:8px;margin-top:-6px;border-right:2px solid #8c8c8c;border-bottom:2px solid #8c8c8c;transform:rotate(45deg);pointer-events:none}" +
       ".xm-hm-fee-goal{display:inline-flex;align-items:center;justify-content:center;gap:4px;width:100%;color:var(--xm-ink);font-size:12px}" +
       ".xm-hm-fee-goal input{width:56px;height:24px;box-sizing:border-box;border:1px solid var(--xm-line);border-radius:4px;padding:0 6px;font:inherit;text-align:center}" +
       ".xm-hm-fee-warn{color:#cf1322;font-size:13px;font-weight:600}" +
@@ -1750,9 +1770,7 @@
       liveChartHtml(paid) +
       '</div><div class="xm-hm-live-cards">' +
       liveCards.map(liveCardHtml).join("") +
-      '</div><div class="xm-hm-panel"><h2>店铺 <span>' +
-      escapeHtml(String(shops.length) + (shops.length !== allShops.length ? " / " + allShops.length : "")) +
-      " 店</span></h2>" +
+      '</div><div class="xm-hm-panel">' +
       liveFilterHtml(allShops, state) +
       '<table class="xm-hm-table">' +
       liveColgroupHtml() +
@@ -3441,17 +3459,8 @@
         event.stopPropagation();
       }
       function onChange(event) {
-        var livePick = event.target.getAttribute("data-live-filter");
-        if (livePick) {
-          var nextFilter = liveFilter();
-          nextFilter[livePick] = event.target.value;
-          if (livePick === "team") {
-            var teamShops = nextFilter.team ? shopsInDutyTeam(state, nextFilter.team) : null;
-            if (nextFilter.shop && teamShops && !teamShops[normShopName(nextFilter.shop)]) {
-              nextFilter.shop = "";
-            }
-          }
-          saveLiveFilter(nextFilter);
+        if (event.target.getAttribute("data-live-filter") === "pick") {
+          saveLiveFilter(parseLiveFilterValue(event.target.value));
           paint(root, state);
           return;
         }
