@@ -283,6 +283,22 @@ function saveShopMaster(state, body, actor) {
   rememberHistory(state, actor, text(body.changeSummary, 200) || (op === "update" ? "编辑店铺" : "新增店铺"), { store });
 }
 
+function writeSubRule(state, store, accountId, subAccountId, subAccountName, body) {
+  const current = new Map((state.rules || []).map((row) => [ruleKey(row), row]));
+  const identity = { store, accountId, subAccountId, subAccountName };
+  const saved = readRulePatch({
+    店铺名称: store,
+    京准通主账户ID: accountId,
+    子账号ID: subAccountId,
+    子账号名称: subAccountName,
+    自动充值: pick(body, ["自动充值", "autoRecharge"]),
+    计划ROI: pick(body, ["计划ROI", "plannedRoi"]),
+  }, current.get(ruleKey(identity)) || identity);
+  current.set(ruleKey(saved), saved);
+  state.rules = [...current.values()];
+  return saved;
+}
+
 function saveSubMaster(state, body, actor) {
   const op = text(body.op || body.操作, 16) || "create";
   const accountId = idText(pick(body, ["京准通主账户ID", "accountId"]), "京准通主账户ID");
@@ -324,24 +340,27 @@ function saveSubMaster(state, body, actor) {
     throw httpError(400, "必须填写店铺和子账号ID");
   }
   if (op === "update") {
-    if (index < 0) {
+    const posted = (state.subs || []).find((row) => row.accountId === accountId && row.subAccountId === subAccountId);
+    if (index < 0 && !posted) {
       throw httpError(400, "找不到要编辑的子账号");
     }
-    state.subMasters[index].subAccountName = subAccountName || state.subMasters[index].subAccountName;
+    if (index < 0) {
+      state.subMasters.push({
+        store: posted.store || store,
+        accountId,
+        subAccountId,
+        subAccountName: subAccountName || posted.subAccountName,
+        deleted: false,
+      });
+    } else {
+      state.subMasters[index].subAccountName = subAccountName || state.subMasters[index].subAccountName;
+    }
+    writeSubRule(state, posted?.store || store, accountId, subAccountId, subAccountName || posted?.subAccountName || "", body);
   } else if (index >= 0 || (state.subs || []).some((row) => row.accountId === accountId && row.subAccountId === subAccountId)) {
     throw httpError(400, "这个子账号已经存在");
   } else {
     state.subMasters.push({ store, accountId, subAccountId, subAccountName, deleted: false });
-    const autoRecharge = flagOn(pick(body, ["自动充值", "autoRecharge"]), false);
-    const plannedRoi = num(pick(body, ["计划ROI", "plannedRoi"]), 2);
-    state.rules.push(assertRule(defaultRule({
-      store,
-      accountId,
-      subAccountId,
-      subAccountName,
-      autoRecharge,
-      plannedRoi,
-    })));
+    writeSubRule(state, store, accountId, subAccountId, subAccountName, body);
   }
   rememberHistory(state, actor, text(body.changeSummary, 200) || (op === "update" ? "编辑子账号" : "新增子账号"), {
     store,

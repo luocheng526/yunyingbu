@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20260927-cell";
+  var VERSION = "20260927-roi";
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -92,6 +92,9 @@
     ".han-rules table.han-rules-grid td:has(input){overflow:visible}" +
     ".han-rules table.han-rules-grid input.han-rules-num{display:block;box-sizing:border-box;width:100%;min-width:0;height:26px;padding:0 4px;text-align:center;border:1px solid #91caff;border-radius:4px;background:#fff;color:#111827}" +
     ".han-rules table.han-rules-grid input.han-rules-num:focus{outline:2px solid #1677ff;border-color:#1677ff}" +
+    ".han-rules table.han-rules-grid input.is-roi{background:#fffbe6;border-color:#faad14;font-weight:700}" +
+    ".han-rules table.han-rules-grid th:nth-child(7),.han-rules table.han-rules-grid td:nth-child(7){width:92px}" +
+    ".han-roi-field{min-width:120px;height:32px;padding:0 8px;border:1px solid #faad14;border-radius:6px;background:#fffbe6;font-weight:700}" +
     ".han-rules tr.is-deleted td{color:#8c8c8c;text-decoration:line-through}" +
     ".han-rules tr.is-deleted td:last-child{text-decoration:none}" +
     ".han-rules .han-paid-table-wrap{max-height:none}" +
@@ -304,7 +307,7 @@
       '<div id="han-rules-run-shops"></div></section>' +
       '<section class="panel"><div class="han-paid-toolbar"><h2>子账号规则</h2><div class="row" id="han-rules-toolbar"></div></div>' +
       '<div id="han-sub-form" class="han-rules-form" hidden></div>' +
-      '<p class="han-rules-hint">表格里的计划ROI和各档金额可以直接改，离开输入框即保存当前子账号。不用先停店。本地机下次领取后，在下一批开始时按新规则执行。</p>' +
+      '<p class="han-rules-hint">计划ROI黄框里直接输入数字，例如 2.1。点一下会选中原来的数字，输入后点别处即保存这一条。不用先停店。</p>' +
       '<p id="han-rules-sync" class="han-rules-sync" hidden></p>' +
       '<div id="han-rules-table"><p class="empty">加载中…</p></div></section>' +
       '<section class="panel" id="han-rules-history-wrap" hidden><h2>修改历史</h2><div id="han-rules-history"></div></section>' +
@@ -390,8 +393,10 @@
     }
 
     function numInput(row, field) {
-      return '<input class="han-rules-num" data-key="' + escapeHtml(rowKey(row)) + '" data-field="' + field +
-        '" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" value="' + escapeHtml(row[field]) + '" />';
+      var roi = field === "plannedRoi";
+      return '<input class="han-rules-num' + (roi ? " is-roi" : "") + '" data-key="' + escapeHtml(rowKey(row)) + '" data-field="' + field +
+        '" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" value="' + escapeHtml(row[field]) + '"' +
+        (roi ? ' placeholder="填写ROI" title="直接填写数字，例如 2.1"' : "") + " />";
     }
 
     function collectEdits() {
@@ -556,9 +561,9 @@
         '<label>子账号ID <input id="han-sub-id" maxlength="64" value="' + escapeHtml(String(current.subAccountId || "")) + '"' + (action === "update" ? " readonly" : "") + " /></label>" +
         '<label>子账号名称 <input id="han-sub-name" maxlength="64" value="' + escapeHtml(current.subAccountName || "") + '" /></label>' +
         '<label><input id="han-sub-auto" type="checkbox"' + ((current.autoRecharge != null ? current.autoRecharge : defaults.autoRecharge) ? " checked" : "") + " /> 自动充值</label>" +
-        '<label>计划ROI <input id="han-sub-roi" type="number" min="0" step="0.01" value="' + escapeHtml(String(current.plannedRoi != null ? current.plannedRoi : defaults.plannedRoi)) + '" /></label>' +
+        '<label>计划ROI <input id="han-sub-roi" class="han-roi-field" type="text" inputmode="decimal" autocomplete="off" placeholder="直接填写，例如 2.1" value="' + escapeHtml(String(current.plannedRoi != null ? current.plannedRoi : defaults.plannedRoi)) + '" /></label>' +
         '<button type="button" class="han-rules-save" id="han-sub-form-save">保存子账号</button>' +
-        '<p class="han-rules-hint">新增子账号默认自动充值=否、计划ROI=2。完整档位仍在下方表格编辑。</p>';
+        '<p class="han-rules-hint">计划ROI直接填写数字，例如 2.1，不要用加减。点保存子账号后写入该子账号，不用停店。</p>';
       root.querySelector("#han-sub-form-save").addEventListener("click", function () {
         saveMaster("sub", action, {
           京准通主账户ID: root.querySelector("#han-sub-shop").value,
@@ -598,7 +603,7 @@
         "<label>店铺选择 <select id=\"han-rules-shop\">" + shops.join("") + "</select></label>" +
         '<input id="han-rules-q" type="search" maxlength="64" placeholder="子账号名称/ID搜索" value="' + escapeHtml(keyword) + '" />' +
         '<label><input id="han-rules-enabled" type="checkbox"' + (enabledOnly ? " checked" : "") + " /> 只看已启用</label>" +
-        '<input id="han-rules-batch-roi" type="number" min="0" step="0.01" placeholder="批量计划ROI" />' +
+        '<input id="han-rules-batch-roi" class="han-roi-field" type="text" inputmode="decimal" autocomplete="off" placeholder="直接填写计划ROI，例如 2.1" />' +
         '<button type="button" id="han-rules-apply-roi">批量设置计划ROI</button>' +
         '<button type="button" id="han-rules-on">批量启用</button>' +
         '<button type="button" id="han-rules-off">批量暂停</button>' +
@@ -688,6 +693,9 @@
         });
       });
       tableWrap.querySelectorAll(".han-rules-num, .han-rules-auto").forEach(function (input) {
+        input.addEventListener("focus", function () {
+          input.select();
+        });
         input.addEventListener("keydown", function (event) {
           if (event.key === "Enter") {
             event.preventDefault();

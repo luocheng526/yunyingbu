@@ -1186,6 +1186,14 @@ test("GET/POST /api/han/worker feeds 付费中心 and 充值规则", async () =>
     assert.equal(added.autoRecharge, false);
     assert.equal(added.plannedRoi, 2);
     assert.equal(added.tier1Amount, 100);
+    const editedRoi = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "sub", op: "update", 京准通主账户ID: "9001", 子账号ID: "9002", 子账号名称: "测试子账号", 自动充值: false, 计划ROI: "2.1" }),
+    });
+    assert.equal(editedRoi.body.ok, true);
+    const afterRoi = await json(base, "/api/han/worker?view=rules");
+    assert.equal(afterRoi.body.rows.find((row) => row.subAccountId === "9002").plannedRoi, 2.1);
     assert.equal(withMaster.body.shopRuns.some((row) => row.accountId === "9001" && row.machineId === "han-worker-01"), true);
 
     const removed = await json(base, "/api/han/worker", {
@@ -1354,6 +1362,15 @@ test("running shop still receives an edited ROI on the next pull", async () => {
     assert.equal(shop.启用, true);
     assert.equal(shop.子账号[0].计划ROI, 2.1);
     assert.match(config.body.note, /不用停店/);
+    const typed = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "sub", op: "update", 京准通主账户ID: "88001", 子账号ID: "88011", 子账号名称: "松郁-主投", 自动充值: true, 计划ROI: "2.6" }),
+    });
+    assert.equal(typed.body.ok, true);
+    const again = await json(base, "/api/han/worker?machineId=han-worker-01");
+    assert.deepEqual(again.body.runShops, ["88001"]);
+    assert.equal(again.body.shops.find((item) => item.店铺名称 === "松郁").子账号[0].计划ROI, 2.6);
   });
 });
 
@@ -1372,7 +1389,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   const han = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
   assert.match(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
   assert.match(han, /\["\/han\/paid\?board=rules", "充值规则", "rules"\]/);
-  assert.match(han, /20260927-cell/);
+  assert.match(han, /20260927-roi/);
   const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
   assert.match(center, /不用先停店/);
   assert.match(center, /ruleSignature/);
