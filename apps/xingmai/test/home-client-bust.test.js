@@ -33,14 +33,16 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /\.xm-hm-table thead th\{text-align:center\}/);
     assert.match(text, /label: "费比预警"/);
     assert.match(text, /label: "更新时间"/);
-    assert.match(text, /费比目标设置/);
+    assert.match(text, /label: "费比目标"/);
+    assert.doesNotMatch(text, /label: "实时利润"/);
+    assert.match(text, /data-fee-shop/);
     assert.match(text, /xm-home-live-cols/);
     assert.match(text, /\.xm-hm-table th\{text-align:center/);
     assert.match(text, /京麦面板实时金额/);
     assert.doesNotMatch(text, /实时销售指数/);
     assert.match(text, /xm-home-live-card-order/);
     assert.match(text, /xm-home-live-row/);
-    assert.match(text, /xm-home-fee-target/);
+    assert.match(text, /xm-home-fee-targets/);
     assert.match(text, /费比预警/);
     assert.match(text, /更新时间 /);
     assert.match(text, /onOutsideCardSet/);

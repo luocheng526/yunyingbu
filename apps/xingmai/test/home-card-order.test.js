@@ -88,11 +88,13 @@ test("live page has fee target, warning and update time", () => {
   assert.match(homeJs, /function liveMetaHtml/);
   assert.match(homeJs, /function feeWarnText/);
   assert.match(homeJs, /function feeWarnLabel/);
-  assert.match(homeJs, /function saveFeeTarget/);
-  assert.match(homeJs, /function feeGoalLabelHtml/);
+  assert.match(homeJs, /function saveFeeTargetFor/);
+  assert.match(homeJs, /function feeGoalCellHtml/);
   assert.match(homeJs, /data-fee-target/);
-  assert.match(homeJs, /费比目标设置/);
+  assert.match(homeJs, /data-fee-shop/);
+  assert.match(homeJs, /label: "费比目标"/);
   assert.match(homeJs, /label: "费比预警"/);
+  assert.doesNotMatch(homeJs, /label: "实时利润"/);
   assert.match(homeJs, /label: "更新时间"/);
   assert.match(homeJs, /function liveTheadHtml/);
   assert.match(homeJs, /费比预警：当前 /);

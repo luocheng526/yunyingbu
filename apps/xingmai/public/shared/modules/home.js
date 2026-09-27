@@ -934,62 +934,74 @@
     }
     return n;
   }
-  function feeTarget() {
+  function feeTargets() {
     try {
-      var raw = localStorage.getItem("xm-home-fee-target");
-      if (raw == null || raw === "") {
-        return null;
-      }
-      var n = Number(raw);
-      if (!isFinite(n)) {
-        return null;
-      }
-      return Math.max(0, Math.min(100, n));
+      var raw = JSON.parse(localStorage.getItem("xm-home-fee-targets") || "{}");
+      return raw && typeof raw === "object" && Object.prototype.toString.call(raw) === "[object Object]" ? raw : {};
     } catch (_err) {
+      return {};
+    }
+  }
+  function feeTargetFor(shop) {
+    var key = String(shop || "").trim();
+    if (!key) {
       return null;
     }
+    var n = Number(feeTargets()[key]);
+    if (!isFinite(n)) {
+      return null;
+    }
+    return Math.max(0, Math.min(100, n));
   }
-  function saveFeeTarget(raw) {
+  function saveFeeTargetFor(shop, raw) {
+    var key = String(shop || "").trim();
+    if (!key) {
+      return;
+    }
     try {
+      var map = feeTargets();
       if (raw == null || raw === "") {
-        localStorage.removeItem("xm-home-fee-target");
-        return;
+        delete map[key];
+      } else {
+        var n = Number(raw);
+        if (!isFinite(n)) {
+          return;
+        }
+        map[key] = Math.max(0, Math.min(100, n));
       }
-      var n = Number(raw);
-      if (!isFinite(n)) {
-        return;
-      }
-      localStorage.setItem("xm-home-fee-target", String(Math.max(0, Math.min(100, n))));
+      localStorage.setItem("xm-home-fee-targets", JSON.stringify(map));
     } catch (_err) {}
   }
-  function feeOverTarget(value) {
+  function feeOverTarget(value, shop) {
     var cur = feePct(value);
-    var goal = feeTarget();
+    var goal = feeTargetFor(shop);
     return cur != null && goal != null && cur > goal;
   }
-  function feeWarnText(value) {
-    if (!feeOverTarget(value)) {
+  function feeWarnText(value, shop) {
+    if (!feeOverTarget(value, shop)) {
       return "";
     }
-    return "费比预警：当前 " + Math.round(feePct(value)) + "% 超过目标 " + Math.round(feeTarget()) + "%";
+    return "费比预警：当前 " + Math.round(feePct(value)) + "% 超过目标 " + Math.round(feeTargetFor(shop)) + "%";
   }
-  function feeWarnLabel(feeRate) {
-    if (feeTarget() == null) {
+  function feeWarnLabel(feeRate, shop) {
+    if (feeTargetFor(shop) == null) {
       return "未设目标";
     }
     if (feePct(feeRate) == null) {
       return "—";
     }
-    return feeOverTarget(feeRate) ? "超标" : "正常";
+    return feeOverTarget(feeRate, shop) ? "超标" : "正常";
   }
   function liveAtText(liveAt) {
     var raw = String(liveAt || "").trim();
     return raw || "—";
   }
-  function feeGoalLabelHtml() {
-    var goal = feeTarget();
+  function feeGoalCellHtml(shop) {
+    var goal = feeTargetFor(shop);
     return (
-      '<label class="xm-hm-fee-goal">费比目标设置 <input type="number" min="0" max="100" step="1" data-fee-target' +
+      '<label class="xm-hm-fee-goal"><input type="number" min="0" max="100" step="1" data-fee-target data-fee-shop="' +
+      escapeHtml(String(shop || "")) +
+      '"' +
       (goal == null ? "" : ' value="' + escapeHtml(String(goal)) + '"') +
       " /> %</label>"
     );
@@ -1120,19 +1132,13 @@
       "</select></label></div>"
     );
   }
-  function liveMetaHtml(state, paid) {
-    var warn = feeWarnText(paid && paid.value);
+  function liveMetaHtml(state) {
     return (
       '<div class="xm-hm-live-bar">' +
       '<span class="xm-hm-live-clock">每5分钟刷新 · 更新时间 ' +
       escapeHtml(liveAtText(state && state.liveAt)) +
       "</span>" +
-      feeGoalLabelHtml() +
-      (warn
-        ? '<strong class="xm-hm-fee-warn">' + escapeHtml(warn) + "</strong>"
-        : '<span class="xm-hm-fee-hint">' +
-          (feeTarget() == null ? "设置目标后超标会预警" : "费比未超目标") +
-          "</span>") +
+      '<span class="xm-hm-fee-hint">各店费比目标在表头列里单独设置</span>' +
       "</div>"
     );
   }
@@ -1362,10 +1368,10 @@
     { label: "店铺名称", w: "16%" },
     { label: "实时销售额" },
     { label: "实时付费金额" },
-    { label: "实时利润" },
     { label: "实时付费ROI" },
     { label: "实时付费成交额" },
     { label: "实时费比" },
+    { label: "费比目标", w: "108px" },
     { label: "费比预警", w: "88px" },
     { label: "更新时间", w: "150px" }
   ];
@@ -1388,26 +1394,27 @@
     );
   }
   function liveShopRowHtml(row, index, liveAt) {
-    var warn = feeWarnLabel(row && row.feeRate);
+    var shop = row && row.shop;
+    var warn = feeWarnLabel(row && row.feeRate, shop);
     return (
       "<tr><td class=\"xm-hm-num\">" +
       rankMark(index) +
       "</td><td>" +
-      escapeHtml(row.shop) +
+      escapeHtml(shop) +
       '</td><td class="xm-hm-num">' +
       escapeHtml(row.liveAmount == null ? "—" : row.liveAmount) +
       '</td><td class="xm-hm-num">' +
       escapeHtml(row.paidAmount == null ? "—" : row.paidAmount) +
       '</td><td class="xm-hm-num">' +
-      escapeHtml(row.profit == null ? "—" : row.profit) +
-      '</td><td class="xm-hm-num">' +
       escapeHtml(row.roi == null ? "—" : row.roi) +
       '</td><td class="xm-hm-num">' +
       escapeHtml(row.paidDeal == null ? "—" : row.paidDeal) +
       '</td><td class="xm-hm-num' +
-      (feeOverTarget(row.feeRate) ? " is-fee-warn" : "") +
+      (feeOverTarget(row.feeRate, shop) ? " is-fee-warn" : "") +
       '">' +
       escapeHtml(row.feeRate == null ? "—" : row.feeRate) +
+      '</td><td class="xm-hm-num">' +
+      feeGoalCellHtml(shop) +
       '</td><td class="xm-hm-num' +
       (warn === "超标" ? " is-fee-warn" : "") +
       '">' +
@@ -1558,8 +1565,8 @@
       ".xm-hm-live-filter{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin:10px 0 8px;padding:8px 0 6px;border-bottom:1px solid var(--xm-line)}" +
       ".xm-hm-live-filter label{display:inline-flex;align-items:center;gap:6px;color:var(--xm-ink);font-size:12px}" +
       ".xm-hm-live-filter select{min-width:168px;height:28px;box-sizing:border-box;border:1px solid var(--xm-line);border-radius:4px;padding:0 8px;font:inherit;background:#fff;color:var(--xm-ink)}" +
-      ".xm-hm-fee-goal{display:inline-flex;align-items:center;gap:6px;color:var(--xm-ink);font-size:12px}" +
-      ".xm-hm-fee-goal input{width:64px;height:28px;box-sizing:border-box;border:1px solid var(--xm-line);border-radius:4px;padding:0 8px;font:inherit}" +
+      ".xm-hm-fee-goal{display:inline-flex;align-items:center;justify-content:center;gap:4px;width:100%;color:var(--xm-ink);font-size:12px}" +
+      ".xm-hm-fee-goal input{width:56px;height:24px;box-sizing:border-box;border:1px solid var(--xm-line);border-radius:4px;padding:0 6px;font:inherit;text-align:center}" +
       ".xm-hm-fee-warn{color:#cf1322;font-size:13px;font-weight:600}" +
       ".xm-hm-fee-hint{color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-chart.is-warn{border-color:#ff7875}" +
@@ -1584,7 +1591,7 @@
       ".xm-hm-live-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;width:100%}" +
       ".xm-hm-live-cards .xm-hm-card{text-align:center;cursor:grab}" +
       ".xm-hm-live-cards .xm-hm-card.is-hold{cursor:grabbing}" +
-      ".xm-hm-live .xm-hm-table{min-width:1180px;table-layout:fixed;border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums}" +
+      ".xm-hm-live .xm-hm-table{min-width:1280px;table-layout:fixed;border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums}" +
       ".xm-hm-live .xm-hm-panel h2 .xm-hm-fee-goal{margin-left:auto}" +
       ".xm-hm-live .xm-hm-table .xm-hm-num{text-align:center;white-space:nowrap}" +
       ".xm-hm-live .xm-hm-table th,.xm-hm-live .xm-hm-table td{border:0;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;text-align:center;padding:var(--xm-hm-live-row,4px) 6px;line-height:1.2}" +
@@ -1737,7 +1744,7 @@
     root.querySelector("#xm-hm-live").hidden = state.view !== "live";
     root.querySelector("#xm-hm-board").hidden = state.view !== "board";
     root.querySelector("#xm-hm-live").innerHTML =
-      liveMetaHtml(state, paid) +
+      liveMetaHtml(state) +
       '<div class="xm-hm-live-charts">' +
       liveChartHtml(hero) +
       liveChartHtml(paid) +
@@ -1745,9 +1752,7 @@
       liveCards.map(liveCardHtml).join("") +
       '</div><div class="xm-hm-panel"><h2>店铺 <span>' +
       escapeHtml(String(shops.length) + (shops.length !== allShops.length ? " / " + allShops.length : "")) +
-      " 店</span>" +
-      feeGoalLabelHtml() +
-      "</h2>" +
+      " 店</span></h2>" +
       liveFilterHtml(allShops, state) +
       '<table class="xm-hm-table">' +
       liveColgroupHtml() +
@@ -3451,7 +3456,7 @@
           return;
         }
         if (event.target.getAttribute("data-fee-target") != null) {
-          saveFeeTarget(event.target.value);
+          saveFeeTargetFor(event.target.getAttribute("data-fee-shop"), event.target.value);
           paint(root, state);
           return;
         }
