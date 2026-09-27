@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20260927-cells";
+  var VERSION = "20260927-edit";
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -87,13 +87,13 @@
     ".han-rules-run{margin-left:0;padding:0 6px;border-radius:999px;font-size:12px;line-height:20px}" +
     ".han-rules table.han-shop-table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:12px}" +
     ".han-rules table.han-rules-grid{width:max-content;min-width:100%;table-layout:auto;border-collapse:collapse;font-size:12px}" +
-    ".han-rules table.han-shop-table th,.han-rules table.han-shop-table td,.han-rules table.han-rules-grid th,.han-rules table.han-rules-grid td{padding:6px 4px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}" +
+    ".han-rules table.han-shop-table th,.han-rules table.han-shop-table td{padding:6px 4px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}" +
+    ".han-rules table.han-rules-grid th,.han-rules table.han-rules-grid td{padding:6px 4px;text-align:center;white-space:nowrap;overflow:visible;vertical-align:middle}" +
     ".han-rules table.han-shop-table td:nth-child(2),.han-rules table.han-shop-table th:nth-child(2),.han-rules table.han-rules-grid td:nth-child(2),.han-rules table.han-rules-grid td:nth-child(4){text-align:left}" +
     ".han-rules table.han-rules-grid thead th{white-space:normal;line-height:1.2;font-size:11px}" +
-    ".han-rules table.han-rules-grid td:has(input){overflow:visible}" +
-    ".han-rules table.han-rules-grid input.han-rules-num,.han-rules table.han-rules-grid input.han-rules-text{display:block;box-sizing:border-box;width:76px;min-width:76px;height:28px;padding:0 4px;text-align:center;border:1px solid #faad14;border-radius:4px;background:#fffbe6;color:#111827;font-weight:600}" +
-    ".han-rules table.han-rules-grid input.han-rules-text{width:120px;min-width:120px;text-align:left;font-weight:500}" +
-    ".han-rules table.han-rules-grid input.han-rules-num:focus,.han-rules table.han-rules-grid input.han-rules-text:focus{outline:2px solid #1677ff;border-color:#1677ff;background:#fff}" +
+    ".han-rules table.han-rules-grid button.han-rules-cell,.han-rules table.han-rules-grid input.han-rules-live{display:block;box-sizing:border-box;width:76px;min-width:76px;height:28px;margin:0;padding:0 4px;text-align:center;border:1px solid #faad14;border-radius:4px;background:#fffbe6;color:#111827;font-weight:600;font-size:13px;line-height:26px;cursor:text;position:relative;z-index:2;pointer-events:auto;user-select:text;appearance:none;-webkit-appearance:none}" +
+    ".han-rules table.han-rules-grid button.han-rules-text,.han-rules table.han-rules-grid input.han-rules-live.han-rules-text{width:120px;min-width:120px;text-align:left;font-weight:500}" +
+    ".han-rules table.han-rules-grid input.han-rules-live{background:#fff;outline:2px solid #1677ff;border-color:#1677ff;-webkit-user-modify:read-write !important}" +
     ".han-roi-field{min-width:120px;height:32px;padding:0 8px;border:1px solid #faad14;border-radius:6px;background:#fffbe6;font-weight:700}" +
     ".han-rules tr.is-deleted td{color:#8c8c8c;text-decoration:line-through}" +
     ".han-rules tr.is-deleted td:last-child{text-decoration:none}" +
@@ -307,7 +307,7 @@
       '<div id="han-rules-run-shops"></div></section>' +
       '<section class="panel"><div class="han-paid-toolbar"><h2>子账号规则</h2><div class="row" id="han-rules-toolbar"></div></div>' +
       '<div id="han-sub-form" class="han-rules-form" hidden></div>' +
-      '<p class="han-rules-hint">黄框都可以直接改：计划ROI、两档花费、余额、充值金额、上涨充值、未增单次数、暂停分钟，以及子账号名称。点一下选中原数字，输入后点别处保存这一条。不用先停店。</p>' +
+      '<p class="han-rules-hint">黄框点一下就进入编辑：计划ROI、两档花费、余额、充值金额、上涨充值、未增单次数、暂停分钟，以及子账号名称。点中后数字会被选中，直接输入新数字，点别处或按回车保存这一条。不用先停店。</p>' +
       '<p id="han-rules-sync" class="han-rules-sync" hidden></p>' +
       '<div id="han-rules-table"><p class="empty">加载中…</p></div></section>' +
       '<section class="panel" id="han-rules-history-wrap" hidden><h2>修改历史</h2><div id="han-rules-history"></div></section>' +
@@ -393,28 +393,24 @@
     }
 
     function numInput(row, field, label) {
-      return '<input class="han-rules-num" data-key="' + escapeHtml(rowKey(row)) + '" data-field="' + field +
-        '" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" value="' + escapeHtml(row[field]) +
-        '" title="直接填写' + label + '" />';
+      return '<button type="button" class="han-rules-cell han-rules-num" data-key="' + escapeHtml(rowKey(row)) + '" data-field="' + field +
+        '" title="点这里直接填写' + label + '">' + escapeHtml(row[field] ?? "") + "</button>";
     }
 
     function nameInput(row) {
-      return '<input class="han-rules-text" data-key="' + escapeHtml(rowKey(row)) + '" data-field="subAccountName" type="text" maxlength="64" autocomplete="off" value="' +
-        escapeHtml(row.subAccountName || "") + '" title="直接填写子账号名称" />';
+      return '<button type="button" class="han-rules-cell han-rules-text" data-key="' + escapeHtml(rowKey(row)) + '" data-field="subAccountName" title="点这里直接填写子账号名称">' +
+        escapeHtml(row.subAccountName || "") + "</button>";
     }
 
     function collectEdits() {
-      root.querySelectorAll(".han-rules-num").forEach(function (input) {
+      root.querySelectorAll("input.han-rules-num, input.han-rules-text").forEach(function (input) {
+        if (input.classList.contains("han-rules-live")) return;
         var row = rows.find(function (item) { return rowKey(item) === input.getAttribute("data-key"); });
         if (row) row[input.getAttribute("data-field")] = input.value;
       });
       root.querySelectorAll(".han-rules-auto").forEach(function (input) {
         var row = rows.find(function (item) { return rowKey(item) === input.getAttribute("data-key"); });
         if (row) row.autoRecharge = input.checked;
-      });
-      root.querySelectorAll(".han-rules-text").forEach(function (input) {
-        var row = rows.find(function (item) { return rowKey(item) === input.getAttribute("data-key"); });
-        if (row) row[input.getAttribute("data-field")] = input.value;
       });
     }
 
@@ -572,6 +568,9 @@
         '<label>计划ROI <input id="han-sub-roi" class="han-roi-field" type="text" inputmode="decimal" autocomplete="off" placeholder="直接填写，例如 2.1" value="' + escapeHtml(String(current.plannedRoi != null ? current.plannedRoi : defaults.plannedRoi)) + '" /></label>' +
         '<button type="button" class="han-rules-save" id="han-sub-form-save">保存子账号</button>' +
         '<p class="han-rules-hint">计划ROI直接填写数字，例如 2.1，不要用加减。点保存子账号后写入该子账号，不用停店。</p>';
+      var roiInput = root.querySelector("#han-sub-roi");
+      roiInput.addEventListener("mouseup", function (event) { event.preventDefault(); });
+      roiInput.addEventListener("focus", function () { roiInput.select(); });
       root.querySelector("#han-sub-form-save").addEventListener("click", function () {
         saveMaster("sub", action, {
           京准通主账户ID: root.querySelector("#han-sub-shop").value,
@@ -700,20 +699,100 @@
           if (row) saveMaster("sub", "restore", { 京准通主账户ID: row.accountId, 子账号ID: row.subAccountId }, "恢复子账号");
         });
       });
-      tableWrap.querySelectorAll(".han-rules-num, .han-rules-text, .han-rules-auto").forEach(function (input) {
-        input.addEventListener("focus", function () {
-          if (input.type !== "checkbox") input.select();
-        });
-        input.addEventListener("keydown", function (event) {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            input.blur();
-          }
-        });
+      tableWrap.querySelectorAll(".han-rules-auto").forEach(function (input) {
         input.addEventListener("change", function () {
           var row = rows.find(function (item) { return rowKey(item) === input.getAttribute("data-key"); });
           if (row && !row.deleted) saveRules([row], "修改充值规则");
         });
+      });
+    }
+
+    function normalizeCell(field, raw) {
+      var text = String(raw ?? "").trim().replace(/[¥￥,\s%]/g, "");
+      if (!/^\d+(\.\d+)?$/.test(text)) return null;
+      var n = Number(text);
+      if (!Number.isFinite(n)) return null;
+      if (field === "noOrderTimes" || field === "pauseMinutes") return String(Math.round(n));
+      return String(n);
+    }
+
+    function openCell(button) {
+      if (!button || !button.isConnected) return;
+      var tr = button.closest("tr");
+      if (tr && tr.classList.contains("is-deleted")) return;
+      var live = tableWrap.querySelector("input.han-rules-live");
+      if (live) live.blur();
+      if (!button.isConnected) return;
+      var field = button.getAttribute("data-field");
+      var key = button.getAttribute("data-key");
+      var isText = button.classList.contains("han-rules-text");
+      var original = button.textContent;
+      var input = document.createElement("input");
+      input.type = "text";
+      input.className = "han-rules-live " + (isText ? "han-rules-text" : "han-rules-num");
+      input.value = original;
+      input.lang = "en";
+      input.setAttribute("data-key", key);
+      input.setAttribute("data-field", field);
+      input.setAttribute("autocomplete", "off");
+      input.setAttribute("spellcheck", "false");
+      if (isText) input.maxLength = 64;
+      else input.setAttribute("inputmode", "decimal");
+      button.replaceWith(input);
+      var done = false;
+      function closeWith(text) {
+        if (done || !input.isConnected) return;
+        done = true;
+        var next = document.createElement("button");
+        next.type = "button";
+        next.className = "han-rules-cell " + (isText ? "han-rules-text" : "han-rules-num");
+        next.title = isText ? "点这里直接填写子账号名称" : "点这里直接填写";
+        next.setAttribute("data-key", key);
+        next.setAttribute("data-field", field);
+        next.textContent = text;
+        input.replaceWith(next);
+      }
+      function finish(save) {
+        if (done) return;
+        var typed = isText ? input.value.trim().slice(0, 64) : normalizeCell(field, input.value);
+        if (!save || typed == null) {
+          closeWith(original);
+          if (save && typed == null) setStatus("请直接填写数字", true);
+          return;
+        }
+        var row = rows.find(function (item) { return rowKey(item) === key; });
+        closeWith(typed);
+        if (!row || row.deleted || String(row[field] ?? "") === typed) return;
+        row[field] = typed;
+        saveRules([row], "修改充值规则");
+      }
+      input.addEventListener("mouseup", function (event) {
+        event.preventDefault();
+        input.focus();
+        input.select();
+      });
+      input.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          input.blur();
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          closeWith(original);
+        }
+      });
+      input.addEventListener("blur", function () { finish(true); });
+      input.focus();
+      input.select();
+    }
+
+    if (!tableWrap.dataset.cellBound) {
+      tableWrap.dataset.cellBound = "1";
+      tableWrap.addEventListener("mousedown", function (event) {
+        var button = event.target.closest && event.target.closest("button.han-rules-cell");
+        if (!button || !tableWrap.contains(button)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        openCell(button);
       });
     }
 
@@ -722,7 +801,32 @@
       return rows.filter(function (row) { return selected.has(rowKey(row)); });
     }
 
-    function saveRules(list, summary) {
+    var saveQueue = Promise.resolve();
+
+    function paintSaved(row, version) {
+      row.version = version;
+      row.syncStatus = "待同步";
+      baseline.set(rowKey(row), ruleSignature(row));
+      var key = rowKey(row);
+      var anchor = null;
+      tableWrap.querySelectorAll("[data-key]").forEach(function (el) {
+        if (!anchor && el.getAttribute("data-key") === key) anchor = el;
+      });
+      if (!anchor) return;
+      var tr = anchor.closest("tr");
+      if (!tr) return;
+      tr.querySelectorAll("button.han-rules-cell").forEach(function (cell) {
+        var field = cell.getAttribute("data-field");
+        if (field && row[field] != null) cell.textContent = row[field];
+      });
+      var tds = tr.children;
+      if (tds.length >= 3) {
+        tds[tds.length - 3].textContent = String(version);
+        tds[tds.length - 2].textContent = "待同步";
+      }
+    }
+
+    function persistRules(list, summary) {
       collectEdits();
       var target = (list || rows).filter(function (row) {
         return row && !row.deleted && ruleSignature(row) !== baseline.get(rowKey(row));
@@ -745,13 +849,21 @@
         });
       });
       return chain.then(function (data) {
+        target.forEach(function (row) { paintSaved(row, data.version); });
+        if (asofEl) asofEl.textContent = "配置版本 " + data.version + " · 待同步";
         setSyncBanner("配置版本 " + data.version + " 已保存。不用停店，本地机下次领取后在下一批开始时使用。ACK 后本页变为已同步。");
-        return load().then(function () {
-          setStatus("已保存版本 " + data.version + "。店铺继续运行，本地机下一批使用新规则。");
-        });
+        setStatus("已保存版本 " + data.version + "。店铺继续运行，本地机下一批使用新规则。");
       }).catch(function (err) {
-        if (!dead) setStatus(err.message || "保存失败", true);
+        if (dead) return;
+        setStatus(err.message || "保存失败", true);
+        return load();
       });
+    }
+
+    function saveRules(list, summary) {
+      var job = saveQueue.then(function () { return persistRules(list, summary); });
+      saveQueue = job.then(function () {}, function () {});
+      return job;
     }
 
     function batchRoi() {

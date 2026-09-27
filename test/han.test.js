@@ -1389,10 +1389,12 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   const han = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
   assert.match(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
   assert.match(han, /\["\/han\/paid\?board=rules", "充值规则", "rules"\]/);
-  assert.match(han, /20260927-cells/);
+  assert.match(han, /20260927-edit/);
   const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
   assert.match(center, /两档花费/);
   assert.match(center, /han-rules-text/);
+  assert.match(center, /han-rules-cell/);
+  assert.match(center, /han-rules-live/);
   assert.match(center, /ruleSignature/);
   assert.match(center, /i \+= 30/);
   assert.match(han, /insertAdjacentElement\("afterend"/);
