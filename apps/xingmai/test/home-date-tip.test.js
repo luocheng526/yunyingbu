@@ -147,6 +147,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /\.xm-hm-live-charts\{display:grid;grid-template-columns:1fr 1fr;gap:20px\}/);
   assert.match(homeJs, /\.xm-hm-live-cards\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\);gap:20px/);
   assert.match(homeJs, /paid: \{ label: "实时费比"/);
+  assert.match(homeJs, /label: "京麦面板实时金额"/);
+  assert.doesNotMatch(homeJs, /label: "实时销售指数"/);
   assert.match(homeJs, /key: "livePaid", label: "实时付费金额"/);
   assert.match(homeJs, /\/api\/home\/erp-paid/);
   assert.match(homeJs, /function seriesOf/);
@@ -544,7 +546,7 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
   assert.match(html, /线：累计（23点=1-23点）/);
   assert.match(html, /preserveAspectRatio="none"/);
   const liveHtml = fns.liveChartHtml({
-    label: "实时销售指数",
+    label: "京麦面板实时金额",
     value: "12,345",
     delta: 8,
     yesterday: yest,
@@ -553,7 +555,7 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
     todayHour: today,
     hours: 24
   });
-  assert.match(liveHtml, /实时销售指数/);
+  assert.match(liveHtml, /京麦面板实时金额/);
   assert.match(liveHtml, /data-hours="24"/);
   assert.match(liveHtml, /data-chart="sales"/);
   assert.doesNotMatch(liveHtml, /<circle/);

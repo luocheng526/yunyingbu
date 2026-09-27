@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.629-home-viewtabs */
+/* xm-module-home 0.1.691-home-jingmai */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1346,7 +1346,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.629-home-viewtabs");
+    board.setAttribute("data-hm-js", "0.1.691-home-jingmai");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1659,7 +1659,7 @@
     return {
       title: "实时看板",
       summary: { channels: 1, shops: 0 },
-      hero: { label: "实时销售指数", value: "—", delta: 0, yesterday: [], today: [], yesterdayHour: [], todayHour: [], hours: 0 },
+      hero: { label: "京麦面板实时金额", value: "—", delta: 0, yesterday: [], today: [], yesterdayHour: [], todayHour: [], hours: 0 },
       paid: { label: "实时费比", value: "—", delta: 0, yesterday: [], today: [], yesterdayHour: [], todayHour: [], hours: 0, unit: "rate", lineMode: "flat" },
       cards: [
         { key: "ad", label: "推广花费 (支付预估)", value: "—" },
@@ -2077,7 +2077,7 @@
     var yestHour = hasHourly ? padHours(hourly.yesterdayPay, 24) : seriesOf(hourly.yesterdayPay, yestPay);
     var todayHour = hasHourly ? todayHours(hourly.todayPay) : seriesOf(hourly.todayPay, todayPay);
     live.hero = {
-      label: "实时销售指数",
+      label: "京麦面板实时金额",
       value: fmtMoney(todayPay),
       delta: trendOf(todayPay, yestPay),
       yesterday: hasHourly ? cumHours(yestHour) : yestHour,
