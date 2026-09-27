@@ -8,7 +8,8 @@ import {
   dbMode,
   query,
   resetStoreForTests,
-  setPeopleLoginForTests
+  setPeopleLoginForTests,
+  setPoolForTests
 } from "../src/modules/profile/auth.js";
 import { patchAppSource } from "../src/modules/profile/patch-app.js";
 
@@ -224,6 +225,45 @@ test("organization people accounts can log in with roster password", async () =>
     });
     assert.equal(adminOrg.res.status, 200);
     assert.equal(adminOrg.json.user.username, "罗成");
+  });
+});
+
+test("people login reads pack json when people table has no username column", async () => {
+  setPoolForTests({
+    async query(sql) {
+      const text = String(sql);
+      if (/SELECT \* FROM `people`/i.test(text) || /SELECT \* FROM people/i.test(text)) {
+        return [
+          [
+            {
+              id: 4,
+              name: "张文静",
+              role: "运营",
+              center: "韩梦凯运营中心",
+              status: "在职",
+              pack: JSON.stringify({
+                username: "张文静",
+                password: "OrgLogin-test1",
+                department: "韩梦凯运营中心"
+              })
+            }
+          ]
+        ];
+      }
+      return [[]];
+    }
+  });
+  await withServer(async (base) => {
+    const ok = await request(base, "/api/auth/login", {
+      method: "POST",
+      body: { username: "张文静", password: "OrgLogin-test1" },
+      redirect: "follow"
+    });
+    assert.equal(ok.res.status, 200);
+    assert.equal(ok.json.user.username, "张文静");
+    const me = await request(base, "/api/auth/me", { cookie: ok.cookie, redirect: "follow" });
+    assert.equal(me.res.status, 200);
+    assert.equal(me.json.username, "张文静");
   });
 });
 

@@ -197,6 +197,7 @@ const KEYLEN = 64;
 const users = new Map();
 const sessions = new Map();
 const peopleRoster = new Map();
+let peopleRowCache = { at: 0, rows: null };
 
 function hashPasswordSync(password) {
   const salt = randomBytes(16);
@@ -309,7 +310,7 @@ async function peoplePasswordMatches(password, stored) {
   if (stored.startsWith("scrypt:")) {
     return verifyPassword(password, stored);
   }
-  return peoplePlainEquals(password, stored);
+  return peoplePlainEquals(String(password).trim(), stored.trim());
 }
 
 function personActive(person) {
@@ -321,6 +322,105 @@ function pickPersonRow(rows, username) {
   const list = Array.isArray(rows) ? rows : [];
   const exact = list.find((row) => peopleKey(row.username) === username);
   return exact || list.find((row) => peopleKey(row.name) === username) || null;
+}
+
+function parseMaybeJson(value) {
+  if (!value) {
+    return {};
+  }
+  if (typeof value === "object" && !Buffer.isBuffer(value)) {
+    return value;
+  }
+  if (typeof value !== "string") {
+    return {};
+  }
+  const text = value.trim();
+  if (!text.startsWith("{") && !text.startsWith("[")) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function normalizePersonRow(row) {
+  if (!row || typeof row !== "object") {
+    return null;
+  }
+  const extra = {};
+  for (const key of Object.keys(row)) {
+    const value = row[key];
+    if (typeof value === "string" && value.trim().startsWith("{")) {
+      Object.assign(extra, parseMaybeJson(value));
+    } else if (value && typeof value === "object" && !Buffer.isBuffer(value) && !Array.isArray(value) && !(value instanceof Date)) {
+      if (key === "pack" || key === "bundle" || key === "data" || key === "json" || key === "extra" || key === "payload" || key === "meta") {
+        Object.assign(extra, value);
+      }
+    }
+  }
+  const merged = { ...extra, ...row };
+  const username = peopleKey(merged.username || merged.login || merged.account || merged.name);
+  if (!username) {
+    return null;
+  }
+  return {
+    name: String(merged.name || username).trim(),
+    username,
+    password: String(
+      merged.password || merged.loginPassword || merged.login_password || merged.pwd || ""
+    ),
+    department: String(merged.department || merged.center || extra.department || ""),
+    center: String(merged.center || ""),
+    role: String(merged.role || ""),
+    status: String(merged.status || extra.status || "在职")
+  };
+}
+
+async function loadPeopleRowsFromMysql() {
+  if (peopleRowCache.rows && Date.now() - peopleRowCache.at < 15000) {
+    return peopleRowCache.rows;
+  }
+  const out = [];
+  const seen = new Set();
+  async function takeTable(table) {
+    try {
+      const [rows] = await query("SELECT * FROM `" + String(table).replace(/`/g, "") + "`");
+      for (const row of rows || []) {
+        const person = normalizePersonRow(row);
+        if (!person) {
+          continue;
+        }
+        const key = person.username + "\0" + person.name;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        out.push(person);
+      }
+    } catch (err) {
+      console.error("people login table failed", table, err && err.code);
+    }
+  }
+  await takeTable("people");
+  if (!out.some((row) => row.password)) {
+    try {
+      const [tables] = await query("SHOW TABLES");
+      for (const item of tables || []) {
+        const name = String(Object.values(item)[0] || "");
+        if (!name || name === "people" || !/people|member|staff|roster/i.test(name)) {
+          continue;
+        }
+        await takeTable(name);
+      }
+    } catch (err) {
+      console.error("people login show tables failed", err && err.code);
+    }
+  }
+  peopleRowCache = { at: Date.now(), rows: out };
+  return out;
 }
 
 async function findPeopleCredential(username) {
@@ -340,14 +440,14 @@ async function findPeopleCredential(username) {
     return null;
   }
   try {
-    const [rows] = await query(
-      `SELECT name, username, password, department, center, role, status
-       FROM people
-       WHERE username IN (?, ?) OR name IN (?, ?)
-       LIMIT 8`,
-      [aliases[0], aliases[aliases.length - 1], aliases[0], aliases[aliases.length - 1]]
-    );
-    return pickPersonRow(rows, aliases[aliases.length - 1]);
+    const rows = await loadPeopleRowsFromMysql();
+    for (const key of aliases) {
+      const hit = pickPersonRow(rows, key);
+      if (hit) {
+        return hit;
+      }
+    }
+    return null;
   } catch (err) {
     console.error("people login lookup failed", err);
     return null;
@@ -503,6 +603,7 @@ export function resetStoreForTests() {
   users.clear();
   sessions.clear();
   peopleRoster.clear();
+  peopleRowCache = { at: 0, rows: null };
   resetDutyCatalogForTests();
   seed();
 }
