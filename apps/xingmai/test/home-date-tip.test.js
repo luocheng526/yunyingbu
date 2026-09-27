@@ -1026,6 +1026,7 @@ test("live header settings add 付费中心 columns without wiring data", () => 
   assert.match(homeJs, /是否成功/);
   assert.match(homeJs, /付费中心（数据待对接）/);
   assert.match(homeJs, /data-live-head/);
+  assert.match(homeJs, /list\.length === need/);
   const pick = (name) => {
     const start = homeJs.indexOf("function " + name);
     assert.notEqual(start, -1, name);
