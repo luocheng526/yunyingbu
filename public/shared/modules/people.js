@@ -1,4 +1,4 @@
-/* xm-module-people org-board 0.1.228-site-acl */
+/* xm-module-people org-board 0.1.229-site-acl-ui */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.228-site-acl";
+    const href = "/people.css?v=0.1.229-site-acl-ui";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -295,27 +295,29 @@
         '<div class="rights-tree-toolbar"><button type="button" id="rights-refresh">刷新树和看板</button><span class="muted" id="rights-checked">检查时间：—</span></div>' +
         '<div class="rights-tree-chart" id="rights-tree-chart"></div></section></div>' +
         '<div class="org-pane" data-pane="acl" hidden>' +
-        '<section class="panel"><h2>权限</h2>' +
-        "<p>店铺主数据按登录人责权：罗成可改全部，沈子晗只改沈子晗组，韩梦凯只改韩梦凯组。双击单元格保存。</p>" +
-        "<p>成员管理整表双击改格子，框不拉长，点别处就保存。仅罗成、韩梦凯、沈子晗能改，其他人不能改。</p>" +
-        "<p>导入是合并不是换表。人员同名覆盖；店铺同一家才覆盖，其它原店铺保留。</p>" +
-        "<p>智能体只读：GET /api/people、GET /api/people/org/stores、GET /api/people/grants。</p>" +
-        '<p class="lead">现有表格责权不变。下面按成员管理的人、店铺主数据的店，逐个分配网站权限。没配过的人默认全关。模块和功能拆开，勾看得见 / 进得去 / 改得了。罗成管全部；沈子晗、韩梦凯只配自己组。</p>' +
-        '<div class="site-acl" id="site-acl" data-site-acl-js="0.1.228-site-acl">' +
+        '<section class="panel site-acl-panel">' +
+        '<div class="site-acl-hero">' +
+        "<div><h2>网站权限</h2>" +
+        '<p class="lead">按成员拆开模块和功能。没配过默认全关。罗成配全部；沈子晗、韩梦凯只配自己组。店铺主数据责权不变。</p></div>' +
+        '<div class="site-acl-kpis" id="site-acl-kpis"></div></div>' +
+        '<div class="site-acl" id="site-acl" data-site-acl-js="0.1.229-site-acl-ui">' +
         '<aside class="site-acl-list">' +
-        '<input type="text" id="site-acl-q" placeholder="姓名 / 经理 / 主管" autocomplete="off" spellcheck="false" />' +
+        '<div class="site-acl-list-head"><strong>成员目录</strong><span id="site-acl-count"></span></div>' +
+        '<input type="text" id="site-acl-q" placeholder="搜索姓名 / 经理 / 主管" autocomplete="off" spellcheck="false" />' +
         '<div id="site-acl-people"></div></aside>' +
         '<div class="site-acl-sheet">' +
-        '<p class="muted" id="site-acl-empty">点左侧的人，打开模块、功能和店铺明细。</p>' +
+        '<div class="site-acl-empty" id="site-acl-empty"><strong>选择成员</strong><span>从左侧点一个人，右侧打开模块、功能和店铺明细。</span></div>' +
         '<div id="site-acl-detail" hidden>' +
-        '<div class="site-acl-head"><div><h3 id="site-acl-name"></h3><p class="muted" id="site-acl-meta"></p></div>' +
-        '<button type="button" id="site-acl-save">保存</button></div>' +
-        '<p class="status error" id="site-acl-error" hidden></p>' +
+        '<div class="site-acl-head"><div class="site-acl-who"><b class="site-acl-avatar" id="site-acl-avatar"></b>' +
+        '<div><h3 id="site-acl-name"></h3><p class="muted" id="site-acl-meta"></p></div></div>' +
+        '<div class="site-acl-head-actions"><p class="status error" id="site-acl-error" hidden></p>' +
         '<p class="status" id="site-acl-ok" hidden></p>' +
-        "<h4>网站模块和功能</h4>" +
+        '<button type="button" id="site-acl-save">保存权限</button></div></div>' +
+        '<div class="site-acl-views">' +
+        '<button type="button" class="site-acl-view is-on" data-acl-view="modules">模块和功能</button>' +
+        '<button type="button" class="site-acl-view" data-acl-view="stores">店铺明细</button></div>' +
         '<div id="site-acl-modules"></div>' +
-        "<h4>店铺明细</h4>" +
-        '<div id="site-acl-stores"></div></div></div></div></section></div>' +
+        '<div id="site-acl-stores" hidden></div></div></div></div></section></div>' +
         '<div class="org-pane" data-pane="logs" hidden>' +
         '<section class="panel"><h2>改动日志</h2>' +
         '<div class="org-table-wrap"><table><thead><tr><th>时间</th><th>动作</th><th>摘要</th></tr></thead>' +
@@ -1911,6 +1913,7 @@
       let siteAclBoard = null;
       let siteAclName = "";
       let siteAclDraft = null;
+      let siteAclView = "modules";
 
       function siteAclCap(value) {
         const edit = Boolean(value && value.edit);
@@ -1919,12 +1922,19 @@
         return { see: see, enter: enter, edit: edit };
       }
 
+      function siteAclLocked() {
+        return !(siteAclBoard && siteAclBoard.canAssign);
+      }
+
       function siteAclBoxes(kind, id, cap) {
+        const locked = siteAclLocked();
         return ["see", "enter", "edit"]
           .map(function (key) {
             const label = key === "see" ? "看得见" : key === "enter" ? "进得去" : "改得了";
             return (
-              '<label class="site-acl-cap"><input type="checkbox" data-acl-kind="' +
+              '<td class="site-acl-cell"><label class="site-acl-cap" title="' +
+              label +
+              '"><input type="checkbox" data-acl-kind="' +
               kind +
               '" data-acl-id="' +
               escapeHtml(id) +
@@ -1932,12 +1942,57 @@
               key +
               '"' +
               (cap[key] ? " checked" : "") +
-              " />" +
+              (locked ? " disabled" : "") +
+              ' aria-label="' +
               label +
-              "</label>"
+              '" /></label></td>'
             );
           })
           .join("");
+      }
+
+      function siteAclMatrixHead() {
+        return (
+          '<thead><tr><th>功能</th><th>看得见</th><th>进得去</th><th>改得了</th></tr></thead>'
+        );
+      }
+
+      function paintSiteAclKpis() {
+        const host = root.querySelector("#site-acl-kpis");
+        const count = root.querySelector("#site-acl-count");
+        const people = (siteAclBoard && siteAclBoard.people) || [];
+        const set = people.filter(function (person) {
+          return person.configured;
+        }).length;
+        if (host) {
+          host.innerHTML =
+            '<article><span>可配成员</span><b>' +
+            people.length +
+            "</b></article><article><span>已配</span><b>" +
+            set +
+            "</b></article><article><span>未配全关</span><b>" +
+            (people.length - set) +
+            "</b></article><article><span>范围</span><b>" +
+            escapeHtml((siteAclBoard && (siteAclBoard.scopeLabel || siteAclBoard.scope)) || "—") +
+            "</b></article>";
+        }
+        if (count) {
+          count.textContent = people.length ? people.length + " 人" : "";
+        }
+      }
+
+      function paintSiteAclView() {
+        root.querySelectorAll("[data-acl-view]").forEach(function (btn) {
+          btn.classList.toggle("is-on", btn.getAttribute("data-acl-view") === siteAclView);
+        });
+        const modules = root.querySelector("#site-acl-modules");
+        const stores = root.querySelector("#site-acl-stores");
+        if (modules) {
+          modules.hidden = siteAclView !== "modules";
+        }
+        if (stores) {
+          stores.hidden = siteAclView !== "stores";
+        }
       }
 
       function paintSiteAclPeople() {
@@ -1945,6 +2000,7 @@
         if (!host || !siteAclBoard) {
           return;
         }
+        paintSiteAclKpis();
         const q = String((root.querySelector("#site-acl-q") && root.querySelector("#site-acl-q").value) || "")
           .trim()
           .toLowerCase();
@@ -1956,19 +2012,21 @@
         });
         host.innerHTML = rows
           .map(function (person) {
+            const name = String(person.name || "");
             return (
               '<button type="button" class="site-acl-person' +
-              (person.name === siteAclName ? " is-on" : "") +
+              (name === siteAclName ? " is-on" : "") +
+              (person.configured ? " is-set" : "") +
               '" data-acl-person="' +
-              escapeHtml(person.name) +
-              '"><strong>' +
-              escapeHtml(person.name) +
-              "</strong><span>" +
-              escapeHtml(person.role || "") +
-              " · " +
-              escapeHtml(person.lineManager || person.center || "") +
-              '</span><em>' +
-              (person.configured ? "已配" : "未配·全关") +
+              escapeHtml(name) +
+              '"><b class="site-acl-avatar">' +
+              escapeHtml(name.slice(0, 1) || "—") +
+              "</b><span><strong>" +
+              escapeHtml(name) +
+              "</strong><small>" +
+              escapeHtml([person.role, person.lineManager || person.center].filter(Boolean).join(" · ")) +
+              '</small></span><em>' +
+              (person.configured ? "已配" : "未配") +
               "</em></button>"
             );
           })
@@ -1986,9 +2044,18 @@
         empty.hidden = true;
         detail.hidden = false;
         const person = siteAclDraft.person || {};
+        const avatar = root.querySelector("#site-acl-avatar");
+        if (avatar) {
+          avatar.textContent = String(person.name || siteAclName || "—").slice(0, 1);
+        }
         root.querySelector("#site-acl-name").textContent = person.name || siteAclName;
         root.querySelector("#site-acl-meta").textContent =
           [person.role, person.lineManager || person.center, person.configured ? "已配" : "未配，默认全关"].filter(Boolean).join(" · ");
+        const save = root.querySelector("#site-acl-save");
+        if (save) {
+          save.hidden = siteAclLocked();
+          save.disabled = siteAclLocked();
+        }
         const modules = (siteAclBoard.catalog || [])
           .map(function (mod) {
             const sheet = siteAclDraft.sheet.modules[mod.id] || { see: false, enter: false, edit: false, features: {} };
@@ -1996,41 +2063,50 @@
               .map(function (feature) {
                 const cap = siteAclCap(sheet.features && sheet.features[feature.id]);
                 return (
-                  '<div class="site-acl-feature"><span>' +
+                  '<tr class="site-acl-feature"><th>' +
                   escapeHtml(feature.name) +
-                  "</span><div class=\"site-acl-caps\">" +
+                  "</th>" +
                   siteAclBoxes("feature", feature.id, cap) +
-                  "</div></div>"
+                  "</tr>"
                 );
               })
               .join("");
             return (
-              '<article class="site-acl-mod"><div class="site-acl-mod-head"><strong>' +
+              '<article class="site-acl-mod"><table class="site-acl-matrix"><caption>' +
               escapeHtml(mod.name) +
-              '</strong><div class="site-acl-caps">' +
+              "</caption>" +
+              siteAclMatrixHead() +
+              "<tbody><tr class=\"site-acl-mod-row\"><th>整个模块</th>" +
               siteAclBoxes("module", mod.id, siteAclCap(sheet)) +
-              "</div></div>" +
+              "</tr>" +
               feats +
-              "</article>"
+              "</tbody></table></article>"
             );
           })
           .join("");
         root.querySelector("#site-acl-modules").innerHTML = modules;
-        const stores = (siteAclDraft.stores || [])
+        const storeRows = (siteAclDraft.stores || [])
           .map(function (store) {
             const cap = siteAclCap(siteAclDraft.sheet.stores && siteAclDraft.sheet.stores[String(store.id)]);
             return (
-              '<div class="site-acl-store"><div><strong>' +
+              "<tr class=\"site-acl-store\"><th><strong>" +
               escapeHtml(store.storeName) +
               "</strong><span>" +
               escapeHtml([store.operator || store.supervisor || store.manager, store.storeId].filter(Boolean).join(" · ")) +
-              '</span></div><div class="site-acl-caps">' +
+              "</span></th>" +
               siteAclBoxes("store", String(store.id), cap) +
-              "</div></div>"
+              "</tr>"
             );
           })
           .join("");
-        root.querySelector("#site-acl-stores").innerHTML = stores || '<p class="muted">这一组还没有店铺明细。</p>';
+        root.querySelector("#site-acl-stores").innerHTML = storeRows
+          ? '<table class="site-acl-matrix"><caption>店铺明细</caption>' +
+            siteAclMatrixHead() +
+            "<tbody>" +
+            storeRows +
+            "</tbody></table>"
+          : '<p class="muted">这一组还没有店铺明细。</p>';
+        paintSiteAclView();
       }
 
       function applySiteAclCheck(kind, id, cap, on) {
@@ -2210,6 +2286,14 @@
       });
       root.querySelector("#site-acl-save").addEventListener("click", function () {
         saveSiteAcl();
+      });
+      root.querySelector(".site-acl-views").addEventListener("click", function (event) {
+        const btn = event.target.closest("[data-acl-view]");
+        if (!btn) {
+          return;
+        }
+        siteAclView = btn.getAttribute("data-acl-view") || "modules";
+        paintSiteAclView();
       });
       root.querySelector("#site-acl-detail").addEventListener("change", function (event) {
         const input = event.target.closest("input[data-acl-kind]");
