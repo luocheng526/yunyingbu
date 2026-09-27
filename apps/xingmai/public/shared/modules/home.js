@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.705-home-rowpick */
+/* xm-module-home 0.1.706-home-livefresh */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -283,6 +283,7 @@
   var viewKey = "company";
   var cardSetOpen = false;
   var teamsRefreshing = false;
+  var liveRefreshing = false;
   function viewStore(kind) {
     return viewKey === "team" || viewKey === "chief"
       ? "xm-home-" + viewKey + "-" + kind
@@ -1130,6 +1131,7 @@
     var shops = liveFilterShopNames(allShops);
     return (
       '<div class="xm-hm-live-filter">' +
+      '<div class="xm-hm-live-filter-left">' +
       '<strong class="xm-hm-live-filter-lab">店铺列表</strong>' +
       '<span class="xm-hm-live-filter-box"><select data-live-filter="pick">' +
       liveFilterOption("", "全选", !cur) +
@@ -1151,7 +1153,12 @@
             .join("") +
           "</optgroup>"
         : "") +
-      "</select></span></div>"
+      "</select></span></div>" +
+      '<button type="button" class="xm-hm-live-refresh" data-refresh-live' +
+      (liveRefreshing ? " disabled" : "") +
+      ">" +
+      (liveRefreshing ? "刷新中…" : "刷新") +
+      "</button></div>"
     );
   }
   function liveMetaHtml(state) {
@@ -1691,9 +1698,12 @@
       ".xm-hm-rest em{font-style:normal;font-variant-numeric:tabular-nums}" +
       ".xm-hm-live-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}" +
       ".xm-hm-live-clock{margin:0;color:var(--xm-muted);font-size:12px}" +
-      ".xm-hm-live-filter{display:flex;align-items:center;gap:12px;margin:0 0 12px;padding:0;border:0}" +
+      ".xm-hm-live-filter{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;padding:0;border:0}" +
+      ".xm-hm-live-filter-left{display:flex;align-items:center;gap:12px;min-width:0}" +
       ".xm-hm-live-filter-lab{font-size:16px;font-weight:600;color:var(--xm-ink);line-height:40px;white-space:nowrap}" +
       ".xm-hm-live-filter-box{position:relative;flex:0 1 320px;min-width:220px;max-width:100%}" +
+      ".xm-hm-live-refresh{border:0;background:transparent;color:var(--xm-primary);cursor:pointer;padding:0 2px;font:inherit;font-size:14px;line-height:40px;white-space:nowrap}" +
+      ".xm-hm-live-refresh:disabled{opacity:.55;cursor:wait}" +
       ".xm-hm-live-filter select{width:100%;height:40px;box-sizing:border-box;border:1px solid #e4e7ed;border-radius:8px;padding:0 36px 0 14px;font:inherit;font-size:14px;color:var(--xm-ink);background:#fff;-webkit-appearance:none;appearance:none}" +
       ".xm-hm-live-filter-box:after{content:\"\";position:absolute;right:14px;top:50%;width:8px;height:8px;margin-top:-6px;border-right:2px solid #8c8c8c;border-bottom:2px solid #8c8c8c;transform:rotate(45deg);pointer-events:none}" +
       ".xm-hm-fee-goal{display:inline-flex;align-items:center;justify-content:center;gap:4px;width:100%;color:var(--xm-ink);font-size:12px}" +
@@ -1859,7 +1869,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.705-home-rowpick");
+    board.setAttribute("data-hm-js", "0.1.706-home-livefresh");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2970,6 +2980,25 @@
           }
         });
       }
+      function refreshLive() {
+        if (liveRefreshing) {
+          return;
+        }
+        liveRefreshing = true;
+        clearLiveRowPicked();
+        paint(root, state);
+        return Promise.resolve(pullLive(true)).then(function () {
+          liveRefreshing = false;
+          if (!dead) {
+            paint(root, state);
+          }
+        }).catch(function () {
+          liveRefreshing = false;
+          if (!dead) {
+            paint(root, state);
+          }
+        });
+      }
       function pullLive(blankFirst) {
         if (blankFirst) {
           clearLiveShown(state);
@@ -3100,6 +3129,10 @@
         }
         if (event.target.closest("[data-refresh-teams]")) {
           refreshTeams();
+          return;
+        }
+        if (event.target.closest("[data-refresh-live]")) {
+          refreshLive();
           return;
         }
         if (event.target.closest("[data-show-teams]")) {
@@ -3511,7 +3544,7 @@
         }
       }
       function onSortSelectStart(event) {
-        var tab = event.target.closest && event.target.closest(".xm-hm-views button,.xm-hm-ranges button,.xm-hm-set,.xm-hm-dates,[data-refresh-teams],[data-show-teams]");
+        var tab = event.target.closest && event.target.closest(".xm-hm-views button,.xm-hm-ranges button,.xm-hm-set,.xm-hm-dates,[data-refresh-teams],[data-show-teams],[data-refresh-live]");
         if (sortFrom || sortDragging || tab) event.preventDefault();
       }
       function onSortMove(event) {

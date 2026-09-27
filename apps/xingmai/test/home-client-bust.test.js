@@ -11,7 +11,7 @@ test("rewrites immutable homepage script url to no-store client.js", () => {
   const out = rewriteHomeModuleUrl(html);
   assert.equal(out.includes("/shared/modules/home.js"), false);
   assert.equal(out.includes(HOME_CLIENT_JS), true);
-  assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.705-home-rowpick$/);
+  assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.706-home-livefresh$/);
 });
 
 test("serves /api/home/client.js from current homepage module", async () => {
@@ -26,10 +26,11 @@ test("serves /api/home/client.js from current homepage module", async () => {
     const text = await res.text();
     assert.equal(res.status, 200);
     assert.match(String(res.headers.get("cache-control") || ""), /no-store/i);
-    assert.match(text, /xm-module-home 0\.1\.705-home-rowpick/);
+    assert.match(text, /xm-module-home 0\.1\.706-home-livefresh/);
     assert.match(text, /function liveTheadHtml/);
     assert.match(text, /function liveFilterHtml/);
     assert.match(text, /data-live-filter="pick"/);
+    assert.match(text, /data-refresh-live/);
     assert.match(text, /店铺列表/);
     assert.match(text, /\.xm-hm-table thead th\{text-align:center\}/);
     assert.match(text, /label: "费比预警"/);
