@@ -387,9 +387,20 @@
           return loadDemo();
         })
         .then(function (data) {
-          if (data) {
-            applyPayload(mergeLive(data, null));
+          if (!data) {
+            return;
           }
+          const merged = mergeLive(data, null);
+          const api = window.XmDataScope;
+          if (!api) {
+            applyPayload(merged);
+            return;
+          }
+          return api.ready().then(function (pack) {
+            merged.shops = api.limitShops(merged.shops, pack);
+            merged.summary = Object.assign({}, merged.summary, { shops: merged.shops.length });
+            applyPayload(merged);
+          });
         })
         .catch(function (err) {
           if (!dead && board) {

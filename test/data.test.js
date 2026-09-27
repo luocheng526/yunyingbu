@@ -154,6 +154,14 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /\/api\/data\/live/);
     assert.match(overviewJs.text, /正在加载数据总览/);
     assert.match(overviewJs.text, /paintErp/);
+    assert.match(overviewJs.text, /function applyDuty/);
+    const scopeJs = await get(base, "/data-scope.js");
+    assert.equal(scopeJs.res.status, 200);
+    assert.match(scopeJs.text, /XmDataScope/);
+    assert.match(scopeJs.text, /韩梦凯/);
+    assert.match(scopeJs.text, /沈子晗/);
+    assert.match(scopeJs.text, /罗成/);
+    assert.match(scopeJs.text, /visibleShops/);
     assert.match(overviewJs.text, /loadLiveSpark/);
     assert.match(overviewJs.text, /seedHeroCompare/);
     assert.match(overviewJs.text, /ch-clock/);
@@ -500,6 +508,7 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.equal(isAllowedDataPath("public/data/placeholder/index.html"), true);
   assert.equal(isAllowedDataPath("public/data/overview/index.html"), true);
   assert.equal(isAllowedDataPath("public/data-overview.js"), true);
+  assert.equal(isAllowedDataPath("public/data-scope.js"), true);
   assert.equal(isAllowedDataPath("public/data/team-demo.json"), true);
   assert.equal(isAllowedDataPath("public/data-shops.js"), true);
   assert.equal(isAllowedDataPath("public/data/shops-demo.json"), true);
@@ -522,7 +531,8 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.match(dataMod, /\/data\/paid/);
   assert.match(dataMod, /XmDataCreateShopDashboard|data-shops\.js/);
   assert.match(dataMod, /restore-v1/);
-  assert.match(dataMod, /data-overview\.js\?v=data-ov5/);
+  assert.match(dataMod, /data-overview\.js\?v=data-ov6/);
+  assert.match(dataMod, /data-scope\.js\?v=scope1/);
   assert.match(css, /ch-pill/);
   assert.match(css, /\.ch-card \.value[\s\S]*font-size: 28px/);
   assert.match(css, /#8c8c8c/);
@@ -548,6 +558,30 @@ test("release allowlist never includes the live site entrypoint", () => {
   const apply = fs.readFileSync(path.join(repoRoot, "scripts/apply-data-to-mengkai.mjs"), "utf8");
   assert.match(apply, /DATA_OVERLAY_FILES/);
   assert.doesNotMatch(apply, /copyFile\("src\/app\.js"/);
+});
+
+test("data-scope gives full view to three leads and duty shops to others", () => {
+  const src = fs.readFileSync(path.join(repoRoot, "public/data-scope.js"), "utf8");
+  const g = { window: {} };
+  new Function("window", src)(g.window);
+  const api = g.window.XmDataScope;
+  assert.equal(api.isFull({ name: "罗成" }), true);
+  assert.equal(api.isFull({ username: "luocheng" }), true);
+  assert.equal(api.isFull({ name: "韩梦凯" }), true);
+  assert.equal(api.isFull({ name: "沈子晗" }), true);
+  assert.equal(api.isFull({ name: "毛永超" }), false);
+  const people = [
+    { id: 2, name: "韩梦凯", role: "经理", center: "韩梦凯运营中心", visibleShops: [] },
+    { id: 21, name: "崔天昊", lineManager: "韩梦凯", supervisor: "毛永超", visibleShops: ["A店"] },
+    { name: "杨润泽", supervisor: "杨润泽", visibleShops: ["B店"] }
+  ];
+  assert.equal(api.buildScope({ name: "沈子晗" }, people).all, true);
+  const scope = api.buildScope({ name: "毛永超" }, people);
+  assert.equal(scope.all, false);
+  assert.equal(api.shopAllowed({ shopName: "A店" }, scope), true);
+  assert.equal(api.shopAllowed({ shopName: "B店" }, scope), false);
+  assert.equal(api.shopAllowed({ shopName: "C店", operateName: "崔天昊" }, scope), true);
+  assert.equal(api.filterShops([{ shopName: "A店" }, { shopName: "B店" }], scope).length, 1);
 });
 
 test("submit-data-release posts version applicant module summary", async () => {

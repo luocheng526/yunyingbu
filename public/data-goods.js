@@ -449,16 +449,25 @@
     }
 
     function applyErp(data) {
+      const api = window.XmDataScope;
       const records = data.records || [];
-      state.total = Number(data.total) || records.length;
-      state.pages = Number(data.totalPages) || 1;
-      state.page = Number(data.currentPage || data.pageNum) || state.page;
-      state.rows = records.map(function (rec) {
-        const row = rowFromErp(rec);
-        row._raw = rec;
-        return row;
-      });
-      state.cards = buildCards(records, state.total);
+      const finish = function (list) {
+        state.total = Number(data.total) || list.length;
+        state.pages = Number(data.totalPages) || 1;
+        state.page = Number(data.currentPage || data.pageNum) || state.page;
+        state.rows = list.map(function (rec) {
+          const row = rowFromErp(rec);
+          row._raw = rec;
+          return row;
+        });
+        state.cards = buildCards(list, state.total);
+      };
+      if (api) {
+        return api.ready().then(function (pack) {
+          finish(api.limitShops(records, pack));
+        });
+      }
+      finish(records);
     }
 
     function load() {
@@ -484,9 +493,11 @@
             return;
           }
           if (data && data.ok && (data.records || []).length) {
-            applyErp(data);
-            render();
-            return;
+            return Promise.resolve(applyErp(data)).then(function () {
+              if (!dead) {
+                render();
+              }
+            });
           }
           throw new Error("empty");
         })
@@ -516,7 +527,16 @@
       return json("/api/data/shop-options")
         .then(function (data) {
           if (!dead) {
-            state.shops = data.records || [];
+            const api = window.XmDataScope;
+            const recs = data.records || [];
+            if (api) {
+              return api.ready().then(function (pack) {
+                if (!dead) {
+                  state.shops = api.limitShops(recs, pack);
+                }
+              });
+            }
+            state.shops = recs;
           }
         })
         .catch(function () {
