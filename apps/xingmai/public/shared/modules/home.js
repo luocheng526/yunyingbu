@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.695-home-livetbl */
+/* xm-module-home 0.1.696-home-feecols */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -973,20 +973,39 @@
     }
     return "费比预警：当前 " + Math.round(feePct(value)) + "% 超过目标 " + Math.round(feeTarget()) + "%";
   }
-  function liveMetaHtml(state, paid) {
+  function feeWarnLabel(feeRate) {
+    if (feeTarget() == null) {
+      return "未设目标";
+    }
+    if (feePct(feeRate) == null) {
+      return "—";
+    }
+    return feeOverTarget(feeRate) ? "超标" : "正常";
+  }
+  function liveAtText(liveAt) {
+    var raw = String(liveAt || "").trim();
+    return raw || "—";
+  }
+  function feeGoalLabelHtml() {
     var goal = feeTarget();
+    return (
+      '<label class="xm-hm-fee-goal">费比目标设置 <input type="number" min="0" max="100" step="1" data-fee-target' +
+      (goal == null ? "" : ' value="' + escapeHtml(String(goal)) + '"') +
+      " /> %</label>"
+    );
+  }
+  function liveMetaHtml(state, paid) {
     var warn = feeWarnText(paid && paid.value);
     return (
       '<div class="xm-hm-live-bar">' +
       '<span class="xm-hm-live-clock">每5分钟刷新 · 更新时间 ' +
-      escapeHtml(state && state.liveAt ? state.liveAt : "—") +
-      '</span><label class="xm-hm-fee-goal">费比目标 <input type="number" min="0" max="100" step="1" data-fee-target' +
-      (goal == null ? "" : ' value="' + escapeHtml(String(goal)) + '"') +
-      " /> %</label>" +
+      escapeHtml(liveAtText(state && state.liveAt)) +
+      "</span>" +
+      feeGoalLabelHtml() +
       (warn
         ? '<strong class="xm-hm-fee-warn">' + escapeHtml(warn) + "</strong>"
         : '<span class="xm-hm-fee-hint">' +
-          (goal == null ? "设置目标后超标会预警" : "费比未超目标") +
+          (feeTarget() == null ? "设置目标后超标会预警" : "费比未超目标") +
           "</span>") +
       "</div>"
     );
@@ -1212,7 +1231,8 @@
       "</article>"
     );
   }
-  function liveShopRowHtml(row, index) {
+  function liveShopRowHtml(row, index, liveAt) {
+    var warn = feeWarnLabel(row && row.feeRate);
     return (
       "<tr><td class=\"xm-hm-num\">" +
       rankMark(index) +
@@ -1232,6 +1252,12 @@
       (feeOverTarget(row.feeRate) ? " is-fee-warn" : "") +
       '">' +
       escapeHtml(row.feeRate == null ? "—" : row.feeRate) +
+      '</td><td class="xm-hm-num' +
+      (warn === "超标" ? " is-fee-warn" : "") +
+      '">' +
+      escapeHtml(warn) +
+      '</td><td class="xm-hm-num">' +
+      escapeHtml(liveAtText(liveAt)) +
       "</td></tr>"
     );
   }
@@ -1398,7 +1424,8 @@
       ".xm-hm-live-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;width:100%}" +
       ".xm-hm-live-cards .xm-hm-card{text-align:center;cursor:grab}" +
       ".xm-hm-live-cards .xm-hm-card.is-hold{cursor:grabbing}" +
-      ".xm-hm-live .xm-hm-table{min-width:960px;table-layout:fixed;border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums}" +
+      ".xm-hm-live .xm-hm-table{min-width:1180px;table-layout:fixed;border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums}" +
+      ".xm-hm-live .xm-hm-panel h2 .xm-hm-fee-goal{margin-left:auto}" +
       ".xm-hm-live .xm-hm-table .xm-hm-num{text-align:center;white-space:nowrap}" +
       ".xm-hm-live .xm-hm-table th,.xm-hm-live .xm-hm-table td{border:0;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;text-align:center;padding:var(--xm-hm-live-row,4px) 6px;line-height:1.2}" +
       ".xm-hm-live .xm-hm-table th{border-right:1px dashed #c8ced8}" +
@@ -1525,7 +1552,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.695-home-livetbl");
+    board.setAttribute("data-hm-js", "0.1.696-home-feecols");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1554,11 +1581,13 @@
       liveCards.map(liveCardHtml).join("") +
       '</div><div class="xm-hm-panel"><h2>店铺 <span>' +
       escapeHtml(String((live.summary && live.summary.shops) || shops.length)) +
-      " 店</span></h2>" +
-      '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th><th>实时销售额</th><th>实时付费金额</th><th>实时利润</th><th>实时付费ROI</th><th>实时付费成交额</th><th>实时费比</th></tr></thead>' +
+      " 店</span>" +
+      feeGoalLabelHtml() +
+      "</h2>" +
+      '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th><th>实时销售额</th><th>实时付费金额</th><th>实时利润</th><th>实时付费ROI</th><th>实时付费成交额</th><th>实时费比</th><th>费比预警</th><th>更新时间</th></tr></thead>' +
       "<tbody>" +
       shops.map(function (row, i) {
-        return liveShopRowHtml(row, i);
+        return liveShopRowHtml(row, i, state.liveAt);
       }).join("") +
       "</tbody></table></div>";
     applyLiveRowPad(root);

@@ -75,8 +75,12 @@ test("live cards persist their own drag order", () => {
 test("live page has fee target, warning and update time", () => {
   assert.match(homeJs, /function liveMetaHtml/);
   assert.match(homeJs, /function feeWarnText/);
+  assert.match(homeJs, /function feeWarnLabel/);
   assert.match(homeJs, /function saveFeeTarget/);
+  assert.match(homeJs, /function feeGoalLabelHtml/);
   assert.match(homeJs, /data-fee-target/);
+  assert.match(homeJs, /费比目标设置/);
+  assert.match(homeJs, /<th>费比预警<\/th><th>更新时间<\/th>/);
   assert.match(homeJs, /费比预警：当前 /);
   assert.match(homeJs, /更新时间 /);
   assert.match(homeJs, /is-warn/);
