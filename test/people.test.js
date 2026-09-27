@@ -8,6 +8,7 @@ import { effectiveStoreOperator, hydrateOrgStores, importStamp, mapImportRow, or
 import { resetOrgExtra } from "../src/modules/people/org-extra.js";
 import { canAssignPerson, canAssignSiteAcl, canEditRoster } from "../src/modules/people/org-acl.js";
 import { hydrateFromMysql, resetPeopleStore } from "../src/modules/people/store.js";
+import { PEOPLE_CLIENT_JS, rewritePeopleModuleUrl } from "../src/modules/people/asset-ver.js";
 import { featureAllowed, resetSiteAcl } from "../src/modules/people/site-acl.js";
 
 const PRESET = [
@@ -57,7 +58,14 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(text, /src="\/shared\/nav\.js"/);
     assert.match(text, /id="site-nav"/);
     assert.match(text, /href="\/people\.css"/);
-    assert.match(text, /shared\/modules\/people\.js/);
+    assert.match(text, /\/api\/people\/client\.js\?v=0\.1\.228-site-acl/);
+    assert.doesNotMatch(text, /\/shared\/modules\/people\.js/);
+    const clientJs = await fetch(`${base}/api/people/client.js?v=0.1.228-site-acl`);
+    const clientText = await clientJs.text();
+    assert.equal(clientJs.status, 200);
+    assert.match(clientJs.headers.get("cache-control") || "", /no-store/);
+    assert.match(clientText, /data-site-acl-js="0\.1\.228-site-acl"/);
+    assert.match(clientText, /site-acl-people/);
     const noticesJs = await fetch(`${base}/shared/modules/notices.js`);
     const noticesText = await noticesJs.text();
     assert.equal(noticesJs.status, 200);
@@ -1484,6 +1492,14 @@ export function createApp() {
   assert.match(patched, /import \{ peopleRouter \} from "\.\/modules\/people\/router\.js";/);
   assert.match(patched, /app\.use\("\/api\/people", peopleRouter\);\n  return app;/);
   assert.equal(patchAppSource(patched), patched);
+});
+
+test("rewritePeopleModuleUrl points the shell at the no-store people client", () => {
+  const html = '<script src="/shared/modules/people.js?v=0.1.713"></script><link rel="preload" href="/shared/modules/people.js?v=0.1.713" as="script" />';
+  const out = rewritePeopleModuleUrl(html);
+  assert.equal(out.includes(PEOPLE_CLIENT_JS), true);
+  assert.equal(out.includes("/shared/modules/people.js"), false);
+  assert.equal(rewritePeopleModuleUrl(`<script src="${PEOPLE_CLIENT_JS}"></script>`).includes(PEOPLE_CLIENT_JS), true);
 });
 
 test("unconfigured people default all-off and only line leaders assign their group", () => {

@@ -1,4 +1,4 @@
-/* xm-module-people org-board */
+/* xm-module-people org-board 0.1.228-site-acl */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.227-site-acl";
+    const href = "/people.css?v=0.1.228-site-acl";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -301,7 +301,7 @@
         "<p>导入是合并不是换表。人员同名覆盖；店铺同一家才覆盖，其它原店铺保留。</p>" +
         "<p>智能体只读：GET /api/people、GET /api/people/org/stores、GET /api/people/grants。</p>" +
         '<p class="lead">现有表格责权不变。下面按成员管理的人、店铺主数据的店，逐个分配网站权限。没配过的人默认全关。模块和功能拆开，勾看得见 / 进得去 / 改得了。罗成管全部；沈子晗、韩梦凯只配自己组。</p>' +
-        '<div class="site-acl" id="site-acl">' +
+        '<div class="site-acl" id="site-acl" data-site-acl-js="0.1.228-site-acl">' +
         '<aside class="site-acl-list">' +
         '<input type="text" id="site-acl-q" placeholder="姓名 / 经理 / 主管" autocomplete="off" spellcheck="false" />' +
         '<div id="site-acl-people"></div></aside>' +
