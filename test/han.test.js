@@ -1087,7 +1087,8 @@ test("GET/POST /api/han/worker feeds 付费中心 and 充值规则", async () =>
 
     const config = await json(base, "/api/han/worker?machineId=han-local");
     assert.equal(config.body.changed, true);
-    assert.equal(config.body.runShops[0], "德系甄选好物企官店");
+    assert.deepEqual(config.body.runShops, ["100"]);
+    assert.equal(config.body.shops[0].店铺名称, "德系甄选好物企官店");
     assert.equal(config.body.shops[0].子账号[0].计划ROI, 2.3);
     assert.equal(config.body.shops[0].子账号[0].自动充值, true);
     assert.equal(config.body.shops[0].子账号[0].第一档充值金额, 100);
@@ -1102,6 +1103,9 @@ test("GET/POST /api/han/worker feeds 付费中心 and 充值规则", async () =>
       body: JSON.stringify({ action: "ack", machineId: "han-local", version: 2, status: "success" }),
     });
     assert.equal(ack.body.status, "已同步");
+    const syncedPage = await json(base, "/api/han/worker?view=rules");
+    assert.equal(syncedPage.body.syncStatus, "已同步");
+    assert.equal(syncedPage.body.rows.find((row) => row.subAccountId === "200").syncStatus, "已同步");
 
     const history = await json(base, "/api/han/worker?view=history");
     assert.equal(history.body.items.some((row) => row.summary === "保存充值规则"), true);
@@ -1209,6 +1213,108 @@ test("GET/POST /api/han/worker feeds 付费中心 and 充值规则", async () =>
       body: JSON.stringify({ action: "status", 京准通主账户ID: "9001", 京准通Cookie状态: "pt_key=this-is-a-cookie-body-not-a-status" }),
     });
     assert.equal(secret.res.status, 400);
+  });
+});
+
+test("stopped shops still deliver full subaccount rules and sync only issued rows", async () => {
+  await withServer(async (base) => {
+    const pushed = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          { 店铺名称: "松郁", 京准通主账户ID: "88001", 花费: 10 },
+          { 店铺名称: "另一家店", 京准通主账户ID: "88002", 花费: 20 },
+        ],
+        subaccounts: [
+          { 店铺名称: "松郁", 京准通主账户ID: "88001", 子账号ID: "88011", 子账号名称: "松郁-主投", 花费: 10, ROI: 1, 余额: 20 },
+          { 店铺名称: "另一家店", 京准通主账户ID: "88002", 子账号ID: "88022", 子账号名称: "另一-主投", 花费: 20, ROI: 1, 余额: 20 },
+        ],
+      }),
+    });
+    assert.equal(pushed.res.status, 201);
+
+    const stopped = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "run", runShops: [], changeSummary: "停止全部店铺" }),
+    });
+    assert.equal(stopped.body.ok, true);
+
+    const saved = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "rules",
+        changeSummary: "松郁计划ROI改为2.1",
+        rows: [{ store: "松郁", accountId: "88001", subAccountId: "88011", 计划ROI: 2.1, 自动充值: true }],
+      }),
+    });
+    assert.equal(saved.res.status, 200);
+    const version = saved.body.version;
+    assert.ok(version > stopped.body.version);
+
+    const premature = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "ack", machineId: "han-worker-01", version, status: "success" }),
+    });
+    assert.equal(premature.body.status, "已同步");
+    const beforePull = await json(base, "/api/han/worker?view=rules");
+    assert.equal(beforePull.body.rows.find((row) => row.subAccountId === "88011").syncStatus, "待同步");
+    assert.equal(beforePull.body.syncStatus, "待同步");
+
+    const config = await json(base, "/api/han/worker?machineId=han-worker-01&sinceVersion=0");
+    assert.equal(config.body.changed, true);
+    assert.equal(config.body.version, version);
+    assert.deepEqual(config.body.runShops, []);
+    const song = config.body.shops.find((shop) => shop.店铺名称 === "松郁");
+    const other = config.body.shops.find((shop) => shop.店铺名称 === "另一家店");
+    assert.ok(song);
+    assert.ok(other);
+    assert.equal(song.启用, false);
+    assert.equal(song.京准通主账户ID, "88001");
+    const sub = song.子账号.find((row) => row.子账号ID === "88011");
+    assert.equal(sub.子账号名称, "松郁-主投");
+    assert.equal(sub.自动充值, true);
+    assert.equal(sub.计划ROI, 2.1);
+    assert.equal(sub.第一档花费下限, 1);
+    assert.equal(sub.第一档花费上限, 1000);
+    assert.equal(sub.第一档余额阈值, 100);
+    assert.equal(sub.第一档充值金额, 100);
+    assert.equal(sub.第二档花费下限, 1000);
+    assert.equal(sub.第二档余额阈值, 50);
+    assert.equal(sub.第二档充值金额, 150);
+    assert.equal(sub.ROI上涨充值金额, 100);
+    assert.equal(sub.连续充值未增单次数, 3);
+    assert.equal(sub.暂停分钟数, 30);
+    assert.equal(other.子账号[0].子账号ID, "88022");
+    assert.equal(other.子账号[0].计划ROI, 2);
+
+    const extra = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subaccounts: [
+          { 店铺名称: "松郁", 京准通主账户ID: "88001", 子账号ID: "88011", 子账号名称: "松郁-主投", 花费: 10, ROI: 1, 余额: 20 },
+          { 店铺名称: "松郁", 京准通主账户ID: "88001", 子账号ID: "88012", 子账号名称: "松郁-未下发", 花费: 1, ROI: 1, 余额: 1 },
+        ],
+      }),
+    });
+    assert.equal(extra.res.status, 201);
+
+    const ack = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "ack", machineId: "han-worker-01", version, status: "success" }),
+    });
+    assert.equal(ack.body.status, "已同步");
+    const rules = await json(base, "/api/han/worker?view=rules");
+    assert.equal(rules.body.rows.find((row) => row.subAccountId === "88011").syncStatus, "已同步");
+    assert.equal(rules.body.rows.find((row) => row.subAccountId === "88011").plannedRoi, 2.1);
+    assert.equal(rules.body.rows.find((row) => row.subAccountId === "88022").syncStatus, "已同步");
+    assert.equal(rules.body.rows.find((row) => row.subAccountId === "88012").syncStatus, "待同步");
+    assert.equal(rules.body.syncStatus, "待同步");
   });
 });
 

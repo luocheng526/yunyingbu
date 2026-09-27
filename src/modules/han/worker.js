@@ -152,6 +152,8 @@ function emptyState() {
     shopMasters: [],
     subMasters: [],
     shopStatuses: [],
+    issues: {},
+    syncedSubs: {},
   };
 }
 
@@ -374,6 +376,34 @@ function shopDirectory(state) {
 
 function ruleKey(row) {
   return [row.store, row.accountId, row.subAccountId].join("\0");
+}
+
+function documentSync(state) {
+  const keys = ruleIdentities(state)
+    .filter((row) => row.subAccountId && !row.deleted)
+    .map((row) => ruleKey(row));
+  if (!keys.length) {
+    return "待同步";
+  }
+  const marks = keys.map((key) => (state.syncedSubs || {})[key]);
+  if (marks.every((mark) => mark && Number(mark.version) === Number(state.version) && mark.status === "success")) {
+    return "已同步";
+  }
+  if (marks.some((mark) => mark && Number(mark.version) === Number(state.version) && mark.status === "failed")) {
+    return "同步失败";
+  }
+  return "待同步";
+}
+
+function rowSync(state, row) {
+  const mark = (state.syncedSubs || {})[ruleKey(row)];
+  if (!mark || Number(mark.version) !== Number(state.version)) {
+    return { status: "待同步", syncedAt: mark?.syncedAt || "" };
+  }
+  return {
+    status: mark.status === "failed" ? "同步失败" : "已同步",
+    syncedAt: mark.syncedAt || "",
+  };
 }
 
 function toWorkerSub(row) {
@@ -641,10 +671,10 @@ export function createWorkerMethods(db, ensure) {
 
   function editorRows(state, includeDeleted = false) {
     const rules = new Map(state.rules.map((row) => [ruleKey(row), row]));
-    const sync = latestSync(state);
     return ruleIdentities(state, includeDeleted).map((sub) => {
       const saved = rules.get(ruleKey(sub));
       const rule = materializeRule(saved || { store: sub.store, accountId: sub.accountId, subAccountId: sub.subAccountId, subAccountName: sub.subAccountName });
+      const sync = rowSync(state, sub);
       return {
         ...rule,
         subAccountName: sub.subAccountName || rule.subAccountName,
@@ -731,7 +761,7 @@ export function createWorkerMethods(db, ensure) {
         version: state.version,
         updatedAt: state.updatedAt,
         updatedBy: state.updatedBy,
-        syncStatus: state.syncStatus,
+        syncStatus: documentSync(state),
         runListSaved: state.runs.length > 0,
         runShops: runs.filter((row) => row.enabled).map((row) => row.store),
         shopRuns: runs,
@@ -761,41 +791,66 @@ export function createWorkerMethods(db, ensure) {
         return { ok: true, changed: false, version, updatedAt: state.updatedAt, machineId: machine };
       }
       const runSaved = state.runs.length > 0;
-      const enabled = new Set(state.runs.filter((row) => row.enabled).map((row) => row.store));
+      const runByStore = new Map(state.runs.map((row) => [row.store, row]));
       const rules = new Map(state.rules.map((row) => [ruleKey(row), row]));
-      const byShop = new Map();
+      const subsByStore = new Map();
       for (const sub of ruleIdentities(state)) {
-        if (runSaved && !enabled.has(sub.store)) {
+        if (!sub.subAccountId || sub.deleted) {
           continue;
         }
-        const run = state.runs.find((row) => row.store === sub.store);
-        if (run && run.machineId && machine && run.machineId !== machine) {
-          continue;
+        if (!subsByStore.has(sub.store)) {
+          subsByStore.set(sub.store, []);
         }
-        if (!byShop.has(sub.store)) {
-          byShop.set(sub.store, {
-            店铺名称: sub.store,
-            京准通主账户ID: String(sub.accountId || ""),
-            启用: true,
-            执行机: run?.machineId || "",
-            子账号: [],
-          });
-        }
-        const shop = byShop.get(sub.store);
-        const saved = rules.get(ruleKey(sub));
-        const rule = materializeRule(saved || { store: sub.store, accountId: sub.accountId, subAccountId: sub.subAccountId, subAccountName: sub.subAccountName });
-        shop.子账号.push(toWorkerSub({ ...rule, subAccountName: sub.subAccountName || rule.subAccountName }));
+        subsByStore.get(sub.store).push(sub);
       }
-      const shops = [...byShop.values()];
+      const issuedKeys = [];
+      const runShops = [];
+      const shops = shopDirectory(state)
+        .filter((shop) => !shop.deleted)
+        .map((shop) => {
+          const run = runByStore.get(shop.store);
+          const enabled = run ? Boolean(run.enabled) : !runSaved;
+          const assignedElsewhere = Boolean(run?.machineId && machine && run.machineId !== machine);
+          const accountId = String(shop.accountId || "");
+          const running = enabled && !assignedElsewhere && Boolean(accountId);
+          if (running && !runShops.includes(accountId)) {
+            runShops.push(accountId);
+          }
+          const subs = (subsByStore.get(shop.store) || []).map((sub) => {
+            issuedKeys.push(ruleKey(sub));
+            const saved = rules.get(ruleKey(sub));
+            const rule = materializeRule(saved || {
+              store: sub.store,
+              accountId: sub.accountId,
+              subAccountId: sub.subAccountId,
+              subAccountName: sub.subAccountName,
+            });
+            return toWorkerSub({ ...rule, subAccountName: sub.subAccountName || rule.subAccountName });
+          });
+          return {
+            店铺名称: shop.store,
+            京准通主账户ID: String(shop.accountId || ""),
+            启用: running,
+            执行机: shop.machineId || run?.machineId || "",
+            子账号: subs,
+          };
+        });
+      state.issues = state.issues || {};
+      state.issues[String(version)] = issuedKeys;
+      const issueVersions = Object.keys(state.issues).map(Number).sort((a, b) => a - b);
+      for (const oldVersion of issueVersions.slice(0, Math.max(0, issueVersions.length - 20))) {
+        delete state.issues[String(oldVersion)];
+      }
+      await save(state);
       return {
         ok: true,
         changed: true,
         version,
         updatedAt: state.updatedAt,
         machineId: machine,
-        runShops: shops.map((shop) => shop.店铺名称),
+        runShops,
         shops,
-        note: "网站只下发规则。本地机用京小洁的花费、ROI、余额命中规则，再执行充值，并把花费、ROI、余额、京麦成交金额和充值记录回传。不要把京准通 Cookie 回传。",
+        note: "shops 始终包含未删除店铺和完整子账号规则。runShops 是当前要运行的京准通主账户ID；为空表示在线待机、不执行充值。网站不接收京准通 Cookie。",
       };
     },
 
@@ -854,10 +909,16 @@ export function createWorkerMethods(db, ensure) {
         throw httpError(400, "status 必须是 success 或 failed");
       }
       const status = statusText;
+      const syncedAt = new Date().toISOString();
       state.machines = state.machines.filter((row) => row.machineId !== machineId).concat([
-        { machineId, version, status, syncedAt: new Date().toISOString(), message: text(body.message, 200) },
+        { machineId, version, status, syncedAt, message: text(body.message, 200) },
       ]);
-      state.syncStatus = status === "success" ? "已同步" : "同步失败";
+      const issued = (state.issues || {})[String(version)] || [];
+      state.syncedSubs = state.syncedSubs || {};
+      for (const key of issued) {
+        state.syncedSubs[key] = { version: Number(version), status, syncedAt };
+      }
+      state.syncStatus = documentSync(state);
       await save(state);
       return { ok: true, machineId, version, status: status === "success" ? "已同步" : "同步失败" };
     },
