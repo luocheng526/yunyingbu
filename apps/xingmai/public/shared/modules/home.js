@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.719-home-headset */
+/* xm-module-home 0.1.723-home-headset */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1937,10 +1937,12 @@
       ".xm-hm-live-filter-right{display:flex;align-items:center;gap:16px;flex:0 0 auto}" +
       ".xm-hm-live-heads,.xm-hm-live-refresh{border:0;background:transparent;color:var(--xm-primary);cursor:pointer;padding:0 2px;font:inherit;font-size:14px;line-height:40px;white-space:nowrap}" +
       ".xm-hm-live-refresh:disabled{opacity:.55;cursor:wait}" +
-      ".xm-hm-head-pop{position:absolute;top:0;left:0;z-index:9;width:300px;max-height:min(72vh,560px);overflow:auto;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:10px}" +
+      ".xm-hm-head-pop{position:absolute;top:0;left:0;z-index:9;width:540px;max-width:calc(100vw - 24px);max-height:min(72vh,640px);overflow:auto;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:10px}" +
       ".xm-hm-head-pop[hidden]{display:none}" +
       ".xm-hm-head-pop h3{margin:0 0 8px;font-size:13px}" +
       ".xm-hm-head-pop .xm-hm-head-hint{margin:0 0 8px;color:var(--xm-muted);font-size:12px;line-height:1.5}" +
+      "#xm-hm-head-opts{display:grid;grid-template-columns:1fr 1fr;column-gap:16px;align-items:start}" +
+      "#xm-hm-head-opts .xm-hm-pop-all,#xm-hm-head-opts .xm-hm-head-sec{grid-column:1/-1}" +
       ".xm-hm-head-pop .xm-hm-head-sec{margin:8px 0 4px;color:var(--xm-muted);font-size:12px;font-weight:600}" +
       ".xm-hm-head-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink);cursor:pointer;-webkit-user-select:none;user-select:none}" +
       ".xm-hm-live-filter select{width:100%;height:40px;box-sizing:border-box;border:1px solid #e4e7ed;border-radius:8px;padding:0 36px 0 14px;font:inherit;font-size:14px;color:var(--xm-ink);background:#fff;-webkit-appearance:none;appearance:none}" +
@@ -2160,6 +2162,15 @@
     if (left + pop.offsetWidth > p.width - 8) {
       left = Math.max(8, p.width - pop.offsetWidth - 8);
     }
+    var popH = pop.offsetHeight;
+    var spaceBelow = p.height - (b.bottom - p.top) - 8;
+    var spaceAbove = b.top - p.top - 8;
+    if (top + popH > p.height - 8 && spaceAbove > spaceBelow) {
+      top = Math.max(8, b.top - p.top - popH - 8);
+    }
+    if (top + popH > p.height - 8) {
+      top = Math.max(8, p.height - popH - 8);
+    }
     pop.style.top = Math.round(top) + "px";
     pop.style.left = Math.round(left) + "px";
   }
@@ -2195,7 +2206,7 @@
     hideCardTip();
     hideLineTip(root);
     var feeDraft = liveFeeDraft(root);
-    board.setAttribute("data-hm-js", "0.1.719-home-headset");
+    board.setAttribute("data-hm-js", "0.1.723-home-headset");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
