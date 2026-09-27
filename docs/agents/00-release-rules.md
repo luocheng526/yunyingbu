@@ -44,6 +44,8 @@
 
 ## 交单
 
+线上登录见 [00-prod-admin.md](00-prod-admin.md)。演示号已停用，只准用罗成。申请人仍写 `罗成运营部主脑`。不要把密码写进单据标题或登录页。
+
 ```
 POST /api/releases
 Cookie: 登录会话
