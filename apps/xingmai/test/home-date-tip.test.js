@@ -143,6 +143,13 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function shopCols/);
   assert.match(homeJs, /SHOP_CARD_KEYS = \["adRatio", "profit", "grossMargin", "refundRate", "netGoodsCost"\]/);
   assert.match(homeJs, /LIVE_CARD_KEYS = \["ad", "roi", "livePay", "livePaid"\]/);
+  assert.match(homeJs, /xm-home-live-card-order/);
+  assert.match(homeJs, /function applyLiveCardMove/);
+  assert.match(homeJs, /function liveRowPad/);
+  assert.match(homeJs, /--xm-hm-live-row/);
+  assert.match(homeJs, /closest\("\.xm-hm-live-cards"\)/);
+  assert.match(homeJs, /\.xm-hm-live \.xm-hm-table th\{border-right:1px dashed #c8ced8\}/);
+  assert.match(homeJs, /data-card="'\s*\+\s*escapeHtml\(card\.key\)/);
   assert.match(homeJs, /\.xm-hm-live\{display:flex;flex-direction:column;gap:20px\}/);
   assert.match(homeJs, /\.xm-hm-live-charts\{display:grid;grid-template-columns:1fr 1fr;gap:20px\}/);
   assert.match(homeJs, /\.xm-hm-live-cards\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\);gap:20px/);

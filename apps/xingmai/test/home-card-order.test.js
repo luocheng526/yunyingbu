@@ -45,3 +45,38 @@ test("visible card drag keeps hidden keys in place", () => {
 test("settings drag reorders the full list", () => {
   assert.deepEqual(applyCardMove(["a", "b", "c"], [], "c", "a", false), ["c", "a", "b"]);
 });
+
+function applyLiveCardMove(full, fromKey, toKey) {
+  const seq = full.slice();
+  const from = seq.indexOf(fromKey);
+  const to = seq.indexOf(toKey);
+  if (from < 0 || to < 0 || from === to) {
+    return seq;
+  }
+  seq.splice(from, 1);
+  seq.splice(to, 0, fromKey);
+  return seq;
+}
+
+test("live cards persist their own drag order", () => {
+  assert.match(homeJs, /xm-home-live-card-order/);
+  assert.match(homeJs, /function applyLiveCardMove/);
+  assert.match(homeJs, /function saveLiveCardOrder/);
+  assert.match(homeJs, /sortLive = !!card\.closest\("\.xm-hm-live-cards"\)/);
+  assert.match(homeJs, /saveLiveCardOrder\(applyLiveCardMove/);
+  assert.deepEqual(applyLiveCardMove(["ad", "roi", "livePay", "livePaid"], "livePaid", "ad"), [
+    "livePaid",
+    "ad",
+    "roi",
+    "livePay"
+  ]);
+});
+
+test("live paid table headers can shrink row spacing", () => {
+  assert.match(homeJs, /function liveRowHit/);
+  assert.match(homeJs, /function saveLiveRowPad/);
+  assert.match(homeJs, /--xm-hm-live-row/);
+  assert.match(homeJs, /\.xm-hm-live \.xm-hm-table th,.xm-hm-live \.xm-hm-table td\{padding:var\(--xm-hm-live-row,4px\) 6px/);
+  assert.match(homeJs, /white-space:nowrap/);
+  assert.match(homeJs, /\.xm-hm-teams \.xm-hm-table th, \.xm-hm-live \.xm-hm-table th/);
+});

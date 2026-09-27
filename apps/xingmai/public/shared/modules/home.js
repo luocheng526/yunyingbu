@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.691-home-jingmai */
+/* xm-module-home 0.1.692-home-livepack */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -526,6 +526,9 @@
   var shopSort = { key: "", dir: "desc" };
   var shopColW = {};
   function colKey(table) {
+    if (table && table.closest && table.closest(".xm-hm-live")) {
+      return "live";
+    }
     var box = table && table.closest && table.closest("[data-team]");
     return box ? box.getAttribute("data-team") || "t" : "t";
   }
@@ -553,7 +556,7 @@
     if (sum) table.style.width = table.style.minWidth = table.style.maxWidth = sum + "px";
   }
   function restoreShopColW(root) {
-    Array.prototype.forEach.call(root.querySelectorAll(".xm-hm-teams .xm-hm-table"), function (table) {
+    Array.prototype.forEach.call(root.querySelectorAll(".xm-hm-teams .xm-hm-table, .xm-hm-live .xm-hm-table"), function (table) {
       if (shopColW[colKey(table)]) applyColW(table);
     });
   }
@@ -830,13 +833,83 @@
     );
   }
   var LIVE_CARD_KEYS = ["ad", "roi", "livePay", "livePaid"];
+  function liveCardOrderFrom(keys) {
+    var defs = LIVE_CARD_KEYS.slice();
+    var seen = {};
+    var out = [];
+    (keys || []).forEach(function (key) {
+      if (defs.indexOf(key) !== -1 && !seen[key]) {
+        seen[key] = true;
+        out.push(key);
+      }
+    });
+    defs.forEach(function (key) {
+      if (!seen[key]) {
+        out.push(key);
+      }
+    });
+    return out;
+  }
+  function liveCardOrder() {
+    var saved = [];
+    try {
+      saved = JSON.parse(localStorage.getItem("xm-home-live-card-order") || "[]");
+    } catch (_err) {
+      saved = [];
+    }
+    if (Object.prototype.toString.call(saved) !== "[object Array]") {
+      saved = [];
+    }
+    return liveCardOrderFrom(saved);
+  }
+  function saveLiveCardOrder(keys) {
+    try {
+      localStorage.setItem("xm-home-live-card-order", JSON.stringify(liveCardOrderFrom(keys)));
+    } catch (_err) {}
+  }
+  function applyLiveCardMove(fromKey, toKey) {
+    var seq = liveCardOrder();
+    var from = seq.indexOf(fromKey);
+    var to = seq.indexOf(toKey);
+    if (from < 0 || to < 0 || from === to) {
+      return seq;
+    }
+    seq.splice(from, 1);
+    seq.splice(to, 0, fromKey);
+    return seq;
+  }
+  function liveRowPadClamp(n) {
+    var v = Number(n);
+    if (!isFinite(v)) {
+      return 4;
+    }
+    return Math.max(1, Math.min(16, Math.round(v)));
+  }
+  function liveRowPad() {
+    try {
+      return liveRowPadClamp(localStorage.getItem("xm-home-live-row") || 4);
+    } catch (_err) {
+      return 4;
+    }
+  }
+  function saveLiveRowPad(n) {
+    try {
+      localStorage.setItem("xm-home-live-row", String(liveRowPadClamp(n)));
+    } catch (_err) {}
+  }
+  function applyLiveRowPad(root) {
+    var box = root && root.querySelector("#xm-hm-live");
+    if (box) {
+      box.style.setProperty("--xm-hm-live-row", liveRowPad() + "px");
+    }
+  }
   function pickLiveCards(cards) {
     var map = {};
     (cards || []).forEach(function (card) {
       if (card && card.key) map[card.key] = card;
     });
     var blank = blankLive().cards;
-    return LIVE_CARD_KEYS.map(function (key) {
+    return liveCardOrder().map(function (key) {
       return map[key] || blank.filter(function (card) { return card.key === key; })[0];
     }).filter(Boolean);
   }
@@ -1072,7 +1145,9 @@
   }
   function liveCardHtml(card) {
     return (
-      '<article class="xm-hm-card"><div class="xm-hm-card-head"><span>' +
+      '<article class="xm-hm-card" data-card="' +
+      escapeHtml(card.key) +
+      '"><div class="xm-hm-card-head"><span>' +
       escapeHtml(card.label) +
       "</span></div><div class=\"xm-hm-value\">" +
       escapeHtml(card.value) +
@@ -1222,8 +1297,12 @@
       ".xm-hm-line-row em{font-style:normal;font-variant-numeric:tabular-nums}" +
       ".xm-hm-line-sub{padding:0 0 0 14px;color:#c0c4cc;font-size:11px;display:flex;justify-content:space-between;gap:12px}" +
       ".xm-hm-live-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;width:100%}" +
-      ".xm-hm-live-cards .xm-hm-card{text-align:center}" +
-      ".xm-hm-live .xm-hm-table{min-width:960px}" +
+      ".xm-hm-live-cards .xm-hm-card{text-align:center;cursor:grab}" +
+      ".xm-hm-live-cards .xm-hm-card.is-hold{cursor:grabbing}" +
+      ".xm-hm-live .xm-hm-table{min-width:960px;table-layout:fixed;border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums}" +
+      ".xm-hm-live .xm-hm-table th,.xm-hm-live .xm-hm-table td{padding:var(--xm-hm-live-row,4px) 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2;box-sizing:border-box}" +
+      ".xm-hm-live .xm-hm-table th{border-right:1px dashed #c8ced8}" +
+      ".xm-hm-live .xm-hm-table th:last-child,.xm-hm-live .xm-hm-table td:last-child{border-right:0}" +
       ".xm-hm-live .xm-hm-panel{overflow-x:auto}" +
       ".xm-hm-card,.xm-hm-pop label{-webkit-user-select:none;user-select:none}" +
       ".xm-hm-card{position:relative;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;padding:12px 14px 10px;box-shadow:var(--xm-shadow);min-height:104px;overflow:visible}" +
@@ -1346,7 +1425,7 @@
     var liveCards = pickLiveCards(live.cards);
     hideCardTip();
     hideLineTip(root);
-    board.setAttribute("data-hm-js", "0.1.691-home-jingmai");
+    board.setAttribute("data-hm-js", "0.1.692-home-livepack");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -1364,7 +1443,6 @@
     teamBox.hidden = !teamView;
     teamBox.innerHTML = teamsCompareHtml(teams, hide, state.view === "chief");
     teamBox.style.setProperty("--xm-hm-team-cols", String(Math.max(teamBox.querySelectorAll(".xm-hm-team").length, 1)));
-    restoreShopColW(root);
     root.querySelector("#xm-hm-live").hidden = state.view !== "live";
     root.querySelector("#xm-hm-board").hidden = state.view !== "board";
     root.querySelector("#xm-hm-live").innerHTML =
@@ -1384,6 +1462,8 @@
         return liveShopRowHtml(row, i);
       }).join("") +
       "</tbody></table></div>";
+    applyLiveRowPad(root);
+    restoreShopColW(root);
     root.querySelector("#xm-hm-ladders").innerHTML = (state.ladders || blankLadders()).map(ladderHtml).join("");
     var gapText = ((state.view === "chief" ? state.chiefGaps : state.teamGaps) || state.gaps || []).filter(function (item) {
       return item.indexOf("人管有店") !== -1 || item.indexOf("韩梦凯 ·") !== -1;
@@ -2826,12 +2906,14 @@
       var sortDragging = false;
       var sortSettings = false;
       var sortTeam = false;
+      var sortLive = false;
       var sortStartX = 0;
       var sortStartY = 0;
       var sortSwallow = false;
       var colDrag = null;
+      var rowDrag = null;
       function shopColHit(event) {
-        var cell = event.target.closest && event.target.closest(".xm-hm-teams .xm-hm-table th");
+        var cell = event.target.closest && event.target.closest(".xm-hm-teams .xm-hm-table th, .xm-hm-live .xm-hm-table th");
         if (!cell) return null;
         var rect = cell.getBoundingClientRect();
         var x = event.clientX || 0;
@@ -2844,6 +2926,20 @@
         }
         return null;
       }
+      function liveRowHit(event) {
+        if (shopColHit(event)) {
+          return null;
+        }
+        var cell = event.target.closest && event.target.closest(".xm-hm-live .xm-hm-table th");
+        if (!cell) {
+          return null;
+        }
+        var rect = cell.getBoundingClientRect();
+        if (rect.bottom - (event.clientY || 0) <= 8) {
+          return { start: liveRowPad(), y: event.clientY || 0 };
+        }
+        return null;
+      }
       function clearTextSelection() {
         var sel = window.getSelection && window.getSelection();
         if (sel && sel.removeAllRanges) sel.removeAllRanges();
@@ -2853,6 +2949,7 @@
         sortDragging = false;
         sortSettings = false;
         sortTeam = false;
+        sortLive = false;
         clearTextSelection();
         Array.prototype.forEach.call(root.querySelectorAll(".is-hold, .is-over"), function (el) {
           el.classList.remove("is-hold", "is-over");
@@ -2894,6 +2991,15 @@
           clearTextSelection();
           return;
         }
+        var rowHit = liveRowHit(event);
+        if (rowHit) {
+          if (event.cancelable) {
+            event.preventDefault();
+          }
+          rowDrag = rowHit;
+          clearTextSelection();
+          return;
+        }
         if (event.target.closest("i") || event.target.closest("input") || event.target.closest("button") || event.target.closest("a")) {
           return;
         }
@@ -2906,14 +3012,17 @@
           if (event.cancelable) event.preventDefault();
           sortFrom = teamCol.getAttribute("data-name") || "";
           sortTeam = true;
+          sortLive = false;
           sortSettings = false;
           clearTextSelection();
           return;
         }
-        if (card && (card.closest("#xm-hm-kpis") || card.closest("#xm-hm-teams"))) {
+        if (card && (card.closest("#xm-hm-kpis") || card.closest("#xm-hm-teams") || card.closest(".xm-hm-live-cards"))) {
           if (event.cancelable) event.preventDefault();
           sortFrom = card.getAttribute("data-card") || "";
           sortSettings = false;
+          sortLive = !!card.closest(".xm-hm-live-cards");
+          sortTeam = false;
           clearTextSelection();
           return;
         }
@@ -2939,8 +3048,17 @@
           document.body.style.cursor = "col-resize";
           return;
         }
+        if (rowDrag) {
+          if (event.cancelable) {
+            event.preventDefault();
+          }
+          saveLiveRowPad(rowDrag.start + (y - rowDrag.y));
+          applyLiveRowPad(root);
+          document.body.style.cursor = "row-resize";
+          return;
+        }
         if (!sortFrom && !sortDragging) {
-          document.body.style.cursor = shopColHit(event) ? "col-resize" : "";
+          document.body.style.cursor = liveRowHit(event) ? "row-resize" : shopColHit(event) ? "col-resize" : "";
         }
         if (sortFrom || sortDragging) {
           clearTextSelection();
@@ -2984,6 +3102,12 @@
           sortFinish();
           return;
         }
+        if (rowDrag) {
+          rowDrag = null;
+          document.body.style.cursor = "";
+          sortFinish();
+          return;
+        }
         var moved = sortDragging && sortFrom;
         var toEl = hitSortEl(event);
         var toKey = toEl
@@ -2992,6 +3116,8 @@
         if (moved && toKey && toKey !== sortFrom) {
           if (sortTeam) {
             saveTeamCols(sortFrom, toKey, state.view === "chief");
+          } else if (sortLive) {
+            saveLiveCardOrder(applyLiveCardMove(sortFrom, toKey));
           } else {
             saveCardOrder(applyCardMove(sortFrom, toKey, !sortSettings));
           }
