@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.224-split-ops";
+    const href = "/people.css?v=0.1.225-owner-audit";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -246,7 +246,7 @@
         '<div class="org-filter-pop" id="org-filter-pop" hidden></div></div>' +
         '<div class="org-pane" data-pane="members" hidden>' +
         '<section class="panel"><h2>身份名册</h2>' +
-        '<p class="lead">表头可筛总监、经理、主管、储备、运营、助理、状态。总监、经理、主管、储备、运营、助理双击可改，仅罗成、韩梦凯、沈子晗能改，其他人不能改。导入按姓名合并：一模一样的名字覆盖原行，对不上的名字当新员工，并落盘，强制刷新还在。勾选后可统一改密码或删除。点新增人员弹出对话框。</p>' +
+        '<p class="lead">人员是人员，不一定有店铺；新人可以还没分配。表头可筛总监、经理、主管、储备、运营、助理、状态。总监、经理、主管、储备、运营、助理双击可改，仅罗成、韩梦凯、沈子晗能改，其他人不能改。导入按姓名合并：一模一样的名字覆盖原行，对不上的名字当新员工，并落盘，强制刷新还在。勾选后可统一改密码或删除。点新增人员弹出对话框。</p>' +
         '<div class="org-kpis" id="people-kpis"></div>' +
         '<div class="org-toolbar">' +
         '<div class="org-search-form" id="people-search-form">' +
@@ -290,7 +290,7 @@
         '<div class="org-filter-pop" id="people-filter-pop" hidden></div></section></div>' +
         '<div class="org-pane" data-pane="rights" hidden>' +
         '<section class="panel rights-fit-panel"><h2>管辖</h2>' +
-        '<p class="lead">只读对照。表头统一是经理、主管、储备、运营、助理、店铺。卡片只写名字。没有助理写无。人和店分别对照成员管理、店铺主数据。</p>' +
+        '<p class="lead">只读对照。店铺必有归属：最小可以是运营或助理，也可以是主管、储备或经理自己；填了几层就几层一起管。人员可以还没分店，责权仍列出人员对不上。表头是经理、主管、储备、运营、助理、店铺。</p>' +
         '<div class="rights-watch" id="rights-watch"></div>' +
         '<div class="rights-tree-toolbar"><button type="button" id="rights-refresh">刷新树和看板</button><span class="muted" id="rights-checked">检查时间：—</span></div>' +
         '<div class="rights-tree-chart" id="rights-tree-chart"></div></section></div>' +
@@ -1573,7 +1573,7 @@
         host.innerHTML =
           '<div class="rights-watch-banner' +
           (lastWatch.conflict ? " is-conflict" : "") +
-          '"><div>组织人员以花名册为准，店铺、店铺ID、商家id以店铺主数据为准。刷新只读这两边，不另开一套权。待补全要点数字才展开。</div><strong>' +
+          '"><div>店铺必有归属，人员可以没有店。组织人员以花名册为准，店铺归属以店铺主数据为准。点「人员对不上」看名单。待补全要点数字才展开。</div><strong>' +
           (lastWatch.conflict ? "存在冲突" : "暂无冲突") +
           "</strong></div>" +
           '<div class="rights-watch-kpis">' +
