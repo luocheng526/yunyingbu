@@ -7,7 +7,8 @@ import {
   DEMO_USERNAME,
   dbMode,
   query,
-  resetStoreForTests
+  resetStoreForTests,
+  setPeopleLoginForTests
 } from "../src/modules/profile/auth.js";
 import { patchAppSource } from "../src/modules/profile/patch-app.js";
 
@@ -180,6 +181,49 @@ test("duty catalog lists granted items and can register a new duty", async () =>
     assert.equal(added.res.status, 200);
     assert.equal(added.json.total, before + 1);
     assert.ok(added.json.groups.some((group) => group.items.some((item) => item.id === "agents.future")));
+  });
+});
+
+test("organization people accounts can log in with roster password", async () => {
+  setPeopleLoginForTests([
+    { name: "沈子晗", username: "沈子晗", password: "OrgLogin-test1", role: "经理", department: "沈子晗运营中心", status: "在职" },
+    { name: "管理员", username: DEMO_USERNAME, password: "OrgLogin-admin1", role: "总监", status: "在职" }
+  ]);
+  await withServer(async (base) => {
+    const bad = await request(base, "/api/auth/login", {
+      method: "POST",
+      body: { username: "沈子晗", password: "bad" },
+      redirect: "follow"
+    });
+    assert.equal(bad.res.status, 401);
+
+    const ok = await request(base, "/api/auth/login", {
+      method: "POST",
+      body: { username: "沈子晗", password: "OrgLogin-test1" },
+      redirect: "follow"
+    });
+    assert.equal(ok.res.status, 200);
+    assert.match(ok.cookie, /mk_sid=/);
+    assert.equal(ok.json.user.username, "沈子晗");
+    const me = await request(base, "/api/auth/me", { cookie: ok.cookie, redirect: "follow" });
+    assert.equal(me.res.status, 200);
+    assert.equal(me.json.username, "沈子晗");
+    assert.equal(me.json.department, "沈子晗运营中心");
+
+    const admin = await request(base, "/api/auth/login", {
+      method: "POST",
+      body: { username: DEMO_USERNAME, password: DEMO_INITIAL_PASSWORD },
+      redirect: "follow"
+    });
+    assert.equal(admin.res.status, 200);
+
+    const adminOrg = await request(base, "/api/auth/login", {
+      method: "POST",
+      body: { username: DEMO_USERNAME, password: "OrgLogin-admin1" },
+      redirect: "follow"
+    });
+    assert.equal(adminOrg.res.status, 200);
+    assert.equal(adminOrg.json.user.username, "罗成");
   });
 });
 

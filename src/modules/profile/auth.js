@@ -196,6 +196,7 @@ export const DEMO_INITIAL_PASSWORD = "ChangeMe123!";
 const KEYLEN = 64;
 const users = new Map();
 const sessions = new Map();
+const peopleRoster = new Map();
 
 function hashPasswordSync(password) {
   const salt = randomBytes(16);
@@ -267,6 +268,126 @@ function resolveUser(username) {
     return users.get(DEMO_USERNAME) ?? null;
   }
   return users.get(trimmed) ?? null;
+}
+
+function peopleKey(username) {
+  return String(username || "").trim();
+}
+
+export function setPeopleLoginForTests(rows) {
+  peopleRoster.clear();
+  for (const row of rows || []) {
+    const username = peopleKey(row.username || row.name);
+    if (!username) {
+      continue;
+    }
+    peopleRoster.set(username, {
+      name: String(row.name || username).trim(),
+      username,
+      password: String(row.password || ""),
+      department: String(row.department || row.center || ""),
+      center: String(row.center || ""),
+      role: String(row.role || ""),
+      status: String(row.status || "在职")
+    });
+  }
+}
+
+function peoplePlainEquals(left, right) {
+  const a = Buffer.from(String(left));
+  const b = Buffer.from(String(right));
+  if (!a.length || a.length !== b.length) {
+    return false;
+  }
+  return timingSafeEqual(a, b);
+}
+
+async function peoplePasswordMatches(password, stored) {
+  if (typeof stored !== "string" || !stored) {
+    return false;
+  }
+  if (stored.startsWith("scrypt:")) {
+    return verifyPassword(password, stored);
+  }
+  return peoplePlainEquals(password, stored);
+}
+
+function personActive(person) {
+  const status = String(person?.status || "在职").trim();
+  return !status || status === "在职" || status === "active";
+}
+
+function pickPersonRow(rows, username) {
+  const list = Array.isArray(rows) ? rows : [];
+  const exact = list.find((row) => peopleKey(row.username) === username);
+  return exact || list.find((row) => peopleKey(row.name) === username) || null;
+}
+
+async function findPeopleCredential(username) {
+  const trimmed = peopleKey(username);
+  if (!trimmed) {
+    return null;
+  }
+  const aliases =
+    trimmed.toLowerCase() === "luocheng" ? [trimmed, DEMO_USERNAME] : [trimmed];
+  if (dbMode() !== "mysql") {
+    for (const key of aliases) {
+      const hit = peopleRoster.get(key);
+      if (hit) {
+        return hit;
+      }
+    }
+    return null;
+  }
+  try {
+    const [rows] = await query(
+      `SELECT name, username, password, department, center, role, status
+       FROM people
+       WHERE username IN (?, ?) OR name IN (?, ?)
+       LIMIT 8`,
+      [aliases[0], aliases[aliases.length - 1], aliases[0], aliases[aliases.length - 1]]
+    );
+    return pickPersonRow(rows, aliases[aliases.length - 1]);
+  } catch (err) {
+    console.error("people login lookup failed", err);
+    return null;
+  }
+}
+
+function userFromPeople(person, existing) {
+  const username = peopleKey(person.username || person.name);
+  const displayName = String(person.name || username).trim();
+  return {
+    username,
+    displayName,
+    email: existing?.email || "",
+    phone: existing?.phone || "",
+    ...identityDefaults(username, displayName),
+    department: person.department || person.center || existing?.department || "",
+    role: person.role || existing?.role || "",
+    passwordHash: existing?.passwordHash || ""
+  };
+}
+
+async function authenticate(username, password) {
+  const existing = resolveUser(username);
+  if (existing && (await verifyPassword(password, existing.passwordHash))) {
+    return existing;
+  }
+  const person = await findPeopleCredential(username);
+  if (!person || !personActive(person) || !(await peoplePasswordMatches(password, person.password))) {
+    return null;
+  }
+  if (existing && existing.username === DEMO_USERNAME) {
+    return existing;
+  }
+  const user = userFromPeople(person, existing);
+  user.passwordHash = await hashPassword(password);
+  users.set(user.username, user);
+  persistUser(user).catch(function (err) {
+    console.error("people login persist failed", err);
+  });
+  return user;
 }
 
 seed();
@@ -381,6 +502,7 @@ export function resetStoreForTests() {
   setDbMode("memory");
   users.clear();
   sessions.clear();
+  peopleRoster.clear();
   resetDutyCatalogForTests();
   seed();
 }
@@ -495,8 +617,8 @@ authRouter.post("/login", async (req, res) => {
     res.status(401).json({ ok: false, error: "请输入用户名和密码" });
     return;
   }
-  const user = resolveUser(username);
-  if (!user || !(await verifyPassword(password, user.passwordHash))) {
+  const user = await authenticate(username, password);
+  if (!user) {
     res.status(401).json({ ok: false, error: "用户名或密码错误" });
     return;
   }
