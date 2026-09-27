@@ -2454,14 +2454,16 @@
     if (!user) {
       return;
     }
-    const show = canSeeStaffNav(user);
+    if (canSeeStaffNav(user)) {
+      return;
+    }
     const releases = document.querySelector('.xm-menu a[href="/releases"]');
     if (releases) {
-      releases.hidden = !show;
+      releases.remove();
     }
     const people = document.querySelector('.xm-menu-group[data-xm-group="/people"]');
     if (people) {
-      people.hidden = !show;
+      people.remove();
     }
   }
 
