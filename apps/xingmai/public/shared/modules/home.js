@@ -545,10 +545,14 @@
     }
     if (idx != null && w != null) list[idx] = Math.max(48, Math.round(w));
     shopColW[key] = list;
+    var cols = table.querySelectorAll("col");
     for (i = 0; i < list.length; i += 1) {
       cw = list[i];
       if (!cw) continue;
       sum += cw;
+      if (cols[i]) {
+        cols[i].style.width = cols[i].style.minWidth = cols[i].style.maxWidth = cw + "px";
+      }
       for (r = 0; r < table.rows.length; r += 1) {
         cell = table.rows[r].cells[i];
         if (cell) cell.style.width = cell.style.minWidth = cell.style.maxWidth = cw + "px";
