@@ -214,7 +214,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.doesNotMatch(homeJs, /LIVE_CARD_KEYS = \["ad", "profit"/);
   assert.match(homeJs, /data-shop-card=/);
   assert.match(homeJs, /function liveTheadHtml/);
-  assert.match(homeJs, /label: "实时销售额"/);
+  assert.match(homeJs, /label: "京麦面板实时金额"/);
+  assert.doesNotMatch(homeJs, /label: "实时销售额"/);
   assert.match(homeJs, /<th><span>运营<\/span><\/th><\/tr>/);
   assert.match(homeJs, /<th><span>排名<\/span><\/th><th><span>店铺名称<\/span><\/th>' \+/);
   assert.match(homeJs, /function sortedShops/);

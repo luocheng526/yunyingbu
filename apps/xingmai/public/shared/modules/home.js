@@ -1366,7 +1366,7 @@
   var LIVE_SHOP_HEADS = [
     { label: "排名", w: "56px" },
     { label: "店铺名称", w: "16%" },
-    { label: "实时销售额" },
+    { label: "京麦面板实时金额" },
     { label: "实时付费金额" },
     { label: "实时付费ROI" },
     { label: "实时付费成交额" },
@@ -1771,7 +1771,7 @@
     root.querySelector("#xm-hm-note").textContent = gapText
       ? "人管对不上：" + gapText
       : state.view === "live"
-        ? "实时销售额和实时付费都走星脉 ERP，每5分钟拉一次。"
+        ? "京麦面板实时金额和实时付费都走星脉 ERP，每5分钟拉一次。"
         : "数字来自星脉 ERP。";
     root.querySelector("#xm-hm-pop h3").textContent =
       "卡片设置 · " + (state.view === "team" ? "经理团队" : state.view === "chief" ? "主管/储备" : "公司");
