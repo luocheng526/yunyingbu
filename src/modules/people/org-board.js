@@ -463,6 +463,17 @@ function countTreePeople(node) {
   return (node.synthetic ? 0 : 1) + node.children.reduce((sum, child) => sum + countTreePeople(child), 0);
 }
 
+function treeAllNames(node, names = new Set()) {
+  if (!node) {
+    return names;
+  }
+  if (!node.synthetic && cleanName(node.name)) {
+    names.add(cleanName(node.name));
+  }
+  (node.children || []).forEach((child) => treeAllNames(child, names));
+  return names;
+}
+
 function treeRoleNames(node, role, names = new Set()) {
   if (!node) {
     return names;
@@ -493,6 +504,25 @@ export function effectiveStoreOperator(row = {}) {
     return owner;
   }
   return cleanName(row.supervisor) || cleanName(row.reserve) || cleanName(row.manager) || "";
+}
+
+export function storeOwners(row = {}) {
+  const names = [];
+  function add(value) {
+    const name = cleanName(value);
+    if (name && !names.includes(name)) {
+      names.push(name);
+    }
+  }
+  add(row.manager);
+  if (!cleanName(row.manager)) {
+    add(managerBranchOfStore(row));
+  }
+  add(row.supervisor);
+  add(row.reserve);
+  add(row.operator);
+  add(row.assistant);
+  return names;
 }
 
 function isLeadRole(role) {
@@ -701,6 +731,7 @@ export function buildRightsTree(stores, roster, byName) {
       reserveName: cleanName(row.reserve),
       managerName: cleanName(row.manager),
       effectiveOperator: effectiveStoreOperator(row),
+      owners: storeOwners(row),
       hanging: !placed.op,
       shared:
         [row.manager, row.supervisor, row.reserve, row.operator || row.owner, row.assistant].filter((name) =>
@@ -757,6 +788,14 @@ function buildRightsWatch(stores, roster, byName, tree) {
         });
       }
     });
+    if (!storeOwners(row).length) {
+      issues.push({
+        kind: "店铺对不上",
+        level: "warn",
+        title: row.storeName + " 没有归属",
+        detail: "店铺主数据必须有归属。最小可以是运营或助理，也可以是主管、储备或经理自己。"
+      });
+    }
     if (!managerBranchOfStore(row)) {
       issues.push({
         kind: "店铺对不上",
@@ -782,22 +821,23 @@ function buildRightsWatch(stores, roster, byName, tree) {
       });
     }
   });
+  const onTree = treeAllNames(tree);
   roster.forEach((person) => {
-    const role = rosterLineRole(person, orgLineOf(person), byName);
-    if ((role === "运营" || role === "店长" || role === "助理") && storeCountOf(person.name, stores) === 0) {
-      issues.push({
-        kind: "店铺对不上",
-        level: "warn",
-        title: person.name + " 名下没有店铺",
-        detail: "花名册在职，店铺主数据里不是总负责人、小组负责人或所属人员。"
-      });
-    }
+    const name = cleanName(person.name);
     if (person.managerId && !roster.some((row) => row.id === person.managerId) && !listPeople().some((row) => row.id === person.managerId)) {
       issues.push({
         kind: "人员对不上",
         level: "warn",
         title: person.name + " 的上级不存在",
         detail: "花名册上级已不在名册里。"
+      });
+    }
+    if (name && !onTree.has(name)) {
+      issues.push({
+        kind: "人员对不上",
+        level: "warn",
+        title: name + " 未进入责权树",
+        detail: "成员管理在职，责权树没有这个人。人员可以还没分店，但仍应出现在责权名单里。"
       });
     }
   });

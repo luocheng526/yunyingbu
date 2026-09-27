@@ -4,7 +4,7 @@ import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { patchAppSource } from "../src/modules/people/patch-app.js";
-import { effectiveStoreOperator, hydrateOrgStores, importStamp, mapImportRow, orgStoresPersistMode, resetOrgBoard } from "../src/modules/people/org-board.js";
+import { effectiveStoreOperator, hydrateOrgStores, importStamp, mapImportRow, orgStoresPersistMode, resetOrgBoard, storeOwners } from "../src/modules/people/org-board.js";
 import { resetOrgExtra } from "../src/modules/people/org-extra.js";
 import { canEditRoster } from "../src/modules/people/org-acl.js";
 import { hydrateFromMysql, resetPeopleStore } from "../src/modules/people/store.js";
@@ -187,6 +187,9 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.doesNotMatch(jsText, /工号/);
     assert.doesNotMatch(jsText, /name="employeeNo"/);
     assert.match(jsText, /表头可筛总监、经理、主管、储备、运营、助理、状态/);
+    assert.match(jsText, /人员是人员，不一定有店铺/);
+    assert.match(jsText, /店铺必有归属/);
+    assert.match(jsText, /人员可以还没分店，责权仍列出人员对不上/);
     assert.match(jsText, /导入按姓名合并/);
     assert.match(jsText, /并落盘，强制刷新还在/);
     assert.match(jsText, /people-cell/);
@@ -835,6 +838,21 @@ test("rights tree follows assistant column when stored role still says 运营", 
   });
 });
 
+test("storeOwners lists every filled seat and empty store has no owner", () => {
+  assert.deepEqual(
+    storeOwners({
+      manager: "韩梦凯",
+      supervisor: "陈晓曼",
+      reserve: "",
+      operator: "刘璇",
+      assistant: "潘梦玉"
+    }),
+    ["韩梦凯", "陈晓曼", "刘璇", "潘梦玉"]
+  );
+  assert.deepEqual(storeOwners({ manager: "沈子晗", operator: "", assistant: "", supervisor: "" }), ["沈子晗"]);
+  assert.deepEqual(storeOwners({ manager: "", supervisor: "", reserve: "", operator: "", assistant: "" }), []);
+});
+
 test("effectiveStoreOperator falls back to 主管/储备/经理", () => {
   assert.equal(effectiveStoreOperator({ operator: "刘璇", supervisor: "陈晓曼" }), "刘璇");
   assert.equal(effectiveStoreOperator({ operator: "", supervisor: "陈晓曼", manager: "韩梦凯" }), "陈晓曼");
@@ -928,6 +946,48 @@ test("rights tree splits operator cards by store and assistant", async () => {
     assert.ok(hanging);
     assert.equal(hanging.operatorName, "");
     assert.equal(hanging.effectiveOperator, "陈晓曼");
+  });
+});
+
+test("rights watch keeps people without stores off 店铺对不上 and still lists 人员对不上", async () => {
+  await withServer(async (base) => {
+    const created = await fetch(`${base}/api/people`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "新人未分店",
+        role: "运营",
+        center: "韩梦凯运营中心",
+        lineManager: "韩梦凯",
+        status: "在职"
+      })
+    });
+    assert.equal(created.status, 201, await created.text());
+    const board = await fetch(`${base}/api/people/org/rights-board`);
+    const data = await board.json();
+    assert.equal(board.status, 200);
+    assert.ok(!data.watch.issues.some((item) => item.title.includes("新人未分店") && item.kind === "店铺对不上"));
+    assert.ok(!data.watch.issues.some((item) => item.title.includes("名下没有店铺")));
+    assert.ok(data.watch.kpis.some((item) => item.label === "人员对不上"));
+    assert.ok(data.watch.issues.some((item) => item.kind === "人员对不上"));
+    function find(node, name) {
+      if (!node) {
+        return null;
+      }
+      if (node.name === name) {
+        return node;
+      }
+      for (const child of node.children || []) {
+        const hit = find(child, name);
+        if (hit) {
+          return hit;
+        }
+      }
+      return null;
+    }
+    const newbie = find(data.tree, "新人未分店");
+    assert.ok(newbie, "roster person without a store still appears on the rights tree");
+    assert.equal((newbie.stores || []).length, 0);
   });
 });
 
