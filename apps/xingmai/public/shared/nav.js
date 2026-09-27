@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.723-center-scope — 沈/韩中心按组织可见；店和数据按中心+责权过滤；三人看全部 */
+/* xm-fast-shell 0.1.727-center-scope — 沈/韩中心按组织可见；店和数据按中心+责权过滤；三人看全部 */
 (function () {
-  const ASSET_VER = "0.1.723";
+  const ASSET_VER = "0.1.727";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
