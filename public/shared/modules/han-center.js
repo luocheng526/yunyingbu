@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20260927-roi";
+  var VERSION = "20260927-cells";
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -85,15 +85,15 @@
     ".han-rules-run.is-stopping{color:#ad6800;background:#fff7e6}" +
     ".han-rules-run.is-off{color:#8c8c8c;background:#f5f5f5}" +
     ".han-rules-run{margin-left:0;padding:0 6px;border-radius:999px;font-size:12px;line-height:20px}" +
-    ".han-rules table.han-shop-table,.han-rules table.han-rules-grid{width:100%;table-layout:fixed;border-collapse:collapse;font-size:12px}" +
+    ".han-rules table.han-shop-table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:12px}" +
+    ".han-rules table.han-rules-grid{width:max-content;min-width:100%;table-layout:auto;border-collapse:collapse;font-size:12px}" +
     ".han-rules table.han-shop-table th,.han-rules table.han-shop-table td,.han-rules table.han-rules-grid th,.han-rules table.han-rules-grid td{padding:6px 4px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}" +
     ".han-rules table.han-shop-table td:nth-child(2),.han-rules table.han-shop-table th:nth-child(2),.han-rules table.han-rules-grid td:nth-child(2),.han-rules table.han-rules-grid td:nth-child(4){text-align:left}" +
     ".han-rules table.han-rules-grid thead th{white-space:normal;line-height:1.2;font-size:11px}" +
     ".han-rules table.han-rules-grid td:has(input){overflow:visible}" +
-    ".han-rules table.han-rules-grid input.han-rules-num{display:block;box-sizing:border-box;width:100%;min-width:0;height:26px;padding:0 4px;text-align:center;border:1px solid #91caff;border-radius:4px;background:#fff;color:#111827}" +
-    ".han-rules table.han-rules-grid input.han-rules-num:focus{outline:2px solid #1677ff;border-color:#1677ff}" +
-    ".han-rules table.han-rules-grid input.is-roi{background:#fffbe6;border-color:#faad14;font-weight:700}" +
-    ".han-rules table.han-rules-grid th:nth-child(7),.han-rules table.han-rules-grid td:nth-child(7){width:92px}" +
+    ".han-rules table.han-rules-grid input.han-rules-num,.han-rules table.han-rules-grid input.han-rules-text{display:block;box-sizing:border-box;width:76px;min-width:76px;height:28px;padding:0 4px;text-align:center;border:1px solid #faad14;border-radius:4px;background:#fffbe6;color:#111827;font-weight:600}" +
+    ".han-rules table.han-rules-grid input.han-rules-text{width:120px;min-width:120px;text-align:left;font-weight:500}" +
+    ".han-rules table.han-rules-grid input.han-rules-num:focus,.han-rules table.han-rules-grid input.han-rules-text:focus{outline:2px solid #1677ff;border-color:#1677ff;background:#fff}" +
     ".han-roi-field{min-width:120px;height:32px;padding:0 8px;border:1px solid #faad14;border-radius:6px;background:#fffbe6;font-weight:700}" +
     ".han-rules tr.is-deleted td{color:#8c8c8c;text-decoration:line-through}" +
     ".han-rules tr.is-deleted td:last-child{text-decoration:none}" +
@@ -307,7 +307,7 @@
       '<div id="han-rules-run-shops"></div></section>' +
       '<section class="panel"><div class="han-paid-toolbar"><h2>子账号规则</h2><div class="row" id="han-rules-toolbar"></div></div>' +
       '<div id="han-sub-form" class="han-rules-form" hidden></div>' +
-      '<p class="han-rules-hint">计划ROI黄框里直接输入数字，例如 2.1。点一下会选中原来的数字，输入后点别处即保存这一条。不用先停店。</p>' +
+      '<p class="han-rules-hint">黄框都可以直接改：计划ROI、两档花费、余额、充值金额、上涨充值、未增单次数、暂停分钟，以及子账号名称。点一下选中原数字，输入后点别处保存这一条。不用先停店。</p>' +
       '<p id="han-rules-sync" class="han-rules-sync" hidden></p>' +
       '<div id="han-rules-table"><p class="empty">加载中…</p></div></section>' +
       '<section class="panel" id="han-rules-history-wrap" hidden><h2>修改历史</h2><div id="han-rules-history"></div></section>' +
@@ -392,11 +392,15 @@
       });
     }
 
-    function numInput(row, field) {
-      var roi = field === "plannedRoi";
-      return '<input class="han-rules-num' + (roi ? " is-roi" : "") + '" data-key="' + escapeHtml(rowKey(row)) + '" data-field="' + field +
-        '" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" value="' + escapeHtml(row[field]) + '"' +
-        (roi ? ' placeholder="填写ROI" title="直接填写数字，例如 2.1"' : "") + " />";
+    function numInput(row, field, label) {
+      return '<input class="han-rules-num" data-key="' + escapeHtml(rowKey(row)) + '" data-field="' + field +
+        '" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" value="' + escapeHtml(row[field]) +
+        '" title="直接填写' + label + '" />';
+    }
+
+    function nameInput(row) {
+      return '<input class="han-rules-text" data-key="' + escapeHtml(rowKey(row)) + '" data-field="subAccountName" type="text" maxlength="64" autocomplete="off" value="' +
+        escapeHtml(row.subAccountName || "") + '" title="直接填写子账号名称" />';
     }
 
     function collectEdits() {
@@ -407,6 +411,10 @@
       root.querySelectorAll(".han-rules-auto").forEach(function (input) {
         var row = rows.find(function (item) { return rowKey(item) === input.getAttribute("data-key"); });
         if (row) row.autoRecharge = input.checked;
+      });
+      root.querySelectorAll(".han-rules-text").forEach(function (input) {
+        var row = rows.find(function (item) { return rowKey(item) === input.getAttribute("data-key"); });
+        if (row) row[input.getAttribute("data-field")] = input.value;
       });
     }
 
@@ -653,14 +661,14 @@
         var key = rowKey(row);
         return '<tr class="' + (row.deleted ? "is-deleted" : "") + '"><td><input type="checkbox" data-check="' + escapeHtml(key) + '"' +
           (selected.has(key) ? " checked" : "") + " /></td><td>" + escapeHtml(row.store) + "</td><td>" + escapeHtml(String(row.accountId || "")) +
-          "</td><td>" + escapeHtml(row.subAccountName || "") + "</td><td>" + escapeHtml(String(row.subAccountId || "")) +
+          "</td><td>" + nameInput(row) + "</td><td>" + escapeHtml(String(row.subAccountId || "")) +
           '</td><td><label title="' + (row.autoRecharge ? "是" : "否") + '"><input class="han-rules-auto" data-key="' + escapeHtml(key) +
           '" type="checkbox"' + (row.autoRecharge ? " checked" : "") + " /></label></td><td>" +
-          numInput(row, "plannedRoi") + "</td><td>" + numInput(row, "tier1MinSpend") + "</td><td>" + numInput(row, "tier1MaxSpend") +
-          "</td><td>" + numInput(row, "tier1Balance") + "</td><td>" + numInput(row, "tier1Amount") + "</td><td>" +
-          numInput(row, "tier2MinSpend") + "</td><td>" + numInput(row, "tier2Balance") + "</td><td>" + numInput(row, "tier2Amount") +
-          "</td><td>" + numInput(row, "roiRiseAmount") + "</td><td>" + numInput(row, "noOrderTimes") + "</td><td>" +
-          numInput(row, "pauseMinutes") + "</td><td>" + escapeHtml(String(row.version || 0)) + "</td><td>" +
+          numInput(row, "plannedRoi", "计划ROI") + "</td><td>" + numInput(row, "tier1MinSpend", "一档花费下限") + "</td><td>" + numInput(row, "tier1MaxSpend", "一档花费上限") +
+          "</td><td>" + numInput(row, "tier1Balance", "一档余额") + "</td><td>" + numInput(row, "tier1Amount", "一档充值") + "</td><td>" +
+          numInput(row, "tier2MinSpend", "二档花费下限") + "</td><td>" + numInput(row, "tier2Balance", "二档余额") + "</td><td>" + numInput(row, "tier2Amount", "二档充值") +
+          "</td><td>" + numInput(row, "roiRiseAmount", "ROI上涨充值") + "</td><td>" + numInput(row, "noOrderTimes", "未增单次数") + "</td><td>" +
+          numInput(row, "pauseMinutes", "暂停分钟") + "</td><td>" + escapeHtml(String(row.version || 0)) + "</td><td>" +
           escapeHtml(row.syncStatus || "待同步") + "</td><td>" +
           (row.deleted
             ? '<button type="button" data-sub-restore="' + escapeHtml(key) + '">恢复</button>'
@@ -692,9 +700,9 @@
           if (row) saveMaster("sub", "restore", { 京准通主账户ID: row.accountId, 子账号ID: row.subAccountId }, "恢复子账号");
         });
       });
-      tableWrap.querySelectorAll(".han-rules-num, .han-rules-auto").forEach(function (input) {
+      tableWrap.querySelectorAll(".han-rules-num, .han-rules-text, .han-rules-auto").forEach(function (input) {
         input.addEventListener("focus", function () {
-          input.select();
+          if (input.type !== "checkbox") input.select();
         });
         input.addEventListener("keydown", function (event) {
           if (event.key === "Enter") {
