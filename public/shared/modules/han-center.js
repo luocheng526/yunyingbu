@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20260927-page";
+  var VERSION = "20260927-board";
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -90,7 +90,7 @@
     ".han-rules table.han-shop-table th,.han-rules table.han-shop-table td{padding:6px 4px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}" +
     ".han-rules table.han-rules-grid th,.han-rules table.han-rules-grid td{padding:6px 4px;text-align:center;white-space:nowrap;overflow:visible;vertical-align:middle}" +
     ".han-rules table.han-shop-table td:nth-child(2),.han-rules table.han-shop-table th:nth-child(2),.han-rules table.han-rules-grid td:nth-child(2),.han-rules table.han-rules-grid td:nth-child(4){text-align:left}" +
-    ".han-rules table.han-rules-grid thead th{white-space:normal;line-height:1.2;font-size:11px}" +
+    ".han-rules table.han-rules-grid thead th{position:static;background:#fafafa;color:#595959;font-size:12px;font-weight:600;white-space:nowrap;line-height:1.3}" +
     ".han-roi-field{min-width:120px;height:32px;padding:0 8px;border:1px solid #faad14;border-radius:6px;background:#fffbe6;font-weight:700}" +
     ".han-rules tr.is-deleted td{color:#8c8c8c;text-decoration:line-through}" +
     ".han-rules tr.is-deleted td:last-child{text-decoration:none}" +
@@ -99,10 +99,22 @@
     ".han-rules table.han-rules-grid{width:100%}" +
     ".han-rules table.han-rules-grid tbody tr{height:44px}" +
     ".han-rules table.han-rules-grid tbody td{height:44px;box-sizing:border-box}" +
-    ".han-rules-batch{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 10px}" +
-    ".han-rules-picked{color:#595959;font-size:13px}" +
-    ".han-rules-pager{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 0}" +
+    ".han-rules-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin:0 0 12px}" +
+    ".han-rules-head h2{margin:0;font-size:16px;line-height:32px}" +
+    ".han-rules-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}" +
+    ".han-rules-filters{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 16px;margin:0 0 12px;padding:12px 14px;background:#fafafa;border:1px solid #f0f0f0;border-radius:8px}" +
+    ".han-rules-filters > label{display:flex;flex-direction:column;gap:4px;min-width:180px;color:#8c8c8c;font-size:12px}" +
+    ".han-rules-filters > label.han-rules-check,.han-rules-batch-group label.han-rules-check{flex-direction:row;align-items:center;min-width:0;height:32px;color:#262626;font-size:13px}" +
+    ".han-rules-check input{width:16px;height:16px;padding:0}" +
+    ".han-rules-batch{display:grid;grid-template-columns:minmax(150px,190px) minmax(240px,1fr) minmax(300px,1.25fr) auto;gap:12px;align-items:center;margin:0 0 12px;padding:12px 14px;background:#fff;border:1px solid #f0f0f0;border-radius:8px}" +
+    ".han-rules-batch-group{display:flex;align-items:center;gap:8px;min-width:0}" +
+    ".han-rules-batch-label{flex:0 0 auto;color:#595959;font-size:12px;font-weight:600}" +
+    ".han-rules-picked{color:#8c8c8c;font-size:13px;white-space:nowrap}" +
+    ".han-rules-pager{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 8px}" +
+    ".han-rules-sheet + .han-rules-pager{margin:8px 0 0}" +
     ".han-rules-pager button[disabled]{opacity:.45}" +
+    ".han-rules-name{font-weight:600;color:#262626}" +
+    "@media (max-width:1100px){.han-rules-batch{grid-template-columns:1fr}}" +
     ".han-rules table.han-rules-grid span.han-rules-cell{display:block;box-sizing:border-box;width:76px;height:28px;margin:0 auto;padding:0 4px;border:1px solid #faad14;border-radius:4px;background:#fffbe6;color:#111827;font-weight:600;font-size:13px;line-height:26px;text-align:center;cursor:text}" +
     ".han-rules table.han-rules-grid span.han-rules-text{width:120px;margin:0;text-align:left;font-weight:500}" +
     ".han-rules table.han-rules-grid input.han-rules-live{display:block;box-sizing:border-box;width:76px;height:28px;margin:0 auto;padding:0 4px;border:1px solid #1677ff;border-radius:4px;background:#fff;color:#111827;font-weight:600;font-size:13px;line-height:26px;text-align:center;outline:2px solid #1677ff}" +
@@ -314,10 +326,12 @@
       '<p class="han-rules-hint" id="han-rules-run-hint">勾选=开启持续运行；取消=停止，本地完成已开始的转账及弹窗后再停该店。全部取消时本地机在线待机。Cookie 状态只显示本地机回报，本页没有 Cookie 输入框。</p>' +
       '<div id="han-shop-form" class="han-rules-form" hidden></div>' +
       '<div id="han-rules-run-shops"></div></section>' +
-      '<section class="panel"><div class="han-paid-toolbar"><h2>子账号规则</h2><div class="row" id="han-rules-toolbar"></div></div>' +
+      '<section class="panel"><div class="han-rules-head"><div><h2>子账号规则</h2>' +
+      '<p class="han-rules-hint">黄框只改数字：计划ROI、两档花费、余额、充值金额。回车保存这一条。子账号名称只展示，不能改。先勾选或全选，再批量改ROI、金额或付费。</p></div>' +
+      '<div class="han-rules-actions" id="han-rules-actions"></div></div>' +
       '<div id="han-sub-form" class="han-rules-form" hidden></div>' +
+      '<div class="han-rules-filters" id="han-rules-toolbar"></div>' +
       '<div class="han-rules-batch" id="han-rules-batch"></div>' +
-      '<p class="han-rules-hint">黄框点一下直接改单个数字：计划ROI、两档花费、余额、充值金额。回车保存这一条。要改很多账号，先勾选或点全选账号，再批量改ROI、充值金额或付费。表格按页切换。不用先停店。</p>' +
       '<p id="han-rules-sync" class="han-rules-sync" hidden></p>' +
       '<div id="han-rules-table"><p class="empty">加载中…</p></div></section>' +
       '<section class="panel" id="han-rules-history-wrap" hidden><h2>修改历史</h2><div id="han-rules-history"></div></section>' +
@@ -378,8 +392,7 @@
         ["选择", "选择"],
         ["店铺", "店铺名称"],
         ["主账户ID", "京准通主账户ID"],
-        ["子账号", "子账号名称"],
-        ["子账号ID", "子账号ID"],
+        ["子账号", "子账号名称，只展示"],
         ["自动", "自动充值"],
         ["计划\nROI", "计划ROI"],
         ["一档\n花费≥", "第一档花费下限"],
@@ -410,11 +423,6 @@
     function numInput(row, field, label) {
       return '<span class="han-rules-cell han-rules-num" data-key="' + escapeHtml(rowKey(row)) + '" data-field="' + field +
         '" title="点这里直接填写' + label + '">' + escapeHtml(row[field] ?? "") + "</span>";
-    }
-
-    function nameInput(row) {
-      return '<span class="han-rules-cell han-rules-text" data-key="' + escapeHtml(rowKey(row)) + '" data-field="subAccountName" title="点这里直接填写子账号名称">' +
-        escapeHtml(row.subAccountName || "") + "</span>";
     }
 
     function collectEdits() {
@@ -578,11 +586,13 @@
           return '<option value="' + escapeHtml(item.accountId || "") + '"' + selected + ">" + escapeHtml(item.store) + "（" + escapeHtml(item.accountId || "") + "）</option>";
         }).join("") + "</select></label>" +
         '<label>子账号ID <input id="han-sub-id" maxlength="64" value="' + escapeHtml(String(current.subAccountId || "")) + '"' + (action === "update" ? " readonly" : "") + " /></label>" +
-        '<label>子账号名称 <input id="han-sub-name" maxlength="64" value="' + escapeHtml(current.subAccountName || "") + '" /></label>' +
+        '<label>子账号名称 <input id="han-sub-name" maxlength="64" value="' + escapeHtml(current.subAccountName || "") + '"' + (action === "update" ? " readonly" : "") + " /></label>" +
         '<label><input id="han-sub-auto" type="checkbox"' + ((current.autoRecharge != null ? current.autoRecharge : defaults.autoRecharge) ? " checked" : "") + " /> 自动充值</label>" +
         '<label>计划ROI <input id="han-sub-roi" class="han-roi-field" type="text" inputmode="decimal" autocomplete="off" placeholder="直接填写，例如 2.1" value="' + escapeHtml(String(current.plannedRoi != null ? current.plannedRoi : defaults.plannedRoi)) + '" /></label>' +
         '<button type="button" class="han-rules-save" id="han-sub-form-save">保存子账号</button>' +
-        '<p class="han-rules-hint">计划ROI直接填写数字，例如 2.1，不要用加减。点保存子账号后写入该子账号，不用停店。</p>';
+        '<p class="han-rules-hint">' + (action === "update"
+          ? "子账号名称和子账号ID不能改，改了就和本地机对不上。这里只改自动充值和计划ROI。"
+          : "子账号ID是京准通子账号编号，新建时填写。表格里不显示这一列。") + "</p>";
       var roiInput = root.querySelector("#han-sub-roi");
       roiInput.addEventListener("mouseup", function (event) { event.preventDefault(); });
       roiInput.addEventListener("focus", function () { roiInput.select(); });
@@ -622,13 +632,14 @@
         return '<option value="' + escapeHtml(name) + '"' + (shop === name ? " selected" : "") + ">" + escapeHtml(name) + "</option>";
       }));
       toolbarEl.innerHTML =
-        "<label>店铺选择 <select id=\"han-rules-shop\">" + shops.join("") + "</select></label>" +
-        '<input id="han-rules-q" type="search" maxlength="64" placeholder="子账号名称/ID搜索" value="' + escapeHtml(keyword) + '" />' +
-        '<label><input id="han-rules-enabled" type="checkbox"' + (enabledOnly ? " checked" : "") + " /> 只看已启用</label>" +
+        "<label>店铺 <select id=\"han-rules-shop\">" + shops.join("") + "</select></label>" +
+        '<label>子账号 <input id="han-rules-q" type="search" maxlength="64" placeholder="搜索子账号名称" value="' + escapeHtml(keyword) + '" /></label>' +
+        '<label class="han-rules-check"><input id="han-rules-enabled" type="checkbox"' + (enabledOnly ? " checked" : "") + " /> 只看已启用</label>" +
+        '<label class="han-rules-check"><input id="han-rules-deleted" type="checkbox"' + (showDeleted ? " checked" : "") + " /> 显示已删除</label>";
+      root.querySelector("#han-rules-actions").innerHTML =
         '<button type="button" class="han-rules-save" id="han-rules-save">保存</button>' +
         '<button type="button" id="han-rules-add-shop">新增店铺</button>' +
         '<button type="button" id="han-rules-add-sub">新增子账号</button>' +
-        '<label><input id="han-rules-deleted" type="checkbox"' + (showDeleted ? " checked" : "") + " /> 显示已删除</label>" +
         '<button type="button" id="han-rules-history-btn">修改历史</button>';
       root.querySelector("#han-rules-shop").addEventListener("change", function (event) {
         collectEdits();
@@ -659,19 +670,22 @@
       root.querySelector("#han-rules-history-btn").addEventListener("click", loadHistory);
       var batchEl = root.querySelector("#han-rules-batch");
       batchEl.innerHTML =
-        '<label><input id="han-rules-check-all" type="checkbox" /> 全选账号</label>' +
-        '<span class="han-rules-picked" id="han-rules-picked">已选 0</span>' +
-        '<input id="han-rules-batch-roi" class="han-roi-field" type="text" inputmode="decimal" autocomplete="off" placeholder="计划ROI，例如 2.1" />' +
-        '<button type="button" id="han-rules-apply-roi">批量改ROI</button>' +
+        '<div class="han-rules-batch-group"><label class="han-rules-check"><input id="han-rules-check-all" type="checkbox" /> 全选账号</label>' +
+        '<span class="han-rules-picked" id="han-rules-picked">已选 0</span></div>' +
+        '<div class="han-rules-batch-group"><span class="han-rules-batch-label">计划ROI</span>' +
+        '<input id="han-rules-batch-roi" class="han-roi-field" type="text" inputmode="decimal" autocomplete="off" placeholder="例如 2.1" />' +
+        '<button type="button" id="han-rules-apply-roi">批量改ROI</button></div>' +
+        '<div class="han-rules-batch-group"><span class="han-rules-batch-label">充值金额</span>' +
         '<select id="han-rules-amount-field">' +
         '<option value="tier1Amount">一档充值</option>' +
         '<option value="tier2Amount">二档充值</option>' +
         '<option value="roiRiseAmount">ROI涨充值</option>' +
         "</select>" +
         '<input id="han-rules-batch-amount" class="han-roi-field" type="text" inputmode="decimal" autocomplete="off" placeholder="金额" />' +
-        '<button type="button" id="han-rules-apply-amount">批量改金额</button>' +
+        '<button type="button" id="han-rules-apply-amount">批量改金额</button></div>' +
+        '<div class="han-rules-batch-group"><span class="han-rules-batch-label">付费</span>' +
         '<button type="button" id="han-rules-on">批量开付费</button>' +
-        '<button type="button" id="han-rules-off">批量关付费</button>';
+        '<button type="button" id="han-rules-off">批量关付费</button></div>';
       root.querySelector("#han-rules-check-all").addEventListener("change", function (event) { toggleAll(event.target.checked); });
       root.querySelector("#han-rules-apply-roi").addEventListener("click", batchRoi);
       root.querySelector("#han-rules-apply-amount").addEventListener("click", batchAmount);
@@ -685,7 +699,7 @@
       var key = rowKey(row);
       return '<tr class="' + (row.deleted ? "is-deleted" : "") + '" style="height:' + ROW_H + 'px"><td><input type="checkbox" data-check="' + escapeHtml(key) + '"' +
         (selected.has(key) ? " checked" : "") + " /></td><td>" + escapeHtml(row.store) + "</td><td>" + escapeHtml(String(row.accountId || "")) +
-        "</td><td>" + nameInput(row) + "</td><td>" + escapeHtml(String(row.subAccountId || "")) +
+        '</td><td class="han-rules-name">' + escapeHtml(row.subAccountName || "") +
         '</td><td><label title="' + (row.autoRecharge ? "是" : "否") + '"><input class="han-rules-auto" data-key="' + escapeHtml(key) +
         '" type="checkbox"' + (row.autoRecharge ? " checked" : "") + " /></label></td><td>" +
         numInput(row, "plannedRoi", "计划ROI") + "</td><td>" + numInput(row, "tier1MinSpend", "一档花费下限") + "</td><td>" + numInput(row, "tier1MaxSpend", "一档花费上限") +
