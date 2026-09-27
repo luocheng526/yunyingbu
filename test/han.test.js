@@ -1221,6 +1221,34 @@ test("GET/POST /api/han/worker feeds 付费中心 and 充值规则", async () =>
       body: JSON.stringify({ action: "status", 京准通主账户ID: "9001", 京准通Cookie状态: "pt_key=this-is-a-cookie-body-not-a-status" }),
     });
     assert.equal(secret.res.status, 400);
+    const snapped = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: [{ 店铺名称: "新建测试店", 京准通主账户ID: "9001", 花费: 1, 京准通Cookie状态: "正常", 京麦Cookie状态: "过期", 执行状态: "运行中" }] }),
+    });
+    assert.equal(snapped.res.status, 201);
+    const afterSnap = await json(base, "/api/han/worker?view=rules");
+    const snappedShop = afterSnap.body.shopRuns.find((row) => row.accountId === "9001");
+    assert.equal(snappedShop.jztCookieStatus, "正常");
+    assert.equal(snappedShop.jmCookieStatus, "过期");
+    assert.equal(snappedShop.runStatus, "运行中");
+    const ignored = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: [{ 店铺名称: "新建测试店", 京准通主账户ID: "9001", 花费: 2, 京准通Cookie状态: "pt_key=not-a-status" }] }),
+    });
+    assert.equal(ignored.res.status, 201);
+    const kept = await json(base, "/api/han/worker?view=rules");
+    assert.equal(kept.body.shopRuns.find((row) => row.accountId === "9001").jztCookieStatus, "正常");
+    const idle = await json(base, "/api/han/worker?machineId=han-worker-01&sinceVersion=99999");
+    assert.equal(idle.body.changed, false);
+    assert.equal(idle.body.shops, undefined);
+    const beat = await json(base, "/api/han/worker?view=rules");
+    const beatShop = beat.body.shopRuns.find((row) => row.accountId === "9001");
+    assert.ok(beatShop.heartbeatAt);
+    assert.equal(beatShop.workerStatus, "在线");
+    assert.equal(beatShop.runStatus, "运行中");
+    assert.equal(beatShop.jztCookieStatus, "正常");
   });
 });
 
@@ -1389,7 +1417,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   const han = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
   assert.match(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
   assert.match(han, /\["\/han\/paid\?board=rules", "充值规则", "rules"\]/);
-  assert.match(han, /20260927-board/);
+  assert.match(han, /20260927-status/);
   const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
   assert.match(center, /两档花费/);
   assert.match(center, /han-rules-text/);
@@ -1402,6 +1430,8 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(center, /批量开付费/);
   assert.match(center, /han-rules-name/);
   assert.match(center, /han-rules-filters/);
+  assert.match(center, /refreshShopStatus/);
+  assert.match(center, /data-run-label/);
   assert.doesNotMatch(center, /data-field="subAccountName"/);
   assert.doesNotMatch(center, /\["子账号ID", "子账号ID"\]/);
   assert.match(center, /searchTimer/);

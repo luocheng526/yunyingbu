@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20260927-board";
+  var VERSION = "20260927-status";
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -373,6 +373,14 @@
       banner.className = "han-rules-sync" + (tone ? " is-" + tone : "");
     }
 
+    function formatWhen(value) {
+      if (!value) return "—";
+      var date = new Date(value);
+      if (Number.isNaN(date.getTime())) return String(value);
+      var parts = new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(date);
+      return parts.replace(/\//g, "-");
+    }
+
     function rowKey(row) {
       return row.store + "\t" + row.accountId + "\t" + row.subAccountId;
     }
@@ -495,15 +503,15 @@
             return "<th>" + title + "</th>";
           }).join("") + "</tr></thead><tbody>" + shopRows.map(function (row) {
             var key = runKey(row);
-            var runStatus = row.status || (runSelected.has(key) ? "已开启" : "已停止");
+            var runLabel = row.deleted || !runSelected.has(key) ? "已停止" : "已开启";
             return '<tr class="' + (row.deleted ? "is-deleted" : "") + '"><td><input type="checkbox" data-run-shop="' + escapeHtml(key) + '"' +
               (runSelected.has(key) && !row.deleted ? " checked" : "") + (row.deleted ? " disabled" : "") + " /></td><td>" +
               escapeHtml(row.store || "") + "</td><td>" + escapeHtml(String(row.accountId || "")) + "</td><td>" +
-              escapeHtml(row.machineId || "任意机") + '</td><td><span class="han-rules-run is-' + statusTone(runStatus) + '">' + escapeHtml(runStatus) +
+              escapeHtml(row.machineId || "任意机") + '</td><td><span class="han-rules-run is-' + statusTone(runLabel) + '" data-run-label="1">' + escapeHtml(runLabel) +
               '</span></td><td><span class="han-rules-run is-' + statusTone(row.jztCookieStatus || "待录") + '">' + escapeHtml(row.jztCookieStatus || "待录") +
               '</span></td><td><span class="han-rules-run is-' + statusTone(row.jmCookieStatus || "待录") + '">' + escapeHtml(row.jmCookieStatus || "待录") +
               '</span></td><td><span class="han-rules-run is-' + statusTone(row.runStatus || "已停止") + '">' + escapeHtml(row.runStatus || "已停止") +
-              "</span></td><td>" + escapeHtml(row.heartbeatAt || "—") + (row.workerStatus ? "（" + escapeHtml(row.workerStatus) + "）" : "") +
+              "</span></td><td>" + escapeHtml(formatWhen(row.heartbeatAt)) + (row.workerStatus ? "（" + escapeHtml(row.workerStatus) + "）" : "") +
               "</td><td>" + escapeHtml(row.lastError || "—") + "</td><td>" +
               (row.deleted
                 ? '<button type="button" data-shop-restore="' + escapeHtml(key) + '">恢复</button>'
@@ -516,6 +524,12 @@
           var key = input.getAttribute("data-run-shop");
           if (input.checked) runSelected.add(key);
           else runSelected.delete(key);
+          var label = input.closest("tr") && input.closest("tr").querySelector("[data-run-label]");
+          if (label) {
+            var on = input.checked;
+            label.textContent = on ? "已开启" : "已停止";
+            label.className = "han-rules-run is-" + (on ? "on" : "off");
+          }
         });
       });
       box.querySelectorAll("[data-shop-edit]").forEach(function (btn) {
@@ -1065,11 +1079,23 @@
       });
     }
 
+    function refreshShopStatus() {
+      return jsonFetch("/api/han/worker?view=rules" + (showDeleted ? "&deleted=1" : "")).then(function (data) {
+        if (dead || !data) return;
+        lastMeta.shopRuns = data.shopRuns || lastMeta.shopRuns;
+        lastMeta.machines = data.machines || lastMeta.machines;
+        if (asofEl && data.version) asofEl.textContent = "配置版本 " + data.version + " · " + (data.syncStatus || "待同步");
+        renderRunShops();
+      }).catch(function () {});
+    }
+
     load().catch(function (err) {
       if (!dead) setStatus(err.message || "无法加载充值规则", true);
     });
+    var statusTimer = setInterval(refreshShopStatus, 15000);
     return function unmount() {
       dead = true;
+      clearInterval(statusTimer);
       root.innerHTML = "";
     };
   }

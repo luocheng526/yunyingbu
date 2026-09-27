@@ -159,15 +159,24 @@ function emptyState() {
 
 const COOKIE_STATUSES = new Set(["待录", "正常", "过期", "身份不符"]);
 
-function cookieStatus(value) {
+function cookieStatus(value, strict = true) {
   const raw = text(value, 32);
   if (!raw) {
-    return "待录";
+    return "";
   }
-  if (!COOKIE_STATUSES.has(raw)) {
+  const alias = { 有效: "正常", 可用: "正常", 已登录: "正常", 失效: "过期", 未登录: "过期" };
+  const mapped = alias[raw] || raw;
+  if (!COOKIE_STATUSES.has(mapped)) {
+    if (!strict) {
+      return "";
+    }
     throw httpError(400, "Cookie状态只能是待录、正常、过期、身份不符，不能回传 Cookie 正文");
   }
-  return raw;
+  return mapped;
+}
+
+function hasReportedStatus(raw) {
+  return ["京准通Cookie状态", "jztCookieStatus", "京麦Cookie状态", "jmCookieStatus", "执行状态", "runStatus", "最后错误", "lastError", "在线状态", "workerStatus", "最后心跳", "heartbeatAt"].some((key) => pick(raw, [key]) !== "");
 }
 
 function ruleIdentities(state, includeDeleted = false) {
@@ -193,7 +202,7 @@ function ruleIdentities(state, includeDeleted = false) {
   return rows;
 }
 
-function applyShopStatuses(state, body) {
+function applyShopStatuses(state, body, strict = true) {
   const incoming = Array.isArray(body.店铺状态)
     ? body.店铺状态
     : Array.isArray(body.statuses)
@@ -202,24 +211,57 @@ function applyShopStatuses(state, body) {
         ? [body]
         : [];
   if (!incoming.length) {
-    throw httpError(400, "店铺状态必填");
+    if (strict) {
+      throw httpError(400, "店铺状态必填");
+    }
+    return;
   }
   const current = new Map((state.shopStatuses || []).map((row) => [row.accountId, row]));
   for (const raw of incoming) {
     const accountId = idText(pick(raw, ["京准通主账户ID", "accountId"]), "京准通主账户ID");
     if (!accountId) {
-      throw httpError(400, "店铺状态必须带京准通主账户ID");
+      if (strict) {
+        throw httpError(400, "店铺状态必须带京准通主账户ID");
+      }
+      continue;
     }
     const prev = current.get(accountId) || {};
+    const jzt = cookieStatus(pick(raw, ["京准通Cookie状态", "jztCookieStatus"]), strict);
+    const jm = cookieStatus(pick(raw, ["京麦Cookie状态", "jmCookieStatus"]), strict);
     current.set(accountId, {
       accountId,
       machineId: text(pick(raw, ["执行机", "machineId"]) || prev.machineId, 64),
-      jztCookieStatus: cookieStatus(pick(raw, ["京准通Cookie状态", "jztCookieStatus"]) || prev.jztCookieStatus),
-      jmCookieStatus: cookieStatus(pick(raw, ["京麦Cookie状态", "jmCookieStatus"]) || prev.jmCookieStatus),
+      jztCookieStatus: jzt || prev.jztCookieStatus || "待录",
+      jmCookieStatus: jm || prev.jmCookieStatus || "待录",
       runStatus: text(pick(raw, ["执行状态", "runStatus"]) || prev.runStatus || "已停止", 16),
-      lastError: text(pick(raw, ["最后错误", "lastError"]) || "", 200),
+      lastError: pick(raw, ["最后错误", "lastError"]) !== "" ? text(pick(raw, ["最后错误", "lastError"]), 200) : (prev.lastError || ""),
       heartbeatAt: text(pick(raw, ["最后心跳", "heartbeatAt"]) || new Date().toISOString(), 40),
       workerStatus: text(pick(raw, ["在线状态", "workerStatus"]) || prev.workerStatus, 16),
+    });
+  }
+  state.shopStatuses = [...current.values()];
+}
+
+function stampMachineHeartbeat(state, machineId) {
+  const now = new Date().toISOString();
+  const current = new Map((state.shopStatuses || []).map((row) => [row.accountId, row]));
+  for (const shop of shopDirectory(state)) {
+    if (shop.deleted || !shop.accountId) {
+      continue;
+    }
+    if (shop.machineId && shop.machineId !== machineId) {
+      continue;
+    }
+    const prev = current.get(shop.accountId) || {};
+    current.set(shop.accountId, {
+      accountId: shop.accountId,
+      machineId,
+      jztCookieStatus: prev.jztCookieStatus || "待录",
+      jmCookieStatus: prev.jmCookieStatus || "待录",
+      runStatus: prev.runStatus || "在线待机",
+      lastError: prev.lastError || "",
+      heartbeatAt: now,
+      workerStatus: "在线",
     });
   }
   state.shopStatuses = [...current.values()];
@@ -806,6 +848,10 @@ export function createWorkerMethods(db, ensure) {
       const version = Number(state.version) || 0;
       const since = Number(sinceVersion) || 0;
       const machine = text(machineId, 64);
+      if (machine) {
+        stampMachineHeartbeat(state, machine);
+        await save(state);
+      }
       if (version > 0 && version <= since) {
         return { ok: true, changed: false, version, updatedAt: state.updatedAt, machineId: machine };
       }
@@ -909,7 +955,11 @@ export function createWorkerMethods(db, ensure) {
       }
       state.recharges = [...rechargeMap.values()].slice(-500);
       if (Array.isArray(body.店铺状态) || Array.isArray(body.statuses)) {
-        applyShopStatuses(state, body);
+        applyShopStatuses(state, body, false);
+      }
+      const statusRows = shopRows.filter((row) => hasReportedStatus(row));
+      if (statusRows.length) {
+        applyShopStatuses(state, { 店铺状态: statusRows }, false);
       }
       await save(state);
       return {
