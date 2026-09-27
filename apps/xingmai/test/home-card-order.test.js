@@ -72,6 +72,18 @@ test("live cards persist their own drag order", () => {
   ]);
 });
 
+test("live shop table can filter by duty team or shop", () => {
+  assert.match(homeJs, /xm-home-live-filter/);
+  assert.match(homeJs, /function liveFilterHtml/);
+  assert.match(homeJs, /function filterLiveShops/);
+  assert.match(homeJs, /function dutyTeamList/);
+  assert.match(homeJs, /data-live-filter="team"/);
+  assert.match(homeJs, /data-live-filter="shop"/);
+  assert.match(homeJs, /全部团队/);
+  assert.match(homeJs, /全部店铺/);
+  assert.match(homeJs, /责权团队/);
+});
+
 test("live page has fee target, warning and update time", () => {
   assert.match(homeJs, /function liveMetaHtml/);
   assert.match(homeJs, /function feeWarnText/);

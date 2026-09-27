@@ -994,6 +994,132 @@
       " /> %</label>"
     );
   }
+  function liveFilter() {
+    try {
+      var raw = JSON.parse(localStorage.getItem("xm-home-live-filter") || "{}");
+      return {
+        team: String((raw && raw.team) || "").trim(),
+        shop: String((raw && raw.shop) || "").trim()
+      };
+    } catch (_err) {
+      return { team: "", shop: "" };
+    }
+  }
+  function saveLiveFilter(next) {
+    try {
+      localStorage.setItem(
+        "xm-home-live-filter",
+        JSON.stringify({
+          team: String((next && next.team) || "").trim(),
+          shop: String((next && next.shop) || "").trim()
+        })
+      );
+    } catch (_err) {}
+  }
+  function dutyTeamLabel(name) {
+    var n = String(name || "").trim();
+    return /团队$/.test(n) ? n : n + "团队";
+  }
+  function dutyTeamList(state) {
+    var seen = {};
+    var out = [];
+    function add(team) {
+      var name = String((team && team.name) || "").trim();
+      if (!name || seen[name]) {
+        return;
+      }
+      seen[name] = true;
+      out.push({ name: name, shops: (team && team.shops) || [] });
+    }
+    ((state && state.teams) || []).forEach(add);
+    ((state && state.chiefs) || []).forEach(add);
+    return out;
+  }
+  function shopsInDutyTeam(state, teamName) {
+    var map = {};
+    dutyTeamList(state).forEach(function (team) {
+      if (teamName && team.name !== teamName) {
+        return;
+      }
+      (team.shops || []).forEach(function (row) {
+        var n = normShopName(row && row.shop);
+        if (n) {
+          map[n] = true;
+        }
+      });
+    });
+    return map;
+  }
+  function filterLiveShops(shops, state) {
+    var pick = liveFilter();
+    var teamMap = pick.team ? shopsInDutyTeam(state, pick.team) : null;
+    return (shops || []).filter(function (row) {
+      var name = String((row && row.shop) || "").trim();
+      if (pick.shop && name !== pick.shop) {
+        return false;
+      }
+      if (teamMap && !teamMap[normShopName(name)]) {
+        return false;
+      }
+      return true;
+    });
+  }
+  function liveFilterShopNames(allShops, state) {
+    var pick = liveFilter();
+    var teamMap = pick.team ? shopsInDutyTeam(state, pick.team) : null;
+    var names = [];
+    var seen = {};
+    (allShops || []).forEach(function (row) {
+      var name = String((row && row.shop) || "").trim();
+      if (!name || seen[name]) {
+        return;
+      }
+      if (teamMap && !teamMap[normShopName(name)]) {
+        return;
+      }
+      seen[name] = true;
+      names.push(name);
+    });
+    if (pick.shop && names.indexOf(pick.shop) === -1) {
+      names.unshift(pick.shop);
+    }
+    return names;
+  }
+  function liveFilterOption(value, label, selected) {
+    return (
+      '<option value="' +
+      escapeHtml(value) +
+      '"' +
+      (selected ? " selected" : "") +
+      ">" +
+      escapeHtml(label) +
+      "</option>"
+    );
+  }
+  function liveFilterHtml(allShops, state) {
+    var pick = liveFilter();
+    var teams = dutyTeamList(state);
+    var shops = liveFilterShopNames(allShops, state);
+    return (
+      '<div class="xm-hm-live-filter">' +
+      '<label>责权团队 <select data-live-filter="team">' +
+      liveFilterOption("", "全部团队", !pick.team) +
+      teams
+        .map(function (team) {
+          return liveFilterOption(team.name, dutyTeamLabel(team.name), pick.team === team.name);
+        })
+        .join("") +
+      "</select></label>" +
+      '<label>店铺 <select data-live-filter="shop">' +
+      liveFilterOption("", "全部店铺", !pick.shop) +
+      shops
+        .map(function (name) {
+          return liveFilterOption(name, name, pick.shop === name);
+        })
+        .join("") +
+      "</select></label></div>"
+    );
+  }
   function liveMetaHtml(state, paid) {
     var warn = feeWarnText(paid && paid.value);
     return (
@@ -1429,6 +1555,9 @@
       ".xm-hm-rest em{font-style:normal;font-variant-numeric:tabular-nums}" +
       ".xm-hm-live-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}" +
       ".xm-hm-live-clock{margin:0;color:var(--xm-muted);font-size:12px}" +
+      ".xm-hm-live-filter{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin:10px 0 8px;padding:8px 0 6px;border-bottom:1px solid var(--xm-line)}" +
+      ".xm-hm-live-filter label{display:inline-flex;align-items:center;gap:6px;color:var(--xm-ink);font-size:12px}" +
+      ".xm-hm-live-filter select{min-width:168px;height:28px;box-sizing:border-box;border:1px solid var(--xm-line);border-radius:4px;padding:0 8px;font:inherit;background:#fff;color:var(--xm-ink)}" +
       ".xm-hm-fee-goal{display:inline-flex;align-items:center;gap:6px;color:var(--xm-ink);font-size:12px}" +
       ".xm-hm-fee-goal input{width:64px;height:28px;box-sizing:border-box;border:1px solid var(--xm-line);border-radius:4px;padding:0 8px;font:inherit}" +
       ".xm-hm-fee-warn{color:#cf1322;font-size:13px;font-weight:600}" +
@@ -1574,7 +1703,8 @@
       return hide.indexOf(card.key) === -1;
     });
     var live = state.live || blankLive();
-    var shops = state.shops && state.shops.length ? state.shops : [];
+    var allShops = state.shops && state.shops.length ? state.shops : [];
+    var shops = filterLiveShops(allShops, state);
     var teams =
       state.view === "chief"
         ? filterOwnChiefs(state.chiefs && state.chiefs.length ? state.chiefs : blankRoleTeams("主管"), state.user)
@@ -1614,10 +1744,11 @@
       '</div><div class="xm-hm-live-cards">' +
       liveCards.map(liveCardHtml).join("") +
       '</div><div class="xm-hm-panel"><h2>店铺 <span>' +
-      escapeHtml(String((live.summary && live.summary.shops) || shops.length)) +
+      escapeHtml(String(shops.length) + (shops.length !== allShops.length ? " / " + allShops.length : "")) +
       " 店</span>" +
       feeGoalLabelHtml() +
       "</h2>" +
+      liveFilterHtml(allShops, state) +
       '<table class="xm-hm-table">' +
       liveColgroupHtml() +
       liveTheadHtml() +
@@ -3305,6 +3436,20 @@
         event.stopPropagation();
       }
       function onChange(event) {
+        var livePick = event.target.getAttribute("data-live-filter");
+        if (livePick) {
+          var nextFilter = liveFilter();
+          nextFilter[livePick] = event.target.value;
+          if (livePick === "team") {
+            var teamShops = nextFilter.team ? shopsInDutyTeam(state, nextFilter.team) : null;
+            if (nextFilter.shop && teamShops && !teamShops[normShopName(nextFilter.shop)]) {
+              nextFilter.shop = "";
+            }
+          }
+          saveLiveFilter(nextFilter);
+          paint(root, state);
+          return;
+        }
         if (event.target.getAttribute("data-fee-target") != null) {
           saveFeeTarget(event.target.value);
           paint(root, state);

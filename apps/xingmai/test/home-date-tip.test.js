@@ -156,6 +156,9 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /费比目标/);
   assert.match(homeJs, /更新时间 /);
   assert.match(homeJs, /data-fee-target/);
+  assert.match(homeJs, /function liveFilterHtml/);
+  assert.match(homeJs, /data-live-filter="team"/);
+  assert.match(homeJs, /data-live-filter="shop"/);
   assert.match(homeJs, /\.xm-hm-live\{display:flex;flex-direction:column;gap:20px\}/);
   assert.match(homeJs, /\.xm-hm-live-charts\{display:grid;grid-template-columns:1fr 1fr;gap:20px\}/);
   assert.match(homeJs, /\.xm-hm-live-cards\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\);gap:20px/);
