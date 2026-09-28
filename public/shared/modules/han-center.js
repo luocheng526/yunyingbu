@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20260928-nosearch";
+  var VERSION = "20260928-batchmsg";
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -122,6 +122,9 @@
     ".han-rules-batch{display:grid;grid-template-columns:minmax(150px,190px) minmax(240px,1fr) minmax(300px,1.25fr) auto;gap:12px;align-items:center;margin:0 0 12px;padding:12px 14px;background:#fff;border:1px solid #f0f0f0;border-radius:8px}" +
     ".han-rules-batch-group{display:flex;align-items:center;gap:8px;min-width:0}" +
     ".han-rules-batch-label{flex:0 0 auto;color:#595959;font-size:12px;font-weight:600}" +
+    ".han-rules-batch-status{grid-column:1 / -1;margin:0;min-height:18px;font-size:13px;line-height:1.5}" +
+    ".han-rules-batch-status.is-ok{color:#027a48}" +
+    ".han-rules-batch-status.is-error{color:#b42318;font-weight:600}" +
     ".han-rules-picked{color:#8c8c8c;font-size:13px;white-space:nowrap}" +
     ".han-rules-pager{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 8px}" +
     ".han-rules-sheet + .han-rules-pager{margin:8px 0 0}" +
@@ -467,10 +470,28 @@
     var rulePage = 1;
     var PAGE_SIZE = 10;
     var ROW_H = 44;
+    var batchDraft = { roi: "", amount: "", field: "tier1Amount" };
+
+    function setBatchStatus(message, isError) {
+      var el = root.querySelector("#han-rules-batch-status");
+      if (!el) return;
+      el.textContent = message || "";
+      el.className = "han-rules-batch-status" + (isError ? " is-error" : message ? " is-ok" : "");
+    }
 
     function setStatus(message, isError) {
       statusEl.textContent = message || "";
       statusEl.className = "status" + (isError ? " error" : message ? " ok" : "");
+      setBatchStatus(message, isError);
+    }
+
+    function readBatchDraft() {
+      var roi = root.querySelector("#han-rules-batch-roi");
+      var amount = root.querySelector("#han-rules-batch-amount");
+      var field = root.querySelector("#han-rules-amount-field");
+      if (roi) batchDraft.roi = roi.value;
+      if (amount) batchDraft.amount = amount.value;
+      if (field) batchDraft.field = field.value;
     }
 
     function setSyncBanner(text, tone) {
@@ -790,29 +811,37 @@
         load();
       });
       root.querySelector("#han-rules-history-btn").addEventListener("click", loadHistory);
+      readBatchDraft();
       var batchEl = root.querySelector("#han-rules-batch");
       batchEl.innerHTML =
         '<div class="han-rules-batch-group"><label class="han-rules-check"><input id="han-rules-check-all" type="checkbox" /> 全选账号</label>' +
         '<span class="han-rules-picked" id="han-rules-picked">已选 0</span></div>' +
         '<div class="han-rules-batch-group"><span class="han-rules-batch-label">计划ROI</span>' +
-        '<input id="han-rules-batch-roi" class="han-roi-field" type="text" inputmode="decimal" autocomplete="off" placeholder="例如 2.1" />' +
+        '<input id="han-rules-batch-roi" class="han-roi-field" type="text" inputmode="decimal" autocomplete="off" placeholder="输入 2.1" value="' + escapeHtml(batchDraft.roi) + '" />' +
         '<button type="button" id="han-rules-apply-roi">批量改ROI</button></div>' +
         '<div class="han-rules-batch-group"><span class="han-rules-batch-label">充值金额</span>' +
         '<select id="han-rules-amount-field">' +
-        '<option value="tier1Amount">一档充值</option>' +
-        '<option value="tier2Amount">二档充值</option>' +
-        '<option value="roiRiseAmount">ROI涨充值</option>' +
+        '<option value="tier1Amount"' + (batchDraft.field === "tier1Amount" ? " selected" : "") + ">一档充值</option>" +
+        '<option value="tier2Amount"' + (batchDraft.field === "tier2Amount" ? " selected" : "") + ">二档充值</option>" +
+        '<option value="roiRiseAmount"' + (batchDraft.field === "roiRiseAmount" ? " selected" : "") + ">ROI涨充值</option>" +
         "</select>" +
-        '<input id="han-rules-batch-amount" class="han-roi-field" type="text" inputmode="decimal" autocomplete="off" placeholder="金额" />' +
+        '<input id="han-rules-batch-amount" class="han-roi-field" type="text" inputmode="decimal" autocomplete="off" placeholder="输入金额" value="' + escapeHtml(batchDraft.amount) + '" />' +
         '<button type="button" id="han-rules-apply-amount">批量改金额</button></div>' +
         '<div class="han-rules-batch-group"><span class="han-rules-batch-label">付费</span>' +
         '<button type="button" id="han-rules-on">批量开付费</button>' +
-        '<button type="button" id="han-rules-off">批量关付费</button></div>';
+        '<button type="button" id="han-rules-off">批量关付费</button></div>' +
+        '<p id="han-rules-batch-status" class="han-rules-batch-status"></p>';
       root.querySelector("#han-rules-check-all").addEventListener("change", function (event) { toggleAll(event.target.checked); });
       root.querySelector("#han-rules-apply-roi").addEventListener("click", batchRoi);
       root.querySelector("#han-rules-apply-amount").addEventListener("click", batchAmount);
       root.querySelector("#han-rules-on").addEventListener("click", function () { batchAuto(true); });
       root.querySelector("#han-rules-off").addEventListener("click", function () { batchAuto(false); });
+      root.querySelector("#han-rules-batch-roi").addEventListener("keydown", function (event) {
+        if (event.key === "Enter") { event.preventDefault(); batchRoi(); }
+      });
+      root.querySelector("#han-rules-batch-amount").addEventListener("keydown", function (event) {
+        if (event.key === "Enter") { event.preventDefault(); batchAmount(); }
+      });
       renderRunShops();
       syncPickUi();
     }
@@ -891,7 +920,10 @@
     }
 
     function normalizeCell(field, raw) {
-      var text = String(raw ?? "").trim().replace(/[¥￥,\s%]/g, "");
+      var text = String(raw ?? "").trim()
+        .replace(/[０-９]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 65296 + 48); })
+        .replace(/[。．｡]/g, ".")
+        .replace(/[¥￥,\s%]/g, "");
       if (!/^\d+(\.\d+)?$/.test(text)) return null;
       var n = Number(text);
       if (!Number.isFinite(n)) return null;
@@ -1053,7 +1085,7 @@
         return row && !row.deleted && ruleSignature(row) !== baseline.get(rowKey(row));
       });
       if (!target.length) {
-        setStatus(list ? "没有修改" : "没有要保存的修改");
+        setStatus(list ? "没有修改，表格数字保持原值" : "没有要保存的修改");
         return Promise.resolve();
       }
       var chunks = [];
@@ -1072,12 +1104,17 @@
       return chain.then(function (data) {
         target.forEach(function (row) { paintSaved(row, data.version); });
         if (asofEl) asofEl.textContent = "配置版本 " + data.version + " · 待同步";
+        var running = (lastMeta.shopRuns || []).filter(function (row) { return row.enabled && !row.deleted; }).length;
+        var follow = running
+          ? "已开启的店在下一批开始时使用这些数字。"
+          : "上面的店铺勾选仍是空的，本地机会继续显示未勾选任何店铺，本轮不采集、不充值。要让它跑，请勾选店铺后点保存运行状态。";
         setSyncBanner("配置版本 " + data.version + " 已保存。不用停店，本地机下次领取后在下一批开始时使用。ACK 后本页变为已同步。");
-        setStatus("已保存版本 " + data.version + "。店铺继续运行，本地机下一批使用新规则。");
+        setStatus(summary + "：已保存 " + target.length + " 个子账号，配置版本 " + data.version + "。表上的数字已更新，本地机下次领取能看到。" + follow);
       }).catch(function (err) {
         if (dead) return;
-        setStatus(err.message || "保存失败", true);
-        return load();
+        var message = err.message || "保存失败";
+        setStatus(message, true);
+        return load().then(function () { setBatchStatus(message, true); });
       });
     }
 
@@ -1091,9 +1128,15 @@
       var typed = normalizeCell(field, raw);
       var picked = checkedRows();
       if (!picked.length) { setStatus("请先勾选子账号，或点全选账号", true); return; }
-      if (typed == null) { setStatus("请直接填写数字", true); return; }
+      if (typed == null) {
+        setStatus("请先在输入框里填写数字。计划ROI例如 2.1，金额例如 80。灰字示例不会保存。", true);
+        var box = field === "plannedRoi" ? root.querySelector("#han-rules-batch-roi") : root.querySelector("#han-rules-batch-amount");
+        if (box) box.focus();
+        return;
+      }
       picked.forEach(function (row) { row[field] = typed; });
       renderTable(false);
+      setBatchStatus("正在把 " + picked.length + " 个子账号改成 " + typed + " …");
       saveRules(picked, summary);
     }
 
@@ -1112,6 +1155,7 @@
       if (!picked.length) { setStatus("请先勾选子账号，或点全选账号", true); return; }
       picked.forEach(function (row) { row.autoRecharge = on; });
       renderTable(false);
+      setBatchStatus(on ? "正在开启已选子账号的自动充值…" : "正在关闭已选子账号的自动充值…");
       saveRules(picked, on ? "批量开付费" : "批量关付费");
     }
 
