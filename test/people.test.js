@@ -131,8 +131,11 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.doesNotMatch(jsText, /id="org-team"/);
     assert.doesNotMatch(jsText, /id="org-status"/);
     assert.match(jsText, /org-filter-name/);
-    assert.match(jsText, /点击单元格即可改/);
-    assert.match(jsText, /点击单元格保存/);
+    assert.doesNotMatch(jsText, /<header class="page-head">/);
+    assert.doesNotMatch(jsText, /id="org-scope"/);
+    assert.match(jsText, /点击修改，点别处保存/);
+    assert.match(jsText, /org-tab-name">店铺主数据/);
+    assert.match(cssText, /\.org-tab\s*\{[\s\S]*?min-height:\s*48px/);
     assert.match(jsText, /storeCellDrag/);
     assert.match(jsText, /下载模板/);
     assert.match(jsText, /id="org-import"/);
@@ -152,7 +155,6 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, />全选/);
     assert.match(jsText, /keepTableTextSelectable/);
     assert.match(jsText, /user-select:text/);
-    assert.match(jsText, /单元格可按住划选后复制/);
     assert.match(jsText, /applyStoreQuery/);
     assert.match(jsText, /bindLiveSearch/);
     assert.match(jsText, /id="people-kpis"/);
@@ -248,9 +250,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /applyMemberFilters/);
     assert.match(jsText, /导入按姓名合并/);
     assert.match(jsText, /一模一样的名字覆盖原行/);
-    assert.match(jsText, /导入是合并：人员同名覆盖/);
-    assert.match(jsText, /店铺只有同一家才覆盖/);
-    assert.match(jsText, /店铺导入会落盘/);
+    assert.match(jsText, /导入是合并：同一家店才覆盖/);
     assert.match(jsText, /normalizePeopleHeader/);
     assert.match(jsText, /endsWith\("姓名"\)/);
     assert.match(jsText, /people-import-file/);
