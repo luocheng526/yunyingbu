@@ -155,6 +155,7 @@ function emptyState() {
     issues: {},
     syncedSubs: {},
     runSubList: null,
+    jingmaiOnly: false,
   };
 }
 
@@ -341,6 +342,18 @@ function saveRunSubs(state, body, actor) {
   rememberHistory(state, actor, text(body.changeSummary, 200) || "只跑选中子账号", {
     runSubs: picked.map((row) => row.subAccountId),
   });
+}
+
+function saveJingmaiOnly(state, body, actor) {
+  const scope = text(body.scope || body.runScope, 16);
+  const enabledFlag = pick(body, ["只跑京麦", "enabled", "jingmaiOnly"]);
+  const turnOff = body.clear === true || scope === "all" || enabledFlag === false || enabledFlag === 0 || enabledFlag === "0" || enabledFlag === "false";
+  const turnOn = scope === "jingmai" || enabledFlag === true || enabledFlag === 1 || enabledFlag === "1" || enabledFlag === "true";
+  if (!turnOff && !turnOn) {
+    throw httpError(400, "请指定只跑京麦或恢复京准通");
+  }
+  state.jingmaiOnly = !turnOff && turnOn;
+  rememberHistory(state, actor, text(body.changeSummary, 200) || (state.jingmaiOnly ? "只跑京麦" : "恢复京准通"));
 }
 
 function saveShopMaster(state, body, actor) {
@@ -907,6 +920,8 @@ export function createWorkerMethods(db, ensure) {
           status: row.status === "success" ? "已同步" : row.status === "failed" ? "同步失败" : row.status || "待同步",
         })),
         rows: editorRows(state, includeDeleted),
+        jingmaiOnly: Boolean(state.jingmaiOnly),
+        runScope: state.jingmaiOnly ? "jingmai" : "all",
         runSubMode: Array.isArray(state.runSubList),
         runSubs: (state.runSubList || []).map((row) => ({
           store: row.store,
@@ -1016,12 +1031,14 @@ export function createWorkerMethods(db, ensure) {
         fullSnapshot: true,
         changeSummary: latestChange?.summary || "",
         runMode: subRunActive ? "sub" : "shop",
+        runScope: state.jingmaiOnly ? "jingmai" : "all",
+        只跑京麦: Boolean(state.jingmaiOnly),
         runShops,
         runSubs,
         shops,
         deletedShopIds: directory.filter((shop) => shop.deleted && shop.accountId).map((shop) => String(shop.accountId)),
         deletedSubAccounts,
-        note: "fullSnapshot 为 true，用本次 shops 整包覆盖本地规则。批量改ROI写入计划ROI，批量改金额写入第一档充值金额、第二档充值金额或ROI上涨充值金额，批量开付费和批量关付费写入自动充值。改这些不用停店，店铺正在运行时也返回。本机下次 GET 拿到新版本后，在下一批开始时使用最新规则。runMode 为 shop 时按整店跑，该店每个子账号的运行都是 true。runMode 为 sub 时只跑 runSubs 里的子账号，子账号.运行 为 false 的不要采集、不要充值。runShops 只是当前要进入的京准通主账户ID；为空表示在线待机。未选中的子账号仍留在 shops 里，规则不要丢掉。deletedShopIds、deletedSubAccounts 是已删除名单。网站不接收京准通 Cookie。",
+        note: "fullSnapshot 为 true，用本次 shops 整包覆盖本地规则。批量改ROI写入计划ROI，批量改金额写入第一档充值金额、第二档充值金额或ROI上涨充值金额，批量开付费和批量关付费写入自动充值。改这些不用停店，店铺正在运行时也返回。本机下次 GET 拿到新版本后，在下一批开始时使用最新规则。runMode 为 shop 时按整店跑，该店每个子账号的运行都是 true。runMode 为 sub 时只跑 runSubs 里的子账号，子账号.运行 为 false 的不要采集、不要充值。runShops 只是当前要进入的店铺的京准通主账户ID；为空表示在线待机，京麦也不采集。只跑京麦为 true 时，已进入的店铺只采集京麦成交金额和京麦 Cookie 状态，不要打开京准通，不要采集京准通花费、ROI、余额、点击，不要充值。未选中的子账号仍留在 shops 里，规则不要丢掉。deletedShopIds、deletedSubAccounts 是已删除名单。网站不接收京准通 Cookie。",
       };
     },
 
@@ -1148,6 +1165,8 @@ export function createWorkerMethods(db, ensure) {
         });
       } else if (action === "runSubs") {
         saveRunSubs(state, body, actor);
+      } else if (action === "jingmai" || action === "runScope") {
+        saveJingmaiOnly(state, body, actor);
       } else {
         const incoming = Array.isArray(body.rows) ? body.rows : [];
         if (!incoming.length) {

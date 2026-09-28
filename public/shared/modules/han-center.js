@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20260928-runsubs";
+  var VERSION = "20260928-jingmai";
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -122,6 +122,7 @@
     ".han-rules-batch{display:grid;grid-template-columns:minmax(150px,190px) minmax(240px,1fr) minmax(300px,1.25fr) auto;gap:12px;align-items:center;margin:0 0 12px;padding:12px 14px;background:#fff;border:1px solid #f0f0f0;border-radius:8px}" +
     ".han-rules-batch-group{display:flex;align-items:center;gap:8px;min-width:0}" +
     ".han-rules-batch-label{flex:0 0 auto;color:#595959;font-size:12px;font-weight:600}" +
+    ".han-rules-batch button.is-on{background:#1677ff;color:#fff;border-color:#1677ff}" +
     ".han-rules-runsubs{grid-column:1 / -1}" +
     ".han-rules-running{display:inline-block;margin-left:6px;padding:0 6px;border-radius:999px;background:#e6f4ff;color:#0958d9;font-size:12px;font-weight:600;line-height:18px;vertical-align:middle}" +
     ".han-rules-batch-status{grid-column:1 / -1;margin:0;min-height:18px;font-size:13px;line-height:1.5}" +
@@ -834,7 +835,9 @@
         '<button type="button" id="han-rules-off">批量关付费</button></div>' +
         '<div class="han-rules-batch-group han-rules-runsubs"><span class="han-rules-batch-label">运行范围</span>' +
         '<button type="button" id="han-rules-run-subs">只跑选中子账号</button>' +
-        '<button type="button" id="han-rules-run-shop">恢复整店跑</button></div>' +
+        '<button type="button" id="han-rules-run-shop">恢复整店跑</button>' +
+        '<button type="button" id="han-rules-jingmai"' + (lastMeta.jingmaiOnly ? ' class="is-on"' : "") + ">只跑京麦</button>" +
+        '<button type="button" id="han-rules-jzt"' + (lastMeta.jingmaiOnly ? "" : ' class="is-on"') + ">恢复京准通</button></div>" +
         '<p id="han-rules-batch-status" class="han-rules-batch-status"></p>';
       root.querySelector("#han-rules-check-all").addEventListener("change", function (event) { toggleAll(event.target.checked); });
       root.querySelector("#han-rules-apply-roi").addEventListener("click", batchRoi);
@@ -843,6 +846,8 @@
       root.querySelector("#han-rules-off").addEventListener("click", function () { batchAuto(false); });
       root.querySelector("#han-rules-run-subs").addEventListener("click", saveRunSubs);
       root.querySelector("#han-rules-run-shop").addEventListener("click", clearRunSubs);
+      root.querySelector("#han-rules-jingmai").addEventListener("click", function () { saveJingmaiOnly(true); });
+      root.querySelector("#han-rules-jzt").addEventListener("click", function () { saveJingmaiOnly(false); });
       root.querySelector("#han-rules-batch-roi").addEventListener("keydown", function (event) {
         if (event.key === "Enter") { event.preventDefault(); batchRoi(); }
       });
@@ -1167,6 +1172,23 @@
       saveRules(picked, on ? "批量开付费" : "批量关付费");
     }
 
+    function saveJingmaiOnly(on) {
+      setBatchStatus(on ? "正在切换为只跑京麦…" : "正在恢复京准通…");
+      jsonFetch("/api/han/worker", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "jingmai", enabled: on, changeSummary: on ? "只跑京麦" : "恢复京准通" }),
+      }).then(function (data) {
+        return load().then(function () {
+          setBatchStatus(on
+            ? "只跑京麦：已保存，配置版本 " + data.version + "。已勾选的店铺进店后只采集京麦成交金额和京麦 Cookie，不打开京准通，不采集花费、ROI、余额，不充值。店铺勾选仍要保存，否则本地机不会进店。"
+            : "已恢复京准通，配置版本 " + data.version + "。已勾选的店铺按原来的规则采集京准通并充值。");
+        });
+      }).catch(function (err) {
+        if (!dead) setStatus(err.message || "保存失败", true);
+      });
+    }
+
     function saveRunSubs() {
       var picked = checkedRows();
       if (!picked.length) {
@@ -1281,10 +1303,15 @@
         renderToolbar();
         renderTable();
         setStatus(rows.length ? "已加载 " + rows.length + " 个子账号" : "");
+        var scopeNotes = [];
+        if (data.jingmaiOnly) {
+          scopeNotes.push("当前只跑京麦数据，不跑京准通。已勾选的店铺进店后只采集京麦成交金额和京麦 Cookie，不要打开京准通，不要充值。");
+        }
         if (data.runSubMode) {
           var runningCount = rows.filter(function (row) { return row.subRunning && !row.deleted; }).length;
-          setBatchStatus("当前只跑选中的 " + runningCount + " 个子账号。没选中的号不要采集、不要充值。点「恢复整店跑」后，已勾选的店铺会跑全部子账号。");
+          scopeNotes.push("当前只跑选中的 " + runningCount + " 个子账号。没选中的号不要采集、不要充值。点「恢复整店跑」后，已勾选的店铺会跑全部子账号。");
         }
+        if (scopeNotes.length) setBatchStatus(scopeNotes.join(""));
       });
     }
 
