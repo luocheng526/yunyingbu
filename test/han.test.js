@@ -502,7 +502,7 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /XmModules\["\/han\/recharge-rules"\]/);
   assert.match(js, /实时付费/);
   assert.match(js, /HanCenter\.mount\(root, hanBoard\)/);
-  assert.match(js, /20260928-batchmsg/);
+  assert.match(js, /20260928-runsubs/);
   assert.doesNotMatch(js, /id="paid-form"/);
   assert.doesNotMatch(js, /上传抓取表/);
   assert.match(js, /XmModules\["\/han\/training"\]/);
@@ -1542,7 +1542,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   const han = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
   assert.match(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
   assert.match(han, /\["\/han\/paid\?board=rules", "充值规则", "rules"\]/);
-  assert.match(han, /20260928-batchmsg/);
+  assert.match(han, /20260928-runsubs/);
   const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
   assert.match(center, /两档花费/);
   assert.match(center, /han-rules-text/);
@@ -1555,6 +1555,9 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(center, /灰字示例不会保存/);
   assert.match(center, /批量改金额/);
   assert.match(center, /批量开付费/);
+  assert.match(center, /只跑选中子账号/);
+  assert.match(center, /恢复整店跑/);
+  assert.match(center, /han-rules-running/);
   assert.match(center, /han-rules-name/);
   assert.match(center, /han-rules-filters/);
   assert.match(center, /refreshShopStatus/);
@@ -1570,7 +1573,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(han, /insertAdjacentElement\("afterend"/);
   assert.match(han, /data-xm-group"\) !== "\/han"/);
   assert.doesNotMatch(han, /anchor\.href = "\/han\/paid-center"/);
-  assert.match(center, /20260928-batchmsg/);
+  assert.match(center, /20260928-runsubs/);
   assert.match(center, /aria-label="主管分组"/);
   assert.match(center, /han-live-bar/);
   assert.match(center, /han-live-tabs/);
@@ -1583,6 +1586,114 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(center, /京准通花费/);
   assert.match(center, /board === "live"/);
   assert.match(center, /\/api\/han\/shops\?team=/);
+});
+
+test("selected subaccounts are the only ones marked running", async () => {
+  await withServer(async (base) => {
+    const a1 = "1234567890123456789";
+    const a2 = "1234567890123456790";
+    const b1 = "2234567890123456789";
+    const b2 = "2234567890123456790";
+    const pushed = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          { 店铺名称: "甲店", 京准通主账户ID: "10001", 花费: 10 },
+          { 店铺名称: "乙店", 京准通主账户ID: "10002", 花费: 8 },
+        ],
+        subaccounts: [
+          { 店铺名称: "甲店", 京准通主账户ID: "10001", 子账号ID: a1, 子账号名称: "甲-一", 花费: 10, ROI: 1, 余额: 20 },
+          { 店铺名称: "甲店", 京准通主账户ID: "10001", 子账号ID: a2, 子账号名称: "甲-二", 花费: 8, ROI: 1, 余额: 20 },
+          { 店铺名称: "乙店", 京准通主账户ID: "10002", 子账号ID: b1, 子账号名称: "乙-一", 花费: 6, ROI: 1, 余额: 20 },
+          { 店铺名称: "乙店", 京准通主账户ID: "10002", 子账号ID: b2, 子账号名称: "乙-二", 花费: 4, ROI: 1, 余额: 20 },
+        ],
+      }),
+    });
+    assert.equal(pushed.res.status, 201);
+
+    const stopped = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "run", runShops: [], changeSummary: "停止全部店铺" }),
+    });
+    assert.equal(stopped.body.ok, true);
+
+    const empty = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "runSubs", runSubs: [], changeSummary: "只跑选中子账号" }),
+    });
+    assert.equal(empty.res.status, 400);
+    assert.match(empty.body.error, /请先勾选要跑的子账号/);
+
+    const missing = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "runSubs",
+        runSubs: [{ 店铺名称: "甲店", 京准通主账户ID: "10001", 子账号ID: "999" }],
+      }),
+    });
+    assert.equal(missing.res.status, 400);
+    assert.match(missing.body.error, /找不到要跑的子账号/);
+
+    const picked = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "runSubs",
+        changeSummary: "只跑选中子账号",
+        runSubs: [{ 店铺名称: "甲店", 京准通主账户ID: "10001", 子账号ID: a1 }],
+      }),
+    });
+    assert.equal(picked.body.ok, true);
+
+    const config = await json(base, "/api/han/worker?machineId=han-worker-01");
+    assert.equal(config.body.runMode, "sub");
+    assert.equal(config.body.changeSummary, "只跑选中子账号");
+    assert.deepEqual(config.body.runShops, ["10001"]);
+    assert.deepEqual(config.body.runSubs, [{ 京准通主账户ID: "10001", 子账号ID: a1 }]);
+    const shopA = config.body.shops.find((shop) => shop.店铺名称 === "甲店");
+    const shopB = config.body.shops.find((shop) => shop.店铺名称 === "乙店");
+    assert.equal(shopA.启用, true);
+    assert.equal(shopB.启用, false);
+    assert.equal(shopA.子账号.find((row) => row.子账号ID === a1).运行, true);
+    assert.equal(shopA.子账号.find((row) => row.子账号ID === a2).运行, false);
+    assert.equal(shopB.子账号.every((row) => row.运行 === false), true);
+    assert.equal(shopA.子账号.length, 2);
+    assert.equal(shopB.子账号.length, 2);
+    assert.equal(typeof shopA.子账号.find((row) => row.子账号ID === a1).子账号ID, "string");
+    assert.match(config.body.note, /不用停店/);
+    assert.match(config.body.note, /runSubs/);
+
+    const rules = await json(base, "/api/han/worker?view=rules");
+    assert.equal(rules.body.runSubMode, true);
+    assert.equal(rules.body.rows.find((row) => row.subAccountId === a1).subRunning, true);
+    assert.equal(rules.body.rows.find((row) => row.subAccountId === a2).subRunning, false);
+    assert.equal(rules.body.rows.find((row) => row.subAccountId === b1).subRunning, false);
+    assert.equal(rules.body.shopRuns.find((row) => row.store === "甲店").enabled, true);
+    assert.equal(rules.body.shopRuns.find((row) => row.store === "乙店").enabled, false);
+
+    const cleared = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "runSubs", clear: true, changeSummary: "恢复整店跑" }),
+    });
+    assert.equal(cleared.body.ok, true);
+    const shopMode = await json(base, "/api/han/worker?machineId=han-worker-01");
+    assert.equal(shopMode.body.runMode, "shop");
+    assert.deepEqual(shopMode.body.runShops, ["10001"]);
+    const againA = shopMode.body.shops.find((shop) => shop.店铺名称 === "甲店");
+    const againB = shopMode.body.shops.find((shop) => shop.店铺名称 === "乙店");
+    assert.equal(againA.子账号.find((row) => row.子账号ID === a1).运行, true);
+    assert.equal(againA.子账号.find((row) => row.子账号ID === a2).运行, true);
+    assert.equal(againB.启用, false);
+    assert.equal(againB.子账号.every((row) => row.运行 === false), true);
+    const rulesAgain = await json(base, "/api/han/worker?view=rules");
+    assert.equal(rulesAgain.body.runSubMode, false);
+    assert.equal(rulesAgain.body.rows.every((row) => row.subRunning === false), true);
+  });
 });
 
 test("han schema uses prefixed tables", async () => {

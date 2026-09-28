@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20260928-batchmsg";
+  var VERSION = "20260928-runsubs";
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -122,6 +122,8 @@
     ".han-rules-batch{display:grid;grid-template-columns:minmax(150px,190px) minmax(240px,1fr) minmax(300px,1.25fr) auto;gap:12px;align-items:center;margin:0 0 12px;padding:12px 14px;background:#fff;border:1px solid #f0f0f0;border-radius:8px}" +
     ".han-rules-batch-group{display:flex;align-items:center;gap:8px;min-width:0}" +
     ".han-rules-batch-label{flex:0 0 auto;color:#595959;font-size:12px;font-weight:600}" +
+    ".han-rules-runsubs{grid-column:1 / -1}" +
+    ".han-rules-running{display:inline-block;margin-left:6px;padding:0 6px;border-radius:999px;background:#e6f4ff;color:#0958d9;font-size:12px;font-weight:600;line-height:18px;vertical-align:middle}" +
     ".han-rules-batch-status{grid-column:1 / -1;margin:0;min-height:18px;font-size:13px;line-height:1.5}" +
     ".han-rules-batch-status.is-ok{color:#027a48}" +
     ".han-rules-batch-status.is-error{color:#b42318;font-weight:600}" +
@@ -830,12 +832,17 @@
         '<div class="han-rules-batch-group"><span class="han-rules-batch-label">付费</span>' +
         '<button type="button" id="han-rules-on">批量开付费</button>' +
         '<button type="button" id="han-rules-off">批量关付费</button></div>' +
+        '<div class="han-rules-batch-group han-rules-runsubs"><span class="han-rules-batch-label">运行范围</span>' +
+        '<button type="button" id="han-rules-run-subs">只跑选中子账号</button>' +
+        '<button type="button" id="han-rules-run-shop">恢复整店跑</button></div>' +
         '<p id="han-rules-batch-status" class="han-rules-batch-status"></p>';
       root.querySelector("#han-rules-check-all").addEventListener("change", function (event) { toggleAll(event.target.checked); });
       root.querySelector("#han-rules-apply-roi").addEventListener("click", batchRoi);
       root.querySelector("#han-rules-apply-amount").addEventListener("click", batchAmount);
       root.querySelector("#han-rules-on").addEventListener("click", function () { batchAuto(true); });
       root.querySelector("#han-rules-off").addEventListener("click", function () { batchAuto(false); });
+      root.querySelector("#han-rules-run-subs").addEventListener("click", saveRunSubs);
+      root.querySelector("#han-rules-run-shop").addEventListener("click", clearRunSubs);
       root.querySelector("#han-rules-batch-roi").addEventListener("keydown", function (event) {
         if (event.key === "Enter") { event.preventDefault(); batchRoi(); }
       });
@@ -851,6 +858,7 @@
       return '<tr class="' + (row.deleted ? "is-deleted" : "") + '" style="height:' + ROW_H + 'px"><td><input type="checkbox" data-check="' + escapeHtml(key) + '"' +
         (selected.has(key) ? " checked" : "") + " /></td><td>" + escapeHtml(row.store) + "</td><td>" + escapeHtml(String(row.accountId || "")) +
         '</td><td class="han-rules-name">' + escapeHtml(row.subAccountName || "") +
+        (row.subRunning ? '<span class="han-rules-running">在跑</span>' : "") +
         '</td><td><label title="' + (row.autoRecharge ? "是" : "否") + '"><input class="han-rules-auto" data-key="' + escapeHtml(key) +
         '" type="checkbox"' + (row.autoRecharge ? " checked" : "") + " /></label></td><td>" +
         numInput(row, "plannedRoi", "计划ROI") + "</td><td>" + numInput(row, "tier1MinSpend", "一档花费下限") + "</td><td>" + numInput(row, "tier1MaxSpend", "一档花费上限") +
@@ -1159,6 +1167,51 @@
       saveRules(picked, on ? "批量开付费" : "批量关付费");
     }
 
+    function saveRunSubs() {
+      var picked = checkedRows();
+      if (!picked.length) {
+        setStatus("请先勾选要跑的子账号", true);
+        return;
+      }
+      setBatchStatus("正在保存只跑选中的 " + picked.length + " 个子账号…");
+      jsonFetch("/api/han/worker", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "runSubs",
+          changeSummary: "只跑选中子账号",
+          runSubs: picked.map(function (row) {
+            return {
+              店铺名称: row.store,
+              京准通主账户ID: String(row.accountId || ""),
+              子账号ID: String(row.subAccountId || ""),
+            };
+          }),
+        }),
+      }).then(function (data) {
+        return load().then(function () {
+          setBatchStatus("只跑选中子账号：已保存 " + picked.length + " 个，配置版本 " + data.version + "。这些子账号的店铺已勾选。本地程序要看子账号的「运行」或 runSubs，没选中的号不要采集、不要充值。还在按整店跑的旧程序，进店后仍会把该店子账号都跑一遍。");
+        });
+      }).catch(function (err) {
+        if (!dead) setStatus(err.message || "保存失败", true);
+      });
+    }
+
+    function clearRunSubs() {
+      setBatchStatus("正在恢复整店跑…");
+      jsonFetch("/api/han/worker", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "runSubs", clear: true, changeSummary: "恢复整店跑" }),
+      }).then(function (data) {
+        return load().then(function () {
+          setBatchStatus("已恢复整店跑，配置版本 " + data.version + "。已勾选的店铺会跑全部子账号。要停掉某店，请取消勾选后点保存运行状态。");
+        });
+      }).catch(function (err) {
+        if (!dead) setStatus(err.message || "保存失败", true);
+      });
+    }
+
     function saveRunShops() {
       var runShops = (lastMeta.shopRuns || []).filter(function (row) {
         return !row.deleted && runSelected.has(runKey(row));
@@ -1228,6 +1281,10 @@
         renderToolbar();
         renderTable();
         setStatus(rows.length ? "已加载 " + rows.length + " 个子账号" : "");
+        if (data.runSubMode) {
+          var runningCount = rows.filter(function (row) { return row.subRunning && !row.deleted; }).length;
+          setBatchStatus("当前只跑选中的 " + runningCount + " 个子账号。没选中的号不要采集、不要充值。点「恢复整店跑」后，已勾选的店铺会跑全部子账号。");
+        }
       });
     }
 

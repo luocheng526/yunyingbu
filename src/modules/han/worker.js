@@ -154,6 +154,7 @@ function emptyState() {
     shopStatuses: [],
     issues: {},
     syncedSubs: {},
+    runSubList: null,
   };
 }
 
@@ -274,6 +275,71 @@ function rememberHistory(state, actor, summary, extra = {}) {
     version: state.version,
     summary,
     ...extra,
+  });
+}
+
+function knownRunStores(state) {
+  return new Set(
+    (state.subs || [])
+      .map((row) => row.store)
+      .concat((state.shops || []).map((row) => row.store))
+      .concat((state.shopMasters || []).filter((row) => !row.deleted).map((row) => row.store))
+      .filter(Boolean),
+  );
+}
+
+function saveRunSubs(state, body, actor) {
+  const clear = body.clear === true || body.runMode === "shop";
+  if (clear) {
+    state.runSubList = null;
+    rememberHistory(state, actor, text(body.changeSummary, 200) || "恢复整店跑");
+    return;
+  }
+  const incoming = Array.isArray(body.runSubs) ? body.runSubs : [];
+  if (!incoming.length) {
+    throw httpError(400, "请先勾选要跑的子账号");
+  }
+  const identities = ruleIdentities(state).filter((sub) => sub.subAccountId && !sub.deleted);
+  const byId = new Map(identities.map((sub) => [ruleKey(sub), sub]));
+  const picked = [];
+  const seen = new Set();
+  for (const raw of incoming) {
+    const identity = {
+      store: text(pick(raw, ["店铺名称", "store"]), 64),
+      accountId: idText(pick(raw, ["京准通主账户ID", "accountId"]), "京准通主账户ID"),
+      subAccountId: idText(pick(raw, ["子账号ID", "subAccountId"]), "子账号ID"),
+    };
+    const found = byId.get(ruleKey(identity));
+    if (!found) {
+      throw httpError(400, "找不到要跑的子账号");
+    }
+    const row = {
+      store: found.store,
+      accountId: String(found.accountId || ""),
+      subAccountId: String(found.subAccountId || ""),
+    };
+    const key = ruleKey(row);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    picked.push(row);
+  }
+  const hadRuns = state.runs.length > 0;
+  const previous = new Map(state.runs.map((row) => [row.store, row]));
+  const stores = new Set(picked.map((row) => row.store));
+  const known = knownRunStores(state);
+  for (const store of stores) {
+    known.add(store);
+  }
+  state.runSubList = picked;
+  state.runs = [...known].map((store) => ({
+    store,
+    enabled: !hadRuns ? stores.has(store) : stores.has(store) ? true : Boolean(previous.get(store)?.enabled),
+    machineId: previous.get(store)?.machineId || "",
+  }));
+  rememberHistory(state, actor, text(body.changeSummary, 200) || "只跑选中子账号", {
+    runSubs: picked.map((row) => row.subAccountId),
   });
 }
 
@@ -483,6 +549,7 @@ function toWorkerSub(row) {
     ROI上涨充值金额: Number(row.roiRiseAmount) || 0,
     连续充值未增单次数: Number(row.noOrderTimes) || 0,
     暂停分钟数: Number(row.pauseMinutes) || 0,
+    运行: Boolean(row.running),
   };
 }
 
@@ -732,14 +799,22 @@ export function createWorkerMethods(db, ensure) {
 
   function editorRows(state, includeDeleted = false) {
     const rules = new Map(state.rules.map((row) => [ruleKey(row), row]));
+    const runSubActive = Array.isArray(state.runSubList);
+    const runSubKeys = new Set((state.runSubList || []).map((row) => ruleKey(row)));
+    const runSaved = state.runs.length > 0;
+    const runByStore = new Map(state.runs.map((row) => [row.store, row]));
     return ruleIdentities(state, includeDeleted).map((sub) => {
       const saved = rules.get(ruleKey(sub));
       const rule = materializeRule(saved || { store: sub.store, accountId: sub.accountId, subAccountId: sub.subAccountId, subAccountName: sub.subAccountName });
       const sync = rowSync(state, sub);
+      const shopRun = runByStore.get(sub.store);
+      const shopOn = shopRun ? Boolean(shopRun.enabled) : !runSaved;
+      const subRunning = runSubActive ? shopOn && runSubKeys.has(ruleKey(sub)) && !sub.deleted : false;
       return {
         ...rule,
         subAccountName: sub.subAccountName || rule.subAccountName,
         deleted: Boolean(sub.deleted),
+        subRunning,
         spend: sub.spend,
         roi: sub.roi,
         balance: sub.balance,
@@ -832,6 +907,12 @@ export function createWorkerMethods(db, ensure) {
           status: row.status === "success" ? "已同步" : row.status === "failed" ? "同步失败" : row.status || "待同步",
         })),
         rows: editorRows(state, includeDeleted),
+        runSubMode: Array.isArray(state.runSubList),
+        runSubs: (state.runSubList || []).map((row) => ({
+          store: row.store,
+          accountId: String(row.accountId || ""),
+          subAccountId: String(row.subAccountId || ""),
+        })),
         stores: runs.map((row) => row.store),
         shops: runs.map((row) => row.store),
         newSubDefaults: { autoRecharge: false, plannedRoi: 2 },
@@ -857,6 +938,8 @@ export function createWorkerMethods(db, ensure) {
       }
       const runSaved = state.runs.length > 0;
       const runByStore = new Map(state.runs.map((row) => [row.store, row]));
+      const subRunActive = Array.isArray(state.runSubList);
+      const runSubKeys = new Set((state.runSubList || []).map((row) => ruleKey(row)));
       const rules = new Map(state.rules.map((row) => [ruleKey(row), row]));
       const subsByStore = new Map();
       for (const sub of ruleIdentities(state)) {
@@ -879,9 +962,6 @@ export function createWorkerMethods(db, ensure) {
           const assignedElsewhere = Boolean(run?.machineId && machine && run.machineId !== machine);
           const accountId = String(shop.accountId || "");
           const running = enabled && !assignedElsewhere && Boolean(accountId);
-          if (running && !runShops.includes(accountId)) {
-            runShops.push(accountId);
-          }
           const subs = (subsByStore.get(shop.store) || []).map((sub) => {
             issuedKeys.push(ruleKey(sub));
             const saved = rules.get(ruleKey(sub));
@@ -891,16 +971,28 @@ export function createWorkerMethods(db, ensure) {
               subAccountId: sub.subAccountId,
               subAccountName: sub.subAccountName,
             });
-            return toWorkerSub({ ...rule, subAccountName: sub.subAccountName || rule.subAccountName });
+            const subRunning = subRunActive ? running && runSubKeys.has(ruleKey(sub)) : running;
+            return toWorkerSub({
+              ...rule,
+              subAccountName: sub.subAccountName || rule.subAccountName,
+              running: subRunning,
+            });
           });
+          const shopOn = subRunActive ? subs.some((row) => row.运行) : running;
+          if (shopOn && accountId && !runShops.includes(accountId)) {
+            runShops.push(accountId);
+          }
           return {
             店铺名称: shop.store,
             京准通主账户ID: String(shop.accountId || ""),
-            启用: running,
+            启用: shopOn,
             执行机: shop.machineId || run?.machineId || "",
             子账号: subs,
           };
         });
+      const runSubs = shops.flatMap((shop) => (shop.子账号 || [])
+        .filter((sub) => sub.运行)
+        .map((sub) => ({ 京准通主账户ID: shop.京准通主账户ID, 子账号ID: sub.子账号ID })));
       state.issues = state.issues || {};
       state.issues[String(version)] = issuedKeys;
       const issueVersions = Object.keys(state.issues).map(Number).sort((a, b) => a - b);
@@ -923,11 +1015,13 @@ export function createWorkerMethods(db, ensure) {
         machineId: machine,
         fullSnapshot: true,
         changeSummary: latestChange?.summary || "",
+        runMode: subRunActive ? "sub" : "shop",
         runShops,
+        runSubs,
         shops,
         deletedShopIds: directory.filter((shop) => shop.deleted && shop.accountId).map((shop) => String(shop.accountId)),
         deletedSubAccounts,
-        note: "fullSnapshot 为 true，用本次 shops 整包覆盖本地规则。批量改ROI写入计划ROI，批量改金额写入第一档充值金额、第二档充值金额或ROI上涨充值金额，批量开付费和批量关付费写入自动充值。改这些不用停店，店铺正在运行时也返回。本机下次 GET 拿到新版本后，在下一批开始时使用最新规则。runShops 只是当前要运行的京准通主账户ID；为空表示在线待机。deletedShopIds、deletedSubAccounts 是已删除名单。网站不接收京准通 Cookie。",
+        note: "fullSnapshot 为 true，用本次 shops 整包覆盖本地规则。批量改ROI写入计划ROI，批量改金额写入第一档充值金额、第二档充值金额或ROI上涨充值金额，批量开付费和批量关付费写入自动充值。改这些不用停店，店铺正在运行时也返回。本机下次 GET 拿到新版本后，在下一批开始时使用最新规则。runMode 为 shop 时按整店跑，该店每个子账号的运行都是 true。runMode 为 sub 时只跑 runSubs 里的子账号，子账号.运行 为 false 的不要采集、不要充值。runShops 只是当前要进入的京准通主账户ID；为空表示在线待机。未选中的子账号仍留在 shops 里，规则不要丢掉。deletedShopIds、deletedSubAccounts 是已删除名单。网站不接收京准通 Cookie。",
       };
     },
 
@@ -1052,6 +1146,8 @@ export function createWorkerMethods(db, ensure) {
           summary: text(body.changeSummary, 200) || "保存运行状态",
           runShops: state.runs.filter((row) => row.enabled).map((row) => row.store),
         });
+      } else if (action === "runSubs") {
+        saveRunSubs(state, body, actor);
       } else {
         const incoming = Array.isArray(body.rows) ? body.rows : [];
         if (!incoming.length) {
