@@ -84,6 +84,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(cssText, /\.xm-main/);
     assert.match(cssText, /\.site-acl-matrix/);
     assert.match(cssText, /\.people-page button\.site-acl-person/);
+    assert.match(cssText, /td\.org-cell\.can-edit/);
     assert.doesNotMatch(text, /class="site-sidebar"/);
     assert.doesNotMatch(text, /<header class="site-header">/);
     assert.match(text, /组织中心/);
@@ -130,7 +131,9 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.doesNotMatch(jsText, /id="org-team"/);
     assert.doesNotMatch(jsText, /id="org-status"/);
     assert.match(jsText, /org-filter-name/);
-    assert.match(jsText, /双击单元格/);
+    assert.match(jsText, /点击单元格即可改/);
+    assert.match(jsText, /点击单元格保存/);
+    assert.match(jsText, /storeCellDrag/);
     assert.match(jsText, /下载模板/);
     assert.match(jsText, /id="org-import"/);
     assert.match(jsText, /groupId: groupId/);

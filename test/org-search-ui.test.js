@@ -627,7 +627,7 @@ const STORE_CLEAR_SMOKE = `<!doctype html>
           document.body.setAttribute("data-ok", "no-cell");
           return;
         }
-        cell.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+        cell.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
         await sleep(80);
         const input = cell.querySelector("input");
         if (!input) {
@@ -677,6 +677,83 @@ test("headless chrome saves a cleared store cell on outside pointer", async () =
     assert.match(html, /data-ok="1"/, html.includes("data-ok=") ? html.slice(html.indexOf("data-ok="), html.indexOf("data-ok=") + 120) : html.slice(-400));
     assert.match(html, /data-cell="—"/);
     assert.match(html, /data-stored=""/);
+  } finally {
+    await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
+});
+
+const STORE_CLICK_SMOKE = `<!doctype html>
+<html lang="zh-CN">
+  <head><meta charset="utf-8" /><link rel="stylesheet" href="/people.css" /></head>
+  <body>
+    <div id="xm-content"></div>
+    <script src="/shared/modules/people.js"></script>
+    <script>
+      (async function () {
+        function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+        window.XmModules["/people"].mount(document.getElementById("xm-content"));
+        await sleep(700);
+        const row = document.querySelector("#org-tbody tr[data-id]");
+        const fields = ["director","manager","supervisor","reserve","operator","assistant","storeName","storeId","merchantId","remark","updatedOn","closedOn","login","password"];
+        const missing = [];
+        for (let i = 0; i < fields.length; i += 1) {
+          const field = fields[i];
+          const cell = row && row.querySelector('td[data-field="' + field + '"]');
+          if (!cell) {
+            missing.push("td:" + field);
+            continue;
+          }
+          cell.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+          await sleep(50);
+          const editor = cell.querySelector(field === "remark" ? "select" : "input");
+          if (!editor) {
+            missing.push(field);
+          }
+          document.getElementById("org-count").dispatchEvent(
+            new PointerEvent("pointerdown", { bubbles: true, cancelable: true })
+          );
+          await sleep(80);
+        }
+        const login = row && row.querySelector('td[data-field="login"]');
+        login.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+        await sleep(50);
+        const loginInput = login.querySelector("input");
+        loginInput.value = "demo_click_login";
+        loginInput.dispatchEvent(new Event("input", { bubbles: true }));
+        document.getElementById("org-count").dispatchEvent(
+          new PointerEvent("pointerdown", { bubbles: true, cancelable: true })
+        );
+        await sleep(800);
+        const listed = await fetch("/api/people/org/stores").then(function (res) { return res.json(); });
+        const id = row.getAttribute("data-id");
+        const stored = (listed.stores || []).find(function (item) { return String(item.id) === String(id); });
+        document.body.setAttribute("data-missing", missing.join(","));
+        document.body.setAttribute("data-login", stored && stored.login || "");
+        document.body.setAttribute("data-ok", !missing.length && stored && stored.login === "demo_click_login" ? "1" : "0");
+      })();
+    </script>
+  </body>
+</html>`;
+
+test("headless chrome clicks every store column to edit", async () => {
+  resetPeopleStore();
+  resetOrgBoard();
+  resetOrgExtra();
+  const app = createApp();
+  const server = http.createServer((req, res) => {
+    if (req.url === "/__store-click-smoke") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(STORE_CLICK_SMOKE);
+      return;
+    }
+    app(req, res);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  try {
+    const html = await chromeDump(`http://127.0.0.1:${port}/__store-click-smoke`, 16000);
+    assert.match(html, /data-ok="1"/, html.includes("data-ok=") ? html.slice(html.indexOf("data-ok="), html.indexOf("data-ok=") + 180) : html.slice(-400));
+    assert.match(html, /data-login="demo_click_login"/);
   } finally {
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }

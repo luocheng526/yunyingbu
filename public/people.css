@@ -526,6 +526,10 @@ body:has(.people-page) .xm-tabs {
   box-sizing: border-box;
 }
 
+.people-page td.org-cell.can-edit {
+  cursor: text;
+}
+
 .people-page td.people-cell.is-editing,
 .people-page td.org-cell.is-editing {
   overflow: hidden;
