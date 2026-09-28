@@ -693,31 +693,38 @@ const STORE_CLICK_SMOKE = `<!doctype html>
         function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
         window.XmModules["/people"].mount(document.getElementById("xm-content"));
         await sleep(700);
-        const row = document.querySelector("#org-tbody tr[data-id]");
         const fields = ["director","manager","supervisor","reserve","operator","assistant","storeName","storeId","merchantId","remark","updatedOn","closedOn","login","password"];
         const missing = [];
-        for (let i = 0; i < fields.length; i += 1) {
-          const field = fields[i];
-          const cell = row && row.querySelector('td[data-field="' + field + '"]');
+        fields.forEach(function (field) {
+          const cell = document.querySelector('#org-tbody tr[data-id] td[data-field="' + field + '"]');
           if (!cell) {
             missing.push("td:" + field);
-            continue;
+            return;
           }
           cell.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-          await sleep(50);
           const editor = cell.querySelector(field === "remark" ? "select" : "input");
           if (!editor) {
             missing.push(field);
           }
-          document.getElementById("org-count").dispatchEvent(
-            new PointerEvent("pointerdown", { bubbles: true, cancelable: true })
-          );
-          await sleep(80);
-        }
+        });
+        document.getElementById("org-count").dispatchEvent(
+          new PointerEvent("pointerdown", { bubbles: true, cancelable: true })
+        );
+        await sleep(400);
+        const row = document.querySelector("#org-tbody tr[data-id]");
         const login = row && row.querySelector('td[data-field="login"]');
+        if (!login) {
+          document.body.setAttribute("data-missing", missing.join(","));
+          document.body.setAttribute("data-ok", "no-login-td");
+          return;
+        }
         login.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-        await sleep(50);
         const loginInput = login.querySelector("input");
+        if (!loginInput) {
+          document.body.setAttribute("data-missing", missing.join(","));
+          document.body.setAttribute("data-ok", "no-login-input");
+          return;
+        }
         loginInput.value = "demo_click_login";
         loginInput.dispatchEvent(new Event("input", { bubbles: true }));
         document.getElementById("org-count").dispatchEvent(
