@@ -1,4 +1,4 @@
-/* xm-module-people org-board 0.1.229-site-acl-ui */
+/* xm-module-people org-board 0.1.230-store-click */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.229-site-acl-ui";
+    const href = "/people.css?v=0.1.230-store-click";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -205,7 +205,7 @@
       root.innerHTML =
         '<main class="page people-page">' +
         '<header class="page-head"><h1>组织中心</h1>' +
-        '<p class="lead">单元格可按住划选后复制。双击单元格即可改。导入是合并：人员同名覆盖、不同名新增；店铺只有同一家才覆盖。店铺导入会落盘，强制刷新还在，不是一套全新演示表。</p>' +
+        '<p class="lead">单元格可按住划选后复制。点击单元格即可改，点别处保存。导入是合并：人员同名覆盖、不同名新增；店铺只有同一家才覆盖。店铺导入会落盘，强制刷新还在，不是一套全新演示表。</p>' +
         '<p class="banner" id="org-scope">当前责权：—</p></header>' +
         '<nav class="org-tabs" id="org-tabs">' +
         '<button type="button" class="org-tab is-active" data-pane="stores">店铺主数据</button>' +
@@ -1195,7 +1195,7 @@
             const td = document.createElement("td");
             td.className = "org-cell" + (row.canEdit ? " can-edit" : "");
             td.setAttribute("data-field", field.key);
-            td.setAttribute("title", row.canEdit ? "双击修改" : "无责权");
+            td.setAttribute("title", row.canEdit ? "点击修改，点别处保存" : "无责权");
             td.innerHTML = displayCell(row, field);
             tr.append(td);
           });
@@ -1273,7 +1273,7 @@
               boardMeta.actor +
               " · " +
               (storeData.scopeLabel || "可改全部团队") +
-              " · 双击单元格保存";
+              " · 点击单元格保存";
           }
           renderKpis(summaryData.summary);
           rawStores = storeData.stores || [];
@@ -2475,8 +2475,25 @@
           closeForm();
         }
       });
+      let storeCellDrag = null;
+      tbody.addEventListener("pointerdown", function (event) {
+        const td = event.target.closest("td.org-cell");
+        if (!td || event.target.closest("input,select,button,.org-check,.org-actions")) {
+          storeCellDrag = null;
+          return;
+        }
+        storeCellDrag = { x: event.clientX, y: event.clientY, moved: false };
+      });
+      tbody.addEventListener("pointermove", function (event) {
+        if (!storeCellDrag) {
+          return;
+        }
+        if (Math.abs(event.clientX - storeCellDrag.x) > 4 || Math.abs(event.clientY - storeCellDrag.y) > 4) {
+          storeCellDrag.moved = true;
+        }
+      });
       tbody.addEventListener("dblclick", function (event) {
-        if (event.target.closest(".org-check")) {
+        if (event.target.closest(".org-check,.org-actions,input,select,button")) {
           return;
         }
         startCellEdit(event.target.closest("td.org-cell"));
@@ -2534,6 +2551,16 @@
               showError(errorEl, err.message);
             });
         }
+        if (editId || delId || event.target.closest(".org-check,.org-actions,input,select,button")) {
+          storeCellDrag = null;
+          return;
+        }
+        if (storeCellDrag && storeCellDrag.moved) {
+          storeCellDrag = null;
+          return;
+        }
+        storeCellDrag = null;
+        startCellEdit(event.target.closest("td.org-cell"));
       });
       form.addEventListener("submit", function (event) {
         event.preventDefault();
