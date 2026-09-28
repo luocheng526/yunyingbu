@@ -500,20 +500,14 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /XmModules\["\/han\/paid"\]/);
   assert.match(js, /XmModules\["\/han\/paid-center"\]/);
   assert.match(js, /XmModules\["\/han\/recharge-rules"\]/);
-  assert.match(js, /han-paid-board/);
-  assert.match(js, /han-paid-summary/);
-  assert.match(js, /han-paid-group/);
-  assert.match(js, /实时指标/);
-  assert.match(js, /实时对比/);
-  assert.match(js, /实时付费金额/);
-  assert.match(js, /id="paid-form"/);
+  assert.match(js, /实时付费/);
+  assert.match(js, /HanCenter\.mount\(root, hanBoard\)/);
+  assert.match(js, /20260928-leads/);
+  assert.doesNotMatch(js, /id="paid-form"/);
+  assert.doesNotMatch(js, /上传抓取表/);
   assert.match(js, /XmModules\["\/han\/training"\]/);
   assert.match(js, /\/api\/han\/selection/);
   assert.match(js, /\/api\/han\/products/);
-  assert.match(js, /\/api\/han\/paid/);
-  assert.match(js, /\/api\/han\/paid\/import-file/);
-  assert.match(js, /上传抓取表/);
-  assert.match(js, /id="han-paid-import"/);
   assert.match(js, /\/api\/han\/training/);
   assert.match(js, /店/);
   assert.match(js, /培训系统/);
@@ -1417,7 +1411,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   const han = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
   assert.match(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
   assert.match(han, /\["\/han\/paid\?board=rules", "充值规则", "rules"\]/);
-  assert.match(han, /20260927-status/);
+  assert.match(han, /20260928-leads/);
   const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
   assert.match(center, /两档花费/);
   assert.match(center, /han-rules-text/);
@@ -1443,6 +1437,14 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(han, /insertAdjacentElement\("afterend"/);
   assert.match(han, /data-xm-group"\) !== "\/han"/);
   assert.doesNotMatch(han, /anchor\.href = "\/han\/paid-center"/);
+  assert.match(center, /20260928-leads/);
+  assert.match(center, /aria-label="主管分组"/);
+  assert.match(center, /han-live-tabs/);
+  assert.match(center, /han-live-group/);
+  assert.match(center, /按主管查看/);
+  assert.match(center, /京准通花费/);
+  assert.match(center, /board === "live"/);
+  assert.match(center, /\/api\/han\/shops\?team=/);
 });
 
 test("han schema uses prefixed tables", async () => {

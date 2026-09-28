@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20260927-status";
+  var VERSION = "20260928-leads";
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -58,6 +58,12 @@
     ".han-paid tbody td{padding:10px 12px;border-bottom:1px solid #f3f4f6;white-space:nowrap;text-align:right}" +
     ".han-paid tbody tr:hover td{background:#f8fbff}" +
     ".han-paid tbody tr.is-zero td{color:#9ca3af}" +
+    ".han-live-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:0}" +
+    ".han-live-tabs a{display:inline-flex;align-items:center;min-height:32px;padding:4px 14px;border-radius:999px;background:#f3f4f6;color:#374151;text-decoration:none;font-size:13px;font-weight:600}" +
+    ".han-live-tabs a.is-active{background:#0f766e;color:#fff}" +
+    ".han-live-group{margin:0 0 16px}" +
+    ".han-live-group h3{margin:0 0 8px;font-size:15px;display:flex;justify-content:space-between;gap:8px}" +
+    ".han-live-group h3 span{font-size:12px;font-weight:500;color:#6b7280}" +
     ".han-paid-store{color:#0f766e;font-weight:700;text-decoration:none;cursor:pointer;background:none;border:0;padding:0;height:auto}" +
     ".han-paid-date{display:block;margin-top:2px;color:#9ca3af;font-size:12px;font-weight:400}" +
     ".han-paid-tag{display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:600}" +
@@ -130,11 +136,31 @@
     );
   }
 
-  function mountCenter(root) {
+  function mountCenter(root, mode) {
+    var TEAMS = ["陈晓曼组", "高明阳组", "毛永超组", "段坤孝组", "薛双双组", "韩梦凯组"];
+    var live = mode === "live";
+    var askedTeam = live ? (new URLSearchParams(window.location.search).get("team") || "") : "";
+    var currentTeam = TEAMS.indexOf(askedTeam) >= 0 ? askedTeam : "";
+    var teamByStore = {};
+    function liveTabs() {
+      function link(href, label, on) {
+        return '<a class="' + (on ? "is-active" : "") + '" href="' + href + '" data-han-tab="' + href + '">' + escapeHtml(label) + "</a>";
+      }
+      return '<nav class="han-live-tabs" aria-label="主管分组">' +
+        link("/han/paid", "全部汇总", !currentTeam) +
+        TEAMS.map(function (name) {
+          var href = "/han/paid?team=" + encodeURIComponent(name);
+          return link(href, name, currentTeam === name);
+        }).join("") +
+        "</nav>";
+    }
     root.innerHTML = page(
-      "付费中心",
-      "最新一次回传的全店快照。点店铺名称下钻查看子账号和充值记录。",
+      live ? "实时付费" : "付费中心",
+      live
+        ? "和沈子晗付费中心同一套回传字段。上方按主管分组查看，点店铺名称下钻子账号和充值记录。"
+        : "最新一次回传的全店快照。点店铺名称下钻查看子账号和充值记录。",
       '<div class="han-paid-meta"><span class="han-paid-dot"></span><span id="han-paid-asof">等待回传</span></div></header>' +
+      (live ? liveTabs() : "") +
       '<section class="kpi-grid" id="han-paid-kpis"></section><div id="han-paid-body"></div><p id="han-paid-status" class="status"></p></main>'
     );
     var asofEl = root.querySelector("#han-paid-asof");
@@ -199,23 +225,73 @@
       }).join("") + "</tbody></table></div>";
     }
 
+    function teamOf(store) {
+      return teamByStore[store] || "韩梦凯组";
+    }
+
+    function metricsFrom(rows) {
+      var spend = 0;
+      var gmv = 0;
+      var orders = 0;
+      var amount = 0;
+      var success = 0;
+      rows.forEach(function (row) {
+        spend += Number(row.spend) || 0;
+        gmv += Number(row.jingmaiGmv) || 0;
+        orders += Number(row.paidOrders) || 0;
+        amount += Number(row.totalOrderAmount) || 0;
+        if (row.success !== "否") success += 1;
+      });
+      return { stores: rows.length, spend: spend, jingmaiGmv: gmv, totalOrderAmount: amount, paidOrders: orders, successCount: success };
+    }
+
+    function scopedRows() {
+      if (!live || !currentTeam) return overviewRows;
+      return overviewRows.filter(function (row) { return teamOf(row.store) === currentTeam; });
+    }
+
+    function renderGroupTable(rows) {
+      if (!rows.length) return '<p class="empty">该组还没有回传</p>';
+      return '<div class="han-paid-table-wrap"><table>' + headerRow("店铺名称") + "<tbody>" + rows.map(function (row) {
+        return '<tr class="' + (isZeroRow(row) ? "is-zero" : "") + '"><td><button type="button" class="han-paid-store" data-han-store="' +
+          escapeHtml(row.store) + '">' + escapeHtml(row.store) + '</button><span class="han-paid-date">' +
+          escapeHtml(row.date || row.capturedAt || "") + "</span></td>" + metricCells(row) + "</tr>";
+      }).join("") + "</tbody></table></div>";
+    }
+
+    function renderLiveTables() {
+      var rows = scopedRows().filter(function (row) {
+        return !keyword || String(row.store || "").indexOf(keyword) >= 0;
+      });
+      var names = currentTeam ? [currentTeam] : TEAMS;
+      return names.map(function (team) {
+        var groupRows = rows.filter(function (row) { return teamOf(row.store) === team; });
+        if (keyword && !groupRows.length && !currentTeam) return "";
+        return '<section class="han-live-group"><h3>' + escapeHtml(team) + "<span>" + groupRows.length +
+          "店</span></h3>" + renderGroupTable(groupRows) + "</section>";
+      }).join("");
+    }
+
     function renderOverview(data) {
       overviewRows = data.shops || [];
-      var metrics = data.metrics || data.totals || {};
-      asofEl.textContent = data.asOf || data.capturedAt
-        ? "最新回传 " + (data.asOf || data.capturedAt) + " · " + (metrics.stores || overviewRows.length) + " 店"
+      var scoped = scopedRows();
+      var metrics = live ? metricsFrom(scoped) : (data.metrics || data.totals || {});
+      var stamp = data.asOf || data.capturedAt;
+      asofEl.textContent = stamp
+        ? "最新回传 " + stamp + " · " + (live ? (currentTeam || "全部主管") + " " : "") + (metrics.stores || scoped.length) + " 店"
         : "等待回传";
       renderKpis(metrics);
-      bodyEl.innerHTML = '<section class="panel"><div class="han-paid-toolbar"><h2>本次回传</h2><div class="row">' +
+      bodyEl.innerHTML = '<section class="panel"><div class="han-paid-toolbar"><h2>' +
+        (live ? "按主管查看" : "本次回传") + '</h2><div class="row">' +
         '<input id="han-paid-filter" type="search" maxlength="64" placeholder="搜索店铺名称" /></div></div>' +
-        '<div id="han-paid-table">' + renderOverviewTable(overviewRows) + "</div></section>";
+        '<div id="han-paid-table">' + (live ? renderLiveTables() : renderOverviewTable(overviewRows)) + "</div></section>";
       var filter = root.querySelector("#han-paid-filter");
       if (filter) {
         filter.value = keyword;
         filter.addEventListener("input", function () {
           keyword = filter.value.trim();
           var wrap = root.querySelector("#han-paid-table");
-          if (wrap) wrap.innerHTML = renderOverviewTable(overviewRows);
+          if (wrap) wrap.innerHTML = live ? renderLiveTables() : renderOverviewTable(overviewRows);
         });
       }
     }
@@ -252,7 +328,7 @@
       var rechargeAmount = recharges.reduce(function (sum, row) { return sum + (Number(row.amount) || 0); }, 0);
       bodyEl.innerHTML =
         '<section class="panel"><div class="han-paid-toolbar"><div class="han-paid-toolbar-left">' +
-        '<button type="button" id="han-paid-back">返回付费中心</button><h2>' + escapeHtml(data.store || shop.store) +
+        '<button type="button" id="han-paid-back">返回' + (live ? "实时付费" : "付费中心") + "</button><h2>" + escapeHtml(data.store || shop.store) +
         "</h2></div></div></section>" +
         '<section class="panel"><h2>子账号</h2>' +
         (accounts.length
@@ -278,9 +354,27 @@
 
     function loadOverview() {
       setStatus("正在加载…");
-      return jsonFetch("/api/han/worker?view=overview").then(function (data) {
+      var jobs = [jsonFetch("/api/han/worker?view=overview")];
+      if (live) {
+        TEAMS.forEach(function (name) {
+          jobs.push(jsonFetch("/api/han/shops?team=" + encodeURIComponent(name)).then(function (json) {
+            return { team: name, items: (json && json.items) || [] };
+          }).catch(function () {
+            return { team: name, items: [] };
+          }));
+        });
+      }
+      return Promise.all(jobs).then(function (all) {
         if (dead) return;
-        renderOverview(data);
+        if (live) {
+          teamByStore = {};
+          all.slice(1).forEach(function (block) {
+            (block.items || []).forEach(function (item) {
+              if (item.store && !teamByStore[item.store]) teamByStore[item.store] = block.team;
+            });
+          });
+        }
+        renderOverview(all[0]);
         setStatus("已更新");
       });
     }
@@ -1104,6 +1198,7 @@
     version: VERSION,
     mount: function (root, board) {
       if (board === "rules") return mountRules(root);
+      if (board === "live") return mountCenter(root, "live");
       return mountCenter(root);
     },
   };
