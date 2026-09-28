@@ -1,4 +1,4 @@
-/* xm-module-people org-board 0.1.230-store-click */
+/* xm-module-people org-board 0.1.231-org-nav */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.230-store-click";
+    const href = "/people.css?v=0.1.231-org-nav";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -204,15 +204,22 @@
       document.addEventListener("wheel", onPeopleWheel, { passive: false, capture: true });
       root.innerHTML =
         '<main class="page people-page">' +
-        '<header class="page-head"><h1>组织中心</h1>' +
-        '<p class="lead">单元格可按住划选后复制。点击单元格即可改，点别处保存。导入是合并：人员同名覆盖、不同名新增；店铺只有同一家才覆盖。店铺导入会落盘，强制刷新还在，不是一套全新演示表。</p>' +
-        '<p class="banner" id="org-scope">当前责权：—</p></header>' +
-        '<nav class="org-tabs" id="org-tabs">' +
-        '<button type="button" class="org-tab is-active" data-pane="stores">店铺主数据</button>' +
-        '<button type="button" class="org-tab" data-pane="members">成员管理</button>' +
-        '<button type="button" class="org-tab" data-pane="rights">责权</button>' +
-        '<button type="button" class="org-tab" data-pane="acl">权限</button>' +
-        '<button type="button" class="org-tab" data-pane="logs">改动日志</button>' +
+        '<nav class="org-tabs" id="org-tabs" aria-label="组织中心功能">' +
+        '<button type="button" class="org-tab is-active" data-pane="stores">' +
+        '<span class="org-tab-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.4"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.4"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.4"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.4"/></svg></span>' +
+        '<span class="org-tab-name">店铺主数据</span></button>' +
+        '<button type="button" class="org-tab" data-pane="members">' +
+        '<span class="org-tab-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="2.6"/><path d="M4.6 17.4c.4-2.7 2.4-4.2 4.4-4.2s4 1.5 4.4 4.2"/><circle cx="16.4" cy="8.4" r="2.2"/><path d="M15.2 13.4c1.7-.2 3.4 1 3.9 3.2"/></svg></span>' +
+        '<span class="org-tab-name">成员管理</span></button>' +
+        '<button type="button" class="org-tab" data-pane="rights">' +
+        '<span class="org-tab-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4.5v4.2"/><circle cx="12" cy="11.2" r="2.4"/><path d="M7.2 19.2V15c0-1 .8-1.8 1.8-1.8h6c1 0 1.8.8 1.8 1.8v4.2"/><path d="M4.8 19.2h14.4"/></svg></span>' +
+        '<span class="org-tab-name">责权</span></button>' +
+        '<button type="button" class="org-tab" data-pane="acl">' +
+        '<span class="org-tab-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.8 5.4 6.4v5.3c0 4.1 2.8 7.3 6.6 8.5 3.8-1.2 6.6-4.4 6.6-8.5V6.4z"/><path d="M9.4 12.1 11.2 14l3.6-3.8"/></svg></span>' +
+        '<span class="org-tab-name">权限</span></button>' +
+        '<button type="button" class="org-tab" data-pane="logs">' +
+        '<span class="org-tab-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4.2" y="4.2" width="15.6" height="15.6" rx="2"/><path d="M8 8.4h8M8 12h8M8 15.6h5.2"/></svg></span>' +
+        '<span class="org-tab-name">改动日志</span></button>' +
         "</nav>" +
         '<div class="org-pane" data-pane="stores">' +
         '<div class="org-kpis" id="org-kpis"></div>' +
