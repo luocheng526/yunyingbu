@@ -870,7 +870,8 @@ export function createWorkerMethods(db, ensure) {
       }
       const issuedKeys = [];
       const runShops = [];
-      const shops = shopDirectory(state)
+      const directory = shopDirectory(state);
+      const shops = directory
         .filter((shop) => !shop.deleted)
         .map((shop) => {
           const run = runByStore.get(shop.store);
@@ -907,15 +908,26 @@ export function createWorkerMethods(db, ensure) {
         delete state.issues[String(oldVersion)];
       }
       await save(state);
+      const latestChange = [...state.history].reverse().find((row) => row && row.summary);
+      const deletedSubAccounts = ruleIdentities(state, true)
+        .filter((sub) => sub.deleted && sub.subAccountId)
+        .map((sub) => ({
+          京准通主账户ID: String(sub.accountId || ""),
+          子账号ID: String(sub.subAccountId || ""),
+        }));
       return {
         ok: true,
         changed: true,
         version,
         updatedAt: state.updatedAt,
         machineId: machine,
+        fullSnapshot: true,
+        changeSummary: latestChange?.summary || "",
         runShops,
         shops,
-        note: "shops 始终带未删除店铺和完整子账号规则，店铺正在运行时也返回。改计划ROI或档位不用停店。本机下次 GET 拿到新版本后，在下一批开始时使用最新规则。runShops 只是当前要运行的京准通主账户ID；为空表示在线待机。网站不接收京准通 Cookie。",
+        deletedShopIds: directory.filter((shop) => shop.deleted && shop.accountId).map((shop) => String(shop.accountId)),
+        deletedSubAccounts,
+        note: "fullSnapshot 为 true，用本次 shops 整包覆盖本地规则。批量改ROI写入计划ROI，批量改金额写入第一档充值金额、第二档充值金额或ROI上涨充值金额，批量开付费和批量关付费写入自动充值。改这些不用停店，店铺正在运行时也返回。本机下次 GET 拿到新版本后，在下一批开始时使用最新规则。runShops 只是当前要运行的京准通主账户ID；为空表示在线待机。deletedShopIds、deletedSubAccounts 是已删除名单。网站不接收京准通 Cookie。",
       };
     },
 

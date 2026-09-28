@@ -1396,6 +1396,137 @@ test("running shop still receives an edited ROI on the next pull", async () => {
   });
 });
 
+test("batch ROI, amount, and paid switch reach the local machine snapshot", async () => {
+  await withServer(async (base) => {
+    const subId = "1234567890123456789";
+    const otherId = "1234567890123456790";
+    const pushed = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [{ 店铺名称: "松郁汽车用品专营店", 京准通主账户ID: "99920461182", 花费: 10 }],
+        subaccounts: [
+          { 店铺名称: "松郁汽车用品专营店", 京准通主账户ID: "99920461182", 子账号ID: subId, 子账号名称: "松郁-五七", 花费: 10, ROI: 1, 余额: 20 },
+          { 店铺名称: "松郁汽车用品专营店", 京准通主账户ID: "99920461182", 子账号ID: otherId, 子账号名称: "松郁-五八", 花费: 8, ROI: 1, 余额: 20 },
+        ],
+      }),
+    });
+    assert.equal(pushed.res.status, 201);
+
+    function ruleRow(id, name, extra) {
+      return {
+        店铺名称: "松郁汽车用品专营店",
+        京准通主账户ID: "99920461182",
+        子账号ID: id,
+        子账号名称: name,
+        自动充值: true,
+        计划ROI: 2,
+        第一档花费下限: 1,
+        第一档花费上限: 1000,
+        第一档余额阈值: 100,
+        第一档充值金额: 100,
+        第二档花费下限: 1000,
+        第二档余额阈值: 50,
+        第二档充值金额: 150,
+        ROI上涨充值金额: 100,
+        连续充值未增单次数: 3,
+        暂停分钟数: 30,
+        ...extra,
+      };
+    }
+
+    const roi = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "rules",
+        changeSummary: "批量改ROI",
+        rows: [ruleRow(subId, "松郁-五七", { 计划ROI: "2.1" }), ruleRow(otherId, "松郁-五八", { 计划ROI: "2.1" })],
+      }),
+    });
+    assert.equal(roi.res.status, 200);
+    const afterRoi = await json(base, "/api/han/worker?machineId=han-worker-01");
+    assert.equal(afterRoi.body.fullSnapshot, true);
+    assert.equal(afterRoi.body.changeSummary, "批量改ROI");
+    assert.deepEqual(afterRoi.body.deletedShopIds, []);
+    assert.deepEqual(afterRoi.body.deletedSubAccounts, []);
+    const roiShop = afterRoi.body.shops.find((shop) => shop.店铺名称 === "松郁汽车用品专营店");
+    assert.equal(roiShop.子账号.find((row) => row.子账号ID === subId).计划ROI, 2.1);
+    assert.equal(roiShop.子账号.find((row) => row.子账号ID === otherId).计划ROI, 2.1);
+    assert.equal(roiShop.子账号.find((row) => row.子账号ID === subId).第一档充值金额, 100);
+
+    const amount = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "rules",
+        changeSummary: "批量改一档充值",
+        rows: [ruleRow(subId, "松郁-五七", { 计划ROI: "2.1", 第一档充值金额: "80", 第二档充值金额: "220", ROI上涨充值金额: "60" })],
+      }),
+    });
+    assert.equal(amount.res.status, 200);
+    const afterAmount = await json(base, "/api/han/worker?machineId=han-worker-01");
+    const amountSub = afterAmount.body.shops[0].子账号.find((row) => row.子账号ID === subId);
+    const untouched = afterAmount.body.shops[0].子账号.find((row) => row.子账号ID === otherId);
+    assert.equal(afterAmount.body.changeSummary, "批量改一档充值");
+    assert.equal(amountSub.第一档充值金额, 80);
+    assert.equal(amountSub.第二档充值金额, 220);
+    assert.equal(amountSub.ROI上涨充值金额, 60);
+    assert.equal(amountSub.计划ROI, 2.1);
+    assert.equal(amountSub.自动充值, true);
+    assert.equal(untouched.第一档充值金额, 100);
+    assert.equal(untouched.计划ROI, 2.1);
+
+    const off = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "rules",
+        changeSummary: "批量关付费",
+        rows: [ruleRow(subId, "松郁-五七", { 自动充值: false, 计划ROI: "2.1", 第一档充值金额: "80", 第二档充值金额: "220", ROI上涨充值金额: "60" })],
+      }),
+    });
+    assert.equal(off.res.status, 200);
+    const on = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "rules",
+        changeSummary: "批量开付费",
+        rows: [ruleRow(otherId, "松郁-五八", { 自动充值: true, 计划ROI: "3" })],
+      }),
+    });
+    assert.equal(on.res.status, 200);
+    const afterSwitch = await json(base, "/api/han/worker?machineId=han-worker-01");
+    assert.equal(afterSwitch.body.fullSnapshot, true);
+    assert.equal(afterSwitch.body.changeSummary, "批量开付费");
+    assert.match(afterSwitch.body.note, /批量改ROI/);
+    assert.match(afterSwitch.body.note, /批量关付费/);
+    const switched = afterSwitch.body.shops[0].子账号;
+    assert.equal(switched.find((row) => row.子账号ID === subId).自动充值, false);
+    assert.equal(switched.find((row) => row.子账号ID === subId).计划ROI, 2.1);
+    assert.equal(switched.find((row) => row.子账号ID === subId).第一档充值金额, 80);
+    assert.equal(switched.find((row) => row.子账号ID === subId).第二档充值金额, 220);
+    assert.equal(switched.find((row) => row.子账号ID === subId).ROI上涨充值金额, 60);
+    assert.equal(switched.find((row) => row.子账号ID === otherId).自动充值, true);
+    assert.equal(switched.find((row) => row.子账号ID === otherId).计划ROI, 3);
+    assert.equal(switched.find((row) => row.子账号ID === subId).子账号ID, subId);
+
+    const removed = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "sub", op: "delete", 京准通主账户ID: "99920461182", 子账号ID: otherId }),
+    });
+    assert.equal(removed.body.ok, true);
+    const afterDelete = await json(base, "/api/han/worker?machineId=han-worker-01");
+    assert.equal(afterDelete.body.shops[0].子账号.some((row) => row.子账号ID === otherId), false);
+    assert.deepEqual(afterDelete.body.deletedSubAccounts, [{ 京准通主账户ID: "99920461182", 子账号ID: otherId }]);
+    const same = await json(base, "/api/han/worker?machineId=han-worker-01&sinceVersion=" + afterDelete.body.version);
+    assert.equal(same.body.changed, false);
+    assert.equal(same.body.fullSnapshot, undefined);
+  });
+});
+
 test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   const { readFile } = await import("node:fs/promises");
   const nav = await readFile(new URL("../public/shared/nav.js", import.meta.url), "utf8");
