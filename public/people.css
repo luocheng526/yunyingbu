@@ -124,6 +124,7 @@ body:has(.people-page) .xm-tabs {
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
 }
 
+.people-page button.org-tab,
 .org-tab {
   flex: 1 1 140px;
   display: inline-flex;
@@ -144,12 +145,14 @@ body:has(.people-page) .xm-tabs {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
+.people-page button.org-tab:hover,
 .org-tab:hover {
   border-color: #91caff;
   background: #f7faff;
   color: #1677ff;
 }
 
+.people-page button.org-tab.is-active,
 .org-tab.is-active {
   border-color: #1677ff;
   background: #1677ff;
