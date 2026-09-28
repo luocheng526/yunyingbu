@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20260928-leads";
+  var VERSION = "20260928-livebar";
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -58,7 +58,12 @@
     ".han-paid tbody td{padding:10px 12px;border-bottom:1px solid #f3f4f6;white-space:nowrap;text-align:right}" +
     ".han-paid tbody tr:hover td{background:#f8fbff}" +
     ".han-paid tbody tr.is-zero td{color:#9ca3af}" +
-    ".han-live-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:0}" +
+    ".han-live-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%}" +
+    ".han-live-bar .han-paid-meta{margin-left:auto;flex:0 0 auto;white-space:nowrap}" +
+    ".han-live .page-head{margin:0}" +
+    ".han-live .page-head .lead{display:none}" +
+    ".han-live table.han-live-grid th:nth-child(2),.han-live table.han-live-grid td:nth-child(2){text-align:right}" +
+    ".han-live-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:0;flex:1 1 auto}" +
     ".han-live-tabs a{display:inline-flex;align-items:center;min-height:32px;padding:4px 14px;border-radius:999px;background:#f3f4f6;color:#374151;text-decoration:none;font-size:13px;font-weight:600}" +
     ".han-live-tabs a.is-active{background:#0f766e;color:#fff}" +
     ".han-live-group{margin:0 0 16px}" +
@@ -154,15 +159,18 @@
         }).join("") +
         "</nav>";
     }
-    root.innerHTML = page(
-      live ? "实时付费" : "付费中心",
-      live
-        ? "和沈子晗付费中心同一套回传字段。上方按主管分组查看，点店铺名称下钻子账号和充值记录。"
-        : "最新一次回传的全店快照。点店铺名称下钻查看子账号和充值记录。",
-      '<div class="han-paid-meta"><span class="han-paid-dot"></span><span id="han-paid-asof">等待回传</span></div></header>' +
-      (live ? liveTabs() : "") +
-      '<section class="kpi-grid" id="han-paid-kpis"></section><div id="han-paid-body"></div><p id="han-paid-status" class="status"></p></main>'
-    );
+    root.innerHTML = live
+      ? '<main class="page han-paid han-live"><style>' + css + "</style>" +
+        '<div class="han-live-bar">' + liveTabs() +
+        '<div class="han-paid-meta"><span class="han-paid-dot"></span><span id="han-paid-asof">等待回传</span></div></div>' +
+        '<header class="page-head"><div><h1>实时付费</h1></div></header>' +
+        '<section class="kpi-grid" id="han-paid-kpis"></section><div id="han-paid-body"></div><p id="han-paid-status" class="status"></p></main>'
+      : page(
+        "付费中心",
+        "最新一次回传的全店快照。点店铺名称下钻查看子账号和充值记录。",
+        '<div class="han-paid-meta"><span class="han-paid-dot"></span><span id="han-paid-asof">等待回传</span></div></header>' +
+        '<section class="kpi-grid" id="han-paid-kpis"></section><div id="han-paid-body"></div><p id="han-paid-status" class="status"></p></main>'
+      );
     var asofEl = root.querySelector("#han-paid-asof");
     var kpiEl = root.querySelector("#han-paid-kpis");
     var bodyEl = root.querySelector("#han-paid-body");
@@ -198,17 +206,22 @@
     }
 
     function metricCells(row) {
-      return "<td>" + escapeHtml(row.accountId || "—") + "</td><td>" + money(row.spend) + "</td><td>" +
+      var cells = "<td>" + money(row.spend) + "</td><td>" +
         integer(row.paidOrders) + "</td><td>" + rate(row.roi) + "</td><td>" + rate(row.cvr) + "</td><td>" +
-        money(row.cpc) + "</td><td>" + money(row.jingmaiGmv) + "</td><td>" + integer(row.clicks) + "</td><td>" +
-        rate(row.ctr) + "</td><td>" + money(row.totalOrderAmount) + "</td><td>" + rate(row.realFeeRatio) + "</td><td>" +
+        money(row.cpc) + "</td><td>" + money(row.jingmaiGmv) + "</td>";
+      if (!live) cells += "<td>" + integer(row.clicks) + "</td><td>" + rate(row.ctr) + "</td>";
+      return (live ? "" : "<td>" + escapeHtml(row.accountId || "—") + "</td>") + cells +
+        "<td>" + money(row.totalOrderAmount) + "</td><td>" + rate(row.realFeeRatio) + "</td><td>" +
         successTag(row.success) + "</td>";
     }
 
     function headerRow(first) {
-      return "<thead><tr><th>" + first + "</th><th>京准通主账户ID</th><th>京准通花费</th><th>京准通付费订单数</th>" +
+      return "<thead><tr><th>" + first + "</th>" +
+        (live ? "" : "<th>京准通主账户ID</th>") +
+        "<th>京准通花费</th><th>京准通付费订单数</th>" +
         "<th>京准通付费投产比</th><th>京准通付费转化率</th><th>京准通平均点击成本</th><th>京麦成交金额</th>" +
-        "<th>京准通点击数</th><th>京准通点击率</th><th>京准通总订单金额</th><th>真实费比</th><th>是否成功</th></tr></thead>";
+        (live ? "" : "<th>京准通点击数</th><th>京准通点击率</th>") +
+        "<th>京准通总订单金额</th><th>真实费比</th><th>是否成功</th></tr></thead>";
     }
 
     function isZeroRow(row) {
@@ -252,7 +265,7 @@
 
     function renderGroupTable(rows) {
       if (!rows.length) return '<p class="empty">该组还没有回传</p>';
-      return '<div class="han-paid-table-wrap"><table>' + headerRow("店铺名称") + "<tbody>" + rows.map(function (row) {
+      return '<div class="han-paid-table-wrap"><table class="han-live-grid">' + headerRow("店铺名称") + "<tbody>" + rows.map(function (row) {
         return '<tr class="' + (isZeroRow(row) ? "is-zero" : "") + '"><td><button type="button" class="han-paid-store" data-han-store="' +
           escapeHtml(row.store) + '">' + escapeHtml(row.store) + '</button><span class="han-paid-date">' +
           escapeHtml(row.date || row.capturedAt || "") + "</span></td>" + metricCells(row) + "</tr>";

@@ -1523,7 +1523,7 @@
         if (dead || !window.HanCenter) return;
         stop = window.HanCenter.mount(root, hanBoard) || function () {};
       }
-      const centerVer = "20260928-leads";
+      const centerVer = "20260928-livebar";
       if (window.HanCenter && window.HanCenter.version === centerVer) {
         start();
       } else {
