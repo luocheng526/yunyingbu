@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20260928-livebar";
+  var VERSION = "20260928-livealign";
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -60,9 +60,12 @@
     ".han-paid tbody tr.is-zero td{color:#9ca3af}" +
     ".han-live-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%}" +
     ".han-live-bar .han-paid-meta{margin-left:auto;flex:0 0 auto;white-space:nowrap}" +
-    ".han-live .page-head{margin:0}" +
-    ".han-live .page-head .lead{display:none}" +
-    ".han-live table.han-live-grid th:nth-child(2),.han-live table.han-live-grid td:nth-child(2){text-align:right}" +
+    ".han-live-tools{justify-content:flex-end;margin-bottom:8px}" +
+    ".han-live .han-paid-store{height:auto;border:0;padding:0;background:transparent;border-radius:0}" +
+    ".han-live table.han-live-grid{width:100%;border-collapse:collapse;table-layout:auto}" +
+    ".han-live table.han-live-grid thead th{position:static;text-align:center}" +
+    ".han-live table.han-live-grid tbody td{text-align:center;vertical-align:middle}" +
+    ".han-live table.han-live-grid th:first-child,.han-live table.han-live-grid td:first-child{text-align:left}" +
     ".han-live-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:0;flex:1 1 auto}" +
     ".han-live-tabs a{display:inline-flex;align-items:center;min-height:32px;padding:4px 14px;border-radius:999px;background:#f3f4f6;color:#374151;text-decoration:none;font-size:13px;font-weight:600}" +
     ".han-live-tabs a.is-active{background:#0f766e;color:#fff}" +
@@ -163,7 +166,6 @@
       ? '<main class="page han-paid han-live"><style>' + css + "</style>" +
         '<div class="han-live-bar">' + liveTabs() +
         '<div class="han-paid-meta"><span class="han-paid-dot"></span><span id="han-paid-asof">等待回传</span></div></div>' +
-        '<header class="page-head"><div><h1>实时付费</h1></div></header>' +
         '<section class="kpi-grid" id="han-paid-kpis"></section><div id="han-paid-body"></div><p id="han-paid-status" class="status"></p></main>'
       : page(
         "付费中心",
@@ -294,8 +296,8 @@
         ? "最新回传 " + stamp + " · " + (live ? (currentTeam || "全部主管") + " " : "") + (metrics.stores || scoped.length) + " 店"
         : "等待回传";
       renderKpis(metrics);
-      bodyEl.innerHTML = '<section class="panel"><div class="han-paid-toolbar"><h2>' +
-        (live ? "按主管查看" : "本次回传") + '</h2><div class="row">' +
+      bodyEl.innerHTML = '<section class="panel"><div class="han-paid-toolbar' + (live ? " han-live-tools" : "") + '">' +
+        (live ? "" : "<h2>本次回传</h2>") + '<div class="row">' +
         '<input id="han-paid-filter" type="search" maxlength="64" placeholder="搜索店铺名称" /></div></div>' +
         '<div id="han-paid-table">' + (live ? renderLiveTables() : renderOverviewTable(overviewRows)) + "</div></section>";
       var filter = root.querySelector("#han-paid-filter");
