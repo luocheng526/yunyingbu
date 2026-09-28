@@ -289,11 +289,30 @@ function knownRunStores(state) {
   );
 }
 
+function applyNamedRuns(state, names, body) {
+  const wanted = new Set((names || []).map((name) => text(name, 64)).filter(Boolean));
+  const known = knownRunStores(state);
+  for (const store of wanted) {
+    known.add(store);
+  }
+  const previous = new Map(state.runs.map((row) => [row.store, row]));
+  state.runs = [...known].map((store) => ({
+    store,
+    enabled: wanted.has(store),
+    machineId: text(body.machineId, 64) || previous.get(store)?.machineId || "",
+  }));
+}
+
 function saveRunSubs(state, body, actor) {
   const clear = body.clear === true || body.runMode === "shop";
   if (clear) {
+    if (Array.isArray(body.runShops)) {
+      applyNamedRuns(state, body.runShops, body);
+    }
     state.runSubList = null;
-    rememberHistory(state, actor, text(body.changeSummary, 200) || "恢复整店跑");
+    rememberHistory(state, actor, text(body.changeSummary, 200) || "恢复整店跑", {
+      runShops: state.runs.filter((row) => row.enabled).map((row) => row.store),
+    });
     return;
   }
   const incoming = Array.isArray(body.runSubs) ? body.runSubs : [];
@@ -326,19 +345,27 @@ function saveRunSubs(state, body, actor) {
     seen.add(key);
     picked.push(row);
   }
-  const hadRuns = state.runs.length > 0;
-  const previous = new Map(state.runs.map((row) => [row.store, row]));
-  const stores = new Set(picked.map((row) => row.store));
-  const known = knownRunStores(state);
-  for (const store of stores) {
-    known.add(store);
-  }
   state.runSubList = picked;
-  state.runs = [...known].map((store) => ({
-    store,
-    enabled: !hadRuns ? stores.has(store) : stores.has(store) ? true : Boolean(previous.get(store)?.enabled),
-    machineId: previous.get(store)?.machineId || "",
-  }));
+  if (Array.isArray(body.runShops)) {
+    const names = body.runShops.map((name) => text(name, 64)).filter(Boolean);
+    for (const row of picked) {
+      if (!names.includes(row.store)) names.push(row.store);
+    }
+    applyNamedRuns(state, names, body);
+  } else {
+    const hadRuns = state.runs.length > 0;
+    const previous = new Map(state.runs.map((row) => [row.store, row]));
+    const stores = new Set(picked.map((row) => row.store));
+    const known = knownRunStores(state);
+    for (const store of stores) {
+      known.add(store);
+    }
+    state.runs = [...known].map((store) => ({
+      store,
+      enabled: !hadRuns ? stores.has(store) : stores.has(store) ? true : Boolean(previous.get(store)?.enabled),
+      machineId: previous.get(store)?.machineId || "",
+    }));
+  }
   rememberHistory(state, actor, text(body.changeSummary, 200) || "只跑选中子账号", {
     runSubs: picked.map((row) => row.subAccountId),
   });
@@ -352,8 +379,13 @@ function saveJingmaiOnly(state, body, actor) {
   if (!turnOff && !turnOn) {
     throw httpError(400, "请指定只跑京麦或恢复京准通");
   }
+  if (Array.isArray(body.runShops)) {
+    applyNamedRuns(state, body.runShops, body);
+  }
   state.jingmaiOnly = !turnOff && turnOn;
-  rememberHistory(state, actor, text(body.changeSummary, 200) || (state.jingmaiOnly ? "只跑京麦" : "恢复京准通"));
+  rememberHistory(state, actor, text(body.changeSummary, 200) || (state.jingmaiOnly ? "只跑京麦" : "恢复京准通"), {
+    runShops: state.runs.filter((row) => row.enabled).map((row) => row.store),
+  });
 }
 
 function saveShopMaster(state, body, actor) {
@@ -822,7 +854,7 @@ export function createWorkerMethods(db, ensure) {
       const sync = rowSync(state, sub);
       const shopRun = runByStore.get(sub.store);
       const shopOn = shopRun ? Boolean(shopRun.enabled) : !runSaved;
-      const subRunning = runSubActive ? shopOn && runSubKeys.has(ruleKey(sub)) && !sub.deleted : false;
+      const subRunning = state.jingmaiOnly ? false : runSubActive ? shopOn && runSubKeys.has(ruleKey(sub)) && !sub.deleted : false;
       return {
         ...rule,
         subAccountName: sub.subAccountName || rule.subAccountName,
@@ -986,14 +1018,14 @@ export function createWorkerMethods(db, ensure) {
               subAccountId: sub.subAccountId,
               subAccountName: sub.subAccountName,
             });
-            const subRunning = subRunActive ? running && runSubKeys.has(ruleKey(sub)) : running;
+            const subRunning = state.jingmaiOnly ? false : subRunActive ? running && runSubKeys.has(ruleKey(sub)) : running;
             return toWorkerSub({
               ...rule,
               subAccountName: sub.subAccountName || rule.subAccountName,
               running: subRunning,
             });
           });
-          const shopOn = subRunActive ? subs.some((row) => row.运行) : running;
+          const shopOn = state.jingmaiOnly ? running : subRunActive ? subs.some((row) => row.运行) : running;
           if (shopOn && accountId && !runShops.includes(accountId)) {
             runShops.push(accountId);
           }
@@ -1038,7 +1070,7 @@ export function createWorkerMethods(db, ensure) {
         shops,
         deletedShopIds: directory.filter((shop) => shop.deleted && shop.accountId).map((shop) => String(shop.accountId)),
         deletedSubAccounts,
-        note: "fullSnapshot 为 true，用本次 shops 整包覆盖本地规则。批量改ROI写入计划ROI，批量改金额写入第一档充值金额、第二档充值金额或ROI上涨充值金额，批量开付费和批量关付费写入自动充值。改这些不用停店，店铺正在运行时也返回。本机下次 GET 拿到新版本后，在下一批开始时使用最新规则。runMode 为 shop 时按整店跑，该店每个子账号的运行都是 true。runMode 为 sub 时只跑 runSubs 里的子账号，子账号.运行 为 false 的不要采集、不要充值。runShops 只是当前要进入的店铺的京准通主账户ID；为空表示在线待机，京麦也不采集。只跑京麦为 true 时，已进入的店铺只采集京麦成交金额和京麦 Cookie 状态，不要打开京准通，不要采集京准通花费、ROI、余额、点击，不要充值。未选中的子账号仍留在 shops 里，规则不要丢掉。deletedShopIds、deletedSubAccounts 是已删除名单。网站不接收京准通 Cookie。",
+        note: "fullSnapshot 为 true，用本次 shops 整包覆盖本地规则。批量改ROI写入计划ROI，批量改金额写入第一档充值金额、第二档充值金额或ROI上涨充值金额，批量开付费和批量关付费写入自动充值。改这些不用停店，店铺正在运行时也返回。本机下次 GET 拿到新版本后，在下一批开始时使用最新规则。runMode 为 shop 时按整店跑，该店每个子账号的运行都是 true。runMode 为 sub 时只跑 runSubs 里的子账号，子账号.运行 为 false 的不要采集、不要充值。runShops 只是当前要进入的店铺的京准通主账户ID；为空表示在线待机，京麦也不采集。只跑京麦为 true 时，runShops 里的店都要进，只采集京麦成交金额和京麦 Cookie 状态，这些子账号的运行都是 false，不要打开京准通，不要采集京准通花费、ROI、余额、点击，不要充值。未选中的子账号仍留在 shops 里，规则不要丢掉。deletedShopIds、deletedSubAccounts 是已删除名单。网站不接收京准通 Cookie。",
       };
     },
 

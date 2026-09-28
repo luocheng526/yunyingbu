@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20260928-jingmai";
+  var VERSION = "20260928-runsave";
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -437,7 +437,7 @@
       "网站随时可以改计划ROI和充值档位，不用先停店。本地机保持运行并领取新版本，在下一批开始时使用最新规则。网站不保存、不接收、不返回京准通/京麦 Cookie 或密码，也不直接充值。",
       '<div class="han-paid-meta"><span class="han-paid-dot"></span><span id="han-rules-asof">等待配置</span></div></header>' +
       '<section class="panel"><div class="han-paid-toolbar"><h2>店铺主档 / 工作机运行店铺</h2><div class="row" id="han-rules-run-actions"></div></div>' +
-      '<p class="han-rules-hint" id="han-rules-run-hint">勾选=开启持续运行；取消=停止，本地完成已开始的转账及弹窗后再停该店。全部取消时本地机在线待机。Cookie 状态只显示本地机回报，本页没有 Cookie 输入框。</p>' +
+      '<p class="han-rules-hint" id="han-rules-run-hint">先勾选店铺，再点下面的只跑京麦、恢复京准通、只跑选中子账号或恢复整店跑，本地机就按这个功能开始。取消勾选后再点一次，这些店停止。Cookie 状态只显示本地机回报，本页没有 Cookie 输入框。</p>' +
       '<div id="han-shop-form" class="han-rules-form" hidden></div>' +
       '<div id="han-rules-run-shops"></div></section>' +
       '<section class="panel"><div class="han-rules-head"><div><h2>子账号规则</h2>' +
@@ -619,14 +619,13 @@
       var actions = root.querySelector("#han-rules-run-actions");
       var hint = root.querySelector("#han-rules-run-hint");
       var shopRows = (lastMeta.shopRuns || []).filter(function (row) { return showDeleted || !row.deleted; });
-      hint.textContent = "网站是店铺和子账号的唯一主档。勾选=开启持续运行；取消=停止，本地完成已开始的转账及弹窗后再停该店。已开启会持续循环采集、回传并按规则充值；已停止不得再开新一轮；停止中表示本地正在收尾。全部取消时本地机在线待机。Cookie 状态只显示本地机回报。";
+      hint.textContent = "先勾选店铺，再点下面的只跑京麦、恢复京准通、只跑选中子账号或恢复整店跑，本地机就按这个功能开始。取消勾选后再点一次，这些店停止。已停止的店不得再开新一轮。Cookie 状态只显示本地机回报。";
       var machines = lastMeta.machines || [];
       actions.innerHTML = (machines.length
         ? '<span>已绑定本地机：' + machines.map(function (item) {
           return escapeHtml(item.machineId) + "（" + escapeHtml(item.status || "待同步") + "）";
         }).join("、") + "</span>"
-        : "<span>还没有本地机 ACK。韩梦凯这台用 machineId=han-worker-01。</span>") +
-        '<button type="button" class="han-rules-save" id="han-rules-run-save">保存运行状态</button>';
+        : "<span>还没有本地机 ACK。韩梦凯这台用 machineId=han-worker-01。</span>");
       if (!shopRows.length) {
         box.innerHTML = '<p class="empty">暂无自己名下的店铺。请先新增店铺。</p>';
       } else {
@@ -679,8 +678,6 @@
           saveMaster("shop", "restore", { 京准通主账户ID: row && row.accountId, 店铺名称: row && row.store }, "恢复店铺");
         });
       });
-      var saveBtn = root.querySelector("#han-rules-run-save");
-      if (saveBtn) saveBtn.addEventListener("click", saveRunShops);
     }
 
     function findShop(key) {
@@ -1120,7 +1117,7 @@
         var running = (lastMeta.shopRuns || []).filter(function (row) { return row.enabled && !row.deleted; }).length;
         var follow = running
           ? "已开启的店在下一批开始时使用这些数字。"
-          : "上面的店铺勾选仍是空的，本地机会继续显示未勾选任何店铺，本轮不采集、不充值。要让它跑，请勾选店铺后点保存运行状态。";
+          : "上面的店铺还没开始跑。要让本地机进店，请勾选店铺后点只跑京麦或恢复京准通。";
         setSyncBanner("配置版本 " + data.version + " 已保存。不用停店，本地机下次领取后在下一批开始时使用。ACK 后本页变为已同步。");
         setStatus(summary + "：已保存 " + target.length + " 个子账号，配置版本 " + data.version + "。表上的数字已更新，本地机下次领取能看到。" + follow);
       }).catch(function (err) {
@@ -1172,17 +1169,25 @@
       saveRules(picked, on ? "批量开付费" : "批量关付费");
     }
 
+    function selectedShopNames() {
+      return (lastMeta.shopRuns || []).filter(function (row) {
+        return !row.deleted && runSelected.has(runKey(row));
+      }).map(function (row) { return row.store; });
+    }
+
     function saveJingmaiOnly(on) {
-      setBatchStatus(on ? "正在切换为只跑京麦…" : "正在恢复京准通…");
+      var shops = selectedShopNames();
+      setBatchStatus(on ? "正在让 " + shops.length + " 家店只跑京麦…" : "正在恢复 " + shops.length + " 家店的京准通…");
       jsonFetch("/api/han/worker", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "jingmai", enabled: on, changeSummary: on ? "只跑京麦" : "恢复京准通" }),
+        body: JSON.stringify({ action: "jingmai", enabled: on, changeSummary: on ? "只跑京麦" : "恢复京准通", runShops: shops }),
       }).then(function (data) {
         return load().then(function () {
+          var idle = shops.length ? "" : "当前没有勾选店铺，本地机本轮不采集、不充值。请先勾选店铺再点一次。";
           setBatchStatus(on
-            ? "只跑京麦：已保存，配置版本 " + data.version + "。已勾选的店铺进店后只采集京麦成交金额和京麦 Cookie，不打开京准通，不采集花费、ROI、余额，不充值。店铺勾选仍要保存，否则本地机不会进店。"
-            : "已恢复京准通，配置版本 " + data.version + "。已勾选的店铺按原来的规则采集京准通并充值。");
+            ? "只跑京麦：已开启 " + shops.length + " 家店，配置版本 " + data.version + "。这些店下一轮只采集京麦成交金额和京麦 Cookie，不打开京准通，不充值。" + idle
+            : "已恢复京准通：已开启 " + shops.length + " 家店，配置版本 " + data.version + "。这些店下一轮采集京准通并按规则充值。" + idle);
         });
       }).catch(function (err) {
         if (!dead) setStatus(err.message || "保存失败", true);
@@ -1195,13 +1200,15 @@
         setStatus("请先勾选要跑的子账号", true);
         return;
       }
-      setBatchStatus("正在保存只跑选中的 " + picked.length + " 个子账号…");
+      var shops = selectedShopNames();
+      setBatchStatus("正在让选中的 " + picked.length + " 个子账号开始跑…");
       jsonFetch("/api/han/worker", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "runSubs",
           changeSummary: "只跑选中子账号",
+          runShops: shops,
           runSubs: picked.map(function (row) {
             return {
               店铺名称: row.store,
@@ -1212,7 +1219,7 @@
         }),
       }).then(function (data) {
         return load().then(function () {
-          setBatchStatus("只跑选中子账号：已保存 " + picked.length + " 个，配置版本 " + data.version + "。这些子账号的店铺已勾选。本地程序要看子账号的「运行」或 runSubs，没选中的号不要采集、不要充值。还在按整店跑的旧程序，进店后仍会把该店子账号都跑一遍。");
+          setBatchStatus("只跑选中子账号：已开始 " + picked.length + " 个，配置版本 " + data.version + "。上面勾选的店和这些子账号的店会进入运行。没选中的号不要采集、不要充值。");
         });
       }).catch(function (err) {
         if (!dead) setStatus(err.message || "保存失败", true);
@@ -1220,33 +1227,16 @@
     }
 
     function clearRunSubs() {
-      setBatchStatus("正在恢复整店跑…");
+      var shops = selectedShopNames();
+      setBatchStatus("正在让 " + shops.length + " 家店恢复整店跑…");
       jsonFetch("/api/han/worker", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "runSubs", clear: true, changeSummary: "恢复整店跑" }),
+        body: JSON.stringify({ action: "runSubs", clear: true, changeSummary: "恢复整店跑", runShops: shops }),
       }).then(function (data) {
         return load().then(function () {
-          setBatchStatus("已恢复整店跑，配置版本 " + data.version + "。已勾选的店铺会跑全部子账号。要停掉某店，请取消勾选后点保存运行状态。");
-        });
-      }).catch(function (err) {
-        if (!dead) setStatus(err.message || "保存失败", true);
-      });
-    }
-
-    function saveRunShops() {
-      var runShops = (lastMeta.shopRuns || []).filter(function (row) {
-        return !row.deleted && runSelected.has(runKey(row));
-      }).map(function (row) { return row.store; });
-      setStatus("保存运行状态…");
-      jsonFetch("/api/han/worker", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "run", changeSummary: "保存运行状态", runShops: runShops })
-      }).then(function (data) {
-        setSyncBanner("运行状态已保存为版本 " + data.version + "。已开启 " + runShops.length + " 家店。改规则不用停店，本地机下一批使用最新规则。");
-        return load().then(function () {
-          setStatus("已保存版本 " + data.version + "，已开启 " + runShops.length + " 家店。");
+          var idle = shops.length ? "" : "当前没有勾选店铺，本地机本轮不进店。";
+          setBatchStatus("已恢复整店跑：已开启 " + shops.length + " 家店，配置版本 " + data.version + "。这些店会跑全部子账号。要停掉某店，取消勾选后再点一次。" + idle);
         });
       }).catch(function (err) {
         if (!dead) setStatus(err.message || "保存失败", true);
@@ -1305,7 +1295,7 @@
         setStatus(rows.length ? "已加载 " + rows.length + " 个子账号" : "");
         var scopeNotes = [];
         if (data.jingmaiOnly) {
-          scopeNotes.push("当前只跑京麦数据，不跑京准通。已勾选的店铺进店后只采集京麦成交金额和京麦 Cookie，不要打开京准通，不要充值。");
+          scopeNotes.push("当前只跑京麦数据，不跑京准通。已开启的店铺下一轮只采集京麦成交金额和京麦 Cookie，不要打开京准通，不要充值。");
         }
         if (data.runSubMode) {
           var runningCount = rows.filter(function (row) { return row.subRunning && !row.deleted; }).length;

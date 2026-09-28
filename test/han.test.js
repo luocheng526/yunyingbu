@@ -502,7 +502,7 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /XmModules\["\/han\/recharge-rules"\]/);
   assert.match(js, /实时付费/);
   assert.match(js, /HanCenter\.mount\(root, hanBoard\)/);
-  assert.match(js, /20260928-jingmai/);
+  assert.match(js, /20260928-runsave/);
   assert.doesNotMatch(js, /id="paid-form"/);
   assert.doesNotMatch(js, /上传抓取表/);
   assert.match(js, /XmModules\["\/han\/training"\]/);
@@ -1542,7 +1542,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   const han = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
   assert.match(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
   assert.match(han, /\["\/han\/paid\?board=rules", "充值规则", "rules"\]/);
-  assert.match(han, /20260928-jingmai/);
+  assert.match(han, /20260928-runsave/);
   const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
   assert.match(center, /两档花费/);
   assert.match(center, /han-rules-text/);
@@ -1559,6 +1559,8 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(center, /恢复整店跑/);
   assert.match(center, /只跑京麦/);
   assert.match(center, /恢复京准通/);
+  assert.match(center, /selectedShopNames/);
+  assert.doesNotMatch(center, /han-rules-run-save/);
   assert.match(center, /han-rules-running/);
   assert.match(center, /han-rules-name/);
   assert.match(center, /han-rules-filters/);
@@ -1575,7 +1577,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(han, /insertAdjacentElement\("afterend"/);
   assert.match(han, /data-xm-group"\) !== "\/han"/);
   assert.doesNotMatch(han, /anchor\.href = "\/han\/paid-center"/);
-  assert.match(center, /20260928-jingmai/);
+  assert.match(center, /20260928-runsave/);
   assert.match(center, /aria-label="主管分组"/);
   assert.match(center, /han-live-bar/);
   assert.match(center, /han-live-tabs/);
@@ -1740,7 +1742,10 @@ test("jingmai-only mode keeps the shop list and tells the machine to skip 京准
     assert.equal(config.body.只跑京麦, true);
     assert.equal(config.body.changeSummary, "只跑京麦");
     assert.deepEqual(config.body.runShops, ["88001"]);
-    assert.equal(config.body.shops.find((shop) => shop.店铺名称 === "松郁").子账号.length, 1);
+    const jingmaiShop = config.body.shops.find((shop) => shop.店铺名称 === "松郁");
+    assert.equal(jingmaiShop.子账号.length, 1);
+    assert.equal(jingmaiShop.启用, true);
+    assert.equal(jingmaiShop.子账号[0].运行, false);
     assert.match(config.body.note, /不用停店/);
     assert.match(config.body.note, /只跑京麦/);
     assert.match(config.body.note, /不要打开京准通/);
@@ -1759,6 +1764,26 @@ test("jingmai-only mode keeps the shop list and tells the machine to skip 京准
     assert.equal(again.body.runScope, "all");
     assert.equal(again.body.只跑京麦, false);
     assert.deepEqual(again.body.runShops, ["88001"]);
+    assert.equal(again.body.shops.find((shop) => shop.店铺名称 === "松郁").子账号[0].运行, true);
+
+    const stopped = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "run", runShops: [], changeSummary: "停止全部店铺" }),
+    });
+    assert.equal(stopped.body.ok, true);
+    const started = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "jingmai", enabled: true, changeSummary: "只跑京麦", runShops: ["松郁"] }),
+    });
+    assert.equal(started.body.ok, true);
+    const live = await json(base, "/api/han/worker?machineId=han-worker-01");
+    assert.equal(live.body.只跑京麦, true);
+    assert.deepEqual(live.body.runShops, ["88001"]);
+    assert.equal(live.body.shops.find((shop) => shop.店铺名称 === "松郁").子账号[0].运行, false);
+    const startedRules = await json(base, "/api/han/worker?view=rules");
+    assert.equal(startedRules.body.shopRuns.find((row) => row.store === "松郁").enabled, true);
   });
 });
 
