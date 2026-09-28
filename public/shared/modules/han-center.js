@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20260928-livealign";
+  var VERSION = "20260928-nosearch";
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -60,7 +60,6 @@
     ".han-paid tbody tr.is-zero td{color:#9ca3af}" +
     ".han-live-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%}" +
     ".han-live-bar .han-paid-meta{margin-left:auto;flex:0 0 auto;white-space:nowrap}" +
-    ".han-live-tools{justify-content:flex-end;margin-bottom:8px}" +
     ".han-live .han-paid-store{height:auto;border:0;padding:0;background:transparent;border-radius:0}" +
     ".han-live table.han-live-grid{width:100%;border-collapse:collapse;table-layout:auto}" +
     ".han-live table.han-live-grid thead th{position:static;text-align:center}" +
@@ -296,11 +295,11 @@
         ? "最新回传 " + stamp + " · " + (live ? (currentTeam || "全部主管") + " " : "") + (metrics.stores || scoped.length) + " 店"
         : "等待回传";
       renderKpis(metrics);
-      bodyEl.innerHTML = '<section class="panel"><div class="han-paid-toolbar' + (live ? " han-live-tools" : "") + '">' +
-        (live ? "" : "<h2>本次回传</h2>") + '<div class="row">' +
-        '<input id="han-paid-filter" type="search" maxlength="64" placeholder="搜索店铺名称" /></div></div>' +
+      bodyEl.innerHTML = '<section class="panel">' +
+        (live ? "" : '<div class="han-paid-toolbar"><h2>本次回传</h2><div class="row">' +
+          '<input id="han-paid-filter" type="search" maxlength="64" placeholder="搜索店铺名称" /></div></div>') +
         '<div id="han-paid-table">' + (live ? renderLiveTables() : renderOverviewTable(overviewRows)) + "</div></section>";
-      var filter = root.querySelector("#han-paid-filter");
+      var filter = live ? null : root.querySelector("#han-paid-filter");
       if (filter) {
         filter.value = keyword;
         filter.addEventListener("input", function () {
