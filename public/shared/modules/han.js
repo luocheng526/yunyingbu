@@ -1535,7 +1535,7 @@
         if (dead || !window.HanCenter) return;
         stop = window.HanCenter.mount(root, hanBoard) || function () {};
       }
-      const centerVer = "20261003-feeratio";
+      const centerVer = "20261003-jmsum";
       if (window.HanCenter && window.HanCenter.version === centerVer) {
         start();
       } else {

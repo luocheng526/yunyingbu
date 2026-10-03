@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20261003-feeratio";
+  var VERSION = "20261003-jmsum";
 
   function escapeHtml(value) {
   return String(value ?? "")
@@ -30,7 +30,19 @@
 
   function feeText(spend, gmv) {
   var n = feeRatio(spend, gmv);
-  return n == null ? "—" : n.toFixed(2);
+  return n == null ? "—" : (n * 100).toFixed(2) + "%";
+  }
+
+  function salesText(value) {
+  return (Number(value) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function salesOf(rows) {
+  var gmv = 0;
+  (rows || []).forEach(function (row) {
+    gmv += Number(row.jingmaiGmv) || 0;
+  });
+  return { gmv: gmv, text: salesText(gmv) };
   }
 
   function feeOf(rows) {
@@ -229,42 +241,10 @@
   return String(Math.round(a / b));
   }
 
-  function liveDelta(now, prev) {
-  var a = liveNum(now);
-  var b = liveNum(prev);
-  if (a == null || b == null || b === 0) return 0;
-  return ((a - b) / Math.abs(b)) * 100;
-  }
-
   function shanghaiHour() {
   var text = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Shanghai", hour: "2-digit", hourCycle: "h23" }).format(new Date());
   var hour = Number(String(text).slice(0, 2));
   return hour === 24 ? 0 : hour || 0;
-  }
-
-  function padHours(list) {
-  var out = (list || []).slice();
-  while (out.length < 24) out.push(0);
-  return out.slice(0, 24);
-  }
-
-  function hourList(value) {
-  if (Array.isArray(value)) return padHours(value);
-  var out = [];
-  for (var hour = 0; hour < 24; hour += 1) {
-    var key = (hour < 10 ? "0" : "") + hour + ":00";
-    out.push(Number(value && value[key]) || 0);
-  }
-  return out;
-  }
-
-  function sumHours(rows, field) {
-  var out = hourList(null);
-  (rows || []).forEach(function (row) {
-    var hours = hourList(row[field]);
-    for (var i = 0; i < 24; i += 1) out[i] += hours[i];
-  });
-  return out;
   }
 
   function flatHours(rate) {
@@ -285,33 +265,15 @@
     var name = String(row.shopName || "").trim();
     return scope[name] || scope["~" + shopKey(name)];
   });
-  var hour = shanghaiHour();
   var todayPay = rows.length ? 0 : null;
-  var yestPay = rows.length ? 0 : null;
   var todayCost = rows.length ? 0 : null;
   var todayRate;
-  var yestRate = null;
-  var todayHours;
-  var yestHours;
   rows.forEach(function (row) {
     todayPay += Number(row.todayPayAmount != null ? row.todayPayAmount : row.payAmount) || 0;
-    yestPay += Number(row.yesterdayPayAmount) || 0;
     todayCost += Number(row.totalPromotionCost) || 0;
   });
   todayRate = todayPay ? todayCost / todayPay : todayCost === 0 ? 0 : null;
-  todayHours = rows.length ? sumHours(rows, "todayHourlyData").slice(0, Math.min(24, hour + 1)) : [];
-  yestHours = rows.length ? sumHours(rows, "yesterdayHourlyData") : [];
   return {
-    hero: { label: "京麦面板实时金额", value: liveInt(todayPay), delta: liveDelta(todayPay, yestPay), yesterdayHour: yestHours, todayHour: todayHours },
-    paid: {
-      label: "实时费比",
-      value: liveRate(todayRate),
-      delta: liveDelta(todayRate, yestRate),
-      unit: "rate",
-      lineMode: "flat",
-      yesterdayHour: yestRate == null ? [] : flatHours(yestRate),
-      todayHour: todayRate == null ? [] : flatHours(todayRate).slice(0, Math.min(24, hour + 1)),
-    },
     cards: [
       { key: "ad", label: "推广花费 (支付预估)", value: liveInt(todayCost), extra: todayRate != null ? "推广占比 " + liveRate(todayRate) : "" },
       { key: "roi", label: "付费成交ROI", value: liveRoi(todayPay, todayCost) },
@@ -382,8 +344,9 @@
   var sub = spec.unit === "rate" ? "线：当天费比" : "线：累计（23点=1-23点）";
   var trend = spec.delta == null ? "" : '<div class="xm-hm-trend ' + (down ? "is-down" : "is-up") + '">环比 ' + (down ? "↘" : "↗") + " " +
     Math.round(Math.abs(Number(spec.delta) || 0)) + "%</div>";
+  var legs = plot.hours ? '<span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span>' : "";
   return '<article class="xm-hm-chart" data-chart="' + (spec.unit === "rate" ? "fee" : "sales") + '"><div class="xm-hm-card-head"><span>' +
-    escapeHtml(spec.label) + '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
+    escapeHtml(spec.label) + "</span>" + legs + '</div><div class="xm-hm-index-num">' +
     escapeHtml(spec.value) + "</div>" + trend + (plot.hours ? '<div class="xm-hm-chart-sub">' + sub + "</div>" : "") + liveLine(plot) + "</article>";
   }
 
@@ -572,8 +535,21 @@
   function renderLiveBoard() {
     if (!boardEl) return;
     var model = liveModel(erpPayload, liveScope());
-    var pageFee = feeOf(scopedRows());
+    var pageRowsNow = scopedRows();
+    var pageSales = salesOf(pageRowsNow);
+    var pageFee = feeOf(pageRowsNow);
     var feeHour = shanghaiHour();
+    model.hero = {
+      label: "京麦成交金额",
+      value: pageSales.text,
+      delta: null,
+      yesterdayHour: [],
+      todayHour: [],
+    };
+    model.cards.forEach(function (card) {
+      if (card.key === "livePay") card.value = pageSales.text;
+      if (card.key === "livePaid") card.value = liveInt(pageRowsNow.length);
+    });
     model.paid = {
       label: "真实费比",
       value: pageFee.text,
