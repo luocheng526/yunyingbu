@@ -1218,6 +1218,21 @@
     ((state && state.chiefs) || []).forEach(add);
     return out;
   }
+  function visibleDutyTeams(state, allShops) {
+    var list = dutyTeamList(state);
+    if (isHomeBoss(state && state.user)) {
+      return list;
+    }
+    var allow = {};
+    liveFilterShopNames(allShops).forEach(function (name) {
+      allow[normShopName(name)] = true;
+    });
+    return list.filter(function (team) {
+      return (team.shops || []).some(function (row) {
+        return allow[normShopName(row && row.shop)];
+      });
+    });
+  }
   function shopsInDutyTeam(state, teamName) {
     var map = {};
     dutyTeamList(state).forEach(function (team) {
@@ -1293,14 +1308,14 @@
   function liveFilterHtml(allShops, state) {
     var pick = liveFilter();
     var cur = liveFilterValue(pick);
-    var teams = dutyTeamList(state);
+    var teams = visibleDutyTeams(state, allShops);
     var shops = liveFilterShopNames(allShops);
     return (
       '<div class="xm-hm-live-filter">' +
       '<div class="xm-hm-live-filter-left">' +
       '<strong class="xm-hm-live-filter-lab">店铺列表</strong>' +
       '<span class="xm-hm-live-filter-box"><select data-live-filter="pick">' +
-      liveFilterOption("", "全选", !cur) +
+      liveFilterOption("", "责权归属", !cur) +
       (teams.length
         ? '<optgroup label="责权团队">' +
           teams
@@ -1327,16 +1342,6 @@
       ">" +
       (liveRefreshing ? "刷新中…" : "刷新") +
       "</button></div></div>"
-    );
-  }
-  function liveMetaHtml(state) {
-    return (
-      '<div class="xm-hm-live-bar">' +
-      '<span class="xm-hm-live-clock">每5分钟刷新 · 更新时间 ' +
-      escapeHtml(liveAtText(state && state.liveAt)) +
-      "</span>" +
-      '<span class="xm-hm-fee-hint">各店费比目标在表头列里单独设置</span>' +
-      "</div>"
     );
   }
   function pickLiveCards(cards) {
@@ -1928,9 +1933,7 @@
       ".xm-hm-rest span{color:var(--xm-muted);width:22px}" +
       ".xm-hm-rest b{flex:1;font-weight:500}" +
       ".xm-hm-rest em{font-style:normal;font-variant-numeric:tabular-nums}" +
-      ".xm-hm-live-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}" +
-      ".xm-hm-live-clock{margin:0;color:var(--xm-muted);font-size:12px}" +
-      ".xm-hm-live-filter{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;padding:0;border:0}" +
+      ".xm-hm-live-filter{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 16px;padding:0;border:0}" +
       ".xm-hm-live-filter-left{display:flex;align-items:center;gap:12px;min-width:0}" +
       ".xm-hm-live-filter-lab{font-size:16px;font-weight:600;color:var(--xm-ink);line-height:40px;white-space:nowrap}" +
       ".xm-hm-live-filter-box{position:relative;flex:0 1 320px;min-width:220px;max-width:100%}" +
@@ -1950,7 +1953,6 @@
       ".xm-hm-fee-goal{display:inline-flex;align-items:center;justify-content:center;gap:4px;width:100%;color:var(--xm-ink);font-size:12px;cursor:text;-webkit-user-select:text;user-select:text;pointer-events:auto}" +
       ".xm-hm-fee-goal input{width:64px;height:28px;box-sizing:border-box;border:1px solid var(--xm-line);border-radius:4px;padding:0 6px;font:inherit;text-align:center;cursor:text;pointer-events:auto;-webkit-user-select:text;user-select:text}" +
       ".xm-hm-fee-warn{color:#cf1322;font-size:13px;font-weight:600}" +
-      ".xm-hm-fee-hint{color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-chart.is-warn{border-color:#ff7875}" +
       ".xm-hm-live .xm-hm-table td.is-fee-warn,.xm-hm-live .xm-hm-table td.is-fee-hot{color:#cf1322;font-weight:600}" +
       ".xm-hm-live .xm-hm-table td.is-fee-cold{color:#1677ff;font-weight:600}" +
@@ -2229,14 +2231,13 @@
     root.querySelector("#xm-hm-live").hidden = state.view !== "live";
     root.querySelector("#xm-hm-board").hidden = state.view !== "board";
     root.querySelector("#xm-hm-live").innerHTML =
-      liveMetaHtml(state) +
+      liveFilterHtml(allShops, state) +
       '<div class="xm-hm-live-charts">' +
       liveChartHtml(hero) +
       liveChartHtml(paid) +
       '</div><div class="xm-hm-live-cards">' +
       liveCards.map(liveCardHtml).join("") +
       '</div><div class="xm-hm-panel">' +
-      liveFilterHtml(allShops, state) +
       '<table class="xm-hm-table" style="min-width:' +
       liveTableMinW() +
       'px">' +

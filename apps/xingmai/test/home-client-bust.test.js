@@ -35,6 +35,8 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /京准通主账户ID/);
     assert.match(text, /真实费比/);
     assert.match(text, /店铺列表/);
+    assert.match(text, /责权归属/);
+    assert.doesNotMatch(text, /各店费比目标在表头列里单独设置/);
     assert.match(text, /\.xm-hm-table thead th\{text-align:center\}/);
     assert.match(text, /label: "费比监控"/);
     assert.match(text, /label: "更新时间"/);
@@ -53,7 +55,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /is-picked/);
     assert.match(text, /xm-home-fee-targets/);
     assert.match(text, /费比监控/);
-    assert.match(text, /更新时间 /);
+    assert.match(text, /label: "更新时间"/);
     assert.match(text, /onOutsideCardSet/);
     assert.match(text, /\/api\/home\/erp-paid/);
     assert.match(text, /\/api\/home\/erp-kpis/);
