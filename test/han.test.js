@@ -550,6 +550,117 @@ test("goHanPage switches Han pages through the shell router", () => {
   assert.deepEqual(calls, [["assign", "/han/goods?team=" + encodeURIComponent("陈晓曼组")]]);
 });
 
+test("实时付费 second click shows the pane that was left open", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { runInNewContext } = await import("node:vm");
+  const js = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
+  const listeners = [];
+  const pane = {
+    attrs: {
+      "data-xm-mounted": "/han/paid",
+      "data-xm-href": "/han/paid",
+      "data-han-paid-key": "live::",
+    },
+    hidden: true,
+    classList: {
+      set: new Set(),
+      add(name) { this.set.add(name); },
+      remove(name) { this.set.delete(name); },
+      contains(name) { return this.set.has(name); },
+      toggle(name, on) { if (on) this.add(name); else this.remove(name); },
+    },
+    style: { display: "none" },
+    innerHTML: '<main class="page han-paid han-live">实时付费正文</main>',
+    querySelector(sel) {
+      if (sel === ".han-live, .han-rules, .page") {
+        return this.innerHTML.includes("han-live") || this.innerHTML.includes('class="page') ? { ok: true } : null;
+      }
+      return null;
+    },
+    setAttribute(name, value) { this.attrs[name] = value; },
+    getAttribute(name) { return Object.prototype.hasOwnProperty.call(this.attrs, name) ? this.attrs[name] : null; },
+  };
+  const location = { pathname: "/han/goods", search: "" };
+  const calls = [];
+  const document = {
+    readyState: "complete",
+    head: { appendChild() {} },
+    documentElement: {},
+    getElementById() { return null; },
+    createElement() { return { setAttribute() {} }; },
+    addEventListener(type, fn) { listeners.push([type, fn]); },
+    querySelector(sel) {
+      if (sel === "[data-xm-mounted='/han/paid']") return pane;
+      return null;
+    },
+    querySelectorAll() { return []; },
+  };
+  const sandbox = {
+    URLSearchParams,
+    setInterval() { return 1; },
+    clearInterval() {},
+    setTimeout(fn) { fn(); return 1; },
+    window: {
+      XmModules: {},
+      location,
+      addEventListener() {},
+      __xmGo(href) {
+        calls.push(href);
+        location.pathname = "/han/paid";
+        location.search = "";
+        pane.hidden = false;
+        pane.style.display = "block";
+        pane.classList.add("is-active");
+      },
+    },
+    document,
+    location,
+    history: {
+      pushState(_state, _title, href) {
+        calls.push(["push", href]);
+        const next = String(href);
+        const cut = next.indexOf("?");
+        location.pathname = cut < 0 ? next : next.slice(0, cut);
+        location.search = cut < 0 ? "" : next.slice(cut);
+      },
+    },
+    fetch() {
+      return Promise.resolve({ json: () => Promise.resolve({ ok: true, items: [] }) });
+    },
+  };
+  sandbox.window.document = document;
+  runInNewContext(js, sandbox);
+  const click = listeners.find((row) => row[0] === "click");
+  assert.ok(click);
+  const link = {
+    attrs: { href: "/han/paid", "data-han-center": "center" },
+    getAttribute(name) { return this.attrs[name] || null; },
+    closest(sel) {
+      if (sel === "a") return this;
+      if (String(sel).indexOf("xm-submenu") >= 0) return { className: "xm-submenu" };
+      return null;
+    },
+  };
+  click[1]({ target: link, button: 0, preventDefault() {}, stopPropagation() {} });
+  assert.deepEqual(calls, ["/han/paid"]);
+  assert.equal(pane.hidden, false);
+  assert.equal(pane.style.display, "block");
+  assert.match(pane.innerHTML, /实时付费正文/);
+
+  pane.attrs["data-han-paid-key"] = "live:" + "陈晓曼组" + ":";
+  pane.hidden = false;
+  pane.style.display = "block";
+  pane.classList.add("is-active");
+  location.pathname = "/han/paid";
+  location.search = "?team=" + encodeURIComponent("陈晓曼组");
+  calls.length = 0;
+  click[1]({ target: link, button: 0, preventDefault() {}, stopPropagation() {} });
+  assert.deepEqual(calls, [["push", "/han/paid"]]);
+  assert.match(pane.innerHTML, /实时付费/);
+  assert.doesNotMatch(pane.innerHTML, /实时付费正文/);
+  assert.equal(pane.attrs["data-han-paid-key"], "live::");
+});
+
 test("goods page puts 商品分层 teams on a horizontal tab bar", async () => {
   const { readFile } = await import("node:fs/promises");
   const { runInNewContext } = await import("node:vm");

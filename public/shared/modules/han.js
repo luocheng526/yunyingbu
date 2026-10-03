@@ -1512,10 +1512,21 @@
     },
   };
 
+  function paidSearchKey(search) {
+    const params = new URLSearchParams(String(search || "").replace(/^\?/, ""));
+    const board = params.get("board") || "";
+    const hanBoard = board === "rules" ? "rules" : board === "center" ? "center" : "live";
+    if (hanBoard !== "live") return hanBoard;
+    return "live:" + (params.get("team") || "") + ":" + (params.get("store") || "");
+  }
+
   function mountHanPaid(root, forcedBoard) {
       const board = forcedBoard || new URLSearchParams(window.location.search).get("board") || "";
       const hanBoard = board === "rules" ? "rules" : board === "center" ? "center" : "live";
       const title = hanBoard === "rules" ? "充值规则" : hanBoard === "center" ? "付费中心" : "实时付费";
+      if (root && root.setAttribute) {
+        root.setAttribute("data-han-paid-key", hanBoard === "live" ? paidSearchKey(window.location.search) : hanBoard);
+      }
       root.innerHTML = page(title, "正在打开…", "");
       let stop = function () {};
       let dead = false;
@@ -1535,11 +1546,13 @@
         };
         document.head.appendChild(script);
       }
-      return function unmount() {
+      function unmount() {
         dead = true;
         if (typeof stop === "function") stop();
         root.innerHTML = "";
-      };
+      }
+      root.__hanGoodsUnmount = unmount;
+      return unmount;
   }
 
   window.XmModules["/han/paid"] = {
@@ -1627,7 +1640,7 @@
 
   function remountGoods(root, path) {
     const modulePath = path || "/han/goods";
-    const prev = root.__hanGoodsUnmount || window.__xmUnmount;
+    const prev = root.__hanGoodsUnmount || (modulePath === "/han/paid" ? null : window.__xmUnmount);
     if (typeof prev === "function") {
       try {
         prev();
@@ -1663,21 +1676,59 @@
     }, 180);
   }
 
+  function paidPane() {
+    return (
+      document.querySelector("[data-xm-mounted='/han/paid']") ||
+      document.querySelector(".xm-pane[data-xm-href='/han/paid']")
+    );
+  }
+
+  function paidPaneOnScreen(root) {
+    if (!root) return false;
+    if (root.hidden) return false;
+    const display = root.style && (root.style.display || "");
+    if (display === "none") return false;
+    if (root.getAttribute && root.getAttribute("data-xm-href") && root.classList && !root.classList.contains("is-active")) {
+      return false;
+    }
+    return true;
+  }
+
+  function revealPaidPane() {
+    const root = paidPane();
+    if (paidPaneOnScreen(root)) return root;
+    if (typeof window.__xmGo === "function") window.__xmGo("/han/paid");
+    return paidPane();
+  }
+
   function goHanPage(href) {
     const target = String(href || "/han/goods");
-    const here = String(location.pathname || "") + String(location.search || "");
-    if (here === target || here === target + "/") {
-      return;
-    }
     const path = target.split("?")[0].replace(/\/+$/, "") || "/";
     if (path === "/han/paid") {
-      const paidRoot = document.querySelector("[data-xm-mounted='/han/paid']");
-      if (paidRoot && window.XmModules["/han/paid"]) {
-        history.pushState({ xm: path }, "", target);
-        remountGoods(paidRoot, "/han/paid");
+      const query = target.indexOf("?") >= 0 ? target.slice(target.indexOf("?")) : "";
+      const root = revealPaidPane();
+      if (root && window.XmModules["/han/paid"]) {
+        const here = String(location.pathname || "") + String(location.search || "");
+        const wantKey = paidSearchKey(query);
+        const haveKey = root.getAttribute ? root.getAttribute("data-han-paid-key") || "" : "";
+        const empty = !root.querySelector || !root.querySelector(".han-live, .han-rules, .page");
+        if (here !== target && here !== target + "/") {
+          history.pushState({ xm: "/han/paid" }, "", target);
+        }
+        if (haveKey !== wantKey || empty) remountGoods(root, "/han/paid");
         ensureHanChrome();
         return;
       }
+      if (typeof window.__xmGo === "function") {
+        window.__xmGo("/han/paid");
+        return;
+      }
+      location.assign(target);
+      return;
+    }
+    const here = String(location.pathname || "") + String(location.search || "");
+    if (here === target || here === target + "/") {
+      return;
     }
     if (path === "/han/goods" || path === "/han/selection") {
       history.pushState({ xm: path }, "", target);
