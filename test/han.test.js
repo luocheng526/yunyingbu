@@ -1419,6 +1419,62 @@ test("nested shop and subaccount recharge rows show on the shop drill-down", asy
   });
 });
 
+test("recharge lines are found under other keys and do not treat a subaccount as a recharge", async () => {
+  await withServer(async (base) => {
+    const pushed = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        capturedAt: "2026-10-03T19:18:50+08:00",
+        rows: [
+          {
+            店铺名称: "RASW个护电器旗舰店",
+            京准通主账户ID: "995225226",
+            京准通花费: 6895.61,
+            日期: "2026-10-03",
+            子账号: [
+              {
+                子账号ID: "2076865648966938625",
+                子账号名称: "RASW个护电器-快4",
+                花费: 220,
+                余额: 0,
+                充值流水: [
+                  { 充值金额: "300元", 充值时间: "2026-10-03 18:10", 账户余额: 520, result: "success", ruleCode: "tier1" },
+                ],
+              },
+              {
+                子账号ID: "2075537314567860226",
+                子账号名称: "RASW个护电器-快6",
+                花费: 1300,
+                充值纪录: JSON.stringify([
+                  { amount: 80, time: "2026-10-03 11:02", balance: 90, 执行结果: "success" },
+                ]),
+              },
+            ],
+          },
+        ],
+        logs: {
+          one: { executionId: "exec-rasw-1", 充值金额: 50, 充值时间: "2026-10-03 16:00", 子账号名称: "RASW个护-快13" },
+        },
+      }),
+    });
+    assert.equal(pushed.res.status, 201);
+    assert.equal(pushed.body.received.subaccounts, 2);
+    assert.equal(pushed.body.received.recharges, 3);
+    const shop = await json(base, "/api/han/worker?view=shop&store=" + encodeURIComponent("RASW个护电器旗舰店"));
+    assert.equal(shop.body.recharges.length, 3);
+    const flow = shop.body.recharges.find((row) => row.subAccountName === "RASW个护电器-快4");
+    assert.equal(flow.amount, 300);
+    assert.equal(flow.subAccountId, "2076865648966938625");
+    assert.equal(flow.balance, 520);
+    const recorded = shop.body.recharges.find((row) => row.subAccountName === "RASW个护电器-快6");
+    assert.equal(recorded.amount, 80);
+    const mapped = shop.body.recharges.find((row) => row.executionId === "exec-rasw-1");
+    assert.equal(mapped.amount, 50);
+    assert.equal(mapped.subAccountName, "RASW个护-快13");
+  });
+});
+
 test("stopped shops still deliver full subaccount rules and sync only issued rows", async () => {
   await withServer(async (base) => {
     const pushed = await json(base, "/api/han/worker", {

@@ -34,7 +34,7 @@ function idText(value, label, max = 64) {
 }
 
 function num(value, fallback = 0) {
-  const raw = String(value ?? "").replace(/[¥￥,\s%]/g, "");
+  const raw = String(value ?? "").replace(/[¥￥,\s%元]/g, "");
   if (!raw) {
     return fallback;
   }
@@ -752,9 +752,11 @@ function parseSub(row, fallbackStore, capturedAt) {
 }
 
 function parseRecharge(row, fallbackStore) {
-  const store = text(pick(row, ["店铺名称", "store"]) || fallbackStore, 64);
-  const amount = num(pick(row, ["金额", "amount", "充值金额", "充值"]));
-  if (!store || !amount) {
+  const store = text(pick(row, ["店铺名称", "store", "店铺", "店名"]) || fallbackStore, 64);
+  const amountRaw = pick(row, ["充值金额", "金额", "amount", "money", "chargeAmount", "到账金额", "充值"]);
+  const chargedAt = text(pick(row, ["充值时间", "chargedAt", "时间", "time", "日期"]), 40);
+  const executionId = idText(pick(row, ["executionId", "执行编号", "唯一执行编号"]), "executionId");
+  if (!store || (amountRaw === "" && !chargedAt && !executionId)) {
     return null;
   }
   return {
@@ -762,18 +764,18 @@ function parseRecharge(row, fallbackStore) {
     accountId: idText(pick(row, ["京准通主账户ID", "accountId"]), "京准通主账户ID"),
     subAccountId: idText(pick(row, ["子账号ID", "子帐号ID", "子账户ID", "subAccountId"]), "子账号ID"),
     subAccountName: text(pick(row, ["子账号名称", "子帐号名称", "子账户名称", "subAccountName"]), 64),
-    amount,
-    balance: num(pick(row, ["余额", "balance", "账户余额"])),
-    chargedAt: text(pick(row, ["时间", "chargedAt", "充值时间", "日期"]), 40),
+    amount: num(amountRaw),
+    balance: num(pick(row, ["余额", "balance", "账户余额", "充值后余额"])),
+    chargedAt,
     note: text(pick(row, ["备注", "note", "remark"]), 200),
-    executionId: idText(pick(row, ["executionId", "执行编号"]), "executionId"),
+    executionId,
     configVersion: num(pick(row, ["configVersion", "配置版本"])),
-    ruleCode: text(pick(row, ["ruleCode", "命中规则", "规则"]), 32),
+    ruleCode: text(pick(row, ["ruleCode", "命中规则", "规则", "规则编码"]), 64),
     plannedRoi: num(pick(row, ["plannedRoi", "当时计划ROI", "计划ROI"])),
     execSpend: num(pick(row, ["execSpend", "当时花费"])),
     execRoi: num(pick(row, ["execRoi", "当时ROI"])),
     execOrders: num(pick(row, ["execPaidOrders", "当时单量"])),
-    result: text(pick(row, ["result", "执行结果"]), 32),
+    result: text(pick(row, ["result", "执行结果", "结果"]), 32),
   };
 }
 
@@ -798,39 +800,66 @@ function withParentIds(item, parent) {
   };
 }
 
-function nestedRecharges(row) {
-  if (!row || typeof row !== "object") return [];
-  const nested = row.充值记录 || row.recharges || row.充值明细 || row.records;
-  return Array.isArray(nested) ? nested : [];
+function parseJsonContainer(value) {
+  if (typeof value !== "string") return value;
+  const raw = value.trim();
+  if (!raw || (raw[0] !== "[" && raw[0] !== "{")) return value;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return value;
+  }
 }
 
-function collectRechargeRows(body, shopRows) {
+function looksLikeRecharge(row) {
+  if (!row || typeof row !== "object" || Array.isArray(row)) return false;
+  const amount = pick(row, ["充值金额", "金额", "amount", "money", "chargeAmount", "到账金额"]);
+  const when = pick(row, ["充值时间", "chargedAt", "时间", "time"]);
+  const exec = pick(row, ["executionId", "执行编号", "唯一执行编号"]);
+  const rule = pick(row, ["ruleCode", "命中规则", "规则编码"]);
+  if (pick(row, ["京准通花费", "花费", "spend", "子账号名称", "subAccountName", "店铺名称"]) && !exec && !when && amount === "") {
+    return false;
+  }
+  return Boolean(exec || (amount !== "" && (when || rule)) || (when && rule));
+}
+
+function rechargeContext(node, parent) {
+  const base = parent || {};
+  if (!node || typeof node !== "object" || Array.isArray(node)) return base;
+  return {
+    店铺名称: pick(node, ["店铺名称", "store", "店铺", "店名"]) || base.店铺名称 || "",
+    京准通主账户ID: pick(node, ["京准通主账户ID", "accountId", "主账户ID"]) || base.京准通主账户ID || "",
+    子账号ID: pick(node, ["子账号ID", "子帐号ID", "子账户ID", "subAccountId"]) || base.子账号ID || "",
+    子账号名称: pick(node, ["子账号名称", "子帐号名称", "子账户名称", "subAccountName"]) || base.子账号名称 || "",
+  };
+}
+
+function walkRecharges(node, parent, out, depth) {
+  if (depth > 8 || node == null) return;
+  if (typeof node === "string") {
+    const parsed = parseJsonContainer(node);
+    if (parsed !== node) walkRecharges(parsed, parent, out, depth + 1);
+    return;
+  }
+  if (Array.isArray(node)) {
+    for (const item of node) walkRecharges(item, parent, out, depth + 1);
+    return;
+  }
+  if (typeof node !== "object") return;
+  const nested = Object.values(node).some((value) => Array.isArray(value) || (typeof value === "string" && value.trim().startsWith("[")));
+  if (!nested && looksLikeRecharge(node)) {
+    out.push(withParentIds(node, parent || {}));
+    return;
+  }
+  const next = rechargeContext(node, parent);
+  for (const value of Object.values(node)) {
+    if (value && (typeof value === "object" || typeof value === "string")) walkRecharges(value, next, out, depth + 1);
+  }
+}
+
+function collectRechargeRows(body) {
   const rows = [];
-  const top = Array.isArray(body.recharges) ? body.recharges : Array.isArray(body.充值记录) ? body.充值记录 : Array.isArray(body.充值明细) ? body.充值明细 : [];
-  for (const item of top) {
-    if (item && typeof item === "object") rows.push(item);
-  }
-  for (const shop of shopRows) {
-    for (const item of nestedRecharges(shop)) {
-      rows.push(withParentIds(item, shop));
-    }
-    const subs = shop?.子账号 || shop?.subaccounts;
-    if (!Array.isArray(subs)) continue;
-    for (const sub of subs) {
-      const parent = { ...shop, ...sub, 店铺名称: pick(sub, ["店铺名称", "store"]) || pick(shop, ["店铺名称", "store", "店铺", "店名"]) };
-      for (const item of nestedRecharges(sub)) {
-        rows.push(withParentIds(item, parent));
-      }
-    }
-  }
-  for (const list of [body.子账号, body.subaccounts]) {
-    if (!Array.isArray(list)) continue;
-    for (const sub of list) {
-      for (const item of nestedRecharges(sub)) {
-        rows.push(withParentIds(item, sub));
-      }
-    }
-  }
+  walkRecharges(body, {}, rows, 0);
   return rows;
 }
 
@@ -1243,13 +1272,21 @@ export function createWorkerMethods(db, ensure) {
       const capturedAt = text(pick(body, ["抓取时间", "capturedAt", "采集时间"]) || new Date().toISOString(), 40);
       const shopRows = Array.isArray(body.rows) ? body.rows : Array.isArray(body.shops) ? body.shops : [];
       const subRows = collectSubRows(body, shopRows);
-      const rechargeRows = collectRechargeRows(body, shopRows);
+      const rechargeRows = collectRechargeRows(body);
       if (!shopRows.length && !subRows.length && !rechargeRows.length) {
         throw httpError(400, "rows、子账号或充值记录必填");
       }
       const shops = shopRows.map((row) => parseShop(row, capturedAt)).filter(Boolean);
       const subs = subRows.map((row) => parseSub(row, shops[0]?.store || "", capturedAt)).filter(Boolean);
-      const recharges = rechargeRows.map((row) => parseRecharge(row, shops[0]?.store || subs[0]?.store || "")).filter(Boolean);
+      const recharges = [];
+      for (const row of rechargeRows) {
+        try {
+          const parsed = parseRecharge(row, shops[0]?.store || subs[0]?.store || "");
+          if (parsed) recharges.push(parsed);
+        } catch {
+          // 一条坏记录不挡这次花费回传，也不挡同包里的其他充值记录。
+        }
+      }
       const shopNames = new Set(shops.map((row) => row.store));
       state.shops = state.shops.filter((row) => !shopNames.has(row.store)).concat(shops);
       const touchedSubs = new Set(subs.map((row) => row.store));
