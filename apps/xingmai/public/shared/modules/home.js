@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.723-home-headset */
+/* xm-module-home 0.1.761-home-paidshops */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -2206,7 +2206,7 @@
     hideCardTip();
     hideLineTip(root);
     var feeDraft = liveFeeDraft(root);
-    board.setAttribute("data-hm-js", "0.1.723-home-headset");
+    board.setAttribute("data-hm-js", "0.1.761-home-paidshops");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2532,7 +2532,7 @@
         { key: "ad", label: "推广花费 (支付预估)", value: "—" },
         { key: "roi", label: "付费成交ROI", value: "—" },
         { key: "livePay", label: "实时付费成交额", value: "—" },
-        { key: "livePaid", label: "实时付费金额", value: "—" }
+        { key: "livePaid", label: "实时付费接入店铺数量", value: "—" }
       ],
       shops: []
     };
@@ -2969,12 +2969,6 @@
       unit: "rate",
       lineMode: "flat"
     };
-    live.cards = [
-      { key: "ad", label: "推广花费 (支付预估)", value: fmtMoney(todayAd), extra: todaySum.promotionRate != null ? "推广占比 " + fmtRate(todaySum.promotionRate) : "" },
-      { key: "roi", label: "付费成交ROI", value: fmtRoi(todaySum.payAmount != null ? todaySum.payAmount : todayPay, todayAd) },
-      { key: "livePay", label: "实时付费成交额", value: fmtMoney(todayPay) },
-      { key: "livePaid", label: "实时付费金额", value: fmtMoney(todayAd) }
-    ];
     var rows = (todayPack && todayPack.records && todayPack.records.length ? todayPack.records : snapPack && snapPack.records) || [];
     live.shops = rows
       .slice()
@@ -2994,6 +2988,12 @@
         };
       });
     live.summary = { channels: 1, shops: live.shops.length };
+    live.cards = [
+      { key: "ad", label: "推广花费 (支付预估)", value: fmtMoney(todayAd), extra: todaySum.promotionRate != null ? "推广占比 " + fmtRate(todaySum.promotionRate) : "" },
+      { key: "roi", label: "付费成交ROI", value: fmtRoi(todaySum.payAmount != null ? todaySum.payAmount : todayPay, todayAd) },
+      { key: "livePay", label: "实时付费成交额", value: fmtMoney(todayPay) },
+      { key: "livePaid", label: "实时付费接入店铺数量", value: fmtInt(live.shops.length) }
+    ];
     return live;
   }
   function ownerOfShop(shopMeta, grants) {
