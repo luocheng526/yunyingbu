@@ -753,15 +753,15 @@ function parseSub(row, fallbackStore, capturedAt) {
 
 function parseRecharge(row, fallbackStore) {
   const store = text(pick(row, ["店铺名称", "store"]) || fallbackStore, 64);
-  const amount = num(pick(row, ["金额", "amount", "充值金额"]));
+  const amount = num(pick(row, ["金额", "amount", "充值金额", "充值"]));
   if (!store || !amount) {
     return null;
   }
   return {
     store,
     accountId: idText(pick(row, ["京准通主账户ID", "accountId"]), "京准通主账户ID"),
-    subAccountId: idText(pick(row, ["子账号ID", "subAccountId"]), "子账号ID"),
-    subAccountName: text(pick(row, ["子账号名称", "subAccountName"]), 64),
+    subAccountId: idText(pick(row, ["子账号ID", "子帐号ID", "子账户ID", "subAccountId"]), "子账号ID"),
+    subAccountName: text(pick(row, ["子账号名称", "子帐号名称", "子账户名称", "subAccountName"]), 64),
     amount,
     balance: num(pick(row, ["余额", "balance", "账户余额"])),
     chargedAt: text(pick(row, ["时间", "chargedAt", "充值时间", "日期"]), 40),
@@ -782,6 +782,56 @@ function rechargeKey(row) {
     return `id\0${row.executionId}`;
   }
   return ["at", row.store, row.subAccountId, row.chargedAt, row.amount].join("\0");
+}
+
+function withParentIds(item, parent) {
+  const store = pick(item, ["店铺名称", "store", "店铺", "店名"]) || pick(parent, ["店铺名称", "store", "店铺", "店名"]);
+  const accountId = pick(item, ["京准通主账户ID", "accountId", "主账户ID"]) || pick(parent, ["京准通主账户ID", "accountId", "主账户ID"]);
+  const subAccountId = pick(item, ["子账号ID", "子帐号ID", "子账户ID", "subAccountId"]) || pick(parent, ["子账号ID", "子帐号ID", "子账户ID", "subAccountId"]);
+  const subAccountName = pick(item, ["子账号名称", "子帐号名称", "子账户名称", "subAccountName"]) || pick(parent, ["子账号名称", "子帐号名称", "子账户名称", "subAccountName"]);
+  return {
+    ...item,
+    店铺名称: store,
+    京准通主账户ID: accountId,
+    子账号ID: subAccountId,
+    子账号名称: subAccountName,
+  };
+}
+
+function nestedRecharges(row) {
+  if (!row || typeof row !== "object") return [];
+  const nested = row.充值记录 || row.recharges || row.充值明细 || row.records;
+  return Array.isArray(nested) ? nested : [];
+}
+
+function collectRechargeRows(body, shopRows) {
+  const rows = [];
+  const top = Array.isArray(body.recharges) ? body.recharges : Array.isArray(body.充值记录) ? body.充值记录 : Array.isArray(body.充值明细) ? body.充值明细 : [];
+  for (const item of top) {
+    if (item && typeof item === "object") rows.push(item);
+  }
+  for (const shop of shopRows) {
+    for (const item of nestedRecharges(shop)) {
+      rows.push(withParentIds(item, shop));
+    }
+    const subs = shop?.子账号 || shop?.subaccounts;
+    if (!Array.isArray(subs)) continue;
+    for (const sub of subs) {
+      const parent = { ...shop, ...sub, 店铺名称: pick(sub, ["店铺名称", "store"]) || pick(shop, ["店铺名称", "store", "店铺", "店名"]) };
+      for (const item of nestedRecharges(sub)) {
+        rows.push(withParentIds(item, parent));
+      }
+    }
+  }
+  for (const list of [body.子账号, body.subaccounts]) {
+    if (!Array.isArray(list)) continue;
+    for (const sub of list) {
+      for (const item of nestedRecharges(sub)) {
+        rows.push(withParentIds(item, sub));
+      }
+    }
+  }
+  return rows;
 }
 
 function collectSubRows(body, shopRows) {
@@ -1024,13 +1074,15 @@ export function createWorkerMethods(db, ensure) {
         throw httpError(400, "store required");
       }
       const state = await load();
+      const found = state.shops.filter((row) => row.store === shop).map(presentShop)[0] || null;
+      const accountId = String(found?.accountId || "");
       return {
         ok: true,
         view: "shop",
         store: shop,
-        shop: state.shops.filter((row) => row.store === shop).map(presentShop)[0] || null,
+        shop: found,
         subaccounts: state.subs.filter((row) => row.store === shop).map(presentSub),
-        recharges: state.recharges.filter((row) => row.store === shop),
+        recharges: state.recharges.filter((row) => row.store === shop || (accountId && row.accountId === accountId)),
       };
     },
 
@@ -1191,11 +1243,7 @@ export function createWorkerMethods(db, ensure) {
       const capturedAt = text(pick(body, ["抓取时间", "capturedAt", "采集时间"]) || new Date().toISOString(), 40);
       const shopRows = Array.isArray(body.rows) ? body.rows : Array.isArray(body.shops) ? body.shops : [];
       const subRows = collectSubRows(body, shopRows);
-      const rechargeRows = Array.isArray(body.recharges)
-        ? body.recharges
-        : Array.isArray(body.充值记录)
-          ? body.充值记录
-          : [];
+      const rechargeRows = collectRechargeRows(body, shopRows);
       if (!shopRows.length && !subRows.length && !rechargeRows.length) {
         throw httpError(400, "rows、子账号或充值记录必填");
       }

@@ -1379,6 +1379,46 @@ test("GET/POST /api/han/worker feeds 付费中心 and 充值规则", async () =>
   });
 });
 
+test("nested shop and subaccount recharge rows show on the shop drill-down", async () => {
+  await withServer(async (base) => {
+    const pushed = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        capturedAt: "2026-10-03T18:30:00+08:00",
+        rows: [
+          {
+            店铺名称: "风巢家居专营店",
+            京准通主账户ID: "2066787424065384499",
+            京准通花费: 100,
+            子账号: [
+              {
+                子账号ID: "206456235676909569",
+                子账号名称: "风巢家居专营-博品2",
+                花费: 135.97,
+                余额: 564.03,
+                充值记录: [{ 充值金额: 300, 充值时间: "2026-10-03 12:10", 账户余额: 864.03, ruleCode: "tier1", result: "success" }],
+              },
+            ],
+            充值记录: [{ 充值金额: 500, 充值时间: "2026-10-03 09:00", 账户余额: 1000, 子账号名称: "风巢-创2" }],
+          },
+        ],
+      }),
+    });
+    assert.equal(pushed.res.status, 201);
+    assert.equal(pushed.body.received.recharges, 2);
+    assert.equal(pushed.body.received.subaccounts, 1);
+    const shop = await json(base, "/api/han/worker?view=shop&store=" + encodeURIComponent("风巢家居专营店"));
+    assert.equal(shop.body.subaccounts.length, 1);
+    assert.equal(shop.body.recharges.length, 2);
+    const nested = shop.body.recharges.find((row) => row.subAccountName === "风巢家居专营-博品2");
+    assert.equal(nested.amount, 300);
+    assert.equal(nested.subAccountId, "206456235676909569");
+    assert.equal(nested.balance, 864.03);
+    assert.equal(shop.body.recharges.some((row) => row.amount === 500 && row.subAccountName === "风巢-创2"), true);
+  });
+});
+
 test("stopped shops still deliver full subaccount rules and sync only issued rows", async () => {
   await withServer(async (base) => {
     const pushed = await json(base, "/api/han/worker", {
