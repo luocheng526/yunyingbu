@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20261003-liveboard";
+  var VERSION = "20261003-homelive";
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -142,33 +142,38 @@
     ".han-rules table.han-rules-grid input.han-rules-live.han-rules-text{width:120px;margin:0;text-align:left;font-weight:500}" +
     "@media (max-width:1100px){.han-paid .kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}" +
     "@media (max-width:700px){.han-paid .kpi-grid{grid-template-columns:1fr 1fr}}" +
-    ".han-live-board{display:flex;flex-direction:column;gap:16px}" +
-    ".han-live-board .xm-hm-live-filter{display:flex;align-items:center;justify-content:space-between;gap:12px}" +
-    ".han-live-board .xm-hm-live-filter-left,.han-live-board .xm-hm-live-filter-right{display:flex;align-items:center;gap:12px}" +
-    ".han-live-board .xm-hm-live-filter-lab{font-size:16px;font-weight:600;line-height:40px;white-space:nowrap}" +
-    ".han-live-board .xm-hm-live-filter-box{position:relative;flex:0 1 320px;min-width:220px}" +
-    ".han-live-board .xm-hm-live-filter select{width:100%;height:40px;box-sizing:border-box;border:1px solid #e4e7ed;border-radius:8px;padding:0 36px 0 14px;font-size:14px;background:#fff;appearance:none}" +
-    ".han-live-board .xm-hm-live-filter-box:after{content:\"\";position:absolute;right:14px;top:50%;width:8px;height:8px;margin-top:-6px;border-right:2px solid #8c8c8c;border-bottom:2px solid #8c8c8c;transform:rotate(45deg);pointer-events:none}" +
-    ".han-live-board .xm-hm-live-heads,.han-live-board .xm-hm-live-refresh{height:auto;border:0;background:transparent;color:var(--xm-primary,#1677ff);padding:0 2px;font-size:14px;line-height:40px}" +
-    ".han-live-board .xm-hm-live-refresh:disabled{opacity:.55;cursor:wait}" +
-    ".han-live-board .xm-hm-head-pop{position:relative;z-index:2;background:#fff;border:1px solid #f0f0f0;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.06);padding:10px 12px}" +
-    ".han-live-board .xm-hm-head-pop[hidden]{display:none}" +
-    ".han-live-board .xm-hm-head-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:13px}" +
-    ".han-live-charts,.han-live-board .xm-hm-live-charts{display:grid;grid-template-columns:1fr 1fr;gap:20px}" +
-    ".han-live-board .xm-hm-chart{background:#fff;border:1px solid #f0f0f0;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.03),0 8px 24px rgba(0,0,0,.04);padding:14px 16px 10px;min-width:0}" +
-    ".han-live-board .xm-hm-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#595959;font-size:13px}" +
-    ".han-live-board .xm-hm-legs{display:inline-flex;align-items:center;gap:10px;color:#8c8c8c;font-size:12px}" +
-    ".han-live-board .xm-hm-legs i{width:10px;height:10px;border-radius:50%;display:inline-block}" +
-    ".han-live-board .xm-hm-legs i.is-yest{background:#91caff}.han-live-board .xm-hm-legs i.is-today{background:#ffa39e}" +
-    ".han-live-board .xm-hm-index-num{margin:8px 0 6px;font-size:28px;font-weight:700;color:var(--xm-primary,#1677ff)}" +
-    ".han-live-board .xm-hm-trend{margin-top:6px;font-size:12px;color:#8c8c8c}" +
-    ".han-live-board .xm-hm-trend.is-up{color:#cf1322}.han-live-board .xm-hm-trend.is-down{color:#389e0d}" +
-    ".han-live-board .xm-hm-chart-sub{margin:10px 0 0;color:#8c8c8c;font-size:12px}" +
-    ".han-live-board .xm-hm-line{display:block;width:100%;height:180px;margin-top:8px}" +
-    ".han-live-board .xm-hm-live-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px}" +
-    ".han-live-board .xm-hm-card{background:#fff;border:1px solid #f0f0f0;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.03),0 8px 24px rgba(0,0,0,.04);padding:16px 12px 14px;text-align:center}" +
-    ".han-live-board .xm-hm-value{margin-top:8px;font-size:22px;font-weight:700;color:#262626}" +
-    "@media (max-width:1100px){.han-live-board .xm-hm-live-charts,.han-live-board .xm-hm-live-cards{grid-template-columns:1fr 1fr}}";
+    "#han-paid-kpis[hidden]{display:none!important}" +
+    "#han-paid-board{position:relative;display:flex;flex-direction:column;gap:16px}" +
+    "#han-paid-board .xm-hm-live-filter{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0}" +
+    "#han-paid-board .xm-hm-live-filter-left{display:flex;align-items:center;gap:12px;min-width:0}" +
+    "#han-paid-board .xm-hm-live-filter-lab{font-size:16px;font-weight:600;color:#262626;line-height:40px;white-space:nowrap}" +
+    "#han-paid-board .xm-hm-live-filter-box{position:relative;flex:0 1 320px;min-width:220px;max-width:100%}" +
+    "#han-paid-board .xm-hm-live-filter-right{display:flex;align-items:center;gap:16px;flex:0 0 auto}" +
+    "#han-paid-board .xm-hm-live-heads,#han-paid-board .xm-hm-live-refresh{height:auto;border:0;background:transparent;color:#1677ff;cursor:pointer;padding:0 2px;font-size:14px;line-height:40px;white-space:nowrap}" +
+    "#han-paid-board .xm-hm-live-refresh:disabled{opacity:.55;cursor:wait}" +
+    "#han-paid-board .xm-hm-live-filter select{width:100%;height:40px;box-sizing:border-box;border:1px solid #e4e7ed;border-radius:8px;padding:0 36px 0 14px;font-size:14px;color:#262626;background:#fff;appearance:none}" +
+    "#han-paid-board .xm-hm-live-filter-box:after{content:\"\";position:absolute;right:14px;top:50%;width:8px;height:8px;margin-top:-6px;border-right:2px solid #8c8c8c;border-bottom:2px solid #8c8c8c;transform:rotate(45deg);pointer-events:none}" +
+    "#han-paid-board .xm-hm-head-pop{position:absolute;top:48px;right:0;z-index:3;width:280px;background:#fff;border:1px solid #f0f0f0;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.08);padding:10px 12px}" +
+    "#han-paid-board .xm-hm-head-pop[hidden]{display:none}" +
+    "#han-paid-board .xm-hm-head-pop h3{margin:0 0 8px;font-size:13px}" +
+    "#han-paid-board .xm-hm-head-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:13px;color:#262626}" +
+    "#han-paid-board .xm-hm-live-charts{display:grid;grid-template-columns:1fr 1fr;gap:20px}" +
+    "#han-paid-board .xm-hm-chart{background:#fff;border:1px solid #f0f0f0;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.03),0 8px 24px rgba(0,0,0,.04);padding:14px 16px 10px;min-width:0}" +
+    "#han-paid-board .xm-hm-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#8c8c8c;font-size:12px}" +
+    "#han-paid-board .xm-hm-legs{display:inline-flex;align-items:center;gap:10px;color:#8c8c8c;font-size:12px}" +
+    "#han-paid-board .xm-hm-legs i{width:10px;height:10px;border-radius:50%;display:inline-block}" +
+    "#han-paid-board .xm-hm-legs i.is-yest{background:#91caff}" +
+    "#han-paid-board .xm-hm-legs i.is-today{background:#ffa39e}" +
+    "#han-paid-board .xm-hm-index-num{margin:8px 0 6px;font-size:28px;font-weight:700;color:#1677ff;line-height:1.2}" +
+    "#han-paid-board .xm-hm-trend{margin-top:6px;min-height:1.2em;font-size:12px;color:#8c8c8c}" +
+    "#han-paid-board .xm-hm-trend.is-up{color:#cf1322}" +
+    "#han-paid-board .xm-hm-trend.is-down{color:#389e0d}" +
+    "#han-paid-board .xm-hm-chart-sub{margin:10px 0 0;color:#8c8c8c;font-size:12px}" +
+    "#han-paid-board .xm-hm-line{display:block;width:100%;height:180px;margin-top:8px}" +
+    "#han-paid-board .xm-hm-live-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;width:100%}" +
+    "#han-paid-board .xm-hm-card{background:#fff;border:1px solid #f0f0f0;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.03),0 8px 24px rgba(0,0,0,.04);padding:12px 14px 10px;min-height:104px;text-align:center}" +
+    "#han-paid-board .xm-hm-value{margin-top:8px;min-height:1.2em;font-size:22px;font-weight:700;color:#262626}" +
+    "@media (max-width:1100px){#han-paid-board .xm-hm-live-charts,#han-paid-board .xm-hm-live-cards{grid-template-columns:1fr 1fr}}";
 
   function page(title, lead, body, extra) {
     return (
@@ -313,12 +318,12 @@
 
   function liveLine(series) {
     var width = 640;
-    var height = 184;
+    var height = Number(series.height) > 0 ? Number(series.height) : 184;
     var top = 12;
     var bottom = 22;
     var yesterday = series.yesterday || [];
     var today = series.today || [];
-    var count = series.hours || Math.max(yesterday.length, today.length, 2);
+    var count = Number(series.hours) > 2 ? Number(series.hours) : Math.max(yesterday.length, today.length, 2);
     var max = 1;
     yesterday.concat(today).forEach(function (n) {
       var v = Number(n) || 0;
@@ -336,27 +341,34 @@
       }).join(" ");
     }
     var labels = "";
-    if (count === 24) {
+    if (count === 24 || count === 48) {
       for (var hour = 1; hour <= 24; hour += 1) {
-        labels += '<text x="' + xAt(hour - 1).toFixed(1) + '" y="' + (height - 5) + '" text-anchor="middle" fill="#8c8c8c" font-size="8">' + hour + "</text>";
+        var index = count === 48 ? hour * 2 - 1 : hour - 1;
+        labels += '<text x="' + xAt(index).toFixed(1) + '" y="' + (height - 5) + '" text-anchor="middle" fill="#8c8c8c" font-size="8">' + hour + "</text>";
       }
     }
     return '<svg class="xm-hm-line" viewBox="0 0 ' + width + " " + height + '" preserveAspectRatio="none">' +
-      (yesterday.length ? '<polyline fill="none" stroke="#91caff" stroke-width="2.2" points="' + points(yesterday) + '"></polyline>' : "") +
-      (today.length ? '<polyline fill="none" stroke="#ffa39e" stroke-width="2.2" points="' + points(today) + '"></polyline>' : "") +
+      (yesterday.length ? '<polyline fill="none" stroke="#91caff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" points="' + points(yesterday) + '"></polyline>' : "") +
+      (today.length ? '<polyline fill="none" stroke="#ffa39e" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" points="' + points(today) + '"></polyline>' : "") +
       labels + "</svg>";
   }
 
   function livePlot(spec) {
     var yesterday = spec.yesterdayHour || [];
     var today = spec.todayHour || [];
-    if (yesterday.length < 3 && today.length < 3) return { yesterday: [], today: [], hours: 0 };
+    var hourly = yesterday.length > 2 || today.length > 2;
+    if (!hourly) return { yesterday: [], today: [], hours: 0, height: 184 };
     var flat = spec.lineMode === "flat" || spec.unit === "rate";
     function roll(list) {
       var total = 0;
       return list.map(function (n) { total += Number(n) || 0; return total; });
     }
-    return { yesterday: flat ? yesterday : roll(yesterday), today: flat ? today : roll(today), hours: 24 };
+    return {
+      yesterday: flat ? yesterday : roll(yesterday),
+      today: flat ? today : roll(today),
+      hours: 24,
+      height: 128,
+    };
   }
 
   function liveChart(spec) {
@@ -394,7 +406,7 @@
       ? '<main class="page han-paid han-live"><style>' + css + "</style>" +
         '<div class="han-live-bar">' + liveTabs() +
         '<div class="han-paid-meta"><span class="han-paid-dot"></span><span id="han-paid-asof">等待回传</span></div></div>' +
-        '<section class="han-live-board" id="han-paid-board"></section><section class="kpi-grid" id="han-paid-kpis" hidden></section><div id="han-paid-body"></div><p id="han-paid-status" class="status"></p></main>'
+        '<section id="han-paid-board"></section><section class="kpi-grid" id="han-paid-kpis" hidden></section><div id="han-paid-body"></div><p id="han-paid-status" class="status"></p></main>'
       : page(
         "付费中心",
         "最新一次回传的全店快照。点店铺名称下钻查看子账号和充值记录。",
@@ -552,7 +564,10 @@
       shops.sort();
       var pick = liveShop ? "shop:" + liveShop : currentTeam ? "team:" + currentTeam : "";
       boardEl.hidden = false;
-      if (kpiEl) kpiEl.hidden = true;
+      if (kpiEl) {
+        kpiEl.hidden = true;
+        kpiEl.innerHTML = "";
+      }
       boardEl.innerHTML = liveFilterHtml(pick, shops) +
         '<div class="xm-hm-head-pop" hidden><h3>表头设置</h3>' + model.cards.map(function (card) {
           return '<label><input type="checkbox" data-live-card="' + escapeHtml(card.key) + '"' + (hidden[card.key] ? "" : " checked") + "> " + escapeHtml(card.label) + "</label>";

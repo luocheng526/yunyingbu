@@ -503,7 +503,7 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /XmModules\["\/han\/recharge-rules"\]/);
   assert.match(js, /实时付费/);
   assert.match(js, /HanCenter\.mount\(root, hanBoard\)/);
-  assert.match(js, /20261003-liveboard/);
+  assert.match(js, /20261003-homelive/);
   assert.doesNotMatch(js, /id="paid-form"/);
   assert.doesNotMatch(js, /上传抓取表/);
   assert.match(js, /XmModules\["\/han\/training"\]/);
@@ -1860,7 +1860,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   const han = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
   assert.match(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
   assert.match(han, /\["\/han\/paid\?board=rules", "充值规则", "rules"\]/);
-  assert.match(han, /20261003-liveboard/);
+  assert.match(han, /20261003-homelive/);
   const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
   assert.match(center, /两档花费/);
   assert.match(center, /han-rules-text/);
@@ -1900,7 +1900,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(han, /insertAdjacentElement\("afterend"/);
   assert.match(han, /data-xm-group"\) !== "\/han"/);
   assert.doesNotMatch(han, /anchor\.href = "\/han\/paid-center"/);
-  assert.match(center, /20261003-liveboard/);
+  assert.match(center, /20261003-homelive/);
   assert.match(center, /aria-label="主管分组"/);
   assert.match(center, /han-live-bar/);
   assert.match(center, /han-live-tabs/);
@@ -1919,7 +1919,15 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(center, /责权归属/);
   assert.match(center, /表头设置/);
   assert.match(center, /实时付费接入店铺数量/);
+  assert.match(center, /推广花费 \(支付预估\)/);
+  assert.match(center, /付费成交ROI/);
+  assert.match(center, /实时付费成交额/);
+  assert.match(center, /线：累计（23点=1-23点）/);
+  assert.match(center, /线：当天费比/);
+  assert.match(center, /id="han-paid-kpis" hidden/);
+  assert.match(center, /#han-paid-kpis\[hidden\]\{display:none!important\}/);
   assert.match(center, /\/api\/home\/erp-paid/);
+  assert.match(han, /params\.get\("liveShop"\)/);
   assert.match(han, /window\.__hanGo = goHanPage/);
 });
 

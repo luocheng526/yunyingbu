@@ -1517,7 +1517,8 @@
     const board = params.get("board") || "";
     const hanBoard = board === "rules" ? "rules" : board === "center" ? "center" : "live";
     if (hanBoard !== "live") return hanBoard;
-    return "live:" + (params.get("team") || "") + ":" + (params.get("store") || "");
+    const liveShop = params.get("liveShop") || "";
+    return "live:" + (params.get("team") || "") + ":" + (params.get("store") || "") + (liveShop ? ":" + liveShop : "");
   }
 
   function mountHanPaid(root, forcedBoard) {
@@ -1534,7 +1535,7 @@
         if (dead || !window.HanCenter) return;
         stop = window.HanCenter.mount(root, hanBoard) || function () {};
       }
-      const centerVer = "20261003-liveboard";
+      const centerVer = "20261003-homelive";
       if (window.HanCenter && window.HanCenter.version === centerVer) {
         start();
       } else {
