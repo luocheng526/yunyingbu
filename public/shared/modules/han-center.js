@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20261003-homelive";
+  var VERSION = "20261003-pagesum";
 
   function escapeHtml(value) {
   return String(value ?? "")
@@ -259,43 +259,27 @@
 
   function liveModel(erp, picked) {
   var all = (erp && erp.records) || [];
-  var rows = picked ? all.filter(function (row) {
+  var scope = picked || {};
+  var rows = all.filter(function (row) {
     var name = String(row.shopName || "").trim();
-    return picked[name] || picked["~" + shopKey(name)];
-  }) : all;
-  var summary = (erp && erp.summary) || {};
-  var yesterday = (erp && erp.yesterday) || {};
-  var hourly = (erp && erp.hourly) || {};
+    return scope[name] || scope["~" + shopKey(name)];
+  });
   var hour = shanghaiHour();
-  var todayPay;
-  var yestPay;
-  var todayCost;
+  var todayPay = rows.length ? 0 : null;
+  var yestPay = rows.length ? 0 : null;
+  var todayCost = rows.length ? 0 : null;
   var todayRate;
-  var yestRate;
+  var yestRate = null;
   var todayHours;
   var yestHours;
-  if (!picked && (summary.todayPayAmount != null || summary.payAmount != null)) {
-    todayPay = summary.todayPayAmount != null ? summary.todayPayAmount : summary.payAmount;
-    yestPay = summary.yesterdayPayAmount != null ? summary.yesterdayPayAmount : yesterday.payAmount;
-    todayCost = summary.totalPromotionCost;
-    todayRate = summary.promotionRate;
-    yestRate = yesterday.promotionRate;
-    todayHours = hourList(hourly.todayPay || summary.todayHourlyData).slice(0, Math.min(24, hour + 1));
-    yestHours = hourList(hourly.yesterdayPay || summary.yesterdayHourlyData);
-  } else {
-    todayPay = rows.length ? 0 : null;
-    yestPay = rows.length ? 0 : null;
-    todayCost = rows.length ? 0 : null;
-    rows.forEach(function (row) {
-      todayPay += Number(row.todayPayAmount != null ? row.todayPayAmount : row.payAmount) || 0;
-      yestPay += Number(row.yesterdayPayAmount) || 0;
-      todayCost += Number(row.totalPromotionCost) || 0;
-    });
-    todayRate = todayPay ? todayCost / todayPay : todayCost === 0 ? 0 : null;
-    yestRate = null;
-    todayHours = rows.length ? sumHours(rows, "todayHourlyData").slice(0, Math.min(24, hour + 1)) : [];
-    yestHours = rows.length ? sumHours(rows, "yesterdayHourlyData") : [];
-  }
+  rows.forEach(function (row) {
+    todayPay += Number(row.todayPayAmount != null ? row.todayPayAmount : row.payAmount) || 0;
+    yestPay += Number(row.yesterdayPayAmount) || 0;
+    todayCost += Number(row.totalPromotionCost) || 0;
+  });
+  todayRate = todayPay ? todayCost / todayPay : todayCost === 0 ? 0 : null;
+  todayHours = rows.length ? sumHours(rows, "todayHourlyData").slice(0, Math.min(24, hour + 1)) : [];
+  yestHours = rows.length ? sumHours(rows, "yesterdayHourlyData") : [];
   return {
     hero: { label: "京麦面板实时金额", value: liveInt(todayPay), delta: liveDelta(todayPay, yestPay), yesterdayHour: yestHours, todayHour: todayHours },
     paid: {
@@ -503,13 +487,44 @@
     return { stores: rows.length, spend: spend, jingmaiGmv: gmv, totalOrderAmount: amount, paidOrders: orders, successCount: success };
   }
 
+  function pageRows() {
+    return !live || !currentTeam ? overviewRows : overviewRows.filter(function (row) { return teamOf(row.store) === currentTeam; });
+  }
+
   function scopedRows() {
-    var rows = !live || !currentTeam ? overviewRows : overviewRows.filter(function (row) { return teamOf(row.store) === currentTeam; });
+    var rows = pageRows();
     if (live && liveShop) {
       var key = shopKey(liveShop);
       rows = rows.filter(function (row) { return row.store === liveShop || shopKey(row.store) === key; });
     }
     return rows;
+  }
+
+  function liveScope() {
+    var picked = {};
+    var rows = scopedRows();
+    if (liveShop && !rows.length) rows = [{ store: liveShop }];
+    rows.forEach(function (row) {
+      var name = String(row.store || "").trim();
+      if (!name) return;
+      picked[name] = true;
+      picked["~" + shopKey(name)] = true;
+    });
+    return picked;
+  }
+
+  function boardShopNames() {
+    var names = [];
+    var seen = {};
+    pageRows().forEach(function (row) {
+      var name = String(row.store || "").trim();
+      var key = shopKey(name);
+      if (!name || seen[key]) return;
+      seen[key] = true;
+      names.push(name);
+    });
+    names.sort();
+    return names;
   }
 
   function hiddenCards() {
@@ -534,34 +549,11 @@
 
   function renderLiveBoard() {
     if (!boardEl) return;
-    var picked = null;
-    if (liveShop) {
-      picked = {};
-      picked[liveShop] = true;
-      picked["~" + shopKey(liveShop)] = true;
-    } else if (currentTeam) {
-      picked = {};
-      Object.keys(teamByStore).forEach(function (store) {
-        if (teamByStore[store] === currentTeam) {
-          picked[store] = true;
-          picked["~" + shopKey(store)] = true;
-        }
-      });
-    }
-    var model = liveModel(erpPayload, picked);
+    var model = liveModel(erpPayload, liveScope());
     var hidden = {};
     hiddenCards().forEach(function (key) { hidden[key] = true; });
     var cards = model.cards.filter(function (card) { return !hidden[card.key]; });
-    var shops = [];
-    var seen = {};
-    ((erpPayload && erpPayload.records) || []).forEach(function (row) {
-      var name = String(row.shopName || "").trim();
-      if (name && !seen[name]) {
-        seen[name] = true;
-        shops.push(name);
-      }
-    });
-    shops.sort();
+    var shops = boardShopNames();
     var pick = liveShop ? "shop:" + liveShop : currentTeam ? "team:" + currentTeam : "";
     boardEl.hidden = false;
     if (kpiEl) {
