@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
+import { rechargeWindowOpen, shanghaiMinutes } from "../src/modules/han/worker.js";
 import { createHanStore, dropProbeTasks, hydrateFromMysql, matchOrgStoresForTeam, mergeTeamShops, buildProductCsv, parseProductCsv, classifyProduct, HAN_DEFAULT_OWNER, HAN_DEFAULT_STORE } from "../src/modules/han/store.js";
 import { createHanFakePool } from "./han-fake-pool.js";
 import { makeMinimalXlsx, parseOverviewFilename, parseOverviewWorkbook, headerKey, paidHeaderKey, parsePaidWorkbook } from "../src/modules/han/import-file.js";
@@ -502,7 +503,7 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /XmModules\["\/han\/recharge-rules"\]/);
   assert.match(js, /实时付费/);
   assert.match(js, /HanCenter\.mount\(root, hanBoard\)/);
-  assert.match(js, /20260928-runsave/);
+  assert.match(js, /20261003-clock/);
   assert.doesNotMatch(js, /id="paid-form"/);
   assert.doesNotMatch(js, /上传抓取表/);
   assert.match(js, /XmModules\["\/han\/training"\]/);
@@ -1638,6 +1639,151 @@ test("batch ROI, amount, and paid switch reach the local machine snapshot", asyn
   });
 });
 
+test("recharge window follows Shanghai clock, including overnight", () => {
+  assert.equal(rechargeWindowOpen("08:00", "23:00", 8 * 60), true);
+  assert.equal(rechargeWindowOpen("08:00", "23:00", 22 * 60 + 59), true);
+  assert.equal(rechargeWindowOpen("08:00", "23:00", 23 * 60), false);
+  assert.equal(rechargeWindowOpen("08:00", "23:00", 7 * 60 + 59), false);
+  assert.equal(rechargeWindowOpen("22:00", "06:00", 23 * 60), true);
+  assert.equal(rechargeWindowOpen("22:00", "06:00", 5 * 60), true);
+  assert.equal(rechargeWindowOpen("22:00", "06:00", 12 * 60), false);
+  assert.equal(rechargeWindowOpen("08:00", "08:00", 8 * 60), null);
+  assert.equal(rechargeWindowOpen("", "23:00", 10 * 60), null);
+  assert.equal(shanghaiMinutes(new Date("2026-10-03T23:30:00+08:00")), 23 * 60 + 30);
+  assert.equal(shanghaiMinutes(new Date("2026-10-03T00:05:00+08:00")), 5);
+});
+
+test("scheduled recharge turns off at night and back on in the morning", async () => {
+  await withServer(async (base) => {
+    const subId = "1234567890123456789";
+    const pushed = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [{ 店铺名称: "松郁汽车用品专营店", 京准通主账户ID: "99920461182", 花费: 10 }],
+        subaccounts: [
+          { 店铺名称: "松郁汽车用品专营店", 京准通主账户ID: "99920461182", 子账号ID: subId, 子账号名称: "松郁-五七", 花费: 10, ROI: 1, 余额: 20 },
+        ],
+      }),
+    });
+    assert.equal(pushed.res.status, 201);
+    const RealDate = Date;
+    function useClock(hm) {
+      const fixed = new RealDate(`2026-10-03T${hm}:00+08:00`);
+      function FakeDate(...args) {
+        if (new.target) {
+          if (args.length === 0) return new RealDate(fixed.getTime());
+          return new RealDate(...args);
+        }
+        return RealDate();
+      }
+      FakeDate.prototype = RealDate.prototype;
+      FakeDate.now = () => fixed.getTime();
+      FakeDate.parse = RealDate.parse;
+      FakeDate.UTC = RealDate.UTC;
+      globalThis.Date = FakeDate;
+    }
+    try {
+      const row = {
+        店铺名称: "松郁汽车用品专营店",
+        京准通主账户ID: "99920461182",
+        子账号ID: subId,
+        子账号名称: "松郁-五七",
+        自动充值: true,
+        计划ROI: 2,
+        第一档花费下限: 1,
+        第一档花费上限: 1000,
+        第一档余额阈值: 100,
+        第一档充值金额: 100,
+        第二档花费下限: 1000,
+        第二档余额阈值: 50,
+        第二档充值金额: 150,
+        ROI上涨充值金额: 100,
+        连续充值未增单次数: 3,
+        暂停分钟数: 30,
+        开充值时间: "08:00",
+        关充值时间: "23:00",
+      };
+      const saved = await json(base, "/api/han/worker", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "rules", changeSummary: "按时间开关充值 08:00-23:00", rows: [row] }),
+      });
+      assert.equal(saved.res.status, 200);
+      useClock("15:00");
+      const day = await json(base, "/api/han/worker?machineId=han-worker-01");
+      const daySub = day.body.shops[0].子账号[0];
+      assert.equal(daySub.自动充值, true);
+      assert.equal(daySub.开充值时间, "08:00");
+      assert.equal(daySub.关充值时间, "23:00");
+      assert.equal(daySub.运行, true);
+      assert.deepEqual(day.body.runShops, ["99920461182"]);
+      const quiet = await json(base, "/api/han/worker?machineId=han-worker-01&sinceVersion=" + day.body.version);
+      assert.equal(quiet.body.changed, false);
+      useClock("23:30");
+      const night = await json(base, "/api/han/worker?machineId=han-worker-01&sinceVersion=" + day.body.version);
+      assert.equal(night.body.changed, true);
+      assert.ok(night.body.version > day.body.version);
+      assert.equal(night.body.shops[0].子账号[0].自动充值, false);
+      assert.equal(night.body.shops[0].子账号[0].运行, true);
+      assert.deepEqual(night.body.runShops, ["99920461182"]);
+      assert.match(night.body.changeSummary, /定时关充值/);
+      assert.match(night.body.note, /不要充值/);
+      const rules = await json(base, "/api/han/worker?view=rules");
+      assert.equal(rules.body.rows[0].autoRecharge, false);
+      assert.equal(rules.body.rows[0].rechargeStart, "08:00");
+      assert.equal(rules.body.rows[0].rechargeEnd, "23:00");
+      useClock("08:00");
+      const morning = await json(base, "/api/han/worker?machineId=han-worker-01&sinceVersion=" + night.body.version);
+      assert.equal(morning.body.changed, true);
+      assert.equal(morning.body.shops[0].子账号[0].自动充值, true);
+      assert.match(morning.body.changeSummary, /定时开充值/);
+      const cleared = await json(base, "/api/han/worker", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "rules",
+          changeSummary: "批量关付费",
+          rows: [{ ...row, 自动充值: false, 开充值时间: "", 关充值时间: "" }],
+        }),
+      });
+      assert.equal(cleared.res.status, 200);
+      useClock("15:00");
+      const stayed = await json(base, "/api/han/worker?machineId=han-worker-01");
+      assert.equal(stayed.body.shops[0].子账号[0].自动充值, false);
+      assert.equal(stayed.body.shops[0].子账号[0].开充值时间, "");
+      const bad = await json(base, "/api/han/worker", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "rules",
+          rows: [{ ...row, 开充值时间: "08:00", 关充值时间: "08:00" }],
+        }),
+      });
+      assert.equal(bad.res.status, 400);
+      const overnight = await json(base, "/api/han/worker", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "rules",
+          changeSummary: "按时间开关充值 22:00-06:00",
+          rows: [{ ...row, 自动充值: false, 开充值时间: "22:00", 关充值时间: "06:00" }],
+        }),
+      });
+      assert.equal(overnight.res.status, 200);
+      useClock("23:00");
+      const late = await json(base, "/api/han/worker?view=rules");
+      assert.equal(late.body.rows[0].autoRecharge, true);
+      useClock("12:00");
+      const noon = await json(base, "/api/han/worker?view=rules");
+      assert.equal(noon.body.rows[0].autoRecharge, false);
+      assert.equal(noon.body.rows[0].rechargeStart, "22:00");
+    } finally {
+      globalThis.Date = RealDate;
+    }
+  });
+});
+
 test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   const { readFile } = await import("node:fs/promises");
   const nav = await readFile(new URL("../public/shared/nav.js", import.meta.url), "utf8");
@@ -1653,7 +1799,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   const han = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
   assert.match(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
   assert.match(han, /\["\/han\/paid\?board=rules", "充值规则", "rules"\]/);
-  assert.match(han, /20260928-runsave/);
+  assert.match(han, /20261003-clock/);
   const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
   assert.match(center, /两档花费/);
   assert.match(center, /han-rules-text/);
@@ -1666,6 +1812,11 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(center, /灰字示例不会保存/);
   assert.match(center, /批量改金额/);
   assert.match(center, /批量开付费/);
+  assert.match(center, /按时间开关/);
+  assert.match(center, /han-rules-open-at/);
+  assert.match(center, /han-rules-close-at/);
+  assert.match(center, /取消定时/);
+  assert.match(center, /定时充值/);
   assert.match(center, /只跑选中子账号/);
   assert.match(center, /恢复整店跑/);
   assert.match(center, /只跑京麦/);
@@ -1688,7 +1839,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(han, /insertAdjacentElement\("afterend"/);
   assert.match(han, /data-xm-group"\) !== "\/han"/);
   assert.doesNotMatch(han, /anchor\.href = "\/han\/paid-center"/);
-  assert.match(center, /20260928-runsave/);
+  assert.match(center, /20261003-clock/);
   assert.match(center, /aria-label="主管分组"/);
   assert.match(center, /han-live-bar/);
   assert.match(center, /han-live-tabs/);

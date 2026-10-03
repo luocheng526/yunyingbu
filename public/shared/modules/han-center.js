@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20260928-runsave";
+  var VERSION = "20261003-clock";
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -123,7 +123,9 @@
     ".han-rules-batch-group{display:flex;align-items:center;gap:8px;min-width:0}" +
     ".han-rules-batch-label{flex:0 0 auto;color:#595959;font-size:12px;font-weight:600}" +
     ".han-rules-batch button.is-on{background:#1677ff;color:#fff;border-color:#1677ff}" +
-    ".han-rules-runsubs{grid-column:1 / -1}" +
+    ".han-rules-runsubs,.han-rules-schedule{grid-column:1 / -1}" +
+    ".han-rules-schedule input[type=time]{min-width:132px}" +
+    ".han-rules-clock{margin-left:6px;color:#8c8c8c;font-size:12px;font-weight:600}" +
     ".han-rules-running{display:inline-block;margin-left:6px;padding:0 6px;border-radius:999px;background:#e6f4ff;color:#0958d9;font-size:12px;font-weight:600;line-height:18px;vertical-align:middle}" +
     ".han-rules-batch-status{grid-column:1 / -1;margin:0;min-height:18px;font-size:13px;line-height:1.5}" +
     ".han-rules-batch-status.is-ok{color:#027a48}" +
@@ -583,6 +585,8 @@
         item[key] = Number(item[key]);
       });
       item.自动充值 = item.自动充值 === true;
+      item.开充值时间 = item.开充值时间 || "";
+      item.关充值时间 = item.关充值时间 || "";
       return JSON.stringify(item);
     }
 
@@ -609,7 +613,9 @@
           第二档充值金额: row.tier2Amount,
           ROI上涨充值金额: row.roiRiseAmount,
           连续充值未增单次数: row.noOrderTimes,
-          暂停分钟数: row.pauseMinutes
+          暂停分钟数: row.pauseMinutes,
+          开充值时间: row.rechargeStart || "",
+          关充值时间: row.rechargeEnd || ""
         };
       });
     }
@@ -830,6 +836,12 @@
         '<div class="han-rules-batch-group"><span class="han-rules-batch-label">付费</span>' +
         '<button type="button" id="han-rules-on">批量开付费</button>' +
         '<button type="button" id="han-rules-off">批量关付费</button></div>' +
+        '<div class="han-rules-batch-group han-rules-schedule"><span class="han-rules-batch-label">定时充值</span>' +
+        '<label>开 <input id="han-rules-open-at" type="time" value="08:00" /></label>' +
+        '<label>关 <input id="han-rules-close-at" type="time" value="23:00" /></label>' +
+        '<button type="button" id="han-rules-schedule">按时间开关</button>' +
+        '<button type="button" id="han-rules-schedule-clear">取消定时</button>' +
+        '<span class="han-rules-picked">每天到开点打开自动充值，到关点关闭。采集不停。</span></div>' +
         '<div class="han-rules-batch-group han-rules-runsubs"><span class="han-rules-batch-label">运行范围</span>' +
         '<button type="button" id="han-rules-run-subs">只跑选中子账号</button>' +
         '<button type="button" id="han-rules-run-shop">恢复整店跑</button>' +
@@ -841,6 +853,8 @@
       root.querySelector("#han-rules-apply-amount").addEventListener("click", batchAmount);
       root.querySelector("#han-rules-on").addEventListener("click", function () { batchAuto(true); });
       root.querySelector("#han-rules-off").addEventListener("click", function () { batchAuto(false); });
+      root.querySelector("#han-rules-schedule").addEventListener("click", saveSchedule);
+      root.querySelector("#han-rules-schedule-clear").addEventListener("click", clearSchedule);
       root.querySelector("#han-rules-run-subs").addEventListener("click", saveRunSubs);
       root.querySelector("#han-rules-run-shop").addEventListener("click", clearRunSubs);
       root.querySelector("#han-rules-jingmai").addEventListener("click", function () { saveJingmaiOnly(true); });
@@ -861,8 +875,10 @@
         (selected.has(key) ? " checked" : "") + " /></td><td>" + escapeHtml(row.store) + "</td><td>" + escapeHtml(String(row.accountId || "")) +
         '</td><td class="han-rules-name">' + escapeHtml(row.subAccountName || "") +
         (row.subRunning ? '<span class="han-rules-running">在跑</span>' : "") +
-        '</td><td><label title="' + (row.autoRecharge ? "是" : "否") + '"><input class="han-rules-auto" data-key="' + escapeHtml(key) +
-        '" type="checkbox"' + (row.autoRecharge ? " checked" : "") + " /></label></td><td>" +
+        '</td><td><label title="' + (row.rechargeStart && row.rechargeEnd ? row.rechargeStart + " 开，" + row.rechargeEnd + " 关" : (row.autoRecharge ? "是" : "否")) + '"><input class="han-rules-auto" data-key="' + escapeHtml(key) +
+        '" type="checkbox"' + (row.autoRecharge ? " checked" : "") + " /></label>" +
+        (row.rechargeStart && row.rechargeEnd ? '<span class="han-rules-clock">' + escapeHtml(row.rechargeStart + "-" + row.rechargeEnd) + "</span>" : "") +
+        "</td><td>" +
         numInput(row, "plannedRoi", "计划ROI") + "</td><td>" + numInput(row, "tier1MinSpend", "一档花费下限") + "</td><td>" + numInput(row, "tier1MaxSpend", "一档花费上限") +
         "</td><td>" + numInput(row, "tier1Balance", "一档余额") + "</td><td>" + numInput(row, "tier1Amount", "一档充值") + "</td><td>" +
         numInput(row, "tier2MinSpend", "二档花费下限") + "</td><td>" + numInput(row, "tier2Balance", "二档余额") + "</td><td>" + numInput(row, "tier2Amount", "二档充值") +
@@ -1160,13 +1176,75 @@
       applyBatch(field, root.querySelector("#han-rules-batch-amount").value, "批量改" + label);
     }
 
+    function shanghaiNowMinutes() {
+      var parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Asia/Shanghai",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23"
+      }).formatToParts(new Date());
+      var hour = Number(parts.find(function (part) { return part.type === "hour"; }).value);
+      var minute = Number(parts.find(function (part) { return part.type === "minute"; }).value);
+      if (hour === 24) hour = 0;
+      return hour * 60 + minute;
+    }
+
+    function clockMinutes(value) {
+      var match = String(value || "").match(/^(\d{2}):(\d{2})$/);
+      if (!match) return null;
+      return Number(match[1]) * 60 + Number(match[2]);
+    }
+
+    function windowOpen(start, end) {
+      var from = clockMinutes(start);
+      var to = clockMinutes(end);
+      if (from == null || to == null || from === to) return null;
+      var now = shanghaiNowMinutes();
+      if (from < to) return now >= from && now < to;
+      return now >= from || now < to;
+    }
+
     function batchAuto(on) {
       var picked = checkedRows();
       if (!picked.length) { setStatus("请先勾选子账号，或点全选账号", true); return; }
-      picked.forEach(function (row) { row.autoRecharge = on; });
+      picked.forEach(function (row) {
+        row.autoRecharge = on;
+        row.rechargeStart = "";
+        row.rechargeEnd = "";
+      });
       renderTable(false);
-      setBatchStatus(on ? "正在开启已选子账号的自动充值…" : "正在关闭已选子账号的自动充值…");
+      setBatchStatus(on ? "正在开启已选子账号的自动充值，并取消定时…" : "正在关闭已选子账号的自动充值，并取消定时…");
       saveRules(picked, on ? "批量开付费" : "批量关付费");
+    }
+
+    function saveSchedule() {
+      var picked = checkedRows();
+      if (!picked.length) { setStatus("请先勾选子账号，或点全选账号", true); return; }
+      var start = root.querySelector("#han-rules-open-at").value;
+      var end = root.querySelector("#han-rules-close-at").value;
+      if (!start || !end) { setBatchStatus("请填写开充值和关充值时间", true); return; }
+      if (start === end) { setBatchStatus("开充值和关充值不能是同一个时间", true); return; }
+      var open = windowOpen(start, end);
+      picked.forEach(function (row) {
+        row.rechargeStart = start;
+        row.rechargeEnd = end;
+        row.autoRecharge = open === true;
+      });
+      renderTable(false);
+      setBatchStatus("正在保存 " + picked.length + " 个子账号的定时：" + start + " 开，" + end + " 关…");
+      saveRules(picked, "按时间开关充值 " + start + "-" + end);
+    }
+
+    function clearSchedule() {
+      var picked = checkedRows();
+      if (!picked.length) { setStatus("请先勾选子账号，或点全选账号", true); return; }
+      picked.forEach(function (row) {
+        row.rechargeStart = "";
+        row.rechargeEnd = "";
+      });
+      renderTable(false);
+      setBatchStatus("正在取消 " + picked.length + " 个子账号的定时…");
+      saveRules(picked, "取消定时开关");
     }
 
     function selectedShopNames() {
@@ -1301,6 +1379,10 @@
           var runningCount = rows.filter(function (row) { return row.subRunning && !row.deleted; }).length;
           scopeNotes.push("当前只跑选中的 " + runningCount + " 个子账号。没选中的号不要采集、不要充值。点「恢复整店跑」后，已勾选的店铺会跑全部子账号。");
         }
+        var timed = rows.filter(function (row) { return row.rechargeStart && row.rechargeEnd && !row.deleted; });
+        if (timed.length) {
+          scopeNotes.push("有 " + timed.length + " 个子账号按时间开关自动充值。到关点关掉充值，到开点再打开，采集不停。");
+        }
         if (scopeNotes.length) setBatchStatus(scopeNotes.join(""));
       });
     }
@@ -1310,6 +1392,22 @@
         if (dead || !data) return;
         lastMeta.shopRuns = data.shopRuns || lastMeta.shopRuns;
         lastMeta.machines = data.machines || lastMeta.machines;
+        if (Number(data.version) !== Number(lastMeta.version) && Array.isArray(data.rows) && !root.querySelector("input.han-rules-live")) {
+          collectEdits();
+          var fresh = {};
+          data.rows.forEach(function (row) { fresh[rowKey(row)] = row; });
+          rows.forEach(function (row) {
+            var next = fresh[rowKey(row)];
+            if (!next) return;
+            row.autoRecharge = next.autoRecharge === true;
+            row.rechargeStart = next.rechargeStart || "";
+            row.rechargeEnd = next.rechargeEnd || "";
+            row.version = data.version;
+            row.syncStatus = next.syncStatus || row.syncStatus;
+          });
+          lastMeta.version = data.version;
+          renderTable(false);
+        }
         if (asofEl && data.version) asofEl.textContent = "配置版本 " + data.version + " · " + (data.syncStatus || "待同步");
         renderRunShops();
       }).catch(function () {});

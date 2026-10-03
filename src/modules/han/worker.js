@@ -51,6 +51,85 @@ function pick(row, keys) {
   return "";
 }
 
+function clockMinutes(value) {
+  const match = String(value ?? "").trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) return null;
+  return hour * 60 + minute;
+}
+
+function formatClock(value) {
+  const minutes = clockMinutes(value);
+  if (minutes == null) return "";
+  return String(Math.floor(minutes / 60)).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0");
+}
+
+function readClock(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  const formatted = formatClock(raw);
+  if (!formatted) throw httpError(400, "开关时间要写成 08:00 这种小时和分钟");
+  return formatted;
+}
+
+export function shanghaiMinutes(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Shanghai",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  let hour = Number(parts.find((part) => part.type === "hour").value);
+  const minute = Number(parts.find((part) => part.type === "minute").value);
+  if (hour === 24) hour = 0;
+  return hour * 60 + minute;
+}
+
+export function rechargeWindowOpen(start, end, nowMinutes) {
+  const from = clockMinutes(start);
+  const to = clockMinutes(end);
+  if (from == null || to == null || from === to) return null;
+  if (from < to) return nowMinutes >= from && nowMinutes < to;
+  return nowMinutes >= from || nowMinutes < to;
+}
+
+function applyRechargeSchedule(state, date = new Date()) {
+  const nowMinutes = shanghaiMinutes(date);
+  const inactive = new Set(
+    ruleIdentities(state, true)
+      .filter((row) => row.deleted)
+      .map((row) => ruleKey(row)),
+  );
+  let opened = 0;
+  let closed = 0;
+  for (const rule of state.rules || []) {
+    if (inactive.has(ruleKey(rule))) continue;
+    const open = rechargeWindowOpen(rule.rechargeStart, rule.rechargeEnd, nowMinutes);
+    if (open == null || Boolean(rule.autoRecharge) === open) continue;
+    rule.autoRecharge = open;
+    if (open) opened += 1;
+    else closed += 1;
+  }
+  if (!opened && !closed) return false;
+  state.version = (Number(state.version) || 0) + 1;
+  state.updatedAt = date.toISOString();
+  state.syncStatus = "待同步";
+  state.history.push({
+    at: state.updatedAt,
+    actor: "定时",
+    version: state.version,
+    summary: opened && closed
+      ? "定时开关充值：开启 " + opened + " 个，关闭 " + closed + " 个"
+      : opened
+        ? "定时开充值 " + opened + " 个子账号"
+        : "定时关充值 " + closed + " 个子账号",
+  });
+  state.history = state.history.slice(-200);
+  return true;
+}
+
 const DEFAULT_RECHARGE_RULE = {
   autoRecharge: true,
   plannedRoi: 2,
@@ -79,6 +158,8 @@ const RULE_FIELDS = [
   ["roiRiseAmount", "ROI上涨充值金额"],
   ["noOrderTimes", "连续充值未增单次数"],
   ["pauseMinutes", "暂停分钟数"],
+  ["rechargeStart", "开充值时间"],
+  ["rechargeEnd", "关充值时间"],
 ];
 
 function flagOn(value, fallback) {
@@ -106,6 +187,8 @@ function defaultRule(base = {}) {
     roiRiseAmount: num(base.roiRiseAmount, DEFAULT_RECHARGE_RULE.roiRiseAmount),
     noOrderTimes: Math.round(num(base.noOrderTimes, DEFAULT_RECHARGE_RULE.noOrderTimes)),
     pauseMinutes: Math.round(num(base.pauseMinutes, DEFAULT_RECHARGE_RULE.pauseMinutes)),
+    rechargeStart: formatClock(base.rechargeStart || base.开充值时间),
+    rechargeEnd: formatClock(base.rechargeEnd || base.关充值时间),
   };
 }
 
@@ -132,6 +215,17 @@ function assertRule(rule) {
   }
   if (rule.autoRecharge && !(rule.tier1Amount > 0) && !(rule.tier2Amount > 0)) {
     throw httpError(400, "自动充值时第一档或第二档充值金额必须大于0");
+  }
+  const startRaw = String(rule.rechargeStart || "");
+  const endRaw = String(rule.rechargeEnd || "");
+  if ((startRaw && clockMinutes(startRaw) == null) || (endRaw && clockMinutes(endRaw) == null)) {
+    throw httpError(400, "开关时间要写成 08:00 这种小时和分钟");
+  }
+  if (Boolean(startRaw) !== Boolean(endRaw)) {
+    throw httpError(400, "开充值和关充值要一起填写");
+  }
+  if (startRaw && clockMinutes(startRaw) === clockMinutes(endRaw)) {
+    throw httpError(400, "开充值和关充值不能是同一个时间");
   }
   return rule;
 }
@@ -594,6 +688,8 @@ function toWorkerSub(row) {
     ROI上涨充值金额: Number(row.roiRiseAmount) || 0,
     连续充值未增单次数: Number(row.noOrderTimes) || 0,
     暂停分钟数: Number(row.pauseMinutes) || 0,
+    开充值时间: formatClock(row.rechargeStart),
+    关充值时间: formatClock(row.rechargeEnd),
     运行: Boolean(row.running),
   };
 }
@@ -742,6 +838,12 @@ function readRulePatch(raw, current) {
         next[key] = Math.round(next[key]);
       }
     }
+  }
+  if (Object.prototype.hasOwnProperty.call(source, "开充值时间") || Object.prototype.hasOwnProperty.call(source, "rechargeStart")) {
+    next.rechargeStart = readClock(pick(source, ["开充值时间", "rechargeStart"]));
+  }
+  if (Object.prototype.hasOwnProperty.call(source, "关充值时间") || Object.prototype.hasOwnProperty.call(source, "rechargeEnd")) {
+    next.rechargeEnd = readClock(pick(source, ["关充值时间", "rechargeEnd"]));
   }
   return assertRule(next);
 }
@@ -934,6 +1036,7 @@ export function createWorkerMethods(db, ensure) {
 
     async workerRules(query = {}) {
       const state = await load();
+      if (applyRechargeSchedule(state)) await save(state);
       const includeDeleted = String(query.deleted || "") === "1";
       const runs = shopRuns(state).filter((row) => includeDeleted || !row.deleted);
       return {
@@ -973,13 +1076,12 @@ export function createWorkerMethods(db, ensure) {
 
     async pullWorker({ machineId, sinceVersion } = {}) {
       const state = await load();
-      const version = Number(state.version) || 0;
+      const scheduled = applyRechargeSchedule(state);
       const since = Number(sinceVersion) || 0;
       const machine = text(machineId, 64);
-      if (machine) {
-        stampMachineHeartbeat(state, machine);
-        await save(state);
-      }
+      if (machine) stampMachineHeartbeat(state, machine);
+      if (scheduled || machine) await save(state);
+      const version = Number(state.version) || 0;
       if (version > 0 && version <= since) {
         return { ok: true, changed: false, version, updatedAt: state.updatedAt, machineId: machine };
       }
@@ -1070,7 +1172,7 @@ export function createWorkerMethods(db, ensure) {
         shops,
         deletedShopIds: directory.filter((shop) => shop.deleted && shop.accountId).map((shop) => String(shop.accountId)),
         deletedSubAccounts,
-        note: "fullSnapshot 为 true，用本次 shops 整包覆盖本地规则。批量改ROI写入计划ROI，批量改金额写入第一档充值金额、第二档充值金额或ROI上涨充值金额，批量开付费和批量关付费写入自动充值。改这些不用停店，店铺正在运行时也返回。本机下次 GET 拿到新版本后，在下一批开始时使用最新规则。runMode 为 shop 时按整店跑，该店每个子账号的运行都是 true。runMode 为 sub 时只跑 runSubs 里的子账号，子账号.运行 为 false 的不要采集、不要充值。runShops 只是当前要进入的店铺的京准通主账户ID；为空表示在线待机，京麦也不采集。只跑京麦为 true 时，runShops 里的店都要进，只采集京麦成交金额和京麦 Cookie 状态，这些子账号的运行都是 false，不要打开京准通，不要采集京准通花费、ROI、余额、点击，不要充值。未选中的子账号仍留在 shops 里，规则不要丢掉。deletedShopIds、deletedSubAccounts 是已删除名单。网站不接收京准通 Cookie。",
+        note: "fullSnapshot 为 true，用本次 shops 整包覆盖本地规则。批量改ROI写入计划ROI，批量改金额写入第一档充值金额、第二档充值金额或ROI上涨充值金额，批量开付费和批量关付费写入自动充值。开充值时间和关充值时间都有值时，每天只在这个时段里自动充值是 true，时段外自动充值是 false，不要充值；采集、京麦、京准通仍按运行范围继续。到点后网站会给出新版本。改这些不用停店，店铺正在运行时也返回。本机下次 GET 拿到新版本后，在下一批开始时使用最新规则。runMode 为 shop 时按整店跑，该店每个子账号的运行都是 true。runMode 为 sub 时只跑 runSubs 里的子账号，子账号.运行 为 false 的不要采集、不要充值。runShops 只是当前要进入的店铺的京准通主账户ID；为空表示在线待机，京麦也不采集。只跑京麦为 true 时，runShops 里的店都要进，只采集京麦成交金额和京麦 Cookie 状态，这些子账号的运行都是 false，不要打开京准通，不要采集京准通花费、ROI、余额、点击，不要充值。未选中的子账号仍留在 shops 里，规则不要丢掉。deletedShopIds、deletedSubAccounts 是已删除名单。网站不接收京准通 Cookie。",
       };
     },
 

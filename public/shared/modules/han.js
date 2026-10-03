@@ -1534,7 +1534,7 @@
         if (dead || !window.HanCenter) return;
         stop = window.HanCenter.mount(root, hanBoard) || function () {};
       }
-      const centerVer = "20260928-runsave";
+      const centerVer = "20261003-clock";
       if (window.HanCenter && window.HanCenter.version === centerVer) {
         start();
       } else {
