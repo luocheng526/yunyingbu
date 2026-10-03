@@ -250,6 +250,7 @@ function emptyState() {
     syncedSubs: {},
     runSubList: null,
     jingmaiOnly: false,
+    subNotes: [],
   };
 }
 
@@ -988,8 +989,9 @@ export function createWorkerMethods(db, ensure) {
     };
   }
 
-  function presentSub(row) {
+  function presentSub(row, notes) {
     const paidOrders = num(row.paidOrders ?? row.orders);
+    const saved = (notes || []).find((note) => note.store === row.store && note.subAccountId === row.subAccountId);
     return {
       ...row,
       paidOrders,
@@ -999,7 +1001,7 @@ export function createWorkerMethods(db, ensure) {
       clicks: num(row.clicks),
       ctr: num(row.ctr),
       cpc: num(row.cpc),
-      remark: row.remark || "",
+      remark: saved ? saved.remark : (row.remark || ""),
     };
   }
 
@@ -1121,7 +1123,7 @@ export function createWorkerMethods(db, ensure) {
         throw httpError(400, "store required");
       }
       const state = await load();
-      const subaccounts = state.subs.filter((row) => row.store === shop).map(presentSub);
+      const subaccounts = state.subs.filter((row) => row.store === shop).map((row) => presentSub(row, state.subNotes));
       const found = applySubOrderAmount(
         state.shops.filter((row) => row.store === shop).map(presentShop)[0] || null,
         orderAmountByStore(subaccounts),
@@ -1357,8 +1359,22 @@ export function createWorkerMethods(db, ensure) {
     },
 
     async saveWorker(body = {}) {
-      const state = await load();
       const action = text(body.action, 32) || "rules";
+      if (action === "remark") {
+        const state = await load();
+        const storeName = text(pick(body, ["店铺名称", "store"]), 64);
+        const subAccountId = idText(pick(body, ["子账号ID", "subAccountId"]), "子账号ID");
+        if (!storeName || !subAccountId) throw httpError(400, "店铺和子账号必填");
+        const known = (state.subs || []).some((row) => row.store === storeName && row.subAccountId === subAccountId);
+        if (!known) throw httpError(404, "子账号不存在");
+        const remark = text(pick(body, ["账户备注", "remark"]), 200);
+        state.subNotes = (state.subNotes || []).filter((row) => !(row.store === storeName && row.subAccountId === subAccountId));
+        state.subNotes.push({ store: storeName, subAccountId, remark });
+        if (state.subNotes.length > 2000) state.subNotes = state.subNotes.slice(-2000);
+        await save(state);
+        return { ok: true, store: storeName, subAccountId, remark, version: state.version };
+      }
+      const state = await load();
       const actor = text(body.actor, 64) || "韩梦凯";
       state.version = (Number(state.version) || 0) + 1;
       state.updatedAt = new Date().toISOString();

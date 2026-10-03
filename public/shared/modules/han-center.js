@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20261003-subsort";
+  var VERSION = "20261003-subnote";
 
   function escapeHtml(value) {
   return String(value ?? "")
@@ -58,10 +58,10 @@
   function jsonFetch(url, options) {
   return fetch(url, Object.assign({ credentials: "same-origin" }, options || {})).then(function (res) {
   return res.json().catch(function () { return {}; }).then(function (data) {
-    if (!res.ok) {
-      throw new Error((data && data.error) || (res.status === 413 ? "一次提交太多，请只改当前子账号" : "请求失败"));
-    }
-    return data;
+  if (!res.ok) {
+  throw new Error((data && data.error) || (res.status === 413 ? "一次提交太多，请只改当前子账号" : "请求失败"));
+  }
+  return data;
   });
   });
   }
@@ -89,6 +89,9 @@
   ".han-paid thead th{position:sticky;top:0;z-index:1;background:#fafafa;color:#6b7280;font-weight:600;white-space:nowrap;padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right}" +
   ".han-paid .han-sub-sort{height:auto;border:0;background:transparent;padding:0;font:inherit;font-weight:600;color:inherit;cursor:pointer}" +
   ".han-paid .han-sub-sort.is-on{color:#1677ff}" +
+  ".han-paid .han-sub-note{height:auto;max-width:180px;border:0;background:transparent;padding:0;font:inherit;color:#1677ff;cursor:text;text-align:left;white-space:normal}" +
+  ".han-paid .han-sub-note.is-empty{color:#9ca3af}" +
+  ".han-paid .han-sub-note-input{width:148px;height:28px}" +
   ".han-paid thead th:first-child,.han-paid thead th:nth-child(2),.han-paid td:first-child,.han-paid td:nth-child(2){text-align:left}" +
   ".han-paid tbody td{padding:10px 12px;border-bottom:1px solid #f3f4f6;white-space:nowrap;text-align:right}" +
   ".han-paid tbody tr:hover td{background:#f8fbff}" +
@@ -269,10 +272,10 @@
   });
   return {
   cards: [
-    { key: "ad", label: "京准通花费", value: liveInt(todayCost), extra: "" },
-    { key: "roi", label: "付费成交ROI", value: liveRoi(todayPay, todayCost) },
-    { key: "livePay", label: "实时付费成交额", value: liveInt(todayPay) },
-    { key: "livePaid", label: "实时付费接入店铺数量", value: liveInt(rows.length) },
+  { key: "ad", label: "京准通花费", value: liveInt(todayCost), extra: "" },
+  { key: "roi", label: "付费成交ROI", value: liveRoi(todayPay, todayCost) },
+  { key: "livePay", label: "实时付费成交额", value: liveInt(todayPay) },
+  { key: "livePaid", label: "实时付费接入店铺数量", value: liveInt(rows.length) },
   ],
   };
   }
@@ -298,14 +301,14 @@
   }
   function points(list) {
   return list.map(function (value, index) {
-    return xAt(index).toFixed(1) + "," + yAt(value).toFixed(1);
+  return xAt(index).toFixed(1) + "," + yAt(value).toFixed(1);
   }).join(" ");
   }
   var labels = "";
   if (count === 24 || count === 48) {
   for (var hour = 1; hour <= 24; hour += 1) {
-    var index = count === 48 ? hour * 2 - 1 : hour - 1;
-    labels += '<text x="' + xAt(index).toFixed(1) + '" y="' + (height - 5) + '" text-anchor="middle" fill="#8c8c8c" font-size="8">' + hour + "</text>";
+  var index = count === 48 ? hour * 2 - 1 : hour - 1;
+  labels += '<text x="' + xAt(index).toFixed(1) + '" y="' + (height - 5) + '" text-anchor="middle" fill="#8c8c8c" font-size="8">' + hour + "</text>";
   }
   }
   return '<svg class="xm-hm-line" viewBox="0 0 ' + width + " " + height + '" preserveAspectRatio="none">' +
@@ -354,26 +357,26 @@
   var teamByStore = {};
   function liveTabs() {
   function link(href, label, on) {
-    return '<a class="' + (on ? "is-active" : "") + '" href="' + href + '" data-han-tab="' + href + '">' + escapeHtml(label) + "</a>";
+  return '<a class="' + (on ? "is-active" : "") + '" href="' + href + '" data-han-tab="' + href + '">' + escapeHtml(label) + "</a>";
   }
   return '<nav class="han-live-tabs" aria-label="主管分组">' +
-    link("/han/paid", "全部汇总", !currentTeam) +
-    TEAMS.map(function (name) {
-      var href = "/han/paid?team=" + encodeURIComponent(name);
-      return link(href, name, currentTeam === name);
-    }).join("") +
-    "</nav>";
+  link("/han/paid", "全部汇总", !currentTeam) +
+  TEAMS.map(function (name) {
+  var href = "/han/paid?team=" + encodeURIComponent(name);
+  return link(href, name, currentTeam === name);
+  }).join("") +
+  "</nav>";
   }
   root.innerHTML = live
   ? '<main class="page han-paid han-live"><style>' + css + "</style>" +
-    '<div class="han-live-bar">' + liveTabs() +
-    '<div class="han-paid-meta"><span class="han-paid-dot"></span><span id="han-paid-asof">等待回传</span></div></div>' +
-    '<section id="han-paid-board"></section><section class="kpi-grid" id="han-paid-kpis" hidden></section><div id="han-paid-body"></div><p id="han-paid-status" class="status"></p></main>'
+  '<div class="han-live-bar">' + liveTabs() +
+  '<div class="han-paid-meta"><span class="han-paid-dot"></span><span id="han-paid-asof">等待回传</span></div></div>' +
+  '<section id="han-paid-board"></section><section class="kpi-grid" id="han-paid-kpis" hidden></section><div id="han-paid-body"></div><p id="han-paid-status" class="status"></p></main>'
   : page(
-    "付费中心",
-    "最新一次回传的全店快照。点店铺名称下钻查看子账号和充值记录。",
-    '<div class="han-paid-meta"><span class="han-paid-dot"></span><span id="han-paid-asof">等待回传</span></div></header>' +
-    '<section class="kpi-grid" id="han-paid-kpis"></section><div id="han-paid-body"></div><p id="han-paid-status" class="status"></p></main>'
+  "付费中心",
+  "最新一次回传的全店快照。点店铺名称下钻查看子账号和充值记录。",
+  '<div class="han-paid-meta"><span class="han-paid-dot"></span><span id="han-paid-asof">等待回传</span></div></header>' +
+  '<section class="kpi-grid" id="han-paid-kpis"></section><div id="han-paid-body"></div><p id="han-paid-status" class="status"></p></main>'
   );
   var asofEl = root.querySelector("#han-paid-asof");
   var boardEl = root.querySelector("#han-paid-board");
@@ -384,6 +387,7 @@
   var overviewRows = [];
   var keyword = "";
   var detailAccounts = [];
+  var detailStore = "";
   var subSortKey = "";
   var subSortDir = "desc";
   var SUB_COLS = [
@@ -415,37 +419,37 @@
   if (boardEl) boardEl.hidden = true;
   if (kpiEl) kpiEl.hidden = false;
   var cards = [
-    { label: metrics.detail ? "子账号" : "店铺数", value: integer(metrics.stores), unit: metrics.detail ? "个" : "家" },
-    { label: "京准通花费", value: money(metrics.spend) },
-    { label: "京麦成交", value: money(metrics.jingmaiGmv) },
-    { label: "总订单金额", value: money(metrics.totalOrderAmount) },
-    { label: "付费订单", value: integer(metrics.paidOrders), unit: "单" },
-    { label: "回传成功", value: integer(metrics.successCount), unit: metrics.detail ? "店" : "店" },
-    { label: "真实费比", value: feeText(metrics.feeSpend != null ? metrics.feeSpend : metrics.spend, metrics.feeGmv != null ? metrics.feeGmv : metrics.jingmaiGmv) },
+  { label: metrics.detail ? "子账号" : "店铺数", value: integer(metrics.stores), unit: metrics.detail ? "个" : "家" },
+  { label: "京准通花费", value: money(metrics.spend) },
+  { label: "京麦成交", value: money(metrics.jingmaiGmv) },
+  { label: "总订单金额", value: money(metrics.totalOrderAmount) },
+  { label: "付费订单", value: integer(metrics.paidOrders), unit: "单" },
+  { label: "回传成功", value: integer(metrics.successCount), unit: metrics.detail ? "店" : "店" },
+  { label: "真实费比", value: feeText(metrics.feeSpend != null ? metrics.feeSpend : metrics.spend, metrics.feeGmv != null ? metrics.feeGmv : metrics.jingmaiGmv) },
   ];
   kpiEl.innerHTML = cards.map(function (card) {
-    return '<article class="kpi-card"><div class="label">' + escapeHtml(card.label) + '</div><div class="value">' +
-      card.value + (card.unit ? '<span class="unit">' + escapeHtml(card.unit) + "</span>" : "") + "</div></article>";
+  return '<article class="kpi-card"><div class="label">' + escapeHtml(card.label) + '</div><div class="value">' +
+  card.value + (card.unit ? '<span class="unit">' + escapeHtml(card.unit) + "</span>" : "") + "</div></article>";
   }).join("");
   }
 
   function metricCells(row) {
   var cells = "<td>" + money(row.spend) + "</td><td>" +
-    integer(row.paidOrders) + "</td><td>" + rate(row.roi) + "</td><td>" + rate(row.cvr) + "</td><td>" +
-    money(row.cpc) + "</td><td>" + money(row.jingmaiGmv) + "</td>";
+  integer(row.paidOrders) + "</td><td>" + rate(row.roi) + "</td><td>" + rate(row.cvr) + "</td><td>" +
+  money(row.cpc) + "</td><td>" + money(row.jingmaiGmv) + "</td>";
   if (!live) cells += "<td>" + integer(row.clicks) + "</td><td>" + rate(row.ctr) + "</td>";
   return (live ? "" : "<td>" + escapeHtml(row.accountId || "—") + "</td>") + cells +
-    "<td>" + money(row.totalOrderAmount) + "</td><td>" + feeText(row.spend, row.jingmaiGmv) + "</td><td>" +
-    successTag(row.success) + "</td>";
+  "<td>" + money(row.totalOrderAmount) + "</td><td>" + feeText(row.spend, row.jingmaiGmv) + "</td><td>" +
+  successTag(row.success) + "</td>";
   }
 
   function headerRow(first) {
   return "<thead><tr><th>" + first + "</th>" +
-    (live ? "" : "<th>京准通主账户ID</th>") +
-    "<th>京准通花费</th><th>京准通付费订单数</th>" +
-    "<th>京准通付费投产比</th><th>京准通付费转化率</th><th>京准通平均点击成本</th><th>京麦成交金额</th>" +
-    (live ? "" : "<th>京准通点击数</th><th>京准通点击率</th>") +
-    "<th>京准通总订单金额</th><th>真实费比</th><th>是否成功</th></tr></thead>";
+  (live ? "" : "<th>京准通主账户ID</th>") +
+  "<th>京准通花费</th><th>京准通付费订单数</th>" +
+  "<th>京准通付费投产比</th><th>京准通付费转化率</th><th>京准通平均点击成本</th><th>京麦成交金额</th>" +
+  (live ? "" : "<th>京准通点击数</th><th>京准通点击率</th>") +
+  "<th>京准通总订单金额</th><th>真实费比</th><th>是否成功</th></tr></thead>";
   }
 
   function isZeroRow(row) {
@@ -456,9 +460,9 @@
   var filtered = keyword ? rows.filter(function (row) { return String(row.store || "").indexOf(keyword) >= 0; }) : rows;
   if (!filtered.length) return '<p class="empty">暂无回传数据</p>';
   return '<div class="han-paid-table-wrap"><table>' + headerRow("店铺名称") + "<tbody>" + filtered.map(function (row) {
-    return '<tr class="' + (isZeroRow(row) ? "is-zero" : "") + '"><td><button type="button" class="han-paid-store" data-han-store="' +
-      escapeHtml(row.store) + '">' + escapeHtml(row.store) + '</button><span class="han-paid-date">' +
-      escapeHtml(row.date || row.capturedAt || "") + "</span></td>" + metricCells(row) + "</tr>";
+  return '<tr class="' + (isZeroRow(row) ? "is-zero" : "") + '"><td><button type="button" class="han-paid-store" data-han-store="' +
+  escapeHtml(row.store) + '">' + escapeHtml(row.store) + '</button><span class="han-paid-date">' +
+  escapeHtml(row.date || row.capturedAt || "") + "</span></td>" + metricCells(row) + "</tr>";
   }).join("") + "</tbody></table></div>";
   }
 
@@ -473,11 +477,11 @@
   var amount = 0;
   var success = 0;
   rows.forEach(function (row) {
-    spend += Number(row.spend) || 0;
-    gmv += Number(row.jingmaiGmv) || 0;
-    orders += Number(row.paidOrders) || 0;
-    amount += Number(row.totalOrderAmount) || 0;
-    if (row.success !== "否") success += 1;
+  spend += Number(row.spend) || 0;
+  gmv += Number(row.jingmaiGmv) || 0;
+  orders += Number(row.paidOrders) || 0;
+  amount += Number(row.totalOrderAmount) || 0;
+  if (row.success !== "否") success += 1;
   });
   return { stores: rows.length, spend: spend, jingmaiGmv: gmv, totalOrderAmount: amount, paidOrders: orders, successCount: success };
   }
@@ -489,8 +493,8 @@
   function scopedRows() {
   var rows = pageRows();
   if (live && liveShop) {
-    var key = shopKey(liveShop);
-    rows = rows.filter(function (row) { return row.store === liveShop || shopKey(row.store) === key; });
+  var key = shopKey(liveShop);
+  rows = rows.filter(function (row) { return row.store === liveShop || shopKey(row.store) === key; });
   }
   return rows;
   }
@@ -500,10 +504,10 @@
   var rows = scopedRows();
   if (liveShop && !rows.length) rows = [{ store: liveShop }];
   rows.forEach(function (row) {
-    var name = String(row.store || "").trim();
-    if (!name) return;
-    picked[name] = true;
-    picked["~" + shopKey(name)] = true;
+  var name = String(row.store || "").trim();
+  if (!name) return;
+  picked[name] = true;
+  picked["~" + shopKey(name)] = true;
   });
   return picked;
   }
@@ -512,11 +516,11 @@
   var names = [];
   var seen = {};
   pageRows().forEach(function (row) {
-    var name = String(row.store || "").trim();
-    var key = shopKey(name);
-    if (!name || seen[key]) return;
-    seen[key] = true;
-    names.push(name);
+  var name = String(row.store || "").trim();
+  var key = shopKey(name);
+  if (!name || seen[key]) return;
+  seen[key] = true;
+  names.push(name);
   });
   names.sort();
   return names;
@@ -524,22 +528,22 @@
 
   function hiddenCards() {
   try {
-    var raw = JSON.parse(localStorage.getItem("han-live-cards") || "[]");
-    return raw && raw.length ? raw : [];
+  var raw = JSON.parse(localStorage.getItem("han-live-cards") || "[]");
+  return raw && raw.length ? raw : [];
   } catch (_err) {
-    return [];
+  return [];
   }
   }
 
   function liveFilterHtml(pick, shops) {
   function option(value, label, on) {
-    return '<option value="' + escapeHtml(value) + '"' + (on ? " selected" : "") + ">" + escapeHtml(label) + "</option>";
+  return '<option value="' + escapeHtml(value) + '"' + (on ? " selected" : "") + ">" + escapeHtml(label) + "</option>";
   }
   return '<div class="xm-hm-live-filter"><div class="xm-hm-live-filter-left"><strong class="xm-hm-live-filter-lab">店铺列表</strong><span class="xm-hm-live-filter-box"><select data-live-filter="pick">' +
-    option("", "责权归属", !pick) +
-    '<optgroup label="责权团队">' + TEAMS.map(function (name) { return option("team:" + name, name, pick === "team:" + name); }).join("") + "</optgroup>" +
-    (shops.length ? '<optgroup label="店铺">' + shops.map(function (name) { return option("shop:" + name, name, pick === "shop:" + name); }).join("") + "</optgroup>" : "") +
-    '</select></span></div><div class="xm-hm-live-filter-right"><button type="button" class="xm-hm-live-heads" data-live-heads>表头设置</button><button type="button" class="xm-hm-live-refresh" data-refresh-live>刷新</button></div></div>';
+  option("", "责权归属", !pick) +
+  '<optgroup label="责权团队">' + TEAMS.map(function (name) { return option("team:" + name, name, pick === "team:" + name); }).join("") + "</optgroup>" +
+  (shops.length ? '<optgroup label="店铺">' + shops.map(function (name) { return option("shop:" + name, name, pick === "shop:" + name); }).join("") + "</optgroup>" : "") +
+  '</select></span></div><div class="xm-hm-live-filter-right"><button type="button" class="xm-hm-live-heads" data-live-heads>表头设置</button><button type="button" class="xm-hm-live-refresh" data-refresh-live>刷新</button></div></div>';
   }
 
   function renderLiveBoard() {
@@ -550,31 +554,31 @@
   var pageFee = feeOf(pageRowsNow);
   var feeHour = shanghaiHour();
   model.hero = {
-    label: "京麦成交金额",
-    value: pageSales.text,
-    delta: null,
-    yesterdayHour: [],
-    todayHour: [],
+  label: "京麦成交金额",
+  value: pageSales.text,
+  delta: null,
+  yesterdayHour: [],
+  todayHour: [],
   };
   var pageSpend = 0;
   pageRowsNow.forEach(function (row) { pageSpend += Number(row.spend) || 0; });
   model.cards.forEach(function (card) {
-    if (card.key === "ad") {
-      card.label = "京准通花费";
-      card.value = salesText(pageSpend);
-      card.extra = "推广占比 " + pageFee.text;
-    }
-    if (card.key === "livePay") card.value = pageSales.text;
-    if (card.key === "livePaid") card.value = liveInt(pageRowsNow.length);
+  if (card.key === "ad") {
+  card.label = "京准通花费";
+  card.value = salesText(pageSpend);
+  card.extra = "推广占比 " + pageFee.text;
+  }
+  if (card.key === "livePay") card.value = pageSales.text;
+  if (card.key === "livePaid") card.value = liveInt(pageRowsNow.length);
   });
   model.paid = {
-    label: "真实费比",
-    value: pageFee.text,
-    delta: null,
-    unit: "rate",
-    lineMode: "flat",
-    yesterdayHour: [],
-    todayHour: pageFee.ratio == null ? [] : flatHours(pageFee.ratio).slice(0, Math.min(24, feeHour + 1)),
+  label: "真实费比",
+  value: pageFee.text,
+  delta: null,
+  unit: "rate",
+  lineMode: "flat",
+  yesterdayHour: [],
+  todayHour: pageFee.ratio == null ? [] : flatHours(pageFee.ratio).slice(0, Math.min(24, feeHour + 1)),
   };
   var hidden = {};
   hiddenCards().forEach(function (key) { hidden[key] = true; });
@@ -583,69 +587,69 @@
   var pick = liveShop ? "shop:" + liveShop : currentTeam ? "team:" + currentTeam : "";
   boardEl.hidden = false;
   if (kpiEl) {
-    kpiEl.hidden = true;
-    kpiEl.innerHTML = "";
+  kpiEl.hidden = true;
+  kpiEl.innerHTML = "";
   }
   boardEl.innerHTML = liveFilterHtml(pick, shops) +
-    '<div class="xm-hm-head-pop" hidden><h3>表头设置</h3>' + model.cards.map(function (card) {
-      return '<label><input type="checkbox" data-live-card="' + escapeHtml(card.key) + '"' + (hidden[card.key] ? "" : " checked") + "> " + escapeHtml(card.label) + "</label>";
-    }).join("") + "</div>" +
-    '<div class="xm-hm-live-charts">' + liveChart(model.hero) + liveChart(model.paid) + "</div>" +
-    '<div class="xm-hm-live-cards">' + cards.map(function (card) {
-      return '<article class="xm-hm-card" data-card="' + escapeHtml(card.key) + '"><div class="xm-hm-card-head"><span>' + escapeHtml(card.label) +
-        '</span></div><div class="xm-hm-value">' + escapeHtml(card.value) + "</div>" +
-        (card.extra ? '<div class="xm-hm-trend">' + escapeHtml(card.extra) + "</div>" : "") + "</article>";
-    }).join("") + "</div>";
+  '<div class="xm-hm-head-pop" hidden><h3>表头设置</h3>' + model.cards.map(function (card) {
+  return '<label><input type="checkbox" data-live-card="' + escapeHtml(card.key) + '"' + (hidden[card.key] ? "" : " checked") + "> " + escapeHtml(card.label) + "</label>";
+  }).join("") + "</div>" +
+  '<div class="xm-hm-live-charts">' + liveChart(model.hero) + liveChart(model.paid) + "</div>" +
+  '<div class="xm-hm-live-cards">' + cards.map(function (card) {
+  return '<article class="xm-hm-card" data-card="' + escapeHtml(card.key) + '"><div class="xm-hm-card-head"><span>' + escapeHtml(card.label) +
+  '</span></div><div class="xm-hm-value">' + escapeHtml(card.value) + "</div>" +
+  (card.extra ? '<div class="xm-hm-trend">' + escapeHtml(card.extra) + "</div>" : "") + "</article>";
+  }).join("") + "</div>";
   var select = boardEl.querySelector("[data-live-filter]");
   if (select) select.addEventListener("change", function () {
-    var value = select.value || "";
-    var href = "/han/paid";
-    if (value.indexOf("team:") === 0) href = "/han/paid?team=" + encodeURIComponent(value.slice(5));
-    else if (value.indexOf("shop:") === 0) href = "/han/paid?liveShop=" + encodeURIComponent(value.slice(5));
-    if (typeof window.__hanGo === "function") window.__hanGo(href);
+  var value = select.value || "";
+  var href = "/han/paid";
+  if (value.indexOf("team:") === 0) href = "/han/paid?team=" + encodeURIComponent(value.slice(5));
+  else if (value.indexOf("shop:") === 0) href = "/han/paid?liveShop=" + encodeURIComponent(value.slice(5));
+  if (typeof window.__hanGo === "function") window.__hanGo(href);
   });
   var refresh = boardEl.querySelector("[data-refresh-live]");
   if (refresh) refresh.addEventListener("click", function () {
-    refresh.disabled = true;
-    refresh.textContent = "刷新中…";
-    loadOverview().catch(function (err) {
-      if (!dead) setStatus(err.message || "加载失败", true);
-    });
+  refresh.disabled = true;
+  refresh.textContent = "刷新中…";
+  loadOverview().catch(function (err) {
+  if (!dead) setStatus(err.message || "加载失败", true);
+  });
   });
   var heads = boardEl.querySelector("[data-live-heads]");
   var pop = boardEl.querySelector(".xm-hm-head-pop");
   if (heads && pop) heads.addEventListener("click", function () { pop.hidden = !pop.hidden; });
   boardEl.querySelectorAll("[data-live-card]").forEach(function (box) {
-    box.addEventListener("change", function () {
-      var off = [];
-      boardEl.querySelectorAll("[data-live-card]").forEach(function (item) {
-        if (!item.checked) off.push(item.getAttribute("data-live-card"));
-      });
-      try { localStorage.setItem("han-live-cards", JSON.stringify(off)); } catch (_err) {}
-      renderLiveBoard();
-    });
+  box.addEventListener("change", function () {
+  var off = [];
+  boardEl.querySelectorAll("[data-live-card]").forEach(function (item) {
+  if (!item.checked) off.push(item.getAttribute("data-live-card"));
+  });
+  try { localStorage.setItem("han-live-cards", JSON.stringify(off)); } catch (_err) {}
+  renderLiveBoard();
+  });
   });
   }
 
   function renderGroupTable(rows) {
   if (!rows.length) return '<p class="empty">该组还没有回传</p>';
   return '<div class="han-paid-table-wrap"><table class="han-live-grid">' + headerRow("店铺名称") + "<tbody>" + rows.map(function (row) {
-    return '<tr class="' + (isZeroRow(row) ? "is-zero" : "") + '"><td><button type="button" class="han-paid-store" data-han-store="' +
-      escapeHtml(row.store) + '">' + escapeHtml(row.store) + '</button><span class="han-paid-date">' +
-      escapeHtml(row.date || row.capturedAt || "") + "</span></td>" + metricCells(row) + "</tr>";
+  return '<tr class="' + (isZeroRow(row) ? "is-zero" : "") + '"><td><button type="button" class="han-paid-store" data-han-store="' +
+  escapeHtml(row.store) + '">' + escapeHtml(row.store) + '</button><span class="han-paid-date">' +
+  escapeHtml(row.date || row.capturedAt || "") + "</span></td>" + metricCells(row) + "</tr>";
   }).join("") + "</tbody></table></div>";
   }
 
   function renderLiveTables() {
   var rows = scopedRows().filter(function (row) {
-    return !keyword || String(row.store || "").indexOf(keyword) >= 0;
+  return !keyword || String(row.store || "").indexOf(keyword) >= 0;
   });
   var names = currentTeam ? [currentTeam] : TEAMS;
   return names.map(function (team) {
-    var groupRows = rows.filter(function (row) { return teamOf(row.store) === team; });
-    if (keyword && !groupRows.length && !currentTeam) return "";
-    return '<section class="han-live-group"><h3>' + escapeHtml(team) + "<span>" + groupRows.length +
-      "店</span></h3>" + renderGroupTable(groupRows) + "</section>";
+  var groupRows = rows.filter(function (row) { return teamOf(row.store) === team; });
+  if (keyword && !groupRows.length && !currentTeam) return "";
+  return '<section class="han-live-group"><h3>' + escapeHtml(team) + "<span>" + groupRows.length +
+  "店</span></h3>" + renderGroupTable(groupRows) + "</section>";
   }).join("");
   }
 
@@ -655,30 +659,33 @@
   var metrics = live ? metricsFrom(scoped) : (data.metrics || data.totals || {});
   var stamp = data.asOf || data.capturedAt;
   asofEl.textContent = stamp
-    ? "最新回传 " + stamp + " · " + (live ? (currentTeam || "全部主管") + " " : "") + (metrics.stores || scoped.length) + " 店"
-    : "等待回传";
+  ? "最新回传 " + stamp + " · " + (live ? (currentTeam || "全部主管") + " " : "") + (metrics.stores || scoped.length) + " 店"
+  : "等待回传";
   if (live) renderLiveBoard();
   else renderKpis(metrics);
   bodyEl.innerHTML = '<section class="panel">' +
-    (live ? "" : '<div class="han-paid-toolbar"><h2>本次回传</h2><div class="row">' +
-      '<input id="han-paid-filter" type="search" maxlength="64" placeholder="搜索店铺名称" /></div></div>') +
-    '<div id="han-paid-table">' + (live ? renderLiveTables() : renderOverviewTable(overviewRows)) + "</div></section>";
+  (live ? "" : '<div class="han-paid-toolbar"><h2>本次回传</h2><div class="row">' +
+  '<input id="han-paid-filter" type="search" maxlength="64" placeholder="搜索店铺名称" /></div></div>') +
+  '<div id="han-paid-table">' + (live ? renderLiveTables() : renderOverviewTable(overviewRows)) + "</div></section>";
   var filter = live ? null : root.querySelector("#han-paid-filter");
   if (filter) {
-    filter.value = keyword;
-    filter.addEventListener("input", function () {
-      keyword = filter.value.trim();
-      var wrap = root.querySelector("#han-paid-table");
-      if (wrap) wrap.innerHTML = live ? renderLiveTables() : renderOverviewTable(overviewRows);
-    });
+  filter.value = keyword;
+  filter.addEventListener("input", function () {
+  keyword = filter.value.trim();
+  var wrap = root.querySelector("#han-paid-table");
+  if (wrap) wrap.innerHTML = live ? renderLiveTables() : renderOverviewTable(overviewRows);
+  });
   }
   }
 
   function subCells(row) {
-  return "<td>" + money(row.balance) + "</td><td>" + escapeHtml(row.remark || "—") + "</td><td>" + money(row.spend) +
-    "</td><td>" + rate(row.roi) + "</td><td>" + integer(row.paidOrders != null ? row.paidOrders : row.orders) +
-    "</td><td>" + money(row.totalOrderAmount) + "</td><td>" + integer(row.impressions) + "</td><td>" +
-    integer(row.clicks) + "</td><td>" + rate(row.ctr) + "</td><td>" + money(row.cpc) + "</td>";
+  var note = row.remark || "";
+  return "<td>" + money(row.balance) + '</td><td><button type="button" class="han-sub-note' + (note ? "" : " is-empty") +
+  '" data-sub-note="' + escapeHtml(row.subAccountId) + '" title="点这里填写账户备注">' + escapeHtml(note || "—") +
+  "</button></td><td>" + money(row.spend) + "</td><td>" + rate(row.roi) + "</td><td>" +
+  integer(row.paidOrders != null ? row.paidOrders : row.orders) + "</td><td>" + money(row.totalOrderAmount) +
+  "</td><td>" + integer(row.impressions) + "</td><td>" + integer(row.clicks) + "</td><td>" + rate(row.ctr) +
+  "</td><td>" + money(row.cpc) + "</td>";
   }
 
   function subSortValue(row, key) {
@@ -694,33 +701,99 @@
   var dir = subSortDir === "asc" ? 1 : -1;
   var text = subSortKey === "name" || subSortKey === "remark";
   list.sort(function (a, b) {
-    var av = subSortValue(a, subSortKey);
-    var bv = subSortValue(b, subSortKey);
-    if (av === bv) return 0;
-    if (text) return String(av).localeCompare(String(bv), "zh") * dir;
-    return (av - bv) * dir;
+  var av = subSortValue(a, subSortKey);
+  var bv = subSortValue(b, subSortKey);
+  if (av === bv) return 0;
+  if (text) return String(av).localeCompare(String(bv), "zh") * dir;
+  return (av - bv) * dir;
   });
   return list;
   }
 
   function subTableHtml(rows) {
   var head = "<thead><tr>" + SUB_COLS.map(function (col) {
-    var on = subSortKey === col[0];
-    var mark = on ? (subSortDir === "asc" ? "↑" : "↓") : "";
-    return '<th><button type="button" class="han-sub-sort' + (on ? " is-on" : "") + '" data-sub-sort="' + col[0] + '">' +
-      escapeHtml(col[1]) + (mark ? "<i>" + mark + "</i>" : "") + "</button></th>";
+  var on = subSortKey === col[0];
+  var mark = on ? (subSortDir === "asc" ? "↑" : "↓") : "";
+  return '<th><button type="button" class="han-sub-sort' + (on ? " is-on" : "") + '" data-sub-sort="' + col[0] + '">' +
+  escapeHtml(col[1]) + (mark ? "<i>" + mark + "</i>" : "") + "</button></th>";
   }).join("") + "</tr></thead>";
   var body = "<tbody>" + sortedSubs(rows).map(function (row) {
-    return "<tr><td>" + escapeHtml(row.subAccountName || row.subAccountId) + '<span class="han-paid-date">' +
-      escapeHtml(row.subAccountId || "") + "</span></td>" + subCells(row) + "</tr>";
+  return "<tr><td>" + escapeHtml(row.subAccountName || row.subAccountId) + '<span class="han-paid-date">' +
+  escapeHtml(row.subAccountId || "") + "</span></td>" + subCells(row) + "</tr>";
   }).join("") + "</tbody>";
   return head + body;
+  }
+
+  function paintSubNote(id, text) {
+  var button = root.querySelector('[data-sub-note="' + id + '"]');
+  if (!button || button.tagName === "INPUT") return;
+  button.textContent = text || "—";
+  button.className = "han-sub-note" + (text ? "" : " is-empty");
+  }
+
+  function openSubNote(button) {
+  if (!button || !button.isConnected) return;
+  var id = button.getAttribute("data-sub-note");
+  var row = detailAccounts.find(function (item) { return String(item.subAccountId) === id; });
+  var original = row ? String(row.remark || "") : "";
+  var input = document.createElement("input");
+  input.className = "han-sub-note-input";
+  input.value = original;
+  input.maxLength = 200;
+  input.placeholder = "填写备注";
+  input.setAttribute("data-sub-note", id);
+  button.replaceWith(input);
+  var done = false;
+  function close(text) {
+  if (done) return;
+  done = true;
+  var next = document.createElement("button");
+  next.type = "button";
+  next.className = "han-sub-note" + (text ? "" : " is-empty");
+  next.title = "点这里填写账户备注";
+  next.setAttribute("data-sub-note", id);
+  next.textContent = text || "—";
+  if (input.isConnected) input.replaceWith(next);
+  }
+  function finish() {
+  if (done) return;
+  var typed = input.value.trim().slice(0, 200);
+  if (typed === original) {
+  close(original);
+  return;
+  }
+  close(typed);
+  if (row) row.remark = typed;
+  jsonFetch("/api/han/worker", {
+  method: "PUT",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ action: "remark", store: detailStore, subAccountId: id, remark: typed }),
+  }).then(function () {
+  setStatus("备注已保存");
+  }).catch(function (err) {
+  if (row) row.remark = original;
+  paintSubNote(id, original);
+  if (!dead) setStatus(err.message || "备注保存失败", true);
+  });
+  }
+  input.addEventListener("keydown", function (event) {
+  if (event.key === "Enter") {
+  event.preventDefault();
+  input.blur();
+  } else if (event.key === "Escape") {
+  event.preventDefault();
+  close(original);
+  }
+  });
+  input.addEventListener("blur", finish);
+  input.focus();
   }
 
   function renderDetail(data) {
   var shop = data.shop || { store: data.store };
   var accounts = data.subaccounts || [];
   detailAccounts = accounts;
+  detailStore = data.store || shop.store || "";
   subSortKey = "";
   subSortDir = "desc";
   var recharges = data.recharges || [];
@@ -728,106 +801,111 @@
   var orders = 0;
   var orderAmount = 0;
   accounts.forEach(function (row) {
-    spend += Number(row.spend) || 0;
-    orders += Number(row.paidOrders != null ? row.paidOrders : row.orders) || 0;
-    orderAmount += Number(row.totalOrderAmount) || 0;
+  spend += Number(row.spend) || 0;
+  orders += Number(row.paidOrders != null ? row.paidOrders : row.orders) || 0;
+  orderAmount += Number(row.totalOrderAmount) || 0;
   });
   asofEl.textContent = (shop.accountId ? "京准通主账户 " + shop.accountId + " · " : "") + accounts.length + " 个子账号";
   renderKpis({
-    detail: true,
-    stores: accounts.length,
-    spend: spend || shop.spend,
-    jingmaiGmv: shop.jingmaiGmv,
-    feeSpend: shop.spend,
-    feeGmv: shop.jingmaiGmv,
-    totalOrderAmount: orderAmount || shop.totalOrderAmount,
-    paidOrders: orders || shop.paidOrders,
-    successCount: shop.success === "否" ? 0 : 1,
+  detail: true,
+  stores: accounts.length,
+  spend: spend || shop.spend,
+  jingmaiGmv: shop.jingmaiGmv,
+  feeSpend: shop.spend,
+  feeGmv: shop.jingmaiGmv,
+  totalOrderAmount: orderAmount || shop.totalOrderAmount,
+  paidOrders: orders || shop.paidOrders,
+  successCount: shop.success === "否" ? 0 : 1,
   });
   var rechargeAmount = recharges.reduce(function (sum, row) { return sum + (Number(row.amount) || 0); }, 0);
   bodyEl.innerHTML =
-    '<section class="panel"><div class="han-paid-toolbar"><div class="han-paid-toolbar-left">' +
-    '<button type="button" id="han-paid-back">返回' + (live ? "实时付费" : "付费中心") + "</button><h2>" + escapeHtml(data.store || shop.store) +
-    "</h2></div></div></section>" +
-    '<section class="panel"><h2>子账号</h2>' +
-    (accounts.length
-      ? '<div class="han-paid-table-wrap"><table id="han-sub-table">' + subTableHtml(accounts) + "</table></div>"
-      : '<p class="empty">本地程序尚未回传子账号明细</p>') +
-    "</section>" +
-    '<section class="panel"><h2>充值记录</h2><p class="lead">累计充值 ' + money(rechargeAmount) + " · " + integer(recharges.length) +
-    " 笔</p>" +
-    (recharges.length
-      ? '<div class="han-paid-table-wrap"><table><thead><tr><th>充值时间</th><th>子账号名称</th><th>充值金额</th><th>账户余额</th><th>命中规则</th><th>结果</th></tr></thead><tbody>' +
-        recharges.map(function (row) {
-          return "<tr><td>" + escapeHtml(row.chargedAt || "") + "</td><td>" + escapeHtml(row.subAccountName || row.subAccountId || "—") +
-            "</td><td>" + money(row.amount) + "</td><td>" + money(row.balance) + "</td><td>" + escapeHtml(row.ruleCode || row.note || "—") +
-            "</td><td>" + escapeHtml(row.result || "—") + "</td></tr>";
-        }).join("") + "</tbody></table></div>"
-      : '<p class="empty">暂无充值记录，本地程序回传后在此展示</p>') +
-    "</section>";
+  '<section class="panel"><div class="han-paid-toolbar"><div class="han-paid-toolbar-left">' +
+  '<button type="button" id="han-paid-back">返回' + (live ? "实时付费" : "付费中心") + "</button><h2>" + escapeHtml(data.store || shop.store) +
+  "</h2></div></div></section>" +
+  '<section class="panel"><h2>子账号</h2>' +
+  (accounts.length
+  ? '<div class="han-paid-table-wrap"><table id="han-sub-table">' + subTableHtml(accounts) + "</table></div>"
+  : '<p class="empty">本地程序尚未回传子账号明细</p>') +
+  "</section>" +
+  '<section class="panel"><h2>充值记录</h2><p class="lead">累计充值 ' + money(rechargeAmount) + " · " + integer(recharges.length) +
+  " 笔</p>" +
+  (recharges.length
+  ? '<div class="han-paid-table-wrap"><table><thead><tr><th>充值时间</th><th>子账号名称</th><th>充值金额</th><th>账户余额</th><th>命中规则</th><th>结果</th></tr></thead><tbody>' +
+  recharges.map(function (row) {
+  return "<tr><td>" + escapeHtml(row.chargedAt || "") + "</td><td>" + escapeHtml(row.subAccountName || row.subAccountId || "—") +
+  "</td><td>" + money(row.amount) + "</td><td>" + money(row.balance) + "</td><td>" + escapeHtml(row.ruleCode || row.note || "—") +
+  "</td><td>" + escapeHtml(row.result || "—") + "</td></tr>";
+  }).join("") + "</tbody></table></div>"
+  : '<p class="empty">暂无充值记录，本地程序回传后在此展示</p>') +
+  "</section>";
   }
 
   function loadOverview() {
   setStatus("正在加载…");
   var jobs = [jsonFetch("/api/han/worker?view=overview")];
   if (live) {
-    TEAMS.forEach(function (name) {
-      jobs.push(jsonFetch("/api/han/shops?team=" + encodeURIComponent(name)).then(function (json) {
-        return { team: name, items: (json && json.items) || [] };
-      }).catch(function () {
-        return { team: name, items: [] };
-      }));
-    });
+  TEAMS.forEach(function (name) {
+  jobs.push(jsonFetch("/api/han/shops?team=" + encodeURIComponent(name)).then(function (json) {
+  return { team: name, items: (json && json.items) || [] };
+  }).catch(function () {
+  return { team: name, items: [] };
+  }));
+  });
   }
   var erpJob = live ? jsonFetch("/api/home/erp-paid").catch(function () { return null; }) : Promise.resolve(null);
   return Promise.all([Promise.all(jobs), erpJob]).then(function (pair) {
-    if (dead) return;
-    var all = pair[0];
-    erpPayload = pair[1];
-    if (live) {
-      teamByStore = {};
-      all.slice(1).forEach(function (block) {
-        (block.items || []).forEach(function (item) {
-          if (item.store && !teamByStore[item.store]) teamByStore[item.store] = block.team;
-        });
-      });
-    }
-    renderOverview(all[0]);
-    setStatus(live && !erpPayload ? "京麦实时没有加载出来" : "已更新", live && !erpPayload);
+  if (dead) return;
+  var all = pair[0];
+  erpPayload = pair[1];
+  if (live) {
+  teamByStore = {};
+  all.slice(1).forEach(function (block) {
+  (block.items || []).forEach(function (item) {
+  if (item.store && !teamByStore[item.store]) teamByStore[item.store] = block.team;
+  });
+  });
+  }
+  renderOverview(all[0]);
+  setStatus(live && !erpPayload ? "京麦实时没有加载出来" : "已更新", live && !erpPayload);
   });
   }
 
   function loadShop(store) {
   setStatus("正在加载…");
   return jsonFetch("/api/han/worker?view=shop&store=" + encodeURIComponent(store)).then(function (data) {
-    if (dead) return;
-    renderDetail(data);
-    setStatus("已更新");
+  if (dead) return;
+  renderDetail(data);
+  setStatus("已更新");
   });
   }
 
   bodyEl.addEventListener("click", function (event) {
+  var noteBtn = event.target.closest("[data-sub-note]");
+  if (noteBtn && noteBtn.tagName !== "INPUT") {
+  openSubNote(noteBtn);
+  return;
+  }
   var sortBtn = event.target.closest("[data-sub-sort]");
   if (sortBtn) {
-    var key = sortBtn.getAttribute("data-sub-sort");
-    if (subSortKey === key) subSortDir = subSortDir === "desc" ? "asc" : "desc";
-    else {
-      subSortKey = key;
-      subSortDir = "desc";
-    }
-    var table = root.querySelector("#han-sub-table");
-    if (table) table.innerHTML = subTableHtml(detailAccounts);
-    return;
+  var key = sortBtn.getAttribute("data-sub-sort");
+  if (subSortKey === key) subSortDir = subSortDir === "desc" ? "asc" : "desc";
+  else {
+  subSortKey = key;
+  subSortDir = "desc";
+  }
+  var table = root.querySelector("#han-sub-table");
+  if (table) table.innerHTML = subTableHtml(detailAccounts);
+  return;
   }
   var link = event.target.closest("[data-han-store]");
   if (link) {
-    loadShop(link.getAttribute("data-han-store")).catch(function (err) {
-      if (!dead) setStatus(err.message || "加载失败", true);
-    });
-    return;
+  loadShop(link.getAttribute("data-han-store")).catch(function (err) {
+  if (!dead) setStatus(err.message || "加载失败", true);
+  });
+  return;
   }
   if (event.target.closest("#han-paid-back")) loadOverview().catch(function (err) {
-    if (!dead) setStatus(err.message || "加载失败", true);
+  if (!dead) setStatus(err.message || "加载失败", true);
   });
   });
 
@@ -939,58 +1017,58 @@
 
   function headers() {
   return [
-    ["选择", "选择"],
-    ["店铺", "店铺名称"],
-    ["主账户ID", "京准通主账户ID"],
-    ["子账号", "子账号名称，只展示"],
-    ["自动", "自动充值"],
-    ["计划\nROI", "计划ROI"],
-    ["一档\n花费≥", "第一档花费下限"],
-    ["一档\n花费<", "第一档花费上限"],
-    ["一档\n余额≤", "第一档余额阈值"],
-    ["一档\n充值", "第一档充值金额"],
-    ["二档\n花费≥", "第二档花费下限"],
-    ["二档\n余额≤", "第二档余额阈值"],
-    ["二档\n充值", "第二档充值金额"],
-    ["ROI\n涨充值", "ROI上涨充值金额"],
-    ["未增\n单次", "连续充值未增单次数"],
-    ["暂停\n分", "暂停分钟数"],
-    ["版本", "配置版本"],
-    ["本地机", "本地机状态"],
-    ["操作", "操作"]
+  ["选择", "选择"],
+  ["店铺", "店铺名称"],
+  ["主账户ID", "京准通主账户ID"],
+  ["子账号", "子账号名称，只展示"],
+  ["自动", "自动充值"],
+  ["计划\nROI", "计划ROI"],
+  ["一档\n花费≥", "第一档花费下限"],
+  ["一档\n花费<", "第一档花费上限"],
+  ["一档\n余额≤", "第一档余额阈值"],
+  ["一档\n充值", "第一档充值金额"],
+  ["二档\n花费≥", "第二档花费下限"],
+  ["二档\n余额≤", "第二档余额阈值"],
+  ["二档\n充值", "第二档充值金额"],
+  ["ROI\n涨充值", "ROI上涨充值金额"],
+  ["未增\n单次", "连续充值未增单次数"],
+  ["暂停\n分", "暂停分钟数"],
+  ["版本", "配置版本"],
+  ["本地机", "本地机状态"],
+  ["操作", "操作"]
   ];
   }
 
   function visibleRows() {
   return rows.filter(function (row) {
-    if (shop && String(row.store || "") !== String(shop)) return false;
-    if (enabledOnly && !row.autoRecharge) return false;
-    if (!keyword) return true;
-    return (String(row.subAccountName || "") + " " + String(row.subAccountId || "")).indexOf(keyword) >= 0;
+  if (shop && String(row.store || "") !== String(shop)) return false;
+  if (enabledOnly && !row.autoRecharge) return false;
+  if (!keyword) return true;
+  return (String(row.subAccountName || "") + " " + String(row.subAccountId || "")).indexOf(keyword) >= 0;
   });
   }
 
   function numInput(row, field, label) {
   return '<span class="han-rules-cell han-rules-num" data-key="' + escapeHtml(rowKey(row)) + '" data-field="' + field +
-    '" title="点这里直接填写' + label + '">' + escapeHtml(row[field] ?? "") + "</span>";
+  '" title="点这里直接填写' + label + '">' + escapeHtml(row[field] ?? "") + "</span>";
   }
 
   function collectEdits() {
   root.querySelectorAll("input.han-rules-num, input.han-rules-text").forEach(function (input) {
-    if (input.classList.contains("han-rules-live")) return;
-    var row = rows.find(function (item) { return rowKey(item) === input.getAttribute("data-key"); });
-    if (row) row[input.getAttribute("data-field")] = input.value;
+  if (input.classList.contains("han-rules-live")) return;
+  var row = rows.find(function (item) { return rowKey(item) === input.getAttribute("data-key"); });
+  if (row) row[input.getAttribute("data-field")] = input.value;
   });
   root.querySelectorAll(".han-rules-auto").forEach(function (input) {
-    var row = rows.find(function (item) { return rowKey(item) === input.getAttribute("data-key"); });
-    if (row) row.autoRecharge = input.checked;
+  var row = rows.find(function (item) { return rowKey(item) === input.getAttribute("data-key"); });
+  if (row) row.autoRecharge = input.checked;
   });
   }
 
   function ruleSignature(row) {
   var item = payloadRows([row])[0];
   ["计划ROI", "第一档花费下限", "第一档花费上限", "第一档余额阈值", "第一档充值金额", "第二档花费下限", "第二档余额阈值", "第二档充值金额", "ROI上涨充值金额", "连续充值未增单次数", "暂停分钟数"].forEach(function (key) {
-    item[key] = Number(item[key]);
+  item[key] = Number(item[key]);
   });
   item.自动充值 = item.自动充值 === true;
   item.开充值时间 = item.开充值时间 || "";
@@ -1005,26 +1083,26 @@
 
   function payloadRows(list) {
   return list.map(function (row) {
-    return {
-      店铺名称: row.store,
-      京准通主账户ID: String(row.accountId || ""),
-      子账号ID: String(row.subAccountId || ""),
-      子账号名称: row.subAccountName || "",
-      自动充值: row.autoRecharge === true || row.autoRecharge === "true",
-      计划ROI: row.plannedRoi,
-      第一档花费下限: row.tier1MinSpend,
-      第一档花费上限: row.tier1MaxSpend,
-      第一档余额阈值: row.tier1Balance,
-      第一档充值金额: row.tier1Amount,
-      第二档花费下限: row.tier2MinSpend,
-      第二档余额阈值: row.tier2Balance,
-      第二档充值金额: row.tier2Amount,
-      ROI上涨充值金额: row.roiRiseAmount,
-      连续充值未增单次数: row.noOrderTimes,
-      暂停分钟数: row.pauseMinutes,
-      开充值时间: row.rechargeStart || "",
-      关充值时间: row.rechargeEnd || ""
-    };
+  return {
+  店铺名称: row.store,
+  京准通主账户ID: String(row.accountId || ""),
+  子账号ID: String(row.subAccountId || ""),
+  子账号名称: row.subAccountName || "",
+  自动充值: row.autoRecharge === true || row.autoRecharge === "true",
+  计划ROI: row.plannedRoi,
+  第一档花费下限: row.tier1MinSpend,
+  第一档花费上限: row.tier1MaxSpend,
+  第一档余额阈值: row.tier1Balance,
+  第一档充值金额: row.tier1Amount,
+  第二档花费下限: row.tier2MinSpend,
+  第二档余额阈值: row.tier2Balance,
+  第二档充值金额: row.tier2Amount,
+  ROI上涨充值金额: row.roiRiseAmount,
+  连续充值未增单次数: row.noOrderTimes,
+  暂停分钟数: row.pauseMinutes,
+  开充值时间: row.rechargeStart || "",
+  关充值时间: row.rechargeEnd || ""
+  };
   });
   }
 
@@ -1036,61 +1114,61 @@
   hint.textContent = "先勾选店铺，再点下面的只跑京麦、恢复京准通、只跑选中子账号或恢复整店跑，本地机就按这个功能开始。取消勾选后再点一次，这些店停止。已停止的店不得再开新一轮。Cookie 状态只显示本地机回报。";
   var machines = lastMeta.machines || [];
   actions.innerHTML = (machines.length
-    ? '<span>已绑定本地机：' + machines.map(function (item) {
-      return escapeHtml(item.machineId) + "（" + escapeHtml(item.status || "待同步") + "）";
-    }).join("、") + "</span>"
-    : "<span>还没有本地机 ACK。韩梦凯这台用 machineId=han-worker-01。</span>");
+  ? '<span>已绑定本地机：' + machines.map(function (item) {
+  return escapeHtml(item.machineId) + "（" + escapeHtml(item.status || "待同步") + "）";
+  }).join("、") + "</span>"
+  : "<span>还没有本地机 ACK。韩梦凯这台用 machineId=han-worker-01。</span>");
   if (!shopRows.length) {
-    box.innerHTML = '<p class="empty">暂无自己名下的店铺。请先新增店铺。</p>';
+  box.innerHTML = '<p class="empty">暂无自己名下的店铺。请先新增店铺。</p>';
   } else {
-    box.innerHTML = '<div class="han-paid-table-wrap"><table class="han-shop-table"><thead><tr>' +
-      ["勾选", "店铺", "主账户ID", "执行机", "运行状态", "京准通Cookie", "京麦Cookie", "执行状态", "最后心跳", "最后错误", "操作"].map(function (title) {
-        return "<th>" + title + "</th>";
-      }).join("") + "</tr></thead><tbody>" + shopRows.map(function (row) {
-        var key = runKey(row);
-        var runLabel = row.deleted || !runSelected.has(key) ? "已停止" : "已开启";
-        return '<tr class="' + (row.deleted ? "is-deleted" : "") + '"><td><input type="checkbox" data-run-shop="' + escapeHtml(key) + '"' +
-          (runSelected.has(key) && !row.deleted ? " checked" : "") + (row.deleted ? " disabled" : "") + " /></td><td>" +
-          escapeHtml(row.store || "") + "</td><td>" + escapeHtml(String(row.accountId || "")) + "</td><td>" +
-          escapeHtml(row.machineId || "任意机") + '</td><td><span class="han-rules-run is-' + statusTone(runLabel) + '" data-run-label="1">' + escapeHtml(runLabel) +
-          '</span></td><td><span class="han-rules-run is-' + statusTone(row.jztCookieStatus || "待录") + '">' + escapeHtml(row.jztCookieStatus || "待录") +
-          '</span></td><td><span class="han-rules-run is-' + statusTone(row.jmCookieStatus || "待录") + '">' + escapeHtml(row.jmCookieStatus || "待录") +
-          '</span></td><td><span class="han-rules-run is-' + statusTone(row.runStatus || "已停止") + '">' + escapeHtml(row.runStatus || "已停止") +
-          "</span></td><td>" + escapeHtml(formatWhen(row.heartbeatAt)) + (row.workerStatus ? "（" + escapeHtml(row.workerStatus) + "）" : "") +
-          "</td><td>" + escapeHtml(row.lastError || "—") + "</td><td>" +
-          (row.deleted
-            ? '<button type="button" data-shop-restore="' + escapeHtml(key) + '">恢复</button>'
-            : '<button type="button" data-shop-edit="' + escapeHtml(key) + '">编辑</button> <button type="button" data-shop-del="' + escapeHtml(key) + '">删除</button>') +
-          "</td></tr>";
-      }).join("") + "</tbody></table></div>";
+  box.innerHTML = '<div class="han-paid-table-wrap"><table class="han-shop-table"><thead><tr>' +
+  ["勾选", "店铺", "主账户ID", "执行机", "运行状态", "京准通Cookie", "京麦Cookie", "执行状态", "最后心跳", "最后错误", "操作"].map(function (title) {
+  return "<th>" + title + "</th>";
+  }).join("") + "</tr></thead><tbody>" + shopRows.map(function (row) {
+  var key = runKey(row);
+  var runLabel = row.deleted || !runSelected.has(key) ? "已停止" : "已开启";
+  return '<tr class="' + (row.deleted ? "is-deleted" : "") + '"><td><input type="checkbox" data-run-shop="' + escapeHtml(key) + '"' +
+  (runSelected.has(key) && !row.deleted ? " checked" : "") + (row.deleted ? " disabled" : "") + " /></td><td>" +
+  escapeHtml(row.store || "") + "</td><td>" + escapeHtml(String(row.accountId || "")) + "</td><td>" +
+  escapeHtml(row.machineId || "任意机") + '</td><td><span class="han-rules-run is-' + statusTone(runLabel) + '" data-run-label="1">' + escapeHtml(runLabel) +
+  '</span></td><td><span class="han-rules-run is-' + statusTone(row.jztCookieStatus || "待录") + '">' + escapeHtml(row.jztCookieStatus || "待录") +
+  '</span></td><td><span class="han-rules-run is-' + statusTone(row.jmCookieStatus || "待录") + '">' + escapeHtml(row.jmCookieStatus || "待录") +
+  '</span></td><td><span class="han-rules-run is-' + statusTone(row.runStatus || "已停止") + '">' + escapeHtml(row.runStatus || "已停止") +
+  "</span></td><td>" + escapeHtml(formatWhen(row.heartbeatAt)) + (row.workerStatus ? "（" + escapeHtml(row.workerStatus) + "）" : "") +
+  "</td><td>" + escapeHtml(row.lastError || "—") + "</td><td>" +
+  (row.deleted
+  ? '<button type="button" data-shop-restore="' + escapeHtml(key) + '">恢复</button>'
+  : '<button type="button" data-shop-edit="' + escapeHtml(key) + '">编辑</button> <button type="button" data-shop-del="' + escapeHtml(key) + '">删除</button>') +
+  "</td></tr>";
+  }).join("") + "</tbody></table></div>";
   }
   box.querySelectorAll("[data-run-shop]").forEach(function (input) {
-    input.addEventListener("change", function () {
-      var key = input.getAttribute("data-run-shop");
-      if (input.checked) runSelected.add(key);
-      else runSelected.delete(key);
-      var label = input.closest("tr") && input.closest("tr").querySelector("[data-run-label]");
-      if (label) {
-        var on = input.checked;
-        label.textContent = on ? "已开启" : "已停止";
-        label.className = "han-rules-run is-" + (on ? "on" : "off");
-      }
-    });
+  input.addEventListener("change", function () {
+  var key = input.getAttribute("data-run-shop");
+  if (input.checked) runSelected.add(key);
+  else runSelected.delete(key);
+  var label = input.closest("tr") && input.closest("tr").querySelector("[data-run-label]");
+  if (label) {
+  var on = input.checked;
+  label.textContent = on ? "已开启" : "已停止";
+  label.className = "han-rules-run is-" + (on ? "on" : "off");
+  }
+  });
   });
   box.querySelectorAll("[data-shop-edit]").forEach(function (btn) {
-    btn.addEventListener("click", function () { toggleShopForm("update", btn.getAttribute("data-shop-edit")); });
+  btn.addEventListener("click", function () { toggleShopForm("update", btn.getAttribute("data-shop-edit")); });
   });
   box.querySelectorAll("[data-shop-del]").forEach(function (btn) {
-    var row = findShop(btn.getAttribute("data-shop-del"));
-    btn.addEventListener("click", function () {
-      saveMaster("shop", "delete", { 京准通主账户ID: row && row.accountId, 店铺名称: row && row.store }, "删除店铺");
-    });
+  var row = findShop(btn.getAttribute("data-shop-del"));
+  btn.addEventListener("click", function () {
+  saveMaster("shop", "delete", { 京准通主账户ID: row && row.accountId, 店铺名称: row && row.store }, "删除店铺");
+  });
   });
   box.querySelectorAll("[data-shop-restore]").forEach(function (btn) {
-    var row = findShop(btn.getAttribute("data-shop-restore"));
-    btn.addEventListener("click", function () {
-      saveMaster("shop", "restore", { 京准通主账户ID: row && row.accountId, 店铺名称: row && row.store }, "恢复店铺");
-    });
+  var row = findShop(btn.getAttribute("data-shop-restore"));
+  btn.addEventListener("click", function () {
+  saveMaster("shop", "restore", { 京准通主账户ID: row && row.accountId, 店铺名称: row && row.store }, "恢复店铺");
+  });
   });
   }
 
@@ -1102,26 +1180,26 @@
   var box = root.querySelector("#han-shop-form");
   if (!box) return;
   if (!box.hidden && box.getAttribute("data-action") === action && box.getAttribute("data-id") === String(key || "")) {
-    box.hidden = true;
-    box.innerHTML = "";
-    return;
+  box.hidden = true;
+  box.innerHTML = "";
+  return;
   }
   var current = findShop(key) || {};
   box.hidden = false;
   box.setAttribute("data-action", action);
   box.setAttribute("data-id", key || "");
   box.innerHTML = "<h3>" + (action === "create" ? "新增店铺" : "编辑店铺") + "</h3>" +
-    '<label>店铺名称 <input id="han-shop-name" maxlength="64" value="' + escapeHtml(current.store || "") + '" /></label>' +
-    '<label>京准通主账户ID <input id="han-shop-account" maxlength="64" value="' + escapeHtml(current.accountId || "") + '"' + (action === "update" ? " readonly" : "") + " /></label>" +
-    '<label>执行机 <input id="han-shop-machine" maxlength="64" placeholder="空=任意已绑定机" value="' + escapeHtml(current.machineId || "") + '" /></label>' +
-    '<button type="button" class="han-rules-save" id="han-shop-form-save">保存店铺</button>' +
-    '<p class="han-rules-hint">主账户ID创建后不可改。更换时请删除旧店再新建。本页不接收 Cookie 正文。</p>';
+  '<label>店铺名称 <input id="han-shop-name" maxlength="64" value="' + escapeHtml(current.store || "") + '" /></label>' +
+  '<label>京准通主账户ID <input id="han-shop-account" maxlength="64" value="' + escapeHtml(current.accountId || "") + '"' + (action === "update" ? " readonly" : "") + " /></label>" +
+  '<label>执行机 <input id="han-shop-machine" maxlength="64" placeholder="空=任意已绑定机" value="' + escapeHtml(current.machineId || "") + '" /></label>' +
+  '<button type="button" class="han-rules-save" id="han-shop-form-save">保存店铺</button>' +
+  '<p class="han-rules-hint">主账户ID创建后不可改。更换时请删除旧店再新建。本页不接收 Cookie 正文。</p>';
   root.querySelector("#han-shop-form-save").addEventListener("click", function () {
-    saveMaster("shop", action, {
-      店铺名称: root.querySelector("#han-shop-name").value,
-      京准通主账户ID: root.querySelector("#han-shop-account").value,
-      执行机: root.querySelector("#han-shop-machine").value
-    }, action === "create" ? "新增店铺" : "编辑店铺");
+  saveMaster("shop", action, {
+  店铺名称: root.querySelector("#han-shop-name").value,
+  京准通主账户ID: root.querySelector("#han-shop-account").value,
+  执行机: root.querySelector("#han-shop-machine").value
+  }, action === "create" ? "新增店铺" : "编辑店铺");
   });
   }
 
@@ -1130,132 +1208,132 @@
   if (!box) return;
   var current = row || {};
   if (!box.hidden && action === "create" && !row) {
-    box.hidden = true;
-    box.innerHTML = "";
-    return;
+  box.hidden = true;
+  box.innerHTML = "";
+  return;
   }
   var shops = (lastMeta.shopRuns || []).filter(function (item) { return !item.deleted; });
   var defaults = lastMeta.newSubDefaults || { autoRecharge: false, plannedRoi: 2 };
   box.hidden = false;
   box.innerHTML = "<h3>" + (action === "create" ? "新增子账号" : "编辑子账号") + "</h3>" +
-    '<label>店铺 <select id="han-sub-shop">' + shops.map(function (item) {
-      var selected = String(item.accountId || "") === String(current.accountId || "") ? " selected" : "";
-      return '<option value="' + escapeHtml(item.accountId || "") + '"' + selected + ">" + escapeHtml(item.store) + "（" + escapeHtml(item.accountId || "") + "）</option>";
-    }).join("") + "</select></label>" +
-    '<label>子账号ID <input id="han-sub-id" maxlength="64" value="' + escapeHtml(String(current.subAccountId || "")) + '"' + (action === "update" ? " readonly" : "") + " /></label>" +
-    '<label>子账号名称 <input id="han-sub-name" maxlength="64" value="' + escapeHtml(current.subAccountName || "") + '"' + (action === "update" ? " readonly" : "") + " /></label>" +
-    '<label><input id="han-sub-auto" type="checkbox"' + ((current.autoRecharge != null ? current.autoRecharge : defaults.autoRecharge) ? " checked" : "") + " /> 自动充值</label>" +
-    '<label>计划ROI <input id="han-sub-roi" class="han-roi-field" type="text" inputmode="decimal" autocomplete="off" placeholder="直接填写，例如 2.1" value="' + escapeHtml(String(current.plannedRoi != null ? current.plannedRoi : defaults.plannedRoi)) + '" /></label>' +
-    '<button type="button" class="han-rules-save" id="han-sub-form-save">保存子账号</button>' +
-    '<p class="han-rules-hint">' + (action === "update"
-      ? "子账号名称和子账号ID不能改，改了就和本地机对不上。这里只改自动充值和计划ROI。"
-      : "子账号ID是京准通子账号编号，新建时填写。表格里不显示这一列。") + "</p>";
+  '<label>店铺 <select id="han-sub-shop">' + shops.map(function (item) {
+  var selected = String(item.accountId || "") === String(current.accountId || "") ? " selected" : "";
+  return '<option value="' + escapeHtml(item.accountId || "") + '"' + selected + ">" + escapeHtml(item.store) + "（" + escapeHtml(item.accountId || "") + "）</option>";
+  }).join("") + "</select></label>" +
+  '<label>子账号ID <input id="han-sub-id" maxlength="64" value="' + escapeHtml(String(current.subAccountId || "")) + '"' + (action === "update" ? " readonly" : "") + " /></label>" +
+  '<label>子账号名称 <input id="han-sub-name" maxlength="64" value="' + escapeHtml(current.subAccountName || "") + '"' + (action === "update" ? " readonly" : "") + " /></label>" +
+  '<label><input id="han-sub-auto" type="checkbox"' + ((current.autoRecharge != null ? current.autoRecharge : defaults.autoRecharge) ? " checked" : "") + " /> 自动充值</label>" +
+  '<label>计划ROI <input id="han-sub-roi" class="han-roi-field" type="text" inputmode="decimal" autocomplete="off" placeholder="直接填写，例如 2.1" value="' + escapeHtml(String(current.plannedRoi != null ? current.plannedRoi : defaults.plannedRoi)) + '" /></label>' +
+  '<button type="button" class="han-rules-save" id="han-sub-form-save">保存子账号</button>' +
+  '<p class="han-rules-hint">' + (action === "update"
+  ? "子账号名称和子账号ID不能改，改了就和本地机对不上。这里只改自动充值和计划ROI。"
+  : "子账号ID是京准通子账号编号，新建时填写。表格里不显示这一列。") + "</p>";
   var roiInput = root.querySelector("#han-sub-roi");
   roiInput.addEventListener("mouseup", function (event) { event.preventDefault(); });
   roiInput.addEventListener("focus", function () { roiInput.select(); });
   root.querySelector("#han-sub-form-save").addEventListener("click", function () {
-    saveMaster("sub", action, {
-      京准通主账户ID: root.querySelector("#han-sub-shop").value,
-      子账号ID: root.querySelector("#han-sub-id").value,
-      子账号名称: root.querySelector("#han-sub-name").value,
-      自动充值: root.querySelector("#han-sub-auto").checked,
-      计划ROI: root.querySelector("#han-sub-roi").value
-    }, action === "create" ? "新增子账号" : "编辑子账号");
+  saveMaster("sub", action, {
+  京准通主账户ID: root.querySelector("#han-sub-shop").value,
+  子账号ID: root.querySelector("#han-sub-id").value,
+  子账号名称: root.querySelector("#han-sub-name").value,
+  自动充值: root.querySelector("#han-sub-auto").checked,
+  计划ROI: root.querySelector("#han-sub-roi").value
+  }, action === "create" ? "新增子账号" : "编辑子账号");
   });
   }
 
   function saveMaster(kind, op, payload, summary) {
   setStatus(summary + "…");
   jsonFetch("/api/han/worker", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(Object.assign({ action: kind, op: op, changeSummary: summary }, payload))
+  method: "PUT",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(Object.assign({ action: kind, op: op, changeSummary: summary }, payload))
   }).then(function (data) {
-    var shopForm = root.querySelector("#han-shop-form");
-    var subForm = root.querySelector("#han-sub-form");
-    if (shopForm) { shopForm.hidden = true; shopForm.innerHTML = ""; }
-    if (subForm) { subForm.hidden = true; subForm.innerHTML = ""; }
-    return load().then(function () {
-      setSyncBanner("配置版本 " + data.version + " 本地机尚未接收（待同步）。本机 GET 并 ACK 后才会变成已同步。");
-      setStatus("已保存版本 " + data.version + "，本地机尚未接收（待同步）。");
-    });
+  var shopForm = root.querySelector("#han-shop-form");
+  var subForm = root.querySelector("#han-sub-form");
+  if (shopForm) { shopForm.hidden = true; shopForm.innerHTML = ""; }
+  if (subForm) { subForm.hidden = true; subForm.innerHTML = ""; }
+  return load().then(function () {
+  setSyncBanner("配置版本 " + data.version + " 本地机尚未接收（待同步）。本机 GET 并 ACK 后才会变成已同步。");
+  setStatus("已保存版本 " + data.version + "，本地机尚未接收（待同步）。");
+  });
   }).catch(function (err) {
-    if (!dead) setStatus(err.message || "保存失败", true);
+  if (!dead) setStatus(err.message || "保存失败", true);
   });
   }
 
   function renderToolbar() {
   var shops = ['<option value="">全部店铺</option>'].concat((lastMeta.shops || []).map(function (name) {
-    return '<option value="' + escapeHtml(name) + '"' + (shop === name ? " selected" : "") + ">" + escapeHtml(name) + "</option>";
+  return '<option value="' + escapeHtml(name) + '"' + (shop === name ? " selected" : "") + ">" + escapeHtml(name) + "</option>";
   }));
   toolbarEl.innerHTML =
-    "<label>店铺 <select id=\"han-rules-shop\">" + shops.join("") + "</select></label>" +
-    '<label>子账号 <input id="han-rules-q" type="search" maxlength="64" placeholder="搜索子账号名称" value="' + escapeHtml(keyword) + '" /></label>' +
-    '<label class="han-rules-check"><input id="han-rules-enabled" type="checkbox"' + (enabledOnly ? " checked" : "") + " /> 只看已启用</label>" +
-    '<label class="han-rules-check"><input id="han-rules-deleted" type="checkbox"' + (showDeleted ? " checked" : "") + " /> 显示已删除</label>";
+  "<label>店铺 <select id=\"han-rules-shop\">" + shops.join("") + "</select></label>" +
+  '<label>子账号 <input id="han-rules-q" type="search" maxlength="64" placeholder="搜索子账号名称" value="' + escapeHtml(keyword) + '" /></label>' +
+  '<label class="han-rules-check"><input id="han-rules-enabled" type="checkbox"' + (enabledOnly ? " checked" : "") + " /> 只看已启用</label>" +
+  '<label class="han-rules-check"><input id="han-rules-deleted" type="checkbox"' + (showDeleted ? " checked" : "") + " /> 显示已删除</label>";
   root.querySelector("#han-rules-actions").innerHTML =
-    '<button type="button" class="han-rules-save" id="han-rules-save">保存</button>' +
-    '<button type="button" id="han-rules-add-shop">新增店铺</button>' +
-    '<button type="button" id="han-rules-add-sub">新增子账号</button>' +
-    '<button type="button" id="han-rules-history-btn">修改历史</button>';
+  '<button type="button" class="han-rules-save" id="han-rules-save">保存</button>' +
+  '<button type="button" id="han-rules-add-shop">新增店铺</button>' +
+  '<button type="button" id="han-rules-add-sub">新增子账号</button>' +
+  '<button type="button" id="han-rules-history-btn">修改历史</button>';
   root.querySelector("#han-rules-shop").addEventListener("change", function (event) {
-    collectEdits();
-    shop = event.target.value;
-    renderTable(true);
+  collectEdits();
+  shop = event.target.value;
+  renderTable(true);
   });
   root.querySelector("#han-rules-q").addEventListener("input", function (event) {
-    var value = event.target.value.trim();
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(function () {
-      collectEdits();
-      keyword = value;
-      renderTable(true);
-    }, 200);
+  var value = event.target.value.trim();
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(function () {
+  collectEdits();
+  keyword = value;
+  renderTable(true);
+  }, 200);
   });
   root.querySelector("#han-rules-enabled").addEventListener("change", function (event) {
-    collectEdits();
-    enabledOnly = event.target.checked;
-    renderTable(true);
+  collectEdits();
+  enabledOnly = event.target.checked;
+  renderTable(true);
   });
   root.querySelector("#han-rules-save").addEventListener("click", function () { saveRules(rows, "保存充值规则"); });
   root.querySelector("#han-rules-add-shop").addEventListener("click", function () { toggleShopForm("create"); });
   root.querySelector("#han-rules-add-sub").addEventListener("click", function () { toggleSubForm("create"); });
   root.querySelector("#han-rules-deleted").addEventListener("change", function (event) {
-    showDeleted = event.target.checked;
-    load();
+  showDeleted = event.target.checked;
+  load();
   });
   root.querySelector("#han-rules-history-btn").addEventListener("click", loadHistory);
   readBatchDraft();
   var batchEl = root.querySelector("#han-rules-batch");
   batchEl.innerHTML =
-    '<div class="han-rules-batch-group"><label class="han-rules-check"><input id="han-rules-check-all" type="checkbox" /> 全选账号</label>' +
-    '<span class="han-rules-picked" id="han-rules-picked">已选 0</span></div>' +
-    '<div class="han-rules-batch-group"><span class="han-rules-batch-label">计划ROI</span>' +
-    '<input id="han-rules-batch-roi" class="han-roi-field" type="text" inputmode="decimal" autocomplete="off" placeholder="输入 2.1" value="' + escapeHtml(batchDraft.roi) + '" />' +
-    '<button type="button" id="han-rules-apply-roi">批量改ROI</button></div>' +
-    '<div class="han-rules-batch-group"><span class="han-rules-batch-label">充值金额</span>' +
-    '<select id="han-rules-amount-field">' +
-    '<option value="tier1Amount"' + (batchDraft.field === "tier1Amount" ? " selected" : "") + ">一档充值</option>" +
-    '<option value="tier2Amount"' + (batchDraft.field === "tier2Amount" ? " selected" : "") + ">二档充值</option>" +
-    '<option value="roiRiseAmount"' + (batchDraft.field === "roiRiseAmount" ? " selected" : "") + ">ROI涨充值</option>" +
-    "</select>" +
-    '<input id="han-rules-batch-amount" class="han-roi-field" type="text" inputmode="decimal" autocomplete="off" placeholder="输入金额" value="' + escapeHtml(batchDraft.amount) + '" />' +
-    '<button type="button" id="han-rules-apply-amount">批量改金额</button></div>' +
-    '<div class="han-rules-batch-group"><span class="han-rules-batch-label">付费</span>' +
-    '<button type="button" id="han-rules-on">批量开付费</button>' +
-    '<button type="button" id="han-rules-off">批量关付费</button></div>' +
-    '<div class="han-rules-batch-group han-rules-schedule"><span class="han-rules-batch-label">定时充值</span>' +
-    '<label>开 <input id="han-rules-open-at" type="time" value="08:00" /></label>' +
-    '<label>关 <input id="han-rules-close-at" type="time" value="23:00" /></label>' +
-    '<button type="button" id="han-rules-schedule">按时间开关</button>' +
-    '<button type="button" id="han-rules-schedule-clear">取消定时</button>' +
-    '<span class="han-rules-picked">每天到开点打开自动充值，到关点关闭。采集不停。</span></div>' +
-    '<div class="han-rules-batch-group han-rules-runsubs"><span class="han-rules-batch-label">运行范围</span>' +
-    '<button type="button" id="han-rules-run-subs">只跑选中子账号</button>' +
-    '<button type="button" id="han-rules-run-shop">恢复整店跑</button>' +
-    '<button type="button" id="han-rules-jingmai"' + (lastMeta.jingmaiOnly ? ' class="is-on"' : "") + ">只跑京麦</button>" +
-    '<button type="button" id="han-rules-jzt"' + (lastMeta.jingmaiOnly ? "" : ' class="is-on"') + ">恢复京准通</button></div>" +
-    '<p id="han-rules-batch-status" class="han-rules-batch-status"></p>';
+  '<div class="han-rules-batch-group"><label class="han-rules-check"><input id="han-rules-check-all" type="checkbox" /> 全选账号</label>' +
+  '<span class="han-rules-picked" id="han-rules-picked">已选 0</span></div>' +
+  '<div class="han-rules-batch-group"><span class="han-rules-batch-label">计划ROI</span>' +
+  '<input id="han-rules-batch-roi" class="han-roi-field" type="text" inputmode="decimal" autocomplete="off" placeholder="输入 2.1" value="' + escapeHtml(batchDraft.roi) + '" />' +
+  '<button type="button" id="han-rules-apply-roi">批量改ROI</button></div>' +
+  '<div class="han-rules-batch-group"><span class="han-rules-batch-label">充值金额</span>' +
+  '<select id="han-rules-amount-field">' +
+  '<option value="tier1Amount"' + (batchDraft.field === "tier1Amount" ? " selected" : "") + ">一档充值</option>" +
+  '<option value="tier2Amount"' + (batchDraft.field === "tier2Amount" ? " selected" : "") + ">二档充值</option>" +
+  '<option value="roiRiseAmount"' + (batchDraft.field === "roiRiseAmount" ? " selected" : "") + ">ROI涨充值</option>" +
+  "</select>" +
+  '<input id="han-rules-batch-amount" class="han-roi-field" type="text" inputmode="decimal" autocomplete="off" placeholder="输入金额" value="' + escapeHtml(batchDraft.amount) + '" />' +
+  '<button type="button" id="han-rules-apply-amount">批量改金额</button></div>' +
+  '<div class="han-rules-batch-group"><span class="han-rules-batch-label">付费</span>' +
+  '<button type="button" id="han-rules-on">批量开付费</button>' +
+  '<button type="button" id="han-rules-off">批量关付费</button></div>' +
+  '<div class="han-rules-batch-group han-rules-schedule"><span class="han-rules-batch-label">定时充值</span>' +
+  '<label>开 <input id="han-rules-open-at" type="time" value="08:00" /></label>' +
+  '<label>关 <input id="han-rules-close-at" type="time" value="23:00" /></label>' +
+  '<button type="button" id="han-rules-schedule">按时间开关</button>' +
+  '<button type="button" id="han-rules-schedule-clear">取消定时</button>' +
+  '<span class="han-rules-picked">每天到开点打开自动充值，到关点关闭。采集不停。</span></div>' +
+  '<div class="han-rules-batch-group han-rules-runsubs"><span class="han-rules-batch-label">运行范围</span>' +
+  '<button type="button" id="han-rules-run-subs">只跑选中子账号</button>' +
+  '<button type="button" id="han-rules-run-shop">恢复整店跑</button>' +
+  '<button type="button" id="han-rules-jingmai"' + (lastMeta.jingmaiOnly ? ' class="is-on"' : "") + ">只跑京麦</button>" +
+  '<button type="button" id="han-rules-jzt"' + (lastMeta.jingmaiOnly ? "" : ' class="is-on"') + ">恢复京准通</button></div>" +
+  '<p id="han-rules-batch-status" class="han-rules-batch-status"></p>';
   root.querySelector("#han-rules-check-all").addEventListener("change", function (event) { toggleAll(event.target.checked); });
   root.querySelector("#han-rules-apply-roi").addEventListener("click", batchRoi);
   root.querySelector("#han-rules-apply-amount").addEventListener("click", batchAmount);
@@ -1268,10 +1346,10 @@
   root.querySelector("#han-rules-jingmai").addEventListener("click", function () { saveJingmaiOnly(true); });
   root.querySelector("#han-rules-jzt").addEventListener("click", function () { saveJingmaiOnly(false); });
   root.querySelector("#han-rules-batch-roi").addEventListener("keydown", function (event) {
-    if (event.key === "Enter") { event.preventDefault(); batchRoi(); }
+  if (event.key === "Enter") { event.preventDefault(); batchRoi(); }
   });
   root.querySelector("#han-rules-batch-amount").addEventListener("keydown", function (event) {
-    if (event.key === "Enter") { event.preventDefault(); batchAmount(); }
+  if (event.key === "Enter") { event.preventDefault(); batchAmount(); }
   });
   renderRunShops();
   syncPickUi();
@@ -1280,23 +1358,23 @@
   function rowHtml(row) {
   var key = rowKey(row);
   return '<tr class="' + (row.deleted ? "is-deleted" : "") + '" style="height:' + ROW_H + 'px"><td><input type="checkbox" data-check="' + escapeHtml(key) + '"' +
-    (selected.has(key) ? " checked" : "") + " /></td><td>" + escapeHtml(row.store) + "</td><td>" + escapeHtml(String(row.accountId || "")) +
-    '</td><td class="han-rules-name">' + escapeHtml(row.subAccountName || "") +
-    (row.subRunning ? '<span class="han-rules-running">在跑</span>' : "") +
-    '</td><td><label title="' + (row.rechargeStart && row.rechargeEnd ? row.rechargeStart + " 开，" + row.rechargeEnd + " 关" : (row.autoRecharge ? "是" : "否")) + '"><input class="han-rules-auto" data-key="' + escapeHtml(key) +
-    '" type="checkbox"' + (row.autoRecharge ? " checked" : "") + " /></label>" +
-    (row.rechargeStart && row.rechargeEnd ? '<span class="han-rules-clock">' + escapeHtml(row.rechargeStart + "-" + row.rechargeEnd) + "</span>" : "") +
-    "</td><td>" +
-    numInput(row, "plannedRoi", "计划ROI") + "</td><td>" + numInput(row, "tier1MinSpend", "一档花费下限") + "</td><td>" + numInput(row, "tier1MaxSpend", "一档花费上限") +
-    "</td><td>" + numInput(row, "tier1Balance", "一档余额") + "</td><td>" + numInput(row, "tier1Amount", "一档充值") + "</td><td>" +
-    numInput(row, "tier2MinSpend", "二档花费下限") + "</td><td>" + numInput(row, "tier2Balance", "二档余额") + "</td><td>" + numInput(row, "tier2Amount", "二档充值") +
-    "</td><td>" + numInput(row, "roiRiseAmount", "ROI上涨充值") + "</td><td>" + numInput(row, "noOrderTimes", "未增单次数") + "</td><td>" +
-    numInput(row, "pauseMinutes", "暂停分钟") + "</td><td>" + escapeHtml(String(row.version || 0)) + "</td><td>" +
-    escapeHtml(row.syncStatus || "待同步") + "</td><td>" +
-    (row.deleted
-      ? '<button type="button" data-sub-restore="' + escapeHtml(key) + '">恢复</button>'
-      : '<button type="button" data-sub-edit="' + escapeHtml(key) + '">编辑</button> <button type="button" data-sub-del="' + escapeHtml(key) + '">删除</button>') +
-    "</td></tr>";
+  (selected.has(key) ? " checked" : "") + " /></td><td>" + escapeHtml(row.store) + "</td><td>" + escapeHtml(String(row.accountId || "")) +
+  '</td><td class="han-rules-name">' + escapeHtml(row.subAccountName || "") +
+  (row.subRunning ? '<span class="han-rules-running">在跑</span>' : "") +
+  '</td><td><label title="' + (row.rechargeStart && row.rechargeEnd ? row.rechargeStart + " 开，" + row.rechargeEnd + " 关" : (row.autoRecharge ? "是" : "否")) + '"><input class="han-rules-auto" data-key="' + escapeHtml(key) +
+  '" type="checkbox"' + (row.autoRecharge ? " checked" : "") + " /></label>" +
+  (row.rechargeStart && row.rechargeEnd ? '<span class="han-rules-clock">' + escapeHtml(row.rechargeStart + "-" + row.rechargeEnd) + "</span>" : "") +
+  "</td><td>" +
+  numInput(row, "plannedRoi", "计划ROI") + "</td><td>" + numInput(row, "tier1MinSpend", "一档花费下限") + "</td><td>" + numInput(row, "tier1MaxSpend", "一档花费上限") +
+  "</td><td>" + numInput(row, "tier1Balance", "一档余额") + "</td><td>" + numInput(row, "tier1Amount", "一档充值") + "</td><td>" +
+  numInput(row, "tier2MinSpend", "二档花费下限") + "</td><td>" + numInput(row, "tier2Balance", "二档余额") + "</td><td>" + numInput(row, "tier2Amount", "二档充值") +
+  "</td><td>" + numInput(row, "roiRiseAmount", "ROI上涨充值") + "</td><td>" + numInput(row, "noOrderTimes", "未增单次数") + "</td><td>" +
+  numInput(row, "pauseMinutes", "暂停分钟") + "</td><td>" + escapeHtml(String(row.version || 0)) + "</td><td>" +
+  escapeHtml(row.syncStatus || "待同步") + "</td><td>" +
+  (row.deleted
+  ? '<button type="button" data-sub-restore="' + escapeHtml(key) + '">恢复</button>'
+  : '<button type="button" data-sub-edit="' + escapeHtml(key) + '">编辑</button> <button type="button" data-sub-del="' + escapeHtml(key) + '">删除</button>') +
+  "</td></tr>";
   }
 
   function pageCount() {
@@ -1312,9 +1390,9 @@
   var picked = list.filter(function (row) { return selected.has(rowKey(row)); }).length;
   var all = list.length > 0 && picked === list.length;
   [root.querySelector("#han-rules-check-all"), tableWrap.querySelector("[data-check-all]")].forEach(function (box) {
-    if (!box) return;
-    box.checked = all;
-    box.indeterminate = picked > 0 && !all;
+  if (!box) return;
+  box.checked = all;
+  box.indeterminate = picked > 0 && !all;
   });
   var label = root.querySelector("#han-rules-picked");
   if (label) label.textContent = "已选 " + picked + " / " + list.length;
@@ -1322,9 +1400,9 @@
 
   function toggleAll(on) {
   selectableRows().forEach(function (row) {
-    var key = rowKey(row);
-    if (on) selected.add(key);
-    else selected.delete(key);
+  var key = rowKey(row);
+  if (on) selected.add(key);
+  else selected.delete(key);
   });
   renderTable(false);
   }
@@ -1334,30 +1412,30 @@
   if (resetPage) rulePage = 1;
   if (rulePage > pageCount()) rulePage = pageCount();
   if (!listCache.length) {
-    tableWrap.innerHTML = rows.length ? '<p class="empty">没有匹配的子账号。</p>' : '<p class="empty">暂无自己名下的子账号。请先新增店铺和子账号，或等本地机回传。</p>';
-    syncPickUi();
-    return;
+  tableWrap.innerHTML = rows.length ? '<p class="empty">没有匹配的子账号。</p>' : '<p class="empty">暂无自己名下的子账号。请先新增店铺和子账号，或等本地机回传。</p>';
+  syncPickUi();
+  return;
   }
   var start = (rulePage - 1) * PAGE_SIZE;
   var slice = listCache.slice(start, start + PAGE_SIZE);
   var pages = pageCount();
   var head = headers().map(function (item, index) {
-    if (index === 0) return '<th><input type="checkbox" data-check-all="1" title="全选账号" /></th>';
-    return '<th title="' + escapeHtml(item[1]) + '">' + escapeHtml(item[0]).split("\n").join("<br>") + "</th>";
+  if (index === 0) return '<th><input type="checkbox" data-check-all="1" title="全选账号" /></th>';
+  return '<th title="' + escapeHtml(item[1]) + '">' + escapeHtml(item[0]).split("\n").join("<br>") + "</th>";
   }).join("");
   var pager = '<div class="han-rules-pager"><button type="button" data-page="prev"' + (rulePage <= 1 ? " disabled" : "") + ">上一页</button>" +
-    "<span>第 " + rulePage + " / " + pages + " 页 · 共 " + listCache.length + " 个</span>" +
-    '<button type="button" data-page="next"' + (rulePage >= pages ? " disabled" : "") + ">下一页</button></div>";
+  "<span>第 " + rulePage + " / " + pages + " 页 · 共 " + listCache.length + " 个</span>" +
+  '<button type="button" data-page="next"' + (rulePage >= pages ? " disabled" : "") + ">下一页</button></div>";
   tableWrap.innerHTML = pager + '<div class="han-paid-table-wrap han-rules-sheet"><table class="han-rules-grid"><thead><tr>' + head +
-    "</tr></thead><tbody>" + slice.map(rowHtml).join("") + "</tbody></table></div>" + pager;
+  "</tr></thead><tbody>" + slice.map(rowHtml).join("") + "</tbody></table></div>" + pager;
   syncPickUi();
   }
 
   function normalizeCell(field, raw) {
   var text = String(raw ?? "").trim()
-    .replace(/[０-９]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 65296 + 48); })
-    .replace(/[。．｡]/g, ".")
-    .replace(/[¥￥,\s%]/g, "");
+  .replace(/[０-９]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 65296 + 48); })
+  .replace(/[。．｡]/g, ".")
+  .replace(/[¥￥,\s%]/g, "");
   if (!/^\d+(\.\d+)?$/.test(text)) return null;
   var n = Number(text);
   if (!Number.isFinite(n)) return null;
@@ -1390,43 +1468,43 @@
   button.replaceWith(input);
   var done = false;
   function closeWith(text) {
-    if (done || !input.isConnected) return;
-    done = true;
-    var next = document.createElement("span");
-    next.className = "han-rules-cell " + (isText ? "han-rules-text" : "han-rules-num");
-    next.title = isText ? "点这里直接填写子账号名称" : "点这里直接填写";
-    next.setAttribute("data-key", key);
-    next.setAttribute("data-field", field);
-    next.textContent = text;
-    input.replaceWith(next);
+  if (done || !input.isConnected) return;
+  done = true;
+  var next = document.createElement("span");
+  next.className = "han-rules-cell " + (isText ? "han-rules-text" : "han-rules-num");
+  next.title = isText ? "点这里直接填写子账号名称" : "点这里直接填写";
+  next.setAttribute("data-key", key);
+  next.setAttribute("data-field", field);
+  next.textContent = text;
+  input.replaceWith(next);
   }
   function finish(save) {
-    if (done) return;
-    var typed = isText ? input.value.trim().slice(0, 64) : normalizeCell(field, input.value);
-    if (!save || typed == null) {
-      closeWith(original);
-      if (save && typed == null) setStatus("请直接填写数字", true);
-      return;
-    }
-    var row = rows.find(function (item) { return rowKey(item) === key; });
-    closeWith(typed);
-    if (!row || row.deleted || String(row[field] ?? "") === typed) return;
-    row[field] = typed;
-    saveRules([row], "修改充值规则");
+  if (done) return;
+  var typed = isText ? input.value.trim().slice(0, 64) : normalizeCell(field, input.value);
+  if (!save || typed == null) {
+  closeWith(original);
+  if (save && typed == null) setStatus("请直接填写数字", true);
+  return;
+  }
+  var row = rows.find(function (item) { return rowKey(item) === key; });
+  closeWith(typed);
+  if (!row || row.deleted || String(row[field] ?? "") === typed) return;
+  row[field] = typed;
+  saveRules([row], "修改充值规则");
   }
   input.addEventListener("mouseup", function (event) {
-    event.preventDefault();
-    input.focus();
-    input.select();
+  event.preventDefault();
+  input.focus();
+  input.select();
   });
   input.addEventListener("keydown", function (event) {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      input.blur();
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      closeWith(original);
-    }
+  if (event.key === "Enter") {
+  event.preventDefault();
+  input.blur();
+  } else if (event.key === "Escape") {
+  event.preventDefault();
+  closeWith(original);
+  }
   });
   input.addEventListener("blur", function () { finish(true); });
   input.focus();
@@ -1436,50 +1514,50 @@
   if (!tableWrap.dataset.cellBound) {
   tableWrap.dataset.cellBound = "1";
   tableWrap.addEventListener("mousedown", function (event) {
-    var cell = event.target.closest && event.target.closest("span.han-rules-cell");
-    if (!cell || !tableWrap.contains(cell)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    openCell(cell);
+  var cell = event.target.closest && event.target.closest("span.han-rules-cell");
+  if (!cell || !tableWrap.contains(cell)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  openCell(cell);
   });
   tableWrap.addEventListener("change", function (event) {
-    var target = event.target;
-    if (!target || !tableWrap.contains(target)) return;
-    if (target.hasAttribute("data-check-all")) {
-      toggleAll(target.checked);
-      return;
-    }
-    if (target.hasAttribute("data-check")) {
-      var checkKey = target.getAttribute("data-check");
-      if (target.checked) selected.add(checkKey);
-      else selected.delete(checkKey);
-      syncPickUi();
-      return;
-    }
-    if (!target.classList.contains("han-rules-auto")) return;
-    var autoRow = rows.find(function (item) { return rowKey(item) === target.getAttribute("data-key"); });
-    if (!autoRow || autoRow.deleted) return;
-    autoRow.autoRecharge = target.checked;
-    saveRules([autoRow], "修改充值规则");
+  var target = event.target;
+  if (!target || !tableWrap.contains(target)) return;
+  if (target.hasAttribute("data-check-all")) {
+  toggleAll(target.checked);
+  return;
+  }
+  if (target.hasAttribute("data-check")) {
+  var checkKey = target.getAttribute("data-check");
+  if (target.checked) selected.add(checkKey);
+  else selected.delete(checkKey);
+  syncPickUi();
+  return;
+  }
+  if (!target.classList.contains("han-rules-auto")) return;
+  var autoRow = rows.find(function (item) { return rowKey(item) === target.getAttribute("data-key"); });
+  if (!autoRow || autoRow.deleted) return;
+  autoRow.autoRecharge = target.checked;
+  saveRules([autoRow], "修改充值规则");
   });
   tableWrap.addEventListener("click", function (event) {
-    var pageBtn = event.target && event.target.closest && event.target.closest("[data-page]");
-    if (pageBtn && tableWrap.contains(pageBtn) && !pageBtn.disabled) {
-      if (pageBtn.getAttribute("data-page") === "prev" && rulePage > 1) rulePage -= 1;
-      if (pageBtn.getAttribute("data-page") === "next" && rulePage < pageCount()) rulePage += 1;
-      renderTable(false);
-      return;
-    }
-    var target = event.target && event.target.closest && event.target.closest("[data-sub-edit],[data-sub-del],[data-sub-restore]");
-    if (!target || !tableWrap.contains(target)) return;
-    var editKey = target.getAttribute("data-sub-edit");
-    var delKey = target.getAttribute("data-sub-del");
-    var restoreKey = target.getAttribute("data-sub-restore");
-    var row = rows.find(function (item) { return rowKey(item) === (editKey || delKey || restoreKey); });
-    if (!row) return;
-    if (editKey) toggleSubForm("update", row);
-    else if (delKey) saveMaster("sub", "delete", { 京准通主账户ID: row.accountId, 子账号ID: row.subAccountId }, "删除子账号");
-    else saveMaster("sub", "restore", { 京准通主账户ID: row.accountId, 子账号ID: row.subAccountId }, "恢复子账号");
+  var pageBtn = event.target && event.target.closest && event.target.closest("[data-page]");
+  if (pageBtn && tableWrap.contains(pageBtn) && !pageBtn.disabled) {
+  if (pageBtn.getAttribute("data-page") === "prev" && rulePage > 1) rulePage -= 1;
+  if (pageBtn.getAttribute("data-page") === "next" && rulePage < pageCount()) rulePage += 1;
+  renderTable(false);
+  return;
+  }
+  var target = event.target && event.target.closest && event.target.closest("[data-sub-edit],[data-sub-del],[data-sub-restore]");
+  if (!target || !tableWrap.contains(target)) return;
+  var editKey = target.getAttribute("data-sub-edit");
+  var delKey = target.getAttribute("data-sub-del");
+  var restoreKey = target.getAttribute("data-sub-restore");
+  var row = rows.find(function (item) { return rowKey(item) === (editKey || delKey || restoreKey); });
+  if (!row) return;
+  if (editKey) toggleSubForm("update", row);
+  else if (delKey) saveMaster("sub", "delete", { 京准通主账户ID: row.accountId, 子账号ID: row.subAccountId }, "删除子账号");
+  else saveMaster("sub", "restore", { 京准通主账户ID: row.accountId, 子账号ID: row.subAccountId }, "恢复子账号");
   });
   }
 
@@ -1497,58 +1575,58 @@
   var key = rowKey(row);
   var anchor = null;
   tableWrap.querySelectorAll("[data-key]").forEach(function (el) {
-    if (!anchor && el.getAttribute("data-key") === key) anchor = el;
+  if (!anchor && el.getAttribute("data-key") === key) anchor = el;
   });
   if (!anchor) return;
   var tr = anchor.closest("tr");
   if (!tr) return;
   tr.querySelectorAll("span.han-rules-cell").forEach(function (cell) {
-    var field = cell.getAttribute("data-field");
-    if (field && row[field] != null) cell.textContent = row[field];
+  var field = cell.getAttribute("data-field");
+  if (field && row[field] != null) cell.textContent = row[field];
   });
   var tds = tr.children;
   if (tds.length >= 3) {
-    tds[tds.length - 3].textContent = String(version);
-    tds[tds.length - 2].textContent = "待同步";
+  tds[tds.length - 3].textContent = String(version);
+  tds[tds.length - 2].textContent = "待同步";
   }
   }
 
   function persistRules(list, summary) {
   collectEdits();
   var target = (list || rows).filter(function (row) {
-    return row && !row.deleted && ruleSignature(row) !== baseline.get(rowKey(row));
+  return row && !row.deleted && ruleSignature(row) !== baseline.get(rowKey(row));
   });
   if (!target.length) {
-    setStatus(list ? "没有修改，表格数字保持原值" : "没有要保存的修改");
-    return Promise.resolve();
+  setStatus(list ? "没有修改，表格数字保持原值" : "没有要保存的修改");
+  return Promise.resolve();
   }
   var chunks = [];
   for (var i = 0; i < target.length; i += 30) chunks.push(target.slice(i, i + 30));
   setStatus("保存中…");
   var chain = Promise.resolve(null);
   chunks.forEach(function (chunk) {
-    chain = chain.then(function () {
-      return jsonFetch("/api/han/worker", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "rules", changeSummary: summary, rows: payloadRows(chunk) })
-      });
-    });
+  chain = chain.then(function () {
+  return jsonFetch("/api/han/worker", {
+  method: "PUT",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ action: "rules", changeSummary: summary, rows: payloadRows(chunk) })
+  });
+  });
   });
   return chain.then(function (data) {
-    target.forEach(function (row) { paintSaved(row, data.version); });
-    if (asofEl) asofEl.textContent = "配置版本 " + data.version + " · 待同步";
-    var running = (lastMeta.shopRuns || []).filter(function (row) { return row.enabled && !row.deleted; }).length;
-    var follow = running
-      ? "已开启的店在下一批开始时使用这些数字。"
-      : "上面的店铺还没开始跑。要让本地机进店，请勾选店铺后点只跑京麦或恢复京准通。";
-    setSyncBanner("配置版本 " + data.version + " 已保存。不用停店，本地机下次领取后在下一批开始时使用。ACK 后本页变为已同步。");
-    setStatus(summary + "：已保存 " + target.length + " 个子账号，配置版本 " + data.version + "。表上的数字已更新，本地机下次领取能看到。" + follow);
+  target.forEach(function (row) { paintSaved(row, data.version); });
+  if (asofEl) asofEl.textContent = "配置版本 " + data.version + " · 待同步";
+  var running = (lastMeta.shopRuns || []).filter(function (row) { return row.enabled && !row.deleted; }).length;
+  var follow = running
+  ? "已开启的店在下一批开始时使用这些数字。"
+  : "上面的店铺还没开始跑。要让本地机进店，请勾选店铺后点只跑京麦或恢复京准通。";
+  setSyncBanner("配置版本 " + data.version + " 已保存。不用停店，本地机下次领取后在下一批开始时使用。ACK 后本页变为已同步。");
+  setStatus(summary + "：已保存 " + target.length + " 个子账号，配置版本 " + data.version + "。表上的数字已更新，本地机下次领取能看到。" + follow);
   }).catch(function (err) {
-    if (dead) return;
-    var message = err.message || "保存失败";
-    setStatus(message, true);
-    return load().then(function () { setBatchStatus(message, true); });
+  if (dead) return;
+  var message = err.message || "保存失败";
+  setStatus(message, true);
+  return load().then(function () { setBatchStatus(message, true); });
   });
   }
 
@@ -1563,10 +1641,10 @@
   var picked = checkedRows();
   if (!picked.length) { setStatus("请先勾选子账号，或点全选账号", true); return; }
   if (typed == null) {
-    setStatus("请先在输入框里填写数字。计划ROI例如 2.1，金额例如 80。灰字示例不会保存。", true);
-    var box = field === "plannedRoi" ? root.querySelector("#han-rules-batch-roi") : root.querySelector("#han-rules-batch-amount");
-    if (box) box.focus();
-    return;
+  setStatus("请先在输入框里填写数字。计划ROI例如 2.1，金额例如 80。灰字示例不会保存。", true);
+  var box = field === "plannedRoi" ? root.querySelector("#han-rules-batch-roi") : root.querySelector("#han-rules-batch-amount");
+  if (box) box.focus();
+  return;
   }
   picked.forEach(function (row) { row[field] = typed; });
   renderTable(false);
@@ -1586,10 +1664,10 @@
 
   function shanghaiNowMinutes() {
   var parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Shanghai",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23"
+  timeZone: "Asia/Shanghai",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23"
   }).formatToParts(new Date());
   var hour = Number(parts.find(function (part) { return part.type === "hour"; }).value);
   var minute = Number(parts.find(function (part) { return part.type === "minute"; }).value);
@@ -1616,9 +1694,9 @@
   var picked = checkedRows();
   if (!picked.length) { setStatus("请先勾选子账号，或点全选账号", true); return; }
   picked.forEach(function (row) {
-    row.autoRecharge = on;
-    row.rechargeStart = "";
-    row.rechargeEnd = "";
+  row.autoRecharge = on;
+  row.rechargeStart = "";
+  row.rechargeEnd = "";
   });
   renderTable(false);
   setBatchStatus(on ? "正在开启已选子账号的自动充值，并取消定时…" : "正在关闭已选子账号的自动充值，并取消定时…");
@@ -1634,9 +1712,9 @@
   if (start === end) { setBatchStatus("开充值和关充值不能是同一个时间", true); return; }
   var open = windowOpen(start, end);
   picked.forEach(function (row) {
-    row.rechargeStart = start;
-    row.rechargeEnd = end;
-    row.autoRecharge = open === true;
+  row.rechargeStart = start;
+  row.rechargeEnd = end;
+  row.autoRecharge = open === true;
   });
   renderTable(false);
   setBatchStatus("正在保存 " + picked.length + " 个子账号的定时：" + start + " 开，" + end + " 关…");
@@ -1647,8 +1725,8 @@
   var picked = checkedRows();
   if (!picked.length) { setStatus("请先勾选子账号，或点全选账号", true); return; }
   picked.forEach(function (row) {
-    row.rechargeStart = "";
-    row.rechargeEnd = "";
+  row.rechargeStart = "";
+  row.rechargeEnd = "";
   });
   renderTable(false);
   setBatchStatus("正在取消 " + picked.length + " 个子账号的定时…");
@@ -1657,7 +1735,7 @@
 
   function selectedShopNames() {
   return (lastMeta.shopRuns || []).filter(function (row) {
-    return !row.deleted && runSelected.has(runKey(row));
+  return !row.deleted && runSelected.has(runKey(row));
   }).map(function (row) { return row.store; });
   }
 
@@ -1665,50 +1743,50 @@
   var shops = selectedShopNames();
   setBatchStatus(on ? "正在让 " + shops.length + " 家店只跑京麦…" : "正在恢复 " + shops.length + " 家店的京准通…");
   jsonFetch("/api/han/worker", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "jingmai", enabled: on, changeSummary: on ? "只跑京麦" : "恢复京准通", runShops: shops }),
+  method: "PUT",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ action: "jingmai", enabled: on, changeSummary: on ? "只跑京麦" : "恢复京准通", runShops: shops }),
   }).then(function (data) {
-    return load().then(function () {
-      var idle = shops.length ? "" : "当前没有勾选店铺，本地机本轮不采集、不充值。请先勾选店铺再点一次。";
-      setBatchStatus(on
-        ? "只跑京麦：已开启 " + shops.length + " 家店，配置版本 " + data.version + "。这些店下一轮只采集京麦成交金额和京麦 Cookie，不打开京准通，不充值。" + idle
-        : "已恢复京准通：已开启 " + shops.length + " 家店，配置版本 " + data.version + "。这些店下一轮采集京准通并按规则充值。" + idle);
-    });
+  return load().then(function () {
+  var idle = shops.length ? "" : "当前没有勾选店铺，本地机本轮不采集、不充值。请先勾选店铺再点一次。";
+  setBatchStatus(on
+  ? "只跑京麦：已开启 " + shops.length + " 家店，配置版本 " + data.version + "。这些店下一轮只采集京麦成交金额和京麦 Cookie，不打开京准通，不充值。" + idle
+  : "已恢复京准通：已开启 " + shops.length + " 家店，配置版本 " + data.version + "。这些店下一轮采集京准通并按规则充值。" + idle);
+  });
   }).catch(function (err) {
-    if (!dead) setStatus(err.message || "保存失败", true);
+  if (!dead) setStatus(err.message || "保存失败", true);
   });
   }
 
   function saveRunSubs() {
   var picked = checkedRows();
   if (!picked.length) {
-    setStatus("请先勾选要跑的子账号", true);
-    return;
+  setStatus("请先勾选要跑的子账号", true);
+  return;
   }
   var shops = selectedShopNames();
   setBatchStatus("正在让选中的 " + picked.length + " 个子账号开始跑…");
   jsonFetch("/api/han/worker", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      action: "runSubs",
-      changeSummary: "只跑选中子账号",
-      runShops: shops,
-      runSubs: picked.map(function (row) {
-        return {
-          店铺名称: row.store,
-          京准通主账户ID: String(row.accountId || ""),
-          子账号ID: String(row.subAccountId || ""),
-        };
-      }),
-    }),
+  method: "PUT",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+  action: "runSubs",
+  changeSummary: "只跑选中子账号",
+  runShops: shops,
+  runSubs: picked.map(function (row) {
+  return {
+  店铺名称: row.store,
+  京准通主账户ID: String(row.accountId || ""),
+  子账号ID: String(row.subAccountId || ""),
+  };
+  }),
+  }),
   }).then(function (data) {
-    return load().then(function () {
-      setBatchStatus("只跑选中子账号：已开始 " + picked.length + " 个，配置版本 " + data.version + "。上面勾选的店和这些子账号的店会进入运行。没选中的号不要采集、不要充值。");
-    });
+  return load().then(function () {
+  setBatchStatus("只跑选中子账号：已开始 " + picked.length + " 个，配置版本 " + data.version + "。上面勾选的店和这些子账号的店会进入运行。没选中的号不要采集、不要充值。");
+  });
   }).catch(function (err) {
-    if (!dead) setStatus(err.message || "保存失败", true);
+  if (!dead) setStatus(err.message || "保存失败", true);
   });
   }
 
@@ -1716,16 +1794,16 @@
   var shops = selectedShopNames();
   setBatchStatus("正在让 " + shops.length + " 家店恢复整店跑…");
   jsonFetch("/api/han/worker", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "runSubs", clear: true, changeSummary: "恢复整店跑", runShops: shops }),
+  method: "PUT",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ action: "runSubs", clear: true, changeSummary: "恢复整店跑", runShops: shops }),
   }).then(function (data) {
-    return load().then(function () {
-      var idle = shops.length ? "" : "当前没有勾选店铺，本地机本轮不进店。";
-      setBatchStatus("已恢复整店跑：已开启 " + shops.length + " 家店，配置版本 " + data.version + "。这些店会跑全部子账号。要停掉某店，取消勾选后再点一次。" + idle);
-    });
+  return load().then(function () {
+  var idle = shops.length ? "" : "当前没有勾选店铺，本地机本轮不进店。";
+  setBatchStatus("已恢复整店跑：已开启 " + shops.length + " 家店，配置版本 " + data.version + "。这些店会跑全部子账号。要停掉某店，取消勾选后再点一次。" + idle);
+  });
   }).catch(function (err) {
-    if (!dead) setStatus(err.message || "保存失败", true);
+  if (!dead) setStatus(err.message || "保存失败", true);
   });
   }
 
@@ -1733,91 +1811,91 @@
   historyWrap.hidden = false;
   historyEl.innerHTML = '<p class="empty">加载历史…</p>';
   jsonFetch("/api/han/worker?view=history").then(function (data) {
-    var items = (data && data.items) || [];
-    if (!items.length) {
-      historyEl.innerHTML = '<p class="empty">还没有修改记录。</p>';
-      return;
-    }
-    historyEl.innerHTML = '<div class="han-paid-table-wrap"><table><thead><tr><th>版本</th><th>店铺</th><th>子账号ID</th><th>字段</th><th>旧值</th><th>新值</th><th>修改人</th><th>时间</th><th>摘要</th></tr></thead><tbody>' +
-      items.map(function (row) {
-        return "<tr><td>" + escapeHtml(row.version || "") + "</td><td>" + escapeHtml(row.store || "") + "</td><td>" +
-          escapeHtml(row.subAccountId || "") + "</td><td>" + escapeHtml(row.field || "") + "</td><td>" +
-          escapeHtml(row.oldValue || "") + "</td><td>" + escapeHtml(row.newValue || "") + "</td><td>" +
-          escapeHtml(row.actor || "") + "</td><td>" + escapeHtml(row.at || "") + "</td><td>" +
-          escapeHtml(row.summary || "") + "</td></tr>";
-      }).join("") + "</tbody></table></div>";
+  var items = (data && data.items) || [];
+  if (!items.length) {
+  historyEl.innerHTML = '<p class="empty">还没有修改记录。</p>';
+  return;
+  }
+  historyEl.innerHTML = '<div class="han-paid-table-wrap"><table><thead><tr><th>版本</th><th>店铺</th><th>子账号ID</th><th>字段</th><th>旧值</th><th>新值</th><th>修改人</th><th>时间</th><th>摘要</th></tr></thead><tbody>' +
+  items.map(function (row) {
+  return "<tr><td>" + escapeHtml(row.version || "") + "</td><td>" + escapeHtml(row.store || "") + "</td><td>" +
+  escapeHtml(row.subAccountId || "") + "</td><td>" + escapeHtml(row.field || "") + "</td><td>" +
+  escapeHtml(row.oldValue || "") + "</td><td>" + escapeHtml(row.newValue || "") + "</td><td>" +
+  escapeHtml(row.actor || "") + "</td><td>" + escapeHtml(row.at || "") + "</td><td>" +
+  escapeHtml(row.summary || "") + "</td></tr>";
+  }).join("") + "</tbody></table></div>";
   }).catch(function (err) {
-    historyEl.innerHTML = '<p class="empty">' + escapeHtml(err.message || "无法加载历史") + "</p>";
+  historyEl.innerHTML = '<p class="empty">' + escapeHtml(err.message || "无法加载历史") + "</p>";
   });
   }
 
   function load() {
   setStatus("加载规则…");
   return jsonFetch("/api/han/worker?view=rules" + (showDeleted ? "&deleted=1" : "")).then(function (data) {
-    if (dead) return;
-    rows = data.rows || [];
-    rememberBaseline();
-    lastMeta = data;
-    lastMeta.shops = data.shops || data.stores || [];
-    runSelected = new Set();
-    (data.shopRuns || []).forEach(function (row) {
-      if (row.enabled && !row.deleted) runSelected.add(runKey(row));
-    });
-    if (!data.runListSaved) {
-      (data.shopRuns || []).forEach(function (row) {
-        if (!row.deleted) runSelected.add(runKey(row));
-      });
-    }
-    asofEl.textContent = data.version
-      ? "配置版本 " + data.version + " · " + (data.syncStatus || "待同步")
-      : "尚未保存过规则，显示默认档位" + (data.syncStatus && data.syncStatus !== "待同步" ? " · " + data.syncStatus : "");
-    if (data.version && data.syncStatus && data.syncStatus !== "已同步") {
-      setSyncBanner("配置版本 " + data.version + " 本地机尚未接收（" + data.syncStatus + "）。本机 GET 并 ACK 后才会变成已同步。", data.syncStatus === "同步失败" ? "error" : "");
-    } else if (!root.querySelector("#han-rules-sync").textContent) {
-      setSyncBanner("");
-    }
-    renderToolbar();
-    renderTable();
-    setStatus(rows.length ? "已加载 " + rows.length + " 个子账号" : "");
-    var scopeNotes = [];
-    if (data.jingmaiOnly) {
-      scopeNotes.push("当前只跑京麦数据，不跑京准通。已开启的店铺下一轮只采集京麦成交金额和京麦 Cookie，不要打开京准通，不要充值。");
-    }
-    if (data.runSubMode) {
-      var runningCount = rows.filter(function (row) { return row.subRunning && !row.deleted; }).length;
-      scopeNotes.push("当前只跑选中的 " + runningCount + " 个子账号。没选中的号不要采集、不要充值。点「恢复整店跑」后，已勾选的店铺会跑全部子账号。");
-    }
-    var timed = rows.filter(function (row) { return row.rechargeStart && row.rechargeEnd && !row.deleted; });
-    if (timed.length) {
-      scopeNotes.push("有 " + timed.length + " 个子账号按时间开关自动充值。到关点关掉充值，到开点再打开，采集不停。");
-    }
-    if (scopeNotes.length) setBatchStatus(scopeNotes.join(""));
+  if (dead) return;
+  rows = data.rows || [];
+  rememberBaseline();
+  lastMeta = data;
+  lastMeta.shops = data.shops || data.stores || [];
+  runSelected = new Set();
+  (data.shopRuns || []).forEach(function (row) {
+  if (row.enabled && !row.deleted) runSelected.add(runKey(row));
+  });
+  if (!data.runListSaved) {
+  (data.shopRuns || []).forEach(function (row) {
+  if (!row.deleted) runSelected.add(runKey(row));
+  });
+  }
+  asofEl.textContent = data.version
+  ? "配置版本 " + data.version + " · " + (data.syncStatus || "待同步")
+  : "尚未保存过规则，显示默认档位" + (data.syncStatus && data.syncStatus !== "待同步" ? " · " + data.syncStatus : "");
+  if (data.version && data.syncStatus && data.syncStatus !== "已同步") {
+  setSyncBanner("配置版本 " + data.version + " 本地机尚未接收（" + data.syncStatus + "）。本机 GET 并 ACK 后才会变成已同步。", data.syncStatus === "同步失败" ? "error" : "");
+  } else if (!root.querySelector("#han-rules-sync").textContent) {
+  setSyncBanner("");
+  }
+  renderToolbar();
+  renderTable();
+  setStatus(rows.length ? "已加载 " + rows.length + " 个子账号" : "");
+  var scopeNotes = [];
+  if (data.jingmaiOnly) {
+  scopeNotes.push("当前只跑京麦数据，不跑京准通。已开启的店铺下一轮只采集京麦成交金额和京麦 Cookie，不要打开京准通，不要充值。");
+  }
+  if (data.runSubMode) {
+  var runningCount = rows.filter(function (row) { return row.subRunning && !row.deleted; }).length;
+  scopeNotes.push("当前只跑选中的 " + runningCount + " 个子账号。没选中的号不要采集、不要充值。点「恢复整店跑」后，已勾选的店铺会跑全部子账号。");
+  }
+  var timed = rows.filter(function (row) { return row.rechargeStart && row.rechargeEnd && !row.deleted; });
+  if (timed.length) {
+  scopeNotes.push("有 " + timed.length + " 个子账号按时间开关自动充值。到关点关掉充值，到开点再打开，采集不停。");
+  }
+  if (scopeNotes.length) setBatchStatus(scopeNotes.join(""));
   });
   }
 
   function refreshShopStatus() {
   return jsonFetch("/api/han/worker?view=rules" + (showDeleted ? "&deleted=1" : "")).then(function (data) {
-    if (dead || !data) return;
-    lastMeta.shopRuns = data.shopRuns || lastMeta.shopRuns;
-    lastMeta.machines = data.machines || lastMeta.machines;
-    if (Number(data.version) !== Number(lastMeta.version) && Array.isArray(data.rows) && !root.querySelector("input.han-rules-live")) {
-      collectEdits();
-      var fresh = {};
-      data.rows.forEach(function (row) { fresh[rowKey(row)] = row; });
-      rows.forEach(function (row) {
-        var next = fresh[rowKey(row)];
-        if (!next) return;
-        row.autoRecharge = next.autoRecharge === true;
-        row.rechargeStart = next.rechargeStart || "";
-        row.rechargeEnd = next.rechargeEnd || "";
-        row.version = data.version;
-        row.syncStatus = next.syncStatus || row.syncStatus;
-      });
-      lastMeta.version = data.version;
-      renderTable(false);
-    }
-    if (asofEl && data.version) asofEl.textContent = "配置版本 " + data.version + " · " + (data.syncStatus || "待同步");
-    renderRunShops();
+  if (dead || !data) return;
+  lastMeta.shopRuns = data.shopRuns || lastMeta.shopRuns;
+  lastMeta.machines = data.machines || lastMeta.machines;
+  if (Number(data.version) !== Number(lastMeta.version) && Array.isArray(data.rows) && !root.querySelector("input.han-rules-live")) {
+  collectEdits();
+  var fresh = {};
+  data.rows.forEach(function (row) { fresh[rowKey(row)] = row; });
+  rows.forEach(function (row) {
+  var next = fresh[rowKey(row)];
+  if (!next) return;
+  row.autoRecharge = next.autoRecharge === true;
+  row.rechargeStart = next.rechargeStart || "";
+  row.rechargeEnd = next.rechargeEnd || "";
+  row.version = data.version;
+  row.syncStatus = next.syncStatus || row.syncStatus;
+  });
+  lastMeta.version = data.version;
+  renderTable(false);
+  }
+  if (asofEl && data.version) asofEl.textContent = "配置版本 " + data.version + " · " + (data.syncStatus || "待同步");
+  renderRunShops();
   }).catch(function () {});
   }
 

@@ -503,7 +503,7 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /XmModules\["\/han\/recharge-rules"\]/);
   assert.match(js, /实时付费/);
   assert.match(js, /HanCenter\.mount\(root, hanBoard\)/);
-  assert.match(js, /20261003-subsort/);
+  assert.match(js, /20261003-subnote/);
   assert.doesNotMatch(js, /id="paid-form"/);
   assert.doesNotMatch(js, /上传抓取表/);
   assert.match(js, /XmModules\["\/han\/training"\]/);
@@ -1156,6 +1156,65 @@ test("shop 京准通总订单金额 sums subaccount order amounts", async () => 
     const shop = await json(base, "/api/han/worker?view=shop&store=" + encodeURIComponent("订单店"));
     assert.equal(shop.body.shop.totalOrderAmount, 837);
     assert.equal(shop.body.subaccounts.find((row) => row.subAccountName === "甲").totalOrderAmount, 608);
+  });
+});
+
+test("子账号账户备注由页面保存，回传花费不会覆盖", async () => {
+  await withServer(async (base) => {
+    const pushed = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [{ 店铺名称: "备注店", 京准通主账户ID: "880", 花费: 10 }],
+        subaccounts: [
+          { 店铺名称: "备注店", 京准通主账户ID: "880", 子账号ID: "881", 子账号名称: "备注甲", 花费: 10, 账户备注: "机器备注" },
+        ],
+      }),
+    });
+    assert.equal(pushed.res.status, 201);
+    const before = await json(base, "/api/han/worker?view=shop&store=" + encodeURIComponent("备注店"));
+    assert.equal(before.body.subaccounts[0].remark, "机器备注");
+    const config = await json(base, "/api/han/worker");
+    const saved = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "remark", store: "备注店", subAccountId: "881", remark: "自己的备注" }),
+    });
+    assert.equal(saved.res.status, 200);
+    assert.equal(saved.body.remark, "自己的备注");
+    assert.equal(saved.body.version, config.body.version);
+    const shop = await json(base, "/api/han/worker?view=shop&store=" + encodeURIComponent("备注店"));
+    assert.equal(shop.body.subaccounts[0].remark, "自己的备注");
+    const again = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [{ 店铺名称: "备注店", 京准通主账户ID: "880", 花费: 22 }],
+        subaccounts: [
+          { 店铺名称: "备注店", 京准通主账户ID: "880", 子账号ID: "881", 子账号名称: "备注甲", 花费: 22, 账户备注: "机器又写了" },
+        ],
+      }),
+    });
+    assert.equal(again.res.status, 201);
+    const kept = await json(base, "/api/han/worker?view=shop&store=" + encodeURIComponent("备注店"));
+    assert.equal(kept.body.subaccounts[0].remark, "自己的备注");
+    assert.equal(kept.body.subaccounts[0].spend, 22);
+    const pulled = await json(base, "/api/han/worker?machineId=han-worker-01");
+    assert.equal(JSON.stringify(pulled.body).includes("自己的备注"), false);
+    const cleared = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "remark", store: "备注店", subAccountId: "881", remark: "" }),
+    });
+    assert.equal(cleared.res.status, 200);
+    const empty = await json(base, "/api/han/worker?view=shop&store=" + encodeURIComponent("备注店"));
+    assert.equal(empty.body.subaccounts[0].remark, "");
+    const missing = await json(base, "/api/han/worker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "remark", store: "备注店", subAccountId: "没有", remark: "x" }),
+    });
+    assert.equal(missing.res.status, 404);
   });
 });
 
@@ -1945,7 +2004,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   const han = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
   assert.match(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
   assert.match(han, /\["\/han\/paid\?board=rules", "充值规则", "rules"\]/);
-  assert.match(han, /20261003-subsort/);
+  assert.match(han, /20261003-subnote/);
   const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
   assert.match(center, /两档花费/);
   assert.match(center, /han-rules-text/);
@@ -1985,7 +2044,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(han, /insertAdjacentElement\("afterend"/);
   assert.match(han, /data-xm-group"\) !== "\/han"/);
   assert.doesNotMatch(han, /anchor\.href = "\/han\/paid-center"/);
-  assert.match(center, /20261003-subsort/);
+  assert.match(center, /20261003-subnote/);
   assert.match(center, /aria-label="主管分组"/);
   assert.match(center, /han-live-bar/);
   assert.match(center, /han-live-tabs/);
@@ -2011,6 +2070,8 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(center, /表头设置/);
   assert.match(center, /实时付费接入店铺数量/);
   assert.match(center, /data-sub-sort/);
+  assert.match(center, /data-sub-note/);
+  assert.match(center, /action: "remark"/);
   assert.match(center, /subSortDir === "desc" \? "asc" : "desc"/);
   assert.match(center, /id="han-sub-table"/);
   assert.match(center, /card\.key === "ad"/);

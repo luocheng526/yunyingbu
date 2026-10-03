@@ -1535,7 +1535,7 @@
         if (dead || !window.HanCenter) return;
         stop = window.HanCenter.mount(root, hanBoard) || function () {};
       }
-      const centerVer = "20261003-subsort";
+      const centerVer = "20261003-subnote";
       if (window.HanCenter && window.HanCenter.version === centerVer) {
         start();
       } else {
