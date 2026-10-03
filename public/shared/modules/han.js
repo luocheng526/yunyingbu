@@ -1535,7 +1535,7 @@
         if (dead || !window.HanCenter) return;
         stop = window.HanCenter.mount(root, hanBoard) || function () {};
       }
-      const centerVer = "20261003-subnote";
+      const centerVer = "20261003-paidroi";
       if (window.HanCenter && window.HanCenter.version === centerVer) {
         start();
       } else {
