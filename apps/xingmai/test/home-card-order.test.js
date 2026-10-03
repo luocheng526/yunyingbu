@@ -77,9 +77,11 @@ test("live shop table can filter by duty team or shop", () => {
   assert.match(homeJs, /function liveFilterHtml/);
   assert.match(homeJs, /function filterLiveShops/);
   assert.match(homeJs, /function dutyTeamList/);
+  assert.match(homeJs, /function visibleDutyTeams/);
   assert.match(homeJs, /data-live-filter="pick"/);
   assert.match(homeJs, /店铺列表/);
-  assert.match(homeJs, /全选/);
+  assert.match(homeJs, /责权归属/);
+  assert.doesNotMatch(homeJs, /liveFilterOption\("", "全选"/);
   assert.match(homeJs, /optgroup label="责权团队"/);
   assert.match(homeJs, /optgroup label="店铺"/);
   assert.match(homeJs, /function parseLiveFilterValue/);
@@ -88,10 +90,47 @@ test("live shop table can filter by duty team or shop", () => {
   assert.match(homeJs, /京准通主账户ID/);
   assert.match(homeJs, /function refreshLive/);
   assert.match(homeJs, /xm-hm-live-refresh/);
+  const pick = (name) => {
+    const start = homeJs.indexOf("function " + name);
+    assert.notEqual(start, -1, name);
+    let depth = 0;
+    for (let i = start; i < homeJs.length; i += 1) {
+      if (homeJs[i] === "{") depth += 1;
+      if (homeJs[i] === "}") {
+        depth -= 1;
+        if (depth === 0) return homeJs.slice(start, i + 1);
+      }
+    }
+    throw new Error("unclosed " + name);
+  };
+  const fns = new Function(
+    pick("homeUserName") +
+      pick("isHomeBoss") +
+      pick("normShopName") +
+      pick("liveFilterShopNames") +
+      pick("dutyTeamList") +
+      pick("visibleDutyTeams") +
+      "return {isHomeBoss,visibleDutyTeams};"
+  )();
+  const state = {
+    user: { displayName: "罗成" },
+    teams: [{ name: "沈子晗", shops: [{ shop: "A店" }] }, { name: "韩梦凯", shops: [{ shop: "B店" }] }],
+    chiefs: [{ name: "毛永超", shops: [{ shop: "C店" }] }]
+  };
+  assert.equal(fns.isHomeBoss({ displayName: "罗成" }), true);
+  assert.equal(fns.isHomeBoss({ displayName: "韩梦凯" }), true);
+  assert.equal(fns.isHomeBoss({ displayName: "沈子晗" }), true);
+  assert.deepEqual(fns.visibleDutyTeams(state, [{ shop: "A店" }]).map((t) => t.name), ["沈子晗", "韩梦凯", "毛永超"]);
+  assert.deepEqual(
+    fns.visibleDutyTeams({ ...state, user: { displayName: "王博" } }, [{ shop: "A店" }]).map((t) => t.name),
+    ["沈子晗"]
+  );
 });
 
 test("live page has fee target, warning and update time", () => {
-  assert.match(homeJs, /function liveMetaHtml/);
+  assert.doesNotMatch(homeJs, /function liveMetaHtml/);
+  assert.doesNotMatch(homeJs, /各店费比目标在表头列里单独设置/);
+  assert.match(homeJs, /liveFilterHtml\(allShops, state\) \+\s*'<div class="xm-hm-live-charts">/);
   assert.match(homeJs, /function feeWarnText/);
   assert.match(homeJs, /function feeWarnLabel/);
   assert.match(homeJs, /function feeMonitorOf/);
@@ -108,7 +147,7 @@ test("live page has fee target, warning and update time", () => {
   assert.match(homeJs, /label: "更新时间"/);
   assert.match(homeJs, /function liveTheadHtml/);
   assert.match(homeJs, /费比监控：当前 /);
-  assert.match(homeJs, /更新时间 /);
+  assert.match(homeJs, /label: "更新时间"/);
   assert.match(homeJs, /is-warn/);
   assert.match(homeJs, /is-fee-warn/);
 });
