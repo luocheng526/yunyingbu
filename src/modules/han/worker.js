@@ -951,6 +951,23 @@ export function createWorkerMethods(db, ensure) {
     await db().query("UPDATE han_worker_doc SET doc = ? WHERE id = ?", [doc, rows[0].id]);
   }
 
+  function orderAmountByStore(subs) {
+    const sums = new Map();
+    for (const row of subs || []) {
+      const store = String(row?.store || "");
+      if (!store) continue;
+      sums.set(store, (sums.get(store) || 0) + num(row.totalOrderAmount));
+    }
+    return sums;
+  }
+
+  function applySubOrderAmount(shop, sums) {
+    if (!shop) return shop;
+    const rolled = sums.get(shop.store) || 0;
+    if (rolled > 0) shop.totalOrderAmount = rolled;
+    return shop;
+  }
+
   function presentShop(row) {
     const paidOrders = num(row.paidOrders ?? row.orders);
     const jingmaiGmv = num(row.jingmaiGmv ?? row.gmv);
@@ -1083,7 +1100,8 @@ export function createWorkerMethods(db, ensure) {
     async workerOverview() {
       const state = await load();
       const capturedAt = state.shops.reduce((latest, row) => (row.capturedAt > latest ? row.capturedAt : latest), "");
-      const shops = state.shops.map(presentShop);
+      const orderAmounts = orderAmountByStore(state.subs);
+      const shops = state.shops.map((row) => applySubOrderAmount(presentShop(row), orderAmounts));
       const metrics = totals(shops);
       return {
         ok: true,
@@ -1103,14 +1121,18 @@ export function createWorkerMethods(db, ensure) {
         throw httpError(400, "store required");
       }
       const state = await load();
-      const found = state.shops.filter((row) => row.store === shop).map(presentShop)[0] || null;
+      const subaccounts = state.subs.filter((row) => row.store === shop).map(presentSub);
+      const found = applySubOrderAmount(
+        state.shops.filter((row) => row.store === shop).map(presentShop)[0] || null,
+        orderAmountByStore(subaccounts),
+      );
       const accountId = String(found?.accountId || "");
       return {
         ok: true,
         view: "shop",
         store: shop,
         shop: found,
-        subaccounts: state.subs.filter((row) => row.store === shop).map(presentSub),
+        subaccounts,
         recharges: state.recharges.filter((row) => row.store === shop || (accountId && row.accountId === accountId)),
       };
     },

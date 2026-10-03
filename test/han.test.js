@@ -503,7 +503,7 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /XmModules\["\/han\/recharge-rules"\]/);
   assert.match(js, /实时付费/);
   assert.match(js, /HanCenter\.mount\(root, hanBoard\)/);
-  assert.match(js, /20261003-jmsum/);
+  assert.match(js, /20261003-spendsum/);
   assert.doesNotMatch(js, /id="paid-form"/);
   assert.doesNotMatch(js, /上传抓取表/);
   assert.match(js, /XmModules\["\/han\/training"\]/);
@@ -1128,6 +1128,35 @@ test("han store keeps dropProbeTasks and hydrateFromMysql exports", async () => 
   assert.equal(dropped.ok, true);
   const hydrated = await hydrateFromMysql(pool);
   assert.equal(hydrated.ok, true);
+});
+
+test("shop 京准通总订单金额 sums subaccount order amounts", async () => {
+  await withServer(async (base) => {
+    const pushed = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          { 店铺名称: "订单店", 京准通主账户ID: "300", 花费: 100, 京准通总订单金额: 0 },
+          { 店铺名称: "只有店", 京准通主账户ID: "301", 京准通总订单金额: 9000 },
+        ],
+        subaccounts: [
+          { 店铺名称: "订单店", 京准通主账户ID: "300", 子账号ID: "1", 子账号名称: "甲", 订单金额: 608 },
+          { 店铺名称: "订单店", 京准通主账户ID: "300", 子账号ID: "2", 子账号名称: "乙", 京准通总订单金额: 229 },
+          { 店铺名称: "订单店", 京准通主账户ID: "300", 子账号ID: "3", 子账号名称: "丙", 花费: 10 },
+        ],
+      }),
+    });
+    assert.equal(pushed.res.status, 201);
+    const overview = await json(base, "/api/han/worker?view=overview");
+    const rolled = overview.body.shops.find((row) => row.store === "订单店");
+    const shopOnly = overview.body.shops.find((row) => row.store === "只有店");
+    assert.equal(rolled.totalOrderAmount, 837);
+    assert.equal(shopOnly.totalOrderAmount, 9000);
+    const shop = await json(base, "/api/han/worker?view=shop&store=" + encodeURIComponent("订单店"));
+    assert.equal(shop.body.shop.totalOrderAmount, 837);
+    assert.equal(shop.body.subaccounts.find((row) => row.subAccountName === "甲").totalOrderAmount, 608);
+  });
 });
 
 test("GET/POST /api/han/worker feeds 付费中心 and 充值规则", async () => {
@@ -1916,7 +1945,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   const han = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
   assert.match(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
   assert.match(han, /\["\/han\/paid\?board=rules", "充值规则", "rules"\]/);
-  assert.match(han, /20261003-jmsum/);
+  assert.match(han, /20261003-spendsum/);
   const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
   assert.match(center, /两档花费/);
   assert.match(center, /han-rules-text/);
@@ -1956,7 +1985,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(han, /insertAdjacentElement\("afterend"/);
   assert.match(han, /data-xm-group"\) !== "\/han"/);
   assert.doesNotMatch(han, /anchor\.href = "\/han\/paid-center"/);
-  assert.match(center, /20261003-jmsum/);
+  assert.match(center, /20261003-spendsum/);
   assert.match(center, /aria-label="主管分组"/);
   assert.match(center, /han-live-bar/);
   assert.match(center, /han-live-tabs/);
@@ -1981,7 +2010,9 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(center, /责权归属/);
   assert.match(center, /表头设置/);
   assert.match(center, /实时付费接入店铺数量/);
-  assert.match(center, /推广花费 \(支付预估\)/);
+  assert.match(center, /card\.key === "ad"/);
+  assert.match(center, /推广占比 /);
+  assert.doesNotMatch(center, /推广花费 \(支付预估\)/);
   assert.match(center, /付费成交ROI/);
   assert.match(center, /实时付费成交额/);
   assert.match(center, /线：累计（23点=1-23点）/);

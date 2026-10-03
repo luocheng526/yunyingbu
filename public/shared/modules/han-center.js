@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20261003-jmsum";
+  var VERSION = "20261003-spendsum";
 
   function escapeHtml(value) {
   return String(value ?? "")
@@ -227,13 +227,6 @@
   return n == null ? "—" : Math.round(n).toLocaleString("en-US");
   }
 
-  function liveRate(value) {
-  var n = liveNum(value);
-  if (n == null) return "—";
-  if (Math.abs(n) <= 1) n = n * 100;
-  return Math.round(n) + "%";
-  }
-
   function liveRoi(pay, cost) {
   var a = liveNum(pay);
   var b = liveNum(cost);
@@ -267,15 +260,13 @@
   });
   var todayPay = rows.length ? 0 : null;
   var todayCost = rows.length ? 0 : null;
-  var todayRate;
   rows.forEach(function (row) {
     todayPay += Number(row.todayPayAmount != null ? row.todayPayAmount : row.payAmount) || 0;
     todayCost += Number(row.totalPromotionCost) || 0;
   });
-  todayRate = todayPay ? todayCost / todayPay : todayCost === 0 ? 0 : null;
   return {
     cards: [
-      { key: "ad", label: "推广花费 (支付预估)", value: liveInt(todayCost), extra: todayRate != null ? "推广占比 " + liveRate(todayRate) : "" },
+      { key: "ad", label: "京准通花费", value: liveInt(todayCost), extra: "" },
       { key: "roi", label: "付费成交ROI", value: liveRoi(todayPay, todayCost) },
       { key: "livePay", label: "实时付费成交额", value: liveInt(todayPay) },
       { key: "livePaid", label: "实时付费接入店铺数量", value: liveInt(rows.length) },
@@ -546,7 +537,14 @@
       yesterdayHour: [],
       todayHour: [],
     };
+    var pageSpend = 0;
+    pageRowsNow.forEach(function (row) { pageSpend += Number(row.spend) || 0; });
     model.cards.forEach(function (card) {
+      if (card.key === "ad") {
+        card.label = "京准通花费";
+        card.value = salesText(pageSpend);
+        card.extra = "推广占比 " + pageFee.text;
+      }
       if (card.key === "livePay") card.value = pageSales.text;
       if (card.key === "livePaid") card.value = liveInt(pageRowsNow.length);
     });
