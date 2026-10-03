@@ -1534,7 +1534,7 @@
         if (dead || !window.HanCenter) return;
         stop = window.HanCenter.mount(root, hanBoard) || function () {};
       }
-      const centerVer = "20261003-clock";
+      const centerVer = "20261003-liveboard";
       if (window.HanCenter && window.HanCenter.version === centerVer) {
         start();
       } else {
@@ -1866,6 +1866,8 @@
       }, 30);
     }).observe(document.documentElement, { childList: true, subtree: true });
   }
+
+  window.__hanGo = goHanPage;
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", watchHanChrome);

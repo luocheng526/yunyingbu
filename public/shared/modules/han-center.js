@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20261003-clock";
+  var VERSION = "20261003-liveboard";
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -141,7 +141,34 @@
     ".han-rules table.han-rules-grid input.han-rules-live{display:block;box-sizing:border-box;width:76px;height:28px;margin:0 auto;padding:0 4px;border:1px solid #1677ff;border-radius:4px;background:#fff;color:#111827;font-weight:600;font-size:13px;line-height:26px;text-align:center;outline:2px solid #1677ff}" +
     ".han-rules table.han-rules-grid input.han-rules-live.han-rules-text{width:120px;margin:0;text-align:left;font-weight:500}" +
     "@media (max-width:1100px){.han-paid .kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}" +
-    "@media (max-width:700px){.han-paid .kpi-grid{grid-template-columns:1fr 1fr}}";
+    "@media (max-width:700px){.han-paid .kpi-grid{grid-template-columns:1fr 1fr}}" +
+    ".han-live-board{display:flex;flex-direction:column;gap:16px}" +
+    ".han-live-board .xm-hm-live-filter{display:flex;align-items:center;justify-content:space-between;gap:12px}" +
+    ".han-live-board .xm-hm-live-filter-left,.han-live-board .xm-hm-live-filter-right{display:flex;align-items:center;gap:12px}" +
+    ".han-live-board .xm-hm-live-filter-lab{font-size:16px;font-weight:600;line-height:40px;white-space:nowrap}" +
+    ".han-live-board .xm-hm-live-filter-box{position:relative;flex:0 1 320px;min-width:220px}" +
+    ".han-live-board .xm-hm-live-filter select{width:100%;height:40px;box-sizing:border-box;border:1px solid #e4e7ed;border-radius:8px;padding:0 36px 0 14px;font-size:14px;background:#fff;appearance:none}" +
+    ".han-live-board .xm-hm-live-filter-box:after{content:\"\";position:absolute;right:14px;top:50%;width:8px;height:8px;margin-top:-6px;border-right:2px solid #8c8c8c;border-bottom:2px solid #8c8c8c;transform:rotate(45deg);pointer-events:none}" +
+    ".han-live-board .xm-hm-live-heads,.han-live-board .xm-hm-live-refresh{height:auto;border:0;background:transparent;color:var(--xm-primary,#1677ff);padding:0 2px;font-size:14px;line-height:40px}" +
+    ".han-live-board .xm-hm-live-refresh:disabled{opacity:.55;cursor:wait}" +
+    ".han-live-board .xm-hm-head-pop{position:relative;z-index:2;background:#fff;border:1px solid #f0f0f0;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.06);padding:10px 12px}" +
+    ".han-live-board .xm-hm-head-pop[hidden]{display:none}" +
+    ".han-live-board .xm-hm-head-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:13px}" +
+    ".han-live-charts,.han-live-board .xm-hm-live-charts{display:grid;grid-template-columns:1fr 1fr;gap:20px}" +
+    ".han-live-board .xm-hm-chart{background:#fff;border:1px solid #f0f0f0;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.03),0 8px 24px rgba(0,0,0,.04);padding:14px 16px 10px;min-width:0}" +
+    ".han-live-board .xm-hm-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#595959;font-size:13px}" +
+    ".han-live-board .xm-hm-legs{display:inline-flex;align-items:center;gap:10px;color:#8c8c8c;font-size:12px}" +
+    ".han-live-board .xm-hm-legs i{width:10px;height:10px;border-radius:50%;display:inline-block}" +
+    ".han-live-board .xm-hm-legs i.is-yest{background:#91caff}.han-live-board .xm-hm-legs i.is-today{background:#ffa39e}" +
+    ".han-live-board .xm-hm-index-num{margin:8px 0 6px;font-size:28px;font-weight:700;color:var(--xm-primary,#1677ff)}" +
+    ".han-live-board .xm-hm-trend{margin-top:6px;font-size:12px;color:#8c8c8c}" +
+    ".han-live-board .xm-hm-trend.is-up{color:#cf1322}.han-live-board .xm-hm-trend.is-down{color:#389e0d}" +
+    ".han-live-board .xm-hm-chart-sub{margin:10px 0 0;color:#8c8c8c;font-size:12px}" +
+    ".han-live-board .xm-hm-line{display:block;width:100%;height:180px;margin-top:8px}" +
+    ".han-live-board .xm-hm-live-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px}" +
+    ".han-live-board .xm-hm-card{background:#fff;border:1px solid #f0f0f0;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.03),0 8px 24px rgba(0,0,0,.04);padding:16px 12px 14px;text-align:center}" +
+    ".han-live-board .xm-hm-value{margin-top:8px;font-size:22px;font-weight:700;color:#262626}" +
+    "@media (max-width:1100px){.han-live-board .xm-hm-live-charts,.han-live-board .xm-hm-live-cards{grid-template-columns:1fr 1fr}}";
 
   function page(title, lead, body, extra) {
     return (
@@ -151,11 +178,205 @@
     );
   }
 
+  function liveNum(value) {
+    if (value == null || value === "" || value === "—") return null;
+    var n = Number(String(value).replace(/,/g, ""));
+    return isFinite(n) ? n : null;
+  }
+
+  function liveInt(value) {
+    var n = liveNum(value);
+    return n == null ? "—" : Math.round(n).toLocaleString("en-US");
+  }
+
+  function liveRate(value) {
+    var n = liveNum(value);
+    if (n == null) return "—";
+    if (Math.abs(n) <= 1) n = n * 100;
+    return Math.round(n) + "%";
+  }
+
+  function liveRoi(pay, cost) {
+    var a = liveNum(pay);
+    var b = liveNum(cost);
+    if (a == null || b == null || b === 0) return "—";
+    return String(Math.round(a / b));
+  }
+
+  function liveDelta(now, prev) {
+    var a = liveNum(now);
+    var b = liveNum(prev);
+    if (a == null || b == null || b === 0) return 0;
+    return ((a - b) / Math.abs(b)) * 100;
+  }
+
+  function shanghaiHour() {
+    var text = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Shanghai", hour: "2-digit", hourCycle: "h23" }).format(new Date());
+    var hour = Number(String(text).slice(0, 2));
+    return hour === 24 ? 0 : hour || 0;
+  }
+
+  function padHours(list) {
+    var out = (list || []).slice();
+    while (out.length < 24) out.push(0);
+    return out.slice(0, 24);
+  }
+
+  function hourList(value) {
+    if (Array.isArray(value)) return padHours(value);
+    var out = [];
+    for (var hour = 0; hour < 24; hour += 1) {
+      var key = (hour < 10 ? "0" : "") + hour + ":00";
+      out.push(Number(value && value[key]) || 0);
+    }
+    return out;
+  }
+
+  function sumHours(rows, field) {
+    var out = hourList(null);
+    (rows || []).forEach(function (row) {
+      var hours = hourList(row[field]);
+      for (var i = 0; i < 24; i += 1) out[i] += hours[i];
+    });
+    return out;
+  }
+
+  function flatHours(rate) {
+    var out = [];
+    var n = Number(rate) || 0;
+    for (var i = 0; i < 24; i += 1) out.push(n);
+    return out;
+  }
+
+  function shopKey(value) {
+    return String(value || "").replace(/\s+/g, "").toLowerCase();
+  }
+
+  function liveModel(erp, picked) {
+    var all = (erp && erp.records) || [];
+    var rows = picked ? all.filter(function (row) {
+      var name = String(row.shopName || "").trim();
+      return picked[name] || picked["~" + shopKey(name)];
+    }) : all;
+    var summary = (erp && erp.summary) || {};
+    var yesterday = (erp && erp.yesterday) || {};
+    var hourly = (erp && erp.hourly) || {};
+    var hour = shanghaiHour();
+    var todayPay;
+    var yestPay;
+    var todayCost;
+    var todayRate;
+    var yestRate;
+    var todayHours;
+    var yestHours;
+    if (!picked && (summary.todayPayAmount != null || summary.payAmount != null)) {
+      todayPay = summary.todayPayAmount != null ? summary.todayPayAmount : summary.payAmount;
+      yestPay = summary.yesterdayPayAmount != null ? summary.yesterdayPayAmount : yesterday.payAmount;
+      todayCost = summary.totalPromotionCost;
+      todayRate = summary.promotionRate;
+      yestRate = yesterday.promotionRate;
+      todayHours = hourList(hourly.todayPay || summary.todayHourlyData).slice(0, Math.min(24, hour + 1));
+      yestHours = hourList(hourly.yesterdayPay || summary.yesterdayHourlyData);
+    } else {
+      todayPay = rows.length ? 0 : null;
+      yestPay = rows.length ? 0 : null;
+      todayCost = rows.length ? 0 : null;
+      rows.forEach(function (row) {
+        todayPay += Number(row.todayPayAmount != null ? row.todayPayAmount : row.payAmount) || 0;
+        yestPay += Number(row.yesterdayPayAmount) || 0;
+        todayCost += Number(row.totalPromotionCost) || 0;
+      });
+      todayRate = todayPay ? todayCost / todayPay : todayCost === 0 ? 0 : null;
+      yestRate = null;
+      todayHours = rows.length ? sumHours(rows, "todayHourlyData").slice(0, Math.min(24, hour + 1)) : [];
+      yestHours = rows.length ? sumHours(rows, "yesterdayHourlyData") : [];
+    }
+    return {
+      hero: { label: "京麦面板实时金额", value: liveInt(todayPay), delta: liveDelta(todayPay, yestPay), yesterdayHour: yestHours, todayHour: todayHours },
+      paid: {
+        label: "实时费比",
+        value: liveRate(todayRate),
+        delta: liveDelta(todayRate, yestRate),
+        unit: "rate",
+        lineMode: "flat",
+        yesterdayHour: yestRate == null ? [] : flatHours(yestRate),
+        todayHour: todayRate == null ? [] : flatHours(todayRate).slice(0, Math.min(24, hour + 1)),
+      },
+      cards: [
+        { key: "ad", label: "推广花费 (支付预估)", value: liveInt(todayCost), extra: todayRate != null ? "推广占比 " + liveRate(todayRate) : "" },
+        { key: "roi", label: "付费成交ROI", value: liveRoi(todayPay, todayCost) },
+        { key: "livePay", label: "实时付费成交额", value: liveInt(todayPay) },
+        { key: "livePaid", label: "实时付费接入店铺数量", value: liveInt(rows.length) },
+      ],
+    };
+  }
+
+  function liveLine(series) {
+    var width = 640;
+    var height = 184;
+    var top = 12;
+    var bottom = 22;
+    var yesterday = series.yesterday || [];
+    var today = series.today || [];
+    var count = series.hours || Math.max(yesterday.length, today.length, 2);
+    var max = 1;
+    yesterday.concat(today).forEach(function (n) {
+      var v = Number(n) || 0;
+      if (v > max) max = v;
+    });
+    function xAt(index) {
+      return 10 + index / Math.max(count - 1, 1) * 620;
+    }
+    function yAt(value) {
+      return height - bottom - (Number(value) || 0) / max * (height - top - bottom);
+    }
+    function points(list) {
+      return list.map(function (value, index) {
+        return xAt(index).toFixed(1) + "," + yAt(value).toFixed(1);
+      }).join(" ");
+    }
+    var labels = "";
+    if (count === 24) {
+      for (var hour = 1; hour <= 24; hour += 1) {
+        labels += '<text x="' + xAt(hour - 1).toFixed(1) + '" y="' + (height - 5) + '" text-anchor="middle" fill="#8c8c8c" font-size="8">' + hour + "</text>";
+      }
+    }
+    return '<svg class="xm-hm-line" viewBox="0 0 ' + width + " " + height + '" preserveAspectRatio="none">' +
+      (yesterday.length ? '<polyline fill="none" stroke="#91caff" stroke-width="2.2" points="' + points(yesterday) + '"></polyline>' : "") +
+      (today.length ? '<polyline fill="none" stroke="#ffa39e" stroke-width="2.2" points="' + points(today) + '"></polyline>' : "") +
+      labels + "</svg>";
+  }
+
+  function livePlot(spec) {
+    var yesterday = spec.yesterdayHour || [];
+    var today = spec.todayHour || [];
+    if (yesterday.length < 3 && today.length < 3) return { yesterday: [], today: [], hours: 0 };
+    var flat = spec.lineMode === "flat" || spec.unit === "rate";
+    function roll(list) {
+      var total = 0;
+      return list.map(function (n) { total += Number(n) || 0; return total; });
+    }
+    return { yesterday: flat ? yesterday : roll(yesterday), today: flat ? today : roll(today), hours: 24 };
+  }
+
+  function liveChart(spec) {
+    var down = Number(spec.delta) < 0;
+    var plot = livePlot(spec);
+    var sub = spec.unit === "rate" ? "线：当天费比" : "线：累计（23点=1-23点）";
+    var trend = '<div class="xm-hm-trend ' + (down ? "is-down" : "is-up") + '">环比 ' + (down ? "↘" : "↗") + " " +
+      Math.round(Math.abs(Number(spec.delta) || 0)) + "%</div>";
+    return '<article class="xm-hm-chart" data-chart="' + (spec.unit === "rate" ? "fee" : "sales") + '"><div class="xm-hm-card-head"><span>' +
+      escapeHtml(spec.label) + '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
+      escapeHtml(spec.value) + "</div>" + trend + (plot.hours ? '<div class="xm-hm-chart-sub">' + sub + "</div>" : "") + liveLine(plot) + "</article>";
+  }
+
   function mountCenter(root, mode) {
     var TEAMS = ["陈晓曼组", "高明阳组", "毛永超组", "段坤孝组", "薛双双组", "韩梦凯组"];
     var live = mode === "live";
     var askedTeam = live ? (new URLSearchParams(window.location.search).get("team") || "") : "";
     var currentTeam = TEAMS.indexOf(askedTeam) >= 0 ? askedTeam : "";
+    var liveShop = live ? (new URLSearchParams(window.location.search).get("liveShop") || "") : "";
+    var erpPayload = null;
     var teamByStore = {};
     function liveTabs() {
       function link(href, label, on) {
@@ -173,7 +394,7 @@
       ? '<main class="page han-paid han-live"><style>' + css + "</style>" +
         '<div class="han-live-bar">' + liveTabs() +
         '<div class="han-paid-meta"><span class="han-paid-dot"></span><span id="han-paid-asof">等待回传</span></div></div>' +
-        '<section class="kpi-grid" id="han-paid-kpis"></section><div id="han-paid-body"></div><p id="han-paid-status" class="status"></p></main>'
+        '<section class="han-live-board" id="han-paid-board"></section><section class="kpi-grid" id="han-paid-kpis" hidden></section><div id="han-paid-body"></div><p id="han-paid-status" class="status"></p></main>'
       : page(
         "付费中心",
         "最新一次回传的全店快照。点店铺名称下钻查看子账号和充值记录。",
@@ -181,6 +402,7 @@
         '<section class="kpi-grid" id="han-paid-kpis"></section><div id="han-paid-body"></div><p id="han-paid-status" class="status"></p></main>'
       );
     var asofEl = root.querySelector("#han-paid-asof");
+    var boardEl = root.querySelector("#han-paid-board");
     var kpiEl = root.querySelector("#han-paid-kpis");
     var bodyEl = root.querySelector("#han-paid-body");
     var statusEl = root.querySelector("#han-paid-status");
@@ -200,6 +422,8 @@
     }
 
     function renderKpis(metrics) {
+      if (boardEl) boardEl.hidden = true;
+      if (kpiEl) kpiEl.hidden = false;
       var cards = [
         { label: metrics.detail ? "子账号" : "店铺数", value: integer(metrics.stores), unit: metrics.detail ? "个" : "家" },
         { label: "京准通花费", value: money(metrics.spend) },
@@ -268,8 +492,106 @@
     }
 
     function scopedRows() {
-      if (!live || !currentTeam) return overviewRows;
-      return overviewRows.filter(function (row) { return teamOf(row.store) === currentTeam; });
+      var rows = !live || !currentTeam ? overviewRows : overviewRows.filter(function (row) { return teamOf(row.store) === currentTeam; });
+      if (live && liveShop) {
+        var key = shopKey(liveShop);
+        rows = rows.filter(function (row) { return row.store === liveShop || shopKey(row.store) === key; });
+      }
+      return rows;
+    }
+
+    function hiddenCards() {
+      try {
+        var raw = JSON.parse(localStorage.getItem("han-live-cards") || "[]");
+        return raw && raw.length ? raw : [];
+      } catch (_err) {
+        return [];
+      }
+    }
+
+    function liveFilterHtml(pick, shops) {
+      function option(value, label, on) {
+        return '<option value="' + escapeHtml(value) + '"' + (on ? " selected" : "") + ">" + escapeHtml(label) + "</option>";
+      }
+      return '<div class="xm-hm-live-filter"><div class="xm-hm-live-filter-left"><strong class="xm-hm-live-filter-lab">店铺列表</strong><span class="xm-hm-live-filter-box"><select data-live-filter="pick">' +
+        option("", "责权归属", !pick) +
+        '<optgroup label="责权团队">' + TEAMS.map(function (name) { return option("team:" + name, name, pick === "team:" + name); }).join("") + "</optgroup>" +
+        (shops.length ? '<optgroup label="店铺">' + shops.map(function (name) { return option("shop:" + name, name, pick === "shop:" + name); }).join("") + "</optgroup>" : "") +
+        '</select></span></div><div class="xm-hm-live-filter-right"><button type="button" class="xm-hm-live-heads" data-live-heads>表头设置</button><button type="button" class="xm-hm-live-refresh" data-refresh-live>刷新</button></div></div>';
+    }
+
+    function renderLiveBoard() {
+      if (!boardEl) return;
+      var picked = null;
+      if (liveShop) {
+        picked = {};
+        picked[liveShop] = true;
+        picked["~" + shopKey(liveShop)] = true;
+      } else if (currentTeam) {
+        picked = {};
+        Object.keys(teamByStore).forEach(function (store) {
+          if (teamByStore[store] === currentTeam) {
+            picked[store] = true;
+            picked["~" + shopKey(store)] = true;
+          }
+        });
+      }
+      var model = liveModel(erpPayload, picked);
+      var hidden = {};
+      hiddenCards().forEach(function (key) { hidden[key] = true; });
+      var cards = model.cards.filter(function (card) { return !hidden[card.key]; });
+      var shops = [];
+      var seen = {};
+      ((erpPayload && erpPayload.records) || []).forEach(function (row) {
+        var name = String(row.shopName || "").trim();
+        if (name && !seen[name]) {
+          seen[name] = true;
+          shops.push(name);
+        }
+      });
+      shops.sort();
+      var pick = liveShop ? "shop:" + liveShop : currentTeam ? "team:" + currentTeam : "";
+      boardEl.hidden = false;
+      if (kpiEl) kpiEl.hidden = true;
+      boardEl.innerHTML = liveFilterHtml(pick, shops) +
+        '<div class="xm-hm-head-pop" hidden><h3>表头设置</h3>' + model.cards.map(function (card) {
+          return '<label><input type="checkbox" data-live-card="' + escapeHtml(card.key) + '"' + (hidden[card.key] ? "" : " checked") + "> " + escapeHtml(card.label) + "</label>";
+        }).join("") + "</div>" +
+        '<div class="xm-hm-live-charts">' + liveChart(model.hero) + liveChart(model.paid) + "</div>" +
+        '<div class="xm-hm-live-cards">' + cards.map(function (card) {
+          return '<article class="xm-hm-card" data-card="' + escapeHtml(card.key) + '"><div class="xm-hm-card-head"><span>' + escapeHtml(card.label) +
+            '</span></div><div class="xm-hm-value">' + escapeHtml(card.value) + "</div>" +
+            (card.extra ? '<div class="xm-hm-trend">' + escapeHtml(card.extra) + "</div>" : "") + "</article>";
+        }).join("") + "</div>";
+      var select = boardEl.querySelector("[data-live-filter]");
+      if (select) select.addEventListener("change", function () {
+        var value = select.value || "";
+        var href = "/han/paid";
+        if (value.indexOf("team:") === 0) href = "/han/paid?team=" + encodeURIComponent(value.slice(5));
+        else if (value.indexOf("shop:") === 0) href = "/han/paid?liveShop=" + encodeURIComponent(value.slice(5));
+        if (typeof window.__hanGo === "function") window.__hanGo(href);
+      });
+      var refresh = boardEl.querySelector("[data-refresh-live]");
+      if (refresh) refresh.addEventListener("click", function () {
+        refresh.disabled = true;
+        refresh.textContent = "刷新中…";
+        loadOverview().catch(function (err) {
+          if (!dead) setStatus(err.message || "加载失败", true);
+        });
+      });
+      var heads = boardEl.querySelector("[data-live-heads]");
+      var pop = boardEl.querySelector(".xm-hm-head-pop");
+      if (heads && pop) heads.addEventListener("click", function () { pop.hidden = !pop.hidden; });
+      boardEl.querySelectorAll("[data-live-card]").forEach(function (box) {
+        box.addEventListener("change", function () {
+          var off = [];
+          boardEl.querySelectorAll("[data-live-card]").forEach(function (item) {
+            if (!item.checked) off.push(item.getAttribute("data-live-card"));
+          });
+          try { localStorage.setItem("han-live-cards", JSON.stringify(off)); } catch (_err) {}
+          renderLiveBoard();
+        });
+      });
     }
 
     function renderGroupTable(rows) {
@@ -302,7 +624,8 @@
       asofEl.textContent = stamp
         ? "最新回传 " + stamp + " · " + (live ? (currentTeam || "全部主管") + " " : "") + (metrics.stores || scoped.length) + " 店"
         : "等待回传";
-      renderKpis(metrics);
+      if (live) renderLiveBoard();
+      else renderKpis(metrics);
       bodyEl.innerHTML = '<section class="panel">' +
         (live ? "" : '<div class="han-paid-toolbar"><h2>本次回传</h2><div class="row">' +
           '<input id="han-paid-filter" type="search" maxlength="64" placeholder="搜索店铺名称" /></div></div>') +
@@ -386,8 +709,11 @@
           }));
         });
       }
-      return Promise.all(jobs).then(function (all) {
+      var erpJob = live ? jsonFetch("/api/home/erp-paid").catch(function () { return null; }) : Promise.resolve(null);
+      return Promise.all([Promise.all(jobs), erpJob]).then(function (pair) {
         if (dead) return;
+        var all = pair[0];
+        erpPayload = pair[1];
         if (live) {
           teamByStore = {};
           all.slice(1).forEach(function (block) {
@@ -397,7 +723,7 @@
           });
         }
         renderOverview(all[0]);
-        setStatus("已更新");
+        setStatus(live && !erpPayload ? "京麦实时没有加载出来" : "已更新", live && !erpPayload);
       });
     }
 

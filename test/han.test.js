@@ -503,7 +503,7 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /XmModules\["\/han\/recharge-rules"\]/);
   assert.match(js, /实时付费/);
   assert.match(js, /HanCenter\.mount\(root, hanBoard\)/);
-  assert.match(js, /20261003-clock/);
+  assert.match(js, /20261003-liveboard/);
   assert.doesNotMatch(js, /id="paid-form"/);
   assert.doesNotMatch(js, /上传抓取表/);
   assert.match(js, /XmModules\["\/han\/training"\]/);
@@ -660,6 +660,27 @@ test("实时付费 second click shows the pane that was left open", async () => 
   assert.match(pane.innerHTML, /实时付费/);
   assert.doesNotMatch(pane.innerHTML, /实时付费正文/);
   assert.equal(pane.attrs["data-han-paid-key"], "live::");
+
+  pane.attrs["data-han-paid-key"] = "live::";
+  pane.innerHTML = '<main class="page han-paid han-live">全部汇总</main>';
+  location.pathname = "/han/paid";
+  location.search = "";
+  calls.length = 0;
+  const teamHref = "/han/paid?team=" + encodeURIComponent("陈晓曼组");
+  const teamTab = {
+    attrs: { href: teamHref, "data-han-tab": teamHref },
+    getAttribute(name) { return this.attrs[name] || null; },
+    closest(sel) {
+      if (sel === "a" || sel === "a[data-han-tab]") return this;
+      return null;
+    },
+  };
+  click[1]({ target: teamTab, button: 0, preventDefault() {}, stopPropagation() {} });
+  assert.equal(location.pathname, "/han/paid");
+  assert.equal(location.search, "?team=" + encodeURIComponent("陈晓曼组"));
+  assert.equal(pane.attrs["data-han-paid-key"], "live:" + "陈晓曼组" + ":");
+  assert.match(pane.innerHTML, /正在打开/);
+  assert.deepEqual(calls, [["push", teamHref]]);
 });
 
 test("goods page puts 商品分层 teams on a horizontal tab bar", async () => {
@@ -1799,7 +1820,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   const han = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
   assert.match(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
   assert.match(han, /\["\/han\/paid\?board=rules", "充值规则", "rules"\]/);
-  assert.match(han, /20261003-clock/);
+  assert.match(han, /20261003-liveboard/);
   const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
   assert.match(center, /两档花费/);
   assert.match(center, /han-rules-text/);
@@ -1839,7 +1860,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(han, /insertAdjacentElement\("afterend"/);
   assert.match(han, /data-xm-group"\) !== "\/han"/);
   assert.doesNotMatch(han, /anchor\.href = "\/han\/paid-center"/);
-  assert.match(center, /20261003-clock/);
+  assert.match(center, /20261003-liveboard/);
   assert.match(center, /aria-label="主管分组"/);
   assert.match(center, /han-live-bar/);
   assert.match(center, /han-live-tabs/);
@@ -1852,6 +1873,14 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(center, /京准通花费/);
   assert.match(center, /board === "live"/);
   assert.match(center, /\/api\/han\/shops\?team=/);
+  assert.match(center, /han-paid-board/);
+  assert.match(center, /京麦面板实时金额/);
+  assert.match(center, /实时费比/);
+  assert.match(center, /责权归属/);
+  assert.match(center, /表头设置/);
+  assert.match(center, /实时付费接入店铺数量/);
+  assert.match(center, /\/api\/home\/erp-paid/);
+  assert.match(han, /window\.__hanGo = goHanPage/);
 });
 
 test("selected subaccounts are the only ones marked running", async () => {
