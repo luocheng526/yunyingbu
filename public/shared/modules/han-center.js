@@ -1,6 +1,5 @@
-/* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20261003-paidroi";
+  var VERSION = "20261003-asof";
 
   function escapeHtml(value) {
   return String(value ?? "")
@@ -233,6 +232,11 @@
   return n == null ? "—" : Math.round(n).toLocaleString("en-US");
   }
 
+  function clockText(value) {
+  var m = String(value || "").match(/(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/);
+  return m ? m[1] + " " + m[2] : "";
+  }
+
   function shanghaiHour() {
   var text = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Shanghai", hour: "2-digit", hourCycle: "h23" }).format(new Date());
   var hour = Number(String(text).slice(0, 2));
@@ -337,7 +341,8 @@
   var legs = plot.hours ? '<span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span>' : "";
   return '<article class="xm-hm-chart" data-chart="' + (spec.unit === "rate" ? "fee" : "sales") + '"><div class="xm-hm-card-head"><span>' +
   escapeHtml(spec.label) + "</span>" + legs + '</div><div class="xm-hm-index-num">' +
-  escapeHtml(spec.value) + "</div>" + trend + (plot.hours ? '<div class="xm-hm-chart-sub">' + sub + "</div>" : "") + liveLine(plot) + "</article>";
+  escapeHtml(spec.value) + "</div>" + (spec.asOf ? '<div class="xm-hm-trend">更新于 ' + escapeHtml(spec.asOf) + "</div>" : "") +
+  trend + (plot.hours ? '<div class="xm-hm-chart-sub">' + sub + "</div>" : "") + liveLine(plot) + "</article>";
   }
 
   function mountCenter(root, mode) {
@@ -555,10 +560,14 @@
   };
   var pageSpend = 0;
   var pageAmount = 0;
+  var pageStamp = "";
   pageRowsNow.forEach(function (row) {
   pageSpend += Number(row.spend) || 0;
   pageAmount += Number(row.totalOrderAmount) || 0;
+  var stamp = String(row.capturedAt || "");
+  if (stamp > pageStamp) pageStamp = stamp;
   });
+  model.hero.asOf = clockText(pageStamp);
   model.cards.forEach(function (card) {
   if (card.key === "ad") {
   card.label = "京准通花费";
