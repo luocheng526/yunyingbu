@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.723-home-headset */
+/* xm-module-home 0.1.761-home-paidshops */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -2206,7 +2206,7 @@
     hideCardTip();
     hideLineTip(root);
     var feeDraft = liveFeeDraft(root);
-    board.setAttribute("data-hm-js", "0.1.723-home-headset");
+    board.setAttribute("data-hm-js", "0.1.761-home-paidshops");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
