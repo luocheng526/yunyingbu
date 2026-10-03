@@ -170,7 +170,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /paid: \{ label: "实时费比"/);
   assert.match(homeJs, /label: "京麦面板实时金额"/);
   assert.doesNotMatch(homeJs, /label: "实时销售指数"/);
-  assert.match(homeJs, /key: "livePaid", label: "实时付费金额"/);
+  assert.match(homeJs, /key: "livePaid", label: "实时付费接入店铺数量"/);
+  assert.match(homeJs, /label: "实时付费接入店铺数量", value: fmtInt\(live.shops.length\)/);
   assert.match(homeJs, /\/api\/home\/erp-paid/);
   assert.match(homeJs, /function seriesOf/);
   assert.match(homeJs, /function todayHours/);

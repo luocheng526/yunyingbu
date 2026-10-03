@@ -45,6 +45,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /xm-home-live-cols/);
     assert.match(text, /\.xm-hm-table th\{text-align:center/);
     assert.match(text, /京麦面板实时金额/);
+    assert.match(text, /实时付费接入店铺数量/);
     assert.doesNotMatch(text, /实时销售指数/);
     assert.match(text, /xm-home-live-card-order/);
     assert.match(text, /xm-home-live-row/);
