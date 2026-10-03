@@ -1,6 +1,6 @@
 /* 韩梦凯付费中心 / 充值规则。数据走 /api/han/worker，看板和档位与沈子晗对齐。 */
 (function () {
-  var VERSION = "20261003-pagesum";
+  var VERSION = "20261003-feeratio";
 
   function escapeHtml(value) {
   return String(value ?? "")
@@ -20,6 +20,27 @@
 
   function rate(value) {
   return (Number(value) || 0).toFixed(2);
+  }
+
+  function feeRatio(spend, gmv) {
+  var pay = Number(gmv);
+  if (!(pay > 0)) return null;
+  return (Number(spend) || 0) / pay;
+  }
+
+  function feeText(spend, gmv) {
+  var n = feeRatio(spend, gmv);
+  return n == null ? "—" : n.toFixed(2);
+  }
+
+  function feeOf(rows) {
+  var spend = 0;
+  var gmv = 0;
+  (rows || []).forEach(function (row) {
+    spend += Number(row.spend) || 0;
+    gmv += Number(row.jingmaiGmv) || 0;
+  });
+  return { ratio: feeRatio(spend, gmv), text: feeText(spend, gmv) };
   }
 
   function jsonFetch(url, options) {
@@ -359,7 +380,7 @@
   var down = Number(spec.delta) < 0;
   var plot = livePlot(spec);
   var sub = spec.unit === "rate" ? "线：当天费比" : "线：累计（23点=1-23点）";
-  var trend = '<div class="xm-hm-trend ' + (down ? "is-down" : "is-up") + '">环比 ' + (down ? "↘" : "↗") + " " +
+  var trend = spec.delta == null ? "" : '<div class="xm-hm-trend ' + (down ? "is-down" : "is-up") + '">环比 ' + (down ? "↘" : "↗") + " " +
     Math.round(Math.abs(Number(spec.delta) || 0)) + "%</div>";
   return '<article class="xm-hm-chart" data-chart="' + (spec.unit === "rate" ? "fee" : "sales") + '"><div class="xm-hm-card-head"><span>' +
     escapeHtml(spec.label) + '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
@@ -427,6 +448,7 @@
       { label: "总订单金额", value: money(metrics.totalOrderAmount) },
       { label: "付费订单", value: integer(metrics.paidOrders), unit: "单" },
       { label: "回传成功", value: integer(metrics.successCount), unit: metrics.detail ? "店" : "店" },
+      { label: "真实费比", value: feeText(metrics.feeSpend != null ? metrics.feeSpend : metrics.spend, metrics.feeGmv != null ? metrics.feeGmv : metrics.jingmaiGmv) },
     ];
     kpiEl.innerHTML = cards.map(function (card) {
       return '<article class="kpi-card"><div class="label">' + escapeHtml(card.label) + '</div><div class="value">' +
@@ -440,7 +462,7 @@
       money(row.cpc) + "</td><td>" + money(row.jingmaiGmv) + "</td>";
     if (!live) cells += "<td>" + integer(row.clicks) + "</td><td>" + rate(row.ctr) + "</td>";
     return (live ? "" : "<td>" + escapeHtml(row.accountId || "—") + "</td>") + cells +
-      "<td>" + money(row.totalOrderAmount) + "</td><td>" + rate(row.realFeeRatio) + "</td><td>" +
+      "<td>" + money(row.totalOrderAmount) + "</td><td>" + feeText(row.spend, row.jingmaiGmv) + "</td><td>" +
       successTag(row.success) + "</td>";
   }
 
@@ -550,6 +572,17 @@
   function renderLiveBoard() {
     if (!boardEl) return;
     var model = liveModel(erpPayload, liveScope());
+    var pageFee = feeOf(scopedRows());
+    var feeHour = shanghaiHour();
+    model.paid = {
+      label: "真实费比",
+      value: pageFee.text,
+      delta: null,
+      unit: "rate",
+      lineMode: "flat",
+      yesterdayHour: [],
+      todayHour: pageFee.ratio == null ? [] : flatHours(pageFee.ratio).slice(0, Math.min(24, feeHour + 1)),
+    };
     var hidden = {};
     hiddenCards().forEach(function (key) { hidden[key] = true; });
     var cards = model.cards.filter(function (card) { return !hidden[card.key]; });
@@ -673,6 +706,8 @@
       stores: accounts.length,
       spend: spend || shop.spend,
       jingmaiGmv: shop.jingmaiGmv,
+      feeSpend: shop.spend,
+      feeGmv: shop.jingmaiGmv,
       totalOrderAmount: orderAmount || shop.totalOrderAmount,
       paidOrders: orders || shop.paidOrders,
       successCount: shop.success === "否" ? 0 : 1,
