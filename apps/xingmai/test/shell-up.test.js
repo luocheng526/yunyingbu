@@ -22,11 +22,11 @@ const items = readFileSync(join(root, "src/modules/home/nav-items.js"), "utf8");
 const pages = readFileSync(join(root, "src/modules/home/pages.js"), "utf8");
 const middleware = readFileSync(join(root, "src/modules/profile/middleware.js"), "utf8");
 
-test("shell pin is 0.1.762 and menus stay collapsed by default", () => {
-  assert.match(nav, /const ASSET_VER = "0\.1\.762"/);
-  assert.match(nav, /0\.1\.762-han-paid-click/);
-  assert.match(pages, /xm-fast-shell 0\.1\.762/);
-  assert.match(middleware, /export const SHELL_ASSET_VER = "0\.1\.762"/);
+test("shell pin is 0.1.763 and menus stay collapsed by default", () => {
+  assert.match(nav, /const ASSET_VER = "0\.1\.763"/);
+  assert.match(nav, /0\.1\.763-han-paid-click/);
+  assert.match(pages, /xm-fast-shell 0\.1\.763/);
+  assert.match(middleware, /export const SHELL_ASSET_VER = "0\.1\.763"/);
   assert.match(middleware, /import \{ currentUser, publicProfile \} from "\.\/auth\.js"/);
   assert.match(nav, /group\.classList\.toggle\("is-open", open\)/);
   assert.match(items, /const open = childActive\(item, activeHref\)/);

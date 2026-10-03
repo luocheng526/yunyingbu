@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.762-han-paid-click — 侧栏实时付费和顶栏页签都走同一条打开页 */
+/* xm-fast-shell 0.1.763-han-paid-click — 侧栏实时付费和顶栏页签都走同一条打开页 */
 (function () {
-  const ASSET_VER = "0.1.762";
+  const ASSET_VER = "0.1.763";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
