@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.762-home-livefilter */
+/* xm-module-home 0.1.786-home-liveclock */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1336,6 +1336,9 @@
         : "") +
       "</select></span></div>" +
       '<div class="xm-hm-live-filter-right">' +
+      '<span class="xm-hm-live-at">更新时间 ' +
+      escapeHtml(liveAtText(state && state.liveAt)) +
+      "</span>" +
       '<button type="button" class="xm-hm-live-heads" data-live-heads>表头设置</button>' +
       '<button type="button" class="xm-hm-live-refresh" data-refresh-live' +
       (liveRefreshing ? " disabled" : "") +
@@ -1938,6 +1941,7 @@
       ".xm-hm-live-filter-lab{font-size:16px;font-weight:600;color:var(--xm-ink);line-height:40px;white-space:nowrap}" +
       ".xm-hm-live-filter-box{position:relative;flex:0 1 320px;min-width:220px;max-width:100%}" +
       ".xm-hm-live-filter-right{display:flex;align-items:center;gap:16px;flex:0 0 auto}" +
+      ".xm-hm-live-at{display:inline-flex;align-items:center;height:32px;padding:0 12px;border:1px solid var(--xm-primary);border-radius:6px;background:var(--xm-primary-soft);color:var(--xm-primary);font-size:13px;line-height:32px;white-space:nowrap}" +
       ".xm-hm-live-heads,.xm-hm-live-refresh{border:0;background:transparent;color:var(--xm-primary);cursor:pointer;padding:0 2px;font:inherit;font-size:14px;line-height:40px;white-space:nowrap}" +
       ".xm-hm-live-refresh:disabled{opacity:.55;cursor:wait}" +
       ".xm-hm-head-pop{position:absolute;top:0;left:0;z-index:9;width:540px;max-width:calc(100vw - 24px);max-height:min(72vh,640px);overflow:auto;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:10px}" +
@@ -2208,7 +2212,7 @@
     hideCardTip();
     hideLineTip(root);
     var feeDraft = liveFeeDraft(root);
-    board.setAttribute("data-hm-js", "0.1.762-home-livefilter");
+    board.setAttribute("data-hm-js", "0.1.786-home-liveclock");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2257,7 +2261,7 @@
     root.querySelector("#xm-hm-note").textContent = gapText
       ? "人管对不上：" + gapText
       : state.view === "live"
-        ? "京麦面板实时金额和实时付费都走星脉 ERP，每5分钟拉一次。"
+        ? "京麦面板实时金额走星脉 ERP。实时付费来自韩梦凯、沈子晗本地机回传，不接星脉。"
         : "数字来自星脉 ERP。";
     root.querySelector("#xm-hm-pop h3").textContent =
       "卡片设置 · " + (state.view === "team" ? "经理团队" : state.view === "chief" ? "主管/储备" : "公司");
@@ -2938,8 +2942,6 @@
     var snap = summaryFrom(snapPack);
     var todayPay = snap.todayPayAmount != null ? snap.todayPayAmount : todaySum.payAmount;
     var yestPay = snap.yesterdayPayAmount != null ? snap.yesterdayPayAmount : yestSum.payAmount;
-    var todayAd = todaySum.totalPromotionCost;
-    var yestAd = yestSum.totalPromotionCost;
     var hourly = (todayPack && todayPack.hourly) || (snapPack && snapPack.hourly) || {};
     var hasHourly = hourly.todayPay && hourly.todayPay.length > 2;
     var yestHour = hasHourly ? padHours(hourly.yesterdayPay, 24) : seriesOf(hourly.yesterdayPay, yestPay);
@@ -2954,19 +2956,15 @@
       todayHour: hasHourly ? todayHour : [],
       hours: hasHourly ? 24 : 0
     };
-    var todayFee = todaySum.promotionRate != null ? todaySum.promotionRate : snap.promotionRate;
-    var yestFee = yestSum.promotionRate;
-    var yestFeeH = yestFee == null ? [] : repeatHours(yestFee, 24);
-    var todayFeeH = todayFee == null ? [] : todayHours(repeatHours(todayFee, 24));
     live.paid = {
       label: "实时费比",
-      value: fmtRate(todayFee),
-      delta: trendOf(todayFee, yestFee),
-      yesterday: todayFeeH.length || yestFeeH.length ? yestFeeH : yestFee == null ? [] : [yestFee, yestFee],
-      today: todayFeeH.length || yestFeeH.length ? todayFeeH : todayFee == null ? [] : [todayFee, todayFee],
-      yesterdayHour: yestFeeH,
-      todayHour: todayFeeH,
-      hours: yestFeeH.length || todayFeeH.length ? 24 : 0,
+      value: "—",
+      delta: 0,
+      yesterday: [],
+      today: [],
+      yesterdayHour: [],
+      todayHour: [],
+      hours: 0,
       unit: "rate",
       lineMode: "flat"
     };
@@ -2981,19 +2979,84 @@
         return {
           shop: row.shopName,
           liveAmount: fmtMoney(pay),
-          paidAmount: fmtMoney(row.totalPromotionCost),
+          paidAmount: "—",
           profit: fmtMoney(row.profit),
-          roi: fmtRoi(row.payAmount != null ? row.payAmount : pay, row.totalPromotionCost),
-          paidDeal: fmtMoney(pay),
-          feeRate: fmtRate(row.promotionRate)
+          roi: "—",
+          paidDeal: "—",
+          feeRate: "—"
         };
       });
     live.summary = { channels: 1, shops: live.shops.length };
     live.cards = [
-      { key: "ad", label: "推广花费 (支付预估)", value: fmtMoney(todayAd), extra: todaySum.promotionRate != null ? "推广占比 " + fmtRate(todaySum.promotionRate) : "" },
-      { key: "roi", label: "付费成交ROI", value: fmtRoi(todaySum.payAmount != null ? todaySum.payAmount : todayPay, todayAd) },
-      { key: "livePay", label: "实时付费成交额", value: fmtMoney(todayPay) },
-      { key: "livePaid", label: "实时付费接入店铺数量", value: fmtInt(live.shops.length) }
+      { key: "ad", label: "推广花费 (支付预估)", value: "—" },
+      { key: "roi", label: "付费成交ROI", value: "—" },
+      { key: "livePay", label: "实时付费成交额", value: "—" },
+      { key: "livePaid", label: "实时付费接入店铺数量", value: "0" }
+    ];
+    return live;
+  }
+  function emptyLocalPaid() {
+    return { ok: true, source: "han-shen-local", updatedAt: "", summary: {}, records: [] };
+  }
+  function scopeLocalPaid(pack, keys) {
+    var src = pack || emptyLocalPaid();
+    if (!keys) {
+      return src;
+    }
+    return Object.assign({}, src, {
+      records: (src.records || []).filter(function (row) {
+        var name = normShopName((row && (row.shopName || row.shop)) || "");
+        var id = normShopId(row && (row.shopId || row.id));
+        return (name && keys["name:" + name]) || (id && keys["id:" + id]);
+      })
+    });
+  }
+  function localShopPaid(row) {
+    var pay = row && (row.paidDeal != null ? row.paidDeal : row.payAmount);
+    var spend = row && (row.paidAmount != null ? row.paidAmount : row.totalPromotionCost);
+    return {
+      paidAmount: fmtMoney(spend),
+      roi: fmtRoi(pay, spend),
+      paidDeal: fmtMoney(pay),
+      feeRate: fmtRate(row && row.feeRate != null ? row.feeRate : row && row.promotionRate)
+    };
+  }
+  function fillLocalPaid(live, local) {
+    live = live || blankLive();
+    var rows = (local && local.records) || [];
+    if (!rows.length) {
+      return live;
+    }
+    var map = {};
+    rows.forEach(function (row) {
+      var name = String((row && (row.shopName || row.shop)) || "").trim();
+      if (name) {
+        map[name] = row;
+      }
+    });
+    var seen = {};
+    live.shops = (live.shops || []).map(function (shop) {
+      seen[shop.shop] = true;
+      var hit = map[shop.shop];
+      return hit ? Object.assign({}, shop, localShopPaid(hit)) : shop;
+    });
+    rows.forEach(function (row) {
+      var name = String((row && (row.shopName || row.shop)) || "").trim();
+      if (!name || seen[name]) {
+        return;
+      }
+      seen[name] = true;
+      live.shops.push(Object.assign({ shop: name, liveAmount: "—" }, localShopPaid(row)));
+    });
+    var sum = (local && local.summary) || {};
+    live.paid = Object.assign({}, live.paid || {}, {
+      value: sum.feeRate != null ? fmtRate(sum.feeRate) : "—"
+    });
+    live.cards = [
+      { key: "ad", label: "推广花费 (支付预估)", value: sum.spend != null ? fmtMoney(sum.spend) : "—" },
+      { key: "roi", label: "付费成交ROI", value: sum.roi != null ? String(sum.roi) : "—" },
+      { key: "livePay", label: "实时付费成交额", value: sum.paidDeal != null ? fmtMoney(sum.paidDeal) : "—" },
+      { key: "livePaid", label: "实时付费接入店铺数量", value: fmtInt(rows.length) }
     ];
     return live;
   }
@@ -3350,8 +3413,32 @@
       var LIVE_REFRESH_MS = 5 * 60 * 1000;
       cardSetOpen = false;
       paint(root, state);
-      function shanghaiClock() {
-        return new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
+      function shanghaiClock(date) {
+        var d = date instanceof Date ? date : new Date();
+        var parts = new Intl.DateTimeFormat("en-GB", {
+          timeZone: "Asia/Shanghai",
+          hourCycle: "h23",
+          year: "numeric",
+          month: "numeric",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit"
+        }).formatToParts(d);
+        function part(type) {
+          var hit = "";
+          for (var i = 0; i < parts.length; i += 1) {
+            if (parts[i].type === type) {
+              hit = parts[i].value;
+              break;
+            }
+          }
+          return hit;
+        }
+        function pad2(n) {
+          return String(n).length < 2 ? "0" + n : String(n);
+        }
+        return part("year") + "/" + Number(part("month")) + "/" + Number(part("day")) + " " + pad2(Number(part("hour"))) + ":" + part("minute") + ":" + part("second");
       }
       function liveScopeKeys() {
         if (!homeUserName(state.user)) {
@@ -3374,19 +3461,32 @@
           state.ownCards = state.cards;
         }
       }
-      function applyLive(todayPack, yestPack, snapPack) {
+      function applyLive(todayPack, yestPack, snapPack, localPack, stampClock) {
         state.livePacks = { today: todayPack, yest: yestPack, snap: snapPack };
+        if (localPack) {
+          state.localPaid = localPack;
+        }
         var keys = liveScopeKeys();
         var today = scopePack(todayPack, keys);
         var yest = scopePack(yestPack, keys);
         var snap = scopePack(snapPack, keys);
-        state.live = liveFromErp(today, yest, snap);
+        var local = scopeLocalPaid(localPack || state.localPaid || emptyLocalPaid(), keys);
+        state.live = fillLocalPaid(liveFromErp(today, yest, snap), local);
         state.shops = state.live.shops;
-        state.liveAt = shanghaiClock();
-        state.source = "xingmai-erp";
+        if (stampClock || !state.liveAt) {
+          state.liveAt = shanghaiClock();
+        }
+        state.source = "han-shen-local";
         paint(root, state);
       }
-      function pullLiveKpis() {
+      function pullLocalPaid() {
+        return api("/api/home/local-paid").then(function (data) {
+          return data && data.ok ? data : emptyLocalPaid();
+        }).catch(function () {
+          return emptyLocalPaid();
+        });
+      }
+      function pullLiveKpis(localPack) {
         var today = shanghaiYmd(0);
         var yest = shanghaiYmd(1);
         return Promise.all([
@@ -3395,7 +3495,7 @@
           fetchCatalogPack()
         ]).then(function (pack) {
           if (!dead) {
-            applyLive(pack[0], pack[1], pack[2]);
+            applyLive(pack[0], pack[1], pack[2], localPack, true);
           }
         }).catch(function () {
           if (!dead) {
@@ -3460,20 +3560,29 @@
           clearLiveShown(state);
           paint(root, state);
         }
-        return api("/api/home/erp-paid").then(function (data) {
+        return Promise.all([
+          api("/api/home/erp-paid").catch(function () {
+            return null;
+          }),
+          pullLocalPaid()
+        ]).then(function (pair) {
           if (dead) {
             return;
           }
+          var data = pair[0];
+          var local = pair[1] || emptyLocalPaid();
           if (data && data.ok && (data.summary || (data.records && data.records.length))) {
             var todayPack = { records: data.records || [], summary: data.summary || {}, hourly: data.hourly };
             var yestPack = { records: [], summary: data.yesterday || {}, hourly: data.hourly };
-            applyLive(todayPack, yestPack, todayPack);
+            applyLive(todayPack, yestPack, todayPack, local, true);
             return;
           }
-          return pullLiveKpis();
+          return pullLiveKpis(local);
         }).catch(function () {
           if (!dead) {
-            return pullLiveKpis();
+            return pullLocalPaid().then(function (local) {
+              return pullLiveKpis(local);
+            });
           }
         });
       }

@@ -172,7 +172,11 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /label: "京麦面板实时金额"/);
   assert.doesNotMatch(homeJs, /label: "实时销售指数"/);
   assert.match(homeJs, /key: "livePaid", label: "实时付费接入店铺数量"/);
-  assert.match(homeJs, /label: "实时付费接入店铺数量", value: fmtInt\(live.shops.length\)/);
+  assert.match(homeJs, /label: "实时付费接入店铺数量", value: "0"/);
+  assert.match(homeJs, /function fillLocalPaid/);
+  assert.match(homeJs, /\/api\/home\/local-paid/);
+  assert.match(homeJs, /xm-hm-live-at">更新时间 /);
+  assert.match(homeJs, /实时付费来自韩梦凯、沈子晗本地机回传，不接星脉/);
   assert.match(homeJs, /\/api\/home\/erp-paid/);
   assert.match(homeJs, /function seriesOf/);
   assert.match(homeJs, /function todayHours/);
