@@ -1,4 +1,4 @@
-(function () {var VERSION = "20261004-feered";
+(function () {var VERSION = "20261004-feegt";
 function escapeHtml(value) {return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");}
 function money(value) {return (Number(value) || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });}
 function integer(value) {return (Number(value) || 0).toLocaleString("zh-CN");}
@@ -15,7 +15,7 @@ function liveInt(value) {var n = liveNum(value);return n == null ? "—" : Math.
 function clockText(value) {var m = String(value || "").match(/(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/);return m ? m[1] + " " + m[2] : "";}
 function shopStamp(row) {return clockText(row && row.capturedAt) || (row && row.date) || "";}
 function feeTargetOf(store) {try {var n = Number(JSON.parse(localStorage.getItem("han-fee-targets") || "{}")[store]);return isFinite(n) && n >= 0 ? n : null;} catch (_err) {return null;}}
-function feeHot(row) {var target = feeTargetOf(row.store);var n = feeRatio(row.spend, row.jingmaiGmv);return target != null && n != null && n * 100 > target;}
+function feeHot(row) {var target = feeTargetOf(row.store);var n = feeRatio(row.spend, row.jingmaiGmv);return target != null && n != null && (target>1?n*100:n)>target;}
 function shanghaiHour() {var text = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Shanghai", hour: "2-digit", hourCycle: "h23" }).format(new Date());var hour = Number(String(text).slice(0, 2));return hour === 24 ? 0 : hour || 0;}
 function flatHours(rate) {var out = [];var n = Number(rate) || 0;for (var i = 0; i < 24; i += 1) out.push(n);return out;}
 function shopKey(value) {return String(value || "").replace(/\s+/g, "").toLowerCase();}
