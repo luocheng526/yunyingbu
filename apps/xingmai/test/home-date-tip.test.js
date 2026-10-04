@@ -174,6 +174,9 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /key: "livePaid", label: "实时付费接入店铺数量"/);
   assert.match(homeJs, /label: "实时付费接入店铺数量", value: "0"/);
   assert.match(homeJs, /function fillLocalPaid/);
+  assert.match(homeJs, /function liveBoardOf/);
+  assert.match(homeJs, /function livePickKeys/);
+  assert.match(homeJs, /function seesAllLiveShops/);
   assert.match(homeJs, /\/api\/home\/local-paid/);
   assert.match(homeJs, /xm-hm-live-at">更新时间 /);
   assert.match(homeJs, /实时付费来自韩梦凯、沈子晗本地机回传，不接星脉/);

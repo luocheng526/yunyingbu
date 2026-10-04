@@ -75,6 +75,7 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
       pick("fmtRoi") +
       pick("blankLive") +
       pick("escapeHtml") +
+      pick("sumLocalPaid") +
       homeJs.slice(start, end) +
       "return {fillLocalPaid,emptyLocalPaid};"
   )();
