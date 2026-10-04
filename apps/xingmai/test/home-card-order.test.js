@@ -107,11 +107,12 @@ test("live shop table can filter by duty team or shop", () => {
   const fns = new Function(
     pick("homeUserName") +
       pick("isHomeBoss") +
+      pick("seesAllLiveShops") +
       pick("normShopName") +
       pick("liveFilterShopNames") +
       pick("dutyTeamList") +
       pick("visibleDutyTeams") +
-      "return {isHomeBoss,visibleDutyTeams};"
+      "return {isHomeBoss,seesAllLiveShops,visibleDutyTeams};"
   )();
   const state = {
     user: { displayName: "罗成" },
@@ -121,10 +122,17 @@ test("live shop table can filter by duty team or shop", () => {
   assert.equal(fns.isHomeBoss({ displayName: "罗成" }), true);
   assert.equal(fns.isHomeBoss({ displayName: "韩梦凯" }), true);
   assert.equal(fns.isHomeBoss({ displayName: "沈子晗" }), true);
+  assert.equal(fns.seesAllLiveShops({ displayName: "罗成" }), true);
+  assert.equal(fns.seesAllLiveShops({ displayName: "韩梦凯" }), false);
+  assert.equal(fns.seesAllLiveShops({ displayName: "沈子晗" }), false);
   assert.deepEqual(fns.visibleDutyTeams(state, [{ shop: "A店" }]).map((t) => t.name), ["沈子晗", "韩梦凯", "毛永超"]);
   assert.deepEqual(
     fns.visibleDutyTeams({ ...state, user: { displayName: "王博" } }, [{ shop: "A店" }]).map((t) => t.name),
     ["沈子晗"]
+  );
+  assert.deepEqual(
+    fns.visibleDutyTeams({ ...state, user: { displayName: "韩梦凯" } }, [{ shop: "B店" }]).map((t) => t.name),
+    ["韩梦凯"]
   );
 });
 

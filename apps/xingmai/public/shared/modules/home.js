@@ -753,6 +753,18 @@
     var n = homeUserName(user);
     return n === "罗成" || n === "韩梦凯" || n === "沈子晗";
   }
+  function seesAllLiveShops(user) {
+    return homeUserName(user) === "罗成";
+  }
+  function liveDutyKeys(state) {
+    if (!homeUserName(state && state.user)) {
+      return {};
+    }
+    if (seesAllLiveShops(state.user)) {
+      return null;
+    }
+    return state && state.dutyReady ? state.dutyKeys || {} : {};
+  }
   function findRosterPerson(people, user) {
     var n = homeUserName(user);
     if (!n) {
@@ -1220,7 +1232,7 @@
   }
   function visibleDutyTeams(state, allShops) {
     var list = dutyTeamList(state);
-    if (isHomeBoss(state && state.user)) {
+    if (seesAllLiveShops(state && state.user)) {
       return list;
     }
     var allow = {};
@@ -1247,6 +1259,34 @@
       });
     });
     return map;
+  }
+  function livePickKeys(state, dutyKeys, pick) {
+    var duty = dutyKeys === undefined ? liveDutyKeys(state) : dutyKeys;
+    pick = pick || liveFilter();
+    var names = null;
+    if (pick.shop) {
+      names = {};
+      names[normShopName(pick.shop)] = true;
+    } else if (pick.team) {
+      names = shopsInDutyTeam(state, pick.team);
+    }
+    if (!names) {
+      return duty;
+    }
+    var keys = {};
+    var any = false;
+    Object.keys(names).forEach(function (raw) {
+      var name = normShopName(raw);
+      if (!name) {
+        return;
+      }
+      if (duty && !duty["name:" + name]) {
+        return;
+      }
+      keys["name:" + name] = true;
+      any = true;
+    });
+    return any ? keys : {};
   }
   function filterLiveShops(shops, state) {
     var pick = liveFilter();
@@ -2197,9 +2237,11 @@
     var cards = arrangeCards(companySrc).filter(function (card) {
       return hide.indexOf(card.key) === -1;
     });
-    var live = state.live || blankLive();
+    var board = liveBoardOf(state);
+    var live = board.live || blankLive();
+    state.shownLive = live;
     var allShops = state.shops && state.shops.length ? state.shops : [];
-    var shops = filterLiveShops(allShops, state);
+    var shops = board.shops && board.shops.length ? board.shops : filterLiveShops(allShops, state);
     var teams =
       state.view === "chief"
         ? filterOwnChiefs(state.chiefs && state.chiefs.length ? state.chiefs : blankRoleTeams("主管"), state.user, state.people, state.dutyShops)
@@ -2935,13 +2977,73 @@
     }
     return fallback == null ? [] : [fallback, fallback];
   }
+  function payOfRow(row) {
+    if (!row) {
+      return null;
+    }
+    if (row.todayPayAmount != null && row.todayPayAmount !== "") {
+      return asNum(row.todayPayAmount);
+    }
+    return asNum(row.payAmount);
+  }
+  function payOfPack(pack) {
+    var rows = (pack && pack.records) || [];
+    if (rows.length) {
+      var total = 0;
+      var hit = false;
+      rows.forEach(function (row) {
+        var n = payOfRow(row);
+        if (n != null) {
+          total += n;
+          hit = true;
+        }
+      });
+      if (hit) {
+        return total;
+      }
+    }
+    var sum = summaryFrom(pack);
+    return sum.todayPayAmount != null ? sum.todayPayAmount : sum.payAmount;
+  }
+  function sumLocalPaid(records) {
+    var spend = 0;
+    var deal = 0;
+    var n = 0;
+    (records || []).forEach(function (row) {
+      var s = asNum(row && (row.paidAmount != null ? row.paidAmount : row.totalPromotionCost));
+      var p = asNum(row && (row.paidDeal != null ? row.paidDeal : row.payAmount));
+      if (s != null) {
+        spend += s;
+      }
+      if (p != null) {
+        deal += p;
+      }
+      n += 1;
+    });
+    return n
+      ? { spend: spend, paidDeal: deal, feeRate: deal ? spend / deal : null, roi: spend ? deal / spend : null, shops: n }
+      : {};
+  }
+  function liveBoardOf(state, dutyKeys, pick) {
+    var packs = state && state.livePacks;
+    var keys = livePickKeys(state, dutyKeys === undefined ? liveDutyKeys(state) : dutyKeys, pick);
+    if (!packs) {
+      var fallback = (state && state.live) || blankLive();
+      return {
+        live: fallback,
+        shops: filterLiveShops(fallback.shops || (state && state.shops) || [], state)
+      };
+    }
+    var live = fillLocalPaid(
+      liveFromErp(scopePack(packs.today, keys), scopePack(packs.yest, keys), scopePack(packs.snap, keys)),
+      scopeLocalPaid((state && state.localPaid) || emptyLocalPaid(), keys)
+    );
+    return { live: live, shops: live.shops || [] };
+  }
   function liveFromErp(todayPack, yestPack, snapPack) {
     var live = blankLive();
-    var todaySum = summaryFrom(todayPack);
-    var yestSum = summaryFrom(yestPack);
-    var snap = summaryFrom(snapPack);
-    var todayPay = snap.todayPayAmount != null ? snap.todayPayAmount : todaySum.payAmount;
-    var yestPay = snap.yesterdayPayAmount != null ? snap.yesterdayPayAmount : yestSum.payAmount;
+    var todayPay = payOfPack(todayPack && todayPack.records && todayPack.records.length ? todayPack : snapPack);
+    var yestPay = payOfPack(yestPack);
     var hourly = (todayPack && todayPack.hourly) || (snapPack && snapPack.hourly) || {};
     var hasHourly = hourly.todayPay && hourly.todayPay.length > 2;
     var yestHour = hasHourly ? padHours(hourly.yesterdayPay, 24) : seriesOf(hourly.yesterdayPay, yestPay);
@@ -3048,13 +3150,13 @@
       seen[name] = true;
       live.shops.push(Object.assign({ shop: name, liveAmount: "—" }, localShopPaid(row)));
     });
-    var sum = (local && local.summary) || {};
+    var sum = sumLocalPaid(rows);
     live.paid = Object.assign({}, live.paid || {}, {
       value: sum.feeRate != null ? fmtRate(sum.feeRate) : "—"
     });
     live.cards = [
       { key: "ad", label: "推广花费 (支付预估)", value: sum.spend != null ? fmtMoney(sum.spend) : "—" },
-      { key: "roi", label: "付费成交ROI", value: sum.roi != null ? String(sum.roi) : "—" },
+      { key: "roi", label: "付费成交ROI", value: sum.roi != null ? fmtRoi(sum.paidDeal, sum.spend) : "—" },
       { key: "livePay", label: "实时付费成交额", value: sum.paidDeal != null ? fmtMoney(sum.paidDeal) : "—" },
       { key: "livePaid", label: "实时付费接入店铺数量", value: fmtInt(rows.length) }
     ];
@@ -3466,7 +3568,7 @@
         if (localPack) {
           state.localPaid = localPack;
         }
-        var keys = liveScopeKeys();
+        var keys = liveDutyKeys(state);
         var today = scopePack(todayPack, keys);
         var yest = scopePack(yestPack, keys);
         var snap = scopePack(snapPack, keys);
@@ -3815,7 +3917,7 @@
           return;
         }
         var slots = Number(chartEl.getAttribute("data-hours")) || 24;
-        var hero = (state.live && state.live.hero) || {};
+        var hero = ((state.shownLive || state.live) && (state.shownLive || state.live).hero) || {};
         var yestHour = hero.yesterdayHour || [];
         var todayHour = hero.todayHour || [];
         var yestCum = hero.yesterday || [];
