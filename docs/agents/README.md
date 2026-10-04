@@ -4,6 +4,8 @@
 
 **发布纪律（现行）：** [00-release-rules.md](00-release-rules.md)。全站一条号 `0.1.N`，交单前 `GET /api/releases/next`，`POST /api/releases` 按提交时间排队，禁止上移下移，只等网页第 1 位「通过」。只有版本发布中心能落地。补丁：[00-release-doc-only.md](00-release-doc-only.md)、[00-release-doc-patch.md](00-release-doc-patch.md)。
 
+**主脑口令（2026-10-04）：** 首页实时、韩梦凯实时付费、沈子晗付费中心、数据中心实时付费都走**本地接口**（韩/沈本地机回传），不是星脉 BI。全文 [00-local-paid.md](00-local-paid.md)。首页、数据中心、沈子晗、韩梦凯四个对话框必须先读。
+
 | Agent | 提示词文件 | 站点路径 | 只许改的目录 |
 |-------|------------|----------|----------------|
 | 首页 | [01-home.md](agents/01-home.md) | `/` | `apps/xingmai/public/index.html` `shared/` `src/modules/home/` |
