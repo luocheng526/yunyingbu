@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getHomeErpKpis } from "./erp-kpis.js";
 import { getHomeErpPaid } from "./erp-paid.js";
+import { getHomeLocalPaid } from "./local-paid.js";
 
 const homeJsPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -31,6 +32,10 @@ export function homeRouter() {
         error: err.message || "星脉 ERP 调用失败"
       });
     }
+  });
+
+  router.get("/local-paid", (_req, res) => {
+    res.json(getHomeLocalPaid());
   });
 
   router.get("/erp-paid", async (_req, res) => {

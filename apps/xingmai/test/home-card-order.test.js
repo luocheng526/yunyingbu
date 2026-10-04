@@ -81,6 +81,7 @@ test("live shop table can filter by duty team or shop", () => {
   assert.match(homeJs, /data-live-filter="pick"/);
   assert.match(homeJs, /店铺列表/);
   assert.match(homeJs, /责权归属/);
+  assert.match(homeJs, /xm-hm-live-at">更新时间 /);
   assert.doesNotMatch(homeJs, /liveFilterOption\("", "全选"/);
   assert.match(homeJs, /optgroup label="责权团队"/);
   assert.match(homeJs, /optgroup label="店铺"/);

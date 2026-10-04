@@ -36,6 +36,9 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /真实费比/);
     assert.match(text, /店铺列表/);
     assert.match(text, /责权归属/);
+    assert.match(text, /xm-hm-live-at">更新时间 /);
+    assert.match(text, /\/api\/home\/local-paid/);
+    assert.match(text, /han-shen-local/);
     assert.doesNotMatch(text, /各店费比目标在表头列里单独设置/);
     assert.match(text, /\.xm-hm-table thead th\{text-align:center\}/);
     assert.match(text, /label: "费比监控"/);
