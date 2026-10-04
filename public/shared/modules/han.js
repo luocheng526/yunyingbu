@@ -1535,7 +1535,7 @@
         if (dead || !window.HanCenter) return;
         stop = window.HanCenter.mount(root, hanBoard) || function () {};
       }
-      const centerVer = "20261004-shopt";
+      const centerVer = "20261004-feehot";
       if (window.HanCenter && window.HanCenter.version === centerVer) {
         start();
       } else {
