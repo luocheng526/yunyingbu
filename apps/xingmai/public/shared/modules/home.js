@@ -2237,11 +2237,11 @@
     var cards = arrangeCards(companySrc).filter(function (card) {
       return hide.indexOf(card.key) === -1;
     });
-    var board = liveBoardOf(state);
-    var live = board.live || blankLive();
+    var liveBoard = liveBoardOf(state);
+    var live = liveBoard.live || blankLive();
     state.shownLive = live;
     var allShops = state.shops && state.shops.length ? state.shops : [];
-    var shops = board.shops && board.shops.length ? board.shops : filterLiveShops(allShops, state);
+    var shops = liveBoard.shops && liveBoard.shops.length ? liveBoard.shops : filterLiveShops(allShops, state);
     var teams =
       state.view === "chief"
         ? filterOwnChiefs(state.chiefs && state.chiefs.length ? state.chiefs : blankRoleTeams("主管"), state.user, state.people, state.dutyShops)

@@ -23,6 +23,12 @@ function pick(name) {
   throw new Error("unclosed " + name);
 }
 
+test("paint keeps the DOM board node when building the filtered live board", () => {
+  assert.match(homeJs, /var liveBoard = liveBoardOf\(state\)/);
+  assert.doesNotMatch(homeJs, /var board = liveBoardOf\(state\)/);
+  assert.match(homeJs, /board\.setAttribute\("data-hm-js"/);
+});
+
 test("罗成 sees all live shops; 韩梦凯 and 沈子晗 stay on duty shops", () => {
   const fns = new Function(
     pick("homeUserName") +
