@@ -21,6 +21,18 @@ async function withServer(fn) {
   }
 }
 
+function rechargeStamp(offsetDays, clock) {
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  const [year, month, day] = today.split("-").map(Number);
+  const shifted = new Date(Date.UTC(year, month - 1, day + offsetDays));
+  return `${shifted.toISOString().slice(0, 10)} ${clock}`;
+}
+
 async function json(base, pathname, options) {
   const res = await fetch(`${base}${pathname}`, options);
   const text = await res.text();
@@ -1229,7 +1241,7 @@ test("GET/POST /api/han/worker feeds 付费中心 and 充值规则", async () =>
         subaccounts: [
           { 店铺名称: "德系甄选好物企官店", 京准通主账户ID: "100", 子账号ID: "200", 子账号名称: "企官-主投", 花费: 800, ROI: 2.4, 余额: 40, 单量: 20 },
         ],
-        recharges: [{ 店铺名称: "德系甄选好物企官店", 子账号ID: "200", 子账号名称: "企官-主投", 金额: 100, 时间: "2026-09-25 09:00", 备注: "一档" }],
+        recharges: [{ 店铺名称: "德系甄选好物企官店", 子账号ID: "200", 子账号名称: "企官-主投", 金额: 100, 时间: rechargeStamp(0, "09:00"), 备注: "一档" }],
       }),
     });
     assert.equal(pushed.res.status, 201);
@@ -1336,8 +1348,8 @@ test("GET/POST /api/han/worker feeds 付费中心 and 充值规则", async () =>
           { 子账号ID: "200", 子账号名称: "企官-主投", 花费: 900, ROI: 2.5, 余额: 30 },
         ] }],
         充值记录: [
-          { 店铺名称: "德系甄选好物企官店", 子账号ID: "200", 充值金额: 100, 充值时间: "2026-09-25 11:00", executionId: "han-1", ruleCode: "tier1", result: "success", configVersion: 2 },
-          { 店铺名称: "德系甄选好物企官店", 子账号ID: "200", 充值金额: 100, 充值时间: "2026-09-25 11:00", executionId: "han-1", ruleCode: "tier1", result: "success", configVersion: 2 },
+          { 店铺名称: "德系甄选好物企官店", 子账号ID: "200", 充值金额: 100, 充值时间: rechargeStamp(0, "11:00"), executionId: "han-1", ruleCode: "tier1", result: "success", configVersion: 2 },
+          { 店铺名称: "德系甄选好物企官店", 子账号ID: "200", 充值金额: 100, 充值时间: rechargeStamp(0, "11:00"), executionId: "han-1", ruleCode: "tier1", result: "success", configVersion: 2 },
         ],
       }),
     });
@@ -1485,10 +1497,10 @@ test("nested shop and subaccount recharge rows show on the shop drill-down", asy
                 子账号名称: "风巢家居专营-博品2",
                 花费: 135.97,
                 余额: 564.03,
-                充值记录: [{ 充值金额: 300, 充值时间: "2026-10-03 12:10", 账户余额: 864.03, ruleCode: "tier1", result: "success" }],
+                充值记录: [{ 充值金额: 300, 充值时间: rechargeStamp(0, "12:10"), 账户余额: 864.03, ruleCode: "tier1", result: "success" }],
               },
             ],
-            充值记录: [{ 充值金额: 500, 充值时间: "2026-10-03 09:00", 账户余额: 1000, 子账号名称: "风巢-创2" }],
+            充值记录: [{ 充值金额: 500, 充值时间: rechargeStamp(0, "09:00"), 账户余额: 1000, 子账号名称: "风巢-创2" }],
           },
         ],
       }),
@@ -1504,6 +1516,27 @@ test("nested shop and subaccount recharge rows show on the shop drill-down", asy
     assert.equal(nested.subAccountId, "206456235676909569");
     assert.equal(nested.balance, 864.03);
     assert.equal(shop.body.recharges.some((row) => row.amount === 500 && row.subAccountName === "风巢-创2"), true);
+  });
+});
+
+test("recharge records older than yesterday are dropped", async () => {
+  await withServer(async (base) => {
+    const pushed = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [{ 店铺名称: "两天店", 京准通主账户ID: "88001" }],
+        充值记录: [
+          { 店铺名称: "两天店", 充值金额: 20, 充值时间: rechargeStamp(0, "10:00"), executionId: "keep-today" },
+          { 店铺名称: "两天店", 充值金额: 30, 充值时间: rechargeStamp(-1, "10:00"), executionId: "keep-yesterday" },
+          { 店铺名称: "两天店", 充值金额: 40, 充值时间: rechargeStamp(-3, "10:00"), executionId: "drop-old" },
+        ],
+      }),
+    });
+    assert.equal(pushed.res.status, 201);
+    const shop = await json(base, "/api/han/worker?view=shop&store=" + encodeURIComponent("两天店"));
+    const ids = shop.body.recharges.map((row) => row.executionId).sort();
+    assert.deepEqual(ids, ["keep-today", "keep-yesterday"]);
   });
 });
 
@@ -1527,7 +1560,7 @@ test("recharge lines are found under other keys and do not treat a subaccount as
                 花费: 220,
                 余额: 0,
                 充值流水: [
-                  { 充值金额: "300元", 充值时间: "2026-10-03 18:10", 账户余额: 520, result: "success", ruleCode: "tier1" },
+                  { 充值金额: "300元", 充值时间: rechargeStamp(0, "18:10"), 账户余额: 520, result: "success", ruleCode: "tier1" },
                 ],
               },
               {
@@ -1535,14 +1568,14 @@ test("recharge lines are found under other keys and do not treat a subaccount as
                 子账号名称: "RASW个护电器-快6",
                 花费: 1300,
                 充值纪录: JSON.stringify([
-                  { amount: 80, time: "2026-10-03 11:02", balance: 90, 执行结果: "success" },
+                  { amount: 80, time: rechargeStamp(0, "11:02"), balance: 90, 执行结果: "success" },
                 ]),
               },
             ],
           },
         ],
         logs: {
-          one: { executionId: "exec-rasw-1", 充值金额: 50, 充值时间: "2026-10-03 16:00", 子账号名称: "RASW个护-快13" },
+          one: { executionId: "exec-rasw-1", 充值金额: 50, 充值时间: rechargeStamp(0, "16:00"), 子账号名称: "RASW个护-快13" },
         },
       }),
     });

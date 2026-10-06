@@ -787,6 +787,30 @@ function rechargeKey(row) {
   return ["at", row.store, row.subAccountId, row.chargedAt, row.amount].join("\0");
 }
 
+function rechargeDay(value) {
+  const match = String(value || "").match(/(\d{4})-(\d{2})-(\d{2})/);
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : "";
+}
+
+function rechargeCutoff(now = new Date()) {
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  const [year, month, day] = today.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day - 1)).toISOString().slice(0, 10);
+}
+
+function keepRecentRecharges(rows, now = new Date()) {
+  const cutoff = rechargeCutoff(now);
+  return (rows || []).filter((row) => {
+    const day = rechargeDay(row.chargedAt);
+    return Boolean(day) && day >= cutoff;
+  });
+}
+
 function withParentIds(item, parent) {
   const store = pick(item, ["店铺名称", "store", "店铺", "店名"]) || pick(parent, ["店铺名称", "store", "店铺", "店名"]);
   const accountId = pick(item, ["京准通主账户ID", "accountId", "主账户ID"]) || pick(parent, ["京准通主账户ID", "accountId", "主账户ID"]);
@@ -1135,7 +1159,7 @@ export function createWorkerMethods(db, ensure) {
         store: shop,
         shop: found,
         subaccounts,
-        recharges: state.recharges.filter((row) => row.store === shop || (accountId && row.accountId === accountId)),
+        recharges: keepRecentRecharges(state.recharges.filter((row) => row.store === shop || (accountId && row.accountId === accountId))),
       };
     },
 
@@ -1315,11 +1339,11 @@ export function createWorkerMethods(db, ensure) {
       state.shops = state.shops.filter((row) => !shopNames.has(row.store)).concat(shops);
       const touchedSubs = new Set(subs.map((row) => row.store));
       state.subs = state.subs.filter((row) => !touchedSubs.has(row.store)).concat(subs);
-      const rechargeMap = new Map(state.recharges.map((row) => [rechargeKey(row), row]));
+      const rechargeMap = new Map(keepRecentRecharges(state.recharges).map((row) => [rechargeKey(row), row]));
       for (const row of recharges) {
         rechargeMap.set(rechargeKey(row), row);
       }
-      state.recharges = [...rechargeMap.values()].slice(-500);
+      state.recharges = keepRecentRecharges([...rechargeMap.values()]);
       if (Array.isArray(body.店铺状态) || Array.isArray(body.statuses)) {
         applyShopStatuses(state, body, false);
       }
