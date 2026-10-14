@@ -1531,11 +1531,65 @@
       root.innerHTML = page(title, "正在打开…", "");
       let stop = function () {};
       let dead = false;
+      function bindDing() {
+        const meta = root.querySelector(".han-paid-meta");
+        if (!meta || meta.querySelector("#han-ding-setup")) return;
+        if (!document.getElementById("han-ding-css")) {
+          const style = document.createElement("style");
+          style.id = "han-ding-css";
+          style.textContent = ".han-ding-setup{display:flex;align-items:center;gap:6px;margin-left:8px}.han-ding-setup[hidden]{display:none!important}.han-ding-setup input{width:260px;height:28px}#han-paid-board .xm-hm-live-charts{display:grid;grid-template-columns:1fr 1fr;gap:20px}#han-paid-board .xm-hm-chart{background:#fff;border:1px solid #f0f0f0;border-radius:8px;box-shadow:0 4px 16px #0000000f;padding:14px 16px 10px;min-width:0}#han-paid-board .xm-hm-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#8c8c8c;font-size:12px}#han-paid-board .xm-hm-legs{display:inline-flex;align-items:center;gap:10px;color:#8c8c8c;font-size:12px}#han-paid-board .xm-hm-legs i{width:10px;height:10px;border-radius:50%;display:inline-block}#han-paid-board .xm-hm-legs i.is-yest{background:#91caff}#han-paid-board .xm-hm-legs i.is-today{background:#ffa39e}#han-paid-board .xm-hm-index-num{margin:8px 0 6px;font-size:28px;font-weight:700;color:#1677ff;line-height:1.2}#han-paid-table .is-fee-hot{color:#cf1322}.han-fee-target{width:72px}#han-paid-board .xm-hm-trend{margin-top:6px;min-height:1.2em;font-size:12px;color:#8c8c8c}#han-paid-board .xm-hm-trend.is-up{color:#cf1322}#han-paid-board .xm-hm-trend.is-down{color:#389e0d}#han-paid-board .xm-hm-chart-sub{margin:10px 0 0;color:#8c8c8c;font-size:12px}#han-paid-board .xm-hm-line{display:block;width:100%;height:180px;margin-top:8px}#han-paid-board .xm-hm-live-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;width:100%}#han-paid-board .xm-hm-card{background:#fff;border:1px solid #f0f0f0;border-radius:8px;box-shadow:0 4px 16px #0000000f;padding:12px 14px 10px;min-height:104px;text-align:center}#han-paid-board .xm-hm-value{margin-top:8px;min-height:1.2em;font-size:22px;font-weight:700;color:#262626}@media (max-width:1100px){#han-paid-board .xm-hm-live-charts,#han-paid-board .xm-hm-live-cards{grid-template-columns:1fr 1fr}}";
+          document.head.appendChild(style);
+        }
+        const form = document.createElement("form");
+        form.id = "han-ding-setup";
+        form.className = "han-ding-setup";
+        form.hidden = true;
+        form.innerHTML = '<input id="han-ding-webhook" type="url" maxlength="500" placeholder="钉钉机器人 Webhook" autocomplete="off" spellcheck="false" /><button type="submit">保存钉钉提醒</button>';
+        form.addEventListener("submit", function (event) {
+          event.preventDefault();
+          const input = form.querySelector("#han-ding-webhook");
+          const webhook = input ? input.value.trim() : "";
+          const status = root.querySelector("#han-paid-status") || root.querySelector("#han-rules-status");
+          function say(text, bad) {
+            if (!status) return;
+            status.textContent = text;
+            status.className = "status" + (bad ? " error" : " ok");
+          }
+          if (!webhook) {
+            say("先粘贴钉钉机器人 Webhook", true);
+            return;
+          }
+          say("正在保存钉钉提醒…", false);
+          fetch("/api/han/worker", {
+            method: "PUT",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "dingtalk", webhook: webhook }),
+          }).then(function (res) {
+            return res.json().catch(function () { return {}; }).then(function (data) {
+              if (!res.ok) throw new Error((data && data.error) || "钉钉提醒保存失败");
+              if (input) input.value = "";
+              if (data && data.remindError) {
+                say("钉钉地址已保存，但这次提醒没发出去：" + data.remindError, true);
+                return;
+              }
+              form.hidden = true;
+              say("钉钉提醒已保存。回传超过30分钟会发到群里。", false);
+              const refresh = root.querySelector("[data-refresh-live]");
+              if (refresh) refresh.click();
+            });
+          }).catch(function (err) {
+            say(err.message || "钉钉提醒保存失败", true);
+          });
+        });
+        meta.appendChild(form);
+      }
       function start() {
         if (dead || !window.HanCenter) return;
         stop = window.HanCenter.mount(root, hanBoard) || function () {};
+        bindDing();
       }
-      const centerVer = "20261006-showshop";
+      const centerVer = "20261014-stale30";
       if (window.HanCenter && window.HanCenter.version === centerVer) {
         start();
       } else {

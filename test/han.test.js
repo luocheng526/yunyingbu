@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
-import { rechargeWindowOpen, shanghaiMinutes } from "../src/modules/han/worker.js";
+import { rechargeWindowOpen, shanghaiMinutes, setStaleAlertSender } from "../src/modules/han/worker.js";
+import { isDingtalkWebhook, parseReturnAt, signDingtalkUrl, staleAlertText, staleDecision, STALE_MS } from "../src/modules/han/stale-alert.js";
 import { createHanStore, dropProbeTasks, hydrateFromMysql, matchOrgStoresForTeam, mergeTeamShops, buildProductCsv, parseProductCsv, classifyProduct, HAN_DEFAULT_OWNER, HAN_DEFAULT_STORE } from "../src/modules/han/store.js";
 import { createHanFakePool } from "./han-fake-pool.js";
 import { makeMinimalXlsx, parseOverviewFilename, parseOverviewWorkbook, headerKey, paidHeaderKey, parsePaidWorkbook } from "../src/modules/han/import-file.js";
@@ -515,7 +516,7 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /XmModules\["\/han\/recharge-rules"\]/);
   assert.match(js, /实时付费/);
   assert.match(js, /HanCenter\.mount\(root, hanBoard\)/);
-  assert.match(js, /20261006-showshop/);
+  assert.match(js, /20261014-stale30/);
   assert.doesNotMatch(js, /id="paid-form"/);
   assert.doesNotMatch(js, /上传抓取表/);
   assert.match(js, /XmModules\["\/han\/training"\]/);
@@ -2037,7 +2038,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   const han = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
   assert.match(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
   assert.match(han, /\["\/han\/paid\?board=rules", "充值规则", "rules"\]/);
-  assert.match(han, /20261006-showshop/);
+  assert.match(han, /20261014-stale30/);
   const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
   assert.match(center, /两档花费/);
   assert.match(center, /han-rules-text/);
@@ -2077,7 +2078,11 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(han, /insertAdjacentElement\("afterend"/);
   assert.match(han, /data-xm-group"\) !== "\/han"/);
   assert.doesNotMatch(han, /anchor\.href = "\/han\/paid-center"/);
-  assert.match(center, /20261006-showshop/);
+  assert.match(center, /20261014-stale30/);
+  assert.match(center, /已超过30分钟没有更新/);
+  assert.match(center, /超过30分钟未更新/);
+  assert.match(han, /action: "dingtalk"/);
+  assert.match(han, /保存钉钉提醒/);
   assert.match(center, /Number\(data\.version\) < Number\(lastMeta\.version\)/);
   assert.match(center, /han-shop-form-msg/);
   assert.match(center, /indexOf\("view=rules"\)>=0&&window\.__xmNativeFetch/);
@@ -2342,6 +2347,78 @@ test("jingmai-only mode keeps the shop list and tells the machine to skip 京准
     const startedRules = await json(base, "/api/han/worker?view=rules");
     assert.equal(startedRules.body.shopRuns.find((row) => row.store === "松郁").enabled, true);
   });
+});
+
+test("回传超过30分钟给钉钉发一条提醒，30分钟内不重复发", async () => {
+  const sent = [];
+  setStaleAlertSender(async (webhook, content) => {
+    sent.push({ webhook, content });
+  });
+  try {
+    assert.equal(parseReturnAt("2026-10-14 09:04:39"), Date.parse("2026-10-14T09:04:39+08:00"));
+    assert.equal(isDingtalkWebhook("https://example.com/robot/send?access_token=abc"), false);
+    assert.equal(isDingtalkWebhook("https://oapi.dingtalk.com/robot/send?access_token=abc"), true);
+    const signed = new URL(signDingtalkUrl("https://oapi.dingtalk.com/robot/send?access_token=abc", "SEC", 1000));
+    assert.equal(signed.searchParams.get("timestamp"), "1000");
+    assert.ok(signed.searchParams.get("sign"));
+    const now = Date.parse("2026-10-14T11:00:00+08:00");
+    const old = [{ capturedAt: "2026-10-14T09:04:39+08:00" }];
+    const due = staleDecision({ shops: old, now, alert: null });
+    assert.equal(due.stale, true);
+    assert.equal(due.send, true);
+    assert.match(staleAlertText(due), /回传超过30分钟没有更新/);
+    assert.match(staleAlertText(due), /2026-10-14 09:04:39/);
+    const quiet = staleDecision({ shops: old, now, alert: { sentAt: now - 10 * 60 * 1000, stamp: due.stamp } });
+    assert.equal(quiet.stale, true);
+    assert.equal(quiet.send, false);
+    const again = staleDecision({ shops: old, now, alert: { sentAt: now - STALE_MS, stamp: due.stamp } });
+    assert.equal(again.send, true);
+    const fresh = staleDecision({ shops: [{ capturedAt: new Date(now - 5 * 60 * 1000).toISOString() }], now, alert: null });
+    assert.equal(fresh.stale, false);
+    assert.equal(fresh.send, false);
+
+    await withServer(async (base) => {
+      const webhook = "https://oapi.dingtalk.com/robot/send?access_token=testtoken";
+      const pushed = await json(base, "/api/han/worker", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          capturedAt: "2026-10-14T09:04:39+08:00",
+          rows: [{ 店铺名称: "回传店", 京准通主账户ID: "501", 京麦成交金额: 100 }],
+        }),
+      });
+      assert.equal(pushed.res.status, 201);
+      const bad = await json(base, "/api/han/worker", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "dingtalk", webhook: "https://example.com/hook" }),
+      });
+      assert.equal(bad.res.status, 400);
+      const saved = await json(base, "/api/han/worker", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "dingtalk", webhook }),
+      });
+      assert.equal(saved.body.ok, true);
+      assert.equal(saved.body.dingtalk.configured, true);
+      assert.equal(saved.body.reminded, true);
+      assert.equal(sent.length, 1);
+      assert.equal(sent[0].webhook, webhook);
+      assert.match(sent[0].content, /回传超过30分钟没有更新/);
+      assert.doesNotMatch(sent[0].content, /access_token/);
+      const overview = await json(base, "/api/han/worker?view=overview");
+      assert.equal(overview.body.stale, true);
+      assert.ok(overview.body.staleMinutes >= 31);
+      assert.equal(overview.body.dingtalk.configured, true);
+      assert.ok(overview.body.dingtalk.remindedAt);
+      assert.equal(JSON.stringify(overview.body).includes("testtoken"), false);
+      assert.equal(sent.length, 1);
+      const rules = await json(base, "/api/han/worker?view=rules");
+      assert.equal(rules.body.version, 0);
+    });
+  } finally {
+    setStaleAlertSender(null);
+  }
 });
 
 test("han schema uses prefixed tables", async () => {
