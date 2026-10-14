@@ -4,6 +4,47 @@
  * 花费、ROI、余额由本地机在充值前向京小洁查询；成交金额和充值由本地机执行后回传。
  */
 
+import {
+  isDingtalkWebhook,
+  postDingtalk,
+  staleAlertText,
+  staleDecision,
+} from "./stale-alert.js";
+
+let dingtalkSender = postDingtalk;
+
+export function setStaleAlertSender(fn) {
+  dingtalkSender = typeof fn === "function" ? fn : postDingtalk;
+}
+
+const staleWatchers = new Set();
+let staleWatchTimer = null;
+
+function watchStaleReturn(fn) {
+  if (process.execArgv.includes("--test") || process.env.HAN_STALE_WATCH === "0") return;
+  staleWatchers.add(fn);
+  if (staleWatchTimer) return;
+  staleWatchTimer = setInterval(() => {
+    for (const check of staleWatchers) {
+      Promise.resolve().then(check).catch(() => {});
+    }
+  }, 60 * 1000);
+  if (typeof staleWatchTimer.unref === "function") staleWatchTimer.unref();
+}
+
+function dingtalkWebhook(state) {
+  const env = String(process.env.HAN_DINGTALK_WEBHOOK || "").trim();
+  if (isDingtalkWebhook(env)) return env;
+  const saved = String(state?.dingtalk?.webhook || "").trim();
+  return isDingtalkWebhook(saved) ? saved : "";
+}
+
+function dingtalkSecret(state) {
+  const env = String(process.env.HAN_DINGTALK_SECRET || "").trim();
+  if (env) return env;
+  return String(state?.dingtalk?.secret || "").trim();
+}
+
 const DOC_ID_SQL = "SELECT id, doc FROM han_worker_doc ORDER BY id ASC";
 
 function httpError(statusCode, message) {
@@ -976,6 +1017,36 @@ export function createWorkerMethods(db, ensure) {
     await db().query("UPDATE han_worker_doc SET doc = ? WHERE id = ?", [doc, rows[0].id]);
   }
 
+  let reminding = null;
+
+  async function remindIfStale(now = Date.now()) {
+    if (reminding) return reminding;
+    reminding = runRemind(now).finally(() => {
+      reminding = null;
+    });
+    return reminding;
+  }
+
+  async function runRemind(now) {
+    const state = await load();
+    const webhook = dingtalkWebhook(state);
+    const decision = staleDecision({ shops: state.shops, now, alert: state.returnAlert });
+    const remindedAt = state.returnAlert && Number(state.returnAlert.sentAt) && Number(state.returnAlert.stamp) === decision.stamp
+      ? new Date(Number(state.returnAlert.sentAt)).toISOString()
+      : "";
+    const base = { ...decision, configured: Boolean(webhook), sent: false, remindedAt };
+    if (!decision.send || !webhook) return base;
+    try {
+      await dingtalkSender(webhook, staleAlertText(decision), dingtalkSecret(state), now);
+    } catch (err) {
+      return { ...base, remindError: err.message || "钉钉提醒发送失败" };
+    }
+    const fresh = await load();
+    fresh.returnAlert = { sentAt: now, stamp: decision.stamp };
+    await save(fresh);
+    return { ...base, sent: true, remindedAt: new Date(now).toISOString() };
+  }
+
   function orderAmountByStore(subs) {
     const sums = new Map();
     for (const row of subs || []) {
@@ -1122,13 +1193,20 @@ export function createWorkerMethods(db, ensure) {
     });
   }
 
-  return {
+  const methods = {
     async workerOverview() {
       const state = await load();
       const capturedAt = state.shops.reduce((latest, row) => (row.capturedAt > latest ? row.capturedAt : latest), "");
       const orderAmounts = orderAmountByStore(state.subs);
       const shops = state.shops.map((row) => applySubOrderAmount(presentShop(row), orderAmounts));
       const metrics = totals(shops);
+      let remind = null;
+      try {
+        remind = await remindIfStale();
+      } catch {
+        remind = null;
+      }
+      const decision = remind || staleDecision({ shops: state.shops, now: Date.now(), alert: state.returnAlert });
       return {
         ok: true,
         view: "overview",
@@ -1138,6 +1216,12 @@ export function createWorkerMethods(db, ensure) {
         totals: metrics,
         metrics,
         shops,
+        stale: Boolean(decision.stale),
+        staleMinutes: decision.stale ? decision.minutes : 0,
+        dingtalk: {
+          configured: Boolean(decision.configured),
+          remindedAt: decision.remindedAt || "",
+        },
       };
     },
 
@@ -1384,6 +1468,24 @@ export function createWorkerMethods(db, ensure) {
 
     async saveWorker(body = {}) {
       const action = text(body.action, 32) || "rules";
+      if (action === "dingtalk") {
+        const state = await load();
+        const webhook = text(pick(body, ["webhook", "钉钉"]), 500);
+        const secret = text(pick(body, ["secret", "加签"]), 200);
+        if (webhook && !isDingtalkWebhook(webhook)) {
+          throw httpError(400, "钉钉机器人地址需要是 https://oapi.dingtalk.com/robot/send 的 webhook");
+        }
+        state.dingtalk = webhook ? { webhook, secret } : { webhook: "", secret: "" };
+        await save(state);
+        const remind = await remindIfStale();
+        return {
+          ok: true,
+          dingtalk: { configured: Boolean(webhook) },
+          stale: Boolean(remind.stale),
+          reminded: Boolean(remind.sent),
+          remindError: remind.remindError || "",
+        };
+      }
       if (action === "remark") {
         const state = await load();
         const storeName = text(pick(body, ["店铺名称", "store"]), 64);
@@ -1499,4 +1601,7 @@ export function createWorkerMethods(db, ensure) {
       return { ok: true, version: state.version, updatedAt: state.updatedAt, syncStatus: state.syncStatus };
     },
   };
+
+  watchStaleReturn(() => remindIfStale());
+  return methods;
 }
