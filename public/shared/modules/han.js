@@ -1552,7 +1552,30 @@
           form = document.createElement("form");
           form.id = "han-ding-setup";
           form.className = "han-ding-setup";
-          form.innerHTML = '<input id="han-ding-webhook" type="url" maxlength="500" placeholder="钉钉机器人 Webhook" autocomplete="off" spellcheck="false" /><button type="submit">保存钉钉提醒</button>';
+          form.innerHTML = '<input id="han-ding-webhook" type="url" maxlength="500" placeholder="钉钉机器人 Webhook" autocomplete="off" spellcheck="false" /><button type="submit">保存钉钉提醒</button><button type="button" data-ding-test="1">发送测试</button>';
+          form.addEventListener("click", function (event) {
+            const test = event.target.closest && event.target.closest("[data-ding-test]");
+            if (!test || !form.contains(test)) return;
+            event.preventDefault();
+            say("正在发送测试提醒…", false);
+            fetch("/api/han/worker", {
+              method: "PUT",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "dingtalk-test" }),
+            }).then(function (res) {
+              return res.json().catch(function () { return {}; }).then(function (data) {
+                if (!res.ok) throw new Error((data && data.error) || "测试提醒发送失败");
+                if (data && data.remindError) {
+                  say("测试提醒没发出去：" + data.remindError, true);
+                  return;
+                }
+                say("测试提醒已发到钉钉群。回传超过30分钟会自动再发。", false);
+              });
+            }).catch(function (err) {
+              say(err.message || "测试提醒发送失败", true);
+            });
+          });
           form.addEventListener("submit", function (event) {
             event.preventDefault();
             const input = form.querySelector("#han-ding-webhook");

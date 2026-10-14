@@ -68,6 +68,15 @@ export function staleAlertText({ minutes, stamp }) {
   return `韩梦凯实时付费：回传超过30分钟没有更新。${clock}`;
 }
 
+export function dingtalkTestText({ stamp, stale, minutes }) {
+  const when = formatShanghai(stamp);
+  const clock = when ? `最新回传 ${when}。` : "";
+  const tail = stale
+    ? `当前已超过30分钟没有更新，已过 ${minutes} 分钟。`
+    : "当前回传还在更新。回传超过30分钟没有更新时，每30分钟自动发一条。";
+  return `韩梦凯实时付费：这是一条测试提醒。${clock}${tail}`;
+}
+
 export function isDingtalkWebhook(value) {
   try {
     const url = new URL(String(value || "").trim());
