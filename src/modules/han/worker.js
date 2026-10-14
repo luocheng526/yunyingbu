@@ -5,6 +5,7 @@
  */
 
 import {
+  dingtalkTestText,
   isDingtalkWebhook,
   postDingtalk,
   staleAlertText,
@@ -1047,6 +1048,19 @@ export function createWorkerMethods(db, ensure) {
     return { ...base, sent: true, remindedAt: new Date(now).toISOString() };
   }
 
+  async function sendDingtalkTest(now = Date.now()) {
+    const state = await load();
+    const webhook = dingtalkWebhook(state);
+    if (!webhook) throw httpError(400, "还没有保存钉钉机器人地址");
+    const decision = staleDecision({ shops: state.shops, now, alert: state.returnAlert });
+    try {
+      await dingtalkSender(webhook, dingtalkTestText(decision), dingtalkSecret(state), now);
+    } catch (err) {
+      return { ok: false, tested: false, remindError: err.message || "钉钉提醒发送失败" };
+    }
+    return { ok: true, tested: true, remindError: "" };
+  }
+
   function orderAmountByStore(subs) {
     const sums = new Map();
     for (const row of subs || []) {
@@ -1486,6 +1500,7 @@ export function createWorkerMethods(db, ensure) {
           remindError: remind.remindError || "",
         };
       }
+      if (action === "dingtalk-test") return sendDingtalkTest();
       if (action === "remark") {
         const state = await load();
         const storeName = text(pick(body, ["店铺名称", "store"]), 64);

@@ -3,7 +3,7 @@ import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { rechargeWindowOpen, shanghaiMinutes, setStaleAlertSender } from "../src/modules/han/worker.js";
-import { isDingtalkWebhook, parseReturnAt, signDingtalkUrl, staleAlertText, staleDecision, STALE_MS } from "../src/modules/han/stale-alert.js";
+import { dingtalkTestText, isDingtalkWebhook, parseReturnAt, signDingtalkUrl, staleAlertText, staleDecision, STALE_MS } from "../src/modules/han/stale-alert.js";
 import { createHanStore, dropProbeTasks, hydrateFromMysql, matchOrgStoresForTeam, mergeTeamShops, buildProductCsv, parseProductCsv, classifyProduct, HAN_DEFAULT_OWNER, HAN_DEFAULT_STORE } from "../src/modules/han/store.js";
 import { createHanFakePool } from "./han-fake-pool.js";
 import { makeMinimalXlsx, parseOverviewFilename, parseOverviewWorkbook, headerKey, paidHeaderKey, parsePaidWorkbook } from "../src/modules/han/import-file.js";
@@ -2082,7 +2082,9 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(center, /已超过30分钟没有更新/);
   assert.match(center, /超过30分钟未更新/);
   assert.match(han, /action: "dingtalk"/);
+  assert.match(han, /action: "dingtalk-test"/);
   assert.match(han, /保存钉钉提醒/);
+  assert.match(han, /发送测试/);
   assert.match(han, /data-ding-remind/);
   assert.match(center, /data-ding-remind="1">钉钉提醒/);
   assert.match(center, /Number\(data\.version\) < Number\(lastMeta\.version\)/);
@@ -2370,6 +2372,7 @@ test("回传超过30分钟给钉钉发一条提醒，30分钟内不重复发", a
     assert.equal(due.send, true);
     assert.match(staleAlertText(due), /回传超过30分钟没有更新/);
     assert.match(staleAlertText(due), /2026-10-14 09:04:39/);
+    assert.match(dingtalkTestText(due), /测试提醒/);
     const quiet = staleDecision({ shops: old, now, alert: { sentAt: now - 10 * 60 * 1000, stamp: due.stamp } });
     assert.equal(quiet.stale, true);
     assert.equal(quiet.send, false);
@@ -2378,6 +2381,7 @@ test("回传超过30分钟给钉钉发一条提醒，30分钟内不重复发", a
     const fresh = staleDecision({ shops: [{ capturedAt: new Date(now - 5 * 60 * 1000).toISOString() }], now, alert: null });
     assert.equal(fresh.stale, false);
     assert.equal(fresh.send, false);
+    assert.match(dingtalkTestText(fresh), /当前回传还在更新/);
 
     await withServer(async (base) => {
       const webhook = "https://oapi.dingtalk.com/robot/send?access_token=testtoken";
@@ -2417,6 +2421,31 @@ test("回传超过30分钟给钉钉发一条提醒，30分钟内不重复发", a
       assert.equal(sent.length, 1);
       const rules = await json(base, "/api/han/worker?view=rules");
       assert.equal(rules.body.version, 0);
+      const tested = await json(base, "/api/han/worker", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "dingtalk-test" }),
+      });
+      assert.equal(tested.body.ok, true);
+      assert.equal(tested.body.tested, true);
+      assert.equal(sent.length, 2);
+      assert.match(sent[1].content, /测试提醒/);
+      assert.match(sent[1].content, /回传/);
+      assert.equal(JSON.stringify(tested.body).includes("testtoken"), false);
+      const rulesAfter = await json(base, "/api/han/worker?view=rules");
+      assert.equal(rulesAfter.body.version, 0);
+      const overviewAfter = await json(base, "/api/han/worker?view=overview");
+      assert.equal(sent.length, 2);
+      assert.ok(overviewAfter.body.dingtalk.remindedAt);
+    });
+    await withServer(async (base) => {
+      const missing = await json(base, "/api/han/worker", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "dingtalk-test" }),
+      });
+      assert.equal(missing.res.status, 400);
+      assert.match(missing.body.error, /还没有保存钉钉机器人地址/);
     });
   } finally {
     setStaleAlertSender(null);
