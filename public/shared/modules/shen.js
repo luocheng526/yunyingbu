@@ -37,29 +37,95 @@
       if (!document.querySelector('link[href^="/shared/shen-paid.css"]')) {
         const link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href = "/shared/shen-paid.css";
+        link.href = "/shared/shen-paid.css?v=0.1.764-live";
         document.head.appendChild(link);
       }
 
+      const TEAMS = ["沈子晗组"];
+      const COLS = [
+        ["spend", "京准通花费"],
+        ["orders", "京准通付费订单数"],
+        ["roi", "京准通付费投产比"],
+        ["cvr", "京准通付费转化率"],
+        ["cpc", "京准通平均点击成本"],
+        ["gmv", "京麦成交金额"],
+        ["amount", "京准通总订单金额"],
+        ["fee", "真实费比"],
+        ["target", "费比目标"],
+        ["ok", "是否成功"]
+      ];
+      const EXTRA = { account: "京准通主账户ID", clicks: "京准通点击数", ctr: "京准通点击率" };
+      const LIVE_CARDS = [
+        { key: "ad", label: "京准通花费" },
+        { key: "roi", label: "付费成交ROI" },
+        { key: "livePay", label: "实时付费成交额" },
+        { key: "livePaid", label: "实时付费店铺数量" }
+      ];
+      const COL_STORE = "shen-live-cols";
+      const CARD_STORE = "shen-live-cards";
+      const FEE_STORE = "shen-fee-targets";
+
+      function parseHash() {
+        const params = new URLSearchParams(String(location.hash || "").replace(/^#/, ""));
+        const team = params.get("team") || "";
+        return {
+          store: params.get("store") || "",
+          team: TEAMS.indexOf(team) >= 0 ? team : "",
+          liveShop: params.get("liveShop") || "",
+          history: params.get("history") === "1"
+        };
+      }
+
+      function writeHash(next, replace) {
+        const merged = Object.assign(parseHash(), next || {});
+        const params = new URLSearchParams();
+        if (merged.store) {
+          params.set("store", merged.store);
+        } else {
+          if (merged.team) {
+            params.set("team", merged.team);
+          }
+          if (merged.liveShop) {
+            params.set("liveShop", merged.liveShop);
+          }
+          if (merged.history) {
+            params.set("history", "1");
+          }
+        }
+        const text = params.toString();
+        const url = location.pathname + location.search + (text ? "#" + text : "");
+        if (replace) {
+          history.replaceState(null, "", url);
+        } else {
+          location.hash = text;
+        }
+      }
+
+      let view = parseHash();
       root.innerHTML =
-        '<main class="page xm-paid">' +
-        '<header class="page-head"><div><h1>付费中心</h1>' +
-        '<p class="lead" id="paid-lead">最新一次回传的全店快照。点店铺名称下钻查看子账号和充值记录。</p></div>' +
+        '<main class="page xm-paid xm-paid-live">' +
+        '<div class="xm-sp-live-bar" id="paid-live-bar">' +
+        '<nav class="xm-sp-live-tabs" id="paid-tabs" aria-label="主管分组"></nav>' +
         '<div class="xm-paid-meta"><span class="xm-paid-dot" aria-hidden="true"></span>' +
-        '<span id="paid-asof">等待回传</span></div></header>' +
-        '<section class="kpi-grid" id="paid-kpis"></section>' +
+        '<span id="paid-asof">等待回传</span></div></div>' +
+        '<section id="paid-board"></section>' +
+        '<section class="kpi-grid" id="paid-kpis" hidden></section>' +
         '<div id="paid-body"></div>' +
         '<p id="paid-status" class="status" role="status"></p></main>';
 
-      const leadEl = root.querySelector("#paid-lead");
+      const barEl = root.querySelector("#paid-live-bar");
+      const tabsEl = root.querySelector("#paid-tabs");
       const asofEl = root.querySelector("#paid-asof");
+      const boardEl = root.querySelector("#paid-board");
       const kpiEl = root.querySelector("#paid-kpis");
       const bodyEl = root.querySelector("#paid-body");
       const statusEl = root.querySelector("#paid-status");
       let dead = false;
       let overviewRows = [];
-      let keyword = "";
-      let includeHistory = false;
+      let enabledStores = [];
+      let overviewStale = false;
+      let keepColsOpen = false;
+      let includeHistory = view.history;
 
       function setStatus(message, isError) {
         statusEl.textContent = message || "";
@@ -73,8 +139,19 @@
         });
       }
 
+      function salesText(value) {
+        return (Number(value) || 0).toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        });
+      }
+
       function integer(value) {
         return (Number(value) || 0).toLocaleString("zh-CN");
+      }
+
+      function liveInt(value) {
+        return Math.round(Number(value) || 0).toLocaleString("en-US");
       }
 
       function rate(value) {
@@ -98,24 +175,16 @@
         if (match) {
           return Number(match[2]) + "." + Number(match[3]) + "-" + match[4] + ":" + match[5];
         }
-        const parsed = new Date(text);
-        if (Number.isNaN(parsed.getTime())) {
-          return text;
-        }
-        const parts = new Intl.DateTimeFormat("en-US", {
-          timeZone: "Asia/Shanghai",
-          month: "numeric",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          hourCycle: "h23"
-        }).formatToParts(parsed);
-        const get = function (type) {
-          return (parts.find(function (part) {
-            return part.type === type;
-          }) || {}).value;
-        };
-        return Number(get("month")) + "." + Number(get("day")) + "-" + get("hour") + ":" + get("minute");
+        return text;
+      }
+
+      function clockText(value) {
+        const match = String(value || "").match(/(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/);
+        return match ? match[1] + " " + match[2] : "";
+      }
+
+      function shopStamp(row) {
+        return clockText(row && (row.ingestedAt || row.capturedAt)) || (row && row.date) || "";
       }
 
       function successTag(value) {
@@ -128,17 +197,815 @@
         return '<span class="xm-paid-tag is-empty">' + escapeHtml(value || "—") + "</span>";
       }
 
-      function currentStore() {
-        const hash = String(location.hash || "").replace(/^#/, "");
-        return new URLSearchParams(hash).get("store") || "";
+      function feeRatio(spend, gmv) {
+        const pay = Number(gmv);
+        if (!(pay > 0)) {
+          return null;
+        }
+        return (Number(spend) || 0) / pay;
       }
 
-      function setStore(store) {
-        if (!store) {
-          history.replaceState(null, "", location.pathname + location.search);
+      function feeText(spend, gmv) {
+        const n = feeRatio(spend, gmv);
+        return n == null ? "—" : (n * 100).toFixed(2) + "%";
+      }
+
+      function rowFeeText(row) {
+        const stored = Number(row.realFeeRatio);
+        if (stored > 0) {
+          const ratio = stored > 1 ? stored / 100 : stored;
+          return (ratio * 100).toFixed(2) + "%";
+        }
+        return feeText(row.spend, row.jingmaiGmv);
+      }
+
+      function shanghaiHour() {
+        const text = new Intl.DateTimeFormat("en-GB", {
+          timeZone: "Asia/Shanghai",
+          hour: "2-digit",
+          hourCycle: "h23"
+        }).format(new Date());
+        const hour = Number(String(text).slice(0, 2));
+        return hour === 24 ? 0 : hour || 0;
+      }
+
+      function flatHours(ratio) {
+        const out = [];
+        const n = Number(ratio) || 0;
+        for (let i = 0; i < 24; i += 1) {
+          out.push(n);
+        }
+        return out;
+      }
+
+      function shopKey(value) {
+        return String(value || "").replace(/\s+/g, "").toLowerCase();
+      }
+
+      function teamOf() {
+        return TEAMS[0];
+      }
+
+      function feeTargetOf(store) {
+        try {
+          const n = Number(JSON.parse(localStorage.getItem(FEE_STORE) || "{}")[store]);
+          return isFinite(n) && n >= 0 ? n : null;
+        } catch (_err) {
+          return null;
+        }
+      }
+
+      function feeHot(row) {
+        const target = feeTargetOf(row.store);
+        const n = feeRatio(row.spend, row.jingmaiGmv);
+        return target != null && n != null && (target > 1 ? n * 100 : n) > target;
+      }
+
+      function readCols() {
+        const order = COLS.map(function (col) {
+          return col[0];
+        });
+        let hidden = [];
+        const widths = {};
+        const known = { account: 1, clicks: 1, ctr: 1 };
+        order.forEach(function (key) {
+          known[key] = 1;
+        });
+        try {
+          const saved = JSON.parse(localStorage.getItem(COL_STORE) || "null");
+          if (saved && saved.order) {
+            const next = [];
+            saved.order.forEach(function (key) {
+              if (known[key] && next.indexOf(key) < 0) {
+                next.push(key);
+              }
+            });
+            order.forEach(function (key) {
+              if (next.indexOf(key) >= 0) {
+                return;
+              }
+              const at = key === "target" ? next.indexOf("fee") : -1;
+              next.splice(at < 0 ? next.length : at + 1, 0, key);
+            });
+            order.splice(0, order.length);
+            next.forEach(function (key) {
+              order.push(key);
+            });
+            hidden = (saved.hidden || []).filter(function (key) {
+              return known[key];
+            });
+          }
+          const raw = saved && saved.widths;
+          if (raw) {
+            Object.keys(raw).forEach(function (key) {
+              const n = Math.round(Number(raw[key]));
+              if ((key === "name" || known[key]) && n >= 48 && n <= 480) {
+                widths[key] = n;
+              }
+            });
+          }
+        } catch (_err) {}
+        if (Object.keys(widths).length && !widths.target) {
+          widths.target = 112;
+        }
+        return { order: order, hidden: hidden, widths: widths };
+      }
+
+      function shownKeys() {
+        const state = readCols();
+        return state.order.filter(function (key) {
+          return state.hidden.indexOf(key) < 0;
+        });
+      }
+
+      function colLabel(key) {
+        for (let i = 0; i < COLS.length; i += 1) {
+          if (COLS[i][0] === key) {
+            return COLS[i][1];
+          }
+        }
+        return EXTRA[key] || key;
+      }
+
+      function colText(row, key) {
+        if (key === "account") {
+          return escapeHtml(row.accountId || "—");
+        }
+        if (key === "spend") {
+          return money(row.spend);
+        }
+        if (key === "orders") {
+          return integer(row.paidOrders);
+        }
+        if (key === "roi") {
+          return rate(row.roi);
+        }
+        if (key === "cvr") {
+          return rate(row.cvr);
+        }
+        if (key === "cpc") {
+          return money(row.cpc);
+        }
+        if (key === "gmv") {
+          return money(row.jingmaiGmv);
+        }
+        if (key === "clicks") {
+          return integer(row.clicks);
+        }
+        if (key === "ctr") {
+          return rate(row.ctr);
+        }
+        if (key === "amount") {
+          return money(row.totalOrderAmount);
+        }
+        if (key === "fee") {
+          return rowFeeText(row);
+        }
+        return successTag(row.success);
+      }
+
+      function metricCells(row) {
+        return shownKeys()
+          .map(function (key) {
+            if (key === "target") {
+              const goal = feeTargetOf(row.store);
+              return (
+                '<td><input class="xm-sp-fee-target" onkeydown="if(event.keyCode==13)this.blur()" data-fee-shop="' +
+                escapeHtml(row.store) +
+                '" value="' +
+                (goal == null ? "" : goal) +
+                '"></td>'
+              );
+            }
+            return "<td" + (key === "fee" && feeHot(row) ? ' class="is-fee-hot"' : "") + ">" + colText(row, key) + "</td>";
+          })
+          .join("");
+      }
+
+      function headerRow(first) {
+        const widths = readCols().widths;
+        function cell(label, key) {
+          const n = widths[key];
+          return (
+            "<th" +
+            (n ? ' style="width:' + n + "px;max-width:" + n + 'px"' : "") +
+            ">" +
+            label +
+            '<i class="xm-sp-col-grip" data-col-grip="' +
+            key +
+            '"></i></th>'
+          );
+        }
+        return (
+          "<thead><tr>" +
+          cell(first, "name") +
+          shownKeys()
+            .map(function (key) {
+              return cell(colLabel(key), key);
+            })
+            .join("") +
+          "</tr></thead>"
+        );
+      }
+
+      function isZeroRow(row) {
+        return !(Number(row.spend) || Number(row.paidOrders) || Number(row.jingmaiGmv) || Number(row.clicks));
+      }
+
+      function pageRows() {
+        return !view.team
+          ? overviewRows
+          : overviewRows.filter(function (row) {
+              return teamOf(row.store) === view.team;
+            });
+      }
+
+      function scopedRows() {
+        let rows = pageRows();
+        if (view.liveShop) {
+          const key = shopKey(view.liveShop);
+          rows = rows.filter(function (row) {
+            return row.store === view.liveShop || shopKey(row.store) === key;
+          });
+        }
+        return rows;
+      }
+
+      function boardShopNames() {
+        const names = [];
+        const seen = {};
+        pageRows().forEach(function (row) {
+          const name = String(row.store || "").trim();
+          const key = shopKey(name);
+          if (!name || seen[key]) {
+            return;
+          }
+          seen[key] = true;
+          names.push(name);
+        });
+        names.sort();
+        return names;
+      }
+
+      function hiddenCards() {
+        try {
+          const raw = JSON.parse(localStorage.getItem(CARD_STORE) || "[]");
+          return raw && raw.length ? raw : [];
+        } catch (_err) {
+          return [];
+        }
+      }
+
+      function salesOf(rows) {
+        let gmv = 0;
+        (rows || []).forEach(function (row) {
+          gmv += Number(row.jingmaiGmv) || 0;
+        });
+        return { gmv: gmv, text: salesText(gmv) };
+      }
+
+      function feeOf(rows) {
+        let spend = 0;
+        let gmv = 0;
+        (rows || []).forEach(function (row) {
+          spend += Number(row.spend) || 0;
+          gmv += Number(row.jingmaiGmv) || 0;
+        });
+        return { ratio: feeRatio(spend, gmv), text: feeText(spend, gmv) };
+      }
+
+      function liveLine(series) {
+        const width = 640;
+        const height = Number(series.height) > 0 ? Number(series.height) : 184;
+        const top = 12;
+        const bottom = 22;
+        const yesterday = series.yesterday || [];
+        const today = series.today || [];
+        const count = Number(series.hours) > 2 ? Number(series.hours) : Math.max(yesterday.length, today.length, 2);
+        let max = 1;
+        yesterday.concat(today).forEach(function (n) {
+          const v = Number(n) || 0;
+          if (v > max) {
+            max = v;
+          }
+        });
+        function xAt(index) {
+          return 10 + (index / Math.max(count - 1, 1)) * 620;
+        }
+        function yAt(value) {
+          return height - bottom - ((Number(value) || 0) / max) * (height - top - bottom);
+        }
+        function points(list) {
+          return list
+            .map(function (value, index) {
+              return xAt(index).toFixed(1) + "," + yAt(value).toFixed(1);
+            })
+            .join(" ");
+        }
+        let labels = "";
+        if (count === 24 || count === 48) {
+          for (let hour = 1; hour <= 24; hour += 1) {
+            const index = count === 48 ? hour * 2 - 1 : hour - 1;
+            labels +=
+              '<text x="' +
+              xAt(index).toFixed(1) +
+              '" y="' +
+              (height - 5) +
+              '" text-anchor="middle" fill="#8c8c8c" font-size="8">' +
+              hour +
+              "</text>";
+          }
+        }
+        return (
+          '<svg class="xm-hm-line" viewBox="0 0 ' +
+          width +
+          " " +
+          height +
+          '" preserveAspectRatio="none">' +
+          (yesterday.length
+            ? '<polyline fill="none" stroke="#91caff" stroke-width="2" points="' + points(yesterday) + '"></polyline>'
+            : "") +
+          (today.length
+            ? '<polyline fill="none" stroke="#ffa39e" stroke-width="2" points="' + points(today) + '"></polyline>'
+            : "") +
+          labels +
+          "</svg>"
+        );
+      }
+
+      function livePlot(spec) {
+        const yesterday = spec.yesterdayHour || [];
+        const today = spec.todayHour || [];
+        const hourly = yesterday.length > 2 || today.length > 2;
+        if (!hourly) {
+          return { yesterday: [], today: [], hours: 0, height: 184 };
+        }
+        return {
+          yesterday: yesterday,
+          today: today,
+          hours: 24,
+          height: 128
+        };
+      }
+
+      function liveChart(spec) {
+        const plot = livePlot(spec);
+        const sub = spec.unit === "rate" ? "线：当天费比" : "线：累计（23点=1-23点）";
+        const legs = plot.hours
+          ? '<span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span>'
+          : "";
+        return (
+          '<article class="xm-hm-chart" data-chart="' +
+          (spec.unit === "rate" ? "fee" : "sales") +
+          '"><div class="xm-hm-card-head"><span>' +
+          escapeHtml(spec.label) +
+          "</span>" +
+          legs +
+          '</div><div class="xm-hm-index-num">' +
+          escapeHtml(spec.value) +
+          "</div>" +
+          (spec.asOf
+            ? '<div class="xm-hm-trend' +
+              (String(spec.asOf).indexOf("超过30分钟") >= 0 ? " is-up" : "") +
+              '">更新于 ' +
+              escapeHtml(spec.asOf) +
+              "</div>"
+            : "") +
+          (plot.hours ? '<div class="xm-hm-chart-sub">' + sub + "</div>" : "") +
+          liveLine(plot) +
+          "</article>"
+        );
+      }
+
+      function liveFilterHtml(pick, shops) {
+        function option(value, label, on) {
+          return (
+            '<option value="' +
+            escapeHtml(value) +
+            '"' +
+            (on ? " selected" : "") +
+            ">" +
+            escapeHtml(label) +
+            "</option>"
+          );
+        }
+        return (
+          '<div class="xm-hm-live-filter"><div class="xm-hm-live-filter-left"><strong class="xm-hm-live-filter-lab">店铺列表</strong>' +
+          '<span class="xm-hm-live-filter-box"><select data-live-filter="pick">' +
+          option("", "责权归属", !pick) +
+          '<optgroup label="责权团队">' +
+          TEAMS.map(function (name) {
+            return option("team:" + name, name, pick === "team:" + name);
+          }).join("") +
+          "</optgroup>" +
+          (shops.length
+            ? '<optgroup label="店铺">' +
+              shops
+                .map(function (name) {
+                  return option("shop:" + name, name, pick === "shop:" + name);
+                })
+                .join("") +
+              "</optgroup>"
+            : "") +
+          '</select></span></div><div class="xm-hm-live-filter-right">' +
+          '<button type="button" class="xm-hm-live-heads" data-live-heads>表头设置</button>' +
+          '<button type="button" class="xm-hm-live-refresh" data-refresh-live>刷新</button></div></div>'
+        );
+      }
+
+      function renderTabs() {
+        function link(hash, label, on) {
+          return (
+            '<a class="' +
+            (on ? "is-active" : "") +
+            '" href="' +
+            (hash || "#") +
+            '" data-sp-tab="' +
+            escapeHtml(hash) +
+            '">' +
+            escapeHtml(label) +
+            "</a>"
+          );
+        }
+        tabsEl.innerHTML =
+          link("", "全部汇总", !view.team) +
+          TEAMS.map(function (name) {
+            return link("team=" + encodeURIComponent(name), name, view.team === name);
+          }).join("");
+      }
+
+      function latestStamp(data) {
+        let best = "";
+        (data.rows || overviewRows).forEach(function (row) {
+          const stamp = String(row.ingestedAt || row.capturedAt || "");
+          if (stamp > best) {
+            best = stamp;
+          }
+        });
+        return clockText(best) || (data && (data.asOf || data.capturedAt)) || "";
+      }
+
+      function paintAsof(data) {
+        const stamp = latestStamp(data || {});
+        const scoped = scopedRows();
+        const stale = overviewStale;
+        const meta = asofEl && asofEl.parentElement;
+        if (meta) {
+          meta.classList.toggle("is-stale", stale);
+        }
+        const roster = enabledStores;
+        let text = stamp
+          ? "最新回传 " +
+            stamp +
+            " · " +
+            (view.team || "全部主管") +
+            " " +
+            scoped.length +
+            " 店"
+          : "等待回传";
+        if (roster.length && !includeHistory) {
+          text += " · 启用店铺";
+        }
+        if (stale) {
+          text += " · 已超过30分钟没有更新";
+        }
+        if (asofEl) {
+          asofEl.textContent = text;
+        }
+      }
+
+      function markStale(data) {
+        const clock = latestStamp(data || {});
+        if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(clock)) {
+          overviewStale = false;
           return;
         }
-        location.hash = "store=" + encodeURIComponent(store);
+        const asUtc = Date.parse(clock.replace(" ", "T") + "Z");
+        const asShanghai = Date.parse(clock.replace(" ", "T") + "+08:00");
+        const parsed = Math.max(asUtc || 0, asShanghai || 0);
+        overviewStale = parsed > 0 && Date.now() - parsed > 30 * 60 * 1000;
+      }
+
+      function renderLiveBoard() {
+        const pageNow = scopedRows();
+        const pageSales = salesOf(pageNow);
+        const pageFee = feeOf(pageNow);
+        const feeHour = shanghaiHour();
+        let pageSpend = 0;
+        let pageAmount = 0;
+        let pageStamp = "";
+        pageNow.forEach(function (row) {
+          pageSpend += Number(row.spend) || 0;
+          pageAmount += Number(row.totalOrderAmount) || 0;
+          const stamp = String(row.ingestedAt || row.capturedAt || "");
+          if (stamp > pageStamp) {
+            pageStamp = stamp;
+          }
+        });
+        const hero = {
+          label: "京准通成交额",
+          value: pageSales.text,
+          asOf: clockText(pageStamp),
+          yesterdayHour: [],
+          todayHour: []
+        };
+        if (overviewStale && hero.asOf) {
+          hero.asOf += " · 超过30分钟未更新";
+        }
+        const paid = {
+          label: "真实费比",
+          value: pageFee.text,
+          unit: "rate",
+          lineMode: "flat",
+          yesterdayHour: [],
+          todayHour: pageFee.ratio == null ? [] : flatHours(pageFee.ratio).slice(0, Math.min(24, feeHour + 1))
+        };
+        const cards = LIVE_CARDS.map(function (card) {
+          const next = { key: card.key, label: card.label, value: "—", extra: "" };
+          if (card.key === "ad") {
+            next.value = salesText(pageSpend);
+            next.extra = "推广占比 " + pageFee.text;
+          }
+          if (card.key === "roi") {
+            next.value = pageSpend > 0 ? (pageAmount / pageSpend).toFixed(2) : "—";
+          }
+          if (card.key === "livePay") {
+            next.value = salesText(pageAmount);
+          }
+          if (card.key === "livePaid") {
+            next.value = liveInt(pageNow.length);
+          }
+          return next;
+        });
+        const hidden = {};
+        hiddenCards().forEach(function (key) {
+          hidden[key] = true;
+        });
+        const shownCards = cards.filter(function (card) {
+          return !hidden[card.key];
+        });
+        const shops = boardShopNames();
+        const pick = view.liveShop ? "shop:" + view.liveShop : view.team ? "team:" + view.team : "";
+        const colState = readCols();
+        const openPop = keepColsOpen;
+        keepColsOpen = false;
+        boardEl.hidden = false;
+        kpiEl.hidden = true;
+        kpiEl.innerHTML = "";
+        boardEl.innerHTML =
+          liveFilterHtml(pick, shops) +
+          '<div class="xm-hm-head-pop"' +
+          (openPop ? "" : " hidden") +
+          "><h3>表头设置</h3>" +
+          cards
+            .map(function (card) {
+              return (
+                '<label><input type="checkbox" data-live-card="' +
+                escapeHtml(card.key) +
+                '"' +
+                (hidden[card.key] ? "" : " checked") +
+                "> " +
+                escapeHtml(card.label) +
+                "</label>"
+              );
+            })
+            .join("") +
+          '<label><input type="checkbox" data-live-history' +
+          (includeHistory ? " checked" : "") +
+          "> 含历史店铺</label>" +
+          "<h3>表格列</h3>" +
+          colState.order
+            .map(function (key) {
+              return (
+                '<div class="xm-hm-col"><label><input type="checkbox" data-live-col="' +
+                key +
+                '"' +
+                (colState.hidden.indexOf(key) < 0 ? " checked" : "") +
+                "> " +
+                colLabel(key) +
+                '</label><button type="button" data-col-move="' +
+                key +
+                '" data-dir="-1">上</button><button type="button" data-col-move="' +
+                key +
+                '" data-dir="1">下</button></div>'
+              );
+            })
+            .join("") +
+          "</div>" +
+          '<div class="xm-hm-live-charts">' +
+          liveChart(hero) +
+          liveChart(paid) +
+          "</div>" +
+          '<div class="xm-hm-live-cards">' +
+          shownCards
+            .map(function (card) {
+              return (
+                '<article class="xm-hm-card" data-card="' +
+                escapeHtml(card.key) +
+                '"><div class="xm-hm-card-head"><span>' +
+                escapeHtml(card.label) +
+                '</span></div><div class="xm-hm-value">' +
+                escapeHtml(card.value) +
+                "</div>" +
+                (card.extra ? '<div class="xm-hm-trend">' + escapeHtml(card.extra) + "</div>" : "") +
+                "</article>"
+              );
+            })
+            .join("") +
+          "</div>";
+
+        const select = boardEl.querySelector("[data-live-filter]");
+        if (select) {
+          select.addEventListener("change", function () {
+            const value = select.value || "";
+            if (value.indexOf("team:") === 0) {
+              writeHash({ team: value.slice(5), liveShop: "", store: "" });
+            } else if (value.indexOf("shop:") === 0) {
+              writeHash({ liveShop: value.slice(5), team: "", store: "" });
+            } else {
+              writeHash({ team: "", liveShop: "", store: "" });
+            }
+          });
+        }
+        const refresh = boardEl.querySelector("[data-refresh-live]");
+        if (refresh) {
+          refresh.addEventListener("click", function () {
+            refresh.disabled = true;
+            refresh.textContent = "刷新中…";
+            load().catch(function (err) {
+              if (!dead) {
+                setStatus(err.message || "加载失败", true);
+              }
+            });
+          });
+        }
+        const heads = boardEl.querySelector("[data-live-heads]");
+        const pop = boardEl.querySelector(".xm-hm-head-pop");
+        if (heads && pop) {
+          heads.addEventListener("click", function () {
+            pop.hidden = !pop.hidden;
+          });
+        }
+        boardEl.querySelectorAll("[data-live-card]").forEach(function (box) {
+          box.addEventListener("change", function () {
+            const off = [];
+            boardEl.querySelectorAll("[data-live-card]").forEach(function (item) {
+              if (!item.checked) {
+                off.push(item.getAttribute("data-live-card"));
+              }
+            });
+            try {
+              localStorage.setItem(CARD_STORE, JSON.stringify(off));
+            } catch (_err) {}
+            renderLiveBoard();
+          });
+        });
+        const historyBox = boardEl.querySelector("[data-live-history]");
+        if (historyBox) {
+          historyBox.addEventListener("change", function () {
+            includeHistory = historyBox.checked;
+            writeHash({ history: includeHistory, store: "" }, true);
+            load();
+          });
+        }
+        function storeCols(state) {
+          try {
+            localStorage.setItem(COL_STORE, JSON.stringify(state));
+          } catch (_err) {}
+          keepColsOpen = true;
+          renderLiveBoard();
+          const wrap = root.querySelector("#paid-table");
+          if (wrap) {
+            wrap.innerHTML = renderLiveTables();
+          }
+        }
+        if (pop) {
+          pop.addEventListener("click", function (event) {
+            const btn = event.target.closest("[data-col-move]");
+            if (!btn) {
+              return;
+            }
+            event.preventDefault();
+            const state = readCols();
+            const key = btn.getAttribute("data-col-move");
+            const index = state.order.indexOf(key);
+            const next = index + Number(btn.getAttribute("data-dir"));
+            if (index < 0 || next < 0 || next >= state.order.length) {
+              return;
+            }
+            const swap = state.order[index];
+            state.order[index] = state.order[next];
+            state.order[next] = swap;
+            storeCols(state);
+          });
+          pop.addEventListener("change", function (event) {
+            const box = event.target.closest("[data-live-col]");
+            if (!box) {
+              return;
+            }
+            const state = readCols();
+            const key = box.getAttribute("data-live-col");
+            state.hidden = state.hidden.filter(function (item) {
+              return item !== key;
+            });
+            if (!box.checked) {
+              state.hidden.push(key);
+            }
+            storeCols(state);
+          });
+        }
+      }
+
+      function paintWidths(widths) {
+        const keys = ["name"].concat(shownKeys());
+        let sum = 0;
+        keys.forEach(function (key) {
+          sum += widths[key] || 0;
+        });
+        root.querySelectorAll("table.xm-sp-live-grid").forEach(function (table) {
+          table.classList.add("is-sized");
+          if (sum) {
+            table.style.width = sum + "px";
+          }
+          table.querySelectorAll("thead th").forEach(function (th, i) {
+            const n = widths[keys[i]];
+            if (!n) {
+              return;
+            }
+            th.style.width = n + "px";
+            th.style.maxWidth = n + "px";
+          });
+        });
+      }
+
+      function renderGroupTable(rows) {
+        if (!rows.length) {
+          return '<p class="empty">该组还没有回传</p>';
+        }
+        const widths = readCols().widths;
+        let sum = 0;
+        ["name"].concat(shownKeys()).forEach(function (key) {
+          sum += widths[key] || 0;
+        });
+        return (
+          '<div class="xm-paid-table-wrap"><table class="xm-sp-live-grid' +
+          (sum ? " is-sized" : "") +
+          '"' +
+          (sum ? ' style="width:' + sum + 'px"' : "") +
+          ">" +
+          headerRow("店铺名称") +
+          "<tbody>" +
+          rows
+            .map(function (row) {
+              return (
+                '<tr class="' +
+                (isZeroRow(row) ? "is-zero" : "") +
+                '"><td><a class="xm-paid-store" href="#store=' +
+                encodeURIComponent(row.store) +
+                '">' +
+                escapeHtml(row.store) +
+                '</a><span class="xm-paid-date">' +
+                escapeHtml(shopStamp(row)) +
+                "</span></td>" +
+                metricCells(row) +
+                "</tr>"
+              );
+            })
+            .join("") +
+          "</tbody></table></div>"
+        );
+      }
+
+      function renderLiveTables() {
+        const rows = scopedRows();
+        const names = view.team ? [view.team] : TEAMS;
+        return names
+          .map(function (team) {
+            const groupRows = rows.filter(function (row) {
+              return teamOf(row.store) === team;
+            });
+            return (
+              '<section class="xm-sp-live-group"><h3>' +
+              escapeHtml(team) +
+              "<span>" +
+              groupRows.length +
+              "店</span></h3>" +
+              renderGroupTable(groupRows) +
+              "</section>"
+            );
+          })
+          .join("");
+      }
+
+      function renderOverview(data) {
+        overviewRows = data.rows || [];
+        enabledStores = data.enabledStores || [];
+        markStale(data);
+        renderTabs();
+        paintAsof(data);
+        renderLiveBoard();
+        bodyEl.innerHTML =
+          '<section class="panel"><div id="paid-table">' + renderLiveTables() + "</div></section>";
       }
 
       function renderKpis(metrics) {
@@ -158,6 +1025,8 @@
             unit: metrics.detail ? "天" : "店"
           }
         ];
+        kpiEl.hidden = false;
+        boardEl.hidden = true;
         kpiEl.innerHTML = cards
           .map(function (card) {
             return (
@@ -170,132 +1039,6 @@
             );
           })
           .join("");
-      }
-
-      function metricCells(row) {
-        return (
-          "<td>" +
-          escapeHtml(row.accountId || "—") +
-          "</td><td>" +
-          money(row.spend) +
-          "</td><td>" +
-          integer(row.paidOrders) +
-          "</td><td>" +
-          rate(row.roi) +
-          "</td><td>" +
-          rate(row.cvr) +
-          "</td><td>" +
-          money(row.cpc) +
-          "</td><td>" +
-          money(row.jingmaiGmv) +
-          "</td><td>" +
-          integer(row.clicks) +
-          "</td><td>" +
-          rate(row.ctr) +
-          "</td><td>" +
-          money(row.totalOrderAmount) +
-          "</td><td>" +
-          rate(row.realFeeRatio) +
-          "</td><td>" +
-          successTag(row.success) +
-          "</td>"
-        );
-      }
-
-      function headerRow(first) {
-        return (
-          "<thead><tr><th>" +
-          first +
-          "</th><th>京准通主账户ID</th><th>京准通花费</th>" +
-          "<th>京准通付费订单数</th><th>京准通付费投产比</th><th>京准通付费转化率</th>" +
-          "<th>京准通平均点击成本</th><th>京麦成交金额</th><th>京准通点击数</th>" +
-          "<th>京准通点击率</th><th>京准通总订单金额</th><th>真实费比</th><th>是否成功</th>" +
-          "</tr></thead>"
-        );
-      }
-
-      function isZeroRow(row) {
-        return !(Number(row.spend) || Number(row.paidOrders) || Number(row.jingmaiGmv) || Number(row.clicks));
-      }
-
-      function renderOverviewTable(rows) {
-        const filtered = keyword
-          ? rows.filter(function (row) {
-              return String(row.store || "").indexOf(keyword) >= 0;
-            })
-          : rows;
-        if (!filtered.length) {
-          return '<p class="empty">暂无回传数据</p>';
-        }
-        const body = filtered
-          .map(function (row) {
-            return (
-              '<tr class="' +
-              (isZeroRow(row) ? "is-zero" : "") +
-              '"><td><a class="xm-paid-store" href="#store=' +
-              encodeURIComponent(row.store) +
-              '">' +
-              escapeHtml(row.store) +
-              '</a><span class="xm-paid-date">' +
-              escapeHtml(row.date) +
-              "</span></td>" +
-              metricCells(row) +
-              "</tr>"
-            );
-          })
-          .join("");
-        return (
-          '<div class="xm-paid-table-wrap"><table>' + headerRow("店铺名称") + "<tbody>" + body + "</tbody></table></div>"
-        );
-      }
-
-      function renderOverview(data) {
-        overviewRows = data.rows || [];
-        const metrics = data.metrics || {};
-        const roster = data.enabledStores || [];
-        leadEl.textContent = roster.length
-          ? "默认只展示当前启用店铺。历史回传保留，可点「含历史店铺」查看。"
-          : "最新一次回传的全店快照。点店铺名称下钻查看该店全部子账号。";
-        asofEl.textContent = data.asOf
-          ? "最新回传 " +
-            data.asOf +
-            " · " +
-            (data.scope === "all" && roster.length ? "含历史 " : roster.length ? "当前启用 " : "") +
-            (metrics.stores || 0) +
-            " 店"
-          : "等待回传";
-        renderKpis(metrics);
-        bodyEl.innerHTML =
-          '<section class="panel" aria-labelledby="paid-latest-heading">' +
-          '<div class="xm-paid-toolbar"><h2 id="paid-latest-heading">本次回传</h2>' +
-          '<div class="row"><input id="paid-store-filter" type="search" maxlength="64" placeholder="搜索店铺名称" />' +
-          (roster.length
-            ? '<button type="button" class="xm-paid-scope" id="paid-scope">' +
-              (includeHistory ? "只看启用店铺" : "含历史店铺") +
-              "</button>"
-            : "") +
-          "</div></div>" +
-          '<div id="paid-table-wrap">' +
-          renderOverviewTable(overviewRows) +
-          "</div></section>";
-        const filter = root.querySelector("#paid-store-filter");
-        if (filter) {
-          filter.value = keyword;
-          filter.addEventListener("input", function () {
-            keyword = filter.value.trim();
-            const wrap = root.querySelector("#paid-table-wrap");
-            if (wrap) {
-              wrap.innerHTML = renderOverviewTable(overviewRows);
-            }
-          });
-        }
-        const scopeBtn = root.querySelector("#paid-scope");
-        if (scopeBtn) {
-          scopeBtn.addEventListener("click", function () {
-            includeHistory = !includeHistory;
-            load();
-          });
-        }
       }
 
       function subCells(row) {
@@ -382,7 +1125,9 @@
         const latest = rows[0] || { store: store };
         const accounts = subaccounts.accounts || [];
         const subTotals = subaccounts.totals || {};
-        leadEl.textContent = "该店全部子账号。点左侧箭头展开每个时间段的明细。";
+        if (barEl) {
+          barEl.hidden = true;
+        }
         asofEl.textContent =
           (latest.accountId ? "京准通主账户 " + latest.accountId + " · " : "") +
           (accounts.length || 0) +
@@ -439,8 +1184,7 @@
         const back = root.querySelector("#paid-back");
         if (back) {
           back.addEventListener("click", function () {
-            setStore("");
-            load();
+            writeHash({ store: "" });
           });
         }
         Array.prototype.forEach.call(root.querySelectorAll(".xm-paid-expand"), function (btn) {
@@ -470,17 +1214,18 @@
       }
 
       function load() {
-        const store = currentStore();
+        view = parseHash();
+        includeHistory = view.history;
         setStatus("正在加载…");
-        if (store) {
+        if (view.store) {
           return Promise.all([
-            getJson("/api/shen/paid?store=" + encodeURIComponent(store) + "&limit=1000"),
-            getJson("/api/shen/paid/subaccounts?store=" + encodeURIComponent(store) + "&limit=2000"),
-            getJson("/api/shen/paid/recharges?store=" + encodeURIComponent(store) + "&limit=1000")
+            getJson("/api/shen/paid?store=" + encodeURIComponent(view.store) + "&limit=1000"),
+            getJson("/api/shen/paid/subaccounts?store=" + encodeURIComponent(view.store) + "&limit=2000"),
+            getJson("/api/shen/paid/recharges?store=" + encodeURIComponent(view.store) + "&limit=1000")
           ])
             .then(function (pair) {
               if (!dead) {
-                renderDetail(store, pair[0], pair[1], pair[2]);
+                renderDetail(view.store, pair[0], pair[1], pair[2]);
                 setStatus("已更新");
               }
             })
@@ -489,6 +1234,9 @@
                 setStatus(err.message || "加载失败", true);
               }
             });
+        }
+        if (barEl) {
+          barEl.hidden = false;
         }
         return getJson("/api/shen/paid?view=latest&limit=500" + (includeHistory ? "&scope=all" : ""))
           .then(function (data) {
@@ -507,6 +1255,87 @@
       function onHash() {
         load();
       }
+
+      bodyEl.addEventListener("pointerdown", function (event) {
+        const grip = event.target.closest("[data-col-grip]");
+        if (!grip) {
+          return;
+        }
+        event.preventDefault();
+        const key = grip.getAttribute("data-col-grip");
+        const state = readCols();
+        const table = grip.closest("table");
+        if (!Object.keys(state.widths).length && table) {
+          const keys = ["name"].concat(shownKeys());
+          table.querySelectorAll("thead th").forEach(function (th, i) {
+            if (keys[i]) {
+              state.widths[keys[i]] = Math.max(48, Math.round(th.getBoundingClientRect().width));
+            }
+          });
+        }
+        const startX = event.clientX;
+        const startW = state.widths[key] || Math.round(grip.parentNode.getBoundingClientRect().width);
+        function move(ev) {
+          if (dead) {
+            up();
+            return;
+          }
+          state.widths[key] = Math.max(48, Math.min(480, Math.round(startW + ev.clientX - startX)));
+          paintWidths(state.widths);
+        }
+        function up() {
+          document.removeEventListener("pointermove", move);
+          document.removeEventListener("pointerup", up);
+          try {
+            localStorage.setItem(COL_STORE, JSON.stringify(state));
+          } catch (_err) {}
+        }
+        document.addEventListener("pointermove", move);
+        document.addEventListener("pointerup", up);
+        paintWidths(state.widths);
+      });
+
+      bodyEl.addEventListener("change", function (event) {
+        const box = event.target.closest("[data-fee-shop]");
+        if (!box) {
+          return;
+        }
+        const store = box.getAttribute("data-fee-shop");
+        const raw = box.value.replace(/[%％]/g, "").trim();
+        let saved = {};
+        try {
+          saved = JSON.parse(localStorage.getItem(FEE_STORE) || "{}") || {};
+        } catch (_err) {}
+        const n = Number(raw);
+        if (!raw) {
+          delete saved[store];
+        } else if (isFinite(n) && n >= 0) {
+          saved[store] = n;
+        } else {
+          return;
+        }
+        try {
+          localStorage.setItem(FEE_STORE, JSON.stringify(saved));
+        } catch (_err) {}
+        const wrap = root.querySelector("#paid-table");
+        if (wrap) {
+          wrap.innerHTML = renderLiveTables();
+        }
+      });
+
+      tabsEl.addEventListener("click", function (event) {
+        const link = event.target.closest("[data-sp-tab]");
+        if (!link) {
+          return;
+        }
+        event.preventDefault();
+        const hash = link.getAttribute("data-sp-tab") || "";
+        if (hash.indexOf("team=") === 0) {
+          writeHash({ team: decodeURIComponent(hash.slice(5)), liveShop: "", store: "" });
+        } else {
+          writeHash({ team: "", liveShop: "", store: "" });
+        }
+      });
 
       window.addEventListener("hashchange", onHash);
       load();
