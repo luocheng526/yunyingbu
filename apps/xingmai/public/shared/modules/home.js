@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.824-home-liveamt */
+/* xm-module-home 0.1.825-home-headset */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1686,16 +1686,25 @@
   ];
   var LIVE_SHOP_HEADS = LIVE_CORE_HEADS.concat(LIVE_EXTRA_HEADS);
   var LIVE_LOCK_HEADS = { rank: true, shop: true };
+  function extraHeadKeys() {
+    return LIVE_EXTRA_HEADS.map(function (col) {
+      return col.key;
+    });
+  }
   function liveHiddenHeads() {
     try {
-      var raw = JSON.parse(localStorage.getItem("xm-home-live-head-hide") || "[]");
+      var stored = localStorage.getItem("xm-home-live-head-hide");
+      if (stored == null) {
+        return extraHeadKeys();
+      }
+      var raw = JSON.parse(stored || "[]");
       if (Object.prototype.toString.call(raw) === "[object Array]") {
         return raw.filter(function (key) {
           return key && !LIVE_LOCK_HEADS[key];
         });
       }
     } catch (_err) {}
-    return [];
+    return extraHeadKeys();
   }
   function saveLiveHiddenHeads(keys) {
     try {
@@ -2139,7 +2148,7 @@
       '<div class="xm-hm-datewrap"><div class="xm-hm-dates" id="xm-hm-dates" title="最多选择30天"><span class="xm-hm-dates-ico">日</span><span class="xm-hm-dates-text" id="xm-hm-date-text"></span><button type="button" class="xm-hm-dates-clear" id="xm-hm-date-clear">×</button></div><div class="xm-hm-cal" id="xm-hm-cal" hidden></div></div>' +
       "</div></div>" +
       '<div class="xm-hm-pop" id="xm-hm-pop" hidden><h3>卡片设置</h3><div id="xm-hm-card-opts"></div></div>' +
-      '<div class="xm-hm-head-pop" id="xm-hm-head-pop" hidden><h3>表头设置</h3><p class="xm-hm-head-hint">付费中心表头先挂上，数据稍后对接。</p><div id="xm-hm-head-opts"></div></div>' +
+      '<div class="xm-hm-head-pop" id="xm-hm-head-pop" hidden><h3>表头设置</h3><p class="xm-hm-head-hint">勾选店铺表要显示的列。排名、店铺名称固定。付费中心列数据待对接。</p><div id="xm-hm-head-opts"></div></div>' +
       '<div class="xm-hm-body">' +
       '<section class="xm-hm-kpis-shell"><div class="xm-hm-teams-bar"><b>星脉甄选</b><button type="button" class="xm-hm-set" id="xm-hm-set">卡片设置</button></div><div class="xm-hm-sales" id="xm-hm-sales"></div><div class="xm-hm-kpis" id="xm-hm-kpis"></div></section>' +
       '<section class="xm-hm-teams" id="xm-hm-teams" hidden></section>' +
@@ -2310,7 +2319,7 @@
     hideCardTip();
     hideLineTip(root);
     var feeDraft = liveFeeDraft(root);
-    board.setAttribute("data-hm-js", "0.1.824-home-liveamt");
+    board.setAttribute("data-hm-js", "0.1.825-home-headset");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
