@@ -202,8 +202,9 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.doesNotMatch(homeJs, /function hourFromBarEvent/);
   assert.doesNotMatch(homeJs, /柱：分时金额/);
   assert.doesNotMatch(homeJs, /柱：分时费比/);
-  assert.match(homeJs, /线：累计（23点=1-23点）/);
-  assert.match(homeJs, /线：当天费比/);
+  assert.doesNotMatch(homeJs, /线：累计（23点=1-23点）/);
+  assert.doesNotMatch(homeJs, /线：当天费比/);
+  assert.doesNotMatch(homeJs, /xm-hm-chart-sub/);
   assert.match(homeJs, /stroke="#91caff"/);
   assert.match(homeJs, /stroke="#ffa39e"/);
   assert.match(homeJs, /\.xm-hm-sales-chart \.xm-hm-line,\.xm-hm-live \.xm-hm-line\{[^}]*height:148px/);
@@ -785,7 +786,8 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
   assert.ok(lastX > 600);
   assert.match(html, />1<\/text>/);
   assert.match(html, />24<\/text>/);
-  assert.match(html, /线：累计（23点=1-23点）/);
+  assert.doesNotMatch(html, /线：累计（23点=1-23点）/);
+  assert.doesNotMatch(html, /xm-hm-chart-sub/);
   assert.match(html, /preserveAspectRatio="none"/);
   const liveHtml = fns.liveChartHtml({
     label: "实时总成交金额",
@@ -825,7 +827,8 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
   assert.match(feeHtml, /data-chart="fee"/);
   assert.match(feeHtml, /data-unit="rate"/);
   assert.match(feeHtml, /data-hours="24"/);
-  assert.match(feeHtml, /线：当天费比/);
+  assert.doesNotMatch(feeHtml, /线：当天费比/);
+  assert.doesNotMatch(feeHtml, /xm-hm-chart-sub/);
   assert.doesNotMatch(feeHtml, /xm-hm-col/);
   const emptySpend = fns.liveChartHtml({
     label: "推广总花费",
@@ -835,7 +838,8 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
   });
   assert.match(emptySpend, /data-hours="24"/);
   assert.match(emptySpend, /环比 —/);
-  assert.match(emptySpend, /线：累计（23点=1-23点）/);
+  assert.doesNotMatch(emptySpend, /线：累计（23点=1-23点）/);
+  assert.doesNotMatch(emptySpend, /xm-hm-chart-sub/);
   assert.match(emptySpend, />1<\/text>/);
   assert.match(emptySpend, />24<\/text>/);
   const emptyFee = fns.liveChartHtml({
@@ -847,7 +851,8 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
   });
   assert.match(emptyFee, /data-hours="24"/);
   assert.match(emptyFee, /环比 —/);
-  assert.match(emptyFee, /线：当天费比/);
+  assert.doesNotMatch(emptyFee, /线：当天费比/);
+  assert.doesNotMatch(emptyFee, /xm-hm-chart-sub/);
   assert.match(emptyFee, />1<\/text>/);
   assert.match(emptyFee, />24<\/text>/);
 });
