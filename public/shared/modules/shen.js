@@ -36,7 +36,7 @@
     mount: function (root) {
       const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
       paidCss.rel = "stylesheet";
-      paidCss.href = "/shared/shen-paid.css?v=0.1.831-jingmai-password";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.832-jingmai-page";
       if (!paidCss.parentNode) {
         document.head.appendChild(paidCss);
       }
@@ -118,8 +118,6 @@
       let dead = false;
       let overviewRows = [];
       let liveUpdatedAt = "";
-      let qrStore = "";
-      let qrTimer = 0;
       let overviewAsOf = "";
       let enabledStores = [];
       let overviewStale = false;
@@ -1891,7 +1889,7 @@
               );
             })
             .join("") +
-          '</tbody></table></div><p class="xm-hl-note">重新登录要点店名旁边的红字，用组织中心保存的账号密码登录，并完成滑动验证。登录一次后服务器每 5 分钟采集。推广花费和广告 ROI 不从成交额推算。</p></section>' +
+          '</tbody></table></div><p class="xm-hl-note">重新登录会打开京麦自己的登录页。请在那个页面完成验证和验证码，一家店登录一次。推广花费和广告 ROI 不从成交额推算。</p></section>' +
           '<div class="xm-sp-shop-modal" data-shop-modal hidden><form class="xm-sp-shop-dialog" data-shop-form>' +
           "<h3>新增店铺</h3><p class=\"xm-sp-shop-hint\">保存后归入沈子晗组，并出现在这份全部店铺里。登录账号在组织中心填写。</p>" +
           '<label>店铺名称<input name="storeName" required maxlength="64" autocomplete="off" /></label>' +
@@ -1901,10 +1899,6 @@
           '<p class="xm-sp-shop-error" data-shop-error hidden></p>' +
           '<div class="xm-sp-shop-actions"><button type="submit">保存</button>' +
           '<button type="button" data-shop-cancel>取消</button></div></form></div>' +
-          '<div class="xm-sp-shop-modal" data-qr-modal hidden><div class="xm-sp-shop-dialog" role="dialog" aria-modal="true">' +
-          '<h3>账号登录</h3><p class="xm-sp-shop-hint" data-qr-shop></p>' +
-          '<p class="xm-sp-shop-hint" data-qr-state>正在打开验证…</p>' +
-          '<div class="xm-sp-shop-actions"><button type="button" data-qr-close>关闭</button></div></div></div>' +
           '<pre id="shen-paid-live-snapshot" hidden>' +
           JSON.stringify(snapshot).replace(/</g, "\\u003c") +
           "</pre></div>";
@@ -1943,20 +1937,16 @@
               setStatus("还没有店铺", true);
               return;
             }
-            openQr(target.store);
+            openLogin(target.store);
           });
         }
         boardEl.querySelectorAll("[data-relogin]").forEach(function (button) {
           button.addEventListener("click", function (event) {
             event.preventDefault();
             event.stopPropagation();
-            openQr(button.getAttribute("data-relogin") || "");
+            openLogin(button.getAttribute("data-relogin") || "");
           });
         });
-        const qrClose = boardEl.querySelector("[data-qr-close]");
-        if (qrClose) {
-          qrClose.addEventListener("click", closeQr);
-        }
         const headOpen = boardEl.querySelector("[data-head-open]");
         const headPop = boardEl.querySelector("[data-head-pop]");
         if (headOpen && headPop) {
@@ -2301,107 +2291,35 @@
         }
       }
 
-      function closeQr() {
-        qrStore = "";
-        window.clearInterval(qrTimer);
-        qrTimer = 0;
-        const modal = boardEl.querySelector("[data-qr-modal]");
-        if (modal) {
-          modal.hidden = true;
-        }
-      }
-
-      function loadCaptcha(done) {
-        if (typeof window.captchaLoadJS === "function") {
-          done();
-          return;
-        }
-        const script = document.createElement("script");
-        script.src = "https://jcap.m.jd.com/home/requireCaptchaPc.js?v=2";
-        script.onload = function () {
-          done();
-        };
-        script.onerror = function () {
-          done(new Error("验证组件没有打开"));
-        };
-        document.head.appendChild(script);
-      }
-
-      function openQr(store) {
+      function openLogin(store) {
         const name = String(store || "");
         if (!name) {
           return;
         }
-        window.clearInterval(qrTimer);
-        qrTimer = 0;
-        qrStore = name;
-        const modal = boardEl.querySelector("[data-qr-modal]");
-        const shop = boardEl.querySelector("[data-qr-shop]");
-        const state = boardEl.querySelector("[data-qr-state]");
-        if (!modal || !state) {
-          return;
-        }
-        modal.hidden = false;
-        if (shop) {
-          shop.textContent = "使用组织中心保存的账号登录「" + name + "」。请完成滑动验证。";
-        }
-        state.textContent = "正在打开验证…";
+        const popup = window.open("about:blank", "_blank");
         postJson("/api/shen/paid/jingmai/relogin", { store: name })
           .then(function (result) {
-            if (qrStore !== name) {
+            const url = result && result.loginUrl ? String(result.loginUrl) : "";
+            if (result && result.status === "page" && url.indexOf("https://passport.shop.jd.com/") === 0) {
+              if (popup) {
+                popup.location.href = url;
+              } else {
+                window.location.assign(url);
+              }
+              const account = result.loginName ? "，账号 " + result.loginName : "";
+              setStatus("已打开「" + name + "」的京麦登录页" + account + "。请在新页面完成验证和验证码。");
               return;
             }
-            if (!result || !result.sessionId) {
-              state.textContent = (result && result.message) || "登录没有打开";
-              return;
+            if (popup) {
+              popup.close();
             }
-            state.textContent = "请完成滑动验证";
-            loadCaptcha(function (err) {
-              if (qrStore !== name) {
-                return;
-              }
-              if (err || typeof window.captchaLoadJS !== "function") {
-                state.textContent = "验证组件没有打开";
-                return;
-              }
-              window.captchaLoadJS(
-                {
-                  sessionId: result.sessionId,
-                  language: "1",
-                  onSuccess: function (payload) {
-                    const token = (payload && (payload.vt || payload.validate || payload.token)) || "";
-                    state.textContent = "正在登录…";
-                    postJson("/api/shen/paid/jingmai/relogin/finish", { store: name, authCode: token })
-                      .then(function (done) {
-                        if (done && done.status === "ok") {
-                          closeQr();
-                          setStatus(name + " 已登录");
-                          load();
-                          return;
-                        }
-                        state.textContent = (done && done.message) || "登录没有通过，请再试一次";
-                      })
-                      .catch(function (error) {
-                        state.textContent = error.message || "登录没有通过，请再试一次";
-                      });
-                  },
-                  onFailure: function () {
-                    state.textContent = "验证没通过，请关闭后重试";
-                  },
-                  onCancel: function () {
-                    state.textContent = "已取消验证";
-                  }
-                },
-                function (instance) {
-                  if (instance && instance.create) {
-                    instance.create({ account: result.loginName || "" });
-                  }
-                }
-              );
-            });
+            setStatus((result && result.message) || "登录页没有打开", true);
           })
           .catch(function (err) {
-            state.textContent = err.message || "登录没有打开";
+            if (popup) {
+              popup.close();
+            }
+            setStatus(err.message || "登录页没有打开", true);
           });
       }
 
@@ -2434,9 +2352,6 @@
                 return { store: row.store, enabled: row.enabled };
               })
             }).catch(function () {});
-            if (qrStore) {
-              return;
-            }
             if (view.store) {
               renderJingmaiShop(view.store);
             } else {
@@ -2562,7 +2477,6 @@
       return function unmount() {
         dead = true;
         window.clearInterval(poll);
-        window.clearInterval(qrTimer);
         window.removeEventListener("hashchange", onHash);
         root.innerHTML = "";
       };

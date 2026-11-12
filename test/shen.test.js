@@ -390,8 +390,9 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /连接京麦/);
     assert.match(embed.text, /重新登录/);
     assert.match(embed.text, /data-relogin/);
-    assert.match(embed.text, /\/api\/shen\/paid\/jingmai\/relogin\/finish/);
+    assert.match(embed.text, /passport\.shop\.jd\.com/);
     assert.equal(embed.text.includes("二维码"), false);
+    assert.equal(embed.text.includes("captchaLoadJS"), false);
     assert.match(embed.text, /60 \* 1000/);
     assert.match(embed.text, /\/api\/home\/local-paid/);
     assert.equal(embed.text.includes("/api/home/erp-paid"), false);

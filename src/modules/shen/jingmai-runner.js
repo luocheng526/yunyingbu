@@ -3,6 +3,8 @@ import { beijingParts, runTick } from "./jingmai.js";
 import { listCollectTargets, markAuth, readJingmaiLive, saveSample, saveSession, setRoster } from "./jingmai-store.js";
 
 const INTERVAL_MS = 5 * 60 * 1000;
+const JINGMAI_LOGIN_URL =
+  "https://passport.shop.jd.com/login/index.action/jdm?ReturnUrl=" + encodeURIComponent("https://shop.jd.com/");
 const inflight = new Set();
 const qrPending = new Map();
 const passwordPending = new Map();
@@ -146,22 +148,20 @@ export async function beginRelogin(store, cookie) {
   if (!shop || shop.enabled === false) {
     return { ok: true, store: name, status: "login", message: "这家店已停用" };
   }
-  if (!shop.login || !shop.password) {
+  if (!shop.login) {
     return { ok: true, store: name, status: "login", message: "组织中心还没有填写这家店的账号" };
   }
-  const opened = await deps.client.openPassword();
-  const previous = passwordPending.get(name);
-  if (previous) {
-    previous.password = "";
-  }
-  passwordPending.set(name, {
-    jar: opened.jar,
-    init: opened.init,
-    loginName: shop.login,
-    password: shop.password
-  });
+  const loginName = shop.login;
+  shop.login = "";
   shop.password = "";
-  return { ok: true, store: name, status: "captcha", sessionId: opened.sessionId, loginName: shop.login };
+  return {
+    ok: true,
+    store: name,
+    status: "page",
+    loginName: loginName,
+    loginUrl: JINGMAI_LOGIN_URL,
+    message: "请刷新页面后再点重新登录"
+  };
 }
 
 export async function finishRelogin(store, authCode) {
