@@ -34,11 +34,11 @@
   window.XmModules["/shen/growth"] = waitPage("产品成长");
   window.XmModules["/shen/paid"] = {
     mount: function (root) {
-      if (!document.querySelector('link[href^="/shared/shen-paid.css"]')) {
-        const link = document.createElement("link");
-        link.rel = "stylesheet";
-        link.href = "/shared/shen-paid.css?v=0.1.821-shen-roster";
-        document.head.appendChild(link);
+      const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
+      paidCss.rel = "stylesheet";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.824-dc-live";
+      if (!paidCss.parentNode) {
+        document.head.appendChild(paidCss);
       }
 
       const COLS = [
@@ -1174,15 +1174,283 @@
         );
       }
 
+      function shopKey(name) {
+        return String(name || "")
+          .replace(/\s+/g, "")
+          .replace(/店$/, "");
+      }
+
+      function parseMoney(value) {
+        if (value == null || value === "" || value === "—") {
+          return null;
+        }
+        const n = Number(String(value).replace(/[,％%\s]/g, ""));
+        return isFinite(n) ? n : null;
+      }
+
+      function formatMoney(value) {
+        if (value == null || !isFinite(Number(value))) {
+          return "—";
+        }
+        const neg = Number(value) < 0;
+        const parts = Math.abs(Number(value)).toFixed(2).split(".");
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        return (neg ? "-" : "") + parts.join(".");
+      }
+
+      function formatRate(value) {
+        if (value == null || !isFinite(Number(value))) {
+          return "—";
+        }
+        return (Number(value) * 100).toFixed(2) + "%";
+      }
+
+      function liveShopsOf(payload) {
+        if (!payload || payload.demo === true || payload.ok === false) {
+          return [];
+        }
+        return (payload.shops || []).filter(function (shop) {
+          return shop && shop.demo !== true;
+        });
+      }
+
+      function applyLiveMetrics(rows, payloads) {
+        const byName = {};
+        (payloads || []).forEach(function (payload) {
+          liveShopsOf(payload).forEach(function (shop) {
+            const key = shopKey(shop.shop || shop.shopName || shop.name);
+            if (key) {
+              byName[key] = shop;
+            }
+          });
+        });
+        rows.forEach(function (row) {
+          const hit = byName[shopKey(row.store)];
+          row.liveAmount = hit ? parseMoney(hit.liveAmount != null ? hit.liveAmount : hit.sales) : null;
+          row.paidAmount = hit ? parseMoney(hit.paidAmount != null ? hit.paidAmount : hit.spend) : null;
+          row.liveProfit = hit ? parseMoney(hit.profit) : null;
+          row.roiText = hit && hit.roi != null && hit.roi !== "" && hit.roi !== "—" ? String(hit.roi) : "";
+          row.paidDeal = hit ? parseMoney(hit.paidDeal != null ? hit.paidDeal : hit.jingmaiGmv) : null;
+          row.feeText = hit && hit.feeRate != null && hit.feeRate !== "" && hit.feeRate !== "—" ? String(hit.feeRate) : "";
+          row.linked = Boolean(hit) && (row.liveAmount != null || row.paidAmount != null || row.paidDeal != null);
+        });
+        rows.sort(function (a, b) {
+          if (a.linked !== b.linked) {
+            return a.linked ? -1 : 1;
+          }
+          const diff = (Number(b.liveAmount) || 0) - (Number(a.liveAmount) || 0);
+          if (diff) {
+            return diff;
+          }
+          return a.store.localeCompare(b.store, "zh");
+        });
+      }
+
+      function sumField(rows, key) {
+        let total = 0;
+        let any = false;
+        rows.forEach(function (row) {
+          if (row[key] == null) {
+            return;
+          }
+          any = true;
+          total += Number(row[key]) || 0;
+        });
+        return any ? total : null;
+      }
+
+      function rankMark(index) {
+        if (index === 0) {
+          return '<b class="xm-dc-cup gold">1</b>';
+        }
+        if (index === 1) {
+          return '<b class="xm-dc-cup silver">2</b>';
+        }
+        if (index === 2) {
+          return '<b class="xm-dc-cup bronze">3</b>';
+        }
+        return "<span>" + (index + 1) + "</span>";
+      }
+
+      function bindShopForm() {
+        const addShop = boardEl.querySelector("[data-add-shop]");
+        const shopModal = boardEl.querySelector("[data-shop-modal]");
+        const shopForm = boardEl.querySelector("[data-shop-form]");
+        const shopError = boardEl.querySelector("[data-shop-error]");
+        if (!addShop || !shopModal || !shopForm) {
+          return;
+        }
+        addShop.addEventListener("click", function () {
+          if (shopError) {
+            shopError.hidden = true;
+            shopError.textContent = "";
+          }
+          shopModal.hidden = false;
+          const nameInput = shopForm.querySelector("[name=storeName]");
+          if (nameInput) {
+            nameInput.focus();
+          }
+        });
+        shopForm.addEventListener("submit", function (event) {
+          event.preventDefault();
+          const storeName = String(shopForm.storeName.value || "").trim();
+          if (!storeName) {
+            return;
+          }
+          const submit = shopForm.querySelector("[type=submit]");
+          if (submit) {
+            submit.disabled = true;
+          }
+          postJson("/api/people/org/stores", {
+            director: "罗成",
+            manager: "沈子晗",
+            supervisor: String(shopForm.supervisor.value || "").trim(),
+            operator: String(shopForm.operator.value || "").trim(),
+            storeName: storeName,
+            storeId: String(shopForm.storeId.value || "").trim(),
+            remark: "运营中"
+          })
+            .then(function () {
+              shopForm.reset();
+              shopModal.hidden = true;
+              return load();
+            })
+            .catch(function (err) {
+              if (shopError) {
+                shopError.hidden = false;
+                shopError.textContent = err.message || "保存失败";
+              }
+            })
+            .then(function () {
+              if (submit) {
+                submit.disabled = false;
+              }
+            });
+        });
+        const cancel = shopForm.querySelector("[data-shop-cancel]");
+        if (cancel) {
+          cancel.addEventListener("click", function () {
+            shopModal.hidden = true;
+          });
+        }
+      }
+
+      function renderDataCenter(rows) {
+        const sales = sumField(rows, "liveAmount");
+        const spend = sumField(rows, "paidAmount");
+        const profit = sumField(rows, "liveProfit");
+        const deal = sumField(rows, "paidDeal");
+        let roiWeight = 0;
+        let roiBase = 0;
+        rows.forEach(function (row) {
+          const roi = parseMoney(row.roiText);
+          const base = row.paidAmount;
+          if (roi == null || base == null) {
+            return;
+          }
+          roiWeight += roi * base;
+          roiBase += base;
+        });
+        const cards = [
+          {
+            label: "推广花费 (支付预估)",
+            value: formatMoney(spend),
+            extra: sales > 0 && spend != null ? "推广占比 " + formatRate(spend / sales) : ""
+          },
+          {
+            label: "利润 (支付预估)",
+            value: formatMoney(profit),
+            extra: sales > 0 && profit != null ? "毛利率 " + formatRate(profit / sales) : ""
+          },
+          { label: "付费成交ROI", value: roiBase > 0 ? (roiWeight / roiBase).toFixed(2) : "—", extra: "" },
+          { label: "实时付费成交额", value: formatMoney(deal), extra: "" },
+          {
+            label: "实时费比",
+            value: sales > 0 && spend != null ? formatRate(spend / sales) : "—",
+            extra: ""
+          }
+        ];
+        const clock = new Intl.DateTimeFormat("zh-CN", {
+          timeZone: "Asia/Shanghai",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false
+        }).format(new Date());
+        boardEl.hidden = false;
+        kpiEl.hidden = true;
+        boardEl.innerHTML =
+          '<div class="xm-dc"><p class="xm-dc-clock">每5分钟自动刷新 · 上次 ' +
+          escapeHtml(clock) +
+          '</p><div class="xm-dc-cards">' +
+          cards
+            .map(function (card) {
+              return (
+                '<article class="xm-dc-card"><div class="xm-dc-label">' +
+                escapeHtml(card.label) +
+                '</div><div class="xm-dc-value">' +
+                escapeHtml(card.value) +
+                "</div>" +
+                (card.extra ? '<div class="xm-dc-extra">' + escapeHtml(card.extra) + "</div>" : "") +
+                "</article>"
+              );
+            })
+            .join("") +
+          '</div><section class="xm-dc-panel"><h2>店铺<span>' +
+          rows.length +
+          ' 店</span><button type="button" data-add-shop>新增店铺</button></h2>' +
+          '<div class="xm-dc-table-wrap"><table class="xm-dc-table"><thead><tr>' +
+          "<th>排名</th><th>店铺名称</th><th>实时销售额</th><th>实时付费金额</th><th>实时利润</th><th>实时付费ROI</th><th>实时付费成交额</th><th>实时费比</th>" +
+          "</tr></thead><tbody>" +
+          rows
+            .map(function (row, index) {
+              return (
+                "<tr><td>" +
+                rankMark(index) +
+                '</td><td class="xm-dc-shop">' +
+                escapeHtml(row.store) +
+                "</td><td>" +
+                formatMoney(row.liveAmount) +
+                "</td><td>" +
+                formatMoney(row.paidAmount) +
+                "</td><td>" +
+                formatMoney(row.liveProfit) +
+                "</td><td>" +
+                escapeHtml(row.roiText || "—") +
+                "</td><td>" +
+                formatMoney(row.paidDeal) +
+                "</td><td>" +
+                escapeHtml(row.feeText || "—") +
+                "</td></tr>"
+              );
+            })
+            .join("") +
+          "</tbody></table></div></section>" +
+          '<p class="xm-dc-note">实时页每5分钟自动拉一次数。版式与数据中心实时付费相同，只列沈子晗组的店。</p>' +
+          '<div class="xm-sp-shop-modal" data-shop-modal hidden><form class="xm-sp-shop-dialog" data-shop-form>' +
+          "<h3>新增店铺</h3><p class=\"xm-sp-shop-hint\">保存后归入沈子晗组，并出现在这份全部店铺里。登录账号在组织中心填写。</p>" +
+          '<label>店铺名称<input name="storeName" required maxlength="64" autocomplete="off" /></label>' +
+          '<label>主管<input name="supervisor" maxlength="40" autocomplete="off" /></label>' +
+          '<label>运营<input name="operator" maxlength="40" autocomplete="off" /></label>' +
+          '<label>店铺ID<input name="storeId" maxlength="32" autocomplete="off" /></label>' +
+          '<p class="xm-sp-shop-error" data-shop-error hidden></p>' +
+          '<div class="xm-sp-shop-actions"><button type="submit">保存</button>' +
+          '<button type="button" data-shop-cancel>取消</button></div></form></div></div>';
+        bindShopForm();
+      }
+
       function renderOverview(data) {
         overviewRows = data.rows || [];
         enabledStores = data.enabledStores || [];
         markStale(data);
-        renderTabs();
-        paintAsof(data);
-        renderLiveBoard();
-        bodyEl.innerHTML =
-          '<section class="panel"><div id="paid-table">' + renderLiveTables() + "</div></section>";
+        if (barEl) {
+          barEl.hidden = true;
+        }
+        bodyEl.innerHTML = "";
+        renderDataCenter(overviewRows);
       }
 
       function renderKpis(metrics) {
@@ -1392,6 +1660,21 @@
         return fetch(url, { credentials: "same-origin" }).then(readJson);
       }
 
+      function getOptional(url) {
+        return fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } })
+          .then(function (res) {
+            if (!res.ok) {
+              return null;
+            }
+            return res.json().catch(function () {
+              return null;
+            });
+          })
+          .catch(function () {
+            return null;
+          });
+      }
+
       function postJson(url, body) {
         return fetch(url, {
           method: "POST",
@@ -1458,28 +1741,38 @@
       function load() {
         view = parseHash();
         setStatus("正在加载…");
-        return getJson("/api/people/org/stores?team=" + encodeURIComponent("沈子晗组"))
-          .then(function (data) {
+        return Promise.all([
+          getJson("/api/people/org/stores?team=" + encodeURIComponent("沈子晗组")),
+          getOptional("/api/data/live"),
+          getOptional("/api/home/live")
+        ])
+          .then(function (pack) {
             if (dead) {
               return;
             }
+            const data = pack[0];
             (data.stores || []).forEach(function (store) {
               delete store.login;
               delete store.password;
             });
             const mapped = mapShenShops(data);
+            applyLiveMetrics(mapped.rows, [pack[1], pack[2]]);
             overviewRows = mapped.rows;
             overviewAsOf = "";
             overviewStale = false;
+            const linked = mapped.rows.filter(function (row) {
+              return row.linked;
+            }).length;
             if (view.store) {
               renderJingmaiShop(view.store);
             } else {
-              if (barEl) {
-                barEl.hidden = false;
-              }
               renderOverview({ asOf: "", rows: mapped.rows });
             }
-            setStatus("已更新 · 沈子晗组 " + mapped.rows.length + " 店。新加的店会进这份名单，京麦成交还没接入");
+            setStatus(
+              linked
+                ? "已更新 · 沈子晗组 " + mapped.rows.length + " 店，其中 " + linked + " 家有实时数"
+                : "已更新 · 沈子晗组 " + mapped.rows.length + " 店。实时接口还没有这些店的数"
+            );
           })
           .catch(function (err) {
             if (!dead) {
@@ -1574,9 +1867,15 @@
       });
 
       window.addEventListener("hashchange", onHash);
+      const poll = window.setInterval(function () {
+        if (!dead) {
+          load();
+        }
+      }, 5 * 60 * 1000);
       load();
       return function unmount() {
         dead = true;
+        window.clearInterval(poll);
         window.removeEventListener("hashchange", onHash);
         root.innerHTML = "";
       };

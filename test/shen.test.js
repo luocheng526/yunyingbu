@@ -386,6 +386,11 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /新增店铺/);
     assert.match(embed.text, /manager: "沈子晗"/);
     assert.match(embed.text, /京麦未接入/);
+    assert.match(embed.text, /\/api\/data\/live/);
+    assert.match(embed.text, /\/api\/home\/live/);
+    assert.match(embed.text, /实时销售额/);
+    assert.match(embed.text, /实时付费金额/);
+    assert.match(embed.text, /payload\.demo/);
     assert.equal(embed.text.includes("/api/people/shops"), false);
     assert.equal(embed.text.includes('name="password"'), false);
     assert.equal(embed.text.includes("/api/home/erp-paid"), false);

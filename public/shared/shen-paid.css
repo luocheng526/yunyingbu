@@ -706,6 +706,132 @@
   color: #262626;
 }
 
+#paid-board .xm-dc-clock,
+#paid-board .xm-dc-note {
+  margin: 0 0 12px;
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+#paid-board .xm-dc-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+#paid-board .xm-dc-card {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px #0000000f;
+  padding: 16px 18px 14px;
+  min-height: 108px;
+}
+
+#paid-board .xm-dc-label {
+  color: #8c8c8c;
+  font-size: 13px;
+}
+
+#paid-board .xm-dc-value {
+  margin-top: 10px;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #262626;
+}
+
+#paid-board .xm-dc-extra {
+  margin-top: 8px;
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+#paid-board .xm-dc-panel {
+  margin-top: 16px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px #0000000f;
+  padding: 14px 16px 8px;
+}
+
+#paid-board .xm-dc-panel h2 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+#paid-board .xm-dc-panel h2 span {
+  margin-left: auto;
+  color: #8c8c8c;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+#paid-board .xm-dc-panel h2 button {
+  border: 0;
+  background: transparent;
+  color: #1677ff;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+}
+
+#paid-board .xm-dc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+#paid-board .xm-dc-table th {
+  text-align: left;
+  color: #8c8c8c;
+  font-weight: 500;
+  padding: 10px 8px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+#paid-board .xm-dc-table td {
+  padding: 12px 8px;
+  border-bottom: 1px solid #f5f5f5;
+  color: #262626;
+}
+
+#paid-board .xm-dc-table th:nth-child(n + 3),
+#paid-board .xm-dc-table td:nth-child(n + 3) {
+  text-align: right;
+}
+
+#paid-board .xm-dc-shop {
+  color: #0f8f86;
+}
+
+#paid-board .xm-dc-cup {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 12px;
+}
+
+#paid-board .xm-dc-cup.gold { background: #f5a623; }
+#paid-board .xm-dc-cup.silver { background: #8c8c8c; }
+#paid-board .xm-dc-cup.bronze { background: #d46b08; }
+
+#paid-board .xm-dc-note {
+  margin-top: 10px;
+}
+
+@media (max-width: 1100px) {
+  #paid-board .xm-dc-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 #paid-board .xm-sp-shop-modal[hidden] {
   display: none !important;
 }
