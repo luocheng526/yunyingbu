@@ -154,6 +154,7 @@ test("live page has fee target, warning and update time", () => {
   assert.doesNotMatch(homeJs, /data-fee-target/);
   assert.doesNotMatch(homeJs, /data-fee-shop/);
   assert.match(homeJs, /placeholder="搜索店铺"/);
+  assert.match(homeJs, /\.xm-hm-live-search input\{width:200px\}/);
   assert.match(homeJs, /function liveChipHtml/);
   assert.match(homeJs, /function liveSearchHtml/);
   assert.match(homeJs, /liveChipHtml\("link", "off", "掉线"/);

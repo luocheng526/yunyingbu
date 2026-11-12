@@ -197,7 +197,7 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function seriesOf/);
   assert.match(homeJs, /function todayHours/);
   assert.match(homeJs, /function padHours/);
-  assert.match(homeJs, /function companySalesHtml/);
+  assert.doesNotMatch(homeJs, /function companySalesHtml/);
   assert.match(homeJs, /function toHalfIncrements/);
   assert.match(homeJs, /function halfTipLabel/);
   assert.match(homeJs, /function halfSalesChart/);
@@ -212,7 +212,7 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.doesNotMatch(homeJs, /xm-hm-chart-sub/);
   assert.match(homeJs, /stroke="#91caff"/);
   assert.match(homeJs, /stroke="#ffa39e"/);
-  assert.match(homeJs, /\.xm-hm-sales-chart \.xm-hm-line,\.xm-hm-live \.xm-hm-line\{[^}]*height:148px/);
+  assert.match(homeJs, /\.xm-hm-live-charts \.xm-hm-line\{[^}]*height:148px/);
   assert.match(homeJs, /function repeatHours/);
   assert.match(homeJs, /unit: src\.unit \|\| base\.unit/);
   assert.match(homeJs, /lineMode: src\.lineMode \|\| base\.lineMode/);
@@ -222,11 +222,13 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.doesNotMatch(homeJs, /function liveSalesCard/);
   assert.doesNotMatch(homeJs, /LIVE_SALES_KEY = "liveSales"/);
   assert.match(homeJs, /id="xm-hm-sales"/);
-  assert.match(homeJs, /#xm-hm-sales"\)\.innerHTML = ""/);
+  assert.match(homeJs, /liveTrio = liveChartHtml\(hero\) \+ liveChartHtml\(paid\) \+ liveChartHtml\(fee\)/);
+  assert.match(homeJs, /#xm-hm-sales"\)\.innerHTML = state\.view === "company" \? liveTrio/);
+  assert.match(homeJs, /xm-hm-sales xm-hm-live-charts/);
   assert.doesNotMatch(homeJs, /companySalesHtml\(hero\)/);
   assert.match(homeJs, /state\.view === "company" \? companySetCards\(state\.cards\)/);
   assert.match(homeJs, /companyHideKeys\(state\.cards\)/);
-  assert.match(homeJs, /\.xm-hm-sales\{display:none/);
+  assert.match(homeJs, /\.xm-hm-sales\{margin-bottom:12px/);
   assert.match(homeJs, /state\.view === "live" \|\| state\.view === "company"/);
   assert.match(homeJs, /function cumHours/);
   assert.match(homeJs, /function hourFromEvent/);
@@ -756,7 +758,7 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
     "function feeWarnText(){return \"\";}" +
       cum +
       homeJs.slice(start, end) +
-      "return {companySalesHtml, liveChartHtml, compareLineHtml, toHalfIncrements, halfTipLabel};"
+      "return {liveChartHtml, compareLineHtml, toHalfIncrements, halfTipLabel};"
   )((value) => String(value == null ? "" : value));
   assert.deepEqual(fns.toHalfIncrements([2, 4]), [1, 1, 2, 2]);
   assert.equal(fns.halfTipLabel(0), "0:30");
@@ -765,35 +767,6 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
   assert.equal(fns.halfTipLabel(15), "8");
   const yest = Array.from({ length: 24 }, (_, i) => (i + 1) * 10);
   const today = [10, 30, 60];
-  const html = fns.companySalesHtml({
-    value: "12,345",
-    yesterday: yest,
-    today: today,
-    yesterdayHour: yest,
-    todayHour: today,
-    hours: 24
-  });
-  assert.match(html, /实时销售金额/);
-  assert.match(html, />12,345</);
-  assert.match(html, /data-hours="24"/);
-  assert.doesNotMatch(html, /环比/);
-  assert.doesNotMatch(html, /<circle/);
-  assert.doesNotMatch(html, /xm-hm-bars/);
-  assert.doesNotMatch(html, /xm-hm-col/);
-  const red = html.match(/stroke="#ffa39e"[^>]*points="([^"]+)"/);
-  const blue = html.match(/stroke="#91caff"[^>]*points="([^"]+)"/);
-  assert.ok(red && blue);
-  assert.equal(red[1].trim().split(/\s+/).length, 3);
-  assert.equal(blue[1].trim().split(/\s+/).length, 24);
-  const firstX = Number(blue[1].trim().split(/\s+/)[0].split(",")[0]);
-  const lastX = Number(blue[1].trim().split(/\s+/).pop().split(",")[0]);
-  assert.ok(firstX < 40);
-  assert.ok(lastX > 600);
-  assert.match(html, />1<\/text>/);
-  assert.match(html, />24<\/text>/);
-  assert.doesNotMatch(html, /线：累计（23点=1-23点）/);
-  assert.doesNotMatch(html, /xm-hm-chart-sub/);
-  assert.match(html, /preserveAspectRatio="none"/);
   const liveHtml = fns.liveChartHtml({
     label: "实时总成交金额",
     value: "12,345",
@@ -1017,8 +990,11 @@ test("fee target is a range and 费比监控 uses 超标 / 加大付费", () => 
   assert.doesNotMatch(homeJs, /xm-home-fee-targets/);
   assert.match(homeJs, /type="search"/);
   assert.match(homeJs, /placeholder="搜索店铺"/);
+  assert.match(homeJs, /\.xm-hm-live-search input\{width:200px\}/);
   assert.match(homeJs, /liveChipHtml\("link", "off", "掉线"/);
   assert.match(homeJs, /回传失败/);
+  const searchFn = homeJs.slice(homeJs.indexOf("function liveSearchHtml"), homeJs.indexOf("function pickLiveCards"));
+  assert.ok(searchFn.indexOf("xm-hm-live-chips") < searchFn.indexOf('data-live-filter="q"'));
   assert.match(homeJs, /if \(isHomeFormField\(event\.target\)\) \{\s*return;/);
   assert.match(homeJs, /加大付费/);
   assert.match(homeJs, /费比超标/);
@@ -1140,7 +1116,9 @@ test("live header settings add 付费中心 columns without wiring data", () => 
   assert.match(homeJs, /京准通点击率/);
   assert.match(homeJs, /京准通总订单金额/);
   assert.match(homeJs, /真实费比/);
-  assert.match(homeJs, /回传成功/);
+  assert.match(homeJs, /是否回传成功/);
+  assert.match(homeJs, /ok = "回传成功"/);
+  assert.match(homeJs, /ok = "回传失败"/);
   assert.match(homeJs, /label: "状态"/);
   assert.match(homeJs, /function liveLinkOf/);
   assert.match(homeJs, /在线/);
@@ -1193,7 +1171,8 @@ test("live header settings add 付费中心 columns without wiring data", () => 
   assert.equal(labels.includes("更新时间"), true);
   assert.equal(labels.includes("京准通主账户ID"), false);
   assert.equal(labels.includes("真实费比"), false);
-  assert.equal(labels.includes("回传成功"), true);
+  assert.equal(labels.includes("是否回传成功"), true);
+  assert.equal(labels.includes("回传成功"), false);
   assert.equal(labels.includes("状态"), true);
   assert.equal(labels.includes("是否成功"), false);
   fns.saveLiveHiddenHeads(["liveAmount", "feeGoal"]);

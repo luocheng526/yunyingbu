@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.876-fee */
+/* xm-module-home 0.1.878-co */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1460,15 +1460,15 @@
     var pick = liveFilter();
     return (
       '<div class="xm-hm-live-search">' +
-      '<input type="search" data-live-filter="q" placeholder="搜索店铺" value="' +
-      escapeHtml(pick.q || "") +
-      '" />' +
       '<div class="xm-hm-live-chips">' +
       liveChipHtml("link", "on", "在线", pick.link === "on") +
       liveChipHtml("link", "off", "掉线", pick.link === "off") +
       liveChipHtml("jzOk", "是", "回传成功", pick.jzOk === "是") +
       liveChipHtml("jzOk", "否", "回传失败", pick.jzOk === "否") +
-      "</div></div>"
+      "</div>" +
+      '<input type="search" data-live-filter="q" placeholder="搜索店铺" value="' +
+      escapeHtml(pick.q || "") +
+      '" /></div>'
     );
   }
   function pickLiveCards(cards) {
@@ -1680,26 +1680,6 @@
       "</article>"
     );
   }
-  function companySalesHtml(chart) {
-    var sales = Object.assign(
-      {
-        label: "实时销售金额",
-        value: (chart && chart.value) || "—"
-      },
-      lineChartOf(chart)
-    );
-    return (
-      '<article class="xm-hm-chart xm-hm-sales-chart" data-chart="sales"' +
-      hoursAttr(sales.hours) +
-      '><div class="xm-hm-card-head"><span>' +
-      escapeHtml(sales.label) +
-      '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
-      escapeHtml(sales.value) +
-      "</div>" +
-      compareLineHtml(sales) +
-      "</article>"
-    );
-  }
   var LIVE_CORE_HEADS = [
     { key: "rank", label: "排名", w: "56px" },
     { key: "shop", label: "店铺名称", w: "16%" },
@@ -1711,7 +1691,7 @@
     { key: "feeWarn", label: "费比监控", w: "120px" },
     { key: "feeGoal", label: "费比设置", w: "110px" },
     { key: "liveAt", label: "更新时间", w: "150px" },
-    { key: "jzOk", label: "回传成功", w: "88px" },
+    { key: "jzOk", label: "是否回传成功", w: "120px" },
     { key: "liveOn", label: "状态", w: "72px" }
   ];
   var LIVE_EXTRA_HEADS = [
@@ -1951,9 +1931,11 @@
     }
     if (key === "jzOk") {
       var ok = String((row && row.jzOk) || "—");
+      if (ok === "是") ok = "回传成功";
+      else if (ok === "否") ok = "回传失败";
       return (
         '<td class="xm-hm-num' +
-        (ok === "是" || ok === "成功" ? " is-fee-cold" : ok === "否" || ok === "失败" ? " is-fee-hot" : "") +
+        (ok === "回传成功" ? " is-fee-cold" : ok === "回传失败" ? " is-fee-hot" : "") +
         '">' +
         escapeHtml(ok) +
         "</td>"
@@ -2059,9 +2041,8 @@
       ".xm-hm-team{cursor:grab;background:#dceaff;border:1px solid #7ea6dc}" +
       ".xm-hm-team.is-hold{cursor:grabbing;opacity:.84}" +
       ".xm-hm-kpis-shell,.xm-hm-teams{padding:10px}" +
-      ".xm-hm-sales{display:none;margin:0}" +
-      ".xm-hm-sales-chart{width:100%}" +
-      ".xm-hm-sales-chart .xm-hm-line,.xm-hm-live .xm-hm-line{display:block;width:100%;height:148px;cursor:crosshair}" +
+      ".xm-hm-sales{margin-bottom:12px}" +
+      ".xm-hm-live-charts .xm-hm-line{display:block;width:100%;height:148px}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
       ".xm-hm-teams{display:flex;flex-direction:column;gap:10px;overflow-x:auto}" +
       ".xm-hm-teams-bar{display:flex;justify-content:space-between;align-items:center;padding:0 0 8px}" +
@@ -2131,10 +2112,10 @@
       ".xm-hm-rest em{font-style:normal;font-variant-numeric:tabular-nums}" +
       ".xm-hm-live-filter{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;padding:0;border:0}" +
       ".xm-hm-live-search{display:flex;gap:8px;margin:8px 0}" +
-      ".xm-hm-live-search input,.xm-hm-live-chip{height:36px;border:1px solid #e4e7ed;border-radius:8px;background:#fff}" +
-      ".xm-hm-live-search input{flex:1;padding:0 10px}" +
+      ".xm-hm-live-search input,.xm-hm-live-chip{height:36px;border:1px solid #e4e7ed;border-radius:8px;background:#fff;padding:0 10px}" +
+      ".xm-hm-live-search input{width:200px}" +
       ".xm-hm-live-chips{display:flex;gap:8px}" +
-      ".xm-hm-live-chip{padding:0 10px;cursor:pointer}" +
+      ".xm-hm-live-chip{cursor:pointer}" +
       ".xm-hm-live-chip.is-on{border-color:var(--xm-primary);color:var(--xm-primary);background:var(--xm-primary-soft)}" +
       ".xm-hm-live-filter-left{display:flex;align-items:center;gap:12px;min-width:0}" +
       ".xm-hm-live-filter-lab{font-size:16px;font-weight:600;color:var(--xm-ink);line-height:40px;white-space:nowrap}" +
@@ -2253,7 +2234,7 @@
       '<div class="xm-hm-pop" id="xm-hm-pop" hidden><h3>卡片设置</h3><div id="xm-hm-card-opts"></div></div>' +
       '<div class="xm-hm-head-pop" id="xm-hm-head-pop" hidden><h3>表头设置</h3><p class="xm-hm-head-hint">勾选店铺表要显示的列。</p><div id="xm-hm-head-opts"></div></div>' +
       '<div class="xm-hm-body">' +
-      '<section class="xm-hm-kpis-shell"><div class="xm-hm-teams-bar"><b>星脉甄选</b><button type="button" class="xm-hm-set" id="xm-hm-set">卡片设置</button></div><div class="xm-hm-sales" id="xm-hm-sales"></div><div class="xm-hm-kpis" id="xm-hm-kpis"></div></section>' +
+      '<section class="xm-hm-kpis-shell"><div class="xm-hm-teams-bar"><b>星脉甄选</b><button type="button" class="xm-hm-set" id="xm-hm-set">卡片设置</button></div><div class="xm-hm-sales xm-hm-live-charts" id="xm-hm-sales"></div><div class="xm-hm-kpis" id="xm-hm-kpis"></div></section>' +
       '<section class="xm-hm-teams" id="xm-hm-teams" hidden></section>' +
       '<section class="xm-hm-live" id="xm-hm-live" hidden></section>' +
       '<section class="xm-hm-board" id="xm-hm-board" hidden>' +
@@ -2430,7 +2411,7 @@
     hideCardTip();
     hideLineTip(root);
     var searchDraft = liveSearchDraft(root);
-    board.setAttribute("data-hm-js", "0.1.876-fee");
+    board.setAttribute("data-hm-js", "0.1.878-co");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2444,7 +2425,8 @@
       btn.classList.toggle("is-on", btn.getAttribute("data-range") === state.range);
     });
     root.querySelector("#xm-hm-date-text").textContent = formatDashDate(state.from) + " 至 " + formatDashDate(state.to);
-    root.querySelector("#xm-hm-sales").innerHTML = "";
+    var liveTrio = liveChartHtml(hero) + liveChartHtml(paid) + liveChartHtml(fee);
+    root.querySelector("#xm-hm-sales").innerHTML = state.view === "company" ? liveTrio : "";
     root.querySelector("#xm-hm-kpis").innerHTML = cards.map(cardHtml).join("");
     var teamBox = root.querySelector("#xm-hm-teams");
     teamBox.hidden = !teamView;
@@ -2455,9 +2437,7 @@
     root.querySelector("#xm-hm-live").innerHTML =
       liveFilterHtml(allShops, state) +
       '<div class="xm-hm-live-charts">' +
-      liveChartHtml(hero) +
-      liveChartHtml(paid) +
-      liveChartHtml(fee) +
+      liveTrio +
       '</div><div class="xm-hm-live-cards">' +
       liveCards.map(function (card) {
         return liveCardHtml(card, liveFeePick);

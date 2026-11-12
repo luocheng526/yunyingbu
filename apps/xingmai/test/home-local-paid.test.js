@@ -163,7 +163,9 @@ test("live shop 回传成功 and 状态 在线/掉线", () => {
   assert.equal(fns.liveLinkOf({ online: false }).label, "掉线");
   assert.equal(fns.liveLinkOf({}).label, "掉线");
   assert.equal(fns.liveLinkOf({ capturedAt: new Date().toISOString() }).kind, "on");
-  assert.match(homeJs, /label: "回传成功"/);
+  assert.match(homeJs, /label: "是否回传成功"/);
+  assert.match(homeJs, /ok = "回传成功"/);
+  assert.match(homeJs, /ok = "回传失败"/);
   assert.match(homeJs, /label: "状态"/);
   assert.doesNotMatch(homeJs, /label: "是否成功"/);
 });
