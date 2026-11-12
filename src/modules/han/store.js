@@ -1207,10 +1207,19 @@ function isClosedStore(row) {
   return status === "closed" || remark === "已退店";
 }
 
+function isOperatingStore(row) {
+  if (isClosedStore(row)) {
+    return false;
+  }
+  const status = String(row.statusKey || "").trim();
+  const remark = String(row.remark || "").trim();
+  return status === "operating" || remark === "运营中";
+}
+
 function isHanDirectStore(row) {
   const rowLead = String(row.lead || "").trim();
   const chief = String(row.chief || "").trim();
-  if (chief && chief !== "韩梦凯") {
+  if (chief && chief !== "韩梦凯" && !chief.endsWith("韩梦凯")) {
     return false;
   }
   const leadName = rowLead.replace(/组$/, "");
@@ -1231,7 +1240,7 @@ export function matchOrgStoresForTeam(stores, team) {
   const items = [];
   (stores || []).forEach((row) => {
     const rowLead = String(row.lead || "").trim();
-    if (isClosedStore(row)) {
+    if (!isOperatingStore(row)) {
       return;
     }
     if (direct) {
