@@ -107,6 +107,10 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   };
   const empty = fns.fillLocalPaid(live, fns.emptyLocalPaid());
   assert.equal(empty.shops[0].paidAmount, "—");
+  assert.equal(empty.paid.hours, 24);
+  assert.equal(empty.fee.hours, 24);
+  assert.equal(empty.paid.delta, "");
+  assert.equal(empty.paid.yestText, "—");
   const filled = fns.fillLocalPaid(live, {
     records: [{ shopName: "A店", paidAmount: 12, paidDeal: 100, feeRate: 0.12 }],
     summary: { spend: 12, paidDeal: 100, feeRate: 0.12 }
