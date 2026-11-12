@@ -7,6 +7,7 @@ import {
   collectPinIds,
   extractPaid,
   extractShopDeal,
+  parseHomeCard,
   hoursFromSamples,
   jingmaiError,
   paidQuery,
@@ -448,6 +449,14 @@ function jsonReply(body, status = 200) {
     text: async () => (typeof body === "string" ? body : JSON.stringify(body))
   };
 }
+
+test("homepage card text keeps today's deal amount", () => {
+  const card = parseHomeCard("经营数据\n成交金额\n¥12,967.90\n较昨日 -27.63%\n成交单量\n42\n成交客户数\n41\n");
+  assert.equal(card.dealAmount, 12967.9);
+  assert.equal(card.orderCount, 42);
+  assert.equal(card.customerCount, 41);
+  assert.equal(parseHomeCard("推广数据\n花费 5"), null);
+});
 
 test("deal card is read from the layer that contains channel data", () => {
   const metrics = extractShopDeal({

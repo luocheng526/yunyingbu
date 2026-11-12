@@ -12,6 +12,7 @@ import {
   parseRealtime,
   beijingParts
 } from "./jingmai.js";
+import { readHomeDeal } from "./jingmai-desk.js";
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
@@ -515,8 +516,15 @@ async function fetchDeal(jar, fetchImpl) {
   try {
     return await fetchSzDeal(jar, fetchImpl);
   } catch (error) {
-    throw shopError || classifyTransportError(error);
+    shopError = shopError || classifyTransportError(error);
   }
+  if (fetchImpl === fetch && jar && jar.length) {
+    const card = await readHomeDeal(jar);
+    if (card && (card.dealAmount != null || card.orderCount != null || card.customerCount != null)) {
+      return card;
+    }
+  }
+  throw shopError || jingmaiError("network", "京麦首页没有成交字段");
 }
 
 function jztHeaders() {

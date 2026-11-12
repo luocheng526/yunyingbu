@@ -156,6 +156,27 @@ export function extractShopDeal(body) {
   return { dealAmount, orderCount, customerCount, yesterdayAmount };
 }
 
+export function parseHomeCard(text) {
+  const source = String(text || "").replace(/\u00a0/g, " ");
+  const start = source.indexOf("经营数据");
+  const section = start >= 0 ? source.slice(start, start + 900) : source.slice(0, 900);
+  function pick(label) {
+    const match = section.match(new RegExp(label + "[^\\d¥￥]{0,40}[¥￥]?\\s*([\\d,]+(?:\\.\\d+)?)"));
+    if (!match) {
+      return null;
+    }
+    const number = Number(match[1].replace(/,/g, ""));
+    return Number.isFinite(number) ? number : null;
+  }
+  const dealAmount = pick("成交金额");
+  const orderCount = pick("成交单量");
+  const customerCount = pick("成交客户数");
+  if (dealAmount == null && orderCount == null && customerCount == null) {
+    return null;
+  }
+  return { dealAmount: dealAmount, orderCount: orderCount, customerCount: customerCount, yesterdayAmount: null };
+}
+
 export function collectPinIds() {
   const ids = [];
   const seen = new Set();

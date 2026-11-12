@@ -5,6 +5,7 @@ import { connect as connectTcp } from "node:net";
 import { tmpdir } from "node:os";
 import { setTimeout as sleep } from "node:timers/promises";
 import zlib from "node:zlib";
+import { extractShopDeal, parseHomeCard } from "./jingmai.js";
 
 const LOGIN_URL =
   "https://passport.shop.jd.com/login/index.action/jdm?ReturnUrl=" + encodeURIComponent("https://shop.jd.com/");
@@ -676,7 +677,7 @@ export function ensureChrome() {
   });
 }
 
-function send(ws, method, params) {
+function send(ws, method, params, sessionId) {
   const id = ws.__seq = (ws.__seq || 0) + 1;
   return new Promise(function (resolve, reject) {
     const timer = setTimeout(function () {
@@ -684,8 +685,16 @@ function send(ws, method, params) {
       reject(new Error(method + " timeout"));
     }, 15000);
     function onMessage(event) {
-      const message = JSON.parse(event.data);
+      let message;
+      try {
+        message = JSON.parse(event.data);
+      } catch {
+        return;
+      }
       if (message.id !== id) {
+        return;
+      }
+      if (sessionId && message.sessionId && message.sessionId !== sessionId) {
         return;
       }
       clearTimeout(timer);
@@ -697,7 +706,11 @@ function send(ws, method, params) {
       }
     }
     ws.addEventListener("message", onMessage);
-    ws.send(JSON.stringify({ id: id, method: method, params: params || {} }));
+    const payload = { id: id, method: method, params: params || {} };
+    if (sessionId) {
+      payload.sessionId = sessionId;
+    }
+    ws.send(JSON.stringify(payload));
   });
 }
 
@@ -708,6 +721,41 @@ function evaluate(ws, expression) {
     }
     return result.result ? result.result.value : null;
   });
+}
+
+function discard(desk) {
+  if (!desk) {
+    return;
+  }
+  if (current === desk) {
+    stopCurrent();
+    return;
+  }
+  desk.password = "";
+  try {
+    if (desk.ws) {
+      desk.ws.close();
+    }
+  } catch {
+    /* already closed */
+  }
+  const removeDir = function () {
+    try {
+      rmSync(desk.dir, { recursive: true, force: true });
+    } catch {
+      /* temp dir already gone */
+    }
+  };
+  try {
+    if (desk.chrome && desk.chrome.exitCode == null) {
+      desk.chrome.once("exit", removeDir);
+      desk.chrome.kill("SIGKILL");
+    } else {
+      removeDir();
+    }
+  } catch {
+    removeDir();
+  }
 }
 
 function stopCurrent() {
@@ -1210,6 +1258,150 @@ export async function typeDesk(store, text) {
     return;
   }
   await send(current.ws, "Input.insertText", { text: value });
+}
+
+function watchShopData(ws) {
+  return new Promise(function (resolve) {
+    const timer = setTimeout(function () {
+      ws.removeEventListener("message", onMessage);
+      resolve("");
+    }, 25000);
+    function finish(text) {
+      clearTimeout(timer);
+      ws.removeEventListener("message", onMessage);
+      resolve(text || "");
+    }
+    function onMessage(event) {
+      let message;
+      try {
+        message = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      if (message.method === "Target.attachedToTarget" && message.params && message.params.sessionId) {
+        send(ws, "Network.enable", {}, message.params.sessionId).catch(function () {});
+        return;
+      }
+      if (message.method === "Network.responseReceived") {
+        const url = message.params && message.params.response ? message.params.response.url : "";
+        if (url.includes("findShopDataByChannel")) {
+          ws.__shopRequests = ws.__shopRequests || new Map();
+          ws.__shopRequests.set(message.params.requestId, message.sessionId || "");
+        }
+        return;
+      }
+      if (message.method !== "Network.loadingFinished" || !ws.__shopRequests || !ws.__shopRequests.has(message.params.requestId)) {
+        return;
+      }
+      const sessionId = ws.__shopRequests.get(message.params.requestId);
+      send(ws, "Network.getResponseBody", { requestId: message.params.requestId }, sessionId).then(function (result) {
+        const text = result.base64Encoded ? Buffer.from(result.body || "", "base64").toString("utf8") : String(result.body || "");
+        try {
+          if (extractShopDeal(JSON.parse(text))) {
+            finish(text);
+          }
+        } catch {
+          /* keep waiting for the card response */
+        }
+      }).catch(function () {});
+    }
+    ws.addEventListener("message", onMessage);
+  });
+}
+
+let dealQueue = Promise.resolve();
+
+async function readHomeDealNow(cookies) {
+  if (current) {
+    return null;
+  }
+  let desk = null;
+  try {
+    desk = await launchChrome();
+    if (current) {
+      discard(desk);
+      desk = null;
+      return null;
+    }
+    current = desk;
+    const ws = desk.ws;
+    await send(ws, "Page.enable");
+    await send(ws, "Network.enable");
+    try {
+      await send(ws, "Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: false, flatten: true });
+    } catch {
+      /* this page target does not attach child frames */
+    }
+    const pending = watchShopData(ws);
+    const jar = (cookies || []).filter(function (item) {
+      return item && item.name && item.value != null;
+    });
+    if (jar.length) {
+      await send(ws, "Network.setCookies", {
+        cookies: jar.map(function (item) {
+          return {
+            name: String(item.name),
+            value: String(item.value),
+            domain: ".jd.com",
+            path: "/",
+            secure: true,
+            httpOnly: true,
+            sameSite: "None"
+          };
+        })
+      });
+    }
+    await send(ws, "Page.navigate", { url: "https://shop.jd.com/jdm/home" });
+    const body = await pending;
+    if (body) {
+      try {
+        const metrics = extractShopDeal(JSON.parse(body));
+        if (metrics) {
+          return metrics;
+        }
+      } catch {
+        /* fall through to the rendered card */
+      }
+    }
+    const text = await evaluate(ws, `(() => {
+      const parts = [];
+      const take = (doc) => { if (doc && doc.body) parts.push(doc.body.innerText || ""); };
+      take(document);
+      document.querySelectorAll("iframe").forEach((frame) => { try { take(frame.contentDocument); } catch (e) {} });
+      return parts.join("\\n").slice(0, 8000);
+    })()`);
+    const card = parseHomeCard(text);
+    if (card) {
+      return card;
+    }
+    const error = new Error("京麦首页卡片没有成交金额");
+    error.code = "network";
+    throw error;
+  } catch (error) {
+    if (error && error.code === "network") {
+      throw error;
+    }
+    if (error && error.code === "browser") {
+      return null;
+    }
+    const wrapped = new Error("京麦首页卡片没有打开");
+    wrapped.code = "network";
+    throw wrapped;
+  } finally {
+    discard(desk);
+  }
+}
+
+export function readHomeDeal(cookies) {
+  const job = dealQueue.then(function () {
+    return readHomeDealNow(cookies);
+  });
+  dealQueue = job.then(function () {
+    return null;
+  }, function () {
+    return null;
+  });
+  return job;
 }
 
 export const jingmaiDesk = {
