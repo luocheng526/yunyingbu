@@ -1,8 +1,8 @@
+import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
-import { chmodSync, createWriteStream, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { connect as connectTcp } from "node:net";
 import { tmpdir } from "node:os";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 
 const LOGIN_URL =
@@ -82,10 +82,10 @@ async function installChrome() {
       mkdirSync(home, { recursive: true });
       const zip = home + "/chrome.zip";
       const response = await fetch(CHROME_URL, { signal: AbortSignal.timeout(120000) });
-      if (!response.ok || !response.body) {
+      if (!response.ok) {
         throw new Error("download");
       }
-      await pipeline(Readable.fromWeb(response.body), createWriteStream(zip));
+      writeFileSync(zip, Buffer.from(await response.arrayBuffer()));
       await extractZip(zip, home);
       const bin = home + "/chrome-headless-shell-linux64/chrome-headless-shell";
       chmodSync(bin, 0o755);
@@ -182,8 +182,137 @@ function stopCurrent() {
   }
 }
 
+function encodeFrame(text) {
+  const payload = Buffer.from(String(text));
+  const mask = randomBytes(4);
+  let header;
+  if (payload.length < 126) {
+    header = Buffer.from([0x81, 0x80 | payload.length]);
+  } else if (payload.length < 65536) {
+    header = Buffer.alloc(4);
+    header[0] = 0x81;
+    header[1] = 0xfe;
+    header.writeUInt16BE(payload.length, 2);
+  } else {
+    header = Buffer.alloc(10);
+    header[0] = 0x81;
+    header[1] = 0xff;
+    header.writeBigUInt64BE(BigInt(payload.length), 2);
+  }
+  const masked = Buffer.alloc(payload.length);
+  for (let index = 0; index < payload.length; index += 1) {
+    masked[index] = payload[index] ^ mask[index % 4];
+  }
+  return Buffer.concat([header, mask, masked]);
+}
+
+function openSocket(url) {
+  const parsed = new URL(url);
+  const socket = connectTcp(Number(parsed.port), parsed.hostname);
+  const listeners = { open: [], message: [], error: [] };
+  let buf = Buffer.alloc(0);
+  let opened = false;
+  let fragments = [];
+  const ws = {
+    addEventListener: function (type, fn) {
+      (listeners[type] || (listeners[type] = [])).push(fn);
+    },
+    removeEventListener: function (type, fn) {
+      listeners[type] = (listeners[type] || []).filter(function (item) {
+        return item !== fn;
+      });
+    },
+    send: function (data) {
+      socket.write(encodeFrame(data));
+    },
+    close: function () {
+      socket.end();
+    }
+  };
+  function emit(type, event) {
+    (listeners[type] || []).forEach(function (fn) {
+      fn(event);
+    });
+  }
+  function takeFrame() {
+    if (buf.length < 2) {
+      return false;
+    }
+    const fin = (buf[0] & 128) !== 0;
+    const opcode = buf[0] & 15;
+    let size = buf[1] & 127;
+    let offset = 2;
+    if (size === 126) {
+      if (buf.length < 4) {
+        return false;
+      }
+      size = buf.readUInt16BE(2);
+      offset = 4;
+    } else if (size === 127) {
+      if (buf.length < 10) {
+        return false;
+      }
+      size = Number(buf.readBigUInt64BE(2));
+      offset = 10;
+    }
+    if (buf.length < offset + size) {
+      return false;
+    }
+    const payload = buf.slice(offset, offset + size);
+    buf = buf.slice(offset + size);
+    if (opcode === 8) {
+      socket.end();
+      return true;
+    }
+    if (opcode === 1 || opcode === 0) {
+      fragments.push(payload);
+      if (fin) {
+        const text = Buffer.concat(fragments).toString();
+        fragments = [];
+        emit("message", { data: text });
+      }
+    }
+    return true;
+  }
+  socket.on("error", function () {
+    emit("error", {});
+  });
+  socket.on("data", function (chunk) {
+    buf = Buffer.concat([buf, chunk]);
+    if (!opened) {
+      const split = buf.indexOf("\r\n\r\n");
+      if (split < 0) {
+        return;
+      }
+      const header = buf.slice(0, split).toString();
+      buf = buf.slice(split + 4);
+      if (!header.includes(" 101 ")) {
+        emit("error", {});
+        socket.destroy();
+        return;
+      }
+      opened = true;
+      emit("open", {});
+    }
+    while (takeFrame()) {
+      /* drain */
+    }
+  });
+  socket.on("connect", function () {
+    socket.write(
+      "GET " + (parsed.pathname || "/") + parsed.search + " HTTP/1.1\r\n" +
+      "Host: " + parsed.host + "\r\n" +
+      "Upgrade: websocket\r\n" +
+      "Connection: Upgrade\r\n" +
+      "Sec-WebSocket-Key: " + randomBytes(16).toString("base64") + "\r\n" +
+      "Sec-WebSocket-Version: 13\r\n\r\n"
+    );
+  });
+  return ws;
+}
+
 function connectSocket(url) {
-  const ws = new WebSocket(url);
+  const ws = openSocket(url);
   return new Promise(function (resolve, reject) {
     const timer = setTimeout(function () {
       reject(new Error("socket"));
