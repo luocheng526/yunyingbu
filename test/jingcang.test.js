@@ -203,6 +203,32 @@ test("GET /api/shen/jingcang only serves the one test shop", async () => {
   }
 });
 
+test("a short last inventory page is the end of the 京东物流 list", async () => {
+  await resetJingmaiStore();
+  resetJingcangJob();
+  await saveSession(JINGCANG_TEST_STORE, { cookies: [{ name: "thor", value: SECRET }], authState: "ok", enabled: true });
+  const full = [];
+  for (let index = 0; index < 20; index += 1) {
+    full.push(stockRow("1023545147" + String(index).padStart(4, "0"), [house("无锡常温C平台仓13号库-CHN", 1)]));
+  }
+  const result = await loadJingcang(JINGCANG_TEST_STORE, {
+    fetchImpl: async function () {
+      return jsonResponse({ code: 200, data: { freeBrand: true } });
+    },
+    readShopStock: async function () {
+      return [
+        JSON.stringify(page(full, 355)),
+        JSON.stringify(page([stockRow("10235451473396", [house("北京常温C平台仓55号库-CHN", 45)])], 355))
+      ];
+    }
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.count, 21);
+  assert.equal(result.truncated, false);
+  assert.equal(result.source, "page");
+  await resetJingmaiStore();
+});
+
 test("jingcang sku rows stay visible when the product title is not a shop name", () => {
   const source = fs.readFileSync(new URL("../public/shared/nav.js", import.meta.url), "utf8");
   const shopNameOf = source.slice(source.indexOf("function shopNameOf"), source.indexOf("function queryValue"));

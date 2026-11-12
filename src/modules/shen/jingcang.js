@@ -426,11 +426,14 @@ async function fetchOverPage(jar, readBrowser) {
     throw jingmaiError("network", "京仓库存页面没有返回");
   }
   const merged = mergePages(pages);
+  const last = pages[pages.length - 1];
+  const lastCount = last ? last.rows.length : 0;
+  const lastFull = lastCount === 10 || lastCount === 20 || lastCount === 50;
   return {
     rows: merged.rows,
     total: merged.total,
     source: "page",
-    truncated: merged.total > 0 && merged.rows.length < merged.total
+    truncated: lastFull && merged.total > merged.rows.length
   };
 }
 
