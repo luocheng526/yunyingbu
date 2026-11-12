@@ -11,7 +11,7 @@ test("rewrites immutable homepage script url to no-store client.js", () => {
   const out = rewriteHomeModuleUrl(html);
   assert.equal(out.includes("/shared/modules/home.js"), false);
   assert.equal(out.includes(HOME_CLIENT_JS), true);
-    assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.825-home-headset$/);
+    assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.826-home-feecards$/);
 });
 
 test("serves /api/home/client.js from current homepage module", async () => {
@@ -26,7 +26,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     const text = await res.text();
     assert.equal(res.status, 200);
     assert.match(String(res.headers.get("cache-control") || ""), /no-store/i);
-    assert.match(text, /xm-module-home 0\.1\.825-home-headset/);
+    assert.match(text, /xm-module-home 0\.1\.826-home-feecards/);
     assert.match(text, /function liveTheadHtml/);
     assert.match(text, /function liveFilterHtml/);
     assert.match(text, /data-live-filter="pick"/);
@@ -62,7 +62,9 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /xm-home-live-yday/);
     assert.match(text, /function feeChartOf/);
     assert.match(text, /repeat\(3,minmax\(0,1fr\)\)/);
-    assert.match(text, /LIVE_CARD_KEYS = \["livePay", "roi", "livePaid", "liveAt"\]/);
+    assert.match(text, /LIVE_CARD_KEYS = \["livePay", "roi", "livePaid", "feeHot", "feeCold", "liveAt"\]/);
+    assert.match(text, /实时付费超标店铺/);
+    assert.match(text, /实时费比低店铺/);
     assert.match(text, /实时付费接入店铺数量/);
     assert.doesNotMatch(text, /实时销售指数/);
     assert.match(text, /xm-home-live-card-order/);

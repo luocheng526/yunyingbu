@@ -147,7 +147,7 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function shopMetricsFrom/);
   assert.match(homeJs, /function shopCols/);
   assert.match(homeJs, /SHOP_CARD_KEYS = \["adRatio", "profit", "grossMargin", "refundRate", "netGoodsCost"\]/);
-  assert.match(homeJs, /LIVE_CARD_KEYS = \["livePay", "roi", "livePaid", "liveAt"\]/);
+  assert.match(homeJs, /LIVE_CARD_KEYS = \["livePay", "roi", "livePaid", "feeHot", "feeCold", "liveAt"\]/);
   assert.match(homeJs, /xm-home-live-card-order/);
   assert.match(homeJs, /function applyLiveCardMove/);
   assert.match(homeJs, /function liveRowPad/);
@@ -167,7 +167,7 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /责权归属/);
   assert.match(homeJs, /\.xm-hm-live\{display:flex;flex-direction:column;gap:20px\}/);
   assert.match(homeJs, /\.xm-hm-live-charts\{display:grid;grid-template-columns:repeat\(3,minmax\(0,1fr\)\);gap:16px\}/);
-  assert.match(homeJs, /\.xm-hm-live-cards\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\);gap:20px/);
+  assert.match(homeJs, /\.xm-hm-live-cards\{display:grid;grid-template-columns:repeat\(6,minmax\(0,1fr\)\);gap:12px/);
   assert.match(homeJs, /label: "推广总花费"/);
   assert.match(homeJs, /function spendChartOf/);
   assert.match(homeJs, /function feeChartOf/);
@@ -181,6 +181,10 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /环比 ↗ 上升 /);
   assert.doesNotMatch(homeJs, /label: "实时销售指数"/);
   assert.match(homeJs, /key: "livePaid", label: "实时付费接入店铺数量"/);
+  assert.match(homeJs, /key: "feeHot", label: "实时付费超标店铺"/);
+  assert.match(homeJs, /key: "feeCold", label: "实时费比低店铺"/);
+  assert.match(homeJs, /function feeShopCounts/);
+  assert.match(homeJs, /function feePickShops/);
   assert.match(homeJs, /key: "liveAt", label: "更新时间"/);
   assert.match(homeJs, /function fillLocalPaid/);
   assert.match(homeJs, /function liveBoardOf/);
@@ -1038,7 +1042,7 @@ test("fee target is a range and 费比监控 uses 超标 / 加大付费", () => 
     pick("asNum") +
       pick("escapeHtml") +
       homeJs.slice(start, end) +
-      "return {feeMonitorOf,feeWarnLabel,feeGoalCellHtml,isHomeFormField,isFeeTyping,saveFeeRangeFor};"
+      "return {feeMonitorOf,feeWarnLabel,feeGoalCellHtml,isHomeFormField,isFeeTyping,saveFeeRangeFor,feeShopCounts,feePickShops};"
   )({
     getItem(key) {
       return Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null;
@@ -1062,6 +1066,15 @@ test("fee target is a range and 费比监控 uses 超标 / 加大付费", () => 
   assert.equal(fns.feeWarnLabel("8%", "没设目标的店"), "未设目标");
   assert.equal(fns.feeMonitorOf("25%", "RASW家居旗舰店").kind, "hot");
   assert.equal(fns.feeMonitorOf("8%", "RASW家居旗舰店").kind, "cold");
+  const counted = fns.feeShopCounts([
+    { shop: "RASW家居旗舰店", feeRate: "25%" },
+    { shop: "RASW家居旗舰店", feeRate: "8%" },
+    { shop: "没设目标的店", feeRate: "8%" }
+  ]);
+  assert.equal(counted.hot, 1);
+  assert.equal(counted.cold, 1);
+  assert.equal(fns.feePickShops([{ shop: "RASW家居旗舰店", feeRate: "25%" }, { shop: "RASW家居旗舰店", feeRate: "8%" }], "hot").length, 1);
+  assert.equal(fns.feePickShops([{ shop: "RASW家居旗舰店", feeRate: "25%" }, { shop: "RASW家居旗舰店", feeRate: "8%" }], "cold")[0].feeRate, "8%");
   store["xm-home-fee-targets"] = JSON.stringify({ 旧数字店: 15 });
   assert.equal(fns.feeWarnLabel("10%", "旧数字店"), "加大付费");
   assert.equal(fns.feeWarnLabel("15%", "旧数字店"), "正常");
