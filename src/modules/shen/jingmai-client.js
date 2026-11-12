@@ -105,6 +105,109 @@ export async function loginShop(username, password, fetchImpl = fetch) {
   });
 }
 
+export function interpretQrCheck(body) {
+  const info = body && body.resultInfo ? body.resultInfo : {};
+  const result = info.result || {};
+  const state = Number(result.state);
+  if (state === 10) {
+    return "waiting";
+  }
+  if (state === 0) {
+    return "confirm";
+  }
+  if (state === 1) {
+    return "ok";
+  }
+  if (state === 11 || state === 12) {
+    return "expired";
+  }
+  if (state === 213) {
+    return "cancelled";
+  }
+  return "waiting";
+}
+
+export async function startQrLogin(fetchImpl = fetch) {
+  const jar = [];
+  const init = await request(fetchImpl, jar, "https://passport.jd.com/service/mobile/initLoginPageData?source=pop_new_mobile", {
+    headers: { accept: "application/json", referer: "https://passport.shop.jd.com/login/index.action" }
+  });
+  const initBody = JSON.parse(await init.text());
+  const uuid = String(initBody.data && initBody.data.uuid ? initBody.data.uuid : "").replace(/-/g, "");
+  if (!uuid) {
+    throw jingmaiError("network", "京麦二维码暂时开不了");
+  }
+  const shown = await request(
+    fetchImpl,
+    jar,
+    "https://passport.shop.jd.com/login/json/qrcode_show.action?_timeStr=" + Date.now() + uuid,
+    { headers: { accept: "image/png,*/*", referer: "https://passport.shop.jd.com/login/index.action" } }
+  );
+  const bytes = Buffer.from(await shown.arrayBuffer());
+  if (bytes[0] !== 0x89) {
+    throw jingmaiError("network", "京麦二维码暂时开不了");
+  }
+  return {
+    uuid: uuid,
+    image: bytes.toString("base64"),
+    jar: jar.map(function (item) {
+      return { name: item.name, value: item.value };
+    })
+  };
+}
+
+export async function pollQrLogin({ uuid, jar, fetchImpl = fetch }) {
+  const next = (jar || []).map(function (item) {
+    return { name: item.name, value: item.value };
+  });
+  const checked = await request(
+    fetchImpl,
+    next,
+    "https://passport.shop.jd.com/login/json/qrcode_check.action?_timeStr=" + Date.now() + uuid,
+    {
+      method: "POST",
+      body: "",
+      headers: {
+        accept: "application/json",
+        origin: "https://passport.shop.jd.com",
+        referer: "https://passport.shop.jd.com/login/index.action",
+        "x-requested-with": "XMLHttpRequest",
+        "content-type": "application/x-www-form-urlencoded"
+      }
+    }
+  );
+  const body = JSON.parse(await checked.text());
+  const status = interpretQrCheck(body);
+  if (status !== "ok") {
+    return {
+      status: status,
+      jar: next.map(function (item) {
+        return { name: item.name, value: item.value };
+      })
+    };
+  }
+  let location = (body.resultInfo && body.resultInfo.result && body.resultInfo.result.returnUrl) || "https://shop.jd.com/";
+  let hops = 0;
+  while (location && hops < 5) {
+    const followed = await request(fetchImpl, next, location, {
+      headers: { referer: "https://passport.shop.jd.com/login/index.action" }
+    });
+    await followed.arrayBuffer();
+    const jump = followed.headers.get("location") || "";
+    if (followed.status < 300 || followed.status >= 400 || !jump) {
+      break;
+    }
+    location = new URL(jump, location).toString();
+    hops += 1;
+  }
+  return {
+    status: "ok",
+    jar: next.map(function (item) {
+      return { name: item.name, value: item.value };
+    })
+  };
+}
+
 export async function fetchHome(jar, fetchImpl = fetch) {
   const response = await request(fetchImpl, jar.slice(), SUMMARY_URL, {
     headers: {
@@ -118,5 +221,7 @@ export async function fetchHome(jar, fetchImpl = fetch) {
 
 export const jingmaiClient = {
   login: loginShop,
-  fetchHome: fetchHome
+  fetchHome: fetchHome,
+  startQr: startQrLogin,
+  pollQr: pollQrLogin
 };

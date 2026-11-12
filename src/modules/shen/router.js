@@ -1,5 +1,12 @@
 import { Router } from "express";
-import { connectJingmai, jingmaiLive, startJingmaiCollector, updateJingmaiRoster } from "./jingmai-runner.js";
+import {
+  beginRelogin,
+  connectJingmai,
+  jingmaiLive,
+  pollRelogin,
+  startJingmaiCollector,
+  updateJingmaiRoster
+} from "./jingmai-runner.js";
 import {
   addTask,
   getBrief,
@@ -139,6 +146,22 @@ shenRouter.get("/paid/jingmai", async (_req, res) => {
     res.json(await jingmaiLive());
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message || "无法加载京麦成交" });
+  }
+});
+
+shenRouter.post("/paid/jingmai/relogin", async (req, res) => {
+  try {
+    res.json(await beginRelogin(req.body && req.body.store));
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "无法打开京麦二维码" });
+  }
+});
+
+shenRouter.get("/paid/jingmai/relogin", async (req, res) => {
+  try {
+    res.json(await pollRelogin(req.query.store));
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "无法确认京麦扫码" });
   }
 });
 

@@ -1135,9 +1135,20 @@
 
 #paid-board .xm-hl-relogin {
   margin-left: 6px;
+  border: 0;
+  background: transparent;
+  padding: 0;
   color: #cf1322;
-  font-style: normal;
+  font: inherit;
   font-size: 12px;
+  cursor: pointer;
+}
+
+#paid-board .xm-hl-qr {
+  display: block;
+  width: 180px;
+  height: 180px;
+  margin: 8px auto 0;
 }
 
 #paid-board .xm-hl-table .is-hot {

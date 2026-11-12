@@ -36,7 +36,7 @@
     mount: function (root) {
       const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
       paidCss.rel = "stylesheet";
-      paidCss.href = "/shared/shen-paid.css?v=0.1.829-jingmai";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.830-jingmai-qr";
       if (!paidCss.parentNode) {
         document.head.appendChild(paidCss);
       }
@@ -118,6 +118,8 @@
       let dead = false;
       let overviewRows = [];
       let liveUpdatedAt = "";
+      let qrStore = "";
+      let qrTimer = 0;
       let overviewAsOf = "";
       let enabledStores = [];
       let overviewStale = false;
@@ -1625,7 +1627,11 @@
             '">' +
             escapeHtml(row.store) +
             "</button>" +
-            (row.loginExpired ? '<em class="xm-hl-relogin">重新登录</em>' : "")
+            (row.loginExpired
+              ? '<button type="button" class="xm-hl-relogin" data-relogin="' +
+                escapeHtml(row.store) +
+                '">重新登录</button>'
+              : "")
           );
         }
         if (col.key === "liveAmount" || col.key === "paidAmount" || col.key === "paidDeal") {
@@ -1885,7 +1891,7 @@
               );
             })
             .join("") +
-          '</tbody></table></div><p class="xm-hl-note">京麦首页的今日成交由服务器每 5 分钟采集，本页每 60 秒读取后台结果。更新时间是最后成功采集的时间。推广花费、广告成交和广告 ROI 不从京麦成交额推算。</p></section>' +
+          '</tbody></table></div><p class="xm-hl-note">重新登录要点店名旁边的红字，用这家店的京麦 App 扫码。扫完后服务器每 5 分钟采集，本页每 60 秒读取。推广花费和广告 ROI 不从成交额推算。</p></section>' +
           '<div class="xm-sp-shop-modal" data-shop-modal hidden><form class="xm-sp-shop-dialog" data-shop-form>' +
           "<h3>新增店铺</h3><p class=\"xm-sp-shop-hint\">保存后归入沈子晗组，并出现在这份全部店铺里。登录账号在组织中心填写。</p>" +
           '<label>店铺名称<input name="storeName" required maxlength="64" autocomplete="off" /></label>' +
@@ -1895,6 +1901,11 @@
           '<p class="xm-sp-shop-error" data-shop-error hidden></p>' +
           '<div class="xm-sp-shop-actions"><button type="submit">保存</button>' +
           '<button type="button" data-shop-cancel>取消</button></div></form></div>' +
+          '<div class="xm-sp-shop-modal" data-qr-modal hidden><div class="xm-sp-shop-dialog" role="dialog" aria-modal="true">' +
+          '<h3>重新登录</h3><p class="xm-sp-shop-hint" data-qr-shop></p>' +
+          '<img class="xm-hl-qr" data-qr-img alt="京麦登录二维码" />' +
+          '<p class="xm-sp-shop-hint" data-qr-state>正在打开二维码…</p>' +
+          '<div class="xm-sp-shop-actions"><button type="button" data-qr-close>关闭</button></div></div></div>' +
           '<pre id="shen-paid-live-snapshot" hidden>' +
           JSON.stringify(snapshot).replace(/</g, "\\u003c") +
           "</pre></div>";
@@ -1925,18 +1936,27 @@
         const connect = boardEl.querySelector("[data-connect-jingmai]");
         if (connect) {
           connect.addEventListener("click", function () {
-            setStatus("正在连接京麦…");
-            postJson("/api/shen/paid/jingmai/connect", {})
-              .then(function (result) {
-                const linked = result && result.linked ? result.linked : 0;
-                const relogin = result && result.relogin ? result.relogin : 0;
-                setStatus("连接完成 · 成功 " + linked + " 家" + (relogin ? "，" + relogin + " 家需要重新登录" : ""));
-                return load();
-              })
-              .catch(function (err) {
-                setStatus(err.message || "连接京麦失败", true);
-              });
+            const expired = overviewRows.filter(function (row) {
+              return row.loginExpired;
+            })[0];
+            const target = expired || overviewRows[0];
+            if (!target) {
+              setStatus("还没有店铺", true);
+              return;
+            }
+            openQr(target.store);
           });
+        }
+        boardEl.querySelectorAll("[data-relogin]").forEach(function (button) {
+          button.addEventListener("click", function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            openQr(button.getAttribute("data-relogin") || "");
+          });
+        });
+        const qrClose = boardEl.querySelector("[data-qr-close]");
+        if (qrClose) {
+          qrClose.addEventListener("click", closeQr);
         }
         const headOpen = boardEl.querySelector("[data-head-open]");
         const headPop = boardEl.querySelector("[data-head-pop]");
@@ -2282,6 +2302,86 @@
         }
       }
 
+      function closeQr() {
+        qrStore = "";
+        window.clearInterval(qrTimer);
+        qrTimer = 0;
+        const modal = boardEl.querySelector("[data-qr-modal]");
+        if (modal) {
+          modal.hidden = true;
+        }
+      }
+
+      function openQr(store) {
+        const name = String(store || "");
+        if (!name) {
+          return;
+        }
+        window.clearInterval(qrTimer);
+        qrTimer = 0;
+        qrStore = name;
+        const modal = boardEl.querySelector("[data-qr-modal]");
+        const shop = boardEl.querySelector("[data-qr-shop]");
+        const img = boardEl.querySelector("[data-qr-img]");
+        const state = boardEl.querySelector("[data-qr-state]");
+        if (!modal || !img || !state) {
+          return;
+        }
+        modal.hidden = false;
+        if (shop) {
+          shop.textContent = "用「" + name + "」的京麦 App 扫这个码，并在手机上点确认。";
+        }
+        img.removeAttribute("src");
+        state.textContent = "正在打开二维码…";
+        postJson("/api/shen/paid/jingmai/relogin", { store: name })
+          .then(function (result) {
+            if (qrStore !== name) {
+              return;
+            }
+            if (result && result.image) {
+              img.src = "data:image/png;base64," + result.image;
+            }
+            state.textContent = "等待扫码";
+            qrTimer = window.setInterval(function () {
+              if (qrStore !== name) {
+                return;
+              }
+              getJson("/api/shen/paid/jingmai/relogin?store=" + encodeURIComponent(name))
+                .then(function (polled) {
+                  if (qrStore !== name) {
+                    return;
+                  }
+                  const step = polled && polled.status;
+                  if (step === "confirm") {
+                    state.textContent = "已扫码，请在手机上点确认";
+                    return;
+                  }
+                  if (step === "ok") {
+                    closeQr();
+                    setStatus(name + " 已重新登录");
+                    load();
+                    return;
+                  }
+                  if (step === "expired" || step === "cancelled" || step === "missing") {
+                    state.textContent = "二维码已失效，请关闭后重新打开";
+                    return;
+                  }
+                  if (step === "login") {
+                    state.textContent = (polled && polled.message) || "请用这家店的京麦再扫一次";
+                  }
+                })
+                .catch(function () {
+                  if (qrStore === name) {
+                    state.textContent = "还在等待扫码";
+                  }
+                });
+            }, 2000);
+          })
+          .catch(function (err) {
+            state.textContent = err.message || "二维码打开失败";
+          });
+      }
+
       function load() {
         view = parseHash();
         setStatus("正在加载…");
@@ -2311,6 +2411,9 @@
                 return { store: row.store, enabled: row.enabled };
               })
             }).catch(function () {});
+            if (qrStore) {
+              return;
+            }
             if (view.store) {
               renderJingmaiShop(view.store);
             } else {
@@ -2436,6 +2539,7 @@
       return function unmount() {
         dead = true;
         window.clearInterval(poll);
+        window.clearInterval(qrTimer);
         window.removeEventListener("hashchange", onHash);
         root.innerHTML = "";
       };

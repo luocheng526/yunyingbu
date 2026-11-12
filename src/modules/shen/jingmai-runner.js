@@ -4,6 +4,7 @@ import { listCollectTargets, markAuth, readJingmaiLive, saveSample, saveSession,
 
 const INTERVAL_MS = 5 * 60 * 1000;
 const inflight = new Set();
+const qrPending = new Map();
 
 const defaultDeps = {
   loadOrg: loadOrgShops,
@@ -18,6 +19,7 @@ export function setJingmaiDeps(next) {
 
 export function resetJingmaiDeps() {
   deps = defaultDeps;
+  qrPending.clear();
 }
 
 export async function loadOrgShops(cookie, fetchImpl = fetch) {
@@ -123,6 +125,57 @@ export async function updateJingmaiRoster(body) {
 
 export async function jingmaiLive() {
   return readJingmaiLive();
+}
+
+export async function beginRelogin(store) {
+  const name = String(store || "").trim();
+  if (!name) {
+    const error = new Error("请选择店铺");
+    error.statusCode = 400;
+    throw error;
+  }
+  const started = await deps.client.startQr();
+  qrPending.set(name, { uuid: started.uuid, jar: started.jar });
+  return { ok: true, store: name, status: "waiting", image: started.image };
+}
+
+export async function pollRelogin(store) {
+  const name = String(store || "").trim();
+  const pending = qrPending.get(name);
+  if (!pending) {
+    return { ok: true, store: name, status: "missing" };
+  }
+  const polled = await deps.client.pollQr(pending);
+  pending.jar = polled.jar;
+  if (polled.status === "expired" || polled.status === "cancelled") {
+    qrPending.delete(name);
+    return { ok: true, store: name, status: polled.status };
+  }
+  if (polled.status !== "ok") {
+    return { ok: true, store: name, status: polled.status };
+  }
+  try {
+    const metrics = await deps.client.fetchHome(polled.jar);
+    await saveSession(name, { cookies: polled.jar, authState: "ok", authMessage: "", enabled: true });
+    const now = beijingParts();
+    await saveSample({
+      store: name,
+      day: now.day,
+      capturedAt: now.stamp,
+      dealAmount: metrics.dealAmount,
+      orderCount: metrics.orderCount,
+      customerCount: metrics.customerCount,
+      yesterdayAmount: metrics.yesterdayAmount,
+      ok: true
+    });
+    qrPending.delete(name);
+    return { ok: true, store: name, status: "ok" };
+  } catch (error) {
+    if (error && error.code === "login") {
+      return { ok: true, store: name, status: "login", message: "扫码未完成，请用这家店的京麦再扫一次" };
+    }
+    return { ok: true, store: name, status: "waiting" };
+  }
 }
 
 export async function jingmaiTick() {

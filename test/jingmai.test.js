@@ -3,7 +3,8 @@ import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { buildLiveView, hoursFromSamples, jingmaiError, parseRealtime, runTick } from "../src/modules/shen/jingmai.js";
-import { connectJingmai, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/shen/jingmai-runner.js";
+import { interpretQrCheck } from "../src/modules/shen/jingmai-client.js";
+import { beginRelogin, connectJingmai, pollRelogin, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/shen/jingmai-runner.js";
 import { listSessions, readJingmaiLive, resetJingmaiStore, saveSample, saveSession } from "../src/modules/shen/jingmai-store.js";
 
 const now = { day: "2026-11-12", stamp: "2026-11-12 11:05:00", hour: 11, clock: "11:05:00" };
@@ -213,6 +214,39 @@ test("connect timeout does not mark the shop logged out", async () => {
     const sessions = await listSessions();
     assert.equal(sessions[0].authState, "ok");
     assert.equal(sessions[0].cookies[0].value, "keep");
+  } finally {
+    resetJingmaiDeps();
+    await resetJingmaiStore();
+  }
+});
+
+test("qr states stay distinct and a confirmed scan saves the deal without returning the session", async () => {
+  assert.equal(interpretQrCheck({ resultInfo: { result: { state: "10" } } }), "waiting");
+  assert.equal(interpretQrCheck({ resultInfo: { result: { state: "0" } } }), "confirm");
+  assert.equal(interpretQrCheck({ resultInfo: { result: { state: "1" } } }), "ok");
+  assert.equal(interpretQrCheck({ resultInfo: { result: { state: "11" } } }), "expired");
+  assert.equal(interpretQrCheck({ resultInfo: { result: { state: "213" } } }), "cancelled");
+  await resetJingmaiStore();
+  setJingmaiDeps({
+    client: {
+      startQr: async () => ({ uuid: "abc", image: "aW1n", jar: [{ name: "QRCodeKEY", value: "hidden-jar" }] }),
+      pollQr: async () => ({ status: "ok", jar: [{ name: "thor", value: "hidden-jar" }] }),
+      fetchHome: async () => ({ dealAmount: 0, orderCount: 1, customerCount: 1, yesterdayAmount: null })
+    }
+  });
+  try {
+    const opened = await beginRelogin("甲店");
+    assert.equal(opened.status, "waiting");
+    assert.equal(opened.image, "aW1n");
+    assert.equal(JSON.stringify(opened).includes("hidden-jar"), false);
+    const done = await pollRelogin("甲店");
+    assert.equal(done.status, "ok");
+    assert.equal(JSON.stringify(done).includes("hidden-jar"), false);
+    const live = await readJingmaiLive();
+    const shop = live.shops.find((item) => item.shop === "甲店");
+    assert.equal(shop.dealAmount, 0);
+    assert.equal(shop.loginExpired, false);
+    assert.equal(JSON.stringify(live).includes("hidden-jar"), false);
   } finally {
     resetJingmaiDeps();
     await resetJingmaiStore();
