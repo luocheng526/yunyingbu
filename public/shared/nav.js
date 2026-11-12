@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.764-jingcang-read — 京仓按有货的仓来看 */
+/* xm-fast-shell 0.1.764-jingcang-city — 京仓按有货的仓来看 */
 (function () {
-  const ASSET_VER = "0.1.764-jingcang-read";
+  const ASSET_VER = "0.1.764-jingcang-city";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",

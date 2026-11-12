@@ -148,7 +148,7 @@
 
       function shortHouse(name) {
         const text = String(name || "");
-        const city = text.match(/^([\u4e00-\u9fa5]{2,3})/);
+        const city = text.match(/^([\u4e00-\u9fa5]{2,3}?)(?=常|温|[A-Za-z])/);
         const num = text.match(/(\d+)号库/);
         if (city && num) {
           return city[1] + num[1];
