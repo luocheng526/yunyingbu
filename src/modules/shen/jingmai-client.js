@@ -5,6 +5,7 @@ import {
   classifyTransportError,
   collectPinIds,
   extractPaid,
+  describeShopPayload,
   extractShopDeal,
   jingmaiError,
   paidQuery,
@@ -478,7 +479,7 @@ async function fetchShopDeal(jar, fetchImpl) {
       if (metrics) {
         return metrics;
       }
-      last = "京麦首页没有成交字段";
+      last = "京麦首页没有成交字段 " + describeShopPayload(payload) + (field ? " field=yes" : " field=no");
     } catch (error) {
       const classified = classifyTransportError(error);
       if (classified.code === "login") {
@@ -600,7 +601,7 @@ export async function fetchHome(jar, fetchImpl = fetch) {
     paid
   );
   if (dealError && deal == null) {
-    metrics.dealNote = String(dealError.message || "京麦首页没有成交字段").slice(0, 80);
+    metrics.dealNote = String(dealError.message || "京麦首页没有成交字段").slice(0, 160);
   }
   if (hasCollected(metrics)) {
     return metrics;

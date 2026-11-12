@@ -110,7 +110,7 @@ function pickIndicator(list, names, codes) {
 }
 
 export function extractShopDeal(body) {
-  const data = body && (body.data || body.result) ? body.data || body.result : body;
+  const data = nested(body);
   const channel = data && data.channelData ? data.channelData : data;
   const list = channel && (channel.indicatorList || channel.indicators);
   const deal = pickIndicator(list, ["成交金额", "成交总金额"], ["3009"]);
@@ -213,18 +213,70 @@ export function extractPaid(body) {
   return { paidAmount, paidDeal, paidRoi };
 }
 
+function nested(body) {
+  let data = body && (body.data || body.result) ? body.data || body.result : body;
+  if (typeof data === "string") {
+    try {
+      data = JSON.parse(data);
+    } catch {
+      return null;
+    }
+  }
+  if (data && data.data && typeof data.data === "object") {
+    return data.data;
+  }
+  return data;
+}
+
+function findBusinessField(node, depth) {
+  if (!node || depth > 5 || typeof node !== "object") {
+    return "";
+  }
+  if (!Array.isArray(node) && node.businessFieldCode) {
+    return String(node.businessFieldCode);
+  }
+  const values = Array.isArray(node) ? node : Object.keys(node).map(function (key) { return node[key]; });
+  for (let index = 0; index < values.length; index += 1) {
+    const found = findBusinessField(values[index], depth + 1);
+    if (found) {
+      return found;
+    }
+  }
+  return "";
+}
+
 export function businessFieldCode(body) {
-  const data = body && (body.data || body.result) ? body.data || body.result : body;
+  const data = nested(body);
   if (!data || typeof data !== "object") {
     return "";
   }
   const list = data.belongVos || data.belongVOList || [];
   const current = data.currentBelongType;
   const found =
-    list.find(function (item) {
+    (Array.isArray(list) ? list : []).find(function (item) {
       return item && String(item.belongType) === String(current);
-    }) || list[0];
-  return found && found.businessFieldCode ? String(found.businessFieldCode) : "";
+    }) || (Array.isArray(list) ? list[0] : null);
+  if (found && found.businessFieldCode) {
+    return String(found.businessFieldCode);
+  }
+  return findBusinessField(data, 0);
+}
+
+export function describeShopPayload(body) {
+  const data = nested(body) || {};
+  const channel = data && data.channelData ? data.channelData : data;
+  const list = channel && (channel.indicatorList || channel.indicators);
+  const rows = Array.isArray(list) ? list : [];
+  const first = rows[0] && typeof rows[0] === "object" ? rows[0] : {};
+  const keys = Object.keys(first).slice(0, 6).join(",");
+  const top = Object.keys(data && typeof data === "object" ? data : {}).slice(0, 6).join(",");
+  return (
+    "n=" + rows.length +
+    " top=" + top +
+    " keys=" + keys +
+    " code=" + (first.code == null ? "" : String(first.code).slice(0, 8)) +
+    " name=" + (first.name == null ? "" : String(first.name).slice(0, 8))
+  ).slice(0, 140);
 }
 
 export function sampleFields(metrics) {
@@ -237,7 +289,7 @@ export function sampleFields(metrics) {
     paidAmount: source.paidAmount == null ? null : source.paidAmount,
     paidDeal: source.paidDeal == null ? null : source.paidDeal,
     paidRoi: source.paidRoi == null ? null : source.paidRoi,
-    dealNote: source.dealNote ? String(source.dealNote).slice(0, 80) : ""
+    dealNote: source.dealNote ? String(source.dealNote).slice(0, 160) : ""
   };
 }
 
@@ -334,7 +386,7 @@ function latestSample(samples, day) {
       }
     );
     if (sample.dealNote) {
-      merged.dealNote = String(sample.dealNote).slice(0, 80);
+      merged.dealNote = String(sample.dealNote).slice(0, 160);
     }
     if (sample.dealAmount != null) {
       merged.dealNote = "";
