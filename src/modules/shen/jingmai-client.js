@@ -458,7 +458,42 @@ async function postDsm(fetchImpl, jar, appId, api, body) {
   return payload;
 }
 
-async function fetchShopDeal(jar, fetchImpl) {
+function dealRetryMs() {
+  const value = Number(process.env.SHEN_DEAL_RETRY_MS);
+  return Number.isFinite(value) && value >= 0 ? value : 5000;
+}
+
+function dealGapMs() {
+  const value = Number(process.env.SHEN_DEAL_RETRY_MS);
+  return Number.isFinite(value) && value >= 0 ? Math.min(value, 800) : 800;
+}
+
+function pause(ms) {
+  return new Promise(function (resolve) {
+    setTimeout(resolve, ms);
+  });
+}
+
+function dealBusy(error) {
+  return /601|操作频繁/.test(String((error && error.message) || ""));
+}
+
+let dealGate = Promise.resolve();
+
+function enqueueDeal(task) {
+  const run = dealGate.then(task, task);
+  dealGate = run.then(
+    function () {
+      return pause(dealGapMs());
+    },
+    function () {
+      return pause(dealGapMs());
+    }
+  );
+  return run;
+}
+
+async function fetchShopDealOnce(jar, fetchImpl) {
   let field = "";
   try {
     const account = await postDsm(fetchImpl, jar, SHELL_APP, ACCOUNT_API, {});
@@ -486,10 +521,30 @@ async function fetchShopDeal(jar, fetchImpl) {
       if (classified.code === "login") {
         throw classified;
       }
+      if (dealBusy(classified)) {
+        throw classified;
+      }
       last = classified.message || last;
     }
   }
   throw jingmaiError("network", last || "京麦首页没有成交字段");
+}
+
+async function fetchShopDeal(jar, fetchImpl) {
+  let last = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await fetchShopDealOnce(jar, fetchImpl);
+    } catch (error) {
+      const classified = classifyTransportError(error);
+      if (classified.code === "login" || attempt === 2 || !dealBusy(classified)) {
+        throw classified;
+      }
+      last = classified;
+      await pause(dealRetryMs());
+    }
+  }
+  throw last || jingmaiError("network", "京麦首页没有成交字段");
 }
 
 async function fetchSzDeal(jar, fetchImpl) {
@@ -505,7 +560,9 @@ async function fetchSzDeal(jar, fetchImpl) {
 async function fetchDeal(jar, fetchImpl) {
   let shopError = null;
   try {
-    return await fetchShopDeal(jar, fetchImpl);
+    return await enqueueDeal(function () {
+      return fetchShopDeal(jar, fetchImpl);
+    });
   } catch (error) {
     const classified = classifyTransportError(error);
     if (classified.code === "login") {
@@ -581,20 +638,27 @@ function hasCollected(metrics) {
 }
 
 export async function fetchHome(jar, fetchImpl = fetch) {
-  let deal = null;
-  let dealError = null;
-  try {
-    deal = await fetchDeal(jar, fetchImpl);
-  } catch (error) {
-    dealError = classifyTransportError(error);
-  }
-  let paid = null;
-  let paidError = null;
-  try {
-    paid = await fetchPaid(jar, fetchImpl);
-  } catch (error) {
-    paidError = classifyTransportError(error);
-  }
+  const dealTask = fetchDeal(jar, fetchImpl).then(
+    function (value) {
+      return { deal: value, dealError: null };
+    },
+    function (error) {
+      return { deal: null, dealError: classifyTransportError(error) };
+    }
+  );
+  const paidTask = fetchPaid(jar, fetchImpl).then(
+    function (value) {
+      return { paid: value, paidError: null };
+    },
+    function (error) {
+      return { paid: null, paidError: classifyTransportError(error) };
+    }
+  );
+  const [dealResult, paidResult] = await Promise.all([dealTask, paidTask]);
+  const deal = dealResult.deal;
+  const dealError = dealResult.dealError;
+  const paid = paidResult.paid;
+  const paidError = paidResult.paidError;
   const metrics = Object.assign(
     {
       dealAmount: null,

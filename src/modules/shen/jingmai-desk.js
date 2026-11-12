@@ -94,6 +94,8 @@ const SONAME_PACKAGES = {
 };
 
 let current = null;
+let readerDesk = null;
+let readerIdle = null;
 let chromeInstall = null;
 let libraryPath = "";
 let libraryTask = null;
@@ -758,7 +760,34 @@ function discard(desk) {
   }
 }
 
+function closeReader() {
+  const desk = readerDesk;
+  readerDesk = null;
+  if (readerIdle) {
+    clearTimeout(readerIdle);
+    readerIdle = null;
+  }
+  if (desk) {
+    discard(desk);
+  }
+}
+
+function armReaderIdle() {
+  if (readerIdle) {
+    clearTimeout(readerIdle);
+  }
+  readerIdle = setTimeout(closeReader, 15000);
+  if (readerIdle && typeof readerIdle.unref === "function") {
+    readerIdle.unref();
+  }
+}
+
 function stopCurrent() {
+  readerDesk = null;
+  if (readerIdle) {
+    clearTimeout(readerIdle);
+    readerIdle = null;
+  }
   const desk = current;
   current = null;
   if (!desk) {
@@ -1315,45 +1344,81 @@ function watchShopData(ws) {
 
 let dealQueue = Promise.resolve();
 
-async function readHomeDealNow(cookies) {
-  if (current) {
+async function prepareReader() {
+  if (current && current !== readerDesk) {
     return null;
   }
-  let desk = null;
+  if (readerDesk && readerDesk.ws) {
+    return readerDesk;
+  }
+  const desk = await launchChrome();
+  if (current) {
+    discard(desk);
+    return null;
+  }
+  current = desk;
+  readerDesk = desk;
+  const ws = desk.ws;
+  await send(ws, "Page.enable");
+  await send(ws, "Network.enable");
   try {
-    desk = await launchChrome();
-    if (current) {
-      discard(desk);
-      desk = null;
+    await send(ws, "Network.setCacheDisabled", { cacheDisabled: true });
+  } catch {
+    /* cache disable is optional */
+  }
+  try {
+    await send(ws, "Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: false, flatten: true });
+  } catch {
+    /* this page target does not attach child frames */
+  }
+  return desk;
+}
+
+function cookieParams(cookies) {
+  return (cookies || [])
+    .filter(function (item) {
+      return item && item.name && item.value != null;
+    })
+    .map(function (item) {
+      return {
+        name: String(item.name),
+        value: String(item.value),
+        domain: ".jd.com",
+        path: "/",
+        secure: true,
+        httpOnly: true,
+        sameSite: "None"
+      };
+    });
+}
+
+async function readHomeDealNow(cookies) {
+  if (readerIdle) {
+    clearTimeout(readerIdle);
+    readerIdle = null;
+  }
+  try {
+    const desk = await prepareReader();
+    if (!desk) {
       return null;
     }
-    current = desk;
     const ws = desk.ws;
-    await send(ws, "Page.enable");
-    await send(ws, "Network.enable");
+    ws.__shopRequests = new Map();
     try {
-      await send(ws, "Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: false, flatten: true });
+      await send(ws, "Network.clearBrowserCookies");
     } catch {
-      /* this page target does not attach child frames */
+      /* older chrome still replaces cookies by name */
     }
+    try {
+      await send(ws, "Page.navigate", { url: "about:blank" });
+    } catch {
+      /* a fresh target can reject the first navigation */
+    }
+    await sleep(300);
     const pending = watchShopData(ws);
-    const jar = (cookies || []).filter(function (item) {
-      return item && item.name && item.value != null;
-    });
+    const jar = cookieParams(cookies);
     if (jar.length) {
-      await send(ws, "Network.setCookies", {
-        cookies: jar.map(function (item) {
-          return {
-            name: String(item.name),
-            value: String(item.value),
-            domain: ".jd.com",
-            path: "/",
-            secure: true,
-            httpOnly: true,
-            sameSite: "None"
-          };
-        })
-      });
+      await send(ws, "Network.setCookies", { cookies: jar });
     }
     await send(ws, "Page.navigate", { url: "https://shop.jd.com/jdm/home" });
     const body = await pending;
@@ -1382,6 +1447,10 @@ async function readHomeDealNow(cookies) {
     error.code = "network";
     throw error;
   } catch (error) {
+    const keep = error && error.code === "network" && /没有成交金额/.test(String(error.message || ""));
+    if (!keep) {
+      closeReader();
+    }
     if (error && error.code === "network") {
       throw error;
     }
@@ -1392,7 +1461,9 @@ async function readHomeDealNow(cookies) {
     wrapped.code = "network";
     throw wrapped;
   } finally {
-    discard(desk);
+    if (readerDesk) {
+      armReaderIdle();
+    }
   }
 }
 

@@ -515,6 +515,45 @@ test("deal card is read from the layer that contains channel data", () => {
   assert.equal(metrics.yesterdayAmount, 17920);
 });
 
+test("a busy homepage retries and then reads the deal card", async () => {
+  const previous = process.env.SHEN_DEAL_RETRY_MS;
+  process.env.SHEN_DEAL_RETRY_MS = "0";
+  let shopCalls = 0;
+  try {
+    const result = await fetchHome([{ name: "thor", value: "hidden-jar" }], async (url) => {
+      if (String(url).includes("findAccountInfo")) {
+        return jsonReply({ code: 200, data: { currentBelongType: 200, belongVos: [{ belongType: 200, businessFieldCode: "omni" }] } });
+      }
+      if (String(url).includes("findShopDataByChannel")) {
+        shopCalls += 1;
+        if (shopCalls < 3) {
+          return jsonReply({ code: 601, msg: "操作频繁，请稍后重试" });
+        }
+        return jsonReply({
+          code: "200",
+          data: { channelData: { indicatorList: [{ code: "3009", name: "成交总金额", todayNum: "8,614.12", yesterdayNum: "1000" }] } }
+        });
+      }
+      if (String(url).includes("pinlist")) {
+        return jsonReply({ code: 1, data: { own: [{ userId: 7 }] } });
+      }
+      if (String(url).includes("summary/overview")) {
+        return jsonReply({ code: 1, data: { summary: [{ index: "cost", value: "10" }, { index: "totalOrderSum", value: "20" }, { index: "ROI", value: "2" }] } });
+      }
+      return jsonReply("<html>busy</html>");
+    });
+    assert.equal(result.dealAmount, 8614.12);
+    assert.equal(result.paidAmount, 10);
+    assert.equal(shopCalls, 3);
+  } finally {
+    if (previous == null) {
+      delete process.env.SHEN_DEAL_RETRY_MS;
+    } else {
+      process.env.SHEN_DEAL_RETRY_MS = previous;
+    }
+  }
+});
+
 test("homepage deal uses the shop card and keeps the gateway reason when it fails", async () => {
   const result = await fetchHome([{ name: "thor", value: "hidden-jar" }], async (url) => {
     if (String(url).includes("findAccountInfo")) {
