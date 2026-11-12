@@ -171,3 +171,64 @@ test("charts cards and shop rows use the same filtered live board", () => {
   assert.equal(shop.shops[0].shop, "A店");
   assert.equal(shop.live.cards.find((card) => card.key === "livePay").value, "80");
 });
+
+test("live table can search shops, filter 掉线/回传失败, and hide idle org shops", () => {
+  const store = {};
+  const fns = new Function(
+    "localStorage",
+    pick("normShopName") +
+      pick("liveLinkOf") +
+      pick("liveFilter") +
+      pick("shopsInDutyTeam") +
+      pick("filterLiveShops") +
+      pick("shopNotOperating") +
+      pick("orgIdleNames") +
+      pick("dutyShopsFrom") +
+      "return {filterLiveShops,shopNotOperating,orgIdleNames,dutyShopsFrom,liveLinkOf};"
+  )({
+    getItem(key) {
+      return Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null;
+    },
+    setItem(key, value) {
+      store[key] = String(value);
+    }
+  });
+  const rows = [
+    { shop: "在线店", jzOk: "是", online: true },
+    { shop: "掉线店", jzOk: "否", online: false },
+    { shop: "闲置店", jzOk: "是", online: true }
+  ];
+  store["xm-home-live-filter"] = JSON.stringify({ link: "off" });
+  assert.deepEqual(
+    fns.filterLiveShops(rows, {}).map((row) => row.shop),
+    ["掉线店"]
+  );
+  store["xm-home-live-filter"] = JSON.stringify({ jzOk: "否" });
+  assert.deepEqual(
+    fns.filterLiveShops(rows, {}).map((row) => row.shop),
+    ["掉线店"]
+  );
+  store["xm-home-live-filter"] = JSON.stringify({ q: "在线" });
+  assert.deepEqual(
+    fns.filterLiveShops(rows, {}).map((row) => row.shop),
+    ["在线店"]
+  );
+  const org = {
+    stores: [
+      { storeName: "在线店", statusKey: "operating" },
+      { storeName: "掉线店", statusKey: "operating" },
+      { storeName: "闲置店", statusKey: "idle" }
+    ]
+  };
+  assert.equal(fns.shopNotOperating({ statusKey: "idle" }), true);
+  assert.equal(fns.shopNotOperating({ statusKey: "operating" }), false);
+  store["xm-home-live-filter"] = JSON.stringify({});
+  assert.deepEqual(
+    fns.filterLiveShops(rows, { orgIdle: fns.orgIdleNames(org) }).map((row) => row.shop),
+    ["在线店", "掉线店"]
+  );
+  assert.deepEqual(
+    fns.dutyShopsFrom(org).map((row) => row.storeName),
+    ["在线店", "掉线店"]
+  );
+});

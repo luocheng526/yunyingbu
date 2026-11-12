@@ -160,7 +160,7 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function feeWarnText/);
   assert.match(homeJs, /费比设置/);
   assert.match(homeJs, /label: "更新时间"/);
-  assert.match(homeJs, /data-fee-target/);
+  assert.doesNotMatch(homeJs, /data-fee-target/);
   assert.match(homeJs, /function liveFilterHtml/);
   assert.match(homeJs, /data-live-filter="pick"/);
   assert.match(homeJs, /店铺列表/);
@@ -192,7 +192,7 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function seesAllLiveShops/);
   assert.match(homeJs, /\/api\/home\/local-paid/);
   assert.match(homeJs, /xm-hm-live-at">更新时间 /);
-  assert.match(homeJs, /实时看板汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」/);
+  assert.match(homeJs, /实时只汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」/);
   assert.match(homeJs, /\/api\/home\/erp-paid/);
   assert.match(homeJs, /function seriesOf/);
   assert.match(homeJs, /function todayHours/);
@@ -1007,14 +1007,16 @@ test("fee target is a range and 费比监控 uses 超标 / 加大付费", () => 
   assert.match(homeJs, /function feeMonitorOf/);
   assert.match(homeJs, /function isHomeFormField/);
   assert.match(homeJs, /function isFeeTyping/);
-  assert.match(homeJs, /function liveFeeDraft/);
+  assert.match(homeJs, /function liveSearchDraft/);
   assert.match(homeJs, /label: "费比监控"/);
   assert.match(homeJs, /label: "费比设置"/);
   assert.doesNotMatch(homeJs, /label: "费比预警"/);
   assert.doesNotMatch(homeJs, /label: "费比目标设置"/);
-  assert.match(homeJs, /type="text" inputmode="decimal"/);
-  assert.doesNotMatch(homeJs, /type="number" min="0" max="100"/);
-  assert.match(homeJs, /onpointerdown="event.stopPropagation\(\)"/);
+  assert.doesNotMatch(homeJs, /function saveFeeRangeFor/);
+  assert.doesNotMatch(homeJs, /data-fee-target/);
+  assert.doesNotMatch(homeJs, /xm-home-fee-targets/);
+  assert.match(homeJs, /type="search"/);
+  assert.match(homeJs, /placeholder="搜索店铺"/);
   assert.match(homeJs, /if \(isHomeFormField\(event\.target\)\) \{\s*return;/);
   assert.match(homeJs, /加大付费/);
   assert.match(homeJs, /费比超标/);
@@ -1036,59 +1038,60 @@ test("fee target is a range and 费比监控 uses 超标 / 加大付费", () => 
   };
   const start = homeJs.indexOf("function feePct");
   const end = homeJs.indexOf("function liveFilter");
-  const store = {};
   const fns = new Function(
-    "localStorage",
     pick("asNum") +
       pick("escapeHtml") +
       homeJs.slice(start, end) +
-      "return {feeMonitorOf,feeWarnLabel,feeGoalCellHtml,isHomeFormField,isFeeTyping,saveFeeRangeFor,feeShopCounts,feePickShops};"
-  )({
-    getItem(key) {
-      return Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null;
-    },
-    setItem(key, value) {
-      store[key] = String(value);
-    },
-    removeItem(key) {
-      delete store[key];
-    }
-  });
-  fns.saveFeeRangeFor("RASW家居旗舰店", "lo", "10");
-  fns.saveFeeRangeFor("RASW家居旗舰店", "hi", "20");
-  assert.equal(fns.feeWarnLabel("8%", "RASW家居旗舰店"), "加大付费");
-  assert.equal(fns.feeWarnLabel("25%", "RASW家居旗舰店"), "费比超标");
-  assert.equal(fns.feeWarnLabel("15%", "RASW家居旗舰店"), "正常");
-  assert.equal(fns.feeWarnLabel("10%", "RASW家居旗舰店"), "正常");
-  assert.equal(fns.feeWarnLabel("20%", "RASW家居旗舰店"), "正常");
-  assert.equal(fns.feeWarnLabel("9%", "RASW家居旗舰店"), "加大付费");
-  assert.equal(fns.feeWarnLabel("21%", "RASW家居旗舰店"), "费比超标");
-  assert.equal(fns.feeWarnLabel("8%", "没设目标的店"), "未设目标");
-  assert.equal(fns.feeMonitorOf("25%", "RASW家居旗舰店").kind, "hot");
-  assert.equal(fns.feeMonitorOf("8%", "RASW家居旗舰店").kind, "cold");
+      "return {feeMonitorOf,feeWarnLabel,feeGoalCellHtml,isHomeFormField,isFeeTyping,feeShopCounts,feePickShops};"
+  )();
+  const rasw = { shop: "RASW家居旗舰店", feeLo: 10, feeHi: 20 };
+  assert.equal(fns.feeWarnLabel({ ...rasw, feeRate: "8%" }), "加大付费");
+  assert.equal(fns.feeWarnLabel({ ...rasw, feeRate: "25%" }), "费比超标");
+  assert.equal(fns.feeWarnLabel({ ...rasw, feeRate: "15%" }), "正常");
+  assert.equal(fns.feeWarnLabel({ ...rasw, feeRate: "10%" }), "正常");
+  assert.equal(fns.feeWarnLabel({ ...rasw, feeRate: "20%" }), "正常");
+  assert.equal(fns.feeWarnLabel({ ...rasw, feeRate: "9%" }), "加大付费");
+  assert.equal(fns.feeWarnLabel({ ...rasw, feeRate: "21%" }), "费比超标");
+  assert.equal(fns.feeWarnLabel({ shop: "没设目标的店", feeRate: "8%" }), "未设目标");
+  assert.equal(fns.feeMonitorOf({ ...rasw, feeRate: "25%" }).kind, "hot");
+  assert.equal(fns.feeMonitorOf({ ...rasw, feeRate: "8%" }).kind, "cold");
   const counted = fns.feeShopCounts([
-    { shop: "RASW家居旗舰店", feeRate: "25%" },
-    { shop: "RASW家居旗舰店", feeRate: "8%" },
+    { shop: "RASW家居旗舰店", feeRate: "25%", feeLo: 10, feeHi: 20 },
+    { shop: "RASW家居旗舰店", feeRate: "8%", feeLo: 10, feeHi: 20 },
     { shop: "没设目标的店", feeRate: "8%" }
   ]);
   assert.equal(counted.hot, 1);
   assert.equal(counted.cold, 1);
-  assert.equal(fns.feePickShops([{ shop: "RASW家居旗舰店", feeRate: "25%" }, { shop: "RASW家居旗舰店", feeRate: "8%" }], "hot").length, 1);
-  assert.equal(fns.feePickShops([{ shop: "RASW家居旗舰店", feeRate: "25%" }, { shop: "RASW家居旗舰店", feeRate: "8%" }], "cold")[0].feeRate, "8%");
-  store["xm-home-fee-targets"] = JSON.stringify({ 旧数字店: 15 });
-  assert.equal(fns.feeWarnLabel("10%", "旧数字店"), "加大付费");
-  assert.equal(fns.feeWarnLabel("15%", "旧数字店"), "正常");
-  assert.equal(fns.feeWarnLabel("20%", "旧数字店"), "费比超标");
-  fns.saveFeeRangeFor("只设上限", "hi", "20");
-  assert.equal(fns.feeWarnLabel("21%", "只设上限"), "费比超标");
-  assert.equal(fns.feeWarnLabel("19%", "只设上限"), "正常");
-  fns.saveFeeRangeFor("只设下限", "lo", "10");
-  assert.equal(fns.feeWarnLabel("9%", "只设下限"), "加大付费");
-  assert.equal(fns.feeWarnLabel("11%", "只设下限"), "正常");
-  assert.match(fns.feeGoalCellHtml("RASW家居旗舰店"), /data-fee-target="lo"/);
-  assert.match(fns.feeGoalCellHtml("RASW家居旗舰店"), /data-fee-target="hi"/);
-  assert.match(fns.feeGoalCellHtml("RASW家居旗舰店"), /type="text"/);
-  assert.match(fns.feeGoalCellHtml("RASW家居旗舰店"), /stopPropagation/);
+  assert.equal(
+    fns.feePickShops(
+      [
+        { shop: "RASW家居旗舰店", feeRate: "25%", feeLo: 10, feeHi: 20 },
+        { shop: "RASW家居旗舰店", feeRate: "8%", feeLo: 10, feeHi: 20 }
+      ],
+      "hot"
+    ).length,
+    1
+  );
+  assert.equal(
+    fns.feePickShops(
+      [
+        { shop: "RASW家居旗舰店", feeRate: "25%", feeLo: 10, feeHi: 20 },
+        { shop: "RASW家居旗舰店", feeRate: "8%", feeLo: 10, feeHi: 20 }
+      ],
+      "cold"
+    )[0].feeRate,
+    "8%"
+  );
+  assert.equal(fns.feeWarnLabel({ shop: "旧数字店", feeRate: "10%", feeLo: 15, feeHi: 15 }), "加大付费");
+  assert.equal(fns.feeWarnLabel({ shop: "旧数字店", feeRate: "15%", feeLo: 15, feeHi: 15 }), "正常");
+  assert.equal(fns.feeWarnLabel({ shop: "旧数字店", feeRate: "20%", feeLo: 15, feeHi: 15 }), "费比超标");
+  assert.equal(fns.feeWarnLabel({ shop: "只设上限", feeRate: "21%", feeHi: 20 }), "费比超标");
+  assert.equal(fns.feeWarnLabel({ shop: "只设上限", feeRate: "19%", feeHi: 20 }), "正常");
+  assert.equal(fns.feeWarnLabel({ shop: "只设下限", feeRate: "9%", feeLo: 10 }), "加大付费");
+  assert.equal(fns.feeWarnLabel({ shop: "只设下限", feeRate: "11%", feeLo: 10 }), "正常");
+  assert.equal(fns.feeGoalCellHtml({ feeLo: 10, feeHi: 20 }), "10%–20%");
+  assert.equal(fns.feeGoalCellHtml({}), "—");
+  assert.doesNotMatch(fns.feeGoalCellHtml({ feeLo: 10, feeHi: 20 }), /<input/);
   assert.equal(fns.isHomeFormField({ closest: (sel) => (sel.indexOf("input") >= 0 ? {} : null) }), true);
   assert.equal(fns.isFeeTyping({ closest: (sel) => (sel.indexOf("input") >= 0 ? {} : null) }), true);
   assert.equal(fns.isFeeTyping({ closest: (sel) => (sel.indexOf("button") >= 0 ? {} : null) }), false);

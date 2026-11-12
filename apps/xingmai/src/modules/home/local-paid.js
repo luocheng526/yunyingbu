@@ -152,6 +152,16 @@ function paidRecordFrom(row, source) {
   if (fee == null && spend != null && jingmai) {
     fee = spend / jingmai;
   }
+  let feeLo = pickNum(row, ["feeLo", "feeMin", "minFee", "targetLo", "feeGoalLo", "费比下限"]);
+  let feeHi = pickNum(row, ["feeHi", "feeMax", "maxFee", "targetHi", "feeGoalHi", "费比上限"]);
+  if (feeLo == null && feeHi == null) {
+    const rangeText = text(row.feeGoal || row.feeRange || row.feeTarget || row["费比设置"]);
+    const m = rangeText.match(/(\d+(?:\.\d+)?)\s*%?\s*[-–~至到]\s*(\d+(?:\.\d+)?)/);
+    if (m) {
+      feeLo = asNum(m[1]);
+      feeHi = asNum(m[2]);
+    }
+  }
   return {
     shopName: shop,
     shop,
@@ -172,6 +182,8 @@ function paidRecordFrom(row, source) {
     realFeeRatio: pickNum(row, ["realFeeRatio", "jzRealFee"]),
     success: text(row.success || row.jzOk),
     capturedAt: text(row.capturedAt || row.ingestedAt),
+    feeLo,
+    feeHi,
     online:
       row.online === true || row.online === "在线"
         ? true
@@ -217,6 +229,8 @@ function betterRecord(cur, next) {
     success: cur.success || next.success,
     capturedAt: cur.capturedAt || next.capturedAt,
     online: cur.online != null ? cur.online : next.online,
+    feeLo: cur.feeLo != null ? cur.feeLo : next.feeLo,
+    feeHi: cur.feeHi != null ? cur.feeHi : next.feeHi,
     source: cur.source && next.source && cur.source !== next.source ? "han+shen" : cur.source || next.source
   };
 }

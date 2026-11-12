@@ -63,7 +63,7 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.match(homeJs, /paidAmount: "—"/);
   assert.match(homeJs, /function liveCardsOf/);
   assert.match(homeJs, /label: "实时付费接入店铺数量"/);
-  assert.match(homeJs, /实时看板汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」/);
+  assert.match(homeJs, /实时只汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」/);
   assert.match(homeJs, /if \(stampClock \|\| !state\.liveAt\)/);
   assert.match(homeJs, /timeZone: "Asia\/Shanghai"/);
   assert.doesNotMatch(homeJs, /京麦面板实时金额和实时付费都走星脉 ERP/);
@@ -196,7 +196,7 @@ test("homepage live paid merges 韩梦凯实时付费 and 沈子晗付费中心 
   const merged = mergeHanShenPaid(
     {
       shops: [
-        { store: "韩店", date: ymd, spend: 10, jingmaiGmv: 40, roi: 4, success: "是", accountId: "1" },
+        { store: "韩店", date: ymd, spend: 10, jingmaiGmv: 40, roi: 4, success: "是", accountId: "1", feeLo: 35, feeHi: 40 },
         { store: "旧店", date: "2026-01-01", spend: 99, jingmaiGmv: 99, success: "是" }
       ]
     },
@@ -213,6 +213,8 @@ test("homepage live paid merges 韩梦凯实时付费 and 沈子晗付费中心 
   assert.equal(merged.summary.spend, 15);
   assert.equal(merged.summary.liveAmount, 60);
   assert.equal(merged.summary.shops, 2);
+  assert.equal(merged.records.find((row) => row.shopName === "韩店").feeLo, 35);
+  assert.equal(merged.records.find((row) => row.shopName === "韩店").feeHi, 40);
   const liveHan = mergeHanShenPaid(
     { stale: false, shops: [{ store: "韩店", date: ymd, spend: 1, jingmaiGmv: 2, success: "是" }] },
     { rows: [] },

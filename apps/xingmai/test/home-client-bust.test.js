@@ -11,7 +11,7 @@ test("rewrites immutable homepage script url to no-store client.js", () => {
   const out = rewriteHomeModuleUrl(html);
   assert.equal(out.includes("/shared/modules/home.js"), false);
   assert.equal(out.includes(HOME_CLIENT_JS), true);
-    assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.871-home-status$/);
+    assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.873-home-scrape$/);
 });
 
 test("serves /api/home/client.js from current homepage module", async () => {
@@ -26,7 +26,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     const text = await res.text();
     assert.equal(res.status, 200);
     assert.match(String(res.headers.get("cache-control") || ""), /no-store/i);
-    assert.match(text, /xm-module-home 0\.1\.871-home-status/);
+    assert.match(text, /xm-module-home 0\.1\.873-home-scrape/);
     assert.match(text, /function liveTheadHtml/);
     assert.match(text, /function liveFilterHtml/);
     assert.match(text, /data-live-filter="pick"/);
@@ -53,7 +53,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /加大付费/);
     assert.doesNotMatch(text, /label: "实时利润"/);
     assert.doesNotMatch(text, /label: "实时销售额"/);
-    assert.match(text, /data-fee-shop/);
+    assert.match(text, /placeholder="搜索店铺"/);
     assert.match(text, /xm-home-live-cols/);
     assert.match(text, /\.xm-hm-table th\{text-align:center/);
     assert.match(text, /实时成交金额/);
@@ -74,7 +74,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /xm-home-live-row/);
     assert.match(text, /xm-home-live-head-order/);
     assert.match(text, /is-picked/);
-    assert.match(text, /xm-home-fee-targets/);
+    assert.doesNotMatch(text, /xm-home-fee-targets/);
     assert.match(text, /费比监控/);
     assert.match(text, /label: "更新时间"/);
     assert.match(text, /onOutsideCardSet/);
