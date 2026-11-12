@@ -798,6 +798,27 @@ function readJingmaiRate(row) {
   return null;
 }
 
+function readOrderAmount(row) {
+  const named = pick(row, [
+    "京准通总订单金额",
+    "总订单金额",
+    "订单金额",
+    "直接订单金额",
+    "付费订单金额",
+    "京准通订单金额",
+    "totalOrderAmount",
+    "orderAmount",
+  ]);
+  if (named !== "") return named;
+  for (const [key, value] of Object.entries(row || {})) {
+    if (value == null || String(value).trim() === "") continue;
+    const name = String(key);
+    if (name.includes("京麦") || name.includes("成交金额") || name.includes("花费")) continue;
+    if (name.includes("订单金额") || name.includes("下单金额")) return value;
+  }
+  return "";
+}
+
 function parseShop(row, capturedAt) {
   const store = text(pick(row, ["店铺名称", "store", "店铺", "店名"]), 64);
   if (!store) {
@@ -820,7 +841,7 @@ function parseShop(row, capturedAt) {
     jingmaiGmvRate: readJingmaiRate(row),
     clicks: num(pick(row, ["京准通点击数", "clicks", "点击数"])),
     ctr: num(pick(row, ["京准通点击率", "ctr", "点击率"])),
-    totalOrderAmount: num(pick(row, ["京准通总订单金额", "totalOrderAmount"])),
+    totalOrderAmount: num(readOrderAmount(row)),
     realFeeRatio: num(pick(row, ["真实费比", "realFeeRatio"])),
     balance: num(pick(row, ["余额", "balance"])),
     success: success === "否" ? "否" : "是",
@@ -846,7 +867,7 @@ function parseSub(row, fallbackStore, capturedAt) {
     balance: num(pick(row, ["余额", "balance", "账户余额"])),
     paidOrders,
     orders: paidOrders,
-    totalOrderAmount: num(pick(row, ["京准通总订单金额", "totalOrderAmount", "订单金额"])),
+    totalOrderAmount: num(readOrderAmount(row)),
     impressions: num(pick(row, ["展现数", "impressions", "曝光数"])),
     clicks: num(pick(row, ["京准通点击数", "clicks", "点击数"])),
     ctr: num(pick(row, ["京准通点击率", "ctr", "点击率"])),
@@ -1136,7 +1157,8 @@ export function createWorkerMethods(db, ensure) {
   function applySubOrderAmount(shop, sums) {
     if (!shop) return shop;
     const rolled = sums.get(shop.store) || 0;
-    if (rolled > 0) shop.totalOrderAmount = rolled;
+    const own = num(shop.totalOrderAmount);
+    if (rolled > own) shop.totalOrderAmount = rolled;
     return shop;
   }
 
