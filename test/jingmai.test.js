@@ -16,7 +16,7 @@ import {
 } from "../src/modules/shen/jingmai.js";
 import { fetchHome, interpretQrCheck } from "../src/modules/shen/jingmai-client.js";
 import { passwordFailureMessage } from "../src/modules/shen/jingmai-client.js";
-import { libraryPackageNames, packageFilename, suiteForGlibc } from "../src/modules/shen/jingmai-desk.js";
+import { libraryPackageNames, loginScreenState, packageFilename, suiteForGlibc } from "../src/modules/shen/jingmai-desk.js";
 import { beginRelogin, beginReloginAll, connectJingmai, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/shen/jingmai-runner.js";
 import { listSessions, readJingmaiLive, resetJingmaiStore, saveSample, saveSession } from "../src/modules/shen/jingmai-store.js";
 
@@ -25,6 +25,14 @@ const now = { day: "2026-11-12", stamp: "2026-11-12 11:05:00", hour: 11, clock: 
 function shop(name) {
   return { store: name, enabled: true, authState: "ok", cookies: [{ name: "thor", value: name }] };
 }
+
+test("a login page that still has the account box stays on screen", () => {
+  assert.equal(loginScreenState("登录异常 忘记密码", true).status, "verify");
+  assert.equal(loginScreenState("登录异常 忘记密码", true).message, "");
+  assert.equal(loginScreenState("登录异常，请稍后再试", false).status, "verify");
+  assert.match(loginScreenState("登录异常，请稍后再试", false).message, /请过一会儿再试/);
+  assert.equal(loginScreenState("账号或密码不正确", true).status, "login");
+});
 
 test("chrome library map names libatk and skips libc", () => {
   assert.deepEqual(libraryPackageNames("libatk-1.0.so.0"), ["libatk1.0-0t64", "libatk1.0-0"]);
@@ -304,6 +312,40 @@ test("connect timeout does not mark the shop logged out", async () => {
     const sessions = await listSessions();
     assert.equal(sessions[0].authState, "ok");
     assert.equal(sessions[0].cookies[0].value, "keep");
+  } finally {
+    resetJingmaiDeps();
+    await resetJingmaiStore();
+  }
+});
+
+test("jingmai rejection keeps the server screen open", async () => {
+  await resetJingmaiStore();
+  let closed = 0;
+  setJingmaiDeps({
+    loadOrg: async () => [{ store: "甲店", enabled: true, login: "acct", password: "secret-pass" }],
+    client: { fetchHome: async () => ({ dealAmount: 1, orderCount: 1, customerCount: 1, yesterdayAmount: null }) },
+    desk: {
+      open: async () => ({ status: "verify", message: "京麦拒绝了这次服务器登录，请过一会儿再试" }),
+      poll: async () => ({ status: "verify", message: "京麦拒绝了这次服务器登录，请过一会儿再试" }),
+      shot: async () => Buffer.from([1, 2, 3]),
+      click: async () => {},
+      type: async () => {},
+      close: async () => {
+        closed += 1;
+      },
+      reset() {}
+    }
+  });
+  try {
+    const opened = await beginRelogin("甲店", "mk_sid=test");
+    assert.equal(opened.status, "screen");
+    assert.match(opened.message, /请过一会儿再试/);
+    const afterOpen = closed;
+    const waiting = await reloginState("甲店");
+    assert.equal(waiting.status, "screen");
+    assert.equal(closed, afterOpen);
+    const live = await readJingmaiLive();
+    assert.equal(live.shops.some((item) => item.loginExpired), false);
   } finally {
     resetJingmaiDeps();
     await resetJingmaiStore();

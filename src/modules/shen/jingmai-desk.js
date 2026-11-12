@@ -1096,17 +1096,25 @@ async function pageText(ws) {
   return String(text || "");
 }
 
-function failureMessage(text) {
-  if (text.includes("不匹配") || text.includes("密码不正确") || text.includes("账号或密码")) {
-    return "账号或密码不正确";
+export function loginScreenState(text, formReady) {
+  const source = String(text || "");
+  if (source.includes("不匹配") || source.includes("密码不正确") || source.includes("账号或密码")) {
+    return { status: "login", message: "账号或密码不正确" };
   }
-  if (text.includes("登录异常")) {
-    return "京麦拒绝了这次服务器登录，请过一会儿再试";
+  if (source.includes("冻结") || source.includes("停用")) {
+    return { status: "login", message: "这个账号现在不能登录" };
   }
-  if (text.includes("冻结") || text.includes("停用")) {
-    return "这个账号现在不能登录";
+  if (!formReady && /登录异常|登录环境异常|暂时无法登录/.test(source)) {
+    return { status: "verify", message: "京麦拒绝了这次服务器登录，请过一会儿再试" };
   }
-  return "";
+  return { status: "verify", message: "" };
+}
+
+async function readScreenState(ws) {
+  const formReady = Boolean(
+    await evaluate(ws, "!![...document.querySelectorAll('input')].find((node) => (node.placeholder || '').includes('账号'))")
+  );
+  return loginScreenState(await pageText(ws), formReady);
 }
 
 async function fillAndSubmit(ws, loginName, password) {
@@ -1189,12 +1197,12 @@ export async function openDesk({ store, loginName, password }) {
     if (hasSession(cookies)) {
       return { status: "ok", cookies: cookies };
     }
-    const message = failureMessage(await pageText(desk.ws));
-    if (message) {
+    const screen = await readScreenState(desk.ws);
+    if (screen.status === "login") {
       stopCurrent();
-      return { status: "login", message: message };
+      return screen;
     }
-    return { status: "verify" };
+    return screen;
   } catch (error) {
     stopCurrent();
     if (error && error.code === "browser") {
@@ -1218,11 +1226,7 @@ export async function pollDesk(store) {
     if (hasSession(cookies)) {
       return { status: "ok", cookies: cookies };
     }
-    const message = failureMessage(await pageText(current.ws));
-    if (message) {
-      return { status: "login", message: message };
-    }
-    return { status: "verify", message: "" };
+    return readScreenState(current.ws);
   } catch {
     return { status: "login", message: "服务器登录中断了" };
   }

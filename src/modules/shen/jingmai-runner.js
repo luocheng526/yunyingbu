@@ -180,7 +180,11 @@ async function startQueued(shop) {
     return advanceAfterSuccess(shop.store);
   }
   if (opened.status === "verify") {
-    return publicState({ status: "screen", store: shop.store, message: "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。" });
+    return publicState({
+      status: "screen",
+      store: shop.store,
+      message: opened.message || "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。"
+    });
   }
   await deps.desk.close();
   if (String(opened.message || "").includes("浏览器")) {
