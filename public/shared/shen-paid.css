@@ -1173,6 +1173,26 @@
   font-weight: 500;
 }
 
+#paid-board .xm-hl-net {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 18px;
+  vertical-align: 1px;
+}
+
+#paid-board .xm-hl-net.is-on {
+  color: #15803d;
+  background: #dcfce7;
+}
+
+#paid-board .xm-hl-net.is-off {
+  color: #dc2626;
+  background: #fee2e2;
+}
+
 #paid-board .xm-hl-shop {
   border: 0;
   background: transparent;

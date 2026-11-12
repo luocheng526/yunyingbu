@@ -456,7 +456,7 @@
     mount: function (root) {
       const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
       paidCss.rel = "stylesheet";
-      paidCss.href = "/shared/shen-paid.css?v=0.1.851-fee-watch";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.764-paid-online";
       if (!paidCss.parentNode) {
         document.head.appendChild(paidCss);
       }
@@ -1751,6 +1751,7 @@
           row.todayHours = sale && Array.isArray(sale.todayHours) ? sale.todayHours : [];
           row.yesterdayHours = sale && Array.isArray(sale.yesterdayHours) ? sale.yesterdayHours : [];
           row.capturedAt = sale && sale.capturedAt ? String(sale.capturedAt) : "";
+          row.online = Boolean(sale && sale.online);
           row.loginExpired = Boolean(sale && sale.loginExpired);
           row.paidAmount =
             sale && sale.paidAmount != null
@@ -2070,6 +2071,16 @@
         });
       }
 
+      function netMark(row) {
+        if (row.online) {
+          return '<span class="xm-hl-net is-on">在线</span>';
+        }
+        if (row.loginExpired) {
+          return '<span class="xm-hl-net is-off">掉线</span>';
+        }
+        return "";
+      }
+
       function homeCell(row, col, index, clock) {
         if (col.key === "rank") {
           return rankMark(index);
@@ -2081,6 +2092,7 @@
             '">' +
             escapeHtml(row.store) +
             "</button>" +
+            netMark(row) +
             (row.loginExpired
               ? '<button type="button" class="xm-hl-relogin" data-relogin="' +
                 escapeHtml(row.store) +

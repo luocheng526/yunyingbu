@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.764-jingcang-jdl — 京仓只显示京东物流商品 */
+/* xm-fast-shell 0.1.764-paid-online — 付费店铺标出在线和掉线 */
 (function () {
-  const ASSET_VER = "0.1.764-jingcang-jdl";
+  const ASSET_VER = "0.1.764-paid-online";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",

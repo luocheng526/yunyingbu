@@ -456,7 +456,8 @@ export function buildLiveView({ shops, samples, now }) {
     return {
       shop: shop.store,
       enabled: shop.enabled !== false,
-      loginExpired: shop.authState === "login_expired",
+      online: shop.enabled !== false && shop.authState === "ok" && Array.isArray(shop.cookies) && shop.cookies.length > 0,
+      loginExpired: shop.enabled !== false && shop.authState === "login_expired",
       dealAmount: today && today.dealAmount != null ? today.dealAmount : null,
       orderCount: today && today.orderCount != null ? today.orderCount : null,
       customerCount: today && today.customerCount != null ? today.customerCount : null,

@@ -162,6 +162,9 @@ test("live view counts successful shops and does not expose cookies", () => {
   assert.equal(view.successShops, 1);
   assert.equal(view.enabledShops, 2);
   assert.equal(view.loginExpiredShops, 1);
+  assert.equal(view.shops[0].online, true);
+  assert.equal(view.shops[1].online, false);
+  assert.equal(view.shops[1].loginExpired, true);
   assert.equal(view.updatedAt, "2026/11/12 11:05:00");
   assert.equal(view.shops[0].dealAmount, 0);
   assert.equal(view.shops[1].dealAmount, null);
