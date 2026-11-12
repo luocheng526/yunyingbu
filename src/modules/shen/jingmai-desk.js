@@ -480,6 +480,7 @@ async function downloadSonames(home, names, suite) {
         mkdirSync(home + "/debs", { recursive: true });
         const response = await fetch(index.mirror.replace(/\/$/, "") + "/" + filename, { signal: AbortSignal.timeout(120000) });
         if (!response.ok) {
+          libraryNote = libraryNote || ("安装包下载失败 " + response.status);
           continue;
         }
         writeFileSync(deb, Buffer.from(await response.arrayBuffer()));
@@ -489,10 +490,20 @@ async function downloadSonames(home, names, suite) {
           installed = true;
           break;
         }
-      } catch {
+        libraryNote = libraryNote || "安装包解不开";
+      } catch (error) {
+        const code = (error && (error.code || error.message)) || "下载失败";
+        if (!installed || code === "ENOSPC" || String(code).includes("no space")) {
+          libraryNote = code;
+        }
         rmSync(deb, { force: true });
       }
     }
+  }
+  if (installed && libraryNote !== "ENOSPC" && !String(libraryNote).includes("no space")) {
+    libraryNote = "";
+  } else if (!installed && !libraryNote) {
+    libraryNote = "软件源里没有 " + names[0];
   }
   return installed;
 }
@@ -539,11 +550,67 @@ function removeSoname(home, name) {
   }
 }
 
+function cleanStaleProfiles() {
+  let names = [];
+  try {
+    names = readdirSync(tmpdir());
+  } catch {
+    return;
+  }
+  names.forEach(function (name) {
+    if (name.startsWith("shen-jingmai-")) {
+      rmSync(tmpdir() + "/" + name, { recursive: true, force: true });
+    }
+  });
+}
+
+function cacheHomes() {
+  const homes = [];
+  chromeHomes().forEach(function (home) {
+    try {
+      mkdirSync(home + "/libs", { recursive: true });
+      homes.push(home + "/libs");
+    } catch {
+      /* this cache dir is not writable */
+    }
+  });
+  return homes;
+}
+
+function readableNote(note) {
+  if (!note) {
+    return "";
+  }
+  if (note === "ENOSPC" || note.includes("no space")) {
+    return "服务器磁盘满了，库没写进去";
+  }
+  return note;
+}
+
 async function fillLibraries(chromePath) {
-  const home = libHome();
-  if (!home || !chromePath) {
+  if (!chromePath) {
     return libraryPath;
   }
+  cleanStaleProfiles();
+  const homes = cacheHomes();
+  if (!homes.length) {
+    libraryNote = "没有可写的目录放浏览器库";
+    return libraryPath;
+  }
+  let last = libraryPath;
+  for (let i = 0; i < homes.length; i += 1) {
+    libraryNote = "";
+    last = await fillLibraryHome(homes[i], chromePath);
+    if (!libraryNote) {
+      libraryPath = last;
+      return last;
+    }
+  }
+  libraryPath = last;
+  return last;
+}
+
+async function fillLibraryHome(home, chromePath) {
   for (let round = 0; round < 8; round += 1) {
     const missing = await lddMissing(chromePath, libSearchPath(home));
     if (!missing) {
@@ -856,7 +923,7 @@ async function launchChrome() {
       libraryPath = libSearchPath(home);
       if (!installed) {
         if (libraryNote) {
-          error.message = message + "。" + libraryNote;
+          error.message = message + "。" + readableNote(libraryNote);
         }
         throw error;
       }
