@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.764-jingcang — 沈子晗运营中心下面增加京仓管理 */
+/* xm-fast-shell 0.1.764-jingcang-rows — 京仓商品行不要被店铺过滤清掉 */
 (function () {
-  const ASSET_VER = "0.1.764";
+  const ASSET_VER = "0.1.764-jingcang-rows";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -453,6 +453,9 @@
   function keepCenterRow(row, allow) {
     if (typeof row === "string") {
       return allow(row);
+    }
+    if (row && typeof row === "object" && (row.sku || row.skuId || Array.isArray(row.warehouses))) {
+      return true;
     }
     const name = shopNameOf(row);
     if (!name) {

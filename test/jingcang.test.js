@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
@@ -175,4 +176,20 @@ test("GET /api/shen/jingcang only serves the one test shop", async () => {
     await resetJingmaiStore();
     await new Promise(function (resolve) { server.close(resolve); });
   }
+});
+
+test("jingcang sku rows stay visible when the product title is not a shop name", () => {
+  const source = fs.readFileSync(new URL("../public/shared/nav.js", import.meta.url), "utf8");
+  const shopNameOf = source.slice(source.indexOf("function shopNameOf"), source.indexOf("function queryValue"));
+  const keepCenterRow = source.slice(source.indexOf("function keepCenterRow"), source.indexOf("const SHOP_LIST_KEYS"));
+  const scope = new Function(`${shopNameOf}\n${keepCenterRow}\nreturn keepCenterRow;`)();
+  const allow = function (name) {
+    return name === "RASW潮流生活旗舰店";
+  };
+  assert.equal(
+    scope({ name: "RASW【德国】婴儿理发器超静音自动吸发", sku: "10235451473396", warehouses: [{ name: "无锡常温C平台仓13号库-CHN", qty: 36 }] }, allow),
+    true
+  );
+  assert.equal(scope({ store: "别的店铺" }, allow), false);
+  assert.equal(scope({ store: "RASW潮流生活旗舰店" }, allow), true);
 });
