@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { loadJingcang } from "./jingcang.js";
 import {
   beginRelogin,
   beginReloginAll,
@@ -144,6 +145,14 @@ shenRouter.get("/paid/summary", async (req, res) => {
     );
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message || "无法加载付费汇总" });
+  }
+});
+
+shenRouter.get("/jingcang", async (req, res) => {
+  try {
+    res.json(await loadJingcang(req.query.store));
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "无法抓取京仓" });
   }
 });
 

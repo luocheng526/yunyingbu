@@ -30,7 +30,7 @@
     mount: function (root) {
       const css = document.querySelector('link[href^="/shared/shen-jingcang.css"]') || document.createElement("link");
       css.rel = "stylesheet";
-      css.href = "/shared/shen-jingcang.css?v=0.1.863-jingcang-photo";
+      css.href = "/shared/shen-jingcang.css?v=0.1.864-jingcang-rasw";
       if (!css.parentNode) {
         document.head.appendChild(css);
       }
@@ -256,8 +256,8 @@
       }
 
       root.innerHTML =
-        '<main class="xm-jc" id="jingcang-board"><header class="xm-jc-head"><div><p class="kicker">沈子晗运营中心</p><h1>京仓管理<em>模板</em></h1><p class="lead">先按组看店铺。每件商品留出图片、SPU、SKU。仓名写在上面，每个仓下面是对应数量。这一版是版式，还没从京麦抓取。</p></div></header>' +
-        '<section class="xm-jc-kpis"><article><span>分组</span><strong data-jc-kpi="groups">4</strong></article><article><span>店铺</span><strong data-jc-kpi="shops">12</strong></article><article><span>样例 SKU</span><strong data-jc-kpi="sku">0</strong></article><article><span>样例可用库存</span><strong data-jc-kpi="stock">0</strong></article></section>' +
+        '<main class="xm-jc" id="jingcang-board"><header class="xm-jc-head"><div><p class="kicker">沈子晗运营中心</p><h1>京仓管理<em data-jc-state>抓取中</em></h1><p class="lead" data-jc-lead>正在抓取 RASW潮流生活旗舰店 的京仓库存。仓名写在上面，每个仓下面是对应数量。其他店铺仍是版式。</p></div></header>' +
+        '<section class="xm-jc-kpis"><article><span>分组</span><strong data-jc-kpi="groups">4</strong></article><article><span>店铺</span><strong data-jc-kpi="shops">12</strong></article><article><span>SKU</span><strong data-jc-kpi="sku">0</strong></article><article><span>可用库存</span><strong data-jc-kpi="stock">0</strong></article></section>' +
         '<div class="xm-jc-bar"><nav class="xm-jc-tabs" aria-label="分组"><button type="button" data-jc-group="" class="is-on">全部</button>' +
         GROUPS.map(function (name) {
           return '<button type="button" data-jc-group="' + escapeHtml(name) + '">' + escapeHtml(name) + "</button>";
@@ -350,7 +350,67 @@
         render();
       });
       render();
+      let alive = true;
+      const liveShop = "RASW潮流生活旗舰店";
+      const stateEl = root.querySelector("[data-jc-state]");
+      const leadEl = root.querySelector("[data-jc-lead]");
+      function say(state, lead) {
+        if (stateEl) {
+          stateEl.textContent = state;
+        }
+        if (leadEl) {
+          leadEl.textContent = lead;
+        }
+      }
+      fetch("/api/shen/jingcang?store=" + encodeURIComponent(liveShop), { headers: { accept: "application/json" } })
+        .then(function (res) {
+          return res.json();
+        })
+        .then(function (payload) {
+          if (!alive) {
+            return;
+          }
+          const rows = payload && Array.isArray(payload.rows) ? payload.rows : [];
+          if (!payload || payload.ok !== true || !rows.length) {
+            say("版式", liveShop + " 没抓到：" + ((payload && (payload.error || payload.message)) || "没有库存") + "。下面仍是版式。");
+            return;
+          }
+          for (let index = GOODS.length - 1; index >= 0; index -= 1) {
+            if (GOODS[index].shop === liveShop) {
+              GOODS.splice(index, 1);
+            }
+          }
+          rows.forEach(function (row) {
+            GOODS.push({
+              shop: liveShop,
+              name: row.name || "",
+              spu: row.spu || "",
+              sku: row.sku || "",
+              code: row.code || "",
+              status: row.status || "在售",
+              mark: "京麦",
+              image: row.image || "",
+              warehouses: Array.isArray(row.warehouses) ? row.warehouses : []
+            });
+          });
+          say(
+            "已抓取",
+            liveShop +
+              " 已抓取 " +
+              rows.length +
+              " 个 SKU" +
+              (payload.truncated ? "，后面还有没翻完的页" : "") +
+              "。全国仓不显示。其他店铺仍是版式。"
+          );
+          render();
+        })
+        .catch(function () {
+          if (alive) {
+            say("版式", "京仓接口没有打开，下面仍是版式。");
+          }
+        });
       return function unmount() {
+        alive = false;
         root.innerHTML = "";
       };
     }
