@@ -36,7 +36,7 @@
     mount: function (root) {
       const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
       paidCss.rel = "stylesheet";
-      paidCss.href = "/shared/shen-paid.css?v=0.1.835-server-login-error";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.843-jingmai-paid";
       if (!paidCss.parentNode) {
         document.head.appendChild(paidCss);
       }
@@ -1313,12 +1313,27 @@
           row.yesterdayHours = sale && Array.isArray(sale.yesterdayHours) ? sale.yesterdayHours : [];
           row.capturedAt = sale && sale.capturedAt ? String(sale.capturedAt) : "";
           row.loginExpired = Boolean(sale && sale.loginExpired);
-          row.paidAmount = pay ? parseMoney(pay.paidAmount != null ? pay.paidAmount : pay.totalPromotionCost) : null;
-          row.paidDeal = pay ? parseMoney(pay.paidDeal != null ? pay.paidDeal : pay.payAmount) : null;
+          row.paidAmount =
+            sale && sale.paidAmount != null
+              ? parseMoney(sale.paidAmount)
+              : pay
+                ? parseMoney(pay.paidAmount != null ? pay.paidAmount : pay.totalPromotionCost)
+                : null;
+          row.paidDeal =
+            sale && sale.paidDeal != null
+              ? parseMoney(sale.paidDeal)
+              : pay
+                ? parseMoney(pay.paidDeal != null ? pay.paidDeal : pay.payAmount)
+                : null;
           const rawFee = pay && pay.feeRate != null && pay.feeRate !== "" ? pay.feeRate : pay && pay.promotionRate;
           const fee = rawFee == null || rawFee === "" ? null : Number(rawFee);
           row.feeRate = fee != null && isFinite(fee) ? fee : null;
-          row.roi = row.paidAmount > 0 && row.paidDeal != null ? row.paidDeal / row.paidAmount : null;
+          row.roi =
+            sale && sale.paidRoi != null
+              ? parseMoney(sale.paidRoi)
+              : row.paidAmount > 0 && row.paidDeal != null
+                ? row.paidDeal / row.paidAmount
+                : null;
           row.linked = row.liveAmount != null;
         });
         rows.sort(function (a, b) {
@@ -1891,7 +1906,7 @@
               );
             })
             .join("") +
-          '</tbody></table></div><p class="xm-hl-note">连接京麦和重新登录都在服务器里登录组织中心保存的账号。验证出现在弹出的画面里，点画面就是在服务器上操作。登录成功后服务器每 5 分钟采集。推广花费和广告 ROI 不从成交额推算。</p></section>' +
+          '</tbody></table></div><p class="xm-hl-note">连接京麦和重新登录都在服务器里登录组织中心保存的账号。验证出现在弹出的画面里，点画面就是在服务器上操作。登录成功后服务器每 5 分钟采集。成交金额来自京麦首页经营数据，付费金额、付费成交额和付费 ROI 来自京准通非全站营销概况。</p></section>' +
           '<div class="xm-sp-shop-modal" data-shop-modal hidden><form class="xm-sp-shop-dialog" data-shop-form>' +
           "<h3>新增店铺</h3><p class=\"xm-sp-shop-hint\">保存后归入沈子晗组，并出现在这份全部店铺里。登录账号在组织中心填写。</p>" +
           '<label>店铺名称<input name="storeName" required maxlength="64" autocomplete="off" /></label>' +

@@ -2,7 +2,17 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
-import { buildLiveView, hoursFromSamples, jingmaiError, parseRealtime, runTick } from "../src/modules/shen/jingmai.js";
+import {
+  buildLiveView,
+  collectPinIds,
+  extractPaid,
+  extractShopDeal,
+  hoursFromSamples,
+  jingmaiError,
+  paidQuery,
+  parseRealtime,
+  runTick
+} from "../src/modules/shen/jingmai.js";
 import { interpretQrCheck } from "../src/modules/shen/jingmai-client.js";
 import { passwordFailureMessage } from "../src/modules/shen/jingmai-client.js";
 import { libraryPackageNames, packageFilename, suiteForGlibc } from "../src/modules/shen/jingmai-desk.js";
@@ -41,6 +51,68 @@ test("realtime parser keeps a real zero and treats login failure separately from
   assert.throws(() => parseRealtime(500, "<html>busy</html>", ""), (error) => error.code === "network");
   const timeout = jingmaiError("timeout", "采集超时");
   assert.equal(timeout.code, "timeout");
+});
+
+test("homepage deal and jingzhuntong paid fields stay separate", () => {
+  const deal = extractShopDeal({
+    data: {
+      channelData: {
+        indicatorList: [
+          { code: "3009", name: "成交总金额", todayNum: "12,967.90", yesterdayNum: "17,920.00" },
+          { code: "3001", name: "成交总单量", todayNum: 42 },
+          { code: "3008", name: "成交客户数", todayNum: "41" },
+          { code: "3010", name: "PC成交金额", todayNum: "100.00" }
+        ]
+      }
+    }
+  });
+  assert.equal(deal.dealAmount, 12967.9);
+  assert.equal(deal.orderCount, 42);
+  assert.equal(deal.customerCount, 41);
+  assert.equal(deal.yesterdayAmount, 17920);
+  const paid = extractPaid({
+    summary: [
+      { index: "cost", value: 6507.32 },
+      { index: "totalOrderSum", value: 11968 },
+      { index: "ROI", value: 2.17 }
+    ]
+  });
+  assert.equal(paid.paidAmount, 6507.32);
+  assert.equal(paid.paidDeal, 11968);
+  assert.equal(paid.paidRoi, 2.17);
+  assert.notEqual(paid.paidRoi, paid.paidDeal / paid.paidAmount);
+  const query = paidQuery("2026-11-12", [101, 102]);
+  assert.deepEqual(query.businessType, [-4, 256]);
+  assert.equal(query.clickOrOrderDay, 15);
+  assert.equal(query.clickOrOrderCaliber, 0);
+  assert.equal(query.isGift, 0);
+  assert.equal(query.orderStatusCategory, 1);
+  assert.equal(query.startDate, "2026-11-12");
+  assert.deepEqual(collectPinIds({ own: [{ userId: 7 }, { userId: "8" }], value: [{ userId: 7 }] }, { value: [{ userId: 9 }] }), [7, 8, 9]);
+});
+
+test("paid numbers count as a successful collection when deal is still empty", () => {
+  const view = buildLiveView({
+    now: now,
+    shops: [{ store: "甲店", enabled: true, authState: "ok", cookies: [{ name: "thor", value: "secret" }] }],
+    samples: [
+      {
+        store: "甲店",
+        day: "2026-11-12",
+        capturedAt: "2026-11-12 13:08:00",
+        dealAmount: null,
+        paidAmount: 0,
+        paidDeal: 11968,
+        paidRoi: 2.17,
+        ok: true
+      }
+    ]
+  });
+  assert.equal(view.successShops, 1);
+  assert.equal(view.shops[0].dealAmount, null);
+  assert.equal(view.shops[0].paidAmount, 0);
+  assert.equal(view.shops[0].paidRoi, 2.17);
+  assert.equal(JSON.stringify(view).includes("secret"), false);
 });
 
 test("missing hours stay empty and a collected zero is kept", () => {
