@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { connect as connectTcp } from "node:net";
 import { tmpdir } from "node:os";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -96,6 +96,7 @@ let current = null;
 let chromeInstall = null;
 let libraryPath = "";
 let libraryTask = null;
+let libraryNote = "";
 let packageIndex = null;
 
 function chromeHomes() {
@@ -223,13 +224,40 @@ export function suiteForGlibc(version) {
 }
 
 function linuxDistro() {
+  let text = "";
+  try {
+    text = readFileSync("/etc/os-release", "utf8");
+  } catch {
+    text = "";
+  }
+  const value = function (key) {
+    const match = text.match(new RegExp("^" + key + "=(.*)$", "m"));
+    return match ? match[1].trim().replace(/^"|"$/g, "") : "";
+  };
+  const id = value("ID");
+  const like = value("ID_LIKE");
+  const code = value("VERSION_CODENAME");
+  if (code) {
+    if (id === "debian" || (like.includes("debian") && !like.includes("ubuntu") && id !== "ubuntu")) {
+      return { kind: "debian", suite: code };
+    }
+    return { kind: "ubuntu", suite: code };
+  }
   let glibc = "";
   try {
     glibc = String((process.report.getReport().header || {}).glibcVersionRuntime || "");
   } catch {
     glibc = "";
   }
-  return { kind: "ubuntu", suite: suiteForGlibc(glibc), glibc: glibc };
+  return { kind: "ubuntu", suite: suiteForGlibc(glibc) };
+}
+
+function olderSuite(suite) {
+  const ubuntu = ["noble", "jammy", "focal"];
+  const debian = ["trixie", "bookworm", "bullseye"];
+  const list = debian.indexOf(suite) >= 0 ? debian : ubuntu;
+  const index = list.indexOf(suite);
+  return index >= 0 && index < list.length - 1 ? list[index + 1] : "";
 }
 
 function distroMirrors(distro) {
@@ -272,26 +300,6 @@ function distroMirrors(distro) {
   return extras.concat(urls.filter(function (url) {
     return extras.indexOf(url) < 0;
   }));
-}
-
-function prepareLibHome(distro) {
-  const home = libHome();
-  if (!home) {
-    return "";
-  }
-  const markerPath = home + "/suite";
-  let current = "";
-  try {
-    current = readFileSync(markerPath, "utf8").trim();
-  } catch {
-    current = "";
-  }
-  if (current !== distro.suite) {
-    rmSync(home + "/usr", { recursive: true, force: true });
-    rmSync(home + "/lib", { recursive: true, force: true });
-    writeFileSync(markerPath, distro.suite);
-  }
-  return home;
 }
 
 function libHome() {
@@ -441,15 +449,19 @@ async function loadPackageIndex(distro) {
   throw lastError || new Error("index");
 }
 
-async function downloadSonames(home, names) {
+async function downloadSonames(home, names, suite) {
   if (!home || !names.length) {
     return false;
   }
   const distro = linuxDistro();
+  if (suite) {
+    distro.suite = suite;
+  }
   let index = null;
   try {
     index = await loadPackageIndex(distro);
   } catch {
+    libraryNote = distro.suite + " 的软件源没有打开";
     return false;
   }
   let installed = false;
@@ -499,8 +511,36 @@ function installLibraries(chromePath) {
   return libraryTask;
 }
 
+function removeSoname(home, name) {
+  if (!home || !name || !existsSync(home)) {
+    return;
+  }
+  const stack = [home];
+  while (stack.length) {
+    const dir = stack.pop();
+    let entries = [];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (let i = 0; i < entries.length; i += 1) {
+      const path = dir + "/" + entries[i].name;
+      if (entries[i].isDirectory()) {
+        stack.push(path);
+      } else if (entries[i].name === name) {
+        try {
+          unlinkSync(path);
+        } catch {
+          /* file already gone */
+        }
+      }
+    }
+  }
+}
+
 async function fillLibraries(chromePath) {
-  const home = prepareLibHome(linuxDistro());
+  const home = libHome();
   if (!home || !chromePath) {
     return libraryPath;
   }
@@ -800,15 +840,24 @@ async function launchChrome() {
       return await startChromeProcess(chromePath);
     } catch (error) {
       lastError = error;
-      const match = String(error && error.message || "").match(/缺少 ([A-Za-z0-9._+-]+)/);
+      const message = String(error && error.message || "");
+      const match = message.match(/缺少 ([A-Za-z0-9._+-]+)/) || message.match(/服务器上的 ([A-Za-z0-9._+-]+\.so(?:\.\d+)*)/);
       if (!match || tried.has(match[1])) {
         throw error;
       }
       tried.add(match[1]);
       const home = libHome();
-      const installed = await downloadSonames(home, [match[1]]);
+      const mismatched = message.includes("这台机器没有");
+      if (mismatched) {
+        removeSoname(home, match[1]);
+      }
+      const suite = mismatched ? olderSuite(linuxDistro().suite) : "";
+      const installed = await downloadSonames(home, [match[1]], suite);
       libraryPath = libSearchPath(home);
       if (!installed) {
+        if (libraryNote) {
+          error.message = message + "。" + libraryNote;
+        }
         throw error;
       }
     }
