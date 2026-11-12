@@ -1133,6 +1133,13 @@
   cursor: pointer;
 }
 
+#paid-board .xm-hl-relogin {
+  margin-left: 6px;
+  color: #cf1322;
+  font-style: normal;
+  font-size: 12px;
+}
+
 #paid-board .xm-hl-table .is-hot {
   color: #cf1322;
 }

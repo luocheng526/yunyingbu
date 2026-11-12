@@ -386,8 +386,12 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /新增店铺/);
     assert.match(embed.text, /manager: "沈子晗"/);
     assert.match(embed.text, /京麦未接入/);
-    assert.match(embed.text, /\/api\/home\/erp-paid/);
+    assert.match(embed.text, /\/api\/shen\/paid\/jingmai/);
+    assert.match(embed.text, /连接京麦/);
+    assert.match(embed.text, /重新登录/);
+    assert.match(embed.text, /60 \* 1000/);
     assert.match(embed.text, /\/api\/home\/local-paid/);
+    assert.equal(embed.text.includes("/api/home/erp-paid"), false);
     assert.match(embed.text, /实时总成交金额/);
     assert.match(embed.text, /实时付费金额/);
     assert.match(embed.text, /费比监控/);

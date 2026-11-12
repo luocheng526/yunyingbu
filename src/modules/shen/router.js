@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { connectJingmai, jingmaiLive, startJingmaiCollector, updateJingmaiRoster } from "./jingmai-runner.js";
 import {
   addTask,
   getBrief,
@@ -133,6 +134,30 @@ shenRouter.get("/paid/summary", async (req, res) => {
   }
 });
 
+shenRouter.get("/paid/jingmai", async (_req, res) => {
+  try {
+    res.json(await jingmaiLive());
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "无法加载京麦成交" });
+  }
+});
+
+shenRouter.post("/paid/jingmai/connect", async (req, res) => {
+  try {
+    res.json(await connectJingmai({ cookie: req.headers.cookie || "" }));
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "无法连接京麦" });
+  }
+});
+
+shenRouter.post("/paid/jingmai/roster", async (req, res) => {
+  try {
+    res.json(await updateJingmaiRoster(req.body || {}));
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "无法更新店铺状态" });
+  }
+});
+
 shenRouter.get("/paid", async (req, res) => {
   try {
     res.json(
@@ -151,3 +176,5 @@ shenRouter.get("/paid", async (req, res) => {
     res.status(err.statusCode || 500).json({ error: err.message || "无法加载付费数据" });
   }
 });
+
+startJingmaiCollector();

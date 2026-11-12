@@ -36,7 +36,7 @@
     mount: function (root) {
       const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
       paidCss.rel = "stylesheet";
-      paidCss.href = "/shared/shen-paid.css?v=0.1.828-home-live";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.829-jingmai";
       if (!paidCss.parentNode) {
         document.head.appendChild(paidCss);
       }
@@ -117,6 +117,7 @@
       const statusEl = root.querySelector("#paid-status");
       let dead = false;
       let overviewRows = [];
+      let liveUpdatedAt = "";
       let overviewAsOf = "";
       let enabledStores = [];
       let overviewStale = false;
@@ -284,6 +285,7 @@
             const remark = String(store.remark || "").trim();
             return {
               store: String(store.storeName || "").trim(),
+              enabled: store.statusKey === "operating" || (store.statusKey == null && store.remark === "运营中"),
               owner: operator || supervisor || groupLead || "未分配",
               group: supervisor || groupLead || operator || "未分配",
               note: remark && remark !== "运营中" ? remark : "",
@@ -588,6 +590,9 @@
         const count = Number(series.hours) > 2 ? Number(series.hours) : Math.max(yesterday.length, today.length, 2);
         let max = 1;
         yesterday.concat(today).forEach(function (n) {
+          if (series.gaps && (n == null || !isFinite(Number(n)))) {
+            return;
+          }
           const v = Number(n) || 0;
           if (v > max) {
             max = v;
@@ -600,11 +605,31 @@
           return height - bottom - ((Number(value) || 0) / max) * (height - top - bottom);
         }
         function points(list) {
-          return list
-            .map(function (value, index) {
-              return xAt(index).toFixed(1) + "," + yAt(value).toFixed(1);
-            })
-            .join(" ");
+          if (series.gaps) {
+            const parts = [];
+            let current = [];
+            list.forEach(function (value, index) {
+              if (value == null || !isFinite(Number(value))) {
+                if (current.length) {
+                  parts.push(current.join(" "));
+                }
+                current = [];
+                return;
+              }
+              current.push(xAt(index).toFixed(1) + "," + yAt(value).toFixed(1));
+            });
+            if (current.length) {
+              parts.push(current.join(" "));
+            }
+            return parts;
+          }
+          return [
+            list
+              .map(function (value, index) {
+                return xAt(index).toFixed(1) + "," + yAt(value).toFixed(1);
+              })
+              .join(" ")
+          ];
         }
         let labels = "";
         if (count === 24 || count === 48) {
@@ -626,12 +651,18 @@
           " " +
           height +
           '" preserveAspectRatio="none">' +
-          (yesterday.length
-            ? '<polyline fill="none" stroke="#91caff" stroke-width="2" points="' + points(yesterday) + '"></polyline>'
-            : "") +
-          (today.length
-            ? '<polyline fill="none" stroke="#ffa39e" stroke-width="2" points="' + points(today) + '"></polyline>'
-            : "") +
+          points(yesterday)
+            .filter(Boolean)
+            .map(function (line) {
+              return '<polyline fill="none" stroke="#91caff" stroke-width="2" points="' + line + '"></polyline>';
+            })
+            .join("") +
+          points(today)
+            .filter(Boolean)
+            .map(function (line) {
+              return '<polyline fill="none" stroke="#ffa39e" stroke-width="2" points="' + line + '"></polyline>';
+            })
+            .join("") +
           labels +
           "</svg>"
         );
@@ -1248,16 +1279,16 @@
         return payload;
       }
 
-      function applyHomeLive(rows, erp, localPaid) {
+      function applyHomeLive(rows, jingmai, localPaid) {
         const sales = {};
-        const erpPayload = freshPayload(erp);
-        ((erpPayload && erpPayload.records) || []).forEach(function (rec) {
-          if (!rec || rec.demo === true) {
+        const jingmaiPayload = freshPayload(jingmai);
+        ((jingmaiPayload && jingmaiPayload.shops) || []).forEach(function (shop) {
+          if (!shop || shop.demo === true) {
             return;
           }
-          const key = shopKey(rec.shopName || rec.shop);
+          const key = shopKey(shop.shop || shop.store);
           if (key) {
-            sales[key] = rec;
+            sales[key] = shop;
           }
         });
         const paid = {};
@@ -1274,17 +1305,19 @@
         rows.forEach(function (row) {
           const sale = sales[shopKey(row.store)];
           const pay = paid[shopKey(row.store)];
-          row.liveAmount = sale ? parseMoney(sale.todayPayAmount != null ? sale.todayPayAmount : sale.payAmount) : null;
-          row.yesterdayAmount = sale ? parseMoney(sale.yesterdayPayAmount) : null;
-          row.todayHours = sale && sale.todayHourlyData ? sale.todayHourlyData : {};
-          row.yesterdayHours = sale && sale.yesterdayHourlyData ? sale.yesterdayHourlyData : {};
+          row.liveAmount = sale ? parseMoney(sale.dealAmount) : null;
+          row.yesterdayAmount = sale ? parseMoney(sale.yesterdayAmount) : null;
+          row.todayHours = sale && Array.isArray(sale.todayHours) ? sale.todayHours : [];
+          row.yesterdayHours = sale && Array.isArray(sale.yesterdayHours) ? sale.yesterdayHours : [];
+          row.capturedAt = sale && sale.capturedAt ? String(sale.capturedAt) : "";
+          row.loginExpired = Boolean(sale && sale.loginExpired);
           row.paidAmount = pay ? parseMoney(pay.paidAmount != null ? pay.paidAmount : pay.totalPromotionCost) : null;
           row.paidDeal = pay ? parseMoney(pay.paidDeal != null ? pay.paidDeal : pay.payAmount) : null;
           const rawFee = pay && pay.feeRate != null && pay.feeRate !== "" ? pay.feeRate : pay && pay.promotionRate;
           const fee = rawFee == null || rawFee === "" ? null : Number(rawFee);
           row.feeRate = fee != null && isFinite(fee) ? fee : null;
           row.roi = row.paidAmount > 0 && row.paidDeal != null ? row.paidDeal / row.paidAmount : null;
-          row.linked = row.liveAmount != null || row.paidAmount != null || row.paidDeal != null;
+          row.linked = row.liveAmount != null;
         });
         rows.sort(function (a, b) {
           const diff = (Number(b.liveAmount) || 0) - (Number(a.liveAmount) || 0);
@@ -1523,8 +1556,29 @@
         return out;
       }
 
+      function sumHourSlots(rows, field) {
+        const out = [];
+        for (let hour = 0; hour < 24; hour += 1) {
+          let any = false;
+          let total = 0;
+          rows.forEach(function (row) {
+            const list = row[field];
+            const value = list && list.length ? list[hour] : null;
+            if (value == null || value === "") {
+              return;
+            }
+            any = true;
+            total += Number(value) || 0;
+          });
+          out.push(any ? total : null);
+        }
+        return out;
+      }
+
       function homeChart(spec) {
-        const plot = spec.blank
+        const plot = spec.gaps
+          ? { yesterday: spec.yHours || [], today: spec.tHours || [], hours: 24, height: 168, gaps: true }
+          : spec.blank
           ? { yesterday: [], today: [], hours: 24, height: 168 }
           : livePlot({
               yesterdayHour: spec.yHours,
@@ -1570,7 +1624,8 @@
             escapeHtml(row.store) +
             '">' +
             escapeHtml(row.store) +
-            "</button>"
+            "</button>" +
+            (row.loginExpired ? '<em class="xm-hl-relogin">重新登录</em>' : "")
           );
         }
         if (col.key === "liveAmount" || col.key === "paidAmount" || col.key === "paidDeal") {
@@ -1615,7 +1670,7 @@
           );
         }
         if (col.key === "liveAt") {
-          return row.linked ? escapeHtml(clock) : "—";
+          return row.capturedAt ? escapeHtml(row.capturedAt) : "—";
         }
         return "—";
       }
@@ -1645,7 +1700,7 @@
         const cold = picked.filter(function (row) {
           return feeKind(row).kind === "cold";
         }).length;
-        const clock = shanghaiClock();
+        const clock = liveUpdatedAt || "—";
         const cols = shownCols();
         const groups = [];
         const seenGroup = {};
@@ -1731,7 +1786,7 @@
             : "") +
           '</select></span></div><div class="xm-hl-tools"><span class="xm-hl-clock">更新时间 ' +
           escapeHtml(clock) +
-          '</span><button type="button" data-add-shop>新增店铺</button><button type="button" data-head-open>表头设置</button><button type="button" data-refresh>刷新</button>' +
+          '</span><button type="button" data-connect-jingmai>连接京麦</button><button type="button" data-add-shop>新增店铺</button><button type="button" data-head-open>表头设置</button><button type="button" data-refresh>刷新</button>' +
           '<div class="xm-hl-pop" data-head-pop hidden><p>实时</p>' +
           liveCols
             .map(function (col) {
@@ -1767,8 +1822,9 @@
             value: formatLive(sales),
             yesterday: formatLive(yestSales),
             delta: deltaOf(sales, yestSales),
-            yHours: sumHours(picked, "yesterdayHours"),
-            tHours: sumHours(picked, "todayHours")
+            gaps: true,
+            yHours: sumHourSlots(picked, "yesterdayHours"),
+            tHours: sumHourSlots(picked, "todayHours")
           }) +
           homeChart({
             title: "推广总花费",
@@ -1829,7 +1885,7 @@
               );
             })
             .join("") +
-          '</tbody></table></div><p class="xm-hl-note">版式与首页实时相同，只列沈子晗组。实时成交金额只汇总这些店，实时付费字段与首页一致，方便首页以后来取。</p></section>' +
+          '</tbody></table></div><p class="xm-hl-note">京麦首页的今日成交由服务器每 5 分钟采集，本页每 60 秒读取后台结果。更新时间是最后成功采集的时间。推广花费、广告成交和广告 ROI 不从京麦成交额推算。</p></section>' +
           '<div class="xm-sp-shop-modal" data-shop-modal hidden><form class="xm-sp-shop-dialog" data-shop-form>' +
           "<h3>新增店铺</h3><p class=\"xm-sp-shop-hint\">保存后归入沈子晗组，并出现在这份全部店铺里。登录账号在组织中心填写。</p>" +
           '<label>店铺名称<input name="storeName" required maxlength="64" autocomplete="off" /></label>' +
@@ -1864,6 +1920,22 @@
         if (refresh) {
           refresh.addEventListener("click", function () {
             load();
+          });
+        }
+        const connect = boardEl.querySelector("[data-connect-jingmai]");
+        if (connect) {
+          connect.addEventListener("click", function () {
+            setStatus("正在连接京麦…");
+            postJson("/api/shen/paid/jingmai/connect", {})
+              .then(function (result) {
+                const linked = result && result.linked ? result.linked : 0;
+                const relogin = result && result.relogin ? result.relogin : 0;
+                setStatus("连接完成 · 成功 " + linked + " 家" + (relogin ? "，" + relogin + " 家需要重新登录" : ""));
+                return load();
+              })
+              .catch(function (err) {
+                setStatus(err.message || "连接京麦失败", true);
+              });
           });
         }
         const headOpen = boardEl.querySelector("[data-head-open]");
@@ -2215,7 +2287,7 @@
         setStatus("正在加载…");
         return Promise.all([
           getJson("/api/people/org/stores?team=" + encodeURIComponent("沈子晗组")),
-          getOptional("/api/home/erp-paid"),
+          getOptional("/api/shen/paid/jingmai"),
           getOptional("/api/home/local-paid")
         ])
           .then(function (pack) {
@@ -2228,22 +2300,38 @@
               delete store.password;
             });
             const mapped = mapShenShops(data);
-            applyHomeLive(mapped.rows, pack[1], pack[2]);
+            const jingmai = pack[1];
+            liveUpdatedAt = jingmai && jingmai.updatedAt ? String(jingmai.updatedAt) : "";
+            applyHomeLive(mapped.rows, jingmai, pack[2]);
             overviewRows = mapped.rows;
             overviewAsOf = "";
             overviewStale = false;
-            const linked = mapped.rows.filter(function (row) {
-              return row.linked;
-            }).length;
+            postJson("/api/shen/paid/jingmai/roster", {
+              shops: mapped.rows.map(function (row) {
+                return { store: row.store, enabled: row.enabled };
+              })
+            }).catch(function () {});
             if (view.store) {
               renderJingmaiShop(view.store);
             } else {
               renderOverview({ asOf: "", rows: mapped.rows });
             }
+            const success = jingmai && jingmai.successShops != null ? jingmai.successShops : 0;
+            const enabled =
+              jingmai && jingmai.enabledShops
+                ? jingmai.enabledShops
+                : mapped.rows.filter(function (row) {
+                    return row.enabled;
+                  }).length;
+            const relogin = jingmai && jingmai.loginExpiredShops ? jingmai.loginExpiredShops : 0;
             setStatus(
-              linked
-                ? "已更新 · 沈子晗组 " + mapped.rows.length + " 店，其中 " + linked + " 家有实时数"
-                : "已更新 · 沈子晗组 " + mapped.rows.length + " 店。实时接口还没有这些店的数"
+              "已更新 · 成功 " +
+                success +
+                "/" +
+                enabled +
+                " 家" +
+                (relogin ? "，" + relogin + " 家需要重新登录" : "") +
+                (liveUpdatedAt ? " · 最后采集 " + liveUpdatedAt : "")
             );
           })
           .catch(function (err) {
@@ -2343,7 +2431,7 @@
         if (!dead) {
           load();
         }
-      }, 5 * 60 * 1000);
+      }, 60 * 1000);
       load();
       return function unmount() {
         dead = true;

@@ -100,3 +100,29 @@ CREATE TABLE IF NOT EXISTS shen_paid_subaccount (
   UNIQUE KEY uk_shen_paid_subaccount (day, account_id, sub_account_id, captured_at),
   KEY idx_shen_paid_sub_store_day (store, day)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 京麦首页成交。每店一份会话，采集结果按北京时间落库。页面只读 GET /api/shen/paid/jingmai。
+CREATE TABLE IF NOT EXISTS shen_jingmai_session (
+  store VARCHAR(64) NOT NULL PRIMARY KEY,
+  cookie_jar MEDIUMTEXT NOT NULL,
+  auth_state VARCHAR(32) NOT NULL DEFAULT 'unlinked',
+  auth_message VARCHAR(200) NOT NULL DEFAULT '',
+  enabled_flag TINYINT NOT NULL DEFAULT 1,
+  linked_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS shen_jingmai_sample (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  store VARCHAR(64) NOT NULL,
+  day DATE NOT NULL,
+  captured_at CHAR(19) NOT NULL,
+  deal_amount DECIMAL(14,2) NULL,
+  order_count INT NULL,
+  customer_count INT NULL,
+  yesterday_amount DECIMAL(14,2) NULL,
+  raw_json TEXT NOT NULL,
+  ok_flag TINYINT NOT NULL DEFAULT 1,
+  UNIQUE KEY uk_shen_jingmai_sample (store, captured_at),
+  KEY idx_shen_jingmai_sample_day (day, store)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
