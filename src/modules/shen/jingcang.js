@@ -118,13 +118,7 @@ function collectHouses(item) {
       return;
     }
     const house = node.warehouse && typeof node.warehouse === "object" ? node.warehouse : node;
-    let name = String(house.sName || house.warehouseName || node.sName || node.warehouseName || "").trim();
-    if (!name) {
-      const typeName = String(node.sTypeName || "").trim();
-      if (typeName.indexOf("仓") !== -1) {
-        name = typeName;
-      }
-    }
+    const name = String(house.sName || house.warehouseName || node.sName || node.warehouseName || "").trim();
     if (!name || name.indexOf("全国仓") !== -1 || seen[name] || name.length > 48) {
       return;
     }
@@ -159,6 +153,43 @@ function collectHouses(item) {
   }
   walk(item, 0);
   return found;
+}
+
+function collectNames(item) {
+  const names = [];
+  const seen = {};
+  function walk(node, depth) {
+    if (!node || depth > 6 || names.length > 20) {
+      return;
+    }
+    if (Array.isArray(node)) {
+      node.forEach(function (child) {
+        walk(child, depth + 1);
+      });
+      return;
+    }
+    if (typeof node !== "object") {
+      return;
+    }
+    ["sName", "warehouseName", "sTypeName"].forEach(function (key) {
+      let value = String(node[key] || "").trim();
+      if (value.indexOf("全国仓") !== -1) {
+        value = "national";
+      }
+      if (value && !seen[value] && value.length < 60) {
+        seen[value] = true;
+        names.push(value);
+      }
+    });
+    Object.keys(node).forEach(function (key) {
+      if (key === "logo") {
+        return;
+      }
+      walk(node[key], depth + 1);
+    });
+  }
+  walk(item, 0);
+  return names;
 }
 
 function shapeOf(item) {
@@ -210,6 +241,7 @@ function toRow(item) {
     status: statusOf(info),
     image: imageUrl(info.logo),
     warehouses: warehouses,
+    names: collectNames(item),
     shape: warehouses.length ? [] : shapeOf(item)
   };
 }
@@ -444,10 +476,17 @@ export async function loadJingcang(storeName, deps) {
     }
   }
   let shape = [];
+  const names = [];
   const rows = result.rows.map(function (row) {
     if (!shape.length && row.shape && row.shape.length) {
       shape = row.shape;
     }
+    (row.names || []).forEach(function (name) {
+      const label = name.indexOf("全国仓") === -1 ? name : "national";
+      if (names.length < 30 && names.indexOf(label) === -1) {
+        names.push(label);
+      }
+    });
     return {
       name: row.name,
       spu: row.spu,
@@ -467,6 +506,7 @@ export async function loadJingcang(storeName, deps) {
     source: result.source,
     capturedAt: beijingParts().stamp,
     shape: shape,
+    names: names,
     rows: rows
   };
 }
