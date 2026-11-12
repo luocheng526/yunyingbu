@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.791-home-livescope */
+/* xm-module-home 0.1.814-home-livespend */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -974,7 +974,7 @@
       "</div></section>"
     );
   }
-  var LIVE_CARD_KEYS = ["ad", "roi", "livePay", "livePaid"];
+  var LIVE_CARD_KEYS = ["livePay", "roi", "livePaid", "liveAt"];
   function liveCardOrderFrom(keys) {
     var defs = LIVE_CARD_KEYS.slice();
     var seen = {};
@@ -1557,7 +1557,7 @@
   function liveChartHtml(chart) {
     var down = Number(chart && chart.delta) < 0;
     var unit = (chart && chart.unit) || "";
-    var kind = unit === "rate" ? "fee" : "sales";
+    var kind = (chart && chart.key) || (unit === "rate" ? "fee" : "sales");
     var line = lineChartOf(chart);
     var sub = unit === "rate" ? "线：当天费比" : "线：累计（23点=1-23点）";
     return (
@@ -2250,11 +2250,16 @@
           : blankTeams();
     var hero = readChart(live.hero, blankLive().hero);
     var paid = readChart(live.paid, blankLive().paid);
-    var liveCards = pickLiveCards(live.cards);
+    var liveCards = pickLiveCards(live.cards).map(function (card) {
+      if (card && card.key === "liveAt") {
+        return Object.assign({}, card, { value: liveAtText(state && state.liveAt) });
+      }
+      return card;
+    });
     hideCardTip();
     hideLineTip(root);
     var feeDraft = liveFeeDraft(root);
-    board.setAttribute("data-hm-js", "0.1.791-home-livescope");
+    board.setAttribute("data-hm-js", "0.1.814-home-livespend");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2573,14 +2578,9 @@
     return {
       title: "实时看板",
       summary: { channels: 1, shops: 0 },
-      hero: { label: "京麦面板实时金额", value: "—", delta: 0, yesterday: [], today: [], yesterdayHour: [], todayHour: [], hours: 0 },
-      paid: { label: "实时费比", value: "—", delta: 0, yesterday: [], today: [], yesterdayHour: [], todayHour: [], hours: 0, unit: "rate", lineMode: "flat" },
-      cards: [
-        { key: "ad", label: "推广花费 (支付预估)", value: "—" },
-        { key: "roi", label: "付费成交ROI", value: "—" },
-        { key: "livePay", label: "实时付费成交额", value: "—" },
-        { key: "livePaid", label: "实时付费接入店铺数量", value: "—" }
-      ],
+      hero: { key: "jingmai", label: "京麦面板实时金额", value: "—", delta: 0, yesterday: [], today: [], yesterdayHour: [], todayHour: [], hours: 0 },
+      paid: spendChartOf(null),
+      cards: liveCardsOf(),
       shops: []
     };
   }
@@ -3024,6 +3024,33 @@
       ? { spend: spend, paidDeal: deal, feeRate: deal ? spend / deal : null, roi: spend ? deal / spend : null, shops: n }
       : {};
   }
+  function spendChartOf(spend, yestSpend, hourly) {
+    hourly = hourly || {};
+    var hasHourly = hourly.todaySpend && hourly.todaySpend.length > 2;
+    var yestHour = hasHourly ? padHours(hourly.yesterdaySpend, 24) : seriesOf(hourly.yesterdaySpend, yestSpend);
+    var todayHour = hasHourly ? todayHours(hourly.todaySpend) : seriesOf(hourly.todaySpend, spend);
+    var hasSpend = spend != null;
+    return {
+      key: "spend",
+      label: "推广总花费",
+      value: hasSpend ? fmtMoney(spend) : "—",
+      delta: hasSpend && yestSpend != null ? trendOf(spend, yestSpend) : "",
+      yesterday: hasHourly ? cumHours(yestHour) : yestSpend != null ? yestHour : [],
+      today: hasHourly ? cumHours(todayHour) : hasSpend ? todayHour : [],
+      yesterdayHour: hasHourly ? yestHour : [],
+      todayHour: hasHourly ? todayHour : [],
+      hours: hasHourly ? 24 : 0
+    };
+  }
+  function liveCardsOf(sum, liveAt) {
+    sum = sum || {};
+    return [
+      { key: "livePay", label: "实时付费成交额", value: sum.paidDeal != null ? fmtMoney(sum.paidDeal) : "—" },
+      { key: "roi", label: "付费成交ROI", value: sum.roi != null ? fmtRoi(sum.paidDeal, sum.spend) : "—" },
+      { key: "livePaid", label: "实时付费接入店铺数量", value: sum.shops != null ? fmtInt(sum.shops) : "0" },
+      { key: "liveAt", label: "更新时间", value: liveAtText(liveAt) }
+    ];
+  }
   function liveBoardOf(state, dutyKeys, pick) {
     var packs = state && state.livePacks;
     var keys = livePickKeys(state, dutyKeys === undefined ? liveDutyKeys(state) : dutyKeys, pick);
@@ -3049,6 +3076,7 @@
     var yestHour = hasHourly ? padHours(hourly.yesterdayPay, 24) : seriesOf(hourly.yesterdayPay, yestPay);
     var todayHour = hasHourly ? todayHours(hourly.todayPay) : seriesOf(hourly.todayPay, todayPay);
     live.hero = {
+      key: "jingmai",
       label: "京麦面板实时金额",
       value: fmtMoney(todayPay),
       delta: trendOf(todayPay, yestPay),
@@ -3058,18 +3086,7 @@
       todayHour: hasHourly ? todayHour : [],
       hours: hasHourly ? 24 : 0
     };
-    live.paid = {
-      label: "实时费比",
-      value: "—",
-      delta: 0,
-      yesterday: [],
-      today: [],
-      yesterdayHour: [],
-      todayHour: [],
-      hours: 0,
-      unit: "rate",
-      lineMode: "flat"
-    };
+    live.paid = spendChartOf(null);
     var rows = (todayPack && todayPack.records && todayPack.records.length ? todayPack.records : snapPack && snapPack.records) || [];
     live.shops = rows
       .slice()
@@ -3089,12 +3106,7 @@
         };
       });
     live.summary = { channels: 1, shops: live.shops.length };
-    live.cards = [
-      { key: "ad", label: "推广花费 (支付预估)", value: "—" },
-      { key: "roi", label: "付费成交ROI", value: "—" },
-      { key: "livePay", label: "实时付费成交额", value: "—" },
-      { key: "livePaid", label: "实时付费接入店铺数量", value: "0" }
-    ];
+    live.cards = liveCardsOf({ shops: 0 });
     return live;
   }
   function emptyLocalPaid() {
@@ -3151,15 +3163,8 @@
       live.shops.push(Object.assign({ shop: name, liveAmount: "—" }, localShopPaid(row)));
     });
     var sum = sumLocalPaid(rows);
-    live.paid = Object.assign({}, live.paid || {}, {
-      value: sum.feeRate != null ? fmtRate(sum.feeRate) : "—"
-    });
-    live.cards = [
-      { key: "ad", label: "推广花费 (支付预估)", value: sum.spend != null ? fmtMoney(sum.spend) : "—" },
-      { key: "roi", label: "付费成交ROI", value: sum.roi != null ? fmtRoi(sum.paidDeal, sum.spend) : "—" },
-      { key: "livePay", label: "实时付费成交额", value: sum.paidDeal != null ? fmtMoney(sum.paidDeal) : "—" },
-      { key: "livePaid", label: "实时付费接入店铺数量", value: fmtInt(rows.length) }
-    ];
+    live.paid = spendChartOf(sum.spend, null, local && local.hourly);
+    live.cards = liveCardsOf(sum);
     return live;
   }
   function ownerOfShop(shopMeta, grants) {
@@ -3917,11 +3922,12 @@
           return;
         }
         var slots = Number(chartEl.getAttribute("data-hours")) || 24;
-        var hero = ((state.shownLive || state.live) && (state.shownLive || state.live).hero) || {};
-        var yestHour = hero.yesterdayHour || [];
-        var todayHour = hero.todayHour || [];
-        var yestCum = hero.yesterday || [];
-        var todayCum = hero.today || [];
+        var pack = (state.shownLive || state.live) || {};
+        var src = chartEl.getAttribute("data-chart") === "spend" ? pack.paid || {} : pack.hero || {};
+        var yestHour = src.yesterdayHour || [];
+        var todayHour = src.todayHour || [];
+        var yestCum = src.yesterday || [];
+        var todayCum = src.today || [];
         if (!yestHour.length && !yestCum.length) {
           hideLineTip(root);
           return;

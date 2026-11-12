@@ -64,12 +64,13 @@ test("live cards persist their own drag order", () => {
   assert.match(homeJs, /function saveLiveCardOrder/);
   assert.match(homeJs, /sortLive = !!card\.closest\("\.xm-hm-live-cards"\)/);
   assert.match(homeJs, /saveLiveCardOrder\(applyLiveCardMove/);
-  assert.deepEqual(applyLiveCardMove(["ad", "roi", "livePay", "livePaid"], "livePaid", "ad"), [
-    "livePaid",
-    "ad",
+  assert.deepEqual(applyLiveCardMove(["livePay", "roi", "livePaid", "liveAt"], "liveAt", "livePay"), [
+    "liveAt",
+    "livePay",
     "roi",
-    "livePay"
+    "livePaid"
   ]);
+  assert.match(homeJs, /LIVE_CARD_KEYS = \["livePay", "roi", "livePaid", "liveAt"\]/);
 });
 
 test("live shop table can filter by duty team or shop", () => {

@@ -111,7 +111,10 @@ test("charts cards and shop rows use the same filtered live board", () => {
       pick("todayHours") +
       pick("seriesOf") +
       pick("cumHours") +
+      pick("liveAtText") +
       pick("sumLocalPaid") +
+      pick("spendChartOf") +
+      pick("liveCardsOf") +
       pick("emptyLocalPaid") +
       pick("scopeLocalPaid") +
       pick("localShopPaid") +
@@ -149,12 +152,14 @@ test("charts cards and shop rows use the same filtered live board", () => {
   assert.equal(all.live.hero.value, "150");
   assert.equal(all.shops.length, 3);
   assert.equal(all.live.cards.find((card) => card.key === "livePaid").value, "2");
-  assert.equal(all.live.cards.find((card) => card.key === "ad").value, "25");
+  assert.equal(all.live.paid.label, "推广总花费");
+  assert.equal(all.live.paid.value, "25");
+  assert.equal(all.live.cards.find((card) => card.key === "ad"), undefined);
   const team = fns.liveBoardOf(state, null, { team: "韩梦凯", shop: "" });
   assert.equal(team.live.hero.value, "50");
   assert.deepEqual(team.shops.map((row) => row.shop), ["B店", "C店"]);
   assert.equal(team.live.cards.find((card) => card.key === "livePaid").value, "1");
-  assert.equal(team.live.cards.find((card) => card.key === "ad").value, "5");
+  assert.equal(team.live.paid.value, "5");
   const shop = fns.liveBoardOf(state, null, { team: "", shop: "A店" });
   assert.equal(shop.live.hero.value, "100");
   assert.equal(shop.shops.length, 1);
