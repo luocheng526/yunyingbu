@@ -13,7 +13,7 @@ import {
   parseRealtime,
   runTick
 } from "../src/modules/shen/jingmai.js";
-import { interpretQrCheck } from "../src/modules/shen/jingmai-client.js";
+import { fetchHome, interpretQrCheck } from "../src/modules/shen/jingmai-client.js";
 import { passwordFailureMessage } from "../src/modules/shen/jingmai-client.js";
 import { libraryPackageNames, packageFilename, suiteForGlibc } from "../src/modules/shen/jingmai-desk.js";
 import { beginRelogin, beginReloginAll, connectJingmai, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/shen/jingmai-runner.js";
@@ -434,8 +434,70 @@ test("jingmai route returns collected deals and hides the session", async () => 
     assert.equal(shop.dealAmount, 0);
     assert.equal(shop.orderCount, 0);
     assert.equal(JSON.stringify(body).includes("hidden"), false);
+    assert.equal(shop.dealNote || "", "");
   } finally {
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
     await resetJingmaiStore();
   }
+});
+
+function jsonReply(body, status = 200) {
+  return {
+    status: status,
+    headers: { get: () => "" },
+    text: async () => (typeof body === "string" ? body : JSON.stringify(body))
+  };
+}
+
+test("homepage deal uses the shop card and keeps the gateway reason when it fails", async () => {
+  const result = await fetchHome([{ name: "thor", value: "hidden-jar" }], async (url) => {
+    if (String(url).includes("findAccountInfo")) {
+      return jsonReply({
+        code: 200,
+        data: { currentBelongType: 200, belongVos: [{ belongType: 200, businessFieldCode: "omni" }] }
+      });
+    }
+    if (String(url).includes("findShopDataByChannel")) {
+      return jsonReply({
+        code: "200",
+        data: {
+          channelData: {
+            indicatorList: [{ code: "3009", name: "成交总金额", todayNum: "1,234.50", yesterdayNum: "1000" }]
+          }
+        }
+      });
+    }
+    if (String(url).includes("pinlist")) {
+      return jsonReply({ code: 1, data: { own: [{ userId: 7 }] } });
+    }
+    if (String(url).includes("summary/overview")) {
+      return jsonReply({
+        code: 1,
+        data: { summary: [{ index: "cost", value: "10" }, { index: "totalOrderSum", value: "20" }, { index: "ROI", value: "2" }] }
+      });
+    }
+    return jsonReply("<html>busy</html>");
+  });
+  assert.equal(result.dealAmount, 1234.5);
+  assert.equal(result.paidAmount, 10);
+  assert.equal(result.paidRoi, 2);
+  assert.equal(result.dealNote || "", "");
+
+  const failed = await fetchHome([{ name: "thor", value: "hidden-jar" }], async (url) => {
+    if (String(url).includes("findAccountInfo") || String(url).includes("findShopDataByChannel")) {
+      return jsonReply({ code: 321, msg: "appId同源限制 cookie=thor" });
+    }
+    if (String(url).includes("pinlist")) {
+      return jsonReply({ code: 1, data: { own: [{ userId: 7 }] } });
+    }
+    if (String(url).includes("summary/overview")) {
+      return jsonReply({ code: 1, data: { summary: [{ index: "cost", value: "11" }] } });
+    }
+    return jsonReply("<html>未登录</html>");
+  });
+  assert.equal(failed.dealAmount, null);
+  assert.equal(failed.paidAmount, 11);
+  assert.equal(String(failed.dealNote).includes("321"), true);
+  assert.equal(String(failed.dealNote).includes("thor"), false);
+  assert.equal(String(failed.dealNote).includes("cookie"), false);
 });

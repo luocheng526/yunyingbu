@@ -418,34 +418,76 @@ async function getJson(fetchImpl, jar, url, headers) {
   return readJson(response.status, await response.text(), response.headers.get("location"));
 }
 
-async function fetchShopDeal(jar, fetchImpl) {
-  const account = await postJson(fetchImpl, jar, dsmUrl(SHELL_APP, ACCOUNT_API), {}, {
+function dsmHeaders() {
+  return {
+    accept: "application/json, text/plain, */*",
+    "x-requested-with": "XMLHttpRequest",
     "dsm-platform": "pc",
+    "dsm-lang": "zh-CN",
+    "jm-platform": "web",
+    "dsm-fv": "0.0.0",
     origin: "https://shop.jd.com",
     referer: "https://shop.jd.com/jdm/home"
-  });
-  const field = businessFieldCode(account);
-  const payload = await postJson(
-    fetchImpl,
-    jar,
-    dsmUrl(SHOP_APP, SHOP_DATA_API),
-    {
-      request: {
-        belongParam: field ? { businessFieldCode: field } : {},
-        bizRequest: { channelCode: "99" }
-      }
-    },
-    {
-      "dsm-platform": "pc",
-      origin: "https://shop.jd.com",
-      referer: "https://shop.jd.com/jdm/home"
-    }
-  );
-  const metrics = extractShopDeal(payload);
-  if (!metrics) {
-    throw jingmaiError("network", "京麦首页没有成交字段");
+  };
+}
+
+function dsmProblem(body) {
+  if (!body || typeof body !== "object" || body.code == null) {
+    return "";
   }
-  return metrics;
+  if (String(body.code) === "200") {
+    return "";
+  }
+  const message = String(body.msg || body.message || "")
+    .replace(/\s+/g, " ")
+    .slice(0, 48);
+  if (/cookie|thor|pt_key|password/i.test(message)) {
+    return String(body.code);
+  }
+  return (String(body.code) + " " + message).trim();
+}
+
+async function postDsm(fetchImpl, jar, appId, api, body) {
+  const payload = await postJson(fetchImpl, jar, dsmUrl(appId, api), body, dsmHeaders());
+  const problem = dsmProblem(payload);
+  if (problem) {
+    throw jingmaiError("network", "京麦首页 " + problem);
+  }
+  return payload;
+}
+
+async function fetchShopDeal(jar, fetchImpl) {
+  let field = "";
+  try {
+    const account = await postDsm(fetchImpl, jar, SHELL_APP, ACCOUNT_API, {});
+    field = businessFieldCode(account);
+  } catch (error) {
+    if (classifyTransportError(error).code === "login") {
+      throw classifyTransportError(error);
+    }
+  }
+  const belongParam = field ? { businessFieldCode: field } : {};
+  const attempts = [{ channelCode: "99" }, {}];
+  let last = "";
+  for (let index = 0; index < attempts.length; index += 1) {
+    try {
+      const payload = await postDsm(fetchImpl, jar, SHOP_APP, SHOP_DATA_API, {
+        request: { belongParam: belongParam, bizRequest: attempts[index] }
+      });
+      const metrics = extractShopDeal(payload);
+      if (metrics) {
+        return metrics;
+      }
+      last = "京麦首页没有成交字段";
+    } catch (error) {
+      const classified = classifyTransportError(error);
+      if (classified.code === "login") {
+        throw classified;
+      }
+      last = classified.message || last;
+    }
+  }
+  throw jingmaiError("network", last || "京麦首页没有成交字段");
 }
 
 async function fetchSzDeal(jar, fetchImpl) {
@@ -459,6 +501,7 @@ async function fetchSzDeal(jar, fetchImpl) {
 }
 
 async function fetchDeal(jar, fetchImpl) {
+  let shopError = null;
   try {
     return await fetchShopDeal(jar, fetchImpl);
   } catch (error) {
@@ -466,8 +509,13 @@ async function fetchDeal(jar, fetchImpl) {
     if (classified.code === "login") {
       throw classified;
     }
+    shopError = classified;
   }
-  return fetchSzDeal(jar, fetchImpl);
+  try {
+    return await fetchSzDeal(jar, fetchImpl);
+  } catch (error) {
+    throw shopError || classifyTransportError(error);
+  }
 }
 
 function jztHeaders() {
@@ -551,6 +599,9 @@ export async function fetchHome(jar, fetchImpl = fetch) {
     deal,
     paid
   );
+  if (dealError && deal == null) {
+    metrics.dealNote = String(dealError.message || "京麦首页没有成交字段").slice(0, 80);
+  }
   if (hasCollected(metrics)) {
     return metrics;
   }

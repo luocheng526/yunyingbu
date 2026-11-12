@@ -230,7 +230,8 @@ export async function saveSample(sample) {
     yesterdayAmount: sample.yesterdayAmount == null ? null : sample.yesterdayAmount,
     paidAmount: sample.paidAmount == null ? null : sample.paidAmount,
     paidDeal: sample.paidDeal == null ? null : sample.paidDeal,
-    paidRoi: sample.paidRoi == null ? null : sample.paidRoi
+    paidRoi: sample.paidRoi == null ? null : sample.paidRoi,
+    dealNote: sample.dealNote ? String(sample.dealNote).slice(0, 80) : ""
   };
   const row = {
     store: sample.store,
@@ -326,6 +327,7 @@ export async function listSamples(fromDay, toDay) {
       paidAmount: raw.paidAmount == null ? null : Number(raw.paidAmount),
       paidDeal: raw.paidDeal == null ? null : Number(raw.paidDeal),
       paidRoi: raw.paidRoi == null ? null : Number(raw.paidRoi),
+      dealNote: raw.dealNote ? String(raw.dealNote).slice(0, 80) : "",
       ok: Number(row.ok_flag) === 1
     };
   });

@@ -236,7 +236,8 @@ export function sampleFields(metrics) {
     yesterdayAmount: source.yesterdayAmount == null ? null : source.yesterdayAmount,
     paidAmount: source.paidAmount == null ? null : source.paidAmount,
     paidDeal: source.paidDeal == null ? null : source.paidDeal,
-    paidRoi: source.paidRoi == null ? null : source.paidRoi
+    paidRoi: source.paidRoi == null ? null : source.paidRoi,
+    dealNote: source.dealNote ? String(source.dealNote).slice(0, 80) : ""
   };
 }
 
@@ -332,6 +333,12 @@ function latestSample(samples, day) {
         }
       }
     );
+    if (sample.dealNote) {
+      merged.dealNote = String(sample.dealNote).slice(0, 80);
+    }
+    if (sample.dealAmount != null) {
+      merged.dealNote = "";
+    }
     if (sampleHasData(sample) && sample.capturedAt) {
       merged.capturedAt = sample.capturedAt;
     }
@@ -379,6 +386,7 @@ export function buildLiveView({ shops, samples, now }) {
       paidAmount: today && today.paidAmount != null ? today.paidAmount : null,
       paidDeal: today && today.paidDeal != null ? today.paidDeal : null,
       paidRoi: today && today.paidRoi != null ? today.paidRoi : null,
+      dealNote: today && today.dealNote ? today.dealNote : "",
       yesterdayAmount: yesterdayAmount,
       capturedAt: today ? displayStamp(today.capturedAt) : "",
       todayHours: hoursFromSamples(mine, day),
