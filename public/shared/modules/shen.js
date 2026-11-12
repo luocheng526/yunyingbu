@@ -36,7 +36,7 @@
     mount: function (root) {
       const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
       paidCss.rel = "stylesheet";
-      paidCss.href = "/shared/shen-paid.css?v=0.1.850-org-groups";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.851-fee-watch";
       if (!paidCss.parentNode) {
         document.head.appendChild(paidCss);
       }
@@ -97,6 +97,7 @@
       }
 
       let view = parseHash();
+      let feeWatch = "";
       root.innerHTML =
         '<main class="page xm-paid xm-paid-live">' +
         '<div class="xm-sp-live-bar" id="paid-live-bar">' +
@@ -1739,6 +1740,9 @@
         const cold = picked.filter(function (row) {
           return feeKind(row).kind === "cold";
         }).length;
+        const listed = picked.filter(function (row) {
+          return !feeWatch || feeKind(row).kind === feeWatch;
+        });
         const clock = liveUpdatedAt || "—";
         const cols = shownCols();
         const groups = [];
@@ -1959,16 +1963,23 @@
           }) +
           '</div><div class="xm-hl-cards">' +
           [
-            ["实时付费成交额", formatLive(deal)],
-            ["付费成交ROI", roi == null ? "—" : roi.toFixed(2)],
-            ["实时付费接入店铺数量", String(paidShops)],
-            ["实时付费超标店铺", String(hot)],
-            ["实时费比低店铺", String(cold)],
-            ["更新时间", clock]
+            ["实时付费成交额", formatLive(deal), ""],
+            ["付费成交ROI", roi == null ? "—" : roi.toFixed(2), ""],
+            ["实时付费接入店铺数量", String(paidShops), ""],
+            ["实时付费超标店铺", String(hot), "hot"],
+            ["实时费比低店铺", String(cold), "cold"],
+            ["更新时间", clock, ""]
           ]
             .map(function (card) {
+              const key = card[2];
+              const on = key && feeWatch === key;
               return (
-                '<article class="xm-hl-card"><div class="label">' +
+                '<article class="xm-hl-card' +
+                (key ? " is-click" : "") +
+                (on ? " is-on" : "") +
+                '"' +
+                (key ? ' data-fee-filter="' + key + '" role="button" tabindex="0"' : "") +
+                '><div class="label">' +
                 escapeHtml(card[0]) +
                 '</div><div class="xm-hl-value">' +
                 escapeHtml(card[1]) +
@@ -1977,7 +1988,9 @@
             })
             .join("") +
           '</div><section class="xm-hl-panel">' +
-          groupedTables(picked) +
+          (feeWatch && !listed.length
+            ? '<p class="xm-hl-empty">' + (feeWatch === "hot" ? "没有费比超标的店铺" : "没有费比偏低的店铺") + "</p>"
+            : groupedTables(listed)) +
           '<p class="xm-hl-note">连接京麦和重新登录都在服务器里登录组织中心保存的账号。验证出现在弹出的画面里，点画面就是在服务器上操作。登录成功后服务器每 5 分钟采集。成交金额来自京麦首页经营数据，付费金额、付费成交额和付费 ROI 来自京准通非全站营销概况。分组按组织中心的主管、储备。</p></section>' +
           '<div class="xm-sp-shop-modal" data-shop-modal hidden><form class="xm-sp-shop-dialog" data-shop-form>' +
           "<h3>新增店铺</h3><p class=\"xm-sp-shop-hint\">保存后归入沈子晗组，并出现在这份全部店铺里。登录账号在组织中心填写。</p>" +
@@ -2016,6 +2029,13 @@
             }
           });
         }
+        boardEl.querySelectorAll("[data-fee-filter]").forEach(function (card) {
+          card.addEventListener("click", function () {
+            const next = card.getAttribute("data-fee-filter") || "";
+            feeWatch = feeWatch === next ? "" : next;
+            renderHomeLive(overviewRows);
+          });
+        });
         const refresh = boardEl.querySelector("[data-refresh]");
         if (refresh) {
           refresh.addEventListener("click", function () {

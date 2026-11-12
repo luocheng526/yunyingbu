@@ -422,6 +422,9 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /张文静组/);
     assert.match(embed.text, /高丽男组/);
     assert.match(embed.text, /张鹏组/);
+    assert.match(embed.text, /data-fee-filter/);
+    assert.match(embed.text, /feeWatch === next \? "" : next/);
+    assert.match(embed.text, /没有费比超标的店铺/);
     assert.match(embed.text, /表头设置/);
     assert.equal(embed.text.includes("/api/shen/paid?view=latest"), false);
     const css = await request(base, "/shared/shen-paid.css");
