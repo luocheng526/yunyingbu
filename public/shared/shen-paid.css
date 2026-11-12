@@ -881,6 +881,10 @@
   line-height: 1.5;
 }
 
+#paid-board [data-desk-state] {
+  color: #b91c1c;
+}
+
 #paid-board .xm-sp-shop-dialog label {
   display: block;
   margin: 10px 0;

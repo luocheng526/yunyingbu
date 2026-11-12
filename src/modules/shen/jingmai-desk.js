@@ -328,6 +328,26 @@ function connectSocket(url) {
   });
 }
 
+function browserFailure(stderr) {
+  const text = String(stderr || "");
+  const library = text.match(/error while loading shared libraries: (\S+)/);
+  if (library) {
+    return "服务器浏览器缺少 " + library[1].replace(/[,:]/g, "") + "，登录开不了";
+  }
+  if (text.includes("Permission denied") || text.includes("EACCES")) {
+    return "服务器浏览器没有执行权限，登录开不了";
+  }
+  const line = text.split("\n").map(function (item) {
+    return item.trim();
+  }).find(function (item) {
+    return item && !item.includes("dbus") && !item.includes("DevTools");
+  });
+  if (line) {
+    return "服务器登录没有打开：" + line.slice(0, 140);
+  }
+  return "服务器登录没有打开";
+}
+
 async function launchChrome() {
   let chromePath = "";
   try {
@@ -364,8 +384,12 @@ async function launchChrome() {
     let buf = "";
     const port = await new Promise(function (resolve, reject) {
       const timer = setTimeout(function () {
-        reject(new Error("browser"));
+        reject(Object.assign(new Error(browserFailure(buf)), { code: "browser" }));
       }, 15000);
+      chrome.on("error", function () {
+        clearTimeout(timer);
+        reject(Object.assign(new Error(browserFailure(buf || "spawn")), { code: "browser" }));
+      });
       chrome.stderr.on("data", function (chunk) {
         buf = (buf + chunk.toString()).slice(-2000);
         const match = buf.match(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//);
@@ -376,7 +400,7 @@ async function launchChrome() {
       });
       chrome.on("exit", function () {
         clearTimeout(timer);
-        reject(new Error("browser"));
+        reject(Object.assign(new Error(browserFailure(buf)), { code: "browser" }));
       });
     });
     const list = await fetch("http://127.0.0.1:" + port + "/json/list").then(function (response) {

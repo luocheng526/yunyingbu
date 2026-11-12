@@ -36,7 +36,7 @@
     mount: function (root) {
       const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
       paidCss.rel = "stylesheet";
-      paidCss.href = "/shared/shen-paid.css?v=0.1.833-server-login";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.835-server-login-error";
       if (!paidCss.parentNode) {
         document.head.appendChild(paidCss);
       }
@@ -2372,9 +2372,10 @@
                 return;
               }
               if (state && (state.status === "login" || state.status === "missing")) {
-                closeDesk(false);
+                window.clearInterval(deskTimer);
+                deskTimer = 0;
+                paintDesk(state);
                 setStatus((state && state.message) || "登录没有通过", true);
-                load();
                 return;
               }
               if (state && state.store) {
@@ -2409,10 +2410,18 @@
           : postJson("/api/shen/paid/jingmai/relogin", { store: name });
         request
           .then(function (result) {
-            if (!result || result.status !== "screen") {
+            if (result && result.status === "ok") {
               closeDesk(false);
-              setStatus((result && result.message) || "没有需要登录的店", result && result.status === "login");
+              setStatus(result.message || "已在服务器登录");
               load();
+              return;
+            }
+            if (!result || result.status !== "screen") {
+              paintDesk({
+                store: (result && result.store) || name,
+                message: (result && result.message) || "服务器登录没有打开"
+              });
+              setStatus((result && result.message) || "服务器登录没有打开", true);
               return;
             }
             deskStore = result.store || deskStore;
@@ -2457,6 +2466,9 @@
                 return { store: row.store, enabled: row.enabled };
               })
             }).catch(function () {});
+            if (deskStore) {
+              return;
+            }
             if (view.store) {
               renderJingmaiShop(view.store);
             } else {
