@@ -153,7 +153,8 @@ test("live page has fee target, warning and update time", () => {
   assert.match(homeJs, /label: "费比监控"/);
   assert.doesNotMatch(homeJs, /label: "实时利润"/);
   assert.doesNotMatch(homeJs, /label: "实时销售额"/);
-  assert.match(homeJs, /label: "京麦面板实时金额"/);
+  assert.match(homeJs, /label: "实时成交金额"/);
+  assert.doesNotMatch(homeJs, /label: "京麦面板实时金额"/);
   assert.match(homeJs, /label: "实时总成交金额"/);
   assert.match(homeJs, /label: "更新时间"/);
   assert.match(homeJs, /function liveTheadHtml/);
