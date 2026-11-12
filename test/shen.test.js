@@ -382,7 +382,8 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /xm-jc-wh-qty/);
     assert.match(embed.text, /RASW潮流生活旗舰店/);
     assert.match(embed.text, /1023541407306/);
-    assert.match(embed.text, /商家全国仓/);
+    assert.match(embed.text, /indexOf\("全国仓"\)/);
+    assert.match(embed.text, /jingcang-sample\.png/);
     assert.match(embed.text, /data-jc-group/);
     assert.match(embed.text, /XmModules\["\/shen\/product"\]/);
     assert.match(embed.text, /XmModules\["\/shen\/product\/xuanpin"\]/);

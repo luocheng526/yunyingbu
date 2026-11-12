@@ -30,7 +30,7 @@
     mount: function (root) {
       const css = document.querySelector('link[href^="/shared/shen-jingcang.css"]') || document.createElement("link");
       css.rel = "stylesheet";
-      css.href = "/shared/shen-jingcang.css?v=0.1.862-jingcang-cols";
+      css.href = "/shared/shen-jingcang.css?v=0.1.863-jingcang-photo";
       if (!css.parentNode) {
         document.head.appendChild(css);
       }
@@ -59,6 +59,7 @@
           code: "RXF-T",
           status: "在售",
           mark: "截图样例",
+          image: "/shared/jingcang-sample.png",
           warehouses: [
             { name: "商家全国仓", kind: "商家仓", qty: 99999 },
             { name: "无锡常温C平台仓13号库-CHN", kind: "京东仓", qty: 36 },
@@ -120,13 +121,22 @@
         });
       }
 
+      function shownHouses(row) {
+        return (row.warehouses || []).filter(function (house) {
+          return String(house.name || "").indexOf("全国仓") === -1;
+        });
+      }
+
       function totalQty(row) {
-        return row.warehouses.reduce(function (sum, house) {
+        return shownHouses(row).reduce(function (sum, house) {
           return sum + Number(house.qty || 0);
         }, 0);
       }
 
-      function photo() {
+      function photo(src) {
+        if (src) {
+          return '<span class="xm-jc-photo"><img src="' + escapeHtml(src) + '" alt="" /></span>';
+        }
         return (
           '<span class="xm-jc-photo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="m8 15 2.5-2.5L14 16l2-2 2 2"/><circle cx="9" cy="9" r="1"/></svg></span>'
         );
@@ -136,7 +146,7 @@
         const list = [];
         const seen = {};
         rows.forEach(function (row) {
-          (row.warehouses || []).forEach(function (house) {
+          shownHouses(row).forEach(function (house) {
             const key = house.kind + "\n" + house.name;
             if (seen[key]) {
               return;
@@ -149,7 +159,7 @@
       }
 
       function qtyAt(row, house) {
-        const hit = (row.warehouses || []).find(function (item) {
+        const hit = shownHouses(row).find(function (item) {
           return item.name === house.name && item.kind === house.kind;
         });
         return hit ? money(hit.qty) : "—";
@@ -158,7 +168,7 @@
       function goodsCell(row) {
         return (
           '<div class="xm-jc-goods">' +
-          photo() +
+          photo(row.image) +
           "<div><strong>" +
           escapeHtml(row.name) +
           '</strong><p><span class="is-on">' +
