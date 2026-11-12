@@ -1,17 +1,19 @@
+import { browserReady, jingmaiDesk } from "./jingmai-desk.js";
 import { jingmaiClient } from "./jingmai-client.js";
 import { beijingParts, runTick } from "./jingmai.js";
-import { listCollectTargets, markAuth, readJingmaiLive, saveSample, saveSession, setRoster } from "./jingmai-store.js";
+import { listCollectTargets, listSessions, markAuth, readJingmaiLive, saveSample, saveSession, setRoster } from "./jingmai-store.js";
 
 const INTERVAL_MS = 5 * 60 * 1000;
-const JINGMAI_LOGIN_URL =
-  "https://passport.shop.jd.com/login/index.action/jdm?ReturnUrl=" + encodeURIComponent("https://shop.jd.com/");
 const inflight = new Set();
 const qrPending = new Map();
 const passwordPending = new Map();
+let loginQueue = [];
+let loginCursor = { index: 0, total: 0, store: "" };
 
 const defaultDeps = {
   loadOrg: loadOrgShops,
-  client: jingmaiClient
+  client: jingmaiClient,
+  desk: jingmaiDesk
 };
 
 let deps = defaultDeps;
@@ -20,13 +22,26 @@ export function setJingmaiDeps(next) {
   deps = Object.assign({}, defaultDeps, next || {});
 }
 
+function wipeQueue() {
+  loginQueue.forEach(function (shop) {
+    shop.login = "";
+    shop.password = "";
+  });
+  loginQueue = [];
+  loginCursor = { index: 0, total: 0, store: "" };
+}
+
 export function resetJingmaiDeps() {
+  if (deps.desk && deps.desk.reset) {
+    deps.desk.reset();
+  }
   deps = defaultDeps;
   qrPending.clear();
   for (const pending of passwordPending.values()) {
     pending.password = "";
   }
   passwordPending.clear();
+  wipeQueue();
 }
 
 export async function loadOrgShops(cookie, fetchImpl = fetch) {
@@ -134,6 +149,107 @@ export async function jingmaiLive() {
   return readJingmaiLive();
 }
 
+function publicState(state) {
+  return {
+    ok: true,
+    store: state.store || loginCursor.store,
+    status: state.status,
+    message: state.message || "",
+    index: state.index || loginCursor.index,
+    total: state.total || loginCursor.total
+  };
+}
+
+async function rememberLogin(store, cookies) {
+  await saveSession(store, { cookies: cookies, authState: "ok", authMessage: "", enabled: true });
+  try {
+    const metrics = await deps.client.fetchHome(cookies);
+    const now = beijingParts();
+    await saveSample({
+      store: store,
+      day: now.day,
+      capturedAt: now.stamp,
+      dealAmount: metrics.dealAmount,
+      orderCount: metrics.orderCount,
+      customerCount: metrics.customerCount,
+      yesterdayAmount: metrics.yesterdayAmount,
+      ok: true
+    });
+  } catch (error) {
+    if (error && error.code === "login") {
+      await markAuth(store, "login_expired", "登录已失效，请重新登录");
+      return false;
+    }
+  }
+  return true;
+}
+
+async function startQueued(shop) {
+  loginCursor.store = shop.store;
+  const opened = await deps.desk.open({ store: shop.store, loginName: shop.login, password: shop.password });
+  shop.login = "";
+  shop.password = "";
+  if (opened.status === "ok") {
+    const kept = await rememberLogin(shop.store, opened.cookies || []);
+    await deps.desk.close();
+    if (!kept) {
+      return advanceAfterFailure(shop.store, "登录没有通过，请再试一次");
+    }
+    return advanceAfterSuccess(shop.store);
+  }
+  if (opened.status === "verify") {
+    return publicState({ status: "screen", store: shop.store, message: "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。" });
+  }
+  await deps.desk.close();
+  if (String(opened.message || "").includes("浏览器")) {
+    wipeQueue();
+    return publicState({ status: "login", store: shop.store, message: opened.message });
+  }
+  return advanceAfterFailure(shop.store, opened.message || "登录没有通过，请再试一次");
+}
+
+async function advanceAfterSuccess(store) {
+  const next = loginQueue.shift();
+  if (!next) {
+    return publicState({ status: "ok", store: store, message: store + " 已在服务器登录" });
+  }
+  loginCursor.index += 1;
+  return startQueued(next);
+}
+
+async function advanceAfterFailure(store, message) {
+  await markAuth(store, "login_expired", message);
+  const next = loginQueue.shift();
+  if (!next) {
+    return publicState({ status: "login", store: store, message: message });
+  }
+  loginCursor.index += 1;
+  const started = await startQueued(next);
+  if (started.status === "screen") {
+    started.message = store + "：" + message;
+  }
+  return started;
+}
+
+async function queueShops(shops) {
+  wipeQueue();
+  if (deps.desk && deps.desk.close) {
+    await deps.desk.close();
+  }
+  loginQueue = shops.map(function (shop) {
+    const copy = { store: shop.store, login: shop.login, password: shop.password };
+    shop.login = "";
+    shop.password = "";
+    return copy;
+  });
+  loginCursor = { index: 1, total: loginQueue.length, store: "" };
+  const first = loginQueue.shift();
+  if (!first) {
+    return publicState({ status: "done", message: "没有需要登录的店" });
+  }
+  return startQueued(first);
+}
+
 export async function beginRelogin(store, cookie) {
   const name = String(store || "").trim();
   if (!name) {
@@ -148,20 +264,98 @@ export async function beginRelogin(store, cookie) {
   if (!shop || shop.enabled === false) {
     return { ok: true, store: name, status: "login", message: "这家店已停用" };
   }
-  if (!shop.login) {
+  if (!shop.login || !shop.password) {
     return { ok: true, store: name, status: "login", message: "组织中心还没有填写这家店的账号" };
   }
-  const loginName = shop.login;
+  const queued = { store: shop.store, login: shop.login, password: shop.password };
   shop.login = "";
   shop.password = "";
-  return {
-    ok: true,
-    store: name,
-    status: "page",
-    loginName: loginName,
-    loginUrl: JINGMAI_LOGIN_URL,
-    message: "请刷新页面后再点重新登录"
-  };
+  return queueShops([queued]);
+}
+
+export async function beginReloginAll(cookie) {
+  const shops = await deps.loadOrg(cookie || "");
+  const sessions = await listSessions();
+  const ready = new Set(
+    sessions
+      .filter(function (session) {
+        return session.authState === "ok" && (session.cookies || []).some(function (item) {
+          return item.name === "thor" || item.name === "pt_key";
+        });
+      })
+      .map(function (session) {
+        return session.store;
+      })
+  );
+  const pending = shops.filter(function (shop) {
+    return shop.enabled !== false && shop.login && shop.password && !ready.has(shop.store);
+  });
+  shops.forEach(function (shop) {
+    if (!pending.includes(shop)) {
+      shop.login = "";
+      shop.password = "";
+    }
+  });
+  if (!pending.length) {
+    return { ok: true, status: "done", message: "需要登录的店都已经在服务器上" };
+  }
+  return queueShops(pending);
+}
+
+export async function reloginState(store) {
+  const name = loginCursor.store || String(store || "").trim();
+  if (!name) {
+    return publicState({ status: "missing", message: "请重新打开登录" });
+  }
+  const state = await deps.desk.poll(name);
+  if (state.status === "ok") {
+    const cookies = state.cookies || [];
+    const kept = await rememberLogin(name, cookies);
+    await deps.desk.close();
+    if (!kept) {
+      return advanceAfterFailure(name, "登录没有通过，请再试一次");
+    }
+    return advanceAfterSuccess(name);
+  }
+  if (state.status === "login") {
+    await deps.desk.close();
+    return advanceAfterFailure(name, state.message || "登录没有通过，请再试一次");
+  }
+  if (state.status === "missing") {
+    return publicState({ status: "missing", store: name, message: state.message || "请重新打开登录" });
+  }
+  return publicState({ status: "screen", store: name, message: state.message || "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。" });
+}
+
+export async function reloginScreen(store) {
+  const name = loginCursor.store || String(store || "").trim();
+  return deps.desk.shot(name);
+}
+
+export async function reloginInput(body) {
+  const name = loginCursor.store || String(body && body.store || "").trim();
+  if (!name) {
+    return publicState({ status: "missing", message: "请重新打开登录" });
+  }
+  if (body && body.text) {
+    await deps.desk.type(name, body.text);
+  }
+  if (body && body.x != null && body.y != null) {
+    await deps.desk.click(name, Number(body.x), Number(body.y));
+  }
+  return reloginState(name);
+}
+
+export function jingmaiBrowser() {
+  return { ok: true, browser: browserReady() };
+}
+
+export async function cancelRelogin() {
+  wipeQueue();
+  if (deps.desk && deps.desk.close) {
+    await deps.desk.close();
+  }
+  return { ok: true };
 }
 
 export async function finishRelogin(store, authCode) {

@@ -36,7 +36,7 @@
     mount: function (root) {
       const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
       paidCss.rel = "stylesheet";
-      paidCss.href = "/shared/shen-paid.css?v=0.1.832-jingmai-page";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.833-server-login";
       if (!paidCss.parentNode) {
         document.head.appendChild(paidCss);
       }
@@ -123,6 +123,8 @@
       let overviewStale = false;
       let keepColsOpen = false;
       let includeHistory = view.history;
+      let deskStore = "";
+      let deskTimer = 0;
 
       function setStatus(message, isError) {
         statusEl.textContent = message || "";
@@ -1889,7 +1891,7 @@
               );
             })
             .join("") +
-          '</tbody></table></div><p class="xm-hl-note">重新登录会打开京麦自己的登录页。请在那个页面完成验证和验证码，一家店登录一次。推广花费和广告 ROI 不从成交额推算。</p></section>' +
+          '</tbody></table></div><p class="xm-hl-note">连接京麦和重新登录都在服务器里登录组织中心保存的账号。验证出现在弹出的画面里，点画面就是在服务器上操作。登录成功后服务器每 5 分钟采集。推广花费和广告 ROI 不从成交额推算。</p></section>' +
           '<div class="xm-sp-shop-modal" data-shop-modal hidden><form class="xm-sp-shop-dialog" data-shop-form>' +
           "<h3>新增店铺</h3><p class=\"xm-sp-shop-hint\">保存后归入沈子晗组，并出现在这份全部店铺里。登录账号在组织中心填写。</p>" +
           '<label>店铺名称<input name="storeName" required maxlength="64" autocomplete="off" /></label>' +
@@ -1899,6 +1901,13 @@
           '<p class="xm-sp-shop-error" data-shop-error hidden></p>' +
           '<div class="xm-sp-shop-actions"><button type="submit">保存</button>' +
           '<button type="button" data-shop-cancel>取消</button></div></form></div>' +
+          '<div class="xm-sp-shop-modal" data-desk-modal hidden><div class="xm-sp-shop-dialog is-desk" role="dialog" aria-modal="true">' +
+          '<h3>服务器登录</h3><p class="xm-sp-shop-hint" data-desk-shop>正在服务器上登录…</p>' +
+          '<p class="xm-sp-shop-hint" data-desk-state></p>' +
+          '<img class="xm-hl-desk" data-desk-shot alt="" />' +
+          '<label>验证码<input data-desk-code maxlength="20" autocomplete="off" /></label>' +
+          '<div class="xm-sp-shop-actions"><button type="button" data-desk-code-send>发送验证码</button>' +
+          '<button type="button" data-desk-close>关闭</button></div></div></div>' +
           '<pre id="shen-paid-live-snapshot" hidden>' +
           JSON.stringify(snapshot).replace(/</g, "\\u003c") +
           "</pre></div>";
@@ -1929,24 +1938,48 @@
         const connect = boardEl.querySelector("[data-connect-jingmai]");
         if (connect) {
           connect.addEventListener("click", function () {
-            const expired = overviewRows.filter(function (row) {
-              return row.loginExpired;
-            })[0];
-            const target = expired || overviewRows[0];
-            if (!target) {
-              setStatus("还没有店铺", true);
-              return;
-            }
-            openLogin(target.store);
+            openDesk("", true);
           });
         }
         boardEl.querySelectorAll("[data-relogin]").forEach(function (button) {
           button.addEventListener("click", function (event) {
             event.preventDefault();
             event.stopPropagation();
-            openLogin(button.getAttribute("data-relogin") || "");
+            openDesk(button.getAttribute("data-relogin") || "", false);
           });
         });
+        const deskShot = boardEl.querySelector("[data-desk-shot]");
+        if (deskShot) {
+          deskShot.addEventListener("click", function (event) {
+            if (!deskStore || !deskShot.naturalWidth) {
+              return;
+            }
+            const rect = deskShot.getBoundingClientRect();
+            const x = Math.round((event.clientX - rect.left) * (deskShot.naturalWidth / rect.width));
+            const y = Math.round((event.clientY - rect.top) * (deskShot.naturalHeight / rect.height));
+            postJson("/api/shen/paid/jingmai/relogin/input", { store: deskStore, x: x, y: y }).catch(function () {});
+          });
+        }
+        const deskSend = boardEl.querySelector("[data-desk-code-send]");
+        if (deskSend) {
+          deskSend.addEventListener("click", function () {
+            const field = boardEl.querySelector("[data-desk-code]");
+            const text = field ? field.value : "";
+            if (!deskStore || !text) {
+              return;
+            }
+            postJson("/api/shen/paid/jingmai/relogin/input", { store: deskStore, text: text }).catch(function () {});
+            if (field) {
+              field.value = "";
+            }
+          });
+        }
+        const deskClose = boardEl.querySelector("[data-desk-close]");
+        if (deskClose) {
+          deskClose.addEventListener("click", function () {
+            closeDesk(true);
+          });
+        }
         const headOpen = boardEl.querySelector("[data-head-open]");
         const headPop = boardEl.querySelector("[data-head-pop]");
         if (headOpen && headPop) {
@@ -2291,39 +2324,111 @@
         }
       }
 
-      function openLogin(store) {
+      function closeDesk(cancel) {
+        deskStore = "";
+        window.clearInterval(deskTimer);
+        deskTimer = 0;
+        const modal = boardEl.querySelector("[data-desk-modal]");
+        if (modal) {
+          modal.hidden = true;
+        }
+        if (cancel) {
+          postJson("/api/shen/paid/jingmai/relogin/cancel", {}).catch(function () {});
+        }
+      }
+
+      function paintDesk(state) {
+        const shop = boardEl.querySelector("[data-desk-shop]");
+        const hint = boardEl.querySelector("[data-desk-state]");
+        const shot = boardEl.querySelector("[data-desk-shot]");
+        const name = (state && state.store) || deskStore;
+        if (shop) {
+          const progress = state && state.total > 1 ? "（" + state.index + "/" + state.total + "）" : "";
+          shop.textContent = "服务器正在登录「" + name + "」" + progress + "。账号和密码用组织中心保存的，不在这台电脑上登录。";
+        }
+        if (hint) {
+          hint.textContent = (state && state.message) || "请在下面的画面里完成验证。点画面就是在服务器上操作。";
+        }
+        if (shot && name && state && state.status === "screen") {
+          shot.src = "/api/shen/paid/jingmai/relogin/screen?store=" + encodeURIComponent(name) + "&t=" + Date.now();
+        }
+      }
+
+      function watchDesk() {
+        window.clearInterval(deskTimer);
+        const pull = function () {
+          if (!deskStore) {
+            return;
+          }
+          getJson("/api/shen/paid/jingmai/relogin/state?store=" + encodeURIComponent(deskStore))
+            .then(function (state) {
+              if (!deskStore) {
+                return;
+              }
+              if (state && (state.status === "ok" || state.status === "done")) {
+                closeDesk(false);
+                setStatus((state && state.message) || "已在服务器登录");
+                load();
+                return;
+              }
+              if (state && (state.status === "login" || state.status === "missing")) {
+                closeDesk(false);
+                setStatus((state && state.message) || "登录没有通过", true);
+                load();
+                return;
+              }
+              if (state && state.store) {
+                deskStore = state.store;
+              }
+              paintDesk(state);
+            })
+            .catch(function (err) {
+              if (deskStore) {
+                setStatus(err.message || "服务器登录中断了", true);
+              }
+            });
+        };
+        pull();
+        deskTimer = window.setInterval(pull, 2000);
+      }
+
+      function openDesk(store, all) {
         const name = String(store || "");
-        if (!name) {
+        if (!all && !name) {
           return;
         }
-        const popup = window.open("about:blank", "_blank");
-        postJson("/api/shen/paid/jingmai/relogin", { store: name })
+        const modal = boardEl.querySelector("[data-desk-modal]");
+        if (!modal) {
+          return;
+        }
+        deskStore = name || "全部";
+        modal.hidden = false;
+        paintDesk({ store: name || "全部店铺", message: "正在服务器上打开登录…" });
+        const request = all
+          ? postJson("/api/shen/paid/jingmai/relogin/all", {})
+          : postJson("/api/shen/paid/jingmai/relogin", { store: name });
+        request
           .then(function (result) {
-            const url = result && result.loginUrl ? String(result.loginUrl) : "";
-            if (result && result.status === "page" && url.indexOf("https://passport.shop.jd.com/") === 0) {
-              if (popup) {
-                popup.location.href = url;
-              } else {
-                window.location.assign(url);
-              }
-              const account = result.loginName ? "，账号 " + result.loginName : "";
-              setStatus("已打开「" + name + "」的京麦登录页" + account + "。请在新页面完成验证和验证码。");
+            if (!result || result.status !== "screen") {
+              closeDesk(false);
+              setStatus((result && result.message) || "没有需要登录的店", result && result.status === "login");
+              load();
               return;
             }
-            if (popup) {
-              popup.close();
-            }
-            setStatus((result && result.message) || "登录页没有打开", true);
+            deskStore = result.store || deskStore;
+            paintDesk(result);
+            watchDesk();
           })
           .catch(function (err) {
-            if (popup) {
-              popup.close();
-            }
-            setStatus(err.message || "登录页没有打开", true);
+            closeDesk(true);
+            setStatus(err.message || "服务器登录没有打开", true);
           });
       }
 
       function load() {
+        if (deskStore) {
+          return Promise.resolve();
+        }
         view = parseHash();
         setStatus("正在加载…");
         return Promise.all([
@@ -2477,6 +2582,7 @@
       return function unmount() {
         dead = true;
         window.clearInterval(poll);
+        window.clearInterval(deskTimer);
         window.removeEventListener("hashchange", onHash);
         root.innerHTML = "";
       };

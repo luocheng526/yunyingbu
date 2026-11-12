@@ -847,6 +847,20 @@
   background: rgba(15, 23, 42, 0.35);
 }
 
+#paid-board .xm-sp-shop-dialog.is-desk {
+  width: min(860px, 96vw);
+}
+
+#paid-board .xm-hl-desk {
+  display: block;
+  width: 100%;
+  min-height: 180px;
+  margin-top: 8px;
+  background: #f3f4f6;
+  border-radius: 8px;
+  cursor: crosshair;
+}
+
 #paid-board .xm-sp-shop-dialog {
   width: min(420px, 100%);
   background: #fff;

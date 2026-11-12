@@ -1,9 +1,15 @@
 import { Router } from "express";
 import {
   beginRelogin,
+  beginReloginAll,
+  cancelRelogin,
   connectJingmai,
   finishRelogin,
+  jingmaiBrowser,
   jingmaiLive,
+  reloginInput,
+  reloginScreen,
+  reloginState,
   startJingmaiCollector,
   updateJingmaiRoster
 } from "./jingmai-runner.js";
@@ -149,9 +155,59 @@ shenRouter.get("/paid/jingmai", async (_req, res) => {
   }
 });
 
+shenRouter.get("/paid/jingmai/browser", async (_req, res) => {
+  res.json(jingmaiBrowser());
+});
+
 shenRouter.post("/paid/jingmai/relogin", async (req, res) => {
   try {
     res.json(await beginRelogin(req.body && req.body.store, req.headers.cookie || ""));
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "无法登录京麦" });
+  }
+});
+
+shenRouter.post("/paid/jingmai/relogin/all", async (req, res) => {
+  try {
+    res.json(await beginReloginAll(req.headers.cookie || ""));
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "无法登录京麦" });
+  }
+});
+
+shenRouter.get("/paid/jingmai/relogin/state", async (req, res) => {
+  try {
+    res.json(await reloginState(req.query.store));
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "无法登录京麦" });
+  }
+});
+
+shenRouter.get("/paid/jingmai/relogin/screen", async (req, res) => {
+  try {
+    const image = await reloginScreen(req.query.store);
+    if (!image || !image.length) {
+      res.status(404).json({ error: "登录画面没有打开" });
+      return;
+    }
+    res.set("cache-control", "no-store");
+    res.type("jpeg").send(image);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "无法登录京麦" });
+  }
+});
+
+shenRouter.post("/paid/jingmai/relogin/input", async (req, res) => {
+  try {
+    res.json(await reloginInput(req.body || {}));
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "无法登录京麦" });
+  }
+});
+
+shenRouter.post("/paid/jingmai/relogin/cancel", async (_req, res) => {
+  try {
+    res.json(await cancelRelogin());
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message || "无法登录京麦" });
   }

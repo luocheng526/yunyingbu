@@ -5,7 +5,7 @@ import { createApp } from "../src/app.js";
 import { buildLiveView, hoursFromSamples, jingmaiError, parseRealtime, runTick } from "../src/modules/shen/jingmai.js";
 import { interpretQrCheck } from "../src/modules/shen/jingmai-client.js";
 import { passwordFailureMessage } from "../src/modules/shen/jingmai-client.js";
-import { beginRelogin, connectJingmai, finishRelogin, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/shen/jingmai-runner.js";
+import { beginRelogin, beginReloginAll, connectJingmai, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/shen/jingmai-runner.js";
 import { listSessions, readJingmaiLive, resetJingmaiStore, saveSample, saveSession } from "../src/modules/shen/jingmai-store.js";
 
 const now = { day: "2026-11-12", stamp: "2026-11-12 11:05:00", hour: 11, clock: "11:05:00" };
@@ -221,30 +221,95 @@ test("connect timeout does not mark the shop logged out", async () => {
   }
 });
 
-test("relogin opens the Jingmai login page and does not return the password", async () => {
+test("server login keeps the password and session off the response", async () => {
   assert.equal(passwordFailureMessage({ data: { emptyAuthcode: true } }), "请先完成滑动验证");
   assert.equal(passwordFailureMessage({ code: 0, data: { failCode: 2 } }), "账号或密码不正确");
   assert.equal(interpretQrCheck({ resultInfo: { result: { state: "11" } } }), "expired");
   await resetJingmaiStore();
-  let openedPassword = false;
+  let seenPassword = "";
+  let polls = 0;
   setJingmaiDeps({
     loadOrg: async () => [{ store: "甲店", enabled: true, login: "seller", password: "secret-pass" }],
     client: {
-      openPassword: async () => {
-        openedPassword = true;
-        return { sessionId: "sid", jar: [], init: {} };
-      }
+      fetchHome: async () => ({ dealAmount: 0, orderCount: 1, customerCount: 1, yesterdayAmount: null })
+    },
+    desk: {
+      open: async ({ password }) => {
+        seenPassword = password;
+        return { status: "verify" };
+      },
+      poll: async () => {
+        polls += 1;
+        if (polls < 2) {
+          return { status: "verify", message: "" };
+        }
+        return { status: "ok", cookies: [{ name: "thor", value: "hidden-jar" }] };
+      },
+      shot: async () => Buffer.from([1, 2, 3]),
+      click: async () => {},
+      type: async () => {},
+      close: async () => {},
+      reset() {}
     }
   });
   try {
     const opened = await beginRelogin("甲店", "mk_sid=test");
-    assert.equal(opened.status, "page");
-    assert.equal(opened.loginName, "seller");
-    assert.equal(String(opened.loginUrl).startsWith("https://passport.shop.jd.com/"), true);
+    assert.equal(opened.status, "screen");
+    assert.equal(seenPassword, "secret-pass");
     assert.equal(JSON.stringify(opened).includes("secret-pass"), false);
-    assert.equal(openedPassword, false);
-    const done = await finishRelogin("甲店", "slide-token");
-    assert.equal(done.status, "missing");
+    assert.equal(JSON.stringify(opened).includes("hidden-jar"), false);
+    const waiting = await reloginState("甲店");
+    assert.equal(waiting.status, "screen");
+    const done = await reloginState("甲店");
+    assert.equal(done.status, "ok");
+    assert.equal(JSON.stringify(done).includes("secret-pass"), false);
+    assert.equal(JSON.stringify(done).includes("hidden-jar"), false);
+    const live = await readJingmaiLive();
+    const shop = live.shops.find((item) => item.shop === "甲店");
+    assert.equal(shop.dealAmount, 0);
+    assert.equal(shop.loginExpired, false);
+  } finally {
+    resetJingmaiDeps();
+    await resetJingmaiStore();
+  }
+});
+
+test("server login walks every shop and skips one that is already in", async () => {
+  await resetJingmaiStore();
+  await saveSession("已登录店", {
+    cookies: [{ name: "thor", value: "keep" }],
+    authState: "ok",
+    authMessage: "",
+    enabled: true
+  });
+  const seen = [];
+  setJingmaiDeps({
+    loadOrg: async () => [
+      { store: "已登录店", enabled: true, login: "old", password: "secret-old" },
+      { store: "乙店", enabled: true, login: "next", password: "secret-next" }
+    ],
+    client: {
+      fetchHome: async () => ({ dealAmount: 12, orderCount: 1, customerCount: 1, yesterdayAmount: null })
+    },
+    desk: {
+      open: async ({ store, password }) => {
+        seen.push(store + ":" + password);
+        return { status: "ok", cookies: [{ name: "thor", value: "hidden-jar" }] };
+      },
+      poll: async () => ({ status: "missing" }),
+      shot: async () => null,
+      click: async () => {},
+      type: async () => {},
+      close: async () => {},
+      reset() {}
+    }
+  });
+  try {
+    const opened = await beginReloginAll("mk_sid=test");
+    assert.equal(opened.status, "ok");
+    assert.deepEqual(seen, ["乙店:secret-next"]);
+    assert.equal(JSON.stringify(opened).includes("secret-next"), false);
+    assert.equal(JSON.stringify(opened).includes("hidden-jar"), false);
   } finally {
     resetJingmaiDeps();
     await resetJingmaiStore();
