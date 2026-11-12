@@ -3,7 +3,7 @@ import fs from "node:fs";
 import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
-import { JINGCANG_TEST_STORE, loadJingcang, parseStockPage, resetJingcangJob, setJingcangHooks, stockQuery } from "../src/modules/shen/jingcang.js";
+import { JINGCANG_TEST_STORE, filteredSearch, loadJingcang, parseStockPage, resetJingcangJob, setJingcangHooks, stockQuery, stockSearch } from "../src/modules/shen/jingcang.js";
 import { listSessions, resetJingmaiStore, saveSession } from "../src/modules/shen/jingmai-store.js";
 
 const SECRET = "shop-session-value";
@@ -226,6 +226,45 @@ test("a short last inventory page is the end of the 京东物流 list", async ()
   assert.equal(result.count, 21);
   assert.equal(result.truncated, false);
   assert.equal(result.source, "page");
+  await resetJingmaiStore();
+});
+
+test("the inventory search counts as filtered only after 在售 and 京东物流 are both sent", () => {
+  const post = JSON.stringify({
+    request: { data: { searchFeatureCodes: ["isJDexpress"], skuPStatuses: ["1"], pageNo: 1, pageSize: 20 } }
+  });
+  assert.deepEqual(stockSearch(post), { codes: ["isJDexpress"], status: ["1"] });
+  assert.equal(filteredSearch({ texts: ["{}"], posts: [post], chose: true }), true);
+  assert.equal(filteredSearch({ texts: ["{}"], posts: [post], chose: false }), false);
+  assert.equal(filteredSearch({ texts: ["{}"], posts: ["{}"], chose: true }), false);
+});
+
+test("a filtered inventory page keeps rows the label check would drop", async () => {
+  await resetJingmaiStore();
+  resetJingcangJob();
+  await saveSession(JINGCANG_TEST_STORE, { cookies: [{ name: "thor", value: SECRET }], authState: "ok", enabled: true });
+  const plain = stockRow("1023541407308", [house("北京常温C平台仓55号库-CHN", 4)]);
+  delete plain.showLabels;
+  const result = await loadJingcang(JINGCANG_TEST_STORE, {
+    fetchImpl: async function () {
+      return jsonResponse({ code: 200, data: { freeBrand: true } });
+    },
+    readShopStock: async function () {
+      return {
+        texts: [JSON.stringify(page([
+          stockRow("1023541407306", [house("无锡常温C平台仓13号库-CHN", 36)]),
+          plain
+        ], 133))],
+        posts: [JSON.stringify({ request: { data: { searchFeatureCodes: ["isJDexpress"], skuPStatuses: ["1"] } } })],
+        chose: true
+      };
+    }
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.filtered, true);
+  assert.equal(result.count, 2);
+  assert.equal(result.rows[1].sku, "1023541407308");
+  assert.equal(result.truncated, false);
   await resetJingmaiStore();
 });
 

@@ -274,7 +274,7 @@
       }
 
       root.innerHTML =
-        '<main class="xm-jc" id="jingcang-board"><header class="xm-jc-head"><div><p class="kicker">沈子晗运营中心</p><h1>京仓管理<em data-jc-state>抓取中</em></h1><p class="lead" data-jc-lead>正在抓取 RASW潮流生活旗舰店里商品标签为京东物流的库存。仓名写在上面，每个仓下面是对应数量。其他店铺仍是版式。</p></div></header>' +
+        '<main class="xm-jc" id="jingcang-board"><header class="xm-jc-head"><div><p class="kicker">沈子晗运营中心</p><h1>京仓管理<em data-jc-state>抓取中</em></h1><p class="lead" data-jc-lead>正在抓取 RASW潮流生活旗舰店里在售、商品标签为京东物流的库存。仓名写在上面，每个仓下面是对应数量。其他店铺仍是版式。</p></div></header>' +
         '<section class="xm-jc-kpis"><article><span>分组</span><strong data-jc-kpi="groups">4</strong></article><article><span>店铺</span><strong data-jc-kpi="shops">12</strong></article><article><span>SKU</span><strong data-jc-kpi="sku">0</strong></article><article><span>可用库存</span><strong data-jc-kpi="stock">0</strong></article></section>' +
         '<div class="xm-jc-bar"><nav class="xm-jc-tabs" aria-label="分组"><button type="button" data-jc-group="" class="is-on">全部</button>' +
         GROUPS.map(function (name) {
@@ -395,7 +395,7 @@
             return;
           }
           if (payload && payload.pending) {
-            say("抓取中", "正在从京麦翻 " + liveShop + " 里商品标签为京东物流的库存。");
+            say("抓取中", "正在从京麦翻 " + liveShop + " 里在售、商品标签为京东物流的库存。");
             setTimeout(pullStock, 2000);
             return;
           }
@@ -425,7 +425,7 @@
           say(
             "已抓取",
             liveShop +
-              " 已抓取商品标签为京东物流的 " +
+              " 已抓取在售且商品标签为京东物流的 " +
               rows.length +
               " 个 SKU" +
               (payload.truncated ? "，后面还有没翻完的页" : "") +

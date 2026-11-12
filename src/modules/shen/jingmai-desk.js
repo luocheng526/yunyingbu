@@ -1482,23 +1482,45 @@ export function readHomeDeal(cookies) {
 const STOCK_PAGE = "https://trade-warehousing-jdm.jd.com/inventory-manage";
 const STOCK_NEXT =
   '(() => { const docs = [document]; document.querySelectorAll("iframe").forEach((frame) => { try { if (frame.contentDocument) docs.push(frame.contentDocument); } catch (e) {} }); for (const doc of docs) { const next = doc.querySelector(".jd-pagination .btn-next, .el-pagination .btn-next, button.btn-next"); if (!next) continue; const disabled = next.disabled || next.classList.contains("is-disabled") || next.getAttribute("aria-disabled") === "true"; if (disabled) return "end"; next.click(); return "next"; } return "no-pager"; })()';
-const STOCK_LABEL =
-  '(() => { const docs = [document]; document.querySelectorAll("iframe").forEach((frame) => { try { if (frame.contentDocument) docs.push(frame.contentDocument); } catch (e) {} }); const wanted = "京东物流"; for (const doc of docs) { const options = doc.querySelectorAll(".jd-select-dropdown__item, .el-select-dropdown__item, [role=\\"option\\"]"); for (const option of options) { const text = String(option.innerText || "").replace(/\\s+/g, ""); if (text !== wanted) continue; option.click(); return "picked"; } } for (const doc of docs) { const labels = doc.querySelectorAll("label, .jd-form-item__label, .el-form-item__label"); for (const label of labels) { if (String(label.innerText || "").replace(/\\s+/g, "").indexOf("商品标签") === -1) continue; const item = label.closest(".jd-form-item, .el-form-item") || label.parentElement; const select = item && item.querySelector(".jd-select, .el-select"); if (!select) continue; const current = String(select.innerText || "").replace(/\\s+/g, ""); if (current.indexOf(wanted) !== -1) return "already"; select.click(); return "open"; } } return "no-filter"; })()';
+function stockPick(labelText, wanted) {
+  return (
+    "(() => { const labelText = " +
+    JSON.stringify(labelText) +
+    "; const wanted = " +
+    JSON.stringify(wanted) +
+    '; const docs = [document]; document.querySelectorAll("iframe").forEach((frame) => { try { if (frame.contentDocument) docs.push(frame.contentDocument); } catch (e) {} }); const norm = (value) => String(value || "").replace(/\\s+/g, ""); const visible = (node) => { const rect = node.getBoundingClientRect(); return rect.width > 2 && rect.height > 2; }; for (const doc of docs) { const options = doc.querySelectorAll(".jd-select-dropdown__item, .el-select-dropdown__item, [role=\\"option\\"]"); for (const option of options) { if (norm(option.innerText) !== wanted || !visible(option)) continue; const panel = option.closest(".jd-select-dropdown, .el-select-dropdown, [role=\\"listbox\\"]"); if (panel && !visible(panel)) continue; option.click(); return "picked"; } } for (const doc of docs) { const labels = doc.querySelectorAll("label, .jd-form-item__label, .el-form-item__label"); for (const label of labels) { if (norm(label.innerText).indexOf(labelText) === -1) continue; const item = label.closest(".jd-form-item, .el-form-item") || label.parentElement; const select = item && item.querySelector(".jd-select, .el-select"); if (!select) continue; const chosen = select.querySelector(".jd-select__selected-item, .el-select__selected-item, .jd-input__inner, input"); const current = norm(chosen ? chosen.value || chosen.innerText || chosen.textContent : ""); if (current === wanted) return "already"; select.click(); return "open"; } } return "missing"; })()'
+  );
+}
+
+function postedFilter(post) {
+  try {
+    const data = JSON.parse(String(post || "")).request.data;
+    const codes = Array.isArray(data.searchFeatureCodes) ? data.searchFeatureCodes.filter(Boolean) : [];
+    const status = Array.isArray(data.skuPStatuses) ? data.skuPStatuses.filter(Boolean) : [];
+    return codes.length > 0 && status.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+const STOCK_SEARCH =
+  '(() => { const docs = [document]; document.querySelectorAll("iframe").forEach((frame) => { try { if (frame.contentDocument) docs.push(frame.contentDocument); } catch (e) {} }); const norm = (value) => String(value || "").replace(/\\s+/g, ""); for (const doc of docs) { const buttons = doc.querySelectorAll("button"); for (const button of buttons) { if (norm(button.innerText) !== "查询") continue; const rect = button.getBoundingClientRect(); if (rect.width < 2 || rect.height < 2) continue; button.click(); return "search"; } } return "no-search"; })()';
 
 function watchStock(ws) {
   const queue = [];
   let waiter = null;
   ws.__stockRequests = new Map();
-  function push(text) {
-    if (!text) {
+  ws.__stockPosts = new Map();
+  function push(entry) {
+    if (!entry || !entry.text) {
       return;
     }
     if (waiter) {
       const resolve = waiter;
       waiter = null;
-      resolve(text);
+      resolve(entry);
     } else {
-      queue.push(text);
+      queue.push(entry);
     }
   }
   function onMessage(event) {
@@ -1512,6 +1534,13 @@ function watchStock(ws) {
       send(ws, "Network.enable", {}, message.params.sessionId).catch(function () {});
       return;
     }
+    if (message.method === "Network.requestWillBeSent") {
+      const request = message.params && message.params.request ? message.params.request : {};
+      if (String(request.url || "").includes("queryStockByPage")) {
+        ws.__stockPosts.set(message.params.requestId, String(request.postData || ""));
+      }
+      return;
+    }
     if (message.method === "Network.responseReceived") {
       const url = message.params && message.params.response ? message.params.response.url : "";
       if (String(url).includes("queryStockByPage")) {
@@ -1523,13 +1552,15 @@ function watchStock(ws) {
       return;
     }
     const sessionId = ws.__stockRequests.get(message.params.requestId);
+    const post = ws.__stockPosts.get(message.params.requestId) || "";
     ws.__stockRequests.delete(message.params.requestId);
+    ws.__stockPosts.delete(message.params.requestId);
     send(ws, "Network.getResponseBody", { requestId: message.params.requestId }, sessionId)
       .then(function (result) {
         const text = result.base64Encoded ? Buffer.from(result.body || "", "base64").toString("utf8") : String(result.body || "");
         const trimmed = text.trim();
         if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-          push(trimmed);
+          push({ text: trimmed, post: post });
         }
       })
       .catch(function () {});
@@ -1588,7 +1619,7 @@ async function readShopStockNow(cookies) {
     }
     await send(ws, "Page.navigate", { url: STOCK_PAGE });
     const first = await watch.next(30000);
-    if (!first) {
+    if (!first || !first.text) {
       const href = await evaluate(ws, "location.href");
       if (/passport|login/i.test(String(href || ""))) {
         const error = new Error("登录已失效，请重新登录");
@@ -1599,39 +1630,60 @@ async function readShopStockNow(cookies) {
       error.code = "network";
       throw error;
     }
-    let texts = [first];
-    let picked = false;
-    for (let attempt = 0; attempt < 3 && !picked; attempt += 1) {
-      const action = await evaluate(ws, STOCK_LABEL);
-      if (action === "already") {
-        picked = true;
-        break;
-      }
-      if (action === "picked") {
-        const filtered = await watch.next(12000);
-        if (filtered) {
-          texts = [filtered];
+    async function choose(label, option) {
+      let action = "missing";
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        action = await evaluate(ws, stockPick(label, option));
+        if (action === "already" || action === "picked" || action === "missing") {
+          return action || "missing";
         }
-        picked = true;
-        break;
+        await sleep(400);
       }
-      if (action !== "open") {
-        break;
-      }
-      await sleep(400);
+      return action || "open";
     }
-    for (let page = 0; page < 20; page += 1) {
+    const statusAction = await choose("商品状态", "在售");
+    const labelAction = await choose("商品标签", "京东物流");
+    let stray = await watch.next(400);
+    let lastStray = null;
+    for (let extra = 0; extra < 6 && stray; extra += 1) {
+      lastStray = stray;
+      stray = await watch.next(300);
+    }
+    const searched = await evaluate(ws, STOCK_SEARCH);
+    let pageOne = null;
+    for (let wait = 0; wait < 4 && !(pageOne && postedFilter(pageOne.post)); wait += 1) {
+      const entry = await watch.next(wait === 0 ? 15000 : 4000);
+      if (!entry || !entry.text) {
+        break;
+      }
+      pageOne = entry;
+    }
+    if ((!pageOne || !pageOne.text) && lastStray && lastStray.text && searched !== "search") {
+      pageOne = lastStray;
+    }
+    const texts = [];
+    const posts = [];
+    if (pageOne && pageOne.text) {
+      texts.push(pageOne.text);
+      posts.push(pageOne.post || "");
+    }
+    for (let page = 0; page < 20 && texts.length; page += 1) {
       const action = await evaluate(ws, STOCK_NEXT);
       if (action !== "next") {
         break;
       }
-      const more = await watch.next(12000);
-      if (!more) {
+      let more = await watch.next(12000);
+      if (!more || !more.text) {
+        more = await watch.next(8000);
+      }
+      if (!more || !more.text) {
         break;
       }
-      texts.push(more);
+      texts.push(more.text);
+      posts.push(more.post || "");
     }
-    return texts;
+    const chose = (statusAction === "already" || statusAction === "picked") && (labelAction === "already" || labelAction === "picked");
+    return { texts: texts, posts: posts, chose: chose };
   } catch (error) {
     if (!error || error.code !== "network") {
       closeReader();

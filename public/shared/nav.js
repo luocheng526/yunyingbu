@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.764-paid-online — 付费店铺标出在线和掉线 */
+/* xm-fast-shell 0.1.764-jingcang-sale — 京仓按在售和京东物流抓全 */
 (function () {
-  const ASSET_VER = "0.1.764-paid-online";
+  const ASSET_VER = "0.1.764-jingcang-sale";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",

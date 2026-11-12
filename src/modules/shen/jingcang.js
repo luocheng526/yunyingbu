@@ -406,12 +406,60 @@ async function fetchOverHttp(jar, fetchImpl) {
   };
 }
 
+export function stockSearch(post) {
+  let body = null;
+  try {
+    body = JSON.parse(String(post || ""));
+  } catch {
+    return null;
+  }
+  const data = body && body.request && body.request.data && typeof body.request.data === "object" ? body.request.data : null;
+  if (!data) {
+    return null;
+  }
+  const codes = Array.isArray(data.searchFeatureCodes) ? data.searchFeatureCodes.map(String).filter(Boolean).slice(0, 4) : [];
+  const status = Array.isArray(data.skuPStatuses) ? data.skuPStatuses.map(String).filter(Boolean).slice(0, 4) : [];
+  return { codes: codes, status: status };
+}
+
+function normalizeStockRead(raw) {
+  if (Array.isArray(raw)) {
+    return { texts: raw, posts: [], chose: false };
+  }
+  if (!raw || typeof raw !== "object") {
+    return { texts: [], posts: [], chose: false };
+  }
+  return {
+    texts: Array.isArray(raw.texts) ? raw.texts : [],
+    posts: Array.isArray(raw.posts) ? raw.posts : [],
+    chose: Boolean(raw.chose)
+  };
+}
+
+const FILTER_TRUST_MAX = 220;
+
+export function filteredSearch(raw) {
+  const pack = normalizeStockRead(raw);
+  if (!pack.chose) {
+    return false;
+  }
+  if (!pack.posts[0]) {
+    return true;
+  }
+  const search = stockSearch(pack.posts[0]);
+  if (!search) {
+    return false;
+  }
+  return search.codes.length > 0 && search.status.length > 0;
+}
+
 async function fetchOverPage(jar, readBrowser) {
-  const texts = await readBrowser(jar);
-  if (texts == null) {
+  const raw = await readBrowser(jar);
+  if (raw == null) {
     throw jingmaiError("network", "京麦登录窗口正开着，这次没有抓库存");
   }
-  const pages = (texts || [])
+  const pack = normalizeStockRead(raw);
+  const pages = pack.texts
     .map(function (text) {
       try {
         return parseStockPage(JSON.parse(text));
@@ -429,10 +477,13 @@ async function fetchOverPage(jar, readBrowser) {
   const last = pages[pages.length - 1];
   const lastCount = last ? last.rows.length : 0;
   const lastFull = lastCount === 10 || lastCount === 20 || lastCount === 50;
+  const filtered = filteredSearch(raw) && merged.rows.length <= FILTER_TRUST_MAX;
   return {
     rows: merged.rows,
     total: merged.total,
     source: "page",
+    filtered: filtered,
+    search: stockSearch(pack.posts[0]),
     truncated: lastFull && merged.total > merged.rows.length
   };
 }
@@ -519,8 +570,9 @@ export async function loadJingcang(storeName, deps) {
       }
     });
   });
+  const trustFilter = Boolean(result.filtered) && result.rows.length <= FILTER_TRUST_MAX;
   const rows = result.rows.filter(function (row) {
-    return row.jdLogistics;
+    return trustFilter || row.jdLogistics;
   }).map(function (row) {
     if (!shape.length && row.shape && row.shape.length) {
       shape = row.shape;
@@ -548,6 +600,8 @@ export async function loadJingcang(storeName, deps) {
     count: rows.length,
     truncated: Boolean(result.truncated),
     source: result.source,
+    filtered: trustFilter,
+    search: result.search || null,
     capturedAt: beijingParts().stamp,
     shape: shape,
     names: names,
