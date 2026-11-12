@@ -30,7 +30,7 @@
     mount: function (root) {
       const css = document.querySelector('link[href^="/shared/shen-jingcang.css"]') || document.createElement("link");
       css.rel = "stylesheet";
-      css.href = "/shared/shen-jingcang.css?v=0.1.858-jingcang-tpl";
+      css.href = "/shared/shen-jingcang.css?v=0.1.862-jingcang-cols";
       if (!css.parentNode) {
         document.head.appendChild(css);
       }
@@ -132,40 +132,32 @@
         );
       }
 
-      function warehouseList(row) {
-        const houses = row.warehouses || [];
-        const jd = houses.filter(function (house) {
-          return house.kind === "京东仓";
-        }).length;
-        const shopCount = houses.length - jd;
-        return (
-          '<p class="xm-jc-wh-sum">共' +
-          houses.length +
-          "个仓 · " +
-          shopCount +
-          "个商家仓 · " +
-          jd +
-          '个京东仓</p><ul class="xm-jc-wh">' +
-          houses
-            .map(function (house) {
-              return (
-                "<li><i>" +
-                escapeHtml(house.kind) +
-                "</i><b>" +
-                escapeHtml(house.name) +
-                "</b><em>" +
-                money(house.qty) +
-                "</em></li>"
-              );
-            })
-            .join("") +
-          "</ul>"
-        );
+      function housesFor(rows) {
+        const list = [];
+        const seen = {};
+        rows.forEach(function (row) {
+          (row.warehouses || []).forEach(function (house) {
+            const key = house.kind + "\n" + house.name;
+            if (seen[key]) {
+              return;
+            }
+            seen[key] = true;
+            list.push(house);
+          });
+        });
+        return list;
       }
 
-      function productRow(row) {
+      function qtyAt(row, house) {
+        const hit = (row.warehouses || []).find(function (item) {
+          return item.name === house.name && item.kind === house.kind;
+        });
+        return hit ? money(hit.qty) : "—";
+      }
+
+      function goodsCell(row) {
         return (
-          "<tr><td><div class=\"xm-jc-goods\">" +
+          '<div class="xm-jc-goods">' +
           photo() +
           "<div><strong>" +
           escapeHtml(row.name) +
@@ -175,27 +167,73 @@
           escapeHtml(row.mark) +
           "</span>" +
           (row.code ? "<span>货号 " + escapeHtml(row.code) + "</span>" : "") +
-          "</p></div></div></td><td class=\"xm-jc-code\">" +
-          escapeHtml(row.spu) +
-          "</td><td class=\"xm-jc-code\">" +
-          escapeHtml(row.sku) +
-          '</td><td class="xm-jc-houses">' +
-          warehouseList(row) +
-          '</td><td class="xm-jc-qty">' +
-          money(totalQty(row)) +
-          "</td></tr>"
+          "</p></div></div>"
         );
       }
 
-      function waitingRow() {
-        return '<tr class="is-wait"><td><div class="xm-jc-goods">' + photo() + '<div><strong>抓取后显示商品</strong><p><span>待抓取</span></p></div></div></td><td class="xm-jc-code">—</td><td class="xm-jc-code">—</td><td class="xm-jc-houses"><p class="xm-jc-wh-sum">各仓库库存会列在这里</p></td><td class="xm-jc-qty">—</td></tr>';
-      }
-
-      function table(rows) {
+      function sheet(shopName, rows) {
+        const houses = housesFor(rows);
+        if (!houses.length) {
+          return (
+            '<article class="xm-jc-shop"><header><h3>' +
+            escapeHtml(shopName) +
+            '</h3><p>还没有样例</p></header><div class="xm-jc-wait">' +
+            photo() +
+            "<div><strong>抓取后显示商品</strong><p>仓名写在上面，每个仓下面是对应数量</p></div></div></article>"
+          );
+        }
+        const style = ' style="--jc-wh:' + houses.length + '"';
+        const heads = houses
+          .map(function (house) {
+            return (
+              '<div class="xm-jc-wh-head"><i>' +
+              escapeHtml(house.kind) +
+              "</i><b>" +
+              escapeHtml(house.name) +
+              "</b></div>"
+            );
+          })
+          .join("");
+        const lines = rows
+          .map(function (row) {
+            return (
+              '<div class="xm-jc-line"' +
+              style +
+              ">" +
+              goodsCell(row) +
+              '<div class="xm-jc-code">' +
+              escapeHtml(row.spu) +
+              '</div><div class="xm-jc-code">' +
+              escapeHtml(row.sku) +
+              "</div>" +
+              houses
+                .map(function (house) {
+                  return '<div class="xm-jc-wh-qty">' + qtyAt(row, house) + "</div>";
+                })
+                .join("") +
+              '<div class="xm-jc-wh-qty is-total">' +
+              money(totalQty(row)) +
+              "</div></div>"
+            );
+          })
+          .join("");
+        const sum = rows.reduce(function (acc, row) {
+          return acc + totalQty(row);
+        }, 0);
         return (
-          '<div class="xm-jc-table-wrap"><table class="xm-jc-table"><thead><tr><th>商品</th><th>SPU</th><th>SKU</th><th>每个仓库的库存</th><th>可用</th></tr></thead><tbody>' +
-          (rows.length ? rows.map(productRow).join("") : waitingRow()) +
-          "</tbody></table></div>"
+          '<article class="xm-jc-shop"><div class="xm-jc-sheet"><div class="xm-jc-line xm-jc-line-head"' +
+          style +
+          '><div class="xm-jc-shop-title"><h3>' +
+          escapeHtml(shopName) +
+          "</h3><p>" +
+          rows.length +
+          " 个 SKU · 可用 " +
+          money(sum) +
+          '</p></div><div class="xm-jc-code-label">SPU</div><div class="xm-jc-code-label">SKU</div>' +
+          heads +
+          '<div class="xm-jc-wh-head is-total"><b>可用</b></div></div>' +
+          lines +
+          "</div></article>"
         );
       }
 
@@ -208,7 +246,7 @@
       }
 
       root.innerHTML =
-        '<main class="xm-jc" id="jingcang-board"><header class="xm-jc-head"><div><p class="kicker">沈子晗运营中心</p><h1>京仓管理<em>模板</em></h1><p class="lead">先按组看店铺。每件商品留出图片、SPU、SKU，库存按仓库分行。这一版是版式，还没从京麦抓取。</p></div></header>' +
+        '<main class="xm-jc" id="jingcang-board"><header class="xm-jc-head"><div><p class="kicker">沈子晗运营中心</p><h1>京仓管理<em>模板</em></h1><p class="lead">先按组看店铺。每件商品留出图片、SPU、SKU。仓名写在上面，每个仓下面是对应数量。这一版是版式，还没从京麦抓取。</p></div></header>' +
         '<section class="xm-jc-kpis"><article><span>分组</span><strong data-jc-kpi="groups">4</strong></article><article><span>店铺</span><strong data-jc-kpi="shops">12</strong></article><article><span>样例 SKU</span><strong data-jc-kpi="sku">0</strong></article><article><span>样例可用库存</span><strong data-jc-kpi="stock">0</strong></article></section>' +
         '<div class="xm-jc-bar"><nav class="xm-jc-tabs" aria-label="分组"><button type="button" data-jc-group="" class="is-on">全部</button>' +
         GROUPS.map(function (name) {
@@ -275,19 +313,7 @@
                       const rows = goodsOf(pair[1]).filter(function (row) {
                         return !needle || pair[1].toLowerCase().indexOf(needle) !== -1 || matches(row);
                       });
-                      const count = rows.length;
-                      const sum = rows.reduce(function (acc, row) {
-                        return acc + totalQty(row);
-                      }, 0);
-                      return (
-                        '<article class="xm-jc-shop"><header><h3>' +
-                        escapeHtml(pair[1]) +
-                        "</h3><p>" +
-                        (count ? count + " 个 SKU · 可用 " + money(sum) : "还没有样例") +
-                        "</p></header>" +
-                        table(rows) +
-                        "</article>"
-                      );
+                      return sheet(pair[1], rows);
                     })
                     .join("") +
                   "</section>"
