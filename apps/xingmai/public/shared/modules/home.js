@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.875-home-search */
+/* xm-module-home 0.1.876-fee */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1090,14 +1090,27 @@
     var n = parseFeeBound(s);
     return { lo: n, hi: n };
   }
+  function scrapedFeeRange(shop) {
+    try {
+      return parseFeeRangeText(JSON.parse(localStorage.getItem("shen-home-fee-targets") || "{}")[shop]);
+    } catch (_err) {
+      return { lo: null, hi: null };
+    }
+  }
   function feeRangeOf(row) {
     if (!row || typeof row !== "object") {
       return { lo: null, hi: null };
     }
     var lo = parseFeeBound(row.feeLo != null ? row.feeLo : row.feeMin != null ? row.feeMin : row.minFee);
     var hi = parseFeeBound(row.feeHi != null ? row.feeHi : row.feeMax != null ? row.feeMax : row.maxFee);
+    var parsed;
     if (lo == null && hi == null) {
-      var parsed = parseFeeRangeText(row.feeGoal || row.feeRange || row.feeTarget || row["费比设置"]);
+      parsed = parseFeeRangeText(row.feeGoal || row.feeRange || row.feeTarget || row["费比设置"]);
+      lo = parsed.lo;
+      hi = parsed.hi;
+    }
+    if (lo == null && hi == null) {
+      parsed = scrapedFeeRange(row.shop);
       lo = parsed.lo;
       hi = parsed.hi;
     }
@@ -2117,7 +2130,7 @@
       ".xm-hm-rest b{flex:1;font-weight:500}" +
       ".xm-hm-rest em{font-style:normal;font-variant-numeric:tabular-nums}" +
       ".xm-hm-live-filter{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;padding:0;border:0}" +
-      ".xm-hm-live-search{display:flex;align-items:center;gap:8px;margin:8px 0}" +
+      ".xm-hm-live-search{display:flex;gap:8px;margin:8px 0}" +
       ".xm-hm-live-search input,.xm-hm-live-chip{height:36px;border:1px solid #e4e7ed;border-radius:8px;background:#fff}" +
       ".xm-hm-live-search input{flex:1;padding:0 10px}" +
       ".xm-hm-live-chips{display:flex;gap:8px}" +
@@ -2238,7 +2251,7 @@
       '<div class="xm-hm-datewrap"><div class="xm-hm-dates" id="xm-hm-dates" title="最多选择30天"><span class="xm-hm-dates-ico">日</span><span class="xm-hm-dates-text" id="xm-hm-date-text"></span><button type="button" class="xm-hm-dates-clear" id="xm-hm-date-clear">×</button></div><div class="xm-hm-cal" id="xm-hm-cal" hidden></div></div>' +
       "</div></div>" +
       '<div class="xm-hm-pop" id="xm-hm-pop" hidden><h3>卡片设置</h3><div id="xm-hm-card-opts"></div></div>' +
-      '<div class="xm-hm-head-pop" id="xm-hm-head-pop" hidden><h3>表头设置</h3><p class="xm-hm-head-hint">勾选店铺表要显示的列。排名、店铺名称固定。付费中心列来自韩梦凯实时付费和沈子晗付费中心，首页是两边汇总。</p><div id="xm-hm-head-opts"></div></div>' +
+      '<div class="xm-hm-head-pop" id="xm-hm-head-pop" hidden><h3>表头设置</h3><p class="xm-hm-head-hint">勾选店铺表要显示的列。</p><div id="xm-hm-head-opts"></div></div>' +
       '<div class="xm-hm-body">' +
       '<section class="xm-hm-kpis-shell"><div class="xm-hm-teams-bar"><b>星脉甄选</b><button type="button" class="xm-hm-set" id="xm-hm-set">卡片设置</button></div><div class="xm-hm-sales" id="xm-hm-sales"></div><div class="xm-hm-kpis" id="xm-hm-kpis"></div></section>' +
       '<section class="xm-hm-teams" id="xm-hm-teams" hidden></section>' +
@@ -2417,7 +2430,7 @@
     hideCardTip();
     hideLineTip(root);
     var searchDraft = liveSearchDraft(root);
-    board.setAttribute("data-hm-js", "0.1.875-home-search");
+    board.setAttribute("data-hm-js", "0.1.876-fee");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2471,7 +2484,7 @@
     root.querySelector("#xm-hm-note").textContent = gapText
       ? "人管对不上：" + gapText
       : state.view === "live"
-        ? "实时只汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」，不填写。未回传 —。"
+        ? "实时只汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」，不填写。"
         : "数字来自星脉 ERP。";
     root.querySelector("#xm-hm-pop h3").textContent =
       "卡片设置 · " + (state.view === "team" ? "经理团队" : state.view === "chief" ? "主管/储备" : "公司");
