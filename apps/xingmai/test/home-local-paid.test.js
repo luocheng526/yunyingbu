@@ -1,11 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getHomeLocalPaid, shanghaiNow } from "../src/modules/home/local-paid.js";
+import {
+  getHomeLocalPaid,
+  rememberLocalPaidDay,
+  setLocalPaidSnapPath,
+  shanghaiNow,
+  shanghaiYmd
+} from "../src/modules/home/local-paid.js";
 import { homeRouter } from "../src/modules/home/router.js";
+
+const snapDir = mkdtempSync(join(tmpdir(), "home-local-paid-"));
+setLocalPaidSnapPath(join(snapDir, "days.json"));
 
 const homeJs = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "../public/shared/modules/home.js"),
@@ -19,6 +29,8 @@ test("local paid stub is not 星脉 ERP and stamps Shanghai time", () => {
   assert.notEqual(data.source, "xingmai-erp");
   assert.equal(Array.isArray(data.records), true);
   assert.equal(data.records.length, 0);
+  assert.equal(Array.isArray(data.yesterday.records), true);
+  assert.equal(data.yesterday.records.length, 0);
   assert.match(String(data.updatedAt || ""), /^\d{4}\/\d{1,2}\/\d{1,2} \d{2}:\d{2}:\d{2}$/);
   assert.match(shanghaiNow(), /^\d{4}\/\d{1,2}\/\d{1,2} \d{2}:\d{2}:\d{2}$/);
 });
@@ -37,6 +49,7 @@ test("homepage local-paid route is mounted", async () => {
     assert.equal(data.ok, true);
     assert.equal(data.source, "han-shen-local");
     assert.equal(data.records.length, 0);
+    assert.equal(data.yesterday.records.length, 0);
   } finally {
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
@@ -66,7 +79,7 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
     }
     throw new Error("unclosed " + name);
   };
-  const start = homeJs.indexOf("function liveFromErp");
+  const start = homeJs.indexOf("var LIVE_DAY_KEY");
   const end = homeJs.indexOf("function ownerOfShop");
   const fns = new Function(
     pick("asNum") +
@@ -84,11 +97,8 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
       pick("blankLive") +
       pick("escapeHtml") +
       pick("sumLocalPaid") +
-      pick("spendChartOf") +
-      pick("feeChartOf") +
-      pick("liveCardsOf") +
       homeJs.slice(start, end) +
-      "return {fillLocalPaid,emptyLocalPaid};"
+      "return {fillLocalPaid,emptyLocalPaid,spendChartOf,hourCum};"
   )();
   const live = {
     shops: [{ shop: "A店", liveAmount: "9", paidAmount: "—", roi: "—", paidDeal: "—", feeRate: "—" }],
@@ -106,7 +116,40 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.equal(filled.paid.value, "12");
   assert.equal(filled.fee.label, "实时费比");
   assert.equal(filled.fee.value, "12%");
+  assert.equal(filled.paid.yestText, "—");
+  const withYest = fns.fillLocalPaid(live, {
+    records: [{ shopName: "A店", paidAmount: 12, paidDeal: 100, feeRate: 0.12 }],
+    yesterday: { records: [{ shopName: "A店", paidAmount: 10, paidDeal: 80 }] }
+  });
+  assert.equal(withYest.paid.value, "12");
+  assert.equal(withYest.paid.yestText, "10");
+  assert.equal(Math.round(withYest.paid.delta), 20);
+  assert.equal(withYest.fee.yestText, "13%");
+  assert.ok(withYest.fee.delta < 0);
   assert.equal(filled.cards.find((card) => card.key === "livePaid").value, "1");
   assert.equal(filled.cards.find((card) => card.key === "ad"), undefined);
   assert.equal(filled.cards.find((card) => card.key === "liveAt").label, "更新时间");
+});
+
+test("local paid snap keeps yesterday after the Shanghai day rolls", () => {
+  const file = join(snapDir, "roll.json");
+  const prev = join(snapDir, "days.json");
+  setLocalPaidSnapPath(file);
+  rememberLocalPaidDay(
+    { records: [{ shopName: "A店", paidAmount: 40, paidDeal: 200 }], hourly: { todaySpend: [1, 2, 3] } },
+    "2026-11-11"
+  );
+  rememberLocalPaidDay(
+    { records: [{ shopName: "A店", paidAmount: 30, paidDeal: 180 }], hourly: { todaySpend: [4, 5, 6] } },
+    "2026-11-12"
+  );
+  const data = getHomeLocalPaid();
+  if (shanghaiYmd() === "2026-11-12") {
+    assert.equal(data.records[0].paidAmount, 30);
+    assert.equal(data.yesterday.records[0].paidAmount, 40);
+    assert.deepEqual(data.hourly.yesterdaySpend, [1, 2, 3]);
+  } else {
+    assert.equal(data.yesterday.records[0].paidAmount, 30);
+  }
+  setLocalPaidSnapPath(prev);
 });
