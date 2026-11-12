@@ -109,8 +109,38 @@ function pickIndicator(list, names, codes) {
   return byCode || byName || null;
 }
 
+function layerValue(node) {
+  if (!node || typeof node !== "object") {
+    return null;
+  }
+  const next = node.data != null ? node.data : node.result;
+  if (typeof next === "string") {
+    try {
+      return JSON.parse(next);
+    } catch {
+      return null;
+    }
+  }
+  return next && typeof next === "object" ? next : null;
+}
+
+function shopRoot(body) {
+  let current = body;
+  for (let depth = 0; depth < 4 && current && typeof current === "object"; depth += 1) {
+    if (current.channelData || current.indicatorList || current.indicators) {
+      return current;
+    }
+    const next = layerValue(current);
+    if (!next || next === current) {
+      return current;
+    }
+    current = next;
+  }
+  return current && typeof current === "object" ? current : {};
+}
+
 export function extractShopDeal(body) {
-  const data = nested(body);
+  const data = shopRoot(body);
   const channel = data && data.channelData ? data.channelData : data;
   const list = channel && (channel.indicatorList || channel.indicators);
   const deal = pickIndicator(list, ["成交金额", "成交总金额"], ["3009"]);
@@ -213,70 +243,44 @@ export function extractPaid(body) {
   return { paidAmount, paidDeal, paidRoi };
 }
 
-function nested(body) {
-  let data = body && (body.data || body.result) ? body.data || body.result : body;
-  if (typeof data === "string") {
-    try {
-      data = JSON.parse(data);
-    } catch {
-      return null;
+export function businessFieldCode(body) {
+  let current = body;
+  for (let depth = 0; depth < 4 && current && typeof current === "object"; depth += 1) {
+    const list = current.belongVos || current.belongVOList;
+    if (Array.isArray(list) && list.length) {
+      const found =
+        list.find(function (item) {
+          return item && String(item.belongType) === String(current.currentBelongType);
+        }) || list[0];
+      if (found && found.businessFieldCode) {
+        return String(found.businessFieldCode);
+      }
     }
-  }
-  if (data && data.data && typeof data.data === "object") {
-    return data.data;
-  }
-  return data;
-}
-
-function findBusinessField(node, depth) {
-  if (!node || depth > 5 || typeof node !== "object") {
-    return "";
-  }
-  if (!Array.isArray(node) && node.businessFieldCode) {
-    return String(node.businessFieldCode);
-  }
-  const values = Array.isArray(node) ? node : Object.keys(node).map(function (key) { return node[key]; });
-  for (let index = 0; index < values.length; index += 1) {
-    const found = findBusinessField(values[index], depth + 1);
-    if (found) {
-      return found;
+    const next = layerValue(current);
+    if (!next || next === current) {
+      break;
     }
+    current = next;
   }
   return "";
 }
 
-export function businessFieldCode(body) {
-  const data = nested(body);
-  if (!data || typeof data !== "object") {
-    return "";
-  }
-  const list = data.belongVos || data.belongVOList || [];
-  const current = data.currentBelongType;
-  const found =
-    (Array.isArray(list) ? list : []).find(function (item) {
-      return item && String(item.belongType) === String(current);
-    }) || (Array.isArray(list) ? list[0] : null);
-  if (found && found.businessFieldCode) {
-    return String(found.businessFieldCode);
-  }
-  return findBusinessField(data, 0);
-}
-
 export function describeShopPayload(body) {
-  const data = nested(body) || {};
+  const parts = [];
+  let current = body;
+  for (let depth = 0; depth < 3 && current && typeof current === "object" && !Array.isArray(current); depth += 1) {
+    parts.push("l" + depth + "=" + Object.keys(current).slice(0, 8).join(","));
+    const next = layerValue(current);
+    if (!next || next === current) {
+      break;
+    }
+    current = next;
+  }
+  const data = shopRoot(body);
   const channel = data && data.channelData ? data.channelData : data;
   const list = channel && (channel.indicatorList || channel.indicators);
   const rows = Array.isArray(list) ? list : [];
-  const first = rows[0] && typeof rows[0] === "object" ? rows[0] : {};
-  const keys = Object.keys(first).slice(0, 6).join(",");
-  const top = Object.keys(data && typeof data === "object" ? data : {}).slice(0, 6).join(",");
-  return (
-    "n=" + rows.length +
-    " top=" + top +
-    " keys=" + keys +
-    " code=" + (first.code == null ? "" : String(first.code).slice(0, 8)) +
-    " name=" + (first.name == null ? "" : String(first.name).slice(0, 8))
-  ).slice(0, 140);
+  return (parts.join(" ") + " n=" + rows.length).slice(0, 150);
 }
 
 export function sampleFields(metrics) {

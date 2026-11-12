@@ -449,6 +449,21 @@ function jsonReply(body, status = 200) {
   };
 }
 
+test("deal card is read from the layer that contains channel data", () => {
+  const metrics = extractShopDeal({
+    code: 200,
+    data: {
+      freeBrand: false,
+      channelData: {
+        indicatorList: [{ code: "3009", name: "成交总金额", todayNum: "12,967.90", yesterdayNum: "17920" }]
+      },
+      data: { freeBrand: false }
+    }
+  });
+  assert.equal(metrics.dealAmount, 12967.9);
+  assert.equal(metrics.yesterdayAmount, 17920);
+});
+
 test("homepage deal uses the shop card and keeps the gateway reason when it fails", async () => {
   const result = await fetchHome([{ name: "thor", value: "hidden-jar" }], async (url) => {
     if (String(url).includes("findAccountInfo")) {
