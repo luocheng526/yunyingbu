@@ -112,7 +112,10 @@
       let query = "";
 
       function money(value) {
-        return Number(value || 0).toLocaleString("zh-CN");
+        if (value == null || value === "") {
+          return "—";
+        }
+        return Number(value).toLocaleString("zh-CN");
       }
 
       function goodsOf(shop) {
@@ -183,13 +186,28 @@
 
       function sheet(shopName, rows) {
         const houses = housesFor(rows);
-        if (!houses.length) {
+        if (!rows.length) {
           return (
             '<article class="xm-jc-shop"><header><h3>' +
             escapeHtml(shopName) +
             '</h3><p>还没有样例</p></header><div class="xm-jc-wait">' +
             photo() +
             "<div><strong>抓取后显示商品</strong><p>仓名写在上面，每个仓下面是对应数量</p></div></div></article>"
+          );
+        }
+        if (!houses.length) {
+          return (
+            '<article class="xm-jc-shop"><header><h3>' +
+            escapeHtml(shopName) +
+            "</h3><p>" +
+            rows.length +
+            ' 个 SKU</p></header><div class="xm-jc-wait">' +
+            rows
+              .map(function (row) {
+                return goodsCell(row);
+              })
+              .join("") +
+            "</div></article>"
           );
         }
         const style = ' style="--jc-wh:' + houses.length + '"';

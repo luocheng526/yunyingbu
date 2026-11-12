@@ -85,11 +85,107 @@ function houseKind(name) {
   return "商家仓";
 }
 
-function qtyOf(detail) {
-  const stock = detail && detail.stockNum && typeof detail.stockNum === "object" ? detail.stockNum : null;
-  const raw = stock && stock.availableStock != null ? stock.availableStock : detail && detail.num != null ? detail.num : stock ? stock.totalStock : null;
-  const qty = Number(raw);
+function asQty(raw) {
+  if (raw == null || raw === "") {
+    return null;
+  }
+  const qty = Number(String(raw).replace(/,/g, ""));
   return Number.isFinite(qty) ? qty : null;
+}
+
+function qtyOf(detail) {
+  if (!detail || typeof detail !== "object") {
+    return null;
+  }
+  const stock = detail.stockNum && typeof detail.stockNum === "object" ? detail.stockNum : null;
+  const raw = stock && stock.availableStock != null
+    ? stock.availableStock
+    : detail.availableStock != null
+      ? detail.availableStock
+      : detail.num != null
+        ? detail.num
+        : stock && stock.totalStock != null
+          ? stock.totalStock
+          : null;
+  return asQty(raw);
+}
+
+function collectHouses(item) {
+  const found = [];
+  const seen = {};
+  function consider(node) {
+    if (!node || typeof node !== "object" || Array.isArray(node)) {
+      return;
+    }
+    const house = node.warehouse && typeof node.warehouse === "object" ? node.warehouse : node;
+    let name = String(house.sName || house.warehouseName || node.sName || node.warehouseName || "").trim();
+    if (!name) {
+      const typeName = String(node.sTypeName || "").trim();
+      if (typeName.indexOf("仓") !== -1) {
+        name = typeName;
+      }
+    }
+    if (!name || name.indexOf("全国仓") !== -1 || seen[name] || name.length > 48) {
+      return;
+    }
+    const qty = qtyOf(node);
+    const sid = house.sid != null ? house.sid : node.sid;
+    if (qty == null && sid == null) {
+      return;
+    }
+    seen[name] = true;
+    found.push({ name: name, kind: houseKind(name), qty: qty == null ? 0 : qty });
+  }
+  function walk(node, depth) {
+    if (!node || depth > 5) {
+      return;
+    }
+    if (Array.isArray(node)) {
+      node.forEach(function (child) {
+        walk(child, depth + 1);
+      });
+      return;
+    }
+    if (typeof node !== "object") {
+      return;
+    }
+    consider(node);
+    Object.keys(node).forEach(function (key) {
+      if (key === "skuInfo" || key === "logo") {
+        return;
+      }
+      walk(node[key], depth + 1);
+    });
+  }
+  walk(item, 0);
+  return found;
+}
+
+function shapeOf(item) {
+  const lines = [];
+  function walk(node, path, depth) {
+    if (lines.length > 50 || depth > 3) {
+      return;
+    }
+    if (Array.isArray(node)) {
+      lines.push(path + "[]*" + node.length);
+      if (node.length) {
+        walk(node[0], path + "[0]", depth + 1);
+      }
+      return;
+    }
+    if (node && typeof node === "object") {
+      Object.keys(node).slice(0, 20).forEach(function (key) {
+        walk(node[key], path + "." + key, depth + 1);
+      });
+      return;
+    }
+    if (typeof node === "number") {
+      lines.push(path + "=" + node);
+    }
+  }
+  walk(item, "row", 0);
+  return lines;
 }
 
 function statusOf(info) {
@@ -105,22 +201,7 @@ function toRow(item) {
   if (!sku) {
     return null;
   }
-  const seen = {};
-  const warehouses = [];
-  const details = Array.isArray(item.stockDetails) ? item.stockDetails : [];
-  details.forEach(function (detail) {
-    const house = (detail && detail.warehouse) || {};
-    const name = String(house.sName || house.warehouseName || house.name || "").trim();
-    if (!name || name.indexOf("全国仓") !== -1 || seen[name]) {
-      return;
-    }
-    const qty = qtyOf(detail);
-    if (qty == null) {
-      return;
-    }
-    seen[name] = true;
-    warehouses.push({ name: name, kind: houseKind(name), qty: qty });
-  });
+  const warehouses = collectHouses(item);
   return {
     name: String(info.skuName || info.productName || item.skuName || "").slice(0, 120),
     spu: String(info.spuId || info.productId || "").trim(),
@@ -128,7 +209,8 @@ function toRow(item) {
     code: String(info.itemNum || "").trim(),
     status: statusOf(info),
     image: imageUrl(info.logo),
-    warehouses: warehouses
+    warehouses: warehouses,
+    shape: warehouses.length ? [] : shapeOf(item)
   };
 }
 
@@ -361,14 +443,30 @@ export async function loadJingcang(storeName, deps) {
       return miss(store, classifyTransportError(browserError));
     }
   }
+  let shape = [];
+  const rows = result.rows.map(function (row) {
+    if (!shape.length && row.shape && row.shape.length) {
+      shape = row.shape;
+    }
+    return {
+      name: row.name,
+      spu: row.spu,
+      sku: row.sku,
+      code: row.code,
+      status: row.status,
+      image: row.image,
+      warehouses: row.warehouses
+    };
+  });
   return {
     ok: true,
     store: store,
     total: result.total,
-    count: result.rows.length,
+    count: rows.length,
     truncated: Boolean(result.truncated),
     source: result.source,
     capturedAt: beijingParts().stamp,
-    rows: result.rows
+    shape: shape,
+    rows: rows
   };
 }
