@@ -36,7 +36,7 @@
     mount: function (root) {
       const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
       paidCss.rel = "stylesheet";
-      paidCss.href = "/shared/shen-paid.css?v=0.1.830-jingmai-qr";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.831-jingmai-password";
       if (!paidCss.parentNode) {
         document.head.appendChild(paidCss);
       }
@@ -1891,7 +1891,7 @@
               );
             })
             .join("") +
-          '</tbody></table></div><p class="xm-hl-note">重新登录要点店名旁边的红字，用这家店的京麦 App 扫码。扫完后服务器每 5 分钟采集，本页每 60 秒读取。推广花费和广告 ROI 不从成交额推算。</p></section>' +
+          '</tbody></table></div><p class="xm-hl-note">重新登录要点店名旁边的红字，用组织中心保存的账号密码登录，并完成滑动验证。登录一次后服务器每 5 分钟采集。推广花费和广告 ROI 不从成交额推算。</p></section>' +
           '<div class="xm-sp-shop-modal" data-shop-modal hidden><form class="xm-sp-shop-dialog" data-shop-form>' +
           "<h3>新增店铺</h3><p class=\"xm-sp-shop-hint\">保存后归入沈子晗组，并出现在这份全部店铺里。登录账号在组织中心填写。</p>" +
           '<label>店铺名称<input name="storeName" required maxlength="64" autocomplete="off" /></label>' +
@@ -1902,9 +1902,8 @@
           '<div class="xm-sp-shop-actions"><button type="submit">保存</button>' +
           '<button type="button" data-shop-cancel>取消</button></div></form></div>' +
           '<div class="xm-sp-shop-modal" data-qr-modal hidden><div class="xm-sp-shop-dialog" role="dialog" aria-modal="true">' +
-          '<h3>重新登录</h3><p class="xm-sp-shop-hint" data-qr-shop></p>' +
-          '<img class="xm-hl-qr" data-qr-img alt="京麦登录二维码" />' +
-          '<p class="xm-sp-shop-hint" data-qr-state>正在打开二维码…</p>' +
+          '<h3>账号登录</h3><p class="xm-sp-shop-hint" data-qr-shop></p>' +
+          '<p class="xm-sp-shop-hint" data-qr-state>正在打开验证…</p>' +
           '<div class="xm-sp-shop-actions"><button type="button" data-qr-close>关闭</button></div></div></div>' +
           '<pre id="shen-paid-live-snapshot" hidden>' +
           JSON.stringify(snapshot).replace(/</g, "\\u003c") +
@@ -2312,6 +2311,22 @@
         }
       }
 
+      function loadCaptcha(done) {
+        if (typeof window.captchaLoadJS === "function") {
+          done();
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = "https://jcap.m.jd.com/home/requireCaptchaPc.js?v=2";
+        script.onload = function () {
+          done();
+        };
+        script.onerror = function () {
+          done(new Error("验证组件没有打开"));
+        };
+        document.head.appendChild(script);
+      }
+
       function openQr(store) {
         const name = String(store || "");
         if (!name) {
@@ -2322,63 +2337,71 @@
         qrStore = name;
         const modal = boardEl.querySelector("[data-qr-modal]");
         const shop = boardEl.querySelector("[data-qr-shop]");
-        const img = boardEl.querySelector("[data-qr-img]");
         const state = boardEl.querySelector("[data-qr-state]");
-        if (!modal || !img || !state) {
+        if (!modal || !state) {
           return;
         }
         modal.hidden = false;
         if (shop) {
-          shop.textContent = "用「" + name + "」的京麦 App 扫这个码，并在手机上点确认。";
+          shop.textContent = "使用组织中心保存的账号登录「" + name + "」。请完成滑动验证。";
         }
-        img.removeAttribute("src");
-        state.textContent = "正在打开二维码…";
+        state.textContent = "正在打开验证…";
         postJson("/api/shen/paid/jingmai/relogin", { store: name })
           .then(function (result) {
             if (qrStore !== name) {
               return;
             }
-            if (result && result.image) {
-              img.src = "data:image/png;base64," + result.image;
+            if (!result || !result.sessionId) {
+              state.textContent = (result && result.message) || "登录没有打开";
+              return;
             }
-            state.textContent = "等待扫码";
-            qrTimer = window.setInterval(function () {
+            state.textContent = "请完成滑动验证";
+            loadCaptcha(function (err) {
               if (qrStore !== name) {
                 return;
               }
-              getJson("/api/shen/paid/jingmai/relogin?store=" + encodeURIComponent(name))
-                .then(function (polled) {
-                  if (qrStore !== name) {
-                    return;
+              if (err || typeof window.captchaLoadJS !== "function") {
+                state.textContent = "验证组件没有打开";
+                return;
+              }
+              window.captchaLoadJS(
+                {
+                  sessionId: result.sessionId,
+                  language: "1",
+                  onSuccess: function (payload) {
+                    const token = (payload && (payload.vt || payload.validate || payload.token)) || "";
+                    state.textContent = "正在登录…";
+                    postJson("/api/shen/paid/jingmai/relogin/finish", { store: name, authCode: token })
+                      .then(function (done) {
+                        if (done && done.status === "ok") {
+                          closeQr();
+                          setStatus(name + " 已登录");
+                          load();
+                          return;
+                        }
+                        state.textContent = (done && done.message) || "登录没有通过，请再试一次";
+                      })
+                      .catch(function (error) {
+                        state.textContent = error.message || "登录没有通过，请再试一次";
+                      });
+                  },
+                  onFailure: function () {
+                    state.textContent = "验证没通过，请关闭后重试";
+                  },
+                  onCancel: function () {
+                    state.textContent = "已取消验证";
                   }
-                  const step = polled && polled.status;
-                  if (step === "confirm") {
-                    state.textContent = "已扫码，请在手机上点确认";
-                    return;
+                },
+                function (instance) {
+                  if (instance && instance.create) {
+                    instance.create({ account: result.loginName || "" });
                   }
-                  if (step === "ok") {
-                    closeQr();
-                    setStatus(name + " 已重新登录");
-                    load();
-                    return;
-                  }
-                  if (step === "expired" || step === "cancelled" || step === "missing") {
-                    state.textContent = "二维码已失效，请关闭后重新打开";
-                    return;
-                  }
-                  if (step === "login") {
-                    state.textContent = (polled && polled.message) || "请用这家店的京麦再扫一次";
-                  }
-                })
-                .catch(function () {
-                  if (qrStore === name) {
-                    state.textContent = "还在等待扫码";
-                  }
-                });
-            }, 2000);
+                }
+              );
+            });
           })
           .catch(function (err) {
-            state.textContent = err.message || "二维码打开失败";
+            state.textContent = err.message || "登录没有打开";
           });
       }
 

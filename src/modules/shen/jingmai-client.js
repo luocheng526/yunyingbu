@@ -1,9 +1,14 @@
+import crypto from "node:crypto";
+import vm from "node:vm";
 import { classifyTransportError, jingmaiError, parseRealtime } from "./jingmai.js";
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
 const SUMMARY_URL = "https://sz.jd.com/sz/api/realtime/realtimeSummary/getSummary.ajax?channel=99";
 const LOGIN_PAGE = "https://passport.shop.jd.com/login/index.action?ReturnUrl=" + encodeURIComponent("https://sz.jd.com/");
+const PASSWORD_INIT = "https://passport.jd.com/login/component/v1/init";
+const PASSWORD_SUBMIT = "https://passport.jd.com/login/component/v1/loginSubmit";
+const SUMMER_URL = "https://jrsecstatic.jdpay.com/jr-sec-dev-static/summer-cryptico-h5.min.js";
 const LOGIN_POST = "https://passport.shop.jd.com/login/doLogin";
 const SESSION_COOKIES = new Set(["thor", "pin", "pt_key", "pt_pin", "flash", "light_key"]);
 
@@ -208,6 +213,143 @@ export async function pollQrLogin({ uuid, jar, fetchImpl = fetch }) {
   };
 }
 
+export function passwordFailureMessage(body) {
+  const data = body && body.data ? body.data : {};
+  if (data.emptyAuthcode) {
+    return "请先完成滑动验证";
+  }
+  return "账号或密码不正确";
+}
+
+let summerEncrypt = null;
+
+async function encryptPayload(publicKey, text, fetchImpl) {
+  if (!summerEncrypt) {
+    const response = await fetchImpl(SUMMER_URL);
+    const source = await response.text();
+    const sandbox = {
+      console,
+      navigator: { userAgent: UA },
+      document: { createElement: function () { return {}; } },
+      atob: function (value) {
+        return Buffer.from(value, "base64").toString("binary");
+      },
+      btoa: function (value) {
+        return Buffer.from(value, "binary").toString("base64");
+      }
+    };
+    sandbox.window = sandbox;
+    sandbox.self = sandbox;
+    sandbox.globalThis = sandbox;
+    vm.createContext(sandbox);
+    vm.runInContext(source, sandbox);
+    summerEncrypt = sandbox.SummerCryptico.encryptData.bind(sandbox.SummerCryptico);
+  }
+  return summerEncrypt(publicKey, text);
+}
+
+function rsaPassword(publicKey, password) {
+  const pem = "-----BEGIN PUBLIC KEY-----\n" + String(publicKey).match(/.{1,64}/g).join("\n") + "\n-----END PUBLIC KEY-----\n";
+  return crypto.publicEncrypt({ key: pem, padding: crypto.constants.RSA_PKCS1_PADDING }, Buffer.from(password)).toString("base64");
+}
+
+export async function openPasswordSession(fetchImpl = fetch) {
+  const jar = [];
+  const response = await request(fetchImpl, jar, PASSWORD_INIT, {
+    method: "POST",
+    body: "source=pop_new&channel=pc&nr=1&h5st=none&seqSid=none&eid=NONE&fp=NONE&ssoDomains=sso.jd.com",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+      origin: "https://passport.shop.jd.com",
+      referer: "https://passport.shop.jd.com/login/index.action",
+      "x-requested-with": "XMLHttpRequest"
+    }
+  });
+  const body = JSON.parse(await response.text());
+  const data = body.data || {};
+  if (body.code !== 1 || !data.publicKey || !data.aksPublicKey) {
+    throw jingmaiError("network", "京麦登录暂时开不了");
+  }
+  const captcha = data.graphicCaptcha || {};
+  return {
+    sessionId: captcha.graphicCaptchaSessionId || "",
+    jar: jar.map(function (item) {
+      return { name: item.name, value: item.value };
+    }),
+    init: {
+      uuid: data.uuid,
+      loginId: data.loginId,
+      saToken: data.sa_token,
+      publicKey: data.publicKey,
+      aksPublicKey: data.aksPublicKey,
+      useSlideAuthCode: data.useSlideAuthCode,
+      jwt: captcha.graphicCaptchaJwtToken || "",
+      sessionId: captcha.graphicCaptchaSessionId || ""
+    }
+  };
+}
+
+export async function submitPasswordSession({ jar, init, loginName, password, authCode, fetchImpl = fetch }) {
+  const next = (jar || []).map(function (item) {
+    return { name: item.name, value: item.value };
+  });
+  const payload = {
+    source: "pop_new",
+    eid: "NONE",
+    fp: "NONE",
+    seqSid: "none",
+    ssoDomains: "sso.jd.com",
+    channel: "pc",
+    h5st: "none",
+    nr: 1,
+    uuid: init.uuid,
+    loginId: init.loginId,
+    saToken: init.saToken,
+    publicKey: init.publicKey,
+    useSlideAuthCode: init.useSlideAuthCode,
+    loginName: loginName,
+    loginPwd: rsaPassword(init.publicKey, password),
+    _stk: loginName,
+    authCode: authCode || "",
+    ReturnUrl: "https://shop.jd.com",
+    graphicCaptchaJwtToken: init.jwt || "",
+    graphicCaptchaSessionId: init.sessionId || "",
+    graphicCaptchaVerifyToken: authCode || ""
+  };
+  const cipher = await encryptPayload(init.aksPublicKey, new URLSearchParams(payload).toString(), fetchImpl);
+  const response = await request(fetchImpl, next, PASSWORD_SUBMIT, {
+    method: "POST",
+    body: new URLSearchParams({ aksParamsB: cipher }).toString(),
+    headers: {
+      accept: "application/json",
+      "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+      origin: "https://passport.shop.jd.com",
+      referer: "https://passport.shop.jd.com/login/index.action",
+      "x-requested-with": "XMLHttpRequest"
+    }
+  });
+  const body = JSON.parse(await response.text());
+  if (body.code !== 1) {
+    throw jingmaiError("login", passwordFailureMessage(body));
+  }
+  let location = (body.data && (body.data.returnUrl || body.data.redirectUrl)) || "https://shop.jd.com/";
+  let hops = 0;
+  while (location && hops < 5) {
+    const followed = await request(fetchImpl, next, location, {
+      headers: { referer: "https://passport.shop.jd.com/login/index.action" }
+    });
+    await followed.arrayBuffer();
+    const jump = followed.headers.get("location") || "";
+    if (followed.status < 300 || followed.status >= 400 || !jump) {
+      break;
+    }
+    location = new URL(jump, location).toString();
+    hops += 1;
+  }
+  return next;
+}
+
 export async function fetchHome(jar, fetchImpl = fetch) {
   const response = await request(fetchImpl, jar.slice(), SUMMARY_URL, {
     headers: {
@@ -223,5 +365,7 @@ export const jingmaiClient = {
   login: loginShop,
   fetchHome: fetchHome,
   startQr: startQrLogin,
-  pollQr: pollQrLogin
+  pollQr: pollQrLogin,
+  openPassword: openPasswordSession,
+  submitPassword: submitPasswordSession
 };

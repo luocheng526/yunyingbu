@@ -5,6 +5,7 @@ import { listCollectTargets, markAuth, readJingmaiLive, saveSample, saveSession,
 const INTERVAL_MS = 5 * 60 * 1000;
 const inflight = new Set();
 const qrPending = new Map();
+const passwordPending = new Map();
 
 const defaultDeps = {
   loadOrg: loadOrgShops,
@@ -20,6 +21,10 @@ export function setJingmaiDeps(next) {
 export function resetJingmaiDeps() {
   deps = defaultDeps;
   qrPending.clear();
+  for (const pending of passwordPending.values()) {
+    pending.password = "";
+  }
+  passwordPending.clear();
 }
 
 export async function loadOrgShops(cookie, fetchImpl = fetch) {
@@ -127,36 +132,57 @@ export async function jingmaiLive() {
   return readJingmaiLive();
 }
 
-export async function beginRelogin(store) {
+export async function beginRelogin(store, cookie) {
   const name = String(store || "").trim();
   if (!name) {
     const error = new Error("请选择店铺");
     error.statusCode = 400;
     throw error;
   }
-  const started = await deps.client.startQr();
-  qrPending.set(name, { uuid: started.uuid, jar: started.jar });
-  return { ok: true, store: name, status: "waiting", image: started.image };
+  const shops = await deps.loadOrg(cookie || "");
+  const shop = shops.find(function (item) {
+    return item.store === name;
+  });
+  if (!shop || shop.enabled === false) {
+    return { ok: true, store: name, status: "login", message: "这家店已停用" };
+  }
+  if (!shop.login || !shop.password) {
+    return { ok: true, store: name, status: "login", message: "组织中心还没有填写这家店的账号" };
+  }
+  const opened = await deps.client.openPassword();
+  const previous = passwordPending.get(name);
+  if (previous) {
+    previous.password = "";
+  }
+  passwordPending.set(name, {
+    jar: opened.jar,
+    init: opened.init,
+    loginName: shop.login,
+    password: shop.password
+  });
+  shop.password = "";
+  return { ok: true, store: name, status: "captcha", sessionId: opened.sessionId, loginName: shop.login };
 }
 
-export async function pollRelogin(store) {
+export async function finishRelogin(store, authCode) {
   const name = String(store || "").trim();
-  const pending = qrPending.get(name);
+  const pending = passwordPending.get(name);
   if (!pending) {
-    return { ok: true, store: name, status: "missing" };
+    return { ok: true, store: name, status: "missing", message: "请重新打开登录" };
   }
-  const polled = await deps.client.pollQr(pending);
-  pending.jar = polled.jar;
-  if (polled.status === "expired" || polled.status === "cancelled") {
-    qrPending.delete(name);
-    return { ok: true, store: name, status: polled.status };
-  }
-  if (polled.status !== "ok") {
-    return { ok: true, store: name, status: polled.status };
-  }
+  const password = pending.password;
+  pending.password = "";
+  passwordPending.delete(name);
   try {
-    const metrics = await deps.client.fetchHome(polled.jar);
-    await saveSession(name, { cookies: polled.jar, authState: "ok", authMessage: "", enabled: true });
+    const jar = await deps.client.submitPassword({
+      jar: pending.jar,
+      init: pending.init,
+      loginName: pending.loginName,
+      password: password,
+      authCode: authCode || ""
+    });
+    const metrics = await deps.client.fetchHome(jar);
+    await saveSession(name, { cookies: jar, authState: "ok", authMessage: "", enabled: true });
     const now = beijingParts();
     await saveSample({
       store: name,
@@ -168,13 +194,10 @@ export async function pollRelogin(store) {
       yesterdayAmount: metrics.yesterdayAmount,
       ok: true
     });
-    qrPending.delete(name);
     return { ok: true, store: name, status: "ok" };
   } catch (error) {
-    if (error && error.code === "login") {
-      return { ok: true, store: name, status: "login", message: "扫码未完成，请用这家店的京麦再扫一次" };
-    }
-    return { ok: true, store: name, status: "waiting" };
+    const message = error && error.code === "login" ? error.message : "登录没有通过，请再试一次";
+    return { ok: true, store: name, status: "login", message: message };
   }
 }
 

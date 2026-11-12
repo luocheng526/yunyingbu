@@ -2,8 +2,8 @@ import { Router } from "express";
 import {
   beginRelogin,
   connectJingmai,
+  finishRelogin,
   jingmaiLive,
-  pollRelogin,
   startJingmaiCollector,
   updateJingmaiRoster
 } from "./jingmai-runner.js";
@@ -151,17 +151,17 @@ shenRouter.get("/paid/jingmai", async (_req, res) => {
 
 shenRouter.post("/paid/jingmai/relogin", async (req, res) => {
   try {
-    res.json(await beginRelogin(req.body && req.body.store));
+    res.json(await beginRelogin(req.body && req.body.store, req.headers.cookie || ""));
   } catch (err) {
-    res.status(err.statusCode || 500).json({ error: err.message || "无法打开京麦二维码" });
+    res.status(err.statusCode || 500).json({ error: err.message || "无法登录京麦" });
   }
 });
 
-shenRouter.get("/paid/jingmai/relogin", async (req, res) => {
+shenRouter.post("/paid/jingmai/relogin/finish", async (req, res) => {
   try {
-    res.json(await pollRelogin(req.query.store));
+    res.json(await finishRelogin(req.body && req.body.store, req.body && req.body.authCode));
   } catch (err) {
-    res.status(err.statusCode || 500).json({ error: err.message || "无法确认京麦扫码" });
+    res.status(err.statusCode || 500).json({ error: err.message || "无法登录京麦" });
   }
 });
 

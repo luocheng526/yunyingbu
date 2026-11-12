@@ -4,7 +4,8 @@ import test from "node:test";
 import { createApp } from "../src/app.js";
 import { buildLiveView, hoursFromSamples, jingmaiError, parseRealtime, runTick } from "../src/modules/shen/jingmai.js";
 import { interpretQrCheck } from "../src/modules/shen/jingmai-client.js";
-import { beginRelogin, connectJingmai, pollRelogin, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/shen/jingmai-runner.js";
+import { passwordFailureMessage } from "../src/modules/shen/jingmai-client.js";
+import { beginRelogin, connectJingmai, finishRelogin, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/shen/jingmai-runner.js";
 import { listSessions, readJingmaiLive, resetJingmaiStore, saveSample, saveSession } from "../src/modules/shen/jingmai-store.js";
 
 const now = { day: "2026-11-12", stamp: "2026-11-12 11:05:00", hour: 11, clock: "11:05:00" };
@@ -220,33 +221,38 @@ test("connect timeout does not mark the shop logged out", async () => {
   }
 });
 
-test("qr states stay distinct and a confirmed scan saves the deal without returning the session", async () => {
-  assert.equal(interpretQrCheck({ resultInfo: { result: { state: "10" } } }), "waiting");
-  assert.equal(interpretQrCheck({ resultInfo: { result: { state: "0" } } }), "confirm");
-  assert.equal(interpretQrCheck({ resultInfo: { result: { state: "1" } } }), "ok");
+test("password login uses the saved account and does not return it", async () => {
+  assert.equal(passwordFailureMessage({ data: { emptyAuthcode: true } }), "请先完成滑动验证");
+  assert.equal(passwordFailureMessage({ code: 0, data: { failCode: 2 } }), "账号或密码不正确");
   assert.equal(interpretQrCheck({ resultInfo: { result: { state: "11" } } }), "expired");
-  assert.equal(interpretQrCheck({ resultInfo: { result: { state: "213" } } }), "cancelled");
   await resetJingmaiStore();
+  let seenPassword = "";
   setJingmaiDeps({
+    loadOrg: async () => [{ store: "甲店", enabled: true, login: "seller", password: "secret-pass" }],
     client: {
-      startQr: async () => ({ uuid: "abc", image: "aW1n", jar: [{ name: "QRCodeKEY", value: "hidden-jar" }] }),
-      pollQr: async () => ({ status: "ok", jar: [{ name: "thor", value: "hidden-jar" }] }),
+      openPassword: async () => ({ sessionId: "sid", jar: [], init: { publicKey: "x" } }),
+      submitPassword: async ({ password, authCode }) => {
+        seenPassword = password;
+        assert.equal(authCode, "slide-token");
+        return [{ name: "thor", value: "hidden-jar" }];
+      },
       fetchHome: async () => ({ dealAmount: 0, orderCount: 1, customerCount: 1, yesterdayAmount: null })
     }
   });
   try {
-    const opened = await beginRelogin("甲店");
-    assert.equal(opened.status, "waiting");
-    assert.equal(opened.image, "aW1n");
-    assert.equal(JSON.stringify(opened).includes("hidden-jar"), false);
-    const done = await pollRelogin("甲店");
+    const opened = await beginRelogin("甲店", "mk_sid=test");
+    assert.equal(opened.status, "captcha");
+    assert.equal(opened.sessionId, "sid");
+    assert.equal(JSON.stringify(opened).includes("secret-pass"), false);
+    const done = await finishRelogin("甲店", "slide-token");
+    assert.equal(seenPassword, "secret-pass");
     assert.equal(done.status, "ok");
+    assert.equal(JSON.stringify(done).includes("secret-pass"), false);
     assert.equal(JSON.stringify(done).includes("hidden-jar"), false);
     const live = await readJingmaiLive();
     const shop = live.shops.find((item) => item.shop === "甲店");
     assert.equal(shop.dealAmount, 0);
     assert.equal(shop.loginExpired, false);
-    assert.equal(JSON.stringify(live).includes("hidden-jar"), false);
   } finally {
     resetJingmaiDeps();
     await resetJingmaiStore();
