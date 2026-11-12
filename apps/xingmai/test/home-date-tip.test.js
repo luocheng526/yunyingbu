@@ -192,7 +192,7 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function seesAllLiveShops/);
   assert.match(homeJs, /\/api\/home\/local-paid/);
   assert.match(homeJs, /xm-hm-live-at">更新时间 /);
-  assert.match(homeJs, /实时付费来自韩梦凯、沈子晗本地机回传，不接星脉/);
+  assert.match(homeJs, /实时看板汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」/);
   assert.match(homeJs, /\/api\/home\/erp-paid/);
   assert.match(homeJs, /function seriesOf/);
   assert.match(homeJs, /function todayHours/);
@@ -1112,7 +1112,7 @@ test("live header settings add 付费中心 columns without wiring data", () => 
   assert.match(homeJs, /京准通总订单金额/);
   assert.match(homeJs, /真实费比/);
   assert.match(homeJs, /是否成功/);
-  assert.match(homeJs, /付费中心（数据待对接）/);
+  assert.match(homeJs, /付费中心（韩梦凯实时付费 \/ 沈子晗付费中心）/);
   assert.match(homeJs, /勾选店铺表要显示的列/);
   assert.doesNotMatch(homeJs, /付费中心表头先挂上/);
   assert.match(homeJs, /data-live-head/);

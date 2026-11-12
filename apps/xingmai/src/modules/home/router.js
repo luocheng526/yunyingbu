@@ -34,8 +34,16 @@ export function homeRouter() {
     }
   });
 
-  router.get("/local-paid", (_req, res) => {
-    res.json(getHomeLocalPaid());
+  router.get("/local-paid", async (req, res) => {
+    try {
+      res.json(await getHomeLocalPaid(req));
+    } catch (err) {
+      res.status(502).json({
+        ok: false,
+        source: "han-shen-local",
+        error: err.message || "韩梦凯/沈子晗实时付费汇总失败"
+      });
+    }
   });
 
   router.get("/erp-paid", async (_req, res) => {
