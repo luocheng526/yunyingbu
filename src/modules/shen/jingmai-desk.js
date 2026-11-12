@@ -1,13 +1,35 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, createWriteStream, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 
 const LOGIN_URL =
   "https://passport.shop.jd.com/login/index.action/jdm?ReturnUrl=" + encodeURIComponent("https://shop.jd.com/");
+const CHROME_VERSION = "157.0.8103.78";
+const CHROME_URL =
+  "https://cdn.npmmirror.com/binaries/chrome-for-testing/" +
+  CHROME_VERSION +
+  "/linux64/chrome-headless-shell-linux64.zip";
 const SESSION_NAMES = new Set(["thor", "pt_key"]);
 
 let current = null;
+let chromeInstall = null;
+
+function chromeHomes() {
+  return [process.env.SHEN_CHROME_DIR, "/tmp/shen-chrome", "/opt/mengkai/.shen-chrome"].filter(Boolean);
+}
+
+function installedBinary() {
+  for (const home of chromeHomes()) {
+    const bin = home + "/chrome-headless-shell-linux64/chrome-headless-shell";
+    if (existsSync(bin)) {
+      return bin;
+    }
+  }
+  return "";
+}
 
 export function findChrome() {
   const candidates = [
@@ -16,11 +38,81 @@ export function findChrome() {
     "/usr/bin/google-chrome-stable",
     "/usr/bin/chromium",
     "/usr/bin/chromium-browser",
-    "/opt/google/chrome/chrome"
+    "/opt/google/chrome/chrome",
+    installedBinary()
   ];
   return candidates.find(function (path) {
     return path && existsSync(path);
   }) || "";
+}
+
+function extractZip(zip, dir) {
+  return new Promise(function (resolve, reject) {
+    let settled = false;
+    function finish(error) {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (error) reject(error);
+      else resolve();
+    }
+    function runUnzip() {
+      const unzip = spawn("unzip", ["-o", zip, "-d", dir], { stdio: "ignore" });
+      unzip.on("error", function () {
+        finish(new Error("unzip"));
+      });
+      unzip.on("exit", function (code) {
+        finish(code === 0 ? null : new Error("unzip"));
+      });
+    }
+    const python = spawn("python3", ["-c", "import sys,zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])", zip, dir], { stdio: "ignore" });
+    python.on("error", runUnzip);
+    python.on("exit", function (code) {
+      if (code === 0) finish(null);
+      else runUnzip();
+    });
+  });
+}
+
+async function installChrome() {
+  let lastError = null;
+  for (const home of chromeHomes()) {
+    try {
+      mkdirSync(home, { recursive: true });
+      const zip = home + "/chrome.zip";
+      const response = await fetch(CHROME_URL, { signal: AbortSignal.timeout(120000) });
+      if (!response.ok || !response.body) {
+        throw new Error("download");
+      }
+      await pipeline(Readable.fromWeb(response.body), createWriteStream(zip));
+      await extractZip(zip, home);
+      const bin = home + "/chrome-headless-shell-linux64/chrome-headless-shell";
+      chmodSync(bin, 0o755);
+      rmSync(zip, { force: true });
+      return bin;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  const failure = new Error("服务器上还没有浏览器，账号登录开不了");
+  failure.code = "browser";
+  failure.cause = lastError;
+  throw failure;
+}
+
+export function ensureChrome() {
+  const existing = findChrome();
+  if (existing) {
+    return Promise.resolve(existing);
+  }
+  if (!chromeInstall) {
+    chromeInstall = installChrome().catch(function (error) {
+      chromeInstall = null;
+      throw error;
+    });
+  }
+  return chromeInstall;
 }
 
 function send(ws, method, params) {
@@ -108,7 +200,17 @@ function connectSocket(url) {
 }
 
 async function launchChrome() {
-  const chromePath = findChrome();
+  let chromePath = "";
+  try {
+    chromePath = await ensureChrome();
+  } catch (error) {
+    if (error && error.code === "browser") {
+      throw error;
+    }
+    const wrapped = new Error("服务器上还没有浏览器，账号登录开不了");
+    wrapped.code = "browser";
+    throw wrapped;
+  }
   if (!chromePath) {
     const error = new Error("服务器上还没有浏览器，账号登录开不了");
     error.code = "browser";

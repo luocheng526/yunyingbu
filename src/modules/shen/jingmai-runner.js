@@ -1,4 +1,4 @@
-import { browserReady, jingmaiDesk } from "./jingmai-desk.js";
+import { browserReady, ensureChrome, jingmaiDesk } from "./jingmai-desk.js";
 import { jingmaiClient } from "./jingmai-client.js";
 import { beijingParts, runTick } from "./jingmai.js";
 import { listCollectTargets, listSessions, markAuth, readJingmaiLive, saveSample, saveSession, setRoster } from "./jingmai-store.js";
@@ -416,6 +416,7 @@ export function startJingmaiCollector() {
     return;
   }
   globalThis.__shenJingmaiStarted = true;
+  ensureChrome().catch(function () {});
   const timer = setInterval(function () {
     jingmaiTick().catch(function (error) {
       console.error("jingmai tick", error && error.code ? error.code : "failed");
