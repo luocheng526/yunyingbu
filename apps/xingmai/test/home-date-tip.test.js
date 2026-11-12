@@ -147,7 +147,7 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function shopMetricsFrom/);
   assert.match(homeJs, /function shopCols/);
   assert.match(homeJs, /SHOP_CARD_KEYS = \["adRatio", "profit", "grossMargin", "refundRate", "netGoodsCost"\]/);
-  assert.match(homeJs, /LIVE_CARD_KEYS = \["ad", "roi", "livePay", "livePaid"\]/);
+  assert.match(homeJs, /LIVE_CARD_KEYS = \["livePay", "roi", "livePaid", "liveAt"\]/);
   assert.match(homeJs, /xm-home-live-card-order/);
   assert.match(homeJs, /function applyLiveCardMove/);
   assert.match(homeJs, /function liveRowPad/);
@@ -168,11 +168,14 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /\.xm-hm-live\{display:flex;flex-direction:column;gap:20px\}/);
   assert.match(homeJs, /\.xm-hm-live-charts\{display:grid;grid-template-columns:1fr 1fr;gap:20px\}/);
   assert.match(homeJs, /\.xm-hm-live-cards\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\);gap:20px/);
-  assert.match(homeJs, /paid: \{ label: "实时费比"/);
+  assert.match(homeJs, /label: "推广总花费"/);
+  assert.match(homeJs, /function spendChartOf/);
+  assert.match(homeJs, /function liveCardsOf/);
+  assert.doesNotMatch(homeJs, /key: "ad", label: "推广花费 \(支付预估\)", value:/);
   assert.match(homeJs, /label: "京麦面板实时金额"/);
   assert.doesNotMatch(homeJs, /label: "实时销售指数"/);
   assert.match(homeJs, /key: "livePaid", label: "实时付费接入店铺数量"/);
-  assert.match(homeJs, /label: "实时付费接入店铺数量", value: "0"/);
+  assert.match(homeJs, /key: "liveAt", label: "更新时间"/);
   assert.match(homeJs, /function fillLocalPaid/);
   assert.match(homeJs, /function liveBoardOf/);
   assert.match(homeJs, /function livePickKeys/);

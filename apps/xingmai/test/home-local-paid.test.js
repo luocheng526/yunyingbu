@@ -47,7 +47,8 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.match(homeJs, /function pullLocalPaid/);
   assert.match(homeJs, /\/api\/home\/local-paid/);
   assert.match(homeJs, /paidAmount: "—"/);
-  assert.match(homeJs, /label: "实时付费接入店铺数量", value: "0"/);
+  assert.match(homeJs, /function liveCardsOf/);
+  assert.match(homeJs, /label: "实时付费接入店铺数量"/);
   assert.match(homeJs, /实时付费来自韩梦凯、沈子晗本地机回传，不接星脉/);
   assert.match(homeJs, /if \(stampClock \|\| !state\.liveAt\)/);
   assert.match(homeJs, /timeZone: "Asia\/Shanghai"/);
@@ -73,16 +74,25 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
       pick("fmtMoney") +
       pick("fmtRate") +
       pick("fmtRoi") +
+      pick("trendOf") +
+      pick("liveAtText") +
+      pick("padHours") +
+      pick("shanghaiHour") +
+      pick("todayHours") +
+      pick("seriesOf") +
+      pick("cumHours") +
       pick("blankLive") +
       pick("escapeHtml") +
       pick("sumLocalPaid") +
+      pick("spendChartOf") +
+      pick("liveCardsOf") +
       homeJs.slice(start, end) +
       "return {fillLocalPaid,emptyLocalPaid};"
   )();
   const live = {
     shops: [{ shop: "A店", liveAmount: "9", paidAmount: "—", roi: "—", paidDeal: "—", feeRate: "—" }],
     cards: [],
-    paid: { label: "实时费比", value: "—" }
+    paid: { label: "推广总花费", value: "—" }
   };
   const empty = fns.fillLocalPaid(live, fns.emptyLocalPaid());
   assert.equal(empty.shops[0].paidAmount, "—");
@@ -91,5 +101,9 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
     summary: { spend: 12, paidDeal: 100, feeRate: 0.12 }
   });
   assert.equal(filled.shops[0].paidAmount, "12");
+  assert.equal(filled.paid.label, "推广总花费");
+  assert.equal(filled.paid.value, "12");
   assert.equal(filled.cards.find((card) => card.key === "livePaid").value, "1");
+  assert.equal(filled.cards.find((card) => card.key === "ad"), undefined);
+  assert.equal(filled.cards.find((card) => card.key === "liveAt").label, "更新时间");
 });
