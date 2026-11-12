@@ -1,5 +1,5 @@
 /** Homepage script URL. Must not use /shared/modules/home.js?v=… — that URL is immutable for 24h. */
-export const HOME_CLIENT_JS = "/api/home/client.js?v=0.1.819-home-liveaxis";
+export const HOME_CLIENT_JS = "/api/home/client.js?v=0.1.821-home-feerange";
 
 export function rewriteHomeModuleUrl(html) {
   return String(html || "").replace(
