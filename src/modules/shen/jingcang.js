@@ -10,9 +10,14 @@ const PAGE_SIZE = 50;
 const MAX_PAGES = 30;
 
 let hooks = {};
+let currentJob = null;
 
 export function setJingcangHooks(next) {
   hooks = next || {};
+}
+
+export function resetJingcangJob() {
+  currentJob = null;
 }
 
 export function stockQuery(pageNo, pageSize) {
@@ -202,13 +207,13 @@ function readBody(status, text, location) {
 
 async function postStock(jar, fetchImpl, pageNo) {
   let last = null;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       const response = await fetchImpl(stockUrl(), {
         method: "POST",
         redirect: "manual",
         body: JSON.stringify(stockQuery(pageNo, PAGE_SIZE)),
-        signal: AbortSignal.timeout(20000),
+        signal: AbortSignal.timeout(8000),
         headers: {
           accept: "application/json, text/plain, */*",
           "content-type": "application/json;charset=UTF-8",
@@ -223,7 +228,7 @@ async function postStock(jar, fetchImpl, pageNo) {
       return readBody(response.status, await response.text(), response.headers.get("location"));
     } catch (error) {
       const classified = classifyTransportError(error);
-      if (classified.code === "login" || attempt === 2 || !/601|操作频繁/.test(classified.message || "")) {
+      if (classified.code === "login" || attempt === 1 || !/601|操作频繁/.test(classified.message || "")) {
         throw classified;
       }
       last = classified;
@@ -286,6 +291,44 @@ async function fetchOverPage(jar, readBrowser) {
 
 function miss(store, error) {
   return { ok: false, store: store, error: safeNote(error), rows: [], capturedAt: beijingParts().stamp };
+}
+
+export function watchJingcang(storeName) {
+  const store = String(storeName || JINGCANG_TEST_STORE).trim() || JINGCANG_TEST_STORE;
+  if (store !== JINGCANG_TEST_STORE) {
+    const error = jingmaiError("network", "这次只抓取RASW潮流生活旗舰店");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (currentJob && currentJob.store === store && currentJob.result && currentJob.result.ok) {
+    return Promise.resolve(currentJob.result);
+  }
+  if (!currentJob || currentJob.store !== store || !currentJob.pending) {
+    const promise = loadJingcang(store).then(function (result) {
+      if (currentJob && currentJob.promise === promise) {
+        currentJob.pending = false;
+        currentJob.result = result;
+      }
+      return result;
+    });
+    currentJob = { store: store, pending: true, result: null, promise: promise };
+  }
+  const promise = currentJob.promise;
+  return new Promise(function (resolve) {
+    const timer = setTimeout(function () {
+      resolve({ ok: false, pending: true, store: store, rows: [] });
+    }, 8000);
+    promise.then(
+      function (result) {
+        clearTimeout(timer);
+        resolve(result);
+      },
+      function () {
+        clearTimeout(timer);
+        resolve({ ok: false, store: store, error: "京仓库存没有返回", rows: [] });
+      }
+    );
+  });
 }
 
 export async function loadJingcang(storeName, deps) {

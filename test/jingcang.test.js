@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
-import { JINGCANG_TEST_STORE, loadJingcang, parseStockPage, setJingcangHooks, stockQuery } from "../src/modules/shen/jingcang.js";
+import { JINGCANG_TEST_STORE, loadJingcang, parseStockPage, resetJingcangJob, setJingcangHooks, stockQuery } from "../src/modules/shen/jingcang.js";
 import { listSessions, resetJingmaiStore, saveSession } from "../src/modules/shen/jingmai-store.js";
 
 const SECRET = "shop-session-value";
@@ -144,6 +144,7 @@ test("an unsigned DSM reply falls back to the inventory page", async () => {
 
 test("GET /api/shen/jingcang only serves the one test shop", async () => {
   await resetJingmaiStore();
+  resetJingcangJob();
   setJingcangHooks({
     fetchImpl: async function () {
       return jsonResponse(page([stockRow("1023541407306", [house("无锡常温C平台仓13号库-CHN", 36)])], 1));
@@ -170,6 +171,7 @@ test("GET /api/shen/jingcang only serves the one test shop", async () => {
     assert.equal(other.status, 400);
   } finally {
     setJingcangHooks(null);
+    resetJingcangJob();
     await resetJingmaiStore();
     await new Promise(function (resolve) { server.close(resolve); });
   }

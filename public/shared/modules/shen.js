@@ -362,12 +362,23 @@
           leadEl.textContent = lead;
         }
       }
-      fetch("/api/shen/jingcang?store=" + encodeURIComponent(liveShop), { headers: { accept: "application/json" } })
+      let pulls = 0;
+      function pullStock() {
+        if (!alive || pulls > 90) {
+          return;
+        }
+        pulls += 1;
+        fetch("/api/shen/jingcang?store=" + encodeURIComponent(liveShop), { headers: { accept: "application/json" } })
         .then(function (res) {
           return res.json();
         })
         .then(function (payload) {
           if (!alive) {
+            return;
+          }
+          if (payload && payload.pending) {
+            say("抓取中", "正在从京麦翻 " + liveShop + " 的库存。");
+            setTimeout(pullStock, 2000);
             return;
           }
           const rows = payload && Array.isArray(payload.rows) ? payload.rows : [];
@@ -409,6 +420,8 @@
             say("版式", "京仓接口没有打开，下面仍是版式。");
           }
         });
+      }
+      pullStock();
       return function unmount() {
         alive = false;
         root.innerHTML = "";
