@@ -36,7 +36,7 @@
     mount: function (root) {
       const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
       paidCss.rel = "stylesheet";
-      paidCss.href = "/shared/shen-paid.css?v=0.1.824-dc-live";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.828-home-live";
       if (!paidCss.parentNode) {
         document.head.appendChild(paidCss);
       }
@@ -1214,30 +1214,79 @@
         });
       }
 
-      function applyLiveMetrics(rows, payloads) {
-        const byName = {};
-        (payloads || []).forEach(function (payload) {
-          liveShopsOf(payload).forEach(function (shop) {
-            const key = shopKey(shop.shop || shop.shopName || shop.name);
-            if (key) {
-              byName[key] = shop;
-            }
-          });
+      const HOME_COLS = [
+        { key: "rank", label: "排名", lock: true, w: "56px" },
+        { key: "shop", label: "店铺名称", lock: true, w: "16%" },
+        { key: "liveAmount", label: "实时成交金额" },
+        { key: "paidAmount", label: "实时付费金额" },
+        { key: "roi", label: "实时付费ROI" },
+        { key: "paidDeal", label: "实时付费成交额" },
+        { key: "feeRate", label: "实时费比" },
+        { key: "feeWarn", label: "费比监控", w: "120px" },
+        { key: "feeGoal", label: "费比设置", w: "176px" },
+        { key: "liveAt", label: "更新时间", w: "150px" },
+        { key: "jzAccount", label: "京准通主账户ID", extra: true, w: "140px" },
+        { key: "jzSpend", label: "京准通花费", extra: true },
+        { key: "jzPaidOrders", label: "京准通付费订单数", extra: true },
+        { key: "jzPaidRoi", label: "京准通付费投产比", extra: true },
+        { key: "jzPaidCvr", label: "京准通付费转化率", extra: true },
+        { key: "jzCpc", label: "京准通平均点击成本", extra: true },
+        { key: "jzDeal", label: "京麦成交金额", extra: true },
+        { key: "jzClicks", label: "京准通点击数", extra: true },
+        { key: "jzCtr", label: "京准通点击率", extra: true },
+        { key: "jzOrderAmt", label: "京准通总订单金额", extra: true },
+        { key: "jzRealFee", label: "真实费比", extra: true },
+        { key: "jzOk", label: "是否成功", extra: true }
+      ];
+      const HEAD_KEY = "shen-home-live-head-hide";
+      const FEE_KEY = "shen-home-fee-targets";
+
+      function freshPayload(payload) {
+        if (!payload || payload.demo === true || payload.ok === false) {
+          return null;
+        }
+        return payload;
+      }
+
+      function applyHomeLive(rows, erp, localPaid) {
+        const sales = {};
+        const erpPayload = freshPayload(erp);
+        ((erpPayload && erpPayload.records) || []).forEach(function (rec) {
+          if (!rec || rec.demo === true) {
+            return;
+          }
+          const key = shopKey(rec.shopName || rec.shop);
+          if (key) {
+            sales[key] = rec;
+          }
+        });
+        const paid = {};
+        const local = freshPayload(localPaid);
+        ((local && local.records) || []).forEach(function (rec) {
+          if (!rec || rec.demo === true) {
+            return;
+          }
+          const key = shopKey(rec.shopName || rec.shop || rec.store);
+          if (key) {
+            paid[key] = rec;
+          }
         });
         rows.forEach(function (row) {
-          const hit = byName[shopKey(row.store)];
-          row.liveAmount = hit ? parseMoney(hit.liveAmount != null ? hit.liveAmount : hit.sales) : null;
-          row.paidAmount = hit ? parseMoney(hit.paidAmount != null ? hit.paidAmount : hit.spend) : null;
-          row.liveProfit = hit ? parseMoney(hit.profit) : null;
-          row.roiText = hit && hit.roi != null && hit.roi !== "" && hit.roi !== "—" ? String(hit.roi) : "";
-          row.paidDeal = hit ? parseMoney(hit.paidDeal != null ? hit.paidDeal : hit.jingmaiGmv) : null;
-          row.feeText = hit && hit.feeRate != null && hit.feeRate !== "" && hit.feeRate !== "—" ? String(hit.feeRate) : "";
-          row.linked = Boolean(hit) && (row.liveAmount != null || row.paidAmount != null || row.paidDeal != null);
+          const sale = sales[shopKey(row.store)];
+          const pay = paid[shopKey(row.store)];
+          row.liveAmount = sale ? parseMoney(sale.todayPayAmount != null ? sale.todayPayAmount : sale.payAmount) : null;
+          row.yesterdayAmount = sale ? parseMoney(sale.yesterdayPayAmount) : null;
+          row.todayHours = sale && sale.todayHourlyData ? sale.todayHourlyData : {};
+          row.yesterdayHours = sale && sale.yesterdayHourlyData ? sale.yesterdayHourlyData : {};
+          row.paidAmount = pay ? parseMoney(pay.paidAmount != null ? pay.paidAmount : pay.totalPromotionCost) : null;
+          row.paidDeal = pay ? parseMoney(pay.paidDeal != null ? pay.paidDeal : pay.payAmount) : null;
+          const rawFee = pay && pay.feeRate != null && pay.feeRate !== "" ? pay.feeRate : pay && pay.promotionRate;
+          const fee = rawFee == null || rawFee === "" ? null : Number(rawFee);
+          row.feeRate = fee != null && isFinite(fee) ? fee : null;
+          row.roi = row.paidAmount > 0 && row.paidDeal != null ? row.paidDeal / row.paidAmount : null;
+          row.linked = row.liveAmount != null || row.paidAmount != null || row.paidDeal != null;
         });
         rows.sort(function (a, b) {
-          if (a.linked !== b.linked) {
-            return a.linked ? -1 : 1;
-          }
           const diff = (Number(b.liveAmount) || 0) - (Number(a.liveAmount) || 0);
           if (diff) {
             return diff;
@@ -1335,42 +1384,8 @@
         }
       }
 
-      function renderDataCenter(rows) {
-        const sales = sumField(rows, "liveAmount");
-        const spend = sumField(rows, "paidAmount");
-        const profit = sumField(rows, "liveProfit");
-        const deal = sumField(rows, "paidDeal");
-        let roiWeight = 0;
-        let roiBase = 0;
-        rows.forEach(function (row) {
-          const roi = parseMoney(row.roiText);
-          const base = row.paidAmount;
-          if (roi == null || base == null) {
-            return;
-          }
-          roiWeight += roi * base;
-          roiBase += base;
-        });
-        const cards = [
-          {
-            label: "推广花费 (支付预估)",
-            value: formatMoney(spend),
-            extra: sales > 0 && spend != null ? "推广占比 " + formatRate(spend / sales) : ""
-          },
-          {
-            label: "利润 (支付预估)",
-            value: formatMoney(profit),
-            extra: sales > 0 && profit != null ? "毛利率 " + formatRate(profit / sales) : ""
-          },
-          { label: "付费成交ROI", value: roiBase > 0 ? (roiWeight / roiBase).toFixed(2) : "—", extra: "" },
-          { label: "实时付费成交额", value: formatMoney(deal), extra: "" },
-          {
-            label: "实时费比",
-            value: sales > 0 && spend != null ? formatRate(spend / sales) : "—",
-            extra: ""
-          }
-        ];
-        const clock = new Intl.DateTimeFormat("zh-CN", {
+      function shanghaiClock() {
+        return new Intl.DateTimeFormat("sv-SE", {
           timeZone: "Asia/Shanghai",
           year: "numeric",
           month: "2-digit",
@@ -1379,57 +1394,442 @@
           minute: "2-digit",
           second: "2-digit",
           hour12: false
-        }).format(new Date());
+        })
+          .format(new Date())
+          .replace(/-/g, "/");
+      }
+
+      function formatLive(value) {
+        if (value == null || !isFinite(Number(value))) {
+          return "—";
+        }
+        const n = Number(value);
+        const digits = Math.abs(n - Math.round(n)) < 0.005 ? 0 : 2;
+        return n.toLocaleString("zh-CN", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+      }
+
+      function hiddenKeys() {
+        try {
+          const raw = localStorage.getItem(HEAD_KEY);
+          if (raw == null) {
+            return HOME_COLS.filter(function (col) {
+              return col.extra;
+            }).map(function (col) {
+              return col.key;
+            });
+          }
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            return list.filter(function (key) {
+              return key && key !== "rank" && key !== "shop";
+            });
+          }
+        } catch (err) {
+          return HOME_COLS.filter(function (col) {
+            return col.extra;
+          }).map(function (col) {
+            return col.key;
+          });
+        }
+        return [];
+      }
+
+      function feeBook() {
+        try {
+          const raw = JSON.parse(localStorage.getItem(FEE_KEY) || "{}");
+          return raw && typeof raw === "object" ? raw : {};
+        } catch (err) {
+          return {};
+        }
+      }
+
+      function feeBound(value) {
+        if (value == null || value === "") {
+          return null;
+        }
+        const n = Number(String(value).replace(/%/g, ""));
+        return isFinite(n) ? Math.max(0, Math.min(100, n)) : null;
+      }
+
+      function feeBounds(shop) {
+        const raw = feeBook()[shop];
+        if (raw == null || raw === "") {
+          return { lo: null, hi: null };
+        }
+        let lo;
+        let hi;
+        if (typeof raw === "object") {
+          lo = feeBound(raw.lo != null ? raw.lo : raw.min);
+          hi = feeBound(raw.hi != null ? raw.hi : raw.max);
+        } else {
+          lo = feeBound(raw);
+          hi = lo;
+        }
+        if (lo != null && hi != null && lo > hi) {
+          return { lo: hi, hi: lo };
+        }
+        return { lo: lo, hi: hi };
+      }
+
+      function feePercent(row) {
+        if (row.feeRate == null || !isFinite(Number(row.feeRate))) {
+          return null;
+        }
+        let n = Number(row.feeRate);
+        if (Math.abs(n) <= 1) {
+          n *= 100;
+        }
+        return n;
+      }
+
+      function feeKind(row) {
+        const bounds = feeBounds(row.store);
+        const pct = feePercent(row);
+        if (bounds.lo == null && bounds.hi == null) {
+          return { label: "未设目标", kind: "" };
+        }
+        if (pct == null) {
+          return { label: "—", kind: "" };
+        }
+        if (bounds.hi != null && pct > bounds.hi) {
+          return { label: "费比超标", kind: "hot" };
+        }
+        if (bounds.lo != null && pct < bounds.lo) {
+          return { label: "加大付费", kind: "cold" };
+        }
+        return { label: "正常", kind: "ok" };
+      }
+
+      function deltaOf(today, yesterday) {
+        if (today == null || yesterday == null || !Number(yesterday)) {
+          return null;
+        }
+        const pct = ((Number(today) - Number(yesterday)) / Math.abs(Number(yesterday))) * 100;
+        const down = pct < 0;
+        return { text: (down ? "下降 " : "上升 ") + Math.abs(pct).toFixed(0) + "%", kind: down ? "down" : "up" };
+      }
+
+      function sumHours(rows, field) {
+        const out = [];
+        for (let hour = 0; hour < 24; hour += 1) {
+          out.push(0);
+        }
+        rows.forEach(function (row) {
+          const list = hourList(row[field] || {});
+          for (let hour = 0; hour < 24; hour += 1) {
+            out[hour] += Number(list[hour]) || 0;
+          }
+        });
+        return out;
+      }
+
+      function homeChart(spec) {
+        const plot = spec.blank
+          ? { yesterday: [], today: [], hours: 24, height: 168 }
+          : livePlot({
+              yesterdayHour: spec.yHours,
+              todayHour: spec.tHours,
+              lineMode: spec.flat ? "flat" : "",
+              unit: spec.flat ? "rate" : ""
+            });
+        const delta = spec.delta;
+        return (
+          '<article class="xm-hl-chart"><div class="xm-hl-chart-head"><span>' +
+          escapeHtml(spec.title) +
+          '</span><span class="xm-hl-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div>' +
+          '<div class="xm-hl-value">' +
+          escapeHtml(spec.value) +
+          '</div><div class="xm-hl-sub">昨天 ' +
+          escapeHtml(spec.yesterday) +
+          (delta
+            ? ' <b class="' + delta.kind + '">环比 ' + escapeHtml(delta.text) + "</b>"
+            : " <span>环比 —</span>") +
+          "</div>" +
+          liveLine(plot) +
+          "</article>"
+        );
+      }
+
+      function shownCols() {
+        const hide = {};
+        hiddenKeys().forEach(function (key) {
+          hide[key] = true;
+        });
+        return HOME_COLS.filter(function (col) {
+          return col.lock || !hide[col.key];
+        });
+      }
+
+      function homeCell(row, col, index, clock) {
+        if (col.key === "rank") {
+          return rankMark(index);
+        }
+        if (col.key === "shop") {
+          return (
+            '<button type="button" class="xm-hl-shop" data-open-shop="' +
+            escapeHtml(row.store) +
+            '">' +
+            escapeHtml(row.store) +
+            "</button>"
+          );
+        }
+        if (col.key === "liveAmount" || col.key === "paidAmount" || col.key === "paidDeal") {
+          return formatLive(row[col.key]);
+        }
+        if (col.key === "roi") {
+          return row.roi == null ? "—" : Number(row.roi).toFixed(2);
+        }
+        if (col.key === "feeRate") {
+          const pct = feePercent(row);
+          const kind = feeKind(row).kind;
+          return (
+            '<span class="' +
+            (kind === "hot" ? "is-hot" : kind === "cold" ? "is-cold" : "") +
+            '">' +
+            (pct == null ? "—" : pct.toFixed(2) + "%") +
+            "</span>"
+          );
+        }
+        if (col.key === "feeWarn") {
+          const kind = feeKind(row);
+          return (
+            '<span class="' +
+            (kind.kind === "hot" ? "is-hot" : kind.kind === "cold" ? "is-cold" : "") +
+            '">' +
+            escapeHtml(kind.label) +
+            "</span>"
+          );
+        }
+        if (col.key === "feeGoal") {
+          const bounds = feeBounds(row.store);
+          return (
+            '<span class="xm-hl-fee" data-fee-target><input data-fee-lo data-shop="' +
+            escapeHtml(row.store) +
+            '" value="' +
+            (bounds.lo == null ? "" : bounds.lo) +
+            '" inputmode="decimal" /> % <input data-fee-hi data-shop="' +
+            escapeHtml(row.store) +
+            '" value="' +
+            (bounds.hi == null ? "" : bounds.hi) +
+            '" inputmode="decimal" /> %</span>'
+          );
+        }
+        if (col.key === "liveAt") {
+          return row.linked ? escapeHtml(clock) : "—";
+        }
+        return "—";
+      }
+
+      function renderHomeLive(rows) {
+        const picked = rows.filter(function (row) {
+          if (view.liveShop && row.store !== view.liveShop) {
+            return false;
+          }
+          if (view.team && row.group !== view.team) {
+            return false;
+          }
+          return true;
+        });
+        const sales = sumField(picked, "liveAmount");
+        const yestSales = sumField(picked, "yesterdayAmount");
+        const spend = sumField(picked, "paidAmount");
+        const deal = sumField(picked, "paidDeal");
+        const roi = spend > 0 && deal != null ? deal / spend : null;
+        const fee = sales > 0 && spend != null ? spend / sales : null;
+        const paidShops = picked.filter(function (row) {
+          return row.paidAmount != null || row.paidDeal != null;
+        }).length;
+        const hot = picked.filter(function (row) {
+          return feeKind(row).kind === "hot";
+        }).length;
+        const cold = picked.filter(function (row) {
+          return feeKind(row).kind === "cold";
+        }).length;
+        const clock = shanghaiClock();
+        const cols = shownCols();
+        const groups = [];
+        const seenGroup = {};
+        rows.forEach(function (row) {
+          if (row.group && !seenGroup[row.group]) {
+            seenGroup[row.group] = true;
+            groups.push(row.group);
+          }
+        });
+        const pick = view.liveShop ? "shop:" + view.liveShop : view.team ? "team:" + view.team : "";
+        function option(value, label, on) {
+          return (
+            '<option value="' +
+            escapeHtml(value) +
+            '"' +
+            (on ? " selected" : "") +
+            ">" +
+            escapeHtml(label) +
+            "</option>"
+          );
+        }
+        const hide = {};
+        hiddenKeys().forEach(function (key) {
+          hide[key] = true;
+        });
+        const liveCols = HOME_COLS.filter(function (col) {
+          return !col.lock && !col.extra;
+        });
+        const extraCols = HOME_COLS.filter(function (col) {
+          return col.extra;
+        });
+        const snapshot = {
+          ok: true,
+          source: "shen-paid-live",
+          center: "沈子晗",
+          updatedAt: clock,
+          summary: {
+            liveAmount: sales,
+            paidAmount: spend,
+            paidDeal: deal,
+            roi: roi,
+            feeRate: fee,
+            shops: picked.length,
+            paidShops: paidShops
+          },
+          shops: picked.map(function (row) {
+            return {
+              shop: row.store,
+              group: row.group || "",
+              owner: row.owner || "",
+              liveAmount: row.liveAmount,
+              yesterdayAmount: row.yesterdayAmount,
+              paidAmount: row.paidAmount,
+              roi: row.roi,
+              paidDeal: row.paidDeal,
+              feeRate: row.feeRate
+            };
+          })
+        };
         boardEl.hidden = false;
         kpiEl.hidden = true;
         boardEl.innerHTML =
-          '<div class="xm-dc"><p class="xm-dc-clock">每5分钟自动刷新 · 上次 ' +
+          '<div class="xm-hl"><div class="xm-hm-live-filter"><div class="xm-hm-live-filter-left"><strong class="xm-hm-live-filter-lab">店铺列表</strong>' +
+          '<span class="xm-hm-live-filter-box"><select data-live-filter="pick">' +
+          option("", "责权归属", !pick) +
+          (groups.length
+            ? '<optgroup label="责权归属">' +
+              groups
+                .map(function (name) {
+                  return option("team:" + name, name, pick === "team:" + name);
+                })
+                .join("") +
+              "</optgroup>"
+            : "") +
+          (rows.length
+            ? '<optgroup label="店铺">' +
+              rows
+                .map(function (row) {
+                  return option("shop:" + row.store, row.store, pick === "shop:" + row.store);
+                })
+                .join("") +
+              "</optgroup>"
+            : "") +
+          '</select></span></div><div class="xm-hl-tools"><span class="xm-hl-clock">更新时间 ' +
           escapeHtml(clock) +
-          '</p><div class="xm-dc-cards">' +
-          cards
+          '</span><button type="button" data-add-shop>新增店铺</button><button type="button" data-head-open>表头设置</button><button type="button" data-refresh>刷新</button>' +
+          '<div class="xm-hl-pop" data-head-pop hidden><p>实时</p>' +
+          liveCols
+            .map(function (col) {
+              return (
+                '<label><input type="checkbox" data-col="' +
+                col.key +
+                '"' +
+                (hide[col.key] ? "" : " checked") +
+                " />" +
+                escapeHtml(col.label) +
+                "</label>"
+              );
+            })
+            .join("") +
+          "<p>付费中心（数据待对接）</p>" +
+          extraCols
+            .map(function (col) {
+              return (
+                '<label><input type="checkbox" data-col="' +
+                col.key +
+                '"' +
+                (hide[col.key] ? "" : " checked") +
+                " />" +
+                escapeHtml(col.label) +
+                "</label>"
+              );
+            })
+            .join("") +
+          "</div></div></div>" +
+          '<div class="xm-hl-charts">' +
+          homeChart({
+            title: "实时总成交金额",
+            value: formatLive(sales),
+            yesterday: formatLive(yestSales),
+            delta: deltaOf(sales, yestSales),
+            yHours: sumHours(picked, "yesterdayHours"),
+            tHours: sumHours(picked, "todayHours")
+          }) +
+          homeChart({
+            title: "推广总花费",
+            value: formatLive(spend),
+            yesterday: "—",
+            delta: null,
+            blank: true
+          }) +
+          homeChart({
+            title: "实时费比",
+            value: fee == null ? "—" : formatRate(fee),
+            yesterday: "—",
+            delta: null,
+            blank: true
+          }) +
+          '</div><div class="xm-hl-cards">' +
+          [
+            ["实时付费成交额", formatLive(deal)],
+            ["付费成交ROI", roi == null ? "—" : roi.toFixed(2)],
+            ["实时付费接入店铺数量", String(paidShops)],
+            ["实时付费超标店铺", String(hot)],
+            ["实时费比低店铺", String(cold)],
+            ["更新时间", clock]
+          ]
             .map(function (card) {
               return (
-                '<article class="xm-dc-card"><div class="xm-dc-label">' +
-                escapeHtml(card.label) +
-                '</div><div class="xm-dc-value">' +
-                escapeHtml(card.value) +
-                "</div>" +
-                (card.extra ? '<div class="xm-dc-extra">' + escapeHtml(card.extra) + "</div>" : "") +
-                "</article>"
+                '<article class="xm-hl-card"><div class="label">' +
+                escapeHtml(card[0]) +
+                '</div><div class="xm-hl-value">' +
+                escapeHtml(card[1]) +
+                "</div></article>"
               );
             })
             .join("") +
-          '</div><section class="xm-dc-panel"><h2>店铺<span>' +
-          rows.length +
-          ' 店</span><button type="button" data-add-shop>新增店铺</button></h2>' +
-          '<div class="xm-dc-table-wrap"><table class="xm-dc-table"><thead><tr>' +
-          "<th>排名</th><th>店铺名称</th><th>实时销售额</th><th>实时付费金额</th><th>实时利润</th><th>实时付费ROI</th><th>实时付费成交额</th><th>实时费比</th>" +
+          '</div><section class="xm-hl-panel"><div class="xm-hl-table-wrap"><table class="xm-hl-table"><colgroup>' +
+          cols
+            .map(function (col) {
+              return col.w ? '<col style="width:' + col.w + '" />' : "<col />";
+            })
+            .join("") +
+          "</colgroup><thead><tr>" +
+          cols
+            .map(function (col) {
+              return "<th>" + escapeHtml(col.label) + "</th>";
+            })
+            .join("") +
           "</tr></thead><tbody>" +
-          rows
+          picked
             .map(function (row, index) {
               return (
-                "<tr><td>" +
-                rankMark(index) +
-                '</td><td class="xm-dc-shop">' +
-                escapeHtml(row.store) +
-                "</td><td>" +
-                formatMoney(row.liveAmount) +
-                "</td><td>" +
-                formatMoney(row.paidAmount) +
-                "</td><td>" +
-                formatMoney(row.liveProfit) +
-                "</td><td>" +
-                escapeHtml(row.roiText || "—") +
-                "</td><td>" +
-                formatMoney(row.paidDeal) +
-                "</td><td>" +
-                escapeHtml(row.feeText || "—") +
-                "</td></tr>"
+                "<tr>" +
+                cols
+                  .map(function (col) {
+                    return "<td>" + homeCell(row, col, index, clock) + "</td>";
+                  })
+                  .join("") +
+                "</tr>"
               );
             })
             .join("") +
-          "</tbody></table></div></section>" +
-          '<p class="xm-dc-note">实时页每5分钟自动拉一次数。版式与数据中心实时付费相同，只列沈子晗组的店。</p>' +
+          '</tbody></table></div><p class="xm-hl-note">版式与首页实时相同，只列沈子晗组。实时成交金额只汇总这些店，实时付费字段与首页一致，方便首页以后来取。</p></section>' +
           '<div class="xm-sp-shop-modal" data-shop-modal hidden><form class="xm-sp-shop-dialog" data-shop-form>' +
           "<h3>新增店铺</h3><p class=\"xm-sp-shop-hint\">保存后归入沈子晗组，并出现在这份全部店铺里。登录账号在组织中心填写。</p>" +
           '<label>店铺名称<input name="storeName" required maxlength="64" autocomplete="off" /></label>' +
@@ -1438,8 +1838,80 @@
           '<label>店铺ID<input name="storeId" maxlength="32" autocomplete="off" /></label>' +
           '<p class="xm-sp-shop-error" data-shop-error hidden></p>' +
           '<div class="xm-sp-shop-actions"><button type="submit">保存</button>' +
-          '<button type="button" data-shop-cancel>取消</button></div></form></div></div>';
+          '<button type="button" data-shop-cancel>取消</button></div></form></div>' +
+          '<pre id="shen-paid-live-snapshot" hidden>' +
+          JSON.stringify(snapshot).replace(/</g, "\\u003c") +
+          "</pre></div>";
         bindShopForm();
+        bindHomeLive();
+      }
+
+      function bindHomeLive() {
+        const filter = boardEl.querySelector("[data-live-filter]");
+        if (filter) {
+          filter.addEventListener("change", function () {
+            const value = filter.value || "";
+            if (value.indexOf("shop:") === 0) {
+              writeHash({ liveShop: value.slice(5), team: "" });
+            } else if (value.indexOf("team:") === 0) {
+              writeHash({ team: value.slice(5), liveShop: "" });
+            } else {
+              writeHash({ team: "", liveShop: "" });
+            }
+          });
+        }
+        const refresh = boardEl.querySelector("[data-refresh]");
+        if (refresh) {
+          refresh.addEventListener("click", function () {
+            load();
+          });
+        }
+        const headOpen = boardEl.querySelector("[data-head-open]");
+        const headPop = boardEl.querySelector("[data-head-pop]");
+        if (headOpen && headPop) {
+          headOpen.addEventListener("click", function (event) {
+            event.stopPropagation();
+            headPop.hidden = !headPop.hidden;
+          });
+          headPop.addEventListener("change", function () {
+            const next = [];
+            headPop.querySelectorAll("[data-col]").forEach(function (box) {
+              if (!box.checked) {
+                next.push(box.getAttribute("data-col"));
+              }
+            });
+            try {
+              localStorage.setItem(HEAD_KEY, JSON.stringify(next));
+            } catch (err) {
+              return;
+            }
+            renderHomeLive(overviewRows);
+          });
+        }
+        boardEl.querySelectorAll("[data-open-shop]").forEach(function (button) {
+          button.addEventListener("click", function () {
+            writeHash({ store: button.getAttribute("data-open-shop") || "" });
+          });
+        });
+        boardEl.querySelectorAll("[data-fee-lo],[data-fee-hi]").forEach(function (input) {
+          input.addEventListener("change", function () {
+            const shop = input.getAttribute("data-shop") || "";
+            const book = feeBook();
+            const bounds = feeBounds(shop);
+            if (input.hasAttribute("data-fee-lo")) {
+              bounds.lo = feeBound(input.value);
+            } else {
+              bounds.hi = feeBound(input.value);
+            }
+            book[shop] = bounds;
+            try {
+              localStorage.setItem(FEE_KEY, JSON.stringify(book));
+            } catch (err) {
+              return;
+            }
+            renderHomeLive(overviewRows);
+          });
+        });
       }
 
       function renderOverview(data) {
@@ -1450,7 +1922,7 @@
           barEl.hidden = true;
         }
         bodyEl.innerHTML = "";
-        renderDataCenter(overviewRows);
+        renderHomeLive(overviewRows);
       }
 
       function renderKpis(metrics) {
@@ -1743,8 +2215,8 @@
         setStatus("正在加载…");
         return Promise.all([
           getJson("/api/people/org/stores?team=" + encodeURIComponent("沈子晗组")),
-          getOptional("/api/data/live"),
-          getOptional("/api/home/live")
+          getOptional("/api/home/erp-paid"),
+          getOptional("/api/home/local-paid")
         ])
           .then(function (pack) {
             if (dead) {
@@ -1756,7 +2228,7 @@
               delete store.password;
             });
             const mapped = mapShenShops(data);
-            applyLiveMetrics(mapped.rows, [pack[1], pack[2]]);
+            applyHomeLive(mapped.rows, pack[1], pack[2]);
             overviewRows = mapped.rows;
             overviewAsOf = "";
             overviewStale = false;
