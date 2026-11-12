@@ -516,7 +516,7 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /XmModules\["\/han\/recharge-rules"\]/);
   assert.match(js, /实时付费/);
   assert.match(js, /HanCenter\.mount\(root, hanBoard\)/);
-  assert.match(js, /20261014-dingbtn/);
+  assert.match(js, /20261112-rate/);
   assert.doesNotMatch(js, /id="paid-form"/);
   assert.doesNotMatch(js, /上传抓取表/);
   assert.match(js, /XmModules\["\/han\/training"\]/);
@@ -2038,7 +2038,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   const han = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
   assert.match(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
   assert.match(han, /\["\/han\/paid\?board=rules", "充值规则", "rules"\]/);
-  assert.match(han, /20261014-dingbtn/);
+  assert.match(han, /20261112-rate/);
   const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
   assert.match(center, /两档花费/);
   assert.match(center, /han-rules-text/);
@@ -2078,7 +2078,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(han, /insertAdjacentElement\("afterend"/);
   assert.match(han, /data-xm-group"\) !== "\/han"/);
   assert.doesNotMatch(han, /anchor\.href = "\/han\/paid-center"/);
-  assert.match(center, /20261014-dingbtn/);
+  assert.match(center, /20261112-rate/);
   assert.match(center, /已超过30分钟没有更新/);
   assert.match(center, /超过30分钟未更新/);
   assert.match(han, /action: "dingtalk"/);
@@ -2124,7 +2124,14 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(center, /action: "remark"/);
   assert.match(center, /subSortDir === "desc" \? "asc" : "desc"/);
   assert.match(center, /id="han-sub-table"/);
-  assert.match(center, /card\.key === "ad"/);
+  assert.match(center, /实时付费超标店铺/);
+  assert.match(center, /han-rank/);
+  assert.match(center, /jingmaiGmvRate/);
+  assert.doesNotMatch(center, /yesterdayPayAmount/);
+  assert.doesNotMatch(center, /yesterdayJingmaiGmv/);
+  assert.match(center, /较昨日上涨/);
+  assert.match(center, /较昨日下降/);
+  assert.match(center, /model\.spend/);
   assert.match(center, /card\.key === "roi"/);
   assert.match(center, /pageAmount \/ pageSpend\)\.toFixed\(2\)/);
   assert.match(center, /card\.value = salesText\(pageAmount\)/);
@@ -2450,6 +2457,29 @@ test("回传超过30分钟给钉钉发一条提醒，30分钟内不重复发", a
   } finally {
     setStaleAlertSender(null);
   }
+});
+
+test("回传里的京麦成交金额环比留在店铺上", async () => {
+  await withServer(async (base) => {
+    const posted = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          { 店铺名称: "回传店", 京准通主账户ID: "501", 京麦成交金额: 30785.47, 京麦成交金额环比: "-8.2%", 真实费比: 32.6 },
+          { 店铺名称: "文字店", 京准通主账户ID: "502", 京麦成交金额: 1200, 较昨日: "较昨日 -27.63%" },
+        ],
+      }),
+    });
+    assert.equal(posted.res.status, 201);
+    const overview = await json(base, "/api/han/worker?view=overview");
+    const shop = overview.body.shops.find((row) => row.store === "回传店");
+    const word = overview.body.shops.find((row) => row.store === "文字店");
+    assert.equal(shop.jingmaiGmv, 30785.47);
+    assert.equal(shop.jingmaiGmvRate, "-8.2%");
+    assert.equal(shop.realFeeRatio, 32.6);
+    assert.equal(word.jingmaiGmvRate, "较昨日 -27.63%");
+  });
 });
 
 test("han schema uses prefixed tables", async () => {

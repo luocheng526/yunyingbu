@@ -737,6 +737,32 @@ function toWorkerSub(row) {
   };
 }
 
+function readJingmaiRate(row) {
+  const named = pick(row, [
+    "京麦成交金额环比",
+    "京麦成交环比",
+    "京麦环比",
+    "较昨日",
+    "较昨日百分比",
+    "成交金额环比",
+    "百分比",
+    "涨跌幅",
+    "jingmaiGmvRate",
+    "gmvRate",
+  ]);
+  if (named !== "") return named;
+  for (const [key, value] of Object.entries(row || {})) {
+    if (value == null || String(value).trim() === "") continue;
+    const name = String(key);
+    const lower = name.toLowerCase();
+    const rate = name.includes("环比") || name.includes("较昨日") || name.includes("百分比") || name.includes("涨跌") || lower.includes("percent");
+    const jingmai = name.includes("京麦") || name.includes("成交") || lower.includes("gmv") || lower.includes("deal") || name === "环比" || name === "较昨日" || name === "百分比";
+    const other = name.includes("花费") || name.includes("费比") || name.includes("点击") || name.includes("转化") || name.includes("投产");
+    if (rate && jingmai && !other) return value;
+  }
+  return null;
+}
+
 function parseShop(row, capturedAt) {
   const store = text(pick(row, ["店铺名称", "store", "店铺", "店名"]), 64);
   if (!store) {
@@ -756,6 +782,7 @@ function parseShop(row, capturedAt) {
     cpc: num(pick(row, ["京准通平均点击成本", "cpc", "平均点击成本"])),
     jingmaiGmv,
     gmv: jingmaiGmv,
+    jingmaiGmvRate: readJingmaiRate(row),
     clicks: num(pick(row, ["京准通点击数", "clicks", "点击数"])),
     ctr: num(pick(row, ["京准通点击率", "ctr", "点击率"])),
     totalOrderAmount: num(pick(row, ["京准通总订单金额", "totalOrderAmount"])),
