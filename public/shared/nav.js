@@ -53,7 +53,6 @@
     { href: "/han/selection", label: "选品数据" },
     { href: "/han/goods", label: "商品数据" },
     { href: "/han/paid", label: "实时付费" },
-    { href: "/han/paid-center", label: "付费中心" },
     { href: "/han/recharge-rules", label: "充值规则" },
     { href: "/han/training", label: "培训系统" }
   ];
