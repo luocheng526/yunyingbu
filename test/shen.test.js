@@ -416,6 +416,12 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /全部汇总/);
     assert.match(embed.text, /店铺列表/);
     assert.match(embed.text, /责权归属/);
+    assert.match(embed.text, /store\.reserve/);
+    assert.match(embed.text, /xm-hl-group/);
+    assert.match(embed.text, /杨润泽组/);
+    assert.match(embed.text, /张文静组/);
+    assert.match(embed.text, /高丽男组/);
+    assert.match(embed.text, /张鹏组/);
     assert.match(embed.text, /表头设置/);
     assert.equal(embed.text.includes("/api/shen/paid?view=latest"), false);
     const css = await request(base, "/shared/shen-paid.css");

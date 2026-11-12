@@ -36,7 +36,7 @@
     mount: function (root) {
       const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
       paidCss.rel = "stylesheet";
-      paidCss.href = "/shared/shen-paid.css?v=0.1.843-jingmai-paid";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.850-org-groups";
       if (!paidCss.parentNode) {
         document.head.appendChild(paidCss);
       }
@@ -273,6 +273,21 @@
         return out;
       }
 
+      const GROUP_ORDER = ["杨润泽组", "张文静组", "高丽男组", "张鹏组"];
+
+      function groupLabel(name) {
+        const text = String(name || "").trim();
+        if (!text || text === "未分配") {
+          return "未分配";
+        }
+        return /组$/.test(text) ? text : text + "组";
+      }
+
+      function groupRank(name) {
+        const index = GROUP_ORDER.indexOf(groupLabel(name));
+        return index < 0 ? GROUP_ORDER.length : index;
+      }
+
       function mapShenShops(data) {
         const rows = ((data && data.stores) || [])
           .filter(function (store) {
@@ -282,14 +297,16 @@
           .map(function (store) {
             const operator = String(store.operator || store.owner || "").trim();
             const supervisor = String(store.supervisor || "").trim();
+            const reserve = String(store.reserve || "").trim();
             const lead = String(store.lead || "").trim();
             const groupLead = /组$/.test(lead) ? "" : lead;
+            const person = supervisor || reserve || groupLead || operator || "未分配";
             const remark = String(store.remark || "").trim();
             return {
               store: String(store.storeName || "").trim(),
               enabled: store.statusKey === "operating" || (store.statusKey == null && store.remark === "运营中"),
-              owner: operator || supervisor || groupLead || "未分配",
-              group: supervisor || groupLead || operator || "未分配",
+              owner: operator || person,
+              group: groupLabel(person),
               note: remark && remark !== "运营中" ? remark : "",
               spend: null,
               jingmaiGmv: null,
@@ -320,7 +337,8 @@
           names.push(name);
         });
         names.sort(function (a, b) {
-          return a.localeCompare(b, "zh");
+          const diff = groupRank(a) - groupRank(b);
+          return diff || a.localeCompare(b, "zh");
         });
         return names;
       }
@@ -786,7 +804,7 @@
           link("", "全部汇总", !view.team) +
           operatorTeams()
             .map(function (name) {
-              return link("team=" + encodeURIComponent(name), name, view.team === name);
+              return link("team=" + encodeURIComponent(name), name, groupLabel(view.team) === groupLabel(name));
             })
             .join("");
       }
@@ -1701,7 +1719,7 @@
           if (view.liveShop && row.store !== view.liveShop) {
             return false;
           }
-          if (view.team && row.group !== view.team) {
+          if (view.team && groupLabel(row.group) !== groupLabel(view.team)) {
             return false;
           }
           return true;
@@ -1726,10 +1744,15 @@
         const groups = [];
         const seenGroup = {};
         rows.forEach(function (row) {
-          if (row.group && !seenGroup[row.group]) {
-            seenGroup[row.group] = true;
-            groups.push(row.group);
+          const name = groupLabel(row.group);
+          if (name && !seenGroup[name]) {
+            seenGroup[name] = true;
+            groups.push(name);
           }
+        });
+        groups.sort(function (a, b) {
+          const diff = groupRank(a) - groupRank(b);
+          return diff || a.localeCompare(b, "zh");
         });
         const pick = view.liveShop ? "shop:" + view.liveShop : view.team ? "team:" + view.team : "";
         function option(value, label, on) {
@@ -1781,6 +1804,79 @@
             };
           })
         };
+        function homeTable(list) {
+          return (
+            '<div class="xm-hl-table-wrap"><table class="xm-hl-table"><colgroup>' +
+            cols
+              .map(function (col) {
+                return col.w ? '<col style="width:' + col.w + '" />' : "<col />";
+              })
+              .join("") +
+            "</colgroup><thead><tr>" +
+            cols
+              .map(function (col) {
+                return "<th>" + escapeHtml(col.label) + "</th>";
+              })
+              .join("") +
+            "</tr></thead><tbody>" +
+            (list.length
+              ? list
+                  .map(function (row, index) {
+                    return (
+                      "<tr>" +
+                      cols
+                        .map(function (col) {
+                          return "<td>" + homeCell(row, col, index, clock) + "</td>";
+                        })
+                        .join("") +
+                      "</tr>"
+                    );
+                  })
+                  .join("")
+              : '<tr><td class="xm-hl-empty" colspan="' + cols.length + '">该组还没有店铺</td></tr>') +
+            "</tbody></table></div>"
+          );
+        }
+        function groupedTables(list) {
+          const buckets = [];
+          const byName = {};
+          list.forEach(function (row) {
+            const name = groupLabel(row.group);
+            if (!byName[name]) {
+              byName[name] = [];
+              buckets.push(name);
+            }
+            byName[name].push(row);
+          });
+          buckets.sort(function (a, b) {
+            const diff = groupRank(a) - groupRank(b);
+            return diff || a.localeCompare(b, "zh");
+          });
+          if (!buckets.length) {
+            return homeTable([]);
+          }
+          return buckets
+            .map(function (name) {
+              const listRows = byName[name];
+              return (
+                '<section class="xm-hl-group"><h3>' +
+                escapeHtml(name) +
+                "<span>" +
+                listRows.length +
+                "店</span></h3>" +
+                homeTable(listRows) +
+                "</section>"
+              );
+            })
+            .join("");
+        }
+        if (barEl) {
+          barEl.hidden = false;
+        }
+        if (asofEl) {
+          asofEl.textContent = liveUpdatedAt ? "最新采集 " + liveUpdatedAt : "等待采集";
+        }
+        renderTabs();
         boardEl.hidden = false;
         kpiEl.hidden = true;
         boardEl.innerHTML =
@@ -1880,33 +1976,9 @@
               );
             })
             .join("") +
-          '</div><section class="xm-hl-panel"><div class="xm-hl-table-wrap"><table class="xm-hl-table"><colgroup>' +
-          cols
-            .map(function (col) {
-              return col.w ? '<col style="width:' + col.w + '" />' : "<col />";
-            })
-            .join("") +
-          "</colgroup><thead><tr>" +
-          cols
-            .map(function (col) {
-              return "<th>" + escapeHtml(col.label) + "</th>";
-            })
-            .join("") +
-          "</tr></thead><tbody>" +
-          picked
-            .map(function (row, index) {
-              return (
-                "<tr>" +
-                cols
-                  .map(function (col) {
-                    return "<td>" + homeCell(row, col, index, clock) + "</td>";
-                  })
-                  .join("") +
-                "</tr>"
-              );
-            })
-            .join("") +
-          '</tbody></table></div><p class="xm-hl-note">连接京麦和重新登录都在服务器里登录组织中心保存的账号。验证出现在弹出的画面里，点画面就是在服务器上操作。登录成功后服务器每 5 分钟采集。成交金额来自京麦首页经营数据，付费金额、付费成交额和付费 ROI 来自京准通非全站营销概况。</p></section>' +
+          '</div><section class="xm-hl-panel">' +
+          groupedTables(picked) +
+          '<p class="xm-hl-note">连接京麦和重新登录都在服务器里登录组织中心保存的账号。验证出现在弹出的画面里，点画面就是在服务器上操作。登录成功后服务器每 5 分钟采集。成交金额来自京麦首页经营数据，付费金额、付费成交额和付费 ROI 来自京准通非全站营销概况。分组按组织中心的主管、储备。</p></section>' +
           '<div class="xm-sp-shop-modal" data-shop-modal hidden><form class="xm-sp-shop-dialog" data-shop-form>' +
           "<h3>新增店铺</h3><p class=\"xm-sp-shop-hint\">保存后归入沈子晗组，并出现在这份全部店铺里。登录账号在组织中心填写。</p>" +
           '<label>店铺名称<input name="storeName" required maxlength="64" autocomplete="off" /></label>' +
