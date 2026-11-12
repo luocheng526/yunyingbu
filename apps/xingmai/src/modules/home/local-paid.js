@@ -171,7 +171,13 @@ function paidRecordFrom(row, source) {
     totalOrderAmount: pickNum(row, ["totalOrderAmount", "jzOrderAmt"]),
     realFeeRatio: pickNum(row, ["realFeeRatio", "jzRealFee"]),
     success: text(row.success || row.jzOk),
-    capturedAt: text(row.capturedAt || row.ingestedAt)
+    capturedAt: text(row.capturedAt || row.ingestedAt),
+    online:
+      row.online === true || row.online === "在线"
+        ? true
+        : row.online === false || row.online === "掉线" || row.loginExpired === true || row.stale === true
+          ? false
+          : null
   };
 }
 
@@ -209,6 +215,8 @@ function betterRecord(cur, next) {
     totalOrderAmount: cur.totalOrderAmount != null ? cur.totalOrderAmount : next.totalOrderAmount,
     realFeeRatio: cur.realFeeRatio != null ? cur.realFeeRatio : next.realFeeRatio,
     success: cur.success || next.success,
+    capturedAt: cur.capturedAt || next.capturedAt,
+    online: cur.online != null ? cur.online : next.online,
     source: cur.source && next.source && cur.source !== next.source ? "han+shen" : cur.source || next.source
   };
 }
@@ -279,7 +287,7 @@ function summarizeRecords(records) {
 
 export function mergeHanShenPaid(han, shenPaid, shenJingmai, ymd = shanghaiYmd()) {
   const map = {};
-  function add(row, source) {
+  function add(row, source, pack) {
     if (!isLiveDay(row, ymd)) {
       return;
     }
@@ -287,10 +295,15 @@ export function mergeHanShenPaid(han, shenPaid, shenJingmai, ymd = shanghaiYmd()
     if (!rec) {
       return;
     }
+    if (rec.online == null && pack && pack.stale === true) {
+      rec.online = false;
+    } else if (rec.online == null && pack && pack.stale === false) {
+      rec.online = true;
+    }
     map[rec.shopName] = betterRecord(map[rec.shopName], rec);
   }
-  listFromPack(han, ["shops", "rows", "items", "records"]).forEach((row) => add(row, "han"));
-  listFromPack(shenPaid, ["rows", "shops", "items", "records"]).forEach((row) => add(row, "shen"));
+  listFromPack(han, ["shops", "rows", "items", "records"]).forEach((row) => add(row, "han", han));
+  listFromPack(shenPaid, ["rows", "shops", "items", "records"]).forEach((row) => add(row, "shen", shenPaid));
   listFromPack(shenJingmai, ["shops", "rows"]).forEach((row) => {
     const named = { ...row, store: shopName(row), jingmaiGmv: row.dealAmount, capturedAt: row.capturedAt };
     if (named.dealAmount == null && named.jingmaiGmv == null && !rowDay(named)) {

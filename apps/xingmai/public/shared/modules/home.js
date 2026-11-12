@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.835-home-paidmerge */
+/* xm-module-home 0.1.871-home-status */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1689,7 +1689,9 @@
     { key: "feeRate", label: "实时费比" },
     { key: "feeWarn", label: "费比监控", w: "120px" },
     { key: "feeGoal", label: "费比设置", w: "176px" },
-    { key: "liveAt", label: "更新时间", w: "150px" }
+    { key: "liveAt", label: "更新时间", w: "150px" },
+    { key: "jzOk", label: "回传成功", w: "88px" },
+    { key: "liveOn", label: "状态", w: "72px" }
   ];
   var LIVE_EXTRA_HEADS = [
     { key: "jzAccount", label: "京准通主账户ID", extra: true, w: "140px" },
@@ -1702,8 +1704,7 @@
     { key: "jzClicks", label: "京准通点击数", extra: true },
     { key: "jzCtr", label: "京准通点击率", extra: true },
     { key: "jzOrderAmt", label: "京准通总订单金额", extra: true },
-    { key: "jzRealFee", label: "真实费比", extra: true },
-    { key: "jzOk", label: "是否成功", extra: true }
+    { key: "jzRealFee", label: "真实费比", extra: true }
   ];
   var LIVE_SHOP_HEADS = LIVE_CORE_HEADS.concat(LIVE_EXTRA_HEADS);
   var LIVE_LOCK_HEADS = { rank: true, shop: true };
@@ -1856,6 +1857,31 @@
       "</tr></thead>"
     );
   }
+  function liveLinkOf(row) {
+    var on = { label: "在线", kind: "on" };
+    var off = { label: "掉线", kind: "off" };
+    if (!row) {
+      return off;
+    }
+    var flag = row.online != null ? row.online : row.liveOn;
+    if (flag === true || flag === "在线" || flag === "on") {
+      return on;
+    }
+    if (flag === false || flag === "掉线" || flag === "off" || row.loginExpired || row.stale) {
+      return off;
+    }
+    if (row.jzOk === "是" || row.jzOk === "否" || row.success === "是" || row.success === "否") {
+      return on;
+    }
+    var at = row.capturedAt || row.ingestedAt;
+    if (at) {
+      var t = Date.parse(String(at));
+      if (Number.isFinite(t) && Date.now() - t <= 30 * 60 * 1000) {
+        return on;
+      }
+    }
+    return off;
+  }
   function liveShopCellHtml(col, row, index, liveAt) {
     var shop = row && row.shop;
     var mon = feeMonitorOf(row && row.feeRate, shop);
@@ -1901,6 +1927,26 @@
     }
     if (key === "liveAt") {
       return '<td class="xm-hm-num">' + escapeHtml(row.liveAt || liveAtText(liveAt)) + "</td>";
+    }
+    if (key === "jzOk") {
+      var ok = String((row && row.jzOk) || "—");
+      return (
+        '<td class="xm-hm-num' +
+        (ok === "是" || ok === "成功" ? " is-fee-cold" : ok === "否" || ok === "失败" ? " is-fee-hot" : "") +
+        '">' +
+        escapeHtml(ok) +
+        "</td>"
+      );
+    }
+    if (key === "liveOn") {
+      var link = liveLinkOf(row);
+      return (
+        '<td class="xm-hm-num' +
+        (link.kind === "on" ? " is-fee-cold" : " is-fee-hot") +
+        '">' +
+        escapeHtml(link.label) +
+        "</td>"
+      );
     }
     if (key && String(key).indexOf("jz") === 0) {
       return '<td class="xm-hm-num">' + escapeHtml(row[key] == null || row[key] === "" ? "—" : row[key]) + "</td>";
@@ -2361,7 +2407,7 @@
     hideCardTip();
     hideLineTip(root);
     var feeDraft = liveFeeDraft(root);
-    board.setAttribute("data-hm-js", "0.1.835-home-paidmerge");
+    board.setAttribute("data-hm-js", "0.1.871-home-status");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -3476,7 +3522,9 @@
       paidDeal: fmtMoney(pay),
       feeRate: fmtRate(fee),
       jzAccount: String((row && (row.accountId || row.jzAccount)) || "").trim() || "—",
-      jzOk: String((row && (row.success || row.jzOk)) || "").trim() || "—"
+      jzOk: String((row && (row.success || row.jzOk)) || "").trim() || "—",
+      online: row && row.online,
+      capturedAt: row && (row.capturedAt || row.ingestedAt)
     };
   }
   function fillLocalPaid(live, local) {
