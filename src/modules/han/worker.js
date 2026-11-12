@@ -116,6 +116,41 @@ function readClock(value) {
   return formatted;
 }
 
+function shanghaiParts(date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const get = (type) => parts.find((part) => part.type === type).value;
+  let hour = Number(get("hour"));
+  if (hour === 24) hour = 0;
+  return { date: `${get("year")}-${get("month")}-${get("day")}`, hour: String(hour) };
+}
+
+function rememberCurve(state, shops, capturedAt) {
+  const parsed = new Date(capturedAt);
+  const when = shanghaiParts(Number.isNaN(parsed.getTime()) ? new Date() : parsed);
+  const curves = state.curves && typeof state.curves === "object" ? state.curves : {};
+  const day = curves[when.date] && typeof curves[when.date] === "object" ? curves[when.date] : {};
+  const hour = day[when.hour] && typeof day[when.hour] === "object" ? { ...day[when.hour] } : {};
+  for (const shop of shops) {
+    if (!shop || !shop.store) continue;
+    hour[shop.store] = [
+      Math.round((Number(shop.jingmaiGmv) || 0) * 100) / 100,
+      Math.round((Number(shop.spend) || 0) * 100) / 100,
+    ];
+  }
+  day[when.hour] = hour;
+  curves[when.date] = day;
+  const dates = Object.keys(curves).sort();
+  while (dates.length > 2) delete curves[dates.shift()];
+  state.curves = curves;
+}
+
 export function shanghaiMinutes(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Shanghai",
@@ -1263,6 +1298,7 @@ export function createWorkerMethods(db, ensure) {
           configured: Boolean(decision.configured),
           remindedAt: decision.remindedAt || "",
         },
+        curves: state.curves || {},
       };
     },
 
@@ -1462,6 +1498,7 @@ export function createWorkerMethods(db, ensure) {
       }
       const shopNames = new Set(shops.map((row) => row.store));
       state.shops = state.shops.filter((row) => !shopNames.has(row.store)).concat(shops);
+      if (shops.length) rememberCurve(state, shops, capturedAt);
       const touchedSubs = new Set(subs.map((row) => row.store));
       state.subs = state.subs.filter((row) => !touchedSubs.has(row.store)).concat(subs);
       const rechargeMap = new Map(keepRecentRecharges(state.recharges).map((row) => [rechargeKey(row), row]));
