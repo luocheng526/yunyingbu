@@ -37,7 +37,7 @@
       if (!document.querySelector('link[href^="/shared/shen-paid.css"]')) {
         const link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href = "/shared/shen-paid.css?v=0.1.817-jingmai";
+        link.href = "/shared/shen-paid.css?v=0.1.821-shen-roster";
         document.head.appendChild(link);
       }
 
@@ -271,16 +271,22 @@
       }
 
       function mapShenShops(data) {
-        const rows = ((data && data.shops) || [])
-          .filter(function (shop) {
-            const name = String(shop.name || "").trim();
-            return shop.kind === "店铺" && shop.pack === "沈子晗包" && name && !/包$/.test(name);
+        const rows = ((data && data.stores) || [])
+          .filter(function (store) {
+            const name = String(store.storeName || "").trim();
+            return name && (store.team === "沈子晗组" || store.manager === "沈子晗");
           })
-          .map(function (shop) {
-            const bundle = String(shop.bundle || "").replace(/包$/, "");
+          .map(function (store) {
+            const operator = String(store.operator || store.owner || "").trim();
+            const supervisor = String(store.supervisor || "").trim();
+            const lead = String(store.lead || "").trim();
+            const groupLead = /组$/.test(lead) ? "" : lead;
+            const remark = String(store.remark || "").trim();
             return {
-              store: String(shop.name || "").trim(),
-              owner: bundle || "沈子晗",
+              store: String(store.storeName || "").trim(),
+              owner: operator || supervisor || groupLead || "未分配",
+              group: supervisor || groupLead || operator || "未分配",
+              note: remark && remark !== "运营中" ? remark : "",
               spend: null,
               jingmaiGmv: null,
               yesterdayGmv: null,
@@ -292,6 +298,9 @@
               linked: false
             };
           });
+        rows.sort(function (a, b) {
+          return a.store.localeCompare(b.store, "zh");
+        });
         return { asOf: "", rows: rows };
       }
 
@@ -299,7 +308,7 @@
         const names = [];
         const seen = {};
         overviewRows.forEach(function (row) {
-          const name = row.owner || "未分配";
+          const name = row.group || row.owner || "未分配";
           if (seen[name]) {
             return;
           }
@@ -316,7 +325,7 @@
         const row = overviewRows.find(function (item) {
           return item.store === store;
         });
-        return (row && row.owner) || "未分配";
+        return (row && (row.group || row.owner)) || "未分配";
       }
 
       function feeTargetOf(store) {
@@ -429,7 +438,7 @@
           return money(row.profit);
         }
         if (key === "owner") {
-          return escapeHtml(row.owner || "—");
+          return escapeHtml((row.owner || "—") + (row.note ? " · " + row.note : ""));
         }
         if (key === "clicks") {
           return integer(row.clicks);
@@ -711,8 +720,18 @@
               "</optgroup>"
             : "") +
           '</select></span></div><div class="xm-hm-live-filter-right">' +
+          '<button type="button" class="xm-hm-live-heads" data-add-shop>新增店铺</button>' +
           '<button type="button" class="xm-hm-live-heads" data-live-heads>表头设置</button>' +
-          '<button type="button" class="xm-hm-live-refresh" data-refresh-live>刷新</button></div></div>'
+          '<button type="button" class="xm-hm-live-refresh" data-refresh-live>刷新</button></div></div>' +
+          '<div class="xm-sp-shop-modal" data-shop-modal hidden><form class="xm-sp-shop-dialog" data-shop-form>' +
+          "<h3>新增店铺</h3><p class=\"xm-sp-shop-hint\">保存后归入沈子晗组，并出现在这份全部店铺里。登录账号在组织中心填写。</p>" +
+          '<label>店铺名称<input name="storeName" required maxlength="64" autocomplete="off" /></label>' +
+          '<label>主管<input name="supervisor" maxlength="40" autocomplete="off" placeholder="用来分组，可空" /></label>' +
+          '<label>运营<input name="operator" maxlength="40" autocomplete="off" /></label>' +
+          '<label>店铺ID<input name="storeId" maxlength="32" autocomplete="off" /></label>' +
+          '<p class="xm-sp-shop-error" data-shop-error hidden></p>' +
+          '<div class="xm-sp-shop-actions"><button type="submit">保存</button>' +
+          '<button type="button" data-shop-cancel>取消</button></div></form></div>'
         );
       }
 
@@ -767,7 +786,7 @@
             " " +
             scoped.length +
             " 店"
-          : "沈子晗包 · " + (view.team || "全部") + " " + scoped.length + " 店 · 京麦未接入";
+          : "沈子晗组 · " + (view.team || "全部") + " " + scoped.length + " 店 · 京麦未接入";
         if (stale) {
           text += " · 已超过30分钟没有更新";
         }
@@ -927,6 +946,65 @@
               writeHash({ team: "", liveShop: "", store: "" });
             }
           });
+        }
+        const addShop = boardEl.querySelector("[data-add-shop]");
+        const shopModal = boardEl.querySelector("[data-shop-modal]");
+        const shopForm = boardEl.querySelector("[data-shop-form]");
+        const shopError = boardEl.querySelector("[data-shop-error]");
+        if (addShop && shopModal && shopForm) {
+          addShop.addEventListener("click", function () {
+            if (shopError) {
+              shopError.hidden = true;
+              shopError.textContent = "";
+            }
+            shopModal.hidden = false;
+            const nameInput = shopForm.querySelector("[name=storeName]");
+            if (nameInput) {
+              nameInput.focus();
+            }
+          });
+          shopForm.addEventListener("submit", function (event) {
+            event.preventDefault();
+            const storeName = String(shopForm.storeName.value || "").trim();
+            if (!storeName) {
+              return;
+            }
+            const submit = shopForm.querySelector("[type=submit]");
+            if (submit) {
+              submit.disabled = true;
+            }
+            postJson("/api/people/org/stores", {
+              director: "罗成",
+              manager: "沈子晗",
+              supervisor: String(shopForm.supervisor.value || "").trim(),
+              operator: String(shopForm.operator.value || "").trim(),
+              storeName: storeName,
+              storeId: String(shopForm.storeId.value || "").trim(),
+              remark: "运营中"
+            })
+              .then(function () {
+                shopForm.reset();
+                shopModal.hidden = true;
+                return load();
+              })
+              .catch(function (err) {
+                if (shopError) {
+                  shopError.hidden = false;
+                  shopError.textContent = err.message || "保存失败";
+                }
+              })
+              .then(function () {
+                if (submit) {
+                  submit.disabled = false;
+                }
+              });
+          });
+          const cancel = shopForm.querySelector("[data-shop-cancel]");
+          if (cancel) {
+            cancel.addEventListener("click", function () {
+              shopModal.hidden = true;
+            });
+          }
         }
         const refresh = boardEl.querySelector("[data-refresh-live]");
         if (refresh) {
@@ -1301,15 +1379,26 @@
         });
       }
 
-      function getJson(url) {
-        return fetch(url, { credentials: "same-origin" }).then(function (res) {
-          return res.json().catch(function () { return {}; }).then(function (data) {
-            if (!res.ok) {
-              throw new Error(data.error || "无法加载付费数据");
-            }
-            return data;
-          });
+      function readJson(res) {
+        return res.json().catch(function () { return {}; }).then(function (data) {
+          if (!res.ok || data.ok === false) {
+            throw new Error(data.error || "无法加载付费数据");
+          }
+          return data;
         });
+      }
+
+      function getJson(url) {
+        return fetch(url, { credentials: "same-origin" }).then(readJson);
+      }
+
+      function postJson(url, body) {
+        return fetch(url, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        }).then(readJson);
       }
 
       function renderJingmaiShop(store) {
@@ -1369,11 +1458,15 @@
       function load() {
         view = parseHash();
         setStatus("正在加载…");
-        return getJson("/api/people/shops")
+        return getJson("/api/people/org/stores?team=" + encodeURIComponent("沈子晗组"))
           .then(function (data) {
             if (dead) {
               return;
             }
+            (data.stores || []).forEach(function (store) {
+              delete store.login;
+              delete store.password;
+            });
             const mapped = mapShenShops(data);
             overviewRows = mapped.rows;
             overviewAsOf = "";
@@ -1386,7 +1479,7 @@
               }
               renderOverview({ asOf: "", rows: mapped.rows });
             }
-            setStatus("已更新 · 沈子晗包 " + mapped.rows.length + " 店，京麦还没有这些店的数据");
+            setStatus("已更新 · 沈子晗组 " + mapped.rows.length + " 店。新加的店会进这份名单，京麦成交还没接入");
           })
           .catch(function (err) {
             if (!dead) {

@@ -706,6 +706,88 @@
   color: #262626;
 }
 
+#paid-board .xm-sp-shop-modal[hidden] {
+  display: none !important;
+}
+
+#paid-board .xm-sp-shop-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+#paid-board .xm-sp-shop-dialog {
+  width: min(420px, 100%);
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px 22px 16px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
+}
+
+#paid-board .xm-sp-shop-dialog h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+#paid-board .xm-sp-shop-hint {
+  margin: 6px 0 10px;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+#paid-board .xm-sp-shop-dialog label {
+  display: block;
+  margin: 10px 0;
+  font-size: 13px;
+  color: #374151;
+}
+
+#paid-board .xm-sp-shop-dialog input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  height: 36px;
+  margin-top: 4px;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  padding: 0 10px;
+  font-size: 14px;
+}
+
+#paid-board .xm-sp-shop-error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+#paid-board .xm-sp-shop-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+#paid-board .xm-sp-shop-actions button {
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid #1677ff;
+  background: #1677ff;
+  color: #fff;
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+#paid-board .xm-sp-shop-actions button[data-shop-cancel] {
+  background: #fff;
+  color: #374151;
+  border-color: #e4e7ed;
+}
+
 .xm-paid .xm-sub-sort {
   height: auto;
   border: 0;

@@ -381,9 +381,13 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /XmModules\["\/shen\/product\/youhua"\]/);
     assert.match(embed.text, /XmModules\["\/shen\/product\/chengzhang"\]/);
     assert.match(embed.text, /XmModules\["\/shen\/paid"\]/);
-    assert.match(embed.text, /\/api\/people\/shops/);
-    assert.match(embed.text, /沈子晗包/);
+    assert.match(embed.text, /\/api\/people\/org\/stores\?team=/);
+    assert.match(embed.text, /沈子晗组/);
+    assert.match(embed.text, /新增店铺/);
+    assert.match(embed.text, /manager: "沈子晗"/);
     assert.match(embed.text, /京麦未接入/);
+    assert.equal(embed.text.includes("/api/people/shops"), false);
+    assert.equal(embed.text.includes('name="password"'), false);
     assert.equal(embed.text.includes("/api/home/erp-paid"), false);
     assert.match(embed.text, /kpi-grid/);
     assert.match(embed.text, /xm-paid-store/);
