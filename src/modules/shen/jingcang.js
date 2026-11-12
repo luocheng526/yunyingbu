@@ -219,6 +219,25 @@ function shapeOf(item) {
   return lines;
 }
 
+function isJdLogistics(item) {
+  const labels = item && item.showLabels;
+  if (Array.isArray(labels)) {
+    for (let index = 0; index < labels.length; index += 1) {
+      const label = labels[index];
+      if (!label || typeof label !== "object") {
+        continue;
+      }
+      const code = String(label.code || "");
+      const name = String(label.name || label.labelName || label.showName || label.text || "");
+      if (code === "label_isJDexpress" || name.indexOf("京东物流") !== -1) {
+        return true;
+      }
+    }
+  }
+  const feature = item && item.skuInfo && item.skuInfo.spuFeatureMap;
+  return Boolean(feature && String(feature.isJDexpress || "") === "1");
+}
+
 function statusOf(info) {
   const text = [info.skuStatusName, info.statusName, info.pStatusName, info.saleStatusName].find(function (item) {
     return typeof item === "string" && item.trim();
@@ -242,8 +261,20 @@ function toRow(item) {
     image: imageUrl(info.logo),
     warehouses: warehouses,
     names: collectNames(item),
-    shape: warehouses.length ? [] : shapeOf(item)
+    shape: warehouses.length ? [] : shapeOf(item),
+    jdLogistics: isJdLogistics(item),
+    labels: labelCodes(item)
   };
+}
+
+function labelCodes(item) {
+  const labels = item && item.showLabels;
+  if (!Array.isArray(labels)) {
+    return [];
+  }
+  return labels.map(function (label) {
+    return String((label && label.code) || "");
+  }).filter(Boolean);
 }
 
 export function parseStockPage(body) {
@@ -477,7 +508,17 @@ export async function loadJingcang(storeName, deps) {
   }
   let shape = [];
   const names = [];
-  const rows = result.rows.map(function (row) {
+  const labelCodesSeen = [];
+  result.rows.forEach(function (row) {
+    (row.labels || []).forEach(function (code) {
+      if (labelCodesSeen.length < 24 && labelCodesSeen.indexOf(code) === -1) {
+        labelCodesSeen.push(code);
+      }
+    });
+  });
+  const rows = result.rows.filter(function (row) {
+    return row.jdLogistics;
+  }).map(function (row) {
     if (!shape.length && row.shape && row.shape.length) {
       shape = row.shape;
     }
@@ -500,13 +541,14 @@ export async function loadJingcang(storeName, deps) {
   return {
     ok: true,
     store: store,
-    total: result.total,
+    total: rows.length,
     count: rows.length,
     truncated: Boolean(result.truncated),
     source: result.source,
     capturedAt: beijingParts().stamp,
     shape: shape,
     names: names,
+    labelCodes: labelCodesSeen,
     rows: rows
   };
 }

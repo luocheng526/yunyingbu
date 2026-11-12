@@ -18,6 +18,7 @@ function stockRow(sku, warehouses) {
       itemNum: "RXF-T",
       skuStatusName: "在售"
     },
+    showLabels: [{ code: "label_isJDexpress", name: "京东物流" }],
     stockDetails: warehouses
   };
 }
@@ -55,6 +56,30 @@ test("stock rows keep each warehouse quantity and drop 全国仓", () => {
   assert.deepEqual(parsed.rows[0].warehouses.map(function (item) { return item.qty; }), [36, 11, 0]);
   assert.equal(JSON.stringify(parsed).includes("全国仓"), false);
   assert.equal(JSON.stringify(parsed).includes("99999"), false);
+});
+
+test("only 京东物流 tagged skus are returned", async () => {
+  await resetJingmaiStore();
+  await saveSession(JINGCANG_TEST_STORE, { cookies: [{ name: "thor", value: SECRET }], authState: "ok", enabled: true });
+  const plain = stockRow("1023541407307", [house("北京常温C平台仓55号库-CHN", 4)]);
+  delete plain.showLabels;
+  const result = await loadJingcang(JINGCANG_TEST_STORE, {
+    fetchImpl: async function () {
+      return jsonResponse(page([
+        stockRow("10235451473396", [house("无锡常温C平台仓13号库-CHN", 36), house("商家全国仓", 99999)]),
+        plain
+      ], 2));
+    },
+    readShopStock: async function () {
+      return [];
+    }
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.count, 1);
+  assert.equal(result.rows[0].sku, "10235451473396");
+  assert.equal(result.rows[0].warehouses.length, 1);
+  assert.equal(JSON.stringify(result).includes("全国仓"), false);
+  await resetJingmaiStore();
 });
 
 test("a nested DSM payload still lists the sku", () => {

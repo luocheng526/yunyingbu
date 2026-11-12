@@ -1482,6 +1482,8 @@ export function readHomeDeal(cookies) {
 const STOCK_PAGE = "https://trade-warehousing-jdm.jd.com/inventory-manage";
 const STOCK_NEXT =
   '(() => { const docs = [document]; document.querySelectorAll("iframe").forEach((frame) => { try { if (frame.contentDocument) docs.push(frame.contentDocument); } catch (e) {} }); for (const doc of docs) { const next = doc.querySelector(".jd-pagination .btn-next, .el-pagination .btn-next, button.btn-next"); if (!next) continue; const disabled = next.disabled || next.classList.contains("is-disabled") || next.getAttribute("aria-disabled") === "true"; if (disabled) return "end"; next.click(); return "next"; } return "no-pager"; })()';
+const STOCK_LABEL =
+  '(() => { const docs = [document]; document.querySelectorAll("iframe").forEach((frame) => { try { if (frame.contentDocument) docs.push(frame.contentDocument); } catch (e) {} }); const wanted = "京东物流"; for (const doc of docs) { const options = doc.querySelectorAll(".jd-select-dropdown__item, .el-select-dropdown__item, [role=\\"option\\"]"); for (const option of options) { const text = String(option.innerText || "").replace(/\\s+/g, ""); if (text !== wanted) continue; option.click(); return "picked"; } } for (const doc of docs) { const labels = doc.querySelectorAll("label, .jd-form-item__label, .el-form-item__label"); for (const label of labels) { if (String(label.innerText || "").replace(/\\s+/g, "").indexOf("商品标签") === -1) continue; const item = label.closest(".jd-form-item, .el-form-item") || label.parentElement; const select = item && item.querySelector(".jd-select, .el-select"); if (!select) continue; const current = String(select.innerText || "").replace(/\\s+/g, ""); if (current.indexOf(wanted) !== -1) return "already"; select.click(); return "open"; } } return "no-filter"; })()';
 
 function watchStock(ws) {
   const queue = [];
@@ -1597,7 +1599,27 @@ async function readShopStockNow(cookies) {
       error.code = "network";
       throw error;
     }
-    const texts = [first];
+    let texts = [first];
+    let picked = false;
+    for (let attempt = 0; attempt < 3 && !picked; attempt += 1) {
+      const action = await evaluate(ws, STOCK_LABEL);
+      if (action === "already") {
+        picked = true;
+        break;
+      }
+      if (action === "picked") {
+        const filtered = await watch.next(12000);
+        if (filtered) {
+          texts = [filtered];
+        }
+        picked = true;
+        break;
+      }
+      if (action !== "open") {
+        break;
+      }
+      await sleep(400);
+    }
     for (let page = 0; page < 20; page += 1) {
       const action = await evaluate(ws, STOCK_NEXT);
       if (action !== "next") {

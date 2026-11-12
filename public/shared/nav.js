@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.764-jingcang-rows — 京仓商品行不要被店铺过滤清掉 */
+/* xm-fast-shell 0.1.764-jingcang-jdl — 京仓只显示京东物流商品 */
 (function () {
-  const ASSET_VER = "0.1.764-jingcang-rows";
+  const ASSET_VER = "0.1.764-jingcang-jdl";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
