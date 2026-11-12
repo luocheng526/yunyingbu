@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.880-in */
+/* xm-module-home 0.1.883-all */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -754,7 +754,7 @@
     return n === "罗成" || n === "韩梦凯" || n === "沈子晗";
   }
   function seesAllLiveShops(user) {
-    return homeUserName(user) === "罗成";
+    return isHomeBoss(user);
   }
   function liveDutyKeys(state) {
     if (!homeUserName(state && state.user)) {
@@ -2417,7 +2417,7 @@
     hideCardTip();
     hideLineTip(root);
     var searchDraft = liveSearchDraft(root);
-    board.setAttribute("data-hm-js", "0.1.880-in");
+    board.setAttribute("data-hm-js", "0.1.883-all");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -4026,20 +4026,11 @@
         }
         return part("year") + "/" + Number(part("month")) + "/" + Number(part("day")) + " " + pad2(Number(part("hour"))) + ":" + part("minute") + ":" + part("second");
       }
-      function liveScopeKeys() {
-        if (!homeUserName(state.user)) {
-          return {};
-        }
-        if (isHomeBoss(state.user)) {
-          return null;
-        }
-        return state.dutyReady ? state.dutyKeys || {} : {};
-      }
       function applyDutyCards() {
         if (!state.rangePack) {
           return;
         }
-        var keys = liveScopeKeys();
+        var keys = liveDutyKeys(state);
         state.cards = companyCardsFrom(summaryFrom(state.rangePack), summaryFrom(state.prevPack));
         if (keys) {
           state.ownCards = companyCardsFrom(summaryFrom(scopePack(state.rangePack, keys)), summaryFrom(scopePack(state.prevPack, keys)));
