@@ -377,6 +377,12 @@ test("shen module mounts product and paid content only", async () => {
     const embed = await request(base, "/shared/modules/shen.js");
     assert.equal(embed.res.status, 200);
     assert.match(embed.text, /XmModules\["\/shen\/jingcang"\]/);
+    assert.match(embed.text, /shen-jingcang\.css/);
+    assert.match(embed.text, /每个仓库的库存/);
+    assert.match(embed.text, /RASW潮流生活旗舰店/);
+    assert.match(embed.text, /1023541407306/);
+    assert.match(embed.text, /商家全国仓/);
+    assert.match(embed.text, /data-jc-group/);
     assert.match(embed.text, /XmModules\["\/shen\/product"\]/);
     assert.match(embed.text, /XmModules\["\/shen\/product\/xuanpin"\]/);
     assert.match(embed.text, /XmModules\["\/shen\/product\/youhua"\]/);

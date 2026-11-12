@@ -26,7 +26,299 @@
     };
   }
 
-  window.XmModules["/shen/jingcang"] = waitPage("京仓管理");
+  window.XmModules["/shen/jingcang"] = {
+    mount: function (root) {
+      const css = document.querySelector('link[href^="/shared/shen-jingcang.css"]') || document.createElement("link");
+      css.rel = "stylesheet";
+      css.href = "/shared/shen-jingcang.css?v=0.1.858-jingcang-tpl";
+      if (!css.parentNode) {
+        document.head.appendChild(css);
+      }
+
+      const GROUPS = ["杨润泽组", "张文静组", "高丽男组", "张鹏组"];
+      const SHOPS = [
+        ["杨润泽组", "RASW潮流生活旗舰店"],
+        ["张文静组", "RASW家居旗舰店"],
+        ["张文静组", "RASW生活电器旗舰"],
+        ["张文静组", "RASW健康电器旗舰店"],
+        ["高丽男组", "HYEGIIR健康器械旗舰店"],
+        ["高丽男组", "HYEGIIR养生器械旗舰店"],
+        ["高丽男组", "DIKTT个护健康旗舰店"],
+        ["高丽男组", "HYEGIIR医疗保健旗舰店"],
+        ["张鹏组", "飒望旗舰店"],
+        ["张鹏组", "SAWAAG生活日用旗舰店"],
+        ["张鹏组", "飒望居家旗舰店"],
+        ["张鹏组", "MGXEK旗舰店"]
+      ];
+      const GOODS = [
+        {
+          shop: "RASW潮流生活旗舰店",
+          name: "RASW【德国】婴儿理发器超静音自动吸发",
+          spu: "100290230908",
+          sku: "1023541407306",
+          code: "RXF-T",
+          status: "在售",
+          mark: "截图样例",
+          warehouses: [
+            { name: "商家全国仓", kind: "商家仓", qty: 99999 },
+            { name: "无锡常温C平台仓13号库-CHN", kind: "京东仓", qty: 36 },
+            { name: "廊坊常温C平台仓5号库-CHN", kind: "京东仓", qty: 11 },
+            { name: "北京常温C平台仓55号库-CHN", kind: "京东仓", qty: 45 }
+          ]
+        },
+        {
+          shop: "RASW家居旗舰店",
+          name: "样例商品 · 家居",
+          spu: "100000000101",
+          sku: "10000000010101",
+          code: "DEMO-JJ",
+          status: "在售",
+          mark: "版式样例",
+          warehouses: [
+            { name: "商家全国仓", kind: "商家仓", qty: 860 },
+            { name: "广州常温C平台仓2号库-CHN", kind: "京东仓", qty: 24 }
+          ]
+        },
+        {
+          shop: "HYEGIIR健康器械旗舰店",
+          name: "样例商品 · 健康",
+          spu: "100000000201",
+          sku: "10000000020101",
+          code: "DEMO-JK",
+          status: "在售",
+          mark: "版式样例",
+          warehouses: [
+            { name: "商家全国仓", kind: "商家仓", qty: 120 },
+            { name: "成都常温C平台仓1号库-CHN", kind: "京东仓", qty: 6 },
+            { name: "北京常温C平台仓55号库-CHN", kind: "京东仓", qty: 3 }
+          ]
+        },
+        {
+          shop: "飒望旗舰店",
+          name: "样例商品 · 日用",
+          spu: "100000000301",
+          sku: "10000000030101",
+          code: "DEMO-RY",
+          status: "在售",
+          mark: "版式样例",
+          warehouses: [
+            { name: "商家全国仓", kind: "商家仓", qty: 40 },
+            { name: "廊坊常温C平台仓5号库-CHN", kind: "京东仓", qty: 9 }
+          ]
+        }
+      ];
+      let groupWatch = "";
+      let query = "";
+
+      function money(value) {
+        return Number(value || 0).toLocaleString("zh-CN");
+      }
+
+      function goodsOf(shop) {
+        return GOODS.filter(function (row) {
+          return row.shop === shop;
+        });
+      }
+
+      function totalQty(row) {
+        return row.warehouses.reduce(function (sum, house) {
+          return sum + Number(house.qty || 0);
+        }, 0);
+      }
+
+      function photo() {
+        return (
+          '<span class="xm-jc-photo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="m8 15 2.5-2.5L14 16l2-2 2 2"/><circle cx="9" cy="9" r="1"/></svg></span>'
+        );
+      }
+
+      function warehouseList(row) {
+        const houses = row.warehouses || [];
+        const jd = houses.filter(function (house) {
+          return house.kind === "京东仓";
+        }).length;
+        const shopCount = houses.length - jd;
+        return (
+          '<p class="xm-jc-wh-sum">共' +
+          houses.length +
+          "个仓 · " +
+          shopCount +
+          "个商家仓 · " +
+          jd +
+          '个京东仓</p><ul class="xm-jc-wh">' +
+          houses
+            .map(function (house) {
+              return (
+                "<li><i>" +
+                escapeHtml(house.kind) +
+                "</i><b>" +
+                escapeHtml(house.name) +
+                "</b><em>" +
+                money(house.qty) +
+                "</em></li>"
+              );
+            })
+            .join("") +
+          "</ul>"
+        );
+      }
+
+      function productRow(row) {
+        return (
+          "<tr><td><div class=\"xm-jc-goods\">" +
+          photo() +
+          "<div><strong>" +
+          escapeHtml(row.name) +
+          '</strong><p><span class="is-on">' +
+          escapeHtml(row.status) +
+          "</span><span>" +
+          escapeHtml(row.mark) +
+          "</span>" +
+          (row.code ? "<span>货号 " + escapeHtml(row.code) + "</span>" : "") +
+          "</p></div></div></td><td class=\"xm-jc-code\">" +
+          escapeHtml(row.spu) +
+          "</td><td class=\"xm-jc-code\">" +
+          escapeHtml(row.sku) +
+          '</td><td class="xm-jc-houses">' +
+          warehouseList(row) +
+          '</td><td class="xm-jc-qty">' +
+          money(totalQty(row)) +
+          "</td></tr>"
+        );
+      }
+
+      function waitingRow() {
+        return '<tr class="is-wait"><td><div class="xm-jc-goods">' + photo() + '<div><strong>抓取后显示商品</strong><p><span>待抓取</span></p></div></div></td><td class="xm-jc-code">—</td><td class="xm-jc-code">—</td><td class="xm-jc-houses"><p class="xm-jc-wh-sum">各仓库库存会列在这里</p></td><td class="xm-jc-qty">—</td></tr>';
+      }
+
+      function table(rows) {
+        return (
+          '<div class="xm-jc-table-wrap"><table class="xm-jc-table"><thead><tr><th>商品</th><th>SPU</th><th>SKU</th><th>每个仓库的库存</th><th>可用</th></tr></thead><tbody>' +
+          (rows.length ? rows.map(productRow).join("") : waitingRow()) +
+          "</tbody></table></div>"
+        );
+      }
+
+      function matches(row) {
+        if (!query) {
+          return true;
+        }
+        const blob = [row.name, row.spu, row.sku, row.code, row.shop].join(" ").toLowerCase();
+        return blob.indexOf(query) !== -1;
+      }
+
+      root.innerHTML =
+        '<main class="xm-jc" id="jingcang-board"><header class="xm-jc-head"><div><p class="kicker">沈子晗运营中心</p><h1>京仓管理<em>模板</em></h1><p class="lead">先按组看店铺。每件商品留出图片、SPU、SKU，库存按仓库分行。这一版是版式，还没从京麦抓取。</p></div></header>' +
+        '<section class="xm-jc-kpis"><article><span>分组</span><strong data-jc-kpi="groups">4</strong></article><article><span>店铺</span><strong data-jc-kpi="shops">12</strong></article><article><span>样例 SKU</span><strong data-jc-kpi="sku">0</strong></article><article><span>样例可用库存</span><strong data-jc-kpi="stock">0</strong></article></section>' +
+        '<div class="xm-jc-bar"><nav class="xm-jc-tabs" aria-label="分组"><button type="button" data-jc-group="" class="is-on">全部</button>' +
+        GROUPS.map(function (name) {
+          return '<button type="button" data-jc-group="' + escapeHtml(name) + '">' + escapeHtml(name) + "</button>";
+        }).join("") +
+        '</nav><label class="xm-jc-search">搜索<input type="search" placeholder="店铺、商品、SPU、SKU" /></label></div>' +
+        '<div class="xm-jc-body"></div></main>';
+      const bodyEl = root.querySelector(".xm-jc-body");
+      const kpiEls = {
+        groups: root.querySelector('[data-jc-kpi="groups"]'),
+        shops: root.querySelector('[data-jc-kpi="shops"]'),
+        sku: root.querySelector('[data-jc-kpi="sku"]'),
+        stock: root.querySelector('[data-jc-kpi="stock"]')
+      };
+
+      function render() {
+        const needle = query;
+        const visibleShops = SHOPS.filter(function (pair) {
+          if (groupWatch && pair[0] !== groupWatch) {
+            return false;
+          }
+          if (!needle) {
+            return true;
+          }
+          if (pair[1].toLowerCase().indexOf(needle) !== -1) {
+            return true;
+          }
+          return goodsOf(pair[1]).some(matches);
+        });
+        const cards = GOODS.filter(function (row) {
+          return visibleShops.some(function (pair) {
+            return pair[1] === row.shop && matches(row);
+          });
+        });
+        const stock = cards.reduce(function (sum, row) {
+          return sum + totalQty(row);
+        }, 0);
+        const groups = GROUPS.filter(function (name) {
+          return visibleShops.some(function (pair) {
+            return pair[0] === name;
+          });
+        });
+        kpiEls.groups.textContent = String(groups.length);
+        kpiEls.shops.textContent = String(visibleShops.length);
+        kpiEls.sku.textContent = String(cards.length);
+        kpiEls.stock.textContent = money(stock);
+        root.querySelectorAll("[data-jc-group]").forEach(function (button) {
+          button.classList.toggle("is-on", (button.getAttribute("data-jc-group") || "") === groupWatch);
+        });
+        bodyEl.innerHTML = groups.length
+          ? groups
+              .map(function (name) {
+                const shops = visibleShops.filter(function (pair) {
+                  return pair[0] === name;
+                });
+                return (
+                  '<section class="xm-jc-group"><h2>' +
+                  escapeHtml(name) +
+                  "<span>" +
+                  shops.length +
+                  "店</span></h2>" +
+                  shops
+                    .map(function (pair) {
+                      const rows = goodsOf(pair[1]).filter(function (row) {
+                        return !needle || pair[1].toLowerCase().indexOf(needle) !== -1 || matches(row);
+                      });
+                      const count = rows.length;
+                      const sum = rows.reduce(function (acc, row) {
+                        return acc + totalQty(row);
+                      }, 0);
+                      return (
+                        '<article class="xm-jc-shop"><header><h3>' +
+                        escapeHtml(pair[1]) +
+                        "</h3><p>" +
+                        (count ? count + " 个 SKU · 可用 " + money(sum) : "还没有样例") +
+                        "</p></header>" +
+                        table(rows) +
+                        "</article>"
+                      );
+                    })
+                    .join("") +
+                  "</section>"
+                );
+              })
+              .join("")
+          : '<p class="xm-jc-empty">没有符合的店铺或商品</p>';
+      }
+
+      root.addEventListener("click", function (event) {
+        const button = event.target.closest("[data-jc-group]");
+        if (!button || !root.contains(button)) {
+          return;
+        }
+        groupWatch = button.getAttribute("data-jc-group") || "";
+        render();
+      });
+      root.addEventListener("input", function (event) {
+        const input = event.target.closest(".xm-jc-search input");
+        if (!input) {
+          return;
+        }
+        query = String(input.value || "").trim().toLowerCase();
+        render();
+      });
+      render();
+      return function unmount() {
+        root.innerHTML = "";
+      };
+    }
+  };
   window.XmModules["/shen/product"] = waitPage("产品中心");
   window.XmModules["/shen/product/xuanpin"] = waitPage("选品");
   window.XmModules["/shen/product/youhua"] = waitPage("优化");

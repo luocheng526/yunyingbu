@@ -1,0 +1,316 @@
+/* 沈子晗京仓管理模板。只作用于本页。 */
+.xm-jc {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 2px 28px;
+  color: var(--xm-text, #1f2937);
+}
+
+.xm-jc-head h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 22px;
+  font-weight: 650;
+}
+
+.xm-jc-head h1 em {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #e6f4ff;
+  color: #1677ff;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 650;
+}
+
+.xm-jc-head .kicker {
+  margin: 0 0 4px;
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+.xm-jc-head .lead {
+  max-width: 720px;
+  margin: 8px 0 0;
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.xm-jc-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.xm-jc-kpis article {
+  padding: 14px 16px 12px;
+  border-radius: 8px;
+  background: var(--xm-card, #fff);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 8px 24px rgba(0, 0, 0, 0.04);
+}
+
+.xm-jc-kpis span {
+  display: block;
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+.xm-jc-kpis strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.xm-jc-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.xm-jc-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.xm-jc-tabs button {
+  min-height: 32px;
+  padding: 4px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #374151;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.xm-jc-tabs button.is-on {
+  background: #1677ff;
+  color: #fff;
+}
+
+.xm-jc-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #667085;
+  font-size: 13px;
+}
+
+.xm-jc-search input {
+  width: 220px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+}
+
+.xm-jc-group h2 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 4px 2px 8px;
+  font-size: 16px;
+}
+
+.xm-jc-group h2 span {
+  color: #8c8c8c;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.xm-jc-shop {
+  margin-bottom: 14px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--xm-card, #fff);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 8px 24px rgba(0, 0, 0, 0.04);
+}
+
+.xm-jc-shop header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.xm-jc-shop h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.xm-jc-shop header p {
+  margin: 0;
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+.xm-jc-table-wrap {
+  overflow-x: auto;
+}
+
+.xm-jc-table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+}
+
+.xm-jc-table th {
+  padding: 10px 14px;
+  background: #fafafa;
+  color: #8c8c8c;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.xm-jc-table td {
+  padding: 14px;
+  border-top: 1px solid #f3f4f6;
+  vertical-align: top;
+}
+
+.xm-jc-goods {
+  display: flex;
+  gap: 10px;
+  min-width: 240px;
+}
+
+.xm-jc-photo {
+  display: grid;
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+  border-radius: 8px;
+  background: #f3f6fb;
+  color: #98a2b3;
+}
+
+.xm-jc-photo svg {
+  width: 26px;
+  height: 26px;
+}
+
+.xm-jc-goods strong {
+  display: block;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.xm-jc-goods p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 0;
+}
+
+.xm-jc-goods span {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #667085;
+  font-size: 12px;
+}
+
+.xm-jc-goods span.is-on {
+  background: #e8f7ee;
+  color: #15803d;
+}
+
+.xm-jc-code {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.xm-jc-qty {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.xm-jc-wh-sum {
+  margin: 0 0 8px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.xm-jc-wh {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 280px;
+}
+
+.xm-jc-wh li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.xm-jc-wh i {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #e6f4ff;
+  color: #1677ff;
+  font-size: 11px;
+  font-style: normal;
+}
+
+.xm-jc-wh b {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xm-jc-wh em {
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.xm-jc-table tr.is-wait td {
+  color: #98a2b3;
+}
+
+.xm-jc-empty {
+  margin: 12px 0;
+  color: #8c8c8c;
+  text-align: center;
+}
+
+@media (max-width: 800px) {
+  .xm-jc-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .xm-jc-search input {
+    width: 160px;
+  }
+}
