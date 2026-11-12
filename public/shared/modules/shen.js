@@ -30,7 +30,7 @@
     mount: function (root) {
       const css = document.querySelector('link[href^="/shared/shen-jingcang.css"]') || document.createElement("link");
       css.rel = "stylesheet";
-      css.href = "/shared/shen-jingcang.css?v=0.1.864-jingcang-rasw";
+      css.href = "/shared/shen-jingcang.css?v=0.1.764-jingcang-read";
       if (!css.parentNode) {
         document.head.appendChild(css);
       }
@@ -110,6 +110,7 @@
       ];
       let groupWatch = "";
       let query = "";
+      let stockFirst = true;
 
       function money(value) {
         if (value == null || value === "") {
@@ -145,123 +146,128 @@
         );
       }
 
-      function housesFor(rows) {
+      function shortHouse(name) {
+        const text = String(name || "");
+        const city = text.match(/^([\u4e00-\u9fa5]{2,3})/);
+        const num = text.match(/(\d+)号库/);
+        if (city && num) {
+          return city[1] + num[1];
+        }
+        return text.replace(/常温|平台仓|中件消费品|库-CHN|-CHN/g, "").slice(0, 8);
+      }
+
+      function houseTotals(rows) {
         const list = [];
-        const seen = {};
+        const index = {};
         rows.forEach(function (row) {
           shownHouses(row).forEach(function (house) {
-            const key = house.kind + "\n" + house.name;
-            if (seen[key]) {
+            const qty = Number(house.qty) || 0;
+            if (!qty) {
               return;
             }
-            seen[key] = true;
-            list.push(house);
+            if (index[house.name] == null) {
+              index[house.name] = list.length;
+              list.push({ name: house.name, qty: 0 });
+            }
+            list[index[house.name]].qty += qty;
           });
+        });
+        list.sort(function (a, b) {
+          return b.qty - a.qty;
         });
         return list;
       }
 
-      function qtyAt(row, house) {
-        const hit = shownHouses(row).find(function (item) {
-          return item.name === house.name && item.kind === house.kind;
-        });
-        return hit ? money(hit.qty) : "—";
+      function stockPills(houses) {
+        if (!houses.length) {
+          return '<span class="xm-jc-none">无货</span>';
+        }
+        return (
+          '<div class="xm-jc-pills">' +
+          houses
+            .map(function (house) {
+              return (
+                '<span class="xm-jc-pill" title="' +
+                escapeHtml(house.name) +
+                '"><i>' +
+                escapeHtml(shortHouse(house.name)) +
+                "</i><b>" +
+                money(house.qty) +
+                "</b></span>"
+              );
+            })
+            .join("") +
+          "</div>"
+        );
       }
 
       function goodsCell(row) {
         return (
           '<div class="xm-jc-goods">' +
           photo(row.image) +
-          "<div><strong>" +
+          '<div><strong title="' +
           escapeHtml(row.name) +
-          '</strong><p><span class="is-on">' +
+          '">' +
+          escapeHtml(row.name) +
+          '</strong><p class="xm-jc-sku">SKU ' +
+          escapeHtml(row.sku) +
+          (row.spu ? " · SPU " + escapeHtml(row.spu) : "") +
+          (row.code ? " · " + escapeHtml(row.code) : "") +
+          '</p><p><span class="is-on">' +
           escapeHtml(row.status) +
           "</span><span>" +
           escapeHtml(row.mark) +
-          "</span>" +
-          (row.code ? "<span>货号 " + escapeHtml(row.code) + "</span>" : "") +
-          "</p></div></div>"
+          "</span></p></div></div>"
         );
       }
 
       function sheet(shopName, rows) {
-        const houses = housesFor(rows);
         if (!rows.length) {
           return (
             '<article class="xm-jc-shop"><header><h3>' +
             escapeHtml(shopName) +
             '</h3><p>还没有样例</p></header><div class="xm-jc-wait">' +
             photo() +
-            "<div><strong>抓取后显示商品</strong><p>仓名写在上面，每个仓下面是对应数量</p></div></div></article>"
+            "<div><strong>抓取后显示商品</strong><p>有货的仓标在商品旁边</p></div></div></article>"
           );
         }
-        if (!houses.length) {
-          return (
-            '<article class="xm-jc-shop"><header><h3>' +
-            escapeHtml(shopName) +
-            "</h3><p>" +
-            rows.length +
-            ' 个 SKU</p></header><div class="xm-jc-wait">' +
-            rows
-              .map(function (row) {
-                return goodsCell(row);
-              })
-              .join("") +
-            "</div></article>"
-          );
+        const ordered = rows.slice();
+        if (stockFirst) {
+          ordered.sort(function (a, b) {
+            return totalQty(b) - totalQty(a);
+          });
         }
-        const style = ' style="--jc-wh:' + houses.length + '"';
-        const heads = houses
-          .map(function (house) {
-            return (
-              '<div class="xm-jc-wh-head"><i>' +
-              escapeHtml(house.kind) +
-              "</i><b>" +
-              escapeHtml(house.name) +
-              "</b></div>"
-            );
-          })
-          .join("");
-        const lines = rows
+        const totals = houseTotals(ordered);
+        const sum = ordered.reduce(function (acc, row) {
+          return acc + totalQty(row);
+        }, 0);
+        const lines = ordered
           .map(function (row) {
+            const houses = shownHouses(row).filter(function (house) {
+              return Number(house.qty) > 0;
+            });
             return (
-              '<div class="xm-jc-line"' +
-              style +
-              ">" +
+              '<div class="xm-jc-row">' +
               goodsCell(row) +
-              '<div class="xm-jc-code">' +
-              escapeHtml(row.spu) +
-              '</div><div class="xm-jc-code">' +
-              escapeHtml(row.sku) +
-              "</div>" +
-              houses
-                .map(function (house) {
-                  return '<div class="xm-jc-wh-qty">' + qtyAt(row, house) + "</div>";
-                })
-                .join("") +
+              stockPills(houses) +
               '<div class="xm-jc-wh-qty is-total">' +
               money(totalQty(row)) +
               "</div></div>"
             );
           })
           .join("");
-        const sum = rows.reduce(function (acc, row) {
-          return acc + totalQty(row);
-        }, 0);
         return (
-          '<article class="xm-jc-shop"><div class="xm-jc-sheet"><div class="xm-jc-line xm-jc-line-head"' +
-          style +
-          '><div class="xm-jc-shop-title"><h3>' +
+          '<article class="xm-jc-shop"><header><div class="xm-jc-shop-title"><h3>' +
           escapeHtml(shopName) +
           "</h3><p>" +
-          rows.length +
+          ordered.length +
           " 个 SKU · 可用 " +
           money(sum) +
-          '</p></div><div class="xm-jc-code-label">SPU</div><div class="xm-jc-code-label">SKU</div>' +
-          heads +
-          '<div class="xm-jc-wh-head is-total"><b>可用</b></div></div>' +
+          "</p></div>" +
+          stockPills(totals) +
+          '</header><div class="xm-jc-row xm-jc-row-head"><span>商品</span><span>有货的仓</span><span class="xm-jc-wh-head">可用</span></div>' +
           lines +
-          "</div></article>"
+          "</article>"
         );
       }
 
@@ -274,13 +280,13 @@
       }
 
       root.innerHTML =
-        '<main class="xm-jc" id="jingcang-board"><header class="xm-jc-head"><div><p class="kicker">沈子晗运营中心</p><h1>京仓管理<em data-jc-state>抓取中</em></h1><p class="lead" data-jc-lead>正在抓取 RASW潮流生活旗舰店里在售、商品标签为京东物流的库存。仓名写在上面，每个仓下面是对应数量。其他店铺仍是版式。</p></div></header>' +
+        '<main class="xm-jc" id="jingcang-board"><header class="xm-jc-head"><div><p class="kicker">沈子晗运营中心</p><h1>京仓管理<em data-jc-state>抓取中</em></h1><p class="lead" data-jc-lead>正在抓取 RASW潮流生活旗舰店里在售、商品标签为京东物流的库存。有货的仓标在商品旁边，没有的不占位置。其他店铺仍是版式。</p></div></header>' +
         '<section class="xm-jc-kpis"><article><span>分组</span><strong data-jc-kpi="groups">4</strong></article><article><span>店铺</span><strong data-jc-kpi="shops">12</strong></article><article><span>SKU</span><strong data-jc-kpi="sku">0</strong></article><article><span>可用库存</span><strong data-jc-kpi="stock">0</strong></article></section>' +
         '<div class="xm-jc-bar"><nav class="xm-jc-tabs" aria-label="分组"><button type="button" data-jc-group="" class="is-on">全部</button>' +
         GROUPS.map(function (name) {
           return '<button type="button" data-jc-group="' + escapeHtml(name) + '">' + escapeHtml(name) + "</button>";
         }).join("") +
-        '</nav><label class="xm-jc-search">搜索<input type="search" placeholder="店铺、商品、SPU、SKU" /></label></div>' +
+        '</nav><div class="xm-jc-tools"><div class="xm-jc-sort" role="group" aria-label="排序"><button type="button" data-jc-sort="stock" class="is-on">有货在前</button><button type="button" data-jc-sort="list">原顺序</button></div><label class="xm-jc-search">搜索<input type="search" placeholder="店铺、商品、SPU、SKU" /></label></div></div>' +
         '<div class="xm-jc-body"></div></main>';
       const bodyEl = root.querySelector(".xm-jc-body");
       const kpiEls = {
@@ -324,6 +330,10 @@
         root.querySelectorAll("[data-jc-group]").forEach(function (button) {
           button.classList.toggle("is-on", (button.getAttribute("data-jc-group") || "") === groupWatch);
         });
+        root.querySelectorAll("[data-jc-sort]").forEach(function (button) {
+          const mode = button.getAttribute("data-jc-sort");
+          button.classList.toggle("is-on", stockFirst ? mode === "stock" : mode === "list");
+        });
         bodyEl.innerHTML = groups.length
           ? groups
               .map(function (name) {
@@ -352,6 +362,12 @@
       }
 
       root.addEventListener("click", function (event) {
+        const sort = event.target.closest("[data-jc-sort]");
+        if (sort && root.contains(sort)) {
+          stockFirst = sort.getAttribute("data-jc-sort") !== "list";
+          render();
+          return;
+        }
         const button = event.target.closest("[data-jc-group]");
         if (!button || !root.contains(button)) {
           return;
