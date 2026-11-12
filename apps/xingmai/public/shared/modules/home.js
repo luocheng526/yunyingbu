@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.823-home-nosub */
+/* xm-module-home 0.1.824-home-liveamt */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1661,7 +1661,7 @@
   var LIVE_CORE_HEADS = [
     { key: "rank", label: "排名", w: "56px" },
     { key: "shop", label: "店铺名称", w: "16%" },
-    { key: "liveAmount", label: "京麦面板实时金额" },
+    { key: "liveAmount", label: "实时成交金额" },
     { key: "paidAmount", label: "实时付费金额" },
     { key: "roi", label: "实时付费ROI" },
     { key: "paidDeal", label: "实时付费成交额" },
@@ -2310,7 +2310,7 @@
     hideCardTip();
     hideLineTip(root);
     var feeDraft = liveFeeDraft(root);
-    board.setAttribute("data-hm-js", "0.1.823-home-nosub");
+    board.setAttribute("data-hm-js", "0.1.824-home-liveamt");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);

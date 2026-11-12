@@ -174,7 +174,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /liveChartHtml\(fee\)/);
   assert.match(homeJs, /function liveCardsOf/);
   assert.doesNotMatch(homeJs, /key: "ad", label: "推广花费 \(支付预估\)", value:/);
-  assert.match(homeJs, /label: "京麦面板实时金额"/);
+  assert.match(homeJs, /label: "实时成交金额"/);
+  assert.doesNotMatch(homeJs, /label: "京麦面板实时金额"/);
   assert.match(homeJs, /label: "实时总成交金额"/);
   assert.match(homeJs, /xm-hm-yest-now/);
   assert.match(homeJs, /环比 ↗ 上升 /);
@@ -238,7 +239,7 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.doesNotMatch(homeJs, /LIVE_CARD_KEYS = \["ad", "profit"/);
   assert.match(homeJs, /data-shop-card=/);
   assert.match(homeJs, /function liveTheadHtml/);
-  assert.match(homeJs, /label: "京麦面板实时金额"/);
+  assert.match(homeJs, /label: "实时成交金额"/);
   assert.doesNotMatch(homeJs, /label: "实时销售额"/);
   assert.match(homeJs, /<th><span>运营<\/span><\/th><\/tr>/);
   assert.match(homeJs, /<th><span>排名<\/span><\/th><th><span>店铺名称<\/span><\/th>' \+/);
