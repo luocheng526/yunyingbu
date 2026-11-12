@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.821-home-feerange */
+/* xm-module-home 0.1.823-home-nosub */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1606,7 +1606,6 @@
     if (Number(line.hours) !== 48) {
       line.hours = 24;
     }
-    var sub = unit === "rate" ? "线：当天费比" : "线：累计（23点=1-23点）";
     var trendCls = !hasDelta ? "" : n > 0 ? " is-up" : n < 0 ? " is-down" : "";
     var trendText = !hasDelta
       ? "环比 —"
@@ -1634,8 +1633,6 @@
       trendCls +
       '">' +
       trendText +
-      '</div><div class="xm-hm-chart-sub">' +
-      sub +
       "</div>" +
       compareLineHtml(line) +
       "</article>"
@@ -1657,7 +1654,6 @@
       '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
       escapeHtml(sales.value) +
       "</div>" +
-      (sales.hours ? '<div class="xm-hm-chart-sub">线：累计（23点=1-23点）</div>' : "") +
       compareLineHtml(sales) +
       "</article>"
     );
@@ -1962,7 +1958,6 @@
       ".xm-hm-sales{display:none;margin:0}" +
       ".xm-hm-sales-chart{width:100%}" +
       ".xm-hm-sales-chart .xm-hm-line,.xm-hm-live .xm-hm-line{display:block;width:100%;height:148px;cursor:crosshair}" +
-      ".xm-hm-chart-sub{margin:10px 0 0;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-content:start;width:100%}" +
       ".xm-hm-teams{display:flex;flex-direction:column;gap:10px;overflow-x:auto}" +
       ".xm-hm-teams-bar{display:flex;justify-content:space-between;align-items:center;padding:0 0 8px}" +
@@ -2315,7 +2310,7 @@
     hideCardTip();
     hideLineTip(root);
     var feeDraft = liveFeeDraft(root);
-    board.setAttribute("data-hm-js", "0.1.821-home-feerange");
+    board.setAttribute("data-hm-js", "0.1.823-home-nosub");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
