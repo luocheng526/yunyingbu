@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.871-home-status */
+/* xm-module-home 0.1.875-home-search */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1059,14 +1059,6 @@
     }
     return n;
   }
-  function feeTargets() {
-    try {
-      var raw = JSON.parse(localStorage.getItem("xm-home-fee-targets") || "{}");
-      return raw && typeof raw === "object" && Object.prototype.toString.call(raw) === "[object Object]" ? raw : {};
-    } catch (_err) {
-      return {};
-    }
-  }
   function parseFeeBound(raw) {
     if (raw == null || raw === "") {
       return null;
@@ -1075,55 +1067,48 @@
     if (!isFinite(n)) {
       return null;
     }
+    if (n > 0 && n <= 1) {
+      n = n * 100;
+    }
     return Math.max(0, Math.min(100, n));
   }
-  function feeRangeFor(shop) {
-    var key = String(shop || "").trim();
-    if (!key) {
-      return { lo: null, hi: null };
-    }
-    var raw = feeTargets()[key];
+  function parseFeeRangeText(raw) {
     if (raw == null || raw === "") {
       return { lo: null, hi: null };
     }
-    var lo;
-    var hi;
     if (typeof raw === "object") {
-      lo = parseFeeBound(raw.lo != null ? raw.lo : raw.min);
-      hi = parseFeeBound(raw.hi != null ? raw.hi : raw.max);
-    } else {
-      lo = parseFeeBound(raw);
-      hi = lo;
+      return {
+        lo: parseFeeBound(raw.lo != null ? raw.lo : raw.min != null ? raw.min : raw.feeLo),
+        hi: parseFeeBound(raw.hi != null ? raw.hi : raw.max != null ? raw.max : raw.feeHi)
+      };
+    }
+    var s = String(raw).trim();
+    var m = s.match(/(\d+(?:\.\d+)?)\s*%?\s*[-–~至到]\s*(\d+(?:\.\d+)?)/);
+    if (m) {
+      return { lo: parseFeeBound(m[1]), hi: parseFeeBound(m[2]) };
+    }
+    var n = parseFeeBound(s);
+    return { lo: n, hi: n };
+  }
+  function feeRangeOf(row) {
+    if (!row || typeof row !== "object") {
+      return { lo: null, hi: null };
+    }
+    var lo = parseFeeBound(row.feeLo != null ? row.feeLo : row.feeMin != null ? row.feeMin : row.minFee);
+    var hi = parseFeeBound(row.feeHi != null ? row.feeHi : row.feeMax != null ? row.feeMax : row.maxFee);
+    if (lo == null && hi == null) {
+      var parsed = parseFeeRangeText(row.feeGoal || row.feeRange || row.feeTarget || row["费比设置"]);
+      lo = parsed.lo;
+      hi = parsed.hi;
     }
     if (lo != null && hi != null && lo > hi) {
       return { lo: hi, hi: lo };
     }
     return { lo: lo, hi: hi };
   }
-  function saveFeeRangeFor(shop, side, raw) {
-    var key = String(shop || "").trim();
-    if (!key) {
-      return;
-    }
-    try {
-      var map = feeTargets();
-      var cur = feeRangeFor(shop);
-      if (side === "hi") {
-        cur.hi = parseFeeBound(raw);
-      } else {
-        cur.lo = parseFeeBound(raw);
-      }
-      if (cur.lo == null && cur.hi == null) {
-        delete map[key];
-      } else {
-        map[key] = { lo: cur.lo, hi: cur.hi };
-      }
-      localStorage.setItem("xm-home-fee-targets", JSON.stringify(map));
-    } catch (_err) {}
-  }
-  function feeMonitorOf(feeRate, shop) {
-    var range = feeRangeFor(shop);
-    var cur = feePct(feeRate);
+  function feeMonitorOf(row) {
+    var range = feeRangeOf(row);
+    var cur = feePct(row && row.feeRate);
     if (range.lo == null && range.hi == null) {
       return { label: "未设目标", kind: "" };
     }
@@ -1142,7 +1127,7 @@
     var hot = 0;
     var cold = 0;
     (shops || []).forEach(function (row) {
-      var kind = feeMonitorOf(row && row.feeRate, row && row.shop).kind;
+      var kind = feeMonitorOf(row).kind;
       if (kind === "hot") {
         hot += 1;
       } else if (kind === "cold") {
@@ -1156,20 +1141,18 @@
       return shops || [];
     }
     return (shops || []).filter(function (row) {
-      return feeMonitorOf(row && row.feeRate, row && row.shop).kind === pick;
+      return feeMonitorOf(row).kind === pick;
     });
   }
-  function feeOverTarget(value, shop) {
-    return feeMonitorOf(value, shop).kind === "hot";
-  }
-  function feeWarnText(value, shop) {
-    if (!feeOverTarget(value, shop)) {
+  function feeWarnText(row) {
+    var range = feeRangeOf(row);
+    if (feeMonitorOf(row).kind !== "hot") {
       return "";
     }
-    return "费比监控：当前 " + Math.round(feePct(value)) + "% 超过最高 " + Math.round(feeRangeFor(shop).hi) + "%";
+    return "费比监控：当前 " + Math.round(feePct(row && row.feeRate)) + "% 超过最高 " + Math.round(range.hi) + "%";
   }
-  function feeWarnLabel(feeRate, shop) {
-    return feeMonitorOf(feeRate, shop).label;
+  function feeWarnLabel(row) {
+    return feeMonitorOf(row).label;
   }
   function feeMonitorClass(kind) {
     if (kind === "hot") {
@@ -1181,84 +1164,60 @@
     return "";
   }
   function isHomeFormField(el) {
-    return !!(el && el.closest && el.closest("input,select,textarea,button,a,[data-fee-target],.xm-hm-fee-goal"));
+    return !!(el && el.closest && el.closest("input,select,textarea,button,a"));
   }
   function isFeeTyping(el) {
-    return !!(el && el.closest && el.closest("input,textarea,select,[data-fee-target],.xm-hm-fee-goal"));
+    return !!(el && el.closest && el.closest("input,textarea,select"));
   }
-  function liveFeeDraft(root) {
-    var el = root && root.querySelector ? root.querySelector("[data-fee-target]:focus") : null;
-    if (!el) {
+  function liveSearchDraft(root) {
+    var el = root && root.querySelector ? root.querySelector("[data-live-filter=\"q\"]") : null;
+    if (!el || document.activeElement !== el) {
       return null;
     }
-    return {
-      shop: String(el.getAttribute("data-fee-shop") || ""),
-      side: String(el.getAttribute("data-fee-target") || ""),
-      value: el.value,
-      start: el.selectionStart,
-      end: el.selectionEnd
-    };
+    return { value: el.value, start: el.selectionStart, end: el.selectionEnd };
   }
-  function restoreLiveFeeDraft(root, draft) {
-    if (!root || !draft || !draft.shop) {
+  function restoreLiveSearchDraft(root, draft) {
+    if (!root || !draft) {
       return;
     }
-    var list = root.querySelectorAll("[data-fee-target]");
-    var i;
-    var el;
-    for (i = 0; i < list.length; i += 1) {
-      el = list[i];
-      if (el.getAttribute("data-fee-shop") !== draft.shop) {
-        continue;
-      }
-      if (draft.side && el.getAttribute("data-fee-target") !== draft.side) {
-        continue;
-      }
-      el.value = draft.value;
-      el.focus();
-      try {
-        if (typeof el.setSelectionRange === "function") {
-          el.setSelectionRange(draft.start == null ? el.value.length : draft.start, draft.end == null ? el.value.length : draft.end);
-        }
-      } catch (_err) {}
+    var el = root.querySelector("[data-live-filter=\"q\"]");
+    if (!el) {
       return;
     }
+    el.value = draft.value;
+    el.focus();
+    try {
+      if (typeof el.setSelectionRange === "function") {
+        el.setSelectionRange(draft.start == null ? el.value.length : draft.start, draft.end == null ? el.value.length : draft.end);
+      }
+    } catch (_err) {}
   }
   function liveAtText(liveAt) {
     var raw = String(liveAt || "").trim();
     return raw || "—";
   }
-  function feeGoalCellHtml(shop) {
-    var range = feeRangeFor(shop);
-    var name = escapeHtml(String(shop || ""));
-    function boundInput(side, value) {
-      return (
-        '<input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" data-fee-target="' +
-        side +
-        '" data-fee-shop="' +
-        name +
-        '"' +
-        (value == null ? "" : ' value="' + escapeHtml(String(value)) + '"') +
-        ' onpointerdown="event.stopPropagation()" onmousedown="event.stopPropagation()" />'
-      );
+  function feeGoalCellHtml(row) {
+    var range = feeRangeOf(row);
+    if (range.lo == null && range.hi == null) {
+      return "—";
     }
-    return (
-      '<span class="xm-hm-fee-goal" onpointerdown="event.stopPropagation()" onmousedown="event.stopPropagation()">' +
-      boundInput("lo", range.lo) +
-      "%–" +
-      boundInput("hi", range.hi) +
-      "%</span>"
-    );
+    function pct(n) {
+      return n == null ? "—" : Math.round(n) + "%";
+    }
+    return pct(range.lo) + "–" + pct(range.hi);
   }
   function liveFilter() {
     try {
       var raw = JSON.parse(localStorage.getItem("xm-home-live-filter") || "{}");
       return {
         team: String((raw && raw.team) || "").trim(),
-        shop: String((raw && raw.shop) || "").trim()
+        shop: String((raw && raw.shop) || "").trim(),
+        q: String((raw && raw.q) || "").trim(),
+        link: String((raw && raw.link) || "").trim(),
+        jzOk: String((raw && raw.jzOk) || "").trim()
       };
     } catch (_err) {
-      return { team: "", shop: "" };
+      return { team: "", shop: "", q: "", link: "", jzOk: "" };
     }
   }
   function saveLiveFilter(next) {
@@ -1267,7 +1226,10 @@
         "xm-home-live-filter",
         JSON.stringify({
           team: String((next && next.team) || "").trim(),
-          shop: String((next && next.shop) || "").trim()
+          shop: String((next && next.shop) || "").trim(),
+          q: String((next && next.q) || "").trim(),
+          link: String((next && next.link) || "").trim(),
+          jzOk: String((next && next.jzOk) || "").trim()
         })
       );
     } catch (_err) {}
@@ -1352,12 +1314,32 @@
   function filterLiveShops(shops, state) {
     var pick = liveFilter();
     var teamMap = pick.team ? shopsInDutyTeam(state, pick.team) : null;
+    var idle = (state && state.orgIdle) || {};
+    var q = String(pick.q || "").toLowerCase();
     return (shops || []).filter(function (row) {
       var name = String((row && row.shop) || "").trim();
+      if (idle[normShopName(name)]) {
+        return false;
+      }
       if (pick.shop && name !== pick.shop) {
         return false;
       }
       if (teamMap && !teamMap[normShopName(name)]) {
+        return false;
+      }
+      if (q && name.toLowerCase().indexOf(q) < 0) {
+        return false;
+      }
+      if (pick.link === "on" && liveLinkOf(row).kind !== "on") {
+        return false;
+      }
+      if (pick.link === "off" && liveLinkOf(row).kind !== "off") {
+        return false;
+      }
+      if (pick.jzOk === "是" && String((row && row.jzOk) || "") !== "是") {
+        return false;
+      }
+      if (pick.jzOk === "否" && String((row && row.jzOk) || "") !== "否") {
         return false;
       }
       return true;
@@ -1446,6 +1428,34 @@
       ">" +
       (liveRefreshing ? "刷新中…" : "刷新") +
       "</button></div></div>"
+    );
+  }
+  function liveChipHtml(key, value, label, on) {
+    return (
+      '<button class="xm-hm-live-chip' +
+      (on ? " is-on" : "") +
+      '" data-live-chip="' +
+      escapeHtml(key) +
+      '" data-live-chip-val="' +
+      escapeHtml(value) +
+      '">' +
+      escapeHtml(label) +
+      "</button>"
+    );
+  }
+  function liveSearchHtml() {
+    var pick = liveFilter();
+    return (
+      '<div class="xm-hm-live-search">' +
+      '<input type="search" data-live-filter="q" placeholder="搜索店铺" value="' +
+      escapeHtml(pick.q || "") +
+      '" />' +
+      '<div class="xm-hm-live-chips">' +
+      liveChipHtml("link", "on", "在线", pick.link === "on") +
+      liveChipHtml("link", "off", "掉线", pick.link === "off") +
+      liveChipHtml("jzOk", "是", "回传成功", pick.jzOk === "是") +
+      liveChipHtml("jzOk", "否", "回传失败", pick.jzOk === "否") +
+      "</div></div>"
     );
   }
   function pickLiveCards(cards) {
@@ -1636,9 +1646,7 @@
           ? "环比 ↘ 下降 " + Math.round(Math.abs(n)) + "%"
           : "环比 0%";
     return (
-      '<article class="xm-hm-chart' +
-      (kind === "fee" && feeWarnText(chart && chart.value) ? " is-warn" : "") +
-      '" data-chart="' +
+      '<article class="xm-hm-chart" data-chart="' +
       kind +
       '"' +
       (unit ? ' data-unit="' + unit + '"' : "") +
@@ -1688,7 +1696,7 @@
     { key: "paidDeal", label: "实时付费成交额" },
     { key: "feeRate", label: "实时费比" },
     { key: "feeWarn", label: "费比监控", w: "120px" },
-    { key: "feeGoal", label: "费比设置", w: "176px" },
+    { key: "feeGoal", label: "费比设置", w: "110px" },
     { key: "liveAt", label: "更新时间", w: "150px" },
     { key: "jzOk", label: "回传成功", w: "88px" },
     { key: "liveOn", label: "状态", w: "72px" }
@@ -1884,7 +1892,7 @@
   }
   function liveShopCellHtml(col, row, index, liveAt) {
     var shop = row && row.shop;
-    var mon = feeMonitorOf(row && row.feeRate, shop);
+    var mon = feeMonitorOf(row);
     var key = col && col.key;
     if (key === "rank") {
       return '<td class="xm-hm-num">' + rankMark(index) + "</td>";
@@ -1923,7 +1931,7 @@
       );
     }
     if (key === "feeGoal") {
-      return '<td class="xm-hm-num">' + feeGoalCellHtml(shop) + "</td>";
+      return '<td class="xm-hm-num">' + escapeHtml(feeGoalCellHtml(row)) + "</td>";
     }
     if (key === "liveAt") {
       return '<td class="xm-hm-num">' + escapeHtml(row.liveAt || liveAtText(liveAt)) + "</td>";
@@ -2108,7 +2116,13 @@
       ".xm-hm-rest span{color:var(--xm-muted);width:22px}" +
       ".xm-hm-rest b{flex:1;font-weight:500}" +
       ".xm-hm-rest em{font-style:normal;font-variant-numeric:tabular-nums}" +
-      ".xm-hm-live-filter{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 16px;padding:0;border:0}" +
+      ".xm-hm-live-filter{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;padding:0;border:0}" +
+      ".xm-hm-live-search{display:flex;align-items:center;gap:8px;margin:8px 0}" +
+      ".xm-hm-live-search input,.xm-hm-live-chip{height:36px;border:1px solid #e4e7ed;border-radius:8px;background:#fff}" +
+      ".xm-hm-live-search input{flex:1;padding:0 10px}" +
+      ".xm-hm-live-chips{display:flex;gap:8px}" +
+      ".xm-hm-live-chip{padding:0 10px;cursor:pointer}" +
+      ".xm-hm-live-chip.is-on{border-color:var(--xm-primary);color:var(--xm-primary);background:var(--xm-primary-soft)}" +
       ".xm-hm-live-filter-left{display:flex;align-items:center;gap:12px;min-width:0}" +
       ".xm-hm-live-filter-lab{font-size:16px;font-weight:600;color:var(--xm-ink);line-height:40px;white-space:nowrap}" +
       ".xm-hm-live-filter-box{position:relative;flex:0 1 320px;min-width:220px;max-width:100%}" +
@@ -2126,13 +2140,10 @@
       ".xm-hm-head-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink);cursor:pointer;-webkit-user-select:none;user-select:none}" +
       ".xm-hm-live-filter select{width:100%;height:40px;box-sizing:border-box;border:1px solid #e4e7ed;border-radius:8px;padding:0 36px 0 14px;font:inherit;font-size:14px;color:var(--xm-ink);background:#fff;-webkit-appearance:none;appearance:none}" +
       ".xm-hm-live-filter-box:after{content:\"\";position:absolute;right:14px;top:50%;width:8px;height:8px;margin-top:-6px;border-right:2px solid #8c8c8c;border-bottom:2px solid #8c8c8c;transform:rotate(45deg);pointer-events:none}" +
-      ".xm-hm-fee-goal{display:inline-flex;align-items:center;justify-content:center;gap:2px;width:100%;color:var(--xm-ink);font-size:12px;white-space:nowrap;cursor:text;-webkit-user-select:text;user-select:text;pointer-events:auto}" +
-      ".xm-hm-fee-goal input{width:40px;height:28px;box-sizing:border-box;border:1px solid var(--xm-line);border-radius:4px;padding:0 4px;font:inherit;text-align:center;cursor:text;pointer-events:auto;-webkit-user-select:text;user-select:text}" +
       ".xm-hm-fee-warn{color:#cf1322;font-size:13px;font-weight:600}" +
       ".xm-hm-chart.is-warn{border-color:#ff7875}" +
       ".xm-hm-live .xm-hm-table td.is-fee-warn,.xm-hm-live .xm-hm-table td.is-fee-hot{color:#cf1322;font-weight:600}" +
       ".xm-hm-live .xm-hm-table td.is-fee-cold{color:#389e0d;font-weight:600}" +
-      ".xm-hm-live .xm-hm-table td:has(.xm-hm-fee-goal){overflow:visible}" +
       ".xm-hm-live-charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}" +
       ".xm-hm-chart{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:14px 16px 10px;min-width:0}" +
       ".xm-hm-legs{display:inline-flex;align-items:center;gap:10px;color:var(--xm-muted);font-size:12px}" +
@@ -2160,7 +2171,6 @@
       ".xm-hm-live-cards .xm-hm-card[data-card=\"feeHot\"] .xm-hm-value{color:#cf1322}" +
       ".xm-hm-live-cards .xm-hm-card[data-card=\"feeCold\"] .xm-hm-value{color:#389e0d}" +
       ".xm-hm-live .xm-hm-table{min-width:1280px;table-layout:fixed;border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums}" +
-      ".xm-hm-live .xm-hm-panel h2 .xm-hm-fee-goal{margin-left:auto}" +
       ".xm-hm-live .xm-hm-table .xm-hm-num{text-align:center;white-space:nowrap}" +
       ".xm-hm-live .xm-hm-table th,.xm-hm-live .xm-hm-table td{border:0;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;text-align:center;padding:var(--xm-hm-live-row,10px) 8px;line-height:1.45}" +
       ".xm-hm-live .xm-hm-table tbody tr{cursor:pointer}" +
@@ -2380,7 +2390,7 @@
     var live = liveBoard.live || blankLive();
     state.shownLive = live;
     var allShops = state.shops && state.shops.length ? state.shops : [];
-    var shops = liveBoard.shops && liveBoard.shops.length ? liveBoard.shops : filterLiveShops(allShops, state);
+    var shops = filterLiveShops(liveBoard.shops && liveBoard.shops.length ? liveBoard.shops : allShops, state);
     var teams =
       state.view === "chief"
         ? filterOwnChiefs(state.chiefs && state.chiefs.length ? state.chiefs : blankRoleTeams("主管"), state.user, state.people, state.dutyShops)
@@ -2406,8 +2416,8 @@
     shops = feePickShops(shops, liveFeePick);
     hideCardTip();
     hideLineTip(root);
-    var feeDraft = liveFeeDraft(root);
-    board.setAttribute("data-hm-js", "0.1.871-home-status");
+    var searchDraft = liveSearchDraft(root);
+    board.setAttribute("data-hm-js", "0.1.875-home-search");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2439,7 +2449,9 @@
       liveCards.map(function (card) {
         return liveCardHtml(card, liveFeePick);
       }).join("") +
-      '</div><div class="xm-hm-panel">' +
+      "</div>" +
+      liveSearchHtml() +
+      '<div class="xm-hm-panel">' +
       '<table class="xm-hm-table" style="min-width:' +
       liveTableMinW() +
       'px">' +
@@ -2459,7 +2471,7 @@
     root.querySelector("#xm-hm-note").textContent = gapText
       ? "人管对不上：" + gapText
       : state.view === "live"
-        ? "实时看板汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」。两边模板相同，首页是总计和店铺明细综合。未回传显示 —。前一天数据留下来做环比。"
+        ? "实时只汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」，不填写。未回传 —。"
         : "数字来自星脉 ERP。";
     root.querySelector("#xm-hm-pop h3").textContent =
       "卡片设置 · " + (state.view === "team" ? "经理团队" : state.view === "chief" ? "主管/储备" : "公司");
@@ -2495,7 +2507,7 @@
     }
     syncCardPop(root);
     syncHeadPop(root);
-    restoreLiveFeeDraft(root, feeDraft);
+    restoreLiveSearchDraft(root, searchDraft);
   }
   function api(path) {
     return fetch(path, { credentials: "same-origin", headers: { Accept: "application/json" } }).then(function (res) {
@@ -3066,10 +3078,33 @@
     }
     return normShopId(hit.shopId || hit.id);
   }
+  function shopNotOperating(row) {
+    var key = String((row && (row.statusKey || row.status)) || "").trim();
+    return (
+      key === "closed" ||
+      key === "idle" ||
+      key === "不运营" ||
+      key === "闲置" ||
+      key === "闲置中"
+    );
+  }
+  function orgIdleNames(orgPack) {
+    var map = {};
+    ((orgPack && orgPack.stores) || []).forEach(function (row) {
+      if (!shopNotOperating(row)) {
+        return;
+      }
+      var name = String((row && (row.storeName || row.shopName || row.shop)) || "").trim();
+      if (name) {
+        map[normShopName(name)] = true;
+      }
+    });
+    return map;
+  }
   function dutyShopsFrom(orgPack, peopleShops) {
     if (orgPack && Object.prototype.toString.call(orgPack.stores) === "[object Array]") {
       return orgPack.stores.filter(function (row) {
-        return row && row.statusKey !== "closed" && row.kind !== "店群";
+        return row && !shopNotOperating(row) && row.kind !== "店群";
       });
     }
     return ((peopleShops && peopleShops.shops) || []).filter(function (shop) {
@@ -3524,7 +3559,9 @@
       jzAccount: String((row && (row.accountId || row.jzAccount)) || "").trim() || "—",
       jzOk: String((row && (row.success || row.jzOk)) || "").trim() || "—",
       online: row && row.online,
-      capturedAt: row && (row.capturedAt || row.ingestedAt)
+      capturedAt: row && (row.capturedAt || row.ingestedAt),
+      feeLo: row && (row.feeLo != null ? row.feeLo : row.feeMin),
+      feeHi: row && (row.feeHi != null ? row.feeHi : row.feeMax)
     };
   }
   function fillLocalPaid(live, local) {
@@ -4132,6 +4169,7 @@
           var dutyShops = dutyShopsFrom(pack[6], peopleShops);
           state.people = people;
           state.dutyShops = dutyShops;
+          state.orgIdle = orgIdleNames(pack[6]);
           state.rangePack = rangePack;
           state.prevPack = prevPack;
           state.dutyReady = true;
@@ -4160,6 +4198,16 @@
       function onClick(event) {
         var help = event.target.closest && event.target.closest(".xm-hm-help");
         if (help) {
+          return;
+        }
+        var chip = event.target.closest("[data-live-chip]");
+        if (chip) {
+          var chipKey = chip.getAttribute("data-live-chip");
+          var chipVal = chip.getAttribute("data-live-chip-val") || "";
+          var chipNext = liveFilter();
+          chipNext[chipKey] = chipNext[chipKey] === chipVal ? "" : chipVal;
+          saveLiveFilter(chipNext);
+          paint(root, state);
           return;
         }
         var view = event.target.closest("[data-view]");
@@ -4812,13 +4860,14 @@
         event.preventDefault();
         event.stopPropagation();
       }
-      function onFeeKey(event) {
-        if (event.target.getAttribute("data-fee-target") == null) {
+      function onLiveSearchInput(event) {
+        if (event.target.getAttribute("data-live-filter") !== "q") {
           return;
         }
-        if (event.key === "Enter") {
-          event.target.blur();
-        }
+        var nextFilter = liveFilter();
+        nextFilter.q = event.target.value;
+        saveLiveFilter(nextFilter);
+        paint(root, state);
       }
       function onChange(event) {
         if (event.target.getAttribute("data-live-head-all") != null) {
@@ -4846,13 +4895,9 @@
           paint(root, state);
           return;
         }
-        if (event.target.getAttribute("data-live-filter") === "pick") {
-          saveLiveFilter(parseLiveFilterValue(event.target.value));
-          paint(root, state);
-          return;
-        }
-        if (event.target.getAttribute("data-fee-target") != null) {
-          saveFeeRangeFor(event.target.getAttribute("data-fee-shop"), event.target.getAttribute("data-fee-target"), event.target.value);
+        var liveFilterKey = event.target.getAttribute("data-live-filter");
+        if (liveFilterKey === "pick") {
+          saveLiveFilter(Object.assign(liveFilter(), parseLiveFilterValue(event.target.value)));
           paint(root, state);
           return;
         }
@@ -4888,7 +4933,7 @@
       }
       var scroller = document.getElementById("xm-content") || root;
       root.addEventListener("click", onClick);
-      root.addEventListener("keydown", onFeeKey);
+      root.addEventListener("input", onLiveSearchInput);
       root.addEventListener("change", onChange);
       root.addEventListener("pointerdown", onCalPointerDown);
       root.addEventListener("pointerover", onCalHover);
@@ -4938,7 +4983,7 @@
         clearLiveRowPicked();
         window.clearInterval(poll);
         root.removeEventListener("click", onClick);
-        root.removeEventListener("keydown", onFeeKey);
+        root.removeEventListener("input", onLiveSearchInput);
         root.removeEventListener("change", onChange);
         root.removeEventListener("pointerdown", onCalPointerDown);
         root.removeEventListener("pointerover", onCalHover);
