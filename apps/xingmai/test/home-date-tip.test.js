@@ -234,6 +234,9 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function hourFromEvent/);
   assert.match(homeJs, /function onLineTipMove/);
   assert.match(homeJs, /function lineTipHtml/);
+  assert.match(homeJs, /chartEl\.getAttribute\("data-unit"\) \|\| src\.unit/);
+  assert.match(homeJs, /!yestHour\.length && !todayHour\.length && !yestCum\.length && !todayCum\.length/);
+  assert.match(homeJs, /function payFit/);
   assert.match(homeJs, /lineTipEl\.id = "xm-hm-line-tip"/);
   assert.match(homeJs, /data-hours="' \+ hours \+ '"/);
   assert.match(homeJs, /yesterday: hasHourly \? cumHours\(yestHour\)/);

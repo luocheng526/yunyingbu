@@ -95,11 +95,12 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
       pick("todayHours") +
       pick("seriesOf") +
       pick("cumHours") +
+      pick("payFit") +
       pick("blankLive") +
       pick("escapeHtml") +
       pick("sumLocalPaid") +
       homeJs.slice(start, end) +
-      "return {fillLocalPaid,emptyLocalPaid,spendChartOf,hourCum};"
+      "return {fillLocalPaid,emptyLocalPaid,spendChartOf,hourCum,payFit};"
   )();
   const live = {
     shops: [{ shop: "A店", liveAmount: "9", paidAmount: "—", roi: "—", paidDeal: "—", feeRate: "—" }],
@@ -140,6 +141,28 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.equal(withGmv.shops[0].liveAmount, "40");
   assert.equal(withGmv.shops[0].jzOk, "是");
   assert.equal(withGmv.shops[0].jzAccount, "999");
+  assert.deepEqual(fns.payFit([2, 2], 10), [5, 5]);
+  const shaped = fns.fillLocalPaid(
+    {
+      hero: {
+        todayHour: [10, 10, 20],
+        yesterdayHour: [8, 8, 8, 8]
+      },
+      shops: [{ shop: "A店", liveAmount: "40", paidAmount: "—" }],
+      cards: [],
+      paid: { label: "推广总花费", value: "—" }
+    },
+    {
+      records: [{ shopName: "A店", paidAmount: 12, paidDeal: 40, jingmaiGmv: 40 }],
+      yesterday: { records: [{ shopName: "A店", paidAmount: 8, paidDeal: 32 }] }
+    }
+  );
+  assert.equal(shaped.paid.yesterdayHour.length, 24);
+  assert.equal(shaped.paid.todayHour.length > 2, true);
+  assert.equal(shaped.fee.yesterdayHour.length, 24);
+  assert.equal(shaped.paid.yesterdayHour.slice(0, 4).reduce((a, b) => a + b, 0), 8);
+  assert.equal(shaped.paid.yestText, "8");
+  assert.match(String(shaped.fee.yestText), /%/);
 });
 
 test("live shop 回传成功 and 状态 在线/掉线", () => {

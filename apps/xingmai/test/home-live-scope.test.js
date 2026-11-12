@@ -111,6 +111,7 @@ test("charts cards and shop rows use the same filtered live board", () => {
       pick("todayHours") +
       pick("seriesOf") +
       pick("cumHours") +
+      pick("payFit") +
       pick("liveAtText") +
       pick("sumLocalPaid") +
       pick("spendChartOf") +

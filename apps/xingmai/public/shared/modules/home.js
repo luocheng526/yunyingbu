@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.878-co */
+/* xm-module-home 0.1.879-tip */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -2411,7 +2411,7 @@
     hideCardTip();
     hideLineTip(root);
     var searchDraft = liveSearchDraft(root);
-    board.setAttribute("data-hm-js", "0.1.878-co");
+    board.setAttribute("data-hm-js", "0.1.879-tip");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -3152,6 +3152,20 @@
       return sum;
     });
   }
+  function payFit(pay, total) {
+    var src = pay || [];
+    var s = 0;
+    var i = 0;
+    for (; i < src.length; i += 1) {
+      s += Number(src[i]) || 0;
+    }
+    if (total == null || !s) {
+      return [];
+    }
+    return src.map(function (v) {
+      return ((Number(v) || 0) / s) * total;
+    });
+  }
   function seriesOf(hourly, fallback) {
     if (hourly && hourly.length) {
       return hourly;
@@ -3564,6 +3578,19 @@
     var sum = rows.length ? sumLocalPaid(rows) : {};
     var yestSum = yestRows.length ? sumLocalPaid(yestRows) : {};
     var hourly = localHourlyOf(local);
+    var payT = (hourly.todayPay && hourly.todayPay.length > 2 ? hourly.todayPay : live.hero && live.hero.todayHour) || [];
+    var payY = (hourly.yesterdayPay && hourly.yesterdayPay.length > 2 ? hourly.yesterdayPay : live.hero && live.hero.yesterdayHour) || [];
+    var sT = 0;
+    var sY = 0;
+    var i;
+    for (i = 0; i < payT.length; i += 1) sT += Number(payT[i]) || 0;
+    for (i = 0; i < payY.length; i += 1) sY += Number(payY[i]) || 0;
+    if (yestSum.spend == null && sum.spend != null && sT && sY) yestSum.spend = sum.spend * (sY / sT);
+    if (yestSum.feeRate == null && yestSum.spend != null && sY) yestSum.feeRate = yestSum.spend / sY;
+    if (!(hourly.todaySpend && hourly.todaySpend.length > 2)) hourly.todaySpend = payFit(payT, sum.spend);
+    if (!(hourly.yesterdaySpend && hourly.yesterdaySpend.length > 2)) hourly.yesterdaySpend = payFit(payY, yestSum.spend);
+    if (!(hourly.todayFee && hourly.todayFee.length > 2) && payT.length > 2 && sum.feeRate != null) hourly.todayFee = payT.map(function () { return sum.feeRate; });
+    if (!(hourly.yesterdayFee && hourly.yesterdayFee.length > 2) && payY.length > 2 && yestSum.feeRate != null) hourly.yesterdayFee = payY.map(function () { return yestSum.feeRate; });
     if (rows.length) {
       var map = {};
       rows.forEach(function (row) {
@@ -4396,7 +4423,7 @@
         var todayHour = src.todayHour || [];
         var yestCum = src.yesterday || [];
         var todayCum = src.today || [];
-        if (!yestHour.length && !yestCum.length) {
+        if (!yestHour.length && !todayHour.length && !yestCum.length && !todayCum.length) {
           hideLineTip(root);
           return;
         }
@@ -4411,17 +4438,18 @@
           label = halfTipLabel(i);
           part = "半小时";
         }
-        var todayOk = i < todayHour.length;
+        var todayOk = i < todayHour.length || i < todayCum.length;
         var tip = lineTipNode();
         tip.innerHTML = lineTipHtml(
           i,
           yestHour[i],
-          yestCum[i],
+          yestCum[i] != null ? yestCum[i] : yestHour[i],
           todayHour[i],
           todayOk,
-          todayCum[i],
+          todayCum[i] != null ? todayCum[i] : todayHour[i],
           label,
-          part
+          part,
+          chartEl.getAttribute("data-unit") || src.unit || ""
         );
         tip.classList.add("is-on");
         placeLineTip(tip, event);
