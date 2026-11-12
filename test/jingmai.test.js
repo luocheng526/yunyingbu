@@ -5,7 +5,7 @@ import { createApp } from "../src/app.js";
 import { buildLiveView, hoursFromSamples, jingmaiError, parseRealtime, runTick } from "../src/modules/shen/jingmai.js";
 import { interpretQrCheck } from "../src/modules/shen/jingmai-client.js";
 import { passwordFailureMessage } from "../src/modules/shen/jingmai-client.js";
-import { libraryPackageNames, packageFilename } from "../src/modules/shen/jingmai-desk.js";
+import { libraryPackageNames, packageFilename, suiteForGlibc } from "../src/modules/shen/jingmai-desk.js";
 import { beginRelogin, beginReloginAll, connectJingmai, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/shen/jingmai-runner.js";
 import { listSessions, readJingmaiLive, resetJingmaiStore, saveSample, saveSession } from "../src/modules/shen/jingmai-store.js";
 
@@ -24,6 +24,10 @@ test("chrome library map names libatk and skips libc", () => {
   assert.equal(packageFilename(index, "libatk1.0-0t64"), "pool/main/a/at-spi2-core/libatk1.0-0t64_2.52.0-1build1_amd64.deb");
   assert.equal(packageFilename(index, "libatk1.0-0"), "pool/old/libatk.deb");
   assert.equal(packageFilename(index, "missing"), "");
+  assert.equal(suiteForGlibc("2.39"), "noble");
+  assert.equal(suiteForGlibc("2.35"), "jammy");
+  assert.equal(suiteForGlibc("2.36"), "jammy");
+  assert.equal(suiteForGlibc("2.31"), "focal");
 });
 
 test("realtime parser keeps a real zero and treats login failure separately from timeout", () => {

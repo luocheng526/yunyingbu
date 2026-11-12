@@ -210,24 +210,26 @@ export function packageFilename(indexText, packageName) {
   return "";
 }
 
+export function suiteForGlibc(version) {
+  const parts = String(version || "").split(".").map(Number);
+  const level = (parts[0] || 0) * 100 + (parts[1] || 0);
+  if (level >= 239) {
+    return "noble";
+  }
+  if (level >= 235) {
+    return "jammy";
+  }
+  return "focal";
+}
+
 function linuxDistro() {
-  let text = "";
+  let glibc = "";
   try {
-    text = readFileSync("/etc/os-release", "utf8");
+    glibc = String((process.report.getReport().header || {}).glibcVersionRuntime || "");
   } catch {
-    text = "";
+    glibc = "";
   }
-  const value = function (key) {
-    const match = text.match(new RegExp("^" + key + "=(.*)$", "m"));
-    return match ? match[1].trim().replace(/^"|"$/g, "") : "";
-  };
-  const id = value("ID");
-  const like = value("ID_LIKE");
-  const code = value("VERSION_CODENAME");
-  if (id === "debian" || (like.includes("debian") && !like.includes("ubuntu") && id !== "ubuntu")) {
-    return { kind: "debian", suite: code || "bookworm" };
-  }
-  return { kind: "ubuntu", suite: code || "noble" };
+  return { kind: "ubuntu", suite: suiteForGlibc(glibc), glibc: glibc };
 }
 
 function distroMirrors(distro) {
@@ -270,6 +272,26 @@ function distroMirrors(distro) {
   return extras.concat(urls.filter(function (url) {
     return extras.indexOf(url) < 0;
   }));
+}
+
+function prepareLibHome(distro) {
+  const home = libHome();
+  if (!home) {
+    return "";
+  }
+  const markerPath = home + "/suite";
+  let current = "";
+  try {
+    current = readFileSync(markerPath, "utf8").trim();
+  } catch {
+    current = "";
+  }
+  if (current !== distro.suite) {
+    rmSync(home + "/usr", { recursive: true, force: true });
+    rmSync(home + "/lib", { recursive: true, force: true });
+    writeFileSync(markerPath, distro.suite);
+  }
+  return home;
 }
 
 function libHome() {
@@ -478,7 +500,7 @@ function installLibraries(chromePath) {
 }
 
 async function fillLibraries(chromePath) {
-  const home = libHome();
+  const home = prepareLibHome(linuxDistro());
   if (!home || !chromePath) {
     return libraryPath;
   }
@@ -734,16 +756,22 @@ function browserFailure(stderr) {
   if (library) {
     return "服务器浏览器缺少 " + library[1].replace(/[,:]/g, "") + "，登录开不了";
   }
+  const glibc = text.match(/version `([^']+)' not found/);
+  if (glibc) {
+    const libs = text.match(/[\w.+-]+\.so(?:\.\d+)*/g) || [];
+    const lib = libs.length ? libs[libs.length - 1] : "库";
+    return "服务器上的 " + lib + " 需要 " + glibc[1] + "，这台机器没有";
+  }
   if (text.includes("Permission denied") || text.includes("EACCES")) {
     return "服务器浏览器没有执行权限，登录开不了";
   }
   const line = text.split("\n").map(function (item) {
     return item.trim();
-  }).find(function (item) {
+  }).filter(function (item) {
     return item && !item.includes("dbus") && !item.includes("DevTools");
-  });
+  }).pop();
   if (line) {
-    return "服务器登录没有打开：" + line.slice(0, 140);
+    return "服务器登录没有打开：" + (line.length > 160 ? line.slice(-160) : line);
   }
   return "服务器登录没有打开";
 }
