@@ -321,6 +321,16 @@ test("han selection / products / paid boards are isolated", async () => {
     );
     assert.equal(onlyShop.body.items.some((row) => row.spu === "SHOP-1"), true);
     assert.equal(onlyShop.body.items.every((row) => row.store === "晓曼一店"), true);
+    const movedShop = await json(base, "/api/han/shops", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ team: "高明阳组", store: "晓曼一店" }),
+    });
+    assert.equal(movedShop.res.status, 201);
+    const left = await json(base, "/api/han/shops?team=" + encodeURIComponent("陈晓曼组"));
+    assert.equal(left.body.items.some((row) => row.store === "晓曼一店"), false);
+    const joined = await json(base, "/api/han/shops?team=" + encodeURIComponent("高明阳组"));
+    assert.equal(joined.body.items.some((row) => row.store === "晓曼一店"), true);
 
     const csv = buildProductCsv([
       { layer: "测新产品", spu: "CSV-1", firstSku: "SKU-1", listedOn: "2026-09-01" },
@@ -516,7 +526,7 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /XmModules\["\/han\/recharge-rules"\]/);
   assert.match(js, /实时付费/);
   assert.match(js, /HanCenter\.mount\(root, hanBoard\)/);
-  assert.match(js, /20261112-sum/);
+  assert.match(js, /20261112-team/);
   assert.doesNotMatch(js, /id="paid-form"/);
   assert.doesNotMatch(js, /上传抓取表/);
   assert.match(js, /XmModules\["\/han\/training"\]/);
@@ -2038,7 +2048,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   const han = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
   assert.match(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
   assert.match(han, /\["\/han\/paid\?board=rules", "充值规则", "rules"\]/);
-  assert.match(han, /20261112-sum/);
+  assert.match(han, /20261112-team/);
   const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
   assert.match(center, /两档花费/);
   assert.match(center, /han-rules-text/);
@@ -2078,7 +2088,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(han, /insertAdjacentElement\("afterend"/);
   assert.match(han, /data-xm-group"\) !== "\/han"/);
   assert.doesNotMatch(han, /anchor\.href = "\/han\/paid-center"/);
-  assert.match(center, /20261112-sum/);
+  assert.match(center, /20261112-team/);
   assert.match(center, /已超过30分钟没有更新/);
   assert.match(center, /超过30分钟未更新/);
   assert.match(han, /action: "dingtalk"/);
@@ -2131,6 +2141,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.doesNotMatch(center, /yesterdayJingmaiGmv/);
   assert.match(center, /较昨日上涨/);
   assert.match(center, /较昨日下降/);
+  assert.match(center, /han-shop-team/);
   assert.match(center, /function heroDelta/);
   assert.match(center, /now \/ base/);
   assert.match(center, /model\.spend/);

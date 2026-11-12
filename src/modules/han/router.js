@@ -1,5 +1,5 @@
 import express, { Router } from "express";
-import { createHanStore, matchOrgStoresForTeam, mergeTeamShops, buildProductCsv } from "./store.js";
+import { createHanStore, matchOrgStoresForTeam, mergeTeamShops, buildProductCsv, HAN_PRODUCT_TEAMS } from "./store.js";
 
 async function loadOrgStores(req) {
   const host = req.get("host");
@@ -124,8 +124,26 @@ export function createHanRouter(store = createHanStore()) {
   hanRouter.get("/shops", async (req, res) => {
     try {
       const team = req.query.team;
-      const local = await store.listShops({ team });
-      const org = matchOrgStoresForTeam(await loadOrgStores(req), team);
+      const orgStores = await loadOrgStores(req);
+      const localAll = await store.listShops({});
+      if (!team) {
+        const seen = new Set();
+        const items = [];
+        HAN_PRODUCT_TEAMS.forEach((name) => {
+          mergeTeamShops(
+            matchOrgStoresForTeam(orgStores, name),
+            localAll.filter((row) => row.team === name),
+          ).forEach((row) => {
+            if (seen.has(row.store)) return;
+            seen.add(row.store);
+            items.push(row);
+          });
+        });
+        res.json({ ok: true, items });
+        return;
+      }
+      const local = localAll.filter((row) => row.team === team);
+      const org = matchOrgStoresForTeam(orgStores, team);
       res.json({ ok: true, items: mergeTeamShops(org, local) });
     } catch (err) {
       res.status(err.statusCode || 500).json({ ok: false, error: err.message });
