@@ -129,6 +129,9 @@
       }
 
       function money(value) {
+        if (value == null || value === "") {
+          return "—";
+        }
         return (Number(value) || 0).toLocaleString("zh-CN", {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2
@@ -136,6 +139,9 @@
       }
 
       function salesText(value) {
+        if (value == null || value === "") {
+          return "—";
+        }
         return (Number(value) || 0).toLocaleString("en-US", {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2
@@ -151,6 +157,9 @@
       }
 
       function rate(value) {
+        if (value == null || value === "") {
+          return "—";
+        }
         return (Number(value) || 0).toFixed(2);
       }
 
@@ -261,33 +270,29 @@
         return out;
       }
 
-      function mapErp(data) {
-        const asOf = (data && data.range && data.range.payTimeEnd) || "";
-        const rows = ((data && data.records) || [])
-          .map(function (rec) {
-            const spend = Number(rec.totalPromotionCost) || 0;
-            const gmv = Number(rec.todayPayAmount != null ? rec.todayPayAmount : rec.payAmount) || 0;
-            const ratio = Number(rec.promotionRate);
-            return {
-              store: String(rec.shopName || "").trim(),
-              shopId: String(rec.shopId || ""),
-              owner: String(rec.operateName || "").trim() || "未分配",
-              spend: spend,
-              jingmaiGmv: gmv,
-              yesterdayGmv: Number(rec.yesterdayPayAmount) || 0,
-              profit: Number(rec.profit) || 0,
-              roi: spend > 0 ? gmv / spend : 0,
-              realFeeRatio: isFinite(ratio) && ratio >= 0 ? ratio : gmv > 0 ? spend / gmv : 0,
-              todayHours: hourList(rec.todayHourlyData),
-              yesterdayHours: hourList(rec.yesterdayHourlyData),
-              asOf: asOf,
-              capturedAt: asOf
-            };
+      function mapShenShops(data) {
+        const rows = ((data && data.shops) || [])
+          .filter(function (shop) {
+            const name = String(shop.name || "").trim();
+            return shop.kind === "店铺" && shop.pack === "沈子晗包" && name && !/包$/.test(name);
           })
-          .filter(function (row) {
-            return row.store;
+          .map(function (shop) {
+            const bundle = String(shop.bundle || "").replace(/包$/, "");
+            return {
+              store: String(shop.name || "").trim(),
+              owner: bundle || "沈子晗",
+              spend: null,
+              jingmaiGmv: null,
+              yesterdayGmv: null,
+              profit: null,
+              roi: null,
+              realFeeRatio: null,
+              todayHours: [],
+              yesterdayHours: [],
+              linked: false
+            };
           });
-        return { asOf: asOf, rows: rows };
+        return { asOf: "", rows: rows };
       }
 
       function operatorTeams() {
@@ -535,19 +540,32 @@
 
       function salesOf(rows) {
         let gmv = 0;
+        let any = false;
         (rows || []).forEach(function (row) {
+          if (row.jingmaiGmv == null) {
+            return;
+          }
+          any = true;
           gmv += Number(row.jingmaiGmv) || 0;
         });
-        return { gmv: gmv, text: salesText(gmv) };
+        return { gmv: any ? gmv : null, text: salesText(any ? gmv : null) };
       }
 
       function feeOf(rows) {
         let spend = 0;
         let gmv = 0;
+        let any = false;
         (rows || []).forEach(function (row) {
+          if (row.spend == null && row.jingmaiGmv == null) {
+            return;
+          }
+          any = true;
           spend += Number(row.spend) || 0;
           gmv += Number(row.jingmaiGmv) || 0;
         });
+        if (!any) {
+          return { ratio: null, text: "—" };
+        }
         return { ratio: feeRatio(spend, gmv), text: feeText(spend, gmv) };
       }
 
@@ -749,7 +767,7 @@
             " " +
             scoped.length +
             " 店"
-          : "等待京麦数据";
+          : "沈子晗包 · " + (view.team || "全部") + " " + scoped.length + " 店 · 京麦未接入";
         if (stale) {
           text += " · 已超过30分钟没有更新";
         }
@@ -775,16 +793,25 @@
         const feeHour = shanghaiHour();
         let pageSpend = 0;
         let pageGmv = 0;
+        let linked = false;
         pageNow.forEach(function (row) {
+          if (row.spend == null && row.jingmaiGmv == null) {
+            return;
+          }
+          linked = true;
           pageSpend += Number(row.spend) || 0;
           pageGmv += Number(row.jingmaiGmv) || 0;
         });
+        if (!linked) {
+          pageSpend = null;
+          pageGmv = null;
+        }
         const hero = {
           label: "京麦成交额",
           value: pageSales.text,
           asOf: clockText(overviewAsOf),
-          yesterdayHour: sumHourSeries(pageNow, "yesterdayHours"),
-          todayHour: sumHourSeries(pageNow, "todayHours")
+          yesterdayHour: linked ? sumHourSeries(pageNow, "yesterdayHours") : [],
+          todayHour: linked ? sumHourSeries(pageNow, "todayHours") : []
         };
         if (overviewStale && hero.asOf) {
           hero.asOf += " · 超过30分钟未更新";
@@ -800,14 +827,14 @@
         const cards = LIVE_CARDS.map(function (card) {
           const next = { key: card.key, label: card.label, value: "—", extra: "" };
           if (card.key === "ad") {
-            next.value = salesText(pageSpend);
-            next.extra = "推广占比 " + pageFee.text;
+            next.value = salesText(linked ? pageSpend : null);
+            next.extra = linked ? "推广占比 " + pageFee.text : "";
           }
           if (card.key === "roi") {
-            next.value = pageSpend > 0 ? (pageGmv / pageSpend).toFixed(2) : "—";
+            next.value = linked && pageSpend > 0 ? (pageGmv / pageSpend).toFixed(2) : "—";
           }
           if (card.key === "livePay") {
-            next.value = salesText(pageGmv);
+            next.value = salesText(linked ? pageGmv : null);
           }
           if (card.key === "livePaid") {
             next.value = liveInt(pageNow.length);
@@ -1342,28 +1369,28 @@
       function load() {
         view = parseHash();
         setStatus("正在加载…");
-        return getJson("/api/home/erp-paid")
+        return getJson("/api/people/shops")
           .then(function (data) {
             if (dead) {
               return;
             }
-            const mapped = mapErp(data);
+            const mapped = mapShenShops(data);
             overviewRows = mapped.rows;
-            overviewAsOf = mapped.asOf;
-            markStale({ asOf: mapped.asOf });
+            overviewAsOf = "";
+            overviewStale = false;
             if (view.store) {
               renderJingmaiShop(view.store);
             } else {
               if (barEl) {
                 barEl.hidden = false;
               }
-              renderOverview({ asOf: mapped.asOf, rows: mapped.rows });
+              renderOverview({ asOf: "", rows: mapped.rows });
             }
-            setStatus("已更新 · 服务器京麦");
+            setStatus("已更新 · 沈子晗包 " + mapped.rows.length + " 店，京麦还没有这些店的数据");
           })
           .catch(function (err) {
             if (!dead) {
-              setStatus(err.message || "京麦数据加载失败", true);
+              setStatus(err.message || "店铺名单加载失败", true);
             }
           });
       }
