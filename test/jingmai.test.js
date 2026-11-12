@@ -18,6 +18,8 @@ function shop(name) {
 test("chrome library map names libatk and skips libc", () => {
   assert.deepEqual(libraryPackageNames("libatk-1.0.so.0"), ["libatk1.0-0t64", "libatk1.0-0"]);
   assert.deepEqual(libraryPackageNames("libc.so.6"), []);
+  assert.deepEqual(libraryPackageNames("libwayland-server.so.0"), ["libwayland-server0"]);
+  assert.deepEqual(libraryPackageNames("libxcb-dri3.so.0"), ["libxcb-dri3-0"]);
   const index = "Package: libatk1.0-0\nFilename: pool/old/libatk.deb\n\nPackage: libatk1.0-0t64\nFilename: pool/main/a/at-spi2-core/libatk1.0-0t64_2.52.0-1build1_amd64.deb\n\n";
   assert.equal(packageFilename(index, "libatk1.0-0t64"), "pool/main/a/at-spi2-core/libatk1.0-0t64_2.52.0-1build1_amd64.deb");
   assert.equal(packageFilename(index, "libatk1.0-0"), "pool/old/libatk.deb");

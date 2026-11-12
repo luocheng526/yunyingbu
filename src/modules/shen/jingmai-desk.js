@@ -72,7 +72,24 @@ const SONAME_PACKAGES = {
   "libcups.so.2": ["libcups2t64", "libcups2"],
   "libfontconfig.so.1": ["libfontconfig1"],
   "libfreetype.so.6": ["libfreetype6"],
-  "libpng16.so.16": ["libpng16-16t64", "libpng16-16"]
+  "libpng16.so.16": ["libpng16-16t64", "libpng16-16"],
+  "libwayland-server.so.0": ["libwayland-server0"],
+  "libwayland-client.so.0": ["libwayland-client0"],
+  "libwayland-cursor.so.0": ["libwayland-cursor0"],
+  "libwayland-egl.so.1": ["libwayland-egl1"],
+  "libgtk-3.so.0": ["libgtk-3-0t64", "libgtk-3-0"],
+  "libgdk-3.so.0": ["libgtk-3-0t64", "libgtk-3-0"],
+  "libpangoft2-1.0.so.0": ["libpangoft2-1.0-0"],
+  "libharfbuzz.so.0": ["libharfbuzz0b"],
+  "libpixman-1.so.0": ["libpixman-1-0"],
+  "libxcb-shm.so.0": ["libxcb-shm0"],
+  "libxcb-render.so.0": ["libxcb-render0"],
+  "libxcb-dri3.so.0": ["libxcb-dri3-0"],
+  "libxcb-present.so.0": ["libxcb-present0"],
+  "libxcb-sync.so.1": ["libxcb-sync1"],
+  "libxcb-xfixes.so.0": ["libxcb-xfixes0"],
+  "libxshmfence.so.1": ["libxshmfence1"],
+  "libstdc++.so.6": ["libstdc++6"]
 };
 
 let current = null;
@@ -169,7 +186,16 @@ export function libraryPackageNames(soname) {
   if (SYSTEM_SONAMES.has(soname)) {
     return [];
   }
-  return (SONAME_PACKAGES[soname] || []).slice();
+  if (SONAME_PACKAGES[soname]) {
+    return SONAME_PACKAGES[soname].slice();
+  }
+  const match = String(soname || "").match(/^(.*)\.so\.(\d+)$/);
+  if (!match || match[1].includes(".")) {
+    return [];
+  }
+  const plain = match[1] + match[2];
+  const dashed = match[1] + "-" + match[2];
+  return [plain + "t64", dashed + "t64", plain, dashed];
 }
 
 export function packageFilename(indexText, packageName) {
@@ -456,7 +482,7 @@ async function fillLibraries(chromePath) {
   if (!home || !chromePath) {
     return libraryPath;
   }
-  for (let round = 0; round < 3; round += 1) {
+  for (let round = 0; round < 8; round += 1) {
     const missing = await lddMissing(chromePath, libSearchPath(home));
     if (!missing) {
       break;
@@ -741,7 +767,7 @@ async function launchChrome() {
   }
   const tried = new Set();
   let lastError = null;
-  for (let attempt = 0; attempt < 6; attempt += 1) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
     try {
       return await startChromeProcess(chromePath);
     } catch (error) {
