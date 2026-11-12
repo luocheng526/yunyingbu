@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.825-home-headset */
+/* xm-module-home 0.1.826-home-feecards */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -974,7 +974,7 @@
       "</div></section>"
     );
   }
-  var LIVE_CARD_KEYS = ["livePay", "roi", "livePaid", "liveAt"];
+  var LIVE_CARD_KEYS = ["livePay", "roi", "livePaid", "feeHot", "feeCold", "liveAt"];
   function liveCardOrderFrom(keys) {
     var defs = LIVE_CARD_KEYS.slice();
     var seen = {};
@@ -1137,6 +1137,27 @@
       return { label: "加大付费", kind: "cold" };
     }
     return { label: "正常", kind: "ok" };
+  }
+  function feeShopCounts(shops) {
+    var hot = 0;
+    var cold = 0;
+    (shops || []).forEach(function (row) {
+      var kind = feeMonitorOf(row && row.feeRate, row && row.shop).kind;
+      if (kind === "hot") {
+        hot += 1;
+      } else if (kind === "cold") {
+        cold += 1;
+      }
+    });
+    return { hot: hot, cold: cold };
+  }
+  function feePickShops(shops, pick) {
+    if (pick !== "hot" && pick !== "cold") {
+      return shops || [];
+    }
+    return (shops || []).filter(function (row) {
+      return feeMonitorOf(row && row.feeRate, row && row.shop).kind === pick;
+    });
   }
   function feeOverTarget(value, shop) {
     return feeMonitorOf(value, shop).kind === "hot";
@@ -1720,6 +1741,7 @@
     return Math.max(1280, liveCols().length * 118);
   }
   var livePicked = {};
+  var liveFeePick = "";
   function liveColMap() {
     var map = {};
     LIVE_SHOP_HEADS.forEach(function (col) {
@@ -1898,9 +1920,12 @@
       "</tr>"
     );
   }
-  function liveCardHtml(card) {
+  function liveCardHtml(card, pick) {
+    var on = (card.key === "feeHot" && pick === "hot") || (card.key === "feeCold" && pick === "cold");
     return (
-      '<article class="xm-hm-card" data-card="' +
+      '<article class="xm-hm-card' +
+      (on ? " is-on" : "") +
+      '" data-card="' +
       escapeHtml(card.key) +
       '"><div class="xm-hm-card-head"><span>' +
       escapeHtml(card.label) +
@@ -2076,9 +2101,15 @@
       ".xm-hm-line-tip i.is-today{background:#ffa39e}" +
       ".xm-hm-line-row em{font-style:normal;font-variant-numeric:tabular-nums}" +
       ".xm-hm-line-sub{padding:0 0 0 14px;color:#c0c4cc;font-size:11px;display:flex;justify-content:space-between;gap:12px}" +
-      ".xm-hm-live-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;width:100%}" +
+      ".xm-hm-live-cards{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;width:100%}" +
       ".xm-hm-live-cards .xm-hm-card{text-align:center;cursor:grab}" +
       ".xm-hm-live-cards .xm-hm-card.is-hold{cursor:grabbing}" +
+      ".xm-hm-live-cards .xm-hm-card[data-card=\"feeHot\"],.xm-hm-live-cards .xm-hm-card[data-card=\"feeCold\"]{cursor:pointer}" +
+      ".xm-hm-live-cards .xm-hm-card.is-on{border-color:var(--xm-primary);box-shadow:0 0 0 1px var(--xm-primary)}" +
+      ".xm-hm-live-cards .xm-hm-card-head{justify-content:center}" +
+      ".xm-hm-live-cards .xm-hm-card-head span{white-space:normal;line-height:1.3;text-align:center}" +
+      ".xm-hm-live-cards .xm-hm-card[data-card=\"feeHot\"] .xm-hm-value{color:#cf1322}" +
+      ".xm-hm-live-cards .xm-hm-card[data-card=\"feeCold\"] .xm-hm-value{color:#389e0d}" +
       ".xm-hm-live .xm-hm-table{min-width:1280px;table-layout:fixed;border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums}" +
       ".xm-hm-live .xm-hm-panel h2 .xm-hm-fee-goal{margin-left:auto}" +
       ".xm-hm-live .xm-hm-table .xm-hm-num{text-align:center;white-space:nowrap}" +
@@ -2310,16 +2341,24 @@
     var hero = readChart(live.hero, blankLive().hero);
     var paid = readChart(live.paid, blankLive().paid);
     var fee = readChart(live.fee, blankLive().fee);
+    var feeN = feeShopCounts(shops);
     var liveCards = pickLiveCards(live.cards).map(function (card) {
       if (card && card.key === "liveAt") {
         return Object.assign({}, card, { value: liveAtText(state && state.liveAt) });
       }
+      if (card && card.key === "feeHot") {
+        return Object.assign({}, card, { value: fmtInt(feeN.hot) });
+      }
+      if (card && card.key === "feeCold") {
+        return Object.assign({}, card, { value: fmtInt(feeN.cold) });
+      }
       return card;
     });
+    shops = feePickShops(shops, liveFeePick);
     hideCardTip();
     hideLineTip(root);
     var feeDraft = liveFeeDraft(root);
-    board.setAttribute("data-hm-js", "0.1.825-home-headset");
+    board.setAttribute("data-hm-js", "0.1.826-home-feecards");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2348,7 +2387,9 @@
       liveChartHtml(paid) +
       liveChartHtml(fee) +
       '</div><div class="xm-hm-live-cards">' +
-      liveCards.map(liveCardHtml).join("") +
+      liveCards.map(function (card) {
+        return liveCardHtml(card, liveFeePick);
+      }).join("") +
       '</div><div class="xm-hm-panel">' +
       '<table class="xm-hm-table" style="min-width:' +
       liveTableMinW() +
@@ -3300,6 +3341,8 @@
       { key: "livePay", label: "实时付费成交额", value: sum.paidDeal != null ? fmtMoney(sum.paidDeal) : "—" },
       { key: "roi", label: "付费成交ROI", value: sum.roi != null ? fmtRoi(sum.paidDeal, sum.spend) : "—" },
       { key: "livePaid", label: "实时付费接入店铺数量", value: sum.shops != null ? fmtInt(sum.shops) : "0" },
+      { key: "feeHot", label: "实时付费超标店铺", value: "0" },
+      { key: "feeCold", label: "实时费比低店铺", value: "0" },
       { key: "liveAt", label: "更新时间", value: liveAtText(liveAt) }
     ];
   }
@@ -4043,6 +4086,7 @@
           }
           if (nextView !== state.view) {
             clearLiveRowPicked();
+            liveFeePick = "";
           }
           state.view = nextView;
           viewKey = state.view || "company";
@@ -4141,6 +4185,16 @@
           shopSort = { key: sortBtn.getAttribute("data-shop-sort") || "", dir: sortBtn.getAttribute("data-dir") || "desc" };
           paint(root, state);
           return;
+        }
+        var liveFeeCard = event.target.closest(".xm-hm-live-cards .xm-hm-card");
+        if (liveFeeCard) {
+          var feeKey = liveFeeCard.getAttribute("data-card");
+          if (feeKey === "feeHot" || feeKey === "feeCold") {
+            var nextPick = feeKey === "feeHot" ? "hot" : "cold";
+            liveFeePick = liveFeePick === nextPick ? "" : nextPick;
+            paint(root, state);
+            return;
+          }
         }
         var liveRow = event.target.closest(".xm-hm-live .xm-hm-table tbody tr");
         if (liveRow && !isHomeFormField(event.target)) {
