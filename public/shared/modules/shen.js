@@ -26,6 +26,7 @@
     };
   }
 
+  window.XmModules["/shen/jingcang"] = waitPage("京仓管理");
   window.XmModules["/shen/product"] = waitPage("产品中心");
   window.XmModules["/shen/product/xuanpin"] = waitPage("选品");
   window.XmModules["/shen/product/youhua"] = waitPage("优化");

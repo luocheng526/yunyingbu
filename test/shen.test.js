@@ -376,6 +376,7 @@ test("shen module mounts product and paid content only", async () => {
   await withServer(async (base) => {
     const embed = await request(base, "/shared/modules/shen.js");
     assert.equal(embed.res.status, 200);
+    assert.match(embed.text, /XmModules\["\/shen\/jingcang"\]/);
     assert.match(embed.text, /XmModules\["\/shen\/product"\]/);
     assert.match(embed.text, /XmModules\["\/shen\/product\/xuanpin"\]/);
     assert.match(embed.text, /XmModules\["\/shen\/product\/youhua"\]/);
