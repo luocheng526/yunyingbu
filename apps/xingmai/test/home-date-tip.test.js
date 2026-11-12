@@ -232,7 +232,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /today: hasHourly \? cumHours\(todayHour\)/);
   assert.match(homeJs, /<i class="is-today"><\/i>实时/);
   assert.match(homeJs, /hourly\.todayPay/);
-  assert.match(homeJs, /hours: hasHourly \? 24 : 0/);
+  assert.match(homeJs, /hours: 24/);
+  assert.match(homeJs, /环比 —/);
   assert.doesNotMatch(homeJs, /LIVE_CARD_KEYS = \["ad", "profit"/);
   assert.match(homeJs, /data-shop-card=/);
   assert.match(homeJs, /function liveTheadHtml/);
@@ -826,6 +827,29 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
   assert.match(feeHtml, /data-hours="24"/);
   assert.match(feeHtml, /线：当天费比/);
   assert.doesNotMatch(feeHtml, /xm-hm-col/);
+  const emptySpend = fns.liveChartHtml({
+    label: "推广总花费",
+    value: "—",
+    yestText: "—",
+    key: "spend"
+  });
+  assert.match(emptySpend, /data-hours="24"/);
+  assert.match(emptySpend, /环比 —/);
+  assert.match(emptySpend, /线：累计（23点=1-23点）/);
+  assert.match(emptySpend, />1<\/text>/);
+  assert.match(emptySpend, />24<\/text>/);
+  const emptyFee = fns.liveChartHtml({
+    label: "实时费比",
+    value: "—",
+    yestText: "—",
+    key: "fee",
+    unit: "rate"
+  });
+  assert.match(emptyFee, /data-hours="24"/);
+  assert.match(emptyFee, /环比 —/);
+  assert.match(emptyFee, /线：当天费比/);
+  assert.match(emptyFee, />1<\/text>/);
+  assert.match(emptyFee, />24<\/text>/);
 });
 
 test("live sales chart keeps 24-hour axis and hides future today points", () => {

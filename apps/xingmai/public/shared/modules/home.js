@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.817-home-liveyest */
+/* xm-module-home 0.1.819-home-liveaxis */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1563,10 +1563,13 @@
     var unit = (chart && chart.unit) || "";
     var kind = (chart && chart.key) || (unit === "rate" ? "fee" : "sales");
     var line = lineChartOf(chart);
+    if (Number(line.hours) !== 48) {
+      line.hours = 24;
+    }
     var sub = unit === "rate" ? "线：当天费比" : "线：累计（23点=1-23点）";
     var trendCls = !hasDelta ? "" : n > 0 ? " is-up" : n < 0 ? " is-down" : "";
     var trendText = !hasDelta
-      ? ""
+      ? "环比 —"
       : n > 0
         ? "环比 ↗ 上升 " + Math.round(Math.abs(n)) + "%"
         : n < 0
@@ -1587,8 +1590,13 @@
       '</div><div class="xm-hm-yest-now">昨天 ' +
       escapeHtml((chart && chart.yestText) || "—") +
       "</div>" +
-      (hasDelta ? '<div class="xm-hm-trend' + trendCls + '">' + trendText + "</div>" : '<div class="xm-hm-trend"></div>') +
-      (line.hours ? '<div class="xm-hm-chart-sub">' + sub + "</div>" : "") +
+      '<div class="xm-hm-trend' +
+      trendCls +
+      '">' +
+      trendText +
+      '</div><div class="xm-hm-chart-sub">' +
+      sub +
+      "</div>" +
       compareLineHtml(line) +
       "</article>"
     );
@@ -2267,7 +2275,7 @@
     hideCardTip();
     hideLineTip(root);
     var feeDraft = liveFeeDraft(root);
-    board.setAttribute("data-hm-js", "0.1.817-home-liveyest");
+    board.setAttribute("data-hm-js", "0.1.819-home-liveaxis");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2587,7 +2595,7 @@
     return {
       title: "实时看板",
       summary: { channels: 1, shops: 0 },
-      hero: { key: "jingmai", label: "实时总成交金额", value: "—", yestText: "—", delta: "", yesterday: [], today: [], yesterdayHour: [], todayHour: [], hours: 0 },
+      hero: { key: "jingmai", label: "实时总成交金额", value: "—", yestText: "—", delta: "", yesterday: [], today: [], yesterdayHour: [], todayHour: [], hours: 24 },
       paid: spendChartOf(null),
       fee: feeChartOf(null),
       cards: liveCardsOf(),
@@ -3208,7 +3216,7 @@
       today: hasHourly ? cumHours(todayHour) : hasSpend ? todayHour : [],
       yesterdayHour: hasYestHour || stampYest ? yestHour : [],
       todayHour: hasHourly ? todayHour : [],
-      hours: hasHourly || hasYestHour || stampYest ? 24 : 0
+      hours: 24
     };
   }
   function feeChartOf(rate, yestRate, hourly) {
@@ -3237,7 +3245,7 @@
       today: hasHourly ? todayHour : hasRate ? todayHour : [],
       yesterdayHour: hasYestHour || stampYest ? yestHour : [],
       todayHour: hasHourly ? todayHour : [],
-      hours: hasHourly || hasYestHour || stampYest ? 24 : 0,
+      hours: 24,
       unit: "rate",
       lineMode: "flat"
     };
@@ -3291,7 +3299,7 @@
       today: hasHourly ? cumHours(todayHour) : todayHour,
       yesterdayHour: hasHourly ? yestHour : [],
       todayHour: hasHourly ? todayHour : [],
-      hours: hasHourly ? 24 : 0
+      hours: 24
     };
     live.paid = spendChartOf(null);
     live.fee = feeChartOf(null);
