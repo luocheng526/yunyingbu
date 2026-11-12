@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.819-home-liveaxis */
+/* xm-module-home 0.1.821-home-feerange */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1067,50 +1067,74 @@
       return {};
     }
   }
-  function feeTargetFor(shop) {
-    var key = String(shop || "").trim();
-    if (!key) {
+  function parseFeeBound(raw) {
+    if (raw == null || raw === "") {
       return null;
     }
-    var n = Number(feeTargets()[key]);
+    var n = Number(String(raw).replace(/%/g, ""));
     if (!isFinite(n)) {
       return null;
     }
     return Math.max(0, Math.min(100, n));
   }
-  function saveFeeTargetFor(shop, raw) {
+  function feeRangeFor(shop) {
+    var key = String(shop || "").trim();
+    if (!key) {
+      return { lo: null, hi: null };
+    }
+    var raw = feeTargets()[key];
+    if (raw == null || raw === "") {
+      return { lo: null, hi: null };
+    }
+    var lo;
+    var hi;
+    if (typeof raw === "object") {
+      lo = parseFeeBound(raw.lo != null ? raw.lo : raw.min);
+      hi = parseFeeBound(raw.hi != null ? raw.hi : raw.max);
+    } else {
+      lo = parseFeeBound(raw);
+      hi = lo;
+    }
+    if (lo != null && hi != null && lo > hi) {
+      return { lo: hi, hi: lo };
+    }
+    return { lo: lo, hi: hi };
+  }
+  function saveFeeRangeFor(shop, side, raw) {
     var key = String(shop || "").trim();
     if (!key) {
       return;
     }
     try {
       var map = feeTargets();
-      if (raw == null || raw === "") {
+      var cur = feeRangeFor(shop);
+      if (side === "hi") {
+        cur.hi = parseFeeBound(raw);
+      } else {
+        cur.lo = parseFeeBound(raw);
+      }
+      if (cur.lo == null && cur.hi == null) {
         delete map[key];
       } else {
-        var n = Number(raw);
-        if (!isFinite(n)) {
-          return;
-        }
-        map[key] = Math.max(0, Math.min(100, n));
+        map[key] = { lo: cur.lo, hi: cur.hi };
       }
       localStorage.setItem("xm-home-fee-targets", JSON.stringify(map));
     } catch (_err) {}
   }
   function feeMonitorOf(feeRate, shop) {
-    var goal = feeTargetFor(shop);
+    var range = feeRangeFor(shop);
     var cur = feePct(feeRate);
-    if (goal == null) {
+    if (range.lo == null && range.hi == null) {
       return { label: "未设目标", kind: "" };
     }
     if (cur == null) {
       return { label: "—", kind: "" };
     }
-    if (cur > goal + 2) {
-      return { label: "控制费比", kind: "hot" };
+    if (range.hi != null && cur > range.hi) {
+      return { label: "费比超标", kind: "hot" };
     }
-    if (cur < goal - 2) {
-      return { label: "放大付费", kind: "cold" };
+    if (range.lo != null && cur < range.lo) {
+      return { label: "加大付费", kind: "cold" };
     }
     return { label: "正常", kind: "ok" };
   }
@@ -1121,7 +1145,7 @@
     if (!feeOverTarget(value, shop)) {
       return "";
     }
-    return "费比监控：当前 " + Math.round(feePct(value)) + "% 超过目标 " + Math.round(feeTargetFor(shop)) + "%";
+    return "费比监控：当前 " + Math.round(feePct(value)) + "% 超过最高 " + Math.round(feeRangeFor(shop).hi) + "%";
   }
   function feeWarnLabel(feeRate, shop) {
     return feeMonitorOf(feeRate, shop).label;
@@ -1148,6 +1172,7 @@
     }
     return {
       shop: String(el.getAttribute("data-fee-shop") || ""),
+      side: String(el.getAttribute("data-fee-target") || ""),
       value: el.value,
       start: el.selectionStart,
       end: el.selectionEnd
@@ -1165,6 +1190,9 @@
       if (el.getAttribute("data-fee-shop") !== draft.shop) {
         continue;
       }
+      if (draft.side && el.getAttribute("data-fee-target") !== draft.side) {
+        continue;
+      }
       el.value = draft.value;
       el.focus();
       try {
@@ -1180,13 +1208,25 @@
     return raw || "—";
   }
   function feeGoalCellHtml(shop) {
-    var goal = feeTargetFor(shop);
+    var range = feeRangeFor(shop);
+    var name = escapeHtml(String(shop || ""));
+    function boundInput(side, value) {
+      return (
+        '<input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" data-fee-target="' +
+        side +
+        '" data-fee-shop="' +
+        name +
+        '"' +
+        (value == null ? "" : ' value="' + escapeHtml(String(value)) + '"') +
+        ' onpointerdown="event.stopPropagation()" onmousedown="event.stopPropagation()" />'
+      );
+    }
     return (
-      '<label class="xm-hm-fee-goal" onpointerdown="event.stopPropagation()" onmousedown="event.stopPropagation()"><input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" data-fee-target data-fee-shop="' +
-      escapeHtml(String(shop || "")) +
-      '"' +
-      (goal == null ? "" : ' value="' + escapeHtml(String(goal)) + '"') +
-      ' onpointerdown="event.stopPropagation()" onmousedown="event.stopPropagation()" /> %</label>'
+      '<span class="xm-hm-fee-goal" onpointerdown="event.stopPropagation()" onmousedown="event.stopPropagation()">' +
+      boundInput("lo", range.lo) +
+      "%–" +
+      boundInput("hi", range.hi) +
+      "%</span>"
     );
   }
   function liveFilter() {
@@ -1630,8 +1670,8 @@
     { key: "roi", label: "实时付费ROI" },
     { key: "paidDeal", label: "实时付费成交额" },
     { key: "feeRate", label: "实时费比" },
-    { key: "feeWarn", label: "费比监控", w: "108px" },
-    { key: "feeGoal", label: "费比目标设置", w: "124px" },
+    { key: "feeWarn", label: "费比监控", w: "120px" },
+    { key: "feeGoal", label: "费比设置", w: "176px" },
     { key: "liveAt", label: "更新时间", w: "150px" }
   ];
   var LIVE_EXTRA_HEADS = [
@@ -2008,12 +2048,12 @@
       ".xm-hm-head-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink);cursor:pointer;-webkit-user-select:none;user-select:none}" +
       ".xm-hm-live-filter select{width:100%;height:40px;box-sizing:border-box;border:1px solid #e4e7ed;border-radius:8px;padding:0 36px 0 14px;font:inherit;font-size:14px;color:var(--xm-ink);background:#fff;-webkit-appearance:none;appearance:none}" +
       ".xm-hm-live-filter-box:after{content:\"\";position:absolute;right:14px;top:50%;width:8px;height:8px;margin-top:-6px;border-right:2px solid #8c8c8c;border-bottom:2px solid #8c8c8c;transform:rotate(45deg);pointer-events:none}" +
-      ".xm-hm-fee-goal{display:inline-flex;align-items:center;justify-content:center;gap:4px;width:100%;color:var(--xm-ink);font-size:12px;cursor:text;-webkit-user-select:text;user-select:text;pointer-events:auto}" +
-      ".xm-hm-fee-goal input{width:64px;height:28px;box-sizing:border-box;border:1px solid var(--xm-line);border-radius:4px;padding:0 6px;font:inherit;text-align:center;cursor:text;pointer-events:auto;-webkit-user-select:text;user-select:text}" +
+      ".xm-hm-fee-goal{display:inline-flex;align-items:center;justify-content:center;gap:2px;width:100%;color:var(--xm-ink);font-size:12px;white-space:nowrap;cursor:text;-webkit-user-select:text;user-select:text;pointer-events:auto}" +
+      ".xm-hm-fee-goal input{width:40px;height:28px;box-sizing:border-box;border:1px solid var(--xm-line);border-radius:4px;padding:0 4px;font:inherit;text-align:center;cursor:text;pointer-events:auto;-webkit-user-select:text;user-select:text}" +
       ".xm-hm-fee-warn{color:#cf1322;font-size:13px;font-weight:600}" +
       ".xm-hm-chart.is-warn{border-color:#ff7875}" +
       ".xm-hm-live .xm-hm-table td.is-fee-warn,.xm-hm-live .xm-hm-table td.is-fee-hot{color:#cf1322;font-weight:600}" +
-      ".xm-hm-live .xm-hm-table td.is-fee-cold{color:#1677ff;font-weight:600}" +
+      ".xm-hm-live .xm-hm-table td.is-fee-cold{color:#389e0d;font-weight:600}" +
       ".xm-hm-live .xm-hm-table td:has(.xm-hm-fee-goal){overflow:visible}" +
       ".xm-hm-live-charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}" +
       ".xm-hm-chart{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:14px 16px 10px;min-width:0}" +
@@ -2275,7 +2315,7 @@
     hideCardTip();
     hideLineTip(root);
     var feeDraft = liveFeeDraft(root);
-    board.setAttribute("data-hm-js", "0.1.819-home-liveaxis");
+    board.setAttribute("data-hm-js", "0.1.821-home-feerange");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -4670,7 +4710,7 @@
           return;
         }
         if (event.target.getAttribute("data-fee-target") != null) {
-          saveFeeTargetFor(event.target.getAttribute("data-fee-shop"), event.target.value);
+          saveFeeRangeFor(event.target.getAttribute("data-fee-shop"), event.target.getAttribute("data-fee-target"), event.target.value);
           paint(root, state);
           return;
         }
