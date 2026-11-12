@@ -114,6 +114,7 @@ test("charts cards and shop rows use the same filtered live board", () => {
       pick("liveAtText") +
       pick("sumLocalPaid") +
       pick("spendChartOf") +
+      pick("feeChartOf") +
       pick("liveCardsOf") +
       pick("emptyLocalPaid") +
       pick("scopeLocalPaid") +
@@ -154,6 +155,8 @@ test("charts cards and shop rows use the same filtered live board", () => {
   assert.equal(all.live.cards.find((card) => card.key === "livePaid").value, "2");
   assert.equal(all.live.paid.label, "推广总花费");
   assert.equal(all.live.paid.value, "25");
+  assert.equal(all.live.fee.label, "实时费比");
+  assert.equal(all.live.fee.value, "26%");
   assert.equal(all.live.cards.find((card) => card.key === "ad"), undefined);
   const team = fns.liveBoardOf(state, null, { team: "韩梦凯", shop: "" });
   assert.equal(team.live.hero.value, "50");

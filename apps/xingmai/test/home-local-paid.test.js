@@ -85,6 +85,7 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
       pick("escapeHtml") +
       pick("sumLocalPaid") +
       pick("spendChartOf") +
+      pick("feeChartOf") +
       pick("liveCardsOf") +
       homeJs.slice(start, end) +
       "return {fillLocalPaid,emptyLocalPaid};"
@@ -103,6 +104,8 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.equal(filled.shops[0].paidAmount, "12");
   assert.equal(filled.paid.label, "推广总花费");
   assert.equal(filled.paid.value, "12");
+  assert.equal(filled.fee.label, "实时费比");
+  assert.equal(filled.fee.value, "12%");
   assert.equal(filled.cards.find((card) => card.key === "livePaid").value, "1");
   assert.equal(filled.cards.find((card) => card.key === "ad"), undefined);
   assert.equal(filled.cards.find((card) => card.key === "liveAt").label, "更新时间");
