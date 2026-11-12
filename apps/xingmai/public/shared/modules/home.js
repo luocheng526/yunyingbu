@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.826-home-feecards */
+/* xm-module-home 0.1.835-home-paidmerge */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1900,7 +1900,10 @@
       return '<td class="xm-hm-num">' + feeGoalCellHtml(shop) + "</td>";
     }
     if (key === "liveAt") {
-      return '<td class="xm-hm-num">' + escapeHtml(liveAtText(liveAt)) + "</td>";
+      return '<td class="xm-hm-num">' + escapeHtml(row.liveAt || liveAtText(liveAt)) + "</td>";
+    }
+    if (key && String(key).indexOf("jz") === 0) {
+      return '<td class="xm-hm-num">' + escapeHtml(row[key] == null || row[key] === "" ? "—" : row[key]) + "</td>";
     }
     return "<td>—</td>";
   }
@@ -2179,7 +2182,7 @@
       '<div class="xm-hm-datewrap"><div class="xm-hm-dates" id="xm-hm-dates" title="最多选择30天"><span class="xm-hm-dates-ico">日</span><span class="xm-hm-dates-text" id="xm-hm-date-text"></span><button type="button" class="xm-hm-dates-clear" id="xm-hm-date-clear">×</button></div><div class="xm-hm-cal" id="xm-hm-cal" hidden></div></div>' +
       "</div></div>" +
       '<div class="xm-hm-pop" id="xm-hm-pop" hidden><h3>卡片设置</h3><div id="xm-hm-card-opts"></div></div>' +
-      '<div class="xm-hm-head-pop" id="xm-hm-head-pop" hidden><h3>表头设置</h3><p class="xm-hm-head-hint">勾选店铺表要显示的列。排名、店铺名称固定。付费中心列数据待对接。</p><div id="xm-hm-head-opts"></div></div>' +
+      '<div class="xm-hm-head-pop" id="xm-hm-head-pop" hidden><h3>表头设置</h3><p class="xm-hm-head-hint">勾选店铺表要显示的列。排名、店铺名称固定。付费中心列来自韩梦凯实时付费和沈子晗付费中心，首页是两边汇总。</p><div id="xm-hm-head-opts"></div></div>' +
       '<div class="xm-hm-body">' +
       '<section class="xm-hm-kpis-shell"><div class="xm-hm-teams-bar"><b>星脉甄选</b><button type="button" class="xm-hm-set" id="xm-hm-set">卡片设置</button></div><div class="xm-hm-sales" id="xm-hm-sales"></div><div class="xm-hm-kpis" id="xm-hm-kpis"></div></section>' +
       '<section class="xm-hm-teams" id="xm-hm-teams" hidden></section>' +
@@ -2257,7 +2260,7 @@
       " /> 全选</label>" +
       '<div class="xm-hm-head-sec">实时</div>' +
       cores.map(row).join("") +
-      '<div class="xm-hm-head-sec">付费中心（数据待对接）</div>' +
+      '<div class="xm-hm-head-sec">付费中心（韩梦凯实时付费 / 沈子晗付费中心）</div>' +
       extras.map(row).join("")
     );
   }
@@ -2358,7 +2361,7 @@
     hideCardTip();
     hideLineTip(root);
     var feeDraft = liveFeeDraft(root);
-    board.setAttribute("data-hm-js", "0.1.826-home-feecards");
+    board.setAttribute("data-hm-js", "0.1.835-home-paidmerge");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2410,7 +2413,7 @@
     root.querySelector("#xm-hm-note").textContent = gapText
       ? "人管对不上：" + gapText
       : state.view === "live"
-        ? "实时总成交金额走星脉 ERP。实时付费来自韩梦凯、沈子晗本地机回传，不接星脉。前一天数据会留下来做环比。"
+        ? "实时看板汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」。两边模板相同，首页是总计和店铺明细综合。未回传显示 —。前一天数据留下来做环比。"
         : "数字来自星脉 ERP。";
     root.querySelector("#xm-hm-pop h3").textContent =
       "卡片设置 · " + (state.view === "team" ? "经理团队" : state.view === "chief" ? "主管/储备" : "公司");
@@ -3112,20 +3115,34 @@
   function sumLocalPaid(records) {
     var spend = 0;
     var deal = 0;
+    var gmv = 0;
+    var gmvHit = false;
     var n = 0;
     (records || []).forEach(function (row) {
       var s = asNum(row && (row.paidAmount != null ? row.paidAmount : row.totalPromotionCost));
       var p = asNum(row && (row.paidDeal != null ? row.paidDeal : row.payAmount));
+      var g = asNum(row && (row.liveAmount != null ? row.liveAmount : row.jingmaiGmv));
       if (s != null) {
         spend += s;
       }
       if (p != null) {
         deal += p;
       }
+      if (g != null) {
+        gmv += g;
+        gmvHit = true;
+      }
       n += 1;
     });
     return n
-      ? { spend: spend, paidDeal: deal, feeRate: deal ? spend / deal : null, roi: spend ? deal / spend : null, shops: n }
+      ? {
+          spend: spend,
+          paidDeal: deal,
+          liveAmount: gmvHit ? gmv : null,
+          feeRate: gmvHit && gmv ? spend / gmv : deal ? spend / deal : null,
+          roi: spend ? (deal || gmv) / spend : null,
+          shops: n
+        }
       : {};
   }
   var LIVE_DAY_KEY = "xm-home-live-yday";
@@ -3272,6 +3289,9 @@
     }
     if (!hourly.yesterdayFee || hourly.yesterdayFee.length < 3) {
       hourly.yesterdayFee = yestH.todayFee || yestH.yesterdayFee || hourly.yesterdayFee;
+    }
+    if (!hourly.yesterdayPay || hourly.yesterdayPay.length < 3) {
+      hourly.yesterdayPay = yestH.todayPay || yestH.yesterdayPay || hourly.yesterdayPay;
     }
     return hourly;
   }
@@ -3441,11 +3461,22 @@
   function localShopPaid(row) {
     var pay = row && (row.paidDeal != null ? row.paidDeal : row.payAmount);
     var spend = row && (row.paidAmount != null ? row.paidAmount : row.totalPromotionCost);
+    var gmv = row && (row.liveAmount != null ? row.liveAmount : row.jingmaiGmv);
+    var fee = row && (row.feeRate != null ? row.feeRate : row && row.realFeeRatio != null ? row.realFeeRatio : row && row.promotionRate);
+    if ((fee == null || fee === 0) && spend != null) {
+      var base = asNum(gmv != null ? gmv : pay);
+      if (base) {
+        fee = spend / base;
+      }
+    }
+    var roi = row && asNum(row.roi) != null ? String(Math.round(asNum(row.roi))) : fmtRoi(pay, spend);
     return {
       paidAmount: fmtMoney(spend),
-      roi: fmtRoi(pay, spend),
+      roi: roi,
       paidDeal: fmtMoney(pay),
-      feeRate: fmtRate(row && row.feeRate != null ? row.feeRate : row && row.promotionRate)
+      feeRate: fmtRate(fee),
+      jzAccount: String((row && (row.accountId || row.jzAccount)) || "").trim() || "—",
+      jzOk: String((row && (row.success || row.jzOk)) || "").trim() || "—"
     };
   }
   function fillLocalPaid(live, local) {
@@ -3467,7 +3498,11 @@
       live.shops = (live.shops || []).map(function (shop) {
         seen[shop.shop] = true;
         var hit = map[shop.shop];
-        return hit ? Object.assign({}, shop, localShopPaid(hit)) : shop;
+        if (!hit) {
+          return shop;
+        }
+        var gmv = asNum(hit.liveAmount != null ? hit.liveAmount : hit.jingmaiGmv);
+        return Object.assign({}, shop, localShopPaid(hit), gmv != null ? { liveAmount: fmtMoney(gmv) } : {});
       });
       rows.forEach(function (row) {
         var name = String((row && (row.shopName || row.shop)) || "").trim();
@@ -3475,7 +3510,8 @@
           return;
         }
         seen[name] = true;
-        live.shops.push(Object.assign({ shop: name, liveAmount: "—" }, localShopPaid(row)));
+        var gmv = asNum(row.liveAmount != null ? row.liveAmount : row.jingmaiGmv);
+        live.shops.push(Object.assign({ shop: name, liveAmount: gmv != null ? fmtMoney(gmv) : "—" }, localShopPaid(row)));
       });
       live.cards = liveCardsOf(sum);
     }

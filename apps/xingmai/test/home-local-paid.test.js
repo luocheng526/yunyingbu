@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   getHomeLocalPaid,
+  mergeHanShenPaid,
   rememberLocalPaidDay,
   setLocalPaidSnapPath,
   shanghaiNow,
@@ -22,8 +23,8 @@ const homeJs = readFileSync(
   "utf8"
 );
 
-test("local paid stub is not 星脉 ERP and stamps Shanghai time", () => {
-  const data = getHomeLocalPaid();
+test("local paid stub is not 星脉 ERP and stamps Shanghai time", async () => {
+  const data = await getHomeLocalPaid();
   assert.equal(data.ok, true);
   assert.equal(data.source, "han-shen-local");
   assert.notEqual(data.source, "xingmai-erp");
@@ -62,7 +63,7 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.match(homeJs, /paidAmount: "—"/);
   assert.match(homeJs, /function liveCardsOf/);
   assert.match(homeJs, /label: "实时付费接入店铺数量"/);
-  assert.match(homeJs, /实时付费来自韩梦凯、沈子晗本地机回传，不接星脉/);
+  assert.match(homeJs, /实时看板汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」/);
   assert.match(homeJs, /if \(stampClock \|\| !state\.liveAt\)/);
   assert.match(homeJs, /timeZone: "Asia\/Shanghai"/);
   assert.doesNotMatch(homeJs, /京麦面板实时金额和实时付费都走星脉 ERP/);
@@ -133,9 +134,15 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.equal(filled.cards.find((card) => card.key === "livePaid").value, "1");
   assert.equal(filled.cards.find((card) => card.key === "ad"), undefined);
   assert.equal(filled.cards.find((card) => card.key === "liveAt").label, "更新时间");
+  const withGmv = fns.fillLocalPaid(live, {
+    records: [{ shopName: "A店", paidAmount: 12, paidDeal: 30, jingmaiGmv: 40, success: "是", accountId: "999" }]
+  });
+  assert.equal(withGmv.shops[0].liveAmount, "40");
+  assert.equal(withGmv.shops[0].jzOk, "是");
+  assert.equal(withGmv.shops[0].jzAccount, "999");
 });
 
-test("local paid snap keeps yesterday after the Shanghai day rolls", () => {
+test("local paid snap keeps yesterday after the Shanghai day rolls", async () => {
   const file = join(snapDir, "roll.json");
   const prev = join(snapDir, "days.json");
   setLocalPaidSnapPath(file);
@@ -147,7 +154,7 @@ test("local paid snap keeps yesterday after the Shanghai day rolls", () => {
     { records: [{ shopName: "A店", paidAmount: 30, paidDeal: 180 }], hourly: { todaySpend: [4, 5, 6] } },
     "2026-11-12"
   );
-  const data = getHomeLocalPaid();
+  const data = await getHomeLocalPaid();
   if (shanghaiYmd() === "2026-11-12") {
     assert.equal(data.records[0].paidAmount, 30);
     assert.equal(data.yesterday.records[0].paidAmount, 40);
@@ -156,4 +163,77 @@ test("local paid snap keeps yesterday after the Shanghai day rolls", () => {
     assert.equal(data.yesterday.records[0].paidAmount, 30);
   }
   setLocalPaidSnapPath(prev);
+});
+
+test("homepage live paid merges 韩梦凯实时付费 and 沈子晗付费中心 for today", () => {
+  const ymd = "2026-11-12";
+  const merged = mergeHanShenPaid(
+    {
+      shops: [
+        { store: "韩店", date: ymd, spend: 10, jingmaiGmv: 40, roi: 4, success: "是", accountId: "1" },
+        { store: "旧店", date: "2026-01-01", spend: 99, jingmaiGmv: 99, success: "是" }
+      ]
+    },
+    {
+      rows: [
+        { store: "沈店", date: ymd, spend: 5, jingmaiGmv: 20, totalOrderAmount: 18, success: "是" },
+        { store: "过期沈店", date: "2026-09-19", spend: 8, jingmaiGmv: 8, success: "是" }
+      ]
+    },
+    { shops: [] },
+    ymd
+  );
+  assert.deepEqual(merged.records.map((row) => row.shopName).sort(), ["沈店", "韩店"]);
+  assert.equal(merged.summary.spend, 15);
+  assert.equal(merged.summary.liveAmount, 60);
+  assert.equal(merged.summary.shops, 2);
+  const same = mergeHanShenPaid(
+    { shops: [{ store: "同店", date: ymd, spend: 3, jingmaiGmv: 9, success: "是" }] },
+    { rows: [{ store: "同店", date: ymd, spend: 4, jingmaiGmv: 8, success: "是" }] },
+    { shops: [] },
+    ymd
+  );
+  assert.equal(same.records.length, 1);
+  assert.equal(same.records[0].source, "han+shen");
+});
+
+test("local-paid route pulls han and shen siblings", async () => {
+  const ymd = shanghaiYmd();
+  const app = express();
+  app.get("/api/han/worker", (_req, res) => {
+    res.json({
+      ok: true,
+      shops: [{ store: "韩店", date: ymd, spend: 11, jingmaiGmv: 22, success: "是" }]
+    });
+  });
+  app.get("/api/shen/paid", (_req, res) => {
+    res.json({
+      ok: true,
+      rows: [{ store: "沈店", date: ymd, spend: 7, jingmaiGmv: 14, success: "是" }]
+    });
+  });
+  app.get("/api/shen/paid/jingmai", (_req, res) => {
+    res.json({ ok: true, shops: [] });
+  });
+  app.use("/api/home", homeRouter());
+  const server = await new Promise((resolve) => {
+    const s = app.listen(0, "127.0.0.1", () => resolve(s));
+  });
+  const file = join(snapDir, "merge.json");
+  const prev = join(snapDir, "days.json");
+  setLocalPaidSnapPath(file);
+  try {
+    const { port } = server.address();
+    const res = await fetch(`http://127.0.0.1:${port}/api/home/local-paid`);
+    const data = await res.json();
+    assert.equal(res.status, 200);
+    assert.equal(data.ok, true);
+    assert.equal(data.source, "han-shen-local");
+    assert.deepEqual(data.records.map((row) => row.shopName).sort(), ["沈店", "韩店"]);
+    assert.equal(data.summary.spend, 18);
+    assert.deepEqual(data.from.sort(), ["han", "shen"]);
+  } finally {
+    setLocalPaidSnapPath(prev);
+    await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
 });
