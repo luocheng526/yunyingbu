@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.873-home-scrape */
+/* xm-module-home 0.1.875-home-search */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1427,21 +1427,35 @@
       (liveRefreshing ? " disabled" : "") +
       ">" +
       (liveRefreshing ? "刷新中…" : "刷新") +
-      "</button></div></div>" +
+      "</button></div></div>"
+    );
+  }
+  function liveChipHtml(key, value, label, on) {
+    return (
+      '<button class="xm-hm-live-chip' +
+      (on ? " is-on" : "") +
+      '" data-live-chip="' +
+      escapeHtml(key) +
+      '" data-live-chip-val="' +
+      escapeHtml(value) +
+      '">' +
+      escapeHtml(label) +
+      "</button>"
+    );
+  }
+  function liveSearchHtml() {
+    var pick = liveFilter();
+    return (
       '<div class="xm-hm-live-search">' +
       '<input type="search" data-live-filter="q" placeholder="搜索店铺" value="' +
       escapeHtml(pick.q || "") +
       '" />' +
-      '<select data-live-filter="link">' +
-      liveFilterOption("", "全部状态", !pick.link) +
-      liveFilterOption("on", "在线", pick.link === "on") +
-      liveFilterOption("off", "掉线", pick.link === "off") +
-      "</select>" +
-      '<select data-live-filter="jzOk">' +
-      liveFilterOption("", "全部回传", !pick.jzOk) +
-      liveFilterOption("是", "回传成功", pick.jzOk === "是") +
-      liveFilterOption("否", "回传失败", pick.jzOk === "否") +
-      "</select></div>"
+      '<div class="xm-hm-live-chips">' +
+      liveChipHtml("link", "on", "在线", pick.link === "on") +
+      liveChipHtml("link", "off", "掉线", pick.link === "off") +
+      liveChipHtml("jzOk", "是", "回传成功", pick.jzOk === "是") +
+      liveChipHtml("jzOk", "否", "回传失败", pick.jzOk === "否") +
+      "</div></div>"
     );
   }
   function pickLiveCards(cards) {
@@ -2103,10 +2117,12 @@
       ".xm-hm-rest b{flex:1;font-weight:500}" +
       ".xm-hm-rest em{font-style:normal;font-variant-numeric:tabular-nums}" +
       ".xm-hm-live-filter{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;padding:0;border:0}" +
-      ".xm-hm-live-search{display:flex;align-items:center;gap:12px;margin:0 0 16px;flex-wrap:wrap}" +
-      ".xm-hm-live-search input,.xm-hm-live-search select{height:36px;box-sizing:border-box;border:1px solid #e4e7ed;border-radius:8px;padding:0 12px;font:inherit;font-size:13px;color:var(--xm-ink);background:#fff}" +
-      ".xm-hm-live-search input{flex:1 1 240px;min-width:180px}" +
-      ".xm-hm-live-search select{flex:0 0 140px}" +
+      ".xm-hm-live-search{display:flex;align-items:center;gap:8px;margin:8px 0}" +
+      ".xm-hm-live-search input,.xm-hm-live-chip{height:36px;border:1px solid #e4e7ed;border-radius:8px;background:#fff}" +
+      ".xm-hm-live-search input{flex:1;padding:0 10px}" +
+      ".xm-hm-live-chips{display:flex;gap:8px}" +
+      ".xm-hm-live-chip{padding:0 10px;cursor:pointer}" +
+      ".xm-hm-live-chip.is-on{border-color:var(--xm-primary);color:var(--xm-primary);background:var(--xm-primary-soft)}" +
       ".xm-hm-live-filter-left{display:flex;align-items:center;gap:12px;min-width:0}" +
       ".xm-hm-live-filter-lab{font-size:16px;font-weight:600;color:var(--xm-ink);line-height:40px;white-space:nowrap}" +
       ".xm-hm-live-filter-box{position:relative;flex:0 1 320px;min-width:220px;max-width:100%}" +
@@ -2401,7 +2417,7 @@
     hideCardTip();
     hideLineTip(root);
     var searchDraft = liveSearchDraft(root);
-    board.setAttribute("data-hm-js", "0.1.873-home-scrape");
+    board.setAttribute("data-hm-js", "0.1.875-home-search");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2433,7 +2449,9 @@
       liveCards.map(function (card) {
         return liveCardHtml(card, liveFeePick);
       }).join("") +
-      '</div><div class="xm-hm-panel">' +
+      "</div>" +
+      liveSearchHtml() +
+      '<div class="xm-hm-panel">' +
       '<table class="xm-hm-table" style="min-width:' +
       liveTableMinW() +
       'px">' +
@@ -2453,7 +2471,7 @@
     root.querySelector("#xm-hm-note").textContent = gapText
       ? "人管对不上：" + gapText
       : state.view === "live"
-        ? "实时只汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」，不填写。未回传 —。不运营店默认不显示。"
+        ? "实时只汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」，不填写。未回传 —。"
         : "数字来自星脉 ERP。";
     root.querySelector("#xm-hm-pop h3").textContent =
       "卡片设置 · " + (state.view === "team" ? "经理团队" : state.view === "chief" ? "主管/储备" : "公司");
@@ -4182,6 +4200,16 @@
         if (help) {
           return;
         }
+        var chip = event.target.closest("[data-live-chip]");
+        if (chip) {
+          var chipKey = chip.getAttribute("data-live-chip");
+          var chipVal = chip.getAttribute("data-live-chip-val") || "";
+          var chipNext = liveFilter();
+          chipNext[chipKey] = chipNext[chipKey] === chipVal ? "" : chipVal;
+          saveLiveFilter(chipNext);
+          paint(root, state);
+          return;
+        }
         var view = event.target.closest("[data-view]");
         if (view) {
           var nextView = view.getAttribute("data-view");
@@ -4870,13 +4898,6 @@
         var liveFilterKey = event.target.getAttribute("data-live-filter");
         if (liveFilterKey === "pick") {
           saveLiveFilter(Object.assign(liveFilter(), parseLiveFilterValue(event.target.value)));
-          paint(root, state);
-          return;
-        }
-        if (liveFilterKey === "link" || liveFilterKey === "jzOk") {
-          var nextFilter = liveFilter();
-          nextFilter[liveFilterKey] = event.target.value;
-          saveLiveFilter(nextFilter);
           paint(root, state);
           return;
         }

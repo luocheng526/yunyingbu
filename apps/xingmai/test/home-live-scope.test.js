@@ -173,6 +173,9 @@ test("charts cards and shop rows use the same filtered live board", () => {
 });
 
 test("live table can search shops, filter 掉线/回传失败, and hide idle org shops", () => {
+  assert.match(homeJs, /liveSearchHtml\(\) \+\s*'<div class="xm-hm-panel">/);
+  assert.match(homeJs, /liveChipHtml\("link", "off", "掉线"/);
+  assert.match(homeJs, /liveChipHtml\("jzOk", "否", "回传失败"/);
   const store = {};
   const fns = new Function(
     "localStorage",

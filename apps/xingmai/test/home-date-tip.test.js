@@ -1017,6 +1017,8 @@ test("fee target is a range and 费比监控 uses 超标 / 加大付费", () => 
   assert.doesNotMatch(homeJs, /xm-home-fee-targets/);
   assert.match(homeJs, /type="search"/);
   assert.match(homeJs, /placeholder="搜索店铺"/);
+  assert.match(homeJs, /liveChipHtml\("link", "off", "掉线"/);
+  assert.match(homeJs, /回传失败/);
   assert.match(homeJs, /if \(isHomeFormField\(event\.target\)\) \{\s*return;/);
   assert.match(homeJs, /加大付费/);
   assert.match(homeJs, /费比超标/);

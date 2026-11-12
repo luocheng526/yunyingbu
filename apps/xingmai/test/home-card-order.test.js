@@ -152,8 +152,11 @@ test("live page has fee target, warning and update time", () => {
   assert.doesNotMatch(homeJs, /data-fee-target/);
   assert.doesNotMatch(homeJs, /data-fee-shop/);
   assert.match(homeJs, /placeholder="搜索店铺"/);
-  assert.match(homeJs, /data-live-filter="link"/);
-  assert.match(homeJs, /data-live-filter="jzOk"/);
+  assert.match(homeJs, /function liveChipHtml/);
+  assert.match(homeJs, /function liveSearchHtml/);
+  assert.match(homeJs, /liveChipHtml\("link", "off", "掉线"/);
+  assert.match(homeJs, /liveChipHtml\("jzOk", "否", "回传失败"/);
+  assert.match(homeJs, /liveSearchHtml\(\) \+\s*'<div class="xm-hm-panel">/);
   assert.match(homeJs, /label: "费比设置"/);
   assert.match(homeJs, /label: "费比监控"/);
   assert.doesNotMatch(homeJs, /label: "实时利润"/);
