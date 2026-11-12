@@ -141,6 +141,7 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.equal(withGmv.shops[0].liveAmount, "40");
   assert.equal(withGmv.shops[0].jzOk, "是");
   assert.equal(withGmv.shops[0].jzAccount, "999");
+  assert.equal(withGmv.shops[0].paidIn, true);
   assert.deepEqual(fns.payFit([2, 2], 10), [5, 5]);
   const shaped = fns.fillLocalPaid(
     {

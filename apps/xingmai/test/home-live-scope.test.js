@@ -177,6 +177,7 @@ test("live table can search shops, filter 掉线/回传失败, and hide idle org
   assert.match(homeJs, /liveSearchHtml\(\) \+\s*'<div class="xm-hm-panel">/);
   assert.match(homeJs, /liveChipHtml\("link", "off", "掉线"/);
   assert.match(homeJs, /liveChipHtml\("jzOk", "否", "回传失败"/);
+  assert.match(homeJs, /liveChipHtml\("paid", "no", "未接入店铺"/);
   const store = {};
   const fns = new Function(
     "localStorage",
@@ -198,9 +199,10 @@ test("live table can search shops, filter 掉线/回传失败, and hide idle org
     }
   });
   const rows = [
-    { shop: "在线店", jzOk: "是", online: true },
-    { shop: "掉线店", jzOk: "否", online: false },
-    { shop: "闲置店", jzOk: "是", online: true }
+    { shop: "在线店", jzOk: "是", online: true, paidIn: true },
+    { shop: "掉线店", jzOk: "否", online: false, paidIn: true },
+    { shop: "闲置店", jzOk: "是", online: true, paidIn: true },
+    { shop: "未接入店", jzOk: "—", online: true }
   ];
   store["xm-home-live-filter"] = JSON.stringify({ link: "off" });
   assert.deepEqual(
@@ -230,6 +232,11 @@ test("live table can search shops, filter 掉线/回传失败, and hide idle org
   assert.deepEqual(
     fns.filterLiveShops(rows, { orgIdle: fns.orgIdleNames(org) }).map((row) => row.shop),
     ["在线店", "掉线店"]
+  );
+  store["xm-home-live-filter"] = JSON.stringify({ paid: "no" });
+  assert.deepEqual(
+    fns.filterLiveShops(rows, { orgIdle: fns.orgIdleNames(org) }).map((row) => row.shop),
+    ["未接入店"]
   );
   assert.deepEqual(
     fns.dutyShopsFrom(org).map((row) => row.storeName),

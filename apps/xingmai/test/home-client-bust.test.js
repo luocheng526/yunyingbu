@@ -11,7 +11,7 @@ test("rewrites immutable homepage script url to no-store client.js", () => {
   const out = rewriteHomeModuleUrl(html);
   assert.equal(out.includes("/shared/modules/home.js"), false);
   assert.equal(out.includes(HOME_CLIENT_JS), true);
-    assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.879-tip$/);
+    assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.880-in$/);
 });
 
 test("serves /api/home/client.js from current homepage module", async () => {
@@ -26,7 +26,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     const text = await res.text();
     assert.equal(res.status, 200);
     assert.match(String(res.headers.get("cache-control") || ""), /no-store/i);
-    assert.match(text, /xm-module-home 0\.1\.879-tip/);
+    assert.match(text, /xm-module-home 0\.1\.880-in/);
     assert.match(text, /function liveTheadHtml/);
     assert.match(text, /function liveFilterHtml/);
     assert.match(text, /data-live-filter="pick"/);
@@ -55,6 +55,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.doesNotMatch(text, /label: "实时销售额"/);
     assert.match(text, /placeholder="搜索店铺"/);
     assert.match(text, /liveChipHtml\("link", "off", "掉线"/);
+    assert.match(text, /liveChipHtml\("paid", "no", "未接入店铺"/);
     assert.match(text, /function liveSearchHtml/);
     assert.match(text, /xm-home-live-cols/);
     assert.match(text, /\.xm-hm-table th\{text-align:center/);

@@ -995,9 +995,11 @@ test("fee target is a range and 费比监控 uses 超标 / 加大付费", () => 
   assert.match(homeJs, /placeholder="搜索店铺"/);
   assert.match(homeJs, /\.xm-hm-live-search input\{width:200px\}/);
   assert.match(homeJs, /liveChipHtml\("link", "off", "掉线"/);
+  assert.match(homeJs, /liveChipHtml\("paid", "no", "未接入店铺"/);
   assert.match(homeJs, /回传失败/);
   const searchFn = homeJs.slice(homeJs.indexOf("function liveSearchHtml"), homeJs.indexOf("function pickLiveCards"));
   assert.ok(searchFn.indexOf("xm-hm-live-chips") < searchFn.indexOf('data-live-filter="q"'));
+  assert.ok(searchFn.indexOf("未接入店铺") < searchFn.indexOf('data-live-filter="q"'));
   assert.match(homeJs, /if \(isHomeFormField\(event\.target\)\) \{\s*return;/);
   assert.match(homeJs, /加大付费/);
   assert.match(homeJs, /费比超标/);
