@@ -737,6 +737,28 @@ function toWorkerSub(row) {
   };
 }
 
+function readYesterdayGmv(row) {
+  const named = pick(row, [
+    "昨日京麦成交金额",
+    "京麦昨日成交金额",
+    "昨日成交金额",
+    "yesterdayJingmaiGmv",
+    "yesterdayGmv",
+    "yesterdayAmount",
+  ]);
+  if (named !== "") return num(named);
+  for (const [key, value] of Object.entries(row || {})) {
+    if (value == null || String(value).trim() === "") continue;
+    const name = String(key);
+    const lower = name.toLowerCase();
+    const yest = name.includes("昨日") || lower.includes("yesterday");
+    const money = name.includes("京麦") || name.includes("成交金额") || name.includes("成交额") || lower.includes("gmv") || lower.includes("amount");
+    const spend = name.includes("花费") || name.includes("推广") || lower.includes("spend") || lower.includes("cost");
+    if (yest && money && !spend) return num(value);
+  }
+  return null;
+}
+
 function parseShop(row, capturedAt) {
   const store = text(pick(row, ["店铺名称", "store", "店铺", "店名"]), 64);
   if (!store) {
@@ -756,6 +778,7 @@ function parseShop(row, capturedAt) {
     cpc: num(pick(row, ["京准通平均点击成本", "cpc", "平均点击成本"])),
     jingmaiGmv,
     gmv: jingmaiGmv,
+    yesterdayJingmaiGmv: readYesterdayGmv(row),
     clicks: num(pick(row, ["京准通点击数", "clicks", "点击数"])),
     ctr: num(pick(row, ["京准通点击率", "ctr", "点击率"])),
     totalOrderAmount: num(pick(row, ["京准通总订单金额", "totalOrderAmount"])),
