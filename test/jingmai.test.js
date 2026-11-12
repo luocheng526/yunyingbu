@@ -5,6 +5,7 @@ import { createApp } from "../src/app.js";
 import { buildLiveView, hoursFromSamples, jingmaiError, parseRealtime, runTick } from "../src/modules/shen/jingmai.js";
 import { interpretQrCheck } from "../src/modules/shen/jingmai-client.js";
 import { passwordFailureMessage } from "../src/modules/shen/jingmai-client.js";
+import { libraryPackageNames, packageFilename } from "../src/modules/shen/jingmai-desk.js";
 import { beginRelogin, beginReloginAll, connectJingmai, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/shen/jingmai-runner.js";
 import { listSessions, readJingmaiLive, resetJingmaiStore, saveSample, saveSession } from "../src/modules/shen/jingmai-store.js";
 
@@ -13,6 +14,15 @@ const now = { day: "2026-11-12", stamp: "2026-11-12 11:05:00", hour: 11, clock: 
 function shop(name) {
   return { store: name, enabled: true, authState: "ok", cookies: [{ name: "thor", value: name }] };
 }
+
+test("chrome library map names libatk and skips libc", () => {
+  assert.deepEqual(libraryPackageNames("libatk-1.0.so.0"), ["libatk1.0-0t64", "libatk1.0-0"]);
+  assert.deepEqual(libraryPackageNames("libc.so.6"), []);
+  const index = "Package: libatk1.0-0\nFilename: pool/old/libatk.deb\n\nPackage: libatk1.0-0t64\nFilename: pool/main/a/at-spi2-core/libatk1.0-0t64_2.52.0-1build1_amd64.deb\n\n";
+  assert.equal(packageFilename(index, "libatk1.0-0t64"), "pool/main/a/at-spi2-core/libatk1.0-0t64_2.52.0-1build1_amd64.deb");
+  assert.equal(packageFilename(index, "libatk1.0-0"), "pool/old/libatk.deb");
+  assert.equal(packageFilename(index, "missing"), "");
+});
 
 test("realtime parser keeps a real zero and treats login failure separately from timeout", () => {
   const metrics = parseRealtime(200, JSON.stringify({ content: { OrdAmt: { value: 0, preValue: 12 }, OrdNum: 0, OrdCustNum: 3 } }), "");

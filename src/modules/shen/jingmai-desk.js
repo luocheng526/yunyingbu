@@ -1,9 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { connect as connectTcp } from "node:net";
 import { tmpdir } from "node:os";
 import { setTimeout as sleep } from "node:timers/promises";
+import zlib from "node:zlib";
 
 const LOGIN_URL =
   "https://passport.shop.jd.com/login/index.action/jdm?ReturnUrl=" + encodeURIComponent("https://shop.jd.com/");
@@ -14,8 +15,71 @@ const CHROME_URL =
   "/linux64/chrome-headless-shell-linux64.zip";
 const SESSION_NAMES = new Set(["thor", "pt_key"]);
 
+const SYSTEM_SONAMES = new Set(["libc.so.6", "libdl.so.2", "libpthread.so.0", "libm.so.6", "libgcc_s.so.1", "ld-linux-x86-64.so.2", "linux-vdso.so.1"]);
+const SONAME_PACKAGES = {
+  "libatk-1.0.so.0": ["libatk1.0-0t64", "libatk1.0-0"],
+  "libatk-bridge-2.0.so.0": ["libatk-bridge2.0-0t64", "libatk-bridge2.0-0"],
+  "libatspi.so.0": ["libatspi2.0-0t64", "libatspi2.0-0"],
+  "libasound.so.2": ["libasound2t64", "libasound2"],
+  "libglib-2.0.so.0": ["libglib2.0-0t64", "libglib2.0-0"],
+  "libgobject-2.0.so.0": ["libglib2.0-0t64", "libglib2.0-0"],
+  "libgio-2.0.so.0": ["libglib2.0-0t64", "libglib2.0-0"],
+  "libgmodule-2.0.so.0": ["libglib2.0-0t64", "libglib2.0-0"],
+  "libnspr4.so": ["libnspr4"],
+  "libnss3.so": ["libnss3"],
+  "libnssutil3.so": ["libnss3"],
+  "libplc4.so": ["libnspr4"],
+  "libplds4.so": ["libnspr4"],
+  "libsmime3.so": ["libnss3"],
+  "libssl3.so": ["libnss3"],
+  "libfreebl3.so": ["libnss3"],
+  "libsoftokn3.so": ["libnss3"],
+  "libdbus-1.so.3": ["libdbus-1-3"],
+  "libX11.so.6": ["libx11-6"],
+  "libXcomposite.so.1": ["libxcomposite1"],
+  "libXdamage.so.1": ["libxdamage1"],
+  "libXext.so.6": ["libxext6"],
+  "libXfixes.so.3": ["libxfixes3"],
+  "libXrandr.so.2": ["libxrandr2"],
+  "libXrender.so.1": ["libxrender1"],
+  "libXau.so.6": ["libxau6"],
+  "libXdmcp.so.6": ["libxdmcp6"],
+  "libXi.so.6": ["libxi6"],
+  "libgbm.so.1": ["libgbm1"],
+  "libexpat.so.1": ["libexpat1"],
+  "libxcb.so.1": ["libxcb1"],
+  "libxkbcommon.so.0": ["libxkbcommon0"],
+  "libudev.so.1": ["libudev1"],
+  "libdrm.so.2": ["libdrm2"],
+  "libpcre2-8.so.0": ["libpcre2-8-0"],
+  "libffi.so.8": ["libffi8"],
+  "libz.so.1": ["zlib1g"],
+  "libmount.so.1": ["libmount1"],
+  "libselinux.so.1": ["libselinux1"],
+  "libsystemd.so.0": ["libsystemd0"],
+  "libblkid.so.1": ["libblkid1"],
+  "libgcrypt.so.20": ["libgcrypt20"],
+  "liblz4.so.1": ["liblz4-1"],
+  "liblzma.so.5": ["liblzma5"],
+  "libzstd.so.1": ["libzstd1"],
+  "libbsd.so.0": ["libbsd0"],
+  "libgpg-error.so.0": ["libgpg-error0"],
+  "libmd.so.0": ["libmd0"],
+  "libcap.so.2": ["libcap2"],
+  "libpango-1.0.so.0": ["libpango-1.0-0"],
+  "libpangocairo-1.0.so.0": ["libpangocairo-1.0-0"],
+  "libcairo.so.2": ["libcairo2"],
+  "libcups.so.2": ["libcups2t64", "libcups2"],
+  "libfontconfig.so.1": ["libfontconfig1"],
+  "libfreetype.so.6": ["libfreetype6"],
+  "libpng16.so.16": ["libpng16-16t64", "libpng16-16"]
+};
+
 let current = null;
 let chromeInstall = null;
+let libraryPath = "";
+let libraryTask = null;
+let packageIndex = null;
 
 function chromeHomes() {
   return [process.env.SHEN_CHROME_DIR, "/tmp/shen-chrome", "/opt/mengkai/.shen-chrome"].filter(Boolean);
@@ -101,18 +165,328 @@ async function installChrome() {
   throw failure;
 }
 
+export function libraryPackageNames(soname) {
+  if (SYSTEM_SONAMES.has(soname)) {
+    return [];
+  }
+  return (SONAME_PACKAGES[soname] || []).slice();
+}
+
+export function packageFilename(indexText, packageName) {
+  const blocks = String(indexText || "").split("\n\n");
+  for (let i = 0; i < blocks.length; i += 1) {
+    const pkg = blocks[i].match(/^Package: (.+)$/m);
+    const file = blocks[i].match(/^Filename: (.+)$/m);
+    if (pkg && file && pkg[1].trim() === packageName) {
+      return file[1].trim();
+    }
+  }
+  return "";
+}
+
+function linuxDistro() {
+  let text = "";
+  try {
+    text = readFileSync("/etc/os-release", "utf8");
+  } catch {
+    text = "";
+  }
+  const value = function (key) {
+    const match = text.match(new RegExp("^" + key + "=(.*)$", "m"));
+    return match ? match[1].trim().replace(/^"|"$/g, "") : "";
+  };
+  const id = value("ID");
+  const like = value("ID_LIKE");
+  const code = value("VERSION_CODENAME");
+  if (id === "debian" || (like.includes("debian") && !like.includes("ubuntu") && id !== "ubuntu")) {
+    return { kind: "debian", suite: code || "bookworm" };
+  }
+  return { kind: "ubuntu", suite: code || "noble" };
+}
+
+function distroMirrors(distro) {
+  const urls = [];
+  const files = ["/etc/apt/sources.list"];
+  try {
+    readdirSync("/etc/apt/sources.list.d").forEach(function (name) {
+      files.push("/etc/apt/sources.list.d/" + name);
+    });
+  } catch {
+    /* no apt sources */
+  }
+  files.forEach(function (file) {
+    let body = "";
+    try {
+      body = readFileSync(file, "utf8");
+    } catch {
+      return;
+    }
+    body.split("\n").forEach(function (line) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) {
+        return;
+      }
+      const deb = trimmed.match(/^deb(?:-src)?\s+(https?:\/\/\S+)/);
+      const uri = trimmed.match(/^URIs:\s*(https?:\/\/\S+)/);
+      const found = (deb && deb[1]) || (uri && uri[1]) || "";
+      if (!found) {
+        return;
+      }
+      const clean = found.replace(/\/$/, "");
+      if (urls.indexOf(clean) < 0) {
+        urls.push(clean);
+      }
+    });
+  });
+  const extras = distro.kind === "debian"
+    ? ["https://mirrors.aliyun.com/debian", "https://mirrors.tuna.tsinghua.edu.cn/debian", "https://deb.debian.org/debian"]
+    : ["https://mirrors.aliyun.com/ubuntu", "https://mirrors.tuna.tsinghua.edu.cn/ubuntu", "https://archive.ubuntu.com/ubuntu"];
+  return extras.concat(urls.filter(function (url) {
+    return extras.indexOf(url) < 0;
+  }));
+}
+
+function libHome() {
+  const homes = chromeHomes();
+  for (let i = 0; i < homes.length; i += 1) {
+    try {
+      mkdirSync(homes[i] + "/libs", { recursive: true });
+      return homes[i] + "/libs";
+    } catch {
+      /* try the next cache dir */
+    }
+  }
+  return "";
+}
+
+function libSearchPath(home) {
+  if (!home) {
+    return "";
+  }
+  return [home + "/usr/lib/x86_64-linux-gnu", home + "/lib/x86_64-linux-gnu", home + "/usr/lib"].filter(function (dir) {
+    return existsSync(dir);
+  }).join(":");
+}
+
+function treeHas(dir, name, depth) {
+  if (!dir || depth > 8 || !existsSync(dir)) {
+    return false;
+  }
+  const entries = readdirSync(dir, { withFileTypes: true });
+  for (let i = 0; i < entries.length; i += 1) {
+    if (entries[i].isDirectory()) {
+      if (treeHas(dir + "/" + entries[i].name, name, depth + 1)) {
+        return true;
+      }
+    } else if (entries[i].name === name) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function lddMissing(binary, extraPath) {
+  return new Promise(function (resolve) {
+    const env = Object.assign({}, process.env);
+    if (extraPath) {
+      env.LD_LIBRARY_PATH = extraPath + (env.LD_LIBRARY_PATH ? ":" + env.LD_LIBRARY_PATH : "");
+    }
+    const child = spawn("ldd", [binary], { env: env, stdio: ["ignore", "pipe", "ignore"] });
+    let out = "";
+    child.stdout.on("data", function (chunk) {
+      out += chunk.toString();
+    });
+    child.on("error", function () {
+      resolve(null);
+    });
+    child.on("exit", function () {
+      const names = [];
+      out.split("\n").forEach(function (line) {
+        if (!line.includes("not found")) {
+          return;
+        }
+        const name = line.trim().split(/\s+/)[0];
+        if (name && names.indexOf(name) < 0) {
+          names.push(name);
+        }
+      });
+      resolve(names);
+    });
+  });
+}
+
+function commandOk(cmd, args) {
+  return new Promise(function (resolve) {
+    const child = spawn(cmd, args, { stdio: "ignore" });
+    child.on("error", function () {
+      resolve(false);
+    });
+    child.on("exit", function (code) {
+      resolve(code === 0);
+    });
+  });
+}
+
+function debDataTar(bytes) {
+  if (!bytes.subarray(0, 8).equals(Buffer.from("!<arch>\n"))) {
+    return null;
+  }
+  let off = 8;
+  while (off + 60 <= bytes.length) {
+    const name = bytes.subarray(off, off + 16).toString("ascii").replace(/\s+$/g, "").replace(/\/$/, "");
+    const size = Number(bytes.subarray(off + 48, off + 58).toString("ascii").trim());
+    off += 60;
+    const body = bytes.subarray(off, off + size);
+    off += size + (size & 1);
+    if (name.startsWith("data.tar")) {
+      return { name: name, body: body };
+    }
+  }
+  return null;
+}
+
+async function extractDeb(deb, dest) {
+  if (await commandOk("dpkg-deb", ["-x", deb, dest])) {
+    return true;
+  }
+  const member = debDataTar(readFileSync(deb));
+  if (!member) {
+    return false;
+  }
+  let tar = member.body;
+  if (member.name.endsWith(".zst") || member.name.endsWith(".zstd")) {
+    if (typeof zlib.zstdDecompressSync !== "function") {
+      return false;
+    }
+    tar = zlib.zstdDecompressSync(tar);
+  } else if (member.name.endsWith(".gz")) {
+    tar = zlib.gunzipSync(tar);
+  } else if (member.name.endsWith(".xz")) {
+    return false;
+  }
+  const tarPath = dest + "/data.tar";
+  writeFileSync(tarPath, tar);
+  const extracted = await commandOk("tar", ["-xf", tarPath, "-C", dest]);
+  rmSync(tarPath, { force: true });
+  return extracted;
+}
+
+async function loadPackageIndex(distro) {
+  if (packageIndex && packageIndex.suite === distro.suite && packageIndex.kind === distro.kind) {
+    return packageIndex;
+  }
+  const mirrors = distroMirrors(distro);
+  let lastError = null;
+  for (let i = 0; i < mirrors.length; i += 1) {
+    try {
+      const response = await fetch(mirrors[i] + "/dists/" + distro.suite + "/main/binary-amd64/Packages.gz", { signal: AbortSignal.timeout(60000) });
+      if (!response.ok) {
+        throw new Error("index");
+      }
+      const text = zlib.gunzipSync(Buffer.from(await response.arrayBuffer())).toString("utf8");
+      packageIndex = { suite: distro.suite, kind: distro.kind, mirror: mirrors[i], text: text };
+      return packageIndex;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("index");
+}
+
+async function downloadSonames(home, names) {
+  if (!home || !names.length) {
+    return false;
+  }
+  const distro = linuxDistro();
+  let index = null;
+  try {
+    index = await loadPackageIndex(distro);
+  } catch {
+    return false;
+  }
+  let installed = false;
+  for (let i = 0; i < names.length; i += 1) {
+    const packages = libraryPackageNames(names[i]);
+    if (treeHas(home, names[i], 0)) {
+      continue;
+    }
+    for (let p = 0; p < packages.length; p += 1) {
+      const filename = packageFilename(index.text, packages[p]);
+      if (!filename) {
+        continue;
+      }
+      const deb = home + "/debs/" + packages[p] + ".deb";
+      try {
+        mkdirSync(home + "/debs", { recursive: true });
+        const response = await fetch(index.mirror.replace(/\/$/, "") + "/" + filename, { signal: AbortSignal.timeout(120000) });
+        if (!response.ok) {
+          continue;
+        }
+        writeFileSync(deb, Buffer.from(await response.arrayBuffer()));
+        const extracted = await extractDeb(deb, home);
+        rmSync(deb, { force: true });
+        if (extracted && treeHas(home, names[i], 0)) {
+          installed = true;
+          break;
+        }
+      } catch {
+        rmSync(deb, { force: true });
+      }
+    }
+  }
+  return installed;
+}
+
+function installLibraries(chromePath) {
+  if (libraryTask) {
+    return libraryTask;
+  }
+  libraryTask = fillLibraries(chromePath).then(function (path) {
+    libraryTask = null;
+    return path;
+  }, function () {
+    libraryTask = null;
+    return libraryPath;
+  });
+  return libraryTask;
+}
+
+async function fillLibraries(chromePath) {
+  const home = libHome();
+  if (!home || !chromePath) {
+    return libraryPath;
+  }
+  for (let round = 0; round < 3; round += 1) {
+    const missing = await lddMissing(chromePath, libSearchPath(home));
+    if (!missing) {
+      break;
+    }
+    const needed = missing.filter(function (name) {
+      return !SYSTEM_SONAMES.has(name) && !treeHas(home, name, 0);
+    });
+    if (!needed.length) {
+      break;
+    }
+    const installed = await downloadSonames(home, needed);
+    if (!installed) {
+      break;
+    }
+  }
+  libraryPath = libSearchPath(home);
+  return libraryPath;
+}
+
 export function ensureChrome() {
   const existing = findChrome();
-  if (existing) {
-    return Promise.resolve(existing);
-  }
-  if (!chromeInstall) {
-    chromeInstall = installChrome().catch(function (error) {
-      chromeInstall = null;
-      throw error;
+  const pending = existing ? Promise.resolve(existing) : chromeInstall || (chromeInstall = installChrome().catch(function (error) {
+    chromeInstall = null;
+    throw error;
+  }));
+  return pending.then(function (bin) {
+    return installLibraries(bin).then(function () {
+      return bin;
     });
-  }
-  return chromeInstall;
+  });
 }
 
 function send(ws, method, params) {
@@ -365,7 +739,35 @@ async function launchChrome() {
     error.code = "browser";
     throw error;
   }
+  const tried = new Set();
+  let lastError = null;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try {
+      return await startChromeProcess(chromePath);
+    } catch (error) {
+      lastError = error;
+      const match = String(error && error.message || "").match(/缺少 ([A-Za-z0-9._+-]+)/);
+      if (!match || tried.has(match[1])) {
+        throw error;
+      }
+      tried.add(match[1]);
+      const home = libHome();
+      const installed = await downloadSonames(home, [match[1]]);
+      libraryPath = libSearchPath(home);
+      if (!installed) {
+        throw error;
+      }
+    }
+  }
+  throw lastError || new Error("服务器登录没有打开");
+}
+
+async function startChromeProcess(chromePath) {
   const dir = mkdtempSync(tmpdir() + "/shen-jingmai-");
+  const env = Object.assign({}, process.env);
+  if (libraryPath) {
+    env.LD_LIBRARY_PATH = libraryPath + (env.LD_LIBRARY_PATH ? ":" + env.LD_LIBRARY_PATH : "");
+  }
   const chrome = spawn(chromePath, [
     "--headless=new",
     "--no-sandbox",
@@ -379,7 +781,7 @@ async function launchChrome() {
     "--user-data-dir=" + dir,
     "--remote-debugging-port=0",
     "about:blank"
-  ], { stdio: ["ignore", "ignore", "pipe"] });
+  ], { env: env, stdio: ["ignore", "ignore", "pipe"] });
   try {
     let buf = "";
     const port = await new Promise(function (resolve, reject) {
