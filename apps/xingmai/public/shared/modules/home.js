@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.815-home-live3charts */
+/* xm-module-home 0.1.817-home-liveyest */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1410,7 +1410,9 @@
       todayHour: src.todayHour && src.todayHour.length ? src.todayHour : base.todayHour || [],
       hours: src.hours || base.hours || 0,
       unit: src.unit || base.unit || "",
-      lineMode: src.lineMode || base.lineMode || ""
+      lineMode: src.lineMode || base.lineMode || "",
+      key: src.key || base.key || "",
+      yestText: src.yestText != null && src.yestText !== "" ? src.yestText : base.yestText || "—"
     };
   }
   function hourX(i, slots) {
@@ -1555,11 +1557,21 @@
     return Number(hours) === 48 || Number(hours) === 24 ? ' data-hours="' + hours + '"' : "";
   }
   function liveChartHtml(chart) {
-    var down = Number(chart && chart.delta) < 0;
+    var delta = chart && chart.delta;
+    var hasDelta = delta != null && delta !== "";
+    var n = hasDelta ? Number(delta) || 0 : 0;
     var unit = (chart && chart.unit) || "";
     var kind = (chart && chart.key) || (unit === "rate" ? "fee" : "sales");
     var line = lineChartOf(chart);
     var sub = unit === "rate" ? "线：当天费比" : "线：累计（23点=1-23点）";
+    var trendCls = !hasDelta ? "" : n > 0 ? " is-up" : n < 0 ? " is-down" : "";
+    var trendText = !hasDelta
+      ? ""
+      : n > 0
+        ? "环比 ↗ 上升 " + Math.round(Math.abs(n)) + "%"
+        : n < 0
+          ? "环比 ↘ 下降 " + Math.round(Math.abs(n)) + "%"
+          : "环比 0%";
     return (
       '<article class="xm-hm-chart' +
       (kind === "fee" && feeWarnText(chart && chart.value) ? " is-warn" : "") +
@@ -1571,17 +1583,11 @@
       '><div class="xm-hm-card-head"><span>' +
       escapeHtml((chart && chart.label) || "实时指标") +
       '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
-      escapeHtml(chart && chart.value != null ? chart.value : "—") +
+      escapeHtml(chart && chart.value != null && chart.value !== "" ? chart.value : "—") +
+      '</div><div class="xm-hm-yest-now">昨天 ' +
+      escapeHtml((chart && chart.yestText) || "—") +
       "</div>" +
-      (chart && (chart.delta == null || chart.delta === "")
-        ? '<div class="xm-hm-trend"></div>'
-        : '<div class="xm-hm-trend ' +
-          (down ? "is-down" : "is-up") +
-          '">环比 ' +
-          (down ? "↘" : "↗") +
-          " " +
-          Math.round(Math.abs(Number(chart && chart.delta) || 0)) +
-          "%</div>") +
+      (hasDelta ? '<div class="xm-hm-trend' + trendCls + '">' + trendText + "</div>" : '<div class="xm-hm-trend"></div>') +
       (line.hours ? '<div class="xm-hm-chart-sub">' + sub + "</div>" : "") +
       compareLineHtml(line) +
       "</article>"
@@ -2048,7 +2054,8 @@
       ".xm-hm-trend.is-down{color:#389e0d}" +
       ".xm-hm-panel{width:100%;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:12px 12px 8px;min-height:0}" +
       ".xm-hm-panel h2{margin:0;font-size:14px;display:flex;align-items:center;justify-content:space-between;gap:8px}" +
-      ".xm-hm-index-num{margin:8px 0 6px;font-size:28px;font-weight:700;color:var(--xm-primary)}" +
+      ".xm-hm-index-num{margin:8px 0 2px;font-size:28px;font-weight:700;color:var(--xm-primary)}" +
+      ".xm-hm-yest-now{margin:0;font-size:13px;color:var(--xm-muted);font-variant-numeric:tabular-nums}" +
       ".xm-hm-table{width:100%;border-collapse:collapse;font-size:12px}" +
       ".xm-hm-table th{text-align:center;color:var(--xm-muted);font-weight:500;padding:6px 4px;border-bottom:1px solid var(--xm-line)}" +
       ".xm-hm-table thead th{text-align:center}" +
@@ -2260,7 +2267,7 @@
     hideCardTip();
     hideLineTip(root);
     var feeDraft = liveFeeDraft(root);
-    board.setAttribute("data-hm-js", "0.1.815-home-live3charts");
+    board.setAttribute("data-hm-js", "0.1.817-home-liveyest");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2310,7 +2317,7 @@
     root.querySelector("#xm-hm-note").textContent = gapText
       ? "人管对不上：" + gapText
       : state.view === "live"
-        ? "京麦面板实时金额走星脉 ERP。实时付费来自韩梦凯、沈子晗本地机回传，不接星脉。"
+        ? "实时总成交金额走星脉 ERP。实时付费来自韩梦凯、沈子晗本地机回传，不接星脉。前一天数据会留下来做环比。"
         : "数字来自星脉 ERP。";
     root.querySelector("#xm-hm-pop h3").textContent =
       "卡片设置 · " + (state.view === "team" ? "经理团队" : state.view === "chief" ? "主管/储备" : "公司");
@@ -2580,7 +2587,7 @@
     return {
       title: "实时看板",
       summary: { channels: 1, shops: 0 },
-      hero: { key: "jingmai", label: "京麦面板实时金额", value: "—", delta: 0, yesterday: [], today: [], yesterdayHour: [], todayHour: [], hours: 0 },
+      hero: { key: "jingmai", label: "实时总成交金额", value: "—", yestText: "—", delta: "", yesterday: [], today: [], yesterdayHour: [], todayHour: [], hours: 0 },
       paid: spendChartOf(null),
       fee: feeChartOf(null),
       cards: liveCardsOf(),
@@ -2667,9 +2674,9 @@
     var blank = blankLive();
     var live = state.live || blank;
     state.live = Object.assign({}, live, {
-      hero: Object.assign({}, live.hero || {}, { value: "", delta: "" }),
-      paid: Object.assign({}, live.paid || {}, { value: "", delta: "" }),
-      fee: Object.assign({}, live.fee || {}, { value: "", delta: "" }),
+      hero: Object.assign({}, live.hero || {}, { value: "" }),
+      paid: Object.assign({}, live.paid || {}, { value: "" }),
+      fee: Object.assign({}, live.fee || {}, { value: "" }),
       cards: (live.cards && live.cards.length ? live.cards : blank.cards).map(function (card) {
         return Object.assign({}, card, { value: "", extra: "" });
       })
@@ -3028,40 +3035,209 @@
       ? { spend: spend, paidDeal: deal, feeRate: deal ? spend / deal : null, roi: spend ? deal / spend : null, shops: n }
       : {};
   }
+  var LIVE_DAY_KEY = "xm-home-live-yday";
+  function emptyLiveDayNums() {
+    return { jingmai: null, spend: null, fee: null, jingmaiAt: [], spendAt: [], feeAt: [] };
+  }
+  function liveDayYmd() {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  }
+  function readLiveDay() {
+    var blank = { ymd: liveDayYmd(), today: emptyLiveDayNums(), yest: emptyLiveDayNums() };
+    try {
+      if (typeof localStorage === "undefined") {
+        return blank;
+      }
+      var raw = JSON.parse(localStorage.getItem(LIVE_DAY_KEY) || "null");
+      if (!raw || typeof raw !== "object") {
+        return blank;
+      }
+      raw.today = raw.today || emptyLiveDayNums();
+      raw.yest = raw.yest || emptyLiveDayNums();
+      return raw;
+    } catch (err) {
+      return blank;
+    }
+  }
+  function writeLiveDay(store) {
+    try {
+      if (typeof localStorage === "undefined") {
+        return;
+      }
+      localStorage.setItem(LIVE_DAY_KEY, JSON.stringify(store));
+    } catch (err) {}
+  }
+  function rollLiveDay(store) {
+    var ymd = liveDayYmd();
+    store = store || { ymd: "", today: emptyLiveDayNums(), yest: emptyLiveDayNums() };
+    if (store.ymd && store.ymd !== ymd) {
+      store.yest = store.today || emptyLiveDayNums();
+      store.today = emptyLiveDayNums();
+    }
+    store.ymd = ymd;
+    store.today = store.today || emptyLiveDayNums();
+    store.yest = store.yest || emptyLiveDayNums();
+    return store;
+  }
+  function stampAt(list, value) {
+    var h = shanghaiHour();
+    var out = padHours(list, 24);
+    if (value == null) {
+      return out;
+    }
+    out[h] = value;
+    return out;
+  }
+  function stampPick(list, fallback) {
+    var h = shanghaiHour();
+    var src = list || [];
+    var i;
+    var n;
+    for (i = Math.min(h, Math.max(src.length - 1, 0)); i >= 0; i -= 1) {
+      n = asNum(src[i]);
+      if (n != null) {
+        return n;
+      }
+    }
+    return fallback == null ? null : asNum(fallback);
+  }
+  function hourCum(hourly, fallback) {
+    var h = shanghaiHour();
+    if (hourly && hourly.length > 2) {
+      var sum = 0;
+      padHours(hourly, 24).slice(0, h + 1).forEach(function (n) {
+        sum += Number(n) || 0;
+      });
+      return sum;
+    }
+    return fallback == null ? null : asNum(fallback);
+  }
+  function hourFlat(hourly, fallback) {
+    var h = shanghaiHour();
+    if (hourly && hourly.length > 2) {
+      var n = asNum(padHours(hourly, 24)[h]);
+      if (n != null) {
+        return n;
+      }
+    }
+    return fallback == null ? null : asNum(fallback);
+  }
+  function keepLiveDay(input) {
+    input = input || {};
+    var store = rollLiveDay(readLiveDay());
+    if (input.jingmai != null) {
+      store.today.jingmai = input.jingmai;
+      store.today.jingmaiAt = stampAt(store.today.jingmaiAt, input.jingmai);
+    }
+    if (input.spend != null) {
+      store.today.spend = input.spend;
+      store.today.spendAt = stampAt(store.today.spendAt, input.spend);
+    }
+    if (input.fee != null) {
+      store.today.fee = input.fee;
+      store.today.feeAt = stampAt(store.today.feeAt, input.fee);
+    }
+    if (input.yestJingmai != null) {
+      store.yest.jingmai = input.yestJingmai;
+    }
+    if (input.yestSpend != null) {
+      store.yest.spend = input.yestSpend;
+    }
+    if (input.yestFee != null) {
+      store.yest.fee = input.yestFee;
+    }
+    writeLiveDay(store);
+    var hourly = input.hourly || {};
+    var yestJingmai = hourCum(hourly.yesterdayPay, null);
+    if (yestJingmai == null) {
+      yestJingmai = stampPick(store.yest.jingmaiAt, store.yest.jingmai);
+    }
+    var yestSpend = hourCum(hourly.yesterdaySpend, null);
+    if (yestSpend == null) {
+      yestSpend = stampPick(store.yest.spendAt, store.yest.spend);
+    }
+    var yestFee = hourFlat(hourly.yesterdayFee, null);
+    if (yestFee == null) {
+      yestFee = stampPick(store.yest.feeAt, store.yest.fee);
+    }
+    return {
+      jingmai: input.jingmai != null ? input.jingmai : store.today.jingmai,
+      spend: input.spend != null ? input.spend : store.today.spend,
+      fee: input.fee != null ? input.fee : store.today.fee,
+      yestJingmai: yestJingmai,
+      yestSpend: yestSpend,
+      yestFee: yestFee,
+      hourly: hourly,
+      yestStamps: store.yest
+    };
+  }
+  function localHourlyOf(local) {
+    var hourly = Object.assign({}, (local && local.hourly) || {});
+    var yestH = (local && local.yesterday && local.yesterday.hourly) || {};
+    if (!hourly.yesterdaySpend || hourly.yesterdaySpend.length < 3) {
+      hourly.yesterdaySpend = yestH.todaySpend || yestH.yesterdaySpend || hourly.yesterdaySpend;
+    }
+    if (!hourly.yesterdayFee || hourly.yesterdayFee.length < 3) {
+      hourly.yesterdayFee = yestH.todayFee || yestH.yesterdayFee || hourly.yesterdayFee;
+    }
+    return hourly;
+  }
   function spendChartOf(spend, yestSpend, hourly) {
     hourly = hourly || {};
     var hasHourly = hourly.todaySpend && hourly.todaySpend.length > 2;
-    var yestHour = hasHourly ? padHours(hourly.yesterdaySpend, 24) : seriesOf(hourly.yesterdaySpend, yestSpend);
+    var hasYestHour = hourly.yesterdaySpend && hourly.yesterdaySpend.length > 2;
+    var stampYest = !hasYestHour && hourly.yesterdaySpendNow && hourly.yesterdaySpendNow.length > 2;
+    var yestHour = hasYestHour
+      ? padHours(hourly.yesterdaySpend, 24)
+      : stampYest
+        ? padHours(hourly.yesterdaySpendNow, 24)
+        : seriesOf(hourly.yesterdaySpend, yestSpend);
     var todayHour = hasHourly ? todayHours(hourly.todaySpend) : seriesOf(hourly.todaySpend, spend);
     var hasSpend = spend != null;
+    var yestNow = hourCum(hourly.yesterdaySpend, null);
+    if (yestNow == null) {
+      yestNow = stampPick(hourly.yesterdaySpendNow, yestSpend);
+    }
     return {
       key: "spend",
       label: "推广总花费",
       value: hasSpend ? fmtMoney(spend) : "—",
-      delta: hasSpend && yestSpend != null ? trendOf(spend, yestSpend) : "",
-      yesterday: hasHourly ? cumHours(yestHour) : yestSpend != null ? yestHour : [],
+      yestText: yestNow != null ? fmtMoney(yestNow) : "—",
+      delta: hasSpend && yestNow != null ? trendOf(spend, yestNow) : "",
+      yesterday: hasYestHour ? cumHours(yestHour) : stampYest ? yestHour : yestNow != null ? yestHour : [],
       today: hasHourly ? cumHours(todayHour) : hasSpend ? todayHour : [],
-      yesterdayHour: hasHourly ? yestHour : [],
+      yesterdayHour: hasYestHour || stampYest ? yestHour : [],
       todayHour: hasHourly ? todayHour : [],
-      hours: hasHourly ? 24 : 0
+      hours: hasHourly || hasYestHour || stampYest ? 24 : 0
     };
   }
   function feeChartOf(rate, yestRate, hourly) {
     hourly = hourly || {};
     var hasHourly = hourly.todayFee && hourly.todayFee.length > 2;
-    var yestHour = hasHourly ? padHours(hourly.yesterdayFee, 24) : seriesOf(hourly.yesterdayFee, yestRate);
+    var hasYestHour = hourly.yesterdayFee && hourly.yesterdayFee.length > 2;
+    var stampYest = !hasYestHour && hourly.yesterdayFeeNow && hourly.yesterdayFeeNow.length > 2;
+    var yestHour = hasYestHour
+      ? padHours(hourly.yesterdayFee, 24)
+      : stampYest
+        ? padHours(hourly.yesterdayFeeNow, 24)
+        : seriesOf(hourly.yesterdayFee, yestRate);
     var todayHour = hasHourly ? todayHours(hourly.todayFee) : seriesOf(hourly.todayFee, rate);
     var hasRate = rate != null;
+    var yestNow = hourFlat(hourly.yesterdayFee, null);
+    if (yestNow == null) {
+      yestNow = stampPick(hourly.yesterdayFeeNow, yestRate);
+    }
     return {
       key: "fee",
       label: "实时费比",
       value: hasRate ? fmtRate(rate) : "—",
-      delta: hasRate && yestRate != null ? trendOf(rate, yestRate) : "",
-      yesterday: hasHourly ? yestHour : yestRate != null ? yestHour : [],
+      yestText: yestNow != null ? fmtRate(yestNow) : "—",
+      delta: hasRate && yestNow != null ? trendOf(rate, yestNow) : "",
+      yesterday: hasYestHour || stampYest ? yestHour : yestNow != null ? yestHour : [],
       today: hasHourly ? todayHour : hasRate ? todayHour : [],
-      yesterdayHour: hasHourly ? yestHour : [],
+      yesterdayHour: hasYestHour || stampYest ? yestHour : [],
       todayHour: hasHourly ? todayHour : [],
-      hours: hasHourly ? 24 : 0,
+      hours: hasHourly || hasYestHour || stampYest ? 24 : 0,
       unit: "rate",
       lineMode: "flat"
     };
@@ -3099,11 +3275,18 @@
     var hasHourly = hourly.todayPay && hourly.todayPay.length > 2;
     var yestHour = hasHourly ? padHours(hourly.yesterdayPay, 24) : seriesOf(hourly.yesterdayPay, yestPay);
     var todayHour = hasHourly ? todayHours(hourly.todayPay) : seriesOf(hourly.todayPay, todayPay);
+    var keptHero = keepLiveDay({
+      jingmai: todayPay,
+      yestJingmai: yestPay,
+      hourly: hourly
+    });
+    var yestNow = keptHero.yestJingmai;
     live.hero = {
       key: "jingmai",
-      label: "京麦面板实时金额",
+      label: "实时总成交金额",
       value: fmtMoney(todayPay),
-      delta: trendOf(todayPay, yestPay),
+      yestText: yestNow != null ? fmtMoney(yestNow) : "—",
+      delta: todayPay != null && yestNow != null ? trendOf(todayPay, yestNow) : "",
       yesterday: hasHourly ? cumHours(yestHour) : yestHour,
       today: hasHourly ? cumHours(todayHour) : todayHour,
       yesterdayHour: hasHourly ? yestHour : [],
@@ -3135,19 +3318,29 @@
     return live;
   }
   function emptyLocalPaid() {
-    return { ok: true, source: "han-shen-local", updatedAt: "", summary: {}, records: [] };
+    return {
+      ok: true,
+      source: "han-shen-local",
+      updatedAt: "",
+      summary: {},
+      records: [],
+      yesterday: { records: [], summary: {}, hourly: {} }
+    };
   }
   function scopeLocalPaid(pack, keys) {
     var src = pack || emptyLocalPaid();
+    function onDuty(row) {
+      var name = normShopName((row && (row.shopName || row.shop)) || "");
+      var id = normShopId(row && (row.shopId || row.id));
+      return (name && keys["name:" + name]) || (id && keys["id:" + id]);
+    }
     if (!keys) {
       return src;
     }
+    var yest = src.yesterday || { records: [] };
     return Object.assign({}, src, {
-      records: (src.records || []).filter(function (row) {
-        var name = normShopName((row && (row.shopName || row.shop)) || "");
-        var id = normShopId(row && (row.shopId || row.id));
-        return (name && keys["name:" + name]) || (id && keys["id:" + id]);
-      })
+      records: (src.records || []).filter(onDuty),
+      yesterday: Object.assign({}, yest, { records: (yest.records || []).filter(onDuty) })
     });
   }
   function localShopPaid(row) {
@@ -3163,34 +3356,51 @@
   function fillLocalPaid(live, local) {
     live = live || blankLive();
     var rows = (local && local.records) || [];
-    if (!rows.length) {
-      return live;
+    var yestRows = (local && local.yesterday && local.yesterday.records) || [];
+    var sum = rows.length ? sumLocalPaid(rows) : {};
+    var yestSum = yestRows.length ? sumLocalPaid(yestRows) : {};
+    var hourly = localHourlyOf(local);
+    if (rows.length) {
+      var map = {};
+      rows.forEach(function (row) {
+        var name = String((row && (row.shopName || row.shop)) || "").trim();
+        if (name) {
+          map[name] = row;
+        }
+      });
+      var seen = {};
+      live.shops = (live.shops || []).map(function (shop) {
+        seen[shop.shop] = true;
+        var hit = map[shop.shop];
+        return hit ? Object.assign({}, shop, localShopPaid(hit)) : shop;
+      });
+      rows.forEach(function (row) {
+        var name = String((row && (row.shopName || row.shop)) || "").trim();
+        if (!name || seen[name]) {
+          return;
+        }
+        seen[name] = true;
+        live.shops.push(Object.assign({ shop: name, liveAmount: "—" }, localShopPaid(row)));
+      });
+      live.cards = liveCardsOf(sum);
     }
-    var map = {};
-    rows.forEach(function (row) {
-      var name = String((row && (row.shopName || row.shop)) || "").trim();
-      if (name) {
-        map[name] = row;
+    var kept = keepLiveDay({
+      spend: sum.spend,
+      fee: sum.feeRate,
+      yestSpend: yestSum.spend,
+      yestFee: yestSum.feeRate,
+      hourly: hourly
+    });
+    if (kept.yestStamps) {
+      if (!hourly.yesterdaySpend || hourly.yesterdaySpend.length < 3) {
+        hourly.yesterdaySpendNow = kept.yestStamps.spendAt;
       }
-    });
-    var seen = {};
-    live.shops = (live.shops || []).map(function (shop) {
-      seen[shop.shop] = true;
-      var hit = map[shop.shop];
-      return hit ? Object.assign({}, shop, localShopPaid(hit)) : shop;
-    });
-    rows.forEach(function (row) {
-      var name = String((row && (row.shopName || row.shop)) || "").trim();
-      if (!name || seen[name]) {
-        return;
+      if (!hourly.yesterdayFee || hourly.yesterdayFee.length < 3) {
+        hourly.yesterdayFeeNow = kept.yestStamps.feeAt;
       }
-      seen[name] = true;
-      live.shops.push(Object.assign({ shop: name, liveAmount: "—" }, localShopPaid(row)));
-    });
-    var sum = sumLocalPaid(rows);
-    live.paid = spendChartOf(sum.spend, null, local && local.hourly);
-    live.fee = feeChartOf(sum.feeRate, null, local && local.hourly);
-    live.cards = liveCardsOf(sum);
+    }
+    live.paid = spendChartOf(kept.spend, kept.yestSpend, hourly);
+    live.fee = feeChartOf(kept.fee, kept.yestFee, hourly);
     return live;
   }
   function ownerOfShop(shopMeta, grants) {

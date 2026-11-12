@@ -175,6 +175,9 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function liveCardsOf/);
   assert.doesNotMatch(homeJs, /key: "ad", label: "推广花费 \(支付预估\)", value:/);
   assert.match(homeJs, /label: "京麦面板实时金额"/);
+  assert.match(homeJs, /label: "实时总成交金额"/);
+  assert.match(homeJs, /xm-hm-yest-now/);
+  assert.match(homeJs, /环比 ↗ 上升 /);
   assert.doesNotMatch(homeJs, /label: "实时销售指数"/);
   assert.match(homeJs, /key: "livePaid", label: "实时付费接入店铺数量"/);
   assert.match(homeJs, /key: "liveAt", label: "更新时间"/);
@@ -784,8 +787,9 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
   assert.match(html, /线：累计（23点=1-23点）/);
   assert.match(html, /preserveAspectRatio="none"/);
   const liveHtml = fns.liveChartHtml({
-    label: "京麦面板实时金额",
+    label: "实时总成交金额",
     value: "12,345",
+    yestText: "11,000",
     delta: 8,
     yesterday: yest,
     today: today,
@@ -793,7 +797,9 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
     todayHour: today,
     hours: 24
   });
-  assert.match(liveHtml, /京麦面板实时金额/);
+  assert.match(liveHtml, /实时总成交金额/);
+  assert.match(liveHtml, /xm-hm-yest-now">昨天 11,000/);
+  assert.match(liveHtml, /环比 ↗ 上升 8%/);
   assert.match(liveHtml, /data-hours="24"/);
   assert.match(liveHtml, /data-chart="sales"/);
   assert.doesNotMatch(liveHtml, /<circle/);
@@ -806,12 +812,15 @@ test("company tab puts a realtime sales row above the KPI cards", () => {
   const feeHtml = fns.liveChartHtml({
     label: "实时费比",
     value: "12%",
+    yestText: "10%",
     delta: -1,
     yesterdayHour: Array.from({ length: 24 }, () => 0.1),
     todayHour: [0.2, 0.2, 0.2],
     unit: "rate",
     lineMode: "flat"
   });
+  assert.match(feeHtml, /昨天 10%/);
+  assert.match(feeHtml, /环比 ↘ 下降 1%/);
   assert.match(feeHtml, /data-chart="fee"/);
   assert.match(feeHtml, /data-unit="rate"/);
   assert.match(feeHtml, /data-hours="24"/);
@@ -917,14 +926,16 @@ test("range change blanks every shown number before the new pack paints", () => 
   assert.equal(state.ladders[0].columns[0].rows[0].name, "杨润泽");
   const live = fns.clearLiveShown({
     live: {
-      hero: { value: "12,345", delta: 8 },
-      paid: { value: "12%", delta: -1 },
+      hero: { value: "12,345", delta: 8, yestText: "11,000" },
+      paid: { value: "12%", delta: -1, yestText: "13%" },
       cards: [{ key: "ad", label: "推广花费", value: "100" }]
     },
     shops: [{ shop: "A", liveAmount: "9", paidAmount: "8" }]
   });
   assert.equal(live.live.hero.value, "");
-  assert.equal(live.live.hero.delta, "");
+  assert.equal(live.live.hero.delta, 8);
+  assert.equal(live.live.hero.yestText, "11,000");
+  assert.equal(live.live.paid.delta, -1);
   assert.equal(live.live.cards[0].value, "");
   assert.equal(live.shops[0].liveAmount, "");
 });
