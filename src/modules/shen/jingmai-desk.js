@@ -401,6 +401,38 @@ function debDataTar(bytes) {
   return null;
 }
 
+function extractDebPython(deb, dest) {
+  const script = [
+    "import sys, io, tarfile, lzma, gzip",
+    "deb, dest = sys.argv[1], sys.argv[2]",
+    "data = open(deb, 'rb').read()",
+    "if not data.startswith(b'!<arch>\\n'):",
+    "    sys.exit(1)",
+    "off = 8",
+    "blob = None",
+    "while off + 60 <= len(data):",
+    "    name = data[off:off+16].decode('ascii', 'replace').strip().rstrip('/')",
+    "    size = int(data[off+48:off+58].decode().strip() or '0')",
+    "    off += 60",
+    "    body = data[off:off+size]",
+    "    off += size + (size & 1)",
+    "    if name.startswith('data.tar'):",
+    "        blob = (name, body)",
+    "        break",
+    "if blob is None:",
+    "    sys.exit(1)",
+    "name, body = blob",
+    "if name.endswith('.xz'):",
+    "    body = lzma.decompress(body)",
+    "elif name.endswith('.gz'):",
+    "    body = gzip.decompress(body)",
+    "elif name.endswith('.zst') or name.endswith('.zstd'):",
+    "    sys.exit(1)",
+    "tarfile.open(fileobj=io.BytesIO(body), mode='r:').extractall(dest)"
+  ].join("\n");
+  return commandOk("python3", ["-c", script, deb, dest]);
+}
+
 async function extractDeb(deb, dest) {
   if (await commandOk("dpkg-deb", ["-x", deb, dest])) {
     return true;
@@ -409,20 +441,20 @@ async function extractDeb(deb, dest) {
   if (!member) {
     return false;
   }
+  if (member.name.endsWith(".xz") || member.name.endsWith(".gz")) {
+    return extractDebPython(deb, dest);
+  }
   let tar = member.body;
   if (member.name.endsWith(".zst") || member.name.endsWith(".zstd")) {
     if (typeof zlib.zstdDecompressSync !== "function") {
+      libraryNote = "这版 Node 解不开压缩包";
       return false;
     }
     tar = zlib.zstdDecompressSync(tar);
-  } else if (member.name.endsWith(".gz")) {
-    tar = zlib.gunzipSync(tar);
-  } else if (member.name.endsWith(".xz")) {
-    return false;
   }
   const tarPath = dest + "/data.tar";
   writeFileSync(tarPath, tar);
-  const extracted = await commandOk("tar", ["-xf", tarPath, "-C", dest]);
+  const extracted = await commandOk("python3", ["-c", "import sys,tarfile; tarfile.open(sys.argv[1]).extractall(sys.argv[2])", tarPath, dest]);
   rmSync(tarPath, { force: true });
   return extracted;
 }
