@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.814-home-livespend */
+/* xm-module-home 0.1.815-home-live3charts */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -2001,7 +2001,7 @@
       ".xm-hm-live .xm-hm-table td.is-fee-warn,.xm-hm-live .xm-hm-table td.is-fee-hot{color:#cf1322;font-weight:600}" +
       ".xm-hm-live .xm-hm-table td.is-fee-cold{color:#1677ff;font-weight:600}" +
       ".xm-hm-live .xm-hm-table td:has(.xm-hm-fee-goal){overflow:visible}" +
-      ".xm-hm-live-charts{display:grid;grid-template-columns:1fr 1fr;gap:20px}" +
+      ".xm-hm-live-charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}" +
       ".xm-hm-chart{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;box-shadow:var(--xm-shadow);padding:14px 16px 10px;min-width:0}" +
       ".xm-hm-legs{display:inline-flex;align-items:center;gap:10px;color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-legs i{width:10px;height:10px;border-radius:50%;display:inline-block}" +
@@ -2250,6 +2250,7 @@
           : blankTeams();
     var hero = readChart(live.hero, blankLive().hero);
     var paid = readChart(live.paid, blankLive().paid);
+    var fee = readChart(live.fee, blankLive().fee);
     var liveCards = pickLiveCards(live.cards).map(function (card) {
       if (card && card.key === "liveAt") {
         return Object.assign({}, card, { value: liveAtText(state && state.liveAt) });
@@ -2259,7 +2260,7 @@
     hideCardTip();
     hideLineTip(root);
     var feeDraft = liveFeeDraft(root);
-    board.setAttribute("data-hm-js", "0.1.814-home-livespend");
+    board.setAttribute("data-hm-js", "0.1.815-home-live3charts");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2286,6 +2287,7 @@
       '<div class="xm-hm-live-charts">' +
       liveChartHtml(hero) +
       liveChartHtml(paid) +
+      liveChartHtml(fee) +
       '</div><div class="xm-hm-live-cards">' +
       liveCards.map(liveCardHtml).join("") +
       '</div><div class="xm-hm-panel">' +
@@ -2580,6 +2582,7 @@
       summary: { channels: 1, shops: 0 },
       hero: { key: "jingmai", label: "京麦面板实时金额", value: "—", delta: 0, yesterday: [], today: [], yesterdayHour: [], todayHour: [], hours: 0 },
       paid: spendChartOf(null),
+      fee: feeChartOf(null),
       cards: liveCardsOf(),
       shops: []
     };
@@ -2666,6 +2669,7 @@
     state.live = Object.assign({}, live, {
       hero: Object.assign({}, live.hero || {}, { value: "", delta: "" }),
       paid: Object.assign({}, live.paid || {}, { value: "", delta: "" }),
+      fee: Object.assign({}, live.fee || {}, { value: "", delta: "" }),
       cards: (live.cards && live.cards.length ? live.cards : blank.cards).map(function (card) {
         return Object.assign({}, card, { value: "", extra: "" });
       })
@@ -3042,6 +3046,26 @@
       hours: hasHourly ? 24 : 0
     };
   }
+  function feeChartOf(rate, yestRate, hourly) {
+    hourly = hourly || {};
+    var hasHourly = hourly.todayFee && hourly.todayFee.length > 2;
+    var yestHour = hasHourly ? padHours(hourly.yesterdayFee, 24) : seriesOf(hourly.yesterdayFee, yestRate);
+    var todayHour = hasHourly ? todayHours(hourly.todayFee) : seriesOf(hourly.todayFee, rate);
+    var hasRate = rate != null;
+    return {
+      key: "fee",
+      label: "实时费比",
+      value: hasRate ? fmtRate(rate) : "—",
+      delta: hasRate && yestRate != null ? trendOf(rate, yestRate) : "",
+      yesterday: hasHourly ? yestHour : yestRate != null ? yestHour : [],
+      today: hasHourly ? todayHour : hasRate ? todayHour : [],
+      yesterdayHour: hasHourly ? yestHour : [],
+      todayHour: hasHourly ? todayHour : [],
+      hours: hasHourly ? 24 : 0,
+      unit: "rate",
+      lineMode: "flat"
+    };
+  }
   function liveCardsOf(sum, liveAt) {
     sum = sum || {};
     return [
@@ -3087,6 +3111,7 @@
       hours: hasHourly ? 24 : 0
     };
     live.paid = spendChartOf(null);
+    live.fee = feeChartOf(null);
     var rows = (todayPack && todayPack.records && todayPack.records.length ? todayPack.records : snapPack && snapPack.records) || [];
     live.shops = rows
       .slice()
@@ -3164,6 +3189,7 @@
     });
     var sum = sumLocalPaid(rows);
     live.paid = spendChartOf(sum.spend, null, local && local.hourly);
+    live.fee = feeChartOf(sum.feeRate, null, local && local.hourly);
     live.cards = liveCardsOf(sum);
     return live;
   }
@@ -3923,7 +3949,8 @@
         }
         var slots = Number(chartEl.getAttribute("data-hours")) || 24;
         var pack = (state.shownLive || state.live) || {};
-        var src = chartEl.getAttribute("data-chart") === "spend" ? pack.paid || {} : pack.hero || {};
+        var kind = chartEl.getAttribute("data-chart");
+        var src = kind === "spend" ? pack.paid || {} : kind === "fee" ? pack.fee || {} : pack.hero || {};
         var yestHour = src.yesterdayHour || [];
         var todayHour = src.todayHour || [];
         var yestCum = src.yesterday || [];

@@ -166,10 +166,12 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /店铺列表/);
   assert.match(homeJs, /责权归属/);
   assert.match(homeJs, /\.xm-hm-live\{display:flex;flex-direction:column;gap:20px\}/);
-  assert.match(homeJs, /\.xm-hm-live-charts\{display:grid;grid-template-columns:1fr 1fr;gap:20px\}/);
+  assert.match(homeJs, /\.xm-hm-live-charts\{display:grid;grid-template-columns:repeat\(3,minmax\(0,1fr\)\);gap:16px\}/);
   assert.match(homeJs, /\.xm-hm-live-cards\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\);gap:20px/);
   assert.match(homeJs, /label: "推广总花费"/);
   assert.match(homeJs, /function spendChartOf/);
+  assert.match(homeJs, /function feeChartOf/);
+  assert.match(homeJs, /liveChartHtml\(fee\)/);
   assert.match(homeJs, /function liveCardsOf/);
   assert.doesNotMatch(homeJs, /key: "ad", label: "推广花费 \(支付预估\)", value:/);
   assert.match(homeJs, /label: "京麦面板实时金额"/);
