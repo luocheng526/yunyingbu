@@ -197,7 +197,7 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /实时只汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」/);
   assert.match(homeJs, /\/api\/home\/erp-paid/);
   assert.match(homeJs, /api\("\/api\/home\/local-paid"/);
-  assert.doesNotMatch(homeJs, /sum\.spend \* \(sY \/ sT\)/);
+  assert.match(homeJs, /sum\.spend \* \(sY \/ sT\)/);
   assert.match(homeJs, /function seriesOf/);
   assert.match(homeJs, /function todayHours/);
   assert.match(homeJs, /function padHours/);

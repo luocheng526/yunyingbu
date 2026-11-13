@@ -221,7 +221,8 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.ok(waved.fee.todayHour[0] > 0.4 && waved.fee.todayHour[1] < 0.45);
   assert.equal(waved.fee.yesterdayHour.length, 24);
   assert.match(homeJs, /function mixFeeHours/);
-  assert.doesNotMatch(homeJs, /sum\.spend \* \(sY \/ sT\)/);
+  assert.match(homeJs, /sum\.spend \* \(sY \/ sT\)/);
+  assert.match(homeJs, /mixFeeHours\(live\.shops, "yestPayHours"\)/);
   assert.match(homeJs, /api\("\/api\/home\/local-paid"/);
   const keptYest = fns.fillLocalPaid(
     {
@@ -242,6 +243,22 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.notEqual(keptYest.hero.yesterdayHour[0], 99);
   assert.equal(keptYest.paid.yesterdayHour[0], 2);
   assert.equal(keptYest.fee.yesterdayHour[0], 0.3);
+  const erpYest = fns.fillLocalPaid(
+    {
+      hero: { label: "实时总成交金额", value: "100", todayHour: [10, 20, 30, 40], yesterdayHour: [8, 16, 24, 32] },
+      shops: [{ shop: "A店", liveAmount: "100", payHours: [10, 20, 30, 40], yestPayHours: [8, 16, 24, 32] }],
+      cards: [],
+      paid: { label: "推广总花费", value: "—" }
+    },
+    {
+      records: [{ shopName: "A店", paidAmount: 10, paidDeal: 40, jingmaiGmv: 100, feeRate: 0.1 }]
+    }
+  );
+  assert.equal(erpYest.hero.yesterdayHour[0], 8);
+  assert.equal(erpYest.paid.yestText, "8");
+  assert.equal(erpYest.paid.yesterdayHour[0], 0.8);
+  assert.equal(erpYest.fee.yesterdayHour.length, 24);
+  assert.notEqual(erpYest.fee.yestText, "—");
 });
 
 test("live shop 状态 follows 10-minute capturedAt", () => {

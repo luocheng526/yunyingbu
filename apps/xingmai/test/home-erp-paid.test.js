@@ -1,8 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { hourlyArray, mapErpPaid, shiftYmd } from "../src/modules/home/erp-paid.js";
 import { homeRouter } from "../src/modules/home/router.js";
+
+const erpPaidJs = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../src/modules/home/erp-paid.js"), "utf8");
 
 test("maps ERP realtime sales and shop promo onto homepage live paid fields", () => {
   const shopToday = {
@@ -56,6 +61,10 @@ test("live paid hours keep 24 slots and shift Shanghai ymd", () => {
   assert.equal(hours[10], 7);
   assert.equal(hours[11], 0);
   assert.equal(shiftYmd("2026-09-15", -1), "2026-09-14");
+  assert.match(erpPaidJs, /const yesterdayRange = /);
+  assert.match(erpPaidJs, /fetchAllShopPages\(erp, yesterdayRange, 200\)/);
+  assert.match(erpPaidJs, /hourly: mapped\.hourly/);
+  assert.doesNotMatch(erpPaidJs, /yesterdayPay: \[\]/);
 });
 
 test("homepage live paid route is mounted", async () => {
