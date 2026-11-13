@@ -20,6 +20,8 @@ import {
   getPaidSummary,
   getStoreSummary,
   ingestPaid,
+  listFeeTargets,
+  saveFeeTarget,
   ingestRecharge,
   listPaid,
   listRecharge,
@@ -153,6 +155,22 @@ shenRouter.get("/jingcang", async (req, res) => {
     res.json(await watchJingcang(req.query.store));
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message || "无法抓取京仓" });
+  }
+});
+
+shenRouter.get("/paid/fee-targets", async (_req, res) => {
+  try {
+    res.json(await listFeeTargets());
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "无法加载费比设置" });
+  }
+});
+
+shenRouter.post("/paid/fee-targets", async (req, res) => {
+  try {
+    res.json(await saveFeeTarget(req.body || {}));
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.message || "无法保存费比设置" });
   }
 });
 

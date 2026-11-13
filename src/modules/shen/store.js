@@ -171,7 +171,17 @@ ON DUPLICATE KEY UPDATE
 FROM shen_paid_subaccount
 WHERE (? = 1 OR store = ?) AND day >= ? AND day <= ?
 ORDER BY day DESC, captured_at DESC, id DESC
-LIMIT ?`
+LIMIT ?`,
+  createFeeTargetTable: `CREATE TABLE IF NOT EXISTS shen_paid_fee_target (
+  store VARCHAR(64) NOT NULL PRIMARY KEY,
+  lo_pct DECIMAL(6,2) NULL,
+  hi_pct DECIMAL(6,2) NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)`,
+  listFeeTargets: `SELECT store, lo_pct, hi_pct FROM shen_paid_fee_target ORDER BY store ASC`,
+  upsertFeeTarget: `INSERT INTO shen_paid_fee_target (store, lo_pct, hi_pct) VALUES (?, ?, ?)
+ON DUPLICATE KEY UPDATE lo_pct = VALUES(lo_pct), hi_pct = VALUES(hi_pct), updated_at = CURRENT_TIMESTAMP`,
+  deleteFeeTarget: `DELETE FROM shen_paid_fee_target WHERE store = ?`
 };
 
 const MAX_PAID_ROWS = 2000;
@@ -189,6 +199,7 @@ let memoryRecharge = [];
 let nextSubId = 1;
 let memorySub = [];
 let memoryEnabled = [];
+let memoryFeeTargets = new Map();
 
 export function setPool(pool) {
   poolOverride = pool;
@@ -1087,7 +1098,8 @@ async function ensurePaidTable() {
     SQL.addPaidSubCapturedAtColumn,
     SQL.dropPaidSubUnique,
     SQL.addPaidSubUniqueWithCaptured,
-    SQL.createEnabledStoreTable
+    SQL.createEnabledStoreTable,
+    SQL.createFeeTargetTable
   ]) {
     try {
       await mysqlQuery(sql);
@@ -1110,6 +1122,7 @@ export function resetStore() {
   nextSubId = 1;
   memorySub = [];
   memoryEnabled = [];
+  memoryFeeTargets = new Map();
 }
 
 export async function hydrateFromMysql() {
@@ -1204,6 +1217,80 @@ export async function getBrief() {
     return { text: rows[0] ? String(rows[0].text || "") : "" };
   }
   return { text: memoryBrief };
+}
+
+function normalizeFeePct(value, label) {
+  if (value == null || value === "") {
+    return null;
+  }
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    throw httpError(400, `${label}必须是数字`);
+  }
+  if (n < 0 || n > 100) {
+    throw httpError(400, `${label}要在 0 到 100 之间`);
+  }
+  return Math.round(n * 100) / 100;
+}
+
+function mapFeeTarget(row) {
+  const lo = row.lo_pct == null || row.lo_pct === "" ? null : Number(row.lo_pct);
+  const hi = row.hi_pct == null || row.hi_pct === "" ? null : Number(row.hi_pct);
+  return {
+    lo: Number.isFinite(lo) ? lo : null,
+    hi: Number.isFinite(hi) ? hi : null
+  };
+}
+
+export async function listFeeTargets() {
+  await ensurePaidTable();
+  const result = await mysqlQuery(SQL.listFeeTargets);
+  const targets = {};
+  if (result) {
+    for (const row of result[0]) {
+      const shop = String(row.store || "").trim();
+      if (!shop) {
+        continue;
+      }
+      targets[shop] = mapFeeTarget(row);
+    }
+    return { ok: true, targets };
+  }
+  for (const [shop, value] of memoryFeeTargets) {
+    targets[shop] = { lo: value.lo, hi: value.hi };
+  }
+  return { ok: true, targets };
+}
+
+export async function saveFeeTarget(body) {
+  const shop = String(body?.shop ?? body?.store ?? "").trim();
+  if (!shop) {
+    throw httpError(400, "必须指定店铺");
+  }
+  if (shop.length > 64) {
+    throw httpError(400, "店铺名称过长");
+  }
+  let lo = normalizeFeePct(body?.lo, "下限");
+  let hi = normalizeFeePct(body?.hi, "上限");
+  if (lo != null && hi != null && lo > hi) {
+    const swap = lo;
+    lo = hi;
+    hi = swap;
+  }
+  await ensurePaidTable();
+  if (lo == null && hi == null) {
+    const deleted = await mysqlQuery(SQL.deleteFeeTarget, [shop]);
+    if (!deleted) {
+      memoryFeeTargets.delete(shop);
+    }
+    return { ok: true, shop, target: null };
+  }
+  const saved = await mysqlQuery(SQL.upsertFeeTarget, [shop, lo, hi]);
+  const target = { lo, hi };
+  if (!saved) {
+    memoryFeeTargets.set(shop, target);
+  }
+  return { ok: true, shop, target };
 }
 
 export async function setBrief(text) {
