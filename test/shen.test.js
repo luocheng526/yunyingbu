@@ -508,6 +508,10 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(css.text, /xm-hl-col-grip/);
     assert.match(css.text, /#paid-board \.xm-hl-login \{[^}]*inline-flex/);
     assert.match(css.text, /#paid-board \.xm-hl-login \{[^}]*align-items: center;/);
+    assert.match(css.text, /#paid-board \.xm-hl-delta\.is-up \{[^}]*#cf1322/);
+    assert.match(css.text, /#paid-board \.xm-hl-delta\.is-down \{[^}]*#389e0d/);
+    assert.match(embed.text, /"00:00"/);
+    assert.match(embed.text, /"24:00"/);
     assert.match(css.text, /#paid-board \.xm-hl-table th,\s*#paid-board \.xm-hl-table td \{[^}]*text-align: center;/);
     assert.match(css.text, /\.xm-hl-fee \{[^}]*inline-flex/);
     assert.equal(embed.text.includes("/api/han/"), false);

@@ -7,10 +7,10 @@ import { currentUser, publicProfile } from "./auth.js";
 import { APP_ICON_PNG } from "./app-icon-png.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.766-paid-deal
+// xm-fast-shell 0.1.767-paid-axis
 // login.html 不走 HTML 内存缓存；login.css 禁止 immutable。必须和 home/pages.js 成套发。
 
-export const SHELL_ASSET_VER = "0.1.766-paid-deal";
+export const SHELL_ASSET_VER = "0.1.767-paid-axis";
 export const WEB_MANIFEST = {
   name: "星脉甄选运营中心",
   short_name: "星脉甄选",

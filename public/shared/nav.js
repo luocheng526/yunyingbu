@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.766-paid-deal — 付费中心成交金额按京麦卡片环比 */
+/* xm-fast-shell 0.1.767-paid-axis — 成交环比上涨红色、下跌绿色，时间轴到 24:00 */
 (function () {
-  const ASSET_VER = "0.1.766-paid-deal";
+  const ASSET_VER = "0.1.767-paid-axis";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",

@@ -472,7 +472,7 @@
     mount: function (root) {
       const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
       paidCss.rel = "stylesheet";
-      paidCss.href = "/shared/shen-paid.css?v=0.1.766-paid-deal";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.767-paid-axis";
       if (!paidCss.parentNode) {
         document.head.appendChild(paidCss);
       }
@@ -1102,20 +1102,22 @@
               "</text>";
           }
         } else if (count > 48) {
-          for (let hour = 0; hour < 24; hour += 2) {
-            const index = hour * 12;
-            if (index >= count) {
-              break;
-            }
+          [
+            [0, "00:00", "start"],
+            [144, "12:00", "middle"],
+            [count - 1, "24:00", "end"]
+          ].forEach(function (mark) {
             labels +=
               '<text x="' +
-              xAt(index).toFixed(1) +
+              xAt(mark[0]).toFixed(1) +
               '" y="' +
               (height - 5) +
-              '" text-anchor="middle" fill="#8c8c8c" font-size="8">' +
-              String(hour).padStart(2, "0") +
-              ":00</text>";
-          }
+              '" text-anchor="' +
+              mark[2] +
+              '" fill="#8c8c8c" font-size="11">' +
+              mark[1] +
+              "</text>";
+          });
         }
         function dots(list, color) {
           if (!series.gaps) {
@@ -2307,10 +2309,11 @@
             total: total
           });
         }
-        while (today.length && today[today.length - 1] == null && yesterday[yesterday.length - 1] == null) {
-          today.pop();
-          yesterday.pop();
-          tips.pop();
+        const daySlots = 24 * 12 + 1;
+        while (today.length < daySlots) {
+          today.push(null);
+          yesterday.push(null);
+          tips.push(null);
         }
         return {
           compare: {
@@ -2322,7 +2325,7 @@
             estimated: estimated,
             label: comparable && samePeriod ? "较昨日同时段" : "较昨日"
           },
-          series: { today: today, yesterday: yesterday, tips: tips, count: today.length }
+          series: { today: today, yesterday: yesterday, tips: tips, count: daySlots }
         };
       }
 

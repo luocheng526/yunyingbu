@@ -1023,12 +1023,12 @@
 }
 
 #paid-board .xm-hl-sub b.down {
-  color: #cf1322;
+  color: #389e0d;
   font-weight: 500;
 }
 
 #paid-board .xm-hl-sub b.up {
-  color: #389e0d;
+  color: #cf1322;
   font-weight: 500;
 }
 
@@ -1051,12 +1051,12 @@
 }
 
 #paid-board .xm-hl-delta.is-up {
-  color: #389e0d;
+  color: #cf1322;
   font-weight: 600;
 }
 
 #paid-board .xm-hl-delta.is-down {
-  color: #cf1322;
+  color: #389e0d;
   font-weight: 600;
 }
 
