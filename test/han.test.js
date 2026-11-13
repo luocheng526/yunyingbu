@@ -526,7 +526,7 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /XmModules\["\/han\/recharge-rules"\]/);
   assert.match(js, /实时付费/);
   assert.match(js, /HanCenter\.mount\(root, hanBoard\)/);
-  assert.match(js, /20261112-open/);
+  assert.match(js, /20261113-seven/);
   assert.doesNotMatch(js, /id="paid-form"/);
   assert.doesNotMatch(js, /上传抓取表/);
   assert.match(js, /XmModules\["\/han\/training"\]/);
@@ -1275,8 +1275,29 @@ test("非全站营销的 ROI 和总订单金额记成京准通付费投产比和
             店铺名称: "嵌套店",
             京准通主账户ID: "401",
             花费: 10,
-            全站营销: { ROI: 8, 总订单金额: 800 },
+            总花费金额: 1511.32,
+            全站营销: { 花费: 444.71, ROI: 8, 总订单金额: 800 },
             非全站营销: { ROI: 2.69, 总订单金额: 1098.05 },
+            京麦成交金额: 1053,
+            京麦成交金额环比: "较昨日上涨18.57%",
+          },
+          {
+            店铺名称: "分拆店",
+            京准通主账户ID: "404",
+            营销类型: "全站营销",
+            花费: 934.87,
+            ROI: 9.9,
+            总订单金额: 1,
+          },
+          {
+            店铺名称: "分拆店",
+            京准通主账户ID: "404",
+            营销类型: "非全站营销",
+            ROI: 1.66,
+            总花费金额: 2200.4,
+            总订单金额: 5285.56,
+            京麦成交金额: 2119.7,
+            京麦成交金额环比: "较昨日上涨29.93%",
           },
           {
             店铺名称: "总金额店",
@@ -1317,6 +1338,15 @@ test("非全站营销的 ROI 和总订单金额记成京准通付费投产比和
     assert.equal(flat.totalOrderAmount, 5285.56);
     assert.equal(nested.roi, 2.69);
     assert.equal(nested.totalOrderAmount, 1098.05);
+    assert.equal(nested.spend, 1511.32);
+    assert.equal(nested.jingmaiGmv, 1053);
+    assert.equal(nested.jingmaiGmvRate, "较昨日上涨18.57%");
+    const split = overview.body.shops.filter((row) => row.store === "分拆店");
+    assert.equal(split.length, 1);
+    assert.equal(split[0].spend, 2200.4);
+    assert.equal(split[0].roi, 1.66);
+    assert.equal(split[0].totalOrderAmount, 5285.56);
+    assert.equal(split[0].jingmaiGmv, 2119.7);
     assert.equal(named.roi, 1.31);
     assert.equal(named.totalOrderAmount, 532);
     const lined = overview.body.shops.find((row) => row.store === "分线店");
@@ -2196,7 +2226,7 @@ test("韩梦凯侧栏隐藏付费中心并保留充值规则", async () => {
   assert.match(han, /a\[href="\/han\/paid-center"\]/);
   assert.doesNotMatch(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
   assert.match(han, /\["\/han\/paid\?board=rules", "充值规则", "rules"\]/);
-  assert.match(han, /20261112-open/);
+  assert.match(han, /20261113-seven/);
   const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
   assert.match(center, /两档花费/);
   assert.match(center, /han-rules-text/);
@@ -2236,7 +2266,7 @@ test("韩梦凯侧栏隐藏付费中心并保留充值规则", async () => {
   assert.match(han, /insertAdjacentElement\("afterend"/);
   assert.match(han, /data-xm-group"\) !== "\/han"/);
   assert.doesNotMatch(han, /anchor\.href = "\/han\/paid-center"/);
-  assert.match(center, /20261112-open/);
+  assert.match(center, /20261113-seven/);
   assert.match(center, /已超过30分钟没有更新/);
   assert.match(center, /超过30分钟未更新/);
   assert.match(han, /action: "dingtalk"/);
@@ -2292,8 +2322,10 @@ test("韩梦凯侧栏隐藏付费中心并保留充值规则", async () => {
   assert.match(center, /较昨日上涨/);
   assert.match(center, /较昨日下降/);
   assert.match(center, /han-shop-team/);
-  assert.match(center, /window\.hanCurve/);
-  assert.match(center, /liveCurves/);
+  assert.match(center, /function dayPair/);
+  assert.match(center, /function hourSeries/);
+  assert.match(center, /yesterdayHourlyData/);
+  assert.match(center, /polyline/);
   assert.match(han, /window\.hanCurve = function/);
   assert.match(center, /function heroDelta/);
   assert.match(center, /now \/ base/);
@@ -2309,8 +2341,15 @@ test("韩梦凯侧栏隐藏付费中心并保留充值规则", async () => {
   assert.match(center, /function shopStamp/);
   assert.match(center, /\["stamp", "回传时间"\]/);
   assert.match(center, /\["line", "状态"\]/);
-  assert.match(center, /window\.hanLine/);
-  assert.match(han, /600000/);
+  assert.doesNotMatch(center, /是否成功/);
+  assert.match(center, /function lineOn/);
+  assert.match(center, /function lineHtml/);
+  assert.match(center, /900000/);
+  assert.match(center, /Asia\/Shanghai/);
+  assert.match(center, /\+08:00/);
+  assert.doesNotMatch(center, /window\.hanLine/);
+  assert.match(han, /900000/);
+  assert.doesNotMatch(han, /600000/);
   assert.match(han, /在线/);
   assert.match(han, /掉线/);
   assert.match(center, /han-fee-targets/);
@@ -2328,8 +2367,7 @@ test("韩梦凯侧栏隐藏付费中心并保留充值规则", async () => {
   assert.doesNotMatch(center, /推广花费 \(支付预估\)/);
   assert.match(center, /付费成交ROI/);
   assert.match(center, /实时付费成交额/);
-  assert.match(center, /线：累计（23点=1-23点）/);
-  assert.match(center, /线：当天费比/);
+  assert.match(center, /昨天<i class="is-today"><\/i>今天/);
   assert.match(center, /id="han-paid-kpis" hidden/);
   assert.match(center, /#han-paid-kpis\[hidden\]\{display:none!important\}/);
   assert.match(center, /#han-paid-board\[hidden\]\{display:none!important\}/);
@@ -2659,7 +2697,7 @@ test("回传里的京麦成交金额环比留在店铺上", async () => {
   });
 });
 
-test("回传按小时记下京麦成交曲线", async () => {
+test("回传只留当前实时京麦成交，不按小时存曲线", async () => {
   await withServer(async (base) => {
     const first = await json(base, "/api/han/worker", {
       method: "POST",
@@ -2674,16 +2712,34 @@ test("回传按小时记下京麦成交曲线", async () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        抓取时间: "2026-11-12T11:15:00+08:00",
-        rows: [{ 店铺名称: "曲线店", 京准通主账户ID: "901", 京麦成交金额: 1800, 京准通花费: 220 }],
+        抓取时间: "2026-11-13T10:15:00+08:00",
+        rows: [{ 店铺名称: "曲线店", 京准通主账户ID: "901", 京麦成交金额: 91212.1, 京准通花费: 36998, 京麦成交金额环比: "-2.79%" }],
       }),
     });
     assert.equal(second.res.status, 201);
     const overview = await json(base, "/api/han/worker?view=overview");
-    const day = overview.body.curves["2026-11-12"];
-    assert.deepEqual(day["10"]["曲线店"], [1000, 100]);
-    assert.deepEqual(day["11"]["曲线店"], [1800, 220]);
+    const shop = overview.body.shops.find((row) => row.store === "曲线店");
+    assert.equal(shop.jingmaiGmv, 91212.1);
+    assert.equal(shop.jingmaiGmvRate, "-2.79%");
+    assert.deepEqual(overview.body.curves, {});
   });
+});
+
+test("回传时间和北京时间相差 15 分钟内显示在线", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
+  const start = center.indexOf("function beijingText");
+  const end = center.indexOf("function shopStamp");
+  const api = new Function(`${center.slice(start, end)}return { returnAt, clockText, lineOn };`)();
+  const now = Date.parse("2026-11-13T10:21:00+08:00");
+  assert.equal(api.lineOn({ capturedAt: "2026-11-13T10:06:00+08:00" }, now), true);
+  assert.equal(api.lineOn({ capturedAt: "2026-11-13T10:05:59+08:00" }, now), false);
+  assert.equal(api.lineOn({ capturedAt: "2026-11-13T02:21:00.000Z" }, now), true);
+  assert.equal(api.lineOn({ capturedAt: "2026-11-13 10:21:00" }, now), true);
+  assert.equal(api.lineOn({ capturedAt: "2026-11-13 10:00:00" }, now), false);
+  assert.equal(api.lineOn({ capturedAt: "" }, now), false);
+  assert.equal(api.clockText("2026-11-13T02:06:00.000Z"), "2026-11-13 10:06:00");
+  assert.equal(api.clockText("2026-11-13 10:06:00"), "2026-11-13 10:06:00");
 });
 
 test("han schema uses prefixed tables", async () => {
