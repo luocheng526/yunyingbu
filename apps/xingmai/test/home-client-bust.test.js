@@ -11,7 +11,7 @@ test("rewrites immutable homepage script url to no-store client.js", () => {
   const out = rewriteHomeModuleUrl(html);
   assert.equal(out.includes("/shared/modules/home.js"), false);
   assert.equal(out.includes(HOME_CLIENT_JS), true);
-    assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.920-yday$/);
+    assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.922-now$/);
 });
 
 test("serves /api/home/client.js from current homepage module", async () => {
@@ -26,7 +26,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     const text = await res.text();
     assert.equal(res.status, 200);
     assert.match(String(res.headers.get("cache-control") || ""), /no-store/i);
-    assert.match(text, /xm-module-home 0\.1\.920-yday/);
+    assert.match(text, /xm-module-home 0\.1\.922-now/);
     assert.match(text, /function liveTheadHtml/);
     assert.match(text, /function liveFilterHtml/);
     assert.match(text, /data-live-filter="pick"/);
@@ -91,6 +91,8 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.doesNotMatch(text, /\/api\/shen\/fee-targets/);
     assert.doesNotMatch(text, /function overlayFeeBooks/);
     assert.match(text, /LIVE_REFRESH_MS = 10 \* 60 \* 1000/);
+    assert.match(text, /cache: "no-store"/);
+    assert.match(text, /Promise\.resolve\(pullLive\(\)\)/);
     assert.doesNotMatch(text, /function kickLive/);
     assert.match(text, /function scrapedFeeRange/);
     assert.match(text, /费比监控/);

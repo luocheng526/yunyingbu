@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.920-yday */
+/* xm-module-home 0.1.922-now */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -2499,6 +2499,7 @@
     return fetch(path, {
       method: body ? "POST" : "GET",
       credentials: "same-origin",
+      cache: "no-store",
       headers: { Accept: "application/json", "Content-Type": "application/json" },
       body: body ? JSON.stringify(body) : undefined
     }).then(function (res) {
@@ -4250,9 +4251,8 @@
           return;
         }
         liveRefreshing = true;
-        clearLiveRowPicked();
         paint(root, state);
-        return Promise.resolve(pullLive(true)).then(function () {
+        return Promise.resolve(pullLive()).then(function () {
           liveRefreshing = false;
           if (!dead) {
             paint(root, state);
