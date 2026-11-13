@@ -77,6 +77,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /@media \(max-width:720px\)/);
     assert.match(text, /\.xm-hm-sales\.xm-hm-live-charts,\.xm-hm-live \.xm-hm-live-charts\{display:flex;flex-direction:column/);
     assert.match(text, /\.xm-hm-sales\.xm-hm-live-charts>\.xm-hm-chart,\.xm-hm-live \.xm-hm-live-charts>\.xm-hm-chart\{flex:0 0 auto;width:100%/);
+    assert.match(text, /\.xm-hm-kpis\{grid-template-columns:1fr;gap:8px\}/);
     assert.doesNotMatch(text, /scroll-snap-type:x mandatory/);
     assert.match(text, /LIVE_CARD_KEYS = \["livePay", "roi", "livePaid", "feeHot", "feeCold", "liveAt"\]/);
     assert.match(text, /实时付费超标店铺/);
