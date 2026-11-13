@@ -58,7 +58,7 @@ export function createHanFakePool() {
       }
 
       const byShop = normalized.match(
-        /^SELECT .+ FROM (han_shop_rules|han_shop_plans) WHERE team_name = \? AND store_name = \?$/i,
+        /^SELECT .+ FROM (han_shop_rules|han_shop_plans|han_team_shops) WHERE team_name = \? AND store_name = \?$/i,
       );
       if (byShop) {
         const name = byShop[1];
@@ -70,6 +70,16 @@ export function createHanFakePool() {
             .map(clone),
           undefined,
         ];
+      }
+
+      if (/^DELETE FROM han_team_shops WHERE store_name = \? AND team_name <> \?$/i.test(normalized)) {
+        const shop = String(params[0] ?? "");
+        const team = String(params[1] ?? "");
+        const before = tables.han_team_shops.length;
+        tables.han_team_shops = tables.han_team_shops.filter(
+          (row) => !(String(row.store_name || "") === shop && String(row.team_name || "") !== team),
+        );
+        return [{ affectedRows: before - tables.han_team_shops.length }, undefined];
       }
 
       if (/^DELETE FROM han_shop_rules WHERE team_name = \? AND store_name = \?$/i.test(normalized)) {

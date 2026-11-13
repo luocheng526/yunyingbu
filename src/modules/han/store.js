@@ -524,11 +524,18 @@ export function createHanStore(poolOrFactory = getPool) {
         err.statusCode = 400;
         throw err;
       }
-      const existing = await this.listShops({ team: teamName });
-      if (existing.some((row) => row.store === shop)) {
-        const err = new Error("store already exists");
-        err.statusCode = 409;
-        throw err;
+      await db().query("DELETE FROM han_team_shops WHERE store_name = ? AND team_name <> ?", [shop, teamName]);
+      const [already] = await db().query(
+        "SELECT id, team_name, store_name, created_at FROM han_team_shops WHERE team_name = ? AND store_name = ?",
+        [teamName, shop],
+      );
+      if (already[0]) {
+        return {
+          id: String(already[0].id),
+          team: already[0].team_name,
+          store: already[0].store_name,
+          createdAt: toIso(already[0].created_at),
+        };
       }
       const [result] = await db().query(
         "INSERT INTO han_team_shops (team_name, store_name) VALUES (?, ?)",
