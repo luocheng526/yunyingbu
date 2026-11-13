@@ -1,4 +1,4 @@
-(function () {var VERSION = "20261112-hide";
+(function () {var VERSION = "20261112-open";
 function escapeHtml(value) {return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");}
 function money(value) {return (Number(value) || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });}
 function integer(value) {return (Number(value) || 0).toLocaleString("zh-CN");}
@@ -46,9 +46,9 @@ function headerRow(first) {var keys = live ? shownKeys() : CENTER_COLS;var width
 function cell(label, key) {var n = widths[key];var grip = live ? '<i class="han-col-grip" data-col-grip="' + key + '"></i>' : "";return "<th" + (n ? ' style="width:' + n + 'px;max-width:' + n + 'px"' : "") + ">" + label + grip + "</th>";}return "<thead><tr>" + (live ? cell("排名", "rank") : "") + cell(first, "name") + keys.map(function (key) { return cell(colLabel(key), key); }).join("") + "</tr></thead>";}
 function isZeroRow(row) {return !(Number(row.spend) || Number(row.paidOrders) || Number(row.jingmaiGmv) || Number(row.clicks));}
 function renderOverviewTable(rows) {var filtered = keyword ? rows.filter(function (row) { return String(row.store || "").indexOf(keyword) >= 0; }) : rows;if (!filtered.length) return '<p class="empty">暂无回传数据</p>';return '<div class="han-paid-table-wrap"><table>' + headerRow("店铺名称") + "<tbody>" + filtered.map(function (row) {return '<tr class="' + (isZeroRow(row) ? "is-zero" : "") + '"><td><button type="button" class="han-paid-store" data-han-store="' +escapeHtml(row.store) + '">' + escapeHtml(row.store) + '</button><span class="han-paid-date">' +escapeHtml(shopStamp(row)) + "</span></td>" + metricCells(row) + "</tr>";}).join("") + "</tbody></table></div>";}
-function teamOf(store) {return teamByStore[store] || "韩梦凯组";}
+function teamOf(store) {return teamByStore[store] || "";}
 function metricsFrom(rows) {var spend = 0;var gmv = 0;var orders = 0;var amount = 0;var success = 0;rows.forEach(function (row) {spend += Number(row.spend) || 0;gmv += Number(row.jingmaiGmv) || 0;orders += Number(row.paidOrders) || 0;amount += Number(row.totalOrderAmount) || 0;if (row.success !== "否") success += 1;});return { stores: rows.length, spend: spend, jingmaiGmv: gmv, totalOrderAmount: amount, paidOrders: orders, successCount: success };}
-function pageRows() {return !live || !currentTeam ? overviewRows : overviewRows.filter(function (row) { return teamOf(row.store) === currentTeam; });}
+function pageRows(){return overviewRows.filter(function(row){var team=live?teamOf(row.store):"x";return team&&(!currentTeam||team===currentTeam)})}
 function scopedRows() {var rows = pageRows();if (live && liveShop) {var key = shopKey(liveShop);rows = rows.filter(function (row) { return row.store === liveShop || shopKey(row.store) === key; });}return rows;}
 function liveScope() {var picked = {};var rows = scopedRows();if (liveShop && !rows.length) rows = [{ store: liveShop }];rows.forEach(function (row) {var name = String(row.store || "").trim();if (!name) return;picked[name] = true;picked["~" + shopKey(name)] = true;});return picked;}
 function boardShopNames() {var names = [];var seen = {};pageRows().forEach(function (row) {var name = String(row.store || "").trim();var key = shopKey(name);if (!name || seen[key]) return;seen[key] = true;names.push(name);});names.sort();return names;}

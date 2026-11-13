@@ -526,7 +526,7 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /XmModules\["\/han\/recharge-rules"\]/);
   assert.match(js, /实时付费/);
   assert.match(js, /HanCenter\.mount\(root, hanBoard\)/);
-  assert.match(js, /20261112-hide/);
+  assert.match(js, /20261112-open/);
   assert.doesNotMatch(js, /id="paid-form"/);
   assert.doesNotMatch(js, /上传抓取表/);
   assert.match(js, /XmModules\["\/han\/training"\]/);
@@ -1122,6 +1122,9 @@ test("han shops map 组织中心 lead to 韩梦凯小组", () => {
     { id: 26, lead: "毛永超", storeName: "DIKTT家居旗舰店", remark: "运营中" },
     { id: 40, lead: "", storeName: "直管一店", remark: "运营中", chief: "韩梦凯" },
     { id: 41, lead: "韩梦凯", storeName: "直管二店", remark: "运营中" },
+    { id: 43, lead: "韩梦凯", storeName: "精铺直管店", remark: "运营中", statusKey: "operating", chief: "精铺组 韩梦凯" },
+    { id: 44, lead: "韩梦凯", storeName: "姝予玩具专营店", remark: "闲置中", statusKey: "idle", chief: "精铺组 韩梦凯" },
+    { id: 45, lead: "陈晓曼", storeName: "未设状态店", remark: "" },
     { id: 42, lead: "", storeName: "别人的店", remark: "运营中", chief: "别人" },
   ];
   const xiaoman = matchOrgStoresForTeam(stores, "陈晓曼组");
@@ -1134,8 +1137,9 @@ test("han shops map 组织中心 lead to 韩梦凯小组", () => {
   const direct = matchOrgStoresForTeam(stores, "韩梦凯组");
   assert.deepEqual(
     direct.map((row) => row.store),
-    ["直管一店", "直管二店"],
+    ["直管一店", "直管二店", "精铺直管店"],
   );
+  assert.equal(xiaoman.some((row) => row.store === "未设状态店"), false);
   assert.equal(direct.every((row) => row.team === "韩梦凯组"), true);
   assert.deepEqual(
     mergeTeamShops(xiaoman, [{ store: "ZYUO洗护旗舰店" }, { store: "手工补的店" }]).map((row) => row.store),
@@ -2064,7 +2068,7 @@ test("韩梦凯侧栏隐藏付费中心并保留充值规则", async () => {
   assert.match(han, /a\[href="\/han\/paid-center"\]/);
   assert.doesNotMatch(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
   assert.match(han, /\["\/han\/paid\?board=rules", "充值规则", "rules"\]/);
-  assert.match(han, /20261112-hide/);
+  assert.match(han, /20261112-open/);
   const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
   assert.match(center, /两档花费/);
   assert.match(center, /han-rules-text/);
@@ -2104,7 +2108,7 @@ test("韩梦凯侧栏隐藏付费中心并保留充值规则", async () => {
   assert.match(han, /insertAdjacentElement\("afterend"/);
   assert.match(han, /data-xm-group"\) !== "\/han"/);
   assert.doesNotMatch(han, /anchor\.href = "\/han\/paid-center"/);
-  assert.match(center, /20261112-hide/);
+  assert.match(center, /20261112-open/);
   assert.match(center, /已超过30分钟没有更新/);
   assert.match(center, /超过30分钟未更新/);
   assert.match(han, /action: "dingtalk"/);
@@ -2120,6 +2124,8 @@ test("韩梦凯侧栏隐藏付费中心并保留充值规则", async () => {
   assert.match(center, /han-live-bar/);
   assert.match(center, /han-live-tabs/);
   assert.match(center, /han-live-grid/);
+  assert.doesNotMatch(center, /teamByStore\[store\] \|\| "韩梦凯组"/);
+  assert.match(center, /teamByStore\[store\] \|\| ""/);
   assert.doesNotMatch(center, /和沈子晗付费中心同一套回传字段/);
   assert.match(center, /han-live-group/);
   assert.doesNotMatch(center, /按主管查看/);
