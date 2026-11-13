@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.879-tip */
+/* xm-module-home 0.1.880-in */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1227,10 +1227,11 @@
         shop: String((raw && raw.shop) || "").trim(),
         q: String((raw && raw.q) || "").trim(),
         link: String((raw && raw.link) || "").trim(),
-        jzOk: String((raw && raw.jzOk) || "").trim()
+        jzOk: String((raw && raw.jzOk) || "").trim(),
+        paid: String((raw && raw.paid) || "").trim()
       };
     } catch (_err) {
-      return { team: "", shop: "", q: "", link: "", jzOk: "" };
+      return { team: "", shop: "", q: "", link: "", jzOk: "", paid: "" };
     }
   }
   function saveLiveFilter(next) {
@@ -1242,7 +1243,8 @@
           shop: String((next && next.shop) || "").trim(),
           q: String((next && next.q) || "").trim(),
           link: String((next && next.link) || "").trim(),
-          jzOk: String((next && next.jzOk) || "").trim()
+          jzOk: String((next && next.jzOk) || "").trim(),
+          paid: String((next && next.paid) || "").trim()
         })
       );
     } catch (_err) {}
@@ -1355,6 +1357,9 @@
       if (pick.jzOk === "否" && String((row && row.jzOk) || "") !== "否") {
         return false;
       }
+      if (pick.paid === "no" ? row && row.paidIn : !(row && row.paidIn)) {
+        return false;
+      }
       return true;
     });
   }
@@ -1465,6 +1470,7 @@
       liveChipHtml("link", "off", "掉线", pick.link === "off") +
       liveChipHtml("jzOk", "是", "回传成功", pick.jzOk === "是") +
       liveChipHtml("jzOk", "否", "回传失败", pick.jzOk === "否") +
+      liveChipHtml("paid", "no", "未接入店铺", pick.paid === "no") +
       "</div>" +
       '<input type="search" data-live-filter="q" placeholder="搜索店铺" value="' +
       escapeHtml(pick.q || "") +
@@ -2411,7 +2417,7 @@
     hideCardTip();
     hideLineTip(root);
     var searchDraft = liveSearchDraft(root);
-    board.setAttribute("data-hm-js", "0.1.879-tip");
+    board.setAttribute("data-hm-js", "0.1.880-in");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -3568,7 +3574,8 @@
       online: row && row.online,
       capturedAt: row && (row.capturedAt || row.ingestedAt),
       feeLo: row && (row.feeLo != null ? row.feeLo : row.feeMin),
-      feeHi: row && (row.feeHi != null ? row.feeHi : row.feeMax)
+      feeHi: row && (row.feeHi != null ? row.feeHi : row.feeMax),
+      paidIn: true
     };
   }
   function fillLocalPaid(live, local) {
