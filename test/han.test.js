@@ -526,7 +526,7 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /XmModules\["\/han\/recharge-rules"\]/);
   assert.match(js, /实时付费/);
   assert.match(js, /HanCenter\.mount\(root, hanBoard\)/);
-  assert.match(js, /20261113-day/);
+  assert.match(js, /20261113-line/);
   assert.doesNotMatch(js, /id="paid-form"/);
   assert.doesNotMatch(js, /上传抓取表/);
   assert.match(js, /XmModules\["\/han\/training"\]/);
@@ -2224,7 +2224,7 @@ test("韩梦凯侧栏隐藏付费中心并保留充值规则", async () => {
   assert.match(han, /a\[href="\/han\/paid-center"\]/);
   assert.doesNotMatch(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
   assert.match(han, /\["\/han\/paid\?board=rules", "充值规则", "rules"\]/);
-  assert.match(han, /20261113-day/);
+  assert.match(han, /20261113-line/);
   const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
   assert.match(center, /两档花费/);
   assert.match(center, /han-rules-text/);
@@ -2264,7 +2264,7 @@ test("韩梦凯侧栏隐藏付费中心并保留充值规则", async () => {
   assert.match(han, /insertAdjacentElement\("afterend"/);
   assert.match(han, /data-xm-group"\) !== "\/han"/);
   assert.doesNotMatch(han, /anchor\.href = "\/han\/paid-center"/);
-  assert.match(center, /20261113-day/);
+  assert.match(center, /20261113-line/);
   assert.match(center, /已超过30分钟没有更新/);
   assert.match(center, /超过30分钟未更新/);
   assert.match(han, /action: "dingtalk"/);
@@ -2339,8 +2339,14 @@ test("韩梦凯侧栏隐藏付费中心并保留充值规则", async () => {
   assert.match(center, /function shopStamp/);
   assert.match(center, /\["stamp", "回传时间"\]/);
   assert.match(center, /\["line", "状态"\]/);
-  assert.match(center, /window\.hanLine/);
-  assert.match(han, /600000/);
+  assert.match(center, /function lineOn/);
+  assert.match(center, /function lineHtml/);
+  assert.match(center, /900000/);
+  assert.match(center, /Asia\/Shanghai/);
+  assert.match(center, /\+08:00/);
+  assert.doesNotMatch(center, /window\.hanLine/);
+  assert.match(han, /900000/);
+  assert.doesNotMatch(han, /600000/);
   assert.match(han, /在线/);
   assert.match(han, /掉线/);
   assert.match(center, /han-fee-targets/);
@@ -2714,6 +2720,23 @@ test("回传只留当前实时京麦成交，不按小时存曲线", async () =>
     assert.equal(shop.jingmaiGmvRate, "-2.79%");
     assert.deepEqual(overview.body.curves, {});
   });
+});
+
+test("回传时间和北京时间相差 15 分钟内显示在线", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
+  const start = center.indexOf("function beijingText");
+  const end = center.indexOf("function shopStamp");
+  const api = new Function(`${center.slice(start, end)}return { returnAt, clockText, lineOn };`)();
+  const now = Date.parse("2026-11-13T10:21:00+08:00");
+  assert.equal(api.lineOn({ capturedAt: "2026-11-13T10:06:00+08:00" }, now), true);
+  assert.equal(api.lineOn({ capturedAt: "2026-11-13T10:05:59+08:00" }, now), false);
+  assert.equal(api.lineOn({ capturedAt: "2026-11-13T02:21:00.000Z" }, now), true);
+  assert.equal(api.lineOn({ capturedAt: "2026-11-13 10:21:00" }, now), true);
+  assert.equal(api.lineOn({ capturedAt: "2026-11-13 10:00:00" }, now), false);
+  assert.equal(api.lineOn({ capturedAt: "" }, now), false);
+  assert.equal(api.clockText("2026-11-13T02:06:00.000Z"), "2026-11-13 10:06:00");
+  assert.equal(api.clockText("2026-11-13 10:06:00"), "2026-11-13 10:06:00");
 });
 
 test("han schema uses prefixed tables", async () => {

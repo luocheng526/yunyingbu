@@ -1523,15 +1523,28 @@
 
   window.hanLine = function (row, key) {
     function esc(value) {
-      return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+    function beijingText(date) {
+      var parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).formatToParts(date);
+      function part(type) { var hit = parts.find(function (item) { return item.type === type; }); return hit ? hit.value : ""; }
+      var hour = part("hour") === "24" ? "00" : part("hour");
+      return part("year") + "-" + part("month") + "-" + part("day") + " " + hour + ":" + part("minute") + ":" + part("second");
+    }
+    function returnAt(value) {
+      var raw = String(value || "").trim();
+      if (!raw) return NaN;
+      if (/(?:Z|[+-]\d{2}:?\d{2})$/.test(raw)) return Date.parse(raw);
+      var match = raw.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
+      if (!match) return NaN;
+      return Date.parse(match[1] + "-" + match[2] + "-" + match[3] + "T" + match[4] + ":" + match[5] + ":" + match[6] + "+08:00");
     }
     if (key === "stamp") {
-      var raw = String((row && row.capturedAt) || "");
-      var match = raw.match(/(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/);
-      return esc(match ? match[1] + " " + match[2] : (row && row.date) || "—");
+      var at = returnAt(row && row.capturedAt);
+      return esc(at === at ? beijingText(new Date(at)) : "—");
     }
-    var at = Date.parse((row && row.capturedAt) || "");
-    var on = at && Date.now() - at <= 600000;
+    var stamp = returnAt(row && row.capturedAt);
+    var on = stamp === stamp && Math.abs(Date.now() - stamp) <= 900000;
     return '<span class="han-line ' + (on ? "is-on" : "is-off") + '" data-at="' + esc((row && row.capturedAt) || "") + '">' + (on ? "在线" : "掉线") + "</span>";
   };
 
@@ -1704,7 +1717,7 @@
         stop = window.HanCenter.mount(root, hanBoard) || function () {};
         bindDing();
       }
-      const centerVer = "20261113-day";
+      const centerVer = "20261113-line";
       if (window.HanCenter && window.HanCenter.version === centerVer) {
         start();
       } else {
