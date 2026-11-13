@@ -767,6 +767,69 @@ function compactName(name) {
   return String(name || "").replace(/[\s\-_/|·．.]+/g, "");
 }
 
+function stripMarkup(value) {
+  return String(value ?? "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&yen;/gi, "¥")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function pairLabel(item) {
+  return pick(item || {}, [
+    "类型",
+    "营销类型",
+    "产品线",
+    "名称",
+    "渠道",
+    "指标",
+    "指标名称",
+    "字段",
+    "label",
+    "name",
+    "title",
+    "key",
+    "metric",
+    "metricName",
+    "campaignTypeName",
+    "campaignType",
+    "productLine",
+  ]);
+}
+
+function metricValue(item) {
+  return pick(item || {}, [
+    "值",
+    "数值",
+    "金额",
+    "展示",
+    "展示值",
+    "value",
+    "amount",
+    "num",
+    "number",
+    "display",
+    "text",
+    "formatted",
+    "money",
+    "content",
+  ]);
+}
+
+function extractLabeled(text, kind) {
+  const s = stripMarkup(text);
+  if (!s) return "";
+  if (kind === "roi") {
+    const m = s.match(/(?:付费投产比|投产比|ROI)\s*[:：]?\s*(-?[\d.]+)/i);
+    return m ? m[1] : "";
+  }
+  const m = s.match(
+    /(?:京准通总订单金额|非全站营销总订单金额|总订单金额|订单总金额|总订单额|订单总额|订单金额)\s*[:：]?\s*([¥￥]?\s*-?[\d,]+(?:\.\d+)?)/,
+  );
+  return m ? m[1].replace(/\s+/g, "") : "";
+}
+
 function wantMarketing(name, want) {
   const text = compactName(name);
   if (want === "non") return text.includes("非全站");
@@ -780,6 +843,7 @@ function isRoiName(name) {
 
 function isAmountName(name, insideNon = false) {
   const text = compactName(name);
+  const en = text.toLowerCase();
   if (text.includes("花费") || text.includes("京麦") || text.includes("点击") || text.includes("费比") || text.includes("转化") || text.includes("展现")) {
     return false;
   }
@@ -792,7 +856,10 @@ function isAmountName(name, insideNon = false) {
     text.includes("成交订单金额") ||
     text.includes("总成交金额") ||
     text.includes("京准通总金额") ||
-    (text.includes("总金额") && !text.includes("花费"))
+    (text.includes("总金额") && !text.includes("花费")) ||
+    en.includes("totalorderamount") ||
+    en.includes("totalorderprice") ||
+    en.includes("orderamount")
   ) {
     return true;
   }
@@ -802,7 +869,10 @@ function isAmountName(name, insideNon = false) {
 function unwrapAmount(value, depth = 0) {
   if (value == null) return "";
   if (typeof value === "number" || typeof value === "boolean") return value;
-  if (typeof value === "string") return value.trim();
+  if (typeof value === "string") {
+    const labeled = extractLabeled(value, "amount");
+    return labeled || value.trim();
+  }
   if (depth > 4 || typeof value !== "object") return "";
   if (Array.isArray(value)) {
     let zero = "";
@@ -825,8 +895,17 @@ function unwrapAmount(value, depth = 0) {
     "成交订单金额",
     "总成交金额",
     "金额",
+    "值",
+    "数值",
+    "展示",
+    "展示值",
     "value",
     "amount",
+    "display",
+    "text",
+    "formatted",
+    "money",
+    "content",
   ]);
   if (named !== "") return unwrapAmount(named, depth + 1);
   for (const [key, inner] of Object.entries(value)) {
@@ -858,7 +937,7 @@ function findBlocks(row, want) {
     if (!Array.isArray(value)) continue;
     for (const item of value) {
       if (!item || typeof item !== "object") continue;
-      if (wantMarketing(pick(item, ["类型", "营销类型", "产品线", "名称", "渠道"]), want)) blocks.push(item);
+      if (wantMarketing(pairLabel(item), want)) blocks.push(item);
     }
   }
   return blocks;
@@ -874,6 +953,14 @@ function collectNonSitewide(row, kind) {
 
   function consider(name, value, insideNon) {
     if (kind === "roi") {
+      if (typeof value === "string") {
+        const extracted = extractLabeled(value, "roi");
+        if (extracted !== "" && (insideNon || wantMarketing(name, "non") || isRoiName(name))) {
+          hadKey = true;
+          values.push(extracted);
+          return;
+        }
+      }
       if (!isRoiName(name)) return;
       if (value != null && typeof value === "object" && !Array.isArray(value)) {
         const inner = pick(value, ["京准通付费投产比", "ROI", "roi", "投产比", "付费投产比"]);
@@ -887,6 +974,14 @@ function collectNonSitewide(row, kind) {
       values.push(value);
       return;
     }
+    if (typeof value === "string") {
+      const extracted = extractLabeled(value, "amount");
+      if (extracted !== "" && (insideNon || wantMarketing(name, "non") || isAmountName(name, insideNon))) {
+        hadKey = true;
+        values.push(extracted);
+        return;
+      }
+    }
     if (!isAmountName(name, insideNon)) return;
     const raw = unwrapAmount(value);
     if (raw === "") return;
@@ -898,13 +993,19 @@ function collectNonSitewide(row, kind) {
     if (!node || typeof node !== "object" || depth > 5) return;
     if (Array.isArray(node)) {
       for (const item of node) {
-        const label = pick(item || {}, ["类型", "营销类型", "产品线", "名称", "渠道"]);
+        const label = pairLabel(item);
         walk(item, insideNon || wantMarketing(label, "non"), depth + 1);
       }
       return;
     }
+    const rowLabel = pairLabel(node);
+    const rowValue = metricValue(node);
+    const labeledNon = insideNon || wantMarketing(rowLabel, "non");
+    if (rowLabel && rowValue !== "") {
+      consider(rowLabel, rowValue, labeledNon);
+    }
     for (const [key, value] of Object.entries(node)) {
-      const non = insideNon || wantMarketing(key, "non");
+      const non = insideNon || wantMarketing(key, "non") || wantMarketing(rowLabel, "non");
       if (value && typeof value === "object") {
         if (non) consider(key, value, true);
         if (non || !wantMarketing(key, "site")) walk(value, non, depth + 1);
