@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.927-phonehero */
+/* xm-module-home 0.1.929-phonetrio */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -2202,7 +2202,7 @@
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{color:var(--xm-muted);font-size:12px}" +
       "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm.is-chief .xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:1fr}}" +
-      "@media (max-width:720px){.xm-hm-sales.xm-hm-live-charts,.xm-hm-live .xm-hm-live-charts{display:flex;flex-direction:row;flex-wrap:nowrap;align-items:stretch;gap:10px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;padding:0 2px 8px;margin-right:-4px}.xm-hm-sales.xm-hm-live-charts>.xm-hm-chart,.xm-hm-live .xm-hm-live-charts>.xm-hm-chart{flex:0 0 78%;width:78%;max-width:340px;min-width:260px;scroll-snap-align:start;box-sizing:border-box}.xm-hm-live-charts .xm-hm-card-head{gap:8px;align-items:flex-start}.xm-hm-live-charts .xm-hm-card-head>span:first-child{min-width:0;flex:1;white-space:nowrap;overflow:visible}.xm-hm-live-charts .xm-hm-legs{flex:0 0 auto;white-space:nowrap}}"
+      "@media (max-width:720px){.xm-hm-sales.xm-hm-live-charts,.xm-hm-live .xm-hm-live-charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;overflow:visible;margin:0;padding:0}.xm-hm-sales.xm-hm-live-charts>.xm-hm-chart,.xm-hm-live .xm-hm-live-charts>.xm-hm-chart{min-width:0;max-width:none;width:auto;padding:8px 8px 6px;box-sizing:border-box}.xm-hm-live-charts .xm-hm-card-head{flex-direction:column;align-items:flex-start;gap:4px}.xm-hm-live-charts .xm-hm-card-head>span:first-child{min-width:0;width:100%;white-space:normal;overflow:visible;line-height:1.25;font-size:11px}.xm-hm-live-charts .xm-hm-legs{flex:0 0 auto;flex-wrap:wrap;white-space:normal;font-size:10px;gap:6px}.xm-hm-live-charts .xm-hm-index-num{margin:4px 0 2px;font-size:18px}.xm-hm-live-charts .xm-hm-yest-now,.xm-hm-live-charts .xm-hm-trend{font-size:10px;margin:0}.xm-hm-sales.xm-hm-live-charts .xm-hm-line,.xm-hm-live .xm-hm-live-charts .xm-hm-line{height:72px;margin-top:4px}}"
     );
   }
   function frameHtml() {
