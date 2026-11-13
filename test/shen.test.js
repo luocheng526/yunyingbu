@@ -436,6 +436,25 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /重新登录/);
     assert.match(embed.text, /xm-hl-net is-on">在线/);
     assert.match(embed.text, /xm-hl-net is-off">掉线/);
+    assert.match(embed.text, /key: "login", label: "登录状态"/);
+    const homeCols = embed.text.slice(embed.text.indexOf("const HOME_COLS"), embed.text.indexOf("const HEAD_KEY"));
+    const homeKeys = [...homeCols.matchAll(/key: "([^"]+)"/g)].map((match) => match[1]);
+    assert.deepEqual(homeKeys.slice(0, 4), ["rank", "shop", "login", "liveAmount"]);
+    const netMark = embed.text.slice(embed.text.indexOf("function netMark"), embed.text.indexOf("function homeCell"));
+    assert.match(netMark, /if \(row\.online\)/);
+    assert.match(netMark, /if \(row\.loginExpired\)/);
+    const shopCell = embed.text.slice(embed.text.indexOf('if (col.key === "shop")'), embed.text.indexOf('if (col.key === "login")'));
+    assert.match(shopCell, /data-open-shop/);
+    assert.equal(shopCell.includes("netMark"), false);
+    assert.equal(shopCell.includes("在线"), false);
+    const loginCell = embed.text.slice(
+      embed.text.indexOf('if (col.key === "login")'),
+      embed.text.indexOf('if (col.key === "liveAmount"')
+    );
+    assert.match(loginCell, /netMark\(row\)/);
+    assert.match(loginCell, /row\.loginExpired/);
+    assert.match(loginCell, /data-relogin/);
+    assert.match(embed.text, /function insertMissingColumns/);
     assert.match(embed.text, /data-relogin/);
     assert.match(embed.text, /\/api\/shen\/paid\/jingmai\/relogin\/screen/);
     assert.match(embed.text, /\/api\/shen\/paid\/jingmai\/relogin\/all/);
@@ -483,6 +502,8 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(css.text, /xm-hm-live-charts/);
     assert.match(css.text, /xm-sp-live-tabs/);
     assert.match(css.text, /xm-hl-col-grip/);
+    assert.match(css.text, /#paid-board \.xm-hl-login \{[^}]*inline-flex/);
+    assert.match(css.text, /#paid-board \.xm-hl-login \{[^}]*align-items: center;/);
     assert.match(css.text, /#paid-board \.xm-hl-table th,\s*#paid-board \.xm-hl-table td \{[^}]*text-align: center;/);
     assert.match(css.text, /\.xm-hl-fee \{[^}]*inline-flex/);
     assert.equal(embed.text.includes("/api/han/"), false);

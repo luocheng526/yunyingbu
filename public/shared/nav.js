@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.764-paid-cols — 付费中心列顺序和费比设置 */
+/* xm-fast-shell 0.1.765-paid-login — 付费中心登录状态独立成列 */
 (function () {
-  const ASSET_VER = "0.1.764-paid-cols";
+  const ASSET_VER = "0.1.765-paid-login";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
