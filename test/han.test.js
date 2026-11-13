@@ -1179,6 +1179,21 @@ test("shop 京准通总订单金额 sums subaccount order amounts", async () => 
     const shop = await json(base, "/api/han/worker?view=shop&store=" + encodeURIComponent("订单店"));
     assert.equal(shop.body.shop.totalOrderAmount, 837);
     assert.equal(shop.body.subaccounts.find((row) => row.subAccountName === "甲").totalOrderAmount, 608);
+    const named = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [{ 店铺名称: "总订单店", 京准通主账户ID: "302", 花费: 6041.05, ROI: 2.99, 总订单金额: 18062.74 }],
+        subaccounts: [
+          { 店铺名称: "总订单店", 京准通主账户ID: "302", 子账号ID: "9", 子账号名称: "旧", 花费: 1, 订单金额: 10 },
+        ],
+      }),
+    });
+    assert.equal(named.res.status, 201);
+    const kept = await json(base, "/api/han/worker?view=overview");
+    const shopRow = kept.body.shops.find((row) => row.store === "总订单店");
+    assert.equal(shopRow.spend, 6041.05);
+    assert.equal(shopRow.totalOrderAmount, 18062.74);
   });
 });
 
