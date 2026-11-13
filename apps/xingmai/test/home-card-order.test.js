@@ -150,6 +150,7 @@ test("live page has fee target, warning and update time", () => {
   assert.doesNotMatch(homeJs, /function saveFeeRangeFor/);
   assert.match(homeJs, /function feeGoalCellHtml/);
   assert.match(homeJs, /function scrapedFeeRange/);
+  assert.match(homeJs, /han-fee-targets/);
   assert.match(homeJs, /shen-home-fee-targets/);
   assert.doesNotMatch(homeJs, /data-fee-target/);
   assert.doesNotMatch(homeJs, /data-fee-shop/);

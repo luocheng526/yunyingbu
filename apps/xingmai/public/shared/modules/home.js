@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.905-roi */
+/* xm-module-home 0.1.907-rtfee */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1091,11 +1091,22 @@
     return { lo: n, hi: n };
   }
   function scrapedFeeRange(shop) {
-    try {
-      return parseFeeRangeText(JSON.parse(localStorage.getItem("shen-home-fee-targets") || "{}")[shop]);
-    } catch (_err) {
-      return { lo: null, hi: null };
+    var keys = ["han-fee-targets", "shen-fee-targets", "shen-home-fee-targets"];
+    var i;
+    var raw;
+    var book;
+    for (i = 0; i < keys.length; i += 1) {
+      try {
+        raw = JSON.parse(localStorage.getItem(keys[i]) || "{}");
+      } catch (_err) {
+        raw = {};
+      }
+      book = raw && raw.targets && typeof raw.targets === "object" ? raw.targets : raw;
+      if (book && Object.prototype.hasOwnProperty.call(book, shop)) {
+        return parseFeeRangeText(book[shop]);
+      }
     }
+    return { lo: null, hi: null };
   }
   function feeRangeOf(row) {
     if (!row || typeof row !== "object") {
@@ -2400,7 +2411,7 @@
     hideCardTip();
     hideLineTip(root);
     var searchDraft = liveSearchDraft(root);
-    board.setAttribute("data-hm-js", "0.1.905-roi");
+    board.setAttribute("data-hm-js", "0.1.907-rtfee");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -3982,7 +3993,8 @@
         source: ""
       };
       var poll = 0;
-      var LIVE_REFRESH_MS = 5 * 60 * 1000;
+      var livePulling = null;
+      var LIVE_REFRESH_MS = 15 * 1000;
       cardSetOpen = false;
       paint(root, state);
       function shanghaiClock(date) {
@@ -4042,9 +4054,38 @@
         state.source = "han-shen-local";
         paint(root, state);
       }
+      function overlayFeeBooks(records, books) {
+        var book = {};
+        (books || []).forEach(function (pack) {
+          var src = pack && pack.targets && typeof pack.targets === "object" ? pack.targets : pack;
+          if (!src || typeof src !== "object") {
+            return;
+          }
+          Object.keys(src).forEach(function (key) {
+            var bounds = parseFeeRangeText(src[key]);
+            if (key === "ok" || key === "username" || bounds.lo == null && bounds.hi == null) {
+              return;
+            }
+            book[key] = bounds;
+          });
+        });
+        (records || []).forEach(function (row) {
+          var hit = book[(row && (row.shopName || row.shop)) || ""];
+          if (hit) {
+            row.feeLo = hit.lo;
+            row.feeHi = hit.hi;
+          }
+        });
+      }
       function pullLocalPaid() {
-        return api("/api/home/local-paid").then(function (data) {
-          return data && data.ok ? data : emptyLocalPaid();
+        return Promise.all([
+          api("/api/home/local-paid"),
+          api("/api/han/fee-targets"),
+          api("/api/shen/fee-targets")
+        ]).then(function (pack) {
+          var data = pack[0] && pack[0].ok ? pack[0] : emptyLocalPaid();
+          overlayFeeBooks(data.records, [pack[2], pack[1]]);
+          return data;
         }).catch(function () {
           return emptyLocalPaid();
         });
@@ -4119,11 +4160,14 @@
         });
       }
       function pullLive(blankFirst) {
+        if (livePulling && !blankFirst) {
+          return livePulling;
+        }
         if (blankFirst) {
           clearLiveShown(state);
           paint(root, state);
         }
-        return Promise.all([
+        livePulling = Promise.all([
           api("/api/home/erp-paid").catch(function () {
             return null;
           }),
@@ -4148,6 +4192,40 @@
             });
           }
         });
+        livePulling.then(function () {
+          livePulling = null;
+        }, function () {
+          livePulling = null;
+        });
+        return livePulling;
+      }
+      function liveShouldPoll() {
+        if (dead || liveRefreshing || sortDragging) {
+          return false;
+        }
+        if (document.visibilityState && document.visibilityState !== "visible") {
+          return false;
+        }
+        if (isFeeTyping(document.activeElement)) {
+          return false;
+        }
+        return state.view === "live" || state.view === "company";
+      }
+      function kickLive() {
+        if (liveShouldPoll()) {
+          pullLive();
+        }
+      }
+      function onFeeStore(ev) {
+        var key = ev && ev.key;
+        if (key === "han-fee-targets" || key === "shen-fee-targets" || key === "shen-home-fee-targets") {
+          kickLive();
+        }
+      }
+      function onLiveVis() {
+        if (document.visibilityState === "visible") {
+          kickLive();
+        }
       }
       function pullBoard() {
         var seq = ++boardSeq;
@@ -4963,11 +5041,10 @@
       document.addEventListener("dragstart", onSortSelectStart);
       pullBoard();
       pullLive();
-      poll = window.setInterval(function () {
-        if (state.view === "live" || state.view === "company") {
-          pullLive();
-        }
-      }, LIVE_REFRESH_MS);
+      poll = window.setInterval(kickLive, LIVE_REFRESH_MS);
+      window.addEventListener("storage", onFeeStore);
+      document.addEventListener("visibilitychange", onLiveVis);
+      window.addEventListener("focus", kickLive);
       if (!state.user || !state.user.username) {
         api("/api/auth/me").then(function (user) {
           if (dead || !user) {
@@ -4987,6 +5064,9 @@
         dead = true;
         clearLiveRowPicked();
         window.clearInterval(poll);
+        window.removeEventListener("storage", onFeeStore);
+        document.removeEventListener("visibilitychange", onLiveVis);
+        window.removeEventListener("focus", kickLive);
         root.removeEventListener("click", onClick);
         root.removeEventListener("input", onLiveSearchInput);
         root.removeEventListener("change", onChange);

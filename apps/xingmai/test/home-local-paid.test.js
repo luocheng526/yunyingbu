@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  applyFeeTargets,
   getHomeLocalPaid,
   mergeHanShenPaid,
   rememberLocalPaidDay,
@@ -304,6 +305,69 @@ test("local-paid route pulls han and shen siblings", async () => {
     assert.deepEqual(data.records.map((row) => row.shopName).sort(), ["沈店", "韩店"]);
     assert.equal(data.summary.spend, 18);
     assert.deepEqual(data.from.sort(), ["han", "shen"]);
+  } finally {
+    setLocalPaidSnapPath(prev);
+    await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
+});
+
+test("fee-targets overlay Han/Shen 费比 onto live records", () => {
+  const ymd = "2026-11-13";
+  const merged = mergeHanShenPaid(
+    { shops: [{ store: "DIKTT潮流生活旗舰店", date: ymd, spend: 2170, jingmaiGmv: 4800, success: "是" }] },
+    { rows: [{ store: "HYEGIIR健康器械旗舰店", date: ymd, spend: 500, jingmaiGmv: 2000, success: "是" }] },
+    { shops: [] },
+    ymd
+  );
+  assert.equal(merged.records.find((row) => row.shopName === "DIKTT潮流生活旗舰店").feeLo, null);
+  applyFeeTargets(merged.records, [
+    { ok: true, targets: { DIKTT潮流生活旗舰店: { lo: 30, hi: 45 } } },
+    { ok: true, targets: { HYEGIIR健康器械旗舰店: { min: 32, max: 58 } } }
+  ]);
+  const han = merged.records.find((row) => row.shopName === "DIKTT潮流生活旗舰店");
+  const shen = merged.records.find((row) => row.shopName === "HYEGIIR健康器械旗舰店");
+  assert.equal(han.feeLo, 30);
+  assert.equal(han.feeHi, 45);
+  assert.equal(shen.feeLo, 32);
+  assert.equal(shen.feeHi, 58);
+});
+
+test("local-paid route overlays sibling 费比设置 and keeps them after worker miss", async () => {
+  const ymd = shanghaiYmd();
+  let hanShops = [{ store: "DIKTT潮流生活旗舰店", date: ymd, spend: 12, jingmaiGmv: 40, success: "是" }];
+  const app = express();
+  app.get("/api/han/worker", (_req, res) => {
+    res.json({ ok: true, shops: hanShops });
+  });
+  app.get("/api/shen/paid", (_req, res) => {
+    res.json({ ok: true, rows: [] });
+  });
+  app.get("/api/shen/paid/jingmai", (_req, res) => {
+    res.json({ ok: true, shops: [] });
+  });
+  app.get("/api/han/fee-targets", (_req, res) => {
+    res.json({ ok: true, targets: { DIKTT潮流生活旗舰店: { lo: 30, hi: 45 } } });
+  });
+  app.get("/api/shen/fee-targets", (_req, res) => {
+    res.status(404).json({ ok: false });
+  });
+  app.use("/api/home", homeRouter());
+  const server = await new Promise((resolve) => {
+    const s = app.listen(0, "127.0.0.1", () => resolve(s));
+  });
+  const file = join(snapDir, "fees.json");
+  const prev = join(snapDir, "days.json");
+  setLocalPaidSnapPath(file);
+  try {
+    const { port } = server.address();
+    const first = await fetch(`http://127.0.0.1:${port}/api/home/local-paid`).then((res) => res.json());
+    assert.equal(first.records[0].feeLo, 30);
+    assert.equal(first.records[0].feeHi, 45);
+    hanShops = [];
+    const second = await fetch(`http://127.0.0.1:${port}/api/home/local-paid`).then((res) => res.json());
+    assert.equal(second.records[0].shopName, "DIKTT潮流生活旗舰店");
+    assert.equal(second.records[0].feeLo, 30);
+    assert.equal(second.records[0].feeHi, 45);
   } finally {
     setLocalPaidSnapPath(prev);
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
