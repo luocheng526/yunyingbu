@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.883-all */
+/* xm-module-home 0.1.901-on */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1209,6 +1209,29 @@
     var raw = String(liveAt || "").trim();
     return raw || "—";
   }
+  function parseLiveAt(raw) {
+    var s = String(raw || "").trim();
+    if (!s) {
+      return NaN;
+    }
+    if (s.indexOf("T") !== -1 || /Z$|[+-]\d\d:\d\d$/.test(s)) {
+      return Date.parse(s);
+    }
+    var m = s.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})[ T](\d{1,2}):(\d{2}):(\d{2})/);
+    return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) - 288e5 : Date.parse(s);
+  }
+  function fmtShopAt(raw) {
+    var t = parseLiveAt(raw);
+    if (!Number.isFinite(t)) {
+      return "";
+    }
+    var d = new Date(t + 288e5);
+    function p(n) {
+      n = String(n);
+      return n.length < 2 ? "0" + n : n;
+    }
+    return d.getUTCFullYear() + "/" + (d.getUTCMonth() + 1) + "/" + d.getUTCDate() + " " + p(d.getUTCHours()) + ":" + p(d.getUTCMinutes()) + ":" + p(d.getUTCSeconds());
+  }
   function feeGoalCellHtml(row) {
     var range = feeRangeOf(row);
     if (range.lo == null && range.hi == null) {
@@ -1351,12 +1374,6 @@
       if (pick.link === "off" && liveLinkOf(row).kind !== "off") {
         return false;
       }
-      if (pick.jzOk === "是" && String((row && row.jzOk) || "") !== "是") {
-        return false;
-      }
-      if (pick.jzOk === "否" && String((row && row.jzOk) || "") !== "否") {
-        return false;
-      }
       if (pick.paid === "no" ? row && row.paidIn : !(row && row.paidIn)) {
         return false;
       }
@@ -1468,8 +1485,6 @@
       '<div class="xm-hm-live-chips">' +
       liveChipHtml("link", "on", "在线", pick.link === "on") +
       liveChipHtml("link", "off", "掉线", pick.link === "off") +
-      liveChipHtml("jzOk", "是", "回传成功", pick.jzOk === "是") +
-      liveChipHtml("jzOk", "否", "回传失败", pick.jzOk === "否") +
       liveChipHtml("paid", "no", "未接入店铺", pick.paid === "no") +
       "</div>" +
       '<input type="search" data-live-filter="q" placeholder="搜索店铺" value="' +
@@ -1697,7 +1712,6 @@
     { key: "feeWarn", label: "费比监控", w: "120px" },
     { key: "feeGoal", label: "费比设置", w: "110px" },
     { key: "liveAt", label: "更新时间", w: "150px" },
-    { key: "jzOk", label: "是否回传成功", w: "120px" },
     { key: "liveOn", label: "状态", w: "72px" }
   ];
   var LIVE_EXTRA_HEADS = [
@@ -1865,29 +1879,10 @@
     );
   }
   function liveLinkOf(row) {
-    var on = { label: "在线", kind: "on" };
-    var off = { label: "掉线", kind: "off" };
-    if (!row) {
-      return off;
-    }
-    var flag = row.online != null ? row.online : row.liveOn;
-    if (flag === true || flag === "在线" || flag === "on") {
-      return on;
-    }
-    if (flag === false || flag === "掉线" || flag === "off" || row.loginExpired || row.stale) {
-      return off;
-    }
-    if (row.jzOk === "是" || row.jzOk === "否" || row.success === "是" || row.success === "否") {
-      return on;
-    }
-    var at = row.capturedAt || row.ingestedAt;
-    if (at) {
-      var t = Date.parse(String(at));
-      if (Number.isFinite(t) && Date.now() - t <= 30 * 60 * 1000) {
-        return on;
-      }
-    }
-    return off;
+    var t = parseLiveAt(row && (row.capturedAt || row.ingestedAt));
+    return Number.isFinite(t) && Date.now() - t <= 6e5
+      ? { label: "在线", kind: "on" }
+      : { label: "掉线", kind: "off" };
   }
   function liveShopCellHtml(col, row, index, liveAt) {
     var shop = row && row.shop;
@@ -1933,19 +1928,7 @@
       return '<td class="xm-hm-num">' + escapeHtml(feeGoalCellHtml(row)) + "</td>";
     }
     if (key === "liveAt") {
-      return '<td class="xm-hm-num">' + escapeHtml(row.liveAt || liveAtText(liveAt)) + "</td>";
-    }
-    if (key === "jzOk") {
-      var ok = String((row && row.jzOk) || "—");
-      if (ok === "是") ok = "回传成功";
-      else if (ok === "否") ok = "回传失败";
-      return (
-        '<td class="xm-hm-num' +
-        (ok === "回传成功" ? " is-fee-cold" : ok === "回传失败" ? " is-fee-hot" : "") +
-        '">' +
-        escapeHtml(ok) +
-        "</td>"
-      );
+      return '<td class="xm-hm-num">' + escapeHtml(fmtShopAt(row && (row.capturedAt || row.ingestedAt || row.liveAt)) || "—") + "</td>";
     }
     if (key === "liveOn") {
       var link = liveLinkOf(row);
@@ -2417,7 +2400,7 @@
     hideCardTip();
     hideLineTip(root);
     var searchDraft = liveSearchDraft(root);
-    board.setAttribute("data-hm-js", "0.1.883-all");
+    board.setAttribute("data-hm-js", "0.1.901-on");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);

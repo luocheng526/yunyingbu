@@ -139,7 +139,6 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
     records: [{ shopName: "A店", paidAmount: 12, paidDeal: 30, jingmaiGmv: 40, success: "是", accountId: "999" }]
   });
   assert.equal(withGmv.shops[0].liveAmount, "40");
-  assert.equal(withGmv.shops[0].jzOk, "是");
   assert.equal(withGmv.shops[0].jzAccount, "999");
   assert.equal(withGmv.shops[0].paidIn, true);
   assert.deepEqual(fns.payFit([2, 2], 10), [5, 5]);
@@ -166,7 +165,7 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.match(String(shaped.fee.yestText), /%/);
 });
 
-test("live shop 回传成功 and 状态 在线/掉线", () => {
+test("live shop 状态 follows 10-minute capturedAt", () => {
   const pick = (name) => {
     const start = homeJs.indexOf("function " + name);
     assert.notEqual(start, -1, name);
@@ -180,16 +179,19 @@ test("live shop 回传成功 and 状态 在线/掉线", () => {
     }
     throw new Error("unclosed " + name);
   };
-  const fns = new Function(pick("liveLinkOf") + "return {liveLinkOf};")();
-  assert.equal(fns.liveLinkOf({ jzOk: "是" }).label, "在线");
-  assert.equal(fns.liveLinkOf({ jzOk: "是" }).kind, "on");
-  assert.equal(fns.liveLinkOf({ jzOk: "否" }).kind, "on");
-  assert.equal(fns.liveLinkOf({ online: false }).label, "掉线");
+  const fns = new Function(pick("parseLiveAt") + pick("fmtShopAt") + pick("liveLinkOf") + "return {liveLinkOf,fmtShopAt,parseLiveAt};")();
+  const fresh = new Date().toISOString();
+  const stale = new Date(Date.now() - 11 * 60 * 1000).toISOString();
+  const almost = new Date(Date.now() - 9 * 60 * 1000).toISOString();
   assert.equal(fns.liveLinkOf({}).label, "掉线");
-  assert.equal(fns.liveLinkOf({ capturedAt: new Date().toISOString() }).kind, "on");
-  assert.match(homeJs, /label: "是否回传成功"/);
-  assert.match(homeJs, /ok = "回传成功"/);
-  assert.match(homeJs, /ok = "回传失败"/);
+  assert.equal(fns.liveLinkOf({ jzOk: "是", online: true }).kind, "off");
+  assert.equal(fns.liveLinkOf({ capturedAt: fresh }).kind, "on");
+  assert.equal(fns.liveLinkOf({ capturedAt: almost }).kind, "on");
+  assert.equal(fns.liveLinkOf({ capturedAt: stale }).kind, "off");
+  assert.equal(fns.liveLinkOf({ capturedAt: stale, online: true }).label, "掉线");
+  assert.match(fns.fmtShopAt("2026-11-13T09:43:03+08:00"), /^2026\/11\/13 09:43:03$/);
+  assert.match(fns.fmtShopAt("2026/11/13 09:43:03"), /^2026\/11\/13 09:43:03$/);
+  assert.doesNotMatch(homeJs, /label: "是否回传成功"/);
   assert.match(homeJs, /label: "状态"/);
   assert.doesNotMatch(homeJs, /label: "是否成功"/);
 });
