@@ -283,12 +283,11 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(paidPage.text, /data-live\.js/);
     assert.match(paidPage.text, /实时看板/);
     const liveJs = await get(base, "/data-live.js");
-    assert.match(liveJs.text, /每5分钟自动刷新/);
-    assert.match(liveJs.text, /实时销售额/);
-    assert.match(liveJs.text, /实时付费金额/);
-    assert.match(liveJs.text, /昨天/);
-    assert.match(liveJs.text, /今天/);
-    assert.match(liveJs.text, /\/api\/home\/live/);
+    assert.match(liveJs.text, /\/api\/home\/client\.js/);
+    assert.match(liveJs.text, /XmModules\["\/home"\]/);
+    assert.match(liveJs.text, /data-view="live"/);
+    assert.match(liveJs.text, /fetchHomeHtml/);
+    assert.match(liveJs.text, /location\.reload/);
     assert.doesNotMatch(liveJs.text, /统计时间/);
     assert.doesNotMatch(liveJs.text, /渠道总览/);
     assert.doesNotMatch(paidPage.text, /实时明细/);
