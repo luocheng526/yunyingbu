@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.917-feewave */
+/* xm-module-home 0.1.920-yday */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -2495,8 +2495,13 @@
     syncHeadPop(root);
     restoreLiveSearchDraft(root, searchDraft);
   }
-  function api(path) {
-    return fetch(path, { credentials: "same-origin", headers: { Accept: "application/json" } }).then(function (res) {
+  function api(path, body) {
+    return fetch(path, {
+      method: body ? "POST" : "GET",
+      credentials: "same-origin",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function (res) {
       if (res.status === 401) {
         window.location.href = "/login";
         return null;
@@ -3458,17 +3463,17 @@
       };
     }
     var live = fillLocalPaid(
-      liveFromErp(scopePack(packs.today, keys), scopePack(packs.yest, keys), scopePack(packs.snap, keys)),
+      liveFromErp(scopePack(packs.today, keys), scopePack(packs.snap, keys)),
       scopeLocalPaid((state && state.localPaid) || emptyLocalPaid(), keys)
     );
     return { live: live, shops: live.shops || [] };
   }
-  function mixFeeHours(shops, hourKey) {
+  function mixFeeHours(shops) {
     var out = [], i, hit = 0, last = 0;
     for (i = 0; i < 24; i += 1) {
       var num = 0, den = 0, k = (i < 10 ? "0" : "") + i + ":00";
       (shops || []).forEach(function (s) {
-        var h = s && s[hourKey];
+        var h = s && s.payHours;
         var g = asNum(h && (Array.isArray(h) ? h[i] : h[k] != null ? h[k] : h[i]));
         var f = asNum(String((s && s.feeRate) || "").replace("%", ""));
         if (g && f != null) {
@@ -3484,32 +3489,24 @@
     }
     return hit ? out : [];
   }
-  function liveFromErp(todayPack, yestPack, snapPack) {
+  function liveFromErp(todayPack, snapPack) {
     var live = blankLive();
     var todayPay = payOfPack(todayPack && todayPack.records && todayPack.records.length ? todayPack : snapPack);
-    var yestPay = payOfPack(yestPack);
     var hourly = (todayPack && todayPack.hourly) || (snapPack && snapPack.hourly) || {};
     var hasHourly = hourly.todayPay && hourly.todayPay.length > 2;
-    var yestHour = hasHourly ? padHours(hourly.yesterdayPay, 24) : seriesOf(hourly.yesterdayPay, yestPay);
     var todayHour = hasHourly ? todayHours(hourly.todayPay) : seriesOf(hourly.todayPay, todayPay);
     var keptHero = keepLiveDay({
       jingmai: todayPay,
-      yestJingmai: yestPay,
-      hourly: hourly
+      hourly: { todayPay: hourly.todayPay }
     });
     var yestNow = keptHero.yestJingmai;
-    live.hero = {
-      key: "jingmai",
-      label: "实时总成交金额",
+    live.hero = Object.assign(live.hero, {
       value: fmtMoney(todayPay),
       yestText: yestNow != null ? fmtMoney(yestNow) : "—",
       delta: todayPay != null && yestNow != null ? trendOf(todayPay, yestNow) : "",
-      yesterday: hasHourly ? cumHours(yestHour) : yestHour,
       today: hasHourly ? cumHours(todayHour) : todayHour,
-      yesterdayHour: hasHourly ? yestHour : [],
-      todayHour: hasHourly ? todayHour : [],
-      hours: 24
-    };
+      todayHour: hasHourly ? todayHour : []
+    });
     live.paid = spendChartOf(null);
     live.fee = feeChartOf(null);
     var rows = (todayPack && todayPack.records && todayPack.records.length ? todayPack.records : snapPack && snapPack.records) || [];
@@ -3528,8 +3525,7 @@
           roi: "—",
           paidDeal: "—",
           feeRate: "—",
-          payHours: row.todayHourlyData,
-          yestPayHours: row.yesterdayHourlyData
+          payHours: row.todayHourlyData
         };
       });
     live.summary = { channels: 1, shops: live.shops.length };
@@ -3710,17 +3706,8 @@
     var sum = rows.length ? sumLocalPaid(rows) : {};
     var yestSum = yestRows.length ? sumLocalPaid(yestRows) : {};
     var hourly = localHourlyOf(local);
-    var payT = (hourly.todayPay && hourly.todayPay.length > 2 ? hourly.todayPay : live.hero && live.hero.todayHour) || [];
-    var payY = (hourly.yesterdayPay && hourly.yesterdayPay.length > 2 ? hourly.yesterdayPay : live.hero && live.hero.yesterdayHour) || [];
-    var sT = 0;
-    var sY = 0;
-    var i;
-    for (i = 0; i < payT.length; i += 1) sT += Number(payT[i]) || 0;
-    for (i = 0; i < payY.length; i += 1) sY += Number(payY[i]) || 0;
-    if (yestSum.spend == null && sum.spend != null && sT && sY) yestSum.spend = sum.spend * (sY / sT);
-    if (yestSum.feeRate == null && yestSum.spend != null && sY) yestSum.feeRate = yestSum.spend / sY;
+    var payT = (live.hero && live.hero.todayHour && live.hero.todayHour.length > 2 ? live.hero.todayHour : hourly.todayPay) || [];
     if (!(hourly.todaySpend && hourly.todaySpend.length > 2)) hourly.todaySpend = payFit(payT, sum.spend);
-    if (!(hourly.yesterdaySpend && hourly.yesterdaySpend.length > 2)) hourly.yesterdaySpend = payFit(payY, yestSum.spend);
     if (rows.length) {
       var map = {};
       rows.forEach(function (row) {
@@ -3750,10 +3737,20 @@
       });
       live.cards = liveCardsOf(sum);
     }
-    var mixT = mixFeeHours(live.shops, "payHours");
-    var mixY = mixFeeHours(live.shops, "yestPayHours");
+    var mixT = mixFeeHours(live.shops);
     if (mixT.length > 2) hourly.todayFee = mixT;
-    if (mixY.length > 2) hourly.yesterdayFee = mixY;
+    if (live.hero) {
+      var yH = hourly.yesterdayPay && hourly.yesterdayPay.length > 2 ? padHours(hourly.yesterdayPay, 24) : [];
+      var yN = hourCum(yH.length ? yH : null, yestSum.liveAmount);
+      if (yH.length) {
+        live.hero.yesterdayHour = yH;
+        live.hero.yesterday = cumHours(yH);
+      }
+      if (yN != null) {
+        live.hero.yestText = fmtMoney(yN);
+        live.hero.delta = asNum(live.hero.value) != null ? trendOf(asNum(live.hero.value), yN) : live.hero.delta;
+      }
+    }
     var kept = keepLiveDay({
       spend: sum.spend,
       fee: sum.feeRate,
@@ -4173,40 +4170,41 @@
         }
         var keys = liveDutyKeys(state);
         var today = scopePack(todayPack, keys);
-        var yest = scopePack(yestPack, keys);
         var snap = scopePack(snapPack, keys);
         var local = scopeLocalPaid(localPack || state.localPaid || emptyLocalPaid(), keys);
-        state.live = fillLocalPaid(liveFromErp(today, yest, snap), local);
+        state.live = fillLocalPaid(liveFromErp(today, snap), local);
         state.shops = state.live.shops;
         if (stampClock || !state.liveAt) {
           state.liveAt = shanghaiClock();
         }
         state.source = "han-shen-local";
         paint(root, state);
+        var L = state.live;
+        api("/api/home/local-paid", { hourly: { todayPay: L.hero && L.hero.todayHour, todaySpend: L.paid && L.paid.todayHour, todayFee: L.fee && L.fee.todayHour } });
       }
       function pullLocalPaid() {
         var ymd = shanghaiYmd(0);
         return Promise.all([
           api("/api/han/worker?view=overview"),
           api("/api/shen/paid?latest=1&from=" + encodeURIComponent(ymd) + "&to=" + encodeURIComponent(ymd)),
-          api("/api/shen/paid/jingmai")
+          api("/api/shen/paid/jingmai"),
+          api("/api/home/local-paid")
         ]).then(function (pack) {
-          var merged = mergeLivePaid(pack[0], pack[1], pack[2], ymd);
-          return merged.records && merged.records.length ? merged : emptyLocalPaid();
+          var m = mergeLivePaid(pack[0], pack[1], pack[2], ymd), d = pack[3];
+          if (d && d.ok) {
+            m.yesterday = d.yesterday || m.yesterday;
+            m.hourly = d.hourly || m.hourly;
+          }
+          return m.records && m.records.length ? m : d && d.ok ? d : emptyLocalPaid();
         }).catch(function () {
           return emptyLocalPaid();
         });
       }
       function pullLiveKpis(localPack) {
         var today = shanghaiYmd(0);
-        var yest = shanghaiYmd(1);
-        return Promise.all([
-          fetchRangePack(today, today),
-          fetchRangePack(yest, yest),
-          fetchCatalogPack()
-        ]).then(function (pack) {
+        return Promise.all([fetchRangePack(today, today), fetchCatalogPack()]).then(function (pack) {
           if (!dead) {
-            applyLive(pack[0], pack[1], pack[2], localPack, true);
+            applyLive(pack[0], { records: [], summary: {}, hourly: {} }, pack[1], localPack, true);
           }
         }).catch(function () {
           if (!dead) {
@@ -4283,9 +4281,8 @@
           var data = pair[0];
           var local = pair[1] || emptyLocalPaid();
           if (data && data.ok && (data.summary || (data.records && data.records.length))) {
-            var todayPack = { records: data.records || [], summary: data.summary || {}, hourly: data.hourly };
-            var yestPack = { records: [], summary: data.yesterday || {}, hourly: data.hourly };
-            applyLive(todayPack, yestPack, todayPack, local, true);
+            var todayPack = { records: data.records || [], summary: data.summary || {}, hourly: { todayPay: (data.hourly && data.hourly.todayPay) || [] } };
+            applyLive(todayPack, { records: [], summary: {}, hourly: {} }, todayPack, local, true);
             return;
           }
           return pullLiveKpis(local);

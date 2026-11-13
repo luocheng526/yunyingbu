@@ -196,6 +196,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /xm-hm-live-at">更新时间 /);
   assert.match(homeJs, /实时只汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」/);
   assert.match(homeJs, /\/api\/home\/erp-paid/);
+  assert.match(homeJs, /api\("\/api\/home\/local-paid"/);
+  assert.doesNotMatch(homeJs, /sum\.spend \* \(sY \/ sT\)/);
   assert.match(homeJs, /function seriesOf/);
   assert.match(homeJs, /function todayHours/);
   assert.match(homeJs, /function padHours/);
@@ -241,7 +243,7 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function payFit/);
   assert.match(homeJs, /lineTipEl\.id = "xm-hm-line-tip"/);
   assert.match(homeJs, /data-hours="' \+ hours \+ '"/);
-  assert.match(homeJs, /yesterday: hasHourly \? cumHours\(yestHour\)/);
+  assert.match(homeJs, /live\.hero\.yesterday = cumHours\(yH\)/);
   assert.match(homeJs, /today: hasHourly \? cumHours\(todayHour\)/);
   assert.match(homeJs, /<i class="is-today"><\/i>实时/);
   assert.match(homeJs, /hourly\.todayPay/);

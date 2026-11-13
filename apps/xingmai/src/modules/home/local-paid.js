@@ -338,8 +338,7 @@ export function mergeHanShenPaid(han, shenPaid, shenJingmai, ymd = shanghaiYmd()
     .sort((a, b) => (b.liveAmount || b.paidDeal || 0) - (a.liveAmount || a.paidDeal || 0));
   const jingmaiShops = listFromPack(shenJingmai, ["shops", "rows"]);
   const hourly = {
-    todayPay: sumHourly(jingmaiShops, "todayHours"),
-    yesterdayPay: sumHourly(jingmaiShops, "yesterdayHours")
+    todayPay: sumHourly(jingmaiShops, "todayHours")
   };
   return {
     records,
@@ -419,6 +418,25 @@ export async function pullHanShenPaid(req, ymd = shanghaiYmd()) {
   return mergeHanShenPaid(han, shenPaid, shenJingmai, ymd);
 }
 
+function pickHours(hourly, key) {
+  const v = hourly && hourly[key];
+  return Array.isArray(v) && v.length > 2 ? v : null;
+}
+
+function mergeTodayHourly(base, incoming, replaceHours) {
+  const out = { ...(base || {}) };
+  ["todayPay", "todaySpend", "todayFee"].forEach((key) => {
+    const next = pickHours(incoming, key);
+    if (!next) {
+      return;
+    }
+    if (replaceHours || !pickHours(out, key)) {
+      out[key] = next;
+    }
+  });
+  return out;
+}
+
 export function rememberLocalPaidDay(pack = {}, ymd = shanghaiYmd()) {
   const snap = readSnap();
   if (snap.ymd && snap.ymd !== ymd) {
@@ -429,15 +447,25 @@ export function rememberLocalPaidDay(pack = {}, ymd = shanghaiYmd()) {
   snap.today = snap.today || emptyDay();
   snap.yesterday = snap.yesterday || emptyDay();
   const records = Array.isArray(pack.records) ? pack.records : [];
-  if (records.length) {
+  const incoming = pack.hourly && typeof pack.hourly === "object" ? pack.hourly : {};
+  const hourly = mergeTodayHourly(snap.today.hourly, incoming, pack.replaceHours === true);
+  const summary =
+    pack.summary && typeof pack.summary === "object"
+      ? { ...(snap.today.summary || {}), ...pack.summary }
+      : snap.today.summary || {};
+  if (records.length || pickHours(hourly, "todayPay") || pickHours(hourly, "todaySpend") || pickHours(hourly, "todayFee")) {
     snap.today = {
-      records,
-      summary: pack.summary && typeof pack.summary === "object" ? pack.summary : {},
-      hourly: pack.hourly && typeof pack.hourly === "object" ? pack.hourly : snap.today.hourly || {}
+      records: records.length ? records : snap.today.records || [],
+      summary,
+      hourly
     };
   }
   writeSnap(snap);
   return snap;
+}
+
+export function postHomeLocalPaid(body = {}, ymd = shanghaiYmd()) {
+  return packFromSnap(rememberLocalPaidDay({ ...(body || {}), replaceHours: true }, ymd));
 }
 
 function packFromSnap(snap, extra = {}) {
