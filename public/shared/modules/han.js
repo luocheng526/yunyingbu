@@ -1704,7 +1704,7 @@
         stop = window.HanCenter.mount(root, hanBoard) || function () {};
         bindDing();
       }
-      const centerVer = "20261112-open";
+      const centerVer = "20261113-day";
       if (window.HanCenter && window.HanCenter.version === centerVer) {
         start();
       } else {

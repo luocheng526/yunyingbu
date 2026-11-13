@@ -116,41 +116,6 @@ function readClock(value) {
   return formatted;
 }
 
-function shanghaiParts(date) {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Shanghai",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(date);
-  const get = (type) => parts.find((part) => part.type === type).value;
-  let hour = Number(get("hour"));
-  if (hour === 24) hour = 0;
-  return { date: `${get("year")}-${get("month")}-${get("day")}`, hour: String(hour) };
-}
-
-function rememberCurve(state, shops, capturedAt) {
-  const parsed = new Date(capturedAt);
-  const when = shanghaiParts(Number.isNaN(parsed.getTime()) ? new Date() : parsed);
-  const curves = state.curves && typeof state.curves === "object" ? state.curves : {};
-  const day = curves[when.date] && typeof curves[when.date] === "object" ? curves[when.date] : {};
-  const hour = day[when.hour] && typeof day[when.hour] === "object" ? { ...day[when.hour] } : {};
-  for (const shop of shops) {
-    if (!shop || !shop.store) continue;
-    hour[shop.store] = [
-      Math.round((Number(shop.jingmaiGmv) || 0) * 100) / 100,
-      Math.round((Number(shop.spend) || 0) * 100) / 100,
-    ];
-  }
-  day[when.hour] = hour;
-  curves[when.date] = day;
-  const dates = Object.keys(curves).sort();
-  while (dates.length > 2) delete curves[dates.shift()];
-  state.curves = curves;
-}
-
 export function shanghaiMinutes(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Shanghai",
@@ -798,37 +763,103 @@ function readJingmaiRate(row) {
   return null;
 }
 
-function nonSitewideBlock(row) {
+function wantMarketing(name, want) {
+  const text = String(name || "");
+  if (want === "non") return text.includes("非全站");
+  return text.includes("全站") && !text.includes("非全站");
+}
+
+function findBlock(row, want) {
   if (!row || typeof row !== "object") return null;
   for (const [key, value] of Object.entries(row)) {
-    if (!String(key).includes("非全站") || !value || typeof value !== "object" || Array.isArray(value)) continue;
+    if (!wantMarketing(key, want) || !value || typeof value !== "object" || Array.isArray(value)) continue;
     return value;
   }
   for (const value of Object.values(row)) {
     if (!Array.isArray(value)) continue;
-    const found = value.find((item) => item && typeof item === "object" && String(pick(item, ["类型", "营销类型", "产品线", "名称", "渠道"])).includes("非全站"));
+    const found = value.find((item) => item && typeof item === "object" && wantMarketing(pick(item, ["类型", "营销类型", "产品线", "名称", "渠道"]), want));
     if (found) return found;
   }
   return null;
 }
 
+function flatMarketing(row, want, accept) {
+  for (const [key, value] of Object.entries(row || {})) {
+    if (value == null || typeof value === "object" || String(value).trim() === "") continue;
+    const name = String(key);
+    if (!wantMarketing(name, want) || !accept(name)) continue;
+    return value;
+  }
+  return "";
+}
+
 function readNonSitewide(row, kind) {
-  const block = nonSitewideBlock(row);
+  const block = findBlock(row, "non");
   if (block) {
     const value = kind === "roi"
       ? pick(block, ["京准通付费投产比", "ROI", "roi", "投产比", "付费投产比"])
       : pick(block, ["京准通总金额", "京准通总订单金额", "总订单金额", "订单总金额", "订单金额", "总金额"]);
     if (value !== "") return value;
   }
-  for (const [key, value] of Object.entries(row || {})) {
-    if (value == null || typeof value === "object" || String(value).trim() === "") continue;
-    const name = String(key);
-    if (!name.includes("非全站")) continue;
+  return flatMarketing(row, "non", (name) => {
     const lower = name.toLowerCase();
-    if (kind === "roi" && (lower.includes("roi") || name.includes("投产"))) return value;
-    if (kind === "amount" && (name.includes("订单金额") || name.includes("订单总金额") || name.includes("总金额"))) return value;
+    if (kind === "roi") return lower.includes("roi") || name.includes("投产");
+    return name.includes("订单金额") || name.includes("订单总金额") || name.includes("总金额");
+  });
+}
+
+function readSpend(row) {
+  const block = findBlock(row, "site");
+  if (block) {
+    const value = pick(block, ["京准通花费", "花费", "spend", "付费金额", "精准通总花费"]);
+    if (value !== "") return value;
   }
+  const labeled = flatMarketing(row, "site", (name) => name.includes("花费") || name.toLowerCase().includes("spend"));
+  if (labeled !== "") return labeled;
+  return pick(row, ["京准通花费", "花费", "spend", "付费金额", "精准通总花费"]);
+}
+
+function shopKind(row) {
+  const named = pick(row, ["营销类型", "产品线", "类型", "渠道", "推广类型"]);
+  if (wantMarketing(named, "non")) return "non";
+  if (wantMarketing(named, "site")) return "site";
+  const non = Boolean(findBlock(row, "non"));
+  const site = Boolean(findBlock(row, "site"));
+  if (non && !site) return "non";
+  if (site && !non) return "site";
   return "";
+}
+
+function mergeShops(rows) {
+  const map = new Map();
+  const filled = (value) => !(value === "" || value == null || value === 0);
+  for (const row of rows) {
+    const prev = map.get(row.store);
+    if (!prev) {
+      map.set(row.store, { ...row });
+      continue;
+    }
+    const next = { ...prev };
+    for (const key of Object.keys(row)) {
+      if (key === "kind" || key === "store") continue;
+      if (filled(row[key]) && !filled(next[key])) next[key] = row[key];
+    }
+    if (String(row.capturedAt || "") > String(next.capturedAt || "")) next.capturedAt = row.capturedAt;
+    const site = row.kind === "site" ? row : prev.kind === "site" ? prev : null;
+    const non = row.kind === "non" ? row : prev.kind === "non" ? prev : null;
+    if (site) next.spend = site.spend;
+    if (non) {
+      next.roi = non.roi;
+      if (non.totalOrderAmount != null) next.totalOrderAmount = non.totalOrderAmount;
+    }
+    next.kind = prev.kind && row.kind && prev.kind !== row.kind ? "both" : row.kind || prev.kind;
+    map.set(row.store, next);
+  }
+  return [...map.values()].map((row) => {
+    const copy = { ...row };
+    delete copy.kind;
+    return copy;
+  });
 }
 
 function readPaidRoi(row) {
@@ -883,7 +914,7 @@ function parseShop(row, capturedAt) {
   return {
     store,
     accountId: idText(pick(row, ["京准通主账户ID", "accountId", "主账户ID"]), "京准通主账户ID"),
-    spend: num(pick(row, ["京准通花费", "花费", "spend", "付费金额", "精准通总花费"])),
+    spend: num(readSpend(row)),
     paidOrders,
     orders: paidOrders,
     roi: num(readPaidRoi(row)),
@@ -915,7 +946,7 @@ function parseSub(row, fallbackStore, capturedAt) {
     accountId: idText(pick(row, ["京准通主账户ID", "accountId"]), "京准通主账户ID"),
     subAccountId,
     subAccountName: text(pick(row, ["子账号名称", "subAccountName"]), 64),
-    spend: num(pick(row, ["京准通花费", "花费", "spend"])),
+    spend: num(readSpend(row)),
     roi: num(readPaidRoi(row)),
     balance: num(pick(row, ["余额", "balance", "账户余额"])),
     paidOrders,
@@ -1218,7 +1249,7 @@ export function createWorkerMethods(db, ensure) {
     if (!shop) return shop;
     const rolled = sums.get(shop.store) || 0;
     const own = num(shop.totalOrderAmount);
-    if (rolled > own) shop.totalOrderAmount = rolled;
+    if (rolled > own && !(own > 0)) shop.totalOrderAmount = rolled;
     return shop;
   }
 
@@ -1573,7 +1604,12 @@ export function createWorkerMethods(db, ensure) {
       }
       const prevShop = new Map(state.shops.map((row) => [row.store, row]));
       const prevSub = new Map(state.subs.map((row) => [row.store + "\0" + row.subAccountId, row]));
-      const shops = shopRows.map((row) => parseShop(row, capturedAt)).filter(Boolean);
+      const shops = mergeShops(shopRows.map((row) => {
+        const shop = parseShop(row, capturedAt);
+        if (!shop) return null;
+        shop.kind = shopKind(row);
+        return shop;
+      }).filter(Boolean));
       const subs = subRows.map((row) => parseSub(row, shops[0]?.store || "", capturedAt)).filter(Boolean);
       for (const row of shops) {
         if (row.totalOrderAmount != null) continue;
@@ -1596,7 +1632,7 @@ export function createWorkerMethods(db, ensure) {
       }
       const shopNames = new Set(shops.map((row) => row.store));
       state.shops = state.shops.filter((row) => !shopNames.has(row.store)).concat(shops);
-      if (shops.length) rememberCurve(state, shops, capturedAt);
+      if (shops.length) state.curves = {};
       const touchedSubs = new Set(subs.map((row) => row.store));
       state.subs = state.subs.filter((row) => !touchedSubs.has(row.store)).concat(subs);
       const rechargeMap = new Map(keepRecentRecharges(state.recharges).map((row) => [rechargeKey(row), row]));
