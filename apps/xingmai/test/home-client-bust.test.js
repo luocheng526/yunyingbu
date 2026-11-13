@@ -11,7 +11,7 @@ test("rewrites immutable homepage script url to no-store client.js", () => {
   const out = rewriteHomeModuleUrl(html);
   assert.equal(out.includes("/shared/modules/home.js"), false);
   assert.equal(out.includes(HOME_CLIENT_JS), true);
-    assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.907-rtfee$/);
+    assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.910-10m$/);
 });
 
 test("serves /api/home/client.js from current homepage module", async () => {
@@ -26,7 +26,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     const text = await res.text();
     assert.equal(res.status, 200);
     assert.match(String(res.headers.get("cache-control") || ""), /no-store/i);
-    assert.match(text, /xm-module-home 0\.1\.907-rtfee/);
+    assert.match(text, /xm-module-home 0\.1\.910-10m/);
     assert.match(text, /function liveTheadHtml/);
     assert.match(text, /function liveFilterHtml/);
     assert.match(text, /data-live-filter="pick"/);
@@ -81,12 +81,11 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /han-fee-targets/);
     assert.match(text, /shen-fee-targets/);
     assert.match(text, /shen-home-fee-targets/);
-    assert.match(text, /\/api\/han\/fee-targets/);
-    assert.match(text, /\/api\/shen\/fee-targets/);
-    assert.match(text, /function overlayFeeBooks/);
-    assert.match(text, /LIVE_REFRESH_MS = 15 \* 1000/);
-    assert.match(text, /function kickLive/);
-    assert.match(text, /addEventListener\("storage", onFeeStore\)/);
+    assert.doesNotMatch(text, /\/api\/han\/fee-targets/);
+    assert.doesNotMatch(text, /\/api\/shen\/fee-targets/);
+    assert.doesNotMatch(text, /function overlayFeeBooks/);
+    assert.match(text, /LIVE_REFRESH_MS = 10 \* 60 \* 1000/);
+    assert.doesNotMatch(text, /function kickLive/);
     assert.match(text, /function scrapedFeeRange/);
     assert.match(text, /费比监控/);
     assert.match(text, /label: "更新时间"/);

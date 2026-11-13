@@ -1100,9 +1100,9 @@ test("fee target is a range and 费比监控 uses 超标 / 加大付费", () => 
   assert.match(homeJs, /han-fee-targets/);
   assert.match(homeJs, /shen-fee-targets/);
   assert.match(homeJs, /shen-home-fee-targets/);
-  assert.match(homeJs, /\/api\/han\/fee-targets/);
-  assert.match(homeJs, /function overlayFeeBooks/);
-  assert.match(homeJs, /LIVE_REFRESH_MS = 15 \* 1000/);
+  assert.doesNotMatch(homeJs, /\/api\/han\/fee-targets/);
+  assert.doesNotMatch(homeJs, /function overlayFeeBooks/);
+  assert.match(homeJs, /LIVE_REFRESH_MS = 10 \* 60 \* 1000/);
   const feeStore = {};
   globalThis.localStorage = {
     getItem(key) {

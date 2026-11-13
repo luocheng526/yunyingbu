@@ -38,12 +38,8 @@ function emptyDay() {
   return { records: [], summary: {}, hourly: {} };
 }
 
-function emptyFees() {
-  return { han: {}, shen: {} };
-}
-
 function emptySnap(ymd = "") {
-  return { ymd, today: emptyDay(), yesterday: emptyDay(), fees: emptyFees() };
+  return { ymd, today: emptyDay(), yesterday: emptyDay() };
 }
 
 let snapPath = "";
@@ -84,15 +80,10 @@ function readSnap() {
     if (!raw || typeof raw !== "object") {
       return emptySnap();
     }
-    const fees = raw.fees && typeof raw.fees === "object" ? raw.fees : emptyFees();
     return {
       ymd: String(raw.ymd || ""),
       today: raw.today && typeof raw.today === "object" ? raw.today : emptyDay(),
-      yesterday: raw.yesterday && typeof raw.yesterday === "object" ? raw.yesterday : emptyDay(),
-      fees: {
-        han: fees.han && typeof fees.han === "object" ? fees.han : {},
-        shen: fees.shen && typeof fees.shen === "object" ? fees.shen : {}
-      }
+      yesterday: raw.yesterday && typeof raw.yesterday === "object" ? raw.yesterday : emptyDay()
     };
   } catch {
     return emptySnap();
@@ -134,80 +125,6 @@ function isLiveDay(row, ymd) {
 
 function shopName(row) {
   return text(row && (row.shopName || row.shop || row.store || row.店铺名称));
-}
-
-function feeBoundsOf(raw) {
-  let lo = null;
-  let hi = null;
-  if (raw == null || raw === "") {
-    return { lo, hi };
-  }
-  if (typeof raw === "object") {
-    lo = asNum(raw.lo != null ? raw.lo : raw.min);
-    hi = asNum(raw.hi != null ? raw.hi : raw.max);
-  } else {
-    lo = asNum(raw);
-    hi = lo;
-  }
-  if (lo != null && hi != null && lo > hi) {
-    return { lo: hi, hi: lo };
-  }
-  return { lo, hi };
-}
-
-export function feeBookOf(pack) {
-  if (!pack || typeof pack !== "object" || Array.isArray(pack)) {
-    return {};
-  }
-  if (pack.targets && typeof pack.targets === "object" && !Array.isArray(pack.targets)) {
-    return feeBookOf(pack.targets);
-  }
-  const out = {};
-  Object.keys(pack).forEach((key) => {
-    if (key === "ok" || key === "username" || key === "error" || key === "han" || key === "shen") {
-      return;
-    }
-    const shop = text(key);
-    if (!shop) {
-      return;
-    }
-    const bounds = feeBoundsOf(pack[key]);
-    if (bounds.lo == null && bounds.hi == null) {
-      return;
-    }
-    out[shop] = bounds;
-  });
-  return out;
-}
-
-export function applyFeeTargets(records, books) {
-  const book = {};
-  (Array.isArray(books) ? books : [books]).forEach((item) => {
-    Object.assign(book, feeBookOf(item));
-  });
-  (records || []).forEach((row) => {
-    if (!row) {
-      return;
-    }
-    const hit = book[shopName(row)];
-    if (!hit) {
-      return;
-    }
-    row.feeLo = hit.lo;
-    row.feeHi = hit.hi;
-  });
-  return records;
-}
-
-function rememberFees(snap, hanFees, shenFees) {
-  snap.fees = snap.fees && typeof snap.fees === "object" ? snap.fees : emptyFees();
-  if (hanFees && hanFees.ok && hanFees.targets && typeof hanFees.targets === "object") {
-    snap.fees.han = feeBookOf(hanFees.targets);
-  }
-  if (shenFees && shenFees.ok && shenFees.targets && typeof shenFees.targets === "object") {
-    snap.fees.shen = feeBookOf(shenFees.targets);
-  }
-  return snap.fees;
 }
 
 function pickNum(row, keys) {
@@ -474,7 +391,7 @@ export async function pullHanShenPaid(req, ymd = shanghaiYmd()) {
   return mergeHanShenPaid(han, shenPaid, shenJingmai, ymd);
 }
 
-export function rememberLocalPaidDay(pack = {}, ymd = shanghaiYmd(), feePacks = {}) {
+export function rememberLocalPaidDay(pack = {}, ymd = shanghaiYmd()) {
   const snap = readSnap();
   if (snap.ymd && snap.ymd !== ymd) {
     snap.yesterday = snap.today || emptyDay();
@@ -491,7 +408,6 @@ export function rememberLocalPaidDay(pack = {}, ymd = shanghaiYmd(), feePacks = 
       hourly: pack.hourly && typeof pack.hourly === "object" ? pack.hourly : snap.today.hourly || {}
     };
   }
-  rememberFees(snap, feePacks.han, feePacks.shen);
   writeSnap(snap);
   return snap;
 }
@@ -527,12 +443,8 @@ function packFromSnap(snap, extra = {}) {
 
 export async function getHomeLocalPaid(req) {
   const ymd = shanghaiYmd();
-  const [merged, hanFees, shenFees] = await Promise.all([
-    req ? pullHanShenPaid(req, ymd) : Promise.resolve({ records: [], summary: {}, hourly: {} }),
-    req ? fetchSibling(req, "/api/han/fee-targets") : Promise.resolve(null),
-    req ? fetchSibling(req, "/api/shen/fee-targets") : Promise.resolve(null)
-  ]);
-  const snap = rememberLocalPaidDay(merged, ymd, { han: hanFees, shen: shenFees });
+  const merged = req ? await pullHanShenPaid(req, ymd) : { records: [], summary: {}, hourly: {} };
+  const snap = rememberLocalPaidDay(merged, ymd);
   const from = [];
   if ((merged.records || []).some((row) => String(row.source || "").indexOf("han") !== -1)) {
     from.push("han");
@@ -540,7 +452,5 @@ export async function getHomeLocalPaid(req) {
   if ((merged.records || []).some((row) => String(row.source || "").indexOf("shen") !== -1)) {
     from.push("shen");
   }
-  const pack = packFromSnap(snap, { summary: merged.summary, from });
-  applyFeeTargets(pack.records, [snap.fees && snap.fees.shen, snap.fees && snap.fees.han]);
-  return pack;
+  return packFromSnap(snap, { summary: merged.summary, from });
 }
