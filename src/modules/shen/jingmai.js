@@ -628,6 +628,29 @@ export function dealPointsFromSamples(samples, day) {
     });
 }
 
+export function fiveMinuteStamp(stamp) {
+  const match = String(stamp || "").match(/(\d{4})[/-](\d{1,2})[/-](\d{1,2})[ T](\d{1,2}):(\d{2})/);
+  if (!match) {
+    return "";
+  }
+  const minute = Math.floor(Number(match[5]) / 5) * 5;
+  function pad(value) {
+    return String(value).padStart(2, "0");
+  }
+  return match[1] + "/" + pad(match[2]) + "/" + pad(match[3]) + " " + pad(match[4]) + ":" + pad(minute);
+}
+
+export function sharedFiveMinuteStamp(stamps) {
+  let latest = "";
+  (stamps || []).forEach(function (stamp) {
+    const text = String(stamp || "");
+    if (text > latest) {
+      latest = text;
+    }
+  });
+  return fiveMinuteStamp(latest);
+}
+
 export function alignOnlineDealSeries(shops) {
   const rows = (shops || []).filter(function (shop) {
     return shop && shop.online === true;

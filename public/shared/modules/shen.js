@@ -472,7 +472,7 @@
     mount: function (root) {
       const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
       paidCss.rel = "stylesheet";
-      paidCss.href = "/shared/shen-paid.css?v=0.1.768-paid-online";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.769-paid-slot";
       if (!paidCss.parentNode) {
         document.head.appendChild(paidCss);
       }
@@ -555,6 +555,7 @@
       let dead = false;
       let overviewRows = [];
       let liveUpdatedAt = "";
+      let liveSlot = "";
       let overviewAsOf = "";
       let enabledStores = [];
       let overviewStale = false;
@@ -2212,6 +2213,18 @@
         );
       }
 
+      function fiveMinuteStamp(stamp) {
+        const match = String(stamp || "").match(/(\d{4})[/-](\d{1,2})[/-](\d{1,2})[ T](\d{1,2}):(\d{2})/);
+        if (!match) {
+          return "";
+        }
+        const minute = Math.floor(Number(match[5]) / 5) * 5;
+        function pad(value) {
+          return String(value).padStart(2, "0");
+        }
+        return match[1] + "/" + pad(match[2]) + "/" + pad(match[3]) + " " + pad(match[4]) + ":" + pad(minute);
+      }
+
       function aggregateDeal(rows) {
         const scope = rows.filter(function (row) {
           return row.online;
@@ -2705,7 +2718,7 @@
           );
         }
         if (col.key === "liveAt") {
-          return row.capturedAt ? escapeHtml(row.capturedAt) : "—";
+          return row.capturedAt && liveSlot ? escapeHtml(liveSlot) : "—";
         }
         return "—";
       }
@@ -2720,6 +2733,26 @@
           }
           return true;
         });
+        let latestCapture = "";
+        picked.forEach(function (row) {
+          if (!row || !row.capturedAt) {
+            return;
+          }
+          if (!row.online) {
+            return;
+          }
+          if (row.capturedAt > latestCapture) {
+            latestCapture = row.capturedAt;
+          }
+        });
+        if (!latestCapture) {
+          picked.forEach(function (row) {
+            if (row && row.capturedAt > latestCapture) {
+              latestCapture = row.capturedAt;
+            }
+          });
+        }
+        liveSlot = fiveMinuteStamp(latestCapture);
         const sales = sumField(picked, "liveAmount");
         const dealCompare = aggregateDeal(picked);
         const spend = sumField(picked, "paidAmount");
@@ -2738,7 +2771,7 @@
         const listed = picked.filter(function (row) {
           return !feeWatch || feeKind(row).kind === feeWatch;
         });
-        const clock = liveUpdatedAt || "—";
+        const clock = liveSlot || fiveMinuteStamp(liveUpdatedAt) || "—";
         const cols = shownCols();
         const groups = [];
         const seenGroup = {};
@@ -2888,7 +2921,7 @@
           barEl.hidden = false;
         }
         if (asofEl) {
-          asofEl.textContent = liveUpdatedAt ? "最新采集 " + liveUpdatedAt : "等待采集";
+          asofEl.textContent = clock && clock !== "—" ? "最新采集 " + clock : "等待采集";
         }
         renderTabs();
         boardEl.hidden = false;
@@ -3889,7 +3922,7 @@
                 enabled +
                 " 家" +
                 (relogin ? "，" + relogin + " 家需要重新登录" : "") +
-                (liveUpdatedAt ? " · 最后采集 " + liveUpdatedAt : "")
+                (liveSlot || liveUpdatedAt ? " · 最后采集 " + (liveSlot || fiveMinuteStamp(liveUpdatedAt)) : "")
             );
           })
           .catch(function (err) {

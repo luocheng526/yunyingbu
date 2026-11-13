@@ -6,6 +6,8 @@ import {
   buildLiveView,
   collectPinIds,
   alignOnlineDealSeries,
+  fiveMinuteStamp,
+  sharedFiveMinuteStamp,
   dealPointsFromSamples,
   extractPaid,
   extractShopDeal,
@@ -598,6 +600,17 @@ test("each collection keeps its own comparison and gaps stay empty", () => {
   const paid = extractPaid({ summary: [{ index: "cost", value: 100, rate: 45.46 }] });
   assert.equal(paid.paidAmount, 100);
   assert.equal(paid.dealRate, undefined);
+});
+
+test("shop update times share one five-minute slot", () => {
+  assert.equal(fiveMinuteStamp("2026/11/13 13:02:03"), "2026/11/13 13:00");
+  assert.equal(fiveMinuteStamp("2026/11/13 13:06:55"), "2026/11/13 13:05");
+  assert.equal(fiveMinuteStamp("2026/11/13 13:11:36"), "2026/11/13 13:10");
+  assert.equal(fiveMinuteStamp("2026-11-13 13:00:00"), "2026/11/13 13:00");
+  assert.equal(
+    sharedFiveMinuteStamp(["2026/11/13 13:02:03", "2026/11/13 13:06:55", "2026/11/13 13:11:36"]),
+    "2026/11/13 13:10"
+  );
 });
 
 test("chart slots keep every online shop instead of the shops captured in that minute", () => {

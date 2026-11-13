@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.768-paid-online — 成交环比只统计在线店铺 */
+/* xm-fast-shell 0.1.769-paid-slot — 更新时间统一到 5 分钟 */
 (function () {
-  const ASSET_VER = "0.1.768-paid-online";
+  const ASSET_VER = "0.1.769-paid-slot";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
