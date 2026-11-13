@@ -1,11 +1,15 @@
 export const REVIEWER = "运营部主脑";
 
 export const MODULES = [
+  "主框架",
   "首页",
   "数据中心",
   "沈子晗",
   "韩梦凯",
   "人员管理",
+  "组织中心",
+  "甄选商学院",
+  "甄选智能体",
   "版本发布中心",
   "个人中心",
   "其他"
@@ -50,7 +54,7 @@ export function createStore({ now } = {}) {
       rejectReason: null,
       publishStartedAt: null,
       publishFinishedAt: null,
-      files: ["public/index.html", "public/shared/nav.js", "public/shared/layout.css"],
+      files: ["public/index.html"],
       acceptance: "登录后打开首页，能看到左侧七个入口。",
       restart: false,
       log: "来自对话提交，等待主脑在网页点确定放行。"

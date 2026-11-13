@@ -1,6 +1,6 @@
 import express from "express";
 import { requireReleasesAuth } from "./auth.js";
-import { checkMainBrainOrder, hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument } from "./document.js";
+import { checkMainBrainOrder, hasCompleteDocument, parseMainBrainOrder, parseReleaseDocument, ticketGuardReason } from "./document.js";
 import { pushXingmaiToEcs } from "./push.js";
 import { restartMengkaiService } from "./restart.js";
 import { createStore, MODULES } from "./store.js";
@@ -75,8 +75,15 @@ export function createReleasesRouter(options = {}) {
   router.use(requireReleasesAuth(options));
 
   async function runPublishJob(item, noDoc) {
-    const files = noDoc ? [] : item.files || [];
-    const shouldRestart = noDoc ? true : Boolean(item.restart);
+    if (noDoc) {
+      throw new Error("禁止空文件列表全量落地。交单必须写明路径。");
+    }
+    const files = item.files || [];
+    const danger = ticketGuardReason({ module: item.module, files, contents: item.contents || {} });
+    if (danger) {
+      throw new Error(danger);
+    }
+    const shouldRestart = Boolean(item.restart);
     const pushResult = await push(files);
     let extra = "";
     if (shouldRestart) {
@@ -100,6 +107,16 @@ export function createReleasesRouter(options = {}) {
     const order = checkMainBrainOrder(rawOrder, item.module);
     if (!order.ok) {
       res.status(409).json({ ok: false, error: order.error });
+      return;
+    }
+
+    const danger = ticketGuardReason({
+      module: item.module,
+      files: item.files,
+      contents: extras.contents || item.contents || req.body?.contents
+    });
+    if (danger) {
+      res.status(400).json({ ok: false, error: danger });
       return;
     }
 
@@ -178,6 +195,11 @@ export function createReleasesRouter(options = {}) {
       res.status(409).json({ ok: false, error: "有发布正在进行，禁止抢发" });
       return;
     }
+    const dangerGo = ticketGuardReason({ ...body, module: body.module || order.module });
+    if (dangerGo) {
+      res.status(400).json({ ok: false, error: dangerGo });
+      return;
+    }
     const ticket = ticketFromOrder(body, order);
     if (ticket.complete && ticket.module && !MODULES.includes(ticket.module)) {
       res.status(400).json({ ok: false, error: "模块不在允许列表中" });
@@ -211,6 +233,11 @@ export function createReleasesRouter(options = {}) {
       return;
     }
     const module = parsed.document.module || "其他";
+    const danger = ticketGuardReason({ ...body, module, files: parsed.document.files });
+    if (danger) {
+      res.status(400).json({ ok: false, error: danger });
+      return;
+    }
     if (parsed.complete && !MODULES.includes(module)) {
       res.status(400).json({ ok: false, error: "模块不在允许列表中" });
       return;
@@ -228,28 +255,12 @@ export function createReleasesRouter(options = {}) {
     res.status(201).json({ ok: true, item, incomplete: !parsed.complete });
   });
 
-  router.post("/reorder", (req, res) => {
-    const ids = req.body?.ids;
-    if (!Array.isArray(ids) || !ids.length) {
-      res.status(400).json({ ok: false, error: "请提供排队 id 列表" });
-      return;
-    }
-    const items = store.reorder(ids);
-    res.json({ ok: true, items });
+  router.post("/reorder", (_req, res) => {
+    res.status(409).json({ ok: false, error: "禁止上移下移。入队按提交时间。" });
   });
 
-  router.post("/:id/move", (req, res) => {
-    const direction = String(req.body?.direction || "").trim();
-    if (direction !== "up" && direction !== "down") {
-      res.status(400).json({ ok: false, error: "direction 只能是 up 或 down" });
-      return;
-    }
-    const result = store.move(req.params.id, direction);
-    if (result.error) {
-      res.status(result.status).json({ ok: false, error: result.error });
-      return;
-    }
-    res.json({ ok: true, item: result.item, items: result.items });
+  router.post("/:id/move", (_req, res) => {
+    res.status(409).json({ ok: false, error: "禁止上移下移。入队按提交时间。" });
   });
 
   router.post("/:id/confirm", async (req, res) => {

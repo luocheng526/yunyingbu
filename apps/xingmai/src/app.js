@@ -6,6 +6,12 @@ import { attachHome } from "./modules/home/attach.js";
 import { attachProfile } from "./modules/profile/attach.js";
 import { releasesPageGate } from "./modules/releases/auth.js";
 import { createReleasesRouter } from "./modules/releases/router.js";
+import { hanRouter } from "./modules/han/router.js";
+import { shenRouter } from "./modules/shen/router.js";
+import { peopleRouter } from "./modules/people/router.js";
+import { academyRouter } from "./modules/academy/router.js";
+import { agentsRouter } from "./modules/agents/router.js";
+import { dataRouter } from "./modules/data/router.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -32,13 +38,27 @@ export function createApp() {
     }
   });
 
+  // 全站入口。缺 attachProfile / createReleasesRouter / /api/health 即瘦版本，覆盖线上会 404。
+  // 数据中心等板块禁止提交本文件。GET / 的兜底在 profile/middleware.js。
+  attachHome(app);
+  app.use("/api/han", hanRouter);
+  app.use("/api/shen", shenRouter);
+  app.use("/api/people", peopleRouter);
+  app.use("/api/academy", academyRouter);
+  app.use("/api/agents", agentsRouter);
+  app.use("/api/data", dataRouter);
   app.use(
     express.static(join(__dirname, "..", "public"), {
+      index: false,
       etag: true,
       lastModified: true,
       setHeaders(res, filePath) {
         if (/\.(?:css|js)$/i.test(filePath)) {
-          res.setHeader("Cache-Control", "public, max-age=3600");
+          const versioned = Boolean(res.req && res.req.query && res.req.query.v);
+          res.setHeader(
+            "Cache-Control",
+            versioned ? "public, max-age=86400, immutable" : "public, max-age=0, must-revalidate"
+          );
           return;
         }
         if (/\.html?$/i.test(filePath)) {
@@ -47,8 +67,6 @@ export function createApp() {
       }
     })
   );
-
-  attachHome(app);
   app.use("/api/releases", createReleasesRouter());
   return app;
 }
