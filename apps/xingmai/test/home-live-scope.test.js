@@ -29,19 +29,23 @@ test("paint keeps the DOM board node when building the filtered live board", () 
   assert.match(homeJs, /board\.setAttribute\("data-hm-js"/);
 });
 
-test("罗成 sees all live shops; 韩梦凯 and 沈子晗 stay on duty shops", () => {
+test("罗成 韩梦凯 沈子晗 see all live shops; others stay on duty shops", () => {
   const fns = new Function(
     pick("homeUserName") +
+      pick("isHomeBoss") +
       pick("seesAllLiveShops") +
       pick("liveDutyKeys") +
       "return {seesAllLiveShops,liveDutyKeys};"
   )();
   assert.equal(fns.seesAllLiveShops({ displayName: "罗成" }), true);
-  assert.equal(fns.seesAllLiveShops({ displayName: "韩梦凯" }), false);
-  assert.equal(fns.seesAllLiveShops({ displayName: "沈子晗" }), false);
+  assert.equal(fns.seesAllLiveShops({ displayName: "韩梦凯" }), true);
+  assert.equal(fns.seesAllLiveShops({ displayName: "沈子晗" }), true);
+  assert.equal(fns.seesAllLiveShops({ displayName: "高传颖" }), false);
   assert.equal(fns.liveDutyKeys({ user: { displayName: "罗成" }, dutyReady: true, dutyKeys: { "name:a": true } }), null);
+  assert.equal(fns.liveDutyKeys({ user: { displayName: "韩梦凯" }, dutyReady: true, dutyKeys: { "name:b店": true } }), null);
+  assert.equal(fns.liveDutyKeys({ user: { displayName: "沈子晗" }, dutyReady: true, dutyKeys: null }), null);
   assert.deepEqual(
-    fns.liveDutyKeys({ user: { displayName: "韩梦凯" }, dutyReady: true, dutyKeys: { "name:b店": true } }),
+    fns.liveDutyKeys({ user: { displayName: "高传颖" }, dutyReady: true, dutyKeys: { "name:b店": true } }),
     { "name:b店": true }
   );
 });
@@ -102,6 +106,7 @@ test("charts cards and shop rows use the same filtered live board", () => {
       pick("dutyTeamList") +
       pick("shopsInDutyTeam") +
       pick("livePickKeys") +
+      pick("isHomeBoss") +
       pick("seesAllLiveShops") +
       pick("liveDutyKeys") +
       pick("blankLive") +
@@ -153,6 +158,18 @@ test("charts cards and shop rows use the same filtered live board", () => {
   const all = fns.liveBoardOf(state, null, { team: "", shop: "" });
   assert.equal(all.live.hero.value, "150");
   assert.equal(all.shops.length, 3);
+  const hanAll = fns.liveBoardOf(
+    { ...state, user: { displayName: "韩梦凯" }, dutyKeys: { "name:b店": true } },
+    undefined,
+    { team: "", shop: "" }
+  );
+  assert.equal(hanAll.shops.length, 3);
+  const gaoOwn = fns.liveBoardOf(
+    { ...state, user: { displayName: "高传颖" }, dutyKeys: { "name:b店": true } },
+    undefined,
+    { team: "", shop: "" }
+  );
+  assert.deepEqual(gaoOwn.shops.map((row) => row.shop), ["B店"]);
   assert.equal(all.live.cards.find((card) => card.key === "livePaid").value, "2");
   assert.equal(all.live.hero.label, "实时总成交金额");
   assert.equal(all.live.paid.label, "推广总花费");
