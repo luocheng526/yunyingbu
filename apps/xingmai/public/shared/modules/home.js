@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.922-erp */
+/* xm-module-home 0.1.924-erp */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
