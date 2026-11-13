@@ -105,6 +105,8 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
       pick("payFit") +
       pick("blankLive") +
       pick("escapeHtml") +
+      pick("normShopName") +
+      pick("normShopId") +
       pick("sumLocalPaid") +
       homeJs.slice(start, end) +
       "return {fillLocalPaid,emptyLocalPaid,spendChartOf,hourCum,payFit};"
@@ -293,6 +295,79 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.notEqual(deadSnap.hero.yestText, "0");
   assert.notEqual(deadSnap.paid.yestText, "0");
   assert.notEqual(deadSnap.paid.yestText, "—");
+  assert.match(homeJs, /function orgStoreForShop/);
+  assert.match(homeJs, /row\.formerNames/);
+  const renamed = fns.fillLocalPaid(
+    {
+      shops: [{ shop: "DIKTT欧栩专卖店", shopId: "16091982", liveAmount: "11,624", paidAmount: "—" }],
+      cards: [],
+      paid: { label: "推广总花费", value: "—" }
+    },
+    {
+      records: [{ shopName: "DIKTT家居旗舰店", paidAmount: 4058, paidDeal: 8000, jingmaiGmv: 13197, feeRate: 0.3 }]
+    },
+    {
+      stores: [{ storeName: "DIKTT家居旗舰店", shopId: "16091982", formerNames: "DIKTT欧栩专卖店" }]
+    }
+  );
+  assert.equal(renamed.shops.length, 1);
+  assert.equal(renamed.shops[0].shop, "DIKTT家居旗舰店");
+  assert.equal(renamed.shops[0].paidIn, true);
+  assert.equal(renamed.shops[0].paidAmount, "4,058");
+  const byIdOnly = fns.fillLocalPaid(
+    {
+      shops: [{ shop: "DIKTT梦幽澜专卖店", shopId: "16098199", liveAmount: "6,531", paidAmount: "—" }],
+      cards: [],
+      paid: { label: "推广总花费", value: "—" }
+    },
+    {
+      records: [{ shopName: "DIKTT生活电器旗舰店", paidAmount: 2061, paidDeal: 4000, jingmaiGmv: 6531 }]
+    },
+    {
+      stores: [{ storeName: "DIKTT生活电器旗舰店", shopId: "16098199", formerNames: "" }]
+    }
+  );
+  assert.equal(byIdOnly.shops.length, 1);
+  assert.equal(byIdOnly.shops[0].shop, "DIKTT生活电器旗舰店");
+  assert.equal(byIdOnly.shops[0].paidIn, true);
+  const unmatched = fns.fillLocalPaid(
+    {
+      shops: [{ shop: "DIKTT欧栩专卖店", shopId: "16091982", liveAmount: "11,624", paidAmount: "—" }],
+      cards: [],
+      paid: { label: "推广总花费", value: "—" }
+    },
+    {
+      records: [{ shopName: "DIKTT家居旗舰店", paidAmount: 4058, paidDeal: 8000 }]
+    }
+  );
+  assert.equal(unmatched.shops[0].shop, "DIKTT欧栩专卖店");
+  assert.equal(unmatched.shops[0].paidIn, undefined);
+  const noMerchantMix = fns.fillLocalPaid(
+    {
+      shops: [
+        { shop: "RASW环境电器旗舰店", shopId: "39133580", liveAmount: "3,876", paidAmount: "—" },
+        { shop: "DIKTT环境电器旗舰店", shopId: "81732029", liveAmount: "997", paidAmount: "—" }
+      ],
+      cards: [],
+      paid: { label: "推广总花费", value: "—" }
+    },
+    {
+      records: [
+        { shopName: "RASW环境电器旗舰店", paidAmount: 1978, paidDeal: 3000 },
+        { shopName: "DIKTT环境电器旗舰店", paidAmount: 533, paidDeal: 900 }
+      ]
+    },
+    {
+      stores: [
+        { storeName: "RASW环境电器旗舰店", shopId: "39133580", merchantId: "39133580" },
+        { storeName: "DIKTT环境电器旗舰店", shopId: "81732029", merchantId: "39133580" }
+      ]
+    }
+  );
+  assert.deepEqual(
+    noMerchantMix.shops.map((row) => row.shop + ":" + row.paidAmount),
+    ["RASW环境电器旗舰店:1,978", "DIKTT环境电器旗舰店:533"]
+  );
 });
 
 test("live shop 状态 follows 10-minute capturedAt", () => {
