@@ -526,7 +526,7 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /XmModules\["\/han\/recharge-rules"\]/);
   assert.match(js, /实时付费/);
   assert.match(js, /HanCenter\.mount\(root, hanBoard\)/);
-  assert.match(js, /20261113-line/);
+  assert.match(js, /20261113-seven/);
   assert.doesNotMatch(js, /id="paid-form"/);
   assert.doesNotMatch(js, /上传抓取表/);
   assert.match(js, /XmModules\["\/han\/training"\]/);
@@ -2226,7 +2226,7 @@ test("韩梦凯侧栏隐藏付费中心并保留充值规则", async () => {
   assert.match(han, /a\[href="\/han\/paid-center"\]/);
   assert.doesNotMatch(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
   assert.match(han, /\["\/han\/paid\?board=rules", "充值规则", "rules"\]/);
-  assert.match(han, /20261113-line/);
+  assert.match(han, /20261113-seven/);
   const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
   assert.match(center, /两档花费/);
   assert.match(center, /han-rules-text/);
@@ -2266,7 +2266,7 @@ test("韩梦凯侧栏隐藏付费中心并保留充值规则", async () => {
   assert.match(han, /insertAdjacentElement\("afterend"/);
   assert.match(han, /data-xm-group"\) !== "\/han"/);
   assert.doesNotMatch(han, /anchor\.href = "\/han\/paid-center"/);
-  assert.match(center, /20261113-line/);
+  assert.match(center, /20261113-seven/);
   assert.match(center, /已超过30分钟没有更新/);
   assert.match(center, /超过30分钟未更新/);
   assert.match(han, /action: "dingtalk"/);
@@ -2341,6 +2341,7 @@ test("韩梦凯侧栏隐藏付费中心并保留充值规则", async () => {
   assert.match(center, /function shopStamp/);
   assert.match(center, /\["stamp", "回传时间"\]/);
   assert.match(center, /\["line", "状态"\]/);
+  assert.doesNotMatch(center, /是否成功/);
   assert.match(center, /function lineOn/);
   assert.match(center, /function lineHtml/);
   assert.match(center, /900000/);

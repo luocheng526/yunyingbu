@@ -1717,7 +1717,7 @@
         stop = window.HanCenter.mount(root, hanBoard) || function () {};
         bindDing();
       }
-      const centerVer = "20261113-line";
+      const centerVer = "20261113-seven";
       if (window.HanCenter && window.HanCenter.version === centerVer) {
         start();
       } else {
