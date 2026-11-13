@@ -11,7 +11,7 @@ test("rewrites immutable homepage script url to no-store client.js", () => {
   const out = rewriteHomeModuleUrl(html);
   assert.equal(out.includes("/shared/modules/home.js"), false);
   assert.equal(out.includes(HOME_CLIENT_JS), true);
-    assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.922-now$/);
+    assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.927-phonehero$/);
 });
 
 test("serves /api/home/client.js from current homepage module", async () => {
@@ -26,7 +26,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     const text = await res.text();
     assert.equal(res.status, 200);
     assert.match(String(res.headers.get("cache-control") || ""), /no-store/i);
-    assert.match(text, /xm-module-home 0\.1\.922-now/);
+    assert.match(text, /xm-module-home 0\.1\.927-phonehero/);
     assert.match(text, /function liveTheadHtml/);
     assert.match(text, /function liveFilterHtml/);
     assert.match(text, /data-live-filter="pick"/);
@@ -74,6 +74,9 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /function feeChartOf/);
     assert.match(text, /function mixFeeHours/);
     assert.match(text, /repeat\(3,minmax\(0,1fr\)\)/);
+    assert.match(text, /@media \(max-width:720px\)/);
+    assert.match(text, /scroll-snap-type:x mandatory/);
+    assert.match(text, /\.xm-hm-sales\.xm-hm-live-charts>\.xm-hm-chart/);
     assert.match(text, /LIVE_CARD_KEYS = \["livePay", "roi", "livePaid", "feeHot", "feeCold", "liveAt"\]/);
     assert.match(text, /实时付费超标店铺/);
     assert.match(text, /实时费比低店铺/);
@@ -101,7 +104,9 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /\/api\/home\/erp-paid/);
     assert.match(text, /method: body \? "POST"/);
     assert.match(text, /api\("\/api\/home\/local-paid"/);
-    assert.doesNotMatch(text, /sum\.spend \* \(sY \/ sT\)/);
+    assert.match(text, /sum\.spend \* \(sY \/ sT\)/);
+    assert.match(text, /yestPayHours: row\.yesterdayHourlyData/);
+    assert.match(text, /hourly: data\.hourly/);
     assert.match(text, /\/api\/home\/erp-kpis/);
     assert.match(text, /platformFee/);
     assert.match(text, /按支付时间统计的订单金额\(包含无效单、代发单\)/);
