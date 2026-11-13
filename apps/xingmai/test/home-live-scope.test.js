@@ -190,6 +190,23 @@ test("charts cards and shop rows use the same filtered live board", () => {
   assert.equal(shop.live.cards.find((card) => card.key === "livePay").value, "80");
 });
 
+test("live shop table defaults to 实时成交金额 descending", () => {
+  assert.match(homeJs, /function sortLiveShops/);
+  assert.match(homeJs, /sortLiveShops\(feePickShops/);
+  const fns = new Function(pick("asNum") + pick("sortLiveShops") + "return {sortLiveShops};")();
+  assert.deepEqual(
+    fns
+      .sortLiveShops([
+        { shop: "低店", liveAmount: "8,088" },
+        { shop: "空店", liveAmount: "—" },
+        { shop: "高店", liveAmount: "14,202" },
+        { shop: "中店", liveAmount: "10,471" }
+      ])
+      .map((row) => row.shop),
+    ["高店", "中店", "低店", "空店"]
+  );
+});
+
 test("live table can search shops, filter 掉线, and hide idle org shops", () => {
   assert.match(homeJs, /liveSearchHtml\(\) \+\s*'<div class="xm-hm-panel">/);
   assert.match(homeJs, /liveChipHtml\("link", "off", "掉线"/);
