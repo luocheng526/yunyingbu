@@ -1704,7 +1704,7 @@
         stop = window.HanCenter.mount(root, hanBoard) || function () {};
         bindDing();
       }
-      const centerVer = "20261112-line";
+      const centerVer = "20261112-hide";
       if (window.HanCenter && window.HanCenter.version === centerVer) {
         start();
       } else {
@@ -1940,14 +1940,17 @@
     if (leftover && leftover.parentNode) leftover.parentNode.removeChild(leftover);
     const paidLink = hanPaidAnchor();
     if (paidLink && paidLink.insertAdjacentElement) {
+      paidLink.parentNode.querySelectorAll('a[href="/han/paid-center"],a[data-han-center="center"]').forEach(function (anchor) {
+        anchor.remove();
+      });
       const specs = [
-        ["/han/paid?board=center", "付费中心", "center"],
         ["/han/paid?board=rules", "充值规则", "rules"],
       ];
       const board = new URLSearchParams(location.search || "").get("board") || "";
       let after = paidLink;
       specs.forEach(function (spec) {
         let anchor = paidLink.parentNode.querySelector('a[data-han-center="' + spec[2] + '"]');
+        if (!anchor && spec[2] === "rules" && paidLink.parentNode.querySelector('a[href="/han/recharge-rules"]')) return;
         if (!anchor) {
           anchor = document.createElement("a");
           anchor.className = "xm-menu-item xm-menu-child";

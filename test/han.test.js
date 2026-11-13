@@ -526,7 +526,7 @@ test("shared han module fills submenu pages", async () => {
   assert.match(js, /XmModules\["\/han\/recharge-rules"\]/);
   assert.match(js, /实时付费/);
   assert.match(js, /HanCenter\.mount\(root, hanBoard\)/);
-  assert.match(js, /20261112-line/);
+  assert.match(js, /20261112-hide/);
   assert.doesNotMatch(js, /id="paid-form"/);
   assert.doesNotMatch(js, /上传抓取表/);
   assert.match(js, /XmModules\["\/han\/training"\]/);
@@ -2048,22 +2048,23 @@ test("scheduled recharge turns off at night and back on in the morning", async (
   });
 });
 
-test("韩梦凯侧栏包含付费中心和充值规则", async () => {
+test("韩梦凯侧栏隐藏付费中心并保留充值规则", async () => {
   const { readFile } = await import("node:fs/promises");
   const nav = await readFile(new URL("../public/shared/nav.js", import.meta.url), "utf8");
   const hanStart = nav.indexOf("const HAN_CHILDREN");
   const hanEnd = nav.indexOf("const ACADEMY_CHILDREN");
   const block = nav.slice(hanStart, hanEnd);
-  assert.match(block, /\/han\/paid-center/);
-  assert.match(block, /付费中心/);
+  assert.doesNotMatch(block, /\/han\/paid-center/);
+  assert.doesNotMatch(block, /付费中心/);
   assert.match(block, /\/han\/recharge-rules/);
   assert.match(block, /充值规则/);
   assert.match(nav, /"\/han\/paid-center": "han"/);
   assert.match(nav, /"\/han\/recharge-rules": "han"/);
   const han = await readFile(new URL("../public/shared/modules/han.js", import.meta.url), "utf8");
-  assert.match(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
+  assert.match(han, /a\[href="\/han\/paid-center"\]/);
+  assert.doesNotMatch(han, /\["\/han\/paid\?board=center", "付费中心", "center"\]/);
   assert.match(han, /\["\/han\/paid\?board=rules", "充值规则", "rules"\]/);
-  assert.match(han, /20261112-line/);
+  assert.match(han, /20261112-hide/);
   const center = await readFile(new URL("../public/shared/modules/han-center.js", import.meta.url), "utf8");
   assert.match(center, /两档花费/);
   assert.match(center, /han-rules-text/);
@@ -2103,7 +2104,7 @@ test("韩梦凯侧栏包含付费中心和充值规则", async () => {
   assert.match(han, /insertAdjacentElement\("afterend"/);
   assert.match(han, /data-xm-group"\) !== "\/han"/);
   assert.doesNotMatch(han, /anchor\.href = "\/han\/paid-center"/);
-  assert.match(center, /20261112-line/);
+  assert.match(center, /20261112-hide/);
   assert.match(center, /已超过30分钟没有更新/);
   assert.match(center, /超过30分钟未更新/);
   assert.match(han, /action: "dingtalk"/);
