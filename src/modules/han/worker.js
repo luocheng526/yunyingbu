@@ -798,8 +798,50 @@ function readJingmaiRate(row) {
   return null;
 }
 
+function nonSitewideBlock(row) {
+  if (!row || typeof row !== "object") return null;
+  for (const [key, value] of Object.entries(row)) {
+    if (!String(key).includes("非全站") || !value || typeof value !== "object" || Array.isArray(value)) continue;
+    return value;
+  }
+  for (const value of Object.values(row)) {
+    if (!Array.isArray(value)) continue;
+    const found = value.find((item) => item && typeof item === "object" && String(pick(item, ["类型", "营销类型", "产品线", "名称", "渠道"])).includes("非全站"));
+    if (found) return found;
+  }
+  return null;
+}
+
+function readNonSitewide(row, kind) {
+  const block = nonSitewideBlock(row);
+  if (block) {
+    const value = kind === "roi"
+      ? pick(block, ["京准通付费投产比", "ROI", "roi", "投产比", "付费投产比"])
+      : pick(block, ["京准通总金额", "京准通总订单金额", "总订单金额", "订单总金额", "订单金额", "总金额"]);
+    if (value !== "") return value;
+  }
+  for (const [key, value] of Object.entries(row || {})) {
+    if (value == null || typeof value === "object" || String(value).trim() === "") continue;
+    const name = String(key);
+    if (!name.includes("非全站")) continue;
+    const lower = name.toLowerCase();
+    if (kind === "roi" && (lower.includes("roi") || name.includes("投产"))) return value;
+    if (kind === "amount" && (name.includes("订单金额") || name.includes("订单总金额") || name.includes("总金额"))) return value;
+  }
+  return "";
+}
+
+function readPaidRoi(row) {
+  const labeled = readNonSitewide(row, "roi");
+  if (labeled !== "") return labeled;
+  return pick(row, ["京准通付费投产比", "ROI", "roi", "投产比"]);
+}
+
 function readOrderAmount(row) {
+  const labeled = readNonSitewide(row, "amount");
+  if (labeled !== "") return labeled;
   const named = pick(row, [
+    "京准通总金额",
     "京准通总订单金额",
     "总订单金额",
     "订单总金额",
@@ -816,9 +858,10 @@ function readOrderAmount(row) {
   ]);
   if (named !== "") return named;
   for (const [key, value] of Object.entries(row || {})) {
-    if (value == null || String(value).trim() === "") continue;
+    if (value == null || typeof value === "object" || String(value).trim() === "") continue;
     const name = String(key);
     if (name.includes("京麦") || name.includes("花费")) continue;
+    if (name.includes("全站") && !name.includes("非全站")) continue;
     if (name.includes("订单金额") || name.includes("下单金额") || name.includes("订单总金额")) return value;
   }
   return "";
@@ -843,7 +886,7 @@ function parseShop(row, capturedAt) {
     spend: num(pick(row, ["京准通花费", "花费", "spend", "付费金额", "精准通总花费"])),
     paidOrders,
     orders: paidOrders,
-    roi: num(pick(row, ["京准通付费投产比", "ROI", "roi", "投产比"])),
+    roi: num(readPaidRoi(row)),
     cvr: num(pick(row, ["京准通付费转化率", "cvr", "转化率"])),
     cpc: num(pick(row, ["京准通平均点击成本", "cpc", "平均点击成本"])),
     jingmaiGmv,
@@ -873,7 +916,7 @@ function parseSub(row, fallbackStore, capturedAt) {
     subAccountId,
     subAccountName: text(pick(row, ["子账号名称", "subAccountName"]), 64),
     spend: num(pick(row, ["京准通花费", "花费", "spend"])),
-    roi: num(pick(row, ["京准通付费投产比", "ROI", "roi", "投产比"])),
+    roi: num(readPaidRoi(row)),
     balance: num(pick(row, ["余额", "balance", "账户余额"])),
     paidOrders,
     orders: paidOrders,
