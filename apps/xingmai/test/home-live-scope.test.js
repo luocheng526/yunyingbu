@@ -112,6 +112,7 @@ test("charts cards and shop rows use the same filtered live board", () => {
       pick("blankLive") +
       pick("escapeHtml") +
       pick("padHours") +
+      pick("hoursHaveNow") +
       pick("shanghaiHour") +
       pick("todayHours") +
       pick("seriesOf") +
