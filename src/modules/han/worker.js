@@ -798,25 +798,78 @@ function readJingmaiRate(row) {
   return null;
 }
 
+function nonSitewideBlock(row) {
+  if (!row || typeof row !== "object") return null;
+  for (const [key, value] of Object.entries(row)) {
+    if (!String(key).includes("非全站") || !value || typeof value !== "object" || Array.isArray(value)) continue;
+    return value;
+  }
+  for (const value of Object.values(row)) {
+    if (!Array.isArray(value)) continue;
+    const found = value.find((item) => item && typeof item === "object" && String(pick(item, ["类型", "营销类型", "产品线", "名称", "渠道"])).includes("非全站"));
+    if (found) return found;
+  }
+  return null;
+}
+
+function readNonSitewide(row, kind) {
+  const block = nonSitewideBlock(row);
+  if (block) {
+    const value = kind === "roi"
+      ? pick(block, ["京准通付费投产比", "ROI", "roi", "投产比", "付费投产比"])
+      : pick(block, ["京准通总金额", "京准通总订单金额", "总订单金额", "订单总金额", "订单金额", "总金额"]);
+    if (value !== "") return value;
+  }
+  for (const [key, value] of Object.entries(row || {})) {
+    if (value == null || typeof value === "object" || String(value).trim() === "") continue;
+    const name = String(key);
+    if (!name.includes("非全站")) continue;
+    const lower = name.toLowerCase();
+    if (kind === "roi" && (lower.includes("roi") || name.includes("投产"))) return value;
+    if (kind === "amount" && (name.includes("订单金额") || name.includes("订单总金额") || name.includes("总金额"))) return value;
+  }
+  return "";
+}
+
+function readPaidRoi(row) {
+  const labeled = readNonSitewide(row, "roi");
+  if (labeled !== "") return labeled;
+  return pick(row, ["京准通付费投产比", "ROI", "roi", "投产比"]);
+}
+
 function readOrderAmount(row) {
+  const labeled = readNonSitewide(row, "amount");
+  if (labeled !== "") return labeled;
   const named = pick(row, [
+    "京准通总金额",
     "京准通总订单金额",
     "总订单金额",
+    "订单总金额",
+    "京准通订单总金额",
+    "总下单金额",
+    "下单总金额",
     "订单金额",
     "直接订单金额",
     "付费订单金额",
+    "成交订单金额",
     "京准通订单金额",
     "totalOrderAmount",
     "orderAmount",
   ]);
   if (named !== "") return named;
   for (const [key, value] of Object.entries(row || {})) {
-    if (value == null || String(value).trim() === "") continue;
+    if (value == null || typeof value === "object" || String(value).trim() === "") continue;
     const name = String(key);
-    if (name.includes("京麦") || name.includes("成交金额") || name.includes("花费")) continue;
-    if (name.includes("订单金额") || name.includes("下单金额")) return value;
+    if (name.includes("京麦") || name.includes("花费")) continue;
+    if (name.includes("全站") && !name.includes("非全站")) continue;
+    if (name.includes("订单金额") || name.includes("下单金额") || name.includes("订单总金额")) return value;
   }
   return "";
+}
+
+function orderAmountOrNull(row) {
+  const raw = readOrderAmount(row);
+  return raw === "" ? null : num(raw);
 }
 
 function parseShop(row, capturedAt) {
@@ -833,7 +886,7 @@ function parseShop(row, capturedAt) {
     spend: num(pick(row, ["京准通花费", "花费", "spend", "付费金额", "精准通总花费"])),
     paidOrders,
     orders: paidOrders,
-    roi: num(pick(row, ["京准通付费投产比", "ROI", "roi", "投产比"])),
+    roi: num(readPaidRoi(row)),
     cvr: num(pick(row, ["京准通付费转化率", "cvr", "转化率"])),
     cpc: num(pick(row, ["京准通平均点击成本", "cpc", "平均点击成本"])),
     jingmaiGmv,
@@ -841,7 +894,7 @@ function parseShop(row, capturedAt) {
     jingmaiGmvRate: readJingmaiRate(row),
     clicks: num(pick(row, ["京准通点击数", "clicks", "点击数"])),
     ctr: num(pick(row, ["京准通点击率", "ctr", "点击率"])),
-    totalOrderAmount: num(readOrderAmount(row)),
+    totalOrderAmount: orderAmountOrNull(row),
     realFeeRatio: num(pick(row, ["真实费比", "realFeeRatio"])),
     balance: num(pick(row, ["余额", "balance"])),
     success: success === "否" ? "否" : "是",
@@ -863,11 +916,11 @@ function parseSub(row, fallbackStore, capturedAt) {
     subAccountId,
     subAccountName: text(pick(row, ["子账号名称", "subAccountName"]), 64),
     spend: num(pick(row, ["京准通花费", "花费", "spend"])),
-    roi: num(pick(row, ["京准通付费投产比", "ROI", "roi", "投产比"])),
+    roi: num(readPaidRoi(row)),
     balance: num(pick(row, ["余额", "balance", "账户余额"])),
     paidOrders,
     orders: paidOrders,
-    totalOrderAmount: num(readOrderAmount(row)),
+    totalOrderAmount: orderAmountOrNull(row),
     impressions: num(pick(row, ["展现数", "impressions", "曝光数"])),
     clicks: num(pick(row, ["京准通点击数", "clicks", "点击数"])),
     ctr: num(pick(row, ["京准通点击率", "ctr", "点击率"])),
@@ -1144,11 +1197,18 @@ export function createWorkerMethods(db, ensure) {
     return { ok: true, tested: true, remindError: "" };
   }
 
-  function orderAmountByStore(subs) {
+  function sameCaptureDay(shopAt, subAt) {
+    const shopDay = String(shopAt || "").slice(0, 10);
+    const subDay = String(subAt || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(shopDay) || !/^\d{4}-\d{2}-\d{2}$/.test(subDay)) return true;
+    return shopDay === subDay;
+  }
+
+  function orderAmountByStore(subs, shopAt) {
     const sums = new Map();
     for (const row of subs || []) {
       const store = String(row?.store || "");
-      if (!store) continue;
+      if (!store || (shopAt && !sameCaptureDay(shopAt, row.capturedAt))) continue;
       sums.set(store, (sums.get(store) || 0) + num(row.totalOrderAmount));
     }
     return sums;
@@ -1160,6 +1220,11 @@ export function createWorkerMethods(db, ensure) {
     const own = num(shop.totalOrderAmount);
     if (rolled > own) shop.totalOrderAmount = rolled;
     return shop;
+  }
+
+  function withSubOrderAmount(shop, subs) {
+    if (!shop) return shop;
+    return applySubOrderAmount(shop, orderAmountByStore(subs, shop.capturedAt));
   }
 
   function presentShop(row) {
@@ -1295,8 +1360,7 @@ export function createWorkerMethods(db, ensure) {
     async workerOverview() {
       const state = await load();
       const capturedAt = state.shops.reduce((latest, row) => (row.capturedAt > latest ? row.capturedAt : latest), "");
-      const orderAmounts = orderAmountByStore(state.subs);
-      const shops = state.shops.map((row) => applySubOrderAmount(presentShop(row), orderAmounts));
+      const shops = state.shops.map((row) => withSubOrderAmount(presentShop(row), state.subs));
       const metrics = totals(shops);
       let remind = null;
       try {
@@ -1331,9 +1395,9 @@ export function createWorkerMethods(db, ensure) {
       }
       const state = await load();
       const subaccounts = state.subs.filter((row) => row.store === shop).map((row) => presentSub(row, state.subNotes));
-      const found = applySubOrderAmount(
+      const found = withSubOrderAmount(
         state.shops.filter((row) => row.store === shop).map(presentShop)[0] || null,
-        orderAmountByStore(subaccounts),
+        subaccounts,
       );
       const accountId = String(found?.accountId || "");
       return {
@@ -1507,8 +1571,20 @@ export function createWorkerMethods(db, ensure) {
       if (!shopRows.length && !subRows.length && !rechargeRows.length) {
         throw httpError(400, "rows、子账号或充值记录必填");
       }
+      const prevShop = new Map(state.shops.map((row) => [row.store, row]));
+      const prevSub = new Map(state.subs.map((row) => [row.store + "\0" + row.subAccountId, row]));
       const shops = shopRows.map((row) => parseShop(row, capturedAt)).filter(Boolean);
       const subs = subRows.map((row) => parseSub(row, shops[0]?.store || "", capturedAt)).filter(Boolean);
+      for (const row of shops) {
+        if (row.totalOrderAmount != null) continue;
+        const prev = prevShop.get(row.store);
+        row.totalOrderAmount = prev ? num(prev.totalOrderAmount) : 0;
+      }
+      for (const row of subs) {
+        if (row.totalOrderAmount != null) continue;
+        const prev = prevSub.get(row.store + "\0" + row.subAccountId);
+        row.totalOrderAmount = prev ? num(prev.totalOrderAmount) : 0;
+      }
       const recharges = [];
       for (const row of rechargeRows) {
         try {

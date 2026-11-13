@@ -1201,6 +1201,134 @@ test("shop 京准通总订单金额 sums subaccount order amounts", async () => 
   });
 });
 
+test("旧日子账号金额不盖住今天的店铺总订单金额", async () => {
+  await withServer(async (base) => {
+    const old = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        抓取时间: "2026-11-02T18:08:23+08:00",
+        rows: [{ 店铺名称: "潮流店", 京准通主账户ID: "1", 花费: 10, 京准通总订单金额: 0 }],
+        subaccounts: [
+          { 店铺名称: "潮流店", 京准通主账户ID: "1", 子账号ID: "1", 子账号名称: "甲", 订单金额: 5285.56 },
+        ],
+      }),
+    });
+    assert.equal(old.res.status, 201);
+    const today = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        抓取时间: "2026-11-13T09:53:18+08:00",
+        rows: [{ 店铺名称: "潮流店", 京准通主账户ID: "1", 花费: 827.75, 京麦成交金额: 1750.7, 订单总金额: 3200 }],
+      }),
+    });
+    assert.equal(today.res.status, 201);
+    const overview = await json(base, "/api/han/worker?view=overview");
+    const row = overview.body.shops.find((item) => item.store === "潮流店");
+    assert.equal(row.spend, 827.75);
+    assert.equal(row.totalOrderAmount, 3200);
+    const omitted = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        抓取时间: "2026-11-13T09:55:00+08:00",
+        rows: [{ 店铺名称: "潮流店", 京准通主账户ID: "1", 花费: 900, 京麦成交金额: 1800 }],
+      }),
+    });
+    assert.equal(omitted.res.status, 201);
+    const kept = await json(base, "/api/han/worker?view=overview");
+    const again = kept.body.shops.find((item) => item.store === "潮流店");
+    assert.equal(again.spend, 900);
+    assert.equal(again.totalOrderAmount, 3200);
+    const zero = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        抓取时间: "2026-11-13T09:56:00+08:00",
+        rows: [{ 店铺名称: "潮流店", 京准通主账户ID: "1", 花费: 900, 京准通总订单金额: 0 }],
+      }),
+    });
+    assert.equal(zero.res.status, 201);
+    const cleared = await json(base, "/api/han/worker?view=overview");
+    assert.equal(cleared.body.shops.find((item) => item.store === "潮流店").totalOrderAmount, 0);
+  });
+});
+
+test("非全站营销的 ROI 和总订单金额记成京准通付费投产比和总金额", async () => {
+  await withServer(async (base) => {
+    const pushed = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          {
+            店铺名称: "非全站店",
+            京准通主账户ID: "400",
+            花费: 827.75,
+            全站营销ROI: 9.9,
+            全站营销总订单金额: 99999,
+            非全站营销ROI: 1.88,
+            非全站营销总订单金额: 5285.56,
+          },
+          {
+            店铺名称: "嵌套店",
+            京准通主账户ID: "401",
+            花费: 10,
+            全站营销: { ROI: 8, 总订单金额: 800 },
+            非全站营销: { ROI: 2.69, 总订单金额: 1098.05 },
+          },
+          {
+            店铺名称: "总金额店",
+            京准通主账户ID: "402",
+            花费: 3,
+            京准通付费投产比: 1.31,
+            京准通总金额: 532,
+          },
+          {
+            店铺名称: "分线店",
+            京准通主账户ID: "403",
+            花费: 4,
+            产品线: [
+              { 类型: "全站营销", ROI: 7, 总订单金额: 70 },
+              { 类型: "非全站营销", ROI: 0.4, 总订单金额: 139 },
+            ],
+          },
+        ],
+        subaccounts: [
+          {
+            店铺名称: "非全站店",
+            京准通主账户ID: "400",
+            子账号ID: "1",
+            子账号名称: "甲",
+            全站营销总订单金额: 50,
+            非全站营销ROI: 1.2,
+            非全站营销总订单金额: 400,
+          },
+        ],
+      }),
+    });
+    assert.equal(pushed.res.status, 201);
+    const overview = await json(base, "/api/han/worker?view=overview");
+    const flat = overview.body.shops.find((row) => row.store === "非全站店");
+    const nested = overview.body.shops.find((row) => row.store === "嵌套店");
+    const named = overview.body.shops.find((row) => row.store === "总金额店");
+    assert.equal(flat.roi, 1.88);
+    assert.equal(flat.totalOrderAmount, 5285.56);
+    assert.equal(nested.roi, 2.69);
+    assert.equal(nested.totalOrderAmount, 1098.05);
+    assert.equal(named.roi, 1.31);
+    assert.equal(named.totalOrderAmount, 532);
+    const lined = overview.body.shops.find((row) => row.store === "分线店");
+    assert.equal(lined.roi, 0.4);
+    assert.equal(lined.totalOrderAmount, 139);
+    const shop = await json(base, "/api/han/worker?view=shop&store=" + encodeURIComponent("非全站店"));
+    const sub = shop.body.subaccounts.find((row) => row.subAccountName === "甲");
+    assert.equal(sub.roi, 1.2);
+    assert.equal(sub.totalOrderAmount, 400);
+  });
+});
+
 test("子账号账户备注由页面保存，回传花费不会覆盖", async () => {
   await withServer(async (base) => {
     const pushed = await json(base, "/api/han/worker", {
