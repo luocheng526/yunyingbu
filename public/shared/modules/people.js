@@ -1,4 +1,4 @@
-/* xm-module-people org-board 0.1.231-org-nav */
+/* xm-module-people org-board 0.1.232-former-names */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.231-org-nav";
+    const href = "/people.css?v=0.1.232-former-names";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -225,7 +225,7 @@
         '<div class="org-kpis" id="org-kpis"></div>' +
         '<div class="org-toolbar">' +
         '<div class="org-search-form" id="org-search-form">' +
-        '<input type="text" id="org-q" placeholder="店铺ID / 商家ID / 店铺名 / 人员" autocomplete="off" spellcheck="false" />' +
+        '<input type="text" id="org-q" placeholder="店铺ID / 商家ID / 店铺名 / 历史店名 / 人员" autocomplete="off" spellcheck="false" />' +
         '<button type="button" id="org-search">搜索</button>' +
         "</div>" +
         '<span class="spacer" id="org-count"></span>' +
@@ -245,6 +245,7 @@
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="operator"><span class="org-filter-name">运营</span><span class="org-filter-caret">▾</span></button></th>' +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="assistant"><span class="org-filter-name">助理</span><span class="org-filter-caret">▾</span></button></th>' +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="storeName"><span class="org-filter-name">店铺名称</span><span class="org-filter-caret">▾</span></button></th>' +
+        "<th>历史店名</th>" +
         "<th>店铺ID</th>" +
         "<th>商家id</th>" +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="remark"><span class="org-filter-name">店铺情况备注</span><span class="org-filter-caret">▾</span></button></th>' +
@@ -339,6 +340,7 @@
         '<label>运营<input name="operator" /></label>' +
         '<label>助理<input name="assistant" /></label>' +
         '<label>店铺名称<input name="storeName" required /></label>' +
+        '<label>历史店名<input name="formerNames" placeholder="多个用顿号分开" /></label>' +
         '<label>店铺ID<input name="storeId" /></label>' +
         '<label>商家id<input name="merchantId" /></label>' +
         '<label>店铺情况备注<select name="remark"><option>运营中</option><option>闲置中</option><option>退店中</option><option>已退店</option></select></label>' +
@@ -482,6 +484,7 @@
         { key: "operator", type: "text" },
         { key: "assistant", type: "text" },
         { key: "storeName", type: "text" },
+        { key: "formerNames", type: "text" },
         { key: "storeId", type: "text" },
         { key: "merchantId", type: "text" },
         { key: "remark", type: "select" },
@@ -500,6 +503,7 @@
         "助理",
         "小组ID",
         "店铺名称",
+        "历史店名",
         "店铺ID",
         "商家id",
         "店铺情况备注",
@@ -517,6 +521,7 @@
         "assistant",
         "groupId",
         "storeName",
+        "formerNames",
         "storeId",
         "merchantId",
         "remark",
@@ -595,6 +600,9 @@
           所属人员: "运营",
           店铺名称: "店铺名称",
           店名: "店铺名称",
+          历史店名: "历史店名",
+          曾用名: "历史店名",
+          历史店铺名: "历史店名",
           店铺ID: "店铺ID",
           店铺id: "店铺ID",
           店铺编号: "店铺ID",
@@ -826,6 +834,19 @@
           .join("");
       }
 
+      function formatFormerNames(value) {
+        const names = [];
+        String(value == null ? "" : value)
+          .split(/[、,，;；\n\/|]+/)
+          .forEach(function (item) {
+            const name = String(item || "").trim();
+            if (name && names.indexOf(name) < 0) {
+              names.push(name);
+            }
+          });
+        return names.join("、");
+      }
+
       function displayCell(row, field) {
         const raw = row[field.key];
         if (field.key === "remark") {
@@ -833,6 +854,9 @@
         }
         if (field.key === "storeName") {
           return '<span class="org-link">' + escapeHtml(blankStaffName(raw) || "—") + "</span>";
+        }
+        if (field.key === "formerNames") {
+          return '<span class="org-former">' + escapeHtml(formatFormerNames(raw) || "—") + "</span>";
         }
         return escapeHtml(blankStaffName(raw) || "—");
       }
@@ -955,6 +979,7 @@
         return stores.filter(function (row) {
           const blob = [
             row.storeName,
+            row.formerNames,
             row.storeId,
             row.shopId,
             row.groupId,
@@ -1182,7 +1207,7 @@
           (qLabel ? " · 搜「" + qLabel + "」" : "");
         root.querySelector("#org-add").hidden = !boardMeta.canCreate;
         if (!stores.length) {
-          tbody.innerHTML = '<tr><td colspan="14" class="org-empty">暂无店铺</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="17" class="org-empty">暂无店铺</td></tr>';
           syncCheckAll();
           return;
         }
@@ -1235,6 +1260,7 @@
         form.operator.value = row ? row.operator || row.owner || "" : "";
         form.assistant.value = row ? row.assistant || "" : "";
         form.storeName.value = row ? row.storeName : "";
+        form.formerNames.value = row ? formatFormerNames(row.formerNames) : "";
         form.storeId.value = row && row.storeId ? row.storeId : "";
         form.merchantId.value = row ? row.merchantId : "";
         form.remark.value = row ? row.remark : "运营中";
@@ -1304,7 +1330,20 @@
             throw new Error(result.data.error || "保存失败");
           }
           const echoed = result.data.store || {};
-          if (String(blankStaffName(echoed[field])) !== String(blankStaffName(value)) && field !== "remark") {
+          if (field === "formerNames") {
+            const current = String(echoed.storeName || "").trim();
+            function formerList(raw) {
+              return formatFormerNames(raw)
+                .split("、")
+                .filter(function (name) {
+                  return name && name !== current;
+                })
+                .join("、");
+            }
+            if (formerList(echoed[field]) !== formerList(value)) {
+              throw new Error("保存失败，服务端未写入" + field);
+            }
+          } else if (String(blankStaffName(echoed[field])) !== String(blankStaffName(value)) && field !== "remark") {
             throw new Error("保存失败，服务端未写入" + field);
           }
           return loadBoard();
@@ -1323,7 +1362,12 @@
         if (!id || !field || !row || !row.canEdit) {
           return;
         }
-        const current = field === "remark" ? row[field] || "" : blankStaffName(row[field]);
+        const current =
+          field === "remark"
+            ? row[field] || ""
+            : field === "formerNames"
+              ? formatFormerNames(row[field])
+              : blankStaffName(row[field]);
         pinCellBox(td);
         if (field === "remark") {
           const select = document.createElement("select");
@@ -3084,6 +3128,7 @@
               assistant: "",
               groupId: "示例运营",
               storeName: "示例旗舰店",
+              formerNames: "示例旧店名",
               storeId: "10001",
               merchantId: "11009999",
               remark: "运营中",

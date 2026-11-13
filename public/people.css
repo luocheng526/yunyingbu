@@ -543,6 +543,10 @@ body:has(.people-page) .xm-tabs {
   cursor: text;
 }
 
+.people-page .org-former {
+  color: #64748b;
+}
+
 .org-cell.can-edit,
 .people-cell.can-edit {
   cursor: text;

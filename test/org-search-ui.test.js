@@ -693,7 +693,7 @@ const STORE_CLICK_SMOKE = `<!doctype html>
         function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
         window.XmModules["/people"].mount(document.getElementById("xm-content"));
         await sleep(700);
-        const fields = ["director","manager","supervisor","reserve","operator","assistant","storeName","storeId","merchantId","remark","updatedOn","closedOn","login","password"];
+        const fields = ["director","manager","supervisor","reserve","operator","assistant","storeName","formerNames","storeId","merchantId","remark","updatedOn","closedOn","login","password"];
         const missing = [];
         fields.forEach(function (field) {
           const cell = document.querySelector('#org-tbody tr[data-id] td[data-field="' + field + '"]');
