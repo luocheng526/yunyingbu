@@ -472,7 +472,7 @@
     mount: function (root) {
       const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
       paidCss.rel = "stylesheet";
-      paidCss.href = "/shared/shen-paid.css?v=0.1.764-paid-online";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.764-paid-cols";
       if (!paidCss.parentNode) {
         document.head.appendChild(paidCss);
       }
@@ -1728,6 +1728,22 @@
       ];
       const HEAD_KEY = "shen-home-live-head-hide";
       const FEE_KEY = "shen-home-fee-targets";
+      const COL_LAYOUT_PREFIX = "shen-paid-live-cols:";
+      const DEFAULT_COL_WIDTH = {
+        rank: 72,
+        shop: 248,
+        liveAmount: 140,
+        paidAmount: 140,
+        roi: 120,
+        paidDeal: 156,
+        feeRate: 110,
+        feeWarn: 110,
+        feeGoal: 210,
+        liveAt: 176
+      };
+      let sharedFeeBook = null;
+      let feeMigrated = false;
+      const feeSaveSeq = {};
 
       function freshPayload(payload) {
         if (!payload || payload.demo === true || payload.ok === false) {
@@ -1940,13 +1956,66 @@
         return [];
       }
 
-      function feeBook() {
+      function localFeeBook() {
         try {
           const raw = JSON.parse(localStorage.getItem(FEE_KEY) || "{}");
           return raw && typeof raw === "object" ? raw : {};
         } catch (err) {
           return {};
         }
+      }
+
+      function feeBook() {
+        return sharedFeeBook || localFeeBook();
+      }
+
+      function postFee(shop, bounds) {
+        feeSaveSeq[shop] = (feeSaveSeq[shop] || 0) + 1;
+        const seq = feeSaveSeq[shop];
+        return postJson("/api/shen/paid/fee-targets", {
+          shop: shop,
+          lo: bounds.lo,
+          hi: bounds.hi
+        })
+          .then(function (res) {
+            if (!sharedFeeBook || feeSaveSeq[shop] !== seq) {
+              return;
+            }
+            const name = (res && res.shop) || shop;
+            if (!res || res.target == null) {
+              delete sharedFeeBook[name];
+            } else {
+              sharedFeeBook[name] = { lo: res.target.lo, hi: res.target.hi };
+            }
+          })
+          .catch(function (err) {
+            setStatus((err && err.message) || "费比设置没有同步", true);
+          });
+      }
+
+      function adoptFeeTargets(payload) {
+        if (!payload || payload.ok === false || !payload.targets || typeof payload.targets !== "object") {
+          return;
+        }
+        const incoming = payload.targets;
+        if (!Object.keys(incoming).length && !feeMigrated) {
+          const local = localFeeBook();
+          const shops = Object.keys(local);
+          if (shops.length) {
+            feeMigrated = true;
+            sharedFeeBook = {};
+            shops.forEach(function (shop) {
+              const bounds = normalizeBounds(local[shop]);
+              if (bounds.lo == null && bounds.hi == null) {
+                return;
+              }
+              sharedFeeBook[shop] = bounds;
+              postFee(shop, bounds);
+            });
+            return;
+          }
+        }
+        sharedFeeBook = incoming;
       }
 
       function feeBound(value) {
@@ -1957,8 +2026,7 @@
         return isFinite(n) ? Math.max(0, Math.min(100, n)) : null;
       }
 
-      function feeBounds(shop) {
-        const raw = feeBook()[shop];
+      function normalizeBounds(raw) {
         if (raw == null || raw === "") {
           return { lo: null, hi: null };
         }
@@ -1975,6 +2043,10 @@
           return { lo: hi, hi: lo };
         }
         return { lo: lo, hi: hi };
+      }
+
+      function feeBounds(shop) {
+        return normalizeBounds(feeBook()[shop]);
       }
 
       function feePercent(row) {
@@ -2077,13 +2149,106 @@
         );
       }
 
+      function layoutUser() {
+        const boot = window.__xmBootUser || {};
+        const named = String(boot.username || boot.displayName || "").trim();
+        if (named) {
+          return named;
+        }
+        const el = document.getElementById("xm-username");
+        const shown = el ? String(el.textContent || "").trim() : "";
+        return shown && shown !== "用户" ? shown : "local";
+      }
+
+      function defaultColWidth(key) {
+        return DEFAULT_COL_WIDTH[key] || 120;
+      }
+
+      function readLayout() {
+        const known = {};
+        HOME_COLS.forEach(function (col) {
+          known[col.key] = true;
+        });
+        let saved = null;
+        try {
+          saved = JSON.parse(localStorage.getItem(COL_LAYOUT_PREFIX + layoutUser()) || "null");
+        } catch (err) {
+          saved = null;
+        }
+        const order = [];
+        ((saved && saved.order) || []).forEach(function (key) {
+          if (known[key] && order.indexOf(key) < 0) {
+            order.push(key);
+          }
+        });
+        HOME_COLS.forEach(function (col) {
+          if (order.indexOf(col.key) < 0) {
+            order.push(col.key);
+          }
+        });
+        const widths = {};
+        HOME_COLS.forEach(function (col) {
+          const n = Number(saved && saved.widths ? saved.widths[col.key] : NaN);
+          const min = col.key === "feeGoal" ? 176 : 64;
+          widths[col.key] = isFinite(n) ? Math.max(min, Math.min(640, Math.round(n))) : defaultColWidth(col.key);
+        });
+        return { order: order, widths: widths };
+      }
+
+      function writeLayout(layout) {
+        try {
+          localStorage.setItem(
+            COL_LAYOUT_PREFIX + layoutUser(),
+            JSON.stringify({ order: layout.order, widths: layout.widths })
+          );
+        } catch (err) {}
+      }
+
+      function moveColumn(order, fromKey, toKey, place) {
+        const from = order.indexOf(fromKey);
+        if (from < 0 || !toKey) {
+          return order.slice();
+        }
+        const next = order.slice();
+        next.splice(from, 1);
+        let index = next.indexOf(toKey);
+        if (index < 0) {
+          return order.slice();
+        }
+        if (place === "after") {
+          index += 1;
+        }
+        next.splice(index, 0, fromKey);
+        return next;
+      }
+
       function shownCols() {
         const hide = {};
         hiddenKeys().forEach(function (key) {
           hide[key] = true;
         });
-        return HOME_COLS.filter(function (col) {
-          return col.lock || !hide[col.key];
+        const byKey = {};
+        HOME_COLS.forEach(function (col) {
+          byKey[col.key] = col;
+        });
+        return readLayout().order.filter(function (key) {
+          const col = byKey[key];
+          return col && (col.lock || !hide[key]);
+        }).map(function (key) {
+          return byKey[key];
+        });
+      }
+
+      function applyWidths(layout) {
+        boardEl.querySelectorAll(".xm-hl-table").forEach(function (table) {
+          let sum = 0;
+          table.querySelectorAll("col[data-col]").forEach(function (col) {
+            const key = col.getAttribute("data-col");
+            const n = layout.widths[key] || defaultColWidth(key);
+            sum += n;
+            col.style.width = n + "px";
+          });
+          table.style.width = sum + "px";
         });
       }
 
@@ -2150,11 +2315,11 @@
             escapeHtml(row.store) +
             '" value="' +
             (bounds.lo == null ? "" : bounds.lo) +
-            '" inputmode="decimal" /> % <input data-fee-hi data-shop="' +
+            '" inputmode="decimal" /><span class="xm-hl-fee-unit">%</span><span class="xm-hl-fee-slash" aria-hidden="true">/</span><input data-fee-hi data-shop="' +
             escapeHtml(row.store) +
             '" value="' +
             (bounds.hi == null ? "" : bounds.hi) +
-            '" inputmode="decimal" /> %</span>'
+            '" inputmode="decimal" /><span class="xm-hl-fee-unit">%</span></span>'
           );
         }
         if (col.key === "liveAt") {
@@ -2257,17 +2422,32 @@
           })
         };
         function homeTable(list) {
+          const layout = readLayout();
+          const tableWidth = cols.reduce(function (sum, col) {
+            return sum + (layout.widths[col.key] || defaultColWidth(col.key));
+          }, 0);
           return (
-            '<div class="xm-hl-table-wrap"><table class="xm-hl-table"><colgroup>' +
+            '<div class="xm-hl-table-wrap"><table class="xm-hl-table" style="width:' +
+            tableWidth +
+            'px"><colgroup>' +
             cols
               .map(function (col) {
-                return col.w ? '<col style="width:' + col.w + '" />' : "<col />";
+                const n = layout.widths[col.key] || defaultColWidth(col.key);
+                return '<col data-col="' + col.key + '" style="width:' + n + 'px" />';
               })
               .join("") +
             "</colgroup><thead><tr>" +
             cols
               .map(function (col) {
-                return "<th>" + escapeHtml(col.label) + "</th>";
+                return (
+                  '<th data-col="' +
+                  col.key +
+                  '"><span class="xm-hl-th-label">' +
+                  escapeHtml(col.label) +
+                  '</span><i class="xm-hl-col-grip" data-col-grip="' +
+                  col.key +
+                  '"></i></th>'
+                );
               })
               .join("") +
             "</tr></thead><tbody>" +
@@ -2565,22 +2745,215 @@
         boardEl.querySelectorAll("[data-fee-lo],[data-fee-hi]").forEach(function (input) {
           input.addEventListener("change", function () {
             const shop = input.getAttribute("data-shop") || "";
-            const book = feeBook();
-            const bounds = feeBounds(shop);
+            if (!shop) {
+              return;
+            }
+            const book = Object.assign({}, feeBook());
+            const bounds = normalizeBounds(book[shop]);
             if (input.hasAttribute("data-fee-lo")) {
               bounds.lo = feeBound(input.value);
             } else {
               bounds.hi = feeBound(input.value);
             }
-            book[shop] = bounds;
+            if (bounds.lo != null && bounds.hi != null && bounds.lo > bounds.hi) {
+              const swap = bounds.lo;
+              bounds.lo = bounds.hi;
+              bounds.hi = swap;
+            }
+            if (bounds.lo == null && bounds.hi == null) {
+              delete book[shop];
+            } else {
+              book[shop] = bounds;
+            }
+            sharedFeeBook = book;
             try {
               localStorage.setItem(FEE_KEY, JSON.stringify(book));
-            } catch (err) {
-              return;
-            }
+            } catch (err) {}
+            postFee(shop, bounds);
             renderHomeLive(overviewRows);
           });
         });
+        bindColumnLayout();
+      }
+
+      function captureFeeInputs() {
+        const book = Object.assign({}, feeBook());
+        boardEl.querySelectorAll("[data-fee-lo],[data-fee-hi]").forEach(function (input) {
+          const shop = input.getAttribute("data-shop") || "";
+          if (!shop) {
+            return;
+          }
+          const bounds = normalizeBounds(book[shop]);
+          if (input.hasAttribute("data-fee-lo")) {
+            bounds.lo = feeBound(input.value);
+          } else {
+            bounds.hi = feeBound(input.value);
+          }
+          if (bounds.lo == null && bounds.hi == null) {
+            delete book[shop];
+          } else {
+            book[shop] = bounds;
+          }
+        });
+        sharedFeeBook = book;
+      }
+
+      function bindColumnLayout() {
+        const shell = boardEl.querySelector(".xm-hl");
+        if (!shell) {
+          return;
+        }
+        const wraps = shell.querySelectorAll(".xm-hl-table-wrap");
+        wraps.forEach(function (wrap) {
+          wrap.addEventListener("scroll", function () {
+            if (wrap.__xmSync) {
+              return;
+            }
+            const left = wrap.scrollLeft;
+            wraps.forEach(function (other) {
+              if (other === wrap || other.scrollLeft === left) {
+                return;
+              }
+              other.__xmSync = true;
+              other.scrollLeft = left;
+              other.__xmSync = false;
+            });
+          });
+        });
+        let drag = null;
+        let resize = null;
+        function clearMarks() {
+          shell.querySelectorAll("thead th[data-col]").forEach(function (th) {
+            th.classList.remove("is-drop-before", "is-drop-after", "is-dragging");
+          });
+        }
+        function headerCells() {
+          const table = shell.querySelector(".xm-hl-table");
+          return table ? Array.prototype.slice.call(table.querySelectorAll("thead th[data-col]")) : [];
+        }
+        function dropAt(clientX) {
+          const cells = headerCells();
+          if (!cells.length) {
+            return null;
+          }
+          const first = cells[0].getBoundingClientRect();
+          if (clientX <= first.left) {
+            return { key: cells[0].getAttribute("data-col"), place: "before" };
+          }
+          const last = cells[cells.length - 1].getBoundingClientRect();
+          if (clientX >= last.right) {
+            return { key: cells[cells.length - 1].getAttribute("data-col"), place: "after" };
+          }
+          for (let i = 0; i < cells.length; i += 1) {
+            const rect = cells[i].getBoundingClientRect();
+            if (clientX <= rect.right) {
+              return {
+                key: cells[i].getAttribute("data-col"),
+                place: clientX < rect.left + rect.width / 2 ? "before" : "after"
+              };
+            }
+          }
+          return null;
+        }
+        function markDrop(key, place) {
+          clearMarks();
+          shell.querySelectorAll('thead th[data-col="' + drag.key + '"]').forEach(function (th) {
+            th.classList.add("is-dragging");
+          });
+          if (!place) {
+            return;
+          }
+          shell.querySelectorAll('thead th[data-col="' + place.key + '"]').forEach(function (th) {
+            th.classList.add(place.place === "before" ? "is-drop-before" : "is-drop-after");
+          });
+        }
+        shell.addEventListener("pointerdown", function (event) {
+          const grip = event.target.closest("[data-col-grip]");
+          if (grip) {
+            event.preventDefault();
+            event.stopPropagation();
+            const key = grip.getAttribute("data-col-grip");
+            const layout = readLayout();
+            resize = {
+              key: key,
+              startX: event.clientX,
+              startW: layout.widths[key] || defaultColWidth(key),
+              layout: layout,
+              pointer: event.pointerId
+            };
+            try {
+              grip.setPointerCapture(event.pointerId);
+            } catch (err) {}
+            return;
+          }
+          if (event.target.closest("input, button, a, label")) {
+            return;
+          }
+          const th = event.target.closest("thead th[data-col]");
+          if (!th) {
+            return;
+          }
+          drag = {
+            key: th.getAttribute("data-col"),
+            startX: event.clientX,
+            startY: event.clientY,
+            active: false,
+            place: null,
+            pointer: event.pointerId
+          };
+          try {
+            th.setPointerCapture(event.pointerId);
+          } catch (err) {}
+        });
+        shell.addEventListener("pointermove", function (event) {
+          if (resize && event.pointerId === resize.pointer) {
+            const min = resize.key === "feeGoal" ? 176 : 64;
+            resize.layout.widths[resize.key] = Math.max(
+              min,
+              Math.min(640, Math.round(resize.startW + event.clientX - resize.startX))
+            );
+            applyWidths(resize.layout);
+            return;
+          }
+          if (!drag || event.pointerId !== drag.pointer) {
+            return;
+          }
+          if (!drag.active && Math.abs(event.clientX - drag.startX) + Math.abs(event.clientY - drag.startY) < 4) {
+            return;
+          }
+          drag.active = true;
+          drag.place = dropAt(event.clientX);
+          markDrop(drag.key, drag.place);
+        });
+        function endPointer(event) {
+          if (resize && event.pointerId === resize.pointer) {
+            writeLayout(resize.layout);
+            resize = null;
+            return;
+          }
+          if (!drag || event.pointerId !== drag.pointer) {
+            return;
+          }
+          const active = drag.active;
+          const fromKey = drag.key;
+          const place = drag.place;
+          drag = null;
+          clearMarks();
+          if (!active || !place || place.key === fromKey) {
+            return;
+          }
+          const layout = readLayout();
+          const next = moveColumn(layout.order, fromKey, place.key, place.place);
+          if (next.join("|") === layout.order.join("|")) {
+            return;
+          }
+          layout.order = next;
+          writeLayout(layout);
+          captureFeeInputs();
+          renderHomeLive(overviewRows);
+        }
+        shell.addEventListener("pointerup", endPointer);
+        shell.addEventListener("pointercancel", endPointer);
       }
 
       function renderOverview(data) {
@@ -2998,12 +3371,14 @@
         return Promise.all([
           getJson("/api/people/org/stores?team=" + encodeURIComponent("沈子晗组")),
           getOptional("/api/shen/paid/jingmai"),
-          getOptional("/api/home/local-paid")
+          getOptional("/api/home/local-paid"),
+          getOptional("/api/shen/paid/fee-targets")
         ])
           .then(function (pack) {
             if (dead) {
               return;
             }
+            adoptFeeTargets(pack[3]);
             const data = pack[0];
             (data.stores || []).forEach(function (store) {
               delete store.login;

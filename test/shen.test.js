@@ -24,6 +24,7 @@ function createFakePool() {
   const subs = [];
   let nextSubId = 1;
   const enabled = [];
+  const feeTargets = [];
   return {
     async query(sql, params = []) {
       if (
@@ -44,7 +45,17 @@ function createFakePool() {
         sql === SQL.addPaidSubCapturedAtColumn ||
         sql === SQL.dropPaidSubUnique ||
         sql === SQL.addPaidSubUniqueWithCaptured ||
-        sql === SQL.createEnabledStoreTable
+        sql === SQL.createEnabledStoreTable ||
+        sql === SQL.createFeeTargetTable ||
+        sql === SQL.addPaidRechargeConfigVersion ||
+        sql === SQL.addPaidRechargeRuleCode ||
+        sql === SQL.addPaidRechargePlannedRoi ||
+        sql === SQL.addPaidRechargeExecSpend ||
+        sql === SQL.addPaidRechargeExecRoi ||
+        sql === SQL.addPaidRechargeExecOrders ||
+        sql === SQL.addPaidRechargeResult ||
+        sql === SQL.addPaidRechargeExecutionId ||
+        sql === SQL.addPaidRechargeExecutionUnique
       ) {
         return [{}];
       }
@@ -307,6 +318,27 @@ function createFakePool() {
         }
         return [[totals]];
       }
+      if (sql === SQL.listFeeTargets) {
+        return [feeTargets.map((row) => ({ ...row }))];
+      }
+      if (sql === SQL.upsertFeeTarget) {
+        const [store, lo, hi] = params;
+        const row = { store, lo_pct: lo, hi_pct: hi };
+        const idx = feeTargets.findIndex((item) => item.store === store);
+        if (idx >= 0) {
+          feeTargets[idx] = row;
+        } else {
+          feeTargets.push(row);
+        }
+        return [{ affectedRows: 1 }];
+      }
+      if (sql === SQL.deleteFeeTarget) {
+        const idx = feeTargets.findIndex((item) => item.store === params[0]);
+        if (idx >= 0) {
+          feeTargets.splice(idx, 1);
+        }
+        return [{ affectedRows: 1 }];
+      }
       throw new Error(`unexpected sql: ${sql}`);
     }
   };
@@ -418,6 +450,10 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /实时付费金额/);
     assert.match(embed.text, /费比监控/);
     assert.match(embed.text, /费比设置/);
+    assert.match(embed.text, /xm-hl-fee-slash/);
+    assert.match(embed.text, /data-col-grip/);
+    assert.match(embed.text, /shen-paid-live-cols:/);
+    assert.match(embed.text, /\/api\/shen\/paid\/fee-targets/);
     assert.match(embed.text, /未设目标/);
     assert.match(embed.text, /实时付费接入店铺数量/);
     assert.match(embed.text, /shen-paid-live-snapshot/);
@@ -446,6 +482,9 @@ test("shen module mounts product and paid content only", async () => {
     assert.equal(css.res.status, 200);
     assert.match(css.text, /xm-hm-live-charts/);
     assert.match(css.text, /xm-sp-live-tabs/);
+    assert.match(css.text, /xm-hl-col-grip/);
+    assert.match(css.text, /#paid-board \.xm-hl-table th,\s*#paid-board \.xm-hl-table td \{[^}]*text-align: center;/);
+    assert.match(css.text, /\.xm-hl-fee \{[^}]*inline-flex/);
     assert.equal(embed.text.includes("/api/han/"), false);
     assert.equal(embed.text.includes("陈琦组"), false);
     assert.equal(embed.text.includes("韩梦凯组"), false);
@@ -1218,6 +1257,48 @@ test("paid latest overview hides renamed RASW store and stale asOf rows", async 
     assert.equal(named.json.rows[0].date, "2026-09-15");
     assert.equal(named.json.rows[0].spend, 3354.39);
     assert.equal(named.json.rows[0].accountId, "99922484897");
+  });
+});
+
+test("paid fee targets are shared across readers", async () => {
+  await withServer(async (base) => {
+    const empty = await request(base, "/api/shen/paid/fee-targets");
+    assert.equal(empty.res.status, 200);
+    assert.deepEqual(empty.json.targets, {});
+
+    const saved = await request(base, "/api/shen/paid/fee-targets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shop: "RASW潮流生活旗舰店", lo: 40, hi: 10 })
+    });
+    assert.equal(saved.res.status, 200);
+    assert.deepEqual(saved.json.target, { lo: 10, hi: 40 });
+
+    await request(base, "/api/shen/paid/fee-targets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shop: "RASW家居旗舰店", lo: 20, hi: 55 })
+    });
+    const listed = await request(base, "/api/shen/paid/fee-targets");
+    assert.deepEqual(listed.json.targets["RASW潮流生活旗舰店"], { lo: 10, hi: 40 });
+    assert.deepEqual(listed.json.targets["RASW家居旗舰店"], { lo: 20, hi: 55 });
+
+    const cleared = await request(base, "/api/shen/paid/fee-targets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shop: "RASW家居旗舰店", lo: null, hi: null })
+    });
+    assert.equal(cleared.json.target, null);
+    const after = await request(base, "/api/shen/paid/fee-targets");
+    assert.equal(after.json.targets["RASW家居旗舰店"], undefined);
+    assert.deepEqual(after.json.targets["RASW潮流生活旗舰店"], { lo: 10, hi: 40 });
+
+    const bad = await request(base, "/api/shen/paid/fee-targets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shop: "RASW潮流生活旗舰店", lo: 120, hi: 10 })
+    });
+    assert.equal(bad.res.status, 400);
   });
 });
 

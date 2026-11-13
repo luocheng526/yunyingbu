@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.764-jingcang-city — 京仓按有货的仓来看 */
+/* xm-fast-shell 0.1.764-paid-cols — 付费中心列顺序和费比设置 */
 (function () {
-  const ASSET_VER = "0.1.764-jingcang-city";
+  const ASSET_VER = "0.1.764-paid-cols";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",

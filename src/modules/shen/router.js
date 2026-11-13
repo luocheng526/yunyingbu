@@ -20,6 +20,8 @@ import {
   getPaidSummary,
   getStoreSummary,
   ingestPaid,
+  listFeeTargets,
+  saveFeeTarget,
   ingestRecharge,
   listPaid,
   listRecharge,
@@ -27,6 +29,18 @@ import {
   listTasks,
   setBrief
 } from "./store.js";
+import {
+  ackWorkerConfig,
+  listEditorConfig,
+  listRuleHistory,
+  pullWorkerConfig,
+  replaceStoreOwners,
+  reportWorkerStatus,
+  resolveActor,
+  saveEditorConfig,
+  saveMasterShop,
+  saveMasterSub
+} from "./recharge-config.js";
 
 export const shenRouter = Router();
 
@@ -148,11 +162,109 @@ shenRouter.get("/paid/summary", async (req, res) => {
   }
 });
 
+shenRouter.get("/paid/recharge-config/editor", async (req, res) => {
+  try {
+    res.json(await listEditorConfig(req.query, resolveActor(req)));
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "无法加载充值规则" });
+  }
+});
+
+shenRouter.put("/paid/recharge-config", async (req, res) => {
+  try {
+    res.json(await saveEditorConfig(req.body, resolveActor(req)));
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.message || "无法保存充值规则" });
+  }
+});
+
+shenRouter.get("/paid/recharge-config/history", async (req, res) => {
+  try {
+    res.json(await listRuleHistory(req.query, resolveActor(req)));
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "无法加载修改历史" });
+  }
+});
+
+shenRouter.post("/paid/recharge-config/owners", async (req, res) => {
+  try {
+    const actor = resolveActor(req);
+    if (actor.username && req.body?.username && req.body.username !== actor.username && !String(actor.role || "").includes("超级管理员")) {
+      res.status(403).json({ error: "只能维护自己的店铺归属" });
+      return;
+    }
+    res.status(201).json(await replaceStoreOwners(req.body?.username || actor.username, req.body?.stores || req.body?.店铺 || []));
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.message || "无法保存店铺归属" });
+  }
+});
+
+shenRouter.get("/paid/recharge-config", async (req, res) => {
+  try {
+    const payload = await pullWorkerConfig(req.query, resolveActor(req));
+    if (payload.changed === false && String(req.query.http304 || "") === "1") {
+      res.status(304).end();
+      return;
+    }
+    res.json(payload);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "无法读取充值规则" });
+  }
+});
+
+shenRouter.post("/paid/recharge-config/ack", async (req, res) => {
+  try {
+    res.json(await ackWorkerConfig(req.body, resolveActor(req)));
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.message || "无法确认同步" });
+  }
+});
+
+shenRouter.post("/paid/shops", async (req, res) => {
+  try {
+    res.json(await saveMasterShop(req.body, resolveActor(req)));
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.message || "无法维护店铺" });
+  }
+});
+
+shenRouter.post("/paid/subs", async (req, res) => {
+  try {
+    res.json(await saveMasterSub(req.body, resolveActor(req)));
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.message || "无法维护子账号" });
+  }
+});
+
+shenRouter.post("/paid/worker-status", async (req, res) => {
+  try {
+    res.json(await reportWorkerStatus(req.body, resolveActor(req)));
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.message || "无法更新工作机状态" });
+  }
+});
+
 shenRouter.get("/jingcang", async (req, res) => {
   try {
     res.json(await watchJingcang(req.query.store));
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message || "无法抓取京仓" });
+  }
+});
+
+shenRouter.get("/paid/fee-targets", async (_req, res) => {
+  try {
+    res.json(await listFeeTargets());
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "无法加载费比设置" });
+  }
+});
+
+shenRouter.post("/paid/fee-targets", async (req, res) => {
+  try {
+    res.json(await saveFeeTarget(req.body || {}));
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.message || "无法保存费比设置" });
   }
 });
 
