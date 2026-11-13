@@ -996,7 +996,7 @@ test("fee target is a range and 费比监控 uses 超标 / 加大付费", () => 
   assert.match(homeJs, /\.xm-hm-live-search input\{width:200px\}/);
   assert.match(homeJs, /liveChipHtml\("link", "off", "掉线"/);
   assert.match(homeJs, /liveChipHtml\("paid", "no", "未接入店铺"/);
-  assert.match(homeJs, /回传失败/);
+  assert.doesNotMatch(homeJs, /回传失败/);
   const searchFn = homeJs.slice(homeJs.indexOf("function liveSearchHtml"), homeJs.indexOf("function pickLiveCards"));
   assert.ok(searchFn.indexOf("xm-hm-live-chips") < searchFn.indexOf('data-live-filter="q"'));
   assert.ok(searchFn.indexOf("未接入店铺") < searchFn.indexOf('data-live-filter="q"'));
@@ -1121,9 +1121,9 @@ test("live header settings add 付费中心 columns without wiring data", () => 
   assert.match(homeJs, /京准通点击率/);
   assert.match(homeJs, /京准通总订单金额/);
   assert.match(homeJs, /真实费比/);
-  assert.match(homeJs, /是否回传成功/);
-  assert.match(homeJs, /ok = "回传成功"/);
-  assert.match(homeJs, /ok = "回传失败"/);
+  assert.doesNotMatch(homeJs, /是否回传成功/);
+  assert.match(homeJs, /function parseLiveAt/);
+  assert.match(homeJs, /Date\.now\(\) - t <= 6e5/);
   assert.match(homeJs, /label: "状态"/);
   assert.match(homeJs, /function liveLinkOf/);
   assert.match(homeJs, /在线/);
@@ -1176,7 +1176,7 @@ test("live header settings add 付费中心 columns without wiring data", () => 
   assert.equal(labels.includes("更新时间"), true);
   assert.equal(labels.includes("京准通主账户ID"), false);
   assert.equal(labels.includes("真实费比"), false);
-  assert.equal(labels.includes("是否回传成功"), true);
+  assert.equal(labels.includes("是否回传成功"), false);
   assert.equal(labels.includes("回传成功"), false);
   assert.equal(labels.includes("状态"), true);
   assert.equal(labels.includes("是否成功"), false);
@@ -1200,8 +1200,8 @@ test("live header settings add 付费中心 columns without wiring data", () => 
   assert.match(html, /data-live-head="feeWarn"/);
   assert.match(html, /data-live-head="feeGoal"/);
   assert.match(html, /data-live-head="liveAt"/);
-  assert.match(html, /data-live-head="jzOk"/);
+  assert.doesNotMatch(html, /data-live-head="jzOk"/);
   assert.match(html, /data-live-head="liveOn"/);
-  assert.match(html, /回传成功/);
+  assert.doesNotMatch(html, /回传成功/);
   assert.match(html, /实时成交金额/);
 });

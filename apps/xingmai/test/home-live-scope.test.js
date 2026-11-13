@@ -190,15 +190,16 @@ test("charts cards and shop rows use the same filtered live board", () => {
   assert.equal(shop.live.cards.find((card) => card.key === "livePay").value, "80");
 });
 
-test("live table can search shops, filter 掉线/回传失败, and hide idle org shops", () => {
+test("live table can search shops, filter 掉线, and hide idle org shops", () => {
   assert.match(homeJs, /liveSearchHtml\(\) \+\s*'<div class="xm-hm-panel">/);
   assert.match(homeJs, /liveChipHtml\("link", "off", "掉线"/);
-  assert.match(homeJs, /liveChipHtml\("jzOk", "否", "回传失败"/);
+  assert.doesNotMatch(homeJs, /liveChipHtml\("jzOk"/);
   assert.match(homeJs, /liveChipHtml\("paid", "no", "未接入店铺"/);
   const store = {};
   const fns = new Function(
     "localStorage",
     pick("normShopName") +
+      pick("parseLiveAt") +
       pick("liveLinkOf") +
       pick("liveFilter") +
       pick("shopsInDutyTeam") +
@@ -215,18 +216,15 @@ test("live table can search shops, filter 掉线/回传失败, and hide idle org
       store[key] = String(value);
     }
   });
+  const now = new Date().toISOString();
+  const old = new Date(Date.now() - 11 * 60 * 1000).toISOString();
   const rows = [
-    { shop: "在线店", jzOk: "是", online: true, paidIn: true },
-    { shop: "掉线店", jzOk: "否", online: false, paidIn: true },
-    { shop: "闲置店", jzOk: "是", online: true, paidIn: true },
-    { shop: "未接入店", jzOk: "—", online: true }
+    { shop: "在线店", capturedAt: now, paidIn: true },
+    { shop: "掉线店", capturedAt: old, paidIn: true },
+    { shop: "闲置店", capturedAt: now, paidIn: true },
+    { shop: "未接入店", capturedAt: now }
   ];
   store["xm-home-live-filter"] = JSON.stringify({ link: "off" });
-  assert.deepEqual(
-    fns.filterLiveShops(rows, {}).map((row) => row.shop),
-    ["掉线店"]
-  );
-  store["xm-home-live-filter"] = JSON.stringify({ jzOk: "否" });
   assert.deepEqual(
     fns.filterLiveShops(rows, {}).map((row) => row.shop),
     ["掉线店"]
