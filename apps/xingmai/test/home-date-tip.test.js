@@ -1094,6 +1094,30 @@ test("fee target is a range and 费比监控 uses 超标 / 加大付费", () => 
   assert.equal(fns.feeGoalCellHtml({ feeLo: 10, feeHi: 20 }), "10%–20%");
   assert.equal(fns.feeGoalCellHtml({}), "—");
   assert.doesNotMatch(fns.feeGoalCellHtml({ feeLo: 10, feeHi: 20 }), /<input/);
+  assert.match(homeJs, /function scrapedFeeRange/);
+  assert.match(homeJs, /shen-home-fee-targets/);
+  const feeStore = {};
+  globalThis.localStorage = {
+    getItem(key) {
+      return Object.prototype.hasOwnProperty.call(feeStore, key) ? feeStore[key] : null;
+    },
+    setItem(key, value) {
+      feeStore[key] = String(value);
+    }
+  };
+  feeStore["shen-home-fee-targets"] = JSON.stringify({
+    RADW潮流生活旗舰店: { lo: 35, hi: 42 },
+    RASW家居旗舰店: { min: 35, max: 41 }
+  });
+  assert.equal(fns.feeGoalCellHtml({ shop: "RADW潮流生活旗舰店" }), "35%–42%");
+  assert.equal(fns.feeGoalCellHtml({ shop: "RASW家居旗舰店" }), "35%–41%");
+  assert.equal(fns.feeWarnLabel({ shop: "RADW潮流生活旗舰店", feeRate: "26.55%" }), "加大付费");
+  assert.equal(fns.feeWarnLabel({ shop: "RADW潮流生活旗舰店", feeRate: "36%" }), "正常");
+  assert.equal(fns.feeWarnLabel({ shop: "RADW潮流生活旗舰店", feeRate: "43%" }), "费比超标");
+  feeStore["shen-home-fee-targets"] = JSON.stringify({ 旧数字店: 15 });
+  assert.equal(fns.feeGoalCellHtml({ shop: "旧数字店" }), "15%–15%");
+  assert.equal(fns.feeGoalCellHtml({ shop: "没设目标的店" }), "—");
+  delete globalThis.localStorage;
   assert.equal(fns.isHomeFormField({ closest: (sel) => (sel.indexOf("input") >= 0 ? {} : null) }), true);
   assert.equal(fns.isFeeTyping({ closest: (sel) => (sel.indexOf("input") >= 0 ? {} : null) }), true);
   assert.equal(fns.isFeeTyping({ closest: (sel) => (sel.indexOf("button") >= 0 ? {} : null) }), false);
