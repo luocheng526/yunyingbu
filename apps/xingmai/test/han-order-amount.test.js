@@ -113,3 +113,110 @@ test("object-shaped amount unwraps value", () => {
   });
   assert.equal(Number(String(raw).replace(/[¥￥,\s%元]/g, "")), 1234.5);
 });
+
+test("nested 非全站营销 投产比 plus 总订单金额 with yen", () => {
+  assert.equal(
+    Number(
+      String(
+        readJingzhuntongOrderAmount({
+          店铺名称: "本机店",
+          非全站营销: { 投产比: 2.38, 总订单金额: "¥9,090.00" },
+        }),
+      ).replace(/[¥￥,\s%元]/g, ""),
+    ),
+    9090,
+  );
+});
+
+test("非全站营销 blob text keeps 总订单金额", () => {
+  assert.equal(
+    Number(
+      String(
+        readJingzhuntongOrderAmount({
+          店铺名称: "整段店",
+          非全站营销: "投产比 2.38 总订单金额 ¥9,090.00",
+        }),
+      ).replace(/[¥￥,\s%元]/g, ""),
+    ),
+    9090,
+  );
+});
+
+test("非全站营销 html blob keeps 总订单金额", () => {
+  assert.equal(
+    Number(
+      String(
+        readJingzhuntongOrderAmount({
+          店铺名称: "网页店",
+          非全站营销: "<div>投产比</div>2.38<div>总订单金额</div>¥9,090.00",
+        }),
+      ).replace(/[¥￥,\s%元]/g, ""),
+    ),
+    9090,
+  );
+});
+
+test("非全站营销 metric pairs keep 总订单金额", () => {
+  assert.equal(
+    Number(
+      String(
+        readJingzhuntongOrderAmount({
+          店铺名称: "指标店",
+          非全站营销: [
+            { 名称: "投产比", 值: 2.38 },
+            { 名称: "总订单金额", 值: "¥9,090.00" },
+          ],
+        }),
+      ).replace(/[¥￥,\s%元]/g, ""),
+    ),
+    9090,
+  );
+});
+
+test("product-line English name keeps 非全站 总订单金额", () => {
+  assert.equal(
+    Number(
+      String(
+        readJingzhuntongOrderAmount({
+          店铺名称: "英文店",
+          产品线: [
+            { name: "全站营销", 投产比: 8, 总订单金额: "¥100.00" },
+            { name: "非全站营销", 投产比: 2.38, 总订单金额: "¥9,090.00" },
+          ],
+        }),
+      ).replace(/[¥￥,\s%元]/g, ""),
+    ),
+    9090,
+  );
+});
+
+test("display text object under 总订单金额 unwraps", () => {
+  assert.equal(
+    Number(
+      String(
+        readJingzhuntongOrderAmount({
+          店铺名称: "展示店",
+          非全站营销: { 投产比: 2.38, 总订单金额: { text: "¥9,090.00", display: "¥9,090.00" } },
+        }),
+      ).replace(/[¥￥,\s%元]/g, ""),
+    ),
+    9090,
+  );
+});
+
+test("flattened roi 0 amount still reads nested 非全站营销 总订单金额", () => {
+  assert.equal(
+    Number(
+      String(
+        readJingzhuntongOrderAmount({
+          店铺名称: "扁平店",
+          roi: 2.38,
+          totalOrderAmount: 0,
+          spend: 3819,
+          非全站营销: { 投产比: 2.38, 总订单金额: "¥9,090.00" },
+        }),
+      ).replace(/[¥￥,\s%元]/g, ""),
+    ),
+    9090,
+  );
+});
