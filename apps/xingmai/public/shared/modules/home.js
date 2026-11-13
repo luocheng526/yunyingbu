@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.914-livesort */
+/* xm-module-home 0.1.917-feewave */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1575,7 +1575,6 @@
     var yest = (chart && chart.yesterday) || [];
     var today = (chart && chart.today) || [];
     var slots = Number(chart && chart.hours) > 2 ? Number(chart.hours) : Math.max(yest.length, today.length, 2);
-    var drawDots = !(chart && chart.noDots);
     var max = 1;
     yest.concat(today).forEach(function (n) {
       var v = Number(n) || 0;
@@ -1583,8 +1582,10 @@
         max = v;
       }
     });
+    var lo = chart && chart.band ? 0.25 : 0;
+    var hi = chart && chart.band ? 0.65 : max;
     function yAt(n) {
-      return height - padBot - ((Number(n) || 0) / max) * (height - padTop - padBot);
+      return height - padBot - (((Number(n) || 0) - lo) / (hi - lo || 1)) * (height - padTop - padBot);
     }
     function pts(list) {
       return list
@@ -1592,13 +1593,6 @@
           return hourX(i, slots).toFixed(1) + "," + yAt(n).toFixed(1);
         })
         .join(" ");
-    }
-    function dots(list, color) {
-      return list
-        .map(function (n, i) {
-          return '<circle cx="' + hourX(i, slots).toFixed(1) + '" cy="' + yAt(n).toFixed(1) + '" r="2.4" fill="' + color + '"></circle>';
-        })
-        .join("");
     }
     function axis() {
       if (slots !== 24 && slots !== 48) {
@@ -1626,10 +1620,8 @@
       " " +
       height +
       '" preserveAspectRatio="none">' +
-      (yestPts ? '<polyline fill="none" stroke="#91caff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" points="' + yestPts + '"></polyline>' : "") +
-      (todayPts ? '<polyline fill="none" stroke="#ffa39e" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" points="' + todayPts + '"></polyline>' : "") +
-      (drawDots && yest.length ? dots(yest, "#91caff") : "") +
-      (drawDots && today.length ? dots(today, "#ffa39e") : "") +
+      (yestPts ? '<polyline fill="none" stroke="#91caff" stroke-width="2.2" points="' + yestPts + '"></polyline>' : "") +
+      (todayPts ? '<polyline fill="none" stroke="#ffa39e" stroke-width="2.2" points="' + todayPts + '"></polyline>' : "") +
       (slots === 24 || slots === 48
         ? '<line class="xm-hm-line-guide" x1="0" y1="' +
           padTop +
@@ -1654,7 +1646,8 @@
       today: flat ? todayHour : cumHours(todayHour),
       hours: 24,
       noDots: true,
-      height: 128
+      height: 128,
+      band: flat ? 1 : 0
     };
   }
   function halfSalesChart(chart) {
@@ -2411,7 +2404,7 @@
     hideCardTip();
     hideLineTip(root);
     var searchDraft = liveSearchDraft(root);
-    board.setAttribute("data-hm-js", "0.1.914-livesort");
+    board.setAttribute("data-hm-js", "0.1.917-feewave");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -3470,6 +3463,27 @@
     );
     return { live: live, shops: live.shops || [] };
   }
+  function mixFeeHours(shops, hourKey) {
+    var out = [], i, hit = 0, last = 0;
+    for (i = 0; i < 24; i += 1) {
+      var num = 0, den = 0, k = (i < 10 ? "0" : "") + i + ":00";
+      (shops || []).forEach(function (s) {
+        var h = s && s[hourKey];
+        var g = asNum(h && (Array.isArray(h) ? h[i] : h[k] != null ? h[k] : h[i]));
+        var f = asNum(String((s && s.feeRate) || "").replace("%", ""));
+        if (g && f != null) {
+          num += (f > 1 ? f / 100 : f) * g;
+          den += g;
+        }
+      });
+      if (den) {
+        last = num / den;
+        hit = 1;
+      }
+      out[i] = last;
+    }
+    return hit ? out : [];
+  }
   function liveFromErp(todayPack, yestPack, snapPack) {
     var live = blankLive();
     var todayPay = payOfPack(todayPack && todayPack.records && todayPack.records.length ? todayPack : snapPack);
@@ -3513,7 +3527,9 @@
           profit: fmtMoney(row.profit),
           roi: "—",
           paidDeal: "—",
-          feeRate: "—"
+          feeRate: "—",
+          payHours: row.todayHourlyData,
+          yestPayHours: row.yesterdayHourlyData
         };
       });
     live.summary = { channels: 1, shops: live.shops.length };
@@ -3705,8 +3721,6 @@
     if (yestSum.feeRate == null && yestSum.spend != null && sY) yestSum.feeRate = yestSum.spend / sY;
     if (!(hourly.todaySpend && hourly.todaySpend.length > 2)) hourly.todaySpend = payFit(payT, sum.spend);
     if (!(hourly.yesterdaySpend && hourly.yesterdaySpend.length > 2)) hourly.yesterdaySpend = payFit(payY, yestSum.spend);
-    if (!(hourly.todayFee && hourly.todayFee.length > 2) && payT.length > 2 && sum.feeRate != null) hourly.todayFee = payT.map(function () { return sum.feeRate; });
-    if (!(hourly.yesterdayFee && hourly.yesterdayFee.length > 2) && payY.length > 2 && yestSum.feeRate != null) hourly.yesterdayFee = payY.map(function () { return yestSum.feeRate; });
     if (rows.length) {
       var map = {};
       rows.forEach(function (row) {
@@ -3736,6 +3750,10 @@
       });
       live.cards = liveCardsOf(sum);
     }
+    var mixT = mixFeeHours(live.shops, "payHours");
+    var mixY = mixFeeHours(live.shops, "yestPayHours");
+    if (mixT.length > 2) hourly.todayFee = mixT;
+    if (mixY.length > 2) hourly.yesterdayFee = mixY;
     var kept = keepLiveDay({
       spend: sum.spend,
       fee: sum.feeRate,

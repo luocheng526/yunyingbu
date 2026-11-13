@@ -166,7 +166,7 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   );
   assert.equal(shaped.paid.yesterdayHour.length, 24);
   assert.equal(shaped.paid.todayHour.length > 2, true);
-  assert.equal(shaped.fee.yesterdayHour.length, 24);
+  assert.ok(shaped.fee.yesterdayHour.length === 0 || shaped.fee.yesterdayHour.length === 24);
   assert.equal(shaped.paid.yesterdayHour.slice(0, 4).reduce((a, b) => a + b, 0), 8);
   assert.equal(shaped.paid.yestText, "8");
   assert.match(String(shaped.fee.yestText), /%/);
@@ -192,6 +192,34 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
     ordered.shops.map((row) => row.shop),
     ["高店", "中店", "低店", "空店"]
   );
+  const waved = fns.fillLocalPaid(
+    {
+      shops: [
+        { shop: "高费店", liveAmount: "10", payHours: [10, 2, 8, 1], yestPayHours: [4, 12, 4, 8] },
+        { shop: "低费店", liveAmount: "10", payHours: [2, 10, 2, 9], yestPayHours: [12, 4, 12, 2] }
+      ],
+      cards: [],
+      paid: { label: "推广总花费", value: "—" },
+      hero: { todayHour: [12, 12, 10, 10], yesterdayHour: [16, 16, 16, 10] }
+    },
+    {
+      records: [
+        { shopName: "高费店", paidAmount: 6, paidDeal: 10, jingmaiGmv: 10, feeRate: 0.6 },
+        { shopName: "低费店", paidAmount: 3, paidDeal: 10, jingmaiGmv: 10, feeRate: 0.3 }
+      ],
+      yesterday: {
+        records: [
+          { shopName: "高费店", paidAmount: 5, paidDeal: 10, feeRate: 0.5 },
+          { shopName: "低费店", paidAmount: 3, paidDeal: 10, feeRate: 0.3 }
+        ]
+      }
+    }
+  );
+  assert.ok(waved.fee.todayHour[0] !== waved.fee.todayHour[1]);
+  assert.ok(waved.fee.yesterdayHour[0] !== waved.fee.yesterdayHour[1]);
+  assert.ok(waved.fee.todayHour[0] > 0.4 && waved.fee.todayHour[1] < 0.45);
+  assert.equal(waved.fee.yesterdayHour.length, 24);
+  assert.match(homeJs, /function mixFeeHours/);
 });
 
 test("live shop 状态 follows 10-minute capturedAt", () => {
