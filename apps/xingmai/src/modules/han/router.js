@@ -1,0 +1,436 @@
+import express, { Router } from "express";
+import { attachHanFeeTargets } from "./fee-targets.js";
+import { createHanStore, matchOrgStoresForTeam, mergeTeamShops, buildProductCsv, HAN_PRODUCT_TEAMS } from "./store.js";
+
+async function loadOrgStores(req) {
+  const host = req.get("host");
+  if (!host) {
+    return [];
+  }
+  const proto = req.protocol === "https" ? "https" : "http";
+  const url = `${proto}://${host}/api/people/org/stores`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+        cookie: req.headers.cookie || "",
+      },
+    });
+    if (!res.ok) {
+      return [];
+    }
+    const data = await res.json();
+    return data && data.ok ? data.stores || [] : [];
+  } catch {
+    return [];
+  }
+}
+
+export function createHanRouter(store = createHanStore()) {
+  const hanRouter = Router();
+  attachHanFeeTargets(hanRouter);
+
+  // 智能体只读汇总：按店 + 时间范围。不要直接查 han_* 内部表。
+  hanRouter.get("/summary", async (req, res) => {
+    try {
+      const summary = await store.listSummary({
+        store: req.query.store,
+        from: req.query.from,
+        to: req.query.to,
+      });
+      res.json({ ok: true, ...summary });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.get("/tasks", async (_req, res) => {
+    try {
+      res.json({ ok: true, tasks: await store.listTasks() });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.post("/tasks", async (req, res) => {
+    try {
+      const task = await store.createTask(req.body || {});
+      res.status(201).json({ ok: true, task });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.get("/brief", async (_req, res) => {
+    try {
+      res.json({ ok: true, ...(await store.getBrief()) });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.put("/brief", async (req, res) => {
+    try {
+      const body = req.body || {};
+      res.json({ ok: true, ...(await store.setBrief({ text: body.text })) });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.get("/selection", async (_req, res) => {
+    try {
+      res.json({ ok: true, items: await store.listSelection() });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.post("/selection", async (req, res) => {
+    try {
+      const item = await store.createSelection(req.body || {});
+      res.status(201).json({ ok: true, item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.get("/picks", async (req, res) => {
+    try {
+      res.json({ ok: true, items: await store.listPicks({ board: req.query.board }) });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.post("/picks", async (req, res) => {
+    try {
+      const item = await store.createPick(req.body || {});
+      res.status(201).json({ ok: true, item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.get("/products", async (req, res) => {
+    try {
+      res.json({
+        ok: true,
+        items: await store.listProducts({ team: req.query.team, store: req.query.store }),
+      });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.get("/shops", async (req, res) => {
+    try {
+      const team = req.query.team;
+      const orgStores = await loadOrgStores(req);
+      const localAll = await store.listShops({});
+      if (!team) {
+        const seen = new Set();
+        const items = [];
+        HAN_PRODUCT_TEAMS.forEach((name) => {
+          mergeTeamShops(
+            matchOrgStoresForTeam(orgStores, name),
+            localAll.filter((row) => row.team === name),
+          ).forEach((row) => {
+            if (seen.has(row.store)) return;
+            seen.add(row.store);
+            items.push(row);
+          });
+        });
+        res.json({ ok: true, items });
+        return;
+      }
+      const local = localAll.filter((row) => row.team === team);
+      const org = matchOrgStoresForTeam(orgStores, team);
+      res.json({ ok: true, items: mergeTeamShops(org, local) });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.post("/shops", async (req, res) => {
+    try {
+      const item = await store.createShop(req.body || {});
+      res.status(201).json({ ok: true, item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.post("/products", async (req, res) => {
+    try {
+      const item = await store.createProduct(req.body || {});
+      res.status(201).json({ ok: true, item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.get("/products.csv", async (req, res) => {
+    try {
+      const items = await store.listProducts({ team: req.query.team, store: req.query.store });
+      const csv = "\uFEFF" + buildProductCsv(items);
+      const name = encodeURIComponent((req.query.store || req.query.team || "商品") + "-分层表.csv");
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", 'attachment; filename="' + name + '"; filename*=UTF-8\'\'' + name);
+      res.send(csv);
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.patch("/products/:id", async (req, res) => {
+    try {
+      const item = await store.updateProduct(req.params.id, req.body || {});
+      res.json({ ok: true, item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.get("/shop-rules", async (req, res) => {
+    try {
+      const item = await store.getShopRules({ team: req.query.team, store: req.query.store });
+      res.json({ ok: true, ...item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.put("/shop-rules", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const item = await store.saveShopRules({
+        team: body.team,
+        store: body.store,
+        rules: body.rules,
+      });
+      res.json({ ok: true, ...item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.get("/shop-plans", async (req, res) => {
+    try {
+      const item = await store.getShopPlans({ team: req.query.team, store: req.query.store });
+      res.json({ ok: true, ...item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.put("/shop-plans", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const item = await store.saveShopPlans({
+        team: body.team,
+        store: body.store,
+        monthItems: body.monthItems,
+        weekItems: body.weekItems,
+        monthPlan: body.monthPlan,
+        weekPlan: body.weekPlan,
+      });
+      res.json({ ok: true, ...item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.delete("/shop-rules", async (req, res) => {
+    try {
+      const item = await store.resetShopRules({ team: req.query.team, store: req.query.store });
+      res.json({ ok: true, ...item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.post("/products/classify", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const result = await store.classifyProducts({
+        team: body.team,
+        store: body.store,
+        unified: body.unified === true || body.unified === 1 || body.unified === "1" || body.unified === "true",
+      });
+      res.json({ ok: true, ...result });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.post("/products/import", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const result = await store.importProducts({
+        team: body.team,
+        store: body.store,
+        items: body.items,
+        csv: body.csv,
+      });
+      res.status(result.created.length ? 201 : 200).json({ ok: true, ...result });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.post(
+    "/products/import-file",
+    express.raw({ type: () => true, limit: "12mb" }),
+    async (req, res) => {
+      try {
+        const result = await store.importProducts({
+          team: req.query.team,
+          store: req.query.store,
+          file: req.body,
+          filename: String(req.query.filename || req.get("x-filename") || ""),
+        });
+        res.status(result.created.length ? 201 : 200).json({ ok: true, ...result });
+      } catch (err) {
+        res.status(err.statusCode || 500).json({
+          ok: false,
+          error: err.message,
+          headers: err.headers || [],
+        });
+      }
+    },
+  );
+
+  hanRouter.get("/worker", async (req, res) => {
+    try {
+      const view = String(req.query.view || "config");
+      if (view === "overview") {
+        res.json(await store.workerOverview());
+        return;
+      }
+      if (view === "shop") {
+        res.json(await store.workerShop(req.query.store));
+        return;
+      }
+      if (view === "rules") {
+        res.json(await store.workerRules(req.query));
+        return;
+      }
+      if (view === "history") {
+        res.json(await store.workerHistory());
+        return;
+      }
+      const payload = await store.pullWorker({
+        machineId: req.query.machineId,
+        sinceVersion: req.query.sinceVersion || req.query.version,
+      });
+      if (payload.changed === false && String(req.query.http304 || "") === "1") {
+        res.status(304).end();
+        return;
+      }
+      res.json(payload);
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.post("/worker", async (req, res) => {
+    try {
+      const result = await store.pushWorker(req.body || {});
+      res.status(201).json(result);
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.put("/worker", async (req, res) => {
+    try {
+      res.json(await store.saveWorker(req.body || {}));
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.get("/paid", async (_req, res) => {
+    try {
+      res.json({ ok: true, items: await store.listPaid() });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.post("/paid", async (req, res) => {
+    try {
+      const item = await store.createPaid(req.body || {});
+      res.status(201).json({ ok: true, item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.get("/paid.csv", (_req, res) => {
+    const csv = "\uFEFF店铺,渠道,金额,日期,备注\n护肤健康旗舰店,精准通,1200.00,2026-09-12,采集导入";
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="han-paid-template.csv"');
+    res.send(csv);
+  });
+
+  hanRouter.post("/paid/import", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const result = await store.importPaid({
+        items: body.items,
+        csv: body.csv,
+      });
+      res.status(result.created.length ? 201 : 200).json({ ok: true, ...result });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({
+        ok: false,
+        error: err.message,
+        headers: err.headers || [],
+      });
+    }
+  });
+
+  hanRouter.post(
+    "/paid/import-file",
+    express.raw({ type: () => true, limit: "12mb" }),
+    async (req, res) => {
+      try {
+        const result = await store.importPaid({
+          file: req.body,
+          filename: String(req.query.filename || req.get("x-filename") || ""),
+        });
+        res.status(result.created.length ? 201 : 200).json({ ok: true, ...result });
+      } catch (err) {
+        res.status(err.statusCode || 500).json({
+          ok: false,
+          error: err.message,
+          headers: err.headers || [],
+        });
+      }
+    },
+  );
+
+  hanRouter.get("/training", async (_req, res) => {
+    try {
+      res.json({ ok: true, items: await store.listTraining() });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  hanRouter.post("/training", async (req, res) => {
+    try {
+      const item = await store.createTraining(req.body || {});
+      res.status(201).json({ ok: true, item });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    }
+  });
+
+  return hanRouter;
+}
+
+export const hanRouter = createHanRouter();
+export default hanRouter;
