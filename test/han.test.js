@@ -1201,6 +1201,60 @@ test("shop 京准通总订单金额 sums subaccount order amounts", async () => 
   });
 });
 
+test("旧日子账号金额不盖住今天的店铺总订单金额", async () => {
+  await withServer(async (base) => {
+    const old = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        抓取时间: "2026-11-02T18:08:23+08:00",
+        rows: [{ 店铺名称: "潮流店", 京准通主账户ID: "1", 花费: 10, 京准通总订单金额: 0 }],
+        subaccounts: [
+          { 店铺名称: "潮流店", 京准通主账户ID: "1", 子账号ID: "1", 子账号名称: "甲", 订单金额: 5285.56 },
+        ],
+      }),
+    });
+    assert.equal(old.res.status, 201);
+    const today = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        抓取时间: "2026-11-13T09:53:18+08:00",
+        rows: [{ 店铺名称: "潮流店", 京准通主账户ID: "1", 花费: 827.75, 京麦成交金额: 1750.7, 订单总金额: 3200 }],
+      }),
+    });
+    assert.equal(today.res.status, 201);
+    const overview = await json(base, "/api/han/worker?view=overview");
+    const row = overview.body.shops.find((item) => item.store === "潮流店");
+    assert.equal(row.spend, 827.75);
+    assert.equal(row.totalOrderAmount, 3200);
+    const omitted = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        抓取时间: "2026-11-13T09:55:00+08:00",
+        rows: [{ 店铺名称: "潮流店", 京准通主账户ID: "1", 花费: 900, 京麦成交金额: 1800 }],
+      }),
+    });
+    assert.equal(omitted.res.status, 201);
+    const kept = await json(base, "/api/han/worker?view=overview");
+    const again = kept.body.shops.find((item) => item.store === "潮流店");
+    assert.equal(again.spend, 900);
+    assert.equal(again.totalOrderAmount, 3200);
+    const zero = await json(base, "/api/han/worker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        抓取时间: "2026-11-13T09:56:00+08:00",
+        rows: [{ 店铺名称: "潮流店", 京准通主账户ID: "1", 花费: 900, 京准通总订单金额: 0 }],
+      }),
+    });
+    assert.equal(zero.res.status, 201);
+    const cleared = await json(base, "/api/han/worker?view=overview");
+    assert.equal(cleared.body.shops.find((item) => item.store === "潮流店").totalOrderAmount, 0);
+  });
+});
+
 test("子账号账户备注由页面保存，回传花费不会覆盖", async () => {
   await withServer(async (base) => {
     const pushed = await json(base, "/api/han/worker", {
