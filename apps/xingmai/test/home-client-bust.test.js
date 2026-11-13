@@ -11,7 +11,7 @@ test("rewrites immutable homepage script url to no-store client.js", () => {
   const out = rewriteHomeModuleUrl(html);
   assert.equal(out.includes("/shared/modules/home.js"), false);
   assert.equal(out.includes(HOME_CLIENT_JS), true);
-    assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.932-phonestack$/);
+    assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.935-phonedata$/);
 });
 
 test("serves /api/home/client.js from current homepage module", async () => {
@@ -26,7 +26,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     const text = await res.text();
     assert.equal(res.status, 200);
     assert.match(String(res.headers.get("cache-control") || ""), /no-store/i);
-    assert.match(text, /xm-module-home 0\.1\.932-phonestack/);
+    assert.match(text, /xm-module-home 0\.1\.935-phonedata/);
     assert.match(text, /function liveTheadHtml/);
     assert.match(text, /function liveFilterHtml/);
     assert.match(text, /data-live-filter="pick"/);
@@ -75,9 +75,10 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /function mixFeeHours/);
     assert.match(text, /repeat\(3,minmax\(0,1fr\)\)/);
     assert.match(text, /@media \(max-width:720px\)/);
-    assert.match(text, /\.xm-hm-sales\.xm-hm-live-charts,\.xm-hm-live \.xm-hm-live-charts\{display:flex;flex-direction:column/);
-    assert.match(text, /\.xm-hm-sales\.xm-hm-live-charts>\.xm-hm-chart,\.xm-hm-live \.xm-hm-live-charts>\.xm-hm-chart\{flex:0 0 auto;width:100%/);
-    assert.match(text, /\.xm-hm-kpis\{grid-template-columns:1fr;gap:8px\}/);
+    assert.match(text, /\.xm-hm-sales\.xm-hm-live-charts,\.xm-hm-live \.xm-hm-live-charts\{display:grid;grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+    assert.match(text, /\.xm-hm-sales\.xm-hm-live-charts \.xm-hm-line,\.xm-hm-live \.xm-hm-live-charts \.xm-hm-line\{display:none/);
+    assert.match(text, /\.xm-hm-live-charts \.xm-hm-legs\{display:none\}/);
+    assert.match(text, /\.xm-hm-kpis\{grid-template-columns:repeat\(3,minmax\(0,1fr\)\);gap:8px\}/);
     assert.doesNotMatch(text, /scroll-snap-type:x mandatory/);
     assert.match(text, /LIVE_CARD_KEYS = \["livePay", "roi", "livePaid", "feeHot", "feeCold", "liveAt"\]/);
     assert.match(text, /实时付费超标店铺/);
