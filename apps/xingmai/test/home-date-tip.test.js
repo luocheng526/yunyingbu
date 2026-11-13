@@ -303,6 +303,27 @@ test("homepage money and rates show as rounded integers", () => {
   assert.match(homeJs, /Math\.round\(Math\.abs\(n\)\)/);
   assert.doesNotMatch(homeJs, /minimumFractionDigits: 2/);
   assert.doesNotMatch(homeJs, /n\.toFixed\(2\) \+ "%"/);
+  assert.match(homeJs, /return \(p \/ a\)\.toFixed\(2\);/);
+});
+
+test("付费成交ROI keeps two decimals", () => {
+  const pick = (name) => {
+    const start = homeJs.indexOf("function " + name);
+    assert.notEqual(start, -1, name);
+    let depth = 0;
+    for (let i = start; i < homeJs.length; i += 1) {
+      if (homeJs[i] === "{") depth += 1;
+      if (homeJs[i] === "}") {
+        depth -= 1;
+        if (depth === 0) return homeJs.slice(start, i + 1);
+      }
+    }
+    throw new Error("unclosed " + name);
+  };
+  const fns = new Function(pick("asNum") + pick("fmtRoi") + "return {fmtRoi};")();
+  assert.equal(fns.fmtRoi(38198, 38198), "1.00");
+  assert.equal(fns.fmtRoi(100, 35), "2.86");
+  assert.equal(fns.fmtRoi(null, 10), "—");
 });
 
 test("duty shop rows sort by metric arrows and keep empty values last", () => {

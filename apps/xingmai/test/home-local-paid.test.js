@@ -118,6 +118,8 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
     summary: { spend: 12, paidDeal: 100, feeRate: 0.12 }
   });
   assert.equal(filled.shops[0].paidAmount, "12");
+  assert.equal(filled.shops[0].roi, "8.33");
+  assert.equal(filled.cards.find((card) => card.key === "roi").value, "8.33");
   assert.equal(filled.paid.label, "推广总花费");
   assert.equal(filled.paid.value, "12");
   assert.equal(filled.fee.label, "实时费比");
