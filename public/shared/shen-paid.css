@@ -1208,14 +1208,24 @@
   background: rgba(22, 119, 255, 0.35);
 }
 
+#paid-board .xm-hl-login {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
 #paid-board .xm-hl-net {
   display: inline-block;
-  margin-left: 8px;
+  margin: 0;
   padding: 0 6px;
   border-radius: 999px;
   font-size: 12px;
   line-height: 18px;
-  vertical-align: 1px;
+  vertical-align: middle;
 }
 
 #paid-board .xm-hl-net.is-on {
@@ -1238,13 +1248,14 @@
 }
 
 #paid-board .xm-hl-relogin {
-  margin-left: 6px;
+  margin: 0;
   border: 0;
   background: transparent;
   padding: 0;
   color: #cf1322;
   font: inherit;
   font-size: 12px;
+  line-height: 18px;
   cursor: pointer;
 }
 

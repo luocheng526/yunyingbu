@@ -472,7 +472,7 @@
     mount: function (root) {
       const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
       paidCss.rel = "stylesheet";
-      paidCss.href = "/shared/shen-paid.css?v=0.1.764-paid-cols";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.765-paid-login";
       if (!paidCss.parentNode) {
         document.head.appendChild(paidCss);
       }
@@ -1705,6 +1705,7 @@
       const HOME_COLS = [
         { key: "rank", label: "排名", lock: true, w: "56px" },
         { key: "shop", label: "店铺名称", lock: true, w: "16%" },
+        { key: "login", label: "登录状态" },
         { key: "liveAmount", label: "实时成交金额" },
         { key: "paidAmount", label: "实时付费金额" },
         { key: "roi", label: "实时付费ROI" },
@@ -1732,6 +1733,7 @@
       const DEFAULT_COL_WIDTH = {
         rank: 72,
         shop: 248,
+        login: 112,
         liveAmount: 140,
         paidAmount: 140,
         roi: 120,
@@ -2181,11 +2183,7 @@
             order.push(key);
           }
         });
-        HOME_COLS.forEach(function (col) {
-          if (order.indexOf(col.key) < 0) {
-            order.push(col.key);
-          }
-        });
+        insertMissingColumns(order);
         const widths = {};
         HOME_COLS.forEach(function (col) {
           const n = Number(saved && saved.widths ? saved.widths[col.key] : NaN);
@@ -2193,6 +2191,34 @@
           widths[col.key] = isFinite(n) ? Math.max(min, Math.min(640, Math.round(n))) : defaultColWidth(col.key);
         });
         return { order: order, widths: widths };
+      }
+
+      function insertMissingColumns(order) {
+        HOME_COLS.forEach(function (col, index) {
+          if (order.indexOf(col.key) >= 0) {
+            return;
+          }
+          let at = order.length;
+          let found = false;
+          for (let i = index - 1; i >= 0; i -= 1) {
+            const prev = order.indexOf(HOME_COLS[i].key);
+            if (prev >= 0) {
+              at = prev + 1;
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            for (let i = index + 1; i < HOME_COLS.length; i += 1) {
+              const next = order.indexOf(HOME_COLS[i].key);
+              if (next >= 0) {
+                at = next;
+                break;
+              }
+            }
+          }
+          order.splice(at, 0, col.key);
+        });
       }
 
       function writeLayout(layout) {
@@ -2272,14 +2298,20 @@
             escapeHtml(row.store) +
             '">' +
             escapeHtml(row.store) +
-            "</button>" +
-            netMark(row) +
-            (row.loginExpired
-              ? '<button type="button" class="xm-hl-relogin" data-relogin="' +
-                escapeHtml(row.store) +
-                '">重新登录</button>'
-              : "")
+            "</button>"
           );
+        }
+        if (col.key === "login") {
+          const badge = netMark(row);
+          const relogin = row.loginExpired
+            ? '<button type="button" class="xm-hl-relogin" data-relogin="' +
+              escapeHtml(row.store) +
+              '">重新登录</button>'
+            : "";
+          if (!badge && !relogin) {
+            return "";
+          }
+          return '<span class="xm-hl-login">' + badge + relogin + "</span>";
         }
         if (col.key === "liveAmount" || col.key === "paidAmount" || col.key === "paidDeal") {
           return formatLive(row[col.key]);
