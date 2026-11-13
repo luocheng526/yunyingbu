@@ -97,8 +97,8 @@ LIMIT ?`,
   widenPaidRechargeChargedAt: `ALTER TABLE shen_paid_recharge MODIFY charged_at VARCHAR(40) NOT NULL DEFAULT ''`,
   addPaidRechargeSubIdColumn: `ALTER TABLE shen_paid_recharge ADD COLUMN sub_account_id VARCHAR(64) NOT NULL DEFAULT ''`,
   addPaidRechargeSubNameColumn: `ALTER TABLE shen_paid_recharge ADD COLUMN sub_account_name VARCHAR(128) NOT NULL DEFAULT ''`,
-  upsertRecharge: `INSERT INTO shen_paid_recharge (store, account_id, sub_account_id, sub_account_name, day, charged_at, amount, balance, channel, remark, source)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  upsertRecharge: `INSERT INTO shen_paid_recharge (store, account_id, sub_account_id, sub_account_name, day, charged_at, amount, balance, channel, remark, source, config_version, rule_code, planned_roi, exec_spend, exec_roi, exec_paid_orders, result_flag, execution_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON DUPLICATE KEY UPDATE
   account_id = VALUES(account_id),
   sub_account_id = VALUES(sub_account_id),
@@ -107,12 +107,47 @@ ON DUPLICATE KEY UPDATE
   channel = VALUES(channel),
   remark = VALUES(remark),
   source = VALUES(source),
+  config_version = VALUES(config_version),
+  rule_code = VALUES(rule_code),
+  planned_roi = VALUES(planned_roi),
+  exec_spend = VALUES(exec_spend),
+  exec_roi = VALUES(exec_roi),
+  exec_paid_orders = VALUES(exec_paid_orders),
+  result_flag = VALUES(result_flag),
+  execution_id = VALUES(execution_id),
   ingested_at = CURRENT_TIMESTAMP`,
-  listRecharge: `SELECT id, store, account_id, sub_account_id, sub_account_name, day, charged_at, amount, balance, channel, remark, source, ingested_at
+  listRecharge: `SELECT id, store, account_id, sub_account_id, sub_account_name, day, charged_at, amount, balance, channel, remark, source, ingested_at, config_version, rule_code, planned_roi, exec_spend, exec_roi, exec_paid_orders, result_flag, execution_id
 FROM shen_paid_recharge
 WHERE (? = 1 OR store = ?) AND day >= ? AND day <= ?
 ORDER BY day DESC, id DESC
 LIMIT ?`,
+  addPaidRechargeConfigVersion: `ALTER TABLE shen_paid_recharge ADD COLUMN config_version INT UNSIGNED NOT NULL DEFAULT 0`,
+  addPaidRechargeRuleCode: `ALTER TABLE shen_paid_recharge ADD COLUMN rule_code VARCHAR(32) NOT NULL DEFAULT ''`,
+  addPaidRechargePlannedRoi: `ALTER TABLE shen_paid_recharge ADD COLUMN planned_roi DECIMAL(12,4) NOT NULL DEFAULT 0`,
+  addPaidRechargeExecSpend: `ALTER TABLE shen_paid_recharge ADD COLUMN exec_spend DECIMAL(14,2) NOT NULL DEFAULT 0`,
+  addPaidRechargeExecRoi: `ALTER TABLE shen_paid_recharge ADD COLUMN exec_roi DECIMAL(12,4) NOT NULL DEFAULT 0`,
+  addPaidRechargeExecOrders: `ALTER TABLE shen_paid_recharge ADD COLUMN exec_paid_orders INT NOT NULL DEFAULT 0`,
+  addPaidRechargeResult: `ALTER TABLE shen_paid_recharge ADD COLUMN result_flag VARCHAR(32) NOT NULL DEFAULT ''`,
+  addPaidRechargeExecutionId: `ALTER TABLE shen_paid_recharge ADD COLUMN execution_id VARCHAR(64) NULL DEFAULT NULL`,
+  addPaidRechargeExecutionUnique: `ALTER TABLE shen_paid_recharge ADD UNIQUE KEY uk_shen_paid_recharge_exec (execution_id)`,
+  listSubaccountIdentities: `SELECT s.store, s.account_id, s.sub_account_id, s.sub_account_name
+FROM shen_paid_subaccount s
+INNER JOIN (
+  SELECT store, account_id, sub_account_id, MAX(id) AS id
+  FROM shen_paid_subaccount
+  GROUP BY store, account_id, sub_account_id
+) latest ON latest.id = s.id
+ORDER BY s.store ASC, s.sub_account_name ASC, s.sub_account_id ASC`,
+  createFeeTargetTable: `CREATE TABLE IF NOT EXISTS shen_paid_fee_target (
+  store VARCHAR(64) NOT NULL PRIMARY KEY,
+  lo_pct DECIMAL(6,2) NULL,
+  hi_pct DECIMAL(6,2) NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)`,
+  listFeeTargets: `SELECT store, lo_pct, hi_pct FROM shen_paid_fee_target ORDER BY store ASC`,
+  upsertFeeTarget: `INSERT INTO shen_paid_fee_target (store, lo_pct, hi_pct) VALUES (?, ?, ?)
+ON DUPLICATE KEY UPDATE lo_pct = VALUES(lo_pct), hi_pct = VALUES(hi_pct), updated_at = CURRENT_TIMESTAMP`,
+  deleteFeeTarget: `DELETE FROM shen_paid_fee_target WHERE store = ?`,
   createEnabledStoreTable: `CREATE TABLE IF NOT EXISTS shen_paid_enabled_store (
   store VARCHAR(64) NOT NULL PRIMARY KEY,
   source VARCHAR(64) NOT NULL DEFAULT 'local',
@@ -171,17 +206,7 @@ ON DUPLICATE KEY UPDATE
 FROM shen_paid_subaccount
 WHERE (? = 1 OR store = ?) AND day >= ? AND day <= ?
 ORDER BY day DESC, captured_at DESC, id DESC
-LIMIT ?`,
-  createFeeTargetTable: `CREATE TABLE IF NOT EXISTS shen_paid_fee_target (
-  store VARCHAR(64) NOT NULL PRIMARY KEY,
-  lo_pct DECIMAL(6,2) NULL,
-  hi_pct DECIMAL(6,2) NULL,
-  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-)`,
-  listFeeTargets: `SELECT store, lo_pct, hi_pct FROM shen_paid_fee_target ORDER BY store ASC`,
-  upsertFeeTarget: `INSERT INTO shen_paid_fee_target (store, lo_pct, hi_pct) VALUES (?, ?, ?)
-ON DUPLICATE KEY UPDATE lo_pct = VALUES(lo_pct), hi_pct = VALUES(hi_pct), updated_at = CURRENT_TIMESTAMP`,
-  deleteFeeTarget: `DELETE FROM shen_paid_fee_target WHERE store = ?`
+LIMIT ?`
 };
 
 const MAX_PAID_ROWS = 2000;
@@ -748,7 +773,15 @@ function mapRecharge(row) {
     channel: row.channel || "",
     remark: row.remark || "",
     source: row.source || "local",
-    ingestedAt: row.ingested_at || row.ingestedAt || ""
+    ingestedAt: row.ingested_at || row.ingestedAt || "",
+    configVersion: Number(row.config_version ?? row.configVersion) || 0,
+    ruleCode: row.rule_code || row.ruleCode || "",
+    plannedRoi: Number(row.planned_roi ?? row.plannedRoi) || 0,
+    execSpend: Number(row.exec_spend ?? row.execSpend) || 0,
+    execRoi: Number(row.exec_roi ?? row.execRoi) || 0,
+    execPaidOrders: Number(row.exec_paid_orders ?? row.execPaidOrders) || 0,
+    result: row.result_flag || row.result || "",
+    executionId: row.execution_id || row.executionId || ""
   };
 }
 
@@ -796,8 +829,33 @@ function parseRechargeRow(raw, defaultStore, defaultDay, source) {
     balance: asMoney(pickField(raw, ["账户余额", "balance", "余额"]), "账户余额"),
     channel: clipText(pickField(raw, ["渠道", "channel"]) || "", 64, "渠道"),
     remark: clipText(pickField(raw, ["备注", "remark", "说明"]) || "", 200, "备注"),
-    source: clipText(pickField(raw, ["source", "来源"]) || source, 64, "来源") || "local"
+    source: clipText(pickField(raw, ["source", "来源"]) || source, 64, "来源") || "local",
+    configVersion: asCount(pickField(raw, ["configVersion", "配置版本"]) || 0, "配置版本"),
+    ruleCode: clipText(pickField(raw, ["ruleCode", "命中规则", "规则"]) || "", 32, "命中规则"),
+    plannedRoi: asRate(pickField(raw, ["plannedRoi", "当时计划ROI", "计划ROI"]) || 0, "当时计划ROI"),
+    execSpend: asMoney(pickField(raw, ["execSpend", "当时花费", "京准通花费"]) || 0, "当时花费"),
+    execRoi: asRate(pickField(raw, ["execRoi", "当时ROI", "京准通付费投产比"]) || 0, "当时ROI"),
+    execPaidOrders: asCount(pickField(raw, ["execPaidOrders", "当时单量", "京准通付费订单数"]) || 0, "当时单量"),
+    result: clipText(pickField(raw, ["result", "执行结果", "resultFlag"]) || "", 32, "执行结果"),
+    executionId: asExecutionId(pickField(raw, ["executionId", "执行编号", "唯一执行编号"]))
   };
+}
+
+function asExecutionId(value) {
+  if (value == null || value === "") {
+    return "";
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value) || !Number.isInteger(value)) {
+      throw httpError(400, "executionId 必须是字符串，不能用科学计数法");
+    }
+    return String(value);
+  }
+  const text = String(value).trim();
+  if (/^[+-]?\d+(\.\d+)?[eE][+-]?\d+$/.test(text)) {
+    throw httpError(400, "executionId 不能使用科学计数法");
+  }
+  return clipText(text, 64, "executionId");
 }
 
 function mapSubaccount(row) {
@@ -979,6 +1037,7 @@ function collectRechargeRaws(payload, rows) {
 }
 
 async function persistRecharge(row, ingestedAt) {
+  const executionId = row.executionId || null;
   const result = await mysqlQuery(SQL.upsertRecharge, [
     row.store,
     row.accountId,
@@ -990,7 +1049,15 @@ async function persistRecharge(row, ingestedAt) {
     row.balance,
     row.channel,
     row.remark,
-    row.source
+    row.source,
+    row.configVersion || 0,
+    row.ruleCode || "",
+    row.plannedRoi || 0,
+    row.execSpend || 0,
+    row.execRoi || 0,
+    row.execPaidOrders || 0,
+    row.result || "",
+    executionId
   ]);
   if (result) {
     return;
@@ -1008,10 +1075,20 @@ async function persistRecharge(row, ingestedAt) {
     channel: row.channel,
     remark: row.remark,
     source: row.source,
-    ingested_at: ingestedAt
+    ingested_at: ingestedAt,
+    config_version: row.configVersion || 0,
+    rule_code: row.ruleCode || "",
+    planned_roi: row.plannedRoi || 0,
+    exec_spend: row.execSpend || 0,
+    exec_roi: row.execRoi || 0,
+    exec_paid_orders: row.execPaidOrders || 0,
+    result_flag: row.result || "",
+    execution_id: row.executionId || ""
   };
-  const key = rechargeKey(mapped);
-  const existing = memoryRecharge.findIndex((item) => rechargeKey(item) === key);
+  const byExec = mapped.execution_id
+    ? memoryRecharge.findIndex((item) => item.execution_id && item.execution_id === mapped.execution_id)
+    : -1;
+  const existing = byExec >= 0 ? byExec : memoryRecharge.findIndex((item) => rechargeKey(item) === rechargeKey(mapped));
   if (existing >= 0) {
     mapped.id = memoryRecharge[existing].id;
     memoryRecharge[existing] = mapped;
@@ -1099,6 +1176,15 @@ async function ensurePaidTable() {
     SQL.dropPaidSubUnique,
     SQL.addPaidSubUniqueWithCaptured,
     SQL.createEnabledStoreTable,
+    SQL.addPaidRechargeConfigVersion,
+    SQL.addPaidRechargeRuleCode,
+    SQL.addPaidRechargePlannedRoi,
+    SQL.addPaidRechargeExecSpend,
+    SQL.addPaidRechargeExecRoi,
+    SQL.addPaidRechargeExecOrders,
+    SQL.addPaidRechargeResult,
+    SQL.addPaidRechargeExecutionId,
+    SQL.addPaidRechargeExecutionUnique,
     SQL.createFeeTargetTable
   ]) {
     try {
@@ -1217,80 +1303,6 @@ export async function getBrief() {
     return { text: rows[0] ? String(rows[0].text || "") : "" };
   }
   return { text: memoryBrief };
-}
-
-function normalizeFeePct(value, label) {
-  if (value == null || value === "") {
-    return null;
-  }
-  const n = Number(value);
-  if (!Number.isFinite(n)) {
-    throw httpError(400, `${label}必须是数字`);
-  }
-  if (n < 0 || n > 100) {
-    throw httpError(400, `${label}要在 0 到 100 之间`);
-  }
-  return Math.round(n * 100) / 100;
-}
-
-function mapFeeTarget(row) {
-  const lo = row.lo_pct == null || row.lo_pct === "" ? null : Number(row.lo_pct);
-  const hi = row.hi_pct == null || row.hi_pct === "" ? null : Number(row.hi_pct);
-  return {
-    lo: Number.isFinite(lo) ? lo : null,
-    hi: Number.isFinite(hi) ? hi : null
-  };
-}
-
-export async function listFeeTargets() {
-  await ensurePaidTable();
-  const result = await mysqlQuery(SQL.listFeeTargets);
-  const targets = {};
-  if (result) {
-    for (const row of result[0]) {
-      const shop = String(row.store || "").trim();
-      if (!shop) {
-        continue;
-      }
-      targets[shop] = mapFeeTarget(row);
-    }
-    return { ok: true, targets };
-  }
-  for (const [shop, value] of memoryFeeTargets) {
-    targets[shop] = { lo: value.lo, hi: value.hi };
-  }
-  return { ok: true, targets };
-}
-
-export async function saveFeeTarget(body) {
-  const shop = String(body?.shop ?? body?.store ?? "").trim();
-  if (!shop) {
-    throw httpError(400, "必须指定店铺");
-  }
-  if (shop.length > 64) {
-    throw httpError(400, "店铺名称过长");
-  }
-  let lo = normalizeFeePct(body?.lo, "下限");
-  let hi = normalizeFeePct(body?.hi, "上限");
-  if (lo != null && hi != null && lo > hi) {
-    const swap = lo;
-    lo = hi;
-    hi = swap;
-  }
-  await ensurePaidTable();
-  if (lo == null && hi == null) {
-    const deleted = await mysqlQuery(SQL.deleteFeeTarget, [shop]);
-    if (!deleted) {
-      memoryFeeTargets.delete(shop);
-    }
-    return { ok: true, shop, target: null };
-  }
-  const saved = await mysqlQuery(SQL.upsertFeeTarget, [shop, lo, hi]);
-  const target = { lo, hi };
-  if (!saved) {
-    memoryFeeTargets.set(shop, target);
-  }
-  return { ok: true, shop, target };
 }
 
 export async function setBrief(text) {
@@ -1655,6 +1667,121 @@ export async function getPaidSummary(query) {
     enabledStores: roster,
     paid: totals
   };
+}
+
+export async function listLatestSubIdentities() {
+  await ensurePaidTable();
+  const result = await mysqlQuery(SQL.listSubaccountIdentities);
+  if (result) {
+    return result[0].map((row) => ({
+      store: row.store || "",
+      accountId: String(row.account_id || row.accountId || ""),
+      subAccountId: String(row.sub_account_id || row.subAccountId || ""),
+      subAccountName: row.sub_account_name || row.subAccountName || ""
+    }));
+  }
+  const latest = new Map();
+  for (const row of memorySub) {
+    const key = `${row.store}\t${row.account_id}\t${row.sub_account_id}`;
+    const prev = latest.get(key);
+    if (!prev || Number(row.id) > Number(prev.id)) {
+      latest.set(key, row);
+    }
+  }
+  return [...latest.values()]
+    .sort((a, b) => a.store.localeCompare(b.store, "zh") || String(a.sub_account_name).localeCompare(String(b.sub_account_name), "zh"))
+    .map((row) => ({
+      store: row.store || "",
+      accountId: String(row.account_id || ""),
+      subAccountId: String(row.sub_account_id || ""),
+      subAccountName: row.sub_account_name || ""
+    }));
+}
+
+export function queryShen(sql, params = []) {
+  return mysqlQuery(sql, params);
+}
+
+export function shenHttpError(statusCode, message) {
+  return httpError(statusCode, message);
+}
+
+export function nowShanghai() {
+  return shanghaiDateTime(new Date());
+}
+
+function normalizeFeePct(value, label) {
+  if (value == null || value === "") {
+    return null;
+  }
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    throw httpError(400, `${label}必须是数字`);
+  }
+  if (n < 0 || n > 100) {
+    throw httpError(400, `${label}要在 0 到 100 之间`);
+  }
+  return Math.round(n * 100) / 100;
+}
+
+function mapFeeTarget(row) {
+  const lo = row.lo_pct == null || row.lo_pct === "" ? null : Number(row.lo_pct);
+  const hi = row.hi_pct == null || row.hi_pct === "" ? null : Number(row.hi_pct);
+  return {
+    lo: Number.isFinite(lo) ? lo : null,
+    hi: Number.isFinite(hi) ? hi : null
+  };
+}
+
+export async function listFeeTargets() {
+  await ensurePaidTable();
+  const result = await mysqlQuery(SQL.listFeeTargets);
+  const targets = {};
+  if (result) {
+    for (const row of result[0]) {
+      const shop = String(row.store || "").trim();
+      if (!shop) {
+        continue;
+      }
+      targets[shop] = mapFeeTarget(row);
+    }
+    return { ok: true, targets };
+  }
+  for (const [shop, value] of memoryFeeTargets) {
+    targets[shop] = { lo: value.lo, hi: value.hi };
+  }
+  return { ok: true, targets };
+}
+
+export async function saveFeeTarget(body) {
+  const shop = String(body?.shop ?? body?.store ?? "").trim();
+  if (!shop) {
+    throw httpError(400, "必须指定店铺");
+  }
+  if (shop.length > 64) {
+    throw httpError(400, "店铺名称过长");
+  }
+  let lo = normalizeFeePct(body?.lo, "下限");
+  let hi = normalizeFeePct(body?.hi, "上限");
+  if (lo != null && hi != null && lo > hi) {
+    const swap = lo;
+    lo = hi;
+    hi = swap;
+  }
+  await ensurePaidTable();
+  if (lo == null && hi == null) {
+    const deleted = await mysqlQuery(SQL.deleteFeeTarget, [shop]);
+    if (!deleted) {
+      memoryFeeTargets.delete(shop);
+    }
+    return { ok: true, shop, target: null };
+  }
+  const saved = await mysqlQuery(SQL.upsertFeeTarget, [shop, lo, hi]);
+  const target = { lo, hi };
+  if (!saved) {
+    memoryFeeTargets.set(shop, target);
+  }
+  return { ok: true, shop, target };
 }
 
 export { STATUSES, DEFAULT_OWNER, MAX_PAID_ROWS };

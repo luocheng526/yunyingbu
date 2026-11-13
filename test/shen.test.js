@@ -46,7 +46,16 @@ function createFakePool() {
         sql === SQL.dropPaidSubUnique ||
         sql === SQL.addPaidSubUniqueWithCaptured ||
         sql === SQL.createEnabledStoreTable ||
-        sql === SQL.createFeeTargetTable
+        sql === SQL.createFeeTargetTable ||
+        sql === SQL.addPaidRechargeConfigVersion ||
+        sql === SQL.addPaidRechargeRuleCode ||
+        sql === SQL.addPaidRechargePlannedRoi ||
+        sql === SQL.addPaidRechargeExecSpend ||
+        sql === SQL.addPaidRechargeExecRoi ||
+        sql === SQL.addPaidRechargeExecOrders ||
+        sql === SQL.addPaidRechargeResult ||
+        sql === SQL.addPaidRechargeExecutionId ||
+        sql === SQL.addPaidRechargeExecutionUnique
       ) {
         return [{}];
       }
