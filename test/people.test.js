@@ -26,15 +26,18 @@ test.beforeEach(() => {
 
 test("mapImportRow accepts Excel-style store headers", () => {
   assert.deepEqual(
-    mapImportRow({ 店名: "A店", 所属人员: "张三", 商家ID: "188", 店铺编号: "SID188", 主账号: "demo_a" }),
+    mapImportRow({ 店名: "A店", 所属人员: "张三", 商家ID: "188", 店铺编号: "SID188", 主账号: "demo_a", 历史店名: "旧A店" }),
     {
       storeName: "A店",
       owner: "张三",
       merchantId: "188",
       storeId: "SID188",
-      login: "demo_a"
+      login: "demo_a",
+      formerNames: "旧A店"
     }
   );
+  assert.equal(mapImportRow({ 曾用名: "甲店" }).formerNames, "甲店");
+  assert.equal(mapImportRow({ 历史店铺名: "乙店" }).formerNames, "乙店");
 });
 
 async function withServer(fn) {
@@ -85,6 +88,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(cssText, /\.site-acl-matrix/);
     assert.match(cssText, /\.people-page button\.site-acl-person/);
     assert.match(cssText, /td\.org-cell\.can-edit/);
+    assert.match(cssText, /\.people-page \.org-former/);
     assert.doesNotMatch(text, /class="site-sidebar"/);
     assert.doesNotMatch(text, /<header class="site-header">/);
     assert.match(text, /组织中心/);
@@ -193,6 +197,9 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /key === "remark"/);
     assert.match(jsText, /org-row-check/);
     assert.match(jsText, /店铺ID/);
+    assert.match(jsText, /历史店名/);
+    assert.match(jsText, /key: "formerNames"/);
+    assert.match(jsText, /formatFormerNames/);
     assert.match(jsText, /缺店铺ID/);
     assert.match(jsText, /缺密码/);
     assert.match(jsText, /缺运营/);
@@ -567,7 +574,7 @@ test("org store board lists demo shops and supports add", async () => {
     const template = await fetch(`${base}/api/people/org/stores/template`);
     const csv = await template.text();
     assert.equal(template.status, 200);
-    assert.match(csv, /总监,经理,主管,储备,运营,助理,小组ID,店铺名称,店铺ID,商家id/);
+    assert.match(csv, /总监,经理,主管,储备,运营,助理,小组ID,店铺名称,历史店名,店铺ID,商家id/);
 
     const imported = await fetch(`${base}/api/people/org/stores/import`, {
       method: "POST",
@@ -745,6 +752,105 @@ test("store import upserts by groupId+shopId and does not touch other groups", a
     const healthKept = afterBlank.stores.find((row) => row.groupId === "郭桂良");
     assert.equal(healthKept.password, keepPassword);
     assert.equal(afterBlank.stores.filter((row) => row.storeName === "RASW健康电器旗舰店").length, 2);
+  });
+});
+
+test("renaming a store archives 历史店名 and import matches former names", async () => {
+  await withServer(async (base) => {
+    const created = await fetch(`${base}/api/people/org/stores`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        director: "罗成",
+        manager: "沈子晗",
+        operator: "张文静",
+        storeName: "ZYUO洗护旗舰店",
+        merchantId: "150078194",
+        remark: "运营中"
+      })
+    });
+    const createdJson = await created.json();
+    assert.equal(created.status, 201, JSON.stringify(createdJson));
+    assert.equal(createdJson.store.formerNames, "");
+
+    const renamed = await fetch(`${base}/api/people/org/stores/${createdJson.store.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ storeName: "ZYUO家庭清洁云铭苒专卖店" })
+    });
+    const renamedJson = await renamed.json();
+    assert.equal(renamed.status, 200, JSON.stringify(renamedJson));
+    assert.equal(renamedJson.store.storeName, "ZYUO家庭清洁云铭苒专卖店");
+    assert.equal(renamedJson.store.formerNames, "ZYUO洗护旗舰店");
+
+    const again = await fetch(`${base}/api/people/org/stores/${createdJson.store.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ storeName: "ZYUO洗护云店" })
+    });
+    const againJson = await again.json();
+    assert.equal(again.status, 200, JSON.stringify(againJson));
+    assert.equal(againJson.store.storeName, "ZYUO洗护云店");
+    assert.equal(againJson.store.formerNames, "ZYUO家庭清洁云铭苒专卖店、ZYUO洗护旗舰店");
+
+    const listed = await fetch(`${base}/api/people/org/stores?q=${encodeURIComponent("ZYUO洗护旗舰店")}`);
+    const listedJson = await listed.json();
+    assert.equal(listed.status, 200);
+    assert.ok(listedJson.stores.some((row) => row.id === createdJson.store.id && row.storeName === "ZYUO洗护云店"));
+
+    const before = await (await fetch(`${base}/api/people/org/stores`)).json();
+    const countBefore = before.stores.length;
+    const imported = await fetch(`${base}/api/people/org/stores/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          {
+            店铺名称: "ZYUO洗护旗舰店",
+            商家ID: "150078194",
+            运营: "张文静"
+          }
+        ]
+      })
+    });
+    const importedJson = await imported.json();
+    assert.equal(imported.status, 200, JSON.stringify(importedJson));
+    assert.equal(importedJson.created, 0, JSON.stringify(importedJson));
+    assert.equal(importedJson.updated, 1, JSON.stringify(importedJson));
+    const after = await (await fetch(`${base}/api/people/org/stores`)).json();
+    assert.equal(after.stores.length, countBefore);
+    const kept = after.stores.find((row) => row.id === createdJson.store.id);
+    assert.equal(kept.storeName, "ZYUO洗护云店");
+    assert.equal(kept.formerNames, "ZYUO家庭清洁云铭苒专卖店、ZYUO洗护旗舰店");
+
+    const typed = await fetch(`${base}/api/people/org/stores/${createdJson.store.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ formerNames: "旧甲店, 旧乙店, ZYUO洗护云店" })
+    });
+    const typedJson = await typed.json();
+    assert.equal(typed.status, 200, JSON.stringify(typedJson));
+    assert.equal(typedJson.store.formerNames, "旧甲店、旧乙店");
+
+    const createByFormer = await fetch(`${base}/api/people/org/stores/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          {
+            店铺名称: "SAWAAG居家唛笙专卖店",
+            历史店名: "SAWAAG居家旗舰店",
+            商家ID: "150078195",
+            运营: "张文静"
+          }
+        ]
+      })
+    });
+    const createByFormerJson = await createByFormer.json();
+    assert.equal(createByFormer.status, 200, JSON.stringify(createByFormerJson));
+    assert.equal(createByFormerJson.created, 1, JSON.stringify(createByFormerJson));
+    assert.equal(createByFormerJson.stores[0].storeName, "SAWAAG居家唛笙专卖店");
+    assert.equal(createByFormerJson.stores[0].formerNames, "SAWAAG居家旗舰店");
   });
 });
 

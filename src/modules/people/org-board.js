@@ -11,8 +11,38 @@ const STATUSES = {
   closed: "已退店"
 };
 
+function parseFormerNames(value) {
+  const source = Array.isArray(value) ? value : String(value == null ? "" : value).split(/[、,，;；\n\/|]+/);
+  const names = [];
+  source.forEach((item) => {
+    const name = String(item || "").trim();
+    if (name && !names.includes(name)) {
+      names.push(name);
+    }
+  });
+  return names;
+}
+
+function formatFormerNames(value) {
+  return parseFormerNames(value).join("、");
+}
+
+function namesOfStore(row = {}) {
+  const names = [];
+  const current = String(row.storeName || "").trim();
+  if (current) {
+    names.push(current);
+  }
+  parseFormerNames(row.formerNames).forEach((name) => {
+    if (!names.includes(name)) {
+      names.push(name);
+    }
+  });
+  return names;
+}
+
 function clone(row) {
-  return { ...row };
+  return { ...row, formerNames: formatFormerNames(row && row.formerNames) };
 }
 
 function inferManagerName(...parts) {
@@ -140,6 +170,7 @@ function seedRows() {
       groupId: groupIdOf(roles),
       shopId: "",
       storeName,
+      formerNames: "",
       storeId: "",
       merchantId,
       remark: "运营中",
@@ -159,6 +190,7 @@ function seedRows() {
       groupId: groupIdOf(roles),
       shopId: "",
       storeName,
+      formerNames: "",
       storeId: "",
       merchantId,
       remark: "运营中",
@@ -204,7 +236,13 @@ function applyBoardSnapshot(data) {
   if (!data || !Array.isArray(data.rows) || !data.rows.length) {
     return false;
   }
-  rows = data.rows.map((row) => ({ reserve: "", ...row, reserve: blankStaffName(row.reserve) }));
+  rows = data.rows.map((row) => ({
+    reserve: "",
+    formerNames: "",
+    ...row,
+    reserve: blankStaffName(row.reserve),
+    formerNames: formatFormerNames(row.formerNames)
+  }));
   nextId = Number(data.nextId) || rows.reduce((max, row) => Math.max(max, Number(row.id) || 0), 0) + 1;
   logs = Array.isArray(data.logs) && data.logs.length ? data.logs.map((item) => ({ ...item })) : logs;
   logId = Number(data.logId) || logs.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1;
@@ -1052,7 +1090,7 @@ export function listOrgStores(query = {}, actor) {
       if (!q) {
         return true;
       }
-      const blob = [row.storeName, row.storeId, row.shopId, row.groupId, row.merchantId, row.director, row.manager, row.supervisor, row.reserve, row.operator, row.assistant, row.owner, row.lead, row.chief, row.login]
+      const blob = [row.storeName, row.formerNames, row.storeId, row.shopId, row.groupId, row.merchantId, row.director, row.manager, row.supervisor, row.reserve, row.operator, row.assistant, row.owner, row.lead, row.chief, row.login]
         .join(" ")
         .toLowerCase();
       return blob.includes(q);
@@ -1084,11 +1122,21 @@ function normalize(input, previous = {}) {
         ? input.shopId.trim()
         : previous.storeId || previous.shopId || "";
   const groupId = roles.groupId || groupIdOf({ ...previous, ...roles, groupId: input.groupId || previous.groupId });
+  const storeName = typeof input.storeName === "string" ? input.storeName.trim() : previous.storeName || "";
+  const previousName = String(previous.storeName || "").trim();
+  let formerList = Object.prototype.hasOwnProperty.call(input, "formerNames")
+    ? parseFormerNames(input.formerNames)
+    : parseFormerNames(previous.formerNames);
+  if (typeof input.storeName === "string" && previousName && previousName !== storeName && !formerList.includes(previousName)) {
+    formerList = [previousName, ...formerList];
+  }
+  formerList = formerList.filter((name) => name !== storeName);
   return {
     ...roles,
     groupId,
     shopId: storeId,
-    storeName: typeof input.storeName === "string" ? input.storeName.trim() : previous.storeName || "",
+    storeName,
+    formerNames: formerList.join("、"),
     storeId,
     merchantId: typeof input.merchantId === "string" ? input.merchantId.trim() : previous.merchantId || "",
     remark: remark || STATUSES[statusKey] || "运营中",
@@ -1109,6 +1157,7 @@ export const STORE_IMPORT_HEADERS = [
   "助理",
   "小组ID",
   "店铺名称",
+  "历史店名",
   "店铺ID",
   "商家id",
   "店铺情况备注",
@@ -1132,6 +1181,10 @@ const HEADER_TO_FIELD = {
   所属人员: "owner",
   店铺名称: "storeName",
   店名: "storeName",
+  历史店名: "formerNames",
+  曾用名: "formerNames",
+  历史店铺名: "formerNames",
+  formerNames: "formerNames",
   店铺ID: "storeId",
   店铺id: "storeId",
   店铺编号: "storeId",
@@ -1214,10 +1267,19 @@ function findExistingStore(input, actor, selectedGroupId = "") {
   }
   const merchantId = String(input.merchantId || "").trim();
   const storeName = String(input.storeName || "").trim();
-  if (merchantId && storeName) {
+  const wantedNames = [];
+  if (storeName) {
+    wantedNames.push(storeName);
+  }
+  parseFormerNames(input.formerNames).forEach((name) => {
+    if (!wantedNames.includes(name)) {
+      wantedNames.push(name);
+    }
+  });
+  if (merchantId && wantedNames.length) {
     const nameMatches = pool.filter((row) => {
-      const sameShop =
-        String(row.merchantId || "").trim() === merchantId && String(row.storeName || "").trim() === storeName;
+      const sameMerchant = String(row.merchantId || "").trim() === merchantId;
+      const sameShop = sameMerchant && namesOfStore(row).some((name) => wantedNames.includes(name));
       return sameShop && (!useGroup || groupIdOf(row) === gid);
     });
     if (nameMatches.length) {
@@ -1255,7 +1317,7 @@ export function mapImportRow(raw = {}) {
       .trim();
     const field =
       HEADER_TO_FIELD[norm] ||
-      (["director", "manager", "supervisor", "reserve", "operator", "assistant", "chief", "lead", "owner", "storeName", "storeId", "shopId", "groupId", "merchantId", "remark", "updatedOn", "closedOn", "login", "password"].includes(norm)
+      (["director", "manager", "supervisor", "reserve", "operator", "assistant", "chief", "lead", "owner", "storeName", "formerNames", "storeId", "shopId", "groupId", "merchantId", "remark", "updatedOn", "closedOn", "login", "password"].includes(norm)
         ? norm
         : "");
     if (field) {
@@ -1308,8 +1370,22 @@ export async function importOrgStores(items, actor, options = {}) {
       return;
     }
     const existing = found.store;
+    const patchInput = filledImport({ ...input, updatedOn: stamp });
+    if (existing && patchInput.storeName) {
+      const incomingName = String(patchInput.storeName).trim();
+      const currentName = String(existing.storeName || "").trim();
+      if (
+        incomingName &&
+        incomingName !== currentName &&
+        parseFormerNames(existing.formerNames).includes(incomingName) &&
+        !storeIdOf(mapped) &&
+        !storeIdOf(draft)
+      ) {
+        delete patchInput.storeName;
+      }
+    }
     const result = existing
-      ? applyPatchOrgStore(existing.id, filledImport({ ...input, updatedOn: stamp }), actor)
+      ? applyPatchOrgStore(existing.id, patchInput, actor)
       : applyCreateOrgStore(input, actor);
     if (!result.ok) {
       failed.push({ line, error: result.error || "导入失败", storeName: draft.storeName });
