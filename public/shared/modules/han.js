@@ -1521,6 +1521,65 @@
     return "live:" + (params.get("team") || "") + ":" + (params.get("store") || "") + (liveShop ? ":" + liveShop : "");
   }
 
+  window.hanCurve = function (rows, server) {
+    var key = "han-curve";
+    var book = {};
+    try { book = JSON.parse(localStorage.getItem(key) || "{}") || {}; } catch (err) { book = {}; }
+    var parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
+    function part(type) { return parts.find(function (item) { return item.type === type; }).value; }
+    var hourNow = Number(part("hour"));
+    if (hourNow === 24) hourNow = 0;
+    var today = part("year") + "-" + part("month") + "-" + part("day");
+    var hourKey = String(hourNow);
+    book[today] = book[today] || {};
+    book[today][hourKey] = book[today][hourKey] || {};
+    (rows || []).forEach(function (row) {
+      var name = String(row.store || "");
+      if (!name) return;
+      book[today][hourKey][name] = [Number(row.jingmaiGmv) || 0, Number(row.spend) || 0];
+    });
+    var kept = Object.keys(book).sort();
+    while (kept.length > 2) delete book[kept.shift()];
+    try { localStorage.setItem(key, JSON.stringify(book)); } catch (err) {}
+    function cell(date, hour, store) {
+      var remote = server && server[date] && server[date][String(hour)];
+      if (remote && remote[store]) return remote[store];
+      var local = book[date] && book[date][String(hour)];
+      return local && local[store];
+    }
+    function series(date, kind) {
+      var out = [];
+      var last = null;
+      var on = 0;
+      for (var h = 0; h < 24; h += 1) {
+        if (date === today && h > hourNow) break;
+        var g = 0;
+        var s = 0;
+        var n = 0;
+        (rows || []).forEach(function (row) {
+          var hit = cell(date, h, row.store);
+          if (!hit) return;
+          g += Number(hit[0]) || 0;
+          s += Number(hit[1]) || 0;
+          n += 1;
+        });
+        var v = n ? (kind === "fee" ? (g > 0 ? s / g : null) : kind === "spend" ? s : g) : null;
+        if (v == null) v = on ? last : null;
+        else { on = 1; last = v; }
+        out.push(v);
+      }
+      while (out.length && out[out.length - 1] == null) out.pop();
+      return out;
+    }
+    var days = {};
+    Object.keys(book).forEach(function (day) { days[day] = 1; });
+    Object.keys(server || {}).forEach(function (day) { days[day] = 1; });
+    var list = Object.keys(days).sort();
+    var day = list[list.length - 1] || "";
+    var prev = list.length > 1 ? list[list.length - 2] : "";
+    return { gmv: series(day, "gmv"), spend: series(day, "spend"), fee: series(day, "fee"), yGmv: series(prev, "gmv"), ySpend: series(prev, "spend"), yFee: series(prev, "fee") };
+  };
+
   function mountHanPaid(root, forcedBoard) {
       const board = forcedBoard || new URLSearchParams(window.location.search).get("board") || "";
       const hanBoard = board === "rules" ? "rules" : board === "center" ? "center" : "live";
@@ -1631,7 +1690,7 @@
         stop = window.HanCenter.mount(root, hanBoard) || function () {};
         bindDing();
       }
-      const centerVer = "20261112-team";
+      const centerVer = "20261112-curve";
       if (window.HanCenter && window.HanCenter.version === centerVer) {
         start();
       } else {
