@@ -1275,6 +1275,7 @@ test("非全站营销的 ROI 和总订单金额记成京准通付费投产比和
             店铺名称: "嵌套店",
             京准通主账户ID: "401",
             花费: 10,
+            总花费金额: 1511.32,
             全站营销: { 花费: 444.71, ROI: 8, 总订单金额: 800 },
             非全站营销: { ROI: 2.69, 总订单金额: 1098.05 },
             京麦成交金额: 1053,
@@ -1293,6 +1294,7 @@ test("非全站营销的 ROI 和总订单金额记成京准通付费投产比和
             京准通主账户ID: "404",
             营销类型: "非全站营销",
             ROI: 1.66,
+            总花费金额: 2200.4,
             总订单金额: 5285.56,
             京麦成交金额: 2119.7,
             京麦成交金额环比: "较昨日上涨29.93%",
@@ -1336,12 +1338,12 @@ test("非全站营销的 ROI 和总订单金额记成京准通付费投产比和
     assert.equal(flat.totalOrderAmount, 5285.56);
     assert.equal(nested.roi, 2.69);
     assert.equal(nested.totalOrderAmount, 1098.05);
-    assert.equal(nested.spend, 444.71);
+    assert.equal(nested.spend, 1511.32);
     assert.equal(nested.jingmaiGmv, 1053);
     assert.equal(nested.jingmaiGmvRate, "较昨日上涨18.57%");
     const split = overview.body.shops.filter((row) => row.store === "分拆店");
     assert.equal(split.length, 1);
-    assert.equal(split[0].spend, 934.87);
+    assert.equal(split[0].spend, 2200.4);
     assert.equal(split[0].roi, 1.66);
     assert.equal(split[0].totalOrderAmount, 5285.56);
     assert.equal(split[0].jingmaiGmv, 2119.7);

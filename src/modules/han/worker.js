@@ -808,14 +808,19 @@ function readNonSitewide(row, kind) {
   });
 }
 
-function readSpend(row) {
-  const block = findBlock(row, "site");
-  if (block) {
-    const value = pick(block, ["京准通花费", "花费", "spend", "付费金额", "精准通总花费"]);
-    if (value !== "") return value;
+function readTotalSpend(row) {
+  const named = pick(row, ["总花费金额", "京准通总花费金额"]);
+  if (named !== "") return named;
+  for (const [key, value] of Object.entries(row || {})) {
+    if (value == null || typeof value === "object" || String(value).trim() === "") continue;
+    if (String(key).includes("总花费金额")) return value;
   }
-  const labeled = flatMarketing(row, "site", (name) => name.includes("花费") || name.toLowerCase().includes("spend"));
-  if (labeled !== "") return labeled;
+  return "";
+}
+
+function readSpend(row) {
+  const total = readTotalSpend(row);
+  if (total !== "") return total;
   return pick(row, ["京准通花费", "花费", "spend", "付费金额", "精准通总花费"]);
 }
 
@@ -845,9 +850,14 @@ function mergeShops(rows) {
       if (filled(row[key]) && !filled(next[key])) next[key] = row[key];
     }
     if (String(row.capturedAt || "") > String(next.capturedAt || "")) next.capturedAt = row.capturedAt;
-    const site = row.kind === "site" ? row : prev.kind === "site" ? prev : null;
     const non = row.kind === "non" ? row : prev.kind === "non" ? prev : null;
-    if (site) next.spend = site.spend;
+    if (row.spendFromTotal) {
+      next.spend = row.spend;
+      next.spendFromTotal = true;
+    } else if (prev.spendFromTotal) {
+      next.spend = prev.spend;
+      next.spendFromTotal = true;
+    }
     if (non) {
       next.roi = non.roi;
       if (non.totalOrderAmount != null) next.totalOrderAmount = non.totalOrderAmount;
@@ -858,6 +868,7 @@ function mergeShops(rows) {
   return [...map.values()].map((row) => {
     const copy = { ...row };
     delete copy.kind;
+    delete copy.spendFromTotal;
     return copy;
   });
 }
@@ -915,6 +926,7 @@ function parseShop(row, capturedAt) {
     store,
     accountId: idText(pick(row, ["京准通主账户ID", "accountId", "主账户ID"]), "京准通主账户ID"),
     spend: num(readSpend(row)),
+    spendFromTotal: readTotalSpend(row) !== "",
     paidOrders,
     orders: paidOrders,
     roi: num(readPaidRoi(row)),
