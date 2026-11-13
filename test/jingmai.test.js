@@ -5,6 +5,7 @@ import { createApp } from "../src/app.js";
 import {
   buildLiveView,
   collectPinIds,
+  alignOnlineDealSeries,
   dealPointsFromSamples,
   extractPaid,
   extractShopDeal,
@@ -597,6 +598,33 @@ test("each collection keeps its own comparison and gaps stay empty", () => {
   const paid = extractPaid({ summary: [{ index: "cost", value: 100, rate: 45.46 }] });
   assert.equal(paid.paidAmount, 100);
   assert.equal(paid.dealRate, undefined);
+});
+
+test("chart slots keep every online shop instead of the shops captured in that minute", () => {
+  const series = alignOnlineDealSeries([
+    {
+      online: true,
+      dealPoints: [
+        { index: 154, slot: "12:50", today: 100, yesterday: 80, comparable: true, estimated: true, label: "较昨日" },
+        { index: 156, slot: "13:00", today: 130, yesterday: 100, comparable: true, estimated: true, label: "较昨日" }
+      ]
+    },
+    {
+      online: true,
+      dealPoints: [{ index: 155, slot: "12:55", today: 50, yesterday: 40, comparable: true, estimated: false, label: "较昨日" }]
+    },
+    { online: true, dealPoints: [] },
+    { online: false, dealPoints: [{ index: 154, slot: "12:50", today: 999, yesterday: 1, comparable: true, label: "较昨日" }] }
+  ]);
+  assert.deepEqual(series.map((point) => point.slot), ["12:50", "12:55", "13:00"]);
+  assert.equal(series[0].n, 1);
+  assert.equal(series[0].total, 3);
+  assert.equal(series[1].n, 2);
+  assert.equal(series[1].today, 150);
+  assert.equal(series[2].n, 2);
+  assert.equal(series[2].today, 180);
+  assert.equal(series[2].total, 3);
+  assert.equal(series.some((point) => point.today === 999), false);
 });
 
 test("deal card is read from the layer that contains channel data", () => {

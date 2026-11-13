@@ -512,6 +512,9 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(css.text, /#paid-board \.xm-hl-delta\.is-down \{[^}]*#389e0d/);
     assert.match(embed.text, /"00:00"/);
     assert.match(embed.text, /"24:00"/);
+    const dealAgg = embed.text.slice(embed.text.indexOf("function aggregateDeal"), embed.text.indexOf("function shopSpark"));
+    assert.match(dealAgg, /row\.online/);
+    assert.equal(dealAgg.includes("const total = rows.length"), false);
     assert.match(css.text, /#paid-board \.xm-hl-table th,\s*#paid-board \.xm-hl-table td \{[^}]*text-align: center;/);
     assert.match(css.text, /\.xm-hl-fee \{[^}]*inline-flex/);
     assert.equal(embed.text.includes("/api/han/"), false);

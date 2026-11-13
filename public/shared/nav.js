@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.767-paid-axis — 成交环比上涨红色、下跌绿色，时间轴到 24:00 */
+/* xm-fast-shell 0.1.768-paid-online — 成交环比只统计在线店铺 */
 (function () {
-  const ASSET_VER = "0.1.767-paid-axis";
+  const ASSET_VER = "0.1.768-paid-online";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",

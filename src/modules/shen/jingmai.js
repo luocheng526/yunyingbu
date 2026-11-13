@@ -628,6 +628,78 @@ export function dealPointsFromSamples(samples, day) {
     });
 }
 
+export function alignOnlineDealSeries(shops) {
+  const rows = (shops || []).filter(function (shop) {
+    return shop && shop.online === true;
+  });
+  const events = new Map();
+  const series = rows.map(function (shop) {
+    const points = (shop.dealPoints || [])
+      .filter(function (point) {
+        return (
+          point &&
+          point.comparable === true &&
+          point.today != null &&
+          point.yesterday != null &&
+          Number.isFinite(Number(point.today)) &&
+          Number.isFinite(Number(point.yesterday)) &&
+          Number(point.yesterday) > 0 &&
+          Number.isFinite(Number(point.index))
+        );
+      })
+      .slice()
+      .sort(function (left, right) {
+        return Number(left.index) - Number(right.index);
+      });
+    points.forEach(function (point) {
+      events.set(Number(point.index), point.slot);
+    });
+    return points;
+  });
+  return Array.from(events.keys())
+    .sort(function (left, right) {
+      return left - right;
+    })
+    .map(function (index) {
+      let today = 0;
+      let yesterday = 0;
+      let count = 0;
+      let estimated = false;
+      let samePeriod = true;
+      series.forEach(function (points) {
+        let chosen = null;
+        points.forEach(function (point) {
+          if (Number(point.index) <= index) {
+            chosen = point;
+          }
+        });
+        if (!chosen) {
+          return;
+        }
+        today += Number(chosen.today);
+        yesterday += Number(chosen.yesterday);
+        count += 1;
+        if (chosen.estimated) {
+          estimated = true;
+        }
+        if (chosen.label !== "较昨日同时段") {
+          samePeriod = false;
+        }
+      });
+      return {
+        index: index,
+        slot: events.get(index),
+        today: today,
+        yesterday: yesterday,
+        rate: count > 0 && yesterday > 0 ? (today / yesterday - 1) * 100 : null,
+        n: count,
+        total: rows.length,
+        estimated: estimated,
+        label: count > 0 && samePeriod ? "较昨日同时段" : "较昨日"
+      };
+    });
+}
+
 export function sumDealCompare(rows) {
   const list = rows || [];
   let todayAll = 0;

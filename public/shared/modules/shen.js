@@ -472,7 +472,7 @@
     mount: function (root) {
       const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
       paidCss.rel = "stylesheet";
-      paidCss.href = "/shared/shen-paid.css?v=0.1.767-paid-axis";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.768-paid-online";
       if (!paidCss.parentNode) {
         document.head.appendChild(paidCss);
       }
@@ -2213,15 +2213,17 @@
       }
 
       function aggregateDeal(rows) {
-        const total = rows.length;
+        const scope = rows.filter(function (row) {
+          return row.online;
+        });
+        const total = scope.length;
         let cohortToday = 0;
         let cohortYesterday = 0;
         let comparable = 0;
         let estimated = false;
         let samePeriod = true;
-        const buckets = {};
-        let last = -1;
-        rows.forEach(function (row) {
+        const events = {};
+        const series = scope.map(function (row) {
           if (
             row.dealComparable &&
             row.liveAmount != null &&
@@ -2239,75 +2241,87 @@
               samePeriod = false;
             }
           }
-          (row.dealPoints || []).forEach(function (point) {
-            const index = Number(point.index);
-            if (!isFinite(index) || index < 0) {
-              return;
-            }
-            if (!buckets[index]) {
-              buckets[index] = { slot: point.slot, shops: {} };
-            }
-            buckets[index].shops[row.store] = point;
-            if (index > last) {
-              last = index;
-            }
+          const points = (row.dealPoints || [])
+            .filter(function (point) {
+              return (
+                point &&
+                point.comparable &&
+                point.today != null &&
+                point.yesterday != null &&
+                isFinite(Number(point.today)) &&
+                isFinite(Number(point.yesterday)) &&
+                Number(point.yesterday) > 0 &&
+                isFinite(Number(point.index))
+              );
+            })
+            .slice()
+            .sort(function (left, right) {
+              return Number(left.index) - Number(right.index);
+            });
+          points.forEach(function (point) {
+            events[Number(point.index)] = point.slot;
           });
+          return points;
         });
         const today = [];
         const yesterday = [];
         const tips = [];
-        const count = last < 0 ? 0 : last + 1;
+        Object.keys(events)
+          .map(function (index) {
+            return Number(index);
+          })
+          .sort(function (left, right) {
+            return left - right;
+          })
+          .forEach(function (index) {
+            let slotToday = 0;
+            let slotYesterday = 0;
+            let slotCount = 0;
+            let slotEstimated = false;
+            let slotSame = true;
+            series.forEach(function (points) {
+              let chosen = null;
+              points.forEach(function (point) {
+                if (Number(point.index) <= index) {
+                  chosen = point;
+                }
+              });
+              if (!chosen) {
+                return;
+              }
+              slotToday += Number(chosen.today);
+              slotYesterday += Number(chosen.yesterday);
+              slotCount += 1;
+              if (chosen.estimated) {
+                slotEstimated = true;
+              }
+              if (chosen.label !== "较昨日同时段") {
+                slotSame = false;
+              }
+            });
+            if (!slotCount || !(slotYesterday > 0)) {
+              return;
+            }
+            today[index] = slotToday;
+            yesterday[index] = slotYesterday;
+            tips[index] = {
+              slot: events[index],
+              today: slotToday,
+              yesterday: slotYesterday,
+              rate: (slotToday / slotYesterday - 1) * 100,
+              estimated: slotEstimated,
+              label: slotSame ? "较昨日同时段" : "较昨日",
+              n: slotCount,
+              total: total
+            };
+          });
+        const count = today.length;
         for (let index = 0; index < count; index += 1) {
-          const bucket = buckets[index];
-          if (!bucket) {
-            today.push(null);
-            yesterday.push(null);
-            tips.push(null);
-            continue;
+          if (today[index] == null) {
+            today[index] = null;
+            yesterday[index] = null;
+            tips[index] = null;
           }
-          let slotToday = 0;
-          let slotYesterday = 0;
-          let slotCount = 0;
-          let slotEstimated = false;
-          let slotSame = true;
-          Object.keys(bucket.shops).forEach(function (name) {
-            const point = bucket.shops[name];
-            if (!point || !point.comparable || point.today == null || point.yesterday == null) {
-              return;
-            }
-            const pointToday = Number(point.today);
-            const pointYesterday = Number(point.yesterday);
-            if (!isFinite(pointToday) || !isFinite(pointYesterday)) {
-              return;
-            }
-            slotToday += pointToday;
-            slotYesterday += pointYesterday;
-            slotCount += 1;
-            if (point.estimated) {
-              slotEstimated = true;
-            }
-            if (point.label !== "较昨日同时段") {
-              slotSame = false;
-            }
-          });
-          if (!slotCount || !(slotYesterday > 0)) {
-            today.push(null);
-            yesterday.push(null);
-            tips.push(null);
-            continue;
-          }
-          today.push(slotToday);
-          yesterday.push(slotYesterday);
-          tips.push({
-            slot: bucket.slot,
-            today: slotToday,
-            yesterday: slotYesterday,
-            rate: (slotToday / slotYesterday - 1) * 100,
-            estimated: slotEstimated,
-            label: slotSame ? "较昨日同时段" : "较昨日",
-            n: slotCount,
-            total: total
-          });
         }
         const daySlots = 24 * 12 + 1;
         while (today.length < daySlots) {
