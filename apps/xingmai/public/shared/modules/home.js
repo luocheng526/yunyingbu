@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.901-on */
+/* xm-module-home 0.1.905-roi */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -2400,7 +2400,7 @@
     hideCardTip();
     hideLineTip(root);
     var searchDraft = liveSearchDraft(root);
-    board.setAttribute("data-hm-js", "0.1.901-on");
+    board.setAttribute("data-hm-js", "0.1.905-roi");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -2605,7 +2605,7 @@
     if (p == null || a == null || a === 0) {
       return "—";
     }
-    return String(Math.round(p / a));
+    return (p / a).toFixed(2);
   }
   function trendOf(cur, prev) {
     var c = asNum(cur);
@@ -3546,7 +3546,10 @@
         fee = spend / base;
       }
     }
-    var roi = row && asNum(row.roi) != null ? String(Math.round(asNum(row.roi))) : fmtRoi(pay, spend);
+    var roi = fmtRoi(pay, spend);
+    if (roi === "—" && row && asNum(row.roi) != null) {
+      roi = asNum(row.roi).toFixed(2);
+    }
     return {
       paidAmount: fmtMoney(spend),
       roi: roi,
