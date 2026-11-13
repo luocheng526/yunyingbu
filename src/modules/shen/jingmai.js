@@ -46,7 +46,7 @@ function asNumber(value) {
     }
     return null;
   }
-  const number = Number(String(value).replace(/,/g, ""));
+  const number = Number(String(value).replace(/[,￥¥%\s]/g, ""));
   return Number.isFinite(number) ? number : null;
 }
 
@@ -86,6 +86,240 @@ export function extractMetrics(body) {
     yesterdayAmount = readField(content, ["yesterdayDealAmt", "yesterdayAmount", "昨日成交金额"]);
   }
   return { dealAmount, orderCount, customerCount, yesterdayAmount };
+}
+
+function indicatorValue(item) {
+  if (!item || typeof item !== "object") {
+    return null;
+  }
+  if (item.todayNum != null && item.todayNum !== "") {
+    return asNumber(item.todayNum);
+  }
+  return asNumber(item.value);
+}
+
+function pickIndicator(list, names, codes) {
+  const rows = Array.isArray(list) ? list : [];
+  const byCode = rows.find(function (item) {
+    return item && codes.includes(String(item.code));
+  });
+  const byName = rows.find(function (item) {
+    return item && names.includes(String(item.name || ""));
+  });
+  return byCode || byName || null;
+}
+
+function layerValue(node) {
+  if (!node || typeof node !== "object") {
+    return null;
+  }
+  const next = node.data != null ? node.data : node.result;
+  if (typeof next === "string") {
+    try {
+      return JSON.parse(next);
+    } catch {
+      return null;
+    }
+  }
+  return next && typeof next === "object" ? next : null;
+}
+
+function shopRoot(body) {
+  let current = body;
+  for (let depth = 0; depth < 4 && current && typeof current === "object"; depth += 1) {
+    if (current.channelData || current.indicatorList || current.indicators) {
+      return current;
+    }
+    const next = layerValue(current);
+    if (!next || next === current) {
+      return current;
+    }
+    current = next;
+  }
+  return current && typeof current === "object" ? current : {};
+}
+
+export function extractShopDeal(body) {
+  const data = shopRoot(body);
+  const channel = data && data.channelData ? data.channelData : data;
+  const list = channel && (channel.indicatorList || channel.indicators);
+  const deal = pickIndicator(list, ["成交金额", "成交总金额"], ["3009"]);
+  const order = pickIndicator(list, ["成交单量", "成交总单量"], ["3001"]);
+  const customer = pickIndicator(list, ["成交客户数"], ["3008"]);
+  const dealAmount = indicatorValue(deal);
+  const orderCount = indicatorValue(order);
+  const customerCount = indicatorValue(customer);
+  if (dealAmount == null && orderCount == null && customerCount == null) {
+    return null;
+  }
+  const yesterdayAmount = deal ? asNumber(deal.yesterdayNum) : null;
+  return { dealAmount, orderCount, customerCount, yesterdayAmount };
+}
+
+export function parseHomeCard(text) {
+  const source = String(text || "").replace(/\u00a0/g, " ");
+  const start = source.indexOf("经营数据");
+  const section = start >= 0 ? source.slice(start, start + 900) : source.slice(0, 900);
+  function pick(label) {
+    const match = section.match(new RegExp(label + "[^\\d¥￥]{0,40}[¥￥]?\\s*([\\d,]+(?:\\.\\d+)?)"));
+    if (!match) {
+      return null;
+    }
+    const number = Number(match[1].replace(/,/g, ""));
+    return Number.isFinite(number) ? number : null;
+  }
+  const dealAmount = pick("成交金额");
+  const orderCount = pick("成交单量");
+  const customerCount = pick("成交客户数");
+  if (dealAmount == null && orderCount == null && customerCount == null) {
+    return null;
+  }
+  return { dealAmount: dealAmount, orderCount: orderCount, customerCount: customerCount, yesterdayAmount: null };
+}
+
+export function collectPinIds() {
+  const ids = [];
+  const seen = new Set();
+  function add(list) {
+    (Array.isArray(list) ? list : []).forEach(function (item) {
+      if (!item || typeof item !== "object") {
+        return;
+      }
+      const raw = item.userId != null && item.userId !== "" ? item.userId : item.pinId;
+      if (raw == null || raw === "") {
+        return;
+      }
+      const key = String(raw);
+      if (seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      ids.push(typeof raw === "number" ? raw : /^\d+$/.test(key) ? Number(key) : key);
+    });
+  }
+  function take(node, depth) {
+    if (!node || depth > 4) {
+      return;
+    }
+    if (Array.isArray(node)) {
+      add(node);
+      return;
+    }
+    if (typeof node !== "object") {
+      return;
+    }
+    add(node.own);
+    add(node.value);
+    add(node.list);
+    ["user", "auth", "agency", "data"].forEach(function (key) {
+      if (node[key]) {
+        take(node[key], depth + 1);
+      }
+    });
+  }
+  for (let index = 0; index < arguments.length; index += 1) {
+    take(arguments[index], 0);
+  }
+  return ids;
+}
+
+export function paidQuery(day, pinIds) {
+  return {
+    pinIdList: pinIds || [],
+    businessType: [-4, 256],
+    skuBrandId: [],
+    skuCid3: [],
+    clickOrOrderDay: 15,
+    clickOrOrderCaliber: 0,
+    isGift: 0,
+    orderStatusCategory: 1,
+    startDate: day,
+    endDate: day,
+    basic: 0,
+    basicRange: 0,
+    userTypes: [],
+    marketingObjectives: [],
+    marketingScenarios: [],
+    marketingTargetingTypes: []
+  };
+}
+
+export function extractPaid(body) {
+  const data = body && body.summary ? body : body && body.data ? body.data : body;
+  const summary = data && data.summary;
+  const list = Array.isArray(summary) ? summary : [];
+  const found = {};
+  list.forEach(function (item) {
+    if (!item || !item.index) {
+      return;
+    }
+    found[item.index] = asNumber(item.value);
+  });
+  const paidAmount = Object.prototype.hasOwnProperty.call(found, "cost") ? found.cost : null;
+  const paidDeal = Object.prototype.hasOwnProperty.call(found, "totalOrderSum") ? found.totalOrderSum : null;
+  const paidRoi = Object.prototype.hasOwnProperty.call(found, "ROI") ? found.ROI : null;
+  if (paidAmount == null && paidDeal == null && paidRoi == null) {
+    return null;
+  }
+  return { paidAmount, paidDeal, paidRoi };
+}
+
+export function businessFieldCode(body) {
+  let current = body;
+  for (let depth = 0; depth < 4 && current && typeof current === "object"; depth += 1) {
+    const list = current.belongVos || current.belongVOList;
+    if (Array.isArray(list) && list.length) {
+      const found =
+        list.find(function (item) {
+          return item && String(item.belongType) === String(current.currentBelongType);
+        }) || list[0];
+      if (found && found.businessFieldCode) {
+        return String(found.businessFieldCode);
+      }
+    }
+    const next = layerValue(current);
+    if (!next || next === current) {
+      break;
+    }
+    current = next;
+  }
+  return "";
+}
+
+export function describeShopPayload(body) {
+  const parts = [];
+  let current = body;
+  for (let depth = 0; depth < 3 && current && typeof current === "object" && !Array.isArray(current); depth += 1) {
+    parts.push("l" + depth + "=" + Object.keys(current).slice(0, 8).join(","));
+    const next = layerValue(current);
+    if (!next || next === current) {
+      break;
+    }
+    current = next;
+  }
+  const data = shopRoot(body);
+  const channel = data && data.channelData ? data.channelData : data;
+  const list = channel && (channel.indicatorList || channel.indicators);
+  const rows = Array.isArray(list) ? list : [];
+  return (parts.join(" ") + " n=" + rows.length).slice(0, 150);
+}
+
+export function sampleFields(metrics) {
+  const source = metrics || {};
+  return {
+    dealAmount: source.dealAmount == null ? null : source.dealAmount,
+    orderCount: source.orderCount == null ? null : source.orderCount,
+    customerCount: source.customerCount == null ? null : source.customerCount,
+    yesterdayAmount: source.yesterdayAmount == null ? null : source.yesterdayAmount,
+    paidAmount: source.paidAmount == null ? null : source.paidAmount,
+    paidDeal: source.paidDeal == null ? null : source.paidDeal,
+    paidRoi: source.paidRoi == null ? null : source.paidRoi,
+    dealNote: source.dealNote ? String(source.dealNote).slice(0, 160) : ""
+  };
+}
+
+function sampleHasData(sample) {
+  return sample.dealAmount != null || sample.paidAmount != null || sample.paidDeal != null || sample.paidRoi != null;
 }
 
 export function parseRealtime(status, text, location) {
@@ -156,16 +390,37 @@ export function hoursFromSamples(samples, day) {
 }
 
 function latestSample(samples, day) {
-  let found = null;
-  (samples || []).forEach(function (sample) {
-    if (sample.day !== day || sample.ok === false) {
-      return;
+  const rows = (samples || [])
+    .filter(function (sample) {
+      return sample.day === day && sample.ok !== false;
+    })
+    .sort(function (a, b) {
+      return a.capturedAt < b.capturedAt ? -1 : 1;
+    });
+  if (!rows.length) {
+    return null;
+  }
+  const merged = sampleFields({});
+  merged.capturedAt = "";
+  rows.forEach(function (sample) {
+    ["dealAmount", "orderCount", "customerCount", "yesterdayAmount", "paidAmount", "paidDeal", "paidRoi"].forEach(
+      function (key) {
+        if (sample[key] != null) {
+          merged[key] = sample[key];
+        }
+      }
+    );
+    if (sample.dealNote) {
+      merged.dealNote = String(sample.dealNote).slice(0, 160);
     }
-    if (!found || found.capturedAt < sample.capturedAt) {
-      found = sample;
+    if (sample.dealAmount != null) {
+      merged.dealNote = "";
+    }
+    if (sampleHasData(sample) && sample.capturedAt) {
+      merged.capturedAt = sample.capturedAt;
     }
   });
-  return found;
+  return merged;
 }
 
 export function buildLiveView({ shops, samples, now }) {
@@ -173,7 +428,7 @@ export function buildLiveView({ shops, samples, now }) {
   const yesterday = previousDay(day);
   let updated = "";
   (samples || []).forEach(function (sample) {
-    if (sample.ok === false || sample.dealAmount == null || !sample.capturedAt) {
+    if (sample.ok === false || !sampleHasData(sample) || !sample.capturedAt) {
       return;
     }
     if (!updated || updated < sample.capturedAt) {
@@ -201,10 +456,15 @@ export function buildLiveView({ shops, samples, now }) {
     return {
       shop: shop.store,
       enabled: shop.enabled !== false,
-      loginExpired: shop.authState === "login_expired",
+      online: shop.enabled !== false && shop.authState === "ok" && Array.isArray(shop.cookies) && shop.cookies.length > 0,
+      loginExpired: shop.enabled !== false && shop.authState === "login_expired",
       dealAmount: today && today.dealAmount != null ? today.dealAmount : null,
       orderCount: today && today.orderCount != null ? today.orderCount : null,
       customerCount: today && today.customerCount != null ? today.customerCount : null,
+      paidAmount: today && today.paidAmount != null ? today.paidAmount : null,
+      paidDeal: today && today.paidDeal != null ? today.paidDeal : null,
+      paidRoi: today && today.paidRoi != null ? today.paidRoi : null,
+      dealNote: today && today.dealNote ? today.dealNote : "",
       yesterdayAmount: yesterdayAmount,
       capturedAt: today ? displayStamp(today.capturedAt) : "",
       todayHours: hoursFromSamples(mine, day),
@@ -215,7 +475,7 @@ export function buildLiveView({ shops, samples, now }) {
     return shop.enabled;
   });
   const successShops = enabled.filter(function (shop) {
-    return shop.dealAmount != null;
+    return shop.dealAmount != null || shop.paidAmount != null || shop.paidDeal != null || shop.paidRoi != null;
   }).length;
   const loginExpiredShops = enabled.filter(function (shop) {
     return shop.loginExpired;
@@ -259,16 +519,9 @@ async function collectOne(shop, deps) {
   const now = deps.now();
   try {
     const metrics = await deps.fetchHome(shop.cookies);
-    await deps.saveSample({
-      store: shop.store,
-      day: now.day,
-      capturedAt: now.stamp,
-      dealAmount: metrics.dealAmount,
-      orderCount: metrics.orderCount,
-      customerCount: metrics.customerCount,
-      yesterdayAmount: metrics.yesterdayAmount,
-      ok: true
-    });
+    await deps.saveSample(
+      Object.assign({ store: shop.store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics))
+    );
   } catch (error) {
     const classified = classifyTransportError(error);
     if (classified.code === "login") {

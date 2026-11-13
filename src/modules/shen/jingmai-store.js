@@ -224,19 +224,26 @@ export async function listCollectTargets() {
 export async function saveSample(sample) {
   await ensure();
   const raw = {
-    dealAmount: sample.dealAmount,
-    orderCount: sample.orderCount,
-    customerCount: sample.customerCount,
-    yesterdayAmount: sample.yesterdayAmount == null ? null : sample.yesterdayAmount
+    dealAmount: sample.dealAmount == null ? null : sample.dealAmount,
+    orderCount: sample.orderCount == null ? null : sample.orderCount,
+    customerCount: sample.customerCount == null ? null : sample.customerCount,
+    yesterdayAmount: sample.yesterdayAmount == null ? null : sample.yesterdayAmount,
+    paidAmount: sample.paidAmount == null ? null : sample.paidAmount,
+    paidDeal: sample.paidDeal == null ? null : sample.paidDeal,
+    paidRoi: sample.paidRoi == null ? null : sample.paidRoi,
+    dealNote: sample.dealNote ? String(sample.dealNote).slice(0, 160) : ""
   };
   const row = {
     store: sample.store,
     day: sample.day,
     capturedAt: sample.capturedAt,
-    dealAmount: sample.dealAmount,
-    orderCount: sample.orderCount,
-    customerCount: sample.customerCount,
-    yesterdayAmount: sample.yesterdayAmount == null ? null : sample.yesterdayAmount,
+    dealAmount: raw.dealAmount,
+    orderCount: raw.orderCount,
+    customerCount: raw.customerCount,
+    yesterdayAmount: raw.yesterdayAmount,
+    paidAmount: raw.paidAmount,
+    paidDeal: raw.paidDeal,
+    paidRoi: raw.paidRoi,
     ok: sample.ok !== false,
     raw: raw
   };
@@ -290,7 +297,7 @@ export async function listSamples(fromDay, toDay) {
     });
   }
   const result = await query(
-    `SELECT store, day, captured_at, deal_amount, order_count, customer_count, yesterday_amount, ok_flag
+    `SELECT store, day, captured_at, deal_amount, order_count, customer_count, yesterday_amount, raw_json, ok_flag
      FROM shen_jingmai_sample
      WHERE day >= ? AND day <= ?
      ORDER BY captured_at ASC`,
@@ -303,6 +310,12 @@ export async function listSamples(fromDay, toDay) {
   }
   return result[0].map(function (row) {
     const day = row.day instanceof Date ? beijingParts(row.day).day : String(row.day).slice(0, 10);
+    let raw = {};
+    try {
+      raw = JSON.parse(row.raw_json || "{}");
+    } catch {
+      raw = {};
+    }
     return {
       store: row.store,
       day: day,
@@ -311,6 +324,10 @@ export async function listSamples(fromDay, toDay) {
       orderCount: row.order_count == null ? null : Number(row.order_count),
       customerCount: row.customer_count == null ? null : Number(row.customer_count),
       yesterdayAmount: row.yesterday_amount == null ? null : Number(row.yesterday_amount),
+      paidAmount: raw.paidAmount == null ? null : Number(raw.paidAmount),
+      paidDeal: raw.paidDeal == null ? null : Number(raw.paidDeal),
+      paidRoi: raw.paidRoi == null ? null : Number(raw.paidRoi),
+      dealNote: raw.dealNote ? String(raw.dealNote).slice(0, 160) : "",
       ok: Number(row.ok_flag) === 1
     };
   });

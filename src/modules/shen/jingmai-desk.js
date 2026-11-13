@@ -5,6 +5,7 @@ import { connect as connectTcp } from "node:net";
 import { tmpdir } from "node:os";
 import { setTimeout as sleep } from "node:timers/promises";
 import zlib from "node:zlib";
+import { extractShopDeal, parseHomeCard } from "./jingmai.js";
 
 const LOGIN_URL =
   "https://passport.shop.jd.com/login/index.action/jdm?ReturnUrl=" + encodeURIComponent("https://shop.jd.com/");
@@ -93,6 +94,8 @@ const SONAME_PACKAGES = {
 };
 
 let current = null;
+let readerDesk = null;
+let readerIdle = null;
 let chromeInstall = null;
 let libraryPath = "";
 let libraryTask = null;
@@ -676,7 +679,7 @@ export function ensureChrome() {
   });
 }
 
-function send(ws, method, params) {
+function send(ws, method, params, sessionId) {
   const id = ws.__seq = (ws.__seq || 0) + 1;
   return new Promise(function (resolve, reject) {
     const timer = setTimeout(function () {
@@ -684,8 +687,16 @@ function send(ws, method, params) {
       reject(new Error(method + " timeout"));
     }, 15000);
     function onMessage(event) {
-      const message = JSON.parse(event.data);
+      let message;
+      try {
+        message = JSON.parse(event.data);
+      } catch {
+        return;
+      }
       if (message.id !== id) {
+        return;
+      }
+      if (sessionId && message.sessionId && message.sessionId !== sessionId) {
         return;
       }
       clearTimeout(timer);
@@ -697,7 +708,11 @@ function send(ws, method, params) {
       }
     }
     ws.addEventListener("message", onMessage);
-    ws.send(JSON.stringify({ id: id, method: method, params: params || {} }));
+    const payload = { id: id, method: method, params: params || {} };
+    if (sessionId) {
+      payload.sessionId = sessionId;
+    }
+    ws.send(JSON.stringify(payload));
   });
 }
 
@@ -710,7 +725,69 @@ function evaluate(ws, expression) {
   });
 }
 
+function discard(desk) {
+  if (!desk) {
+    return;
+  }
+  if (current === desk) {
+    stopCurrent();
+    return;
+  }
+  desk.password = "";
+  try {
+    if (desk.ws) {
+      desk.ws.close();
+    }
+  } catch {
+    /* already closed */
+  }
+  const removeDir = function () {
+    try {
+      rmSync(desk.dir, { recursive: true, force: true });
+    } catch {
+      /* temp dir already gone */
+    }
+  };
+  try {
+    if (desk.chrome && desk.chrome.exitCode == null) {
+      desk.chrome.once("exit", removeDir);
+      desk.chrome.kill("SIGKILL");
+    } else {
+      removeDir();
+    }
+  } catch {
+    removeDir();
+  }
+}
+
+function closeReader() {
+  const desk = readerDesk;
+  readerDesk = null;
+  if (readerIdle) {
+    clearTimeout(readerIdle);
+    readerIdle = null;
+  }
+  if (desk) {
+    discard(desk);
+  }
+}
+
+function armReaderIdle() {
+  if (readerIdle) {
+    clearTimeout(readerIdle);
+  }
+  readerIdle = setTimeout(closeReader, 15000);
+  if (readerIdle && typeof readerIdle.unref === "function") {
+    readerIdle.unref();
+  }
+}
+
 function stopCurrent() {
+  readerDesk = null;
+  if (readerIdle) {
+    clearTimeout(readerIdle);
+    readerIdle = null;
+  }
   const desk = current;
   current = null;
   if (!desk) {
@@ -1048,17 +1125,25 @@ async function pageText(ws) {
   return String(text || "");
 }
 
-function failureMessage(text) {
-  if (text.includes("不匹配") || text.includes("密码不正确") || text.includes("账号或密码")) {
-    return "账号或密码不正确";
+export function loginScreenState(text, formReady) {
+  const source = String(text || "");
+  if (source.includes("不匹配") || source.includes("密码不正确") || source.includes("账号或密码")) {
+    return { status: "login", message: "账号或密码不正确" };
   }
-  if (text.includes("登录异常")) {
-    return "京麦拒绝了这次服务器登录，请过一会儿再试";
+  if (source.includes("冻结") || source.includes("停用")) {
+    return { status: "login", message: "这个账号现在不能登录" };
   }
-  if (text.includes("冻结") || text.includes("停用")) {
-    return "这个账号现在不能登录";
+  if (!formReady && /登录异常|登录环境异常|暂时无法登录/.test(source)) {
+    return { status: "verify", message: "京麦拒绝了这次服务器登录，请过一会儿再试" };
   }
-  return "";
+  return { status: "verify", message: "" };
+}
+
+async function readScreenState(ws) {
+  const formReady = Boolean(
+    await evaluate(ws, "!![...document.querySelectorAll('input')].find((node) => (node.placeholder || '').includes('账号'))")
+  );
+  return loginScreenState(await pageText(ws), formReady);
 }
 
 async function fillAndSubmit(ws, loginName, password) {
@@ -1141,12 +1226,12 @@ export async function openDesk({ store, loginName, password }) {
     if (hasSession(cookies)) {
       return { status: "ok", cookies: cookies };
     }
-    const message = failureMessage(await pageText(desk.ws));
-    if (message) {
+    const screen = await readScreenState(desk.ws);
+    if (screen.status === "login") {
       stopCurrent();
-      return { status: "login", message: message };
+      return screen;
     }
-    return { status: "verify" };
+    return screen;
   } catch (error) {
     stopCurrent();
     if (error && error.code === "browser") {
@@ -1170,11 +1255,7 @@ export async function pollDesk(store) {
     if (hasSession(cookies)) {
       return { status: "ok", cookies: cookies };
     }
-    const message = failureMessage(await pageText(current.ws));
-    if (message) {
-      return { status: "login", message: message };
-    }
-    return { status: "verify", message: "" };
+    return readScreenState(current.ws);
   } catch {
     return { status: "login", message: "服务器登录中断了" };
   }
@@ -1210,6 +1291,429 @@ export async function typeDesk(store, text) {
     return;
   }
   await send(current.ws, "Input.insertText", { text: value });
+}
+
+function watchShopData(ws) {
+  return new Promise(function (resolve) {
+    const timer = setTimeout(function () {
+      ws.removeEventListener("message", onMessage);
+      resolve("");
+    }, 25000);
+    function finish(text) {
+      clearTimeout(timer);
+      ws.removeEventListener("message", onMessage);
+      resolve(text || "");
+    }
+    function onMessage(event) {
+      let message;
+      try {
+        message = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      if (message.method === "Target.attachedToTarget" && message.params && message.params.sessionId) {
+        send(ws, "Network.enable", {}, message.params.sessionId).catch(function () {});
+        return;
+      }
+      if (message.method === "Network.responseReceived") {
+        const url = message.params && message.params.response ? message.params.response.url : "";
+        if (url.includes("findShopDataByChannel")) {
+          ws.__shopRequests = ws.__shopRequests || new Map();
+          ws.__shopRequests.set(message.params.requestId, message.sessionId || "");
+        }
+        return;
+      }
+      if (message.method !== "Network.loadingFinished" || !ws.__shopRequests || !ws.__shopRequests.has(message.params.requestId)) {
+        return;
+      }
+      const sessionId = ws.__shopRequests.get(message.params.requestId);
+      send(ws, "Network.getResponseBody", { requestId: message.params.requestId }, sessionId).then(function (result) {
+        const text = result.base64Encoded ? Buffer.from(result.body || "", "base64").toString("utf8") : String(result.body || "");
+        try {
+          if (extractShopDeal(JSON.parse(text))) {
+            finish(text);
+          }
+        } catch {
+          /* keep waiting for the card response */
+        }
+      }).catch(function () {});
+    }
+    ws.addEventListener("message", onMessage);
+  });
+}
+
+let dealQueue = Promise.resolve();
+
+async function prepareReader() {
+  if (current && current !== readerDesk) {
+    return null;
+  }
+  if (readerDesk && readerDesk.ws) {
+    return readerDesk;
+  }
+  const desk = await launchChrome();
+  if (current) {
+    discard(desk);
+    return null;
+  }
+  current = desk;
+  readerDesk = desk;
+  const ws = desk.ws;
+  await send(ws, "Page.enable");
+  await send(ws, "Network.enable");
+  try {
+    await send(ws, "Network.setCacheDisabled", { cacheDisabled: true });
+  } catch {
+    /* cache disable is optional */
+  }
+  try {
+    await send(ws, "Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: false, flatten: true });
+  } catch {
+    /* this page target does not attach child frames */
+  }
+  return desk;
+}
+
+function cookieParams(cookies) {
+  return (cookies || [])
+    .filter(function (item) {
+      return item && item.name && item.value != null;
+    })
+    .map(function (item) {
+      return {
+        name: String(item.name),
+        value: String(item.value),
+        domain: ".jd.com",
+        path: "/",
+        secure: true,
+        httpOnly: true,
+        sameSite: "None"
+      };
+    });
+}
+
+async function readHomeDealNow(cookies) {
+  if (readerIdle) {
+    clearTimeout(readerIdle);
+    readerIdle = null;
+  }
+  try {
+    const desk = await prepareReader();
+    if (!desk) {
+      return null;
+    }
+    const ws = desk.ws;
+    ws.__shopRequests = new Map();
+    try {
+      await send(ws, "Network.clearBrowserCookies");
+    } catch {
+      /* older chrome still replaces cookies by name */
+    }
+    try {
+      await send(ws, "Page.navigate", { url: "about:blank" });
+    } catch {
+      /* a fresh target can reject the first navigation */
+    }
+    await sleep(300);
+    const pending = watchShopData(ws);
+    const jar = cookieParams(cookies);
+    if (jar.length) {
+      await send(ws, "Network.setCookies", { cookies: jar });
+    }
+    await send(ws, "Page.navigate", { url: "https://shop.jd.com/jdm/home" });
+    const body = await pending;
+    if (body) {
+      try {
+        const metrics = extractShopDeal(JSON.parse(body));
+        if (metrics) {
+          return metrics;
+        }
+      } catch {
+        /* fall through to the rendered card */
+      }
+    }
+    const text = await evaluate(ws, `(() => {
+      const parts = [];
+      const take = (doc) => { if (doc && doc.body) parts.push(doc.body.innerText || ""); };
+      take(document);
+      document.querySelectorAll("iframe").forEach((frame) => { try { take(frame.contentDocument); } catch (e) {} });
+      return parts.join("\\n").slice(0, 8000);
+    })()`);
+    const card = parseHomeCard(text);
+    if (card) {
+      return card;
+    }
+    const error = new Error("京麦首页卡片没有成交金额");
+    error.code = "network";
+    throw error;
+  } catch (error) {
+    const keep = error && error.code === "network" && /没有成交金额/.test(String(error.message || ""));
+    if (!keep) {
+      closeReader();
+    }
+    if (error && error.code === "network") {
+      throw error;
+    }
+    if (error && error.code === "browser") {
+      return null;
+    }
+    const wrapped = new Error("京麦首页卡片没有打开");
+    wrapped.code = "network";
+    throw wrapped;
+  } finally {
+    if (readerDesk) {
+      armReaderIdle();
+    }
+  }
+}
+
+export function readHomeDeal(cookies) {
+  const job = dealQueue.then(function () {
+    return readHomeDealNow(cookies);
+  });
+  dealQueue = job.then(function () {
+    return null;
+  }, function () {
+    return null;
+  });
+  return job;
+}
+
+const STOCK_PAGE = "https://trade-warehousing-jdm.jd.com/inventory-manage";
+const STOCK_NEXT =
+  '(() => { const docs = [document]; document.querySelectorAll("iframe").forEach((frame) => { try { if (frame.contentDocument) docs.push(frame.contentDocument); } catch (e) {} }); for (const doc of docs) { const next = doc.querySelector(".jd-pagination .btn-next, .el-pagination .btn-next, button.btn-next"); if (!next) continue; const disabled = next.disabled || next.classList.contains("is-disabled") || next.getAttribute("aria-disabled") === "true"; if (disabled) return "end"; next.click(); return "next"; } return "no-pager"; })()';
+function stockPick(labelText, wanted) {
+  return (
+    "(() => { const labelText = " +
+    JSON.stringify(labelText) +
+    "; const wanted = " +
+    JSON.stringify(wanted) +
+    '; const docs = [document]; document.querySelectorAll("iframe").forEach((frame) => { try { if (frame.contentDocument) docs.push(frame.contentDocument); } catch (e) {} }); const norm = (value) => String(value || "").replace(/\\s+/g, ""); const visible = (node) => { const rect = node.getBoundingClientRect(); return rect.width > 2 && rect.height > 2; }; for (const doc of docs) { const options = doc.querySelectorAll(".jd-select-dropdown__item, .el-select-dropdown__item, [role=\\"option\\"]"); for (const option of options) { if (norm(option.innerText) !== wanted || !visible(option)) continue; const panel = option.closest(".jd-select-dropdown, .el-select-dropdown, [role=\\"listbox\\"]"); if (panel && !visible(panel)) continue; option.click(); return "picked"; } } for (const doc of docs) { const labels = doc.querySelectorAll("label, .jd-form-item__label, .el-form-item__label"); for (const label of labels) { if (norm(label.innerText).indexOf(labelText) === -1) continue; const item = label.closest(".jd-form-item, .el-form-item") || label.parentElement; const select = item && item.querySelector(".jd-select, .el-select"); if (!select) continue; const chosen = select.querySelector(".jd-select__selected-item, .el-select__selected-item, .jd-input__inner, input"); const current = norm(chosen ? chosen.value || chosen.innerText || chosen.textContent : ""); if (current === wanted) return "already"; select.click(); return "open"; } } return "missing"; })()'
+  );
+}
+
+function postedFilter(post) {
+  try {
+    const data = JSON.parse(String(post || "")).request.data;
+    const codes = Array.isArray(data.searchFeatureCodes) ? data.searchFeatureCodes.filter(Boolean) : [];
+    const status = Array.isArray(data.skuPStatuses) ? data.skuPStatuses.filter(Boolean) : [];
+    return codes.length > 0 && status.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+const STOCK_SEARCH =
+  '(() => { const docs = [document]; document.querySelectorAll("iframe").forEach((frame) => { try { if (frame.contentDocument) docs.push(frame.contentDocument); } catch (e) {} }); const norm = (value) => String(value || "").replace(/\\s+/g, ""); for (const doc of docs) { const buttons = doc.querySelectorAll("button"); for (const button of buttons) { if (norm(button.innerText) !== "查询") continue; const rect = button.getBoundingClientRect(); if (rect.width < 2 || rect.height < 2) continue; button.click(); return "search"; } } return "no-search"; })()';
+
+function watchStock(ws) {
+  const queue = [];
+  let waiter = null;
+  ws.__stockRequests = new Map();
+  ws.__stockPosts = new Map();
+  function push(entry) {
+    if (!entry || !entry.text) {
+      return;
+    }
+    if (waiter) {
+      const resolve = waiter;
+      waiter = null;
+      resolve(entry);
+    } else {
+      queue.push(entry);
+    }
+  }
+  function onMessage(event) {
+    let message;
+    try {
+      message = JSON.parse(event.data);
+    } catch {
+      return;
+    }
+    if (message.method === "Target.attachedToTarget" && message.params && message.params.sessionId) {
+      send(ws, "Network.enable", {}, message.params.sessionId).catch(function () {});
+      return;
+    }
+    if (message.method === "Network.requestWillBeSent") {
+      const request = message.params && message.params.request ? message.params.request : {};
+      if (String(request.url || "").includes("queryStockByPage")) {
+        ws.__stockPosts.set(message.params.requestId, String(request.postData || ""));
+      }
+      return;
+    }
+    if (message.method === "Network.responseReceived") {
+      const url = message.params && message.params.response ? message.params.response.url : "";
+      if (String(url).includes("queryStockByPage")) {
+        ws.__stockRequests.set(message.params.requestId, message.sessionId || "");
+      }
+      return;
+    }
+    if (message.method !== "Network.loadingFinished" || !ws.__stockRequests.has(message.params.requestId)) {
+      return;
+    }
+    const sessionId = ws.__stockRequests.get(message.params.requestId);
+    const post = ws.__stockPosts.get(message.params.requestId) || "";
+    ws.__stockRequests.delete(message.params.requestId);
+    ws.__stockPosts.delete(message.params.requestId);
+    send(ws, "Network.getResponseBody", { requestId: message.params.requestId }, sessionId)
+      .then(function (result) {
+        const text = result.base64Encoded ? Buffer.from(result.body || "", "base64").toString("utf8") : String(result.body || "");
+        const trimmed = text.trim();
+        if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+          push({ text: trimmed, post: post });
+        }
+      })
+      .catch(function () {});
+  }
+  ws.addEventListener("message", onMessage);
+  return {
+    next: function (ms) {
+      if (queue.length) {
+        return Promise.resolve(queue.shift());
+      }
+      return new Promise(function (resolve) {
+        const timer = setTimeout(function () {
+          waiter = null;
+          resolve("");
+        }, ms);
+        waiter = function (text) {
+          clearTimeout(timer);
+          resolve(text);
+        };
+      });
+    },
+    stop: function () {
+      waiter = null;
+      ws.removeEventListener("message", onMessage);
+    }
+  };
+}
+
+async function readShopStockNow(cookies) {
+  if (readerIdle) {
+    clearTimeout(readerIdle);
+    readerIdle = null;
+  }
+  let watch = null;
+  try {
+    const desk = await prepareReader();
+    if (!desk) {
+      return null;
+    }
+    const ws = desk.ws;
+    try {
+      await send(ws, "Network.clearBrowserCookies");
+    } catch {
+      /* older chrome still replaces cookies by name */
+    }
+    try {
+      await send(ws, "Page.navigate", { url: "about:blank" });
+    } catch {
+      /* a fresh target can reject the first navigation */
+    }
+    await sleep(300);
+    watch = watchStock(ws);
+    const jar = cookieParams(cookies);
+    if (jar.length) {
+      await send(ws, "Network.setCookies", { cookies: jar });
+    }
+    await send(ws, "Page.navigate", { url: STOCK_PAGE });
+    const first = await watch.next(30000);
+    if (!first || !first.text) {
+      const href = await evaluate(ws, "location.href");
+      if (/passport|login/i.test(String(href || ""))) {
+        const error = new Error("登录已失效，请重新登录");
+        error.code = "login";
+        throw error;
+      }
+      const error = new Error("京仓库存页面没有返回");
+      error.code = "network";
+      throw error;
+    }
+    async function choose(label, option) {
+      let action = "missing";
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        action = await evaluate(ws, stockPick(label, option));
+        if (action === "already" || action === "picked" || action === "missing") {
+          return action || "missing";
+        }
+        await sleep(400);
+      }
+      return action || "open";
+    }
+    const statusAction = await choose("商品状态", "在售");
+    const labelAction = await choose("商品标签", "京东物流");
+    let stray = await watch.next(400);
+    let lastStray = null;
+    for (let extra = 0; extra < 6 && stray; extra += 1) {
+      lastStray = stray;
+      stray = await watch.next(300);
+    }
+    const searched = await evaluate(ws, STOCK_SEARCH);
+    let pageOne = null;
+    for (let wait = 0; wait < 4 && !(pageOne && postedFilter(pageOne.post)); wait += 1) {
+      const entry = await watch.next(wait === 0 ? 15000 : 4000);
+      if (!entry || !entry.text) {
+        break;
+      }
+      pageOne = entry;
+    }
+    if ((!pageOne || !pageOne.text) && lastStray && lastStray.text && searched !== "search") {
+      pageOne = lastStray;
+    }
+    const texts = [];
+    const posts = [];
+    if (pageOne && pageOne.text) {
+      texts.push(pageOne.text);
+      posts.push(pageOne.post || "");
+    }
+    for (let page = 0; page < 20 && texts.length; page += 1) {
+      const action = await evaluate(ws, STOCK_NEXT);
+      if (action !== "next") {
+        break;
+      }
+      let more = await watch.next(12000);
+      if (!more || !more.text) {
+        more = await watch.next(8000);
+      }
+      if (!more || !more.text) {
+        break;
+      }
+      texts.push(more.text);
+      posts.push(more.post || "");
+    }
+    const chose = (statusAction === "already" || statusAction === "picked") && (labelAction === "already" || labelAction === "picked");
+    return { texts: texts, posts: posts, chose: chose };
+  } catch (error) {
+    if (!error || error.code !== "network") {
+      closeReader();
+    }
+    if (error && (error.code === "login" || error.code === "network")) {
+      throw error;
+    }
+    const wrapped = new Error("京仓库存页面没有打开");
+    wrapped.code = "network";
+    throw wrapped;
+  } finally {
+    if (watch) {
+      watch.stop();
+    }
+    if (readerDesk) {
+      armReaderIdle();
+    }
+  }
+}
+
+export function readShopStock(cookies) {
+  const job = dealQueue.then(function () {
+    return readShopStockNow(cookies);
+  });
+  dealQueue = job.then(function () {
+    return null;
+  }, function () {
+    return null;
+  });
+  return job;
 }
 
 export const jingmaiDesk = {

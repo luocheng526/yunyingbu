@@ -1,6 +1,6 @@
 import { browserReady, ensureChrome, jingmaiDesk } from "./jingmai-desk.js";
 import { jingmaiClient } from "./jingmai-client.js";
-import { beijingParts, runTick } from "./jingmai.js";
+import { beijingParts, runTick, sampleFields } from "./jingmai.js";
 import { listCollectTargets, listSessions, markAuth, readJingmaiLive, saveSample, saveSession, setRoster } from "./jingmai-store.js";
 
 const INTERVAL_MS = 5 * 60 * 1000;
@@ -94,16 +94,7 @@ async function connectOne(shop) {
     const metrics = await deps.client.fetchHome(cookies);
     await saveSession(shop.store, { cookies: cookies, authState: "ok", authMessage: "", enabled: true });
     const now = beijingParts();
-    await saveSample({
-      store: shop.store,
-      day: now.day,
-      capturedAt: now.stamp,
-      dealAmount: metrics.dealAmount,
-      orderCount: metrics.orderCount,
-      customerCount: metrics.customerCount,
-      yesterdayAmount: metrics.yesterdayAmount,
-      ok: true
-    });
+    await saveSample(Object.assign({ store: shop.store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics)));
     return { store: shop.store, ok: true };
   } catch (error) {
     if (error && error.code === "login") {
@@ -165,16 +156,7 @@ async function rememberLogin(store, cookies) {
   try {
     const metrics = await deps.client.fetchHome(cookies);
     const now = beijingParts();
-    await saveSample({
-      store: store,
-      day: now.day,
-      capturedAt: now.stamp,
-      dealAmount: metrics.dealAmount,
-      orderCount: metrics.orderCount,
-      customerCount: metrics.customerCount,
-      yesterdayAmount: metrics.yesterdayAmount,
-      ok: true
-    });
+    await saveSample(Object.assign({ store: store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics)));
   } catch (error) {
     if (error && error.code === "login") {
       await markAuth(store, "login_expired", "登录已失效，请重新登录");
@@ -198,7 +180,11 @@ async function startQueued(shop) {
     return advanceAfterSuccess(shop.store);
   }
   if (opened.status === "verify") {
-    return publicState({ status: "screen", store: shop.store, message: "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。" });
+    return publicState({
+      status: "screen",
+      store: shop.store,
+      message: opened.message || "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。"
+    });
   }
   await deps.desk.close();
   if (String(opened.message || "").includes("浏览器")) {
@@ -378,16 +364,7 @@ export async function finishRelogin(store, authCode) {
     const metrics = await deps.client.fetchHome(jar);
     await saveSession(name, { cookies: jar, authState: "ok", authMessage: "", enabled: true });
     const now = beijingParts();
-    await saveSample({
-      store: name,
-      day: now.day,
-      capturedAt: now.stamp,
-      dealAmount: metrics.dealAmount,
-      orderCount: metrics.orderCount,
-      customerCount: metrics.customerCount,
-      yesterdayAmount: metrics.yesterdayAmount,
-      ok: true
-    });
+    await saveSample(Object.assign({ store: name, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics)));
     return { ok: true, store: name, status: "ok" };
   } catch (error) {
     const message = error && error.code === "login" ? error.message : "登录没有通过，请再试一次";

@@ -376,6 +376,19 @@ test("shen module mounts product and paid content only", async () => {
   await withServer(async (base) => {
     const embed = await request(base, "/shared/modules/shen.js");
     assert.equal(embed.res.status, 200);
+    assert.match(embed.text, /XmModules\["\/shen\/jingcang"\]/);
+    assert.match(embed.text, /shen-jingcang\.css/);
+    assert.match(embed.text, /xm-jc-wh-head/);
+    assert.match(embed.text, /xm-jc-wh-qty/);
+    assert.match(embed.text, /xm-jc-pill/);
+    assert.match(embed.text, /有货的仓/);
+    assert.match(embed.text, /有货在前/);
+    assert.match(embed.text, /RASW潮流生活旗舰店/);
+    assert.match(embed.text, /1023541407306/);
+    assert.match(embed.text, /indexOf\("全国仓"\)/);
+    assert.match(embed.text, /jingcang-sample\.png/);
+    assert.match(embed.text, /\/api\/shen\/jingcang/);
+    assert.match(embed.text, /data-jc-group/);
     assert.match(embed.text, /XmModules\["\/shen\/product"\]/);
     assert.match(embed.text, /XmModules\["\/shen\/product\/xuanpin"\]/);
     assert.match(embed.text, /XmModules\["\/shen\/product\/youhua"\]/);
@@ -389,6 +402,8 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /\/api\/shen\/paid\/jingmai/);
     assert.match(embed.text, /连接京麦/);
     assert.match(embed.text, /重新登录/);
+    assert.match(embed.text, /xm-hl-net is-on">在线/);
+    assert.match(embed.text, /xm-hl-net is-off">掉线/);
     assert.match(embed.text, /data-relogin/);
     assert.match(embed.text, /\/api\/shen\/paid\/jingmai\/relogin\/screen/);
     assert.match(embed.text, /\/api\/shen\/paid\/jingmai\/relogin\/all/);
@@ -416,6 +431,15 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /全部汇总/);
     assert.match(embed.text, /店铺列表/);
     assert.match(embed.text, /责权归属/);
+    assert.match(embed.text, /store\.reserve/);
+    assert.match(embed.text, /xm-hl-group/);
+    assert.match(embed.text, /杨润泽组/);
+    assert.match(embed.text, /张文静组/);
+    assert.match(embed.text, /高丽男组/);
+    assert.match(embed.text, /张鹏组/);
+    assert.match(embed.text, /data-fee-filter/);
+    assert.match(embed.text, /feeWatch === next \? "" : next/);
+    assert.match(embed.text, /没有费比超标的店铺/);
     assert.match(embed.text, /表头设置/);
     assert.equal(embed.text.includes("/api/shen/paid?view=latest"), false);
     const css = await request(base, "/shared/shen-paid.css");

@@ -1,4 +1,5 @@
 export const SHEN_SUBMENUS = [
+  { slug: "jingcang", href: "/shen/jingcang", label: "京仓管理" },
   { slug: "product/xuanpin", href: "/shen/product/xuanpin", label: "选品" },
   { slug: "product/youhua", href: "/shen/product/youhua", label: "优化" },
   { slug: "product/chengzhang", href: "/shen/product/chengzhang", label: "产品成长" },

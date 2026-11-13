@@ -2,10 +2,21 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
-import { buildLiveView, hoursFromSamples, jingmaiError, parseRealtime, runTick } from "../src/modules/shen/jingmai.js";
-import { interpretQrCheck } from "../src/modules/shen/jingmai-client.js";
+import {
+  buildLiveView,
+  collectPinIds,
+  extractPaid,
+  extractShopDeal,
+  parseHomeCard,
+  hoursFromSamples,
+  jingmaiError,
+  paidQuery,
+  parseRealtime,
+  runTick
+} from "../src/modules/shen/jingmai.js";
+import { fetchHome, interpretQrCheck } from "../src/modules/shen/jingmai-client.js";
 import { passwordFailureMessage } from "../src/modules/shen/jingmai-client.js";
-import { libraryPackageNames, packageFilename, suiteForGlibc } from "../src/modules/shen/jingmai-desk.js";
+import { libraryPackageNames, loginScreenState, packageFilename, suiteForGlibc } from "../src/modules/shen/jingmai-desk.js";
 import { beginRelogin, beginReloginAll, connectJingmai, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/shen/jingmai-runner.js";
 import { listSessions, readJingmaiLive, resetJingmaiStore, saveSample, saveSession } from "../src/modules/shen/jingmai-store.js";
 
@@ -14,6 +25,14 @@ const now = { day: "2026-11-12", stamp: "2026-11-12 11:05:00", hour: 11, clock: 
 function shop(name) {
   return { store: name, enabled: true, authState: "ok", cookies: [{ name: "thor", value: name }] };
 }
+
+test("a login page that still has the account box stays on screen", () => {
+  assert.equal(loginScreenState("登录异常 忘记密码", true).status, "verify");
+  assert.equal(loginScreenState("登录异常 忘记密码", true).message, "");
+  assert.equal(loginScreenState("登录异常，请稍后再试", false).status, "verify");
+  assert.match(loginScreenState("登录异常，请稍后再试", false).message, /请过一会儿再试/);
+  assert.equal(loginScreenState("账号或密码不正确", true).status, "login");
+});
 
 test("chrome library map names libatk and skips libc", () => {
   assert.deepEqual(libraryPackageNames("libatk-1.0.so.0"), ["libatk1.0-0t64", "libatk1.0-0"]);
@@ -41,6 +60,68 @@ test("realtime parser keeps a real zero and treats login failure separately from
   assert.throws(() => parseRealtime(500, "<html>busy</html>", ""), (error) => error.code === "network");
   const timeout = jingmaiError("timeout", "采集超时");
   assert.equal(timeout.code, "timeout");
+});
+
+test("homepage deal and jingzhuntong paid fields stay separate", () => {
+  const deal = extractShopDeal({
+    data: {
+      channelData: {
+        indicatorList: [
+          { code: "3009", name: "成交总金额", todayNum: "12,967.90", yesterdayNum: "17,920.00" },
+          { code: "3001", name: "成交总单量", todayNum: 42 },
+          { code: "3008", name: "成交客户数", todayNum: "41" },
+          { code: "3010", name: "PC成交金额", todayNum: "100.00" }
+        ]
+      }
+    }
+  });
+  assert.equal(deal.dealAmount, 12967.9);
+  assert.equal(deal.orderCount, 42);
+  assert.equal(deal.customerCount, 41);
+  assert.equal(deal.yesterdayAmount, 17920);
+  const paid = extractPaid({
+    summary: [
+      { index: "cost", value: 6507.32 },
+      { index: "totalOrderSum", value: 11968 },
+      { index: "ROI", value: 2.17 }
+    ]
+  });
+  assert.equal(paid.paidAmount, 6507.32);
+  assert.equal(paid.paidDeal, 11968);
+  assert.equal(paid.paidRoi, 2.17);
+  assert.notEqual(paid.paidRoi, paid.paidDeal / paid.paidAmount);
+  const query = paidQuery("2026-11-12", [101, 102]);
+  assert.deepEqual(query.businessType, [-4, 256]);
+  assert.equal(query.clickOrOrderDay, 15);
+  assert.equal(query.clickOrOrderCaliber, 0);
+  assert.equal(query.isGift, 0);
+  assert.equal(query.orderStatusCategory, 1);
+  assert.equal(query.startDate, "2026-11-12");
+  assert.deepEqual(collectPinIds({ own: [{ userId: 7 }, { userId: "8" }], value: [{ userId: 7 }] }, { value: [{ userId: 9 }] }), [7, 8, 9]);
+});
+
+test("paid numbers count as a successful collection when deal is still empty", () => {
+  const view = buildLiveView({
+    now: now,
+    shops: [{ store: "甲店", enabled: true, authState: "ok", cookies: [{ name: "thor", value: "secret" }] }],
+    samples: [
+      {
+        store: "甲店",
+        day: "2026-11-12",
+        capturedAt: "2026-11-12 13:08:00",
+        dealAmount: null,
+        paidAmount: 0,
+        paidDeal: 11968,
+        paidRoi: 2.17,
+        ok: true
+      }
+    ]
+  });
+  assert.equal(view.successShops, 1);
+  assert.equal(view.shops[0].dealAmount, null);
+  assert.equal(view.shops[0].paidAmount, 0);
+  assert.equal(view.shops[0].paidRoi, 2.17);
+  assert.equal(JSON.stringify(view).includes("secret"), false);
 });
 
 test("missing hours stay empty and a collected zero is kept", () => {
@@ -81,6 +162,9 @@ test("live view counts successful shops and does not expose cookies", () => {
   assert.equal(view.successShops, 1);
   assert.equal(view.enabledShops, 2);
   assert.equal(view.loginExpiredShops, 1);
+  assert.equal(view.shops[0].online, true);
+  assert.equal(view.shops[1].online, false);
+  assert.equal(view.shops[1].loginExpired, true);
   assert.equal(view.updatedAt, "2026/11/12 11:05:00");
   assert.equal(view.shops[0].dealAmount, 0);
   assert.equal(view.shops[1].dealAmount, null);
@@ -237,6 +321,40 @@ test("connect timeout does not mark the shop logged out", async () => {
   }
 });
 
+test("jingmai rejection keeps the server screen open", async () => {
+  await resetJingmaiStore();
+  let closed = 0;
+  setJingmaiDeps({
+    loadOrg: async () => [{ store: "甲店", enabled: true, login: "acct", password: "secret-pass" }],
+    client: { fetchHome: async () => ({ dealAmount: 1, orderCount: 1, customerCount: 1, yesterdayAmount: null }) },
+    desk: {
+      open: async () => ({ status: "verify", message: "京麦拒绝了这次服务器登录，请过一会儿再试" }),
+      poll: async () => ({ status: "verify", message: "京麦拒绝了这次服务器登录，请过一会儿再试" }),
+      shot: async () => Buffer.from([1, 2, 3]),
+      click: async () => {},
+      type: async () => {},
+      close: async () => {
+        closed += 1;
+      },
+      reset() {}
+    }
+  });
+  try {
+    const opened = await beginRelogin("甲店", "mk_sid=test");
+    assert.equal(opened.status, "screen");
+    assert.match(opened.message, /请过一会儿再试/);
+    const afterOpen = closed;
+    const waiting = await reloginState("甲店");
+    assert.equal(waiting.status, "screen");
+    assert.equal(closed, afterOpen);
+    const live = await readJingmaiLive();
+    assert.equal(live.shops.some((item) => item.loginExpired), false);
+  } finally {
+    resetJingmaiDeps();
+    await resetJingmaiStore();
+  }
+});
+
 test("server login keeps the password and session off the response", async () => {
   assert.equal(passwordFailureMessage({ data: { emptyAuthcode: true } }), "请先完成滑动验证");
   assert.equal(passwordFailureMessage({ code: 0, data: { failCode: 2 } }), "账号或密码不正确");
@@ -362,8 +480,132 @@ test("jingmai route returns collected deals and hides the session", async () => 
     assert.equal(shop.dealAmount, 0);
     assert.equal(shop.orderCount, 0);
     assert.equal(JSON.stringify(body).includes("hidden"), false);
+    assert.equal(shop.dealNote || "", "");
   } finally {
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
     await resetJingmaiStore();
   }
+});
+
+function jsonReply(body, status = 200) {
+  return {
+    status: status,
+    headers: { get: () => "" },
+    text: async () => (typeof body === "string" ? body : JSON.stringify(body))
+  };
+}
+
+test("homepage card text keeps today's deal amount", () => {
+  const card = parseHomeCard("经营数据\n成交金额\n¥12,967.90\n较昨日 -27.63%\n成交单量\n42\n成交客户数\n41\n");
+  assert.equal(card.dealAmount, 12967.9);
+  assert.equal(card.orderCount, 42);
+  assert.equal(card.customerCount, 41);
+  assert.equal(parseHomeCard("推广数据\n花费 5"), null);
+});
+
+test("deal card is read from the layer that contains channel data", () => {
+  const metrics = extractShopDeal({
+    code: 200,
+    data: {
+      freeBrand: false,
+      channelData: {
+        indicatorList: [{ code: "3009", name: "成交总金额", todayNum: "12,967.90", yesterdayNum: "17920" }]
+      },
+      data: { freeBrand: false }
+    }
+  });
+  assert.equal(metrics.dealAmount, 12967.9);
+  assert.equal(metrics.yesterdayAmount, 17920);
+});
+
+test("a busy homepage retries and then reads the deal card", async () => {
+  const previous = process.env.SHEN_DEAL_RETRY_MS;
+  process.env.SHEN_DEAL_RETRY_MS = "0";
+  let shopCalls = 0;
+  try {
+    const result = await fetchHome([{ name: "thor", value: "hidden-jar" }], async (url) => {
+      if (String(url).includes("findAccountInfo")) {
+        return jsonReply({ code: 200, data: { currentBelongType: 200, belongVos: [{ belongType: 200, businessFieldCode: "omni" }] } });
+      }
+      if (String(url).includes("findShopDataByChannel")) {
+        shopCalls += 1;
+        if (shopCalls < 3) {
+          return jsonReply({ code: 601, msg: "操作频繁，请稍后重试" });
+        }
+        return jsonReply({
+          code: "200",
+          data: { channelData: { indicatorList: [{ code: "3009", name: "成交总金额", todayNum: "8,614.12", yesterdayNum: "1000" }] } }
+        });
+      }
+      if (String(url).includes("pinlist")) {
+        return jsonReply({ code: 1, data: { own: [{ userId: 7 }] } });
+      }
+      if (String(url).includes("summary/overview")) {
+        return jsonReply({ code: 1, data: { summary: [{ index: "cost", value: "10" }, { index: "totalOrderSum", value: "20" }, { index: "ROI", value: "2" }] } });
+      }
+      return jsonReply("<html>busy</html>");
+    });
+    assert.equal(result.dealAmount, 8614.12);
+    assert.equal(result.paidAmount, 10);
+    assert.equal(shopCalls, 3);
+  } finally {
+    if (previous == null) {
+      delete process.env.SHEN_DEAL_RETRY_MS;
+    } else {
+      process.env.SHEN_DEAL_RETRY_MS = previous;
+    }
+  }
+});
+
+test("homepage deal uses the shop card and keeps the gateway reason when it fails", async () => {
+  const result = await fetchHome([{ name: "thor", value: "hidden-jar" }], async (url) => {
+    if (String(url).includes("findAccountInfo")) {
+      return jsonReply({
+        code: 200,
+        data: { currentBelongType: 200, belongVos: [{ belongType: 200, businessFieldCode: "omni" }] }
+      });
+    }
+    if (String(url).includes("findShopDataByChannel")) {
+      return jsonReply({
+        code: "200",
+        data: {
+          channelData: {
+            indicatorList: [{ code: "3009", name: "成交总金额", todayNum: "1,234.50", yesterdayNum: "1000" }]
+          }
+        }
+      });
+    }
+    if (String(url).includes("pinlist")) {
+      return jsonReply({ code: 1, data: { own: [{ userId: 7 }] } });
+    }
+    if (String(url).includes("summary/overview")) {
+      return jsonReply({
+        code: 1,
+        data: { summary: [{ index: "cost", value: "10" }, { index: "totalOrderSum", value: "20" }, { index: "ROI", value: "2" }] }
+      });
+    }
+    return jsonReply("<html>busy</html>");
+  });
+  assert.equal(result.dealAmount, 1234.5);
+  assert.equal(result.paidAmount, 10);
+  assert.equal(result.paidRoi, 2);
+  assert.equal(result.dealNote || "", "");
+
+  const failed = await fetchHome([{ name: "thor", value: "hidden-jar" }], async (url) => {
+    if (String(url).includes("findAccountInfo") || String(url).includes("findShopDataByChannel")) {
+      return jsonReply({ code: 321, msg: "appId同源限制 cookie=thor" });
+    }
+    if (String(url).includes("pinlist")) {
+      return jsonReply({ code: 1, data: { own: [{ userId: 7 }] } });
+    }
+    if (String(url).includes("summary/overview")) {
+      return jsonReply({ code: 1, data: { summary: [{ index: "cost", value: "11" }] } });
+    }
+    return jsonReply("<html>未登录</html>");
+  });
+  assert.equal(failed.dealAmount, null);
+  assert.equal(failed.paidAmount, 11);
+  assert.equal(String(failed.dealNote).includes("321"), true);
+  assert.equal(String(failed.dealNote).includes("thor"), false);
+  assert.equal(String(failed.dealNote).includes("cookie"), false);
 });
