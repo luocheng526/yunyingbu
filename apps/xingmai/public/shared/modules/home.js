@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.905-roi */
+/* xm-module-home 0.1.911-shops */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -1091,11 +1091,22 @@
     return { lo: n, hi: n };
   }
   function scrapedFeeRange(shop) {
-    try {
-      return parseFeeRangeText(JSON.parse(localStorage.getItem("shen-home-fee-targets") || "{}")[shop]);
-    } catch (_err) {
-      return { lo: null, hi: null };
+    var keys = ["han-fee-targets", "shen-fee-targets", "shen-home-fee-targets"];
+    var i;
+    var raw;
+    var book;
+    for (i = 0; i < keys.length; i += 1) {
+      try {
+        raw = JSON.parse(localStorage.getItem(keys[i]) || "{}");
+      } catch (_err) {
+        raw = {};
+      }
+      book = raw && raw.targets && typeof raw.targets === "object" ? raw.targets : raw;
+      if (book && Object.prototype.hasOwnProperty.call(book, shop)) {
+        return parseFeeRangeText(book[shop]);
+      }
     }
+    return { lo: null, hi: null };
   }
   function feeRangeOf(row) {
     if (!row || typeof row !== "object") {
@@ -2400,7 +2411,7 @@
     hideCardTip();
     hideLineTip(root);
     var searchDraft = liveSearchDraft(root);
-    board.setAttribute("data-hm-js", "0.1.905-roi");
+    board.setAttribute("data-hm-js", "0.1.911-shops");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -3519,6 +3530,113 @@
       yesterday: { records: [], summary: {}, hourly: {} }
     };
   }
+  function liveDayOf(row) {
+    var raw = String((row && (row.date || row.day || row.bizDate || row.capturedAt || row.ingestedAt)) || "");
+    var m = raw.match(/(\d{4}-\d{2}-\d{2})/);
+    return m ? m[1] : "";
+  }
+  function liveShopName(row) {
+    return String((row && (row.shopName || row.shop || row.store || row["店铺名称"])) || "").trim();
+  }
+  function liveList(pack, keys) {
+    var i;
+    var nest;
+    if (!pack || typeof pack !== "object") {
+      return [];
+    }
+    for (i = 0; i < keys.length; i += 1) {
+      if (Array.isArray(pack[keys[i]])) {
+        return pack[keys[i]];
+      }
+    }
+    nest = pack.data || pack.result || pack.payload;
+    if (nest && typeof nest === "object") {
+      for (i = 0; i < keys.length; i += 1) {
+        if (Array.isArray(nest[keys[i]])) {
+          return nest[keys[i]];
+        }
+      }
+    }
+    return [];
+  }
+  function livePaidRow(row, source) {
+    var shop = liveShopName(row);
+    var spend;
+    var jingmai;
+    var deal;
+    var fee;
+    if (!shop) {
+      return null;
+    }
+    spend = asNum(row.paidAmount != null ? row.paidAmount : row.spend != null ? row.spend : row.totalPromotionCost);
+    jingmai = asNum(row.jingmaiGmv != null ? row.jingmaiGmv : row.liveAmount != null ? row.liveAmount : row.dealAmount != null ? row.dealAmount : row.gmv);
+    deal = asNum(row.paidDeal != null ? row.paidDeal : row.totalOrderAmount != null ? row.totalOrderAmount : row.payAmount);
+    fee = asNum(row.feeRate != null ? row.feeRate : row.realFeeRatio != null ? row.realFeeRatio : row.promotionRate);
+    if (fee === 0) {
+      fee = null;
+    }
+    if (fee == null && spend != null && jingmai) {
+      fee = spend / jingmai;
+    }
+    return {
+      shopName: shop,
+      shop: shop,
+      source: source,
+      date: liveDayOf(row),
+      paidAmount: spend,
+      paidDeal: deal != null ? deal : jingmai,
+      liveAmount: jingmai,
+      jingmaiGmv: jingmai,
+      feeRate: fee,
+      roi: asNum(row.roi),
+      accountId: String((row && (row.accountId || row.jzAccount)) || "").trim(),
+      capturedAt: String((row && (row.capturedAt || row.ingestedAt)) || ""),
+      success: String((row && (row.success || row.jzOk)) || ""),
+      feeLo: asNum(row.feeLo != null ? row.feeLo : row.feeMin),
+      feeHi: asNum(row.feeHi != null ? row.feeHi : row.feeMax)
+    };
+  }
+  function mergeLivePaid(han, shen, jingmai, ymd) {
+    var map = {};
+    function add(list, source) {
+      (list || []).forEach(function (row) {
+        var day = liveDayOf(row);
+        var rec;
+        var cur;
+        if (day && ymd && day !== ymd) {
+          return;
+        }
+        rec = livePaidRow(row, source);
+        if (!rec) {
+          return;
+        }
+        cur = map[rec.shopName];
+        map[rec.shopName] = cur
+          ? Object.assign({}, cur, rec, {
+              paidAmount: rec.paidAmount != null ? rec.paidAmount : cur.paidAmount,
+              paidDeal: rec.paidDeal != null ? rec.paidDeal : cur.paidDeal,
+              liveAmount: rec.liveAmount != null ? rec.liveAmount : cur.liveAmount,
+              jingmaiGmv: rec.jingmaiGmv != null ? rec.jingmaiGmv : cur.jingmaiGmv,
+              capturedAt: rec.capturedAt || cur.capturedAt,
+              source: cur.source && rec.source && cur.source !== rec.source ? "han+shen" : rec.source || cur.source
+            })
+          : rec;
+      });
+    }
+    add(liveList(han, ["shops", "rows", "items", "records"]), "han");
+    add(liveList(shen, ["rows", "shops", "items", "records"]), "shen");
+    add(liveList(jingmai, ["shops", "rows"]), "shen");
+    return {
+      ok: true,
+      source: "han-shen-local",
+      records: Object.keys(map).map(function (name) {
+        return map[name];
+      }),
+      yesterday: { records: [] },
+      hourly: {},
+      summary: {}
+    };
+  }
   function scopeLocalPaid(pack, keys) {
     var src = pack || emptyLocalPaid();
     function onDuty(row) {
@@ -3982,7 +4100,7 @@
         source: ""
       };
       var poll = 0;
-      var LIVE_REFRESH_MS = 5 * 60 * 1000;
+      var LIVE_REFRESH_MS = 10 * 60 * 1000;
       cardSetOpen = false;
       paint(root, state);
       function shanghaiClock(date) {
@@ -4043,8 +4161,14 @@
         paint(root, state);
       }
       function pullLocalPaid() {
-        return api("/api/home/local-paid").then(function (data) {
-          return data && data.ok ? data : emptyLocalPaid();
+        var ymd = shanghaiYmd(0);
+        return Promise.all([
+          api("/api/han/worker?view=overview"),
+          api("/api/shen/paid?latest=1&from=" + encodeURIComponent(ymd) + "&to=" + encodeURIComponent(ymd)),
+          api("/api/shen/paid/jingmai")
+        ]).then(function (pack) {
+          var merged = mergeLivePaid(pack[0], pack[1], pack[2], ymd);
+          return merged.records && merged.records.length ? merged : emptyLocalPaid();
         }).catch(function () {
           return emptyLocalPaid();
         });

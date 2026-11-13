@@ -59,7 +59,10 @@ test("homepage local-paid route is mounted", async () => {
 test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.match(homeJs, /function fillLocalPaid/);
   assert.match(homeJs, /function pullLocalPaid/);
-  assert.match(homeJs, /\/api\/home\/local-paid/);
+  assert.match(homeJs, /\/api\/han\/worker\?view=overview/);
+  assert.match(homeJs, /\/api\/shen\/paid\?latest=1/);
+  assert.match(homeJs, /\/api\/shen\/paid\/jingmai/);
+  assert.match(homeJs, /function mergeLivePaid/);
   assert.match(homeJs, /paidAmount: "—"/);
   assert.match(homeJs, /function liveCardsOf/);
   assert.match(homeJs, /label: "实时付费接入店铺数量"/);
@@ -308,4 +311,61 @@ test("local-paid route pulls han and shen siblings", async () => {
     setLocalPaidSnapPath(prev);
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
+});
+
+test("homepage client mergeLivePaid builds shop rows from 韩/沈 APIs", () => {
+  const pick = (name) => {
+    const start = homeJs.indexOf("function " + name);
+    assert.notEqual(start, -1, name);
+    let depth = 0;
+    for (let i = start; i < homeJs.length; i += 1) {
+      if (homeJs[i] === "{") depth += 1;
+      if (homeJs[i] === "}") {
+        depth -= 1;
+        if (depth === 0) return homeJs.slice(start, i + 1);
+      }
+    }
+    throw new Error("unclosed " + name);
+  };
+  const fns = new Function(
+    pick("asNum") +
+      pick("liveDayOf") +
+      pick("liveShopName") +
+      pick("liveList") +
+      pick("livePaidRow") +
+      pick("mergeLivePaid") +
+      "return {mergeLivePaid};"
+  )();
+  const ymd = "2026-11-13";
+  const merged = fns.mergeLivePaid(
+    {
+      ok: true,
+      shops: [
+        { store: "韩店", date: ymd, spend: 10, jingmaiGmv: 40, capturedAt: "2026-11-13T10:00:00+08:00", accountId: "1" },
+        { store: "旧店", date: "2026-01-01", spend: 99, jingmaiGmv: 99 }
+      ]
+    },
+    {
+      ok: true,
+      data: {
+        rows: [{ store: "沈店", date: ymd, spend: 5, jingmaiGmv: 20, totalOrderAmount: 18 }]
+      }
+    },
+    { shops: [{ store: "京麦店", dealAmount: 12 }] },
+    ymd
+  );
+  assert.deepEqual(merged.records.map((row) => row.shopName).sort(), ["京麦店", "沈店", "韩店"]);
+  assert.equal(merged.records.find((row) => row.shopName === "韩店").paidAmount, 10);
+  assert.equal(merged.records.find((row) => row.shopName === "沈店").paidDeal, 18);
+  assert.equal(merged.records.find((row) => row.shopName === "京麦店").liveAmount, 12);
+});
+
+test("local-paid pack always has ok and records, never empty object", async () => {
+  const data = await getHomeLocalPaid();
+  assert.equal(data.ok, true);
+  assert.equal(data.source, "han-shen-local");
+  assert.equal(Array.isArray(data.records), true);
+  assert.doesNotMatch(homeJs, /\/api\/han\/fee-targets/);
+  assert.doesNotMatch(homeJs, /\/api\/shen\/fee-targets/);
+  assert.match(homeJs, /LIVE_REFRESH_MS = 10 \* 60 \* 1000/);
 });

@@ -190,7 +190,9 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function liveBoardOf/);
   assert.match(homeJs, /function livePickKeys/);
   assert.match(homeJs, /function seesAllLiveShops/);
-  assert.match(homeJs, /\/api\/home\/local-paid/);
+  assert.match(homeJs, /\/api\/han\/worker\?view=overview/);
+  assert.match(homeJs, /\/api\/shen\/paid\?latest=1/);
+  assert.match(homeJs, /\/api\/shen\/paid\/jingmai/);
   assert.match(homeJs, /xm-hm-live-at">更新时间 /);
   assert.match(homeJs, /实时只汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」/);
   assert.match(homeJs, /\/api\/home\/erp-paid/);
@@ -1097,7 +1099,12 @@ test("fee target is a range and 费比监控 uses 超标 / 加大付费", () => 
   assert.equal(fns.feeGoalCellHtml({}), "—");
   assert.doesNotMatch(fns.feeGoalCellHtml({ feeLo: 10, feeHi: 20 }), /<input/);
   assert.match(homeJs, /function scrapedFeeRange/);
+  assert.match(homeJs, /han-fee-targets/);
+  assert.match(homeJs, /shen-fee-targets/);
   assert.match(homeJs, /shen-home-fee-targets/);
+  assert.doesNotMatch(homeJs, /\/api\/han\/fee-targets/);
+  assert.doesNotMatch(homeJs, /function overlayFeeBooks/);
+  assert.match(homeJs, /LIVE_REFRESH_MS = 10 \* 60 \* 1000/);
   const feeStore = {};
   globalThis.localStorage = {
     getItem(key) {
@@ -1107,10 +1114,14 @@ test("fee target is a range and 费比监控 uses 超标 / 加大付费", () => 
       feeStore[key] = String(value);
     }
   };
+  feeStore["han-fee-targets"] = JSON.stringify({
+    DIKTT潮流生活旗舰店: { lo: 30, hi: 45 }
+  });
   feeStore["shen-home-fee-targets"] = JSON.stringify({
     RADW潮流生活旗舰店: { lo: 35, hi: 42 },
     RASW家居旗舰店: { min: 35, max: 41 }
   });
+  assert.equal(fns.feeGoalCellHtml({ shop: "DIKTT潮流生活旗舰店" }), "30%–45%");
   assert.equal(fns.feeGoalCellHtml({ shop: "RADW潮流生活旗舰店" }), "35%–42%");
   assert.equal(fns.feeGoalCellHtml({ shop: "RASW家居旗舰店" }), "35%–41%");
   assert.equal(fns.feeWarnLabel({ shop: "RADW潮流生活旗舰店", feeRate: "26.55%" }), "加大付费");
