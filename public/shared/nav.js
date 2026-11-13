@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.765-paid-login — 付费中心登录状态独立成列 */
+/* xm-fast-shell 0.1.766-paid-deal — 付费中心成交金额按京麦卡片环比 */
 (function () {
-  const ASSET_VER = "0.1.765-paid-login";
+  const ASSET_VER = "0.1.766-paid-deal";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",

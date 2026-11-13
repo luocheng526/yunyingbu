@@ -466,6 +466,10 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /\/api\/home\/local-paid/);
     assert.equal(embed.text.includes("/api/home/erp-paid"), false);
     assert.match(embed.text, /实时总成交金额/);
+    assert.match(embed.text, /可比 /);
+    assert.match(embed.text, /今日实采/);
+    assert.match(embed.text, /昨日推算/);
+    assert.equal(embed.text.includes("deltaOf(sales, yestSales)"), false);
     assert.match(embed.text, /实时付费金额/);
     assert.match(embed.text, /费比监控/);
     assert.match(embed.text, /费比设置/);

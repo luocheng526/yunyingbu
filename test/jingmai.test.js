@@ -5,9 +5,12 @@ import { createApp } from "../src/app.js";
 import {
   buildLiveView,
   collectPinIds,
+  dealPointsFromSamples,
   extractPaid,
   extractShopDeal,
   parseHomeCard,
+  resolveDealCompare,
+  sumDealCompare,
   hoursFromSamples,
   jingmaiError,
   paidQuery,
@@ -496,11 +499,104 @@ function jsonReply(body, status = 200) {
 }
 
 test("homepage card text keeps today's deal amount", () => {
-  const card = parseHomeCard("经营数据\n成交金额\n¥12,967.90\n较昨日 -27.63%\n成交单量\n42\n成交客户数\n41\n");
+  const card = parseHomeCard("经营数据\n成交金额\n¥12,967.90\n较昨日 -27.63%\n成交单量\n42\n较昨日 +9%\n成交客户数\n41\n");
   assert.equal(card.dealAmount, 12967.9);
   assert.equal(card.orderCount, 42);
   assert.equal(card.customerCount, 41);
+  assert.equal(card.dealRate, -27.63);
+  assert.equal(card.dealRateLabel, "较昨日");
+  assert.equal(card.yesterdayAmount, null);
   assert.equal(parseHomeCard("推广数据\n花费 5"), null);
+});
+
+test("deal compare uses the jingmai card amount and signed rate", () => {
+  const card = parseHomeCard(
+    "经营数据\n成交金额\n¥1,516.59\n较昨日 +45.46%\n成交单量\n13\n较昨日 +33.33%\n更新时间：2026/11/13 11:04:00"
+  );
+  assert.equal(card.dealRate, 45.46);
+  assert.equal(card.dealRateLabel, "较昨日");
+  assert.equal(card.platformUpdatedAt, "2026-11-13 11:04:00");
+  const samePeriod = parseHomeCard("经营数据\n成交金额\n¥10\n较昨日同时段 -20%\n成交单量\n1");
+  assert.equal(samePeriod.dealRateLabel, "较昨日同时段");
+  assert.equal(samePeriod.dealRate, -20);
+  const raised = resolveDealCompare({ dealAmount: 1516.59, dealRate: 45.46, dealRateLabel: "较昨日" });
+  assert.equal(raised.rate, 45.46);
+  assert.equal(raised.estimated, true);
+  assert.ok(Math.abs(raised.yesterday - 1516.59 / 1.4546) < 1e-9);
+  const dropped = resolveDealCompare({ dealAmount: 80, dealRate: -20, dealRateLabel: "较昨日" });
+  assert.equal(dropped.yesterday, 100);
+  const wiped = resolveDealCompare({ dealAmount: 0, dealRate: -100, dealRateLabel: "较昨日" });
+  assert.equal(wiped.rate, -100);
+  assert.equal(wiped.yesterday, null);
+  assert.equal(wiped.comparable, false);
+  const missing = resolveDealCompare({ dealAmount: 10, dealRate: null, yesterdayAmount: null });
+  assert.equal(missing.rate, null);
+  assert.equal(missing.comparable, false);
+  const original = resolveDealCompare({ dealAmount: 1516.59, yesterdayAmount: 1042.62, dealRate: 45.46, dealRateLabel: "较昨日" });
+  assert.equal(original.yesterday, 1042.62);
+  assert.equal(original.estimated, false);
+  const summed = sumDealCompare([
+    { today: 100, yesterday: 50, comparable: true, estimated: true, label: "较昨日" },
+    { today: 100, yesterday: 200, comparable: true, estimated: true, label: "较昨日" },
+    { today: 50, yesterday: null, comparable: false, estimated: false, label: "" }
+  ]);
+  assert.equal(summed.today, 250);
+  assert.equal(summed.cohortToday, 200);
+  assert.equal(summed.cohortYesterday, 250);
+  assert.ok(Math.abs(summed.rate - -20) < 1e-9);
+  assert.equal(summed.comparable, 2);
+  assert.equal(summed.total, 3);
+  const flat = sumDealCompare([{ today: 20, yesterday: 0, comparable: true, label: "较昨日" }]);
+  assert.equal(flat.rate, null);
+  assert.equal(flat.today, 20);
+});
+
+test("each collection keeps its own comparison and gaps stay empty", () => {
+  const points = dealPointsFromSamples(
+    [
+      { day: "2026-11-13", capturedAt: "2026-11-13 10:02:00", dealAmount: 100, dealRate: 0, ok: true },
+      { day: "2026-11-13", capturedAt: "2026-11-13 10:04:00", dealAmount: 110, dealRate: 10, ok: true },
+      { day: "2026-11-13", capturedAt: "2026-11-13 12:10:00", dealAmount: 200, yesterdayAmount: 100, ok: true },
+      { day: "2026-11-12", capturedAt: "2026-11-12 10:04:00", dealAmount: 1, dealRate: 90, ok: true }
+    ],
+    "2026-11-13"
+  );
+  assert.equal(points.length, 2);
+  assert.equal(points[0].slot, "10:00");
+  assert.equal(points[0].today, 110);
+  assert.ok(Math.abs(points[0].yesterday - 100) < 1e-9);
+  assert.equal(points[0].estimated, true);
+  assert.equal(points[1].slot, "12:10");
+  assert.equal(points[1].yesterday, 100);
+  assert.equal(points[1].estimated, false);
+  assert.equal(points.some((point) => point.slot === "11:00"), false);
+  const view = buildLiveView({
+    now: { day: "2026-11-13", stamp: "2026-11-13 11:07:00", hour: 11, clock: "11:07:00" },
+    shops: [{ store: "RASW潮流生活旗舰店", enabled: true, authState: "ok", cookies: [{ name: "thor", value: "secret" }] }],
+    samples: [
+      { store: "RASW潮流生活旗舰店", day: "2026-11-12", capturedAt: "2026-11-12 11:07:00", dealAmount: 999, ok: true },
+      {
+        store: "RASW潮流生活旗舰店",
+        day: "2026-11-13",
+        capturedAt: "2026-11-13 11:07:00",
+        dealAmount: 1516.59,
+        dealRate: 45.46,
+        dealRateLabel: "较昨日",
+        paidAmount: 919.81,
+        ok: true
+      }
+    ]
+  });
+  const shop = view.shops[0];
+  assert.equal(shop.dealAmount, 1516.59);
+  assert.equal(shop.dealRate, 45.46);
+  assert.notEqual(shop.yesterdayAmount, 999);
+  assert.equal(shop.yesterdayEstimated, true);
+  assert.equal(shop.paidAmount, 919.81);
+  assert.equal(shop.paidRate, undefined);
+  const paid = extractPaid({ summary: [{ index: "cost", value: 100, rate: 45.46 }] });
+  assert.equal(paid.paidAmount, 100);
+  assert.equal(paid.dealRate, undefined);
 });
 
 test("deal card is read from the layer that contains channel data", () => {

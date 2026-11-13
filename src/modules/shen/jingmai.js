@@ -85,7 +85,15 @@ export function extractMetrics(body) {
   if (yesterdayAmount == null) {
     yesterdayAmount = readField(content, ["yesterdayDealAmt", "yesterdayAmount", "昨日成交金额"]);
   }
-  return { dealAmount, orderCount, customerCount, yesterdayAmount };
+  return {
+    dealAmount,
+    orderCount,
+    customerCount,
+    yesterdayAmount,
+    dealRate: readDealRate(dealSource, yesterdayAmount),
+    dealRateLabel: readDealLabel(dealSource),
+    platformUpdatedAt: readUpdatedAt(dealSource) || readUpdatedAt(content)
+  };
 }
 
 function indicatorValue(item) {
@@ -153,7 +161,16 @@ export function extractShopDeal(body) {
     return null;
   }
   const yesterdayAmount = deal ? asNumber(deal.yesterdayNum) : null;
-  return { dealAmount, orderCount, customerCount, yesterdayAmount };
+  const channelUpdated = readUpdatedAt(channel) || readUpdatedAt(data);
+  return {
+    dealAmount,
+    orderCount,
+    customerCount,
+    yesterdayAmount,
+    dealRate: readDealRate(deal, yesterdayAmount),
+    dealRateLabel: readDealLabel(deal),
+    platformUpdatedAt: readUpdatedAt(deal) || channelUpdated
+  };
 }
 
 export function parseHomeCard(text) {
@@ -174,7 +191,88 @@ export function parseHomeCard(text) {
   if (dealAmount == null && orderCount == null && customerCount == null) {
     return null;
   }
-  return { dealAmount: dealAmount, orderCount: orderCount, customerCount: customerCount, yesterdayAmount: null };
+  const compare = readCardCompare(section);
+  return {
+    dealAmount: dealAmount,
+    orderCount: orderCount,
+    customerCount: customerCount,
+    yesterdayAmount: null,
+    dealRate: compare.rate,
+    dealRateLabel: compare.label,
+    platformUpdatedAt: readCardUpdated(section)
+  };
+}
+
+function readCardCompare(section) {
+  const match = String(section || "").match(/成交金额[\s\S]{0,160}?较昨日(同时段)?\s*([+-]?\d+(?:\.\d+)?)\s*%/);
+  if (!match) {
+    return { rate: null, label: "" };
+  }
+  const rate = Number(match[2]);
+  if (!Number.isFinite(rate)) {
+    return { rate: null, label: "" };
+  }
+  return { rate: rate, label: match[1] ? "较昨日同时段" : "较昨日" };
+}
+
+function readCardUpdated(section) {
+  const match = String(section || "").match(
+    /(?:更新时间|数据更新|平台更新|更新于)\s*[:：]?\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{2}:\d{2}(?::\d{2})?)/
+  );
+  return match ? match[1].replace(/\//g, "-") : "";
+}
+
+function readDealRate(item, platformYesterday) {
+  if (!item || typeof item !== "object") {
+    return null;
+  }
+  const unit = item.rateUnit || item.compareUnit || item.unit || "";
+  const keys = ["rate", "compareRate", "chainRate", "ringRate", "yesterdayRate", "rateNum"];
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (item[key] == null || item[key] === "") {
+      continue;
+    }
+    const number = asNumber(item[key]);
+    if (number == null) {
+      return null;
+    }
+    if (String(unit).includes("%") || Math.abs(number) > 1) {
+      return number;
+    }
+    if (platformYesterday != null) {
+      return null;
+    }
+    return Math.round(number * 10000) / 100;
+  }
+  return null;
+}
+
+function readDealLabel(item) {
+  const text = [item && item.desc, item && item.compareDesc, item && item.rateDesc, item && item.subTitle]
+    .filter(Boolean)
+    .join("");
+  if (text.includes("较昨日同时段")) {
+    return "较昨日同时段";
+  }
+  if (text.includes("较昨日")) {
+    return "较昨日";
+  }
+  return "";
+}
+
+function readUpdatedAt(item) {
+  if (!item || typeof item !== "object") {
+    return "";
+  }
+  const keys = ["updateTime", "dataTime", "statisticTime", "refreshTime", "updatedAt"];
+  for (let index = 0; index < keys.length; index += 1) {
+    const value = item[keys[index]];
+    if (value) {
+      return String(value).replace(/\//g, "-").slice(0, 19);
+    }
+  }
+  return "";
 }
 
 export function collectPinIds() {
@@ -311,6 +409,9 @@ export function sampleFields(metrics) {
     orderCount: source.orderCount == null ? null : source.orderCount,
     customerCount: source.customerCount == null ? null : source.customerCount,
     yesterdayAmount: source.yesterdayAmount == null ? null : source.yesterdayAmount,
+    dealRate: asNumber(source.dealRate),
+    dealRateLabel: source.dealRateLabel === "较昨日同时段" ? "较昨日同时段" : source.dealRateLabel === "较昨日" ? "较昨日" : "",
+    platformUpdatedAt: source.platformUpdatedAt ? String(source.platformUpdatedAt).slice(0, 19) : "",
     paidAmount: source.paidAmount == null ? null : source.paidAmount,
     paidDeal: source.paidDeal == null ? null : source.paidDeal,
     paidRoi: source.paidRoi == null ? null : source.paidRoi,
@@ -423,6 +524,152 @@ function latestSample(samples, day) {
   return merged;
 }
 
+function latestDealReading(samples, day) {
+  const rows = (samples || [])
+    .filter(function (sample) {
+      return sample.day === day && sample.ok !== false && sample.dealAmount != null;
+    })
+    .sort(function (left, right) {
+      if (left.capturedAt < right.capturedAt) {
+        return -1;
+      }
+      if (left.capturedAt > right.capturedAt) {
+        return 1;
+      }
+      return 0;
+    });
+  return rows.length ? rows[rows.length - 1] : null;
+}
+
+export function resolveDealCompare(sample) {
+  const source = sample || {};
+  const today = source.dealAmount == null || source.dealAmount === "" ? null : Number(source.dealAmount);
+  const todayAmount = Number.isFinite(today) ? today : null;
+  const platform = source.yesterdayAmount == null || source.yesterdayAmount === "" ? null : Number(source.yesterdayAmount);
+  const hasPlatform = Number.isFinite(platform);
+  const given = source.dealRate == null || source.dealRate === "" ? null : Number(source.dealRate);
+  const hasRate = Number.isFinite(given);
+  let yesterday = hasPlatform ? platform : null;
+  let estimated = false;
+  let rate = hasRate ? given : null;
+  if (yesterday == null && todayAmount != null && hasRate && given > -100) {
+    yesterday = todayAmount / (1 + given / 100);
+    estimated = true;
+  }
+  if (rate == null && todayAmount != null && yesterday != null && yesterday > 0) {
+    rate = (todayAmount / yesterday - 1) * 100;
+  }
+  const comparable = todayAmount != null && yesterday != null;
+  const label =
+    source.dealRateLabel === "较昨日同时段"
+      ? "较昨日同时段"
+      : rate != null || yesterday != null
+        ? "较昨日"
+        : "";
+  return {
+    today: todayAmount,
+    yesterday: yesterday,
+    rate: rate,
+    estimated: estimated,
+    comparable: comparable,
+    label: label,
+    platformUpdatedAt: source.platformUpdatedAt ? String(source.platformUpdatedAt) : ""
+  };
+}
+
+function slotOf(stamp) {
+  const match = String(stamp || "").match(/(\d{2}):(\d{2})/);
+  if (!match) {
+    return null;
+  }
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) {
+    return null;
+  }
+  const floored = Math.floor(minute / 5) * 5;
+  const index = hour * 12 + floored / 5;
+  const label = String(hour).padStart(2, "0") + ":" + String(floored).padStart(2, "0");
+  return { index: index, label: label };
+}
+
+export function dealPointsFromSamples(samples, day) {
+  const buckets = new Map();
+  (samples || []).forEach(function (sample) {
+    if (!sample || sample.day !== day || sample.ok === false || sample.dealAmount == null) {
+      return;
+    }
+    const slot = slotOf(sample.capturedAt);
+    if (!slot) {
+      return;
+    }
+    const current = buckets.get(slot.index);
+    if (!current || String(current.capturedAt || "") <= String(sample.capturedAt || "")) {
+      buckets.set(slot.index, sample);
+    }
+  });
+  return Array.from(buckets.values())
+    .sort(function (left, right) {
+      return String(left.capturedAt || "") < String(right.capturedAt || "") ? -1 : 1;
+    })
+    .map(function (sample) {
+      const slot = slotOf(sample.capturedAt);
+      const compare = resolveDealCompare(sample);
+      return {
+        slot: slot.label,
+        index: slot.index,
+        today: compare.today,
+        yesterday: compare.yesterday,
+        rate: compare.rate,
+        estimated: compare.estimated,
+        comparable: compare.comparable,
+        label: compare.label
+      };
+    });
+}
+
+export function sumDealCompare(rows) {
+  const list = rows || [];
+  let todayAll = 0;
+  let todayCount = 0;
+  let cohortToday = 0;
+  let cohortYesterday = 0;
+  let comparable = 0;
+  let estimated = false;
+  let samePeriod = true;
+  list.forEach(function (row) {
+    const today = row && row.today == null ? null : Number(row && row.today);
+    if (!Number.isFinite(today)) {
+      return;
+    }
+    todayAll += today;
+    todayCount += 1;
+    const yesterday = row.yesterday == null ? null : Number(row.yesterday);
+    if (!row.comparable || !Number.isFinite(yesterday)) {
+      return;
+    }
+    cohortToday += today;
+    cohortYesterday += yesterday;
+    comparable += 1;
+    if (row.estimated) {
+      estimated = true;
+    }
+    if (row.label !== "较昨日同时段") {
+      samePeriod = false;
+    }
+  });
+  return {
+    today: todayCount ? todayAll : null,
+    cohortToday: comparable ? cohortToday : null,
+    cohortYesterday: comparable ? cohortYesterday : null,
+    rate: comparable > 0 && cohortYesterday > 0 ? (cohortToday / cohortYesterday - 1) * 100 : null,
+    comparable: comparable,
+    total: list.length,
+    estimated: estimated,
+    label: comparable && samePeriod ? "较昨日同时段" : "较昨日"
+  };
+}
+
 export function buildLiveView({ shops, samples, now }) {
   const day = now.day;
   const yesterday = previousDay(day);
@@ -436,37 +683,32 @@ export function buildLiveView({ shops, samples, now }) {
     }
   });
   const viewShops = (shops || []).map(function (shop) {
-    const today = latestSample(
-      (samples || []).filter(function (sample) {
-        return sample.store === shop.store;
-      }),
-      day
-    );
-    const prior = latestSample(
-      (samples || []).filter(function (sample) {
-        return sample.store === shop.store;
-      }),
-      yesterday
-    );
     const mine = (samples || []).filter(function (sample) {
       return sample.store === shop.store;
     });
-    const yesterdayAmount =
-      today && today.yesterdayAmount != null ? today.yesterdayAmount : prior ? prior.dealAmount : null;
+    const today = latestSample(mine, day);
+    const reading = latestDealReading(mine, day);
+    const compare = resolveDealCompare(reading || {});
     return {
       shop: shop.store,
       enabled: shop.enabled !== false,
       online: shop.enabled !== false && shop.authState === "ok" && Array.isArray(shop.cookies) && shop.cookies.length > 0,
       loginExpired: shop.enabled !== false && shop.authState === "login_expired",
-      dealAmount: today && today.dealAmount != null ? today.dealAmount : null,
+      dealAmount: compare.today,
       orderCount: today && today.orderCount != null ? today.orderCount : null,
       customerCount: today && today.customerCount != null ? today.customerCount : null,
       paidAmount: today && today.paidAmount != null ? today.paidAmount : null,
       paidDeal: today && today.paidDeal != null ? today.paidDeal : null,
       paidRoi: today && today.paidRoi != null ? today.paidRoi : null,
       dealNote: today && today.dealNote ? today.dealNote : "",
-      yesterdayAmount: yesterdayAmount,
-      capturedAt: today ? displayStamp(today.capturedAt) : "",
+      yesterdayAmount: compare.yesterday,
+      yesterdayEstimated: compare.estimated,
+      dealRate: compare.rate,
+      dealRateLabel: compare.label,
+      dealComparable: compare.comparable,
+      platformUpdatedAt: compare.platformUpdatedAt,
+      dealPoints: dealPointsFromSamples(mine, day),
+      capturedAt: reading ? displayStamp(reading.capturedAt) : today ? displayStamp(today.capturedAt) : "",
       todayHours: hoursFromSamples(mine, day),
       yesterdayHours: hoursFromSamples(mine, yesterday)
     };
