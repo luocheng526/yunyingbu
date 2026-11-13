@@ -142,6 +142,16 @@ test("missing hours stay empty and a collected zero is kept", () => {
   assert.equal(hours[10], 8);
   assert.equal(hours[11], null);
   assert.equal(hours.filter((value) => value === 0).length, 0);
+  const paid = hoursFromSamples(
+    [
+      { store: "甲店", day: "2026-11-12", capturedAt: "2026-11-12 09:10:00", paidAmount: 120, dealAmount: 400, ok: true },
+      { store: "甲店", day: "2026-11-12", capturedAt: "2026-11-12 09:40:00", paidAmount: 180, dealAmount: 500, ok: true }
+    ],
+    "2026-11-12",
+    "paidAmount"
+  );
+  assert.equal(paid[9], 180);
+  assert.equal(paid[10], null);
 });
 
 test("live view counts successful shops and does not expose cookies", () => {

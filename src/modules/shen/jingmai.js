@@ -472,11 +472,12 @@ export function classifyTransportError(error) {
   return jingmaiError("network", "采集超时");
 }
 
-export function hoursFromSamples(samples, day) {
+export function hoursFromSamples(samples, day, field) {
+  const key = field || "dealAmount";
   const hours = new Array(24).fill(null);
   const rows = (samples || [])
     .filter(function (sample) {
-      return sample.day === day && sample.ok !== false && sample.dealAmount != null;
+      return sample.day === day && sample.ok !== false && sample[key] != null;
     })
     .sort(function (a, b) {
       return a.capturedAt < b.capturedAt ? -1 : 1;
@@ -484,7 +485,7 @@ export function hoursFromSamples(samples, day) {
   rows.forEach(function (sample) {
     const hour = Number(String(sample.capturedAt || "").slice(11, 13));
     if (hour >= 0 && hour < 24) {
-      hours[hour] = sample.dealAmount;
+      hours[hour] = sample[key];
     }
   });
   return hours;
@@ -805,7 +806,9 @@ export function buildLiveView({ shops, samples, now }) {
       dealPoints: dealPointsFromSamples(mine, day),
       capturedAt: reading ? displayStamp(reading.capturedAt) : today ? displayStamp(today.capturedAt) : "",
       todayHours: hoursFromSamples(mine, day),
-      yesterdayHours: hoursFromSamples(mine, yesterday)
+      yesterdayHours: hoursFromSamples(mine, yesterday),
+      todayPaidHours: hoursFromSamples(mine, day, "paidAmount"),
+      yesterdayPaidHours: hoursFromSamples(mine, yesterday, "paidAmount")
     };
   });
   const enabled = viewShops.filter(function (shop) {

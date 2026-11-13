@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.769-paid-slot — 更新时间统一到 5 分钟 */
+/* xm-fast-shell 0.1.770-paid-curve — 概览曲线改成清晰的全天实线 */
 (function () {
-  const ASSET_VER = "0.1.769-paid-slot";
+  const ASSET_VER = "0.1.770-paid-curve";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",

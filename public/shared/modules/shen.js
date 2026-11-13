@@ -472,7 +472,7 @@
     mount: function (root) {
       const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
       paidCss.rel = "stylesheet";
-      paidCss.href = "/shared/shen-paid.css?v=0.1.769-paid-slot";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.770-paid-curve";
       if (!paidCss.parentNode) {
         document.head.appendChild(paidCss);
       }
@@ -1047,47 +1047,94 @@
         const today = series.today || [];
         const count = Number(series.hours) > 2 ? Number(series.hours) : Math.max(yesterday.length, today.length, 2);
         let max = 1;
+        let min = 0;
+        let seen = false;
         yesterday.concat(today).forEach(function (n) {
           if (series.gaps && (n == null || !isFinite(Number(n)))) {
             return;
           }
           const v = Number(n) || 0;
+          if (!seen || v < min) {
+            min = v;
+          }
+          seen = true;
           if (v > max) {
             max = v;
           }
         });
+        const fit = series.scale === "fit" && seen;
+        if (fit) {
+          const span = Math.max(max - min, Math.abs(max) * 0.08, 0.01);
+          min -= span * 0.2;
+          max += span * 0.2;
+        } else {
+          min = 0;
+          max *= 1.08;
+        }
         function xAt(index) {
           return 10 + (index / Math.max(count - 1, 1)) * 620;
         }
         function yAt(value) {
-          return height - bottom - ((Number(value) || 0) / max) * (height - top - bottom);
+          const plot = height - top - bottom;
+          return height - bottom - ((Number(value) || 0) - min) / Math.max(max - min, 0.01) * plot;
         }
-        function points(list) {
-          if (series.gaps) {
-            const parts = [];
-            let current = [];
-            list.forEach(function (value, index) {
-              if (value == null || !isFinite(Number(value))) {
-                if (current.length) {
-                  parts.push(current.join(" "));
-                }
-                current = [];
-                return;
+        function segments(list) {
+          const parts = [];
+          let current = [];
+          list.forEach(function (value, index) {
+            if (series.gaps && (value == null || !isFinite(Number(value)))) {
+              if (current.length) {
+                parts.push(current);
               }
-              current.push(xAt(index).toFixed(1) + "," + yAt(value).toFixed(1));
-            });
-            if (current.length) {
-              parts.push(current.join(" "));
+              current = [];
+              return;
             }
-            return parts;
+            current.push({ x: xAt(index), y: yAt(value) });
+          });
+          if (current.length) {
+            parts.push(current);
           }
-          return [
-            list
-              .map(function (value, index) {
-                return xAt(index).toFixed(1) + "," + yAt(value).toFixed(1);
-              })
-              .join(" ")
-          ];
+          return parts;
+        }
+        function curve(part) {
+          if (!part.length) {
+            return "";
+          }
+          if (part.length < 3) {
+            return (
+              "M " +
+              part
+                .map(function (point) {
+                  return point.x.toFixed(1) + " " + point.y.toFixed(1);
+                })
+                .join(" L ")
+            );
+          }
+          let path = "M " + part[0].x.toFixed(1) + " " + part[0].y.toFixed(1);
+          for (let index = 0; index < part.length - 1; index += 1) {
+            const p0 = part[Math.max(index - 1, 0)];
+            const p1 = part[index];
+            const p2 = part[index + 1];
+            const p3 = part[Math.min(index + 2, part.length - 1)];
+            const c1x = p1.x + (p2.x - p0.x) / 6;
+            const c1y = p1.y + (p2.y - p0.y) / 6;
+            const c2x = p2.x - (p3.x - p1.x) / 6;
+            const c2y = p2.y - (p3.y - p1.y) / 6;
+            path +=
+              " C " +
+              c1x.toFixed(1) +
+              " " +
+              c1y.toFixed(1) +
+              " " +
+              c2x.toFixed(1) +
+              " " +
+              c2y.toFixed(1) +
+              " " +
+              p2.x.toFixed(1) +
+              " " +
+              p2.y.toFixed(1);
+          }
+          return path;
         }
         let labels = "";
         if (count === 24 || count === 48) {
@@ -1098,7 +1145,7 @@
               xAt(index).toFixed(1) +
               '" y="' +
               (height - 5) +
-              '" text-anchor="middle" fill="#8c8c8c" font-size="8">' +
+              '" text-anchor="middle" fill="#8c8c8c" font-size="12">' +
               hour +
               "</text>";
           }
@@ -1120,23 +1167,15 @@
               "</text>";
           });
         }
-        function dots(list, color) {
-          if (!series.gaps) {
-            return "";
-          }
-          return list
-            .map(function (value, index) {
-              if (value == null || !isFinite(Number(value))) {
-                return "";
-              }
+        function stroke(list, color) {
+          return segments(list)
+            .map(function (part) {
               return (
-                '<circle cx="' +
-                xAt(index).toFixed(1) +
-                '" cy="' +
-                yAt(value).toFixed(1) +
-                '" r="2.4" fill="' +
+                '<path fill="none" stroke="' +
                 color +
-                '"></circle>'
+                '" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" d="' +
+                curve(part) +
+                '"></path>'
               );
             })
             .join("");
@@ -1147,20 +1186,8 @@
           " " +
           height +
           '" preserveAspectRatio="none">' +
-          points(yesterday)
-            .filter(Boolean)
-            .map(function (line) {
-              return '<polyline fill="none" stroke="#91caff" stroke-width="2" points="' + line + '"></polyline>';
-            })
-            .join("") +
-          points(today)
-            .filter(Boolean)
-            .map(function (line) {
-              return '<polyline fill="none" stroke="#ffa39e" stroke-width="2" points="' + line + '"></polyline>';
-            })
-            .join("") +
-          dots(yesterday, "#91caff") +
-          dots(today, "#ffa39e") +
+          stroke(yesterday, "#69b1ff") +
+          stroke(today, "#ff7875") +
           labels +
           "</svg>"
         );
@@ -1834,6 +1861,8 @@
           row.dealPoints = sale && Array.isArray(sale.dealPoints) ? sale.dealPoints : [];
           row.todayHours = sale && Array.isArray(sale.todayHours) ? sale.todayHours : [];
           row.yesterdayHours = sale && Array.isArray(sale.yesterdayHours) ? sale.yesterdayHours : [];
+          row.todayPaidHours = sale && Array.isArray(sale.todayPaidHours) ? sale.todayPaidHours : [];
+          row.yesterdayPaidHours = sale && Array.isArray(sale.yesterdayPaidHours) ? sale.yesterdayPaidHours : [];
           row.capturedAt = sale && sale.capturedAt ? String(sale.capturedAt) : "";
           row.online = Boolean(sale && sale.online);
           row.loginExpired = Boolean(sale && sale.loginExpired);
@@ -2225,6 +2254,138 @@
         return match[1] + "/" + pad(match[2]) + "/" + pad(match[3]) + " " + pad(match[4]) + ":" + pad(minute);
       }
 
+      function carryList(list, lastHour) {
+        const out = [];
+        let last = null;
+        let seen = false;
+        const source = list || [];
+        for (let hour = 0; hour < 24; hour += 1) {
+          if (hour <= lastHour && source[hour] != null && isFinite(Number(source[hour]))) {
+            last = Number(source[hour]);
+            seen = true;
+          }
+          out.push(hour <= lastHour && seen ? last : null);
+        }
+        return out;
+      }
+
+      function lastCollectedHour(rows, fields) {
+        let lastHour = -1;
+        rows.forEach(function (row) {
+          fields.forEach(function (field) {
+            const list = (row && row[field]) || [];
+            for (let hour = 0; hour < 24; hour += 1) {
+              if (list[hour] != null && isFinite(Number(list[hour]))) {
+                lastHour = Math.max(lastHour, hour);
+              }
+            }
+          });
+        });
+        return lastHour;
+      }
+
+      function carriedSeries(rows, field) {
+        const scope = (rows || []).filter(function (row) {
+          return row && row.online;
+        });
+        const lastHour = lastCollectedHour(scope, [field]);
+        const values = new Array(24).fill(null);
+        const counts = new Array(24).fill(0);
+        if (lastHour < 0) {
+          return { values: values, counts: counts };
+        }
+        scope.forEach(function (row) {
+          const carried = carryList(row[field], lastHour);
+          for (let hour = 0; hour <= lastHour; hour += 1) {
+            if (carried[hour] == null) {
+              continue;
+            }
+            values[hour] = (values[hour] || 0) + carried[hour];
+            counts[hour] += 1;
+          }
+        });
+        return { values: values, counts: counts };
+      }
+
+      function ratioSeries(rows, paidField, dealField) {
+        const scope = (rows || []).filter(function (row) {
+          return row && row.online;
+        });
+        const lastHour = lastCollectedHour(scope, [paidField, dealField]);
+        const values = new Array(24).fill(null);
+        const counts = new Array(24).fill(0);
+        if (lastHour < 0) {
+          return { values: values, counts: counts };
+        }
+        const paid = scope.map(function (row) {
+          return carryList(row[paidField], lastHour);
+        });
+        const deal = scope.map(function (row) {
+          return carryList(row[dealField], lastHour);
+        });
+        for (let hour = 0; hour <= lastHour; hour += 1) {
+          let spend = 0;
+          let sales = 0;
+          let count = 0;
+          scope.forEach(function (_row, index) {
+            if (paid[index][hour] == null || deal[index][hour] == null || !(deal[index][hour] > 0)) {
+              return;
+            }
+            spend += paid[index][hour];
+            sales += deal[index][hour];
+            count += 1;
+          });
+          if (!count || !(sales > 0)) {
+            continue;
+          }
+          values[hour] = spend / sales;
+          counts[hour] = count;
+        }
+        return { values: values, counts: counts };
+      }
+
+      function trendTips(today, yesterday, total, unit) {
+        const tips = [];
+        for (let hour = 0; hour < 24; hour += 1) {
+          const current = today.values[hour];
+          const prior = yesterday.values[hour];
+          if (current == null && prior == null) {
+            tips.push(null);
+            continue;
+          }
+          tips.push({
+            slot: String(hour).padStart(2, "0") + ":00",
+            today: current,
+            yesterday: prior,
+            rate: current != null && prior != null && prior > 0 ? (current / prior - 1) * 100 : null,
+            estimated: false,
+            label: "较昨日",
+            unit: unit || "money",
+            n: today.counts[hour] || yesterday.counts[hour] || 0,
+            total: total
+          });
+        }
+        return tips;
+      }
+
+      function trendDelta(today, yesterday, asMoney) {
+        let hour = -1;
+        for (let index = 23; index >= 0; index -= 1) {
+          if (today[index] != null) {
+            hour = index;
+            break;
+          }
+        }
+        if (hour < 0 || yesterday[hour] == null || !(yesterday[hour] > 0)) {
+          return { yesterday: "—", delta: null };
+        }
+        const rate = (today[hour] / yesterday[hour] - 1) * 100;
+        return {
+          yesterday: asMoney ? formatLive(yesterday[hour]) : formatRate(yesterday[hour]),
+          delta: { kind: rate < 0 ? "down" : "up", text: arrowText(rate) }
+        };
+      }
+
       function aggregateDeal(rows) {
         const scope = rows.filter(function (row) {
           return row.online;
@@ -2460,33 +2621,19 @@
 
       function homeChart(spec) {
         const deal = spec.deal || null;
-        const plot = deal
-          ? {
-              yesterday: deal.series.yesterday,
-              today: deal.series.today,
-              hours: deal.series.count,
-              height: 168,
-              gaps: true
-            }
-          : spec.gaps
-          ? { yesterday: spec.yHours || [], today: spec.tHours || [], hours: 24, height: 168, gaps: true }
-          : spec.blank
-            ? { yesterday: [], today: [], hours: 24, height: 168 }
-            : livePlot({
-                yesterdayHour: spec.yHours,
-                todayHour: spec.tHours,
-                lineMode: spec.flat ? "flat" : "",
-                unit: spec.flat ? "rate" : ""
-              });
+        const plot = {
+          yesterday: spec.yHours || [],
+          today: spec.tHours || [],
+          hours: 24,
+          height: 188,
+          gaps: true,
+          scale: spec.scale || ""
+        };
         const delta = spec.delta;
-        const legend = deal
-          ? '<i class="is-today"></i>今日实采<i class="is-yest"></i>' + (deal.compare.estimated ? "昨日推算" : "昨日对比")
-          : '<i class="is-yest"></i>昨天<i class="is-today"></i>今天';
-        const meta = deal ? escapeHtml(JSON.stringify(deal.series.tips || [])) : "";
+        const legend = '<i class="is-yest"></i>昨天<i class="is-today"></i>今天';
+        const meta = escapeHtml(JSON.stringify(spec.tips || []));
         return (
-          '<article class="xm-hl-chart"' +
-          (deal ? " data-deal-chart" : "") +
-          '><div class="xm-hl-chart-head"><span>' +
+          '<article class="xm-hl-chart" data-deal-chart><div class="xm-hl-chart-head"><span>' +
           escapeHtml(spec.title) +
           '</span><span class="xm-hl-legs">' +
           legend +
@@ -2502,12 +2649,9 @@
                 : " <span>环比 —</span>")) +
           "</div>" +
           liveLine(plot) +
-          (deal
-            ? '<div hidden data-deal-meta>' +
-              meta +
-              '</div><div class="xm-hl-chart-tip" data-deal-tip hidden></div>'
-            : "") +
-          "</article>"
+          '<div hidden data-deal-meta>' +
+          meta +
+          '</div><div class="xm-hl-chart-tip" data-deal-tip hidden></div></article>'
         );
       }
 
@@ -2755,6 +2899,17 @@
         liveSlot = fiveMinuteStamp(latestCapture);
         const sales = sumField(picked, "liveAmount");
         const dealCompare = aggregateDeal(picked);
+        const onlineTotal = picked.filter(function (row) {
+          return row && row.online;
+        }).length;
+        const salesToday = carriedSeries(picked, "todayHours");
+        const salesYesterday = carriedSeries(picked, "yesterdayHours");
+        const spendToday = carriedSeries(picked, "todayPaidHours");
+        const spendYesterday = carriedSeries(picked, "yesterdayPaidHours");
+        const feeToday = ratioSeries(picked, "todayPaidHours", "todayHours");
+        const feeYesterday = ratioSeries(picked, "yesterdayPaidHours", "yesterdayHours");
+        const spendEdge = trendDelta(spendToday.values, spendYesterday.values, true);
+        const feeEdge = trendDelta(feeToday.values, feeYesterday.values, false);
         const spend = sumField(picked, "paidAmount");
         const deal = sumField(picked, "paidDeal");
         const roi = spend > 0 && deal != null ? deal / spend : null;
@@ -2984,21 +3139,29 @@
           homeChart({
             title: "实时总成交金额",
             value: formatLive(sales),
-            deal: dealCompare
+            deal: dealCompare,
+            yHours: salesYesterday.values,
+            tHours: salesToday.values,
+            tips: trendTips(salesToday, salesYesterday, onlineTotal)
           }) +
           homeChart({
             title: "推广总花费",
             value: formatLive(spend),
-            yesterday: "—",
-            delta: null,
-            blank: true
+            yesterday: spendEdge.yesterday,
+            delta: spendEdge.delta,
+            yHours: spendYesterday.values,
+            tHours: spendToday.values,
+            tips: trendTips(spendToday, spendYesterday, onlineTotal)
           }) +
           homeChart({
             title: "实时费比",
             value: fee == null ? "—" : formatRate(fee),
-            yesterday: "—",
-            delta: null,
-            blank: true
+            yesterday: feeEdge.yesterday,
+            delta: feeEdge.delta,
+            scale: "fit",
+            yHours: feeYesterday.values,
+            tHours: feeToday.values,
+            tips: trendTips(feeToday, feeYesterday, onlineTotal, "rate")
           }) +
           '</div><div class="xm-hl-cards">' +
           [
@@ -3115,7 +3278,7 @@
               return;
             }
             const item = meta[best];
-            const yestName = item.estimated ? "昨日推算" : "昨日对比";
+            const amount = item.unit === "rate" ? formatRate : moneyText;
             const rate =
               item.rate == null || !isFinite(Number(item.rate))
                 ? (item.label || "较昨日") + " —"
@@ -3124,12 +3287,10 @@
             tip.innerHTML =
               "<b>" +
               escapeHtml(item.slot || "") +
-              "</b><div>今日实采 " +
-              moneyText(item.today) +
-              "</div><div>" +
-              yestName +
-              " " +
-              moneyText(item.yesterday) +
+              "</b><div>今日 " +
+              amount(item.today) +
+              "</div><div>昨日 " +
+              amount(item.yesterday) +
               "</div><div>" +
               escapeHtml(rate) +
               "</div><div>可比 " +

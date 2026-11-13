@@ -512,6 +512,12 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(css.text, /#paid-board \.xm-hl-delta\.is-down \{[^}]*#389e0d/);
     assert.match(embed.text, /"00:00"/);
     assert.match(embed.text, /"24:00"/);
+    assert.match(embed.text, /function carriedSeries/);
+    assert.match(embed.text, /vector-effect="non-scaling-stroke"/);
+    assert.equal(embed.text.includes("blank: true"), false);
+    const lineFn = embed.text.slice(embed.text.indexOf("function liveLine"), embed.text.indexOf("function livePlot"));
+    assert.equal(lineFn.includes("<circle"), false);
+    assert.equal(lineFn.includes("<polyline"), false);
     const dealAgg = embed.text.slice(embed.text.indexOf("function aggregateDeal"), embed.text.indexOf("function shopSpark"));
     assert.match(dealAgg, /row\.online/);
     assert.equal(dealAgg.includes("const total = rows.length"), false);

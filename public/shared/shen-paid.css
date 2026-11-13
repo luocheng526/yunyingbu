@@ -625,11 +625,11 @@
 }
 
 #paid-board .xm-hm-legs i.is-yest {
-  background: #91caff;
+  background: #69b1ff;
 }
 
 #paid-board .xm-hm-legs i.is-today {
-  background: #ffa39e;
+  background: #ff7875;
 }
 
 #paid-board .xm-hm-index-num {
@@ -1001,11 +1001,11 @@
 }
 
 #paid-board .xm-hl-legs i.is-yest {
-  background: #91caff;
+  background: #69b1ff;
 }
 
 #paid-board .xm-hl-legs i.is-today {
-  background: #ffa39e;
+  background: #ff7875;
 }
 
 #paid-board .xm-hl-value {
@@ -1125,7 +1125,7 @@
 
 #paid-board .xm-hl-chart .xm-hm-line {
   width: 100%;
-  height: 150px;
+  height: 188px;
   display: block;
   pointer-events: all;
 }
