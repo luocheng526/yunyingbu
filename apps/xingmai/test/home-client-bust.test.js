@@ -11,7 +11,7 @@ test("rewrites immutable homepage script url to no-store client.js", () => {
   const out = rewriteHomeModuleUrl(html);
   assert.equal(out.includes("/shared/modules/home.js"), false);
   assert.equal(out.includes(HOME_CLIENT_JS), true);
-    assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.910-10m$/);
+    assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.911-shops$/);
 });
 
 test("serves /api/home/client.js from current homepage module", async () => {
@@ -26,7 +26,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     const text = await res.text();
     assert.equal(res.status, 200);
     assert.match(String(res.headers.get("cache-control") || ""), /no-store/i);
-    assert.match(text, /xm-module-home 0\.1\.910-10m/);
+    assert.match(text, /xm-module-home 0\.1\.911-shops/);
     assert.match(text, /function liveTheadHtml/);
     assert.match(text, /function liveFilterHtml/);
     assert.match(text, /data-live-filter="pick"/);
@@ -37,7 +37,10 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /店铺列表/);
     assert.match(text, /责权归属/);
     assert.match(text, /xm-hm-live-at">更新时间 /);
-    assert.match(text, /\/api\/home\/local-paid/);
+    assert.match(text, /\/api\/han\/worker\?view=overview/);
+    assert.match(text, /\/api\/shen\/paid\?latest=1/);
+    assert.match(text, /\/api\/shen\/paid\/jingmai/);
+    assert.match(text, /function mergeLivePaid/);
     assert.match(text, /han-shen-local/);
     assert.match(text, /function liveBoardOf/);
     assert.match(text, /function seesAllLiveShops/);

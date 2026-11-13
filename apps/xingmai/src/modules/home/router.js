@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getHomeErpKpis } from "./erp-kpis.js";
 import { getHomeErpPaid } from "./erp-paid.js";
-import { getHomeLocalPaid } from "./local-paid.js";
+import { getHomeLocalPaid, pullHanShenPaid, shanghaiYmd, shanghaiNow } from "./local-paid.js";
 
 const homeJsPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -35,12 +35,36 @@ export function homeRouter() {
   });
 
   router.get("/local-paid", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
     try {
-      res.json(await getHomeLocalPaid(req));
+      let data = await getHomeLocalPaid(req);
+      if (!data || data.ok !== true || !Array.isArray(data.records) || !data.records.length) {
+        const ymd = shanghaiYmd();
+        const merged = await pullHanShenPaid(req, ymd);
+        const from = [];
+        if ((merged.records || []).some((row) => String(row.source || "").indexOf("han") !== -1)) {
+          from.push("han");
+        }
+        if ((merged.records || []).some((row) => String(row.source || "").indexOf("shen") !== -1)) {
+          from.push("shen");
+        }
+        data = {
+          ok: true,
+          source: "han-shen-local",
+          updatedAt: shanghaiNow(),
+          summary: merged.summary || {},
+          records: merged.records || [],
+          yesterday: (data && data.yesterday) || { records: [] },
+          hourly: merged.hourly || {},
+          from
+        };
+      }
+      return res.json(data);
     } catch (err) {
       res.status(502).json({
         ok: false,
         source: "han-shen-local",
+        records: [],
         error: err.message || "韩梦凯/沈子晗实时付费汇总失败"
       });
     }

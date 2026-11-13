@@ -190,7 +190,9 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /function liveBoardOf/);
   assert.match(homeJs, /function livePickKeys/);
   assert.match(homeJs, /function seesAllLiveShops/);
-  assert.match(homeJs, /\/api\/home\/local-paid/);
+  assert.match(homeJs, /\/api\/han\/worker\?view=overview/);
+  assert.match(homeJs, /\/api\/shen\/paid\?latest=1/);
+  assert.match(homeJs, /\/api\/shen\/paid\/jingmai/);
   assert.match(homeJs, /xm-hm-live-at">更新时间 /);
   assert.match(homeJs, /实时只汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」/);
   assert.match(homeJs, /\/api\/home\/erp-paid/);

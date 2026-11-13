@@ -244,6 +244,14 @@ function listFromPack(pack, keys) {
       return pack[key];
     }
   }
+  const nest = pack.data || pack.result || pack.payload;
+  if (nest && typeof nest === "object") {
+    for (const key of keys) {
+      if (Array.isArray(nest[key])) {
+        return nest[key];
+      }
+    }
+  }
   return [];
 }
 
@@ -340,46 +348,66 @@ export function mergeHanShenPaid(han, shenPaid, shenJingmai, ymd = shanghaiYmd()
   };
 }
 
-function siblingOrigin(req) {
+function siblingOrigins(req) {
+  const out = [];
   const forced = String(process.env.HOME_LIVE_ORIGIN || "").trim();
   if (forced) {
-    return forced.replace(/\/$/, "");
+    out.push(forced.replace(/\/$/, ""));
   }
   if (!req) {
-    return "";
+    return out;
   }
   const host = String(req.get?.("host") || req.headers?.host || "").trim();
-  if (!host) {
-    return "";
-  }
   const proto = String(req.get?.("x-forwarded-proto") || req.headers?.["x-forwarded-proto"] || req.protocol || "http")
     .split(",")[0]
     .trim();
-  return `${proto}://${host}`;
+  if (host) {
+    out.push(`${proto}://${host}`);
+  }
+  const port = Number(req.socket?.localPort || req.connection?.localPort || 0);
+  if (port) {
+    out.push(`http://127.0.0.1:${port}`);
+  }
+  return out;
+}
+
+function usableSibling(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return false;
+  }
+  return (
+    data.ok === true ||
+    Array.isArray(data.shops) ||
+    Array.isArray(data.rows) ||
+    Array.isArray(data.records) ||
+    Array.isArray(data.items)
+  );
 }
 
 async function fetchSibling(req, path) {
-  const origin = siblingOrigin(req);
-  if (!origin) {
-    return null;
-  }
-  const cookie = String(req.headers?.cookie || "");
-  try {
-    const res = await fetch(origin + path, {
-      headers: {
-        accept: "application/json",
-        cookie
-      },
-      signal: AbortSignal.timeout(8000)
-    });
-    if (!res.ok) {
-      return null;
+  const cookie = String(req?.headers?.cookie || "");
+  const origins = siblingOrigins(req);
+  for (const origin of origins) {
+    try {
+      const res = await fetch(origin + path, {
+        headers: {
+          accept: "application/json",
+          cookie
+        },
+        signal: AbortSignal.timeout(8000)
+      });
+      if (!res.ok) {
+        continue;
+      }
+      const data = await res.json();
+      if (usableSibling(data)) {
+        return data;
+      }
+    } catch {
+      continue;
     }
-    const data = await res.json();
-    return data && typeof data === "object" ? data : null;
-  } catch {
-    return null;
   }
+  return null;
 }
 
 export async function pullHanShenPaid(req, ymd = shanghaiYmd()) {
