@@ -396,6 +396,19 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.equal(zeroToday.paid.yesterdayHour[0], 2);
   assert.equal(zeroToday.paid.value, "12");
   assert.notEqual(Number(zeroToday.paid.todayHour[0].toFixed(1)), 7.5);
+  const booked = fns.fillLocalPaid(
+    {
+      shops: [{ shop: "费比店", liveAmount: "9", paidAmount: "—", feeRate: "—" }],
+      cards: [],
+      paid: { label: "推广总花费", value: "—" }
+    },
+    {
+      records: [{ shopName: "费比店", paidAmount: 12, paidDeal: 40 }],
+      feeTargets: { 费比店: { lo: 30, hi: 45 } }
+    }
+  );
+  assert.equal(booked.shops[0].feeLo, 30);
+  assert.equal(booked.shops[0].feeHi, 45);
 });
 
 test("live shop 状态 follows 10-minute capturedAt", () => {
@@ -676,5 +689,27 @@ test("local-paid POST ignores all-zero today hours", () => {
   );
   assert.deepEqual(posted.hourly.todaySpend, [4, 5, 6, 7]);
   assert.deepEqual(posted.hourly.todayPay, [8, 9, 10, 11]);
+  setLocalPaidSnapPath(prev);
+});
+
+test("fee targets stay on the server so another browser can show 费比设置", async () => {
+  const file = join(snapDir, "fee-book.json");
+  const prev = join(snapDir, "days.json");
+  setLocalPaidSnapPath(file);
+  const posted = postHomeLocalPaid({
+    records: [{ shopName: "A店", paidAmount: 9, paidDeal: 30 }],
+    feeTargets: { A店: { lo: 30, hi: 45 }, B店: "35%-42%" }
+  });
+  assert.equal(posted.feeTargets["A店"].lo, 30);
+  assert.equal(posted.feeTargets["A店"].hi, 45);
+  assert.equal(posted.feeTargets["B店"].lo, 35);
+  assert.equal(posted.records[0].feeLo, 30);
+  assert.equal(posted.records[0].feeHi, 45);
+  const later = await getHomeLocalPaid();
+  assert.equal(later.feeTargets["A店"].lo, 30);
+  assert.equal(later.feeTargets["B店"].hi, 42);
+  const keep = postHomeLocalPaid({ feeTargets: { C店: { min: 18, max: 22 } } });
+  assert.equal(keep.feeTargets["A店"].lo, 30);
+  assert.equal(keep.feeTargets["C店"].lo, 18);
   setLocalPaidSnapPath(prev);
 });

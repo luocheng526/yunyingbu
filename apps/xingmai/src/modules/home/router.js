@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getHomeErpKpis } from "./erp-kpis.js";
 import { getHomeErpPaid } from "./erp-paid.js";
+import { HOME_JS_STAMP } from "./asset-ver.js";
 import { getHomeLocalPaid, postHomeLocalPaid, pullHanShenPaid, shanghaiYmd, shanghaiNow } from "./local-paid.js";
 
 const homeJsPath = path.join(
@@ -48,14 +49,27 @@ export function homeRouter() {
         if ((merged.records || []).some((row) => String(row.source || "").indexOf("shen") !== -1)) {
           from.push("shen");
         }
+        const book = (data && data.feeTargets) || {};
         data = {
           ok: true,
           source: "han-shen-local",
           updatedAt: shanghaiNow(),
           summary: merged.summary || {},
-          records: merged.records || [],
+          records: (merged.records || []).map((row) => {
+            const shop = row && (row.shopName || row.shop);
+            const hit = shop ? book[shop] : null;
+            if (!hit) {
+              return row;
+            }
+            return {
+              ...row,
+              feeLo: row.feeLo != null ? row.feeLo : hit.lo,
+              feeHi: row.feeHi != null ? row.feeHi : hit.hi
+            };
+          }),
           yesterday: (data && data.yesterday) || { records: [] },
           hourly: Object.assign({}, (data && data.hourly) || {}, merged.hourly || {}),
+          feeTargets: book,
           from
         };
       }
@@ -100,7 +114,8 @@ export function homeRouter() {
   });
 
   router.get("/summary", (_req, res) => {
-    res.json({ ok: true, module: "home" });
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json({ ok: true, module: "home", stamp: HOME_JS_STAMP });
   });
 
   return router;

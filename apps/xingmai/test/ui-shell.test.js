@@ -174,6 +174,7 @@ test("home page html is the xingmai sider template", async () => {
   const homePage = await fetch(`${base}/home`, { headers: { cookie } });
   assert.equal(homePage.status, 200);
   const homePageHtml = await homePage.text();
+  assert.match(homePageHtml, /\/api\/home\/client\.js/);
   assert.match(homePageHtml, /\/shared\/modules\/home\.js/);
   assert.match(homePageHtml, /<span>首页<\/span>/);
   assert.match(html, /退出登录/);
@@ -506,8 +507,8 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.match(meMod, /sessionStorage\.getItem\("xm-me"\)/);
   assert.match(meMod, /__xmMeAt/);
   const homeMod = readFileSync(join(root, "public/shared/modules/home.js"), "utf8");
-  assert.match(homeMod, /功能待开发/);
   assert.match(homeMod, /XmModules\["\/home"\]/);
+  assert.match(homeMod, /function ensureFreshHome/);
   const { renderAppShell } = await import("../src/modules/profile/middleware.js");
   const shell = renderAppShell("/data", { username: "罗成", displayName: "罗成" });
   assert.match(shell, /rel="icon" type="image\/png" href="data:image\/png;base64,/);
