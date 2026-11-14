@@ -165,7 +165,10 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
     },
     {
       records: [{ shopName: "A店", paidAmount: 12, paidDeal: 40, jingmaiGmv: 40 }],
-      yesterday: { records: [{ shopName: "A店", paidAmount: 8, paidDeal: 32 }] }
+      yesterday: {
+        records: [{ shopName: "A店", paidAmount: 8, paidDeal: 32 }],
+        hourly: { todaySpend: [2, 2, 2, 2], todayPay: [8, 8, 8, 8], todayFee: [0.2, 0.2, 0.2, 0.2] }
+      }
     }
   );
   assert.ok(shaped.paid.yesterdayHour.length === 0 || shaped.paid.yesterdayHour.length === 24);
@@ -225,7 +228,6 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.equal(waved.fee.yesterdayHour.length, 24);
   assert.match(homeJs, /function mixFeeHours/);
   assert.match(homeJs, /sum\.spend \* \(sY \/ sT\)/);
-  assert.match(homeJs, /mixFeeHours\(live\.shops, "yestPayHours"\)/);
   assert.match(homeJs, /api\("\/api\/home\/local-paid"/);
   const keptYest = fns.fillLocalPaid(
     {
@@ -257,11 +259,9 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
       records: [{ shopName: "A店", paidAmount: 10, paidDeal: 40, jingmaiGmv: 100, feeRate: 0.1 }]
     }
   );
-  assert.equal(erpYest.hero.yesterdayHour[0], 8);
-  assert.equal(erpYest.paid.yestText, "8");
-  assert.equal(erpYest.paid.yesterdayHour[0], 0.8);
-  assert.equal(erpYest.fee.yesterdayHour.length, 24);
-  assert.notEqual(erpYest.fee.yestText, "—");
+  assert.equal(erpYest.hero.yesterdayHour.length, 0);
+  assert.equal(erpYest.paid.yestText, "—");
+  assert.equal(erpYest.paid.yesterdayHour.length, 0);
   assert.match(homeJs, /function hoursHaveNow/);
   const deadPay = [];
   var di;
@@ -291,10 +291,9 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
       hourly: { yesterdayPay: deadPay, todayPay: [10, 20, 30, 40] }
     }
   );
-  assert.equal(deadSnap.hero.yesterdayHour[0], 8);
-  assert.notEqual(deadSnap.hero.yestText, "0");
-  assert.notEqual(deadSnap.paid.yestText, "0");
-  assert.notEqual(deadSnap.paid.yestText, "—");
+  assert.equal(deadSnap.hero.yesterdayHour.length, 0);
+  assert.equal(deadSnap.hero.yestText, "80");
+  assert.equal(deadSnap.paid.yestText, "9");
   assert.match(homeJs, /function orgStoreForShop/);
   assert.match(homeJs, /row\.formerNames/);
   const renamed = fns.fillLocalPaid(
@@ -371,19 +370,32 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   const zeros = Array.from({ length: 24 }, () => 0);
   const zeroToday = fns.fillLocalPaid(
     {
-      hero: { value: "100", todayHour: [10, 20, 30, 40], yesterdayHour: [8, 16, 24, 32] },
-      shops: [{ shop: "A店", liveAmount: "100", payHours: [10, 20, 30, 40], yestPayHours: [8, 16, 24, 32] }],
+      hero: { value: "100", todayHour: [50, 10, 10, 10], yesterdayHour: [8, 16, 24, 32] },
+      shops: [{ shop: "A店", liveAmount: "100", payHours: [50, 10, 10, 10], yestPayHours: [8, 16, 24, 32] }],
       cards: [],
       paid: { label: "推广总花费", value: "—" }
     },
     {
       records: [{ shopName: "A店", paidAmount: 12, paidDeal: 40, jingmaiGmv: 100, feeRate: 0.12 }],
-      hourly: { todayPay: zeros, todaySpend: zeros, todayFee: zeros }
+      hourly: {
+        todayPay: zeros,
+        todaySpend: zeros,
+        todayFee: zeros,
+        yesterdaySpend: [2, 4, 6, 8],
+        yesterdayPay: [8, 16, 24, 32]
+      },
+      yesterday: {
+        records: [{ shopName: "A店", paidAmount: 20, paidDeal: 80, jingmaiGmv: 80 }],
+        hourly: { todaySpend: [2, 4, 6, 8], todayPay: [8, 16, 24, 32] }
+      }
     }
   );
   assert.ok(zeroToday.paid.todayHour.some((n) => Number(n) > 0));
   assert.equal(Number(zeroToday.paid.todayHour[0].toFixed(1)), 1.2);
+  assert.equal(Number(zeroToday.paid.todayHour[1].toFixed(1)), 2.4);
+  assert.equal(zeroToday.paid.yesterdayHour[0], 2);
   assert.equal(zeroToday.paid.value, "12");
+  assert.notEqual(Number(zeroToday.paid.todayHour[0].toFixed(1)), 7.5);
 });
 
 test("live shop 状态 follows 10-minute capturedAt", () => {
