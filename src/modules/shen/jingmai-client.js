@@ -570,28 +570,29 @@ async function fetchSzDeal(jar, fetchImpl) {
   return parseRealtime(response.status, await response.text(), response.headers.get("location"));
 }
 
-async function fetchDeal(jar, fetchImpl) {
+async function fetchDeal(jar, fetchImpl, readCard) {
   let shopError = null;
   try {
     return await enqueueDeal(function () {
       return fetchShopDeal(jar, fetchImpl);
     });
   } catch (error) {
-    const classified = classifyTransportError(error);
-    if (classified.code === "login") {
-      throw classified;
-    }
-    shopError = classified;
+    shopError = classifyTransportError(error);
   }
   try {
     return await fetchSzDeal(jar, fetchImpl);
   } catch (error) {
     shopError = shopError || classifyTransportError(error);
   }
-  if (fetchImpl === fetch && jar && jar.length) {
-    const card = await readHomeDeal(jar);
-    if (card && (card.dealAmount != null || card.orderCount != null || card.customerCount != null)) {
-      return card;
+  const reader = readCard || (fetchImpl === fetch ? readHomeDeal : null);
+  if (reader && jar && jar.length) {
+    try {
+      const card = await reader(jar);
+      if (card && (card.dealAmount != null || card.orderCount != null || card.customerCount != null)) {
+        return card;
+      }
+    } catch (error) {
+      shopError = shopError || classifyTransportError(error);
     }
   }
   throw shopError || jingmaiError("network", "京麦首页没有成交字段");
@@ -652,8 +653,8 @@ function hasCollected(metrics) {
   });
 }
 
-export async function fetchHome(jar, fetchImpl = fetch) {
-  const dealTask = fetchDeal(jar, fetchImpl).then(
+export async function fetchHome(jar, fetchImpl = fetch, readCard) {
+  const dealTask = fetchDeal(jar, fetchImpl, readCard).then(
     function (value) {
       return { deal: value, dealError: null };
     },

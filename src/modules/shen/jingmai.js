@@ -960,7 +960,7 @@ async function collectOne(shop, deps) {
   try {
     const metrics = await withDeadline(function () {
       return deps.fetchHome(shop.cookies);
-    }, 100000);
+    }, 600000);
     await deps.saveSample(
       Object.assign({ store: shop.store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics))
     );

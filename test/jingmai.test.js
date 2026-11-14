@@ -890,6 +890,22 @@ test("homepage deal uses the shop card and keeps the gateway reason when it fail
       return true;
     }
   );
+  const card = await fetchHome(
+    [{ name: "thor", value: "hidden-jar" }],
+    async (url) => {
+      const target = String(url);
+      if (target.includes("findAccountInfo") || target.includes("findShopDataByChannel") || target.includes("getSummary")) {
+        return jsonReply({ code: 1001, msg: "未登录" });
+      }
+      if (target.includes("pinlist")) {
+        return jsonReply({ code: -100, msg: "登录失败，请刷新页面重新登录" });
+      }
+      return jsonReply({ code: 1, data: {} });
+    },
+    async () => ({ dealAmount: 88, orderCount: 2, customerCount: 2, yesterdayAmount: 40, dealRate: 10, dealRateLabel: "较昨日" })
+  );
+  assert.equal(card.dealAmount, 88);
+  assert.equal(card.orderCount, 2);
   assert.equal(String(failed.dealNote).includes("thor"), false);
   assert.equal(String(failed.dealNote).includes("cookie"), false);
 });
