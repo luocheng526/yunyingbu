@@ -745,6 +745,72 @@ test("ERP shop-day store overwrites the same day and serves local from/to", asyn
   resetErpDaysDeps();
 });
 
+test("release smoke can import ticket files without nav.js or pages.js siblings", async () => {
+  const routerSrc = fs.readFileSync(path.join(repoRoot, "src/modules/data/router.js"), "utf8");
+  assert.doesNotMatch(routerSrc, /^import .+ from "\.\/nav\.js"/m);
+  assert.doesNotMatch(routerSrc, /^import .+ from "\.\/pages\.js"/m);
+  assert.doesNotMatch(routerSrc, /export const dataRouter = Router\(\);\s*startErpDayJobs/);
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "erp-smoke-"));
+  fs.mkdirSync(path.join(tmp, "src/modules/data"), { recursive: true });
+  fs.mkdirSync(path.join(tmp, "node_modules/express"), { recursive: true });
+  fs.writeFileSync(
+    path.join(tmp, "node_modules/express/package.json"),
+    JSON.stringify({ name: "express", type: "module", main: "index.js" })
+  );
+  fs.writeFileSync(
+    path.join(tmp, "node_modules/express/index.js"),
+    "export function Router(){ const r=function(){}; r.get=()=>r; r.use=()=>r; return r; }\n"
+  );
+  for (const rel of [
+    "src/modules/data/erp-days.js",
+    "src/modules/data/router.js",
+    "src/modules/data/overview.js",
+    "src/modules/data/release-files.js"
+  ]) {
+    fs.copyFileSync(path.join(repoRoot, rel), path.join(tmp, rel));
+  }
+  const child = spawn(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-e",
+      `import { pathToFileURL } from "node:url";
+import path from "node:path";
+const live = process.env.MENGKAI_SMOKE_LIVE;
+const files = JSON.parse(process.env.MENGKAI_SMOKE_FILES);
+for (const rel of files) {
+  await import(pathToFileURL(path.join(live, rel)).href);
+}
+console.log("SMOKE_OK");`
+    ],
+    {
+      cwd: tmp,
+      env: {
+        ...process.env,
+        MENGKAI_SMOKE_LIVE: tmp,
+        MENGKAI_SMOKE_FILES: JSON.stringify([
+          "src/modules/data/erp-days.js",
+          "src/modules/data/router.js",
+          "src/modules/data/overview.js",
+          "src/modules/data/release-files.js"
+        ]),
+        XM_ERP_DAYS_JOBS: "0"
+      }
+    }
+  );
+  let out = "";
+  child.stdout.on("data", (c) => {
+    out += c;
+  });
+  let err = "";
+  child.stderr.on("data", (c) => {
+    err += c;
+  });
+  const code = await new Promise((resolve) => child.on("close", resolve));
+  assert.equal(code, 0, err || out);
+  assert.match(out, /SMOKE_OK/);
+});
+
 test("ERP day jobs cover yesterday, day-before, month 3rd, and 90-day backfill", async () => {
   resetErpDaysDeps();
   const daily = jobsFor(new Date("2026-11-13T18:10:00Z"));
