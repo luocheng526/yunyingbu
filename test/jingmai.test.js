@@ -23,7 +23,7 @@ import {
 import { fetchHome, interpretQrCheck } from "../src/modules/shen/jingmai-client.js";
 import { passwordFailureMessage } from "../src/modules/shen/jingmai-client.js";
 import { libraryPackageNames, loginScreenState, packageFilename, suiteForGlibc } from "../src/modules/shen/jingmai-desk.js";
-import { beginRelogin, beginReloginAll, connectJingmai, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/shen/jingmai-runner.js";
+import { beginRelogin, beginReloginAll, connectJingmai, refreshJingmai, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/shen/jingmai-runner.js";
 import { listCollectTargets, listSessions, readJingmaiLive, resetJingmaiStore, saveSample, saveSession } from "../src/modules/shen/jingmai-store.js";
 
 const now = { day: "2026-11-12", stamp: "2026-11-12 11:05:00", hour: 11, clock: "11:05:00" };
@@ -908,4 +908,89 @@ test("homepage deal uses the shop card and keeps the gateway reason when it fail
   assert.equal(card.orderCount, 2);
   assert.equal(String(failed.dealNote).includes("thor"), false);
   assert.equal(String(failed.dealNote).includes("cookie"), false);
+});
+
+test("silent refresh logs an offline shop back in and saves the deal", async () => {
+  await resetJingmaiStore();
+  await saveSession("甲店", {
+    cookies: [{ name: "thor", value: "old-jar" }],
+    authState: "offline",
+    authMessage: "登录已失效，请重新登录",
+    enabled: true
+  });
+  await saveSession("乙店", {
+    cookies: [{ name: "thor", value: "keep-jar" }],
+    authState: "ok",
+    authMessage: "",
+    enabled: true
+  });
+  const opened = [];
+  let closed = 0;
+  setJingmaiDeps({
+    loadOrg: async () => [
+      { store: "甲店", enabled: true, login: "acct", password: "secret-pass" },
+      { store: "乙店", enabled: true, login: "acct-b", password: "secret-pass" }
+    ],
+    client: {
+      fetchHome: async () => ({ dealAmount: 88, orderCount: 2, customerCount: 2, yesterdayAmount: 40 })
+    },
+    desk: {
+      open: async ({ store }) => {
+        opened.push(store);
+        return { status: "ok", cookies: [{ name: "thor", value: "new-jar" }] };
+      },
+      close: async () => {
+        closed += 1;
+      },
+      reset() {}
+    }
+  });
+  try {
+    const result = await refreshJingmai("mk_sid=test");
+    assert.equal(result.logged, 1);
+    assert.deepEqual(opened, ["甲店"]);
+    assert.equal(closed, 1);
+    assert.equal(JSON.stringify(result).includes("secret-pass"), false);
+    assert.equal(JSON.stringify(result).includes("new-jar"), false);
+    const sessions = await listSessions();
+    const shop = sessions.find((item) => item.store === "甲店");
+    assert.equal(shop.authState, "ok");
+    assert.equal(shop.cookies[0].value, "new-jar");
+    const live = await readJingmaiLive();
+    const row = live.shops.find((item) => item.shop === "甲店");
+    assert.equal(row.dealAmount, 88);
+  } finally {
+    resetJingmaiDeps();
+    await resetJingmaiStore();
+  }
+});
+
+test("silent refresh keeps the old session when the login page asks for a check", async () => {
+  await resetJingmaiStore();
+  await saveSession("甲店", {
+    cookies: [{ name: "thor", value: "keep-jar" }],
+    authState: "offline",
+    authMessage: "登录失败，请刷新页面重新登录",
+    enabled: true
+  });
+  setJingmaiDeps({
+    loadOrg: async () => [{ store: "甲店", enabled: true, login: "acct", password: "secret-pass" }],
+    client: { fetchHome: async () => ({ dealAmount: 1 }) },
+    desk: {
+      open: async () => ({ status: "verify", message: "请完成验证" }),
+      close: async () => {},
+      reset() {}
+    }
+  });
+  try {
+    const result = await refreshJingmai("mk_sid=test");
+    assert.equal(result.logged, 0);
+    assert.equal(result.results[0].status, "verify");
+    const sessions = await listSessions();
+    assert.equal(sessions[0].cookies[0].value, "keep-jar");
+    assert.equal(sessions[0].authState, "offline");
+  } finally {
+    resetJingmaiDeps();
+    await resetJingmaiStore();
+  }
 });

@@ -1222,8 +1222,13 @@ export async function openDesk({ store, loginName, password }) {
       return { status: "login", message: "服务器没有填上账号" };
     }
     await sleep(2500);
-    const cookies = await readCookies(desk.ws);
+    let cookies = await readCookies(desk.ws);
+    for (let attempt = 0; attempt < 6 && !hasSession(cookies); attempt += 1) {
+      await sleep(800);
+      cookies = await readCookies(desk.ws);
+    }
     if (hasSession(cookies)) {
+      stopCurrent();
       return { status: "ok", cookies: cookies };
     }
     const screen = await readScreenState(desk.ws);
