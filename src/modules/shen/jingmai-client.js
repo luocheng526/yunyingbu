@@ -10,7 +10,8 @@ import {
   jingmaiError,
   paidQuery,
   parseRealtime,
-  beijingParts
+  beijingParts,
+  withDeadline
 } from "./jingmai.js";
 import { readHomeDeal } from "./jingmai-desk.js";
 
@@ -480,8 +481,20 @@ function dealBusy(error) {
 
 let dealGate = Promise.resolve();
 
+function dealGateMs() {
+  const value = Number(process.env.SHEN_DEAL_GATE_MS);
+  return Number.isFinite(value) && value > 0 ? value : 25000;
+}
+
 function enqueueDeal(task) {
-  const run = dealGate.then(task, task);
+  const run = dealGate.then(
+    function () {
+      return withDeadline(task, dealGateMs(), "采集超时");
+    },
+    function () {
+      return withDeadline(task, dealGateMs(), "采集超时");
+    }
+  );
   dealGate = run.then(
     function () {
       return pause(dealGapMs());

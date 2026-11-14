@@ -217,7 +217,12 @@ export async function listSessions() {
 export async function listCollectTargets() {
   const sessions = await listSessions();
   return sessions.filter(function (session) {
-    return session.enabled && session.authState === "ok" && session.cookies && session.cookies.length;
+    return (
+      session.enabled &&
+      (session.authState === "ok" || session.authState === "offline") &&
+      session.cookies &&
+      session.cookies.length
+    );
   });
 }
 

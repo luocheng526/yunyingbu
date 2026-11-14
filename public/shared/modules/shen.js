@@ -472,7 +472,7 @@
     mount: function (root) {
       const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
       paidCss.rel = "stylesheet";
-      paidCss.href = "/shared/shen-paid.css?v=0.1.770-paid-curve";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.771-paid-offline";
       if (!paidCss.parentNode) {
         document.head.appendChild(paidCss);
       }
@@ -1865,6 +1865,8 @@
           row.yesterdayPaidHours = sale && Array.isArray(sale.yesterdayPaidHours) ? sale.yesterdayPaidHours : [];
           row.capturedAt = sale && sale.capturedAt ? String(sale.capturedAt) : "";
           row.online = Boolean(sale && sale.online);
+          row.offline = Boolean(sale && sale.offline);
+          row.offlineReason = sale && sale.offlineReason ? String(sale.offlineReason) : "";
           row.loginExpired = Boolean(sale && sale.loginExpired);
           row.paidAmount =
             sale && sale.paidAmount != null
@@ -2786,8 +2788,9 @@
         if (row.online) {
           return '<span class="xm-hl-net is-on">在线</span>';
         }
-        if (row.loginExpired) {
-          return '<span class="xm-hl-net is-off">掉线</span>';
+        if (row.loginExpired || row.offline) {
+          const reason = row.offlineReason ? ' title="' + escapeHtml(row.offlineReason) + '"' : "";
+          return '<span class="xm-hl-net is-off"' + reason + ">掉线</span>";
         }
         return "";
       }

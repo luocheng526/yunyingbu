@@ -5,7 +5,7 @@ import { connect as connectTcp } from "node:net";
 import { tmpdir } from "node:os";
 import { setTimeout as sleep } from "node:timers/promises";
 import zlib from "node:zlib";
-import { extractShopDeal, parseHomeCard } from "./jingmai.js";
+import { extractShopDeal, parseHomeCard, withDeadline } from "./jingmai.js";
 
 const LOGIN_URL =
   "https://passport.shop.jd.com/login/index.action/jdm?ReturnUrl=" + encodeURIComponent("https://shop.jd.com/");
@@ -1469,7 +1469,9 @@ async function readHomeDealNow(cookies) {
 
 export function readHomeDeal(cookies) {
   const job = dealQueue.then(function () {
-    return readHomeDealNow(cookies);
+    return withDeadline(function () {
+      return readHomeDealNow(cookies);
+    }, 45000);
   });
   dealQueue = job.then(function () {
     return null;
@@ -1706,7 +1708,9 @@ async function readShopStockNow(cookies) {
 
 export function readShopStock(cookies) {
   const job = dealQueue.then(function () {
-    return readShopStockNow(cookies);
+    return withDeadline(function () {
+      return readShopStockNow(cookies);
+    }, 45000);
   });
   dealQueue = job.then(function () {
     return null;

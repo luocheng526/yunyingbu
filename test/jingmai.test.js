@@ -24,7 +24,7 @@ import { fetchHome, interpretQrCheck } from "../src/modules/shen/jingmai-client.
 import { passwordFailureMessage } from "../src/modules/shen/jingmai-client.js";
 import { libraryPackageNames, loginScreenState, packageFilename, suiteForGlibc } from "../src/modules/shen/jingmai-desk.js";
 import { beginRelogin, beginReloginAll, connectJingmai, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/shen/jingmai-runner.js";
-import { listSessions, readJingmaiLive, resetJingmaiStore, saveSample, saveSession } from "../src/modules/shen/jingmai-store.js";
+import { listCollectTargets, listSessions, readJingmaiLive, resetJingmaiStore, saveSample, saveSession } from "../src/modules/shen/jingmai-store.js";
 
 const now = { day: "2026-11-12", stamp: "2026-11-12 11:05:00", hour: 11, clock: "11:05:00" };
 
@@ -127,6 +127,9 @@ test("paid numbers count as a successful collection when deal is still empty", (
   assert.equal(view.shops[0].dealAmount, null);
   assert.equal(view.shops[0].paidAmount, 0);
   assert.equal(view.shops[0].paidRoi, 2.17);
+  assert.equal(view.shops[0].online, false);
+  assert.equal(view.shops[0].offline, true);
+  assert.match(view.shops[0].offlineReason, /没有成交字段/);
   assert.equal(JSON.stringify(view).includes("secret"), false);
 });
 
@@ -179,7 +182,9 @@ test("live view counts successful shops and does not expose cookies", () => {
   assert.equal(view.enabledShops, 2);
   assert.equal(view.loginExpiredShops, 1);
   assert.equal(view.shops[0].online, true);
+  assert.equal(view.shops[0].offline, false);
   assert.equal(view.shops[1].online, false);
+  assert.equal(view.shops[1].offline, false);
   assert.equal(view.shops[1].loginExpired, true);
   assert.equal(view.updatedAt, "2026/11/12 11:05:00");
   assert.equal(view.shops[0].dealAmount, 0);
@@ -188,9 +193,9 @@ test("live view counts successful shops and does not expose cookies", () => {
   assert.equal(JSON.stringify(view).includes("secret"), false);
 });
 
-test("one slow shop does not block another, and a timeout is not a logout", async () => {
+test("one slow shop does not block another, and a timeout shows offline without clearing the login", async () => {
   const saved = [];
-  let marked = 0;
+  const marked = [];
   let calls = 0;
   await runTick({
     inflight: new Set(),
@@ -207,13 +212,62 @@ test("one slow shop does not block another, and a timeout is not a logout", asyn
     saveSample: async (sample) => {
       saved.push(sample.store);
     },
-    markAuth: async () => {
-      marked += 1;
+    markAuth: async (store, state, message) => {
+      marked.push([store, state, message]);
     }
   });
   assert.equal(calls, 2);
   assert.deepEqual(saved, ["快店"]);
-  assert.equal(marked, 0);
+  assert.deepEqual(marked, [["慢店", "offline", "采集超时"]]);
+});
+
+test("a missing deal field shows offline and a later deal clears it", async () => {
+  const marked = [];
+  await runTick({
+    inflight: new Set(),
+    now: () => now,
+    listTargets: async () => [shop("缺字段店")],
+    fetchHome: async () => ({ dealAmount: null, paidAmount: 12, dealNote: "京麦首页没有成交字段" }),
+    saveSample: async () => {},
+    markAuth: async (store, state, message) => {
+      marked.push([store, state, message]);
+    }
+  });
+  assert.deepEqual(marked, [["缺字段店", "offline", "京麦首页没有成交字段"]]);
+  marked.length = 0;
+  await runTick({
+    inflight: new Set(),
+    now: () => now,
+    listTargets: async () => [{ store: "缺字段店", enabled: true, authState: "offline", cookies: [{ name: "thor", value: "x" }] }],
+    fetchHome: async () => ({ dealAmount: 8, orderCount: 1, customerCount: 1 }),
+    saveSample: async () => {},
+    markAuth: async (store, state, message) => {
+      marked.push([store, state, message]);
+    }
+  });
+  assert.deepEqual(marked, [["缺字段店", "ok", ""]]);
+});
+
+test("a stopped collector shows offline while the saved session stays", () => {
+  const view = buildLiveView({
+    now: { day: "2026-11-14", stamp: "2026-11-14 09:19:00", hour: 9, clock: "09:19:00" },
+    shops: [{ store: "甲店", enabled: true, authState: "ok", authMessage: "", cookies: [{ name: "thor", value: "secret" }] }],
+    samples: [
+      {
+        store: "甲店",
+        day: "2026-11-13",
+        capturedAt: "2026-11-13 18:00:00",
+        dealAmount: 1516.59,
+        paidAmount: 80,
+        ok: true
+      }
+    ]
+  });
+  assert.equal(view.shops[0].online, false);
+  assert.equal(view.shops[0].offline, true);
+  assert.equal(view.shops[0].loginExpired, false);
+  assert.equal(view.shops[0].offlineReason, "采集已停止");
+  assert.equal(view.shops[0].dealAmount, null);
 });
 
 test("the same shop is not queued twice", async () => {
@@ -301,6 +355,27 @@ test("connect uses org accounts without returning the password", async () => {
     assert.equal(JSON.stringify(live).includes("jar-seller"), false);
   } finally {
     resetJingmaiDeps();
+    await resetJingmaiStore();
+  }
+});
+
+test("offline shops stay in the collector and a dead login does not", async () => {
+  await resetJingmaiStore();
+  await saveSession("在线店", { cookies: [{ name: "thor", value: "a" }], authState: "ok", enabled: true });
+  await saveSession("超时店", { cookies: [{ name: "thor", value: "b" }], authState: "offline", authMessage: "采集超时", enabled: true });
+  await saveSession("失效店", { cookies: [{ name: "thor", value: "c" }], authState: "login_expired", enabled: true });
+  try {
+    const names = (await listCollectTargets()).map(function (row) {
+      return row.store;
+    });
+    assert.equal(names.includes("在线店"), true);
+    assert.equal(names.includes("超时店"), true);
+    assert.equal(names.includes("失效店"), false);
+    const timed = (await listSessions()).find(function (row) {
+      return row.store === "超时店";
+    });
+    assert.equal(timed.cookies[0].value, "b");
+  } finally {
     await resetJingmaiStore();
   }
 });
@@ -700,6 +775,49 @@ test("a busy homepage retries and then reads the deal card", async () => {
       delete process.env.SHEN_DEAL_RETRY_MS;
     } else {
       process.env.SHEN_DEAL_RETRY_MS = previous;
+    }
+  }
+});
+
+test("a hung deal request releases the queue for the next shop", async () => {
+  const previousGate = process.env.SHEN_DEAL_GATE_MS;
+  const previousRetry = process.env.SHEN_DEAL_RETRY_MS;
+  process.env.SHEN_DEAL_GATE_MS = "30";
+  process.env.SHEN_DEAL_RETRY_MS = "0";
+  const first = fetchHome([{ name: "thor", value: "stuck" }], function () {
+    return new Promise(function () {});
+  });
+  first.catch(function () {});
+  await new Promise(function (resolve) {
+    setTimeout(resolve, 15);
+  });
+  try {
+    const result = await fetchHome([{ name: "thor", value: "next" }], async function (url) {
+      if (String(url).includes("findShopDataByChannel")) {
+        return jsonReply({
+          code: "200",
+          data: { channelData: { indicatorList: [{ code: "3009", name: "成交金额", todayNum: "5" }] } }
+        });
+      }
+      if (String(url).includes("pinlist")) {
+        return jsonReply({ code: 1, data: { own: [{ userId: 1 }] } });
+      }
+      if (String(url).includes("summary/overview")) {
+        return jsonReply({ code: 1, data: { summary: [{ index: "cost", value: "1" }, { index: "totalOrderSum", value: "2" }, { index: "ROI", value: "2" }] } });
+      }
+      return jsonReply({ code: 200, data: {} });
+    });
+    assert.equal(result.dealAmount, 5);
+  } finally {
+    if (previousGate == null) {
+      delete process.env.SHEN_DEAL_GATE_MS;
+    } else {
+      process.env.SHEN_DEAL_GATE_MS = previousGate;
+    }
+    if (previousRetry == null) {
+      delete process.env.SHEN_DEAL_RETRY_MS;
+    } else {
+      process.env.SHEN_DEAL_RETRY_MS = previousRetry;
     }
   }
 });

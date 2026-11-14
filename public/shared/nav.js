@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.770-paid-curve — 概览曲线改成清晰的全天实线 */
+/* xm-fast-shell 0.1.771-paid-offline — 采集超时、缺字段或采集停止显示掉线 */
 (function () {
-  const ASSET_VER = "0.1.770-paid-curve";
+  const ASSET_VER = "0.1.771-paid-offline";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",

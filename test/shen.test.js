@@ -435,14 +435,16 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /连接京麦/);
     assert.match(embed.text, /重新登录/);
     assert.match(embed.text, /xm-hl-net is-on">在线/);
-    assert.match(embed.text, /xm-hl-net is-off">掉线/);
+    assert.match(embed.text, /xm-hl-net is-off/);
+    assert.match(embed.text, />掉线<\/span>/);
     assert.match(embed.text, /key: "login", label: "登录状态"/);
     const homeCols = embed.text.slice(embed.text.indexOf("const HOME_COLS"), embed.text.indexOf("const HEAD_KEY"));
     const homeKeys = [...homeCols.matchAll(/key: "([^"]+)"/g)].map((match) => match[1]);
     assert.deepEqual(homeKeys.slice(0, 4), ["rank", "shop", "login", "liveAmount"]);
     const netMark = embed.text.slice(embed.text.indexOf("function netMark"), embed.text.indexOf("function homeCell"));
     assert.match(netMark, /if \(row\.online\)/);
-    assert.match(netMark, /if \(row\.loginExpired\)/);
+    assert.match(netMark, /row\.loginExpired \|\| row\.offline/);
+    assert.match(embed.text, /row\.offline = Boolean\(sale && sale\.offline\)/);
     const shopCell = embed.text.slice(embed.text.indexOf('if (col.key === "shop")'), embed.text.indexOf('if (col.key === "login")'));
     assert.match(shopCell, /data-open-shop/);
     assert.equal(shopCell.includes("netMark"), false);

@@ -472,6 +472,71 @@ export function classifyTransportError(error) {
   return jingmaiError("network", "采集超时");
 }
 
+export function withDeadline(work, ms, message) {
+  return new Promise(function (resolve, reject) {
+    let settled = false;
+    const timer = setTimeout(function () {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      reject(jingmaiError("timeout", message || "采集超时"));
+    }, ms);
+    Promise.resolve()
+      .then(work)
+      .then(
+        function (value) {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          clearTimeout(timer);
+          resolve(value);
+        },
+        function (error) {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          clearTimeout(timer);
+          reject(error);
+        }
+      );
+  });
+}
+
+const FRESH_MS = 15 * 60 * 1000;
+
+function stampMs(stamp) {
+  const match = String(stamp || "").match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!match) {
+    return NaN;
+  }
+  return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]), Number(match[6] || 0));
+}
+
+function latestDataStamp(samples) {
+  let stamp = "";
+  (samples || []).forEach(function (sample) {
+    if (sample.ok === false || !sampleHasData(sample) || !sample.capturedAt) {
+      return;
+    }
+    if (!stamp || stamp < sample.capturedAt) {
+      stamp = sample.capturedAt;
+    }
+  });
+  return stamp;
+}
+
+function sampleIsFresh(stamp, now) {
+  const sampleMs = stampMs(stamp);
+  const nowMs = stampMs(now && now.stamp);
+  if (!Number.isFinite(sampleMs) || !Number.isFinite(nowMs)) {
+    return false;
+  }
+  return nowMs - sampleMs <= FRESH_MS;
+}
+
 export function hoursFromSamples(samples, day, field) {
   const key = field || "dealAmount";
   const hours = new Array(24).fill(null);
@@ -785,11 +850,34 @@ export function buildLiveView({ shops, samples, now }) {
     const today = latestSample(mine, day);
     const reading = latestDealReading(mine, day);
     const compare = resolveDealCompare(reading || {});
+    const hasSession = shop.enabled !== false && Array.isArray(shop.cookies) && shop.cookies.length > 0;
+    const loginExpired = shop.enabled !== false && shop.authState === "login_expired";
+    const fresh = sampleIsFresh(latestDataStamp(mine), now);
+    const dealMissing = !reading || reading.dealAmount == null;
+    const collectFailed = shop.authState === "offline";
+    const watched = shop.authState === "ok" || collectFailed;
+    const online = hasSession && shop.authState === "ok" && fresh && !dealMissing;
+    let offline = false;
+    let offlineReason = "";
+    if (hasSession && watched && !online && (collectFailed || !fresh || dealMissing)) {
+      offline = true;
+      if (collectFailed && shop.authMessage) {
+        offlineReason = String(shop.authMessage);
+      } else if (!fresh) {
+        offlineReason = "采集已停止";
+      } else if (dealMissing) {
+        offlineReason = (reading && reading.dealNote) || "京麦首页没有成交字段";
+      } else {
+        offlineReason = "采集超时";
+      }
+    }
     return {
       shop: shop.store,
       enabled: shop.enabled !== false,
-      online: shop.enabled !== false && shop.authState === "ok" && Array.isArray(shop.cookies) && shop.cookies.length > 0,
-      loginExpired: shop.enabled !== false && shop.authState === "login_expired",
+      online: online,
+      offline: offline,
+      offlineReason: offlineReason,
+      loginExpired: loginExpired,
       dealAmount: compare.today,
       orderCount: today && today.orderCount != null ? today.orderCount : null,
       customerCount: today && today.customerCount != null ? today.customerCount : null,
@@ -855,17 +943,31 @@ export async function runTick(deps) {
   await Promise.all(jobs);
 }
 
+function offlineMessage(error) {
+  const classified = classifyTransportError(error);
+  return String(classified.message || "采集超时").replace(/\s+/g, " ").slice(0, 80) || "采集超时";
+}
+
 async function collectOne(shop, deps) {
   const now = deps.now();
   try {
-    const metrics = await deps.fetchHome(shop.cookies);
+    const metrics = await withDeadline(function () {
+      return deps.fetchHome(shop.cookies);
+    }, 100000);
     await deps.saveSample(
       Object.assign({ store: shop.store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics))
     );
+    if (metrics.dealAmount == null) {
+      await deps.markAuth(shop.store, "offline", metrics.dealNote || "京麦首页没有成交字段");
+    } else if (shop.authState === "offline") {
+      await deps.markAuth(shop.store, "ok", "");
+    }
   } catch (error) {
     const classified = classifyTransportError(error);
     if (classified.code === "login") {
       await deps.markAuth(shop.store, "login_expired", "登录已失效，请重新登录");
+      return;
     }
+    await deps.markAuth(shop.store, "offline", offlineMessage(classified));
   }
 }
