@@ -42,6 +42,13 @@ async function loadDb() {
 
 /** Called by live src/notes-store.js after schema setup. Must stay a named export. */
 export async function hydrateFromMysql() {
+  try {
+    const { ensureErpDayTable, startErpDayJobs } = await import("./erp-days.js");
+    await ensureErpDayTable();
+    startErpDayJobs();
+  } catch {
+    // day table is optional when ERP client is not mounted
+  }
   const db = await loadDb();
   if (!db?.query) {
     return { ok: true, skipped: true };

@@ -23,6 +23,7 @@ export const DATA_OVERLAY_FILES = [
   "src/modules/data/nav.js",
   "src/modules/data/pages.js",
   "src/modules/data/router.js",
+  "src/modules/data/erp-days.js",
   "src/modules/data/patch-app.js",
   "src/modules/data/release-files.js",
   "public/data/shops/index.html",
