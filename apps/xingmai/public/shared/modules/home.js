@@ -1,6 +1,6 @@
-/* xm-module-home 0.1.950-livegmv */
+/* xm-module-home 0.1.951-noerp */
 (function () {
-  var HOME_JS_STAMP = "0.1.950-livegmv";
+  var HOME_JS_STAMP = "0.1.951-noerp";
   var VIEWS = [
     { key: "company", label: "公司" },
     { key: "team", label: "经理团队" },
@@ -3530,20 +3530,9 @@
     ];
   }
   function liveBoardOf(state, dutyKeys, pick) {
-    var packs = state && state.livePacks;
     var keys = livePickKeys(state, dutyKeys === undefined ? liveDutyKeys(state) : dutyKeys, pick);
-    if (!packs) {
-      var fallback = (state && state.live) || blankLive();
-      return {
-        live: fallback,
-        shops: filterLiveShops(fallback.shops || (state && state.shops) || [], state)
-      };
-    }
-    var live = fillLocalPaid(
-      liveFromErp(scopePack(packs.today, keys), scopePack(packs.snap, keys)),
-      scopeLocalPaid((state && state.localPaid) || emptyLocalPaid(), keys),
-      { stores: (state && state.dutyShops) || [] }
-    );
+    var local = scopeLocalPaid((state && state.localPaid) || emptyLocalPaid(), keys);
+    var live = fillLocalPaid(blankLive(), local, { stores: (state && state.dutyShops) || [] });
     return { live: live, shops: live.shops || [] };
   }
   function mixFeeHours(shops, hourKey) {
@@ -3566,56 +3555,6 @@
       out[i] = last;
     }
     return hit ? out : [];
-  }
-  function liveFromErp(todayPack, snapPack) {
-    var live = blankLive();
-    var todayPay = payOfPack(todayPack && todayPack.records && todayPack.records.length ? todayPack : snapPack);
-    var hourly = (todayPack && todayPack.hourly) || (snapPack && snapPack.hourly) || {};
-    var yestPay = asNum(todayPack && todayPack.summary && todayPack.summary.yesterdayPayAmount);
-    var hasHourly = hoursHaveNow(hourly.todayPay);
-    var yestHour = hoursHaveNow(hourly.yesterdayPay) ? padHours(hourly.yesterdayPay, 24) : seriesOf(null, yestPay);
-    var todayHour = hasHourly ? todayHours(hourly.todayPay) : seriesOf(null, todayPay);
-    var keptHero = keepLiveDay({
-      jingmai: todayPay,
-      yestJingmai: yestPay,
-      hourly: hourly
-    });
-    var yestNow = keptHero.yestJingmai;
-    live.hero = Object.assign(live.hero, {
-      value: fmtMoney(todayPay),
-      yestText: yestNow != null ? fmtMoney(yestNow) : "—",
-      delta: todayPay != null && yestNow != null ? trendOf(todayPay, yestNow) : "",
-      yesterday: hasHourly ? cumHours(yestHour) : yestHour,
-      today: hasHourly ? cumHours(todayHour) : todayHour,
-      yesterdayHour: hasHourly ? yestHour : [],
-      todayHour: hasHourly ? todayHour : []
-    });
-    live.paid = spendChartOf(null);
-    live.fee = feeChartOf(null);
-    var rows = (todayPack && todayPack.records && todayPack.records.length ? todayPack.records : snapPack && snapPack.records) || [];
-    live.shops = rows
-      .slice()
-      .sort(function (a, b) {
-        return (asNum(b.todayPayAmount) || asNum(b.payAmount) || 0) - (asNum(a.todayPayAmount) || asNum(a.payAmount) || 0);
-      })
-      .map(function (row) {
-        var pay = row.todayPayAmount != null ? row.todayPayAmount : row.payAmount;
-        return {
-          shop: row.shopName,
-          shopId: row.shopId,
-          liveAmount: fmtMoney(pay),
-          paidAmount: "—",
-          profit: fmtMoney(row.profit),
-          roi: "—",
-          paidDeal: "—",
-          feeRate: "—",
-          payHours: row.todayHourlyData,
-          yestPayHours: row.yesterdayHourlyData
-        };
-      });
-    live.summary = { channels: 1, shops: live.shops.length };
-    live.cards = liveCardsOf({ shops: 0 });
-    return live;
   }
   function emptyLocalPaid() {
     return {
@@ -4402,10 +4341,8 @@
           state.localPaid = localPack;
         }
         var keys = liveDutyKeys(state);
-        var today = scopePack(todayPack, keys);
-        var snap = scopePack(snapPack, keys);
         var local = scopeLocalPaid(localPack || state.localPaid || emptyLocalPaid(), keys);
-        state.live = fillLocalPaid(liveFromErp(today, snap), local, { stores: state.dutyShops || [] });
+        state.live = fillLocalPaid(blankLive(), local, { stores: state.dutyShops || [] });
         state.shops = state.live.shops;
         if (stampClock || !state.liveAt) {
           state.liveAt = shanghaiClock();
@@ -4441,18 +4378,6 @@
           return m.records && m.records.length ? m : d && d.ok ? d : emptyLocalPaid();
         }).catch(function () {
           return emptyLocalPaid();
-        });
-      }
-      function pullLiveKpis(localPack) {
-        var today = shanghaiYmd(0);
-        return Promise.all([fetchRangePack(today, today), fetchCatalogPack()]).then(function (pack) {
-          if (!dead) {
-            applyLive(pack[0], { records: [], summary: {}, hourly: {} }, pack[1], localPack, true);
-          }
-        }).catch(function () {
-          if (!dead) {
-            paint(root, state);
-          }
         });
       }
       var boardSeq = 0;
@@ -4511,28 +4436,13 @@
           clearLiveShown(state);
           paint(root, state);
         }
-        return Promise.all([
-          api("/api/home/erp-paid").catch(function () {
-            return null;
-          }),
-          pullLocalPaid()
-        ]).then(function (pair) {
-          if (dead) {
-            return;
+        return pullLocalPaid().then(function (local) {
+          if (!dead) {
+            applyLive(null, null, null, local || emptyLocalPaid(), true);
           }
-          var data = pair[0];
-          var local = pair[1] || emptyLocalPaid();
-          if (data && data.ok && (data.summary || (data.records && data.records.length))) {
-            var todayPack = { records: data.records || [], summary: data.summary || {}, hourly: data.hourly };
-            applyLive(todayPack, { records: [], summary: data.yesterday || {}, hourly: data.hourly }, todayPack, local, true);
-            return;
-          }
-          return pullLiveKpis(local);
         }).catch(function () {
           if (!dead) {
-            return pullLocalPaid().then(function (local) {
-              return pullLiveKpis(local);
-            });
+            paint(root, state);
           }
         });
       }

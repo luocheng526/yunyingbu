@@ -147,8 +147,8 @@ test("charts cards and shop rows use the same filtered live board", () => {
     livePacks: packs,
     localPaid: {
       records: [
-        { shopName: "A店", paidAmount: 20, paidDeal: 80 },
-        { shopName: "B店", paidAmount: 5, paidDeal: 15 }
+        { shopName: "A店", paidAmount: 20, paidDeal: 80, jingmaiGmv: 100 },
+        { shopName: "B店", paidAmount: 5, paidDeal: 15, jingmaiGmv: 50 }
       ],
       yesterday: {
         records: [
@@ -163,13 +163,13 @@ test("charts cards and shop rows use the same filtered live board", () => {
   };
   const all = fns.liveBoardOf(state, null, { team: "", shop: "" });
   assert.equal(all.live.hero.value, "150");
-  assert.equal(all.shops.length, 3);
+  assert.equal(all.shops.length, 2);
   const hanAll = fns.liveBoardOf(
     { ...state, user: { displayName: "韩梦凯" }, dutyKeys: { "name:b店": true } },
     undefined,
     { team: "", shop: "" }
   );
-  assert.equal(hanAll.shops.length, 3);
+  assert.equal(hanAll.shops.length, 2);
   const gaoOwn = fns.liveBoardOf(
     { ...state, user: { displayName: "高传颖" }, dutyKeys: { "name:b店": true } },
     undefined,
@@ -181,12 +181,12 @@ test("charts cards and shop rows use the same filtered live board", () => {
   assert.equal(all.live.paid.label, "推广总花费");
   assert.equal(all.live.paid.value, "25");
   assert.equal(all.live.fee.label, "实时费比");
-  assert.equal(all.live.fee.value, "26%");
+  assert.equal(all.live.fee.value, "17%");
   assert.equal(all.live.hero.yestText, "80");
   assert.equal(all.live.cards.find((card) => card.key === "ad"), undefined);
   const team = fns.liveBoardOf(state, null, { team: "韩梦凯", shop: "" });
   assert.equal(team.live.hero.value, "50");
-  assert.deepEqual(team.shops.map((row) => row.shop), ["B店", "C店"]);
+  assert.deepEqual(team.shops.map((row) => row.shop), ["B店"]);
   assert.equal(team.live.cards.find((card) => card.key === "livePaid").value, "1");
   assert.equal(team.live.paid.value, "5");
   const shop = fns.liveBoardOf(state, null, { team: "", shop: "A店" });
