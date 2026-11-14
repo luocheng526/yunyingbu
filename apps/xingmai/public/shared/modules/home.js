@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.922-now */
+/* xm-module-home 0.1.924-erp */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -3469,12 +3469,12 @@
     );
     return { live: live, shops: live.shops || [] };
   }
-  function mixFeeHours(shops) {
+  function mixFeeHours(shops, hourKey) {
     var out = [], i, hit = 0, last = 0;
     for (i = 0; i < 24; i += 1) {
       var num = 0, den = 0, k = (i < 10 ? "0" : "") + i + ":00";
       (shops || []).forEach(function (s) {
-        var h = s && s.payHours;
+        var h = s && s[hourKey || "payHours"];
         var g = asNum(h && (Array.isArray(h) ? h[i] : h[k] != null ? h[k] : h[i]));
         var f = asNum(String((s && s.feeRate) || "").replace("%", ""));
         if (g && f != null) {
@@ -3494,18 +3494,23 @@
     var live = blankLive();
     var todayPay = payOfPack(todayPack && todayPack.records && todayPack.records.length ? todayPack : snapPack);
     var hourly = (todayPack && todayPack.hourly) || (snapPack && snapPack.hourly) || {};
+    var yestPay = asNum(todayPack && todayPack.summary && todayPack.summary.yesterdayPayAmount);
     var hasHourly = hourly.todayPay && hourly.todayPay.length > 2;
+    var yestHour = hasHourly ? padHours(hourly.yesterdayPay, 24) : seriesOf(hourly.yesterdayPay, yestPay);
     var todayHour = hasHourly ? todayHours(hourly.todayPay) : seriesOf(hourly.todayPay, todayPay);
     var keptHero = keepLiveDay({
       jingmai: todayPay,
-      hourly: { todayPay: hourly.todayPay }
+      yestJingmai: yestPay,
+      hourly: hourly
     });
     var yestNow = keptHero.yestJingmai;
     live.hero = Object.assign(live.hero, {
       value: fmtMoney(todayPay),
       yestText: yestNow != null ? fmtMoney(yestNow) : "—",
       delta: todayPay != null && yestNow != null ? trendOf(todayPay, yestNow) : "",
+      yesterday: hasHourly ? cumHours(yestHour) : yestHour,
       today: hasHourly ? cumHours(todayHour) : todayHour,
+      yesterdayHour: hasHourly ? yestHour : [],
       todayHour: hasHourly ? todayHour : []
     });
     live.paid = spendChartOf(null);
@@ -3526,7 +3531,8 @@
           roi: "—",
           paidDeal: "—",
           feeRate: "—",
-          payHours: row.todayHourlyData
+          payHours: row.todayHourlyData,
+          yestPayHours: row.yesterdayHourlyData
         };
       });
     live.summary = { channels: 1, shops: live.shops.length };
@@ -3708,7 +3714,14 @@
     var yestSum = yestRows.length ? sumLocalPaid(yestRows) : {};
     var hourly = localHourlyOf(local);
     var payT = (live.hero && live.hero.todayHour && live.hero.todayHour.length > 2 ? live.hero.todayHour : hourly.todayPay) || [];
+    var payY = (hourly.yesterdayPay && hourly.yesterdayPay.length > 2 ? hourly.yesterdayPay : live.hero && live.hero.yesterdayHour) || [];
+    var sT = 0, sY = 0, i;
+    for (i = 0; i < payT.length; i += 1) sT += Number(payT[i]) || 0;
+    for (i = 0; i < payY.length; i += 1) sY += Number(payY[i]) || 0;
+    if (yestSum.spend == null && sum.spend != null && sT && sY) yestSum.spend = sum.spend * (sY / sT);
+    if (yestSum.feeRate == null && yestSum.spend != null && sY) yestSum.feeRate = yestSum.spend / sY;
     if (!(hourly.todaySpend && hourly.todaySpend.length > 2)) hourly.todaySpend = payFit(payT, sum.spend);
+    if (!(hourly.yesterdaySpend && hourly.yesterdaySpend.length > 2)) hourly.yesterdaySpend = payFit(payY, yestSum.spend);
     if (rows.length) {
       var map = {};
       rows.forEach(function (row) {
@@ -3738,8 +3751,10 @@
       });
       live.cards = liveCardsOf(sum);
     }
-    var mixT = mixFeeHours(live.shops);
+    var mixT = mixFeeHours(live.shops, "payHours");
+    var mixY = mixFeeHours(live.shops, "yestPayHours");
     if (mixT.length > 2) hourly.todayFee = mixT;
+    if (!(hourly.yesterdayFee && hourly.yesterdayFee.length > 2) && mixY.length > 2) hourly.yesterdayFee = mixY;
     if (live.hero) {
       var yH = hourly.yesterdayPay && hourly.yesterdayPay.length > 2 ? padHours(hourly.yesterdayPay, 24) : [];
       var yN = hourCum(yH.length ? yH : null, yestSum.liveAmount);
@@ -4281,8 +4296,8 @@
           var data = pair[0];
           var local = pair[1] || emptyLocalPaid();
           if (data && data.ok && (data.summary || (data.records && data.records.length))) {
-            var todayPack = { records: data.records || [], summary: data.summary || {}, hourly: { todayPay: (data.hourly && data.hourly.todayPay) || [] } };
-            applyLive(todayPack, { records: [], summary: {}, hourly: {} }, todayPack, local, true);
+            var todayPack = { records: data.records || [], summary: data.summary || {}, hourly: data.hourly };
+            applyLive(todayPack, { records: [], summary: data.yesterday || {}, hourly: data.hourly }, todayPack, local, true);
             return;
           }
           return pullLiveKpis(local);
