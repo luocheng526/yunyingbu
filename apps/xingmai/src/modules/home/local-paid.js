@@ -420,7 +420,10 @@ export async function pullHanShenPaid(req, ymd = shanghaiYmd()) {
 
 function pickHours(hourly, key) {
   const v = hourly && hourly[key];
-  return Array.isArray(v) && v.length > 2 ? v : null;
+  if (!Array.isArray(v) || v.length < 3) {
+    return null;
+  }
+  return v.some((n) => Number(n) > 0) ? v : null;
 }
 
 function mergeTodayHourly(base, incoming, replaceHours) {
