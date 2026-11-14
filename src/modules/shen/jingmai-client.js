@@ -617,14 +617,16 @@ async function fetchPaid(jar, fetchImpl) {
       throw classifyTransportError(error);
     }
   }
-  const userData = user && user.code === 1 ? user.data : user;
-  const authData = auth && auth.code === 1 ? auth.data : auth;
-  if (user && user.code != null && Number(user.code) !== 1) {
-    throw jingmaiError("network", "京准通没有返回账号");
-  }
+  const userData = user && Number(user.code) === 1 ? user.data : user;
+  const authData = auth && Number(auth.code) === 1 ? auth.data : auth;
   const pinIds = collectPinIds(userData, authData);
   if (!pinIds.length) {
-    throw jingmaiError("network", "京准通没有返回账号");
+    const payload = user && user.code != null ? user : auth;
+    const code = payload && payload.code != null ? String(payload.code) : "";
+    const message = String((payload && (payload.msg || payload.message)) || "")
+      .replace(/\s+/g, " ")
+      .slice(0, 36);
+    throw jingmaiError("network", ("京准通没有返回账号" + (code ? " " + code : "") + (message ? " " + message : "")).trim());
   }
   const day = beijingParts().day;
   const overview = await postJson(
@@ -691,10 +693,15 @@ export async function fetchHome(jar, fetchImpl = fetch) {
   if (hasCollected(metrics)) {
     return metrics;
   }
-  if (dealError && dealError.code === "login" && (!paidError || paidError.code === "login")) {
-    throw dealError;
+  const parts = [];
+  if (dealError && dealError.message) {
+    parts.push(String(dealError.message));
   }
-  throw paidError || dealError || jingmaiError("network", "京麦没有返回数据");
+  if (paidError && paidError.message) {
+    parts.push(String(paidError.message));
+  }
+  const login = dealError && dealError.code === "login" && (!paidError || paidError.code === "login");
+  throw jingmaiError(login ? "login" : "network", parts.join("；").slice(0, 180) || "京麦没有返回数据");
 }
 
 export const jingmaiClient = {

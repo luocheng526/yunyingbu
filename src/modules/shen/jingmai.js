@@ -283,7 +283,9 @@ export function collectPinIds() {
       if (!item || typeof item !== "object") {
         return;
       }
-      const raw = item.userId != null && item.userId !== "" ? item.userId : item.pinId;
+      const raw = [item.userId, item.pinId, item.accountId, item.uid, item.id].find(function (value) {
+        return value != null && value !== "";
+      });
       if (raw == null || raw === "") {
         return;
       }
@@ -309,6 +311,11 @@ export function collectPinIds() {
     add(node.own);
     add(node.value);
     add(node.list);
+    add(node.pins);
+    add(node.pinList);
+    add(node.subPins);
+    add(node.accountList);
+    add(node.result);
     ["user", "auth", "agency", "data"].forEach(function (key) {
       if (node[key]) {
         take(node[key], depth + 1);
@@ -945,7 +952,7 @@ export async function runTick(deps) {
 
 function offlineMessage(error) {
   const classified = classifyTransportError(error);
-  return String(classified.message || "采集超时").replace(/\s+/g, " ").slice(0, 80) || "采集超时";
+  return String(classified.message || "采集超时").replace(/\s+/g, " ").slice(0, 180) || "采集超时";
 }
 
 async function collectOne(shop, deps) {

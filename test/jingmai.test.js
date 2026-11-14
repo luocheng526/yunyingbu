@@ -104,6 +104,7 @@ test("homepage deal and jingzhuntong paid fields stay separate", () => {
   assert.equal(query.orderStatusCategory, 1);
   assert.equal(query.startDate, "2026-11-12");
   assert.deepEqual(collectPinIds({ own: [{ userId: 7 }, { userId: "8" }], value: [{ userId: 7 }] }, { value: [{ userId: 9 }] }), [7, 8, 9]);
+  assert.deepEqual(collectPinIds({ pinList: [{ id: 15 }] }), [15]);
 });
 
 test("paid numbers count as a successful collection when deal is still empty", () => {
@@ -871,6 +872,24 @@ test("homepage deal uses the shop card and keeps the gateway reason when it fail
   assert.equal(failed.dealAmount, null);
   assert.equal(failed.paidAmount, 11);
   assert.equal(String(failed.dealNote).includes("321"), true);
+  await assert.rejects(
+    fetchHome([{ name: "thor", value: "hidden-jar" }], async (url) => {
+      const target = String(url);
+      if (target.includes("findAccountInfo") || target.includes("findShopDataByChannel") || target.includes("getSummary")) {
+        return jsonReply({ code: 312, msg: "请求异常，请稍后再试" });
+      }
+      if (target.includes("pinlist")) {
+        return jsonReply({ code: -100, msg: "登录失败，请刷新页面重新登录" });
+      }
+      return jsonReply({ code: 1, data: {} });
+    }),
+    (error) => {
+      assert.match(error.message, /312/);
+      assert.match(error.message, /-100/);
+      assert.equal(error.code, "network");
+      return true;
+    }
+  );
   assert.equal(String(failed.dealNote).includes("thor"), false);
   assert.equal(String(failed.dealNote).includes("cookie"), false);
 });

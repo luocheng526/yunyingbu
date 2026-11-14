@@ -1316,8 +1316,8 @@ function watchShopData(ws) {
         return;
       }
       if (message.method === "Network.responseReceived") {
-        const url = message.params && message.params.response ? message.params.response.url : "";
-        if (url.includes("findShopDataByChannel")) {
+        const url = message.params && message.params.response ? String(message.params.response.url || "") : "";
+        if (url.includes("findShopDataByChannel") || url.includes("sff.jd.com") || url.includes("getSummary")) {
           ws.__shopRequests = ws.__shopRequests || new Map();
           ws.__shopRequests.set(message.params.requestId, message.sessionId || "");
         }
@@ -1434,10 +1434,16 @@ async function readHomeDealNow(cookies) {
     }
     const text = await evaluate(ws, `(() => {
       const parts = [];
-      const take = (doc) => { if (doc && doc.body) parts.push(doc.body.innerText || ""); };
+      const take = (node) => {
+        if (!node) return;
+        if (node.body) parts.push(node.body.innerText || "");
+        else if (node.innerText) parts.push(node.innerText);
+        const nodes = node.querySelectorAll ? node.querySelectorAll("*") : [];
+        nodes.forEach((el) => { if (el.shadowRoot) take(el.shadowRoot); });
+      };
       take(document);
       document.querySelectorAll("iframe").forEach((frame) => { try { take(frame.contentDocument); } catch (e) {} });
-      return parts.join("\\n").slice(0, 8000);
+      return parts.join("\\n").slice(0, 12000);
     })()`);
     const card = parseHomeCard(text);
     if (card) {
