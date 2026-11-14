@@ -1107,6 +1107,8 @@ test("fee target is a range and 费比监控 uses 超标 / 加大付费", () => 
   assert.doesNotMatch(homeJs, /\/api\/han\/fee-targets/);
   assert.doesNotMatch(homeJs, /function overlayFeeBooks/);
   assert.match(homeJs, /LIVE_REFRESH_MS = 10 \* 60 \* 1000/);
+  assert.match(homeJs, /cache: "no-store"/);
+  assert.match(homeJs, /function refreshLive\(\) \{\n        if \(liveRefreshing\) \{\n          return;\n        \}\n        liveRefreshing = true;\n        paint\(root, state\);\n        return Promise\.resolve\(pullLive\(\)\)/);
   const feeStore = {};
   globalThis.localStorage = {
     getItem(key) {

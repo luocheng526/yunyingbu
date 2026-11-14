@@ -442,6 +442,7 @@ test("local-paid pack always has ok and records, never empty object", async () =
   assert.doesNotMatch(homeJs, /\/api\/han\/fee-targets/);
   assert.doesNotMatch(homeJs, /\/api\/shen\/fee-targets/);
   assert.match(homeJs, /LIVE_REFRESH_MS = 10 \* 60 \* 1000/);
+  assert.match(homeJs, /cache: "no-store"/);
 });
 
 test("live day snap rolls today's hours into yesterday for 环比", () => {
