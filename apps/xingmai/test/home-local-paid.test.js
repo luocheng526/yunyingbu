@@ -97,6 +97,7 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
       pick("trendOf") +
       pick("liveAtText") +
       pick("padHours") +
+      pick("hoursHaveNow") +
       pick("shanghaiHour") +
       pick("todayHours") +
       pick("seriesOf") +
@@ -259,6 +260,39 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.equal(erpYest.paid.yesterdayHour[0], 0.8);
   assert.equal(erpYest.fee.yesterdayHour.length, 24);
   assert.notEqual(erpYest.fee.yestText, "—");
+  assert.match(homeJs, /function hoursHaveNow/);
+  const deadPay = [];
+  var di;
+  for (di = 0; di < 13; di += 1) deadPay.push(null);
+  deadPay.push(34460, 122237, 134646);
+  while (deadPay.length < 24) deadPay.push(1000);
+  const deadSnap = fns.fillLocalPaid(
+    {
+      hero: {
+        label: "实时总成交金额",
+        value: "100",
+        todayHour: [10, 20, 30, 40],
+        yesterdayHour: [8, 16, 24, 32],
+        yestText: "80",
+        delta: 25
+      },
+      shops: [{ shop: "A店", liveAmount: "100", payHours: [10, 20, 30, 40], yestPayHours: [8, 16, 24, 32] }],
+      cards: [],
+      paid: { label: "推广总花费", value: "—" }
+    },
+    {
+      records: [{ shopName: "A店", paidAmount: 10, paidDeal: 40, jingmaiGmv: 100, feeRate: 0.1 }],
+      yesterday: {
+        records: [{ shopName: "A店", paidAmount: 9, paidDeal: 30, jingmaiGmv: 80, date: "2026-11-12" }],
+        hourly: { todayPay: deadPay }
+      },
+      hourly: { yesterdayPay: deadPay, todayPay: [10, 20, 30, 40] }
+    }
+  );
+  assert.equal(deadSnap.hero.yesterdayHour[0], 8);
+  assert.notEqual(deadSnap.hero.yestText, "0");
+  assert.notEqual(deadSnap.paid.yestText, "0");
+  assert.notEqual(deadSnap.paid.yestText, "—");
 });
 
 test("live shop 状态 follows 10-minute capturedAt", () => {

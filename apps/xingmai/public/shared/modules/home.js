@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.924-erp */
+/* xm-module-home 0.1.930-erpyest */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -2201,7 +2201,8 @@
       ".xm-hm-pop-all{font-weight:600;border-bottom:1px solid var(--xm-line);margin:0 0 4px;padding:2px 0 8px}" +
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{color:var(--xm-muted);font-size:12px}" +
-      "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm.is-chief .xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:1fr}}"
+      "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm.is-chief .xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:1fr}}" +
+      "@media (max-width:720px){.xm-hm-sales.xm-hm-live-charts,.xm-hm-live .xm-hm-live-charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;overflow:visible;margin:0;padding:0}.xm-hm-sales.xm-hm-live-charts>.xm-hm-chart,.xm-hm-live .xm-hm-live-charts>.xm-hm-chart{min-width:0;max-width:none;width:auto;padding:8px 8px 6px;box-sizing:border-box}.xm-hm-live-charts .xm-hm-card-head{flex-direction:column;align-items:flex-start;gap:4px}.xm-hm-live-charts .xm-hm-card-head>span:first-child{min-width:0;width:100%;white-space:normal;overflow:visible;line-height:1.25;font-size:11px}.xm-hm-live-charts .xm-hm-legs{flex:0 0 auto;flex-wrap:wrap;white-space:normal;font-size:10px;gap:6px}.xm-hm-live-charts .xm-hm-index-num{margin:4px 0 2px;font-size:18px}.xm-hm-live-charts .xm-hm-yest-now,.xm-hm-live-charts .xm-hm-trend{font-size:10px;margin:0}.xm-hm-sales.xm-hm-live-charts .xm-hm-line,.xm-hm-live .xm-hm-live-charts .xm-hm-line{height:72px;margin-top:4px}}"
     );
   }
   function frameHtml() {
@@ -3141,6 +3142,23 @@
     }
     return src.slice(0, slots);
   }
+  function hoursHaveNow(hourly) {
+    if (!hourly || hourly.length < 3) {
+      return false;
+    }
+    var src = padHours(hourly, 24);
+    if (src[0] == null || src[0] === "") {
+      return false;
+    }
+    var h = shanghaiHour();
+    var i;
+    for (i = 0; i <= h && i < src.length; i += 1) {
+      if (Number(src[i]) > 0) {
+        return true;
+      }
+    }
+    return false;
+  }
   function todayHours(hourly) {
     return padHours(hourly, 24).slice(0, Math.min(24, shanghaiHour() + 1));
   }
@@ -3713,15 +3731,20 @@
     var sum = rows.length ? sumLocalPaid(rows) : {};
     var yestSum = yestRows.length ? sumLocalPaid(yestRows) : {};
     var hourly = localHourlyOf(local);
+    if (!hoursHaveNow(hourly.yesterdayPay) && live.hero && hoursHaveNow(live.hero.yesterdayHour)) {
+      hourly.yesterdayPay = live.hero.yesterdayHour;
+    } else if (!hoursHaveNow(hourly.yesterdayPay)) {
+      hourly.yesterdayPay = [];
+    }
     var payT = (live.hero && live.hero.todayHour && live.hero.todayHour.length > 2 ? live.hero.todayHour : hourly.todayPay) || [];
-    var payY = (hourly.yesterdayPay && hourly.yesterdayPay.length > 2 ? hourly.yesterdayPay : live.hero && live.hero.yesterdayHour) || [];
+    var payY = (hoursHaveNow(hourly.yesterdayPay) ? hourly.yesterdayPay : live.hero && live.hero.yesterdayHour) || [];
     var sT = 0, sY = 0, i;
     for (i = 0; i < payT.length; i += 1) sT += Number(payT[i]) || 0;
     for (i = 0; i < payY.length; i += 1) sY += Number(payY[i]) || 0;
     if (yestSum.spend == null && sum.spend != null && sT && sY) yestSum.spend = sum.spend * (sY / sT);
     if (yestSum.feeRate == null && yestSum.spend != null && sY) yestSum.feeRate = yestSum.spend / sY;
     if (!(hourly.todaySpend && hourly.todaySpend.length > 2)) hourly.todaySpend = payFit(payT, sum.spend);
-    if (!(hourly.yesterdaySpend && hourly.yesterdaySpend.length > 2)) hourly.yesterdaySpend = payFit(payY, yestSum.spend);
+    if (!hoursHaveNow(hourly.yesterdaySpend)) hourly.yesterdaySpend = payFit(payY, yestSum.spend);
     if (rows.length) {
       var map = {};
       rows.forEach(function (row) {
@@ -3754,18 +3777,19 @@
     var mixT = mixFeeHours(live.shops, "payHours");
     var mixY = mixFeeHours(live.shops, "yestPayHours");
     if (mixT.length > 2) hourly.todayFee = mixT;
-    if (!(hourly.yesterdayFee && hourly.yesterdayFee.length > 2) && mixY.length > 2) hourly.yesterdayFee = mixY;
-    if (live.hero) {
-      var yH = hourly.yesterdayPay && hourly.yesterdayPay.length > 2 ? padHours(hourly.yesterdayPay, 24) : [];
-      var yN = hourCum(yH.length ? yH : null, yestSum.liveAmount);
-      if (yH.length) {
-        live.hero.yesterdayHour = yH;
-        live.hero.yesterday = cumHours(yH);
-      }
-      if (yN != null) {
+    if (!hoursHaveNow(hourly.yesterdayFee) && mixY.length > 2) hourly.yesterdayFee = mixY;
+    if (live.hero && hoursHaveNow(hourly.yesterdayPay)) {
+      var yH = padHours(hourly.yesterdayPay, 24);
+      var yN = hourCum(yH, null);
+      live.hero.yesterdayHour = yH;
+      live.hero.yesterday = cumHours(yH);
+      if (yN) {
         live.hero.yestText = fmtMoney(yN);
         live.hero.delta = asNum(live.hero.value) != null ? trendOf(asNum(live.hero.value), yN) : live.hero.delta;
       }
+    } else if (live.hero && !hoursHaveNow(live.hero.yesterdayHour) && yestSum.liveAmount) {
+      live.hero.yestText = fmtMoney(yestSum.liveAmount);
+      live.hero.delta = asNum(live.hero.value) != null ? trendOf(asNum(live.hero.value), yestSum.liveAmount) : live.hero.delta;
     }
     var kept = keepLiveDay({
       spend: sum.spend,
@@ -4196,7 +4220,7 @@
         state.source = "han-shen-local";
         paint(root, state);
         var L = state.live;
-        api("/api/home/local-paid", { hourly: { todayPay: L.hero && L.hero.todayHour, todaySpend: L.paid && L.paid.todayHour, todayFee: L.fee && L.fee.todayHour } });
+        api("/api/home/local-paid", { hourly: { todayPay: padHours(L.hero && L.hero.todayHour, 24), todaySpend: padHours(L.paid && L.paid.todayHour, 24), todayFee: padHours(L.fee && L.fee.todayHour, 24) } });
       }
       function pullLocalPaid() {
         var ymd = shanghaiYmd(0);
