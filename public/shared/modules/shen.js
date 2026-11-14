@@ -472,7 +472,7 @@
     mount: function (root) {
       const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
       paidCss.rel = "stylesheet";
-      paidCss.href = "/shared/shen-paid.css?v=0.1.771-paid-offline";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.772-paid-relogin";
       if (!paidCss.parentNode) {
         document.head.appendChild(paidCss);
       }
@@ -2790,7 +2790,13 @@
         }
         if (row.loginExpired || row.offline) {
           const reason = row.offlineReason ? ' title="' + escapeHtml(row.offlineReason) + '"' : "";
-          return '<span class="xm-hl-net is-off"' + reason + ">掉线</span>";
+          return (
+            '<button type="button" class="xm-hl-net is-off" data-relogin="' +
+            escapeHtml(row.store) +
+            '"' +
+            reason +
+            ">掉线</button>"
+          );
         }
         return "";
       }

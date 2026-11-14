@@ -1330,6 +1330,12 @@
   background: #fee2e2;
 }
 
+#paid-board button.xm-hl-net.is-off {
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
 #paid-board .xm-hl-shop {
   border: 0;
   background: transparent;
