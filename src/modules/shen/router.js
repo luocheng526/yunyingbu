@@ -3,6 +3,7 @@ import { watchJingcang } from "./jingcang.js";
 import {
   beginRelogin,
   beginReloginAll,
+  refreshJingmai,
   cancelRelogin,
   connectJingmai,
   finishRelogin,
@@ -278,6 +279,14 @@ shenRouter.get("/paid/jingmai", async (_req, res) => {
 
 shenRouter.get("/paid/jingmai/browser", async (_req, res) => {
   res.json(jingmaiBrowser());
+});
+
+shenRouter.post("/paid/jingmai/refresh", (req, res) => {
+  const cookie = req.headers.cookie || "";
+  refreshJingmai(cookie).catch(function (err) {
+    console.error("jingmai refresh", err && err.statusCode ? err.statusCode : "failed");
+  });
+  res.json({ ok: true, status: "running" });
 });
 
 shenRouter.post("/paid/jingmai/relogin", async (req, res) => {

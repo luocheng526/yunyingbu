@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.765-paid-login — 付费中心登录状态独立成列 */
+/* xm-fast-shell 0.1.772-paid-relogin — 点掉线打开重新登录 */
 (function () {
-  const ASSET_VER = "0.1.765-paid-login";
+  const ASSET_VER = "0.1.772-paid-relogin";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",

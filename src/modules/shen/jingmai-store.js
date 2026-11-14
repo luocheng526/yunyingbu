@@ -217,7 +217,12 @@ export async function listSessions() {
 export async function listCollectTargets() {
   const sessions = await listSessions();
   return sessions.filter(function (session) {
-    return session.enabled && session.authState === "ok" && session.cookies && session.cookies.length;
+    return (
+      session.enabled &&
+      (session.authState === "ok" || session.authState === "offline") &&
+      session.cookies &&
+      session.cookies.length
+    );
   });
 }
 
@@ -228,6 +233,9 @@ export async function saveSample(sample) {
     orderCount: sample.orderCount == null ? null : sample.orderCount,
     customerCount: sample.customerCount == null ? null : sample.customerCount,
     yesterdayAmount: sample.yesterdayAmount == null ? null : sample.yesterdayAmount,
+    dealRate: sample.dealRate == null || sample.dealRate === "" ? null : Number(sample.dealRate),
+    dealRateLabel: sample.dealRateLabel ? String(sample.dealRateLabel).slice(0, 20) : "",
+    platformUpdatedAt: sample.platformUpdatedAt ? String(sample.platformUpdatedAt).slice(0, 19) : "",
     paidAmount: sample.paidAmount == null ? null : sample.paidAmount,
     paidDeal: sample.paidDeal == null ? null : sample.paidDeal,
     paidRoi: sample.paidRoi == null ? null : sample.paidRoi,
@@ -244,6 +252,9 @@ export async function saveSample(sample) {
     paidAmount: raw.paidAmount,
     paidDeal: raw.paidDeal,
     paidRoi: raw.paidRoi,
+    dealRate: Number.isFinite(raw.dealRate) ? raw.dealRate : null,
+    dealRateLabel: raw.dealRateLabel || "",
+    platformUpdatedAt: raw.platformUpdatedAt || "",
     ok: sample.ok !== false,
     raw: raw
   };
@@ -328,6 +339,9 @@ export async function listSamples(fromDay, toDay) {
       paidDeal: raw.paidDeal == null ? null : Number(raw.paidDeal),
       paidRoi: raw.paidRoi == null ? null : Number(raw.paidRoi),
       dealNote: raw.dealNote ? String(raw.dealNote).slice(0, 160) : "",
+      dealRate: raw.dealRate == null || raw.dealRate === "" || !Number.isFinite(Number(raw.dealRate)) ? null : Number(raw.dealRate),
+      dealRateLabel: raw.dealRateLabel ? String(raw.dealRateLabel).slice(0, 20) : "",
+      platformUpdatedAt: raw.platformUpdatedAt ? String(raw.platformUpdatedAt).slice(0, 19) : "",
       ok: Number(row.ok_flag) === 1
     };
   });

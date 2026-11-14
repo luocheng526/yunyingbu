@@ -5,9 +5,15 @@ import { createApp } from "../src/app.js";
 import {
   buildLiveView,
   collectPinIds,
+  alignOnlineDealSeries,
+  fiveMinuteStamp,
+  sharedFiveMinuteStamp,
+  dealPointsFromSamples,
   extractPaid,
   extractShopDeal,
   parseHomeCard,
+  resolveDealCompare,
+  sumDealCompare,
   hoursFromSamples,
   jingmaiError,
   paidQuery,
@@ -17,8 +23,8 @@ import {
 import { fetchHome, interpretQrCheck } from "../src/modules/shen/jingmai-client.js";
 import { passwordFailureMessage } from "../src/modules/shen/jingmai-client.js";
 import { libraryPackageNames, loginScreenState, packageFilename, suiteForGlibc } from "../src/modules/shen/jingmai-desk.js";
-import { beginRelogin, beginReloginAll, connectJingmai, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/shen/jingmai-runner.js";
-import { listSessions, readJingmaiLive, resetJingmaiStore, saveSample, saveSession } from "../src/modules/shen/jingmai-store.js";
+import { beginRelogin, beginReloginAll, connectJingmai, refreshJingmai, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/shen/jingmai-runner.js";
+import { listCollectTargets, listSessions, readJingmaiLive, resetJingmaiStore, saveSample, saveSession } from "../src/modules/shen/jingmai-store.js";
 
 const now = { day: "2026-11-12", stamp: "2026-11-12 11:05:00", hour: 11, clock: "11:05:00" };
 
@@ -98,6 +104,7 @@ test("homepage deal and jingzhuntong paid fields stay separate", () => {
   assert.equal(query.orderStatusCategory, 1);
   assert.equal(query.startDate, "2026-11-12");
   assert.deepEqual(collectPinIds({ own: [{ userId: 7 }, { userId: "8" }], value: [{ userId: 7 }] }, { value: [{ userId: 9 }] }), [7, 8, 9]);
+  assert.deepEqual(collectPinIds({ pinList: [{ id: 15 }] }), [15]);
 });
 
 test("paid numbers count as a successful collection when deal is still empty", () => {
@@ -121,6 +128,25 @@ test("paid numbers count as a successful collection when deal is still empty", (
   assert.equal(view.shops[0].dealAmount, null);
   assert.equal(view.shops[0].paidAmount, 0);
   assert.equal(view.shops[0].paidRoi, 2.17);
+  assert.equal(view.shops[0].online, false);
+  assert.equal(view.shops[0].offline, true);
+  assert.match(view.shops[0].offlineReason, /没有成交字段/);
+  const kept = buildLiveView({
+    now: now,
+    shops: [{ store: "甲店", enabled: true, authState: "offline", authMessage: "京麦首页没有成交字段", cookies: [{ name: "thor", value: "secret" }] }],
+    samples: [
+      {
+        store: "甲店",
+        day: "2026-11-12",
+        capturedAt: "2026-11-12 11:00:00",
+        dealAmount: 88,
+        paidAmount: 10,
+        ok: true
+      }
+    ]
+  });
+  assert.equal(kept.shops[0].online, true);
+  assert.equal(kept.shops[0].dealAmount, 88);
   assert.equal(JSON.stringify(view).includes("secret"), false);
 });
 
@@ -136,6 +162,16 @@ test("missing hours stay empty and a collected zero is kept", () => {
   assert.equal(hours[10], 8);
   assert.equal(hours[11], null);
   assert.equal(hours.filter((value) => value === 0).length, 0);
+  const paid = hoursFromSamples(
+    [
+      { store: "甲店", day: "2026-11-12", capturedAt: "2026-11-12 09:10:00", paidAmount: 120, dealAmount: 400, ok: true },
+      { store: "甲店", day: "2026-11-12", capturedAt: "2026-11-12 09:40:00", paidAmount: 180, dealAmount: 500, ok: true }
+    ],
+    "2026-11-12",
+    "paidAmount"
+  );
+  assert.equal(paid[9], 180);
+  assert.equal(paid[10], null);
 });
 
 test("live view counts successful shops and does not expose cookies", () => {
@@ -163,7 +199,9 @@ test("live view counts successful shops and does not expose cookies", () => {
   assert.equal(view.enabledShops, 2);
   assert.equal(view.loginExpiredShops, 1);
   assert.equal(view.shops[0].online, true);
+  assert.equal(view.shops[0].offline, false);
   assert.equal(view.shops[1].online, false);
+  assert.equal(view.shops[1].offline, false);
   assert.equal(view.shops[1].loginExpired, true);
   assert.equal(view.updatedAt, "2026/11/12 11:05:00");
   assert.equal(view.shops[0].dealAmount, 0);
@@ -172,9 +210,9 @@ test("live view counts successful shops and does not expose cookies", () => {
   assert.equal(JSON.stringify(view).includes("secret"), false);
 });
 
-test("one slow shop does not block another, and a timeout is not a logout", async () => {
+test("one slow shop does not block another, and a timeout shows offline without clearing the login", async () => {
   const saved = [];
-  let marked = 0;
+  const marked = [];
   let calls = 0;
   await runTick({
     inflight: new Set(),
@@ -191,13 +229,62 @@ test("one slow shop does not block another, and a timeout is not a logout", asyn
     saveSample: async (sample) => {
       saved.push(sample.store);
     },
-    markAuth: async () => {
-      marked += 1;
+    markAuth: async (store, state, message) => {
+      marked.push([store, state, message]);
     }
   });
   assert.equal(calls, 2);
   assert.deepEqual(saved, ["快店"]);
-  assert.equal(marked, 0);
+  assert.deepEqual(marked, [["慢店", "offline", "采集超时"]]);
+});
+
+test("a missing deal field shows offline and a later deal clears it", async () => {
+  const marked = [];
+  await runTick({
+    inflight: new Set(),
+    now: () => now,
+    listTargets: async () => [shop("缺字段店")],
+    fetchHome: async () => ({ dealAmount: null, paidAmount: 12, dealNote: "京麦首页没有成交字段" }),
+    saveSample: async () => {},
+    markAuth: async (store, state, message) => {
+      marked.push([store, state, message]);
+    }
+  });
+  assert.deepEqual(marked, [["缺字段店", "offline", "京麦首页没有成交字段"]]);
+  marked.length = 0;
+  await runTick({
+    inflight: new Set(),
+    now: () => now,
+    listTargets: async () => [{ store: "缺字段店", enabled: true, authState: "offline", cookies: [{ name: "thor", value: "x" }] }],
+    fetchHome: async () => ({ dealAmount: 8, orderCount: 1, customerCount: 1 }),
+    saveSample: async () => {},
+    markAuth: async (store, state, message) => {
+      marked.push([store, state, message]);
+    }
+  });
+  assert.deepEqual(marked, [["缺字段店", "ok", ""]]);
+});
+
+test("a stopped collector shows offline while the saved session stays", () => {
+  const view = buildLiveView({
+    now: { day: "2026-11-14", stamp: "2026-11-14 09:19:00", hour: 9, clock: "09:19:00" },
+    shops: [{ store: "甲店", enabled: true, authState: "ok", authMessage: "", cookies: [{ name: "thor", value: "secret" }] }],
+    samples: [
+      {
+        store: "甲店",
+        day: "2026-11-13",
+        capturedAt: "2026-11-13 18:00:00",
+        dealAmount: 1516.59,
+        paidAmount: 80,
+        ok: true
+      }
+    ]
+  });
+  assert.equal(view.shops[0].online, false);
+  assert.equal(view.shops[0].offline, true);
+  assert.equal(view.shops[0].loginExpired, false);
+  assert.equal(view.shops[0].offlineReason, "采集已停止");
+  assert.equal(view.shops[0].dealAmount, null);
 });
 
 test("the same shop is not queued twice", async () => {
@@ -285,6 +372,27 @@ test("connect uses org accounts without returning the password", async () => {
     assert.equal(JSON.stringify(live).includes("jar-seller"), false);
   } finally {
     resetJingmaiDeps();
+    await resetJingmaiStore();
+  }
+});
+
+test("offline shops stay in the collector and a dead login does not", async () => {
+  await resetJingmaiStore();
+  await saveSession("在线店", { cookies: [{ name: "thor", value: "a" }], authState: "ok", enabled: true });
+  await saveSession("超时店", { cookies: [{ name: "thor", value: "b" }], authState: "offline", authMessage: "采集超时", enabled: true });
+  await saveSession("失效店", { cookies: [{ name: "thor", value: "c" }], authState: "login_expired", enabled: true });
+  try {
+    const names = (await listCollectTargets()).map(function (row) {
+      return row.store;
+    });
+    assert.equal(names.includes("在线店"), true);
+    assert.equal(names.includes("超时店"), true);
+    assert.equal(names.includes("失效店"), false);
+    const timed = (await listSessions()).find(function (row) {
+      return row.store === "超时店";
+    });
+    assert.equal(timed.cookies[0].value, "b");
+  } finally {
     await resetJingmaiStore();
   }
 });
@@ -496,11 +604,142 @@ function jsonReply(body, status = 200) {
 }
 
 test("homepage card text keeps today's deal amount", () => {
-  const card = parseHomeCard("经营数据\n成交金额\n¥12,967.90\n较昨日 -27.63%\n成交单量\n42\n成交客户数\n41\n");
+  const card = parseHomeCard("经营数据\n成交金额\n¥12,967.90\n较昨日 -27.63%\n成交单量\n42\n较昨日 +9%\n成交客户数\n41\n");
   assert.equal(card.dealAmount, 12967.9);
   assert.equal(card.orderCount, 42);
   assert.equal(card.customerCount, 41);
+  assert.equal(card.dealRate, -27.63);
+  assert.equal(card.dealRateLabel, "较昨日");
+  assert.equal(card.yesterdayAmount, null);
   assert.equal(parseHomeCard("推广数据\n花费 5"), null);
+});
+
+test("deal compare uses the jingmai card amount and signed rate", () => {
+  const card = parseHomeCard(
+    "经营数据\n成交金额\n¥1,516.59\n较昨日 +45.46%\n成交单量\n13\n较昨日 +33.33%\n更新时间：2026/11/13 11:04:00"
+  );
+  assert.equal(card.dealRate, 45.46);
+  assert.equal(card.dealRateLabel, "较昨日");
+  assert.equal(card.platformUpdatedAt, "2026-11-13 11:04:00");
+  const samePeriod = parseHomeCard("经营数据\n成交金额\n¥10\n较昨日同时段 -20%\n成交单量\n1");
+  assert.equal(samePeriod.dealRateLabel, "较昨日同时段");
+  assert.equal(samePeriod.dealRate, -20);
+  const raised = resolveDealCompare({ dealAmount: 1516.59, dealRate: 45.46, dealRateLabel: "较昨日" });
+  assert.equal(raised.rate, 45.46);
+  assert.equal(raised.estimated, true);
+  assert.ok(Math.abs(raised.yesterday - 1516.59 / 1.4546) < 1e-9);
+  const dropped = resolveDealCompare({ dealAmount: 80, dealRate: -20, dealRateLabel: "较昨日" });
+  assert.equal(dropped.yesterday, 100);
+  const wiped = resolveDealCompare({ dealAmount: 0, dealRate: -100, dealRateLabel: "较昨日" });
+  assert.equal(wiped.rate, -100);
+  assert.equal(wiped.yesterday, null);
+  assert.equal(wiped.comparable, false);
+  const missing = resolveDealCompare({ dealAmount: 10, dealRate: null, yesterdayAmount: null });
+  assert.equal(missing.rate, null);
+  assert.equal(missing.comparable, false);
+  const original = resolveDealCompare({ dealAmount: 1516.59, yesterdayAmount: 1042.62, dealRate: 45.46, dealRateLabel: "较昨日" });
+  assert.equal(original.yesterday, 1042.62);
+  assert.equal(original.estimated, false);
+  const summed = sumDealCompare([
+    { today: 100, yesterday: 50, comparable: true, estimated: true, label: "较昨日" },
+    { today: 100, yesterday: 200, comparable: true, estimated: true, label: "较昨日" },
+    { today: 50, yesterday: null, comparable: false, estimated: false, label: "" }
+  ]);
+  assert.equal(summed.today, 250);
+  assert.equal(summed.cohortToday, 200);
+  assert.equal(summed.cohortYesterday, 250);
+  assert.ok(Math.abs(summed.rate - -20) < 1e-9);
+  assert.equal(summed.comparable, 2);
+  assert.equal(summed.total, 3);
+  const flat = sumDealCompare([{ today: 20, yesterday: 0, comparable: true, label: "较昨日" }]);
+  assert.equal(flat.rate, null);
+  assert.equal(flat.today, 20);
+});
+
+test("each collection keeps its own comparison and gaps stay empty", () => {
+  const points = dealPointsFromSamples(
+    [
+      { day: "2026-11-13", capturedAt: "2026-11-13 10:02:00", dealAmount: 100, dealRate: 0, ok: true },
+      { day: "2026-11-13", capturedAt: "2026-11-13 10:04:00", dealAmount: 110, dealRate: 10, ok: true },
+      { day: "2026-11-13", capturedAt: "2026-11-13 12:10:00", dealAmount: 200, yesterdayAmount: 100, ok: true },
+      { day: "2026-11-12", capturedAt: "2026-11-12 10:04:00", dealAmount: 1, dealRate: 90, ok: true }
+    ],
+    "2026-11-13"
+  );
+  assert.equal(points.length, 2);
+  assert.equal(points[0].slot, "10:00");
+  assert.equal(points[0].today, 110);
+  assert.ok(Math.abs(points[0].yesterday - 100) < 1e-9);
+  assert.equal(points[0].estimated, true);
+  assert.equal(points[1].slot, "12:10");
+  assert.equal(points[1].yesterday, 100);
+  assert.equal(points[1].estimated, false);
+  assert.equal(points.some((point) => point.slot === "11:00"), false);
+  const view = buildLiveView({
+    now: { day: "2026-11-13", stamp: "2026-11-13 11:07:00", hour: 11, clock: "11:07:00" },
+    shops: [{ store: "RASW潮流生活旗舰店", enabled: true, authState: "ok", cookies: [{ name: "thor", value: "secret" }] }],
+    samples: [
+      { store: "RASW潮流生活旗舰店", day: "2026-11-12", capturedAt: "2026-11-12 11:07:00", dealAmount: 999, ok: true },
+      {
+        store: "RASW潮流生活旗舰店",
+        day: "2026-11-13",
+        capturedAt: "2026-11-13 11:07:00",
+        dealAmount: 1516.59,
+        dealRate: 45.46,
+        dealRateLabel: "较昨日",
+        paidAmount: 919.81,
+        ok: true
+      }
+    ]
+  });
+  const shop = view.shops[0];
+  assert.equal(shop.dealAmount, 1516.59);
+  assert.equal(shop.dealRate, 45.46);
+  assert.notEqual(shop.yesterdayAmount, 999);
+  assert.equal(shop.yesterdayEstimated, true);
+  assert.equal(shop.paidAmount, 919.81);
+  assert.equal(shop.paidRate, undefined);
+  const paid = extractPaid({ summary: [{ index: "cost", value: 100, rate: 45.46 }] });
+  assert.equal(paid.paidAmount, 100);
+  assert.equal(paid.dealRate, undefined);
+});
+
+test("shop update times share one five-minute slot", () => {
+  assert.equal(fiveMinuteStamp("2026/11/13 13:02:03"), "2026/11/13 13:00");
+  assert.equal(fiveMinuteStamp("2026/11/13 13:06:55"), "2026/11/13 13:05");
+  assert.equal(fiveMinuteStamp("2026/11/13 13:11:36"), "2026/11/13 13:10");
+  assert.equal(fiveMinuteStamp("2026-11-13 13:00:00"), "2026/11/13 13:00");
+  assert.equal(
+    sharedFiveMinuteStamp(["2026/11/13 13:02:03", "2026/11/13 13:06:55", "2026/11/13 13:11:36"]),
+    "2026/11/13 13:10"
+  );
+});
+
+test("chart slots keep every online shop instead of the shops captured in that minute", () => {
+  const series = alignOnlineDealSeries([
+    {
+      online: true,
+      dealPoints: [
+        { index: 154, slot: "12:50", today: 100, yesterday: 80, comparable: true, estimated: true, label: "较昨日" },
+        { index: 156, slot: "13:00", today: 130, yesterday: 100, comparable: true, estimated: true, label: "较昨日" }
+      ]
+    },
+    {
+      online: true,
+      dealPoints: [{ index: 155, slot: "12:55", today: 50, yesterday: 40, comparable: true, estimated: false, label: "较昨日" }]
+    },
+    { online: true, dealPoints: [] },
+    { online: false, dealPoints: [{ index: 154, slot: "12:50", today: 999, yesterday: 1, comparable: true, label: "较昨日" }] }
+  ]);
+  assert.deepEqual(series.map((point) => point.slot), ["12:50", "12:55", "13:00"]);
+  assert.equal(series[0].n, 1);
+  assert.equal(series[0].total, 3);
+  assert.equal(series[1].n, 2);
+  assert.equal(series[1].today, 150);
+  assert.equal(series[2].n, 2);
+  assert.equal(series[2].today, 180);
+  assert.equal(series[2].total, 3);
+  assert.equal(series.some((point) => point.today === 999), false);
 });
 
 test("deal card is read from the layer that contains channel data", () => {
@@ -557,6 +796,49 @@ test("a busy homepage retries and then reads the deal card", async () => {
   }
 });
 
+test("a hung deal request releases the queue for the next shop", async () => {
+  const previousGate = process.env.SHEN_DEAL_GATE_MS;
+  const previousRetry = process.env.SHEN_DEAL_RETRY_MS;
+  process.env.SHEN_DEAL_GATE_MS = "30";
+  process.env.SHEN_DEAL_RETRY_MS = "0";
+  const first = fetchHome([{ name: "thor", value: "stuck" }], function () {
+    return new Promise(function () {});
+  });
+  first.catch(function () {});
+  await new Promise(function (resolve) {
+    setTimeout(resolve, 15);
+  });
+  try {
+    const result = await fetchHome([{ name: "thor", value: "next" }], async function (url) {
+      if (String(url).includes("findShopDataByChannel")) {
+        return jsonReply({
+          code: "200",
+          data: { channelData: { indicatorList: [{ code: "3009", name: "成交金额", todayNum: "5" }] } }
+        });
+      }
+      if (String(url).includes("pinlist")) {
+        return jsonReply({ code: 1, data: { own: [{ userId: 1 }] } });
+      }
+      if (String(url).includes("summary/overview")) {
+        return jsonReply({ code: 1, data: { summary: [{ index: "cost", value: "1" }, { index: "totalOrderSum", value: "2" }, { index: "ROI", value: "2" }] } });
+      }
+      return jsonReply({ code: 200, data: {} });
+    });
+    assert.equal(result.dealAmount, 5);
+  } finally {
+    if (previousGate == null) {
+      delete process.env.SHEN_DEAL_GATE_MS;
+    } else {
+      process.env.SHEN_DEAL_GATE_MS = previousGate;
+    }
+    if (previousRetry == null) {
+      delete process.env.SHEN_DEAL_RETRY_MS;
+    } else {
+      process.env.SHEN_DEAL_RETRY_MS = previousRetry;
+    }
+  }
+});
+
 test("homepage deal uses the shop card and keeps the gateway reason when it fails", async () => {
   const result = await fetchHome([{ name: "thor", value: "hidden-jar" }], async (url) => {
     if (String(url).includes("findAccountInfo")) {
@@ -606,6 +888,125 @@ test("homepage deal uses the shop card and keeps the gateway reason when it fail
   assert.equal(failed.dealAmount, null);
   assert.equal(failed.paidAmount, 11);
   assert.equal(String(failed.dealNote).includes("321"), true);
+  await assert.rejects(
+    fetchHome([{ name: "thor", value: "hidden-jar" }], async (url) => {
+      const target = String(url);
+      if (target.includes("findAccountInfo") || target.includes("findShopDataByChannel") || target.includes("getSummary")) {
+        return jsonReply({ code: 312, msg: "请求异常，请稍后再试" });
+      }
+      if (target.includes("pinlist")) {
+        return jsonReply({ code: -100, msg: "登录失败，请刷新页面重新登录" });
+      }
+      return jsonReply({ code: 1, data: {} });
+    }),
+    (error) => {
+      assert.match(error.message, /312/);
+      assert.match(error.message, /-100/);
+      assert.equal(error.code, "network");
+      return true;
+    }
+  );
+  const card = await fetchHome(
+    [{ name: "thor", value: "hidden-jar" }],
+    async (url) => {
+      const target = String(url);
+      if (target.includes("findAccountInfo") || target.includes("findShopDataByChannel") || target.includes("getSummary")) {
+        return jsonReply({ code: 1001, msg: "未登录" });
+      }
+      if (target.includes("pinlist")) {
+        return jsonReply({ code: -100, msg: "登录失败，请刷新页面重新登录" });
+      }
+      return jsonReply({ code: 1, data: {} });
+    },
+    async () => ({ dealAmount: 88, orderCount: 2, customerCount: 2, yesterdayAmount: 40, dealRate: 10, dealRateLabel: "较昨日" })
+  );
+  assert.equal(card.dealAmount, 88);
+  assert.equal(card.orderCount, 2);
   assert.equal(String(failed.dealNote).includes("thor"), false);
   assert.equal(String(failed.dealNote).includes("cookie"), false);
+});
+
+test("silent refresh logs an offline shop back in and saves the deal", async () => {
+  await resetJingmaiStore();
+  await saveSession("甲店", {
+    cookies: [{ name: "thor", value: "old-jar" }],
+    authState: "offline",
+    authMessage: "登录已失效，请重新登录",
+    enabled: true
+  });
+  await saveSession("乙店", {
+    cookies: [{ name: "thor", value: "keep-jar" }],
+    authState: "ok",
+    authMessage: "",
+    enabled: true
+  });
+  const opened = [];
+  let closed = 0;
+  setJingmaiDeps({
+    loadOrg: async () => [
+      { store: "甲店", enabled: true, login: "acct", password: "secret-pass" },
+      { store: "乙店", enabled: true, login: "acct-b", password: "secret-pass" }
+    ],
+    client: {
+      fetchHome: async () => ({ dealAmount: 88, orderCount: 2, customerCount: 2, yesterdayAmount: 40 })
+    },
+    desk: {
+      open: async ({ store }) => {
+        opened.push(store);
+        return { status: "ok", cookies: [{ name: "thor", value: "new-jar" }] };
+      },
+      close: async () => {
+        closed += 1;
+      },
+      reset() {}
+    }
+  });
+  try {
+    const result = await refreshJingmai("mk_sid=test");
+    assert.equal(result.logged, 1);
+    assert.deepEqual(opened, ["甲店"]);
+    assert.equal(closed, 1);
+    assert.equal(JSON.stringify(result).includes("secret-pass"), false);
+    assert.equal(JSON.stringify(result).includes("new-jar"), false);
+    const sessions = await listSessions();
+    const shop = sessions.find((item) => item.store === "甲店");
+    assert.equal(shop.authState, "ok");
+    assert.equal(shop.cookies[0].value, "new-jar");
+    const live = await readJingmaiLive();
+    const row = live.shops.find((item) => item.shop === "甲店");
+    assert.equal(row.dealAmount, 88);
+  } finally {
+    resetJingmaiDeps();
+    await resetJingmaiStore();
+  }
+});
+
+test("silent refresh keeps the old session when the login page asks for a check", async () => {
+  await resetJingmaiStore();
+  await saveSession("甲店", {
+    cookies: [{ name: "thor", value: "keep-jar" }],
+    authState: "offline",
+    authMessage: "登录失败，请刷新页面重新登录",
+    enabled: true
+  });
+  setJingmaiDeps({
+    loadOrg: async () => [{ store: "甲店", enabled: true, login: "acct", password: "secret-pass" }],
+    client: { fetchHome: async () => ({ dealAmount: 1 }) },
+    desk: {
+      open: async () => ({ status: "verify", message: "请完成验证" }),
+      close: async () => {},
+      reset() {}
+    }
+  });
+  try {
+    const result = await refreshJingmai("mk_sid=test");
+    assert.equal(result.logged, 0);
+    assert.equal(result.results[0].status, "verify");
+    const sessions = await listSessions();
+    assert.equal(sessions[0].cookies[0].value, "keep-jar");
+    assert.equal(sessions[0].authState, "offline");
+  } finally {
+    resetJingmaiDeps();
+    await resetJingmaiStore();
+  }
 });

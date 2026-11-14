@@ -9,6 +9,9 @@ const qrPending = new Map();
 const passwordPending = new Map();
 let loginQueue = [];
 let loginCursor = { index: 0, total: 0, store: "" };
+const orgCache = new Map();
+let refreshing = false;
+let deskLock = Promise.resolve();
 
 const defaultDeps = {
   loadOrg: loadOrgShops,
@@ -42,6 +45,45 @@ export function resetJingmaiDeps() {
   }
   passwordPending.clear();
   wipeQueue();
+  orgCache.forEach(function (shop) {
+    shop.password = "";
+  });
+  orgCache.clear();
+  refreshing = false;
+  deskLock = Promise.resolve();
+}
+
+function rememberOrg(shops) {
+  (shops || []).forEach(function (shop) {
+    if (!shop || !shop.store || !shop.login || !shop.password) {
+      return;
+    }
+    orgCache.set(shop.store, {
+      store: shop.store,
+      enabled: shop.enabled !== false,
+      login: shop.login,
+      password: shop.password
+    });
+  });
+}
+
+function withDesk(task) {
+  const run = deskLock.then(task, task);
+  deskLock = run.then(
+    function () {},
+    function () {}
+  );
+  return run;
+}
+
+function sessionNeedsLogin(session) {
+  if (!session || session.enabled === false) {
+    return false;
+  }
+  if (session.authState === "login_expired" || !session.cookies || !session.cookies.length) {
+    return true;
+  }
+  return /登录已失效|请重新登录|未登录|登录失败/.test(String(session.authMessage || ""));
 }
 
 export async function loadOrgShops(cookie, fetchImpl = fetch) {
@@ -157,11 +199,12 @@ async function rememberLogin(store, cookies) {
     const metrics = await deps.client.fetchHome(cookies);
     const now = beijingParts();
     await saveSample(Object.assign({ store: store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics)));
-  } catch (error) {
-    if (error && error.code === "login") {
-      await markAuth(store, "login_expired", "登录已失效，请重新登录");
-      return false;
+    if (metrics.dealAmount == null) {
+      await markAuth(store, "offline", metrics.dealNote || "京麦首页没有成交字段");
     }
+  } catch (error) {
+    const message = String((error && error.message) || "采集超时").replace(/\s+/g, " ").slice(0, 180) || "采集超时";
+    await markAuth(store, "offline", message);
   }
   return true;
 }
@@ -172,8 +215,8 @@ async function startQueued(shop) {
   shop.login = "";
   shop.password = "";
   if (opened.status === "ok") {
-    const kept = await rememberLogin(shop.store, opened.cookies || []);
     await deps.desk.close();
+    const kept = await rememberLogin(shop.store, opened.cookies || []);
     if (!kept) {
       return advanceAfterFailure(shop.store, "登录没有通过，请再试一次");
     }
@@ -244,6 +287,7 @@ export async function beginRelogin(store, cookie) {
     throw error;
   }
   const shops = await deps.loadOrg(cookie || "");
+  rememberOrg(shops);
   const shop = shops.find(function (item) {
     return item.store === name;
   });
@@ -261,6 +305,7 @@ export async function beginRelogin(store, cookie) {
 
 export async function beginReloginAll(cookie) {
   const shops = await deps.loadOrg(cookie || "");
+  rememberOrg(shops);
   const sessions = await listSessions();
   const ready = new Set(
     sessions
@@ -372,6 +417,66 @@ export async function finishRelogin(store, authCode) {
   }
 }
 
+async function silentOne(shop) {
+  const opened = await deps.desk.open({ store: shop.store, loginName: shop.login, password: shop.password });
+  shop.login = "";
+  shop.password = "";
+  if (opened.status === "ok") {
+    await deps.desk.close();
+    const kept = await rememberLogin(shop.store, opened.cookies || []);
+    return { store: shop.store, status: kept ? "ok" : "login" };
+  }
+  if (deps.desk && deps.desk.close) {
+    await deps.desk.close();
+  }
+  return { store: shop.store, status: opened.status || "login" };
+}
+
+async function runSilent(shops) {
+  const sessions = await listSessions();
+  const byName = new Map(sessions.map(function (session) {
+    return [session.store, session];
+  }));
+  const targets = (shops || []).filter(function (shop) {
+    if (!shop || shop.enabled === false || !shop.login || !shop.password || inflight.has(shop.store)) {
+      return false;
+    }
+    return sessionNeedsLogin(byName.get(shop.store) || { enabled: true, cookies: [], authState: "" });
+  });
+  const results = [];
+  for (const shop of targets) {
+    const copy = { store: shop.store, enabled: shop.enabled, login: shop.login, password: shop.password };
+    results.push(await withDesk(function () {
+      return silentOne(copy);
+    }));
+    copy.password = "";
+  }
+  return {
+    ok: true,
+    logged: results.filter(function (item) {
+      return item.status === "ok";
+    }).length,
+    total: targets.length,
+    results: results.map(function (item) {
+      return { store: item.store, status: item.status };
+    })
+  };
+}
+
+export async function refreshJingmai(cookie) {
+  if (refreshing) {
+    return { ok: true, status: "running" };
+  }
+  refreshing = true;
+  try {
+    const shops = await deps.loadOrg(cookie || "");
+    rememberOrg(shops);
+    return await runSilent(shops);
+  } finally {
+    refreshing = false;
+  }
+}
+
 export async function jingmaiTick() {
   await runTick({
     inflight: inflight,
@@ -383,10 +488,23 @@ export async function jingmaiTick() {
     markAuth: markAuth,
     now: beijingParts
   });
+  if (refreshing || !orgCache.size) {
+    return;
+  }
+  refreshing = true;
+  const cached = [...orgCache.values()].map(function (shop) {
+    return { store: shop.store, enabled: shop.enabled, login: shop.login, password: shop.password };
+  });
+  runSilent(cached).finally(function () {
+    refreshing = false;
+    cached.forEach(function (shop) {
+      shop.password = "";
+    });
+  });
 }
 
 export function startJingmaiCollector() {
-  if (process.argv.includes("--test")) {
+  if (process.argv.includes("--test") || process.env.NODE_TEST_CONTEXT) {
     return;
   }
   if (globalThis.__shenJingmaiStarted) {

@@ -472,7 +472,7 @@
     mount: function (root) {
       const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
       paidCss.rel = "stylesheet";
-      paidCss.href = "/shared/shen-paid.css?v=0.1.765-paid-login";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.772-paid-relogin";
       if (!paidCss.parentNode) {
         document.head.appendChild(paidCss);
       }
@@ -555,6 +555,7 @@
       let dead = false;
       let overviewRows = [];
       let liveUpdatedAt = "";
+      let liveSlot = "";
       let overviewAsOf = "";
       let enabledStores = [];
       let overviewStale = false;
@@ -1046,47 +1047,94 @@
         const today = series.today || [];
         const count = Number(series.hours) > 2 ? Number(series.hours) : Math.max(yesterday.length, today.length, 2);
         let max = 1;
+        let min = 0;
+        let seen = false;
         yesterday.concat(today).forEach(function (n) {
           if (series.gaps && (n == null || !isFinite(Number(n)))) {
             return;
           }
           const v = Number(n) || 0;
+          if (!seen || v < min) {
+            min = v;
+          }
+          seen = true;
           if (v > max) {
             max = v;
           }
         });
+        const fit = series.scale === "fit" && seen;
+        if (fit) {
+          const span = Math.max(max - min, Math.abs(max) * 0.08, 0.01);
+          min -= span * 0.2;
+          max += span * 0.2;
+        } else {
+          min = 0;
+          max *= 1.08;
+        }
         function xAt(index) {
           return 10 + (index / Math.max(count - 1, 1)) * 620;
         }
         function yAt(value) {
-          return height - bottom - ((Number(value) || 0) / max) * (height - top - bottom);
+          const plot = height - top - bottom;
+          return height - bottom - ((Number(value) || 0) - min) / Math.max(max - min, 0.01) * plot;
         }
-        function points(list) {
-          if (series.gaps) {
-            const parts = [];
-            let current = [];
-            list.forEach(function (value, index) {
-              if (value == null || !isFinite(Number(value))) {
-                if (current.length) {
-                  parts.push(current.join(" "));
-                }
-                current = [];
-                return;
+        function segments(list) {
+          const parts = [];
+          let current = [];
+          list.forEach(function (value, index) {
+            if (series.gaps && (value == null || !isFinite(Number(value)))) {
+              if (current.length) {
+                parts.push(current);
               }
-              current.push(xAt(index).toFixed(1) + "," + yAt(value).toFixed(1));
-            });
-            if (current.length) {
-              parts.push(current.join(" "));
+              current = [];
+              return;
             }
-            return parts;
+            current.push({ x: xAt(index), y: yAt(value) });
+          });
+          if (current.length) {
+            parts.push(current);
           }
-          return [
-            list
-              .map(function (value, index) {
-                return xAt(index).toFixed(1) + "," + yAt(value).toFixed(1);
-              })
-              .join(" ")
-          ];
+          return parts;
+        }
+        function curve(part) {
+          if (!part.length) {
+            return "";
+          }
+          if (part.length < 3) {
+            return (
+              "M " +
+              part
+                .map(function (point) {
+                  return point.x.toFixed(1) + " " + point.y.toFixed(1);
+                })
+                .join(" L ")
+            );
+          }
+          let path = "M " + part[0].x.toFixed(1) + " " + part[0].y.toFixed(1);
+          for (let index = 0; index < part.length - 1; index += 1) {
+            const p0 = part[Math.max(index - 1, 0)];
+            const p1 = part[index];
+            const p2 = part[index + 1];
+            const p3 = part[Math.min(index + 2, part.length - 1)];
+            const c1x = p1.x + (p2.x - p0.x) / 6;
+            const c1y = p1.y + (p2.y - p0.y) / 6;
+            const c2x = p2.x - (p3.x - p1.x) / 6;
+            const c2y = p2.y - (p3.y - p1.y) / 6;
+            path +=
+              " C " +
+              c1x.toFixed(1) +
+              " " +
+              c1y.toFixed(1) +
+              " " +
+              c2x.toFixed(1) +
+              " " +
+              c2y.toFixed(1) +
+              " " +
+              p2.x.toFixed(1) +
+              " " +
+              p2.y.toFixed(1);
+          }
+          return path;
         }
         let labels = "";
         if (count === 24 || count === 48) {
@@ -1097,10 +1145,40 @@
               xAt(index).toFixed(1) +
               '" y="' +
               (height - 5) +
-              '" text-anchor="middle" fill="#8c8c8c" font-size="8">' +
+              '" text-anchor="middle" fill="#8c8c8c" font-size="12">' +
               hour +
               "</text>";
           }
+        } else if (count > 48) {
+          [
+            [0, "00:00", "start"],
+            [144, "12:00", "middle"],
+            [count - 1, "24:00", "end"]
+          ].forEach(function (mark) {
+            labels +=
+              '<text x="' +
+              xAt(mark[0]).toFixed(1) +
+              '" y="' +
+              (height - 5) +
+              '" text-anchor="' +
+              mark[2] +
+              '" fill="#8c8c8c" font-size="11">' +
+              mark[1] +
+              "</text>";
+          });
+        }
+        function stroke(list, color) {
+          return segments(list)
+            .map(function (part) {
+              return (
+                '<path fill="none" stroke="' +
+                color +
+                '" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" d="' +
+                curve(part) +
+                '"></path>'
+              );
+            })
+            .join("");
         }
         return (
           '<svg class="xm-hm-line" viewBox="0 0 ' +
@@ -1108,18 +1186,8 @@
           " " +
           height +
           '" preserveAspectRatio="none">' +
-          points(yesterday)
-            .filter(Boolean)
-            .map(function (line) {
-              return '<polyline fill="none" stroke="#91caff" stroke-width="2" points="' + line + '"></polyline>';
-            })
-            .join("") +
-          points(today)
-            .filter(Boolean)
-            .map(function (line) {
-              return '<polyline fill="none" stroke="#ffa39e" stroke-width="2" points="' + line + '"></polyline>';
-            })
-            .join("") +
+          stroke(yesterday, "#69b1ff") +
+          stroke(today, "#ff7875") +
           labels +
           "</svg>"
         );
@@ -1782,10 +1850,23 @@
           const pay = paid[shopKey(row.store)];
           row.liveAmount = sale ? parseMoney(sale.dealAmount) : null;
           row.yesterdayAmount = sale ? parseMoney(sale.yesterdayAmount) : null;
+          row.dealRate = sale && sale.dealRate != null && sale.dealRate !== "" ? Number(sale.dealRate) : null;
+          if (row.dealRate != null && !isFinite(row.dealRate)) {
+            row.dealRate = null;
+          }
+          row.dealRateLabel = sale && sale.dealRateLabel ? String(sale.dealRateLabel) : "";
+          row.yesterdayEstimated = Boolean(sale && sale.yesterdayEstimated);
+          row.dealComparable = Boolean(sale && sale.dealComparable);
+          row.platformUpdatedAt = sale && sale.platformUpdatedAt ? String(sale.platformUpdatedAt) : "";
+          row.dealPoints = sale && Array.isArray(sale.dealPoints) ? sale.dealPoints : [];
           row.todayHours = sale && Array.isArray(sale.todayHours) ? sale.todayHours : [];
           row.yesterdayHours = sale && Array.isArray(sale.yesterdayHours) ? sale.yesterdayHours : [];
+          row.todayPaidHours = sale && Array.isArray(sale.todayPaidHours) ? sale.todayPaidHours : [];
+          row.yesterdayPaidHours = sale && Array.isArray(sale.yesterdayPaidHours) ? sale.yesterdayPaidHours : [];
           row.capturedAt = sale && sale.capturedAt ? String(sale.capturedAt) : "";
           row.online = Boolean(sale && sale.online);
+          row.offline = Boolean(sale && sale.offline);
+          row.offlineReason = sale && sale.offlineReason ? String(sale.offlineReason) : "";
           row.loginExpired = Boolean(sale && sale.loginExpired);
           row.paidAmount =
             sale && sale.paidAmount != null
@@ -2122,32 +2203,457 @@
         return out;
       }
 
-      function homeChart(spec) {
-        const plot = spec.gaps
-          ? { yesterday: spec.yHours || [], today: spec.tHours || [], hours: 24, height: 168, gaps: true }
-          : spec.blank
-          ? { yesterday: [], today: [], hours: 24, height: 168 }
-          : livePlot({
-              yesterdayHour: spec.yHours,
-              todayHour: spec.tHours,
-              lineMode: spec.flat ? "flat" : "",
-              unit: spec.flat ? "rate" : ""
-            });
-        const delta = spec.delta;
+      function arrowText(rate) {
+        const down = Number(rate) < 0;
+        const abs = Math.abs(Number(rate));
+        const rounded = Math.round(abs * 100) / 100;
+        const text = Math.abs(rounded - Math.round(rounded)) < 0.001 ? String(Math.round(rounded)) : rounded.toFixed(2);
+        return (down ? "↓" : "↑") + text + "%";
+      }
+
+      function moneyText(value) {
+        return value == null || !isFinite(Number(value)) ? "—" : "¥" + formatLive(value);
+      }
+
+      function dealSubHtml(compare) {
+        const label = compare.label || "较昨日";
+        const rate =
+          compare.rate == null || !isFinite(Number(compare.rate))
+            ? "<span>" + escapeHtml(label) + " —</span>"
+            : '<b class="' +
+              (Number(compare.rate) < 0 ? "down" : "up") +
+              '">' +
+              escapeHtml(label) +
+              " " +
+              arrowText(compare.rate) +
+              "</b>";
+        const mark = "可比 " + compare.comparable + "/" + compare.total + " 店";
+        const yestName = compare.estimated ? "昨日推算 " : "昨日对比 ";
         return (
-          '<article class="xm-hl-chart"><div class="xm-hl-chart-head"><span>' +
+          rate +
+          ' <span class="xm-hl-cohort">' +
+          mark +
+          '<span class="xm-hl-deal-card is-sum"><div>今日实采 ' +
+          moneyText(compare.cohortToday) +
+          "</div><div>" +
+          yestName +
+          moneyText(compare.cohortYesterday) +
+          "</div><div>" +
+          mark +
+          "</div></span></span>"
+        );
+      }
+
+      function fiveMinuteStamp(stamp) {
+        const match = String(stamp || "").match(/(\d{4})[/-](\d{1,2})[/-](\d{1,2})[ T](\d{1,2}):(\d{2})/);
+        if (!match) {
+          return "";
+        }
+        const minute = Math.floor(Number(match[5]) / 5) * 5;
+        function pad(value) {
+          return String(value).padStart(2, "0");
+        }
+        return match[1] + "/" + pad(match[2]) + "/" + pad(match[3]) + " " + pad(match[4]) + ":" + pad(minute);
+      }
+
+      function carryList(list, lastHour) {
+        const out = [];
+        let last = null;
+        let seen = false;
+        const source = list || [];
+        for (let hour = 0; hour < 24; hour += 1) {
+          if (hour <= lastHour && source[hour] != null && isFinite(Number(source[hour]))) {
+            last = Number(source[hour]);
+            seen = true;
+          }
+          out.push(hour <= lastHour && seen ? last : null);
+        }
+        return out;
+      }
+
+      function lastCollectedHour(rows, fields) {
+        let lastHour = -1;
+        rows.forEach(function (row) {
+          fields.forEach(function (field) {
+            const list = (row && row[field]) || [];
+            for (let hour = 0; hour < 24; hour += 1) {
+              if (list[hour] != null && isFinite(Number(list[hour]))) {
+                lastHour = Math.max(lastHour, hour);
+              }
+            }
+          });
+        });
+        return lastHour;
+      }
+
+      function carriedSeries(rows, field) {
+        const scope = (rows || []).filter(function (row) {
+          return row && row.online;
+        });
+        const lastHour = lastCollectedHour(scope, [field]);
+        const values = new Array(24).fill(null);
+        const counts = new Array(24).fill(0);
+        if (lastHour < 0) {
+          return { values: values, counts: counts };
+        }
+        scope.forEach(function (row) {
+          const carried = carryList(row[field], lastHour);
+          for (let hour = 0; hour <= lastHour; hour += 1) {
+            if (carried[hour] == null) {
+              continue;
+            }
+            values[hour] = (values[hour] || 0) + carried[hour];
+            counts[hour] += 1;
+          }
+        });
+        return { values: values, counts: counts };
+      }
+
+      function ratioSeries(rows, paidField, dealField) {
+        const scope = (rows || []).filter(function (row) {
+          return row && row.online;
+        });
+        const lastHour = lastCollectedHour(scope, [paidField, dealField]);
+        const values = new Array(24).fill(null);
+        const counts = new Array(24).fill(0);
+        if (lastHour < 0) {
+          return { values: values, counts: counts };
+        }
+        const paid = scope.map(function (row) {
+          return carryList(row[paidField], lastHour);
+        });
+        const deal = scope.map(function (row) {
+          return carryList(row[dealField], lastHour);
+        });
+        for (let hour = 0; hour <= lastHour; hour += 1) {
+          let spend = 0;
+          let sales = 0;
+          let count = 0;
+          scope.forEach(function (_row, index) {
+            if (paid[index][hour] == null || deal[index][hour] == null || !(deal[index][hour] > 0)) {
+              return;
+            }
+            spend += paid[index][hour];
+            sales += deal[index][hour];
+            count += 1;
+          });
+          if (!count || !(sales > 0)) {
+            continue;
+          }
+          values[hour] = spend / sales;
+          counts[hour] = count;
+        }
+        return { values: values, counts: counts };
+      }
+
+      function trendTips(today, yesterday, total, unit) {
+        const tips = [];
+        for (let hour = 0; hour < 24; hour += 1) {
+          const current = today.values[hour];
+          const prior = yesterday.values[hour];
+          if (current == null && prior == null) {
+            tips.push(null);
+            continue;
+          }
+          tips.push({
+            slot: String(hour).padStart(2, "0") + ":00",
+            today: current,
+            yesterday: prior,
+            rate: current != null && prior != null && prior > 0 ? (current / prior - 1) * 100 : null,
+            estimated: false,
+            label: "较昨日",
+            unit: unit || "money",
+            n: today.counts[hour] || yesterday.counts[hour] || 0,
+            total: total
+          });
+        }
+        return tips;
+      }
+
+      function trendDelta(today, yesterday, asMoney) {
+        let hour = -1;
+        for (let index = 23; index >= 0; index -= 1) {
+          if (today[index] != null) {
+            hour = index;
+            break;
+          }
+        }
+        if (hour < 0 || yesterday[hour] == null || !(yesterday[hour] > 0)) {
+          return { yesterday: "—", delta: null };
+        }
+        const rate = (today[hour] / yesterday[hour] - 1) * 100;
+        return {
+          yesterday: asMoney ? formatLive(yesterday[hour]) : formatRate(yesterday[hour]),
+          delta: { kind: rate < 0 ? "down" : "up", text: arrowText(rate) }
+        };
+      }
+
+      function aggregateDeal(rows) {
+        const scope = rows.filter(function (row) {
+          return row.online;
+        });
+        const total = scope.length;
+        let cohortToday = 0;
+        let cohortYesterday = 0;
+        let comparable = 0;
+        let estimated = false;
+        let samePeriod = true;
+        const events = {};
+        const series = scope.map(function (row) {
+          if (
+            row.dealComparable &&
+            row.liveAmount != null &&
+            isFinite(Number(row.liveAmount)) &&
+            row.yesterdayAmount != null &&
+            isFinite(Number(row.yesterdayAmount))
+          ) {
+            cohortToday += Number(row.liveAmount);
+            cohortYesterday += Number(row.yesterdayAmount);
+            comparable += 1;
+            if (row.yesterdayEstimated) {
+              estimated = true;
+            }
+            if (row.dealRateLabel !== "较昨日同时段") {
+              samePeriod = false;
+            }
+          }
+          const points = (row.dealPoints || [])
+            .filter(function (point) {
+              return (
+                point &&
+                point.comparable &&
+                point.today != null &&
+                point.yesterday != null &&
+                isFinite(Number(point.today)) &&
+                isFinite(Number(point.yesterday)) &&
+                Number(point.yesterday) > 0 &&
+                isFinite(Number(point.index))
+              );
+            })
+            .slice()
+            .sort(function (left, right) {
+              return Number(left.index) - Number(right.index);
+            });
+          points.forEach(function (point) {
+            events[Number(point.index)] = point.slot;
+          });
+          return points;
+        });
+        const today = [];
+        const yesterday = [];
+        const tips = [];
+        Object.keys(events)
+          .map(function (index) {
+            return Number(index);
+          })
+          .sort(function (left, right) {
+            return left - right;
+          })
+          .forEach(function (index) {
+            let slotToday = 0;
+            let slotYesterday = 0;
+            let slotCount = 0;
+            let slotEstimated = false;
+            let slotSame = true;
+            series.forEach(function (points) {
+              let chosen = null;
+              points.forEach(function (point) {
+                if (Number(point.index) <= index) {
+                  chosen = point;
+                }
+              });
+              if (!chosen) {
+                return;
+              }
+              slotToday += Number(chosen.today);
+              slotYesterday += Number(chosen.yesterday);
+              slotCount += 1;
+              if (chosen.estimated) {
+                slotEstimated = true;
+              }
+              if (chosen.label !== "较昨日同时段") {
+                slotSame = false;
+              }
+            });
+            if (!slotCount || !(slotYesterday > 0)) {
+              return;
+            }
+            today[index] = slotToday;
+            yesterday[index] = slotYesterday;
+            tips[index] = {
+              slot: events[index],
+              today: slotToday,
+              yesterday: slotYesterday,
+              rate: (slotToday / slotYesterday - 1) * 100,
+              estimated: slotEstimated,
+              label: slotSame ? "较昨日同时段" : "较昨日",
+              n: slotCount,
+              total: total
+            };
+          });
+        const count = today.length;
+        for (let index = 0; index < count; index += 1) {
+          if (today[index] == null) {
+            today[index] = null;
+            yesterday[index] = null;
+            tips[index] = null;
+          }
+        }
+        const daySlots = 24 * 12 + 1;
+        while (today.length < daySlots) {
+          today.push(null);
+          yesterday.push(null);
+          tips.push(null);
+        }
+        return {
+          compare: {
+            rate: comparable > 0 && cohortYesterday > 0 ? (cohortToday / cohortYesterday - 1) * 100 : null,
+            comparable: comparable,
+            total: total,
+            cohortToday: comparable ? cohortToday : null,
+            cohortYesterday: comparable ? cohortYesterday : null,
+            estimated: estimated,
+            label: comparable && samePeriod ? "较昨日同时段" : "较昨日"
+          },
+          series: { today: today, yesterday: yesterday, tips: tips, count: daySlots }
+        };
+      }
+
+      function shopSpark(points) {
+        const list = (points || []).filter(function (point) {
+          return point && (point.today != null || point.yesterday != null);
+        });
+        if (!list.length) {
+          return "";
+        }
+        const indexes = list.map(function (point) {
+          return Number(point.index);
+        });
+        const min = Math.min.apply(null, indexes);
+        const max = Math.max.apply(null, indexes);
+        const span = Math.max(max - min, 1);
+        let peak = 1;
+        list.forEach(function (point) {
+          [point.today, point.yesterday].forEach(function (value) {
+            if (value != null && Number(value) > peak) {
+              peak = Number(value);
+            }
+          });
+        });
+        function line(key, color) {
+          const parts = [];
+          let current = [];
+          let previous = null;
+          list.forEach(function (point) {
+            const value = point[key];
+            const index = Number(point.index);
+            if (value == null || !isFinite(Number(value)) || (previous != null && index - previous > 1)) {
+              if (current.length) {
+                parts.push(current.join(" "));
+              }
+              current = [];
+              if (value == null || !isFinite(Number(value))) {
+                previous = index;
+                return;
+              }
+            }
+            const x = 4 + ((index - min) / span) * 172;
+            const y = 48 - (Number(value) / peak) * 40;
+            current.push(x.toFixed(1) + "," + y.toFixed(1));
+            previous = index;
+          });
+          if (current.length) {
+            parts.push(current.join(" "));
+          }
+          const circles = list
+            .map(function (point) {
+              const value = point[key];
+              if (value == null || !isFinite(Number(value))) {
+                return "";
+              }
+              const x = 4 + ((Number(point.index) - min) / span) * 172;
+              const y = 48 - (Number(value) / peak) * 40;
+              return '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2.2" fill="' + color + '"></circle>';
+            })
+            .join("");
+          return (
+            parts
+              .map(function (drawn) {
+                return '<polyline fill="none" stroke="' + color + '" stroke-width="1.6" points="' + drawn + '"></polyline>';
+              })
+              .join("") + circles
+          );
+        }
+        return (
+          '<svg class="xm-hl-spark" viewBox="0 0 180 56" aria-hidden="true">' +
+          line("yesterday", "#91caff") +
+          line("today", "#ffa39e") +
+          "</svg>"
+        );
+      }
+
+      function dealCell(row) {
+        const amount = formatLive(row.liveAmount);
+        if (row.dealRate == null || !isFinite(Number(row.dealRate))) {
+          return amount;
+        }
+        const down = Number(row.dealRate) < 0;
+        const yestWord = row.yesterdayEstimated && row.yesterdayAmount != null ? "昨日约 " : "昨日 ";
+        return (
+          '<span class="xm-hl-deal" data-shop-deal><span>' +
+          amount +
+          '</span><b class="xm-hl-delta ' +
+          (down ? "is-down" : "is-up") +
+          '">' +
+          arrowText(row.dealRate) +
+          '</b><span class="xm-hl-deal-card is-shop" hidden><b>' +
+          escapeHtml(row.store) +
+          "</b>" +
+          shopSpark(row.dealPoints) +
+          "<div>今日 " +
+          moneyText(row.liveAmount) +
+          "｜" +
+          yestWord +
+          moneyText(row.yesterdayAmount) +
+          "</div>" +
+          (row.platformUpdatedAt ? "<div>平台更新 " + escapeHtml(row.platformUpdatedAt) + "</div>" : "") +
+          "</span></span>"
+        );
+      }
+
+      function homeChart(spec) {
+        const deal = spec.deal || null;
+        const plot = {
+          yesterday: spec.yHours || [],
+          today: spec.tHours || [],
+          hours: 24,
+          height: 188,
+          gaps: true,
+          scale: spec.scale || ""
+        };
+        const delta = spec.delta;
+        const legend = '<i class="is-yest"></i>昨天<i class="is-today"></i>今天';
+        const meta = escapeHtml(JSON.stringify(spec.tips || []));
+        return (
+          '<article class="xm-hl-chart" data-deal-chart><div class="xm-hl-chart-head"><span>' +
           escapeHtml(spec.title) +
-          '</span><span class="xm-hl-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div>' +
-          '<div class="xm-hl-value">' +
+          '</span><span class="xm-hl-legs">' +
+          legend +
+          '</span></div><div class="xm-hl-value">' +
           escapeHtml(spec.value) +
-          '</div><div class="xm-hl-sub">昨天 ' +
-          escapeHtml(spec.yesterday) +
-          (delta
-            ? ' <b class="' + delta.kind + '">环比 ' + escapeHtml(delta.text) + "</b>"
-            : " <span>环比 —</span>") +
+          "</div><div class=\"xm-hl-sub\">" +
+          (deal
+            ? dealSubHtml(deal.compare)
+            : "昨天 " +
+              escapeHtml(spec.yesterday) +
+              (delta
+                ? ' <b class="' + delta.kind + '">环比 ' + escapeHtml(delta.text) + "</b>"
+                : " <span>环比 —</span>")) +
           "</div>" +
           liveLine(plot) +
-          "</article>"
+          '<div hidden data-deal-meta>' +
+          meta +
+          '</div><div class="xm-hl-chart-tip" data-deal-tip hidden></div></article>'
         );
       }
 
@@ -2282,8 +2788,15 @@
         if (row.online) {
           return '<span class="xm-hl-net is-on">在线</span>';
         }
-        if (row.loginExpired) {
-          return '<span class="xm-hl-net is-off">掉线</span>';
+        if (row.loginExpired || row.offline) {
+          const reason = row.offlineReason ? ' title="' + escapeHtml(row.offlineReason) + '"' : "";
+          return (
+            '<button type="button" class="xm-hl-net is-off" data-relogin="' +
+            escapeHtml(row.store) +
+            '"' +
+            reason +
+            ">掉线</button>"
+          );
         }
         return "";
       }
@@ -2313,7 +2826,10 @@
           }
           return '<span class="xm-hl-login">' + badge + relogin + "</span>";
         }
-        if (col.key === "liveAmount" || col.key === "paidAmount" || col.key === "paidDeal") {
+        if (col.key === "liveAmount") {
+          return dealCell(row);
+        }
+        if (col.key === "paidAmount" || col.key === "paidDeal") {
           return formatLive(row[col.key]);
         }
         if (col.key === "roi") {
@@ -2355,7 +2871,7 @@
           );
         }
         if (col.key === "liveAt") {
-          return row.capturedAt ? escapeHtml(row.capturedAt) : "—";
+          return row.capturedAt && liveSlot ? escapeHtml(liveSlot) : "—";
         }
         return "—";
       }
@@ -2370,8 +2886,39 @@
           }
           return true;
         });
+        let latestCapture = "";
+        picked.forEach(function (row) {
+          if (!row || !row.capturedAt) {
+            return;
+          }
+          if (!row.online) {
+            return;
+          }
+          if (row.capturedAt > latestCapture) {
+            latestCapture = row.capturedAt;
+          }
+        });
+        if (!latestCapture) {
+          picked.forEach(function (row) {
+            if (row && row.capturedAt > latestCapture) {
+              latestCapture = row.capturedAt;
+            }
+          });
+        }
+        liveSlot = fiveMinuteStamp(latestCapture);
         const sales = sumField(picked, "liveAmount");
-        const yestSales = sumField(picked, "yesterdayAmount");
+        const dealCompare = aggregateDeal(picked);
+        const onlineTotal = picked.filter(function (row) {
+          return row && row.online;
+        }).length;
+        const salesToday = carriedSeries(picked, "todayHours");
+        const salesYesterday = carriedSeries(picked, "yesterdayHours");
+        const spendToday = carriedSeries(picked, "todayPaidHours");
+        const spendYesterday = carriedSeries(picked, "yesterdayPaidHours");
+        const feeToday = ratioSeries(picked, "todayPaidHours", "todayHours");
+        const feeYesterday = ratioSeries(picked, "yesterdayPaidHours", "yesterdayHours");
+        const spendEdge = trendDelta(spendToday.values, spendYesterday.values, true);
+        const feeEdge = trendDelta(feeToday.values, feeYesterday.values, false);
         const spend = sumField(picked, "paidAmount");
         const deal = sumField(picked, "paidDeal");
         const roi = spend > 0 && deal != null ? deal / spend : null;
@@ -2388,7 +2935,7 @@
         const listed = picked.filter(function (row) {
           return !feeWatch || feeKind(row).kind === feeWatch;
         });
-        const clock = liveUpdatedAt || "—";
+        const clock = liveSlot || fiveMinuteStamp(liveUpdatedAt) || "—";
         const cols = shownCols();
         const groups = [];
         const seenGroup = {};
@@ -2538,7 +3085,7 @@
           barEl.hidden = false;
         }
         if (asofEl) {
-          asofEl.textContent = liveUpdatedAt ? "最新采集 " + liveUpdatedAt : "等待采集";
+          asofEl.textContent = clock && clock !== "—" ? "最新采集 " + clock : "等待采集";
         }
         renderTabs();
         boardEl.hidden = false;
@@ -2601,25 +3148,29 @@
           homeChart({
             title: "实时总成交金额",
             value: formatLive(sales),
-            yesterday: formatLive(yestSales),
-            delta: deltaOf(sales, yestSales),
-            gaps: true,
-            yHours: sumHourSlots(picked, "yesterdayHours"),
-            tHours: sumHourSlots(picked, "todayHours")
+            deal: dealCompare,
+            yHours: salesYesterday.values,
+            tHours: salesToday.values,
+            tips: trendTips(salesToday, salesYesterday, onlineTotal)
           }) +
           homeChart({
             title: "推广总花费",
             value: formatLive(spend),
-            yesterday: "—",
-            delta: null,
-            blank: true
+            yesterday: spendEdge.yesterday,
+            delta: spendEdge.delta,
+            yHours: spendYesterday.values,
+            tHours: spendToday.values,
+            tips: trendTips(spendToday, spendYesterday, onlineTotal)
           }) +
           homeChart({
             title: "实时费比",
             value: fee == null ? "—" : formatRate(fee),
-            yesterday: "—",
-            delta: null,
-            blank: true
+            yesterday: feeEdge.yesterday,
+            delta: feeEdge.delta,
+            scale: "fit",
+            yHours: feeYesterday.values,
+            tHours: feeToday.values,
+            tips: trendTips(feeToday, feeYesterday, onlineTotal, "rate")
           }) +
           '</div><div class="xm-hl-cards">' +
           [
@@ -2675,7 +3226,97 @@
         bindHomeLive();
       }
 
+      function bindDealHover() {
+        boardEl.querySelectorAll("[data-shop-deal]").forEach(function (host) {
+          const card = host.querySelector(".xm-hl-deal-card");
+          if (!card) {
+            return;
+          }
+          host.addEventListener("mouseenter", function () {
+            const rect = host.getBoundingClientRect();
+            card.hidden = false;
+            const width = 248;
+            let left = rect.left;
+            if (left + width > window.innerWidth - 8) {
+              left = Math.max(8, window.innerWidth - width - 8);
+            }
+            let top = rect.bottom + 6;
+            if (top + 180 > window.innerHeight) {
+              top = Math.max(8, rect.top - 180);
+            }
+            card.style.left = left + "px";
+            card.style.top = top + "px";
+          });
+          host.addEventListener("mouseleave", function () {
+            card.hidden = true;
+          });
+        });
+        boardEl.querySelectorAll("[data-deal-chart]").forEach(function (article) {
+          const svg = article.querySelector("svg");
+          const tip = article.querySelector("[data-deal-tip]");
+          const raw = article.querySelector("[data-deal-meta]");
+          if (!svg || !tip || !raw) {
+            return;
+          }
+          let meta = [];
+          try {
+            meta = JSON.parse(raw.textContent || "[]");
+          } catch (err) {
+            meta = [];
+          }
+          function hide() {
+            tip.hidden = true;
+          }
+          svg.addEventListener("mousemove", function (event) {
+            const rect = svg.getBoundingClientRect();
+            let best = -1;
+            let bestDist = 16;
+            meta.forEach(function (item, index) {
+              if (!item) {
+                return;
+              }
+              const px = 10 + (index / Math.max(meta.length - 1, 1)) * 620;
+              const dist = Math.abs(px * (rect.width / 640) - (event.clientX - rect.left));
+              if (dist < bestDist) {
+                bestDist = dist;
+                best = index;
+              }
+            });
+            if (best < 0 || !meta[best]) {
+              hide();
+              return;
+            }
+            const item = meta[best];
+            const amount = item.unit === "rate" ? formatRate : moneyText;
+            const rate =
+              item.rate == null || !isFinite(Number(item.rate))
+                ? (item.label || "较昨日") + " —"
+                : (item.label || "较昨日") + " " + arrowText(item.rate);
+            tip.hidden = false;
+            tip.innerHTML =
+              "<b>" +
+              escapeHtml(item.slot || "") +
+              "</b><div>今日 " +
+              amount(item.today) +
+              "</div><div>昨日 " +
+              amount(item.yesterday) +
+              "</div><div>" +
+              escapeHtml(rate) +
+              "</div><div>可比 " +
+              item.n +
+              "/" +
+              item.total +
+              " 店</div>";
+            const localX = event.clientX - article.getBoundingClientRect().left + 12;
+            tip.style.left = Math.max(8, Math.min(localX, article.clientWidth - 176)) + "px";
+            tip.style.top = "36px";
+          });
+          svg.addEventListener("mouseleave", hide);
+        });
+      }
+
       function bindHomeLive() {
+        bindDealHover();
         const filter = boardEl.querySelector("[data-live-filter]");
         if (filter) {
           filter.addEventListener("change", function () {
@@ -3451,7 +4092,7 @@
                 enabled +
                 " 家" +
                 (relogin ? "，" + relogin + " 家需要重新登录" : "") +
-                (liveUpdatedAt ? " · 最后采集 " + liveUpdatedAt : "")
+                (liveSlot || liveUpdatedAt ? " · 最后采集 " + (liveSlot || fiveMinuteStamp(liveUpdatedAt)) : "")
             );
           })
           .catch(function (err) {
