@@ -863,7 +863,7 @@ export function buildLiveView({ shops, samples, now }) {
     const dealMissing = !reading || reading.dealAmount == null;
     const collectFailed = shop.authState === "offline";
     const watched = shop.authState === "ok" || collectFailed;
-    const online = hasSession && shop.authState === "ok" && fresh && !dealMissing;
+    const online = hasSession && watched && fresh && !dealMissing && !loginExpired;
     let offline = false;
     let offlineReason = "";
     if (hasSession && watched && !online && (collectFailed || !fresh || dealMissing)) {

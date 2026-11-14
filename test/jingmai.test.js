@@ -131,6 +131,22 @@ test("paid numbers count as a successful collection when deal is still empty", (
   assert.equal(view.shops[0].online, false);
   assert.equal(view.shops[0].offline, true);
   assert.match(view.shops[0].offlineReason, /没有成交字段/);
+  const kept = buildLiveView({
+    now: now,
+    shops: [{ store: "甲店", enabled: true, authState: "offline", authMessage: "京麦首页没有成交字段", cookies: [{ name: "thor", value: "secret" }] }],
+    samples: [
+      {
+        store: "甲店",
+        day: "2026-11-12",
+        capturedAt: "2026-11-12 11:00:00",
+        dealAmount: 88,
+        paidAmount: 10,
+        ok: true
+      }
+    ]
+  });
+  assert.equal(kept.shops[0].online, true);
+  assert.equal(kept.shops[0].dealAmount, 88);
   assert.equal(JSON.stringify(view).includes("secret"), false);
 });
 
