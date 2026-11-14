@@ -77,3 +77,5 @@ Cookie: 登录会话
 
 站点：`https://zx.xingmaierp.cc/releases`  
 待上线默认不自动刷新，要看最新点「刷新」。点「通过」才落地。
+
+线上登录账号和密码只写在 `docs/agents/00-prod-admin.md`。交单前先读那份，旧密码已经作废。不要把密码写进单据标题或登录页。
