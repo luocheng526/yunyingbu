@@ -199,11 +199,12 @@ async function rememberLogin(store, cookies) {
     const metrics = await deps.client.fetchHome(cookies);
     const now = beijingParts();
     await saveSample(Object.assign({ store: store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics)));
-  } catch (error) {
-    if (error && error.code === "login") {
-      await markAuth(store, "login_expired", "登录已失效，请重新登录");
-      return false;
+    if (metrics.dealAmount == null) {
+      await markAuth(store, "offline", metrics.dealNote || "京麦首页没有成交字段");
     }
+  } catch (error) {
+    const message = String((error && error.message) || "采集超时").replace(/\s+/g, " ").slice(0, 180) || "采集超时";
+    await markAuth(store, "offline", message);
   }
   return true;
 }

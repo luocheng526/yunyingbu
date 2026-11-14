@@ -1221,20 +1221,31 @@ export async function openDesk({ store, loginName, password }) {
       stopCurrent();
       return { status: "login", message: "服务器没有填上账号" };
     }
-    await sleep(2500);
-    let cookies = await readCookies(desk.ws);
-    for (let attempt = 0; attempt < 6 && !hasSession(cookies); attempt += 1) {
-      await sleep(800);
-      cookies = await readCookies(desk.ws);
-    }
-    if (hasSession(cookies)) {
-      stopCurrent();
-      return { status: "ok", cookies: cookies };
-    }
-    const screen = await readScreenState(desk.ws);
-    if (screen.status === "login") {
-      stopCurrent();
-      return screen;
+    let cookies = [];
+    let screen = { status: "verify", message: "" };
+    for (let attempt = 0; attempt < 18; attempt += 1) {
+      await sleep(attempt === 0 ? 1200 : 1000);
+      try {
+        cookies = await readCookies(desk.ws);
+      } catch {
+        cookies = [];
+      }
+      if (hasSession(cookies)) {
+        stopCurrent();
+        return { status: "ok", cookies: cookies };
+      }
+      try {
+        screen = await readScreenState(desk.ws);
+      } catch {
+        screen = { status: "verify", message: "" };
+      }
+      if (screen.status === "login") {
+        stopCurrent();
+        return screen;
+      }
+      if (screen.message && /滑块|验证码|安全验证|请过一会儿再试/.test(screen.message)) {
+        return screen;
+      }
     }
     return screen;
   } catch (error) {
@@ -1397,6 +1408,22 @@ function cookieParams(cookies) {
     });
 }
 
+function homeCardText(ws) {
+  return evaluate(ws, `(() => {
+    const parts = [];
+    const take = (node) => {
+      if (!node) return;
+      if (node.body) parts.push(node.body.innerText || "");
+      else if (node.innerText) parts.push(node.innerText);
+      const nodes = node.querySelectorAll ? node.querySelectorAll("*") : [];
+      nodes.forEach((el) => { if (el.shadowRoot) take(el.shadowRoot); });
+    };
+    take(document);
+    document.querySelectorAll("iframe").forEach((frame) => { try { take(frame.contentDocument); } catch (e) {} });
+    return parts.join("\\n").slice(0, 12000);
+  })()`);
+}
+
 async function readHomeDealNow(cookies) {
   if (readerIdle) {
     clearTimeout(readerIdle);
@@ -1420,12 +1447,24 @@ async function readHomeDealNow(cookies) {
       /* a fresh target can reject the first navigation */
     }
     await sleep(300);
-    const pending = watchShopData(ws);
+    let networkDone = false;
+    const pending = watchShopData(ws).then(function (body) {
+      networkDone = true;
+      return body;
+    });
     const jar = cookieParams(cookies);
     if (jar.length) {
       await send(ws, "Network.setCookies", { cookies: jar });
     }
     await send(ws, "Page.navigate", { url: "https://shop.jd.com/jdm/home" });
+    let card = null;
+    for (let attempt = 0; attempt < 12 && !card && !networkDone; attempt += 1) {
+      await sleep(1000);
+      card = parseHomeCard(await homeCardText(ws));
+    }
+    if (card) {
+      return card;
+    }
     const body = await pending;
     if (body) {
       try {
@@ -1437,20 +1476,7 @@ async function readHomeDealNow(cookies) {
         /* fall through to the rendered card */
       }
     }
-    const text = await evaluate(ws, `(() => {
-      const parts = [];
-      const take = (node) => {
-        if (!node) return;
-        if (node.body) parts.push(node.body.innerText || "");
-        else if (node.innerText) parts.push(node.innerText);
-        const nodes = node.querySelectorAll ? node.querySelectorAll("*") : [];
-        nodes.forEach((el) => { if (el.shadowRoot) take(el.shadowRoot); });
-      };
-      take(document);
-      document.querySelectorAll("iframe").forEach((frame) => { try { take(frame.contentDocument); } catch (e) {} });
-      return parts.join("\\n").slice(0, 12000);
-    })()`);
-    const card = parseHomeCard(text);
+    card = parseHomeCard(await homeCardText(ws));
     if (card) {
       return card;
     }
