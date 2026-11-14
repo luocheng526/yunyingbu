@@ -8,6 +8,16 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { getOverview, hydrateFromMysql } from "../src/modules/data/overview.js";
+import {
+  backfillDays,
+  daysOfLastMonth,
+  jobsFor,
+  lastNDays,
+  pullDay,
+  resetErpDaysDeps,
+  setErpDaysDeps,
+  summarizeDays
+} from "../src/modules/data/erp-days.js";
 import { patchAppSource } from "../src/modules/data/patch-app.js";
 import {
   DATA_OVERLAY_FILES,
@@ -497,6 +507,12 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.equal(isAllowedDataPath("src/app.js"), false);
   assert.equal(isAllowedDataPath("public/shared/nav.js"), false);
   assert.equal(isAllowedDataPath("src/modules/data/overview.js"), true);
+  assert.equal(isAllowedDataPath("src/modules/data/erp-days.js"), true);
+  assert.equal(DATA_OVERLAY_FILES.includes("src/modules/data/erp-days.js"), true);
+  assert.equal(isForbiddenReleasePath("src/modules/home/erp-kpis.js"), true);
+  assert.equal(isForbiddenReleasePath("src/modules/han/foo.js"), true);
+  assert.equal(isForbiddenReleasePath("src/modules/shen/foo.js"), true);
+  assert.equal(DATA_OVERLAY_FILES.includes("src/app.js"), false);
   assert.equal(isAllowedDataPath("public/data/placeholder/index.html"), true);
   assert.equal(isAllowedDataPath("public/data/overview/index.html"), true);
   assert.equal(isAllowedDataPath("public/data-overview.js"), true);
@@ -684,4 +700,80 @@ test("prod admin doc and submit script keep password off tickets", async () => {
   } finally {
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
+});
+
+test("ERP shop-day store overwrites the same day and serves local from/to", async () => {
+  resetErpDaysDeps();
+  const calls = [];
+  setErpDaysDeps({
+    erpPost: async (path, body) => {
+      calls.push({ path, body });
+      assert.equal(path, "/product/jd/order/shop/page");
+      const pay = body.payTimeStart.startsWith("2026-11-12") && calls.filter((c) => c.body.payTimeStart.startsWith("2026-11-12")).length > 1
+        ? 80
+        : 50;
+      return {
+        total: 1,
+        records: [{ shopId: "s1", shopName: "RASW家居旗舰店", payAmount: pay, refundAmount: 5, orderCount: 2 }]
+      };
+    }
+  });
+  const first = await pullDay("2026-11-12");
+  const second = await pullDay("2026-11-12");
+  assert.equal(first.ok, true);
+  assert.equal(second.ok, true);
+  assert.equal(first.shops, 1);
+  assert.equal(second.shops, 1);
+  const local = await summarizeDays({ from: "2026-11-12", to: "2026-11-12" });
+  assert.equal(local.ok, true);
+  assert.equal(local.source, "local-erp-days");
+  assert.equal(local.liveErp, false);
+  assert.equal(local.shops.length, 1);
+  assert.equal(local.shops[0].payAmount, 80);
+  assert.equal(local.summary.payAmount, 80);
+  await withServer(async (base) => {
+    const api = await get(base, "/api/data/erp-days?from=2026-11-12&to=2026-11-12");
+    assert.equal(api.res.status, 200);
+    const body = JSON.parse(api.text);
+    assert.equal(body.source, "local-erp-days");
+    assert.equal(body.shops[0].payAmount, 80);
+    const overview = await get(base, "/api/data/overview?from=2026-11-12&to=2026-11-12");
+    assert.equal(JSON.parse(overview.text).source, "local-erp-days");
+    const demo = await get(base, "/api/data/overview");
+    assert.equal(JSON.parse(demo.text).demo, true);
+  });
+  resetErpDaysDeps();
+});
+
+test("ERP day jobs cover yesterday, day-before, month 3rd, and 90-day backfill", async () => {
+  resetErpDaysDeps();
+  const daily = jobsFor(new Date("2026-11-13T18:10:00Z"));
+  assert.deepEqual(daily[0].days, ["2026-11-13", "2026-11-12"]);
+  const early = jobsFor(new Date("2026-11-13T16:00:00Z"));
+  assert.equal(early.length, 0);
+  const month = jobsFor(new Date("2026-12-02T18:10:00Z"));
+  assert.equal(month.some((j) => j.kind === "month"), true);
+  assert.deepEqual(daysOfLastMonth("2026-12-03")[0], "2026-11-01");
+  assert.equal(daysOfLastMonth("2026-12-03").at(-1), "2026-11-30");
+  assert.equal(lastNDays(90, "2026-11-14").length, 90);
+  const seen = new Set();
+  setErpDaysDeps({
+    erpPost: async (_path, body) => {
+      seen.add(String(body.payTimeStart).slice(0, 10));
+      return { total: 0, records: [] };
+    }
+  });
+  const backfill = await backfillDays(90, { today: "2026-11-14" });
+  assert.equal(backfill.days, 90);
+  assert.equal(seen.size, 90);
+  assert.equal(seen.has("2026-11-13"), true);
+  assert.equal(seen.has("2026-08-16"), true);
+  assert.equal(seen.has("2026-11-14"), false);
+  const daysJs = fs.readFileSync(path.join(repoRoot, "src/modules/data/erp-days.js"), "utf8");
+  assert.match(daysJs, /import\("\.\/erp\.js"\)/);
+  assert.match(daysJs, /erpPost/);
+  assert.doesNotMatch(daysJs, /modules\/home/);
+  assert.doesNotMatch(daysJs, /modules\/han/);
+  assert.doesNotMatch(daysJs, /modules\/shen/);
+  resetErpDaysDeps();
 });

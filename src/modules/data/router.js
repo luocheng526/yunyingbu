@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { getOverview } from "./overview.js";
 import { getNav } from "./nav.js";
+import { startErpDayJobs, summarizeDays } from "./erp-days.js";
 import {
   getGoodsBoard,
   getGoodsOverview,
@@ -13,14 +14,32 @@ import {
 } from "./pages.js";
 
 export const dataRouter = Router();
+startErpDayJobs();
 
 dataRouter.get("/nav", (_req, res) => {
   res.json(getNav());
 });
 
-dataRouter.get("/overview", async (_req, res, next) => {
+dataRouter.get("/overview", async (req, res, next) => {
   try {
+    const from = String(req.query.from || req.query.payTimeStart || "").slice(0, 10);
+    const to = String(req.query.to || req.query.payTimeEnd || "").slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to)) {
+      const local = await summarizeDays({ from, to });
+      if (local && local.ok && (local.shops || []).length) {
+        res.json(local);
+        return;
+      }
+    }
     res.json(await getOverview());
+  } catch (err) {
+    next(err);
+  }
+});
+
+dataRouter.get("/erp-days", async (req, res, next) => {
+  try {
+    res.json(await summarizeDays(req.query));
   } catch (err) {
     next(err);
   }
