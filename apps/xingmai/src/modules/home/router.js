@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getHomeErpKpis } from "./erp-kpis.js";
 import { getHomeErpPaid } from "./erp-paid.js";
-import { getHomeLocalPaid, pullHanShenPaid, shanghaiYmd, shanghaiNow } from "./local-paid.js";
+import { getHomeLocalPaid, postHomeLocalPaid, pullHanShenPaid, shanghaiYmd, shanghaiNow } from "./local-paid.js";
 
 const homeJsPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -55,7 +55,7 @@ export function homeRouter() {
           summary: merged.summary || {},
           records: merged.records || [],
           yesterday: (data && data.yesterday) || { records: [] },
-          hourly: merged.hourly || {},
+          hourly: Object.assign({}, (data && data.hourly) || {}, merged.hourly || {}),
           from
         };
       }
@@ -66,6 +66,20 @@ export function homeRouter() {
         source: "han-shen-local",
         records: [],
         error: err.message || "韩梦凯/沈子晗实时付费汇总失败"
+      });
+    }
+  });
+
+  router.post("/local-paid", (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    try {
+      return res.json(postHomeLocalPaid(req.body || {}));
+    } catch (err) {
+      return res.status(500).json({
+        ok: false,
+        source: "han-shen-local",
+        records: [],
+        error: err.message || "实时留底失败"
       });
     }
   });

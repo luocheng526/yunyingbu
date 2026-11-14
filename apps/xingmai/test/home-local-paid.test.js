@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import {
   getHomeLocalPaid,
   mergeHanShenPaid,
+  postHomeLocalPaid,
   rememberLocalPaidDay,
   setLocalPaidSnapPath,
   shanghaiNow,
@@ -164,10 +165,9 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
       yesterday: { records: [{ shopName: "A店", paidAmount: 8, paidDeal: 32 }] }
     }
   );
-  assert.equal(shaped.paid.yesterdayHour.length, 24);
+  assert.ok(shaped.paid.yesterdayHour.length === 0 || shaped.paid.yesterdayHour.length === 24);
   assert.equal(shaped.paid.todayHour.length > 2, true);
   assert.ok(shaped.fee.yesterdayHour.length === 0 || shaped.fee.yesterdayHour.length === 24);
-  assert.equal(shaped.paid.yesterdayHour.slice(0, 4).reduce((a, b) => a + b, 0), 8);
   assert.equal(shaped.paid.yestText, "8");
   assert.match(String(shaped.fee.yestText), /%/);
   const ordered = fns.fillLocalPaid(
@@ -211,7 +211,8 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
         records: [
           { shopName: "高费店", paidAmount: 5, paidDeal: 10, feeRate: 0.5 },
           { shopName: "低费店", paidAmount: 3, paidDeal: 10, feeRate: 0.3 }
-        ]
+        ],
+        hourly: { todayFee: [0.55, 0.35, 0.48, 0.4], todaySpend: [5, 3, 4, 2], todayPay: [16, 16, 16, 10] }
       }
     }
   );
@@ -220,6 +221,27 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.ok(waved.fee.todayHour[0] > 0.4 && waved.fee.todayHour[1] < 0.45);
   assert.equal(waved.fee.yesterdayHour.length, 24);
   assert.match(homeJs, /function mixFeeHours/);
+  assert.doesNotMatch(homeJs, /sum\.spend \* \(sY \/ sT\)/);
+  assert.match(homeJs, /api\("\/api\/home\/local-paid"/);
+  const keptYest = fns.fillLocalPaid(
+    {
+      hero: { label: "实时总成交金额", value: "100", todayHour: [10, 20], yesterdayHour: [99, 99, 99] },
+      shops: [],
+      cards: [],
+      paid: { label: "推广总花费", value: "—" }
+    },
+    {
+      records: [{ shopName: "A店", paidAmount: 12, paidDeal: 40, jingmaiGmv: 100 }],
+      yesterday: {
+        records: [{ shopName: "A店", paidAmount: 9, paidDeal: 30, jingmaiGmv: 80 }],
+        hourly: { todayPay: [8, 8, 8, 8], todaySpend: [2, 2, 1, 1], todayFee: [0.3, 0.4, 0.5, 0.4] }
+      }
+    }
+  );
+  assert.equal(keptYest.hero.yesterdayHour[0], 8);
+  assert.notEqual(keptYest.hero.yesterdayHour[0], 99);
+  assert.equal(keptYest.paid.yesterdayHour[0], 2);
+  assert.equal(keptYest.fee.yesterdayHour[0], 0.3);
 });
 
 test("live shop 状态 follows 10-minute capturedAt", () => {
@@ -420,4 +442,69 @@ test("local-paid pack always has ok and records, never empty object", async () =
   assert.doesNotMatch(homeJs, /\/api\/han\/fee-targets/);
   assert.doesNotMatch(homeJs, /\/api\/shen\/fee-targets/);
   assert.match(homeJs, /LIVE_REFRESH_MS = 10 \* 60 \* 1000/);
+});
+
+test("live day snap rolls today's hours into yesterday for 环比", () => {
+  const file = join(snapDir, "keep-yday.json");
+  const prev = join(snapDir, "days.json");
+  setLocalPaidSnapPath(file);
+  rememberLocalPaidDay(
+    {
+      records: [{ shopName: "A店", paidAmount: 40, liveAmount: 100 }],
+      hourly: { todayPay: [4, 5, 6], todaySpend: [1, 2, 3], todayFee: [0.3, 0.4, 0.5] }
+    },
+    "2026-11-12"
+  );
+  const posted = postHomeLocalPaid(
+    {
+      records: [{ shopName: "A店", paidAmount: 30, liveAmount: 80 }],
+      hourly: { todayPay: [7, 8, 9], todaySpend: [4, 5, 6], todayFee: [0.2, 0.22, 0.21] }
+    },
+    "2026-11-13"
+  );
+  assert.equal(posted.yesterday.records[0].paidAmount, 40);
+  assert.deepEqual(posted.hourly.yesterdayPay, [4, 5, 6]);
+  assert.deepEqual(posted.hourly.yesterdaySpend, [1, 2, 3]);
+  assert.deepEqual(posted.hourly.yesterdayFee, [0.3, 0.4, 0.5]);
+  assert.deepEqual(posted.hourly.todayPay, [7, 8, 9]);
+  setLocalPaidSnapPath(prev);
+});
+
+test("local-paid POST keeps today hours without wiping yesterday", async () => {
+  const file = join(snapDir, "post-yday.json");
+  const prev = join(snapDir, "days.json");
+  setLocalPaidSnapPath(file);
+  rememberLocalPaidDay(
+    { records: [{ shopName: "A店", paidAmount: 11 }], hourly: { todaySpend: [1, 2, 3] } },
+    "2026-11-12"
+  );
+  const app = express();
+  app.use(express.json());
+  app.use("/api/home", homeRouter());
+  const server = await new Promise((resolve) => {
+    const s = app.listen(0, "127.0.0.1", () => resolve(s));
+  });
+  try {
+    const { port } = server.address();
+    const res = await fetch(`http://127.0.0.1:${port}/api/home/local-paid`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        records: [{ shopName: "A店", paidAmount: 9 }],
+        hourly: { todaySpend: [4, 5, 6], todayPay: [7, 8, 9] }
+      })
+    });
+    const data = await res.json();
+    assert.equal(res.status, 200);
+    assert.equal(data.ok, true);
+    assert.equal(Array.isArray(data.yesterday.records), true);
+    if (shanghaiYmd() !== "2026-11-12") {
+      assert.equal(data.yesterday.records[0].paidAmount, 11);
+      assert.deepEqual(data.hourly.yesterdaySpend, [1, 2, 3]);
+    }
+    assert.deepEqual(data.hourly.todaySpend, [4, 5, 6]);
+  } finally {
+    setLocalPaidSnapPath(prev);
+    await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
 });

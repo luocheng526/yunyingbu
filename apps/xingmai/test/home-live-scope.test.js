@@ -148,7 +148,12 @@ test("charts cards and shop rows use the same filtered live board", () => {
       records: [
         { shopName: "A店", paidAmount: 20, paidDeal: 80 },
         { shopName: "B店", paidAmount: 5, paidDeal: 15 }
-      ]
+      ],
+      yesterday: {
+        records: [
+          { shopName: "A店", paidAmount: 16, paidDeal: 60, jingmaiGmv: 80 }
+        ]
+      }
     },
     teams: [
       { name: "沈子晗", shops: [{ shop: "A店" }] },

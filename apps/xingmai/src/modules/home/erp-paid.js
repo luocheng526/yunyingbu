@@ -213,23 +213,19 @@ export async function getHomeErpPaid() {
     return { ok: false, error: "数据中心 ERP 客户端未挂上" };
   }
   const { ymd, time } = shanghaiParts();
-  const yesterday = shiftYmd(ymd, -1);
   const range = { payTimeStart: `${ymd} 00:00:00`, payTimeEnd: `${ymd} ${time}` };
-  const yesterdayRange = { payTimeStart: `${yesterday} 00:00:00`, payTimeEnd: `${yesterday} 23:59:59` };
-  const [shopToday, shopYesterday, realtime] = await Promise.all([
+  const [shopToday, realtime] = await Promise.all([
     fetchAllShopPages(erp, range, 200),
-    fetchAllShopPages(erp, yesterdayRange, 200),
     erp.erpPost("/product/board/realtimeSalesRevenue", {}).catch(() => [])
   ]);
-  const mapped = mapErpPaid(shopToday, shopYesterday, realtime);
+  const mapped = mapErpPaid(shopToday, {}, realtime);
   return {
     ok: true,
     source: "xingmai-erp",
     range,
-    yesterdayRange,
     summary: mapped.summary,
-    yesterday: mapped.yesterday,
+    yesterday: {},
     records: mapped.records,
-    hourly: mapped.hourly
+    hourly: { todayPay: (mapped.hourly && mapped.hourly.todayPay) || [], yesterdayPay: [] }
   };
 }
