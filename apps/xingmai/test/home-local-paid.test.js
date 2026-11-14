@@ -368,6 +368,22 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
     noMerchantMix.shops.map((row) => row.shop + ":" + row.paidAmount),
     ["RASW环境电器旗舰店:1,978", "DIKTT环境电器旗舰店:533"]
   );
+  const zeros = Array.from({ length: 24 }, () => 0);
+  const zeroToday = fns.fillLocalPaid(
+    {
+      hero: { value: "100", todayHour: [10, 20, 30, 40], yesterdayHour: [8, 16, 24, 32] },
+      shops: [{ shop: "A店", liveAmount: "100", payHours: [10, 20, 30, 40], yestPayHours: [8, 16, 24, 32] }],
+      cards: [],
+      paid: { label: "推广总花费", value: "—" }
+    },
+    {
+      records: [{ shopName: "A店", paidAmount: 12, paidDeal: 40, jingmaiGmv: 100, feeRate: 0.12 }],
+      hourly: { todayPay: zeros, todaySpend: zeros, todayFee: zeros }
+    }
+  );
+  assert.ok(zeroToday.paid.todayHour.some((n) => Number(n) > 0));
+  assert.equal(Number(zeroToday.paid.todayHour[0].toFixed(1)), 1.2);
+  assert.equal(zeroToday.paid.value, "12");
 });
 
 test("live shop 状态 follows 10-minute capturedAt", () => {
@@ -634,4 +650,19 @@ test("local-paid POST keeps today hours without wiping yesterday", async () => {
     setLocalPaidSnapPath(prev);
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
+});
+
+test("local-paid POST ignores all-zero today hours", () => {
+  const file = join(snapDir, "zero-today.json");
+  const prev = join(snapDir, "days.json");
+  setLocalPaidSnapPath(file);
+  const ymd = shanghaiYmd();
+  rememberLocalPaidDay({ hourly: { todaySpend: [4, 5, 6, 7], todayPay: [8, 9, 10, 11] } }, ymd);
+  const posted = postHomeLocalPaid(
+    { hourly: { todaySpend: Array.from({ length: 24 }, () => 0), todayPay: Array.from({ length: 24 }, () => 0) } },
+    ymd
+  );
+  assert.deepEqual(posted.hourly.todaySpend, [4, 5, 6, 7]);
+  assert.deepEqual(posted.hourly.todayPay, [8, 9, 10, 11]);
+  setLocalPaidSnapPath(prev);
 });

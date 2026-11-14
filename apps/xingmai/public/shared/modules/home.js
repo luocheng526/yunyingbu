@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.931-alias */
+/* xm-module-home 0.1.936-todayh */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -2202,7 +2202,7 @@
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{color:var(--xm-muted);font-size:12px}" +
       "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm.is-chief .xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:1fr}}" +
-      "@media (max-width:720px){.xm-hm-sales.xm-hm-live-charts,.xm-hm-live .xm-hm-live-charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;overflow:visible;margin:0;padding:0}.xm-hm-sales.xm-hm-live-charts>.xm-hm-chart,.xm-hm-live .xm-hm-live-charts>.xm-hm-chart{min-width:0;max-width:none;width:auto;padding:8px 8px 6px;box-sizing:border-box}.xm-hm-live-charts .xm-hm-card-head{flex-direction:column;align-items:flex-start;gap:4px}.xm-hm-live-charts .xm-hm-card-head>span:first-child{min-width:0;width:100%;white-space:normal;overflow:visible;line-height:1.25;font-size:11px}.xm-hm-live-charts .xm-hm-legs{flex:0 0 auto;flex-wrap:wrap;white-space:normal;font-size:10px;gap:6px}.xm-hm-live-charts .xm-hm-index-num{margin:4px 0 2px;font-size:18px}.xm-hm-live-charts .xm-hm-yest-now,.xm-hm-live-charts .xm-hm-trend{font-size:10px;margin:0}.xm-hm-sales.xm-hm-live-charts .xm-hm-line,.xm-hm-live .xm-hm-live-charts .xm-hm-line{height:72px;margin-top:4px}}"
+      "@media (max-width:720px){.xm-hm-sales.xm-hm-live-charts,.xm-hm-live .xm-hm-live-charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;overflow:visible;margin:0 0 12px;padding:0}.xm-hm-sales.xm-hm-live-charts>.xm-hm-chart,.xm-hm-live .xm-hm-live-charts>.xm-hm-chart{min-width:0;max-width:none;width:auto;padding:10px 10px 8px;box-sizing:border-box}.xm-hm-live-charts .xm-hm-card-head{align-items:flex-start;gap:4px}.xm-hm-live-charts .xm-hm-card-head>span:first-child{min-width:0;flex:1;white-space:normal;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;font-size:12px;line-height:1.3}.xm-hm-live-charts .xm-hm-legs{display:none}.xm-hm-live-charts .xm-hm-index-num{margin:8px 0 2px;font-size:20px}.xm-hm-live-charts .xm-hm-yest-now,.xm-hm-live-charts .xm-hm-trend{font-size:12px;margin-top:4px}.xm-hm-sales.xm-hm-live-charts .xm-hm-line,.xm-hm-live .xm-hm-live-charts .xm-hm-line{display:none;height:0;margin:0}.xm-hm-kpis{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}}"
     );
   }
   function frameHtml() {
@@ -3402,15 +3402,15 @@
   }
   function spendChartOf(spend, yestSpend, hourly) {
     hourly = hourly || {};
-    var hasHourly = hourly.todaySpend && hourly.todaySpend.length > 2;
-    var hasYestHour = hourly.yesterdaySpend && hourly.yesterdaySpend.length > 2;
+    var hasHourly = hoursHaveNow(hourly.todaySpend);
+    var hasYestHour = hoursHaveNow(hourly.yesterdaySpend);
     var stampYest = !hasYestHour && hourly.yesterdaySpendNow && hourly.yesterdaySpendNow.length > 2;
     var yestHour = hasYestHour
       ? padHours(hourly.yesterdaySpend, 24)
       : stampYest
         ? padHours(hourly.yesterdaySpendNow, 24)
         : seriesOf(hourly.yesterdaySpend, yestSpend);
-    var todayHour = hasHourly ? todayHours(hourly.todaySpend) : seriesOf(hourly.todaySpend, spend);
+    var todayHour = hasHourly ? todayHours(hourly.todaySpend) : seriesOf(null, spend);
     var hasSpend = spend != null;
     var yestNow = hourCum(hourly.yesterdaySpend, null);
     if (yestNow == null) {
@@ -3431,15 +3431,15 @@
   }
   function feeChartOf(rate, yestRate, hourly) {
     hourly = hourly || {};
-    var hasHourly = hourly.todayFee && hourly.todayFee.length > 2;
-    var hasYestHour = hourly.yesterdayFee && hourly.yesterdayFee.length > 2;
+    var hasHourly = hoursHaveNow(hourly.todayFee);
+    var hasYestHour = hoursHaveNow(hourly.yesterdayFee);
     var stampYest = !hasYestHour && hourly.yesterdayFeeNow && hourly.yesterdayFeeNow.length > 2;
     var yestHour = hasYestHour
       ? padHours(hourly.yesterdayFee, 24)
       : stampYest
         ? padHours(hourly.yesterdayFeeNow, 24)
         : seriesOf(hourly.yesterdayFee, yestRate);
-    var todayHour = hasHourly ? todayHours(hourly.todayFee) : seriesOf(hourly.todayFee, rate);
+    var todayHour = hasHourly ? todayHours(hourly.todayFee) : seriesOf(null, rate);
     var hasRate = rate != null;
     var yestNow = hourFlat(hourly.yesterdayFee, null);
     if (yestNow == null) {
@@ -3514,9 +3514,9 @@
     var todayPay = payOfPack(todayPack && todayPack.records && todayPack.records.length ? todayPack : snapPack);
     var hourly = (todayPack && todayPack.hourly) || (snapPack && snapPack.hourly) || {};
     var yestPay = asNum(todayPack && todayPack.summary && todayPack.summary.yesterdayPayAmount);
-    var hasHourly = hourly.todayPay && hourly.todayPay.length > 2;
-    var yestHour = hasHourly ? padHours(hourly.yesterdayPay, 24) : seriesOf(hourly.yesterdayPay, yestPay);
-    var todayHour = hasHourly ? todayHours(hourly.todayPay) : seriesOf(hourly.todayPay, todayPay);
+    var hasHourly = hoursHaveNow(hourly.todayPay);
+    var yestHour = hoursHaveNow(hourly.yesterdayPay) ? padHours(hourly.yesterdayPay, 24) : seriesOf(null, yestPay);
+    var todayHour = hasHourly ? todayHours(hourly.todayPay) : seriesOf(null, todayPay);
     var keptHero = keepLiveDay({
       jingmai: todayPay,
       yestJingmai: yestPay,
@@ -3796,14 +3796,14 @@
     } else if (!hoursHaveNow(hourly.yesterdayPay)) {
       hourly.yesterdayPay = [];
     }
-    var payT = (live.hero && live.hero.todayHour && live.hero.todayHour.length > 2 ? live.hero.todayHour : hourly.todayPay) || [];
+    var payT = (hoursHaveNow(live.hero && live.hero.todayHour) ? live.hero.todayHour : hoursHaveNow(hourly.todayPay) ? hourly.todayPay : []) || [];
     var payY = (hoursHaveNow(hourly.yesterdayPay) ? hourly.yesterdayPay : live.hero && live.hero.yesterdayHour) || [];
     var sT = 0, sY = 0, i;
     for (i = 0; i < payT.length; i += 1) sT += Number(payT[i]) || 0;
     for (i = 0; i < payY.length; i += 1) sY += Number(payY[i]) || 0;
     if (yestSum.spend == null && sum.spend != null && sT && sY) yestSum.spend = sum.spend * (sY / sT);
     if (yestSum.feeRate == null && yestSum.spend != null && sY) yestSum.feeRate = yestSum.spend / sY;
-    if (!(hourly.todaySpend && hourly.todaySpend.length > 2)) hourly.todaySpend = payFit(payT, sum.spend);
+    if (!hoursHaveNow(hourly.todaySpend)) hourly.todaySpend = payFit(payT, sum.spend);
     if (!hoursHaveNow(hourly.yesterdaySpend)) hourly.yesterdaySpend = payFit(payY, yestSum.spend);
     if (rows.length) {
       var map = {};
@@ -3860,7 +3860,7 @@
     }
     var mixT = mixFeeHours(live.shops, "payHours");
     var mixY = mixFeeHours(live.shops, "yestPayHours");
-    if (mixT.length > 2) hourly.todayFee = mixT;
+    if (hoursHaveNow(mixT)) hourly.todayFee = mixT;
     if (!hoursHaveNow(hourly.yesterdayFee) && mixY.length > 2) hourly.yesterdayFee = mixY;
     if (live.hero && hoursHaveNow(hourly.yesterdayPay)) {
       var yH = padHours(hourly.yesterdayPay, 24);
@@ -4304,7 +4304,16 @@
         state.source = "han-shen-local";
         paint(root, state);
         var L = state.live;
-        api("/api/home/local-paid", { hourly: { todayPay: padHours(L.hero && L.hero.todayHour, 24), todaySpend: padHours(L.paid && L.paid.todayHour, 24), todayFee: padHours(L.fee && L.fee.todayHour, 24) } });
+        var payH = padHours(L.hero && L.hero.todayHour, 24);
+        var spendH = padHours(L.paid && L.paid.todayHour, 24);
+        var feeH = padHours(L.fee && L.fee.todayHour, 24);
+        api("/api/home/local-paid", {
+          hourly: {
+            todayPay: hoursHaveNow(payH) ? payH : undefined,
+            todaySpend: hoursHaveNow(spendH) ? spendH : undefined,
+            todayFee: hoursHaveNow(feeH) ? feeH : undefined
+          }
+        });
       }
       function pullLocalPaid() {
         var ymd = shanghaiYmd(0);
