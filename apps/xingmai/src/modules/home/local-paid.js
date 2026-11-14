@@ -39,7 +39,7 @@ function emptyDay() {
 }
 
 function emptySnap(ymd = "") {
-  return { ymd, today: emptyDay(), yesterday: emptyDay() };
+  return { ymd, today: emptyDay(), yesterday: emptyDay(), feeTargets: {} };
 }
 
 let snapPath = "";
@@ -83,7 +83,9 @@ function readSnap() {
     return {
       ymd: String(raw.ymd || ""),
       today: raw.today && typeof raw.today === "object" ? raw.today : emptyDay(),
-      yesterday: raw.yesterday && typeof raw.yesterday === "object" ? raw.yesterday : emptyDay()
+      yesterday: raw.yesterday && typeof raw.yesterday === "object" ? raw.yesterday : emptyDay(),
+      feeTargets:
+        raw.feeTargets && typeof raw.feeTargets === "object" && !Array.isArray(raw.feeTargets) ? raw.feeTargets : {}
     };
   } catch {
     return emptySnap();
@@ -125,6 +127,76 @@ function isLiveDay(row, ymd) {
 
 function shopName(row) {
   return text(row && (row.shopName || row.shop || row.store || row.店铺名称));
+}
+
+function asFeeRange(raw) {
+  if (raw == null || raw === "") {
+    return null;
+  }
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    const lo = asNum(raw.lo != null ? raw.lo : raw.min != null ? raw.min : raw.feeLo);
+    const hi = asNum(raw.hi != null ? raw.hi : raw.max != null ? raw.max : raw.feeHi);
+    if (lo == null && hi == null) {
+      return null;
+    }
+    return { lo: lo != null ? lo : hi, hi: hi != null ? hi : lo };
+  }
+  const s = String(raw).trim();
+  const m = s.match(/(\d+(?:\.\d+)?)\s*%?\s*[-–~至到]\s*(\d+(?:\.\d+)?)/);
+  if (m) {
+    return { lo: asNum(m[1]), hi: asNum(m[2]) };
+  }
+  const n = asNum(s);
+  return n == null ? null : { lo: n, hi: n };
+}
+
+function mergeFeeTargets(base, incoming) {
+  const out = { ...(base && typeof base === "object" && !Array.isArray(base) ? base : {}) };
+  if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) {
+    return out;
+  }
+  Object.keys(incoming).forEach((shop) => {
+    const name = text(shop);
+    if (!name) {
+      return;
+    }
+    const range = asFeeRange(incoming[shop]);
+    if (!range) {
+      return;
+    }
+    out[name] = range;
+  });
+  return out;
+}
+
+function feeTargetsFromRecords(records) {
+  const out = {};
+  (records || []).forEach((row) => {
+    const shop = shopName(row);
+    if (!shop || (row.feeLo == null && row.feeHi == null)) {
+      return;
+    }
+    out[shop] = { lo: row.feeLo != null ? row.feeLo : null, hi: row.feeHi != null ? row.feeHi : null };
+  });
+  return out;
+}
+
+function applyFeeTargetsToRecords(records, book) {
+  if (!book || typeof book !== "object") {
+    return records || [];
+  }
+  return (records || []).map((row) => {
+    const shop = shopName(row);
+    const hit = shop ? book[shop] : null;
+    if (!hit) {
+      return row;
+    }
+    return {
+      ...row,
+      feeLo: row.feeLo != null ? row.feeLo : hit.lo,
+      feeHi: row.feeHi != null ? row.feeHi : hit.hi
+    };
+  });
 }
 
 function pickNum(row, keys) {
@@ -452,16 +524,22 @@ export function rememberLocalPaidDay(pack = {}, ymd = shanghaiYmd()) {
   const records = Array.isArray(pack.records) ? pack.records : [];
   const incoming = pack.hourly && typeof pack.hourly === "object" ? pack.hourly : {};
   const hourly = mergeTodayHourly(snap.today.hourly, incoming, pack.replaceHours === true);
+  const incomingFee = pack.feeTargets && typeof pack.feeTargets === "object" ? pack.feeTargets : {};
+  const feeTargets = mergeFeeTargets(mergeFeeTargets(snap.feeTargets, feeTargetsFromRecords(records)), incomingFee);
+  snap.feeTargets = feeTargets;
   const summary =
     pack.summary && typeof pack.summary === "object"
       ? { ...(snap.today.summary || {}), ...pack.summary }
       : snap.today.summary || {};
-  if (records.length || pickHours(hourly, "todayPay") || pickHours(hourly, "todaySpend") || pickHours(hourly, "todayFee")) {
+  const hasHours = pickHours(hourly, "todayPay") || pickHours(hourly, "todaySpend") || pickHours(hourly, "todayFee");
+  if (records.length || hasHours || Object.keys(incomingFee).length) {
     snap.today = {
-      records: records.length ? records : snap.today.records || [],
+      records: applyFeeTargetsToRecords(records.length ? records : snap.today.records || [], feeTargets),
       summary,
       hourly
     };
+  } else if ((snap.today.records || []).length && Object.keys(feeTargets).length) {
+    snap.today.records = applyFeeTargetsToRecords(snap.today.records, feeTargets);
   }
   writeSnap(snap);
   return snap;
@@ -484,18 +562,20 @@ function packFromSnap(snap, extra = {}) {
   if (!hourly.yesterdayPay || hourly.yesterdayPay.length < 3) {
     hourly.yesterdayPay = (yesterday.hourly || {}).todayPay || (yesterday.hourly || {}).yesterdayPay;
   }
+  const feeTargets = snap.feeTargets && typeof snap.feeTargets === "object" ? snap.feeTargets : {};
   return {
     ok: true,
     source: "han-shen-local",
     updatedAt: shanghaiNow(),
     summary: today.summary || extra.summary || {},
-    records: today.records || [],
+    records: applyFeeTargetsToRecords(today.records || [], feeTargets),
     yesterday: {
       summary: yesterday.summary || {},
       records: yesterday.records || [],
       hourly: yesterday.hourly || {}
     },
     hourly,
+    feeTargets,
     from: extra.from || []
   };
 }

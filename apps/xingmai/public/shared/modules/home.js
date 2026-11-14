@@ -1,5 +1,6 @@
-/* xm-module-home 0.1.946-ydayh */
+/* xm-module-home 0.1.948-feebook */
 (function () {
+  var HOME_JS_STAMP = "0.1.948-feebook";
   var VIEWS = [
     { key: "company", label: "公司" },
     { key: "team", label: "经理团队" },
@@ -1090,8 +1091,9 @@
     var n = parseFeeBound(s);
     return { lo: n, hi: n };
   }
-  function scrapedFeeRange(shop) {
+  function scrapedFeeBook() {
     var keys = ["han-fee-targets", "shen-fee-targets", "shen-home-fee-targets"];
+    var out = {};
     var i;
     var raw;
     var book;
@@ -1102,8 +1104,40 @@
         raw = {};
       }
       book = raw && raw.targets && typeof raw.targets === "object" ? raw.targets : raw;
-      if (book && Object.prototype.hasOwnProperty.call(book, shop)) {
-        return parseFeeRangeText(book[shop]);
+      if (!book || typeof book !== "object") {
+        continue;
+      }
+      Object.keys(book).forEach(function (name) {
+        var range;
+        if (!name || out[name]) {
+          return;
+        }
+        range = parseFeeRangeText(book[name]);
+        if (range.lo != null || range.hi != null) {
+          out[name] = range;
+        }
+      });
+    }
+    return out;
+  }
+  function scrapedFeeRange(shop) {
+    var book = scrapedFeeBook();
+    var want;
+    var names;
+    var i;
+    var n;
+    if (shop && book[shop]) {
+      return book[shop];
+    }
+    want = String(shop || "").replace(/\s+/g, "").toLowerCase();
+    if (!want) {
+      return { lo: null, hi: null };
+    }
+    names = Object.keys(book);
+    for (i = 0; i < names.length; i += 1) {
+      n = String(names[i] || "").replace(/\s+/g, "").toLowerCase();
+      if (n === want) {
+        return book[names[i]];
       }
     }
     return { lo: null, hi: null };
@@ -2518,6 +2552,19 @@
       return null;
     });
   }
+  function ensureFreshHome() {
+    fetch("/api/home/summary", { credentials: "same-origin", cache: "no-store" })
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .then(function (data) {
+        var live = String((data && data.stamp) || "");
+        if (live && live !== HOME_JS_STAMP) {
+          window.location.replace("/home");
+        }
+      })
+      .catch(function () {});
+  }
   var COMPANY_CARD_DEFS = [
     { key: "payAmount", label: "支付金额 (支付)", accent: true, field: "payAmount", kind: "money", tip: "按支付时间统计的订单金额(包含无效单、代发单)" },
     { key: "adCost", label: "推广花费 (支付预估)", field: "totalPromotionCost", kind: "money", tip: "SPU推广费用" },
@@ -3566,7 +3613,8 @@
       updatedAt: "",
       summary: {},
       records: [],
-      yesterday: { records: [], summary: {}, hourly: {} }
+      yesterday: { records: [], summary: {}, hourly: {} },
+      feeTargets: {}
     };
   }
   function liveDayOf(row) {
@@ -3896,8 +3944,22 @@
     }
     live.paid = spendChartOf(kept.spend, kept.yestSpend, hourly);
     live.fee = feeChartOf(kept.fee, kept.yestFee, hourly);
-    live.shops = sortLiveShops(live.shops);
+    live.shops = sortLiveShops(applyFeeBook(live.shops, local && local.feeTargets));
     return live;
+  }
+  function applyFeeBook(shops, book) {
+    book = book && typeof book === "object" ? book : {};
+    return (shops || []).map(function (shop) {
+      var hit;
+      if (!shop || shop.feeLo != null || shop.feeHi != null) {
+        return shop;
+      }
+      hit = book[shop.shop] || (shop.shop ? book[normShopName(shop.shop)] : null);
+      if (!hit || (hit.lo == null && hit.hi == null)) {
+        return shop;
+      }
+      return Object.assign({}, shop, { feeLo: hit.lo, feeHi: hit.hi });
+    });
   }
   function ownerOfShop(shopMeta, grants) {
     if (!shopMeta) {
@@ -4218,6 +4280,7 @@
   window.XmModules["/home"] = {
     mount: function (root) {
       clearLiveRowPicked();
+      ensureFreshHome();
       root.innerHTML = frameHtml();
       var dead = false;
       var dates = rangeDates("yesterday");
@@ -4316,7 +4379,8 @@
             todayPay: hoursHaveNow(payH) ? payH : undefined,
             todaySpend: hoursHaveNow(spendH) ? spendH : undefined,
             todayFee: hoursHaveNow(feeH) ? feeH : undefined
-          }
+          },
+          feeTargets: scrapedFeeBook()
         });
       }
       function pullLocalPaid() {
@@ -4331,6 +4395,7 @@
           if (d && d.ok) {
             m.yesterday = d.yesterday || m.yesterday;
             m.hourly = d.hourly || m.hourly;
+            m.feeTargets = d.feeTargets || {};
           }
           return m.records && m.records.length ? m : d && d.ok ? d : emptyLocalPaid();
         }).catch(function () {

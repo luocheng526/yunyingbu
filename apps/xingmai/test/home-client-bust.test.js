@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
-import { HOME_CLIENT_JS, rewriteHomeModuleUrl } from "../src/modules/home/asset-ver.js";
+import { HOME_CLIENT_JS, HOME_JS_STAMP, rewriteHomeModuleUrl } from "../src/modules/home/asset-ver.js";
+import { attachHome } from "../src/modules/home/attach.js";
 import { homeRouter } from "../src/modules/home/router.js";
 
 test("rewrites immutable homepage script url to no-store client.js", () => {
@@ -11,7 +12,7 @@ test("rewrites immutable homepage script url to no-store client.js", () => {
   const out = rewriteHomeModuleUrl(html);
   assert.equal(out.includes("/shared/modules/home.js"), false);
   assert.equal(out.includes(HOME_CLIENT_JS), true);
-    assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.946-ydayh$/);
+    assert.match(HOME_CLIENT_JS, /^\/api\/home\/client\.js\?v=0\.1\.948-feebook$/);
 });
 
 test("serves /api/home/client.js from current homepage module", async () => {
@@ -26,7 +27,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     const text = await res.text();
     assert.equal(res.status, 200);
     assert.match(String(res.headers.get("cache-control") || ""), /no-store/i);
-    assert.match(text, /xm-module-home 0\.1\.946-ydayh/);
+    assert.match(text, /xm-module-home 0\.1\.948-feebook/);
     assert.match(text, /function liveTheadHtml/);
     assert.match(text, /function liveFilterHtml/);
     assert.match(text, /data-live-filter="pick"/);
@@ -95,6 +96,12 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /Promise\.resolve\(pullLive\(\)\)/);
     assert.doesNotMatch(text, /function kickLive/);
     assert.match(text, /function scrapedFeeRange/);
+    assert.match(text, /function scrapedFeeBook/);
+    assert.match(text, /function applyFeeBook/);
+    assert.match(text, /function ensureFreshHome/);
+    assert.match(text, /feeTargets: scrapedFeeBook\(\)/);
+    assert.match(text, /m\.feeTargets = d\.feeTargets/);
+    assert.match(text, /var HOME_JS_STAMP = "0\.1\.948-feebook"/);
     assert.match(text, /费比监控/);
     assert.match(text, /label: "更新时间"/);
     assert.match(text, /onOutsideCardSet/);
@@ -110,6 +117,37 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /SPU推广费用/);
     assert.match(text, /京小洁采购单成本\+导入的货品成本/);
     assert.match(text, /净货品成本占比 \(支付\)/);
+    const sum = await fetch(`http://127.0.0.1:${port}/api/home/summary`);
+    const sumJson = await sum.json();
+    assert.equal(sumJson.stamp, HOME_JS_STAMP);
+    assert.match(String(sum.headers.get("cache-control") || ""), /no-store/i);
+  } finally {
+    await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
+});
+
+test("any html page rewrites home.js to no-store client.js and intercepts later loads", async () => {
+  const app = express();
+  attachHome(app);
+  app.get("/probe", (_req, res) => {
+    res
+      .type("html")
+      .send(
+        '<!DOCTYPE html><html lang="zh-CN"><head></head><body><script src="/shared/modules/home.js?v=0.1.112"></script></body></html>'
+      );
+  });
+  const server = await new Promise((resolve) => {
+    const s = app.listen(0, "127.0.0.1", () => resolve(s));
+  });
+  try {
+    const { port } = server.address();
+    const res = await fetch(`http://127.0.0.1:${port}/probe`);
+    const html = await res.text();
+    assert.equal(html.includes('/shared/modules/home.js?v=0.1.112'), false);
+    assert.equal(html.includes(HOME_CLIENT_JS), true);
+    assert.match(html, /data-xm-home-live-js="1"/);
+    assert.match(html, /HTMLScriptElement/);
+    assert.match(html, /indexOf\("\/shared\/modules\/home\.js"\)/);
   } finally {
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
