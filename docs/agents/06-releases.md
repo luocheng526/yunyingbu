@@ -15,6 +15,7 @@
 - 制品没有完整完成不要交单：须有模块、文件、验收、是否重启，源文件齐，改到的 src 先过语法检查。未完成当场拒绝，防止系统崩溃卡住。
 
 【站点】http://zx.xingmaierp.cc/releases
+【线上登录】见 docs/agents/00-prod-admin.md（密码已改，旧密码作废）
 【服务器】/opt/mengkai ，Nginx → 127.0.0.1:3000
 
 【你拥有的路径】

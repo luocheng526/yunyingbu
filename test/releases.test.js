@@ -33,6 +33,7 @@ import {
   RELEASES_MODULE_HREF,
   RELEASES_SCROLL_STYLE_ID
 } from "../src/modules/releases/auth.js";
+import { MODULES } from "../src/modules/releases/store.js";
 
 const signedInUser = { username: "罗成" };
 let activeCookie = "";
@@ -132,6 +133,25 @@ function publishBody(order = "按这份文档发版") {
   return JSON.stringify({ order });
 }
 
+test("MODULES includes 智能人事 and keeps 组织中心 人员管理", () => {
+  assert.equal(MODULES.includes("智能人事"), true);
+  assert.equal(MODULES.includes("组织中心"), true);
+  assert.equal(MODULES.includes("人员管理"), true);
+});
+
+test("POST /api/releases accepts module 智能人事", async () => {
+  await withServer(async (base) => {
+    const created = await json(base, "/api/releases", {
+      method: "POST",
+      body: apply("hr", "智能人事对话", "智能人事", "补白名单", {
+        files: ["public/releases.css"]
+      })
+    });
+    assert.notEqual(created.body.error, "模块不在允许列表中");
+    assert.equal(created.res.status, 201);
+    assert.equal(created.body.item.module, "智能人事");
+  });
+});
 
 test("GET /releases is the release center page", async () => {
   await withServer(async (base) => {

@@ -55,7 +55,7 @@ Cookie: 登录会话
   "version": "0.1.N-说明",   // N 来自 /api/releases/next
   "applicant": "你的对话名",
   "source": "你的对话名",
-  "module": "首页|数据中心|沈子晗|韩梦凯|人员管理|版本发布中心|个人中心",
+  "module": "首页|数据中心|沈子晗|韩梦凯|人员管理|组织中心|店铺维护中心|版本发布中心|个人中心|甄选商学院|甄选智能体|智能人事",
   "summary": "更新了什么",
   "files": ["public/...", "src/..."],
   "acceptance": "上线后怎么验",
@@ -77,3 +77,5 @@ Cookie: 登录会话
 
 站点：`https://zx.xingmaierp.cc/releases`  
 待上线默认不自动刷新，要看最新点「刷新」。点「通过」才落地。
+
+线上登录账号和密码只写在 `docs/agents/00-prod-admin.md`。交单前先读那份，旧密码已经作废。不要把密码写进单据标题或登录页。
