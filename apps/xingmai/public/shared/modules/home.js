@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.930-erpyest */
+/* xm-module-home 0.1.931-alias */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -3483,7 +3483,8 @@
     }
     var live = fillLocalPaid(
       liveFromErp(scopePack(packs.today, keys), scopePack(packs.snap, keys)),
-      scopeLocalPaid((state && state.localPaid) || emptyLocalPaid(), keys)
+      scopeLocalPaid((state && state.localPaid) || emptyLocalPaid(), keys),
+      { stores: (state && state.dutyShops) || [] }
     );
     return { live: live, shops: live.shops || [] };
   }
@@ -3543,6 +3544,7 @@
         var pay = row.todayPayAmount != null ? row.todayPayAmount : row.payAmount;
         return {
           shop: row.shopName,
+          shopId: row.shopId,
           liveAmount: fmtMoney(pay),
           paidAmount: "—",
           profit: fmtMoney(row.profit),
@@ -3695,6 +3697,63 @@
       return (asNum(b && b.liveAmount) || 0) - (asNum(a && a.liveAmount) || 0);
     });
   }
+  function splitShopNames(raw) {
+    var out = [];
+    String(raw == null ? "" : raw).split(/[、,，;；]/).forEach(function (part) {
+      part = String(part || "").trim();
+      if (part && out.indexOf(part) === -1) {
+        out.push(part);
+      }
+    });
+    return out;
+  }
+  function orgStoreNames(row) {
+    if (!row) {
+      return [];
+    }
+    return splitShopNames(row.storeName || row.shopName || row.shop || row.name).concat(splitShopNames(row.formerNames));
+  }
+  function indexOrgStores(orgPack) {
+    var stores = Array.isArray(orgPack) ? orgPack : (orgPack && orgPack.stores) || [];
+    var byName = {};
+    var byId = {};
+    stores.forEach(function (row) {
+      if (!row) {
+        return;
+      }
+      orgStoreNames(row).forEach(function (name) {
+        byName[name] = row;
+        byName[normShopName(name)] = row;
+      });
+      var id = normShopId(row.shopId || row.storeId);
+      if (id) {
+        byId[id] = row;
+      }
+    });
+    return { byName: byName, byId: byId };
+  }
+  function orgStoreForShop(shop, index) {
+    if (!shop || !index) {
+      return null;
+    }
+    var id = normShopId(shop.shopId || shop.storeId || shop.id);
+    if (id && index.byId[id]) {
+      return index.byId[id];
+    }
+    var name = String(shop.shop || shop.shopName || "").trim();
+    return index.byName[name] || index.byName[normShopName(name)] || null;
+  }
+  function markShopSeen(seen, name, orgRow) {
+    function mark(n) {
+      if (!n) {
+        return;
+      }
+      seen[n] = true;
+      seen[normShopName(n)] = true;
+    }
+    mark(name);
+    orgStoreNames(orgRow).forEach(mark);
+  }
   function localShopPaid(row) {
     var pay = row && (row.paidDeal != null ? row.paidDeal : row.payAmount);
     var spend = row && (row.paidAmount != null ? row.paidAmount : row.totalPromotionCost);
@@ -3724,12 +3783,13 @@
       paidIn: true
     };
   }
-  function fillLocalPaid(live, local) {
+  function fillLocalPaid(live, local, orgPack) {
     live = live || blankLive();
     var rows = (local && local.records) || [];
     var yestRows = (local && local.yesterday && local.yesterday.records) || [];
     var sum = rows.length ? sumLocalPaid(rows) : {};
     var yestSum = yestRows.length ? sumLocalPaid(yestRows) : {};
+    var orgIndex = indexOrgStores(orgPack);
     var hourly = localHourlyOf(local);
     if (!hoursHaveNow(hourly.yesterdayPay) && live.hero && hoursHaveNow(live.hero.yesterdayHour)) {
       hourly.yesterdayPay = live.hero.yesterdayHour;
@@ -3747,30 +3807,54 @@
     if (!hoursHaveNow(hourly.yesterdaySpend)) hourly.yesterdaySpend = payFit(payY, yestSum.spend);
     if (rows.length) {
       var map = {};
+      function putPaid(key, row) {
+        if (!key || map[key]) {
+          return;
+        }
+        map[key] = row;
+        var n = normShopName(key);
+        if (n && !map[n]) {
+          map[n] = row;
+        }
+      }
       rows.forEach(function (row) {
         var name = String((row && (row.shopName || row.shop)) || "").trim();
-        if (name) {
-          map[name] = row;
+        if (!name) {
+          return;
         }
+        putPaid(name, row);
+        orgStoreNames(orgStoreForShop({ shop: name, shopId: row && (row.shopId || row.storeId) }, orgIndex)).forEach(function (alias) {
+          putPaid(alias, row);
+        });
       });
       var seen = {};
       live.shops = (live.shops || []).map(function (shop) {
-        seen[shop.shop] = true;
-        var hit = map[shop.shop];
+        var orgRow = orgStoreForShop(shop, orgIndex);
+        var display = String((orgRow && (orgRow.storeName || orgRow.shopName)) || shop.shop || "").trim() || shop.shop;
+        markShopSeen(seen, shop.shop, orgRow);
+        markShopSeen(seen, display, orgRow);
+        var hit = map[shop.shop] || map[normShopName(shop.shop)] || map[display] || map[normShopName(display)];
+        if (!hit && orgRow) {
+          hit = map[orgRow.storeName] || map[normShopName(orgRow.storeName)];
+        }
         if (!hit) {
-          return shop;
+          return display !== shop.shop ? Object.assign({}, shop, { shop: display }) : shop;
         }
         var gmv = asNum(hit.liveAmount != null ? hit.liveAmount : hit.jingmaiGmv);
-        return Object.assign({}, shop, localShopPaid(hit), gmv != null ? { liveAmount: fmtMoney(gmv) } : {});
+        return Object.assign({}, shop, { shop: display }, localShopPaid(hit), gmv != null ? { liveAmount: fmtMoney(gmv) } : {});
       });
       rows.forEach(function (row) {
         var name = String((row && (row.shopName || row.shop)) || "").trim();
-        if (!name || seen[name]) {
+        if (!name || seen[name] || seen[normShopName(name)]) {
           return;
         }
-        seen[name] = true;
+        var orgRow = orgStoreForShop({ shop: name, shopId: row && (row.shopId || row.storeId) }, orgIndex);
+        if (orgRow && (seen[orgRow.storeName] || seen[normShopName(orgRow.storeName)])) {
+          return;
+        }
+        markShopSeen(seen, name, orgRow);
         var gmv = asNum(row.liveAmount != null ? row.liveAmount : row.jingmaiGmv);
-        live.shops.push(Object.assign({ shop: name, liveAmount: gmv != null ? fmtMoney(gmv) : "—" }, localShopPaid(row)));
+        live.shops.push(Object.assign({ shop: (orgRow && orgRow.storeName) || name, liveAmount: gmv != null ? fmtMoney(gmv) : "—" }, localShopPaid(row)));
       });
       live.cards = liveCardsOf(sum);
     }
@@ -4212,7 +4296,7 @@
         var today = scopePack(todayPack, keys);
         var snap = scopePack(snapPack, keys);
         var local = scopeLocalPaid(localPack || state.localPaid || emptyLocalPaid(), keys);
-        state.live = fillLocalPaid(liveFromErp(today, snap), local);
+        state.live = fillLocalPaid(liveFromErp(today, snap), local, { stores: state.dutyShops || [] });
         state.shops = state.live.shops;
         if (stampClock || !state.liveAt) {
           state.liveAt = shanghaiClock();
