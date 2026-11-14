@@ -52,7 +52,7 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /<svg viewBox="0 0 24 24"/);
   assert.match(jsText, /login-logo\.png/);
   assert.match(jsText, /xingmai-logo\.png/);
-  assert.match(jsText, /xm-fast-shell 0\.1\.112/);
+  assert.match(jsText, /xm-fast-shell 0\.1\.113/);
   assert.match(jsText, /data-xm-style/);
   assert.match(jsText, /甄选粉/);
   assert.match(jsText, /setInterval\(tickClock, 1000\)/);
@@ -76,7 +76,7 @@ test("shared shell assets are public", async () => {
   assert.doesNotMatch(jsText, /菜单标签">项目<|>项目<\/p>/);
   assert.doesNotMatch(jsText, /xm-menu-label">项目/);
   assert.match(jsText, /退出登录/);
-  assert.match(jsText, /v0\.4\.17/);
+  assert.match(jsText, /v0\.4\.18/);
   assert.match(jsText, /数据总揽/);
   assert.match(jsText, /店铺数据/);
   assert.match(jsText, /选品中心/);
@@ -90,6 +90,8 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /label: \"首页\"/);
   assert.match(jsText, /href: \"\/home\"/);
   assert.match(jsText, /组织中心/);
+  assert.match(jsText, /智能人事/);
+  assert.match(jsText, /href: \"\/hr\"/);
   assert.doesNotMatch(jsText, /<span>人员管理<\/span>/);
   assert.match(jsText, /甄选商学院/);
   assert.match(jsText, /培训课程/);
@@ -108,13 +110,14 @@ test("shared shell assets are public", async () => {
   const homeAt = itemsBlock.indexOf('href: "/home"');
   const dataAt = itemsBlock.indexOf('href: "/data"');
   const peopleAt = itemsBlock.indexOf('href: "/people"');
+  const hrAt = itemsBlock.indexOf('href: "/hr"');
   const releasesAt = itemsBlock.indexOf('href: "/releases"');
   const meAt = itemsBlock.indexOf('href: "/me"');
   const academyAt = itemsBlock.indexOf('href: "/academy"');
   const agentsAt = itemsBlock.indexOf('href: "/agents"');
   assert.ok(homeAt > -1 && dataAt > homeAt);
-  assert.ok(academyAt > -1 && agentsAt > academyAt && releasesAt > agentsAt);
-  assert.ok(releasesAt > -1 && peopleAt > releasesAt && meAt > peopleAt);
+  assert.ok(academyAt > -1 && agentsAt > academyAt && peopleAt > agentsAt);
+  assert.ok(peopleAt > -1 && hrAt > peopleAt && releasesAt > hrAt && meAt > releasesAt);
   assert.doesNotMatch(jsText, /id="xm-theme"/);
   assert.doesNotMatch(jsText, />暗色</);
   assert.doesNotMatch(jsText, /id="xm-logout">退出</);
@@ -177,7 +180,7 @@ test("home page html is the xingmai sider template", async () => {
   assert.match(homePageHtml, /\/shared\/modules\/home\.js/);
   assert.match(homePageHtml, /<span>首页<\/span>/);
   assert.match(html, /退出登录/);
-  assert.match(html, /v0\.4\.17/);
+  assert.match(html, /v0\.4\.18/);
   assert.match(html, /甄选商学院/);
   assert.match(html, /培训课程/);
   assert.match(html, /培训考试/);
@@ -194,7 +197,7 @@ test("home page html is the xingmai sider template", async () => {
   assert.match(html, /培训系统/);
   assert.match(html, /xm-menu-parent/);
   assert.match(html, /xm-caret/);
-  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.112/);
+  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.113/);
   assert.match(html, /data-xm-style="pink"/);
   assert.match(html, /aria-label="页面风格"/);
   assert.match(html, /data-xm-queue-badge/);
@@ -342,9 +345,13 @@ test("甄选商学院 expands three children and 甄选智能体 stays a leaf", 
   assert.doesNotMatch(mainNav, /组织中心/);
   assert.doesNotMatch(mainNav, /href="\/people"/);
   assert.match(mainNav, /data-xm-group="\/academy"/);
-  assert.ok(footNav.indexOf('href="/releases"') < footNav.indexOf('href="/people"'));
-  assert.ok(footNav.indexOf('href="/people"') < footNav.indexOf('href="/me"'));
+  assert.doesNotMatch(mainNav, /智能人事/);
+  assert.doesNotMatch(mainNav, /href="\/hr"/);
+  assert.ok(footNav.indexOf('href="/people"') < footNav.indexOf('href="/hr"'));
+  assert.ok(footNav.indexOf('href="/hr"') < footNav.indexOf('href="/releases"'));
+  assert.ok(footNav.indexOf('href="/releases"') < footNav.indexOf('href="/me"'));
   assert.ok(footNav.indexOf('href="/me"') < footNav.indexOf("退出登录"));
+  assert.match(footNav, /智能人事/);
   assert.match(academyHtml, /\/shared\/modules\/academy\.js/);
   assert.match(academyHtml, /id="xm-content"/);
   assert.match(academyHtml, /<title>星脉甄选运营中心<\/title>/);
@@ -371,6 +378,23 @@ test("甄选商学院 expands three children and 甄选智能体 stays a leaf", 
   const agentsApi = await fetch(`${base}/api/agents`, { headers: { cookie } });
   assert.equal(agentsApi.status, 200);
   assert.equal((await agentsApi.json()).module, "甄选智能体");
+  const hr = await fetch(`${base}/hr`, { headers: { cookie } });
+  assert.equal(hr.status, 200);
+  const hrHtml = await hr.text();
+  assert.match(hrHtml, /\/shared\/modules\/hr\.js/);
+  assert.match(hrHtml, /智能人事/);
+  assert.match(hrHtml, /<title>星脉甄选运营中心<\/title>/);
+  assert.doesNotMatch(hrHtml, /面试/);
+  assert.doesNotMatch(hrHtml, /考勤/);
+  const hrFoot = hrHtml.match(/<nav class="xm-menu xm-menu-foot">[\s\S]*?<\/nav>/)[0];
+  assert.doesNotMatch(hrFoot, /xm-submenu/);
+  const hrMod = readFileSync(join(root, "public/shared/modules/hr.js"), "utf8");
+  assert.match(hrMod, /XmModules\["\/hr"\]/);
+  assert.doesNotMatch(hrMod, /面试/);
+  assert.doesNotMatch(hrMod, /考勤/);
+  const hrApi = await fetch(`${base}/api/hr`, { headers: { cookie } });
+  assert.equal(hrApi.status, 200);
+  assert.deepEqual(await hrApi.json(), { ok: true, module: "hr" });
 });
 
 test("版本发布中心 sider shows a queue badge hooked to pending tickets", async () => {
@@ -460,8 +484,8 @@ test("page renderer injects shared shell onto module html", async () => {
     '<!DOCTYPE html><html><head></head><body class="oc-page"><div class="oc-tab">待上线</div></body></html>'
   );
   assert.match(injected, /\/shared\/layout\.css/);
-  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.112/);
-  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.112"/);
+  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.113/);
+  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.113"/);
   assert.match(injected, /localStorage.getItem\("xm-theme"\)/);
   const login = withSharedShell('<html><head></head><body class="login-page"></body></html>');
   assert.doesNotMatch(login, /\/shared\/nav\.js/);
@@ -513,7 +537,7 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.match(shell, /rel="icon" type="image\/png" href="data:image\/png;base64,/);
   assert.match(shell, /<title>星脉甄选运营中心<\/title>/);
   assert.match(shell, /xm-app-shell/);
-  assert.match(shell, /\/shared\/modules\/data\.js\?v=0\.1\.112/);
+  assert.match(shell, /\/shared\/modules\/data\.js\?v=0\.1\.113/);
   assert.match(shell, /data-xm-style="pink"/);
   assert.match(shell, /<span>首页<\/span>/);
   assert.match(shell, /href="\/home"/);
