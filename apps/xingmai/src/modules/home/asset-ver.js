@@ -1,5 +1,5 @@
 /** Homepage script URL. Must not use /shared/modules/home.js?v=… — that URL is immutable for 24h. */
-export const HOME_JS_STAMP = "0.1.947-feebook";
+export const HOME_JS_STAMP = "0.1.948-feebook";
 export const HOME_CLIENT_JS = `/api/home/client.js?v=${HOME_JS_STAMP}`;
 
 export function rewriteHomeModuleUrl(html) {

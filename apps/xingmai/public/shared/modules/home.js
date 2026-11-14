@@ -1,6 +1,6 @@
-/* xm-module-home 0.1.947-feebook */
+/* xm-module-home 0.1.948-feebook */
 (function () {
-  var HOME_JS_STAMP = "0.1.947-feebook";
+  var HOME_JS_STAMP = "0.1.948-feebook";
   var VIEWS = [
     { key: "company", label: "公司" },
     { key: "team", label: "经理团队" },
