@@ -63,6 +63,8 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.match(homeJs, /\/api\/shen\/paid\?latest=1/);
   assert.match(homeJs, /\/api\/shen\/paid\/jingmai/);
   assert.match(homeJs, /function mergeLivePaid/);
+  assert.match(homeJs, /function sortLiveShops/);
+  assert.match(homeJs, /sortLiveShops\(feePickShops/);
   assert.match(homeJs, /paidAmount: "—"/);
   assert.match(homeJs, /function liveCardsOf/);
   assert.match(homeJs, /label: "实时付费接入店铺数量"/);
@@ -168,6 +170,28 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.equal(shaped.paid.yesterdayHour.slice(0, 4).reduce((a, b) => a + b, 0), 8);
   assert.equal(shaped.paid.yestText, "8");
   assert.match(String(shaped.fee.yestText), /%/);
+  const ordered = fns.fillLocalPaid(
+    {
+      shops: [
+        { shop: "低店", liveAmount: "10" },
+        { shop: "高店", liveAmount: "90" }
+      ],
+      cards: [],
+      paid: { label: "推广总花费", value: "—" }
+    },
+    {
+      records: [
+        { shopName: "低店", paidAmount: 1, paidDeal: 10, jingmaiGmv: 10 },
+        { shopName: "高店", paidAmount: 1, paidDeal: 90, jingmaiGmv: 90 },
+        { shopName: "空店", paidAmount: 1, paidDeal: 1 },
+        { shopName: "中店", paidAmount: 1, paidDeal: 50, jingmaiGmv: 50 }
+      ]
+    }
+  );
+  assert.deepEqual(
+    ordered.shops.map((row) => row.shop),
+    ["高店", "中店", "低店", "空店"]
+  );
 });
 
 test("live shop 状态 follows 10-minute capturedAt", () => {

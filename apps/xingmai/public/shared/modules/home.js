@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.911-shops */
+/* xm-module-home 0.1.914-livesort */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -2407,11 +2407,11 @@
       }
       return card;
     });
-    shops = feePickShops(shops, liveFeePick);
+    shops = sortLiveShops(feePickShops(shops, liveFeePick));
     hideCardTip();
     hideLineTip(root);
     var searchDraft = liveSearchDraft(root);
-    board.setAttribute("data-hm-js", "0.1.911-shops");
+    board.setAttribute("data-hm-js", "0.1.914-livesort");
     board.classList.toggle("is-board", state.view === "board");
     board.classList.toggle("is-live", state.view === "live");
     board.classList.toggle("is-team", teamView);
@@ -3653,6 +3653,11 @@
       yesterday: Object.assign({}, yest, { records: (yest.records || []).filter(onDuty) })
     });
   }
+  function sortLiveShops(shops) {
+    return (shops || []).slice().sort(function (a, b) {
+      return (asNum(b && b.liveAmount) || 0) - (asNum(a && a.liveAmount) || 0);
+    });
+  }
   function localShopPaid(row) {
     var pay = row && (row.paidDeal != null ? row.paidDeal : row.payAmount);
     var spend = row && (row.paidAmount != null ? row.paidAmount : row.totalPromotionCost);
@@ -3748,6 +3753,7 @@
     }
     live.paid = spendChartOf(kept.spend, kept.yestSpend, hourly);
     live.fee = feeChartOf(kept.fee, kept.yestFee, hourly);
+    live.shops = sortLiveShops(live.shops);
     return live;
   }
   function ownerOfShop(shopMeta, grants) {
