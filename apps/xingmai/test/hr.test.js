@@ -145,6 +145,8 @@ test("client mounts one page and five in-page tabs", () => {
   assert.match(client, /data-act="refresh-board"/);
   assert.match(client, /data-kpi/);
   assert.match(client, /迟到明细/);
+  assert.match(client, /data-punch-list/);
+  assert.match(client, /data-kpi-table/);
   assert.match(client, /甄选员工详细名单/);
   assert.match(client, /data-staff-search/);
   assert.match(client, /data-staff-pick/);

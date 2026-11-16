@@ -257,7 +257,7 @@
             '<div class="hr-board-grid"><section class="hr-card hr-board-card" data-depts></section>' +
             '<section class="hr-card hr-board-card" data-days></section></div>' +
             '<h3 class="hr-board-sub">当日打卡</h3>' +
-            table(["姓名", "部门", "工号", "日期", "上班", "下班", "结果"], emptyRow(7, "还没有打卡")) + "</section>";
+            table(["姓名", "部门", "工号", "日期", "上班", "下班", "结果"], emptyRow(7, "还没有打卡")).replace("data-list", "data-punch-list") + "</section>";
         }).join("") + "</section>";
     } else if (tab === "overtime") {
       html = '<section class="hr-panel hr-effort"><div class="hr-toolbar"><span>运营部门，18:00 之后的下班打卡。角色从组织中心对齐。</span>' +
@@ -400,8 +400,8 @@
       return "<tr><td>" + esc(row.userName || "未命名") + "</td><td>" + esc(row.department) + "</td><td>" + esc(row.jobNumber) +
         "</td><td>" + esc(row.workDate) + "</td><td>" + esc(row.on) + "</td><td>" + esc(row.off) + "</td><td>" + esc(labels) + "</td></tr>";
     }).join("") : emptyRow(7, "还没有打卡");
-    var list = section.querySelector("[data-list]");
-    if (list) list.outerHTML = table(["姓名", "部门", "工号", "日期", "上班", "下班", "结果"], body);
+    var list = section.querySelector("[data-punch-list]");
+    if (list) list.outerHTML = table(["姓名", "部门", "工号", "日期", "上班", "下班", "结果"], body).replace("data-list", "data-punch-list");
   }
 
   function fillKpiList(section, roster) {
@@ -456,7 +456,7 @@
         return "<tr><td>" + esc(row.name || "未命名") + "</td><td>" + esc(row.department) + "</td><td>" + esc(row.jobNumber) + "</td></tr>";
       }).join("");
     }
-    box.innerHTML = "<h3>" + esc(titles[kind] || "明细") + "</h3>" + table(headers, body);
+    box.innerHTML = "<h3>" + esc(titles[kind] || "明细") + "</h3>" + table(headers, body).replace("data-list", "data-kpi-table");
   }
 
   function setUpdated(root, value) {
