@@ -430,6 +430,8 @@
     };
   }
 
-  window.XmModules = window.XmModules || {};
-  window.XmModules["/hr"] = { mount: mount, unmount: function () {} };
+  var host = typeof window === "undefined" ? null : window;
+  if (!host) return;
+  host.XmModules = host.XmModules || {};
+  host.XmModules["/hr"] = { mount: mount, unmount: function () {} };
 })();

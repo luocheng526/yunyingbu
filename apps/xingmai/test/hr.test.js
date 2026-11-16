@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { pathToFileURL, fileURLToPath } from "node:url";
 import express from "express";
 import test from "node:test";
 import { createDingClient } from "../src/modules/hr/dingtalk.js";
@@ -108,6 +108,10 @@ test("client mounts one page and five in-page tabs", () => {
   assert.match(client, /data-theme/);
   assert.match(client, /\/api\/people/);
   assert.match(client, /钉钉还没配置/);
+});
+
+test("browser script survives the release import check", async () => {
+  await import(pathToFileURL(join(root, "../public/shared/modules/hr.js")).href);
 });
 
 test("mapping uses job number or phone and skips ambiguous names", () => {
