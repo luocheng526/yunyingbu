@@ -202,7 +202,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.doesNotMatch(homeJs, /\/api\/han\/worker\?view=overview/);
   assert.doesNotMatch(homeJs, /\/api\/shen\/paid\?latest=1/);
   assert.doesNotMatch(homeJs, /\/api\/shen\/paid\/jingmai/);
-  assert.match(homeJs, /\/api\/home\/live-login/);
+  assert.match(homeJs, /\/api\/home\/live-login\/one/);
+  assert.match(homeJs, /xm-hm-desk-mask/);
   assert.match(homeJs, /xm-hm-live-at">更新时间 /);
   assert.match(homeJs, /实时按付费中心的方式，用组织中心账号在服务器登录京麦/);
   assert.doesNotMatch(homeJs, /\/api\/home\/erp-paid/);

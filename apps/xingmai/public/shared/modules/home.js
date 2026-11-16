@@ -1,6 +1,6 @@
-/* xm-module-home 0.1.1032-jingmai */
+/* xm-module-home 0.1.1039-loginpop */
 (function () {
-  var HOME_JS_STAMP = "0.1.1032-jingmai";
+  var HOME_JS_STAMP = "0.1.1039-loginpop";
   var VIEWS = [
     { key: "company", label: "数据总揽" },
     { key: "overview", label: "团队概括" },
@@ -290,7 +290,6 @@
   var headSetOpen = false;
   var teamsRefreshing = false;
   var liveRefreshing = false;
-  var deskKicked = false;
   var deskTimer = 0;
   function viewStore(kind) {
     return viewKey === "team" || viewKey === "chief"
@@ -2493,13 +2492,14 @@
     }
     if (key === "liveOn") {
       var link = liveLinkOf(row);
-      return (
-        '<td class="xm-hm-num' +
-        (link.kind === "on" ? " is-fee-cold" : " is-fee-hot") +
-        '">' +
-        escapeHtml(link.label) +
-        "</td>"
-      );
+      if (link.kind === "off") {
+        return (
+          '<td class="xm-hm-num is-fee-hot"><button type="button" class="xm-hm-login-link" data-live-login="' +
+          escapeHtml(shop) +
+          '">掉线</button></td>'
+        );
+      }
+      return '<td class="xm-hm-num is-fee-cold">' + escapeHtml(link.label) + "</td>";
     }
     if (key && String(key).indexOf("jz") === 0) {
       return '<td class="xm-hm-num">' + escapeHtml(row[key] == null || row[key] === "" ? "—" : row[key]) + "</td>";
@@ -2819,12 +2819,16 @@
       ".xm-hm-pop-all{font-weight:600;border-bottom:1px solid var(--xm-line);margin:0 0 4px;padding:2px 0 8px}" +
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{color:var(--xm-muted);font-size:12px}" +
-      ".xm-hm-desk{margin:0 0 12px;padding:12px;border:1px solid #d7e3f5;border-radius:12px;background:#f7fbff}" +
+      ".xm-hm-login-link{border:0;background:transparent;padding:0;color:#e23b3b;font:inherit;font-weight:700;cursor:pointer;text-decoration:underline}" +
+      ".xm-hm-desk-mask{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(15,23,42,.45)}" +
+      ".xm-hm-desk{position:relative;width:min(780px,100%);max-height:calc(100vh - 48px);overflow:auto;margin:0;padding:16px 16px 14px;border:0;border-radius:12px;background:#fff;box-shadow:0 18px 50px rgba(0,0,0,.22)}" +
+      ".xm-hm-desk h3{margin:0 28px 8px 0;font-size:16px}" +
       ".xm-hm-desk p{margin:0 0 8px;font-size:13px;color:#355}" +
-      ".xm-hm-desk img{display:block;max-width:720px;width:100%;height:auto;cursor:crosshair;border-radius:8px;background:#fff}" +
+      ".xm-hm-desk img{display:block;width:100%;height:auto;cursor:crosshair;border-radius:8px;background:#fff}" +
+      ".xm-hm-desk-x{position:absolute;top:8px;right:8px;width:28px;height:28px;border:0;border-radius:6px;background:transparent;cursor:pointer;font-size:18px;line-height:1}" +
       ".xm-hm-desk-row{display:flex;gap:8px;margin-top:8px;align-items:center}" +
       ".xm-hm-desk-row input{flex:1;min-width:0;height:32px;padding:0 8px;border:1px solid #d7e3f5;border-radius:8px}" +
-      ".xm-hm-desk-row button,.xm-hm-desk-start{height:32px;padding:0 12px;border:0;border-radius:8px;background:#2f6fed;color:#fff;cursor:pointer}" +
+      ".xm-hm-desk-row button{height:32px;padding:0 12px;border:0;border-radius:8px;background:#2f6fed;color:#fff;cursor:pointer}" +
       "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm.is-chief .xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:1fr}}" +
       "@media (max-width:720px){.xm-hm-sales.xm-hm-live-charts,.xm-hm-live .xm-hm-live-charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;overflow:visible;margin:0 0 12px;padding:0}.xm-hm-sales.xm-hm-live-charts>.xm-hm-chart,.xm-hm-live .xm-hm-live-charts>.xm-hm-chart{min-width:0;max-width:none;width:auto;padding:10px 10px 8px;box-sizing:border-box}.xm-hm-live-charts .xm-hm-card-head{align-items:flex-start;gap:4px}.xm-hm-live-charts .xm-hm-card-head>span:first-child{min-width:0;flex:1;white-space:normal;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;font-size:12px;line-height:1.3}.xm-hm-live-charts .xm-hm-legs{display:none}.xm-hm-live-charts .xm-hm-index-num{margin:8px 0 2px;font-size:20px}.xm-hm-live-charts .xm-hm-yest-now,.xm-hm-live-charts .xm-hm-trend{font-size:12px;margin-top:4px}.xm-hm-sales.xm-hm-live-charts .xm-hm-line,.xm-hm-live .xm-hm-live-charts .xm-hm-line{display:none;height:0;margin:0}.xm-hm-kpis{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}}"
     );
@@ -2984,18 +2988,31 @@
   }
   function liveDeskHtml(state) {
     var desk = state && state.desk;
-    var status = desk && desk.status;
-    var start = '<button type="button" class="xm-hm-desk-start" data-desk-start>登录未登录店铺</button>';
-    if (status !== "screen" && status !== "verify") {
-      var tip = desk && desk.message ? escapeHtml(desk.message) : "没在服务器登录过的店，点这里用组织中心账号登录。";
-      return '<div class="xm-hm-desk"><p id="xm-hm-desk-msg">' + tip + "</p>" + start + "</div>";
+    if (!desk || !desk.open) {
+      return "";
     }
+    var status = desk.status;
+    var shot =
+      status === "screen" || status === "verify"
+        ? '<img id="xm-hm-desk-shot" alt="服务器登录画面" src="/api/home/live-login/screen?store=' +
+          encodeURIComponent(desk.store || "") +
+          "&t=" +
+          Date.now() +
+          '" />'
+        : "";
+    var tools =
+      status === "screen" || status === "verify"
+        ? '<div class="xm-hm-desk-row"><input id="xm-hm-desk-text" placeholder="验证码" /><button type="button" data-desk-type>输入</button><button type="button" data-desk-cancel>取消</button></div>'
+        : '<div class="xm-hm-desk-row"><button type="button" data-desk-cancel>关闭</button></div>';
     return (
-      '<div class="xm-hm-desk"><p id="xm-hm-desk-msg">' +
-      escapeHtml((desk.store || "") + " " + (desk.message || "点画面就是在服务器上操作")) +
-      '</p><img id="xm-hm-desk-shot" alt="服务器登录画面" src="/api/home/live-login/screen?t=' +
-      Date.now() +
-      '" /><div class="xm-hm-desk-row"><input id="xm-hm-desk-text" placeholder="验证码" /><button type="button" data-desk-type>输入</button><button type="button" data-desk-cancel>取消</button></div></div>'
+      '<div class="xm-hm-desk-mask" data-desk-mask><div class="xm-hm-desk" role="dialog" aria-modal="true"><button type="button" class="xm-hm-desk-x" data-desk-cancel aria-label="关闭">×</button><h3>' +
+      escapeHtml(desk.store || "登录店铺") +
+      '</h3><p id="xm-hm-desk-msg">' +
+      escapeHtml(desk.message || "点画面就是在服务器上操作。") +
+      "</p>" +
+      shot +
+      tools +
+      "</div></div>"
     );
   }
   function paint(root, state) {
@@ -3123,7 +3140,7 @@
     root.querySelector("#xm-hm-note").textContent = gapText
       ? "人管对不上：" + gapText
       : state.view === "live"
-        ? "实时按付费中心的方式，用组织中心账号在服务器登录京麦，抓京麦成交和京准通付费。没登录过的店在画面里完成验证。"
+        ? "实时按付费中心的方式，用组织中心账号在服务器登录京麦，抓京麦成交和京准通付费。点掉线的店，在页面中间弹出这一家的登录画面。"
         : state.view === "week"
           ? "近七天业绩汇总：爬虫填店铺和当天数字，其余可手填；一键发送图片发到钉钉。"
           : "数字来自星脉 ERP。";
@@ -5018,13 +5035,24 @@
         if (deskTimer) {
           return;
         }
+        var seq = deskSeq;
         deskTimer = window.setInterval(function () {
           api("/api/home/live-login/state").then(function (st) {
-            if (dead) {
+            if (dead || seq !== deskSeq || !state.desk || !state.desk.open) {
               return;
             }
-            var prev = state.desk && state.desk.status;
+            var prev = state.desk.status;
+            var opened = state.desk.open;
+            var keptStore = state.desk.store;
+            var keptMessage = state.desk.message;
             state.desk = st || {};
+            state.desk.open = opened;
+            if (!state.desk.store) {
+              state.desk.store = keptStore;
+            }
+            if (!state.desk.message) {
+              state.desk.message = keptMessage;
+            }
             var status = state.desk.status;
             var img = root.querySelector("#xm-hm-desk-shot");
             if (status === "screen" && img) {
@@ -5038,34 +5066,54 @@
             if (status !== prev) {
               paint(root, state);
             }
-            if (status === "done" || status === "ok" || status === "login" || status === "missing") {
+            if (status === "done" || status === "ok") {
               window.clearInterval(deskTimer);
               deskTimer = 0;
-              if (status === "done" || status === "ok") {
-                pullLive();
-              }
+              state.desk = null;
+              paint(root, state);
+              pullLive();
+              return;
+            }
+            if (status === "login" || status === "missing") {
+              window.clearInterval(deskTimer);
+              deskTimer = 0;
+              state.desk.open = true;
+              paint(root, state);
             }
           });
         }, 2500);
       }
-      function ensureDeskLogin() {
-        if (state.view !== "live" || deskKicked) {
+      var deskSeq = 0;
+      function closeDesk() {
+        deskSeq += 1;
+        window.clearInterval(deskTimer);
+        deskTimer = 0;
+        state.desk = null;
+        api("/api/home/live-login/cancel", {});
+        if (!dead) {
+          paint(root, state);
+        }
+      }
+      function openShopLogin(shop) {
+        var name = String(shop || "").trim();
+        if (!name) {
           return;
         }
-        deskKicked = true;
-        api("/api/home/live-login/state").then(function (st) {
-          if (dead) {
+        var seq = ++deskSeq;
+        window.clearInterval(deskTimer);
+        deskTimer = 0;
+        state.desk = { open: true, status: "opening", store: name, message: "正在打开「" + name + "」的登录画面" };
+        if (!dead) {
+          paint(root, state);
+        }
+        api("/api/home/live-login/one", { store: name }).then(function (st) {
+          if (dead || seq !== deskSeq) {
             return;
           }
-          if (st && st.status === "screen") {
-            showDesk(st);
-            return;
-          }
-          api("/api/home/live-login", {}).then(function (opened) {
-            if (!dead) {
-              showDesk(opened || { status: "missing", message: "登录没有打开" });
-            }
-          });
+          var next = st || { status: "login", message: "登录没有打开" };
+          next.open = true;
+          next.store = next.store || name;
+          showDesk(next);
         });
       }
       var boardSeq = 0;
@@ -5123,9 +5171,6 @@
         if (blankFirst) {
           clearLiveShown(state);
           paint(root, state);
-        }
-        if (state.view === "live") {
-          ensureDeskLogin();
         }
         return pullLocalPaid().then(function (local) {
           if (!dead) {
@@ -5235,18 +5280,16 @@
           return;
         }
         if (event.target.closest("[data-desk-cancel]")) {
-          api("/api/home/live-login/cancel", {}).then(function () {
-            window.clearInterval(deskTimer);
-            deskTimer = 0;
-            deskKicked = false;
-            state.desk = { status: "missing", message: "已取消登录" };
-            paint(root, state);
-          });
+          closeDesk();
           return;
         }
-        if (event.target.closest("[data-desk-start]")) {
-          deskKicked = false;
-          ensureDeskLogin();
+        if (event.target.closest("[data-desk-mask]") && !event.target.closest(".xm-hm-desk")) {
+          closeDesk();
+          return;
+        }
+        var loginBtn = event.target.closest("[data-live-login]");
+        if (loginBtn) {
+          openShopLogin(loginBtn.getAttribute("data-live-login"));
           return;
         }
         var chip = event.target.closest("[data-live-chip]");
@@ -6151,7 +6194,6 @@
       return function unmount() {
         dead = true;
         clearLiveRowPicked();
-        deskKicked = false;
         if (deskTimer) {
           window.clearInterval(deskTimer);
           deskTimer = 0;
