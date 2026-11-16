@@ -2,12 +2,11 @@ import { Router } from "express";
 import { createDingClient, readDingEnv } from "./dingtalk.js";
 import { startDingStream } from "./stream.js";
 import {
-  addDays,
-  boardPack,
+  archiveYesterday,
   canSeeHr,
   effortReport,
   loadRoster,
-  runDaily,
+  readStoredBoard,
   shanghaiToday,
   startScheduler
 } from "./sync.js";
@@ -131,29 +130,15 @@ hrRouter.get("/board", async (req, res) => {
     const today = shanghaiToday();
     const raw = String(req.query.date || today);
     const date = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : today;
-    const users = await listDingUsers();
-    const links = await listLinks();
-    const userByPerson = new Map(links.map((link) => [link.personId, link.dingtalkUserId]));
-    const leaves = (await listLeaves()).map((row) => ({
-      ...row,
-      dingtalkUserId: row.dingtalkUserId || userByPerson.get(row.personId) || ""
-    }));
-    const dates = [];
-    const punches = [];
-    for (let offset = 6; offset >= 0; offset -= 1) {
-      const day = addDays(date, -offset);
-      dates.push(day);
-      punches.push(...await listPunches({ date: day }));
-    }
-    const boards = boardPack({ date, users, punches, leaves, dates });
-    const first = boards[0];
+    const stored = await readStoredBoard(date);
     res.json({
       ok: true,
       configured: readDingEnv().configured,
-      boards,
-      board: first.board,
-      days: first.days,
-      punches: first.punches
+      saved: stored.saved,
+      boards: stored.boards,
+      board: stored.board,
+      days: stored.days,
+      punches: stored.punches
     });
   } catch (err) {
     sendErr(res, err);
@@ -234,9 +219,8 @@ hrRouter.post("/sync", async (_req, res) => {
       res.json({ ok: true, configured: false });
       return;
     }
-    const day = addDays(shanghaiToday(), -1);
-    const result = await runDaily(day, createDingClient());
-    res.json({ ok: true, configured: true, workDate: day, ...result });
+    const result = await archiveYesterday(createDingClient());
+    res.json({ ok: true, ...result });
   } catch (err) {
     sendErr(res, err);
   }

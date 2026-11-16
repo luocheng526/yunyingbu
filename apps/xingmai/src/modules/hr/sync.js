@@ -1,13 +1,18 @@
 import { createDingClient, readDingEnv } from "./dingtalk.js";
 import {
   latestSync,
+  listBoardMetrics,
   listDingUsers,
+  listLeaves,
   listLinks,
+  listPunches,
+  readBoardPunches,
   recordSync,
   replaceDayPunches,
   replaceLeaves,
   replaceOvertime,
   replaceQuotas,
+  saveBoardDay,
   saveDingUsers,
   saveLinks
 } from "./store.js";
@@ -518,9 +523,31 @@ export function boardPack({ date, users = [], punches = [], leaves = [], dates =
   });
 }
 
-export function shouldPullToday(parts, latestToday, today) {
+export function shouldPullYesterday(parts, latest, yesterday) {
   if (!parts || Number(parts.hour) < 10) return false;
-  if (latestToday && latestToday.ok && latestToday.workDate === today) return false;
+  if (latest && latest.ok && latest.workDate === yesterday) return false;
+  return true;
+}
+
+export function previousMonth(today) {
+  const [year, month] = String(today || "").split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 2, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+export function daysOfMonth(yearMonth) {
+  const [year, month] = String(yearMonth || "").split("-").map(Number);
+  if (!year || !month) return [];
+  const count = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const days = [];
+  for (let day = 1; day <= count; day += 1) days.push(`${yearMonth}-${String(day).padStart(2, "0")}`);
+  return days;
+}
+
+export function shouldReconcileMonth(parts, latest, today) {
+  if (!parts || Number(parts.day) !== 1 || Number(parts.hour) < 10) return false;
+  const month = previousMonth(today);
+  if (latest && latest.ok && latest.workDate === month) return false;
   return true;
 }
 
@@ -720,6 +747,104 @@ export async function pullLeaveAndOvertime(workDate, client = createDingClient()
   return { configured: true, quotas, overtime, leaves };
 }
 
+function emptyBoard(date) {
+  return { date, staff: 0, expected: 0, punched: 0, late: 0, leave: 0, departments: [] };
+}
+
+export async function saveBoardSnapshot(date) {
+  const users = await listDingUsers();
+  const links = await listLinks();
+  const userByPerson = new Map(links.map((link) => [link.personId, link.dingtalkUserId]));
+  const leaves = (await listLeaves()).map((row) => ({
+    ...row,
+    dingtalkUserId: row.dingtalkUserId || userByPerson.get(row.personId) || ""
+  }));
+  const punches = await listPunches({ date });
+  const packed = boardPack({ date, users, punches, leaves, dates: [date] });
+  const teams = packed.map((team) => ({
+    id: team.id,
+    title: team.title,
+    board: team.board,
+    punches: team.punches
+  }));
+  await saveBoardDay(date, { teams });
+  return { date, teams };
+}
+
+export async function readStoredBoard(date) {
+  const dates = [];
+  for (let offset = 6; offset >= 0; offset -= 1) dates.push(addDays(date, -offset));
+  const today = shanghaiToday();
+  let metrics = await listBoardMetrics(dates);
+  for (const day of dates) {
+    if (day >= today || metrics[day]) continue;
+    await saveBoardSnapshot(day);
+  }
+  metrics = await listBoardMetrics(dates);
+  const punches = await readBoardPunches(date);
+  const boards = BOARD_TEAMS.map((team) => {
+    const current = (metrics[date] || []).find((item) => item.id === team.id);
+    const board = current ? current.board : emptyBoard(date);
+    const days = dates.map((day) => {
+      const found = (metrics[day] || []).find((item) => item.id === team.id);
+      const one = found ? found.board : emptyBoard(day);
+      return { date: day, expected: one.expected || 0, punched: one.punched || 0, late: one.late || 0, leave: one.leave || 0 };
+    });
+    return {
+      id: team.id,
+      title: team.title,
+      board,
+      days,
+      punches: (punches && punches[team.id]) || []
+    };
+  });
+  return {
+    saved: Boolean(metrics[date]),
+    boards,
+    board: boards[0].board,
+    days: boards[0].days,
+    punches: boards[0].punches
+  };
+}
+
+export async function archiveYesterday(client = createDingClient()) {
+  const yesterday = addDays(shanghaiToday(), -1);
+  if (!client.configured()) {
+    await recordSync("daily", yesterday, false, "钉钉还没配置");
+    return { configured: false, workDate: yesterday };
+  }
+  await refreshDirectory(client);
+  const pulled = await pullDay(yesterday, { client });
+  await saveBoardSnapshot(yesterday);
+  await recordSync("daily", yesterday, true, `已保存 ${yesterday}，打卡 ${pulled.punches?.length || 0} 条`);
+  return { configured: true, workDate: yesterday, users: pulled.users, punches: pulled.punches };
+}
+
+export async function reconcileMonth(yearMonth, client = createDingClient()) {
+  if (!client.configured()) {
+    await recordSync("month", yearMonth, false, "钉钉还没配置");
+    return { configured: false, month: yearMonth };
+  }
+  await refreshDirectory(client);
+  const days = daysOfMonth(yearMonth);
+  let failed = 0;
+  for (const day of days) {
+    try {
+      await pullDay(day, { client });
+      await saveBoardSnapshot(day);
+    } catch (err) {
+      failed += 1;
+      await recordSync("month", day, false, String(err.message || "这一天没有核对成").slice(0, 180));
+    }
+  }
+  if (failed) {
+    await recordSync("month", yearMonth, false, `${yearMonth} 有 ${failed} 天没有核对成，原数据保留`);
+    return { configured: true, month: yearMonth, days: days.length, failed };
+  }
+  await recordSync("month", yearMonth, true, `已用钉钉核对并覆盖 ${yearMonth} 共 ${days.length} 天`);
+  return { configured: true, month: yearMonth, days: days.length, failed: 0 };
+}
+
 export async function runToday(client = createDingClient()) {
   const day = shanghaiToday();
   if (!readDingEnv().configured) {
@@ -757,22 +882,20 @@ export function startScheduler(client = createDingClient()) {
     if (!client.configured()) return;
     const parts = shanghaiParts();
     const today = shanghaiToday();
-    if (shouldPullToday(parts, await latestSync("today"), today)) {
+    const yesterday = addDays(today, -1);
+    if (shouldPullYesterday(parts, await latestSync("daily"), yesterday)) {
       try {
-        await runToday(client);
+        await archiveYesterday(client);
       } catch (err) {
-        await recordSync("today", today, false, String(err.message || "今日打卡没有拉下来").slice(0, 180));
+        await recordSync("daily", yesterday, false, String(err.message || "前一天没有保存").slice(0, 180));
       }
     }
-    if (parts.hour < 1) return;
-    const day = addDays(today, -1);
-    const latest = await latestSync("daily");
-    if (latest && latest.ok && latest.workDate === day) return;
-    try {
-      await runDaily(day, client);
-      await recordSync("daily", day, true, "日批完成");
-    } catch (err) {
-      await recordSync("daily", day, false, String(err.message || "日批没有完成").slice(0, 180));
+    if (shouldReconcileMonth(parts, await latestSync("month"), today)) {
+      try {
+        await reconcileMonth(previousMonth(today), client);
+      } catch (err) {
+        await recordSync("month", previousMonth(today), false, String(err.message || "上月没有核对成").slice(0, 180));
+      }
     }
   };
   timer = setInterval(() => {

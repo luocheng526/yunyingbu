@@ -244,7 +244,7 @@
       ];
       html = '<section class="hr-panel hr-board">' +
         '<div class="hr-board-head"><p class="hr-msg" data-msg></p>' +
-        '<label class="hr-month">统计日<input type="date" data-day value="' + esc(today) + '" /></label></div>' +
+        '<label class="hr-month">统计日<input type="date" data-day value="' + esc(addDays(today, -1)) + '" /></label></div>' +
         teams.map(function (team) {
           return '<section class="hr-team" data-team="' + team.id + '"><h2 class="hr-team-title">' + esc(team.title) + "</h2>" +
             '<div class="hr-board-kpis" data-board></div>' +
@@ -403,6 +403,7 @@
       fillTeam(root.querySelector('[data-team="' + id + '"]'), view || { board: {}, days: [], punches: [] });
     });
     if (!pack.configured) setMsg(root, "钉钉还没配置，看板先按空模板放着。", false);
+    else if (!pack.saved) setMsg(root, "这一天还没归档。每天 10 点保存前一天。", false);
     else setMsg(root, "", false);
   }
 
@@ -699,14 +700,36 @@
   function loadTab(root, state) {
     var ticket = ++state.ticket;
     var tab = state.tab;
+    if (tab === "attendance") {
+      var dayInput = root.querySelector("[data-day]");
+      var day = dayInput && dayInput.value ? dayInput.value : addDays(shanghaiToday(), -1);
+      state.boards = state.boards || {};
+      var boardReq = state.boards[day]
+        ? Promise.resolve(state.boards[day])
+        : api("/api/hr/board?date=" + encodeURIComponent(day)).then(function (data) {
+          state.boards[day] = data;
+          return data;
+        });
+      boardReq.then(function (view) {
+        if (!state.alive || ticket !== state.ticket || state.tab !== tab) return;
+        state.view = view;
+        fillAttendance(root, view);
+      }).catch(function (err) {
+        if (!state.alive || ticket !== state.ticket) return;
+        if (err.status === 403) {
+          var link = document.querySelector('a[href="/hr"]');
+          if (link) link.remove();
+          root.innerHTML = '<div class="xm-page hr-page"><p class="hr-msg is-error">没有智能人事权限</p></div>';
+          return;
+        }
+        setMsg(root, err.message || "读取失败", true);
+      });
+      return;
+    }
     var peopleReq = api("/api/people").then(safePeople).catch(function () { return []; });
     var statusReq = api("/api/hr/status").catch(function () { return { configured: false }; });
     var dataReq;
-    if (tab === "attendance") {
-      var dayInput = root.querySelector("[data-day]");
-      var day = dayInput && dayInput.value ? dayInput.value : shanghaiToday();
-      dataReq = api("/api/hr/board?date=" + encodeURIComponent(day));
-    } else if (tab === "overtime") {
+    if (tab === "overtime") {
       dataReq = api("/api/hr/effort" + monthQuery(root));
     } else if (tab === "staff") {
       dataReq = api("/api/hr/staff");

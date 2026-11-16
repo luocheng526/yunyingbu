@@ -149,6 +149,12 @@ export const HR_SCHEMA = [
     ok_flag TINYINT NOT NULL,
     message VARCHAR(180) NOT NULL DEFAULT '',
     created_at VARCHAR(40) NOT NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS hr_board_days (
+    work_date VARCHAR(10) NOT NULL PRIMARY KEY,
+    metrics_json MEDIUMTEXT NOT NULL,
+    punches_json MEDIUMTEXT NOT NULL,
+    saved_at VARCHAR(40) NOT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 ];
 
@@ -169,7 +175,8 @@ function emptyMemory() {
     onboards: [],
     staff: [],
     talents: [],
-    runs: []
+    runs: [],
+    boards: []
   };
 }
 
@@ -319,6 +326,9 @@ async function migratePunchTable() {
     await query(
       "ALTER TABLE hr_punches ADD UNIQUE KEY uq_hr_punch_user (dingtalk_userid, work_date, check_type, record_id)"
     );
+  }
+  if (!indexNames.has("idx_hr_punch_day")) {
+    await query("ALTER TABLE hr_punches ADD INDEX idx_hr_punch_day (work_date)");
   }
 }
 
@@ -526,6 +536,65 @@ export async function replaceDayPunches(workDate, userIds, punches) {
   memory.punches = memory.punches.filter((row) => !(row.workDate === day && ids.includes(row.dingtalkUserId)));
   for (const punch of punches) memory.punches.push({ ...punch, workDate: day, personId: Number(punch.personId) || 0 });
   return listPunches({ date: day });
+}
+
+export async function saveBoardDay(workDate, snapshot) {
+  await ensureHrSchema();
+  const day = mustDate(workDate, "日期");
+  const metrics = (snapshot.teams || []).map((team) => ({
+    id: team.id,
+    title: team.title,
+    board: team.board
+  }));
+  const punches = {};
+  for (const team of snapshot.teams || []) punches[team.id] = team.punches || [];
+  const savedAt = new Date().toISOString();
+  if (dbMode() === "mysql") {
+    await query(
+      `INSERT INTO hr_board_days (work_date, metrics_json, punches_json, saved_at)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE metrics_json = VALUES(metrics_json), punches_json = VALUES(punches_json), saved_at = VALUES(saved_at)`,
+      [day, JSON.stringify(metrics), JSON.stringify(punches), savedAt]
+    );
+    return { workDate: day, savedAt };
+  }
+  const row = { workDate: day, metrics, punches, savedAt };
+  const index = memory.boards.findIndex((item) => item.workDate === day);
+  if (index >= 0) memory.boards[index] = row;
+  else memory.boards.push(row);
+  return { workDate: day, savedAt };
+}
+
+export async function listBoardMetrics(dates) {
+  await ensureHrSchema();
+  const wanted = [...new Set((dates || []).map((day) => clip(day, 10)).filter(Boolean))];
+  if (!wanted.length) return {};
+  if (dbMode() === "mysql") {
+    const rows = await rowsOf(
+      `SELECT work_date, metrics_json FROM hr_board_days WHERE work_date IN (${wanted.map(() => "?").join(",")})`,
+      wanted
+    );
+    const out = {};
+    for (const row of rows) out[row.work_date] = JSON.parse(row.metrics_json || "[]");
+    return out;
+  }
+  const out = {};
+  for (const row of memory.boards) {
+    if (wanted.includes(row.workDate)) out[row.workDate] = row.metrics;
+  }
+  return out;
+}
+
+export async function readBoardPunches(workDate) {
+  await ensureHrSchema();
+  const day = mustDate(workDate, "日期");
+  if (dbMode() === "mysql") {
+    const rows = await rowsOf("SELECT punches_json FROM hr_board_days WHERE work_date = ?", [day]);
+    if (!rows.length) return null;
+    return JSON.parse(rows[0].punches_json || "{}");
+  }
+  const row = memory.boards.find((item) => item.workDate === day);
+  return row ? row.punches : null;
 }
 
 export async function listOvertime({ month = "" } = {}) {

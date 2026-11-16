@@ -17,6 +17,7 @@ import {
   listQuotas,
   replaceDayPunches,
   resetHrStore,
+  saveDingUsers,
   saveLinks,
   upsertLink
 } from "../src/modules/hr/store.js";
@@ -31,9 +32,14 @@ import {
   publicPerson,
   punchesFromDing,
   pullDay,
+  readStoredBoard,
+  reconcileMonth,
   rowsForDay,
   runDaily,
-  shouldPullToday,
+  daysOfMonth,
+  previousMonth,
+  shouldPullYesterday,
+  shouldReconcileMonth,
   teamOf
 } from "../src/modules/hr/sync.js";
 
@@ -98,7 +104,7 @@ function jsonResponse(body) {
 }
 
 test("hr schema stays in hr_ tables", () => {
-  assert.equal(HR_SCHEMA.length, 12);
+  assert.equal(HR_SCHEMA.length, 13);
   for (const sql of HR_SCHEMA) {
     assert.match(sql, /CREATE TABLE IF NOT EXISTS hr_/);
     assert.doesNotMatch(sql, /people|han_|shen_/i);
@@ -127,6 +133,8 @@ test("client mounts one page and five in-page tabs", () => {
   assert.match(client, /data-theme/);
   assert.match(client, /\/api\/people/);
   assert.match(client, /钉钉还没配置/);
+  assert.match(client, /每天 10 点保存前一天/);
+  assert.match(client, /state\.boards/);
   assert.match(client, /甄选员工详细名单/);
   assert.match(client, /data-staff-search/);
   assert.match(client, /data-staff-pick/);
@@ -216,11 +224,18 @@ test("NotSigned does not invent a clock time", () => {
   assert.equal(rows[1].label, "未打卡");
 });
 
-test("today's attendance is pulled once after 10:00 Shanghai", () => {
-  assert.equal(shouldPullToday({ hour: 9 }, null, "2026-11-16"), false);
-  assert.equal(shouldPullToday({ hour: 10 }, null, "2026-11-16"), true);
-  assert.equal(shouldPullToday({ hour: 12 }, { ok: true, workDate: "2026-11-16" }, "2026-11-16"), false);
-  assert.equal(shouldPullToday({ hour: 12 }, { ok: true, workDate: "2026-11-15" }, "2026-11-16"), true);
+test("yesterday is saved once after 10:00 and last month is checked on the 1st", () => {
+  assert.equal(shouldPullYesterday({ hour: 9 }, null, "2026-11-15"), false);
+  assert.equal(shouldPullYesterday({ hour: 10 }, null, "2026-11-15"), true);
+  assert.equal(shouldPullYesterday({ hour: 12 }, { ok: true, workDate: "2026-11-15" }, "2026-11-15"), false);
+  assert.equal(shouldPullYesterday({ hour: 12 }, { ok: true, workDate: "2026-11-14" }, "2026-11-15"), true);
+  assert.equal(previousMonth("2026-11-01"), "2026-10");
+  assert.equal(previousMonth("2026-01-01"), "2025-12");
+  assert.equal(daysOfMonth("2026-02").length, 28);
+  assert.equal(shouldReconcileMonth({ day: 1, hour: 9 }, null, "2026-11-01"), false);
+  assert.equal(shouldReconcileMonth({ day: 1, hour: 10 }, null, "2026-11-01"), true);
+  assert.equal(shouldReconcileMonth({ day: 2, hour: 10 }, null, "2026-11-02"), false);
+  assert.equal(shouldReconcileMonth({ day: 1, hour: 11 }, { ok: true, workDate: "2026-10" }, "2026-11-01"), false);
   const rows = rowsForDay(
     [{ userId: "a", userName: "甲", department: "运营二区", jobNumber: "" }],
     [{ dingtalkUserId: "a", workDate: "2026-11-16", userName: "", department: "", checkAt: "2026-11-16 09:01", timeResult: "Normal", checkType: "OnDuty" }],
@@ -373,6 +388,69 @@ test("a punch is stored even when the person is not on the org roster", async ()
   assert.equal(rows[0].jobNumber, "SZ099");
   assert.equal(rows[0].checkAt, "2026-11-13 09:20");
   assert.equal(JSON.stringify(rows).includes("13900000000"), false);
+});
+
+test("the board keeps the saved day instead of rebuilding it", async () => {
+  resetHrStore();
+  await saveDingUsers([{ userId: "u1", userName: "甲", jobNumber: "A1", department: "运营一组" }]);
+  await replaceDayPunches("2020-11-15", ["u1"], [{
+    dingtalkUserId: "u1",
+    userName: "甲",
+    department: "运营一组",
+    jobNumber: "A1",
+    workDate: "2020-11-15",
+    checkType: "OnDuty",
+    timeResult: "Late",
+    label: "迟到",
+    checkAt: "2020-11-15 09:20",
+    recordId: "r1"
+  }]);
+  const first = await readStoredBoard("2020-11-15");
+  assert.equal(first.saved, true);
+  assert.equal(first.boards[0].board.punched, 1);
+  assert.equal(first.boards[0].board.late, 1);
+  assert.equal(first.days.length, 7);
+  await replaceDayPunches("2020-11-15", ["u1"], []);
+  const second = await readStoredBoard("2020-11-15");
+  assert.equal(second.boards[0].board.punched, 1);
+  assert.equal(second.boards[0].board.late, 1);
+});
+
+test("the monthly check overwrites a stored day with the ding result", async () => {
+  resetHrStore();
+  await saveDingUsers([{ userId: "u1", userName: "甲", jobNumber: "A1", department: "运营一组" }]);
+  await replaceDayPunches("2026-02-02", ["u1"], [{
+    dingtalkUserId: "u1",
+    userName: "甲",
+    department: "运营一组",
+    jobNumber: "A1",
+    workDate: "2026-02-02",
+    checkType: "OnDuty",
+    timeResult: "Late",
+    label: "迟到",
+    checkAt: "2026-02-02 09:40",
+    recordId: "old"
+  }]);
+  const fake = {
+    configured: () => true,
+    async listUsers() {
+      return [{ userId: "u1", name: "甲", jobNumber: "A1", department: "运营一组" }];
+    },
+    async listAttendance(_ids, day) {
+      if (day !== "2026-02-02") return [];
+      return [{ id: "new", userId: "u1", checkType: "OnDuty", timeResult: "Normal", userCheckTime: Date.parse("2026-02-02T01:00:00Z") }];
+    }
+  };
+  const result = await reconcileMonth("2026-02", fake);
+  assert.equal(result.configured, true);
+  assert.equal(result.failed, 0);
+  assert.equal(result.days, 28);
+  const rows = await listPunches({ date: "2026-02-02" });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].timeResult, "Normal");
+  const board = await readStoredBoard("2026-02-02");
+  assert.equal(board.boards[0].board.late, 0);
+  assert.equal(board.boards[0].board.punched, 1);
 });
 
 test("unconfigured daily pull writes nothing", async () => {
