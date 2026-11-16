@@ -9,7 +9,7 @@
 |---|---|---|
 | `/login` | 无壳。独立登录页，**不加载** `nav.js` | 个人中心 |
 | `/` | 无菜单项。登录后 302 到 `/data` | — |
-| `/data` `/shen` `/han` `/people` `/hr` `/academy` `/agents` `/releases` `/me` | **主框架** `renderAppShell`：侧栏 + `#xm-content` | 各模块 `XmModules[path].mount(#xm-content)` |
+| `/data` `/shen` `/han` `/people` `/hr` `/academy` `/agents` `/work` `/feedback` `/releases` `/me` | **主框架** `renderAppShell`：侧栏 + `#xm-content` | 各模块 `XmModules[path].mount(#xm-content)` |
 
 模块之间点击：`history.pushState` + 加载对应 `public/shared/modules/<id>.js`。不要整页跳，不要预取全部模块文档。
 
@@ -47,12 +47,14 @@
 | 智能人事 | `src/modules/hr/`、`shared/modules/hr.js` | 同上。侧栏一项 `/hr`，无子菜单。钉钉假勤归这里；人列表读 `GET /api/people` |
 | 甄选商学院 | `public/academy.html`、`public/academy*`、`src/modules/academy/`、`shared/modules/academy.js` | 同上 |
 | 甄选智能体 | `public/agents.html`、`public/agents*`、`src/modules/agents/`、`shared/modules/agents.js` | 同上 |
+| 工作汇报 | `src/modules/work/`、`shared/modules/work.js` | 同上。侧栏主栏一项 `/work`，无子菜单。运营部、人事部、技术部按责权填报 |
+| 需求与反馈 | `src/modules/feedback/`、`shared/modules/feedback.js` | 同上。侧栏主栏一项 `/feedback`，无子菜单 |
 | 版本发布中心 | `public/releases.html`、`releases.css`、`src/modules/releases/`（**补丁**线上闸，禁止用仓库简化 router 整文件覆盖） | 壳、业务模块、线上 `app.js` |
 | 个人中心 | `login.html` / `login.css` / `me.html`、`src/modules/profile/`；`home/pages.js` 与 `profile/middleware.js` 必须同单 | 壳；登录页不得加载 `nav.js` |
 
 `nav-items.js` 虽然在 `src/modules/home/`，归属 **主框架**，首页不要交。
 
-主框架已认识：侧栏第一项「首页」`/home`（`/` 仍跳数据中心）；「甄选商学院」带子菜单培训课程 / 培训考试 / 运营手册；「甄选智能体」`/agents`；底部「组织中心 / 智能人事 / 版本发布中心 / 个人中心」，智能人事路径 `/hr`。要再加子菜单或改 `src/app.js` 挂新 API，问主框架，不要自己改壳。
+主框架已认识：侧栏第一项「首页」`/home`（`/` 仍跳数据中心）；「甄选商学院」带子菜单培训课程 / 培训考试 / 运营手册；「甄选智能体」`/agents`；「工作汇报」`/work`；「需求与反馈」`/feedback`；底部「组织中心 / 智能人事 / 版本发布中心 / 个人中心」，智能人事路径 `/hr`。要再加子菜单或改 `src/app.js` 挂新 API，问主框架，不要自己改壳。
 
 ## 怎么新建独立对话框并对接
 
@@ -68,7 +70,7 @@
 做完用模块名「甄选商学院」交单，申请人 罗成运营部主脑。
 ```
 
-智能体对话框把上面两处换成 `09-agents.md`、`agents`、`甄选智能体`。智能人事换成 `10-hr.md`、`hr`、`智能人事`。
+智能体对话框把上面两处换成 `09-agents.md`、`agents`、`甄选智能体`。智能人事换成 `10-hr.md`、`hr`、`智能人事`。工作汇报换成 `12-work.md`、`work`、`工作汇报`。需求与反馈换成 `11-feedback.md`、`feedback`、`需求与反馈`。
 
 4. 对接方式（已经接好，新对话不用再铺壳）：
    - 登录后点侧栏对应入口 → 主框架 `pushState` → 加载 `public/shared/modules/<id>.js` → `mount(#xm-content)`。
