@@ -43,7 +43,7 @@
 
   function ensureStyle() {
     var style = document.getElementById("work-page-style");
-    if (style && style.getAttribute("data-rev") === "sum2") {
+    if (style && style.getAttribute("data-rev") === "sum3") {
       return;
     }
     if (!style) {
@@ -51,7 +51,7 @@
       style.id = "work-page-style";
       document.head.appendChild(style);
     }
-    style.setAttribute("data-rev", "sum2");
+    style.setAttribute("data-rev", "sum3");
     style.textContent =
       ".work-page{color:var(--xm-ink);font-size:13px;}" +
       ".work-bar{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 10px;}" +
@@ -67,7 +67,6 @@
       ".work-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;}" +
       ".work-kpi{border:0;border-radius:12px;min-height:92px;padding:14px 14px 12px;color:#fff;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:0 8px 18px rgba(22,119,255,.12);}" +
       "button.work-kpi{appearance:none;width:100%;cursor:pointer;font:inherit;text-align:left;}" +
-      "button.work-kpi:hover{filter:brightness(1.06);}" +
       ".work-kpi b,.work-kpi strong{display:block;font-size:28px;line-height:1;font-weight:700;font-variant-numeric:tabular-nums;color:#fff;}" +
       ".work-kpi span{display:block;margin-top:8px;color:rgba(255,255,255,.92);font-size:13px;font-weight:600;}" +
       ".work-c0{background:linear-gradient(135deg,#2f6fe4,#5b94f5);}" +
@@ -76,6 +75,9 @@
       ".work-c3{background:linear-gradient(135deg,#7468ff,#9b8cff);}" +
       ".work-c4{background:linear-gradient(135deg,#1fb8c9,#2fd3c0);}" +
       ".work-c5{background:linear-gradient(135deg,#e23b3b,#ff6b6b);}" +
+      ".work-quiet{background:var(--xm-card);color:var(--xm-ink);border:1px solid var(--xm-line);}" +
+      ".work-quiet b{color:var(--xm-primary);}" +
+      ".work-quiet span{color:var(--xm-muted);}" +
       ".work-card{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:12px;box-shadow:var(--xm-shadow);padding:10px 12px;}" +
       ".work-cardhead{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 4px;}" +
       ".work-lane .work-field{margin-top:8px;max-width:720px;}" +
@@ -177,6 +179,8 @@
       ".work-person.tone-miss{background:linear-gradient(90deg,#e23b3b,#ff6b6b);}" +
       ".work-person.tone-rest{background:linear-gradient(90deg,#f08a1e,#ffb04a);}" +
       ".work-person.tone-free{background:linear-gradient(90deg,#2f6fe4,#5b94f5);}" +
+      ".work-person.tone-calm{background:var(--xm-card);color:var(--xm-ink);border:1px solid var(--xm-line);border-left:3px solid var(--xm-primary);}" +
+      ".work-person.tone-calm .work-who span,.work-person.tone-calm .work-main{color:var(--xm-muted);}" +
       ".work-who{flex:0 0 140px;min-width:0;}" +
       ".work-who b{display:block;font-size:16px;}" +
       ".work-who span,.work-main{font-size:12px;color:rgba(255,255,255,.92);line-height:1.45;}" +
@@ -1255,18 +1259,15 @@
       return text || "暂无数量";
     }
     function bars(groups) {
-      var tones = ["tone-ok", "tone-free", "tone-rest"];
       if (!groups.length) {
         return '<div class="work-card"><div class="work-empty">暂无明细</div></div>';
       }
       return (
         '<div class="work-people">' +
         groups
-          .map(function (group, index) {
+          .map(function (group) {
             return (
-              '<article class="work-person ' +
-              tones[index % 3] +
-              '"><div class="work-who"><b>' +
+              '<article class="work-person tone-calm"><div class="work-who"><b>' +
               esc(group.name) +
               "</b><span>日报 " +
               group.rows.length +
@@ -1279,13 +1280,14 @@
         "</div>"
       );
     }
+    function plain(value, label) {
+      return '<article class="work-kpi work-quiet"><b>' + esc(value) + "</b><span>" + esc(label) + "</span></article>";
+    }
     var cards = metrics
-      .map(function (metric, index) {
+      .map(function (metric) {
         var total = rows.length ? metricTotal(rows, metric.id) : "—";
         return (
-          '<button type="button" class="work-kpi work-c' +
-          (index % 6) +
-          '" data-summary-metric="' +
+          '<button type="button" class="work-kpi work-quiet" data-summary-metric="' +
           esc(metric.id) +
           '"><b>' +
           total +
@@ -1297,11 +1299,8 @@
       .join("");
     var diaries = rows
       .map(function (row, index) {
-        var tones = ["tone-free", "tone-ok", "tone-rest"];
         return (
-          '<article class="work-person ' +
-          tones[index % 3] +
-          '"><div class="work-who"><b>' +
+          '<article class="work-person tone-calm"><div class="work-who"><b>' +
           esc(row.day) +
           "</b><span>" +
           esc(row.personName) +
@@ -1331,9 +1330,9 @@
       esc(state.summarySpu) +
       '"></label><button type="button" class="work-primary" data-summary-query>查询</button></div></section>' +
       '<div class="work-stats">' +
-      kpi(0, rows.length, "已交日报") +
-      kpi(1, Object.keys(peopleCount).length, "已报人数") +
-      kpi(4, Object.keys(shopCount).length, "店铺数") +
+      plain(rows.length, "已交日报") +
+      plain(Object.keys(peopleCount).length, "已报人数") +
+      plain(Object.keys(shopCount).length, "店铺数") +
       "</div>" +
       '<div class="work-stats">' +
       cards +
