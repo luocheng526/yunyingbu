@@ -197,8 +197,30 @@ test("罗成配模板后，名单里的人按表填当天事项", async () => {
       }
     });
     assert.equal(saved.status, 200);
-    assert.equal(saved.data.rows[0].status, "已报");
     assert.equal(saved.data.rows[0].items[0].content, "跟了 RASW 家居两场活动");
+    assert.equal(saved.data.rows[0].status, "未报");
+    assert.equal(saved.data.rows[0].statusNote, "店铺日报未交");
+
+    const diary = await json(staff.base, "/api/work/diary", {
+      method: "PUT",
+      body: {
+        date: today,
+        status: "已提交",
+        reports: [
+          {
+            shopId: "1",
+            revision: 0,
+            items: { 评价数: { count: 2, detail: "回复差评", spus: "SPU1", actions: [], images: [] } },
+            extra: [],
+            notes: "家居店已看完",
+            proofs: {}
+          }
+        ]
+      }
+    });
+    assert.equal(diary.status, 200);
+    const finished = await json(staff.base, `/api/work/report?date=${today}`);
+    assert.equal(finished.data.rows[0].status, "已报");
 
     const yesterday = "2026-11-15";
     const otherDay = await json(staff.base, `/api/work/report?date=${yesterday}`);
@@ -220,6 +242,178 @@ test("罗成配模板后，名单里的人按表填当天事项", async () => {
     await admin.close();
     await staff.close();
     await other.close();
+  }
+});
+
+test("同一人两家店只计一人，草稿刷新后还在", async () => {
+  resetPeopleStore();
+  resetWorkStore();
+  const adminApp = express();
+  adminApp.use(express.json());
+  adminApp.use("/api/work", withUser(luocheng), workRouter);
+  const wang = { username: "王博", displayName: "王博" };
+  const staffApp = express();
+  staffApp.use(express.json());
+  staffApp.use("/api/work", withUser(wang), workRouter);
+  const hanApp = express();
+  hanApp.use(express.json());
+  hanApp.use("/api/work", withUser(han), workRouter);
+  const shenApp = express();
+  shenApp.use(express.json());
+  shenApp.use("/api/work", withUser({ username: "沈子晗", displayName: "沈子晗" }), workRouter);
+  const admin = await listen(adminApp);
+  const staff = await listen(staffApp);
+  const outsider = await listen(hanApp);
+  const leader = await listen(shenApp);
+  try {
+    await json(admin.base, "/api/work/settings/members", {
+      method: "PUT",
+      body: { personId: 7, deptCode: "ops" }
+    });
+    const today = (await json(staff.base, "/api/work")).data.today;
+    const shops = await json(staff.base, `/api/work/diary?date=${today}`);
+    assert.deepEqual(
+      shops.data.shops.map((item) => item.name),
+      ["飒望居家旗舰店", "SAWAAG居家布艺旗舰店"]
+    );
+    const draft = await json(staff.base, "/api/work/diary", {
+      method: "PUT",
+      body: {
+        date: today,
+        status: "草稿",
+        reports: [
+          { shopId: "4", revision: 0, items: { 评价数: { count: 1, detail: "甲店", spus: "", actions: [], images: [] } }, extra: [], notes: "甲", proofs: {} },
+          { shopId: "5", revision: 0, items: { 评价数: { count: 2, detail: "乙店", spus: "", actions: [], images: [] } }, extra: [], notes: "乙", proofs: {} }
+        ]
+      }
+    });
+    assert.equal(draft.status, 200);
+    const again = await json(staff.base, `/api/work/diary?date=${today}`);
+    assert.equal(again.data.mine.length, 2);
+    assert.equal(again.data.mine.find((row) => row.shopId === "4").items["评价数"].detail, "甲店");
+    assert.equal(again.data.mine.find((row) => row.shopId === "5").notes, "乙");
+
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64"
+    );
+    const image = await json(staff.base, "/api/work/diary/image", {
+      method: "POST",
+      body: { date: today, shopId: "4", fieldKey: "评价数", name: "a.png", mime: "image/png", data: png.toString("base64") }
+    });
+    assert.equal(image.status, 200);
+    const rev4 = again.data.mine.find((row) => row.shopId === "4").revision;
+    const rev5 = again.data.mine.find((row) => row.shopId === "5").revision;
+    const submitted = await json(staff.base, "/api/work/diary", {
+      method: "PUT",
+      body: {
+        date: today,
+        status: "已提交",
+        reports: [
+          {
+            shopId: "4",
+            revision: rev4,
+            items: { 评价数: { count: 1, detail: "甲店", spus: "", actions: [], images: [{ id: image.data.image.id, name: "a.png" }] } },
+            extra: [],
+            notes: "甲",
+            proofs: {}
+          },
+          {
+            shopId: "5",
+            revision: rev5,
+            items: { 评价数: { count: 2, detail: "乙店", spus: "", actions: [], images: [] } },
+            extra: [],
+            notes: "乙",
+            proofs: {}
+          }
+        ]
+      }
+    });
+    assert.equal(submitted.status, 200);
+    await json(staff.base, "/api/work/report", {
+      method: "PUT",
+      body: { date: today, items: [{ key: "shop", content: "两家店都看了" }] }
+    });
+    const summary = await json(leader.base, `/api/work/diary/summary?from=${today}&to=${today}`);
+    assert.equal(summary.data.peopleCount, 1);
+    assert.equal(summary.data.shopCount, 2);
+    assert.equal(summary.data.reportCount, 2);
+    const shot = await json(leader.base, `/api/work/diary/image?id=${image.data.image.id}`);
+    assert.equal(shot.status, 200);
+    assert.equal(shot.data.mime, "image/png");
+    const hidden = await json(outsider.base, `/api/work/diary/summary?from=${today}&to=${today}`);
+    assert.equal(hidden.data.reportCount, 0);
+    const duty = await json(admin.base, `/api/work/diary/duty?date=${today}`);
+    const wangRow = duty.data.rows.find((row) => row.name === "王博");
+    assert.equal(wangRow.template, "已填");
+    assert.equal(wangRow.diary, "已交");
+    assert.equal(wangRow.shops, 2);
+    assert.equal(wangRow.status, "已报");
+    assert.equal(duty.data.summary.should, duty.data.summary.done);
+  } finally {
+    await admin.close();
+    await staff.close();
+    await outsider.close();
+    await leader.close();
+  }
+});
+
+test("人事按模板填报，免报和移出不计入未报", async () => {
+  resetPeopleStore();
+  resetWorkStore();
+  const adminApp = express();
+  adminApp.use(express.json());
+  adminApp.use("/api/work", withUser(luocheng), workRouter);
+  const yang = { username: "杨润泽", displayName: "杨润泽" };
+  const staffApp = express();
+  staffApp.use(express.json());
+  staffApp.use("/api/work", withUser(yang), workRouter);
+  const admin = await listen(adminApp);
+  const staff = await listen(staffApp);
+  try {
+    await json(admin.base, "/api/work/settings/members", {
+      method: "PUT",
+      body: { personId: 8, deptCode: "hr" }
+    });
+    const today = (await json(staff.base, "/api/work")).data.today;
+    const saved = await json(staff.base, "/api/work/report", {
+      method: "PUT",
+      body: { date: today, items: [{ key: "hire", content: "今天约了两场面试" }] }
+    });
+    assert.equal(saved.data.rows[0].status, "已报");
+    assert.equal(saved.data.rows[0].deptName, "人事部");
+    const board = await json(admin.base, `/api/work/report?date=${today}&dept=hr`);
+    assert.equal(board.data.summary.should, 1);
+    assert.equal(board.data.summary.done, 1);
+    assert.equal(board.data.rows[0].person.name, "杨润泽");
+
+    await json(admin.base, "/api/work/diary/rest", {
+      method: "PUT",
+      body: { date: today, personId: 8, rest: true }
+    });
+    const exempt = await json(admin.base, `/api/work/report?date=${today}&dept=hr`);
+    assert.equal(exempt.data.rows[0].status, "免报");
+    assert.equal(exempt.data.summary.should, 0);
+    assert.equal(exempt.data.summary.miss, 0);
+
+    await json(admin.base, "/api/work/settings/members", {
+      method: "PUT",
+      body: { personId: 8, deptCode: "" }
+    });
+    const removed = await json(admin.base, `/api/work/report?date=${today}&dept=hr`);
+    assert.equal(removed.data.summary.should, 0);
+    assert.equal(removed.data.rows.length, 0);
+    const yesterday = "2026-11-15";
+    await json(admin.base, "/api/work/settings/members", {
+      method: "PUT",
+      body: { personId: 8, deptCode: "hr" }
+    });
+    const history = await json(staff.base, `/api/work/report?date=${yesterday}`);
+    assert.equal(history.data.rows[0].status, "未报");
+    assert.equal(history.data.rows[0].items[0].content, "");
+  } finally {
+    await admin.close();
+    await staff.close();
   }
 });
 

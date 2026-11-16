@@ -10,6 +10,15 @@
     rosterScope: "all",
     orgBoard: "",
     boardQuery: "",
+    diary: null,
+    diaryDraft: null,
+    diaryDraftDate: "",
+    diaryOpen: [],
+    diaryShop: "",
+    diaryGroup: "goods",
+    summary: null,
+    duty: null,
+    diarySettings: null,
     meta: null,
     report: null,
     settings: null,
@@ -81,7 +90,12 @@
       ".work-count{margin-left:auto;color:var(--xm-muted);font-size:12px;}" +
       ".work-field.is-grow{flex:1;min-width:200px;}" +
       ".work-table td.work-rights{max-width:280px;white-space:normal;}" +
-      "@media (max-width:720px){.work-stats{grid-template-columns:repeat(2,minmax(0,1fr));}.work-count{margin-left:0;}}";
+      ".work-diary-item{display:grid;grid-template-columns:minmax(120px,180px) 96px 36px auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--xm-line);}" +
+      ".work-diary-more{grid-column:1 / -1;display:flex;flex-direction:column;gap:8px;padding:4px 0 8px;}" +
+      ".work-diary-more[hidden]{display:none;}" +
+      ".work-shot{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}" +
+      ".work-shot img{max-width:160px;max-height:120px;border:1px solid var(--xm-line);border-radius:6px;}" +
+      "@media (max-width:720px){.work-stats{grid-template-columns:repeat(2,minmax(0,1fr));}.work-count{margin-left:0;}.work-diary-item{grid-template-columns:1fr;}}";
     document.head.appendChild(style);
   }
 
@@ -493,6 +507,7 @@
                   (row.submitted ? "work-ok" : "work-miss") +
                   '">' +
                   esc(row.status) +
+                  (row.statusNote ? '<span class="work-sub">' + esc(row.statusNote) + "</span>" : "") +
                   "</td>"
                 : "") +
               "</tr>"
@@ -513,6 +528,419 @@
     );
   }
 
+  function diarySections() {
+    var nodes = (state.diary && state.diary.catalog && state.diary.catalog.nodes) || [];
+    return nodes.filter(function (node) {
+      return node.kind === "section" && node.enabled !== false;
+    });
+  }
+
+  function diaryNodes(kind, parent) {
+    var nodes = (state.diary && state.diary.catalog && state.diary.catalog.nodes) || [];
+    return nodes.filter(function (node) {
+      return node.kind === kind && node.parent === parent && node.enabled !== false;
+    });
+  }
+
+  function syncDiaryDraft() {
+    var pack = state.diary || { shops: [], mine: [], sharedLabels: [] };
+    if (state.diaryDraftDate === state.date && state.diaryDraft) {
+      return;
+    }
+    var draft = {};
+    var open = [];
+    (pack.mine || []).forEach(function (row) {
+      if (!row.shopId || row.shopId === "__personal__") {
+        return;
+      }
+      open.push(String(row.shopId));
+      draft[String(row.shopId)] = JSON.parse(JSON.stringify(row));
+    });
+    if (!open.length && pack.shops && pack.shops[0]) {
+      open = [String(pack.shops[0].id)];
+    }
+    open.forEach(function (id) {
+      if (!draft[id]) {
+        draft[id] = { shopId: id, revision: 0, status: "未填报", items: {}, extra: [], notes: "", proofs: {} };
+      }
+    });
+    state.diaryDraft = draft;
+    state.diaryOpen = open;
+    state.diaryDraftDate = state.date;
+    if (!state.diaryShop || open.indexOf(state.diaryShop) < 0) {
+      state.diaryShop = open[0] || "";
+    }
+  }
+
+  function activeDraft() {
+    syncDiaryDraft();
+    return state.diaryDraft[state.diaryShop] || null;
+  }
+
+  function metricRow(node, item) {
+    var shared = ((state.diary && state.diary.sharedLabels) || []).indexOf(node.name) >= 0;
+    if (shared) {
+      return (
+        '<p class="work-muted">「' +
+        esc(node.name) +
+        "」和上面的部门事项是同一项，只填一次。</p>"
+      );
+    }
+    var current = item || {};
+    var images = current.images || [];
+    var choices = diaryNodes("choice", node.id);
+    var yesNo = node.id === "报名活动" || node.id === "一键低价商品";
+    var late = node.id === "即将超时订单";
+    return (
+      '<div class="work-diary-item" data-metric="' +
+      esc(node.id) +
+      '"><span>' +
+      esc(node.name) +
+      '</span><input data-diary-count type="number" min="0" max="100000" step="1" value="' +
+      esc(current.count || "") +
+      '">' +
+      (node.unit ? "<small>" + esc(node.unit) + "</small>" : "<small></small>") +
+      '<button type="button" class="work-mini" data-diary-more>明细</button>' +
+      '<div class="work-diary-more" hidden>' +
+      (yesNo
+        ? '<label class="work-field">是否全部完成<select data-diary-detail><option value=""></option><option' +
+          (current.detail === "是" ? " selected" : "") +
+          '>是</option><option' +
+          (current.detail === "否" ? " selected" : "") +
+          ">否</option></select></label>"
+        : '<label class="work-field">' +
+          (late ? "即将超时原因" : "工作明细") +
+          '<input data-diary-detail value="' +
+          esc(current.detail || "") +
+          '" maxlength="600"></label>') +
+      '<label class="work-field">相关 SPU<input data-diary-spu value="' +
+      esc(current.spus || "") +
+      '" maxlength="2200" placeholder="多个 SPU 用逗号分隔"></label>' +
+      (choices.length
+        ? '<div class="work-checks">' +
+          choices
+            .map(function (choice) {
+              var on = (current.actions || []).indexOf(choice.id) >= 0;
+              return (
+                '<label><input type="checkbox" data-diary-choice value="' +
+                esc(choice.id) +
+                '"' +
+                (on ? " checked" : "") +
+                ">" +
+                esc(choice.name) +
+                "</label>"
+              );
+            })
+            .join("") +
+          "</div>"
+        : "") +
+      '<div class="work-shot" data-diary-images>' +
+      images
+        .map(function (image) {
+          return (
+            '<button type="button" class="work-mini" data-preview-image="' +
+            esc(image.id) +
+            '">查看截图 · ' +
+            esc(image.name) +
+            '</button><button type="button" class="work-mini" data-remove-image="' +
+            esc(image.id) +
+            '">移除</button>'
+          );
+        })
+        .join("") +
+      '<label class="work-mini">添加截图<input data-diary-file type="file" accept="image/png,image/jpeg,image/webp" hidden></label>' +
+      "</div></div></div>"
+    );
+  }
+
+  function renderDiaryFill() {
+    var pack = state.diary;
+    if (!pack) {
+      return "";
+    }
+    var shops = pack.shops || [];
+    if (!shops.length) {
+      return "";
+    }
+    syncDiaryDraft();
+    var draft = activeDraft();
+    var sections = diarySections();
+    if (sections.every(function (section) { return section.id !== state.diaryGroup; })) {
+      state.diaryGroup = sections[0] ? sections[0].id : "goods";
+    }
+    var lanes = diaryNodes("lane", state.diaryGroup);
+    var fields = "";
+    lanes.forEach(function (lane) {
+      var metrics = diaryNodes("metric", lane.id);
+      var extras = diaryNodes("extra", lane.id);
+      var notes = diaryNodes("note", lane.id);
+      fields +=
+        "<h3>" +
+        esc(lane.name) +
+        "</h3>" +
+        metrics
+          .map(function (node) {
+            return metricRow(node, (draft && draft.items && draft.items[node.id]) || {});
+          })
+          .join("") +
+        (extras.length
+          ? '<div class="work-checks">' +
+            extras
+              .map(function (node) {
+                var on = draft && (draft.extra || []).indexOf(node.id) >= 0;
+                return (
+                  '<label><input type="checkbox" data-diary-extra value="' +
+                  esc(node.id) +
+                  '"' +
+                  (on ? " checked" : "") +
+                  ">" +
+                  esc(node.name) +
+                  "</label>"
+                );
+              })
+              .join("") +
+            "</div>"
+          : "") +
+        notes
+          .map(function () {
+            return (
+              '<label class="work-field">备注<textarea data-diary-notes maxlength="2000">' +
+              esc((draft && draft.notes) || "") +
+              "</textarea></label>"
+            );
+          })
+          .join("");
+    });
+    var remaining = shops.filter(function (shop) {
+      return state.diaryOpen.indexOf(String(shop.id)) < 0;
+    });
+    return (
+      '<section class="work-card"><h2>店铺日报</h2><p class="work-lead" style="padding:0 12px 8px">同一天可以填多家店。保存草稿后刷新还能继续。和部门事项重名的栏目只填上面那一次，汇总两边都能看到。</p>' +
+      '<div class="work-chiprow">' +
+      state.diaryOpen
+        .map(function (id) {
+          var shop = shops.find(function (item) { return String(item.id) === id; });
+          return (
+            '<button type="button" class="work-mini' +
+            (id === state.diaryShop ? " is-on" : "") +
+            '" data-diary-shop="' +
+            esc(id) +
+            '">' +
+            esc(shop ? shop.name : id) +
+            "</button>"
+          );
+        })
+        .join("") +
+      (remaining.length
+        ? '<select data-add-shop><option value="">＋ 添加店铺</option>' +
+          remaining
+            .map(function (shop) {
+              return '<option value="' + esc(shop.id) + '">' + esc(shop.name) + "</option>";
+            })
+            .join("") +
+          "</select>"
+        : "") +
+      (state.diaryShop
+        ? '<button type="button" class="work-mini" data-remove-shop="' + esc(state.diaryShop) + '">移出当前店</button>'
+        : "") +
+      "</div>" +
+      '<div class="work-chiprow">' +
+      sections
+        .map(function (section) {
+          return (
+            '<button type="button" class="work-mini' +
+            (section.id === state.diaryGroup ? " is-on" : "") +
+            '" data-diary-group="' +
+            esc(section.id) +
+            '">' +
+            esc(section.name) +
+            "</button>"
+          );
+        })
+        .join("") +
+      "</div>" +
+      fields +
+      '<div class="work-filters"><button type="button" class="work-mini" data-diary-save="草稿">保存草稿</button><button type="button" class="work-primary" data-diary-save="已提交">提交日报</button><span class="work-muted">' +
+      esc(draft && draft.status ? draft.status : "") +
+      "</span></div></section>"
+    );
+  }
+
+  function renderSummary() {
+    var data = state.summary;
+    if (!data) {
+      return '<div class="work-card"><div class="work-empty">正在读取工作汇总…</div></div>';
+    }
+    var metrics = (data.metrics || [])
+      .map(function (item) {
+        return "<div><span>" + esc(item.name) + "</span><strong>" + esc(item.total) + "</strong></div>";
+      })
+      .join("");
+    var rows = (data.rows || [])
+      .map(function (row) {
+        return (
+          "<tr><td>" +
+          esc(row.day) +
+          "</td><td>" +
+          esc(row.personName) +
+          "</td><td>" +
+          esc(row.shopName) +
+          "</td><td>" +
+          esc(row.status) +
+          "</td><td>" +
+          esc(row.notes || "—") +
+          "</td></tr>"
+        );
+      })
+      .join("");
+    return (
+      '<div class="work-panel"><div class="work-stats">' +
+      "<div><span>已交日报</span><strong>" +
+      esc(data.reportCount) +
+      "</strong></div><div><span>已报人数</span><strong>" +
+      esc(data.peopleCount) +
+      "</strong></div><div><span>店铺数</span><strong>" +
+      esc(data.shopCount) +
+      "</strong></div></div>" +
+      '<div class="work-card"><h2>工作量</h2><div class="work-stats">' +
+      metrics +
+      "</div></div>" +
+      '<div class="work-card work-table-wrap"><table class="work-table"><thead><tr><th>日期</th><th>填报人</th><th>店铺</th><th>状态</th><th>备注</th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="5" class="work-empty">这段时间还没有已提交的店铺日报。</td></tr>') +
+      "</tbody></table></div></div>"
+    );
+  }
+
+  function renderDuty() {
+    var data = state.duty;
+    if (!data) {
+      return '<div class="work-card"><div class="work-empty">正在读取提交情况…</div></div>';
+    }
+    var sum = data.summary || {};
+    var rows = (data.rows || [])
+      .map(function (row) {
+        return (
+          "<tr><td>" +
+          esc(row.name) +
+          "</td><td>" +
+          esc(row.role) +
+          "</td><td>" +
+          esc(row.deptName || "—") +
+          "</td><td>" +
+          esc(row.template) +
+          "</td><td>" +
+          esc(row.diary) +
+          "</td><td>" +
+          esc(row.shops) +
+          "</td><td class=\"" +
+          (row.status === "已报" ? "work-ok" : row.status === "未报" ? "work-miss" : "") +
+          '">' +
+          esc(row.status) +
+          (row.note ? '<span class="work-sub">' + esc(row.note) + "</span>" : "") +
+          "</td><td>" +
+          (row.status !== "自愿"
+            ? '<button type="button" class="work-mini" data-rest="' +
+              esc(row.personId) +
+              '" data-rest-on="' +
+              (row.status === "免报" ? "0" : "1") +
+              '">' +
+              (row.status === "免报" ? "取消休息" : "登记休息") +
+              "</button>"
+            : "—") +
+          "</td></tr>"
+        );
+      })
+      .join("");
+    return (
+      '<div class="work-panel"><div class="work-stats"><div><span>应报人数</span><strong>' +
+      esc(sum.should || 0) +
+      '</strong></div><div><span>已报人数</span><strong>' +
+      esc(sum.done || 0) +
+      '</strong></div><div><span>未报人数</span><strong>' +
+      esc(sum.miss || 0) +
+      '</strong></div><div><span>免报</span><strong>' +
+      esc(sum.exempt || 0) +
+      '</strong></div><div><span>已交店铺数</span><strong>' +
+      esc(sum.shops || 0) +
+      "</strong></div></div>" +
+      '<div class="work-card work-table-wrap"><table class="work-table"><thead><tr><th>姓名</th><th>岗位</th><th>部门</th><th>部门事项</th><th>店铺日报</th><th>已交店</th><th>状态</th><th>休息</th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="8" class="work-empty">这一天没有需要汇报的人。</td></tr>') +
+      "</tbody></table></div></div>"
+    );
+  }
+
+  function renderDiarySettings() {
+    var data = state.diarySettings;
+    if (!data) {
+      return '<div class="work-card"><div class="work-empty">正在读取日报设置…</div></div>';
+    }
+    var policy = data.policy || {};
+    var positions = (policy.options || [])
+      .map(function (item) {
+        var on = (policy.positions || []).indexOf(item) >= 0;
+        return (
+          '<label><input type="checkbox" data-position value="' +
+          esc(item) +
+          '"' +
+          (on ? " checked" : "") +
+          "> " +
+          esc(item === "助理" ? "运营助理" : item) +
+          "</label>"
+        );
+      })
+      .join("");
+    var delivery = policy.delivery || {};
+    var catalogNodes = (data.catalog && data.catalog.nodes) || [];
+    function sectionTitle(node) {
+      var current = node;
+      var guard = 0;
+      while (current && current.kind !== "section" && guard < 6) {
+        current = catalogNodes.find(function (item) {
+          return item.id === current.parent;
+        });
+        guard += 1;
+      }
+      return current && current.kind === "section" ? current.name : "";
+    }
+    var nodes = catalogNodes
+      .filter(function (node) {
+        return node.kind === "metric" || node.kind === "extra" || node.kind === "note";
+      })
+      .map(function (node, index) {
+        return (
+          '<tr data-catalog-row="' +
+          index +
+          '"><td>' +
+          esc(sectionTitle(node)) +
+          '</td><td><input data-catalog-name value="' +
+          esc(node.name) +
+          '"></td><td><input data-catalog-unit value="' +
+          esc(node.unit || "") +
+          '"></td><td><input type="checkbox" data-catalog-on' +
+          (node.enabled !== false ? " checked" : "") +
+          "></td></tr>"
+        );
+      })
+      .join("");
+    return (
+      '<div class="work-panel"><div class="work-card"><h2>必须提交店铺日报的岗位</h2><p class="work-lead" style="padding:0 12px 8px">勾选岗位、并且已经排进运营部、人事部或技术部、名下有店的人，当天要交店铺日报。登记休息后当天免报。移出汇报名单的人不再计入部门应报。</p><div class="work-checks">' +
+      positions +
+      '</div><button type="button" class="work-primary" data-save-positions>保存岗位设置</button></div>' +
+      '<div class="work-card"><h2>考勤与提醒</h2><p class="work-lead" style="padding:0 12px 8px">新站还没有钉钉企业应用，休息登记在这里生效，提醒不会发到钉钉。</p><div class="work-checks"><label><input type="checkbox" data-delivery="useSchedule"' +
+      (delivery.useSchedule ? " checked" : "") +
+      '> 按钉钉排班识别休息日</label><label><input type="checkbox" data-delivery="useLeave"' +
+      (delivery.useLeave ? " checked" : "") +
+      '> 按钉钉请假记录识别已批休假</label><label><input type="checkbox" data-delivery="remind"' +
+      (delivery.remind ? " checked" : "") +
+      '> 提醒未交日报</label></div><label class="work-field">每日提醒时间（北京时间）<input data-remind-at type="time" value="' +
+      esc(delivery.remindAt || "18:00") +
+      '"></label><button type="button" class="work-primary" data-save-delivery>保存考勤与提醒</button></div>' +
+      '<div class="work-card"><h2>填报项目</h2><p class="work-lead" style="padding:0 12px 8px">四个栏目：商品与评价、活动与库存、订单处理、其他与备注。停用后，已经提交的记录仍可在工作汇总里看。</p><div class="work-table-wrap"><table class="work-table"><thead><tr><th>栏目</th><th>名称</th><th>单位</th><th>启用</th></tr></thead><tbody>' +
+      nodes +
+      '</tbody></table></div><button type="button" class="work-primary" data-save-catalog>保存填报内容</button></div></div>'
+    );
+  }
+
   function renderToday() {
     var date = state.date || todayIso();
     var depts = ((state.meta && state.meta.depts) || [])
@@ -530,7 +958,8 @@
       .join("");
     var mine = myRow();
     var canFill = Boolean(mine);
-    var skip = state.report && state.report.needReport === false && !isAdmin();
+    var hasShops = Boolean(state.diary && state.diary.shops && state.diary.shops.length);
+    var skip = state.report && state.report.needReport === false && !isAdmin() && !hasShops;
     var fillBlock = "";
     if (skip) {
       fillBlock = '<div class="work-card"><div class="work-empty">你所在部门不需要工作汇报。</div></div>';
@@ -575,6 +1004,7 @@
       '<button type="button" class="work-mini" data-today>今天</button>' +
       "</div>" +
       fillBlock +
+      renderDiaryFill() +
       board +
       "</div>"
     );
@@ -756,18 +1186,39 @@
   function paint(root) {
     ensureStyle();
     var admin = isAdmin();
+    var leader = Boolean(state.diary && state.diary.leader);
     var tabs =
       '<div class="work-tabs" role="tablist">' +
       '<button type="button" class="work-tab" data-tab="today" aria-selected="' +
       (state.tab === "today") +
       '">今天工作汇报</button>' +
+      '<button type="button" class="work-tab" data-tab="summary" aria-selected="' +
+      (state.tab === "summary") +
+      '">工作汇总</button>' +
+      (leader
+        ? '<button type="button" class="work-tab" data-tab="duty" aria-selected="' +
+          (state.tab === "duty") +
+          '">提交情况</button>'
+        : "") +
       (admin
         ? '<button type="button" class="work-tab" data-tab="settings" aria-selected="' +
           (state.tab === "settings") +
-          '">部门设置</button>'
+          '">部门设置</button>' +
+          '<button type="button" class="work-tab" data-tab="diarySettings" aria-selected="' +
+          (state.tab === "diarySettings") +
+          '">日报设置</button>'
         : "") +
       "</div>";
-    var body = state.tab === "settings" && admin ? renderSettings() : renderToday();
+    var body =
+      state.tab === "settings" && admin
+        ? renderSettings()
+        : state.tab === "summary"
+          ? renderSummary()
+          : state.tab === "duty" && leader
+            ? renderDuty()
+            : state.tab === "diarySettings" && admin
+              ? renderDiarySettings()
+              : renderToday();
     var focusKey = state.keepFocus;
     var caret = state.keepCaret;
     state.keepFocus = "";
@@ -775,7 +1226,7 @@
     root.innerHTML =
       '<main class="page work-page">' +
       '<header class="page-head work-head"><div><p class="kicker">工作汇报</p><h1>工作汇报</h1>' +
-      '<p class="work-lead">运营部、人事部、技术部按组织中心责权填报。其他部门不用报。</p></div></header>' +
+      '<p class="work-lead">先填部门模板里的今日事项，再填自己负责的店铺日报。人数按人计，店铺按店计。</p></div></header>' +
       tabs +
       '<p class="work-msg' +
       (state.error ? " is-error" : "") +
@@ -822,10 +1273,60 @@
       query += "&dept=" + encodeURIComponent(state.dept);
     }
     state.report = await api(query);
+    state.diaryDraftDate = "";
+    state.diary = await api("/api/work/diary?date=" + encodeURIComponent(state.date));
     if (isAdmin()) {
       state.settings = await api("/api/work/settings");
     }
+    if (state.tab === "summary") {
+      state.summary = await api("/api/work/diary/summary?from=" + encodeURIComponent(state.date) + "&to=" + encodeURIComponent(state.date));
+    }
+    if (state.tab === "duty" && state.diary.leader) {
+      state.duty = await api("/api/work/diary/duty?date=" + encodeURIComponent(state.date));
+    }
+    if (state.tab === "diarySettings" && isAdmin()) {
+      state.diarySettings = await api("/api/work/diary/settings");
+    }
     paint(root);
+  }
+
+  function readDiarySheet(root) {
+    syncDiaryDraft();
+    var draft = state.diaryDraft[state.diaryShop];
+    if (!draft) {
+      return;
+    }
+    draft.items = draft.items || {};
+    [].slice.call(root.querySelectorAll("[data-metric]")).forEach(function (row) {
+      var id = row.getAttribute("data-metric");
+      var countNode = row.querySelector("[data-diary-count]");
+      var detailNode = row.querySelector("[data-diary-detail]");
+      var spuNode = row.querySelector("[data-diary-spu]");
+      var previous = draft.items[id] || {};
+      draft.items[id] = {
+        count: countNode ? Number(countNode.value) || 0 : previous.count || 0,
+        detail: detailNode ? detailNode.value : previous.detail || "",
+        spus: spuNode ? spuNode.value : previous.spus || "",
+        actions: [].slice.call(row.querySelectorAll("[data-diary-choice]:checked")).map(function (box) {
+          return box.value;
+        }),
+        images: previous.images || []
+      };
+    });
+    var notes = root.querySelector("[data-diary-notes]");
+    if (notes) {
+      draft.notes = notes.value;
+    }
+    var extras = [].slice.call(root.querySelectorAll("[data-diary-extra]"));
+    if (extras.length) {
+      draft.extra = extras
+        .filter(function (box) {
+          return box.checked;
+        })
+        .map(function (box) {
+          return box.value;
+        });
+    }
   }
 
   function bind(root) {
@@ -834,14 +1335,10 @@
       if (tab) {
         state.tab = tab.getAttribute("data-tab") || "today";
         setMsg("");
-        if (state.tab === "today") {
-          reload(root).catch(function (err) {
-            setMsg(err.message, true);
-            paint(root);
-          });
-        } else {
+        reload(root).catch(function (err) {
+          setMsg(err.message, true);
           paint(root);
-        }
+        });
         return;
       }
       var today = event.target.closest("[data-today]");
@@ -851,6 +1348,170 @@
           setMsg(err.message, true);
           paint(root);
         });
+        return;
+      }
+      var diaryShop = event.target.closest("[data-diary-shop]");
+      if (diaryShop) {
+        readDiarySheet(root);
+        state.diaryShop = diaryShop.getAttribute("data-diary-shop") || "";
+        paint(root);
+        return;
+      }
+      var diaryGroup = event.target.closest("[data-diary-group]");
+      if (diaryGroup) {
+        readDiarySheet(root);
+        state.diaryGroup = diaryGroup.getAttribute("data-diary-group") || "goods";
+        paint(root);
+        return;
+      }
+      var more = event.target.closest("[data-diary-more]");
+      if (more) {
+        var box = more.parentNode.querySelector(".work-diary-more");
+        if (box) {
+          box.hidden = !box.hidden;
+        }
+        return;
+      }
+      var removeShop = event.target.closest("[data-remove-shop]");
+      if (removeShop) {
+        readDiarySheet(root);
+        var removeId = removeShop.getAttribute("data-remove-shop");
+        state.diaryOpen = state.diaryOpen.filter(function (id) { return id !== removeId; });
+        delete state.diaryDraft[removeId];
+        state.diaryShop = state.diaryOpen[0] || "";
+        paint(root);
+        return;
+      }
+      var saveDiaryBtn = event.target.closest("[data-diary-save]");
+      if (saveDiaryBtn) {
+        readDiarySheet(root);
+        var reports = state.diaryOpen.map(function (id) {
+          var row = state.diaryDraft[id] || { shopId: id, revision: 0, items: {}, extra: [], notes: "", proofs: {} };
+          return {
+            shopId: id,
+            revision: row.revision || 0,
+            items: row.items || {},
+            extra: row.extra || [],
+            notes: row.notes || "",
+            proofs: row.proofs || {}
+          };
+        });
+        api("/api/work/diary", {
+          method: "PUT",
+          body: { date: state.date, status: saveDiaryBtn.getAttribute("data-diary-save"), reports: reports }
+        })
+          .then(function () {
+            setMsg(saveDiaryBtn.getAttribute("data-diary-save") === "草稿" ? "草稿已保存" : "日报已提交");
+            return reload(root);
+          })
+          .catch(function (err) {
+            setMsg(err.message, true);
+            paint(root);
+          });
+        return;
+      }
+      var preview = event.target.closest("[data-preview-image]");
+      if (preview) {
+        api("/api/work/diary/image?id=" + encodeURIComponent(preview.getAttribute("data-preview-image")))
+          .then(function (image) {
+            var img = document.createElement("img");
+            img.alt = image.name || "截图";
+            img.src = "data:" + image.mime + ";base64," + image.data;
+            preview.parentNode.appendChild(img);
+          })
+          .catch(function (err) {
+            setMsg(err.message, true);
+            paint(root);
+          });
+        return;
+      }
+      var restBtn = event.target.closest("[data-rest]");
+      if (restBtn) {
+        api("/api/work/diary/rest", {
+          method: "PUT",
+          body: {
+            date: state.date,
+            personId: Number(restBtn.getAttribute("data-rest")),
+            rest: restBtn.getAttribute("data-rest-on") === "1"
+          }
+        })
+          .then(function (data) {
+            state.duty = data;
+            setMsg(restBtn.getAttribute("data-rest-on") === "1" ? "已登记休息" : "已取消休息");
+            paint(root);
+          })
+          .catch(function (err) {
+            setMsg(err.message, true);
+            paint(root);
+          });
+        return;
+      }
+      var savePositions = event.target.closest("[data-save-positions]");
+      if (savePositions) {
+        api("/api/work/diary/settings", {
+          method: "PUT",
+          body: {
+            revision: state.diarySettings.policy.revision,
+            positions: [].slice.call(root.querySelectorAll("[data-position]:checked")).map(function (box) { return box.value; })
+          }
+        })
+          .then(function (data) {
+            state.diarySettings = data;
+            setMsg("日报岗位设置已保存");
+            paint(root);
+          })
+          .catch(function (err) {
+            setMsg(err.message, true);
+            paint(root);
+          });
+        return;
+      }
+      var saveDelivery = event.target.closest("[data-save-delivery]");
+      if (saveDelivery) {
+        var delivery = {};
+        [].slice.call(root.querySelectorAll("[data-delivery]")).forEach(function (box) {
+          delivery[box.getAttribute("data-delivery")] = box.checked;
+        });
+        delivery.remindAt = (root.querySelector("[data-remind-at]") || {}).value || "18:00";
+        api("/api/work/diary/settings", {
+          method: "PUT",
+          body: { delivery: delivery }
+        })
+          .then(function (data) {
+            state.diarySettings = data;
+            setMsg("考勤与提醒已保存。钉钉企业应用未接入，不会外发。");
+            paint(root);
+          })
+          .catch(function (err) {
+            setMsg(err.message, true);
+            paint(root);
+          });
+        return;
+      }
+      var saveCatalog = event.target.closest("[data-save-catalog]");
+      if (saveCatalog) {
+        var catalog = JSON.parse(JSON.stringify(state.diarySettings.catalog));
+        var editable = catalog.nodes.filter(function (node) {
+          return node.kind === "metric" || node.kind === "extra" || node.kind === "note";
+        });
+        [].slice.call(root.querySelectorAll("[data-catalog-row]")).forEach(function (row, index) {
+          if (!editable[index]) {
+            return;
+          }
+          editable[index].name = row.querySelector("[data-catalog-name]").value;
+          editable[index].unit = row.querySelector("[data-catalog-unit]").value;
+          editable[index].enabled = row.querySelector("[data-catalog-on]").checked;
+        });
+        api("/api/work/diary/settings", { method: "PUT", body: { catalog: catalog } })
+          .then(function (data) {
+            state.diarySettings = data;
+            setMsg("填报内容已保存");
+            paint(root);
+          })
+          .catch(function (err) {
+            setMsg(err.message, true);
+            paint(root);
+          });
         return;
       }
       var deptFilter = event.target.closest("[data-dept-filter]");
@@ -1011,6 +1672,60 @@
           .catch(function (err) {
             setMsg(err.message, true);
             assign.checked = !assign.checked;
+            paint(root);
+          });
+      }
+    });
+    root.addEventListener("change", function (event) {
+      var addShop = event.target.closest("[data-add-shop]");
+      if (addShop && addShop.value) {
+        readDiarySheet(root);
+        var id = String(addShop.value);
+        if (state.diaryOpen.indexOf(id) < 0) {
+          state.diaryOpen.push(id);
+          state.diaryDraft[id] = state.diaryDraft[id] || {
+            shopId: id,
+            revision: 0,
+            status: "未填报",
+            items: {},
+            extra: [],
+            notes: "",
+            proofs: {}
+          };
+        }
+        state.diaryShop = id;
+        paint(root);
+        return;
+      }
+      var file = event.target.closest("[data-diary-file]");
+      if (file && file.files && file.files[0]) {
+        var metric = file.closest("[data-metric]");
+        var fieldKey = metric ? metric.getAttribute("data-metric") : "备注";
+        var picked = file.files[0];
+        var form = new FormData();
+        form.append("date", state.date);
+        form.append("shopId", state.diaryShop);
+        form.append("fieldKey", fieldKey);
+        form.append("file", picked, picked.name);
+        fetch("/api/work/diary/image", { method: "POST", credentials: "same-origin", body: form })
+          .then(function (res) {
+            return res.json().then(function (data) {
+              if (!res.ok || data.ok === false) {
+                throw new Error(data.error || "截图上传失败");
+              }
+              return data;
+            });
+          })
+          .then(function (saved) {
+            readDiarySheet(root);
+            var draft = state.diaryDraft[state.diaryShop];
+            draft.items[fieldKey] = draft.items[fieldKey] || { count: 0, detail: "", spus: "", actions: [], images: [] };
+            draft.items[fieldKey].images = (draft.items[fieldKey].images || []).concat([saved.image]);
+            setMsg("截图已上传");
+            paint(root);
+          })
+          .catch(function (err) {
+            setMsg(err.message, true);
             paint(root);
           });
       }

@@ -1,5 +1,6 @@
 import { dbMode, query } from "../profile/auth.js";
 import { listPeople } from "../people/store.js";
+import { bindRoster, diaryObligation, readyDiary, resetDiaryStore } from "./diary.js";
 
 export const WORK_DEPTS = [
   { code: "ops", name: "运营部" },
@@ -149,6 +150,7 @@ export function resetWorkStore() {
   members = new Map();
   templates = new Map();
   rows = new Map();
+  resetDiaryStore();
 }
 
 async function ignoreDuplicate(work) {
@@ -239,6 +241,7 @@ async function readyStore() {
   } else {
     seedDefaultTemplates();
   }
+  await readyDiary();
   ready = true;
 }
 
@@ -565,15 +568,35 @@ function reportOf(person, deptCode, date) {
     label: item.label,
     content: rows.get(rowKey(person.id, date, item.key)) || ""
   }));
-  const submitted = items.some((item) => item.content.trim());
+  const templateFilled = items.some((item) => item.content.trim());
   return {
     person: publicPerson(person, deptCode),
     deptCode,
     deptName: deptName(deptCode),
     items,
-    submitted,
-    status: submitted ? "已报" : "未报"
+    templateFilled,
+    submitted: templateFilled,
+    status: templateFilled ? "已报" : "未报"
   };
+}
+
+async function applyDayStatus(row, person, date) {
+  const obligation = await diaryObligation({
+    person,
+    date,
+    onRoster: true,
+    templateFilled: row.templateFilled,
+    templateLabels: row.items.map((item) => item.label)
+  });
+  row.submitted = obligation.status === "已报";
+  row.status = obligation.status;
+  row.statusNote = obligation.note || "";
+  row.diary = {
+    shopRequired: obligation.shopRequired,
+    templateRequired: obligation.templateRequired,
+    shopDone: obligation.shopDone
+  };
+  return row;
 }
 
 export async function getReport(user, queryInput) {
@@ -603,7 +626,7 @@ export async function getReport(user, queryInput) {
       };
     }
     const deptCode = members.get(Number(me.id));
-    const row = reportOf(me, deptCode, date);
+    const row = await applyDayStatus(reportOf(me, deptCode, date), me, date);
     return {
       ok: true,
       date,
@@ -611,7 +634,11 @@ export async function getReport(user, queryInput) {
       isAdmin: false,
       needReport: true,
       rows: [row],
-      summary: { should: 1, done: row.submitted ? 1 : 0, miss: row.submitted ? 0 : 1 }
+      summary: {
+        should: row.status === "免报" ? 0 : 1,
+        done: row.status === "已报" ? 1 : 0,
+        miss: row.status === "已报" || row.status === "免报" ? 0 : 1
+      }
     };
   }
   const list = [];
@@ -623,7 +650,7 @@ export async function getReport(user, queryInput) {
     if (!person || person.status === "离职") {
       continue;
     }
-    list.push(reportOf(person, deptCode, date));
+    list.push(await applyDayStatus(reportOf(person, deptCode, date), person, date));
   }
   list.sort((a, b) => {
     const dept = a.deptCode.localeCompare(b.deptCode);
@@ -632,7 +659,8 @@ export async function getReport(user, queryInput) {
     }
     return a.person.name.localeCompare(b.person.name, "zh");
   });
-  const done = list.filter((item) => item.submitted).length;
+  const counted = list.filter((item) => item.status === "已报" || item.status === "未报");
+  const done = counted.filter((item) => item.status === "已报").length;
   return {
     ok: true,
     date,
@@ -640,9 +668,40 @@ export async function getReport(user, queryInput) {
     isAdmin: true,
     needReport: true,
     rows: list,
-    summary: { should: list.length, done, miss: list.length - done }
+    summary: { should: counted.length, done, miss: counted.length - done }
   };
 }
+
+bindRoster(async () => ({
+  memberDept(id) {
+    return members.get(Number(id)) || "";
+  },
+  deptName(code) {
+    return deptName(code);
+  },
+  templateLabels(person, date) {
+    const deptCode = members.get(Number(person.id));
+    if (!deptCode) {
+      return [];
+    }
+    return itemsFor(person.id, deptCode).map((item) => item.label);
+  },
+  templateFilled(person, date) {
+    const deptCode = members.get(Number(person.id));
+    if (!deptCode) {
+      return false;
+    }
+    return itemsFor(person.id, deptCode).some((item) => String(rows.get(rowKey(person.id, date, item.key)) || "").trim());
+  },
+  templateContent(person, date, label) {
+    const deptCode = members.get(Number(person.id));
+    if (!deptCode) {
+      return "";
+    }
+    const item = itemsFor(person.id, deptCode).find((entry) => entry.label === label);
+    return item ? rows.get(rowKey(person.id, date, item.key)) || "" : "";
+  }
+}));
 
 export async function saveReport(user, input) {
   await readyStore();
