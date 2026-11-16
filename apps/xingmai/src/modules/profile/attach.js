@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { authRouter, currentUser, profileRouter } from "./auth.js";
 import { injectHtmlShell, requireLoginUnlessPublic } from "./middleware.js";
+import { prefsRouter } from "./prefs.js";
 
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public");
 
@@ -26,6 +27,7 @@ export function attachProfile(app) {
     }
     res.sendFile(path.join(publicDir, "login.html"));
   });
+  app.use("/api/auth/prefs", prefsRouter);
   app.use("/api/auth", authRouter);
   app.use("/api/profile", profileRouter);
 }

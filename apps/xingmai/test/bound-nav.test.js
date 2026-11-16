@@ -55,7 +55,7 @@ test("侧栏在首页和星脉数据中心之间挂边界数据中心", () => {
 
 test("壳把 /bound 交给边界数据中心模块", () => {
   assert.equal(APP_MODULES["/bound"], "bound");
-  assert.equal(SHELL_ASSET_VER, "0.1.772-bound");
+  assert.equal(SHELL_ASSET_VER, "0.1.772-scroll");
   const html = renderAppShell("/bound", luocheng);
   assert.equal(html.includes("/shared/modules/bound.js"), true);
   assert.equal(html.includes("边界数据中心"), true);
@@ -63,7 +63,7 @@ test("壳把 /bound 交给边界数据中心模块", () => {
 
 test("nav.js 把边界数据中心放在星脉数据中心上面", () => {
   const js = readFileSync(join(root, "../public/shared/nav.js"), "utf8");
-  assert.match(js, /0\.1\.772-bound/);
+  assert.match(js, /0\.1\.772-scroll/);
   assert.match(js, /\{ href: "\/bound", label: "边界数据中心" \}/);
   assert.match(js, /\{ href: "\/data", label: "星脉数据中心"/);
   assert.match(js, /"\/bound": "bound"/);

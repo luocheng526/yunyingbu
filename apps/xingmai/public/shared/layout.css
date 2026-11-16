@@ -1,4 +1,5 @@
 /* xm-sider-narrow 0.1.112 */
+/* xm-shell-scroll 0.1.772-scroll */
 :root,
 html[data-theme="light"] {
   --xm-sider: #ffffff;
@@ -50,6 +51,8 @@ html[data-theme="pink"] {
 
 html, body {
   margin: 0;
+  height: 100%;
+  max-height: 100%;
   min-height: 100%;
   background: var(--xm-bg);
   color: var(--xm-ink);
@@ -57,17 +60,25 @@ html, body {
 
 body.login-page {
   background: inherit;
+  height: auto;
+  max-height: none;
+  overflow: auto;
 }
 
 .xm-app,
-body:has(.xm-shell) {
+body:has(.xm-shell),
+body.xm-app-shell {
   overflow: hidden;
   height: 100%;
+  max-height: 100%;
 }
 
 .xm-shell {
   display: flex;
-  min-height: 100vh;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  overflow: hidden;
   background: var(--xm-bg);
 }
 
@@ -348,11 +359,27 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
 }
 
 .xm-main {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   background: var(--xm-bg);
+}
+
+.xm-notice-bar {
+  flex: 0 0 auto;
+}
+
+.xm-workspace {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
 }
 
 .xm-topbar {
@@ -455,9 +482,13 @@ a.xm-username:hover {
   color: #595959;
 }
 
-.xm-content {
-  flex: 1;
+.xm-content,
+.xm-workspace > .xm-pane.is-active {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 0;
 }
 

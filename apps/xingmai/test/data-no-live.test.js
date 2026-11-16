@@ -55,12 +55,12 @@ test("数据中心侧栏只留总揽店铺商品，实时付费不进数据中�
 });
 
 test("首页仍有实时页签，旧 /data/paid 跳回首页", async () => {
-  assert.equal(SHELL_ASSET_VER, "0.1.772-bound");
+  assert.equal(SHELL_ASSET_VER, "0.1.772-scroll");
   assert.equal(APP_MODULES["/home"], "home");
   const homeJs = readFileSync(join(root, "../public/shared/modules/home.js"), "utf8");
   assert.match(homeJs, /\{ key: "live", label: "实时" \}/);
   const navJs = readFileSync(join(root, "../public/shared/nav.js"), "utf8");
-  assert.match(navJs, /0\.1\.772-bound/);
+  assert.match(navJs, /0\.1\.772-scroll/);
   assert.match(navJs, /"\/data\/paid": "\/home"/);
   const dataKids = navJs.match(/const DATA_CHILDREN = \[([\s\S]*?)\];/)[1];
   assert.doesNotMatch(dataKids, /\/data\/paid/);
