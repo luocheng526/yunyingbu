@@ -10,58 +10,115 @@ export const SITE_MODULES = [
     id: "home",
     name: "首页",
     features: [
-      { id: "home.workbench", name: "工作台" },
-      { id: "home.realtime", name: "实时店铺" },
+      { id: "home.company", name: "数据总揽" },
+      { id: "home.workbench", name: "团队概括" },
+      { id: "home.realtime", name: "实时" },
+      { id: "home.week", name: "近七天业绩汇总" },
       { id: "home.lead", name: "主管/储备" },
+      { id: "home.board", name: "排行榜" },
       { id: "home.team", name: "更新团队" }
     ]
   },
   {
-    id: "data",
-    name: "数据中心",
+    id: "bound",
+    name: "边界数据中心",
     features: [
-      { id: "data.board", name: "看板" },
-      { id: "data.export", name: "导出" }
+      { id: "bound.board", name: "工作台" },
+      { id: "bound.link", name: "扫码连接" },
+      { id: "bound.cards", name: "指标设置" },
+      { id: "bound.export", name: "导出" }
+    ]
+  },
+  {
+    id: "data",
+    name: "星脉数据中心",
+    features: [
+      { id: "data.overview", name: "数据总揽" },
+      { id: "data.shops", name: "店铺数据" },
+      { id: "data.goods", name: "商品数据" }
     ]
   },
   {
     id: "shen",
     name: "沈子晗运营中心",
     features: [
-      { id: "shen.tasks", name: "任务" },
-      { id: "shen.brief", name: "今日简报" }
+      { id: "shen.jingcang", name: "京仓管理" },
+      { id: "shen.product", name: "产品中心" },
+      { id: "shen.paid", name: "付费中心" },
+      { id: "shen.recharge", name: "充值规则" },
+      { id: "shen.training", name: "培训系统" },
+      { id: "shen.tasks", name: "任务管理" }
     ]
   },
   {
     id: "han",
     name: "韩梦凯运营中心",
     features: [
-      { id: "han.tasks", name: "任务" },
-      { id: "han.brief", name: "今日简报" }
+      { id: "han.selection", name: "选品数据" },
+      { id: "han.goods", name: "商品数据" },
+      { id: "han.paid", name: "实时付费" },
+      { id: "han.recharge", name: "充值规则" },
+      { id: "han.training", name: "培训系统" }
     ]
   },
   {
     id: "shopkeep",
     name: "店铺维护中心",
     features: [
-      { id: "shopkeep.list", name: "店铺列表" },
-      { id: "shopkeep.log", name: "维护记录" }
+      { id: "shopkeep.reviews", name: "评价管理" },
+      { id: "shopkeep.violations", name: "违规管理" },
+      { id: "shopkeep.shipping", name: "发货监控" },
+      { id: "shopkeep.stock", name: "京东库存监控" }
     ]
   },
   {
     id: "academy",
-    name: "甄选学院",
+    name: "甄选商学院",
     features: [
-      { id: "academy.courses", name: "课程" },
-      { id: "academy.records", name: "学习记录" }
+      { id: "academy.courses", name: "培训课程" },
+      { id: "academy.exams", name: "培训考试" },
+      { id: "academy.handbook", name: "运营手册" }
     ]
   },
   {
     id: "agent",
     name: "甄选智能体",
     features: [
-      { id: "agent.chat", name: "对话" },
-      { id: "agent.query", name: "只读查询" }
+      { id: "agent.chat", name: "主脑问答台" },
+      { id: "agent.connect", name: "模型接入" },
+      { id: "agent.history", name: "历史会话" }
+    ]
+  },
+  {
+    id: "work",
+    name: "工作汇报",
+    features: [
+      { id: "work.today", name: "今天工作汇报" },
+      { id: "work.summary", name: "工作汇总" },
+      { id: "work.duty", name: "提交情况" },
+      { id: "work.settings", name: "部门设置" },
+      { id: "work.diary", name: "日报设置" }
+    ]
+  },
+  {
+    id: "meeting",
+    name: "月度大会",
+    features: [
+      { id: "meeting.hours", name: "奋斗时长" },
+      { id: "meeting.rank", name: "奋斗排名" },
+      { id: "meeting.people", name: "新人介绍" },
+      { id: "meeting.levels", name: "职级调整" },
+      { id: "meeting.stars", name: "优秀员工" }
+    ]
+  },
+  {
+    id: "feedback",
+    name: "需求与反馈",
+    features: [
+      { id: "feedback.open", name: "需求与任务" },
+      { id: "feedback.doing", name: "开发中任务" },
+      { id: "feedback.closed", name: "已完成任务" },
+      { id: "feedback.reject", name: "需求驳回" }
     ]
   },
   {
@@ -81,7 +138,18 @@ export const SITE_MODULES = [
       { id: "people.members", name: "成员管理" },
       { id: "people.rights", name: "责权" },
       { id: "people.acl", name: "权限" },
-      { id: "people.logs", name: "改动日志" }
+      { id: "people.logs", name: "改动日志" },
+      { id: "people.notices", name: "公告中心" }
+    ]
+  },
+  {
+    id: "hr",
+    name: "智能人事",
+    features: [
+      { id: "hr.attendance", name: "数据看板" },
+      { id: "hr.overtime", name: "奋斗时长" },
+      { id: "hr.recruit", name: "招聘中心" },
+      { id: "hr.staff", name: "员工花名册" }
     ]
   },
   {

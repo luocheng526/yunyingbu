@@ -615,15 +615,40 @@ test("org center stays off DingTalk and keeps people columns local", async () =>
   assert.match(adminDoc, /不要在组织中心再铺「智能人事」菜单/);
   assert.match(orgDoc, /假勤、打卡、调休、加班归 \*\*智能人事\*\*/);
   assert.match(orgDoc, /不要在组织中心再铺智能人事菜单或页签/);
+  assert.match(orgDoc, /网站权限目录跟主框架侧栏走/);
   assert.match(orgDoc, /公告中心整页挂在「改动日志」后面的页签/);
   assert.match(routerSrc, /dingTalk: false/);
   assert.equal((peopleJs.match(/class="org-tab(?: is-active)?"/g) || []).length, 6);
   assert.doesNotMatch(peopleJs, /智能人事/);
   assert.doesNotMatch(peopleJs, /href="\/hr"/);
-  assert.ok(!SITE_MODULES.some((mod) => mod.id === "hr" || mod.name === "智能人事"));
+  assert.deepEqual(
+    SITE_MODULES.map((mod) => mod.name),
+    [
+      "首页",
+      "边界数据中心",
+      "星脉数据中心",
+      "沈子晗运营中心",
+      "韩梦凯运营中心",
+      "店铺维护中心",
+      "甄选商学院",
+      "甄选智能体",
+      "工作汇报",
+      "月度大会",
+      "需求与反馈",
+      "版本发布中心",
+      "组织中心",
+      "智能人事",
+      "公告中心",
+      "个人中心"
+    ]
+  );
+  assert.deepEqual(
+    SITE_MODULES.find((mod) => mod.id === "hr").features.map((item) => item.name),
+    ["数据看板", "奋斗时长", "招聘中心", "员工花名册"]
+  );
   assert.deepEqual(
     SITE_MODULES.find((mod) => mod.id === "people").features.map((item) => item.name),
-    ["店铺主数据", "成员管理", "责权", "权限", "改动日志"]
+    ["店铺主数据", "成员管理", "责权", "权限", "改动日志", "公告中心"]
   );
   await withServer(async (base) => {
     const res = await fetch(`${base}/api/people`);
@@ -1873,6 +1898,7 @@ test("unconfigured people default all-off and only line leaders assign their gro
   assert.equal(canAssignPerson("韩梦凯", { name: "张文静", lineManager: "沈子晗", center: "沈子晗运营中心" }), false);
   assert.equal(canAssignPerson("沈子晗", { name: "罗成" }), false);
   assert.equal(featureAllowed("张文静", "home.workbench", "see"), false);
+  assert.equal(featureAllowed("张文静", "hr.attendance", "see"), false);
   assert.equal(featureAllowed("张文静", "people.stores", "edit"), false);
   assert.equal(featureAllowed("罗成", "people.acl", "edit"), true);
   assert.equal(featureAllowed("沈子晗", "people.acl", "edit"), true);
@@ -1900,6 +1926,15 @@ test("site acl assigns split module and store caps by roster and store board", a
     assert.equal(board.status, 200);
     assert.equal(boardJson.canAssign, true);
     assert.ok(boardJson.catalog.some((mod) => mod.id === "people" && mod.features.some((item) => item.id === "people.acl")));
+    assert.ok(boardJson.catalog.some((mod) => mod.id === "hr" && mod.name === "智能人事"));
+    assert.ok(boardJson.catalog.some((mod) => mod.id === "bound" && mod.name === "边界数据中心"));
+    assert.ok(boardJson.catalog.some((mod) => mod.id === "work" && mod.name === "工作汇报"));
+    assert.ok(boardJson.catalog.some((mod) => mod.id === "meeting" && mod.name === "月度大会"));
+    assert.ok(boardJson.catalog.some((mod) => mod.id === "feedback" && mod.name === "需求与反馈"));
+    assert.equal(boardJson.catalog.find((mod) => mod.id === "data").name, "星脉数据中心");
+    assert.equal(boardJson.catalog.find((mod) => mod.id === "academy").name, "甄选商学院");
+    assert.ok(boardJson.me.modules.hr.features["hr.attendance"].edit);
+    assert.equal(featureAllowed("罗成", "hr.staff", "see"), true);
     assert.ok(boardJson.people.some((row) => row.name === "张文静" && row.configured === false));
     assert.ok(boardJson.people.some((row) => row.name === "刘璇"));
     const rasw = boardJson.stores.find((row) => row.storeName === "RASW家居旗舰店");
