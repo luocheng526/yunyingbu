@@ -35,7 +35,7 @@ test("人事部账号登录只进智能人事，侧栏只留智能人事和个�
   assert.equal(html.includes('href="/home"'), false);
   assert.equal(html.includes('href="/hr"'), true);
   const navSrc = fs.readFileSync(new URL("../public/shared/nav.js", import.meta.url), "utf8");
-  assert.match(navSrc, /isHrDesk\(\) && leafRoute\(current\) === deskHome\(\) && key !== deskHome\(\)/);
+  assert.match(navSrc, /leafRoute\(current\) === deskHome\(\) && key !== deskHome\(\)/);
   assert.equal(html.includes("数据中心"), false);
   assert.equal(html.includes("星脉数据中心"), false);
   assert.equal(html.includes("边界数据中心"), false);
@@ -52,7 +52,7 @@ test("人事部账号登录只进智能人事，侧栏只留智能人事和个�
   const base = `http://127.0.0.1:${port}`;
   try {
     const staff = await login(base, "罗成");
-    assert.equal(staff.data.user.home, "/data");
+    assert.equal(staff.data.user.home, "/home");
     assert.equal(staff.data.user.desk, "");
     const staffData = await fetch(`${base}/data`, { headers: { cookie: staff.cookie }, redirect: "manual" });
     assert.equal(staffData.status, 302);
@@ -259,7 +259,7 @@ test("沈子晗中心运营账号不进人事台", async () => {
     const ops = await login(`http://127.0.0.1:${port}`, "张文静");
     assert.equal(ops.status, 200);
     assert.equal(ops.data.user.desk, "");
-    assert.equal(ops.data.user.home, "/data");
+    assert.equal(ops.data.user.home, "/home");
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

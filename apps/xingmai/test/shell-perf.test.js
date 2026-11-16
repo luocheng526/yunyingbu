@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createApp } from "../src/app.js";
 import { resetHanStore } from "../src/modules/han/store.js";
+import { SHELL_ASSET_VER } from "../src/modules/profile/middleware.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const server = createApp().listen(0);
@@ -26,9 +27,10 @@ async function loginCookie() {
 test("shell HTML is versioned so browsers drop the old full-reload nav.js", async () => {
   const cookie = await loginCookie();
   const html = await (await fetch(`${base}/data/overview`, { headers: { cookie } })).text();
-  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.113/);
-  assert.match(html, /\/shared\/layout\.css\?v=0\.1\.113/);
-  assert.match(html, /\/shared\/modules\/data\.js\?v=0\.1\.113/);
+  const ver = SHELL_ASSET_VER.replaceAll(".", "\\.");
+  assert.match(html, new RegExp(`/shared/nav\\.js\\?v=${ver}`));
+  assert.match(html, new RegExp(`/shared/layout\\.css\\?v=${ver}`));
+  assert.match(html, new RegExp(`/shared/modules/data\\.js\\?v=${ver}`));
   const js = readFileSync(join(root, "public/shared/nav.js"), "utf8");
   assert.match(js, /history\.pushState/);
   assert.match(js, /function go\(/);
@@ -51,8 +53,12 @@ test("sidebar HTML stays fast when the same process is reused", async () => {
     assert.equal(res.status, 200);
     samples.push(ms);
     const html = await res.text();
-    assert.match(html, /\/shared\/nav\.js\?v=0\.1\.113/);
-    assert.match(html, /\/shared\/modules\//);
+    assert.match(html, new RegExp(`/shared/nav\\.js\\?v=${SHELL_ASSET_VER.replaceAll(".", "\\.")}`));
+    if (path === "/home") {
+      assert.match(html, /\/api\/home\/client\.js/);
+    } else {
+      assert.match(html, /\/shared\/modules\//);
+    }
     assert.match(html, /<span>首页<\/span>/);
   }
   const max = Math.max(...samples);
@@ -64,7 +70,7 @@ test("home page is injected and not served as raw static index", async () => {
   for (const dest of ["/", "/index.html"]) {
     const res = await fetch(`${base}${dest}`, { headers: { cookie }, redirect: "manual" });
     assert.equal(res.status, 302);
-    assert.equal(res.headers.get("location"), "/data");
+    assert.equal(res.headers.get("location"), "/home");
   }
 });
 
