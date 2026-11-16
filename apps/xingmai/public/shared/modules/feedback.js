@@ -63,24 +63,25 @@
       ".fb-c1{background:linear-gradient(135deg,#2fcf78,#62e08a);}" +
       ".fb-c2{background:linear-gradient(135deg,#4b7cff,#6ea0ff);}" +
       ".fb-c3{background:linear-gradient(135deg,#ff9440,#ffb15a);}" +
-      ".fb-board{border-radius:16px;padding:14px;background:linear-gradient(180deg,#7ed4ea 0%,#8eb6ff 42%,#c9b6ff 74%,#ffd3ae 100%);min-height:280px;}" +
+      ".fb-board{border-radius:16px;padding:14px;background:linear-gradient(180deg,#2f6fe4 0%,#d7e7ff 100%);min-height:280px;}" +
       ".fb-board-bar{display:flex;align-items:center;gap:8px;color:#fff;margin:0 0 12px;}" +
       ".fb-board-bar strong{font-size:16px;font-weight:700;}" +
       ".fb-board-bar span{flex:1;font-size:12px;opacity:.92;}" +
-      ".fb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;}" +
-      ".fb-person{background:var(--xm-card);color:var(--xm-ink);border-radius:12px;padding:12px;box-shadow:0 10px 24px rgba(20,40,80,.12);display:flex;flex-direction:column;gap:8px;}" +
-      ".fb-person-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;}" +
+      ".fb-grid{display:flex;flex-direction:column;gap:10px;}" +
+      ".fb-person{background:var(--xm-card);color:var(--xm-ink);border-radius:12px;padding:12px 14px;box-shadow:0 8px 18px rgba(20,40,80,.12);display:flex;align-items:center;gap:16px;width:100%;box-sizing:border-box;}" +
+      ".fb-who{flex:0 0 132px;min-width:0;}" +
+      ".fb-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:4px;}" +
       ".fb-name{font-size:16px;font-weight:700;}" +
-      ".fb-when{color:var(--xm-muted);font-size:12px;text-align:right;line-height:1.4;font-variant-numeric:tabular-nums;}" +
+      ".fb-when{color:var(--xm-muted);font-size:12px;line-height:1.4;font-variant-numeric:tabular-nums;margin-top:4px;}" +
       ".fb-need{font-size:14px;font-weight:650;}" +
-      ".fb-body{white-space:pre-wrap;line-height:1.55;}" +
-      ".fb-shot{width:100%;max-height:168px;object-fit:cover;border-radius:8px;background:#f4f7fb;display:block;}" +
-      ".fb-shot-empty{height:92px;border:1px dashed var(--xm-line);border-radius:8px;color:var(--xm-muted);display:flex;align-items:center;justify-content:center;font-size:12px;background:color-mix(in srgb, var(--xm-ink) 4%, var(--xm-card));}" +
-      ".fb-meta{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--xm-muted);}" +
+      ".fb-body{white-space:pre-wrap;line-height:1.5;}" +
+      ".fb-shot{width:148px;height:72px;object-fit:cover;border-radius:8px;background:#f4f7fb;display:block;flex:0 0 auto;}" +
+      ".fb-shot-empty{width:148px;height:72px;box-sizing:border-box;border:1px dashed var(--xm-line);border-radius:8px;color:var(--xm-muted);display:flex;align-items:center;justify-content:center;font-size:12px;background:color-mix(in srgb, var(--xm-ink) 4%, var(--xm-card));flex:0 0 auto;}" +
+      ".fb-meta{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--xm-muted);}" +
       ".fb-meta b{color:var(--xm-ink);font-weight:650;}" +
       ".fb-ops{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}" +
-      ".fb-ops input{flex:1 1 100%;min-width:0;height:30px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;font-size:12px;}" +
-      ".fb-empty{padding:36px 12px;text-align:center;color:#fff;}" +
+      ".fb-ops input{flex:1 1 180px;min-width:140px;height:30px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;font-size:12px;}" +
+      ".fb-empty{padding:36px 12px;text-align:center;color:#12325a;}" +
       ".fb-empty b{display:block;margin-bottom:6px;font-size:15px;}" +
       ".fb-form{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:12px;box-shadow:var(--xm-shadow);padding:14px;display:flex;flex-direction:column;gap:10px;margin:0 0 14px;}" +
       ".fb-field{display:flex;flex-direction:column;gap:4px;color:var(--xm-muted);font-size:12px;}" +
@@ -92,7 +93,7 @@
       ".fb-primary:disabled{opacity:.6;cursor:default;}" +
       ".fb-onboard{height:32px;border:0;border-radius:6px;background:#fff;color:#245bdb;padding:0 12px;font:inherit;font-size:13px;font-weight:650;cursor:pointer;}" +
       ".fb-ghost{height:28px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;font-size:12px;cursor:pointer;}" +
-      "@media (max-width:900px){.fb-stats{grid-template-columns:repeat(2,minmax(0,1fr));}}";
+      "@media (max-width:900px){.fb-stats{grid-template-columns:repeat(2,minmax(0,1fr));}.fb-person{flex-wrap:wrap;align-items:flex-start;}.fb-who,.fb-shot,.fb-shot-empty{flex-basis:auto;}}";
     document.head.appendChild(style);
   }
 
@@ -207,18 +208,16 @@
     }
     return (
       '<article class="fb-person">' +
-      '<div class="fb-person-top"><div class="fb-name">' +
+      '<div class="fb-who"><div class="fb-name">' +
       esc(item.authorName || item.author) +
       '</div><div class="fb-when">' +
       time +
       "</div></div>" +
-      '<div class="fb-need">' +
+      '<div class="fb-main"><div class="fb-need">' +
       esc(item.title) +
       '</div><div class="fb-body">' +
       esc(item.body) +
-      "</div>" +
-      shotHtml(item) +
-      '<div class="fb-meta"><div>备注说明　<b>' +
+      '</div><div class="fb-meta"><div>备注说明　<b>' +
       esc(noteText) +
       "</b></div><div>审核人　经理 <b>" +
       esc(manager) +
@@ -226,6 +225,8 @@
       esc(STATUS[item.status] || item.status) +
       "</b></div></div>" +
       ops +
+      "</div>" +
+      shotHtml(item) +
       "</article>"
     );
   }
@@ -240,7 +241,7 @@
     } else if (state.loadError) {
       body = '<div class="fb-empty"><b>看板没有加载出来</b><button type="button" class="fb-onboard" data-retry="1">重试</button></div>';
     } else if (!rows.length) {
-      body = '<div class="fb-empty"><b>这个颜色里还没有需求</b>提交后，每个人一张小卡片，放在这块渐变里。</div>';
+      body = '<div class="fb-empty"><b>这个颜色里还没有需求</b>提交后，每个人一条长卡片，横在这块渐变里。</div>';
     } else {
       body = '<div class="fb-grid">' + rows.map(personCard).join("") + "</div>";
     }
