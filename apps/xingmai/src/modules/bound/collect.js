@@ -1,0 +1,617 @@
+import { randomBytes } from "node:crypto";
+import { API_ORIGIN, MASTERS, ORIGIN, PAGE_SIZE, accessCodes, reports } from "./catalog.js";
+import { listSheetHeads, readState, replaceMasters, writeMaster, writeSheet, writeState } from "./persist.js";
+import { collectScopes, shanghaiToday } from "./time.js";
+
+const KNOWN_ACCESS = new Set(accessCodes());
+let fetchImpl = globalThis.fetch;
+let timer = null;
+let busy = false;
+
+export function setBoundFetch(next) {
+  fetchImpl = next || globalThis.fetch;
+}
+
+export function stopCollectLoop() {
+  if (timer) {
+    clearInterval(timer);
+  }
+  timer = null;
+  busy = false;
+}
+
+export function ensureCollectLoop() {
+  if (timer || process.env.BOUND_COLLECT_LOOP === "0") {
+    return;
+  }
+  timer = setInterval(() => {
+    tick().catch(() => {});
+  }, 4000);
+  if (typeof timer.unref === "function") {
+    timer.unref();
+  }
+}
+
+function blankSession() {
+  return {
+    phase: "idle",
+    provider: "WECHAT",
+    deviceId: "",
+    cookies: {},
+    scene: "",
+    qrUrl: "",
+    message: "",
+    accounts: [],
+    loginTicket: "",
+    allowed: null,
+    userName: ""
+  };
+}
+
+async function session() {
+  const saved = await readState("session", null);
+  const next = { ...blankSession(), ...(saved || {}) };
+  if (!next.deviceId) {
+    next.deviceId = randomBytes(16).toString("hex");
+    await writeState("session", next);
+  }
+  return next;
+}
+
+async function saveSession(next) {
+  await writeState("session", next);
+  return next;
+}
+
+function absorbCookies(current, response) {
+  const lines = typeof response.headers.getSetCookie === "function" ? response.headers.getSetCookie() : [];
+  const single = response.headers.get("set-cookie");
+  const all = lines.length ? lines : single ? [single] : [];
+  all.forEach((line) => {
+    const part = String(line).split(";")[0];
+    const index = part.indexOf("=");
+    if (index > 0) {
+      current.cookies[part.slice(0, index).trim()] = part.slice(index + 1).trim();
+    }
+  });
+}
+
+async function callUpstream(current, spec) {
+  const url = new URL(API_ORIGIN + spec.path);
+  Object.entries(spec.query || {}).forEach(([key, value]) => {
+    if (value != null && value !== "") {
+      url.searchParams.set(key, String(value));
+    }
+  });
+  const headers = {
+    "X-Requested-With": "XMLHttpRequest",
+    Origin: ORIGIN,
+    Referer: `${ORIGIN}/login`,
+    Accept: "application/json,image/*,*/*"
+  };
+  const cookie = Object.entries(current.cookies || {}).map(([key, value]) => `${key}=${value}`).join("; ");
+  if (cookie) {
+    headers.Cookie = cookie;
+  }
+  if (spec.access) {
+    headers["access-code"] = spec.access;
+  }
+  let body;
+  if (spec.method === "form") {
+    headers["Content-Type"] = "application/x-www-form-urlencoded;charset=UTF-8";
+    body = formBody(spec.body || {});
+  } else if (spec.method !== "get") {
+    headers["Content-Type"] = "application/json;charset=UTF-8";
+    body = JSON.stringify(spec.body || {});
+  }
+  const response = await fetchImpl(url, { method: spec.method === "get" ? "GET" : "POST", headers, body });
+  absorbCookies(current, response);
+  const type = response.headers.get("content-type") || "";
+  if (!type.includes("json")) {
+    const buffer = Buffer.from(await response.arrayBuffer());
+    return { binary: true, type, buffer, status: response.status };
+  }
+  return response.json();
+}
+
+function formBody(value) {
+  const params = new URLSearchParams();
+  Object.entries(value).forEach(([key, item]) => {
+    if (item == null) {
+      return;
+    }
+    if (Array.isArray(item)) {
+      if (!item.length) {
+        params.set(key, "");
+      }
+      item.forEach((entry, index) => {
+        params.set(`${key}[${index}]`, typeof entry === "object" ? JSON.stringify(entry) : String(entry));
+      });
+      return;
+    }
+    params.set(key, typeof item === "object" ? JSON.stringify(item) : String(item));
+  });
+  return params.toString();
+}
+
+function authExpired(payload) {
+  if (!payload || payload.binary) {
+    return false;
+  }
+  const content = String(payload.content || "");
+  return payload.code === -1 || payload.code === -7 || payload.code === 9901 || /未登录|登录状态已过期|请重新登录/.test(content);
+}
+
+function denied(payload) {
+  return /无权限|没有权限|无权|权限不足/.test(String((payload && (payload.content || payload.message)) || ""));
+}
+
+function extractList(data) {
+  if (Array.isArray(data)) {
+    return { rows: data, total: data.length, object: false };
+  }
+  if (!data || typeof data !== "object") {
+    return { rows: [], total: 0, object: true, raw: data };
+  }
+  for (const key of ["list", "rows", "records", "columnData", "dataList", "goodsList", "pageList"]) {
+    if (Array.isArray(data[key])) {
+      const total = Number(data.total ?? data.totalCount ?? data.count ?? data[key].length);
+      return { rows: data[key], total: Number.isFinite(total) ? total : data[key].length, object: false };
+    }
+  }
+  if (data.data && typeof data.data === "object") {
+    const inner = extractList(data.data);
+    if (!inner.object || inner.rows.length) {
+      return inner;
+    }
+  }
+  return { rows: [], total: 0, object: true, raw: data };
+}
+
+function collectAccess(node, found) {
+  if (typeof node === "string") {
+    if (KNOWN_ACCESS.has(node)) {
+      found.add(node);
+    }
+    return;
+  }
+  if (Array.isArray(node)) {
+    node.forEach((item) => collectAccess(item, found));
+    return;
+  }
+  if (node && typeof node === "object") {
+    Object.values(node).forEach((item) => collectAccess(item, found));
+  }
+}
+
+function providerQuery(provider) {
+  return provider && provider !== "WECHAT" ? { provider } : {};
+}
+
+export async function linkStatus() {
+  const current = await session();
+  return {
+    ok: true,
+    module: "bound",
+    source: "crawler",
+    erp: false,
+    phase: current.phase,
+    provider: current.provider,
+    deviceId: current.deviceId,
+    message: current.message,
+    userName: current.userName,
+    accounts: current.accounts || [],
+    qrReady: Boolean(current.qrUrl)
+  };
+}
+
+export async function startLink(provider) {
+  const current = await session();
+  current.provider = ["FEISHU", "DINGTALK", "QYWX", "WECHAT"].includes(provider) ? provider : "WECHAT";
+  current.phase = "waiting_scan";
+  current.message = "正在向旧站官方登录接口取二维码";
+  current.accounts = [];
+  current.loginTicket = "";
+  const payload = await callUpstream(current, {
+    method: "get",
+    path: "/auth/qrcode",
+    query: { deviceId: current.deviceId, domain: "hejun.ecbis.cn", ...providerQuery(current.provider) }
+  });
+  if (!payload || payload.code !== 0 || !payload.data) {
+    current.phase = "needs_scan";
+    current.message = (payload && payload.content) || "官方登录二维码没有生成";
+    await saveSession(current);
+    return linkStatus();
+  }
+  current.scene = payload.data.scene || "";
+  current.qrUrl = payload.data.url || "";
+  current.message = "请用旧站登录页同一个扫码方式确认。扫码前二维码只在这一页显示。";
+  await saveSession(current);
+  return linkStatus();
+}
+
+export async function qrBytes() {
+  const current = await session();
+  if (!current.qrUrl) {
+    return null;
+  }
+  if (current.provider !== "WECHAT") {
+    return { kind: "url", url: current.qrUrl };
+  }
+  const response = await fetchImpl(current.qrUrl, {
+    headers: {
+      Referer: `${ORIGIN}/login`,
+      Cookie: Object.entries(current.cookies || {}).map(([key, value]) => `${key}=${value}`).join("; ")
+    }
+  });
+  const type = response.headers.get("content-type") || "image/png";
+  return { kind: "image", type, buffer: Buffer.from(await response.arrayBuffer()) };
+}
+
+async function finishLogin(current, data) {
+  current.userName = String((data && (data.nickName || data.userName || data.name)) || current.userName || "");
+  current.phase = "collecting";
+  current.message = "已登录。从 2026-09-01 按北京时间补采，页面查询不会再打旧站。";
+  current.accounts = [];
+  await saveSession(current);
+}
+
+export async function pollLink() {
+  const current = await session();
+  if (current.phase !== "waiting_scan" || !current.scene) {
+    return linkStatus();
+  }
+  const payload = await callUpstream(current, {
+    method: "get",
+    path: "/auth/checkQrcode",
+    query: {
+      scene: current.scene,
+      domain: "hejun.ecbis.cn",
+      deviceId: current.deviceId,
+      ...providerQuery(current.provider)
+    }
+  });
+  const code = payload && payload.code;
+  if (code === 1000102) {
+    current.message = "等待扫码";
+  } else if (code === 1000103) {
+    current.message = "二维码已过期，正在重新生成";
+    await saveSession(current);
+    return startLink(current.provider);
+  } else if (code === 1011) {
+    current.message = payload.content || `浏览器标识未加入登录管理：${current.deviceId}`;
+  } else if (code === 0) {
+    const data = payload.data || {};
+    if (data.needBind) {
+      current.message = data.message || "这个第三方账号还没绑定，请先在旧站用账号绑定后再扫。";
+    } else if (data.needSelect && Array.isArray(data.accounts) && data.accounts.length) {
+      current.phase = "choose_account";
+      current.loginTicket = data.loginTicket || "";
+      current.accounts = data.accounts;
+      current.message = "扫码成功，请选择要进入的企业账号。";
+    } else {
+      await finishLogin(current, data);
+      return linkStatus();
+    }
+  } else if (payload && payload.content) {
+    current.message = String(payload.content);
+  }
+  await saveSession(current);
+  return linkStatus();
+}
+
+export async function pickAccount(companyId) {
+  const current = await session();
+  const account = (current.accounts || []).find((item) => String(item.companyId) === String(companyId)) || current.accounts[0];
+  if (!account || !current.loginTicket) {
+    return { ...(await linkStatus()), ok: false, error: "没有可选择的企业账号" };
+  }
+  const payload = await callUpstream(current, {
+    method: "json",
+    path: "/auth/ticket/login",
+    body: {
+      loginTicket: current.loginTicket,
+      companyId: account.companyId,
+      deviceId: current.deviceId,
+      agreementStatus: true
+    }
+  });
+  if (!payload || payload.code !== 0) {
+    current.message = (payload && payload.content) || "企业账号登录失败";
+    await saveSession(current);
+    return { ...(await linkStatus()), ok: false };
+  }
+  await finishLogin(current, payload.data || account);
+  return linkStatus();
+}
+
+async function masterState() {
+  return (await readState("masters", {})) || {};
+}
+
+function reportBody(report, dim, scope, page) {
+  return {
+    startDate: scope.start,
+    endDate: scope.end,
+    daysType: scope.daysType,
+    pageNum: Math.max(page, 1),
+    pageSize: PAGE_SIZE,
+    shopList: [],
+    shopId: "",
+    filterCondition: [],
+    isSpu: dim === "spu",
+    isCategory: /cate|品类/.test(report.id),
+    platform: ""
+  };
+}
+
+function sheetHole(report, dim, scope, sheets) {
+  const pages = sheets.filter(
+    (row) => row.reportId === report.id && row.dim === dim && row.startOn === scope.start && row.endOn === scope.end
+  );
+  const first = pages.find((row) => row.pageNo === 1);
+  if (!first) {
+    return { page: 1, kind: report.kind === "object" ? "object" : "list", attempts: 0 };
+  }
+  if (first.status === "denied" || (first.status === "failed" && first.attempts >= 3)) {
+    return null;
+  }
+  if (first.status !== "done") {
+    return { page: 1, kind: first.kind || report.kind, attempts: first.attempts };
+  }
+  if (first.kind === "object") {
+    return null;
+  }
+  const size = first.pageSize || PAGE_SIZE;
+  const need = first.totalRows === 0 ? 1 : Math.ceil(first.totalRows / size);
+  for (let page = 2; page <= Math.min(need, 200); page += 1) {
+    const found = pages.find((row) => row.pageNo === page);
+    if (!found) {
+      return { page, kind: "list", attempts: 0 };
+    }
+    if (found.status === "failed" && found.attempts < 3) {
+      return { page, kind: "list", attempts: found.attempts };
+    }
+    if (found.status !== "done" && found.status !== "failed") {
+      return { page, kind: "list", attempts: found.attempts };
+    }
+  }
+  if (report.sumPath) {
+    const sum = pages.find((row) => row.pageNo === 0);
+    if (!sum) {
+      return { page: 0, kind: "sum", attempts: 0 };
+    }
+    if (sum.status === "failed" && sum.attempts < 3) {
+      return { page: 0, kind: "sum", attempts: sum.attempts };
+    }
+  }
+  return null;
+}
+
+async function nextUnit(current) {
+  const masters = await masterState();
+  for (const master of MASTERS) {
+    const state = masters[master.id] || { status: "missing", page: 1, attempts: 0 };
+    if (state.status === "done" || state.status === "failed") {
+      continue;
+    }
+    return { type: "master", master, page: state.page || 1, attempts: state.attempts || 0 };
+  }
+  const allowed = Array.isArray(current.allowed) ? new Set(current.allowed) : null;
+  const sheets = await listSheetHeads();
+  const scopes = collectScopes(shanghaiToday());
+  for (const report of reports()) {
+    if (allowed && report.access && !allowed.has(report.access)) {
+      continue;
+    }
+    for (const dim of report.dims || ["all"]) {
+      for (const scope of scopes) {
+        const hole = sheetHole(report, dim, scope, sheets);
+        if (hole) {
+          return { type: "report", report, dim, scope, ...hole };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+async function rememberMaster(id, patch) {
+  const masters = await masterState();
+  masters[id] = { ...(masters[id] || {}), ...patch };
+  await writeState("masters", masters);
+}
+
+async function runMaster(current, unit) {
+  const master = unit.master;
+  let payload;
+  try {
+    payload = await callUpstream(current, {
+      method: master.method,
+      path: master.path,
+      access: "",
+      query: master.method === "get" ? { pageNum: unit.page, pageSize: PAGE_SIZE, startDate: "2026-09-01", endDate: shanghaiToday() } : {},
+      body: master.method === "get" ? null : reportBody(master, "all", { start: "2026-09-01", end: shanghaiToday(), daysType: "custom" }, unit.page)
+    });
+  } catch (error) {
+    await rememberMaster(master.id, { status: unit.attempts + 1 >= 3 ? "failed" : "retry", page: unit.page, attempts: unit.attempts + 1, error: String(error.message || error).slice(0, 300) });
+    return;
+  }
+  if (authExpired(payload)) {
+    current.phase = "needs_scan";
+    current.message = "旧站登录已过期。已保留补采进度，扫码后从中断处继续。";
+    await saveSession(current);
+    return;
+  }
+  if (!payload || payload.code !== 0) {
+    await rememberMaster(master.id, {
+      status: unit.attempts + 1 >= 3 ? "failed" : "retry",
+      attempts: unit.attempts + 1,
+      error: String((payload && payload.content) || "资料接口失败").slice(0, 300)
+    });
+    return;
+  }
+  const extracted = extractList(payload.data);
+  const items = extracted.object ? [extracted.raw || payload.data] : extracted.rows;
+  if (unit.page === 1) {
+    await replaceMasters(master.id, items.filter(Boolean));
+  } else {
+    for (const item of items) {
+      const key = String((item && (item.id || item.goodsId || item.shopId || item.userId)) || `${master.id}-${unit.page}-${items.indexOf(item)}`);
+      await writeMaster(master.id, key, item);
+    }
+  }
+  if (master.id === "perms") {
+    const found = new Set();
+    collectAccess(payload.data, found);
+    current.allowed = found.size ? [...found] : null;
+    await saveSession(current);
+  }
+  const size = PAGE_SIZE;
+  const more = !extracted.object && unit.page < 200 && extracted.total > unit.page * size && items.length === size;
+  await rememberMaster(master.id, more ? { status: "partial", page: unit.page + 1, attempts: 0 } : { status: "done", page: unit.page, attempts: 0 });
+}
+
+async function runReport(current, unit) {
+  const report = unit.report;
+  const spec = unit.kind === "sum"
+    ? { method: report.sumMethod || report.method, path: report.sumPath, access: report.access }
+    : { method: report.method, path: report.path, access: report.access };
+  const body = reportBody(report, unit.dim, unit.scope, unit.page || 1);
+  let payload;
+  try {
+    payload = await callUpstream(current, { ...spec, body, query: spec.method === "get" ? body : {} });
+  } catch (error) {
+    await writeSheet({
+      reportId: report.id,
+      dim: unit.dim,
+      startOn: unit.scope.start,
+      endOn: unit.scope.end,
+      pageNo: unit.page,
+      status: "failed",
+      kind: unit.kind,
+      attempts: unit.attempts + 1,
+      errorText: String(error.message || error),
+      payload: {}
+    });
+    return;
+  }
+  if (authExpired(payload)) {
+    current.phase = "needs_scan";
+    current.message = "旧站登录已过期。已保留补采进度，扫码后从中断处继续。";
+    await saveSession(current);
+    return;
+  }
+  if (denied(payload)) {
+    await writeSheet({
+      reportId: report.id,
+      dim: unit.dim,
+      startOn: unit.scope.start,
+      endOn: unit.scope.end,
+      pageNo: unit.page || 1,
+      status: "denied",
+      kind: unit.kind,
+      attempts: 1,
+      errorText: String(payload.content || "没有权限"),
+      payload: {}
+    });
+    return;
+  }
+  if (!payload || payload.code !== 0) {
+    await writeSheet({
+      reportId: report.id,
+      dim: unit.dim,
+      startOn: unit.scope.start,
+      endOn: unit.scope.end,
+      pageNo: unit.page,
+      status: "failed",
+      kind: unit.kind,
+      attempts: unit.attempts + 1,
+      errorText: String((payload && payload.content) || "接口失败"),
+      payload: {}
+    });
+    return;
+  }
+  if (unit.kind === "object" || unit.kind === "sum") {
+    await writeSheet({
+      reportId: report.id,
+      dim: unit.dim,
+      startOn: unit.scope.start,
+      endOn: unit.scope.end,
+      pageNo: unit.kind === "sum" ? 0 : 1,
+      status: "done",
+      kind: unit.kind === "sum" ? "sum" : "object",
+      totalRows: 1,
+      pageSize: 1,
+      attempts: 0,
+      rowCount: 1,
+      payload: { raw: payload.data }
+    });
+    return;
+  }
+  const extracted = extractList(payload.data);
+  if (extracted.object) {
+    await writeSheet({
+      reportId: report.id,
+      dim: unit.dim,
+      startOn: unit.scope.start,
+      endOn: unit.scope.end,
+      pageNo: unit.page || 1,
+      status: "done",
+      kind: "object",
+      totalRows: 1,
+      pageSize: 1,
+      attempts: 0,
+      rowCount: 1,
+      payload: { raw: extracted.raw, rows: extracted.raw ? [extracted.raw] : [] }
+    });
+    return;
+  }
+  await writeSheet({
+    reportId: report.id,
+    dim: unit.dim,
+    startOn: unit.scope.start,
+    endOn: unit.scope.end,
+    pageNo: unit.page,
+    status: "done",
+    kind: "list",
+    totalRows: extracted.total,
+    pageSize: PAGE_SIZE,
+    attempts: 0,
+    rowCount: extracted.rows.length,
+    payload: { rows: extracted.rows, total: extracted.total }
+  });
+}
+
+export async function tick() {
+  if (busy) {
+    return { ok: true, skipped: true };
+  }
+  busy = true;
+  try {
+    const current = await session();
+    if (current.phase === "waiting_scan") {
+      return pollLink();
+    }
+    if (current.phase !== "collecting" && current.phase !== "logged_in") {
+      return { ok: true, idle: true, phase: current.phase };
+    }
+    const unit = await nextUnit(current);
+    if (!unit) {
+      current.phase = "logged_in";
+      current.message = `已补到 ${shanghaiToday()} 之前能确定的范围。之后按天增量。`;
+      await saveSession(current);
+      return { ok: true, idle: true, phase: current.phase };
+    }
+    current.phase = "collecting";
+    await saveSession(current);
+    if (unit.type === "master") {
+      await runMaster(current, unit);
+    } else {
+      await runReport(current, unit);
+    }
+    return { ok: true, phase: (await session()).phase, unit: unit.type === "master" ? unit.master.id : unit.report.id };
+  } finally {
+    busy = false;
+  }
+}
