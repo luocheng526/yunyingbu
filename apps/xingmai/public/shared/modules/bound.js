@@ -24,7 +24,13 @@
     compare: "yoy",
     stockDim: "style",
     hideCombo: false,
-    dutyScope: "link"
+    dutyScope: "link",
+    hpKind: "hp",
+    matchMode: "exact",
+    splitWarehouse: false,
+    splitCombo: false,
+    comboMode: "whole",
+    profilePane: "info"
   };
   var active = 0;
   var timer = 0;
@@ -75,7 +81,13 @@
       ".bd-stat b{display:block;margin-top:6px;font-size:20px;}",
       ".bd-top3{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 12px;}",
       ".bd-top3 article,.bd-profile{padding:12px;background:#fff;border:1px solid #eceff5;border-radius:6px;}",
-      ".bd-top3 h3,.bd-profile h2{margin:0 0 8px;font-size:14px;}",
+      ".bd-top3 h3,.bd-profile h2,.bd-block-title{margin:0 0 8px;font-size:14px;}",
+      ".bd-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}",
+      ".bd-fields div{padding:8px 0;border-bottom:1px solid #f0f2f5;}",
+      ".bd-fields span{display:block;color:#86909c;font-size:12px;}",
+      ".bd-fields b{display:block;margin-top:4px;font-weight:500;}",
+      ".bd-wall{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}",
+      ".bd-wall button{height:32px;padding:0 12px;border:1px solid #e1e4ea;border-radius:4px;background:#fff;cursor:pointer;font:inherit;}",
       ".bd-kpi span{display:block;color:#86909c;font-size:12px;}",
       ".bd-kpi b{display:block;margin:6px 0 4px;font-size:22px;font-weight:650;letter-spacing:-.02em;}",
       ".bd-kpi b.is-down{color:#d93025;}",
@@ -184,7 +196,7 @@
     productOperation: "商品流量、搜索、推广和素材运营。",
     productStock: "商品总库存数据。支持按款式、按货品查看。",
     hpOverview: "货品名称、编码和店铺使用同一套货品资料。",
-    hpPanorama: "从经营、全渠道、布局、SKU 和库存看货品。",
+    hpPanorama: "按货品或款式看总览、渠道布局、商品布局、SKU 全渠道、库存、品牌和发货仓库。",
     hpStock: "货品总库存综合指标和库存明细。",
     teamOverview: "链接管理、店铺管理、业绩对比和个人榜单、团队榜单。",
     teamSkills: "销售额贡献和提成收入。",
@@ -205,7 +217,7 @@
 
   function searchPlaceholder(pageId) {
     if (pageId === "teamMemberProfile") return "请输入成员名称";
-    if (pageId === "hpOverview" || pageId === "hpPanorama" || pageId === "hpStock") return "搜索货品名称、编码";
+    if (pageId === "hpOverview" || pageId === "hpPanorama" || pageId === "hpStock") return "货品名称/编码/款式编码";
     return "搜索商品、店铺、负责人";
   }
 
@@ -363,10 +375,20 @@
     var tabLabel = (data.tab && data.tab.label) || "";
     var html = "";
     if (id === "channelAnalysis" && tabLabel.indexOf("地域") >= 0) {
-      html += chips([["province", "按省份"], ["city", "按城市"]], "area");
+      html += '<span class="bd-sub">地域范围</span>' + chips([["province", "按省份"], ["city", "按城市"]], "area");
     }
     if (id === "channelAnalysis" && tabLabel.indexOf("时段") >= 0) {
-      html += chips([["pay", "按支付"], ["ship", "按发货"]], "hourType");
+      html += '<span class="bd-sub">销售时段统计类型</span>' + chips([["ship", "按发货"], ["pay", "按支付"]], "hourType");
+    }
+    if (id === "hpOverview") {
+      html += chips([["exact", "精确"], ["fuzzy", "模糊"]], "matchMode");
+      html += '<label class="bd-chip' + (state.splitWarehouse ? " is-on" : "") + '"><input type="checkbox" data-act="warehouse"' + (state.splitWarehouse ? " checked" : "") + ">按发货仓库拆分</label>";
+      html += '<label class="bd-chip' + (state.splitCombo ? " is-on" : "") + '"><input type="checkbox" data-act="split-combo"' + (state.splitCombo ? " checked" : "") + ">拆分组合装</label>";
+    }
+    if (id === "hpPanorama") {
+      html += chips([["hp", "按货品"], ["ks", "按款式"]], "hpKind");
+      html += '<span class="bd-sub">组合装口径</span>' + chips([["split", "已拆分"], ["whole", "未拆分"]], "comboMode");
+      html += '<p class="bd-status">仅总览数据和渠道布局分析支持按拆分组合装查询，其他分析固定按未拆分查询。</p>';
     }
     if (id === "channelAnalysisNew") {
       html += chips([["yoy", "同比"], ["mom", "环比"]], "compare");
@@ -412,7 +434,9 @@
       refund: { refundAmount: 1, refundRate: 1 },
       cost: { saleCost: 1 },
       ad: { cost: 1 },
-      profit: { profit: 1 }
+      profit: { profit: 1 },
+      order: { orderType: 1 },
+      service: { service: 1 }
     };
     var allow = groups[state.goodsGroup];
     if (!allow) {
@@ -433,12 +457,24 @@
         var body = ranked.length ? "<ol>" + ranked.map(function (row, index) {
           return "<li>" + (index + 1) + ". " + esc(row.name || "未命名") + "</li>";
         }).join("") + "</ol>" : "<p>暂无相关数据</p>";
-        return "<article><h3>" + title + "</h3>" + body + "</article>";
+        return "<article><h3>" + title + "</h3>" + body + '<button type="button" class="bd-linkish" data-act="chip" data-key="skillMore" data-value="1">查看更多</button></article>';
       }
       return '<div class="bd-top3">' + board("销售额贡献TOP3") + board("个人提成TOP3") + "</div>";
     }
     if (data.page.id === "teamMemberDetail") {
-      return '<div class="bd-stats"><article class="bd-stat"><span>管理店铺数</span><b>' + esc((data.shops || []).length) + '</b></article><article class="bd-stat"><span>管理链接数</span><b>' + esc(data.total) + '</b></article><article class="bd-stat"><span>管理人数</span><b>' + esc(data.total) + "</b></article></div>";
+      var ready = data.coverage && data.coverage.status === "ready";
+      var sum = data.allSum || {};
+      function picked(keys, fallback) {
+        for (var i = 0; i < keys.length; i += 1) {
+          if (sum[keys[i]] != null && sum[keys[i]] !== "") return sum[keys[i]];
+        }
+        return fallback;
+      }
+      function stat(label, value) {
+        var text = !ready ? "未采完" : (value == null || value === "" ? "—" : value);
+        return '<article class="bd-stat"><span>' + label + "</span><b>" + esc(text) + "</b></article>";
+      }
+      return '<div class="bd-stats">' + stat("管理店铺数", picked(["shopCount", "manageShopCount"], (data.shops || []).length)) + stat("自己责权的店铺数", picked(["ownShopCount", "dutyShopCount"], null)) + stat("管理链接数", picked(["linkCount", "manageLinkCount"], data.total)) + stat("管理人数", picked(["memberCount", "manageUserCount"], null)) + "</div>" + chips([["sku", "按SKU统计"], ["spu", "按SPU统计"]], "dim") + '<p class="bd-status">表格为自定义时间时，只显示有销量的数据。访客相关指标按单日累加。</p><h2 class="bd-block-title">岗位工作明细</h2>';
     }
     return "";
   }
@@ -449,17 +485,39 @@
     }
     if (data.page.id === "personalCenter") {
       var row = (data.rows || [])[0] || {};
-      var phone = row.shop || row.name || "未采完";
-      return '<section class="bd-profile"><h2>账号绑定</h2><p>微信、飞书、钉钉、企业微信的绑定从本库个人资料读取。</p><p>' + (data.coverage.status === "ready" ? "已采到个人资料" : "未采完") + '</p><h2>修改密码</h2><p>密码只在旧站修改，这里不保存密码。</p><h2>手机号</h2><p>' + esc(phone) + "</p></section>";
+      var metrics = row.metrics || {};
+      function field(label, value) {
+        var text = value == null || value === "" ? "未采完" : value;
+        return "<div><span>" + label + "</span><b>" + esc(text) + "</b></div>";
+      }
+      var body = "";
+      if (state.profilePane === "safe") {
+        body = field("更换手机号", metrics.phone || metrics.mobile || row.shop) + '<div><span>修改密码</span><b>密码只在旧站修改，这里不保存密码。</b></div>' + field("微信", metrics.wechat) + field("飞书", metrics.feishu) + field("钉钉", metrics.dingtalk) + field("企业微信", metrics.qywx);
+      } else if (state.profilePane === "msg") {
+        body = "<p>消息设置从本库个人资料读取。" + (data.coverage.status === "ready" ? "已采到个人资料。" : "未采完。") + "</p>";
+      } else {
+        body = field("姓名", metrics.userName || row.name) + field("手机号", metrics.phone || metrics.mobile || row.shop) + field("花名", metrics.nickName || metrics.alias) + field("岗位", metrics.postName || metrics.post) + field("职级", metrics.rankName || metrics.rank) + field("职务", metrics.jobName || metrics.duty);
+      }
+      return '<section class="bd-profile">' + chips([["info", "基本信息"], ["safe", "账号安全"], ["msg", "消息设置"]], "profilePane") + '<div class="bd-fields">' + body + "</div></section>";
     }
     if (data.page.id === "myProjects") {
       var rows = data.rows || [];
-      if (!rows.length) {
-        return '<p class="bd-miss">' + (data.coverage.status === "ready" ? "这个范围内没有记录。" : "未采完") + "</p>";
+      var dayText = data.range && data.range.to ? cnDate(data.range.to) : "";
+      var wall = "";
+      if (state.catalog) {
+        state.catalog.modules.forEach(function (mod) {
+          mod.pages.forEach(function (page) {
+            if (page.id === "myProjects" || page.id === "personalCenter") {
+              return;
+            }
+            wall += '<button type="button" data-act="page" data-page="' + esc(page.id) + '">' + esc(page.label) + "</button>";
+          });
+        });
       }
-      return '<div class="bd-gallery">' + rows.map(function (item) {
+      var projects = rows.length ? rows.map(function (item) {
         return '<article class="bd-tile"><strong>' + esc(item.name || "未命名项目") + "</strong><div>" + esc(item.shop || "") + "</div></article>";
-      }).join("") + "</div>";
+      }).join("") : '<p class="bd-miss">' + (data.coverage.status === "ready" ? "这个范围内没有记录。" : "未采完") + "</p>";
+      return '<section class="bd-profile"><p>今天是' + esc(dayText) + '。今天是你在公司服务的天数以本库个人资料为准。</p><div class="bd-wall">' + wall + "</div></section>" + '<div class="bd-gallery">' + projects + "</div>";
     }
     if (data.page.id === "channelAnalysisNew") {
       return '<section class="bd-block"><div class="bd-block-bar"><h2>指标趋势</h2></div><p class="bd-miss">' + (data.coverage.status === "ready" ? "这段已采完，趋势按当前指标对比。" : "未采完") + "</p></section>";
@@ -492,7 +550,11 @@
         return '<article class="bd-tile"><strong>' + esc(row.name || "未命名") + "</strong><div>" + esc(row.shop) + "</div><div>" + formatCell(metricOf(row, { key: "payAmount", numeric: true, money: true, aliases: ["gmv", "xse"] }), { key: "payAmount", numeric: true, money: true }) + "</div></article>";
       }).join("") + "</div>";
     }
-    var head = "<tr><th></th>" + cols.map(function (column) { return "<th>" + esc(column.label) + "</th>"; }).join("") + "</tr>";
+    var suffix = data.page && data.page.id === "channelAnalysisNew" ? (state.compare === "mom" ? "环比" : "同比") : "";
+    var head = "<tr><th></th>" + cols.map(function (column) {
+      var label = column.label + (suffix && column.numeric ? suffix : "");
+      return "<th>" + esc(label) + "</th>";
+    }).join("") + "</tr>";
     var body = list.map(function (row) {
       var cells = cols.map(function (column) {
         return "<td>" + formatCell(metricOf(row, column), column) + "</td>";
@@ -500,7 +562,8 @@
       var detail = row.fields && state.open[row.key] ? '<tr><td colspan="' + (cols.length + 1) + '" class="bd-detail">' + row.fields.map(function (field) {
         return "<div>" + esc(field.key) + "：" + esc(field.value) + "</div>";
       }).join("") + '<label>跟进 <input data-act="mark" data-key="' + esc(row.key) + '" data-field="follow" value="' + esc(row.follow) + '"></label><label>打标 <input data-act="mark" data-key="' + esc(row.key) + '" data-field="tag" value="' + esc(row.tag) + '"></label><label>目标 <input data-act="mark" data-key="' + esc(row.key) + '" data-field="target" value="' + esc(row.target) + '"></label></td></tr>' : "";
-      var opener = row.fields ? '<button type="button" class="bd-linkish" data-act="expand" data-key="' + esc(row.key) + '">明细</button>' : "";
+      var openerLabel = data.page && data.page.id === "channelAnalysisNew" ? "跟进 待办 打标" : "明细";
+      var opener = row.fields ? '<button type="button" class="bd-linkish" data-act="expand" data-key="' + esc(row.key) + '">' + openerLabel + "</button>" : "";
       return "<tr><td>" + opener + "</td>" + cells + "</tr>" + detail;
     }).join("");
     if (!list.length) {
@@ -543,6 +606,13 @@
         return '<label><input type="checkbox" data-act="card" value="' + esc(card.key) + '"' + (card.on ? " checked" : "") + ">" + esc(card.label) + "</label>";
       }).join("") + '<button type="button" data-act="save-cards">保存指标</button></div>';
     }
+    if (state.panel === "batch") {
+      var batchLabel = state.batchField === "target" ? "设置目标" : state.batchField === "tag" ? "批量打标" : "设置跟进";
+      return '<div class="bd-panel"><strong>' + batchLabel + '</strong><input data-act="batch-value" value="' + esc(state.batchValue || "") + '"><button type="button" data-act="save-batch">确定</button></div>';
+    }
+    if (state.panel === "upload") {
+      return '<div class="bd-panel"><strong>上传报表</strong><p>生意参谋入店来源报表、生意参谋关键指标对比报表、生意参谋流量来源报表、关键词推广来源详情报表、生意参谋手淘搜索来源详情报表。</p><p>这一页只读本库，不把报表回传到旧站。</p></div>';
+    }
     if (state.panel === "columns") {
       return '<div class="bd-panel"><strong>字段设置</strong>' + data.columns.map(function (column) {
         return '<label><input type="checkbox" data-act="column" value="' + esc(column.key) + '"' + (column.on ? " checked" : "") + ">" + esc(column.label) + "</label>";
@@ -570,10 +640,17 @@
       return '<section class="bd-main"><p class="bd-miss">' + esc(state.error || "正在读取本库") + "</p></section>";
     }
     var ops = (data.page && data.page.ops) || meta.ops || [];
-    var tabs = (data.tabs || []).map(function (tab) {
+    var visibleTabs = (data.tabs || []).filter(function (tab) {
+      if (!data.page || data.page.id !== "hpPanorama") {
+        return true;
+      }
+      return (tab.group || "hp") === state.hpKind;
+    });
+    var tabs = visibleTabs.map(function (tab) {
       return '<button type="button" data-act="tab" data-tab="' + esc(tab.id) + '" class="' + (data.tab && data.tab.id === tab.id ? "is-on" : "") + '">' + esc(tab.label) + "</button>";
     }).join("");
-    var shops = '<option value="">全部店铺</option>' + (data.shops || []).map(function (shop) {
+    var shopPrompt = data.page.id === "channelAnalysis" ? "选择渠道/店铺/分组" : "全部店铺";
+    var shops = '<option value="">' + shopPrompt + "</option>" + (data.shops || []).map(function (shop) {
       return '<option value="' + esc(shop) + '"' + (shop === state.shop ? " selected" : "") + ">" + esc(shop) + "</option>";
     }).join("");
     var preset = activePreset();
@@ -581,12 +658,14 @@
       return '<button type="button" data-act="preset" data-preset="' + item[0] + '" class="' + (preset === item[0] ? "is-on" : "") + '">' + item[1] + "</button>";
     }).join("");
     var setting = (data.cards && data.cards.length) ? "cards" : "columns";
-    var tabLabel = data.tab && data.tab.label ? data.tab.label : data.page.label;
+    var tabLabel = data.page.id === "teamSkills" ? "团队成员" : (data.tab && data.tab.label ? data.tab.label : data.page.label);
     var profileOnly = data.page.id === "personalCenter" || data.page.id === "myProjects";
     var tableBlock = profileOnly ? "" : '<section class="bd-block"><div class="bd-block-bar"><h2>' + esc(tabLabel) + '</h2><div class="bd-tools">' +
       (ops.indexOf("dim") >= 0 ? '<button type="button" data-act="dim" data-dim="spu" class="' + (state.dim === "spu" ? "is-on" : "") + '">SPU</button><button type="button" data-act="dim" data-dim="sku" class="' + (state.dim === "sku" ? "is-on" : "") + '">SKU</button>' : "") +
       (ops.indexOf("views") >= 0 ? '<button type="button" data-act="view" data-view="list" class="' + (state.view === "list" ? "is-on" : "") + '">列表</button><button type="button" data-act="view" data-view="period" class="' + (state.view === "period" ? "is-on" : "") + '">周期</button><button type="button" data-act="view" data-view="gallery" class="' + (state.view === "gallery" ? "is-on" : "") + '">大图</button>' : "") +
-      (ops.indexOf("export") >= 0 ? '<a href="/api/bound/export?' + esc(queryString()) + '">导出</a>' : "") +
+      (ops.indexOf("export") >= 0 ? '<a href="/api/bound/export?' + esc(queryString()) + '">' + (data.page.id === "productStock" ? "导出表格数据" : "导出") + "</a>" : "") +
+      (data.page.id === "productOverview" ? '<button type="button" data-act="panel" data-panel="columns">自定义数据字段</button><button type="button" data-act="panel" data-panel="batch" data-field="follow">设置跟进</button><button type="button" data-act="panel" data-panel="batch" data-field="target">设置目标</button><button type="button" data-act="panel" data-panel="batch" data-field="tag">批量打标</button>' : "") +
+      (data.page.id === "productOperation" ? '<button type="button" data-act="panel" data-panel="upload">上传报表</button>' : "") +
       '<button type="button" data-act="panel" data-panel="columns">更多</button></div></div>' +
       renderTable(data) +
       renderSums(data) +
@@ -684,11 +763,31 @@
       } else if (act === "view") {
         state.view = node.getAttribute("data-view");
       } else if (act === "chip") {
-        state[node.getAttribute("data-key")] = node.getAttribute("data-value");
+        var chipKey = node.getAttribute("data-key");
+        state[chipKey] = node.getAttribute("data-value");
+        if (chipKey === "hpKind") {
+          var hpPage = pageMeta();
+          var nextTab = ((hpPage && hpPage.tabs) || []).filter(function (tab) {
+            return (tab.group || "hp") === state.hpKind;
+          })[0];
+          state.tab = nextTab ? nextTab.id : "";
+          state.pageNo = 1;
+          load(root, token);
+          return;
+        }
+        if (chipKey === "dim") {
+          state.pageNo = 1;
+          load(root, token);
+          return;
+        }
         paint(root);
         return;
       } else if (act === "panel") {
-        state.panel = state.panel === node.getAttribute("data-panel") ? "" : node.getAttribute("data-panel");
+        var nextPanel = node.getAttribute("data-panel");
+        state.panel = state.panel === nextPanel && state.batchField === (node.getAttribute("data-field") || "") ? "" : nextPanel;
+        if (node.getAttribute("data-field")) {
+          state.batchField = node.getAttribute("data-field");
+        }
         paint(root);
         return;
       } else if (act === "expand") {
@@ -727,6 +826,20 @@
           return load(root, token);
         });
         return;
+      } else if (act === "save-batch") {
+        var input = root.querySelector("[data-act='batch-value']");
+        var value = input ? input.value : "";
+        var field = state.batchField || "follow";
+        var rows = (state.viewData && state.viewData.rows) || [];
+        Promise.all(rows.map(function (row) {
+          var payload = { rowKey: row.key, follow: row.follow, tag: row.tag, target: row.target };
+          payload[field] = value;
+          return fetch("/api/bound/marks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        })).then(function () {
+          state.panel = "";
+          return load(root, token);
+        });
+        return;
       } else if (act === "save-cards" || act === "save-columns") {
         var boxes = root.querySelectorAll("[data-act='" + (act === "save-cards" ? "card" : "column") + "']");
         var chosen = [];
@@ -753,8 +866,10 @@
         return;
       }
       var act = node.getAttribute("data-act");
-      if (act === "combo") {
-        state.hideCombo = Boolean(node.checked);
+      if (act === "combo" || act === "warehouse" || act === "split-combo") {
+        if (act === "combo") state.hideCombo = Boolean(node.checked);
+        if (act === "warehouse") state.splitWarehouse = Boolean(node.checked);
+        if (act === "split-combo") state.splitCombo = Boolean(node.checked);
         paint(root);
         return;
       }

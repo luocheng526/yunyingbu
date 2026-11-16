@@ -11,6 +11,7 @@ const list = (id, label, path, method, access, extra = {}) => ({
   access,
   kind: extra.kind || "list",
   dims: extra.dims || ["all"],
+  group: extra.group || "",
   sumPath: extra.sumPath || "",
   sumMethod: extra.sumMethod || method
 });
@@ -136,9 +137,14 @@ export const PAGES = [
     ops: ["date", "shop", "search", "cards", "export", "sums"],
     cards: list("hp_zl_cards", "货品综合指标", "/hp/coreIndicator", "json", "hp_zl", { kind: "object" }),
     tabs: [
-      list("hp_zl_list", "货品列表", "/hp/hpOverView", "json", "hp_zl", {
+      list("hp_zl_list", "货品", "/hp/hpOverView", "json", "hp_zl", {
         sumPath: "/v2/Hp/overViewPageListSumData"
-      })
+      }),
+      list("hp_zl_ks", "款式", "/ks/ksOverView", "json", "hp_zl"),
+      list("hp_zl_pp", "品牌", "/hp/attribute/pp/page", "json", "hp_zl"),
+      list("hp_zl_hpfl", "ERP分类", "/hp/attribute/hpfl/page", "json", "hp_zl"),
+      list("hp_zl_xnfl", "ERP虚拟分类", "/hp/attribute/xnfl/page", "json", "hp_zl"),
+      list("hp_zl_fhck", "发货仓库", "/hp/attribute/fhck/page", "json", "hp_zl")
     ]
   },
   {
@@ -148,11 +154,19 @@ export const PAGES = [
     route: "/workTable/hpPanorama",
     ops: ["date", "shop", "search", "tabs", "export", "sums"],
     tabs: [
-      list("hp_qj_zl", "总览数据", "/hp/getOperateData", "json", "hp_qj", { kind: "object" }),
-      list("hp_qj_qd", "全渠道分析", "/hp/hpAllChannelData", "json", "hp_qj"),
-      list("hp_qj_layout", "布局分析", "/hp/hpProductLayoutAnalysisData", "json", "hp_qj"),
-      list("hp_qj_sku", "SKU分析", "/hp/hpSkuData", "json", "hp_qj"),
-      list("hp_qj_kc", "货品库存", "/hp/hpStock", "json", "hp_qj")
+      list("hp_qj_zl", "总览数据", "/hp/getOperateData", "json", "hp_qj", { kind: "object", group: "hp" }),
+      list("hp_qj_qd", "渠道布局分析", "/hp/hpAllChannelData", "json", "hp_qj", { group: "hp" }),
+      list("hp_qj_layout", "商品布局分析", "/hp/hpProductLayoutAnalysisData", "json", "hp_qj", { group: "hp" }),
+      list("hp_qj_sku", "SKU全渠道分析", "/hp/hpSkuData", "json", "hp_qj", { group: "hp" }),
+      list("hp_qj_kc", "货品库存数据", "/hp/hpStock", "json", "hp_qj", { group: "hp" }),
+      list("hp_qj_pp", "品牌分析", "/hp/attribute/pp/page", "json", "hp_qj", { group: "hp" }),
+      list("hp_qj_ck", "发货仓库分析", "/hp/warehouseAnalysisPage", "json", "hp_qj", { group: "hp" }),
+      list("hp_qj_ks_zl", "总览数据", "/ks/getOperateData", "json", "hp_qj", { kind: "object", group: "ks" }),
+      list("hp_qj_ks_hp", "货品数据", "/ks/getRelatedHpDataPage", "json", "hp_qj", { group: "ks" }),
+      list("hp_qj_ks_qd", "渠道布局分析", "/ks/ksAllChannelData", "json", "hp_qj", { group: "ks" }),
+      list("hp_qj_ks_layout", "商品布局分析", "/ks/ksProductLayoutAnalysisData", "json", "hp_qj", { group: "ks" }),
+      list("hp_qj_ks_pp", "品牌分析", "/hp/attribute/pp/page", "json", "hp_qj", { group: "ks" }),
+      list("hp_qj_ks_ck", "发货仓库分析", "/ks/warehouseAnalysisPage", "json", "hp_qj", { group: "ks" })
     ]
   },
   {
@@ -265,7 +279,9 @@ export const GOODS_COLUMNS = [
   { key: "refundRate", label: "退款率", aliases: ["refundRate"], numeric: true, rate: true },
   { key: "saleCost", label: "商品成本", aliases: ["saleCost", "xshf"], numeric: true, money: true },
   { key: "cost", label: "推广花费", aliases: ["cost", "tghf"], numeric: true, money: true },
-  { key: "profit", label: "利润", aliases: ["profit", "lryg"], numeric: true, money: true }
+  { key: "profit", label: "利润", aliases: ["profit", "lryg"], numeric: true, money: true },
+  { key: "orderType", label: "订单类型", aliases: ["orderType", "orderKind", "ddlx"] },
+  { key: "service", label: "服务体验", aliases: ["serviceScore", "experience", "fwty"] }
 ];
 
 export const STOCK_COLUMNS = [
@@ -433,7 +449,8 @@ export function publicCatalog() {
           id: tab.id,
           label: tab.label,
           dims: tab.dims,
-          kind: tab.kind
+          kind: tab.kind,
+          group: tab.group || ""
         }))
       }))
     }))

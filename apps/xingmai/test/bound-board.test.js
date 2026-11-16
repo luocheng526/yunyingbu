@@ -59,6 +59,9 @@ test("功能清单覆盖渠道、商品、团队、我的", () => {
   assert.equal(goods.ops.includes("export"), true);
   assert.equal(goods.ops.includes("cards"), true);
   assert.equal(catalog.modules[0].pages.map((page) => page.label).join(","), "渠道总览,渠道详情,关键指标分析");
+  const hp = catalog.modules[2].pages.find((page) => page.label === "货品全景分析");
+  assert.deepEqual(hp.tabs.filter((tab) => tab.group === "hp").map((tab) => tab.label), ["总览数据", "渠道布局分析", "商品布局分析", "SKU全渠道分析", "货品库存数据", "品牌分析", "发货仓库分析"]);
+  assert.deepEqual(hp.tabs.filter((tab) => tab.group === "ks").map((tab) => tab.label), ["总览数据", "货品数据", "渠道布局分析", "商品布局分析", "品牌分析", "发货仓库分析"]);
 });
 
 test("GET /api/bound 仍标明爬虫且不是 ERP", async () => {

@@ -383,6 +383,18 @@ function nameLabel(page, tab) {
     return /成员|个人|客服/.test(tabLabel) ? "成员" : "名称";
   }
   if (page && page.module === "hp") {
+    if (/品牌/.test(tabLabel)) {
+      return "品牌";
+    }
+    if (/仓库/.test(tabLabel)) {
+      return "仓库";
+    }
+    if (/款式/.test(tabLabel)) {
+      return "款式";
+    }
+    if (/分类/.test(tabLabel)) {
+      return "分类";
+    }
     return "货品";
   }
   return "商品";
@@ -538,7 +550,8 @@ export async function readView(query) {
     tab: tab ? { id: tab.id, label: tab.label, dims: tab.dims } : null,
     tabs: (page.tabs || []).filter((item) => !item.id.endsWith("_trend") || item.id === (tab && tab.id)).map((item) => ({
       id: item.id,
-      label: item.label
+      label: item.label,
+      group: item.group || ""
     })).filter((item) => item.id !== "sp_zl_trend"),
     range,
     daysType,
