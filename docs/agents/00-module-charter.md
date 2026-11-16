@@ -1,7 +1,7 @@
 # 全员纪律（每个模块先读这一页）
 
-线上：`https://zx.xingmaierp.cc`。一个 Express，九个业务面 + **主框架**。
-交单：登录版本发布中心 → `GET /api/releases/next` → `POST /api/releases`。申请人 `罗成运营部主脑`。演示号已停用，只准用罗成，见 [00-prod-admin.md](00-prod-admin.md)。做完直接交单。不要等用户再说「提交」。
+线上：`https://zx.xingmaierp.cc`。一个 Express，十个业务面 + **主框架**。
+交单：登录版本发布中心 → `GET /api/releases/next` → `POST /api/releases`。申请人 `罗成运营部主脑`。演示号已停用，只准用罗成。登录不上先读 [00-prod-admin.md](00-prod-admin.md)。做完直接交单。不要等用户再说「提交」。
 
 ## 现行结构：嵌入式，不是每人一套站
 
@@ -9,7 +9,7 @@
 |---|---|---|
 | `/login` | 无壳。独立登录页，**不加载** `nav.js` | 个人中心 |
 | `/` | 无菜单项。登录后 302 到 `/data` | — |
-| `/data` `/shen` `/han` `/people` `/academy` `/agents` `/releases` `/me` | **主框架** `renderAppShell`：侧栏 + `#xm-content` | 各模块 `XmModules[path].mount(#xm-content)` |
+| `/data` `/shen` `/han` `/people` `/hr` `/academy` `/agents` `/releases` `/me` | **主框架** `renderAppShell`：侧栏 + `#xm-content` | 各模块 `XmModules[path].mount(#xm-content)` |
 
 模块之间点击：`history.pushState` + 加载对应 `public/shared/modules/<id>.js`。不要整页跳，不要预取全部模块文档。
 
@@ -43,7 +43,8 @@
 | 数据中心 | `public/data.html`、`public/data*`、`src/modules/data/`、`shared/modules/data.js` | 壳、内核、别人的模块 |
 | 沈子晗 | `public/shen.html`、`public/shen*`、`src/modules/shen/`、`shared/modules/shen.js` | 同上 |
 | 韩梦凯 | `public/han.html`、`public/han*`、`src/modules/han/`、`shared/modules/han.js` | 同上 |
-| 组织中心 | `public/people.html`、`public/people*`、`src/modules/people/`、`shared/modules/people.js` | 同上。侧栏显示「组织中心」，路径仍是 `/people`。旧交单名「人员管理」闸门仍认，新单用「组织中心」 |
+| 组织中心 | `public/people.html`、`public/people*`、`src/modules/people/`、`shared/modules/people.js` | 同上。侧栏显示「组织中心」，路径仍是 `/people`。旧交单名「人员管理」闸门仍认，新单用「组织中心」。**不接钉钉** |
+| 智能人事 | `src/modules/hr/`、`shared/modules/hr.js` | 同上。侧栏一项 `/hr`，无子菜单。钉钉假勤归这里；人列表读 `GET /api/people` |
 | 甄选商学院 | `public/academy.html`、`public/academy*`、`src/modules/academy/`、`shared/modules/academy.js` | 同上 |
 | 甄选智能体 | `public/agents.html`、`public/agents*`、`src/modules/agents/`、`shared/modules/agents.js` | 同上 |
 | 版本发布中心 | `public/releases.html`、`releases.css`、`src/modules/releases/`（**补丁**线上闸，禁止用仓库简化 router 整文件覆盖） | 壳、业务模块、线上 `app.js` |
@@ -51,7 +52,7 @@
 
 `nav-items.js` 虽然在 `src/modules/home/`，归属 **主框架**，首页不要交。
 
-主框架已认识：侧栏第一项「首页」`/home`（`/` 仍跳数据中心）；「甄选商学院」带子菜单培训课程 / 培训考试 / 运营手册；「甄选智能体」`/agents`。要再加子菜单或改 `src/app.js` 挂新 API，问主框架，不要自己改壳。
+主框架已认识：侧栏第一项「首页」`/home`（`/` 仍跳数据中心）；「甄选商学院」带子菜单培训课程 / 培训考试 / 运营手册；「甄选智能体」`/agents`；底部「组织中心 / 智能人事 / 版本发布中心 / 个人中心」，智能人事路径 `/hr`。要再加子菜单或改 `src/app.js` 挂新 API，问主框架，不要自己改壳。
 
 ## 怎么新建独立对话框并对接
 
@@ -67,7 +68,7 @@
 做完用模块名「甄选商学院」交单，申请人 罗成运营部主脑。
 ```
 
-智能体对话框把上面两处换成 `09-agents.md`、`agents`、`甄选智能体`。
+智能体对话框把上面两处换成 `09-agents.md`、`agents`、`甄选智能体`。智能人事换成 `10-hr.md`、`hr`、`智能人事`。
 
 4. 对接方式（已经接好，新对话不用再铺壳）：
    - 登录后点侧栏对应入口 → 主框架 `pushState` → 加载 `public/shared/modules/<id>.js` → `mount(#xm-content)`。

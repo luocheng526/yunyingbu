@@ -3,7 +3,7 @@
 每位模块开发只看自己那一页，但 **结构以 [00-module-charter.md](00-module-charter.md) 为准**。旧分支、旧 prompt 里「每页自己带侧栏」「壳归首页」作废。
 
 线上：https://zx.xingmaierp.cc  
-交单：版本发布中心。申请人 `罗成运营部主脑`。做完直接交单。纪律：[00-release-rules.md](00-release-rules.md)。演示号已停用，只准用罗成：[00-prod-admin.md](00-prod-admin.md)。
+交单：版本发布中心。申请人 `罗成运营部主脑`。做完直接交单。纪律：[00-release-rules.md](00-release-rules.md)。演示号已停用，只准用罗成。登录不上先读：[00-prod-admin.md](00-prod-admin.md)。
 
 | 文件 | 给谁 |
 |---|---|
@@ -18,6 +18,7 @@
 | [05-people.md](05-people.md) | 组织中心（旧对话名「人员管理」，路径仍是 `/people`） |
 | [08-academy.md](08-academy.md) | 甄选商学院（新对话框用这一页当第一条消息） |
 | [09-agents.md](09-agents.md) | 甄选智能体（新对话框用这一页当第一条消息） |
+| [10-hr.md](10-hr.md) | 智能人事（新对话框用这一页当第一条消息） |
 | [06-releases.md](06-releases.md) | 版本发布中心 |
 | [07-profile.md](07-profile.md) | 个人中心 |
 
