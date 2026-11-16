@@ -87,6 +87,7 @@
       ".hr-empty{padding:28px 12px;text-align:center;color:var(--xm-muted);}" +
       ".hr-msg{min-height:18px;color:var(--xm-muted);font-size:12px;}" +
       ".hr-msg:empty{display:none;min-height:0;}" +
+      ".hr-joined{color:#12b36a;font-weight:650;white-space:nowrap;}" +
       ".hr-msg.is-error{color:#cf1322;}" +
       "html[data-theme='dark'] .hr-msg.is-error{color:#ff7875;}" +
       ".hr-mini{height:26px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;font-size:12px;cursor:pointer;}" +
@@ -258,9 +259,9 @@
         '<p class="hr-msg" data-msg></p>' +
         table(["姓名", "部门", "角色", "组织", "月累计"], emptyRow(5, "这个月还没有 18 点后的下班打卡")) + "</section>";
     } else if (tab === "recruit") {
-      html = '<section class="hr-panel"><div class="hr-toolbar"><span>待入职按天填写，记录在服务器上。</span>' +
-        '<label class="hr-month">日期<input type="date" data-join-day value="' + esc(today) + '" /></label></div>' +
-        kpis([{ label: "待入职", value: "0" }, { label: "入职情况", value: "0" }]) +
+      html = '<section class="hr-panel"><div class="hr-toolbar"><span>按月统计待入职。点登记后进入花名册在职，记录在服务器上。</span>' +
+        '<label class="hr-month">月份<input type="month" data-join-month value="' + esc(String(today).slice(0, 7)) + '" /></label></div>' +
+        '<div class="hr-board-kpis" data-recruit-kpis></div>' +
         '<h2 class="hr-team-title">待入职</h2>' +
         '<form class="hr-form hr-card" data-form="recruit">' +
         field("姓名", '<input name="name" required maxlength="64" autocomplete="off" />') +
@@ -274,7 +275,7 @@
         field("备注", '<input name="note" maxlength="500" autocomplete="off" />', "hr-field-grow") +
         field("情况说明", '<textarea name="detail" maxlength="1000" rows="3"></textarea>', "hr-field-wide") +
         '<button class="hr-primary" type="submit">登记待入职</button></form>' +
-        table(["姓名", "性别", "应聘岗位", "预计入职时间", "联系电话", "籍贯", "渠道", "邀约人", "备注", "情况说明", ""], emptyRow(11, "这一天还没有待入职")) +
+        table(["姓名", "性别", "应聘岗位", "预计入职时间", "联系电话", "籍贯", "渠道", "邀约人", "备注", "情况说明", "是否登记入职", ""], emptyRow(12, "这个月还没有待入职")) +
         '<h2 class="hr-team-title">入职情况表</h2>' +
         '<form class="hr-form hr-card" data-form="onboard">' +
         field("姓名", '<input name="name" required maxlength="64" autocomplete="off" />') +
@@ -572,18 +573,36 @@
       "</td><td>" + esc(row.inviter) + "</td><td>" + esc(row.note) + "</td><td>" + esc(row.detail) + "</td>";
   }
 
+  function joinCell(row) {
+    if (row.joined) return '<td><span class="hr-joined">已登记入职</span></td>';
+    return '<td><button type="button" class="hr-mini" data-act="join" data-id="' + esc(row.id) + '">登记</button></td>';
+  }
+
+  function recruitKpis(rows) {
+    var done = rows.filter(function (row) { return row.joined; }).length;
+    var cards = [
+      { tone: "staff", icon: "staff", label: "待入职", value: rows.length },
+      { tone: "due", icon: "due", label: "已登记入职", value: done },
+      { tone: "punch", icon: "punch", label: "未登记", value: rows.length - done },
+      { tone: "late", icon: "late", label: "男", value: rows.filter(function (row) { return row.gender === "男"; }).length },
+      { tone: "leave", icon: "leave", label: "女", value: rows.filter(function (row) { return row.gender === "女"; }).length }
+    ];
+    return cards.map(function (card) {
+      return '<article class="hr-board-kpi hr-tone-' + card.tone + '">' + boardIcon(card.icon) +
+        "<b>" + esc(card.value) + "</b><span>" + esc(card.label) + "</span></article>";
+    }).join("");
+  }
+
   function fillRecruit(root, pack) {
     var rows = pack.recruits || [];
     var joined = pack.onboards || [];
-    setStats(root, [
-      { label: "待入职", value: rows.length },
-      { label: "入职情况", value: joined.length }
-    ]);
-    var headers = ["姓名", "性别", "应聘岗位", "预计入职时间", "联系电话", "籍贯", "渠道", "邀约人", "备注", "情况说明", ""];
+    var cards = root.querySelector("[data-recruit-kpis]");
+    if (cards) cards.innerHTML = recruitKpis(rows);
+    var headers = ["姓名", "性别", "应聘岗位", "预计入职时间", "联系电话", "籍贯", "渠道", "邀约人", "备注", "情况说明", "是否登记入职", ""];
     var body = rows.length ? rows.map(function (row) {
       return "<tr>" + recruitCells(row, "<td>" + esc(row.position) + "</td><td>" + esc(row.expectedJoin) + "</td>") +
-        "<td>" + removeBtn("recruit", row.id) + "</td></tr>";
-    }).join("") : emptyRow(11, "这一天还没有待入职");
+        joinCell(row) + "<td>" + removeBtn("recruit", row.id) + "</td></tr>";
+    }).join("") : emptyRow(12, "这个月还没有待入职");
     setList(root, headers, body);
     var onboardHeaders = ["姓名", "性别", "入职部门", "岗位", "入职日期", "联系电话", "籍贯", "渠道", "邀约人", "备注", "情况说明", ""];
     var onboardBody = joined.length ? joined.map(function (row) {
@@ -642,10 +661,10 @@
     } else if (tab === "staff") {
       dataReq = api("/api/hr/staff");
     } else {
-      var dayInput = root.querySelector("[data-join-day]");
-      var day = dayInput && dayInput.value ? dayInput.value : shanghaiToday();
+      var monthInput = root.querySelector("[data-join-month]");
+      var month = monthInput && monthInput.value ? monthInput.value : shanghaiToday().slice(0, 7);
       dataReq = Promise.all([
-        api("/api/hr/recruits?date=" + encodeURIComponent(day)),
+        api("/api/hr/recruits?month=" + encodeURIComponent(month)),
         api("/api/hr/onboards")
       ]).then(function (pair) {
         return Object.assign({}, pair[0], pair[1]);
@@ -854,6 +873,18 @@
           .then(function () { sync.disabled = false; });
         return;
       }
+      var join = event.target.closest("[data-act='join']");
+      if (join && root.contains(join)) {
+        event.preventDefault();
+        join.disabled = true;
+        api("/api/hr/recruits/" + encodeURIComponent(join.getAttribute("data-id")) + "/join", { method: "POST", body: {} })
+          .then(function (data) {
+            setMsg(root, data.already ? "已经登记过入职" : "已登记入职，已写入员工花名册的在职人员", false);
+            loadTab(root, state);
+          })
+          .catch(function (err) { setMsg(root, err.message, true); join.disabled = false; });
+        return;
+      }
       var edit = event.target.closest("[data-act='staff-edit']");
       if (edit && root.contains(edit)) {
         event.preventDefault();
@@ -884,7 +915,9 @@
       if (!form || !root.contains(form)) return;
       event.preventDefault();
       var kind = form.getAttribute("data-form");
-      var dayInput = root.querySelector("[data-join-day]");
+      var monthInput = root.querySelector("[data-join-month]");
+      var joinMonth = monthInput && monthInput.value ? monthInput.value : shanghaiToday().slice(0, 7);
+      var todayText = shanghaiToday();
       var staffId = form.getAttribute("data-staff-id");
       var body = kind === "staff" ? {
         name: formValue(form, "name"),
@@ -925,7 +958,7 @@
         inviter: formValue(form, "inviter"),
         note: formValue(form, "note"),
         detail: formValue(form, "detail"),
-        recordDate: dayInput && dayInput.value ? dayInput.value : shanghaiToday()
+        recordDate: todayText.slice(0, 7) === joinMonth ? todayText : joinMonth + "-01"
       };
       var button = form.querySelector("button[type='submit']");
       if (button) button.disabled = true;
@@ -945,7 +978,7 @@
     root.addEventListener("change", function (event) {
       var target = event.target;
       if (!target || !root.contains(target)) return;
-      if (target.matches("[data-month], [data-day], [data-join-day]")) {
+      if (target.matches("[data-month], [data-day], [data-join-month]")) {
         loadTab(root, state);
         return;
       }

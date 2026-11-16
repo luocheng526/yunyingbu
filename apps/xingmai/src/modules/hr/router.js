@@ -37,6 +37,7 @@ import {
   listPunches,
   listQuotas,
   listTalents,
+  registerRecruitJoin,
   syncStaffFromPunches,
   updateStaff,
   upsertLink
@@ -243,7 +244,7 @@ hrRouter.post("/sync", async (_req, res) => {
 
 hrRouter.get("/recruits", async (req, res) => {
   try {
-    res.json({ ok: true, recruits: await listRecruits({ date: req.query.date }) });
+    res.json({ ok: true, recruits: await listRecruits({ date: req.query.date, month: req.query.month }) });
   } catch (err) {
     sendErr(res, err);
   }
@@ -329,6 +330,14 @@ hrRouter.put("/staff/:id", async (req, res) => {
 hrRouter.delete("/staff/:id", async (req, res) => {
   try {
     res.json({ ok: true, ...(await deleteStaff(req.params.id)) });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.post("/recruits/:id/join", async (req, res) => {
+  try {
+    res.json({ ok: true, ...(await registerRecruitJoin(req.params.id, actorName(req))) });
   } catch (err) {
     sendErr(res, err);
   }

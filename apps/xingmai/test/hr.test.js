@@ -547,6 +547,47 @@ test("roster keeps ops punch staff and can be imported or marked left", async ()
   }
 });
 
+test("registering a hire copies them onto the active roster once", async () => {
+  resetHrStore();
+  const server = await listen(appWithUser());
+  try {
+    const created = await request(server, "/api/hr/recruits", {
+      method: "POST",
+      body: {
+        name: "谷凤晴",
+        gender: "女",
+        position: "运营经理",
+        expectedJoin: "2026-11-16",
+        phone: "15622535135",
+        hometown: "天津市宁河区",
+        channel: "BOSS",
+        inviter: "李栖彤",
+        note: "无",
+        recordDate: "2026-11-16"
+      }
+    });
+    assert.equal(created.status, 201);
+    const month = await request(server, "/api/hr/recruits?month=2026-11");
+    assert.equal(month.data.recruits.length, 1);
+    assert.equal(month.data.recruits[0].joined, false);
+    const other = await request(server, "/api/hr/recruits?month=2026-10");
+    assert.equal(other.data.recruits.length, 0);
+    const joined = await request(server, `/api/hr/recruits/${created.data.recruit.id}/join`, { method: "POST", body: {} });
+    assert.equal(joined.status, 200);
+    assert.equal(joined.data.recruit.joined, true);
+    assert.equal(joined.data.staff.status, "在职");
+    assert.equal(joined.data.staff.name, "谷凤晴");
+    assert.equal(joined.data.staff.position, "运营经理");
+    assert.equal(joined.data.staff.joinedOn, "2026-11-16");
+    const again = await request(server, `/api/hr/recruits/${created.data.recruit.id}/join`, { method: "POST", body: {} });
+    assert.equal(again.data.already, true);
+    const roster = await request(server, "/api/hr/staff?status=" + encodeURIComponent("在职"));
+    assert.equal(roster.data.staff.filter((row) => row.name === "谷凤晴").length, 1);
+  } finally {
+    await close(server);
+  }
+});
+
 test("http keeps attendance read-only and interviews in this module", async () => {
   resetHrStore();
   await saveLinks([]);

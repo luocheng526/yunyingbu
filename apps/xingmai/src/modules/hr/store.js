@@ -89,6 +89,8 @@ export const HR_SCHEMA = [
     note_text VARCHAR(500) NOT NULL DEFAULT '',
     detail_text VARCHAR(1000) NOT NULL DEFAULT '',
     record_date VARCHAR(10) NOT NULL DEFAULT '',
+    joined_flag TINYINT NOT NULL DEFAULT 0,
+    staff_id INT NOT NULL DEFAULT 0,
     created_by VARCHAR(64) NOT NULL DEFAULT '',
     created_at VARCHAR(40) NOT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
@@ -280,6 +282,12 @@ async function migrateRecruitTable() {
        END
        WHERE record_date = ''`
     );
+  }
+  if (!names.has("joined_flag")) {
+    await query("ALTER TABLE hr_recruits ADD COLUMN joined_flag TINYINT NOT NULL DEFAULT 0");
+  }
+  if (!names.has("staff_id")) {
+    await query("ALTER TABLE hr_recruits ADD COLUMN staff_id INT NOT NULL DEFAULT 0");
   }
 }
 
@@ -759,22 +767,34 @@ function mapRecruit(row) {
     note: row.note_text || "",
     detail: row.detail_text || "",
     recordDate: row.record_date || "",
+    joined: Boolean(Number(row.joined_flag) || row.joined),
+    staffId: Number(row.staff_id || row.staffId) || 0,
     createdBy: row.created_by || ""
   };
 }
 
-export async function listRecruits({ date = "" } = {}) {
+export async function listRecruits({ date = "", month = "" } = {}) {
   await ensureHrSchema();
   const day = date ? mustDate(date, "日期") : "";
+  const picked = !day && month ? mustMonth(month) : "";
   if (dbMode() === "mysql") {
+    const where = [];
+    const params = [];
+    if (day) {
+      where.push("record_date = ?");
+      params.push(day);
+    } else if (picked) {
+      where.push("record_date LIKE ?");
+      params.push(`${picked}%`);
+    }
     const rows = await rowsOf(
-      day ? "SELECT * FROM hr_recruits WHERE record_date = ? ORDER BY id DESC" : "SELECT * FROM hr_recruits ORDER BY id DESC",
-      day ? [day] : []
+      `SELECT * FROM hr_recruits ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY id DESC`,
+      params
     );
     return rows.map(mapRecruit);
   }
   return memory.recruits
-    .filter((row) => !day || row.recordDate === day)
+    .filter((row) => (day ? row.recordDate === day : !picked || String(row.recordDate || "").slice(0, 7) === picked))
     .map((row) => ({ ...row }))
     .sort((a, b) => b.id - a.id);
 }
@@ -793,13 +813,15 @@ export async function createRecruit(input = {}, actor = "") {
     note: clip(input.note, 500),
     detail: clip(input.detail, 1000),
     recordDate: mustDate(input.recordDate, "日期"),
+    joined: false,
+    staffId: 0,
     ...stamp(actor)
   };
   if (dbMode() === "mysql") {
     const [result] = await query(
       `INSERT INTO hr_recruits
-        (person_name, gender, position_name, expected_join, phone, hometown, channel_name, inviter, note_text, detail_text, record_date, created_by, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (person_name, gender, position_name, expected_join, phone, hometown, channel_name, inviter, note_text, detail_text, record_date, joined_flag, staff_id, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)`,
       [row.name, row.gender, row.position, row.expectedJoin, row.phone, row.hometown, row.channel, row.inviter, row.note, row.detail, row.recordDate, row.createdBy, row.createdAt]
     );
     row.id = Number(result.insertId);
@@ -814,6 +836,37 @@ export async function deleteRecruit(id) {
   return removeRow("hr_recruits", memory.recruits, id, (next) => {
     memory.recruits = next;
   });
+}
+
+export async function registerRecruitJoin(id, actor = "") {
+  await ensureHrSchema();
+  const key = Number(id);
+  const current = (await listRecruits()).find((row) => row.id === key);
+  if (!current) throw bad("记录不存在", 404);
+  if (current.joined && current.staffId) return { recruit: current, already: true };
+  const note = [current.note, current.detail, current.channel && `渠道 ${current.channel}`, current.inviter && `邀约人 ${current.inviter}`]
+    .filter(Boolean)
+    .join("；");
+  const staff = await createStaff({
+    name: current.name,
+    gender: current.gender,
+    position: current.position,
+    phone: current.phone,
+    hometown: current.hometown,
+    joinedOn: current.expectedJoin || current.recordDate,
+    status: "在职",
+    note
+  }, actor);
+  if (dbMode() === "mysql") {
+    await query("UPDATE hr_recruits SET joined_flag = 1, staff_id = ? WHERE id = ?", [staff.id, key]);
+  } else {
+    const stored = memory.recruits.find((row) => row.id === key);
+    if (stored) {
+      stored.joined = true;
+      stored.staffId = staff.id;
+    }
+  }
+  return { recruit: { ...current, joined: true, staffId: staff.id }, staff, already: false };
 }
 
 function mapOnboard(row) {
