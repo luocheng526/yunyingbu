@@ -155,6 +155,7 @@ peopleRouter.get("/org/stores/template", (_req, res) => {
     "",
     "示例运营",
     "示例旗舰店",
+    "",
     "10001",
     "11009999",
     "运营中",
