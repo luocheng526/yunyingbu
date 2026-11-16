@@ -1127,7 +1127,10 @@ async function pageText(ws) {
 
 export function loginScreenState(text, formReady) {
   const source = String(text || "");
-  if (source.includes("不匹配") || source.includes("密码不正确") || source.includes("账号或密码")) {
+  if (/滑块|安全验证|请完成验证/.test(source)) {
+    return { status: "verify", message: "" };
+  }
+  if (source.includes("不匹配") || source.includes("密码不正确") || source.includes("账号或密码不正确") || source.includes("账号或密码错误")) {
     return { status: "login", message: "账号或密码不正确" };
   }
   if (source.includes("冻结") || source.includes("停用")) {
@@ -1282,7 +1285,19 @@ export async function shotDesk(store) {
     return null;
   }
   try {
-    const shot = await send(current.ws, "Page.captureScreenshot", { format: "jpeg", quality: 60 });
+    const params = { format: "jpeg", quality: 72, fromSurface: true, captureBeyondViewport: false };
+    try {
+      const metrics = await send(current.ws, "Page.getLayoutMetrics");
+      const view = (metrics && (metrics.cssVisualViewport || metrics.cssLayoutViewport)) || {};
+      const width = Math.round(view.clientWidth || view.width || 0);
+      const height = Math.round(view.clientHeight || view.height || 0);
+      if (width > 0 && height > 0) {
+        params.clip = { x: 0, y: 0, width: width, height: height, scale: 1 };
+      }
+    } catch {
+      /* fall back to the viewport screenshot */
+    }
+    const shot = await send(current.ws, "Page.captureScreenshot", params);
     return Buffer.from(shot.data || "", "base64");
   } catch {
     return null;
@@ -1293,9 +1308,16 @@ export async function clickDesk(store, x, y) {
   if (!current || current.store !== store || !current.ws) {
     return;
   }
-  const point = { x: Math.max(0, Math.round(x)), y: Math.max(0, Math.round(y)) };
-  await send(current.ws, "Input.dispatchMouseEvent", Object.assign({ type: "mousePressed", button: "left", clickCount: 1 }, point));
-  await send(current.ws, "Input.dispatchMouseEvent", Object.assign({ type: "mouseReleased", button: "left", clickCount: 1 }, point));
+  const point = {
+    x: Math.max(0, Math.round(Number(x) || 0)),
+    y: Math.max(0, Math.round(Number(y) || 0)),
+    button: "left",
+    clickCount: 1
+  };
+  await send(current.ws, "Input.dispatchMouseEvent", Object.assign({ type: "mouseMoved", buttons: 0 }, point));
+  await send(current.ws, "Input.dispatchMouseEvent", Object.assign({ type: "mousePressed", buttons: 1 }, point));
+  await sleep(90);
+  await send(current.ws, "Input.dispatchMouseEvent", Object.assign({ type: "mouseReleased", buttons: 0 }, point));
 }
 
 export async function typeDesk(store, text) {

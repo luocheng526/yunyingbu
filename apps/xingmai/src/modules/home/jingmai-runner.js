@@ -234,7 +234,7 @@ async function startQueued(shop) {
     return publicState({
       status: "screen",
       store: shop.store,
-      message: opened.message || "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。"
+      message: opened.message || "点一下只会点到服务器上的登录页，这个窗口不会关掉。"
     });
   }
   await deps.desk.close();
@@ -352,18 +352,18 @@ export async function reloginState(store) {
     const kept = await rememberLogin(name, cookies);
     await deps.desk.close();
     if (!kept) {
-      return advanceAfterFailure(name, "登录没有通过，请再试一次");
+      return publicState({ status: "screen", store: name, message: "登录没有通过，请再试一次" });
     }
     return advanceAfterSuccess(name);
-  }
-  if (state.status === "login") {
-    await deps.desk.close();
-    return advanceAfterFailure(name, state.message || "登录没有通过，请再试一次");
   }
   if (state.status === "missing") {
     return publicState({ status: "missing", store: name, message: state.message || "请重新打开登录" });
   }
-  return publicState({ status: "screen", store: name, message: state.message || "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。" });
+  return publicState({
+    status: "screen",
+    store: name,
+    message: state.message || "点一下只会点到服务器上的登录页，这个窗口不会关掉。"
+  });
 }
 
 export async function reloginScreen(store) {

@@ -1,4 +1,5 @@
 import { Router, raw } from "express";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getHomeErpKpis } from "./erp-kpis.js";
@@ -33,13 +34,34 @@ const homeJsPath = path.join(
   "../../../public/shared/modules/home.js"
 );
 
+const OLD_SHOW_DESK = "      function showDesk(st) {\n        state.desk = st || {};\n";
+const KEPT_SHOW_DESK =
+  "      function showDesk(st) {\n" +
+  "        state.desk = st || {};\n" +
+  "        state.desk.open = true;\n" +
+  "        if (state.desk.status !== \"ok\" && state.desk.status !== \"done\" && state.desk.status !== \"verify\") {\n" +
+  "          state.desk.status = \"screen\";\n" +
+  "        }\n";
+
+export function patchHomeClientSource(text) {
+  const source = String(text || "");
+  if (source.includes("function applyDesk(st)") || !source.includes(OLD_SHOW_DESK)) {
+    return source;
+  }
+  return source.replace(OLD_SHOW_DESK, KEPT_SHOW_DESK).replaceAll("0.1.1039-loginpop", "0.1.1043-deskkeep");
+}
+
+function homeClientSource() {
+  return patchHomeClientSource(fs.readFileSync(homeJsPath, "utf8"));
+}
+
 export function homeRouter() {
   const router = Router();
 
   router.get("/client.js", (_req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
     res.type("application/javascript");
-    res.sendFile(homeJsPath);
+    res.send(homeClientSource());
   });
 
   router.get("/erp-kpis", async (req, res) => {
