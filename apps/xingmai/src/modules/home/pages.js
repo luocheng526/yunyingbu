@@ -6,7 +6,7 @@ import { NAV_ITEMS, orgNavFlags } from "./nav-items.js";
 import { hrRouter } from "../hr/router.js";
 
 // xm-upgrade-mask 0.1.52  必须和 profile/middleware.js 成套发。
-// xm-fast-shell 0.1.772-hr-foot
+// xm-fast-shell 0.1.772-notice-tab
 // xm-login-session 登录会话回读必须和 profile/middleware.js 成套发。
 // login.html 不走 HTML 内存缓存，必须和 profile/middleware.js 成套发。
 
@@ -121,6 +121,10 @@ export function registerPageRoutes(app) {
     }
     if ((method === "GET" || method === "HEAD") && path === "/shen/recharge-rules/index.html") {
       res.redirect(302, "/shen/recharge-rules");
+      return;
+    }
+    if ((method === "GET" || method === "HEAD") && path === "/notices") {
+      res.redirect(302, "/people?pane=notices");
       return;
     }
     next();

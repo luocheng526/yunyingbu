@@ -29,6 +29,8 @@ test("staff markup order is 版本发布中心, 组织中心, 智能人事, 个�
   assert.equal(foot.includes("面试"), false);
   assert.equal(foot.includes("考勤"), false);
   assert.equal(foot.includes("DINGTALK"), false);
+  assert.equal(foot.includes("公告中心"), false);
+  assert.equal(foot.includes('data-xm-group="/people"'), false);
 });
 
 test("shell maps /hr to 智能人事", () => {
