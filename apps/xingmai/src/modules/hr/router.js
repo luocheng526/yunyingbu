@@ -5,6 +5,7 @@ import {
   addDays,
   buildBoard,
   loadRoster,
+  rowsForDay,
   runDaily,
   shanghaiToday,
   startScheduler
@@ -108,7 +109,7 @@ hrRouter.get("/board", async (req, res) => {
       configured: readDingEnv().configured,
       board: buildBoard({ date, users, punches, leaves }),
       days,
-      punches: punches.filter((row) => row.workDate === date)
+      punches: rowsForDay(users, punches, date)
     });
   } catch (err) {
     sendErr(res, err);

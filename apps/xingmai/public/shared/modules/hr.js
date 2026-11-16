@@ -1,7 +1,7 @@
 /* xm-module-hr — 智能人事。只挂 /hr。假勤只读钉钉落库，面试和人才在本库。 */
 (function () {
   var TABS = [
-    { id: "attendance", label: "考勤" },
+    { id: "attendance", label: "看板" },
     { id: "overtime", label: "加班" },
     { id: "timeoff", label: "调休" },
     { id: "talent", label: "人才" },
@@ -186,7 +186,19 @@
     var groups = {};
     rows.forEach(function (row) {
       var key = (row.dingtalkUserId || row.personId) + "|" + row.workDate;
-      if (!groups[key]) groups[key] = { personId: row.personId, userName: row.userName || "", jobNumber: row.jobNumber || "", workDate: row.workDate, on: "", off: "", labels: [] };
+      if (!groups[key]) {
+        groups[key] = {
+          personId: row.personId,
+          userName: row.userName || "",
+          department: row.department || "",
+          jobNumber: row.jobNumber || "",
+          workDate: row.workDate,
+          on: "",
+          off: "",
+          labels: []
+        };
+      }
+      if (row.department && !groups[key].department) groups[key].department = row.department;
       if (row.checkType === "OffDuty") groups[key].off = row.checkAt || "";
       else groups[key].on = row.checkAt || "";
       if (row.label) groups[key].labels.push(row.label);
@@ -200,14 +212,14 @@
     var html = "";
     if (tab === "attendance") {
       html = '<section class="hr-panel hr-board">' +
-        '<div class="hr-board-head"><div><h2 class="hr-board-title">考勤看板</h2>' +
+        '<div class="hr-board-head"><div><h2 class="hr-board-title">看板</h2>' +
         '<p class="hr-msg" data-msg>每天一张。入转调离先不做。</p></div>' +
         '<label class="hr-month">统计日<input type="date" data-day value="' + esc(today) + '" /></label></div>' +
         '<div class="hr-board-kpis" data-board></div>' +
         '<div class="hr-board-grid"><section class="hr-card hr-board-card" data-depts></section>' +
         '<section class="hr-card hr-board-card" data-days></section></div>' +
         '<h3 class="hr-board-sub">当日打卡</h3>' +
-        table(["姓名", "工号", "日期", "上班", "下班", "结果"], emptyRow(6, "还没有打卡")) + "</section>";
+        table(["姓名", "部门", "工号", "日期", "上班", "下班", "结果"], emptyRow(7, "还没有打卡")) + "</section>";
     } else if (tab === "overtime") {
       html = '<section class="hr-panel">' + monthBar + kpis([{ label: "加班总时长", value: "0" }]) +
         '<p class="hr-msg" data-msg></p>' + table(["姓名", "日期", "时长"], emptyRow(3, "还没有加班")) + "</section>";
@@ -300,13 +312,15 @@
 
   function fillAttendance(root, pack) {
     fillBoard(root, pack);
-    var days = pairPunches(pack.punches || []);
+    var days = pairPunches(pack.punches || []).sort(function (a, b) {
+      return String(a.department).localeCompare(String(b.department), "zh") || String(a.userName).localeCompare(String(b.userName), "zh");
+    });
     var body = days.length ? days.map(function (row) {
       var labels = row.labels.filter(function (label, index) { return row.labels.indexOf(label) === index; }).join("、");
-      return "<tr><td>" + esc(row.userName || "未命名") + "</td><td>" + esc(row.jobNumber) + "</td><td>" + esc(row.workDate) +
-        "</td><td>" + esc(row.on) + "</td><td>" + esc(row.off) + "</td><td>" + esc(labels) + "</td></tr>";
-    }).join("") : emptyRow(6, "还没有打卡");
-    setList(root, ["姓名", "工号", "日期", "上班", "下班", "结果"], body);
+      return "<tr><td>" + esc(row.userName || "未命名") + "</td><td>" + esc(row.department) + "</td><td>" + esc(row.jobNumber) +
+        "</td><td>" + esc(row.workDate) + "</td><td>" + esc(row.on) + "</td><td>" + esc(row.off) + "</td><td>" + esc(labels) + "</td></tr>";
+    }).join("") : emptyRow(7, "还没有打卡");
+    setList(root, ["姓名", "部门", "工号", "日期", "上班", "下班", "结果"], body);
     if (!pack.configured) setMsg(root, "钉钉还没配置，看板先按空模板放着。", false);
     else setMsg(root, "每天一张。人数来自钉钉名单，打卡和请假按这一天统计。入转调离先不做。", false);
   }

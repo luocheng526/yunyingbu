@@ -1,6 +1,6 @@
 import { dbMode, query } from "../profile/auth.js";
 
-export const HR_TABS = ["考勤", "加班", "调休", "人才", "面试"];
+export const HR_TABS = ["看板", "加班", "调休", "人才", "面试"];
 export const INTERVIEW_RESULTS = ["待定", "通过", "未通过", "未到场"];
 export const TALENT_STAGES = ["储备", "面试中", "已入职", "已淘汰"];
 
@@ -25,6 +25,7 @@ export const HR_SCHEMA = [
     dingtalk_userid VARCHAR(64) NOT NULL DEFAULT '',
     user_name VARCHAR(64) NOT NULL DEFAULT '',
     job_number VARCHAR(64) NOT NULL DEFAULT '',
+    department VARCHAR(64) NOT NULL DEFAULT '',
     work_date VARCHAR(10) NOT NULL,
     check_type VARCHAR(16) NOT NULL,
     time_result VARCHAR(32) NOT NULL DEFAULT '',
@@ -196,6 +197,9 @@ async function migratePunchTable() {
   if (!names.has("job_number")) {
     await query("ALTER TABLE hr_punches ADD COLUMN job_number VARCHAR(64) NOT NULL DEFAULT ''");
   }
+  if (!names.has("department")) {
+    await query("ALTER TABLE hr_punches ADD COLUMN department VARCHAR(64) NOT NULL DEFAULT ''");
+  }
   await query("ALTER TABLE hr_punches MODIFY person_id INT NOT NULL DEFAULT 0");
   const indexes = await rowsOf(
     `SELECT INDEX_NAME FROM information_schema.STATISTICS
@@ -343,13 +347,14 @@ export async function replaceDayPunches(workDate, userIds, punches) {
     for (const punch of punches) {
       await query(
         `INSERT INTO hr_punches
-          (person_id, dingtalk_userid, user_name, job_number, work_date, check_type, time_result, label, check_at, record_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (person_id, dingtalk_userid, user_name, job_number, department, work_date, check_type, time_result, label, check_at, record_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           Number(punch.personId) || 0,
           punch.dingtalkUserId,
           punch.userName || "",
           punch.jobNumber || "",
+          punch.department || "",
           day,
           punch.checkType,
           punch.timeResult,
@@ -487,15 +492,19 @@ export async function recordSync(kind, workDate, ok, message) {
   return row;
 }
 
-export async function latestSync() {
+export async function latestSync(kind = "") {
   await ensureHrSchema();
+  const picked = clip(kind, 32);
   if (dbMode() === "mysql") {
-    const rows = await rowsOf("SELECT * FROM hr_sync_runs ORDER BY id DESC LIMIT 1");
+    const rows = picked
+      ? await rowsOf("SELECT * FROM hr_sync_runs WHERE run_kind = ? ORDER BY id DESC LIMIT 1", [picked])
+      : await rowsOf("SELECT * FROM hr_sync_runs ORDER BY id DESC LIMIT 1");
     if (!rows.length) return null;
     const row = rows[0];
     return { kind: row.run_kind, workDate: row.work_date, ok: Boolean(row.ok_flag), message: row.message, createdAt: row.created_at };
   }
-  return memory.runs.length ? { ...memory.runs[memory.runs.length - 1] } : null;
+  const rows = picked ? memory.runs.filter((row) => row.kind === picked) : memory.runs;
+  return rows.length ? { ...rows[rows.length - 1] } : null;
 }
 
 function mapPunch(row) {
@@ -504,6 +513,7 @@ function mapPunch(row) {
     dingtalkUserId: row.dingtalk_userid,
     userName: row.user_name || "",
     jobNumber: row.job_number || "",
+    department: row.department || "",
     workDate: row.work_date,
     checkType: row.check_type,
     timeResult: row.time_result,

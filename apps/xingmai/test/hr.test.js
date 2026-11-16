@@ -25,7 +25,9 @@ import {
   publicPerson,
   punchesFromDing,
   pullDay,
-  runDaily
+  rowsForDay,
+  runDaily,
+  shouldPullToday
 } from "../src/modules/hr/sync.js";
 
 for (const key of ["DINGTALK_CORP_ID", "DINGTALK_CLIENT_ID", "DINGTALK_CLIENT_SECRET"]) {
@@ -89,7 +91,7 @@ test("hr schema stays in hr_ tables", () => {
 
 test("client mounts one page and five in-page tabs", () => {
   assert.match(client, /XmModules\["\/hr"\]/);
-  const labels = ["考勤", "加班", "调休", "人才", "面试"];
+  const labels = ["看板", "加班", "调休", "人才", "面试"];
   let from = 0;
   for (const label of labels) {
     const at = client.indexOf(`label: "${label}"`);
@@ -183,6 +185,20 @@ test("NotSigned does not invent a clock time", () => {
   assert.equal(rows[0].label, "正常");
   assert.equal(rows[1].checkAt, "");
   assert.equal(rows[1].label, "未打卡");
+});
+
+test("today's attendance is pulled once after 10:00 Shanghai", () => {
+  assert.equal(shouldPullToday({ hour: 9 }, null, "2026-11-16"), false);
+  assert.equal(shouldPullToday({ hour: 10 }, null, "2026-11-16"), true);
+  assert.equal(shouldPullToday({ hour: 12 }, { ok: true, workDate: "2026-11-16" }, "2026-11-16"), false);
+  assert.equal(shouldPullToday({ hour: 12 }, { ok: true, workDate: "2026-11-15" }, "2026-11-16"), true);
+  const rows = rowsForDay(
+    [{ userId: "a", userName: "甲", department: "运营二区", jobNumber: "" }],
+    [{ dingtalkUserId: "a", workDate: "2026-11-16", userName: "", department: "", checkAt: "2026-11-16 09:01", timeResult: "Normal", checkType: "OnDuty" }],
+    "2026-11-16"
+  );
+  assert.equal(rows[0].userName, "甲");
+  assert.equal(rows[0].department, "运营二区");
 });
 
 test("attendance board counts staff, punches, late arrivals, leave, and departments", () => {
@@ -372,7 +388,7 @@ test("http keeps attendance read-only and interviews in this module", async () =
     assert.equal(denied.status, 401);
     const home = await request(server, "/api/hr");
     assert.equal(home.status, 200);
-    assert.deepEqual(home.data.tabs, ["考勤", "加班", "调休", "人才", "面试"]);
+    assert.deepEqual(home.data.tabs, ["看板", "加班", "调休", "人才", "面试"]);
     assert.equal(home.data.module, "hr");
     const status = await request(server, "/api/hr/status");
     assert.equal(status.data.configured, false);

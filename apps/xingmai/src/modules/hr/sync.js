@@ -160,6 +160,7 @@ export function punchesFromDing(records, usersById, workDate) {
       dingtalkUserId: userId,
       userName: user.userName || user.name || "",
       jobNumber: user.jobNumber || "",
+      department: user.department || "",
       workDate,
       checkType: record.checkType === "OffDuty" ? "OffDuty" : "OnDuty",
       timeResult,
@@ -205,6 +206,46 @@ function leaveCovers(leave, day) {
   const start = String(leave.startAt || "").slice(0, 10);
   const end = String(leave.endAt || "").slice(0, 10) || start;
   return Boolean(start) && start <= day && end >= day;
+}
+
+export function shouldPullToday(parts, latestToday, today) {
+  if (!parts || Number(parts.hour) < 10) return false;
+  if (latestToday && latestToday.ok && latestToday.workDate === today) return false;
+  return true;
+}
+
+export function rowsForDay(users, punches, date) {
+  const byUser = new Map();
+  for (const user of users || []) {
+    if (user && user.userId) byUser.set(user.userId, user);
+  }
+  const rows = (punches || []).filter((row) => row.workDate === date).map((row) => {
+    const user = byUser.get(row.dingtalkUserId) || {};
+    return {
+      ...row,
+      userName: row.userName || user.userName || user.name || "",
+      jobNumber: row.jobNumber || user.jobNumber || "",
+      department: row.department || user.department || ""
+    };
+  });
+  const seen = new Set(rows.map((row) => row.dingtalkUserId));
+  for (const user of byUser.values()) {
+    if (seen.has(user.userId)) continue;
+    rows.push({
+      personId: Number(user.personId) || 0,
+      dingtalkUserId: user.userId,
+      userName: user.userName || user.name || "",
+      jobNumber: user.jobNumber || "",
+      department: user.department || "",
+      workDate: date,
+      checkType: "OnDuty",
+      timeResult: "",
+      label: "",
+      checkAt: "",
+      recordId: ""
+    });
+  }
+  return rows;
 }
 
 export function buildBoard({ date, users = [], punches = [], leaves = [] }) {
@@ -369,6 +410,18 @@ export async function pullLeaveAndOvertime(workDate, client = createDingClient()
   return { configured: true, quotas, overtime, leaves };
 }
 
+export async function runToday(client = createDingClient()) {
+  const day = shanghaiToday();
+  if (!readDingEnv().configured) {
+    await recordSync("today", day, false, "钉钉还没配置");
+    return { configured: false };
+  }
+  await refreshDirectory(client);
+  const pulled = await pullDay(day, { client });
+  await recordSync("today", day, true, `今日 ${pulled.users || 0} 人，打卡 ${pulled.punches?.length || 0} 条`);
+  return { configured: true, workDate: day, punches: pulled.punches, users: pulled.users };
+}
+
 export async function runDaily(workDate, client = createDingClient()) {
   if (!readDingEnv().configured) {
     await recordSync("daily", workDate, false, "钉钉还没配置");
@@ -393,10 +446,18 @@ export function startScheduler(client = createDingClient()) {
   const tick = async () => {
     if (!client.configured()) return;
     const parts = shanghaiParts();
+    const today = shanghaiToday();
+    if (shouldPullToday(parts, await latestSync("today"), today)) {
+      try {
+        await runToday(client);
+      } catch (err) {
+        await recordSync("today", today, false, String(err.message || "今日打卡没有拉下来").slice(0, 180));
+      }
+    }
     if (parts.hour < 1) return;
-    const day = addDays(shanghaiToday(), -1);
-    const latest = await latestSync();
-    if (latest && latest.ok && latest.kind === "daily" && latest.workDate === day) return;
+    const day = addDays(today, -1);
+    const latest = await latestSync("daily");
+    if (latest && latest.ok && latest.workDate === day) return;
     try {
       await runDaily(day, client);
       await recordSync("daily", day, true, "日批完成");
