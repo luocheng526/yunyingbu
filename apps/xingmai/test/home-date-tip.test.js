@@ -59,7 +59,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /\.xm-hm-team-kpis\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(homeJs, /\.xm-hm\.is-chief \.xm-hm-team-kpis\{grid-template-columns:1fr/);
   assert.doesNotMatch(homeJs, /\.xm-hm\.is-chief \.xm-hm-card\{aspect-ratio:1\/1/);
-  assert.match(homeJs, /xm-hm-teams-bar"><b>星脉甄选<\/b><span><button type="button" data-refresh-teams/);
+  assert.match(homeJs, /title \|\| "星脉甄选"/);
+  assert.match(homeJs, /data-refresh-teams/);
   assert.match(homeJs, /更新团队/);
   assert.match(homeJs, /更新中…/);
   assert.match(homeJs, /data-show-teams>恢复所有团队的卡片<\/button><button type="button" class="xm-hm-set">卡片设置/);
@@ -125,9 +126,17 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.match(homeJs, /\.xm-hm-views button\.is-on\{background:transparent;border-bottom-color:var\(--xm-primary\)/);
   assert.doesNotMatch(homeJs, /\.xm-hm-views button\{border:1px solid var\(--xm-primary\)/);
   assert.doesNotMatch(homeJs, /\.xm-hm-views button\.is-on\{background:var\(--xm-primary\)/);
-  assert.match(homeJs, /label: "公司"/);
+  assert.match(homeJs, /label: "数据总揽"/);
+  assert.match(homeJs, /label: "团队概括"/);
   assert.match(homeJs, /label: "实时"/);
   assert.match(homeJs, /label: "排行榜"/);
+  assert.match(homeJs, /data-over-open/);
+  assert.match(homeJs, /data-over-back/);
+  assert.match(homeJs, /xm-hm-over-card is-/);
+  assert.match(homeJs, /is-teal\{background:linear-gradient\(135deg,#2ec8d4,#22b4c0\)/);
+  assert.match(homeJs, /is-green\{background:linear-gradient\(135deg,#3ddc84,#2ec56e\)/);
+  assert.match(homeJs, /is-blue\{background:linear-gradient\(135deg,#5b8cff,#4a74f5\)/);
+  assert.doesNotMatch(homeJs, /\{ key: "company", label: "公司" \}/);
   assert.match(homeJs, /\.xm-hm-set\{border:0;background:transparent;color:var\(--xm-primary\)/);
   assert.match(homeJs, /closest\("\.xm-hm-views button,\.xm-hm-ranges button,\.xm-hm-set,\.xm-hm-dates,\[data-refresh-teams\],\[data-show-teams\],\[data-refresh-live\],\[data-live-heads\]"\)/);
   assert.match(homeJs, /--xm-hm-team-cols/);
@@ -418,6 +427,7 @@ test("homepage views: bosses see all, chiefs see 主管/储备, operators do not
   assert.equal(fns.shopOnUserDuty(shops[1], { displayName: "索一龙" }), false);
   assert.deepEqual(fns.allowedHomeViews({ displayName: "罗成" }, people, shops), {
     company: true,
+    overview: true,
     team: true,
     chief: true,
     live: true,
@@ -425,6 +435,7 @@ test("homepage views: bosses see all, chiefs see 主管/储备, operators do not
   });
   assert.deepEqual(fns.allowedHomeViews({ displayName: "高传颖", role: "主管" }, people, shops), {
     company: true,
+    overview: true,
     team: false,
     chief: true,
     live: true,
@@ -432,6 +443,7 @@ test("homepage views: bosses see all, chiefs see 主管/储备, operators do not
   });
   assert.deepEqual(fns.allowedHomeViews({ displayName: "索一龙", role: "运营" }, people, shops), {
     company: true,
+    overview: true,
     team: false,
     chief: false,
     live: true,
@@ -442,6 +454,18 @@ test("homepage views: bosses see all, chiefs see 主管/储备, operators do not
     ["杨润泽", "高传颖", "毛永超"]
   );
   assert.deepEqual(fns.filterOwnChiefs(teams, { displayName: "索一龙", role: "运营" }, people, shops), []);
+});
+
+test("overview merges manager chief and board panes", () => {
+  assert.match(homeJs, /key: "overview", label: "团队概括"/);
+  assert.match(homeJs, /function overviewBodyHtml/);
+  assert.match(homeJs, /function overviewCardsHtml/);
+  assert.match(homeJs, /data-over="team"/);
+  assert.match(homeJs, /data-over="chief"/);
+  assert.match(homeJs, /data-over="board"/);
+  assert.match(homeJs, /state\.view === "team" \|\| state\.view === "chief" \|\| state\.view === "board"/);
+  assert.match(homeJs, /data-over-open/);
+  assert.match(homeJs, /‹ 团队概括/);
 });
 
 test("company and live packs keep only the signed-in person's duty shops", () => {
