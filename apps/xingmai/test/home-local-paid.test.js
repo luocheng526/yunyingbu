@@ -68,7 +68,12 @@ test("live page uses Han+Shen paid totals and leaves paid for local return", () 
   assert.doesNotMatch(homeJs, /\/api\/han\/worker\?view=overview/);
   assert.doesNotMatch(homeJs, /\/api\/shen\/paid\?latest=1/);
   assert.doesNotMatch(homeJs, /\/api\/shen\/paid\/jingmai/);
-  assert.match(homeJs, /\/api\/home\/live-login/);
+  assert.match(homeJs, /\/api\/home\/live-login\/one/);
+  assert.match(homeJs, /data-live-login/);
+  assert.match(homeJs, /xm-hm-desk-mask/);
+  assert.match(homeJs, /点掉线的店，在页面中间弹出这一家的登录画面/);
+  assert.doesNotMatch(homeJs, /登录未登录店铺/);
+  assert.doesNotMatch(homeJs, /api\("\/api\/home\/live-login", \{\}\)/);
   assert.match(homeJs, /function mergeLivePaid/);
   assert.match(homeJs, /function sortLiveShops/);
   assert.match(homeJs, /sortLiveShops\(feePickShops/);
