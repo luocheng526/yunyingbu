@@ -529,7 +529,7 @@
           var days = on ? '<div class="hr-table-wrap"><table class="hr-table"><thead><tr><th>日期</th><th>下班</th><th>时长</th></tr></thead><tbody>' +
             (dayRows(row) || emptyRow(3, "这个月没有 18 点后的下班")) + "</tbody></table></div>" : "";
           return '<li data-effort="' + esc(row.userId) + '" aria-expanded="' + (on ? "true" : "false") + '"><span>' + (index + 1) + ". " +
-            esc(row.name || "未命名") + "</span><b>" + esc(row.hours) + "</b>" + days + "</li>";
+            esc(row.name || "未命名") + (row.department ? " · " + esc(row.department) : "") + "</span><b>" + esc(row.hours) + "</b>" + days + "</li>";
         }).join("") : '<li class="hr-empty">这个角色还没有对上的人</li>';
         return '<section class="hr-card hr-board-card"><h3>' + esc(rank.title) + '</h3><ul class="hr-rank-list">' + items + "</ul></section>";
       }).join("");

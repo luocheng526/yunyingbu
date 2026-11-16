@@ -60,7 +60,15 @@ export function publicPerson(row) {
     status: String(row.status || "").trim(),
     employeeNo: String(row.employeeNo || row.employee_no || "").trim(),
     phone: String(row.phone || row.mobile || "").trim(),
-    department: String(row.department || row.center || "").trim()
+    department: String(row.department || row.center || "").trim(),
+    center: String(row.center || "").trim(),
+    board: String(row.board || "").trim(),
+    director: String(row.director || "").trim(),
+    lineManager: String(row.lineManager || "").trim(),
+    supervisor: String(row.supervisor || "").trim(),
+    reserve: String(row.reserve || "").trim(),
+    operator: String(row.operator || "").trim(),
+    assistant: String(row.assistant || "").trim()
   };
 }
 
@@ -280,6 +288,66 @@ export function isOpsDepartment(name) {
   return String(name || "").includes("运营");
 }
 
+const POST_BLANK = new Set(["", "无", "—", "-", "点击填写", "空", "（空）", "暂无"]);
+const ORG_MANAGERS = new Set(["罗成", "韩梦凯", "沈子晗"]);
+const POST_FIELDS = [
+  ["经理", "lineManager"],
+  ["主管", "supervisor"],
+  ["储备", "reserve"],
+  ["运营", "operator"],
+  ["助理", "assistant"]
+];
+
+function cleanPost(value) {
+  const text = String(value || "").trim();
+  return POST_BLANK.has(text) ? "" : text;
+}
+
+export function isEffortPerson(person) {
+  if (!person || person.status === "离职") return false;
+  const department = String(person.department || "");
+  const center = String(person.center || "");
+  if (department === "人员管理" || center === "人员管理") return false;
+  if (person.board && person.board !== "ops") return false;
+  if (person.board === "ops") return true;
+  return isOpsDepartment(department) || isOpsDepartment(center) || department === "其他" || center === "其他";
+}
+
+export function orgPostSets(people = []) {
+  const rows = (people || []).filter(isEffortPerson);
+  const sets = Object.fromEntries(POST_FIELDS.map(([label]) => [label, new Set()]));
+  const hasColumns = rows.some((person) => POST_FIELDS.some(([, field]) => cleanPost(person[field])));
+  if (!hasColumns) {
+    for (const person of rows) {
+      const role = String(person.role || "").trim();
+      if (sets[role]) sets[role].add(personName(person.name));
+    }
+    return sets;
+  }
+  for (const person of rows) {
+    const name = personName(person.name);
+    for (const [label, field] of POST_FIELDS) {
+      const raw = String(person[field] || "").trim();
+      let value = cleanPost(raw);
+      if ((label === "运营" && raw === "运营") || (label === "助理" && raw === "助理") || (label === "储备" && raw === "储备") || (label === "经理" && raw === "经理")) {
+        value = cleanPost(name);
+      }
+      if (label === "主管" && (raw === "主管" || raw === "主管/储备")) value = cleanPost(name);
+      if (!value) continue;
+      if ((label === "主管" || label === "储备") && ORG_MANAGERS.has(value)) continue;
+      if (label === "经理" && value === "罗成") continue;
+      sets[label].add(personName(value));
+    }
+  }
+  return sets;
+}
+
+function postsOf(name, sets) {
+  const key = personName(name);
+  if (!key) return [];
+  return POST_FIELDS.map(([label]) => label).filter((label) => sets[label].has(key));
+}
+
 export function pairEffort(dingUsers, people, links = []) {
   const ding = (dingUsers || []).filter((user) => user && user.userId && isOpsDepartment(user.department));
   const org = (people || []).filter((person) => person && person.id && person.status !== "离职" && isOpsDepartment(person.department || person.center));
@@ -404,10 +472,39 @@ export function effortReport({ month = "", users = [], punches = [], people = []
     ...team,
     average: team.roster ? round1(team.hours / team.roster) : 0
   })).sort((a, b) => b.average - a.average || a.name.localeCompare(b.name, "zh"));
+  const sets = orgPostSets(people);
+  for (const row of rows) {
+    const posts = [...new Set([...postsOf(row.name, sets), ...postsOf(row.orgName, sets)])];
+    row.posts = posts;
+    if (posts.length) row.role = posts.join("、");
+  }
+  const seen = new Set(rows.flatMap((row) => [personName(row.name), personName(row.orgName)]).filter(Boolean));
+  const ranked = rows.concat((people || []).filter(isEffortPerson).flatMap((person) => {
+    const key = personName(person.name);
+    if (!key || seen.has(key)) return [];
+    const posts = postsOf(person.name, sets);
+    if (!posts.length) return [];
+    seen.add(key);
+    const lead = personName(person.supervisor || person.lineManager || "");
+    const team = rows.find((row) => lead && personName(row.department).includes(lead));
+    return [{
+      userId: `org-${person.id}`,
+      name: person.name || "",
+      department: team ? team.department : (person.department || person.center || ""),
+      jobNumber: person.employeeNo || "",
+      hours: 0,
+      days: [],
+      personId: Number(person.id),
+      orgName: person.name || "",
+      role: posts.join("、"),
+      posts,
+      matchBy: ""
+    }];
+  }));
   const ranks = EFFORT_RANKS.map((rank) => ({
     id: rank.id,
     title: rank.title,
-    rows: rows.filter((row) => rank.roles.includes(row.role)).sort((a, b) => b.hours - a.hours || String(a.name).localeCompare(String(b.name), "zh"))
+    rows: ranked.filter((row) => (row.posts || [row.role]).some((post) => rank.roles.includes(post))).sort((a, b) => b.hours - a.hours || String(a.name).localeCompare(String(b.name), "zh"))
   }));
   return {
     month: safeMonth,

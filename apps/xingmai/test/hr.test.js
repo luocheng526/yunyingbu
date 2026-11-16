@@ -220,7 +220,7 @@ test("mapping uses job number or phone and skips ambiguous names", () => {
 
 test("public person drops anything except the roster fields", () => {
   const view = publicPerson({ id: 9, name: "甲", status: "在职", employeeNo: "E9", phone: "13900000000", department: "运营", password: "hidden", username: "jia" });
-  assert.deepEqual(Object.keys(view).sort(), ["department", "employeeNo", "id", "name", "phone", "role", "status"]);
+  assert.deepEqual(Object.keys(view).sort(), ["assistant", "board", "center", "department", "director", "employeeNo", "id", "lineManager", "name", "operator", "phone", "reserve", "role", "status", "supervisor"]);
   assert.equal(JSON.stringify(view).includes("hidden"), false);
 });
 
@@ -335,10 +335,39 @@ test("effort report ranks roles, averages teams, and lists who is not aligned", 
   assert.equal(report.teams[0].name, "运营一组");
   assert.equal(report.teams[0].average, 1.8);
   assert.deepEqual(report.ranks[0].rows.map((row) => row.name), ["甲"]);
-  assert.equal(report.ranks[1].rows.length, 0);
+  assert.deepEqual(report.ranks[1].rows.map((row) => row.name), ["丁"]);
   assert.equal(report.watch.dingMiss[0].name, "乙");
   assert.equal(report.watch.orgMiss[0].name, "丁");
   assert.equal(report.watch.conflict, true);
+});
+
+test("assistant and operator ranks follow the org personnel columns", () => {
+  const report = effortReport({
+    month: "2026-11",
+    users: [
+      { userId: "u1", userName: "郭想", department: "运营二组（毛永超）", jobNumber: "" },
+      { userId: "u2", userName: "崔天昊", department: "运营二组（毛永超）", jobNumber: "" },
+      { userId: "u3", userName: "毛永超", department: "运营二组（毛永超）", jobNumber: "" }
+    ],
+    punches: [
+      { dingtalkUserId: "u1", userName: "郭想", department: "运营二组（毛永超）", workDate: "2026-11-16", checkType: "OffDuty", checkAt: "2026-11-16 21:00" },
+      { dingtalkUserId: "u2", userName: "崔天昊", department: "运营二组（毛永超）", workDate: "2026-11-16", checkType: "OffDuty", checkAt: "2026-11-16 20:00" }
+    ],
+    people: [
+      { id: 1, name: "郭想", role: "运营", status: "在职", board: "ops", center: "韩梦凯运营中心", department: "韩梦凯运营中心", supervisor: "毛永超", operator: "无", assistant: "郭想" },
+      { id: 2, name: "崔天昊", role: "运营", status: "在职", board: "ops", center: "韩梦凯运营中心", department: "韩梦凯运营中心", supervisor: "毛永超", operator: "崔天昊", assistant: "无" },
+      { id: 3, name: "毛永超", role: "运营", status: "在职", board: "ops", center: "韩梦凯运营中心", department: "韩梦凯运营中心", supervisor: "毛永超", operator: "毛永超", assistant: "" },
+      { id: 4, name: "孙广泽", role: "运营", status: "在职", board: "ops", center: "韩梦凯运营中心", department: "韩梦凯运营中心", supervisor: "高明阳", operator: "杨顺", assistant: "孙广泽" },
+      { id: 5, name: "张璇", role: "主管", status: "在职", board: "hrTech", center: "其他", department: "其他", supervisor: "张璇", operator: "", assistant: "" }
+    ],
+    links: []
+  });
+  assert.deepEqual(report.ranks[0].rows.map((row) => row.name), ["郭想", "孙广泽"]);
+  assert.equal(report.ranks[0].rows[1].department, "韩梦凯运营中心");
+  assert.deepEqual(report.ranks[1].rows.map((row) => row.name), ["崔天昊", "毛永超"]);
+  assert.deepEqual(report.ranks[2].rows.map((row) => row.name), ["毛永超"]);
+  assert.equal(report.people.find((row) => row.name === "郭想").role, "助理");
+  assert.equal(report.ranks.some((rank) => rank.rows.some((row) => row.name === "张璇")), false);
 });
 
 test("a manual alignment stays when the daily match is rewritten", async () => {
