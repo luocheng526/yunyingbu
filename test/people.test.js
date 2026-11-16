@@ -9,7 +9,7 @@ import { resetOrgExtra } from "../src/modules/people/org-extra.js";
 import { canAssignPerson, canAssignSiteAcl, canEditRoster } from "../src/modules/people/org-acl.js";
 import { hydrateFromMysql, resetPeopleStore } from "../src/modules/people/store.js";
 import { PEOPLE_CLIENT_JS, rewritePeopleModuleUrl } from "../src/modules/people/asset-ver.js";
-import { featureAllowed, resetSiteAcl } from "../src/modules/people/site-acl.js";
+import { featureAllowed, resetSiteAcl, SITE_MODULES } from "../src/modules/people/site-acl.js";
 
 const PRESET = [
   { name: "沈子晗", role: "经理", center: "沈子晗运营中心", status: "在职" },
@@ -139,6 +139,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.doesNotMatch(jsText, /id="org-scope"/);
     assert.match(jsText, /点击修改，点别处保存/);
     assert.match(jsText, /org-tab-name">店铺主数据/);
+    assert.doesNotMatch(jsText, /智能人事/);
     assert.match(cssText, /\.org-tab\s*\{[\s\S]*?min-height:\s*48px/);
     assert.match(jsText, /storeCellDrag/);
     assert.match(jsText, /下载模板/);
@@ -478,12 +479,16 @@ test("GET /api/people/charter is read-only source rule", async () => {
     assert.equal(data.roster, "手维护");
     assert.equal(data.shopRightsMaintain, "手维护");
     assert.equal(data.hrModule, "智能人事");
+    assert.equal(data.hrPath, "/hr");
+    assert.equal(data.hrNav, "主框架");
     assert.deepEqual(data.hrTopics, ["假勤", "打卡", "调休", "加班"]);
+    assert.deepEqual(data.orgTabs, ["店铺主数据", "成员管理", "责权", "权限", "改动日志"]);
     assert.equal(data.release.module, "组织中心");
     assert.equal(data.release.applicant, "罗成运营部主脑");
     assert.match(data.rule, /不接钉钉/);
     assert.match(data.rule, /手维护/);
     assert.match(data.rule, /智能人事/);
+    assert.match(data.rule, /不再铺菜单/);
   });
 });
 
@@ -502,12 +507,24 @@ test("org center stays off DingTalk and keeps people columns local", async () =>
   assert.equal(charterFile.dingTalk, false);
   assert.ok(charterFile.notSource.includes("钉钉通讯录"));
   assert.equal(charterFile.hrModule, "智能人事");
+  assert.equal(charterFile.hrPath, "/hr");
+  assert.equal(charterFile.hrNav, "主框架");
   assert.equal(charterFile.release.module, "组织中心");
   assert.equal(charterFile.release.applicant, "罗成运营部主脑");
   assert.match(adminDoc, /组织中心继续不接钉钉/);
   assert.match(adminDoc, /罗成运营部主脑/);
+  assert.match(adminDoc, /不要在组织中心再铺「智能人事」菜单/);
   assert.match(orgDoc, /假勤、打卡、调休、加班归 \*\*智能人事\*\*/);
+  assert.match(orgDoc, /不要在组织中心再铺菜单/);
   assert.match(routerSrc, /dingTalk: false/);
+  assert.equal((peopleJs.match(/class="org-tab(?: is-active)?"/g) || []).length, 5);
+  assert.doesNotMatch(peopleJs, /智能人事/);
+  assert.doesNotMatch(peopleJs, /href="\/hr"/);
+  assert.ok(!SITE_MODULES.some((mod) => mod.id === "hr" || mod.name === "智能人事"));
+  assert.deepEqual(
+    SITE_MODULES.find((mod) => mod.id === "people").features.map((item) => item.name),
+    ["店铺主数据", "成员管理", "责权", "权限", "改动日志"]
+  );
   await withServer(async (base) => {
     const res = await fetch(`${base}/api/people`);
     const data = await res.json();
