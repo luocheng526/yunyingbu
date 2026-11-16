@@ -1,3 +1,5 @@
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { browserReady, ensureChrome, jingmaiDesk } from "./jingmai-desk.js";
 import { jingmaiClient } from "./jingmai-client.js";
 import { beijingParts, runTick, sampleFields } from "./jingmai.js";
@@ -53,18 +55,82 @@ export function resetJingmaiDeps() {
   deskLock = Promise.resolve();
 }
 
+function orgFilePath() {
+  if (process.env.SHEN_JINGMAI_ORG_FILE) {
+    return process.env.SHEN_JINGMAI_ORG_FILE;
+  }
+  if (process.env.NODE_TEST_CONTEXT || process.argv.includes("--test")) {
+    return "";
+  }
+  return join(process.cwd(), "data", "shen-jingmai-org.json");
+}
+
 function rememberOrg(shops) {
+  let changed = false;
   (shops || []).forEach(function (shop) {
     if (!shop || !shop.store || !shop.login || !shop.password) {
       return;
     }
-    orgCache.set(shop.store, {
+    const current = orgCache.get(shop.store);
+    const next = {
       store: shop.store,
       enabled: shop.enabled !== false,
       login: shop.login,
       password: shop.password
-    });
+    };
+    if (!current || current.login !== next.login || current.password !== next.password || current.enabled !== next.enabled) {
+      changed = true;
+    }
+    orgCache.set(shop.store, next);
   });
+  if (changed) {
+    writeOrgFile();
+  }
+}
+
+function writeOrgFile() {
+  const path = orgFilePath();
+  if (!path || !orgCache.size) {
+    return;
+  }
+  const payload = {};
+  orgCache.forEach(function (shop, name) {
+    payload[name] = { enabled: shop.enabled !== false, login: shop.login, password: shop.password };
+  });
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, JSON.stringify(payload), { mode: 0o600 });
+    chmodSync(path, 0o600);
+  } catch {
+    /* a read-only disk still keeps the accounts for this process */
+  }
+}
+
+function loadOrgFile() {
+  if (orgCache.size) {
+    return;
+  }
+  const path = orgFilePath();
+  if (!path) {
+    return;
+  }
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf8"));
+    Object.keys(parsed || {}).forEach(function (name) {
+      const shop = parsed[name];
+      if (!shop || !shop.login || !shop.password) {
+        return;
+      }
+      orgCache.set(name, {
+        store: name,
+        enabled: shop.enabled !== false,
+        login: String(shop.login),
+        password: String(shop.password)
+      });
+    });
+  } catch {
+    /* the account file is created the next time organization data is read */
+  }
 }
 
 function withDesk(task) {
@@ -199,9 +265,6 @@ async function rememberLogin(store, cookies) {
     const metrics = await deps.client.fetchHome(cookies);
     const now = beijingParts();
     await saveSample(Object.assign({ store: store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics)));
-    if (metrics.dealAmount == null) {
-      await markAuth(store, "offline", metrics.dealNote || "京麦首页没有成交字段");
-    }
   } catch (error) {
     const message = String((error && error.message) || "采集超时").replace(/\s+/g, " ").slice(0, 180) || "采集超时";
     await markAuth(store, "offline", message);
@@ -488,6 +551,7 @@ export async function jingmaiTick() {
     markAuth: markAuth,
     now: beijingParts
   });
+  loadOrgFile();
   if (refreshing || !orgCache.size) {
     return;
   }

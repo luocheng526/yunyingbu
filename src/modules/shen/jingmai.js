@@ -860,20 +860,18 @@ export function buildLiveView({ shops, samples, now }) {
     const hasSession = shop.enabled !== false && Array.isArray(shop.cookies) && shop.cookies.length > 0;
     const loginExpired = shop.enabled !== false && shop.authState === "login_expired";
     const fresh = sampleIsFresh(latestDataStamp(mine), now);
-    const dealMissing = !reading || reading.dealAmount == null;
-    const collectFailed = shop.authState === "offline";
-    const watched = shop.authState === "ok" || collectFailed;
-    const online = hasSession && watched && fresh && !dealMissing && !loginExpired;
+    const blankDeal = /没有成交字段/.test(String(shop.authMessage || ""));
+    const collectFailed = shop.authState === "offline" && !blankDeal;
+    const watched = shop.authState === "ok" || shop.authState === "offline";
+    const online = hasSession && watched && fresh && !collectFailed && !loginExpired;
     let offline = false;
     let offlineReason = "";
-    if (hasSession && watched && !online && (collectFailed || !fresh || dealMissing)) {
+    if (hasSession && watched && !online) {
       offline = true;
       if (collectFailed && shop.authMessage) {
         offlineReason = String(shop.authMessage);
       } else if (!fresh) {
         offlineReason = "采集已停止";
-      } else if (dealMissing) {
-        offlineReason = (reading && reading.dealNote) || "京麦首页没有成交字段";
       } else {
         offlineReason = "采集超时";
       }
@@ -964,9 +962,7 @@ async function collectOne(shop, deps) {
     await deps.saveSample(
       Object.assign({ store: shop.store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics))
     );
-    if (metrics.dealAmount == null) {
-      await deps.markAuth(shop.store, "offline", metrics.dealNote || "京麦首页没有成交字段");
-    } else if (shop.authState === "offline") {
+    if (shop.authState === "offline") {
       await deps.markAuth(shop.store, "ok", "");
     }
   } catch (error) {

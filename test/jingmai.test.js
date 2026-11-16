@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
 import http from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import {
@@ -23,7 +26,7 @@ import {
 import { fetchHome, interpretQrCheck } from "../src/modules/shen/jingmai-client.js";
 import { passwordFailureMessage } from "../src/modules/shen/jingmai-client.js";
 import { libraryPackageNames, loginScreenState, packageFilename, suiteForGlibc } from "../src/modules/shen/jingmai-desk.js";
-import { beginRelogin, beginReloginAll, connectJingmai, refreshJingmai, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/shen/jingmai-runner.js";
+import { beginRelogin, beginReloginAll, connectJingmai, jingmaiTick, refreshJingmai, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/shen/jingmai-runner.js";
 import { listCollectTargets, listSessions, readJingmaiLive, resetJingmaiStore, saveSample, saveSession } from "../src/modules/shen/jingmai-store.js";
 
 const now = { day: "2026-11-12", stamp: "2026-11-12 11:05:00", hour: 11, clock: "11:05:00" };
@@ -128,9 +131,8 @@ test("paid numbers count as a successful collection when deal is still empty", (
   assert.equal(view.shops[0].dealAmount, null);
   assert.equal(view.shops[0].paidAmount, 0);
   assert.equal(view.shops[0].paidRoi, 2.17);
-  assert.equal(view.shops[0].online, false);
-  assert.equal(view.shops[0].offline, true);
-  assert.match(view.shops[0].offlineReason, /没有成交字段/);
+  assert.equal(view.shops[0].online, true);
+  assert.equal(view.shops[0].offline, false);
   const kept = buildLiveView({
     now: now,
     shops: [{ store: "甲店", enabled: true, authState: "offline", authMessage: "京麦首页没有成交字段", cookies: [{ name: "thor", value: "secret" }] }],
@@ -238,7 +240,7 @@ test("one slow shop does not block another, and a timeout shows offline without 
   assert.deepEqual(marked, [["慢店", "offline", "采集超时"]]);
 });
 
-test("a missing deal field shows offline and a later deal clears it", async () => {
+test("a collected dash for the deal amount does not mark the shop offline", async () => {
   const marked = [];
   await runTick({
     inflight: new Set(),
@@ -250,13 +252,12 @@ test("a missing deal field shows offline and a later deal clears it", async () =
       marked.push([store, state, message]);
     }
   });
-  assert.deepEqual(marked, [["缺字段店", "offline", "京麦首页没有成交字段"]]);
-  marked.length = 0;
+  assert.deepEqual(marked, []);
   await runTick({
     inflight: new Set(),
     now: () => now,
-    listTargets: async () => [{ store: "缺字段店", enabled: true, authState: "offline", cookies: [{ name: "thor", value: "x" }] }],
-    fetchHome: async () => ({ dealAmount: 8, orderCount: 1, customerCount: 1 }),
+    listTargets: async () => [{ store: "缺字段店", enabled: true, authState: "offline", authMessage: "京麦首页没有成交字段", cookies: [{ name: "thor", value: "x" }] }],
+    fetchHome: async () => ({ dealAmount: null, paidAmount: 12 }),
     saveSample: async () => {},
     markAuth: async (store, state, message) => {
       marked.push([store, state, message]);
@@ -1006,6 +1007,70 @@ test("silent refresh keeps the old session when the login page asks for a check"
     assert.equal(sessions[0].cookies[0].value, "keep-jar");
     assert.equal(sessions[0].authState, "offline");
   } finally {
+    resetJingmaiDeps();
+    await resetJingmaiStore();
+  }
+});
+
+test("a restarted collector logs a shop in again from the saved account file", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "shen-org-"));
+  const previous = process.env.SHEN_JINGMAI_ORG_FILE;
+  process.env.SHEN_JINGMAI_ORG_FILE = join(dir, "org.json");
+  await resetJingmaiStore();
+  const opened = [];
+  const desk = {
+    open: async ({ store }) => {
+      opened.push(store);
+      return { status: "ok", cookies: [{ name: "thor", value: "new-jar" }] };
+    },
+    close: async () => {},
+    reset() {}
+  };
+  setJingmaiDeps({
+    loadOrg: async () => [{ store: "甲店", enabled: true, login: "acct", password: "secret-pass" }],
+    client: {
+      fetchHome: async () => {
+        const error = new Error("登录已失效，请重新登录");
+        error.code = "login";
+        throw error;
+      }
+    },
+    desk: desk
+  });
+  try {
+    await refreshJingmai("mk_sid=test");
+    resetJingmaiDeps();
+    await saveSession("甲店", {
+      cookies: [{ name: "thor", value: "old-jar" }],
+      authState: "offline",
+      authMessage: "登录已失效，请重新登录；京准通没有返回账号 -100 登录失败，请刷新页面重新登录",
+      enabled: true
+    });
+    setJingmaiDeps({
+      loadOrg: async () => [],
+      client: {
+        fetchHome: async () => {
+          const error = new Error("登录已失效，请重新登录");
+          error.code = "login";
+          throw error;
+        }
+      },
+      desk: desk
+    });
+    opened.length = 0;
+    await jingmaiTick();
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 50);
+    });
+    assert.deepEqual(opened, ["甲店"]);
+    assert.equal(JSON.stringify(opened).includes("secret-pass"), false);
+  } finally {
+    if (previous == null) {
+      delete process.env.SHEN_JINGMAI_ORG_FILE;
+    } else {
+      process.env.SHEN_JINGMAI_ORG_FILE = previous;
+    }
+    rmSync(dir, { recursive: true, force: true });
     resetJingmaiDeps();
     await resetJingmaiStore();
   }
