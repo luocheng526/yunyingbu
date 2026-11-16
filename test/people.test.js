@@ -9,7 +9,7 @@ import { resetOrgExtra } from "../src/modules/people/org-extra.js";
 import { canAssignPerson, canAssignSiteAcl, canEditLogin, canEditRoster, canSeeLogin } from "../src/modules/people/org-acl.js";
 import { hydrateFromMysql, resetPeopleStore } from "../src/modules/people/store.js";
 import { PEOPLE_CLIENT_JS, rewritePeopleModuleUrl } from "../src/modules/people/asset-ver.js";
-import { featureAllowed, resetSiteAcl, SITE_MODULES } from "../src/modules/people/site-acl.js";
+import { featureAllowed, moduleIdForPath, navVisibility, resetSiteAcl, SITE_MODULES } from "../src/modules/people/site-acl.js";
 
 const PRESET = [
   { name: "沈子晗", role: "经理", center: "沈子晗运营中心", status: "在职" },
@@ -335,6 +335,8 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /进得去/);
     assert.match(jsText, /改得了/);
     assert.match(jsText, /\/api\/people\/org\/site-acl/);
+    assert.match(jsText, /勾选保存在服务器/);
+    assert.match(jsText, /已保存到服务器/);
     assert.doesNotMatch(jsText, /填写对应的店铺/);
     assert.match(jsText, /renderRightsModEmpty\("无"\)/);
     assert.match(jsText, /renderRightsTreeChart/);
@@ -616,6 +618,8 @@ test("org center stays off DingTalk and keeps people columns local", async () =>
   assert.match(orgDoc, /假勤、打卡、调休、加班归 \*\*智能人事\*\*/);
   assert.match(orgDoc, /不要在组织中心再铺智能人事菜单或页签/);
   assert.match(orgDoc, /网站权限目录跟主框架侧栏走/);
+  assert.match(orgDoc, /权限勾选保存在服务器/);
+  assert.match(adminDoc, /权限勾选保存在服务器/);
   assert.match(orgDoc, /公告中心整页挂在「改动日志」后面的页签/);
   assert.match(routerSrc, /dingTalk: false/);
   assert.equal((peopleJs.match(/class="org-tab(?: is-active)?"/g) || []).length, 6);
@@ -1984,6 +1988,12 @@ test("site acl assigns split module and store caps by roster and store board", a
     assert.equal(meJson.me.configured, true);
     assert.equal(meJson.me.modules.home.features["home.workbench"].enter, true);
     assert.equal(meJson.me.modules.releases.features["releases.gate"].see, false);
+    assert.equal(meJson.configured, true);
+    assert.equal(meJson.nav["/home"].see, true);
+    assert.equal(meJson.nav["/people"].see, true);
+    assert.equal(meJson.nav["/releases"].see, false);
+    assert.equal(meJson.nav["/me"].see, true);
+    assert.match(me.headers.get("cache-control") || "", /no-store/);
 
     const blocked = await fetch(`${base}/api/people/org/site-acl/${encodeURIComponent("刘璇")}?actor=${encodeURIComponent("张文静")}`, {
       method: "PUT",
@@ -1991,5 +2001,70 @@ test("site acl assigns split module and store caps by roster and store board", a
       body: JSON.stringify({ modules: {}, stores: {} })
     });
     assert.equal(blocked.status, 403);
+  });
+});
+
+test("site acl maps paths and live nav follows the saved server sheet", async () => {
+  assert.equal(moduleIdForPath("/"), "home");
+  assert.equal(moduleIdForPath("/hr/attendance"), "hr");
+  assert.equal(moduleIdForPath("/stores/reviews"), "shopkeep");
+  assert.equal(moduleIdForPath("/people?pane=notices"), "people");
+  assert.equal(moduleIdForPath("/notices"), "notices");
+  const blank = navVisibility("张文静");
+  assert.equal(blank.configured, false);
+  assert.equal(blank.paths["/home"].see, false);
+  assert.equal(blank.paths["/me"].see, true);
+  const luo = navVisibility("罗成");
+  assert.equal(luo.configured, true);
+  assert.equal(luo.paths["/people"].see, true);
+  assert.equal(luo.paths["/hr"].see, true);
+
+  const navJs = fs.readFileSync("public/shared/nav.js", "utf8");
+  assert.match(navJs, /\/api\/people\/org\/site-acl\/me/);
+  assert.match(navJs, /function allowSitePath/);
+  assert.match(navJs, /startSiteAclWatch/);
+
+  await withServer(async (base) => {
+    const open = await fetch(`${base}/people?actor=${encodeURIComponent("张文静")}`, { redirect: "manual" });
+    assert.equal(open.status, 200);
+
+    const saved = await fetch(`${base}/api/people/org/site-acl/${encodeURIComponent("张文静")}?actor=${encodeURIComponent("沈子晗")}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        modules: {
+          work: { see: true, enter: true, edit: false },
+          feedback: { see: true, enter: true, edit: false },
+          hr: { see: true, enter: true, edit: false },
+          notices: { see: true, enter: true, edit: false },
+          profile: { see: true, enter: true, edit: false }
+        },
+        stores: {}
+      })
+    });
+    const savedJson = await saved.json();
+    assert.equal(saved.status, 200, JSON.stringify(savedJson));
+    assert.equal(savedJson.sheet.configured, true);
+    assert.equal(savedJson.sheet.modules.work.see, true);
+    assert.equal(savedJson.sheet.modules.people.see, false);
+
+    const blocked = await fetch(`${base}/people?actor=${encodeURIComponent("张文静")}`, { redirect: "manual" });
+    assert.equal(blocked.status, 302);
+    assert.equal(blocked.headers.get("location"), "/me");
+
+    const notices = await fetch(`${base}/people?pane=notices&actor=${encodeURIComponent("张文静")}`, { redirect: "manual" });
+    assert.equal(notices.status, 200);
+
+    const me = await fetch(`${base}/api/people/org/site-acl/me?actor=${encodeURIComponent("张文静")}`);
+    const meJson = await me.json();
+    assert.equal(me.status, 200);
+    assert.equal(meJson.configured, true);
+    assert.equal(meJson.nav["/work"].see, true);
+    assert.equal(meJson.nav["/feedback"].see, true);
+    assert.equal(meJson.nav["/hr"].see, true);
+    assert.equal(meJson.nav["/notices"].see, true);
+    assert.equal(meJson.nav["/people"].see, false);
+    assert.equal(meJson.nav["/home"].see, false);
+    assert.equal(meJson.nav["/me"].see, true);
   });
 });
