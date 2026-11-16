@@ -323,16 +323,16 @@ export const CHANNEL_COLUMNS = [
 ];
 
 export const CHANNEL_CARDS = [
-  { key: "realTimeGmv", label: "实时销售额(支付)", aliases: ["realTimeGmv", "ssxse"], money: true },
-  { key: "payCount", label: "支付件数(支付)", aliases: ["payCount", "payGoodsCount", "zfxs"] },
-  { key: "sales", label: "销售件数(支付)", aliases: ["sales", "xsjs", "saleCount"] },
-  { key: "deliverCount", label: "发货件数(支付)", aliases: ["deliverCount", "fhjs", "sendCount"] },
-  { key: "costRate", label: "成本率(支付)", aliases: ["costRate", "cbl"], rate: true },
-  { key: "profit", label: "利润(支付预估)", aliases: ["profit", "lryg"], money: true },
-  { key: "refundRate", label: "退款率(退款金额)", aliases: ["refundRate", "tkl"], rate: true },
-  { key: "netProfit", label: "净利润(支付)", aliases: ["netProfit", "jlr"], money: true },
-  { key: "cost", label: "推广花费(支付)", aliases: ["cost", "tghf"], money: true },
-  { key: "lrl", label: "小毛利率", aliases: ["lrl", "grossRate"], rate: true }
+  { key: "realTimeGmv", label: "实时销售额(支付)", aliases: ["realTimeGmv", "ssxse"], money: true, note: "销售目标 —" },
+  { key: "payAmount", label: "支付金额(支付)", aliases: ["payAmount", "gmv", "xse"], money: true, note: "达成率 —" },
+  { key: "saleFee", label: "销售费用(支付预估)", aliases: ["saleFee", "xsfee", "salesFee"], money: true, note: "销售费用占比 —" },
+  { key: "deliverFee", label: "发货费用(支付)", aliases: ["deliverFee", "fhfee", "shipFee"], money: true, note: "发货费用占比 —" },
+  { key: "saleCost", label: "商品成本(支付)", aliases: ["saleCost", "xshf"], money: true, note: "成本占比 —" },
+  { key: "profit", label: "利润(支付预估)", aliases: ["profit", "lryg"], money: true, note: "毛利率 —" },
+  { key: "refundRate", label: "退款率(退款金额)", aliases: ["refundRate", "tkl"], rate: true, note: "退款目标 —" },
+  { key: "netProfit", label: "净利润(支付)", aliases: ["netProfit", "jlr"], money: true, note: "达成率 —" },
+  { key: "cost", label: "推广花费(支付)", aliases: ["cost", "tghf"], money: true, note: "推广花费率 —" },
+  { key: "lrl", label: "小毛利率", aliases: ["lrl", "grossRate"], rate: true, note: "" }
 ];
 
 export const TEAM_COLUMNS = [

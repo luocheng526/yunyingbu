@@ -30,7 +30,8 @@
     splitWarehouse: false,
     splitCombo: false,
     comboMode: "whole",
-    profilePane: "info"
+    profilePane: "info",
+    shopView: "list"
   };
   var active = 0;
   var timer = 0;
@@ -62,16 +63,17 @@
       ".bd-sub,.bd-status{margin:4px 0 0;color:#86909c;font-size:12px;line-height:1.5;}",
       ".bd-banner{margin:6px 0 0;color:#d93025;font-size:12px;}",
       ".bd-filters{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;align-items:center;}",
-      ".bd-filters input,.bd-filters select,.bd-tools button,.bd-tools a,.bd-pager button,.bd-panel button{height:30px;padding:0 10px;border:1px solid #e1e4ea;border-radius:4px;background:#fff;color:#1f2329;font:inherit;font-size:12px;text-decoration:none;line-height:28px;}",
+      ".bd-filters input,.bd-filters select,.bd-tools button,.bd-tools a,.bd-pager button,.bd-panel button,.bd-outline{height:30px;padding:0 10px;border:1px solid #e1e4ea;border-radius:4px;background:#fff;color:#1f2329;font:inherit;font-size:12px;text-decoration:none;line-height:28px;cursor:pointer;}",
+      ".bd-outline{margin-left:auto;border-color:#3b6cff;color:#3b6cff;}",
       ".bd-presets{display:flex;align-items:center;height:30px;padding:0 4px;border-radius:4px;background:#fff;}",
       ".bd-presets button{height:24px;padding:0 8px;border:0;border-radius:4px;background:transparent;color:#4e5969;cursor:pointer;font:inherit;font-size:12px;}",
       ".bd-presets button.is-on{background:#e8f1ff;color:#3b6cff;}",
       ".bd-primary{height:30px;padding:0 12px;border:0;border-radius:4px;background:#3b6cff;color:#fff;cursor:pointer;font:inherit;font-size:12px;}",
-      ".bd-kpis{margin:0 0 12px;padding:12px;background:#fff;border:1px solid #eceff5;border-radius:6px;}",
-      ".bd-kpi-head{display:flex;gap:12px;align-items:center;margin-bottom:10px;font-size:14px;}",
+      ".bd-kpis{margin:0 0 12px;padding:8px 4px 12px;background:#fff;border:1px solid #eceff5;border-radius:6px;}",
+      ".bd-kpi-head{display:flex;gap:12px;align-items:center;margin:0 12px 4px;font-size:14px;}",
       ".bd-kpi-head span{color:#86909c;font-size:12px;}",
-      ".bd-kpi-row{display:flex;gap:8px;overflow:auto;}",
-      ".bd-kpi{min-width:148px;padding:8px 12px;background:#fff;border-right:1px solid #eceff3;}",
+      ".bd-kpi-row{display:flex;flex-wrap:wrap;gap:0;}",
+      ".bd-kpi{min-width:132px;padding:8px 14px;background:#fff;border-right:1px solid #f2f3f5;}",
       ".bd-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;}",
       ".bd-chip{height:28px;padding:0 10px;border:1px solid #e1e4ea;border-radius:4px;background:#fff;color:#4e5969;cursor:pointer;font:inherit;font-size:12px;}",
       ".bd-chip.is-on{border-color:#3b6cff;color:#3b6cff;background:#e8f1ff;}",
@@ -89,8 +91,9 @@
       ".bd-wall{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}",
       ".bd-wall button{height:32px;padding:0 12px;border:1px solid #e1e4ea;border-radius:4px;background:#fff;cursor:pointer;font:inherit;}",
       ".bd-kpi span{display:block;color:#86909c;font-size:12px;}",
-      ".bd-kpi b{display:block;margin:6px 0 4px;font-size:22px;font-weight:650;letter-spacing:-.02em;}",
-      ".bd-kpi b.is-down{color:#d93025;}",
+      ".bd-kpi b{display:block;margin:6px 0 4px;font-size:22px;font-weight:650;letter-spacing:-.02em;color:#1d2129;}",
+      ".bd-kpi b.is-up{color:#f53f3f;}",
+      ".bd-kpi b.is-down{color:#00b42a;}",
       ".bd-kpi em{color:#86909c;font-style:normal;font-size:12px;}",
       ".bd-tabs{display:flex;gap:4px;border-bottom:1px solid #e6e8ee;margin:0 0 12px;}",
       ".bd-tabs button{height:36px;padding:0 12px;border:0;border-bottom:2px solid transparent;background:transparent;color:#4e5969;cursor:pointer;font:inherit;}",
@@ -105,10 +108,13 @@
       ".bd-table{width:100%;border-collapse:collapse;font-size:12px;}",
       ".bd-table th,.bd-table td{padding:8px 10px;border-bottom:1px solid #f0f2f5;text-align:right;white-space:nowrap;}",
       ".bd-table th:first-child,.bd-table td:first-child,.bd-table th:nth-child(2),.bd-table td:nth-child(2){text-align:left;}",
-      ".bd-table th{background:#fafafa;color:#86909c;font-weight:500;}",
+      ".bd-table th{background:#fafafa;color:#3b6cff;font-weight:500;}",
       ".bd-num{display:inline-block;min-width:56px;padding:2px 6px;border-radius:2px;text-align:right;}",
-      ".bd-num.is-up{background:#e8f8ef;color:#137333;}",
-      ".bd-num.is-down{background:#fdecea;color:#d93025;}",
+      ".bd-num.is-up{background:#ffece8;color:#f53f3f;}",
+      ".bd-num.is-down{background:#e8ffea;color:#00b42a;}",
+      ".bd-bars{display:flex;flex-direction:column;gap:8px;padding:8px 0;}",
+      ".bd-bar{display:grid;grid-template-columns:120px minmax(0,1fr) 120px;gap:8px;align-items:center;}",
+      ".bd-bar i{display:block;height:8px;background:#3b6cff;border-radius:4px;}",
       ".bd-miss{color:#c0c4cc;}",
       ".bd-linkish{padding:0;border:0;background:transparent;color:#3b6cff;cursor:pointer;font:inherit;font-size:12px;}",
       ".bd-gallery{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;}",
@@ -356,11 +362,18 @@
     var cards = data.cards.filter(function (card) { return card.on; }).map(function (card) {
       var missing = data.cardStatus !== "ready" || card.value == null || card.value === "";
       var text = missing ? "未采完" : formatCard(card);
-      var tone = !missing && Number(card.value) < 0 ? "is-down" : "";
-      return '<article class="bd-kpi"><span>' + esc(card.label) + '</span><b class="' + tone + '">' + text + "</b><em>达成率 —</em></article>";
+      var num = Number(card.value);
+      var tone = "";
+      if (!missing && num < 0) {
+        tone = "is-down";
+      } else if (!missing && card.rate && num > 0) {
+        tone = "is-up";
+      }
+      var sub = card.note != null ? card.note : (card.rate ? "" : "达成率 —");
+      return '<article class="bd-kpi"><span>' + esc(card.label) + '</span><b class="' + tone + '">' + text + "</b><em>" + sub + "</em></article>";
     }).join("");
     var title = cardTitle(data.page && data.page.id);
-    return '<section class="bd-kpis"><div class="bd-kpi-head"><strong>' + esc(title) + '</strong><span>渠道 ' + esc(data.total) + ' 个</span><span>店铺 ' + esc((data.shops || []).length) + " 个</span></div><div class=\"bd-kpi-row\">" + cards + "</div></section>";
+    return '<section class="bd-kpis"><div class="bd-kpi-head"><strong>' + esc(title) + '</strong><span>渠道 ' + esc(data.total) + ' 个</span><span>店铺 ' + esc((data.shops || []).length) + ' 个</span><button type="button" class="bd-outline" data-act="panel" data-panel="cards">设定指标</button></div><div class="bd-kpi-row">' + cards + "</div></section>";
   }
 
   function chips(items, key) {
@@ -525,6 +538,22 @@
     return "";
   }
 
+  function renderBars(data, list) {
+    if (!list.length) {
+      return '<p class="bd-miss">' + (data.coverage.status === "ready" ? "这个范围内没有记录。" : "未采完") + "</p>";
+    }
+    var pay = { key: "payAmount", numeric: true, money: true, aliases: ["gmv", "xse", "saleAmount"] };
+    var max = 1;
+    list.forEach(function (row) {
+      max = Math.max(max, Math.abs(Number(metricOf(row, pay)) || 0));
+    });
+    return '<div class="bd-bars">' + list.map(function (row) {
+      var amount = Number(metricOf(row, pay)) || 0;
+      var width = Math.max(2, Math.round(Math.abs(amount) / max * 100));
+      return '<div class="bd-bar"><span>' + esc(row.name || "未命名") + '</span><i style="width:' + width + '%"></i><b>' + formatCell(amount, pay) + "</b></div>";
+    }).join("") + "</div>";
+  }
+
   function formatCard(card) {
     var num = Number(card.value);
     if (!Number.isFinite(num)) {
@@ -542,6 +571,9 @@
     if (!cols.length) {
       return '<p class="bd-miss">这个分组的字段还没进本地库。</p>';
     }
+    if (state.view === "chart" && rows == null) {
+      return renderBars(data, list);
+    }
     if (state.view === "gallery" && rows == null) {
       if (!list.length) {
         return '<p class="bd-miss">' + (data.coverage.status === "ready" ? "这个范围内没有记录。" : "未采完") + "</p>";
@@ -551,7 +583,8 @@
       }).join("") + "</div>";
     }
     var suffix = data.page && data.page.id === "channelAnalysisNew" ? (state.compare === "mom" ? "环比" : "同比") : "";
-    var head = "<tr><th></th>" + cols.map(function (column) {
+    var showOpener = !(data.page && (data.page.id === "channelOverview" || data.page.id === "channelAnalysis"));
+    var head = "<tr>" + (showOpener ? "<th></th>" : "") + cols.map(function (column) {
       var label = column.label + (suffix && column.numeric ? suffix : "");
       return "<th>" + esc(label) + "</th>";
     }).join("") + "</tr>";
@@ -559,15 +592,15 @@
       var cells = cols.map(function (column) {
         return "<td>" + formatCell(metricOf(row, column), column) + "</td>";
       }).join("");
-      var detail = row.fields && state.open[row.key] ? '<tr><td colspan="' + (cols.length + 1) + '" class="bd-detail">' + row.fields.map(function (field) {
+      var detail = row.fields && state.open[row.key] ? '<tr><td colspan="' + (cols.length + (showOpener ? 1 : 0)) + '" class="bd-detail">' + row.fields.map(function (field) {
         return "<div>" + esc(field.key) + "：" + esc(field.value) + "</div>";
       }).join("") + '<label>跟进 <input data-act="mark" data-key="' + esc(row.key) + '" data-field="follow" value="' + esc(row.follow) + '"></label><label>打标 <input data-act="mark" data-key="' + esc(row.key) + '" data-field="tag" value="' + esc(row.tag) + '"></label><label>目标 <input data-act="mark" data-key="' + esc(row.key) + '" data-field="target" value="' + esc(row.target) + '"></label></td></tr>' : "";
       var openerLabel = data.page && data.page.id === "channelAnalysisNew" ? "跟进 待办 打标" : "明细";
       var opener = row.fields ? '<button type="button" class="bd-linkish" data-act="expand" data-key="' + esc(row.key) + '">' + openerLabel + "</button>" : "";
-      return "<tr><td>" + opener + "</td>" + cells + "</tr>" + detail;
+      return "<tr>" + (showOpener ? "<td>" + opener + "</td>" : "") + cells + "</tr>" + detail;
     }).join("");
     if (!list.length) {
-      body = '<tr><td colspan="' + (cols.length + 1) + '">' + (data.coverage.status === "ready" ? "这个范围内没有记录。" : "未采完") + "</td></tr>";
+      body = '<tr><td colspan="' + (cols.length + (showOpener ? 1 : 0)) + '">' + (data.coverage.status === "ready" ? "这个范围内没有记录。" : "未采完") + "</td></tr>";
     }
     return '<div class="bd-scroll"><table class="bd-table">' + head + body + "</table></div>";
   }
@@ -591,7 +624,11 @@
     var rows = data.shops.map(function (shop) {
       return byShop[shop] || { key: "shop-" + shop, name: shop, shop: shop, metrics: {}, fields: null };
     });
-    return '<section class="bd-block"><div class="bd-block-bar"><h2>店铺列表</h2></div>' + renderTable(data, rows, columns) + "</section>";
+    if (data.allSum) {
+      rows.unshift({ key: "shop-sum", name: "汇总", shop: "全部", metrics: data.allSum, fields: null });
+    }
+    var shopBody = state.shopView === "chart" ? renderBars(data, rows) : renderTable(data, rows, columns);
+    return '<section class="bd-block"><div class="bd-block-bar"><h2>店铺列表</h2><div class="bd-tools"><button type="button" data-act="panel" data-panel="batch" data-field="tag">打标</button><button type="button" data-act="shop-view" data-view="list" class="' + (state.shopView === "list" ? "is-on" : "") + '">列表</button><button type="button" data-act="shop-view" data-view="chart" class="' + (state.shopView === "chart" ? "is-on" : "") + '">图表</button><button type="button" data-act="panel" data-panel="columns">默认视窗</button><button type="button" data-act="panel" data-panel="columns">更多</button><a href="/api/bound/export?' + esc(queryString()) + '">导出</a></div></div>' + shopBody + "</section>";
   }
 
   function renderSums(data) {
@@ -658,10 +695,12 @@
       return '<button type="button" data-act="preset" data-preset="' + item[0] + '" class="' + (preset === item[0] ? "is-on" : "") + '">' + item[1] + "</button>";
     }).join("");
     var setting = (data.cards && data.cards.length) ? "cards" : "columns";
+    var channelPage = data.page.id === "channelOverview" || data.page.id === "channelAnalysis";
     var tabLabel = data.page.id === "teamSkills" ? "团队成员" : (data.tab && data.tab.label ? data.tab.label : data.page.label);
     var profileOnly = data.page.id === "personalCenter" || data.page.id === "myProjects";
     var tableBlock = profileOnly ? "" : '<section class="bd-block"><div class="bd-block-bar"><h2>' + esc(tabLabel) + '</h2><div class="bd-tools">' +
       (ops.indexOf("dim") >= 0 ? '<button type="button" data-act="dim" data-dim="spu" class="' + (state.dim === "spu" ? "is-on" : "") + '">SPU</button><button type="button" data-act="dim" data-dim="sku" class="' + (state.dim === "sku" ? "is-on" : "") + '">SKU</button>' : "") +
+      (channelPage ? '<button type="button" data-act="panel" data-panel="cards">目标</button><button type="button" data-act="view" data-view="list" class="' + (state.view === "list" ? "is-on" : "") + '">列表</button><button type="button" data-act="view" data-view="chart" class="' + (state.view === "chart" ? "is-on" : "") + '">图表</button><button type="button" data-act="panel" data-panel="columns">默认视窗</button>' : "") +
       (ops.indexOf("views") >= 0 ? '<button type="button" data-act="view" data-view="list" class="' + (state.view === "list" ? "is-on" : "") + '">列表</button><button type="button" data-act="view" data-view="period" class="' + (state.view === "period" ? "is-on" : "") + '">周期</button><button type="button" data-act="view" data-view="gallery" class="' + (state.view === "gallery" ? "is-on" : "") + '">大图</button>' : "") +
       (ops.indexOf("export") >= 0 ? '<a href="/api/bound/export?' + esc(queryString()) + '">' + (data.page.id === "productStock" ? "导出表格数据" : "导出") + "</a>" : "") +
       (data.page.id === "productOverview" ? '<button type="button" data-act="panel" data-panel="columns">自定义数据字段</button><button type="button" data-act="panel" data-panel="batch" data-field="follow">设置跟进</button><button type="button" data-act="panel" data-panel="batch" data-field="target">设置目标</button><button type="button" data-act="panel" data-panel="batch" data-field="tag">批量打标</button>' : "") +
@@ -669,14 +708,14 @@
       '<button type="button" data-act="panel" data-panel="columns">更多</button></div></div>' +
       renderTable(data) +
       renderSums(data) +
-      '<div class="bd-pager"><span>共 ' + esc(data.total) + ' 条</span><button type="button" data-act="page-no" data-delta="-1">上一页</button><span>第 ' + esc(data.pageNo) + ' 页</span><button type="button" data-act="page-no" data-delta="1">下一页</button></div></section>';
+      '<div class="bd-pager"><span>共 ' + esc(data.total) + ' 条</span><span>50条/页</span><button type="button" data-act="page-no" data-delta="-1">上一页</button><span>第 ' + esc(data.pageNo) + ' 页</span><button type="button" data-act="page-no" data-delta="1">下一页</button></div></section>';
     return '<section class="bd-main" data-bound-erp="false" data-page="' + esc(data.page.id) + '" data-coverage="' + esc(data.coverage.status) + '">' +
       '<header class="bd-head"><div><h1>' + esc(data.page.label) + '</h1><p class="bd-sub">' + esc(BLURBS[data.page.id] || "") + "</p>" + renderStatus(data) + "</div>" +
       '<div class="bd-filters">' +
-      (ops.indexOf("date") >= 0 ? '<span class="bd-sub">统计时间：' + esc(cnDate(data.range.from)) + " 至 " + esc(cnDate(data.range.to)) + '</span><div class="bd-presets">' + presetButtons + '</div><button type="button" data-act="shift" data-delta="-1" aria-label="上一期">‹</button><input data-act="from" type="date" value="' + esc(data.range.from) + '"><input data-act="to" type="date" value="' + esc(data.range.to) + '"><button type="button" data-act="shift" data-delta="1" aria-label="下一期">›</button>' : "") +
+      (ops.indexOf("date") >= 0 ? '<span class="bd-sub">（统计时间：' + esc(cnDate(data.range.from)) + "-" + esc(cnDate(data.range.to)) + '）</span><div class="bd-presets">' + presetButtons + '<button type="button" data-act="preset" data-preset="custom" class="' + (preset === "" ? "is-on" : "") + '">自定义</button></div><button type="button" data-act="shift" data-delta="-1" aria-label="上一期">‹</button><button type="button" data-act="shift" data-delta="1" aria-label="下一期">›</button><input data-act="from" type="date" value="' + esc(data.range.from) + '"><input data-act="to" type="date" value="' + esc(data.range.to) + '">' : "") +
       (ops.indexOf("shop") >= 0 ? "<select data-act=\"shop\">" + shops + "</select>" : "") +
       (ops.indexOf("search") >= 0 ? '<input data-act="q" value="' + esc(state.q) + '" placeholder="' + esc(searchPlaceholder(data.page.id)) + '">' : "") +
-      '<button type="button" class="bd-primary" data-act="panel" data-panel="' + setting + '">设定指标</button></div></header>' +
+      (data.cards && data.cards.length ? "" : '<button type="button" class="bd-primary" data-act="panel" data-panel="' + setting + '">设定指标</button>') + "</div></header>" +
       renderCards(data) +
       renderPanel(data) +
       (tabs ? '<div class="bd-tabs">' + tabs + "</div>" : "") +
@@ -762,6 +801,12 @@
         state.pageNo = 1;
       } else if (act === "view") {
         state.view = node.getAttribute("data-view");
+        paint(root);
+        return;
+      } else if (act === "shop-view") {
+        state.shopView = node.getAttribute("data-view");
+        paint(root);
+        return;
       } else if (act === "chip") {
         var chipKey = node.getAttribute("data-key");
         state[chipKey] = node.getAttribute("data-value");
@@ -798,6 +843,11 @@
       } else if (act === "page-no") {
         state.pageNo = Math.max(1, state.pageNo + Number(node.getAttribute("data-delta") || 0));
       } else if (act === "preset") {
+        if (node.getAttribute("data-preset") === "custom") {
+          state.daysType = "custom";
+          paint(root);
+          return;
+        }
         applyRange(presetRange(node.getAttribute("data-preset"), state.to || iso(new Date())));
       } else if (act === "shift") {
         var current = state.daysType || "month";

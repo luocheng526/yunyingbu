@@ -423,7 +423,8 @@ function metricCards(defs, source, ready) {
       on: true,
       value: value == null || value === "" ? null : value,
       rate: Boolean(card.rate),
-      money: Boolean(card.money)
+      money: Boolean(card.money),
+      note: card.note || ""
     };
   });
 }
