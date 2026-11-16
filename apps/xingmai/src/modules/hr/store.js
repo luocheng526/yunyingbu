@@ -1,6 +1,7 @@
 import { dbMode, query } from "../profile/auth.js";
 
-export const HR_TABS = ["看板", "奋斗时长", "面试"];
+export const HR_TABS = ["看板", "奋斗时长", "招聘"];
+export const GENDERS = ["男", "女"];
 export const INTERVIEW_RESULTS = ["待定", "通过", "未通过", "未到场"];
 export const TALENT_STAGES = ["储备", "面试中", "已入职", "已淘汰"];
 
@@ -74,6 +75,21 @@ export const HR_SCHEMA = [
     created_by VARCHAR(64) NOT NULL DEFAULT '',
     created_at VARCHAR(40) NOT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS hr_recruits (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    person_name VARCHAR(64) NOT NULL,
+    gender VARCHAR(8) NOT NULL DEFAULT '',
+    position_name VARCHAR(64) NOT NULL DEFAULT '',
+    expected_join VARCHAR(10) NOT NULL DEFAULT '',
+    phone VARCHAR(32) NOT NULL DEFAULT '',
+    hometown VARCHAR(64) NOT NULL DEFAULT '',
+    channel_name VARCHAR(64) NOT NULL DEFAULT '',
+    inviter VARCHAR(64) NOT NULL DEFAULT '',
+    note_text VARCHAR(500) NOT NULL DEFAULT '',
+    detail_text VARCHAR(1000) NOT NULL DEFAULT '',
+    created_by VARCHAR(64) NOT NULL DEFAULT '',
+    created_at VARCHAR(40) NOT NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   `CREATE TABLE IF NOT EXISTS hr_talents (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     person_name VARCHAR(64) NOT NULL,
@@ -108,6 +124,7 @@ function emptyMemory() {
     quotas: [],
     leaves: [],
     interviews: [],
+    recruits: [],
     talents: [],
     runs: []
   };
@@ -168,6 +185,26 @@ function mustMonth(value) {
   if (!text) return "";
   if (!/^\d{4}-\d{2}$/.test(text)) throw bad("月份要写成 YYYY-MM");
   return text;
+}
+
+function optionalGender(value) {
+  const text = clip(value, 8);
+  if (!text) return "";
+  if (!GENDERS.includes(text)) throw bad("性别请选男或女");
+  return text;
+}
+
+function optionalDate(value, label) {
+  const text = clip(value, 10);
+  if (!text) return "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) throw bad(`${label}要写成 YYYY-MM-DD`);
+  return text;
+}
+
+function optionalPhone(value) {
+  const phone = clip(value, 32);
+  if (phone && !/^[0-9+\-\s]{5,32}$/.test(phone)) throw bad("电话只保留数字、加号和短横线");
+  return phone;
 }
 
 function mustWhen(value) {
@@ -593,6 +630,68 @@ export async function createInterview(input = {}, actor = "") {
 export async function deleteInterview(id) {
   return removeRow("hr_interviews", memory.interviews, id, (next) => {
     memory.interviews = next;
+  });
+}
+
+function mapRecruit(row) {
+  return {
+    id: Number(row.id),
+    name: row.person_name,
+    gender: row.gender || "",
+    position: row.position_name || "",
+    expectedJoin: row.expected_join || "",
+    phone: row.phone || "",
+    hometown: row.hometown || "",
+    channel: row.channel_name || "",
+    inviter: row.inviter || "",
+    note: row.note_text || "",
+    detail: row.detail_text || "",
+    createdBy: row.created_by || ""
+  };
+}
+
+export async function listRecruits() {
+  await ensureHrSchema();
+  if (dbMode() === "mysql") {
+    const rows = await rowsOf("SELECT * FROM hr_recruits ORDER BY id DESC");
+    return rows.map(mapRecruit);
+  }
+  return memory.recruits.map((row) => ({ ...row })).sort((a, b) => b.id - a.id);
+}
+
+export async function createRecruit(input = {}, actor = "") {
+  await ensureHrSchema();
+  const row = {
+    name: mustName(input.name, "姓名"),
+    gender: optionalGender(input.gender),
+    position: clip(input.position, 64),
+    expectedJoin: optionalDate(input.expectedJoin, "预计入职时间"),
+    phone: optionalPhone(input.phone),
+    hometown: clip(input.hometown, 64),
+    channel: clip(input.channel, 64),
+    inviter: clip(input.inviter, 64),
+    note: clip(input.note, 500),
+    detail: clip(input.detail, 1000),
+    ...stamp(actor)
+  };
+  if (dbMode() === "mysql") {
+    const [result] = await query(
+      `INSERT INTO hr_recruits
+        (person_name, gender, position_name, expected_join, phone, hometown, channel_name, inviter, note_text, detail_text, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [row.name, row.gender, row.position, row.expectedJoin, row.phone, row.hometown, row.channel, row.inviter, row.note, row.detail, row.createdBy, row.createdAt]
+    );
+    row.id = Number(result.insertId);
+    return row;
+  }
+  row.id = seq++;
+  memory.recruits.push(row);
+  return { ...row };
+}
+
+export async function deleteRecruit(id) {
+  return removeRow("hr_recruits", memory.recruits, id, (next) => {
+    memory.recruits = next;
   });
 }
 

@@ -13,12 +13,15 @@ import {
 import {
   HR_TABS,
   createInterview,
+  createRecruit,
   createTalent,
   deleteInterview,
+  deleteRecruit,
   deleteTalent,
   latestSync,
   listDingUsers,
   listInterviews,
+  listRecruits,
   listLeaves,
   listLinks,
   listOvertime,
@@ -171,6 +174,31 @@ hrRouter.post("/sync", async (_req, res) => {
     const day = addDays(shanghaiToday(), -1);
     const result = await runDaily(day, createDingClient());
     res.json({ ok: true, configured: true, workDate: day, ...result });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.get("/recruits", async (_req, res) => {
+  try {
+    res.json({ ok: true, recruits: await listRecruits() });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.post("/recruits", async (req, res) => {
+  try {
+    const recruit = await createRecruit(req.body || {}, actorName(req));
+    res.status(201).json({ ok: true, recruit });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.delete("/recruits/:id", async (req, res) => {
+  try {
+    res.json({ ok: true, ...(await deleteRecruit(req.params.id)) });
   } catch (err) {
     sendErr(res, err);
   }

@@ -1,11 +1,11 @@
-/* xm-module-hr — 智能人事。只挂 /hr。假勤只读钉钉落库，面试和人才在本库。 */
+/* xm-module-hr — 智能人事。只挂 /hr。假勤只读钉钉落库，招聘记在本库。 */
 (function () {
   var TABS = [
     { id: "attendance", label: "看板" },
     { id: "overtime", label: "奋斗时长" },
-    { id: "interview", label: "面试" }
+    { id: "recruit", label: "招聘" }
   ];
-  var RESULTS = ["待定", "通过", "未通过", "未到场"];
+  var GENDERS = ["男", "女"];
   var STAGES = ["储备", "面试中", "已入职", "已淘汰"];
 
   function esc(value) {
@@ -49,7 +49,7 @@
       ".hr-tabs{display:flex;gap:0;border-bottom:1px solid var(--xm-line);margin:0 0 12px;overflow:auto;}" +
       ".hr-tab{appearance:none;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--xm-muted);font:inherit;font-size:14px;padding:10px 16px;cursor:pointer;white-space:nowrap;}" +
       ".hr-tab[aria-selected='true']{color:var(--xm-primary);border-bottom-color:var(--xm-primary);font-weight:600;}" +
-      ".hr-tab:focus-visible,.hr-page button:focus-visible,.hr-page input:focus-visible,.hr-page select:focus-visible{outline:2px solid var(--xm-primary);outline-offset:1px;}" +
+      ".hr-tab:focus-visible,.hr-page button:focus-visible,.hr-page input:focus-visible,.hr-page select:focus-visible,.hr-page textarea:focus-visible{outline:2px solid var(--xm-primary);outline-offset:1px;}" +
       ".hr-panel{display:flex;flex-direction:column;gap:12px;}" +
       ".hr-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:8px;}" +
       ".hr-kpi{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;padding:10px 12px;box-shadow:var(--xm-shadow);}" +
@@ -59,7 +59,9 @@
       ".hr-form{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;padding:12px;}" +
       ".hr-field{display:flex;flex-direction:column;gap:4px;min-width:140px;flex:1 1 140px;color:var(--xm-muted);font-size:12px;}" +
       ".hr-field input,.hr-field select{height:32px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;font-size:13px;}" +
+      ".hr-field textarea{min-height:64px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:6px 8px;font:inherit;font-size:13px;resize:vertical;}" +
       ".hr-field-grow{flex:2 1 220px;}" +
+      ".hr-field-wide{flex:1 1 100%;}" +
       ".hr-toolbar{display:flex;justify-content:space-between;gap:8px;align-items:center;color:var(--xm-muted);font-size:13px;}" +
       ".hr-month input{height:32px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;}" +
       ".hr-primary{height:32px;border:0;border-radius:6px;background:var(--xm-primary);color:#fff;padding:0 14px;font:inherit;font-size:13px;cursor:pointer;}" +
@@ -236,17 +238,22 @@
         kpis([{ label: "本月奋斗时长", value: "0" }, { label: "人数", value: "0" }]) +
         '<p class="hr-msg" data-msg></p>' + table(["姓名", "部门", "月累计"], emptyRow(3, "这个月还没有 18 点后的下班打卡")) + "</section>";
     } else {
-      html = '<section class="hr-panel"><div class="hr-toolbar"><span>面试先记在本库。</span></div>' +
-        kpis([{ label: "面试场次", value: "0" }, { label: "通过", value: "0" }, { label: "通过率", value: "—" }]) +
-        '<form class="hr-form hr-card" data-form="interview">' +
-        field("候选人", '<input name="candidateName" required maxlength="64" autocomplete="off" />') +
-        field("岗位", '<input name="position" maxlength="64" autocomplete="off" />') +
-        field("面试官", '<input name="interviewer" maxlength="64" autocomplete="off" />') +
-        field("面试时间", '<input name="interviewAt" type="datetime-local" required />') +
-        field("结果", '<select name="result">' + options(RESULTS, "待定") + "</select>") +
+      html = '<section class="hr-panel"><div class="hr-toolbar"><span>招聘先记在本库。</span></div>' +
+        kpis([{ label: "人数", value: "0" }]) +
+        '<form class="hr-form hr-card" data-form="recruit">' +
+        field("姓名", '<input name="name" required maxlength="64" autocomplete="off" />') +
+        field("性别", '<select name="gender"><option value="">请选择</option>' + options(GENDERS, "") + "</select>") +
+        field("应聘岗位", '<input name="position" maxlength="64" autocomplete="off" />') +
+        field("预计入职时间", '<input name="expectedJoin" type="date" />') +
+        field("联系电话", '<input name="phone" maxlength="32" autocomplete="off" />') +
+        field("籍贯", '<input name="hometown" maxlength="64" autocomplete="off" />') +
+        field("渠道", '<input name="channel" maxlength="64" autocomplete="off" />') +
+        field("邀约人", '<input name="inviter" maxlength="64" autocomplete="off" />') +
         field("备注", '<input name="note" maxlength="500" autocomplete="off" />', "hr-field-grow") +
-        '<button class="hr-primary" type="submit">登记面试</button></form>' +
-        '<p class="hr-msg" data-msg></p>' + table(["候选人", "岗位", "面试官", "时间", "结果", "备注", ""], emptyRow(7, "还没有面试记录")) + "</section>";
+        field("情况说明", '<textarea name="detail" maxlength="1000" rows="3"></textarea>', "hr-field-wide") +
+        '<button class="hr-primary" type="submit">登记</button></form>' +
+        '<p class="hr-msg" data-msg></p>' +
+        table(["姓名", "性别", "应聘岗位", "预计入职时间", "联系电话", "籍贯", "渠道", "邀约人", "备注", "情况说明", ""], emptyRow(11, "还没有招聘记录")) + "</section>";
     }
     root.querySelector(".hr-body").innerHTML = html;
     void today;
@@ -388,20 +395,17 @@
     setList(root, ["姓名", "电话", "目标岗位", "来源", "阶段", "备注", ""], body);
   }
 
-  function fillInterview(root, pack) {
-    var rows = pack.interviews || [];
-    var passed = rows.filter(function (row) { return row.result === "通过"; }).length;
-    setStats(root, [
-      { label: "面试场次", value: rows.length },
-      { label: "通过", value: passed },
-      { label: "通过率", value: rows.length ? Math.round((passed / rows.length) * 1000) / 10 + "%" : "—" }
-    ]);
+  function fillRecruit(root, pack) {
+    var rows = pack.recruits || [];
+    setStats(root, [{ label: "人数", value: rows.length }]);
+    var headers = ["姓名", "性别", "应聘岗位", "预计入职时间", "联系电话", "籍贯", "渠道", "邀约人", "备注", "情况说明", ""];
     var body = rows.length ? rows.map(function (row) {
-      return "<tr><td>" + esc(row.candidateName) + "</td><td>" + esc(row.position) + "</td><td>" + esc(row.interviewer) +
-        "</td><td>" + esc(row.interviewAt) + "</td><td>" + esc(row.result) + "</td><td>" + esc(row.note) +
-        "</td><td>" + removeBtn("interview", row.id) + "</td></tr>";
-    }).join("") : emptyRow(7, "还没有面试记录");
-    setList(root, ["候选人", "岗位", "面试官", "时间", "结果", "备注", ""], body);
+      return "<tr><td>" + esc(row.name) + "</td><td>" + esc(row.gender) + "</td><td>" + esc(row.position) +
+        "</td><td>" + esc(row.expectedJoin) + "</td><td>" + esc(row.phone) + "</td><td>" + esc(row.hometown) +
+        "</td><td>" + esc(row.channel) + "</td><td>" + esc(row.inviter) + "</td><td>" + esc(row.note) +
+        "</td><td>" + esc(row.detail) + "</td><td>" + removeBtn("recruit", row.id) + "</td></tr>";
+    }).join("") : emptyRow(11, "还没有招聘记录");
+    setList(root, headers, body);
   }
 
   function monthQuery(root) {
@@ -422,7 +426,7 @@
     } else if (tab === "overtime") {
       dataReq = api("/api/hr/effort" + monthQuery(root));
     } else {
-      dataReq = api("/api/hr/interviews");
+      dataReq = api("/api/hr/recruits");
     }
     Promise.all([peopleReq, statusReq, dataReq]).then(function (pack) {
       if (!state.alive || ticket !== state.ticket || state.tab !== tab) return;
@@ -430,7 +434,7 @@
       state.view = view;
       if (tab === "attendance") fillAttendance(root, view);
       else if (tab === "overtime") fillEffort(root, view);
-      else fillInterview(root, view);
+      else fillRecruit(root, view);
     }).catch(function (err) {
       if (!state.alive || ticket !== state.ticket) return;
       setMsg(root, err.message || "读取失败", true);
@@ -482,7 +486,7 @@
       var btn = event.target.closest("[data-act='delete']");
       if (!btn || !root.contains(btn)) return;
       if (!window.confirm("删除这条记录？")) return;
-      var kind = btn.getAttribute("data-kind") === "talent" ? "/talents/" : "/interviews/";
+      var kind = btn.getAttribute("data-kind") === "talent" ? "/talents/" : "/recruits/";
       api("/api/hr" + kind + btn.getAttribute("data-id"), { method: "DELETE" })
         .then(function () { loadTab(root, state); })
         .catch(function (err) { setMsg(root, err.message, true); });
@@ -501,16 +505,20 @@
         stage: formValue(form, "stage"),
         note: formValue(form, "note")
       } : {
-        candidateName: formValue(form, "candidateName"),
+        name: formValue(form, "name"),
+        gender: formValue(form, "gender"),
         position: formValue(form, "position"),
-        interviewer: formValue(form, "interviewer"),
-        interviewAt: formValue(form, "interviewAt"),
-        result: formValue(form, "result"),
-        note: formValue(form, "note")
+        expectedJoin: formValue(form, "expectedJoin"),
+        phone: formValue(form, "phone"),
+        hometown: formValue(form, "hometown"),
+        channel: formValue(form, "channel"),
+        inviter: formValue(form, "inviter"),
+        note: formValue(form, "note"),
+        detail: formValue(form, "detail")
       };
       var button = form.querySelector("button[type='submit']");
       if (button) button.disabled = true;
-      api("/api/hr/" + (kind === "talent" ? "talents" : "interviews"), { method: "POST", body: body })
+      api("/api/hr/" + (kind === "talent" ? "talents" : "recruits"), { method: "POST", body: body })
         .then(function () {
           form.reset();
           loadTab(root, state);

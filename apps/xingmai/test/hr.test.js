@@ -10,7 +10,7 @@ import { hrRouter, shouldStartHrJobs } from "../src/modules/hr/router.js";
 import { ackFor, interestingEvent } from "../src/modules/hr/stream.js";
 import {
   HR_SCHEMA,
-  listInterviews,
+  listRecruits,
   listLinks,
   listOvertime,
   listPunches,
@@ -86,7 +86,7 @@ function jsonResponse(body) {
 }
 
 test("hr schema stays in hr_ tables", () => {
-  assert.equal(HR_SCHEMA.length, 9);
+  assert.equal(HR_SCHEMA.length, 10);
   for (const sql of HR_SCHEMA) {
     assert.match(sql, /CREATE TABLE IF NOT EXISTS hr_/);
     assert.doesNotMatch(sql, /people|han_|shen_/i);
@@ -95,7 +95,7 @@ test("hr schema stays in hr_ tables", () => {
 
 test("client mounts one page and five in-page tabs", () => {
   assert.match(client, /XmModules\["\/hr"\]/);
-  const labels = ["看板", "奋斗时长", "面试"];
+  const labels = ["看板", "奋斗时长", "招聘"];
   let from = 0;
   for (const label of labels) {
     const at = client.indexOf(`label: "${label}"`);
@@ -453,7 +453,7 @@ test("http keeps attendance read-only and interviews in this module", async () =
     assert.equal(denied.status, 401);
     const home = await request(server, "/api/hr");
     assert.equal(home.status, 200);
-    assert.deepEqual(home.data.tabs, ["看板", "奋斗时长", "面试"]);
+    assert.deepEqual(home.data.tabs, ["看板", "奋斗时长", "招聘"]);
     const effort = await request(server, "/api/hr/effort?month=2026-11");
     assert.deepEqual(effort.data.people, []);
     assert.equal(effort.data.hours, 0);
@@ -472,15 +472,35 @@ test("http keeps attendance read-only and interviews in this module", async () =
     assert.match(client, /部门人数/);
     const synced = await request(server, "/api/hr/sync", { method: "POST" });
     assert.equal(synced.data.configured, false);
-    const created = await request(server, "/api/hr/interviews", {
+    const created = await request(server, "/api/hr/recruits", {
       method: "POST",
-      body: { candidateName: "周周", position: "运营", interviewAt: "2026-11-16T09:30", result: "通过" }
+      body: {
+        name: "周周",
+        gender: "女",
+        position: "运营",
+        expectedJoin: "2026-12-01",
+        phone: "13800001111",
+        hometown: "安徽",
+        channel: "BOSS",
+        inviter: "李四",
+        note: "下午联系",
+        detail: "可尽快到岗"
+      }
     });
     assert.equal(created.status, 201);
-    assert.equal((await listInterviews()).length, 1);
-    const removed = await request(server, `/api/hr/interviews/${created.data.interview.id}`, { method: "DELETE" });
+    const listed = await listRecruits();
+    assert.equal(listed.length, 1);
+    assert.equal(listed[0].name, "周周");
+    assert.equal(listed[0].gender, "女");
+    assert.equal(listed[0].expectedJoin, "2026-12-01");
+    assert.equal(listed[0].hometown, "安徽");
+    assert.equal(listed[0].inviter, "李四");
+    assert.equal(listed[0].detail, "可尽快到岗");
+    const badGender = await request(server, "/api/hr/recruits", { method: "POST", body: { name: "甲", gender: "未知" } });
+    assert.equal(badGender.status, 400);
+    const removed = await request(server, `/api/hr/recruits/${created.data.recruit.id}`, { method: "DELETE" });
     assert.equal(removed.status, 200);
-    assert.deepEqual(await listInterviews(), []);
+    assert.deepEqual(await listRecruits(), []);
     const talent = await request(server, "/api/hr/talents", {
       method: "POST",
       body: { name: "钱钱", phone: "13900002222", stage: "储备" }
