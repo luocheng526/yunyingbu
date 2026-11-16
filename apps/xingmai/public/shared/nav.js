@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep v0.4.18 — 组织中心也要显示顶栏页签 */
+/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap v0.4.18 — 顶栏最多 10 个页签 */
 (function () {
-  const ASSET_VER = "0.1.773-tabkeep";
+  const ASSET_VER = "0.1.774-tabcap";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -991,6 +991,31 @@
     return PARENT_HOME[key] || key;
   }
 
+  const MAX_OPEN_TABS = 10;
+
+  function capOpenTabs() {
+    const pin = deskHome();
+    const keep = leafRoute(current);
+    while (openTabs.length > MAX_OPEN_TABS) {
+      let dropAt = -1;
+      let drop = "";
+      for (let i = 0; i < openTabs.length; i += 1) {
+        const href = openTabs[i];
+        if (href === pin || href === keep) {
+          continue;
+        }
+        dropAt = i;
+        drop = href;
+        break;
+      }
+      if (dropAt < 0) {
+        break;
+      }
+      openTabs.splice(dropAt, 1);
+      disposePane(drop);
+    }
+  }
+
   function ensureOpenTabs() {
     if (!Array.isArray(openTabs)) {
       openTabs = [];
@@ -1023,6 +1048,7 @@
     if (!openTabs.length) {
       openTabs = [pin];
     }
+    capOpenTabs();
     writeOpenTabs();
   }
 
@@ -1248,6 +1274,7 @@
     if (openTabs.indexOf(key) < 0) {
       openTabs.push(key);
     }
+    capOpenTabs();
     writeOpenTabs();
     paneFor(key, true);
     paintTabs();
