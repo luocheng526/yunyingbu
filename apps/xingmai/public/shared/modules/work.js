@@ -42,11 +42,16 @@
   }
 
   function ensureStyle() {
-    if (document.getElementById("work-page-style")) {
+    var style = document.getElementById("work-page-style");
+    if (style && style.getAttribute("data-rev") === "sum2") {
       return;
     }
-    var style = document.createElement("style");
-    style.id = "work-page-style";
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "work-page-style";
+      document.head.appendChild(style);
+    }
+    style.setAttribute("data-rev", "sum2");
     style.textContent =
       ".work-page{color:var(--xm-ink);font-size:13px;}" +
       ".work-bar{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 10px;}" +
@@ -61,6 +66,8 @@
       ".work-panel{display:flex;flex-direction:column;gap:8px;}" +
       ".work-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;}" +
       ".work-kpi{border:0;border-radius:12px;min-height:92px;padding:14px 14px 12px;color:#fff;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:0 8px 18px rgba(22,119,255,.12);}" +
+      "button.work-kpi{appearance:none;width:100%;cursor:pointer;font:inherit;text-align:left;}" +
+      "button.work-kpi:hover{filter:brightness(1.06);}" +
       ".work-kpi b,.work-kpi strong{display:block;font-size:28px;line-height:1;font-weight:700;font-variant-numeric:tabular-nums;color:#fff;}" +
       ".work-kpi span{display:block;margin-top:8px;color:rgba(255,255,255,.92);font-size:13px;font-weight:600;}" +
       ".work-c0{background:linear-gradient(135deg,#2f6fe4,#5b94f5);}" +
@@ -99,7 +106,6 @@
       ".work-dept.is-on{box-shadow:0 0 0 3px #fff,0 0 0 5px rgba(20,40,80,.45);}" +
       ".work-dept b{display:block;font-size:16px;font-weight:700;}" +
       ".work-dept span{display:block;margin-top:6px;color:rgba(255,255,255,.9);font-size:12px;}" +
-      ".work-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-end;flex-wrap:wrap;}" +
       ".work-muted{color:var(--xm-muted);font-size:12px;}" +
       ".work-filters{display:flex;flex-direction:row;flex-wrap:wrap;gap:8px;align-items:center;}" +
       ".work-filters .work-mini{flex:none;width:auto;}" +
@@ -108,7 +114,6 @@
       ".work-duty{min-width:140px;max-width:280px;white-space:normal;line-height:1.45;}" +
       ".work-count{margin-left:auto;color:var(--xm-muted);font-size:12px;}" +
       ".work-field.is-grow{flex:1;min-width:200px;}" +
-      ".work-table td.work-rights{max-width:280px;white-space:normal;}" +
       ".work-checks{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px;}" +
       ".work-checks label{display:inline-flex;align-items:center;gap:5px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:5px;padding:4px 7px;font-size:13px;cursor:pointer;}" +
       ".work-context{display:flex;align-items:center;flex-wrap:wrap;gap:10px 22px;font-size:13px;color:var(--xm-muted);}" +
@@ -158,11 +163,6 @@
       ".work-submitbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:2px 2px 0;}" +
       ".work-submitbar strong{color:var(--xm-muted);font-size:12px;font-weight:650;}" +
       ".work-submitbar .work-primary,.work-submitbar .work-mini{min-height:38px;padding:7px 16px;font-weight:650;}" +
-      ".work-summary-note{margin:0 0 10px;color:var(--xm-muted);font-size:13px;}" +
-      ".work-metric-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:10px;}" +
-      ".work-metric{display:block;width:100%;border:1px solid var(--xm-line);border-radius:7px;padding:14px 16px;background:var(--xm-card);color:var(--xm-muted);text-align:left;cursor:pointer;font:inherit;}" +
-      ".work-metric:hover{border-color:#8c90da;}" +
-      ".work-metric strong{display:block;margin-top:4px;font-size:23px;line-height:1.4;color:var(--xm-ink);font-variant-numeric:tabular-nums;}" +
       ".work-sum-table th,.work-sum-table td{white-space:nowrap;}" +
       ".work-modal{position:fixed;inset:0;z-index:40;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;background:rgba(15,23,42,.45);}" +
       ".work-dialog{width:min(920px,100%);background:var(--xm-card);color:var(--xm-ink);border-radius:12px;box-shadow:var(--xm-shadow);padding:16px 18px;}" +
@@ -183,7 +183,6 @@
       ".work-main{flex:1;min-width:0;}" +
       ".work-person .work-mini{background:#fff;color:#245bdb;border:0;font-weight:650;}" +
       "@media (max-width:980px){.work-stats,.work-depts,.work-lanes,.work-orders{grid-template-columns:1fr;}.work-lanes,.work-orders{gap:14px;}.work-person{flex-wrap:wrap;align-items:flex-start;}.work-count{margin-left:0;}.work-dutybadge{margin-left:0;}.work-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 8px;padding:6px 12px;}.work-groups button{min-height:36px;justify-content:center;font-size:13px;}.work-groups button.is-on{background:rgba(36,91,219,.1);border-radius:5px;border-bottom-color:transparent;}.work-storeactions{margin-left:0;}.work-sum-split{grid-template-columns:1fr;}}";
-    document.head.appendChild(style);
   }
 
   function api(path, options) {
@@ -1244,49 +1243,76 @@
         );
       })
       .join("");
+    function bits(group) {
+      var text = metrics
+        .filter(function (metric) {
+          return metricTotal(group.rows, metric.id);
+        })
+        .map(function (metric) {
+          return metric.name + " " + metricTotal(group.rows, metric.id);
+        })
+        .join(" · ");
+      return text || "暂无数量";
+    }
+    function bars(groups) {
+      var tones = ["tone-ok", "tone-free", "tone-rest"];
+      if (!groups.length) {
+        return '<div class="work-card"><div class="work-empty">暂无明细</div></div>';
+      }
+      return (
+        '<div class="work-people">' +
+        groups
+          .map(function (group, index) {
+            return (
+              '<article class="work-person ' +
+              tones[index % 3] +
+              '"><div class="work-who"><b>' +
+              esc(group.name) +
+              "</b><span>日报 " +
+              group.rows.length +
+              '</span></div><div class="work-main">' +
+              esc(bits(group)) +
+              "</div></article>"
+            );
+          })
+          .join("") +
+        "</div>"
+      );
+    }
     var cards = metrics
-      .map(function (metric) {
+      .map(function (metric, index) {
         var total = rows.length ? metricTotal(rows, metric.id) : "—";
         return (
-          '<button type="button" class="work-metric" data-summary-metric="' +
+          '<button type="button" class="work-kpi work-c' +
+          (index % 6) +
+          '" data-summary-metric="' +
           esc(metric.id) +
-          '"><span>' +
-          esc(metricLabel(metric)) +
-          "</span><strong>" +
+          '"><b>' +
           total +
-          "</strong></button>"
+          "</b><span>" +
+          esc(metric.name) +
+          "</span></button>"
         );
       })
       .join("");
-    var head = ["人员", "日报数"].concat(metrics.map(metricLabel));
-    var shopHead = ["店铺", "日报数"].concat(metrics.map(metricLabel));
-    function lines(groups, nameKey) {
-      return groups
-        .map(function (group) {
-          return (
-            "<tr><td>" +
-            esc(group.name) +
-            "</td><td>" +
-            group.rows.length +
-            "</td>" +
-            metrics
-              .map(function (metric) {
-                return "<td>" + metricTotal(group.rows, metric.id) + "</td>";
-              })
-              .join("") +
-            "</tr>"
-          );
-        })
-        .join("");
-    }
-    var note =
-      "已提交 " +
-      rows.length +
-      " 份日报 · " +
-      Object.keys(peopleCount).length +
-      " 人 · " +
-      Object.keys(shopCount).length +
-      " 家店";
+    var diaries = rows
+      .map(function (row, index) {
+        var tones = ["tone-free", "tone-ok", "tone-rest"];
+        return (
+          '<article class="work-person ' +
+          tones[index % 3] +
+          '"><div class="work-who"><b>' +
+          esc(row.day) +
+          "</b><span>" +
+          esc(row.personName) +
+          '</span></div><div class="work-main">' +
+          esc(row.shopName) +
+          '</div><button type="button" class="work-mini" data-summary-report="' +
+          index +
+          '">查看详情</button></article>'
+        );
+      })
+      .join("");
     return (
       '<div class="work-panel"><section class="work-card"><h2>汇总筛选</h2><div class="work-filters">' +
       '<button type="button" class="work-mini" data-summary-period="今天">今天</button>' +
@@ -1304,37 +1330,19 @@
       '</select></label><label class="work-field">SPU<input data-summary-spu value="' +
       esc(state.summarySpu) +
       '"></label><button type="button" class="work-primary" data-summary-query>查询</button></div></section>' +
-      '<section class="work-card"><h2>工作量汇总</h2><p class="work-summary-note">' +
-      esc(note) +
-      '</p><div class="work-metric-grid">' +
+      '<div class="work-stats">' +
+      kpi(0, rows.length, "已交日报") +
+      kpi(1, Object.keys(peopleCount).length, "已报人数") +
+      kpi(4, Object.keys(shopCount).length, "店铺数") +
+      "</div>" +
+      '<div class="work-stats">' +
       cards +
-      "</div></section>" +
-      '<section class="work-card"><h2>按人员汇总</h2>' +
-      summaryTable(head, lines(groupSummary(rows, "personId"))) +
-      "</section>" +
-      '<section class="work-card"><h2>按店铺汇总</h2>' +
-      summaryTable(shopHead, lines(groupSummary(rows, "shopId"))) +
-      "</section>" +
-      '<section class="work-card"><h2>已提交日报</h2>' +
-      summaryTable(
-        ["日期", "填报人", "店铺", "操作"],
-        rows
-          .map(function (row, index) {
-            return (
-              "<tr><td>" +
-              esc(row.day) +
-              "</td><td>" +
-              esc(row.personName) +
-              "</td><td>" +
-              esc(row.shopName) +
-              '</td><td><button type="button" class="work-mini" data-summary-report="' +
-              index +
-              '">查看详情</button></td></tr>'
-            );
-          })
-          .join("")
-      ) +
-      "</section>" +
+      "</div><h2>按人员汇总</h2>" +
+      bars(groupSummary(rows, "personId")) +
+      "<h2>按店铺汇总</h2>" +
+      bars(groupSummary(rows, "shopId")) +
+      "<h2>已提交日报</h2>" +
+      (diaries ? '<div class="work-people">' + diaries + "</div>" : '<div class="work-card"><div class="work-empty">这段时间还没有已提交的店铺日报。</div></div>') +
       renderSummaryDialog(rows, metrics) +
       "</div>"
     );
