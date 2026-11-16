@@ -1,3 +1,4 @@
+/* 工作汇报店铺日报。 */
 import { dbMode, query } from "../profile/auth.js";
 import { listGrants, listPeople, listShops } from "../people/store.js";
 

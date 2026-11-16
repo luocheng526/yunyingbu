@@ -1,3 +1,4 @@
+/* 工作汇报接口。 */
 import { Router } from "express";
 import {
   diaryDuty,

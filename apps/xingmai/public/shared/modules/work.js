@@ -1,4 +1,4 @@
-/* xm-module-work — 工作汇报。按组织中心责权排进运营部、人事部、技术部，再按模板填当天表。 */
+/* xm-module-work — 工作汇报。部门模板填当天事项，再填店铺日报。 */
 (function () {
   var state = {
     tab: "today",

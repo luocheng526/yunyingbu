@@ -1,3 +1,4 @@
+/* 工作汇报填报。 */
 import { dbMode, query } from "../profile/auth.js";
 import { listPeople } from "../people/store.js";
 import { bindRoster, diaryObligation, readyDiary, resetDiaryStore } from "./diary.js";
