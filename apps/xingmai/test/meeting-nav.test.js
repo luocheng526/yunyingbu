@@ -61,7 +61,7 @@ test("侧栏在工作汇报后面挂月度大会，不进底部", () => {
 
 test("壳把 /meeting 交给月度大会模块", () => {
   assert.equal(APP_MODULES["/meeting"], "meeting");
-  assert.equal(SHELL_ASSET_VER, "0.1.772-meeting");
+  assert.equal(SHELL_ASSET_VER, "0.1.772-nolive");
   const html = renderAppShell("/meeting", luocheng);
   assert.equal(html.includes("/shared/modules/meeting.js"), true);
   assert.equal(html.includes("月度大会"), true);
@@ -69,7 +69,7 @@ test("壳把 /meeting 交给月度大会模块", () => {
 
 test("nav.js 把月度大会放进主栏而不是底栏", () => {
   const js = readFileSync(join(root, "../public/shared/nav.js"), "utf8");
-  assert.match(js, /0\.1\.772-meeting/);
+  assert.match(js, /0\.1\.772-nolive/);
   assert.match(js, /\{ href: "\/meeting", label: "月度大会" \}/);
   assert.match(js, /"\/meeting": "meeting"/);
   const itemsBlock = js.match(/const items = \[([\s\S]*?)\];/)[1];
