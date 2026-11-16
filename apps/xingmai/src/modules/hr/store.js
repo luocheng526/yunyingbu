@@ -1,13 +1,58 @@
 import { dbMode, query } from "../profile/auth.js";
 
-export const HR_TABS = ["面试统计", "考勤", "调休", "人才管理", "加班时长"];
-
+export const HR_TABS = ["考勤", "加班", "调休", "人才", "面试"];
 export const INTERVIEW_RESULTS = ["待定", "通过", "未通过", "未到场"];
-export const ATTENDANCE_STATUSES = ["正常", "迟到", "早退", "缺卡", "旷工", "请假"];
-export const TIMEOFF_STATUSES = ["待审", "已通过", "已驳回"];
 export const TALENT_STAGES = ["储备", "面试中", "已入职", "已淘汰"];
 
 export const HR_SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS hr_ding_links (
+    person_id INT NOT NULL PRIMARY KEY,
+    dingtalk_userid VARCHAR(64) NOT NULL,
+    match_by VARCHAR(16) NOT NULL,
+    employee_no VARCHAR(64) NOT NULL DEFAULT '',
+    updated_at VARCHAR(40) NOT NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS hr_punches (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    person_id INT NOT NULL,
+    dingtalk_userid VARCHAR(64) NOT NULL DEFAULT '',
+    work_date VARCHAR(10) NOT NULL,
+    check_type VARCHAR(16) NOT NULL,
+    time_result VARCHAR(32) NOT NULL DEFAULT '',
+    label VARCHAR(16) NOT NULL DEFAULT '',
+    check_at VARCHAR(32) NOT NULL DEFAULT '',
+    record_id VARCHAR(64) NOT NULL DEFAULT '',
+    UNIQUE KEY uq_hr_punch (person_id, work_date, check_type, record_id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS hr_overtime_days (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    person_id INT NOT NULL,
+    work_date VARCHAR(10) NOT NULL,
+    hours DECIMAL(5,1) NOT NULL,
+    source_name VARCHAR(16) NOT NULL DEFAULT 'ding',
+    UNIQUE KEY uq_hr_ot (person_id, work_date)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS hr_leave_quotas (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    person_id INT NOT NULL,
+    leave_code VARCHAR(64) NOT NULL,
+    leave_name VARCHAR(64) NOT NULL DEFAULT '',
+    quota_hours DECIMAL(8,1) NOT NULL DEFAULT 0,
+    used_hours DECIMAL(8,1) NOT NULL DEFAULT 0,
+    balance_hours DECIMAL(8,1) NOT NULL DEFAULT 0,
+    UNIQUE KEY uq_hr_quota (person_id, leave_code)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS hr_leave_records (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    person_id INT NOT NULL,
+    leave_code VARCHAR(64) NOT NULL DEFAULT '',
+    leave_name VARCHAR(64) NOT NULL DEFAULT '',
+    start_at VARCHAR(32) NOT NULL,
+    end_at VARCHAR(32) NOT NULL,
+    duration VARCHAR(32) NOT NULL DEFAULT '',
+    record_key VARCHAR(191) NOT NULL,
+    UNIQUE KEY uq_hr_leave (record_key)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   `CREATE TABLE IF NOT EXISTS hr_interviews (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     candidate_name VARCHAR(64) NOT NULL,
@@ -16,29 +61,6 @@ export const HR_SCHEMA = [
     interview_at VARCHAR(32) NOT NULL,
     result_name VARCHAR(16) NOT NULL,
     note_text VARCHAR(500) NOT NULL DEFAULT '',
-    created_by VARCHAR(64) NOT NULL DEFAULT '',
-    created_at VARCHAR(40) NOT NULL
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-  `CREATE TABLE IF NOT EXISTS hr_attendance (
-    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    person_name VARCHAR(64) NOT NULL,
-    work_date VARCHAR(10) NOT NULL,
-    check_in VARCHAR(8) NOT NULL DEFAULT '',
-    check_out VARCHAR(8) NOT NULL DEFAULT '',
-    status_name VARCHAR(16) NOT NULL,
-    note_text VARCHAR(500) NOT NULL DEFAULT '',
-    created_by VARCHAR(64) NOT NULL DEFAULT '',
-    created_at VARCHAR(40) NOT NULL,
-    UNIQUE KEY uq_hr_att_person_day (person_name, work_date)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-  `CREATE TABLE IF NOT EXISTS hr_timeoff (
-    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    person_name VARCHAR(64) NOT NULL,
-    start_on VARCHAR(10) NOT NULL,
-    end_on VARCHAR(10) NOT NULL,
-    hours DECIMAL(6,1) NOT NULL,
-    reason VARCHAR(500) NOT NULL DEFAULT '',
-    status_name VARCHAR(16) NOT NULL,
     created_by VARCHAR(64) NOT NULL DEFAULT '',
     created_at VARCHAR(40) NOT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
@@ -53,13 +75,12 @@ export const HR_SCHEMA = [
     created_by VARCHAR(64) NOT NULL DEFAULT '',
     created_at VARCHAR(40) NOT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-  `CREATE TABLE IF NOT EXISTS hr_overtime (
+  `CREATE TABLE IF NOT EXISTS hr_sync_runs (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    person_name VARCHAR(64) NOT NULL,
-    work_date VARCHAR(10) NOT NULL,
-    hours DECIMAL(5,1) NOT NULL,
-    reason VARCHAR(500) NOT NULL DEFAULT '',
-    created_by VARCHAR(64) NOT NULL DEFAULT '',
+    run_kind VARCHAR(32) NOT NULL,
+    work_date VARCHAR(10) NOT NULL DEFAULT '',
+    ok_flag TINYINT NOT NULL,
+    message VARCHAR(180) NOT NULL DEFAULT '',
     created_at VARCHAR(40) NOT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 ];
@@ -70,11 +91,14 @@ let ready = null;
 
 function emptyMemory() {
   return {
+    links: [],
+    punches: [],
+    overtime: [],
+    quotas: [],
+    leaves: [],
     interviews: [],
-    attendance: [],
-    timeoff: [],
     talents: [],
-    overtime: []
+    runs: []
   };
 }
 
@@ -88,116 +112,18 @@ function clip(value, max) {
   return String(value ?? "").trim().slice(0, max);
 }
 
-function mustName(value, label) {
-  const name = clip(value, 64);
-  if (!name) {
-    throw bad(`${label}不能为空`);
-  }
-  return name;
-}
-
-function mustChoice(value, options, label) {
-  const picked = clip(value, 16);
-  if (!options.includes(picked)) {
-    throw bad(`${label}不正确`);
-  }
-  return picked;
-}
-
-function mustDate(value, label) {
-  const text = clip(value, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(text) || Number.isNaN(Date.parse(`${text}T00:00:00Z`))) {
-    throw bad(`${label}要写成 YYYY-MM-DD`);
-  }
-  return text;
-}
-
-function mustMonth(value) {
-  const text = clip(value, 7);
-  if (!text) {
-    return "";
-  }
-  if (!/^\d{4}-\d{2}$/.test(text)) {
-    throw bad("月份要写成 YYYY-MM");
-  }
-  return text;
-}
-
-function mustTime(value, label, { required = false } = {}) {
-  const text = clip(value, 8);
-  if (!text) {
-    if (required) {
-      throw bad(`${label}不能为空`);
-    }
-    return "";
-  }
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(text)) {
-    throw bad(`${label}要写成 HH:MM`);
-  }
-  return text;
-}
-
-function mustWhen(value) {
-  const text = clip(value, 32).replace("T", " ");
-  const match = text.match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})/);
-  if (!match) {
-    throw bad("面试时间要写成 YYYY-MM-DD HH:MM");
-  }
-  mustDate(match[1], "面试日期");
-  mustTime(match[2], "面试时间", { required: true });
-  return `${match[1]} ${match[2]}`;
-}
-
-function mustHours(value, label, max) {
-  const num = Number(value);
-  if (!Number.isFinite(num) || num <= 0 || num > max) {
-    throw bad(`${label}要大于 0，且不超过 ${max}`);
-  }
-  return Math.round(num * 10) / 10;
-}
-
-function inMonth(value, month) {
-  if (!month) {
-    return true;
-  }
-  return String(value || "").slice(0, 7) === month;
-}
-
-function stamp(actor) {
-  return {
-    createdBy: clip(actor, 64),
-    createdAt: new Date().toISOString()
-  };
-}
-
-function round1(value) {
-  return Math.round(Number(value) * 10) / 10;
-}
-
-function byIdDesc(rows) {
-  return rows.slice().sort((a, b) => Number(b.id) - Number(a.id));
-}
-
 export function resetHrStore() {
   const fresh = emptyMemory();
-  memory.interviews = fresh.interviews;
-  memory.attendance = fresh.attendance;
-  memory.timeoff = fresh.timeoff;
-  memory.talents = fresh.talents;
-  memory.overtime = fresh.overtime;
+  Object.assign(memory, fresh);
   seq = 1;
   ready = null;
 }
 
 export function ensureHrSchema() {
-  if (dbMode() !== "mysql") {
-    return Promise.resolve();
-  }
+  if (dbMode() !== "mysql") return Promise.resolve();
   if (!ready) {
     ready = (async () => {
-      for (const sql of HR_SCHEMA) {
-        await query(sql);
-      }
+      for (const sql of HR_SCHEMA) await query(sql);
     })().catch((err) => {
       ready = null;
       throw err;
@@ -206,170 +132,321 @@ export function ensureHrSchema() {
   return ready;
 }
 
-function interviewStats(rows) {
-  const stats = {
-    total: rows.length,
-    passed: 0,
-    failed: 0,
-    pending: 0,
-    absent: 0,
-    passRate: null,
-    byPosition: []
-  };
-  const positions = new Map();
-  for (const row of rows) {
-    if (row.result === "通过") stats.passed += 1;
-    else if (row.result === "未通过") stats.failed += 1;
-    else if (row.result === "未到场") stats.absent += 1;
-    else stats.pending += 1;
-    const key = row.position || "未填岗位";
-    const bucket = positions.get(key) || { position: key, total: 0, passed: 0 };
-    bucket.total += 1;
-    if (row.result === "通过") bucket.passed += 1;
-    positions.set(key, bucket);
-  }
-  if (stats.total > 0) {
-    stats.passRate = Math.round((stats.passed / stats.total) * 1000) / 1000;
-  }
-  stats.byPosition = [...positions.values()].sort((a, b) => b.total - a.total || a.position.localeCompare(b.position, "zh"));
-  return stats;
+function mustName(value, label) {
+  const name = clip(value, 64);
+  if (!name) throw bad(`${label}不能为空`);
+  return name;
 }
 
-function attendanceStats(rows) {
-  const stats = { total: rows.length, normal: 0, late: 0, early: 0, missing: 0, absent: 0, leave: 0 };
-  const map = { 正常: "normal", 迟到: "late", 早退: "early", 缺卡: "missing", 旷工: "absent", 请假: "leave" };
-  for (const row of rows) {
-    const key = map[row.status];
-    if (key) stats[key] += 1;
-  }
-  return stats;
+function mustChoice(value, options, label) {
+  const picked = clip(value, 16);
+  if (!options.includes(picked)) throw bad(`${label}不正确`);
+  return picked;
 }
 
-function timeoffStats(rows) {
-  const stats = { pending: 0, approved: 0, rejected: 0, approvedHours: 0 };
-  for (const row of rows) {
-    if (row.status === "已通过") {
-      stats.approved += 1;
-      stats.approvedHours = round1(stats.approvedHours + Number(row.hours || 0));
-    } else if (row.status === "已驳回") {
-      stats.rejected += 1;
-    } else {
-      stats.pending += 1;
-    }
-  }
-  return stats;
+function mustDate(value, label) {
+  const text = clip(value, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) throw bad(`${label}要写成 YYYY-MM-DD`);
+  return text;
 }
 
-function talentStats(rows) {
-  const stats = { total: rows.length, reserve: 0, interviewing: 0, hired: 0, rejected: 0 };
-  const map = { 储备: "reserve", 面试中: "interviewing", 已入职: "hired", 已淘汰: "rejected" };
-  for (const row of rows) {
-    const key = map[row.stage];
-    if (key) stats[key] += 1;
-  }
-  return stats;
+function mustMonth(value) {
+  const text = clip(value, 7);
+  if (!text) return "";
+  if (!/^\d{4}-\d{2}$/.test(text)) throw bad("月份要写成 YYYY-MM");
+  return text;
 }
 
-function overtimeStats(rows) {
-  const people = new Map();
-  let totalHours = 0;
-  for (const row of rows) {
-    const hours = Number(row.hours || 0);
-    totalHours = round1(totalHours + hours);
-    people.set(row.personName, round1((people.get(row.personName) || 0) + hours));
-  }
-  const byPerson = [...people.entries()]
-    .map(([personName, hours]) => ({ personName, hours }))
-    .sort((a, b) => b.hours - a.hours || a.personName.localeCompare(b.personName, "zh"));
-  return { totalHours, byPerson };
+function mustWhen(value) {
+  const text = clip(value, 32).replace("T", " ");
+  const match = text.match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})/);
+  if (!match) throw bad("面试时间要写成 YYYY-MM-DD HH:MM");
+  return `${match[1]} ${match[2]}`;
 }
 
-function mapInterview(row) {
-  return {
-    id: Number(row.id),
-    candidateName: row.candidate_name ?? row.candidateName,
-    position: row.position_name ?? row.position ?? "",
-    interviewer: row.interviewer || "",
-    interviewAt: row.interview_at ?? row.interviewAt,
-    result: row.result_name ?? row.result,
-    note: row.note_text ?? row.note ?? "",
-    createdBy: row.created_by ?? row.createdBy ?? "",
-    createdAt: row.created_at ?? row.createdAt
-  };
+function inMonth(value, month) {
+  return !month || String(value || "").slice(0, 7) === month;
 }
 
-function mapAttendance(row) {
-  return {
-    id: Number(row.id),
-    personName: row.person_name ?? row.personName,
-    workDate: row.work_date ?? row.workDate,
-    checkIn: row.check_in ?? row.checkIn ?? "",
-    checkOut: row.check_out ?? row.checkOut ?? "",
-    status: row.status_name ?? row.status,
-    note: row.note_text ?? row.note ?? "",
-    createdBy: row.created_by ?? row.createdBy ?? "",
-    createdAt: row.created_at ?? row.createdAt
-  };
+function stamp(actor) {
+  return { createdBy: clip(actor, 64), createdAt: new Date().toISOString() };
 }
 
-function mapTimeoff(row) {
-  return {
-    id: Number(row.id),
-    personName: row.person_name ?? row.personName,
-    startOn: row.start_on ?? row.startOn,
-    endOn: row.end_on ?? row.endOn,
-    hours: round1(row.hours),
-    reason: row.reason || "",
-    status: row.status_name ?? row.status,
-    createdBy: row.created_by ?? row.createdBy ?? "",
-    createdAt: row.created_at ?? row.createdAt
-  };
-}
-
-function mapTalent(row) {
-  return {
-    id: Number(row.id),
-    name: row.person_name ?? row.name,
-    phone: row.phone || "",
-    targetRole: row.target_role ?? row.targetRole ?? "",
-    source: row.source_name ?? row.source ?? "",
-    stage: row.stage_name ?? row.stage,
-    note: row.note_text ?? row.note ?? "",
-    createdBy: row.created_by ?? row.createdBy ?? "",
-    createdAt: row.created_at ?? row.createdAt
-  };
-}
-
-function mapOvertime(row) {
-  return {
-    id: Number(row.id),
-    personName: row.person_name ?? row.personName,
-    workDate: row.work_date ?? row.workDate,
-    hours: round1(row.hours),
-    reason: row.reason || "",
-    createdBy: row.created_by ?? row.createdBy ?? "",
-    createdAt: row.created_at ?? row.createdAt
-  };
-}
-
-async function selectAll(sql, params, map) {
+async function rowsOf(sql, params = []) {
   const [rows] = await query(sql, params);
-  return rows.map(map);
+  return rows;
 }
 
-export async function listInterviews({ month = "" } = {}) {
+export async function listLinks() {
+  await ensureHrSchema();
+  if (dbMode() === "mysql") {
+    const rows = await rowsOf("SELECT person_id, dingtalk_userid, match_by, employee_no FROM hr_ding_links ORDER BY person_id");
+    return rows.map((row) => ({
+      personId: Number(row.person_id),
+      dingtalkUserId: row.dingtalk_userid,
+      matchBy: row.match_by,
+      employeeNo: row.employee_no || ""
+    }));
+  }
+  return memory.links.map((row) => ({ ...row }));
+}
+
+export async function saveLinks(links) {
+  await ensureHrSchema();
+  const now = new Date().toISOString();
+  const clean = links.map((link) => ({
+    personId: Number(link.personId),
+    dingtalkUserId: clip(link.dingtalkUserId, 64),
+    matchBy: clip(link.matchBy, 16),
+    employeeNo: clip(link.employeeNo, 64),
+    updatedAt: now
+  })).filter((link) => link.personId && link.dingtalkUserId);
+  if (dbMode() === "mysql") {
+    await query("DELETE FROM hr_ding_links");
+    for (const link of clean) {
+      await query(
+        `INSERT INTO hr_ding_links (person_id, dingtalk_userid, match_by, employee_no, updated_at)
+         VALUES (?, ?, ?, ?, ?)`,
+        [link.personId, link.dingtalkUserId, link.matchBy, link.employeeNo, link.updatedAt]
+      );
+    }
+    return listLinks();
+  }
+  memory.links = clean;
+  return listLinks();
+}
+
+export async function listPunches({ month = "", date = "" } = {}) {
+  await ensureHrSchema();
+  const pickedMonth = mustMonth(month);
+  const pickedDate = date ? mustDate(date, "日期") : "";
+  if (dbMode() === "mysql") {
+    const where = [];
+    const params = [];
+    if (pickedDate) {
+      where.push("work_date = ?");
+      params.push(pickedDate);
+    } else if (pickedMonth) {
+      where.push("work_date LIKE ?");
+      params.push(`${pickedMonth}%`);
+    }
+    const sql = `SELECT * FROM hr_punches ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY work_date DESC, person_id, check_type`;
+    const rows = await rowsOf(sql, params);
+    return rows.map(mapPunch);
+  }
+  return memory.punches
+    .filter((row) => (pickedDate ? row.workDate === pickedDate : inMonth(row.workDate, pickedMonth)))
+    .map((row) => ({ ...row }))
+    .sort((a, b) => String(b.workDate).localeCompare(String(a.workDate)) || a.personId - b.personId);
+}
+
+export async function replaceDayPunches(workDate, personIds, punches) {
+  await ensureHrSchema();
+  const day = mustDate(workDate, "日期");
+  const ids = [...new Set(personIds.map((id) => Number(id)).filter((id) => id > 0))];
+  if (dbMode() === "mysql") {
+    if (ids.length) {
+      await query(`DELETE FROM hr_punches WHERE work_date = ? AND person_id IN (${ids.map(() => "?").join(",")})`, [day, ...ids]);
+    }
+    for (const punch of punches) {
+      await query(
+        `INSERT INTO hr_punches
+          (person_id, dingtalk_userid, work_date, check_type, time_result, label, check_at, record_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [punch.personId, punch.dingtalkUserId, day, punch.checkType, punch.timeResult, punch.label, punch.checkAt, punch.recordId || ""]
+      );
+    }
+    return listPunches({ date: day });
+  }
+  memory.punches = memory.punches.filter((row) => !(row.workDate === day && ids.includes(row.personId)));
+  for (const punch of punches) memory.punches.push({ ...punch, workDate: day });
+  return listPunches({ date: day });
+}
+
+export async function listOvertime({ month = "" } = {}) {
   await ensureHrSchema();
   const picked = mustMonth(month);
   if (dbMode() === "mysql") {
     const sql = picked
-      ? "SELECT * FROM hr_interviews WHERE interview_at LIKE ? ORDER BY interview_at DESC, id DESC"
-      : "SELECT * FROM hr_interviews ORDER BY interview_at DESC, id DESC";
-    const interviews = await selectAll(sql, picked ? [`${picked}%`] : [], mapInterview);
-    return { interviews, stats: interviewStats(interviews) };
+      ? "SELECT * FROM hr_overtime_days WHERE work_date LIKE ? ORDER BY work_date DESC, person_id"
+      : "SELECT * FROM hr_overtime_days ORDER BY work_date DESC, person_id";
+    const rows = await rowsOf(sql, picked ? [`${picked}%`] : []);
+    return rows.map((row) => ({
+      personId: Number(row.person_id),
+      workDate: row.work_date,
+      hours: Number(row.hours),
+      source: row.source_name
+    }));
   }
-  const interviews = byIdDesc(memory.interviews.filter((row) => inMonth(row.interviewAt, picked)).map(mapInterview));
-  interviews.sort((a, b) => String(b.interviewAt).localeCompare(String(a.interviewAt)) || b.id - a.id);
-  return { interviews, stats: interviewStats(interviews) };
+  return memory.overtime
+    .filter((row) => inMonth(row.workDate, picked))
+    .map((row) => ({ ...row }))
+    .sort((a, b) => String(b.workDate).localeCompare(String(a.workDate)) || a.personId - b.personId);
+}
+
+export async function replaceOvertime(workDate, personIds, rows) {
+  await ensureHrSchema();
+  const day = mustDate(workDate, "日期");
+  const ids = [...new Set(personIds.map((id) => Number(id)).filter((id) => id > 0))];
+  if (dbMode() === "mysql") {
+    if (ids.length) {
+      await query(`DELETE FROM hr_overtime_days WHERE work_date = ? AND person_id IN (${ids.map(() => "?").join(",")})`, [day, ...ids]);
+    }
+    for (const row of rows) {
+      if (!(Number(row.hours) > 0)) continue;
+      await query(
+        "INSERT INTO hr_overtime_days (person_id, work_date, hours, source_name) VALUES (?, ?, ?, ?)",
+        [row.personId, day, row.hours, row.source || "ding"]
+      );
+    }
+    return listOvertime({ month: day.slice(0, 7) });
+  }
+  memory.overtime = memory.overtime.filter((row) => !(row.workDate === day && ids.includes(row.personId)));
+  for (const row of rows) {
+    if (Number(row.hours) > 0) memory.overtime.push({ personId: row.personId, workDate: day, hours: Number(row.hours), source: row.source || "ding" });
+  }
+  return listOvertime({ month: day.slice(0, 7) });
+}
+
+export async function listQuotas() {
+  await ensureHrSchema();
+  if (dbMode() === "mysql") {
+    const rows = await rowsOf("SELECT * FROM hr_leave_quotas ORDER BY person_id");
+    return rows.map(mapQuota);
+  }
+  return memory.quotas.map((row) => ({ ...row }));
+}
+
+export async function replaceQuotas(rows) {
+  await ensureHrSchema();
+  if (dbMode() === "mysql") {
+    await query("DELETE FROM hr_leave_quotas");
+    for (const row of rows) {
+      await query(
+        `INSERT INTO hr_leave_quotas (person_id, leave_code, leave_name, quota_hours, used_hours, balance_hours)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [row.personId, row.leaveCode, row.leaveName, row.quotaHours, row.usedHours, row.balanceHours]
+      );
+    }
+    return listQuotas();
+  }
+  memory.quotas = rows.map((row) => ({ ...row }));
+  return listQuotas();
+}
+
+export async function listLeaves() {
+  await ensureHrSchema();
+  if (dbMode() === "mysql") {
+    const rows = await rowsOf("SELECT * FROM hr_leave_records ORDER BY start_at DESC");
+    return rows.map(mapLeave);
+  }
+  return memory.leaves.map((row) => ({ ...row })).sort((a, b) => String(b.startAt).localeCompare(String(a.startAt)));
+}
+
+export async function replaceLeaves(_personIds, rows) {
+  await ensureHrSchema();
+  if (dbMode() === "mysql") {
+    for (const row of rows) {
+      await query(
+        `INSERT INTO hr_leave_records (person_id, leave_code, leave_name, start_at, end_at, duration, record_key)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE leave_name = VALUES(leave_name), start_at = VALUES(start_at), end_at = VALUES(end_at), duration = VALUES(duration)`,
+        [row.personId, row.leaveCode, row.leaveName, row.startAt, row.endAt, row.duration, row.recordKey]
+      );
+    }
+    return listLeaves();
+  }
+  for (const row of rows) {
+    const index = memory.leaves.findIndex((item) => item.recordKey === row.recordKey);
+    if (index >= 0) memory.leaves[index] = { ...row };
+    else memory.leaves.push({ ...row });
+  }
+  return listLeaves();
+}
+
+export async function recordSync(kind, workDate, ok, message) {
+  await ensureHrSchema();
+  const row = {
+    kind: clip(kind, 32),
+    workDate: clip(workDate, 10),
+    ok: ok ? 1 : 0,
+    message: clip(message, 180),
+    createdAt: new Date().toISOString()
+  };
+  if (dbMode() === "mysql") {
+    await query(
+      "INSERT INTO hr_sync_runs (run_kind, work_date, ok_flag, message, created_at) VALUES (?, ?, ?, ?, ?)",
+      [row.kind, row.workDate, row.ok, row.message, row.createdAt]
+    );
+  } else {
+    memory.runs.push(row);
+  }
+  return row;
+}
+
+export async function latestSync() {
+  await ensureHrSchema();
+  if (dbMode() === "mysql") {
+    const rows = await rowsOf("SELECT * FROM hr_sync_runs ORDER BY id DESC LIMIT 1");
+    if (!rows.length) return null;
+    const row = rows[0];
+    return { kind: row.run_kind, workDate: row.work_date, ok: Boolean(row.ok_flag), message: row.message, createdAt: row.created_at };
+  }
+  return memory.runs.length ? { ...memory.runs[memory.runs.length - 1] } : null;
+}
+
+function mapPunch(row) {
+  return {
+    personId: Number(row.person_id),
+    dingtalkUserId: row.dingtalk_userid,
+    workDate: row.work_date,
+    checkType: row.check_type,
+    timeResult: row.time_result,
+    label: row.label,
+    checkAt: row.check_at || "",
+    recordId: row.record_id || ""
+  };
+}
+
+function mapQuota(row) {
+  return {
+    personId: Number(row.person_id),
+    leaveCode: row.leave_code,
+    leaveName: row.leave_name,
+    quotaHours: Number(row.quota_hours),
+    usedHours: Number(row.used_hours),
+    balanceHours: Number(row.balance_hours)
+  };
+}
+
+function mapLeave(row) {
+  return {
+    personId: Number(row.person_id),
+    leaveCode: row.leave_code,
+    leaveName: row.leave_name,
+    startAt: row.start_at,
+    endAt: row.end_at,
+    duration: row.duration,
+    recordKey: row.record_key
+  };
+}
+
+export async function listInterviews() {
+  await ensureHrSchema();
+  if (dbMode() === "mysql") {
+    const rows = await rowsOf("SELECT * FROM hr_interviews ORDER BY interview_at DESC, id DESC");
+    return rows.map((row) => ({
+      id: Number(row.id),
+      candidateName: row.candidate_name,
+      position: row.position_name,
+      interviewer: row.interviewer,
+      interviewAt: row.interview_at,
+      result: row.result_name,
+      note: row.note_text,
+      createdBy: row.created_by
+    }));
+  }
+  return memory.interviews.map((row) => ({ ...row })).sort((a, b) => String(b.interviewAt).localeCompare(String(a.interviewAt)) || b.id - a.id);
 }
 
 export async function createInterview(input = {}, actor = "") {
@@ -391,174 +468,41 @@ export async function createInterview(input = {}, actor = "") {
       [row.candidateName, row.position, row.interviewer, row.interviewAt, row.result, row.note, row.createdBy, row.createdAt]
     );
     row.id = Number(result.insertId);
-    return mapInterview(row);
+    return row;
   }
   row.id = seq++;
   memory.interviews.push(row);
-  return mapInterview(row);
+  return { ...row };
 }
 
 export async function deleteInterview(id) {
-  await ensureHrSchema();
-  const key = Number(id);
-  if (!Number.isInteger(key) || key <= 0) {
-    throw bad("记录不存在", 404);
-  }
-  if (dbMode() === "mysql") {
-    const [result] = await query("DELETE FROM hr_interviews WHERE id = ?", [key]);
-    if (!result.affectedRows) throw bad("记录不存在", 404);
-    return { id: key };
-  }
-  const before = memory.interviews.length;
-  memory.interviews = memory.interviews.filter((row) => row.id !== key);
-  if (memory.interviews.length === before) throw bad("记录不存在", 404);
-  return { id: key };
-}
-
-export async function listAttendance({ month = "" } = {}) {
-  await ensureHrSchema();
-  const picked = mustMonth(month);
-  if (dbMode() === "mysql") {
-    const sql = picked
-      ? "SELECT * FROM hr_attendance WHERE work_date LIKE ? ORDER BY work_date DESC, id DESC"
-      : "SELECT * FROM hr_attendance ORDER BY work_date DESC, id DESC";
-    const attendance = await selectAll(sql, picked ? [`${picked}%`] : [], mapAttendance);
-    return { attendance, stats: attendanceStats(attendance) };
-  }
-  const attendance = memory.attendance
-    .filter((row) => inMonth(row.workDate, picked))
-    .map(mapAttendance)
-    .sort((a, b) => String(b.workDate).localeCompare(String(a.workDate)) || b.id - a.id);
-  return { attendance, stats: attendanceStats(attendance) };
-}
-
-export async function createAttendance(input = {}, actor = "") {
-  await ensureHrSchema();
-  const row = {
-    personName: mustName(input.personName, "姓名"),
-    workDate: mustDate(input.workDate, "考勤日期"),
-    checkIn: mustTime(input.checkIn, "上班时间"),
-    checkOut: mustTime(input.checkOut, "下班时间"),
-    status: mustChoice(input.status, ATTENDANCE_STATUSES, "考勤状态"),
-    note: clip(input.note, 500),
-    ...stamp(actor)
-  };
-  if (dbMode() === "mysql") {
-    try {
-      const [result] = await query(
-        `INSERT INTO hr_attendance
-          (person_name, work_date, check_in, check_out, status_name, note_text, created_by, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [row.personName, row.workDate, row.checkIn, row.checkOut, row.status, row.note, row.createdBy, row.createdAt]
-      );
-      row.id = Number(result.insertId);
-    } catch (err) {
-      if (err && (err.code === "ER_DUP_ENTRY" || err.errno === 1062)) {
-        throw bad("这一天已经有这条考勤", 409);
-      }
-      throw err;
-    }
-    return mapAttendance(row);
-  }
-  if (memory.attendance.some((item) => item.personName === row.personName && item.workDate === row.workDate)) {
-    throw bad("这一天已经有这条考勤", 409);
-  }
-  row.id = seq++;
-  memory.attendance.push(row);
-  return mapAttendance(row);
-}
-
-export async function deleteAttendance(id) {
-  return deleteById("hr_attendance", memory.attendance, id, (next) => {
-    memory.attendance = next;
-  });
-}
-
-export async function listTimeoff() {
-  await ensureHrSchema();
-  if (dbMode() === "mysql") {
-    const timeoff = await selectAll(
-      "SELECT * FROM hr_timeoff ORDER BY start_on DESC, id DESC",
-      [],
-      mapTimeoff
-    );
-    return { timeoff, stats: timeoffStats(timeoff) };
-  }
-  const timeoff = memory.timeoff
-    .map(mapTimeoff)
-    .sort((a, b) => String(b.startOn).localeCompare(String(a.startOn)) || b.id - a.id);
-  return { timeoff, stats: timeoffStats(timeoff) };
-}
-
-export async function createTimeoff(input = {}, actor = "") {
-  await ensureHrSchema();
-  const startOn = mustDate(input.startOn, "开始日期");
-  const endOn = mustDate(input.endOn, "结束日期");
-  if (endOn < startOn) {
-    throw bad("结束日期不能早于开始日期");
-  }
-  const row = {
-    personName: mustName(input.personName, "姓名"),
-    startOn,
-    endOn,
-    hours: mustHours(input.hours, "调休时长", 240),
-    reason: clip(input.reason, 500),
-    status: mustChoice(input.status || "待审", TIMEOFF_STATUSES, "调休状态"),
-    ...stamp(actor)
-  };
-  if (dbMode() === "mysql") {
-    const [result] = await query(
-      `INSERT INTO hr_timeoff
-        (person_name, start_on, end_on, hours, reason, status_name, created_by, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [row.personName, row.startOn, row.endOn, row.hours, row.reason, row.status, row.createdBy, row.createdAt]
-    );
-    row.id = Number(result.insertId);
-    return mapTimeoff(row);
-  }
-  row.id = seq++;
-  memory.timeoff.push(row);
-  return mapTimeoff(row);
-}
-
-export async function updateTimeoffStatus(id, status) {
-  await ensureHrSchema();
-  const key = mustPositiveId(id);
-  const next = mustChoice(status, TIMEOFF_STATUSES, "调休状态");
-  if (dbMode() === "mysql") {
-    const [result] = await query("UPDATE hr_timeoff SET status_name = ? WHERE id = ?", [next, key]);
-    if (!result.affectedRows) throw bad("记录不存在", 404);
-    const [rows] = await query("SELECT * FROM hr_timeoff WHERE id = ?", [key]);
-    return mapTimeoff(rows[0]);
-  }
-  const row = memory.timeoff.find((item) => item.id === key);
-  if (!row) throw bad("记录不存在", 404);
-  row.status = next;
-  return mapTimeoff(row);
-}
-
-export async function deleteTimeoff(id) {
-  return deleteById("hr_timeoff", memory.timeoff, id, (next) => {
-    memory.timeoff = next;
+  return removeRow("hr_interviews", memory.interviews, id, (next) => {
+    memory.interviews = next;
   });
 }
 
 export async function listTalents() {
   await ensureHrSchema();
   if (dbMode() === "mysql") {
-    const talents = await selectAll("SELECT * FROM hr_talents ORDER BY id DESC", [], mapTalent);
-    return { talents, stats: talentStats(talents) };
+    const rows = await rowsOf("SELECT * FROM hr_talents ORDER BY id DESC");
+    return rows.map((row) => ({
+      id: Number(row.id),
+      name: row.person_name,
+      phone: row.phone,
+      targetRole: row.target_role,
+      source: row.source_name,
+      stage: row.stage_name,
+      note: row.note_text,
+      createdBy: row.created_by
+    }));
   }
-  const talents = byIdDesc(memory.talents.map(mapTalent));
-  return { talents, stats: talentStats(talents) };
+  return memory.talents.map((row) => ({ ...row })).sort((a, b) => b.id - a.id);
 }
 
 export async function createTalent(input = {}, actor = "") {
   await ensureHrSchema();
   const phone = clip(input.phone, 32);
-  if (phone && !/^[0-9+\-\s]{5,32}$/.test(phone)) {
-    throw bad("电话只保留数字、加号和短横线");
-  }
+  if (phone && !/^[0-9+\-\s]{5,32}$/.test(phone)) throw bad("电话只保留数字、加号和短横线");
   const row = {
     name: mustName(input.name, "姓名"),
     phone,
@@ -576,107 +520,23 @@ export async function createTalent(input = {}, actor = "") {
       [row.name, row.phone, row.targetRole, row.source, row.stage, row.note, row.createdBy, row.createdAt]
     );
     row.id = Number(result.insertId);
-    return mapTalent(row);
+    return row;
   }
   row.id = seq++;
   memory.talents.push(row);
-  return mapTalent(row);
-}
-
-export async function updateTalentStage(id, stage) {
-  await ensureHrSchema();
-  const key = mustPositiveId(id);
-  const next = mustChoice(stage, TALENT_STAGES, "人才阶段");
-  if (dbMode() === "mysql") {
-    const [result] = await query("UPDATE hr_talents SET stage_name = ? WHERE id = ?", [next, key]);
-    if (!result.affectedRows) throw bad("记录不存在", 404);
-    const [rows] = await query("SELECT * FROM hr_talents WHERE id = ?", [key]);
-    return mapTalent(rows[0]);
-  }
-  const row = memory.talents.find((item) => item.id === key);
-  if (!row) throw bad("记录不存在", 404);
-  row.stage = next;
-  return mapTalent(row);
+  return { ...row };
 }
 
 export async function deleteTalent(id) {
-  return deleteById("hr_talents", memory.talents, id, (next) => {
+  return removeRow("hr_talents", memory.talents, id, (next) => {
     memory.talents = next;
   });
 }
 
-export async function listOvertime({ month = "" } = {}) {
+async function removeRow(table, rows, id, assign) {
   await ensureHrSchema();
-  const picked = mustMonth(month);
-  if (dbMode() === "mysql") {
-    const sql = picked
-      ? "SELECT * FROM hr_overtime WHERE work_date LIKE ? ORDER BY work_date DESC, id DESC"
-      : "SELECT * FROM hr_overtime ORDER BY work_date DESC, id DESC";
-    const overtime = await selectAll(sql, picked ? [`${picked}%`] : [], mapOvertime);
-    return { overtime, stats: overtimeStats(overtime) };
-  }
-  const overtime = memory.overtime
-    .filter((row) => inMonth(row.workDate, picked))
-    .map(mapOvertime)
-    .sort((a, b) => String(b.workDate).localeCompare(String(a.workDate)) || b.id - a.id);
-  return { overtime, stats: overtimeStats(overtime) };
-}
-
-export async function createOvertime(input = {}, actor = "") {
-  await ensureHrSchema();
-  const row = {
-    personName: mustName(input.personName, "姓名"),
-    workDate: mustDate(input.workDate, "加班日期"),
-    hours: mustHours(input.hours, "加班时长", 24),
-    reason: clip(input.reason, 500),
-    ...stamp(actor)
-  };
-  if (dbMode() === "mysql") {
-    const [sumRows] = await query(
-      "SELECT COALESCE(SUM(hours), 0) AS total FROM hr_overtime WHERE person_name = ? AND work_date = ?",
-      [row.personName, row.workDate]
-    );
-    const used = Number(sumRows[0]?.total || 0);
-    if (round1(used + row.hours) > 24) {
-      throw bad("同一人同一天加班不能超过 24 小时");
-    }
-    const [result] = await query(
-      `INSERT INTO hr_overtime
-        (person_name, work_date, hours, reason, created_by, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [row.personName, row.workDate, row.hours, row.reason, row.createdBy, row.createdAt]
-    );
-    row.id = Number(result.insertId);
-    return mapOvertime(row);
-  }
-  const used = memory.overtime
-    .filter((item) => item.personName === row.personName && item.workDate === row.workDate)
-    .reduce((sum, item) => sum + Number(item.hours), 0);
-  if (round1(used + row.hours) > 24) {
-    throw bad("同一人同一天加班不能超过 24 小时");
-  }
-  row.id = seq++;
-  memory.overtime.push(row);
-  return mapOvertime(row);
-}
-
-export async function deleteOvertime(id) {
-  return deleteById("hr_overtime", memory.overtime, id, (next) => {
-    memory.overtime = next;
-  });
-}
-
-function mustPositiveId(id) {
   const key = Number(id);
-  if (!Number.isInteger(key) || key <= 0) {
-    throw bad("记录不存在", 404);
-  }
-  return key;
-}
-
-async function deleteById(table, rows, id, assign) {
-  await ensureHrSchema();
-  const key = mustPositiveId(id);
+  if (!Number.isInteger(key) || key <= 0) throw bad("记录不存在", 404);
   if (dbMode() === "mysql") {
     const [result] = await query(`DELETE FROM ${table} WHERE id = ?`, [key]);
     if (!result.affectedRows) throw bad("记录不存在", 404);

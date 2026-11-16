@@ -1,27 +1,27 @@
 import { Router } from "express";
+import { createDingClient, readDingEnv } from "./dingtalk.js";
+import { startDingStream } from "./stream.js";
 import {
-  ATTENDANCE_STATUSES,
+  addDays,
+  loadRoster,
+  runDaily,
+  shanghaiToday,
+  startScheduler
+} from "./sync.js";
+import {
   HR_TABS,
-  INTERVIEW_RESULTS,
-  TALENT_STAGES,
-  TIMEOFF_STATUSES,
-  createAttendance,
   createInterview,
-  createOvertime,
   createTalent,
-  createTimeoff,
-  deleteAttendance,
   deleteInterview,
-  deleteOvertime,
   deleteTalent,
-  deleteTimeoff,
-  listAttendance,
+  latestSync,
   listInterviews,
+  listLeaves,
+  listLinks,
   listOvertime,
-  listTalents,
-  listTimeoff,
-  updateTalentStage,
-  updateTimeoffStatus
+  listPunches,
+  listQuotas,
+  listTalents
 } from "./store.js";
 
 export const hrRouter = Router();
@@ -40,27 +40,88 @@ function actorName(req) {
 
 function sendErr(res, err) {
   const status = Number(err?.statusCode) || 500;
-  const error = status >= 500 ? "人事数据暂时写不进去" : err.message;
-  res.status(status).json({ ok: false, error });
+  res.status(status).json({ ok: false, error: status >= 500 ? "人事数据暂时读不出来" : err.message });
 }
 
 hrRouter.use(requireUser);
 
 hrRouter.get("/", (_req, res) => {
-  res.json({
-    ok: true,
-    module: "智能人事",
-    tabs: HR_TABS,
-    interviewResults: INTERVIEW_RESULTS,
-    attendanceStatuses: ATTENDANCE_STATUSES,
-    timeoffStatuses: TIMEOFF_STATUSES,
-    talentStages: TALENT_STAGES
-  });
+  res.json({ ok: true, module: "hr", name: "智能人事", tabs: HR_TABS });
 });
 
-hrRouter.get("/interviews", async (req, res) => {
+hrRouter.get("/status", async (_req, res) => {
   try {
-    res.json({ ok: true, ...(await listInterviews({ month: req.query.month })) });
+    const links = await listLinks();
+    res.json({
+      ok: true,
+      configured: readDingEnv().configured,
+      linked: links.length,
+      lastSync: await latestSync()
+    });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.get("/links", async (_req, res) => {
+  try {
+    res.json({ ok: true, links: await listLinks() });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.get("/roster", async (_req, res) => {
+  try {
+    res.json({ ok: true, people: await loadRoster() });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.get("/attendance", async (req, res) => {
+  try {
+    const punches = await listPunches({ month: req.query.month, date: req.query.date });
+    res.json({ ok: true, punches });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.get("/overtime", async (req, res) => {
+  try {
+    res.json({ ok: true, overtime: await listOvertime({ month: req.query.month }) });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.get("/timeoff", async (_req, res) => {
+  try {
+    res.json({ ok: true, quotas: await listQuotas(), leaves: await listLeaves() });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.post("/sync", async (_req, res) => {
+  try {
+    if (!readDingEnv().configured) {
+      res.json({ ok: true, configured: false });
+      return;
+    }
+    const day = addDays(shanghaiToday(), -1);
+    const result = await runDaily(day, createDingClient());
+    res.json({ ok: true, configured: true, workDate: day, ...result });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.get("/interviews", async (_req, res) => {
+  try {
+    const interviews = await listInterviews();
+    res.json({ ok: true, interviews });
   } catch (err) {
     sendErr(res, err);
   }
@@ -83,68 +144,9 @@ hrRouter.delete("/interviews/:id", async (req, res) => {
   }
 });
 
-hrRouter.get("/attendance", async (req, res) => {
-  try {
-    res.json({ ok: true, ...(await listAttendance({ month: req.query.month })) });
-  } catch (err) {
-    sendErr(res, err);
-  }
-});
-
-hrRouter.post("/attendance", async (req, res) => {
-  try {
-    const attendance = await createAttendance(req.body || {}, actorName(req));
-    res.status(201).json({ ok: true, attendance });
-  } catch (err) {
-    sendErr(res, err);
-  }
-});
-
-hrRouter.delete("/attendance/:id", async (req, res) => {
-  try {
-    res.json({ ok: true, ...(await deleteAttendance(req.params.id)) });
-  } catch (err) {
-    sendErr(res, err);
-  }
-});
-
-hrRouter.get("/timeoff", async (_req, res) => {
-  try {
-    res.json({ ok: true, ...(await listTimeoff()) });
-  } catch (err) {
-    sendErr(res, err);
-  }
-});
-
-hrRouter.post("/timeoff", async (req, res) => {
-  try {
-    const timeoff = await createTimeoff(req.body || {}, actorName(req));
-    res.status(201).json({ ok: true, timeoff });
-  } catch (err) {
-    sendErr(res, err);
-  }
-});
-
-hrRouter.patch("/timeoff/:id", async (req, res) => {
-  try {
-    const timeoff = await updateTimeoffStatus(req.params.id, req.body?.status);
-    res.json({ ok: true, timeoff });
-  } catch (err) {
-    sendErr(res, err);
-  }
-});
-
-hrRouter.delete("/timeoff/:id", async (req, res) => {
-  try {
-    res.json({ ok: true, ...(await deleteTimeoff(req.params.id)) });
-  } catch (err) {
-    sendErr(res, err);
-  }
-});
-
 hrRouter.get("/talents", async (_req, res) => {
   try {
-    res.json({ ok: true, ...(await listTalents()) });
+    res.json({ ok: true, talents: await listTalents() });
   } catch (err) {
     sendErr(res, err);
   }
@@ -159,15 +161,6 @@ hrRouter.post("/talents", async (req, res) => {
   }
 });
 
-hrRouter.patch("/talents/:id", async (req, res) => {
-  try {
-    const talent = await updateTalentStage(req.params.id, req.body?.stage);
-    res.json({ ok: true, talent });
-  } catch (err) {
-    sendErr(res, err);
-  }
-});
-
 hrRouter.delete("/talents/:id", async (req, res) => {
   try {
     res.json({ ok: true, ...(await deleteTalent(req.params.id)) });
@@ -176,29 +169,11 @@ hrRouter.delete("/talents/:id", async (req, res) => {
   }
 });
 
-hrRouter.get("/overtime", async (req, res) => {
-  try {
-    res.json({ ok: true, ...(await listOvertime({ month: req.query.month })) });
-  } catch (err) {
-    sendErr(res, err);
-  }
-});
-
-hrRouter.post("/overtime", async (req, res) => {
-  try {
-    const overtime = await createOvertime(req.body || {}, actorName(req));
-    res.status(201).json({ ok: true, overtime });
-  } catch (err) {
-    sendErr(res, err);
-  }
-});
-
-hrRouter.delete("/overtime/:id", async (req, res) => {
-  try {
-    res.json({ ok: true, ...(await deleteOvertime(req.params.id)) });
-  } catch (err) {
-    sendErr(res, err);
-  }
-});
+const underTest = Boolean(process.env.NODE_TEST_CONTEXT) || process.argv.includes("--test");
+if (!underTest) {
+  const client = createDingClient();
+  startScheduler(client);
+  startDingStream({ client });
+}
 
 export default hrRouter;
