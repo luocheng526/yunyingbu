@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.772-notice-tab — 公告中心并进组织中心改动日志后的页签，侧栏不再做二级菜单 */
+/* xm-fast-shell 0.1.772-work-rpt2 — 侧栏甄选智能体后增加工作汇报 */
 (function () {
-  const ASSET_VER = "0.1.772-notice-tab";
+  const ASSET_VER = "0.1.772-work-rpt2";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -34,6 +34,7 @@
     "/academy/exams": "academy",
     "/academy/handbook": "academy",
     "/agents": "agents",
+    "/work": "work",
     "/releases": "releases",
     "/me": "me",
     "/notices": "notices"
@@ -74,6 +75,7 @@
     { href: "/stores", label: "店铺维护中心" },
     { href: "/academy", label: "甄选商学院", children: ACADEMY_CHILDREN },
     { href: "/agents", label: "甄选智能体" },
+    { href: "/work", label: "工作汇报" },
     { href: "/releases", label: "版本发布中心" },
     { href: "/people", label: "组织中心" },
     { href: "/hr", label: "智能人事" },
@@ -117,6 +119,7 @@
     "/stores": '<path d="M4 9 6 4h12l2 5"/><path d="M4 9h16v11H4z"/><path d="M9 20v-6h6v6"/>',
     "/academy": '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M8 7h8"/><path d="M8 11h6"/>',
     "/agents": '<rect x="6" y="8" width="12" height="10" rx="2"/><path d="M12 8V5"/><circle cx="9.5" cy="13" r="1"/><circle cx="14.5" cy="13" r="1"/><path d="M9 19v1h6v-1"/>',
+    "/work": '<rect x="7" y="3.5" width="10" height="17" rx="2"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/>',
     "/releases": '<path d="M12 4v10"/><path d="M8.5 7.5 12 4l3.5 3.5"/><rect x="6" y="14" width="12" height="6" rx="1"/>',
     "/me": '<circle cx="12" cy="8" r="2.6"/><path d="M6.2 18.5c.6-2.8 2.8-4.3 5.8-4.3s5.2 1.5 5.8 4.3"/>',
     "/notices": '<path d="M5 9v6"/><path d="M8 7v10"/><path d="M8 7l11-3v16L8 17"/>',
@@ -208,8 +211,11 @@
     return key === p || key.indexOf(p + "/") === 0;
   }
 
-  const MAIN = items.slice(0, 7);
-  const FOOT = items.slice(7);
+  const footStart = items.findIndex(function (item) {
+    return item.href === "/releases";
+  });
+  const MAIN = items.slice(0, footStart >= 0 ? footStart : 8);
+  const FOOT = items.slice(footStart >= 0 ? footStart : 8);
 
   function ico(name) {
     const path = ICO_PATH[name] || ICO_PATH["/data"];
