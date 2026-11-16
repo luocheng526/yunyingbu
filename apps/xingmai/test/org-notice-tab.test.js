@@ -32,7 +32,7 @@ test("people.js keeps 公告中心 as a tab after 改动日志", () => {
 
 test("nav.js no longer nests 公告中心 under 组织中心", () => {
   const js = readFileSync(join(root, "../public/shared/nav.js"), "utf8");
-  assert.match(js, /0\.1\.772-notice-tab/);
+  assert.match(js, /0\.1\.772-work-rpt2/);
   assert.match(js, /\{ href: "\/people", label: "组织中心" \}/);
   assert.doesNotMatch(js, /label: "组织中心", children:/);
   assert.match(js, /normalize\(href\) === "\/notices"/);

@@ -4,9 +4,10 @@ import { fileURLToPath } from "node:url";
 import * as profileShell from "../profile/middleware.js";
 import { NAV_ITEMS, orgNavFlags } from "./nav-items.js";
 import { hrRouter } from "../hr/router.js";
+import { workRouter } from "../work/router.js";
 
 // xm-upgrade-mask 0.1.52  必须和 profile/middleware.js 成套发。
-// xm-fast-shell 0.1.772-notice-tab
+// xm-fast-shell 0.1.772-work-rpt2
 // xm-login-session 登录会话回读必须和 profile/middleware.js 成套发。
 // login.html 不走 HTML 内存缓存，必须和 profile/middleware.js 成套发。
 
@@ -90,6 +91,7 @@ function bounceOtherCenter(req, res, dest) {
 
 export function registerPageRoutes(app) {
   app.use("/api/hr", hrRouter);
+  app.use("/api/work", workRouter);
   app.use((req, res, next) => {
     const method = String(req.method || "GET").toUpperCase();
     const path = String(req.path || "").replace(/\/+$/, "") || "/";

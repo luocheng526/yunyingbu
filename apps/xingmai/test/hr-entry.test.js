@@ -15,6 +15,10 @@ test("foot order is 版本发布中心, 组织中心, 智能人事, 个人中心
     NAV_MAIN.some((item) => item.href === "/hr"),
     false
   );
+  const agents = NAV_MAIN.findIndex((item) => item.href === "/agents");
+  const work = NAV_MAIN.findIndex((item) => item.href === "/work");
+  assert.ok(agents >= 0 && work === agents + 1);
+  assert.equal(NAV_MAIN[work].label, "工作汇报");
 });
 
 test("staff markup order is 版本发布中心, 组织中心, 智能人事, 个人中心", () => {
