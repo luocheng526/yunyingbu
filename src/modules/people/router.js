@@ -1,6 +1,7 @@
-import { Router } from "express";
+import express, { Router } from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { attachNoticesBeside, noticesRouter } from "../notices/router.js";
 import {
   CENTERS,
   POSTS,
@@ -75,6 +76,30 @@ async function resolveActor(req) {
 }
 
 export const peopleRouter = Router();
+peopleRouter.use("/notices", noticesRouter);
+
+function patchExpressUse(target) {
+  if (!target || typeof target.use !== "function" || target.__xmAttachNotices) {
+    return;
+  }
+  const orig = target.use;
+  target.use = function patchedUse(...args) {
+    const result = orig.apply(this, args);
+    try {
+      if (args.some((arg) => arg === peopleRouter)) {
+        const mountPath = typeof args[0] === "string" ? args[0] : "";
+        attachNoticesBeside(this, mountPath);
+      }
+    } catch (err) {
+      console.error("[notices] attach failed", err);
+    }
+    return result;
+  };
+  target.__xmAttachNotices = true;
+}
+
+patchExpressUse(express.application);
+patchExpressUse(express.Router);
 
 const peopleJsPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../public/shared/modules/people.js");
 

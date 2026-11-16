@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { bustPeopleHtml, rewritePeopleModuleUrl } from "./modules/people/asset-ver.js";
+import { attachNotices } from "./modules/notices/router.js";
 import { peopleRouter } from "./modules/people/router.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -14,6 +15,7 @@ export function createApp() {
   app.use(bustPeopleHtml);
   app.use(express.static(publicDir));
   app.use("/api/people", peopleRouter);
+  attachNotices(app);
   app.get("/people", (_req, res) => {
     const html = fs.readFileSync(path.join(publicDir, "people.html"), "utf8");
     res.type("html").send(rewritePeopleModuleUrl(html));
