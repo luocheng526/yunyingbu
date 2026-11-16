@@ -39,6 +39,7 @@ test("人事部账号登录只进智能人事，侧栏只留智能人事和个�
   assert.equal(html.includes("数据中心"), false);
   assert.equal(html.includes("工作汇报"), false);
   assert.equal(html.includes("需求与反馈"), false);
+  assert.equal(html.includes("月度大会"), false);
   assert.equal(html.includes("组织中心"), false);
 
   const app = createApp();
@@ -81,6 +82,10 @@ test("人事部账号登录只进智能人事，侧栏只留智能人事和个�
     assert.equal(feedback.status, 302);
     assert.equal(feedback.headers.get("location"), "/hr");
 
+    const meeting = await fetch(`${base}/meeting`, { headers: { cookie: hr.cookie }, redirect: "manual" });
+    assert.equal(meeting.status, 302);
+    assert.equal(meeting.headers.get("location"), "/hr");
+
     const page = await fetch(`${base}/hr`, { headers: { cookie: hr.cookie } });
     assert.equal(page.status, 200);
     const body = await page.text();
@@ -90,6 +95,7 @@ test("人事部账号登录只进智能人事，侧栏只留智能人事和个�
     assert.doesNotMatch(body, />数据中心</);
     assert.doesNotMatch(body, />工作汇报</);
     assert.doesNotMatch(body, />需求与反馈</);
+    assert.doesNotMatch(body, />月度大会</);
     assert.match(body, />个人中心</);
     assert.match(body, /"desk":"hr"/);
 

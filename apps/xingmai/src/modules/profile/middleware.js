@@ -7,10 +7,10 @@ import { currentUser, publicProfile } from "./auth.js";
 import { APP_ICON_PNG } from "./app-icon-png.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.772-feedback
+// xm-fast-shell 0.1.772-meeting
 // login.html 不走 HTML 内存缓存；login.css 禁止 immutable。必须和 home/pages.js 成套发。
 
-export const SHELL_ASSET_VER = "0.1.772-feedback";
+export const SHELL_ASSET_VER = "0.1.772-meeting";
 export const WEB_MANIFEST = {
   name: "星脉甄选运营中心",
   short_name: "星脉甄选",
@@ -83,6 +83,7 @@ export const APP_MODULES = {
   "/academy/handbook": "academy",
   "/agents": "agents",
   "/work": "work",
+  "/meeting": "meeting",
   "/feedback": "feedback",
   "/releases": "releases",
   "/me": "me",
@@ -121,6 +122,7 @@ const SHELL_TITLES = {
   "/academy/handbook": "运营手册",
   "/agents": "甄选智能体",
   "/work": "工作汇报",
+  "/meeting": "月度大会",
   "/feedback": "需求与反馈",
   "/releases": "版本发布中心",
   "/me": "个人中心",

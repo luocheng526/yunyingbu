@@ -21,6 +21,7 @@
 | [10-hr.md](10-hr.md) | 智能人事（新对话框用这一页当第一条消息） |
 | [11-feedback.md](11-feedback.md) | 需求与反馈（新对话框用这一页当第一条消息） |
 | [12-work.md](12-work.md) | 工作汇报（新对话框用这一页当第一条消息） |
+| [13-meeting.md](13-meeting.md) | 月度大会（新对话框用这一页当第一条消息） |
 | [06-releases.md](06-releases.md) | 版本发布中心 |
 | [07-profile.md](07-profile.md) | 个人中心 |
 
