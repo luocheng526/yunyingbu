@@ -1,10 +1,13 @@
 import { dbMode, query } from "../profile/auth.js";
+import { listPeople } from "../people/store.js";
 
 const KINDS = new Set(["request", "feedback"]);
-const STATUSES = new Set(["open", "doing", "closed"]);
+const STATUSES = new Set(["open", "doing", "closed", "rejected"]);
 const TITLE_MAX = 80;
 const BODY_MAX = 2000;
 const NOTE_MAX = 500;
+const SHOT_MAX = 80000;
+const SHOT_RE = /^data:image\/(?:jpeg|png|webp);base64,[a-z0-9+/=\s]+$/i;
 
 let ready = false;
 let seq = 0;
@@ -63,7 +66,9 @@ function cloneItem(item) {
     status: item.status,
     author: item.author,
     authorName: item.authorName,
+    managerName: item.managerName || "",
     note: item.note,
+    shot: item.shot || "",
     createdAt: item.createdAt,
     updatedAt: item.updatedAt
   };
@@ -97,12 +102,40 @@ async function ensureTables() {
       status VARCHAR(16) NOT NULL,
       author VARCHAR(64) NOT NULL,
       author_name VARCHAR(128) NOT NULL,
+      manager_name VARCHAR(128) NOT NULL DEFAULT '',
       note TEXT NOT NULL,
+      shot MEDIUMTEXT NULL,
       created_at VARCHAR(40) NOT NULL,
       updated_at VARCHAR(40) NOT NULL,
       KEY idx_feedback_author (author)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
   );
+  await ignoreDuplicate(() =>
+    query("ALTER TABLE feedback_items ADD COLUMN manager_name VARCHAR(128) NOT NULL DEFAULT ''")
+  );
+  await ignoreDuplicate(() => query("ALTER TABLE feedback_items ADD COLUMN shot MEDIUMTEXT NULL"));
+}
+
+async function ignoreDuplicate(work) {
+  try {
+    await work();
+  } catch (err) {
+    const message = String(err && err.message ? err.message : err);
+    if (!/Duplicate column|already exists|check that column/i.test(message)) {
+      throw err;
+    }
+  }
+}
+
+function cleanShot(value) {
+  const shot = String(value || "").replace(/\s+/g, "");
+  if (!shot) {
+    return "";
+  }
+  if (!SHOT_RE.test(shot) || shot.length > SHOT_MAX) {
+    return null;
+  }
+  return shot;
 }
 
 function rowToItem(row) {
@@ -116,7 +149,9 @@ function rowToItem(row) {
     status,
     author: text(row.author),
     authorName: text(row.author_name) || text(row.author),
+    managerName: text(row.manager_name),
     note: String(row.note || ""),
+    shot: String(row.shot || ""),
     createdAt: text(row.created_at),
     updatedAt: text(row.updated_at)
   };
@@ -125,7 +160,7 @@ function rowToItem(row) {
 async function hydrateMysql() {
   items.clear();
   const [rows] = await query(
-    "SELECT id, kind, title, body, status, author, author_name, note, created_at, updated_at FROM feedback_items"
+    "SELECT id, kind, title, body, status, author, author_name, manager_name, note, shot, created_at, updated_at FROM feedback_items"
   );
   let max = 0;
   for (const row of rows) {
@@ -155,6 +190,16 @@ async function readyStore() {
 function nextId() {
   seq += 1;
   return seq;
+}
+
+async function managerNameOf(authorName) {
+  try {
+    const people = await listPeople();
+    const person = people.find((item) => text(item.name) === authorName);
+    return text(person && person.managerName);
+  } catch {
+    return "";
+  }
 }
 
 export async function listItems(user, query) {
@@ -199,6 +244,14 @@ export async function createItem(user, body) {
   if (!who.author) {
     return { ok: false, statusCode: 400, error: "无法识别提交人" };
   }
+  const note = text(body && body.note);
+  if (note.length > NOTE_MAX) {
+    return { ok: false, statusCode: 400, error: "备注请控制在 500 字内" };
+  }
+  const shot = cleanShot(body && body.shot);
+  if (shot == null) {
+    return { ok: false, statusCode: 400, error: "截图太大或格式不对" };
+  }
   await readyStore();
   const stamp = nowStamp();
   const item = {
@@ -209,16 +262,30 @@ export async function createItem(user, body) {
     status: "open",
     author: who.author,
     authorName: who.authorName,
-    note: "",
+    managerName: await managerNameOf(who.authorName),
+    note,
+    shot,
     createdAt: stamp,
     updatedAt: stamp
   };
   if (dbMode() === "mysql") {
     const [result] = await query(
       `INSERT INTO feedback_items
-        (kind, title, body, status, author, author_name, note, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [item.kind, item.title, item.body, item.status, item.author, item.authorName, item.note, item.createdAt, item.updatedAt]
+        (kind, title, body, status, author, author_name, manager_name, note, shot, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        item.kind,
+        item.title,
+        item.body,
+        item.status,
+        item.author,
+        item.authorName,
+        item.managerName,
+        item.note,
+        item.shot,
+        item.createdAt,
+        item.updatedAt
+      ]
     );
     item.id = Number(result.insertId);
     if (item.id > seq) {
@@ -245,7 +312,7 @@ export async function updateItem(user, rawId, body) {
   }
   const status = text(body && body.status);
   if (!STATUSES.has(status)) {
-    return { ok: false, statusCode: 400, error: "请选择待处理、处理中或已关闭" };
+    return { ok: false, statusCode: 400, error: "请选择需求与任务、开发中、已完成或驳回" };
   }
   const hasNote = body && Object.prototype.hasOwnProperty.call(body, "note");
   const note = hasNote ? text(body.note) : null;
