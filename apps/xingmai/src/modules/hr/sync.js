@@ -208,6 +208,48 @@ function leaveCovers(leave, day) {
   return Boolean(start) && start <= day && end >= day;
 }
 
+export const BOARD_TEAMS = [
+  { id: "ops", title: "甄选运营团队看板" },
+  { id: "backend", title: "后端团队看板" },
+  { id: "total", title: "总看板" }
+];
+
+export function teamOf(department) {
+  const name = String(department || "");
+  if (name.includes("综合")) return "skip";
+  if (name.includes("运营") || name.includes("人事") || name.includes("技术")) return "ops";
+  return "backend";
+}
+
+export function usersForTeam(users, team) {
+  return (users || []).filter((user) => {
+    const kind = teamOf(user && user.department);
+    if (kind === "skip") return false;
+    if (team === "total") return true;
+    return kind === team;
+  });
+}
+
+export function boardPack({ date, users = [], punches = [], leaves = [], dates = [] }) {
+  return BOARD_TEAMS.map((team) => {
+    const picked = usersForTeam(users, team.id);
+    const ids = new Set(picked.map((user) => user.userId));
+    const scopedPunches = punches.filter((row) => ids.has(row.dingtalkUserId));
+    const scopedLeaves = leaves.filter((row) => ids.has(row.dingtalkUserId));
+    const days = dates.map((day) => {
+      const one = buildBoard({ date: day, users: picked, punches: scopedPunches, leaves: scopedLeaves });
+      return { date: day, expected: one.expected, punched: one.punched, late: one.late, leave: one.leave };
+    });
+    return {
+      id: team.id,
+      title: team.title,
+      board: buildBoard({ date, users: picked, punches: scopedPunches, leaves: scopedLeaves }),
+      days,
+      punches: rowsForDay(picked, scopedPunches, date)
+    };
+  });
+}
+
 export function shouldPullToday(parts, latestToday, today) {
   if (!parts || Number(parts.hour) < 10) return false;
   if (latestToday && latestToday.ok && latestToday.workDate === today) return false;

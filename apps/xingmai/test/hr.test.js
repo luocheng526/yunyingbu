@@ -20,6 +20,7 @@ import {
   saveLinks
 } from "../src/modules/hr/store.js";
 import {
+  boardPack,
   buildBoard,
   matchRoster,
   publicPerson,
@@ -27,7 +28,8 @@ import {
   pullDay,
   rowsForDay,
   runDaily,
-  shouldPullToday
+  shouldPullToday,
+  teamOf
 } from "../src/modules/hr/sync.js";
 
 for (const key of ["DINGTALK_CORP_ID", "DINGTALK_CLIENT_ID", "DINGTALK_CLIENT_SECRET"]) {
@@ -111,6 +113,13 @@ test("client mounts one page and five in-page tabs", () => {
   assert.match(client, /data-theme/);
   assert.match(client, /\/api\/people/);
   assert.match(client, /钉钉还没配置/);
+  const boardTitles = ["甄选运营团队看板", "后端团队看板", "总看板"];
+  let titleAt = 0;
+  for (const title of boardTitles) {
+    const at = client.indexOf(title);
+    assert.ok(at > titleAt, title);
+    titleAt = at;
+  }
   assert.equal(client.includes('class="hr-title"'), false);
   assert.equal(client.includes("每天一张"), false);
 });
@@ -201,6 +210,38 @@ test("today's attendance is pulled once after 10:00 Shanghai", () => {
   );
   assert.equal(rows[0].userName, "甲");
   assert.equal(rows[0].department, "运营二区");
+});
+
+test("ops board counts 运营 人事 技术, backend skips 综合部, total is the sum", () => {
+  assert.equal(teamOf("运营二区（沈子晗）"), "ops");
+  assert.equal(teamOf("人事部"), "ops");
+  assert.equal(teamOf("技术部"), "ops");
+  assert.equal(teamOf("综合部"), "skip");
+  assert.equal(teamOf("工商部"), "backend");
+  assert.equal(teamOf("客服部"), "backend");
+  const users = [
+    { userId: "a", department: "运营二区（沈子晗）" },
+    { userId: "b", department: "人事部" },
+    { userId: "c", department: "技术部" },
+    { userId: "d", department: "工商部" },
+    { userId: "e", department: "综合部" }
+  ];
+  const punches = users.map((user) => ({
+    dingtalkUserId: user.userId,
+    workDate: "2026-11-16",
+    checkAt: "2026-11-16 09:00",
+    timeResult: "Normal",
+    checkType: "OnDuty"
+  }));
+  const packs = boardPack({ date: "2026-11-16", users, punches, leaves: [], dates: ["2026-11-16"] });
+  assert.deepEqual(packs.map((item) => item.title), ["甄选运营团队看板", "后端团队看板", "总看板"]);
+  assert.equal(packs[0].board.staff, 3);
+  assert.equal(packs[0].board.punched, 3);
+  assert.equal(packs[1].board.staff, 1);
+  assert.equal(packs[1].board.departments[0].name, "工商部");
+  assert.equal(packs[2].board.staff, 4);
+  assert.equal(packs[0].punches.some((row) => row.department === "综合部"), false);
+  assert.equal(packs[2].punches.some((row) => row.department === "综合部"), false);
 });
 
 test("attendance board counts staff, punches, late arrivals, leave, and departments", () => {

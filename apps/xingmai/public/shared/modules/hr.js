@@ -90,7 +90,7 @@
       ".hr-board-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(240px,.8fr);gap:12px;}" +
       ".hr-board-card{padding:14px 16px 16px;}" +
       ".hr-board-card h3{margin:0 0 12px;font-size:14px;font-weight:650;color:var(--xm-ink);}" +
-      ".hr-bar-row{display:grid;grid-template-columns:88px minmax(0,1fr) 36px;gap:8px;align-items:center;margin:0 0 10px;}" +
+      ".hr-bar-row{display:grid;grid-template-columns:minmax(108px,168px) minmax(0,1fr) 36px;gap:8px;align-items:center;margin:0 0 10px;}" +
       ".hr-bar-name{color:var(--xm-muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}" +
       ".hr-bar-track{height:10px;border-radius:999px;background:color-mix(in srgb,var(--xm-primary) 12%,var(--xm-line));overflow:hidden;}" +
       ".hr-bar-fill{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#7a6cff,#3a63f5);}" +
@@ -100,6 +100,9 @@
       ".hr-day-col b{font-size:12px;color:var(--xm-ink);font-variant-numeric:tabular-nums;}" +
       ".hr-day-fill{width:100%;max-width:28px;border-radius:8px 8px 4px 4px;background:linear-gradient(180deg,#8d7cff,#3a63f5);min-height:4px;}" +
       ".hr-day-col span{color:var(--xm-muted);font-size:11px;}" +
+      ".hr-team{display:flex;flex-direction:column;gap:12px;}" +
+      ".hr-team + .hr-team{margin-top:8px;padding-top:16px;border-top:1px solid var(--xm-line);}" +
+      ".hr-team-title{margin:0;font-size:16px;font-weight:700;color:var(--xm-ink);}" +
       ".hr-board-sub{margin:4px 0 0;font-size:14px;font-weight:650;color:var(--xm-ink);}" +
       "@media (max-width:980px){.hr-board-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}.hr-board-grid{grid-template-columns:1fr;}}";
     document.head.appendChild(style);
@@ -210,14 +213,22 @@
     var monthBar = '<div class="hr-toolbar"><span>' + esc(hint) + '</span><label class="hr-month">月份<input type="month" data-month value="' + esc(month) + '" /></label></div>';
     var html = "";
     if (tab === "attendance") {
+      var teams = [
+        { id: "ops", title: "甄选运营团队看板" },
+        { id: "backend", title: "后端团队看板" },
+        { id: "total", title: "总看板" }
+      ];
       html = '<section class="hr-panel hr-board">' +
         '<div class="hr-board-head"><p class="hr-msg" data-msg></p>' +
         '<label class="hr-month">统计日<input type="date" data-day value="' + esc(today) + '" /></label></div>' +
-        '<div class="hr-board-kpis" data-board></div>' +
-        '<div class="hr-board-grid"><section class="hr-card hr-board-card" data-depts></section>' +
-        '<section class="hr-card hr-board-card" data-days></section></div>' +
-        '<h3 class="hr-board-sub">当日打卡</h3>' +
-        table(["姓名", "部门", "工号", "日期", "上班", "下班", "结果"], emptyRow(7, "还没有打卡")) + "</section>";
+        teams.map(function (team) {
+          return '<section class="hr-team" data-team="' + team.id + '"><h2 class="hr-team-title">' + esc(team.title) + "</h2>" +
+            '<div class="hr-board-kpis" data-board></div>' +
+            '<div class="hr-board-grid"><section class="hr-card hr-board-card" data-depts></section>' +
+            '<section class="hr-card hr-board-card" data-days></section></div>' +
+            '<h3 class="hr-board-sub">当日打卡</h3>' +
+            table(["姓名", "部门", "工号", "日期", "上班", "下班", "结果"], emptyRow(7, "还没有打卡")) + "</section>";
+        }).join("") + "</section>";
     } else if (tab === "overtime") {
       html = '<section class="hr-panel">' + monthBar + kpis([{ label: "加班总时长", value: "0" }]) +
         '<p class="hr-msg" data-msg></p>' + table(["姓名", "日期", "时长"], emptyRow(3, "还没有加班")) + "</section>";
@@ -266,8 +277,9 @@
     return "<i>" + '<svg viewBox="0 0 16 16" aria-hidden="true">' + (paths[kind] || "") + "</svg></i>";
   }
 
-  function fillBoard(root, pack) {
-    var board = pack.board || { staff: 0, expected: 0, punched: 0, late: 0, leave: 0, date: "", departments: [] };
+  function fillTeam(section, view) {
+    if (!section) return;
+    var board = (view && view.board) || { staff: 0, expected: 0, punched: 0, late: 0, leave: 0, date: "", departments: [] };
     var prefix = board.date && board.date === shanghaiToday() ? "今日" : "当日";
     var cards = [
       { tone: "staff", icon: "staff", label: "员工人数", value: board.staff || 0 },
@@ -276,7 +288,7 @@
       { tone: "late", icon: "late", label: prefix + "迟到人数", value: board.late || 0 },
       { tone: "leave", icon: "leave", label: prefix + "请假人数", value: board.leave || 0 }
     ];
-    var box = root.querySelector("[data-board]");
+    var box = section.querySelector("[data-board]");
     if (box) {
       box.innerHTML = cards.map(function (card) {
         return '<article class="hr-board-kpi hr-tone-' + card.tone + '">' + boardIcon(card.icon) +
@@ -285,18 +297,18 @@
     }
     var depts = board.departments || [];
     var maxCount = depts.reduce(function (max, row) { return Math.max(max, row.count || 0); }, 0) || 1;
-    var deptBox = root.querySelector("[data-depts]");
+    var deptBox = section.querySelector("[data-depts]");
     if (deptBox) {
       var rows = depts.length ? depts.map(function (row) {
         var width = Math.max(4, Math.round((row.count / maxCount) * 100));
         return '<div class="hr-bar-row"><span class="hr-bar-name">' + esc(row.name) + '</span><span class="hr-bar-track"><span class="hr-bar-fill" style="width:' +
           width + '%"></span></span><b>' + esc(row.count) + "</b></div>";
-      }).join("") : '<div class="hr-empty">还没有部门人数。钉钉名单拉下来之后按部门计数。</div>';
+      }).join("") : '<div class="hr-empty">这个范围还没有部门人数。</div>';
       deptBox.innerHTML = "<h3>" + esc(prefix) + "部门人数</h3>" + rows;
     }
-    var series = pack.days || [];
+    var series = (view && view.days) || [];
     var maxPunch = series.reduce(function (max, row) { return Math.max(max, row.punched || 0); }, 0) || 1;
-    var dayBox = root.querySelector("[data-days]");
+    var dayBox = section.querySelector("[data-days]");
     if (dayBox) {
       var cols = series.length ? series.map(function (row) {
         var height = Math.max(8, Math.round(((row.punched || 0) / maxPunch) * 96));
@@ -306,11 +318,7 @@
       }).join("") : '<div class="hr-empty">还没有每日统计。</div>';
       dayBox.innerHTML = "<h3>近 7 日打卡人数</h3>" + (series.length ? '<div class="hr-day-cols">' + cols + "</div>" : cols);
     }
-  }
-
-  function fillAttendance(root, pack) {
-    fillBoard(root, pack);
-    var days = pairPunches(pack.punches || []).sort(function (a, b) {
+    var days = pairPunches((view && view.punches) || []).sort(function (a, b) {
       return String(a.department).localeCompare(String(b.department), "zh") || String(a.userName).localeCompare(String(b.userName), "zh");
     });
     var body = days.length ? days.map(function (row) {
@@ -318,7 +326,17 @@
       return "<tr><td>" + esc(row.userName || "未命名") + "</td><td>" + esc(row.department) + "</td><td>" + esc(row.jobNumber) +
         "</td><td>" + esc(row.workDate) + "</td><td>" + esc(row.on) + "</td><td>" + esc(row.off) + "</td><td>" + esc(labels) + "</td></tr>";
     }).join("") : emptyRow(7, "还没有打卡");
-    setList(root, ["姓名", "部门", "工号", "日期", "上班", "下班", "结果"], body);
+    var list = section.querySelector("[data-list]");
+    if (list) list.outerHTML = table(["姓名", "部门", "工号", "日期", "上班", "下班", "结果"], body);
+  }
+
+  function fillAttendance(root, pack) {
+    var boards = pack.boards || [];
+    ["ops", "backend", "total"].forEach(function (id) {
+      var view = boards.filter(function (item) { return item.id === id; })[0];
+      if (!view && id === "ops" && pack.board) view = { board: pack.board, days: pack.days, punches: pack.punches };
+      fillTeam(root.querySelector('[data-team="' + id + '"]'), view || { board: {}, days: [], punches: [] });
+    });
     if (!pack.configured) setMsg(root, "钉钉还没配置，看板先按空模板放着。", false);
     else setMsg(root, "", false);
   }

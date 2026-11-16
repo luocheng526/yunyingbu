@@ -3,9 +3,8 @@ import { createDingClient, readDingEnv } from "./dingtalk.js";
 import { startDingStream } from "./stream.js";
 import {
   addDays,
-  buildBoard,
+  boardPack,
   loadRoster,
-  rowsForDay,
   runDaily,
   shanghaiToday,
   startScheduler
@@ -94,22 +93,22 @@ hrRouter.get("/board", async (req, res) => {
       ...row,
       dingtalkUserId: row.dingtalkUserId || userByPerson.get(row.personId) || ""
     }));
+    const dates = [];
     const punches = [];
     for (let offset = 6; offset >= 0; offset -= 1) {
-      punches.push(...await listPunches({ date: addDays(date, -offset) }));
-    }
-    const days = [];
-    for (let offset = 6; offset >= 0; offset -= 1) {
       const day = addDays(date, -offset);
-      const one = buildBoard({ date: day, users, punches, leaves });
-      days.push({ date: day, expected: one.expected, punched: one.punched, late: one.late, leave: one.leave });
+      dates.push(day);
+      punches.push(...await listPunches({ date: day }));
     }
+    const boards = boardPack({ date, users, punches, leaves, dates });
+    const first = boards[0];
     res.json({
       ok: true,
       configured: readDingEnv().configured,
-      board: buildBoard({ date, users, punches, leaves }),
-      days,
-      punches: rowsForDay(users, punches, date)
+      boards,
+      board: first.board,
+      days: first.days,
+      punches: first.punches
     });
   } catch (err) {
     sendErr(res, err);
