@@ -22,7 +22,8 @@ function shanghaiParts(date = new Date()) {
   const pick = (type) => parts.find((item) => item.type === type)?.value || "";
   return {
     ymd: `${pick("year")}-${pad2(Number(pick("month")))}-${pad2(Number(pick("day")))}`,
-    clock: `${pick("year")}/${Number(pick("month"))}/${Number(pick("day"))} ${pad2(Number(pick("hour")))}:${pick("minute")}:${pick("second")}`
+    clock: `${pick("year")}/${Number(pick("month"))}/${Number(pick("day"))} ${pad2(Number(pick("hour")))}:${pick("minute")}:${pick("second")}`,
+    hour: Number(pick("hour")) || 0
   };
 }
 
@@ -32,6 +33,10 @@ export function shanghaiNow(date = new Date()) {
 
 export function shanghaiYmd(date = new Date()) {
   return shanghaiParts(date).ymd;
+}
+
+export function shanghaiHour(date = new Date()) {
+  return shanghaiParts(date).hour;
 }
 
 function emptyDay() {
@@ -596,6 +601,56 @@ function mergeTodayHourly(base, incoming, replaceHours) {
   return out;
 }
 
+export function stampRunningHours(prev, total, hour = shanghaiHour()) {
+  const t = asNum(total);
+  const src = Array.isArray(prev) ? prev : [];
+  const out = Array.from({ length: 24 }, (_, i) => Number(src[i]) || 0);
+  const h = Math.min(23, Math.max(0, Number(hour) || 0));
+  if (t == null) {
+    return out.some((n) => n > 0) ? out : [];
+  }
+  let before = 0;
+  for (let i = 0; i < h; i += 1) {
+    before += out[i];
+  }
+  out[h] = Math.max(0, t - before);
+  for (let i = h + 1; i < 24; i += 1) {
+    out[i] = 0;
+  }
+  return out;
+}
+
+export function stampFlatHours(prev, value, hour = shanghaiHour()) {
+  const n = asNum(value);
+  const src = Array.isArray(prev) ? prev : [];
+  const out = Array.from({ length: 24 }, (_, i) => Number(src[i]) || 0);
+  const h = Math.min(23, Math.max(0, Number(hour) || 0));
+  if (n == null && !out.some((v) => v > 0)) {
+    return [];
+  }
+  if (n != null) {
+    out[h] = n;
+  }
+  for (let i = h + 1; i < 24; i += 1) {
+    out[i] = 0;
+  }
+  return out;
+}
+
+function stampHourlyTotals(hourly, summary, hour) {
+  const out = { ...(hourly || {}) };
+  if (asNum(summary && summary.liveAmount) != null) {
+    out.todayPay = stampRunningHours(out.todayPay, summary.liveAmount, hour);
+  }
+  if (asNum(summary && summary.spend) != null) {
+    out.todaySpend = stampRunningHours(out.todaySpend, summary.spend, hour);
+  }
+  if (asNum(summary && summary.feeRate) != null) {
+    out.todayFee = stampFlatHours(out.todayFee, summary.feeRate, hour);
+  }
+  return out;
+}
+
 export function rememberLocalPaidDay(pack = {}, ymd = shanghaiYmd()) {
   const snap = readSnap();
   if (snap.ymd && snap.ymd !== ymd) {
@@ -605,13 +660,20 @@ export function rememberLocalPaidDay(pack = {}, ymd = shanghaiYmd()) {
   snap.ymd = ymd;
   snap.today = snap.today || emptyDay();
   snap.yesterday = snap.yesterday || emptyDay();
-  const records = Array.isArray(pack.records) ? pack.records : [];
+  const hasIncomingRecords = Array.isArray(pack.records) && pack.records.length;
+  const records = hasIncomingRecords ? pack.records : snap.today.records || [];
   const incoming = pack.hourly && typeof pack.hourly === "object" ? pack.hourly : {};
-  const hourly = mergeTodayHourly(snap.today.hourly, incoming, pack.replaceHours === true);
-  const summary =
-    pack.summary && typeof pack.summary === "object"
-      ? { ...(snap.today.summary || {}), ...pack.summary }
-      : snap.today.summary || {};
+  let hourly = mergeTodayHourly(snap.today.hourly, incoming, pack.replaceHours === true);
+  let summary = { ...(snap.today.summary || {}) };
+  if (pack.summary && typeof pack.summary === "object") {
+    summary = { ...summary, ...pack.summary };
+  } else if (hasIncomingRecords) {
+    summary = { ...summary, ...summarizeRecords(records) };
+  }
+  if (ymd === shanghaiYmd()) {
+    const hour = Number.isFinite(Number(pack.hour)) ? Number(pack.hour) : shanghaiHour();
+    hourly = stampHourlyTotals(hourly, summary, hour);
+  }
   const hasHours = pickHours(hourly, "todayPay") || pickHours(hourly, "todaySpend") || pickHours(hourly, "todayFee");
   if (records.length || hasHours) {
     snap.today = {

@@ -12,7 +12,8 @@ import {
   rememberLocalPaidDay,
   setLocalPaidSnapPath,
   shanghaiNow,
-  shanghaiYmd
+  shanghaiYmd,
+  stampRunningHours
 } from "../src/modules/home/local-paid.js";
 import { homeRouter } from "../src/modules/home/router.js";
 
@@ -57,7 +58,7 @@ test("homepage local-paid route is mounted", async () => {
   }
 });
 
-test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
+test("live page uses Han+Shen paid totals and leaves paid for local return", () => {
   assert.match(homeJs, /function fillLocalPaid/);
   assert.match(homeJs, /function pullLocalPaid/);
   assert.match(homeJs, /\/api\/han\/worker\?view=overview/);
@@ -66,12 +67,15 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.match(homeJs, /function mergeLivePaid/);
   assert.match(homeJs, /function sortLiveShops/);
   assert.match(homeJs, /sortLiveShops\(feePickShops/);
-  assert.match(homeJs, /paidAmount: "—"/);
   assert.match(homeJs, /function liveCardsOf/);
   assert.match(homeJs, /label: "实时付费接入店铺数量"/);
   assert.match(homeJs, /实时只汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」/);
   assert.match(homeJs, /if \(stampClock \|\| !state\.liveAt\)/);
   assert.match(homeJs, /timeZone: "Asia\/Shanghai"/);
+  assert.match(homeJs, /fillLocalPaid\(blankLive\(\)/);
+  assert.doesNotMatch(homeJs, /\/api\/home\/erp-paid/);
+  assert.doesNotMatch(homeJs, /function liveFromErp/);
+  assert.doesNotMatch(homeJs, /function pullLiveKpis/);
   assert.doesNotMatch(homeJs, /京麦面板实时金额和实时付费都走星脉 ERP/);
   const pick = (name) => {
     const start = homeJs.indexOf("function " + name);
@@ -109,7 +113,7 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
       pick("normShopId") +
       pick("sumLocalPaid") +
       homeJs.slice(start, end) +
-      "return {fillLocalPaid,emptyLocalPaid,spendChartOf,hourCum,payFit};"
+      "return {fillLocalPaid,emptyLocalPaid,blankLive,spendChartOf,hourCum,payFit};"
   )();
   const live = {
     shops: [{ shop: "A店", liveAmount: "9", paidAmount: "—", roi: "—", paidDeal: "—", feeRate: "—" }],
@@ -152,36 +156,27 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.equal(withGmv.shops[0].liveAmount, "40");
   assert.equal(withGmv.shops[0].jzAccount, "999");
   assert.equal(withGmv.shops[0].paidIn, true);
-  const hanShenHero = fns.fillLocalPaid(
-    {
-      hero: {
-        label: "实时总成交金额",
-        value: "291,255",
-        todayHour: [18, 10, 5, 29],
-        yesterdayHour: [20, 12, 8, 40],
-        yestText: "381,894"
-      },
-      shops: [],
-      cards: [],
-      paid: { label: "推广总花费", value: "—" }
-    },
-    {
+  const hanShenHero = fns.fillLocalPaid(fns.blankLive(), {
+    records: [
+      { shopName: "韩店", paidAmount: 104524, paidDeal: 199764, jingmaiGmv: 251945, source: "han" },
+      { shopName: "沈店", paidAmount: 65585, paidDeal: 134741, jingmaiGmv: 154648, source: "shen" }
+    ],
+    yesterday: {
       records: [
-        { shopName: "韩店", paidAmount: 104524, paidDeal: 199764, jingmaiGmv: 251945, source: "han" },
-        { shopName: "沈店", paidAmount: 65585, paidDeal: 134741, jingmaiGmv: 154648, source: "shen" }
-      ],
-      yesterday: {
-        records: [
-          { shopName: "韩店", jingmaiGmv: 240000 },
-          { shopName: "沈店", jingmaiGmv: 140000 }
-        ]
-      }
+        { shopName: "韩店", jingmaiGmv: 240000 },
+        { shopName: "沈店", jingmaiGmv: 140000 }
+      ]
+    },
+    hourly: {
+      todayPay: [20, 40, 80, 60],
+      yesterdayPay: [30, 50, 70, 90]
     }
-  );
+  });
   assert.equal(hanShenHero.hero.value, "406,593");
   assert.notEqual(hanShenHero.hero.value, "291,255");
   assert.equal(hanShenHero.hero.yestText, "380,000");
-  assert.ok(Number(hanShenHero.hero.todayHour[0]) > 18);
+  assert.ok(hanShenHero.hero.todayHour.length > 2);
+  assert.ok(Number(hanShenHero.hero.todayHour[0]) > 0);
   assert.deepEqual(fns.payFit([2, 2], 10), [5, 5]);
   const shaped = fns.fillLocalPaid(
     {
@@ -737,9 +732,11 @@ test("local-paid POST keeps today hours without wiping yesterday", async () => {
     assert.equal(Array.isArray(data.yesterday.records), true);
     if (shanghaiYmd() !== "2026-11-12") {
       assert.equal(data.yesterday.records[0].paidAmount, 11);
-      assert.deepEqual(data.hourly.yesterdaySpend, [1, 2, 3]);
+      assert.deepEqual(data.hourly.yesterdaySpend.slice(0, 3), [1, 2, 3]);
     }
-    assert.deepEqual(data.hourly.todaySpend, [4, 5, 6]);
+    assert.equal(data.hourly.todaySpend[0], 4);
+    assert.equal(data.hourly.todaySpend[1], 5);
+    assert.equal(data.hourly.todaySpend[2], 6);
   } finally {
     setLocalPaidSnapPath(prev);
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
@@ -797,37 +794,75 @@ test("zero yesterday hours on the snap do not wipe ERP 成交 or flatten 付费"
       pick("normShopId") +
       pick("sumLocalPaid") +
       homeJs.slice(homeJs.indexOf("var LIVE_DAY_KEY"), homeJs.indexOf("function ownerOfShop")) +
-      "return {fillLocalPaid};"
+      "return {fillLocalPaid,blankLive};"
   )();
-  const out = fns.fillLocalPaid(
-    {
-      hero: {
-        label: "实时总成交金额",
-        value: "291,255",
-        todayHour: [18, 10, 5, 5, 19, 23],
-        yesterdayHour: [18, 10, 5, 3, 20, 35, 38],
-        yestText: "503,569"
-      },
-      shops: [{ shop: "A店", liveAmount: "100" }],
-      cards: [],
-      paid: { label: "推广总花费", value: "—" }
-    },
-    {
-      records: [{ shopName: "A店", paidAmount: 160, paidDeal: 300 }],
-      yesterday: { records: [{ shopName: "A店", paidAmount: 135, paidDeal: 280 }] },
-      hourly: {
-        todayPay: zeros,
-        yesterdayPay: zeros,
-        todaySpend: [8, 3, 12, 5, 9, 2, 11, 4],
-        yesterdaySpend: [4, 6, 2, 8, 8, 3, 10, 1]
-      }
+  const out = fns.fillLocalPaid(fns.blankLive(), {
+    records: [{ shopName: "A店", paidAmount: 160, paidDeal: 300, jingmaiGmv: 400 }],
+    yesterday: { records: [{ shopName: "A店", paidAmount: 135, paidDeal: 280, jingmaiGmv: 380 }] },
+    hourly: {
+      todayPay: zeros,
+      yesterdayPay: zeros,
+      todaySpend: [8, 3, 12, 5, 9, 2, 11, 4],
+      yesterdaySpend: [4, 6, 2, 8, 8, 3, 10, 1]
     }
-  );
-  assert.equal(out.hero.yesterdayHour[0], 18);
-  assert.equal(out.hero.yesterdayHour.length, 7);
+  });
+  assert.equal(out.hero.value, "400");
+  assert.notEqual(out.hero.value, "291,255");
+  assert.equal(out.hero.yestText, "380");
+  assert.equal((out.hero.yesterdayHour || []).length, 0);
   assert.ok(out.paid.yesterdayHour.length > 2);
   assert.notEqual(out.paid.yesterdayHour[0], out.paid.yesterdayHour[1]);
   assert.notEqual(out.paid.todayHour[0], out.paid.todayHour[2]);
+});
+
+test("local-paid stamps Han+Shen hourly totals onto the current hour", () => {
+  assert.deepEqual(stampRunningHours([10, 10, 10, 5], 60, 3), [
+    10, 10, 10, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+  ]);
+  const file = join(snapDir, "stamp-hours.json");
+  const prev = join(snapDir, "days.json");
+  setLocalPaidSnapPath(file);
+  const ymd = shanghaiYmd();
+  const snap = rememberLocalPaidDay(
+    {
+      records: [
+        { shopName: "韩店", paidAmount: 10, liveAmount: 40 },
+        { shopName: "沈店", paidAmount: 5, liveAmount: 20 }
+      ],
+      summary: { spend: 15, liveAmount: 60 },
+      hourly: { todayPay: [8, 8, 8, 8] },
+      hour: 3
+    },
+    ymd
+  );
+  const packed = postHomeLocalPaid({ hour: 3 }, ymd);
+  assert.equal(snap.today.summary.liveAmount, 60);
+  assert.equal(packed.hourly.todayPay[0], 8);
+  assert.equal(packed.hourly.todayPay[1], 8);
+  assert.equal(packed.hourly.todayPay[2], 8);
+  assert.equal(packed.hourly.todayPay[3], 36);
+  assert.equal(packed.hourly.todayPay.slice(4).every((n) => n === 0), true);
+  assert.equal(packed.records.length, 2);
+  setLocalPaidSnapPath(prev);
+});
+
+test("local-paid POST hours keep today's Han+Shen shop records", () => {
+  const file = join(snapDir, "keep-records.json");
+  const prev = join(snapDir, "days.json");
+  setLocalPaidSnapPath(file);
+  const ymd = shanghaiYmd();
+  rememberLocalPaidDay(
+    {
+      records: [{ shopName: "韩店", paidAmount: 10, liveAmount: 40 }],
+      summary: { spend: 10, liveAmount: 40 }
+    },
+    ymd
+  );
+  const posted = postHomeLocalPaid({ hourly: { todayPay: [4, 5, 6, 7], todaySpend: [1, 2, 3, 4] } }, ymd);
+  assert.equal(posted.records[0].shopName, "韩店");
+  assert.equal(posted.records[0].liveAmount, 40);
+  assert.ok(posted.hourly.todayPay.length === 24 || posted.hourly.todayPay.length >= 4);
+  setLocalPaidSnapPath(prev);
 });
 
 test("homepage reads 费比设置 from Han and Shen server APIs, not a local snap", async () => {
