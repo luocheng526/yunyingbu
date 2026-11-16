@@ -13,7 +13,7 @@
 - `src/modules/profile/`
 - `public/shared/modules/me.js`
 
-【你不能改】壳四件套、`nav-items.js`、人员名册、别人的业务页。
+【你不能改】壳四件套、`nav-items.js`、人员名册、别人的业务页。登录不要改成钉钉 SSO，除非主脑另下口令。
 
 【白名单（未登录可访问）】
 - `GET /login` 及登录页静态资源
