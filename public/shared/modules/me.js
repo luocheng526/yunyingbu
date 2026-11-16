@@ -36,6 +36,7 @@
       ".me-page button.me-btn{display:block;width:100%;border:0;border-radius:8px;padding:9px 12px;font:inherit;background:var(--xm-primary,#1677ff);color:#fff;cursor:pointer;}" +
       ".me-page button.me-btn-logout{margin-top:10px;background:#e11d48;}" +
       ".me-page button.me-btn-logout:hover{background:#be123c;}" +
+      ".me-page #me-hard-reload,.me-page .me-btn-hard{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;}" +
       ".me-page .status{min-height:1.2em;margin:0 0 8px;font-size:13px;}" +
       ".me-page .status.error{color:#b91c1c;}" +
       ".me-page .status.ok{color:#047857;}" +
@@ -82,6 +83,7 @@
         '<button class="me-btn" type="submit">保存新密码</button>' +
         "</form>" +
         '<form id="logout-form"><button class="me-btn me-btn-logout" type="submit">退出登录</button></form>' +
+        '<button type="button" id="me-hard-reload" class="me-btn-hard" tabindex="-1" aria-hidden="true">强制刷新</button>' +
         "</div></section>" +
         '<section class="panel">' +
         '<div class="me-rights-head"><h2>我的责权清单</h2>' +

@@ -148,6 +148,8 @@ test("login 罗成 sets cookie; GET /api/auth/me 200; wrong password 401", async
     assert.match(moduleJs.text, /退出登录/);
     assert.match(moduleJs.text, /me-btn-logout/);
     assert.match(moduleJs.text, /\/api\/auth\/logout/);
+    assert.match(moduleJs.text, /id="me-hard-reload"/);
+    assert.match(moduleJs.text, /me-btn-hard\{position:absolute/);
   });
 });
 
