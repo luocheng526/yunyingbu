@@ -1,4 +1,4 @@
-/* xm-module-people org-board 0.1.234-dept-boards */
+/* xm-module-people org-board 0.1.235-notice-tab */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -220,6 +220,9 @@
         '<button type="button" class="org-tab" data-pane="logs">' +
         '<span class="org-tab-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4.2" y="4.2" width="15.6" height="15.6" rx="2"/><path d="M8 8.4h8M8 12h8M8 15.6h5.2"/></svg></span>' +
         '<span class="org-tab-name">改动日志</span></button>' +
+        '<button type="button" class="org-tab" data-pane="notices">' +
+        '<span class="org-tab-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 9v6"/><path d="M8 7v10"/><path d="M8 7l11-3v16L8 17"/></svg></span>' +
+        '<span class="org-tab-name">公告中心</span></button>' +
         "</nav>" +
         '<div class="org-pane" data-pane="stores">' +
         '<div class="org-kpis" id="org-kpis"></div>' +
@@ -335,6 +338,8 @@
         '<section class="panel"><h2>改动日志</h2>' +
         '<div class="org-table-wrap"><table><thead><tr><th>时间</th><th>动作</th><th>摘要</th></tr></thead>' +
         '<tbody id="logs-tbody"></tbody></table></div></section></div>' +
+        '<div class="org-pane" data-pane="notices" hidden>' +
+        '<div id="org-notices-root"></div></div>' +
         '<div class="org-modal" id="org-modal">' +
         '<form class="org-dialog" id="org-form"><h3 id="org-form-title">新增店铺</h3>' +
         '<div class="org-grid">' +
@@ -2458,7 +2463,21 @@
         if (pane === "acl") {
           loadSiteAcl();
         }
+        if (pane === "notices" && window.__xmMountOrgNotices) {
+          window.__xmMountOrgNotices();
+        }
       });
+      try {
+        const pane = new URLSearchParams(window.location.search).get("pane");
+        if (pane === "notices" || window.__xmOrgPane === "notices") {
+          const tab = root.querySelector('.org-tab[data-pane="notices"]');
+          if (tab) {
+            tab.click();
+          }
+        }
+      } catch (_err) {
+        /* ignore */
+      }
 
       root.querySelector("#org-tabs").parentElement.addEventListener("click", function (event) {
         const btn = event.target.closest(".org-filter-btn");
@@ -3524,8 +3543,65 @@
           }
         });
         showShellTab();
+        const noticeRoot = document.getElementById("org-notices-root");
+        if (noticeRoot && typeof noticeRoot.__xmNoticeUnmount === "function") {
+          try {
+            noticeRoot.__xmNoticeUnmount();
+          } catch (_err) {
+            /* ignore */
+          }
+        }
         root.innerHTML = "";
       };
     }
+  };
+})();
+
+(function () {
+  function loadNotices(root) {
+    if (!root) {
+      return;
+    }
+    function mount() {
+      const mod = window.XmModules && window.XmModules["/notices"];
+      if (!mod || typeof mod.mount !== "function") {
+        return;
+      }
+      if (typeof root.__xmNoticeUnmount === "function") {
+        try {
+          root.__xmNoticeUnmount();
+        } catch (_err) {
+          /* ignore */
+        }
+      }
+      root.__xmNoticeUnmount = mod.mount(root);
+    }
+    if (
+      window.XmModules &&
+      window.XmModules["/notices"] &&
+      typeof window.XmModules["/notices"].mount === "function"
+    ) {
+      mount();
+      return;
+    }
+    const src = "/shared/modules/notices.js";
+    let script = document.querySelector('script[src^="' + src + '"]');
+    if (!script) {
+      script = document.createElement("script");
+      script.src = src;
+      script.onload = function () {
+        script.setAttribute("data-xm-loaded", "1");
+        mount();
+      };
+      document.head.appendChild(script);
+      return;
+    }
+    script.addEventListener("load", mount);
+    if (script.getAttribute("data-xm-loaded") === "1") {
+      mount();
+    }
+  }
+  window.__xmMountOrgNotices = function () {
+    loadNotices(document.getElementById("org-notices-root"));
   };
 })();
