@@ -4,6 +4,7 @@ import { startDingStream } from "./stream.js";
 import {
   addDays,
   boardPack,
+  canSeeHr,
   effortReport,
   loadRoster,
   runDaily,
@@ -13,9 +14,11 @@ import {
 import {
   HR_TABS,
   createInterview,
+  createOnboard,
   createRecruit,
   createTalent,
   deleteInterview,
+  deleteOnboard,
   deleteLink,
   deleteRecruit,
   deleteTalent,
@@ -23,6 +26,7 @@ import {
   listDingUsers,
   listInterviews,
   listLinks,
+  listOnboards,
   listRecruits,
   listLeaves,
   listOvertime,
@@ -52,6 +56,34 @@ function sendErr(res, err) {
 }
 
 hrRouter.use(requireUser);
+
+async function viewerAllowed(req) {
+  const [people, users] = await Promise.all([
+    loadRoster().catch(() => []),
+    listDingUsers().catch(() => [])
+  ]);
+  return canSeeHr(req.user, people, users);
+}
+
+hrRouter.get("/access", async (req, res) => {
+  try {
+    res.json({ ok: true, allowed: await viewerAllowed(req) });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.use(async (req, res, next) => {
+  try {
+    if (await viewerAllowed(req)) {
+      next();
+      return;
+    }
+    res.status(403).json({ ok: false, error: "没有智能人事权限" });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
 
 hrRouter.get("/", (_req, res) => {
   res.json({ ok: true, module: "hr", name: "智能人事", tabs: HR_TABS });
@@ -203,9 +235,9 @@ hrRouter.post("/sync", async (_req, res) => {
   }
 });
 
-hrRouter.get("/recruits", async (_req, res) => {
+hrRouter.get("/recruits", async (req, res) => {
   try {
-    res.json({ ok: true, recruits: await listRecruits() });
+    res.json({ ok: true, recruits: await listRecruits({ date: req.query.date }) });
   } catch (err) {
     sendErr(res, err);
   }
@@ -215,6 +247,31 @@ hrRouter.post("/recruits", async (req, res) => {
   try {
     const recruit = await createRecruit(req.body || {}, actorName(req));
     res.status(201).json({ ok: true, recruit });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.get("/onboards", async (_req, res) => {
+  try {
+    res.json({ ok: true, onboards: await listOnboards() });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.post("/onboards", async (req, res) => {
+  try {
+    const onboard = await createOnboard(req.body || {}, actorName(req));
+    res.status(201).json({ ok: true, onboard });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.delete("/onboards/:id", async (req, res) => {
+  try {
+    res.json({ ok: true, ...(await deleteOnboard(req.params.id)) });
   } catch (err) {
     sendErr(res, err);
   }

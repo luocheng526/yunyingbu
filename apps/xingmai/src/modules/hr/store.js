@@ -87,6 +87,23 @@ export const HR_SCHEMA = [
     inviter VARCHAR(64) NOT NULL DEFAULT '',
     note_text VARCHAR(500) NOT NULL DEFAULT '',
     detail_text VARCHAR(1000) NOT NULL DEFAULT '',
+    record_date VARCHAR(10) NOT NULL DEFAULT '',
+    created_by VARCHAR(64) NOT NULL DEFAULT '',
+    created_at VARCHAR(40) NOT NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS hr_onboards (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    person_name VARCHAR(64) NOT NULL,
+    gender VARCHAR(8) NOT NULL DEFAULT '',
+    department_name VARCHAR(64) NOT NULL DEFAULT '',
+    position_name VARCHAR(64) NOT NULL DEFAULT '',
+    joined_on VARCHAR(10) NOT NULL DEFAULT '',
+    phone VARCHAR(32) NOT NULL DEFAULT '',
+    hometown VARCHAR(64) NOT NULL DEFAULT '',
+    channel_name VARCHAR(64) NOT NULL DEFAULT '',
+    inviter VARCHAR(64) NOT NULL DEFAULT '',
+    note_text VARCHAR(500) NOT NULL DEFAULT '',
+    detail_text VARCHAR(1000) NOT NULL DEFAULT '',
     created_by VARCHAR(64) NOT NULL DEFAULT '',
     created_at VARCHAR(40) NOT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
@@ -125,6 +142,7 @@ function emptyMemory() {
     leaves: [],
     interviews: [],
     recruits: [],
+    onboards: [],
     talents: [],
     runs: []
   };
@@ -154,6 +172,7 @@ export function ensureHrSchema() {
       for (const sql of HR_SCHEMA) await query(sql);
       await migratePunchTable();
       await migrateDingUsers();
+      await migrateRecruitTable();
     })().catch((err) => {
       ready = null;
       throw err;
@@ -220,6 +239,25 @@ function inMonth(value, month) {
 
 function stamp(actor) {
   return { createdBy: clip(actor, 64), createdAt: new Date().toISOString() };
+}
+
+async function migrateRecruitTable() {
+  const columns = await rowsOf(
+    `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'hr_recruits'`
+  );
+  const names = new Set(columns.map((row) => row.COLUMN_NAME));
+  if (!names.has("record_date")) {
+    await query("ALTER TABLE hr_recruits ADD COLUMN record_date VARCHAR(10) NOT NULL DEFAULT ''");
+    await query(
+      `UPDATE hr_recruits
+       SET record_date = CASE
+         WHEN expected_join <> '' THEN LEFT(expected_join, 10)
+         ELSE LEFT(created_at, 10)
+       END
+       WHERE record_date = ''`
+    );
+  }
 }
 
 async function migratePunchTable() {
@@ -697,17 +735,25 @@ function mapRecruit(row) {
     inviter: row.inviter || "",
     note: row.note_text || "",
     detail: row.detail_text || "",
+    recordDate: row.record_date || "",
     createdBy: row.created_by || ""
   };
 }
 
-export async function listRecruits() {
+export async function listRecruits({ date = "" } = {}) {
   await ensureHrSchema();
+  const day = date ? mustDate(date, "日期") : "";
   if (dbMode() === "mysql") {
-    const rows = await rowsOf("SELECT * FROM hr_recruits ORDER BY id DESC");
+    const rows = await rowsOf(
+      day ? "SELECT * FROM hr_recruits WHERE record_date = ? ORDER BY id DESC" : "SELECT * FROM hr_recruits ORDER BY id DESC",
+      day ? [day] : []
+    );
     return rows.map(mapRecruit);
   }
-  return memory.recruits.map((row) => ({ ...row })).sort((a, b) => b.id - a.id);
+  return memory.recruits
+    .filter((row) => !day || row.recordDate === day)
+    .map((row) => ({ ...row }))
+    .sort((a, b) => b.id - a.id);
 }
 
 export async function createRecruit(input = {}, actor = "") {
@@ -723,14 +769,15 @@ export async function createRecruit(input = {}, actor = "") {
     inviter: clip(input.inviter, 64),
     note: clip(input.note, 500),
     detail: clip(input.detail, 1000),
+    recordDate: mustDate(input.recordDate, "日期"),
     ...stamp(actor)
   };
   if (dbMode() === "mysql") {
     const [result] = await query(
       `INSERT INTO hr_recruits
-        (person_name, gender, position_name, expected_join, phone, hometown, channel_name, inviter, note_text, detail_text, created_by, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [row.name, row.gender, row.position, row.expectedJoin, row.phone, row.hometown, row.channel, row.inviter, row.note, row.detail, row.createdBy, row.createdAt]
+        (person_name, gender, position_name, expected_join, phone, hometown, channel_name, inviter, note_text, detail_text, record_date, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [row.name, row.gender, row.position, row.expectedJoin, row.phone, row.hometown, row.channel, row.inviter, row.note, row.detail, row.recordDate, row.createdBy, row.createdAt]
     );
     row.id = Number(result.insertId);
     return row;
@@ -743,6 +790,70 @@ export async function createRecruit(input = {}, actor = "") {
 export async function deleteRecruit(id) {
   return removeRow("hr_recruits", memory.recruits, id, (next) => {
     memory.recruits = next;
+  });
+}
+
+function mapOnboard(row) {
+  return {
+    id: Number(row.id),
+    name: row.person_name,
+    gender: row.gender || "",
+    department: row.department_name || "",
+    position: row.position_name || "",
+    joinedOn: row.joined_on || "",
+    phone: row.phone || "",
+    hometown: row.hometown || "",
+    channel: row.channel_name || "",
+    inviter: row.inviter || "",
+    note: row.note_text || "",
+    detail: row.detail_text || "",
+    createdBy: row.created_by || ""
+  };
+}
+
+export async function listOnboards() {
+  await ensureHrSchema();
+  if (dbMode() === "mysql") {
+    const rows = await rowsOf("SELECT * FROM hr_onboards ORDER BY joined_on DESC, id DESC");
+    return rows.map(mapOnboard);
+  }
+  return memory.onboards.map((row) => ({ ...row })).sort((a, b) => String(b.joinedOn).localeCompare(String(a.joinedOn)) || b.id - a.id);
+}
+
+export async function createOnboard(input = {}, actor = "") {
+  await ensureHrSchema();
+  const row = {
+    name: mustName(input.name, "姓名"),
+    gender: optionalGender(input.gender),
+    department: clip(input.department, 64),
+    position: clip(input.position, 64),
+    joinedOn: optionalDate(input.joinedOn, "入职日期"),
+    phone: optionalPhone(input.phone),
+    hometown: clip(input.hometown, 64),
+    channel: clip(input.channel, 64),
+    inviter: clip(input.inviter, 64),
+    note: clip(input.note, 500),
+    detail: clip(input.detail, 1000),
+    ...stamp(actor)
+  };
+  if (dbMode() === "mysql") {
+    const [result] = await query(
+      `INSERT INTO hr_onboards
+        (person_name, gender, department_name, position_name, joined_on, phone, hometown, channel_name, inviter, note_text, detail_text, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [row.name, row.gender, row.department, row.position, row.joinedOn, row.phone, row.hometown, row.channel, row.inviter, row.note, row.detail, row.createdBy, row.createdAt]
+    );
+    row.id = Number(result.insertId);
+    return row;
+  }
+  row.id = seq++;
+  memory.onboards.push(row);
+  return { ...row };
+}
+
+export async function deleteOnboard(id) {
+  return removeRow("hr_onboards", memory.onboards, id, (next) => {
+    memory.onboards = next;
   });
 }
 

@@ -25,6 +25,7 @@ import {
   buildBoard,
   effortFromPunches,
   effortHours,
+  canSeeHr,
   effortReport,
   matchRoster,
   publicPerson,
@@ -54,14 +55,15 @@ function close(server) {
   return new Promise((resolve) => server.close(resolve));
 }
 
-async function request(server, path, { method = "GET", body, user = true } = {}) {
+async function request(server, path, { method = "GET", body, user = true, dept = "" } = {}) {
   const { port } = server.address();
   const res = await fetch(`http://127.0.0.1:${port}${path}`, {
     method,
     headers: {
       Accept: "application/json",
       ...(body ? { "Content-Type": "application/json" } : {}),
-      ...(user ? { "x-test-user": "luocheng" } : {})
+      ...(user ? { "x-test-user": user === true ? "luocheng" : String(user) } : {}),
+      ...(dept ? { "x-test-dept": dept } : {})
     },
     body: body ? JSON.stringify(body) : undefined
   });
@@ -73,7 +75,15 @@ function appWithUser() {
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
-    if (req.headers["x-test-user"]) req.user = { username: String(req.headers["x-test-user"]), displayName: "罗成" };
+    if (req.headers["x-test-user"]) {
+      const name = String(req.headers["x-test-user"]);
+      const presets = {
+        tech: { username: "tech", displayName: "郝晨淼", department: "技术部" },
+        hr: { username: "hr", displayName: "张璇", department: "人事部" },
+        other: { username: "other", displayName: "丙", department: "运营一组" }
+      };
+      req.user = presets[name] || { username: name, displayName: name === "luocheng" ? "罗成" : name };
+    }
     next();
   });
   app.use("/api/hr", hrRouter);
@@ -88,7 +98,7 @@ function jsonResponse(body) {
 }
 
 test("hr schema stays in hr_ tables", () => {
-  assert.equal(HR_SCHEMA.length, 10);
+  assert.equal(HR_SCHEMA.length, 11);
   for (const sql of HR_SCHEMA) {
     assert.match(sql, /CREATE TABLE IF NOT EXISTS hr_/);
     assert.doesNotMatch(sql, /people|han_|shen_/i);
@@ -491,6 +501,15 @@ test("stream ack answers ping and only pulls finished attendance approvals", () 
   assert.equal(started, null);
 });
 
+test("only named leaders and hr or tech departments can open hr", () => {
+  assert.equal(canSeeHr({ username: "luocheng", displayName: "罗成" }), true);
+  assert.equal(canSeeHr({ displayName: "韩梦凯" }), true);
+  assert.equal(canSeeHr({ displayName: "沈子晗" }), true);
+  assert.equal(canSeeHr({ displayName: "甲", department: "技术部" }), true);
+  assert.equal(canSeeHr({ displayName: "乙" }, [], [{ userName: "乙", department: "人事部" }]), true);
+  assert.equal(canSeeHr({ displayName: "丙", department: "运营一组" }), false);
+});
+
 test("http keeps attendance read-only and interviews in this module", async () => {
   resetHrStore();
   await saveLinks([]);
@@ -499,6 +518,13 @@ test("http keeps attendance read-only and interviews in this module", async () =
   try {
     const denied = await request(server, "/api/hr", { user: false });
     assert.equal(denied.status, 401);
+    const hidden = await request(server, "/api/hr", { user: "other" });
+    assert.equal(hidden.status, 403);
+    const tech = await request(server, "/api/hr/access", { user: "tech" });
+    assert.equal(tech.status, 200);
+    assert.equal(tech.data.allowed, true);
+    const hr = await request(server, "/api/hr/access", { user: "hr" });
+    assert.equal(hr.data.allowed, true);
     const home = await request(server, "/api/hr");
     assert.equal(home.status, 200);
     assert.deepEqual(home.data.tabs, ["看板", "奋斗时长", "招聘"]);
@@ -541,7 +567,8 @@ test("http keeps attendance read-only and interviews in this module", async () =
         channel: "BOSS",
         inviter: "李四",
         note: "下午联系",
-        detail: "可尽快到岗"
+        detail: "可尽快到岗",
+        recordDate: "2026-11-16"
       }
     });
     assert.equal(created.status, 201);
@@ -553,6 +580,13 @@ test("http keeps attendance read-only and interviews in this module", async () =
     assert.equal(listed[0].hometown, "安徽");
     assert.equal(listed[0].inviter, "李四");
     assert.equal(listed[0].detail, "可尽快到岗");
+    assert.equal(listed[0].recordDate, "2026-11-16");
+    const onboard = await request(server, "/api/hr/onboards", {
+      method: "POST",
+      body: { name: "周周", gender: "女", department: "运营一组", position: "运营", joinedOn: "2026-11-16", phone: "13800001111" }
+    });
+    assert.equal(onboard.status, 201);
+    assert.equal(onboard.data.onboard.department, "运营一组");
     const badGender = await request(server, "/api/hr/recruits", { method: "POST", body: { name: "甲", gender: "未知" } });
     assert.equal(badGender.status, 400);
     const removed = await request(server, `/api/hr/recruits/${created.data.recruit.id}`, { method: "DELETE" });

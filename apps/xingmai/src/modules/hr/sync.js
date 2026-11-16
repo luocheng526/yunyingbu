@@ -21,6 +21,30 @@ const TIME_LABEL = {
   NotSigned: "未打卡"
 };
 
+const HR_VIEWERS = new Set(["罗成", "韩梦凯", "沈子晗", "luocheng"]);
+
+export function canSeeHr(user, people = [], dingUsers = []) {
+  const names = [user && user.username, user && user.displayName, user && user.name]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  if (names.some((name) => HR_VIEWERS.has(name) || HR_VIEWERS.has(name.toLowerCase()))) return true;
+  const bags = [user && user.department, user && user.center, user && user.title, user && user.role];
+  for (const person of people || []) {
+    if (!person) continue;
+    const personNames = [person.name, person.username].map((value) => String(value || "").trim());
+    if (!names.some((name) => personNames.includes(name))) continue;
+    bags.push(person.department, person.center, person.role);
+  }
+  for (const ding of dingUsers || []) {
+    if (!ding) continue;
+    const dingName = String(ding.userName || ding.name || "").trim();
+    if (!names.includes(dingName)) continue;
+    bags.push(ding.department);
+  }
+  const text = bags.map((value) => String(value || "")).join(" ");
+  return text.includes("人事") || text.includes("技术");
+}
+
 export function publicPerson(row) {
   return {
     id: Number(row.id),

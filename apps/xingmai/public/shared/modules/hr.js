@@ -1,4 +1,4 @@
-/* xm-module-hr — 智能人事。只挂 /hr。假勤只读钉钉落库，招聘记在本库。 */
+/* xm-module-hr — 智能人事。只挂 /hr。假勤只读钉钉落库，招聘记在服务器上。 */
 (function () {
   var TABS = [
     { id: "attendance", label: "看板" },
@@ -257,8 +257,10 @@
         '<p class="hr-msg" data-msg></p>' +
         table(["姓名", "部门", "角色", "组织", "月累计"], emptyRow(5, "这个月还没有 18 点后的下班打卡")) + "</section>";
     } else {
-      html = '<section class="hr-panel"><div class="hr-toolbar"><span>招聘先记在本库。</span></div>' +
-        kpis([{ label: "人数", value: "0" }]) +
+      html = '<section class="hr-panel"><div class="hr-toolbar"><span>待入职按天填写，记录在服务器上。</span>' +
+        '<label class="hr-month">日期<input type="date" data-join-day value="' + esc(today) + '" /></label></div>' +
+        kpis([{ label: "待入职", value: "0" }, { label: "入职情况", value: "0" }]) +
+        '<h2 class="hr-team-title">待入职</h2>' +
         '<form class="hr-form hr-card" data-form="recruit">' +
         field("姓名", '<input name="name" required maxlength="64" autocomplete="off" />') +
         field("性别", '<select name="gender"><option value="">请选择</option>' + options(GENDERS, "") + "</select>") +
@@ -270,9 +272,25 @@
         field("邀约人", '<input name="inviter" maxlength="64" autocomplete="off" />') +
         field("备注", '<input name="note" maxlength="500" autocomplete="off" />', "hr-field-grow") +
         field("情况说明", '<textarea name="detail" maxlength="1000" rows="3"></textarea>', "hr-field-wide") +
-        '<button class="hr-primary" type="submit">登记</button></form>' +
+        '<button class="hr-primary" type="submit">登记待入职</button></form>' +
+        table(["姓名", "性别", "应聘岗位", "预计入职时间", "联系电话", "籍贯", "渠道", "邀约人", "备注", "情况说明", ""], emptyRow(11, "这一天还没有待入职")) +
+        '<h2 class="hr-team-title">入职情况表</h2>' +
+        '<form class="hr-form hr-card" data-form="onboard">' +
+        field("姓名", '<input name="name" required maxlength="64" autocomplete="off" />') +
+        field("性别", '<select name="gender"><option value="">请选择</option>' + options(GENDERS, "") + "</select>") +
+        field("入职部门", '<input name="department" maxlength="64" autocomplete="off" />') +
+        field("岗位", '<input name="position" maxlength="64" autocomplete="off" />') +
+        field("入职日期", '<input name="joinedOn" type="date" />') +
+        field("联系电话", '<input name="phone" maxlength="32" autocomplete="off" />') +
+        field("籍贯", '<input name="hometown" maxlength="64" autocomplete="off" />') +
+        field("渠道", '<input name="channel" maxlength="64" autocomplete="off" />') +
+        field("邀约人", '<input name="inviter" maxlength="64" autocomplete="off" />') +
+        field("备注", '<input name="note" maxlength="500" autocomplete="off" />', "hr-field-grow") +
+        field("情况说明", '<textarea name="detail" maxlength="1000" rows="3"></textarea>', "hr-field-wide") +
+        '<button class="hr-primary" type="submit">登记入职情况</button></form>' +
         '<p class="hr-msg" data-msg></p>' +
-        table(["姓名", "性别", "应聘岗位", "预计入职时间", "联系电话", "籍贯", "渠道", "邀约人", "备注", "情况说明", ""], emptyRow(11, "还没有招聘记录")) + "</section>";
+        table(["姓名", "性别", "入职部门", "岗位", "入职日期", "联系电话", "籍贯", "渠道", "邀约人", "备注", "情况说明", ""], emptyRow(12, "还没有入职情况")).replace("data-list", "data-onboards") +
+        "</section>";
     }
     root.querySelector(".hr-body").innerHTML = html;
     void today;
@@ -520,17 +538,32 @@
     setList(root, ["姓名", "电话", "目标岗位", "来源", "阶段", "备注", ""], body);
   }
 
+  function recruitCells(row, extra) {
+    return "<td>" + esc(row.name) + "</td><td>" + esc(row.gender) + "</td>" + extra +
+      "<td>" + esc(row.phone) + "</td><td>" + esc(row.hometown) + "</td><td>" + esc(row.channel) +
+      "</td><td>" + esc(row.inviter) + "</td><td>" + esc(row.note) + "</td><td>" + esc(row.detail) + "</td>";
+  }
+
   function fillRecruit(root, pack) {
     var rows = pack.recruits || [];
-    setStats(root, [{ label: "人数", value: rows.length }]);
+    var joined = pack.onboards || [];
+    setStats(root, [
+      { label: "待入职", value: rows.length },
+      { label: "入职情况", value: joined.length }
+    ]);
     var headers = ["姓名", "性别", "应聘岗位", "预计入职时间", "联系电话", "籍贯", "渠道", "邀约人", "备注", "情况说明", ""];
     var body = rows.length ? rows.map(function (row) {
-      return "<tr><td>" + esc(row.name) + "</td><td>" + esc(row.gender) + "</td><td>" + esc(row.position) +
-        "</td><td>" + esc(row.expectedJoin) + "</td><td>" + esc(row.phone) + "</td><td>" + esc(row.hometown) +
-        "</td><td>" + esc(row.channel) + "</td><td>" + esc(row.inviter) + "</td><td>" + esc(row.note) +
-        "</td><td>" + esc(row.detail) + "</td><td>" + removeBtn("recruit", row.id) + "</td></tr>";
-    }).join("") : emptyRow(11, "还没有招聘记录");
+      return "<tr>" + recruitCells(row, "<td>" + esc(row.position) + "</td><td>" + esc(row.expectedJoin) + "</td>") +
+        "<td>" + removeBtn("recruit", row.id) + "</td></tr>";
+    }).join("") : emptyRow(11, "这一天还没有待入职");
     setList(root, headers, body);
+    var onboardHeaders = ["姓名", "性别", "入职部门", "岗位", "入职日期", "联系电话", "籍贯", "渠道", "邀约人", "备注", "情况说明", ""];
+    var onboardBody = joined.length ? joined.map(function (row) {
+      return "<tr>" + recruitCells(row, "<td>" + esc(row.department) + "</td><td>" + esc(row.position) + "</td><td>" + esc(row.joinedOn) + "</td>") +
+        "<td>" + removeBtn("onboard", row.id) + "</td></tr>";
+    }).join("") : emptyRow(12, "还没有入职情况");
+    var box = root.querySelector("[data-onboards]");
+    if (box) box.outerHTML = table(onboardHeaders, onboardBody).replace("data-list", "data-onboards");
   }
 
   function monthQuery(root) {
@@ -551,7 +584,14 @@
     } else if (tab === "overtime") {
       dataReq = api("/api/hr/effort" + monthQuery(root));
     } else {
-      dataReq = api("/api/hr/recruits");
+      var dayInput = root.querySelector("[data-join-day]");
+      var day = dayInput && dayInput.value ? dayInput.value : shanghaiToday();
+      dataReq = Promise.all([
+        api("/api/hr/recruits?date=" + encodeURIComponent(day)),
+        api("/api/hr/onboards")
+      ]).then(function (pair) {
+        return Object.assign({}, pair[0], pair[1]);
+      });
     }
     Promise.all([peopleReq, statusReq, dataReq]).then(function (pack) {
       if (!state.alive || ticket !== state.ticket || state.tab !== tab) return;
@@ -562,6 +602,12 @@
       else fillRecruit(root, view);
     }).catch(function (err) {
       if (!state.alive || ticket !== state.ticket) return;
+      if (err.status === 403) {
+        var link = document.querySelector('a[href="/hr"]');
+        if (link) link.remove();
+        root.innerHTML = '<div class="xm-page hr-page"><p class="hr-msg is-error">没有智能人事权限</p></div>';
+        return;
+      }
       setMsg(root, err.message || "读取失败", true);
     });
   }
@@ -646,7 +692,7 @@
       var btn = event.target.closest("[data-act='delete']");
       if (!btn || !root.contains(btn)) return;
       if (!window.confirm("删除这条记录？")) return;
-      var kind = btn.getAttribute("data-kind") === "talent" ? "/talents/" : "/recruits/";
+      var kind = btn.getAttribute("data-kind") === "onboard" ? "/onboards/" : "/recruits/";
       api("/api/hr" + kind + btn.getAttribute("data-id"), { method: "DELETE" })
         .then(function () { loadTab(root, state); })
         .catch(function (err) { setMsg(root, err.message, true); });
@@ -657,13 +703,19 @@
       if (!form || !root.contains(form)) return;
       event.preventDefault();
       var kind = form.getAttribute("data-form");
-      var body = kind === "talent" ? {
+      var dayInput = root.querySelector("[data-join-day]");
+      var body = kind === "onboard" ? {
         name: formValue(form, "name"),
+        gender: formValue(form, "gender"),
+        department: formValue(form, "department"),
+        position: formValue(form, "position"),
+        joinedOn: formValue(form, "joinedOn"),
         phone: formValue(form, "phone"),
-        targetRole: formValue(form, "targetRole"),
-        source: formValue(form, "source"),
-        stage: formValue(form, "stage"),
-        note: formValue(form, "note")
+        hometown: formValue(form, "hometown"),
+        channel: formValue(form, "channel"),
+        inviter: formValue(form, "inviter"),
+        note: formValue(form, "note"),
+        detail: formValue(form, "detail")
       } : {
         name: formValue(form, "name"),
         gender: formValue(form, "gender"),
@@ -674,11 +726,12 @@
         channel: formValue(form, "channel"),
         inviter: formValue(form, "inviter"),
         note: formValue(form, "note"),
-        detail: formValue(form, "detail")
+        detail: formValue(form, "detail"),
+        recordDate: dayInput && dayInput.value ? dayInput.value : shanghaiToday()
       };
       var button = form.querySelector("button[type='submit']");
       if (button) button.disabled = true;
-      api("/api/hr/" + (kind === "talent" ? "talents" : "recruits"), { method: "POST", body: body })
+      api("/api/hr/" + (kind === "onboard" ? "onboards" : "recruits"), { method: "POST", body: body })
         .then(function () {
           form.reset();
           loadTab(root, state);
@@ -690,7 +743,7 @@
     root.addEventListener("click", onClick);
     root.addEventListener("submit", onSubmit);
     root.addEventListener("change", function (event) {
-      if (event.target && event.target.matches("[data-month], [data-day]")) loadTab(root, state);
+      if (event.target && event.target.matches("[data-month], [data-day], [data-join-day]")) loadTab(root, state);
     });
     loadTab(root, state);
     return function unmount() {
