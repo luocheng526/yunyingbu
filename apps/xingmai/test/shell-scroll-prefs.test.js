@@ -20,7 +20,7 @@ async function login(base, username, password = "ChangeMe123!") {
 }
 
 test("壳层工作区是唯一滚轮，不靠首页是否挂载", () => {
-  assert.equal(SHELL_ASSET_VER, "0.1.772-navhot");
+  assert.equal(SHELL_ASSET_VER, "0.1.772-tabs");
   assert.match(layoutCss, /\.xm-workspace\s*\{/);
   assert.match(layoutCss, /\.xm-workspace > \.xm-pane\.is-active/);
   assert.match(layoutCss, /overflow:\s*auto/);

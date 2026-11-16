@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-scroll 0.1.772-navhot v0.4.18 — 选中一级菜单走深色渐变 */
+/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs v0.4.18 — 页签贴回顶栏蓝线 */
 (function () {
-  const ASSET_VER = "0.1.772-navhot";
+  const ASSET_VER = "0.1.772-tabs";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
