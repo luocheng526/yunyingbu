@@ -1,8 +1,12 @@
 import {
+  CHANNEL_CARDS,
+  CHANNEL_COLUMNS,
   GOODS_CARDS,
   GOODS_COLUMNS,
   PAGES,
   START_ON,
+  TEAM_CARDS,
+  TEAM_COLUMNS,
   pageById,
   publicCatalog,
   tabById
@@ -250,15 +254,62 @@ function cardsFrom(payload, pref) {
   });
 }
 
-function columnsFrom(pref) {
-  const enabled = new Set((pref && pref.columns) || GOODS_COLUMNS.map((column) => column.key));
-  return GOODS_COLUMNS.map((column) => ({
+function columnSource(page) {
+  if (page && page.module === "channel") {
+    return CHANNEL_COLUMNS;
+  }
+  if (page && page.module === "team") {
+    return TEAM_COLUMNS;
+  }
+  return GOODS_COLUMNS;
+}
+
+function nameLabel(page, tab) {
+  const tabLabel = tab && tab.label ? tab.label : "";
+  if (page && page.module === "channel") {
+    if (/店铺/.test(tabLabel)) {
+      return "店铺";
+    }
+    if (/品类/.test(tabLabel)) {
+      return "品类";
+    }
+    if (/商品|热销/.test(tabLabel)) {
+      return "商品";
+    }
+    return "渠道";
+  }
+  if (page && page.module === "team") {
+    return /成员|个人|客服/.test(tabLabel) ? "成员" : "名称";
+  }
+  return "商品";
+}
+
+function columnsFrom(pref, page, tab) {
+  const source = columnSource(page);
+  const enabled = new Set((pref && pref.columns) || source.map((column) => column.key));
+  return source.map((column, index) => ({
     key: column.key,
-    label: column.label,
+    label: index === 0 && column.key === "name" ? nameLabel(page, tab) : column.label,
     on: enabled.has(column.key),
-    numeric: Boolean(column.numeric),
-    money: Boolean(column.money)
+    numeric: Boolean(column.numeric || column.money || column.rate),
+    money: Boolean(column.money),
+    rate: Boolean(column.rate),
+    aliases: column.aliases || []
   }));
+}
+
+function metricCards(defs, source, ready) {
+  return defs.map((card) => {
+    const value = ready && source ? pickAlias(source, [card.key].concat(card.aliases || [])) : null;
+    return {
+      key: card.key,
+      label: card.label,
+      on: true,
+      value: value == null || value === "" ? null : value,
+      rate: Boolean(card.rate),
+      money: Boolean(card.money)
+    };
+  });
 }
 
 async function loadScope(all, report, dim, from, to) {
@@ -379,9 +430,11 @@ export async function readView(query) {
     dim,
     view,
     shops,
-    columns: columnsFrom(pref),
-    cards: page.ops.includes("cards") ? cardsFrom(cardPage && cardPage.payload, pref) : [],
-    cardStatus: page.ops.includes("cards") ? (cardPage ? "ready" : "missing") : "",
+    columns: columnsFrom(pref, page, tab),
+    cards: page.ops.includes("cards")
+      ? cardsFrom(cardPage && cardPage.payload, pref)
+      : metricCards(page.module === "channel" ? CHANNEL_CARDS : page.module === "team" ? TEAM_CARDS : [], complete ? allSum : null, complete),
+    cardStatus: page.ops.includes("cards") ? (cardPage ? "ready" : "missing") : complete ? "ready" : "missing",
     coverage,
     rows: slice.map((row) => ({
       key: row.key,

@@ -1,7 +1,7 @@
 /* xm-module-bound — 边界 BI 工作台。只读本库，只请求 /api/bound。爬虫，非 ERP。 */
 (function () {
   var state = {
-    page: "productOverview",
+    page: "channelOverview",
     tab: "",
     dim: "sku",
     view: "list",
@@ -37,37 +37,60 @@
     var style = document.createElement("style");
     style.id = "bd-page-style";
     style.textContent = [
-      ".bd-app{display:grid;grid-template-columns:168px minmax(0,1fr);gap:12px;color:var(--xm-ink);}",
-      ".bd-side,.bd-main{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;}",
-      ".bd-side{padding:8px;}",
-      ".bd-mod{margin:8px 8px 4px;font-size:12px;opacity:.55;}",
-      ".bd-side button{display:block;width:100%;height:32px;margin:0 0 4px;padding:0 10px;border:0;border-radius:6px;background:transparent;color:var(--xm-ink);text-align:left;cursor:pointer;}",
-      ".bd-side button.is-on{background:var(--xm-primary-soft);color:var(--xm-primary);font-weight:650;}",
-      ".bd-main{padding:12px;min-width:0;}",
-      ".bd-note,.bd-banner{margin:0 0 10px;padding:8px 10px;border-radius:6px;background:var(--xm-bg);font-size:12px;line-height:1.5;}",
-      ".bd-banner.is-bad{color:#cf1322;}",
-      ".bd-bar,.bd-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 10px;}",
-      ".bd-bar h1{margin:0;font-size:16px;}",
-      ".bd-bar input,.bd-bar select,.bd-tools button,.bd-bar button{height:30px;border:1px solid var(--xm-line);border-radius:4px;background:var(--xm-card);color:var(--xm-ink);font:inherit;font-size:13px;}",
-      ".bd-tools button.is-on,.bd-tabs button.is-on{background:var(--xm-primary);color:#fff;border-color:var(--xm-primary);}",
-      ".bd-tabs{display:flex;flex-wrap:wrap;gap:0;border-bottom:1px solid var(--xm-line);margin-bottom:8px;}",
-      ".bd-tabs button{height:34px;padding:0 12px;border:0;background:transparent;color:var(--xm-ink);cursor:pointer;}",
-      ".bd-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 10px;}",
-      ".bd-card{padding:10px 12px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);}",
-      ".bd-card b{display:block;margin-top:6px;font-size:20px;}",
-      ".bd-card span,.bd-miss{color:var(--xm-ink);opacity:.62;font-size:12px;}",
+      ".bd-app{display:grid;grid-template-columns:156px minmax(0,1fr);min-height:640px;background:#f4f6fa;color:#1f2329;font-size:13px;}",
+      ".bd-side{background:#fff;border-right:1px solid #e6e8ee;padding:8px 0;}",
+      ".bd-mod{margin:12px 14px 4px;color:#86909c;font-size:12px;}",
+      ".bd-side button{display:block;width:100%;height:34px;padding:0 14px;border:0;background:transparent;color:#1f2329;text-align:left;cursor:pointer;}",
+      ".bd-side button.is-on{background:#e8f1ff;color:#3b6cff;font-weight:650;}",
+      ".bd-main{min-width:0;padding:16px 16px 24px;}",
+      ".bd-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:12px;}",
+      ".bd-head h1{margin:0;font-size:18px;font-weight:650;line-height:1.3;}",
+      ".bd-sub,.bd-status{margin:4px 0 0;color:#86909c;font-size:12px;line-height:1.5;}",
+      ".bd-banner{margin:6px 0 0;color:#d93025;font-size:12px;}",
+      ".bd-filters{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;align-items:center;}",
+      ".bd-filters input,.bd-filters select,.bd-tools button,.bd-tools a,.bd-pager button,.bd-panel button{height:30px;padding:0 10px;border:1px solid #e1e4ea;border-radius:4px;background:#fff;color:#1f2329;font:inherit;font-size:12px;text-decoration:none;line-height:28px;}",
+      ".bd-presets{display:flex;align-items:center;height:30px;padding:0 4px;border-radius:4px;background:#fff;}",
+      ".bd-presets button{height:24px;padding:0 8px;border:0;border-radius:4px;background:transparent;color:#4e5969;cursor:pointer;font:inherit;font-size:12px;}",
+      ".bd-presets button.is-on{background:#e8f1ff;color:#3b6cff;}",
+      ".bd-primary{height:30px;padding:0 12px;border:0;border-radius:4px;background:#3b6cff;color:#fff;cursor:pointer;font:inherit;font-size:12px;}",
+      ".bd-kpis{margin:0 0 12px;padding:12px;background:#fff;border:1px solid #eceff5;border-radius:6px;}",
+      ".bd-kpi-head{display:flex;gap:12px;align-items:center;margin-bottom:10px;font-size:14px;}",
+      ".bd-kpi-head span{color:#86909c;font-size:12px;}",
+      ".bd-kpi-row{display:flex;gap:8px;overflow:auto;}",
+      ".bd-kpi{min-width:148px;padding:8px 10px;border-radius:4px;background:#fafbfd;}",
+      ".bd-kpi span{display:block;color:#86909c;font-size:12px;}",
+      ".bd-kpi b{display:block;margin:6px 0 4px;font-size:22px;font-weight:650;letter-spacing:-.02em;}",
+      ".bd-kpi b.is-down{color:#d93025;}",
+      ".bd-kpi em{color:#86909c;font-style:normal;font-size:12px;}",
+      ".bd-tabs{display:flex;gap:4px;border-bottom:1px solid #e6e8ee;margin:0 0 12px;}",
+      ".bd-tabs button{height:36px;padding:0 12px;border:0;border-bottom:2px solid transparent;background:transparent;color:#4e5969;cursor:pointer;font:inherit;}",
+      ".bd-tabs button.is-on{color:#3b6cff;border-bottom-color:#3b6cff;font-weight:650;}",
+      ".bd-block{background:#fff;border:1px solid #eceff5;border-radius:6px;padding:12px;}",
+      ".bd-block + .bd-block{margin-top:12px;}",
+      ".bd-block-bar{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:8px;}",
+      ".bd-block-bar h2{margin:0;font-size:14px;font-weight:650;}",
+      ".bd-tools{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}",
+      ".bd-tools button.is-on{background:#e8f1ff;color:#3b6cff;border-color:#c9dbff;}",
+      ".bd-scroll{overflow:auto;}",
       ".bd-table{width:100%;border-collapse:collapse;font-size:12px;}",
-      ".bd-table th,.bd-table td{padding:8px;border-bottom:1px solid var(--xm-line);text-align:left;white-space:nowrap;}",
-      ".bd-table th{opacity:.6;}",
-      ".bd-gallery{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}",
-      ".bd-tile{min-height:120px;padding:12px;border:1px solid var(--xm-line);border-radius:8px;}",
-      ".bd-tile strong{display:block;font-size:16px;margin-bottom:6px;}",
-      ".bd-sum{display:flex;gap:16px;margin-top:8px;font-size:13px;}",
-      ".bd-panel{margin-top:8px;padding:8px;border:1px dashed var(--xm-line);border-radius:6px;}",
-      ".bd-panel label{display:flex;gap:6px;align-items:center;margin:4px 0;font-size:13px;}",
+      ".bd-table th,.bd-table td{padding:8px 10px;border-bottom:1px solid #f0f2f5;text-align:right;white-space:nowrap;}",
+      ".bd-table th:first-child,.bd-table td:first-child,.bd-table th:nth-child(2),.bd-table td:nth-child(2){text-align:left;}",
+      ".bd-table th{background:#fafafa;color:#86909c;font-weight:500;}",
+      ".bd-num{display:inline-block;min-width:56px;padding:2px 6px;border-radius:2px;text-align:right;}",
+      ".bd-num.is-up{background:#e8f8ef;color:#137333;}",
+      ".bd-num.is-down{background:#fdecea;color:#d93025;}",
+      ".bd-miss{color:#c0c4cc;}",
+      ".bd-linkish{padding:0;border:0;background:transparent;color:#3b6cff;cursor:pointer;font:inherit;font-size:12px;}",
+      ".bd-gallery{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;}",
+      ".bd-tile{min-height:120px;padding:12px;border:1px solid #eceff5;border-radius:6px;background:#fff;}",
+      ".bd-tile strong{display:block;margin-bottom:6px;font-size:14px;}",
+      ".bd-sum,.bd-pager{display:flex;gap:16px;align-items:center;margin-top:10px;color:#4e5969;font-size:12px;}",
+      ".bd-pager{justify-content:flex-end;}",
+      ".bd-panel{margin:0 0 12px;padding:10px 12px;background:#fff;border:1px solid #eceff5;border-radius:6px;}",
+      ".bd-panel label{display:flex;gap:6px;align-items:center;margin:4px 12px 4px 0;font-size:12px;}",
       ".bd-qr{width:180px;height:180px;object-fit:contain;background:#fff;}",
-      ".bd-detail{white-space:normal;font-size:12px;line-height:1.5;}",
-      "@media(max-width:900px){.bd-app{grid-template-columns:1fr}.bd-cards,.bd-gallery{grid-template-columns:1fr 1fr}}"
+      ".bd-detail{white-space:normal;text-align:left;font-size:12px;line-height:1.6;color:#4e5969;}",
+      "@media(max-width:900px){.bd-app{grid-template-columns:1fr}.bd-head{flex-direction:column}.bd-gallery{grid-template-columns:1fr 1fr}}"
     ].join("");
     if (document.head) {
       document.head.appendChild(style);
@@ -88,24 +111,6 @@
       });
     });
     return found;
-  }
-
-  function money(value) {
-    var num = Number(value);
-    if (!Number.isFinite(num)) {
-      return esc(value);
-    }
-    return num.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-
-  function plain(value, numeric) {
-    if (value == null || value === "") {
-      return '<span class="bd-miss">—</span>';
-    }
-    if (typeof value === "number" && numeric) {
-      return esc(String(Math.round(value * 100) / 100));
-    }
-    return esc(value);
   }
 
   function sumCell(sum, key) {
@@ -149,12 +154,133 @@
     }).join("");
   }
 
-  function renderBanner(data) {
-    if (!data || data.page.id === "link") {
+  var BLURBS = {
+    channelOverview: "全渠道经营指标、渠道与店铺数据使用同一统计口径。",
+    channelAnalysis: "按店铺查看经营、流量、业绩、地域和时段。",
+    channelAnalysisNew: "按链接、店铺、渠道对比关键指标。",
+    productOverview: "商品销售、流量和转化使用同一统计口径。",
+    productPanorama: "从渠道、SKU、地域和库存看商品全景。",
+    productOperation: "商品流量、搜索、推广和素材运营。",
+    productStock: "商品库存数量和可售状态。",
+    teamOverview: "团队链接、店铺、业绩和榜单。",
+    teamSkills: "岗位技能评估。",
+    teamMemberDetail: "成员管理的商品、店铺、团队、客服和类目。",
+    teamMemberProfile: "团队成员档案。",
+    myProjects: "当前账号在旧站工作台里的项目。",
+    personalCenter: "当前账号的个人资料。"
+  };
+
+  function iso(date) {
+    var month = String(date.getMonth() + 1).padStart(2, "0");
+    var day = String(date.getDate()).padStart(2, "0");
+    return date.getFullYear() + "-" + month + "-" + day;
+  }
+
+  function parseIso(value) {
+    var parts = String(value || "").split("-");
+    if (parts.length !== 3) {
+      return new Date();
+    }
+    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  }
+
+  function addDays(date, delta) {
+    var next = new Date(date.getTime());
+    next.setDate(next.getDate() + delta);
+    return next;
+  }
+
+  function presetRange(preset, anchorIso) {
+    var anchor = parseIso(anchorIso);
+    var end = iso(anchor);
+    if (preset === "day") {
+      return { from: end, to: end };
+    }
+    if (preset === "7") {
+      return { from: iso(addDays(anchor, -6)), to: end };
+    }
+    if (preset === "30") {
+      return { from: iso(addDays(anchor, -29)), to: end };
+    }
+    if (preset === "week") {
+      var weekday = anchor.getDay() || 7;
+      return { from: iso(addDays(anchor, 1 - weekday)), to: end };
+    }
+    if (preset === "month") {
+      var start = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+      return { from: iso(start), to: end };
+    }
+    if (preset === "year") {
+      return { from: anchor.getFullYear() + "-01-01", to: end };
+    }
+    return { from: state.from, to: state.to };
+  }
+
+  function activePreset() {
+    var anchor = state.to || iso(new Date());
+    var keys = ["7", "30", "day", "week", "month", "year"];
+    for (var i = 0; i < keys.length; i += 1) {
+      var range = presetRange(keys[i], anchor);
+      if (range.from === state.from && range.to === state.to) {
+        return keys[i];
+      }
+    }
+    return "";
+  }
+
+  function cnDate(value) {
+    var parts = String(value || "").split("-");
+    if (parts.length !== 3) {
       return "";
     }
+    return parts[0] + "年" + Number(parts[1]) + "月" + Number(parts[2]) + "日";
+  }
+
+  function metricOf(row, column) {
+    if (!column) {
+      return null;
+    }
+    if (column.key === "name") {
+      return row.name || (row.metrics && row.metrics.name) || "";
+    }
+    if (column.key === "shop") {
+      return row.shop || (row.metrics && row.metrics.shop) || "";
+    }
+    if (column.key === "owner") {
+      return row.owner || (row.metrics && row.metrics.owner) || "";
+    }
+    var metrics = row.metrics || {};
+    if (metrics[column.key] != null && metrics[column.key] !== "") {
+      return metrics[column.key];
+    }
+    var aliases = column.aliases || [];
+    for (var i = 0; i < aliases.length; i += 1) {
+      if (metrics[aliases[i]] != null && metrics[aliases[i]] !== "") {
+        return metrics[aliases[i]];
+      }
+    }
+    return null;
+  }
+
+  function formatCell(value, column) {
+    if (value == null || value === "") {
+      return '<span class="bd-miss">—</span>';
+    }
+    var num = Number(value);
+    if (!column || !column.numeric || !Number.isFinite(num)) {
+      return esc(value);
+    }
+    var whole = Math.abs(num) >= 100 && Math.abs(num - Math.round(num)) < 0.001;
+    var digits = column.rate || !whole ? 2 : 0;
+    var text = num.toLocaleString("zh-CN", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    if (column.rate) {
+      text += "%";
+    }
+    return '<span class="bd-num ' + (num < 0 ? "is-down" : "is-up") + '">' + esc(text) + "</span>";
+  }
+
+  function renderStatus(data) {
     var coverage = data.coverage || {};
-    var text = "爬虫，非 ERP。查询只读本库，不会因为刷新去旧站重抓。";
     var bad = "";
     if (coverage.status === "missing") {
       bad = "这段还有 " + ((coverage.missing || []).length) + " 天没采完，汇总留空，不当成 0。";
@@ -163,43 +289,85 @@
     } else if (coverage.status === "denied") {
       bad = "当前账号没有这个菜单。";
     }
-    return '<p class="bd-note">' + text + "</p>" + (bad ? '<p class="bd-banner is-bad">' + bad + "</p>" : '<p class="bd-banner">' + esc(data.sumNote || "") + "</p>");
+    var note = "爬虫，非 ERP。查询只读本库，不会因为刷新去旧站重抓。";
+    if (!bad && data.sumNote) {
+      note += esc(data.sumNote);
+    }
+    return '<p class="bd-status">' + note + "</p>" + (bad ? '<p class="bd-banner">' + bad + "</p>" : "");
   }
 
   function renderCards(data) {
     if (!data || !data.cards || !data.cards.length || state.panel === "cards") {
       return "";
     }
-    return '<div class="bd-cards">' + data.cards.filter(function (card) { return card.on; }).map(function (card) {
-      var value = data.cardStatus !== "ready" || card.value == null ? "未采完" : card.value;
-      return '<div class="bd-card"><span>' + esc(card.label) + '</span><b>' + esc(value) + "</b></div>";
-    }).join("") + "</div>";
+    var cards = data.cards.filter(function (card) { return card.on; }).map(function (card) {
+      var missing = data.cardStatus !== "ready" || card.value == null || card.value === "";
+      var text = missing ? "未采完" : formatCard(card);
+      var tone = !missing && Number(card.value) < 0 ? "is-down" : "";
+      return '<article class="bd-kpi"><span>' + esc(card.label) + '</span><b class="' + tone + '">' + text + "</b><em>达成率 —</em></article>";
+    }).join("");
+    return '<section class="bd-kpis"><div class="bd-kpi-head"><strong>综合指标</strong><span>渠道 ' + esc(data.total) + ' 个</span><span>店铺 ' + esc((data.shops || []).length) + " 个</span></div><div class=\"bd-kpi-row\">" + cards + "</div></section>";
   }
 
-  function renderTable(data) {
-    var columns = (data.columns || []).filter(function (column) { return column.on; });
-    if (state.view === "gallery") {
-      if (!data.rows.length) {
+  function formatCard(card) {
+    var num = Number(card.value);
+    if (!Number.isFinite(num)) {
+      return esc(card.value);
+    }
+    var whole = !card.rate && Math.abs(num) >= 100 && Math.abs(num - Math.round(num)) < 0.001;
+    var digits = card.rate || !whole ? 2 : 0;
+    var text = num.toLocaleString("zh-CN", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    return esc(card.rate ? text + "%" : text);
+  }
+
+  function renderTable(data, rows, columns) {
+    var list = rows || data.rows || [];
+    var cols = columns || (data.columns || []).filter(function (column) { return column.on; });
+    if (state.view === "gallery" && rows == null) {
+      if (!list.length) {
         return '<p class="bd-miss">' + (data.coverage.status === "ready" ? "这个范围内没有记录。" : "未采完") + "</p>";
       }
-      return '<div class="bd-gallery">' + data.rows.map(function (row) {
-        return '<article class="bd-tile"><strong>' + esc(row.name || "未命名") + "</strong><div>" + esc(row.shop) + "</div><div>" + esc(row.metrics.payAmount == null ? "—" : row.metrics.payAmount) + "</div></article>";
+      return '<div class="bd-gallery">' + list.map(function (row) {
+        return '<article class="bd-tile"><strong>' + esc(row.name || "未命名") + "</strong><div>" + esc(row.shop) + "</div><div>" + formatCell(metricOf(row, { key: "payAmount", numeric: true, money: true, aliases: ["gmv", "xse"] }), { key: "payAmount", numeric: true, money: true }) + "</div></article>";
       }).join("") + "</div>";
     }
-    var head = "<tr><th></th>" + columns.map(function (column) { return "<th>" + esc(column.label) + "</th>"; }).join("") + "</tr>";
-    var body = data.rows.map(function (row) {
-      var cells = columns.map(function (column) {
-        return "<td>" + plain(row.metrics[column.key], column.numeric) + "</td>";
+    var head = "<tr><th></th>" + cols.map(function (column) { return "<th>" + esc(column.label) + "</th>"; }).join("") + "</tr>";
+    var body = list.map(function (row) {
+      var cells = cols.map(function (column) {
+        return "<td>" + formatCell(metricOf(row, column), column) + "</td>";
       }).join("");
-      var detail = state.open[row.key] ? '<tr><td colspan="' + (columns.length + 1) + '" class="bd-detail">' + row.fields.map(function (field) {
+      var detail = row.fields && state.open[row.key] ? '<tr><td colspan="' + (cols.length + 1) + '" class="bd-detail">' + row.fields.map(function (field) {
         return "<div>" + esc(field.key) + "：" + esc(field.value) + "</div>";
       }).join("") + '<label>跟进 <input data-act="mark" data-key="' + esc(row.key) + '" data-field="follow" value="' + esc(row.follow) + '"></label><label>打标 <input data-act="mark" data-key="' + esc(row.key) + '" data-field="tag" value="' + esc(row.tag) + '"></label><label>目标 <input data-act="mark" data-key="' + esc(row.key) + '" data-field="target" value="' + esc(row.target) + '"></label></td></tr>' : "";
-      return '<tr><td><button type="button" data-act="expand" data-key="' + esc(row.key) + '">明细</button></td>' + cells + "</tr>" + detail;
+      var opener = row.fields ? '<button type="button" class="bd-linkish" data-act="expand" data-key="' + esc(row.key) + '">明细</button>' : "";
+      return "<tr><td>" + opener + "</td>" + cells + "</tr>" + detail;
     }).join("");
-    if (!data.rows.length) {
-      body = '<tr><td colspan="' + (columns.length + 1) + '">' + (data.coverage.status === "ready" ? "这个范围内没有记录。" : "未采完") + "</td></tr>";
+    if (!list.length) {
+      body = '<tr><td colspan="' + (cols.length + 1) + '">' + (data.coverage.status === "ready" ? "这个范围内没有记录。" : "未采完") + "</td></tr>";
     }
-    return '<div style="overflow:auto"><table class="bd-table">' + head + body + "</table></div>";
+    return '<div class="bd-scroll"><table class="bd-table">' + head + body + "</table></div>";
+  }
+
+  function renderShopBlock(data) {
+    if (!data.page || data.page.id !== "channelOverview" || !(data.shops || []).length) {
+      return "";
+    }
+    var columns = (data.columns || []).filter(function (column) { return column.on; }).map(function (column, index) {
+      if (index === 0) {
+        return { key: "name", label: "店铺", numeric: false, aliases: [] };
+      }
+      return column;
+    });
+    var byShop = {};
+    (data.rows || []).forEach(function (row) {
+      if (row.shop) {
+        byShop[row.shop] = row;
+      }
+    });
+    var rows = data.shops.map(function (shop) {
+      return byShop[shop] || { key: "shop-" + shop, name: shop, shop: shop, metrics: {}, fields: null };
+    });
+    return '<section class="bd-block"><div class="bd-block-bar"><h2>店铺列表</h2></div>' + renderTable(data, rows, columns) + "</section>";
   }
 
   function renderSums(data) {
@@ -228,7 +396,7 @@
     var accounts = (link.accounts || []).map(function (account) {
       return '<button type="button" data-act="pick" data-company="' + esc(account.companyId) + '">' + esc(account.companyName || account.name || account.companyId) + "</button>";
     }).join("");
-    return '<section class="bd-main" data-bound-erp="false"><h1>扫码连接旧站</h1><p class="bd-note">二维码来自旧站官方登录接口，和登录页同一张。扫码后服务器沿用这个会话补采，页面查询不再打旧站。</p><p>' + esc(link.message || "") + "</p><p>浏览器标识 " + esc(link.deviceId || "") + "</p>" + qr + '<div class="bd-tools"><button type="button" data-act="scan" data-provider="WECHAT">微信</button><button type="button" data-act="scan" data-provider="FEISHU">飞书</button><button type="button" data-act="scan" data-provider="DINGTALK">钉钉</button><button type="button" data-act="scan" data-provider="QYWX">企业微信</button></div>' + accounts + "</section>";
+    return '<section class="bd-main" data-bound-erp="false"><header class="bd-head"><div><h1>扫码连接旧站</h1><p class="bd-sub">二维码来自旧站官方登录接口，和登录页同一张。扫码后服务器沿用这个会话补采，页面查询不再打旧站。</p><p class="bd-status">爬虫，非 ERP。浏览器标识 ' + esc(link.deviceId || "") + "</p></div></header><section class=\"bd-block\"><p>" + esc(link.message || "") + "</p>" + qr + '<div class="bd-tools"><button type="button" data-act="scan" data-provider="WECHAT">微信</button><button type="button" data-act="scan" data-provider="FEISHU">飞书</button><button type="button" data-act="scan" data-provider="DINGTALK">钉钉</button><button type="button" data-act="scan" data-provider="QYWX">企业微信</button>' + accounts + "</div></section></section>";
   }
 
   function renderMain() {
@@ -240,32 +408,38 @@
     if (!data || !meta) {
       return '<section class="bd-main"><p class="bd-miss">' + esc(state.error || "正在读取本库") + "</p></section>";
     }
-    var ops = meta.ops || [];
+    var ops = (data.page && data.page.ops) || meta.ops || [];
     var tabs = (data.tabs || []).map(function (tab) {
       return '<button type="button" data-act="tab" data-tab="' + esc(tab.id) + '" class="' + (data.tab && data.tab.id === tab.id ? "is-on" : "") + '">' + esc(tab.label) + "</button>";
     }).join("");
     var shops = '<option value="">全部店铺</option>' + (data.shops || []).map(function (shop) {
       return '<option value="' + esc(shop) + '"' + (shop === state.shop ? " selected" : "") + ">" + esc(shop) + "</option>";
     }).join("");
+    var preset = activePreset();
+    var presetButtons = [["7", "7天"], ["30", "30天"], ["day", "日"], ["week", "周"], ["month", "月"], ["year", "年"]].map(function (item) {
+      return '<button type="button" data-act="preset" data-preset="' + item[0] + '" class="' + (preset === item[0] ? "is-on" : "") + '">' + item[1] + "</button>";
+    }).join("");
+    var setting = (data.cards && data.cards.length) ? "cards" : "columns";
+    var tabLabel = data.tab && data.tab.label ? data.tab.label : data.page.label;
     return '<section class="bd-main" data-bound-erp="false" data-page="' + esc(data.page.id) + '" data-coverage="' + esc(data.coverage.status) + '">' +
-      renderBanner(data) +
-      '<div class="bd-bar"><h1>' + esc(data.page.label) + '</h1>' +
-      (ops.indexOf("date") >= 0 ? '<input data-act="from" type="date" value="' + esc(data.range.from) + '"><input data-act="to" type="date" value="' + esc(data.range.to) + '">' : "") +
+      '<header class="bd-head"><div><h1>' + esc(data.page.label) + '</h1><p class="bd-sub">' + esc(BLURBS[data.page.id] || "") + "</p>" + renderStatus(data) + "</div>" +
+      '<div class="bd-filters">' +
+      (ops.indexOf("date") >= 0 ? '<span class="bd-sub">统计时间：' + esc(cnDate(data.range.to)) + '</span><div class="bd-presets">' + presetButtons + '</div><input data-act="from" type="date" value="' + esc(data.range.from) + '"><input data-act="to" type="date" value="' + esc(data.range.to) + '">' : "") +
       (ops.indexOf("shop") >= 0 ? "<select data-act=\"shop\">" + shops + "</select>" : "") +
       (ops.indexOf("search") >= 0 ? '<input data-act="q" value="' + esc(state.q) + '" placeholder="搜索商品、店铺、负责人">' : "") +
-      "</div>" +
-      '<div class="bd-tools">' +
-      (ops.indexOf("dim") >= 0 ? '<button type="button" data-act="dim" data-dim="spu" class="' + (state.dim === "spu" ? "is-on" : "") + '">SPU</button><button type="button" data-act="dim" data-dim="sku" class="' + (state.dim === "sku" ? "is-on" : "") + '">SKU</button>' : "") +
-      (ops.indexOf("views") >= 0 ? '<button type="button" data-act="view" data-view="list" class="' + (state.view === "list" ? "is-on" : "") + '">列表</button><button type="button" data-act="view" data-view="period" class="' + (state.view === "period" ? "is-on" : "") + '">周期</button><button type="button" data-act="view" data-view="gallery" class="' + (state.view === "gallery" ? "is-on" : "") + '">大图</button>' : "") +
-      (ops.indexOf("cards") >= 0 ? '<button type="button" data-act="panel" data-panel="cards">指标设置</button>' : "") +
-      (ops.indexOf("export") >= 0 ? '<a href="/api/bound/export?' + esc(queryString()) + '">导出</a>' : "") +
-      '<button type="button" data-act="panel" data-panel="columns">字段</button></div>' +
-      (tabs ? '<div class="bd-tabs">' + tabs + "</div>" : "") +
+      '<button type="button" class="bd-primary" data-act="panel" data-panel="' + setting + '">设定指标</button></div></header>' +
       renderCards(data) +
       renderPanel(data) +
+      (tabs ? '<div class="bd-tabs">' + tabs + "</div>" : "") +
+      '<section class="bd-block"><div class="bd-block-bar"><h2>' + esc(tabLabel) + '</h2><div class="bd-tools">' +
+      (ops.indexOf("dim") >= 0 ? '<button type="button" data-act="dim" data-dim="spu" class="' + (state.dim === "spu" ? "is-on" : "") + '">SPU</button><button type="button" data-act="dim" data-dim="sku" class="' + (state.dim === "sku" ? "is-on" : "") + '">SKU</button>' : "") +
+      (ops.indexOf("views") >= 0 ? '<button type="button" data-act="view" data-view="list" class="' + (state.view === "list" ? "is-on" : "") + '">列表</button><button type="button" data-act="view" data-view="period" class="' + (state.view === "period" ? "is-on" : "") + '">周期</button><button type="button" data-act="view" data-view="gallery" class="' + (state.view === "gallery" ? "is-on" : "") + '">大图</button>' : "") +
+      (ops.indexOf("export") >= 0 ? '<a href="/api/bound/export?' + esc(queryString()) + '">导出</a>' : "") +
+      '<button type="button" data-act="panel" data-panel="columns">更多</button></div></div>' +
       renderTable(data) +
       renderSums(data) +
-      '<div class="bd-tools"><button type="button" data-act="page-no" data-delta="-1">上一页</button><span>第 ' + esc(data.pageNo) + ' 页</span><button type="button" data-act="page-no" data-delta="1">下一页</button></div></section>';
+      '<div class="bd-pager"><span>共 ' + esc(data.total) + ' 条</span><button type="button" data-act="page-no" data-delta="-1">上一页</button><span>第 ' + esc(data.pageNo) + ' 页</span><button type="button" data-act="page-no" data-delta="1">下一页</button></div></section>' +
+      renderShopBlock(data) + "</section>";
   }
 
   function render(root) {
@@ -306,6 +480,9 @@
     }
     if (view.ok) {
       state.viewData = await view.json();
+      if (state.viewData.page && state.viewData.page.id && state.page !== "link") {
+        state.page = state.viewData.page.id;
+      }
       if (state.viewData.range) {
         state.from = state.viewData.range.from;
         state.to = state.viewData.range.to;
@@ -350,6 +527,11 @@
         return;
       } else if (act === "page-no") {
         state.pageNo = Math.max(1, state.pageNo + Number(node.getAttribute("data-delta") || 0));
+      } else if (act === "preset") {
+        var range = presetRange(node.getAttribute("data-preset"), state.to || iso(new Date()));
+        state.from = range.from;
+        state.to = range.to;
+        state.pageNo = 1;
       } else if (act === "scan") {
         fetch("/api/bound/link/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: node.getAttribute("data-provider") }) }).then(function () {
           return load(root, token);

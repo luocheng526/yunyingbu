@@ -237,6 +237,53 @@ export const GOODS_CARDS = [
   { key: "refundRate", label: "退款率", aliases: ["refundRate"], rate: true }
 ];
 
+export const CHANNEL_COLUMNS = [
+  { key: "name", label: "渠道", aliases: ["channelName", "platformName", "name", "title"] },
+  { key: "realTimeGmv", label: "实时销售额(支付)", aliases: ["realTimeGmv", "ssxse"], numeric: true, money: true },
+  { key: "payAmount", label: "支付金额(支付)", aliases: ["payAmount", "gmv", "xse"], numeric: true, money: true },
+  { key: "netGmv", label: "净销售额(支付)", aliases: ["netGmv", "jxse"], numeric: true, money: true },
+  { key: "sales", label: "销售件数(支付)", aliases: ["sales", "xsjs", "saleCount"], numeric: true },
+  { key: "refund", label: "退款数", aliases: ["refund", "refundCount", "thtkjs"], numeric: true },
+  { key: "refundRate", label: "退款率(退款金额)", aliases: ["refundRate", "tkl"], numeric: true, rate: true },
+  { key: "saleCost", label: "商品成本(支付)", aliases: ["saleCost", "xshf"], numeric: true, money: true },
+  { key: "netHpCost", label: "净商品成本(支付)", aliases: ["netHpCost", "jhpcb"], numeric: true, money: true },
+  { key: "jhpcbzb", label: "净商品成本占比(支付)", aliases: ["jhpcbzb"], numeric: true, rate: true },
+  { key: "cost", label: "推广花费(支付预估)", aliases: ["cost", "tghf"], numeric: true, money: true },
+  { key: "tghfXseZb", label: "推广花费销售占比(支付预估)", aliases: ["tghfXseZb"], numeric: true, rate: true },
+  { key: "profit", label: "利润(支付预估)", aliases: ["profit", "lryg"], numeric: true, money: true },
+  { key: "lrl", label: "小毛利率", aliases: ["lrl"], numeric: true, rate: true }
+];
+
+export const CHANNEL_CARDS = [
+  { key: "realTimeGmv", label: "实时销售额(支付)", aliases: ["realTimeGmv", "ssxse"], money: true },
+  { key: "payCount", label: "支付件数(支付)", aliases: ["payCount", "payGoodsCount", "zfxs"] },
+  { key: "sales", label: "销售件数(支付)", aliases: ["sales", "xsjs", "saleCount"] },
+  { key: "deliverCount", label: "发货件数(支付)", aliases: ["deliverCount", "fhjs", "sendCount"] },
+  { key: "costRate", label: "成本率(支付)", aliases: ["costRate", "cbl"], rate: true },
+  { key: "profit", label: "利润(支付预估)", aliases: ["profit", "lryg"], money: true },
+  { key: "refundRate", label: "退款率(退款金额)", aliases: ["refundRate", "tkl"], rate: true },
+  { key: "netProfit", label: "净利润(支付)", aliases: ["netProfit", "jlr"], money: true },
+  { key: "cost", label: "推广花费(支付)", aliases: ["cost", "tghf"], money: true },
+  { key: "lrl", label: "小毛利率", aliases: ["lrl", "grossRate"], rate: true }
+];
+
+export const TEAM_COLUMNS = [
+  { key: "name", label: "名称", aliases: ["teamName", "userName", "name", "title"] },
+  { key: "owner", label: "负责人", aliases: ["leaderName", "fzrName", "ownerName", "userName"] },
+  { key: "shop", label: "店铺", aliases: ["shopName", "shop", "channelName"] },
+  { key: "payAmount", label: "销售金额", aliases: ["payAmount", "gmv", "saleAmount"], numeric: true, money: true },
+  { key: "sales", label: "销售件数", aliases: ["sales", "xsjs", "saleCount"], numeric: true },
+  { key: "cost", label: "推广花费", aliases: ["cost", "tghf"], numeric: true, money: true },
+  { key: "profit", label: "利润", aliases: ["profit", "lryg"], numeric: true, money: true }
+];
+
+export const TEAM_CARDS = [
+  { key: "payAmount", label: "销售金额", aliases: ["payAmount", "gmv", "saleAmount"], money: true },
+  { key: "sales", label: "销售件数", aliases: ["sales", "xsjs", "saleCount"] },
+  { key: "cost", label: "推广花费", aliases: ["cost", "tghf"], money: true },
+  { key: "profit", label: "利润", aliases: ["profit", "lryg"], money: true }
+];
+
 export function pageById(id) {
   return PAGES.find((page) => page.id === id) || PAGES.find((page) => page.id === "productOverview");
 }
