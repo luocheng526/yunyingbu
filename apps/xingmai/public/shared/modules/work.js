@@ -179,8 +179,6 @@
       ".work-person.tone-miss{background:linear-gradient(90deg,#e23b3b,#ff6b6b);}" +
       ".work-person.tone-rest{background:linear-gradient(90deg,#f08a1e,#ffb04a);}" +
       ".work-person.tone-free{background:linear-gradient(90deg,#2f6fe4,#5b94f5);}" +
-      ".work-person.tone-calm{background:var(--xm-card);color:var(--xm-ink);border:1px solid var(--xm-line);border-left:3px solid var(--xm-primary);}" +
-      ".work-person.tone-calm .work-who span,.work-person.tone-calm .work-main{color:var(--xm-muted);}" +
       ".work-who{flex:0 0 140px;min-width:0;}" +
       ".work-who b{display:block;font-size:16px;}" +
       ".work-who span,.work-main{font-size:12px;color:rgba(255,255,255,.92);line-height:1.45;}" +
@@ -1258,7 +1256,7 @@
         .join(" · ");
       return text || "暂无数量";
     }
-    function bars(groups) {
+    function bars(groups, tone) {
       if (!groups.length) {
         return '<div class="work-card"><div class="work-empty">暂无明细</div></div>';
       }
@@ -1267,7 +1265,7 @@
         groups
           .map(function (group) {
             return (
-              '<article class="work-person tone-calm"><div class="work-who"><b>' +
+              '<article class="work-person ' + tone + '"><div class="work-who"><b>' +
               esc(group.name) +
               "</b><span>日报 " +
               group.rows.length +
@@ -1279,9 +1277,6 @@
           .join("") +
         "</div>"
       );
-    }
-    function plain(value, label) {
-      return '<article class="work-kpi work-quiet"><b>' + esc(value) + "</b><span>" + esc(label) + "</span></article>";
     }
     var cards = metrics
       .map(function (metric) {
@@ -1300,7 +1295,7 @@
     var diaries = rows
       .map(function (row, index) {
         return (
-          '<article class="work-person tone-calm"><div class="work-who"><b>' +
+          '<article class="work-person tone-ok"><div class="work-who"><b>' +
           esc(row.day) +
           "</b><span>" +
           esc(row.personName) +
@@ -1330,16 +1325,16 @@
       esc(state.summarySpu) +
       '"></label><button type="button" class="work-primary" data-summary-query>查询</button></div></section>' +
       '<div class="work-stats">' +
-      plain(rows.length, "已交日报") +
-      plain(Object.keys(peopleCount).length, "已报人数") +
-      plain(Object.keys(shopCount).length, "店铺数") +
+      kpi(0, rows.length, "已交日报") +
+      kpi(1, Object.keys(peopleCount).length, "已报人数") +
+      kpi(4, Object.keys(shopCount).length, "店铺数") +
       "</div>" +
       '<div class="work-stats">' +
       cards +
       "</div><h2>按人员汇总</h2>" +
-      bars(groupSummary(rows, "personId")) +
+      bars(groupSummary(rows, "personId"), "tone-ok") +
       "<h2>按店铺汇总</h2>" +
-      bars(groupSummary(rows, "shopId")) +
+      bars(groupSummary(rows, "shopId"), "tone-free") +
       "<h2>已提交日报</h2>" +
       (diaries ? '<div class="work-people">' + diaries + "</div>" : '<div class="work-card"><div class="work-empty">这段时间还没有已提交的店铺日报。</div></div>') +
       renderSummaryDialog(rows, metrics) +
