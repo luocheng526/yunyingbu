@@ -160,13 +160,21 @@ export function createDingClient({ env = process.env, fetchImpl = globalThis.fet
     return rows;
   }
 
-  async function listUpdatedata(userId, workDate) {
+  async function listDayDetail(userId, workDate) {
     const data = await postOapi("/topapi/attendance/getupdatedata", {
       userid: userId,
       work_date: workDate
     });
     const result = data.result || {};
-    return result.attendance_result_list || [];
+    return {
+      results: result.attendance_result_list || [],
+      approves: result.approve_list || []
+    };
+  }
+
+  async function listUpdatedata(userId, workDate) {
+    const detail = await listDayDetail(userId, workDate);
+    return detail.results;
   }
 
   async function listVacationTypes(opUserId) {
@@ -219,6 +227,7 @@ export function createDingClient({ env = process.env, fetchImpl = globalThis.fet
     corpId: () => config.corpId,
     listUsers,
     listAttendance,
+    listDayDetail,
     listUpdatedata,
     listLeaveStatus,
     listVacationTypes,

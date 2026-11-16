@@ -11,6 +11,7 @@ import {
   readBoardStamp,
   recordSync,
   replaceDayPunches,
+  renameCoveringLeaves,
   replaceLeavesInRange,
   replaceOvertime,
   replaceQuotas,
@@ -623,7 +624,7 @@ export function boardPack({ date, users = [], punches = [], leaves = [], dates =
       title: team.title,
       board: buildBoard({ date, users: picked, punches: scopedPunches, leaves: scopedLeaves }),
       days,
-      punches: rowsForDay(picked, scopedPunches, date),
+      punches: rowsForDay(picked, scopedPunches, date, scopedLeaves),
       roster: teamRoster({ date, users: picked, punches: scopedPunches, leaves: scopedLeaves })
     };
   });
@@ -657,12 +658,42 @@ export function shouldReconcileMonth(parts, latest, today) {
   return true;
 }
 
-export function rowsForDay(users, punches, date) {
+export function leaveNameFromApprove(item) {
+  const biz = Number(item?.biz_type ?? item?.bizType);
+  const tag = String(item?.tag_name || item?.tagName || "").trim();
+  const sub = String(item?.sub_type || item?.subType || "").trim();
+  const leaveLike = biz === 3 || /假|调休/.test(tag) || /假|调休/.test(sub);
+  if (!leaveLike) return "";
+  if (sub && sub !== "请假") return sub;
+  return tag || sub || "请假";
+}
+
+export function attendanceStatus({ leaveName = "", lateLabel = "", labels = [], punched = false, duration = "" } = {}) {
+  const leave = String(leaveName || "").trim();
+  if (leave) {
+    const amount = Number(duration);
+    const full = duration === "" || !Number.isFinite(amount) || amount >= 100;
+    if (full || !punched) return leave;
+    if (lateLabel) return `${lateLabel}、${leave}`;
+    return `上班、${leave}`;
+  }
+  if (lateLabel) return lateLabel;
+  const text = [...new Set((labels || []).filter(Boolean))];
+  if (text.includes("早退")) return "早退";
+  if (text.includes("严重迟到")) return "严重迟到";
+  if (text.includes("旷工迟到")) return "旷工迟到";
+  if (text.includes("迟到")) return "迟到";
+  if (punched || text.includes("正常")) return "上班";
+  return "未打卡";
+}
+
+export function rowsForDay(users, punches, date, leaves = []) {
+  const day = String(date || "");
   const byUser = new Map();
   for (const user of users || []) {
     if (user && user.userId) byUser.set(user.userId, user);
   }
-  const rows = (punches || []).filter((row) => row.workDate === date).map((row) => {
+  const rows = (punches || []).filter((row) => row.workDate === day).map((row) => {
     const user = byUser.get(row.dingtalkUserId) || {};
     return {
       ...row,
@@ -680,13 +711,39 @@ export function rowsForDay(users, punches, date) {
       userName: user.userName || user.name || "",
       jobNumber: user.jobNumber || "",
       department: user.department || "",
-      workDate: date,
+      workDate: day,
       checkType: "OnDuty",
       timeResult: "",
       label: "",
       checkAt: "",
       recordId: ""
     });
+  }
+  const leaveByUser = new Map();
+  for (const leave of leaves || []) {
+    if (!leaveCovers(leave, day)) continue;
+    const userId = String(leave.dingtalkUserId || "");
+    if (userId && !leaveByUser.has(userId)) leaveByUser.set(userId, leave);
+  }
+  const grouped = new Map();
+  for (const row of rows) {
+    const userId = String(row.dingtalkUserId || "");
+    if (!grouped.has(userId)) grouped.set(userId, []);
+    grouped.get(userId).push(row);
+  }
+  for (const [userId, userRows] of grouped) {
+    const labels = userRows.map((row) => row.label).filter(Boolean);
+    const lateRow = userRows.find((row) => row.timeResult === "Late" || row.timeResult === "SeriousLate" || row.timeResult === "Absenteeism" || Number(row.lateMinutes) > 0);
+    const punched = userRows.some((row) => row.checkAt);
+    const leave = leaveByUser.get(userId);
+    const status = attendanceStatus({
+      leaveName: leave ? (leave.leaveName || "请假") : "",
+      duration: leave ? leave.duration || "" : "",
+      lateLabel: lateRow ? (lateRow.label || TIME_LABEL[lateRow.timeResult] || "迟到") : "",
+      labels,
+      punched
+    });
+    for (const row of userRows) row.status = status;
   }
   return rows;
 }
@@ -853,17 +910,19 @@ export async function pullLeaves(startDate, endDate, client = createDingClient()
   const { startMs } = dayBounds(startDate);
   const { endMs } = dayBounds(endDate);
   const leaveRows = await client.listLeaveStatus(userIds, startMs, endMs);
-  let types = [];
-  try {
-    types = await client.listVacationTypes(userIds[0]);
-  } catch {
-    types = [];
-  }
   const typeName = new Map();
-  for (const type of types) {
-    const code = String(type.leave_code || type.leaveCode || "");
-    const name = String(type.leave_name || type.leaveName || "");
-    if (code) typeName.set(code, name);
+  for (const opUserId of userIds.slice(0, 8)) {
+    if (typeName.size) break;
+    try {
+      const types = await client.listVacationTypes(opUserId);
+      for (const type of types || []) {
+        const code = String(type.leave_code || type.leaveCode || "");
+        const name = String(type.leave_name || type.leaveName || "").trim();
+        if (code && name) typeName.set(code, name);
+      }
+    } catch {
+      /* 换下一个人再读假期类型 */
+    }
   }
   const known = new Set(userIds);
   const leaves = [];
@@ -871,6 +930,7 @@ export async function pullLeaves(startDate, endDate, client = createDingClient()
     const userId = String(row.userid || "");
     if (!known.has(userId)) continue;
     const code = String(row.leave_code || "");
+    const named = String(row.leave_name || row.leaveName || "").trim();
     const start = leaveMs(row.start_time);
     const end = leaveMs(row.end_time);
     if (!start || !end) continue;
@@ -878,7 +938,7 @@ export async function pullLeaves(startDate, endDate, client = createDingClient()
       personId: personByUser.get(userId) || 0,
       dingtalkUserId: userId,
       leaveCode: code,
-      leaveName: typeName.get(code) || "请假",
+      leaveName: named || typeName.get(code) || "请假",
       startAt: formatShanghai(start),
       endAt: formatShanghai(end),
       duration: String(row.duration_percent ?? row.duration ?? ""),
@@ -982,20 +1042,27 @@ function unpackTeam(raw) {
 }
 
 export async function pullLate(workDate, client = createDingClient()) {
-  if (!client.configured() || typeof client.listUpdatedata !== "function") return [];
+  if (!client.configured()) return [];
+  if (typeof client.listDayDetail !== "function" && typeof client.listUpdatedata !== "function") return [];
   const directory = await listDingUsers();
   const byUser = new Map(directory.map((user) => [user.userId, user]));
   const ids = directory.map((user) => user.userId).filter(Boolean);
   const found = [];
+  const names = [];
   const queue = ids.slice();
   async function one(userId) {
-    let list = [];
+    let detail = { results: [], approves: [] };
     try {
-      list = await client.listUpdatedata(userId, workDate);
+      if (typeof client.listDayDetail === "function") detail = (await client.listDayDetail(userId, workDate)) || detail;
+      else if (typeof client.listUpdatedata === "function") detail.results = (await client.listUpdatedata(userId, workDate)) || [];
     } catch {
       return;
     }
-    for (const item of list || []) {
+    for (const item of detail.approves || []) {
+      const leaveName = leaveNameFromApprove(item);
+      if (leaveName && leaveName !== "请假") names.push({ dingtalkUserId: userId, leaveName });
+    }
+    for (const item of detail.results || []) {
       const timeResult = String(item.time_result || item.timeResult || "");
       const checkType = String(item.check_type || item.checkType || "OnDuty");
       if (checkType === "OffDuty") continue;
@@ -1024,6 +1091,7 @@ export async function pullLate(workDate, client = createDingClient()) {
   });
   await Promise.all(workers);
   if (found.length) await markLatePunches(workDate, found);
+  if (names.length) await renameCoveringLeaves(workDate, names);
   return found;
 }
 

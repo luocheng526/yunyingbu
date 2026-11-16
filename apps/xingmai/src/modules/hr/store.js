@@ -840,6 +840,35 @@ export async function replaceLeavesInRange(userIds, startAt, endAt, rows) {
   return listLeaves();
 }
 
+export async function renameCoveringLeaves(workDate, updates) {
+  await ensureHrSchema();
+  const day = String(workDate || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+  const start = `${day} 00:00`;
+  const end = `${day} 23:59`;
+  const rows = (updates || []).filter((row) => row && row.dingtalkUserId && row.leaveName && row.leaveName !== "请假");
+  if (dbMode() === "mysql") {
+    for (const row of rows) {
+      await query(
+        `UPDATE hr_leave_records SET leave_name = ?
+         WHERE dingtalk_userid = ? AND start_at <= ? AND end_at >= ? AND (leave_name = '' OR leave_name = '请假')`,
+        [clip(row.leaveName, 64), clip(row.dingtalkUserId, 64), end, start]
+      );
+    }
+    return;
+  }
+  for (const row of rows) {
+    const name = clip(row.leaveName, 64);
+    const userId = clip(row.dingtalkUserId, 64);
+    for (const item of memory.leaves) {
+      if (item.dingtalkUserId !== userId) continue;
+      if (String(item.startAt || "") > end || String(item.endAt || "") < start) continue;
+      if (item.leaveName && item.leaveName !== "请假") continue;
+      item.leaveName = name;
+    }
+  }
+}
+
 export async function recordSync(kind, workDate, ok, message) {
   await ensureHrSchema();
   const row = {

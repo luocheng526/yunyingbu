@@ -147,6 +147,7 @@ test("client mounts one page and five in-page tabs", () => {
   assert.match(client, /迟到明细/);
   assert.match(client, /data-punch-list/);
   assert.match(client, /data-kpi-table/);
+  assert.match(client, /状态/);
   assert.match(client, /甄选员工详细名单/);
   assert.match(client, /data-staff-search/);
   assert.match(client, /data-staff-pick/);
@@ -255,6 +256,27 @@ test("yesterday is saved once after 10:00 and last month is checked on the 1st",
   );
   assert.equal(rows[0].userName, "甲");
   assert.equal(rows[0].department, "运营二区");
+  assert.equal(rows[0].status, "上班");
+  const marked = rowsForDay(
+    [
+      { userId: "a", userName: "甲", department: "运营一组" },
+      { userId: "b", userName: "乙", department: "运营一组" },
+      { userId: "c", userName: "丙", department: "运营一组" }
+    ],
+    [
+      { dingtalkUserId: "a", workDate: "2026-11-15", checkType: "OnDuty", timeResult: "Normal", label: "正常", checkAt: "2026-11-15 09:00" },
+      { dingtalkUserId: "b", workDate: "2026-11-15", checkType: "OnDuty", timeResult: "Late", label: "迟到", checkAt: "2026-11-15 09:20", lateMinutes: 20 }
+    ],
+    "2026-11-15",
+    [
+      { dingtalkUserId: "c", leaveName: "事假", startAt: "2026-11-15 00:00", endAt: "2026-11-15 23:59", duration: "100" },
+      { dingtalkUserId: "b", leaveName: "调休", startAt: "2026-11-15 00:00", endAt: "2026-11-15 12:00", duration: "50" }
+    ]
+  );
+  const status = Object.fromEntries(marked.map((row) => [row.userName, row.status]));
+  assert.equal(status["甲"], "上班");
+  assert.equal(status["乙"], "迟到、调休");
+  assert.equal(status["丙"], "事假");
 });
 
 test("ops board counts 运营 人事 技术, backend skips 综合部, total is the sum", () => {
@@ -531,6 +553,36 @@ test("late results come from the attendance day, not only the raw punch", async 
   assert.equal(board.boards[0].board.late, 1);
   assert.equal(board.boards[0].roster.filter((row) => row.late).length, 1);
   assert.equal(board.boards[0].roster.find((row) => row.late).name, "甲");
+});
+
+test("an approval subtype replaces a generic leave name", async () => {
+  resetHrStore();
+  await saveDingUsers([{ userId: "u1", userName: "甲", department: "运营一组" }]);
+  await pullLeaves("2020-11-15", "2020-11-15", {
+    configured: () => true,
+    async listLeaveStatus() {
+      return [{
+        userid: "u1",
+        leave_code: "x",
+        start_time: Date.parse("2020-11-15T00:00:00Z"),
+        end_time: Date.parse("2020-11-15T15:59:00Z"),
+        duration_percent: 100
+      }];
+    },
+    async listVacationTypes() {
+      return [];
+    }
+  });
+  assert.equal((await listLeaves())[0].leaveName, "请假");
+  await pullLate("2020-11-15", {
+    configured: () => true,
+    async listDayDetail() {
+      return { results: [], approves: [{ biz_type: 3, tag_name: "请假", sub_type: "调休" }] };
+    }
+  });
+  assert.equal((await listLeaves())[0].leaveName, "调休");
+  const board = await saveBoardSnapshot("2020-11-15");
+  assert.equal(board.teams[0].punches[0].status, "调休");
 });
 
 test("refreshing a day pulls punches and leave and stamps the time", async () => {

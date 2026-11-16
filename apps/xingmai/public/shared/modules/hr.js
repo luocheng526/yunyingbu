@@ -112,6 +112,10 @@
       ".hr-kpi-list{margin-top:4px;}" +
       ".hr-kpi-list:empty{display:none;}" +
       ".hr-kpi-list h3{margin:0 0 8px;font-size:14px;font-weight:650;color:var(--xm-ink);}" +
+      ".hr-status-work{color:#0f9f6e;font-weight:650;}" +
+      ".hr-status-late{color:#7c5cff;font-weight:650;}" +
+      ".hr-status-leave{color:#f08a24;font-weight:650;}" +
+      ".hr-status-miss{color:var(--xm-muted);}" +
       ".hr-tone-staff{background:linear-gradient(135deg,#3dcbd6,#1499c4);}" +
       ".hr-tone-due{background:linear-gradient(135deg,#3adf8a,#12b36a);}" +
       ".hr-tone-punch{background:linear-gradient(135deg,#5b8cff,#3a63f5);}" +
@@ -227,13 +231,15 @@
           workDate: row.workDate,
           on: "",
           off: "",
-          labels: []
+          labels: [],
+          status: ""
         };
       }
       if (row.department && !groups[key].department) groups[key].department = row.department;
       if (row.checkType === "OffDuty") groups[key].off = row.checkAt || "";
       else groups[key].on = row.checkAt || "";
       if (row.label) groups[key].labels.push(row.label);
+      if (row.status) groups[key].status = row.status;
     });
     return Object.keys(groups).map(function (key) { return groups[key]; });
   }
@@ -257,7 +263,7 @@
             '<div class="hr-board-grid"><section class="hr-card hr-board-card" data-depts></section>' +
             '<section class="hr-card hr-board-card" data-days></section></div>' +
             '<h3 class="hr-board-sub">当日打卡</h3>' +
-            table(["姓名", "部门", "工号", "日期", "上班", "下班", "结果"], emptyRow(7, "还没有打卡")).replace("data-list", "data-punch-list") + "</section>";
+            table(["姓名", "部门", "工号", "日期", "上班", "下班", "状态"], emptyRow(7, "还没有打卡")).replace("data-list", "data-punch-list") + "</section>";
         }).join("") + "</section>";
     } else if (tab === "overtime") {
       html = '<section class="hr-panel hr-effort"><div class="hr-toolbar"><span>运营部门，18:00 之后的下班打卡。角色从组织中心对齐。</span>' +
@@ -392,16 +398,42 @@
       }).join("") : '<div class="hr-empty">还没有每日统计。</div>';
       dayBox.innerHTML = "<h3>近 7 日打卡人数</h3>" + (series.length ? '<div class="hr-day-cols">' + cols + "</div>" : cols);
     }
+    var roster = (view && view.roster) || [];
     var days = pairPunches((view && view.punches) || []).sort(function (a, b) {
       return String(a.department).localeCompare(String(b.department), "zh") || String(a.userName).localeCompare(String(b.userName), "zh");
     });
     var body = days.length ? days.map(function (row) {
-      var labels = row.labels.filter(function (label, index) { return row.labels.indexOf(label) === index; }).join("、");
+      var status = showStatus(row, roster);
       return "<tr><td>" + esc(row.userName || "未命名") + "</td><td>" + esc(row.department) + "</td><td>" + esc(row.jobNumber) +
-        "</td><td>" + esc(row.workDate) + "</td><td>" + esc(row.on) + "</td><td>" + esc(row.off) + "</td><td>" + esc(labels) + "</td></tr>";
+        "</td><td>" + esc(row.workDate) + "</td><td>" + esc(row.on) + "</td><td>" + esc(row.off) +
+        '</td><td class="' + statusClass(status) + '">' + esc(status) + "</td></tr>";
     }).join("") : emptyRow(7, "还没有打卡");
     var list = section.querySelector("[data-punch-list]");
-    if (list) list.outerHTML = table(["姓名", "部门", "工号", "日期", "上班", "下班", "结果"], body).replace("data-list", "data-punch-list");
+    if (list) list.outerHTML = table(["姓名", "部门", "工号", "日期", "上班", "下班", "状态"], body).replace("data-list", "data-punch-list");
+  }
+
+  function showStatus(row, roster) {
+    if (row.status) return row.status;
+    var person = (roster || []).filter(function (item) {
+      return item.name && item.name === row.userName && (!row.department || !item.department || item.department === row.department);
+    })[0];
+    if (!person) person = (roster || []).filter(function (item) { return item.name && item.name === row.userName; })[0];
+    if (person && person.onLeave) return person.leaveName || "请假";
+    if (person && person.late) return person.lateLabel || "迟到";
+    if ((person && person.punched) || row.on || row.off) return "上班";
+    var labels = row.labels || [];
+    if (labels.indexOf("严重迟到") >= 0) return "严重迟到";
+    if (labels.indexOf("旷工迟到") >= 0) return "旷工迟到";
+    if (labels.indexOf("迟到") >= 0) return "迟到";
+    if (labels.indexOf("早退") >= 0) return "早退";
+    return "未打卡";
+  }
+
+  function statusClass(text) {
+    if (text === "上班" || text.indexOf("上班") === 0) return "hr-status-work";
+    if (text === "未打卡") return "hr-status-miss";
+    if (text.indexOf("迟到") >= 0 || text.indexOf("早退") >= 0 || text.indexOf("旷工") >= 0) return "hr-status-late";
+    return "hr-status-leave";
   }
 
   function fillKpiList(section, roster) {
