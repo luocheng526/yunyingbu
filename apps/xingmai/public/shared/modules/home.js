@@ -1,6 +1,6 @@
-/* xm-module-home 0.1.1039-loginpop */
+/* xm-module-home 0.1.1043-deskkeep */
 (function () {
-  var HOME_JS_STAMP = "0.1.1039-loginpop";
+  var HOME_JS_STAMP = "0.1.1043-deskkeep";
   var VIEWS = [
     { key: "company", label: "数据总揽" },
     { key: "overview", label: "团队概括" },
@@ -2824,7 +2824,7 @@
       ".xm-hm-desk{position:relative;width:min(780px,100%);max-height:calc(100vh - 48px);overflow:auto;margin:0;padding:16px 16px 14px;border:0;border-radius:12px;background:#fff;box-shadow:0 18px 50px rgba(0,0,0,.22)}" +
       ".xm-hm-desk h3{margin:0 28px 8px 0;font-size:16px}" +
       ".xm-hm-desk p{margin:0 0 8px;font-size:13px;color:#355}" +
-      ".xm-hm-desk img{display:block;width:100%;height:auto;cursor:crosshair;border-radius:8px;background:#fff}" +
+      ".xm-hm-desk img{display:block;width:100%;height:auto;cursor:crosshair;border-radius:8px;background:#fff;user-select:none;-webkit-user-drag:none}" +
       ".xm-hm-desk-x{position:absolute;top:8px;right:8px;width:28px;height:28px;border:0;border-radius:6px;background:transparent;cursor:pointer;font-size:18px;line-height:1}" +
       ".xm-hm-desk-row{display:flex;gap:8px;margin-top:8px;align-items:center}" +
       ".xm-hm-desk-row input{flex:1;min-width:0;height:32px;padding:0 8px;border:1px solid #d7e3f5;border-radius:8px}" +
@@ -3008,7 +3008,7 @@
       '<div class="xm-hm-desk-mask" data-desk-mask><div class="xm-hm-desk" role="dialog" aria-modal="true"><button type="button" class="xm-hm-desk-x" data-desk-cancel aria-label="关闭">×</button><h3>' +
       escapeHtml(desk.store || "登录店铺") +
       '</h3><p id="xm-hm-desk-msg">' +
-      escapeHtml(desk.message || "点画面就是在服务器上操作。") +
+      escapeHtml(desk.message || "点一下只会点到服务器上的登录页，这个窗口不会关掉。") +
       "</p>" +
       shot +
       tools +
@@ -5021,15 +5021,68 @@
           return emptyLocalPaid();
         });
       }
+      function deskShotUrl(store) {
+        return "/api/home/live-login/screen?store=" + encodeURIComponent(store || "") + "&t=" + Date.now();
+      }
+      function touchDeskShot(store, message) {
+        var img = root.querySelector("#xm-hm-desk-shot");
+        if (img) {
+          var next = deskShotUrl(store);
+          var preload = new Image();
+          preload.onload = function () {
+            if (img.isConnected) {
+              img.src = next;
+            }
+          };
+          preload.src = next;
+        }
+        var msg = root.querySelector("#xm-hm-desk-msg");
+        if (msg) {
+          msg.textContent = (store ? store + " " : "") + (message || "点一下只会点到服务器上的登录页，这个窗口不会关掉。");
+        }
+        return Boolean(img);
+      }
       function showDesk(st) {
         state.desk = st || {};
+        if (state.desk.status === "verify" || state.desk.status === "login") {
+          state.desk.status = "screen";
+        }
         if (!dead) {
           paint(root, state);
         }
-        var status = state.desk && state.desk.status;
-        if (status === "screen" || status === "verify") {
+        if (state.desk && state.desk.open && state.desk.status === "screen") {
           pollDesk();
         }
+      }
+      function applyDesk(st) {
+        var prev = state.desk || {};
+        var next = st || {};
+        if (next.status === "done" || next.status === "ok") {
+          window.clearInterval(deskTimer);
+          deskTimer = 0;
+          state.desk = null;
+          if (!dead) {
+            paint(root, state);
+          }
+          pullLive();
+          return;
+        }
+        next.open = true;
+        next.store = next.store || prev.store;
+        if (!next.message) {
+          next.message = prev.message;
+        }
+        if (next.status === "verify" || next.status === "login" || next.status === "missing" || !next.status) {
+          next.status = "screen";
+        }
+        var keepShot = prev.open && root.querySelector("#xm-hm-desk-shot");
+        state.desk = next;
+        if (keepShot && next.status === "screen") {
+          touchDeskShot(next.store, next.message);
+          pollDesk();
+          return;
+        }
+        showDesk(next);
       }
       function pollDesk() {
         if (deskTimer) {
@@ -5041,32 +5094,10 @@
             if (dead || seq !== deskSeq || !state.desk || !state.desk.open) {
               return;
             }
-            var prev = state.desk.status;
-            var opened = state.desk.open;
             var keptStore = state.desk.store;
             var keptMessage = state.desk.message;
-            state.desk = st || {};
-            state.desk.open = opened;
-            if (!state.desk.store) {
-              state.desk.store = keptStore;
-            }
-            if (!state.desk.message) {
-              state.desk.message = keptMessage;
-            }
-            var status = state.desk.status;
-            var img = root.querySelector("#xm-hm-desk-shot");
-            if (status === "screen" && img) {
-              img.src = "/api/home/live-login/screen?t=" + Date.now();
-              var msg = root.querySelector("#xm-hm-desk-msg");
-              if (msg) {
-                msg.textContent = (state.desk.store || "") + " " + (state.desk.message || "");
-              }
-              return;
-            }
-            if (status !== prev) {
-              paint(root, state);
-            }
-            if (status === "done" || status === "ok") {
+            var next = st || {};
+            if (next.status === "done" || next.status === "ok") {
               window.clearInterval(deskTimer);
               deskTimer = 0;
               state.desk = null;
@@ -5074,10 +5105,14 @@
               pullLive();
               return;
             }
-            if (status === "login" || status === "missing") {
-              window.clearInterval(deskTimer);
-              deskTimer = 0;
-              state.desk.open = true;
+            next.open = true;
+            next.store = next.store || keptStore;
+            if (!next.message) {
+              next.message = keptMessage;
+            }
+            next.status = "screen";
+            state.desk = next;
+            if (!touchDeskShot(next.store, next.message)) {
               paint(root, state);
             }
           });
@@ -5250,17 +5285,19 @@
         }
         var deskShot = event.target.closest("#xm-hm-desk-shot");
         if (deskShot) {
+          event.preventDefault();
           var rect = deskShot.getBoundingClientRect();
-          var scaleX = deskShot.naturalWidth && rect.width ? deskShot.naturalWidth / rect.width : 1;
-          var scaleY = deskShot.naturalHeight && rect.height ? deskShot.naturalHeight / rect.height : 1;
+          var nw = deskShot.naturalWidth;
+          var nh = deskShot.naturalHeight;
+          if (!nw || !nh || !rect.width || !rect.height) {
+            return;
+          }
           api("/api/home/live-login/input", {
             store: state.desk && state.desk.store,
-            x: Math.round((event.clientX - rect.left) * scaleX),
-            y: Math.round((event.clientY - rect.top) * scaleY)
+            x: Math.round((event.clientX - rect.left) * (nw / rect.width)),
+            y: Math.round((event.clientY - rect.top) * (nh / rect.height))
           }).then(function (st) {
-            if (st) {
-              showDesk(st);
-            }
+            applyDesk(st || { status: "screen" });
           });
           return;
         }
@@ -5273,9 +5310,7 @@
             if (box) {
               box.value = "";
             }
-            if (st) {
-              showDesk(st);
-            }
+            applyDesk(st || { status: "screen" });
           });
           return;
         }
@@ -6145,6 +6180,13 @@
         }
       }
       var scroller = document.getElementById("xm-content") || root;
+      function onDeskPointerDown(event) {
+        var shot = event.target.closest && event.target.closest("#xm-hm-desk-shot");
+        if (shot) {
+          event.preventDefault();
+        }
+      }
+      root.addEventListener("pointerdown", onDeskPointerDown);
       root.addEventListener("click", onClick);
       root.addEventListener("input", onLiveSearchInput);
       root.addEventListener("change", onChange);
@@ -6199,6 +6241,7 @@
           deskTimer = 0;
         }
         window.clearInterval(poll);
+        root.removeEventListener("pointerdown", onDeskPointerDown);
         root.removeEventListener("click", onClick);
         root.removeEventListener("input", onLiveSearchInput);
         root.removeEventListener("change", onChange);
