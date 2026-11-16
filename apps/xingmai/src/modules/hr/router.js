@@ -4,6 +4,7 @@ import { startDingStream } from "./stream.js";
 import {
   archiveYesterday,
   canSeeHr,
+  refreshLeaves,
   effortReport,
   loadRoster,
   readStoredBoard,
@@ -219,8 +220,10 @@ hrRouter.post("/sync", async (_req, res) => {
       res.json({ ok: true, configured: false });
       return;
     }
-    const result = await archiveYesterday(createDingClient());
-    res.json({ ok: true, ...result });
+    const client = createDingClient();
+    const result = await archiveYesterday(client);
+    const leaves = await refreshLeaves(client);
+    res.json({ ok: true, ...result, leaveCount: (leaves.leaves || []).length });
   } catch (err) {
     sendErr(res, err);
   }

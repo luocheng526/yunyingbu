@@ -57,6 +57,7 @@ export const HR_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS hr_leave_records (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     person_id INT NOT NULL,
+    dingtalk_userid VARCHAR(64) NOT NULL DEFAULT '',
     leave_code VARCHAR(64) NOT NULL DEFAULT '',
     leave_name VARCHAR(64) NOT NULL DEFAULT '',
     start_at VARCHAR(32) NOT NULL,
@@ -205,6 +206,7 @@ export function ensureHrSchema() {
       await migratePunchTable();
       await migrateDingUsers();
       await migrateRecruitTable();
+      await migrateLeaveTable();
     })().catch((err) => {
       ready = null;
       throw err;
@@ -295,6 +297,17 @@ async function migrateRecruitTable() {
   }
   if (!names.has("staff_id")) {
     await query("ALTER TABLE hr_recruits ADD COLUMN staff_id INT NOT NULL DEFAULT 0");
+  }
+}
+
+async function migrateLeaveTable() {
+  const columns = await rowsOf(
+    `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'hr_leave_records'`
+  );
+  const names = new Set(columns.map((row) => row.COLUMN_NAME));
+  if (!names.has("dingtalk_userid")) {
+    await query("ALTER TABLE hr_leave_records ADD COLUMN dingtalk_userid VARCHAR(64) NOT NULL DEFAULT ''");
   }
 }
 
@@ -677,23 +690,63 @@ export async function listLeaves() {
   return memory.leaves.map((row) => ({ ...row })).sort((a, b) => String(b.startAt).localeCompare(String(a.startAt)));
 }
 
-export async function replaceLeaves(_personIds, rows) {
+function leaveRow(row) {
+  return {
+    personId: Number(row.personId) || 0,
+    dingtalkUserId: clip(row.dingtalkUserId, 64),
+    leaveCode: clip(row.leaveCode, 64),
+    leaveName: clip(row.leaveName, 64),
+    startAt: clip(row.startAt, 32),
+    endAt: clip(row.endAt, 32),
+    duration: clip(row.duration, 32),
+    recordKey: clip(row.recordKey, 191)
+  };
+}
+
+export async function replaceLeaves(userIds, rows) {
   await ensureHrSchema();
+  const ids = [...new Set((userIds || []).map((id) => clip(id, 64)).filter(Boolean))];
+  return replaceLeavesInRange(ids, "0000-01-01 00:00", "9999-12-31 23:59", rows);
+}
+
+export async function replaceLeavesInRange(userIds, startAt, endAt, rows) {
+  await ensureHrSchema();
+  const ids = [...new Set((userIds || []).map((id) => clip(id, 64)).filter(Boolean))];
+  const start = clip(startAt, 32);
+  const end = clip(endAt, 32);
+  const clean = (rows || []).map(leaveRow).filter((row) => row.recordKey && row.dingtalkUserId);
   if (dbMode() === "mysql") {
-    for (const row of rows) {
+    if (ids.length && start && end) {
       await query(
-        `INSERT INTO hr_leave_records (person_id, leave_code, leave_name, start_at, end_at, duration, record_key)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE leave_name = VALUES(leave_name), start_at = VALUES(start_at), end_at = VALUES(end_at), duration = VALUES(duration)`,
-        [row.personId, row.leaveCode, row.leaveName, row.startAt, row.endAt, row.duration, row.recordKey]
+        `DELETE FROM hr_leave_records WHERE dingtalk_userid IN (${ids.map(() => "?").join(",")}) AND start_at <= ? AND end_at >= ?`,
+        [...ids, end, start]
+      );
+    }
+    if (start && end) {
+      await query("DELETE FROM hr_leave_records WHERE dingtalk_userid = '' AND start_at <= ? AND end_at >= ?", [end, start]);
+    }
+    for (const row of clean) {
+      await query(
+        `INSERT INTO hr_leave_records
+          (person_id, dingtalk_userid, leave_code, leave_name, start_at, end_at, duration, record_key)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE dingtalk_userid = VALUES(dingtalk_userid), leave_name = VALUES(leave_name),
+           start_at = VALUES(start_at), end_at = VALUES(end_at), duration = VALUES(duration)`,
+        [row.personId, row.dingtalkUserId, row.leaveCode, row.leaveName, row.startAt, row.endAt, row.duration, row.recordKey]
       );
     }
     return listLeaves();
   }
-  for (const row of rows) {
+  memory.leaves = memory.leaves.filter((row) => {
+    const overlaps = String(row.startAt || "") <= end && String(row.endAt || "") >= start;
+    if (!overlaps) return true;
+    if (!row.dingtalkUserId) return false;
+    return !ids.includes(row.dingtalkUserId);
+  });
+  for (const row of clean) {
     const index = memory.leaves.findIndex((item) => item.recordKey === row.recordKey);
-    if (index >= 0) memory.leaves[index] = { ...row };
-    else memory.leaves.push({ ...row });
+    if (index >= 0) memory.leaves[index] = row;
+    else memory.leaves.push(row);
   }
   return listLeaves();
 }
@@ -763,6 +816,7 @@ function mapQuota(row) {
 function mapLeave(row) {
   return {
     personId: Number(row.person_id),
+    dingtalkUserId: row.dingtalk_userid || "",
     leaveCode: row.leave_code,
     leaveName: row.leave_name,
     startAt: row.start_at,

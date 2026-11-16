@@ -9,7 +9,7 @@ import {
   readBoardPunches,
   recordSync,
   replaceDayPunches,
-  replaceLeaves,
+  replaceLeavesInRange,
   replaceOvertime,
   replaceQuotas,
   saveBoardDay,
@@ -669,21 +669,29 @@ export async function pullDay(workDate, { client = createDingClient(), userIds =
   return { configured: true, punches, users: ids.length };
 }
 
-export async function pullLeaveAndOvertime(workDate, client = createDingClient()) {
-  if (!client.configured()) return { configured: false };
-  const links = await listLinks();
-  if (!links.length) {
-    await recordSync("leave", workDate, true, "没有已对齐的人，调休和加班留空");
-    return { configured: true, quotas: [], overtime: [] };
+function leaveMs(value) {
+  const num = Number(value);
+  if (Number.isFinite(num) && num > 0) return num;
+  const parsed = Date.parse(String(value || ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export async function pullLeaves(startDate, endDate, client = createDingClient()) {
+  if (!client.configured()) return { configured: false, leaves: [], quotas: [] };
+  let directory = await listDingUsers();
+  if (!directory.length) directory = await refreshDirectory(client);
+  const userIds = directory.map((user) => user.userId).filter(Boolean);
+  if (!userIds.length) {
+    return { configured: true, leaves: [], quotas: [] };
   }
-  const userIds = links.map((link) => link.dingtalkUserId);
-  const byUser = new Map(links.map((link) => [link.dingtalkUserId, link]));
-  const { startMs, endMs } = dayBounds(workDate);
+  const links = await listLinks();
+  const personByUser = new Map(links.map((link) => [link.dingtalkUserId, link.personId]));
+  const { startMs } = dayBounds(startDate);
+  const { endMs } = dayBounds(endDate);
   const leaveRows = await client.listLeaveStatus(userIds, startMs, endMs);
-  const opUserId = userIds[0];
   let types = [];
   try {
-    types = await client.listVacationTypes(opUserId);
+    types = await client.listVacationTypes(userIds[0]);
   } catch {
     types = [];
   }
@@ -693,46 +701,59 @@ export async function pullLeaveAndOvertime(workDate, client = createDingClient()
     const name = String(type.leave_name || type.leaveName || "");
     if (code) typeName.set(code, name);
   }
-  const compTypes = [...typeName.entries()].filter(([, name]) => name.includes("调休"));
+  const known = new Set(userIds);
   const leaves = [];
   for (const row of leaveRows) {
-    const link = byUser.get(String(row.userid || ""));
-    if (!link) continue;
+    const userId = String(row.userid || "");
+    if (!known.has(userId)) continue;
     const code = String(row.leave_code || "");
-    const name = typeName.get(code) || "";
-    if (!name.includes("调休")) continue;
+    const start = leaveMs(row.start_time);
+    const end = leaveMs(row.end_time);
+    if (!start || !end) continue;
     leaves.push({
-      personId: link.personId,
+      personId: personByUser.get(userId) || 0,
+      dingtalkUserId: userId,
       leaveCode: code,
-      leaveName: name || "调休",
-      startAt: formatShanghai(row.start_time),
-      endAt: formatShanghai(row.end_time),
-      duration: String(row.duration_percent ?? ""),
-      recordKey: `${link.personId}-${code}-${row.start_time}-${row.end_time}`
+      leaveName: typeName.get(code) || "请假",
+      startAt: formatShanghai(start),
+      endAt: formatShanghai(end),
+      duration: String(row.duration_percent ?? row.duration ?? ""),
+      recordKey: `${userId}-${code}-${start}-${end}`
     });
   }
-  await replaceLeaves(links.map((link) => link.personId), leaves);
+  await replaceLeavesInRange(userIds, `${startDate} 00:00`, `${endDate} 23:59`, leaves);
 
+  const compTypes = [...typeName.entries()].filter(([, name]) => name.includes("调休"));
   const quotas = [];
   for (const [code, name] of compTypes) {
-    const quotaRows = await client.listVacationQuota(opUserId, code, userIds);
-    for (const row of quotaRows) {
-      const link = byUser.get(String(row.userid || ""));
-      if (!link) continue;
-      const quotaHours = Number(row.quota_num_per_hour ?? row.quota_num_per_day ?? 0);
-      const usedHours = Number(row.used_num_per_hour ?? row.used_num_per_day ?? 0);
-      quotas.push({
-        personId: link.personId,
-        leaveCode: code,
-        leaveName: name,
-        quotaHours,
-        usedHours,
-        balanceHours: Math.round((quotaHours - usedHours) * 10) / 10
-      });
+    try {
+      const quotaRows = await client.listVacationQuota(userIds[0], code, userIds);
+      for (const row of quotaRows) {
+        const userId = String(row.userid || "");
+        if (!known.has(userId)) continue;
+        const quotaHours = Number(row.quota_num_per_hour ?? row.quota_num_per_day ?? 0);
+        const usedHours = Number(row.used_num_per_hour ?? row.used_num_per_day ?? 0);
+        quotas.push({
+          personId: personByUser.get(userId) || 0,
+          leaveCode: code,
+          leaveName: name,
+          quotaHours,
+          usedHours,
+          balanceHours: Math.round((quotaHours - usedHours) * 10) / 10
+        });
+      }
+    } catch {
+      /* 余额读不到时，请假记录仍然保留 */
     }
   }
   if (compTypes.length) await replaceQuotas(quotas);
+  return { configured: true, leaves, quotas };
+}
 
+export async function pullLeaveAndOvertime(workDate, client = createDingClient()) {
+  if (!client.configured()) return { configured: false };
+  const pulled = await pullLeaves(workDate, workDate, client);
+  const links = await listLinks();
   const overtime = [];
   for (const link of links) {
     try {
@@ -742,9 +763,27 @@ export async function pullLeaveAndOvertime(workDate, client = createDingClient()
       /* 这一人的加班列读不到就留空，不用别的数填上 */
     }
   }
-  await replaceOvertime(workDate, links.map((link) => link.personId), overtime);
-  await recordSync("leave", workDate, true, `调休余额 ${quotas.length} 条，加班 ${overtime.length} 条`);
-  return { configured: true, quotas, overtime, leaves };
+  if (links.length) await replaceOvertime(workDate, links.map((link) => link.personId), overtime);
+  await recordSync("leave", workDate, true, `请假和调休 ${pulled.leaves.length} 条，调休余额 ${pulled.quotas.length} 条，加班 ${overtime.length} 条`);
+  return { configured: true, quotas: pulled.quotas, overtime, leaves: pulled.leaves };
+}
+
+export async function refreshLeaves(client = createDingClient()) {
+  const yesterday = addDays(shanghaiToday(), -1);
+  if (!client.configured()) {
+    await recordSync("leave", yesterday, false, "钉钉还没配置");
+    return { configured: false, leaves: [] };
+  }
+  const from = addDays(yesterday, -30);
+  const pulled = await pullLeaves(from, yesterday, client);
+  const today = shanghaiToday();
+  for (let offset = 0; offset <= 30; offset += 1) {
+    const day = addDays(from, offset);
+    if (day >= today) continue;
+    await saveBoardSnapshot(day);
+  }
+  await recordSync("leave", yesterday, true, `请假和调休 ${pulled.leaves.length} 条，已写回看板`);
+  return pulled;
 }
 
 function emptyBoard(date) {
@@ -827,6 +866,13 @@ export async function reconcileMonth(yearMonth, client = createDingClient()) {
   }
   await refreshDirectory(client);
   const days = daysOfMonth(yearMonth);
+  if (days.length) {
+    try {
+      await pullLeaves(days[0], days[days.length - 1], client);
+    } catch (err) {
+      await recordSync("month", yearMonth, false, String(err.message || "上月请假没有核对成").slice(0, 180));
+    }
+  }
   let failed = 0;
   for (const day of days) {
     try {
@@ -888,6 +934,13 @@ export function startScheduler(client = createDingClient()) {
         await archiveYesterday(client);
       } catch (err) {
         await recordSync("daily", yesterday, false, String(err.message || "前一天没有保存").slice(0, 180));
+      }
+    }
+    if (shouldPullYesterday(parts, await latestSync("leave"), yesterday)) {
+      try {
+        await refreshLeaves(client);
+      } catch (err) {
+        await recordSync("leave", yesterday, false, String(err.message || "请假和调休没有抓下来").slice(0, 180));
       }
     }
     if (shouldReconcileMonth(parts, await latestSync("month"), today)) {

@@ -10,6 +10,7 @@ import { hrRouter, shouldStartHrJobs } from "../src/modules/hr/router.js";
 import { ackFor, interestingEvent } from "../src/modules/hr/stream.js";
 import {
   HR_SCHEMA,
+  listLeaves,
   listLinks,
   listRecruits,
   listOvertime,
@@ -32,7 +33,9 @@ import {
   publicPerson,
   punchesFromDing,
   pullDay,
+  pullLeaves,
   readStoredBoard,
+  saveBoardSnapshot,
   reconcileMonth,
   rowsForDay,
   runDaily,
@@ -453,6 +456,39 @@ test("the monthly check overwrites a stored day with the ding result", async () 
   assert.equal(board.boards[0].board.punched, 1);
 });
 
+test("leave is counted from ding users when nobody is aligned", async () => {
+  resetHrStore();
+  await saveDingUsers([{ userId: "u-leave", userName: "乙", jobNumber: "", department: "运营一组" }]);
+  await saveBoardSnapshot("2020-11-15");
+  assert.equal((await readStoredBoard("2020-11-15")).boards[0].board.leave, 0);
+  const fake = {
+    configured: () => true,
+    async listLeaveStatus() {
+      return [{
+        userid: "u-leave",
+        leave_code: "sick",
+        start_time: Date.parse("2020-11-15T00:00:00Z"),
+        end_time: Date.parse("2020-11-15T10:00:00Z"),
+        duration_percent: 100
+      }];
+    },
+    async listVacationTypes() {
+      return [{ leave_code: "sick", leave_name: "病假" }, { leave_code: "comp", leave_name: "调休" }];
+    },
+    async listVacationQuota() {
+      return [];
+    }
+  };
+  const pulled = await pullLeaves("2020-11-15", "2020-11-15", fake);
+  assert.equal(pulled.leaves.length, 1);
+  assert.equal(pulled.leaves[0].leaveName, "病假");
+  assert.equal((await listLinks()).length, 0);
+  await saveBoardSnapshot("2020-11-15");
+  const board = await readStoredBoard("2020-11-15");
+  assert.equal(board.boards[0].board.leave, 1);
+  assert.equal(board.boards[0].board.expected, 0);
+});
+
 test("unconfigured daily pull writes nothing", async () => {
   resetHrStore();
   const result = await runDaily("2026-11-15");
@@ -478,13 +514,22 @@ test("a successful pull keeps the same person and day, and an error keeps the ol
       ];
     },
     async listLeaveStatus() {
-      return [{
-        userid: "ding-1",
-        leave_code: "comp",
-        start_time: Date.parse("2026-11-15T01:00:00Z"),
-        end_time: Date.parse("2026-11-15T10:00:00Z"),
-        duration_percent: 100
-      }];
+      return [
+        {
+          userid: "ding-1",
+          leave_code: "comp",
+          start_time: Date.parse("2026-11-15T01:00:00Z"),
+          end_time: Date.parse("2026-11-15T10:00:00Z"),
+          duration_percent: 100
+        },
+        {
+          userid: "ding-1",
+          leave_code: "annual",
+          start_time: Date.parse("2026-11-15T01:00:00Z"),
+          end_time: Date.parse("2026-11-15T10:00:00Z"),
+          duration_percent: 100
+        }
+      ];
     },
     async listVacationTypes() {
       return [{ leave_code: "comp", leave_name: "调休" }, { leave_code: "annual", leave_name: "年假" }];
@@ -508,6 +553,11 @@ test("a successful pull keeps the same person and day, and an error keeps the ol
   assert.equal(punches.find((row) => row.checkType === "OnDuty").checkAt, "2026-11-15 09:00");
   assert.equal(punches.find((row) => row.checkType === "OffDuty").checkAt, "");
   await pullLeaveAndOvertime("2026-11-15", fake);
+  const leaves = await listLeaves();
+  assert.equal(leaves.length, 2);
+  assert.equal(leaves.some((row) => row.leaveName === "调休"), true);
+  assert.equal(leaves.some((row) => row.leaveName === "年假"), true);
+  assert.equal(leaves.every((row) => row.dingtalkUserId === "ding-1"), true);
   const quotas = await listQuotas();
   assert.equal(quotas.length, 1);
   assert.equal(quotas[0].leaveName, "调休");
