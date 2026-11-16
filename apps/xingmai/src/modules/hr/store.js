@@ -321,8 +321,9 @@ export async function listLinks() {
   return memory.links.map((row) => ({ ...row }));
 }
 
-export async function saveLinks(links) {
+export async function saveLinks(links, options = {}) {
   await ensureHrSchema();
+  const keepManual = Boolean(options.keepManual);
   const now = new Date().toISOString();
   const clean = links.map((link) => ({
     personId: Number(link.personId),
@@ -332,8 +333,12 @@ export async function saveLinks(links) {
     updatedAt: now
   })).filter((link) => link.personId && link.dingtalkUserId);
   if (dbMode() === "mysql") {
-    await query("DELETE FROM hr_ding_links");
+    await query(keepManual ? "DELETE FROM hr_ding_links WHERE match_by <> 'manual'" : "DELETE FROM hr_ding_links");
+    const kept = keepManual ? await listLinks() : [];
+    const blockedPeople = new Set(kept.map((link) => link.personId));
+    const blockedUsers = new Set(kept.map((link) => link.dingtalkUserId));
     for (const link of clean) {
+      if (keepManual && (blockedPeople.has(link.personId) || blockedUsers.has(link.dingtalkUserId))) continue;
       await query(
         `INSERT INTO hr_ding_links (person_id, dingtalk_userid, match_by, employee_no, updated_at)
          VALUES (?, ?, ?, ?, ?)`,
@@ -342,8 +347,54 @@ export async function saveLinks(links) {
     }
     return listLinks();
   }
-  memory.links = clean;
+  if (!keepManual) {
+    memory.links = clean;
+    return listLinks();
+  }
+  const manual = memory.links.filter((link) => link.matchBy === "manual");
+  const blockedPeople = new Set(manual.map((link) => link.personId));
+  const blockedUsers = new Set(manual.map((link) => link.dingtalkUserId));
+  memory.links = manual.concat(clean.filter((link) => !blockedPeople.has(link.personId) && !blockedUsers.has(link.dingtalkUserId)));
   return listLinks();
+}
+
+export async function upsertLink(input = {}) {
+  await ensureHrSchema();
+  const personId = Number(input.personId);
+  const dingtalkUserId = clip(input.dingtalkUserId, 64);
+  if (!personId || personId < 1) throw bad("要选择组织里的人");
+  if (!dingtalkUserId) throw bad("要选择钉钉里的人");
+  const row = {
+    personId,
+    dingtalkUserId,
+    matchBy: "manual",
+    employeeNo: clip(input.employeeNo, 64),
+    updatedAt: new Date().toISOString()
+  };
+  if (dbMode() === "mysql") {
+    await query("DELETE FROM hr_ding_links WHERE person_id = ? OR dingtalk_userid = ?", [personId, dingtalkUserId]);
+    await query(
+      `INSERT INTO hr_ding_links (person_id, dingtalk_userid, match_by, employee_no, updated_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      [row.personId, row.dingtalkUserId, row.matchBy, row.employeeNo, row.updatedAt]
+    );
+    return row;
+  }
+  memory.links = memory.links.filter((link) => link.personId !== personId && link.dingtalkUserId !== dingtalkUserId);
+  memory.links.push(row);
+  return { ...row };
+}
+
+export async function deleteLink(personId) {
+  await ensureHrSchema();
+  const id = Number(personId);
+  if (!id) throw bad("找不到这条对齐");
+  if (dbMode() === "mysql") {
+    await query("DELETE FROM hr_ding_links WHERE person_id = ?", [id]);
+  } else {
+    memory.links = memory.links.filter((link) => link.personId !== id);
+  }
+  return { id };
 }
 
 export async function listPunches({ month = "", date = "" } = {}) {

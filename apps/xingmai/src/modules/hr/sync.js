@@ -25,6 +25,7 @@ export function publicPerson(row) {
   return {
     id: Number(row.id),
     name: String(row.name || "").trim(),
+    role: String(row.role || "").trim(),
     status: String(row.status || "").trim(),
     employeeNo: String(row.employeeNo || row.employee_no || "").trim(),
     phone: String(row.phone || row.mobile || "").trim(),
@@ -224,6 +225,197 @@ export function effortFromPunches(punches, month = "") {
     .sort((a, b) => b.hours - a.hours || String(a.name).localeCompare(String(b.name), "zh"));
 }
 
+export const EFFORT_RANKS = [
+  { id: "assistant", title: "助理排行", roles: ["助理"] },
+  { id: "operator", title: "运营排行", roles: ["运营"] },
+  { id: "lead", title: "主管/储备/经理排行", roles: ["主管", "储备", "经理"] }
+];
+
+function round1(value) {
+  return Math.round(Number(value) * 10) / 10;
+}
+
+function personName(value) {
+  return String(value || "").replace(/\s+/g, "");
+}
+
+export function isOpsDepartment(name) {
+  return String(name || "").includes("运营");
+}
+
+export function pairEffort(dingUsers, people, links = []) {
+  const ding = (dingUsers || []).filter((user) => user && user.userId && isOpsDepartment(user.department));
+  const org = (people || []).filter((person) => person && person.id && person.status !== "离职" && isOpsDepartment(person.department || person.center));
+  const allPeople = new Map((people || []).filter((person) => person && person.id && person.status !== "离职").map((person) => [Number(person.id), person]));
+  const dingById = new Map(ding.map((user) => [String(user.userId), user]));
+  const usedPeople = new Set();
+  const usedUsers = new Set();
+  const pairs = [];
+  function take(person, user, matchBy) {
+    if (!person || !user || usedPeople.has(Number(person.id)) || usedUsers.has(String(user.userId))) return;
+    usedPeople.add(Number(person.id));
+    usedUsers.add(String(user.userId));
+    pairs.push({
+      personId: Number(person.id),
+      userId: String(user.userId),
+      matchBy,
+      person: {
+        id: Number(person.id),
+        name: person.name || "",
+        role: person.role || "",
+        department: person.department || person.center || "",
+        employeeNo: person.employeeNo || ""
+      },
+      user: {
+        userId: String(user.userId),
+        name: user.userName || user.name || "",
+        department: user.department || "",
+        jobNumber: user.jobNumber || ""
+      }
+    });
+  }
+  for (const link of links || []) {
+    if (!link || link.matchBy !== "manual") continue;
+    take(allPeople.get(Number(link.personId)), dingById.get(String(link.dingtalkUserId)), "manual");
+  }
+  const jobUsers = new Map();
+  const jobPeople = new Map();
+  for (const user of ding) {
+    const job = normKey(user.jobNumber);
+    if (!job || usedUsers.has(String(user.userId))) continue;
+    jobUsers.set(job, [...(jobUsers.get(job) || []), user]);
+  }
+  for (const person of org) {
+    const job = normKey(person.employeeNo);
+    if (!job || usedPeople.has(Number(person.id))) continue;
+    jobPeople.set(job, [...(jobPeople.get(job) || []), person]);
+  }
+  for (const [job, users] of jobUsers) {
+    const found = jobPeople.get(job) || [];
+    if (users.length === 1 && found.length === 1) take(found[0], users[0], "job_number");
+  }
+  const nameUsers = new Map();
+  const namePeople = new Map();
+  for (const user of ding) {
+    const name = personName(user.userName || user.name);
+    if (!name || usedUsers.has(String(user.userId))) continue;
+    nameUsers.set(name, [...(nameUsers.get(name) || []), user]);
+  }
+  for (const person of org) {
+    const name = personName(person.name);
+    if (!name || usedPeople.has(Number(person.id))) continue;
+    namePeople.set(name, [...(namePeople.get(name) || []), person]);
+  }
+  for (const [name, users] of nameUsers) {
+    const found = namePeople.get(name) || [];
+    if (users.length === 1 && found.length === 1) take(found[0], users[0], "name");
+  }
+  return {
+    pairs,
+    dingMiss: ding.filter((user) => !usedUsers.has(String(user.userId))).map((user) => ({
+      userId: String(user.userId),
+      name: user.userName || user.name || "",
+      department: user.department || "",
+      jobNumber: user.jobNumber || "",
+      reason: "钉钉里有这个人，组织中心对不上"
+    })),
+    orgMiss: org.filter((person) => !usedPeople.has(Number(person.id))).map((person) => ({
+      personId: Number(person.id),
+      name: person.name || "",
+      role: person.role || "",
+      department: person.department || person.center || "",
+      employeeNo: person.employeeNo || "",
+      reason: "组织中心里有这个人，钉钉对不上"
+    }))
+  };
+}
+
+export function effortReport({ month = "", users = [], punches = [], people = [], links = [] } = {}) {
+  const safeMonth = /^\d{4}-\d{2}$/.test(String(month || "")) ? String(month) : "";
+  const hoursByUser = new Map(effortFromPunches(punches, safeMonth).map((row) => [row.userId, row]));
+  const paired = pairEffort(users, people, links);
+  const pairByUser = new Map(paired.pairs.map((row) => [row.userId, row]));
+  const ding = (users || []).filter((user) => user && user.userId && isOpsDepartment(user.department));
+  const org = (people || []).filter((person) => person && person.id && person.status !== "离职" && isOpsDepartment(person.department || person.center));
+  const rows = ding.map((user) => {
+    const effort = hoursByUser.get(String(user.userId));
+    const pair = pairByUser.get(String(user.userId));
+    return {
+      userId: String(user.userId),
+      name: user.userName || user.name || effort?.name || "",
+      department: user.department || "",
+      jobNumber: user.jobNumber || "",
+      hours: effort?.hours || 0,
+      days: effort?.days || [],
+      personId: pair?.personId || 0,
+      orgName: pair?.person.name || "",
+      role: pair?.person.role || "",
+      matchBy: pair?.matchBy || ""
+    };
+  }).sort((a, b) => b.hours - a.hours || String(a.name).localeCompare(String(b.name), "zh"));
+  const participants = rows.filter((row) => row.hours > 0);
+  const hours = round1(rows.reduce((sum, row) => sum + row.hours, 0));
+  const teams = [...rows.reduce((map, row) => {
+    const name = row.department || "未分部门";
+    if (!map.has(name)) map.set(name, { name, roster: 0, participants: 0, hours: 0 });
+    const team = map.get(name);
+    team.roster += 1;
+    team.hours = round1(team.hours + row.hours);
+    if (row.hours > 0) team.participants += 1;
+    return map;
+  }, new Map()).values()].map((team) => ({
+    ...team,
+    average: team.roster ? round1(team.hours / team.roster) : 0
+  })).sort((a, b) => b.average - a.average || a.name.localeCompare(b.name, "zh"));
+  const ranks = EFFORT_RANKS.map((rank) => ({
+    id: rank.id,
+    title: rank.title,
+    rows: rows.filter((row) => rank.roles.includes(row.role)).sort((a, b) => b.hours - a.hours || String(a.name).localeCompare(String(b.name), "zh"))
+  }));
+  return {
+    month: safeMonth,
+    participants: participants.length,
+    roster: rows.length,
+    hours,
+    average: participants.length ? round1(hours / participants.length) : 0,
+    unmatched: paired.dingMiss.length + paired.orgMiss.length,
+    teams,
+    ranks,
+    people: rows,
+    choices: {
+      people: org.map((person) => ({
+        id: Number(person.id),
+        name: person.name || "",
+        role: person.role || "",
+        department: person.department || person.center || "",
+        employeeNo: person.employeeNo || ""
+      })),
+      users: ding.map((user) => ({
+        userId: String(user.userId),
+        name: user.userName || user.name || "",
+        department: user.department || "",
+        jobNumber: user.jobNumber || ""
+      }))
+    },
+    watch: {
+      conflict: paired.dingMiss.length + paired.orgMiss.length > 0,
+      compared: `${ding.length}/${org.length}`,
+      pairs: paired.pairs.map((row) => ({
+        personId: row.personId,
+        userId: row.userId,
+        matchBy: row.matchBy,
+        name: row.user.name,
+        orgName: row.person.name,
+        role: row.person.role,
+        department: row.user.department,
+        orgDepartment: row.person.department
+      })),
+      dingMiss: paired.dingMiss,
+      orgMiss: paired.orgMiss
+    }
+  };
+}
+
 export function overtimeFromColumns(columnVals, personId) {
   let hours = 0;
   for (const column of columnVals || []) {
@@ -389,7 +581,7 @@ export async function alignRoster(client = createDingClient(), roster = null) {
   const people = roster || (await loadRoster());
   const users = await client.listUsers();
   const matched = matchRoster(people, users);
-  await saveLinks(matched.links);
+  await saveLinks(matched.links, { keepManual: true });
   await recordSync("align", shanghaiToday(), true, `对齐 ${matched.links.length} 人，未对齐 ${matched.skipped.length} 人`);
   return { configured: true, ...matched };
 }

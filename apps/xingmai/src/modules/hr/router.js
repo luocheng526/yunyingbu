@@ -4,7 +4,7 @@ import { startDingStream } from "./stream.js";
 import {
   addDays,
   boardPack,
-  effortFromPunches,
+  effortReport,
   loadRoster,
   runDaily,
   shanghaiToday,
@@ -16,18 +16,20 @@ import {
   createRecruit,
   createTalent,
   deleteInterview,
+  deleteLink,
   deleteRecruit,
   deleteTalent,
   latestSync,
   listDingUsers,
   listInterviews,
+  listLinks,
   listRecruits,
   listLeaves,
-  listLinks,
   listOvertime,
   listPunches,
   listQuotas,
-  listTalents
+  listTalents,
+  upsertLink
 } from "./store.js";
 
 export const hrRouter = Router();
@@ -141,9 +143,31 @@ hrRouter.get("/effort", async (req, res) => {
         department: row.department || user.department || ""
       };
     });
-    const people = effortFromPunches(punches, /^\d{4}-\d{2}$/.test(month) ? month : "");
-    const hours = Math.round(people.reduce((sum, person) => sum + person.hours, 0) * 10) / 10;
-    res.json({ ok: true, month, hours, people });
+    const report = effortReport({
+      month: /^\d{4}-\d{2}$/.test(month) ? month : "",
+      users,
+      punches,
+      people: await loadRoster(),
+      links: await listLinks()
+    });
+    res.json({ ok: true, ...report });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.post("/links", async (req, res) => {
+  try {
+    const link = await upsertLink(req.body || {});
+    res.status(201).json({ ok: true, link });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.delete("/links/:personId", async (req, res) => {
+  try {
+    res.json({ ok: true, ...(await deleteLink(req.params.personId)) });
   } catch (err) {
     sendErr(res, err);
   }

@@ -10,20 +10,22 @@ import { hrRouter, shouldStartHrJobs } from "../src/modules/hr/router.js";
 import { ackFor, interestingEvent } from "../src/modules/hr/stream.js";
 import {
   HR_SCHEMA,
-  listRecruits,
   listLinks,
+  listRecruits,
   listOvertime,
   listPunches,
   listQuotas,
   replaceDayPunches,
   resetHrStore,
-  saveLinks
+  saveLinks,
+  upsertLink
 } from "../src/modules/hr/store.js";
 import {
   boardPack,
   buildBoard,
   effortFromPunches,
   effortHours,
+  effortReport,
   matchRoster,
   publicPerson,
   punchesFromDing,
@@ -184,7 +186,7 @@ test("mapping uses job number or phone and skips ambiguous names", () => {
 
 test("public person drops anything except the roster fields", () => {
   const view = publicPerson({ id: 9, name: "甲", status: "在职", employeeNo: "E9", phone: "13900000000", department: "运营", password: "hidden", username: "jia" });
-  assert.deepEqual(Object.keys(view).sort(), ["department", "employeeNo", "id", "name", "phone", "status"]);
+  assert.deepEqual(Object.keys(view).sort(), ["department", "employeeNo", "id", "name", "phone", "role", "status"]);
   assert.equal(JSON.stringify(view).includes("hidden"), false);
 });
 
@@ -264,6 +266,52 @@ test("effort hours start after 18:00 and only count 运营 departments", () => {
   assert.deepEqual(people[0].days.map((day) => day.date), ["2026-11-16", "2026-11-17"]);
   assert.equal(people[0].days[0].offAt, "2026-11-16 21:00");
   assert.equal(people[0].days[0].hours, 3);
+});
+
+test("effort report ranks roles, averages teams, and lists who is not aligned", () => {
+  const report = effortReport({
+    month: "2026-11",
+    users: [
+      { userId: "u1", userName: "甲", department: "运营一组", jobNumber: "A1" },
+      { userId: "u2", userName: "乙", department: "运营一组", jobNumber: "" },
+      { userId: "u3", userName: "丙", department: "人事部", jobNumber: "" }
+    ],
+    punches: [
+      { dingtalkUserId: "u1", userName: "甲", department: "运营一组", workDate: "2026-11-16", checkType: "OffDuty", checkAt: "2026-11-16 20:30" },
+      { dingtalkUserId: "u2", userName: "乙", department: "运营一组", workDate: "2026-11-16", checkType: "OffDuty", checkAt: "2026-11-16 19:00" }
+    ],
+    people: [
+      { id: 1, name: "甲", role: "助理", status: "在职", department: "沈子晗运营中心", employeeNo: "A1", password: "hidden" },
+      { id: 2, name: "丁", role: "运营", status: "在职", department: "韩梦凯运营中心", employeeNo: "" }
+    ],
+    links: []
+  });
+  assert.equal(JSON.stringify(report).includes("hidden"), false);
+  assert.equal(report.participants, 2);
+  assert.equal(report.roster, 2);
+  assert.equal(report.hours, 3.5);
+  assert.equal(report.average, 1.8);
+  assert.equal(report.teams[0].name, "运营一组");
+  assert.equal(report.teams[0].average, 1.8);
+  assert.deepEqual(report.ranks[0].rows.map((row) => row.name), ["甲"]);
+  assert.equal(report.ranks[1].rows.length, 0);
+  assert.equal(report.watch.dingMiss[0].name, "乙");
+  assert.equal(report.watch.orgMiss[0].name, "丁");
+  assert.equal(report.watch.conflict, true);
+});
+
+test("a manual alignment stays when the daily match is rewritten", async () => {
+  resetHrStore();
+  await upsertLink({ personId: 9, dingtalkUserId: "keep" });
+  await saveLinks([
+    { personId: 9, dingtalkUserId: "other", matchBy: "job_number", employeeNo: "A9" },
+    { personId: 8, dingtalkUserId: "new", matchBy: "phone", employeeNo: "" }
+  ], { keepManual: true });
+  const links = await listLinks();
+  assert.deepEqual(links.map((link) => [link.personId, link.dingtalkUserId, link.matchBy]), [
+    [9, "keep", "manual"],
+    [8, "new", "phone"]
+  ]);
 });
 
 test("attendance board counts staff, punches, late arrivals, leave, and departments", () => {
@@ -455,8 +503,17 @@ test("http keeps attendance read-only and interviews in this module", async () =
     assert.equal(home.status, 200);
     assert.deepEqual(home.data.tabs, ["看板", "奋斗时长", "招聘"]);
     const effort = await request(server, "/api/hr/effort?month=2026-11");
-    assert.deepEqual(effort.data.people, []);
     assert.equal(effort.data.hours, 0);
+    assert.equal(Array.isArray(effort.data.people), true);
+    assert.equal(Array.isArray(effort.data.watch.orgMiss), true);
+    assert.equal(JSON.stringify(effort.data).includes("password"), false);
+    assert.deepEqual(effort.data.ranks.map((rank) => rank.title), ["助理排行", "运营排行", "主管/储备/经理排行"]);
+    const linked = await request(server, "/api/hr/links", { method: "POST", body: { personId: 5, dingtalkUserId: "u9" } });
+    assert.equal(linked.status, 201);
+    assert.equal((await listLinks())[0].matchBy, "manual");
+    const cleared = await request(server, "/api/hr/links/5", { method: "DELETE" });
+    assert.equal(cleared.status, 200);
+    assert.deepEqual(await listLinks(), []);
     assert.equal(home.data.module, "hr");
     const status = await request(server, "/api/hr/status");
     assert.equal(status.data.configured, false);
