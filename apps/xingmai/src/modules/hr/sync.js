@@ -1,13 +1,14 @@
 import { createDingClient, readDingEnv } from "./dingtalk.js";
 import {
   latestSync,
+  listDingUsers,
   listLinks,
-  listPunches,
   recordSync,
   replaceDayPunches,
   replaceLeaves,
   replaceOvertime,
   replaceQuotas,
+  saveDingUsers,
   saveLinks
 } from "./store.js";
 
@@ -146,17 +147,19 @@ export function formatShanghai(value) {
   return `${pick("year")}-${pick("month")}-${pick("day")} ${pick("hour")}:${pick("minute")}`;
 }
 
-export function punchesFromDing(records, linksByUserId, workDate) {
+export function punchesFromDing(records, usersById, workDate) {
   const out = [];
   for (const record of records || []) {
     const userId = String(record.userId || "").trim();
-    const link = linksByUserId.get(userId);
-    if (!link) continue;
+    if (!userId) continue;
+    const user = usersById.get(userId) || {};
     const timeResult = String(record.timeResult || "");
     const signed = timeResult && timeResult !== "NotSigned";
     out.push({
-      personId: link.personId,
+      personId: Number(user.personId) || 0,
       dingtalkUserId: userId,
+      userName: user.userName || user.name || "",
+      jobNumber: user.jobNumber || "",
       workDate,
       checkType: record.checkType === "OffDuty" ? "OffDuty" : "OnDuty",
       timeResult,
@@ -211,23 +214,36 @@ export async function alignRoster(client = createDingClient(), roster = null) {
   return { configured: true, ...matched };
 }
 
-export async function pullDay(workDate, { client = createDingClient(), personIds = null } = {}) {
+export async function refreshDirectory(client = createDingClient()) {
+  if (!client.configured()) {
+    return [];
+  }
+  const users = await client.listUsers();
+  return saveDingUsers(users);
+}
+
+export async function pullDay(workDate, { client = createDingClient(), userIds = null } = {}) {
   if (!client.configured()) {
     return { configured: false, punches: [] };
   }
+  let directory = await listDingUsers();
+  if (!directory.length) directory = await refreshDirectory(client);
   const links = await listLinks();
-  const chosen = personIds ? links.filter((link) => personIds.includes(link.personId)) : links;
-  const linksByUserId = new Map(chosen.map((link) => [link.dingtalkUserId, link]));
-  const userIds = [...linksByUserId.keys()];
-  if (!userIds.length) {
-    await recordSync("attendance", workDate, true, "没有已对齐的人，打卡表留空");
-    return { configured: true, punches: [] };
+  const personByUser = new Map(links.map((link) => [link.dingtalkUserId, link.personId]));
+  const usersById = new Map(directory.map((user) => [user.userId, { ...user, personId: personByUser.get(user.userId) || 0 }]));
+  const chosen = userIds ? directory.filter((user) => userIds.includes(user.userId)) : directory;
+  const ids = chosen.map((user) => user.userId);
+  if (!ids.length) {
+    if (!directory.length) {
+      await recordSync("attendance", workDate, true, "钉钉通讯录是空的，打卡表留空");
+    }
+    return { configured: true, punches: [], users: 0 };
   }
-  const records = await client.listAttendance(userIds, workDate);
-  const punches = punchesFromDing(records, linksByUserId, workDate);
-  await replaceDayPunches(workDate, chosen.map((link) => link.personId), punches);
-  await recordSync("attendance", workDate, true, punches.length ? `写入打卡 ${punches.length} 条` : "钉钉这一天没有打卡结果");
-  return { configured: true, punches };
+  const records = await client.listAttendance(ids, workDate);
+  const punches = punchesFromDing(records, usersById, workDate);
+  await replaceDayPunches(workDate, ids, punches);
+  await recordSync("attendance", workDate, true, punches.length ? `钉钉 ${ids.length} 人，写入打卡 ${punches.length} 条` : `钉钉 ${ids.length} 人，这一天没有打卡结果`);
+  return { configured: true, punches, users: ids.length };
 }
 
 export async function pullLeaveAndOvertime(workDate, client = createDingClient()) {
@@ -313,14 +329,16 @@ export async function runDaily(workDate, client = createDingClient()) {
     await recordSync("daily", workDate, false, "钉钉还没配置");
     return { configured: false };
   }
-  await alignRoster(client);
-  const first = await pullDay(workDate, { client });
-  const stored = await listPunches({ date: workDate });
-  if (!stored.length) {
-    await pullDay(addDays(workDate, -1), { client });
+  const directory = await refreshDirectory(client);
+  const days = [];
+  for (let offset = 6; offset >= 0; offset -= 1) days.push(addDays(workDate, -offset));
+  let punches = [];
+  for (const day of days) {
+    const pulled = await pullDay(day, { client });
+    punches = punches.concat(pulled.punches || []);
   }
-  await pullLeaveAndOvertime(workDate, client);
-  return { configured: true, punches: first.punches };
+  await recordSync("attendance", workDate, true, `钉钉 ${directory.length} 人，近 7 天打卡 ${punches.length} 条`);
+  return { configured: true, punches, users: directory.length };
 }
 
 let timer = null;

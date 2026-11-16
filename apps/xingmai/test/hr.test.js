@@ -79,7 +79,7 @@ function jsonResponse(body) {
 }
 
 test("hr schema stays in hr_ tables", () => {
-  assert.equal(HR_SCHEMA.length, 8);
+  assert.equal(HR_SCHEMA.length, 9);
   for (const sql of HR_SCHEMA) {
     assert.match(sql, /CREATE TABLE IF NOT EXISTS hr_/);
     assert.doesNotMatch(sql, /people|han_|shen_/i);
@@ -184,6 +184,28 @@ test("NotSigned does not invent a clock time", () => {
   assert.equal(rows[1].label, "未打卡");
 });
 
+test("a punch is stored even when the person is not on the org roster", async () => {
+  resetHrStore();
+  const fake = {
+    configured: () => true,
+    async listUsers() {
+      return [{ userId: "ding-9", name: "丁", jobNumber: "SZ099", mobile: "13900000000" }];
+    },
+    async listAttendance() {
+      return [{ id: "r9", userId: "ding-9", checkType: "OnDuty", timeResult: "Late", userCheckTime: Date.parse("2026-11-13T01:20:00Z") }];
+    }
+  };
+  const pulled = await pullDay("2026-11-13", { client: fake });
+  assert.equal(pulled.users, 1);
+  const rows = await listPunches({ date: "2026-11-13" });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].personId, 0);
+  assert.equal(rows[0].userName, "丁");
+  assert.equal(rows[0].jobNumber, "SZ099");
+  assert.equal(rows[0].checkAt, "2026-11-13 09:20");
+  assert.equal(JSON.stringify(rows).includes("13900000000"), false);
+});
+
 test("unconfigured daily pull writes nothing", async () => {
   resetHrStore();
   const result = await runDaily("2026-11-15");
@@ -235,6 +257,7 @@ test("a successful pull keeps the same person and day, and an error keeps the ol
   const punches = await listPunches({ date: "2026-11-15" });
   assert.equal(punches.length, 2);
   assert.equal(punches.every((row) => row.personId === 7), true);
+  assert.equal(punches[0].jobNumber, "E001");
   assert.equal(punches.find((row) => row.checkType === "OnDuty").checkAt, "2026-11-15 09:00");
   assert.equal(punches.find((row) => row.checkType === "OffDuty").checkAt, "");
   await pullLeaveAndOvertime("2026-11-15", fake);
@@ -273,7 +296,7 @@ test("ding client asks the official attendance api with isI18n false", async () 
     fetchImpl
   });
   const users = await ding.listUsers();
-  assert.deepEqual(users, [{ userId: "u", mobile: "13900001111", jobNumber: "J1" }]);
+  assert.deepEqual(users, [{ userId: "u", name: "不保留", mobile: "13900001111", jobNumber: "J1" }]);
   await ding.listAttendance(["u"], "2026-11-15");
   const attendance = calls.find((call) => call.url.includes("/attendance/list"));
   assert.equal(attendance.body.isI18n, false);

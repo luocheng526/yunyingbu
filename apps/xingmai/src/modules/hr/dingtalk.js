@@ -86,16 +86,18 @@ export function createDingClient({ env = process.env, fetchImpl = globalThis.fet
       for (let page = 0; page < 40; page += 1) {
         const data = await postOapi("/topapi/v2/user/list", { dept_id: deptId, cursor, size: 100 });
         const result = data.result || {};
-        for (const user of result.list || []) {
+        const list = Array.isArray(result.list) ? result.list : (result.list ? [result.list] : []);
+        for (const user of list) {
           const userId = String(user.userid || "").trim();
           if (!userId || byId.has(userId)) continue;
           byId.set(userId, {
             userId,
+            name: String(user.name || "").trim(),
             mobile: String(user.mobile || "").trim(),
             jobNumber: String(user.job_number || "").trim()
           });
         }
-        if (!result.has_more) break;
+        if (result.has_more !== true && result.has_more !== "true") break;
         cursor = Number(result.next_cursor || 0);
       }
     }
@@ -116,8 +118,9 @@ export function createDingClient({ env = process.env, fetchImpl = globalThis.fet
           limit: 50,
           isI18n: false
         });
-        rows.push(...(data.recordresult || []));
-        if (!data.hasMore) break;
+        const records = Array.isArray(data.recordresult) ? data.recordresult : (data.recordresult ? [data.recordresult] : []);
+        rows.push(...records);
+        if (data.hasMore !== true && data.hasMore !== "true") break;
         offset += 50;
       }
     }

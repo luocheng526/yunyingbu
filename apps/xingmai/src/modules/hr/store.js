@@ -5,6 +5,12 @@ export const INTERVIEW_RESULTS = ["待定", "通过", "未通过", "未到场"];
 export const TALENT_STAGES = ["储备", "面试中", "已入职", "已淘汰"];
 
 export const HR_SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS hr_ding_users (
+    dingtalk_userid VARCHAR(64) NOT NULL PRIMARY KEY,
+    user_name VARCHAR(64) NOT NULL DEFAULT '',
+    job_number VARCHAR(64) NOT NULL DEFAULT '',
+    updated_at VARCHAR(40) NOT NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   `CREATE TABLE IF NOT EXISTS hr_ding_links (
     person_id INT NOT NULL PRIMARY KEY,
     dingtalk_userid VARCHAR(64) NOT NULL,
@@ -14,15 +20,17 @@ export const HR_SCHEMA = [
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   `CREATE TABLE IF NOT EXISTS hr_punches (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    person_id INT NOT NULL,
+    person_id INT NOT NULL DEFAULT 0,
     dingtalk_userid VARCHAR(64) NOT NULL DEFAULT '',
+    user_name VARCHAR(64) NOT NULL DEFAULT '',
+    job_number VARCHAR(64) NOT NULL DEFAULT '',
     work_date VARCHAR(10) NOT NULL,
     check_type VARCHAR(16) NOT NULL,
     time_result VARCHAR(32) NOT NULL DEFAULT '',
     label VARCHAR(16) NOT NULL DEFAULT '',
     check_at VARCHAR(32) NOT NULL DEFAULT '',
     record_id VARCHAR(64) NOT NULL DEFAULT '',
-    UNIQUE KEY uq_hr_punch (person_id, work_date, check_type, record_id)
+    UNIQUE KEY uq_hr_punch_user (dingtalk_userid, work_date, check_type, record_id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   `CREATE TABLE IF NOT EXISTS hr_overtime_days (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -91,6 +99,7 @@ let ready = null;
 
 function emptyMemory() {
   return {
+    users: [],
     links: [],
     punches: [],
     overtime: [],
@@ -124,6 +133,7 @@ export function ensureHrSchema() {
   if (!ready) {
     ready = (async () => {
       for (const sql of HR_SCHEMA) await query(sql);
+      await migratePunchTable();
     })().catch((err) => {
       ready = null;
       throw err;
@@ -172,9 +182,73 @@ function stamp(actor) {
   return { createdBy: clip(actor, 64), createdAt: new Date().toISOString() };
 }
 
+async function migratePunchTable() {
+  const columns = await rowsOf(
+    `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'hr_punches'`
+  );
+  const names = new Set(columns.map((row) => row.COLUMN_NAME));
+  if (!names.has("user_name")) {
+    await query("ALTER TABLE hr_punches ADD COLUMN user_name VARCHAR(64) NOT NULL DEFAULT ''");
+  }
+  if (!names.has("job_number")) {
+    await query("ALTER TABLE hr_punches ADD COLUMN job_number VARCHAR(64) NOT NULL DEFAULT ''");
+  }
+  await query("ALTER TABLE hr_punches MODIFY person_id INT NOT NULL DEFAULT 0");
+  const indexes = await rowsOf(
+    `SELECT INDEX_NAME FROM information_schema.STATISTICS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'hr_punches'`
+  );
+  const indexNames = new Set(indexes.map((row) => row.INDEX_NAME));
+  if (indexNames.has("uq_hr_punch")) {
+    await query("ALTER TABLE hr_punches DROP INDEX uq_hr_punch");
+  }
+  if (!indexNames.has("uq_hr_punch_user")) {
+    await query(
+      "ALTER TABLE hr_punches ADD UNIQUE KEY uq_hr_punch_user (dingtalk_userid, work_date, check_type, record_id)"
+    );
+  }
+}
+
 async function rowsOf(sql, params = []) {
   const [rows] = await query(sql, params);
   return rows;
+}
+
+export async function listDingUsers() {
+  await ensureHrSchema();
+  if (dbMode() === "mysql") {
+    const rows = await rowsOf("SELECT dingtalk_userid, user_name, job_number FROM hr_ding_users ORDER BY user_name, dingtalk_userid");
+    return rows.map((row) => ({
+      userId: row.dingtalk_userid,
+      userName: row.user_name || "",
+      jobNumber: row.job_number || ""
+    }));
+  }
+  return memory.users.map((row) => ({ ...row }));
+}
+
+export async function saveDingUsers(users) {
+  await ensureHrSchema();
+  const now = new Date().toISOString();
+  const clean = users.map((user) => ({
+    userId: clip(user.userId, 64),
+    userName: clip(user.name || user.userName, 64),
+    jobNumber: clip(user.jobNumber, 64),
+    updatedAt: now
+  })).filter((user) => user.userId);
+  if (dbMode() === "mysql") {
+    await query("DELETE FROM hr_ding_users");
+    for (const user of clean) {
+      await query(
+        "INSERT INTO hr_ding_users (dingtalk_userid, user_name, job_number, updated_at) VALUES (?, ?, ?, ?)",
+        [user.userId, user.userName, user.jobNumber, user.updatedAt]
+      );
+    }
+    return listDingUsers();
+  }
+  memory.users = clean;
+  return listDingUsers();
 }
 
 export async function listLinks() {
@@ -230,7 +304,7 @@ export async function listPunches({ month = "", date = "" } = {}) {
       where.push("work_date LIKE ?");
       params.push(`${pickedMonth}%`);
     }
-    const sql = `SELECT * FROM hr_punches ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY work_date DESC, person_id, check_type`;
+    const sql = `SELECT * FROM hr_punches ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY work_date DESC, user_name, check_type`;
     const rows = await rowsOf(sql, params);
     return rows.map(mapPunch);
   }
@@ -240,26 +314,40 @@ export async function listPunches({ month = "", date = "" } = {}) {
     .sort((a, b) => String(b.workDate).localeCompare(String(a.workDate)) || a.personId - b.personId);
 }
 
-export async function replaceDayPunches(workDate, personIds, punches) {
+export async function replaceDayPunches(workDate, userIds, punches) {
   await ensureHrSchema();
   const day = mustDate(workDate, "日期");
-  const ids = [...new Set(personIds.map((id) => Number(id)).filter((id) => id > 0))];
+  const ids = [...new Set(userIds.map((id) => clip(id, 64)).filter(Boolean))];
   if (dbMode() === "mysql") {
     if (ids.length) {
-      await query(`DELETE FROM hr_punches WHERE work_date = ? AND person_id IN (${ids.map(() => "?").join(",")})`, [day, ...ids]);
+      await query(
+        `DELETE FROM hr_punches WHERE work_date = ? AND dingtalk_userid IN (${ids.map(() => "?").join(",")})`,
+        [day, ...ids]
+      );
     }
     for (const punch of punches) {
       await query(
         `INSERT INTO hr_punches
-          (person_id, dingtalk_userid, work_date, check_type, time_result, label, check_at, record_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [punch.personId, punch.dingtalkUserId, day, punch.checkType, punch.timeResult, punch.label, punch.checkAt, punch.recordId || ""]
+          (person_id, dingtalk_userid, user_name, job_number, work_date, check_type, time_result, label, check_at, record_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          Number(punch.personId) || 0,
+          punch.dingtalkUserId,
+          punch.userName || "",
+          punch.jobNumber || "",
+          day,
+          punch.checkType,
+          punch.timeResult,
+          punch.label,
+          punch.checkAt,
+          punch.recordId || ""
+        ]
       );
     }
     return listPunches({ date: day });
   }
-  memory.punches = memory.punches.filter((row) => !(row.workDate === day && ids.includes(row.personId)));
-  for (const punch of punches) memory.punches.push({ ...punch, workDate: day });
+  memory.punches = memory.punches.filter((row) => !(row.workDate === day && ids.includes(row.dingtalkUserId)));
+  for (const punch of punches) memory.punches.push({ ...punch, workDate: day, personId: Number(punch.personId) || 0 });
   return listPunches({ date: day });
 }
 
@@ -397,8 +485,10 @@ export async function latestSync() {
 
 function mapPunch(row) {
   return {
-    personId: Number(row.person_id),
+    personId: Number(row.person_id) || 0,
     dingtalkUserId: row.dingtalk_userid,
+    userName: row.user_name || "",
+    jobNumber: row.job_number || "",
     workDate: row.work_date,
     checkType: row.check_type,
     timeResult: row.time_result,

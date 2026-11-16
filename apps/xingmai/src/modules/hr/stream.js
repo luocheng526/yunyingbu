@@ -57,10 +57,7 @@ export function interestingEvent(message, corpId) {
 
 async function refreshUsers(userIds, client) {
   const day = shanghaiToday();
-  const links = await (await import("./store.js")).listLinks();
-  const personIds = links.filter((link) => userIds.includes(link.dingtalkUserId)).map((link) => link.personId);
-  if (!personIds.length) return;
-  await pullDay(day, { client, personIds });
+  await pullDay(day, { client, userIds });
   await pullLeaveAndOvertime(day, client);
 }
 

@@ -157,8 +157,8 @@
   function pairPunches(rows) {
     var groups = {};
     rows.forEach(function (row) {
-      var key = row.personId + "|" + row.workDate;
-      if (!groups[key]) groups[key] = { personId: row.personId, workDate: row.workDate, on: "", off: "", labels: [] };
+      var key = (row.dingtalkUserId || row.personId) + "|" + row.workDate;
+      if (!groups[key]) groups[key] = { personId: row.personId, userName: row.userName || "", jobNumber: row.jobNumber || "", workDate: row.workDate, on: "", off: "", labels: [] };
       if (row.checkType === "OffDuty") groups[key].off = row.checkAt || "";
       else groups[key].on = row.checkAt || "";
       if (row.label) groups[key].labels.push(row.label);
@@ -173,10 +173,9 @@
     if (tab === "attendance") {
       html = '<section class="hr-panel">' + monthBar + kpis([
         { label: "打卡条数", value: "0" },
-        { label: "已对齐", value: "0" },
-        { label: "未对齐", value: "0" }
-      ]) + '<p class="hr-msg" data-msg></p>' + table(["姓名", "工号", "对齐"], emptyRow(3, "还没有在职人员")) +
-        table(["姓名", "日期", "上班", "下班", "结果"], emptyRow(5, "还没有打卡")).replace("data-list", "data-punches") + "</section>";
+        { label: "人数", value: "0" }
+      ]) + '<p class="hr-msg" data-msg>先按钉钉名单展示，和组织中心的对齐以后再看。</p>' +
+        table(["姓名", "工号", "日期", "上班", "下班", "结果"], emptyRow(6, "还没有打卡")) + "</section>";
     } else if (tab === "overtime") {
       html = '<section class="hr-panel">' + monthBar + kpis([{ label: "加班总时长", value: "0" }]) +
         '<p class="hr-msg" data-msg></p>' + table(["姓名", "日期", "时长"], emptyRow(3, "还没有加班")) + "</section>";
@@ -215,32 +214,21 @@
   }
 
   function fillAttendance(root, pack) {
-    var people = pack.people || [];
-    var links = pack.links || [];
-    var linked = {};
-    links.forEach(function (link) { linked[link.personId] = link; });
-    var open = people.filter(function (person) { return !linked[person.id]; });
+    var days = pairPunches(pack.punches || []);
+    var names = {};
+    days.forEach(function (row) { if (row.userName) names[row.userName] = true; });
     setStats(root, [
       { label: "打卡条数", value: (pack.punches || []).length },
-      { label: "已对齐", value: links.length },
-      { label: "未对齐", value: open.length }
+      { label: "人数", value: Object.keys(names).length }
     ]);
-    var linkBody = people.length ? people.slice(0, 30).map(function (person) {
-      var link = linked[person.id];
-      var how = link ? (link.matchBy === "phone" ? "手机号" : "工号") : "未对齐";
-      return "<tr><td>" + esc(person.name) + "</td><td>" + esc(person.employeeNo) + "</td><td>" + esc(how) + "</td></tr>";
-    }).join("") : emptyRow(3, "还没有在职人员");
-    if (people.length > 30) linkBody += '<tr><td colspan="3">还有 ' + (people.length - 30) + " 人</td></tr>";
-    setList(root, ["姓名", "工号", "对齐"], linkBody);
-    var days = pairPunches(pack.punches || []);
-    var punchBody = days.length ? days.map(function (row) {
+    var body = days.length ? days.map(function (row) {
       var labels = row.labels.filter(function (label, index) { return row.labels.indexOf(label) === index; }).join("、");
-      return "<tr><td>" + esc(nameOf(people, row.personId) || "未命名") + "</td><td>" + esc(row.workDate) +
+      return "<tr><td>" + esc(row.userName || "未命名") + "</td><td>" + esc(row.jobNumber) + "</td><td>" + esc(row.workDate) +
         "</td><td>" + esc(row.on) + "</td><td>" + esc(row.off) + "</td><td>" + esc(labels) + "</td></tr>";
-    }).join("") : emptyRow(5, "还没有打卡");
-    var box = root.querySelector("[data-punches]");
-    if (box) box.outerHTML = table(["姓名", "日期", "上班", "下班", "结果"], punchBody).replace("data-list", "data-punches");
-    if (!pack.configured) setMsg(root, "钉钉还没配置，对齐和打卡先留空。", false);
+    }).join("") : emptyRow(6, "还没有打卡");
+    setList(root, ["姓名", "工号", "日期", "上班", "下班", "结果"], body);
+    if (!pack.configured) setMsg(root, "钉钉还没配置，打卡先留空。", false);
+    else setMsg(root, "先按钉钉名单展示，和组织中心的对齐以后再看。", false);
   }
 
   function fillOvertime(root, pack) {
@@ -318,9 +306,7 @@
     var statusReq = api("/api/hr/status").catch(function () { return { configured: false }; });
     var dataReq;
     if (tab === "attendance") {
-      dataReq = Promise.all([api("/api/hr/attendance" + monthQuery(root)), api("/api/hr/links")]).then(function (pair) {
-        return { punches: pair[0].punches || [], links: pair[1].links || [] };
-      });
+      dataReq = api("/api/hr/attendance" + monthQuery(root));
     } else if (tab === "overtime") {
       dataReq = api("/api/hr/overtime" + monthQuery(root));
     } else if (tab === "timeoff") {
