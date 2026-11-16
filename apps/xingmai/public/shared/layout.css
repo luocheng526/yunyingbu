@@ -1,5 +1,6 @@
 /* xm-sider-narrow 0.1.112 */
 /* xm-shell-scroll 0.1.772-scroll */
+/* xm-nav-hot 0.1.772-navhot */
 :root,
 html[data-theme="light"] {
   --xm-sider: #ffffff;
@@ -10,7 +11,8 @@ html[data-theme="light"] {
   --xm-line: #f0f0f0;
   --xm-primary: #1677ff;
   --xm-primary-soft: #e6f4ff;
-  --xm-primary-deep: #1263d6;
+  --xm-primary-deep: #0b4ec4;
+  --xm-menu-glow: rgba(11, 78, 196, 0.38);
   --xm-card: #ffffff;
   --xm-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 8px 24px rgba(0, 0, 0, 0.04);
   --xm-sider-w: 200px;
@@ -27,7 +29,8 @@ html[data-theme="dark"] {
   --xm-line: #2a2820;
   --xm-primary: #3b82f6;
   --xm-primary-soft: #1e3a5f;
-  --xm-primary-deep: #2563eb;
+  --xm-primary-deep: #1d4ed8;
+  --xm-menu-glow: rgba(29, 78, 216, 0.5);
   --xm-card: #1c1a14;
   --xm-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.28);
 }
@@ -42,7 +45,8 @@ html[data-theme="pink"] {
   --xm-line: #ffd0e0;
   --xm-primary: #f8005f;
   --xm-primary-soft: #ffe0ec;
-  --xm-primary-deep: #c1004c;
+  --xm-primary-deep: #9d0040;
+  --xm-menu-glow: rgba(157, 0, 64, 0.36);
   --xm-card: #ffffff;
   --xm-shadow: 0 1px 2px rgba(248, 0, 95, 0.08), 0 8px 24px rgba(248, 0, 95, 0.06);
 }
@@ -124,6 +128,18 @@ html.xm-collapsed .xm-queue-badge {
   padding: 0 4px;
   font-size: 10px;
   line-height: 16px;
+}
+
+html.xm-collapsed .xm-menu-group.is-current {
+  margin: 4px 8px;
+  border-radius: 10px;
+  padding: 0;
+}
+
+html.xm-collapsed .xm-menu-item.is-active,
+html.xm-collapsed .xm-menu-group.is-current > .xm-menu-parent {
+  margin: 0;
+  border-radius: 10px;
 }
 
 html.xm-collapsed .xm-brand {
@@ -224,6 +240,7 @@ html.xm-collapsed .xm-collapse {
   width: calc(100% - 6px);
   cursor: pointer;
   font-family: inherit;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .xm-ico {
@@ -268,23 +285,66 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
   padding: 16px;
 }
 
+.xm-menu-group.is-current {
+  background: color-mix(in srgb, var(--xm-primary) 8%, transparent);
+  border-radius: 0 12px 12px 0;
+  margin: 2px 6px 2px 0;
+  padding: 2px 0 4px;
+}
+
+.xm-menu-group.is-current > .xm-menu-item,
+.xm-menu-group.is-current .xm-submenu .xm-menu-item {
+  width: 100%;
+  margin-right: 0;
+}
+
 .xm-menu-item.is-active,
-.xm-menu-item[aria-current="page"] {
-  background: var(--xm-primary-soft);
-  color: var(--xm-primary);
-  font-weight: 600;
+.xm-menu-item[aria-current="page"],
+.xm-menu-group.is-current > .xm-menu-parent {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0.05) 42%, rgba(0, 0, 0, 0.14) 100%),
+    linear-gradient(135deg, var(--xm-primary-deep) 0%, var(--xm-primary) 52%, color-mix(in srgb, var(--xm-primary) 72%, #ffffff) 100%);
+  color: #fff;
+  font-weight: 700;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    0 8px 18px var(--xm-menu-glow);
+}
+
+.xm-menu-item.is-active:hover,
+.xm-menu-item[aria-current="page"]:hover,
+.xm-menu-group.is-current > .xm-menu-parent:hover,
+.xm-menu-item.is-active:active,
+.xm-menu-item[aria-current="page"]:active,
+.xm-menu-group.is-current > .xm-menu-parent:active {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.08) 42%, rgba(0, 0, 0, 0.1) 100%),
+    linear-gradient(135deg, var(--xm-primary-deep) 0%, var(--xm-primary) 46%, color-mix(in srgb, var(--xm-primary) 58%, #fff) 100%);
+  color: #fff;
 }
 
 .xm-menu-item.is-active::before,
-.xm-menu-item[aria-current="page"]::before {
+.xm-menu-item[aria-current="page"]::before,
+.xm-menu-group.is-current > .xm-menu-parent::before {
   content: "";
   position: absolute;
   left: 0;
-  top: 8px;
-  bottom: 8px;
+  top: 7px;
+  bottom: 7px;
   width: 3px;
-  background: var(--xm-primary);
+  background: #fff;
   border-radius: 0 2px 2px 0;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.85);
+  z-index: 1;
+}
+
+.xm-menu-item.is-active .xm-ico,
+.xm-menu-item[aria-current="page"] .xm-ico,
+.xm-menu-group.is-current > .xm-menu-parent .xm-ico,
+.xm-menu-item.is-active .xm-caret,
+.xm-menu-group.is-current > .xm-menu-parent .xm-caret {
+  opacity: 1;
+  color: #fff;
 }
 
 .xm-queue-badge {
@@ -668,6 +728,24 @@ html[data-theme="dark"] .xm-menu-item:hover {
 
 html[data-theme="dark"] .xm-menu-item:active {
   background: #1e3a5f;
+}
+
+html[data-theme="dark"] .xm-menu-item.is-active,
+html[data-theme="dark"] .xm-menu-item[aria-current="page"],
+html[data-theme="dark"] .xm-menu-group.is-current > .xm-menu-parent,
+html[data-theme="dark"] .xm-menu-item.is-active:hover,
+html[data-theme="dark"] .xm-menu-item[aria-current="page"]:hover,
+html[data-theme="dark"] .xm-menu-group.is-current > .xm-menu-parent:hover,
+html[data-theme="dark"] .xm-menu-item.is-active:active,
+html[data-theme="dark"] .xm-menu-item[aria-current="page"]:active,
+html[data-theme="dark"] .xm-menu-group.is-current > .xm-menu-parent:active {
+  color: #fff;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 42%, rgba(0, 0, 0, 0.28) 100%),
+    linear-gradient(135deg, var(--xm-primary-deep) 0%, var(--xm-primary) 54%, color-mix(in srgb, var(--xm-primary) 70%, #ffffff) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 8px 18px var(--xm-menu-glow);
 }
 
 html[data-theme="dark"] .xm-user,

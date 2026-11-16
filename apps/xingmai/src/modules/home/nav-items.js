@@ -476,7 +476,7 @@ function itemLink(item, activeHref, extraClass) {
 function groupMarkup(item, activeHref) {
   const open = childActive(item, activeHref);
   const kids = item.children.map((child) => itemLink(child, activeHref, "xm-menu-child")).join("");
-  return `<div class="xm-menu-group${open ? " is-open" : ""}" data-xm-group="${item.href}"><button type="button" class="xm-menu-item xm-menu-parent" aria-expanded="${open ? "true" : "false"}">${ico(item.href)}<span>${item.label}</span>${CARET}</button><div class="xm-submenu">${kids}</div></div>`;
+  return `<div class="xm-menu-group${open ? " is-open is-current" : ""}" data-xm-group="${item.href}"><button type="button" class="xm-menu-item xm-menu-parent${open ? " is-active" : ""}" aria-expanded="${open ? "true" : "false"}">${ico(item.href)}<span>${item.label}</span>${CARET}</button><div class="xm-submenu">${kids}</div></div>`;
 }
 
 export function navMarkup(activeHref, user) {
