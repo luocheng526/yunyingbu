@@ -41,7 +41,7 @@ test("侧栏在工作汇报后面挂需求与反馈，不进底部", () => {
 
 test("壳把 /feedback 交给需求与反馈模块", () => {
   assert.equal(APP_MODULES["/feedback"], "feedback");
-  assert.equal(SHELL_ASSET_VER, "0.1.772-tab2");
+  assert.equal(SHELL_ASSET_VER, "0.1.772-orgscroll");
   const html = renderAppShell("/feedback", luocheng);
   assert.equal(html.includes("/shared/modules/feedback.js"), true);
   assert.equal(html.includes("需求与反馈"), true);

@@ -4,6 +4,7 @@
 /* xm-tabs-restore 0.1.772-tabs */
 /* xm-menu-lite 0.1.772-menulite */
 /* xm-tabs-fig2 0.1.772-tab2 */
+/* xm-org-scroll 0.1.772-orgscroll */
 :root,
 html[data-theme="light"] {
   --xm-sider: #ffffff;
@@ -578,6 +579,20 @@ a.xm-username:hover {
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   padding: 0;
+}
+
+/* 组织中心 people.js 把表格 overflow:visible，滚轮绑在 .xm-main。
+   修花名册时壳把 .xm-workspace 锁成 hidden，表格被夹在中间滚不了。
+   选择器带 html，压过后注入的 people-page-css。工作区自己滚，顶栏不动。 */
+html body:has(.xm-shell):has(.people-page) .xm-main {
+  overflow-x: hidden !important;
+  overflow-y: hidden !important;
+}
+
+html body:has(.xm-shell):has(.people-page) .xm-workspace {
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
 }
 
 .xm-page {
