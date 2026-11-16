@@ -34,6 +34,7 @@ import {
   punchesFromDing,
   pullDay,
   pullLeaves,
+  pullLate,
   refreshBoardDay,
   readStoredBoard,
   saveBoardSnapshot,
@@ -142,6 +143,8 @@ test("client mounts one page and five in-page tabs", () => {
   assert.match(client, /刷新数据/);
   assert.match(client, /data-updated/);
   assert.match(client, /data-act="refresh-board"/);
+  assert.match(client, /data-kpi/);
+  assert.match(client, /迟到明细/);
   assert.match(client, /甄选员工详细名单/);
   assert.match(client, /data-staff-search/);
   assert.match(client, /data-staff-pick/);
@@ -458,6 +461,45 @@ test("the monthly check overwrites a stored day with the ding result", async () 
   const board = await readStoredBoard("2026-02-02");
   assert.equal(board.boards[0].board.late, 0);
   assert.equal(board.boards[0].board.punched, 1);
+});
+
+test("late results come from the attendance day, not only the raw punch", async () => {
+  resetHrStore();
+  await saveDingUsers([{ userId: "u1", userName: "甲", jobNumber: "A1", department: "运营一组" }]);
+  await replaceDayPunches("2020-11-15", ["u1"], [{
+    dingtalkUserId: "u1",
+    userName: "甲",
+    department: "运营一组",
+    jobNumber: "A1",
+    workDate: "2020-11-15",
+    checkType: "OnDuty",
+    timeResult: "Normal",
+    label: "正常",
+    checkAt: "2020-11-15 09:25",
+    recordId: "p1"
+  }]);
+  const found = await pullLate("2020-11-15", {
+    configured: () => true,
+    async listUpdatedata() {
+      return [{
+        check_type: "OnDuty",
+        time_result: "Late",
+        plan_check_time: Date.parse("2020-11-15T01:00:00Z"),
+        user_check_time: Date.parse("2020-11-15T01:25:00Z")
+      }];
+    }
+  });
+  assert.equal(found.length, 1);
+  assert.equal(found[0].minutes, 25);
+  assert.equal(found[0].label, "迟到");
+  const punches = await listPunches({ date: "2020-11-15" });
+  assert.equal(punches[0].timeResult, "Late");
+  assert.equal(punches[0].lateMinutes, 25);
+  await saveBoardSnapshot("2020-11-15");
+  const board = await readStoredBoard("2020-11-15");
+  assert.equal(board.boards[0].board.late, 1);
+  assert.equal(board.boards[0].roster.filter((row) => row.late).length, 1);
+  assert.equal(board.boards[0].roster.find((row) => row.late).name, "甲");
 });
 
 test("refreshing a day pulls punches and leave and stamps the time", async () => {

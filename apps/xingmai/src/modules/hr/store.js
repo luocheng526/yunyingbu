@@ -33,6 +33,8 @@ export const HR_SCHEMA = [
     time_result VARCHAR(32) NOT NULL DEFAULT '',
     label VARCHAR(16) NOT NULL DEFAULT '',
     check_at VARCHAR(32) NOT NULL DEFAULT '',
+    plan_at VARCHAR(32) NOT NULL DEFAULT '',
+    late_minutes INT NOT NULL DEFAULT 0,
     record_id VARCHAR(64) NOT NULL DEFAULT '',
     UNIQUE KEY uq_hr_punch_user (dingtalk_userid, work_date, check_type, record_id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
@@ -326,6 +328,12 @@ async function migratePunchTable() {
   if (!names.has("department")) {
     await query("ALTER TABLE hr_punches ADD COLUMN department VARCHAR(64) NOT NULL DEFAULT ''");
   }
+  if (!names.has("plan_at")) {
+    await query("ALTER TABLE hr_punches ADD COLUMN plan_at VARCHAR(32) NOT NULL DEFAULT ''");
+  }
+  if (!names.has("late_minutes")) {
+    await query("ALTER TABLE hr_punches ADD COLUMN late_minutes INT NOT NULL DEFAULT 0");
+  }
   await query("ALTER TABLE hr_punches MODIFY person_id INT NOT NULL DEFAULT 0");
   const indexes = await rowsOf(
     `SELECT INDEX_NAME FROM information_schema.STATISTICS
@@ -551,6 +559,74 @@ export async function replaceDayPunches(workDate, userIds, punches) {
   return listPunches({ date: day });
 }
 
+export async function markLatePunches(workDate, rows) {
+  await ensureHrSchema();
+  const day = mustDate(workDate, "日期");
+  const clean = (rows || []).map((row) => ({
+    dingtalkUserId: clip(row.dingtalkUserId, 64),
+    userName: clip(row.userName, 64),
+    jobNumber: clip(row.jobNumber, 64),
+    department: clip(row.department, 64),
+    timeResult: clip(row.timeResult, 32),
+    label: clip(row.label, 16),
+    planAt: clip(row.planAt, 32),
+    checkAt: clip(row.checkAt, 32),
+    minutes: Math.max(0, Number(row.minutes) || 0)
+  })).filter((row) => row.dingtalkUserId && row.timeResult);
+  if (dbMode() === "mysql") {
+    for (const row of clean) {
+      await query(
+        `UPDATE hr_punches
+         SET time_result = ?, label = ?, plan_at = ?, late_minutes = ?,
+             check_at = CASE WHEN check_at = '' AND ? <> '' THEN ? ELSE check_at END
+         WHERE work_date = ? AND dingtalk_userid = ? AND check_type = 'OnDuty'`,
+        [row.timeResult, row.label, row.planAt, row.minutes, row.checkAt, row.checkAt, day, row.dingtalkUserId]
+      );
+      const existing = await rowsOf(
+        "SELECT id FROM hr_punches WHERE work_date = ? AND dingtalk_userid = ? AND check_type = 'OnDuty' LIMIT 1",
+        [day, row.dingtalkUserId]
+      );
+      if (existing.length) continue;
+      await query(
+        `INSERT INTO hr_punches
+          (person_id, dingtalk_userid, user_name, job_number, department, work_date, check_type, time_result, label, check_at, plan_at, late_minutes, record_id)
+         VALUES (0, ?, ?, ?, ?, ?, 'OnDuty', ?, ?, ?, ?, ?, ?)`,
+        [row.dingtalkUserId, row.userName, row.jobNumber, row.department, day, row.timeResult, row.label, row.checkAt, row.planAt, row.minutes, `late-${row.dingtalkUserId}`]
+      );
+    }
+    return listPunches({ date: day });
+  }
+  for (const row of clean) {
+    const existing = memory.punches.filter((item) => item.workDate === day && item.dingtalkUserId === row.dingtalkUserId && item.checkType !== "OffDuty");
+    if (!existing.length) {
+      memory.punches.push({
+        personId: 0,
+        dingtalkUserId: row.dingtalkUserId,
+        userName: row.userName,
+        jobNumber: row.jobNumber,
+        department: row.department,
+        workDate: day,
+        checkType: "OnDuty",
+        timeResult: row.timeResult,
+        label: row.label,
+        checkAt: row.checkAt,
+        planAt: row.planAt,
+        lateMinutes: row.minutes,
+        recordId: `late-${row.dingtalkUserId}`
+      });
+      continue;
+    }
+    for (const item of existing) {
+      item.timeResult = row.timeResult;
+      item.label = row.label;
+      item.planAt = row.planAt;
+      item.lateMinutes = row.minutes;
+      if (!item.checkAt && row.checkAt) item.checkAt = row.checkAt;
+    }
+  }
+  return listPunches({ date: day });
+}
+
 export async function saveBoardDay(workDate, snapshot) {
   await ensureHrSchema();
   const day = mustDate(workDate, "日期");
@@ -560,7 +636,9 @@ export async function saveBoardDay(workDate, snapshot) {
     board: team.board
   }));
   const punches = {};
-  for (const team of snapshot.teams || []) punches[team.id] = team.punches || [];
+  for (const team of snapshot.teams || []) {
+    punches[team.id] = { punches: team.punches || [], roster: team.roster || [] };
+  }
   const savedAt = new Date().toISOString();
   if (dbMode() === "mysql") {
     await query(
@@ -809,6 +887,8 @@ function mapPunch(row) {
     timeResult: row.time_result,
     label: row.label,
     checkAt: row.check_at || "",
+    planAt: row.plan_at || "",
+    lateMinutes: Number(row.late_minutes) || 0,
     recordId: row.record_id || ""
   };
 }

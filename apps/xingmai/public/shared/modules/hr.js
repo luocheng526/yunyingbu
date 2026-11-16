@@ -109,6 +109,9 @@
       ".hr-board-kpi i svg{width:16px;height:16px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}" +
       ".hr-board-kpi b{display:block;margin-top:10px;font-size:34px;line-height:1;font-weight:700;font-variant-numeric:tabular-nums;}" +
       ".hr-board-kpi span{display:block;margin-top:8px;font-size:13px;opacity:.95;}" +
+      ".hr-kpi-list{margin-top:4px;}" +
+      ".hr-kpi-list:empty{display:none;}" +
+      ".hr-kpi-list h3{margin:0 0 8px;font-size:14px;font-weight:650;color:var(--xm-ink);}" +
       ".hr-tone-staff{background:linear-gradient(135deg,#3dcbd6,#1499c4);}" +
       ".hr-tone-due{background:linear-gradient(135deg,#3adf8a,#12b36a);}" +
       ".hr-tone-punch{background:linear-gradient(135deg,#5b8cff,#3a63f5);}" +
@@ -250,7 +253,7 @@
         '<label class="hr-month">统计日<input type="date" data-day value="' + esc(addDays(today, -1)) + '" /></label></div>' +
         teams.map(function (team) {
           return '<section class="hr-team" data-team="' + team.id + '"><h2 class="hr-team-title">' + esc(team.title) + "</h2>" +
-            '<div class="hr-board-kpis" data-board></div>' +
+            '<div class="hr-board-kpis" data-board></div><div class="hr-kpi-list" data-kpi-list></div>' +
             '<div class="hr-board-grid"><section class="hr-card hr-board-card" data-depts></section>' +
             '<section class="hr-card hr-board-card" data-days></section></div>' +
             '<h3 class="hr-board-sub">当日打卡</h3>' +
@@ -349,20 +352,23 @@
     if (!section) return;
     var board = (view && view.board) || { staff: 0, expected: 0, punched: 0, late: 0, leave: 0, date: "", departments: [] };
     var prefix = board.date && board.date === shanghaiToday() ? "今日" : "当日";
+    var open = section.getAttribute("data-open") || "";
     var cards = [
-      { tone: "staff", icon: "staff", label: "员工人数", value: board.staff || 0 },
-      { tone: "due", icon: "due", label: prefix + "应到人数", value: board.expected || 0 },
-      { tone: "punch", icon: "punch", label: prefix + "打卡人数", value: board.punched || 0 },
-      { tone: "late", icon: "late", label: prefix + "迟到人数", value: board.late || 0 },
-      { tone: "leave", icon: "leave", label: prefix + "请假人数", value: board.leave || 0 }
+      { key: "staff", tone: "staff", icon: "staff", label: "员工人数", value: board.staff || 0 },
+      { key: "due", tone: "due", icon: "due", label: prefix + "应到人数", value: board.expected || 0 },
+      { key: "punch", tone: "punch", icon: "punch", label: prefix + "打卡人数", value: board.punched || 0 },
+      { key: "late", tone: "late", icon: "late", label: prefix + "迟到人数", value: board.late || 0 },
+      { key: "leave", tone: "leave", icon: "leave", label: prefix + "请假人数", value: board.leave || 0 }
     ];
     var box = section.querySelector("[data-board]");
     if (box) {
       box.innerHTML = cards.map(function (card) {
-        return '<article class="hr-board-kpi hr-tone-' + card.tone + '">' + boardIcon(card.icon) +
-          "<b>" + esc(card.value) + "</b><span>" + esc(card.label) + "</span></article>";
+        return '<button type="button" class="hr-board-kpi hr-tone-' + card.tone + (open === card.key ? " is-on" : "") +
+          '" data-kpi="' + card.key + '">' + boardIcon(card.icon) +
+          "<b>" + esc(card.value) + "</b><span>" + esc(card.label) + "</span></button>";
       }).join("");
     }
+    fillKpiList(section, (view && view.roster) || []);
     var depts = board.departments || [];
     var maxCount = depts.reduce(function (max, row) { return Math.max(max, row.count || 0); }, 0) || 1;
     var deptBox = section.querySelector("[data-depts]");
@@ -396,6 +402,61 @@
     }).join("") : emptyRow(7, "还没有打卡");
     var list = section.querySelector("[data-list]");
     if (list) list.outerHTML = table(["姓名", "部门", "工号", "日期", "上班", "下班", "结果"], body);
+  }
+
+  function fillKpiList(section, roster) {
+    var box = section.querySelector("[data-kpi-list]");
+    if (!box) return;
+    var kind = section.getAttribute("data-open") || "";
+    if (!kind) {
+      box.innerHTML = "";
+      return;
+    }
+    var titles = { staff: "员工明细", due: "应到明细", punch: "打卡明细", late: "迟到明细", leave: "请假明细" };
+    var rows = (roster || []).filter(function (row) {
+      if (kind === "due") return !row.onLeave;
+      if (kind === "punch") return row.punched;
+      if (kind === "late") return row.late;
+      if (kind === "leave") return row.onLeave;
+      return true;
+    }).sort(function (a, b) {
+      return String(a.department).localeCompare(String(b.department), "zh") || String(a.name).localeCompare(String(b.name), "zh");
+    });
+    var headers = ["姓名", "部门", "工号"];
+    var body = "";
+    if (!roster.length) {
+      body = emptyRow(3, "点刷新数据后可以看明细");
+    } else if (!rows.length) {
+      if (kind === "late") headers = ["姓名", "部门", "工号", "应上班", "打卡时间", "迟到"];
+      else if (kind === "leave") headers = ["姓名", "部门", "假期", "开始", "结束", "时长"];
+      else if (kind === "punch") headers = ["姓名", "部门", "工号", "上班", "下班"];
+      body = emptyRow(headers.length, kind === "late" ? "这一天没有迟到的人" : kind === "leave" ? "这一天没有请假的人" : "没有对应的人");
+    } else if (kind === "late") {
+      headers = ["姓名", "部门", "工号", "应上班", "打卡时间", "迟到"];
+      body = rows.map(function (row) {
+        var minutes = row.lateMinutes ? row.lateMinutes + "分钟" : "";
+        var result = [row.lateLabel, minutes].filter(Boolean).join(" ");
+        return "<tr><td>" + esc(row.name || "未命名") + "</td><td>" + esc(row.department) + "</td><td>" + esc(row.jobNumber) +
+          "</td><td>" + esc(String(row.planAt || "").slice(11)) + "</td><td>" + esc(String(row.on || "").slice(11)) + "</td><td>" + esc(result) + "</td></tr>";
+      }).join("");
+    } else if (kind === "leave") {
+      headers = ["姓名", "部门", "假期", "开始", "结束", "时长"];
+      body = rows.map(function (row) {
+        return "<tr><td>" + esc(row.name || "未命名") + "</td><td>" + esc(row.department) + "</td><td>" + esc(row.leaveName || "请假") +
+          "</td><td>" + esc(row.leaveStart) + "</td><td>" + esc(row.leaveEnd) + "</td><td>" + esc(row.leaveDuration) + "</td></tr>";
+      }).join("");
+    } else if (kind === "punch") {
+      headers = ["姓名", "部门", "工号", "上班", "下班"];
+      body = rows.map(function (row) {
+        return "<tr><td>" + esc(row.name || "未命名") + "</td><td>" + esc(row.department) + "</td><td>" + esc(row.jobNumber) +
+          "</td><td>" + esc(String(row.on || "").slice(11)) + "</td><td>" + esc(String(row.off || "").slice(11)) + "</td></tr>";
+      }).join("");
+    } else {
+      body = rows.map(function (row) {
+        return "<tr><td>" + esc(row.name || "未命名") + "</td><td>" + esc(row.department) + "</td><td>" + esc(row.jobNumber) + "</td></tr>";
+      }).join("");
+    }
+    box.innerHTML = "<h3>" + esc(titles[kind] || "明细") + "</h3>" + table(headers, body);
   }
 
   function setUpdated(root, value) {
@@ -888,6 +949,18 @@
     paint(root, state.tab, addDays(shanghaiToday(), -1).slice(0, 7), shanghaiToday());
 
     function onClick(event) {
+      var kpi = event.target.closest("[data-kpi]");
+      if (kpi && root.contains(kpi)) {
+        event.preventDefault();
+        var section = kpi.closest("[data-team]");
+        if (!section || !state.view) return;
+        var key = kpi.getAttribute("data-kpi");
+        section.setAttribute("data-open", section.getAttribute("data-open") === key ? "" : key);
+        var teamId = section.getAttribute("data-team");
+        var teamView = ((state.view && state.view.boards) || []).filter(function (item) { return item.id === teamId; })[0];
+        fillTeam(section, teamView || { board: {}, days: [], punches: [], roster: [] });
+        return;
+      }
       var refresh = event.target.closest("[data-act='refresh-board']");
       if (refresh && root.contains(refresh)) {
         event.preventDefault();

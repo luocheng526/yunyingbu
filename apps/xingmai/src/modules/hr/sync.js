@@ -6,6 +6,7 @@ import {
   listLeaves,
   listLinks,
   listPunches,
+  markLatePunches,
   readBoardPunches,
   readBoardStamp,
   recordSync,
@@ -525,7 +526,8 @@ export function boardPack({ date, users = [], punches = [], leaves = [], dates =
       title: team.title,
       board: buildBoard({ date, users: picked, punches: scopedPunches, leaves: scopedLeaves }),
       days,
-      punches: rowsForDay(picked, scopedPunches, date)
+      punches: rowsForDay(picked, scopedPunches, date),
+      roster: teamRoster({ date, users: picked, punches: scopedPunches, leaves: scopedLeaves })
     };
   });
 }
@@ -592,6 +594,64 @@ export function rowsForDay(users, punches, date) {
   return rows;
 }
 
+export function lateMinutes(planAt, checkAt) {
+  const plan = Date.parse(`${String(planAt || "").replace(" ", "T")}:00+08:00`);
+  const actual = Date.parse(`${String(checkAt || "").replace(" ", "T")}:00+08:00`);
+  if (!Number.isFinite(plan) || !Number.isFinite(actual) || actual <= plan) return 0;
+  return Math.round((actual - plan) / 60000);
+}
+
+export function teamRoster({ date, users = [], punches = [], leaves = [] }) {
+  const day = String(date || "");
+  const byUser = new Map();
+  for (const row of punches || []) {
+    if (row.workDate !== day || !row.dingtalkUserId) continue;
+    if (!byUser.has(row.dingtalkUserId)) {
+      byUser.set(row.dingtalkUserId, { on: "", off: "", planAt: "", minutes: 0, label: "", late: false });
+    }
+    const item = byUser.get(row.dingtalkUserId);
+    if (row.checkType === "OffDuty") {
+      if (!item.off || String(row.checkAt || "") > item.off) item.off = row.checkAt || "";
+    } else if (!item.on || String(row.checkAt || "") > item.on) {
+      item.on = row.checkAt || "";
+    }
+    if (row.timeResult === "Late" || row.timeResult === "SeriousLate" || row.timeResult === "Absenteeism" || Number(row.lateMinutes) > 0) {
+      item.late = true;
+      item.planAt = row.planAt || item.planAt;
+      item.minutes = Number(row.lateMinutes) || item.minutes || lateMinutes(row.planAt, row.checkAt);
+      item.label = row.label || TIME_LABEL[row.timeResult] || "迟到";
+    }
+  }
+  const leaveByUser = new Map();
+  for (const leave of leaves || []) {
+    if (!leaveCovers(leave, day)) continue;
+    const userId = String(leave.dingtalkUserId || "");
+    if (userId && !leaveByUser.has(userId)) leaveByUser.set(userId, leave);
+  }
+  return (users || []).filter((user) => user && user.userId).map((user) => {
+    const punch = byUser.get(user.userId) || { on: "", off: "", planAt: "", minutes: 0, label: "", late: false };
+    const leave = leaveByUser.get(user.userId);
+    return {
+      userId: user.userId,
+      name: user.userName || user.name || "",
+      department: user.department || "",
+      jobNumber: user.jobNumber || "",
+      onLeave: Boolean(leave),
+      leaveName: leave ? (leave.leaveName || "请假") : "",
+      leaveStart: leave ? leave.startAt || "" : "",
+      leaveEnd: leave ? leave.endAt || "" : "",
+      leaveDuration: leave ? String(leave.duration || "") : "",
+      punched: Boolean(punch.on || punch.off),
+      on: punch.on,
+      off: punch.off,
+      late: punch.late,
+      planAt: punch.planAt,
+      lateMinutes: punch.minutes,
+      lateLabel: punch.label
+    };
+  });
+}
+
 export function buildBoard({ date, users = [], punches = [], leaves = [] }) {
   const day = String(date || "");
   const directory = users.filter((user) => user && user.userId);
@@ -608,7 +668,7 @@ export function buildBoard({ date, users = [], punches = [], leaves = [] }) {
     const userId = String(row.dingtalkUserId || "");
     if (!userId) continue;
     if (row.checkAt) punched.add(userId);
-    if (row.timeResult === "Late" || row.timeResult === "SeriousLate") late.add(userId);
+    if (row.timeResult === "Late" || row.timeResult === "SeriousLate" || row.timeResult === "Absenteeism" || Number(row.lateMinutes) > 0) late.add(userId);
   }
   const leaveCount = directory.filter((user) => onLeave.has(user.userId)).length;
   const deptMap = new Map();
@@ -811,10 +871,63 @@ export async function saveBoardSnapshot(date) {
     id: team.id,
     title: team.title,
     board: team.board,
-    punches: team.punches
+    punches: team.punches,
+    roster: team.roster
   }));
   await saveBoardDay(date, { teams });
   return { date, teams };
+}
+
+function unpackTeam(raw) {
+  if (Array.isArray(raw)) return { punches: raw, roster: [] };
+  if (!raw || typeof raw !== "object") return { punches: [], roster: [] };
+  return { punches: raw.punches || [], roster: raw.roster || [] };
+}
+
+export async function pullLate(workDate, client = createDingClient()) {
+  if (!client.configured() || typeof client.listUpdatedata !== "function") return [];
+  const directory = await listDingUsers();
+  const byUser = new Map(directory.map((user) => [user.userId, user]));
+  const ids = directory.map((user) => user.userId).filter(Boolean);
+  const found = [];
+  const queue = ids.slice();
+  async function one(userId) {
+    let list = [];
+    try {
+      list = await client.listUpdatedata(userId, workDate);
+    } catch {
+      return;
+    }
+    for (const item of list || []) {
+      const timeResult = String(item.time_result || item.timeResult || "");
+      const checkType = String(item.check_type || item.checkType || "OnDuty");
+      if (checkType === "OffDuty") continue;
+      if (timeResult !== "Late" && timeResult !== "SeriousLate" && timeResult !== "Absenteeism") continue;
+      const user = byUser.get(userId) || {};
+      const planAt = formatShanghai(item.plan_check_time || item.planCheckTime);
+      const checkAt = formatShanghai(item.user_check_time || item.userCheckTime);
+      found.push({
+        dingtalkUserId: userId,
+        userName: user.userName || user.name || "",
+        jobNumber: user.jobNumber || "",
+        department: user.department || "",
+        timeResult,
+        label: TIME_LABEL[timeResult] || "迟到",
+        planAt,
+        checkAt,
+        minutes: lateMinutes(planAt, checkAt)
+      });
+    }
+  }
+  const workers = [0, 1, 2, 3].map(async () => {
+    while (queue.length) {
+      const userId = queue.shift();
+      if (userId) await one(userId);
+    }
+  });
+  await Promise.all(workers);
+  if (found.length) await markLatePunches(workDate, found);
+  return found;
 }
 
 export async function readStoredBoard(date) {
@@ -829,6 +942,7 @@ export async function readStoredBoard(date) {
   metrics = await listBoardMetrics(dates);
   const punches = await readBoardPunches(date);
   const boards = BOARD_TEAMS.map((team) => {
+    const packed = unpackTeam(punches && punches[team.id]);
     const current = (metrics[date] || []).find((item) => item.id === team.id);
     const board = current ? current.board : emptyBoard(date);
     const days = dates.map((day) => {
@@ -841,7 +955,8 @@ export async function readStoredBoard(date) {
       title: team.title,
       board,
       days,
-      punches: (punches && punches[team.id]) || []
+      punches: packed.punches,
+      roster: packed.roster
     };
   });
   return {
@@ -864,15 +979,17 @@ export async function refreshBoardDay(workDate, client = createDingClient()) {
   await refreshDirectory(client);
   const pulled = await pullDay(day, { client });
   const leaves = await pullLeaves(day, day, client);
+  const late = await pullLate(day, client);
   await saveBoardSnapshot(day);
   const updatedAt = shanghaiClock(await readBoardStamp(day));
-  await recordSync("refresh", day, true, `已刷新 ${day}，打卡 ${pulled.punches?.length || 0} 条，请假 ${leaves.leaves?.length || 0} 条`);
+  await recordSync("refresh", day, true, `已刷新 ${day}，打卡 ${pulled.punches?.length || 0} 条，请假 ${leaves.leaves?.length || 0} 条，迟到 ${late.length} 人`);
   return {
     configured: true,
     workDate: day,
     updatedAt,
     punches: pulled.punches?.length || 0,
-    leaveCount: leaves.leaves?.length || 0
+    leaveCount: leaves.leaves?.length || 0,
+    lateCount: late.length
   };
 }
 
@@ -884,6 +1001,7 @@ export async function archiveYesterday(client = createDingClient()) {
   }
   await refreshDirectory(client);
   const pulled = await pullDay(yesterday, { client });
+  await pullLate(yesterday, client);
   await saveBoardSnapshot(yesterday);
   await recordSync("daily", yesterday, true, `已保存 ${yesterday}，打卡 ${pulled.punches?.length || 0} 条`);
   return { configured: true, workDate: yesterday, users: pulled.users, punches: pulled.punches };
