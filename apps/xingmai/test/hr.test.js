@@ -1,0 +1,374 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { createServer } from "node:http";
+import { dirname, join } from "node:path";
+import { pathToFileURL, fileURLToPath } from "node:url";
+import express from "express";
+import test from "node:test";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { createDingClient } from "../src/modules/hr/dingtalk.js";
+import { hrRouter, shouldStartHrJobs } from "../src/modules/hr/router.js";
+import { ackFor, interestingEvent, startDingStream } from "../src/modules/hr/stream.js";
+import { startScheduler } from "../src/modules/hr/sync.js";
+
+const execFileAsync = promisify(execFile);
+import {
+  HR_SCHEMA,
+  listInterviews,
+  listLinks,
+  listOvertime,
+  listPunches,
+  listQuotas,
+  replaceDayPunches,
+  resetHrStore,
+  saveLinks
+} from "../src/modules/hr/store.js";
+import {
+  matchRoster,
+  publicPerson,
+  punchesFromDing,
+  pullDay,
+  runDaily
+} from "../src/modules/hr/sync.js";
+
+for (const key of ["DINGTALK_CORP_ID", "DINGTALK_CLIENT_ID", "DINGTALK_CLIENT_SECRET"]) {
+  delete process.env[key];
+}
+
+const root = dirname(fileURLToPath(import.meta.url));
+const client = readFileSync(join(root, "../public/shared/modules/hr.js"), "utf8");
+
+function listen(app) {
+  return new Promise((resolve) => {
+    const server = createServer(app);
+    server.listen(0, "127.0.0.1", () => resolve(server));
+  });
+}
+
+function close(server) {
+  return new Promise((resolve) => server.close(resolve));
+}
+
+async function request(server, path, { method = "GET", body, user = true } = {}) {
+  const { port } = server.address();
+  const res = await fetch(`http://127.0.0.1:${port}${path}`, {
+    method,
+    headers: {
+      Accept: "application/json",
+      ...(body ? { "Content-Type": "application/json" } : {}),
+      ...(user ? { "x-test-user": "luocheng" } : {})
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const data = await res.json();
+  return { status: res.status, data };
+}
+
+function appWithUser() {
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => {
+    if (req.headers["x-test-user"]) req.user = { username: String(req.headers["x-test-user"]), displayName: "罗成" };
+    next();
+  });
+  app.use("/api/hr", hrRouter);
+  return app;
+}
+
+function jsonResponse(body) {
+  return {
+    ok: true,
+    json: async () => body
+  };
+}
+
+test("hr schema stays in hr_ tables", () => {
+  assert.equal(HR_SCHEMA.length, 8);
+  for (const sql of HR_SCHEMA) {
+    assert.match(sql, /CREATE TABLE IF NOT EXISTS hr_/);
+    assert.doesNotMatch(sql, /people|han_|shen_/i);
+  }
+});
+
+test("client mounts one page and five in-page tabs", () => {
+  assert.match(client, /XmModules\["\/hr"\]/);
+  const labels = ["考勤", "加班", "调休", "人才", "面试"];
+  let from = 0;
+  for (const label of labels) {
+    const at = client.indexOf(`label: "${label}"`);
+    assert.ok(at > from, label);
+    from = at;
+  }
+  assert.equal(client.includes("面试统计"), false);
+  assert.equal(client.includes("人才管理"), false);
+  assert.equal(client.includes("加班时长"), false);
+  assert.equal(client.includes('XmModules["/hr/'), false);
+  assert.equal(client.includes("pushState"), false);
+  assert.equal(client.includes("location.assign"), false);
+  assert.equal(client.includes("location.href"), false);
+  assert.equal(client.includes("password"), false);
+  assert.equal(client.includes("DINGTALK_"), false);
+  assert.match(client, /var\(--xm-/);
+  assert.match(client, /data-theme/);
+  assert.match(client, /\/api\/people/);
+  assert.match(client, /钉钉还没配置/);
+});
+
+test("browser script survives the release import check", async () => {
+  await import(pathToFileURL(join(root, "../public/shared/modules/hr.js")).href);
+});
+
+test("mapping uses job number or phone and skips ambiguous names", () => {
+  const people = [
+    { id: 1, name: "同名", status: "在职", employeeNo: "A1", phone: "" },
+    { id: 2, name: "同名", status: "在职", employeeNo: "", phone: "13800000000" },
+    { id: 3, name: "同名", status: "在职", employeeNo: "", phone: "" },
+    { id: 4, name: "离职人", status: "离职", employeeNo: "A4", phone: "" },
+    { id: 5, name: "重号", status: "在职", employeeNo: "A1", phone: "" }
+  ];
+  const users = [
+    { userId: "u1", jobNumber: "A1", mobile: "" },
+    { userId: "u2", jobNumber: "", mobile: "+86 138 0000 0000" }
+  ];
+  const matched = matchRoster(people, users);
+  assert.deepEqual(matched.links.map((row) => row.personId), [2]);
+  assert.equal(matched.links[0].matchBy, "phone");
+  assert.equal(matched.links[0].dingtalkUserId, "u2");
+  assert.ok(matched.skipped.some((row) => row.personId === 3 && row.reason.includes("没有工号")));
+  assert.ok(matched.skipped.filter((row) => row.reason.includes("同一个钉钉用户")).length >= 2);
+  assert.equal(matched.skipped.some((row) => row.personId === 4), false);
+});
+
+test("public person drops anything except the roster fields", () => {
+  const view = publicPerson({ id: 9, name: "甲", status: "在职", employeeNo: "E9", phone: "13900000000", department: "运营", password: "hidden", username: "jia" });
+  assert.deepEqual(Object.keys(view).sort(), ["department", "employeeNo", "id", "name", "phone", "status"]);
+  assert.equal(JSON.stringify(view).includes("hidden"), false);
+});
+
+test("NotSigned does not invent a clock time", () => {
+  const links = new Map([["u2", { personId: 2 }]]);
+  const rows = punchesFromDing([
+    { id: "on", userId: "u2", checkType: "OnDuty", timeResult: "Normal", userCheckTime: Date.parse("2026-11-15T01:02:00Z"), baseCheckTime: 1 },
+    { id: "off", userId: "u2", checkType: "OffDuty", timeResult: "NotSigned", baseCheckTime: Date.parse("2026-11-15T10:00:00Z") }
+  ], links, "2026-11-15");
+  assert.equal(rows[0].checkAt, "2026-11-15 09:02");
+  assert.equal(rows[0].label, "正常");
+  assert.equal(rows[1].checkAt, "");
+  assert.equal(rows[1].label, "未打卡");
+});
+
+test("unconfigured daily pull writes nothing", async () => {
+  resetHrStore();
+  const result = await runDaily("2026-11-15");
+  assert.equal(result.configured, false);
+  assert.deepEqual(await listPunches({ date: "2026-11-15" }), []);
+  assert.deepEqual(await listLinks(), []);
+  assert.deepEqual(await listOvertime({ month: "2026-11" }), []);
+  assert.deepEqual(await listQuotas(), []);
+});
+
+test("a successful pull keeps the same person and day, and an error keeps the old row", async () => {
+  resetHrStore();
+  const roster = [{ id: 7, name: "甲", status: "在职", employeeNo: "E001", phone: "", department: "运营" }];
+  const fake = {
+    configured: () => true,
+    async listUsers() {
+      return [{ userId: "ding-1", mobile: "", jobNumber: "E001" }];
+    },
+    async listAttendance() {
+      return [
+        { id: "r1", userId: "ding-1", checkType: "OnDuty", timeResult: "Normal", userCheckTime: Date.parse("2026-11-15T01:00:00Z") },
+        { id: "r2", userId: "ding-1", checkType: "OffDuty", timeResult: "NotSigned", baseCheckTime: Date.parse("2026-11-15T10:00:00Z") }
+      ];
+    },
+    async listLeaveStatus() {
+      return [{
+        userid: "ding-1",
+        leave_code: "comp",
+        start_time: Date.parse("2026-11-15T01:00:00Z"),
+        end_time: Date.parse("2026-11-15T10:00:00Z"),
+        duration_percent: 100
+      }];
+    },
+    async listVacationTypes() {
+      return [{ leave_code: "comp", leave_name: "调休" }, { leave_code: "annual", leave_name: "年假" }];
+    },
+    async listVacationQuota(_op, code) {
+      if (code !== "comp") return [{ userid: "ding-1", quota_num_per_hour: 40, used_num_per_hour: 0 }];
+      return [{ userid: "ding-1", quota_num_per_hour: 8, used_num_per_hour: 1 }];
+    },
+    async listOvertimeHours() {
+      return [{ column_vals: [{ value: "2.5" }] }];
+    }
+  };
+  const { alignRoster, pullLeaveAndOvertime } = await import("../src/modules/hr/sync.js");
+  const pulled = await alignRoster(fake, roster);
+  assert.equal(pulled.links.length, 1);
+  await pullDay("2026-11-15", { client: fake });
+  const punches = await listPunches({ date: "2026-11-15" });
+  assert.equal(punches.length, 2);
+  assert.equal(punches.every((row) => row.personId === 7), true);
+  assert.equal(punches.find((row) => row.checkType === "OnDuty").checkAt, "2026-11-15 09:00");
+  assert.equal(punches.find((row) => row.checkType === "OffDuty").checkAt, "");
+  await pullLeaveAndOvertime("2026-11-15", fake);
+  const quotas = await listQuotas();
+  assert.equal(quotas.length, 1);
+  assert.equal(quotas[0].leaveName, "调休");
+  assert.equal(quotas[0].balanceHours, 7);
+  const overtime = await listOvertime({ month: "2026-11" });
+  assert.equal(overtime[0].hours, 2.5);
+  assert.equal(overtime[0].personId, 7);
+
+  const failing = {
+    configured: () => true,
+    async listAttendance() {
+      throw Object.assign(new Error("钉钉接口没有返回数据"), { statusCode: 502 });
+    }
+  };
+  await assert.rejects(() => pullDay("2026-11-15", { client: failing }));
+  assert.equal((await listPunches({ date: "2026-11-15" })).length, 2);
+});
+
+test("ding client asks the official attendance api with isI18n false", async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url: String(url), body: JSON.parse(init.body) });
+    if (String(url).includes("/oauth2/")) return jsonResponse({ accessToken: "test-token", expireIn: 7200 });
+    if (String(url).includes("/department/listsub")) return jsonResponse({ errcode: 0, result: [] });
+    if (String(url).includes("/user/list")) {
+      return jsonResponse({ errcode: 0, result: { list: [{ userid: "u", mobile: "13900001111", job_number: "J1", name: "不保留" }], has_more: false } });
+    }
+    if (String(url).includes("/attendance/list")) return jsonResponse({ errcode: 0, recordresult: [], hasMore: false });
+    return jsonResponse({ errcode: 0, result: {} });
+  };
+  const ding = createDingClient({
+    env: { DINGTALK_CORP_ID: "corp", DINGTALK_CLIENT_ID: "app", DINGTALK_CLIENT_SECRET: "secret" },
+    fetchImpl
+  });
+  const users = await ding.listUsers();
+  assert.deepEqual(users, [{ userId: "u", mobile: "13900001111", jobNumber: "J1" }]);
+  await ding.listAttendance(["u"], "2026-11-15");
+  const attendance = calls.find((call) => call.url.includes("/attendance/list"));
+  assert.equal(attendance.body.isI18n, false);
+  assert.deepEqual(attendance.body.userIdList, ["u"]);
+  assert.equal(attendance.url.includes("oapi.dingtalk.com"), true);
+});
+
+test("stream ack answers ping and only pulls finished attendance approvals", () => {
+  const ping = ackFor({ type: "SYSTEM", headers: { topic: "ping", messageId: "m1" }, data: JSON.stringify({ opaque: "abc" }) });
+  assert.equal(JSON.parse(ping.data).opaque, "abc");
+  const event = ackFor({ type: "EVENT", headers: { topic: "*", messageId: "m2" }, data: "{}" });
+  assert.equal(JSON.parse(event.data).status, "SUCCESS");
+  assert.equal(ackFor({ type: "SYSTEM", headers: { topic: "disconnect", messageId: "m3" } }), null);
+  const punch = interestingEvent({
+    type: "EVENT",
+    headers: { eventType: "attendance_check_record", eventCorpId: "corp" },
+    data: JSON.stringify({ dataList: [{ userId: "u2", checkTime: 1 }] })
+  }, "corp");
+  assert.deepEqual(punch.userIds, ["u2"]);
+  const otherCorp = interestingEvent({
+    type: "EVENT",
+    headers: { eventType: "attendance_check_record", eventCorpId: "other" },
+    data: JSON.stringify({ dataList: [{ userId: "u2" }] })
+  }, "corp");
+  assert.equal(otherCorp, null);
+  const agreed = interestingEvent({
+    type: "EVENT",
+    headers: { eventType: "bpms_instance_change", eventCorpId: "corp" },
+    data: JSON.stringify({ type: "finish", result: "agree", bizCategoryId: "attendance.batchovertime", staffId: "u9", title: "加班 3 小时" })
+  }, "corp");
+  assert.deepEqual(agreed, { kind: "approval", userIds: ["u9"] });
+  const started = interestingEvent({
+    type: "EVENT",
+    headers: { eventType: "bpms_instance_change" },
+    data: JSON.stringify({ type: "start", result: "agree", bizCategoryId: "attendance.leave", staffId: "u9" })
+  }, "");
+  assert.equal(started, null);
+});
+
+test("http keeps attendance read-only and interviews in this module", async () => {
+  resetHrStore();
+  await saveLinks([]);
+  await replaceDayPunches("2026-11-15", [1], []);
+  const server = await listen(appWithUser());
+  try {
+    const denied = await request(server, "/api/hr", { user: false });
+    assert.equal(denied.status, 401);
+    const home = await request(server, "/api/hr");
+    assert.equal(home.status, 200);
+    assert.deepEqual(home.data.tabs, ["考勤", "加班", "调休", "人才", "面试"]);
+    assert.equal(home.data.module, "hr");
+    const status = await request(server, "/api/hr/status");
+    assert.equal(status.data.configured, false);
+    assert.equal(JSON.stringify(status.data).includes("secret"), false);
+    const empty = await request(server, "/api/hr/attendance?month=2026-11");
+    assert.deepEqual(empty.data.punches, []);
+    const synced = await request(server, "/api/hr/sync", { method: "POST" });
+    assert.equal(synced.data.configured, false);
+    const created = await request(server, "/api/hr/interviews", {
+      method: "POST",
+      body: { candidateName: "周周", position: "运营", interviewAt: "2026-11-16T09:30", result: "通过" }
+    });
+    assert.equal(created.status, 201);
+    assert.equal((await listInterviews()).length, 1);
+    const removed = await request(server, `/api/hr/interviews/${created.data.interview.id}`, { method: "DELETE" });
+    assert.equal(removed.status, 200);
+    assert.deepEqual(await listInterviews(), []);
+    const talent = await request(server, "/api/hr/talents", {
+      method: "POST",
+      body: { name: "钱钱", phone: "13900002222", stage: "储备" }
+    });
+    assert.equal(talent.status, 201);
+    const gone = await request(server, `/api/hr/talents/${talent.data.talent.id}`, { method: "DELETE" });
+    assert.equal(gone.status, 200);
+  } finally {
+    await close(server);
+  }
+});
+
+test("shouldStartHrJobs is off for smoke and node:test", () => {
+  assert.equal(shouldStartHrJobs({ MENGKAI_SMOKE_LIVE: "/opt/mengkai" }, []), false);
+  assert.equal(shouldStartHrJobs({ NODE_TEST_CONTEXT: "1" }, []), false);
+  assert.equal(shouldStartHrJobs({}, ["node", "--test"]), false);
+  assert.equal(shouldStartHrJobs({}, ["node", "src/server.js"]), true);
+});
+
+test("ding jobs stay idle when the gate smoke env is set", () => {
+  const prev = process.env.MENGKAI_SMOKE_LIVE;
+  process.env.MENGKAI_SMOKE_LIVE = "/opt/mengkai";
+  try {
+    assert.deepEqual(startDingStream({ client: createDingClient() }), { started: false });
+    assert.equal(startScheduler(createDingClient()), undefined);
+  } finally {
+    if (prev == null) delete process.env.MENGKAI_SMOKE_LIVE;
+    else process.env.MENGKAI_SMOKE_LIVE = prev;
+  }
+});
+
+test("gate-style import of hr router exits while ding env is present", async () => {
+  const xingmai = join(root, "..");
+  const script = `
+import { pathToFileURL } from "node:url";
+import path from "node:path";
+const live = process.env.MENGKAI_SMOKE_LIVE;
+const files = JSON.parse(process.env.MENGKAI_SMOKE_FILES || "[]");
+for (const rel of files) {
+  await import(pathToFileURL(path.join(live, rel)).href);
+}
+console.log("SMOKE_OK");
+`;
+  const { stdout } = await execFileAsync(process.execPath, ["--input-type=module", "-e", script], {
+    cwd: xingmai,
+    timeout: 4000,
+    env: {
+      ...process.env,
+      DINGTALK_CORP_ID: "ding-smoke",
+      DINGTALK_CLIENT_ID: "ding-client",
+      DINGTALK_CLIENT_SECRET: "ding-secret",
+      MENGKAI_SMOKE_LIVE: xingmai,
+      MENGKAI_SMOKE_FILES: JSON.stringify(["src/modules/hr/router.js"])
+    }
+  });
+  assert.match(String(stdout), /SMOKE_OK/);
+});

@@ -38,7 +38,7 @@ test("shell maps /hr to 智能人事", () => {
   assert.equal(html.includes("面试"), false);
 });
 
-test("GET /api/hr returns module stub", async () => {
+test("GET /api/hr is mounted and asks for login", async () => {
   const app = express();
   registerPageRoutes(app);
   const server = await new Promise((resolve) => {
@@ -47,8 +47,8 @@ test("GET /api/hr returns module stub", async () => {
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/hr`);
-    assert.equal(res.status, 200);
-    assert.deepEqual(await res.json(), { ok: true, module: "hr" });
+    assert.equal(res.status, 401);
+    assert.deepEqual(await res.json(), { ok: false, error: "未登录" });
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
