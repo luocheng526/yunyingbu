@@ -10,27 +10,44 @@ const PERSONAL = "__personal__";
 const DEFAULT_NODES = [
   { id: "goods", kind: "section", parent: "", name: "商品与评价", enabled: true },
   { id: "ops", kind: "section", parent: "", name: "活动与库存", enabled: true },
-  { id: "orders", kind: "section", parent: "", name: "订单处理", enabled: true },
+  { id: "orders", kind: "section", parent: "", name: "订单处置", enabled: true },
   { id: "other", kind: "section", parent: "", name: "其他与备注", enabled: true },
-  { id: "lane-goods", kind: "lane", parent: "goods", name: "商品与评价", enabled: true },
-  { id: "评价数", kind: "metric", parent: "lane-goods", name: "评价数", unit: "条", enabled: true },
-  { id: "穿热销数量", kind: "metric", parent: "lane-goods", name: "穿热销数量", unit: "件", enabled: true },
-  { id: "优化", kind: "metric", parent: "lane-goods", name: "优化", unit: "款", enabled: true },
+  { id: "products", kind: "lane", parent: "goods", name: "商品维护", enabled: true },
+  { id: "上品", kind: "metric", parent: "products", name: "上品", enabled: true },
+  { id: "优化", kind: "metric", parent: "products", name: "优化商品数", unit: "款", enabled: true },
+  { id: "新增SPU", kind: "metric", parent: "products", name: "新增SPU", unit: "个", enabled: true },
+  { id: "新增单品", kind: "metric", parent: "products", name: "新增单品", unit: "个", enabled: true },
+  { id: "reviews", kind: "lane", parent: "goods", name: "评价与热销", enabled: true },
+  { id: "评价合并", kind: "metric", parent: "reviews", name: "评价合并", enabled: true },
+  { id: "差评整改", kind: "metric", parent: "reviews", name: "差评整改", enabled: true },
+  { id: "评价数", kind: "metric", parent: "reviews", name: "找到的评价数", unit: "条", enabled: true },
+  { id: "穿热销数量", kind: "metric", parent: "reviews", name: "穿热销数量", unit: "个", enabled: true },
+  { id: "campaign", kind: "lane", parent: "ops", name: "活动提报", enabled: true },
+  { id: "报名活动", kind: "metric", parent: "campaign", name: "报名活动", enabled: true },
+  { id: "一键低价商品", kind: "metric", parent: "campaign", name: "一键低价商品", enabled: true },
+  { id: "新增活动提报", kind: "metric", parent: "campaign", name: "新增活动提报", enabled: true },
+  { id: "stock", kind: "lane", parent: "ops", name: "仓储库存", enabled: true },
+  { id: "新增入仓量", kind: "metric", parent: "stock", name: "新增入仓量", enabled: true },
+  { id: "库存调整", kind: "metric", parent: "stock", name: "库存调整", enabled: true },
+  { id: "exceptions", kind: "lane", parent: "orders", name: "订单跟进", enabled: true },
+  { id: "即将超时订单", kind: "metric", parent: "exceptions", name: "即将超时订单", unit: "单", enabled: true },
+  { id: "违约单处置记录", kind: "metric", parent: "exceptions", name: "违约单处置记录", unit: "份", enabled: true },
+  { id: "misc", kind: "lane", parent: "other", name: "其他工作", enabled: true },
+  { id: "开直播", kind: "extra", parent: "misc", name: "开直播", enabled: true },
+  { id: "做短视频", kind: "extra", parent: "misc", name: "做短视频", enabled: true },
+  { id: "活动复盘", kind: "extra", parent: "misc", name: "活动复盘", enabled: true },
+  { id: "商品素材管理", kind: "extra", parent: "misc", name: "商品素材管理", enabled: true },
   { id: "主图", kind: "choice", parent: "优化", name: "主图", enabled: true },
   { id: "详情", kind: "choice", parent: "优化", name: "详情", enabled: true },
-  { id: "价格", kind: "choice", parent: "优化", name: "价格", enabled: true },
   { id: "标题", kind: "choice", parent: "优化", name: "标题", enabled: true },
-  { id: "lane-ops", kind: "lane", parent: "ops", name: "活动与库存", enabled: true },
-  { id: "报名活动", kind: "metric", parent: "lane-ops", name: "报名活动", unit: "个", enabled: true },
-  { id: "一键低价商品", kind: "metric", parent: "lane-ops", name: "一键低价商品", unit: "个", enabled: true },
-  { id: "库存补货", kind: "metric", parent: "lane-ops", name: "库存补货", unit: "款", enabled: true },
-  { id: "lane-orders", kind: "lane", parent: "orders", name: "订单处理", enabled: true },
-  { id: "即将超时订单", kind: "metric", parent: "lane-orders", name: "即将超时订单", unit: "单", enabled: true },
-  { id: "违约单处置记录", kind: "metric", parent: "lane-orders", name: "违约单处置记录", unit: "单", enabled: true },
-  { id: "lane-other", kind: "lane", parent: "other", name: "其他", enabled: true },
-  { id: "客服咨询", kind: "extra", parent: "lane-other", name: "客服咨询", enabled: true },
-  { id: "售后跟进", kind: "extra", parent: "lane-other", name: "售后跟进", enabled: true },
-  { id: "备注", kind: "note", parent: "lane-other", name: "备注", enabled: true }
+  { id: "SKU名", kind: "choice", parent: "优化", name: "SKU名", enabled: true },
+  { id: "商品素材", kind: "choice", parent: "优化", name: "商品素材", enabled: true },
+  { id: "短标题", kind: "choice", parent: "优化", name: "短标题", enabled: true },
+  { id: "商品属性", kind: "choice", parent: "优化", name: "商品属性", enabled: true },
+  { id: "主图视频", kind: "choice", parent: "优化", name: "主图视频", enabled: true },
+  { id: "详情视频", kind: "choice", parent: "优化", name: "详情视频", enabled: true },
+  { id: "问答", kind: "choice", parent: "优化", name: "问答", enabled: true },
+  { id: "备注", kind: "note", parent: "misc", name: "备注", enabled: true }
 ];
 
 let ready = false;
@@ -111,6 +128,11 @@ function parseDate(raw, { allowFuture = false } = {}) {
     return "";
   }
   return value;
+}
+
+function legacyCatalog(nodes) {
+  const ids = new Set(nodes.map((node) => node.id));
+  return ids.has("lane-goods") && !ids.has("上品");
 }
 
 function enabledNodes(nodes) {
@@ -388,6 +410,10 @@ export async function readyDiary() {
   if (dbMode() === "mysql") {
     await ensureTables();
     await hydrateMysql();
+  }
+  if (legacyCatalog(catalog.nodes)) {
+    catalog = { revision: Number(catalog.revision || 1) + 1, nodes: cloneNodes(DEFAULT_NODES) };
+    await saveMeta("catalog", catalog);
   }
   ready = true;
 }

@@ -1,4 +1,4 @@
-/* xm-module-work — 工作汇报。部门模板填当天事项，再填店铺日报。 */
+/* xm-module-work — 工作汇报。今天页按填写日报排版。 */
 (function () {
   var state = {
     tab: "today",
@@ -99,26 +99,60 @@
       ".work-filters{display:flex;flex-direction:row;flex-wrap:wrap;gap:8px;align-items:center;}" +
       ".work-filters .work-mini{flex:none;width:auto;}" +
       ".work-chiprow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}" +
-      ".work-shops{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end;}" +
-      ".work-shops select{height:28px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;font-size:12px;}" +
       ".work-sub{display:block;margin-top:2px;font-size:12px;line-height:1.45;opacity:.92;}" +
       ".work-duty{min-width:140px;max-width:280px;white-space:normal;line-height:1.45;}" +
       ".work-count{margin-left:auto;color:var(--xm-muted);font-size:12px;}" +
       ".work-field.is-grow{flex:1;min-width:200px;}" +
       ".work-table td.work-rights{max-width:280px;white-space:normal;}" +
-      ".work-checks{display:flex;flex-wrap:wrap;gap:8px 14px;margin:0 0 8px;}" +
-      ".work-checks label{display:flex;align-items:center;gap:6px;font-size:13px;}" +
-      ".work-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;}" +
-      ".work-lane{margin-top:10px;}" +
-      ".work-card .work-chiprow,.work-card .work-filters{margin-top:10px;}" +
-      ".work-diary-item{display:grid;grid-template-columns:minmax(72px,1fr) 108px auto;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--xm-line);border-radius:8px;background:rgba(36,91,219,.04);}" +
-      ".work-metric-num{display:flex;align-items:center;gap:4px;}" +
-      ".work-metric-num input{width:72px;height:28px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;font-size:13px;box-sizing:border-box;}" +
-      ".work-diary-item small{color:var(--xm-muted);font-size:12px;min-width:1em;}" +
-      ".work-diary-more{grid-column:1 / -1;display:flex;flex-direction:column;gap:8px;padding:4px 0 8px;}" +
+      ".work-checks{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px;}" +
+      ".work-checks label{display:inline-flex;align-items:center;gap:5px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:5px;padding:4px 7px;font-size:13px;cursor:pointer;}" +
+      ".work-context{display:flex;align-items:center;flex-wrap:wrap;gap:10px 22px;font-size:13px;color:var(--xm-muted);}" +
+      ".work-context .work-field{flex-direction:row;align-items:center;gap:8px;min-width:0;}" +
+      ".work-context .work-field input{height:34px;}" +
+      ".work-filler strong{margin-left:4px;color:var(--xm-ink);font-weight:650;}" +
+      ".work-dutybadge{margin-left:auto;border-radius:20px;background:var(--xm-card);color:var(--xm-ink);border:1px solid var(--xm-line);padding:3px 10px;font-size:12px;}" +
+      ".work-sheet{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:12px;box-shadow:var(--xm-shadow);min-width:0;}" +
+      ".work-storebar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:18px 22px;border-bottom:1px solid var(--xm-line);}" +
+      ".work-storetitle,.work-storeactions{display:flex;align-items:center;gap:10px;min-width:0;}" +
+      ".work-storetitle{flex-wrap:wrap;}" +
+      ".work-storeicon{display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:rgba(36,91,219,.1);color:var(--xm-primary);flex:none;}" +
+      ".work-storetitle small{display:block;font-size:12px;color:var(--xm-muted);}" +
+      ".work-storetitle h3{margin:0;font-size:18px;font-weight:670;}" +
+      ".work-storetitle select{border:0;background:transparent;color:var(--xm-ink);font:inherit;font-size:16px;font-weight:650;max-width:320px;}" +
+      ".work-badge{border-radius:6px;background:rgba(20,40,80,.06);color:var(--xm-muted);padding:2px 8px;font-size:12px;}" +
+      ".work-storeactions{margin-left:auto;}" +
+      ".work-storeactions select{height:32px;border:1px solid var(--xm-primary);border-radius:6px;background:var(--xm-card);color:var(--xm-primary);padding:0 10px;font:inherit;font-size:13px;font-weight:650;}" +
+      ".work-link{border:0;background:transparent;color:var(--xm-muted);font:inherit;font-size:12px;cursor:pointer;padding:6px 4px;}" +
+      ".work-groups{display:flex;gap:22px;padding:0 22px;border-bottom:1px solid var(--xm-line);flex-wrap:wrap;}" +
+      ".work-groups button{display:inline-flex;gap:7px;align-items:center;min-height:48px;padding:0 3px;cursor:pointer;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--xm-muted);font:inherit;font-size:14px;font-weight:650;}" +
+      ".work-groups button.is-on{color:var(--xm-primary);border-bottom-color:var(--xm-primary);}" +
+      ".work-section{padding:18px 22px 8px;}" +
+      ".work-lanes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;align-items:start;}" +
+      ".work-lanes.is-single{grid-template-columns:minmax(0,1fr);}" +
+      ".work-lane{min-width:0;}" +
+      ".work-lane-title{margin:0 0 5px;padding:7px 10px;border-radius:5px;background:rgba(20,40,80,.05);font-size:13px;color:var(--xm-muted);font-weight:650;}" +
+      ".work-diary-item{padding:0 4px;border-bottom:1px solid var(--xm-line);}" +
+      ".work-item-line{min-height:55px;display:grid;align-items:center;column-gap:8px;grid-template-columns:minmax(0,1fr) minmax(62px,92px) 69px;font-size:14px;}" +
+      ".work-item-line>span{font-weight:550;overflow-wrap:anywhere;}" +
+      ".work-metric-num{display:flex;align-items:center;gap:5px;}" +
+      ".work-metric-num input{width:72px;height:33px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;font-size:15px;font-weight:650;font-variant-numeric:tabular-nums;box-sizing:border-box;}" +
+      ".work-metric-num small{color:var(--xm-muted);font-size:12px;}" +
+      ".work-more{display:inline-flex;align-items:center;justify-self:end;gap:5px;padding:6px 2px;font:inherit;font-size:12px;background:transparent;color:var(--xm-muted);border:0;cursor:pointer;}" +
+      ".work-more.is-open,.work-more:hover{color:var(--xm-primary);}" +
+      ".work-more i{width:6px;height:6px;border:solid currentColor;border-width:0 1.5px 1.5px 0;transform:translateY(-2px) rotate(45deg);}" +
+      ".work-more.is-open i{transform:translateY(2px) rotate(225deg);}" +
+      ".work-diary-more{display:grid;gap:10px;margin:0 0 12px;padding:12px;background:rgba(20,40,80,.04);border-radius:7px;}" +
       ".work-diary-more[hidden]{display:none;}" +
+      ".work-orders{display:grid;grid-template-columns:minmax(200px,.8fr) minmax(0,1.2fr);gap:28px;align-items:start;}" +
+      ".work-order{min-width:0;}" +
+      ".work-order header{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:40px;border-bottom:1px solid var(--xm-line);padding-bottom:9px;margin-bottom:12px;}" +
+      ".work-order h4{margin:0;font-size:15px;}" +
+      ".work-order textarea,.work-diary-more textarea{min-height:70px;width:100%;box-sizing:border-box;}" +
       ".work-shot{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}" +
       ".work-shot img{max-width:148px;max-height:72px;object-fit:cover;border:0;border-radius:8px;}" +
+      ".work-submitbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:2px 2px 0;}" +
+      ".work-submitbar strong{color:var(--xm-muted);font-size:12px;font-weight:650;}" +
+      ".work-submitbar .work-primary,.work-submitbar .work-mini{min-height:38px;padding:7px 16px;font-weight:650;}" +
       ".work-people{display:flex;flex-direction:column;gap:8px;}" +
       ".work-person{color:#fff;border-radius:12px;padding:12px 14px;box-shadow:0 8px 18px rgba(20,40,80,.12);display:flex;align-items:center;gap:16px;}" +
       ".work-person.tone-ok{background:linear-gradient(90deg,#1faa5a,#3dce78);}" +
@@ -130,7 +164,7 @@
       ".work-who span,.work-main{font-size:12px;color:rgba(255,255,255,.92);line-height:1.45;}" +
       ".work-main{flex:1;min-width:0;}" +
       ".work-person .work-mini{background:#fff;color:#245bdb;border:0;font-weight:650;}" +
-      "@media (max-width:980px){.work-stats,.work-depts,.work-metrics{grid-template-columns:1fr;}.work-person{flex-wrap:wrap;align-items:flex-start;}.work-count{margin-left:0;}.work-shops{justify-content:flex-start;}}";
+      "@media (max-width:980px){.work-stats,.work-depts,.work-lanes,.work-orders{grid-template-columns:1fr;}.work-lanes,.work-orders{gap:14px;}.work-person{flex-wrap:wrap;align-items:flex-start;}.work-count{margin-left:0;}.work-dutybadge{margin-left:0;}.work-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 8px;padding:6px 12px;}.work-groups button{min-height:36px;justify-content:center;font-size:13px;}.work-groups button.is-on{background:rgba(36,91,219,.1);border-radius:5px;border-bottom-color:transparent;}.work-storeactions{margin-left:0;}}";
     document.head.appendChild(style);
   }
 
@@ -612,65 +646,36 @@
     return state.diaryDraft[state.diaryShop] || null;
   }
 
-  function metricRow(node, item) {
-    var shared = ((state.diary && state.diary.sharedLabels) || []).indexOf(node.name) >= 0;
-    if (shared) {
-      return (
-        '<p class="work-muted">「' +
-        esc(node.name) +
-        "」和上面的部门事项是同一项，只填一次。</p>"
-      );
-    }
-    var current = item || {};
-    var images = current.images || [];
-    var choices = diaryNodes("choice", node.id);
-    var yesNo = node.id === "报名活动" || node.id === "一键低价商品";
-    var late = node.id === "即将超时订单";
+  function diaryIcon(kind) {
+    var paths = {
+      goods: '<path d="m3 7 7-4 7 4v7l-7 4-7-4zM3 7l7 4 7-4M10 11v7"/>',
+      ops: '<path d="M3 16h14M4 13V9m5 4V5m5 8V7"/>',
+      orders: '<rect x="4" y="3" width="12" height="14" rx="2"/><path d="M7 7h6m-6 4h4"/>',
+      other: '<path d="M4 4h12v9l-4 4H4zM8 8h5m-5 3h3"/>',
+      store: '<path d="M3 8l2-4h10l2 4M4 10v6h12v-6M8 16v-4h4v4M3 8c0 3 3 3 4 1 1 2 4 2 5 0 1 2 5 2 5-1"/>'
+    };
     return (
-      '<div class="work-diary-item" data-metric="' +
-      esc(node.id) +
-      '"><span>' +
-      esc(node.name) +
-      '</span><label class="work-metric-num"><input data-diary-count type="number" min="0" max="100000" step="1" value="' +
-      esc(current.count || "") +
+      '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round">' +
+      (paths[kind] || paths.other) +
+      "</svg>"
+    );
+  }
+
+  function quantityField(node, current) {
+    var count = Number(current.count) > 0 ? String(current.count) : "";
+    return (
+      '<label class="work-metric-num"><input data-diary-count type="number" min="0" max="100000" step="1" placeholder="0" value="' +
+      esc(count) +
       '">' +
       (node.unit ? "<small>" + esc(node.unit) + "</small>" : "") +
-      '</label><button type="button" class="work-mini" data-diary-more>明细</button>' +
-      '<div class="work-diary-more" hidden>' +
-      (yesNo
-        ? '<label class="work-field">是否全部完成<select data-diary-detail><option value=""></option><option' +
-          (current.detail === "是" ? " selected" : "") +
-          '>是</option><option' +
-          (current.detail === "否" ? " selected" : "") +
-          ">否</option></select></label>"
-        : '<label class="work-field">' +
-          (late ? "即将超时原因" : "工作明细") +
-          '<input data-diary-detail value="' +
-          esc(current.detail || "") +
-          '" maxlength="600"></label>') +
-      '<label class="work-field">相关 SPU<input data-diary-spu value="' +
-      esc(current.spus || "") +
-      '" maxlength="2200" placeholder="多个 SPU 用逗号分隔"></label>' +
-      (choices.length
-        ? '<div class="work-checks">' +
-          choices
-            .map(function (choice) {
-              var on = (current.actions || []).indexOf(choice.id) >= 0;
-              return (
-                '<label><input type="checkbox" data-diary-choice value="' +
-                esc(choice.id) +
-                '"' +
-                (on ? " checked" : "") +
-                ">" +
-                esc(choice.name) +
-                "</label>"
-              );
-            })
-            .join("") +
-          "</div>"
-        : "") +
+      "</label>"
+    );
+  }
+
+  function shotField(images) {
+    return (
       '<div class="work-shot" data-diary-images>' +
-      images
+      (images || [])
         .map(function (image) {
           return (
             '<button type="button" class="work-mini" data-preview-image="' +
@@ -683,8 +688,114 @@
           );
         })
         .join("") +
-      '<label class="work-mini">添加截图<input data-diary-file type="file" accept="image/png,image/jpeg,image/webp" hidden></label>' +
-      "</div></div></div>"
+      '<label class="work-mini">添加截图<input data-diary-file type="file" accept="image/png,image/jpeg,image/webp" hidden></label></div>'
+    );
+  }
+
+  function choiceField(node, current) {
+    var choices = diaryNodes("choice", node.id);
+    if (!choices.length) {
+      return "";
+    }
+    return (
+      '<div class="work-checks" role="group" aria-label="优化项目"><span class="work-muted">优化项目</span>' +
+      choices
+        .map(function (choice) {
+          var on = (current.actions || []).indexOf(choice.id) >= 0;
+          return (
+            '<label><input type="checkbox" data-diary-choice value="' +
+            esc(choice.id) +
+            '"' +
+            (on ? " checked" : "") +
+            ">" +
+            esc(choice.name) +
+            "</label>"
+          );
+        })
+        .join("") +
+      "</div>"
+    );
+  }
+
+  function metricFilled(current) {
+    return Boolean(
+      (current.spus && String(current.spus).trim()) ||
+        (current.detail && String(current.detail).trim()) ||
+        (current.actions && current.actions.length) ||
+        (current.images && current.images.length)
+    );
+  }
+
+  function metricRow(node, item) {
+    var shared = ((state.diary && state.diary.sharedLabels) || []).indexOf(node.name) >= 0;
+    if (shared) {
+      return '<p class="work-muted">「' + esc(node.name) + "」和上面的部门事项是同一项，只填一次。</p>";
+    }
+    var current = item || {};
+    var yesNo = node.id === "报名活动" || node.id === "一键低价商品";
+    var countsOnly = node.id === "评价数" || node.id === "穿热销数量";
+    var open = metricFilled(current);
+    var detail = yesNo
+      ? '<label class="work-field">是否全部完成<select data-diary-detail><option value=""></option><option' +
+        (current.detail === "是" ? " selected" : "") +
+        '>是</option><option' +
+        (current.detail === "否" ? " selected" : "") +
+        ">否</option></select></label>"
+      : '<label class="work-field">' +
+        (node.id === "优化" ? "补充说明" : "工作明细") +
+        '<input data-diary-detail value="' +
+        esc(current.detail || "") +
+        '" maxlength="600" placeholder="选填"></label>';
+    var spus = countsOnly
+      ? ""
+      : '<label class="work-field">相关 SPU<input data-diary-spu value="' +
+        esc(current.spus || "") +
+        '" maxlength="2200" placeholder="' +
+        (node.id === "优化" ? "按 SPU 去重，也可只填款数" : "多个 SPU 用逗号分隔") +
+        '"></label>';
+    return (
+      '<div class="work-diary-item" data-metric="' +
+      esc(node.id) +
+      '"><div class="work-item-line"><span>' +
+      esc(node.name) +
+      "</span>" +
+      quantityField(node, current) +
+      '<button type="button" class="work-more' +
+      (open ? " is-open" : "") +
+      '" data-diary-more aria-expanded="' +
+      (open ? "true" : "false") +
+      '">' +
+      (open ? "已填明细" : "明细") +
+      "<i></i></button></div><div class=\"work-diary-more\"" +
+      (open ? "" : " hidden") +
+      ">" +
+      spus +
+      choiceField(node, current) +
+      detail +
+      shotField(current.images) +
+      "</div></div>"
+    );
+  }
+
+  function orderCard(node, item) {
+    var current = item || {};
+    var late = node.id === "即将超时订单";
+    return (
+      '<section class="work-order" data-metric="' +
+      esc(node.id) +
+      '"><header><h4>' +
+      esc(node.name) +
+      "</h4>" +
+      (late ? quantityField(node, current) : "") +
+      "</header><label class=\"work-field\">" +
+      (late ? "即将超时原因" : "处置经过") +
+      '<textarea data-diary-detail maxlength="600" placeholder="' +
+      (late ? "数量大于 0 时请填写原因" : "记录发生了什么、如何处理、处理结果") +
+      '">' +
+      esc(current.detail || "") +
+      "</textarea></label>" +
+      shotField(current.images) +
+      "</section>"
     );
   }
 
@@ -709,23 +820,27 @@
       var metrics = diaryNodes("metric", lane.id);
       var extras = diaryNodes("extra", lane.id);
       var notes = diaryNodes("note", lane.id);
-      var sectionName = "";
-      sections.forEach(function (section) {
-        if (section.id === state.diaryGroup) {
-          sectionName = section.name;
-        }
+      var orders = metrics.length > 0 && metrics.every(function (node) {
+        return node.id === "即将超时订单" || node.id === "违约单处置记录";
       });
-      var titled = lane.name && lane.name !== sectionName;
+      var body = orders
+        ? '<div class="work-orders">' +
+          metrics
+            .map(function (node) {
+              return orderCard(node, (draft && draft.items && draft.items[node.id]) || {});
+            })
+            .join("") +
+          "</div>"
+        : metrics
+            .map(function (node) {
+              return metricRow(node, (draft && draft.items && draft.items[node.id]) || {});
+            })
+            .join("");
       fields +=
-        '<section class="work-lane">' +
-        (titled ? "<h3>" + esc(lane.name) + "</h3>" : "") +
-        '<div class="work-metrics">' +
-        metrics
-          .map(function (node) {
-            return metricRow(node, (draft && draft.items && draft.items[node.id]) || {});
-          })
-          .join("") +
-        "</div>" +
+        '<section class="work-lane"><h3 class="work-lane-title">' +
+        esc(lane.name) +
+        "</h3>" +
+        body +
         (extras.length
           ? '<div class="work-checks">' +
             extras
@@ -758,22 +873,33 @@
     var remaining = shops.filter(function (shop) {
       return state.diaryOpen.indexOf(String(shop.id)) < 0;
     });
+    var currentShop = shops.find(function (item) { return String(item.id) === state.diaryShop; });
+    var shopTitle = state.diaryOpen.length > 1
+      ? '<select data-switch-shop aria-label="切换填写店铺">' +
+        state.diaryOpen
+          .map(function (id) {
+            var shop = shops.find(function (item) { return String(item.id) === id; });
+            return (
+              '<option value="' +
+              esc(id) +
+              '"' +
+              (id === state.diaryShop ? " selected" : "") +
+              ">" +
+              esc(shop ? shop.name : id) +
+              "</option>"
+            );
+          })
+          .join("") +
+        "</select>"
+      : "<h3>" + esc(currentShop ? currentShop.name : "选择填写店铺") + "</h3>";
     return (
-      '<section class="work-card"><div class="work-cardhead"><div><h2>店铺日报</h2><p class="work-lead">同一天可以填多家店。保存草稿后刷新还能继续。</p></div><div class="work-shops">' +
-      state.diaryOpen
-        .map(function (id) {
-          var shop = shops.find(function (item) { return String(item.id) === id; });
-          return (
-            '<button type="button" class="work-mini' +
-            (id === state.diaryShop ? " is-on" : "") +
-            '" data-diary-shop="' +
-            esc(id) +
-            '">' +
-            esc(shop ? shop.name : id) +
-            "</button>"
-          );
-        })
-        .join("") +
+      '<section class="work-sheet"><div class="work-storebar"><div class="work-storetitle"><i class="work-storeicon">' +
+      diaryIcon("store") +
+      "</i><div><small>填写店铺</small>" +
+      shopTitle +
+      "</div>" +
+      (draft ? '<span class="work-badge">' + esc(draft.status || "未填报") + "</span>" : "") +
+      '</div><div class="work-storeactions">' +
       (remaining.length
         ? '<select data-add-shop><option value="">＋ 添加店铺</option>' +
           remaining
@@ -784,28 +910,35 @@
           "</select>"
         : "") +
       (state.diaryShop
-        ? '<button type="button" class="work-mini" data-remove-shop="' + esc(state.diaryShop) + '">移出当前店</button>'
+        ? '<button type="button" class="work-link" data-remove-shop="' + esc(state.diaryShop) + '">移出</button>'
         : "") +
       "</div></div>" +
-      '<div class="work-chiprow">' +
+      '<nav class="work-groups" aria-label="工作分类">' +
       sections
         .map(function (section) {
           return (
-            '<button type="button" class="work-mini' +
-            (section.id === state.diaryGroup ? " is-on" : "") +
-            '" data-diary-group="' +
+            '<button type="button"' +
+            (section.id === state.diaryGroup ? ' class="is-on"' : "") +
+            ' data-diary-group="' +
             esc(section.id) +
+            '" aria-pressed="' +
+            (section.id === state.diaryGroup) +
             '">' +
+            diaryIcon(section.id) +
+            "<span>" +
             esc(section.name) +
-            "</button>"
+            "</span></button>"
           );
         })
         .join("") +
-      "</div>" +
+      '</nav><div class="work-section"><div class="work-lanes' +
+      (lanes.length === 1 ? " is-single" : "") +
+      '">' +
       fields +
-      '<div class="work-filters"><button type="button" class="work-mini" data-diary-save="草稿">保存草稿</button><button type="button" class="work-primary" data-diary-save="已提交">提交日报</button><span class="work-muted">' +
-      esc(draft && draft.status ? draft.status : "") +
-      "</span></div></section>"
+      "</div></div></section>" +
+      '<footer class="work-submitbar"><strong>本次填报：' +
+      state.diaryOpen.length +
+      ' 家店</strong><div class="work-filters"><button type="button" class="work-mini" data-diary-save="草稿">保存草稿</button><button type="button" class="work-primary" data-diary-save="已提交">提交日报</button></div></footer>'
     );
   }
 
@@ -985,9 +1118,47 @@
       '> 提醒未交日报</label></div><label class="work-field">每日提醒时间（北京时间）<input data-remind-at type="time" value="' +
       esc(delivery.remindAt || "18:00") +
       '"></label><button type="button" class="work-primary" data-save-delivery>保存考勤与提醒</button></div>' +
-      '<div class="work-card"><h2>填报项目</h2><p class="work-lead">四个栏目：商品与评价、活动与库存、订单处理、其他与备注。停用后，已经提交的记录仍可在工作汇总里看。</p><div class="work-table-wrap"><table class="work-table"><thead><tr><th>栏目</th><th>名称</th><th>单位</th><th>启用</th></tr></thead><tbody>' +
+      '<div class="work-card"><h2>填报项目</h2><p class="work-lead">四个栏目：商品与评价、活动与库存、订单处置、其他与备注。停用后，已经提交的记录仍可在工作汇总里看。</p><div class="work-table-wrap"><table class="work-table"><thead><tr><th>栏目</th><th>名称</th><th>单位</th><th>启用</th></tr></thead><tbody>' +
       nodes +
       '</tbody></table></div><button type="button" class="work-primary" data-save-catalog>保存填报内容</button></div></div>'
+    );
+  }
+
+  function fillerName() {
+    var me = state.meta && state.meta.me;
+    return me && me.name ? me.name : "";
+  }
+
+  function dutyBadge() {
+    var row = myRow();
+    if (!row || row.status === "自愿") {
+      return "自愿填报";
+    }
+    if (row.status === "免报") {
+      return "免报";
+    }
+    if (row.status === "已报") {
+      return "已交";
+    }
+    if (row.status === "未报") {
+      return "应交 · 待提交";
+    }
+    return "自愿填报";
+  }
+
+  function renderContext() {
+    var date = state.date || todayIso();
+    var max = (state.meta && state.meta.today) || todayIso();
+    return (
+      '<div class="work-context"><label class="work-field">工作日期<input type="date" data-work-date min="2020-01-01" max="' +
+      esc(max) +
+      '" value="' +
+      esc(date) +
+      '"></label><button type="button" class="work-mini" data-today>今天</button><span class="work-filler">填报人 <strong>' +
+      esc(fillerName()) +
+      '</strong></span><span class="work-dutybadge">' +
+      esc(dutyBadge()) +
+      "</span></div>"
     );
   }
 
@@ -1046,14 +1217,7 @@
         renderAdminTable(date)
       : "";
     var diary = renderDiaryFill();
-    return (
-      '<div class="work-panel">' +
-      (isAdmin() ? renderKpis() : "") +
-      fillBlock +
-      diary +
-      board +
-      "</div>"
-    );
+    return '<div class="work-panel">' + renderContext() + fillBlock + diary + board + "</div>";
   }
 
   function renderTemplateEditor(items, personMode) {
@@ -1270,17 +1434,22 @@
     var caret = state.keepCaret;
     state.keepFocus = "";
     state.keepCaret = null;
-    var onToday = state.tab !== "settings" && state.tab !== "summary" && state.tab !== "duty" && state.tab !== "diarySettings";
+    var dated = state.tab === "summary" || state.tab === "duty";
     var date = state.date || todayIso();
-    var dateTools = onToday
+    var dateTools = dated
       ? '<div class="work-tools"><label class="work-field">日期<input type="date" data-work-date min="2020-01-01" max="2099-12-31" value="' +
         esc(date) +
         '"></label><button type="button" class="work-mini" data-today>今天</button></div>'
       : "";
+    var heading = state.tab === "today" ? "填写日报" : "工作汇报";
+    var lead = state.tab === "today" ? "" : '<p class="work-lead">人数按人计，店铺按店计。</p>';
     root.innerHTML =
       '<main class="page work-page">' +
-      '<div class="work-bar"><div><h1>工作汇报</h1>' +
-      '<p class="work-lead">先填部门模板里的今日事项，再填自己负责的店铺日报。人数按人计，店铺按店计。</p></div>' +
+      '<div class="work-bar"><div><h1>' +
+      heading +
+      "</h1>" +
+      lead +
+      "</div>" +
       dateTools +
       "</div>" +
       tabs +
@@ -1422,9 +1591,13 @@
       }
       var more = event.target.closest("[data-diary-more]");
       if (more) {
-        var box = more.parentNode.querySelector(".work-diary-more");
+        var row = more.closest("[data-metric]");
+        var box = row ? row.querySelector(".work-diary-more") : null;
         if (box) {
           box.hidden = !box.hidden;
+          more.classList.toggle("is-open", !box.hidden);
+          more.setAttribute("aria-expanded", box.hidden ? "false" : "true");
+          more.childNodes[0].textContent = box.hidden ? "明细" : "已填明细";
         }
         return;
       }
@@ -1733,6 +1906,13 @@
       }
     });
     root.addEventListener("change", function (event) {
+      var switchShop = event.target.closest("[data-switch-shop]");
+      if (switchShop && switchShop.value) {
+        readDiarySheet(root);
+        state.diaryShop = String(switchShop.value);
+        paint(root);
+        return;
+      }
       var addShop = event.target.closest("[data-add-shop]");
       if (addShop && addShop.value) {
         readDiarySheet(root);
