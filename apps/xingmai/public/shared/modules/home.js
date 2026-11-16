@@ -1,4 +1,4 @@
-/* xm-module-home 0.1.932-phonestack */
+/* xm-module-home 0.1.935-phonedata */
 (function () {
   var VIEWS = [
     { key: "company", label: "公司" },
@@ -2202,7 +2202,7 @@
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{color:var(--xm-muted);font-size:12px}" +
       "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm.is-chief .xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:1fr}}" +
-      "@media (max-width:720px){.xm-hm-sales.xm-hm-live-charts,.xm-hm-live .xm-hm-live-charts{display:flex;flex-direction:column;flex-wrap:nowrap;align-items:stretch;gap:10px;overflow:visible;margin:0;padding:0}.xm-hm-sales.xm-hm-live-charts>.xm-hm-chart,.xm-hm-live .xm-hm-live-charts>.xm-hm-chart{flex:0 0 auto;width:100%;max-width:none;min-width:0;padding:12px 14px 10px;box-sizing:border-box}.xm-hm-live-charts .xm-hm-card-head{flex-direction:row;align-items:center;gap:8px}.xm-hm-live-charts .xm-hm-card-head>span:first-child{min-width:0;flex:1;white-space:nowrap;overflow:visible;font-size:13px}.xm-hm-live-charts .xm-hm-legs{flex:0 0 auto;white-space:nowrap;font-size:12px}.xm-hm-live-charts .xm-hm-index-num{margin:8px 0 2px;font-size:24px}.xm-hm-live-charts .xm-hm-yest-now,.xm-hm-live-charts .xm-hm-trend{font-size:12px}.xm-hm-sales.xm-hm-live-charts .xm-hm-line,.xm-hm-live .xm-hm-live-charts .xm-hm-line{height:148px;margin-top:8px}.xm-hm-kpis{grid-template-columns:1fr;gap:8px}}"
+      "@media (max-width:720px){.xm-hm-sales.xm-hm-live-charts,.xm-hm-live .xm-hm-live-charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;overflow:visible;margin:0 0 12px;padding:0}.xm-hm-sales.xm-hm-live-charts>.xm-hm-chart,.xm-hm-live .xm-hm-live-charts>.xm-hm-chart{min-width:0;max-width:none;width:auto;padding:10px 10px 8px;box-sizing:border-box}.xm-hm-live-charts .xm-hm-card-head{align-items:flex-start;gap:4px}.xm-hm-live-charts .xm-hm-card-head>span:first-child{min-width:0;flex:1;white-space:normal;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;font-size:12px;line-height:1.3}.xm-hm-live-charts .xm-hm-legs{display:none}.xm-hm-live-charts .xm-hm-index-num{margin:8px 0 2px;font-size:20px}.xm-hm-live-charts .xm-hm-yest-now,.xm-hm-live-charts .xm-hm-trend{font-size:12px;margin-top:4px}.xm-hm-sales.xm-hm-live-charts .xm-hm-line,.xm-hm-live .xm-hm-live-charts .xm-hm-line{display:none;height:0;margin:0}.xm-hm-kpis{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}}"
     );
   }
   function frameHtml() {
