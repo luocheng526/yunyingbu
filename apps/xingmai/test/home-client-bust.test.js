@@ -13,7 +13,7 @@ test("rewrites immutable homepage script url to no-store client.js", () => {
   assert.equal(out.includes("/shared/modules/home.js"), false);
   assert.equal(out.includes(HOME_CLIENT_JS), true);
     assert.equal(HOME_CLIENT_JS, `/api/home/client.js?v=${HOME_JS_STAMP}`);
-    assert.equal(HOME_JS_STAMP, "0.1.996-oview");
+    assert.equal(HOME_JS_STAMP, "0.1.997-weeksum");
 });
 
 test("serves /api/home/client.js from current homepage module", async () => {
@@ -28,7 +28,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     const text = await res.text();
     assert.equal(res.status, 200);
     assert.match(String(res.headers.get("cache-control") || ""), /no-store/i);
-    assert.match(text, /xm-module-home 0\.1\.996-oview/);
+    assert.match(text, /xm-module-home 0\.1\.997-weeksum/);
     assert.match(text, /function liveTheadHtml/);
     assert.match(text, /function liveFilterHtml/);
     assert.match(text, /data-live-filter="pick"/);
@@ -101,7 +101,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /function applyFeeBook/);
     assert.match(text, /function ensureFreshHome/);
     assert.match(text, /m\.feeTargets = d\.feeTargets/);
-    assert.match(text, /var HOME_JS_STAMP = "0\.1\.996-oview"/);
+    assert.match(text, /var HOME_JS_STAMP = "0\.1\.997-weeksum"/);
     assert.match(text, /label: "数据总揽"/);
     assert.match(text, /label: "团队概括"/);
     assert.match(text, /data-over-open/);

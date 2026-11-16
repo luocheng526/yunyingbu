@@ -276,7 +276,7 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.doesNotMatch(homeJs, /data-shop-pad/);
   assert.doesNotMatch(homeJs, /行距/);
   assert.doesNotMatch(homeJs, /--xm-hm-row-pad/);
-  assert.doesNotMatch(homeJs, /#5b9bd5/);
+  assert.match(homeJs, /th\.is-fee,\.xm-hm-week-table th\.is-feeRate\{background:#5b9bd5/);
   assert.match(homeJs, /border-right:1px dashed #c8ced8/);
   assert.match(homeJs, /星脉甄选/);
   assert.doesNotMatch(homeJs, /class="xm-hm-set">卡片设置<\/button><\/header>/);
@@ -431,6 +431,7 @@ test("homepage views: bosses see all, chiefs see 主管/储备, operators do not
     team: true,
     chief: true,
     live: true,
+    week: true,
     board: true
   });
   assert.deepEqual(fns.allowedHomeViews({ displayName: "高传颖", role: "主管" }, people, shops), {
@@ -439,6 +440,7 @@ test("homepage views: bosses see all, chiefs see 主管/储备, operators do not
     team: false,
     chief: true,
     live: true,
+    week: true,
     board: true
   });
   assert.deepEqual(fns.allowedHomeViews({ displayName: "索一龙", role: "运营" }, people, shops), {
@@ -447,6 +449,7 @@ test("homepage views: bosses see all, chiefs see 主管/储备, operators do not
     team: false,
     chief: false,
     live: true,
+    week: true,
     board: true
   });
   assert.deepEqual(

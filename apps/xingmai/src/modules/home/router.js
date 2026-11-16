@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, raw } from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getHomeErpKpis } from "./erp-kpis.js";
@@ -12,6 +12,15 @@ import {
   shanghaiYmd,
   shanghaiNow
 } from "./local-paid.js";
+import {
+  buildWeekPack,
+  saveWeekCells,
+  dingWebhook,
+  saveWeekShot,
+  getWeekShot,
+  postDingTalk,
+  readWeekStore
+} from "./week-report.js";
 
 const homeJsPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -122,6 +131,72 @@ export function homeRouter() {
   router.get("/summary", (_req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
     res.json({ ok: true, module: "home", stamp: HOME_JS_STAMP });
+  });
+
+  router.get("/week-report", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    try {
+      const live = await getHomeLocalPaid(req);
+      return res.json(buildWeekPack((live && live.records) || []));
+    } catch {
+      return res.json(buildWeekPack([]));
+    }
+  });
+
+  router.post("/week-report", (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    const saved = saveWeekCells(req.body || {});
+    return res.json({ ok: true, updatedAt: saved.updatedAt, dingReady: Boolean(saved.webhook || dingWebhook()) });
+  });
+
+  router.get("/week-shot/:id.png", (req, res) => {
+    const buf = getWeekShot(req.params.id);
+    if (!buf) {
+      return res.status(404).type("text").send("gone");
+    }
+    res.setHeader("Cache-Control", "public, max-age=600");
+    res.type("png").send(buf);
+  });
+
+  router.post("/week-send", raw({ type: "application/octet-stream", limit: "12mb" }), async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || []);
+    if (!buf.length) {
+      return res.status(400).json({ ok: false, error: "没有图片" });
+    }
+    const id = saveWeekShot(buf);
+    const host = String(req.get("x-forwarded-host") || req.get("host") || "").split(",")[0].trim();
+    const proto = String(req.get("x-forwarded-proto") || req.protocol || "https")
+      .split(",")[0]
+      .trim();
+    const picUrl = host ? `${proto}://${host}/api/home/week-shot/${id}.png` : "";
+    const hook = dingWebhook();
+    if (!hook) {
+      return res.json({
+        ok: true,
+        sent: false,
+        shot: id,
+        picUrl,
+        error: "表已出图。到本页填钉钉机器人 webhook 后再发。"
+      });
+    }
+    try {
+      const ding = await postDingTalk({
+        webhook: hook,
+        title: "近七天业绩汇总",
+        text: `甄选五倍业绩统计 ${shanghaiNow()}`,
+        picUrl
+      });
+      return res.json({ ok: ding.ok, sent: ding.ok, shot: id, picUrl, error: ding.error || "" });
+    } catch (err) {
+      return res.status(502).json({ ok: false, sent: false, shot: id, picUrl, error: err.message || "钉钉发送失败" });
+    }
+  });
+
+  router.get("/week-ding", (_req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    const saved = readWeekStore();
+    res.json({ ok: true, dingReady: Boolean(saved.webhook || dingWebhook()) });
   });
 
   return router;

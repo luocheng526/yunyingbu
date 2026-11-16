@@ -1,10 +1,11 @@
-/* xm-module-home 0.1.996-oview */
+/* xm-module-home 0.1.997-weeksum */
 (function () {
-  var HOME_JS_STAMP = "0.1.996-oview";
+  var HOME_JS_STAMP = "0.1.997-weeksum";
   var VIEWS = [
     { key: "company", label: "数据总揽" },
     { key: "overview", label: "团队概括" },
-    { key: "live", label: "实时" }
+    { key: "live", label: "实时" },
+    { key: "week", label: "近七天业绩汇总" }
   ];
   var OVERVIEW_PANES = [
     { key: "team", label: "经理团队", tone: "teal", hint: "经营团队" },
@@ -832,6 +833,7 @@
       company: true,
       overview: true,
       live: true,
+      week: true,
       team: canSeeTeamView(user),
       chief: canSeeChiefView(user, people, shops),
       board: true
@@ -950,6 +952,405 @@
       );
     }
     return parts.join("");
+  }
+  function weekMdLabel(ymd) {
+    var p = String(ymd || "").split("-");
+    return p.length < 3 ? String(ymd || "") : Number(p[1]) + "." + Number(p[2]) + "号";
+  }
+  function weekShiftYmd(ymd, delta) {
+    var p = String(ymd || shanghaiYmd(0)).split("-").map(Number);
+    var d = new Date(Date.UTC(p[0] || 2026, (p[1] || 1) - 1, p[2] || 1));
+    d.setUTCDate(d.getUTCDate() + (Number(delta) || 0));
+    return d.getUTCFullYear() + "-" + ("0" + (d.getUTCMonth() + 1)).slice(-2) + "-" + ("0" + d.getUTCDate()).slice(-2);
+  }
+  function weekLastDays(count, ymd) {
+    var n = Math.max(1, Number(count) || 7);
+    var out = [];
+    var i;
+    for (i = n - 1; i >= 0; i -= 1) {
+      var day = weekShiftYmd(ymd, -i);
+      out.push({ ymd: day, label: weekMdLabel(day) });
+    }
+    return out;
+  }
+  function weekMonthLast(year, month) {
+    var days = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (month === 2) {
+      return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0) ? 29 : 28;
+    }
+    return days[month] || 30;
+  }
+  function blankWeekPack() {
+    var today = shanghaiYmd(0);
+    var parts = today.split("-").map(Number);
+    var year = parts[0] || 2026;
+    var month = parts[1] || 1;
+    var days = weekLastDays(7, today);
+    var feeDays = days.slice(-3);
+    var cols = [
+      { key: "takeDate", label: "拿店日期", group: "id", w: 72 },
+      { key: "rank", label: "当月职级", group: "id", w: 56 },
+      { key: "owner", label: "所属人", group: "id", w: 110 },
+      { key: "stage", label: "店铺阶段", group: "id", w: 120 },
+      { key: "shop", label: "店铺名称", group: "id", w: 150 },
+      { key: "cat", label: "店铺所在类目", group: "cat", w: 88 }
+    ];
+    days.forEach(function (day) {
+      cols.push({ key: "gmv_" + day.ymd, label: day.label, group: "gmv", w: 58, ymd: day.ymd });
+    });
+    feeDays.forEach(function (day) {
+      cols.push({ key: "fee_" + day.ymd, label: day.label + "推广费用", group: "fee", w: 64, ymd: day.ymd });
+    });
+    feeDays.forEach(function (day) {
+      cols.push({ key: "feeRate_" + day.ymd, label: day.label + "推广费用占比", group: "feeRate", w: 72, ymd: day.ymd });
+    });
+    cols.push({ key: "monthFee", label: "当月费比", group: "feeRate", w: 64 });
+    var m;
+    for (m = 1; m < month; m += 1) {
+      cols.push({
+        key: "profit_" + ("0" + m).slice(-2),
+        label: m + ".1-" + (m === 6 || m === 8 || m === 10 ? weekMonthLast(year, m) + "号" : m + "." + weekMonthLast(year, m) + "号") + "利润",
+        group: "profit",
+        w: 70
+      });
+    }
+    weekLastDays(6, weekShiftYmd(today, -1)).slice(-5).forEach(function (day) {
+      cols.push({
+        key: "mtd_" + day.ymd,
+        label: Number(parts[1]) + ".1-" + Number(day.ymd.split("-")[2]) + "号利润",
+        group: "mtd",
+        w: 70,
+        ymd: day.ymd
+      });
+    });
+    for (m = 5; m < month; m += 1) {
+      cols.push({
+        key: "margin_" + ("0" + m).slice(-2),
+        label: m + ".1-" + (m === 6 || m === 8 || m === 10 ? weekMonthLast(year, m) + "号" : m + "." + weekMonthLast(year, m) + "号") + "大毛利率",
+        group: "margin",
+        w: 72
+      });
+    }
+    [
+      { key: "visitors", label: "访客数" },
+      { key: "orders", label: "订单数" },
+      { key: "newSku", label: "店铺上新数" },
+      { key: "onSale", label: "在售" },
+      { key: "jingcang", label: "京仓SPU个数" },
+      { key: "ret15", label: "近15天退货率" },
+      { key: "ret30", label: "近30天退货率" },
+      { key: "cat2", label: "店铺所在类目" },
+      { key: "monthSpend", label: "本月推广总费用" },
+      { key: "panel", label: "面板总业绩" },
+      { key: "register", label: "登记日期" }
+    ].forEach(function (item) {
+      cols.push({ key: item.key, label: item.label, group: "ops", w: 68 });
+    });
+    function emptyTeam(key, label) {
+      return { key: key, label: label, totalLabel: label + "业绩", kpis: [], rows: [], foot: [] };
+    }
+    return {
+      title: "甄选五倍业绩统计",
+      ymd: today,
+      columns: cols,
+      dingReady: false,
+      teams: [emptyTeam("han", "韩梦凯五倍店铺"), emptyTeam("shen", "沈子晗五倍店铺")]
+    };
+  }
+  function weekCellText(value) {
+    if (value == null || value === "") {
+      return "";
+    }
+    if (typeof value === "number" && Number.isFinite(value)) {
+      if (Math.abs(value) < 1 && value !== 0) {
+        return (value * 100).toFixed(2).replace(/\.00$/, "") + "%";
+      }
+      return fmtInt(value);
+    }
+    return String(value);
+  }
+  function weekGmvClass(row, col, columns) {
+    if (!col || col.group !== "gmv") {
+      return "";
+    }
+    var raw = row && row.cells ? row.cells[col.key] : "";
+    if (raw == null || raw === "") {
+      return "";
+    }
+    var cur = Number(String(raw).replace(/,/g, ""));
+    if (!Number.isFinite(cur)) {
+      return "";
+    }
+    var idx = -1;
+    var i;
+    for (i = 0; i < columns.length; i += 1) {
+      if (columns[i].key === col.key) {
+        idx = i;
+        break;
+      }
+    }
+    var prev = idx > 0 ? columns[idx - 1] : null;
+    if (!prev || prev.group !== "gmv") {
+      return "is-up";
+    }
+    var before = Number(String((row.cells && row.cells[prev.key]) || "").replace(/,/g, ""));
+    if (!Number.isFinite(before)) {
+      return "is-up";
+    }
+    return cur >= before ? "is-up" : "is-down";
+  }
+  function weekTableHtml(pack) {
+    var columns = (pack && pack.columns) || [];
+    var left = 0;
+    var sticky = {};
+    columns.forEach(function (col, i) {
+      if (i < 6) {
+        sticky[col.key] = left;
+        left += col.w || 70;
+      }
+    });
+    function headCell(col) {
+      var stick = sticky[col.key];
+      return (
+        '<th class="is-' +
+        escapeHtml(col.group || "ops") +
+        '"' +
+        (stick != null ? ' style="position:sticky;left:' + stick + "px;z-index:2;min-width:" + (col.w || 70) + "px;width:" + (col.w || 70) + 'px"' : ' style="min-width:' + (col.w || 70) + "px;width:" + (col.w || 70) + 'px"') +
+        ">" +
+        escapeHtml(col.label) +
+        "</th>"
+      );
+    }
+    function bodyCell(teamKey, row, col) {
+      var stick = sticky[col.key];
+      var gmv = weekGmvClass(row, col, columns);
+      var cls = "is-" + (col.group || "ops") + (gmv ? " " + gmv : "") + (col.key === "shop" ? " is-shop" : "");
+      var val = row.cells && row.cells[col.key] != null ? row.cells[col.key] : "";
+      var show = col.key === "shop" ? escapeHtml(row.shop || val || "") : escapeHtml(weekCellText(val));
+      var inner =
+        col.key === "shop"
+          ? show
+          : '<input data-week-cell="' +
+            escapeHtml(teamKey) +
+            "|" +
+            escapeHtml(row.shop || "") +
+            "|" +
+            escapeHtml(col.key) +
+            '" value="' +
+            show +
+            '" />';
+      return (
+        '<td class="' +
+        cls +
+        '"' +
+        (stick != null ? ' style="position:sticky;left:' + stick + "px;z-index:1;background:inherit\"" : "") +
+        ">" +
+        inner +
+        "</td>"
+      );
+    }
+    function footCell(kind, col, label) {
+      if (col.key === "shop") {
+        return '<td class="is-' + kind + '">' + escapeHtml(label) + "</td>";
+      }
+      return '<td class="is-' + kind + '"></td>';
+    }
+    var teams = ((pack && pack.teams) || []).map(function (team) {
+      var kpis = (team.kpis || [])
+        .map(function (item) {
+          return "<span>" + escapeHtml(item.label) + "<b>" + escapeHtml(weekCellText(item.value)) + "</b></span>";
+        })
+        .join("");
+      var rows = (team.rows || [])
+        .map(function (row) {
+          return (
+            "<tr>" +
+            columns
+              .map(function (col) {
+                return bodyCell(team.key, row, col);
+              })
+              .join("") +
+            "</tr>"
+          );
+        })
+        .join("");
+      var foot = (team.foot || [])
+        .map(function (item) {
+          return (
+            '<tr class="xm-hm-week-foot">' +
+            columns
+              .map(function (col) {
+                return footCell(item.kind || "fine", col, item.label);
+              })
+              .join("") +
+            "</tr>"
+          );
+        })
+        .join("");
+      return (
+        '<section class="xm-hm-week-team"><div class="xm-hm-week-head"><span>' +
+        escapeHtml(team.totalLabel || team.label) +
+        '</span><div class="xm-hm-week-kpis">' +
+        kpis +
+        '</div><button type="button" class="is-ghost" data-week-add="' +
+        escapeHtml(team.key) +
+        '">加一行</button></div><table class="xm-hm-week-table"><thead><tr>' +
+        columns.map(headCell).join("") +
+        "</tr></thead><tbody>" +
+        rows +
+        foot +
+        "</tbody></table></section>"
+      );
+    });
+    return (
+      '<div class="xm-hm-week-bar"><div><h2>' +
+      escapeHtml((pack && pack.title) || "甄选五倍业绩统计") +
+      "</h2><p>表头按原五倍表。店铺和当天成交/花费先接韩梦凯实时付费、沈子晗付费中心；其余格子可手填，保存到服务器。点一键发送图片生成大图发钉钉。</p></div><span><input data-week-hook placeholder=\"钉钉机器人 webhook\" /><button type=\"button\" data-week-hook-save>保存机器人</button><button type=\"button\" data-week-send>" +
+      (weekSending ? "发送中…" : "一键发送图片") +
+      "</button></span></div>" +
+      teams.join("")
+    );
+  }
+  var weekSending = false;
+  function drawWeekPng(pack) {
+    return new Promise(function (resolve, reject) {
+      var columns = (pack && pack.columns) || [];
+      var teams = (pack && pack.teams) || [];
+      if (!columns.length) {
+        reject(new Error("没有表头"));
+        return;
+      }
+      var scale = 2;
+      var rowH = 28;
+      var headH = 52;
+      var titleH = 36;
+      var teamGap = 16;
+      var width = 0;
+      columns.forEach(function (col) {
+        width += col.w || 70;
+      });
+      var height = 8;
+      teams.forEach(function (team) {
+        height += titleH + headH + ((team.rows || []).length + (team.foot || []).length) * rowH + teamGap;
+      });
+      var canvas = document.createElement("canvas");
+      canvas.width = Math.max(width, 800) * scale;
+      canvas.height = Math.max(height, 200) * scale;
+      var ctx = canvas.getContext("2d");
+      ctx.scale(scale, scale);
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.font = '12px "Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif';
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      function fillHead(group) {
+        if (group === "fee" || group === "feeRate") {
+          return "#5b9bd5";
+        }
+        if (group === "profit" || group === "margin") {
+          return "#bdd7ee";
+        }
+        if (group === "mtd" || group === "cat") {
+          return "#f8cbad";
+        }
+        return "#ffff00";
+      }
+      function wrap(text, maxW) {
+        var s = String(text || "");
+        var lines = [];
+        var cur = "";
+        var i;
+        for (i = 0; i < s.length; i += 1) {
+          if (ctx.measureText(cur + s[i]).width > maxW && cur) {
+            lines.push(cur);
+            cur = s[i];
+          } else {
+            cur += s[i];
+          }
+        }
+        if (cur) {
+          lines.push(cur);
+        }
+        return lines.slice(0, 3);
+      }
+      var y = 4;
+      teams.forEach(function (team) {
+        ctx.fillStyle = "#ffc000";
+        ctx.fillRect(0, y, width, titleH);
+        ctx.fillStyle = "#111";
+        ctx.font = 'bold 16px "Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif';
+        ctx.textAlign = "left";
+        ctx.fillText((team.totalLabel || team.label || "") + "  " + (pack.title || ""), 10, y + titleH / 2);
+        y += titleH;
+        var x = 0;
+        ctx.font = 'bold 11px "Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif';
+        ctx.textAlign = "center";
+        columns.forEach(function (col) {
+          var w = col.w || 70;
+          ctx.fillStyle = fillHead(col.group);
+          ctx.fillRect(x, y, w, headH);
+          ctx.strokeStyle = "#333";
+          ctx.strokeRect(x, y, w, headH);
+          ctx.fillStyle = col.group === "fee" || col.group === "feeRate" ? "#fff" : "#111";
+          var lines = wrap(col.label, w - 6);
+          lines.forEach(function (line, i) {
+            ctx.fillText(line, x + w / 2, y + headH / 2 + (i - (lines.length - 1) / 2) * 12);
+          });
+          x += w;
+        });
+        y += headH;
+        function drawWeekRow(cells, shop, kind) {
+          var x0 = 0;
+          columns.forEach(function (col) {
+            var w = col.w || 70;
+            var gmv = kind ? "" : weekGmvClass({ cells: cells, shop: shop }, col, columns);
+            var bg = "#fff";
+            if (kind === "fine") {
+              bg = "#ffff00";
+            } else if (kind === "noclean") {
+              bg = "#5b9bd5";
+            } else if (kind === "clean") {
+              bg = "#00b050";
+            } else if (gmv === "is-up") {
+              bg = "#00b050";
+            } else if (gmv === "is-down") {
+              bg = "#ff0000";
+            } else if (col.group === "id") {
+              bg = "#ffff00";
+            } else if (col.group === "cat" || col.group === "mtd") {
+              bg = "#f8cbad";
+            }
+            ctx.fillStyle = bg;
+            ctx.fillRect(x0, y, w, rowH);
+            ctx.strokeStyle = "#333";
+            ctx.strokeRect(x0, y, w, rowH);
+            ctx.fillStyle = bg === "#00b050" || bg === "#ff0000" || bg === "#5b9bd5" ? "#fff" : "#111";
+            ctx.font = '11px "Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif';
+            var text = col.key === "shop" ? shop || cells.shop || (kind ? cells.label : "") : weekCellText(cells[col.key]);
+            if (kind && col.key === "shop") {
+              text = cells.label || "";
+            }
+            ctx.fillText(String(text || ""), x0 + w / 2, y + rowH / 2);
+            x0 += w;
+          });
+          y += rowH;
+        }
+        (team.rows || []).forEach(function (row) {
+          drawWeekRow(row.cells || {}, row.shop, "");
+        });
+        (team.foot || []).forEach(function (item) {
+          drawWeekRow({ label: item.label }, "", item.kind);
+        });
+        y += teamGap;
+      });
+      canvas.toBlob(function (blob) {
+        if (!blob) {
+          reject(new Error("出图失败"));
+          return;
+        }
+        resolve(blob);
+      }, "image/png");
+    });
   }
   function seesAllChiefs(user) {
     return canSeeChiefView(user);
@@ -2180,8 +2581,39 @@
       ".xm-hm-tip{position:fixed;z-index:9;display:none;box-sizing:border-box;width:max-content;max-width:360px;padding:10px 12px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;color:var(--xm-ink);font-size:12px;line-height:1.6;white-space:pre-wrap;pointer-events:none}" +
       ".xm-hm-tip.is-on{display:block}" +
       ".xm-hm-body{position:relative;display:flex;flex-direction:column;gap:12px;overflow:visible}" +
-      ".xm-hm.is-live .xm-hm-kpis-shell,.xm-hm.is-board .xm-hm-kpis-shell,.xm-hm.is-team .xm-hm-kpis-shell,.xm-hm.is-overview .xm-hm-kpis-shell,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
-      ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden]{display:none}" +
+      ".xm-hm.is-live .xm-hm-kpis-shell,.xm-hm.is-board .xm-hm-kpis-shell,.xm-hm.is-team .xm-hm-kpis-shell,.xm-hm.is-overview .xm-hm-kpis-shell,.xm-hm.is-week .xm-hm-kpis-shell,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges,.xm-hm.is-week .xm-hm-ranges{display:none}" +
+      ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden],.xm-hm-week[hidden]{display:none}" +
+      ".xm-hm-week{display:flex;flex-direction:column;gap:12px}" +
+      ".xm-hm-week-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between}" +
+      ".xm-hm-week-bar h2{margin:0;font-size:18px}" +
+      ".xm-hm-week-bar p{margin:0;color:var(--xm-muted);font-size:12px;flex:1 1 240px}" +
+      ".xm-hm-week-bar span{display:flex;flex-wrap:wrap;gap:8px;align-items:center}" +
+      ".xm-hm-week-bar input{height:32px;min-width:220px;border:1px solid var(--xm-line);border-radius:6px;padding:0 8px;font-size:12px}" +
+      ".xm-hm-week-bar button{border:0;background:var(--xm-primary);color:#fff;border-radius:6px;height:32px;padding:0 12px;cursor:pointer;font-size:13px}" +
+      ".xm-hm-week-bar button.is-ghost{background:transparent;color:var(--xm-primary)}" +
+      ".xm-hm-week-bar button:disabled{opacity:.55;cursor:wait}" +
+      ".xm-hm-week-team{border:1px solid #e4e7ed;border-radius:10px;overflow:auto;background:#fff}" +
+      ".xm-hm-week-head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:8px 10px;background:#ffc000;font-weight:700}" +
+      ".xm-hm-week-kpis{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;font-weight:600}" +
+      ".xm-hm-week-kpis b{font-size:16px;margin-left:4px}" +
+      ".xm-hm-week-table{border-collapse:separate;border-spacing:0;font-size:11px;table-layout:fixed}" +
+      ".xm-hm-week-table th,.xm-hm-week-table td{border:1px solid #333;padding:3px 4px;text-align:center;vertical-align:middle;word-break:break-all;background:#fff}" +
+      ".xm-hm-week-table th{font-weight:700;line-height:1.25}" +
+      ".xm-hm-week-table th.is-id,.xm-hm-week-table td.is-id{background:#ffff00}" +
+      ".xm-hm-week-table th.is-cat,.xm-hm-week-table td.is-cat{background:#f8cbad}" +
+      ".xm-hm-week-table th.is-gmv{background:#ffff00}" +
+      ".xm-hm-week-table th.is-fee,.xm-hm-week-table th.is-feeRate{background:#5b9bd5;color:#fff}" +
+      ".xm-hm-week-table th.is-profit,.xm-hm-week-table th.is-margin{background:#bdd7ee}" +
+      ".xm-hm-week-table th.is-mtd{background:#f8cbad}" +
+      ".xm-hm-week-table th.is-ops{background:#ffff00}" +
+      ".xm-hm-week-table td.is-up{background:#00b050;color:#fff}" +
+      ".xm-hm-week-table td.is-down{background:#ff0000;color:#fff}" +
+      ".xm-hm-week-table td.is-fine{background:#ffff00}" +
+      ".xm-hm-week-table td.is-noclean{background:#5b9bd5;color:#fff}" +
+      ".xm-hm-week-table td.is-clean{background:#00b050;color:#fff}" +
+      ".xm-hm-week-table input{width:100%;border:0;background:transparent;text-align:center;font:inherit;color:inherit;padding:0}" +
+      ".xm-hm-week-table .is-shop{text-align:left;font-weight:600}" +
+      ".xm-hm-week-foot td{font-weight:700}" +
       ".xm-hm-over-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin:0 0 16px}" +
       ".xm-hm-over-card{display:flex;flex-direction:column;align-items:flex-start;gap:6px;border:0;border-radius:16px;padding:18px 20px 16px;color:#fff;cursor:pointer;text-align:left;min-height:118px;box-shadow:none}" +
       ".xm-hm-over-card.is-teal{background:linear-gradient(135deg,#2ec8d4,#22b4c0)}" +
@@ -2415,6 +2847,7 @@
       '<section class="xm-hm-kpis-shell"><div class="xm-hm-teams-bar"><b>星脉甄选</b><button type="button" class="xm-hm-set" id="xm-hm-set">卡片设置</button></div><div class="xm-hm-sales xm-hm-live-charts" id="xm-hm-sales"></div><div class="xm-hm-kpis" id="xm-hm-kpis"></div></section>' +
       '<section class="xm-hm-teams" id="xm-hm-teams" hidden></section>' +
       '<section class="xm-hm-live" id="xm-hm-live" hidden></section>' +
+      '<section class="xm-hm-week" id="xm-hm-week" hidden></section>' +
       '<section class="xm-hm-board" id="xm-hm-board" hidden>' +
       '<div id="xm-hm-ladders"></div></section>' +
       '</div><p class="xm-hm-note" id="xm-hm-note">数字来自星脉 ERP。</p></div>'
@@ -2597,6 +3030,7 @@
     board.classList.toggle("is-overview", state.view === "overview");
     board.classList.toggle("is-board", state.view === "overview" && state.teamPane === "board");
     board.classList.toggle("is-live", state.view === "live");
+    board.classList.toggle("is-week", state.view === "week");
     board.classList.toggle("is-team", state.view === "overview" && state.teamPane !== "board");
     board.classList.toggle("is-chief", state.view === "overview" && state.teamPane === "chief");
     Array.prototype.forEach.call(root.querySelectorAll("[data-view]"), function (btn) {
@@ -2618,6 +3052,13 @@
       block.style.setProperty("--xm-hm-team-cols", String(Math.max(block.querySelectorAll(".xm-hm-team").length, 1)));
     });
     root.querySelector("#xm-hm-live").hidden = state.view !== "live";
+    var weekBox = root.querySelector("#xm-hm-week");
+    if (weekBox) {
+      weekBox.hidden = state.view !== "week";
+      if (state.view === "week") {
+        weekBox.innerHTML = weekTableHtml(state.weekPack || blankWeekPack());
+      }
+    }
     root.querySelector("#xm-hm-board").hidden = true;
     root.querySelector("#xm-hm-live").innerHTML =
       liveFilterHtml(allShops, state) +
@@ -2658,7 +3099,9 @@
       ? "人管对不上：" + gapText
       : state.view === "live"
         ? "实时只汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」，不填写。"
-        : "数字来自星脉 ERP。";
+        : state.view === "week"
+          ? "近七天业绩汇总：爬虫填店铺和当天数字，其余可手填；一键发送图片发到钉钉。"
+          : "数字来自星脉 ERP。";
     root.querySelector("#xm-hm-pop h3").textContent =
       "卡片设置 · " + (viewKey === "team" ? "经理团队" : viewKey === "chief" ? "主管/储备" : "数据总揽");
     var setCards = state.view === "company" ? companySetCards(state.cards) : arrangeCards(state.cards || blankCompanyCards());
@@ -4456,7 +4899,8 @@
         ladders: blankLadders(),
         liveAt: "",
         gaps: [],
-        source: ""
+        source: "",
+        weekPack: blankWeekPack()
       };
       var poll = 0;
       var LIVE_REFRESH_MS = 10 * 60 * 1000;
@@ -4662,6 +5106,17 @@
           }
         });
       }
+      function pullWeek() {
+        api("/api/home/week-report").then(function (data) {
+          if (dead || !data) {
+            return;
+          }
+          state.weekPack = data;
+          if (state.view === "week") {
+            paint(root, state);
+          }
+        });
+      }
       function onClick(event) {
         var help = event.target.closest && event.target.closest(".xm-hm-help");
         if (help) {
@@ -4701,6 +5156,9 @@
           if (state.view === "live" || state.view === "company") {
             pullLive(true);
           }
+          if (state.view === "week") {
+            pullWeek();
+          }
           return;
         }
         var overOpen = event.target.closest("[data-over-open]");
@@ -4724,6 +5182,72 @@
           cardSetOpen = false;
           headSetOpen = false;
           paint(root, state);
+          return;
+        }
+        if (event.target.closest("[data-week-hook-save]")) {
+          var hookInput = root.querySelector("[data-week-hook]");
+          api("/api/home/week-report", { webhook: hookInput ? hookInput.value : "" }).then(function (data) {
+            if (state.weekPack) {
+              state.weekPack.dingReady = !!(data && data.dingReady);
+            }
+            if (hookInput) {
+              hookInput.value = "";
+              hookInput.placeholder = data && data.dingReady ? "钉钉机器人已保存" : "钉钉机器人 webhook";
+            }
+          });
+          return;
+        }
+        var addTeam = event.target.closest("[data-week-add]");
+        if (addTeam) {
+          var teamKey = addTeam.getAttribute("data-week-add");
+          var name = window.prompt("店铺名称");
+          if (!name) {
+            return;
+          }
+          var shop = String(name).trim();
+          var addCells = {};
+          addCells[teamKey + "|" + shop + "|shop"] = shop;
+          api("/api/home/week-report", { cells: addCells }).then(function () {
+            pullWeek();
+          });
+          return;
+        }
+        if (event.target.closest("[data-week-send]")) {
+          if (weekSending) {
+            return;
+          }
+          weekSending = true;
+          paint(root, state);
+          drawWeekPng(state.weekPack || blankWeekPack())
+            .then(function (blob) {
+              return fetch("/api/home/week-send", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { Accept: "application/json", "Content-Type": "application/octet-stream" },
+                body: blob
+              }).then(function (res) {
+                return res.json().then(function (data) {
+                  return { res: res, data: data, blob: blob };
+                });
+              });
+            })
+            .then(function (out) {
+              weekSending = false;
+              paint(root, state);
+              var msg = (out.data && (out.data.error || (out.data.sent ? "已发到钉钉" : "图已生成"))) || "发送结束";
+              window.alert(msg);
+              if (out.blob && !(out.data && out.data.sent)) {
+                var a = document.createElement("a");
+                a.href = URL.createObjectURL(out.blob);
+                a.download = "近七天业绩汇总.png";
+                a.click();
+              }
+            })
+            .catch(function (err) {
+              weekSending = false;
+              paint(root, state);
+              window.alert((err && err.message) || "出图失败");
+            });
           return;
         }
         var range = event.target.closest("[data-range]");
@@ -5411,6 +5935,27 @@
                   })
           );
           paint(root, state);
+          return;
+        }
+        var weekCell = event.target.getAttribute("data-week-cell");
+        if (weekCell) {
+          var patch = {};
+          patch[weekCell] = event.target.value;
+          api("/api/home/week-report", { cells: patch });
+          var bits = weekCell.split("|");
+          if (bits.length >= 3 && state.weekPack && state.weekPack.teams) {
+            state.weekPack.teams.forEach(function (team) {
+              if (team.key !== bits[0]) {
+                return;
+              }
+              (team.rows || []).forEach(function (row) {
+                if (row.shop === bits[1]) {
+                  row.cells = row.cells || {};
+                  row.cells[bits.slice(2).join("|")] = event.target.value;
+                }
+              });
+            });
+          }
           return;
         }
         var hideKey = event.target.getAttribute("data-hide");
