@@ -1,4 +1,4 @@
-/* xm-module-work — 工作汇报。今天页按填写日报排版。 */
+/* xm-module-work — 工作汇报。今天页按填写日报，汇总可点开明细。 */
 (function () {
   var state = {
     tab: "today",
@@ -17,6 +17,12 @@
     diaryShop: "",
     diaryGroup: "goods",
     summary: null,
+    summaryFrom: "",
+    summaryTo: "",
+    summaryPerson: "",
+    summaryShop: "",
+    summarySpu: "",
+    summaryDialog: null,
     duty: null,
     diarySettings: null,
     meta: null,
@@ -53,7 +59,6 @@
       ".work-tab[aria-selected='true']{border:0;color:#fff;font-weight:650;background:linear-gradient(90deg,#245bdb,#4b7cff);box-shadow:0 6px 14px rgba(36,91,219,.18);}" +
       ".work-page button:focus-visible,.work-page input:focus-visible,.work-page select:focus-visible,.work-page textarea:focus-visible{outline:2px solid var(--xm-primary);outline-offset:1px;}" +
       ".work-panel{display:flex;flex-direction:column;gap:8px;}" +
-      ".work-split{display:flex;flex-direction:column;gap:8px;}" +
       ".work-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;}" +
       ".work-kpi{border:0;border-radius:12px;min-height:92px;padding:14px 14px 12px;color:#fff;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:0 8px 18px rgba(22,119,255,.12);}" +
       ".work-kpi b,.work-kpi strong{display:block;font-size:28px;line-height:1;font-weight:700;font-variant-numeric:tabular-nums;color:#fff;}" +
@@ -153,6 +158,19 @@
       ".work-submitbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:2px 2px 0;}" +
       ".work-submitbar strong{color:var(--xm-muted);font-size:12px;font-weight:650;}" +
       ".work-submitbar .work-primary,.work-submitbar .work-mini{min-height:38px;padding:7px 16px;font-weight:650;}" +
+      ".work-summary-note{margin:0 0 10px;color:var(--xm-muted);font-size:13px;}" +
+      ".work-metric-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:10px;}" +
+      ".work-metric{display:block;width:100%;border:1px solid var(--xm-line);border-radius:7px;padding:14px 16px;background:var(--xm-card);color:var(--xm-muted);text-align:left;cursor:pointer;font:inherit;}" +
+      ".work-metric:hover{border-color:#8c90da;}" +
+      ".work-metric strong{display:block;margin-top:4px;font-size:23px;line-height:1.4;color:var(--xm-ink);font-variant-numeric:tabular-nums;}" +
+      ".work-sum-table th,.work-sum-table td{white-space:nowrap;}" +
+      ".work-modal{position:fixed;inset:0;z-index:40;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;background:rgba(15,23,42,.45);}" +
+      ".work-dialog{width:min(920px,100%);background:var(--xm-card);color:var(--xm-ink);border-radius:12px;box-shadow:var(--xm-shadow);padding:16px 18px;}" +
+      ".work-dialog-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 0 12px;}" +
+      ".work-sum-split{display:grid;grid-template-columns:minmax(180px,.7fr) minmax(280px,1.6fr);gap:14px;align-items:start;}" +
+      ".work-fold{margin:0 0 8px;}" +
+      ".work-fold summary{cursor:pointer;font-weight:650;}" +
+      ".work-total{margin:0 0 8px;font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;}" +
       ".work-people{display:flex;flex-direction:column;gap:8px;}" +
       ".work-person{color:#fff;border-radius:12px;padding:12px 14px;box-shadow:0 8px 18px rgba(20,40,80,.12);display:flex;align-items:center;gap:16px;}" +
       ".work-person.tone-ok{background:linear-gradient(90deg,#1faa5a,#3dce78);}" +
@@ -164,7 +182,7 @@
       ".work-who span,.work-main{font-size:12px;color:rgba(255,255,255,.92);line-height:1.45;}" +
       ".work-main{flex:1;min-width:0;}" +
       ".work-person .work-mini{background:#fff;color:#245bdb;border:0;font-weight:650;}" +
-      "@media (max-width:980px){.work-stats,.work-depts,.work-lanes,.work-orders{grid-template-columns:1fr;}.work-lanes,.work-orders{gap:14px;}.work-person{flex-wrap:wrap;align-items:flex-start;}.work-count{margin-left:0;}.work-dutybadge{margin-left:0;}.work-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 8px;padding:6px 12px;}.work-groups button{min-height:36px;justify-content:center;font-size:13px;}.work-groups button.is-on{background:rgba(36,91,219,.1);border-radius:5px;border-bottom-color:transparent;}.work-storeactions{margin-left:0;}}";
+      "@media (max-width:980px){.work-stats,.work-depts,.work-lanes,.work-orders{grid-template-columns:1fr;}.work-lanes,.work-orders{gap:14px;}.work-person{flex-wrap:wrap;align-items:flex-start;}.work-count{margin-left:0;}.work-dutybadge{margin-left:0;}.work-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 8px;padding:6px 12px;}.work-groups button{min-height:36px;justify-content:center;font-size:13px;}.work-groups button.is-on{background:rgba(36,91,219,.1);border-radius:5px;border-bottom-color:transparent;}.work-storeactions{margin-left:0;}.work-sum-split{grid-template-columns:1fr;}}";
     document.head.appendChild(style);
   }
 
@@ -942,45 +960,383 @@
     );
   }
 
+  function shiftIso(day, offset) {
+    var date = new Date(String(day) + "T12:00:00Z");
+    date.setUTCDate(date.getUTCDate() + offset);
+    return date.toISOString().slice(0, 10);
+  }
+
+  function summarySpu() {
+    return String(state.summarySpu || "").trim().toUpperCase();
+  }
+
+  function splitSpus(value) {
+    return String(value || "")
+      .toUpperCase()
+      .split(/[\s,，、;；]+/)
+      .filter(Boolean);
+  }
+
+  function summaryRows() {
+    var spu = summarySpu();
+    return ((state.summary && state.summary.rows) || []).filter(function (row) {
+      if (state.summaryPerson && String(row.personId) !== String(state.summaryPerson)) {
+        return false;
+      }
+      if (state.summaryShop && String(row.shopId) !== String(state.summaryShop)) {
+        return false;
+      }
+      if (!spu) {
+        return true;
+      }
+      var items = row.items || {};
+      return Object.keys(items).some(function (id) {
+        return splitSpus(items[id] && items[id].spus).indexOf(spu) >= 0;
+      });
+    });
+  }
+
+  function metricCount(row, id) {
+    var item = (row.items && row.items[id]) || {};
+    var spu = summarySpu();
+    if (spu && splitSpus(item.spus).indexOf(spu) < 0) {
+      return 0;
+    }
+    if (id === "违约单处置记录") {
+      if (String(item.detail || "").trim() || (item.images || []).length) {
+        return 1;
+      }
+    }
+    if (id === "优化" && spu) {
+      return 1;
+    }
+    return Number(item.count) || 0;
+  }
+
+  function metricTotal(rows, id) {
+    return rows.reduce(function (sum, row) {
+      return sum + metricCount(row, id);
+    }, 0);
+  }
+
+  function metricLabel(metric) {
+    return metric.name + (metric.unit ? "（" + metric.unit + "）" : "");
+  }
+
+  function choiceName(id) {
+    var nodes = (state.diary && state.diary.catalog && state.diary.catalog.nodes) || [];
+    var found = null;
+    nodes.forEach(function (node) {
+      if (node.id === id) {
+        found = node.name;
+      }
+    });
+    return found || id;
+  }
+
+  function itemDetailText(item) {
+    var actions = (item && item.actions) || [];
+    var parts = actions.map(choiceName);
+    if (item && item.detail) {
+      parts.push(item.detail);
+    }
+    return parts.filter(Boolean).join("、");
+  }
+
+  function imageButtons(images) {
+    return (images || [])
+      .map(function (image) {
+        return (
+          '<button type="button" class="work-mini" data-preview-image="' +
+          esc(image.id) +
+          '">查看截图 · ' +
+          esc(image.name) +
+          "</button>"
+        );
+      })
+      .join("");
+  }
+
+  function summaryTable(headers, rows) {
+    return (
+      '<div class="work-table-wrap"><table class="work-table work-sum-table"><thead><tr>' +
+      headers.map(function (header) { return "<th>" + esc(header) + "</th>"; }).join("") +
+      "</tr></thead><tbody>" +
+      (rows || '<tr><td colspan="' + headers.length + '" class="work-empty">暂无明细</td></tr>') +
+      "</tbody></table></div>"
+    );
+  }
+
+  function groupSummary(rows, key) {
+    var groups = [];
+    var index = {};
+    rows.forEach(function (row) {
+      var id = String(row[key]);
+      if (!index[id]) {
+        index[id] = { id: id, name: key === "personId" ? row.personName : row.shopName, rows: [] };
+        groups.push(index[id]);
+      }
+      index[id].rows.push(row);
+    });
+    return groups;
+  }
+
+  function renderSummaryDialog(rows, metrics) {
+    var dialog = state.summaryDialog;
+    if (!dialog) {
+      return "";
+    }
+    var body = "";
+    var title = "";
+    if (dialog.type === "metric") {
+      var metric = null;
+      metrics.forEach(function (item) {
+        if (item.id === dialog.id) {
+          metric = item;
+        }
+      });
+      if (!metric) {
+        return "";
+      }
+      title = metricLabel(metric) + "明细";
+      var entries = rows.filter(function (row) {
+        var item = (row.items && row.items[dialog.id]) || {};
+        return metricCount(row, dialog.id) || item.spus || (item.images || []).length || itemDetailText(item);
+      });
+      var people = groupSummary(entries, "personId");
+      var shops = groupSummary(entries, "shopId");
+      body =
+        '<p class="work-total">合计 ' +
+        metricTotal(entries, dialog.id) +
+        '</p><div class="work-sum-split"><section><h3>人员贡献</h3>' +
+        summaryTable(
+          ["人员", "数量"],
+          people
+            .map(function (group) {
+              return "<tr><td>" + esc(group.name) + "</td><td>" + metricTotal(group.rows, dialog.id) + "</td></tr>";
+            })
+            .join("")
+        ) +
+        '</section><section><h3>店铺明细</h3>' +
+        (shops.length
+          ? shops
+              .map(function (group) {
+                return (
+                  '<details class="work-fold" open><summary>' +
+                  esc(group.name) +
+                  " · " +
+                  metricTotal(group.rows, dialog.id) +
+                  "</summary>" +
+                  summaryTable(
+                    ["日期", "人员", "数量", "SPU", "明细"],
+                    group.rows
+                      .map(function (row) {
+                        var item = (row.items && row.items[dialog.id]) || {};
+                        return (
+                          "<tr><td>" +
+                          esc(row.day) +
+                          "</td><td>" +
+                          esc(row.personName) +
+                          "</td><td>" +
+                          metricCount(row, dialog.id) +
+                          "</td><td>" +
+                          esc(summarySpu() && dialog.id === "优化" ? state.summarySpu : item.spus || "") +
+                          "</td><td>" +
+                          esc(itemDetailText(item)) +
+                          imageButtons(item.images) +
+                          "</td></tr>"
+                        );
+                      })
+                      .join("")
+                  ) +
+                  "</details>"
+                );
+              })
+              .join("")
+          : '<p class="work-empty">暂无明细</p>') +
+        "</section></div>";
+    } else {
+      var report = rows[dialog.index];
+      if (!report) {
+        return "";
+      }
+      title = "日报详情";
+      body =
+        "<p>" +
+        esc(report.day) +
+        "　" +
+        esc(report.personName) +
+        "　" +
+        esc(report.shopName) +
+        "</p>" +
+        summaryTable(
+          ["工作内容", "数量", "SPU", "明细"],
+          metrics
+            .map(function (metric) {
+              var item = (report.items && report.items[metric.id]) || {};
+              return (
+                "<tr><td>" +
+                esc(metricLabel(metric)) +
+                "</td><td>" +
+                (item && item.count != null ? item.count : "—") +
+                "</td><td>" +
+                esc(item.spus || "") +
+                "</td><td>" +
+                esc(itemDetailText(item)) +
+                imageButtons(item.images) +
+                "</td></tr>"
+              );
+            })
+            .join("")
+        ) +
+        "<p>其他工作　" +
+        esc(((report.extra || []).map(choiceName).join("、")) || "—") +
+        "</p><p>备注　" +
+        esc(report.notes || "—") +
+        "</p>" +
+        imageButtons((report.proofs && report.proofs["备注"]) || []);
+    }
+    return (
+      '<div class="work-modal"><div class="work-dialog" role="dialog"><div class="work-dialog-head"><h2>' +
+      esc(title) +
+      '</h2><button type="button" class="work-mini" data-summary-close>关闭</button></div>' +
+      body +
+      "</div></div>"
+    );
+  }
+
   function renderSummary() {
     var data = state.summary;
     if (!data) {
       return '<div class="work-card"><div class="work-empty">正在读取工作汇总…</div></div>';
     }
-    var metrics = (data.metrics || [])
-      .map(function (item, index) {
-        return kpi(index % 5, item.total, item.name);
-      })
-      .join("");
-    var rows = (data.rows || [])
-      .map(function (row) {
+    var rows = summaryRows();
+    var metrics = data.metrics || [];
+    var peopleCount = {};
+    var shopCount = {};
+    rows.forEach(function (row) {
+      peopleCount[row.personId] = true;
+      shopCount[row.shopId] = true;
+    });
+    var peopleOptions = (data.people || [])
+      .map(function (person) {
         return (
-          "<tr><td>" +
-          esc(row.day) +
-          "</td><td>" +
-          esc(row.personName) +
-          "</td><td>" +
-          esc(row.shopName) +
-          "</td><td>" +
-          esc(row.status) +
-          "</td><td>" +
-          esc(row.notes || "—") +
-          "</td></tr>"
+          '<option value="' +
+          esc(person.id) +
+          '"' +
+          (String(state.summaryPerson) === String(person.id) ? " selected" : "") +
+          ">" +
+          esc(person.name) +
+          "</option>"
         );
       })
       .join("");
+    var shopOptions = (data.shops || [])
+      .map(function (shop) {
+        return (
+          '<option value="' +
+          esc(shop.id) +
+          '"' +
+          (String(state.summaryShop) === String(shop.id) ? " selected" : "") +
+          ">" +
+          esc(shop.name) +
+          "</option>"
+        );
+      })
+      .join("");
+    var cards = metrics
+      .map(function (metric) {
+        var total = rows.length ? metricTotal(rows, metric.id) : "—";
+        return (
+          '<button type="button" class="work-metric" data-summary-metric="' +
+          esc(metric.id) +
+          '"><span>' +
+          esc(metricLabel(metric)) +
+          "</span><strong>" +
+          total +
+          "</strong></button>"
+        );
+      })
+      .join("");
+    var head = ["人员", "日报数"].concat(metrics.map(metricLabel));
+    var shopHead = ["店铺", "日报数"].concat(metrics.map(metricLabel));
+    function lines(groups, nameKey) {
+      return groups
+        .map(function (group) {
+          return (
+            "<tr><td>" +
+            esc(group.name) +
+            "</td><td>" +
+            group.rows.length +
+            "</td>" +
+            metrics
+              .map(function (metric) {
+                return "<td>" + metricTotal(group.rows, metric.id) + "</td>";
+              })
+              .join("") +
+            "</tr>"
+          );
+        })
+        .join("");
+    }
+    var note =
+      "已提交 " +
+      rows.length +
+      " 份日报 · " +
+      Object.keys(peopleCount).length +
+      " 人 · " +
+      Object.keys(shopCount).length +
+      " 家店";
     return (
-      '<div class="work-panel"><div class="work-stats">' +
-      kpi(0, data.reportCount, "已交日报") +
-      kpi(1, data.peopleCount, "已报人数") +
-      kpi(4, data.shopCount, "店铺数") +
-      "</div>" +
-      '<div class="work-card"><h2>工作量</h2><div class="work-stats">' +
-      metrics +
-      "</div></div>" +
-      '<div class="work-card work-table-wrap"><table class="work-table"><thead><tr><th>日期</th><th>填报人</th><th>店铺</th><th>状态</th><th>备注</th></tr></thead><tbody>' +
-      (rows || '<tr><td colspan="5" class="work-empty">这段时间还没有已提交的店铺日报。</td></tr>') +
-      "</tbody></table></div></div>"
+      '<div class="work-panel"><section class="work-card"><h2>汇总筛选</h2><div class="work-filters">' +
+      '<button type="button" class="work-mini" data-summary-period="今天">今天</button>' +
+      '<button type="button" class="work-mini" data-summary-period="昨天">昨天</button>' +
+      '<button type="button" class="work-mini" data-summary-period="近7天">近7天</button>' +
+      '<button type="button" class="work-mini" data-summary-period="本月">本月</button></div>' +
+      '<div class="work-form"><label class="work-field">开始日期<input type="date" data-summary-from value="' +
+      esc(state.summaryFrom) +
+      '"></label><label class="work-field">结束日期<input type="date" data-summary-to value="' +
+      esc(state.summaryTo) +
+      '"></label><label class="work-field">人员<select data-summary-person><option value="">全部人员</option>' +
+      peopleOptions +
+      '</select></label><label class="work-field">店铺<select data-summary-shop><option value="">全部店铺</option>' +
+      shopOptions +
+      '</select></label><label class="work-field">SPU<input data-summary-spu value="' +
+      esc(state.summarySpu) +
+      '"></label><button type="button" class="work-primary" data-summary-query>查询</button></div></section>' +
+      '<section class="work-card"><h2>工作量汇总</h2><p class="work-summary-note">' +
+      esc(note) +
+      '</p><div class="work-metric-grid">' +
+      cards +
+      "</div></section>" +
+      '<section class="work-card"><h2>按人员汇总</h2>' +
+      summaryTable(head, lines(groupSummary(rows, "personId"))) +
+      "</section>" +
+      '<section class="work-card"><h2>按店铺汇总</h2>' +
+      summaryTable(shopHead, lines(groupSummary(rows, "shopId"))) +
+      "</section>" +
+      '<section class="work-card"><h2>已提交日报</h2>' +
+      summaryTable(
+        ["日期", "填报人", "店铺", "操作"],
+        rows
+          .map(function (row, index) {
+            return (
+              "<tr><td>" +
+              esc(row.day) +
+              "</td><td>" +
+              esc(row.personName) +
+              "</td><td>" +
+              esc(row.shopName) +
+              '</td><td><button type="button" class="work-mini" data-summary-report="' +
+              index +
+              '">查看详情</button></td></tr>'
+            );
+          })
+          .join("")
+      ) +
+      "</section>" +
+      renderSummaryDialog(rows, metrics) +
+      "</div>"
     );
   }
 
@@ -1434,15 +1790,15 @@
     var caret = state.keepCaret;
     state.keepFocus = "";
     state.keepCaret = null;
-    var dated = state.tab === "summary" || state.tab === "duty";
+    var dated = state.tab === "duty";
     var date = state.date || todayIso();
     var dateTools = dated
       ? '<div class="work-tools"><label class="work-field">日期<input type="date" data-work-date min="2020-01-01" max="2099-12-31" value="' +
         esc(date) +
         '"></label><button type="button" class="work-mini" data-today>今天</button></div>'
       : "";
-    var heading = state.tab === "today" ? "填写日报" : "工作汇报";
-    var lead = state.tab === "today" ? "" : '<p class="work-lead">人数按人计，店铺按店计。</p>';
+    var heading = state.tab === "today" ? "填写日报" : state.tab === "summary" ? "工作汇总" : "工作汇报";
+    var lead = state.tab === "today" || state.tab === "summary" ? "" : '<p class="work-lead">人数按人计，店铺按店计。</p>';
     root.innerHTML =
       '<main class="page work-page">' +
       '<div class="work-bar"><div><h1>' +
@@ -1504,7 +1860,20 @@
       state.settings = await api("/api/work/settings");
     }
     if (state.tab === "summary") {
-      state.summary = await api("/api/work/diary/summary?from=" + encodeURIComponent(state.date) + "&to=" + encodeURIComponent(state.date));
+      var summaryDay = state.meta.today || state.date || todayIso();
+      if (!state.summaryTo) {
+        state.summaryTo = summaryDay;
+      }
+      if (!state.summaryFrom) {
+        state.summaryFrom = shiftIso(state.summaryTo, -6);
+      }
+      state.summaryDialog = null;
+      state.summary = await api(
+        "/api/work/diary/summary?from=" +
+          encodeURIComponent(state.summaryFrom) +
+          "&to=" +
+          encodeURIComponent(state.summaryTo)
+      );
     }
     if (state.tab === "duty" && state.diary.leader) {
       state.duty = await api("/api/work/diary/duty?date=" + encodeURIComponent(state.date));
@@ -1554,6 +1923,29 @@
     }
   }
 
+  function readSummaryForm(root) {
+    var from = root.querySelector("[data-summary-from]");
+    var to = root.querySelector("[data-summary-to]");
+    var person = root.querySelector("[data-summary-person]");
+    var shop = root.querySelector("[data-summary-shop]");
+    var spu = root.querySelector("[data-summary-spu]");
+    if (from && from.value) {
+      state.summaryFrom = from.value;
+    }
+    if (to && to.value) {
+      state.summaryTo = to.value;
+    }
+    if (person) {
+      state.summaryPerson = person.value;
+    }
+    if (shop) {
+      state.summaryShop = shop.value;
+    }
+    if (spu) {
+      state.summarySpu = spu.value;
+    }
+  }
+
   function bind(root) {
     root.addEventListener("click", function (event) {
       var tab = event.target.closest("[data-tab]");
@@ -1564,6 +1956,45 @@
           setMsg(err.message, true);
           paint(root);
         });
+        return;
+      }
+      var summaryPeriod = event.target.closest("[data-summary-period]");
+      if (summaryPeriod) {
+        readSummaryForm(root);
+        var summaryToday = (state.meta && state.meta.today) || todayIso();
+        var period = summaryPeriod.getAttribute("data-summary-period");
+        state.summaryTo = period === "昨天" ? shiftIso(summaryToday, -1) : summaryToday;
+        state.summaryFrom = period === "今天" ? summaryToday : period === "昨天" ? state.summaryTo : period === "本月" ? summaryToday.slice(0, 7) + "-01" : shiftIso(summaryToday, -6);
+        reload(root).catch(function (err) {
+          setMsg(err.message, true);
+          paint(root);
+        });
+        return;
+      }
+      var summaryQuery = event.target.closest("[data-summary-query]");
+      if (summaryQuery) {
+        readSummaryForm(root);
+        reload(root).catch(function (err) {
+          setMsg(err.message, true);
+          paint(root);
+        });
+        return;
+      }
+      var summaryMetric = event.target.closest("[data-summary-metric]");
+      if (summaryMetric) {
+        state.summaryDialog = { type: "metric", id: summaryMetric.getAttribute("data-summary-metric") };
+        paint(root);
+        return;
+      }
+      var summaryReport = event.target.closest("[data-summary-report]");
+      if (summaryReport) {
+        state.summaryDialog = { type: "report", index: Number(summaryReport.getAttribute("data-summary-report")) };
+        paint(root);
+        return;
+      }
+      if ((event.target.classList && event.target.classList.contains("work-modal")) || event.target.closest("[data-summary-close]")) {
+        state.summaryDialog = null;
+        paint(root);
         return;
       }
       var today = event.target.closest("[data-today]");

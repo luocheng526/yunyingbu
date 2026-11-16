@@ -766,15 +766,6 @@ function metricValue(report, id) {
   return Number(item.count) || 0;
 }
 
-function templateMetricValue(content) {
-  const text = String(content || "").trim();
-  if (!text) {
-    return 0;
-  }
-  const matched = text.match(/-?\d+/);
-  return matched ? Number(matched[0]) : 1;
-}
-
 export async function diarySummary(user, queryInput, isAdmin) {
   await readyDiary();
   const from = parseDate(queryInput?.from || todayShanghai());
@@ -789,8 +780,6 @@ export async function diarySummary(user, queryInput, isAdmin) {
   }
   const personFilter = String(queryInput?.personId || "").trim();
   const shopFilter = String(queryInput?.shopId || "").trim();
-  const spu = String(queryInput?.spu || "").trim().toUpperCase();
-  const roster = await rosterReader();
   const visible = [];
   for (const row of reports.values()) {
     if (row.status !== "已提交" || row.date < from || row.date > to || row.shopKey === PERSONAL) {
@@ -812,7 +801,7 @@ export async function diarySummary(user, queryInput, isAdmin) {
     const shop = bundle.shops.find((item) => String(item.id) === row.shopKey);
     visible.push({ row, author, shopName: shop?.name || row.shopKey });
   }
-  const metrics = catalog.nodes.filter((node) => node.kind === "metric");
+  const metrics = catalog.nodes.filter((node) => node.kind === "metric" && node.enabled !== false);
   const peopleIds = new Set(visible.map((item) => item.author.id));
   const shopIds = new Set(visible.map((item) => item.row.shopKey));
   const totals = {};
@@ -824,36 +813,19 @@ export async function diarySummary(user, queryInput, isAdmin) {
       totals[node.id] += metricValue(item.row, node.id);
     });
   });
-  const seenTemplate = new Set();
-  for (const person of bundle.people) {
-    if (personFilter && String(person.id) !== personFilter) {
-      continue;
-    }
-    if (!canSeePerson(me, person, isAdmin, to, bundle.people, bundle.shops, bundle.grants)) {
-      continue;
-    }
-    for (let cursor = from; cursor <= to; cursor = shiftDate(cursor, 1)) {
-      const labels = roster.templateLabels(person, cursor);
-      labels.forEach((label) => {
-        const node = metrics.find((item) => item.name === label);
-        if (!node) {
-          return;
-        }
-        const content = roster.templateContent ? roster.templateContent(person, cursor, label) : "";
-        const amount = templateMetricValue(content);
-        if (!amount) {
-          return;
-        }
-        const mark = `${person.id}|${cursor}|${node.id}`;
-        if (seenTemplate.has(mark)) {
-          return;
-        }
-        seenTemplate.add(mark);
-        totals[node.id] += amount;
-        peopleIds.add(person.id);
-      });
-    }
-  }
+  const optionPeople = bundle.people
+    .filter((person) => canSeePerson(me, person, isAdmin, to, bundle.people, bundle.shops, bundle.grants))
+    .map((person) => ({ id: person.id, name: person.name }))
+    .sort((a, b) => a.name.localeCompare(b.name, "zh"));
+  const optionShops = new Map();
+  optionPeople.forEach((person) => {
+    shopsFor(person.id, to, bundle.shops, bundle.grants).forEach((shop) => {
+      optionShops.set(String(shop.id), shop.name);
+    });
+  });
+  visible.forEach((item) => {
+    optionShops.set(String(item.row.shopKey), item.shopName);
+  });
   return {
     ok: true,
     from,
@@ -861,6 +833,10 @@ export async function diarySummary(user, queryInput, isAdmin) {
     reportCount: visible.length,
     peopleCount: peopleIds.size,
     shopCount: shopIds.size,
+    people: optionPeople,
+    shops: [...optionShops.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, "zh")),
     metrics: metrics.map((node) => ({
       id: node.id,
       name: node.name,
@@ -871,8 +847,7 @@ export async function diarySummary(user, queryInput, isAdmin) {
       ...publicReport(item.row, item.shopName),
       day: item.row.date,
       personId: item.author.id,
-      personName: item.author.name,
-      spu
+      personName: item.author.name
     }))
   };
 }
