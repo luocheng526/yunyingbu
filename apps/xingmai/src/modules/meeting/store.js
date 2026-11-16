@@ -3,11 +3,11 @@ import { dbMode, query } from "../profile/auth.js";
 const MONTH_RE = /^\d{4}-\d{2}$/;
 const KPI_KEYS = ["hours", "rank", "profit", "new", "star"];
 const KPI_META = {
-  hours: { label: "奋斗时长", hint: "本月合计", unit: "h" },
-  rank: { label: "奋斗排名", hint: "第一名", unit: "" },
-  profit: { label: "BI利润", hint: "本月", unit: "" },
-  new: { label: "新人介绍", hint: "本月入职", unit: "人" },
-  star: { label: "优秀员工", hint: "本月表彰", unit: "人" }
+  hours: { label: "奋斗时长", hint: "本月合计", unit: "h", placeholder: "小时" },
+  rank: { label: "奋斗排名", hint: "第一名", unit: "", placeholder: "姓名" },
+  profit: { label: "BI利润", hint: "本月", unit: "", placeholder: "金额" },
+  new: { label: "新人介绍", hint: "本月入职", unit: "人", placeholder: "人数" },
+  star: { label: "优秀员工", hint: "本月表彰", unit: "人", placeholder: "人数" }
 };
 
 let ready = false;
@@ -52,11 +52,12 @@ function cloneKpis(list) {
         label: KPI_META[key].label,
         hint: KPI_META[key].hint,
         unit: KPI_META[key].unit,
-        value: text(item.value) || "0"
+        placeholder: KPI_META[key].placeholder,
+        value: text(item.value)
       });
     }
   });
-  return KPI_KEYS.map((key) => byKey.get(key) || { key, value: "0", ...KPI_META[key] });
+  return KPI_KEYS.map((key) => byKey.get(key) || { key, value: "", ...KPI_META[key] });
 }
 
 function cloneRows(list, fields) {
