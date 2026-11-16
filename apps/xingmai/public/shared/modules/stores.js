@@ -1,16 +1,20 @@
 /* xm-module-stores erp-pages */
 (function () {
+  var ICO =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">';
   var PAGES = [
     {
       id: "reviews",
       title: "评价管理",
       path: "/stores/reviews",
       api: "/api/stores/erp/reviews",
+      tone: 0,
+      ico: ICO + '<polygon points="12 3 14.8 9.2 21.5 9.9 16.5 14.4 18 21 12 17.6 6 21 7.5 14.4 2.5 9.9 9.2 9.2"/></svg>',
       lead: "对接星脉 ERP 京东商品。按销量取数后按一星评价从高到低排。",
       kpis: [
-        { key: "total", label: "商品总数" },
-        { key: "oneStar", label: "本页一星" },
-        { key: "listed", label: "本页条数" }
+        { key: "total", label: "商品总数", ico: ICO + '<path d="M4 19V9"/><path d="M10 19V5"/><path d="M16 19v-8"/><path d="M22 19V7"/></svg>' },
+        { key: "oneStar", label: "本页一星", ico: ICO + '<polygon points="12 3 14.8 9.2 21.5 9.9 16.5 14.4 18 21 12 17.6 6 21 7.5 14.4 2.5 9.9 9.2 9.2"/></svg>' },
+        { key: "listed", label: "本页条数", ico: ICO + '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>' }
       ]
     },
     {
@@ -18,11 +22,13 @@
       title: "违规管理",
       path: "/stores/violations",
       api: "/api/stores/erp/violations",
+      tone: 1,
+      ico: ICO + '<path d="M12 9v4"/><path d="M12 17h.01"/><path d="m10.3 4.3-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-2.7l-8-14a2 2 0 0 0-3.4 0Z"/></svg>',
       lead: "对接星脉 ERP。系统下架和删除商品按同步时间倒序。",
       kpis: [
-        { key: "total", label: "违规商品" },
-        { key: "systemOff", label: "本页系统下架" },
-        { key: "removed", label: "本页删除" }
+        { key: "total", label: "违规商品", ico: ICO + '<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>' },
+        { key: "systemOff", label: "本页系统下架", ico: ICO + '<path d="M12 9v4"/><path d="M12 17h.01"/><path d="m10.3 4.3-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-2.7l-8-14a2 2 0 0 0-3.4 0Z"/></svg>' },
+        { key: "removed", label: "本页删除", ico: ICO + '<path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 13h10l1-13"/></svg>' }
       ]
     },
     {
@@ -30,11 +36,13 @@
       title: "发货监控",
       path: "/stores/shipping",
       api: "/api/stores/erp/shipping",
+      tone: 2,
+      ico: ICO + '<rect x="1" y="7" width="15" height="10" rx="1"/><path d="M16 11h4l3 3v3h-7"/><circle cx="6.5" cy="18.5" r="1.5"/><circle cx="18.5" cy="18.5" r="1.5"/></svg>',
       lead: "对接星脉 ERP 京东订单。默认看待发货和已发货。",
       kpis: [
-        { key: "total", label: "监控订单" },
-        { key: "waiting", label: "本页待发货" },
-        { key: "shipped", label: "本页已发货" }
+        { key: "total", label: "监控订单", ico: ICO + '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10"/><path d="M7 12h6"/></svg>' },
+        { key: "waiting", label: "本页待发货", ico: ICO + '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>' },
+        { key: "shipped", label: "本页已发货", ico: ICO + '<rect x="1" y="7" width="15" height="10" rx="1"/><path d="M16 11h4l3 3v3h-7"/><circle cx="6.5" cy="18.5" r="1.5"/><circle cx="18.5" cy="18.5" r="1.5"/></svg>' }
       ]
     },
     {
@@ -42,11 +50,13 @@
       title: "京东库存监控",
       path: "/stores/inventory",
       api: "/api/stores/erp/inventory",
+      tone: 3,
+      ico: ICO + '<path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="M3.3 7.9 12 13l8.7-5.1"/><path d="M12 13v10"/></svg>',
       lead: "对接星脉 ERP 京东商品库存。负数标异常，小于等于 20 标低库存。",
       kpis: [
-        { key: "total", label: "商品总数" },
-        { key: "abnormal", label: "本页库存异常" },
-        { key: "low", label: "本页低库存" }
+        { key: "total", label: "商品总数", ico: ICO + '<path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="M12 13v10"/></svg>' },
+        { key: "abnormal", label: "本页库存异常", ico: ICO + '<circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg>' },
+        { key: "low", label: "本页低库存", ico: ICO + '<path d="M4 19h16"/><path d="M7 19V10"/><path d="M12 19V6"/><path d="M17 19v-5"/></svg>' }
       ]
     }
   ];
@@ -327,11 +337,15 @@
       '<nav class="stores-subnav" aria-label="店铺维护页面">' +
       PAGES.map(function (item) {
         return (
-          '<button type="button" data-page="' +
+          '<button type="button" class="stores-tone-' +
+          item.tone +
+          '" data-page="' +
           escapeHtml(item.id) +
-          '">' +
+          '"><span class="stores-card-ico" aria-hidden="true">' +
+          item.ico +
+          '</span><span class="stores-card-title">' +
           escapeHtml(item.title) +
-          "</button>"
+          "</span></button>"
         );
       }).join("") +
       "</nav>" +
@@ -400,14 +414,15 @@
       var data = summary || {};
       kpiEl.innerHTML = page.kpis
         .map(function (item, index) {
-          var warn = index === 1 ? " is-warn" : index === 2 ? " is-open" : "";
           return (
-            '<article class="kpi-card' +
-            warn +
-            '"><div class="label">' +
-            escapeHtml(item.label) +
-            '</div><div class="value">' +
+            '<article class="kpi-card stores-tone-' +
+            index +
+            '"><span class="stores-card-ico" aria-hidden="true">' +
+            (item.ico || "") +
+            '</span><div class="value">' +
             count(data[item.key]) +
+            '</div><div class="label">' +
+            escapeHtml(item.label) +
             "</div></article>"
           );
         })

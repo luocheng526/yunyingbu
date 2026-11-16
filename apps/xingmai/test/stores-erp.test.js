@@ -114,8 +114,12 @@ test("stores module mounts four ERP pages with the screenshot titles", () => {
   assert.doesNotMatch(storesJs, /xingmai110/);
   assert.doesNotMatch(storesJs, /店铺档案/);
   assert.match(storesJs, /stores-board/);
-  assert.match(storesCss, /flex-direction: row/);
-  assert.match(storesCss, /--xm-primary-soft/);
+  assert.match(storesJs, /stores-tone-/);
+  assert.match(storesCss, /linear-gradient\(135deg/);
+  assert.match(storesCss, /stores-tone-0/);
+  assert.match(storesCss, /stores-tone-1/);
+  assert.match(storesCss, /stores-tone-2/);
+  assert.match(storesCss, /stores-tone-3/);
   assert.doesNotMatch(storesCss, /#f5f5f7/);
   assert.doesNotMatch(storesCss, /grid-template-columns:\s*200px/);
 });
