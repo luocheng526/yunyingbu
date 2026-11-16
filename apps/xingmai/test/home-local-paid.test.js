@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import {
   getHomeLocalPaid,
   mergeHanShenPaid,
+  packJingmaiShops,
   postHomeLocalPaid,
   rememberLocalPaidDay,
   setLocalPaidSnapPath,
@@ -16,6 +17,8 @@ import {
   stampRunningHours
 } from "../src/modules/home/local-paid.js";
 import { homeRouter } from "../src/modules/home/router.js";
+import { loadOrgShops, setJingmaiRequestOrigin } from "../src/modules/home/jingmai-runner.js";
+import { resetJingmaiStore, saveSample, saveSession } from "../src/modules/home/jingmai-store.js";
 
 const snapDir = mkdtempSync(join(tmpdir(), "home-local-paid-"));
 setLocalPaidSnapPath(join(snapDir, "days.json"));
@@ -28,7 +31,7 @@ const homeJs = readFileSync(
 test("local paid stub is not 星脉 ERP and stamps Shanghai time", async () => {
   const data = await getHomeLocalPaid();
   assert.equal(data.ok, true);
-  assert.equal(data.source, "han-shen-local");
+  assert.equal(data.source, "jingmai-local");
   assert.notEqual(data.source, "xingmai-erp");
   assert.equal(Array.isArray(data.records), true);
   assert.equal(data.records.length, 0);
@@ -50,7 +53,7 @@ test("homepage local-paid route is mounted", async () => {
     const data = await res.json();
     assert.equal(res.status, 200);
     assert.equal(data.ok, true);
-    assert.equal(data.source, "han-shen-local");
+    assert.equal(data.source, "jingmai-local");
     assert.equal(data.records.length, 0);
     assert.equal(data.yesterday.records.length, 0);
   } finally {
@@ -61,15 +64,17 @@ test("homepage local-paid route is mounted", async () => {
 test("live page uses Han+Shen paid totals and leaves paid for local return", () => {
   assert.match(homeJs, /function fillLocalPaid/);
   assert.match(homeJs, /function pullLocalPaid/);
-  assert.match(homeJs, /\/api\/han\/worker\?view=overview/);
-  assert.match(homeJs, /\/api\/shen\/paid\?latest=1/);
-  assert.match(homeJs, /\/api\/shen\/paid\/jingmai/);
+  assert.match(homeJs, /api\("\/api\/home\/local-paid"\)/);
+  assert.doesNotMatch(homeJs, /\/api\/han\/worker\?view=overview/);
+  assert.doesNotMatch(homeJs, /\/api\/shen\/paid\?latest=1/);
+  assert.doesNotMatch(homeJs, /\/api\/shen\/paid\/jingmai/);
+  assert.match(homeJs, /\/api\/home\/live-login/);
   assert.match(homeJs, /function mergeLivePaid/);
   assert.match(homeJs, /function sortLiveShops/);
   assert.match(homeJs, /sortLiveShops\(feePickShops/);
   assert.match(homeJs, /function liveCardsOf/);
   assert.match(homeJs, /label: "实时付费接入店铺数量"/);
-  assert.match(homeJs, /实时只汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」/);
+  assert.match(homeJs, /实时按付费中心的方式，用组织中心账号在服务器登录京麦/);
   assert.match(homeJs, /if \(stampClock \|\| !state\.liveAt\)/);
   assert.match(homeJs, /timeZone: "Asia\/Shanghai"/);
   assert.match(homeJs, /fillLocalPaid\(blankLive\(\)/);
@@ -560,23 +565,65 @@ test("homepage live paid merges 韩梦凯实时付费 and 沈子晗付费中心 
   assert.ok(hours.hourly.yesterdaySpend.some((n, i) => i > 0 && n !== hours.hourly.yesterdaySpend[0]));
 });
 
-test("local-paid route pulls han and shen siblings", async () => {
+test("jingmai org loader keeps every team and hides passwords", async () => {
+  setJingmaiRequestOrigin("http://org.invalid");
+  const shops = await loadOrgShops("sid=1", async (url, opts) => {
+    assert.equal(String(url).includes("team="), false);
+    assert.equal(String(url).endsWith("/api/people/org/stores"), true);
+    assert.equal(opts.headers.cookie, "sid=1");
+    return {
+      status: 200,
+      ok: true,
+      json: async () => ({
+        stores: [
+          { storeName: "韩店", team: "精铺组 韩梦凯", statusKey: "operating", login: "a", password: "secret" },
+          { storeName: "停店", team: "沈子晗组", statusKey: "closed", login: "b", password: "secret" }
+        ]
+      })
+    };
+  });
+  setJingmaiRequestOrigin("");
+  assert.equal(shops.length, 2);
+  assert.equal(shops[0].enabled, true);
+  assert.equal(shops[1].enabled, false);
+  const packed = packJingmaiShops({ shops: [] }, shops);
+  assert.deepEqual(packed.records.map((row) => row.shopName), ["韩店"]);
+  assert.equal(packed.records[0].source, "jingmai-han");
+  assert.equal(packed.records[0].loginExpired, true);
+  assert.equal(JSON.stringify(packed).includes("secret"), false);
+});
+
+test("local-paid route reads jingmai sessions for every org shop", async () => {
   const ymd = shanghaiYmd();
+  await resetJingmaiStore();
+  await saveSession("韩店", { cookies: [{ name: "thor", value: "t" }], authState: "ok", enabled: true });
+  await saveSample({
+    store: "韩店",
+    day: ymd,
+    capturedAt: `${ymd} 10:00:00`,
+    ok: true,
+    dealAmount: 22,
+    paidAmount: 11
+  });
+  await saveSession("沈店", { cookies: [{ name: "pt_key", value: "p" }], authState: "ok", enabled: true });
+  await saveSample({
+    store: "沈店",
+    day: ymd,
+    capturedAt: `${ymd} 10:00:00`,
+    ok: true,
+    dealAmount: 14,
+    paidAmount: 7
+  });
   const app = express();
-  app.get("/api/han/worker", (_req, res) => {
+  app.get("/api/people/org/stores", (_req, res) => {
     res.json({
       ok: true,
-      shops: [{ store: "韩店", date: ymd, spend: 11, jingmaiGmv: 22, success: "是" }]
+      stores: [
+        { storeName: "韩店", team: "精铺组 韩梦凯", statusKey: "operating", login: "a", password: "b" },
+        { storeName: "沈店", team: "沈子晗组", manager: "沈子晗", statusKey: "operating", login: "c", password: "d" },
+        { storeName: "未登录店", team: "精铺组 韩梦凯", statusKey: "operating", login: "e", password: "f" }
+      ]
     });
-  });
-  app.get("/api/shen/paid", (_req, res) => {
-    res.json({
-      ok: true,
-      rows: [{ store: "沈店", date: ymd, spend: 7, jingmaiGmv: 14, success: "是" }]
-    });
-  });
-  app.get("/api/shen/paid/jingmai", (_req, res) => {
-    res.json({ ok: true, shops: [] });
   });
   app.get("/api/han/fee-targets", (_req, res) => {
     res.json({ ok: true, username: "罗成", targets: { 韩店: { lo: 35, hi: 42 } } });
@@ -597,15 +644,22 @@ test("local-paid route pulls han and shen siblings", async () => {
     const data = await res.json();
     assert.equal(res.status, 200);
     assert.equal(data.ok, true);
-    assert.equal(data.source, "han-shen-local");
-    assert.deepEqual(data.records.map((row) => row.shopName).sort(), ["沈店", "韩店"]);
+    assert.equal(data.source, "jingmai-local");
+    assert.deepEqual(data.records.map((row) => row.shopName).sort(), ["未登录店", "沈店", "韩店"]);
     assert.equal(data.summary.spend, 18);
+    assert.equal(data.summary.liveAmount, 36);
     assert.equal(data.feeTargets["韩店"].lo, 35);
     assert.equal(data.feeTargets["沈店"].hi, 36);
     assert.equal(data.records.find((row) => row.shopName === "韩店").feeLo, 35);
     assert.equal(data.records.find((row) => row.shopName === "沈店").feeHi, 36);
-    assert.deepEqual(data.from.sort(), ["han", "shen"]);
+    assert.equal(data.records.find((row) => row.shopName === "韩店").source, "jingmai-han");
+    assert.equal(data.records.find((row) => row.shopName === "沈店").source, "jingmai-shen");
+    assert.equal(data.records.find((row) => row.shopName === "未登录店").loginExpired, true);
+    assert.equal(data.records.find((row) => row.shopName === "未登录店").paidAmount, null);
+    assert.deepEqual(data.from, ["jingmai"]);
+    assert.equal(JSON.stringify(data).includes("password"), false);
   } finally {
+    await resetJingmaiStore();
     setLocalPaidSnapPath(prev);
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
@@ -668,7 +722,7 @@ test("homepage client mergeLivePaid builds shop rows from 韩/沈 APIs", () => {
 test("local-paid pack always has ok and records, never empty object", async () => {
   const data = await getHomeLocalPaid();
   assert.equal(data.ok, true);
-  assert.equal(data.source, "han-shen-local");
+  assert.equal(data.source, "jingmai-local");
   assert.equal(Array.isArray(data.records), true);
   assert.doesNotMatch(homeJs, /\/api\/han\/fee-targets/);
   assert.doesNotMatch(homeJs, /\/api\/shen\/fee-targets/);

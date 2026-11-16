@@ -1,6 +1,6 @@
-/* xm-module-home 0.1.997-weeksum */
+/* xm-module-home 0.1.1030-jingmai */
 (function () {
-  var HOME_JS_STAMP = "0.1.997-weeksum";
+  var HOME_JS_STAMP = "0.1.1030-jingmai";
   var VIEWS = [
     { key: "company", label: "数据总揽" },
     { key: "overview", label: "团队概括" },
@@ -290,6 +290,8 @@
   var headSetOpen = false;
   var teamsRefreshing = false;
   var liveRefreshing = false;
+  var deskKicked = false;
+  var deskTimer = 0;
   function viewStore(kind) {
     return viewKey === "team" || viewKey === "chief"
       ? "xm-home-" + viewKey + "-" + kind
@@ -2817,6 +2819,12 @@
       ".xm-hm-pop-all{font-weight:600;border-bottom:1px solid var(--xm-line);margin:0 0 4px;padding:2px 0 8px}" +
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{color:var(--xm-muted);font-size:12px}" +
+      ".xm-hm-desk{margin:0 0 12px;padding:12px;border:1px solid #d7e3f5;border-radius:12px;background:#f7fbff}" +
+      ".xm-hm-desk p{margin:0 0 8px;font-size:13px;color:#355}" +
+      ".xm-hm-desk img{display:block;max-width:720px;width:100%;height:auto;cursor:crosshair;border-radius:8px;background:#fff}" +
+      ".xm-hm-desk-row{display:flex;gap:8px;margin-top:8px;align-items:center}" +
+      ".xm-hm-desk-row input{flex:1;min-width:0;height:32px;padding:0 8px;border:1px solid #d7e3f5;border-radius:8px}" +
+      ".xm-hm-desk-row button,.xm-hm-desk-start{height:32px;padding:0 12px;border:0;border-radius:8px;background:#2f6fed;color:#fff;cursor:pointer}" +
       "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm.is-chief .xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:1fr}}" +
       "@media (max-width:720px){.xm-hm-sales.xm-hm-live-charts,.xm-hm-live .xm-hm-live-charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;overflow:visible;margin:0 0 12px;padding:0}.xm-hm-sales.xm-hm-live-charts>.xm-hm-chart,.xm-hm-live .xm-hm-live-charts>.xm-hm-chart{min-width:0;max-width:none;width:auto;padding:10px 10px 8px;box-sizing:border-box}.xm-hm-live-charts .xm-hm-card-head{align-items:flex-start;gap:4px}.xm-hm-live-charts .xm-hm-card-head>span:first-child{min-width:0;flex:1;white-space:normal;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;font-size:12px;line-height:1.3}.xm-hm-live-charts .xm-hm-legs{display:none}.xm-hm-live-charts .xm-hm-index-num{margin:8px 0 2px;font-size:20px}.xm-hm-live-charts .xm-hm-yest-now,.xm-hm-live-charts .xm-hm-trend{font-size:12px;margin-top:4px}.xm-hm-sales.xm-hm-live-charts .xm-hm-line,.xm-hm-live .xm-hm-live-charts .xm-hm-line{display:none;height:0;margin:0}.xm-hm-kpis{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}}"
     );
@@ -2974,6 +2982,22 @@
     pop.style.top = Math.round(top) + "px";
     pop.style.left = Math.round(left) + "px";
   }
+  function liveDeskHtml(state) {
+    var desk = state && state.desk;
+    var status = desk && desk.status;
+    var start = '<button type="button" class="xm-hm-desk-start" data-desk-start>登录未登录店铺</button>';
+    if (status !== "screen" && status !== "verify") {
+      var tip = desk && desk.message ? escapeHtml(desk.message) : "没在服务器登录过的店，点这里用组织中心账号登录。";
+      return '<div class="xm-hm-desk"><p id="xm-hm-desk-msg">' + tip + "</p>" + start + "</div>";
+    }
+    return (
+      '<div class="xm-hm-desk"><p id="xm-hm-desk-msg">' +
+      escapeHtml((desk.store || "") + " " + (desk.message || "点画面就是在服务器上操作")) +
+      '</p><img id="xm-hm-desk-shot" alt="服务器登录画面" src="/api/home/live-login/screen?t=' +
+      Date.now() +
+      '" /><div class="xm-hm-desk-row"><input id="xm-hm-desk-text" placeholder="验证码" /><button type="button" data-desk-type>输入</button><button type="button" data-desk-cancel>取消</button></div></div>'
+    );
+  }
   function paint(root, state) {
     var board = root.querySelector("#xm-hm");
     var allow = allowedHomeViews(state.user, state.people, state.dutyShops);
@@ -3061,6 +3085,7 @@
     }
     root.querySelector("#xm-hm-board").hidden = true;
     root.querySelector("#xm-hm-live").innerHTML =
+      liveDeskHtml(state) +
       liveFilterHtml(allShops, state) +
       '<div class="xm-hm-live-charts">' +
       liveTrio +
@@ -3098,7 +3123,7 @@
     root.querySelector("#xm-hm-note").textContent = gapText
       ? "人管对不上：" + gapText
       : state.view === "live"
-        ? "实时只汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」，不填写。"
+        ? "实时按付费中心的方式，用组织中心账号在服务器登录京麦，抓京麦成交和京准通付费。没登录过的店在画面里完成验证。"
         : state.view === "week"
           ? "近七天业绩汇总：爬虫填店铺和当天数字，其余可手填；一键发送图片发到钉钉。"
           : "数字来自星脉 ERP。";
@@ -4167,7 +4192,7 @@
   function emptyLocalPaid() {
     return {
       ok: true,
-      source: "han-shen-local",
+      source: "jingmai-local",
       updatedAt: "",
       summary: {},
       records: [],
@@ -4282,7 +4307,7 @@
     add(liveList(jingmai, ["shops", "rows"]), "shen");
     return {
       ok: true,
-      source: "han-shen-local",
+      source: "jingmai-local",
       records: Object.keys(map).map(function (name) {
         return map[name];
       }),
@@ -4892,6 +4917,7 @@
         dutyReady: false,
         ownCards: blankCompanyCards(),
         livePacks: null,
+        desk: null,
         rangePack: null,
         prevPack: null,
         teamGaps: [],
@@ -4957,7 +4983,7 @@
         if (stampClock || !state.liveAt) {
           state.liveAt = shanghaiClock();
         }
-        state.source = "han-shen-local";
+        state.source = "jingmai-local";
         paint(root, state);
         var L = state.live;
         var payH = padHours(L.hero && L.hero.todayHour, 24);
@@ -4972,22 +4998,74 @@
         });
       }
       function pullLocalPaid() {
-        var ymd = shanghaiYmd(0);
-        return Promise.all([
-          api("/api/han/worker?view=overview"),
-          api("/api/shen/paid?latest=1&from=" + encodeURIComponent(ymd) + "&to=" + encodeURIComponent(ymd)),
-          api("/api/shen/paid/jingmai"),
-          api("/api/home/local-paid")
-        ]).then(function (pack) {
-          var m = mergeLivePaid(pack[0], pack[1], pack[2], ymd), d = pack[3];
-          if (d && d.ok) {
-            m.yesterday = d.yesterday || m.yesterday;
-            m.hourly = d.hourly || m.hourly;
-            m.feeTargets = d.feeTargets || {};
-          }
-          return m.records && m.records.length ? m : d && d.ok ? d : emptyLocalPaid();
+        return api("/api/home/local-paid").then(function (data) {
+          return data && data.ok ? data : emptyLocalPaid();
         }).catch(function () {
           return emptyLocalPaid();
+        });
+      }
+      function showDesk(st) {
+        state.desk = st || {};
+        if (!dead) {
+          paint(root, state);
+        }
+        var status = state.desk && state.desk.status;
+        if (status === "screen" || status === "verify") {
+          pollDesk();
+        }
+      }
+      function pollDesk() {
+        if (deskTimer) {
+          return;
+        }
+        deskTimer = window.setInterval(function () {
+          api("/api/home/live-login/state").then(function (st) {
+            if (dead) {
+              return;
+            }
+            var prev = state.desk && state.desk.status;
+            state.desk = st || {};
+            var status = state.desk.status;
+            var img = root.querySelector("#xm-hm-desk-shot");
+            if (status === "screen" && img) {
+              img.src = "/api/home/live-login/screen?t=" + Date.now();
+              var msg = root.querySelector("#xm-hm-desk-msg");
+              if (msg) {
+                msg.textContent = (state.desk.store || "") + " " + (state.desk.message || "");
+              }
+              return;
+            }
+            if (status !== prev) {
+              paint(root, state);
+            }
+            if (status === "done" || status === "ok" || status === "login" || status === "missing") {
+              window.clearInterval(deskTimer);
+              deskTimer = 0;
+              if (status === "done" || status === "ok") {
+                pullLive();
+              }
+            }
+          });
+        }, 2500);
+      }
+      function ensureDeskLogin() {
+        if (state.view !== "live" || deskKicked) {
+          return;
+        }
+        deskKicked = true;
+        api("/api/home/live-login/state").then(function (st) {
+          if (dead) {
+            return;
+          }
+          if (st && st.status === "screen") {
+            showDesk(st);
+            return;
+          }
+          api("/api/home/live-login", {}).then(function (opened) {
+            if (!dead) {
+              showDesk(opened || { status: "missing", message: "登录没有打开" });
+            }
+          });
         });
       }
       var boardSeq = 0;
@@ -5045,6 +5123,9 @@
         if (blankFirst) {
           clearLiveShown(state);
           paint(root, state);
+        }
+        if (state.view === "live") {
+          ensureDeskLogin();
         }
         return pullLocalPaid().then(function (local) {
           if (!dead) {
@@ -5120,6 +5201,52 @@
       function onClick(event) {
         var help = event.target.closest && event.target.closest(".xm-hm-help");
         if (help) {
+          return;
+        }
+        var deskShot = event.target.closest("#xm-hm-desk-shot");
+        if (deskShot) {
+          var rect = deskShot.getBoundingClientRect();
+          var scaleX = deskShot.naturalWidth && rect.width ? deskShot.naturalWidth / rect.width : 1;
+          var scaleY = deskShot.naturalHeight && rect.height ? deskShot.naturalHeight / rect.height : 1;
+          api("/api/home/live-login/input", {
+            store: state.desk && state.desk.store,
+            x: Math.round((event.clientX - rect.left) * scaleX),
+            y: Math.round((event.clientY - rect.top) * scaleY)
+          }).then(function (st) {
+            if (st) {
+              showDesk(st);
+            }
+          });
+          return;
+        }
+        if (event.target.closest("[data-desk-type]")) {
+          var box = root.querySelector("#xm-hm-desk-text");
+          api("/api/home/live-login/input", {
+            store: state.desk && state.desk.store,
+            text: box ? box.value : ""
+          }).then(function (st) {
+            if (box) {
+              box.value = "";
+            }
+            if (st) {
+              showDesk(st);
+            }
+          });
+          return;
+        }
+        if (event.target.closest("[data-desk-cancel]")) {
+          api("/api/home/live-login/cancel", {}).then(function () {
+            window.clearInterval(deskTimer);
+            deskTimer = 0;
+            deskKicked = false;
+            state.desk = { status: "missing", message: "已取消登录" };
+            paint(root, state);
+          });
+          return;
+        }
+        if (event.target.closest("[data-desk-start]")) {
+          deskKicked = false;
+          ensureDeskLogin();
           return;
         }
         var chip = event.target.closest("[data-live-chip]");
@@ -6024,6 +6151,11 @@
       return function unmount() {
         dead = true;
         clearLiveRowPicked();
+        deskKicked = false;
+        if (deskTimer) {
+          window.clearInterval(deskTimer);
+          deskTimer = 0;
+        }
         window.clearInterval(poll);
         root.removeEventListener("click", onClick);
         root.removeEventListener("input", onLiveSearchInput);

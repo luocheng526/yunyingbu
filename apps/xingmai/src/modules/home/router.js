@@ -7,11 +7,17 @@ import { HOME_JS_STAMP } from "./asset-ver.js";
 import {
   getHomeLocalPaid,
   postHomeLocalPaid,
-  pullFeeTargets,
-  pullHanShenPaid,
-  shanghaiYmd,
   shanghaiNow
 } from "./local-paid.js";
+import {
+  beginRelogin,
+  beginReloginAll,
+  cancelRelogin,
+  reloginInput,
+  reloginScreen,
+  reloginState,
+  startJingmaiCollector
+} from "./jingmai-runner.js";
 import {
   buildWeekPack,
   saveWeekCells,
@@ -54,48 +60,68 @@ export function homeRouter() {
   router.get("/local-paid", async (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
     try {
-      let data = await getHomeLocalPaid(req);
-      if (!data || data.ok !== true || !Array.isArray(data.records) || !data.records.length) {
-        const ymd = shanghaiYmd();
-        const [merged, book] = await Promise.all([pullHanShenPaid(req, ymd), pullFeeTargets(req)]);
-        const from = [];
-        if ((merged.records || []).some((row) => String(row.source || "").indexOf("han") !== -1)) {
-          from.push("han");
-        }
-        if ((merged.records || []).some((row) => String(row.source || "").indexOf("shen") !== -1)) {
-          from.push("shen");
-        }
-        data = {
-          ok: true,
-          source: "han-shen-local",
-          updatedAt: shanghaiNow(),
-          summary: merged.summary || {},
-          records: (merged.records || []).map((row) => {
-            const shop = row && (row.shopName || row.shop);
-            const hit = shop ? book[shop] : null;
-            if (!hit) {
-              return row;
-            }
-            return {
-              ...row,
-              feeLo: row.feeLo != null ? row.feeLo : hit.lo,
-              feeHi: row.feeHi != null ? row.feeHi : hit.hi
-            };
-          }),
-          yesterday: (data && data.yesterday) || { records: [] },
-          hourly: Object.assign({}, (data && data.hourly) || {}, merged.hourly || {}),
-          feeTargets: book,
-          from
-        };
-      }
-      return res.json(data);
+      return res.json(await getHomeLocalPaid(req));
     } catch (err) {
       res.status(502).json({
         ok: false,
-        source: "han-shen-local",
+        source: "jingmai-local",
         records: [],
-        error: err.message || "韩梦凯/沈子晗实时付费汇总失败"
+        error: err.message || "京麦实时采集失败"
       });
+    }
+  });
+
+  router.post("/live-login", async (req, res) => {
+    try {
+      res.json(await beginReloginAll(req.headers.cookie || ""));
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ error: err.message || "无法登录京麦" });
+    }
+  });
+
+  router.post("/live-login/one", async (req, res) => {
+    try {
+      res.json(await beginRelogin(req.body && req.body.store, req.headers.cookie || ""));
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ error: err.message || "无法登录京麦" });
+    }
+  });
+
+  router.get("/live-login/state", async (req, res) => {
+    try {
+      res.json(await reloginState(req.query.store));
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ error: err.message || "无法登录京麦" });
+    }
+  });
+
+  router.get("/live-login/screen", async (req, res) => {
+    try {
+      const image = await reloginScreen(req.query.store);
+      if (!image || !image.length) {
+        res.status(404).json({ error: "登录画面没有打开" });
+        return;
+      }
+      res.set("cache-control", "no-store");
+      res.type("jpeg").send(image);
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ error: err.message || "无法登录京麦" });
+    }
+  });
+
+  router.post("/live-login/input", async (req, res) => {
+    try {
+      res.json(await reloginInput(req.body || {}));
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ error: err.message || "无法登录京麦" });
+    }
+  });
+
+  router.post("/live-login/cancel", async (_req, res) => {
+    try {
+      res.json(await cancelRelogin());
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ error: err.message || "无法登录京麦" });
     }
   });
 
@@ -106,7 +132,7 @@ export function homeRouter() {
     } catch (err) {
       return res.status(500).json({
         ok: false,
-        source: "han-shen-local",
+        source: "jingmai-local",
         records: [],
         error: err.message || "实时留底失败"
       });
@@ -201,3 +227,5 @@ export function homeRouter() {
 
   return router;
 }
+
+startJingmaiCollector();
