@@ -1,6 +1,6 @@
-/* xm-module-home 0.1.1030-jingmai */
+/* xm-module-home 0.1.1032-jingmai */
 (function () {
-  var HOME_JS_STAMP = "0.1.1030-jingmai";
+  var HOME_JS_STAMP = "0.1.1032-jingmai";
   var VIEWS = [
     { key: "company", label: "数据总揽" },
     { key: "overview", label: "团队概括" },
