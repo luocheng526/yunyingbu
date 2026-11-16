@@ -2,10 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as profileShell from "../profile/middleware.js";
-import { NAV_ITEMS } from "./nav-items.js";
+import { NAV_ITEMS, orgNavFlags } from "./nav-items.js";
+import { hrRouter } from "../hr/router.js";
 
 // xm-upgrade-mask 0.1.52  必须和 profile/middleware.js 成套发。
-// xm-fast-shell 0.1.113
+// xm-fast-shell 0.1.772-hr-entry
+// xm-login-session 登录会话回读必须和 profile/middleware.js 成套发。
+// login.html 不走 HTML 内存缓存，必须和 profile/middleware.js 成套发。
 
 function renderExistingPage(filePath) {
   if (typeof profileShell.readThemedHtml === "function") {
@@ -69,12 +72,55 @@ for (const item of NAV_ITEMS) {
   }
 }
 
+function bounceOtherCenter(req, res, dest) {
+  const flags = orgNavFlags(req.user);
+  if (!flags.known) {
+    return false;
+  }
+  if (dest === "shen" && !flags.shen) {
+    res.redirect(302, flags.han ? "/han/selection" : "/home");
+    return true;
+  }
+  if (dest === "han" && !flags.han) {
+    res.redirect(302, flags.shen ? "/shen/product" : "/home");
+    return true;
+  }
+  return false;
+}
+
 export function registerPageRoutes(app) {
+  app.use("/api/hr", hrRouter);
   app.use((req, res, next) => {
     const method = String(req.method || "GET").toUpperCase();
     const path = String(req.path || "").replace(/\/+$/, "") || "/";
+    if ((method === "GET" || method === "HEAD") && path.startsWith("/shen") && bounceOtherCenter(req, res, "shen")) {
+      return;
+    }
+    if ((method === "GET" || method === "HEAD") && path.startsWith("/han") && bounceOtherCenter(req, res, "han")) {
+      return;
+    }
+    if ((method === "GET" || method === "HEAD") && (path === "/" || path === "/index.html")) {
+      res.redirect(302, "/home");
+      return;
+    }
     if ((method === "GET" || method === "HEAD") && path === "/data") {
       res.redirect(302, "/data/overview");
+      return;
+    }
+    if ((method === "GET" || method === "HEAD") && path === "/shen") {
+      res.redirect(302, "/shen/product");
+      return;
+    }
+    if ((method === "GET" || method === "HEAD") && path === "/shen/selection") {
+      res.redirect(302, "/shen/product");
+      return;
+    }
+    if ((method === "GET" || method === "HEAD") && path === "/shen/growth") {
+      res.redirect(302, "/shen/product");
+      return;
+    }
+    if ((method === "GET" || method === "HEAD") && path === "/shen/recharge-rules/index.html") {
+      res.redirect(302, "/shen/recharge-rules");
       return;
     }
     next();
@@ -83,7 +129,16 @@ export function registerPageRoutes(app) {
     res.redirect(302, "/data/overview");
   });
   app.get("/shen", (_req, res) => {
-    res.redirect(302, "/shen/selection");
+    res.redirect(302, "/shen/product");
+  });
+  app.get("/shen/selection", (_req, res) => {
+    res.redirect(302, "/shen/product");
+  });
+  app.get("/shen/growth", (_req, res) => {
+    res.redirect(302, "/shen/product");
+  });
+  app.get("/shen/recharge-rules/index.html", (_req, res) => {
+    res.redirect(302, "/shen/recharge-rules");
   });
   app.get("/han", (_req, res) => {
     res.redirect(302, "/han/selection");

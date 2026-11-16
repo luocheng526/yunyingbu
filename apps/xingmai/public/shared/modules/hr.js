@@ -1,4 +1,4 @@
-/* xm-module-hr 0.1.113 */
+/* xm-module-hr 0.1.772-hr-entry */
 (function () {
   function escapeHtml(value) {
     return String(value)
