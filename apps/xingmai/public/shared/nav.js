@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.772-hr-foot — 底部：版本发布中心、组织中心、智能人事、个人中心 */
+/* xm-fast-shell 0.1.772-notice-tab — 公告中心并进组织中心改动日志后的页签，侧栏不再做二级菜单 */
 (function () {
-  const ASSET_VER = "0.1.772-hr-foot";
+  const ASSET_VER = "0.1.772-notice-tab";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -66,10 +66,6 @@
     { href: "/academy/exams", label: "培训考试" },
     { href: "/academy/handbook", label: "运营手册" }
   ];
-  const PEOPLE_CHILDREN = [
-    { href: "/people", label: "组织中心" },
-    { href: "/notices", label: "公告中心" }
-  ];
   const items = [
     { href: "/home", label: "首页" },
     { href: "/data", label: "数据中心", children: DATA_CHILDREN },
@@ -79,11 +75,13 @@
     { href: "/academy", label: "甄选商学院", children: ACADEMY_CHILDREN },
     { href: "/agents", label: "甄选智能体" },
     { href: "/releases", label: "版本发布中心" },
-    { href: "/people", label: "组织中心", children: PEOPLE_CHILDREN },
+    { href: "/people", label: "组织中心" },
     { href: "/hr", label: "智能人事" },
     { href: "/me", label: "个人中心" }
   ];
-  const labels = items.concat(DATA_CHILDREN, SHEN_CHILDREN, HAN_CHILDREN, ACADEMY_CHILDREN, PEOPLE_CHILDREN);
+  const labels = items.concat(DATA_CHILDREN, SHEN_CHILDREN, HAN_CHILDREN, ACADEMY_CHILDREN, [
+    { href: "/notices", label: "公告中心" }
+  ]);
 
   const path = (window.location.pathname.replace(/\/+$/, "") || "/").toLowerCase();
   if (path === "/login" || path === "/login.html") {
@@ -177,7 +175,11 @@
   }
 
   function isActive(href) {
-    return current === normalize(href);
+    const key = normalize(href);
+    if (key === "/people") {
+      return current === "/people" || current === "/notices";
+    }
+    return current === key;
   }
 
   function labelOf(href) {
@@ -2443,6 +2445,10 @@
   }
 
   function go(href, push) {
+    if (normalize(href) === "/notices") {
+      window.__xmOrgPane = "notices";
+      href = "/people";
+    }
     const key = normalize(href);
     if (PARENT_HOME[key]) {
       go(PARENT_HOME[key], push);
@@ -2465,7 +2471,11 @@
       return;
     }
     if (push !== false) {
-      history.pushState({ xm: key }, "", key);
+      history.pushState(
+        { xm: key },
+        "",
+        key === "/people" && window.__xmOrgPane === "notices" ? "/people?pane=notices" : key
+      );
     }
     setPhoneNav(false);
     current = key;
@@ -2475,22 +2485,34 @@
     if (key === "/releases") {
       ensureReleasesCss();
     }
+    function openOrgNoticesTab() {
+      if (key !== "/people" || window.__xmOrgPane !== "notices") {
+        return;
+      }
+      const tab = document.querySelector('.org-tab[data-pane="notices"]');
+      if (tab) {
+        tab.click();
+      }
+      window.__xmOrgPane = "";
+    }
     const root = paneFor(key, true) || contentRoot();
     if (alreadyMounted(root, key)) {
       ensureMeHardReload();
       refreshQueueBadge();
+      openOrgNoticesTab();
       return;
     }
     loadModuleScript(key).then(function () {
       mountRoute(key);
+      window.setTimeout(openOrgNoticesTab, 0);
     });
     refreshQueueBadge();
   }
   window.__xmGo = go;
 
   function openNotice(id) {
-    const href = "/notices";
-    go(href);
+    window.__xmOrgPane = "notices";
+    go("/people");
     if (!id) {
       return;
     }
@@ -2909,7 +2931,11 @@
     if (releases) {
       releases.remove();
     }
-    const people = document.querySelector('.xm-menu-group[data-xm-group="/people"]');
+    const peopleGroup = document.querySelector('.xm-menu-group[data-xm-group="/people"]');
+    if (peopleGroup) {
+      peopleGroup.remove();
+    }
+    const people = document.querySelector('.xm-menu a[href="/people"]');
     if (people) {
       people.remove();
     }

@@ -350,10 +350,7 @@ export const ACADEMY_CHILDREN = [
   { href: "/academy/handbook", label: "运营手册" }
 ];
 
-export const PEOPLE_CHILDREN = [
-  { href: "/people", label: "组织中心" },
-  { href: "/notices", label: "公告中心" }
-];
+export const PEOPLE_CHILDREN = [];
 
 export const NAV_MAIN = [
   { href: "/home", label: "首页" },
@@ -367,7 +364,7 @@ export const NAV_MAIN = [
 
 export const NAV_FOOT = [
   { href: "/releases", file: "releases.html", label: "版本发布中心" },
-  { href: "/people", file: "people.html", label: "组织中心", children: PEOPLE_CHILDREN },
+  { href: "/people", file: "people.html", label: "组织中心" },
   { href: "/hr", label: "智能人事" },
   { href: "/me", file: "me.html", label: "个人中心" }
 ];
@@ -443,7 +440,9 @@ function attrMarkup(item) {
 }
 
 function itemLink(item, activeHref, extraClass) {
-  const on = hrefKey(item.href) === hrefKey(activeHref);
+  const key = hrefKey(activeHref);
+  const on =
+    hrefKey(item.href) === key || (item.href === "/people" && (key === "/notices" || key.startsWith("/people?")));
   const current = on ? ' aria-current="page"' : "";
   const active = on ? " is-active" : "";
   const extra = extraClass ? ` ${extraClass}` : "";
