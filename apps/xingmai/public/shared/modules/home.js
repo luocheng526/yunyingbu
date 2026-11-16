@@ -1,6 +1,6 @@
-/* xm-module-home 0.1.994-oview */
+/* xm-module-home 0.1.996-oview */
 (function () {
-  var HOME_JS_STAMP = "0.1.994-oview";
+  var HOME_JS_STAMP = "0.1.996-oview";
   var VIEWS = [
     { key: "company", label: "数据总揽" },
     { key: "overview", label: "团队概括" },
