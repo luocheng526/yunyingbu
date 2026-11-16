@@ -109,6 +109,8 @@
       ".hr-board-kpi i svg{width:16px;height:16px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}" +
       ".hr-board-kpi b{display:block;margin-top:10px;font-size:34px;line-height:1;font-weight:700;font-variant-numeric:tabular-nums;}" +
       ".hr-board-kpi span{display:block;margin-top:8px;font-size:13px;opacity:.95;}" +
+      ".hr-recruit-kpis .hr-board-kpi b{margin-top:6px;font-size:18px;font-weight:650;}" +
+      ".hr-recruit-kpis .hr-board-kpi span{margin-top:8px;font-size:22px;font-weight:700;line-height:1.25;opacity:1;}" +
       ".hr-kpi-list{margin-top:4px;}" +
       ".hr-kpi-list:empty{display:none;}" +
       ".hr-kpi-list h3{margin:0 0 8px;font-size:14px;font-weight:650;color:var(--xm-ink);}" +
@@ -278,7 +280,7 @@
     } else if (tab === "recruit") {
       html = '<section class="hr-panel"><div class="hr-toolbar"><span>按月统计待入职。点登记后进入花名册在职，记录在服务器上。</span>' +
         '<label class="hr-month">月份<input type="month" data-join-month value="' + esc(String(today).slice(0, 7)) + '" /></label></div>' +
-        '<div class="hr-board-kpis" data-recruit-kpis></div>' +
+        '<div class="hr-board-kpis hr-recruit-kpis" data-recruit-kpis></div>' +
         '<h2 class="hr-team-title">待入职</h2>' +
         '<form class="hr-form hr-card" data-form="recruit">' +
         field("姓名", '<input name="name" required maxlength="64" autocomplete="off" />') +
