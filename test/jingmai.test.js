@@ -131,9 +131,8 @@ test("paid numbers count as a successful collection when deal is still empty", (
   assert.equal(view.shops[0].dealAmount, null);
   assert.equal(view.shops[0].paidAmount, 0);
   assert.equal(view.shops[0].paidRoi, 2.17);
-  assert.equal(view.shops[0].online, false);
-  assert.equal(view.shops[0].offline, true);
-  assert.match(view.shops[0].offlineReason, /没有成交字段/);
+  assert.equal(view.shops[0].online, true);
+  assert.equal(view.shops[0].offline, false);
   const kept = buildLiveView({
     now: now,
     shops: [{ store: "甲店", enabled: true, authState: "offline", authMessage: "京麦首页没有成交字段", cookies: [{ name: "thor", value: "secret" }] }],
@@ -241,7 +240,7 @@ test("one slow shop does not block another, and a timeout shows offline without 
   assert.deepEqual(marked, [["慢店", "offline", "采集超时"]]);
 });
 
-test("a missing deal field shows offline and a later deal clears it", async () => {
+test("a collected dash for the deal amount does not mark the shop offline", async () => {
   const marked = [];
   await runTick({
     inflight: new Set(),
@@ -253,13 +252,12 @@ test("a missing deal field shows offline and a later deal clears it", async () =
       marked.push([store, state, message]);
     }
   });
-  assert.deepEqual(marked, [["缺字段店", "offline", "京麦首页没有成交字段"]]);
-  marked.length = 0;
+  assert.deepEqual(marked, []);
   await runTick({
     inflight: new Set(),
     now: () => now,
-    listTargets: async () => [{ store: "缺字段店", enabled: true, authState: "offline", cookies: [{ name: "thor", value: "x" }] }],
-    fetchHome: async () => ({ dealAmount: 8, orderCount: 1, customerCount: 1 }),
+    listTargets: async () => [{ store: "缺字段店", enabled: true, authState: "offline", authMessage: "京麦首页没有成交字段", cookies: [{ name: "thor", value: "x" }] }],
+    fetchHome: async () => ({ dealAmount: null, paidAmount: 12 }),
     saveSample: async () => {},
     markAuth: async (store, state, message) => {
       marked.push([store, state, message]);
