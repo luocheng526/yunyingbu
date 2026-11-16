@@ -4,7 +4,14 @@ import { fileURLToPath } from "node:url";
 import { getHomeErpKpis } from "./erp-kpis.js";
 import { getHomeErpPaid } from "./erp-paid.js";
 import { HOME_JS_STAMP } from "./asset-ver.js";
-import { getHomeLocalPaid, postHomeLocalPaid, pullHanShenPaid, shanghaiYmd, shanghaiNow } from "./local-paid.js";
+import {
+  getHomeLocalPaid,
+  postHomeLocalPaid,
+  pullFeeTargets,
+  pullHanShenPaid,
+  shanghaiYmd,
+  shanghaiNow
+} from "./local-paid.js";
 
 const homeJsPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -41,7 +48,7 @@ export function homeRouter() {
       let data = await getHomeLocalPaid(req);
       if (!data || data.ok !== true || !Array.isArray(data.records) || !data.records.length) {
         const ymd = shanghaiYmd();
-        const merged = await pullHanShenPaid(req, ymd);
+        const [merged, book] = await Promise.all([pullHanShenPaid(req, ymd), pullFeeTargets(req)]);
         const from = [];
         if ((merged.records || []).some((row) => String(row.source || "").indexOf("han") !== -1)) {
           from.push("han");
@@ -49,7 +56,6 @@ export function homeRouter() {
         if ((merged.records || []).some((row) => String(row.source || "").indexOf("shen") !== -1)) {
           from.push("shen");
         }
-        const book = (data && data.feeTargets) || {};
         data = {
           ok: true,
           source: "han-shen-local",

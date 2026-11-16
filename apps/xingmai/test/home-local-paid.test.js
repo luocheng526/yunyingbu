@@ -244,9 +244,8 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
       }
     }
   );
-  assert.equal(keptYest.hero.yesterdayHour[0], 8);
-  assert.notEqual(keptYest.hero.yesterdayHour[0], 99);
-  assert.equal(keptYest.paid.yesterdayHour[0], 2);
+  assert.equal(keptYest.hero.yesterdayHour[0], 99);
+  assert.equal(Number(keptYest.paid.yesterdayHour[0].toFixed(1)), 3);
   assert.equal(keptYest.fee.yesterdayHour[0], 0.3);
   const erpYest = fns.fillLocalPaid(
     {
@@ -259,7 +258,8 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
       records: [{ shopName: "A店", paidAmount: 10, paidDeal: 40, jingmaiGmv: 100, feeRate: 0.1 }]
     }
   );
-  assert.equal(erpYest.hero.yesterdayHour.length, 0);
+  assert.equal(erpYest.hero.yesterdayHour[0], 8);
+  assert.equal(erpYest.hero.yesterdayHour.length, 4);
   assert.equal(erpYest.paid.yestText, "—");
   assert.equal(erpYest.paid.yesterdayHour.length, 0);
   assert.match(homeJs, /function hoursHaveNow/);
@@ -291,7 +291,7 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
       hourly: { yesterdayPay: deadPay, todayPay: [10, 20, 30, 40] }
     }
   );
-  assert.equal(deadSnap.hero.yesterdayHour.length, 0);
+  assert.equal(deadSnap.hero.yesterdayHour[0], 8);
   assert.equal(deadSnap.hero.yestText, "80");
   assert.equal(deadSnap.paid.yestText, "9");
   assert.match(homeJs, /function orgStoreForShop/);
@@ -511,6 +511,28 @@ test("homepage live paid merges 韩梦凯实时付费 and 沈子晗付费中心 
   );
   assert.equal(same.records.length, 1);
   assert.equal(same.records[0].source, "han+shen");
+  const hours = mergeHanShenPaid(
+    { shops: [] },
+    { rows: [] },
+    {
+      shops: [
+        {
+          shop: "京麦店",
+          dealAmount: 100,
+          todayHours: [null, null, 40, 70, 100],
+          yesterdayHours: [null, 20, 20, 50, 80],
+          todayPaidHours: [null, null, 10, 18, 30],
+          yesterdayPaidHours: [4, 10, 12, 20, 28]
+        }
+      ]
+    },
+    ymd
+  );
+  assert.deepEqual(hours.hourly.todayPay.slice(0, 5), [0, 0, 40, 30, 30]);
+  assert.deepEqual(hours.hourly.yesterdayPay.slice(0, 5), [0, 20, 0, 30, 30]);
+  assert.deepEqual(hours.hourly.todaySpend.slice(0, 5), [0, 0, 10, 8, 12]);
+  assert.deepEqual(hours.hourly.yesterdaySpend.slice(0, 5), [4, 6, 2, 8, 8]);
+  assert.ok(hours.hourly.yesterdaySpend.some((n, i) => i > 0 && n !== hours.hourly.yesterdaySpend[0]));
 });
 
 test("local-paid route pulls han and shen siblings", async () => {
@@ -531,6 +553,12 @@ test("local-paid route pulls han and shen siblings", async () => {
   app.get("/api/shen/paid/jingmai", (_req, res) => {
     res.json({ ok: true, shops: [] });
   });
+  app.get("/api/han/fee-targets", (_req, res) => {
+    res.json({ ok: true, username: "罗成", targets: { 韩店: { lo: 35, hi: 42 } } });
+  });
+  app.get("/api/shen/paid/fee-targets", (_req, res) => {
+    res.json({ ok: true, targets: { 沈店: { lo: 30, hi: 36 } } });
+  });
   app.use("/api/home", homeRouter());
   const server = await new Promise((resolve) => {
     const s = app.listen(0, "127.0.0.1", () => resolve(s));
@@ -547,6 +575,10 @@ test("local-paid route pulls han and shen siblings", async () => {
     assert.equal(data.source, "han-shen-local");
     assert.deepEqual(data.records.map((row) => row.shopName).sort(), ["沈店", "韩店"]);
     assert.equal(data.summary.spend, 18);
+    assert.equal(data.feeTargets["韩店"].lo, 35);
+    assert.equal(data.feeTargets["沈店"].hi, 36);
+    assert.equal(data.records.find((row) => row.shopName === "韩店").feeLo, 35);
+    assert.equal(data.records.find((row) => row.shopName === "沈店").feeHi, 36);
     assert.deepEqual(data.from.sort(), ["han", "shen"]);
   } finally {
     setLocalPaidSnapPath(prev);
@@ -692,24 +724,83 @@ test("local-paid POST ignores all-zero today hours", () => {
   setLocalPaidSnapPath(prev);
 });
 
-test("fee targets stay on the server so another browser can show 费比设置", async () => {
-  const file = join(snapDir, "fee-book.json");
-  const prev = join(snapDir, "days.json");
-  setLocalPaidSnapPath(file);
-  const posted = postHomeLocalPaid({
-    records: [{ shopName: "A店", paidAmount: 9, paidDeal: 30 }],
-    feeTargets: { A店: { lo: 30, hi: 45 }, B店: "35%-42%" }
-  });
-  assert.equal(posted.feeTargets["A店"].lo, 30);
-  assert.equal(posted.feeTargets["A店"].hi, 45);
-  assert.equal(posted.feeTargets["B店"].lo, 35);
-  assert.equal(posted.records[0].feeLo, 30);
-  assert.equal(posted.records[0].feeHi, 45);
-  const later = await getHomeLocalPaid();
-  assert.equal(later.feeTargets["A店"].lo, 30);
-  assert.equal(later.feeTargets["B店"].hi, 42);
-  const keep = postHomeLocalPaid({ feeTargets: { C店: { min: 18, max: 22 } } });
-  assert.equal(keep.feeTargets["A店"].lo, 30);
-  assert.equal(keep.feeTargets["C店"].lo, 18);
-  setLocalPaidSnapPath(prev);
+test("zero yesterday hours on the snap do not wipe ERP 成交 or flatten 付费", () => {
+  const zeros = Array.from({ length: 24 }, () => 0);
+  const pick = (name) => {
+    const start = homeJs.indexOf("function " + name);
+    assert.notEqual(start, -1, name);
+    let depth = 0;
+    for (let i = start; i < homeJs.length; i += 1) {
+      if (homeJs[i] === "{") depth += 1;
+      if (homeJs[i] === "}") {
+        depth -= 1;
+        if (depth === 0) return homeJs.slice(start, i + 1);
+      }
+    }
+    throw new Error("unclosed " + name);
+  };
+  const fns = new Function(
+    pick("asNum") +
+      pick("fmtInt") +
+      pick("fmtMoney") +
+      pick("fmtRate") +
+      pick("fmtRoi") +
+      pick("trendOf") +
+      pick("liveAtText") +
+      pick("padHours") +
+      pick("hoursHaveNow") +
+      pick("shanghaiHour") +
+      pick("todayHours") +
+      pick("seriesOf") +
+      pick("cumHours") +
+      pick("payFit") +
+      pick("blankLive") +
+      pick("escapeHtml") +
+      pick("normShopName") +
+      pick("normShopId") +
+      pick("sumLocalPaid") +
+      homeJs.slice(homeJs.indexOf("var LIVE_DAY_KEY"), homeJs.indexOf("function ownerOfShop")) +
+      "return {fillLocalPaid};"
+  )();
+  const out = fns.fillLocalPaid(
+    {
+      hero: {
+        label: "实时总成交金额",
+        value: "291,255",
+        todayHour: [18, 10, 5, 5, 19, 23],
+        yesterdayHour: [18, 10, 5, 3, 20, 35, 38],
+        yestText: "503,569"
+      },
+      shops: [{ shop: "A店", liveAmount: "100" }],
+      cards: [],
+      paid: { label: "推广总花费", value: "—" }
+    },
+    {
+      records: [{ shopName: "A店", paidAmount: 160, paidDeal: 300, jingmaiGmv: 400 }],
+      yesterday: { records: [{ shopName: "A店", paidAmount: 135, paidDeal: 280, jingmaiGmv: 500 }] },
+      hourly: {
+        todayPay: zeros,
+        yesterdayPay: zeros,
+        todaySpend: [8, 3, 12, 5, 9, 2, 11, 4],
+        yesterdaySpend: [4, 6, 2, 8, 8, 3, 10, 1]
+      }
+    }
+  );
+  assert.equal(out.hero.yesterdayHour[0], 18);
+  assert.equal(out.hero.yesterdayHour.length, 7);
+  assert.ok(out.paid.yesterdayHour.length > 2);
+  assert.notEqual(out.paid.yesterdayHour[0], out.paid.yesterdayHour[1]);
+  assert.notEqual(out.paid.todayHour[0], out.paid.todayHour[2]);
+});
+
+test("homepage reads 费比设置 from Han and Shen server APIs, not a local snap", async () => {
+  const localPaidJs = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "../src/modules/home/local-paid.js"),
+    "utf8"
+  );
+  assert.match(localPaidJs, /\/api\/han\/fee-targets/);
+  assert.match(localPaidJs, /\/api\/shen\/paid\/fee-targets/);
+  assert.doesNotMatch(homeJs, /\/api\/han\/fee-targets/);
+  assert.doesNotMatch(homeJs, /\/api\/shen\/fee-targets/);
+  assert.doesNotMatch(homeJs, /feeTargets: scrapedFeeBook\(\)/);
 });

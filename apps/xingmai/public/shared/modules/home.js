@@ -1,6 +1,6 @@
-/* xm-module-home 0.1.948-feebook */
+/* xm-module-home 0.1.949-feeapi */
 (function () {
-  var HOME_JS_STAMP = "0.1.948-feebook";
+  var HOME_JS_STAMP = "0.1.949-feeapi";
   var VIEWS = [
     { key: "company", label: "公司" },
     { key: "team", label: "经理团队" },
@@ -3183,20 +3183,19 @@
   }
   function padHours(hourly, slots) {
     slots = slots || 24;
-    var src = hourly && hourly.length ? hourly.slice() : [];
-    while (src.length < slots) {
-      src.push(0);
+    var src = [];
+    var i;
+    var raw = hourly && hourly.length ? hourly : [];
+    for (i = 0; i < slots; i += 1) {
+      src.push(Number(raw[i]) || 0);
     }
-    return src.slice(0, slots);
+    return src;
   }
   function hoursHaveNow(hourly) {
     if (!hourly || hourly.length < 3) {
       return false;
     }
     var src = padHours(hourly, 24);
-    if (src[0] == null || src[0] === "") {
-      return false;
-    }
     var h = shanghaiHour();
     var i;
     for (i = 0; i <= h && i < src.length; i += 1) {
@@ -3436,14 +3435,26 @@
   function localHourlyOf(local) {
     var hourly = Object.assign({}, (local && local.hourly) || {});
     var yestH = (local && local.yesterday && local.yesterday.hourly) || {};
-    if (!hourly.yesterdaySpend || hourly.yesterdaySpend.length < 3) {
-      hourly.yesterdaySpend = yestH.todaySpend || yestH.yesterdaySpend || hourly.yesterdaySpend;
+    if (!hoursHaveNow(hourly.yesterdaySpend)) {
+      hourly.yesterdaySpend = hoursHaveNow(yestH.todaySpend)
+        ? yestH.todaySpend
+        : hoursHaveNow(yestH.yesterdaySpend)
+          ? yestH.yesterdaySpend
+          : hourly.yesterdaySpend;
     }
-    if (!hourly.yesterdayFee || hourly.yesterdayFee.length < 3) {
-      hourly.yesterdayFee = yestH.todayFee || yestH.yesterdayFee || hourly.yesterdayFee;
+    if (!hoursHaveNow(hourly.yesterdayFee)) {
+      hourly.yesterdayFee = hoursHaveNow(yestH.todayFee)
+        ? yestH.todayFee
+        : hoursHaveNow(yestH.yesterdayFee)
+          ? yestH.yesterdayFee
+          : hourly.yesterdayFee;
     }
-    if (!hourly.yesterdayPay || hourly.yesterdayPay.length < 3) {
-      hourly.yesterdayPay = yestH.todayPay || yestH.yesterdayPay || hourly.yesterdayPay;
+    if (!hoursHaveNow(hourly.yesterdayPay)) {
+      hourly.yesterdayPay = hoursHaveNow(yestH.todayPay)
+        ? yestH.todayPay
+        : hoursHaveNow(yestH.yesterdayPay)
+          ? yestH.yesterdayPay
+          : hourly.yesterdayPay;
     }
     return hourly;
   }
@@ -3847,10 +3858,16 @@
     for (i = 0; i < yestPayH.length; i += 1) sY += Number(yestPayH[i]) || 0;
     if (yestSum.spend == null && sum.spend != null && sT && sY) yestSum.spend = sum.spend * (sY / sT);
     if (yestSum.feeRate == null && yestSum.spend != null && sY) yestSum.feeRate = yestSum.spend / sY;
-    if (!hoursHaveNow(hourly.todaySpend)) {
+    if (hoursHaveNow(hourly.todaySpend) && sum.spend != null) {
+      hourly.todaySpend = payFit(hourly.todaySpend, sum.spend);
+    } else if (!hoursHaveNow(hourly.todaySpend)) {
       hourly.todaySpend = payFit(yestSpendH.length ? yestSpendH : yestPayH.length ? yestPayH : todayPayH, sum.spend);
     }
-    if (!hoursHaveNow(hourly.yesterdaySpend)) hourly.yesterdaySpend = payFit(yestPayH, yestSum.spend);
+    if (hoursHaveNow(hourly.yesterdaySpend) && yestSum.spend != null) {
+      hourly.yesterdaySpend = payFit(hourly.yesterdaySpend, yestSum.spend);
+    } else if (!hoursHaveNow(hourly.yesterdaySpend)) {
+      hourly.yesterdaySpend = payFit(yestPayH, yestSum.spend);
+    }
     if (rows.length) {
       var map = {};
       function putPaid(key, row) {
@@ -3907,7 +3924,7 @@
     if (!hoursHaveNow(hourly.todayFee) && hoursHaveNow(hourly.yesterdayFee)) {
       hourly.todayFee = padHours(hourly.yesterdayFee, 24);
     }
-    if (live.hero && hoursHaveNow(hourly.yesterdayPay)) {
+    if (live.hero && hoursHaveNow(hourly.yesterdayPay) && !hoursHaveNow(live.hero.yesterdayHour)) {
       var yH = padHours(hourly.yesterdayPay, 24);
       var yN = hourCum(yH, null);
       live.hero.yesterdayHour = yH;
@@ -3916,16 +3933,9 @@
         live.hero.yestText = fmtMoney(yN);
         live.hero.delta = asNum(live.hero.value) != null ? trendOf(asNum(live.hero.value), yN) : live.hero.delta;
       }
-    } else if (live.hero) {
-      live.hero.yesterdayHour = [];
-      live.hero.yesterday = [];
-      if (yestSum.liveAmount) {
-        live.hero.yestText = fmtMoney(yestSum.liveAmount);
-        live.hero.delta = asNum(live.hero.value) != null ? trendOf(asNum(live.hero.value), yestSum.liveAmount) : live.hero.delta;
-      } else {
-        live.hero.yestText = "—";
-        live.hero.delta = "";
-      }
+    } else if (live.hero && (!live.hero.yestText || live.hero.yestText === "—") && yestSum.liveAmount) {
+      live.hero.yestText = fmtMoney(yestSum.liveAmount);
+      live.hero.delta = asNum(live.hero.value) != null ? trendOf(asNum(live.hero.value), yestSum.liveAmount) : live.hero.delta;
     }
     var kept = keepLiveDay({
       spend: sum.spend,
@@ -3935,10 +3945,10 @@
       hourly: hourly
     });
     if (kept.yestStamps) {
-      if (!hourly.yesterdaySpend || hourly.yesterdaySpend.length < 3) {
+      if (!hoursHaveNow(hourly.yesterdaySpend)) {
         hourly.yesterdaySpendNow = kept.yestStamps.spendAt;
       }
-      if (!hourly.yesterdayFee || hourly.yesterdayFee.length < 3) {
+      if (!hoursHaveNow(hourly.yesterdayFee)) {
         hourly.yesterdayFeeNow = kept.yestStamps.feeAt;
       }
     }
@@ -4379,8 +4389,7 @@
             todayPay: hoursHaveNow(payH) ? payH : undefined,
             todaySpend: hoursHaveNow(spendH) ? spendH : undefined,
             todayFee: hoursHaveNow(feeH) ? feeH : undefined
-          },
-          feeTargets: scrapedFeeBook()
+          }
         });
       }
       function pullLocalPaid() {

@@ -39,7 +39,7 @@ function emptyDay() {
 }
 
 function emptySnap(ymd = "") {
-  return { ymd, today: emptyDay(), yesterday: emptyDay(), feeTargets: {} };
+  return { ymd, today: emptyDay(), yesterday: emptyDay() };
 }
 
 let snapPath = "";
@@ -83,9 +83,7 @@ function readSnap() {
     return {
       ymd: String(raw.ymd || ""),
       today: raw.today && typeof raw.today === "object" ? raw.today : emptyDay(),
-      yesterday: raw.yesterday && typeof raw.yesterday === "object" ? raw.yesterday : emptyDay(),
-      feeTargets:
-        raw.feeTargets && typeof raw.feeTargets === "object" && !Array.isArray(raw.feeTargets) ? raw.feeTargets : {}
+      yesterday: raw.yesterday && typeof raw.yesterday === "object" ? raw.yesterday : emptyDay()
     };
   } catch {
     return emptySnap();
@@ -165,18 +163,6 @@ function mergeFeeTargets(base, incoming) {
       return;
     }
     out[name] = range;
-  });
-  return out;
-}
-
-function feeTargetsFromRecords(records) {
-  const out = {};
-  (records || []).forEach((row) => {
-    const shop = shopName(row);
-    if (!shop || (row.feeLo == null && row.feeHi == null)) {
-      return;
-    }
-    out[shop] = { lo: row.feeLo != null ? row.feeLo : null, hi: row.feeHi != null ? row.feeHi : null };
   });
   return out;
 }
@@ -327,27 +313,95 @@ function listFromPack(pack, keys) {
   return [];
 }
 
-function sumHourly(shops, field) {
-  const out = Array.from({ length: 24 }, () => null);
-  let hit = false;
-  (shops || []).forEach((shop) => {
-    const hours = shop && shop[field];
-    if (!Array.isArray(hours)) {
+function usableHours(hours) {
+  return Array.isArray(hours) && hours.length >= 3 && hours.some((n) => Number(n) > 0);
+}
+
+function hourIncrements(hours) {
+  if (!Array.isArray(hours) || hours.length < 3) {
+    return [];
+  }
+  const nums = hours.map((n) => asNum(n));
+  if (!nums.some((n) => n != null && n > 0)) {
+    return [];
+  }
+  let lastSeen = null;
+  let decreasing = false;
+  nums.forEach((n) => {
+    if (n == null || decreasing) {
       return;
     }
-    hours.forEach((value, i) => {
-      if (i >= 24) {
-        return;
+    if (lastSeen != null && n < lastSeen - 0.01) {
+      decreasing = true;
+    }
+    lastSeen = n;
+  });
+  const out = Array.from({ length: 24 }, () => 0);
+  if (decreasing) {
+    nums.forEach((n, i) => {
+      if (i < 24 && n != null) {
+        out[i] = n;
       }
-      const n = asNum(value);
-      if (n == null) {
-        return;
-      }
-      out[i] = (out[i] || 0) + n;
-      hit = true;
+    });
+    return out.some((n) => n > 0) ? out : [];
+  }
+  let last = 0;
+  nums.forEach((n, i) => {
+    if (i >= 24) {
+      return;
+    }
+    if (n == null) {
+      out[i] = 0;
+      return;
+    }
+    out[i] = Math.max(0, n - last);
+    last = n;
+  });
+  return out.some((n) => n > 0) ? out : [];
+}
+
+function sumHourIncrements(shops, field) {
+  const out = Array.from({ length: 24 }, () => 0);
+  let hit = false;
+  (shops || []).forEach((shop) => {
+    const inc = hourIncrements(shop && shop[field]);
+    if (!inc.length) {
+      return;
+    }
+    hit = true;
+    inc.forEach((n, i) => {
+      out[i] += n;
     });
   });
   return hit ? out : [];
+}
+
+function feeHoursFrom(spendH, payH) {
+  if (!usableHours(spendH)) {
+    return [];
+  }
+  const out = Array.from({ length: 24 }, () => 0);
+  let last = 0;
+  let hit = false;
+  for (let i = 0; i < 24; i += 1) {
+    const spend = Number(spendH[i]) || 0;
+    const pay = Number((payH && payH[i]) || 0);
+    if (pay > 0) {
+      last = spend / pay;
+      hit = true;
+    }
+    out[i] = last;
+  }
+  return hit ? out : [];
+}
+
+function pickUsableHours(...lists) {
+  for (const hours of lists) {
+    if (usableHours(hours)) {
+      return hours;
+    }
+  }
+  return [];
 }
 
 function summarizeRecords(records) {
@@ -409,8 +463,17 @@ export function mergeHanShenPaid(han, shenPaid, shenJingmai, ymd = shanghaiYmd()
     .map((name) => map[name])
     .sort((a, b) => (b.liveAmount || b.paidDeal || 0) - (a.liveAmount || a.paidDeal || 0));
   const jingmaiShops = listFromPack(shenJingmai, ["shops", "rows"]);
+  const todayPay = sumHourIncrements(jingmaiShops, "todayHours");
+  const todaySpend = sumHourIncrements(jingmaiShops, "todayPaidHours");
+  const yesterdayPay = sumHourIncrements(jingmaiShops, "yesterdayHours");
+  const yesterdaySpend = sumHourIncrements(jingmaiShops, "yesterdayPaidHours");
   const hourly = {
-    todayPay: sumHourly(jingmaiShops, "todayHours")
+    todayPay,
+    todaySpend,
+    yesterdayPay,
+    yesterdaySpend,
+    todayFee: feeHoursFrom(todaySpend, todayPay),
+    yesterdayFee: feeHoursFrom(yesterdaySpend, yesterdayPay)
   };
   return {
     records,
@@ -490,6 +553,27 @@ export async function pullHanShenPaid(req, ymd = shanghaiYmd()) {
   return mergeHanShenPaid(han, shenPaid, shenJingmai, ymd);
 }
 
+function feeBookFromPack(pack) {
+  if (!pack || typeof pack !== "object" || Array.isArray(pack)) {
+    return {};
+  }
+  if (pack.targets && typeof pack.targets === "object" && !Array.isArray(pack.targets)) {
+    return mergeFeeTargets({}, pack.targets);
+  }
+  if (pack.feeTargets && typeof pack.feeTargets === "object" && !Array.isArray(pack.feeTargets)) {
+    return mergeFeeTargets({}, pack.feeTargets);
+  }
+  return {};
+}
+
+export async function pullFeeTargets(req) {
+  const [han, shen] = await Promise.all([
+    fetchSibling(req, "/api/han/fee-targets"),
+    fetchSibling(req, "/api/shen/paid/fee-targets")
+  ]);
+  return mergeFeeTargets(feeBookFromPack(han), feeBookFromPack(shen));
+}
+
 function pickHours(hourly, key) {
   const v = hourly && hourly[key];
   if (!Array.isArray(v) || v.length < 3) {
@@ -524,22 +608,17 @@ export function rememberLocalPaidDay(pack = {}, ymd = shanghaiYmd()) {
   const records = Array.isArray(pack.records) ? pack.records : [];
   const incoming = pack.hourly && typeof pack.hourly === "object" ? pack.hourly : {};
   const hourly = mergeTodayHourly(snap.today.hourly, incoming, pack.replaceHours === true);
-  const incomingFee = pack.feeTargets && typeof pack.feeTargets === "object" ? pack.feeTargets : {};
-  const feeTargets = mergeFeeTargets(mergeFeeTargets(snap.feeTargets, feeTargetsFromRecords(records)), incomingFee);
-  snap.feeTargets = feeTargets;
   const summary =
     pack.summary && typeof pack.summary === "object"
       ? { ...(snap.today.summary || {}), ...pack.summary }
       : snap.today.summary || {};
   const hasHours = pickHours(hourly, "todayPay") || pickHours(hourly, "todaySpend") || pickHours(hourly, "todayFee");
-  if (records.length || hasHours || Object.keys(incomingFee).length) {
+  if (records.length || hasHours) {
     snap.today = {
-      records: applyFeeTargetsToRecords(records.length ? records : snap.today.records || [], feeTargets),
+      records,
       summary,
       hourly
     };
-  } else if ((snap.today.records || []).length && Object.keys(feeTargets).length) {
-    snap.today.records = applyFeeTargetsToRecords(snap.today.records, feeTargets);
   }
   writeSnap(snap);
   return snap;
@@ -552,17 +631,32 @@ export function postHomeLocalPaid(body = {}, ymd = shanghaiYmd()) {
 function packFromSnap(snap, extra = {}) {
   const today = snap.today || emptyDay();
   const yesterday = snap.yesterday || emptyDay();
+  const yestH = yesterday.hourly || {};
+  const liveH = extra.hourly && typeof extra.hourly === "object" && !Array.isArray(extra.hourly) ? extra.hourly : {};
   const hourly = { ...(today.hourly || {}) };
-  if (!hourly.yesterdaySpend || hourly.yesterdaySpend.length < 3) {
-    hourly.yesterdaySpend = (yesterday.hourly || {}).todaySpend || (yesterday.hourly || {}).yesterdaySpend;
-  }
-  if (!hourly.yesterdayFee || hourly.yesterdayFee.length < 3) {
-    hourly.yesterdayFee = (yesterday.hourly || {}).todayFee || (yesterday.hourly || {}).yesterdayFee;
-  }
-  if (!hourly.yesterdayPay || hourly.yesterdayPay.length < 3) {
-    hourly.yesterdayPay = (yesterday.hourly || {}).todayPay || (yesterday.hourly || {}).yesterdayPay;
-  }
-  const feeTargets = snap.feeTargets && typeof snap.feeTargets === "object" ? snap.feeTargets : {};
+  hourly.todayPay = pickUsableHours(hourly.todayPay, liveH.todayPay);
+  hourly.todaySpend = pickUsableHours(liveH.todaySpend, hourly.todaySpend);
+  hourly.todayFee = pickUsableHours(hourly.todayFee, liveH.todayFee);
+  hourly.yesterdayPay = pickUsableHours(
+    hourly.yesterdayPay,
+    liveH.yesterdayPay,
+    yestH.todayPay,
+    yestH.yesterdayPay
+  );
+  hourly.yesterdaySpend = pickUsableHours(
+    liveH.yesterdaySpend,
+    hourly.yesterdaySpend,
+    yestH.todaySpend,
+    yestH.yesterdaySpend
+  );
+  hourly.yesterdayFee = pickUsableHours(
+    hourly.yesterdayFee,
+    liveH.yesterdayFee,
+    yestH.todayFee,
+    yestH.yesterdayFee
+  );
+  const feeTargets =
+    extra.feeTargets && typeof extra.feeTargets === "object" && !Array.isArray(extra.feeTargets) ? extra.feeTargets : {};
   return {
     ok: true,
     source: "han-shen-local",
@@ -582,7 +676,10 @@ function packFromSnap(snap, extra = {}) {
 
 export async function getHomeLocalPaid(req) {
   const ymd = shanghaiYmd();
-  const merged = req ? await pullHanShenPaid(req, ymd) : { records: [], summary: {}, hourly: {} };
+  const [merged, feeTargets] = await Promise.all([
+    req ? pullHanShenPaid(req, ymd) : Promise.resolve({ records: [], summary: {}, hourly: {} }),
+    req ? pullFeeTargets(req) : Promise.resolve({})
+  ]);
   const snap = rememberLocalPaidDay(merged, ymd);
   const from = [];
   if ((merged.records || []).some((row) => String(row.source || "").indexOf("han") !== -1)) {
@@ -591,5 +688,5 @@ export async function getHomeLocalPaid(req) {
   if ((merged.records || []).some((row) => String(row.source || "").indexOf("shen") !== -1)) {
     from.push("shen");
   }
-  return packFromSnap(snap, { summary: merged.summary, from });
+  return packFromSnap(snap, { summary: merged.summary, from, feeTargets, hourly: merged.hourly });
 }
