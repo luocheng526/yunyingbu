@@ -97,7 +97,8 @@
       ".hr-person{cursor:pointer;}" +
       ".hr-person[aria-expanded='true'] td{background:color-mix(in srgb,var(--xm-primary) 8%,var(--xm-card));}" +
       ".hr-detail td{padding:8px 10px 12px;}" +
-      ".hr-board-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-end;}" +
+      ".hr-board-head{display:flex;justify-content:flex-end;gap:12px;align-items:center;}" +
+      ".hr-board-head .hr-msg:not(:empty){margin-right:auto;}" +
       ".hr-board-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;}" +
       ".hr-board-kpi{border:0;border-radius:16px;padding:16px 16px 14px;color:#fff;min-height:108px;box-shadow:0 10px 22px rgba(24,49,99,.12);}" +
       "button.hr-board-kpi{width:100%;text-align:left;cursor:pointer;font:inherit;}" +
