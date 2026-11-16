@@ -1087,6 +1087,7 @@ export async function hydrateFromMysql() {
     }
     const { query } = auth;
     const [personRows] = await query(
+      // 组织中心不接钉钉：people 只读这些列，禁止加钉钉字段，禁止同步通讯录。
       "SELECT id, name, role, center, status, demo, employee_no, department, manager_id FROM people ORDER BY id ASC"
     );
     const [shopRows] = await query("SELECT id, name, kind, pack, bundle, demo FROM people_shops ORDER BY id ASC");

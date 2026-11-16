@@ -473,6 +473,52 @@ test("GET /api/people/charter is read-only source rule", async () => {
     assert.equal(data.agentAccess, "read-only");
     assert.equal(data.sourceOfTruth.employment, "花名册");
     assert.match(data.sourceOfTruth.shopRights, /管辖/);
+    assert.equal(data.dingTalk, false);
+    assert.ok(data.notSource.includes("钉钉通讯录"));
+    assert.equal(data.roster, "手维护");
+    assert.equal(data.shopRightsMaintain, "手维护");
+    assert.equal(data.hrModule, "智能人事");
+    assert.deepEqual(data.hrTopics, ["假勤", "打卡", "调休", "加班"]);
+    assert.equal(data.release.module, "组织中心");
+    assert.equal(data.release.applicant, "罗成运营部主脑");
+    assert.match(data.rule, /不接钉钉/);
+    assert.match(data.rule, /手维护/);
+    assert.match(data.rule, /智能人事/);
+  });
+});
+
+test("org center stays off DingTalk and keeps people columns local", async () => {
+  const dingTalkWire = /dingtalk|unionid|openid|dduserid|oapi\.ding|通讯录同步/i;
+  const peopleCols = "SELECT id, name, role, center, status, demo, employee_no, department, manager_id FROM people";
+  const storeSrc = fs.readFileSync("src/modules/people/store.js", "utf8");
+  const routerSrc = fs.readFileSync("src/modules/people/router.js", "utf8");
+  const peopleJs = fs.readFileSync("public/shared/modules/people.js", "utf8");
+  const charterFile = JSON.parse(fs.readFileSync("public/people-charter.json", "utf8"));
+  const adminDoc = fs.readFileSync("docs/agents/00-prod-admin.md", "utf8");
+  const orgDoc = fs.readFileSync("docs/agents/01-org-center.md", "utf8");
+  assert.match(storeSrc, new RegExp(peopleCols.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.doesNotMatch(storeSrc, dingTalkWire);
+  assert.doesNotMatch(peopleJs, dingTalkWire);
+  assert.equal(charterFile.dingTalk, false);
+  assert.ok(charterFile.notSource.includes("钉钉通讯录"));
+  assert.equal(charterFile.hrModule, "智能人事");
+  assert.equal(charterFile.release.module, "组织中心");
+  assert.equal(charterFile.release.applicant, "罗成运营部主脑");
+  assert.match(adminDoc, /组织中心继续不接钉钉/);
+  assert.match(adminDoc, /罗成运营部主脑/);
+  assert.match(orgDoc, /假勤、打卡、调休、加班归 \*\*智能人事\*\*/);
+  assert.match(routerSrc, /dingTalk: false/);
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/api/people`);
+    const data = await res.json();
+    assert.equal(res.status, 200);
+    assert.ok(Array.isArray(data.people) && data.people.length);
+    const forbidden = /^(dingtalk|ding_?talk|userid|unionid|openid|dduserid|dinguserid)$/i;
+    for (const person of data.people) {
+      for (const key of Object.keys(person)) {
+        assert.equal(forbidden.test(key), false, key);
+      }
+    }
   });
 });
 

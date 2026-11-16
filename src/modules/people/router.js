@@ -88,7 +88,17 @@ export const PEOPLE_CHARTER = {
     employment: "花名册",
     shopRights: "管辖 / 店铺主数据"
   },
-  rule: "智能体是只读调用方。在职与店权只认花名册和管辖。"
+  notSource: ["钉钉通讯录", "其它模块本地名单", "智能体记忆"],
+  dingTalk: false,
+  roster: "手维护",
+  shopRightsMaintain: "手维护",
+  hrModule: "智能人事",
+  hrTopics: ["假勤", "打卡", "调休", "加班"],
+  release: {
+    module: "组织中心",
+    applicant: "罗成运营部主脑"
+  },
+  rule: "智能体是只读调用方。在职与店权只认花名册和管辖。组织中心不接钉钉，不改 people 表加钉钉字段，不同步钉钉通讯录。花名册和店权仍手维护。假勤、打卡、调休、加班归智能人事。"
 };
 
 async function requireRosterEditor(req, res) {
