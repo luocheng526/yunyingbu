@@ -94,6 +94,8 @@ test("GET /login is 200 星脉管理系统", async () => {
     assert.equal(res.status, 200);
     assert.match(text, /星脉管理系统/);
     assert.match(text, /记住密码/);
+    assert.doesNotMatch(text, /nav\.js/);
+    assert.doesNotMatch(text, /钉钉|SSO|dingtalk/i);
   });
 });
 
