@@ -98,6 +98,32 @@ test("POST rejects a data ticket that includes the shared shell", async (t) => {
   assert.match(String(body.error || ""), /禁止提交全站壳文件/);
 });
 
+test("POST /api/releases accepts 需求与反馈 and 边界数据中心", async (t) => {
+  const store = createStore({ now: () => "2026-09-05T00:00:00.000Z" });
+  const { server, base } = appWith(store);
+  t.after(() => server.close());
+  for (const module of ["需求与反馈", "工作汇报", "月度大会", "边界数据中心"]) {
+    const created = await fetch(`${base}/api/releases`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        version: "0.1.1-" + module,
+        applicant: "罗成运营部主脑",
+        source: "罗成运营部主脑",
+        module,
+        summary: "用自己的模块名交单",
+        files: ["public/releases.css"],
+        acceptance: "不再报模块不在允许列表中",
+        restart: false
+      })
+    });
+    const data = await created.json();
+    assert.notEqual(data.error, "模块不在允许列表中", module);
+    assert.equal(created.status, 201, module);
+    assert.equal(data.item.module, module);
+  }
+});
+
 test("confirm from the webpage releases the ticket", async (t) => {
   const store = createStore({ now: () => "2026-09-05T00:00:00.000Z" });
   const { server, base } = appWith(store);
