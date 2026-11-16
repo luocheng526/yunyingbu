@@ -9,7 +9,7 @@ import { feedbackRouter } from "../feedback/router.js";
 import { meetingRouter } from "../meeting/router.js";
 
 // xm-upgrade-mask 0.1.52  必须和 profile/middleware.js 成套发。
-// xm-fast-shell 0.1.772-meeting
+// xm-fast-shell 0.1.772-nolive
 // xm-login-session 登录会话回读必须和 profile/middleware.js 成套发。
 // login.html 不走 HTML 内存缓存，必须和 profile/middleware.js 成套发。
 
@@ -134,6 +134,10 @@ export function registerPageRoutes(app) {
       res.redirect(302, "/data/overview");
       return;
     }
+    if ((method === "GET" || method === "HEAD") && path === "/data/paid") {
+      res.redirect(302, "/home");
+      return;
+    }
     if ((method === "GET" || method === "HEAD") && path === "/shen") {
       res.redirect(302, "/shen/product");
       return;
@@ -158,6 +162,9 @@ export function registerPageRoutes(app) {
   });
   app.get("/data", (_req, res) => {
     res.redirect(302, "/data/overview");
+  });
+  app.get("/data/paid", (_req, res) => {
+    res.redirect(302, "/home");
   });
   app.get("/shen", (_req, res) => {
     res.redirect(302, "/shen/product");

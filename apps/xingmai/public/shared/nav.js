@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.772-meeting — 主栏加月度大会 */
+/* xm-fast-shell 0.1.772-nolive — 数据中心不再挂实时付费 */
 (function () {
-  const ASSET_VER = "0.1.772-meeting";
+  const ASSET_VER = "0.1.772-nolive";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -44,8 +44,7 @@
   const DATA_CHILDREN = [
     { href: "/data/overview", label: "数据总揽" },
     { href: "/data/shops", label: "店铺数据" },
-    { href: "/data/goods", label: "商品数据" },
-    { href: "/data/paid", label: "实时付费" }
+    { href: "/data/goods", label: "商品数据" }
   ];
   const SHEN_CHILDREN = [
     { href: "/shen/jingcang", label: "京仓管理" },
@@ -764,7 +763,7 @@
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout">' +
       ico("logout") +
       "<span>退出登录</span></button>" +
-      '<p class="xm-version">v0.4.28</p></nav>'
+      '<p class="xm-version">v0.4.29</p></nav>'
     );
   }
 
@@ -869,6 +868,7 @@
   const TAB_STORE = "xm-open-tabs";
   const PARENT_HOME = {
     "/data": "/data/overview",
+    "/data/paid": "/home",
     "/shen": "/shen/product",
     "/han": "/han/selection",
     "/academy": "/academy/courses"
