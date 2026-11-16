@@ -41,7 +41,7 @@ test("侧栏在工作汇报后面挂需求与反馈，不进底部", () => {
 
 test("壳把 /feedback 交给需求与反馈模块", () => {
   assert.equal(APP_MODULES["/feedback"], "feedback");
-  assert.equal(SHELL_ASSET_VER, "0.1.772-nolive");
+  assert.equal(SHELL_ASSET_VER, "0.1.772-bound");
   const html = renderAppShell("/feedback", luocheng);
   assert.equal(html.includes("/shared/modules/feedback.js"), true);
   assert.equal(html.includes("需求与反馈"), true);
@@ -49,7 +49,7 @@ test("壳把 /feedback 交给需求与反馈模块", () => {
 
 test("nav.js 把需求与反馈放进主栏而不是底栏", () => {
   const js = readFileSync(join(root, "../public/shared/nav.js"), "utf8");
-  assert.match(js, /0\.1\.772-nolive/);
+  assert.match(js, /0\.1\.772-bound/);
   assert.match(js, /\{ href: "\/feedback", label: "需求与反馈" \}/);
   assert.match(js, /"\/feedback": "feedback"/);
   const itemsBlock = js.match(/const items = \[([\s\S]*?)\];/)[1];

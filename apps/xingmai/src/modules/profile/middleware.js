@@ -7,10 +7,10 @@ import { currentUser, publicProfile } from "./auth.js";
 import { APP_ICON_PNG } from "./app-icon-png.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.772-nolive
+// xm-fast-shell 0.1.772-bound
 // login.html 不走 HTML 内存缓存；login.css 禁止 immutable。必须和 home/pages.js 成套发。
 
-export const SHELL_ASSET_VER = "0.1.772-nolive";
+export const SHELL_ASSET_VER = "0.1.772-bound";
 export const WEB_MANIFEST = {
   name: "星脉甄选运营中心",
   short_name: "星脉甄选",
@@ -52,6 +52,7 @@ const TAB_ICON_ICO = Buffer.from(
 );
 export const APP_MODULES = {
   "/home": "home",
+  "/bound": "bound",
   "/data": "data",
   "/data/overview": "data",
   "/data/shops": "data",
@@ -91,7 +92,8 @@ export const APP_MODULES = {
 };
 const SHELL_TITLES = {
   "/home": "首页",
-  "/data": "数据中心",
+  "/bound": "边界数据中心",
+  "/data": "星脉数据中心",
   "/data/overview": "数据总揽",
   "/data/shops": "店铺数据",
   "/data/goods": "商品数据",

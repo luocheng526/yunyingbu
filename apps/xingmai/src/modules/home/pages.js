@@ -7,9 +7,10 @@ import { hrRouter } from "../hr/router.js";
 import { workRouter } from "../work/router.js";
 import { feedbackRouter } from "../feedback/router.js";
 import { meetingRouter } from "../meeting/router.js";
+import { boundRouter } from "../bound/router.js";
 
 // xm-upgrade-mask 0.1.52  必须和 profile/middleware.js 成套发。
-// xm-fast-shell 0.1.772-nolive
+// xm-fast-shell 0.1.772-bound
 // xm-login-session 登录会话回读必须和 profile/middleware.js 成套发。
 // login.html 不走 HTML 内存缓存，必须和 profile/middleware.js 成套发。
 
@@ -114,6 +115,7 @@ export function registerPageRoutes(app) {
   app.use("/api/work", workRouter);
   app.use("/api/feedback", feedbackRouter);
   app.use("/api/meeting", meetingRouter);
+  app.use("/api/bound", boundRouter);
   app.use((req, res, next) => {
     const method = String(req.method || "GET").toUpperCase();
     const path = String(req.path || "").replace(/\/+$/, "") || "/";
