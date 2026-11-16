@@ -131,17 +131,7 @@
         background: #e11d48;
       }
       .btn-logout:hover { background: #be123c; }
-      #me-hard-reload,
-      .me-btn-hard {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        border: 0;
-      }
+      .me-btn-hard { margin-top: 0.65rem; }
       .status { min-height: 1.25rem; margin: 0 0 0.7rem; font-size: 0.9rem; }
       .status.error { color: #b91c1c; }
       .status.ok { color: #047857; }
@@ -221,7 +211,7 @@
             <form id="logout-form">
               <button class="btn btn-logout" type="submit">退出登录</button>
             </form>
-            <button type="button" id="me-hard-reload" class="me-btn-hard" tabindex="-1" aria-hidden="true">强制刷新</button>
+            <button type="button" id="me-hard-reload" class="btn me-btn-hard" title="绕过缓存重新加载本页">强制刷新</button>
           </div>
         </section>
         <section class="card">
@@ -320,6 +310,14 @@
           event.preventDefault();
           await api("/api/auth/logout", { method: "POST" });
           window.location.replace("/login?out=1");
+        });
+        document.getElementById("me-hard-reload").addEventListener("click", function (event) {
+          event.preventDefault();
+          if (typeof window.__xmHardReload === "function") {
+            window.__xmHardReload();
+            return;
+          }
+          window.location.replace(window.location.pathname + "?_xm=" + Date.now() + (window.location.hash || ""));
         });
       })();
     </script>
