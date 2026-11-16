@@ -1,12 +1,15 @@
-/* xm-module-home 0.1.951-noerp */
+/* xm-module-home 0.1.996-oview */
 (function () {
-  var HOME_JS_STAMP = "0.1.951-noerp";
+  var HOME_JS_STAMP = "0.1.996-oview";
   var VIEWS = [
-    { key: "company", label: "公司" },
-    { key: "team", label: "经理团队" },
-    { key: "chief", label: "主管/储备" },
-    { key: "live", label: "实时" },
-    { key: "board", label: "排行榜" }
+    { key: "company", label: "数据总揽" },
+    { key: "overview", label: "团队概括" },
+    { key: "live", label: "实时" }
+  ];
+  var OVERVIEW_PANES = [
+    { key: "team", label: "经理团队", tone: "teal", hint: "经营团队" },
+    { key: "chief", label: "主管/储备", tone: "green", hint: "主管储备" },
+    { key: "board", label: "排行榜", tone: "blue", hint: "业绩利润" }
   ];
   var RANGES = [
     { key: "yesterday", label: "昨天" },
@@ -728,13 +731,15 @@
       "</section>"
     );
   }
-  function teamsCompareHtml(teams, hide, simple) {
+  function teamsCompareHtml(teams, hide, simple, title) {
     var gone = goneTeams();
     var list = orderTeams(teams && teams.length ? teams : simple ? [] : blankTeams(), simple).filter(function (team) {
       return gone.indexOf(team.name) === -1;
     });
     return (
-      '<div class="xm-hm-teams-bar"><b>星脉甄选</b><span><button type="button" data-refresh-teams' +
+      '<div class="xm-hm-teams-bar"><b>' +
+      escapeHtml(title || "星脉甄选") +
+      '</b><span><button type="button" data-refresh-teams' +
       (teamsRefreshing ? " disabled" : "") +
       ">" +
       (teamsRefreshing ? "更新中…" : "更新团队") +
@@ -825,11 +830,126 @@
   function allowedHomeViews(user, people, shops) {
     return {
       company: true,
+      overview: true,
+      live: true,
       team: canSeeTeamView(user),
       chief: canSeeChiefView(user, people, shops),
-      live: true,
       board: true
     };
+  }
+  function canOpenOverviewPane(key, user, people, shops) {
+    if (key === "team") {
+      return canSeeTeamView(user);
+    }
+    if (key === "chief") {
+      return canSeeChiefView(user, people, shops);
+    }
+    return key === "board";
+  }
+  function overviewIcon(key) {
+    if (key === "board") {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4h10v2H7zm1 4h8l-1.2 12H9.2zM6 8h12v2H6z"/></svg>';
+    }
+    if (key === "chief") {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 11a3.5 3.5 0 1 0-3.5-3.5A3.5 3.5 0 0 0 8 11zm8 0a3.5 3.5 0 1 0-3.5-3.5A3.5 3.5 0 0 0 16 11zM8 13c-3.2 0-6 1.7-6 4.2V19h8.1A6.5 6.5 0 0 1 16 12.1 6.6 6.6 0 0 1 8 13zm8 0a5 5 0 1 0 5 5 5 5 0 0 0-5-5z"/></svg>';
+    }
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-4.4 0-8 2.1-8 4.7V21h16v-2.3C20 16.1 16.4 14 12 14z"/></svg>';
+  }
+  function overviewCardsHtml(state) {
+    var shownTeams = state && state.teams && state.teams.length ? state.teams : blankTeams();
+    var shownChiefs = filterOwnChiefs(
+      state && state.chiefs && state.chiefs.length ? state.chiefs : blankRoleTeams("主管"),
+      state && state.user,
+      state && state.people,
+      state && state.dutyShops
+    );
+    var teamsN = shownTeams.length;
+    var chiefN = shownChiefs.length;
+    var boardN = 0;
+    ((state && state.ladders) || blankLadders()).forEach(function (lad) {
+      (lad.columns || []).forEach(function (col) {
+        boardN += (col.rows || []).length;
+      });
+    });
+    return (
+      '<div class="xm-hm-over-cards">' +
+      OVERVIEW_PANES.filter(function (pane) {
+        return canOpenOverviewPane(pane.key, state && state.user, state && state.people, state && state.dutyShops);
+      })
+        .map(function (pane) {
+          var n = pane.key === "team" ? teamsN : pane.key === "chief" ? chiefN : boardN;
+          return (
+            '<button type="button" class="xm-hm-over-card is-' +
+            pane.tone +
+            '" data-over-open="' +
+            pane.key +
+            '"><span class="xm-hm-over-ico">' +
+            overviewIcon(pane.key) +
+            "</span><strong>" +
+            escapeHtml(fmtInt(n)) +
+            "</strong><em>" +
+            escapeHtml(pane.label) +
+            "</em><small>" +
+            escapeHtml(pane.hint) +
+            "</small></button>"
+          );
+        })
+        .join("") +
+      "</div>"
+    );
+  }
+  function overviewNavHtml(pane) {
+    var hit = OVERVIEW_PANES.filter(function (item) {
+      return item.key === pane;
+    })[0];
+    return (
+      '<div class="xm-hm-over-nav"><button type="button" data-over-back>‹ 团队概括</button><b>' +
+      escapeHtml((hit && hit.label) || "团队概括") +
+      "</b></div>"
+    );
+  }
+  function hiddenForView(key) {
+    var prev = viewKey;
+    viewKey = key;
+    var list = key === "team" || key === "chief" ? teamHidden(hiddenCards()) : hiddenCards();
+    viewKey = prev;
+    return list;
+  }
+  function overviewBodyHtml(state) {
+    var pane = (state && state.teamPane) || "";
+    var parts = [];
+    if (!pane) {
+      parts.push(overviewCardsHtml(state));
+    } else {
+      parts.push(overviewNavHtml(pane));
+    }
+    if ((!pane || pane === "team") && canSeeTeamView(state && state.user)) {
+      parts.push(
+        '<div class="xm-hm-over-block" data-over="team">' +
+          teamsCompareHtml(state && state.teams && state.teams.length ? state.teams : blankTeams(), hiddenForView("team"), false, "经理团队") +
+          "</div>"
+      );
+    }
+    if ((!pane || pane === "chief") && canSeeChiefView(state && state.user, state && state.people, state && state.dutyShops)) {
+      parts.push(
+        '<div class="xm-hm-over-block is-chief" data-over="chief">' +
+          teamsCompareHtml(
+            filterOwnChiefs(state && state.chiefs && state.chiefs.length ? state.chiefs : blankRoleTeams("主管"), state && state.user, state && state.people, state && state.dutyShops),
+            hiddenForView("chief"),
+            true,
+            "主管/储备"
+          ) +
+          "</div>"
+      );
+    }
+    if (!pane || pane === "board") {
+      parts.push(
+        '<div class="xm-hm-over-block is-board" data-over="board"><div class="xm-hm-teams-bar"><b>排行榜</b></div>' +
+          ((state && state.ladders) || blankLadders()).map(ladderHtml).join("") +
+          "</div>"
+      );
+    }
+    return parts.join("");
   }
   function seesAllChiefs(user) {
     return canSeeChiefView(user);
@@ -2060,8 +2180,38 @@
       ".xm-hm-tip{position:fixed;z-index:9;display:none;box-sizing:border-box;width:max-content;max-width:360px;padding:10px 12px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;color:var(--xm-ink);font-size:12px;line-height:1.6;white-space:pre-wrap;pointer-events:none}" +
       ".xm-hm-tip.is-on{display:block}" +
       ".xm-hm-body{position:relative;display:flex;flex-direction:column;gap:12px;overflow:visible}" +
-      ".xm-hm.is-live .xm-hm-kpis-shell,.xm-hm.is-board .xm-hm-kpis-shell,.xm-hm.is-team .xm-hm-kpis-shell,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
+      ".xm-hm.is-live .xm-hm-kpis-shell,.xm-hm.is-board .xm-hm-kpis-shell,.xm-hm.is-team .xm-hm-kpis-shell,.xm-hm.is-overview .xm-hm-kpis-shell,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges{display:none}" +
       ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden]{display:none}" +
+      ".xm-hm-over-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin:0 0 16px}" +
+      ".xm-hm-over-card{display:flex;flex-direction:column;align-items:flex-start;gap:6px;border:0;border-radius:16px;padding:18px 20px 16px;color:#fff;cursor:pointer;text-align:left;min-height:118px;box-shadow:none}" +
+      ".xm-hm-over-card.is-teal{background:linear-gradient(135deg,#2ec8d4,#22b4c0)}" +
+      ".xm-hm-over-card.is-green{background:linear-gradient(135deg,#3ddc84,#2ec56e)}" +
+      ".xm-hm-over-card.is-blue{background:linear-gradient(135deg,#5b8cff,#4a74f5)}" +
+      ".xm-hm-over-card:hover{filter:brightness(1.04)}" +
+      ".xm-hm-over-ico{width:36px;height:36px;border-radius:12px;background:rgba(255,255,255,.22);display:inline-flex;align-items:center;justify-content:center}" +
+      ".xm-hm-over-ico svg{width:20px;height:20px;display:block}" +
+      ".xm-hm-over-card strong{margin-top:8px;font-size:32px;line-height:1;font-weight:700}" +
+      ".xm-hm-over-card em{font-style:normal;font-size:14px;font-weight:600}" +
+      ".xm-hm-over-card small{font-size:12px;opacity:.86}" +
+      ".xm-hm-over-nav{display:flex;align-items:center;gap:12px;margin:0 0 12px}" +
+      ".xm-hm-over-nav button{border:0;background:0;color:var(--xm-primary);cursor:pointer;padding:0;font-size:14px}" +
+      ".xm-hm-over-nav b{font-size:16px}" +
+      ".xm-hm-over-block{display:flex;flex-direction:column;gap:10px;margin:0 0 18px}" +
+      ".xm-hm-over-block.is-chief .xm-hm-team-kpis{grid-template-columns:1fr;gap:6px}" +
+      ".xm-hm-over-block.is-chief .xm-hm-card{min-height:0;min-width:0;padding:6px}" +
+      ".xm-hm-over-block.is-chief .xm-hm-card-head{font-size:10px;line-height:1.2;gap:4px}" +
+      ".xm-hm-over-block.is-chief .xm-hm-value{margin-top:4px;font-size:13px}" +
+      ".xm-hm-over-block.is-chief .xm-hm-trend{margin-top:2px;font-size:10px}" +
+      ".xm-hm-over-block.is-chief .xm-hm-team-head h2{font-size:13px}" +
+      ".xm-hm-over-block.is-chief .xm-hm-table{min-width:0}" +
+      ".xm-hm-over-block.is-chief .xm-hm-card-head span{min-width:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}" +
+      ".xm-hm-over-block.is-chief .xm-hm-card-head .xm-hm-help{width:12px;height:12px;font-size:8px;flex:0 0 auto}" +
+      ".xm-hm-over-block.is-chief .xm-hm-panel{overflow:hidden}" +
+      ".xm-hm-over-block.is-chief .xm-hm-teams-grid{grid-template-columns:repeat(var(--xm-hm-team-cols,2),minmax(200px,1fr));gap:16px}" +
+      ".xm-hm-over-block.is-chief .xm-hm-team .xm-hm-panel{margin-top:0}" +
+      ".xm-hm-over-block.is-board{gap:16px}" +
+      ".xm-hm-over-block:not(.is-chief) .xm-hm-teams-grid{grid-template-columns:repeat(var(--xm-hm-team-cols,2),minmax(0,1fr));gap:20px}" +
+      "@media (max-width:1100px){.xm-hm-over-cards{grid-template-columns:1fr}}" +
       ".xm-hm-live{display:flex;flex-direction:column;gap:20px}" +
       ".xm-hm-kpis-shell,.xm-hm-teams,.xm-hm-team{background:linear-gradient(#dceaff,#f7fbff);border:0;outline:0;box-shadow:none;border-radius:12px}" +
       ".xm-hm-teams{background:0}" +
@@ -2394,12 +2544,21 @@
   function paint(root, state) {
     var board = root.querySelector("#xm-hm");
     var allow = allowedHomeViews(state.user, state.people, state.dutyShops);
+    if (state.view === "team" || state.view === "chief" || state.view === "board") {
+      state.teamPane = state.view;
+      state.view = "overview";
+    }
     if (!allow[state.view]) {
       state.view = "company";
     }
-    viewKey = state.view || "company";
-    var teamView = state.view === "team" || state.view === "chief";
-    var hide = teamView ? teamHidden(hiddenCards()) : hiddenCards();
+    if (state.view === "overview" && state.teamPane && !canOpenOverviewPane(state.teamPane, state.user, state.people, state.dutyShops)) {
+      state.teamPane = "";
+    }
+    if (!cardSetOpen) {
+      viewKey = state.view === "overview" ? state.teamPane || "team" : state.view || "company";
+    }
+    var teamView = state.view === "overview";
+    var hide = viewKey === "team" || viewKey === "chief" ? teamHidden(hiddenCards()) : hiddenCards();
     var companySrc = !homeUserName(state.user)
       ? blankCompanyCards()
       : isHomeBoss(state.user)
@@ -2413,12 +2572,7 @@
     state.shownLive = live;
     var allShops = state.shops && state.shops.length ? state.shops : [];
     var shops = filterLiveShops(liveBoard.shops && liveBoard.shops.length ? liveBoard.shops : allShops, state);
-    var teams =
-      state.view === "chief"
-        ? filterOwnChiefs(state.chiefs && state.chiefs.length ? state.chiefs : blankRoleTeams("主管"), state.user, state.people, state.dutyShops)
-        : state.teams && state.teams.length
-          ? state.teams
-          : blankTeams();
+    var teams = state.teams && state.teams.length ? state.teams : blankTeams();
     var hero = readChart(live.hero, blankLive().hero);
     var paid = readChart(live.paid, blankLive().paid);
     var fee = readChart(live.fee, blankLive().fee);
@@ -2439,11 +2593,12 @@
     hideCardTip();
     hideLineTip(root);
     var searchDraft = liveSearchDraft(root);
-    board.setAttribute("data-hm-js", "0.1.917-feewave");
-    board.classList.toggle("is-board", state.view === "board");
+    board.setAttribute("data-hm-js", HOME_JS_STAMP);
+    board.classList.toggle("is-overview", state.view === "overview");
+    board.classList.toggle("is-board", state.view === "overview" && state.teamPane === "board");
     board.classList.toggle("is-live", state.view === "live");
-    board.classList.toggle("is-team", teamView);
-    board.classList.toggle("is-chief", state.view === "chief");
+    board.classList.toggle("is-team", state.view === "overview" && state.teamPane !== "board");
+    board.classList.toggle("is-chief", state.view === "overview" && state.teamPane === "chief");
     Array.prototype.forEach.call(root.querySelectorAll("[data-view]"), function (btn) {
       var key = btn.getAttribute("data-view");
       btn.hidden = !allow[key];
@@ -2458,10 +2613,12 @@
     root.querySelector("#xm-hm-kpis").innerHTML = cards.map(cardHtml).join("");
     var teamBox = root.querySelector("#xm-hm-teams");
     teamBox.hidden = !teamView;
-    teamBox.innerHTML = teamsCompareHtml(teams, hide, state.view === "chief");
-    teamBox.style.setProperty("--xm-hm-team-cols", String(Math.max(teamBox.querySelectorAll(".xm-hm-team").length, 1)));
+    teamBox.innerHTML = teamView ? overviewBodyHtml(state) : "";
+    Array.prototype.forEach.call(teamBox.querySelectorAll(".xm-hm-over-block"), function (block) {
+      block.style.setProperty("--xm-hm-team-cols", String(Math.max(block.querySelectorAll(".xm-hm-team").length, 1)));
+    });
     root.querySelector("#xm-hm-live").hidden = state.view !== "live";
-    root.querySelector("#xm-hm-board").hidden = state.view !== "board";
+    root.querySelector("#xm-hm-board").hidden = true;
     root.querySelector("#xm-hm-live").innerHTML =
       liveFilterHtml(allShops, state) +
       '<div class="xm-hm-live-charts">' +
@@ -2485,8 +2642,16 @@
       "</tbody></table></div>";
     applyLiveRowPad(root);
     restoreShopColW(root);
-    root.querySelector("#xm-hm-ladders").innerHTML = (state.ladders || blankLadders()).map(ladderHtml).join("");
-    var gapText = ((state.view === "chief" ? state.chiefGaps : state.teamGaps) || state.gaps || []).filter(function (item) {
+    root.querySelector("#xm-hm-ladders").innerHTML = "";
+    var gapSrc =
+      state.view !== "overview"
+        ? []
+        : state.teamPane === "chief"
+          ? state.chiefGaps || []
+          : state.teamPane === "team"
+            ? state.teamGaps || []
+            : [].concat(state.teamGaps || [], state.chiefGaps || [], state.gaps || []);
+    var gapText = gapSrc.filter(function (item) {
       return item.indexOf("人管有店") !== -1 || item.indexOf("韩梦凯 ·") !== -1;
     }).join("；");
     root.querySelector("#xm-hm-note").textContent = gapText
@@ -2495,7 +2660,7 @@
         ? "实时只汇总韩梦凯运营中心「实时付费」和沈子晗运营中心「付费中心」，不填写。"
         : "数字来自星脉 ERP。";
     root.querySelector("#xm-hm-pop h3").textContent =
-      "卡片设置 · " + (state.view === "team" ? "经理团队" : state.view === "chief" ? "主管/储备" : "公司");
+      "卡片设置 · " + (viewKey === "team" ? "经理团队" : viewKey === "chief" ? "主管/储备" : "数据总揽");
     var setCards = state.view === "company" ? companySetCards(state.cards) : arrangeCards(state.cards || blankCompanyCards());
     var allOn = setCards.length > 0 && setCards.every(function (card) {
       return hide.indexOf(card.key) === -1;
@@ -4267,6 +4432,7 @@
       var dates = rangeDates("yesterday");
       var state = {
         view: "company",
+        teamPane: "",
         range: "yesterday",
         mode: "shop",
         from: dates.from,
@@ -4522,8 +4688,11 @@
             liveFeePick = "";
           }
           state.view = nextView;
-          viewKey = state.view || "company";
-          state.mode = state.view === "team" || state.view === "chief" ? "company" : "shop";
+          if (nextView === "overview") {
+            state.teamPane = "";
+          }
+          viewKey = state.view === "overview" ? "team" : state.view || "company";
+          state.mode = state.view === "overview" ? "company" : "shop";
           closeCal();
           clearTextSelection();
           cardSetOpen = false;
@@ -4532,6 +4701,29 @@
           if (state.view === "live" || state.view === "company") {
             pullLive(true);
           }
+          return;
+        }
+        var overOpen = event.target.closest("[data-over-open]");
+        if (overOpen) {
+          var pane = overOpen.getAttribute("data-over-open");
+          if (!canOpenOverviewPane(pane, state.user, state.people, state.dutyShops)) {
+            return;
+          }
+          state.view = "overview";
+          state.teamPane = pane;
+          viewKey = pane === "board" ? "team" : pane;
+          cardSetOpen = false;
+          headSetOpen = false;
+          paint(root, state);
+          return;
+        }
+        if (event.target.closest("[data-over-back]")) {
+          state.view = "overview";
+          state.teamPane = "";
+          viewKey = "team";
+          cardSetOpen = false;
+          headSetOpen = false;
+          paint(root, state);
           return;
         }
         var range = event.target.closest("[data-range]");
@@ -4605,7 +4797,11 @@
           return;
         }
         if (event.target.closest(".xm-hm-set")) {
-          viewKey = state.view || "company";
+          var overBlock = event.target.closest("[data-over]");
+          viewKey = (overBlock && overBlock.getAttribute("data-over")) || (state.view === "overview" ? state.teamPane || "team" : state.view || "company");
+          if (viewKey === "board" || viewKey === "overview") {
+            viewKey = "team";
+          }
           cardSetOpen = !cardSetOpen;
           headSetOpen = false;
           syncHeadPop(root);
@@ -5140,7 +5336,7 @@
           if (sortHead) {
             saveLiveHeadOrder(applyLiveHeadMove(sortFrom, toKey));
           } else if (sortTeam) {
-            saveTeamCols(sortFrom, toKey, state.view === "chief");
+            saveTeamCols(sortFrom, toKey, state.teamPane === "chief" || !!(toEl && toEl.closest && toEl.closest(".xm-hm-over-block.is-chief")));
           } else if (sortLive) {
             saveLiveCardOrder(applyLiveCardMove(sortFrom, toKey));
           } else {
