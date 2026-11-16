@@ -5,9 +5,10 @@ import * as profileShell from "../profile/middleware.js";
 import { NAV_ITEMS, isHrDesk, orgNavFlags } from "./nav-items.js";
 import { hrRouter } from "../hr/router.js";
 import { workRouter } from "../work/router.js";
+import { feedbackRouter } from "../feedback/router.js";
 
 // xm-upgrade-mask 0.1.52  必须和 profile/middleware.js 成套发。
-// xm-fast-shell 0.1.772-hr-desk
+// xm-fast-shell 0.1.772-feedback
 // xm-login-session 登录会话回读必须和 profile/middleware.js 成套发。
 // login.html 不走 HTML 内存缓存，必须和 profile/middleware.js 成套发。
 
@@ -110,6 +111,7 @@ function bounceHrDesk(req, res) {
 export function registerPageRoutes(app) {
   app.use("/api/hr", hrRouter);
   app.use("/api/work", workRouter);
+  app.use("/api/feedback", feedbackRouter);
   app.use((req, res, next) => {
     const method = String(req.method || "GET").toUpperCase();
     const path = String(req.path || "").replace(/\/+$/, "") || "/";

@@ -38,6 +38,7 @@ test("人事部账号登录只进智能人事，侧栏只留智能人事和个�
   assert.match(navSrc, /isHrDesk\(\) && leafRoute\(current\) === deskHome\(\) && key !== deskHome\(\)/);
   assert.equal(html.includes("数据中心"), false);
   assert.equal(html.includes("工作汇报"), false);
+  assert.equal(html.includes("需求与反馈"), false);
   assert.equal(html.includes("组织中心"), false);
 
   const app = createApp();
@@ -76,6 +77,10 @@ test("人事部账号登录只进智能人事，侧栏只留智能人事和个�
     assert.equal(work.status, 302);
     assert.equal(work.headers.get("location"), "/hr");
 
+    const feedback = await fetch(`${base}/feedback`, { headers: { cookie: hr.cookie }, redirect: "manual" });
+    assert.equal(feedback.status, 302);
+    assert.equal(feedback.headers.get("location"), "/hr");
+
     const page = await fetch(`${base}/hr`, { headers: { cookie: hr.cookie } });
     assert.equal(page.status, 200);
     const body = await page.text();
@@ -84,6 +89,7 @@ test("人事部账号登录只进智能人事，侧栏只留智能人事和个�
     assert.doesNotMatch(body, />首页</);
     assert.doesNotMatch(body, />数据中心</);
     assert.doesNotMatch(body, />工作汇报</);
+    assert.doesNotMatch(body, />需求与反馈</);
     assert.match(body, />个人中心</);
     assert.match(body, /"desk":"hr"/);
 

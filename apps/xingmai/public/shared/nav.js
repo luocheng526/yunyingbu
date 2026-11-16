@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.772-hr-desk — 人事部账号只进智能人事数据看板 */
+/* xm-fast-shell 0.1.772-feedback — 主栏加需求与反馈 */
 (function () {
-  const ASSET_VER = "0.1.772-hr-desk";
+  const ASSET_VER = "0.1.772-feedback";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -35,6 +35,7 @@
     "/academy/handbook": "academy",
     "/agents": "agents",
     "/work": "work",
+    "/feedback": "feedback",
     "/releases": "releases",
     "/me": "me",
     "/notices": "notices"
@@ -76,6 +77,7 @@
     { href: "/academy", label: "甄选商学院", children: ACADEMY_CHILDREN },
     { href: "/agents", label: "甄选智能体" },
     { href: "/work", label: "工作汇报" },
+    { href: "/feedback", label: "需求与反馈" },
     { href: "/releases", label: "版本发布中心" },
     { href: "/people", label: "组织中心" },
     { href: "/hr", label: "智能人事" },
@@ -120,6 +122,7 @@
     "/academy": '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M8 7h8"/><path d="M8 11h6"/>',
     "/agents": '<rect x="6" y="8" width="12" height="10" rx="2"/><path d="M12 8V5"/><circle cx="9.5" cy="13" r="1"/><circle cx="14.5" cy="13" r="1"/><path d="M9 19v1h6v-1"/>',
     "/work": '<rect x="7" y="3.5" width="10" height="17" rx="2"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/>',
+    "/feedback": '<path d="M5 6h14v9H8l-3 3V6z"/><path d="M8 10h8"/><path d="M8 13h5"/>',
     "/releases": '<path d="M12 4v10"/><path d="M8.5 7.5 12 4l3.5 3.5"/><rect x="6" y="14" width="12" height="6" rx="1"/>',
     "/me": '<circle cx="12" cy="8" r="2.6"/><path d="M6.2 18.5c.6-2.8 2.8-4.3 5.8-4.3s5.2 1.5 5.8 4.3"/>',
     "/notices": '<path d="M5 9v6"/><path d="M8 7v10"/><path d="M8 7l11-3v16L8 17"/>',
@@ -758,7 +761,7 @@
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout">' +
       ico("logout") +
       "<span>退出登录</span></button>" +
-      '<p class="xm-version">v0.4.26</p></nav>'
+      '<p class="xm-version">v0.4.27</p></nav>'
     );
   }
 

@@ -19,6 +19,7 @@
 | [08-academy.md](08-academy.md) | 甄选商学院（新对话框用这一页当第一条消息） |
 | [09-agents.md](09-agents.md) | 甄选智能体（新对话框用这一页当第一条消息） |
 | [10-hr.md](10-hr.md) | 智能人事（新对话框用这一页当第一条消息） |
+| [11-feedback.md](11-feedback.md) | 需求与反馈（新对话框用这一页当第一条消息） |
 | [06-releases.md](06-releases.md) | 版本发布中心 |
 | [07-profile.md](07-profile.md) | 个人中心 |
 
