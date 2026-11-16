@@ -6,7 +6,7 @@ import test from "node:test";
 import vm from "node:vm";
 import express from "express";
 import { boundRouter } from "../src/modules/bound/router.js";
-import { buildBoard, normalizeFilters } from "../src/modules/bound/store.js";
+import { demoBoard, normalizeFilters } from "../src/modules/bound/store.js";
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
 const clientPath = join(rootDir, "../public/shared/modules/bound.js");
@@ -44,16 +44,21 @@ test("筛选只接受日期和短关键词", () => {
   });
 });
 
-test("空汇总标明爬虫且不是 ERP", () => {
-  const board = buildBoard({ from: "", to: "", q: "" }, [], []);
+test("演示模板标明爬虫且不是 ERP", () => {
+  const board = demoBoard();
   assert.equal(board.erp, false);
+  assert.equal(board.demo, true);
   assert.equal(board.source, "crawler");
   assert.equal(board.label, "爬虫，非 ERP");
-  assert.equal(board.connected, false);
-  assert.deepEqual(board.ownedTables, ["bound_batches", "bound_rows"]);
-  assert.equal(board.tables.every((table) => table.rows.length === 0), true);
-  assert.equal(board.kpis.find((item) => item.key === "batches").value, null);
-  assert.match(board.note, /不读取、不转发、不展示/);
+  assert.deepEqual(
+    board.panes.map((pane) => pane.label),
+    ["数据总揽", "店铺数据", "商品数据"]
+  );
+  assert.equal(board.shops.rows.some((row) => row.name === "演示旗舰店"), true);
+  assert.equal(board.goods.rows.some((row) => row.name === "演示保温杯"), true);
+  assert.equal(board.overview.sections ? board.sections.includes("经营数据") : true, true);
+  assert.match(board.note, /不是星脉 ERP/);
+  assert.equal(JSON.stringify(board).includes("xingmai-erp"), false);
 });
 
 test("GET /api/bound 仍是爬虫标记，汇总台为空", async () => {
@@ -65,15 +70,15 @@ test("GET /api/bound 仍是爬虫标记，汇总台为空", async () => {
     const stamp = await fetch(`${base}/api/bound`);
     assert.equal(stamp.status, 200);
     assert.deepEqual(await stamp.json(), { ok: true, module: "bound", source: "crawler", erp: false });
-    const board = await fetch(`${base}/api/bound/board?from=2026-11-01&to=2026-11-16&q=店铺`);
+    const board = await fetch(`${base}/api/bound/board`);
     assert.equal(board.status, 200);
     const body = await board.json();
     assert.equal(body.erp, false);
+    assert.equal(body.demo, true);
     assert.equal(body.source, "crawler");
     assert.equal(body.label, "爬虫，非 ERP");
-    assert.equal(body.connected, false);
-    assert.deepEqual(body.filters, { from: "2026-11-01", to: "2026-11-16", q: "店铺" });
-    assert.equal(body.tables.every((table) => table.rows.length === 0), true);
+    assert.equal(body.shops.rows.length > 1, true);
+    assert.equal(body.goods.rows.length > 1, true);
   } finally {
     await close();
   }
@@ -103,12 +108,13 @@ test("页面只请求边界接口，并画出空汇总台", async () => {
   const storeSrc = readFileSync(storePath, "utf8");
   assert.match(js, /爬虫，非 ERP/);
   assert.match(js, /XmModules\["\/bound"\]/);
-  assert.match(js, /暂无爬虫数据/);
+  assert.match(js, /数据总揽/);
+  assert.match(js, /店铺数据/);
+  assert.match(js, /商品数据/);
+  assert.match(js, /演示数据/);
   assert.doesNotMatch(js, /\/api\/data|\/api\/home|\/api\/shen|\/api\/han|jingmai/);
   assert.doesNotMatch(routerSrc, /modules\/data|modules\/shen|modules\/han|from \"\.\.\/home\/router|data\.js/);
-  assert.doesNotMatch(storeSrc, /modules\/data|modules\/shen|modules\/han|\/api\/data|jingmai/);
-  assert.match(storeSrc, /bound_batches/);
-  assert.match(storeSrc, /bound_rows/);
+  assert.doesNotMatch(storeSrc, /modules\/data|modules\/shen|modules\/han|\/api\/data|jingmai|xingmai-erp/);
 
   const calls = [];
   const styles = [];
@@ -153,7 +159,7 @@ test("页面只请求边界接口，并画出空汇总台", async () => {
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: async () => buildBoard({ from: "", to: "", q: "" }, [], [])
+          json: async () => demoBoard()
         });
       }
       if (href === "/api/bound") {
@@ -171,9 +177,12 @@ test("页面只请求边界接口，并画出空汇总台", async () => {
   await new Promise((resolve) => setTimeout(resolve, 30));
   assert.match(root.innerHTML, /边界数据中心/);
   assert.match(root.innerHTML, /爬虫，非 ERP/);
-  assert.match(root.innerHTML, /暂无爬虫数据/);
+  assert.match(root.innerHTML, /数据总揽/);
+  assert.match(root.innerHTML, /店铺数据/);
+  assert.match(root.innerHTML, /商品数据/);
+  assert.match(root.innerHTML, /演示旗舰店/);
+  assert.match(root.innerHTML, /data-bound-demo="true"/);
   assert.match(root.innerHTML, /data-bound-erp="false"/);
-  assert.equal(root.innerHTML.includes('type="date"'), true);
   assert.deepEqual(calls, ["/api/bound", "/api/bound/board"]);
   stop();
   assert.equal(root.innerHTML, "");

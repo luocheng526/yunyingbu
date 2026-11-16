@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { isHrDesk } from "../home/nav-items.js";
-import { buildBoard, normalizeFilters, readBoard } from "./store.js";
+import { demoBoard, readBoard } from "./store.js";
 
 export const boundRouter = Router();
 
@@ -33,8 +33,8 @@ boundRouter.get("/board", async (req, res) => {
     res.json(await readBoard(req.query || {}));
   } catch (err) {
     console.error("bound board read failed", err && err.message ? err.message : err);
-    const board = buildBoard(normalizeFilters(req.query || {}), [], []);
-    board.warning = "汇总表暂时读不到，页面保持为空，没有改去读 ERP。";
+    const board = demoBoard();
+    board.warning = "演示模板暂时读不到库，仍展示演示数据，没有改去读 ERP。";
     res.json(board);
   }
 });
