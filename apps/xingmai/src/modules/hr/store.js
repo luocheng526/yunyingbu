@@ -9,6 +9,7 @@ export const HR_SCHEMA = [
     dingtalk_userid VARCHAR(64) NOT NULL PRIMARY KEY,
     user_name VARCHAR(64) NOT NULL DEFAULT '',
     job_number VARCHAR(64) NOT NULL DEFAULT '',
+    department VARCHAR(64) NOT NULL DEFAULT '',
     updated_at VARCHAR(40) NOT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   `CREATE TABLE IF NOT EXISTS hr_ding_links (
@@ -134,6 +135,7 @@ export function ensureHrSchema() {
     ready = (async () => {
       for (const sql of HR_SCHEMA) await query(sql);
       await migratePunchTable();
+      await migrateDingUsers();
     })().catch((err) => {
       ready = null;
       throw err;
@@ -210,6 +212,17 @@ async function migratePunchTable() {
   }
 }
 
+async function migrateDingUsers() {
+  const columns = await rowsOf(
+    `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'hr_ding_users'`
+  );
+  const names = new Set(columns.map((row) => row.COLUMN_NAME));
+  if (!names.has("department")) {
+    await query("ALTER TABLE hr_ding_users ADD COLUMN department VARCHAR(64) NOT NULL DEFAULT ''");
+  }
+}
+
 async function rowsOf(sql, params = []) {
   const [rows] = await query(sql, params);
   return rows;
@@ -218,11 +231,12 @@ async function rowsOf(sql, params = []) {
 export async function listDingUsers() {
   await ensureHrSchema();
   if (dbMode() === "mysql") {
-    const rows = await rowsOf("SELECT dingtalk_userid, user_name, job_number FROM hr_ding_users ORDER BY user_name, dingtalk_userid");
+    const rows = await rowsOf("SELECT dingtalk_userid, user_name, job_number, department FROM hr_ding_users ORDER BY user_name, dingtalk_userid");
     return rows.map((row) => ({
       userId: row.dingtalk_userid,
       userName: row.user_name || "",
-      jobNumber: row.job_number || ""
+      jobNumber: row.job_number || "",
+      department: row.department || ""
     }));
   }
   return memory.users.map((row) => ({ ...row }));
@@ -235,14 +249,15 @@ export async function saveDingUsers(users) {
     userId: clip(user.userId, 64),
     userName: clip(user.name || user.userName, 64),
     jobNumber: clip(user.jobNumber, 64),
+    department: clip(user.department, 64),
     updatedAt: now
   })).filter((user) => user.userId);
   if (dbMode() === "mysql") {
     await query("DELETE FROM hr_ding_users");
     for (const user of clean) {
       await query(
-        "INSERT INTO hr_ding_users (dingtalk_userid, user_name, job_number, updated_at) VALUES (?, ?, ?, ?)",
-        [user.userId, user.userName, user.jobNumber, user.updatedAt]
+        "INSERT INTO hr_ding_users (dingtalk_userid, user_name, job_number, department, updated_at) VALUES (?, ?, ?, ?, ?)",
+        [user.userId, user.userName, user.jobNumber, user.department, user.updatedAt]
       );
     }
     return listDingUsers();

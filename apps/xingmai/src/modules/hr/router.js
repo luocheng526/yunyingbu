@@ -3,6 +3,7 @@ import { createDingClient, readDingEnv } from "./dingtalk.js";
 import { startDingStream } from "./stream.js";
 import {
   addDays,
+  buildBoard,
   loadRoster,
   runDaily,
   shanghaiToday,
@@ -15,6 +16,7 @@ import {
   deleteInterview,
   deleteTalent,
   latestSync,
+  listDingUsers,
   listInterviews,
   listLeaves,
   listLinks,
@@ -74,6 +76,40 @@ hrRouter.get("/links", async (_req, res) => {
 hrRouter.get("/roster", async (_req, res) => {
   try {
     res.json({ ok: true, people: await loadRoster() });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.get("/board", async (req, res) => {
+  try {
+    const today = shanghaiToday();
+    const raw = String(req.query.date || today);
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : today;
+    const users = await listDingUsers();
+    const links = await listLinks();
+    const userByPerson = new Map(links.map((link) => [link.personId, link.dingtalkUserId]));
+    const leaves = (await listLeaves()).map((row) => ({
+      ...row,
+      dingtalkUserId: row.dingtalkUserId || userByPerson.get(row.personId) || ""
+    }));
+    const punches = [];
+    for (let offset = 6; offset >= 0; offset -= 1) {
+      punches.push(...await listPunches({ date: addDays(date, -offset) }));
+    }
+    const days = [];
+    for (let offset = 6; offset >= 0; offset -= 1) {
+      const day = addDays(date, -offset);
+      const one = buildBoard({ date: day, users, punches, leaves });
+      days.push({ date: day, expected: one.expected, punched: one.punched, late: one.late, leave: one.leave });
+    }
+    res.json({
+      ok: true,
+      configured: readDingEnv().configured,
+      board: buildBoard({ date, users, punches, leaves }),
+      days,
+      punches: punches.filter((row) => row.workDate === date)
+    });
   } catch (err) {
     sendErr(res, err);
   }

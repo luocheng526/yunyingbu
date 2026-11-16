@@ -20,6 +20,7 @@ import {
   saveLinks
 } from "../src/modules/hr/store.js";
 import {
+  buildBoard,
   matchRoster,
   publicPerson,
   punchesFromDing,
@@ -184,6 +185,31 @@ test("NotSigned does not invent a clock time", () => {
   assert.equal(rows[1].label, "未打卡");
 });
 
+test("attendance board counts staff, punches, late arrivals, leave, and departments", () => {
+  const board = buildBoard({
+    date: "2026-11-16",
+    users: [
+      { userId: "a", department: "运营部" },
+      { userId: "b", department: "运营部" },
+      { userId: "c", department: "产品部" }
+    ],
+    punches: [
+      { dingtalkUserId: "a", workDate: "2026-11-16", timeResult: "Late", checkAt: "2026-11-16 09:20" },
+      { dingtalkUserId: "b", workDate: "2026-11-16", timeResult: "Normal", checkAt: "2026-11-16 09:00" },
+      { dingtalkUserId: "c", workDate: "2026-11-16", timeResult: "NotSigned", checkAt: "" }
+    ],
+    leaves: [{ dingtalkUserId: "c", startAt: "2026-11-16 09:00", endAt: "2026-11-16 18:00" }]
+  });
+  assert.equal(board.staff, 3);
+  assert.equal(board.expected, 2);
+  assert.equal(board.punched, 2);
+  assert.equal(board.late, 1);
+  assert.equal(board.leave, 1);
+  assert.equal(board.departments[0].name, "运营部");
+  assert.equal(board.departments[0].count, 2);
+  assert.equal(board.departments.find((row) => row.name === "产品部").leave, 1);
+});
+
 test("a punch is stored even when the person is not on the org roster", async () => {
   resetHrStore();
   const fake = {
@@ -296,7 +322,7 @@ test("ding client asks the official attendance api with isI18n false", async () 
     fetchImpl
   });
   const users = await ding.listUsers();
-  assert.deepEqual(users, [{ userId: "u", name: "不保留", mobile: "13900001111", jobNumber: "J1" }]);
+  assert.deepEqual(users, [{ userId: "u", name: "不保留", mobile: "13900001111", jobNumber: "J1", department: "" }]);
   await ding.listAttendance(["u"], "2026-11-15");
   const attendance = calls.find((call) => call.url.includes("/attendance/list"));
   assert.equal(attendance.body.isI18n, false);
@@ -353,6 +379,13 @@ test("http keeps attendance read-only and interviews in this module", async () =
     assert.equal(JSON.stringify(status.data).includes("secret"), false);
     const empty = await request(server, "/api/hr/attendance?month=2026-11");
     assert.deepEqual(empty.data.punches, []);
+    const board = await request(server, "/api/hr/board?date=2026-11-16");
+    assert.equal(board.data.board.staff, 0);
+    assert.equal(board.data.board.leave, 0);
+    assert.equal(board.data.days.length, 7);
+    assert.equal(client.includes("入职审批"), false);
+    assert.match(client, /今日应到人数|应到人数/);
+    assert.match(client, /部门人数/);
     const synced = await request(server, "/api/hr/sync", { method: "POST" });
     assert.equal(synced.data.configured, false);
     const created = await request(server, "/api/hr/interviews", {

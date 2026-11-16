@@ -63,39 +63,50 @@ export function createDingClient({ env = process.env, fetchImpl = globalThis.fet
 
   async function listDepartments() {
     const seen = new Set();
-    const queue = [1];
-    const ids = [];
-    while (queue.length && ids.length < 400) {
-      const deptId = queue.shift();
-      if (seen.has(deptId)) continue;
-      seen.add(deptId);
-      ids.push(deptId);
-      const data = await postOapi("/topapi/v2/department/listsub", { dept_id: deptId });
-      for (const dept of data.result || []) {
-        if (dept && dept.dept_id != null) queue.push(Number(dept.dept_id));
+    const queue = [{ id: 1, name: "" }];
+    const depts = [];
+    while (queue.length && depts.length < 400) {
+      const current = queue.shift();
+      if (seen.has(current.id)) continue;
+      seen.add(current.id);
+      depts.push(current);
+      const data = await postOapi("/topapi/v2/department/listsub", { dept_id: current.id });
+      const result = data.result;
+      const list = Array.isArray(result) ? result : (result && result.dept_id != null ? [result] : []);
+      for (const dept of list) {
+        if (dept && dept.dept_id != null) {
+          queue.push({ id: Number(dept.dept_id), name: String(dept.name || "").trim() });
+        }
       }
     }
-    return ids;
+    return depts;
   }
 
   async function listUsers() {
     const departments = await listDepartments();
     const byId = new Map();
-    for (const deptId of departments) {
+    for (const dept of departments) {
       let cursor = 0;
+      const deptName = dept.id === 1 ? "" : dept.name;
       for (let page = 0; page < 40; page += 1) {
-        const data = await postOapi("/topapi/v2/user/list", { dept_id: deptId, cursor, size: 100 });
+        const data = await postOapi("/topapi/v2/user/list", { dept_id: dept.id, cursor, size: 100 });
         const result = data.result || {};
         const list = Array.isArray(result.list) ? result.list : (result.list ? [result.list] : []);
         for (const user of list) {
           const userId = String(user.userid || "").trim();
-          if (!userId || byId.has(userId)) continue;
-          byId.set(userId, {
-            userId,
-            name: String(user.name || "").trim(),
-            mobile: String(user.mobile || "").trim(),
-            jobNumber: String(user.job_number || "").trim()
-          });
+          if (!userId) continue;
+          const existing = byId.get(userId);
+          if (!existing) {
+            byId.set(userId, {
+              userId,
+              name: String(user.name || "").trim(),
+              mobile: String(user.mobile || "").trim(),
+              jobNumber: String(user.job_number || "").trim(),
+              department: deptName
+            });
+          } else if (deptName && !existing.department) {
+            existing.department = deptName;
+          }
         }
         if (result.has_more !== true && result.has_more !== "true") break;
         cursor = Number(result.next_cursor || 0);

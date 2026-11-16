@@ -201,6 +201,51 @@ export async function loadRoster() {
   }
 }
 
+function leaveCovers(leave, day) {
+  const start = String(leave.startAt || "").slice(0, 10);
+  const end = String(leave.endAt || "").slice(0, 10) || start;
+  return Boolean(start) && start <= day && end >= day;
+}
+
+export function buildBoard({ date, users = [], punches = [], leaves = [] }) {
+  const day = String(date || "");
+  const directory = users.filter((user) => user && user.userId);
+  const onLeave = new Set();
+  for (const leave of leaves) {
+    if (!leaveCovers(leave, day)) continue;
+    const userId = String(leave.dingtalkUserId || "");
+    if (userId) onLeave.add(userId);
+  }
+  const punched = new Set();
+  const late = new Set();
+  for (const row of punches) {
+    if (row.workDate !== day) continue;
+    const userId = String(row.dingtalkUserId || "");
+    if (!userId) continue;
+    if (row.checkAt) punched.add(userId);
+    if (row.timeResult === "Late" || row.timeResult === "SeriousLate") late.add(userId);
+  }
+  const leaveCount = directory.filter((user) => onLeave.has(user.userId)).length;
+  const deptMap = new Map();
+  for (const user of directory) {
+    const name = user.department || "未分部门";
+    if (!deptMap.has(name)) deptMap.set(name, { name, count: 0, punched: 0, leave: 0 });
+    const bucket = deptMap.get(name);
+    bucket.count += 1;
+    if (punched.has(user.userId)) bucket.punched += 1;
+    if (onLeave.has(user.userId)) bucket.leave += 1;
+  }
+  return {
+    date: day,
+    staff: directory.length,
+    expected: Math.max(0, directory.length - leaveCount),
+    punched: punched.size,
+    late: late.size,
+    leave: leaveCount,
+    departments: [...deptMap.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "zh"))
+  };
+}
+
 export async function alignRoster(client = createDingClient(), roster = null) {
   if (!client.configured()) {
     await recordSync("align", "", false, "钉钉还没配置");

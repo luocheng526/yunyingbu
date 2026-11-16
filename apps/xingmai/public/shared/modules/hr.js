@@ -74,7 +74,35 @@
       ".hr-msg{min-height:18px;color:var(--xm-muted);font-size:12px;}" +
       ".hr-msg.is-error{color:#cf1322;}" +
       "html[data-theme='dark'] .hr-msg.is-error{color:#ff7875;}" +
-      ".hr-mini{height:26px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;font-size:12px;cursor:pointer;}";
+      ".hr-mini{height:26px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;font-size:12px;cursor:pointer;}" +
+      ".hr-board-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-end;}" +
+      ".hr-board-title{margin:0;font-size:18px;font-weight:700;color:var(--xm-ink);}" +
+      ".hr-board-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;}" +
+      ".hr-board-kpi{border:0;border-radius:16px;padding:16px 16px 14px;color:#fff;min-height:108px;box-shadow:0 10px 22px rgba(24,49,99,.12);}" +
+      ".hr-board-kpi i{display:flex;width:28px;height:28px;border-radius:8px;align-items:center;justify-content:center;background:rgba(255,255,255,.22);}" +
+      ".hr-board-kpi i svg{width:16px;height:16px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}" +
+      ".hr-board-kpi b{display:block;margin-top:10px;font-size:34px;line-height:1;font-weight:700;font-variant-numeric:tabular-nums;}" +
+      ".hr-board-kpi span{display:block;margin-top:8px;font-size:13px;opacity:.95;}" +
+      ".hr-tone-staff{background:linear-gradient(135deg,#3dcbd6,#1499c4);}" +
+      ".hr-tone-due{background:linear-gradient(135deg,#3adf8a,#12b36a);}" +
+      ".hr-tone-punch{background:linear-gradient(135deg,#5b8cff,#3a63f5);}" +
+      ".hr-tone-late{background:linear-gradient(135deg,#8d7cff,#6847f0);}" +
+      ".hr-tone-leave{background:linear-gradient(135deg,#ffb057,#ff7a18);}" +
+      ".hr-board-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(240px,.8fr);gap:12px;}" +
+      ".hr-board-card{padding:14px 16px 16px;}" +
+      ".hr-board-card h3{margin:0 0 12px;font-size:14px;font-weight:650;color:var(--xm-ink);}" +
+      ".hr-bar-row{display:grid;grid-template-columns:88px minmax(0,1fr) 36px;gap:8px;align-items:center;margin:0 0 10px;}" +
+      ".hr-bar-name{color:var(--xm-muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}" +
+      ".hr-bar-track{height:10px;border-radius:999px;background:color-mix(in srgb,var(--xm-primary) 12%,var(--xm-line));overflow:hidden;}" +
+      ".hr-bar-fill{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#7a6cff,#3a63f5);}" +
+      ".hr-bar-row b{text-align:right;font-size:13px;color:var(--xm-ink);font-variant-numeric:tabular-nums;}" +
+      ".hr-day-cols{display:flex;align-items:flex-end;gap:8px;height:148px;padding-top:8px;}" +
+      ".hr-day-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px;min-width:0;height:100%;}" +
+      ".hr-day-col b{font-size:12px;color:var(--xm-ink);font-variant-numeric:tabular-nums;}" +
+      ".hr-day-fill{width:100%;max-width:28px;border-radius:8px 8px 4px 4px;background:linear-gradient(180deg,#8d7cff,#3a63f5);min-height:4px;}" +
+      ".hr-day-col span{color:var(--xm-muted);font-size:11px;}" +
+      ".hr-board-sub{margin:4px 0 0;font-size:14px;font-weight:650;color:var(--xm-ink);}" +
+      "@media (max-width:980px){.hr-board-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}.hr-board-grid{grid-template-columns:1fr;}}";
     document.head.appendChild(style);
   }
 
@@ -171,10 +199,14 @@
     var monthBar = '<div class="hr-toolbar"><span>' + esc(hint) + '</span><label class="hr-month">月份<input type="month" data-month value="' + esc(month) + '" /></label></div>';
     var html = "";
     if (tab === "attendance") {
-      html = '<section class="hr-panel">' + monthBar + kpis([
-        { label: "打卡条数", value: "0" },
-        { label: "人数", value: "0" }
-      ]) + '<p class="hr-msg" data-msg>先按钉钉名单展示，和组织中心的对齐以后再看。</p>' +
+      html = '<section class="hr-panel hr-board">' +
+        '<div class="hr-board-head"><div><h2 class="hr-board-title">考勤看板</h2>' +
+        '<p class="hr-msg" data-msg>每天一张。入转调离先不做。</p></div>' +
+        '<label class="hr-month">统计日<input type="date" data-day value="' + esc(today) + '" /></label></div>' +
+        '<div class="hr-board-kpis" data-board></div>' +
+        '<div class="hr-board-grid"><section class="hr-card hr-board-card" data-depts></section>' +
+        '<section class="hr-card hr-board-card" data-days></section></div>' +
+        '<h3 class="hr-board-sub">当日打卡</h3>' +
         table(["姓名", "工号", "日期", "上班", "下班", "结果"], emptyRow(6, "还没有打卡")) + "</section>";
     } else if (tab === "overtime") {
       html = '<section class="hr-panel">' + monthBar + kpis([{ label: "加班总时长", value: "0" }]) +
@@ -213,22 +245,70 @@
     void today;
   }
 
+  function boardIcon(kind) {
+    var paths = {
+      staff: '<circle cx="8" cy="5" r="2.2"/><path d="M3 13c.6-2.2 2.4-3.2 5-3.2s4.4 1 5 3.2"/>',
+      due: '<rect x="3" y="3" width="10" height="10" rx="2"/><path d="M5.5 8.2l1.6 1.6 3.4-3.6"/>',
+      punch: '<circle cx="8" cy="8" r="5"/><path d="M8 5.2V8l2 1.4"/>',
+      late: '<path d="M8 2.5l1.4 3.2 3.4.3-2.6 2.2.8 3.3L8 9.8 4.9 11.5l.8-3.3L3.2 6l3.4-.3z"/>',
+      leave: '<path d="M4 12V4.5L8 3l4 1.5V12"/><path d="M6 12V7.5h4V12"/>'
+    };
+    return "<i>" + '<svg viewBox="0 0 16 16" aria-hidden="true">' + (paths[kind] || "") + "</svg></i>";
+  }
+
+  function fillBoard(root, pack) {
+    var board = pack.board || { staff: 0, expected: 0, punched: 0, late: 0, leave: 0, date: "", departments: [] };
+    var prefix = board.date && board.date === shanghaiToday() ? "今日" : "当日";
+    var cards = [
+      { tone: "staff", icon: "staff", label: "员工人数", value: board.staff || 0 },
+      { tone: "due", icon: "due", label: prefix + "应到人数", value: board.expected || 0 },
+      { tone: "punch", icon: "punch", label: prefix + "打卡人数", value: board.punched || 0 },
+      { tone: "late", icon: "late", label: prefix + "迟到人数", value: board.late || 0 },
+      { tone: "leave", icon: "leave", label: prefix + "请假人数", value: board.leave || 0 }
+    ];
+    var box = root.querySelector("[data-board]");
+    if (box) {
+      box.innerHTML = cards.map(function (card) {
+        return '<article class="hr-board-kpi hr-tone-' + card.tone + '">' + boardIcon(card.icon) +
+          "<b>" + esc(card.value) + "</b><span>" + esc(card.label) + "</span></article>";
+      }).join("");
+    }
+    var depts = board.departments || [];
+    var maxCount = depts.reduce(function (max, row) { return Math.max(max, row.count || 0); }, 0) || 1;
+    var deptBox = root.querySelector("[data-depts]");
+    if (deptBox) {
+      var rows = depts.length ? depts.map(function (row) {
+        var width = Math.max(4, Math.round((row.count / maxCount) * 100));
+        return '<div class="hr-bar-row"><span class="hr-bar-name">' + esc(row.name) + '</span><span class="hr-bar-track"><span class="hr-bar-fill" style="width:' +
+          width + '%"></span></span><b>' + esc(row.count) + "</b></div>";
+      }).join("") : '<div class="hr-empty">还没有部门人数。钉钉名单拉下来之后按部门计数。</div>';
+      deptBox.innerHTML = "<h3>" + esc(prefix) + "部门人数</h3>" + rows;
+    }
+    var series = pack.days || [];
+    var maxPunch = series.reduce(function (max, row) { return Math.max(max, row.punched || 0); }, 0) || 1;
+    var dayBox = root.querySelector("[data-days]");
+    if (dayBox) {
+      var cols = series.length ? series.map(function (row) {
+        var height = Math.max(8, Math.round(((row.punched || 0) / maxPunch) * 96));
+        var label = String(row.date || "").slice(5);
+        return '<div class="hr-day-col"><b>' + esc(row.punched || 0) + '</b><span class="hr-day-fill" style="height:' + height +
+          'px"></span><span>' + esc(label) + "</span></div>";
+      }).join("") : '<div class="hr-empty">还没有每日统计。</div>';
+      dayBox.innerHTML = "<h3>近 7 日打卡人数</h3>" + (series.length ? '<div class="hr-day-cols">' + cols + "</div>" : cols);
+    }
+  }
+
   function fillAttendance(root, pack) {
+    fillBoard(root, pack);
     var days = pairPunches(pack.punches || []);
-    var names = {};
-    days.forEach(function (row) { if (row.userName) names[row.userName] = true; });
-    setStats(root, [
-      { label: "打卡条数", value: (pack.punches || []).length },
-      { label: "人数", value: Object.keys(names).length }
-    ]);
     var body = days.length ? days.map(function (row) {
       var labels = row.labels.filter(function (label, index) { return row.labels.indexOf(label) === index; }).join("、");
       return "<tr><td>" + esc(row.userName || "未命名") + "</td><td>" + esc(row.jobNumber) + "</td><td>" + esc(row.workDate) +
         "</td><td>" + esc(row.on) + "</td><td>" + esc(row.off) + "</td><td>" + esc(labels) + "</td></tr>";
     }).join("") : emptyRow(6, "还没有打卡");
     setList(root, ["姓名", "工号", "日期", "上班", "下班", "结果"], body);
-    if (!pack.configured) setMsg(root, "钉钉还没配置，打卡先留空。", false);
-    else setMsg(root, "先按钉钉名单展示，和组织中心的对齐以后再看。", false);
+    if (!pack.configured) setMsg(root, "钉钉还没配置，看板先按空模板放着。", false);
+    else setMsg(root, "每天一张。人数来自钉钉名单，打卡和请假按这一天统计。入转调离先不做。", false);
   }
 
   function fillOvertime(root, pack) {
@@ -306,7 +386,9 @@
     var statusReq = api("/api/hr/status").catch(function () { return { configured: false }; });
     var dataReq;
     if (tab === "attendance") {
-      dataReq = api("/api/hr/attendance" + monthQuery(root));
+      var dayInput = root.querySelector("[data-day]");
+      var day = dayInput && dayInput.value ? dayInput.value : shanghaiToday();
+      dataReq = api("/api/hr/board?date=" + encodeURIComponent(day));
     } else if (tab === "overtime") {
       dataReq = api("/api/hr/overtime" + monthQuery(root));
     } else if (tab === "timeoff") {
@@ -407,7 +489,7 @@
     root.addEventListener("click", onClick);
     root.addEventListener("submit", onSubmit);
     root.addEventListener("change", function (event) {
-      if (event.target && event.target.matches("[data-month]")) loadTab(root, state);
+      if (event.target && event.target.matches("[data-month], [data-day]")) loadTab(root, state);
     });
     loadTab(root, state);
     return function unmount() {
