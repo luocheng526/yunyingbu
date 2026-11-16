@@ -12,7 +12,7 @@ const navJs = readFileSync(join(root, "../public/shared/nav.js"), "utf8");
 const luocheng = { username: "罗成", displayName: "罗成" };
 
 test("选中菜单用浅色渐变，不要投影，暗色粉红不盖掉", () => {
-  assert.equal(SHELL_ASSET_VER, "0.1.772-menulite");
+  assert.equal(SHELL_ASSET_VER, "0.1.772-tab2");
   assert.match(layoutCss, /xm-menu-lite 0\.1\.772-menulite/);
   assert.match(layoutCss, /\.xm-menu-item\.is-active/);
   assert.match(layoutCss, /\.xm-menu-group\.is-current > \.xm-menu-parent/);
@@ -23,7 +23,7 @@ test("选中菜单用浅色渐变，不要投影，暗色粉红不盖掉", () =>
   assert.match(layoutCss, /html\[data-theme="pink"\]/);
   assert.match(layoutCss, /--xm-primary: #1677ff/);
   assert.match(layoutCss, /--xm-primary: #f8005f/);
-  assert.match(navJs, /ASSET_VER = "0\.1\.772-menulite"/);
+  assert.match(navJs, /ASSET_VER = "0\.1\.772-tab2"/);
   assert.match(navJs, /is-open is-current/);
   assert.match(navJs, /xm-menu-item xm-menu-parent' \+[\s\S]*is-active/);
 });
@@ -41,14 +41,14 @@ test("点数据总揽时一级星脉数据中心和当前子项都标成选中",
   assert.doesNotMatch(home, /xm-menu-group is-open is-current" data-xm-group="\/data"/);
 });
 
-test("顶栏页签贴着蓝线，关闭是小叉不是系统按钮", () => {
-  assert.match(layoutCss, /xm-tabs-restore 0\.1\.772-tabs/);
+test("顶栏页签是带叉的原样，电脑上不出现空白菜单按钮", () => {
+  assert.match(layoutCss, /xm-tabs-fig2 0\.1\.772-tab2/);
+  assert.match(layoutCss, /\.xm-phone-menu,\s*\.xm-phone-mask \{\s*display:\s*none/);
   assert.match(layoutCss, /\.xm-tabs \{[\s\S]*align-items:\s*flex-end/);
   assert.match(layoutCss, /\.xm-tab-close \{[\s\S]*appearance:\s*none/);
-  assert.match(layoutCss, /\.xm-tab-close \{[\s\S]*opacity:\s*0/);
+  assert.match(layoutCss, /\.xm-tab-close \{[\s\S]*opacity:\s*0\.45/);
   assert.match(layoutCss, /\.xm-tab\.is-pinned \.xm-tab-close/);
-  assert.match(layoutCss, /\.xm-tab\.is-active::after/);
-  assert.match(layoutCss, /\.xm-topbar \{[\s\S]*align-items:\s*stretch/);
+  assert.doesNotMatch(layoutCss, /\.xm-tab\.is-active::after/);
 });
 
 test("人事桌面选中智能人事时仍只有两个入口", () => {
