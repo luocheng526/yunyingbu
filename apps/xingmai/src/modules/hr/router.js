@@ -169,8 +169,14 @@ hrRouter.delete("/talents/:id", async (req, res) => {
   }
 });
 
-const underTest = Boolean(process.env.NODE_TEST_CONTEXT) || process.argv.includes("--test");
-if (!underTest) {
+export function shouldStartHrJobs() {
+  if (process.env.NODE_TEST_CONTEXT) return false;
+  if (process.argv.includes("--test")) return false;
+  if (process.env.MENGKAI_SMOKE_LIVE) return false;
+  return true;
+}
+
+if (shouldStartHrJobs()) {
   const client = createDingClient();
   startScheduler(client);
   startDingStream({ client });

@@ -6,7 +6,7 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 import express from "express";
 import test from "node:test";
 import { createDingClient } from "../src/modules/hr/dingtalk.js";
-import { hrRouter } from "../src/modules/hr/router.js";
+import { hrRouter, shouldStartHrJobs } from "../src/modules/hr/router.js";
 import { ackFor, interestingEvent } from "../src/modules/hr/stream.js";
 import {
   HR_SCHEMA,
@@ -112,6 +112,37 @@ test("client mounts one page and five in-page tabs", () => {
 
 test("browser script survives the release import check", async () => {
   await import(pathToFileURL(join(root, "../public/shared/modules/hr.js")).href);
+});
+
+test("smoke import does not stay alive when DingTalk env is present", async () => {
+  assert.equal(shouldStartHrJobs(), false);
+  const { spawn } = await import("node:child_process");
+  const appRoot = join(root, "..");
+  const code = `
+process.env.DINGTALK_CORP_ID = "corp";
+process.env.DINGTALK_CLIENT_ID = "app";
+process.env.DINGTALK_CLIENT_SECRET = "secret";
+process.env.MENGKAI_SMOKE_LIVE = ${JSON.stringify(appRoot)};
+await import(${JSON.stringify(pathToFileURL(join(appRoot, "src/modules/hr/router.js")).href)});
+console.log("SMOKE_OK");
+`;
+  const child = spawn(process.execPath, ["--input-type=module", "-e", code], { stdio: ["ignore", "pipe", "pipe"] });
+  const out = await new Promise((resolve, reject) => {
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(new Error(`smoke import hung: ${stderr}`));
+    }, 4000);
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("exit", (status) => {
+      clearTimeout(timer);
+      resolve({ status, stdout, stderr });
+    });
+  });
+  assert.equal(out.status, 0, out.stderr);
+  assert.match(out.stdout, /SMOKE_OK/);
 });
 
 test("mapping uses job number or phone and skips ambiguous names", () => {
