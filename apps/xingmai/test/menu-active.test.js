@@ -11,23 +11,19 @@ const layoutCss = readFileSync(join(root, "../public/shared/layout.css"), "utf8"
 const navJs = readFileSync(join(root, "../public/shared/nav.js"), "utf8");
 const luocheng = { username: "罗成", displayName: "罗成" };
 
-test("选中菜单用更深的主题色渐变，暗色粉红不盖掉", () => {
-  assert.equal(SHELL_ASSET_VER, "0.1.772-tabs");
-  assert.match(layoutCss, /xm-nav-hot 0\.1\.772-navhot/);
-  assert.match(layoutCss, /--xm-menu-glow:/);
+test("选中菜单用浅色渐变，不要投影，暗色粉红不盖掉", () => {
+  assert.equal(SHELL_ASSET_VER, "0.1.772-menulite");
+  assert.match(layoutCss, /xm-menu-lite 0\.1\.772-menulite/);
   assert.match(layoutCss, /\.xm-menu-item\.is-active/);
   assert.match(layoutCss, /\.xm-menu-group\.is-current > \.xm-menu-parent/);
-  assert.match(layoutCss, /linear-gradient\(135deg, var\(--xm-primary-deep\)/);
-  assert.match(layoutCss, /linear-gradient\(180deg, rgba\(255, 255, 255/);
+  assert.match(layoutCss, /linear-gradient\([\s\S]*color-mix\(in srgb, var\(--xm-primary\)/);
+  assert.doesNotMatch(layoutCss, /--xm-menu-glow:/);
+  assert.doesNotMatch(layoutCss, /0 8px 18px/);
   assert.match(layoutCss, /html\[data-theme="dark"\] \.xm-menu-item\.is-active/);
   assert.match(layoutCss, /html\[data-theme="pink"\]/);
   assert.match(layoutCss, /--xm-primary: #1677ff/);
   assert.match(layoutCss, /--xm-primary: #f8005f/);
-  assert.doesNotMatch(
-    layoutCss,
-    /\.xm-menu-item\.is-active,\s*\.xm-menu-item\[aria-current="page"\] \{\s*background: var\(--xm-primary-soft\)/
-  );
-  assert.match(navJs, /ASSET_VER = "0\.1\.772-tabs"/);
+  assert.match(navJs, /ASSET_VER = "0\.1\.772-menulite"/);
   assert.match(navJs, /is-open is-current/);
   assert.match(navJs, /xm-menu-item xm-menu-parent' \+[\s\S]*is-active/);
 });
