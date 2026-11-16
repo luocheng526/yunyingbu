@@ -1,9 +1,10 @@
-/* xm-fast-shell 0.1.772-nolive — 数据中心不再挂实时付费 */
+/* xm-fast-shell 0.1.772-bound — 边界数据中心 + 星脉数据中心 */
 (function () {
-  const ASSET_VER = "0.1.772-nolive";
+  const ASSET_VER = "0.1.772-bound";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
+    "/bound": "bound",
     "/data": "data",
     "/data/overview": "data",
     "/data/shops": "data",
@@ -70,7 +71,8 @@
   ];
   const items = [
     { href: "/home", label: "首页" },
-    { href: "/data", label: "数据中心", children: DATA_CHILDREN },
+    { href: "/bound", label: "边界数据中心" },
+    { href: "/data", label: "星脉数据中心", children: DATA_CHILDREN },
     { href: "/shen", label: "沈子晗运营中心", children: SHEN_CHILDREN },
     { href: "/han", label: "韩梦凯运营中心", children: HAN_CHILDREN },
     { href: "/stores", label: "店铺维护中心" },
@@ -114,6 +116,7 @@
   let current = window.location.pathname.replace(/\/+$/, "") || "/";
   const ICO_PATH = {
     "/home": '<path d="M4 11.5 12 4l8 7.5"/><path d="M6 10.8V20h4.2v-5.2h3.6V20H18v-9.2"/>',
+    "/bound": '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/><path d="M12 5v2"/><path d="M19 12h-2"/>',
     "/data": '<path d="M5 19V10"/><path d="M10 19V6"/><path d="M15 19v-7"/><path d="M20 19V8"/>',
     "/shen": '<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 9h6"/><path d="M9 13h6"/><path d="M9 17h4"/>',
     "/han": '<path d="M8 11.5 12 5l4 6.5"/><path d="M6.5 13h11l-1.2 6H7.7z"/>',
@@ -763,7 +766,7 @@
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout">' +
       ico("logout") +
       "<span>退出登录</span></button>" +
-      '<p class="xm-version">v0.4.29</p></nav>'
+      '<p class="xm-version">v0.4.30</p></nav>'
     );
   }
 

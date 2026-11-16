@@ -1,4 +1,4 @@
-export const NAV_VERSION = "v0.4.29";
+export const NAV_VERSION = "v0.4.30";
 
 export const DATA_CHILDREN = [
   { href: "/data/overview", label: "数据总揽" },
@@ -370,7 +370,8 @@ export const PEOPLE_CHILDREN = [];
 
 export const NAV_MAIN = [
   { href: "/home", label: "首页" },
-  { href: "/data", label: "数据中心", children: DATA_CHILDREN },
+  { href: "/bound", label: "边界数据中心" },
+  { href: "/data", label: "星脉数据中心", children: DATA_CHILDREN },
   { href: "/shen", label: "沈子晗运营中心", children: SHEN_CHILDREN },
   { href: "/han", label: "韩梦凯运营中心", children: HAN_CHILDREN },
   { href: "/stores", file: "stores.html", label: "店铺维护中心" },
@@ -404,6 +405,7 @@ export const NAV_ITEMS = [...flatten(NAV_MAIN), ...flatten(NAV_FOOT)];
 
 const ICO_PATH = {
   "/home": '<path d="M4 11.5 12 4l8 7.5"/><path d="M6 10.8V20h4.2v-5.2h3.6V20H18v-9.2"/>',
+  "/bound": '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/><path d="M12 5v2"/><path d="M19 12h-2"/>',
   "/data": '<path d="M5 19V10"/><path d="M10 19V6"/><path d="M15 19v-7"/><path d="M20 19V8"/>',
   "/shen": '<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 9h6"/><path d="M9 13h6"/><path d="M9 17h4"/>',
   "/han": '<path d="M8 11.5 12 5l4 6.5"/><path d="M6.5 13h11l-1.2 6H7.7z"/>',

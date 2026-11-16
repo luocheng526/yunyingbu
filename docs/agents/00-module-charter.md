@@ -9,7 +9,7 @@
 |---|---|---|
 | `/login` | 无壳。独立登录页，**不加载** `nav.js` | 个人中心 |
 | `/` | 无菜单项。登录后 302 到 `/data` | — |
-| `/data` `/shen` `/han` `/people` `/hr` `/academy` `/agents` `/work` `/feedback` `/releases` `/me` | **主框架** `renderAppShell`：侧栏 + `#xm-content` | 各模块 `XmModules[path].mount(#xm-content)` |
+| `/data` `/bound` `/shen` `/han` `/people` `/hr` `/academy` `/agents` `/work` `/feedback` `/releases` `/me` | **主框架** `renderAppShell`：侧栏 + `#xm-content` | 各模块 `XmModules[path].mount(#xm-content)` |
 
 模块之间点击：`history.pushState` + 加载对应 `public/shared/modules/<id>.js`。不要整页跳，不要预取全部模块文档。
 
@@ -40,7 +40,8 @@
 |---|---|---|
 | 主框架 | 壳四件套、`nav-items.js`、内核三件、闸补丁、`auth.js` | 各业务 `public/*.html`、`shared/modules/*.js` |
 | 首页 | `shared/modules/home.js`、`src/modules/home/`（除 `nav-items.js`） | 壳、内核、别人的模块。侧栏第一项「首页」，路径 `/home`。不要改 `public/index.html`，`/` 仍跳数据中心 |
-| 数据中心 | `public/data.html`、`public/data*`、`src/modules/data/`、`shared/modules/data.js` | 壳、内核、别人的模块 |
+| 数据中心 | `public/data.html`、`public/data*`、`src/modules/data/`、`shared/modules/data.js` | 壳、内核、别人的模块。侧栏显示「星脉数据中心」，路径仍是 `/data`，交单名仍是「数据中心」 |
+| 边界数据中心 | `src/modules/bound/`、`shared/modules/bound.js` | 同上。侧栏一项 `/bound`，无子菜单，在首页后面、星脉数据中心前面。爬虫汇总，不是 ERP |
 | 沈子晗 | `public/shen.html`、`public/shen*`、`src/modules/shen/`、`shared/modules/shen.js` | 同上 |
 | 韩梦凯 | `public/han.html`、`public/han*`、`src/modules/han/`、`shared/modules/han.js` | 同上 |
 | 组织中心 | `public/people.html`、`public/people*`、`src/modules/people/`、`shared/modules/people.js` | 同上。侧栏显示「组织中心」，路径仍是 `/people`。旧交单名「人员管理」闸门仍认，新单用「组织中心」。**不接钉钉** |
@@ -55,7 +56,7 @@
 
 `nav-items.js` 虽然在 `src/modules/home/`，归属 **主框架**，首页不要交。
 
-主框架已认识：侧栏第一项「首页」`/home`（`/` 仍跳数据中心）；「甄选商学院」带子菜单培训课程 / 培训考试 / 运营手册；「甄选智能体」`/agents`；「工作汇报」`/work`；「月度大会」`/meeting`；「需求与反馈」`/feedback`；底部「组织中心 / 智能人事 / 版本发布中心 / 个人中心」，智能人事路径 `/hr`。要再加子菜单或改 `src/app.js` 挂新 API，问主框架，不要自己改壳。
+主框架已认识：侧栏第一项「首页」`/home`（`/` 仍跳首页）；「边界数据中心」`/bound`；「星脉数据中心」`/data`（交单名仍是数据中心）；「甄选商学院」带子菜单培训课程 / 培训考试 / 运营手册；「甄选智能体」`/agents`；「工作汇报」`/work`；「月度大会」`/meeting`；「需求与反馈」`/feedback`；底部「组织中心 / 智能人事 / 版本发布中心 / 个人中心」，智能人事路径 `/hr`。要再加子菜单或改 `src/app.js` 挂新 API，问主框架，不要自己改壳。
 
 ## 怎么新建独立对话框并对接
 
@@ -71,7 +72,7 @@
 做完用模块名「甄选商学院」交单，申请人 罗成运营部主脑。
 ```
 
-智能体对话框把上面两处换成 `09-agents.md`、`agents`、`甄选智能体`。智能人事换成 `10-hr.md`、`hr`、`智能人事`。工作汇报换成 `12-work.md`、`work`、`工作汇报`。需求与反馈换成 `11-feedback.md`、`feedback`、`需求与反馈`。
+智能体对话框把上面两处换成 `09-agents.md`、`agents`、`甄选智能体`。智能人事换成 `10-hr.md`、`hr`、`智能人事`。工作汇报换成 `12-work.md`、`work`、`工作汇报`。需求与反馈换成 `11-feedback.md`、`feedback`、`需求与反馈`。月度大会换成 `13-meeting.md`、`meeting`、`月度大会`。边界数据中心换成 `14-bound.md`、`bound`、`边界数据中心`。
 
 4. 对接方式（已经接好，新对话不用再铺壳）：
    - 登录后点侧栏对应入口 → 主框架 `pushState` → 加载 `public/shared/modules/<id>.js` → `mount(#xm-content)`。

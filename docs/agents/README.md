@@ -12,7 +12,8 @@
 | [00-main-framework.md](00-main-framework.md) | 主框架（壳 + 内核 + 闸） |
 | [00-left-nav-others.md](00-left-nav-others.md) | 非主框架：不要重做侧栏 |
 | [01-home.md](01-home.md) | 首页 |
-| [02-data-center.md](02-data-center.md) | 数据中心 |
+| [02-data-center.md](02-data-center.md) | 星脉数据中心（交单名仍是「数据中心」） |
+| [14-bound.md](14-bound.md) | 边界数据中心（新对话框用这一页当第一条消息） |
 | [03-shen-zihan.md](03-shen-zihan.md) | 沈子晗 |
 | [04-han-mengkai.md](04-han-mengkai.md) | 韩梦凯 |
 | [05-people.md](05-people.md) | 组织中心（旧对话名「人员管理」，路径仍是 `/people`） |
