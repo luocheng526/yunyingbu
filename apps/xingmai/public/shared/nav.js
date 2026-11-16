@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap v0.4.18 — 顶栏最多 10 个页签 */
+/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap 0.1.775-dutylive v0.4.18 — 组织中心改权限后立刻收菜单 */
 (function () {
-  const ASSET_VER = "0.1.774-tabcap";
+  const ASSET_VER = "0.1.775-dutylive";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -168,12 +168,55 @@
     return window.__xmBootUser || null;
   }
 
+  function textLooksHr(value) {
+    const text = String(value || "").trim();
+    if (!text || text.indexOf("人员管理") >= 0) {
+      return false;
+    }
+    const lower = text.toLowerCase();
+    if (lower === "hrtech" || lower === "hr") {
+      return true;
+    }
+    if (text === "人事" || text.indexOf("人事部") >= 0 || text.indexOf("人事部门") >= 0 || text.indexOf("人事和技术") >= 0) {
+      return true;
+    }
+    return /人事(专员|主管|经理|总监)$/.test(text);
+  }
+
+  function textLooksTech(value) {
+    const text = String(value || "").trim();
+    if (!text) {
+      return false;
+    }
+    const lower = text.toLowerCase();
+    return lower === "backend" || text === "技术" || text.indexOf("技术部") >= 0;
+  }
+
+  function personLooksHr(person) {
+    if (!person) {
+      return false;
+    }
+    const board = String(person.board || "").trim().toLowerCase();
+    if (board === "hrtech") {
+      return !(textLooksTech(person.department) || textLooksTech(person.center) || textLooksTech(person.role));
+    }
+    return (
+      textLooksHr(person.department) ||
+      textLooksHr(person.center) ||
+      textLooksHr(person.role) ||
+      textLooksHr(person.board)
+    );
+  }
+
   function isHrDesk(user) {
     const who = user || currentStaffUser();
     if (!who || canSeeStaffNav(who)) {
       return false;
     }
-    return String(who.desk || "") === "hr";
+    if (String(who.desk || "") === "hr") {
+      return true;
+    }
+    return personLooksHr(who);
   }
 
   function deskHome(user) {
@@ -632,6 +675,11 @@
   let centerScopePack = null;
   let centerScopePending = null;
 
+  function invalidateCenterScope() {
+    centerScopePack = null;
+    centerScopePending = null;
+  }
+
   function loadCenterScope() {
     if (centerScopePack) {
       return Promise.resolve(centerScopePack);
@@ -770,6 +818,22 @@
       "<span>退出登录</span></button>" +
       '<p class="xm-version">v0.4.30</p></nav>'
     );
+  }
+
+  let scopeKey = "";
+
+  function scopeSignature(user) {
+    const who = user || {};
+    const shops = Array.isArray(who.visibleShops) ? who.visibleShops.join(",") : "";
+    return [who.desk || "", who.board || "", who.department || "", who.center || "", who.role || "", shops].join("|");
+  }
+
+  function paintSider() {
+    const sider = document.querySelector(".xm-sider");
+    if (!sider) {
+      return;
+    }
+    sider.innerHTML = siderHtml();
   }
 
   function contentRoot() {
@@ -3119,25 +3183,103 @@
     }
   }
 
+  function relinkSider() {
+    const collapseBtn = document.getElementById("xm-collapse");
+    if (collapseBtn && !collapseBtn.dataset.bound) {
+      collapseBtn.dataset.bound = "1";
+      collapseBtn.addEventListener("click", function () {
+        const next = !document.documentElement.classList.contains("xm-collapsed");
+        applyCollapsed(next);
+        persistPrefsSoon();
+      });
+    }
+    const logoutBtn = document.getElementById("xm-logout");
+    if (logoutBtn && !logoutBtn.dataset.bound) {
+      logoutBtn.dataset.bound = "1";
+      logoutBtn.addEventListener("click", function () {
+        clearOpenTabs();
+        fetch("/api/auth/logout", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { Accept: "application/json" }
+        }).finally(function () {
+          window.location.replace("/login?out=1");
+        });
+      });
+    }
+    applyCollapsed(bootPrefs().siderCollapsed === true);
+    bindBrandHome();
+    bindMenu(document);
+    pinHomeTab();
+  }
+
+  function applyScopeUser(user, force) {
+    if (!user || !(user.username || user.displayName || user.name)) {
+      return;
+    }
+    const nextUser = Object.assign({}, user);
+    if (personLooksHr(nextUser) && !canSeeStaffNav(nextUser)) {
+      nextUser.desk = "hr";
+    }
+    rememberStaffUser(nextUser);
+    const next = scopeSignature(nextUser);
+    if (!force && next === scopeKey) {
+      return;
+    }
+    if (next !== scopeKey) {
+      invalidateCenterScope();
+    }
+    scopeKey = next;
+    paintSider();
+    relinkSider();
+    ensureOpenTabs();
+    paintTabs();
+    if (isHrDesk(nextUser) && !allowDeskRoute(current)) {
+      go(deskHome(nextUser));
+    }
+  }
+
+  function readScopeMe() {
+    fetch("/api/auth/me", { credentials: "same-origin", headers: { Accept: "application/json" } })
+      .then(function (res) {
+        if (res.status === 401) {
+          window.location.replace("/login");
+          return null;
+        }
+        return res.ok ? res.json() : null;
+      })
+      .then(function (payload) {
+        if (!payload) {
+          return;
+        }
+        const user = payload.user || payload;
+        applyScopeUser(user);
+      })
+      .catch(function () {
+        /* keep current sider */
+      });
+  }
+
+  function watchScope() {
+    if (window.__xmScopeWatch) {
+      return;
+    }
+    window.__xmScopeWatch = 1;
+    setInterval(function () {
+      if (document.visibilityState === "visible") {
+        readScopeMe();
+      }
+    }, 2500);
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") {
+        readScopeMe();
+      }
+    });
+    window.addEventListener("focus", readScopeMe);
+  }
+
   function applyStaffNav(user) {
-    if (!user) {
-      return;
-    }
-    if (canSeeStaffNav(user)) {
-      return;
-    }
-    const releases = document.querySelector('.xm-menu a[href="/releases"]');
-    if (releases) {
-      releases.remove();
-    }
-    const peopleGroup = document.querySelector('.xm-menu-group[data-xm-group="/people"]');
-    if (peopleGroup) {
-      peopleGroup.remove();
-    }
-    const people = document.querySelector('.xm-menu a[href="/people"]');
-    if (people) {
-      people.remove();
-    }
+    applyScopeUser(user);
   }
 
   function ensureOrgNavCss() {
@@ -3202,20 +3344,8 @@
     } else {
       document.documentElement.removeAttribute("data-xm-org-pending");
     }
-    if (orgFlags.resolved || orgFlags.known) {
-      if (!orgFlags.shen) {
-        const shen = document.querySelector('.xm-menu-group[data-xm-group="/shen"]');
-        if (shen) {
-          shen.remove();
-        }
-      }
-      if (!orgFlags.han) {
-        const han = document.querySelector('.xm-menu-group[data-xm-group="/han"]');
-        if (han) {
-          han.remove();
-        }
-      }
-    }
+    paintSider();
+    relinkSider();
     const here = centerOfPath(current);
     if (orgFlags.resolved && here && !orgFlags[here] && typeof window.__xmGo === "function") {
       window.__xmGo(homeForOrg());
@@ -3256,12 +3386,19 @@
               director: person.director,
               managerName: person.managerName,
               username: person.username,
-              name: person.name
+              name: person.name,
+              board: person.board,
+              role: person.role,
+              visibleShops: person.visibleShops
             };
             break;
           }
         }
         const merged = Object.assign({}, user || {}, row || {});
+        if (personLooksHr(merged) && !canSeeStaffNav(merged)) {
+          merged.desk = "hr";
+        }
+        applyScopeUser(merged, true);
         if (canSeeStaffNav(merged)) {
           applyOrgNav({ shen: true, han: true, known: true, resolved: true });
           return;
@@ -3461,28 +3598,9 @@
     const boot = window.__xmBootUser;
     if (boot && (boot.displayName || boot.username)) {
       bindChrome(boot.displayName || boot.username, boot);
-    } else {
-      fetch("/api/auth/me", { credentials: "same-origin", headers: { Accept: "application/json" } })
-        .then(function (res) {
-          if (res.status === 401) {
-            window.location.replace("/login");
-            return null;
-          }
-          if (!res.ok) {
-            return null;
-          }
-          return res.json();
-        })
-        .then(function (payload) {
-          if (!payload) {
-            return;
-          }
-          bindChrome(payload.displayName || payload.username || "用户", payload);
-        })
-        .catch(function () {
-          /* keep painted shell */
-        });
     }
+    watchScope();
+    readScopeMe();
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", bootCurrentModule);
     } else {

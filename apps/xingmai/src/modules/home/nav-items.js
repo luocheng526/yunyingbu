@@ -40,11 +40,127 @@ export function canSeeStaffNav(user) {
   });
 }
 
+function textLooksHr(value) {
+  const text = String(value || "").trim();
+  if (!text || text.includes("人员管理")) {
+    return false;
+  }
+  const lower = text.toLowerCase();
+  if (lower === "hrtech" || lower === "hr") {
+    return true;
+  }
+  if (text === "人事" || text.includes("人事部") || text.includes("人事部门") || text.includes("人事和技术")) {
+    return true;
+  }
+  return /人事(专员|主管|经理|总监)$/.test(text);
+}
+
+function textLooksTech(value) {
+  const text = String(value || "").trim();
+  if (!text) {
+    return false;
+  }
+  const lower = text.toLowerCase();
+  return lower === "backend" || text === "技术" || text.includes("技术部");
+}
+
+function actorAliases(user) {
+  if (!user) {
+    return [];
+  }
+  if (typeof user === "string") {
+    return [user.trim()].filter(Boolean);
+  }
+  return [user.username, user.displayName, user.name]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+}
+
+export function personLooksHr(person) {
+  if (!person) {
+    return false;
+  }
+  const board = String(person.board || "").trim().toLowerCase();
+  if (board === "hrtech") {
+    return ![person.department, person.center, person.role].some(textLooksTech);
+  }
+  return [person.department, person.center, person.role, person.board].some(textLooksHr);
+}
+
+function matchOrgPerson(user, people) {
+  const aliases = actorAliases(user);
+  return (
+    (Array.isArray(people) ? people : []).find(
+      (person) => aliases.includes(String(person.username || "")) || aliases.includes(String(person.name || ""))
+    ) || null
+  );
+}
+
+function underHrOrg(me, people) {
+  if (!me) {
+    return false;
+  }
+  if (personLooksHr(me)) {
+    return true;
+  }
+  const byId = new Map((Array.isArray(people) ? people : []).map((person) => [Number(person.id), person]));
+  const seen = new Set([Number(me.id)]);
+  let cur = me;
+  for (let i = 0; i < 16; i += 1) {
+    const mid = Number(cur.managerId);
+    if (!Number.isFinite(mid) || seen.has(mid)) {
+      break;
+    }
+    seen.add(mid);
+    const boss = byId.get(mid);
+    if (!boss) {
+      break;
+    }
+    if (canSeeStaffNav(boss)) {
+      break;
+    }
+    if (personLooksHr(boss)) {
+      return true;
+    }
+    cur = boss;
+  }
+  return false;
+}
+
+export function hrDeskFromOrg(user, people, memberMap) {
+  if (!user || canSeeStaffNav(user)) {
+    return "";
+  }
+  const list = Array.isArray(people) ? people : [];
+  const me = matchOrgPerson(user, list);
+  const codes = memberMap instanceof Map ? memberMap : new Map();
+  if (me && (codes.get(Number(me.id)) || "") === "hr") {
+    return "hr";
+  }
+  if (underHrOrg(me, list)) {
+    return "hr";
+  }
+  if (
+    personLooksHr({
+      board: user.board,
+      department: user.department,
+      center: user.center,
+      role: user.role
+    })
+  ) {
+    return "hr";
+  }
+  return "";
+}
+
 export function isHrDesk(user) {
   if (!user || canSeeStaffNav(user)) {
     return false;
   }
-  return String(user.desk || "") === "hr";
+  if (String(user.desk || "") === "hr") {
+    return true;
+  }
+  return personLooksHr(user);
 }
 
 export function deskHome(user) {

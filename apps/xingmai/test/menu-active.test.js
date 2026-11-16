@@ -12,7 +12,7 @@ const navJs = readFileSync(join(root, "../public/shared/nav.js"), "utf8");
 const luocheng = { username: "罗成", displayName: "罗成" };
 
 test("选中菜单用浅色渐变，不要投影，暗色粉红不盖掉", () => {
-  assert.equal(SHELL_ASSET_VER, "0.1.774-tabcap");
+  assert.equal(SHELL_ASSET_VER, "0.1.775-dutylive");
   assert.match(layoutCss, /xm-menu-lite 0\.1\.772-menulite/);
   assert.match(layoutCss, /\.xm-menu-item\.is-active/);
   assert.match(layoutCss, /\.xm-menu-group\.is-current > \.xm-menu-parent/);
@@ -23,7 +23,7 @@ test("选中菜单用浅色渐变，不要投影，暗色粉红不盖掉", () =>
   assert.match(layoutCss, /html\[data-theme="pink"\]/);
   assert.match(layoutCss, /--xm-primary: #1677ff/);
   assert.match(layoutCss, /--xm-primary: #f8005f/);
-  assert.match(navJs, /ASSET_VER = "0\.1\.774-tabcap"/);
+  assert.match(navJs, /ASSET_VER = "0\.1\.775-dutylive"/);
   assert.match(navJs, /is-open is-current/);
   assert.match(navJs, /xm-menu-item xm-menu-parent' \+[\s\S]*is-active/);
 });
@@ -45,6 +45,7 @@ test("顶栏页签是独立表头，不贴蓝线，电脑上不出现空白菜�
   assert.match(layoutCss, /xm-notice-head 0\.1\.772-notice/);
   assert.match(layoutCss, /xm-tabs-keep 0\.1\.773-tabkeep/);
   assert.match(layoutCss, /xm-tab-cap 0\.1\.774-tabcap/);
+  assert.match(layoutCss, /xm-duty-live 0\.1\.775-dutylive/);
   assert.match(layoutCss, /\.xm-phone-menu,\s*\.xm-phone-mask \{\s*display:\s*none/);
   assert.match(layoutCss, /\.xm-topbar \{[\s\S]*align-items:\s*center/);
   assert.match(layoutCss, /\.xm-tabs \{[\s\S]*align-items:\s*center/);
