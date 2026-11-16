@@ -51,7 +51,7 @@ test.beforeEach(() => {
 test("功能清单覆盖渠道、商品、团队、我的", () => {
   const catalog = publicCatalog();
   assert.equal(catalog.erp, false);
-  assert.deepEqual(catalog.modules.map((item) => item.label), ["渠道", "商品", "团队", "我的"]);
+  assert.deepEqual(catalog.modules.map((item) => item.label), ["渠道", "商品", "货品", "团队", "我的"]);
   const goods = catalog.modules[1].pages.find((page) => page.label === "商品总览");
   assert.deepEqual(goods.tabs.map((tab) => tab.label), ["商品列表", "品类分析", "地域分析", "销售时段分析"]);
   assert.equal(goods.ops.includes("dim"), true);

@@ -3,7 +3,13 @@ import {
   CHANNEL_COLUMNS,
   GOODS_CARDS,
   GOODS_COLUMNS,
+  HP_CARDS,
+  HP_COLUMNS,
+  HP_STOCK_COLUMNS,
+  MEMBER_COLUMNS,
   PAGES,
+  SKILL_COLUMNS,
+  STOCK_COLUMNS,
   START_ON,
   TEAM_CARDS,
   TEAM_COLUMNS,
@@ -238,10 +244,18 @@ function filterRows(rows, query) {
   });
 }
 
-function cardsFrom(payload, pref) {
-  const enabled = new Set((pref && pref.cards) || GOODS_CARDS.map((card) => card.key));
+function cardSource(page) {
+  if (page && page.module === "hp") {
+    return HP_CARDS;
+  }
+  return GOODS_CARDS;
+}
+
+function cardsFrom(payload, pref, page) {
+  const defs = cardSource(page);
+  const enabled = new Set((pref && pref.cards) || defs.map((card) => card.key));
   const source = payload && payload.raw ? payload.raw : payload;
-  return GOODS_CARDS.map((card) => {
+  return defs.map((card) => {
     const value = source ? pickAlias(source, card.aliases.concat(card.label)) : undefined;
     return {
       key: card.key,
@@ -255,11 +269,26 @@ function cardsFrom(payload, pref) {
 }
 
 function columnSource(page) {
+  if (page && page.id === "productStock") {
+    return STOCK_COLUMNS;
+  }
+  if (page && page.id === "hpStock") {
+    return HP_STOCK_COLUMNS;
+  }
+  if (page && page.id === "teamSkills") {
+    return SKILL_COLUMNS;
+  }
+  if (page && page.id === "teamMemberProfile") {
+    return MEMBER_COLUMNS;
+  }
   if (page && page.module === "channel") {
     return CHANNEL_COLUMNS;
   }
   if (page && page.module === "team") {
     return TEAM_COLUMNS;
+  }
+  if (page && page.module === "hp") {
+    return HP_COLUMNS;
   }
   return GOODS_COLUMNS;
 }
@@ -280,6 +309,9 @@ function nameLabel(page, tab) {
   }
   if (page && page.module === "team") {
     return /成员|个人|客服/.test(tabLabel) ? "成员" : "名称";
+  }
+  if (page && page.module === "hp") {
+    return "货品";
   }
   return "商品";
 }
@@ -432,8 +464,8 @@ export async function readView(query) {
     shops,
     columns: columnsFrom(pref, page, tab),
     cards: page.ops.includes("cards")
-      ? cardsFrom(cardPage && cardPage.payload, pref)
-      : metricCards(page.module === "channel" ? CHANNEL_CARDS : page.module === "team" ? TEAM_CARDS : [], complete ? allSum : null, complete),
+      ? cardsFrom(cardPage && cardPage.payload, pref, page)
+      : metricCards(page.module === "channel" ? CHANNEL_CARDS : page.module === "team" ? TEAM_CARDS : page.module === "hp" ? HP_CARDS : [], complete ? allSum : null, complete),
     cardStatus: page.ops.includes("cards") ? (cardPage ? "ready" : "missing") : complete ? "ready" : "missing",
     coverage,
     rows: slice.map((row) => ({

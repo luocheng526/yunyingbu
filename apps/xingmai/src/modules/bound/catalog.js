@@ -123,10 +123,46 @@ export const PAGES = [
   {
     id: "productStock",
     module: "goods",
-    label: "商品库存数据",
+    label: "商品库存分析",
     route: "/workTable/productStock",
     ops: ["date", "shop", "search", "expand", "export", "sums"],
-    tabs: [list("sp_kc", "商品库存数据", "/goods/goodsStock", "form", "sp_kc")]
+    tabs: [list("sp_kc", "商品总库存数据", "/goods/goodsStock", "form", "sp_kc")]
+  },
+  {
+    id: "hpOverview",
+    module: "hp",
+    label: "货品总览",
+    route: "/workTable/hpOverview",
+    ops: ["date", "shop", "search", "cards", "export", "sums"],
+    cards: list("hp_zl_cards", "货品综合指标", "/hp/coreIndicator", "json", "hp_zl", { kind: "object" }),
+    tabs: [
+      list("hp_zl_list", "货品列表", "/hp/hpOverView", "json", "hp_zl", {
+        sumPath: "/v2/Hp/overViewPageListSumData"
+      })
+    ]
+  },
+  {
+    id: "hpPanorama",
+    module: "hp",
+    label: "货品全景分析",
+    route: "/workTable/hpPanorama",
+    ops: ["date", "shop", "search", "tabs", "export", "sums"],
+    tabs: [
+      list("hp_qj_zl", "总览数据", "/hp/getOperateData", "json", "hp_qj", { kind: "object" }),
+      list("hp_qj_qd", "全渠道分析", "/hp/hpAllChannelData", "json", "hp_qj"),
+      list("hp_qj_layout", "布局分析", "/hp/hpProductLayoutAnalysisData", "json", "hp_qj"),
+      list("hp_qj_sku", "SKU分析", "/hp/hpSkuData", "json", "hp_qj"),
+      list("hp_qj_kc", "货品库存", "/hp/hpStock", "json", "hp_qj")
+    ]
+  },
+  {
+    id: "hpStock",
+    module: "hp",
+    label: "货品库存数据",
+    route: "/workTable/hpStock",
+    ops: ["date", "search", "cards", "export", "sums"],
+    cards: list("hp_kc_cards", "货品总库存综合指标", "/hp/newStockIndicator", "json", "hp_kc", { kind: "object" }),
+    tabs: [list("hp_kc_list", "货品总库存数据", "/v2/hp/allHpStock", "json", "hp_kc")]
   },
   {
     id: "teamOverview",
@@ -145,10 +181,10 @@ export const PAGES = [
   {
     id: "teamSkills",
     module: "team",
-    label: "岗位技能评估",
+    label: "岗位能力评估",
     route: "/workTable/teamSkills",
     ops: ["date", "search", "expand", "export", "sums"],
-    tabs: [list("td_gwnl", "岗位技能评估", "/team/postAssess", "form", "td_zl")]
+    tabs: [list("td_gwnl", "岗位能力评估", "/team/postAssess", "form", "td_zl")]
   },
   {
     id: "teamMemberDetail",
@@ -199,6 +235,7 @@ export const PAGES = [
 export const MODULES = [
   { id: "channel", label: "渠道" },
   { id: "goods", label: "商品" },
+  { id: "hp", label: "货品" },
   { id: "team", label: "团队" },
   { id: "mine", label: "我的" }
 ];
@@ -223,7 +260,22 @@ export const GOODS_COLUMNS = [
   { key: "dealCount", label: "成交件数", aliases: ["dealCount", "cjjs", "payGoodsCount"], numeric: true },
   { key: "payUsers", label: "支付人数", aliases: ["payUsers", "payBuyer", "buyerCount", "payUserCount"], numeric: true },
   { key: "netPayUsers", label: "净支付人数", aliases: ["netPayUsers", "netBuyerCount"], numeric: true },
-  { key: "payAmount", label: "销售金额", aliases: ["payAmount", "saleAmount", "gmv", "payMoney"], numeric: true, money: true }
+  { key: "payAmount", label: "销售金额", aliases: ["payAmount", "saleAmount", "gmv", "payMoney"], numeric: true, money: true },
+  { key: "refundAmount", label: "退款金额", aliases: ["refundAmount", "refundMoney"], numeric: true, money: true },
+  { key: "refundRate", label: "退款率", aliases: ["refundRate"], numeric: true, rate: true },
+  { key: "saleCost", label: "商品成本", aliases: ["saleCost", "xshf"], numeric: true, money: true },
+  { key: "cost", label: "推广花费", aliases: ["cost", "tghf"], numeric: true, money: true },
+  { key: "profit", label: "利润", aliases: ["profit", "lryg"], numeric: true, money: true }
+];
+
+export const STOCK_COLUMNS = [
+  { key: "hpName", label: "货品名称", aliases: ["hpName", "goodsName", "name", "styleName"] },
+  { key: "code", label: "货品编码", aliases: ["hpCode", "goodsCode", "code"] },
+  { key: "styleCode", label: "款式编码", aliases: ["styleCode", "ksCode"] },
+  { key: "goodsId", label: "商品ID", aliases: ["goodsId", "spuId", "productId"] },
+  { key: "goodsName", label: "商品名称", aliases: ["spuName", "productName"] },
+  { key: "stock", label: "库存数量", aliases: ["stock", "stockCount", "kcsl"], numeric: true },
+  { key: "stockAmount", label: "库存金额", aliases: ["stockAmount", "kcje"], numeric: true, money: true }
 ];
 
 export const GOODS_CARDS = [
@@ -277,6 +329,56 @@ export const TEAM_COLUMNS = [
   { key: "profit", label: "利润", aliases: ["profit", "lryg"], numeric: true, money: true }
 ];
 
+export const HP_COLUMNS = [
+  { key: "name", label: "货品", aliases: ["hpName", "goodsName", "name", "title", "styleName"] },
+  { key: "code", label: "货品编码", aliases: ["hpCode", "skuCode", "goodsCode", "styleCode", "code"] },
+  { key: "shop", label: "店铺", aliases: ["shopName", "shop", "channelName"] },
+  { key: "stock", label: "库存数量", aliases: ["stock", "stockCount", "kcsl", "stockNum"], numeric: true },
+  { key: "stockAmount", label: "库存金额", aliases: ["stockAmount", "kcje", "stockMoney"], numeric: true, money: true },
+  { key: "payAmount", label: "销售金额", aliases: ["payAmount", "gmv", "saleAmount"], numeric: true, money: true },
+  { key: "sales", label: "销售件数", aliases: ["sales", "saleCount", "xsjs"], numeric: true }
+];
+
+export const HP_STOCK_COLUMNS = [
+  { key: "hpName", label: "货品", aliases: ["hpName", "goodsName", "name", "title"] },
+  { key: "code", label: "货品编码", aliases: ["hpCode", "skuCode", "goodsCode", "code"] },
+  { key: "spec", label: "颜色规格", aliases: ["spec", "skuName", "color"] },
+  { key: "owner", label: "货品负责人", aliases: ["ownerName", "leaderName", "fzrName"] },
+  { key: "ship7", label: "最近7天出货量", aliases: ["ship7", "weekShip", "recentShip"], numeric: true },
+  { key: "coverDays", label: "库存可支撑天数", aliases: ["coverDays", "stockDays"], numeric: true },
+  { key: "replenishDays", label: "补货周期(天)", aliases: ["replenishDays", "bhCycle"], numeric: true },
+  { key: "oversell", label: "即将超卖", aliases: ["oversell", "willOversell"] },
+  { key: "stock", label: "库存数量", aliases: ["stock", "stockCount", "kcsl"], numeric: true },
+  { key: "stockRate", label: "库存数量占比", aliases: ["stockRate", "kcslzb"], numeric: true, rate: true },
+  { key: "stockAmount", label: "库存金额", aliases: ["stockAmount", "kcje"], numeric: true, money: true },
+  { key: "stockAmountRate", label: "库存金额占比", aliases: ["stockAmountRate", "kcjezb"], numeric: true, rate: true },
+  { key: "slow", label: "是否滞销", aliases: ["slow", "unsalable", "zx"] }
+];
+
+export const SKILL_COLUMNS = [
+  { key: "memberName", label: "姓名", aliases: ["userName", "memberName", "name"] },
+  { key: "dept", label: "部门", aliases: ["deptName", "department", "dept"] },
+  { key: "rank", label: "职级", aliases: ["rankName", "postRank", "rank"] },
+  { key: "payAmount", label: "总销售额", aliases: ["payAmount", "gmv", "saleAmount"], numeric: true, money: true },
+  { key: "commission", label: "提成收入", aliases: ["commission", "tcIncome", "bonus"], numeric: true, money: true }
+];
+
+export const MEMBER_COLUMNS = [
+  { key: "memberName", label: "姓名", aliases: ["userName", "memberName", "name"] },
+  { key: "dept", label: "部门", aliases: ["deptName", "department", "dept"] },
+  { key: "post", label: "岗位", aliases: ["postName", "jobName", "post"] },
+  { key: "rank", label: "职级", aliases: ["rankName", "postRank", "rank"] },
+  { key: "tenure", label: "在职时间", aliases: ["tenure", "entryDate", "onJob"] },
+  { key: "years", label: "服务年限", aliases: ["years", "serviceYears"] }
+];
+
+export const HP_CARDS = [
+  { key: "payAmount", label: "销售金额", aliases: ["payAmount", "gmv", "saleAmount"], money: true },
+  { key: "sales", label: "销售件数", aliases: ["sales", "saleCount", "xsjs"] },
+  { key: "stock", label: "库存数量", aliases: ["stock", "stockCount", "kcsl"] },
+  { key: "stockAmount", label: "库存金额", aliases: ["stockAmount", "kcje"], money: true }
+];
+
 export const TEAM_CARDS = [
   { key: "payAmount", label: "销售金额", aliases: ["payAmount", "gmv", "saleAmount"], money: true },
   { key: "sales", label: "销售件数", aliases: ["sales", "xsjs", "saleCount"] },
@@ -318,7 +420,7 @@ export function publicCatalog() {
     erp: false,
     label: "爬虫，非 ERP",
     startOn: START_ON,
-    note: "版式对齐边界 BI 工作台的渠道、商品、团队、我的。数字只读本库，不读星脉 ERP。",
+    note: "版式对齐边界 BI 工作台的渠道、商品、货品、团队、我的。数字只读本库，不读星脉 ERP。",
     modules: MODULES.map((item) => ({
       ...item,
       pages: PAGES.filter((page) => page.module === item.id).map((page) => ({
