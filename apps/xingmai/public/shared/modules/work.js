@@ -1,4 +1,4 @@
-/* xm-module-work 0.1.772-work-rpt2 — 工作汇报。运营部、人事部、技术部按责权模板填报。 */
+/* xm-module-work — 工作汇报。按组织中心责权排进运营部、人事部、技术部，再按模板填当天表。 */
 (function () {
   var state = {
     tab: "today",
@@ -6,6 +6,10 @@
     dept: "",
     settingsDept: "ops",
     personId: 0,
+    rosterQuery: "",
+    rosterScope: "all",
+    orgBoard: "",
+    boardQuery: "",
     meta: null,
     report: null,
     settings: null,
@@ -48,9 +52,12 @@
       ".work-mini{height:28px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 10px;font:inherit;font-size:12px;cursor:pointer;}" +
       ".work-mini.is-on{border-color:var(--xm-primary);color:var(--xm-primary);}" +
       ".work-table-wrap{overflow:auto;}" +
+      ".work-roster-scroll{max-height:360px;overflow:auto;}" +
       ".work-table{width:100%;border-collapse:collapse;font-size:13px;}" +
       ".work-table th{text-align:left;color:var(--xm-muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--xm-line);white-space:nowrap;}" +
       ".work-table td{padding:8px 10px;border-bottom:1px solid var(--xm-line);vertical-align:top;}" +
+      "td.work-check{width:48px;text-align:center;}" +
+      "td.work-check input{width:18px;height:18px;margin:0;accent-color:var(--xm-primary);cursor:pointer;}" +
       ".work-empty{padding:28px 12px;text-align:center;color:var(--xm-muted);}" +
       ".work-msg{min-height:18px;color:var(--xm-muted);font-size:12px;padding:0 4px;}" +
       ".work-msg.is-error{color:#cf1322;}" +
@@ -68,8 +75,13 @@
       ".work-muted{color:var(--xm-muted);font-size:12px;}" +
       ".work-filters{display:flex;flex-direction:row;flex-wrap:wrap;gap:8px;align-items:center;padding:4px 12px 12px;}" +
       ".work-filters .work-mini{flex:none;width:auto;}" +
-      ".work-table td.work-rights{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}" +
-      "@media (max-width:720px){.work-stats{grid-template-columns:repeat(2,minmax(0,1fr));}}";
+      ".work-chiprow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:0 12px 12px;}" +
+      ".work-sub{display:block;margin-top:2px;color:var(--xm-muted);font-size:12px;line-height:1.45;}" +
+      ".work-duty{min-width:160px;max-width:340px;white-space:normal;line-height:1.45;}" +
+      ".work-count{margin-left:auto;color:var(--xm-muted);font-size:12px;}" +
+      ".work-field.is-grow{flex:1;min-width:200px;}" +
+      ".work-table td.work-rights{max-width:280px;white-space:normal;}" +
+      "@media (max-width:720px){.work-stats{grid-template-columns:repeat(2,minmax(0,1fr));}.work-count{margin-left:0;}}";
     document.head.appendChild(style);
   }
 
@@ -134,6 +146,234 @@
     return Boolean(state.meta && state.meta.isAdmin);
   }
 
+  function orgBoards() {
+    return (
+      (state.settings && state.settings.orgBoards) ||
+      (state.meta && state.meta.orgBoards) || [
+        { code: "ops", name: "运营部门" },
+        { code: "hrTech", name: "人事和技术部门" },
+        { code: "backend", name: "后端部门" }
+      ]
+    );
+  }
+
+  function deptLabel(code) {
+    var hit = ((state.meta && state.meta.depts) || []).find(function (item) {
+      return item.code === code;
+    });
+    return hit ? hit.name : "";
+  }
+
+  function dateLabel(date) {
+    return date === todayIso() ? "今日工作" : date + " 的工作";
+  }
+
+  function chip(attr, value, label, current) {
+    return (
+      '<button type="button" class="work-mini' +
+      (current === value ? " is-on" : "") +
+      '" ' +
+      attr +
+      '="' +
+      esc(value) +
+      '">' +
+      esc(label) +
+      "</button>"
+    );
+  }
+
+  function personShops(person) {
+    return ((person && person.visibleShops) || []).filter(Boolean).join("、");
+  }
+
+  function rosterDuty(person) {
+    var shops = personShops(person);
+    var duty = (person && person.duty) || "";
+    if (shops && duty) {
+      return esc(shops) + '<span class="work-sub">' + esc(duty) + "</span>";
+    }
+    return esc(shops || duty || (person && person.rights) || "—");
+  }
+
+  function boardDuty(person) {
+    if (!person) {
+      return "—";
+    }
+    if (personShops(person)) {
+      return (person.seat ? person.seat + " · " : "") + (person.rights || personShops(person));
+    }
+    return person.duty || person.seat || person.rights || "—";
+  }
+
+  function rosterBlob(person) {
+    return [
+      person.name,
+      person.role,
+      person.center,
+      person.orgBoardName,
+      person.seat,
+      person.duty,
+      person.rights,
+      personShops(person),
+      person.deptName
+    ]
+      .join(" ")
+      .toLowerCase();
+  }
+
+  function personVisible(person) {
+    var q = String(state.rosterQuery || "").trim().toLowerCase();
+    if (state.orgBoard === "none") {
+      if (person.orgBoard) {
+        return false;
+      }
+    } else if (state.orgBoard && person.orgBoard !== state.orgBoard) {
+      return false;
+    }
+    if (state.rosterScope === "open" && person.deptCode) {
+      return false;
+    }
+    if (state.rosterScope === "here" && person.deptCode !== state.settingsDept) {
+      return false;
+    }
+    if (state.rosterScope === "other" && (!person.deptCode || person.deptCode === state.settingsDept)) {
+      return false;
+    }
+    if (q && rosterBlob(person).indexOf(q) < 0) {
+      return false;
+    }
+    return true;
+  }
+
+  function rosterPeople() {
+    return ((state.settings && state.settings.people) || []).filter(personVisible);
+  }
+
+  function applyRosterFilter(root) {
+    var rows = [].slice.call(root.querySelectorAll("[data-person-row]"));
+    var shown = 0;
+    rows.forEach(function (tr) {
+      var person = {
+        orgBoard: tr.getAttribute("data-org-board") || "",
+        deptCode: tr.getAttribute("data-dept") || ""
+      };
+      var q = String(state.rosterQuery || "").trim().toLowerCase();
+      var ok = true;
+      if (state.orgBoard === "none") {
+        ok = !person.orgBoard;
+      } else if (state.orgBoard) {
+        ok = person.orgBoard === state.orgBoard;
+      }
+      if (ok && state.rosterScope === "open") {
+        ok = !person.deptCode;
+      }
+      if (ok && state.rosterScope === "here") {
+        ok = person.deptCode === state.settingsDept;
+      }
+      if (ok && state.rosterScope === "other") {
+        ok = Boolean(person.deptCode) && person.deptCode !== state.settingsDept;
+      }
+      if (ok && q) {
+        ok = String(tr.getAttribute("data-blob") || "").indexOf(q) >= 0;
+      }
+      tr.hidden = !ok;
+      if (ok) {
+        shown += 1;
+      }
+    });
+    var empty = root.querySelector("[data-roster-empty]");
+    if (empty) {
+      empty.hidden = shown > 0;
+    }
+    var count = root.querySelector("[data-roster-count]");
+    if (count) {
+      count.textContent = "显示 " + shown + " / " + rows.length;
+    }
+  }
+
+  function reportRows() {
+    var rows = (state.report && state.report.rows) || [];
+    var q = String(state.boardQuery || "").trim().toLowerCase();
+    if (!q) {
+      return rows;
+    }
+    return rows.filter(function (row) {
+      var person = row.person || {};
+      var blob = [
+        person.name,
+        row.deptName,
+        person.role,
+        person.center,
+        person.seat,
+        person.duty,
+        person.rights,
+        personShops(person),
+        row.status,
+        (row.items || [])
+          .map(function (item) {
+            return item.label + " " + item.content;
+          })
+          .join(" ")
+      ]
+        .join(" ")
+        .toLowerCase();
+      return blob.indexOf(q) >= 0;
+    });
+  }
+
+  function reportBlob(row) {
+    var person = row.person || {};
+    return [
+      person.name,
+      row.deptName,
+      person.role,
+      person.center,
+      person.seat,
+      person.duty,
+      person.rights,
+      personShops(person),
+      row.status,
+      (row.items || [])
+        .map(function (item) {
+          return item.label + " " + item.content;
+        })
+        .join(" ")
+    ]
+      .join(" ")
+      .toLowerCase();
+  }
+
+  function applyBoardFilter(root) {
+    var q = String(state.boardQuery || "").trim().toLowerCase();
+    var groups = {};
+    [].slice.call(root.querySelectorAll("[data-report-row]")).forEach(function (tr) {
+      var id = tr.getAttribute("data-report-row");
+      groups[id] = groups[id] || [];
+      groups[id].push(tr);
+    });
+    var ids = Object.keys(groups);
+    var shown = 0;
+    ids.forEach(function (id) {
+      var blob = groups[id][0].getAttribute("data-blob") || "";
+      var ok = !q || blob.indexOf(q) >= 0;
+      groups[id].forEach(function (tr) {
+        tr.hidden = !ok;
+      });
+      if (ok) {
+        shown += 1;
+      }
+    });
+    var empty = root.querySelector("[data-board-empty]");
+    if (empty) {
+      empty.hidden = shown > 0;
+    }
+    var count = root.querySelector("[data-board-count]");
+    if (count) {
+      count.hidden = !q;
+      count.textContent = "显示 " + shown + " / " + ids.length;
+    }
+  }
+
   function myRow() {
     var rows = (state.report && state.report.rows) || [];
     var me = state.meta && state.meta.me;
@@ -193,18 +433,31 @@
     );
   }
 
-  function renderAdminTable() {
+  function renderAdminTable(date) {
     var rows = (state.report && state.report.rows) || [];
     if (!rows.length) {
       return '<div class="work-card"><div class="work-empty">这一天还没有人需要汇报。先到部门设置里按责权把人排进运营部、人事部或技术部。</div></div>';
     }
+    var q = String(state.boardQuery || "").trim().toLowerCase();
+    var visiblePeople = 0;
     var body = rows
       .map(function (row) {
         var items = row.items || [];
+        var blob = reportBlob(row);
+        var hide = q && blob.indexOf(q) < 0;
+        if (!hide) {
+          visiblePeople += 1;
+        }
         return items
           .map(function (item, index) {
             return (
-              "<tr>" +
+              "<tr" +
+              (hide ? " hidden" : "") +
+              ' data-report-row="' +
+              esc(row.person.id) +
+              '" data-blob="' +
+              esc(blob) +
+              '">' +
               (index === 0
                 ? '<td rowspan="' +
                   items.length +
@@ -222,10 +475,10 @@
                   items.length +
                   '">' +
                   esc(row.person.center) +
-                  '</td><td class="work-rights" rowspan="' +
+                  '</td><td class="work-duty" rowspan="' +
                   items.length +
                   '">' +
-                  esc(row.person.rights) +
+                  esc(boardDuty(row.person)) +
                   "</td>"
                 : "") +
               "<td>" +
@@ -249,8 +502,13 @@
       })
       .join("");
     return (
-      '<div class="work-card work-table-wrap"><table class="work-table"><thead><tr><th>姓名</th><th>部门</th><th>岗位</th><th>所属中心</th><th>责权</th><th>工作事项</th><th>今日工作</th><th>状态</th></tr></thead><tbody>' +
+      '<div class="work-card work-table-wrap"><table class="work-table"><thead><tr><th>姓名</th><th>部门</th><th>岗位</th><th>所属中心</th><th>责权</th><th>工作事项</th><th>' +
+      esc(dateLabel(date)) +
+      '</th><th>状态</th></tr></thead><tbody>' +
       body +
+      '<tr data-board-empty' +
+      (visiblePeople ? " hidden" : "") +
+      '><td colspan="8" class="work-empty">没有符合筛选的人。</td></tr>' +
       "</tbody></table></div>"
     );
   }
@@ -273,25 +531,41 @@
     var mine = myRow();
     var canFill = Boolean(mine);
     var skip = state.report && state.report.needReport === false && !isAdmin();
-    var fillBlock = skip
-      ? '<div class="work-card"><div class="work-empty">你所在部门不需要工作汇报。</div></div>'
-      : '<div class="work-head"><div><h2 style="padding:0">我的今日事项</h2><p class="work-lead">按罗成配好的模板填，一天一张表。</p></div>' +
-        (canFill
-          ? '<button type="button" class="work-primary" data-save-mine>保存今日汇报</button>'
-          : "") +
-        "</div>" +
-        renderFillTable(mine, canFill);
-    var board =
-      isAdmin()
-        ? renderKpis() +
-          '<div class="work-filters"><span class="work-muted">部门</span>' +
-          '<button type="button" class="work-mini' +
-          (state.dept ? "" : " is-on") +
-          '" data-dept-filter="">全部</button>' +
-          depts +
-          "</div>" +
-          renderAdminTable()
-        : "";
+    var fillBlock = "";
+    if (skip) {
+      fillBlock = '<div class="work-card"><div class="work-empty">你所在部门不需要工作汇报。</div></div>';
+    } else if (canFill) {
+      fillBlock =
+        '<div class="work-head"><div><h2 style="padding:0">' +
+        esc(dateLabel(date)) +
+        (mine.deptName ? " · " + esc(mine.deptName) : "") +
+        '</h2><p class="work-lead">按罗成配好的模板填，一天一张表。</p></div>' +
+        '<button type="button" class="work-primary" data-save-mine>保存这一天</button></div>' +
+        renderFillTable(mine, true);
+    } else if (!isAdmin()) {
+      fillBlock = '<div class="work-card"><div class="work-empty">今天没有需要填的事项。</div></div>';
+    }
+    var shown = reportRows().length;
+    var total = ((state.report && state.report.rows) || []).length;
+    var board = isAdmin()
+      ? renderKpis() +
+        '<div class="work-filters"><span class="work-muted">部门</span>' +
+        '<button type="button" class="work-mini' +
+        (state.dept ? "" : " is-on") +
+        '" data-dept-filter="">全部</button>' +
+        depts +
+        '<label class="work-field is-grow">找人<input data-board-q data-keep-focus="board" value="' +
+        esc(state.boardQuery) +
+        '" placeholder="姓名、责权、事项"></label>' +
+        '<span class="work-count" data-board-count' +
+        (state.boardQuery ? "" : " hidden") +
+        ">显示 " +
+        shown +
+        " / " +
+        total +
+        "</span></div>" +
+        renderAdminTable(date)
+      : "";
     return (
       '<div class="work-panel">' +
       '<div class="work-card work-form">' +
@@ -328,7 +602,11 @@
       '<div class="work-card"><h2>' +
       (personMode ? "个人工作事项" : "部门默认事项") +
       "</h2>" +
-      '<p class="work-lead" style="padding:0 12px 8px">他们打开工作汇报时，按这个表格填每天事项。</p>' +
+      '<p class="work-lead" style="padding:0 12px 8px">' +
+      (personMode && !personTemplate(state.personId).length
+        ? "这个人还没有个人模板，下面是部门事项。保存后只给这个人用。"
+        : "他们打开工作汇报时，按这个表格填每天事项。") +
+      "</p>" +
       '<div class="work-table-wrap"><table class="work-table"><thead><tr><th>#</th><th>事项名称</th><th></th></tr></thead><tbody>' +
       (rows || '<tr><td colspan="3" class="work-empty">还没有事项</td></tr>') +
       "</tbody></table></div>" +
@@ -341,12 +619,24 @@
   }
 
   function renderPeopleTable() {
-    var people = (state.settings && state.settings.people) || [];
+    var all = (state.settings && state.settings.people) || [];
+    var people = rosterPeople();
     var body = people
       .map(function (person) {
         var on = person.deptCode === state.settingsDept;
+        var orgName = person.orgBoardName || (person.orgBoard ? person.orgBoard : "未分部门");
         return (
-          "<tr><td><input type=\"checkbox\" data-assign=\"" +
+          "<tr" +
+          (personVisible(person) ? "" : " hidden") +
+          ' data-person-row="' +
+          esc(person.id) +
+          '" data-org-board="' +
+          esc(person.orgBoard || "") +
+          '" data-dept="' +
+          esc(person.deptCode || "") +
+          '" data-blob="' +
+          esc(rosterBlob(person)) +
+          '"><td class="work-check"><input type="checkbox" data-assign="' +
           esc(person.id) +
           '"' +
           (on ? " checked" : "") +
@@ -356,19 +646,51 @@
           esc(person.role) +
           "</td><td>" +
           esc(person.center) +
-          '</td><td class="work-rights">' +
-          esc(person.rights) +
+          "</td><td>" +
+          esc(orgName) +
+          "</td><td>" +
+          esc(person.seat || "—") +
+          '</td><td class="work-duty">' +
+          rosterDuty(person) +
           "</td><td>" +
           esc(person.deptName || "不汇报") +
           "</td></tr>"
         );
       })
       .join("");
+    var boards = [{ code: "", name: "全部组织部门" }]
+      .concat(orgBoards())
+      .concat([{ code: "none", name: "未分部门" }]);
     return (
       '<div class="work-card"><h2>按责权加人</h2>' +
-      '<p class="work-lead" style="padding:0 12px 8px">名单来自组织中心在职人员。勾上的人每天按模板汇报，其他部门不需要。</p>' +
-      '<div class="work-table-wrap"><table class="work-table"><thead><tr><th>汇报</th><th>姓名</th><th>岗位</th><th>所属中心</th><th>责权</th><th>当前部门</th></tr></thead><tbody>' +
-      (body || '<tr><td colspan="6" class="work-empty">组织中心还没有人</td></tr>') +
+      '<p class="work-lead" style="padding:0 12px 8px">名单来自组织中心在职人员。组织部门只作参考：人事和技术在那边是同一张表，这里要拆成人事部或技术部。勾上的人才按当前部门的模板每天填表。</p>' +
+      '<div class="work-form"><label class="work-field is-grow">搜索<input data-roster-q data-keep-focus="roster" value="' +
+      esc(state.rosterQuery) +
+      '" placeholder="姓名、中心、店铺、主管"></label><span class="work-count" data-roster-count>显示 ' +
+      people.length +
+      " / " +
+      all.length +
+      "</span></div>" +
+      '<div class="work-chiprow">' +
+      chip("data-roster-scope", "all", "全部", state.rosterScope) +
+      chip("data-roster-scope", "open", "未排", state.rosterScope) +
+      chip("data-roster-scope", "here", "本部门", state.rosterScope) +
+      chip("data-roster-scope", "other", "其他汇报部门", state.rosterScope) +
+      "</div>" +
+      '<div class="work-chiprow">' +
+      boards
+        .map(function (item) {
+          return chip("data-org-board", item.code, item.name, state.orgBoard);
+        })
+        .join("") +
+      "</div>" +
+      '<div class="work-table-wrap work-roster-scroll"><table class="work-table"><thead><tr><th>汇报</th><th>姓名</th><th>岗位</th><th>所属中心</th><th>组织部门</th><th>席位</th><th>责权</th><th>当前汇报</th></tr></thead><tbody>' +
+      body +
+      '<tr data-roster-empty' +
+      (people.length ? " hidden" : "") +
+      '><td colspan="8" class="work-empty">' +
+      (all.length ? "没有符合筛选的人" : "组织中心还没有人") +
+      "</td></tr>" +
       "</tbody></table></div></div>"
     );
   }
@@ -424,9 +746,9 @@
       '<div class="work-panel"><div class="work-depts">' +
       depts +
       "</div>" +
+      renderPeopleTable() +
       renderPersonPicker() +
       renderTemplateEditor(items, Boolean(Number(state.personId))) +
-      renderPeopleTable() +
       "</div>"
     );
   }
@@ -446,10 +768,14 @@
         : "") +
       "</div>";
     var body = state.tab === "settings" && admin ? renderSettings() : renderToday();
+    var focusKey = state.keepFocus;
+    var caret = state.keepCaret;
+    state.keepFocus = "";
+    state.keepCaret = null;
     root.innerHTML =
       '<main class="page work-page">' +
       '<header class="page-head work-head"><div><p class="kicker">工作汇报</p><h1>工作汇报</h1>' +
-      '<p class="work-lead">运营部、人事部、技术部按责权填报。其他部门不用报。</p></div></header>' +
+      '<p class="work-lead">运营部、人事部、技术部按组织中心责权填报。其他部门不用报。</p></div></header>' +
       tabs +
       '<p class="work-msg' +
       (state.error ? " is-error" : "") +
@@ -458,6 +784,15 @@
       "</p>" +
       body +
       "</main>";
+    if (focusKey) {
+      var focused = root.querySelector('[data-keep-focus="' + focusKey + '"]');
+      if (focused) {
+        focused.focus();
+        if (typeof caret === "number" && focused.setSelectionRange) {
+          focused.setSelectionRange(caret, caret);
+        }
+      }
+    }
   }
 
   function collectTemplate(root) {
@@ -498,7 +833,15 @@
       var tab = event.target.closest("[data-tab]");
       if (tab) {
         state.tab = tab.getAttribute("data-tab") || "today";
-        paint(root);
+        setMsg("");
+        if (state.tab === "today") {
+          reload(root).catch(function (err) {
+            setMsg(err.message, true);
+            paint(root);
+          });
+        } else {
+          paint(root);
+        }
         return;
       }
       var today = event.target.closest("[data-today]");
@@ -526,6 +869,18 @@
         paint(root);
         return;
       }
+      var scope = event.target.closest("button[data-roster-scope]");
+      if (scope) {
+        state.rosterScope = scope.getAttribute("data-roster-scope") || "all";
+        paint(root);
+        return;
+      }
+      var orgBoard = event.target.closest("button[data-org-board]");
+      if (orgBoard) {
+        state.orgBoard = orgBoard.getAttribute("data-org-board") || "";
+        paint(root);
+        return;
+      }
       var saveMine = event.target.closest("[data-save-mine]");
       if (saveMine) {
         if (state.saving) {
@@ -535,7 +890,7 @@
         api("/api/work/report", { method: "PUT", body: { date: state.date, items: collectMine(root) } })
           .then(function (data) {
             state.report = data;
-            setMsg("今日汇报已保存");
+            setMsg(state.date === todayIso() ? "今日汇报已保存" : "这一天的汇报已保存");
           })
           .catch(function (err) {
             setMsg(err.message, true);
@@ -635,10 +990,22 @@
       if (assign) {
         var personId = Number(assign.getAttribute("data-assign"));
         var deptCode = assign.checked ? state.settingsDept : "";
+        var current = ((state.settings && state.settings.people) || []).find(function (item) {
+          return Number(item.id) === personId;
+        });
+        var prevCode = current ? current.deptCode : "";
+        var prevName = current ? current.deptName : "";
         api("/api/work/settings/members", { method: "PUT", body: { personId: personId, deptCode: deptCode } })
           .then(function (data) {
             state.settings = data;
-            setMsg(deptCode ? "已加入需汇报名单" : "已移出，不用再报");
+            var nextName = deptLabel(deptCode);
+            var msg = "已移出，不用再报";
+            if (deptCode && prevCode && prevCode !== deptCode) {
+              msg = "已从" + prevName + "改到" + nextName;
+            } else if (deptCode) {
+              msg = "已加入" + nextName;
+            }
+            setMsg(msg);
             paint(root);
           })
           .catch(function (err) {
@@ -646,6 +1013,19 @@
             assign.checked = !assign.checked;
             paint(root);
           });
+      }
+    });
+    root.addEventListener("input", function (event) {
+      var roster = event.target.closest("[data-roster-q]");
+      if (roster) {
+        state.rosterQuery = roster.value || "";
+        applyRosterFilter(root);
+        return;
+      }
+      var boardQuery = event.target.closest("[data-board-q]");
+      if (boardQuery) {
+        state.boardQuery = boardQuery.value || "";
+        applyBoardFilter(root);
       }
     });
   }
@@ -659,6 +1039,11 @@
       state.dept = "";
       state.settingsDept = "ops";
       state.personId = 0;
+      state.rosterQuery = "";
+      state.rosterScope = "all";
+      state.orgBoard = "";
+      state.boardQuery = "";
+      state.keepFocus = "";
       state.msg = "";
       state.error = false;
       root.innerHTML = '<main class="page work-page"><p class="work-empty">正在打开工作汇报…</p></main>';

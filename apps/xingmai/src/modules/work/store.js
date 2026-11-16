@@ -63,6 +63,51 @@ function formatRights(person) {
   return `${shops.slice(0, 2).join("、")} 等${shops.length}店`;
 }
 
+export const ORG_BOARDS = [
+  { code: "ops", name: "运营部门" },
+  { code: "hrTech", name: "人事和技术部门" },
+  { code: "backend", name: "后端部门" }
+];
+
+const SEATS = [
+  ["director", "总监"],
+  ["lineManager", "经理"],
+  ["supervisor", "主管"],
+  ["reserve", "储备"],
+  ["operator", "运营"],
+  ["assistant", "助理"]
+];
+
+function dutyValue(value) {
+  const text = String(value || "").trim();
+  return text === "无" ? "" : text;
+}
+
+export function orgBoardName(code) {
+  return ORG_BOARDS.find((item) => item.code === code)?.name || "";
+}
+
+export function seatOf(person) {
+  const name = String(person?.name || "").trim();
+  if (!name) {
+    return "";
+  }
+  return SEATS.filter(([key]) => dutyValue(person[key]) === name)
+    .map(([, label]) => label)
+    .join("、");
+}
+
+export function dutyText(person) {
+  const name = String(person?.name || "").trim();
+  return SEATS.filter(([key]) => key !== "director" || dutyValue(person?.director) === name)
+    .map(([key, label]) => {
+      const value = dutyValue(person?.[key]);
+      return value ? `${label} ${value}` : "";
+    })
+    .filter(Boolean)
+    .join(" · ");
+}
+
 function namesOf(user) {
   if (!user) {
     return [];
@@ -213,6 +258,7 @@ async function orgPeople() {
       usernameById.get(Number(person.id)) ||
       person.username ||
       (person.employeeNo === "XM001" || person.center === "人员管理" ? "罗成" : "");
+    const board = String(person.board || person.orgBoard || "").trim();
     return {
       id: Number(person.id),
       name: String(person.name || ""),
@@ -223,6 +269,13 @@ async function orgPeople() {
       managerName: String(person.managerName || ""),
       status: String(person.status || ""),
       username,
+      director: dutyValue(person.director),
+      lineManager: dutyValue(person.lineManager),
+      supervisor: dutyValue(person.supervisor),
+      reserve: dutyValue(person.reserve),
+      operator: dutyValue(person.operator),
+      assistant: dutyValue(person.assistant),
+      board,
       visibleShops: Array.isArray(person.visibleShops) ? person.visibleShops.map((item) => String(item)) : [],
       rights: formatRights(person)
     };
@@ -333,6 +386,7 @@ function itemsFor(personId, deptCode) {
 }
 
 function publicPerson(person, deptCode) {
+  const board = String(person.board || "");
   return {
     id: person.id,
     name: person.name,
@@ -344,6 +398,10 @@ function publicPerson(person, deptCode) {
     username: person.username,
     rights: person.rights,
     visibleShops: person.visibleShops,
+    orgBoard: board,
+    orgBoardName: orgBoardName(board),
+    seat: seatOf(person),
+    duty: dutyText(person),
     deptCode: deptCode || "",
     deptName: deptName(deptCode)
   };
@@ -359,6 +417,7 @@ export async function snapshot(user) {
     today: todayShanghai(),
     isAdmin: admin,
     depts: WORK_DEPTS,
+    orgBoards: ORG_BOARDS,
     me: me ? publicPerson(me, deptCode) : null,
     needReport: Boolean(deptCode) || admin
   };
@@ -396,6 +455,7 @@ export async function getSettings(user) {
   return {
     ok: true,
     depts: WORK_DEPTS,
+    orgBoards: ORG_BOARDS,
     people: people.map((person) => publicPerson(person, members.get(person.id) || "")),
     members: memberList,
     templates: templateMap,
