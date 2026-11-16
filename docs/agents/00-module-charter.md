@@ -48,13 +48,14 @@
 | 甄选商学院 | `public/academy.html`、`public/academy*`、`src/modules/academy/`、`shared/modules/academy.js` | 同上 |
 | 甄选智能体 | `public/agents.html`、`public/agents*`、`src/modules/agents/`、`shared/modules/agents.js` | 同上 |
 | 工作汇报 | `src/modules/work/`、`shared/modules/work.js` | 同上。侧栏主栏一项 `/work`，无子菜单。运营部、人事部、技术部按责权填报 |
+| 月度大会 | `src/modules/meeting/`、`shared/modules/meeting.js` | 同上。侧栏主栏一项 `/meeting`，无子菜单。一页小看板 |
 | 需求与反馈 | `src/modules/feedback/`、`shared/modules/feedback.js` | 同上。侧栏主栏一项 `/feedback`，无子菜单 |
 | 版本发布中心 | `public/releases.html`、`releases.css`、`src/modules/releases/`（**补丁**线上闸，禁止用仓库简化 router 整文件覆盖） | 壳、业务模块、线上 `app.js` |
 | 个人中心 | `login.html` / `login.css` / `me.html`、`src/modules/profile/`；`home/pages.js` 与 `profile/middleware.js` 必须同单 | 壳；登录页不得加载 `nav.js` |
 
 `nav-items.js` 虽然在 `src/modules/home/`，归属 **主框架**，首页不要交。
 
-主框架已认识：侧栏第一项「首页」`/home`（`/` 仍跳数据中心）；「甄选商学院」带子菜单培训课程 / 培训考试 / 运营手册；「甄选智能体」`/agents`；「工作汇报」`/work`；「需求与反馈」`/feedback`；底部「组织中心 / 智能人事 / 版本发布中心 / 个人中心」，智能人事路径 `/hr`。要再加子菜单或改 `src/app.js` 挂新 API，问主框架，不要自己改壳。
+主框架已认识：侧栏第一项「首页」`/home`（`/` 仍跳数据中心）；「甄选商学院」带子菜单培训课程 / 培训考试 / 运营手册；「甄选智能体」`/agents`；「工作汇报」`/work`；「月度大会」`/meeting`；「需求与反馈」`/feedback`；底部「组织中心 / 智能人事 / 版本发布中心 / 个人中心」，智能人事路径 `/hr`。要再加子菜单或改 `src/app.js` 挂新 API，问主框架，不要自己改壳。
 
 ## 怎么新建独立对话框并对接
 
