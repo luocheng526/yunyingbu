@@ -1,9 +1,10 @@
 /* xm-module-hr — 智能人事。只挂 /hr。假勤只读钉钉落库，招聘记在服务器上。 */
 (function () {
   var TABS = [
-    { id: "attendance", label: "看板" },
+    { id: "attendance", label: "数据看板" },
     { id: "overtime", label: "奋斗时长" },
-    { id: "recruit", label: "招聘" }
+    { id: "recruit", label: "招聘中心" },
+    { id: "staff", label: "员工花名册" }
   ];
   var GENDERS = ["男", "女"];
   var STAGES = ["储备", "面试中", "已入职", "已淘汰"];
@@ -77,7 +78,7 @@
       ".hr-link{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}" +
       ".hr-link select{height:32px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);font:inherit;}" +
       ".hr-toolbar{display:flex;justify-content:space-between;gap:8px;align-items:center;color:var(--xm-muted);font-size:13px;}" +
-      ".hr-month input{height:32px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;}" +
+      ".hr-month input,.hr-month select{height:32px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;}" +
       ".hr-primary{height:32px;border:0;border-radius:6px;background:var(--xm-primary);color:#fff;padding:0 14px;font:inherit;font-size:13px;cursor:pointer;}" +
       ".hr-table-wrap{overflow:auto;}" +
       ".hr-table{width:100%;border-collapse:collapse;font-size:13px;}" +
@@ -256,7 +257,7 @@
         '<section class="hr-card hr-watch" data-watch></section>' +
         '<p class="hr-msg" data-msg></p>' +
         table(["姓名", "部门", "角色", "组织", "月累计"], emptyRow(5, "这个月还没有 18 点后的下班打卡")) + "</section>";
-    } else {
+    } else if (tab === "recruit") {
       html = '<section class="hr-panel"><div class="hr-toolbar"><span>待入职按天填写，记录在服务器上。</span>' +
         '<label class="hr-month">日期<input type="date" data-join-day value="' + esc(today) + '" /></label></div>' +
         kpis([{ label: "待入职", value: "0" }, { label: "入职情况", value: "0" }]) +
@@ -290,6 +291,33 @@
         '<button class="hr-primary" type="submit">登记入职情况</button></form>' +
         '<p class="hr-msg" data-msg></p>' +
         table(["姓名", "性别", "入职部门", "岗位", "入职日期", "联系电话", "籍贯", "渠道", "邀约人", "备注", "情况说明", ""], emptyRow(12, "还没有入职情况")).replace("data-list", "data-onboards") +
+        "</section>";
+    } else {
+      html = '<section class="hr-panel"><div class="hr-toolbar"><span>运营打卡人员的在职和离职记在服务器上。可以手填、导入表格，或从打卡带入。</span>' +
+        '<span class="hr-link"><button type="button" class="hr-mini" data-act="staff-template">下载模板</button>' +
+        '<button type="button" class="hr-mini" data-act="staff-pick">导入表格</button>' +
+        '<input type="file" accept=".csv,text/csv" data-staff-file hidden />' +
+        '<button type="button" class="hr-mini" data-act="staff-sync">从打卡带入</button>' +
+        '<label class="hr-month">状态<select data-staff-filter><option value="">全部</option><option value="在职">在职</option><option value="离职">离职</option></select></label></span></div>' +
+        kpis([{ label: "在职", value: "0" }, { label: "离职", value: "0" }]) +
+        '<form class="hr-form hr-card" data-form="staff">' +
+        field("姓名", '<input name="name" required maxlength="64" autocomplete="off" />') +
+        field("性别", '<select name="gender"><option value="">请选择</option>' + options(GENDERS, "") + "</select>") +
+        field("工号", '<input name="jobNumber" maxlength="64" autocomplete="off" />') +
+        field("部门", '<input name="department" maxlength="64" autocomplete="off" />') +
+        field("岗位", '<input name="position" maxlength="64" autocomplete="off" />') +
+        field("联系电话", '<input name="phone" maxlength="32" autocomplete="off" />') +
+        field("入职日期", '<input name="joinedOn" type="date" />') +
+        field("离职日期", '<input name="leftOn" type="date" />') +
+        field("状态", '<select name="status">' + options(["在职", "离职"], "在职") + "</select>") +
+        field("籍贯", '<input name="hometown" maxlength="64" autocomplete="off" />') +
+        field("学历", '<input name="education" maxlength="32" autocomplete="off" />') +
+        field("紧急联系人", '<input name="emergencyName" maxlength="64" autocomplete="off" />') +
+        field("紧急电话", '<input name="emergencyPhone" maxlength="32" autocomplete="off" />') +
+        field("备注", '<input name="note" maxlength="500" autocomplete="off" />', "hr-field-grow") +
+        '<button class="hr-primary" type="submit">登记</button></form>' +
+        '<p class="hr-msg" data-msg></p>' +
+        table(["姓名", "性别", "工号", "部门", "岗位", "联系电话", "入职日期", "离职日期", "状态", "籍贯", "学历", "紧急联系人", "紧急电话", "备注", ""], emptyRow(15, "还没有花名册")) +
         "</section>";
     }
     root.querySelector(".hr-body").innerHTML = html;
@@ -566,6 +594,34 @@
     if (box) box.outerHTML = table(onboardHeaders, onboardBody).replace("data-list", "data-onboards");
   }
 
+  function staffCells(row) {
+    return "<td>" + esc(row.name) + "</td><td>" + esc(row.gender) + "</td><td>" + esc(row.jobNumber) +
+      "</td><td>" + esc(row.department) + "</td><td>" + esc(row.position) + "</td><td>" + esc(row.phone) +
+      "</td><td>" + esc(row.joinedOn) + "</td><td>" + esc(row.leftOn) + "</td><td>" +
+      '<select data-staff-status data-id="' + esc(row.id) + '">' + options(["在职", "离职"], row.status || "在职") + "</select></td><td>" +
+      esc(row.hometown) + "</td><td>" + esc(row.education) + "</td><td>" + esc(row.emergencyName) +
+      "</td><td>" + esc(row.emergencyPhone) + "</td><td>" + esc(row.note) + "</td>";
+  }
+
+  function fillStaff(root, pack) {
+    var all = pack.staff || [];
+    var filter = root.querySelector("[data-staff-filter]");
+    var picked = filter && filter.value ? filter.value : "";
+    var rows = picked ? all.filter(function (row) { return row.status === picked; }) : all;
+    var active = all.filter(function (row) { return row.status !== "离职"; }).length;
+    setStats(root, [
+      { label: "在职", value: active },
+      { label: "离职", value: all.length - active }
+    ]);
+    var headers = ["姓名", "性别", "工号", "部门", "岗位", "联系电话", "入职日期", "离职日期", "状态", "籍贯", "学历", "紧急联系人", "紧急电话", "备注", ""];
+    var body = rows.length ? rows.map(function (row) {
+      return "<tr>" + staffCells(row) + "<td>" +
+        '<button type="button" class="hr-mini" data-act="staff-edit" data-id="' + esc(row.id) + '">修改</button> ' +
+        removeBtn("staff", row.id) + "</td></tr>";
+    }).join("") : emptyRow(15, "还没有花名册");
+    setList(root, headers, body);
+  }
+
   function monthQuery(root) {
     var input = root.querySelector("[data-month]");
     return input && input.value ? "?month=" + encodeURIComponent(input.value) : "";
@@ -583,6 +639,8 @@
       dataReq = api("/api/hr/board?date=" + encodeURIComponent(day));
     } else if (tab === "overtime") {
       dataReq = api("/api/hr/effort" + monthQuery(root));
+    } else if (tab === "staff") {
+      dataReq = api("/api/hr/staff");
     } else {
       var dayInput = root.querySelector("[data-join-day]");
       var day = dayInput && dayInput.value ? dayInput.value : shanghaiToday();
@@ -599,6 +657,7 @@
       state.view = view;
       if (tab === "attendance") fillAttendance(root, view);
       else if (tab === "overtime") fillEffort(root, view);
+      else if (tab === "staff") fillStaff(root, view);
       else fillRecruit(root, view);
     }).catch(function (err) {
       if (!state.alive || ticket !== state.ticket) return;
@@ -627,6 +686,92 @@
   function formValue(form, name) {
     var el = form.elements[name];
     return el ? String(el.value || "").trim() : "";
+  }
+
+  var STAFF_HEADERS = ["姓名", "性别", "工号", "部门", "岗位", "联系电话", "入职日期", "离职日期", "状态", "籍贯", "学历", "紧急联系人", "紧急电话", "备注"];
+  var STAFF_KEYS = {
+    "姓名": "name",
+    "性别": "gender",
+    "工号": "jobNumber",
+    "部门": "department",
+    "岗位": "position",
+    "联系电话": "phone",
+    "电话": "phone",
+    "入职日期": "joinedOn",
+    "离职日期": "leftOn",
+    "状态": "status",
+    "在职状态": "status",
+    "籍贯": "hometown",
+    "学历": "education",
+    "紧急联系人": "emergencyName",
+    "紧急电话": "emergencyPhone",
+    "备注": "note"
+  };
+
+  function parseCsv(text) {
+    var rows = [];
+    var row = [];
+    var cell = "";
+    var quoted = false;
+    var source = String(text || "").replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    function pushRow() {
+      if (row.some(function (value) { return String(value || "").trim(); })) rows.push(row);
+      row = [];
+      cell = "";
+    }
+    for (var i = 0; i < source.length; i += 1) {
+      var ch = source[i];
+      if (quoted) {
+        if (ch === '"') {
+          if (source[i + 1] === '"') { cell += '"'; i += 1; }
+          else quoted = false;
+        } else cell += ch;
+      } else if (ch === '"') quoted = true;
+      else if (ch === ",") { row.push(cell); cell = ""; }
+      else if (ch === "\n") { row.push(cell); pushRow(); }
+      else cell += ch;
+    }
+    row.push(cell);
+    pushRow();
+    return rows;
+  }
+
+  function csvStaff(text) {
+    var grid = parseCsv(text);
+    if (!grid.length) return [];
+    var head = grid[0].map(function (name) { return String(name || "").trim(); });
+    var keys = head.map(function (name) { return STAFF_KEYS[name] || ""; });
+    if (keys.indexOf("name") < 0) return [];
+    return grid.slice(1).map(function (line) {
+      var item = {};
+      keys.forEach(function (key, index) {
+        if (key) item[key] = String(line[index] || "").trim();
+      });
+      return item;
+    }).filter(function (item) { return item.name; });
+  }
+
+  function downloadCsv(filename, text) {
+    var blob = new Blob(["\uFEFF" + text], { type: "text/csv;charset=utf-8" });
+    var link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
+  function fillStaffForm(form, row) {
+    ["name", "gender", "jobNumber", "department", "position", "phone", "joinedOn", "leftOn", "status", "hometown", "education", "emergencyName", "emergencyPhone", "note"].forEach(function (key) {
+      if (form.elements[key]) form.elements[key].value = row && row[key] ? row[key] : (key === "status" ? "在职" : "");
+    });
+    var button = form.querySelector("button[type='submit']");
+    if (row && row.id) {
+      form.setAttribute("data-staff-id", String(row.id));
+      if (button) button.textContent = "保存修改";
+    } else {
+      form.removeAttribute("data-staff-id");
+      if (button) button.textContent = "登记";
+    }
   }
 
   function mount(root) {
@@ -683,6 +828,41 @@
         if (state.view) fillEffort(root, state.view);
         return;
       }
+      var template = event.target.closest("[data-act='staff-template']");
+      if (template && root.contains(template)) {
+        event.preventDefault();
+        downloadCsv("员工花名册.csv", STAFF_HEADERS.join(",") + "\n");
+        return;
+      }
+      var pick = event.target.closest("[data-act='staff-pick']");
+      if (pick && root.contains(pick)) {
+        event.preventDefault();
+        var fileInput = root.querySelector("[data-staff-file]");
+        if (fileInput) fileInput.click();
+        return;
+      }
+      var sync = event.target.closest("[data-act='staff-sync']");
+      if (sync && root.contains(sync)) {
+        event.preventDefault();
+        sync.disabled = true;
+        api("/api/hr/staff/sync", { method: "POST", body: {} })
+          .then(function (data) {
+            setMsg(root, data.added ? "已从打卡带入 " + data.added + " 人" : "打卡里的运营人员都已经在花名册里", false);
+            loadTab(root, state);
+          })
+          .catch(function (err) { setMsg(root, err.message, true); })
+          .then(function () { sync.disabled = false; });
+        return;
+      }
+      var edit = event.target.closest("[data-act='staff-edit']");
+      if (edit && root.contains(edit)) {
+        event.preventDefault();
+        var staffId = Number(edit.getAttribute("data-id"));
+        var person = ((state.view && state.view.staff) || []).filter(function (row) { return Number(row.id) === staffId; })[0];
+        var staffForm = root.querySelector("form[data-form='staff']");
+        if (person && staffForm) fillStaffForm(staffForm, person);
+        return;
+      }
       var tabBtn = event.target.closest(".hr-tab");
       if (tabBtn && root.contains(tabBtn)) {
         event.preventDefault();
@@ -692,7 +872,8 @@
       var btn = event.target.closest("[data-act='delete']");
       if (!btn || !root.contains(btn)) return;
       if (!window.confirm("删除这条记录？")) return;
-      var kind = btn.getAttribute("data-kind") === "onboard" ? "/onboards/" : "/recruits/";
+      var kindName = btn.getAttribute("data-kind");
+      var kind = kindName === "onboard" ? "/onboards/" : kindName === "staff" ? "/staff/" : "/recruits/";
       api("/api/hr" + kind + btn.getAttribute("data-id"), { method: "DELETE" })
         .then(function () { loadTab(root, state); })
         .catch(function (err) { setMsg(root, err.message, true); });
@@ -704,7 +885,24 @@
       event.preventDefault();
       var kind = form.getAttribute("data-form");
       var dayInput = root.querySelector("[data-join-day]");
-      var body = kind === "onboard" ? {
+      var staffId = form.getAttribute("data-staff-id");
+      var body = kind === "staff" ? {
+        name: formValue(form, "name"),
+        gender: formValue(form, "gender"),
+        jobNumber: formValue(form, "jobNumber"),
+        department: formValue(form, "department"),
+        position: formValue(form, "position"),
+        phone: formValue(form, "phone"),
+        joinedOn: formValue(form, "joinedOn"),
+        leftOn: formValue(form, "leftOn"),
+        status: formValue(form, "status") || "在职",
+        hometown: formValue(form, "hometown"),
+        education: formValue(form, "education"),
+        emergencyName: formValue(form, "emergencyName"),
+        emergencyPhone: formValue(form, "emergencyPhone"),
+        note: formValue(form, "note"),
+        replace: true
+      } : kind === "onboard" ? {
         name: formValue(form, "name"),
         gender: formValue(form, "gender"),
         department: formValue(form, "department"),
@@ -731,9 +929,11 @@
       };
       var button = form.querySelector("button[type='submit']");
       if (button) button.disabled = true;
-      api("/api/hr/" + (kind === "onboard" ? "onboards" : "recruits"), { method: "POST", body: body })
+      var path = kind === "staff" ? (staffId ? "/staff/" + encodeURIComponent(staffId) : "/staff") : kind === "onboard" ? "/onboards" : "/recruits";
+      api("/api/hr" + path, { method: kind === "staff" && staffId ? "PUT" : "POST", body: body })
         .then(function () {
           form.reset();
+          if (kind === "staff") fillStaffForm(form, null);
           loadTab(root, state);
         })
         .catch(function (err) { setMsg(root, err.message, true); })
@@ -743,7 +943,41 @@
     root.addEventListener("click", onClick);
     root.addEventListener("submit", onSubmit);
     root.addEventListener("change", function (event) {
-      if (event.target && event.target.matches("[data-month], [data-day], [data-join-day]")) loadTab(root, state);
+      var target = event.target;
+      if (!target || !root.contains(target)) return;
+      if (target.matches("[data-month], [data-day], [data-join-day]")) {
+        loadTab(root, state);
+        return;
+      }
+      if (target.matches("[data-staff-filter]")) {
+        if (state.view) fillStaff(root, state.view);
+        return;
+      }
+      if (target.matches("[data-staff-file]")) {
+        var file = target.files && target.files[0];
+        target.value = "";
+        if (!file) return;
+        file.text().then(function (text) {
+          var rows = csvStaff(text);
+          if (!rows.length) {
+            setMsg(root, "表格需要有姓名这一列，并且至少一行人员", true);
+            return null;
+          }
+          return api("/api/hr/staff/import", { method: "POST", body: { rows: rows } });
+        }).then(function (data) {
+          if (!data) return;
+          setMsg(root, "已导入，新增 " + data.added + " 人，更新 " + data.updated + " 人", false);
+          loadTab(root, state);
+        }).catch(function (err) { setMsg(root, err.message || "导入失败", true); });
+        return;
+      }
+      if (target.matches("[data-staff-status]")) {
+        api("/api/hr/staff/" + encodeURIComponent(target.getAttribute("data-id")), {
+          method: "PUT",
+          body: { status: target.value, replace: false }
+        }).then(function () { loadTab(root, state); })
+          .catch(function (err) { setMsg(root, err.message, true); });
+      }
     });
     loadTab(root, state);
     return function unmount() {

@@ -1,7 +1,8 @@
 import { dbMode, query } from "../profile/auth.js";
 
-export const HR_TABS = ["看板", "奋斗时长", "招聘"];
+export const HR_TABS = ["数据看板", "奋斗时长", "招聘中心", "员工花名册"];
 export const GENDERS = ["男", "女"];
+export const STAFF_STATUSES = ["在职", "离职"];
 export const INTERVIEW_RESULTS = ["待定", "通过", "未通过", "未到场"];
 export const TALENT_STAGES = ["储备", "面试中", "已入职", "已淘汰"];
 
@@ -107,6 +108,27 @@ export const HR_SCHEMA = [
     created_by VARCHAR(64) NOT NULL DEFAULT '',
     created_at VARCHAR(40) NOT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS hr_staff (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    person_name VARCHAR(64) NOT NULL,
+    gender VARCHAR(8) NOT NULL DEFAULT '',
+    job_number VARCHAR(64) NOT NULL DEFAULT '',
+    department_name VARCHAR(64) NOT NULL DEFAULT '',
+    position_name VARCHAR(64) NOT NULL DEFAULT '',
+    phone VARCHAR(32) NOT NULL DEFAULT '',
+    joined_on VARCHAR(10) NOT NULL DEFAULT '',
+    left_on VARCHAR(10) NOT NULL DEFAULT '',
+    status_name VARCHAR(16) NOT NULL DEFAULT '在职',
+    hometown VARCHAR(64) NOT NULL DEFAULT '',
+    education VARCHAR(32) NOT NULL DEFAULT '',
+    emergency_name VARCHAR(64) NOT NULL DEFAULT '',
+    emergency_phone VARCHAR(32) NOT NULL DEFAULT '',
+    note_text VARCHAR(500) NOT NULL DEFAULT '',
+    dingtalk_userid VARCHAR(64) NOT NULL DEFAULT '',
+    created_by VARCHAR(64) NOT NULL DEFAULT '',
+    created_at VARCHAR(40) NOT NULL,
+    updated_at VARCHAR(40) NOT NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   `CREATE TABLE IF NOT EXISTS hr_talents (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     person_name VARCHAR(64) NOT NULL,
@@ -143,6 +165,7 @@ function emptyMemory() {
     interviews: [],
     recruits: [],
     onboards: [],
+    staff: [],
     talents: [],
     runs: []
   };
@@ -855,6 +878,240 @@ export async function deleteOnboard(id) {
   return removeRow("hr_onboards", memory.onboards, id, (next) => {
     memory.onboards = next;
   });
+}
+
+function mapStaff(row) {
+  return {
+    id: Number(row.id),
+    name: row.person_name,
+    gender: row.gender || "",
+    jobNumber: row.job_number || "",
+    department: row.department_name || "",
+    position: row.position_name || "",
+    phone: row.phone || "",
+    joinedOn: row.joined_on || "",
+    leftOn: row.left_on || "",
+    status: row.status_name || "在职",
+    hometown: row.hometown || "",
+    education: row.education || "",
+    emergencyName: row.emergency_name || "",
+    emergencyPhone: row.emergency_phone || "",
+    note: row.note_text || "",
+    dingtalkUserId: row.dingtalk_userid || "",
+    createdBy: row.created_by || ""
+  };
+}
+
+function filled(input, key) {
+  return input && input[key] != null && String(input[key]).trim() !== "";
+}
+
+function staffFrom(input, { requireName = true } = {}) {
+  const statusText = clip(input.status, 16);
+  let status = statusText ? mustChoice(statusText, STAFF_STATUSES, "状态") : "";
+  const leftOn = optionalDate(input.leftOn, "离职日期");
+  if (!status) status = leftOn ? "离职" : "在职";
+  return {
+    name: requireName ? mustName(input.name, "姓名") : clip(input.name, 64),
+    gender: optionalGender(input.gender),
+    jobNumber: clip(input.jobNumber, 64),
+    department: clip(input.department, 64),
+    position: clip(input.position, 64),
+    phone: optionalPhone(input.phone),
+    joinedOn: optionalDate(input.joinedOn, "入职日期"),
+    leftOn,
+    status,
+    hometown: clip(input.hometown, 64),
+    education: clip(input.education, 32),
+    emergencyName: clip(input.emergencyName, 64),
+    emergencyPhone: optionalPhone(input.emergencyPhone),
+    note: clip(input.note, 500),
+    dingtalkUserId: clip(input.dingtalkUserId, 64)
+  };
+}
+
+function staffPatch(input) {
+  const patch = {};
+  if (filled(input, "name")) patch.name = mustName(input.name, "姓名");
+  if (filled(input, "gender")) patch.gender = optionalGender(input.gender);
+  if (filled(input, "jobNumber")) patch.jobNumber = clip(input.jobNumber, 64);
+  if (filled(input, "department")) patch.department = clip(input.department, 64);
+  if (filled(input, "position")) patch.position = clip(input.position, 64);
+  if (filled(input, "phone")) patch.phone = optionalPhone(input.phone);
+  if (filled(input, "joinedOn")) patch.joinedOn = optionalDate(input.joinedOn, "入职日期");
+  if (filled(input, "leftOn")) patch.leftOn = optionalDate(input.leftOn, "离职日期");
+  if (filled(input, "status")) patch.status = mustChoice(input.status, STAFF_STATUSES, "状态");
+  else if (patch.leftOn) patch.status = "离职";
+  if (filled(input, "hometown")) patch.hometown = clip(input.hometown, 64);
+  if (filled(input, "education")) patch.education = clip(input.education, 32);
+  if (filled(input, "emergencyName")) patch.emergencyName = clip(input.emergencyName, 64);
+  if (filled(input, "emergencyPhone")) patch.emergencyPhone = optionalPhone(input.emergencyPhone);
+  if (filled(input, "note")) patch.note = clip(input.note, 500);
+  if (filled(input, "dingtalkUserId")) patch.dingtalkUserId = clip(input.dingtalkUserId, 64);
+  return patch;
+}
+
+async function readStaffRows() {
+  await ensureHrSchema();
+  if (dbMode() === "mysql") {
+    const rows = await rowsOf("SELECT * FROM hr_staff ORDER BY id DESC");
+    return rows.map(mapStaff);
+  }
+  return memory.staff.map((row) => ({ ...row }));
+}
+
+function sortStaff(rows) {
+  return rows
+    .slice()
+    .sort((a, b) => (a.status === "在职" ? 0 : 1) - (b.status === "在职" ? 0 : 1) || String(a.department).localeCompare(String(b.department), "zh") || String(a.name).localeCompare(String(b.name), "zh"));
+}
+
+export async function listStaff({ status = "" } = {}) {
+  const picked = clip(status, 16);
+  if (picked && !STAFF_STATUSES.includes(picked)) throw bad("状态不正确");
+  const rows = await readStaffRows();
+  return sortStaff(picked ? rows.filter((row) => row.status === picked) : rows);
+}
+
+async function writeStaff(row) {
+  if (dbMode() === "mysql") {
+    const [result] = await query(
+      `INSERT INTO hr_staff
+        (person_name, gender, job_number, department_name, position_name, phone, joined_on, left_on, status_name, hometown, education, emergency_name, emergency_phone, note_text, dingtalk_userid, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [row.name, row.gender, row.jobNumber, row.department, row.position, row.phone, row.joinedOn, row.leftOn, row.status, row.hometown, row.education, row.emergencyName, row.emergencyPhone, row.note, row.dingtalkUserId, row.createdBy, row.createdAt, row.updatedAt]
+    );
+    row.id = Number(result.insertId);
+    return row;
+  }
+  row.id = seq++;
+  memory.staff.push(row);
+  return { ...row };
+}
+
+async function saveStaffRow(row) {
+  row.updatedAt = new Date().toISOString();
+  if (dbMode() === "mysql") {
+    const [result] = await query(
+      `UPDATE hr_staff SET
+        person_name = ?, gender = ?, job_number = ?, department_name = ?, position_name = ?, phone = ?,
+        joined_on = ?, left_on = ?, status_name = ?, hometown = ?, education = ?, emergency_name = ?,
+        emergency_phone = ?, note_text = ?, dingtalk_userid = ?, updated_at = ?
+       WHERE id = ?`,
+      [row.name, row.gender, row.jobNumber, row.department, row.position, row.phone, row.joinedOn, row.leftOn, row.status, row.hometown, row.education, row.emergencyName, row.emergencyPhone, row.note, row.dingtalkUserId, row.updatedAt, row.id]
+    );
+    if (!result.affectedRows) throw bad("记录不存在", 404);
+    return row;
+  }
+  const index = memory.staff.findIndex((item) => item.id === row.id);
+  if (index < 0) throw bad("记录不存在", 404);
+  memory.staff[index] = row;
+  return { ...row };
+}
+
+export async function createStaff(input = {}, actor = "") {
+  const row = { ...staffFrom(input), ...stamp(actor), updatedAt: new Date().toISOString() };
+  return writeStaff(row);
+}
+
+export async function updateStaff(id, input = {}, _actor = "", { replace = false } = {}) {
+  const key = Number(id);
+  const rows = await readStaffRows();
+  const current = rows.find((row) => row.id === key);
+  if (!current) throw bad("记录不存在", 404);
+  const next = replace ? { ...current, ...staffFrom(input), id: current.id, createdBy: current.createdBy, createdAt: current.createdAt } : { ...current, ...staffPatch(input) };
+  if (next.status === "在职" && replace && !clip(input.leftOn, 10)) next.leftOn = "";
+  return saveStaffRow(next);
+}
+
+function matchStaff(rows, input) {
+  const ding = clip(input.dingtalkUserId, 64);
+  const job = clip(input.jobNumber, 64);
+  const name = clip(input.name, 64);
+  const department = clip(input.department, 64);
+  if (ding) {
+    const hit = rows.find((row) => row.dingtalkUserId === ding);
+    if (hit) return hit;
+  }
+  if (job) {
+    const hit = rows.find((row) => row.jobNumber === job);
+    if (hit) return hit;
+  }
+  if (name) {
+    return rows.find((row) => row.name === name && row.department === department) || null;
+  }
+  return null;
+}
+
+export async function importStaff(rows = [], actor = "") {
+  if (!Array.isArray(rows) || !rows.length) throw bad("没有可导入的行");
+  if (rows.length > 400) throw bad("一次最多导入 400 人");
+  const existing = await readStaffRows();
+  let added = 0;
+  let updated = 0;
+  for (const input of rows) {
+    if (!clip(input && input.name, 64)) continue;
+    const hit = matchStaff(existing, input);
+    if (hit) {
+      const saved = await updateStaff(hit.id, input, actor, { replace: false });
+      Object.assign(hit, saved);
+      updated += 1;
+    } else {
+      const saved = await createStaff(input, actor);
+      existing.push(saved);
+      added += 1;
+    }
+  }
+  if (!added && !updated) throw bad("没有可导入的行");
+  return { added, updated };
+}
+
+async function opsPunchPeople() {
+  await ensureHrSchema();
+  if (dbMode() === "mysql") {
+    const rows = await rowsOf(
+      `SELECT dingtalk_userid, MAX(user_name) AS user_name, MAX(job_number) AS job_number, MAX(department) AS department
+       FROM hr_punches
+       WHERE department LIKE '%运营%' AND dingtalk_userid <> ''
+       GROUP BY dingtalk_userid`
+    );
+    return rows.map((row) => ({
+      dingtalkUserId: row.dingtalk_userid,
+      name: row.user_name || "",
+      jobNumber: row.job_number || "",
+      department: row.department || ""
+    }));
+  }
+  const seen = new Map();
+  for (const row of memory.punches) {
+    if (!String(row.department || "").includes("运营") || !row.dingtalkUserId) continue;
+    seen.set(row.dingtalkUserId, {
+      dingtalkUserId: row.dingtalkUserId,
+      name: row.userName || "",
+      jobNumber: row.jobNumber || "",
+      department: row.department || ""
+    });
+  }
+  return [...seen.values()];
+}
+
+export async function deleteStaff(id) {
+  return removeRow("hr_staff", memory.staff, id, (next) => {
+    memory.staff = next;
+  });
+}
+
+export async function syncStaffFromPunches(actor = "") {
+  const people = await opsPunchPeople();
+  const existing = await readStaffRows();
+  let added = 0;
+  for (const person of people) {
+    if (!person.name || matchStaff(existing, person)) continue;
+    const saved = await createStaff({ ...person, status: "在职" }, actor);
+    existing.push(saved);
+    added += 1;
+  }
+  return { added };
 }
 
 export async function listTalents() {

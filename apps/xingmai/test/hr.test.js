@@ -98,7 +98,7 @@ function jsonResponse(body) {
 }
 
 test("hr schema stays in hr_ tables", () => {
-  assert.equal(HR_SCHEMA.length, 11);
+  assert.equal(HR_SCHEMA.length, 12);
   for (const sql of HR_SCHEMA) {
     assert.match(sql, /CREATE TABLE IF NOT EXISTS hr_/);
     assert.doesNotMatch(sql, /people|han_|shen_/i);
@@ -107,7 +107,7 @@ test("hr schema stays in hr_ tables", () => {
 
 test("client mounts one page and five in-page tabs", () => {
   assert.match(client, /XmModules\["\/hr"\]/);
-  const labels = ["看板", "奋斗时长", "招聘"];
+  const labels = ["数据看板", "奋斗时长", "招聘中心", "员工花名册"];
   let from = 0;
   for (const label of labels) {
     const at = client.indexOf(`label: "${label}"`);
@@ -510,6 +510,43 @@ test("only named leaders and hr or tech departments can open hr", () => {
   assert.equal(canSeeHr({ displayName: "丙", department: "运营一组" }), false);
 });
 
+test("roster keeps ops punch staff and can be imported or marked left", async () => {
+  resetHrStore();
+  await replaceDayPunches("2026-11-16", ["u1", "u2"], [
+    { dingtalkUserId: "u1", userName: "甲", jobNumber: "A1", department: "运营一组", checkType: "OnDuty", timeResult: "Normal", checkAt: "2026-11-16 09:00", recordId: "1" },
+    { dingtalkUserId: "u2", userName: "乙", jobNumber: "B1", department: "技术部", checkType: "OnDuty", timeResult: "Normal", checkAt: "2026-11-16 09:00", recordId: "2" }
+  ]);
+  const server = await listen(appWithUser());
+  try {
+    const synced = await request(server, "/api/hr/staff/sync", { method: "POST", body: {} });
+    assert.equal(synced.status, 200);
+    assert.equal(synced.data.added, 1);
+    const created = await request(server, "/api/hr/staff", {
+      method: "POST",
+      body: { name: "丙", department: "运营二组", status: "在职", phone: "13800002222" }
+    });
+    assert.equal(created.status, 201);
+    const imported = await request(server, "/api/hr/staff/import", {
+      method: "POST",
+      body: { rows: [{ name: "甲", jobNumber: "A1", education: "本科", status: "离职", leftOn: "2026-11-16" }] }
+    });
+    assert.equal(imported.data.added, 0);
+    assert.equal(imported.data.updated, 1);
+    const again = await request(server, "/api/hr/staff/sync", { method: "POST", body: {} });
+    assert.equal(again.data.added, 0);
+    const left = await request(server, "/api/hr/staff?status=" + encodeURIComponent("离职"));
+    assert.equal(left.data.staff.length, 1);
+    assert.equal(left.data.staff[0].name, "甲");
+    assert.equal(left.data.staff[0].education, "本科");
+    assert.equal(left.data.staff[0].leftOn, "2026-11-16");
+    const all = await request(server, "/api/hr/staff");
+    assert.equal(all.data.staff.length, 2);
+    assert.equal(JSON.stringify(all.data).includes("password"), false);
+  } finally {
+    await close(server);
+  }
+});
+
 test("http keeps attendance read-only and interviews in this module", async () => {
   resetHrStore();
   await saveLinks([]);
@@ -527,7 +564,7 @@ test("http keeps attendance read-only and interviews in this module", async () =
     assert.equal(hr.data.allowed, true);
     const home = await request(server, "/api/hr");
     assert.equal(home.status, 200);
-    assert.deepEqual(home.data.tabs, ["看板", "奋斗时长", "招聘"]);
+    assert.deepEqual(home.data.tabs, ["数据看板", "奋斗时长", "招聘中心", "员工花名册"]);
     const effort = await request(server, "/api/hr/effort?month=2026-11");
     assert.equal(effort.data.hours, 0);
     assert.equal(Array.isArray(effort.data.people), true);

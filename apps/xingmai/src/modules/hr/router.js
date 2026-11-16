@@ -16,23 +16,29 @@ import {
   createInterview,
   createOnboard,
   createRecruit,
+  createStaff,
   createTalent,
   deleteInterview,
   deleteOnboard,
   deleteLink,
   deleteRecruit,
+  deleteStaff,
   deleteTalent,
   latestSync,
   listDingUsers,
   listInterviews,
   listLinks,
+  importStaff,
   listOnboards,
   listRecruits,
+  listStaff,
   listLeaves,
   listOvertime,
   listPunches,
   listQuotas,
   listTalents,
+  syncStaffFromPunches,
+  updateStaff,
   upsertLink
 } from "./store.js";
 
@@ -272,6 +278,57 @@ hrRouter.post("/onboards", async (req, res) => {
 hrRouter.delete("/onboards/:id", async (req, res) => {
   try {
     res.json({ ok: true, ...(await deleteOnboard(req.params.id)) });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.get("/staff", async (req, res) => {
+  try {
+    res.json({ ok: true, staff: await listStaff({ status: req.query.status }) });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.post("/staff/import", async (req, res) => {
+  try {
+    res.json({ ok: true, ...(await importStaff((req.body || {}).rows, actorName(req))) });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.post("/staff/sync", async (req, res) => {
+  try {
+    res.json({ ok: true, ...(await syncStaffFromPunches(actorName(req))) });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.post("/staff", async (req, res) => {
+  try {
+    const person = await createStaff(req.body || {}, actorName(req));
+    res.status(201).json({ ok: true, staff: person });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.put("/staff/:id", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const person = await updateStaff(req.params.id, body, actorName(req), { replace: body.replace === true });
+    res.json({ ok: true, staff: person });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.delete("/staff/:id", async (req, res) => {
+  try {
+    res.json({ ok: true, ...(await deleteStaff(req.params.id)) });
   } catch (err) {
     sendErr(res, err);
   }
