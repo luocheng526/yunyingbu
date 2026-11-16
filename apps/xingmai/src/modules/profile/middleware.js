@@ -7,10 +7,10 @@ import { currentUser, publicProfile } from "./auth.js";
 import { APP_ICON_PNG } from "./app-icon-png.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.772-work-rpt2
+// xm-fast-shell 0.1.772-hr-desk
 // login.html 不走 HTML 内存缓存；login.css 禁止 immutable。必须和 home/pages.js 成套发。
 
-export const SHELL_ASSET_VER = "0.1.772-work-rpt2";
+export const SHELL_ASSET_VER = "0.1.772-hr-desk";
 export const WEB_MANIFEST = {
   name: "星脉甄选运营中心",
   short_name: "星脉甄选",
@@ -587,8 +587,20 @@ function serveHomeIndex(req, res) {
   if (destPath !== "/" && destPath !== "/index.html") {
     return false;
   }
-  res.redirect(302, "/home");
+  res.redirect(302, req.user && req.user.desk === "hr" ? "/hr" : "/home");
   return true;
+}
+
+async function attachDesk(user) {
+  if (!user) {
+    return;
+  }
+  try {
+    const { deskOf } = await import("../work/store.js");
+    user.desk = await deskOf(user);
+  } catch {
+    user.desk = user.desk || "";
+  }
 }
 
 function dropHanApiCache(req) {
@@ -646,14 +658,18 @@ export function requireLoginUnlessPublic(req, res, next) {
   const user = currentUser(req);
   if (user) {
     req.user = user;
-    dropHanApiCache(req);
-    if (serveHomeIndex(req, res)) {
-      return;
-    }
-    if (serveHanApiCache(req, res)) {
-      return;
-    }
-    next();
+    Promise.resolve(attachDesk(user))
+      .then(() => {
+        dropHanApiCache(req);
+        if (serveHomeIndex(req, res)) {
+          return;
+        }
+        if (serveHanApiCache(req, res)) {
+          return;
+        }
+        next();
+      })
+      .catch(next);
     return;
   }
   if (normalizedPath(req).startsWith("/api/")) {

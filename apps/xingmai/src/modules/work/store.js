@@ -241,6 +241,53 @@ export async function matchPerson(user) {
   return hit || null;
 }
 
+function textLooksHr(value) {
+  const text = String(value || "").trim();
+  if (!text || text.includes("人员管理")) {
+    return false;
+  }
+  if (text === "人事" || text.includes("人事部")) {
+    return true;
+  }
+  return /人事(专员|主管|经理|总监)$/.test(text);
+}
+
+function isStaffBrain(user) {
+  return namesOf(user).some((name) => {
+    const lower = name.toLowerCase();
+    return name === "罗成" || lower === "luocheng" || name === "韩梦凯" || name === "沈子晗";
+  });
+}
+
+export async function deskOf(user) {
+  if (!user || isStaffBrain(user)) {
+    return "";
+  }
+  await readyStore();
+  const me = await matchPerson(user);
+  const code = me ? members.get(Number(me.id)) || "" : "";
+  if (code === "hr") {
+    return "hr";
+  }
+  const bag = [
+    user.department,
+    user.center,
+    user.role,
+    user.username,
+    user.displayName,
+    user.name,
+    me && me.department,
+    me && me.center,
+    me && me.role,
+    me && me.name,
+    me && me.username
+  ];
+  if (bag.some(textLooksHr)) {
+    return "hr";
+  }
+  return "";
+}
+
 function parseDate(raw) {
   const value = String(raw || "").trim();
   if (!value) {

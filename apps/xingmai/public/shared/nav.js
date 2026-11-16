@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.772-work-rpt2 — 侧栏甄选智能体后增加工作汇报 */
+/* xm-fast-shell 0.1.772-hr-desk — 人事部账号只进智能人事数据看板 */
 (function () {
-  const ASSET_VER = "0.1.772-work-rpt2";
+  const ASSET_VER = "0.1.772-hr-desk";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -160,7 +160,32 @@
     return window.__xmBootUser || null;
   }
 
+  function isHrDesk(user) {
+    const who = user || currentStaffUser();
+    if (!who || canSeeStaffNav(who)) {
+      return false;
+    }
+    return String(who.desk || "") === "hr";
+  }
+
+  function deskHome(user) {
+    return isHrDesk(user) ? "/hr" : "/home";
+  }
+
+  function allowDeskRoute(href) {
+    if (!isHrDesk()) {
+      return true;
+    }
+    const key = normalize(href);
+    return key === "/hr" || key === "/me";
+  }
+
   function footVisible(user) {
+    if (isHrDesk(user)) {
+      return FOOT.filter(function (item) {
+        return item.href === "/me";
+      });
+    }
     const show = canSeeStaffNav(user);
     return FOOT.filter(function (item) {
       return show || !STAFF_NAV[item.href];
@@ -692,6 +717,9 @@
   let orgFlags = { shen: true, han: true, known: false, resolved: false };
 
   function mainVisible(user, flags) {
+    if (isHrDesk(user)) {
+      return [{ href: "/hr", label: "智能人事" }];
+    }
     const next = flags || orgFlagsFromUser(user);
     return MAIN.filter(function (item) {
       if (item.href === "/shen") {
@@ -711,8 +739,14 @@
   }
 
   function siderHtml() {
+    const home = deskHome();
+    const homeTitle = isHrDesk() ? "回到智能人事" : "回到首页";
     return (
-      '<div class="xm-brand"><a class="xm-logo" href="/home" title="回到首页"><img src="/login-logo.png" alt="星脉甄选" onerror="this.onerror=null;this.src=\'/shared/xingmai-logo.png\'" /></a>' +
+      '<div class="xm-brand"><a class="xm-logo" href="' +
+      home +
+      '" title="' +
+      homeTitle +
+      '"><img src="/login-logo.png" alt="星脉甄选" onerror="this.onerror=null;this.src=\'/shared/xingmai-logo.png\'" /></a>' +
       '<button type="button" class="xm-collapse" id="xm-collapse" aria-label="折叠侧栏">‹</button></div>' +
       '<nav class="xm-menu xm-menu-main">' +
       mainHtml() +
@@ -724,7 +758,7 @@
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout">' +
       ico("logout") +
       "<span>退出登录</span></button>" +
-      '<p class="xm-version">v0.4.24</p></nav>'
+      '<p class="xm-version">v0.4.26</p></nav>'
     );
   }
 
@@ -911,7 +945,7 @@
 
   function tabButtonHtml(href, active) {
     const label = labelOf(href);
-    const pinned = href === "/home";
+    const pinned = href === deskHome();
     const closer = pinned
       ? ""
       : '<button type="button" class="xm-tab-close" aria-label="关闭 ' + label + '">×</button>';
@@ -957,11 +991,17 @@
     if (MODULES[here] && !PARENT_HOME[here] && openTabs.indexOf(here) < 0) {
       openTabs.push(here);
     }
-    if (openTabs.indexOf("/home") < 0) {
-      openTabs.unshift("/home");
+    const pin = deskHome();
+    if (isHrDesk()) {
+      openTabs = openTabs.filter(function (href) {
+        return allowDeskRoute(href);
+      });
+    }
+    if (openTabs.indexOf(pin) < 0) {
+      openTabs.unshift(pin);
     }
     if (!openTabs.length) {
-      openTabs = ["/home"];
+      openTabs = [pin];
     }
     writeOpenTabs();
   }
@@ -994,7 +1034,7 @@
   }
 
   function pinHomeTab() {
-    const home = document.querySelector('.xm-tabs .xm-tab[data-href="/home"]');
+    const home = document.querySelector('.xm-tabs .xm-tab[data-href="' + deskHome() + '"]');
     if (!home) {
       return;
     }
@@ -1059,7 +1099,7 @@
     bar.setAttribute("data-count", String(openTabs.length));
     bar.innerHTML = openTabs
       .map(function (href) {
-        return tabButtonHtml(href, href === current || (href === "/home" && leafRoute(current) === "/home"));
+        return tabButtonHtml(href, href === current || (href === deskHome() && leafRoute(current) === deskHome()));
       })
       .join("");
     pinHomeTab();
@@ -1154,7 +1194,7 @@
 
   function closeTab(href) {
     const key = leafRoute(href);
-    if (key === "/home") {
+    if (key === deskHome()) {
       return;
     }
     const idx = openTabs.indexOf(key);
@@ -1168,7 +1208,7 @@
     disposePane(key);
     writeOpenTabs();
     if (current === key) {
-      go(openTabs[idx] || openTabs[idx - 1] || openTabs[0] || "/home", true);
+      go(openTabs[idx] || openTabs[idx - 1] || openTabs[0] || deskHome(), true);
       return;
     }
     paintTabs();
@@ -1203,7 +1243,7 @@
       const shown = pane && pane.classList.contains("is-active") && !pane.hidden;
       if (href !== current || !shown) {
         go(href, href === current ? false : undefined);
-      } else if (href === "/home" && homePaneEmpty()) {
+      } else if (href === deskHome() && (href === "/home" ? homePaneEmpty() : true)) {
         goHomeRefresh();
       }
     });
@@ -1223,6 +1263,9 @@
     }
     window.__xmTabsRestored = 1;
     const key = leafRoute(dest || "");
+    if (isHrDesk() && leafRoute(current) === deskHome() && key !== deskHome()) {
+      return;
+    }
     if (!key || key === current || !MODULES[key] || PARENT_HOME[key]) {
       return;
     }
@@ -1557,7 +1600,7 @@
   }
 
   function bootHomePane() {
-    if (current === "/home") {
+    if (isHrDesk() || current === "/home") {
       return;
     }
     paneFor("/home", true);
@@ -1570,24 +1613,25 @@
   }
 
   function goHomeRefresh() {
-    if (openTabs.indexOf("/home") < 0) {
-      openTabs.unshift("/home");
+    const home = deskHome();
+    if (openTabs.indexOf(home) < 0) {
+      openTabs.unshift(home);
     }
     writeOpenTabs();
-    if (normalize(window.location.pathname) !== "/home") {
-      history.pushState({ xm: "/home" }, "", "/home");
+    if (normalize(window.location.pathname) !== home) {
+      history.pushState({ xm: home }, "", home);
     }
-    current = "/home";
+    current = home;
     setPhoneNav(false);
-    disposePane("/home");
-    const root = paneFor("/home", true);
+    disposePane(home);
+    const root = paneFor(home, true);
     if (root) {
       root.removeAttribute("data-xm-mounted");
     }
-    paintActive("/home");
-    showPane("/home");
-    loadModuleScript("/home").then(function () {
-      mountRoute("/home");
+    paintActive(home);
+    showPane(home);
+    loadModuleScript(home).then(function () {
+      mountRoute(home);
     });
   }
 
@@ -2430,14 +2474,14 @@
     const brand = document.querySelector(".xm-brand");
     const logo = document.querySelector("a.xm-logo");
     if (logo) {
-      logo.setAttribute("href", "/home");
-      logo.setAttribute("title", "回到首页");
+      logo.setAttribute("href", deskHome());
+      logo.setAttribute("title", isHrDesk() ? "回到智能人事" : "回到首页");
     }
     if (!brand || brand.dataset.homeBound === "1") {
       return;
     }
     brand.dataset.homeBound = "1";
-    brand.setAttribute("title", "回到首页");
+    brand.setAttribute("title", isHrDesk() ? "回到智能人事" : "回到首页");
     brand.addEventListener("click", function (event) {
       if (event.target.closest(".xm-collapse")) {
         return;
@@ -2456,12 +2500,16 @@
       href = "/people";
     }
     const key = normalize(href);
+    if (!allowDeskRoute(key)) {
+      go(deskHome(), push);
+      return;
+    }
     if (PARENT_HOME[key]) {
       go(PARENT_HOME[key], push);
       return;
     }
     if (key === "/") {
-      window.location.replace("/home");
+      window.location.replace(deskHome());
       return;
     }
     const which = centerOfPath(key);
@@ -2765,7 +2813,7 @@
             go(href, false);
             return;
           }
-          if (href === "/home" && homePaneEmpty()) {
+          if (href === deskHome() && (href === "/home" ? homePaneEmpty() : true)) {
             goHomeRefresh();
           }
           return;
@@ -2971,6 +3019,9 @@
   }
 
   function homeForOrg() {
+    if (isHrDesk()) {
+      return "/hr";
+    }
     if (orgFlags.shen && !orgFlags.han) {
       return "/shen/product";
     }
@@ -3305,7 +3356,7 @@
   window.addEventListener("popstate", function () {
     const href = normalize(window.location.pathname);
     if (href === "/") {
-      window.location.replace("/home");
+      window.location.replace(deskHome());
       return;
     }
     go(href, false);

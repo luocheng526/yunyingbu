@@ -1,4 +1,4 @@
-export const NAV_VERSION = "v0.4.25";
+export const NAV_VERSION = "v0.4.26";
 
 export const DATA_CHILDREN = [
   { href: "/data/overview", label: "数据总揽" },
@@ -39,6 +39,17 @@ export function canSeeStaffNav(user) {
     const name = String(value || "").trim();
     return Boolean(name) && (STAFF_NAV_NAMES.has(name) || STAFF_NAV_NAMES.has(name.toLowerCase()));
   });
+}
+
+export function isHrDesk(user) {
+  if (!user || canSeeStaffNav(user)) {
+    return false;
+  }
+  return String(user.desk || "") === "hr";
+}
+
+export function deskHome(user) {
+  return isHrDesk(user) ? "/hr" : "/home";
 }
 
 export function orgNavFlags(user) {
@@ -325,6 +336,9 @@ export function filterCenterPayload(data, allow, storeQuery) {
 }
 
 function footItemsFor(user) {
+  if (isHrDesk(user)) {
+    return NAV_FOOT.filter((item) => item.href === "/me");
+  }
   if (canSeeStaffNav(user)) {
     return NAV_FOOT;
   }
@@ -332,6 +346,9 @@ function footItemsFor(user) {
 }
 
 function mainItemsFor(user) {
+  if (isHrDesk(user)) {
+    return [{ href: "/hr", label: "智能人事" }];
+  }
   const flags = orgNavFlags(user);
   return NAV_MAIN.filter((item) => {
     if (item.href === "/shen") {
@@ -464,5 +481,7 @@ export function navMarkup(activeHref, user) {
   const foot = footItemsFor(user)
     .map((item) => (item.children ? groupMarkup(item, activeHref) : itemLink(item, activeHref)))
     .join("");
-  return `<aside class="xm-sider" aria-label="侧栏导航"><div class="xm-brand"><a class="xm-logo" href="/home" title="回到首页"><img src="/login-logo.png" alt="星脉甄选" onerror="this.onerror=null;this.src='/shared/xingmai-logo.png'" /></a><button type="button" class="xm-collapse" id="xm-collapse" aria-label="折叠侧栏">‹</button></div><nav class="xm-menu xm-menu-main">${main}</nav><nav class="xm-menu xm-menu-foot">${foot}<button type="button" class="xm-menu-item xm-logout" id="xm-logout">${ico("logout")}<span>退出登录</span></button><p class="xm-version">${NAV_VERSION}</p></nav></aside>`;
+  const home = deskHome(user);
+  const homeTitle = isHrDesk(user) ? "回到智能人事" : "回到首页";
+  return `<aside class="xm-sider" aria-label="侧栏导航"><div class="xm-brand"><a class="xm-logo" href="${home}" title="${homeTitle}"><img src="/login-logo.png" alt="星脉甄选" onerror="this.onerror=null;this.src='/shared/xingmai-logo.png'" /></a><button type="button" class="xm-collapse" id="xm-collapse" aria-label="折叠侧栏">‹</button></div><nav class="xm-menu xm-menu-main">${main}</nav><nav class="xm-menu xm-menu-foot">${foot}<button type="button" class="xm-menu-item xm-logout" id="xm-logout">${ico("logout")}<span>退出登录</span></button><p class="xm-version">${NAV_VERSION}</p></nav></aside>`;
 }
