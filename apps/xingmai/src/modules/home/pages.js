@@ -2,12 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as profileShell from "../profile/middleware.js";
-import { NAV_ITEMS, orgNavFlags } from "./nav-items.js";
+import { NAV_ITEMS, isHrDesk, orgNavFlags } from "./nav-items.js";
 import { hrRouter } from "../hr/router.js";
 import { workRouter } from "../work/router.js";
 
 // xm-upgrade-mask 0.1.52  必须和 profile/middleware.js 成套发。
-// xm-fast-shell 0.1.772-work-rpt2
+// xm-fast-shell 0.1.772-hr-desk
 // xm-login-session 登录会话回读必须和 profile/middleware.js 成套发。
 // login.html 不走 HTML 内存缓存，必须和 profile/middleware.js 成套发。
 
@@ -89,12 +89,33 @@ function bounceOtherCenter(req, res, dest) {
   return false;
 }
 
+function bounceHrDesk(req, res) {
+  if (!isHrDesk(req.user)) {
+    return false;
+  }
+  const path = String(req.path || "").replace(/\/+$/, "") || "/";
+  if (path.startsWith("/api/")) {
+    return false;
+  }
+  if (path === "/hr" || path.startsWith("/hr/") || path === "/me" || path.startsWith("/me")) {
+    return false;
+  }
+  if (/\.(?:js|css|png|jpe?g|svg|ico|webp|woff2?|map)$/i.test(path)) {
+    return false;
+  }
+  res.redirect(302, "/hr");
+  return true;
+}
+
 export function registerPageRoutes(app) {
   app.use("/api/hr", hrRouter);
   app.use("/api/work", workRouter);
   app.use((req, res, next) => {
     const method = String(req.method || "GET").toUpperCase();
     const path = String(req.path || "").replace(/\/+$/, "") || "/";
+    if ((method === "GET" || method === "HEAD") && bounceHrDesk(req, res)) {
+      return;
+    }
     if ((method === "GET" || method === "HEAD") && path.startsWith("/shen") && bounceOtherCenter(req, res, "shen")) {
       return;
     }

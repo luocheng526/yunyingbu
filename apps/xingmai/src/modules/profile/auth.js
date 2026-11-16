@@ -364,15 +364,36 @@ export function resetStoreForTests() {
   seed();
 }
 
+export function addUserForTests(input = {}) {
+  const username = String(input.username || "").trim();
+  if (!username) {
+    return null;
+  }
+  const user = {
+    username,
+    displayName: String(input.displayName || username).trim() || username,
+    email: String(input.email || "").trim(),
+    phone: String(input.phone || "").trim(),
+    department: String(input.department || "").trim(),
+    center: String(input.center || "").trim(),
+    passwordHash: hashPasswordSync(String(input.password || DEMO_INITIAL_PASSWORD))
+  };
+  users.set(username, user);
+  return user;
+}
+
 export function publicProfile(user) {
   if (!user) {
     return null;
   }
+  const desk = String(user.desk || "");
   return {
     username: user.username,
     displayName: user.displayName,
     email: user.email,
-    phone: user.phone
+    phone: user.phone,
+    desk,
+    home: desk === "hr" ? "/hr" : "/data"
   };
 }
 
@@ -448,7 +469,9 @@ function sendProfile(res, user) {
     username: profile.username,
     displayName: profile.displayName,
     email: profile.email,
-    phone: profile.phone
+    phone: profile.phone,
+    desk: profile.desk,
+    home: profile.home
   });
 }
 
@@ -486,6 +509,12 @@ authRouter.post("/login", async (req, res) => {
   persistSession(sid, user.username, createdAt, expiresAt).catch(function (err) {
     console.error("session persist failed", err);
   });
+  try {
+    const { deskOf } = await import("../work/store.js");
+    user.desk = await deskOf(user);
+  } catch {
+    user.desk = user.desk || "";
+  }
   res.json({ ok: true, remember, user: publicProfile(user) });
 });
 

@@ -11,10 +11,17 @@ export function attachProfile(app) {
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true });
   });
-  app.get("/login", (req, res) => {
+  app.get("/login", async (req, res) => {
     const leaving = String(req.query.out || "") === "1";
-    if (!leaving && currentUser(req)) {
-      res.redirect("/data");
+    const user = currentUser(req);
+    if (!leaving && user) {
+      try {
+        const { deskOf } = await import("../work/store.js");
+        user.desk = await deskOf(user);
+      } catch {
+        user.desk = user.desk || "";
+      }
+      res.redirect(user.desk === "hr" ? "/hr" : "/data");
       return;
     }
     res.sendFile(path.join(publicDir, "login.html"));
