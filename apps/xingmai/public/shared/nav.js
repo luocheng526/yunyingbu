@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.772-hr-entry — 侧栏底部补智能人事 /hr */
+/* xm-fast-shell 0.1.772-hr-foot — 底部：版本发布中心、组织中心、智能人事、个人中心 */
 (function () {
-  const ASSET_VER = "0.1.772-hr-entry";
+  const ASSET_VER = "0.1.772-hr-foot";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -78,9 +78,9 @@
     { href: "/stores", label: "店铺维护中心" },
     { href: "/academy", label: "甄选商学院", children: ACADEMY_CHILDREN },
     { href: "/agents", label: "甄选智能体" },
+    { href: "/releases", label: "版本发布中心" },
     { href: "/people", label: "组织中心", children: PEOPLE_CHILDREN },
     { href: "/hr", label: "智能人事" },
-    { href: "/releases", label: "版本发布中心" },
     { href: "/me", label: "个人中心" }
   ];
   const labels = items.concat(DATA_CHILDREN, SHEN_CHILDREN, HAN_CHILDREN, ACADEMY_CHILDREN, PEOPLE_CHILDREN);

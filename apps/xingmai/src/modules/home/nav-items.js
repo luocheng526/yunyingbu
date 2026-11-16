@@ -366,9 +366,9 @@ export const NAV_MAIN = [
 ];
 
 export const NAV_FOOT = [
+  { href: "/releases", file: "releases.html", label: "版本发布中心" },
   { href: "/people", file: "people.html", label: "组织中心", children: PEOPLE_CHILDREN },
   { href: "/hr", label: "智能人事" },
-  { href: "/releases", file: "releases.html", label: "版本发布中心" },
   { href: "/me", file: "me.html", label: "个人中心" }
 ];
 
