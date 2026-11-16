@@ -152,6 +152,36 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
   assert.equal(withGmv.shops[0].liveAmount, "40");
   assert.equal(withGmv.shops[0].jzAccount, "999");
   assert.equal(withGmv.shops[0].paidIn, true);
+  const hanShenHero = fns.fillLocalPaid(
+    {
+      hero: {
+        label: "实时总成交金额",
+        value: "291,255",
+        todayHour: [18, 10, 5, 29],
+        yesterdayHour: [20, 12, 8, 40],
+        yestText: "381,894"
+      },
+      shops: [],
+      cards: [],
+      paid: { label: "推广总花费", value: "—" }
+    },
+    {
+      records: [
+        { shopName: "韩店", paidAmount: 104524, paidDeal: 199764, jingmaiGmv: 251945, source: "han" },
+        { shopName: "沈店", paidAmount: 65585, paidDeal: 134741, jingmaiGmv: 154648, source: "shen" }
+      ],
+      yesterday: {
+        records: [
+          { shopName: "韩店", jingmaiGmv: 240000 },
+          { shopName: "沈店", jingmaiGmv: 140000 }
+        ]
+      }
+    }
+  );
+  assert.equal(hanShenHero.hero.value, "406,593");
+  assert.notEqual(hanShenHero.hero.value, "291,255");
+  assert.equal(hanShenHero.hero.yestText, "380,000");
+  assert.ok(Number(hanShenHero.hero.todayHour[0]) > 18);
   assert.deepEqual(fns.payFit([2, 2], 10), [5, 5]);
   const shaped = fns.fillLocalPaid(
     {
@@ -244,7 +274,7 @@ test("live page keeps 京麦 from ERP and leaves paid for local return", () => {
       }
     }
   );
-  assert.equal(keptYest.hero.yesterdayHour[0], 99);
+  assert.equal(Number(keptYest.hero.yesterdayHour[0].toFixed(2)), 26.67);
   assert.equal(Number(keptYest.paid.yesterdayHour[0].toFixed(1)), 3);
   assert.equal(keptYest.fee.yesterdayHour[0], 0.3);
   const erpYest = fns.fillLocalPaid(
@@ -631,6 +661,13 @@ test("homepage client mergeLivePaid builds shop rows from 韩/沈 APIs", () => {
   assert.equal(merged.records.find((row) => row.shopName === "韩店").paidAmount, 10);
   assert.equal(merged.records.find((row) => row.shopName === "沈店").paidDeal, 18);
   assert.equal(merged.records.find((row) => row.shopName === "京麦店").liveAmount, 12);
+  const keepGmv = fns.mergeLivePaid(
+    { shops: [] },
+    { rows: [{ store: "RASW家居旗舰店", date: ymd, spend: 500, jingmaiGmv: 154648 }] },
+    { shops: [{ store: "RASW家居旗舰店", dealAmount: 11784 }] },
+    ymd
+  );
+  assert.equal(keepGmv.records[0].liveAmount, 154648);
 });
 
 test("local-paid pack always has ok and records, never empty object", async () => {
@@ -776,8 +813,8 @@ test("zero yesterday hours on the snap do not wipe ERP 成交 or flatten 付费"
       paid: { label: "推广总花费", value: "—" }
     },
     {
-      records: [{ shopName: "A店", paidAmount: 160, paidDeal: 300, jingmaiGmv: 400 }],
-      yesterday: { records: [{ shopName: "A店", paidAmount: 135, paidDeal: 280, jingmaiGmv: 500 }] },
+      records: [{ shopName: "A店", paidAmount: 160, paidDeal: 300 }],
+      yesterday: { records: [{ shopName: "A店", paidAmount: 135, paidDeal: 280 }] },
       hourly: {
         todayPay: zeros,
         yesterdayPay: zeros,

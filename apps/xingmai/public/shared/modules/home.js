@@ -1,6 +1,6 @@
-/* xm-module-home 0.1.949-feeapi */
+/* xm-module-home 0.1.950-livegmv */
 (function () {
-  var HOME_JS_STAMP = "0.1.949-feeapi";
+  var HOME_JS_STAMP = "0.1.950-livegmv";
   var VIEWS = [
     { key: "company", label: "公司" },
     { key: "team", label: "经理团队" },
@@ -3696,6 +3696,15 @@
   }
   function mergeLivePaid(han, shen, jingmai, ymd) {
     var map = {};
+    function pickAmt(a, b) {
+      if (a == null) {
+        return b;
+      }
+      if (b == null) {
+        return a;
+      }
+      return a >= b ? a : b;
+    }
     function add(list, source) {
       (list || []).forEach(function (row) {
         var day = liveDayOf(row);
@@ -3713,8 +3722,8 @@
           ? Object.assign({}, cur, rec, {
               paidAmount: rec.paidAmount != null ? rec.paidAmount : cur.paidAmount,
               paidDeal: rec.paidDeal != null ? rec.paidDeal : cur.paidDeal,
-              liveAmount: rec.liveAmount != null ? rec.liveAmount : cur.liveAmount,
-              jingmaiGmv: rec.jingmaiGmv != null ? rec.jingmaiGmv : cur.jingmaiGmv,
+              liveAmount: pickAmt(rec.liveAmount, cur.liveAmount),
+              jingmaiGmv: pickAmt(rec.jingmaiGmv, cur.jingmaiGmv),
               capturedAt: rec.capturedAt || cur.capturedAt,
               source: cur.source && rec.source && cur.source !== rec.source ? "han+shen" : rec.source || cur.source
             })
@@ -3937,7 +3946,30 @@
       live.hero.yestText = fmtMoney(yestSum.liveAmount);
       live.hero.delta = asNum(live.hero.value) != null ? trendOf(asNum(live.hero.value), yestSum.liveAmount) : live.hero.delta;
     }
+    if (live.hero && sum.liveAmount != null) {
+      live.hero.value = fmtMoney(sum.liveAmount);
+      if (hoursHaveNow(live.hero.todayHour)) {
+        live.hero.todayHour = payFit(live.hero.todayHour, sum.liveAmount);
+        live.hero.today = cumHours(live.hero.todayHour);
+      } else if (hoursHaveNow(hourly.todayPay)) {
+        live.hero.todayHour = todayHours(payFit(hourly.todayPay, sum.liveAmount));
+        live.hero.today = cumHours(live.hero.todayHour);
+      }
+      if (yestSum.liveAmount != null) {
+        live.hero.yestText = fmtMoney(yestSum.liveAmount);
+        live.hero.delta = trendOf(sum.liveAmount, yestSum.liveAmount);
+        if (hoursHaveNow(live.hero.yesterdayHour)) {
+          live.hero.yesterdayHour = payFit(live.hero.yesterdayHour, yestSum.liveAmount);
+          live.hero.yesterday = cumHours(live.hero.yesterdayHour);
+        } else if (hoursHaveNow(hourly.yesterdayPay)) {
+          live.hero.yesterdayHour = payFit(hourly.yesterdayPay, yestSum.liveAmount);
+          live.hero.yesterday = cumHours(live.hero.yesterdayHour);
+        }
+      }
+    }
     var kept = keepLiveDay({
+      jingmai: sum.liveAmount,
+      yestJingmai: yestSum.liveAmount,
       spend: sum.spend,
       fee: sum.feeRate,
       yestSpend: yestSum.spend,
