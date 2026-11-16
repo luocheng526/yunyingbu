@@ -330,7 +330,7 @@ async function masterState() {
 }
 
 function failText(scope, message) {
-  return `daysType=${scope.daysType} ${String(message || "接口失败")}`.slice(0, 300);
+  return `q=1 daysType=${scope.daysType} ${String(message || "接口失败")}`.slice(0, 300);
 }
 
 function reportBody(report, dim, scope, page) {
@@ -338,6 +338,7 @@ function reportBody(report, dim, scope, page) {
     startDate: scope.start,
     endDate: scope.end,
     daysType: scope.daysType,
+    queryType: 1,
     pageNum: Math.max(page, 1),
     pageSize: PAGE_SIZE,
     shopList: [],
@@ -361,7 +362,7 @@ function sheetHole(report, dim, scope, sheets) {
     return null;
   }
   if (first.status === "failed" && first.attempts >= 3) {
-    const stamped = String(first.errorText || "").startsWith(`daysType=${scope.daysType} `);
+    const stamped = String(first.errorText || "").startsWith(`q=1 daysType=${scope.daysType} `);
     if (stamped) {
       return null;
     }
