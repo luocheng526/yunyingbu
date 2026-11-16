@@ -1037,6 +1037,54 @@ const LOGIN_OPS_SMOKE = `<!doctype html>
   </body>
 </html>`;
 
+const DEPT_BOARDS_SMOKE = `<!doctype html>
+<html lang="zh-CN">
+  <head><meta charset="utf-8" /><link rel="stylesheet" href="/people.css" /></head>
+  <body>
+    <div id="xm-content"></div>
+    <script src="/shared/modules/people.js"></script>
+    <script>
+      (async function () {
+        function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+        function headersOf() {
+          return Array.prototype.map.call(document.querySelectorAll('[data-pane="members"] thead th'), function (th) {
+            return th.textContent.replace(/▾/g, "").trim();
+          });
+        }
+        window.XmModules["/people"].mount(document.getElementById("xm-content"));
+        await sleep(700);
+        document.querySelector('[data-pane="members"]').click();
+        await sleep(500);
+        const tabs = Array.prototype.map.call(document.querySelectorAll(".people-dept-tab"), function (btn) {
+          return btn.textContent.trim();
+        });
+        const opsHeaders = headersOf();
+        const opsActive = document.querySelector('.people-dept-tab[data-board="ops"]').classList.contains("is-active");
+        const opsHasShen = Array.prototype.some.call(document.querySelectorAll("#people-tbody tr"), function (tr) {
+          return ((tr.cells[1] && tr.cells[1].textContent) || "").indexOf("沈子晗") >= 0;
+        });
+        document.querySelector('.people-dept-tab[data-board="hrTech"]').click();
+        await sleep(200);
+        const hrActive = document.querySelector('.people-dept-tab[data-board="hrTech"]').classList.contains("is-active");
+        const hrEmpty = (document.querySelector("#people-tbody") && document.querySelector("#people-tbody").textContent) || "";
+        const hrHeaders = headersOf();
+        document.querySelector('.people-dept-tab[data-board="backend"]').click();
+        await sleep(200);
+        const backendEmpty = (document.querySelector("#people-tbody") && document.querySelector("#people-tbody").textContent) || "";
+        const backendHeaders = headersOf();
+        const headerNeed = ["姓名", "总监", "经理", "主管", "储备", "运营", "助理", "状态", "账号", "登录密码"];
+        const headerOk = headerNeed.every(function (name) { return opsHeaders.indexOf(name) >= 0; });
+        const sameHeaders = opsHeaders.join("|") === hrHeaders.join("|") && hrHeaders.join("|") === backendHeaders.join("|");
+        const tabsOk = tabs.join(",") === "运营部门管理,人事和技术部门,后端部门";
+        document.body.setAttribute("data-tabs", tabs.join(","));
+        document.body.setAttribute("data-headers", opsHeaders.join(","));
+        document.body.setAttribute("data-hr", hrEmpty.replace(/\\s+/g, " ").trim());
+        document.body.setAttribute("data-ok", tabsOk && opsActive && opsHasShen && hrActive && hrEmpty.indexOf("还没有人") >= 0 && backendEmpty.indexOf("还没有人") >= 0 && sameHeaders && headerOk ? "1" : "0");
+      })();
+    </script>
+  </body>
+</html>`;
+
 test("headless chrome opens 登录信息 and 设置密码 from 成员管理", async () => {
   resetPeopleStore();
   resetOrgBoard();
@@ -1061,6 +1109,35 @@ test("headless chrome opens 登录信息 and 设置密码 from 成员管理", as
     );
     assert.match(html, /data-login-title="登录信息/);
     assert.match(html, /data-pass-title="设置密码/);
+  } finally {
+    await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
+});
+
+test("headless chrome switches 运营 / 人事技术 / 后端 boards with the same headers", async () => {
+  resetPeopleStore();
+  resetOrgBoard();
+  resetOrgExtra();
+  const app = createApp();
+  const server = http.createServer((req, res) => {
+    if (req.url === "/__dept-boards-smoke") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(DEPT_BOARDS_SMOKE);
+      return;
+    }
+    app(req, res);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  try {
+    const html = await chromeDump(`http://127.0.0.1:${port}/__dept-boards-smoke`, 12000);
+    assert.match(
+      html,
+      /data-ok="1"/,
+      html.includes("data-ok=") ? html.slice(html.indexOf("data-ok="), html.indexOf("data-ok=") + 360) : html.slice(-400)
+    );
+    assert.match(html, /data-tabs="运营部门管理,人事和技术部门,后端部门"/);
+    assert.match(html, /data-headers="[^"]*姓名[^"]*总监[^"]*经理/);
   } finally {
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }

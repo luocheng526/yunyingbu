@@ -182,6 +182,39 @@ body:has(.people-page) .xm-tabs {
   white-space: nowrap;
 }
 
+.people-dept-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.people-dept-tab {
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #1f1f1f;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.people-dept-tab:hover {
+  border-color: #91caff;
+  background: #f7faff;
+  color: #1677ff;
+}
+
+.people-dept-tab.is-active {
+  border-color: #1677ff;
+  background: #1677ff;
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(22, 119, 255, 0.2);
+}
+
 .org-kpis {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
