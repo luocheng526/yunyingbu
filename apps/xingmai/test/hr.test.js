@@ -127,6 +127,10 @@ test("client mounts one page and five in-page tabs", () => {
   assert.match(client, /data-theme/);
   assert.match(client, /\/api\/people/);
   assert.match(client, /钉钉还没配置/);
+  assert.match(client, /甄选员工详细名单/);
+  assert.match(client, /data-staff-search/);
+  assert.match(client, /data-staff-pick/);
+  assert.match(client, /data-staff-field/);
   const boardTitles = ["甄选运营团队看板", "后端团队看板", "总看板"];
   let titleAt = 0;
   for (const title of boardTitles) {
@@ -542,6 +546,33 @@ test("roster keeps ops punch staff and can be imported or marked left", async ()
     const all = await request(server, "/api/hr/staff");
     assert.equal(all.data.staff.length, 2);
     assert.equal(JSON.stringify(all.data).includes("password"), false);
+    const row = left.data.staff[0];
+    const edited = await request(server, "/api/hr/staff/" + row.id, {
+      method: "PUT",
+      body: {
+        name: row.name,
+        gender: "女",
+        jobNumber: row.jobNumber,
+        department: row.department,
+        position: "运营",
+        phone: "13800003333",
+        joinedOn: "2026-11-01",
+        leftOn: row.leftOn,
+        status: "离职",
+        hometown: "天津",
+        education: row.education,
+        emergencyName: "张三",
+        emergencyPhone: "13900004444",
+        note: "手工修改",
+        dingtalkUserId: row.dingtalkUserId,
+        replace: true
+      }
+    });
+    assert.equal(edited.status, 200);
+    assert.equal(edited.data.staff.position, "运营");
+    assert.equal(edited.data.staff.hometown, "天津");
+    assert.equal(edited.data.staff.note, "手工修改");
+    assert.equal(edited.data.staff.dingtalkUserId, "u1");
   } finally {
     await close(server);
   }

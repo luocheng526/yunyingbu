@@ -97,6 +97,11 @@
       ".hr-board-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-end;}" +
       ".hr-board-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;}" +
       ".hr-board-kpi{border:0;border-radius:16px;padding:16px 16px 14px;color:#fff;min-height:108px;box-shadow:0 10px 22px rgba(24,49,99,.12);}" +
+      "button.hr-board-kpi{width:100%;text-align:left;cursor:pointer;font:inherit;}" +
+      "button.hr-board-kpi.is-on{box-shadow:0 0 0 3px rgba(16,24,40,.35),0 10px 22px rgba(24,49,99,.18);}" +
+      ".hr-staff-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}" +
+      ".hr-cell{width:100%;min-width:88px;height:28px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 6px;font:inherit;font-size:12px;}" +
+      ".hr-cell-wide{min-width:140px;}" +
       ".hr-board-kpi i{display:flex;width:28px;height:28px;border-radius:8px;align-items:center;justify-content:center;background:rgba(255,255,255,.22);}" +
       ".hr-board-kpi i svg{width:16px;height:16px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}" +
       ".hr-board-kpi b{display:block;margin-top:10px;font-size:34px;line-height:1;font-weight:700;font-variant-numeric:tabular-nums;}" +
@@ -298,9 +303,8 @@
         '<span class="hr-link"><button type="button" class="hr-mini" data-act="staff-template">下载模板</button>' +
         '<button type="button" class="hr-mini" data-act="staff-pick">导入表格</button>' +
         '<input type="file" accept=".csv,text/csv" data-staff-file hidden />' +
-        '<button type="button" class="hr-mini" data-act="staff-sync">从打卡带入</button>' +
-        '<label class="hr-month">状态<select data-staff-filter><option value="">全部</option><option value="在职">在职</option><option value="离职">离职</option></select></label></span></div>' +
-        kpis([{ label: "在职", value: "0" }, { label: "离职", value: "0" }]) +
+        '<button type="button" class="hr-mini" data-act="staff-sync">从打卡带入</button></span></div>' +
+        '<div class="hr-board-kpis hr-staff-kpis" data-staff-kpis></div>' +
         '<form class="hr-form hr-card" data-form="staff">' +
         field("姓名", '<input name="name" required maxlength="64" autocomplete="off" />') +
         field("性别", '<select name="gender"><option value="">请选择</option>' + options(GENDERS, "") + "</select>") +
@@ -318,6 +322,8 @@
         field("备注", '<input name="note" maxlength="500" autocomplete="off" />', "hr-field-grow") +
         '<button class="hr-primary" type="submit">登记</button></form>' +
         '<p class="hr-msg" data-msg></p>' +
+        '<div class="hr-toolbar"><h2 class="hr-team-title">甄选员工详细名单</h2>' +
+        '<label class="hr-month">搜索<input type="search" data-staff-search placeholder="姓名、工号、部门、电话" /></label></div>' +
         table(["姓名", "性别", "工号", "部门", "岗位", "联系电话", "入职日期", "离职日期", "状态", "籍贯", "学历", "紧急联系人", "紧急电话", "备注", ""], emptyRow(15, "还没有花名册")) +
         "</section>";
     }
@@ -613,31 +619,75 @@
     if (box) box.outerHTML = table(onboardHeaders, onboardBody).replace("data-list", "data-onboards");
   }
 
+  function staffSaveBody(row, key, value) {
+    var body = {
+      name: row.name || "",
+      gender: row.gender || "",
+      jobNumber: row.jobNumber || "",
+      department: row.department || "",
+      position: row.position || "",
+      phone: row.phone || "",
+      joinedOn: row.joinedOn || "",
+      leftOn: row.leftOn || "",
+      status: row.status || "在职",
+      hometown: row.hometown || "",
+      education: row.education || "",
+      emergencyName: row.emergencyName || "",
+      emergencyPhone: row.emergencyPhone || "",
+      note: row.note || "",
+      dingtalkUserId: row.dingtalkUserId || "",
+      replace: true
+    };
+    body[key] = value;
+    return body;
+  }
+
+  function staffBox(row, key, type, max) {
+    var value = row[key] || "";
+    if (key === "gender") {
+      return '<select class="hr-cell" data-staff-field="gender" data-id="' + esc(row.id) + '"><option value="">请选择</option>' + options(GENDERS, value) + "</select>";
+    }
+    return '<input class="hr-cell' + (key === "note" ? " hr-cell-wide" : "") + '" data-staff-field="' + key + '" data-id="' + esc(row.id) +
+      '" type="' + (type || "text") + '" maxlength="' + (max || 64) + '" value="' + esc(value) + '" />';
+  }
+
   function staffCells(row) {
-    return "<td>" + esc(row.name) + "</td><td>" + esc(row.gender) + "</td><td>" + esc(row.jobNumber) +
-      "</td><td>" + esc(row.department) + "</td><td>" + esc(row.position) + "</td><td>" + esc(row.phone) +
-      "</td><td>" + esc(row.joinedOn) + "</td><td>" + esc(row.leftOn) + "</td><td>" +
-      '<select data-staff-status data-id="' + esc(row.id) + '">' + options(["在职", "离职"], row.status || "在职") + "</select></td><td>" +
-      esc(row.hometown) + "</td><td>" + esc(row.education) + "</td><td>" + esc(row.emergencyName) +
-      "</td><td>" + esc(row.emergencyPhone) + "</td><td>" + esc(row.note) + "</td>";
+    return "<td>" + staffBox(row, "name", "text", 64) + "</td><td>" + staffBox(row, "gender") + "</td><td>" + staffBox(row, "jobNumber") +
+      "</td><td>" + staffBox(row, "department") + "</td><td>" + staffBox(row, "position") + "</td><td>" + staffBox(row, "phone", "text", 32) +
+      "</td><td>" + staffBox(row, "joinedOn", "date", 10) + "</td><td>" + staffBox(row, "leftOn", "date", 10) + "</td><td>" +
+      '<select class="hr-cell" data-staff-status data-id="' + esc(row.id) + '">' + options(["在职", "离职"], row.status || "在职") + "</select></td><td>" +
+      staffBox(row, "hometown") + "</td><td>" + staffBox(row, "education", "text", 32) + "</td><td>" + staffBox(row, "emergencyName") +
+      "</td><td>" + staffBox(row, "emergencyPhone", "text", 32) + "</td><td>" + staffBox(row, "note", "text", 500) + "</td>";
   }
 
   function fillStaff(root, pack) {
     var all = pack.staff || [];
-    var filter = root.querySelector("[data-staff-filter]");
-    var picked = filter && filter.value ? filter.value : "";
-    var rows = picked ? all.filter(function (row) { return row.status === picked; }) : all;
+    var picked = root.getAttribute("data-staff-pick") || "";
+    var search = root.querySelector("[data-staff-search]");
+    var query = search ? String(search.value || "").replace(/\s+/g, "").toLowerCase() : "";
+    var rows = all.filter(function (row) {
+      if (picked && row.status !== picked) return false;
+      if (!query) return true;
+      var bag = [row.name, row.jobNumber, row.department, row.position, row.phone, row.hometown, row.education, row.emergencyName, row.note].join("");
+      return bag.replace(/\s+/g, "").toLowerCase().indexOf(query) >= 0;
+    });
     var active = all.filter(function (row) { return row.status !== "离职"; }).length;
-    setStats(root, [
-      { label: "在职", value: active },
-      { label: "离职", value: all.length - active }
-    ]);
+    var cards = root.querySelector("[data-staff-kpis]");
+    if (cards) {
+      cards.innerHTML = [
+        { tone: "due", status: "在职", label: "在职", value: active, icon: "staff" },
+        { tone: "leave", status: "离职", label: "离职", value: all.length - active, icon: "leave" }
+      ].map(function (card) {
+        return '<button type="button" class="hr-board-kpi hr-tone-' + card.tone + (picked === card.status ? " is-on" : "") +
+          '" data-staff-pick="' + card.status + '">' + boardIcon(card.icon) + "<b>" + esc(card.value) + "</b><span>" + esc(card.label) + "</span></button>";
+      }).join("");
+    }
     var headers = ["姓名", "性别", "工号", "部门", "岗位", "联系电话", "入职日期", "离职日期", "状态", "籍贯", "学历", "紧急联系人", "紧急电话", "备注", ""];
     var body = rows.length ? rows.map(function (row) {
       return "<tr>" + staffCells(row) + "<td>" +
         '<button type="button" class="hr-mini" data-act="staff-edit" data-id="' + esc(row.id) + '">修改</button> ' +
         removeBtn("staff", row.id) + "</td></tr>";
-    }).join("") : emptyRow(15, "还没有花名册");
+    }).join("") : emptyRow(15, query ? "没有匹配的人" : picked === "离职" ? "没有离职人员" : picked === "在职" ? "没有在职人员" : "还没有花名册");
     setList(root, headers, body);
   }
 
@@ -860,6 +910,14 @@
         if (fileInput) fileInput.click();
         return;
       }
+      var pick = event.target.closest("[data-staff-pick]");
+      if (pick && root.contains(pick)) {
+        event.preventDefault();
+        var nextPick = pick.getAttribute("data-staff-pick");
+        root.setAttribute("data-staff-pick", root.getAttribute("data-staff-pick") === nextPick ? "" : nextPick);
+        if (state.view) fillStaff(root, state.view);
+        return;
+      }
       var sync = event.target.closest("[data-act='staff-sync']");
       if (sync && root.contains(sync)) {
         event.preventDefault();
@@ -975,6 +1033,9 @@
 
     root.addEventListener("click", onClick);
     root.addEventListener("submit", onSubmit);
+    root.addEventListener("input", function (event) {
+      if (event.target && event.target.matches("[data-staff-search]") && state.view) fillStaff(root, state.view);
+    });
     root.addEventListener("change", function (event) {
       var target = event.target;
       if (!target || !root.contains(target)) return;
@@ -982,8 +1043,20 @@
         loadTab(root, state);
         return;
       }
-      if (target.matches("[data-staff-filter]")) {
-        if (state.view) fillStaff(root, state.view);
+      if (target.matches("[data-staff-field]")) {
+        var field = target.getAttribute("data-staff-field");
+        var staffId = Number(target.getAttribute("data-id"));
+        var person = ((state.view && state.view.staff) || []).filter(function (item) { return Number(item.id) === staffId; })[0];
+        if (!person || String(person[field] || "") === String(target.value || "")) return;
+        api("/api/hr/staff/" + encodeURIComponent(staffId), { method: "PUT", body: staffSaveBody(person, field, target.value) })
+          .then(function (data) {
+            if (data.staff) Object.assign(person, data.staff);
+            setMsg(root, "已保存", false);
+          })
+          .catch(function (err) {
+            setMsg(root, err.message, true);
+            loadTab(root, state);
+          });
         return;
       }
       if (target.matches("[data-staff-file]")) {
