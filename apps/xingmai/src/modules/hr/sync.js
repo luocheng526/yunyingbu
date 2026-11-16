@@ -172,6 +172,58 @@ export function punchesFromDing(records, usersById, workDate) {
   return out;
 }
 
+export function effortHours(workDate, checkAt) {
+  const clock = String(checkAt || "").match(/^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})/);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(workDate || "")) || !clock) return 0;
+  const start = Date.parse(`${workDate}T18:00:00+08:00`);
+  const end = Date.parse(`${clock[1]}T${clock[2]}:${clock[3]}:00+08:00`);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+  return Math.round(((end - start) / 3600000) * 10) / 10;
+}
+
+export function effortFromPunches(punches, month = "") {
+  const people = new Map();
+  for (const row of punches || []) {
+    if (!String(row.department || "").includes("运营")) continue;
+    if (row.checkType !== "OffDuty" || !row.checkAt) continue;
+    const day = String(row.workDate || "");
+    if (month && !day.startsWith(month)) continue;
+    const hours = effortHours(day, row.checkAt);
+    if (!(hours > 0)) continue;
+    const key = String(row.dingtalkUserId || row.userName || "");
+    if (!key) continue;
+    if (!people.has(key)) {
+      people.set(key, {
+        userId: String(row.dingtalkUserId || ""),
+        name: row.userName || "",
+        department: row.department || "",
+        hours: 0,
+        days: []
+      });
+    }
+    const person = people.get(key);
+    if (row.userName) person.name = row.userName;
+    if (row.department) person.department = row.department;
+    const same = person.days.find((item) => item.date === day);
+    if (same) {
+      if (String(row.checkAt) > String(same.offAt)) {
+        person.hours = Math.round((person.hours - same.hours + hours) * 10) / 10;
+        same.offAt = row.checkAt;
+        same.hours = hours;
+      }
+    } else {
+      person.days.push({ date: day, offAt: row.checkAt, hours });
+      person.hours = Math.round((person.hours + hours) * 10) / 10;
+    }
+  }
+  return [...people.values()]
+    .map((person) => {
+      person.days.sort((a, b) => a.date.localeCompare(b.date));
+      return person;
+    })
+    .sort((a, b) => b.hours - a.hours || String(a.name).localeCompare(String(b.name), "zh"));
+}
+
 export function overtimeFromColumns(columnVals, personId) {
   let hours = 0;
   for (const column of columnVals || []) {

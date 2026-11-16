@@ -4,6 +4,7 @@ import { startDingStream } from "./stream.js";
 import {
   addDays,
   boardPack,
+  effortFromPunches,
   loadRoster,
   runDaily,
   shanghaiToday,
@@ -119,6 +120,27 @@ hrRouter.get("/attendance", async (req, res) => {
   try {
     const punches = await listPunches({ month: req.query.month, date: req.query.date });
     res.json({ ok: true, punches });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.get("/effort", async (req, res) => {
+  try {
+    const month = String(req.query.month || shanghaiToday().slice(0, 7));
+    const users = await listDingUsers();
+    const byId = new Map(users.map((user) => [user.userId, user]));
+    const punches = (await listPunches({ month })).map((row) => {
+      const user = byId.get(row.dingtalkUserId) || {};
+      return {
+        ...row,
+        userName: row.userName || user.userName || "",
+        department: row.department || user.department || ""
+      };
+    });
+    const people = effortFromPunches(punches, /^\d{4}-\d{2}$/.test(month) ? month : "");
+    const hours = Math.round(people.reduce((sum, person) => sum + person.hours, 0) * 10) / 10;
+    res.json({ ok: true, month, hours, people });
   } catch (err) {
     sendErr(res, err);
   }

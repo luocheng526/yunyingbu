@@ -22,6 +22,8 @@ import {
 import {
   boardPack,
   buildBoard,
+  effortFromPunches,
+  effortHours,
   matchRoster,
   publicPerson,
   punchesFromDing,
@@ -93,7 +95,7 @@ test("hr schema stays in hr_ tables", () => {
 
 test("client mounts one page and five in-page tabs", () => {
   assert.match(client, /XmModules\["\/hr"\]/);
-  const labels = ["看板", "加班", "调休", "人才", "面试"];
+  const labels = ["看板", "奋斗时长", "面试"];
   let from = 0;
   for (const label of labels) {
     const at = client.indexOf(`label: "${label}"`);
@@ -242,6 +244,26 @@ test("ops board counts 运营 人事 技术, backend skips 综合部, total is t
   assert.equal(packs[2].board.staff, 4);
   assert.equal(packs[0].punches.some((row) => row.department === "综合部"), false);
   assert.equal(packs[2].punches.some((row) => row.department === "综合部"), false);
+});
+
+test("effort hours start after 18:00 and only count 运营 departments", () => {
+  assert.equal(effortHours("2026-11-16", "2026-11-16 17:50"), 0);
+  assert.equal(effortHours("2026-11-16", "2026-11-16 18:00"), 0);
+  assert.equal(effortHours("2026-11-16", "2026-11-16 20:30"), 2.5);
+  assert.equal(effortHours("2026-11-16", "2026-11-17 00:30"), 6.5);
+  const people = effortFromPunches([
+    { dingtalkUserId: "a", userName: "甲", department: "运营二区（沈子晗）", workDate: "2026-11-16", checkType: "OffDuty", checkAt: "2026-11-16 20:30" },
+    { dingtalkUserId: "a", userName: "甲", department: "运营二区（沈子晗）", workDate: "2026-11-16", checkType: "OffDuty", checkAt: "2026-11-16 21:00" },
+    { dingtalkUserId: "a", userName: "甲", department: "运营二区（沈子晗）", workDate: "2026-11-17", checkType: "OffDuty", checkAt: "2026-11-17 19:00" },
+    { dingtalkUserId: "b", userName: "乙", department: "人事部", workDate: "2026-11-16", checkType: "OffDuty", checkAt: "2026-11-16 21:00" },
+    { dingtalkUserId: "c", userName: "丙", department: "工商部", workDate: "2026-11-16", checkType: "OffDuty", checkAt: "2026-11-16 22:00" }
+  ], "2026-11");
+  assert.equal(people.length, 1);
+  assert.equal(people[0].name, "甲");
+  assert.equal(people[0].hours, 4);
+  assert.deepEqual(people[0].days.map((day) => day.date), ["2026-11-16", "2026-11-17"]);
+  assert.equal(people[0].days[0].offAt, "2026-11-16 21:00");
+  assert.equal(people[0].days[0].hours, 3);
 });
 
 test("attendance board counts staff, punches, late arrivals, leave, and departments", () => {
@@ -431,7 +453,10 @@ test("http keeps attendance read-only and interviews in this module", async () =
     assert.equal(denied.status, 401);
     const home = await request(server, "/api/hr");
     assert.equal(home.status, 200);
-    assert.deepEqual(home.data.tabs, ["看板", "加班", "调休", "人才", "面试"]);
+    assert.deepEqual(home.data.tabs, ["看板", "奋斗时长", "面试"]);
+    const effort = await request(server, "/api/hr/effort?month=2026-11");
+    assert.deepEqual(effort.data.people, []);
+    assert.equal(effort.data.hours, 0);
     assert.equal(home.data.module, "hr");
     const status = await request(server, "/api/hr/status");
     assert.equal(status.data.configured, false);

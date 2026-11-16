@@ -2,9 +2,7 @@
 (function () {
   var TABS = [
     { id: "attendance", label: "看板" },
-    { id: "overtime", label: "加班" },
-    { id: "timeoff", label: "调休" },
-    { id: "talent", label: "人才" },
+    { id: "overtime", label: "奋斗时长" },
     { id: "interview", label: "面试" }
   ];
   var RESULTS = ["待定", "通过", "未通过", "未到场"];
@@ -75,6 +73,9 @@
       ".hr-msg.is-error{color:#cf1322;}" +
       "html[data-theme='dark'] .hr-msg.is-error{color:#ff7875;}" +
       ".hr-mini{height:26px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;font-size:12px;cursor:pointer;}" +
+      ".hr-person{cursor:pointer;}" +
+      ".hr-person[aria-expanded='true'] td{background:color-mix(in srgb,var(--xm-primary) 8%,var(--xm-card));}" +
+      ".hr-detail td{padding:8px 10px 12px;}" +
       ".hr-board-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-end;}" +
       ".hr-board-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;}" +
       ".hr-board-kpi{border:0;border-radius:16px;padding:16px 16px 14px;color:#fff;min-height:108px;box-shadow:0 10px 22px rgba(24,49,99,.12);}" +
@@ -230,25 +231,10 @@
             table(["姓名", "部门", "工号", "日期", "上班", "下班", "结果"], emptyRow(7, "还没有打卡")) + "</section>";
         }).join("") + "</section>";
     } else if (tab === "overtime") {
-      html = '<section class="hr-panel">' + monthBar + kpis([{ label: "加班总时长", value: "0" }]) +
-        '<p class="hr-msg" data-msg></p>' + table(["姓名", "日期", "时长"], emptyRow(3, "还没有加班")) + "</section>";
-    } else if (tab === "timeoff") {
-      html = '<section class="hr-panel"><div class="hr-toolbar"><span>' + esc(hint) + "</span></div>" +
-        kpis([{ label: "有余额的人", value: "0" }, { label: "调休记录", value: "0" }]) +
-        '<p class="hr-msg" data-msg></p>' + table(["姓名", "假期", "额度", "已用", "剩余"], emptyRow(5, "还没有调休余额")) +
-        table(["姓名", "开始", "结束", "时长"], emptyRow(4, "还没有调休记录")).replace("data-list", "data-leaves") + "</section>";
-    } else if (tab === "talent") {
-      html = '<section class="hr-panel"><div class="hr-toolbar"><span>人才先记在本库。钉钉招聘还没接。</span></div>' +
-        kpis([{ label: "人数", value: "0" }]) +
-        '<form class="hr-form hr-card" data-form="talent">' +
-        field("姓名", '<input name="name" required maxlength="64" autocomplete="off" />') +
-        field("电话", '<input name="phone" maxlength="32" autocomplete="off" />') +
-        field("目标岗位", '<input name="targetRole" maxlength="64" autocomplete="off" />') +
-        field("来源", '<input name="source" maxlength="64" autocomplete="off" />') +
-        field("阶段", '<select name="stage">' + options(STAGES, "储备") + "</select>") +
-        field("备注", '<input name="note" maxlength="500" autocomplete="off" />', "hr-field-grow") +
-        '<button class="hr-primary" type="submit">登记人才</button></form>' +
-        '<p class="hr-msg" data-msg></p>' + table(["姓名", "电话", "目标岗位", "来源", "阶段", "备注", ""], emptyRow(7, "还没有人才档案")) + "</section>";
+      html = '<section class="hr-panel"><div class="hr-toolbar"><span>运营部门，18:00 之后的下班打卡，按月累计。</span>' +
+        '<label class="hr-month">月份<input type="month" data-month value="' + esc(month) + '" /></label></div>' +
+        kpis([{ label: "本月奋斗时长", value: "0" }, { label: "人数", value: "0" }]) +
+        '<p class="hr-msg" data-msg></p>' + table(["姓名", "部门", "月累计"], emptyRow(3, "这个月还没有 18 点后的下班打卡")) + "</section>";
     } else {
       html = '<section class="hr-panel"><div class="hr-toolbar"><span>面试先记在本库。</span></div>' +
         kpis([{ label: "面试场次", value: "0" }, { label: "通过", value: "0" }, { label: "通过率", value: "—" }]) +
@@ -341,15 +327,29 @@
     else setMsg(root, "", false);
   }
 
-  function fillOvertime(root, pack) {
-    var rows = pack.overtime || [];
-    var total = rows.reduce(function (sum, row) { return sum + Number(row.hours || 0); }, 0);
-    setStats(root, [{ label: "加班总时长", value: total ? String(Math.round(total * 10) / 10) : "0" }]);
-    var body = rows.length ? rows.map(function (row) {
-      return "<tr><td>" + esc(nameOf(pack.people, row.personId) || "未命名") + "</td><td>" + esc(row.workDate) + "</td><td>" + esc(row.hours) + "</td></tr>";
-    }).join("") : emptyRow(3, "还没有加班");
-    setList(root, ["姓名", "日期", "时长"], body);
-    if (!pack.configured) setMsg(root, "钉钉还没配置，加班先留空。", false);
+  function fillEffort(root, pack) {
+    var people = pack.people || [];
+    var total = people.reduce(function (sum, person) { return sum + Number(person.hours || 0); }, 0);
+    setStats(root, [
+      { label: "本月奋斗时长", value: total ? String(Math.round(total * 10) / 10) : "0" },
+      { label: "人数", value: people.length }
+    ]);
+    var open = root.getAttribute("data-open") || "";
+    var body = people.length ? people.map(function (person) {
+      var id = person.userId || person.name;
+      var on = open === id;
+      var main = '<tr class="hr-person" data-effort="' + esc(id) + '" aria-expanded="' + (on ? "true" : "false") + '"><td>' +
+        esc(person.name || "未命名") + "</td><td>" + esc(person.department) + "</td><td>" + esc(person.hours) + "</td></tr>";
+      if (!on) return main;
+      var days = (person.days || []).map(function (day) {
+        return "<tr><td>" + esc(day.date) + "</td><td>" + esc(String(day.offAt || "").slice(11, 16)) + "</td><td>" + esc(day.hours) + "</td></tr>";
+      }).join("");
+      return main + '<tr class="hr-detail"><td colspan="3"><table class="hr-table"><thead><tr><th>日期</th><th>下班</th><th>时长</th></tr></thead><tbody>' +
+        days + "</tbody></table></td></tr>";
+    }).join("") : emptyRow(3, "这个月还没有 18 点后的下班打卡");
+    setList(root, ["姓名", "部门", "月累计"], body);
+    if (!pack.configured) setMsg(root, "钉钉还没配置，奋斗时长先留空。", false);
+    else setMsg(root, "", false);
   }
 
   function fillTimeoff(root, pack) {
@@ -420,21 +420,16 @@
       var day = dayInput && dayInput.value ? dayInput.value : shanghaiToday();
       dataReq = api("/api/hr/board?date=" + encodeURIComponent(day));
     } else if (tab === "overtime") {
-      dataReq = api("/api/hr/overtime" + monthQuery(root));
-    } else if (tab === "timeoff") {
-      dataReq = api("/api/hr/timeoff");
-    } else if (tab === "talent") {
-      dataReq = api("/api/hr/talents");
+      dataReq = api("/api/hr/effort" + monthQuery(root));
     } else {
       dataReq = api("/api/hr/interviews");
     }
     Promise.all([peopleReq, statusReq, dataReq]).then(function (pack) {
       if (!state.alive || ticket !== state.ticket || state.tab !== tab) return;
       var view = Object.assign({ people: pack[0], configured: pack[1].configured }, pack[2]);
+      state.view = view;
       if (tab === "attendance") fillAttendance(root, view);
-      else if (tab === "overtime") fillOvertime(root, view);
-      else if (tab === "timeoff") fillTimeoff(root, view);
-      else if (tab === "talent") fillTalent(root, view);
+      else if (tab === "overtime") fillEffort(root, view);
       else fillInterview(root, view);
     }).catch(function (err) {
       if (!state.alive || ticket !== state.ticket) return;
@@ -470,6 +465,14 @@
     paint(root, state.tab, addDays(shanghaiToday(), -1).slice(0, 7), shanghaiToday());
 
     function onClick(event) {
+      var person = event.target.closest("[data-effort]");
+      if (person && root.contains(person)) {
+        event.preventDefault();
+        var id = person.getAttribute("data-effort");
+        root.setAttribute("data-open", root.getAttribute("data-open") === id ? "" : id);
+        if (state.view) fillEffort(root, state.view);
+        return;
+      }
       var tabBtn = event.target.closest(".hr-tab");
       if (tabBtn && root.contains(tabBtn)) {
         event.preventDefault();

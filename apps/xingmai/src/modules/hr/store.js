@@ -1,6 +1,6 @@
 import { dbMode, query } from "../profile/auth.js";
 
-export const HR_TABS = ["看板", "加班", "调休", "人才", "面试"];
+export const HR_TABS = ["看板", "奋斗时长", "面试"];
 export const INTERVIEW_RESULTS = ["待定", "通过", "未通过", "未到场"];
 export const TALENT_STAGES = ["储备", "面试中", "已入职", "已淘汰"];
 
