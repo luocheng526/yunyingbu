@@ -642,6 +642,42 @@ body:has(.people-page) .xm-tabs {
   margin: 0 0 12px;
 }
 
+.people-login-dialog,
+.people-pass-dialog {
+  width: min(420px, calc(100vw - 32px));
+}
+
+.people-login-dialog label,
+.people-pass-dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #4e5969;
+}
+
+.people-page td.people-ops {
+  white-space: nowrap;
+}
+
+.people-page button.people-login-btn,
+.people-page button.people-pass-btn {
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  line-height: 20px;
+  background: #fff;
+  color: #1d2129;
+  border: 1px solid #e5e6eb;
+  margin: 0 6px 0 0;
+}
+
+.people-page button.people-login-btn {
+  color: #1677ff;
+  border-color: #91caff;
+}
+
 .org-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }

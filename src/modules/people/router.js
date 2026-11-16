@@ -19,7 +19,7 @@ import {
   reconcilePeople,
   removePeople
 } from "./store.js";
-import { canAssignSiteAcl, canEditRoster, scopeOf } from "./org-acl.js";
+import { canAssignSiteAcl, canEditLogin, canEditRoster, canSeeLogin, scopeOf } from "./org-acl.js";
 import {
   hydrateSiteAcl,
   listSiteAclBoard,
@@ -119,6 +119,20 @@ function sendResult(res, result, created) {
     return;
   }
   res.status(created ? 201 : 200).json({ ok: true, ...result });
+}
+
+function loginViewOf(actor, person) {
+  const canSee = canSeeLogin(actor, person);
+  const canEdit = canEditLogin(actor, person);
+  if (canSee) {
+    return { ...person, canSeeLogin: true, canEditLogin: canEdit };
+  }
+  return { ...person, username: "", password: "", canSeeLogin: false, canEditLogin: false };
+}
+
+function findListedPerson(id) {
+  const key = String(id);
+  return listPeople().find((row) => String(row.id) === key) || null;
 }
 
 peopleRouter.get("/charter", (_req, res) => {
@@ -326,7 +340,7 @@ peopleRouter.get("/", async (req, res) => {
     charter: PEOPLE_CHARTER,
     centers: CENTERS,
     posts: POSTS,
-    people: listPeople()
+    people: listPeople().map((row) => loginViewOf(actor, row))
   });
 });
 
@@ -353,12 +367,17 @@ peopleRouter.post("/import", async (req, res) => {
 });
 
 peopleRouter.patch("/passwords", async (req, res) => {
-  if (!(await requireRosterEditor(req, res))) {
+  const actor = await requireRosterEditor(req, res);
+  if (!actor) {
     return;
   }
   await hydratePeopleRoster();
   const body = req.body || {};
-  sendResult(res, await patchPeoplePasswords(body.ids, body.password), false);
+  const ids = (Array.isArray(body.ids) ? body.ids : []).filter((id) => {
+    const person = findListedPerson(id);
+    return person && canEditLogin(actor, person);
+  });
+  sendResult(res, await patchPeoplePasswords(ids, body.password), false);
 });
 
 peopleRouter.post("/remove", async (req, res) => {
@@ -370,11 +389,32 @@ peopleRouter.post("/remove", async (req, res) => {
 });
 
 peopleRouter.patch("/:id", async (req, res) => {
-  if (!(await requireRosterEditor(req, res))) {
+  const actor = await resolveActor(req);
+  await hydratePeopleRoster();
+  const found = findListedPerson(req.params.id);
+  if (!found) {
+    res.status(404).json({ ok: false, error: "人员不存在" });
     return;
   }
-  await hydratePeopleRoster();
-  sendResult(res, await patchPerson(req.params.id, req.body || {}), false);
+  const input = req.body && typeof req.body === "object" ? req.body : {};
+  const loginInput = {};
+  const rest = {};
+  Object.keys(input).forEach((key) => {
+    if (key === "username" || key === "password") {
+      loginInput[key] = input[key];
+    } else {
+      rest[key] = input[key];
+    }
+  });
+  if (Object.keys(rest).length && !canEditRoster(actor)) {
+    res.status(403).json({ ok: false, error: "只有罗成、韩梦凯、沈子晗能改成员" });
+    return;
+  }
+  if (Object.keys(loginInput).length && !canEditLogin(actor, found)) {
+    res.status(403).json({ ok: false, error: "超出责权：只能改自己的账号密码" });
+    return;
+  }
+  sendResult(res, await patchPerson(req.params.id, { ...rest, ...loginInput }), false);
 });
 
 peopleRouter.post("/", async (req, res) => {

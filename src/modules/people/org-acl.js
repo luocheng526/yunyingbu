@@ -28,8 +28,16 @@ export function groupIdOf(row = {}) {
   return normalizeGroupId(row.team || row.chief || manager || "未分组");
 }
 
-export function scopeOf(actor) {
+export function actorKey(actor) {
   const name = normalizeGroupId(actor);
+  if (name === "luocheng") {
+    return "罗成";
+  }
+  return name;
+}
+
+export function scopeOf(actor) {
+  const name = actorKey(actor);
   if (!name || FULL.has(name) || name.includes("罗成")) {
     return { key: "all", actor: name || "罗成", groupId: "", label: "可改全部团队" };
   }
@@ -69,8 +77,37 @@ export function canEditStore(actor, row) {
 
 /** 成员表五级线：只有罗成、韩梦凯、沈子晗能双击改。 */
 export function canEditRoster(actor) {
-  const name = normalizeGroupId(actor);
+  const name = actorKey(actor);
   return name.includes("罗成") || name.includes("沈子晗") || name.includes("韩梦凯");
+}
+
+function samePerson(actor, person) {
+  const name = actorKey(actor);
+  if (!name || !person) {
+    return false;
+  }
+  const personName = normalizeGroupId(person.name);
+  const username = normalizeGroupId(person.username);
+  return name === personName || (Boolean(username) && name === username);
+}
+
+/** 罗成看全部账号密码；沈子晗/韩梦凯看本组；运营只看自己的。 */
+export function canSeeLogin(actor, person) {
+  if (samePerson(actor, person)) {
+    return true;
+  }
+  const scope = scopeOf(actor);
+  if (scope.key === "all") {
+    return true;
+  }
+  if (scope.key === "shen" || scope.key === "han") {
+    return canAssignPerson(actor, person);
+  }
+  return false;
+}
+
+export function canEditLogin(actor, person) {
+  return canSeeLogin(actor, person);
 }
 
 export function canAssignSiteAcl(actor) {

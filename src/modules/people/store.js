@@ -870,6 +870,9 @@ function applyPatchPerson(id, input) {
     if (!password) {
       return { ok: false, statusCode: 400, error: "密码不能为空" };
     }
+    if (password.length < 6 || password.length > 128) {
+      return { ok: false, statusCode: 400, error: "密码为 6–128 位" };
+    }
     found.password = password;
   }
   if (Object.prototype.hasOwnProperty.call(input, "name") || Object.prototype.hasOwnProperty.call(input, "姓名")) {
@@ -909,6 +912,9 @@ export async function patchPeoplePasswords(ids, password) {
   const next = typeof password === "string" ? password.trim() : "";
   if (!next) {
     return { ok: false, statusCode: 400, error: "密码不能为空" };
+  }
+  if (next.length < 6 || next.length > 128) {
+    return { ok: false, statusCode: 400, error: "密码为 6–128 位" };
   }
   const list = Array.isArray(ids) ? ids : [];
   if (!list.length) {

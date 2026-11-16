@@ -6,7 +6,7 @@ import { createApp } from "../src/app.js";
 import { patchAppSource } from "../src/modules/people/patch-app.js";
 import { effectiveStoreOperator, hydrateOrgStores, importStamp, mapImportRow, orgStoresPersistMode, resetOrgBoard, storeOwners } from "../src/modules/people/org-board.js";
 import { resetOrgExtra } from "../src/modules/people/org-extra.js";
-import { canAssignPerson, canAssignSiteAcl, canEditRoster } from "../src/modules/people/org-acl.js";
+import { canAssignPerson, canAssignSiteAcl, canEditLogin, canEditRoster, canSeeLogin } from "../src/modules/people/org-acl.js";
 import { hydrateFromMysql, resetPeopleStore } from "../src/modules/people/store.js";
 import { PEOPLE_CLIENT_JS, rewritePeopleModuleUrl } from "../src/modules/people/asset-ver.js";
 import { featureAllowed, resetSiteAcl, SITE_MODULES } from "../src/modules/people/site-acl.js";
@@ -245,7 +245,12 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /\/api\/people\/remove/);
     assert.doesNotMatch(jsText, /能看见的店/);
     assert.match(jsText, /data-filter-key="status"/);
-    assert.match(jsText, /<th>账号<\/th><th>登录密码<\/th>/);
+    assert.match(jsText, /<th>账号<\/th><th>登录密码<\/th><th>操作<\/th>/);
+    assert.match(jsText, /people-login-btn/);
+    assert.match(jsText, /people-pass-btn/);
+    assert.match(jsText, /登录信息 · /);
+    assert.match(jsText, /设置密码 · /);
+    assert.match(cssText, /\.people-login-dialog/);
     assert.doesNotMatch(jsText, /店铺 \/ 店群/);
     assert.doesNotMatch(jsText, /id="shop-form"/);
     assert.doesNotMatch(jsText, /id="shop-tbody"/);
@@ -1489,6 +1494,91 @@ test("people roster template and import merges by exact name", async () => {
     assert.equal(afterFresh.people.length, seedCount + 3);
     assert.ok(afterFresh.people.some((item) => item.name === "导入同事"));
     assert.ok(afterFresh.people.some((item) => item.name === "王博"));
+  });
+});
+
+test("login info follows 责权 and operators can only change themselves", async () => {
+  assert.equal(canEditRoster("luocheng"), true);
+  const wang = { name: "王博", username: "王博", center: "沈子晗运营中心", lineManager: "沈子晗" };
+  const jing = { name: "张文静", username: "张文静", center: "沈子晗运营中心", lineManager: "沈子晗" };
+  const kai = { name: "韩梦凯", username: "韩梦凯", center: "韩梦凯运营中心" };
+  assert.equal(canSeeLogin("罗成", wang), true);
+  assert.equal(canSeeLogin("沈子晗", wang), true);
+  assert.equal(canSeeLogin("韩梦凯", wang), false);
+  assert.equal(canSeeLogin("张文静", jing), true);
+  assert.equal(canSeeLogin("张文静", wang), false);
+  assert.equal(canEditLogin("张文静", jing), true);
+  assert.equal(canEditLogin("张文静", wang), false);
+  assert.equal(canSeeLogin("韩梦凯", kai), true);
+
+  await withServer(async (base) => {
+    const asLuo = await (await fetch(`${base}/api/people`)).json();
+    const luoWang = asLuo.people.find((row) => row.name === "王博");
+    assert.equal(luoWang.canSeeLogin, true);
+    assert.equal(luoWang.password, "ChangeMe123!");
+
+    const asJing = await (await fetch(`${base}/api/people?actor=${encodeURIComponent("张文静")}`)).json();
+    const jingSelf = asJing.people.find((row) => row.name === "张文静");
+    const jingWang = asJing.people.find((row) => row.name === "王博");
+    assert.equal(jingSelf.canEditLogin, true);
+    assert.equal(jingSelf.password, "ChangeMe123!");
+    assert.equal(jingWang.canSeeLogin, false);
+    assert.equal(jingWang.password, "");
+    assert.equal(jingWang.username, "");
+
+    const asShen = await (await fetch(`${base}/api/people?actor=${encodeURIComponent("沈子晗")}`)).json();
+    assert.equal(asShen.people.find((row) => row.name === "王博").canSeeLogin, true);
+    const asHan = await (await fetch(`${base}/api/people?actor=${encodeURIComponent("韩梦凯")}`)).json();
+    assert.equal(asHan.people.find((row) => row.name === "王博").password, "");
+    assert.equal(asHan.people.find((row) => row.name === "韩梦凯").canSeeLogin, true);
+
+    const ownPass = await fetch(`${base}/api/people/${jingSelf.id}?actor=${encodeURIComponent("张文静")}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "SelfPass1" })
+    });
+    const ownPassJson = await ownPass.json();
+    assert.equal(ownPass.status, 200, JSON.stringify(ownPassJson));
+    assert.equal(ownPassJson.person.password, "SelfPass1");
+
+    const ownUser = await fetch(`${base}/api/people/${jingSelf.id}?actor=${encodeURIComponent("张文静")}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "wenjing" })
+    });
+    const ownUserJson = await ownUser.json();
+    assert.equal(ownUser.status, 200, JSON.stringify(ownUserJson));
+    assert.equal(ownUserJson.person.username, "wenjing");
+
+    const otherPass = await fetch(`${base}/api/people/${luoWang.id}?actor=${encodeURIComponent("张文静")}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "HackPass1" })
+    });
+    assert.equal(otherPass.status, 403);
+
+    const shortPass = await fetch(`${base}/api/people/${jingSelf.id}?actor=${encodeURIComponent("张文静")}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "ab" })
+    });
+    assert.equal(shortPass.status, 400);
+
+    const shenPass = await fetch(`${base}/api/people/${luoWang.id}?actor=${encodeURIComponent("沈子晗")}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "ShenPass1" })
+    });
+    const shenPassJson = await shenPass.json();
+    assert.equal(shenPass.status, 200, JSON.stringify(shenPassJson));
+    assert.equal(shenPassJson.person.password, "ShenPass1");
+
+    const hanPass = await fetch(`${base}/api/people/${luoWang.id}?actor=${encodeURIComponent("韩梦凯")}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "HanPass1" })
+    });
+    assert.equal(hanPass.status, 403);
   });
 });
 
