@@ -8,6 +8,7 @@ import {
   effortReport,
   loadRoster,
   readStoredBoard,
+  refreshBoardDay,
   shanghaiToday,
   startScheduler
 } from "./sync.js";
@@ -136,6 +137,7 @@ hrRouter.get("/board", async (req, res) => {
       ok: true,
       configured: readDingEnv().configured,
       saved: stored.saved,
+      updatedAt: stored.updatedAt,
       boards: stored.boards,
       board: stored.board,
       days: stored.days,
@@ -214,8 +216,14 @@ hrRouter.get("/timeoff", async (_req, res) => {
   }
 });
 
-hrRouter.post("/sync", async (_req, res) => {
+hrRouter.post("/sync", async (req, res) => {
   try {
+    const rawDate = String((req.body && req.body.date) || "");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+      const refreshed = await refreshBoardDay(rawDate, createDingClient());
+      res.json({ ok: true, ...refreshed });
+      return;
+    }
     if (!readDingEnv().configured) {
       res.json({ ok: true, configured: false });
       return;

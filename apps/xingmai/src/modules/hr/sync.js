@@ -7,6 +7,7 @@ import {
   listLinks,
   listPunches,
   readBoardPunches,
+  readBoardStamp,
   recordSync,
   replaceDayPunches,
   replaceLeavesInRange,
@@ -159,6 +160,12 @@ export function addDays(ymd, days) {
   const [year, month, day] = ymd.split("-").map(Number);
   const utc = new Date(Date.UTC(year, month - 1, day + days));
   return utc.toISOString().slice(0, 10);
+}
+
+export function shanghaiClock(value = Date.now()) {
+  const ms = typeof value === "number" ? value : Date.parse(String(value || ""));
+  if (!Number.isFinite(ms) || ms <= 0) return "";
+  return formatShanghai(ms);
 }
 
 export function formatShanghai(value) {
@@ -839,10 +846,33 @@ export async function readStoredBoard(date) {
   });
   return {
     saved: Boolean(metrics[date]),
+    updatedAt: shanghaiClock(await readBoardStamp(date)),
     boards,
     board: boards[0].board,
     days: boards[0].days,
     punches: boards[0].punches
+  };
+}
+
+export async function refreshBoardDay(workDate, client = createDingClient()) {
+  const raw = String(workDate || "");
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : addDays(shanghaiToday(), -1);
+  if (!client.configured()) {
+    await recordSync("refresh", day, false, "钉钉还没配置");
+    return { configured: false, workDate: day, updatedAt: "" };
+  }
+  await refreshDirectory(client);
+  const pulled = await pullDay(day, { client });
+  const leaves = await pullLeaves(day, day, client);
+  await saveBoardSnapshot(day);
+  const updatedAt = shanghaiClock(await readBoardStamp(day));
+  await recordSync("refresh", day, true, `已刷新 ${day}，打卡 ${pulled.punches?.length || 0} 条，请假 ${leaves.leaves?.length || 0} 条`);
+  return {
+    configured: true,
+    workDate: day,
+    updatedAt,
+    punches: pulled.punches?.length || 0,
+    leaveCount: leaves.leaves?.length || 0
   };
 }
 

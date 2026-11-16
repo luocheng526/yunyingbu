@@ -598,6 +598,17 @@ export async function listBoardMetrics(dates) {
   return out;
 }
 
+export async function readBoardStamp(workDate) {
+  await ensureHrSchema();
+  const day = mustDate(workDate, "日期");
+  if (dbMode() === "mysql") {
+    const rows = await rowsOf("SELECT saved_at FROM hr_board_days WHERE work_date = ?", [day]);
+    return rows.length ? String(rows[0].saved_at || "") : "";
+  }
+  const row = memory.boards.find((item) => item.workDate === day);
+  return row ? String(row.savedAt || "") : "";
+}
+
 export async function readBoardPunches(workDate) {
   await ensureHrSchema();
   const day = mustDate(workDate, "日期");

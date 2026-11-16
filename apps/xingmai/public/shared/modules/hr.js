@@ -47,7 +47,10 @@
     style.id = "hr-page-style";
     style.textContent =
       ".hr-page{color:var(--xm-ink);}" +
-      ".hr-tabs{display:flex;gap:0;border-bottom:1px solid var(--xm-line);margin:0 0 12px;overflow:auto;}" +
+      ".hr-top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;border-bottom:1px solid var(--xm-line);margin:0 0 12px;}" +
+      ".hr-tabs{display:flex;gap:0;min-width:0;overflow:auto;}" +
+      ".hr-refresh{display:flex;align-items:center;gap:10px;padding:0 0 8px;flex:none;}" +
+      ".hr-updated{color:var(--xm-muted);font-size:13px;white-space:nowrap;}" +
       ".hr-tab{appearance:none;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--xm-muted);font:inherit;font-size:14px;padding:10px 16px;cursor:pointer;white-space:nowrap;}" +
       ".hr-tab[aria-selected='true']{color:var(--xm-primary);border-bottom-color:var(--xm-primary);font-weight:600;}" +
       ".hr-tab:focus-visible,.hr-page button:focus-visible,.hr-page input:focus-visible,.hr-page select:focus-visible,.hr-page textarea:focus-visible{outline:2px solid var(--xm-primary);outline-offset:1px;}" +
@@ -395,6 +398,12 @@
     if (list) list.outerHTML = table(["姓名", "部门", "工号", "日期", "上班", "下班", "结果"], body);
   }
 
+  function setUpdated(root, value) {
+    var node = root.querySelector("[data-updated]");
+    if (!node) return;
+    node.textContent = value ? "更新于 " + value : "尚未更新";
+  }
+
   function fillAttendance(root, pack) {
     var boards = pack.boards || [];
     ["ops", "backend", "total"].forEach(function (id) {
@@ -402,6 +411,7 @@
       if (!view && id === "ops" && pack.board) view = { board: pack.board, days: pack.days, punches: pack.punches };
       fillTeam(root.querySelector('[data-team="' + id + '"]'), view || { board: {}, days: [], punches: [] });
     });
+    setUpdated(root, pack.updatedAt);
     if (!pack.configured) setMsg(root, "钉钉还没配置，看板先按空模板放着。", false);
     else if (!pack.saved) setMsg(root, "这一天还没归档。每天 10 点保存前一天。", false);
     else setMsg(root, "", false);
@@ -869,14 +879,38 @@
   function mount(root) {
     ensureStyle();
     var state = { tab: "attendance", ticket: 0, alive: true };
-    root.innerHTML = '<div class="xm-page hr-page"><div class="hr-tabs" role="tablist" aria-label="智能人事">' +
+    root.innerHTML = '<div class="xm-page hr-page"><div class="hr-top"><div class="hr-tabs" role="tablist" aria-label="智能人事">' +
       TABS.map(function (tab, index) {
         var on = index === 0;
         return '<button type="button" class="hr-tab" role="tab" data-tab="' + tab.id + '" aria-selected="' + (on ? "true" : "false") + '" tabindex="' + (on ? "0" : "-1") + '">' + esc(tab.label) + "</button>";
-      }).join("") + '</div><div class="hr-body" role="tabpanel"></div></div>';
+      }).join("") + '</div><div class="hr-refresh"><span class="hr-updated" data-updated>尚未更新</span>' +
+      '<button type="button" class="hr-primary" data-act="refresh-board">刷新数据</button></div></div><div class="hr-body" role="tabpanel"></div></div>';
     paint(root, state.tab, addDays(shanghaiToday(), -1).slice(0, 7), shanghaiToday());
 
     function onClick(event) {
+      var refresh = event.target.closest("[data-act='refresh-board']");
+      if (refresh && root.contains(refresh)) {
+        event.preventDefault();
+        if (refresh.disabled) return;
+        var dayInput = root.querySelector("[data-day]");
+        var day = dayInput && dayInput.value ? dayInput.value : addDays(shanghaiToday(), -1);
+        refresh.disabled = true;
+        refresh.textContent = "正在拉取";
+        api("/api/hr/sync", { method: "POST", body: { date: day } })
+          .then(function (data) {
+            setUpdated(root, data.updatedAt);
+            state.boards = state.boards || {};
+            delete state.boards[day];
+            if (state.tab === "attendance") loadTab(root, state);
+            setMsg(root, data.configured === false ? "钉钉还没配置" : "已刷新 " + day, false);
+          })
+          .catch(function (err) { setMsg(root, err.message, true); })
+          .then(function () {
+            refresh.disabled = false;
+            refresh.textContent = "刷新数据";
+          });
+        return;
+      }
       var download = event.target.closest("[data-act='download']");
       if (download && root.contains(download)) {
         event.preventDefault();

@@ -34,6 +34,7 @@ import {
   punchesFromDing,
   pullDay,
   pullLeaves,
+  refreshBoardDay,
   readStoredBoard,
   saveBoardSnapshot,
   reconcileMonth,
@@ -138,6 +139,9 @@ test("client mounts one page and five in-page tabs", () => {
   assert.match(client, /钉钉还没配置/);
   assert.match(client, /每天 10 点保存前一天/);
   assert.match(client, /state\.boards/);
+  assert.match(client, /刷新数据/);
+  assert.match(client, /data-updated/);
+  assert.match(client, /data-act="refresh-board"/);
   assert.match(client, /甄选员工详细名单/);
   assert.match(client, /data-staff-search/);
   assert.match(client, /data-staff-pick/);
@@ -454,6 +458,44 @@ test("the monthly check overwrites a stored day with the ding result", async () 
   const board = await readStoredBoard("2026-02-02");
   assert.equal(board.boards[0].board.late, 0);
   assert.equal(board.boards[0].board.punched, 1);
+});
+
+test("refreshing a day pulls punches and leave and stamps the time", async () => {
+  resetHrStore();
+  const fake = {
+    configured: () => true,
+    async listUsers() {
+      return [{ userId: "u1", name: "甲", jobNumber: "A1", department: "运营一组" }];
+    },
+    async listAttendance() {
+      return [{ id: "p1", userId: "u1", checkType: "OnDuty", timeResult: "Normal", userCheckTime: Date.parse("2020-11-15T01:00:00Z") }];
+    },
+    async listLeaveStatus() {
+      return [{
+        userid: "u1",
+        leave_code: "sick",
+        start_time: Date.parse("2020-11-15T00:00:00Z"),
+        end_time: Date.parse("2020-11-15T10:00:00Z"),
+        duration_percent: 100
+      }];
+    },
+    async listVacationTypes() {
+      return [{ leave_code: "sick", leave_name: "病假" }];
+    },
+    async listVacationQuota() {
+      return [];
+    }
+  };
+  const result = await refreshBoardDay("2020-11-15", fake);
+  assert.equal(result.configured, true);
+  assert.equal(result.workDate, "2020-11-15");
+  assert.match(result.updatedAt, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+  assert.equal(result.punches > 0, true);
+  assert.equal(result.leaveCount, 1);
+  const board = await readStoredBoard("2020-11-15");
+  assert.equal(board.updatedAt, result.updatedAt);
+  assert.equal(board.boards[0].board.punched, 1);
+  assert.equal(board.boards[0].board.leave, 1);
 });
 
 test("leave is counted from ding users when nobody is aligned", async () => {
