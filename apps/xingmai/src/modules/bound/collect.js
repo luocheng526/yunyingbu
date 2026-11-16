@@ -329,6 +329,10 @@ async function masterState() {
   return (await readState("masters", {})) || {};
 }
 
+function failText(scope, message) {
+  return `daysType=${scope.daysType} ${String(message || "接口失败")}`.slice(0, 300);
+}
+
 function reportBody(report, dim, scope, page) {
   return {
     startDate: scope.start,
@@ -353,8 +357,15 @@ function sheetHole(report, dim, scope, sheets) {
   if (!first) {
     return { page: 1, kind: report.kind === "object" ? "object" : "list", attempts: 0 };
   }
-  if (first.status === "denied" || (first.status === "failed" && first.attempts >= 3)) {
+  if (first.status === "denied") {
     return null;
+  }
+  if (first.status === "failed" && first.attempts >= 3) {
+    const stamped = String(first.errorText || "").startsWith(`daysType=${scope.daysType} `);
+    if (stamped) {
+      return null;
+    }
+    return { page: 1, kind: first.kind || report.kind, attempts: 0 };
   }
   if (first.status !== "done") {
     return { page: 1, kind: first.kind || report.kind, attempts: first.attempts };
@@ -491,7 +502,7 @@ async function runReport(current, unit) {
       status: "failed",
       kind: unit.kind,
       attempts: unit.attempts + 1,
-      errorText: String(error.message || error),
+      errorText: failText(unit.scope, error.message || error),
       payload: {}
     });
     return;
@@ -527,7 +538,7 @@ async function runReport(current, unit) {
       status: "failed",
       kind: unit.kind,
       attempts: unit.attempts + 1,
-      errorText: String((payload && payload.content) || "接口失败"),
+      errorText: failText(unit.scope, (payload && payload.content) || "接口失败"),
       payload: {}
     });
     return;

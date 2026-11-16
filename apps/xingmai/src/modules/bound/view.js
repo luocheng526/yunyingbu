@@ -72,6 +72,72 @@ function isFullMonth(from, to) {
   return from.endsWith("-01") && to === monthEnd(from) && from.slice(0, 7) === to.slice(0, 7);
 }
 
+const DAY_TYPES = new Set(["1", "7", "14", "30", "week", "month", "year", "quarter", "custom"]);
+
+const PLATFORM_NAMES = {
+  TM: "天猫",
+  JD: "京东",
+  DY: "抖音",
+  PDD: "拼多多",
+  TB: "淘宝",
+  KS: "快手",
+  XHS: "小红书",
+  WX: "微信"
+};
+
+function daysTypeOf(raw, range) {
+  const value = String(raw || "");
+  if (DAY_TYPES.has(value)) {
+    return value;
+  }
+  if (isFullMonth(range.from, range.to)) {
+    return "month";
+  }
+  if (range.from === range.to) {
+    return "1";
+  }
+  return "custom";
+}
+
+function ownValue(source, aliases) {
+  const keys = Object.keys(source);
+  for (const alias of aliases) {
+    const key = keys.find((item) => item.toLowerCase() === alias.toLowerCase());
+    const value = key ? source[key] : undefined;
+    if (value != null && value !== "" && typeof value !== "object") {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function platformLabel(code) {
+  const raw = String(code || "");
+  if (!raw) {
+    return "";
+  }
+  if (raw.toLowerCase() === "all") {
+    return "全部";
+  }
+  return PLATFORM_NAMES[raw.toUpperCase()] || raw;
+}
+
+function latestReadyMonth(all, reportId, dim, today) {
+  let best = null;
+  all.forEach((row) => {
+    if (row.reportId !== reportId || row.dim !== dim || row.pageNo !== 1 || row.status !== "done") {
+      return;
+    }
+    if (!isFullMonth(row.startOn, row.endOn) || row.endOn > today) {
+      return;
+    }
+    if (!best || row.startOn > best.startOn) {
+      best = row;
+    }
+  });
+  return best ? { from: best.startOn, to: best.endOn } : null;
+}
+
 function asNumber(value) {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
@@ -146,9 +212,15 @@ export function normalizeRow(raw, index) {
   const children = []
     .concat(source.children || [], source.skuList || [], source.detailList || [])
     .filter((item) => item && typeof item === "object");
+  const directName = ownValue(source, ["goodsName", "hpName", "channelName", "platformName", "cateName", "userName", "memberName", "styleName", "name", "title"]);
+  const metricLabel = directName && /支付|预估|占比/.test(String(directName));
+  const name = String((metricLabel ? "" : directName) || platformLabel(ownValue(source, ["platform"])) || directName || "");
+  if (name) {
+    metrics.name = name;
+  }
   return {
     key: rowKeyOf(source, index),
-    name: String(metrics.name || pickAlias(source, ["goodsName", "name", "title"]) || ""),
+    name,
     shop: String(metrics.shop || ""),
     owner: String(metrics.owner || ""),
     metrics,
@@ -344,8 +416,8 @@ function metricCards(defs, source, ready) {
   });
 }
 
-async function loadScope(all, report, dim, from, to) {
-  if (isFullMonth(from, to) && from.slice(0, 7) < shanghaiToday().slice(0, 7)) {
+async function loadScope(all, report, dim, from, to, daysType) {
+  if (isFullMonth(from, to) && from.slice(0, 7) < shanghaiToday().slice(0, 7) && daysType !== "1") {
     const monthPages = sheetsFor(all, report.id, dim, from, to);
     const month = scopeStatus(monthPages);
     if (month.status === "ready" || month.status === "failed" || month.status === "denied") {
@@ -400,7 +472,10 @@ function shopOptions(rows, masters) {
 export async function readView(query) {
   const page = pageById(text(query.page, 40));
   const tab = tabById(page, text(query.tab, 40));
-  const range = normalizeRange(query);
+  const requested = normalizeRange(query);
+  const explicitFrom = DATE_RE.test(String(query.from || ""));
+  let range = requested;
+  let daysType = daysTypeOf(query.daysType, requested);
   const dim = tab && tab.dims && tab.dims.includes(query.dim) ? query.dim : (tab && tab.dims ? tab.dims[0] : "all");
   const view = ["list", "period", "gallery"].includes(query.view) ? query.view : "list";
   const pageNo = Math.max(1, Number(query.pageNo) || 1);
@@ -416,7 +491,14 @@ export async function readView(query) {
     coverage = { status: masters.length ? "ready" : "missing", mode: "local", missing: [], failed: [], denied: [], error: "" };
   } else if (tab) {
     const trend = view === "period" ? (page.tabs || []).find((item) => item.id.endsWith("_trend")) : null;
-    const loaded = await loadScope(all, trend || tab, dim, range.from, range.to);
+    if (!explicitFrom) {
+      const readyMonth = latestReadyMonth(all, (trend || tab).id, dim, shanghaiToday());
+      if (readyMonth) {
+        range = readyMonth;
+        daysType = "month";
+      }
+    }
+    const loaded = await loadScope(all, trend || tab, dim, range.from, range.to, daysType);
     coverage = { ...loaded.status, mode: loaded.mode, missing: loaded.missing, failed: loaded.failed, denied: loaded.denied || [] };
     rawRows = rowsOf(loaded.pages);
     const sumPage = loaded.pages.find((item) => item.pageNo === 0 && item.status === "done");
@@ -459,6 +541,7 @@ export async function readView(query) {
       label: item.label
     })).filter((item) => item.id !== "sp_zl_trend"),
     range,
+    daysType,
     dim,
     view,
     shops,

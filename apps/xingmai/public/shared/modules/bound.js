@@ -9,6 +9,7 @@
     q: "",
     from: "",
     to: "",
+    daysType: "",
     pageNo: 1,
     catalog: null,
     viewData: null,
@@ -152,6 +153,9 @@
     params.set("q", state.q);
     params.set("from", state.from);
     params.set("to", state.to);
+    if (state.daysType) {
+      params.set("daysType", state.daysType);
+    }
     params.set("pageNo", String(state.pageNo));
     return params.toString();
   }
@@ -227,40 +231,42 @@
 
   function presetRange(preset, anchorIso) {
     var anchor = parseIso(anchorIso);
-    var end = iso(anchor);
-    if (preset === "day") {
-      return { from: end, to: end };
+    if (preset === "date") {
+      var day = iso(anchor);
+      return { from: day, to: day, daysType: "1" };
     }
-    if (preset === "7") {
-      return { from: iso(addDays(anchor, -6)), to: end };
+    if (preset === "day7") {
+      return { from: iso(addDays(anchor, -7)), to: iso(addDays(anchor, -1)), daysType: "7" };
     }
-    if (preset === "30") {
-      return { from: iso(addDays(anchor, -29)), to: end };
+    if (preset === "day30") {
+      return { from: iso(addDays(anchor, -30)), to: iso(addDays(anchor, -1)), daysType: "30" };
     }
     if (preset === "week") {
-      var weekday = anchor.getDay() || 7;
-      return { from: iso(addDays(anchor, 1 - weekday)), to: end };
+      var offset = (anchor.getDay() + 6) % 7;
+      var start = addDays(anchor, -offset);
+      return { from: iso(start), to: iso(addDays(start, 6)), daysType: "week" };
     }
     if (preset === "month") {
-      var start = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
-      return { from: iso(start), to: end };
+      var monthStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+      var monthEnd = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
+      return { from: iso(monthStart), to: iso(monthEnd), daysType: "month" };
     }
     if (preset === "year") {
-      return { from: anchor.getFullYear() + "-01-01", to: end };
+      return { from: anchor.getFullYear() + "-01-01", to: anchor.getFullYear() + "-12-31", daysType: "year" };
     }
-    return { from: state.from, to: state.to };
+    return { from: state.from, to: state.to, daysType: state.daysType || "custom" };
   }
 
   function activePreset() {
-    var anchor = state.to || iso(new Date());
-    var keys = ["7", "30", "day", "week", "month", "year"];
-    for (var i = 0; i < keys.length; i += 1) {
-      var range = presetRange(keys[i], anchor);
-      if (range.from === state.from && range.to === state.to) {
-        return keys[i];
-      }
-    }
-    return "";
+    var map = { "1": "date", "7": "day7", "30": "day30", week: "week", month: "month", year: "year" };
+    return map[state.daysType] || "";
+  }
+
+  function applyRange(range) {
+    state.from = range.from;
+    state.to = range.to;
+    state.daysType = range.daysType;
+    state.pageNo = 1;
   }
 
   function cnDate(value) {
@@ -571,7 +577,7 @@
       return '<option value="' + esc(shop) + '"' + (shop === state.shop ? " selected" : "") + ">" + esc(shop) + "</option>";
     }).join("");
     var preset = activePreset();
-    var presetButtons = [["7", "7天"], ["30", "30天"], ["day", "日"], ["week", "周"], ["month", "月"], ["year", "年"]].map(function (item) {
+    var presetButtons = [["day7", "7天"], ["day30", "30天"], ["date", "日"], ["week", "周"], ["month", "月"], ["year", "年"]].map(function (item) {
       return '<button type="button" data-act="preset" data-preset="' + item[0] + '" class="' + (preset === item[0] ? "is-on" : "") + '">' + item[1] + "</button>";
     }).join("");
     var setting = (data.cards && data.cards.length) ? "cards" : "columns";
@@ -588,7 +594,7 @@
     return '<section class="bd-main" data-bound-erp="false" data-page="' + esc(data.page.id) + '" data-coverage="' + esc(data.coverage.status) + '">' +
       '<header class="bd-head"><div><h1>' + esc(data.page.label) + '</h1><p class="bd-sub">' + esc(BLURBS[data.page.id] || "") + "</p>" + renderStatus(data) + "</div>" +
       '<div class="bd-filters">' +
-      (ops.indexOf("date") >= 0 ? '<span class="bd-sub">统计时间：' + esc(cnDate(data.range.to)) + '</span><div class="bd-presets">' + presetButtons + '</div><input data-act="from" type="date" value="' + esc(data.range.from) + '"><input data-act="to" type="date" value="' + esc(data.range.to) + '">' : "") +
+      (ops.indexOf("date") >= 0 ? '<span class="bd-sub">统计时间：' + esc(cnDate(data.range.from)) + " 至 " + esc(cnDate(data.range.to)) + '</span><div class="bd-presets">' + presetButtons + '</div><button type="button" data-act="shift" data-delta="-1" aria-label="上一期">‹</button><input data-act="from" type="date" value="' + esc(data.range.from) + '"><input data-act="to" type="date" value="' + esc(data.range.to) + '"><button type="button" data-act="shift" data-delta="1" aria-label="下一期">›</button>' : "") +
       (ops.indexOf("shop") >= 0 ? "<select data-act=\"shop\">" + shops + "</select>" : "") +
       (ops.indexOf("search") >= 0 ? '<input data-act="q" value="' + esc(state.q) + '" placeholder="' + esc(searchPlaceholder(data.page.id)) + '">' : "") +
       '<button type="button" class="bd-primary" data-act="panel" data-panel="' + setting + '">设定指标</button></div></header>' +
@@ -646,6 +652,7 @@
       if (state.viewData.range) {
         state.from = state.viewData.range.from;
         state.to = state.viewData.range.to;
+        state.daysType = state.viewData.daysType || state.daysType;
       }
     } else {
       state.viewData = null;
@@ -692,10 +699,24 @@
       } else if (act === "page-no") {
         state.pageNo = Math.max(1, state.pageNo + Number(node.getAttribute("data-delta") || 0));
       } else if (act === "preset") {
-        var range = presetRange(node.getAttribute("data-preset"), state.to || iso(new Date()));
-        state.from = range.from;
-        state.to = range.to;
-        state.pageNo = 1;
+        applyRange(presetRange(node.getAttribute("data-preset"), state.to || iso(new Date())));
+      } else if (act === "shift") {
+        var current = state.daysType || "month";
+        var preset = { "1": "date", "7": "day7", "30": "day30", week: "week", month: "month", year: "year" }[current] || "date";
+        var anchor = parseIso(state.to || iso(new Date()));
+        var delta = Number(node.getAttribute("data-delta") || 0);
+        if (preset === "month") {
+          anchor = new Date(anchor.getFullYear(), anchor.getMonth() + delta, 1);
+        } else if (preset === "year") {
+          anchor = new Date(anchor.getFullYear() + delta, 0, 1);
+        } else if (preset === "week" || preset === "day7") {
+          anchor = addDays(anchor, delta * 7);
+        } else if (preset === "day30") {
+          anchor = addDays(anchor, delta * 30);
+        } else {
+          anchor = addDays(anchor, delta);
+        }
+        applyRange(presetRange(preset, iso(anchor)));
       } else if (act === "scan") {
         fetch("/api/bound/link/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: node.getAttribute("data-provider") }) }).then(function () {
           return load(root, token);
@@ -739,6 +760,9 @@
       }
       if (act === "from" || act === "to" || act === "shop") {
         state[act === "shop" ? "shop" : act] = node.value;
+        if (act === "from" || act === "to") {
+          state.daysType = "custom";
+        }
         state.pageNo = 1;
         load(root, token);
       }

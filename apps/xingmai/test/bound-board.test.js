@@ -142,6 +142,47 @@ test("没采完的范围汇总留空，采完的整月和当前页分开算", as
     assert.match(csv, /status=missing/);
     assert.match(csv, /十一月/);
     assert.equal(csv.split("十一月").length, 2);
+    const opened = await fetch(`${base}/api/bound/view?page=productOverview&tab=sp_zl_list&dim=sku`);
+    const openedBody = await opened.json();
+    assert.equal(openedBody.daysType, "month");
+    assert.equal(openedBody.range.from, "2026-09-01");
+    assert.equal(openedBody.range.to, "2026-09-30");
+    assert.equal(openedBody.allSum.payAmount, 140);
+    await writeSheet({
+      reportId: "sp_zl_list",
+      dim: "sku",
+      startOn: "2026-10-01",
+      endOn: "2026-10-31",
+      pageNo: 1,
+      status: "done",
+      kind: "list",
+      totalRows: 1,
+      pageSize: 50,
+      rowCount: 1,
+      payload: { rows: [{ goodsId: "d", goodsName: "十月杯", shopName: "甲店", payAmount: 9 }] }
+    });
+    const october = await fetch(`${base}/api/bound/view?page=productOverview&tab=sp_zl_list&dim=sku&from=2026-10-01&to=2026-10-31&daysType=month`);
+    const octoberBody = await october.json();
+    assert.equal(octoberBody.coverage.status, "ready");
+    assert.equal(octoberBody.allSum.payAmount, 9);
+    assert.equal(octoberBody.rows[0].name, "十月杯");
+    await writeSheet({
+      reportId: "qdzl_lb",
+      dim: "all",
+      startOn: "2026-09-01",
+      endOn: "2026-09-30",
+      pageNo: 1,
+      status: "done",
+      kind: "list",
+      totalRows: 1,
+      pageSize: 50,
+      rowCount: 1,
+      payload: { rows: [{ platform: "TM", payAmount: 20, columnInfo: [{ name: "推广花费(支付预估)" }] }] }
+    });
+    const named = await fetch(`${base}/api/bound/view?page=channelOverview&tab=qdzl_lb&from=2026-09-01&to=2026-09-30&daysType=month`);
+    const namedBody = await named.json();
+    assert.equal(namedBody.rows[0].name, "天猫");
+    assert.equal(namedBody.allSum.payAmount, 20);
   } finally {
     await close();
   }

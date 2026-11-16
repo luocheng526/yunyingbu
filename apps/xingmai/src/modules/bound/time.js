@@ -46,7 +46,7 @@ export function collectScopes(today) {
     month = next.toISOString().slice(0, 7);
   }
   eachDay("2026-09-01", today).forEach((day) => {
-    scopes.push({ start: day, end: day, daysType: "date" });
+    scopes.push({ start: day, end: day, daysType: 1 });
   });
   return scopes;
 }
