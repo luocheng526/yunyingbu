@@ -111,6 +111,8 @@ test("client mounts one page and five in-page tabs", () => {
   assert.match(client, /data-theme/);
   assert.match(client, /\/api\/people/);
   assert.match(client, /钉钉还没配置/);
+  assert.equal(client.includes('class="hr-title"'), false);
+  assert.equal(client.includes("每天一张"), false);
 });
 
 test("browser script survives the release import check", async () => {

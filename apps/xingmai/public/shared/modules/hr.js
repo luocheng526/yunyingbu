@@ -48,7 +48,6 @@
     style.id = "hr-page-style";
     style.textContent =
       ".hr-page{color:var(--xm-ink);}" +
-      ".hr-title{margin:0 0 8px;font-size:18px;font-weight:600;color:var(--xm-ink);}" +
       ".hr-tabs{display:flex;gap:0;border-bottom:1px solid var(--xm-line);margin:0 0 12px;overflow:auto;}" +
       ".hr-tab{appearance:none;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--xm-muted);font:inherit;font-size:14px;padding:10px 16px;cursor:pointer;white-space:nowrap;}" +
       ".hr-tab[aria-selected='true']{color:var(--xm-primary);border-bottom-color:var(--xm-primary);font-weight:600;}" +
@@ -72,11 +71,11 @@
       ".hr-table td{padding:8px 10px;border-bottom:1px solid var(--xm-line);vertical-align:middle;}" +
       ".hr-empty{padding:28px 12px;text-align:center;color:var(--xm-muted);}" +
       ".hr-msg{min-height:18px;color:var(--xm-muted);font-size:12px;}" +
+      ".hr-msg:empty{display:none;min-height:0;}" +
       ".hr-msg.is-error{color:#cf1322;}" +
       "html[data-theme='dark'] .hr-msg.is-error{color:#ff7875;}" +
       ".hr-mini{height:26px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;font-size:12px;cursor:pointer;}" +
       ".hr-board-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-end;}" +
-      ".hr-board-title{margin:0;font-size:18px;font-weight:700;color:var(--xm-ink);}" +
       ".hr-board-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;}" +
       ".hr-board-kpi{border:0;border-radius:16px;padding:16px 16px 14px;color:#fff;min-height:108px;box-shadow:0 10px 22px rgba(24,49,99,.12);}" +
       ".hr-board-kpi i{display:flex;width:28px;height:28px;border-radius:8px;align-items:center;justify-content:center;background:rgba(255,255,255,.22);}" +
@@ -212,8 +211,7 @@
     var html = "";
     if (tab === "attendance") {
       html = '<section class="hr-panel hr-board">' +
-        '<div class="hr-board-head"><div><h2 class="hr-board-title">看板</h2>' +
-        '<p class="hr-msg" data-msg>每天一张。入转调离先不做。</p></div>' +
+        '<div class="hr-board-head"><p class="hr-msg" data-msg></p>' +
         '<label class="hr-month">统计日<input type="date" data-day value="' + esc(today) + '" /></label></div>' +
         '<div class="hr-board-kpis" data-board></div>' +
         '<div class="hr-board-grid"><section class="hr-card hr-board-card" data-depts></section>' +
@@ -322,7 +320,7 @@
     }).join("") : emptyRow(7, "还没有打卡");
     setList(root, ["姓名", "部门", "工号", "日期", "上班", "下班", "结果"], body);
     if (!pack.configured) setMsg(root, "钉钉还没配置，看板先按空模板放着。", false);
-    else setMsg(root, "每天一张。人数来自钉钉名单，打卡和请假按这一天统计。入转调离先不做。", false);
+    else setMsg(root, "", false);
   }
 
   function fillOvertime(root, pack) {
@@ -446,7 +444,7 @@
   function mount(root) {
     ensureStyle();
     var state = { tab: "attendance", ticket: 0, alive: true };
-    root.innerHTML = '<div class="xm-page hr-page"><h1 class="hr-title">智能人事</h1><div class="hr-tabs" role="tablist" aria-label="智能人事">' +
+    root.innerHTML = '<div class="xm-page hr-page"><div class="hr-tabs" role="tablist" aria-label="智能人事">' +
       TABS.map(function (tab, index) {
         var on = index === 0;
         return '<button type="button" class="hr-tab" role="tab" data-tab="' + tab.id + '" aria-selected="' + (on ? "true" : "false") + '" tabindex="' + (on ? "0" : "-1") + '">' + esc(tab.label) + "</button>";
