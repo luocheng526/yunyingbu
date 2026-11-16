@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
 import http from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import {
@@ -23,7 +26,7 @@ import {
 import { fetchHome, interpretQrCheck } from "../src/modules/shen/jingmai-client.js";
 import { passwordFailureMessage } from "../src/modules/shen/jingmai-client.js";
 import { libraryPackageNames, loginScreenState, packageFilename, suiteForGlibc } from "../src/modules/shen/jingmai-desk.js";
-import { beginRelogin, beginReloginAll, connectJingmai, refreshJingmai, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/shen/jingmai-runner.js";
+import { beginRelogin, beginReloginAll, connectJingmai, jingmaiTick, refreshJingmai, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/shen/jingmai-runner.js";
 import { listCollectTargets, listSessions, readJingmaiLive, resetJingmaiStore, saveSample, saveSession } from "../src/modules/shen/jingmai-store.js";
 
 const now = { day: "2026-11-12", stamp: "2026-11-12 11:05:00", hour: 11, clock: "11:05:00" };
@@ -1006,6 +1009,70 @@ test("silent refresh keeps the old session when the login page asks for a check"
     assert.equal(sessions[0].cookies[0].value, "keep-jar");
     assert.equal(sessions[0].authState, "offline");
   } finally {
+    resetJingmaiDeps();
+    await resetJingmaiStore();
+  }
+});
+
+test("a restarted collector logs a shop in again from the saved account file", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "shen-org-"));
+  const previous = process.env.SHEN_JINGMAI_ORG_FILE;
+  process.env.SHEN_JINGMAI_ORG_FILE = join(dir, "org.json");
+  await resetJingmaiStore();
+  const opened = [];
+  const desk = {
+    open: async ({ store }) => {
+      opened.push(store);
+      return { status: "ok", cookies: [{ name: "thor", value: "new-jar" }] };
+    },
+    close: async () => {},
+    reset() {}
+  };
+  setJingmaiDeps({
+    loadOrg: async () => [{ store: "甲店", enabled: true, login: "acct", password: "secret-pass" }],
+    client: {
+      fetchHome: async () => {
+        const error = new Error("登录已失效，请重新登录");
+        error.code = "login";
+        throw error;
+      }
+    },
+    desk: desk
+  });
+  try {
+    await refreshJingmai("mk_sid=test");
+    resetJingmaiDeps();
+    await saveSession("甲店", {
+      cookies: [{ name: "thor", value: "old-jar" }],
+      authState: "offline",
+      authMessage: "登录已失效，请重新登录；京准通没有返回账号 -100 登录失败，请刷新页面重新登录",
+      enabled: true
+    });
+    setJingmaiDeps({
+      loadOrg: async () => [],
+      client: {
+        fetchHome: async () => {
+          const error = new Error("登录已失效，请重新登录");
+          error.code = "login";
+          throw error;
+        }
+      },
+      desk: desk
+    });
+    opened.length = 0;
+    await jingmaiTick();
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 50);
+    });
+    assert.deepEqual(opened, ["甲店"]);
+    assert.equal(JSON.stringify(opened).includes("secret-pass"), false);
+  } finally {
+    if (previous == null) {
+      delete process.env.SHEN_JINGMAI_ORG_FILE;
+    } else {
+      process.env.SHEN_JINGMAI_ORG_FILE = previous;
+    }
+    rmSync(dir, { recursive: true, force: true });
     resetJingmaiDeps();
     await resetJingmaiStore();
   }
