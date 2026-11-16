@@ -53,7 +53,7 @@
       ".work-tab[aria-selected='true']{border:0;color:#fff;font-weight:650;background:linear-gradient(90deg,#245bdb,#4b7cff);box-shadow:0 6px 14px rgba(36,91,219,.18);}" +
       ".work-page button:focus-visible,.work-page input:focus-visible,.work-page select:focus-visible,.work-page textarea:focus-visible{outline:2px solid var(--xm-primary);outline-offset:1px;}" +
       ".work-panel{display:flex;flex-direction:column;gap:8px;}" +
-      ".work-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:8px;align-items:start;}" +
+      ".work-split{display:flex;flex-direction:column;gap:8px;}" +
       ".work-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;}" +
       ".work-kpi{border:0;border-radius:12px;min-height:92px;padding:14px 14px 12px;color:#fff;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:0 8px 18px rgba(22,119,255,.12);}" +
       ".work-kpi b,.work-kpi strong{display:block;font-size:28px;line-height:1;font-weight:700;font-variant-numeric:tabular-nums;color:#fff;}" +
@@ -65,7 +65,8 @@
       ".work-c4{background:linear-gradient(135deg,#1fb8c9,#2fd3c0);}" +
       ".work-c5{background:linear-gradient(135deg,#e23b3b,#ff6b6b);}" +
       ".work-card{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:12px;box-shadow:var(--xm-shadow);padding:10px 12px;}" +
-      ".work-cardhead{display:flex;justify-content:space-between;gap:8px;align-items:flex-end;flex-wrap:wrap;margin:0 0 8px;}" +
+      ".work-cardhead{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 4px;}" +
+      ".work-lane .work-field{margin-top:8px;max-width:720px;}" +
       ".work-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;}" +
       ".work-form{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;}" +
       ".work-field{display:flex;flex-direction:column;gap:4px;min-width:140px;color:var(--xm-muted);font-size:12px;}" +
@@ -82,7 +83,7 @@
       ".work-table td{padding:4px 6px;border-bottom:1px solid var(--xm-line);vertical-align:middle;}" +
       "td.work-check{width:48px;text-align:center;}" +
       "td.work-check input{width:16px;height:16px;margin:0;accent-color:var(--xm-primary);cursor:pointer;}" +
-      ".work-empty{padding:28px 12px;text-align:center;color:var(--xm-muted);}" +
+      ".work-empty{padding:18px 12px;text-align:center;color:var(--xm-muted);}" +
       ".work-empty b{display:block;margin-bottom:6px;font-size:15px;color:var(--xm-ink);}" +
       ".work-msg{min-height:16px;margin:0 0 6px;color:var(--xm-muted);font-size:12px;}" +
       ".work-msg.is-error{color:#cf1322;}" +
@@ -98,12 +99,8 @@
       ".work-filters{display:flex;flex-direction:row;flex-wrap:wrap;gap:8px;align-items:center;}" +
       ".work-filters .work-mini{flex:none;width:auto;}" +
       ".work-chiprow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}" +
-      ".work-boardbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:#fff;margin:0 0 8px;padding:10px 12px;border-radius:12px;background:linear-gradient(90deg,#245bdb,#4b7cff);}" +
-      ".work-boardbar strong{font-size:14px;font-weight:700;}" +
-      ".work-boardbar span{flex:1;font-size:12px;opacity:.92;}" +
-      ".work-boardbar .work-mini{background:#fff;color:#245bdb;border:0;font-weight:650;}" +
-      ".work-boardbar .work-mini.is-on{background:#163a86;color:#fff;}" +
-      ".work-boardbar select{height:26px;border:0;border-radius:6px;padding:0 8px;font:inherit;font-size:12px;}" +
+      ".work-shops{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end;}" +
+      ".work-shops select{height:28px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;font-size:12px;}" +
       ".work-sub{display:block;margin-top:2px;font-size:12px;line-height:1.45;opacity:.92;}" +
       ".work-duty{min-width:140px;max-width:280px;white-space:normal;line-height:1.45;}" +
       ".work-count{margin-left:auto;color:var(--xm-muted);font-size:12px;}" +
@@ -111,11 +108,13 @@
       ".work-table td.work-rights{max-width:280px;white-space:normal;}" +
       ".work-checks{display:flex;flex-wrap:wrap;gap:8px 14px;margin:0 0 8px;}" +
       ".work-checks label{display:flex;align-items:center;gap:6px;font-size:13px;}" +
-      ".work-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}" +
-      ".work-lane{background:rgba(36,91,219,.06);border:1px solid var(--xm-line);border-radius:10px;padding:8px 10px;}" +
-      ".work-card .work-chiprow,.work-card .work-filters{margin-top:8px;}" +
-      ".work-diary-item{display:grid;grid-template-columns:minmax(88px,1fr) 72px 28px auto;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--xm-line);}" +
-      ".work-diary-item small{color:var(--xm-muted);font-size:12px;}" +
+      ".work-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;}" +
+      ".work-lane{margin-top:10px;}" +
+      ".work-card .work-chiprow,.work-card .work-filters{margin-top:10px;}" +
+      ".work-diary-item{display:grid;grid-template-columns:minmax(72px,1fr) 108px auto;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--xm-line);border-radius:8px;background:rgba(36,91,219,.04);}" +
+      ".work-metric-num{display:flex;align-items:center;gap:4px;}" +
+      ".work-metric-num input{width:72px;height:28px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;font-size:13px;box-sizing:border-box;}" +
+      ".work-diary-item small{color:var(--xm-muted);font-size:12px;min-width:1em;}" +
       ".work-diary-more{grid-column:1 / -1;display:flex;flex-direction:column;gap:8px;padding:4px 0 8px;}" +
       ".work-diary-more[hidden]{display:none;}" +
       ".work-shot{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}" +
@@ -131,7 +130,7 @@
       ".work-who span,.work-main{font-size:12px;color:rgba(255,255,255,.92);line-height:1.45;}" +
       ".work-main{flex:1;min-width:0;}" +
       ".work-person .work-mini{background:#fff;color:#245bdb;border:0;font-weight:650;}" +
-      "@media (max-width:980px){.work-stats,.work-depts{grid-template-columns:repeat(2,minmax(0,1fr));}.work-split,.work-grid{grid-template-columns:1fr;}.work-person{flex-wrap:wrap;align-items:flex-start;}.work-count{margin-left:0;}.work-diary-item{grid-template-columns:1fr;}}";
+      "@media (max-width:980px){.work-stats,.work-depts,.work-metrics{grid-template-columns:1fr;}.work-person{flex-wrap:wrap;align-items:flex-start;}.work-count{margin-left:0;}.work-shops{justify-content:flex-start;}}";
     document.head.appendChild(style);
   }
 
@@ -632,11 +631,11 @@
       esc(node.id) +
       '"><span>' +
       esc(node.name) +
-      '</span><input data-diary-count type="number" min="0" max="100000" step="1" value="' +
+      '</span><label class="work-metric-num"><input data-diary-count type="number" min="0" max="100000" step="1" value="' +
       esc(current.count || "") +
       '">' +
-      (node.unit ? "<small>" + esc(node.unit) + "</small>" : "<small></small>") +
-      '<button type="button" class="work-mini" data-diary-more>明细</button>' +
+      (node.unit ? "<small>" + esc(node.unit) + "</small>" : "") +
+      '</label><button type="button" class="work-mini" data-diary-more>明细</button>' +
       '<div class="work-diary-more" hidden>' +
       (yesNo
         ? '<label class="work-field">是否全部完成<select data-diary-detail><option value=""></option><option' +
@@ -710,15 +709,23 @@
       var metrics = diaryNodes("metric", lane.id);
       var extras = diaryNodes("extra", lane.id);
       var notes = diaryNodes("note", lane.id);
+      var sectionName = "";
+      sections.forEach(function (section) {
+        if (section.id === state.diaryGroup) {
+          sectionName = section.name;
+        }
+      });
+      var titled = lane.name && lane.name !== sectionName;
       fields +=
-        '<section class="work-lane"><h3>' +
-        esc(lane.name) +
-        "</h3>" +
+        '<section class="work-lane">' +
+        (titled ? "<h3>" + esc(lane.name) + "</h3>" : "") +
+        '<div class="work-metrics">' +
         metrics
           .map(function (node) {
             return metricRow(node, (draft && draft.items && draft.items[node.id]) || {});
           })
           .join("") +
+        "</div>" +
         (extras.length
           ? '<div class="work-checks">' +
             extras
@@ -752,8 +759,7 @@
       return state.diaryOpen.indexOf(String(shop.id)) < 0;
     });
     return (
-      '<section class="work-card"><div class="work-boardbar"><strong>店铺日报</strong><span>同一天可以填多家店，草稿刷新还在。</span></div>' +
-      '<div class="work-chiprow">' +
+      '<section class="work-card"><div class="work-cardhead"><div><h2>店铺日报</h2><p class="work-lead">同一天可以填多家店。保存草稿后刷新还能继续。</p></div><div class="work-shops">' +
       state.diaryOpen
         .map(function (id) {
           var shop = shops.find(function (item) { return String(item.id) === id; });
@@ -780,7 +786,7 @@
       (state.diaryShop
         ? '<button type="button" class="work-mini" data-remove-shop="' + esc(state.diaryShop) + '">移出当前店</button>'
         : "") +
-      "</div>" +
+      "</div></div>" +
       '<div class="work-chiprow">' +
       sections
         .map(function (section) {
@@ -796,9 +802,7 @@
         })
         .join("") +
       "</div>" +
-      '<div class="work-grid">' +
       fields +
-      "</div>" +
       '<div class="work-filters"><button type="button" class="work-mini" data-diary-save="草稿">保存草稿</button><button type="button" class="work-primary" data-diary-save="已提交">提交日报</button><span class="work-muted">' +
       esc(draft && draft.status ? draft.status : "") +
       "</span></div></section>"
@@ -1018,7 +1022,7 @@
         '<button type="button" class="work-primary" data-save-mine>保存这一天</button></div>' +
         renderFillTable(mine, true) +
         "</section>";
-    } else if (!isAdmin()) {
+    } else if (!isAdmin() && !hasShops) {
       fillBlock = '<div class="work-card"><div class="work-empty">今天没有需要填的事项。</div></div>';
     }
     var shown = reportRows().length;
@@ -1042,17 +1046,11 @@
         renderAdminTable(date)
       : "";
     var diary = renderDiaryFill();
-    var main = fillBlock && diary ? '<div class="work-split">' + fillBlock + diary + "</div>" : fillBlock + diary;
     return (
       '<div class="work-panel">' +
-      '<div class="work-tools">' +
-      '<label class="work-field">日期<input type="date" data-work-date min="2020-01-01" max="2099-12-31" value="' +
-      esc(date) +
-      '"></label>' +
-      '<button type="button" class="work-mini" data-today>今天</button>' +
-      "</div>" +
       (isAdmin() ? renderKpis() : "") +
-      main +
+      fillBlock +
+      diary +
       board +
       "</div>"
     );
@@ -1272,10 +1270,19 @@
     var caret = state.keepCaret;
     state.keepFocus = "";
     state.keepCaret = null;
+    var onToday = state.tab !== "settings" && state.tab !== "summary" && state.tab !== "duty" && state.tab !== "diarySettings";
+    var date = state.date || todayIso();
+    var dateTools = onToday
+      ? '<div class="work-tools"><label class="work-field">日期<input type="date" data-work-date min="2020-01-01" max="2099-12-31" value="' +
+        esc(date) +
+        '"></label><button type="button" class="work-mini" data-today>今天</button></div>'
+      : "";
     root.innerHTML =
       '<main class="page work-page">' +
       '<div class="work-bar"><div><h1>工作汇报</h1>' +
-      '<p class="work-lead">先填部门模板里的今日事项，再填自己负责的店铺日报。人数按人计，店铺按店计。</p></div></div>' +
+      '<p class="work-lead">先填部门模板里的今日事项，再填自己负责的店铺日报。人数按人计，店铺按店计。</p></div>' +
+      dateTools +
+      "</div>" +
       tabs +
       '<p class="work-msg' +
       (state.error ? " is-error" : "") +
