@@ -13,7 +13,7 @@ test("rewrites immutable homepage script url to no-store client.js", () => {
   assert.equal(out.includes("/shared/modules/home.js"), false);
   assert.equal(out.includes(HOME_CLIENT_JS), true);
     assert.equal(HOME_CLIENT_JS, `/api/home/client.js?v=${HOME_JS_STAMP}`);
-    assert.equal(HOME_JS_STAMP, "0.1.997-weeksum");
+    assert.equal(HOME_JS_STAMP, "0.1.1032-jingmai");
 });
 
 test("serves /api/home/client.js from current homepage module", async () => {
@@ -28,7 +28,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     const text = await res.text();
     assert.equal(res.status, 200);
     assert.match(String(res.headers.get("cache-control") || ""), /no-store/i);
-    assert.match(text, /xm-module-home 0\.1\.997-weeksum/);
+    assert.match(text, /xm-module-home 0\.1\.1032-jingmai/);
     assert.match(text, /function liveTheadHtml/);
     assert.match(text, /function liveFilterHtml/);
     assert.match(text, /data-live-filter="pick"/);
@@ -39,13 +39,14 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /店铺列表/);
     assert.match(text, /责权归属/);
     assert.match(text, /xm-hm-live-at">更新时间 /);
-    assert.match(text, /\/api\/han\/worker\?view=overview/);
-    assert.match(text, /\/api\/shen\/paid\?latest=1/);
-    assert.match(text, /\/api\/shen\/paid\/jingmai/);
+    assert.doesNotMatch(text, /\/api\/han\/worker\?view=overview/);
+    assert.doesNotMatch(text, /\/api\/shen\/paid\?latest=1/);
+    assert.doesNotMatch(text, /\/api\/shen\/paid\/jingmai/);
+    assert.match(text, /\/api\/home\/live-login/);
     assert.match(text, /function mergeLivePaid/);
     assert.match(text, /function sortLiveShops/);
     assert.match(text, /sortLiveShops\(feePickShops/);
-    assert.match(text, /han-shen-local/);
+    assert.match(text, /jingmai-local/);
     assert.match(text, /function liveBoardOf/);
     assert.match(text, /function seesAllLiveShops/);
     assert.doesNotMatch(text, /各店费比目标在表头列里单独设置/);
@@ -100,8 +101,8 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /function scrapedFeeBook/);
     assert.match(text, /function applyFeeBook/);
     assert.match(text, /function ensureFreshHome/);
-    assert.match(text, /m\.feeTargets = d\.feeTargets/);
-    assert.match(text, /var HOME_JS_STAMP = "0\.1\.997-weeksum"/);
+    assert.match(text, /applyFeeBook\(live\.shops, local && local\.feeTargets\)/);
+    assert.match(text, /var HOME_JS_STAMP = "0\.1\.1032-jingmai"/);
     assert.match(text, /label: "数据总揽"/);
     assert.match(text, /label: "团队概括"/);
     assert.match(text, /data-over-open/);
@@ -115,7 +116,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /api\("\/api\/home\/local-paid"/);
     assert.match(text, /sum\.spend \* \(sY \/ sT\)/);
     assert.match(text, /fillLocalPaid\(blankLive\(\)/);
-    assert.match(text, /m\.hourly = d\.hourly/);
+    assert.match(text, /function localHourlyOf/);
     assert.match(text, /\/api\/home\/erp-kpis/);
     assert.match(text, /platformFee/);
     assert.match(text, /按支付时间统计的订单金额\(包含无效单、代发单\)/);

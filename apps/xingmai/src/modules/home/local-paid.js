@@ -1,8 +1,9 @@
-/** 首页实时 = 韩梦凯「实时付费」+ 沈子晗「付费中心」汇总。模板相同，首页是总计。不接星脉 ERP。昨天快照做环比。 */
+/** 首页实时按付费中心的方式抓京麦成交和京准通付费。组织中心全部店铺。不接星脉 ERP。昨天快照做环比。 */
 
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { jingmaiLive, loadOrgShops, setJingmaiRequestOrigin, startJingmaiCollector } from "./jingmai-runner.js";
 
 function pad2(n) {
   return String(n).padStart(2, "0");
@@ -721,7 +722,7 @@ function packFromSnap(snap, extra = {}) {
     extra.feeTargets && typeof extra.feeTargets === "object" && !Array.isArray(extra.feeTargets) ? extra.feeTargets : {};
   return {
     ok: true,
-    source: "han-shen-local",
+    source: "jingmai-local",
     updatedAt: shanghaiNow(),
     summary: today.summary || extra.summary || {},
     records: applyFeeTargetsToRecords(today.records || [], feeTargets),
@@ -736,19 +737,131 @@ function packFromSnap(snap, extra = {}) {
   };
 }
 
+function teamSource(team, manager) {
+  const text = `${team || ""}${manager || ""}`;
+  if (text.includes("沈子晗")) {
+    return "jingmai-shen";
+  }
+  if (text.includes("韩梦凯")) {
+    return "jingmai-han";
+  }
+  return "jingmai";
+}
+
+function sumMoney(rows, key) {
+  let total = 0;
+  let hit = false;
+  (rows || []).forEach((row) => {
+    const value = asNum(row && row[key]);
+    if (value == null) {
+      return;
+    }
+    total += value;
+    hit = true;
+  });
+  return hit ? Math.round(total * 100) / 100 : null;
+}
+
+export function packJingmaiShops(view, org) {
+  const shops = Array.isArray(view && view.shops) ? view.shops.slice() : [];
+  const orgRows = Array.isArray(org) ? org : [];
+  const byName = new Map();
+  orgRows.forEach((row) => {
+    if (row && row.store) {
+      byName.set(row.store, row);
+    }
+  });
+  const seen = new Set(shops.map((shop) => String((shop && shop.shop) || "").trim()));
+  orgRows.forEach((row) => {
+    if (!row || !row.store || row.enabled === false || seen.has(row.store)) {
+      return;
+    }
+    seen.add(row.store);
+    shops.push({
+      shop: row.store,
+      enabled: true,
+      online: false,
+      offline: true,
+      loginExpired: true,
+      offlineReason: row.login && row.password ? "未在服务器登录" : "组织中心未填账号",
+      dealAmount: null,
+      paidAmount: null,
+      paidDeal: null,
+      paidRoi: null
+    });
+  });
+  const records = shops
+    .filter((shop) => shop && shop.enabled !== false && shop.shop)
+    .map((shop) => {
+      const meta = byName.get(shop.shop) || {};
+      return {
+        shopName: shop.shop,
+        source: teamSource(meta.team, meta.manager),
+        liveAmount: asNum(shop.dealAmount),
+        paidAmount: asNum(shop.paidAmount),
+        paidDeal: asNum(shop.paidDeal),
+        roi: asNum(shop.paidRoi),
+        online: shop.online === true,
+        loginExpired: shop.loginExpired === true,
+        capturedAt: shop.capturedAt || "",
+        platformUpdatedAt: shop.platformUpdatedAt || ""
+      };
+    });
+  const hourly = {
+    todayPay: sumHourIncrements(shops, "todayHours"),
+    yesterdayPay: sumHourIncrements(shops, "yesterdayHours"),
+    todaySpend: sumHourIncrements(shops, "todayPaidHours"),
+    yesterdaySpend: sumHourIncrements(shops, "yesterdayPaidHours")
+  };
+  hourly.todayFee = feeHoursFrom(hourly.todaySpend, hourly.todayPay);
+  hourly.yesterdayFee = feeHoursFrom(hourly.yesterdaySpend, hourly.yesterdayPay);
+  return {
+    records,
+    summary: {
+      liveAmount: sumMoney(records, "liveAmount"),
+      spend: sumMoney(records, "paidAmount"),
+      paidDeal: sumMoney(records, "paidDeal"),
+      shopCount: records.length,
+      onlineCount: records.filter((row) => row.online).length
+    },
+    hourly,
+    updatedAt: (view && view.updatedAt) || "",
+    from: ["jingmai"]
+  };
+}
+
+export async function pullJingmaiPaid(req) {
+  if (!process.env.NODE_TEST_CONTEXT && !process.argv.includes("--test")) {
+    startJingmaiCollector();
+  }
+  const cookie = (req && req.headers && req.headers.cookie) || "";
+  if (req && typeof req.get === "function") {
+    const host = req.get("host");
+    if (host) {
+      const proto = String((req.headers && req.headers["x-forwarded-proto"]) || req.protocol || "http")
+        .split(",")[0]
+        .trim();
+      setJingmaiRequestOrigin(`${proto}://${host}`);
+    }
+  }
+  const view = await jingmaiLive();
+  let org = [];
+  if (req) {
+    try {
+      org = await loadOrgShops(cookie);
+    } catch {
+      org = [];
+    }
+  }
+  return packJingmaiShops(view, org);
+}
+
 export async function getHomeLocalPaid(req) {
   const ymd = shanghaiYmd();
   const [merged, feeTargets] = await Promise.all([
-    req ? pullHanShenPaid(req, ymd) : Promise.resolve({ records: [], summary: {}, hourly: {} }),
+    pullJingmaiPaid(req),
     req ? pullFeeTargets(req) : Promise.resolve({})
   ]);
   const snap = rememberLocalPaidDay(merged, ymd);
-  const from = [];
-  if ((merged.records || []).some((row) => String(row.source || "").indexOf("han") !== -1)) {
-    from.push("han");
-  }
-  if ((merged.records || []).some((row) => String(row.source || "").indexOf("shen") !== -1)) {
-    from.push("shen");
-  }
-  return packFromSnap(snap, { summary: merged.summary, from, feeTargets, hourly: merged.hourly });
+  return packFromSnap(snap, { summary: merged.summary, from: merged.from || ["jingmai"], feeTargets, hourly: merged.hourly });
 }
