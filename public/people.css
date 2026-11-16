@@ -9,19 +9,25 @@ body:has(.xm-shell):has(.people-page) {
 }
 
 body:has(.xm-shell):has(.people-page) .xm-shell {
-  height: 100vh;
-  max-height: 100vh;
+  height: 100%;
+  max-height: 100%;
   overflow: hidden;
 }
 
 body:has(.xm-shell):has(.people-page) .xm-main {
   min-height: 0;
-  height: 100vh;
-  max-height: 100vh;
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
+  height: auto;
+  max-height: none;
+  overflow: hidden !important;
   display: flex;
   flex-direction: column;
+}
+
+body:has(.xm-shell):has(.people-page) .xm-workspace {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 body:has(.people-page) #xm-notice-mask {
@@ -40,10 +46,11 @@ body:has(.people-page) #xm-notice-mask .xm-notice-dialog {
 
 body:has(.people-page) .xm-content,
 #xm-content:has(.people-page) {
-  flex: 0 0 auto;
-  height: auto;
-  min-height: 0;
-  overflow: visible !important;
+  flex: 1 1 auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
 }
 
 .xm-content .page.people-page,

@@ -97,6 +97,9 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     const jsText = await js.text();
     assert.equal(js.status, 200);
     assert.match(jsText, /overflow-y:auto!important/);
+    assert.match(jsText, /#xm-content:has\(\.people-page\)\{[^}]*overflow-y:auto!important/);
+    assert.doesNotMatch(jsText, /#xm-content:has\(\.people-page\)\{[^}]*overflow:visible!important/);
+    assert.match(jsText, /peopleScrollRoot/);
     assert.match(jsText, /org-table-wrap\{overflow:visible!important/);
     assert.match(jsText, /max-height:none!important/);
     assert.match(jsText, /org-toolbar\{position:static/);
