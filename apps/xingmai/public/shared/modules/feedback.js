@@ -7,10 +7,10 @@
     { status: "rejected", label: "需求驳回", tone: "c3" }
   ];
   var STATUS = {
-    open: "需求与任务",
-    doing: "开发中任务",
-    closed: "已完成任务",
-    rejected: "需求驳回"
+    open: "提交需求待审核",
+    doing: "开发中",
+    closed: "已完成",
+    rejected: "驳回"
   };
   var state = {
     lane: "",
@@ -59,29 +59,33 @@
       ".fb-stat.is-on{box-shadow:0 0 0 3px #fff,0 0 0 5px rgba(20,40,80,.45);}" +
       ".fb-ico{position:absolute;top:12px;left:14px;width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,.24);display:flex;align-items:center;justify-content:center;}" +
       ".fb-ico svg{width:16px;height:16px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}" +
-      ".fb-c0{background:linear-gradient(135deg,#1fb8c9,#2fd3c0);}" +
-      ".fb-c1{background:linear-gradient(135deg,#2fcf78,#62e08a);}" +
-      ".fb-c2{background:linear-gradient(135deg,#4b7cff,#6ea0ff);}" +
-      ".fb-c3{background:linear-gradient(135deg,#ff9440,#ffb15a);}" +
-      ".fb-board{border-radius:16px;padding:14px;background:linear-gradient(180deg,#2f6fe4 0%,#d7e7ff 100%);min-height:280px;}" +
-      ".fb-board-bar{display:flex;align-items:center;gap:8px;color:#fff;margin:0 0 12px;}" +
+      ".fb-c0{background:linear-gradient(135deg,#2f6fe4,#5b94f5);}" +
+      ".fb-c1{background:linear-gradient(135deg,#1faa5a,#3dce78);}" +
+      ".fb-c2{background:linear-gradient(135deg,#f08a1e,#ffb04a);}" +
+      ".fb-c3{background:linear-gradient(135deg,#e23b3b,#ff6b6b);}" +
+      ".fb-board{padding:0;background:transparent;min-height:0;}" +
+      ".fb-board-bar{display:flex;align-items:center;gap:8px;color:#fff;margin:0 0 10px;padding:10px 14px;border-radius:12px;background:linear-gradient(90deg,#245bdb,#4b7cff);}" +
       ".fb-board-bar strong{font-size:16px;font-weight:700;}" +
       ".fb-board-bar span{flex:1;font-size:12px;opacity:.92;}" +
       ".fb-grid{display:flex;flex-direction:column;gap:10px;}" +
-      ".fb-person{background:var(--xm-card);color:var(--xm-ink);border-radius:12px;padding:12px 14px;box-shadow:0 8px 18px rgba(20,40,80,.12);display:flex;align-items:center;gap:16px;width:100%;box-sizing:border-box;}" +
+      ".fb-person{color:#fff;border-radius:12px;padding:12px 14px;box-shadow:0 8px 18px rgba(20,40,80,.12);display:flex;align-items:center;gap:16px;width:100%;box-sizing:border-box;}" +
+      ".fb-person.tone-open{background:linear-gradient(90deg,#2f6fe4,#5b94f5);}" +
+      ".fb-person.tone-doing{background:linear-gradient(90deg,#1faa5a,#3dce78);}" +
+      ".fb-person.tone-closed{background:linear-gradient(90deg,#f08a1e,#ffb04a);}" +
+      ".fb-person.tone-rejected{background:linear-gradient(90deg,#e23b3b,#ff6b6b);}" +
       ".fb-who{flex:0 0 132px;min-width:0;}" +
       ".fb-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:4px;}" +
       ".fb-name{font-size:16px;font-weight:700;}" +
-      ".fb-when{color:var(--xm-muted);font-size:12px;line-height:1.4;font-variant-numeric:tabular-nums;margin-top:4px;}" +
+      ".fb-when{color:rgba(255,255,255,.88);font-size:12px;line-height:1.4;font-variant-numeric:tabular-nums;margin-top:4px;}" +
       ".fb-need{font-size:14px;font-weight:650;}" +
       ".fb-body{white-space:pre-wrap;line-height:1.5;}" +
-      ".fb-shot{width:148px;height:72px;object-fit:cover;border-radius:8px;background:#f4f7fb;display:block;flex:0 0 auto;}" +
-      ".fb-shot-empty{width:148px;height:72px;box-sizing:border-box;border:1px dashed var(--xm-line);border-radius:8px;color:var(--xm-muted);display:flex;align-items:center;justify-content:center;font-size:12px;background:color-mix(in srgb, var(--xm-ink) 4%, var(--xm-card));flex:0 0 auto;}" +
-      ".fb-meta{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--xm-muted);}" +
-      ".fb-meta b{color:var(--xm-ink);font-weight:650;}" +
+      ".fb-shot{width:148px;height:72px;object-fit:cover;border-radius:8px;background:rgba(255,255,255,.2);display:block;flex:0 0 auto;}" +
+      ".fb-shot-empty{width:148px;height:72px;box-sizing:border-box;border:1px dashed rgba(255,255,255,.55);border-radius:8px;color:rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;font-size:12px;background:rgba(255,255,255,.12);flex:0 0 auto;}" +
+      ".fb-meta{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:rgba(255,255,255,.9);}" +
+      ".fb-meta b{color:#fff;font-weight:650;}" +
       ".fb-ops{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}" +
       ".fb-ops input{flex:1 1 180px;min-width:140px;height:30px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;font-size:12px;}" +
-      ".fb-empty{padding:36px 12px;text-align:center;color:#12325a;}" +
+      ".fb-empty{padding:28px 12px;text-align:center;color:var(--xm-muted);}" +
       ".fb-empty b{display:block;margin-bottom:6px;font-size:15px;}" +
       ".fb-form{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:12px;box-shadow:var(--xm-shadow);padding:14px;display:flex;flex-direction:column;gap:10px;margin:0 0 14px;}" +
       ".fb-field{display:flex;flex-direction:column;gap:4px;color:var(--xm-muted);font-size:12px;}" +
@@ -146,7 +150,13 @@
     if (!state.lane) {
       return "全部需求";
     }
-    return STATUS[state.lane] || "全部需求";
+    var lane = null;
+    for (var i = 0; i < LANES.length; i += 1) {
+      if (LANES[i].status === state.lane) {
+        lane = LANES[i];
+      }
+    }
+    return lane ? lane.label : "全部需求";
   }
 
   function stats() {
@@ -207,7 +217,7 @@
         "</div>";
     }
     return (
-      '<article class="fb-person">' +
+      '<article class="fb-person tone-' + esc(item.status) + '">' +
       '<div class="fb-who"><div class="fb-name">' +
       esc(item.authorName || item.author) +
       '</div><div class="fb-when">' +
@@ -241,7 +251,7 @@
     } else if (state.loadError) {
       body = '<div class="fb-empty"><b>看板没有加载出来</b><button type="button" class="fb-onboard" data-retry="1">重试</button></div>';
     } else if (!rows.length) {
-      body = '<div class="fb-empty"><b>这个颜色里还没有需求</b>提交后，每个人一条长卡片，横在这块渐变里。</div>';
+      body = '<div class="fb-empty"><b>这里还没有需求</b>提交后，一条需求一个色框。蓝是待审核，绿是开发中，橙是已完成，红是驳回。</div>';
     } else {
       body = '<div class="fb-grid">' + rows.map(personCard).join("") + "</div>";
     }
