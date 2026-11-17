@@ -6,6 +6,8 @@ const js = await readFile(new URL("../../../public/shared/modules/academy.js", i
 const css = await readFile(new URL("../../../public/academy.css", import.meta.url), "utf8");
 const shellNav = await readFile(new URL("../../../public/shared/nav.js", import.meta.url), "utf8");
 const navItems = await readFile(new URL("../home/nav-items.js", import.meta.url), "utf8");
+const shellPages = await readFile(new URL("../home/pages.js", import.meta.url), "utf8");
+const shellMiddleware = await readFile(new URL("../profile/middleware.js", import.meta.url), "utf8");
 
 test("academy root mounts the complete learning dashboard", () => {
   assert.match(js, /function dashboardPage/);
@@ -63,4 +65,12 @@ test("academy is one top-level menu without sidebar children", () => {
   assert.doesNotMatch(shellNav, /"\/academy": "\/academy\/courses"/);
   assert.match(navItems, /export const ACADEMY_CHILDREN = \[\]/);
   assert.match(navItems, /\{ href: "\/academy", label: "甄选商学院" \}/);
+});
+
+test("shell cache pin refreshes the academy menu and module", () => {
+  assert.match(shellNav, /xm-fast-shell 0\.1\.147/);
+  assert.match(shellPages, /xm-fast-shell 0\.1\.147/);
+  assert.match(shellMiddleware, /xm-fast-shell 0\.1\.147/);
+  assert.match(shellMiddleware, /SHELL_ASSET_VER = "0\.1\.147"/);
+  assert.match(shellMiddleware, /shared\/nav\.js\?v=\$\{SHELL_ASSET_VER\}/);
 });
