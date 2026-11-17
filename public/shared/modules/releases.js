@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.105-page2-bar */
+/* xm-module-releases 0.1.106-page2-always */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -190,14 +190,14 @@
       <div id="flash" class="flash" role="status"></div>
       <div id="lock-view" class="lock-box idle" hidden></div>
       <section class="oc-card panel rg-board">
-        <nav class="rg-subnav" aria-label="记录页签" hidden>
+        <nav class="rg-subnav" aria-label="记录页签">
           <button type="button" class="oc-tab rg-sub" data-tab="history"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span class="rg-sub-label">发布记录</span></button>
           <button type="button" class="oc-tab rg-sub" data-tab="logs"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg><span class="rg-sub-label">运行日志</span></button>
           <button type="button" class="oc-tab rg-sub" data-tab="failed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.3 3.2L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.2a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg><span class="rg-sub-label">失败版本</span></button>
           <button type="button" class="oc-tab rg-sub" data-tab="compare"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M15.5 5.5A6 6 0 0 1 21 11M8.5 18.5A6 6 0 0 1 3 13"/></svg><span class="rg-sub-label">版本对比</span></button>
           <button type="button" class="oc-tab rg-sub" data-tab="rollback"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span class="rg-sub-label">回滚管理</span></button>
         </nav>
-        <div class="rg-filters" id="rg-filters" hidden>
+        <div class="rg-filters" id="rg-filters">
           <label>版本号 <input id="flt-ver" type="search" placeholder="请输入版本号" autocomplete="off" /></label>
           <label>发布状态
             <select id="flt-status">
@@ -275,7 +275,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-24";
+      link.href = "/releases.css?v=sc-ui-25";
       document.head.appendChild(link);
     }
   }
@@ -804,7 +804,7 @@
 
       function activeTabName() {
         const sub = document.querySelector(".rg-subnav");
-        const inner = sub && !sub.hidden ? sub.querySelector(".oc-tab.active") : null;
+        const inner = sub ? sub.querySelector(".oc-tab.active") : null;
         if (inner) {
           return inner.getAttribute("data-tab") || "queue";
         }
@@ -1242,11 +1242,11 @@
         const name = tab || activeTabName();
         const filters = document.getElementById("rg-filters");
         if (filters) {
-          filters.hidden = !(name === "history" || name === "failed" || name === "rollback");
+          filters.hidden = name === "logs" || name === "compare";
         }
         const sub = document.querySelector(".rg-subnav");
         if (sub) {
-          sub.hidden = name === "queue";
+          sub.hidden = false;
         }
       }
       function cmpOption(item) {

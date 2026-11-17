@@ -204,8 +204,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /不会自动跳转/);
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /sc-ui-24/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-24/);
+    assert.match(text, /sc-ui-25/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-25/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
     assert.match(text, /id="xm-releases-boot"/);
