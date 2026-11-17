@@ -7,6 +7,7 @@ import { createApp } from "../src/app.js";
 import { resetStoreForTests } from "../src/modules/profile/auth.js";
 import { resetErpCacheForTests, setErpFetchForTests } from "../src/modules/data/erp.js";
 import { resetStoresDutyCacheForTests } from "../src/modules/stores/erp.js";
+import { setJdFetchForTests, warehouseLines } from "../src/modules/stores/jd-stock.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const storesJs = readFileSync(join(root, "public/shared/modules/stores.js"), "utf8");
@@ -115,6 +116,9 @@ test("stores module mounts four ERP pages with the screenshot titles", () => {
   assert.match(storesJs, /违规管理/);
   assert.match(storesJs, /发货监控/);
   assert.match(storesJs, /京东库存监控/);
+  assert.match(storesJs, /京东物流/);
+  assert.match(storesJs, /全国仓/);
+  assert.match(storesJs, /skuName/);
   assert.match(storesJs, /\/api\/stores\/erp\/reviews/);
   assert.match(storesJs, /\/api\/stores\/erp\/violations/);
   assert.match(storesJs, /\/api\/stores\/erp\/shipping/);
@@ -272,27 +276,104 @@ test("shipping monitors waiting and shipped orders", async () => {
   assert.deepEqual(orderCall.body.orderStatus, [3, 6]);
 });
 
-test("inventory flags negative stock as abnormal", async () => {
+test("inventory keeps jd express warehouses and drops national stock", () => {
+  const jd = warehouseLines(
+    [{ featureKey: "isJDexpress", featureValue: "1" }],
+    [
+      { storeId: 0, stockNum: 99997, warehouseName: "商家全国仓" },
+      { storeId: 5, stockNum: 80, warehouseName: "京东全国仓" },
+      {
+        storeId: 118091428,
+        stockNum: 4,
+        orderTransferNum: 1,
+        warehouseName: "北京常温C平台仓55号库-CHN"
+      }
+    ]
+  );
+  assert.equal(jd.jdExpress, true);
+  assert.equal(jd.droppedNational, 2);
+  assert.equal(jd.lines.length, 1);
+  assert.equal(jd.lines[0].usableNum, 3);
+  assert.equal(jd.lines[0].spotNum, 4);
+  assert.equal(jd.lines[0].bookingNum, 1);
+  assert.equal(jd.lines[0].stockLabel, "低库存");
+  assert.equal(jd.lines[0].warehouseName, "北京常温C平台仓55号库-CHN");
+
+  const merchant = warehouseLines([], [{ storeId: 88, stockNum: 50, warehouseName: "商家仓" }]);
+  assert.equal(merchant.jdExpress, false);
+  assert.equal(merchant.lines.length, 0);
+});
+
+test("inventory reads partition stock and hides shop auth", async () => {
   process.env.XM_ERP_TOKEN = "test-token";
-  mockErp(async (url) => {
+  const calls = mockErp(async (url) => {
     if (String(url).includes("/jd/shopInfo/page")) {
       return shopPage();
     }
-    return jsonRes({
-      total: 1,
-      totalPages: 1,
-      currentPage: 1,
-      pageSize: 20,
-      records: [{ productId: "77", productName: "异常库存", shopId: "19852571", productStatus: 105, stockNum: -3 }]
-    });
+    if (String(url).includes("/jd/product/sku/page")) {
+      return jsonRes({
+        total: 2,
+        totalPages: 1,
+        currentPage: 1,
+        pageSize: 20,
+        records: [
+          { skuId: "10236540030710", productId: "10035504820272", productName: "RASW德系毛球修剪器", shopId: "19852571", stockNum: 199976 },
+          { skuId: "2002", productId: "200", productName: "商家自发货", shopId: "19852571", stockNum: 50 }
+        ]
+      });
+    }
+    throw new Error("unexpected " + url);
+  });
+  setJdFetchForTests(async (_url, options) => {
+    const params = new URLSearchParams(options.body);
+    const biz = JSON.parse(params.get("360buy_param_json"));
+    const method = params.get("method");
+    if (method === "jingdong.sku.read.findSkuById") {
+      const express = biz.skuId === "10236540030710";
+      return {
+        json: async () => ({
+          jingdong_sku_read_findSkuById_responce: {
+            sku: { features: express ? [{ featureKey: "isJDexpress", featureValue: "1" }] : [] }
+          }
+        })
+      };
+    }
+    const stocks =
+      biz.skuId === "10236540030710"
+        ? [
+            { storeId: 0, stockNum: 99997, orderBookingNum: 0, orderTransferNum: 0, appBookingNum: 0 },
+            { storeId: 118091428, stockNum: 4, orderBookingNum: 0, orderTransferNum: 1, appBookingNum: 0 }
+          ]
+        : [{ storeId: 88, stockNum: 50 }];
+    return {
+      json: async () => ({
+        jingdong_ware_stock_sku_query_responce: {
+          returnType: { success: true, obj: { skuStockInfos: stocks } }
+        }
+      })
+    };
   });
   const cookie = await loginCookie();
-  const res = await fetch(`${base}/api/stores/erp/inventory`, { headers: { cookie } });
+  const res = await fetch(`${base}/api/stores/erp/inventory?skuName=${encodeURIComponent("毛球")}`, {
+    headers: { cookie }
+  });
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.page, "京东库存监控");
-  assert.equal(body.records[0].stockLabel, "库存异常");
-  assert.equal(body.summary.abnormal, 1);
+  assert.equal(body.source, "jingdong-partition-stock");
+  assert.equal(body.records.length, 1);
+  assert.equal(body.records[0].warehouseId, "118091428");
+  assert.equal(body.records[0].usableNum, 3);
+  assert.equal(body.records[0].stockLabel, "低库存");
+  assert.equal(body.records[0].tag, "京东物流");
+  assert.equal(body.summary.jd, 1);
+  assert.equal(body.summary.droppedNational, 1);
+  assert.equal(body.summary.low, 1);
+  assert.equal(JSON.stringify(body).includes("SECRET"), false);
+  assert.equal(JSON.stringify(body).includes("99997"), false);
+  const skuCall = calls.find((item) => String(item.url).includes("/jd/product/sku/page"));
+  assert.equal(skuCall.body.skuName, "毛球");
+  assert.equal(calls.some((item) => String(item.url).includes("/jd/product/page")), false);
 });
 
 test("ERP SQL errors are not leaked to the client", async () => {

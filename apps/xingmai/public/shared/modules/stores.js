@@ -52,11 +52,11 @@
       api: "/api/stores/erp/inventory",
       tone: 3,
       ico: ICO + '<path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="M3.3 7.9 12 13l8.7-5.1"/><path d="M12 13v10"/></svg>',
-      lead: "对接星脉 ERP 京东商品库存。负数标异常，小于等于 20 标低库存。",
+      lead: "商品标签选京东物流，去掉全国仓，剩下的才是京仓库存。可用库存 = 现货 − 占用，小于等于 20 标低库存。",
       kpis: [
-        { key: "total", label: "商品总数", ico: ICO + '<path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="M12 13v10"/></svg>' },
-        { key: "abnormal", label: "本页库存异常", ico: ICO + '<circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg>' },
-        { key: "low", label: "本页低库存", ico: ICO + '<path d="M4 19h16"/><path d="M7 19V10"/><path d="M12 19V6"/><path d="M17 19v-5"/></svg>' }
+        { key: "jd", label: "本页京仓", ico: ICO + '<path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="M12 13v10"/></svg>' },
+        { key: "usable", label: "可用库存", ico: ICO + '<path d="M4 19h16"/><path d="M7 19V10"/><path d="M12 19V6"/><path d="M17 19v-5"/></svg>' },
+        { key: "low", label: "本页低库存", ico: ICO + '<circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg>' }
       ]
     }
   ];
@@ -247,21 +247,24 @@
         }
         return (
           "<tr><td>" +
-          productNameCell(row) +
-          "</td><td>" +
+          "<div>" +
+          none(row.productName) +
+          '</div><div class="stores-sub">SKU ' +
+          none(row.skuId) +
+          "</div></td><td>" +
           shopCell(row) +
           "</td><td>" +
-          count(row.stockNum) +
+          none(row.warehouseName) +
+          '</td><td class="stores-sub">' +
+          none(row.warehouseId) +
+          "</td><td>" +
+          count(row.usableNum) +
+          "</td><td>" +
+          count(row.spotNum) +
+          "</td><td>" +
+          count(row.bookingNum) +
           "</td><td>" +
           pill(row.stockLabel, statusKind(row.stockLabel)) +
-          "</td><td>" +
-          money(row.jdPrice) +
-          "</td><td>" +
-          pill(row.statusLabel, statusKind(row.statusLabel)) +
-          "</td><td>" +
-          none(row.itemNum) +
-          "</td><td>" +
-          none(row.syncTime) +
           "</td></tr>"
         );
       })
@@ -278,7 +281,7 @@
     if (id === "shipping") {
       return "<tr><th>订单号</th><th>店铺</th><th>状态</th><th>金额</th><th>付款时间</th><th>商品</th><th>件数</th><th>买家备注</th></tr>";
     }
-    return "<tr><th>商品</th><th>店铺</th><th>库存</th><th>库存状态</th><th>京东价</th><th>状态</th><th>货号</th><th>同步时间</th></tr>";
+    return "<tr><th>商品</th><th>店铺</th><th>仓库</th><th>仓库编号</th><th>京仓库存</th><th>现货</th><th>占用</th><th>状态</th></tr>";
   }
 
   function extraFilters(id, state) {
@@ -358,7 +361,7 @@
       '<form class="stores-toolbar" data-filter>' +
       '<label>责权选择<select name="dutyId"><option value="">全部责权</option></select></label>' +
       '<label>店铺<select name="shopId"><option value="">全部店铺</option></select></label>' +
-      '<label>搜索<input name="q" maxlength="64" placeholder="店名 / 关键词" /></label>' +
+      '<label>搜索<input name="q" maxlength="64" placeholder="店名 / 商品" /></label>' +
       '<span data-extra></span>' +
       '<button type="submit">查询</button>' +
       "</form>" +
@@ -586,7 +589,11 @@
         params.set("dutyId", state.dutyId);
       }
       if (state.q) {
-        params.set("shopName", state.q);
+        if (page.id === "inventory") {
+          params.set("skuName", state.q);
+        } else {
+          params.set("shopName", state.q);
+        }
       }
       if (page.id === "shipping" && state.orderStatus) {
         params.set("orderStatus", state.orderStatus);

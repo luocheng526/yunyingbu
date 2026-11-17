@@ -1,4 +1,5 @@
 import { erpPost, listErpShopMeta } from "../data/erp.js";
+import { readJdWarehouseStock, resetJdStockForTests } from "./jd-stock.js";
 
 export const STORE_PAGES = [
   { id: "reviews", title: "评价管理", path: "/stores/reviews" },
@@ -25,9 +26,11 @@ export const PRODUCT_STATUS = {
 
 const LOW_STOCK = 20;
 const USER_TTL_MS = 5 * 60 * 1000;
+const AUTH_TTL_MS = 5 * 60 * 1000;
 const UNASSIGNED_DUTY = "unassigned";
 
 let userNameCache = { at: 0, names: {} };
+let shopAuthCache = { at: 0, map: {} };
 
 function toInt(value, fallback) {
   const n = Number(value);
@@ -233,6 +236,8 @@ async function productPage(input, extra) {
 
 export function resetStoresDutyCacheForTests() {
   userNameCache = { at: 0, names: {} };
+  shopAuthCache = { at: 0, map: {} };
+  resetJdStockForTests();
 }
 
 export async function listErpStoreShops() {
@@ -348,18 +353,113 @@ export async function listErpShipping(input = {}) {
   };
 }
 
+async function loadShopAuthMap() {
+  const now = Date.now();
+  if (Object.keys(shopAuthCache.map).length && now - shopAuthCache.at < AUTH_TTL_MS) {
+    return shopAuthCache.map;
+  }
+  const map = {};
+  let pageNum = 1;
+  let totalPages = 1;
+  do {
+    const data = await erpPost("/product/jd/shopInfo/page", { pageNum, pageSize: 50 });
+    for (const row of data?.records || []) {
+      const auth = row?.authInfo;
+      if (!row?.id || !auth?.appKey || !auth?.appSecret || !auth?.accessToken) {
+        continue;
+      }
+      map[String(row.id)] = {
+        appKey: auth.appKey,
+        appSecret: auth.appSecret,
+        accessToken: auth.accessToken
+      };
+    }
+    totalPages = Number(data?.totalPages || 1);
+    pageNum += 1;
+  } while (pageNum <= totalPages && pageNum <= 20);
+  shopAuthCache = { at: now, map };
+  return map;
+}
+
+async function mapPool(items, limit, fn) {
+  const out = new Array(items.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      out[index] = await fn(items[index], index);
+    }
+  }
+  const size = Math.min(Math.max(limit, 1), items.length || 1);
+  await Promise.all(Array.from({ length: items.length ? size : 0 }, () => worker()));
+  return out;
+}
+
 export async function listErpInventory(input = {}) {
-  const page = await productPage(input, { orderBy: "stockNum", asc: true });
-  const abnormal = page.records.filter((row) => row.stockLabel === "库存异常").length;
-  const low = page.records.filter((row) => row.stockLabel === "低库存").length;
+  const meta = await listErpShopMeta();
+  const { ids, emptyDuty } = await resolveShopIds(input);
+  const pageSize = Math.min(toInt(input.pageSize, 20), 20);
+  if (emptyDuty) {
+    return {
+      ...emptyPage(pageSize),
+      page: "京东库存监控",
+      summary: { jd: 0, usable: 0, low: 0, droppedNational: 0, listed: 0 }
+    };
+  }
+  const keyword = String(input.skuName || input.productName || "").trim();
+  const data = await erpPost("/product/jd/product/sku/page", {
+    pageNum: toInt(input.pageNum, 1),
+    pageSize,
+    shopIds: ids.length ? ids : undefined,
+    skuName: keyword || undefined
+  });
+  const skus = Array.isArray(data?.records) ? data.records : [];
+  const authMap = await loadShopAuthMap();
+  const groups = await mapPool(skus, 4, async (sku) => {
+    const shopId = String(sku?.shopId ?? "");
+    const auth = authMap[shopId];
+    if (!auth || !sku?.skuId) {
+      return { lines: [], droppedNational: 0, failed: 0 };
+    }
+    try {
+      const stock = await readJdWarehouseStock(auth, sku.skuId);
+      return {
+        droppedNational: stock.droppedNational,
+        failed: 0,
+        lines: stock.lines.map((line) => ({
+          ...line,
+          productId: String(sku.productId ?? ""),
+          productName: sku.productName || sku.skuName || "",
+          skuId: String(sku.skuId),
+          shopId,
+          shopName: shopName(meta, shopId)
+        }))
+      };
+    } catch {
+      return { lines: [], droppedNational: 0, failed: 1 };
+    }
+  });
+  const droppedNational = groups.reduce((sum, group) => sum + group.droppedNational, 0);
+  const failed = groups.reduce((sum, group) => sum + group.failed, 0);
+  const records = groups
+    .flatMap((group) => group.lines)
+    .sort((a, b) => a.usableNum - b.usableNum || String(a.skuId).localeCompare(String(b.skuId)));
+  const usable = records.reduce((sum, row) => sum + row.usableNum, 0);
+  const low = records.filter((row) => row.stockLabel === "低库存" || row.stockLabel === "库存异常").length;
   return {
-    ...page,
+    ok: true,
+    source: "jingdong-partition-stock",
     page: "京东库存监控",
+    ...pageOf(data),
+    records,
     summary: {
-      total: page.total,
-      abnormal,
+      jd: records.length,
+      usable,
       low,
-      listed: page.records.length
+      droppedNational,
+      failed,
+      listed: records.length
     }
   };
 }

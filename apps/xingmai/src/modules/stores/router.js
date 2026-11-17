@@ -53,6 +53,7 @@ function erpQuery(query = {}) {
     shopIds: query.shopIds,
     dutyId: query.dutyId,
     shopName: query.shopName || query.q,
+    skuName: query.skuName,
     orderStatus: query.orderStatus,
     productStatus: query.productStatus
   };
