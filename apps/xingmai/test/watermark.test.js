@@ -19,7 +19,7 @@ async function login(base, username, password = "ChangeMe123!") {
 }
 
 test("登录后的业务页铺当前查看者水印，登录页没有", async () => {
-  assert.equal(SHELL_ASSET_VER, "0.1.785-mever");
+  assert.equal(SHELL_ASSET_VER, "0.1.786-mebust");
   assert.match(layoutCss, /xm-watermark 0\.1\.779-watermark/);
   assert.match(layoutCss, /xm-mark-lite 0\.1\.780-marklite/);
   assert.match(layoutCss, /xm-mark-who 0\.1\.781-markwho/);

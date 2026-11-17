@@ -554,4 +554,8 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.doesNotMatch(shell, /今日订单/);
   const versionedMod = await fetch(`${base}/shared/modules/home.js?v=0.1.108`);
   assert.match(String(versionedMod.headers.get("cache-control") || ""), /max-age=86400/);
+  const meScript = await fetch(`${base}/shared/modules/me.js?v=${SHELL_ASSET_VER}`);
+  assert.equal(meScript.status, 200);
+  assert.match(String(meScript.headers.get("cache-control") || ""), /no-store/);
+  assert.doesNotMatch(String(meScript.headers.get("cache-control") || ""), /immutable/);
 });
