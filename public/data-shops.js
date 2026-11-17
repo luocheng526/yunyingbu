@@ -231,26 +231,20 @@
         ? '<span class="ch-logo" style="background:' + escapeHtml(color) + '" aria-hidden="true"></span>'
         : "";
     return (
-      '<td class="ch-name"><span class="ch-bar"></span>' +
+      '<span class="ch-name"><span class="ch-bar"></span>' +
       mark +
       "<span>" +
       escapeHtml(row.name) +
-      "</span></td>"
+      "</span></span>"
     );
   }
 
   function toolButtons() {
-    return (
-      '<div class="ch-tools">' +
-      '<button type="button" disabled>打标</button>' +
-      '<button type="button" disabled>目标</button>' +
-      '<button type="button" class="is-on" disabled>列表</button>' +
-      '<button type="button" disabled>周期</button>' +
-      '<button type="button" disabled>图表</button>' +
-      '<button type="button" disabled>个人默认视图</button>' +
-      '<button type="button" disabled>更多数据</button>' +
-      '<button type="button" disabled>导出</button></div>'
-    );
+    const ui = window.XmDataUi;
+    if (ui) {
+      return ui.tools(["打标", "目标", "列表", "周期", "图表", "个人默认视图", "更多数据", "导出"], "列表");
+    }
+    return "";
   }
 
   function cellHtml(cell) {
@@ -263,10 +257,16 @@
   function createShopDashboard(root) {
     ensureCss();
     stripPageChrome(root);
+    if (window.XmDataUi) {
+      window.XmDataUi.markScope(root);
+    }
     let board = root.querySelector("#board");
     if (!board) {
-      root.innerHTML = '<main class="xm-page data-overview-root ch-root"><div id="board"></div></main>';
+      root.innerHTML = '<main class="xm-page xm-ui-scope data-overview-root ch-root"><div id="board"></div></main>';
       board = root.querySelector("#board");
+    }
+    if (window.XmDataUi) {
+      window.XmDataUi.markScope(board);
     }
     const state = {
       range: "7天",
@@ -282,17 +282,11 @@
       if (dead || !board) {
         return;
       }
-      const ranges = RANGES.map(function (label) {
-        return (
-          '<button type="button" data-range="' +
-          escapeHtml(label) +
-          '"' +
-          (label === state.range ? ' class="is-active"' : "") +
-          ">" +
-          escapeHtml(label) +
-          "</button>"
-        );
-      }).join("");
+      const kit = window.XmUI;
+      const ui = window.XmDataUi;
+      if (!kit || !ui) {
+        return;
+      }
       const custom =
         state.range === "自定义"
           ? '<label class="ch-pick">从 <input type="date" data-from value="' +
@@ -301,39 +295,61 @@
             escapeHtml(state.customTo) +
             '" /></label>'
           : "";
-      const head =
-        "<tr>" +
-        COLUMNS.map(function (col) {
-          return "<th>" + escapeHtml(col) + " <i></i></th>";
-        }).join("") +
-        "</tr>";
-      const body = state.rows
-        .map(function (row) {
-          return "<tr>" + nameCell(row) + padCells(row.cells).map(cellHtml).join("") + "</tr>";
-        })
-        .join("");
+      const columns = COLUMNS.map(function (col, i) {
+        if (i === 0) {
+          return {
+            key: "name",
+            label: col,
+            render: function (_v, row) {
+              return nameCell(row._src || row);
+            }
+          };
+        }
+        return {
+          key: "c" + i,
+          label: col,
+          render: function (v) {
+            if (v && typeof v === "object" && v.html) {
+              return v.html;
+            }
+            return escapeHtml(v == null ? "" : v);
+          }
+        };
+      });
+      const rows = state.rows.map(function (row) {
+        const obj = { name: row.name, _src: row };
+        padCells(row.cells).forEach(function (cell, i) {
+          obj["c" + (i + 1)] = cell;
+        });
+        return obj;
+      });
+      const tagFilter = kit.FilterToolbar({
+        search: false,
+        filters: [{ label: "请选择标签", name: "tag", options: [{ value: "", label: "请选择标签" }] }]
+      });
       board.innerHTML =
-        '<div class="ch-top"><div class="ch-title">店铺总览</div>' +
-        '<div class="ch-right"><span class="ch-time">（统计时间：' +
-        escapeHtml(state.dateLabel) +
-        "）</span>" +
-        '<div class="ch-ranges">' +
-        ranges +
+        kit.PageContentHeader({
+          eyebrow: "数据中心",
+          title: "店铺总览",
+          description: "（统计时间：" + (state.dateLabel || "") + "）"
+        }) +
+        ui.rangeTabs(RANGES, state.range) +
         custom +
-        "</div></div></div>" +
-        '<section class="ch-table ch-table-solo sh-wide">' +
-        '<div class="ch-table-bar"><strong>店铺列表</strong>' +
-        '<label class="ch-pick"><select disabled><option>请选择标签</option></select></label>' +
-        '<label class="ch-zero"><input type="checkbox" disabled /> 显示数字</label>' +
-        toolButtons() +
-        "</div>" +
-        '<div class="ch-table-wrap" data-hscroll>' +
-        "<table><thead>" +
-        head +
-        "</thead><tbody>" +
-        body +
-        "</tbody></table></div>" +
-        '<p class="sh-hint">表格可左右滑动，后面还有营销额、利润、费用和打包费。</p></section>';
+        kit.ContentCard({
+          title: "店铺列表",
+          content:
+            tagFilter +
+            '<label class="ch-zero"><input type="checkbox" disabled /> 显示数字</label>' +
+            toolButtons() +
+            '<div data-hscroll>' +
+            kit.DataTable({ columns: columns, rows: rows }) +
+            "</div>" +
+            '<p class="sh-hint">表格可左右滑动，后面还有营销额、利润、费用和打包费。</p>'
+        });
+      const tagSel = board.querySelector('select[name="tag"]');
+      if (tagSel) {
+        tagSel.disabled = true;
+      }
     }
 
     function json(url) {
@@ -408,8 +424,17 @@
       }
     });
 
-    render();
-    load();
+    if (window.XmDataUi) {
+      window.XmDataUi.ready(function () {
+        if (!dead) {
+          render();
+          load();
+        }
+      });
+    } else {
+      render();
+      load();
+    }
 
     return function unmount() {
       dead = true;

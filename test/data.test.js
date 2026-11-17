@@ -77,8 +77,9 @@ test("GET /data is the data center page with title, cards, table, and left-shell
     assert.match(text, /shared\/layout\.css/);
     assert.match(text, /shared\/nav\.js/);
     assert.match(text, /id="site-nav"/);
-    assert.match(text, /<main class="xm-page">/);
-    assert.match(text, /class="kpi-grid"/);
+    assert.match(text, /xm-ui-scope/);
+    assert.match(text, /window\.XmUI/);
+    assert.match(text, /data-xm-ui\.js/);
     assert.match(text, /data-subnav\.js/);
     assert.match(text, /id="data-subnav"/);
     assert.doesNotMatch(text, /class="site-header"/);
@@ -167,6 +168,10 @@ test("data child pages and demo APIs respond", async () => {
     assert.match(overviewJs.text, /今天/);
     assert.match(overviewJs.text, /数据总览/);
     assert.match(overviewJs.text, /ch-pill/);
+    assert.match(overviewJs.text, /xm-ui-scope/);
+    assert.match(overviewJs.text, /window\.XmUI/);
+    assert.match(overviewJs.text, /StatCard/);
+    assert.match(overviewJs.text, /DataTable/);
     assert.match(overviewJs.text, /function fmtInt/);
     assert.match(overviewJs.text, /mergeErpShops/);
     assert.match(overviewJs.text, /\/api\/data\/shop-options/);
@@ -506,6 +511,7 @@ test("release allowlist never includes the live site entrypoint", () => {
   assert.equal(isAllowedDataPath("public/data-goods.js"), true);
   assert.equal(isAllowedDataPath("public/data/goods-demo.json"), true);
   assert.equal(isAllowedDataPath("public/data-live.js"), true);
+  assert.equal(isAllowedDataPath("public/data-xm-ui.js"), true);
   assert.equal(isAllowedDataPath("public/data/live-demo.json"), true);
   assert.equal(isAllowedDataPath("public/shared/modules/data.js"), true);
   assert.equal(isAllowedDataPath("public/shared/nav.js"), false);

@@ -224,28 +224,29 @@
   }
 
   function toolButtons() {
-    return (
-      '<div class="ch-tools">' +
-      '<button type="button" disabled>表格操作</button>' +
-      '<button type="button" disabled>选数</button>' +
-      '<button type="button" disabled>导入推广SKU</button>' +
-      '<button type="button" disabled>去推广</button>' +
-      '<button type="button" class="is-on" disabled>列表</button>' +
-      '<button type="button" disabled>周期</button>' +
-      '<button type="button" disabled>大图</button>' +
-      '<button type="button" disabled>默认视图</button>' +
-      '<button type="button" disabled>更多数据</button>' +
-      '<button type="button" disabled>导出</button></div>'
-    );
+    const ui = window.XmDataUi;
+    if (ui) {
+      return ui.tools(
+        ["表格操作", "选数", "导入推广SKU", "去推广", "列表", "周期", "大图", "默认视图", "更多数据", "导出"],
+        "列表"
+      );
+    }
+    return "";
   }
 
   function createGoodsDashboard(root) {
     ensureCss();
     stripPageChrome(root);
+    if (window.XmDataUi) {
+      window.XmDataUi.markScope(root);
+    }
     let board = root.querySelector("#board");
     if (!board) {
-      root.innerHTML = '<main class="xm-page data-overview-root ch-root"><div id="board"></div></main>';
+      root.innerHTML = '<main class="xm-page xm-ui-scope data-overview-root ch-root"><div id="board"></div></main>';
       board = root.querySelector("#board");
+    }
+    if (window.XmDataUi) {
+      window.XmDataUi.markScope(board);
     }
     const state = {
       view: "metrics",
@@ -286,125 +287,114 @@
     }
 
     function tableHtml() {
+      const kit = window.XmUI;
+      if (!kit) {
+        return "";
+      }
       const shown = visibleRows();
       const bodyRows = [sumRow(shown)].concat(shown);
-      const shopOpts =
-        '<option value="">全部店铺</option>' +
-        state.shops
-          .map(function (shop) {
-            return (
-              '<option value="' +
-              escapeHtml(shop.id) +
-              '"' +
-              (shop.id === state.shopId ? " selected" : "") +
-              ">" +
-              escapeHtml(shop.shopName) +
-              "</option>"
-            );
-          })
-          .join("");
-      const head =
-        "<tr>" +
-        COLUMNS.map(function (col) {
-          return "<th>" + escapeHtml(col) + " <i></i></th>";
-        }).join("") +
-        "</tr>";
-      const body = bodyRows
-        .map(function (row) {
-          const thumb = row.thumb
-            ? '<span class="gd-thumb" aria-hidden="true"></span>'
-            : '<span class="ch-bar"></span>';
-          return (
-            "<tr><td class=\"ch-name\">" +
-            thumb +
-            "<span>" +
-            escapeHtml(row.name) +
-            "</span></td>" +
-            (row.cells || [])
-              .map(function (cell) {
-                return "<td>" + escapeHtml(cell) + "</td>";
+      const columns = COLUMNS.map(function (col, i) {
+        if (i === 0) {
+          return {
+            key: "name",
+            label: col,
+            render: function (_v, row) {
+              const src = row._src || row;
+              const thumb = src.thumb
+                ? '<span class="gd-thumb" aria-hidden="true"></span>'
+                : '<span class="ch-bar"></span>';
+              return thumb + "<span>" + escapeHtml(src.name) + "</span>";
+            }
+          };
+        }
+        return { key: "c" + i, label: col };
+      });
+      const rows = bodyRows.map(function (row) {
+        const obj = { name: row.name, _src: row };
+        (row.cells || []).forEach(function (cell, i) {
+          obj["c" + (i + 1)] = cell;
+        });
+        return obj;
+      });
+      const filters = kit.FilterToolbar({
+        searchPlaceholder: "输入商品名/商品ID/网店SKU",
+        filters: [
+          {
+            label: "全部店铺",
+            name: "shop",
+            options: [{ value: "", label: "全部店铺" }].concat(
+              state.shops.map(function (shop) {
+                return { value: shop.id, label: shop.shopName };
               })
-              .join("") +
-            "</tr>"
-          );
-        })
-        .join("");
-      return (
-        '<section class="ch-table ch-table-solo">' +
-        '<div class="ch-table-bar gd-filters">' +
-        '<label class="ch-pick"><select data-shop>' +
-        shopOpts +
-        "</select></label>" +
-        '<label class="ch-pick"><select disabled><option>请选择标签</option></select></label>' +
-        '<label class="ch-pick"><select disabled><option>请选择类目</option></select></label>' +
-        '<label class="ch-pick"><select disabled><option>全部商品</option></select></label>' +
-        '<label class="ch-pick gd-search"><input type="search" data-q placeholder="输入商品名/商品ID/网店SKU" value="' +
-        escapeHtml(state.q) +
-        '" /></label></div>' +
-        '<div class="ch-table-bar">' +
-        '<label class="ch-zero"><input type="checkbox" disabled /> 只看精选</label>' +
-        '<label class="ch-zero"><input type="checkbox" disabled /> 只看负责人</label>' +
-        '<label class="ch-zero"><input type="checkbox" disabled /> 只看有效商品</label>' +
-        '<label class="ch-zero"><input type="checkbox" disabled /> 显示0</label>' +
-        toolButtons() +
-        "</div>" +
-        '<div class="ch-table-wrap"><table><thead>' +
-        head +
-        "</thead><tbody>" +
-        body +
-        "</tbody></table></div>" +
-        '<div class="ch-table-bar gd-pager"><span>第 ' +
-        escapeHtml(String(state.page)) +
-        " / " +
-        escapeHtml(String(state.pages)) +
-        " 页 · 共 " +
-        escapeHtml(String(state.total)) +
-        ' 条</span><button type="button" data-prev' +
-        (state.page <= 1 ? " disabled" : "") +
-        '>上一页</button><button type="button" data-next' +
-        (state.page >= state.pages ? " disabled" : "") +
-        ">下一页</button></div></section>"
-      );
+            )
+          },
+          { label: "请选择标签", name: "tag", options: [{ value: "", label: "请选择标签" }] },
+          { label: "请选择类目", name: "cat", options: [{ value: "", label: "请选择类目" }] },
+          { label: "全部商品", name: "sku", options: [{ value: "", label: "全部商品" }] }
+        ]
+      });
+      return kit.ContentCard({
+        content:
+          filters +
+          '<label class="ch-zero"><input type="checkbox" disabled /> 只看精选</label>' +
+          '<label class="ch-zero"><input type="checkbox" disabled /> 只看负责人</label>' +
+          '<label class="ch-zero"><input type="checkbox" disabled /> 只看有效商品</label>' +
+          '<label class="ch-zero"><input type="checkbox" disabled /> 显示0</label>' +
+          toolButtons() +
+          kit.DataTable({ columns: columns, rows: rows }) +
+          '<div class="gd-pager"><span>第 ' +
+          escapeHtml(String(state.page)) +
+          " / " +
+          escapeHtml(String(state.pages)) +
+          " 页 · 共 " +
+          escapeHtml(String(state.total)) +
+          " 条</span>" +
+          kit
+            .button({
+              label: "上一页",
+              size: "small",
+              variant: "secondary",
+              disabled: state.page <= 1
+            })
+            .replace("<button", '<button data-prev') +
+          kit
+            .button({
+              label: "下一页",
+              size: "small",
+              variant: "secondary",
+              disabled: state.page >= state.pages
+            })
+            .replace("<button", '<button data-next') +
+          "</div>"
+      });
     }
 
     function render() {
       if (dead || !board) {
         return;
       }
-      const ranges = RANGES.map(function (label) {
-        return (
-          '<button type="button" data-range="' +
-          escapeHtml(label) +
-          '"' +
-          (label === state.range ? ' class="is-active"' : "") +
-          ">" +
-          escapeHtml(label) +
-          "</button>"
-        );
-      }).join("");
+      const kit = window.XmUI;
+      const ui = window.XmDataUi;
+      if (!kit || !ui) {
+        return;
+      }
       const cards = state.cards
-        .map(function (card) {
+        .map(function (card, i) {
           const on = card.key === state.selectedKey;
           return (
-            '<article class="gd-card' +
-            (on ? " is-on" : "") +
-            '" data-card="' +
+            '<div data-card="' +
             escapeHtml(card.key) +
-            '"><div class="gd-card-top"><span class="gd-dot" style="background:' +
-            escapeHtml(card.color || "#8c8c8c") +
-            '"></span><span class="label">' +
-            escapeHtml(card.label) +
-            '</span><span class="gd-date">' +
-            escapeHtml(state.cardDate) +
-            '</span><button type="button" class="gd-more" disabled>⋯</button></div>' +
-            (card.hint ? '<div class="hint">' + escapeHtml(card.hint) + "</div>" : "") +
-            '<div class="value">' +
-            escapeHtml(card.value) +
-            '</div><div class="extra"><span>' +
-            escapeHtml(card.share || "") +
-            "</span><span>" +
-            escapeHtml(card.delta || "") +
-            "</span></div></article>"
+            '"' +
+            (on ? ' class="is-on"' : "") +
+            ">" +
+            kit.StatCard({
+              label: card.label,
+              value: String(card.value),
+              note: [state.cardDate, card.hint, card.share, card.delta].filter(Boolean).join(" · "),
+              tone: on ? "blue" : ["green", "orange", "purple", "blue"][i % 4],
+              icon: "chart"
+            }) +
+            "</div>"
           );
         })
         .join("");
@@ -416,27 +406,44 @@
             escapeHtml(state.customTo) +
             '" /></label>'
           : "";
+      const views = kit
+        .FilterToolbar({
+          search: false,
+          tabs: [
+            { label: "综合指标", value: "metrics", active: state.view === "metrics" },
+            { label: "SPU", value: "spu", active: state.view === "spu" }
+          ],
+          action: "默认视图"
+        })
+        .replace(/data-xm-ui-tab="/g, 'data-view="');
       board.innerHTML =
-        '<div class="ch-top"><div class="ch-title">商品数据总览</div>' +
-        '<div class="ch-right"><span class="ch-time">（统计时间：' +
-        escapeHtml(state.dateLabel || "") +
-        "）</span>" +
-        '<div class="ch-ranges">' +
-        ranges +
+        kit.PageContentHeader({
+          eyebrow: "数据中心",
+          title: "商品数据总览",
+          description: "（统计时间：" + (state.dateLabel || "") + "）",
+          actions: [{ label: "卡片设置", size: "small", variant: "secondary", disabled: true }]
+        }) +
+        ui.rangeTabs(RANGES, state.range) +
         custom +
-        "</div></div></div>" +
-        '<div class="gd-sub">' +
-        '<button type="button" data-view="metrics"' +
-        (state.view === "metrics" ? ' class="is-on"' : "") +
-        ">综合指标</button>" +
-        '<button type="button" data-view="spu"' +
-        (state.view === "spu" ? ' class="is-on"' : "") +
-        ">SPU</button>" +
-        '<span class="gd-sub-tools"><button type="button" disabled>默认视图</button><button type="button" disabled>卡片设置</button></span></div>' +
-        (state.view === "metrics"
-          ? '<div class="gd-metrics">' + cards + '<article class="gd-card gd-add" aria-hidden="true">+</article></div>'
-          : "") +
+        views +
+        (state.view === "metrics" ? '<div class="xm-ui-stat-grid">' + cards + "</div>" : "") +
         tableHtml();
+      const shopSel = board.querySelector('select[name="shop"]');
+      if (shopSel) {
+        shopSel.setAttribute("data-shop", "");
+        shopSel.value = state.shopId || "";
+      }
+      ["tag", "cat", "sku"].forEach(function (name) {
+        const el = board.querySelector('select[name="' + name + '"]');
+        if (el) {
+          el.disabled = true;
+        }
+      });
+      const search = board.querySelector(".xm-ui-search input");
+      if (search) {
+        search.setAttribute("data-q", "");
+        search.value = state.q || "";
+      }
     }
 
     function json(url) {
@@ -538,7 +545,7 @@
         load();
         return;
       }
-      const card = event.target.closest("article[data-card]");
+      const card = event.target.closest("[data-card]");
       if (card) {
         state.selectedKey = card.getAttribute("data-card");
         render();
@@ -584,8 +591,17 @@
     state.from = span.from;
     state.to = span.to;
     state.dateLabel = span.dateLabel;
-    render();
-    loadShops().then(load);
+    if (window.XmDataUi) {
+      window.XmDataUi.ready(function () {
+        if (!dead) {
+          render();
+          loadShops().then(load);
+        }
+      });
+    } else {
+      render();
+      loadShops().then(load);
+    }
 
     return function unmount() {
       dead = true;

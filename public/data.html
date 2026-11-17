@@ -9,123 +9,79 @@
   </head>
   <body>
     <div id="site-nav"></div>
-    <main class="xm-page">
-      <p class="kicker">运营部</p>
+    <main class="xm-page xm-ui-scope" id="data-home">
       <h1>数据中心</h1>
       <nav class="data-subnav" id="data-subnav"></nav>
       <p class="lead">运营关键指标看板。数字为占位演示，不连接业务库。</p>
-      <section class="kpi-grid" id="cards" aria-label="关键指标">
-        <article class="kpi-card">
-          <div class="label">今日订单</div>
-          <div class="value">128</div>
-          <span class="demo-flag">演示数据</span>
-        </article>
-        <article class="kpi-card">
-          <div class="label">待处理</div>
-          <div class="value">17</div>
-          <span class="demo-flag">演示数据</span>
-        </article>
-        <article class="kpi-card">
-          <div class="label">在职人数</div>
-          <div class="value">36</div>
-          <span class="demo-flag">演示数据</span>
-        </article>
-        <article class="kpi-card">
-          <div class="label">本周发布次数</div>
-          <div class="value">5</div>
-          <span class="demo-flag">演示数据</span>
-        </article>
-      </section>
-      <section class="panel">
-        <h2>最近数据事件</h2>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>时间</th>
-              <th>类型</th>
-              <th>摘要</th>
-            </tr>
-          </thead>
-          <tbody id="events">
-            <tr><td colspan="3">正在加载…</td></tr>
-          </tbody>
-        </table>
-      </section>
+      <div id="cards" aria-label="关键指标"></div>
+      <div id="events-wrap"></div>
     </main>
+    <script src="/data-xm-ui.js"></script>
     <script src="/data-overview.js?v=xm-module"></script>
     <script src="/shared/nav.js"></script>
     <script src="/data-subnav.js"></script>
     <script>
       (function () {
+        const DEMO_CARDS = [
+          { label: "今日订单", value: "128" },
+          { label: "待处理", value: "17" },
+          { label: "在职人数", value: "36" },
+          { label: "本周发布次数", value: "5" }
+        ];
         const cardsEl = document.getElementById("cards");
-        const eventsEl = document.getElementById("events");
+        const eventsWrap = document.getElementById("events-wrap");
+        const home = document.getElementById("data-home");
 
-        function escapeHtml(value) {
-          return String(value)
-            .replaceAll("&", "&amp;")
-            .replaceAll("<", "&lt;")
-            .replaceAll(">", "&gt;")
-            .replaceAll('"', "&quot;");
-        }
-
-        function renderCards(cards, notice) {
-          cardsEl.innerHTML = cards
-            .map(function (card) {
-              return (
-                '<article class="kpi-card">' +
-                '<div class="label">' +
-                escapeHtml(card.label) +
-                "</div>" +
-                '<div class="value">' +
-                escapeHtml(card.value) +
-                "</div>" +
-                '<span class="demo-flag">' +
-                escapeHtml(notice || "演示数据") +
-                "</span>" +
-                "</article>"
-              );
-            })
-            .join("");
-        }
-
-        function renderEvents(events) {
-          if (!events || !events.length) {
-            eventsEl.innerHTML = '<tr><td colspan="3">暂无事件</td></tr>';
+        function paint(cards, events, notice) {
+          const kit = window.XmUI;
+          const ui = window.XmDataUi;
+          if (!kit || !ui) {
             return;
           }
-          eventsEl.innerHTML = events
-            .map(function (row) {
-              return (
-                "<tr><td>" +
-                escapeHtml(row.time) +
-                "</td><td>" +
-                escapeHtml(row.type) +
-                "</td><td>" +
-                escapeHtml(row.summary) +
-                "</td></tr>"
-              );
+          if (home) {
+            ui.markScope(home);
+          }
+          cardsEl.innerHTML = ui.statGrid(
+            (cards || []).map(function (card) {
+              return { label: card.label, value: card.value, note: notice || "演示数据" };
             })
-            .join("");
+          );
+          const rows = (events || []).map(function (row) {
+            return { time: row.time, type: row.type, summary: row.summary };
+          });
+          eventsWrap.innerHTML = kit.ContentCard({
+            title: "最近数据事件",
+            content:
+              rows.length
+                ? kit.DataTable({
+                    columns: [
+                      { key: "time", label: "时间" },
+                      { key: "type", label: "类型" },
+                      { key: "summary", label: "摘要" }
+                    ],
+                    rows: rows
+                  })
+                : kit.EmptyState({ title: "暂无事件" })
+          });
         }
 
-        fetch("/api/data/overview", {
-          credentials: "same-origin",
-          headers: { Accept: "application/json" }
-        })
-          .then(function (res) {
-            if (!res.ok) throw new Error("接口 " + res.status);
-            return res.json();
+        window.XmDataUi.ready(function () {
+          paint(DEMO_CARDS, [], "演示数据");
+          fetch("/api/data/overview", {
+            credentials: "same-origin",
+            headers: { Accept: "application/json" }
           })
-          .then(function (data) {
-            renderCards(data.cards || [], data.notice);
-            renderEvents(data.events || []);
-          })
-          .catch(function (err) {
-            eventsEl.innerHTML =
-              '<tr><td colspan="3" class="error">无法加载数据事件：' +
-              escapeHtml(err.message) +
-              "</td></tr>";
-          });
+            .then(function (res) {
+              if (!res.ok) throw new Error("接口 " + res.status);
+              return res.json();
+            })
+            .then(function (data) {
+              paint(data.cards || DEMO_CARDS, data.events || [], data.notice || "演示数据");
+            })
+            .catch(function (err) {
+              paint(DEMO_CARDS, [{ time: "—", type: "error", summary: "无法加载数据事件：" + err.message }], "演示数据");
+            });
+        });
       })();
     </script>
   </body>

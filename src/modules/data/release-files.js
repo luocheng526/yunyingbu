@@ -18,6 +18,7 @@ export const DATA_OVERLAY_FILES = [
   "public/data-goods.js",
   "public/data/goods-demo.json",
   "public/data-live.js",
+  "public/data-xm-ui.js",
   "public/data/live-demo.json",
   "src/modules/data/overview.js",
   "src/modules/data/nav.js",
