@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>韩梦凯运营中心</title>
+    <link rel="stylesheet" href="/shared/layout.css?v=0.1.52" />
+    <script>try{var t=localStorage.getItem("xm-theme");if(t==="dark"||t==="light"){document.documentElement.setAttribute("data-theme",t);document.documentElement.style.colorScheme=t;}}catch(e){}</script>
+  </head>
+  <body>
+    <main class="page">
+      <header class="page-head">
+        <p class="kicker">韩梦凯业务线</p>
+        <h1>韩梦凯运营中心</h1>
+        <p class="lead">任务和今日简报写入数据库，与沈子晗中心隔离。默认负责人是韩梦凯。</p>
+      </header>
+      <div class="stack">
+        <section class="panel">
+          <h2>新增任务</h2>
+          <form id="task-form">
+            <label for="title">标题（必填）</label>
+            <input id="title" name="title" required placeholder="任务标题" />
+            <div class="actions"><button type="submit">添加</button></div>
+            <p class="msg status" id="task-msg"></p>
+          </form>
+        </section>
+        <section class="panel">
+          <h2>任务列表</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>标题</th>
+                <th>状态</th>
+                <th>负责人</th>
+              </tr>
+            </thead>
+            <tbody id="task-body"></tbody>
+          </table>
+        </section>
+        <section class="panel">
+          <h2>今日简报</h2>
+          <form id="brief-form">
+            <label for="brief">简报</label>
+            <textarea id="brief" name="text" placeholder="今日进展…"></textarea>
+            <div class="actions"><button type="submit">保存简报</button></div>
+            <p class="msg status" id="brief-msg"></p>
+          </form>
+        </section>
+      </div>
+    </main>
+    <script src="/shared/nav.js?v=0.1.52"></script>
+    <script>
+      const taskBody = document.getElementById("task-body");
+      const taskMsg = document.getElementById("task-msg");
+      const briefMsg = document.getElementById("brief-msg");
+      const briefEl = document.getElementById("brief");
+
+      function escapeHtml(s) {
+        return String(s ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      function renderTasks(tasks) {
+        taskBody.innerHTML = "";
+        if (!tasks || !tasks.length) {
+          taskBody.innerHTML = '<tr><td colspan="3" class="empty">暂无任务</td></tr>';
+          return;
+        }
+        tasks.forEach(function (t) {
+          const tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td>" +
+            escapeHtml(t.title) +
+            '</td><td class="status">' +
+            escapeHtml(t.status) +
+            "</td><td>" +
+            escapeHtml(t.owner) +
+            "</td>";
+          taskBody.appendChild(tr);
+        });
+      }
+
+      async function load() {
+        const [tasksRes, briefRes] = await Promise.all([
+          fetch("/api/han/tasks", { credentials: "same-origin" }),
+          fetch("/api/han/brief", { credentials: "same-origin" })
+        ]);
+        const tasksJson = await tasksRes.json();
+        const briefJson = await briefRes.json();
+        renderTasks(tasksJson.tasks);
+        briefEl.value = briefJson.text || "";
+      }
+
+      document.getElementById("task-form").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const title = document.getElementById("title").value;
+        const res = await fetch("/api/han/tasks", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: title })
+        });
+        const json = await res.json();
+        taskMsg.textContent = json.ok ? "已添加" : json.error || "失败";
+        taskMsg.className = "msg status" + (json.ok ? " ok" : " error");
+        if (json.ok) {
+          document.getElementById("title").value = "";
+          await load();
+        }
+      });
+
+      document.getElementById("brief-form").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const res = await fetch("/api/han/brief", {
+          method: "PUT",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: briefEl.value })
+        });
+        const json = await res.json();
+        briefMsg.textContent = json.ok ? "已保存" : "保存失败";
+        briefMsg.className = "msg status" + (json.ok ? " ok" : " error");
+      });
+
+      load().catch(function (err) {
+        taskMsg.textContent = String(err);
+        taskMsg.className = "msg status error";
+      });
+    </script>
+  </body>
+</html>
