@@ -8,6 +8,7 @@ import { resetPrefsForTests } from "../src/modules/profile/prefs.js";
 
 const layoutCss = fs.readFileSync(new URL("../public/shared/layout.css", import.meta.url), "utf8");
 const navSrc = fs.readFileSync(new URL("../public/shared/nav.js", import.meta.url), "utf8");
+const peopleSrc = fs.readFileSync(new URL("../public/shared/modules/people.js", import.meta.url), "utf8");
 
 async function login(base, username, password = "ChangeMe123!") {
   const res = await fetch(`${base}/api/auth/login`, {
@@ -20,7 +21,7 @@ async function login(base, username, password = "ChangeMe123!") {
 }
 
 test("壳层工作区是唯一滚轮，不靠首页是否挂载", () => {
-  assert.equal(SHELL_ASSET_VER, "0.1.772-tab2");
+  assert.equal(SHELL_ASSET_VER, "0.1.772-orgscroll");
   assert.match(layoutCss, /\.xm-workspace\s*\{/);
   assert.match(layoutCss, /\.xm-workspace > \.xm-pane\.is-active/);
   assert.match(layoutCss, /overflow:\s*auto/);
@@ -31,6 +32,24 @@ test("壳层工作区是唯一滚轮，不靠首页是否挂载", () => {
   assert.doesNotMatch(navSrc, /localStorage\.setItem\("xm-theme"/);
   assert.doesNotMatch(navSrc, /localStorage\.setItem\("xm-sider-collapsed"/);
   assert.doesNotMatch(navSrc, /localStorage\.getItem\("xm-open-tabs"/);
+});
+
+test("组织中心表格由工作区滚，不改 people.js", () => {
+  assert.match(layoutCss, /xm-org-scroll 0\.1\.772-orgscroll/);
+  assert.match(
+    layoutCss,
+    /html body:has\(\.xm-shell\):has\(\.people-page\) \.xm-main \{[\s\S]*overflow-y:\s*hidden\s*!important/
+  );
+  assert.match(
+    layoutCss,
+    /html body:has\(\.xm-shell\):has\(\.people-page\) \.xm-workspace \{[\s\S]*overflow-y:\s*auto\s*!important/
+  );
+  assert.match(navSrc, /id = "xm-org-scroll-css"/);
+  assert.match(navSrc, /wrap\.scrollTop \+= event\.deltaY/);
+  assert.match(navSrc, /ASSET_VER = "0\.1\.772-orgscroll"/);
+  assert.match(peopleSrc, /overflow-y:auto!important/);
+  assert.match(peopleSrc, /#xm-content:has\(\.people-page\)\{flex:0 0 auto;height:auto;overflow:visible!important/);
+  assert.match(peopleSrc, /\.org-table-wrap\{overflow:visible!important/);
 });
 
 test("蓝夜粉、侧栏、页签跟账号走服务器，换人不会带走", async () => {
@@ -77,6 +96,13 @@ test("蓝夜粉、侧栏、页签跟账号走服务器，换人不会带走", as
     assert.match(staffHtml, /"siderCollapsed":true/);
     assert.match(staffHtml, /class="xm-workspace"/);
     assert.match(staffHtml, /id="xm-content"/);
+
+    const peoplePage = await fetch(`${base}/people`, { headers: { cookie: staff.cookie } });
+    const peopleHtml = await peoplePage.text();
+    assert.equal(peoplePage.status, 200);
+    assert.match(peopleHtml, /layout\.css\?v=0\.1\.772-orgscroll/);
+    assert.match(peopleHtml, /nav\.js\?v=0\.1\.772-orgscroll/);
+    assert.match(peopleHtml, /class="xm-workspace"/);
 
     const hrPage = await fetch(`${base}/hr`, { headers: { cookie: other.cookie } });
     const hrHtml = await hrPage.text();

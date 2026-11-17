@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 v0.4.18 — 页签恢复成带叉的原样，去掉空白块 */
+/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll v0.4.18 — 组织中心工作区自己滚 */
 (function () {
-  const ASSET_VER = "0.1.772-tab2";
+  const ASSET_VER = "0.1.772-orgscroll";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -1070,6 +1070,43 @@
     return key === "/people" || key === "/people/";
   }
 
+  function ensureOrgScrollCss() {
+    const css =
+      "html body:has(.xm-shell):has(.people-page) .xm-main{overflow-x:hidden!important;overflow-y:hidden!important;}" +
+      "html body:has(.xm-shell):has(.people-page) .xm-workspace{overflow-x:auto!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch;}";
+    let el = document.getElementById("xm-org-scroll-css");
+    if (!el) {
+      el = document.createElement("style");
+      el.id = "xm-org-scroll-css";
+      el.setAttribute("data-xm-org-scroll", "1");
+      el.textContent = css;
+    }
+    if (document.head) {
+      document.head.appendChild(el);
+    }
+  }
+
+  function onPeopleWheel(event) {
+    if (!isPeopleRoute() || event.defaultPrevented || event.ctrlKey) {
+      return;
+    }
+    const target = event.target;
+    if (target && target.closest && target.closest(".org-filter-pop, input, select, textarea")) {
+      return;
+    }
+    const wrap = document.querySelector(".xm-workspace");
+    if (!wrap) {
+      return;
+    }
+    const before = wrap.scrollTop;
+    wrap.scrollTop += event.deltaY;
+    if (wrap.scrollTop !== before) {
+      event.preventDefault();
+    }
+  }
+
+  document.addEventListener("wheel", onPeopleWheel, { passive: false, capture: true });
+
   function parkPeopleHosts() {
     const onPeople = isPeopleRoute();
     const css = document.getElementById("people-page-css");
@@ -1091,6 +1128,7 @@
       }
     });
     relaxNoticeForPeople();
+    ensureOrgScrollCss();
   }
 
   function hideForeignPages() {

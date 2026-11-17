@@ -12,7 +12,7 @@ const navJs = readFileSync(join(root, "../public/shared/nav.js"), "utf8");
 const luocheng = { username: "罗成", displayName: "罗成" };
 
 test("选中菜单用浅色渐变，不要投影，暗色粉红不盖掉", () => {
-  assert.equal(SHELL_ASSET_VER, "0.1.772-tab2");
+  assert.equal(SHELL_ASSET_VER, "0.1.772-orgscroll");
   assert.match(layoutCss, /xm-menu-lite 0\.1\.772-menulite/);
   assert.match(layoutCss, /\.xm-menu-item\.is-active/);
   assert.match(layoutCss, /\.xm-menu-group\.is-current > \.xm-menu-parent/);
@@ -23,7 +23,7 @@ test("选中菜单用浅色渐变，不要投影，暗色粉红不盖掉", () =>
   assert.match(layoutCss, /html\[data-theme="pink"\]/);
   assert.match(layoutCss, /--xm-primary: #1677ff/);
   assert.match(layoutCss, /--xm-primary: #f8005f/);
-  assert.match(navJs, /ASSET_VER = "0\.1\.772-tab2"/);
+  assert.match(navJs, /ASSET_VER = "0\.1\.772-orgscroll"/);
   assert.match(navJs, /is-open is-current/);
   assert.match(navJs, /xm-menu-item xm-menu-parent' \+[\s\S]*is-active/);
 });
