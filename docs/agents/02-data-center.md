@@ -10,6 +10,7 @@
 - **禁止提交壳。** 壳归主框架，不归首页。
 - 嵌入式：内容写在 `public/shared/modules/data.js`，`XmModules["/data"].mount(#xm-content)`。不要再做完整带侧栏的 `data.html` 当主界面。
 - 颜色只跟 `--xm-*` / `data-theme`。不要从 e50e 抄全页壳。
+- 每次改动都不要录屏，不要做视频分析，不要出预览图，不要截图。核对用接口或本地测试。
 
 【你能改】
 - `public/data.html`、`public/data*`（静态兜底即可，真正界面在模块脚本）

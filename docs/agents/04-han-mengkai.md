@@ -8,6 +8,7 @@
 - 嵌入式：`public/shared/modules/han.js` 挂 `XmModules["/han"]`。不要自画侧栏，不要交壳，不要交 `src/app.js`。
 - 跟沈子晗数据结构类似但数据完全隔离，禁止共用 shen 的数组。
 - 颜色跟 `--xm-*` / `data-theme`。不要抄 e50e 全页壳。
+- 每次改动都不要录屏，不要做视频分析，不要出预览图，不要截图。核对用接口或本地测试。
 
 【你能改】
 - `public/han.html`、`public/han*`
