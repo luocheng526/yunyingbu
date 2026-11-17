@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   STORE_PAGES,
+  listErpDuties,
   listErpInventory,
   listErpReviews,
   listErpShipping,
@@ -50,6 +51,7 @@ function erpQuery(query = {}) {
     pageSize: query.pageSize,
     shopId: query.shopId,
     shopIds: query.shopIds,
+    dutyId: query.dutyId,
     shopName: query.shopName || query.q,
     orderStatus: query.orderStatus,
     productStatus: query.productStatus
@@ -58,6 +60,10 @@ function erpQuery(query = {}) {
 
 storesRouter.get("/erp/shops", (_req, res) => {
   sendErp(res, () => listErpStoreShops());
+});
+
+storesRouter.get("/erp/duties", (_req, res) => {
+  sendErp(res, () => listErpDuties());
 });
 
 storesRouter.get("/erp/reviews", (req, res) => {

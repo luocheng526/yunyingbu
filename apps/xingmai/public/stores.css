@@ -115,6 +115,129 @@
   flex-direction: column;
 }
 
+.stores-work {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.stores-aside {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--xm-line);
+  border-radius: 12px;
+  background: var(--xm-card);
+  padding: 12px;
+}
+
+.stores-aside h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.stores-aside-meta,
+.stores-aside-kicker {
+  margin: 4px 0 8px;
+  color: var(--xm-muted);
+  font-size: 12px;
+}
+
+.stores-aside-kicker {
+  margin: 10px 0 6px;
+  font-weight: 600;
+  color: var(--xm-ink);
+}
+
+.stores-aside-q,
+.stores-aside-all {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--xm-line);
+  border-radius: 8px;
+  padding: 7px 8px;
+  font: inherit;
+  color: var(--xm-ink);
+  background: var(--xm-bg, #fff);
+}
+
+.stores-aside-all {
+  margin-top: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stores-aside-all:hover,
+.stores-duty-head:hover,
+.stores-duty-shop:hover {
+  border-color: var(--xm-primary);
+  color: var(--xm-primary);
+}
+
+.stores-duty-list {
+  flex: 1;
+  overflow: auto;
+  min-height: 240px;
+}
+
+.stores-duty {
+  border-bottom: 1px solid var(--xm-line);
+}
+
+.stores-duty-head,
+.stores-duty-shop {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--xm-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stores-duty-head {
+  padding: 8px 2px;
+  font-weight: 600;
+}
+
+.stores-duty-head em {
+  font-style: normal;
+  color: var(--xm-muted);
+  font-weight: 500;
+}
+
+.stores-duty ul {
+  display: none;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.stores-duty.is-open ul,
+.stores-duty.is-on ul {
+  display: block;
+}
+
+.stores-duty-shop {
+  padding: 5px 8px 5px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.stores-duty.is-on .stores-duty-head,
+.stores-duty-shop.is-on,
+.stores-aside-all.is-on {
+  color: var(--xm-primary);
+  background: var(--xm-primary-soft);
+}
+
 .stores-page .kpi-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -284,6 +407,16 @@
 .stores-pill.done {
   background: #f6ffed;
   color: #389e0d;
+}
+
+@media (max-width: 1100px) {
+  .stores-work {
+    grid-template-columns: 1fr;
+  }
+
+  .stores-aside {
+    max-height: 360px;
+  }
 }
 
 @media (max-width: 860px) {

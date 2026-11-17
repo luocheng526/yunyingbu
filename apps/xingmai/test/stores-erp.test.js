@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { createApp } from "../src/app.js";
 import { resetStoreForTests } from "../src/modules/profile/auth.js";
 import { resetErpCacheForTests, setErpFetchForTests } from "../src/modules/data/erp.js";
+import { resetStoresDutyCacheForTests } from "../src/modules/stores/erp.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const storesJs = readFileSync(join(root, "public/shared/modules/stores.js"), "utf8");
@@ -23,6 +24,7 @@ const base = `http://127.0.0.1:${port}`;
 beforeEach(() => {
   resetStoreForTests();
   resetErpCacheForTests();
+  resetStoresDutyCacheForTests();
   setErpFetchForTests(null);
   delete process.env.XM_ERP_TOKEN;
   delete process.env.XM_ERP_USERNAME;
@@ -72,6 +74,12 @@ function mockErp(handler) {
   setErpFetchForTests(async (url, options) => {
     const body = options.body ? JSON.parse(options.body) : {};
     calls.push({ url, body, auth: options.headers.Authorization || "" });
+    if (String(url).includes("/system/user/list")) {
+      return jsonRes([
+        { id: 88, username: "沈子晗", password: "SECRET" },
+        { id: 21, username: "韩梦凯" }
+      ]);
+    }
     return handler(url, body, options);
   });
   return calls;
@@ -89,6 +97,7 @@ function shopPage() {
         shopName: "京东家居旗舰店",
         type: 0,
         status: 1,
+        operatorId: 88,
         authInfo: { appKey: "SECRET", appSecret: "SECRET", accessToken: "SECRET" }
       }
     ]
@@ -114,6 +123,10 @@ test("stores module mounts four ERP pages with the screenshot titles", () => {
   assert.doesNotMatch(storesJs, /xingmai110/);
   assert.doesNotMatch(storesJs, /店铺档案/);
   assert.match(storesJs, /stores-board/);
+  assert.match(storesJs, /责权选择/);
+  assert.match(storesJs, /明细店铺/);
+  assert.match(storesJs, /按责权分组/);
+  assert.match(storesJs, /\/api\/stores\/erp\/duties/);
   assert.match(storesJs, /stores-tone-/);
   assert.match(storesCss, /linear-gradient\(135deg/);
   assert.match(storesCss, /stores-tone-0/);
@@ -319,6 +332,81 @@ test("shop list strips JD auth tokens", async () => {
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.records[0].shopName, "京东家居旗舰店");
+  assert.equal(body.records[0].operatorName, "沈子晗");
   assert.equal(body.records[0].authInfo, undefined);
   assert.equal(JSON.stringify(body).includes("SECRET"), false);
+});
+
+test("duties group shops by ERP operator and hide user secrets", async () => {
+  process.env.XM_ERP_TOKEN = "test-token";
+  mockErp(async (url) => {
+    if (String(url).includes("/jd/shopInfo/page")) {
+      return jsonRes({
+        total: 2,
+        totalPages: 1,
+        currentPage: 1,
+        pageSize: 50,
+        records: [
+          { id: "19852571", shopName: "京东家居旗舰店", type: 0, status: 1, operatorId: 88 },
+          { id: "11", shopName: "韩店", type: 0, status: 1, operatorId: 21 }
+        ]
+      });
+    }
+    throw new Error("unexpected " + url);
+  });
+  const cookie = await loginCookie();
+  const res = await fetch(`${base}/api/stores/erp/duties`, { headers: { cookie } });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.groupCount, 2);
+  const shen = body.groups.find((item) => item.name === "沈子晗");
+  const han = body.groups.find((item) => item.name === "韩梦凯");
+  assert.equal(shen.shopCount, 1);
+  assert.equal(shen.shops[0].shopName, "京东家居旗舰店");
+  assert.equal(han.shops[0].shopName, "韩店");
+  assert.equal(JSON.stringify(body).includes("SECRET"), false);
+});
+
+test("reviews can filter by duty shop group", async () => {
+  process.env.XM_ERP_TOKEN = "test-token";
+  const calls = mockErp(async (url) => {
+    if (String(url).includes("/jd/shopInfo/page")) {
+      return shopPage();
+    }
+    if (String(url).includes("/jd/product/page")) {
+      return jsonRes({
+        total: 1,
+        totalPages: 1,
+        currentPage: 1,
+        pageSize: 20,
+        records: [{ productId: "1001", productName: "差评枕头", shopId: "19852571", productStatus: 105, stockNum: 8, oneStarNum: 1 }]
+      });
+    }
+    throw new Error("unexpected " + url);
+  });
+  const cookie = await loginCookie();
+  const res = await fetch(`${base}/api/stores/erp/reviews?dutyId=88`, { headers: { cookie } });
+  assert.equal(res.status, 200);
+  const productCall = calls.find((item) => String(item.url).includes("/jd/product/page"));
+  assert.deepEqual(productCall.body.shopIds, [19852571]);
+});
+
+test("unknown duty returns an empty page without querying products", async () => {
+  process.env.XM_ERP_TOKEN = "test-token";
+  const calls = mockErp(async (url) => {
+    if (String(url).includes("/jd/shopInfo/page")) {
+      return shopPage();
+    }
+    throw new Error("unexpected " + url);
+  });
+  const cookie = await loginCookie();
+  const res = await fetch(`${base}/api/stores/erp/reviews?dutyId=999`, { headers: { cookie } });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.total, 0);
+  assert.equal(body.records.length, 0);
+  assert.equal(
+    calls.some((item) => String(item.url).includes("/jd/product/page")),
+    false
+  );
 });

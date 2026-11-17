@@ -322,11 +322,14 @@
       pageId: pageFromLocation(initialId),
       pageNum: 1,
       pages: 1,
+      dutyId: "",
       shopId: "",
       q: "",
+      shopQ: "",
       orderStatus: "",
       productStatus: "",
-      shops: []
+      shops: [],
+      groups: []
     };
     var dead = false;
 
@@ -353,18 +356,27 @@
       '<section class="stores-main">' +
       '<div class="kpi-grid" data-kpi></div>' +
       '<form class="stores-toolbar" data-filter>' +
+      '<label>责权选择<select name="dutyId"><option value="">全部责权</option></select></label>' +
       '<label>店铺<select name="shopId"><option value="">全部店铺</option></select></label>' +
       '<label>搜索<input name="q" maxlength="64" placeholder="店名 / 关键词" /></label>' +
       '<span data-extra></span>' +
       '<button type="submit">查询</button>' +
       "</form>" +
       '<p class="status" data-status role="status"></p>' +
+      '<div class="stores-work">' +
       '<section class="panel stores-board"><div class="stores-table-wrap"><table><thead data-head></thead>' +
       '<tbody data-body><tr><td colspan="8" class="empty">正在加载…</td></tr></tbody></table></div>' +
       '<div class="stores-pager"><p data-pager></p>' +
       '<p><button type="button" class="ghost" data-prev>上一页</button> ' +
       '<button type="button" class="ghost" data-next>下一页</button></p></div></section>' +
-      "</section></main>";
+      '<aside class="stores-aside" aria-label="明细店铺">' +
+      "<h2>明细店铺</h2>" +
+      '<p class="stores-aside-meta" data-shop-total></p>' +
+      '<input class="stores-aside-q" data-shop-q maxlength="32" placeholder="筛选店名" />' +
+      '<button type="button" class="stores-aside-all" data-duty="" data-shop="">全部店铺</button>' +
+      '<p class="stores-aside-kicker">按责权分组</p>' +
+      '<div class="stores-duty-list" data-duties></div>' +
+      "</aside></div></section></main>";
 
     var titleEl = root.querySelector("[data-title]");
     var leadEl = root.querySelector("[data-lead]");
@@ -375,7 +387,11 @@
     var statusEl = root.querySelector("[data-status]");
     var pagerEl = root.querySelector("[data-pager]");
     var filterForm = root.querySelector("[data-filter]");
+    var dutySelect = filterForm.dutyId;
     var shopSelect = filterForm.shopId;
+    var dutyListEl = root.querySelector("[data-duties]");
+    var shopTotalEl = root.querySelector("[data-shop-total]");
+    var shopQEl = root.querySelector("[data-shop-q]");
 
     function setStatus(message, isError) {
       statusEl.textContent = message || "";
@@ -406,7 +422,9 @@
         }
       });
       filterForm.q.value = state.q;
+      dutySelect.value = state.dutyId;
       shopSelect.value = state.shopId;
+      renderDuties();
     }
 
     function renderKpi(summary) {
@@ -429,10 +447,44 @@
         .join("");
     }
 
+    function shopsInDuty(dutyId) {
+      if (!dutyId) {
+        return state.shops.slice();
+      }
+      return state.shops.filter(function (shop) {
+        return String(shop.operatorId || "unassigned") === String(dutyId);
+      });
+    }
+
+    function fillDuties() {
+      var current = state.dutyId;
+      dutySelect.innerHTML = '<option value="">全部责权</option>';
+      state.groups.forEach(function (group) {
+        dutySelect.insertAdjacentHTML(
+          "beforeend",
+          '<option value="' +
+            escapeHtml(group.id) +
+            '">' +
+            escapeHtml(group.name) +
+            " · " +
+            count(group.shopCount || (group.shops || []).length) +
+            "</option>"
+        );
+      });
+      if (
+        [...dutySelect.options].some(function (option) {
+          return option.value === String(current);
+        })
+      ) {
+        dutySelect.value = String(current);
+      }
+    }
+
     function fillShops() {
       var current = state.shopId;
+      var shops = shopsInDuty(state.dutyId);
       shopSelect.innerHTML = '<option value="">全部店铺</option>';
-      state.shops.forEach(function (shop) {
+      shops.forEach(function (shop) {
         shopSelect.insertAdjacentHTML(
           "beforeend",
           '<option value="' +
@@ -449,7 +501,78 @@
         })
       ) {
         shopSelect.value = String(current);
+      } else {
+        state.shopId = "";
+        shopSelect.value = "";
       }
+    }
+
+    function renderDuties() {
+      var allBtn = root.querySelector(".stores-aside-all");
+      if (allBtn) {
+        allBtn.classList.toggle("is-on", !state.dutyId && !state.shopId);
+      }
+      var q = String(state.shopQ || "").trim().toLowerCase();
+      var groups = state.groups
+        .map(function (group) {
+          var shops = (group.shops || []).filter(function (shop) {
+            if (!q) {
+              return true;
+            }
+            return (
+              String(shop.shopName || "").toLowerCase().indexOf(q) !== -1 ||
+              String(shop.id || "").indexOf(q) !== -1
+            );
+          });
+          return { id: group.id, name: group.name, shops: shops, shopCount: shops.length };
+        })
+        .filter(function (group) {
+          return group.shopCount > 0;
+        });
+      shopTotalEl.textContent =
+        (state.dutyId
+          ? "当前责权 " + count(shopsInDuty(state.dutyId).length)
+          : "全部 " + count(state.shops.length)) + " 家店";
+      if (!groups.length) {
+        dutyListEl.innerHTML = '<p class="empty">没有匹配的店铺</p>';
+        return;
+      }
+      dutyListEl.innerHTML = groups
+        .map(function (group) {
+          var onDuty = String(group.id) === String(state.dutyId);
+          var open = onDuty || Boolean(q) || groups.length <= 6;
+          return (
+            '<section class="stores-duty' +
+            (onDuty ? " is-on" : "") +
+            (open ? " is-open" : "") +
+            '">' +
+            '<button type="button" class="stores-duty-head" data-duty="' +
+            escapeHtml(group.id) +
+            '" data-shop=""><span>' +
+            escapeHtml(group.name) +
+            "</span><em>" +
+            count(group.shopCount) +
+            "</em></button><ul>" +
+            group.shops
+              .map(function (shop) {
+                var onShop = String(shop.id) === String(state.shopId);
+                return (
+                  '<li><button type="button" class="stores-duty-shop' +
+                  (onShop ? " is-on" : "") +
+                  '" data-duty="' +
+                  escapeHtml(group.id) +
+                  '" data-shop="' +
+                  escapeHtml(shop.id) +
+                  '">' +
+                  escapeHtml(shop.shopName || shop.id) +
+                  "</button></li>"
+                );
+              })
+              .join("") +
+            "</ul></section>"
+          );
+        })
+        .join("");
     }
 
     function load() {
@@ -459,6 +582,8 @@
       params.set("pageSize", "20");
       if (state.shopId) {
         params.set("shopId", state.shopId);
+      } else if (state.dutyId) {
+        params.set("dutyId", state.dutyId);
       }
       if (state.q) {
         params.set("shopName", state.q);
@@ -512,9 +637,27 @@
       showPage(btn.getAttribute("data-page"));
     }
 
+    function applyScope(dutyId, shopId) {
+      state.dutyId = String(dutyId || "").trim();
+      state.shopId = String(shopId || "").trim();
+      if (state.shopId) {
+        var shop = state.shops.find(function (item) {
+          return String(item.id) === state.shopId;
+        });
+        if (shop) {
+          state.dutyId = String(shop.operatorId || "unassigned");
+        }
+      }
+      fillShops();
+      dutySelect.value = state.dutyId;
+      shopSelect.value = state.shopId;
+      renderDuties();
+      state.pageNum = 1;
+      load();
+    }
+
     function onFilter(event) {
       event.preventDefault();
-      state.shopId = String(filterForm.shopId.value || "").trim();
       state.q = String(filterForm.q.value || "").trim();
       if (filterForm.orderStatus) {
         state.orderStatus = String(filterForm.orderStatus.value || "");
@@ -522,8 +665,20 @@
       if (filterForm.productStatus) {
         state.productStatus = String(filterForm.productStatus.value || "");
       }
-      state.pageNum = 1;
-      load();
+      applyScope(filterForm.dutyId.value, filterForm.shopId.value);
+    }
+
+    function onAsideClick(event) {
+      var btn = event.target.closest("[data-duty]");
+      if (!btn) {
+        return;
+      }
+      applyScope(btn.getAttribute("data-duty"), btn.getAttribute("data-shop"));
+    }
+
+    function onShopQ() {
+      state.shopQ = String(shopQEl.value || "").trim();
+      renderDuties();
     }
 
     function onPrev() {
@@ -549,6 +704,14 @@
 
     root.querySelector(".stores-subnav").addEventListener("click", onNavClick);
     filterForm.addEventListener("submit", onFilter);
+    dutySelect.addEventListener("change", function () {
+      applyScope(dutySelect.value, "");
+    });
+    shopSelect.addEventListener("change", function () {
+      applyScope(state.dutyId, shopSelect.value);
+    });
+    root.querySelector(".stores-aside").addEventListener("click", onAsideClick);
+    shopQEl.addEventListener("input", onShopQ);
     root.querySelector("[data-prev]").addEventListener("click", onPrev);
     root.querySelector("[data-next]").addEventListener("click", onNext);
     window.addEventListener("hashchange", onHash);
@@ -556,16 +719,19 @@
     renderChrome();
     renderKpi({});
     syncHash();
-    fetchJson("/api/stores/erp/shops")
+    fetchJson("/api/stores/erp/duties")
       .then(function (data) {
         if (dead) {
           return;
         }
         state.shops = data.records || [];
+        state.groups = data.groups || [];
+        fillDuties();
         fillShops();
+        renderDuties();
       })
       .catch(function () {
-        /* 店铺下拉失败不挡四个页面 */
+        /* 责权列表失败不挡四个页面 */
       });
     load();
 

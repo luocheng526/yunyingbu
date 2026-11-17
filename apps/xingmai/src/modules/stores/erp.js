@@ -24,6 +24,10 @@ export const PRODUCT_STATUS = {
 };
 
 const LOW_STOCK = 20;
+const USER_TTL_MS = 5 * 60 * 1000;
+const UNASSIGNED_DUTY = "unassigned";
+
+let userNameCache = { at: 0, names: {} };
 
 function toInt(value, fallback) {
   const n = Number(value);
@@ -45,6 +49,81 @@ function shopIdsOf(input = {}) {
     return Number.isFinite(id) ? [id] : [];
   }
   return [];
+}
+
+function dutyKeyOf(shop) {
+  return shop?.operatorId == null || shop.operatorId === "" ? UNASSIGNED_DUTY : String(shop.operatorId);
+}
+
+async function listErpUserNames() {
+  const now = Date.now();
+  if (userNameCache.names && now - userNameCache.at < USER_TTL_MS) {
+    return userNameCache.names;
+  }
+  try {
+    const data = await erpPost("/system/user/list", {});
+    const rows = Array.isArray(data) ? data : data?.records || [];
+    const names = {};
+    for (const row of rows) {
+      if (!row || row.id == null || !row.username) {
+        continue;
+      }
+      names[String(row.id)] = String(row.username);
+    }
+    userNameCache = { at: now, names };
+  } catch {
+    userNameCache = { at: now, names: userNameCache.names || {} };
+  }
+  return userNameCache.names;
+}
+
+function dutyNameOf(shop, names = {}) {
+  const key = dutyKeyOf(shop);
+  if (key === UNASSIGNED_DUTY) {
+    return "未分配";
+  }
+  return names[key] || shop.operatorName || `责权${key}`;
+}
+
+function publicStoreShop(shop, names = {}) {
+  const operatorId = shop?.operatorId == null || shop.operatorId === "" ? "" : String(shop.operatorId);
+  return {
+    id: shop.id,
+    shopName: shop.shopName,
+    statusLabel: shop.statusLabel,
+    typeLabel: shop.typeLabel,
+    operatorId,
+    operatorName: dutyNameOf(shop, names)
+  };
+}
+
+async function resolveShopIds(input = {}) {
+  const explicit = shopIdsOf(input);
+  if (explicit.length) {
+    return { ids: explicit, emptyDuty: false };
+  }
+  const dutyId = String(input.dutyId || "").trim();
+  if (!dutyId) {
+    return { ids: [], emptyDuty: false };
+  }
+  const meta = await listErpShopMeta();
+  const ids = Object.values(meta.names)
+    .filter((shop) => dutyKeyOf(shop) === dutyId)
+    .map((shop) => Number(shop.id))
+    .filter((id) => Number.isFinite(id));
+  return { ids, emptyDuty: ids.length === 0 };
+}
+
+function emptyPage(pageSize = 20) {
+  return {
+    ok: true,
+    source: "xingmai-erp",
+    total: 0,
+    totalPages: 1,
+    currentPage: 1,
+    pageSize,
+    records: []
+  };
 }
 
 function statusList(input, key, fallback) {
@@ -133,7 +212,10 @@ function publicOrder(row, meta) {
 
 async function productPage(input, extra) {
   const meta = await listErpShopMeta();
-  const ids = shopIdsOf(input);
+  const { ids, emptyDuty } = await resolveShopIds(input);
+  if (emptyDuty) {
+    return emptyPage(Math.min(toInt(input.pageSize, 20), 50));
+  }
   const data = await erpPost("/product/jd/product/page", {
     pageNum: toInt(input.pageNum, 1),
     pageSize: Math.min(toInt(input.pageSize, 20), 50),
@@ -149,15 +231,56 @@ async function productPage(input, extra) {
   };
 }
 
+export function resetStoresDutyCacheForTests() {
+  userNameCache = { at: 0, names: {} };
+}
+
 export async function listErpStoreShops() {
+  const board = await listErpDuties();
+  return { ok: true, source: "xingmai-erp", total: board.total, records: board.records };
+}
+
+export async function listErpDuties() {
   const meta = await listErpShopMeta();
-  const records = Object.values(meta.names).map((shop) => ({
-    id: shop.id,
-    shopName: shop.shopName,
-    statusLabel: shop.statusLabel,
-    typeLabel: shop.typeLabel
-  }));
-  return { ok: true, source: "xingmai-erp", total: records.length, records };
+  const names = await listErpUserNames();
+  const records = Object.values(meta.names).map((shop) => publicStoreShop(shop, names));
+  const grouped = new Map();
+  for (const shop of records) {
+    const id = dutyKeyOf(shop);
+    if (!grouped.has(id)) {
+      grouped.set(id, {
+        id,
+        name: shop.operatorName || dutyNameOf(shop, names),
+        shops: []
+      });
+    }
+    grouped.get(id).shops.push({
+      id: shop.id,
+      shopName: shop.shopName,
+      statusLabel: shop.statusLabel
+    });
+  }
+  const groups = [...grouped.values()].map((group) => {
+    group.shops.sort((a, b) => String(a.shopName).localeCompare(String(b.shopName), "zh"));
+    return { ...group, shopCount: group.shops.length };
+  });
+  groups.sort((a, b) => {
+    if (a.id === UNASSIGNED_DUTY) {
+      return 1;
+    }
+    if (b.id === UNASSIGNED_DUTY) {
+      return -1;
+    }
+    return b.shopCount - a.shopCount || String(a.name).localeCompare(String(b.name), "zh");
+  });
+  return {
+    ok: true,
+    source: "xingmai-erp",
+    total: records.length,
+    groupCount: groups.length,
+    records,
+    groups
+  };
 }
 
 export async function listErpReviews(input = {}) {
@@ -194,7 +317,14 @@ export async function listErpViolations(input = {}) {
 
 export async function listErpShipping(input = {}) {
   const meta = await listErpShopMeta();
-  const ids = shopIdsOf(input);
+  const { ids, emptyDuty } = await resolveShopIds(input);
+  if (emptyDuty) {
+    return {
+      ...emptyPage(Math.min(toInt(input.pageSize, 20), 50)),
+      page: "发货监控",
+      summary: { total: 0, waiting: 0, shipped: 0, listed: 0 }
+    };
+  }
   const statuses = statusList(input, "orderStatus", [3, 6]);
   const data = await erpPost("/product/jd/order/page", {
     pageNum: toInt(input.pageNum, 1),
