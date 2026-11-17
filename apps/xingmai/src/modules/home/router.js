@@ -117,6 +117,33 @@ const KEPT_CLICK_POINT =
   "            imageWidth: deskShot.naturalWidth || 0,\n" +
   "            imageHeight: deskShot.naturalHeight || 0\n" +
   "          }).then(function (st) {";
+const OLD_LIVE_LINK =
+  "  function liveLinkOf(row) {\n" +
+  "    var t = parseLiveAt(row && (row.capturedAt || row.ingestedAt));\n" +
+  "    return Number.isFinite(t) && Date.now() - t <= 6e5\n" +
+  "      ? { label: \"在线\", kind: \"on\" }\n" +
+  "      : { label: \"掉线\", kind: \"off\" };\n" +
+  "  }";
+const KEPT_LIVE_LINK =
+  "  function liveLinkOf(row) {\n" +
+  "    if (row && row.loginExpired === true) {\n" +
+  "      return { label: \"掉线\", kind: \"off\" };\n" +
+  "    }\n" +
+  "    if (row && row.online === true) {\n" +
+  "      return { label: \"在线\", kind: \"on\" };\n" +
+  "    }\n" +
+  "    var t = parseLiveAt(row && (row.capturedAt || row.ingestedAt));\n" +
+  "    return Number.isFinite(t) && Date.now() - t <= 6e5\n" +
+  "      ? { label: \"在线\", kind: \"on\" }\n" +
+  "      : { label: \"掉线\", kind: \"off\" };\n" +
+  "  }";
+const OLD_ONLINE_COPY =
+  "      online: row && row.online,\n" +
+  "      capturedAt: row && (row.capturedAt || row.ingestedAt),";
+const KEPT_ONLINE_COPY =
+  "      online: row && row.online === true,\n" +
+  "      loginExpired: row && row.loginExpired === true,\n" +
+  "      capturedAt: row && (row.capturedAt || row.ingestedAt),";
 
 export function patchHomeClientSource(text) {
   const source = String(text || "");
@@ -129,7 +156,10 @@ export function patchHomeClientSource(text) {
     .replace(OLD_DESK_SRC, KEPT_DESK_SRC)
     .replace(OLD_CLICK_POINT, KEPT_CLICK_POINT)
     .replace(OLD_OPENING, KEPT_OPENING)
-    .replaceAll("0.1.1039-loginpop", "0.1.1043-deskkeep");
+    .replace(OLD_LIVE_LINK, KEPT_LIVE_LINK)
+    .replace(OLD_ONLINE_COPY, KEPT_ONLINE_COPY)
+    .replaceAll("0.1.1039-loginpop", "0.1.1070-liveon")
+    .replaceAll("0.1.1043-deskkeep", "0.1.1070-liveon");
 }
 
 function homeClientSource() {
