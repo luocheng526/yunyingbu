@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap 0.1.775-dutylive v0.4.18 — 组织中心改权限后立刻收菜单 */
+/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap 0.1.775-dutylive 0.1.776-homehit v0.4.18 — 登录进首页，未选中的星脉数据中心不要蓝 */
 (function () {
-  const ASSET_VER = "0.1.775-dutylive";
+  const ASSET_VER = "0.1.776-homehit";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -1432,7 +1432,7 @@
     }
     window.__xmTabsRestored = 1;
     const key = leafRoute(dest || "");
-    if (isHrDesk() && leafRoute(current) === deskHome() && key !== deskHome()) {
+    if (leafRoute(current) === deskHome() && key !== deskHome()) {
       return;
     }
     if (!key || key === current || !MODULES[key] || PARENT_HOME[key]) {
@@ -1599,11 +1599,13 @@
     const groups = document.querySelectorAll(".xm-menu-group[data-xm-group]");
     Array.prototype.forEach.call(groups, function (group) {
       const prefix = group.getAttribute("data-xm-group");
-      const open = groupOpen(prefix, current);
-      group.classList.toggle("is-open", open);
+      const on = groupOpen(prefix, current);
+      group.classList.toggle("is-current", on);
+      group.classList.toggle("is-open", on);
       const parent = group.querySelector(".xm-menu-parent");
       if (parent) {
-        parent.setAttribute("aria-expanded", open ? "true" : "false");
+        parent.classList.toggle("is-active", on);
+        parent.setAttribute("aria-expanded", on ? "true" : "false");
       }
     });
   }

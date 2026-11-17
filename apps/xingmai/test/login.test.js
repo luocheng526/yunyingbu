@@ -40,7 +40,7 @@ test("login page is public", async () => {
   const html = await res.text();
   assert.match(html, /星脉管理系统/);
   assert.match(html, /<title>星脉甄选运营中心<\/title>/);
-  assert.match(html, /rel="icon" type="image\/png" href="data:image\/png;base64,/);
+  assert.match(html, /rel="icon" type="image\/png" sizes="32x32" href="\/shared\/tab-icon\.png\?v=/);
   assert.doesNotMatch(html, /rel="icon"[^>]+href="\/login-logo\.png"/);
   assert.match(html, /ChangeMe123!/);
   assert.doesNotMatch(html, /\/shared\/nav\.js/);
@@ -54,7 +54,7 @@ test("logged-in visit to /login redirects home unless out=1", async () => {
   const cookie = String(res.headers.get("set-cookie") || "").split(";")[0];
   const bounce = await fetch(`${base}/login`, { headers: { cookie }, redirect: "manual" });
   assert.equal(bounce.status, 302);
-  assert.equal(bounce.headers.get("location"), "/data");
+  assert.equal(bounce.headers.get("location"), "/home");
   const leaving = await fetch(`${base}/login?out=1`, { headers: { cookie }, redirect: "manual" });
   assert.equal(leaving.status, 200);
   const html = await leaving.text();
@@ -68,6 +68,7 @@ test("demo user can log in", async () => {
   const data = await res.json();
   assert.equal(data.ok, true);
   assert.equal(data.user.username, "罗成");
+  assert.equal(data.user.home, "/home");
   const cookie = res.headers.get("set-cookie") || "";
   assert.match(cookie, /mk_sid=/);
   assert.match(cookie, /Max-Age=604800/);

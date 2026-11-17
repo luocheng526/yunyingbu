@@ -393,7 +393,7 @@ export function publicProfile(user) {
     email: user.email,
     phone: user.phone,
     desk,
-    home: desk === "hr" ? "/hr" : "/data",
+    home: desk === "hr" ? "/hr" : "/home",
     board: String(user.board || ""),
     department: String(user.department || ""),
     center: String(user.center || ""),

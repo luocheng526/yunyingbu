@@ -56,7 +56,7 @@ function runCapFromNav(hrefs, current, pin = PIN) {
 }
 
 test("顶栏最多 10 个页签，开第 11 个关掉首页后的第一个", () => {
-  assert.equal(SHELL_ASSET_VER, "0.1.775-dutylive");
+  assert.equal(SHELL_ASSET_VER, "0.1.776-homehit");
   const next = "/work";
   const result = runCapFromNav([...TEN, next], next);
   assert.deepEqual(result.dropped, ["/bound"]);
@@ -110,5 +110,5 @@ test("壳层页签用同一套上限，打开和恢复都会裁", () => {
   assert.match(navJs, /capOpenTabs\(\);\s*writeOpenTabs\(\);/);
   assert.match(navJs, /0\.1\.774-tabcap/);
   assert.match(layoutCss, /xm-tab-cap 0\.1\.774-tabcap/);
-  assert.match(pagesJs, /xm-fast-shell 0\.1\.775-dutylive/);
+  assert.match(pagesJs, /xm-fast-shell 0\.1\.776-homehit/);
 });

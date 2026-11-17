@@ -12,7 +12,7 @@ const navJs = readFileSync(join(root, "../public/shared/nav.js"), "utf8");
 const luocheng = { username: "罗成", displayName: "罗成" };
 
 test("选中菜单用浅色渐变，不要投影，暗色粉红不盖掉", () => {
-  assert.equal(SHELL_ASSET_VER, "0.1.775-dutylive");
+  assert.equal(SHELL_ASSET_VER, "0.1.776-homehit");
   assert.match(layoutCss, /xm-menu-lite 0\.1\.772-menulite/);
   assert.match(layoutCss, /\.xm-menu-item\.is-active/);
   assert.match(layoutCss, /\.xm-menu-group\.is-current > \.xm-menu-parent/);
@@ -23,7 +23,10 @@ test("选中菜单用浅色渐变，不要投影，暗色粉红不盖掉", () =>
   assert.match(layoutCss, /html\[data-theme="pink"\]/);
   assert.match(layoutCss, /--xm-primary: #1677ff/);
   assert.match(layoutCss, /--xm-primary: #f8005f/);
-  assert.match(navJs, /ASSET_VER = "0\.1\.775-dutylive"/);
+  assert.match(navJs, /ASSET_VER = "0\.1\.776-homehit"/);
+  assert.match(navJs, /group\.classList\.toggle\("is-current", on\)/);
+  assert.match(navJs, /parent\.classList\.toggle\("is-active", on\)/);
+  assert.match(navJs, /leafRoute\(current\) === deskHome\(\) && key !== deskHome\(\)/);
   assert.match(navJs, /is-open is-current/);
   assert.match(navJs, /xm-menu-item xm-menu-parent' \+[\s\S]*is-active/);
 });
@@ -39,6 +42,7 @@ test("点数据总揽时一级星脉数据中心和当前子项都标成选中",
   const home = navMarkup("/home", luocheng);
   assert.match(home, /xm-menu-item is-active" href="\/home"/);
   assert.doesNotMatch(home, /xm-menu-group is-open is-current" data-xm-group="\/data"/);
+  assert.doesNotMatch(home, /data-xm-group="\/data"[\s\S]*xm-menu-parent is-active/);
 });
 
 test("顶栏页签是独立表头，不贴蓝线，电脑上不出现空白菜单按钮", () => {
@@ -46,6 +50,7 @@ test("顶栏页签是独立表头，不贴蓝线，电脑上不出现空白菜�
   assert.match(layoutCss, /xm-tabs-keep 0\.1\.773-tabkeep/);
   assert.match(layoutCss, /xm-tab-cap 0\.1\.774-tabcap/);
   assert.match(layoutCss, /xm-duty-live 0\.1\.775-dutylive/);
+  assert.match(layoutCss, /xm-home-hit 0\.1\.776-homehit/);
   assert.match(layoutCss, /\.xm-phone-menu,\s*\.xm-phone-mask \{\s*display:\s*none/);
   assert.match(layoutCss, /\.xm-topbar \{[\s\S]*align-items:\s*center/);
   assert.match(layoutCss, /\.xm-tabs \{[\s\S]*align-items:\s*center/);
