@@ -592,7 +592,27 @@ export async function readView(query) {
   const pageNo = Math.max(1, Number(query.pageNo) || 1);
   const pageSize = Math.min(100, Math.max(10, Number(query.pageSize) || 20));
   const pref = await readPref(`page:${page.id}`);
-  const all = await listSheets();
+  if (!page.local && !explicitFrom) {
+    const yesterday = addDays(shanghaiToday(), -1);
+    const day = yesterday < START_ON ? START_ON : yesterday;
+    range = { from: day, to: day };
+    daysType = "1";
+  }
+  const reportIds = new Set();
+  if (tab) {
+    reportIds.add(tab.id);
+  }
+  if (page.cards) {
+    reportIds.add(page.cards.id);
+  }
+  if (page.id === "channelOverview" && tab && tab.id === "qdzl_lb") {
+    reportIds.add("qdfx_dplb");
+  }
+  const trend = view === "period" ? (page.tabs || []).find((item) => item.id.endsWith("_trend")) : null;
+  if (trend) {
+    reportIds.add(trend.id);
+  }
+  const all = page.local ? [] : await listSheets({ reportIds: [...reportIds], from: range.from, to: range.to });
   let coverage = { status: "missing", mode: "day", missing: eachDay(range.from, range.to), failed: [], denied: [], error: "" };
   let rawRows = [];
   let sumPayload = null;
@@ -601,13 +621,6 @@ export async function readView(query) {
     rawRows = masters.map((item) => item.payload);
     coverage = { status: masters.length ? "ready" : "missing", mode: "local", missing: [], failed: [], denied: [], error: "" };
   } else if (tab) {
-    const trend = view === "period" ? (page.tabs || []).find((item) => item.id.endsWith("_trend")) : null;
-    if (!explicitFrom) {
-      const yesterday = addDays(shanghaiToday(), -1);
-      const day = yesterday < START_ON ? START_ON : yesterday;
-      range = { from: day, to: day };
-      daysType = "1";
-    }
     const loaded = await loadScope(all, trend || tab, dim, range.from, range.to, daysType);
     coverage = { ...loaded.status, mode: loaded.mode, missing: loaded.missing, failed: loaded.failed, denied: loaded.denied || [] };
     rawRows = rowsOf(loaded.pages);
@@ -641,7 +654,15 @@ export async function readView(query) {
   const pickedShop = shopPick ? shopRows.find((row) => row.shop === shopPick && !isTotalRow(row)) : null;
   let filtered = filterRows(normalized, pickedShop ? { ...query, shop: "" } : query);
   if (pickedShop) {
-    filtered = filtered.filter((row) => !isTotalRow(row) && (row.name === pickedShop.name || row.shop === shopPick));
+    filtered = [{
+      key: pickedShop.key,
+      name: pickedShop.shop || pickedShop.name,
+      shop: pickedShop.shop,
+      owner: pickedShop.owner,
+      metrics: pickedShop.metrics,
+      raw: pickedShop.raw,
+      children: []
+    }];
   }
   const marks = await readMarks(filtered.map((row) => row.key));
   const markMap = new Map(marks.map((item) => [item.rowKey, item]));
@@ -903,7 +924,7 @@ export async function progressBody() {
 }
 
 export async function coverageBody() {
-  const all = await listSheets();
+  const all = await listSheetHeads();
   const today = shanghaiToday();
   const reports = [];
   PAGES.forEach((page) => {

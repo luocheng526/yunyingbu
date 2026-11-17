@@ -273,7 +273,8 @@ test("没采完的范围汇总留空，采完的整月和当前页分开算", as
     assert.equal(stackedBody.cards.find((card) => card.key === "realTimeGmv").value, 4);
     const shopScoped = await fetch(`${base}/api/bound/view?page=channelOverview&tab=qdzl_lb&from=2026-11-05&to=2026-11-06&daysType=custom&shop=${encodeURIComponent("甲店")}`);
     const scopedShop = await shopScoped.json();
-    assert.equal(scopedShop.rows.map((row) => row.name).join(","), "京东");
+    assert.equal(scopedShop.rows.map((row) => row.name).join(","), "甲店");
+    assert.equal(scopedShop.rows[0].shop, "甲店");
     assert.equal(scopedShop.allSum.payAmount, 9);
     assert.equal(scopedShop.shopRows.length, 1);
   } finally {

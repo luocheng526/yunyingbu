@@ -450,7 +450,7 @@ function sheetHole(report, dim, scope, sheets) {
   );
   const first = pages.find((row) => row.pageNo === 1);
   if (!first) {
-    return { page: 1, kind: report.kind === "object" ? "object" : "list", attempts: 0 };
+    return { page: 1, kind: report.kind === "object" ? "object" : "list", attempts: 0, cause: "new" };
   }
   if (first.status === "denied") {
     return null;
@@ -459,13 +459,16 @@ function sheetHole(report, dim, scope, sheets) {
     if (first.attempts >= 3 && failureSettled(report, scope, first)) {
       return null;
     }
-    return { page: 1, kind: first.kind || report.kind, attempts: first.attempts >= 3 ? 0 : first.attempts };
+    return { page: 1, kind: first.kind || report.kind, attempts: first.attempts >= 3 ? 0 : first.attempts, cause: "retry" };
   }
   if (first.status !== "done") {
-    return { page: 1, kind: first.kind || report.kind, attempts: first.attempts };
+    return { page: 1, kind: first.kind || report.kind, attempts: first.attempts, cause: "page" };
   }
-  if (scope.start === scope.end && first.kind !== "object" && first.totalRows === 0 && first.rowCount === 0 && !String(first.errorText || "").startsWith("empty-ok")) {
-    return { page: 1, kind: "list", attempts: first.attempts, emptyRetry: true };
+  const siblingHasRows = sheets.some(
+    (row) => row.reportId === report.id && row.dim === dim && row.pageNo === 1 && row.status === "done" && row.totalRows > 0
+  );
+  if (scope.start === scope.end && first.kind !== "object" && first.totalRows === 0 && first.rowCount === 0 && siblingHasRows && !String(first.errorText || "").startsWith("empty-ok2")) {
+    return { page: 1, kind: "list", attempts: first.attempts, emptyRetry: true, cause: "empty" };
   }
   if (first.kind === "object") {
     return null;
@@ -475,25 +478,25 @@ function sheetHole(report, dim, scope, sheets) {
   for (let page = 2; page <= Math.min(need, 200); page += 1) {
     const found = pages.find((row) => row.pageNo === page);
     if (!found) {
-      return { page, kind: "list", attempts: 0 };
+      return { page, kind: "list", attempts: 0, cause: "page" };
     }
     if (found.status === "failed") {
       if (found.attempts >= 3 && failureSettled(report, scope, found)) {
         continue;
       }
-      return { page, kind: "list", attempts: found.attempts >= 3 ? 0 : found.attempts };
+      return { page, kind: "list", attempts: found.attempts >= 3 ? 0 : found.attempts, cause: "retry" };
     }
     if (found.status !== "done" && found.status !== "failed") {
-      return { page, kind: "list", attempts: found.attempts };
+      return { page, kind: "list", attempts: found.attempts, cause: "page" };
     }
   }
   if (report.sumPath) {
     const sum = pages.find((row) => row.pageNo === 0);
     if (!sum) {
-      return { page: 0, kind: "sum", attempts: 0 };
+      return { page: 0, kind: "sum", attempts: 0, cause: "page" };
     }
     if (sum.status === "failed" && sum.attempts < 3) {
-      return { page: 0, kind: "sum", attempts: sum.attempts };
+      return { page: 0, kind: "sum", attempts: sum.attempts, cause: "page" };
     }
   }
   return null;
@@ -511,15 +514,17 @@ async function nextUnit(current) {
   const allowed = Array.isArray(current.allowed) ? new Set(current.allowed) : null;
   const sheets = await listSheetHeads();
   const scopes = collectScopes(shanghaiToday());
-  for (const report of reports()) {
-    if (allowed && report.access && !allowed.has(report.access)) {
-      continue;
-    }
-    for (const dim of report.dims || ["all"]) {
-      for (const scope of scopes) {
-        const hole = sheetHole(report, dim, scope, sheets);
-        if (hole) {
-          return { type: "report", report, dim, scope, ...hole };
+  for (const cause of ["retry", "empty", "page", "new"]) {
+    for (const report of reports()) {
+      if (allowed && report.access && !allowed.has(report.access)) {
+        continue;
+      }
+      for (const dim of report.dims || ["all"]) {
+        for (const scope of scopes) {
+          const hole = sheetHole(report, dim, scope, sheets);
+          if (hole && hole.cause === cause) {
+            return { type: "report", report, dim, scope, ...hole };
+          }
         }
       }
     }
@@ -690,7 +695,7 @@ async function runReport(current, unit) {
     pageSize: PAGE_SIZE,
     attempts: 0,
     rowCount: extracted.rows.length,
-    errorText: unit.emptyRetry && extracted.total === 0 && extracted.rows.length === 0 ? "empty-ok" : "",
+    errorText: unit.emptyRetry && extracted.total === 0 && extracted.rows.length === 0 ? "empty-ok2" : "",
     payload: { rows: extracted.rows, total: extracted.total }
   });
 }
