@@ -1,8 +1,9 @@
 import { randomBytes } from "node:crypto";
-import { spawn } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { connect as connectTcp } from "node:net";
 import { tmpdir } from "node:os";
+import { dirname, resolve, sep } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import zlib from "node:zlib";
 import { extractShopDeal, parseHomeCard, withDeadline } from "./jingmai.js";
@@ -105,7 +106,20 @@ let libraryNote = "";
 let packageIndex = null;
 
 function chromeHomes() {
-  return [process.env.SHEN_CHROME_DIR, "/tmp/shen-chrome", "/opt/mengkai/.shen-chrome"].filter(Boolean);
+  const homes = [
+    "/opt/mengkai/.shen-chrome",
+    process.env.SHEN_CHROME_DIR,
+    "/tmp/shen-chrome",
+    tmpdir() + "/shen-chrome"
+  ];
+  const seen = new Set();
+  return homes.filter(function (home) {
+    if (!home || seen.has(home)) {
+      return false;
+    }
+    seen.add(home);
+    return true;
+  });
 }
 
 function installedBinary() {
@@ -490,62 +504,138 @@ function debDataTar(bytes) {
   return null;
 }
 
-function extractDebPython(deb, dest) {
-  const script = [
-    "import sys, io, tarfile, lzma, gzip",
-    "deb, dest = sys.argv[1], sys.argv[2]",
-    "data = open(deb, 'rb').read()",
-    "if not data.startswith(b'!<arch>\\n'):",
-    "    sys.exit(1)",
-    "off = 8",
-    "blob = None",
-    "while off + 60 <= len(data):",
-    "    name = data[off:off+16].decode('ascii', 'replace').strip().rstrip('/')",
-    "    size = int(data[off+48:off+58].decode().strip() or '0')",
-    "    off += 60",
-    "    body = data[off:off+size]",
-    "    off += size + (size & 1)",
-    "    if name.startswith('data.tar'):",
-    "        blob = (name, body)",
-    "        break",
-    "if blob is None:",
-    "    sys.exit(1)",
-    "name, body = blob",
-    "if name.endswith('.xz'):",
-    "    body = lzma.decompress(body)",
-    "elif name.endswith('.gz'):",
-    "    body = gzip.decompress(body)",
-    "elif name.endswith('.zst') or name.endswith('.zstd'):",
-    "    sys.exit(1)",
-    "tarfile.open(fileobj=io.BytesIO(body), mode='r:').extractall(dest)"
-  ].join("\n");
-  return commandOk("python3", ["-c", script, deb, dest]);
+function octalField(bytes) {
+  const text = bytes.toString("ascii").replace(/\0.*$/, "").trim();
+  if (!text) {
+    return 0;
+  }
+  const value = parseInt(text, 8);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function pathInside(dest, rel) {
+  const root = resolve(dest);
+  const full = resolve(root, rel);
+  return full === root || full.startsWith(root + sep);
+}
+
+export function extractUstar(buffer, dest) {
+  const bytes = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+  mkdirSync(dest, { recursive: true });
+  let off = 0;
+  let pendingName = "";
+  while (off + 512 <= bytes.length) {
+    const header = bytes.subarray(off, off + 512);
+    off += 512;
+    if (header.every(function (byte) { return byte === 0; })) {
+      break;
+    }
+    const size = octalField(header.subarray(124, 136));
+    if (size > 80 * 1024 * 1024 || off + size > bytes.length + 512) {
+      throw new Error("安装包里的文件过大");
+    }
+    const data = bytes.subarray(off, off + size);
+    off += Math.ceil(size / 512) * 512;
+    const type = header[156];
+    const rawName = header.subarray(0, 100).toString("utf8").replace(/\0.*$/, "");
+    const prefix = header.subarray(345, 500).toString("utf8").replace(/\0.*$/, "");
+    let name = pendingName || (prefix ? prefix.replace(/\/$/, "") + "/" + rawName : rawName);
+    pendingName = "";
+    if (type === 76 || type === 120) {
+      pendingName = data.toString("utf8").replace(/\0.*$/, "").trim();
+      const pathLine = pendingName.match(/^path=(.*)$/m);
+      if (pathLine) {
+        pendingName = pathLine[1];
+      }
+      continue;
+    }
+    name = name.replace(/^\.\//, "").replace(/\/$/, "");
+    if (!name || name.split("/").includes("..") || !pathInside(dest, name)) {
+      continue;
+    }
+    const full = dest + "/" + name;
+    if (type === 53) {
+      mkdirSync(full, { recursive: true });
+      continue;
+    }
+    mkdirSync(dirname(full), { recursive: true });
+    if (type === 50) {
+      const link = header.subarray(157, 257).toString("utf8").replace(/\0.*$/, "");
+      if (!link || link.startsWith("/") || link.split("/").includes("..")) {
+        continue;
+      }
+      try {
+        unlinkSync(full);
+      } catch {
+        /* new link */
+      }
+      symlinkSync(link, full);
+      continue;
+    }
+    if (type === 48 || type === 0) {
+      writeFileSync(full, data);
+    }
+  }
+}
+
+function inflateXz(body) {
+  const attempts = [
+    ["xz", ["-dc"]],
+    ["unxz", ["-c"]],
+    ["python3", ["-c", "import sys,lzma; sys.stdout.buffer.write(lzma.decompress(sys.stdin.buffer.read()))"]]
+  ];
+  let last = "没有程序能解开 xz 安装包";
+  for (let i = 0; i < attempts.length; i += 1) {
+    const result = spawnSync(attempts[i][0], attempts[i][1], { input: body, maxBuffer: 80 * 1024 * 1024 });
+    if (result.status === 0 && result.stdout && result.stdout.length) {
+      return result.stdout;
+    }
+    const err = Buffer.isBuffer(result.stderr) ? result.stderr.toString("utf8").trim() : "";
+    if (err) {
+      last = err.split("\n").pop().slice(0, 160);
+    }
+  }
+  throw new Error(last);
+}
+
+function inflateMember(member) {
+  const name = member.name;
+  const body = member.body;
+  if (name.endsWith(".gz")) {
+    return zlib.gunzipSync(body);
+  }
+  if (name.endsWith(".zst") || name.endsWith(".zstd")) {
+    if (typeof zlib.zstdDecompressSync !== "function") {
+      throw new Error("这版 Node 解不开 zstd 安装包 " + name);
+    }
+    return zlib.zstdDecompressSync(body);
+  }
+  if (name.endsWith(".xz")) {
+    return inflateXz(body);
+  }
+  return body;
+}
+
+export function unpackDebBuffer(bytes, dest) {
+  const member = debDataTar(Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes));
+  if (!member) {
+    throw new Error("安装包不是 deb");
+  }
+  extractUstar(inflateMember(member), dest);
 }
 
 async function extractDeb(deb, dest) {
   if (await commandOk("dpkg-deb", ["-x", deb, dest])) {
     return true;
   }
-  const member = debDataTar(readFileSync(deb));
-  if (!member) {
+  try {
+    unpackDebBuffer(readFileSync(deb), dest);
+    return true;
+  } catch (error) {
+    libraryNote = libraryNote || ("安装包解不开：" + String((error && error.message) || "展开失败").slice(0, 120));
+    console.error("jingmai deb", deb, libraryNote);
     return false;
   }
-  if (member.name.endsWith(".xz") || member.name.endsWith(".gz")) {
-    return extractDebPython(deb, dest);
-  }
-  let tar = member.body;
-  if (member.name.endsWith(".zst") || member.name.endsWith(".zstd")) {
-    if (typeof zlib.zstdDecompressSync !== "function") {
-      libraryNote = "这版 Node 解不开压缩包";
-      return false;
-    }
-    tar = zlib.zstdDecompressSync(tar);
-  }
-  const tarPath = dest + "/data.tar";
-  writeFileSync(tarPath, tar);
-  const extracted = await commandOk("python3", ["-c", "import sys,tarfile; tarfile.open(sys.argv[1]).extractall(sys.argv[2])", tarPath, dest]);
-  rmSync(tarPath, { force: true });
-  return extracted;
 }
 
 async function loadPackageIndex(distro) {
@@ -589,6 +679,7 @@ async function downloadSonames(home, names, suite) {
   for (let i = 0; i < names.length; i += 1) {
     const packages = libraryPackageNames(names[i]);
     if (treeHas(home, names[i], 0)) {
+      installed = true;
       continue;
     }
     for (let p = 0; p < packages.length; p += 1) {
@@ -752,7 +843,7 @@ async function fillLibraries(chromePath) {
 }
 
 async function fillLibraryHome(home, chromePath) {
-  for (let round = 0; round < 8; round += 1) {
+  for (let round = 0; round < 24; round += 1) {
     const missing = await lddMissing(chromePath, libSearchPath(home));
     if (!missing) {
       break;
@@ -1098,54 +1189,67 @@ function browserFailure(stderr) {
   return "服务器登录没有打开";
 }
 
+export function browserStartFailure() {
+  return "服务器浏览器启动失败";
+}
+
 async function launchChrome() {
-  const host = hostChromePath(findChrome());
+  const found = findChrome();
+  const host = hostChromePath(found);
+  let chromePath = "";
   if (host) {
     try {
       fontConfig = "";
-      libraryPath = "";
+      libraryPath = libSearchPath(libHome());
       return await startChromeProcess(host);
     } catch (error) {
-      if (error && error.code === "browser") {
-        throw error;
+      const message = String((error && error.message) || "");
+      console.error("jingmai browser", message);
+      if (!message.includes("缺少 ") && !message.includes("这台机器没有")) {
+        const wrapped = new Error(browserStartFailure());
+        wrapped.code = "browser";
+        throw wrapped;
       }
-      const wrapped = new Error("服务器登录没有打开");
+      chromePath = host;
+    }
+  }
+  if (!chromePath) {
+    try {
+      chromePath = await ensureChrome();
+    } catch (error) {
+      console.error("jingmai browser", error && error.message);
+      const wrapped = new Error(browserStartFailure());
       wrapped.code = "browser";
       throw wrapped;
     }
   }
-  let chromePath = "";
-  try {
-    chromePath = await ensureChrome();
-  } catch (error) {
-    if (error && error.code === "browser") {
-      throw error;
-    }
-    const wrapped = new Error("服务器上还没有浏览器，账号登录开不了");
-    wrapped.code = "browser";
-    throw wrapped;
-  }
   if (!chromePath) {
-    const error = new Error("服务器上还没有浏览器，账号登录开不了");
+    const error = new Error(browserStartFailure());
     error.code = "browser";
     throw error;
   }
-  try {
-    fontConfig = await ensureLoginFont();
-  } catch {
-    fontConfig = "";
+  if (!host) {
+    try {
+      fontConfig = await ensureLoginFont();
+    } catch {
+      fontConfig = "";
+    }
   }
   const tried = new Set();
   let lastError = null;
-  for (let attempt = 0; attempt < 8; attempt += 1) {
+  for (let attempt = 0; attempt < 24; attempt += 1) {
     try {
+      libraryPath = libSearchPath(libHome()) || libraryPath;
       return await startChromeProcess(chromePath);
     } catch (error) {
       lastError = error;
       const message = String(error && error.message || "");
+      console.error("jingmai browser", message);
       const match = message.match(/缺少 ([A-Za-z0-9._+-]+)/) || message.match(/服务器上的 ([A-Za-z0-9._+-]+\.so(?:\.\d+)*)/);
       if (!match || tried.has(match[1])) {
-        throw error;
+        const wrapped = new Error(browserStartFailure());
+        wrapped.code = "browser";
+        throw wrapped;
       }
       tried.add(match[1]);
       const home = libHome();
@@ -1157,14 +1261,17 @@ async function launchChrome() {
       const installed = await downloadSonames(home, [match[1]], suite);
       libraryPath = libSearchPath(home);
       if (!installed) {
-        if (libraryNote) {
-          error.message = message + "。" + readableNote(libraryNote);
-        }
-        throw error;
+        console.error("jingmai browser libs", readableNote(libraryNote) || message);
+        const wrapped = new Error(browserStartFailure());
+        wrapped.code = "browser";
+        throw wrapped;
       }
     }
   }
-  throw lastError || new Error("服务器登录没有打开");
+  console.error("jingmai browser", lastError && lastError.message);
+  const wrapped = new Error(browserStartFailure());
+  wrapped.code = "browser";
+  throw wrapped;
 }
 
 async function startChromeProcess(chromePath) {
@@ -1512,7 +1619,8 @@ export async function openDesk({ store, loginName, password, reveal, onStep } = 
       stopCurrent();
     }
     if (error && error.code === "browser") {
-      return { status: "login", message: error.message };
+      console.error("jingmai browser", error.message);
+      return { status: "login", message: browserStartFailure() };
     }
     if (String(error && error.message || "").includes("timeout")) {
       return { status: "login", message: "登录页没有在 8 秒内打开" };

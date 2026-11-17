@@ -5378,7 +5378,7 @@
             return;
           }
           failDesk(seq, name, state.desk.step || "打开京麦登录页", "登录页还没有出来，可以重试本店");
-        }, 20000);
+        }, 90000);
         api("/api/home/live-login/one", { store: name }).then(function (st) {
           if (dead || seq !== deskSeq) {
             return;

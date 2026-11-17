@@ -39,7 +39,13 @@ elif command -v yum >/dev/null 2>&1; then
 elif command -v apt-get >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
-  apt-get install -y -qq git curl ca-certificates
+  apt-get install -y -qq git curl ca-certificates unzip python3 xz-utils zstd \
+    libnss3 libnspr4 libgbm1 libdrm2 libxkbcommon0 \
+    libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+    libpango-1.0-0 libcairo2 fonts-wqy-microhei
+  apt-get install -y -qq libatk-bridge2.0-0t64 libatk1.0-0t64 libatspi2.0-0t64 libasound2t64 \
+    || apt-get install -y -qq libatk-bridge2.0-0 libatk1.0-0 libatspi2.0-0 libasound2 \
+    || true
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
