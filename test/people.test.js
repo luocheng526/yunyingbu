@@ -132,6 +132,13 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(cssText, /\.rights-mod-card\s*\{[\s\S]*?justify-content: center/);
     assert.match(jsText, /onPeopleWheel/);
     assert.match(jsText, /店铺主数据/);
+    assert.match(jsText, /org-console/);
+    assert.match(jsText, /组织架构分布/);
+    assert.match(jsText, /店铺运营状态/);
+    assert.match(jsText, /坐席使用情况/);
+    assert.match(jsText, /org-hero-kpis/);
+    assert.match(cssText, /\.org-console-kpis/);
+    assert.match(cssText, /\.org-hero-kpi/);
     assert.match(jsText, /总监/);
     assert.match(jsText, /主管\/储备/);
     assert.match(jsText, /org-filter-name">经理/);
@@ -151,7 +158,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /id="org-notices-root"/);
     assert.match(jsText, /__xmMountOrgNotices/);
     assert.doesNotMatch(jsText, /智能人事/);
-    assert.match(cssText, /\.org-tab\s*\{[\s\S]*?min-height:\s*48px/);
+    assert.match(cssText, /\.org-tab\s*\{[\s\S]*?min-height:\s*52px/);
     assert.match(jsText, /storeCellDrag/);
     assert.match(jsText, /下载模板/);
     assert.match(jsText, /id="org-import"/);
@@ -681,6 +688,8 @@ test("org store board lists demo shops and supports add", async () => {
     assert.equal(summaryJson.summary.idle, 0);
     assert.equal(summaryJson.summary.closing, 0);
     assert.equal(summaryJson.summary.closed, 0);
+    assert.ok(summaryJson.summary.listed > summaryJson.summary.total);
+    assert.ok(summaryJson.summary.statusCounts.idle >= 1);
 
     const listed = await fetch(`${base}/api/people/org/stores`);
     const listedJson = await listed.json();

@@ -340,11 +340,11 @@ const BLOCKING_NOTICE_SMOKE = `<!doctype html>
         document.body.append(mask);
         await sleep(80);
         const search = document.getElementById("people-q");
+        search.scrollIntoView({ block: "center" });
         const searchRect = search.getBoundingClientRect();
-        const searchHit = document.elementFromPoint(
-          searchRect.left + searchRect.width / 2,
-          searchRect.top + searchRect.height / 2
-        );
+        const sx = Math.min(window.innerWidth - 2, Math.max(2, searchRect.left + searchRect.width / 2));
+        const sy = Math.min(window.innerHeight - 2, Math.max(2, searchRect.top + searchRect.height / 2));
+        const searchHit = document.elementFromPoint(sx, sy);
         const noticeButton = document.getElementById("notice-action");
         const noticeRect = noticeButton.getBoundingClientRect();
         const noticeHit = document.elementFromPoint(
