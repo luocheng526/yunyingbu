@@ -499,47 +499,24 @@
       ? '<b class="xm-hm-cup ' + ["gold", "silver", "bronze"][index] + '">' + (index + 1) + "</b>"
       : "<span>" + (index + 1) + "</span>";
   }
-  function uiButton(label, attrs, opts) {
-    var item = { label: label, variant: "secondary", size: "small" };
-    var extra = "";
-    if (opts) {
-      Object.keys(opts).forEach(function (key) {
-        if (key === "extraClass") extra = opts[key];
-        else item[key] = opts[key];
-      });
-    }
-    var html = window.XmUI.button(item);
-    if (extra) html = html.replace('class="', 'class="' + extra + " ");
-    return attrs ? html.replace("<button ", "<button " + attrs + " ") : html;
-  }
-  function uiStat(card, attrs, tone) {
-    var trend = card && card.trend;
-    var note = card && card.extra ? String(card.extra) : "";
-    var trendDir = "";
-    if (!note && trend != null && trend !== "" && typeof trend !== "object") {
-      var n = Number(trend) || 0;
-      note = "环比 " + (n >= 0 ? "↗ " : "↘ ") + Math.round(Math.abs(n)) + "%";
-      trendDir = n >= 0 ? "up" : "";
-    }
-    var html = window.XmUI.StatCard({
-      label: card.label,
-      value: card.value == null || card.value === "" ? "—" : String(card.value),
-      note: note,
-      trend: trendDir,
-      icon: "chart",
-      tone: tone || "blue"
-    });
-    html = html.replace('<article class="xm-ui-stat-card">', '<article class="xm-ui-stat-card xm-hm-card"' + (attrs || "") + ">");
-    if (card && card.tip) {
-      html = html.replace(
-        "</article>",
-        '<button type="button" class="xm-hm-help" data-tip="' + tipAttr(card.tip) + '" aria-label="指标说明">!</button></article>'
-      );
-    }
-    return html;
-  }
   function cardHtml(card, teamKey) {
-    return uiStat(card, ' data-card="' + escapeHtml(card.key) + '"' + (teamKey ? ' data-team="' + escapeHtml(teamKey) + '"' : ""));
+    return (
+      '<article class="xm-hm-card" data-card="' +
+      escapeHtml(card.key) +
+      '"' +
+      (teamKey ? ' data-team="' + escapeHtml(teamKey) + '"' : "") +
+      '><div class="xm-hm-card-head"><span>' +
+      escapeHtml(card.label) +
+      '</span><button type="button" class="xm-hm-help" data-tip="' +
+      tipAttr(card.tip) +
+      '" aria-label="指标说明">!</button></div><div class="xm-hm-value' +
+      (card.accent ? " is-accent" : "") +
+      '">' +
+      escapeHtml(card.value) +
+      "</div>" +
+      trendHtml(card.trend) +
+      "</article>"
+    );
   }
   function shopColLabel(def) {
     return String(def.label || "").replace(/\s*\([^)]*\)\s*/g, "").replace(/\s+/g, "");
@@ -719,7 +696,7 @@
       '"><h2>责权店铺 <span>' +
       shops.length +
       " 店</span></h2>" +
-      '<table class="xm-ui-table xm-hm-table"><thead><tr><th><span>排名</span></th><th><span>店铺名称</span></th>' +
+      '<table class="xm-hm-table"><thead><tr><th><span>排名</span></th><th><span>店铺名称</span></th>' +
       cols
         .map(function (def) {
           return shopColHead(def, sort);
@@ -764,11 +741,11 @@
     return (
       '<div class="xm-hm-teams-bar"><b>' +
       escapeHtml(title || "星脉甄选") +
-      '</b><span>' +
-      uiButton(teamsRefreshing ? "更新中…" : "更新团队", "data-refresh-teams", { disabled: !!teamsRefreshing }) +
-      uiButton("恢复所有团队的卡片", "data-show-teams") +
-      uiButton("卡片设置", "", { extraClass: "xm-hm-set" }) +
-      '</span></div><div class="xm-hm-teams-grid">' +
+      '</b><span><button type="button" data-refresh-teams' +
+      (teamsRefreshing ? " disabled" : "") +
+      ">" +
+      (teamsRefreshing ? "更新中…" : "更新团队") +
+      '</button><button type="button" data-show-teams>恢复所有团队的卡片</button><button type="button" class="xm-hm-set">卡片设置</button></span></div><div class="xm-hm-teams-grid">' +
       list
         .map(function (team) {
           return teamBlockHtml({ key: team.key, name: team.name, cards: arrangeCards(team.cards), shops: team.shops }, hide, simple);
@@ -1218,7 +1195,7 @@
         kpis +
         '</div><button type="button" class="is-ghost" data-week-add="' +
         escapeHtml(team.key) +
-        '">加一行</button></div><table class="xm-ui-table xm-hm-week-table"><thead><tr>' +
+        '">加一行</button></div><table class="xm-hm-week-table"><thead><tr>' +
         columns.map(headCell).join("") +
         "</tr></thead><tbody>" +
         rows +
@@ -2047,16 +2024,27 @@
       '<span class="xm-hm-live-at">更新时间 ' +
       escapeHtml(liveAtText(state && state.liveAt)) +
       "</span>" +
-      uiButton("表头设置", "data-live-heads", { extraClass: "xm-hm-live-heads" }) +
-      uiButton("连接京麦", "data-connect-jingmai", { extraClass: "xm-hm-live-refresh" }) +
-      uiButton(liveRefreshing ? "刷新中…" : "刷新", "data-refresh-live", { extraClass: "xm-hm-live-refresh", disabled: !!liveRefreshing }) +
-      "</div></div>"
+      '<button type="button" class="xm-hm-live-heads" data-live-heads>表头设置</button>' +
+      '<button type="button" class="xm-hm-live-refresh" data-connect-jingmai>连接京麦</button>' +
+      '<button type="button" class="xm-hm-live-refresh" data-refresh-live' +
+      (liveRefreshing ? " disabled" : "") +
+      ">" +
+      (liveRefreshing ? "刷新中…" : "刷新") +
+      "</button></div></div>"
     );
   }
   function liveChipHtml(key, value, label, on) {
-    return uiButton(label, 'data-live-chip="' + escapeHtml(key) + '" data-live-chip-val="' + escapeHtml(value) + '"', {
-      extraClass: "xm-hm-live-chip" + (on ? " is-on" : "")
-    });
+    return (
+      '<button class="xm-hm-live-chip' +
+      (on ? " is-on" : "") +
+      '" data-live-chip="' +
+      escapeHtml(key) +
+      '" data-live-chip-val="' +
+      escapeHtml(value) +
+      '">' +
+      escapeHtml(label) +
+      "</button>"
+    );
   }
   function liveSearchHtml() {
     var pick = liveFilter();
@@ -2252,33 +2240,26 @@
         : n < 0
           ? "环比 ↘ 下降 " + Math.round(Math.abs(n)) + "%"
           : "环比 0%";
-    var html = window.XmUI.ChartCard({
-      title: (chart && chart.label) || "实时指标",
-      legend: [
-        { label: "昨天", color: "#94a3b8" },
-        { label: "今天", color: "#1677ff" }
-      ],
-      ariaLabel: (chart && chart.label) || "实时指标",
-      content:
-        '<div class="xm-hm-index-num">' +
-        escapeHtml(chart && chart.value != null && chart.value !== "" ? chart.value : "—") +
-        '</div><div class="xm-hm-yest-now">昨天 ' +
-        escapeHtml((chart && chart.yestText) || "—") +
-        '</div><div class="xm-hm-trend' +
-        trendCls +
-        '">' +
-        trendText +
-        "</div>" +
-        compareLineHtml(line)
-    });
-    return html.replace(
-      '<section class="xm-ui-card xm-ui-chart-card">',
-      '<section class="xm-ui-card xm-ui-chart-card xm-hm-chart" data-chart="' +
-        kind +
-        '"' +
-        (unit ? ' data-unit="' + unit + '"' : "") +
-        hoursAttr(line.hours) +
-        ">"
+    return (
+      '<article class="xm-hm-chart" data-chart="' +
+      kind +
+      '"' +
+      (unit ? ' data-unit="' + unit + '"' : "") +
+      hoursAttr(line.hours) +
+      '><div class="xm-hm-card-head"><span>' +
+      escapeHtml((chart && chart.label) || "实时指标") +
+      '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
+      escapeHtml(chart && chart.value != null && chart.value !== "" ? chart.value : "—") +
+      '</div><div class="xm-hm-yest-now">昨天 ' +
+      escapeHtml((chart && chart.yestText) || "—") +
+      "</div>" +
+      '<div class="xm-hm-trend' +
+      trendCls +
+      '">' +
+      trendText +
+      "</div>" +
+      compareLineHtml(line) +
+      "</article>"
     );
   }
   var LIVE_CORE_HEADS = [
@@ -2547,17 +2528,17 @@
       var link = liveLinkOf(row);
       if (link.kind === "off") {
         return (
-          '<td class="xm-hm-num">' +
-          uiButton("掉线", 'data-live-login="' + escapeHtml(shop) + '"' + (row && row.offlineReason ? ' title="' + escapeHtml(row.offlineReason) + '"' : ""), {
-            extraClass: "xm-hm-login-link"
-          }) +
-          "</td>"
+          '<td class="xm-hm-num is-fee-hot"><button type="button" class="xm-hm-login-link" data-live-login="' +
+          escapeHtml(shop) +
+          '"' +
+          (row && row.offlineReason ? ' title="' + escapeHtml(row.offlineReason) + '"' : "") +
+          ">掉线</button></td>"
         );
       }
       if (!link.label) {
         return "<td></td>";
       }
-      return '<td class="xm-hm-num">' + window.XmUI.StatusBadge({ label: link.label, tone: "success", dot: true }) + "</td>";
+      return '<td class="xm-hm-num is-fee-cold">' + escapeHtml(link.label) + "</td>";
     }
     if (key && String(key).indexOf("jz") === 0) {
       return '<td class="xm-hm-num">' + escapeHtml(row[key] == null || row[key] === "" ? "—" : row[key]) + "</td>";
@@ -2582,56 +2563,22 @@
   }
   function liveCardHtml(card, pick) {
     var on = (card.key === "feeHot" && pick === "hot") || (card.key === "feeCold" && pick === "cold");
-    var tone = card.key === "feeHot" ? "orange" : card.key === "feeCold" ? "green" : "blue";
-    var html = uiStat(card, ' data-card="' + escapeHtml(card.key) + '"', tone);
-    return on ? html.replace("xm-hm-card", "xm-hm-card is-on") : html;
-  }
-  function liveBoardHtml(shops, liveAt) {
-    var cols = liveCols();
-    if (!shops || !shops.length) {
-      return '<div class="xm-hm-panel">' + window.XmUI.EmptyState({ title: "没有店铺", description: "当前筛选下没有店铺。" }) + "</div>";
-    }
-    var columns = cols.map(function (col) {
-      return {
-        key: col.key,
-        label: col.label,
-        render: function (_value, row) {
-          var index = shops.indexOf(row);
-          var cell = liveShopCellHtml(col, row, index < 0 ? 0 : index, liveAt);
-          var matched = cell.match(/^<td class="([^"]*)">/);
-          var inner = cell.replace(/^<td[^>]*>/, "").replace(/<\/td>$/, "");
-          return (matched ? "<!--td:" + matched[1] + "-->" : "") + inner;
-        }
-      };
-    });
-    var html = window.XmUI.DataTable({ columns: columns, rows: shops });
-    html = html.replace(
-      '<div class="xm-ui-table-wrap"><table class="xm-ui-table">',
-      '<div class="xm-ui-table-wrap"><table class="xm-ui-table xm-hm-table" style="min-width:' + liveTableMinW() + 'px">' + liveColgroupHtml()
+    return (
+      '<article class="xm-hm-card' +
+      (on ? " is-on" : "") +
+      '" data-card="' +
+      escapeHtml(card.key) +
+      '"><div class="xm-hm-card-head"><span>' +
+      escapeHtml(card.label) +
+      "</span></div><div class=\"xm-hm-value\">" +
+      escapeHtml(card.value) +
+      "</div>" +
+      (card.extra ? '<div class="xm-hm-trend">' + escapeHtml(card.extra) + "</div>" : "") +
+      "</article>"
     );
-    var head = 0;
-    html = html.replace(/<th>/g, function () {
-      var col = cols[head++];
-      return '<th data-live-col="' + escapeHtml(col && col.key) + '"><span>';
-    });
-    html = html.replace(/<\/th>/g, "</span></th>");
-    var rowAt = 0;
-    var bodyStart = html.indexOf("<tbody>");
-    var bodyEnd = html.indexOf("</tbody>");
-    var body = html.slice(bodyStart, bodyEnd).replace(/<tr>/g, function () {
-      var row = shops[rowAt++];
-      var shop = row && row.shop;
-      return '<tr class="xm-hm-live-row' + (liveRowPicked(shop) ? " is-picked" : "") + '" data-live-shop="' + escapeHtml(shop) + '">';
-    });
-    html = html.slice(0, bodyStart) + body + html.slice(bodyEnd);
-    html = html.replace(/<td><!--td:([^>]*?)-->/g, '<td class="$1">');
-    return '<div class="xm-hm-panel">' + html + "</div>";
   }
   function cssText() {
     return (
-      ".xm-ui-scope .xm-hm-card.xm-ui-stat-card{background:transparent;border:0;box-shadow:none;padding:0;min-height:0}" +
-      ".xm-ui-scope .xm-hm-chart.xm-ui-card{background:transparent;border:0;box-shadow:none;padding:0;min-width:0}" +
-      ".xm-ui-scope .xm-hm-login-link.xm-ui-button{color:#cf1322}" +
       "html:has(#xm-hm),html:has(#xm-hm) body{height:100%!important;max-height:100%!important;overflow:hidden!important}" +
       ".xm-shell{height:100vh!important;max-height:100vh!important;min-height:0!important;overflow:hidden!important}" +
       ".xm-main{min-height:0!important;overflow:hidden!important;flex:1 1 auto!important}" +
@@ -2928,28 +2875,20 @@
     );
   }
   function frameHtml() {
-    var viewBar = window.XmUI.FilterToolbar({
-      tabs: VIEWS.map(function (item) {
-        return { value: item.key, label: item.label, active: item.key === "company" };
-      }),
-      search: false
-    });
+    var viewBtns = VIEWS.map(function (item) {
+      return '<button type="button" data-view="' + item.key + '">' + item.label + "</button>";
+    }).join("");
     var rangeBtns = RANGES.map(function (item) {
-      return uiButton(item.label, 'data-range="' + item.key + '"');
+      return '<button type="button" data-range="' + item.key + '">' + item.label + "</button>";
     }).join("");
     return (
       '<style id="xm-home-css">' +
       cssText() +
       "</style>" +
-      '<div class="xm-hm xm-ui-scope" id="xm-hm">' +
-      window.XmUI.PageContentHeader({
-        eyebrow: "运营中心",
-        title: "首页",
-        description: "数据总揽、团队概括、实时和近七天业绩。"
-      }) +
+      '<div class="xm-hm" id="xm-hm">' +
       '<div class="xm-hm-bar">' +
       '<div class="xm-hm-views">' +
-      viewBar +
+      viewBtns +
       "</div>" +
       '<div class="xm-hm-ranges">' +
       rangeBtns +
@@ -2958,9 +2897,7 @@
       '<div class="xm-hm-pop" id="xm-hm-pop" hidden><h3>卡片设置</h3><div id="xm-hm-card-opts"></div></div>' +
       '<div class="xm-hm-head-pop" id="xm-hm-head-pop" hidden><h3>表头设置</h3><p class="xm-hm-head-hint">勾选店铺表要显示的列。</p><div id="xm-hm-head-opts"></div></div>' +
       '<div class="xm-hm-body">' +
-      '<section class="xm-hm-kpis-shell"><div class="xm-hm-teams-bar"><b>星脉甄选</b>' +
-      uiButton("卡片设置", 'id="xm-hm-set"', { extraClass: "xm-hm-set" }) +
-      '</div><div class="xm-hm-sales xm-hm-live-charts" id="xm-hm-sales"></div><div class="xm-hm-kpis" id="xm-hm-kpis"></div></section>' +
+      '<section class="xm-hm-kpis-shell"><div class="xm-hm-teams-bar"><b>星脉甄选</b><button type="button" class="xm-hm-set" id="xm-hm-set">卡片设置</button></div><div class="xm-hm-sales xm-hm-live-charts" id="xm-hm-sales"></div><div class="xm-hm-kpis" id="xm-hm-kpis"></div></section>' +
       '<section class="xm-hm-teams" id="xm-hm-teams" hidden></section>' +
       '<section class="xm-hm-live" id="xm-hm-live" hidden></section>' +
       '<section class="xm-hm-week" id="xm-hm-week" hidden></section>' +
@@ -3203,10 +3140,10 @@
     board.classList.toggle("is-week", state.view === "week");
     board.classList.toggle("is-team", state.view === "overview" && state.teamPane !== "board");
     board.classList.toggle("is-chief", state.view === "overview" && state.teamPane === "chief");
-    Array.prototype.forEach.call(root.querySelectorAll("[data-xm-ui-tab]"), function (btn) {
-      var key = btn.getAttribute("data-xm-ui-tab");
+    Array.prototype.forEach.call(root.querySelectorAll("[data-view]"), function (btn) {
+      var key = btn.getAttribute("data-view");
       btn.hidden = !allow[key];
-      btn.classList.toggle("is-active", key === state.view);
+      btn.classList.toggle("is-on", key === state.view);
     });
     Array.prototype.forEach.call(root.querySelectorAll("[data-range]"), function (btn) {
       btn.classList.toggle("is-on", btn.getAttribute("data-range") === state.range);
@@ -3241,7 +3178,17 @@
       }).join("") +
       "</div>" +
       liveSearchHtml() +
-      (liveBoardSlot = liveSlotOf(shops), liveBoardHtml(shops, liveBoardSlot || state.liveAt));
+      '<div class="xm-hm-panel">' +
+      '<table class="xm-hm-table" style="min-width:' +
+      liveTableMinW() +
+      'px">' +
+      liveColgroupHtml() +
+      liveTheadHtml() +
+      "<tbody>" +
+      (liveBoardSlot = liveSlotOf(shops), shops).map(function (row, i) {
+        return liveShopRowHtml(row, i, liveBoardSlot || state.liveAt);
+      }).join("") +
+      "</tbody></table></div>";
     applyLiveRowPad(root);
     restoreShopColW(root);
     root.querySelector("#xm-hm-ladders").innerHTML = "";
@@ -5678,9 +5625,9 @@
           paint(root, state);
           return;
         }
-        var view = event.target.closest("[data-xm-ui-tab]");
+        var view = event.target.closest("[data-view]");
         if (view) {
-          var nextView = view.getAttribute("data-xm-ui-tab");
+          var nextView = view.getAttribute("data-view");
           if (!allowedHomeViews(state.user, state.people, state.dutyShops)[nextView]) {
             return;
           }
