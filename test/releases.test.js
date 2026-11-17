@@ -211,8 +211,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /本机落地/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /sc-ui-4/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-4/);
+    assert.match(text, /sc-ui-21/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-21/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
     assert.match(text, /id="xm-releases-boot"/);
@@ -272,7 +272,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /window\.location\.replace\("\/login"\)/);
     assert.doesNotMatch(text, /id="login-form"/);
     assert.doesNotMatch(text, /id="apply-form"/);
-    assert.doesNotMatch(text, /提交发布申请/);
+    assert.doesNotMatch(text, /新建发布/);
+    assert.match(text, /版本发布流程/);
     assert.doesNotMatch(text, /星脉管理系统/);
   });
 });
@@ -299,7 +300,8 @@ test("releases.html has no login form and sends users to /login", () => {
   assert.doesNotMatch(html, /\/shared\/layout.css/);
   assert.doesNotMatch(html, /\/shared\/nav.js/);
   assert.doesNotMatch(html, /id="apply-form"/);
-  assert.doesNotMatch(html, /提交发布申请/);
+  assert.doesNotMatch(html, /新建发布/);
+  assert.match(html, /版本发布流程/);
   assert.match(html, /id="refresh-btn"/);
   assert.match(html, /id="upgrade-mask"/);
   assert.match(html, /location\.replace\("\/releases\?reloaded="/);
@@ -369,8 +371,8 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.doesNotMatch(text, /Unlock the document so this page can scroll/);
     assert.doesNotMatch(text, /(?<!min-)height: 100vh !important/);
     assert.doesNotMatch(text, /html:has\(\.oc-wrap\) \.xm-content \{\s*[^}]*overflow: auto !important/);
-    assert.match(text, /--oc-bg:\s*var\(--xm-bg,\s*#f7f7f4\)/);
-    assert.match(text, /--oc-text:\s*var\(--xm-ink,\s*#14120b\)/);
+    assert.match(text, /--oc-bg:\s*var\(--xm-bg,\s*#f3f6fb\)/);
+    assert.match(text, /--oc-text:\s*var\(--xm-ink,\s*#1e293b\)/);
     assert.match(text, /\.xm-content button\.oc-tab/);
     assert.match(text, /#upgrade-mask/);
     assert.match(text, /html > #upgrade-mask/);
@@ -387,8 +389,10 @@ test("GET /releases.css is page-only stylesheet", async () => {
     assert.match(text, /\.oc-hero-card/);
     assert.match(text, /\.oc-tab-num/);
     assert.match(text, /\.sc-table/);
-    assert.match(text, /--oc-frame:\s*#dc2626/);
-    assert.match(text, /border: 2px solid var\(--oc-frame/);
+    assert.match(text, /--oc-frame:\s*transparent/);
+    assert.match(text, /\.rg-cards/);
+    assert.match(text, /\.rg-steps/);
+    assert.match(text, /#1677ff/);
   });
 });
 
