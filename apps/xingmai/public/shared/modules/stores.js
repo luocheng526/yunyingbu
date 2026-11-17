@@ -42,10 +42,10 @@
       title: "京东库存监控",
       path: "/stores/inventory",
       api: "/api/stores/erp/inventory",
-      lead: "商品标签选京东物流，去掉全国仓。现货和占用都是 0 的空仓不展示。可用库存 = 现货 − 占用，小于等于 20 标低库存。",
+      lead: "商品标签选京东物流。库存总数 = 可用总数 − 全国仓。后面列出每个仓的库存，例如肇庆仓 7个。",
       kpis: [
-        { key: "jd", label: "京仓" },
-        { key: "usable", label: "可用库存" },
+        { key: "jd", label: "商品" },
+        { key: "usable", label: "库存总数" },
         { key: "low", label: "低库存" }
       ]
     }
@@ -244,15 +244,9 @@
           "</div></td><td>" +
           shopCell(row) +
           "</td><td>" +
-          none(row.warehouseName) +
-          '</td><td class="stores-sub">' +
-          none(row.warehouseId) +
-          "</td><td>" +
           count(row.usableNum) +
           "</td><td>" +
-          count(row.spotNum) +
-          "</td><td>" +
-          count(row.bookingNum) +
+          none(row.warehouseText) +
           "</td><td>" +
           pill(row.stockLabel, statusKind(row.stockLabel)) +
           "</td></tr>"
@@ -271,7 +265,7 @@
     if (id === "shipping") {
       return "<tr><th>订单号</th><th>店铺</th><th>状态</th><th>金额</th><th>付款时间</th><th>商品</th><th>件数</th><th>买家备注</th></tr>";
     }
-    return "<tr><th>商品</th><th>店铺</th><th>仓库</th><th>仓库编号</th><th>京仓库存</th><th>现货</th><th>占用</th><th>状态</th></tr>";
+    return "<tr><th>商品</th><th>店铺</th><th>库存总数</th><th>各仓</th><th>状态</th></tr>";
   }
 
   function extraFilters(id, state) {

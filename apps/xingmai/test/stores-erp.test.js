@@ -7,7 +7,7 @@ import { createApp } from "../src/app.js";
 import { resetStoreForTests } from "../src/modules/profile/auth.js";
 import { resetErpCacheForTests, setErpFetchForTests } from "../src/modules/data/erp.js";
 import { resetStoresDutyCacheForTests } from "../src/modules/stores/erp.js";
-import { setJdFetchForTests, warehouseLines } from "../src/modules/stores/jd-stock.js";
+import { groupSkuInventory, setJdFetchForTests, shortWarehouseName, warehouseLines } from "../src/modules/stores/jd-stock.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const storesJs = readFileSync(join(root, "public/shared/modules/stores.js"), "utf8");
@@ -290,16 +290,37 @@ test("inventory keeps jd express warehouses and drops national stock", () => {
   );
   assert.equal(jd.jdExpress, true);
   assert.equal(jd.droppedNational, 2);
-  assert.equal(jd.lines.length, 1);
-  assert.equal(jd.lines[0].usableNum, 3);
-  assert.equal(jd.lines[0].spotNum, 4);
-  assert.equal(jd.lines[0].bookingNum, 1);
-  assert.equal(jd.lines[0].stockLabel, "低库存");
-  assert.equal(jd.lines[0].warehouseName, "北京常温C平台仓55号库-CHN");
+  assert.equal(jd.lines.length, 2);
+  const kept = jd.lines.find((line) => line.warehouseId === "118091428");
+  assert.equal(kept.usableNum, 3);
+  assert.equal(kept.spotNum, 4);
+  assert.equal(kept.bookingNum, 1);
+  assert.equal(kept.stockLabel, "低库存");
+  assert.equal(kept.warehouseName, "北京常温C平台仓55号库-CHN");
 
   const merchant = warehouseLines([], [{ storeId: 88, stockNum: 50, warehouseName: "商家仓" }]);
   assert.equal(merchant.jdExpress, false);
   assert.equal(merchant.lines.length, 0);
+
+  assert.equal(shortWarehouseName("肇庆常温C平台仓5号库-CHN"), "肇庆仓");
+  assert.equal(shortWarehouseName("北京常温C平台仓55号库-CHN"), "北京仓");
+  const named = warehouseLines([{ featureKey: "isJDexpress", featureValue: "1" }], [
+    { storeId: 0, stockNum: 9979, warehouseName: "商家全国仓" },
+    { storeId: 118065543, stockNum: 7, warehouseName: "肇庆常温C平台仓5号库-CHN" },
+    { storeId: 118091428, stockNum: 0, warehouseName: "北京常温C平台仓55号库-CHN" }
+  ]).lines.map((line) => ({
+    ...line,
+    skuId: "10234367620628",
+    shopId: "1",
+    productName: "烧水杯",
+    warehouseFullName: line.warehouseName,
+    warehouseName: shortWarehouseName(line.warehouseName, line.warehouseId)
+  }));
+  const grouped = groupSkuInventory(named);
+  assert.equal(grouped.length, 1);
+  assert.equal(grouped[0].usableNum, 7);
+  assert.equal(grouped[0].warehouseText, "肇庆仓 7个、北京仓 0个");
+  assert.equal(JSON.stringify(grouped).includes("9979"), false);
 });
 
 test("inventory reads partition stock and hides shop auth", async () => {
@@ -360,8 +381,9 @@ test("inventory reads partition stock and hides shop auth", async () => {
   assert.equal(body.page, "京东库存监控");
   assert.equal(body.source, "jingdong-partition-stock");
   assert.equal(body.records.length, 1);
-  assert.equal(body.records[0].warehouseId, "118091428");
+  assert.equal(body.records[0].warehouses[0].warehouseId, "118091428");
   assert.equal(body.records[0].usableNum, 3);
+  assert.match(body.records[0].warehouseText, /3个/);
   assert.equal(body.records[0].stockLabel, "低库存");
   assert.equal(body.records[0].tag, "京东物流");
   assert.equal(body.summary.jd, 1);
@@ -431,7 +453,8 @@ test("inventory reads JD logistics SKUs from every page of each shop", async () 
   assert.equal(body.records.length, 1);
   assert.equal(body.records[0].skuId, "10236540030710");
   assert.equal(body.records[0].usableNum, 3);
-  assert.equal(body.records[0].warehouseId, "118091428");
+  assert.equal(body.records[0].warehouses[0].warehouseId, "118091428");
+  assert.match(body.records[0].warehouseText, /3个/);
   assert.equal(body.scanning, false);
   assert.equal(body.pagesRead, 3);
   assert.equal(body.pagesTotal, 3);

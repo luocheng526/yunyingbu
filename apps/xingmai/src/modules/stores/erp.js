@@ -1,5 +1,14 @@
 import { erpPost, listErpShopMeta } from "../data/erp.js";
-import { callJd, parseSkuSearch, readJdWarehouseStock, readPartitionLines, resetJdStockForTests } from "./jd-stock.js";
+import {
+  callJd,
+  groupSkuInventory,
+  parseSkuSearch,
+  readJdWarehouseStock,
+  readPartitionLines,
+  resetJdStockForTests,
+  shortWarehouseName,
+  warehouseNameMap
+} from "./jd-stock.js";
 
 export const STORE_PAGES = [
   { id: "reviews", title: "评价管理", path: "/stores/reviews" },
@@ -473,12 +482,21 @@ async function linesForSkus(skus, authFor, meta, readLines) {
       return { lines: [], droppedNational: 0, failed: 1 };
     }
   });
+  const records = groups.flatMap((group) => group.lines);
+  const namesByShop = new Map();
+  await mapPool([...new Set(records.map((line) => line.shopId))], 3, async (shopId) => {
+    const auth = authFor(shopId);
+    namesByShop.set(shopId, auth ? await warehouseNameMap(auth) : {});
+  });
+  for (const line of records) {
+    const full = namesByShop.get(line.shopId)?.[line.warehouseId] || line.warehouseName;
+    line.warehouseFullName = full;
+    line.warehouseName = shortWarehouseName(full, line.warehouseId);
+  }
   return {
     droppedNational: groups.reduce((sum, group) => sum + group.droppedNational, 0),
     failed: groups.reduce((sum, group) => sum + group.failed, 0),
-    records: groups
-      .flatMap((group) => group.lines)
-      .sort((a, b) => a.usableNum - b.usableNum || String(a.skuId).localeCompare(String(b.skuId)))
+    records
   };
 }
 
@@ -630,13 +648,14 @@ async function waitForFirstRows(scan) {
 }
 
 function inventoryPage(scan, input) {
+  const grouped = groupSkuInventory(scan.records);
   const pageSize = Math.min(toInt(input.pageSize, 20), 50);
-  const total = scan.records.length;
+  const total = grouped.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
   const currentPage = Math.min(toInt(input.pageNum, 1), totalPages);
   const start = (currentPage - 1) * pageSize;
-  return inventoryResult(scan.records.slice(start, start + pageSize), {
-    summaryRows: scan.records,
+  return inventoryResult(grouped.slice(start, start + pageSize), {
+    summaryRows: grouped,
     total,
     totalPages,
     currentPage,
@@ -668,8 +687,11 @@ export async function listErpInventory(input = {}) {
       skuName: keyword
     });
     const listed = await linesForSkus(data?.records || [], (shopId) => authMap[shopId], meta, readJdWarehouseStock);
-    return inventoryResult(listed.records, {
+    const grouped = groupSkuInventory(listed.records);
+    return inventoryResult(grouped, {
       ...pageOf(data),
+      summaryRows: grouped,
+      total: grouped.length,
       droppedNational: listed.droppedNational,
       failed: listed.failed
     });
