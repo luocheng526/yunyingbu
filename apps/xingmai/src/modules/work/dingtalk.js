@@ -539,8 +539,12 @@ export async function checkWorkNotice() {
     await sendWorkNotice("0");
     return { ok: true };
   } catch (error) {
-    if (USERID_CODES.has(Number(error.code))) {
+    const code = Number(error.code);
+    if (USERID_CODES.has(code)) {
       return { ok: true };
+    }
+    if (code === 88 || code === 60011) {
+      return { ok: false, error: "这个应用还没有发工作通知的权限" };
     }
     return { ok: false, error: "工作通知还不能用" };
   }
@@ -550,13 +554,25 @@ export async function saveAppConfig(input) {
   const agentId = String(input?.agentId || "").trim();
   const clientId = String(input?.clientId || "").trim();
   const clientSecret = String(input?.clientSecret || "").trim();
-  if (!/^\d{4,20}$/.test(agentId) || !/^ding[a-z0-9]+$/i.test(clientId) || clientSecret.length < 10 || clientSecret.length > 128) {
+  if (!/^\d{4,20}$/.test(agentId)) {
     return { ok: false, error: "应用凭证不完整" };
+  }
+  if (clientSecret.includes("*")) {
+    return { ok: false, error: "页面上的 Client Secret 被挡住了" };
   }
   const prevAgent = rememberedAgent;
   const prevAuth = { ...rememberedAuth };
+  let nextAuth = { ...rememberedAuth };
+  if (clientSecret) {
+    if (!/^ding[a-z0-9]+$/i.test(clientId) || clientSecret.length < 10 || clientSecret.length > 128) {
+      return { ok: false, error: "应用凭证不完整" };
+    }
+    nextAuth = { clientId, clientSecret };
+  } else if (clientId && clientId !== dingConfig().clientId) {
+    return { ok: false, error: "页面上的 Client Secret 被挡住了，还不能换成这个应用" };
+  }
   rememberedAgent = agentId;
-  rememberedAuth = { clientId, clientSecret };
+  rememberedAuth = nextAuth;
   tokenCache = { value: "", until: 0 };
   const check = await checkWorkNotice();
   if (!check.ok) {

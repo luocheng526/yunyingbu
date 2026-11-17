@@ -33,7 +33,43 @@ test("应用凭证只保存在服务端，返回值里没有密钥", async () =>
     assert.equal(dingPublic().agent, true);
     const rejected = await saveAppConfig({ agentId: "1", clientId: "dingabc123", clientSecret: "secret-value-1" });
     assert.equal(rejected.ok, false);
+    const masked = await saveAppConfig({ agentId: "10001", clientId: "dingabc123", clientSecret: "pL83****Ks1Y" });
+    assert.equal(masked.ok, false);
   } finally {
+    resetDingStore();
+    setDingTransport(globalThis.fetch);
+  }
+});
+
+test("同一个应用只补 AgentId，另一个应用不会覆盖已有密钥", async () => {
+  const prevId = process.env.DINGTALK_CLIENT_ID;
+  const prevSecret = process.env.DINGTALK_CLIENT_SECRET;
+  process.env.DINGTALK_CLIENT_ID = "dingabc123";
+  process.env.DINGTALK_CLIENT_SECRET = "secret-value-1";
+  setDingTransport(async (url) => {
+    if (String(url).includes("accessToken")) {
+      return { json: async () => ({ accessToken: "token", expireIn: 7200 }) };
+    }
+    return { json: async () => ({ errcode: 33012, errmsg: "无效的USERID" }) };
+  });
+  try {
+    const saved = await saveAppConfig({ agentId: "10001", clientId: "dingabc123" });
+    assert.equal(saved.ok, true);
+    assert.equal(JSON.stringify(saved).includes("secret-value-1"), false);
+    const mismatch = await saveAppConfig({ agentId: "10002", clientId: "dingother999" });
+    assert.equal(mismatch.ok, false);
+    assert.equal(dingPublic().agent, true);
+  } finally {
+    if (prevId === undefined) {
+      delete process.env.DINGTALK_CLIENT_ID;
+    } else {
+      process.env.DINGTALK_CLIENT_ID = prevId;
+    }
+    if (prevSecret === undefined) {
+      delete process.env.DINGTALK_CLIENT_SECRET;
+    } else {
+      process.env.DINGTALK_CLIENT_SECRET = prevSecret;
+    }
     resetDingStore();
     setDingTransport(globalThis.fetch);
   }
