@@ -93,12 +93,18 @@
       ".fb-field textarea{min-height:72px;resize:vertical;}" +
       ".fb-form-ops{grid-column:1 / -1;display:flex;justify-content:flex-end;gap:8px;}" +
       ".fb-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0 0 12px;}" +
-      ".fb-kpi{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:12px;box-shadow:var(--xm-shadow);padding:14px 16px;display:flex;justify-content:space-between;gap:8px;align-items:center;min-height:92px;}" +
-      ".fb-kpi b{display:block;margin-top:8px;font-size:28px;line-height:1;font-weight:700;}" +
-      ".fb-kpi span{display:block;margin-top:6px;color:var(--xm-muted);font-size:12px;}" +
-      ".fb-kpi-ico{width:28px;height:28px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;color:#fff;}" +
-      ".fb-kpi-ico.blue{background:#2f6bff;}.fb-kpi-ico.green{background:#22a06b;}.fb-kpi-ico.purple{background:#7c5cfc;}.fb-kpi-ico.red{background:#f04452;}" +
-      ".fb-spark{width:92px;height:36px;flex:none;}" +
+      ".fb-kpi{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:12px;box-shadow:var(--xm-shadow);padding:16px 18px;display:flex;justify-content:space-between;gap:12px;align-items:center;min-height:96px;}" +
+      ".fb-kpi-main{display:flex;align-items:center;gap:12px;min-width:0;}" +
+      ".fb-kpi-text{display:flex;flex-direction:column;gap:6px;min-width:0;}" +
+      ".fb-kpi b{display:block;margin:0;font-size:36px;line-height:1;font-weight:700;letter-spacing:-0.03em;}" +
+      ".fb-kpi-text span{display:block;margin:0;color:var(--xm-muted);font-size:13px;line-height:1;}" +
+      ".fb-kpi-ico{width:42px;height:42px;display:inline-flex;align-items:center;justify-content:center;flex:none;}" +
+      ".fb-kpi-ico svg{width:20px;height:20px;}" +
+      ".fb-kpi-ico.blue{border-radius:12px;background:#2f6bff;color:#fff;}" +
+      ".fb-kpi-ico.green{border-radius:50%;background:#e7f8ef;color:#22a06b;}" +
+      ".fb-kpi-ico.purple{border-radius:50%;background:#f0ecff;color:#7c5cfc;}" +
+      ".fb-kpi-ico.red{border-radius:50%;background:#ffecee;color:#f04452;}" +
+      ".fb-spark{width:112px;height:44px;flex:none;}" +
       ".fb-mid{display:grid;grid-template-columns:1fr 1.35fr;gap:12px;margin:0 0 12px;}" +
       ".fb-card{padding:14px 16px;}" +
       ".fb-card h2{margin:0 0 12px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;}" +
@@ -226,18 +232,18 @@
   }
 
   function spark(color) {
-    return '<svg class="fb-spark" viewBox="0 0 92 36" aria-hidden="true"><path d="M0 24 C12 24 14 8 26 12 C38 16 40 28 52 20 C64 12 70 6 92 10" fill="none" stroke="' + color + '" stroke-width="2"/></svg>';
+    return '<svg class="fb-spark" viewBox="0 0 120 48" aria-hidden="true"><path d="M0 32 C14 32 18 14 34 18 C50 22 54 36 70 28 C86 20 96 10 120 16" fill="none" stroke="' + color + '" stroke-width="2.4" stroke-linecap="round"/></svg>';
   }
 
   function kpis() {
     var cards = [
-      { n: state.items.length, label: "全部需求", tone: "blue", color: "#2f6bff", ico: icon('<rect x="5" y="4" width="14" height="16" rx="2"/><path d="M8 9h8M8 13h8"/>') },
-      { n: countStatus("doing"), label: "开发中", tone: "green", color: "#22a06b", ico: icon('<circle cx="12" cy="12" r="7"/><path d="M12 8v4l3 2"/>') },
-      { n: countStatus("closed"), label: "已完成", tone: "purple", color: "#7c5cfc", ico: icon('<circle cx="12" cy="12" r="7"/><path d="m9 12 2 2 4-4"/>') },
-      { n: countStatus("mine"), label: "待我处理", tone: "red", color: "#f04452", ico: icon('<path d="M12 8v5"/><path d="M12 16h.01"/><circle cx="12" cy="12" r="8"/>') }
+      { n: state.items.length, label: "全部需求", tone: "blue", color: "#2f6bff", ico: icon('<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 9h6M9 13h6"/>') },
+      { n: countStatus("doing"), label: "开发中", tone: "green", color: "#3dcb86", ico: icon('<path d="M16.5 7.5A6.5 6.5 0 0 0 7 10"/><path d="M6.5 6.5V10H10"/><path d="M7.5 16.5A6.5 6.5 0 0 0 17 14"/><path d="M17.5 17.5V14H14"/>') },
+      { n: countStatus("closed"), label: "已完成", tone: "purple", color: "#7c5cfc", ico: icon('<path d="m7 12 3.2 3.2L17 8.5"/>') },
+      { n: countStatus("mine"), label: "待我处理", tone: "red", color: "#f04452", ico: icon('<path d="M12 7v7"/><path d="M12 17.5h.01"/>') }
     ];
     return '<section class="fb-kpis">' + cards.map(function (card) {
-      return '<article class="fb-kpi"><div><span class="fb-kpi-ico ' + card.tone + '">' + card.ico + '</span><b>' + card.n + "</b><span>" + card.label + "</span></div>" + spark(card.color) + "</article>";
+      return '<article class="fb-kpi"><div class="fb-kpi-main"><span class="fb-kpi-ico ' + card.tone + '">' + card.ico + '</span><div class="fb-kpi-text"><b>' + card.n + "</b><span>" + card.label + "</span></div></div>" + spark(card.color) + "</article>";
     }).join("") + "</section>";
   }
 
