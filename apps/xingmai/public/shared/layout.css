@@ -5,6 +5,7 @@
 /* xm-menu-lite 0.1.772-menulite */
 /* xm-tabs-fig2 0.1.772-tab2 */
 /* xm-org-scroll 0.1.772-orgscroll */
+/* xm-notice-head 0.1.772-notice */
 :root,
 html[data-theme="light"] {
   --xm-sider: #ffffff;
@@ -410,6 +411,134 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
 
 .xm-notice-bar {
   flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--xm-line);
+  background: var(--xm-primary-soft);
+  color: var(--xm-ink);
+  font-size: 13px;
+  overflow: hidden;
+}
+
+.xm-notice-bar[hidden] {
+  display: none !important;
+}
+
+.xm-notice-kicker {
+  flex: 0 0 auto;
+  color: var(--xm-primary);
+  font-weight: 600;
+}
+
+.xm-notice-track-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.xm-notice-track {
+  display: flex;
+  align-items: center;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.xm-notice-track.is-static .xm-notice-link {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.xm-notice-link,
+.xm-notice-more {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.xm-notice-link:hover,
+.xm-notice-more:hover {
+  color: var(--xm-primary);
+}
+
+.xm-notice-link.is-important {
+  color: #cf1322 !important;
+  font-weight: 600;
+}
+
+.xm-notice-link.is-important:hover {
+  color: #a8071a !important;
+}
+
+.xm-notice-more {
+  margin-left: auto;
+  color: var(--xm-primary);
+  flex: 0 0 auto;
+}
+
+.xm-notice-sep,
+.xm-notice-dot {
+  color: var(--xm-muted);
+}
+
+.xm-notice-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 80;
+  padding: 24px;
+}
+
+.xm-notice-dialog {
+  width: min(520px, 100%);
+  background: var(--xm-card);
+  color: var(--xm-ink);
+  border-radius: 12px;
+  padding: 22px 22px 18px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+}
+
+.xm-notice-dialog h2 {
+  margin: 4px 0 8px;
+  font-size: 20px;
+}
+
+.xm-notice-pop-lead {
+  margin: 0 0 16px;
+  color: var(--xm-muted);
+  line-height: 1.6;
+}
+
+.xm-notice-pop-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.xm-notice-pop-actions button {
+  border: 1px solid var(--xm-line);
+  background: var(--xm-card);
+  color: inherit;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.xm-notice-pop-open {
+  background: var(--xm-primary) !important;
+  border-color: var(--xm-primary) !important;
+  color: #fff !important;
 }
 
 .xm-workspace {
@@ -428,7 +557,7 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
   background: var(--xm-top);
   border-bottom: 2px solid var(--xm-primary);
   display: flex;
-  align-items: stretch;
+  align-items: center;
   gap: 12px;
   padding: 0 16px 0 12px;
 }
@@ -455,12 +584,10 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
 
 .xm-tabs {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 8px;
   flex: 1;
   min-width: 0;
-  height: 100%;
-  padding-top: 12px;
 }
 
 .xm-tab {
@@ -471,7 +598,7 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
   height: 28px;
   padding: 0 12px;
   border: 0;
-  border-radius: 4px 4px 0 0;
+  border-radius: 4px;
   background: #f5f5f5;
   color: #595959;
   font-size: 13px;
@@ -873,6 +1000,16 @@ html[data-theme="dark"] .xm-tab-close:hover {
 
   .xm-phone-menu-bars::after {
     top: 5px;
+  }
+
+  .xm-notice-bar {
+    min-height: 32px;
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+
+  .xm-notice-kicker {
+    display: none;
   }
 }
 

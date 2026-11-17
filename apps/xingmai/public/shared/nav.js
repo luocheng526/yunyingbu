@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll v0.4.18 — 组织中心工作区自己滚 */
+/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice v0.4.18 — 公告栏和顶栏页签不贴蓝线 */
 (function () {
-  const ASSET_VER = "0.1.772-orgscroll";
+  const ASSET_VER = "0.1.772-notice";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -2789,20 +2789,59 @@
   }
 
   function watchNoticeMask() {
-    if (document.documentElement.getAttribute("data-xm-notice-watch") === "1") {
-      return;
-    }
     document.documentElement.setAttribute("data-xm-notice-watch", "1");
-    if (!document.body) {
-      return;
-    }
-    new MutationObserver(function () {
-      closeNoticePopup();
-    }).observe(document.body, { childList: true });
   }
 
-  function showNoticePopup() {
-    closeNoticePopup();
+  function showNoticePopup(item) {
+    if (!item || !item.id || document.getElementById("xm-notice-mask")) {
+      return;
+    }
+    try {
+      if (sessionStorage.getItem("xm-notice-popup") === item.id) {
+        return;
+      }
+    } catch (_err) {
+      /* ignore */
+    }
+    const mask = document.createElement("div");
+    mask.id = "xm-notice-mask";
+    mask.className = "xm-notice-mask";
+    mask.innerHTML =
+      '<div class="xm-notice-dialog' +
+      (item.level === "important" ? " is-important" : "") +
+      '" role="dialog" aria-labelledby="xm-notice-pop-title">' +
+      '<p class="xm-notice-kicker">登录提醒</p>' +
+      '<h2 id="xm-notice-pop-title"></h2>' +
+      '<p class="xm-notice-pop-lead"></p>' +
+      '<div class="xm-notice-pop-actions">' +
+      '<button type="button" class="xm-notice-pop-close">稍后再看</button>' +
+      '<button type="button" class="xm-notice-pop-open">查看公告</button></div></div>';
+    mask.querySelector("#xm-notice-pop-title").textContent = item.title || "公告";
+    mask.querySelector(".xm-notice-pop-lead").textContent = item.summary || item.body || "";
+    mask.querySelector(".xm-notice-pop-close").addEventListener("click", function () {
+      try {
+        sessionStorage.setItem("xm-notice-popup", item.id);
+      } catch (_err) {
+        /* ignore */
+      }
+      closeNoticePopup();
+    });
+    mask.querySelector(".xm-notice-pop-open").addEventListener("click", function () {
+      try {
+        sessionStorage.setItem("xm-notice-popup", item.id);
+      } catch (_err2) {
+        /* ignore */
+      }
+      closeNoticePopup();
+      openNotice(item.id);
+    });
+    mask.addEventListener("click", function (event) {
+      if (event.target === mask) {
+        closeNoticePopup();
+      }
+    });
+    ensureImportantNoticeCss();
+    document.body.appendChild(mask);
   }
 
   function bootNoticePopup() {
