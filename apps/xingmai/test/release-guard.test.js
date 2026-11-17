@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dangerousAppJsReason, ticketGuardReason } from "../src/modules/releases/document.js";
+import { MODULES } from "../src/modules/releases/store.js";
 
 const fullApp = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../src/app.js"), "utf8");
 
@@ -105,4 +106,10 @@ test("only 主框架 may submit shell files", () => {
     files: ["public/shared/nav.js", "public/shared/layout.css", "src/modules/home/nav-items.js"]
   });
   assert.equal(reason, "");
+});
+
+test("闸门 MODULES 含需求与反馈、工作汇报、月度大会、边界数据中心", () => {
+  for (const name of ["需求与反馈", "工作汇报", "月度大会", "边界数据中心"]) {
+    assert.equal(MODULES.includes(name), true, name);
+  }
 });
