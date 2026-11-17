@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap 0.1.775-dutylive 0.1.776-homehit 0.1.777-parentgo 0.1.778-nochild 0.1.779-watermark 0.1.780-marklite 0.1.781-markwho 0.1.782-lightskin 0.1.783-navbold 0.1.784-homeloop v0.4.18 — 首页版本对不上不再整页重开 */
+/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap 0.1.775-dutylive 0.1.776-homehit 0.1.777-parentgo 0.1.778-nochild 0.1.779-watermark 0.1.780-marklite 0.1.781-markwho 0.1.782-lightskin 0.1.783-navbold 0.1.784-homeloop 0.1.785-mever v0.4.18 — 个人中心脚本和壳用同一版本 */
 (function () {
-  const ASSET_VER = "0.1.784-homeloop";
+  const ASSET_VER = "0.1.785-mever";
   const origFetch = window.fetch ? window.fetch.bind(window) : null;
   if (origFetch) {
     window.fetch = function (input, init) {
