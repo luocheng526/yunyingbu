@@ -2916,10 +2916,10 @@
           '<button type="button" class="ghost site-acl-danger" data-acl-act="clear"><i class="site-acl-shortcut-ico tone-red"></i>清空全部权限<span>移除该成员的所有权限</span></button>' +
           '<button type="button" class="ghost" data-acl-act="export"><i class="site-acl-shortcut-ico tone-cyan"></i>导出配置<span>导出当前权限配置清单</span></button></div></section>' +
           '<section class="site-acl-card site-acl-help"><div class="site-acl-picked-head"><strong>配置说明</strong></div>' +
-          "<ul><li>勾选模块后，可进一步配置该模块下的具体功能。</li>" +
-          "<li>未勾选的模块，成员在左侧菜单中将不可见。</li>" +
+          "<ul><li>勾选模块后再配具体功能。</li>" +
+          "<li>未勾选的模块侧栏不可见。</li>" +
           "<li>勾选保存在服务器，配过的人侧栏立刻按这份权限显示。没配过默认全关。</li>" +
-          "<li>罗成配全部；沈子晗、韩梦凯只配自己组。店铺主数据责权不变。</li></ul></section></aside>"
+          "<li>罗成配全部；沈子晗、韩梦凯只配自己组。</li></ul></section></aside>"
         );
       }
 
@@ -2938,16 +2938,11 @@
                 .map(function (feature) {
                   const on = siteAclCap(sheet.features && sheet.features[feature.id]).see;
                   return (
-                    '<label class="site-acl-tree-feat' +
+                    '<div class="site-acl-tree-feat' +
                     (on ? " is-on" : "") +
-                    '"><input type="checkbox" data-acl-kind="feature" data-acl-id="' +
-                    escapeHtml(feature.id) +
-                    '" data-acl-cap="see"' +
-                    (on ? " checked" : "") +
-                    (locked ? " disabled" : "") +
-                    " /><span>" +
+                    '">' +
                     escapeHtml(feature.name) +
-                    "</span></label>"
+                    "</div>"
                   );
                 })
                 .join("");
@@ -3105,7 +3100,7 @@
         });
         pop.innerHTML =
           '<div class="site-acl-copy-dialog"><strong>引用他人权限</strong>' +
-          "<p>把已配成员的勾选复制到当前草稿，不会立刻保存。</p>" +
+          "<p>复制到草稿，点保存权限才生效。</p>" +
           '<div class="site-acl-tpl-list">' +
           people
             .map(function (person) {
