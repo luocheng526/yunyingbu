@@ -133,7 +133,8 @@
       ".me-tabs button{border:1px solid #eef2f7!important;background:#fff!important;border-radius:999px!important;padding:10px 18px!important;font:inherit;font-size:15px!important;font-weight:700!important;cursor:pointer;color:#64748b;display:inline-flex;align-items:center;gap:8px;box-shadow:0 2px 8px rgba(15,23,42,.04);height:auto!important;}" +
       ".me-tabs button svg{width:20px!important;height:20px!important;}" +
       ".me-tabs button.on{background:#1677ff!important;color:#fff!important;border-color:#1677ff!important;box-shadow:0 8px 16px rgba(22,119,255,.28);}" +
-      ".me-split{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:16px;align-items:start;}" +
+      ".me-split{display:grid;grid-template-columns:minmax(320px,.92fr) minmax(0,1.18fr);gap:16px;align-items:start;}" +
+      ".me-col > .me-card + .me-card{margin-top:16px;}" +
       ".me-card{background:#fff;border:1px solid #e8eef7;border-radius:20px;padding:18px 22px 12px;box-shadow:0 8px 24px rgba(15,23,42,.04);}" +
       ".me-card + .me-card{margin-top:16px;}" +
       ".me-card-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}" +
@@ -259,7 +260,17 @@
         ico('<rect x="5" y="4" width="14" height="16" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>', "currentColor", 20) +
         "操作日志</button></nav>" +
         '<div class="me-pane on" data-me-pane="basic"><div class="me-split">' +
-        '<section class="me-card"><div class="me-card-h"><h3><i class="me-bar-title"></i>个人信息</h3>' +
+        '<div class="me-col"><section class="me-card" id="me-security-card">' +
+        '<div class="me-card-h"><h3><i class="me-bar-title"></i>账号安全</h3></div>' +
+        '<p id="status" class="status" role="status"></p>' +
+        '<form id="password-form" autocomplete="off">' +
+        '<input id="current-password" type="password" required placeholder="当前密码" />' +
+        '<input id="new-password" type="password" required minlength="8" placeholder="新密码（至少 8 位）" />' +
+        '<input id="confirm-password" type="password" required minlength="8" placeholder="再次输入新密码" />' +
+        '<button class="me-btn" type="submit">保存新密码</button></form>' +
+        '<form id="logout-form"><button class="me-btn me-btn-logout" type="submit">退出登录</button></form>' +
+        '<button type="button" id="me-hard-reload" class="me-btn me-btn-hard" title="绕过缓存重新加载本页">强制刷新</button></section></div>' +
+        '<div class="me-col"><section class="me-card"><div class="me-card-h"><h3><i class="me-bar-title"></i>个人信息</h3>' +
         '<button class="me-edit" type="button" id="who-edit">' +
         ico('<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>') +
         "编辑信息</button></div>" +
@@ -282,7 +293,7 @@
         '<input id="edit-email" placeholder="邮箱" />' +
         '<button class="me-btn" type="submit">保存信息</button></form>' +
         '<span id="who-username" hidden></span></section>' +
-        "<div><section class=\"me-card\"><div class=\"me-card-h\"><h3><i class=\"me-bar-title\"></i>快捷操作</h3></div>" +
+        "<section class=\"me-card\"><div class=\"me-card-h\"><h3><i class=\"me-bar-title\"></i>快捷操作</h3></div>" +
         '<div class="me-actions">' +
         '<button class="me-act" type="button" data-go="security"><i>' +
         ico('<path d="M8 11V8a4 4 0 1 1 8 0v3M6 11h12v9H6z"/>', "#1677ff", 28) +
@@ -316,15 +327,6 @@
         '<section class="me-card"><div class="me-card-h"><h3><i class="me-bar-title"></i>登录与设备</h3>' +
         '<button class="me-link" type="button" data-go="logs">查看全部 ></button></div>' +
         '<div id="device-list"></div></section></div></div></div>' +
-        '<div class="me-pane" data-me-pane="security"><section class="me-card" style="max-width:420px">' +
-        "<h3>账号安全</h3><p id=\"status\" class=\"status\" role=\"status\"></p>" +
-        '<form id="password-form" autocomplete="off">' +
-        '<input id="current-password" type="password" required placeholder="当前密码" />' +
-        '<input id="new-password" type="password" required minlength="8" placeholder="新密码（至少 8 位）" />' +
-        '<input id="confirm-password" type="password" required minlength="8" placeholder="再次输入新密码" />' +
-        '<button class="me-btn" type="submit">保存新密码</button></form>' +
-        '<form id="logout-form"><button class="me-btn me-btn-logout" type="submit">退出登录</button></form>' +
-        '<button type="button" id="me-hard-reload" class="me-btn me-btn-hard" title="绕过缓存重新加载本页">强制刷新</button></section></div>' +
         '<div class="me-pane" data-me-pane="notice"><section class="me-card"><p class="me-empty">消息通知设置即将开放</p></section></div>' +
         '<div class="me-pane" data-me-pane="prefs"><section class="me-card"><p class="me-empty">系统偏好设置即将开放</p></section></div>' +
         '<div class="me-pane" data-me-pane="rights"><section class="me-card">' +
@@ -350,12 +352,19 @@
       }
 
       function showTab(id) {
+        const paneId = id === "security" ? "basic" : id;
         root.querySelectorAll("[data-me-tab]").forEach(function (btn) {
           btn.classList.toggle("on", btn.getAttribute("data-me-tab") === id);
         });
         root.querySelectorAll("[data-me-pane]").forEach(function (pane) {
-          pane.classList.toggle("on", pane.getAttribute("data-me-pane") === id);
+          pane.classList.toggle("on", pane.getAttribute("data-me-pane") === paneId);
         });
+        if (id === "security") {
+          const field = root.querySelector("#current-password");
+          if (field) {
+            field.focus();
+          }
+        }
       }
 
       function showAvatar(src, name) {
