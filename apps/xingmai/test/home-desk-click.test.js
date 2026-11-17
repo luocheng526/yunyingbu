@@ -138,6 +138,14 @@ test("the old client shows the login picture while the page is still opening", (
   assert.match(next, /preview: true/);
 });
 
+test("typing the code does not rebuild the whole page when the picture is already open", () => {
+  const old = "      function showDesk(st) {\n        state.desk = st || {};\n        if (!dead) {\n          paint(root, state);\n        }\n        var status = state.desk && state.desk.status;\n        if (status === \"screen\" || status === \"verify\") {\n          pollDesk();\n        }\n              img.src = \"/api/home/live-login/screen?t=\" + Date.now();\n";
+  const next = patchHomeClientSource(old);
+  assert.match(next, /!\(status === "screen" && img\)/);
+  assert.match(next, /probe.onerror/);
+  assert.doesNotMatch(next, /img\.src = "\/api\/home\/live-login\/screen\?t="/);
+});
+
 test("clicking the login picture keeps the dialog open", () => {
   assert.match(homeJs, /function applyDesk\(st\)/);
   assert.match(homeJs, /next\.open = true/);

@@ -5024,15 +5024,21 @@
       function deskShotUrl(store) {
         return "/api/home/live-login/screen?store=" + encodeURIComponent(store || "") + "&t=" + Date.now();
       }
+      var deskShotBusy = false;
       function touchDeskShot(store, message) {
         var img = root.querySelector("#xm-hm-desk-shot");
-        if (img) {
+        if (img && !deskShotBusy) {
+          deskShotBusy = true;
           var next = deskShotUrl(store);
           var preload = new Image();
           preload.onload = function () {
+            deskShotBusy = false;
             if (img.isConnected) {
               img.src = next;
             }
+          };
+          preload.onerror = function () {
+            deskShotBusy = false;
           };
           preload.src = next;
         }
@@ -5117,7 +5123,7 @@
               paint(root, state);
             }
           });
-        }, 2500);
+        }, 4000);
       }
       var deskSeq = 0;
       function closeDesk() {
@@ -5152,7 +5158,7 @@
             }
           };
           probe.src = "/api/home/live-login/screen?store=" + encodeURIComponent(name) + "&t=" + Date.now();
-        }, 600);
+        }, 1500);
       }
       function openShopLogin(shop) {
         var name = String(shop || "").trim();
