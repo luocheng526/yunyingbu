@@ -12,7 +12,7 @@ const navJs = readFileSync(join(root, "../public/shared/nav.js"), "utf8");
 const luocheng = { username: "罗成", displayName: "罗成" };
 
 test("选中菜单用浅色渐变，不要投影，暗色粉红不盖掉", () => {
-  assert.equal(SHELL_ASSET_VER, "0.1.776-homehit");
+  assert.equal(SHELL_ASSET_VER, "0.1.777-parentgo");
   assert.match(layoutCss, /xm-menu-lite 0\.1\.772-menulite/);
   assert.match(layoutCss, /\.xm-menu-item\.is-active/);
   assert.match(layoutCss, /\.xm-menu-group\.is-current > \.xm-menu-parent/);
@@ -23,12 +23,26 @@ test("选中菜单用浅色渐变，不要投影，暗色粉红不盖掉", () =>
   assert.match(layoutCss, /html\[data-theme="pink"\]/);
   assert.match(layoutCss, /--xm-primary: #1677ff/);
   assert.match(layoutCss, /--xm-primary: #f8005f/);
-  assert.match(navJs, /ASSET_VER = "0\.1\.776-homehit"/);
+  assert.match(navJs, /ASSET_VER = "0\.1\.777-parentgo"/);
   assert.match(navJs, /group\.classList\.toggle\("is-current", on\)/);
   assert.match(navJs, /parent\.classList\.toggle\("is-active", on\)/);
+  assert.match(navJs, /function groupHome\(/);
+  assert.match(navJs, /if \(dest && !on\) \{\s*go\(dest\);/);
   assert.match(navJs, /leafRoute\(current\) === deskHome\(\) && key !== deskHome\(\)/);
   assert.match(navJs, /is-open is-current/);
   assert.match(navJs, /xm-menu-item xm-menu-parent' \+[\s\S]*is-active/);
+});
+
+test("点一级星脉数据中心会进数据总揽，和点边界数据中心一样标蓝", () => {
+  assert.match(navJs, /"\/data": "\/data\/overview"/);
+  assert.match(navJs, /function groupHome\(/);
+  assert.match(navJs, /if \(dest && !on\) \{\s*go\(dest\);/);
+  const html = navMarkup("/data/overview", luocheng);
+  assert.match(html, /xm-menu-group is-open is-current" data-xm-group="\/data"/);
+  assert.match(html, /xm-menu-item xm-menu-parent is-active"/);
+  const bound = navMarkup("/bound", luocheng);
+  assert.match(bound, /xm-menu-item is-active" href="\/bound"/);
+  assert.doesNotMatch(bound, /xm-menu-group is-open is-current" data-xm-group="\/data"/);
 });
 
 test("点数据总揽时一级星脉数据中心和当前子项都标成选中", () => {
@@ -51,6 +65,7 @@ test("顶栏页签是独立表头，不贴蓝线，电脑上不出现空白菜�
   assert.match(layoutCss, /xm-tab-cap 0\.1\.774-tabcap/);
   assert.match(layoutCss, /xm-duty-live 0\.1\.775-dutylive/);
   assert.match(layoutCss, /xm-home-hit 0\.1\.776-homehit/);
+  assert.match(layoutCss, /xm-parent-go 0\.1\.777-parentgo/);
   assert.match(layoutCss, /\.xm-phone-menu,\s*\.xm-phone-mask \{\s*display:\s*none/);
   assert.match(layoutCss, /\.xm-topbar \{[\s\S]*align-items:\s*center/);
   assert.match(layoutCss, /\.xm-tabs \{[\s\S]*align-items:\s*center/);
