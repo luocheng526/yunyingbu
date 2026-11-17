@@ -727,12 +727,10 @@ async function sendRobotCard(userid, title, markdown, url, button, robotCode) {
     body: JSON.stringify({
       robotCode: robotCode || dingConfig().clientId,
       userIds: [String(userid)],
-      msgKey: "sampleActionCard",
+      msgKey: "sampleMarkdown",
       msgParam: JSON.stringify({
         title: String(title || "工作任务").slice(0, 64),
-        text: String(markdown || "").slice(0, 500),
-        singleTitle: button || "去处理",
-        singleURL: url || WORK_URL
+        text: `${String(markdown || "").slice(0, 400)}\n\n[${button || "去处理"}](${url || WORK_URL})`
       })
     }),
     signal: AbortSignal.timeout(8000)
