@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice v0.4.18 — 公告栏和顶栏页签不贴蓝线 */
+/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep v0.4.18 — 组织中心也要显示顶栏页签 */
 (function () {
-  const ASSET_VER = "0.1.772-notice";
+  const ASSET_VER = "0.1.773-tabkeep";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -1047,8 +1047,8 @@
     }
     bar.hidden = false;
     bar.removeAttribute("hidden");
-    bar.style.removeProperty("display");
-    bar.style.removeProperty("visibility");
+    bar.style.setProperty("display", "flex", "important");
+    bar.style.setProperty("visibility", "visible", "important");
     delete bar.dataset.peopleHid;
     return bar;
   }
@@ -1073,7 +1073,8 @@
   function ensureOrgScrollCss() {
     const css =
       "html body:has(.xm-shell):has(.people-page) .xm-main{overflow-x:hidden!important;overflow-y:hidden!important;}" +
-      "html body:has(.xm-shell):has(.people-page) .xm-workspace{overflow-x:auto!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch;}";
+      "html body:has(.xm-shell):has(.people-page) .xm-workspace{overflow-x:auto!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch;}" +
+      "html body:has(.xm-shell) .xm-topbar>.xm-tabs,html body:has(.xm-shell) .xm-topbar>.xm-tabs[hidden]{display:flex!important;visibility:visible!important;}";
     let el = document.getElementById("xm-org-scroll-css");
     if (!el) {
       el = document.createElement("style");
@@ -1129,6 +1130,25 @@
     });
     relaxNoticeForPeople();
     ensureOrgScrollCss();
+    revealTabBar();
+    if (onPeople) {
+      window.setTimeout(function () {
+        ensureOrgScrollCss();
+        revealTabBar();
+        pinHomeTab();
+        if (!document.querySelector(".xm-topbar .xm-tab")) {
+          paintTabs();
+        }
+      }, 0);
+      window.setTimeout(function () {
+        ensureOrgScrollCss();
+        revealTabBar();
+        pinHomeTab();
+        if (!document.querySelector(".xm-topbar .xm-tab")) {
+          paintTabs();
+        }
+      }, 80);
+    }
   }
 
   function hideForeignPages() {
@@ -1702,14 +1722,13 @@
       return;
     }
     window.__xmTabWatch = 1;
-    let queued = 0;
-    const obs = new MutationObserver(function () {
-      if (queued) {
-        return;
+    let timer = 0;
+    const kick = function () {
+      if (timer) {
+        window.clearTimeout(timer);
       }
-      queued = 1;
-      setTimeout(function () {
-        queued = 0;
+      timer = window.setTimeout(function () {
+        timer = 0;
         const bar = topbar.querySelector(".xm-tabs");
         if (!bar || !bar.querySelector(".xm-tab")) {
           paintTabs();
@@ -1718,8 +1737,14 @@
         revealTabBar();
         pinHomeTab();
       }, 0);
+    };
+    const obs = new MutationObserver(kick);
+    obs.observe(topbar, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["hidden", "style", "class", "data-people-hid"]
     });
-    obs.observe(topbar, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "style", "class"] });
   }
 
   /* xm-home-ai-diag-begin */

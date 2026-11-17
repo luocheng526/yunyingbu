@@ -6,6 +6,7 @@
 /* xm-tabs-fig2 0.1.772-tab2 */
 /* xm-org-scroll 0.1.772-orgscroll */
 /* xm-notice-head 0.1.772-notice */
+/* xm-tabs-keep 0.1.773-tabkeep */
 :root,
 html[data-theme="light"] {
   --xm-sider: #ffffff;
@@ -583,11 +584,16 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
 }
 
 .xm-tabs {
-  display: flex;
+  display: flex !important;
   align-items: center;
   gap: 8px;
   flex: 1;
   min-width: 0;
+  visibility: visible !important;
+}
+
+.xm-topbar > .xm-tabs[hidden] {
+  display: flex !important;
 }
 
 .xm-tab {
@@ -720,6 +726,13 @@ html body:has(.xm-shell):has(.people-page) .xm-workspace {
   overflow-x: auto !important;
   overflow-y: auto !important;
   -webkit-overflow-scrolling: touch;
+}
+
+/* 组织中心 people.js 进页会 hidden/display:none 顶栏页签。壳页签必须一直在。 */
+html body:has(.xm-shell) .xm-topbar > .xm-tabs,
+html body:has(.xm-shell) .xm-topbar > .xm-tabs[hidden] {
+  display: flex !important;
+  visibility: visible !important;
 }
 
 .xm-page {
