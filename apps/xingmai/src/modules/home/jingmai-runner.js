@@ -385,7 +385,15 @@ export async function reloginInput(body) {
       height: Number(body.imageHeight) || 0
     });
   }
-  return reloginState(name);
+  const started = Date.now();
+  let state = await reloginState(name);
+  while (state.status === "screen" && Date.now() - started < 8000) {
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 400);
+    });
+    state = await reloginState(name);
+  }
+  return state;
 }
 
 export function jingmaiBrowser() {
