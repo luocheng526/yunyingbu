@@ -45,7 +45,7 @@
     return ["待执行", "进行中", "已退回"].indexOf(task.status) >= 0 && Date.parse(task.due_at + "+08:00") < now;
   }
 
-  function mount(host, tab) {
+  function mount(host, tab, openId) {
     ensureStyle();
     var queue = queues[tab] || "mine";
     var mode = queue === "publish" ? "发布任务" : queue === "review" ? "待检查" : "全部任务";
@@ -146,7 +146,10 @@
 
     function openTask(id) {
       var task = items.find(function (item) { return item.id === id; });
-      if (!task) return;
+      if (!task) {
+        say("没有这条任务，或当前账号不能处理", true);
+        return;
+      }
       var actions = [];
       if (task.assignee === ctx.me && task.status === "待执行") actions.push("start");
       if (task.assignee === ctx.me && ["待执行", "进行中", "已退回"].indexOf(task.status) >= 0) actions.push("submit");
@@ -284,7 +287,9 @@
         host.innerHTML = '<div class="work-card"><div class="work-empty">对不上组织中心的人，还不能收发任务。</div></div>';
         return;
       }
-      return reload();
+      return reload().then(function () {
+        if (openId) openTask(openId);
+      });
     }).catch(function (err) {
       host.innerHTML = '<div class="work-card"><div class="work-empty">' + esc(err.message) + "</div></div>";
     });

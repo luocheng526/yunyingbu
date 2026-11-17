@@ -2,6 +2,17 @@
 import { dbMode, query } from "../profile/auth.js";
 
 const WORK_URL = "https://zx.xingmaierp.cc/work";
+
+export function workLink(tab, taskId) {
+  const url = new URL(WORK_URL);
+  if (tab) {
+    url.searchParams.set("tab", tab);
+  }
+  if (taskId) {
+    url.searchParams.set("task", String(taskId));
+  }
+  return url.toString();
+}
 const sentKeys = new Set();
 const binds = new Map();
 let attendanceCache = new Map();
@@ -689,7 +700,7 @@ export function dingUserOf(personId) {
   return binds.get(Number(personId))?.userid || "";
 }
 
-export async function sendTaskNotice(userid, title, markdown) {
+export async function sendTaskNotice(userid, title, markdown, url) {
   const agentId = currentAgentId();
   if (!agentId || !userid) {
     return false;
@@ -702,8 +713,8 @@ export async function sendTaskNotice(userid, title, markdown) {
       action_card: {
         title: String(title || "工作任务").slice(0, 64),
         markdown: String(markdown || "").slice(0, 500),
-        single_title: "打开工作汇报",
-        single_url: WORK_URL
+        single_title: "去处理",
+        single_url: url || WORK_URL
       }
     }
   });
@@ -726,7 +737,7 @@ export async function sendWorkNotice(userid) {
         title: "今天的日报还没提交",
         markdown: "今天的工作日报还没交，请在今天提交。",
         single_title: "去填日报",
-        single_url: WORK_URL
+        single_url: workLink("todo")
       }
     }
   });

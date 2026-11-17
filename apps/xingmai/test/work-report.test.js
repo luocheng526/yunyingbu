@@ -10,6 +10,8 @@ import { APP_MODULES, renderAppShell, SHELL_ASSET_VER } from "../src/modules/pro
 import { resetPeopleStore } from "../src/modules/people/store.js";
 import { workRouter } from "../src/modules/work/router.js";
 import { resetWorkStore } from "../src/modules/work/store.js";
+import { saveDingBinds } from "../src/modules/work/diary.js";
+import { setDingTransport } from "../src/modules/work/dingtalk.js";
 import { setTaskNotifier } from "../src/modules/work/tasks.js";
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -83,9 +85,13 @@ test("填写日报页用看板，空的时候仍能写下日报", () => {
   assert.match(js, /function renderSummary\(\)/);
   assert.match(js, /function renderDuty\(\)/);
   assert.match(js, /tabBtn\("taskPublish", "发布任务"\)/);
-  assert.match(js, /tabBtn\("taskMine", "我的任务"\)/);
-  assert.match(js, /tabBtn\("taskReview", "待检查任务"\)/);
+  assert.match(js, /tabBtn\("taskMine", "我的任务", state\.badges\.mine\)/);
+  assert.match(js, /tabBtn\("taskReview", "待检查任务", state\.badges\.review\)/);
   assert.match(js, /data-task-host/);
+  assert.match(js, /function refreshBadges\(root\)/);
+  assert.match(js, /readDeepLink\(\)/);
+  const login = readFileSync(join(root, "../public/login.html"), "utf8");
+  assert.match(login, /back.indexOf\("\/work"\) === 0/);
   const tasks = readFileSync(join(root, "../public/shared/modules/work-tasks.js"), "utf8");
   assert.match(tasks, /queue === "publish" \? "published"/);
   assert.match(tasks, /优先跟进/);
@@ -456,8 +462,8 @@ test("发布、执行、退回、再提交、检查通过走同一条任务", as
   resetPeopleStore();
   resetWorkStore();
   const notices = [];
-  setTaskNotifier(async (personId, title, text) => {
-    notices.push({ personId: String(personId), title, text });
+  setTaskNotifier(async (personId, title, text, url) => {
+    notices.push({ personId: String(personId), title, text, url: url || "" });
     return true;
   });
   let current = luocheng;
@@ -501,6 +507,17 @@ test("发布、执行、退回、再提交、检查通过走同一条任务", as
     assert.equal(notices.length, 1);
     assert.equal(notices[0].personId, "4");
     assert.match(notices[0].text, /核对活动价/);
+    assert.match(notices[0].text, /2026-11-17 18:00/);
+    assert.match(notices[0].url, /tab=taskMine/);
+    assert.match(notices[0].url, /task=task-role-1/);
+    current = zhang;
+    const openBadge = await json(base, "/api/work/badges");
+    assert.equal(openBadge.data.mine, 1);
+    assert.equal(openBadge.data.review, 0);
+    current = han;
+    const hanBadge = await json(base, "/api/work/badges");
+    assert.equal(hanBadge.data.review, 0);
+    current = luocheng;
 
     current = zhang;
     const mine = await json(base, "/api/work/tasks?queue=mine");
@@ -536,6 +553,14 @@ test("发布、执行、退回、再提交、检查通过走同一条任务", as
     assert.match(repeat.data.error, /刷新/);
     assert.equal(notices.length, 2);
     assert.equal(notices[1].personId, "2");
+    assert.match(notices[1].url, /tab=taskReview/);
+    assert.match(notices[1].text, /截止 2026-11-17 18:00/);
+    current = zhang;
+    const afterSubmit = await json(base, "/api/work/badges");
+    assert.equal(afterSubmit.data.mine, 0);
+    current = han;
+    const reviewBadge = await json(base, "/api/work/badges");
+    assert.equal(reviewBadge.data.review, 1);
 
     current = han;
     const review = await json(base, "/api/work/tasks?queue=review");
@@ -557,6 +582,13 @@ test("发布、执行、退回、再提交、检查通过走同一条任务", as
     assert.equal(returned.data.task.status, "已退回");
     assert.equal(notices.at(-1).personId, "4");
     assert.match(notices.at(-1).text, /少了两个 SPU/);
+    assert.match(notices.at(-1).url, /tab=taskMine/);
+    current = zhang;
+    const returnedBadge = await json(base, "/api/work/badges");
+    assert.equal(returnedBadge.data.mine, 1);
+    current = han;
+    const returnedReview = await json(base, "/api/work/badges");
+    assert.equal(returnedReview.data.review, 0);
 
     current = zhang;
     const bounced = await json(base, "/api/work/tasks?queue=mine");
@@ -588,6 +620,12 @@ test("发布、执行、退回、再提交、检查通过走同一条任务", as
     current = zhang;
     const finished = await json(base, "/api/work/tasks?queue=mine");
     assert.equal(finished.data.rows[0].status, "已完成");
+    const clearMine = await json(base, "/api/work/badges");
+    assert.equal(clearMine.data.mine, 0);
+    current = han;
+    const clearReview = await json(base, "/api/work/badges");
+    assert.equal(clearReview.data.review, 0);
+    current = zhang;
     current = luocheng;
     const publishedList = await json(base, "/api/work/tasks?queue=published");
     assert.equal(publishedList.data.rows[0].status, "已完成");
@@ -657,6 +695,91 @@ test("任务附件用表单上传，重复发布不新增", async () => {
   } finally {
     resetWorkStore();
     await close();
+  }
+});
+
+test("逾期任务只计一次，新的一条单独提醒，待办排人只提醒一次", async () => {
+  resetPeopleStore();
+  resetWorkStore();
+  const notices = [];
+  setTaskNotifier(async (personId, title, text, url) => {
+    notices.push({ personId: String(personId), title, text, url: url || "" });
+    return true;
+  });
+  let current = luocheng;
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => {
+    req.user = current;
+    next();
+  });
+  app.use("/api/work", workRouter);
+  const { base, close } = await listen(app);
+  const late = {
+    title: "逾期仍算一条",
+    assignee: "4",
+    reviewer: "2",
+    start_at: "2026-11-01T09:00",
+    due_at: "2026-11-02T09:00"
+  };
+  try {
+    await json(base, "/api/work/tasks/publish", { method: "POST", body: { ...late, id: "task-late-1" } });
+    await json(base, "/api/work/tasks/publish", { method: "POST", body: { ...late, id: "task-late-2", title: "第二条" } });
+    await json(base, "/api/work/tasks/publish", { method: "POST", body: { ...late, id: "task-late-2", title: "第二条重复" } });
+    const third = await json(base, "/api/work/tasks/publish", { method: "POST", body: { ...late, id: "task-late-3", title: "第三条" } });
+    assert.equal(third.status, 200);
+    assert.equal(notices.length, 3);
+    assert.equal(notices.filter((item) => item.personId === "4").length, 3);
+    current = zhang;
+    const badges = await json(base, "/api/work/badges");
+    assert.equal(badges.data.mine, 3);
+    current = han;
+    assert.equal((await json(base, "/api/work/badges")).data.review, 0);
+  } finally {
+    resetWorkStore();
+    await close();
+  }
+
+  resetPeopleStore();
+  resetWorkStore();
+  const { resetDingStore } = await import("../src/modules/work/dingtalk.js");
+  resetDingStore();
+  process.env.DINGTALK_CLIENT_ID = "test-client";
+  process.env.DINGTALK_CLIENT_SECRET = "test-secret";
+  process.env.DINGTALK_AGENT_ID = "100";
+  const calls = [];
+  setDingTransport(async (url, options) => {
+    calls.push(String(options?.body || ""));
+    if (String(url).includes("accessToken")) {
+      return { json: async () => ({ accessToken: "token", expireIn: 7200 }) };
+    }
+    return { json: async () => ({ errcode: 0, result: {} }) };
+  });
+  try {
+    await saveDingBinds(luocheng, { binds: [{ personId: 4, userid: "u4" }] }, true);
+    const { saveMembers } = await import("../src/modules/work/store.js");
+    await saveMembers(luocheng, { personId: 4, deptCode: "ops" });
+    await saveMembers(luocheng, { personId: 4, deptCode: "ops" });
+    const todoNotes = calls.filter((body) => body.includes("待办事项") && body.includes("tab=todo"));
+    assert.equal(todoNotes.length, 1);
+    assert.match(todoNotes[0], /今天的日报还没提交/);
+    const app2 = express();
+    app2.use(express.json());
+    app2.use("/api/work", withUser(zhang), workRouter);
+    const staff = await listen(app2);
+    try {
+      const badge = await json(staff.base, "/api/work/badges");
+      assert.equal(badge.data.todo, 1);
+    } finally {
+      await staff.close();
+    }
+  } finally {
+    delete process.env.DINGTALK_CLIENT_ID;
+    delete process.env.DINGTALK_CLIENT_SECRET;
+    delete process.env.DINGTALK_AGENT_ID;
+    setDingTransport(globalThis.fetch);
+    resetDingStore();
+    resetWorkStore();
   }
 });
 

@@ -16,8 +16,8 @@ import {
   startDiaryReminder,
   syncDingBinds
 } from "./diary.js";
-import { getReport, getSettings, isWorkAdmin, saveMembers, saveReport, saveTemplate, snapshot } from "./store.js";
-import { actTask, listTasks, publishTask, readTaskFile, taskContext } from "./tasks.js";
+import { getReport, getSettings, isWorkAdmin, myTodoCount, saveMembers, saveReport, saveTemplate, snapshot } from "./store.js";
+import { actTask, listTasks, publishTask, readTaskFile, taskContext, taskCounts } from "./tasks.js";
 
 export const workRouter = Router();
 startDiaryReminder();
@@ -271,6 +271,15 @@ workRouter.put(
   "/diary/ding",
   wrap(async (req, res) => {
     sendResult(res, await saveDingBinds(req.user, req.body || {}, isWorkAdmin(req.user)), 403);
+  })
+);
+
+workRouter.get(
+  "/badges",
+  wrap(async (req, res) => {
+    const todo = await myTodoCount(req.user);
+    const counts = await taskCounts(req.user);
+    sendResult(res, { ok: true, todo, mine: counts.mine, review: counts.review });
   })
 );
 

@@ -1,7 +1,7 @@
 /* 工作任务：发布、执行、检查走同一条记录。 */
 import { randomUUID } from "node:crypto";
 import { dbMode, query } from "../profile/auth.js";
-import { dingUserOf, sendTaskNotice } from "./dingtalk.js";
+import { dingUserOf, sendTaskNotice, workLink } from "./dingtalk.js";
 import { matchPerson, orgPeople } from "./store.js";
 
 const tasks = new Map();
@@ -67,13 +67,13 @@ function lock(id, fn) {
   return run;
 }
 
-async function defaultNotify(personId, title, text) {
+async function defaultNotify(personId, title, text, url) {
   const userid = dingUserOf(personId);
   if (!userid) {
     return false;
   }
   try {
-    return await sendTaskNotice(userid, title, text);
+    return await sendTaskNotice(userid, title, text, url);
   } catch {
     return false;
   }
@@ -227,12 +227,16 @@ function takeFiles(input) {
   return { ok: true, files };
 }
 
-async function tell(personId, title, text) {
+async function tell(personId, title, text, url) {
   try {
-    await notify(personId, title, text);
+    await notify(personId, title, text, url);
   } catch {
     /* 通知失败不回滚任务。 */
   }
+}
+
+function dueText(value) {
+  return String(value || "").slice(0, 16).replace("T", " ");
 }
 
 export async function taskContext(user) {
@@ -339,7 +343,7 @@ export async function publishTask(user, input) {
       ]
     };
     await saveTask(task);
-    await tell(assignee, "新的工作任务", `你有一条新任务：${title}。请在工作汇报里查看。`);
+    await tell(assignee, "新的工作任务", `我的任务「${title}」，截止 ${dueText(dueAt)}。`, workLink("taskMine", id));
     return { ok: true, task: view(task) };
   });
 }
@@ -399,14 +403,35 @@ export async function actTask(user, input) {
     await saveTask(task);
     if (spec.notice) {
       const target = task[spec.notice];
+      const due = dueText(task.due_at);
       const text =
         spec.notice === "reviewer"
-          ? `任务「${task.title}」已提交检查。`
-          : `任务「${task.title}」被退回。${note}`;
-      await tell(target, spec.notice === "reviewer" ? "任务待检查" : "任务被退回", text);
+          ? `待检查任务「${task.title}」，截止 ${due}。`
+          : `我的任务「${task.title}」被退回。${note} 截止 ${due}。`;
+      const tab = spec.notice === "reviewer" ? "taskReview" : "taskMine";
+      await tell(target, spec.notice === "reviewer" ? "任务待检查" : "任务被退回", text, workLink(tab, task.id));
     }
     return { ok: true, task: view(task) };
   });
+}
+
+export async function taskCounts(user) {
+  await ready();
+  const me = await meOf(user);
+  if (!me) {
+    return { mine: 0, review: 0 };
+  }
+  let mine = 0;
+  let review = 0;
+  for (const task of tasks.values()) {
+    if (task.assignee === me.id && ["待执行", "进行中", "已退回"].includes(task.status)) {
+      mine += 1;
+    }
+    if (task.reviewer === me.id && task.status === "待检查") {
+      review += 1;
+    }
+  }
+  return { mine, review };
 }
 
 export async function readTaskFile(user, fileId) {

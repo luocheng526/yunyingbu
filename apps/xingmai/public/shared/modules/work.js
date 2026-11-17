@@ -24,6 +24,9 @@
   summarySpu: "",
   summaryDialog: null,
   todoOpen: false,
+  badges: { todo: 0, mine: 0, review: 0 },
+  openTask: "",
+  badgeTimer: 0,
   duty: null,
   diarySettings: null,
   meta: null,
@@ -1700,12 +1703,18 @@
   );
  }
 
+ function dot(count) {
+  var n = Number(count) || 0;
+  if (n < 1) return "";
+  return '<i class="work-dot">' + (n > 99 ? "99" : n) + "</i>";
+ }
+
  function paint(root) {
   ensureStyle();
   var admin = isAdmin();
   var leader = Boolean(state.diary && state.diary.leader);
-  function tabBtn(id, label) {
-   return '<button type="button" class="work-tab" data-tab="' + id + '" aria-selected="' + (state.tab === id) + '">' + label + "</button>";
+  function tabBtn(id, label, count) {
+   return '<button type="button" class="work-tab" data-tab="' + id + '" aria-selected="' + (state.tab === id) + '">' + label + dot(count) + "</button>";
   }
   var tabs =
    '<div class="work-tabs" role="tablist">' +
@@ -1716,11 +1725,11 @@
    '<button type="button" class="work-tab" data-tab="todo" aria-selected="' +
    (state.tab === "todo") +
    '">待办事项' +
-   (state.todoOpen ? '<i class="work-dot">1</i>' : "") +
+   dot(state.badges.todo) +
    "</button>" +
    tabBtn("taskPublish", "发布任务") +
-   tabBtn("taskMine", "我的任务") +
-   tabBtn("taskReview", "待检查任务") +
+   tabBtn("taskMine", "我的任务", state.badges.mine) +
+   tabBtn("taskReview", "待检查任务", state.badges.review) +
    "</div>";
   var taskTab = state.tab === "taskPublish" || state.tab === "taskMine" || state.tab === "taskReview";
   var body =
@@ -1777,7 +1786,9 @@
   if (!host) return;
   function run() {
    if (!host.isConnected || state.tab !== tab || !window.XmWorkTasks) return;
-   window.XmWorkTasks.mount(host, tab);
+   var openId = state.openTask;
+   state.openTask = "";
+   window.XmWorkTasks.mount(host, tab, openId);
   }
   if (window.XmWorkTasks) {
    run();
@@ -1789,7 +1800,7 @@
    return;
   }
   var script = document.createElement("script");
-  script.src = "/shared/modules/work-tasks.js?v=task2";
+  script.src = "/shared/modules/work-tasks.js?v=task3";
   script.setAttribute("data-work-tasks", "");
   script.onload = run;
   script.onerror = function () {
@@ -1854,7 +1865,18 @@
   state.diary = await diaryPromise;
   var todayRows = todayPromise ? (await todayPromise).rows : state.report.rows;
   var mine = mineIn(todayRows);
-  state.todoOpen = Boolean(mine && mine.status === "未报");
+  var badgeData = await api("/api/work/badges").catch(function () { return null; });
+  if (badgeData) {
+   state.badges = {
+    todo: Number(badgeData.todo) || 0,
+    mine: Number(badgeData.mine) || 0,
+    review: Number(badgeData.review) || 0
+   };
+   state.todoOpen = state.badges.todo > 0;
+  } else {
+   state.todoOpen = Boolean(mine && mine.status === "未报");
+   state.badges.todo = state.todoOpen ? 1 : 0;
+  }
   state.diaryDraftDate = "";
   if (settingsPromise) {
    state.settings = await settingsPromise;
@@ -2427,11 +2449,54 @@
   });
  }
 
+ function readDeepLink() {
+  var params;
+  try {
+   params = new URLSearchParams(window.location.search);
+  } catch (err) {
+   return;
+  }
+  var tab = params.get("tab") || "";
+  if (tab === "todo" || tab === "taskPublish" || tab === "taskMine" || tab === "taskReview" || tab === "today") {
+   state.tab = tab;
+  }
+  state.openTask = params.get("task") || "";
+ }
+
+ function refreshBadges(root) {
+  return api("/api/work/badges").then(function (data) {
+   state.badges = {
+    todo: Number(data.todo) || 0,
+    mine: Number(data.mine) || 0,
+    review: Number(data.review) || 0
+   };
+   state.todoOpen = state.badges.todo > 0;
+   var map = { todo: state.badges.todo, taskMine: state.badges.mine, taskReview: state.badges.review };
+   Object.keys(map).forEach(function (id) {
+    var btn = root.querySelector('.work-tab[data-tab="' + id + '"]');
+    if (!btn) return;
+    var mark = btn.querySelector(".work-dot");
+    if (!map[id]) {
+     if (mark) mark.remove();
+     return;
+    }
+    if (!mark) {
+     mark = document.createElement("i");
+     mark.className = "work-dot";
+     btn.appendChild(mark);
+    }
+    mark.textContent = String(map[id] > 99 ? 99 : map[id]);
+   });
+   paintNavBadge();
+  }).catch(function () {});
+ }
+
  window.XmModules = window.XmModules || {};
  window.XmModules["/work"] = {
   mount: function (root) {
    ensureStyle();
    state.tab = "today";
+   readDeepLink();
    state.date = "";
    state.dept = "";
    state.settingsDept = "ops";
@@ -2450,7 +2515,14 @@
     bind(root);
    }
    reload(root).catch(oops(root));
+   if (state.badgeTimer) clearInterval(state.badgeTimer);
+   state.badgeTimer = setInterval(function () {
+    if (!root.isConnected) return;
+    refreshBadges(root);
+   }, 10000);
    return function unmount() {
+    clearInterval(state.badgeTimer);
+    state.badgeTimer = 0;
     root.innerHTML = "";
    };
   }

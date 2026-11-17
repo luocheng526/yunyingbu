@@ -4,6 +4,7 @@ import { listGrants, listPeople, listShops } from "../people/store.js";
 import {
   claimReminder,
   confirmedBinds,
+  dingUserOf,
   dingPublic,
   discoverAgent,
   inRemindWindow,
@@ -14,7 +15,9 @@ import {
   resetDingStore,
   saveAppConfig,
   saveBinds,
+  sendTaskNotice,
   sendWorkNotice,
+  workLink,
   shanghaiNow,
   syncBinds
 } from "./dingtalk.js";
@@ -1218,6 +1221,45 @@ export async function saveDingBinds(user, input, isAdmin) {
   const rows = (Array.isArray(input?.binds) ? input.binds : []).filter((row) => known.has(Number(row.personId)));
   await saveBinds(rows.map((row) => ({ personId: row.personId, userid: row.userid, match: "人工" })));
   return getDiarySettings(user, true);
+}
+
+export async function noteMemberAdded(personId) {
+  await readyDiary();
+  const date = shanghaiNow().date;
+  const packed = await obligationBundle(date);
+  const person = packed.bundle.people.find((item) => Number(item.id) === Number(personId));
+  const roster = await rosterReader();
+  if (!person || !roster.memberDept(person.id)) {
+    return { sent: false };
+  }
+  const obligation = await diaryObligation({
+    person,
+    date,
+    onRoster: true,
+    templateFilled: roster.templateFilled(person, date),
+    templateLabels: roster.templateLabels(person, date),
+    bundle: packed.bundle,
+    reportsByPerson: packed.reportsByPerson,
+    attendance: packed.attendance
+  });
+  if (obligation.status !== "未报") {
+    return { sent: false };
+  }
+  const userid = dingUserOf(person.id);
+  if (!userid) {
+    return { sent: false };
+  }
+  const claimed = await claimReminder(person.id, `${date}#new`);
+  if (!claimed) {
+    return { sent: false };
+  }
+  try {
+    await sendTaskNotice(userid, "待办事项", `今天的日报还没提交。截止日期 ${date}。`, workLink("todo"));
+    return { sent: true };
+  } catch (error) {
+    await releaseReminder(person.id, `${date}#new`);
+    return { sent: false, error: error.publicMessage || "钉钉接口失败" };
+  }
 }
 
 export async function reminderTargets(date) {

@@ -1,6 +1,7 @@
 /* 工作汇报填报。 */
 import { dbMode, query } from "../profile/auth.js";
-import { bindRoster, diaryObligation, loadOrg, obligationBundle, readyDiary, resetDiaryStore } from "./diary.js";
+import { bindRoster, diaryObligation, loadOrg, noteMemberAdded, obligationBundle, readyDiary, resetDiaryStore } from "./diary.js";
+import { releaseReminder } from "./dingtalk.js";
 import { resetTaskStore } from "./tasks.js";
 
 export const WORK_DEPTS = [
@@ -499,8 +500,14 @@ export async function saveMembers(user, input) {
       if (dbMode() === "mysql") {
         await query("DELETE FROM work_report_members WHERE person_id = ?", [personId]);
       }
+      try {
+        await releaseReminder(personId, `${todayShanghai()}#new`);
+      } catch {
+        /* 取消提醒标记失败不影响移出。 */
+      }
       continue;
     }
+    const isNew = !members.has(personId);
     members.set(personId, deptCode);
     if (dbMode() === "mysql") {
       await query(
@@ -510,8 +517,30 @@ export async function saveMembers(user, input) {
         [personId, deptCode, nowStamp()]
       );
     }
+    if (isNew) {
+      try {
+        await noteMemberAdded(personId);
+      } catch {
+        /* 提醒失败不影响排进部门。 */
+      }
+    }
   }
   return getSettings(user);
+}
+
+export async function myTodoCount(user) {
+  await readyStore();
+  const me = await matchPerson(user);
+  if (!me || me.status === "离职") {
+    return 0;
+  }
+  const deptCode = members.get(Number(me.id));
+  if (!deptCode) {
+    return 0;
+  }
+  const date = todayShanghai();
+  const row = await applyDayStatus(reportOf(me, deptCode, date), me, date, await obligationBundle(date));
+  return row.status === "未报" ? 1 : 0;
 }
 
 export async function saveTemplate(user, input) {
