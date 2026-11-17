@@ -1,4 +1,4 @@
-/* xm-module-people org-board 0.1.237-acl-live */
+/* xm-module-people org-board 0.1.238-org-console */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.237-acl-live";
+    const href = "/people.css?v=0.1.238-org-console";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -148,7 +148,7 @@
       ".people-page{overflow:visible;padding-bottom:24px;}" +
       ".people-page table,.people-page th,.people-page td,.people-page .org-cell,.people-page .org-link,.people-page .tag{-webkit-user-select:text!important;user-select:text!important;-webkit-user-drag:none;}" +
       ".people-page input,.people-page textarea{-webkit-user-select:text!important;user-select:text!important;-webkit-user-drag:auto;pointer-events:auto!important;}" +
-      ".people-page .org-toolbar{position:static;background:var(--xm-bg,#f0f2f5);}" +
+      ".people-page .org-toolbar{position:static;background:#fff;}" +
       ".people-page .org-filter-pop[hidden]{display:none!important;}" +
       ".people-page .org-table-wrap{overflow:visible!important;max-height:none!important;}" +
       ".people-page table{border-collapse:separate;border-spacing:0;}" +
@@ -220,7 +220,18 @@
       }
       document.addEventListener("wheel", onPeopleWheel, { passive: false, capture: true });
       root.innerHTML =
-        '<main class="page people-page">' +
+        '<main class="page people-page org-console">' +
+        '<header class="org-console-head">' +
+        '<div class="org-console-brand">' +
+        '<span class="org-console-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><rect x="4" y="6" width="24" height="20" rx="4"/><path d="M10 16h12"/><path d="M10 12h7"/><path d="M10 20h5"/></svg></span>' +
+        "<div><h1>组织中心</h1><p>管理店铺主数据、成员花名册、责权、网站权限和公告，保障组织高效协同</p></div></div>" +
+        "</header>" +
+        '<section class="org-console-kpis" id="org-hero-kpis"></section>' +
+        '<section class="org-console-charts">' +
+        '<article class="org-chart-card"><div class="org-chart-head"><strong>组织架构分布</strong><span>按部门人数</span></div><div class="org-chart-body" id="org-chart-org"></div></article>' +
+        '<article class="org-chart-card"><div class="org-chart-head"><strong>店铺运营状态</strong></div><div class="org-chart-body" id="org-chart-stores"></div></article>' +
+        '<article class="org-chart-card"><div class="org-chart-head"><strong>坐席使用情况</strong><span id="org-chart-seats-meta"></span></div><div class="org-chart-body" id="org-chart-seats"></div></article>' +
+        "</section>" +
         '<nav class="org-tabs" id="org-tabs" aria-label="组织中心功能">' +
         '<button type="button" class="org-tab is-active" data-pane="stores">' +
         '<span class="org-tab-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.4"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.4"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.4"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.4"/></svg></span>' +
@@ -242,17 +253,16 @@
         '<span class="org-tab-name">公告中心</span></button>' +
         "</nav>" +
         '<div class="org-pane" data-pane="stores">' +
-        '<div class="org-kpis" id="org-kpis"></div>' +
         '<div class="org-toolbar">' +
         '<div class="org-search-form" id="org-search-form">' +
         '<input type="text" id="org-q" placeholder="店铺ID / 商家ID / 店铺名 / 历史店名 / 人员" autocomplete="off" spellcheck="false" />' +
-        '<button type="button" id="org-search">搜索</button>' +
+        '<button type="button" id="org-search">查询</button>' +
         "</div>" +
         '<span class="spacer" id="org-count"></span>' +
         '<button type="button" class="ghost" id="org-template">下载模板</button>' +
         '<button type="button" class="ghost" id="org-import">导入</button>' +
         '<input type="file" id="org-import-file" accept=".csv,.txt,text/csv,text/plain" hidden />' +
-        '<button type="button" class="ghost" id="org-export">导出本筛</button>' +
+        '<button type="button" class="ghost" id="org-export">导出</button>' +
         '<button type="button" id="org-add">+ 新增店铺</button>' +
         "</div>" +
         '<p class="status error" id="org-error" hidden></p>' +
@@ -271,6 +281,7 @@
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="remark"><span class="org-filter-name">店铺情况备注</span><span class="org-filter-caret">▾</span></button></th>' +
         "<th>更新时间</th><th>退店时间</th><th>登录主账号</th><th>密码</th><th>操作</th>" +
         '</tr></thead><tbody id="org-tbody"></tbody></table></div>' +
+        '<div class="org-table-foot" id="org-table-foot"></div>' +
         '<div class="org-filter-pop" id="org-filter-pop" hidden></div></div>' +
         '<div class="org-pane" data-pane="members" hidden>' +
         '<section class="panel">' +
@@ -424,7 +435,7 @@
         '<button type="submit">保存密码</button>' +
         "</div></form></div></main>";
 
-      const kpis = root.querySelector("#org-kpis");
+      const kpis = root.querySelector("#org-hero-kpis");
       const tbody = root.querySelector("#org-tbody");
       const qInput = root.querySelector("#org-q");
       const errorEl = root.querySelector("#org-error");
@@ -898,27 +909,274 @@
         return String((row && row.statusKey) || "") === "operating";
       }
 
-      function renderKpis(summary) {
-        const items = [
-          ["店铺总数", summary.total],
-          ["运营中", summary.operating],
-          ["缺店铺ID", summary.missingStoreId],
-          ["缺商家ID", summary.missingMerchant],
-          ["缺主账号", summary.missingLogin],
-          ["缺密码", summary.missingPassword],
-          ["缺运营", summary.missingOwner]
-        ];
-        kpis.innerHTML = items
-          .map(function (item) {
-            return (
-              '<article class="org-kpi"><div class="label">' +
-              escapeHtml(item[0]) +
-              '</div><div class="value">' +
-              escapeHtml(item[1]) +
-              "</div></article>"
+      let lastSummary = { total: 0, operating: 0, missingStoreId: 0, missingMerchant: 0, missingLogin: 0, missingPassword: 0, missingOwner: 0, listed: 0, statusCounts: {} };
+      let lastConsolePeople = [];
+
+      function sparkPath() {
+        return "M2 16 C 10 8, 18 22, 30 12 S 50 6, 70 14 90 20, 110 10";
+      }
+
+      function donutSvg(items, colors, centerLabel, centerValue) {
+        const total = items.reduce(function (sum, item) {
+          return sum + Number(item.value || 0);
+        }, 0);
+        const cx = 54;
+        const cy = 54;
+        const outer = 40;
+        const inner = 24;
+        let angle = -Math.PI / 2;
+        const slices =
+          total <= 0
+            ? '<circle cx="54" cy="54" r="40" fill="none" stroke="#e8eef5" stroke-width="16"></circle>'
+            : items
+                .map(function (item, index) {
+                  const value = Number(item.value || 0);
+                  if (!value) {
+                    return "";
+                  }
+                  const sweep = (value / total) * Math.PI * 2;
+                  const start = angle;
+                  const end = angle + sweep;
+                  angle = end;
+                  const large = sweep > Math.PI ? 1 : 0;
+                  const x0 = cx + outer * Math.cos(start);
+                  const y0 = cy + outer * Math.sin(start);
+                  const x1 = cx + outer * Math.cos(end);
+                  const y1 = cy + outer * Math.sin(end);
+                  const x2 = cx + inner * Math.cos(end);
+                  const y2 = cy + inner * Math.sin(end);
+                  const x3 = cx + inner * Math.cos(start);
+                  const y3 = cy + inner * Math.sin(start);
+                  return (
+                    '<path d="M ' +
+                    x0.toFixed(2) +
+                    " " +
+                    y0.toFixed(2) +
+                    " A " +
+                    outer +
+                    " " +
+                    outer +
+                    " 0 " +
+                    large +
+                    " 1 " +
+                    x1.toFixed(2) +
+                    " " +
+                    y1.toFixed(2) +
+                    " L " +
+                    x2.toFixed(2) +
+                    " " +
+                    y2.toFixed(2) +
+                    " A " +
+                    inner +
+                    " " +
+                    inner +
+                    " 0 " +
+                    large +
+                    " 0 " +
+                    x3.toFixed(2) +
+                    " " +
+                    y3.toFixed(2) +
+                    ' Z" fill="' +
+                    colors[index % colors.length] +
+                    '"></path>'
+                  );
+                })
+                .join("");
+        return (
+          '<svg class="org-donut" viewBox="0 0 108 108" aria-hidden="true">' +
+          slices +
+          '<text x="54" y="50" text-anchor="middle" class="org-donut-label">' +
+          escapeHtml(centerLabel || "") +
+          "</text>" +
+          '<text x="54" y="68" text-anchor="middle" class="org-donut-value">' +
+          escapeHtml(centerValue == null ? total : centerValue) +
+          "</text></svg>"
+        );
+      }
+
+      function legendHtml(items, colors) {
+        const total = items.reduce(function (sum, item) {
+          return sum + Number(item.value || 0);
+        }, 0) || 1;
+        return (
+          '<ul class="org-chart-legend">' +
+          items
+            .map(function (item, index) {
+              const value = Number(item.value || 0);
+              const pct = Math.round((value / total) * 1000) / 10;
+              return (
+                "<li><i style=\"background:" +
+                colors[index % colors.length] +
+                '"></i><span>' +
+                escapeHtml(item.label) +
+                "</span><b>" +
+                escapeHtml(value) +
+                " 人</b><em>" +
+                pct +
+                "%</em></li>"
+              );
+            })
+            .join("") +
+          "</ul>"
+        );
+      }
+
+      function personDept(person) {
+        const board = String((person && person.board) || "ops");
+        if (board === "hrTech") {
+          return "人事和技术";
+        }
+        if (board === "backend") {
+          return "后端部门";
+        }
+        const center = String((person && (person.center || person.department || person.lineManager)) || "");
+        if (center.indexOf("韩梦凯") >= 0) {
+          return "韩梦凯组";
+        }
+        if (center.indexOf("沈子晗") >= 0) {
+          return "沈子晗组";
+        }
+        if (center.indexOf("人员管理") >= 0) {
+          return "人员管理";
+        }
+        return "运营部门";
+      }
+
+      function onDuty(person) {
+        const status = String((person && person.status) || "在职").trim();
+        return !status || status === "在职";
+      }
+
+      function kpiCard(tone, label, value, hint, ico) {
+        return (
+          '<article class="org-hero-kpi tone-' +
+          tone +
+          '"><span class="org-hero-kpi-ico" aria-hidden="true">' +
+          ico +
+          "</span><div><div class=\"label\">" +
+          escapeHtml(label) +
+          '</div><div class="value">' +
+          escapeHtml(value) +
+          '</div><div class="hint">' +
+          hint +
+          '</div></div><svg class="org-hero-spark" viewBox="0 0 112 24" fill="none"><path d="' +
+          sparkPath() +
+          '" stroke="currentColor" stroke-width="2"></path></svg></article>'
+        );
+      }
+
+      function renderKpis(summary, people) {
+        lastSummary = summary || lastSummary;
+        lastConsolePeople = people || lastConsolePeople;
+        const bag = lastSummary || {};
+        const roster = lastConsolePeople || [];
+        const statusCounts = bag.statusCounts || {};
+        const operating = Number(bag.operating || 0);
+        const closed = Number(statusCounts.closed || 0) + Number(statusCounts.closing || 0);
+        const idle = Number(statusCounts.idle || 0);
+        const listed = Number(bag.listed || operating);
+        const duty = roster.filter(onDuty);
+        const depts = {};
+        const groups = {};
+        duty.forEach(function (person) {
+          const dept = String(person.department || person.center || "").trim();
+          if (dept) {
+            depts[dept] = true;
+          }
+          const group = personDept(person);
+          groups[group] = (groups[group] || 0) + 1;
+        });
+        const deptCount = Object.keys(depts).length || Object.keys(groups).length;
+        const filled = Math.max(0, operating - Number(bag.missingOwner || 0));
+        const fillPct = operating ? Math.round((filled / operating) * 1000) / 10 : 0;
+        const icoStore = '<svg viewBox="0 0 24 24"><path d="M4 10h16l-1.2 10H5.2z"/><path d="M8 10V7h8v3"/></svg>';
+        const icoDept = '<svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="2.4"/><circle cx="16" cy="8" r="2.4"/><path d="M4.6 18c.5-2.6 2.4-4 4.4-4s3.9 1.4 4.4 4"/><path d="M12.8 18c.4-2.4 2-3.6 3.6-3.6 1.7 0 3.2 1.2 3.6 3.6"/></svg>';
+        const icoPeople = '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5.5 19c.8-3.3 3.3-5 6.5-5s5.7 1.7 6.5 5"/></svg>';
+        const icoBook = '<svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 9h6"/><path d="M9 13h6"/></svg>';
+        const icoGap = '<svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M8 12h8"/></svg>';
+        if (kpis) {
+          kpis.innerHTML =
+            kpiCard("blue", "店铺总数", listed, "运营中 " + operating + " ｜ 已关闭 " + closed, icoStore) +
+            kpiCard("green", "部门总数", deptCount, "按花名册中心统计", icoDept) +
+            kpiCard("purple", "在职人数", duty.length, "花名册在职", icoPeople) +
+            kpiCard("orange", "花名册", roster.length, "在职使用 " + (roster.length ? Math.round((duty.length / roster.length) * 1000) / 10 : 0) + "%", icoBook) +
+            kpiCard(
+              "cyan",
+              "缺运营",
+              bag.missingOwner || 0,
+              "缺店铺ID " +
+                (bag.missingStoreId || 0) +
+                " · 缺商家ID " +
+                (bag.missingMerchant || 0) +
+                " · 缺主账号 " +
+                (bag.missingLogin || 0) +
+                " · 缺密码 " +
+                (bag.missingPassword || 0),
+              icoGap
             );
-          })
-          .join("");
+        }
+        const pieItems = Object.keys(groups).map(function (label) {
+          return { label: label, value: groups[label] };
+        });
+        const pieColors = ["#60a5fa", "#38bdf8", "#34d399", "#fb923c", "#c084fc", "#f472b6"];
+        const orgHost = root.querySelector("#org-chart-org");
+        if (orgHost) {
+          orgHost.innerHTML =
+            donutSvg(pieItems, pieColors, "在职人数", duty.length) + legendHtml(pieItems, pieColors);
+        }
+        const storeItems = [
+          { label: "运营中", value: operating },
+          { label: "闲置中", value: idle },
+          { label: "退店中", value: Number(statusCounts.closing || 0) },
+          { label: "已退店", value: Number(statusCounts.closed || 0) }
+        ].filter(function (item) {
+          return item.value > 0 || item.label === "运营中";
+        });
+        const storeColors = ["#3b82f6", "#94a3b8", "#fb923c", "#cbd5e1"];
+        const storeHost = root.querySelector("#org-chart-stores");
+        if (storeHost) {
+          storeHost.innerHTML =
+            donutSvg(storeItems, storeColors, "店铺总数", listed) +
+            '<ul class="org-chart-legend">' +
+            storeItems
+              .map(function (item, index) {
+                const pct = listed ? Math.round((item.value / listed) * 1000) / 10 : 0;
+                return (
+                  "<li><i style=\"background:" +
+                  storeColors[index] +
+                  '"></i><span>' +
+                  escapeHtml(item.label) +
+                  "</span><b>" +
+                  escapeHtml(item.value) +
+                  "</b><em>" +
+                  pct +
+                  "%</em></li>"
+                );
+              })
+              .join("") +
+            "</ul>";
+        }
+        const seatsHost = root.querySelector("#org-chart-seats");
+        const seatsMeta = root.querySelector("#org-chart-seats-meta");
+        if (seatsMeta) {
+          seatsMeta.textContent = filled + " / " + operating + "（使用率 " + fillPct + "%）";
+        }
+        if (seatsHost) {
+          seatsHost.innerHTML =
+            '<div class="org-seats-bar"><span style="width:' +
+            fillPct +
+            '%"></span></div>' +
+            '<div class="org-seats-tiles">' +
+            '<article class="tone-green"><span>有运营</span><b>' +
+            filled +
+            "</b></article>" +
+            '<article class="tone-blue"><span>剩余坐席</span><b>' +
+            Number(bag.missingOwner || 0) +
+            "</b></article>" +
+            '<article class="tone-orange"><span>闲置店铺</span><b>' +
+            idle +
+            "</b></article></div>";
+        }
       }
 
       function formatFormerNames(value) {
@@ -1292,6 +1550,10 @@
           selectedCount() +
           " 条" +
           (qLabel ? " · 搜「" + qLabel + "」" : "");
+        const foot = root.querySelector("#org-table-foot");
+        if (foot) {
+          foot.textContent = "共 " + stores.length + " 条记录";
+        }
         root.querySelector("#org-add").hidden = !boardMeta.canCreate;
         if (!stores.length) {
           tbody.innerHTML = '<tr><td colspan="17" class="org-empty">暂无店铺</td></tr>';
@@ -1371,6 +1633,9 @@
           }),
           fetch("/api/people/org/stores?" + params.toString(), { credentials: "same-origin" }).then(function (res) {
             return res.json();
+          }),
+          fetch("/api/people", { credentials: "same-origin" }).then(function (res) {
+            return res.json();
           })
         ]).then(function (results) {
           if (dead) {
@@ -1378,6 +1643,7 @@
           }
           const summaryData = results[0];
           const storeData = results[1];
+          const peopleData = results[2];
           if (!summaryData.ok || !storeData.ok) {
             throw new Error(storeData.error || summaryData.error || "无法加载店铺主数据");
           }
@@ -1395,7 +1661,7 @@
               (storeData.scopeLabel || "可改全部团队") +
               " · 点击单元格保存";
           }
-          renderKpis(summaryData.summary);
+          renderKpis(summaryData.summary, (peopleData && peopleData.ok && peopleData.people) || lastConsolePeople);
           rawStores = storeData.stores || [];
           paintStores();
           paintFilterCarets();
@@ -1646,6 +1912,7 @@
           }
           roster.people = peopleData.people || [];
           roster.canEdit = peopleData.canEdit === true;
+          renderKpis(lastSummary, roster.people);
           paintRosterAcl();
           paintDeptTabs();
           renderPeopleKpis(currentBoardPeople());

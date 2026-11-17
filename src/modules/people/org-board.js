@@ -1042,12 +1042,21 @@ export function listTeams() {
 export function summarizeOrg(actor) {
   const stores = listOrgStores({}, actor);
   const counted = stores.filter(countsInStoreStats);
+  const statusCounts = { operating: 0, idle: 0, closing: 0, closed: 0 };
+  stores.forEach((row) => {
+    const key = String(row.statusKey || "");
+    if (statusCounts[key] != null) {
+      statusCounts[key] += 1;
+    }
+  });
   return {
     total: counted.length,
     operating: counted.length,
     idle: 0,
     closing: 0,
     closed: 0,
+    listed: stores.length,
+    statusCounts,
     missingStoreId: counted.filter((row) => !String(row.storeId || "").trim()).length,
     missingMerchant: counted.filter((row) => !String(row.merchantId || "").trim()).length,
     missingLogin: counted.filter((row) => !String(row.login || "").trim()).length,
