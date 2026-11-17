@@ -281,6 +281,7 @@ async function startQueued(shop, epoch) {
   loginCursor.step = "启动浏览器";
   loginCursor.phase = "opening";
   loginCursor.failed = false;
+  loginCursor.startedAt = Date.now();
   loginCursor.message = "正在启动浏览器";
   let opened;
   try {
@@ -414,7 +415,8 @@ export async function beginRelogin(store, cookie) {
     step: "启动浏览器",
     message: "正在启动浏览器",
     failed: false,
-    phase: "opening"
+    phase: "opening",
+    startedAt: Date.now()
   };
   const shops = await deps.loadOrg(cookie || "");
   if (epoch !== loginEpoch) {
@@ -499,10 +501,26 @@ export async function reloginState(store) {
   if (!name) {
     return publicState({ status: "missing", message: "请重新打开登录" });
   }
+  const idle = !loginCursor.phase || loginCursor.phase === "idle";
   if (loginCursor.failed || loginCursor.phase === "failed") {
     return publicState({ status: "failed", store: name, step: loginCursor.step, message: loginCursor.message || "登录没有打开" });
   }
+  const startLimit = deps.startLimitMs || 55000;
+  if (!idle && loginCursor.phase === "opening" && loginCursor.startedAt && Date.now() - loginCursor.startedAt > startLimit) {
+    loginEpoch += 1;
+    loginCursor.failed = true;
+    loginCursor.phase = "failed";
+    loginCursor.step = "启动浏览器";
+    loginCursor.message = "服务器浏览器启动失败";
+    if (deps.desk && deps.desk.close) {
+      await deps.desk.close();
+    }
+    return publicState({ status: "failed", store: name, step: "启动浏览器", message: loginCursor.message });
+  }
   const state = await deps.desk.poll(name);
+  if (idle && (!state || state.status === "opening" || state.status === "missing")) {
+    return publicState({ status: "idle", store: name, message: "" });
+  }
   if (state.status === "verify" || state.status === "screen") {
     loginCursor.phase = "screen";
     loginCursor.step = "京麦登录页";
@@ -580,6 +598,7 @@ export function jingmaiBrowser() {
 }
 
 export async function cancelRelogin() {
+  loginEpoch += 1;
   wipeQueue();
   if (deps.desk && deps.desk.close) {
     await deps.desk.close();

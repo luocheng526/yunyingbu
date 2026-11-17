@@ -980,8 +980,28 @@ function armReaderIdle() {
 }
 
 let loginVisible = false;
+let booting = null;
+let bootAbort = null;
+
+function stopBooting() {
+  if (bootAbort) {
+    bootAbort.abort();
+    bootAbort = null;
+  }
+  const chrome = booting;
+  booting = null;
+  if (!chrome || chrome.exitCode != null) {
+    return;
+  }
+  try {
+    chrome.kill("SIGKILL");
+  } catch {
+    /* already gone */
+  }
+}
 
 function stopCurrent() {
+  stopBooting();
   loginVisible = false;
   shotCache = { at: 0, store: "", image: null, ready: false };
   readerDesk = null;
@@ -1201,8 +1221,8 @@ function browserAbortError() {
   return Object.assign(new Error("aborted"), { code: "browser" });
 }
 
-export function readDebugTargets(url, signal) {
-  const timeout = AbortSignal.timeout(4000);
+export function readDebugTargets(url, signal, timeoutMs) {
+  const timeout = AbortSignal.timeout(timeoutMs || 4000);
   const link = signal ? AbortSignal.any([timeout, signal]) : timeout;
   return fetch(url, { signal: link }).then(function (response) {
     if (!response.ok) {
@@ -1212,64 +1232,48 @@ export function readDebugTargets(url, signal) {
   });
 }
 
+function browserLaunchError(error) {
+  const message = String((error && error.message) || "");
+  console.error("jingmai browser", message);
+  const wrapped = new Error(message && message !== "aborted" ? message : browserStartFailure());
+  wrapped.code = "browser";
+  return wrapped;
+}
+
 async function launchChrome(signal) {
   if (signal && signal.aborted) {
     throw browserAbortError();
   }
-  const found = findChrome();
-  const host = hostChromePath(found);
+  const host = hostChromePath(findChrome());
   let chromePath = host;
-  if (host) {
+  if (!chromePath) {
     try {
-      fontConfig = "";
-      libraryPath = libSearchPath(libHome());
-      return await startChromeProcess(host, signal);
+      chromePath = await ensureChrome();
     } catch (error) {
-      const message = String((error && error.message) || "");
-      console.error("jingmai browser", message);
-      if (signal && signal.aborted) {
-        throw browserAbortError();
-      }
-      const missing = message.match(/缺少 ([A-Za-z0-9._+-]+)/) || message.match(/服务器上的 ([A-Za-z0-9._+-]+\.so(?:\.\d+)*)/);
-      if (!missing) {
-        const wrapped = new Error(browserStartFailure());
-        wrapped.code = "browser";
-        throw wrapped;
-      }
-      const home = libHome();
-      if (message.includes("这台机器没有")) {
-        removeSoname(home, missing[1]);
-      }
-      const installed = await downloadSonames(home, [missing[1]], message.includes("这台机器没有") ? olderSuite(linuxDistro().suite) : "");
-      libraryPath = libSearchPath(home);
-      if (!installed || (signal && signal.aborted)) {
-        const wrapped = new Error(browserStartFailure());
-        wrapped.code = "browser";
-        throw wrapped;
-      }
-      return await startChromeProcess(host, signal);
+      throw browserLaunchError(error);
     }
   }
-  try {
-    chromePath = await ensureChrome();
-  } catch (error) {
-    console.error("jingmai browser", error && error.message);
-    const wrapped = new Error(browserStartFailure());
-    wrapped.code = "browser";
-    throw wrapped;
-  }
   if (!chromePath || (signal && signal.aborted)) {
-    const error = new Error(browserStartFailure());
-    error.code = "browser";
-    throw error;
+    throw browserLaunchError(new Error(browserStartFailure()));
   }
-  try {
-    fontConfig = await ensureLoginFont();
-  } catch {
+  if (host) {
     fontConfig = "";
+  } else {
+    try {
+      fontConfig = await ensureLoginFont();
+    } catch {
+      fontConfig = "";
+    }
   }
-  libraryPath = libSearchPath(libHome()) || libraryPath;
-  return await startChromeProcess(chromePath, signal);
+  libraryPath = libSearchPath(libHome());
+  try {
+    return await startChromeProcess(chromePath, signal);
+  } catch (error) {
+    if (signal && signal.aborted) {
+      throw browserAbortError();
+    }
+    throw browserLaunchError(error);
+  }
 }
 
 async function startChromeProcess(chromePath, signal) {
@@ -1294,7 +1298,11 @@ async function startChromeProcess(chromePath, signal) {
     "--user-data-dir=" + dir,
     "--remote-debugging-port=0",
     "about:blank"
-  ], { env: env, stdio: ["ignore", "ignore", "pipe"] });
+  ], { env: env, stdio: ["ignore", "pipe", "pipe"] });
+  booting = chrome;
+  const controller = new AbortController();
+  bootAbort = controller;
+  const linked = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
   try {
     let buf = "";
     const port = await new Promise(function (resolve, reject) {
@@ -1313,31 +1321,31 @@ async function startChromeProcess(chromePath, signal) {
       }
       const timer = setTimeout(function () {
         finish(Object.assign(new Error(browserFailure(buf)), { code: "browser" }));
-      }, 12000);
-      if (signal) {
-        if (signal.aborted) {
-          finish(browserAbortError());
-          return;
-        }
-        signal.addEventListener("abort", function () {
-          finish(browserAbortError());
-        }, { once: true });
+      }, 20000);
+      if (linked.aborted) {
+        finish(browserAbortError());
+        return;
       }
+      linked.addEventListener("abort", function () {
+        finish(browserAbortError());
+      }, { once: true });
       chrome.on("error", function () {
         finish(Object.assign(new Error(browserFailure(buf || "spawn")), { code: "browser" }));
       });
-      chrome.stderr.on("data", function (chunk) {
-        buf = (buf + chunk.toString()).slice(-2000);
-        const match = buf.match(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//);
+      function takeChunk(chunk) {
+        buf = (buf + chunk.toString()).slice(-4000);
+        const match = buf.match(/DevTools listening on ws:\/\/(?:127\.0\.0\.1|\[::1\]):(\d+)\//);
         if (match) {
           finish(null, Number(match[1]));
         }
-      });
+      }
+      chrome.stdout.on("data", takeChunk);
+      chrome.stderr.on("data", takeChunk);
       chrome.on("exit", function () {
         finish(Object.assign(new Error(browserFailure(buf)), { code: "browser" }));
       });
     });
-    const list = await readDebugTargets("http://127.0.0.1:" + port + "/json/list", signal);
+    const list = await readDebugTargets("http://127.0.0.1:" + port + "/json/list", linked, 30000);
     const page = Array.isArray(list) ? list.find(function (item) {
       return item.type === "page";
     }) : null;
@@ -1345,8 +1353,17 @@ async function startChromeProcess(chromePath, signal) {
       throw Object.assign(new Error("json"), { code: "browser" });
     }
     const ws = await connectSocket(page.webSocketDebuggerUrl);
+    if (booting === chrome) {
+      booting = null;
+    }
+    if (bootAbort === controller) {
+      bootAbort = null;
+    }
     return { chrome: chrome, dir: dir, ws: ws, port: port, password: "" };
   } catch (error) {
+    if (booting === chrome) {
+      booting = null;
+    }
     try {
       chrome.kill("SIGKILL");
     } catch {
@@ -1687,33 +1704,32 @@ export async function openDesk({ store, loginName, password, reveal, onStep } = 
     }
   };
   let desk = null;
-  const launchLimit = AbortSignal.timeout(18000);
+  let launchTimedOut = false;
+  let launchTimer = null;
   try {
     loginVisible = false;
     shotCache = { at: 0, store: "", image: null, ready: false };
     step("正在启动浏览器");
-    const launching = acquireDesk(store, ticket, launchLimit);
+    const launching = acquireDesk(store, ticket);
     launching.catch(function () {});
     desk = await Promise.race([
       launching,
       new Promise(function (_resolve, reject) {
-        if (launchLimit.aborted) {
+        launchTimer = setTimeout(function () {
+          launchTimedOut = true;
+          stopBooting();
           reject(browserAbortError());
-          return;
-        }
-        launchLimit.addEventListener("abort", function () {
-          reject(browserAbortError());
-        }, { once: true });
+        }, 50000);
       })
     ]);
-    if (!desk || ticket !== openTicket || launchLimit.aborted) {
+    if (!desk || ticket !== openTicket || launchTimedOut) {
       if (desk && desk !== current) {
         discard(desk);
       }
       if (ticket === openTicket) {
         openTicket += 1;
       }
-      return { status: "login", message: launchLimit.aborted ? browserStartFailure() : "登录已取消" };
+      return { status: "login", message: launchTimedOut ? browserStartFailure() : "登录已取消" };
     }
     step("正在打开登录页");
     try {
@@ -1731,18 +1747,20 @@ export async function openDesk({ store, loginName, password, reveal, onStep } = 
     if (ticket === openTicket) {
       stopCurrent();
     }
-    if (ticket === openTicket && (launchLimit.aborted || (error && error.code === "browser"))) {
+    if (ticket === openTicket && (launchTimedOut || (error && error.code === "browser"))) {
       openTicket += 1;
     }
-    if (error && (error.code === "browser" || launchLimit.aborted)) {
+    if (error && (error.code === "browser" || launchTimedOut)) {
       console.error("jingmai browser", error.message);
-      return { status: "login", message: browserStartFailure() };
+      const detail = error && error.message && error.message !== "aborted" ? error.message : "";
+      return { status: "login", message: detail || browserStartFailure() };
     }
     if (String(error && error.message || "").includes("timeout")) {
       return { status: "login", message: "登录页没有在 8 秒内打开" };
     }
     return { status: "login", message: "服务器登录没有打开" };
   } finally {
+    clearTimeout(launchTimer);
     password = "";
     if (desk) {
       desk.password = "";

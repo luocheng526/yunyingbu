@@ -753,6 +753,45 @@ test("a zstd library package unpacks the soname without python or dpkg", () => {
   }
 });
 
+test("an idle login check does not say the browser is starting", async () => {
+  await resetJingmaiStore();
+  resetJingmaiDeps();
+  const state = await reloginState("SAWAAG家居旗舰店");
+  assert.equal(state.status, "idle");
+  assert.equal(state.message, "");
+});
+
+test("a browser that never finishes starting is reported as a failure", async () => {
+  await resetJingmaiStore();
+  setJingmaiDeps({
+    startLimitMs: 40,
+    loadOrg: async () => [
+      { store: "飒望生活日用旗舰店", enabled: true, login: "sa", password: "secret", shopId: "1" }
+    ],
+    desk: {
+      open: function () {
+        return new Promise(function () {});
+      },
+      poll: async function () {
+        return { status: "opening", message: "正在启动浏览器" };
+      },
+      close: async function () {}
+    }
+  });
+  try {
+    const opening = await beginRelogin("飒望生活日用旗舰店", "cookie");
+    assert.equal(opening.status, "opening");
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 80);
+    });
+    const failed = await reloginState("飒望生活日用旗舰店");
+    assert.equal(failed.status, "failed");
+    assert.equal(failed.message, "服务器浏览器启动失败");
+  } finally {
+    resetJingmaiDeps();
+  }
+});
+
 test("a browser debug port that never answers does not keep the login starting", async () => {
   const server = createServer(function () {});
   await new Promise(function (resolve) {
