@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import vm from "node:vm";
 import {
+  accountIdentity,
   businessFieldCode,
   classifyTransportError,
   collectPinIds,
@@ -653,6 +654,11 @@ function hasCollected(metrics) {
   });
 }
 
+export async function fetchAccountIdentity(jar, fetchImpl = fetch) {
+  const account = await postDsm(fetchImpl, jar, SHELL_APP, ACCOUNT_API, {});
+  return accountIdentity(account);
+}
+
 export async function fetchHome(jar, fetchImpl = fetch, readCard) {
   const dealTask = fetchDeal(jar, fetchImpl, readCard).then(
     function (value) {
@@ -708,6 +714,7 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard) {
 export const jingmaiClient = {
   login: loginShop,
   fetchHome: fetchHome,
+  fetchAccountIdentity: fetchAccountIdentity,
   startQr: startQrLogin,
   pollQr: pollQrLogin,
   openPassword: openPasswordSession,

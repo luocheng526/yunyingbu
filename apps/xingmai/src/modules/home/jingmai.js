@@ -369,6 +369,73 @@ export function extractPaid(body) {
   return { paidAmount, paidDeal, paidRoi };
 }
 
+export function accountIdentity(body) {
+  let current = body;
+  for (let depth = 0; depth < 4 && current && typeof current === "object"; depth += 1) {
+    const list = current.belongVos || current.belongVOList;
+    if (Array.isArray(list) && list.length) {
+      const found =
+        list.find(function (item) {
+          return item && String(item.belongType) === String(current.currentBelongType);
+        }) || list[0];
+      const shopId = String((found && (found.belongBizId || found.shopId || found.venderId)) || "").trim();
+      const shopName = String((found && (found.shopName || found.belongName || found.name)) || "").trim();
+      if (shopId || shopName) {
+        return { shopId: shopId, shopName: shopName };
+      }
+    }
+    const next = layerValue(current);
+    if (!next || next === current) {
+      break;
+    }
+    current = next;
+  }
+  return { shopId: "", shopName: "" };
+}
+
+export function sameShop(expected, actual) {
+  const wantId = String((expected && expected.shopId) || "").trim();
+  const gotId = String((actual && actual.shopId) || "").trim();
+  const wantName = String((expected && (expected.store || expected.shopName)) || "").replace(/\s+/g, "");
+  const gotName = String((actual && actual.shopName) || "").replace(/\s+/g, "");
+  if (!gotId && !gotName) {
+    return true;
+  }
+  if (wantId && gotId) {
+    return wantId === gotId;
+  }
+  if (wantName && gotName) {
+    return wantName === gotName;
+  }
+  return true;
+}
+
+export function sessionStillValid(session) {
+  if (!session || session.authState === "login_expired" || session.authState === "unlinked") {
+    return false;
+  }
+  return (session.cookies || []).some(function (item) {
+    return item && (item.name === "thor" || item.name === "pt_key") && item.value;
+  });
+}
+
+export function bindDecision(expected, identity, existing) {
+  const actual = identity || { shopId: "", shopName: "" };
+  if (!sameShop(expected, actual)) {
+    const who = actual.shopName || actual.shopId || "另一家店";
+    const message = "登录到的是「" + who + "」，不是这家店";
+    if (sessionStillValid(existing)) {
+      return { action: "keep", shopId: String((existing && existing.shopId) || ""), message: message };
+    }
+    return { action: "reject", shopId: String((expected && expected.shopId) || ""), message: message };
+  }
+  return {
+    action: "save",
+    shopId: String(actual.shopId || (expected && expected.shopId) || "").trim(),
+    message: ""
+  };
+}
+
 export function businessFieldCode(body) {
   let current = body;
   for (let depth = 0; depth < 4 && current && typeof current === "object"; depth += 1) {

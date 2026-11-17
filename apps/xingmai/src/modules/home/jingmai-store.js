@@ -20,6 +20,7 @@ const CREATE_SESSION = `CREATE TABLE IF NOT EXISTS shen_jingmai_session (
   auth_state VARCHAR(32) NOT NULL DEFAULT 'unlinked',
   auth_message VARCHAR(200) NOT NULL DEFAULT '',
   enabled_flag TINYINT NOT NULL DEFAULT 1,
+  shop_id VARCHAR(32) NOT NULL DEFAULT '',
   linked_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`;
@@ -76,6 +77,14 @@ async function ensure() {
     return;
   }
   await query(CREATE_SAMPLE);
+  try {
+    await query("ALTER TABLE shen_jingmai_session ADD COLUMN shop_id VARCHAR(32) NOT NULL DEFAULT ''");
+  } catch (error) {
+    const message = String((error && (error.sqlMessage || error.message)) || "");
+    if (!/duplicate|exists/i.test(message)) {
+      throw error;
+    }
+  }
   ready = true;
 }
 
@@ -86,7 +95,8 @@ function memorySession(store) {
       cookies: [],
       authState: "unlinked",
       authMessage: "",
-      enabled: true
+      enabled: true,
+      shopId: ""
     }
   );
 }
@@ -105,12 +115,14 @@ export async function saveSession(store, fields) {
   const authState = fields.authState || (current ? current.authState : "unlinked");
   const authMessage = fields.authMessage == null ? (current ? current.authMessage : "") : fields.authMessage;
   const enabled = fields.enabled == null ? (current ? current.enabled : true) : Boolean(fields.enabled);
+  const shopId = String(fields.shopId == null ? (current && current.shopId) || "" : fields.shopId).trim().slice(0, 32);
   const row = {
     store: store,
     cookies: cookies || [],
     authState: authState,
     authMessage: String(authMessage || "").slice(0, 200),
     enabled: enabled,
+    shopId: shopId,
     linkedAt: stampNow()
   };
   if (memoryMode !== false) {
@@ -119,18 +131,41 @@ export async function saveSession(store, fields) {
       return;
     }
   }
-  const result = await query(
-    `INSERT INTO shen_jingmai_session (store, cookie_jar, auth_state, auth_message, enabled_flag, linked_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-       cookie_jar = VALUES(cookie_jar),
-       auth_state = VALUES(auth_state),
-       auth_message = VALUES(auth_message),
-       enabled_flag = VALUES(enabled_flag),
-       linked_at = VALUES(linked_at),
-       updated_at = VALUES(updated_at)`,
-    [store, JSON.stringify(row.cookies), row.authState, row.authMessage, row.enabled ? 1 : 0, stampNow(), stampNow()]
-  );
+  const stamp = stampNow();
+  const packed = JSON.stringify(row.cookies);
+  let result;
+  try {
+    result = await query(
+      `INSERT INTO shen_jingmai_session (store, cookie_jar, auth_state, auth_message, enabled_flag, shop_id, linked_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         cookie_jar = VALUES(cookie_jar),
+         auth_state = VALUES(auth_state),
+         auth_message = VALUES(auth_message),
+         enabled_flag = VALUES(enabled_flag),
+         shop_id = IF(VALUES(shop_id) = '', shop_id, VALUES(shop_id)),
+         linked_at = VALUES(linked_at),
+         updated_at = VALUES(updated_at)`,
+      [store, packed, row.authState, row.authMessage, row.enabled ? 1 : 0, row.shopId, stamp, stamp]
+    );
+  } catch (error) {
+    const message = String((error && (error.sqlMessage || error.message)) || "");
+    if (!/shop_id|Unknown column/i.test(message)) {
+      throw error;
+    }
+    result = await query(
+      `INSERT INTO shen_jingmai_session (store, cookie_jar, auth_state, auth_message, enabled_flag, linked_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         cookie_jar = VALUES(cookie_jar),
+         auth_state = VALUES(auth_state),
+         auth_message = VALUES(auth_message),
+         enabled_flag = VALUES(enabled_flag),
+         linked_at = VALUES(linked_at),
+         updated_at = VALUES(updated_at)`,
+      [store, packed, row.authState, row.authMessage, row.enabled ? 1 : 0, stamp, stamp]
+    );
+  }
   if (result == null) {
     memory.sessions.set(store, row);
   }
@@ -206,9 +241,20 @@ export async function listSessions() {
       return Object.assign({}, row, { cookies: row.cookies.slice() });
     });
   }
-  const result = await query(
-    `SELECT store, cookie_jar, auth_state, auth_message, enabled_flag, linked_at FROM shen_jingmai_session ORDER BY store ASC`
-  );
+  let result;
+  try {
+    result = await query(
+      `SELECT store, cookie_jar, auth_state, auth_message, enabled_flag, linked_at, shop_id FROM shen_jingmai_session ORDER BY store ASC`
+    );
+  } catch (error) {
+    const message = String((error && (error.sqlMessage || error.message)) || "");
+    if (!/shop_id|Unknown column/i.test(message)) {
+      throw error;
+    }
+    result = await query(
+      `SELECT store, cookie_jar, auth_state, auth_message, enabled_flag, linked_at FROM shen_jingmai_session ORDER BY store ASC`
+    );
+  }
   if (result == null) {
     return [...memory.sessions.values()];
   }
@@ -225,6 +271,7 @@ export async function listSessions() {
       authState: row.auth_state,
       authMessage: row.auth_message || "",
       enabled: Number(row.enabled_flag) === 1,
+      shopId: String(row.shop_id || ""),
       linkedAt: row.linked_at instanceof Date ? beijingParts(row.linked_at).stamp : String(row.linked_at || "")
     };
   });
@@ -232,13 +279,23 @@ export async function listSessions() {
 
 export async function listCollectTargets() {
   const sessions = await listSessions();
+  const seenShop = new Set();
   return sessions.filter(function (session) {
-    return (
-      session.enabled &&
-      (session.authState === "ok" || session.authState === "offline") &&
-      session.cookies &&
-      session.cookies.length
-    );
+    if (
+      !session.enabled ||
+      (session.authState !== "ok" && session.authState !== "offline") ||
+      !session.cookies ||
+      !session.cookies.length
+    ) {
+      return false;
+    }
+    if (session.shopId && seenShop.has(session.shopId)) {
+      return false;
+    }
+    if (session.shopId) {
+      seenShop.add(session.shopId);
+    }
+    return true;
   });
 }
 

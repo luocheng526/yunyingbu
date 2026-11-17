@@ -808,6 +808,7 @@ export function packJingmaiShops(view, org) {
         offline: offline,
         offlineReason: shop.offlineReason || (savedAccount && sessionMissing ? "组织中心有账号，京麦会话还没有" : ""),
         loginExpired: shop.loginExpired === true,
+        shopId: String(meta.shopId || shop.shopId || ""),
         capturedAt: shop.capturedAt || "",
         platformUpdatedAt: shop.platformUpdatedAt || ""
       };

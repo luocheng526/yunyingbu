@@ -300,11 +300,10 @@ test("live page uses Han+Shen paid totals and leaves paid for local return", () 
   assert.equal(erpYest.paid.yestText, "—");
   assert.equal(erpYest.paid.yesterdayHour.length, 0);
   assert.match(homeJs, /function hoursHaveNow/);
+  const shanghaiHour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Shanghai", hour: "2-digit", hour12: false }).format(new Date()).slice(0, 2)) || 0;
   const deadPay = [];
   var di;
-  for (di = 0; di < 13; di += 1) deadPay.push(null);
-  deadPay.push(34460, 122237, 134646);
-  while (deadPay.length < 24) deadPay.push(1000);
+  for (di = 0; di < 24; di += 1) deadPay.push(di > shanghaiHour ? 1000 : null);
   const deadSnap = fns.fillLocalPaid(
     {
       hero: {
