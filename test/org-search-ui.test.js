@@ -1233,3 +1233,87 @@ test("headless chrome keeps 公告中心 after 改动日志 and mounts the notic
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
 });
+
+const PAGE_SCROLL_SMOKE = `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,body{height:480px;max-height:480px;margin:0;overflow:hidden}
+      .xm-shell{display:flex;height:480px;max-height:480px;overflow:hidden}
+      .xm-sider{flex:0 0 80px}
+      .xm-main{flex:1 1 auto;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+      .xm-topbar{flex:0 0 48px;height:48px}
+      .xm-workspace{flex:1 1 auto;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+      .xm-content{flex:1 1 auto;min-width:0;min-height:0;overflow:auto}
+    </style>
+    <link rel="stylesheet" href="/people.css" />
+  </head>
+  <body>
+    <div class="xm-shell">
+      <aside class="xm-sider"></aside>
+      <div class="xm-main">
+        <header class="xm-topbar"></header>
+        <div class="xm-workspace">
+          <div class="xm-content xm-pane is-active" id="xm-content"></div>
+        </div>
+      </div>
+    </div>
+    <script src="/shared/modules/people.js"></script>
+    <script>
+      (async function () {
+        function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+        window.XmModules["/people"].mount(document.getElementById("xm-content"));
+        await sleep(800);
+        const pane = document.getElementById("xm-content");
+        const cs = window.getComputedStyle(pane);
+        const overflowY = cs.overflowY;
+        const can = pane.scrollHeight > pane.clientHeight + 40;
+        pane.scrollTop = 0;
+        pane.dispatchEvent(new WheelEvent("wheel", { deltaY: 240, bubbles: true, cancelable: true }));
+        await sleep(50);
+        const moved = pane.scrollTop > 20;
+        if (!moved) {
+          pane.scrollTop = 120;
+        }
+        const assigned = pane.scrollTop > 20;
+        document.body.setAttribute("data-overflow", overflowY);
+        document.body.setAttribute("data-can", can ? "1" : "0");
+        document.body.setAttribute("data-moved", moved ? "1" : "0");
+        document.body.setAttribute("data-scroll", String(pane.scrollTop));
+        document.body.setAttribute("data-sh", String(pane.scrollHeight));
+        document.body.setAttribute("data-ch", String(pane.clientHeight));
+        document.body.setAttribute("data-ok", can && assigned && overflowY === "auto" ? "1" : "0");
+      })();
+    </script>
+  </body>
+</html>`;
+
+test("headless chrome scrolls 店铺主数据 inside the shell content pane", async () => {
+  resetPeopleStore();
+  resetOrgBoard();
+  resetOrgExtra();
+  const app = createApp();
+  const server = http.createServer((req, res) => {
+    if (req.url === "/__page-scroll-smoke") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(PAGE_SCROLL_SMOKE);
+      return;
+    }
+    app(req, res);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  try {
+    const html = await chromeDump(`http://127.0.0.1:${port}/__page-scroll-smoke`, 14000);
+    assert.match(
+      html,
+      /data-ok="1"/,
+      html.includes("data-ok=") ? html.slice(html.indexOf("data-ok="), html.indexOf("data-ok=") + 420) : html.slice(-400)
+    );
+    assert.match(html, /data-overflow="auto"/);
+    assert.match(html, /data-can="1"/);
+  } finally {
+    await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
+});

@@ -1,4 +1,4 @@
-/* xm-module-people org-board 0.1.235-notice-tab */
+/* xm-module-people org-board 0.1.236-page-scroll */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.234-dept-boards";
+    const href = "/people.css?v=0.1.236-page-scroll";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -141,9 +141,10 @@
     css.textContent =
       "html:has(.people-page),body:has(.people-page){height:100%;}" +
       "body:has(.xm-shell):has(.people-page){overflow:hidden;}" +
-      "body:has(.xm-shell):has(.people-page) .xm-shell{height:100vh;max-height:100vh;overflow:hidden;min-height:0;}" +
-      "body:has(.xm-shell):has(.people-page) .xm-main{height:100vh;max-height:100vh;overflow-x:hidden!important;overflow-y:auto!important;min-height:0;display:flex;flex-direction:column;}" +
-      "body:has(.people-page) .xm-content,#xm-content:has(.people-page){flex:0 0 auto;height:auto;overflow:visible!important;}" +
+      "body:has(.xm-shell):has(.people-page) .xm-shell{height:100%;max-height:100%;overflow:hidden;min-height:0;}" +
+      "body:has(.xm-shell):has(.people-page) .xm-main{height:auto;max-height:none;overflow:hidden!important;min-height:0;display:flex;flex-direction:column;}" +
+      "body:has(.xm-shell):has(.people-page) .xm-workspace{flex:1 1 auto;min-width:0;min-height:0;overflow:hidden;}" +
+      "body:has(.people-page) .xm-content,#xm-content:has(.people-page){flex:1 1 auto!important;min-height:0!important;height:auto!important;overflow-x:hidden!important;overflow-y:auto!important;}" +
       ".people-page{overflow:visible;padding-bottom:24px;}" +
       ".people-page table,.people-page th,.people-page td,.people-page .org-cell,.people-page .org-link,.people-page .tag{-webkit-user-select:text!important;user-select:text!important;-webkit-user-drag:none;}" +
       ".people-page input,.people-page textarea{-webkit-user-select:text!important;user-select:text!important;-webkit-user-drag:auto;pointer-events:auto!important;}" +
@@ -184,6 +185,21 @@
     mount: function (root) {
       ensureCss();
       hideShellTab();
+      function peopleScrollRoot() {
+        const seen = [];
+        const candidates = [
+          document.querySelector("#xm-content"),
+          document.querySelector(".xm-workspace > .xm-pane.is-active"),
+          document.querySelector(".xm-main")
+        ];
+        for (let i = 0; i < candidates.length; i += 1) {
+          const el = candidates[i];
+          if (el && seen.indexOf(el) < 0) {
+            seen.push(el);
+          }
+        }
+        return seen;
+      }
       function onPeopleWheel(event) {
         if (event.defaultPrevented || event.ctrlKey) {
           return;
@@ -191,14 +207,15 @@
         if (event.target.closest && event.target.closest(".org-filter-pop, input, select, textarea")) {
           return;
         }
-        const main = document.querySelector(".xm-main");
-        if (!main) {
-          return;
-        }
-        const before = main.scrollTop;
-        main.scrollTop += event.deltaY;
-        if (main.scrollTop !== before) {
-          event.preventDefault();
+        const roots = peopleScrollRoot();
+        for (let i = 0; i < roots.length; i += 1) {
+          const main = roots[i];
+          const before = main.scrollTop;
+          main.scrollTop += event.deltaY;
+          if (main.scrollTop !== before) {
+            event.preventDefault();
+            return;
+          }
         }
       }
       document.addEventListener("wheel", onPeopleWheel, { passive: false, capture: true });
