@@ -19,9 +19,14 @@ async function login(base, username, password = "ChangeMe123!") {
 }
 
 test("登录后的业务页铺当前查看者水印，登录页没有", async () => {
-  assert.equal(SHELL_ASSET_VER, "0.1.780-marklite");
+  assert.equal(SHELL_ASSET_VER, "0.1.781-markwho");
   assert.match(layoutCss, /xm-watermark 0\.1\.779-watermark/);
   assert.match(layoutCss, /xm-mark-lite 0\.1\.780-marklite/);
+  assert.match(layoutCss, /xm-mark-who 0\.1\.781-markwho/);
+  assert.match(navSrc, /function lockLoginMark\(/);
+  assert.match(navSrc, /user\.displayName \|\| user\.username \|\| ""/);
+  assert.match(navSrc, /querySelectorAll\("\.xm-watermark"\)/);
+  assert.doesNotMatch(navSrc, /username: person\.username/);
   assert.match(layoutCss, /rgba\(140, 140, 140, 0\.28\)/);
   assert.doesNotMatch(layoutCss, /rgba\(89, 89, 89, 0\.34\)/);
   assert.match(layoutCss, /\.xm-watermark \{[\s\S]*pointer-events:\s*none/);

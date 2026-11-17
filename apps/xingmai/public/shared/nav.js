@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap 0.1.775-dutylive 0.1.776-homehit 0.1.777-parentgo 0.1.778-nochild 0.1.779-watermark 0.1.780-marklite v0.4.18 — 水印再浅一档，不挡数字 */
+/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap 0.1.775-dutylive 0.1.776-homehit 0.1.777-parentgo 0.1.778-nochild 0.1.779-watermark 0.1.780-marklite 0.1.781-markwho v0.4.18 — 水印只跟登录账号走 */
 (function () {
-  const ASSET_VER = "0.1.780-marklite";
+  const ASSET_VER = "0.1.781-markwho";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -386,27 +386,42 @@
   }
 
   const WATERMARK_CELLS = 80;
+  let loginMark = "";
 
-  function viewerLabel(user) {
-    if (!user) {
+  function accountLabel(user) {
+    if (!user || typeof user !== "object") {
       return "";
     }
-    if (typeof user === "string") {
-      return user.trim();
+    return String(user.displayName || user.username || "").trim();
+  }
+
+  function lockLoginMark(user) {
+    if (loginMark) {
+      return loginMark;
     }
-    return String(user.displayName || user.username || user.name || "").trim();
+    const boot = accountLabel(currentStaffUser()) || accountLabel(bootUser()) || accountLabel(user);
+    if (boot) {
+      loginMark = boot;
+      return loginMark;
+    }
+    const shown = document.getElementById("xm-username");
+    const text = shown ? String(shown.textContent || "").trim() : "";
+    if (text && text !== "用户") {
+      loginMark = text;
+    }
+    return loginMark;
   }
 
   function watermarkText(user) {
-    const name = viewerLabel(user);
+    const name = lockLoginMark(user);
     return name ? "甄选：" + name : "";
   }
 
   function clearWatermark() {
-    const layer = document.querySelector(".xm-watermark");
-    if (layer) {
+    const layers = document.querySelectorAll(".xm-watermark");
+    Array.prototype.forEach.call(layers, function (layer) {
       layer.remove();
-    }
+    });
   }
 
   function paintWatermark(user) {
@@ -414,13 +429,21 @@
     if (!label || !document.body) {
       return;
     }
-    let layer = document.querySelector(".xm-watermark");
+    const nameEl = document.getElementById("xm-username");
+    if (nameEl && loginMark && nameEl.textContent !== loginMark) {
+      nameEl.textContent = loginMark;
+    }
+    const layers = document.querySelectorAll(".xm-watermark");
+    let layer = layers.length ? layers[0] : null;
+    for (let i = 1; i < layers.length; i += 1) {
+      layers[i].remove();
+    }
     if (
       layer &&
       layer.getAttribute("data-xm-watermark") === label &&
       layer.querySelectorAll(".xm-watermark-sheet span").length >= WATERMARK_CELLS
     ) {
-      if (layer.parentNode === document.body && layer !== document.body.lastElementChild) {
+      if (layer.parentNode !== document.body || layer !== document.body.lastElementChild) {
         document.body.appendChild(layer);
       }
       return;
@@ -3234,8 +3257,15 @@
   }
 
   function rememberStaffUser(user, userLabel) {
+    const prev = window.__xmBootUser && typeof window.__xmBootUser === "object" ? window.__xmBootUser : null;
+    const locked = loginMark || (prev ? String(prev.displayName || prev.username || "").trim() : "");
     if (user && (user.username || user.displayName || user.name)) {
-      window.__xmBootUser = user;
+      const next = Object.assign({}, prev || {}, user);
+      if (locked) {
+        next.displayName = (prev && prev.displayName) || locked;
+        next.username = (prev && prev.username) || locked;
+      }
+      window.__xmBootUser = next;
       return;
     }
     if (userLabel && !window.__xmBootUser) {
@@ -3448,8 +3478,6 @@
               lineManager: person.lineManager,
               director: person.director,
               managerName: person.managerName,
-              username: person.username,
-              name: person.name,
               board: person.board,
               role: person.role,
               visibleShops: person.visibleShops
