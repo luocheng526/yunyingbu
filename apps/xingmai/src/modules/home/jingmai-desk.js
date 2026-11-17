@@ -1304,20 +1304,283 @@ export async function shotDesk(store) {
   }
 }
 
-export async function clickDesk(store, x, y) {
-  if (!current || current.store !== store || !current.ws) {
-    return;
+export function loginPageAction(doc, action) {
+  function textOf(node) {
+    return String((node && (node.innerText || node.value || node.textContent)) || "").replace(/\s+/g, "");
   }
+  function visible(node) {
+    if (!node || !node.getBoundingClientRect) {
+      return false;
+    }
+    const rect = node.getBoundingClientRect();
+    return rect.width > 2 && rect.height > 2;
+  }
+  function isConfirm(node) {
+    const text = textOf(node);
+    if (!text || text.length > 12 || /获取|发送|重新|取消|关闭/.test(text)) {
+      return false;
+    }
+    return /确定|提交|确认|完成/.test(text) || text === "验证";
+  }
+  function docsOf(root) {
+    const docs = [];
+    function add(item) {
+      if (!item || docs.indexOf(item) !== -1) {
+        return;
+      }
+      docs.push(item);
+      const frames = item.querySelectorAll ? item.querySelectorAll("iframe") : [];
+      for (let i = 0; i < frames.length; i += 1) {
+        try {
+          add(frames[i].contentDocument);
+        } catch {
+          /* the captcha frame is not readable from here */
+        }
+      }
+    }
+    add(root);
+    return docs;
+  }
+  function topBox(node) {
+    const rect = node.getBoundingClientRect();
+    let left = rect.left;
+    let top = rect.top;
+    let view = node.ownerDocument;
+    for (let depth = 0; depth < 5 && view && view.defaultView && view.defaultView.frameElement; depth += 1) {
+      const frame = view.defaultView.frameElement;
+      const frameBox = frame.getBoundingClientRect();
+      left += frameBox.left;
+      top += frameBox.top;
+      view = frame.ownerDocument;
+    }
+    return {
+      left: left,
+      top: top,
+      width: rect.width,
+      height: rect.height,
+      cx: left + rect.width / 2,
+      cy: top + rect.height / 2
+    };
+  }
+  function pointOf(node, fallbackX, fallbackY, kind) {
+    if (!node || !node.getBoundingClientRect) {
+      return { kind: kind || "point", x: Math.round(fallbackX), y: Math.round(fallbackY) };
+    }
+    const box = topBox(node);
+    return { kind: kind || "button", x: Math.round(box.cx), y: Math.round(box.cy) };
+  }
+  function elementAt(root, x, y) {
+    let current = root;
+    let localX = x;
+    let localY = y;
+    let el = null;
+    for (let depth = 0; depth < 5; depth += 1) {
+      if (!current || !current.elementFromPoint) {
+        break;
+      }
+      el = current.elementFromPoint(localX, localY);
+      if (!el || String(el.tagName || "").toUpperCase() !== "IFRAME") {
+        break;
+      }
+      const rect = el.getBoundingClientRect();
+      let inner = null;
+      try {
+        inner = el.contentDocument;
+      } catch {
+        inner = null;
+      }
+      if (!inner || !inner.elementFromPoint) {
+        break;
+      }
+      localX -= rect.left;
+      localY -= rect.top;
+      current = inner;
+    }
+    return el;
+  }
+  function clickable(el) {
+    let node = el;
+    for (let i = 0; node && i < 6; i += 1) {
+      const tag = String(node.tagName || "").toUpperCase();
+      const role = node.getAttribute ? String(node.getAttribute("role") || "") : "";
+      const type = String(node.type || "").toLowerCase();
+      if ((tag === "BUTTON" || tag === "A" || role === "button" || type === "button" || type === "submit" || isConfirm(node)) && visible(node)) {
+        return node;
+      }
+      node = node.parentElement || null;
+    }
+    return null;
+  }
+  function nearConfirm(root, x, y) {
+    let best = null;
+    let bestDist = 20;
+    docsOf(root).forEach(function (item) {
+      const nodes = item.querySelectorAll ? item.querySelectorAll("button, a, [role=button], input, div, span") : [];
+      for (let i = 0; i < nodes.length; i += 1) {
+        const node = nodes[i];
+        if (!visible(node) || !isConfirm(node)) {
+          continue;
+        }
+        const box = topBox(node);
+        const dx = Math.max(box.left - x, 0, x - (box.left + box.width));
+        const dy = Math.max(box.top - y, 0, y - (box.top + box.height));
+        const dist = Math.hypot(dx, dy);
+        if (dist <= bestDist) {
+          best = node;
+          bestDist = dist;
+        }
+      }
+    });
+    return best;
+  }
+  function confirmAround(input) {
+    let node = input && input.parentElement;
+    for (let depth = 0; node && depth < 6; depth += 1) {
+      const nodes = node.querySelectorAll ? node.querySelectorAll("button, a, [role=button], div, span") : [];
+      for (let i = 0; i < nodes.length; i += 1) {
+        if (nodes[i] !== input && visible(nodes[i]) && isConfirm(nodes[i])) {
+          return nodes[i];
+        }
+      }
+      node = node.parentElement;
+    }
+    return null;
+  }
+  if (action && action.text) {
+    const value = String(action.text).slice(0, 20);
+    let input = null;
+    docsOf(doc).forEach(function (item) {
+      const fields = item.querySelectorAll ? item.querySelectorAll("input, textarea") : [];
+      for (let i = 0; i < fields.length; i += 1) {
+        const field = fields[i];
+        const hint = String(field.placeholder || "") + String(field.name || "");
+        if (!visible(field) || (/账号|密码/.test(hint) && !/验证码/.test(hint))) {
+          continue;
+        }
+        if (/验证码|校验码|短信/.test(hint)) {
+          input = field;
+        }
+      }
+    });
+    if (!input) {
+      return { kind: "no-input", x: 0, y: 0 };
+    }
+    if (input.focus) {
+      input.focus();
+    }
+    try {
+      const view = input.ownerDocument && input.ownerDocument.defaultView;
+      const proto = view && view.HTMLInputElement && Object.getOwnPropertyDescriptor(view.HTMLInputElement.prototype, "value");
+      if (proto && proto.set) {
+        proto.set.call(input, value);
+      } else {
+        input.value = value;
+      }
+      if (view && view.Event && input.dispatchEvent) {
+        input.dispatchEvent(new view.Event("input", { bubbles: true }));
+        input.dispatchEvent(new view.Event("change", { bubbles: true }));
+      }
+    } catch {
+      input.value = value;
+    }
+    const button = confirmAround(input);
+    if (!button) {
+      return { kind: "typed", x: 0, y: 0 };
+    }
+    return pointOf(button, 0, 0, "button");
+  }
+  const rawX = Number(action && action.x) || 0;
+  const rawY = Number(action && action.y) || 0;
+  const hit = clickable(elementAt(doc, rawX, rawY)) || nearConfirm(doc, rawX, rawY);
+  if (!hit) {
+    return { kind: "point", x: Math.round(rawX), y: Math.round(rawY) };
+  }
+  return pointOf(hit, rawX, rawY, "button");
+}
+
+async function cssPoint(ws, x, y, image) {
+  let px = Number(x) || 0;
+  let py = Number(y) || 0;
+  const iw = image && Number(image.width);
+  const ih = image && Number(image.height);
+  if (!(iw > 0 && ih > 0)) {
+    return { x: px, y: py };
+  }
+  try {
+    const metrics = await send(ws, "Page.getLayoutMetrics");
+    const view = (metrics && (metrics.cssVisualViewport || metrics.cssLayoutViewport)) || {};
+    const vw = Number(view.clientWidth || view.width) || 0;
+    const vh = Number(view.clientHeight || view.height) || 0;
+    if (vw > 0 && vh > 0 && (Math.abs(iw - vw) > 1 || Math.abs(ih - vh) > 1)) {
+      px = px * vw / iw;
+      py = py * vh / ih;
+    }
+  } catch {
+    /* keep the point from the picture */
+  }
+  return { x: px, y: py };
+}
+
+async function mouseClick(ws, x, y, sessionId) {
   const point = {
     x: Math.max(0, Math.round(Number(x) || 0)),
     y: Math.max(0, Math.round(Number(y) || 0)),
     button: "left",
     clickCount: 1
   };
-  await send(current.ws, "Input.dispatchMouseEvent", Object.assign({ type: "mouseMoved", buttons: 0 }, point));
-  await send(current.ws, "Input.dispatchMouseEvent", Object.assign({ type: "mousePressed", buttons: 1 }, point));
-  await sleep(90);
-  await send(current.ws, "Input.dispatchMouseEvent", Object.assign({ type: "mouseReleased", buttons: 0 }, point));
+  await send(ws, "Input.dispatchMouseEvent", Object.assign({ type: "mouseMoved", buttons: 0 }, point), sessionId);
+  await send(ws, "Input.dispatchMouseEvent", Object.assign({ type: "mousePressed", buttons: 1 }, point), sessionId);
+  await sleep(80);
+  await send(ws, "Input.dispatchMouseEvent", Object.assign({ type: "mouseReleased", buttons: 0 }, point), sessionId);
+}
+
+async function pierceClick(ws, x, y) {
+  try {
+    await send(ws, "DOM.enable");
+    await send(ws, "DOM.getDocument", { pierce: true, depth: 1 });
+    const located = await send(ws, "DOM.getNodeForLocation", {
+      x: Math.max(0, Math.round(x)),
+      y: Math.max(0, Math.round(y)),
+      pierce: true
+    });
+    const resolved = await send(ws, "DOM.resolveNode", {
+      nodeId: located && located.nodeId,
+      backendNodeId: located && located.backendNodeId
+    });
+    const objectId = resolved && resolved.object && resolved.object.objectId;
+    if (!objectId) {
+      return "";
+    }
+    const clicked = await send(ws, "Runtime.callFunctionOn", {
+      objectId: objectId,
+      returnByValue: true,
+      functionDeclaration: "function(){ let node = this; for (let i = 0; node && i < 8; i += 1) { const tag = String(node.tagName || '').toUpperCase(); const text = String(node.innerText || node.value || '').replace(/\\s+/g, ''); const role = node.getAttribute ? String(node.getAttribute('role') || '') : ''; const type = String(node.type || '').toLowerCase(); const confirm = text && text.length <= 12 && !/获取|发送|重新|取消|关闭/.test(text) && (/确定|提交|确认|完成/.test(text) || text === '验证'); if (tag === 'BUTTON' || tag === 'A' || role === 'button' || type === 'button' || type === 'submit' || confirm) { node.click(); return 'button'; } node = node.parentElement; } return 'point'; }"
+    });
+    return clicked && clicked.result ? clicked.result.value : "";
+  } catch {
+    return "";
+  }
+}
+
+export async function clickDesk(store, x, y, image) {
+  if (!current || current.store !== store || !current.ws) {
+    return;
+  }
+  const point = await cssPoint(current.ws, x, y, image);
+  let aim = { kind: "point", x: point.x, y: point.y };
+  try {
+    const hit = await evaluate(current.ws, `(${loginPageAction.toString()})(document, ${JSON.stringify({ x: point.x, y: point.y })})`);
+    if (hit && hit.x != null) {
+      aim = hit;
+    }
+  } catch {
+    aim = { kind: "point", x: point.x, y: point.y };
+  }
+  await mouseClick(current.ws, aim.x, aim.y);
+  if (aim.kind !== "button") {
+    await pierceClick(current.ws, point.x, point.y);
+  }
+  await sleep(250);
 }
 
 export async function typeDesk(store, text) {
@@ -1328,7 +1591,19 @@ export async function typeDesk(store, text) {
   if (!value) {
     return;
   }
-  await send(current.ws, "Input.insertText", { text: value });
+  let aim = null;
+  try {
+    aim = await evaluate(current.ws, `(${loginPageAction.toString()})(document, ${JSON.stringify({ text: value })})`);
+  } catch {
+    aim = null;
+  }
+  if (!aim || aim.kind === "no-input") {
+    await send(current.ws, "Input.insertText", { text: value });
+  }
+  if (aim && aim.kind === "button") {
+    await mouseClick(current.ws, aim.x, aim.y);
+  }
+  await sleep(250);
 }
 
 function watchShopData(ws) {
