@@ -1,6 +1,6 @@
 import { browserReady, browserStartFailure, ensureChrome, jingmaiDesk, launchNote, LOGIN_SCREEN_MESSAGE, PAGE_WAIT_MESSAGE } from "./jingmai-desk.js";
 import { jingmaiClient } from "./jingmai-client.js";
-import { beijingParts, bindDecision, runTick, sampleFields, sessionStillValid } from "./jingmai.js";
+import { beijingParts, bindDecision, runTick, sampleFields, sessionStillValid, withDeadline } from "./jingmai.js";
 import { listCollectTargets, listSessions, markAuth, readJingmaiLive, saveSample, saveSession, setRoster } from "./jingmai-store.js";
 
 const INTERVAL_MS = 5 * 60 * 1000;
@@ -18,6 +18,7 @@ let loginEpoch = 0;
 let openingMark = 0;
 const orgCache = new Map();
 let refreshing = false;
+let recovering = false;
 let deskLock = Promise.resolve();
 
 const defaultDeps = {
@@ -58,6 +59,7 @@ export function resetJingmaiDeps() {
   });
   orgCache.clear();
   refreshing = false;
+  recovering = false;
   deskLock = Promise.resolve();
   loginEpoch = 0;
 }
@@ -116,7 +118,7 @@ export async function loadOrgShops(cookie, fetchImpl = fetch) {
     throw error;
   }
   const data = await response.json();
-  return (data.stores || [])
+  const mapped = (data.stores || [])
     .map(function (store) {
       return {
         store: String(store.storeName || "").trim(),
@@ -131,6 +133,56 @@ export async function loadOrgShops(cookie, fetchImpl = fetch) {
     .filter(function (store) {
       return store.store;
     });
+  rememberOrg(mapped);
+  return mapped;
+}
+
+async function cookiesAlive(cookies) {
+  if (!cookies || !cookies.length || !deps.client || !deps.client.fetchHome) {
+    return false;
+  }
+  try {
+    await withDeadline(function () {
+      return deps.client.fetchHome(cookies);
+    }, 12000);
+    return true;
+  } catch (error) {
+    if (error && error.code === "login") {
+      return false;
+    }
+    return false;
+  }
+}
+
+async function passwordRelogin(shop) {
+  if (!shop || !shop.store || !shop.login || !shop.password || !deps.client || !deps.client.login) {
+    return false;
+  }
+  if (inflight.has(shop.store)) {
+    return false;
+  }
+  inflight.add(shop.store);
+  try {
+    const cookies = await deps.client.login(shop.login, shop.password);
+    const kept = await rememberLogin(shop.store, cookies, { shopId: shop.shopId || "", store: shop.store });
+    return kept === "saved" || kept === "kept";
+  } finally {
+    inflight.delete(shop.store);
+  }
+}
+
+function cachedOrgShop(name) {
+  const hit = orgCache.get(name);
+  if (!hit || !hit.login || !hit.password) {
+    return null;
+  }
+  return {
+    store: hit.store,
+    login: hit.login,
+    password: hit.password,
+    shopId: hit.shopId || "",
+    enabled: hit.enabled !== false
+  };
 }
 
 async function connectOne(shop) {
@@ -199,7 +251,7 @@ export async function jingmaiLive() {
 function publicState(state) {
   return {
     ok: true,
-    build: "open12",
+    build: "relogin",
     store: state.store || loginCursor.store,
     status: state.status,
     message: state.message || "",
@@ -461,6 +513,8 @@ export async function beginRelogin(store, cookie) {
     startedAt: Date.now()
   };
   markOpening();
+  loginCursor.step = "重新登录";
+  loginCursor.message = "正在重新登录";
   const shops = await deps.loadOrg(cookie || "");
   if (epoch !== loginEpoch) {
     return currentLoginState(name);
@@ -485,10 +539,41 @@ export async function beginRelogin(store, cookie) {
     return item.store === name;
   });
   if (sessionStillValid(existing)) {
-    if (epoch === loginEpoch) {
-      loginCursor = { index: 0, total: 0, store: "", step: "", message: "", failed: false, phase: "idle" };
+    const alive = await cookiesAlive(existing.cookies || []);
+    if (epoch !== loginEpoch) {
+      return currentLoginState(name);
     }
-    return { ok: true, status: "done", store: name, message: "「" + name + "」已连接" };
+    if (alive) {
+      clearOpening();
+      loginCursor = { index: 0, total: 0, store: "", step: "", message: "", failed: false, phase: "idle" };
+      shop.login = "";
+      shop.password = "";
+      return { ok: true, status: "done", store: name, message: "「" + name + "」已连接" };
+    }
+    await markAuth(name, "login_expired", "登录已失效，请重新登录");
+  }
+  try {
+    const renewed = await passwordRelogin({
+      store: shop.store,
+      login: shop.login,
+      password: shop.password,
+      shopId: shop.shopId || ""
+    });
+    if (epoch !== loginEpoch) {
+      return currentLoginState(name);
+    }
+    if (renewed) {
+      clearOpening();
+      loginCursor = { index: 0, total: 0, store: "", step: "", message: "", failed: false, phase: "idle" };
+      shop.login = "";
+      shop.password = "";
+      return { ok: true, status: "done", store: name, message: "「" + name + "」已重新登录" };
+    }
+  } catch {
+    /* 掉线店先走账号密码；需要验证码时再打开服务器画面 */
+  }
+  if (epoch !== loginEpoch) {
+    return currentLoginState(name);
   }
   const queued = { store: shop.store, login: shop.login, password: shop.password, shopId: shop.shopId || "" };
   shop.login = "";
@@ -515,18 +600,16 @@ export async function beginReloginAll(cookie) {
   const shops = await deps.loadOrg(cookie || "");
   rememberOrg(shops);
   const sessions = await listSessions();
-  const ready = new Set(
-    sessions
-      .filter(function (session) {
-        return sessionStillValid(session);
-      })
-      .map(function (session) {
-        return session.store;
-      })
+  const byName = new Map(
+    sessions.map(function (session) {
+      return [session.store, session];
+    })
   );
   const pending = [];
   shops.forEach(function (shop) {
-    const needs = shop.enabled !== false && shop.login && shop.password && !ready.has(shop.store);
+    const session = byName.get(shop.store);
+    const ready = sessionStillValid(session) && !sessionNeedsLogin(session);
+    const needs = shop.enabled !== false && shop.login && shop.password && !ready;
     shop.login = "";
     shop.password = "";
     if (needs) {
@@ -537,6 +620,89 @@ export async function beginReloginAll(cookie) {
     return { ok: true, status: "done", message: "全部店铺已连接", shops: [] };
   }
   return { ok: true, status: "pick", message: "选择要登录的店铺", shops: pending };
+}
+
+export async function recoverDroppedShops(cookie) {
+  if (recovering || refreshing || loginInProgress(loginCursor.store)) {
+    return { ok: true, status: "running", recovered: 0, total: 0 };
+  }
+  recovering = true;
+  try {
+    let shops = [];
+    try {
+      shops = await deps.loadOrg(cookie || "");
+      rememberOrg(shops);
+    } catch {
+      shops = [...orgCache.values()].map(function (shop) {
+        return {
+          store: shop.store,
+          login: shop.login,
+          password: shop.password,
+          shopId: shop.shopId || "",
+          enabled: shop.enabled !== false
+        };
+      });
+    }
+    const sessions = await listSessions();
+    const byName = new Map(
+      sessions.map(function (session) {
+        return [session.store, session];
+      })
+    );
+    const live = await readJingmaiLive();
+    const dropped = new Set(
+      ((live && live.shops) || [])
+        .filter(function (row) {
+          return row && (row.offline === true || row.loginExpired === true);
+        })
+        .map(function (row) {
+          return row.shop;
+        })
+    );
+    const targets = [];
+    shops.forEach(function (shop) {
+      if (!shop || shop.enabled === false || !shop.login || !shop.password || inflight.has(shop.store)) {
+        return;
+      }
+      const session = byName.get(shop.store);
+      const needs =
+        dropped.has(shop.store) ||
+        sessionNeedsLogin(session || { enabled: true, cookies: [], authState: "" }) ||
+        (sessionStillValid(session) && session && session.authState === "offline");
+      if (!needs) {
+        return;
+      }
+      targets.push({
+        store: shop.store,
+        login: shop.login,
+        password: shop.password,
+        shopId: shop.shopId || ""
+      });
+      shop.login = "";
+      shop.password = "";
+    });
+    const results = [];
+    for (let i = 0; i < targets.length; i += 1) {
+      const shop = targets[i];
+      try {
+        const ok = await passwordRelogin(shop);
+        results.push({ store: shop.store, status: ok ? "ok" : "login" });
+      } catch {
+        results.push({ store: shop.store, status: "login" });
+      }
+      shop.password = "";
+    }
+    return {
+      ok: true,
+      recovered: results.filter(function (item) {
+        return item.status === "ok";
+      }).length,
+      total: targets.length,
+      results: results
+    };
+  } finally {
+    recovering = false;
+  }
 }
 
 export async function reloginState(store) {
@@ -774,6 +940,11 @@ export async function jingmaiTick() {
     markAuth: markAuth,
     now: beijingParts
   });
+  try {
+    await recoverDroppedShops("");
+  } catch (error) {
+    console.error("jingmai recover", error && error.code ? error.code : "failed");
+  }
 }
 
 export function startJingmaiCollector() {
