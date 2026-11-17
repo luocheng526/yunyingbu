@@ -105,6 +105,25 @@ export function parseSkuFeatures(payload) {
   return payload?.jingdong_sku_read_findSkuById_responce?.sku?.features || [];
 }
 
+export function parseSkuSearch(payload) {
+  const page = payload?.jingdong_sku_read_searchSkuList_responce?.page || {};
+  const data = Array.isArray(page.data) ? page.data : [];
+  const pageSize = Number(page.pageSize || 20) || 20;
+  const total = Number(page.totalItem || 0);
+  return {
+    total,
+    pageSize,
+    lastPage: Math.max(1, Math.ceil(total / pageSize) || 1),
+    skus: data
+      .filter((row) => isJdExpress(row.features) && row?.skuId != null)
+      .map((row) => ({
+        skuId: String(row.skuId),
+        wareId: String(row.wareId ?? ""),
+        skuName: row.skuName || ""
+      }))
+  };
+}
+
 export function parsePartitionStocks(payload) {
   const info = payload?.jingdong_ware_stock_sku_query_responce?.returnType;
   if (info && info.success === false) {
@@ -144,6 +163,14 @@ export async function callJd(auth, method, biz) {
     throw new Error(String(desc).slice(0, 180));
   }
   return payload;
+}
+
+export async function readPartitionLines(auth, skuId) {
+  const stockPayload = await callJd(auth, "jingdong.ware.stock.sku.query", {
+    skuId: String(skuId),
+    stockModel: "POP_PARTITION"
+  });
+  return warehouseLines([{ featureKey: "isJDexpress", featureValue: "1" }], parsePartitionStocks(stockPayload));
 }
 
 export async function readJdWarehouseStock(auth, skuId) {

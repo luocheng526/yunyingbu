@@ -373,6 +373,64 @@ test("inventory reads partition stock and hides shop auth", async () => {
   assert.equal(calls.some((item) => String(item.url).includes("/jd/product/page")), false);
 });
 
+test("inventory reads JD logistics SKUs from the tail of each shop", async () => {
+  process.env.XM_ERP_TOKEN = "test-token";
+  mockErp(async (url) => {
+    if (String(url).includes("/jd/shopInfo/page")) {
+      return shopPage();
+    }
+    throw new Error("unexpected " + url);
+  });
+  setJdFetchForTests(async (_url, options) => {
+    const params = new URLSearchParams(options.body);
+    const biz = JSON.parse(params.get("360buy_param_json"));
+    const method = params.get("method");
+    if (method === "jingdong.sku.read.searchSkuList") {
+      const data =
+        Number(biz.pageNo) === 2
+          ? [
+              {
+                skuId: "10236540030710",
+                skuName: "RASW德系毛球修剪器",
+                features: [{ featureKey: "isJDexpress", featureValue: "1" }]
+              }
+            ]
+          : [{ skuId: "1", skuName: "普通商品", features: [] }];
+      return {
+        json: async () => ({
+          jingdong_sku_read_searchSkuList_responce: {
+            page: { pageSize: 20, totalItem: 40, data }
+          }
+        })
+      };
+    }
+    return {
+      json: async () => ({
+        jingdong_ware_stock_sku_query_responce: {
+          returnType: {
+            success: true,
+            obj: {
+              skuStockInfos: [
+                { storeId: 0, stockNum: 99997 },
+                { storeId: 118091428, stockNum: 4, orderTransferNum: 1 }
+              ]
+            }
+          }
+        }
+      })
+    };
+  });
+  const cookie = await loginCookie();
+  const res = await fetch(`${base}/api/stores/erp/inventory`, { headers: { cookie } });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.records.length, 1);
+  assert.equal(body.records[0].skuId, "10236540030710");
+  assert.equal(body.records[0].usableNum, 3);
+  assert.equal(body.records[0].warehouseId, "118091428");
+  assert.equal(JSON.stringify(body).includes("99997"), false);
+});
+
 test("ERP SQL errors are not leaked to the client", async () => {
   process.env.XM_ERP_TOKEN = "test-token";
   mockErp(async (url) => {

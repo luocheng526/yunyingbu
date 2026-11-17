@@ -1,5 +1,5 @@
 import { erpPost, listErpShopMeta } from "../data/erp.js";
-import { readJdWarehouseStock, resetJdStockForTests } from "./jd-stock.js";
+import { callJd, parseSkuSearch, readJdWarehouseStock, readPartitionLines, resetJdStockForTests } from "./jd-stock.js";
 
 export const STORE_PAGES = [
   { id: "reviews", title: "评价管理", path: "/stores/reviews" },
@@ -396,40 +396,87 @@ async function mapPool(items, limit, fn) {
   return out;
 }
 
-export async function listErpInventory(input = {}) {
-  const meta = await listErpShopMeta();
-  const { ids, emptyDuty } = await resolveShopIds(input);
-  const pageSize = Math.min(toInt(input.pageSize, 20), 20);
-  if (emptyDuty) {
-    return {
-      ...emptyPage(pageSize),
-      page: "京东库存监控",
-      summary: { jd: 0, usable: 0, low: 0, droppedNational: 0, listed: 0 }
-    };
-  }
-  const keyword = String(input.skuName || input.productName || "").trim();
-  const data = await erpPost("/product/jd/product/sku/page", {
-    pageNum: toInt(input.pageNum, 1),
-    pageSize,
-    shopIds: ids.length ? ids : undefined,
-    skuName: keyword || undefined
+const SHOPS_PER_PAGE = 4;
+const EXPRESS_PER_SHOP = 6;
+const STOCK_CHECK_CAP = 16;
+const SKU_SEARCH_FIELD = "skuId,wareId,skuName,stockNum,features";
+
+async function searchJdSkuPage(auth, pageNo) {
+  const payload = await callJd(auth, "jingdong.sku.read.searchSkuList", {
+    pageNo,
+    pageSize: 20,
+    field: SKU_SEARCH_FIELD
   });
-  const skus = Array.isArray(data?.records) ? data.records : [];
-  const authMap = await loadShopAuthMap();
+  return parseSkuSearch(payload);
+}
+
+async function expressSkusAtTail(auth) {
+  const first = await searchJdSkuPage(auth, 1);
+  const pages = [];
+  if (first.lastPage <= 2) {
+    pages.push(first.skus);
+  }
+  const targets = [];
+  if (first.lastPage > 1) {
+    targets.push(first.lastPage);
+  }
+  if (first.lastPage > 2) {
+    targets.push(first.lastPage - 1);
+  }
+  const rest = await mapPool(targets, 2, async (pageNo) => (await searchJdSkuPage(auth, pageNo)).skus);
+  const seen = new Set();
+  const skus = [];
+  for (const row of [...pages.flat(), ...rest.flat()]) {
+    if (!row?.skuId || seen.has(row.skuId)) {
+      continue;
+    }
+    seen.add(row.skuId);
+    skus.push(row);
+    if (skus.length >= EXPRESS_PER_SHOP) {
+      break;
+    }
+  }
+  return skus;
+}
+
+function inventoryResult(records, extra) {
+  const usable = records.reduce((sum, row) => sum + row.usableNum, 0);
+  const low = records.filter((row) => row.stockLabel === "低库存" || row.stockLabel === "库存异常").length;
+  return {
+    ok: true,
+    source: "jingdong-partition-stock",
+    page: "京东库存监控",
+    records,
+    summary: {
+      jd: records.length,
+      usable,
+      low,
+      droppedNational: extra.droppedNational || 0,
+      failed: extra.failed || 0,
+      listed: records.length
+    },
+    total: extra.total ?? records.length,
+    totalPages: extra.totalPages || 1,
+    currentPage: extra.currentPage || 1,
+    pageSize: extra.pageSize || records.length
+  };
+}
+
+async function linesForSkus(skus, authFor, meta, readLines) {
   const groups = await mapPool(skus, 4, async (sku) => {
-    const shopId = String(sku?.shopId ?? "");
-    const auth = authMap[shopId];
-    if (!auth || !sku?.skuId) {
+    const shopId = String(sku.shopId ?? "");
+    const auth = authFor(shopId);
+    if (!auth || !sku.skuId) {
       return { lines: [], droppedNational: 0, failed: 0 };
     }
     try {
-      const stock = await readJdWarehouseStock(auth, sku.skuId);
+      const stock = await readLines(auth, sku.skuId);
       return {
         droppedNational: stock.droppedNational,
         failed: 0,
         lines: stock.lines.map((line) => ({
           ...line,
-          productId: String(sku.productId ?? ""),
+          productId: String(sku.productId || sku.wareId || ""),
           productName: sku.productName || sku.skuName || "",
           skuId: String(sku.skuId),
           shopId,
@@ -440,26 +487,59 @@ export async function listErpInventory(input = {}) {
       return { lines: [], droppedNational: 0, failed: 1 };
     }
   });
-  const droppedNational = groups.reduce((sum, group) => sum + group.droppedNational, 0);
-  const failed = groups.reduce((sum, group) => sum + group.failed, 0);
-  const records = groups
-    .flatMap((group) => group.lines)
-    .sort((a, b) => a.usableNum - b.usableNum || String(a.skuId).localeCompare(String(b.skuId)));
-  const usable = records.reduce((sum, row) => sum + row.usableNum, 0);
-  const low = records.filter((row) => row.stockLabel === "低库存" || row.stockLabel === "库存异常").length;
   return {
-    ok: true,
-    source: "jingdong-partition-stock",
-    page: "京东库存监控",
-    ...pageOf(data),
-    records,
-    summary: {
-      jd: records.length,
-      usable,
-      low,
-      droppedNational,
-      failed,
-      listed: records.length
-    }
+    droppedNational: groups.reduce((sum, group) => sum + group.droppedNational, 0),
+    failed: groups.reduce((sum, group) => sum + group.failed, 0),
+    records: groups
+      .flatMap((group) => group.lines)
+      .sort((a, b) => a.usableNum - b.usableNum || String(a.skuId).localeCompare(String(b.skuId)))
   };
+}
+
+export async function listErpInventory(input = {}) {
+  const meta = await listErpShopMeta();
+  const { ids, emptyDuty } = await resolveShopIds(input);
+  const pageSize = Math.min(toInt(input.pageSize, 20), 20);
+  if (emptyDuty) {
+    return inventoryResult([], { total: 0, totalPages: 1, currentPage: 1, pageSize, droppedNational: 0, failed: 0 });
+  }
+  const keyword = String(input.skuName || input.productName || "").trim();
+  const authMap = await loadShopAuthMap();
+  if (keyword) {
+    const data = await erpPost("/product/jd/product/sku/page", {
+      pageNum: toInt(input.pageNum, 1),
+      pageSize,
+      shopIds: ids.length ? ids : undefined,
+      skuName: keyword
+    });
+    const listed = await linesForSkus(data?.records || [], (shopId) => authMap[shopId], meta, readJdWarehouseStock);
+    return {
+      ...inventoryResult(listed.records, {
+        ...pageOf(data),
+        droppedNational: listed.droppedNational,
+        failed: listed.failed
+      })
+    };
+  }
+  const shopIds = (ids.length ? ids.map(String) : Object.keys(authMap)).filter((id) => authMap[id]);
+  const pageNum = toInt(input.pageNum, 1);
+  const shopPages = Math.max(1, Math.ceil(shopIds.length / SHOPS_PER_PAGE));
+  const windowIds = ids.length === 1 ? shopIds : shopIds.slice((pageNum - 1) * SHOPS_PER_PAGE, pageNum * SHOPS_PER_PAGE);
+  const grouped = await mapPool(windowIds, 3, async (shopId) => {
+    try {
+      const skus = await expressSkusAtTail(authMap[shopId]);
+      return skus.map((sku) => ({ ...sku, shopId }));
+    } catch {
+      return [];
+    }
+  });
+  const listed = await linesForSkus(grouped.flat().slice(0, STOCK_CHECK_CAP), (shopId) => authMap[shopId], meta, readPartitionLines);
+  return inventoryResult(listed.records, {
+    total: listed.records.length,
+    totalPages: ids.length === 1 ? 1 : shopPages,
+    currentPage: ids.length === 1 ? 1 : Math.min(pageNum, shopPages),
+    pageSize: SHOPS_PER_PAGE,
+    droppedNational: listed.droppedNational,
+    failed: listed.failed
+  });
 }
