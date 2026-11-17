@@ -49,3 +49,4 @@
 - 改 `app.js` 时正文必须同时有 `attachProfile`、`attachHome`、`createReleasesRouter`、`/api/health`。缺一个闸会拒。
 - 禁止空 `files`。
 - 申请人：`罗成运营部主脑`。做完直接交单。
+- 每次改动都不要录屏，不要做视频分析，不要出预览图，不要截图。核对用接口或本地测试。

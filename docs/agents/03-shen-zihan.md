@@ -6,6 +6,7 @@
 - 版本号 `0.1.N-说明`，先 `GET /api/releases/next`。禁止自编 `shen-0.1.x`。
 - 嵌入式：`public/shared/modules/shen.js` 挂 `XmModules["/shen"]`。不要自画侧栏，不要交壳，不要交 `src/app.js`。
 - 内容区跟 `--xm-*` / `data-theme`。不要抄 e50e 全页壳。
+- 每次改动都不要录屏，不要做视频分析，不要出预览图，不要截图。核对用接口或本地测试。
 
 【你能改】
 - `public/shen.html`、`public/shen*`

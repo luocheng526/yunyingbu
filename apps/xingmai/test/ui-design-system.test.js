@@ -123,7 +123,7 @@ test("shell loads the content UI without restyling header, sidebar, or existing 
 test("business modules cannot overwrite the shared content UI", () => {
   const reason = ticketGuardReason({
     module: "数据中心",
-    files: ["public/shared/xm-ui.css", "docs/XM_UI_DESIGN_SYSTEM.md"]
+    files: ["public/shared/xm-ui.css", "docs/XM_UI_DESIGN_SYSTEM.md", ".cursor/rules/no-preview-media.mdc"]
   });
   assert.match(reason, /禁止提交全站壳文件/);
   assert.equal(

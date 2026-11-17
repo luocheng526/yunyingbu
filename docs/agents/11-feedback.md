@@ -6,6 +6,7 @@
 - 版本号 `0.1.N-说明`，先 `GET /api/releases/next`。登录不上先读 [00-prod-admin.md](00-prod-admin.md)。
 - 嵌入式：`public/shared/modules/feedback.js` 挂 `XmModules["/feedback"]`。不要自画侧栏，不要交壳，不要交 `src/app.js`。
 - 颜色跟 `--xm-*` / `data-theme`。不要抄 e50e 全页壳。
+- 每次改动都不要录屏，不要做视频分析，不要出预览图，不要截图。核对用接口或本地测试。
 - 只要一页 `/feedback`，上面用页签切换即可，不要再开子路由，除非主框架先改侧栏。
 - 人事部账号只看智能人事和个人中心，不要把需求与反馈加进人事台。
 - 不要覆盖现网 `hr.js`、`people.js`、`app.js`。

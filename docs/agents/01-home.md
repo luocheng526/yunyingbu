@@ -6,6 +6,7 @@
 - 版本号 `0.1.N-说明`，先 `GET /api/releases/next`。
 - 嵌入式：`public/shared/modules/home.js` 挂 `XmModules["/home"]`。不要自画侧栏，不要交壳，不要交 `src/app.js`。
 - 颜色跟 `--xm-*` / `data-theme`。不要抄 e50e 全页壳。
+- 每次改动都不要录屏，不要做视频分析，不要出预览图，不要截图。核对用接口或本地测试。
 
 【你能改】
 - `public/shared/modules/home.js`
