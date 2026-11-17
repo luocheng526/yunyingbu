@@ -476,12 +476,6 @@ function mainItemsFor(user) {
   });
 }
 
-export const ACADEMY_CHILDREN = [
-  { href: "/academy/courses", label: "培训课程" },
-  { href: "/academy/exams", label: "培训考试" },
-  { href: "/academy/handbook", label: "运营手册" }
-];
-
 export const PEOPLE_CHILDREN = [];
 
 export const NAV_MAIN = [
@@ -491,7 +485,7 @@ export const NAV_MAIN = [
   { href: "/shen", label: "沈子晗运营中心", children: SHEN_CHILDREN },
   { href: "/han", label: "韩梦凯运营中心", children: HAN_CHILDREN },
   { href: "/stores", file: "stores.html", label: "店铺维护中心" },
-  { href: "/academy", label: "甄选商学院", children: ACADEMY_CHILDREN },
+  { href: "/academy", label: "甄选商学院" },
   { href: "/agents", file: "agents.html", label: "甄选智能体" },
   { href: "/work", label: "工作汇报" },
   { href: "/meeting", label: "月度大会" },
@@ -582,7 +576,9 @@ function attrMarkup(item) {
 function itemLink(item, activeHref, extraClass) {
   const key = hrefKey(activeHref);
   const on =
-    hrefKey(item.href) === key || (item.href === "/people" && (key === "/notices" || key.startsWith("/people?")));
+    hrefKey(item.href) === key ||
+    (item.href === "/people" && (key === "/notices" || key.startsWith("/people?"))) ||
+    (item.href === "/academy" && (key === "/academy" || key.startsWith("/academy/")));
   const current = on ? ' aria-current="page"' : "";
   const active = on ? " is-active" : "";
   const extra = extraClass ? ` ${extraClass}` : "";

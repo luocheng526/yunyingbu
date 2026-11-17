@@ -95,9 +95,6 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /href: \"\/hr\"/);
   assert.doesNotMatch(jsText, /<span>人员管理<\/span>/);
   assert.match(jsText, /甄选商学院/);
-  assert.match(jsText, /培训课程/);
-  assert.match(jsText, /培训考试/);
-  assert.match(jsText, /运营手册/);
   assert.match(jsText, /甄选智能体/);
   assert.match(jsText, /版本发布中心/);
   assert.match(jsText, /个人中心/);
@@ -108,6 +105,9 @@ test("shared shell assets are public", async () => {
   assert.match(jsText, /items\.slice\(0, footStart/);
   assert.doesNotMatch(jsText, /items\.slice\(0, 5\)/);
   const itemsBlock = jsText.match(/const items = \[([\s\S]*?)\];/)[1];
+  assert.doesNotMatch(itemsBlock, /培训课程/);
+  assert.doesNotMatch(itemsBlock, /培训考试/);
+  assert.doesNotMatch(itemsBlock, /运营手册/);
   const homeAt = itemsBlock.indexOf('href: "/home"');
   const dataAt = itemsBlock.indexOf('href: "/data"');
   const peopleAt = itemsBlock.indexOf('href: "/people"');
@@ -183,9 +183,9 @@ test("home page html is the xingmai sider template", async () => {
   assert.match(html, /退出登录/);
   assert.match(html, /v0\.4\.\d+/);
   assert.match(html, /甄选商学院/);
-  assert.match(html, /培训课程/);
-  assert.match(html, /培训考试/);
-  assert.match(html, /运营手册/);
+  assert.doesNotMatch(html, /href="\/academy\/courses"/);
+  assert.doesNotMatch(html, /href="\/academy\/exams"/);
+  assert.doesNotMatch(html, /href="\/academy\/handbook"/);
   assert.match(html, /甄选智能体/);
   assert.match(html, /数据总揽/);
   assert.match(html, /店铺数据/);
@@ -318,7 +318,7 @@ test("数据中心 expands three placeholder children", async () => {
   assert.match(dataMod, /XmModules\["\/data\/goods"\]/);
 });
 
-test("甄选商学院 expands three children and 甄选智能体 stays a leaf", async () => {
+test("甄选商学院是一项，没有子菜单", async () => {
   const cookieRes = await fetch(`${base}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -326,19 +326,16 @@ test("甄选商学院 expands three children and 甄选智能体 stays a leaf", 
   });
   assert.equal(cookieRes.status, 200);
   const cookie = String(cookieRes.headers.get("set-cookie") || "").split(";")[0];
-  const academyBounce = await fetch(`${base}/academy`, { headers: { cookie }, redirect: "manual" });
-  assert.equal(academyBounce.status, 302);
-  assert.equal(academyBounce.headers.get("location"), "/academy/courses");
-  const academy = await fetch(`${base}/academy/courses`, { headers: { cookie } });
-  assert.equal(academy.status, 200);
-  const academyHtml = await academy.text();
+  const academyPage = await fetch(`${base}/academy`, { headers: { cookie }, redirect: "manual" });
+  assert.equal(academyPage.status, 200);
+  const academyHtml = await academyPage.text();
   assert.match(academyHtml, /甄选商学院/);
-  assert.match(academyHtml, /培训课程/);
-  assert.match(academyHtml, /培训考试/);
-  assert.match(academyHtml, /运营手册/);
-  assert.match(academyHtml, /href="\/academy\/courses"/);
-  assert.match(academyHtml, /href="\/academy\/exams"/);
-  assert.match(academyHtml, /href="\/academy\/handbook"/);
+  assert.match(academyHtml, /href="\/academy"/);
+  assert.doesNotMatch(academyHtml, /href="\/academy\/courses"/);
+  assert.doesNotMatch(academyHtml, /href="\/academy\/exams"/);
+  assert.doesNotMatch(academyHtml, /href="\/academy\/handbook"/);
+  const coursePage = await fetch(`${base}/academy/courses`, { headers: { cookie } });
+  assert.equal(coursePage.status, 200);
   assert.match(academyHtml, /甄选智能体/);
   assert.match(academyHtml, /组织中心/);
   assert.doesNotMatch(academyHtml, /<span>人员管理<\/span>/);
@@ -346,7 +343,8 @@ test("甄选商学院 expands three children and 甄选智能体 stays a leaf", 
   const footNav = academyHtml.match(/<nav class="xm-menu xm-menu-foot">[\s\S]*?<\/nav>/)[0];
   assert.doesNotMatch(mainNav, /组织中心/);
   assert.doesNotMatch(mainNav, /href="\/people"/);
-  assert.match(mainNav, /data-xm-group="\/academy"/);
+  assert.doesNotMatch(mainNav, /data-xm-group="\/academy"/);
+  assert.match(mainNav, /href="\/academy"/);
   assert.doesNotMatch(mainNav, /智能人事/);
   assert.doesNotMatch(mainNav, /href="\/hr"/);
   assert.ok(footNav.indexOf('href="/releases"') < footNav.indexOf('href="/people"'));
