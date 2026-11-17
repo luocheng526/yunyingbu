@@ -393,8 +393,109 @@ export function publicProfile(user) {
     email: user.email,
     phone: user.phone,
     desk,
-    home: desk === "hr" ? "/hr" : "/data"
+    home: desk === "hr" ? "/hr" : "/data",
+    board: String(user.board || ""),
+    department: String(user.department || ""),
+    center: String(user.center || ""),
+    role: String(user.role || ""),
+    visibleShops: Array.isArray(user.visibleShops) ? user.visibleShops.map((item) => String(item)) : []
   };
+}
+
+async function mergePeopleBoard(people) {
+  if (dbMode() !== "mysql") {
+    return Array.isArray(people) ? people : [];
+  }
+  const list = Array.isArray(people) ? people : [];
+  const tries = [
+    "SELECT id, name, username, board, role, center, department, manager_id FROM people",
+    "SELECT id, username, board, manager_id FROM people"
+  ];
+  for (const sql of tries) {
+    try {
+      const [rows] = await query(sql);
+      const extra = new Map(
+        (rows || []).map((row) => [
+          Number(row.id),
+          {
+            username: String(row.username || "").trim(),
+            board: String(row.board || "").trim(),
+            name: String(row.name || "").trim(),
+            role: String(row.role || "").trim(),
+            center: String(row.center || "").trim(),
+            department: String(row.department || "").trim(),
+            managerId: row.manager_id == null || row.manager_id === "" ? null : Number(row.manager_id)
+          }
+        ])
+      );
+      return list.map((person) => {
+        const patch = extra.get(Number(person.id)) || {};
+        return {
+          ...person,
+          username: person.username || patch.username || "",
+          board: person.board || patch.board || "",
+          role: person.role || patch.role || "",
+          center: person.center || patch.center || "",
+          department: person.department || patch.department || "",
+          managerId: person.managerId != null ? person.managerId : patch.managerId
+        };
+      });
+    } catch {
+      /* 组织中心表字段因版本不同，换一条 SQL */
+    }
+  }
+  return list;
+}
+
+export async function resolveDesk(user) {
+  if (!user) {
+    return "";
+  }
+  try {
+    const { canSeeStaffNav, hrDeskFromOrg } = await import("../home/nav-items.js");
+    if (canSeeStaffNav(user)) {
+      user.desk = "";
+      return "";
+    }
+    let people = [];
+    try {
+      const { listPeople } = await import("../people/store.js");
+      people = await listPeople();
+    } catch {
+      people = [];
+    }
+    people = await mergePeopleBoard(people);
+    let fromWork = "";
+    try {
+      const work = await import("../work/store.js");
+      if (typeof work.deskOf === "function") {
+        fromWork = String((await work.deskOf(user)) || "");
+      }
+    } catch {
+      fromWork = "";
+    }
+    const fromOrg = hrDeskFromOrg(user, people);
+    const desk = fromWork === "hr" || fromOrg === "hr" ? "hr" : "";
+    user.desk = desk;
+    const aliases = [user.username, user.displayName, user.name]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean);
+    const me =
+      people.find(
+        (person) => aliases.includes(String(person.username || "")) || aliases.includes(String(person.name || ""))
+      ) || null;
+    if (me) {
+      user.board = String(me.board || user.board || "");
+      user.department = String(me.department || user.department || "");
+      user.center = String(me.center || user.center || "");
+      user.role = String(me.role || user.role || "");
+      user.visibleShops = Array.isArray(me.visibleShops) ? me.visibleShops.map((item) => String(item)) : [];
+    }
+    return desk;
+  } catch {
+    user.desk = user.desk || "";
+    return String(user.desk || "");
+  }
 }
 
 function parseCookies(req) {
@@ -509,12 +610,7 @@ authRouter.post("/login", async (req, res) => {
   persistSession(sid, user.username, createdAt, expiresAt).catch(function (err) {
     console.error("session persist failed", err);
   });
-  try {
-    const { deskOf } = await import("../work/store.js");
-    user.desk = await deskOf(user);
-  } catch {
-    user.desk = user.desk || "";
-  }
+  await resolveDesk(user);
   res.json({ ok: true, remember, user: publicProfile(user) });
 });
 
@@ -530,12 +626,13 @@ authRouter.post("/logout", (req, res) => {
   res.json({ ok: true });
 });
 
-authRouter.get("/me", (req, res) => {
+authRouter.get("/me", async (req, res) => {
   const user = currentUser(req);
   if (!user) {
     res.status(401).json({ ok: false, error: "未登录" });
     return;
   }
+  await resolveDesk(user);
   sendProfile(res, user);
 });
 

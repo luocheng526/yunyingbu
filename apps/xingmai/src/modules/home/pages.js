@@ -10,7 +10,7 @@ import { meetingRouter } from "../meeting/router.js";
 import { boundRouter } from "../bound/router.js";
 
 // xm-upgrade-mask 0.1.52  必须和 profile/middleware.js 成套发。
-// xm-fast-shell 0.1.774-tabcap
+// xm-fast-shell 0.1.775-dutylive
 // xm-login-session 登录会话回读必须和 profile/middleware.js 成套发。
 // login.html 不走 HTML 内存缓存，必须和 profile/middleware.js 成套发。
 

@@ -3,14 +3,14 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { navMarkup } from "../home/nav-items.js";
-import { currentUser, publicProfile } from "./auth.js";
+import { currentUser, publicProfile, resolveDesk } from "./auth.js";
 import { APP_ICON_PNG } from "./app-icon-png.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.774-tabcap
+// xm-fast-shell 0.1.775-dutylive
 // login.html 不走 HTML 内存缓存；login.css 禁止 immutable。必须和 home/pages.js 成套发。
 
-export const SHELL_ASSET_VER = "0.1.774-tabcap";
+export const SHELL_ASSET_VER = "0.1.775-dutylive";
 export const WEB_MANIFEST = {
   name: "星脉甄选运营中心",
   short_name: "星脉甄选",
@@ -617,8 +617,7 @@ async function attachDesk(user) {
     return;
   }
   try {
-    const { deskOf } = await import("../work/store.js");
-    user.desk = await deskOf(user);
+    await resolveDesk(user);
   } catch {
     user.desk = user.desk || "";
   }
