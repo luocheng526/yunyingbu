@@ -7,17 +7,17 @@ import { currentUser, publicProfile, resolveDesk } from "./auth.js";
 import { APP_ICON_PNG } from "./app-icon-png.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.781-markwho
+// xm-fast-shell 0.1.782-lightskin
 // login.html 不走 HTML 内存缓存；login.css 禁止 immutable。必须和 home/pages.js 成套发。
 
-export const SHELL_ASSET_VER = "0.1.781-markwho";
+export const SHELL_ASSET_VER = "0.1.782-lightskin";
 export const WEB_MANIFEST = {
   name: "星脉甄选运营中心",
   short_name: "星脉甄选",
   start_url: "/home",
   scope: "/",
   display: "standalone",
-  background_color: "#f0f2f5",
+  background_color: "#f5f7fb",
   theme_color: "#1677ff",
   icons: [
     { src: `/apple-touch-icon.png?v=${SHELL_ASSET_VER}`, sizes: "180x180", type: "image/png", purpose: "any" },
