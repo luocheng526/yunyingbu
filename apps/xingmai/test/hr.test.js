@@ -168,7 +168,7 @@ test("hr schema stays in hr_ tables", () => {
 
 test("client mounts one page and five in-page tabs", () => {
   assert.match(client, /XmModules\["\/hr"\]/);
-  const labels = ["数据看板", "奋斗时长", "招聘中心", "员工花名册"];
+  const labels = ["数据看板", "奋斗时长", "招聘管理", "员工管理", "考勤管理", "薪酬绩效", "培训发展", "组织架构"];
   let from = 0;
   for (const label of labels) {
     const at = client.indexOf(`label: "${label}"`);
@@ -210,6 +210,10 @@ test("client mounts one page and five in-page tabs", () => {
   assert.match(client, /\.hr-board-kpi span\{order:1/);
   assert.match(client, /\.hr-board-kpi b\{order:2/);
   assert.match(client, /\.hr-board-kpi i\{order:3;display:flex;width:52px/);
+  assert.match(client, /考勤管理/);
+  assert.match(client, /薪酬金额还没有录入/);
+  assert.match(client, /培训记录还没有录入/);
+  assert.match(client, /data-org/);
   assert.match(client, /甄选员工详细名单/);
   assert.match(client, /data-staff-search/);
   assert.match(client, /data-staff-pick/);
@@ -1073,7 +1077,7 @@ test("http keeps attendance read-only and interviews in this module", async () =
     assert.equal(hr.data.allowed, true);
     const home = await request(server, "/api/hr");
     assert.equal(home.status, 200);
-    assert.deepEqual(home.data.tabs, ["数据看板", "奋斗时长", "招聘中心", "员工花名册"]);
+    assert.deepEqual(home.data.tabs, ["数据看板", "奋斗时长", "招聘管理", "员工管理", "考勤管理", "薪酬绩效", "培训发展", "组织架构"]);
     const effort = await request(server, "/api/hr/effort?month=2026-11");
     assert.equal(effort.data.hours, 0);
     assert.equal(Array.isArray(effort.data.people), true);

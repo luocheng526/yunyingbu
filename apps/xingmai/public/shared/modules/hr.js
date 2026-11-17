@@ -3,8 +3,12 @@
   var TABS = [
     { id: "attendance", label: "数据看板" },
     { id: "overtime", label: "奋斗时长" },
-    { id: "recruit", label: "招聘中心" },
-    { id: "staff", label: "员工花名册" }
+    { id: "recruit", label: "招聘管理" },
+    { id: "staff", label: "员工管理" },
+    { id: "clock", label: "考勤管理" },
+    { id: "pay", label: "薪酬绩效" },
+    { id: "train", label: "培训发展" },
+    { id: "org", label: "组织架构" }
   ];
   var GENDERS = ["男", "女"];
   var STAGES = ["储备", "面试中", "已入职", "已淘汰"];
@@ -49,6 +53,11 @@
       ".hr-page{color:var(--xm-ink);}" +
       ".hr-top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;border-bottom:1px solid var(--xm-line);margin:0 0 12px;}" +
       ".hr-tabs{display:flex;gap:0;min-width:0;overflow:auto;}" +
+      ".hr-org{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;}" +
+      ".hr-org-card{padding:12px 14px;}" +
+      ".hr-org-card h3{margin:0 0 8px;font-size:15px;}" +
+      ".hr-org-card ul{margin:0;padding:0;list-style:none;}" +
+      ".hr-org-card li{padding:6px 0;border-bottom:1px solid var(--xm-line);font-size:13px;}" +
       ".hr-refresh{display:flex;align-items:center;gap:10px;padding:0 0 8px;flex:none;}" +
       ".hr-updated{color:var(--xm-muted);font-size:13px;white-space:nowrap;}" +
       ".hr-tab{appearance:none;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--xm-muted);font:inherit;font-size:14px;padding:10px 16px;cursor:pointer;white-space:nowrap;}" +
@@ -307,7 +316,7 @@
         '<p class="hr-msg" data-msg></p>' +
         table(["姓名", "部门", "角色", "组织", "月累计"], emptyRow(5, "这个月还没有 18 点后的下班打卡")) + "</section>";
     } else if (tab === "recruit") {
-      html = '<section class="hr-panel"><div class="hr-toolbar"><span>按月统计待入职。点登记后进入花名册在职，记录在服务器上。</span>' +
+      html = '<section class="hr-panel"><div class="hr-toolbar"><span>按月统计待入职。点登记后进入员工管理的在职人员，记录在服务器上。</span>' +
         '<label class="hr-month">月份<input type="month" data-join-month value="' + esc(String(today).slice(0, 7)) + '" /></label></div>' +
         '<div class="hr-board-kpis hr-recruit-kpis" data-recruit-kpis></div>' +
         '<h2 class="hr-team-title">待入职</h2>' +
@@ -341,6 +350,23 @@
         '<p class="hr-msg" data-msg></p>' +
         table(["姓名", "性别", "入职部门", "岗位", "入职日期", "联系电话", "籍贯", "渠道", "邀约人", "备注", "情况说明", ""], emptyRow(12, "还没有入职情况")).replace("data-list", "data-onboards") +
         "</section>";
+    } else if (tab === "clock") {
+      html = '<section class="hr-panel"><div class="hr-toolbar"><span>当天已经留档的打卡、迟到和请假。</span>' +
+        '<label class="hr-month">日期<input type="date" data-clock-day value="' + esc(today) + '" /></label></div>' +
+        '<div class="hr-stats" data-clock-kpis></div>' +
+        '<p class="hr-msg" data-msg></p>' +
+        table(["姓名", "部门", "工号", "上班", "下班", "状态"], emptyRow(6, "这一天还没有打卡")) + "</section>";
+    } else if (tab === "pay") {
+      html = '<section class="hr-panel"><div class="hr-toolbar"><span>薪酬金额还没有录入，这里不显示工资。绩效先用本月已留档的奋斗时长。</span>' +
+        '<label class="hr-month">月份<input type="month" data-month value="' + esc(month) + '" /></label></div>' +
+        '<div class="hr-stats" data-pay-kpis></div>' +
+        '<section class="hr-card hr-board-card" data-pay-teams></section>' +
+        '<p class="hr-msg" data-msg></p></section>';
+    } else if (tab === "train") {
+      html = '<section class="hr-panel"><div class="hr-card hr-board-card"><h3>培训发展</h3><div class="hr-empty">培训记录还没有录入。</div></div></section>';
+    } else if (tab === "org") {
+      html = '<section class="hr-panel"><div class="hr-toolbar"><span>按员工管理里的部门列出来。</span></div>' +
+        '<div class="hr-org" data-org></div><p class="hr-msg" data-msg></p></section>';
     } else {
       html = '<section class="hr-panel"><div class="hr-toolbar"><span>运营打卡人员的在职和离职记在服务器上。可以手填、导入表格，或从打卡带入。</span>' +
         '<span class="hr-link"><button type="button" class="hr-mini" data-act="staff-template">下载模板</button>' +
@@ -882,6 +908,94 @@
     return input && input.value ? "?month=" + encodeURIComponent(input.value) : "";
   }
 
+  function clockPack(pack) {
+    var boards = (pack && pack.boards) || [];
+    var total = boards.filter(function (item) { return item.id === "total"; })[0];
+    if (total) return total;
+    return { board: (pack && pack.board) || {}, punches: (pack && pack.punches) || [], roster: (pack && pack.roster) || [] };
+  }
+
+  function clockRows(punches) {
+    var groups = {};
+    (punches || []).forEach(function (row) {
+      var key = (row.dingtalkUserId || row.userName || "") + "|" + row.workDate;
+      if (!groups[key]) groups[key] = { userName: row.userName || "", department: row.department || "", jobNumber: row.jobNumber || "", on: "", off: "", label: "" };
+      if (row.department) groups[key].department = row.department;
+      if (row.checkType === "OffDuty") groups[key].off = row.checkAt || "";
+      else groups[key].on = row.checkAt || "";
+      if (row.label) groups[key].label = row.label;
+    });
+    return Object.keys(groups).map(function (key) { return groups[key]; }).sort(function (a, b) {
+      return String(a.department).localeCompare(String(b.department), "zh") || String(a.userName).localeCompare(String(b.userName), "zh");
+    });
+  }
+
+  function fillClock(root, pack) {
+    var view = clockPack(pack);
+    var board = view.board || {};
+    var box = root.querySelector("[data-clock-kpis]");
+    if (box) {
+      box.innerHTML = [
+        { label: "员工人数", value: board.staff || 0 },
+        { label: "应到人数", value: board.expected || 0 },
+        { label: "打卡人数", value: board.punched || 0 },
+        { label: "迟到人数", value: board.late || 0 },
+        { label: "请假人数", value: board.leave || 0 }
+      ].map(function (item) {
+        return '<div class="hr-kpi"><b>' + esc(item.value) + "</b><span>" + esc(item.label) + "</span></div>";
+      }).join("");
+    }
+    var rows = clockRows(view.punches);
+    var body = rows.length ? rows.map(function (row) {
+      return "<tr><td>" + esc(row.userName || "未命名") + "</td><td>" + esc(row.department) + "</td><td>" + esc(row.jobNumber) +
+        "</td><td>" + esc(String(row.on).slice(11)) + "</td><td>" + esc(String(row.off).slice(11)) + "</td><td>" + esc(row.label || (row.on || row.off ? "上班" : "未打卡")) + "</td></tr>";
+    }).join("") : emptyRow(6, "这一天还没有打卡");
+    setList(root, ["姓名", "部门", "工号", "上班", "下班", "状态"], body);
+    setUpdated(root, pack && pack.updatedAt);
+    setMsg(root, pack && pack.saved === false ? "这一天还没留档。" : "", false);
+  }
+
+  function fillPay(root, pack) {
+    var box = root.querySelector("[data-pay-kpis]");
+    if (box) {
+      box.innerHTML = [
+        { label: "薪酬", value: "未录入" },
+        { label: "本月人均时长", value: pack.average || 0 },
+        { label: "参与人数", value: pack.participants || 0 }
+      ].map(function (item) {
+        return '<div class="hr-kpi"><b>' + esc(item.value) + "</b><span>" + esc(item.label) + "</span></div>";
+      }).join("");
+    }
+    var teams = pack.teams || [];
+    var card = root.querySelector("[data-pay-teams]");
+    if (card) {
+      card.innerHTML = "<h3>各部门人均时长</h3>" + (teams.length ? teams.map(function (team) {
+        return '<div class="hr-rank"><div class="hr-rank-top"><span>' + esc(team.name) + "</span><b>" + esc(team.average || 0) + "小时</b></div></div>";
+      }).join("") : '<div class="hr-empty">这个月还没留档奋斗时长。</div>');
+    }
+    if (!pack.saved) setMsg(root, "这个月的绩效还没留档。薪酬金额仍然不在这里。", false);
+    else setMsg(root, "", false);
+  }
+
+  function fillOrg(root, pack) {
+    var box = root.querySelector("[data-org]");
+    if (!box) return;
+    var people = (pack.staff || []).filter(function (row) { return row.status !== "离职"; });
+    var groups = {};
+    people.forEach(function (row) {
+      var name = row.department || "未分部门";
+      if (!groups[name]) groups[name] = [];
+      groups[name].push(row);
+    });
+    var names = Object.keys(groups).sort(function (a, b) { return groups[b].length - groups[a].length || a.localeCompare(b, "zh"); });
+    box.innerHTML = names.length ? names.map(function (name) {
+      return '<section class="hr-card hr-org-card"><h3>' + esc(name) + " · " + groups[name].length + "人</h3><ul>" +
+        groups[name].sort(function (a, b) { return String(a.name).localeCompare(String(b.name), "zh"); }).map(function (row) {
+          return "<li>" + esc(row.name) + (row.position ? " · " + esc(row.position) : "") + "</li>";
+        }).join("") + "</ul></section>";
+    }).join("") : '<div class="hr-empty">员工管理里还没有在职人员。</div>';
+  }
+
   function loadTab(root, state) {
     var ticket = ++state.ticket;
     var tab = state.tab;
@@ -931,6 +1045,47 @@
       });
       return;
     }
+    if (tab === "clock") {
+      var clockInput = root.querySelector("[data-clock-day]");
+      var clockDay = clockInput && clockInput.value ? clockInput.value : shanghaiToday();
+      state.clocks = state.clocks || {};
+      var clockReq = state.clocks[clockDay]
+        ? Promise.resolve(state.clocks[clockDay])
+        : api("/api/hr/board?date=" + encodeURIComponent(clockDay)).then(function (data) {
+          state.clocks[clockDay] = data;
+          return data;
+        });
+      clockReq.then(function (view) {
+        if (!state.alive || ticket !== state.ticket || state.tab !== tab) return;
+        state.view = view;
+        fillClock(root, view);
+      }).catch(function (err) {
+        if (!state.alive || ticket !== state.ticket) return;
+        setMsg(root, err.message || "读取失败", true);
+      });
+      return;
+    }
+    if (tab === "pay") {
+      var payInput = root.querySelector("[data-month]");
+      var payMonth = payInput && payInput.value ? payInput.value : shanghaiToday().slice(0, 7);
+      state.effort = state.effort || {};
+      var payReq = state.effort[payMonth]
+        ? Promise.resolve(state.effort[payMonth])
+        : api("/api/hr/effort?month=" + encodeURIComponent(payMonth)).then(function (data) {
+          state.effort[payMonth] = data;
+          return data;
+        });
+      payReq.then(function (view) {
+        if (!state.alive || ticket !== state.ticket || state.tab !== tab) return;
+        state.view = view;
+        fillPay(root, view);
+      }).catch(function (err) {
+        if (!state.alive || ticket !== state.ticket) return;
+        setMsg(root, err.message || "读取失败", true);
+      });
+      return;
+    }
+    if (tab === "train") return;
     if (!state.people) {
       state.people = api("/api/people").then(safePeople).catch(function () { return []; });
     }
@@ -940,7 +1095,7 @@
     var peopleReq = state.people;
     var statusReq = state.status;
     var dataReq;
-    if (tab === "staff") {
+    if (tab === "staff" || tab === "org") {
       dataReq = api("/api/hr/staff");
     } else {
       var monthInput = root.querySelector("[data-join-month]");
@@ -959,7 +1114,8 @@
       if (tab === "attendance") fillHome(root, view);
       else if (tab === "overtime") fillEffort(root, view);
       else if (tab === "staff") fillStaff(root, view);
-      else fillRecruit(root, view);
+      else if (tab === "org") fillOrg(root, view);
+      else if (tab === "recruit") fillRecruit(root, view);
     }).catch(function (err) {
       if (!state.alive || ticket !== state.ticket) return;
       if (err.status === 403) {
@@ -1128,7 +1284,9 @@
           .then(function (data) {
             setUpdated(root, data.updatedAt);
             state.home = {};
-            if (state.tab === "attendance") loadTab(root, state);
+            state.clocks = {};
+            state.effort = {};
+            if (state.tab === "attendance" || state.tab === "clock" || state.tab === "pay" || state.tab === "overtime") loadTab(root, state);
             setMsg(root, data.configured === false ? "钉钉还没配置" : "已刷新 " + day, false);
           })
           .catch(function (err) { setMsg(root, err.message, true); })
@@ -1221,7 +1379,7 @@
         join.disabled = true;
         api("/api/hr/recruits/" + encodeURIComponent(join.getAttribute("data-id")) + "/join", { method: "POST", body: {} })
           .then(function (data) {
-            setMsg(root, data.already ? "已经登记过入职" : "已登记入职，已写入员工花名册的在职人员", false);
+            setMsg(root, data.already ? "已经登记过入职" : "已登记入职，已写入员工管理的在职人员", false);
             loadTab(root, state);
           })
           .catch(function (err) { setMsg(root, err.message, true); join.disabled = false; });
@@ -1324,7 +1482,7 @@
     root.addEventListener("change", function (event) {
       var target = event.target;
       if (!target || !root.contains(target)) return;
-      if (target.matches("[data-month], [data-range], [data-join-month]")) {
+      if (target.matches("[data-month], [data-range], [data-join-month], [data-clock-day]")) {
         loadTab(root, state);
         return;
       }

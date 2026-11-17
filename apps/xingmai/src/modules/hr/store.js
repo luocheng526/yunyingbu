@@ -1,6 +1,6 @@
 import { dbMode, query } from "../profile/auth.js";
 
-export const HR_TABS = ["数据看板", "奋斗时长", "招聘中心", "员工花名册"];
+export const HR_TABS = ["数据看板", "奋斗时长", "招聘管理", "员工管理", "考勤管理", "薪酬绩效", "培训发展", "组织架构"];
 export const GENDERS = ["男", "女"];
 export const STAFF_STATUSES = ["在职", "离职"];
 export const INTERVIEW_RESULTS = ["待定", "通过", "未通过", "未到场"];
