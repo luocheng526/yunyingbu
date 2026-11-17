@@ -67,6 +67,22 @@ test("壳把 /work 交给工作汇报模块", () => {
   assert.equal(html.includes("工作汇报"), true);
 });
 
+test("填写日报页用看板，空的时候仍能写下日报", () => {
+  const js = readFileSync(join(root, "../public/shared/modules/work.js"), "utf8");
+  assert.match(js, /员工日常工作汇报、任务进展与成果沉淀/);
+  assert.match(js, /tabBtn\("today", "填写日报"\)/);
+  assert.match(js, /今日应提交/);
+  assert.match(js, /今日提交率/);
+  assert.match(js, /这一天还没有人需要汇报。/);
+  assert.match(js, /data-write="today"/);
+  assert.match(js, /日报填写说明/);
+  assert.match(js, /按罗成配好的模板填/);
+  assert.match(js, /function renderDiaryFill\(\)/);
+  assert.match(js, /function renderDiarySettings\(\)/);
+  assert.match(js, /function renderSummary\(\)/);
+  assert.match(js, /function renderDuty\(\)/);
+});
+
 test("今天未交时侧栏工作汇报右上角是 1，交了就去掉", () => {
   const js = readFileSync(join(root, "../public/shared/modules/work.js"), "utf8");
   assert.match(js, /function paintNavBadge\(\)/);
