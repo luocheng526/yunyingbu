@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
-import { connect as connectTcp } from "node:net";
+import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { connect as connectTcp, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, resolve, sep } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -169,6 +169,72 @@ export function browserCandidates(found, shell) {
     list.push(found);
   }
   return list;
+}
+
+export function realBrowserBinary(file) {
+  if (!file || !existsSync(file)) {
+    return "";
+  }
+  let fd = null;
+  try {
+    fd = openSync(file, "r");
+    const buf = Buffer.alloc(160);
+    const size = readSync(fd, buf, 0, buf.length, 0);
+    const text = buf.subarray(0, size).toString("utf8");
+    if (text.startsWith("#!") || text.includes("snap")) {
+      return "";
+    }
+    if (buf[0] !== 0x7f || buf.toString("utf8", 1, 4) !== "ELF") {
+      return "";
+    }
+    return file;
+  } catch {
+    return "";
+  } finally {
+    if (fd != null) {
+      try {
+        closeSync(fd);
+      } catch {
+        /* already closed */
+      }
+    }
+  }
+}
+
+function reservePort() {
+  return new Promise(function (resolve, reject) {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", function () {
+      const address = server.address();
+      const port = address && address.port;
+      server.close(function () {
+        resolve(port);
+      });
+    });
+  });
+}
+
+export async function waitForDebugPort(port, signal, budgetMs) {
+  const deadline = Date.now() + (budgetMs || 8000);
+  let lastError = null;
+  while (Date.now() < deadline) {
+    if (signal && signal.aborted) {
+      throw browserAbortError();
+    }
+    try {
+      const version = await readDebugTargets("http://127.0.0.1:" + port + "/json/version", signal, 800);
+      if (version && (version.webSocketDebuggerUrl || version.Browser)) {
+        return version;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await sleep(200);
+  }
+  const wrapped = new Error((lastError && lastError.message) || "debug");
+  wrapped.code = "browser";
+  throw wrapped;
 }
 
 function extractZip(zip, dir) {
@@ -1263,7 +1329,8 @@ async function launchChrome(signal) {
     throw browserAbortError();
   }
   lastLaunchNote = "";
-  let bins = browserCandidates(findChrome(), installedBinary());
+  stopBooting();
+  let bins = browserCandidates(findChrome(), installedBinary()).filter(realBrowserBinary);
   if (!bins.length) {
     try {
       bins = [await ensureChrome()];
@@ -1288,7 +1355,7 @@ async function launchChrome(signal) {
       }
     }
     libraryPath = libSearchPath(libHome());
-    const budget = bins.length > 1 && i === 0 ? 8000 : 20000;
+    const budget = 10000;
     try {
       return await startChromeProcess(chromePath, signal, budget);
     } catch (error) {
@@ -1315,6 +1382,7 @@ async function startChromeProcess(chromePath, signal, budgetMs) {
   if (fontConfig) {
     env.FONTCONFIG_FILE = fontConfig;
   }
+  const port = await reservePort();
   const chrome = spawn(chromePath, [
     "--headless=new",
     "--no-sandbox",
@@ -1326,8 +1394,9 @@ async function startChromeProcess(chromePath, signal, budgetMs) {
     "--lang=zh-CN",
     "--window-size=1100,720",
     "--user-data-dir=" + dir,
-    "--remote-debugging-port=0",
-    "about:blank"
+    "--remote-debugging-address=127.0.0.1",
+    "--remote-debugging-port=" + port,
+    LOGIN_URL
   ], { env: env, stdio: ["ignore", "pipe", "pipe"] });
   booting = chrome;
   const controller = new AbortController();
@@ -1335,7 +1404,7 @@ async function startChromeProcess(chromePath, signal, budgetMs) {
   const linked = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
   try {
     let buf = "";
-    const port = await new Promise(function (resolve, reject) {
+    const readyPort = await new Promise(function (resolve, reject) {
       let settled = false;
       function finish(error, value) {
         if (settled) {
@@ -1364,18 +1433,19 @@ async function startChromeProcess(chromePath, signal, budgetMs) {
       });
       function takeChunk(chunk) {
         buf = (buf + chunk.toString()).slice(-4000);
-        const match = buf.match(/DevTools listening on ws:\/\/(?:127\.0\.0\.1|\[::1\]):(\d+)\//);
-        if (match) {
-          finish(null, Number(match[1]));
-        }
       }
       chrome.stdout.on("data", takeChunk);
       chrome.stderr.on("data", takeChunk);
       chrome.on("exit", function () {
         finish(Object.assign(new Error(browserFailure(buf)), { code: "browser" }));
       });
+      waitForDebugPort(port, linked, Math.max(1000, (budgetMs || 10000) - 500)).then(function () {
+        finish(null, port);
+      }, function (error) {
+        finish(Object.assign(error, { code: "browser" }));
+      });
     });
-    const list = await readDebugTargets("http://127.0.0.1:" + port + "/json/list", linked, 30000);
+    const list = await readDebugTargets("http://127.0.0.1:" + readyPort + "/json/list", linked, 4000);
     const page = Array.isArray(list) ? list.find(function (item) {
       return item.type === "page";
     }) : null;
@@ -1389,7 +1459,7 @@ async function startChromeProcess(chromePath, signal, budgetMs) {
     if (bootAbort === controller) {
       bootAbort = null;
     }
-    return { chrome: chrome, dir: dir, ws: ws, port: port, password: "" };
+    return { chrome: chrome, dir: dir, ws: ws, port: readyPort, password: "" };
   } catch (error) {
     if (booting === chrome) {
       booting = null;

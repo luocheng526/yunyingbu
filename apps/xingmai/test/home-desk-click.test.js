@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { accountIdentity, bindDecision, buildLiveView, collectAuthDecision } from "../src/modules/home/jingmai.js";
 import { beginRelogin, beginReloginAll, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/home/jingmai-runner.js";
 import { patchConnectPicker } from "../src/modules/home/connect-patch.js";
 import { listCollectTargets, listSessions, resetJingmaiStore, saveSession } from "../src/modules/home/jingmai-store.js";
 import { packJingmaiShops } from "../src/modules/home/local-paid.js";
-import { browserCandidates, browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginScreenState, readDebugTargets, sessionReady, unpackDebBuffer } from "../src/modules/home/jingmai-desk.js";
+import { browserCandidates, browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginScreenState, readDebugTargets, realBrowserBinary, sessionReady, unpackDebBuffer, waitForDebugPort } from "../src/modules/home/jingmai-desk.js";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import zlib from "node:zlib";
@@ -795,6 +795,43 @@ test("a browser that never finishes starting is reported as a failure", async ()
     assert.equal(failed.message, "服务器浏览器启动失败");
   } finally {
     resetJingmaiDeps();
+  }
+});
+
+test("the login connects as soon as the debug port answers", async () => {
+  const server = createServer(function (req, res) {
+    if (String(req.url || "").startsWith("/json/version")) {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ Browser: "test", webSocketDebuggerUrl: "ws://127.0.0.1/devtools/browser" }));
+      return;
+    }
+    res.statusCode = 404;
+    res.end();
+  });
+  await new Promise(function (resolve) {
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  try {
+    const version = await waitForDebugPort(server.address().port, undefined, 2000);
+    assert.equal(version.Browser, "test");
+  } finally {
+    await new Promise(function (resolve) {
+      server.close(resolve);
+    });
+  }
+});
+
+test("a shell wrapper is not used as the login browser", () => {
+  const dir = mkdtempSync(tmpdir() + "/xm-browser-");
+  const script = dir + "/google-chrome";
+  const elf = dir + "/chrome";
+  try {
+    writeFileSync(script, "#!/bin/sh\nexec snap run chromium\n");
+    writeFileSync(elf, Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0, 0, 0, 0]));
+    assert.equal(realBrowserBinary(script), "");
+    assert.equal(realBrowserBinary(elf), elf);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 
