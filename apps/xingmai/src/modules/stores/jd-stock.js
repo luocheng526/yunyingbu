@@ -61,6 +61,9 @@ export function warehouseLines(features, stocks) {
     }
     const spotNum = num(row.stockNum);
     const bookingNum = num(row.orderBookingNum) + num(row.orderTransferNum) + num(row.appBookingNum);
+    if (spotNum === 0 && bookingNum === 0) {
+      continue;
+    }
     const usableNum = spotNum - bookingNum;
     const warehouseName = String(row.warehouseName || row.storeName || "").trim() || `京东仓 ${storeId}`;
     lines.push({

@@ -284,7 +284,8 @@ test("inventory keeps jd express warehouses and drops national stock", () => {
         stockNum: 4,
         orderTransferNum: 1,
         warehouseName: "北京常温C平台仓55号库-CHN"
-      }
+      },
+      { storeId: 118065543, stockNum: 0, orderBookingNum: 0, warehouseName: "空仓" }
     ]
   );
   assert.equal(jd.jdExpress, true);

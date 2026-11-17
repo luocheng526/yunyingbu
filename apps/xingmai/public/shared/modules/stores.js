@@ -42,7 +42,7 @@
       title: "京东库存监控",
       path: "/stores/inventory",
       api: "/api/stores/erp/inventory",
-      lead: "商品标签选京东物流，去掉全国仓，剩下的才是京仓库存。可用库存 = 现货 − 占用，小于等于 20 标低库存。",
+      lead: "商品标签选京东物流，去掉全国仓。现货和占用都是 0 的空仓不展示。可用库存 = 现货 − 占用，小于等于 20 标低库存。",
       kpis: [
         { key: "jd", label: "京仓" },
         { key: "usable", label: "可用库存" },
