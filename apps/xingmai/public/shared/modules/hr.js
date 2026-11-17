@@ -127,13 +127,10 @@
       ".hr-board-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(240px,.8fr);gap:12px;}" +
       ".hr-board-card{padding:14px 16px 16px;}" +
       ".hr-board-card h3{margin:0 0 12px;font-size:14px;font-weight:650;color:var(--xm-ink);}" +
-      ".hr-tree ul{margin:0;padding:0 0 0 16px;list-style:none;border-left:1px solid color-mix(in srgb,var(--xm-primary) 35%,var(--xm-line));}" +
-      ".hr-tree li{position:relative;margin:0;padding:5px 0 5px 14px;}" +
-      ".hr-tree li:before{content:\"\";position:absolute;left:0;top:18px;width:14px;border-top:1px solid color-mix(in srgb,var(--xm-primary) 35%,var(--xm-line));}" +
-      ".hr-tree-card{display:inline-flex;align-items:center;gap:8px;max-width:100%;min-height:28px;padding:4px 10px;border:1px solid var(--xm-line);border-radius:8px;background:color-mix(in srgb,var(--xm-primary) 8%,var(--xm-card));}" +
-      ".hr-tree-card b{font-size:13px;font-variant-numeric:tabular-nums;color:var(--xm-primary);}" +
-      ".hr-tree-card span{font-size:13px;color:var(--xm-ink);}" +
       ".hr-day-cols{display:flex;align-items:flex-end;gap:8px;height:148px;padding-top:8px;}" +
+      ".hr-dept-cols{height:188px;overflow-x:auto;}" +
+      ".hr-dept-cols .hr-day-col{min-width:46px;}" +
+      ".hr-dept-cols .hr-day-col span:last-child{width:100%;max-height:2.6em;overflow:hidden;line-height:1.25;text-align:center;word-break:break-all;}" +
       ".hr-day-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px;min-width:0;height:100%;}" +
       ".hr-day-col b{font-size:12px;color:var(--xm-ink);font-variant-numeric:tabular-nums;}" +
       ".hr-day-fill{width:100%;max-width:28px;border-radius:8px 8px 4px 4px;background:linear-gradient(180deg,#8d7cff,#3a63f5);min-height:4px;}" +
@@ -382,10 +379,7 @@
     var depts = board.departments || [];
     var deptBox = section.querySelector("[data-depts]");
     if (deptBox) {
-      var heading = section.querySelector(".hr-team-title");
-      var treeTitle = heading ? String(heading.textContent || "").replace(/看板$/, "") : "部门";
-      deptBox.innerHTML = "<h3>" + esc(prefix) + "部门人数</h3>" +
-        (depts.length ? '<div class="hr-tree">' + renderDeptNode(buildDeptTree(treeTitle, depts)) + "</div>" : '<div class="hr-empty">这个范围还没有部门人数。</div>');
+      deptBox.innerHTML = "<h3>" + esc(prefix) + "部门人数</h3>" + deptColumns(depts);
     }
     var series = (view && view.days) || [];
     var maxPunch = series.reduce(function (max, row) { return Math.max(max, row.punched || 0); }, 0) || 1;
@@ -437,38 +431,19 @@
     return "hr-status-leave";
   }
 
-  function buildDeptTree(title, depts) {
-    function countOf(rows) {
-      return rows.reduce(function (sum, row) { return sum + (Number(row.count) || 0); }, 0);
-    }
-    function byCount(a, b) {
-      return (b.count || 0) - (a.count || 0) || String(a.name).localeCompare(String(b.name), "zh");
-    }
-    function leaf(row) {
-      return { name: row.name || "未分部门", count: Number(row.count) || 0, children: [] };
-    }
-    var ops = [];
-    var other = [];
-    (depts || []).forEach(function (row) {
-      (String(row.name || "").indexOf("运营") >= 0 ? ops : other).push(row);
+  function deptColumns(depts) {
+    var rows = (depts || []).map(function (row) {
+      return { name: row.name || "未分部门", count: Number(row.count) || 0 };
+    }).filter(function (row) { return row.count > 0; }).sort(function (a, b) {
+      return b.count - a.count || String(a.name).localeCompare(String(b.name), "zh");
     });
-    var children = [];
-    if (ops.length && other.length) {
-      children.push({ name: "运营", count: countOf(ops), children: ops.map(leaf).sort(byCount) });
-      other.forEach(function (row) { children.push(leaf(row)); });
-    } else {
-      children = (depts || []).map(leaf);
-    }
-    children.sort(byCount);
-    return { name: title || "部门", count: countOf(depts || []), children: children };
-  }
-
-  function renderDeptNode(node) {
-    var card = '<div class="hr-tree-card"><b>' + esc(node.count) + "</b><span>" + esc(node.name) + "</span></div>";
-    if (!node.children || !node.children.length) return card;
-    return card + "<ul>" + node.children.map(function (child) {
-      return "<li>" + renderDeptNode(child) + "</li>";
-    }).join("") + "</ul>";
+    if (!rows.length) return '<div class="hr-empty">这个范围还没有部门人数。</div>';
+    var max = rows.reduce(function (peak, row) { return Math.max(peak, row.count); }, 0) || 1;
+    return '<div class="hr-day-cols hr-dept-cols">' + rows.map(function (row) {
+      var height = Math.max(8, Math.round((row.count / max) * 96));
+      return '<div class="hr-day-col" title="' + esc(row.name) + '"><b>' + esc(row.count) +
+        '</b><span class="hr-day-fill" style="height:' + height + 'px"></span><span>' + esc(row.name) + "</span></div>";
+    }).join("") + "</div>";
   }
 
   function fillKpiList(section, roster) {
