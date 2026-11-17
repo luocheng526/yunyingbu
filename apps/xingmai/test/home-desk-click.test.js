@@ -6,7 +6,7 @@ import { beginRelogin, beginReloginAll, reloginState, resetJingmaiDeps, setJingm
 import { patchConnectPicker } from "../src/modules/home/connect-patch.js";
 import { listCollectTargets, listSessions, resetJingmaiStore, saveSession } from "../src/modules/home/jingmai-store.js";
 import { packJingmaiShops } from "../src/modules/home/local-paid.js";
-import { browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginScreenState, sessionReady, unpackDebBuffer } from "../src/modules/home/jingmai-desk.js";
+import { browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginScreenState, sessionReady, unpackDebBuffer } from "../src/modules/home/jingmai-desk.js";
 import { tmpdir } from "node:os";
 import zlib from "node:zlib";
 import { patchHomeClientSource } from "../src/modules/home/router.js";
@@ -410,6 +410,7 @@ test("连接京麦 lists shops that still need a login and does not open the bro
 test("opening a shop reports the browser step before the login page is ready", async () => {
   await resetJingmaiStore();
   let closed = false;
+  let pageUp = false;
   let release = function () {};
   setJingmaiDeps({
     loadOrg: async () => [
@@ -422,10 +423,11 @@ test("opening a shop reports the browser step before the login page is ready", a
         }
         return new Promise(function (resolve) {
           release = function () {
+            pageUp = true;
             if (options && options.onStep) {
               options.onStep("正在打开登录页");
             }
-            resolve({ status: "verify", message: "登录页已打开" });
+            resolve({ status: "verify", message: "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。" });
           };
         });
       },
@@ -433,7 +435,9 @@ test("opening a shop reports the browser step before the login page is ready", a
         closed = true;
       },
       poll: async function () {
-        return { status: "screen", message: "登录页已打开" };
+        return pageUp
+          ? { status: "verify", message: "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。" }
+          : { status: "opening", message: "正在启动浏览器" };
       }
     }
   });
@@ -458,6 +462,7 @@ test("opening a shop reports the browser step before the login page is ready", a
     assert.equal(screen.status, "screen");
     assert.equal(screen.store, "飒望生活日用旗舰店");
     assert.equal(screen.step, "京麦登录页");
+    assert.match(screen.message, /服务器画面/);
   } finally {
     resetJingmaiDeps();
   }
@@ -621,10 +626,22 @@ test("a login form captcha is submitted with the 登录 button", () => {
   assert.equal(loginPageAction(doc, { submit: true }).kind, "button");
 });
 
-test("the login picture is shown as soon as the page is up", () => {
-  assert.equal(loginOpenReady(0, { status: "verify", message: "" }, false), "wait");
-  assert.equal(loginOpenReady(1, { status: "verify", message: "" }, false), "show");
-  assert.equal(loginOpenReady(1, { status: "verify", message: "" }, true), "ok");
+test("the login page is shown once it is on screen, and typing waits until the form stays up", () => {
+  const blank = { readyState: "complete", href: "about:blank", accountVisible: true, passwordVisible: true };
+  const loading = { readyState: "loading", href: "https://passport.shop.jd.com/login", accountVisible: true, passwordVisible: true };
+  const painted = { readyState: "interactive", href: "https://passport.shop.jd.com/login", text: "账号登录" };
+  const form = { readyState: "interactive", href: "https://passport.shop.jd.com/login", accountVisible: true, passwordVisible: true };
+  assert.equal(loginPageVisible(null), false);
+  assert.equal(loginPageVisible(blank), false);
+  assert.equal(loginPageVisible(painted), true);
+  assert.equal(loginPageSettled(blank), false);
+  assert.equal(loginPageSettled(loading), false);
+  assert.equal(loginPageSettled(painted), false);
+  assert.equal(loginPageSettled(form), true);
+  assert.equal(loginPageSettled({ readyState: "interactive", href: "https://passport.shop.jd.com/login", text: "请完成安全验证" }), true);
+  assert.equal(loginOpenReady(1, { status: "verify", formReady: true }, false), "wait");
+  assert.equal(loginOpenReady(1, { status: "verify", settled: true }, false), "show");
+  assert.equal(loginOpenReady(1, { status: "verify" }, true), "ok");
   assert.equal(loginOpenReady(0, { status: "login", message: "账号或密码不正确" }, false), "login");
 });
 

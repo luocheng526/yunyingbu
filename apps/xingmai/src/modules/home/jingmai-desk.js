@@ -913,8 +913,8 @@ function send(ws, method, params, sessionId, timeoutMs) {
   });
 }
 
-function evaluate(ws, expression) {
-  return send(ws, "Runtime.evaluate", { expression: expression, returnByValue: true, awaitPromise: true }).then(function (result) {
+function evaluate(ws, expression, timeoutMs) {
+  return send(ws, "Runtime.evaluate", { expression: expression, returnByValue: true, awaitPromise: true }, undefined, timeoutMs).then(function (result) {
     if (result.exceptionDetails) {
       return null;
     }
@@ -979,7 +979,11 @@ function armReaderIdle() {
   }
 }
 
+let loginVisible = false;
+
 function stopCurrent() {
+  loginVisible = false;
+  shotCache = { at: 0, store: "", image: null, ready: false };
   readerDesk = null;
   if (readerIdle) {
     clearTimeout(readerIdle);
@@ -1394,6 +1398,52 @@ export function deskUsable(desk) {
   );
 }
 
+export const LOGIN_SCREEN_MESSAGE = "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。";
+
+export const PAGE_WAIT_MESSAGE = "正在等京麦页面刷新出来";
+
+const LOGIN_PAGE_EXPR = `(() => {
+  function shown(el) {
+    if (!el) return false;
+    const box = el.getBoundingClientRect();
+    return box.width > 20 && box.height > 10;
+  }
+  const inputs = [...document.querySelectorAll("input")];
+  const account = inputs.find((node) => (node.placeholder || "").includes("账号"));
+  const password = inputs.find((node) => (node.placeholder || "").includes("密码"));
+  return {
+    readyState: document.readyState,
+    href: location.href,
+    accountVisible: shown(account),
+    passwordVisible: shown(password),
+    text: document.body ? document.body.innerText.slice(0, 300) : ""
+  };
+})()`;
+
+export function loginPageVisible(page) {
+  if (!page) {
+    return false;
+  }
+  const href = String(page.href || "");
+  if (!href || href === "about:blank" || href.startsWith("about:")) {
+    return false;
+  }
+  if (page.accountVisible || page.passwordVisible) {
+    return true;
+  }
+  return /登录|账号|密码|验证码|安全验证|滑块|扫码/.test(String(page.text || ""));
+}
+
+export function loginPageSettled(page) {
+  if (!loginPageVisible(page) || page.readyState === "loading") {
+    return false;
+  }
+  if (page.accountVisible && page.passwordVisible) {
+    return true;
+  }
+  return /滑块|验证码|安全验证|扫码登录/.test(String(page.text || ""));
+}
+
 export function loginOpenReady(attempt, screen, hasCookie) {
   if (hasCookie) {
     return "ok";
@@ -1401,7 +1451,7 @@ export function loginOpenReady(attempt, screen, hasCookie) {
   if (screen && screen.status === "login") {
     return "login";
   }
-  if (attempt >= 1) {
+  if (screen && screen.settled) {
     return "show";
   }
   return "wait";
@@ -1409,8 +1459,8 @@ export function loginOpenReady(attempt, screen, hasCookie) {
 
 export function loginScreenState(text, formReady) {
   const source = String(text || "");
-  if (/滑块|安全验证|请完成验证/.test(source)) {
-    return { status: "verify", message: "" };
+  if (/滑块|验证码|安全验证|请完成验证|扫码/.test(source)) {
+    return { status: "verify", message: LOGIN_SCREEN_MESSAGE };
   }
   if (source.includes("不匹配") || source.includes("密码不正确") || source.includes("账号或密码不正确") || source.includes("账号或密码错误")) {
     return { status: "login", message: "账号或密码不正确" };
@@ -1421,14 +1471,29 @@ export function loginScreenState(text, formReady) {
   if (!formReady && /登录异常|登录环境异常|暂时无法登录/.test(source)) {
     return { status: "verify", message: "京麦拒绝了这次服务器登录，请过一会儿再试" };
   }
-  return { status: "verify", message: "" };
+  return { status: "verify", message: formReady ? LOGIN_SCREEN_MESSAGE : "" };
 }
 
 async function readScreenState(ws) {
   const formReady = Boolean(
     await evaluate(ws, "!![...document.querySelectorAll('input')].find((node) => (node.placeholder || '').includes('账号'))")
   );
-  return loginScreenState(await pageText(ws), formReady);
+  const state = loginScreenState(await pageText(ws), formReady);
+  state.formReady = formReady;
+  return state;
+}
+
+async function loginSurfaceReady(ws) {
+  try {
+    const form = await evaluate(ws, "!![...document.querySelectorAll('input')].find((node) => { const p = node.placeholder || ''; return p.includes('账号') || p.includes('验证码'); })");
+    if (form) {
+      return true;
+    }
+    const text = await pageText(ws);
+    return /滑块|验证码|安全验证|扫码登录/.test(String(text || ""));
+  } catch {
+    return false;
+  }
 }
 
 async function fillAndSubmit(ws, loginName, password) {
@@ -1520,71 +1585,78 @@ export async function closeDesk() {
   }
 }
 
-async function finishOpen(desk, loginName, password, ticket, reveal) {
+async function readLoginPage(ws) {
   try {
-    let ready = false;
-    for (let attempt = 0; attempt < 12; attempt += 1) {
+    return await evaluate(ws, LOGIN_PAGE_EXPR, 2500);
+  } catch {
+    return null;
+  }
+}
+
+async function finishOpen(desk, loginName, password, ticket) {
+  try {
+    let streak = 0;
+    let sawPage = false;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
       if (ticket !== openTicket || current !== desk) {
         return { status: "login", message: "登录已取消" };
       }
-      await sleep(200);
-      ready = Boolean(await evaluate(desk.ws, "!![...document.querySelectorAll('input')].find((node) => (node.placeholder || '').includes('账号'))"));
-      if (ready) {
-        break;
+      await sleep(700);
+      const page = await readLoginPage(desk.ws);
+      if (loginPageVisible(page)) {
+        loginVisible = true;
+        sawPage = true;
       }
-    }
-    if (!ready) {
-      if (reveal && ticket === openTicket && current === desk) {
-        return { status: "verify", message: "登录页已打开" };
+      if (loginPageSettled(page)) {
+        streak += 1;
+        if (streak >= 2) {
+          break;
+        }
+      } else {
+        streak = 0;
       }
-      if (ticket === openTicket) {
-        stopCurrent();
-      }
-      return { status: "login", message: "服务器没有打开京麦登录页" };
     }
     if (ticket !== openTicket || current !== desk) {
       return { status: "login", message: "登录已取消" };
     }
-    const submitted = await fillAndSubmit(desk.ws, loginName, password);
+    if (streak >= 2) {
+      await fillAndSubmit(desk.ws, loginName, password);
+    }
     password = "";
-    if (!submitted) {
-      if (reveal && ticket === openTicket && current === desk) {
-        return { status: "verify", message: "登录页已打开" };
-      }
+    loginVisible = sawPage || loginVisible;
+    if (!loginVisible) {
       if (ticket === openTicket) {
         stopCurrent();
       }
-      return { status: "login", message: "服务器没有填上账号" };
+      return { status: "login", message: "登录页还没刷新出来" };
     }
-    let cookies = [];
-    let screen = { status: "verify", message: "" };
-    for (let attempt = 0; attempt < 4; attempt += 1) {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
       if (ticket !== openTicket || current !== desk) {
         return { status: "login", message: "登录已取消" };
       }
-      await sleep(attempt === 0 ? 400 : 300);
+      let cookies = [];
+      let href = "";
       try {
         cookies = await readCookies(desk.ws);
+        href = String(await evaluate(desk.ws, "location.href", 2500) || "");
       } catch {
         cookies = [];
+        href = "";
       }
-      try {
-        screen = await readScreenState(desk.ws);
-      } catch {
-        screen = { status: "verify", message: "" };
-      }
-      const decision = loginOpenReady(attempt, screen, hasSession(cookies));
-      if (decision === "ok") {
+      if (sessionReady(href, cookies)) {
         return { status: "ok", cookies: cookies };
       }
-      if (decision === "login") {
+      const page = await readLoginPage(desk.ws);
+      if (loginPageVisible(page)) {
+        loginVisible = true;
+      }
+      const screen = loginScreenState(page && page.text, Boolean(page && page.accountVisible));
+      if (screen.status === "login") {
         return screen;
       }
-      if (decision === "show") {
-        return screen.status === "verify" ? screen : { status: "verify", message: screen.message || "" };
-      }
+      await sleep(700);
     }
-    return screen;
+    return { status: "verify", message: LOGIN_SCREEN_MESSAGE, formReady: true };
   } finally {
     password = "";
   }
@@ -1599,21 +1671,25 @@ export async function openDesk({ store, loginName, password, reveal, onStep } = 
   };
   let desk = null;
   try {
+    loginVisible = false;
+    shotCache = { at: 0, store: "", image: null, ready: false };
     step("正在启动浏览器");
     desk = await acquireDesk(store, ticket);
     if (!desk || ticket !== openTicket) {
       return { status: "login", message: "登录已取消" };
     }
     step("正在打开登录页");
-    await send(desk.ws, "Page.navigate", { url: LOGIN_URL }, undefined, 8000);
+    try {
+      await send(desk.ws, "Page.navigate", { url: LOGIN_URL }, undefined, 20000);
+    } catch (error) {
+      if (!String(error && error.message || "").includes("timeout")) {
+        throw error;
+      }
+    }
     const account = loginName;
     const secret = password;
     password = "";
-    if (reveal) {
-      finishOpen(desk, account, secret, ticket, true).catch(function () {});
-      return { status: "verify", message: "登录页已打开" };
-    }
-    return await finishOpen(desk, account, secret, ticket, false);
+    return await finishOpen(desk, account, secret, ticket);
   } catch (error) {
     if (ticket === openTicket) {
       stopCurrent();
@@ -1636,7 +1712,7 @@ export async function openDesk({ store, loginName, password, reveal, onStep } = 
 
 export async function pollDesk(store) {
   if (!current || current.store !== store || !current.ws || current.ws.readyState !== 1) {
-    return { status: "opening", message: "正在打开「" + (store || "") + "」的登录画面" };
+    return { status: "opening", message: "正在启动浏览器" };
   }
   try {
     const cookies = await readCookies(current.ws);
@@ -1644,13 +1720,16 @@ export async function pollDesk(store) {
     if (sessionReady(href, cookies)) {
       return { status: "ok", cookies: cookies };
     }
+    if (!loginVisible) {
+      return { status: "opening", message: PAGE_WAIT_MESSAGE };
+    }
   } catch {
-    /* the login page is navigating; keep the window open */
+    return { status: "opening", message: "正在启动浏览器" };
   }
-  return { status: "screen", message: "" };
+  return { status: "verify", message: LOGIN_SCREEN_MESSAGE };
 }
 
-let shotCache = { at: 0, store: "", image: null };
+let shotCache = { at: 0, store: "", image: null, ready: false };
 let shotTask = null;
 let shotHold = 0;
 
@@ -1663,7 +1742,7 @@ export async function shotDesk(store) {
     return null;
   }
   const now = Date.now();
-  if (shotCache.store === store && shotCache.image && (now - shotCache.at < 1600 || now < shotHold)) {
+  if (shotCache.ready && shotCache.store === store && shotCache.image && (now - shotCache.at < 1600 || now < shotHold)) {
     return shotCache.image;
   }
   if (shotTask) {
@@ -1676,31 +1755,22 @@ export async function shotDesk(store) {
 }
 
 async function captureShot(store) {
-  if (!current || current.store !== store || !current.ws) {
-    return shotCache.store === store ? shotCache.image : null;
+  if (!current || current.store !== store || !current.ws || current.ws.readyState !== 1) {
+    return shotCache.ready && shotCache.store === store ? shotCache.image : null;
+  }
+  if (!loginVisible) {
+    return shotCache.ready && shotCache.store === store ? shotCache.image : null;
   }
   try {
-    const params = { format: "jpeg", quality: 60, fromSurface: true, captureBeyondViewport: false };
-    try {
-      const metrics = await send(current.ws, "Page.getLayoutMetrics", {}, undefined, 2500);
-      const view = (metrics && (metrics.cssVisualViewport || metrics.cssLayoutViewport)) || {};
-      const width = Math.round(view.clientWidth || view.width || 0);
-      const height = Math.round(view.clientHeight || view.height || 0);
-      if (width > 0 && height > 0) {
-        params.clip = { x: 0, y: 0, width: width, height: height, scale: 1 };
-      }
-    } catch {
-      /* fall back to the viewport screenshot */
-    }
-    const shot = await send(current.ws, "Page.captureScreenshot", params, undefined, 4000);
+    const shot = await send(current.ws, "Page.captureScreenshot", { format: "jpeg", quality: 60 }, undefined, 4000);
     const image = Buffer.from(shot.data || "", "base64");
     if (!image.length) {
-      return shotCache.store === store ? shotCache.image : null;
+      return shotCache.ready && shotCache.store === store ? shotCache.image : null;
     }
-    shotCache = { at: Date.now(), store: store, image: image };
+    shotCache = { at: Date.now(), store: store, image: image, ready: true };
     return image;
   } catch {
-    return shotCache.store === store ? shotCache.image : null;
+    return shotCache.ready && shotCache.store === store ? shotCache.image : null;
   }
 }
 
