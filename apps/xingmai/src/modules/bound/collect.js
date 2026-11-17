@@ -159,6 +159,12 @@ function extractList(data) {
       return { rows: data[key], total: Number.isFinite(total) ? total : data[key].length, object: false };
     }
   }
+  if (data.growAnalysis && typeof data.growAnalysis === "object") {
+    const inner = extractList(data.growAnalysis);
+    if (!inner.object || inner.rows.length) {
+      return inner;
+    }
+  }
   if (data.data && typeof data.data === "object") {
     const inner = extractList(data.data);
     if (!inner.object || inner.rows.length) {
@@ -338,11 +344,33 @@ async function masterState() {
   return (await readState("masters", {})) || {};
 }
 
-function failText(scope, message) {
-  return `q=1 daysType=${scope.daysType} ${String(message || "接口失败")}`.slice(0, 300);
+function requestMark(report) {
+  if (report.id === "qdzl_yj" || report.id === "qdfx_yj") {
+    return "year";
+  }
+  if (report.id === "qdzl_pl") {
+    return "channelCate";
+  }
+  return "q=1";
 }
 
-function reportBody(report, dim, scope, page) {
+function failText(report, scope, message) {
+  return `${requestMark(report)} daysType=${scope.daysType} ${String(message || "接口失败")}`.slice(0, 300);
+}
+
+function compareYears(scope) {
+  const year = Number(String(scope.end || scope.start || "").slice(0, 4));
+  const current = Number.isFinite(year) && year >= 2026 ? year : 2026;
+  return { prevYear: current - 1, year: current };
+}
+
+export function reportBody(report, dim, scope, page) {
+  if (report.id === "qdzl_yj") {
+    return { ...compareYears(scope), compareType: 0, lstChannel: null };
+  }
+  if (report.id === "qdfx_yj") {
+    return { ...compareYears(scope), lstChannel: null, shopIds: [] };
+  }
   return {
     startDate: scope.start,
     endDate: scope.end,
@@ -371,7 +399,7 @@ function sheetHole(report, dim, scope, sheets) {
     return null;
   }
   if (first.status === "failed" && first.attempts >= 3) {
-    const stamped = String(first.errorText || "").startsWith(`q=1 daysType=${scope.daysType} `);
+    const stamped = String(first.errorText || "").startsWith(`${requestMark(report)} daysType=${scope.daysType} `);
     if (stamped) {
       return null;
     }
@@ -512,7 +540,7 @@ async function runReport(current, unit) {
       status: "failed",
       kind: unit.kind,
       attempts: unit.attempts + 1,
-      errorText: failText(unit.scope, error.message || error),
+      errorText: failText(report, unit.scope, error.message || error),
       payload: {}
     });
     return;
@@ -548,7 +576,7 @@ async function runReport(current, unit) {
       status: "failed",
       kind: unit.kind,
       attempts: unit.attempts + 1,
-      errorText: failText(unit.scope, (payload && payload.content) || "接口失败"),
+      errorText: failText(report, unit.scope, (payload && payload.content) || "接口失败"),
       payload: {}
     });
     return;

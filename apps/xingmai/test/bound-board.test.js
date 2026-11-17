@@ -8,7 +8,8 @@ import express from "express";
 import { boundRouter } from "../src/modules/bound/router.js";
 import { pollLink, resetBoundStore, setBoundClock, setBoundFetch, startLink, tick } from "../src/modules/bound/store.js";
 import { readState, writeSheet, writeState } from "../src/modules/bound/persist.js";
-import { publicCatalog } from "../src/modules/bound/catalog.js";
+import { publicCatalog, reports } from "../src/modules/bound/catalog.js";
+import { reportBody } from "../src/modules/bound/collect.js";
 
 process.env.BOUND_COLLECT_LOOP = "0";
 
@@ -540,6 +541,20 @@ test("页面只请求边界接口，并画出四个模块", async () => {
   assert.equal(root.innerHTML, "");
 });
 
+test("业绩对比按年份请求，品类分析走渠道类目接口", () => {
+  const byId = Object.fromEntries(reports().map((item) => [item.id, item]));
+  assert.equal(byId.qdzl_pl.path, "/v2/channel/channelCateAnalysis");
+  assert.equal(byId.qdfx_yj.path, "/v2/channel/dynamicDetailAnalysis");
+  const year = reportBody(byId.qdzl_yj, "all", { start: "2026-11-07", end: "2026-11-07", daysType: 1 }, 1);
+  assert.deepEqual(year, { prevYear: 2025, year: 2026, compareType: 0, lstChannel: null });
+  const shopYear = reportBody(byId.qdfx_yj, "all", { start: "2026-09-01", end: "2026-09-30", daysType: "month" }, 1);
+  assert.deepEqual(shopYear, { prevYear: 2025, year: 2026, lstChannel: null, shopIds: [] });
+  const cate = reportBody(byId.qdzl_pl, "all", { start: "2026-11-07", end: "2026-11-07", daysType: 1 }, 1);
+  assert.equal(cate.startDate, "2026-11-07");
+  assert.equal(cate.daysType, 1);
+  assert.equal(cate.queryType, 1);
+});
+
 test("采集进度只数表头，扫码页标出正在采集的表", async () => {
   resetBoundStore();
   await writeState("session", {
@@ -561,6 +576,18 @@ test("采集进度只数表头，扫码页标出正在采集的表", async () =>
     rowCount: 1,
     payload: { rows: [{ name: "京东", payAmount: 12 }] }
   });
+  await writeSheet({
+    reportId: "qdzl_yj",
+    dim: "all",
+    startOn: "2026-09-01",
+    endOn: "2026-09-01",
+    pageNo: 1,
+    status: "failed",
+    kind: "list",
+    attempts: 3,
+    errorText: "q=1 daysType=1 查询参数不匹配",
+    payload: {}
+  });
   const { base, close } = await listen(appFor({ username: "罗成", displayName: "罗成" }));
   const other = await listen(appFor({ username: "店员", displayName: "店员" }));
   try {
@@ -572,6 +599,10 @@ test("采集进度只数表头，扫码页标出正在采集的表", async () =>
     const ready = body.items.find((item) => item.id === "qdzl_lb");
     assert.equal(ready.readyDays, 1);
     assert.equal(ready.status, "partial");
+    const failed = body.items.find((item) => item.id === "qdzl_yj");
+    assert.equal(failed.readyDays, 0);
+    assert.equal(failed.failedDays, 1);
+    assert.equal(failed.reason, "查询参数不匹配");
     assert.equal(body.items.some((item) => item.status === "pending"), true);
     assert.equal((await fetch(`${other.base}/api/bound/progress`)).status, 403);
   } finally {
@@ -632,7 +663,7 @@ test("采集进度只数表头，扫码页标出正在采集的表", async () =>
             cursor: { id: "qdzl_yj", label: "业绩对比", page: "渠道总览", dim: "all", start: "2026-09-01", end: "2026-09-01" },
             items: [
               { id: "qdzl_lb", dim: "all", page: "渠道总览", tab: "渠道列表", readyDays: 40, failedDays: 0, latest: "2026-10-10", status: "partial" },
-              { id: "qdzl_yj", dim: "all", page: "渠道总览", tab: "业绩对比", readyDays: 0, failedDays: 2, latest: "", status: "failed" }
+              { id: "qdzl_yj", dim: "all", page: "渠道总览", tab: "业绩对比", readyDays: 0, failedDays: 2, latest: "", status: "failed", reason: "查询参数不匹配" }
             ]
           })
         });
@@ -694,6 +725,7 @@ test("采集进度只数表头，扫码页标出正在采集的表", async () =>
   assert.match(root.innerHTML, /采集进度/);
   assert.match(root.innerHTML, /正在采集：渠道总览 \/ 业绩对比/);
   assert.match(root.innerHTML, /正在采/);
+  assert.match(root.innerHTML, /查询参数不匹配/);
   assert.match(root.innerHTML, /渠道列表/);
   assert.doesNotMatch(root.innerHTML, /bd-qr/);
   stop();

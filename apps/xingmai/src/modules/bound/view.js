@@ -783,6 +783,10 @@ export function catalogBody() {
   return publicCatalog();
 }
 
+function plainError(text) {
+  return String(text || "").replace(/^(?:q=1|year|channelCate) daysType=\S+\s+/, "").slice(0, 120);
+}
+
 function reportProgress(heads, reportId, dim) {
   const groups = new Map();
   heads.forEach((row) => {
@@ -799,9 +803,13 @@ function reportProgress(heads, reportId, dim) {
   let failedDays = 0;
   let months = 0;
   let latest = "";
+  let reason = "";
   groups.forEach((pages, key) => {
     const [startOn, endOn] = key.split("|");
     const state = scopeStatus(pages);
+    if (state.status === "failed" && !reason) {
+      reason = plainError(state.error);
+    }
     if (startOn === endOn) {
       if (state.status === "ready") {
         readyDays += 1;
@@ -819,7 +827,7 @@ function reportProgress(heads, reportId, dim) {
       failedDays += 1;
     }
   });
-  return { readyDays, failedDays, months, latest };
+  return { readyDays, failedDays, months, latest, reason };
 }
 
 export async function progressBody() {
@@ -850,7 +858,8 @@ export async function progressBody() {
           failedDays: stats.failedDays,
           months: stats.months,
           latest: stats.latest,
-          status
+          status,
+          reason: stats.reason || ""
         });
       });
     });

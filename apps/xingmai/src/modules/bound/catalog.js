@@ -28,7 +28,7 @@ export const PAGES = [
       list("qdzl_fz", "店铺分组", "/v2/channel/shopGroupOverViewList_v2", "json", "qd_zl"),
       list("qdzl_jy", "经营数据", "/v2/channel/operatingData", "json", "qd_zl", { kind: "object" }),
       list("qdzl_yj", "业绩对比", "/v2/channel/dynamicChannelAnalysis", "json", "qd_zl"),
-      list("qdzl_pl", "品类分析", "/v2/channel/cateAnalysis", "json", "qd_zl"),
+      list("qdzl_pl", "品类分析", "/v2/channel/channelCateAnalysis", "json", "qd_zl"),
       list("qdzl_bqfx", "标签分析", "/v2/channel/labelAnalysis/comparisonList", "json", "qd_zl"),
       list("qdzl_rx", "热销商品", "/v2/channel/hotGoods", "json", "qd_zl"),
       list("qdzl_zbdrfx", "主播达人分析", "/v2/flow/channel/anchorExpertListInfo", "json", "qd_zl")
@@ -43,7 +43,7 @@ export const PAGES = [
     tabs: [
       list("qdfx_dplb", "店铺列表", "/v2/channel/shopOverViewList_V2", "json", "qd_fx"),
       list("qdfx_jy", "经营数据", "/v2/channel/shop/operatingData", "json", "qd_fx", { kind: "object" }),
-      list("qdfx_yj", "业绩对比", "/v2/channel/dynamicChannelAnalysis", "json", "qd_fx"),
+      list("qdfx_yj", "业绩对比", "/v2/channel/dynamicDetailAnalysis", "json", "qd_fx"),
       list("qdfx_llly", "流量来源", "/v2/flow/source/channel/flowSourceListInfo", "json", "qd_fx"),
       list("qdfx_llfx", "流量分析", "/v2/flow/channel/flowChannelAnalyzeExpert", "json", "qd_fx"),
       list("qdfx_zbdr", "主播达人分析", "/v2/flow/channel/anchorExpertListInfo", "json", "qd_fx"),

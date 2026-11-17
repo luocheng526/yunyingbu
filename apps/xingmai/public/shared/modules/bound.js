@@ -145,6 +145,7 @@
       ".bd-meter i{display:block;height:100%;background:#3b6cff;}",
       ".bd-progress{max-height:420px;overflow:auto;}",
       ".bd-progress td.is-current{color:#3b6cff;font-weight:650;}",
+      ".bd-reason{margin-top:2px;max-width:280px;color:#8a93a6;font-size:12px;font-weight:400;white-space:normal;}",
       ".bd-detail{white-space:normal;text-align:left;font-size:12px;line-height:1.6;color:#4e5969;}",
       "@media(max-width:900px){.bd-app{grid-template-columns:1fr}.bd-head{flex-direction:column}.bd-gallery{grid-template-columns:1fr 1fr}}"
     ].join("");
@@ -932,7 +933,13 @@
     var rows = progress.items.map(function (item) {
       var current = cursor.id === item.id && (cursor.dim || "all") === (item.dim || "all");
       var dim = item.dim && item.dim !== "all" ? " " + item.dim.toUpperCase() : "";
-      return '<tr class="' + (current ? "bd-total" : "") + '"><td class="' + (current ? "is-current" : "") + '">' + esc(item.page) + "</td><td>" + esc(item.tab + dim) + "</td><td>" + esc(item.readyDays) + "/" + esc(progress.dayCount) + "</td><td>" + esc(item.failedDays) + "</td><td>" + esc(item.latest || "—") + "</td><td>" + esc(current ? "正在采" : (labels[item.status] || item.status)) + "</td></tr>";
+      var statusText = current ? "正在采" : (labels[item.status] || item.status);
+      var reason = item.reason || "";
+      if (!reason && item.readyDays === 0 && item.failedDays > 0) {
+        reason = "还没有一天采集成功，已采天数不会增加";
+      }
+      var reasonHtml = reason ? '<div class="bd-reason">' + esc(reason) + "</div>" : "";
+      return '<tr class="' + (current ? "bd-total" : "") + '"><td class="' + (current ? "is-current" : "") + '">' + esc(item.page) + "</td><td>" + esc(item.tab + dim) + "</td><td>" + esc(item.readyDays) + "/" + esc(progress.dayCount) + "</td><td>" + esc(item.failedDays) + "</td><td>" + esc(item.latest || "—") + "</td><td>" + esc(statusText) + reasonHtml + "</td></tr>";
     }).join("");
     return '<section class="bd-block"><h2 class="bd-block-title">采集进度</h2><p class="bd-now">' + esc(now) + "</p><div class=\"bd-meter\"><i style=\"width:" + width + "%\"></i></div><p class=\"bd-status\">已完成 " + esc(done) + " / " + esc(total) + " 张表。进行中 " + esc(counts.partial || 0) + "，失败 " + esc(counts.failed || 0) + "，还没开始 " + esc(counts.pending || 0) + "。范围 " + esc(progress.startOn) + " 至 " + esc(progress.today) + "。</p><div class=\"bd-progress\"><table class=\"bd-table\"><tr><th>页面</th><th>表</th><th>已采天数</th><th>失败</th><th>最近一天</th><th>状态</th></tr>" + rows + "</table></div></section>";
   }
