@@ -174,6 +174,55 @@ export const SITE_MODULES = [
   }
 ];
 
+export const SITE_NAV = [
+  { id: "home", href: "/home" },
+  { id: "bound", href: "/bound" },
+  { id: "data", href: "/data" },
+  { id: "shen", href: "/shen" },
+  { id: "han", href: "/han" },
+  { id: "shopkeep", href: "/stores" },
+  { id: "academy", href: "/academy" },
+  { id: "agent", href: "/agents" },
+  { id: "work", href: "/work" },
+  { id: "meeting", href: "/meeting" },
+  { id: "feedback", href: "/feedback" },
+  { id: "releases", href: "/releases" },
+  { id: "people", href: "/people" },
+  { id: "hr", href: "/hr" },
+  { id: "notices", href: "/notices" },
+  { id: "profile", href: "/me" }
+];
+
+export function moduleIdForPath(pathname) {
+  const raw = String(pathname || "/")
+    .split("?")[0]
+    .replace(/\/index\.html$/i, "")
+    .replace(/\/+$/, "") || "/";
+  if (raw === "/" ) {
+    return "home";
+  }
+  const ranked = SITE_NAV.slice().sort((a, b) => b.href.length - a.href.length);
+  const hit = ranked.find((row) => raw === row.href || raw.startsWith(`${row.href}/`));
+  return hit ? hit.id : "";
+}
+
+export function navVisibility(name) {
+  const who = String(name || "").trim();
+  const sheet = effectiveSiteAcl(who);
+  const configured = Boolean(sheet.configured);
+  const paths = {};
+  SITE_NAV.forEach((row) => {
+    const always = row.id === "profile";
+    const cap = (sheet.modules && sheet.modules[row.id]) || emptyCap();
+    paths[row.href] = {
+      see: always || Boolean(cap.see),
+      enter: always || Boolean(cap.enter),
+      edit: Boolean(cap.edit)
+    };
+  });
+  return { configured, persist: persistMode, paths };
+}
+
 const persistFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "data", "site-acl.json");
 
 let grants = {};

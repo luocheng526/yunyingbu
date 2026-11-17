@@ -1,4 +1,4 @@
-/* xm-module-people org-board 0.1.236-page-scroll */
+/* xm-module-people org-board 0.1.237-acl-live */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.236-page-scroll";
+    const href = "/people.css?v=0.1.237-acl-live";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -331,7 +331,7 @@
         '<section class="panel site-acl-panel">' +
         '<div class="site-acl-hero">' +
         "<div><h2>网站权限</h2>" +
-        '<p class="lead">按成员拆开模块和功能。没配过默认全关。罗成配全部；沈子晗、韩梦凯只配自己组。店铺主数据责权不变。</p></div>' +
+        '<p class="lead">按成员拆开模块和功能。勾选保存在服务器，配过的人侧栏立刻按这份权限显示。没配过默认全关。罗成配全部；沈子晗、韩梦凯只配自己组。店铺主数据责权不变。</p></div>' +
         '<div class="site-acl-kpis" id="site-acl-kpis"></div></div>' +
         '<div class="site-acl" id="site-acl" data-site-acl-js="0.1.229-site-acl-ui">' +
         '<aside class="site-acl-list">' +
@@ -2383,7 +2383,7 @@
               return;
             }
             root.querySelector("#site-acl-ok").hidden = false;
-            root.querySelector("#site-acl-ok").textContent = "已保存 " + siteAclName;
+            root.querySelector("#site-acl-ok").textContent = "已保存到服务器 " + siteAclName + "，对方刷新或最多十几秒后侧栏生效";
             return loadSiteAcl();
           });
       }
@@ -2495,6 +2495,33 @@
       } catch (_err) {
         /* ignore */
       }
+      fetch("/api/people/org/site-acl/me", { credentials: "same-origin", headers: { Accept: "application/json" } })
+        .then(function (res) {
+          return res && res.ok ? res.json() : null;
+        })
+        .then(function (data) {
+          if (!data || !data.ok || !data.configured || !data.nav) {
+            return;
+          }
+          const peopleOk = data.nav["/people"] && (data.nav["/people"].see || data.nav["/people"].enter);
+          const noticesOk = data.nav["/notices"] && (data.nav["/notices"].see || data.nav["/notices"].enter);
+          if (peopleOk) {
+            return;
+          }
+          root.querySelectorAll(".org-tab").forEach(function (tab) {
+            const pane = tab.getAttribute("data-pane");
+            tab.hidden = !(pane === "notices" && noticesOk);
+          });
+          if (noticesOk) {
+            const tab = root.querySelector('.org-tab[data-pane="notices"]');
+            if (tab) {
+              tab.click();
+            }
+          }
+        })
+        .catch(function () {
+          /* keep full tabs if live acl is unreachable */
+        });
 
       root.querySelector("#org-tabs").parentElement.addEventListener("click", function (event) {
         const btn = event.target.closest(".org-filter-btn");

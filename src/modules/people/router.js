@@ -26,10 +26,12 @@ import { canAssignSiteAcl, canEditLogin, canEditRoster, canSeeLogin, scopeOf } f
 import {
   hydrateSiteAcl,
   listSiteAclBoard,
+  navVisibility,
   readPersonSiteAcl,
   savePersonSiteAcl,
   siteAclPersistMode
 } from "./site-acl.js";
+import { attachSiteAclGuard } from "./site-acl-guard.js";
 import {
   STORE_IMPORT_HEADERS,
   createOrgStore,
@@ -89,6 +91,7 @@ function patchExpressUse(target) {
       if (args.some((arg) => arg === peopleRouter)) {
         const mountPath = typeof args[0] === "string" ? args[0] : "";
         attachNoticesBeside(this, mountPath);
+        attachSiteAclGuard(this);
       }
     } catch (err) {
       console.error("[notices] attach failed", err);
@@ -266,7 +269,17 @@ peopleRouter.get("/org/site-acl/me", async (req, res) => {
   await hydrateSiteAcl();
   const actor = await resolveActor(req);
   const board = listSiteAclBoard(actor);
-  res.json({ ok: true, persist: siteAclPersistMode(), actor, me: board.me, catalog: board.catalog });
+  const vis = navVisibility(actor);
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.json({
+    ok: true,
+    persist: siteAclPersistMode(),
+    configured: vis.configured,
+    actor,
+    me: board.me,
+    catalog: board.catalog,
+    nav: vis.paths
+  });
 });
 
 peopleRouter.get("/org/site-acl/:name", async (req, res) => {
