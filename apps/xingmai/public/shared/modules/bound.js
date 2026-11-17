@@ -30,6 +30,8 @@
     splitWarehouse: false,
     splitCombo: false,
     datePop: "",
+    calMonth: "",
+    calAnchor: "",
     comboMode: "whole",
     profilePane: "info",
     shopView: "list",
@@ -78,6 +80,26 @@
       ".bd-split{width:1px;align-self:stretch;margin:6px 4px;background:#e5e6eb;}",
       ".bd-picker{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;}",
       ".bd-pop{position:absolute;top:36px;right:0;z-index:3;display:flex;gap:6px;align-items:center;padding:8px;background:#fff;border:1px solid #e5e6eb;border-radius:4px;box-shadow:0 6px 16px rgba(29,33,41,.12);}",
+      ".bd-custom{position:relative;}",
+      ".bd-tip{display:none;position:absolute;top:34px;right:0;z-index:6;width:280px;padding:10px 12px;border-radius:2px;background:#1d2129;color:#fff;font-size:12px;font-weight:400;line-height:1.6;text-align:left;text-decoration:none;white-space:normal;box-shadow:0 6px 16px rgba(0,0,0,.18);}",
+      ".bd-custom:hover .bd-tip{display:block;}",
+      ".bd-cal{position:absolute;top:40px;right:0;z-index:5;width:560px;padding:8px 12px 10px;background:#fff;border:1px solid #e5e6eb;border-radius:2px;box-shadow:0 8px 24px rgba(29,33,41,.12);}",
+      ".bd-cal-months{display:grid;grid-template-columns:1fr 1fr;gap:12px;}",
+      ".bd-cal-head{display:grid;grid-template-columns:28px 1fr 28px;align-items:center;height:36px;color:#1d2129;font-size:14px;}",
+      ".bd-cal-head strong{text-align:center;font-weight:500;}",
+      ".bd-cal-head button{height:28px;border:0;background:transparent;color:#4e5969;cursor:pointer;font-size:16px;}",
+      ".bd-cal-head button:disabled{color:#c9cdd4;cursor:not-allowed;}",
+      ".bd-cal-week,.bd-cal-grid{display:grid;grid-template-columns:repeat(7,32px);justify-content:center;}",
+      ".bd-cal-week span{height:28px;line-height:28px;text-align:center;color:#86909c;font-size:12px;}",
+      ".bd-cal-day{height:32px;border:0;background:transparent;color:#1d2129;cursor:pointer;font:inherit;font-size:12px;}",
+      ".bd-cal-day.is-out{color:#c9cdd4;}",
+      ".bd-cal-day.is-off{color:#c9cdd4;cursor:not-allowed;}",
+      ".bd-cal-day.is-mid{background:#e8f3ff;color:#1d2129;border-radius:0;}",
+      ".bd-cal-day.is-edge{background:#3b6cff;color:#fff;}",
+      ".bd-cal-day.is-edge.is-from{border-radius:4px 0 0 4px;}",
+      ".bd-cal-day.is-edge.is-to{border-radius:0 4px 4px 0;}",
+      ".bd-cal-day.is-edge.is-one{border-radius:4px;}",
+      ".bd-cal-foot{margin:8px 0 0;color:#86909c;font-size:12px;text-align:right;}",
       ".bd-primary{height:30px;padding:0 12px;border:0;border-radius:4px;background:#3b6cff;color:#fff;cursor:pointer;font:inherit;font-size:12px;}",
       ".bd-kpi-head .bd-primary{margin-left:auto;height:28px;}",
       ".bd-kpis{margin:0 0 12px;padding:8px 4px 12px;background:#fff;border:1px solid #eceff5;border-radius:6px;}",
@@ -399,6 +421,80 @@
     return { from: range.from, to: range.to, daysType: "year" };
   }
 
+  function daySpan(from, to) {
+    var start = parseIso(from);
+    var end = parseIso(to);
+    return Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+  }
+
+  function addMonth(ym, delta) {
+    var parts = String(ym || "").split("-");
+    var date = new Date(Number(parts[0]), Number(parts[1]) - 1 + delta, 1);
+    return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0");
+  }
+
+  function monthCells(ym) {
+    var parts = String(ym).split("-");
+    var year = Number(parts[0]);
+    var month = Number(parts[1]);
+    var first = new Date(year, month - 1, 1);
+    var lead = (first.getDay() + 6) % 7;
+    var count = new Date(year, month, 0).getDate();
+    var cells = [];
+    var index;
+    for (index = 0; index < lead; index += 1) {
+      var prev = new Date(year, month - 1, 1 - (lead - index));
+      cells.push({ iso: iso(prev), day: prev.getDate(), inMonth: false });
+    }
+    for (index = 1; index <= count; index += 1) {
+      var day = String(index).padStart(2, "0");
+      cells.push({ iso: ym + "-" + day, day: index, inMonth: true });
+    }
+    var next = 1;
+    while (cells.length % 7 !== 0) {
+      var tail = new Date(year, month, next);
+      cells.push({ iso: iso(tail), day: tail.getDate(), inMonth: false });
+      next += 1;
+    }
+    return cells;
+  }
+
+  function renderMonth(ym, side) {
+    var today = shanghaiToday();
+    var todayMonth = today.slice(0, 7);
+    var from = state.calAnchor || state.from;
+    var to = state.calAnchor ? state.calAnchor : state.to;
+    var week = ["一", "二", "三", "四", "五", "六", "日"].map(function (name) {
+      return "<span>" + name + "</span>";
+    }).join("");
+    var days = monthCells(ym).map(function (cell) {
+      var off = cell.iso < DATA_START || cell.iso > today;
+      if (state.calAnchor && !off && Math.abs(daySpan(state.calAnchor, cell.iso) - 1) > 30) {
+        off = true;
+      }
+      var edge = !off && (cell.iso === from || cell.iso === to);
+      var mid = !off && from && to && cell.iso > from && cell.iso < to;
+      var one = edge && from === to;
+      var cls = "bd-cal-day";
+      if (!cell.inMonth) cls += " is-out";
+      if (off) cls += " is-off";
+      if (mid) cls += " is-mid";
+      if (edge) cls += " is-edge" + (one ? " is-one" : cell.iso === from ? " is-from" : " is-to");
+      return '<button type="button" class="' + cls + '" data-act="cal-day" data-day="' + cell.iso + '"' + (off ? " disabled" : "") + ">" + cell.day + "</button>";
+    }).join("");
+    var prev = side === "left" ? '<button type="button" data-act="cal-shift" data-delta="-1"' + (ym <= "2026-09" ? " disabled" : "") + ' aria-label="上个月">«</button>' : "<span></span>";
+    var next = side === "right" ? '<button type="button" data-act="cal-shift" data-delta="1"' + (addMonth(ym, 0) > todayMonth ? " disabled" : "") + ' aria-label="下个月">»</button>' : "<span></span>";
+    var title = Number(ym.slice(0, 4)) + " 年 " + Number(ym.slice(5, 7)) + " 月";
+    return '<section><div class="bd-cal-head">' + prev + "<strong>" + title + "</strong>" + next + '</div><div class="bd-cal-week">' + week + '</div><div class="bd-cal-grid">' + days + "</div></section>";
+  }
+
+  function renderCustomCalendar() {
+    var left = state.calMonth || (state.from || shanghaiToday()).slice(0, 7);
+    if (left < "2026-09") left = "2026-09";
+    var right = addMonth(left, 1);
+    return '<div class="bd-cal"><div class="bd-cal-months">' + renderMonth(left, "left") + renderMonth(right, "right") + '</div><p class="bd-cal-foot">*最少选择 1 天，最多选择 31 天</p></div>';
+  }
+
   function activePreset() {
     var map = { "1": "date", "7": "day7", "30": "day30", week: "week", month: "month", year: "year", custom: "custom" };
     return map[state.daysType] || "";
@@ -462,12 +558,12 @@
     }).join("");
     return '<div class="bd-datepick"><span class="bd-stat-time">' + esc(statText(data.range.from, data.range.to, daysType)) + '</span><div class="bd-presets">' + buttons +
       '<i class="bd-split"></i><button type="button" class="bd-arrow" data-act="shift" data-delta="-1" aria-label="上一期"' + (shiftRange(-1) ? "" : " disabled") + '>‹</button><button type="button" class="bd-arrow" data-act="shift" data-delta="1" aria-label="下一期"' + (shiftRange(1) ? "" : " disabled") + '>›</button><i class="bd-split"></i>' +
-      '<button type="button" data-act="preset" data-preset="custom" class="bd-custom' + (preset === "custom" ? " is-on" : "") + '">自定义</button></div>' +
+      '<button type="button" data-act="preset" data-preset="custom" class="bd-custom' + (preset === "custom" ? " is-on" : "") + '">自定义<span class="bd-tip">自定义支持在可选时间范围内，对任意连续最多 31 天的数据进行分析。访客相关的指标默认将单日的数据直接累加计算。</span></button></div>' +
       '<input class="bd-picker" data-act="pick-date" type="date" min="' + DATA_START + '" max="' + esc(today) + '" value="' + esc(dayValue) + '">' +
       '<input class="bd-picker" data-act="pick-week" type="week" max="' + esc(isoWeekValue(iso(addDays(parseIso(weekStart(today)), -7)))) + '" value="' + esc(isoWeekValue(monday)) + '">' +
       '<input class="bd-picker" data-act="pick-month" type="month" min="2026-09" max="' + esc(today.slice(0, 7)) + '" value="' + esc(monthValue) + '">' +
       (state.datePop === "year" ? '<div class="bd-pop">' + years + "</div>" : "") +
-      (state.datePop === "custom" ? '<div class="bd-pop"><input data-act="range-from" type="date" min="' + DATA_START + '" max="' + esc(today) + '" value="' + esc(data.range.from) + '"><span>至</span><input data-act="range-to" type="date" min="' + DATA_START + '" max="' + esc(today) + '" value="' + esc(data.range.to) + '"></div>' : "") +
+      (state.datePop === "custom" ? renderCustomCalendar() : "") +
       "</div>";
   }
 
@@ -853,7 +949,19 @@
       return "";
     }
     var source = data.shopRows || [];
+    var gaps = data.shopGaps || [];
+    var gapNote = gaps.length ? '<p class="bd-banner">店铺明细缺失：' + esc(gaps.join("、")) + "。这些天的金额没有采全，不会按 0 计入店铺汇总，已安排补采。</p>" : "";
+    var channelPay = Number(sumCell(data.allSum, "payAmount").replace(/,/g, "")) || 0;
+    var shopPay = source.reduce(function (sum, row) {
+      return sum + (Number((row.metrics || {}).payAmount) || 0);
+    }, 0);
+    if (source.length && channelPay > 0 && shopPay === 0) {
+      return '<section class="bd-block"><div class="bd-block-bar"><h2>店铺列表</h2></div><p class="bd-banner">这一天的店铺明细金额是 0，和渠道支付 ' + esc(sumCell(data.allSum, "payAmount")) + " 对不上。这是明细没采全，不会把缺失显示成真实的 0。已安排补采。</p></section>";
+    }
     if (!source.length) {
+      if (gapNote) {
+        return '<section class="bd-block"><div class="bd-block-bar"><h2>店铺列表</h2></div>' + gapNote + "</section>";
+      }
       var waiting = data.shopStatus && data.shopStatus !== "ready" ? "店铺列表还没采完。" : "这个范围内没有店铺记录。";
       return '<section class="bd-block"><div class="bd-block-bar"><h2>店铺列表</h2></div><p class="bd-miss">' + waiting + "</p></section>";
     }
@@ -874,7 +982,7 @@
       return (left.name === "汇总" ? 0 : 1) - (right.name === "汇总" ? 0 : 1);
     });
     var shopBody = state.shopView === "chart" ? renderBars(data, rows) : renderTable(data, rows, columns);
-    return '<section class="bd-block"><div class="bd-block-bar"><h2>店铺列表</h2><div class="bd-tools"><button type="button" data-act="shop-view" data-view="list" class="' + (state.shopView === "list" ? "is-on" : "") + '">列表</button><button type="button" data-act="shop-view" data-view="chart" class="' + (state.shopView === "chart" ? "is-on" : "") + '">图表</button><a href="/api/bound/export?' + esc(queryString()) + '">导出</a></div></div>' + shopBody + "</section>";
+    return '<section class="bd-block"><div class="bd-block-bar"><h2>店铺列表</h2><div class="bd-tools"><button type="button" data-act="shop-view" data-view="list" class="' + (state.shopView === "list" ? "is-on" : "") + '">列表</button><button type="button" data-act="shop-view" data-view="chart" class="' + (state.shopView === "chart" ? "is-on" : "") + '">图表</button><a href="/api/bound/export?' + esc(queryString()) + '">导出</a></div></div>' + gapNote + shopBody + "</section>";
   }
 
   function isTotalName(row) {
@@ -1177,6 +1285,8 @@
         var presetName = node.getAttribute("data-preset");
         if (presetName === "custom") {
           state.datePop = state.datePop === "custom" ? "" : "custom";
+          state.calAnchor = "";
+          state.calMonth = (state.from || shanghaiToday()).slice(0, 7);
           paint(root);
           return;
         }
@@ -1250,6 +1360,38 @@
           state.panel = "";
           return load(root, token);
         });
+        return;
+      } else if (act === "cal-shift") {
+        var nextMonth = addMonth(state.calMonth || shanghaiToday().slice(0, 7), Number(node.getAttribute("data-delta") || 0));
+        var todayMonth = shanghaiToday().slice(0, 7);
+        if (nextMonth >= "2026-09" && nextMonth <= todayMonth) {
+          state.calMonth = nextMonth;
+          paint(root);
+        }
+        return;
+      } else if (act === "cal-day") {
+        if (node.disabled) {
+          return;
+        }
+        var picked = node.getAttribute("data-day");
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(picked || "")) {
+          return;
+        }
+        if (!state.calAnchor) {
+          state.calAnchor = picked;
+          paint(root);
+          return;
+        }
+        var start = state.calAnchor < picked ? state.calAnchor : picked;
+        var end = state.calAnchor < picked ? picked : state.calAnchor;
+        if (daySpan(start, end) > 31) {
+          return;
+        }
+        var chosen = clampRange(start, end);
+        state.calAnchor = "";
+        state.datePop = "";
+        applyRange({ from: chosen.from, to: chosen.to, daysType: "custom" });
+        load(root, token);
         return;
       } else {
         return;

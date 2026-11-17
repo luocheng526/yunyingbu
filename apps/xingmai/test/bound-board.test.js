@@ -245,6 +245,24 @@ test("没采完的范围汇总留空，采完的整月和当前页分开算", as
     await writeSheet({
       reportId: "qdfx_dplb",
       dim: "all",
+      startOn: "2026-11-05",
+      endOn: "2026-11-05",
+      pageNo: 2,
+      status: "done",
+      kind: "list",
+      totalRows: 2,
+      pageSize: 50,
+      rowCount: 2,
+      payload: {
+        rows: [
+          { shopName: "合计", platform: "ALL", sumLine: true, payAmount: 10 },
+          { shopId: 7, shopName: "甲店", platform: "JD", payAmount: 6, profit: 1 }
+        ]
+      }
+    });
+    await writeSheet({
+      reportId: "qdfx_dplb",
+      dim: "all",
       startOn: "2026-11-06",
       endOn: "2026-11-06",
       pageNo: 1,
@@ -445,6 +463,8 @@ test("页面只请求边界接口，并画出四个模块", async () => {
   const routerSrc = readFileSync(routerPath, "utf8");
   const storeSrc = readFileSync(storePath, "utf8");
   assert.match(js, /爬虫，非 ERP/);
+  assert.match(js, /最少选择 1 天，最多选择 31 天/);
+  assert.match(js, /访客相关的指标默认将单日的数据直接累加计算/);
   assert.match(js, /XmModules\["\/bound"\]/);
   assert.doesNotMatch(js, /\/api\/data|\/api\/home|jingmai|hejun\.ecbis|biprodapi/);
   assert.doesNotMatch(routerSrc, /modules\/data|jingmai/);
@@ -889,7 +909,39 @@ test("日期条的 7 天、30 天截止到昨天，周从周一开始并且不�
   assert.equal(previousQuery.get("to") < today, true);
   click("preset", { "data-preset": "custom" });
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.match(root.innerHTML, /data-act="range-from"/);
-  assert.match(root.innerHTML, /data-act="range-to"/);
+  assert.match(root.innerHTML, /bd-cal-months/);
+  assert.match(root.innerHTML, /最少选择 1 天，最多选择 31 天/);
+  assert.match(root.innerHTML, /is-from/);
+  assert.match(root.innerHTML, /is-to/);
+  click("cal-day", { "data-day": "2026-11-01" });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  click("cal-day", { "data-day": "2026-11-15" });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  const custom = calls.filter((href) => href.includes("daysType=custom")).pop();
+  const customQuery = new URL(custom, "http://local").searchParams;
+  assert.equal(customQuery.get("from"), "2026-11-01");
+  assert.equal(customQuery.get("to"), "2026-11-15");
+  click("preset", { "data-preset": "custom" });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const beforeOver = calls.length;
+  click("cal-day", { "data-day": "2026-11-01" });
+  click("cal-day", { "data-day": "2026-12-20" });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(calls.length, beforeOver);
+  click("cal-day", { "data-day": "2026-11-01" });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  const oneDay = calls.filter((href) => href.includes("daysType=custom")).pop();
+  const oneQuery = new URL(oneDay, "http://local").searchParams;
+  assert.equal(oneQuery.get("from"), "2026-11-01");
+  assert.equal(oneQuery.get("to"), "2026-11-01");
+  click("preset", { "data-preset": "custom" });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  click("cal-day", { "data-day": "2026-10-20" });
+  click("cal-day", { "data-day": "2026-11-10" });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  const cross = calls.filter((href) => href.includes("daysType=custom")).pop();
+  const crossQuery = new URL(cross, "http://local").searchParams;
+  assert.equal(crossQuery.get("from"), "2026-10-20");
+  assert.equal(crossQuery.get("to"), "2026-11-10");
   stop();
 });

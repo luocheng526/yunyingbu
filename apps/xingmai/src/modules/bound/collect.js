@@ -388,6 +388,49 @@ function failureSettled(report, scope, row) {
   return text.startsWith(`${requestMark(report)} daysType=${scope.daysType} `);
 }
 
+function thinList(report, dim, first, sheets) {
+  if (!first || first.status !== "done") {
+    return false;
+  }
+  if (report.id !== "qdfx_dplb" && report.id !== "qd_gjzbfx_dpck") {
+    return false;
+  }
+  if (String(first.errorText || "").startsWith("thin-ok")) {
+    return false;
+  }
+  if ((first.rowCount || 0) >= 20) {
+    return false;
+  }
+  return sheets.some(
+    (row) => row.reportId === report.id && row.dim === dim && row.pageNo === 1 && row.status === "done" && row.rowCount >= 40 && row.startOn !== first.startOn
+  );
+}
+
+function rawIdentity(raw) {
+  if (!raw || typeof raw !== "object") {
+    return String(raw);
+  }
+  const shopId = raw.shopId || raw.shopID || "";
+  const goodsId = raw.goodsId || raw.spuid || raw.skuId || raw.hpCode || "";
+  const shop = raw.shopName || raw.shop || "";
+  const platform = raw.platform || raw.platformName || "";
+  const name = raw.channelName || raw.platformName || raw.cateName || raw.goodsName || raw.name || "";
+  const sum = raw.sumLine ? "sum" : "";
+  return [shopId, goodsId, shop, platform, name, sum].join("|");
+}
+
+function dedupeRaw(rows) {
+  const seen = new Set();
+  return rows.filter((raw) => {
+    const id = rawIdentity(raw);
+    if (seen.has(id)) {
+      return false;
+    }
+    seen.add(id);
+    return true;
+  });
+}
+
 function failText(report, scope, message) {
   return `${requestMark(report)} daysType=${scope.daysType} ${String(message || "接口失败")}`.slice(0, 300);
 }
@@ -469,6 +512,9 @@ function sheetHole(report, dim, scope, sheets) {
   );
   if (scope.start === scope.end && first.kind !== "object" && first.totalRows === 0 && first.rowCount === 0 && siblingHasRows && !String(first.errorText || "").startsWith("empty-ok2")) {
     return { page: 1, kind: "list", attempts: first.attempts, emptyRetry: true, cause: "empty" };
+  }
+  if (scope.start === scope.end && thinList(report, dim, first, sheets)) {
+    return { page: 1, kind: "list", attempts: 0, cause: "retry", thinRetry: true };
   }
   if (first.kind === "object") {
     return null;
@@ -683,6 +729,14 @@ async function runReport(current, unit) {
     });
     return;
   }
+  const unique = dedupeRaw(extracted.rows);
+  const wholeList = unique.length !== PAGE_SIZE;
+  let note = "";
+  if (unit.emptyRetry && unique.length === 0) {
+    note = "empty-ok2";
+  } else if (unit.thinRetry && unique.length < 20) {
+    note = "thin-ok";
+  }
   await writeSheet({
     reportId: report.id,
     dim: unit.dim,
@@ -691,12 +745,12 @@ async function runReport(current, unit) {
     pageNo: unit.page,
     status: "done",
     kind: "list",
-    totalRows: extracted.total,
+    totalRows: wholeList ? unique.length : extracted.total,
     pageSize: PAGE_SIZE,
     attempts: 0,
-    rowCount: extracted.rows.length,
-    errorText: unit.emptyRetry && extracted.total === 0 && extracted.rows.length === 0 ? "empty-ok2" : "",
-    payload: { rows: extracted.rows, total: extracted.total }
+    rowCount: unique.length,
+    errorText: note,
+    payload: { rows: unique, total: wholeList ? unique.length : extracted.total }
   });
 }
 

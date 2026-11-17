@@ -251,11 +251,71 @@ export function scopeStatus(pages) {
   return { status: "ready", error: "" };
 }
 
+function rawIdentity(raw) {
+  if (!raw || typeof raw !== "object") {
+    return String(raw);
+  }
+  const shopId = raw.shopId || raw.shopID || "";
+  const goodsId = raw.goodsId || raw.spuid || raw.skuId || raw.hpCode || "";
+  const shop = raw.shopName || raw.shop || "";
+  const platform = raw.platform || raw.platformName || "";
+  const name = raw.channelName || raw.platformName || raw.cateName || raw.goodsName || raw.name || "";
+  const sum = raw.sumLine ? "sum" : "";
+  return [shopId, goodsId, shop, platform, name, sum].join("|");
+}
+
+function rawPay(raw) {
+  const value = Number(raw && raw.payAmount);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function rawTotal(raw) {
+  const name = String((raw && (raw.shopName || raw.channelName || raw.platformName || raw.name)) || "");
+  return Boolean(raw && (raw.sumLine || name === "合计" || name === "全渠道" || name === "全部" || raw.platform === "ALL"));
+}
+
+function daySheetPay(pages, day) {
+  const page = pages.find((row) => row.pageNo === 1 && row.status === "done" && row.startOn === day && row.endOn === day);
+  const rows = page && page.payload && Array.isArray(page.payload.rows) ? page.payload.rows : null;
+  if (!rows) {
+    return null;
+  }
+  const total = rows.find((row) => rawTotal(row));
+  if (total) {
+    return rawPay(total);
+  }
+  return rows.reduce((sum, row) => sum + rawPay(row), 0);
+}
+
+function shopGapDays(shopPages, channelPages, from, to) {
+  return eachDay(from, to).filter((day) => {
+    const channel = daySheetPay(channelPages, day);
+    const shop = daySheetPay(shopPages, day);
+    return channel > 0 && (shop == null || shop === 0);
+  });
+}
+
 function rowsOf(pages) {
-  return pages
+  const groups = new Map();
+  pages
     .filter((row) => row.pageNo > 0 && row.status === "done")
-    .sort((a, b) => a.pageNo - b.pageNo)
-    .flatMap((row) => (Array.isArray(row.payload && row.payload.rows) ? row.payload.rows : []));
+    .sort((left, right) => (left.startOn === right.startOn ? left.pageNo - right.pageNo : left.startOn < right.startOn ? -1 : 1))
+    .forEach((page) => {
+      const key = `${page.startOn}|${page.endOn}`;
+      if (!groups.has(key)) {
+        groups.set(key, { seen: new Set(), rows: [] });
+      }
+      const bucket = groups.get(key);
+      (Array.isArray(page.payload && page.payload.rows) ? page.payload.rows : []).forEach((raw) => {
+        const id = rawIdentity(raw);
+        if (bucket.seen.has(id)) {
+          return;
+        }
+        bucket.seen.add(id);
+        bucket.rows.push(raw);
+      });
+    });
+  return [...groups.values()].flatMap((bucket) => bucket.rows);
 }
 
 const SNAPSHOT_REPORTS = new Set(["qdzl_lb", "qdzl_fz", "qdfx_dplb", "qd_gjzbfx_dpck", "qd_gjzbfx_qdck"]);
@@ -638,11 +698,14 @@ export async function readView(query) {
   }
   let shopRows = [];
   let shopStatus = "missing";
+  let shopGaps = [];
   if (page.id === "channelOverview" && tab && tab.id === "qdzl_lb") {
     const shopReport = tabById(pageById("channelAnalysis"), "qdfx_dplb");
     const shopLoaded = await loadScope(all, shopReport, "all", range.from, range.to, daysType);
     shopStatus = shopLoaded.status.status;
-    let shopNormalized = rowsOf(shopLoaded.pages).map((row, index) => normalizeRow(row, index));
+    shopGaps = shopGapDays(shopLoaded.pages, all.filter((row) => row.reportId === "qdzl_lb"), range.from, range.to);
+    const shopPages = shopLoaded.pages.filter((row) => !shopGaps.includes(row.startOn));
+    let shopNormalized = rowsOf(shopPages).map((row, index) => normalizeRow(row, index));
     if (shopLoaded.mode === "day" && range.from !== range.to) {
       shopNormalized = collapseSnapshots(shopNormalized);
     } else {
@@ -708,6 +771,7 @@ export async function readView(query) {
     channelCount: page.id === "channelOverview" && tab && tab.id === "qdzl_lb" ? filtered.filter((row) => !isTotalRow(row)).length : undefined,
     shopCount: page.id === "channelOverview" && tab && tab.id === "qdzl_lb" ? shopRows.filter((row) => !isTotalRow(row)).length : undefined,
     shopStatus,
+    shopGaps,
     shopRows: shopRows.map((row) => ({
       key: row.key,
       name: row.name,
