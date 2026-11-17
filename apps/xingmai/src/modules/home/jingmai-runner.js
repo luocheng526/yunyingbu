@@ -36,7 +36,7 @@ function wipeQueue() {
     shop.password = "";
   });
   loginQueue = [];
-  loginCursor = { index: 0, total: 0, store: "" };
+  loginCursor = { index: 0, total: 0, store: "", step: "", message: "", failed: false, phase: "idle" };
 }
 
 export function resetJingmaiDeps() {
@@ -198,6 +198,8 @@ function publicState(state) {
     store: state.store || loginCursor.store,
     status: state.status,
     message: state.message || "",
+    step: state.step || loginCursor.step || "",
+    shops: state.shops || [],
     index: state.index || loginCursor.index,
     total: state.total || loginCursor.total
   };
@@ -250,45 +252,60 @@ async function rememberLogin(store, cookies, expected) {
     const metrics = await deps.client.fetchHome(cookies);
     const now = beijingParts();
     await saveSample(Object.assign({ store: store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics)));
-    if (metrics.dealAmount == null) {
-      await markAuth(store, "offline", metrics.dealNote || "京麦首页没有成交字段");
-    }
-  } catch (error) {
-    const message = String((error && error.message) || "采集超时").replace(/\s+/g, " ").slice(0, 180) || "采集超时";
-    await markAuth(store, "offline", message);
+  } catch {
+    /* 一次采集超时或没有成交，保留刚保存的登录 */
   }
   return "saved";
 }
 
 async function startQueued(shop) {
   loginCursor.store = shop.store;
-  const opened = await deps.desk.open({ store: shop.store, loginName: shop.login, password: shop.password });
+  loginCursor.step = "打开京麦登录页";
+  loginCursor.phase = "opening";
+  loginCursor.failed = false;
+  loginCursor.message = "正在打开「" + shop.store + "」的登录画面";
+  let opened;
+  try {
+    opened = await deps.desk.open({ store: shop.store, loginName: shop.login, password: shop.password });
+  } catch {
+    opened = { status: "login", message: "服务器没有打开京麦登录页" };
+  }
   shop.login = "";
   shop.password = "";
   if (opened.status === "ok") {
     await deps.desk.close();
     const kept = await rememberLogin(shop.store, opened.cookies || [], { shopId: shop.shopId || "", store: shop.store });
     if (kept === "kept") {
-      return publicState({ status: "login", store: shop.store, message: "这次登录到的不是这家店，原来的会话还在" });
+      return publicState({ status: "done", store: shop.store, message: "这次登录到的不是这家店，原来的会话还在" });
     }
     if (kept !== "saved") {
-      return advanceAfterFailure(shop.store, "登录没有通过，请再试一次");
+    loginCursor.failed = true;
+    loginCursor.phase = "failed";
+    loginCursor.step = "核对店铺身份";
+    loginCursor.message = "登录没有通过，请再试一次";
+      return publicState({ status: "failed", store: shop.store, step: "核对店铺身份", message: loginCursor.message });
     }
-    return advanceAfterSuccess(shop.store);
+    return publicState({ status: "ok", store: shop.store, message: shop.store + " 已在服务器登录" });
   }
   if (opened.status === "verify") {
+    loginCursor.phase = "screen";
+    loginCursor.step = "京麦登录页";
+    loginCursor.message = opened.message || "登录页已打开";
     return publicState({
       status: "screen",
       store: shop.store,
-      message: opened.message || "点一下只会点到服务器上的登录页，这个窗口不会关掉。"
+      step: "京麦登录页",
+      message: loginCursor.message
     });
   }
-  await deps.desk.close();
-  if (String(opened.message || "").includes("浏览器")) {
-    wipeQueue();
-    return publicState({ status: "login", store: shop.store, message: opened.message });
+  if (deps.desk && deps.desk.close) {
+    await deps.desk.close();
   }
-  return advanceAfterFailure(shop.store, opened.message || "登录没有通过，请再试一次");
+  loginCursor.failed = true;
+  loginCursor.phase = "failed";
+  loginCursor.step = "打开京麦登录页";
+  loginCursor.message = opened.message || "服务器没有打开京麦登录页";
+  return publicState({ status: "failed", store: shop.store, step: loginCursor.step, message: loginCursor.message });
 }
 
 async function advanceAfterSuccess(store) {
@@ -315,22 +332,32 @@ async function advanceAfterFailure(store, message) {
 }
 
 async function queueShops(shops) {
-  wipeQueue();
-  if (deps.desk && deps.desk.close) {
-    await deps.desk.close();
-  }
-  loginQueue = shops.map(function (shop) {
+  const copies = (shops || []).map(function (shop) {
     const copy = { store: shop.store, login: shop.login, password: shop.password, shopId: shop.shopId || "" };
     shop.login = "";
     shop.password = "";
     return copy;
   });
-  loginCursor = { index: 1, total: loginQueue.length, store: "" };
-  const first = loginQueue.shift();
-  if (!first) {
-    return publicState({ status: "done", message: "没有需要登录的店" });
+  wipeQueue();
+  loginQueue = copies;
+  const first = loginQueue[0];
+  loginCursor = {
+    index: 1,
+    total: loginQueue.length,
+    store: first ? first.store : "",
+    step: "打开京麦登录页",
+    message: first ? "正在打开「" + first.store + "」的登录画面" : "全部店铺已连接",
+    failed: false,
+    phase: "opening"
+  };
+  if (deps.desk && deps.desk.close) {
+    await deps.desk.close();
   }
-  return startQueued(first);
+  const next = loginQueue.shift();
+  if (!next) {
+    return publicState({ status: "done", message: "全部店铺已连接" });
+  }
+  return startQueued(next);
 }
 
 export async function beginRelogin(store, cookie) {
@@ -351,10 +378,29 @@ export async function beginRelogin(store, cookie) {
   if (!shop.login || !shop.password) {
     return { ok: true, store: name, status: "login", message: "组织中心还没有填写这家店的账号" };
   }
-  const queued = { store: shop.store, login: shop.login, password: shop.password };
+  const sessions = await listSessions();
+  const existing = sessions.find(function (item) {
+    return item.store === name;
+  });
+  if (sessionStillValid(existing)) {
+    return { ok: true, status: "done", store: name, message: "「" + name + "」已连接" };
+  }
+  const queued = { store: shop.store, login: shop.login, password: shop.password, shopId: shop.shopId || "" };
   shop.login = "";
   shop.password = "";
-  return queueShops([queued]);
+  const job = queueShops([queued]);
+  job.catch(function () {
+    loginCursor.failed = true;
+    loginCursor.phase = "failed";
+    loginCursor.step = "打开京麦登录页";
+    loginCursor.message = "服务器没有打开京麦登录页";
+  });
+  return publicState({
+    status: "opening",
+    store: name,
+    step: "打开京麦登录页",
+    message: "正在打开「" + name + "」的登录画面"
+  });
 }
 
 export async function beginReloginAll(cookie) {
@@ -364,27 +410,25 @@ export async function beginReloginAll(cookie) {
   const ready = new Set(
     sessions
       .filter(function (session) {
-        return session.authState === "ok" && (session.cookies || []).some(function (item) {
-          return item.name === "thor" || item.name === "pt_key";
-        });
+        return sessionStillValid(session);
       })
       .map(function (session) {
         return session.store;
       })
   );
-  const pending = shops.filter(function (shop) {
-    return shop.enabled !== false && shop.login && shop.password && !ready.has(shop.store);
-  });
+  const pending = [];
   shops.forEach(function (shop) {
-    if (!pending.includes(shop)) {
-      shop.login = "";
-      shop.password = "";
+    const needs = shop.enabled !== false && shop.login && shop.password && !ready.has(shop.store);
+    shop.login = "";
+    shop.password = "";
+    if (needs) {
+      pending.push({ store: shop.store, shopId: shop.shopId || "" });
     }
   });
   if (!pending.length) {
-    return { ok: true, status: "done", message: "需要登录的店都已经在服务器上" };
+    return { ok: true, status: "done", message: "全部店铺已连接", shops: [] };
   }
-  return queueShops(pending);
+  return { ok: true, status: "pick", message: "选择要登录的店铺", shops: pending };
 }
 
 export async function reloginState(store) {
@@ -392,7 +436,26 @@ export async function reloginState(store) {
   if (!name) {
     return publicState({ status: "missing", message: "请重新打开登录" });
   }
+  if (loginCursor.failed || loginCursor.phase === "failed") {
+    return publicState({ status: "failed", store: name, step: loginCursor.step, message: loginCursor.message || "登录没有打开" });
+  }
+  if (loginCursor.phase === "opening") {
+    return publicState({
+      status: "opening",
+      store: name,
+      step: loginCursor.step || "打开京麦登录页",
+      message: loginCursor.message || "正在打开「" + name + "」的登录画面"
+    });
+  }
   const state = await deps.desk.poll(name);
+  if (state.status === "opening") {
+    return publicState({
+      status: "opening",
+      store: name,
+      step: loginCursor.step || "打开京麦登录页",
+      message: loginCursor.message || state.message
+    });
+  }
   if (state.status === "ok") {
     const cookies = state.cookies || [];
     const cached = orgCache.get(name);

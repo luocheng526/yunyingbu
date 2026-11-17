@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { getHomeErpKpis } from "./erp-kpis.js";
 import { getHomeErpPaid } from "./erp-paid.js";
 import { HOME_JS_STAMP } from "./asset-ver.js";
+import { patchConnectPicker } from "./connect-patch.js";
 import {
   getHomeLocalPaid,
   postHomeLocalPaid,
@@ -236,10 +237,9 @@ const KEPT_REFRESH_CLICK =
 
 export function patchHomeClientSource(text) {
   const source = String(text || "");
-  if (source.includes("function applyDesk(st)") || !source.includes(OLD_SHOW_DESK)) {
-    return source;
-  }
-  return source
+  const patched = source.includes("function applyDesk(st)") || !source.includes(OLD_SHOW_DESK)
+    ? source
+    : source
     .replace(OLD_SHOW_DESK, KEPT_SHOW_DESK)
     .replace(OLD_DESK_PAINT, KEPT_DESK_PAINT)
     .replace(OLD_DESK_SRC, KEPT_DESK_SRC)
@@ -258,6 +258,7 @@ export function patchHomeClientSource(text) {
     .replaceAll("0.1.1039-loginpop", "0.1.1090-paidon")
     .replaceAll("0.1.1043-deskkeep", "0.1.1090-paidon")
     .replaceAll("0.1.1070-liveon", "0.1.1090-paidon");
+  return patchConnectPicker(patched);
 }
 
 function homeClientSource() {
