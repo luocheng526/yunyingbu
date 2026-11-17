@@ -1,4 +1,4 @@
-/* xm-module-agents 0.1.148 */
+/* xm-module-agents 0.1.149 */
 (function () {
   var SPARK =
     '<svg class="agents-spark" viewBox="0 0 28 28" aria-hidden="true">' +
@@ -37,41 +37,65 @@
     );
   }
 
+  function sceneIco(inner) {
+    return '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">' + inner + "</svg>";
+  }
+
   var SCENES = [
     {
       id: "qa",
       title: "电商知识问答",
-      text: "运营问题、平台规则、玩法策略、SOP 流程即时解答",
+      text: "运营问题、平台规则、玩法策略 SOP流程即时解答",
       prompt: "电商运营里，选品和平台规则日常要注意什么？",
-      ico: icon("M4 4h12a2 2 0 012 2v7a2 2 0 01-2 2H9l-5 5V6a2 2 0 012-2zm14 4h2a2 2 0 012 2v7l-4 4v-3h-2", "#2f7bff")
+      ico:
+        sceneIco(
+          '<path fill="#2f7bff" d="M3.6 4.2A2.6 2.6 0 016.2 1.6h8.2A2.6 2.6 0 0117 4.2v5.6A2.6 2.6 0 0114.4 12.4H8.1L3.6 15.8V4.2z"/>' +
+            '<path fill="#60a5fa" d="M9.4 13.1h7.4A2.3 2.3 0 0119.1 15.4V21l-3.6-2.5h-4.8A2.3 2.3 0 018.4 16.2v-1.5c0-.9.8-1.6 1.8-1.6z"/>'
+        )
     },
     {
       id: "create",
       title: "创作与运营执行",
-      text: "主图 / 详情图 / 海报 / 标题 / 卖点文案、上新、优化等日常工作",
+      text: "主图/详情图/海报/标题/卖点 文案、上新、优化等日常工作",
       prompt: "怎么做主图、详情和标题？日常做店怎么排？",
-      ico: icon("M4 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2zm3 12h10v2H7zM8 8l2.5 3 2-2.5L16 13H8z", "#7c3aed")
+      ico:
+        sceneIco(
+          '<rect x="3" y="4" width="18" height="16" rx="3.2" fill="#8b5cf6"/>' +
+            '<circle cx="8.6" cy="9" r="1.7" fill="#f3e8ff"/>' +
+            '<path fill="#ddd6fe" d="M5 17.6l4.6-5 2.8 2.7 3.2-3.4 4.4 5.7H5z"/>'
+        )
     },
     {
       id: "diag",
       title: "店铺分析与诊断",
-      text: "店铺健康度、流量 / 转化 / 利润问题定位与优化建议",
+      text: "店铺健康度、流量/转化/利润 问题定位与优化建议",
       prompt: "店铺健康一般看哪些指标？本店近30天如果没有接口请直接说还没有。",
-      ico: icon("M3 21V8h6v13H3zm6 0V3h6v18H9zm6 0v-8h6v8h-6z", "#16a34a")
+      ico:
+        sceneIco(
+          '<path fill="#16a34a" d="M4 10.4L12 4.2l8 6.2V12H4v-1.6zM6 13h12v8H6v-8zm4.2 3h3.6v5h-3.6v-5z"/>'
+        )
     },
     {
       id: "market",
       title: "行业大盘分析",
-      text: "行业趋势、竞争格局、热销商品、价格带、机会赛道分析",
+      text: "行业趋势、竞争格局、热销商品 价格带、机会赛道分析",
       prompt: "行业大盘和竞品分析一般怎么做？没有外数就说还没有。",
-      ico: icon("M4 19h16v2H4zM7 10h3v7H7zm5-5h3v12h-3zm5 8h3v4h-3z", "#f59e0b")
+      ico:
+        sceneIco(
+          '<rect x="3.4" y="12.2" width="4.2" height="8" rx="1.2" fill="#f59e0b"/>' +
+            '<rect x="9.9" y="5.4" width="4.2" height="14.8" rx="1.2" fill="#f59e0b"/>' +
+            '<rect x="16.4" y="8.6" width="4.2" height="11.6" rx="1.2" fill="#f59e0b"/>'
+        )
     },
     {
       id: "watch",
       title: "数据异常监控",
-      text: "公司 / 店铺经营数据实时监控，异常预警、原因分析与处置建议",
+      text: "公司/店铺经营数据实时监控 异常预警、原因分析与处置建议",
       prompt: "数据异常监控需要哪些只读接口？现在缺什么？",
-      ico: icon("M12 3a6 6 0 016 6v3.5l2 2.5H4l2-2.5V9a6 6 0 016-6zm-2 16a2 2 0 004 0z", "#ef4444")
+      ico:
+        sceneIco(
+          '<path fill="#f43f5e" d="M12 2.6a6.2 6.2 0 016.2 6.2v3.1l1.9 2.8H3.9l1.9-2.8V8.8A6.2 6.2 0 0112 2.6zm-2.6 16.6a2.6 2.6 0 005.2 0H9.4z"/>'
+        )
     }
   ];
 
@@ -109,7 +133,7 @@
     }
     const link = document.createElement("link");
     link.rel = "stylesheet";
-    link.href = "/agents.css";
+    link.href = "/agents.css?v=0.1.149";
     document.head.appendChild(link);
   }
 
@@ -245,11 +269,11 @@
             item.id +
             '" data-prompt="' +
             escapeHtml(item.prompt) +
-            '"><span class="ico">' +
+            '"><span class="scene-head"><span class="ico">' +
             item.ico +
             "</span><strong>" +
             escapeHtml(item.title) +
-            "</strong><p>" +
+            "</strong></span><p>" +
             escapeHtml(item.text) +
             '</p><span class="go">立即使用 →</span></button>'
           );

@@ -46,6 +46,8 @@ test("会话页挂 XmModules /agents，颜色走主题变量", () => {
   assert.match(agentsJs, /常用工具/);
   assert.match(agentsJs, /嗨！我是甄选智能体/);
   assert.match(agentsJs, /立即使用/);
+  assert.match(agentsJs, /scene-head/);
+  assert.match(agentsCss, /scene-head/);
   assert.match(agentsJs, /主脑问答台/);
   assert.match(agentsJs, /\/api\/agents\/chat/);
   assert.match(agentsJs, /\/api\/agents\/models/);
