@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap 0.1.775-dutylive 0.1.776-homehit 0.1.777-parentgo 0.1.778-nochild 0.1.779-watermark 0.1.780-marklite 0.1.781-markwho 0.1.782-lightskin 0.1.783-navbold 0.1.784-homeloop 0.1.785-mever 0.1.786-mebust v0.4.18 — 个人中心脚本不进浏览器缓存 */
+/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap 0.1.775-dutylive 0.1.776-homehit 0.1.777-parentgo 0.1.778-nochild 0.1.779-watermark 0.1.780-marklite 0.1.781-markwho 0.1.782-lightskin 0.1.783-navbold 0.1.784-homeloop 0.1.785-mever 0.1.787-acadleaf v0.4.18 — 个人中心脚本不进浏览器缓存 */
 (function () {
-  const ASSET_VER = "0.1.786-mebust";
+  const ASSET_VER = "0.1.787-acadleaf";
   const origFetch = window.fetch ? window.fetch.bind(window) : null;
   if (origFetch) {
     window.fetch = function (input, init) {
@@ -90,7 +90,7 @@
   ];
   const STAFF_NAV = { "/releases": 1, "/people": 1, "/hr": 1 };
   const STAFF_NAV_NAMES = { "罗成": 1, "韩梦凯": 1, "沈子晗": 1, luocheng: 1 };
-  const ACADEMY_CHILDREN = [
+  const ACADEMY_PAGES = [
     { href: "/academy/courses", label: "培训课程" },
     { href: "/academy/exams", label: "培训考试" },
     { href: "/academy/handbook", label: "运营手册" }
@@ -102,7 +102,7 @@
     { href: "/shen", label: "沈子晗运营中心", children: SHEN_CHILDREN },
     { href: "/han", label: "韩梦凯运营中心", children: HAN_CHILDREN },
     { href: "/stores", label: "店铺维护中心" },
-    { href: "/academy", label: "甄选商学院", children: ACADEMY_CHILDREN },
+    { href: "/academy", label: "甄选商学院" },
     { href: "/agents", label: "甄选智能体" },
     { href: "/work", label: "工作汇报" },
     { href: "/meeting", label: "月度大会" },
@@ -112,7 +112,7 @@
     { href: "/hr", label: "智能人事" },
     { href: "/me", label: "个人中心" }
   ];
-  const labels = items.concat(DATA_CHILDREN, SHEN_CHILDREN, HAN_CHILDREN, ACADEMY_CHILDREN, [
+  const labels = items.concat(DATA_CHILDREN, SHEN_CHILDREN, HAN_CHILDREN, ACADEMY_PAGES, [
     { href: "/notices", label: "公告中心" }
   ]);
 
@@ -283,6 +283,9 @@
     const key = normalize(href);
     if (key === "/people") {
       return current === "/people" || current === "/notices";
+    }
+    if (key === "/academy") {
+      return current === "/academy" || current.indexOf("/academy/") === 0;
     }
     return current === key;
   }
@@ -1082,8 +1085,7 @@
     "/data": "/data/overview",
     "/data/paid": "/home",
     "/shen": "/shen/product",
-    "/han": "/han/selection",
-    "/academy": "/academy/courses"
+    "/han": "/han/selection"
   };
   const unmounts = {};
   let openTabs = [];

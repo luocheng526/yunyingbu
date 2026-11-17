@@ -56,7 +56,7 @@ function runCapFromNav(hrefs, current, pin = PIN) {
 }
 
 test("顶栏最多 10 个页签，开第 11 个关掉首页后的第一个", () => {
-  assert.equal(SHELL_ASSET_VER, "0.1.786-mebust");
+  assert.equal(SHELL_ASSET_VER, "0.1.787-acadleaf");
   const next = "/work";
   const result = runCapFromNav([...TEN, next], next);
   assert.deepEqual(result.dropped, ["/bound"]);
