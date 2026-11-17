@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap 0.1.775-dutylive 0.1.776-homehit 0.1.777-parentgo 0.1.778-nochild 0.1.779-watermark 0.1.780-marklite 0.1.781-markwho v0.4.18 — 水印只跟登录账号走 */
+/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap 0.1.775-dutylive 0.1.776-homehit 0.1.777-parentgo 0.1.778-nochild 0.1.779-watermark 0.1.780-marklite 0.1.781-markwho 0.1.782-lightskin v0.4.18 — 浅色皮肤收成一套变量 */
 (function () {
-  const ASSET_VER = "0.1.781-markwho";
+  const ASSET_VER = "0.1.782-lightskin";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
