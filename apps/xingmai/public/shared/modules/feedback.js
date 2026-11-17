@@ -1,10 +1,10 @@
 /* xm-module-feedback — 需求与反馈工作台：统计、类型分布、流程、列表。 */
 (function () {
   var TYPES = [
-    { id: "feature", label: "功能需求", color: "#2f6bff" },
-    { id: "suggest", label: "优化建议", color: "#22a06b" },
-    { id: "issue", label: "问题反馈", color: "#f5a524" },
-    { id: "other", label: "其他需求", color: "#7c8aa5" }
+    { id: "feature", label: "功能需求", color: "var(--xm-ui-primary)" },
+    { id: "suggest", label: "优化建议", color: "var(--xm-ui-green)" },
+    { id: "issue", label: "问题反馈", color: "var(--xm-ui-orange)" },
+    { id: "other", label: "其他需求", color: "var(--xm-ui-text-muted)" }
   ];
   var STATUSES = {
     review: { label: "待评审", color: "#f5a524" },
@@ -64,100 +64,47 @@
       .replace(/"/g, "&quot;");
   }
 
+  function ui() {
+    return window.XmUI;
+  }
+
   function ensureStyle() {
-    if (document.getElementById("fb-page-style")) {
-      return;
+    var style = document.getElementById("fb-page-style");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "fb-page-style";
+      document.head.appendChild(style);
     }
-    var style = document.createElement("style");
-    style.id = "fb-page-style";
     style.textContent =
-      ".fb-page{color:var(--xm-ink);font-size:13px;}" +
-      ".fb-page button:focus-visible,.fb-page input:focus-visible,.fb-page select:focus-visible,.fb-page textarea:focus-visible{outline:2px solid var(--xm-primary);outline-offset:1px;}" +
-      ".fb-top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin:0 0 14px;}" +
-      ".fb-brand{display:flex;gap:10px;align-items:flex-start;}" +
-      ".fb-logo{width:36px;height:36px;border-radius:10px;background:#2f6bff;color:#fff;display:flex;align-items:center;justify-content:center;flex:none;}" +
-      ".fb-page h1{margin:0;font-size:20px;font-weight:700;}" +
-      ".fb-sub{margin:4px 0 0;color:var(--xm-muted);font-size:12px;}" +
-      ".fb-actions{display:flex;gap:8px;align-items:center;}" +
-      ".fb-ghost{height:32px;border:1px solid var(--xm-line);border-radius:8px;background:var(--xm-card);color:var(--xm-ink);padding:0 12px;font:inherit;font-size:13px;cursor:pointer;}" +
-      ".fb-primary{height:32px;border:0;border-radius:8px;background:#2f6bff;color:#fff;padding:0 14px;font:inherit;font-size:13px;font-weight:650;cursor:pointer;}" +
-      ".fb-primary:disabled{opacity:.6;cursor:default;}" +
-      ".fb-msg{min-height:18px;margin:0 0 8px;color:var(--xm-muted);font-size:12px;}" +
-      ".fb-msg.is-error{color:#cf1322;}" +
-      ".fb-help,.fb-form,.fb-card,.fb-detail{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:12px;box-shadow:var(--xm-shadow);}" +
-      ".fb-help{padding:12px 14px;margin:0 0 12px;color:var(--xm-muted);line-height:1.6;}" +
-      ".fb-form{padding:14px;margin:0 0 12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}" +
-      ".fb-field{display:flex;flex-direction:column;gap:4px;color:var(--xm-muted);font-size:12px;}" +
-      ".fb-field.wide{grid-column:1 / -1;}" +
-      ".fb-field input,.fb-field select,.fb-field textarea{border:1px solid var(--xm-line);border-radius:8px;background:var(--xm-card);color:var(--xm-ink);font:inherit;font-size:13px;padding:6px 8px;}" +
-      ".fb-field textarea{min-height:72px;resize:vertical;}" +
-      ".fb-form-ops{grid-column:1 / -1;display:flex;justify-content:flex-end;gap:8px;}" +
-      ".fb-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0 0 12px;}" +
-      ".fb-kpi{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:12px;box-shadow:var(--xm-shadow);padding:16px 18px;display:flex;justify-content:space-between;gap:12px;align-items:center;min-height:96px;}" +
-      ".fb-kpi-main{display:flex;align-items:center;gap:12px;min-width:0;}" +
-      ".fb-kpi-text{display:flex;flex-direction:column;gap:6px;min-width:0;}" +
-      ".fb-kpi b{display:block;margin:0;font-size:36px;line-height:1;font-weight:700;letter-spacing:-0.03em;}" +
-      ".fb-kpi-text span{display:block;margin:0;color:var(--xm-muted);font-size:13px;line-height:1;}" +
-      ".fb-kpi-ico{width:42px;height:42px;display:inline-flex;align-items:center;justify-content:center;flex:none;}" +
-      ".fb-kpi-ico svg{width:20px;height:20px;}" +
-      ".fb-kpi-ico.blue{border-radius:12px;background:#2f6bff;color:#fff;}" +
-      ".fb-kpi-ico.green{border-radius:50%;background:#e7f8ef;color:#22a06b;}" +
-      ".fb-kpi-ico.purple{border-radius:50%;background:#f0ecff;color:#7c5cfc;}" +
-      ".fb-kpi-ico.red{border-radius:50%;background:#ffecee;color:#f04452;}" +
-      ".fb-spark{width:112px;height:44px;flex:none;}" +
-      ".fb-mid{display:grid;grid-template-columns:1fr 1.35fr;gap:12px;margin:0 0 12px;}" +
-      ".fb-card{padding:14px 16px;}" +
-      ".fb-card h2{margin:0 0 12px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;}" +
-      ".fb-card h2 i{width:3px;height:14px;border-radius:2px;background:#2f6bff;display:inline-block;}" +
-      ".fb-dist{display:flex;gap:18px;align-items:center;}" +
-      ".fb-donut{width:132px;height:132px;border-radius:50%;position:relative;flex:none;}" +
-      ".fb-donut-hole{position:absolute;inset:28px;border-radius:50%;background:var(--xm-card);display:flex;flex-direction:column;align-items:center;justify-content:center;}" +
-      ".fb-donut-hole b{font-size:22px;line-height:1;}" +
-      ".fb-donut-hole span{color:var(--xm-muted);font-size:12px;margin-top:2px;}" +
-      ".fb-legend{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;flex:1;}" +
-      ".fb-legend li{display:grid;grid-template-columns:10px 1fr auto auto;gap:8px;align-items:center;}" +
-      ".fb-legend i{width:8px;height:8px;border-radius:50%;}" +
-      ".fb-legend em{font-style:normal;color:var(--xm-muted);min-width:52px;text-align:right;}" +
-      ".fb-flow{display:flex;align-items:flex-start;justify-content:space-between;gap:6px;}" +
-      ".fb-step{flex:1;text-align:center;min-width:0;}" +
-      ".fb-step-ico{width:42px;height:42px;margin:0 auto 8px;border-radius:50%;background:#eef3ff;color:#2f6bff;display:flex;align-items:center;justify-content:center;}" +
-      ".fb-step b{display:block;font-size:13px;}" +
-      ".fb-step span{display:block;margin-top:4px;color:var(--xm-muted);font-size:12px;line-height:1.4;}" +
-      ".fb-arrow{color:#c5d0e0;margin-top:12px;flex:none;}" +
-      ".fb-table-card{padding:0;overflow:hidden;}" +
-      ".fb-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 12px 0;}" +
-      ".fb-tab{height:30px;border:0;border-radius:8px;background:transparent;color:var(--xm-muted);padding:0 10px;font:inherit;font-size:13px;cursor:pointer;}" +
-      ".fb-tab.is-on{background:#2f6bff;color:#fff;}" +
-      ".fb-filters{margin-left:auto;display:flex;flex-wrap:wrap;gap:8px;align-items:center;}" +
-      ".fb-filters select,.fb-filters input{height:32px;border:1px solid var(--xm-line);border-radius:8px;background:var(--xm-card);color:var(--xm-ink);font:inherit;font-size:13px;padding:0 8px;}" +
-      ".fb-filters input{width:210px;}" +
-      ".fb-wrap{overflow:auto;}" +
-      ".fb-table{width:100%;border-collapse:collapse;font-size:13px;min-width:980px;}" +
-      ".fb-table th{text-align:left;color:var(--xm-muted);font-weight:600;padding:10px 8px;border-bottom:1px solid var(--xm-line);background:color-mix(in srgb, var(--xm-ink) 3%, var(--xm-card));white-space:nowrap;}" +
-      ".fb-table td{padding:10px 8px;border-bottom:1px solid var(--xm-line);vertical-align:middle;}" +
-      ".fb-title{font-weight:650;}" +
-      ".fb-pill{display:inline-block;border-radius:6px;padding:1px 8px;font-size:12px;line-height:20px;color:#fff;white-space:nowrap;}" +
-      ".fb-pri{display:inline-block;min-width:28px;text-align:center;border-radius:6px;padding:1px 6px;font-size:12px;font-weight:700;color:#fff;}" +
-      ".fb-pri.P0{background:#f04452;}.fb-pri.P1{background:#f5a524;}.fb-pri.P2{background:#7c8aa5;}" +
-      ".fb-who{display:flex;align-items:center;gap:6px;white-space:nowrap;}" +
-      ".fb-av{width:22px;height:22px;border-radius:50%;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;}" +
-      ".fb-bar{width:88px;height:6px;border-radius:99px;background:color-mix(in srgb, var(--xm-ink) 8%, transparent);display:inline-block;vertical-align:middle;margin-right:6px;overflow:hidden;}" +
-      ".fb-bar i{display:block;height:100%;border-radius:99px;}" +
-      ".fb-link{border:0;background:transparent;color:#2f6bff;font:inherit;font-size:13px;cursor:pointer;padding:0 4px;}" +
-      ".fb-foot{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:10px 12px;color:var(--xm-muted);}" +
-      ".fb-pager{display:flex;gap:6px;align-items:center;}" +
-      ".fb-pager button{min-width:28px;height:28px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);font:inherit;cursor:pointer;}" +
-      ".fb-pager button.is-on{background:#2f6bff;color:#fff;border-color:#2f6bff;}" +
-      ".fb-empty{padding:28px 12px;text-align:center;color:var(--xm-muted);}" +
-      ".fb-detail{margin-top:12px;padding:14px;display:grid;grid-template-columns:1.4fr .8fr;gap:12px;}" +
-      ".fb-detail h3{margin:0 0 6px;font-size:15px;}" +
-      ".fb-detail p{margin:0 0 8px;white-space:pre-wrap;line-height:1.55;}" +
-      ".fb-meta{color:var(--xm-muted);font-size:12px;display:flex;flex-direction:column;gap:4px;}" +
-      ".fb-shot{width:100%;max-height:180px;object-fit:contain;border-radius:8px;background:color-mix(in srgb, var(--xm-ink) 4%, var(--xm-card));}" +
-      ".fb-ops{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;}" +
-      ".fb-ops input{height:30px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;}" +
-      "@media (max-width:1100px){.fb-kpis,.fb-mid,.fb-form,.fb-detail{grid-template-columns:1fr;}.fb-filters{margin-left:0;}}";
-    document.head.appendChild(style);
+      ".xm-ui-scope .fb-msg{min-height:18px;margin:0 0 12px;color:var(--xm-ui-text-muted);font-size:13px;}" +
+      ".xm-ui-scope .fb-msg.is-error{color:var(--xm-ui-red);}" +
+      ".xm-ui-scope .fb-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}" +
+      ".xm-ui-scope .fb-form .xm-ui-field{display:flex;flex-direction:column;align-items:stretch;}" +
+      ".xm-ui-scope .fb-form .xm-ui-select,.xm-ui-scope .fb-ops .xm-ui-select{width:100%;box-sizing:border-box;}" +
+      ".xm-ui-scope .fb-form .wide{grid-column:1 / -1;}" +
+      ".xm-ui-scope textarea.xm-ui-select{height:auto;min-height:88px;padding:8px 10px;resize:vertical;}" +
+      ".xm-ui-scope .fb-form-ops{grid-column:1 / -1;display:flex;justify-content:flex-end;gap:8px;}" +
+      ".xm-ui-scope .fb-dist{display:flex;justify-content:center;min-height:180px;}" +
+      ".xm-ui-scope .fb-donut{width:148px;height:148px;border-radius:50%;position:relative;}" +
+      ".xm-ui-scope .fb-donut-hole{position:absolute;inset:34px;border-radius:50%;background:var(--xm-ui-surface);display:flex;flex-direction:column;align-items:center;justify-content:center;}" +
+      ".xm-ui-scope .fb-donut-hole b{font-size:27px;line-height:1;font-weight:750;color:var(--xm-ui-text);}" +
+      ".xm-ui-scope .fb-donut-hole span{margin-top:4px;color:var(--xm-ui-text-muted);font-size:12px;}" +
+      ".xm-ui-scope .fb-flow{display:flex;align-items:flex-start;gap:8px;}" +
+      ".xm-ui-scope .fb-step{flex:1;min-width:0;text-align:center;}" +
+      ".xm-ui-scope .fb-step .xm-ui-icon{width:22px;height:22px;color:var(--xm-ui-primary);}" +
+      ".xm-ui-scope .fb-step b{display:block;margin-top:8px;color:var(--xm-ui-text);font-size:13px;}" +
+      ".xm-ui-scope .fb-step span{display:block;margin-top:4px;color:var(--xm-ui-text-muted);font-size:12px;line-height:1.45;}" +
+      ".xm-ui-scope .fb-arrow{margin-top:2px;color:var(--xm-ui-text-muted);flex:none;}" +
+      ".xm-ui-scope .fb-foot{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:12px;color:var(--xm-ui-text-secondary);font-size:13px;}" +
+      ".xm-ui-scope .fb-pager{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}" +
+      ".xm-ui-scope .fb-progress{width:88px;display:inline-block;vertical-align:middle;margin:0 6px 0 0;}" +
+      ".xm-ui-scope .fb-detail{display:grid;grid-template-columns:1.4fr .8fr;gap:16px;}" +
+      ".xm-ui-scope .fb-detail p{margin:0 0 8px;white-space:pre-wrap;line-height:1.5;color:var(--xm-ui-text);}" +
+      ".xm-ui-scope .fb-meta{display:flex;flex-direction:column;gap:4px;color:var(--xm-ui-text-secondary);font-size:13px;}" +
+      ".xm-ui-scope .fb-shot{width:100%;max-height:180px;object-fit:contain;border-radius:8px;background:var(--xm-ui-bg);}" +
+      ".xm-ui-scope .fb-ops{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px;}" +
+      ".xm-ui-scope .fb-ops .xm-ui-select{width:auto;}" +
+      "@media (max-width:1100px){.xm-ui-scope .fb-form,.xm-ui-scope .fb-detail,.xm-ui-scope .fb-flow{display:grid;grid-template-columns:1fr;}}";
   }
 
   function typeOf(id) {
@@ -227,24 +174,37 @@
     });
   }
 
-  function icon(paths) {
-    return '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + paths + "</svg>";
+  function withAttr(html, attrs) {
+    return html.replace("<button ", "<button " + attrs + " ");
   }
 
-  function spark(color) {
-    return '<svg class="fb-spark" viewBox="0 0 120 48" aria-hidden="true"><path d="M0 32 C14 32 18 14 34 18 C50 22 54 36 70 28 C86 20 96 10 120 16" fill="none" stroke="' + color + '" stroke-width="2.4" stroke-linecap="round"/></svg>';
+  function toneForStatus(id) {
+    if (id === "doing") return "blue";
+    if (id === "accept") return "purple";
+    if (id === "closed") return "success";
+    if (id === "review") return "warning";
+    if (id === "mine" || id === "rejected") return "danger";
+    return "neutral";
+  }
+
+  function toneForType(id) {
+    if (id === "feature") return "blue";
+    if (id === "suggest") return "success";
+    if (id === "issue") return "warning";
+    return "neutral";
+  }
+
+  function toneForPriority(id) {
+    if (id === "P0") return "danger";
+    if (id === "P1") return "warning";
+    return "neutral";
   }
 
   function kpis() {
-    var cards = [
-      { n: state.items.length, label: "全部需求", tone: "blue", color: "#2f6bff", ico: icon('<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 9h6M9 13h6"/>') },
-      { n: countStatus("doing"), label: "开发中", tone: "green", color: "#3dcb86", ico: icon('<path d="M16.5 7.5A6.5 6.5 0 0 0 7 10"/><path d="M6.5 6.5V10H10"/><path d="M7.5 16.5A6.5 6.5 0 0 0 17 14"/><path d="M17.5 17.5V14H14"/>') },
-      { n: countStatus("closed"), label: "已完成", tone: "purple", color: "#7c5cfc", ico: icon('<path d="m7 12 3.2 3.2L17 8.5"/>') },
-      { n: countStatus("mine"), label: "待我处理", tone: "red", color: "#f04452", ico: icon('<path d="M12 7v7"/><path d="M12 17.5h.01"/>') }
-    ];
-    return '<section class="fb-kpis">' + cards.map(function (card) {
-      return '<article class="fb-kpi"><div class="fb-kpi-main"><span class="fb-kpi-ico ' + card.tone + '">' + card.ico + '</span><div class="fb-kpi-text"><b>' + card.n + "</b><span>" + card.label + "</span></div></div>" + spark(card.color) + "</article>";
-    }).join("") + "</section>";
+    return ui().StatCard({ label: "全部需求", value: String(state.items.length), unit: "条", icon: "file", tone: "blue" }) +
+      ui().StatCard({ label: "开发中", value: String(countStatus("doing")), unit: "条", icon: "play", tone: "green" }) +
+      ui().StatCard({ label: "已完成", value: String(countStatus("closed")), unit: "条", icon: "check", tone: "purple" }) +
+      ui().StatCard({ label: "待我处理", value: String(countStatus("mine")), unit: "条", icon: "award", tone: "orange" });
   }
 
   function donut() {
@@ -252,7 +212,7 @@
     var parts = TYPES.map(function (type) {
       return { type: type, n: state.items.filter(function (item) { return item.reqType === type.id; }).length };
     });
-    var gradient = "#e6ebf2";
+    var gradient = "var(--xm-ui-border)";
     if (total) {
       var cursor = 0;
       gradient = parts.map(function (part) {
@@ -261,24 +221,31 @@
         return part.type.color + " " + start.toFixed(2) + "% " + cursor.toFixed(2) + "%";
       }).join(",");
     }
-    var legend = parts.map(function (part) {
-      var pct = total ? ((part.n / total) * 100).toFixed(1) : "0.0";
-      return "<li><i style=\"background:" + part.type.color + "\"></i><span>" + part.type.label + "</span><b>" + part.n + "</b><em>" + pct + "%</em></li>";
-    }).join("");
-    return '<section class="fb-card"><h2><i></i>需求类型分布</h2><div class="fb-dist"><div class="fb-donut" style="background:conic-gradient(' + gradient + ')"><div class="fb-donut-hole"><b>' + total + '</b><span>总需求</span></div></div><ul class="fb-legend">' + legend + "</ul></div></section>";
+    return ui().ChartCard({
+      title: "需求类型分布",
+      ariaLabel: "需求类型分布",
+      legend: parts.map(function (part) {
+        var pct = total ? ((part.n / total) * 100).toFixed(1) : "0.0";
+        return { label: part.type.label + " " + part.n + " · " + pct + "%", color: part.type.color };
+      }),
+      content: '<div class="fb-dist"><div class="fb-donut" style="background:conic-gradient(' + gradient + ')"><div class="fb-donut-hole"><b>' + total + "</b><span>总需求</span></div></div></div>"
+    });
   }
 
   function flow() {
     var steps = [
-      ["提交需求", "员工提出需求或反馈", icon('<path d="M7 4h8l4 4v12H7z"/><path d="M15 4v4h4"/>')],
-      ["需求评审", "产品/技术评估可行性", icon('<circle cx="9" cy="9" r="3"/><circle cx="16" cy="10" r="2"/><path d="M4 18c1-3 3-4 5-4s4 1 5 4"/><path d="M14 18c.4-2 1.6-3 3-3 1 0 2 .4 2.5 1.5"/>')],
-      ["排期开发", "进入开发迭代计划", icon('<path d="M8 7h8v10H8z"/><path d="M10 7V5h4v2"/>')],
-      ["开发实现", "开发与内部测试", icon('<circle cx="12" cy="12" r="3"/><path d="M12 5v2M12 17v2M5 12h2M17 12h2"/>')],
-      ["验收上线", "上线发布并通知", icon('<circle cx="12" cy="12" r="7"/><path d="m9 12 2 2 4-4"/>')]
+      ["提交需求", "员工提出需求或反馈", "file"],
+      ["需求评审", "产品/技术评估可行性", "users"],
+      ["排期开发", "进入开发迭代计划", "chart"],
+      ["开发实现", "开发与内部测试", "play"],
+      ["验收上线", "上线发布并通知", "check"]
     ];
-    return '<section class="fb-card"><h2><i></i>需求处理流程</h2><div class="fb-flow">' + steps.map(function (step, index) {
-      return (index ? '<span class="fb-arrow" aria-hidden="true">›</span>' : "") + '<div class="fb-step"><div class="fb-step-ico">' + step[2] + "</div><b>" + step[0] + "</b><span>" + step[1] + "</span></div>";
-    }).join("") + "</div></section>";
+    return ui().ContentCard({
+      title: "需求处理流程",
+      content: '<div class="fb-flow">' + steps.map(function (step, index) {
+        return (index ? '<span class="fb-arrow" aria-hidden="true">›</span>' : "") + '<div class="fb-step">' + ui().icon(step[2]) + "<b>" + step[0] + "</b><span>" + step[1] + "</span></div>";
+      }).join("") + "</div>"
+    });
   }
 
   function pager(total) {
@@ -290,54 +257,111 @@
     var start = Math.max(1, state.page - 2);
     var end = Math.min(pages, start + 4);
     for (var i = start; i <= end; i += 1) {
-      buttons += '<button type="button" data-page="' + i + '" class="' + (i === state.page ? "is-on" : "") + '">' + i + "</button>";
+      buttons += withAttr(ui().button({ label: String(i), variant: i === state.page ? "" : "secondary", size: "small" }), 'data-page="' + i + '"');
     }
-    return '<div class="fb-foot"><span>共 ' + total + ' 条记录</span><div class="fb-pager"><span>20 条/页</span><button type="button" data-page="' + Math.max(1, state.page - 1) + '">‹</button>' + buttons + '<button type="button" data-page="' + Math.min(pages, state.page + 1) + '">›</button></div></div>';
+    return '<div class="fb-foot"><span>共 ' + total + ' 条记录</span><div class="fb-pager"><span>20 条/页</span>' +
+      withAttr(ui().button({ label: "‹", variant: "secondary", size: "small" }), 'data-page="' + Math.max(1, state.page - 1) + '"') +
+      buttons +
+      withAttr(ui().button({ label: "›", variant: "secondary", size: "small" }), 'data-page="' + Math.min(pages, state.page + 1) + '"') +
+      "</div></div>";
+  }
+
+  function toolbar() {
+    var html = ui().FilterToolbar({
+      tabs: TABS.map(function (tab) {
+        var n = tab.id === "all" ? state.items.length : countStatus(tab.id);
+        return { label: tab.label + " (" + n + ")", value: tab.id, active: state.tab === tab.id };
+      }),
+      filters: [
+        {
+          label: "需求类型",
+          name: "filterType",
+          options: [{ value: "all", label: "全部类型" }].concat(TYPES.map(function (type) {
+            return { value: type.id, label: type.label };
+          }))
+        },
+        {
+          label: "优先级",
+          name: "filterPriority",
+          options: [
+            { value: "all", label: "全部" },
+            { value: "P0", label: "P0" },
+            { value: "P1", label: "P1" },
+            { value: "P2", label: "P2" }
+          ]
+        }
+      ],
+      searchPlaceholder: "搜索需求标题/描述/提交人",
+      action: "查询"
+    });
+    html = html.replace('class="xm-ui-button xm-ui-button--small"', 'class="xm-ui-button xm-ui-button--small" data-search="1"');
+    return html.replace("</div></div>", ui().button({ label: "导出", variant: "secondary", size: "small", id: "fb-export" }) + "</div></div>");
+  }
+
+  function progressCell(value) {
+    var n = Math.max(0, Math.min(100, Number(value) || 0));
+    return '<span class="xm-ui-progress-card__progress fb-progress"><span style="width:' + n + '%"></span></span>' + n + "%";
+  }
+
+  function tableColumns() {
+    return [
+      { key: "pick", label: "选择", render: function (value) { return value; } },
+      { key: "title", label: "需求标题" },
+      { key: "reqType", label: "需求类型", type: "status" },
+      { key: "priority", label: "优先级", type: "status" },
+      { key: "author", label: "提交人" },
+      { key: "moduleName", label: "所属模块" },
+      { key: "status", label: "当前状态", type: "status" },
+      { key: "progress", label: "进度", render: function (value) { return progressCell(value); } },
+      { key: "createdAt", label: "提交时间" },
+      { key: "dueOn", label: "计划完成" },
+      { key: "ops", label: "操作", render: function (value) { return value; } }
+    ];
   }
 
   function table() {
     var list = matched();
     var pageRows = list.slice((state.page - 1) * PAGE_SIZE, state.page * PAGE_SIZE);
-    var head = '<div class="fb-toolbar">' + TABS.map(function (tab) {
-      var n = tab.id === "all" ? state.items.length : countStatus(tab.id);
-      return '<button type="button" class="fb-tab' + (state.tab === tab.id ? " is-on" : "") + '" data-tab="' + tab.id + '">' + tab.label + " (" + n + ")</button>";
-    }).join("") + '<div class="fb-filters"><label>需求类型 <select data-filter="type"><option value="">全部类型</option>' +
-      TYPES.map(function (type) {
-        return '<option value="' + type.id + '"' + (state.draftType === type.id ? " selected" : "") + ">" + type.label + "</option>";
-      }).join("") +
-      '</select></label><label>优先级 <select data-filter="priority"><option value="">全部</option><option value="P0">P0</option><option value="P1">P1</option><option value="P2">P2</option></select></label><input data-q="1" value="' +
-      esc(state.draftQ) +
-      '" placeholder="搜索需求标题/描述/提交人" aria-label="搜索"><button type="button" class="fb-primary" data-search="1">查询</button><button type="button" class="fb-ghost" data-export="1">导出</button></div></div>';
+    var head = toolbar() + '<div class="xm-ui-spacer-3"></div><label class="xm-ui-field"><input type="checkbox" data-pick-all="1" aria-label="全选本页"> 全选本页</label>';
+    var body = "";
     if (!state.loaded) {
-      return '<section class="fb-card fb-table-card">' + head + '<div class="fb-empty">正在加载…</div></section>';
+      body = ui().EmptyState({ title: "正在加载", description: "正在读取需求列表。" });
+    } else if (state.loadError) {
+      body = ui().EmptyState({ title: "列表没有加载出来", description: "可以再试一次。", action: "重试" }).replace(
+        'class="xm-ui-button xm-ui-button--small"',
+        'class="xm-ui-button xm-ui-button--small" data-retry="1"'
+      );
+    } else if (!pageRows.length) {
+      body = ui().DataTable({ columns: tableColumns(), rows: [] }) + ui().EmptyState({ title: "还没有符合条件的需求", description: "换个筛选条件，或提交一条新需求。" }) + pager(list.length);
+    } else {
+      body = ui().DataTable({
+        columns: tableColumns(),
+        rows: pageRows.map(function (item) {
+          var type = typeOf(item.reqType);
+          var status = statusOf(item.status);
+          var op = withAttr(ui().button({ label: "查看", variant: "secondary", size: "small" }), 'data-open="' + item.id + '"');
+          if (state.admin && item.status !== "closed") {
+            op += withAttr(ui().button({ label: item.status === "doing" || item.status === "accept" ? "跟进" : "处理", variant: "secondary", size: "small" }), 'data-open="' + item.id + '"');
+          } else if (state.admin) {
+            op += withAttr(ui().button({ label: "评价", variant: "secondary", size: "small" }), 'data-open="' + item.id + '"');
+          }
+          return {
+            pick: '<input type="checkbox" data-pick="' + item.id + '"' + (state.picked[item.id] ? " checked" : "") + ' aria-label="选择">',
+            title: item.title,
+            reqType: { label: type.label, tone: toneForType(item.reqType) },
+            priority: { label: item.priority || "P2", tone: toneForPriority(item.priority) },
+            author: item.authorName || item.author || "",
+            moduleName: item.moduleName || "—",
+            status: { label: status.label, tone: toneForStatus(item.status) },
+            progress: item.progress,
+            createdAt: String(item.createdAt || "").slice(0, 16),
+            dueOn: item.dueOn || "—",
+            ops: op
+          };
+        })
+      }) + pager(list.length);
     }
-    if (state.loadError) {
-      return '<section class="fb-card fb-table-card">' + head + '<div class="fb-empty">列表没有加载出来 <button type="button" class="fb-link" data-retry="1">重试</button></div></section>';
-    }
-    if (!pageRows.length) {
-      return '<section class="fb-card fb-table-card">' + head + '<div class="fb-empty">还没有符合条件的需求</div>' + pager(list.length) + "</section>";
-    }
-    var body = pageRows.map(function (item) {
-      var type = typeOf(item.reqType);
-      var status = statusOf(item.status);
-      var progress = Math.max(0, Math.min(100, Number(item.progress) || 0));
-      var due = item.dueOn || "—";
-      var op = '<button type="button" class="fb-link" data-open="' + item.id + '">查看</button>';
-      if (state.admin && item.status !== "closed") {
-        op += '<button type="button" class="fb-link" data-open="' + item.id + '">' + (item.status === "doing" || item.status === "accept" ? "跟进" : "处理") + "</button>";
-      } else if (state.admin) {
-        op += '<button type="button" class="fb-link" data-open="' + item.id + '">评价</button>';
-      }
-      return "<tr><td><input type=\"checkbox\" data-pick=\"" + item.id + "\"" + (state.picked[item.id] ? " checked" : "") + ' aria-label="选择"></td><td class="fb-title">' +
-        esc(item.title) + '</td><td><span class="fb-pill" style="background:' + type.color + '">' + type.label + '</span></td><td><span class="fb-pri ' + esc(item.priority) + '">' +
-        esc(item.priority || "P2") + '</span></td><td><span class="fb-who"><span class="fb-av" style="background:' + type.color + '">' +
-        esc((item.authorName || "?").slice(0, 1)) + "</span>" + esc(item.authorName || item.author) + "</span></td><td>" +
-        esc(item.moduleName || "—") + '</td><td><span class="fb-pill" style="background:' + status.color + '">' + status.label +
-        '</span></td><td><span class="fb-bar"><i style="width:' + progress + "%;background:" + status.color + '"></i></span>' + progress +
-        "%</td><td>" + esc(String(item.createdAt || "").slice(0, 16)) + "</td><td>" + esc(due) + "</td><td>" + op + "</td></tr>";
-    }).join("");
-    return '<section class="fb-card fb-table-card">' + head + '<div class="fb-wrap"><table class="fb-table"><thead><tr><th><input type="checkbox" data-pick-all="1" aria-label="全选本页"></th><th>需求标题</th><th>需求类型</th><th>优先级</th><th>提交人</th><th>所属模块</th><th>当前状态</th><th>进度</th><th>提交时间</th><th>计划完成</th><th>操作</th></tr></thead><tbody>' +
-      body + "</tbody></table></div>" + pager(list.length) + "</section>";
+    return ui().ContentCard({ title: "需求列表", content: head + body });
   }
 
   function findItem(id) {
@@ -356,51 +380,87 @@
     }
     var type = typeOf(item.reqType);
     var status = statusOf(item.status);
-    var shot = item.shot && /^data:image\//.test(item.shot) ? '<img class="fb-shot" alt="需求截图" src="' + esc(item.shot) + '">' : "";
+    var shot = item.shot && /^data:image\//.test(item.shot) ? '<img class="fb-shot" alt="需求截图" src="' + esc(item.shot) + '">' : ui().EmptyState({ title: "没有截图", description: "这条需求没有附截图。" });
     var ops = "";
     if (state.admin) {
       var noteValue = state.notes[item.id] != null ? state.notes[item.id] : item.note || "";
       var progressValue = state.progress[item.id] != null ? state.progress[item.id] : item.progress;
-      ops = '<div class="fb-ops"><input data-note-id="' + item.id + '" value="' + esc(noteValue) + '" placeholder="备注说明" aria-label="备注说明"><input data-progress-id="' +
-        item.id + '" type="number" min="0" max="100" value="' + esc(progressValue) + '" aria-label="进度" style="width:72px">' +
+      ops = '<div class="fb-ops"><input class="xm-ui-select" data-note-id="' + item.id + '" value="' + esc(noteValue) + '" placeholder="备注说明" aria-label="备注说明"><input class="xm-ui-select" data-progress-id="' +
+        item.id + '" type="number" min="0" max="100" value="' + esc(progressValue) + '" aria-label="进度" style="width:88px">' +
         ["review", "doing", "accept", "mine", "closed", "rejected"].map(function (id) {
           if (id === item.status) {
             return "";
           }
-          return '<button type="button" class="fb-ghost" data-set-status="' + id + '" data-id="' + item.id + '">' + statusOf(id).label + "</button>";
+          return withAttr(ui().button({ label: statusOf(id).label, variant: "secondary", size: "small" }), 'data-set-status="' + id + '" data-id="' + item.id + '"');
         }).join("") + "</div>";
     }
-    return '<section class="fb-detail"><div><h3>' + esc(item.title) + "</h3><p>" + esc(item.body) + '</p><div class="fb-meta"><div>类型　' + type.label + "　优先级　" + esc(item.priority) + "　状态　" + status.label + "</div><div>备注　" + esc(item.note || "暂无") + "</div><div>审核人　经理 " + esc(item.managerName || "未登记") + "　罗成</div></div>" + ops + "</div><div>" + (shot || '<div class="fb-empty">没有截图</div>') + "</div></section>";
+    return '<div class="xm-ui-spacer-4"></div>' + ui().ContentCard({
+      title: item.title,
+      content: '<div class="fb-detail"><div><p>' + esc(item.body) + '</p><div class="fb-meta"><div>类型　' + esc(type.label) + "　优先级　" + esc(item.priority) + "　状态　" + esc(status.label) + "</div><div>备注　" + esc(item.note || "暂无") + "</div><div>审核人　经理 " + esc(item.managerName || "未登记") + "　罗成</div></div>" + ops + "</div><div>" + shot + "</div></div>"
+    });
   }
 
   function formHtml() {
     if (!state.composing) {
       return "";
     }
-    return '<form class="fb-form" data-compose="1"><label class="fb-field wide">需求标题<input name="title" maxlength="80" required value="' + esc(state.title) + '" placeholder="一句话写清要做什么"></label><label class="fb-field">需求类型<select name="reqType">' +
-      TYPES.map(function (type) {
-        return '<option value="' + type.id + '"' + (state.reqType === type.id ? " selected" : "") + ">" + type.label + "</option>";
-      }).join("") +
-      '</select></label><label class="fb-field">优先级<select name="priority"><option' + (state.formPriority === "P0" ? " selected" : "") + '>P0</option><option' + (state.formPriority === "P1" ? " selected" : "") + '>P1</option><option' + (state.formPriority === "P2" ? " selected" : "") + '>P2</option></select></label><label class="fb-field">所属模块<select name="moduleName"><option value="">请选择</option>' +
-      MODULES.map(function (name) {
-        return '<option' + (state.moduleName === name ? " selected" : "") + ">" + name + "</option>";
-      }).join("") +
-      '</select></label><label class="fb-field wide">需求说明<textarea name="body" maxlength="2000" required placeholder="背景、希望怎么处理">' + esc(state.body) + '</textarea></label><label class="fb-field">计划完成<input name="dueOn" type="date" value="' + esc(state.dueOn) + '"></label><label class="fb-field">备注<input name="remark" maxlength="500" value="' + esc(state.note) + '"></label><label class="fb-field">截图<input name="shot" type="file" accept="image/*"><span data-shot-name>' +
-      esc(state.shotLabel || "可选") + '</span></label><div class="fb-form-ops"><button type="button" class="fb-ghost" data-close-form="1">取消</button><button type="submit" class="fb-primary"' + (state.saving ? " disabled" : "") + ">提交</button></div></form>";
+    return ui().ContentCard({
+      title: "提交需求/反馈",
+      content: '<form class="fb-form" data-compose="1"><label class="xm-ui-field wide">需求标题<input class="xm-ui-select" name="title" maxlength="80" required value="' + esc(state.title) + '" placeholder="一句话写清要做什么"></label><label class="xm-ui-field">需求类型<select class="xm-ui-select" name="reqType">' +
+        TYPES.map(function (type) {
+          return '<option value="' + type.id + '"' + (state.reqType === type.id ? " selected" : "") + ">" + type.label + "</option>";
+        }).join("") +
+        '</select></label><label class="xm-ui-field">优先级<select class="xm-ui-select" name="priority"><option' + (state.formPriority === "P0" ? " selected" : "") + '>P0</option><option' + (state.formPriority === "P1" ? " selected" : "") + '>P1</option><option' + (state.formPriority === "P2" ? " selected" : "") + '>P2</option></select></label><label class="xm-ui-field">所属模块<select class="xm-ui-select" name="moduleName"><option value="">请选择</option>' +
+        MODULES.map(function (name) {
+          return '<option' + (state.moduleName === name ? " selected" : "") + ">" + name + "</option>";
+        }).join("") +
+        '</select></label><label class="xm-ui-field wide">需求说明<textarea class="xm-ui-select" name="body" maxlength="2000" required placeholder="背景、希望怎么处理">' + esc(state.body) + '</textarea></label><label class="xm-ui-field">计划完成<input class="xm-ui-select" name="dueOn" type="date" value="' + esc(state.dueOn) + '"></label><label class="xm-ui-field">备注<input class="xm-ui-select" name="remark" maxlength="500" value="' + esc(state.note) + '"></label><label class="xm-ui-field">截图<input class="xm-ui-select" name="shot" type="file" accept="image/*"><span data-shot-name>' +
+        esc(state.shotLabel || "可选") + "</span></label><div class=\"fb-form-ops\">" +
+        ui().button({ label: "取消", variant: "secondary", id: "fb-close-form" }) +
+        ui().button({ label: "提交", type: "submit", disabled: state.saving }) +
+        "</div></form>"
+    }) + '<div class="xm-ui-spacer-4"></div>';
+  }
+
+  function helpHtml() {
+    if (!state.help) {
+      return "";
+    }
+    return ui().ContentCard({
+      title: "使用说明",
+      content: "<p>员工提交需求后，先由评审看可行性，再排期开发、实现测试，最后验收上线。罗成可以改状态、进度和备注。审核人是提交人的经理和罗成。其他人只看自己提交的。</p>"
+    }) + '<div class="xm-ui-spacer-4"></div>';
+  }
+
+  function syncControls(root) {
+    var typeSel = root.querySelector("[name=filterType]");
+    if (typeSel) typeSel.value = state.draftType || "all";
+    var priSel = root.querySelector("[name=filterPriority]");
+    if (priSel) priSel.value = state.draftPriority || "all";
+    var search = root.querySelector(".xm-ui-search input");
+    if (search) search.value = state.draftQ;
   }
 
   function paint(root) {
     ensureStyle();
+    root.classList.add("xm-ui-scope");
     root.innerHTML =
-      '<main class="page fb-page"><div class="fb-top"><div class="fb-brand"><span class="fb-logo" aria-hidden="true">' +
-      icon('<path d="M6 7h12v8H9l-3 3z"/>') +
-      '</span><div><h1>需求与反馈</h1><p class="fb-sub">收集、跟进和管理产品需求、优化建议与问题反馈，持续提升系统体验</p></div></div><div class="fb-actions"><button type="button" class="fb-ghost" data-help="1">使用说明</button><button type="button" class="fb-primary" data-open-form="1">+ 提交需求/反馈</button></div></div><p class="fb-msg' +
-      (state.error ? " is-error" : "") + '" role="status">' + esc(state.msg) + "</p>" +
-      (state.help ? '<section class="fb-help">员工提交需求后，先由评审看可行性，再排期开发、实现测试，最后验收上线。罗成可以改状态、进度和备注。审核人是提交人的经理和罗成。其他人只看自己提交的。</section>' : "") +
-      formHtml() + kpis() + '<div class="fb-mid">' + donut() + flow() + "</div>" + table() + detail() + "</main>";
-    var priority = root.querySelector('[data-filter="priority"]');
-    if (priority) {
-      priority.value = state.draftPriority;
+      ui().PageContentHeader({
+        title: "需求与反馈",
+        description: "收集、跟进和管理产品需求、优化建议与问题反馈，持续提升系统体验",
+        actions: [
+          { label: "使用说明", variant: "secondary", id: "fb-help" },
+          { label: "提交需求/反馈", id: "fb-open-form" }
+        ]
+      }) +
+      '<p class="fb-msg' + (state.error ? " is-error" : "") + '" role="status">' + esc(state.msg) + "</p>" +
+      '<div class="xm-ui-stack">' + helpHtml() + formHtml() +
+      '<div class="xm-ui-stat-grid">' + kpis() + "</div>" +
+      donut() + flow() + table() + "</div>" + detail();
+    syncControls(root);
+    var opened = root.querySelector(".fb-detail") || root.querySelector("[data-compose]");
+    if (opened && opened.scrollIntoView) {
+      opened.scrollIntoView({ block: "nearest" });
     }
   }
 
@@ -569,17 +629,17 @@
   }
 
   function onClick(root, event) {
-    if (event.target.closest("[data-help]")) {
+    if (event.target.closest("#fb-help")) {
       state.help = !state.help;
       paint(root);
       return;
     }
-    if (event.target.closest("[data-open-form]")) {
+    if (event.target.closest("#fb-open-form")) {
       state.composing = true;
       paint(root);
       return;
     }
-    if (event.target.closest("[data-close-form]")) {
+    if (event.target.closest("#fb-close-form")) {
       state.composing = false;
       paint(root);
       return;
@@ -596,13 +656,13 @@
       paint(root);
       return;
     }
-    if (event.target.closest("[data-export]")) {
+    if (event.target.closest("#fb-export")) {
       exportRows();
       return;
     }
-    var tab = event.target.closest("[data-tab]");
+    var tab = event.target.closest("[data-xm-ui-tab]");
     if (tab) {
-      state.tab = tab.getAttribute("data-tab") || "all";
+      state.tab = tab.getAttribute("data-xm-ui-tab") || "all";
       state.page = 1;
       paint(root);
       return;
@@ -648,19 +708,19 @@
           else if (el.name === "priority") state.formPriority = el.value;
           else if (el.name === "moduleName") state.moduleName = el.value;
           else if (el.name === "dueOn") state.dueOn = el.value;
-          else if (el.hasAttribute("data-q")) state.draftQ = el.value;
+          else if (el.closest && el.closest(".xm-ui-search")) state.draftQ = el.value;
           else if (el.hasAttribute("data-note-id")) state.notes[el.getAttribute("data-note-id")] = el.value;
           else if (el.hasAttribute("data-progress-id")) state.progress[el.getAttribute("data-progress-id")] = el.value;
         });
         root.addEventListener("change", function (event) {
           var el = event.target;
           if (!el) return;
-          if (el.getAttribute("data-filter") === "type") {
-            state.draftType = el.value;
+          if (el.name === "filterType") {
+            state.draftType = el.value === "all" ? "" : el.value;
             return;
           }
-          if (el.getAttribute("data-filter") === "priority") {
-            state.draftPriority = el.value;
+          if (el.name === "filterPriority") {
+            state.draftPriority = el.value === "all" ? "" : el.value;
             return;
           }
           if (el.hasAttribute("data-pick-all")) {
@@ -694,6 +754,7 @@
       }
       load(root);
       return function unmount() {
+        root.classList.remove("xm-ui-scope");
         root.innerHTML = "";
       };
     }
