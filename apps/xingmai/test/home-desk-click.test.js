@@ -1,17 +1,38 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { accountIdentity, bindDecision, buildLiveView, collectAuthDecision } from "../src/modules/home/jingmai.js";
-import { beginRelogin, beginReloginAll, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/home/jingmai-runner.js";
+import { beginRelogin, beginReloginAll, recoverDroppedShops, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/home/jingmai-runner.js";
 import { patchConnectPicker } from "../src/modules/home/connect-patch.js";
 import { listCollectTargets, listSessions, resetJingmaiStore, saveSession } from "../src/modules/home/jingmai-store.js";
 import { packJingmaiShops } from "../src/modules/home/local-paid.js";
-import { browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginScreenState, sessionReady, unpackDebBuffer } from "../src/modules/home/jingmai-desk.js";
+import { browserCandidates, browserLaunchOrder, browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginTipBlocked, loginScreenState, readDebugTargets, realBrowserBinary, resolveBrowserBinary, sessionReady, unpackDebBuffer, waitForDebugPort } from "../src/modules/home/jingmai-desk.js";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import zlib from "node:zlib";
 import { patchHomeClientSource } from "../src/modules/home/router.js";
 
 const homeJs = readFileSync(new URL("../public/shared/modules/home.js", import.meta.url), "utf8");
+
+function deskDeps(extra) {
+  return Object.assign(
+    {
+      client: {
+        login: async function () {
+          const error = new Error("need desk");
+          error.code = "login";
+          throw error;
+        },
+        fetchHome: async function () {
+          const error = new Error("login");
+          error.code = "login";
+          throw error;
+        }
+      }
+    },
+    extra || {}
+  );
+}
 
 test("a shop that just logged in shows a fresh time before the first deal arrives", () => {
   const view = buildLiveView({
@@ -298,7 +319,7 @@ test("a mismatched login keeps the cookies already saved for that shop", async (
     authState: "ok",
     shopId: "16107402"
   });
-  setJingmaiDeps({
+  setJingmaiDeps(deskDeps({
     desk: {
       poll: async () => ({ status: "ok", cookies: [{ name: "thor", value: "other-shop" }] }),
       close: async () => {}
@@ -306,7 +327,7 @@ test("a mismatched login keeps the cookies already saved for that shop", async (
     client: {
       fetchAccountIdentity: async () => ({ shopId: "196509787", shopName: "UUMILO个人洗护旗舰店" })
     }
-  });
+  }));
   try {
     const state = await reloginState("DIKTT潮流生活旗舰店");
     assert.equal(state.status, "login");
@@ -322,7 +343,7 @@ test("a mismatched login keeps the cookies already saved for that shop", async (
 
 test("a mismatched login with no saved session is not written as this shop", async () => {
   await resetJingmaiStore();
-  setJingmaiDeps({
+  setJingmaiDeps(deskDeps({
     desk: {
       poll: async () => ({ status: "ok", cookies: [{ name: "thor", value: "other-shop" }] }),
       close: async () => {}
@@ -330,7 +351,7 @@ test("a mismatched login with no saved session is not written as this shop", asy
     client: {
       fetchAccountIdentity: async () => ({ shopId: "16107402", shopName: "DIKTT潮流生活旗舰店" })
     }
-  });
+  }));
   try {
     const state = await reloginState("UUMILO个人洗护旗舰店");
     assert.equal(state.status, "screen");
@@ -367,11 +388,26 @@ test("连接京麦 lists shops that still need a login and does not open the bro
     shopId: "16107402"
   });
   let opened = false;
-  setJingmaiDeps({
+  setJingmaiDeps(deskDeps({
     loadOrg: async () => [
       { store: "DIKTT潮流生活旗舰店", enabled: true, login: "diktt", password: "secret", shopId: "16107402" },
       { store: "UUMILO个人洗护旗舰店", enabled: true, login: "uumilo", password: "secret", shopId: "196509787" }
     ],
+    client: {
+      login: async function () {
+        const error = new Error("need desk");
+        error.code = "login";
+        throw error;
+      },
+      fetchHome: async function (cookies) {
+        if (cookies && cookies[0] && cookies[0].value === "live") {
+          return { dealAmount: 1 };
+        }
+        const error = new Error("login");
+        error.code = "login";
+        throw error;
+      }
+    },
     desk: {
       open: async () => {
         opened = true;
@@ -380,7 +416,7 @@ test("连接京麦 lists shops that still need a login and does not open the bro
       close: async () => {},
       poll: async () => ({ status: "screen", message: "登录页已打开" })
     }
-  });
+  }));
   try {
     const listed = await beginReloginAll("cookie");
     assert.equal(listed.status, "pick");
@@ -412,7 +448,7 @@ test("opening a shop reports the browser step before the login page is ready", a
   let closed = false;
   let pageUp = false;
   let release = function () {};
-  setJingmaiDeps({
+  setJingmaiDeps(deskDeps({
     loadOrg: async () => [
       { store: "飒望生活日用旗舰店", enabled: true, login: "sa", password: "secret", shopId: "1" }
     ],
@@ -440,7 +476,7 @@ test("opening a shop reports the browser step before the login page is ready", a
           : { status: "opening", message: "正在启动浏览器" };
       }
     }
-  });
+  }));
   try {
     const started = Date.now();
     const opening = await beginRelogin("飒望生活日用旗舰店", "cookie");
@@ -468,13 +504,23 @@ test("opening a shop reports the browser step before the login page is ready", a
   }
 });
 
+test("the homepage tries the host browser first and can fall back to the shell", () => {
+  const shell = "/tmp/shen-chrome/chrome-headless-shell-linux64/chrome-headless-shell";
+  assert.deepEqual(browserCandidates("/usr/bin/google-chrome", shell), ["/usr/bin/google-chrome", shell]);
+  assert.deepEqual(browserCandidates(shell, shell), [shell]);
+  assert.deepEqual(
+    browserLaunchOrder(["/usr/bin/google-chrome", "/opt/google/chrome/chrome", shell]),
+    ["/opt/google/chrome/chrome", "/usr/bin/google-chrome", shell]
+  );
+});
+
 test("the homepage uses the same host browser as the paid center and does not start it twice", async () => {
   assert.equal(hostChromePath("/usr/bin/google-chrome"), "/usr/bin/google-chrome");
   assert.equal(hostChromePath("/tmp/shen-chrome/chrome-headless-shell-linux64/chrome-headless-shell"), "");
   await resetJingmaiStore();
   let calls = 0;
   let release = function () {};
-  setJingmaiDeps({
+  setJingmaiDeps(deskDeps({
     loadOrg: async () => [
       { store: "飒望生活日用旗舰店", enabled: true, login: "sa", password: "secret", shopId: "13341301" },
       { store: "DIKTT潮流生活旗舰店", enabled: true, login: "diktt", password: "secret", shopId: "16107402" }
@@ -496,7 +542,7 @@ test("the homepage uses the same host browser as the paid center and does not st
         return { status: "screen", message: "登录页已打开" };
       }
     }
-  });
+  }));
   try {
     const first = await beginRelogin("飒望生活日用旗舰店", "cookie");
     const second = await beginRelogin("飒望生活日用旗舰店", "cookie");
@@ -524,7 +570,7 @@ test("an older login attempt cannot mark the shop failed after a newer one start
     shopId: "16107402"
   });
   const releases = [];
-  setJingmaiDeps({
+  setJingmaiDeps(deskDeps({
     loadOrg: async () => [
       { store: "飒望生活日用旗舰店", enabled: true, login: "sa", password: "secret", shopId: "13341301" },
       { store: "UUMILO个人洗护旗舰店", enabled: true, login: "uu", password: "secret", shopId: "196509787" }
@@ -540,7 +586,7 @@ test("an older login attempt cannot mark the shop failed after a newer one start
         return { status: "opening", message: "正在启动浏览器" };
       }
     }
-  });
+  }));
   try {
     await beginRelogin("飒望生活日用旗舰店", "cookie");
     await beginRelogin("UUMILO个人洗护旗舰店", "cookie");
@@ -568,7 +614,7 @@ test("a shop that fails to open keeps other shops logged in and names the step",
     authState: "ok",
     shopId: "16107402"
   });
-  setJingmaiDeps({
+  setJingmaiDeps(deskDeps({
     loadOrg: async () => [
       { store: "UUMILO个人洗护旗舰店", enabled: true, login: "uumilo", password: "secret", shopId: "196509787" }
     ],
@@ -577,7 +623,7 @@ test("a shop that fails to open keeps other shops logged in and names the step",
       close: async () => {},
       poll: async () => ({ status: "screen" })
     }
-  });
+  }));
   try {
     await beginRelogin("UUMILO个人洗护旗舰店", "cookie");
     await new Promise((resolve) => setTimeout(resolve, 30));
@@ -634,6 +680,9 @@ test("the login page is shown once it is on screen, and typing waits until the f
   assert.equal(loginPageVisible(null), false);
   assert.equal(loginPageVisible(blank), false);
   assert.equal(loginPageVisible(painted), true);
+  assert.equal(loginTipBlocked({ text: "访问出错，请稍后再试", accountVisible: false }), true);
+  assert.equal(loginTipBlocked({ text: "访问出错", accountVisible: true }), false);
+  assert.equal(loginPageVisible({ readyState: "complete", href: "https://passport.shop.jd.com/login", text: "访问出错，请稍后再试" }), false);
   assert.equal(loginPageSettled(blank), false);
   assert.equal(loginPageSettled(loading), false);
   assert.equal(loginPageSettled(painted), false);
@@ -752,6 +801,104 @@ test("a zstd library package unpacks the soname without python or dpkg", () => {
   }
 });
 
+test("an idle login check does not say the browser is starting", async () => {
+  await resetJingmaiStore();
+  resetJingmaiDeps();
+  const state = await reloginState("SAWAAG家居旗舰店");
+  assert.equal(state.status, "idle");
+  assert.equal(state.message, "");
+});
+
+test("a browser that never finishes starting is reported as a failure", async () => {
+  await resetJingmaiStore();
+  setJingmaiDeps(deskDeps({
+    startLimitMs: 40,
+    loadOrg: async () => [
+      { store: "飒望生活日用旗舰店", enabled: true, login: "sa", password: "secret", shopId: "1" }
+    ],
+    desk: {
+      open: function () {
+        return new Promise(function () {});
+      },
+      poll: async function () {
+        return { status: "opening", message: "正在启动浏览器" };
+      },
+      close: async function () {}
+    }
+  }));
+  try {
+    const opening = await beginRelogin("飒望生活日用旗舰店", "cookie");
+    assert.equal(opening.status, "opening");
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 80);
+    });
+    const failed = await reloginState("飒望生活日用旗舰店");
+    assert.equal(failed.status, "failed");
+    assert.equal(failed.message, "服务器浏览器启动失败");
+  } finally {
+    resetJingmaiDeps();
+  }
+});
+
+test("the login connects as soon as the debug port answers", async () => {
+  const server = createServer(function (req, res) {
+    if (String(req.url || "").startsWith("/json/version")) {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ Browser: "test", webSocketDebuggerUrl: "ws://127.0.0.1/devtools/browser" }));
+      return;
+    }
+    res.statusCode = 404;
+    res.end();
+  });
+  await new Promise(function (resolve) {
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  try {
+    const version = await waitForDebugPort(server.address().port, undefined, 2000);
+    assert.equal(version.Browser, "test");
+  } finally {
+    await new Promise(function (resolve) {
+      server.close(resolve);
+    });
+  }
+});
+
+test("a shell wrapper is not used as the login browser", () => {
+  const dir = mkdtempSync(tmpdir() + "/xm-browser-");
+  const script = dir + "/google-chrome";
+  const elf = dir + "/chrome";
+  try {
+    writeFileSync(script, "#!/bin/sh\nexec snap run chromium\n");
+    writeFileSync(elf, Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0, 0, 0, 0]));
+    assert.equal(realBrowserBinary(script), "");
+    assert.equal(realBrowserBinary(elf), elf);
+    assert.equal(resolveBrowserBinary(script), "");
+    assert.equal(resolveBrowserBinary(elf), elf);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a browser debug port that never answers does not keep the login starting", async () => {
+  const server = createServer(function () {});
+  await new Promise(function (resolve) {
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  const started = Date.now();
+  try {
+    await assert.rejects(readDebugTargets("http://127.0.0.1:" + address.port + "/json/list"));
+    assert.ok(Date.now() - started < 7000);
+  } finally {
+    if (typeof server.closeAllConnections === "function") {
+      server.closeAllConnections();
+    }
+    await new Promise(function (resolve) {
+      server.close(resolve);
+    });
+  }
+});
+
 test("a browser that cannot start does not mark the shop offline", async () => {
   await resetJingmaiStore();
   await saveSession("飒望生活日用旗舰店", {
@@ -764,7 +911,7 @@ test("a browser that cannot start does not mark the shop offline", async () => {
     authState: "ok",
     shopId: "16107402"
   });
-  setJingmaiDeps({
+  setJingmaiDeps(deskDeps({
     loadOrg: async () => [
       { store: "飒望生活日用旗舰店", enabled: true, login: "sa", password: "secret", shopId: "13341301" }
     ],
@@ -773,7 +920,7 @@ test("a browser that cannot start does not mark the shop offline", async () => {
       close: async () => {},
       poll: async () => ({ status: "failed" })
     }
-  });
+  }));
   try {
     await beginRelogin("飒望生活日用旗舰店", "cookie");
     await new Promise((resolve) => setTimeout(resolve, 30));
@@ -796,4 +943,108 @@ test("clicking the login picture keeps the dialog open", () => {
   assert.match(homeJs, /next\.open = true/);
   assert.match(homeJs, /applyDesk\(st \|\| \{ status: "screen" \}\)/);
   assert.match(homeJs, /preload\.onload/);
+});
+
+test("a dropped shop with a dead cookie logs in again with the password and does not open the desk", async () => {
+  await resetJingmaiStore();
+  await saveSession("DIKTT环境电器旗舰店", {
+    cookies: [{ name: "thor", value: "stale" }],
+    authState: "ok",
+    authMessage: "京准通没有返回账号 -100 登录失败，请刷新页面重新登录",
+    shopId: "1001"
+  });
+  let deskCalls = 0;
+  let logins = 0;
+  setJingmaiDeps(deskDeps({
+    loadOrg: async () => [
+      { store: "DIKTT环境电器旗舰店", enabled: true, login: "diktt", password: "secret", shopId: "1001" }
+    ],
+    client: {
+      fetchHome: async function () {
+        const error = new Error("登录已失效");
+        error.code = "login";
+        throw error;
+      },
+      login: async function (username, password) {
+        logins += 1;
+        assert.equal(username, "diktt");
+        assert.equal(password, "secret");
+        return [{ name: "thor", value: "fresh" }];
+      }
+    },
+    desk: {
+      open: async function () {
+        deskCalls += 1;
+        return { status: "verify", message: "should not open" };
+      },
+      close: async function () {},
+      poll: async function () {
+        return { status: "opening", message: "正在启动浏览器" };
+      }
+    }
+  }));
+  try {
+    const done = await beginRelogin("DIKTT环境电器旗舰店", "cookie");
+    assert.equal(done.status, "done");
+    assert.match(done.message, /已重新登录/);
+    assert.equal(deskCalls, 0);
+    assert.equal(logins, 1);
+    const row = (await listSessions()).find((item) => item.store === "DIKTT环境电器旗舰店");
+    assert.equal(row.authState, "ok");
+    assert.equal(row.cookies[0].value, "fresh");
+  } finally {
+    resetJingmaiDeps();
+  }
+});
+
+test("dropped shops recover themselves with the saved password", async () => {
+  await resetJingmaiStore();
+  await saveSession("DIKTT环境电器旗舰店", {
+    cookies: [{ name: "thor", value: "stale" }],
+    authState: "offline",
+    authMessage: "登录已失效，请重新登录",
+    shopId: "1001"
+  });
+  let logins = 0;
+  setJingmaiDeps(deskDeps({
+    loadOrg: async () => [
+      { store: "DIKTT环境电器旗舰店", enabled: true, login: "diktt", password: "secret", shopId: "1001" }
+    ],
+    client: {
+      fetchHome: async function (cookies) {
+        if (cookies && cookies[0] && cookies[0].value === "fresh") {
+          return { dealAmount: 1 };
+        }
+        const error = new Error("登录已失效");
+        error.code = "login";
+        throw error;
+      },
+      login: async function () {
+        logins += 1;
+        return [{ name: "thor", value: "fresh" }];
+      },
+      fetchAccountIdentity: async function () {
+        return { shopId: "1001", shopName: "DIKTT环境电器旗舰店" };
+      }
+    },
+    desk: {
+      open: async function () {
+        return { status: "verify" };
+      },
+      close: async function () {},
+      poll: async function () {
+        return { status: "idle" };
+      }
+    }
+  }));
+  try {
+    const result = await recoverDroppedShops("cookie");
+    assert.equal(result.recovered, 1);
+    assert.equal(logins, 1);
+    const row = (await listSessions()).find((item) => item.store === "DIKTT环境电器旗舰店");
+    assert.equal(row.authState, "ok");
+    assert.equal(row.cookies[0].value, "fresh");
+  } finally {
+    resetJingmaiDeps();
+  }
 });

@@ -1,6 +1,6 @@
-import { browserReady, ensureChrome, jingmaiDesk, LOGIN_SCREEN_MESSAGE, PAGE_WAIT_MESSAGE } from "./jingmai-desk.js";
+import { browserReady, browserStartFailure, ensureChrome, jingmaiDesk, launchNote, LOGIN_SCREEN_MESSAGE, PAGE_WAIT_MESSAGE } from "./jingmai-desk.js";
 import { jingmaiClient } from "./jingmai-client.js";
-import { beijingParts, bindDecision, runTick, sampleFields, sessionStillValid } from "./jingmai.js";
+import { beijingParts, bindDecision, runTick, sampleFields, sessionStillValid, withDeadline } from "./jingmai.js";
 import { listCollectTargets, listSessions, markAuth, readJingmaiLive, saveSample, saveSession, setRoster } from "./jingmai-store.js";
 
 const INTERVAL_MS = 5 * 60 * 1000;
@@ -15,8 +15,10 @@ const passwordPending = new Map();
 let loginQueue = [];
 let loginCursor = { index: 0, total: 0, store: "" };
 let loginEpoch = 0;
+let openingMark = 0;
 const orgCache = new Map();
 let refreshing = false;
+let recovering = false;
 let deskLock = Promise.resolve();
 
 const defaultDeps = {
@@ -51,11 +53,13 @@ export function resetJingmaiDeps() {
   }
   passwordPending.clear();
   wipeQueue();
+  openingMark = 0;
   orgCache.forEach(function (shop) {
     shop.password = "";
   });
   orgCache.clear();
   refreshing = false;
+  recovering = false;
   deskLock = Promise.resolve();
   loginEpoch = 0;
 }
@@ -114,7 +118,7 @@ export async function loadOrgShops(cookie, fetchImpl = fetch) {
     throw error;
   }
   const data = await response.json();
-  return (data.stores || [])
+  const mapped = (data.stores || [])
     .map(function (store) {
       return {
         store: String(store.storeName || "").trim(),
@@ -129,6 +133,56 @@ export async function loadOrgShops(cookie, fetchImpl = fetch) {
     .filter(function (store) {
       return store.store;
     });
+  rememberOrg(mapped);
+  return mapped;
+}
+
+async function cookiesAlive(cookies) {
+  if (!cookies || !cookies.length || !deps.client || !deps.client.fetchHome) {
+    return false;
+  }
+  try {
+    await withDeadline(function () {
+      return deps.client.fetchHome(cookies);
+    }, 12000);
+    return true;
+  } catch (error) {
+    if (error && error.code === "login") {
+      return false;
+    }
+    return false;
+  }
+}
+
+async function passwordRelogin(shop) {
+  if (!shop || !shop.store || !shop.login || !shop.password || !deps.client || !deps.client.login) {
+    return false;
+  }
+  if (inflight.has(shop.store)) {
+    return false;
+  }
+  inflight.add(shop.store);
+  try {
+    const cookies = await deps.client.login(shop.login, shop.password);
+    const kept = await rememberLogin(shop.store, cookies, { shopId: shop.shopId || "", store: shop.store });
+    return kept === "saved" || kept === "kept";
+  } finally {
+    inflight.delete(shop.store);
+  }
+}
+
+function cachedOrgShop(name) {
+  const hit = orgCache.get(name);
+  if (!hit || !hit.login || !hit.password) {
+    return null;
+  }
+  return {
+    store: hit.store,
+    login: hit.login,
+    password: hit.password,
+    shopId: hit.shopId || "",
+    enabled: hit.enabled !== false
+  };
 }
 
 async function connectOne(shop) {
@@ -197,13 +251,16 @@ export async function jingmaiLive() {
 function publicState(state) {
   return {
     ok: true,
+    build: "deskua",
     store: state.store || loginCursor.store,
     status: state.status,
     message: state.message || "",
     step: state.step || loginCursor.step || "",
     shops: state.shops || [],
     index: state.index || loginCursor.index,
-    total: state.total || loginCursor.total
+    total: state.total || loginCursor.total,
+    openingMs: openingMark ? Date.now() - openingMark : 0,
+    note: state.note || launchNote() || ""
   };
 }
 
@@ -260,6 +317,16 @@ async function rememberLogin(store, cookies, expected) {
   return "saved";
 }
 
+function markOpening() {
+  if (!openingMark) {
+    openingMark = Date.now();
+  }
+}
+
+function clearOpening() {
+  openingMark = 0;
+}
+
 function loginInProgress(name) {
   return loginCursor.store === name && loginCursor.failed !== true && (loginCursor.phase === "opening" || loginCursor.phase === "screen");
 }
@@ -281,14 +348,19 @@ async function startQueued(shop, epoch) {
   loginCursor.step = "启动浏览器";
   loginCursor.phase = "opening";
   loginCursor.failed = false;
+  loginCursor.startedAt = Date.now();
+  markOpening();
   loginCursor.message = "正在启动浏览器";
   let opened;
+  const boot = typeof AbortController === "function" ? new AbortController() : null;
+  let openTimer = null;
   try {
-    opened = await deps.desk.open({
+    const opening = deps.desk.open({
       store: shop.store,
       loginName: shop.login,
       password: shop.password,
       reveal: true,
+      signal: boot ? boot.signal : undefined,
       onStep: function (message) {
         if (epoch != null && epoch !== loginEpoch) {
           return;
@@ -297,8 +369,29 @@ async function startQueued(shop, epoch) {
         loginCursor.message = message;
       }
     });
+    opening.catch(function () {});
+    opened = await Promise.race([
+      opening,
+      new Promise(function (resolve) {
+        openTimer = setTimeout(function () {
+          try {
+            if (boot) {
+              boot.abort();
+            }
+          } catch {
+            /* ignore */
+          }
+          resolve({
+            status: "login",
+            message: launchNote() || browserStartFailure()
+          });
+        }, deps.startLimitMs || 12000);
+      })
+    ]);
   } catch {
-    opened = { status: "login", message: "服务器没有打开京麦登录页" };
+    opened = { status: "login", message: launchNote() || "服务器没有打开京麦登录页" };
+  } finally {
+    clearTimeout(openTimer);
   }
   shop.login = "";
   shop.password = "";
@@ -387,8 +480,10 @@ async function queueShops(shops, epoch) {
     step: "启动浏览器",
     message: first ? "正在启动浏览器" : "全部店铺已连接",
     failed: false,
-    phase: "opening"
+    phase: "opening",
+    startedAt: Date.now()
   };
+  markOpening();
   const next = loginQueue.shift();
   if (!next) {
     return publicState({ status: "done", message: "全部店铺已连接" });
@@ -414,8 +509,12 @@ export async function beginRelogin(store, cookie) {
     step: "启动浏览器",
     message: "正在启动浏览器",
     failed: false,
-    phase: "opening"
+    phase: "opening",
+    startedAt: Date.now()
   };
+  markOpening();
+  loginCursor.step = "重新登录";
+  loginCursor.message = "正在重新登录";
   const shops = await deps.loadOrg(cookie || "");
   if (epoch !== loginEpoch) {
     return currentLoginState(name);
@@ -440,10 +539,41 @@ export async function beginRelogin(store, cookie) {
     return item.store === name;
   });
   if (sessionStillValid(existing)) {
-    if (epoch === loginEpoch) {
-      loginCursor = { index: 0, total: 0, store: "", step: "", message: "", failed: false, phase: "idle" };
+    const alive = await cookiesAlive(existing.cookies || []);
+    if (epoch !== loginEpoch) {
+      return currentLoginState(name);
     }
-    return { ok: true, status: "done", store: name, message: "「" + name + "」已连接" };
+    if (alive) {
+      clearOpening();
+      loginCursor = { index: 0, total: 0, store: "", step: "", message: "", failed: false, phase: "idle" };
+      shop.login = "";
+      shop.password = "";
+      return { ok: true, status: "done", store: name, message: "「" + name + "」已连接" };
+    }
+    await markAuth(name, "login_expired", "登录已失效，请重新登录");
+  }
+  try {
+    const renewed = await passwordRelogin({
+      store: shop.store,
+      login: shop.login,
+      password: shop.password,
+      shopId: shop.shopId || ""
+    });
+    if (epoch !== loginEpoch) {
+      return currentLoginState(name);
+    }
+    if (renewed) {
+      clearOpening();
+      loginCursor = { index: 0, total: 0, store: "", step: "", message: "", failed: false, phase: "idle" };
+      shop.login = "";
+      shop.password = "";
+      return { ok: true, status: "done", store: name, message: "「" + name + "」已重新登录" };
+    }
+  } catch {
+    /* 掉线店先走账号密码；需要验证码时再打开服务器画面 */
+  }
+  if (epoch !== loginEpoch) {
+    return currentLoginState(name);
   }
   const queued = { store: shop.store, login: shop.login, password: shop.password, shopId: shop.shopId || "" };
   shop.login = "";
@@ -470,18 +600,16 @@ export async function beginReloginAll(cookie) {
   const shops = await deps.loadOrg(cookie || "");
   rememberOrg(shops);
   const sessions = await listSessions();
-  const ready = new Set(
-    sessions
-      .filter(function (session) {
-        return sessionStillValid(session);
-      })
-      .map(function (session) {
-        return session.store;
-      })
+  const byName = new Map(
+    sessions.map(function (session) {
+      return [session.store, session];
+    })
   );
   const pending = [];
   shops.forEach(function (shop) {
-    const needs = shop.enabled !== false && shop.login && shop.password && !ready.has(shop.store);
+    const session = byName.get(shop.store);
+    const ready = sessionStillValid(session) && !sessionNeedsLogin(session);
+    const needs = shop.enabled !== false && shop.login && shop.password && !ready;
     shop.login = "";
     shop.password = "";
     if (needs) {
@@ -494,15 +622,139 @@ export async function beginReloginAll(cookie) {
   return { ok: true, status: "pick", message: "选择要登录的店铺", shops: pending };
 }
 
+export async function recoverDroppedShops(cookie) {
+  if (recovering || refreshing || loginInProgress(loginCursor.store)) {
+    return { ok: true, status: "running", recovered: 0, total: 0 };
+  }
+  recovering = true;
+  try {
+    let shops = [];
+    try {
+      shops = await deps.loadOrg(cookie || "");
+      rememberOrg(shops);
+    } catch {
+      shops = [...orgCache.values()].map(function (shop) {
+        return {
+          store: shop.store,
+          login: shop.login,
+          password: shop.password,
+          shopId: shop.shopId || "",
+          enabled: shop.enabled !== false
+        };
+      });
+    }
+    const sessions = await listSessions();
+    const byName = new Map(
+      sessions.map(function (session) {
+        return [session.store, session];
+      })
+    );
+    const live = await readJingmaiLive();
+    const dropped = new Set(
+      ((live && live.shops) || [])
+        .filter(function (row) {
+          return row && (row.offline === true || row.loginExpired === true);
+        })
+        .map(function (row) {
+          return row.shop;
+        })
+    );
+    const targets = [];
+    shops.forEach(function (shop) {
+      if (!shop || shop.enabled === false || !shop.login || !shop.password || inflight.has(shop.store)) {
+        return;
+      }
+      const session = byName.get(shop.store);
+      const needs =
+        dropped.has(shop.store) ||
+        sessionNeedsLogin(session || { enabled: true, cookies: [], authState: "" }) ||
+        (sessionStillValid(session) && session && session.authState === "offline");
+      if (!needs) {
+        return;
+      }
+      targets.push({
+        store: shop.store,
+        login: shop.login,
+        password: shop.password,
+        shopId: shop.shopId || ""
+      });
+      shop.login = "";
+      shop.password = "";
+    });
+    const results = [];
+    for (let i = 0; i < targets.length; i += 1) {
+      const shop = targets[i];
+      try {
+        const ok = await passwordRelogin(shop);
+        results.push({ store: shop.store, status: ok ? "ok" : "login" });
+      } catch {
+        results.push({ store: shop.store, status: "login" });
+      }
+      shop.password = "";
+    }
+    return {
+      ok: true,
+      recovered: results.filter(function (item) {
+        return item.status === "ok";
+      }).length,
+      total: targets.length,
+      results: results
+    };
+  } finally {
+    recovering = false;
+  }
+}
+
 export async function reloginState(store) {
   const name = loginCursor.store || String(store || "").trim();
   if (!name) {
     return publicState({ status: "missing", message: "请重新打开登录" });
   }
+  const idle = !loginCursor.phase || loginCursor.phase === "idle";
   if (loginCursor.failed || loginCursor.phase === "failed") {
     return publicState({ status: "failed", store: name, step: loginCursor.step, message: loginCursor.message || "登录没有打开" });
   }
+  if (loginCursor.phase === "opening") {
+    markOpening();
+  } else if (idle || loginCursor.phase === "failed" || loginCursor.phase === "screen") {
+    clearOpening();
+  }
+  const startLimit = deps.startLimitMs || 12000;
+  const openingFor = openingMark ? Date.now() - openingMark : 0;
+  if (!idle && loginCursor.phase === "opening" && openingFor > startLimit) {
+    let peeked = null;
+    try {
+      peeked = await Promise.race([
+        deps.desk.poll(name),
+        new Promise(function (resolve) {
+          setTimeout(function () {
+            resolve(null);
+          }, 800);
+        })
+      ]);
+    } catch {
+      peeked = null;
+    }
+    if (peeked && (peeked.status === "verify" || peeked.status === "screen" || peeked.status === "ok")) {
+      /* 浏览器已经开了，交给下面的正常判断 */
+    } else {
+      const note = (peeked && peeked.message && peeked.message !== "正在启动浏览器" ? peeked.message : "") || launchNote();
+      loginEpoch += 1;
+      clearOpening();
+      loginCursor.failed = true;
+      loginCursor.phase = "failed";
+      loginCursor.step = "启动浏览器";
+      loginCursor.message = note || browserStartFailure();
+      if (deps.desk && deps.desk.close) {
+        Promise.resolve(deps.desk.close()).catch(function () {});
+      }
+      return publicState({ status: "failed", store: name, step: "启动浏览器", message: loginCursor.message });
+    }
+  }
   const state = await deps.desk.poll(name);
+  if (idle && (!state || state.status === "opening" || state.status === "missing")) {
+    return publicState({ status: "idle", store: name, message: "" });
+  }
   if (state.status === "verify" || state.status === "screen") {
     loginCursor.phase = "screen";
     loginCursor.step = "京麦登录页";
@@ -580,6 +832,8 @@ export function jingmaiBrowser() {
 }
 
 export async function cancelRelogin() {
+  loginEpoch += 1;
+  clearOpening();
   wipeQueue();
   if (deps.desk && deps.desk.close) {
     await deps.desk.close();
@@ -686,6 +940,11 @@ export async function jingmaiTick() {
     markAuth: markAuth,
     now: beijingParts
   });
+  try {
+    await recoverDroppedShops("");
+  } catch (error) {
+    console.error("jingmai recover", error && error.code ? error.code : "failed");
+  }
 }
 
 export function startJingmaiCollector() {

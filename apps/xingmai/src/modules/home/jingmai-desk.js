@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
-import { connect as connectTcp } from "node:net";
+import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { connect as connectTcp, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, resolve, sep } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -14,7 +14,13 @@ const CHROME_VERSION = "157.0.8103.78";
 const CHROME_URL =
   "https://cdn.npmmirror.com/binaries/chrome-for-testing/" +
   CHROME_VERSION +
+  "/linux64/chrome-linux64.zip";
+const CHROME_SHELL_URL =
+  "https://cdn.npmmirror.com/binaries/chrome-for-testing/" +
+  CHROME_VERSION +
   "/linux64/chrome-headless-shell-linux64.zip";
+const DESK_UA =
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + CHROME_VERSION + " Safari/537.36";
 const SESSION_NAMES = new Set(["thor", "pt_key"]);
 
 const SYSTEM_SONAMES = new Set(["libc.so.6", "libdl.so.2", "libpthread.so.0", "libm.so.6", "libgcc_s.so.1", "ld-linux-x86-64.so.2", "linux-vdso.so.1"]);
@@ -124,9 +130,13 @@ function chromeHomes() {
 
 function installedBinary() {
   for (const home of chromeHomes()) {
-    const bin = home + "/chrome-headless-shell-linux64/chrome-headless-shell";
-    if (existsSync(bin)) {
-      return bin;
+    const full = home + "/chrome-linux64/chrome";
+    if (existsSync(full)) {
+      return full;
+    }
+    const shell = home + "/chrome-headless-shell-linux64/chrome-headless-shell";
+    if (existsSync(shell)) {
+      return shell;
     }
   }
   return "";
@@ -153,6 +163,129 @@ export function hostChromePath(path) {
     return "";
   }
   return value;
+}
+
+export function browserCandidates(found, shell) {
+  const host = hostChromePath(found);
+  const list = [];
+  if (host) {
+    list.push(host);
+  }
+  const extra = String(shell || "");
+  if (extra && list.indexOf(extra) < 0) {
+    list.push(extra);
+  }
+  if (!list.length && found) {
+    list.push(found);
+  }
+  return list;
+}
+
+export function browserLaunchOrder(paths) {
+  const preferred = [];
+  const rest = [];
+  (paths || []).forEach(function (path) {
+    const value = String(path || "");
+    if (!value) {
+      return;
+    }
+    if (value === "/opt/google/chrome/chrome") {
+      preferred.push(value);
+    } else {
+      rest.push(value);
+    }
+  });
+  return preferred.concat(rest);
+}
+
+export function realBrowserBinary(file) {
+  if (!file || !existsSync(file)) {
+    return "";
+  }
+  let fd = null;
+  try {
+    fd = openSync(file, "r");
+    const buf = Buffer.alloc(160);
+    const size = readSync(fd, buf, 0, buf.length, 0);
+    const text = buf.subarray(0, size).toString("utf8");
+    if (text.startsWith("#!") || text.includes("snap")) {
+      return "";
+    }
+    if (buf[0] !== 0x7f || buf.toString("utf8", 1, 4) !== "ELF") {
+      return "";
+    }
+    return file;
+  } catch {
+    return "";
+  } finally {
+    if (fd != null) {
+      try {
+        closeSync(fd);
+      } catch {
+        /* already closed */
+      }
+    }
+  }
+}
+
+export function resolveBrowserBinary(file) {
+  const direct = realBrowserBinary(file);
+  if (direct) {
+    return direct;
+  }
+  if (!file || !existsSync(file)) {
+    return "";
+  }
+  let text = "";
+  try {
+    text = readFileSync(file, "utf8").slice(0, 4000);
+  } catch {
+    return "";
+  }
+  if (!text.startsWith("#!") || text.includes("snap")) {
+    return "";
+  }
+  const match = text.match(/\/opt\/google\/chrome\/chrome\b|\/usr\/lib\/chromium[^ \n"']+|\/usr\/lib64\/chromium[^ \n"']+/);
+  if (!match) {
+    return "";
+  }
+  return realBrowserBinary(match[0]);
+}
+
+function reservePort() {
+  return new Promise(function (resolve, reject) {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", function () {
+      const address = server.address();
+      const port = address && address.port;
+      server.close(function () {
+        resolve(port);
+      });
+    });
+  });
+}
+
+export async function waitForDebugPort(port, signal, budgetMs) {
+  const deadline = Date.now() + (budgetMs || 8000);
+  let lastError = null;
+  while (Date.now() < deadline) {
+    if (signal && signal.aborted) {
+      throw browserAbortError();
+    }
+    try {
+      const version = await readDebugTargets("http://127.0.0.1:" + port + "/json/version", signal, 800);
+      if (version && (version.webSocketDebuggerUrl || version.Browser)) {
+        return version;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await sleep(200);
+  }
+  const wrapped = new Error((lastError && lastError.message) || "debug");
+  wrapped.code = "browser";
+  throw wrapped;
 }
 
 function extractZip(zip, dir) {
@@ -184,24 +317,33 @@ function extractZip(zip, dir) {
   });
 }
 
+async function installChromePackage(home, url, relativeBin) {
+  mkdirSync(home, { recursive: true });
+  const zip = home + "/chrome.zip";
+  const response = await fetch(url, { signal: AbortSignal.timeout(180000) });
+  if (!response.ok) {
+    throw new Error("download");
+  }
+  writeFileSync(zip, Buffer.from(await response.arrayBuffer()));
+  await extractZip(zip, home);
+  const bin = home + "/" + relativeBin;
+  chmodSync(bin, 0o755);
+  rmSync(zip, { force: true });
+  return bin;
+}
+
 async function installChrome() {
   let lastError = null;
   for (const home of chromeHomes()) {
     try {
-      mkdirSync(home, { recursive: true });
-      const zip = home + "/chrome.zip";
-      const response = await fetch(CHROME_URL, { signal: AbortSignal.timeout(120000) });
-      if (!response.ok) {
-        throw new Error("download");
-      }
-      writeFileSync(zip, Buffer.from(await response.arrayBuffer()));
-      await extractZip(zip, home);
-      const bin = home + "/chrome-headless-shell-linux64/chrome-headless-shell";
-      chmodSync(bin, 0o755);
-      rmSync(zip, { force: true });
-      return bin;
+      return await installChromePackage(home, CHROME_URL, "chrome-linux64/chrome");
     } catch (error) {
       lastError = error;
+      try {
+        return await installChromePackage(home, CHROME_SHELL_URL, "chrome-headless-shell-linux64/chrome-headless-shell");
+      } catch (shellError) {
+        lastError = shellError;
+      }
     }
   }
   const failure = new Error("服务器上还没有浏览器，账号登录开不了");
@@ -863,12 +1005,29 @@ async function fillLibraryHome(home, chromePath) {
   return libraryPath;
 }
 
+function hasFullChrome(path) {
+  const value = String(path || "");
+  return Boolean(value) && !value.includes("chrome-headless-shell");
+}
+
 export function ensureChrome() {
   const existing = findChrome();
-  const pending = existing ? Promise.resolve(existing) : chromeInstall || (chromeInstall = installChrome().catch(function (error) {
-    chromeInstall = null;
-    throw error;
-  }));
+  const pending =
+    hasFullChrome(existing)
+      ? Promise.resolve(existing)
+      : chromeInstall ||
+        (chromeInstall = installChrome()
+          .catch(function (error) {
+            chromeInstall = null;
+            if (existing) {
+              return existing;
+            }
+            throw error;
+          })
+          .then(function (bin) {
+            chromeInstall = null;
+            return bin;
+          }));
   return pending.then(function (bin) {
     return installLibraries(bin).then(function () {
       return bin;
@@ -876,8 +1035,13 @@ export function ensureChrome() {
   });
 }
 
+function deskSession(ws) {
+  return ws && ws.__sessionId ? ws.__sessionId : undefined;
+}
+
 function send(ws, method, params, sessionId, timeoutMs) {
   const id = ws.__seq = (ws.__seq || 0) + 1;
+  const sid = sessionId == null ? deskSession(ws) : sessionId;
   return new Promise(function (resolve, reject) {
     const timer = setTimeout(function () {
       ws.removeEventListener("message", onMessage);
@@ -893,7 +1057,7 @@ function send(ws, method, params, sessionId, timeoutMs) {
       if (message.id !== id) {
         return;
       }
-      if (sessionId && message.sessionId && message.sessionId !== sessionId) {
+      if (sid && message.sessionId && message.sessionId !== sid) {
         return;
       }
       clearTimeout(timer);
@@ -906,20 +1070,74 @@ function send(ws, method, params, sessionId, timeoutMs) {
     }
     ws.addEventListener("message", onMessage);
     const payload = { id: id, method: method, params: params || {} };
-    if (sessionId) {
-      payload.sessionId = sessionId;
+    if (sid) {
+      payload.sessionId = sid;
     }
     ws.send(JSON.stringify(payload));
   });
 }
 
 function evaluate(ws, expression, timeoutMs) {
-  return send(ws, "Runtime.evaluate", { expression: expression, returnByValue: true, awaitPromise: true }, undefined, timeoutMs).then(function (result) {
+  return send(ws, "Runtime.evaluate", { expression: expression, returnByValue: true, awaitPromise: true }, deskSession(ws), timeoutMs).then(function (result) {
     if (result.exceptionDetails) {
       return null;
     }
     return result.result ? result.result.value : null;
   });
+}
+
+async function reconnectDesk(desk) {
+  if (!desk || !desk.port || !desk.chrome || desk.chrome.exitCode != null) {
+    return false;
+  }
+  try {
+    const list = await readDebugTargets("http://127.0.0.1:" + desk.port + "/json/list", undefined, 2000);
+    const page = Array.isArray(list) ? list.find(function (item) {
+      return item.type === "page" && item.webSocketDebuggerUrl;
+    }) : null;
+    const version = await readDebugTargets("http://127.0.0.1:" + desk.port + "/json/version", undefined, 2000);
+    const browserUrl = version && version.webSocketDebuggerUrl;
+    if (browserUrl) {
+      try {
+        if (desk.ws) {
+          desk.ws.close();
+        }
+      } catch {
+        /* ignore */
+      }
+      desk.ws = await connectSocket(browserUrl);
+      desk.ws.__sessionId = "";
+      if (page && page.id) {
+        try {
+          await send(desk.ws, "Target.setDiscoverTargets", { discover: true }, "", 2000);
+          const attached = await send(desk.ws, "Target.attachToTarget", { targetId: page.id, flatten: true }, "", 3000);
+          desk.ws.__sessionId = attached && attached.sessionId ? attached.sessionId : "";
+          desk.sessionId = desk.ws.__sessionId;
+        } catch {
+          desk.ws.__sessionId = "";
+        }
+      }
+      if (desk.ws.__sessionId) {
+        return true;
+      }
+    }
+    if (!page || !page.webSocketDebuggerUrl) {
+      return false;
+    }
+    try {
+      if (desk.ws) {
+        desk.ws.close();
+      }
+    } catch {
+      /* ignore */
+    }
+    desk.ws = await connectSocket(page.webSocketDebuggerUrl);
+    desk.ws.__sessionId = "";
+    desk.sessionId = "";
+    return desk.ws.readyState === 1;
+  } catch {
+    return false;
+  }
 }
 
 function discard(desk) {
@@ -980,8 +1198,28 @@ function armReaderIdle() {
 }
 
 let loginVisible = false;
+let booting = null;
+let bootAbort = null;
+
+function stopBooting() {
+  if (bootAbort) {
+    bootAbort.abort();
+    bootAbort = null;
+  }
+  const chrome = booting;
+  booting = null;
+  if (!chrome || chrome.exitCode != null) {
+    return;
+  }
+  try {
+    chrome.kill("SIGKILL");
+  } catch {
+    /* already gone */
+  }
+}
 
 function stopCurrent() {
+  stopBooting();
   loginVisible = false;
   shotCache = { at: 0, store: "", image: null, ready: false };
   readerDesk = null;
@@ -1197,88 +1435,106 @@ export function browserStartFailure() {
   return "服务器浏览器启动失败";
 }
 
-async function launchChrome() {
-  const found = findChrome();
-  const host = hostChromePath(found);
-  let chromePath = "";
-  if (host) {
-    try {
-      fontConfig = "";
-      libraryPath = libSearchPath(libHome());
-      return await startChromeProcess(host);
-    } catch (error) {
-      const message = String((error && error.message) || "");
-      console.error("jingmai browser", message);
-      if (!message.includes("缺少 ") && !message.includes("这台机器没有")) {
-        const wrapped = new Error(browserStartFailure());
-        wrapped.code = "browser";
-        throw wrapped;
-      }
-      chromePath = host;
-    }
-  }
-  if (!chromePath) {
-    try {
-      chromePath = await ensureChrome();
-    } catch (error) {
-      console.error("jingmai browser", error && error.message);
-      const wrapped = new Error(browserStartFailure());
-      wrapped.code = "browser";
-      throw wrapped;
-    }
-  }
-  if (!chromePath) {
-    const error = new Error(browserStartFailure());
-    error.code = "browser";
-    throw error;
-  }
-  if (!host) {
-    try {
-      fontConfig = await ensureLoginFont();
-    } catch {
-      fontConfig = "";
-    }
-  }
-  const tried = new Set();
-  let lastError = null;
-  for (let attempt = 0; attempt < 24; attempt += 1) {
-    try {
-      libraryPath = libSearchPath(libHome()) || libraryPath;
-      return await startChromeProcess(chromePath);
-    } catch (error) {
-      lastError = error;
-      const message = String(error && error.message || "");
-      console.error("jingmai browser", message);
-      const match = message.match(/缺少 ([A-Za-z0-9._+-]+)/) || message.match(/服务器上的 ([A-Za-z0-9._+-]+\.so(?:\.\d+)*)/);
-      if (!match || tried.has(match[1])) {
-        const wrapped = new Error(browserStartFailure());
-        wrapped.code = "browser";
-        throw wrapped;
-      }
-      tried.add(match[1]);
-      const home = libHome();
-      const mismatched = message.includes("这台机器没有");
-      if (mismatched) {
-        removeSoname(home, match[1]);
-      }
-      const suite = mismatched ? olderSuite(linuxDistro().suite) : "";
-      const installed = await downloadSonames(home, [match[1]], suite);
-      libraryPath = libSearchPath(home);
-      if (!installed) {
-        console.error("jingmai browser libs", readableNote(libraryNote) || message);
-        const wrapped = new Error(browserStartFailure());
-        wrapped.code = "browser";
-        throw wrapped;
-      }
-    }
-  }
-  console.error("jingmai browser", lastError && lastError.message);
-  const wrapped = new Error(browserStartFailure());
-  wrapped.code = "browser";
-  throw wrapped;
+function browserAbortError() {
+  return Object.assign(new Error("aborted"), { code: "browser" });
 }
 
-async function startChromeProcess(chromePath) {
+export function readDebugTargets(url, signal, timeoutMs) {
+  const timeout = AbortSignal.timeout(timeoutMs || 4000);
+  const link = signal ? AbortSignal.any([timeout, signal]) : timeout;
+  return fetch(url, { signal: link }).then(function (response) {
+    if (!response.ok) {
+      throw Object.assign(new Error("json"), { code: "browser" });
+    }
+    return response.json();
+  });
+}
+
+function browserLaunchError(error) {
+  const message = String((error && error.message) || "");
+  console.error("jingmai browser", message);
+  const wrapped = new Error(message && message !== "aborted" ? message : browserStartFailure());
+  wrapped.code = "browser";
+  return wrapped;
+}
+
+let lastLaunchNote = "";
+
+async function launchChrome(signal) {
+  if (signal && signal.aborted) {
+    throw browserAbortError();
+  }
+  lastLaunchNote = "正在找服务器上的 Chrome";
+  stopBooting();
+  const bins = [];
+  browserLaunchOrder([
+    "/opt/google/chrome/chrome",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    installedBinary(),
+    findChrome(),
+    process.env.CHROME_PATH
+  ]).forEach(function (path) {
+    const real = resolveBrowserBinary(path) || realBrowserBinary(path);
+    if (real && bins.indexOf(real) < 0) {
+      bins.push(real);
+    }
+  });
+  if (!bins.length) {
+    lastLaunchNote = "服务器上没有可用的 Chrome";
+    throw browserLaunchError(new Error(lastLaunchNote));
+  }
+  lastLaunchNote = "正在启动 " + bins[0];
+  let lastError = null;
+  for (let i = 0; i < bins.length; i += 1) {
+    if (signal && signal.aborted) {
+      throw browserAbortError();
+    }
+    const chromePath = bins[i];
+    const host = hostChromePath(chromePath);
+    fontConfig = "";
+    if (!host) {
+      try {
+        fontConfig = await Promise.race([
+          ensureLoginFont(),
+          sleep(1500).then(function () {
+            return "";
+          })
+        ]);
+      } catch {
+        fontConfig = "";
+      }
+    }
+    libraryPath = libSearchPath(libHome());
+    const flagSets = [
+      ["--headless=new", "--remote-debugging-address=127.0.0.1", "--remote-allow-origins=*"],
+      ["--headless=new", "--remote-allow-origins=*"],
+      ["--headless", "--remote-allow-origins=*"]
+    ];
+    for (let f = 0; f < flagSets.length; f += 1) {
+      if (signal && signal.aborted) {
+        throw browserAbortError();
+      }
+      lastLaunchNote = "正在启动浏览器 " + (i + 1) + "/" + bins.length;
+      try {
+        return await startChromeProcess(chromePath, signal, 8000, flagSets[f]);
+      } catch (error) {
+        lastError = error;
+        const message = String((error && error.message) || "");
+        if (message && message !== "aborted") {
+          lastLaunchNote = message;
+        }
+        stopBooting();
+        if (signal && signal.aborted) {
+          throw browserAbortError();
+        }
+      }
+    }
+  }
+  throw browserLaunchError(lastError || new Error(browserStartFailure()));
+}
+
+async function startChromeProcess(chromePath, signal, budgetMs, extraFlags) {
   const dir = mkdtempSync(tmpdir() + "/shen-jingmai-");
   const env = Object.assign({}, process.env);
   if (libraryPath) {
@@ -1287,8 +1543,13 @@ async function startChromeProcess(chromePath) {
   if (fontConfig) {
     env.FONTCONFIG_FILE = fontConfig;
   }
-  const chrome = spawn(chromePath, [
-    "--headless=new",
+  const port = await Promise.race([
+    reservePort(),
+    sleep(2000).then(function () {
+      throw Object.assign(new Error("没有空闲的调试端口"), { code: "browser" });
+    })
+  ]);
+  const flags = [
     "--no-sandbox",
     "--disable-dev-shm-usage",
     "--disable-gpu",
@@ -1298,41 +1559,114 @@ async function startChromeProcess(chromePath) {
     "--lang=zh-CN",
     "--window-size=1100,720",
     "--user-data-dir=" + dir,
-    "--remote-debugging-port=0",
-    "about:blank"
-  ], { env: env, stdio: ["ignore", "ignore", "pipe"] });
+    "--remote-debugging-port=" + port
+  ];
+  (extraFlags || ["--headless=new", "--remote-debugging-address=127.0.0.1", "--remote-allow-origins=*"]).forEach(function (flag) {
+    if (flags.indexOf(flag) < 0) {
+      flags.push(flag);
+    }
+  });
+  flags.push(LOGIN_URL);
+  const chrome = spawn(chromePath, flags, { env: env, stdio: ["ignore", "pipe", "pipe"] });
+  booting = chrome;
+  const controller = new AbortController();
+  bootAbort = controller;
+  const linked = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
   try {
     let buf = "";
-    const port = await new Promise(function (resolve, reject) {
-      const timer = setTimeout(function () {
-        reject(Object.assign(new Error(browserFailure(buf)), { code: "browser" }));
-      }, 15000);
-      chrome.on("error", function () {
-        clearTimeout(timer);
-        reject(Object.assign(new Error(browserFailure(buf || "spawn")), { code: "browser" }));
-      });
-      chrome.stderr.on("data", function (chunk) {
-        buf = (buf + chunk.toString()).slice(-2000);
-        const match = buf.match(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//);
-        if (match) {
-          clearTimeout(timer);
-          resolve(Number(match[1]));
+    const readyPort = await new Promise(function (resolve, reject) {
+      let settled = false;
+      function finish(error, value) {
+        if (settled) {
+          return;
         }
-      });
-      chrome.on("exit", function () {
+        settled = true;
         clearTimeout(timer);
-        reject(Object.assign(new Error(browserFailure(buf)), { code: "browser" }));
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(value);
+      }
+      const timer = setTimeout(function () {
+        finish(Object.assign(new Error(browserFailure(buf)), { code: "browser" }));
+      }, budgetMs || 20000);
+      if (linked.aborted) {
+        finish(browserAbortError());
+        return;
+      }
+      linked.addEventListener("abort", function () {
+        finish(browserAbortError());
+      }, { once: true });
+      chrome.on("error", function () {
+        finish(Object.assign(new Error(browserFailure(buf || "spawn")), { code: "browser" }));
+      });
+      function takeChunk(chunk) {
+        buf = (buf + chunk.toString()).slice(-4000);
+      }
+      chrome.stdout.on("data", takeChunk);
+      chrome.stderr.on("data", takeChunk);
+      chrome.on("exit", function () {
+        finish(Object.assign(new Error(browserFailure(buf)), { code: "browser" }));
+      });
+      waitForDebugPort(port, linked, Math.max(1000, (budgetMs || 10000) - 500)).then(function () {
+        finish(null, port);
+      }, function (error) {
+        finish(Object.assign(error, { code: "browser" }));
       });
     });
-    const list = await fetch("http://127.0.0.1:" + port + "/json/list").then(function (response) {
-      return response.json();
-    });
-    const page = list.find(function (item) {
-      return item.type === "page";
-    });
-    const ws = await connectSocket(page.webSocketDebuggerUrl);
-    return { chrome: chrome, dir: dir, ws: ws, port: port, password: "" };
+    const version = await readDebugTargets("http://127.0.0.1:" + readyPort + "/json/version", linked, 4000);
+    const browserUrl = version && version.webSocketDebuggerUrl;
+    const list = await readDebugTargets("http://127.0.0.1:" + readyPort + "/json/list", linked, 4000);
+    const page = Array.isArray(list) ? list.find(function (item) {
+      return item.type === "page" && item.webSocketDebuggerUrl;
+    }) : null;
+    if (!page && !browserUrl) {
+      throw Object.assign(new Error("json"), { code: "browser" });
+    }
+    let ws = null;
+    let sessionId = "";
+    if (browserUrl) {
+      ws = await connectSocket(browserUrl);
+      try {
+        await send(ws, "Target.setDiscoverTargets", { discover: true }, undefined, 3000);
+        const targetId = page && page.id;
+        if (targetId) {
+          const attached = await send(ws, "Target.attachToTarget", { targetId: targetId, flatten: true }, undefined, 4000);
+          sessionId = attached && attached.sessionId ? attached.sessionId : "";
+        }
+      } catch {
+        sessionId = "";
+      }
+    }
+    if (!sessionId) {
+      if (!page || !page.webSocketDebuggerUrl) {
+        throw Object.assign(new Error("json"), { code: "browser" });
+      }
+      try {
+        if (ws) {
+          ws.close();
+        }
+      } catch {
+        /* ignore */
+      }
+      ws = await connectSocket(page.webSocketDebuggerUrl);
+      sessionId = "";
+    }
+    if (booting === chrome) {
+      booting = null;
+    }
+    if (bootAbort === controller) {
+      bootAbort = null;
+    }
+    if (ws) {
+      ws.__sessionId = sessionId || "";
+    }
+    return { chrome: chrome, dir: dir, ws: ws, port: readyPort, sessionId: sessionId || "", password: "" };
   } catch (error) {
+    if (booting === chrome) {
+      booting = null;
+    }
     try {
       chrome.kill("SIGKILL");
     } catch {
@@ -1420,6 +1754,17 @@ const LOGIN_PAGE_EXPR = `(() => {
   };
 })()`;
 
+export function loginTipBlocked(page) {
+  if (!page) {
+    return false;
+  }
+  if (page.accountVisible || page.passwordVisible) {
+    return false;
+  }
+  const text = String(page.text || "");
+  return /访问出错|暂时无法访问|人数过多|网络繁忙|环境异常|登录异常|拒绝访问|系统繁忙/.test(text);
+}
+
 export function loginPageVisible(page) {
   if (!page) {
     return false;
@@ -1431,7 +1776,10 @@ export function loginPageVisible(page) {
   if (page.accountVisible || page.passwordVisible) {
     return true;
   }
-  return /登录|账号|密码|验证码|安全验证|滑块|扫码/.test(String(page.text || ""));
+  if (loginTipBlocked(page)) {
+    return false;
+  }
+  return /密码登录|短信登录|账号登录|请输入账号|请输入登录密码|验证码|安全验证|滑块|扫码登录/.test(String(page.text || ""));
 }
 
 export function loginPageSettled(page) {
@@ -1533,8 +1881,50 @@ export function resetDesk() {
   stopCurrent();
 }
 
-async function acquireDesk(store, ticket) {
+async function disguiseDesk(ws) {
+  if (!ws) {
+    return;
+  }
+  await send(ws, "Page.enable", {}, undefined, 3000);
+  await send(ws, "Network.enable", {}, undefined, 3000);
+  try {
+    await send(
+      ws,
+      "Network.setUserAgentOverride",
+      {
+        userAgent: DESK_UA,
+        acceptLanguage: "zh-CN,zh;q=0.9,en;q=0.8",
+        platform: "Linux x86_64"
+      },
+      undefined,
+      3000
+    );
+  } catch {
+    /* older chrome builds still open the login page */
+  }
+  try {
+    await send(
+      ws,
+      "Emulation.setDeviceMetricsOverride",
+      {
+        width: 1100,
+        height: 720,
+        deviceScaleFactor: 1,
+        mobile: false
+      },
+      undefined,
+      3000
+    );
+  } catch {
+    /* keep going */
+  }
+}
+
+async function acquireDesk(store, ticket, signal) {
   if (ticket != null && ticket !== openTicket) {
+    return null;
+  }
+  if (signal && signal.aborted) {
     return null;
   }
   if (deskUsable(current)) {
@@ -1542,29 +1932,33 @@ async function acquireDesk(store, ticket) {
     current.password = "";
     try {
       await send(current.ws, "Network.clearBrowserCookies", {}, undefined, 2000);
+      try {
+        await disguiseDesk(current.ws);
+      } catch {
+        /* reuse the open browser even if disguise fails */
+      }
       return current;
     } catch {
       stopCurrent();
     }
   }
-  if (ticket != null && ticket !== openTicket) {
+  if ((ticket != null && ticket !== openTicket) || (signal && signal.aborted)) {
     return null;
   }
-  const desk = await launchChrome();
-  if (ticket != null && ticket !== openTicket) {
+  const desk = await launchChrome(signal);
+  if ((ticket != null && ticket !== openTicket) || (signal && signal.aborted)) {
     discard(desk);
     return null;
   }
   desk.store = store;
   current = desk;
-  await send(desk.ws, "Page.enable");
-  await send(desk.ws, "Network.enable");
-  await send(desk.ws, "Emulation.setDeviceMetricsOverride", {
-    width: 1100,
-    height: 720,
-    deviceScaleFactor: 1,
-    mobile: false
-  });
+  loginVisible = true;
+  lastLaunchNote = "浏览器已打开，正在接登录页";
+  try {
+    await disguiseDesk(desk.ws);
+  } catch {
+    /* page commands can continue after the picture is already up */
+  }
   return desk;
 }
 
@@ -1595,21 +1989,34 @@ async function readLoginPage(ws) {
 
 async function finishOpen(desk, loginName, password, ticket) {
   try {
+    loginVisible = true;
+    lastLaunchNote = LOGIN_SCREEN_MESSAGE;
     let streak = 0;
     let sawPage = false;
-    for (let attempt = 0; attempt < 20; attempt += 1) {
+    let retried = false;
+    for (let attempt = 0; attempt < 24; attempt += 1) {
       if (ticket !== openTicket || current !== desk) {
         return { status: "login", message: "登录已取消" };
       }
-      await sleep(700);
+      if (attempt > 0) {
+        await sleep(500);
+      }
       const page = await readLoginPage(desk.ws);
+      if (loginTipBlocked(page) && !retried) {
+        retried = true;
+        try {
+          await send(desk.ws, "Page.navigate", { url: LOGIN_URL }, undefined, 8000);
+        } catch {
+          /* keep waiting on the current page */
+        }
+        continue;
+      }
       if (loginPageVisible(page)) {
-        loginVisible = true;
         sawPage = true;
       }
       if (loginPageSettled(page)) {
         streak += 1;
-        if (streak >= 2) {
+        if (streak >= 1) {
           break;
         }
       } else {
@@ -1619,18 +2026,15 @@ async function finishOpen(desk, loginName, password, ticket) {
     if (ticket !== openTicket || current !== desk) {
       return { status: "login", message: "登录已取消" };
     }
-    if (streak >= 2) {
-      await fillAndSubmit(desk.ws, loginName, password);
+    if (streak >= 1 && loginName && password) {
+      try {
+        await fillAndSubmit(desk.ws, loginName, password);
+      } catch {
+        /* keep the picture open for manual login */
+      }
     }
     password = "";
-    loginVisible = sawPage || loginVisible;
-    if (!loginVisible) {
-      if (ticket === openTicket) {
-        stopCurrent();
-      }
-      return { status: "login", message: "登录页还没刷新出来" };
-    }
-    for (let attempt = 0; attempt < 8; attempt += 1) {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
       if (ticket !== openTicket || current !== desk) {
         return { status: "login", message: "登录已取消" };
       }
@@ -1647,22 +2051,28 @@ async function finishOpen(desk, loginName, password, ticket) {
         return { status: "ok", cookies: cookies };
       }
       const page = await readLoginPage(desk.ws);
-      if (loginPageVisible(page)) {
-        loginVisible = true;
+      if (loginTipBlocked(page)) {
+        return { status: "login", message: "京麦拒绝了这次服务器登录，请过一会儿再试" };
       }
       const screen = loginScreenState(page && page.text, Boolean(page && page.accountVisible));
       if (screen.status === "login") {
         return screen;
       }
-      await sleep(700);
+      if ((page && (page.accountVisible || page.passwordVisible)) || loginPageVisible(page)) {
+        return { status: "verify", message: LOGIN_SCREEN_MESSAGE, formReady: true };
+      }
+      await sleep(400);
     }
-    return { status: "verify", message: LOGIN_SCREEN_MESSAGE, formReady: true };
+    if (!sawPage) {
+      return { status: "login", message: "服务器没有打开京麦登录页" };
+    }
+    return { status: "verify", message: LOGIN_SCREEN_MESSAGE, formReady: Boolean(sawPage) };
   } finally {
     password = "";
   }
 }
 
-export async function openDesk({ store, loginName, password, reveal, onStep } = {}) {
+export async function openDesk({ store, loginName, password, reveal, onStep, signal } = {}) {
   const ticket = ++openTicket;
   const step = function (message) {
     if (message && typeof onStep === "function") {
@@ -1670,17 +2080,46 @@ export async function openDesk({ store, loginName, password, reveal, onStep } = 
     }
   };
   let desk = null;
+  let launchTimedOut = false;
+  let launchTimer = null;
+  const boot = new AbortController();
+  const linked = signal ? AbortSignal.any([signal, boot.signal]) : boot.signal;
   try {
     loginVisible = false;
     shotCache = { at: 0, store: "", image: null, ready: false };
+    lastLaunchNote = "正在启动浏览器";
     step("正在启动浏览器");
-    desk = await acquireDesk(store, ticket);
-    if (!desk || ticket !== openTicket) {
-      return { status: "login", message: "登录已取消" };
+    const launching = acquireDesk(store, ticket, linked);
+    launching.catch(function () {});
+    desk = await Promise.race([
+      launching,
+      new Promise(function (_resolve, reject) {
+        launchTimer = setTimeout(function () {
+          launchTimedOut = true;
+          lastLaunchNote = browserStartFailure();
+          try {
+            boot.abort();
+          } catch {
+            /* ignore */
+          }
+          stopBooting();
+          reject(browserAbortError());
+        }, 12000);
+      })
+    ]);
+    if (!desk || ticket !== openTicket || launchTimedOut || linked.aborted) {
+      if (desk && desk !== current) {
+        discard(desk);
+      }
+      if (ticket === openTicket) {
+        openTicket += 1;
+      }
+      return { status: "login", message: lastLaunchNote && lastLaunchNote !== "aborted" ? lastLaunchNote : (launchTimedOut ? browserStartFailure() : "登录已取消") };
     }
     step("正在打开登录页");
+    lastLaunchNote = "正在打开京麦登录页";
     try {
-      await send(desk.ws, "Page.navigate", { url: LOGIN_URL }, undefined, 20000);
+      await send(desk.ws, "Page.navigate", { url: LOGIN_URL }, undefined, 8000);
     } catch (error) {
       if (!String(error && error.message || "").includes("timeout")) {
         throw error;
@@ -1694,15 +2133,22 @@ export async function openDesk({ store, loginName, password, reveal, onStep } = 
     if (ticket === openTicket) {
       stopCurrent();
     }
-    if (error && error.code === "browser") {
+    if (ticket === openTicket && (launchTimedOut || (error && error.code === "browser") || (signal && signal.aborted))) {
+      openTicket += 1;
+    }
+    if (error && (error.code === "browser" || launchTimedOut || (signal && signal.aborted))) {
       console.error("jingmai browser", error.message);
-      return { status: "login", message: browserStartFailure() };
+      const detail = lastLaunchNote && lastLaunchNote !== "aborted" && lastLaunchNote !== "正在启动浏览器"
+        ? lastLaunchNote
+        : (error && error.message && error.message !== "aborted" ? error.message : "");
+      return { status: "login", message: detail || browserStartFailure() };
     }
     if (String(error && error.message || "").includes("timeout")) {
       return { status: "login", message: "登录页没有在 8 秒内打开" };
     }
     return { status: "login", message: "服务器登录没有打开" };
   } finally {
+    clearTimeout(launchTimer);
     password = "";
     if (desk) {
       desk.password = "";
@@ -1710,9 +2156,21 @@ export async function openDesk({ store, loginName, password, reveal, onStep } = 
   }
 }
 
+export function launchNote() {
+  return lastLaunchNote && lastLaunchNote !== "aborted" ? lastLaunchNote : "";
+}
+
 export async function pollDesk(store) {
-  if (!current || current.store !== store || !current.ws || current.ws.readyState !== 1) {
-    return { status: "opening", message: "正在启动浏览器" };
+  if (!current || current.store !== store) {
+    const note = launchNote();
+    return { status: "opening", message: note || "正在启动浏览器", note: note };
+  }
+  if (!deskUsable(current)) {
+    const ok = await reconnectDesk(current);
+    if (!ok) {
+      const note = launchNote();
+      return { status: "opening", message: note || PAGE_WAIT_MESSAGE, note: note };
+    }
   }
   try {
     const cookies = await readCookies(current.ws);
@@ -1720,11 +2178,13 @@ export async function pollDesk(store) {
     if (sessionReady(href, cookies)) {
       return { status: "ok", cookies: cookies };
     }
-    if (!loginVisible) {
+    loginVisible = true;
+  } catch {
+    const ok = await reconnectDesk(current);
+    if (!ok) {
       return { status: "opening", message: PAGE_WAIT_MESSAGE };
     }
-  } catch {
-    return { status: "opening", message: "正在启动浏览器" };
+    loginVisible = true;
   }
   return { status: "verify", message: LOGIN_SCREEN_MESSAGE };
 }
@@ -1738,8 +2198,14 @@ function holdShots(ms) {
 }
 
 export async function shotDesk(store) {
-  if (!current || current.store !== store || !current.ws) {
+  if (!current || current.store !== store) {
     return null;
+  }
+  if (!deskUsable(current)) {
+    const ok = await reconnectDesk(current);
+    if (!ok) {
+      return shotCache.ready && shotCache.store === store ? shotCache.image : null;
+    }
   }
   const now = Date.now();
   if (shotCache.ready && shotCache.store === store && shotCache.image && (now - shotCache.at < 1600 || now < shotHold)) {
@@ -1755,14 +2221,17 @@ export async function shotDesk(store) {
 }
 
 async function captureShot(store) {
-  if (!current || current.store !== store || !current.ws || current.ws.readyState !== 1) {
+  if (!current || current.store !== store) {
     return shotCache.ready && shotCache.store === store ? shotCache.image : null;
   }
-  if (!loginVisible) {
-    return shotCache.ready && shotCache.store === store ? shotCache.image : null;
+  if (!deskUsable(current)) {
+    const ok = await reconnectDesk(current);
+    if (!ok) {
+      return shotCache.ready && shotCache.store === store ? shotCache.image : null;
+    }
   }
   try {
-    const shot = await send(current.ws, "Page.captureScreenshot", { format: "jpeg", quality: 60 }, undefined, 4000);
+    const shot = await send(current.ws, "Page.captureScreenshot", { format: "jpeg", quality: 60 }, deskSession(current.ws), 4000);
     const image = Buffer.from(shot.data || "", "base64");
     if (!image.length) {
       return shotCache.ready && shotCache.store === store ? shotCache.image : null;
