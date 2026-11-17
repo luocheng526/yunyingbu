@@ -280,7 +280,18 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /people-page-num/);
     assert.match(jsText, /data-page/);
     assert.match(jsText, /id="people-template"/);
-    assert.match(jsText, /组织中心-身份名册模板/);
+    assert.match(jsText, /组织中心-" \+ boardNameOf\(peopleBoard\) \+ "模板\.csv/);
+    assert.match(jsText, /id="people-dept-tabs"/);
+    assert.match(jsText, /运营部门管理/);
+    assert.match(jsText, /人事和技术部门/);
+    assert.match(jsText, /后端部门/);
+    assert.match(jsText, /currentBoardPeople/);
+    assert.match(jsText, /还没有人，点新增人员手填/);
+    assert.match(jsText, /表头与运营部一样/);
+    assert.doesNotMatch(jsText, /<h2>身份名册<\/h2>/);
+    assert.doesNotMatch(jsText, /身份名册/);
+    assert.match(cssText, /\.people-dept-tabs/);
+    assert.match(cssText, /\.people-dept-tab\.is-active/);
     assert.match(jsText, /\/api\/people\/import/);
     assert.match(jsText, /点新增人员弹出对话框/);
     assert.match(jsText, /id="people-q"/);
@@ -467,6 +478,78 @@ test("GET /api/people returns Shen-line roster and grants", async () => {
         { ...expected, demo: true }
       );
     }
+    assert.deepEqual(
+      data.boards.map((row) => row.id),
+      ["ops", "hrTech", "backend"]
+    );
+    assert.equal(data.boards[0].name, "运营部门管理");
+    assert.equal(data.boards[1].name, "人事和技术部门");
+    assert.equal(data.boards[2].name, "后端部门");
+    assert.ok(data.boards[0].count >= 16);
+    assert.equal(data.boards[1].count, 0);
+    assert.equal(data.boards[2].count, 0);
+    assert.ok(data.people.every((row) => row.board === "ops"));
+  });
+});
+
+test("department boards share roster headers and stay empty until hand-filled", async () => {
+  await withServer(async (base) => {
+    const created = await fetch(`${base}/api/people`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "人事同事", role: "运营", board: "hrTech", status: "在职" })
+    });
+    const createdJson = await created.json();
+    assert.equal(created.status, 201, JSON.stringify(createdJson));
+    assert.equal(createdJson.person.board, "hrTech");
+    assert.equal(createdJson.person.username, "人事同事");
+
+    const imported = await fetch(`${base}/api/people/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        board: "backend",
+        rows: [
+          {
+            姓名: "后端同事",
+            总监: "罗成",
+            经理: "",
+            运营: "后端同事",
+            状态: "在职",
+            账号: "houduan",
+            登录密码: "Backend1!"
+          },
+          {
+            姓名: "王博",
+            总监: "罗成",
+            经理: "沈子晗",
+            运营: "王博",
+            状态: "在职",
+            账号: "should-not-overwrite-ops",
+            登录密码: "NoTouch1!"
+          }
+        ]
+      })
+    });
+    const importedJson = await imported.json();
+    assert.equal(imported.status, 200, JSON.stringify(importedJson));
+    assert.equal(importedJson.created, 2, JSON.stringify(importedJson));
+    assert.equal(importedJson.updated, 0, JSON.stringify(importedJson));
+
+    const after = await (await fetch(`${base}/api/people`)).json();
+    const wangOps = after.people.find((row) => row.name === "王博" && row.board === "ops");
+    assert.ok(wangOps);
+    assert.notEqual(wangOps.username, "should-not-overwrite-ops");
+    const wangBackend = after.people.find((row) => row.name === "王博" && row.board === "backend");
+    assert.equal(wangBackend.username, "should-not-overwrite-ops");
+    const hr = after.people.find((row) => row.name === "人事同事");
+    assert.equal(hr.board, "hrTech");
+    const backend = after.people.find((row) => row.name === "后端同事");
+    assert.equal(backend.board, "backend");
+    const counts = Object.fromEntries(after.boards.map((row) => [row.id, row.count]));
+    assert.equal(counts.hrTech, 1);
+    assert.equal(counts.backend, 2);
+    assert.equal(after.people.filter((row) => row.board === "ops").length, counts.ops);
   });
 });
 

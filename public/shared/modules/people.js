@@ -1,4 +1,4 @@
-/* xm-module-people org-board 0.1.233-login-ops */
+/* xm-module-people org-board 0.1.234-dept-boards */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.233-login-ops";
+    const href = "/people.css?v=0.1.234-dept-boards";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -253,8 +253,13 @@
         '</tr></thead><tbody id="org-tbody"></tbody></table></div>' +
         '<div class="org-filter-pop" id="org-filter-pop" hidden></div></div>' +
         '<div class="org-pane" data-pane="members" hidden>' +
-        '<section class="panel"><h2>身份名册</h2>' +
-        '<p class="lead">人员是人员，不一定有店铺；新人可以还没分配。表头可筛总监、经理、主管、储备、运营、助理、状态。总监、经理、主管、储备、运营、助理双击可改，仅罗成、韩梦凯、沈子晗能改，其他人不能改。账号密码点「登录信息」「设置密码」：罗成看全部，沈子晗/韩梦凯看本组责权，运营只看改自己的。导入按姓名合并：一模一样的名字覆盖原行，对不上的名字当新员工，并落盘，强制刷新还在。勾选后可统一改密码或删除。点新增人员弹出对话框。</p>' +
+        '<section class="panel">' +
+        '<nav class="people-dept-tabs" id="people-dept-tabs" aria-label="部门">' +
+        '<button type="button" class="people-dept-tab is-active" data-board="ops">运营部门管理</button>' +
+        '<button type="button" class="people-dept-tab" data-board="hrTech">人事和技术部门</button>' +
+        '<button type="button" class="people-dept-tab" data-board="backend">后端部门</button>' +
+        "</nav>" +
+        '<p class="lead">人员是人员，不一定有店铺；新人可以还没分配。人事技术和后端的人后面手填，表头与运营部一样。表头可筛总监、经理、主管、储备、运营、助理、状态。总监、经理、主管、储备、运营、助理双击可改，仅罗成、韩梦凯、沈子晗能改，其他人不能改。账号密码点「登录信息」「设置密码」：罗成看全部，沈子晗/韩梦凯看本组责权，运营只看改自己的。导入按姓名合并：一模一样的名字覆盖原行，对不上的名字当新员工，并落盘，强制刷新还在。勾选后可统一改密码或删除。点新增人员弹出对话框。</p>' +
         '<div class="org-kpis" id="people-kpis"></div>' +
         '<div class="org-toolbar">' +
         '<div class="org-search-form" id="people-search-form">' +
@@ -431,6 +436,28 @@
       let loginPersonId = "";
       const PEOPLE_HEADERS = ["姓名", "总监", "经理", "主管", "储备", "运营", "助理", "状态", "账号", "登录密码"];
       const PEOPLE_KEYS = ["name", "director", "lineManager", "supervisor", "reserve", "operator", "assistant", "status", "username", "password"];
+      const PEOPLE_BOARDS = [
+        { id: "ops", name: "运营部门管理" },
+        { id: "hrTech", name: "人事和技术部门" },
+        { id: "backend", name: "后端部门" }
+      ];
+      let peopleBoard = "ops";
+      function boardNameOf(id) {
+        const hit = PEOPLE_BOARDS.find(function (item) {
+          return item.id === id;
+        });
+        return hit ? hit.name : "运营部门管理";
+      }
+      function currentBoardPeople() {
+        return (roster.people || []).filter(function (row) {
+          return (row.board || "ops") === peopleBoard;
+        });
+      }
+      function paintDeptTabs() {
+        root.querySelectorAll(".people-dept-tab").forEach(function (btn) {
+          btn.classList.toggle("is-active", btn.getAttribute("data-board") === peopleBoard);
+        });
+      }
       if (peopleForm && peopleForm.name && peopleForm.username) {
         peopleForm.name.addEventListener("input", function () {
           peopleForm.username.value = peopleForm.name.value.trim();
@@ -806,7 +833,7 @@
 
       function peopleLineKpiCounts(people) {
         const directors = uniqueLineKpiNames(people, "director", "总监");
-        if (directors.indexOf("罗成") < 0) {
+        if (peopleBoard === "ops" && directors.indexOf("罗成") < 0) {
           directors.push("罗成");
         }
         return {
@@ -1108,7 +1135,7 @@
         }
         if (isMemberFilter(key)) {
           peoplePage = 1;
-          renderPeople(applyMemberFilters(roster.people));
+          renderPeople(applyMemberFilters(currentBoardPeople()));
         } else {
           paintStores();
         }
@@ -1526,6 +1553,12 @@
         const pageRows = people.slice(start, start + peoplePageSize);
         peopleTbody.replaceChildren();
         const canEdit = roster.canEdit;
+        if (!pageRows.length) {
+          const empty = document.createElement("tr");
+          empty.innerHTML =
+            '<td colspan="12" class="org-empty">还没有人，点新增人员手填。表头与运营部一样。</td>';
+          peopleTbody.append(empty);
+        }
         pageRows.forEach(function (person) {
           const tr = document.createElement("tr");
           tr.setAttribute("data-id", String(person.id));
@@ -1592,8 +1625,9 @@
           roster.people = peopleData.people || [];
           roster.canEdit = peopleData.canEdit === true;
           paintRosterAcl();
-          renderPeopleKpis(roster.people);
-          renderPeople(applyMemberFilters(roster.people));
+          paintDeptTabs();
+          renderPeopleKpis(currentBoardPeople());
+          renderPeople(applyMemberFilters(currentBoardPeople()));
         });
       }
 
@@ -2754,7 +2788,26 @@
 
       function rerenderPeople() {
         peoplePage = 1;
-        renderPeople(applyMemberFilters(roster.people));
+        renderPeopleKpis(currentBoardPeople());
+        renderPeople(applyMemberFilters(currentBoardPeople()));
+      }
+      const deptTabs = root.querySelector("#people-dept-tabs");
+      if (deptTabs) {
+        deptTabs.addEventListener("click", function (event) {
+          const btn = event.target.closest(".people-dept-tab");
+          if (!btn) {
+            return;
+          }
+          const next = btn.getAttribute("data-board") || "ops";
+          if (next === peopleBoard) {
+            return;
+          }
+          peopleBoard = next;
+          memberSelectedIds = {};
+          peoplePage = 1;
+          paintDeptTabs();
+          rerenderPeople();
+        });
       }
       const peoplePager = root.querySelector("#people-pager");
       if (peoplePager) {
@@ -2851,7 +2904,9 @@
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(Object.fromEntries(new FormData(peopleForm).entries()))
+          body: JSON.stringify(
+            Object.assign(Object.fromEntries(new FormData(peopleForm).entries()), { board: peopleBoard })
+          )
         })
           .then(function (res) {
             return res.json().then(function (data) {
@@ -2882,7 +2937,7 @@
       }
       root.querySelector("#people-template").addEventListener("click", function () {
         downloadCsv(
-          "组织中心-身份名册模板.csv",
+          "组织中心-" + boardNameOf(peopleBoard) + "模板.csv",
           peopleCsvLines([
             {
               name: "示例同事",
@@ -2900,7 +2955,7 @@
         );
       });
       root.querySelector("#people-export").addEventListener("click", function () {
-        downloadCsv("组织中心-身份名册.csv", peopleCsvLines(lastPeople));
+        downloadCsv("组织中心-" + boardNameOf(peopleBoard) + ".csv", peopleCsvLines(lastPeople));
       });
       root.querySelector("#people-import").addEventListener("click", function () {
         if (!roster.canEdit) {
@@ -2939,7 +2994,7 @@
             if (headerIndex < 0) {
               const preview = (table[0] || []).map(normalizePeopleHeader).filter(Boolean).join("、");
               if (preview.indexOf("店铺名称") >= 0) {
-                throw new Error("这是店铺模板。请到店铺主数据导入，或下载身份名册模板。");
+                throw new Error("这是店铺模板。请到店铺主数据导入，或下载部门模板。");
               }
               throw new Error(
                 "没认出姓名。请用「下载模板」，或把 Excel 另存为 CSV（不要直接传 xlsx）。当前表头：" +
@@ -2970,7 +3025,7 @@
               method: "POST",
               credentials: "same-origin",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ rows: rows })
+              body: JSON.stringify({ rows: rows, board: peopleBoard })
             }).then(function (res) {
               return res.json().then(function (data) {
                 return { res: res, data: data };

@@ -13,6 +13,50 @@ export const CENTERS = [
 ];
 
 export const POSTS = ["店长", "运营", "主管", "经理", "储备", "助理", "总监"];
+export const PEOPLE_BOARDS = [
+  { id: "ops", name: "运营部门管理" },
+  { id: "hrTech", name: "人事和技术部门" },
+  { id: "backend", name: "后端部门" }
+];
+const BOARD_IDS = new Set(PEOPLE_BOARDS.map((row) => row.id));
+const BOARD_NAME_TO_ID = {
+  运营部门管理: "ops",
+  运营部: "ops",
+  运营: "ops",
+  人事和技术部门: "hrTech",
+  人事技术: "hrTech",
+  人事: "hrTech",
+  后端部门: "backend",
+  后端: "backend"
+};
+
+export function normalizeBoard(value) {
+  const raw = String(value || "").trim();
+  if (BOARD_IDS.has(raw)) {
+    return raw;
+  }
+  return BOARD_NAME_TO_ID[raw] || "ops";
+}
+
+export function boardOf(person) {
+  return normalizeBoard(person && person.board);
+}
+
+function knownBoard(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+  if (BOARD_IDS.has(raw) || BOARD_NAME_TO_ID[raw]) {
+    return normalizeBoard(raw);
+  }
+  return "";
+}
+
+function boardFromInput(input, fallback = "ops") {
+  const item = input && typeof input === "object" ? input : {};
+  return knownBoard(item.board) || knownBoard(item.部门管理) || normalizeBoard(fallback);
+}
 export const SHOP_KINDS = ["店铺", "店群"];
 export const INITIAL_PASSWORD = "ChangeMe123!";
 
@@ -194,6 +238,7 @@ function applyRosterSnapshot(data) {
     if (next.reserve == null) {
       next.reserve = "";
     }
+    next.board = boardOf(next);
     return next;
   });
   shops = Array.isArray(data.shops) ? data.shops.map(clone) : shops;
@@ -656,6 +701,7 @@ function presentPerson(person) {
   const line = orgLineOf(person);
   return {
     ...clone(row),
+    board: boardOf(person),
     managerName: managerNameOf(person),
     director: line.director,
     lineManager: line.manager,
@@ -740,7 +786,8 @@ function applyCreatePerson(input) {
     department,
     managerId,
     username: usernameRaw || name,
-    password: passwordRaw || INITIAL_PASSWORD
+    password: passwordRaw || INITIAL_PASSWORD,
+    board: boardFromInput(input, "ops")
   };
   stampOrgLine(person, line, { skipEmpty: true });
   people.push(person);
@@ -758,11 +805,12 @@ export async function createPerson(input) {
 
 export const PEOPLE_IMPORT_HEADERS = ["姓名", "总监", "经理", "主管", "储备", "运营", "助理", "状态", "账号", "登录密码"];
 
-export async function importPeople(rows) {
+export async function importPeople(rows, board) {
   const list = Array.isArray(rows) ? rows : [];
   if (!list.length) {
     return { ok: false, statusCode: 400, error: "请按模板导入至少一行" };
   }
+  const importBoard = normalizeBoard(board);
   let created = 0;
   let updated = 0;
   const failed = [];
@@ -777,6 +825,7 @@ export async function importPeople(rows) {
     const status = String(item.状态 || item.status || "").trim() || "在职";
     const username = String(item.账号 || item.username || "").trim();
     const password = String(item.登录密码 || item.password || "").trim();
+    const boardId = boardFromInput(item, importBoard);
     if (!name) {
       failed.push({ line, error: "姓名为必填" });
       return;
@@ -785,7 +834,7 @@ export async function importPeople(rows) {
     if (managerId != null && !findPerson(managerId)) {
       managerId = null;
     }
-    const found = people.find((row) => String(row.name || "").trim() === name);
+    const found = people.find((row) => String(row.name || "").trim() === name && boardOf(row) === boardId);
     if (found) {
       const result = applyPatchPerson(found.id, {
         status,
@@ -801,6 +850,7 @@ export async function importPeople(rows) {
       found.center = center;
       found.department = department || found.department || center;
       found.managerId = managerId;
+      found.board = boardId;
       stampOrgLine(found, org, { skipEmpty: true });
       rememberLogin(withLogin(found));
       updated += 1;
@@ -815,6 +865,7 @@ export async function importPeople(rows) {
       managerId,
       username,
       password,
+      board: boardId,
       director: org.director,
       lineManager: org.lineManager,
       supervisor: org.supervisor,
@@ -1039,7 +1090,8 @@ function personFromMysqlRow(row) {
     department: row.department || "",
     managerId: row.manager_id == null ? null : Number(row.manager_id),
     username: row.username || row.name,
-    password: row.password || INITIAL_PASSWORD
+    password: row.password || INITIAL_PASSWORD,
+    board: "ops"
   };
 }
 

@@ -15,7 +15,9 @@ import {
   patchPerson,
   patchPeoplePasswords,
   peopleRosterPersistMode,
+  PEOPLE_BOARDS,
   PEOPLE_IMPORT_HEADERS,
+  boardOf,
   reconcilePeople,
   removePeople
 } from "./store.js";
@@ -340,6 +342,10 @@ peopleRouter.get("/", async (req, res) => {
     charter: PEOPLE_CHARTER,
     centers: CENTERS,
     posts: POSTS,
+    boards: PEOPLE_BOARDS.map((item) => ({
+      ...item,
+      count: listPeople().filter((row) => boardOf(row) === item.id).length
+    })),
     people: listPeople().map((row) => loginViewOf(actor, row))
   });
 });
@@ -363,7 +369,7 @@ peopleRouter.post("/import", async (req, res) => {
   }
   await hydratePeopleRoster();
   const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
-  sendResult(res, await importPeople(rows), false);
+  sendResult(res, await importPeople(rows, req.body?.board), false);
 });
 
 peopleRouter.patch("/passwords", async (req, res) => {
