@@ -159,6 +159,12 @@ function extractList(data) {
       return { rows: data[key], total: Number.isFinite(total) ? total : data[key].length, object: false };
     }
   }
+  if (data.growAnalysis && typeof data.growAnalysis === "object") {
+    const inner = extractList(data.growAnalysis);
+    if (!inner.object || inner.rows.length) {
+      return inner;
+    }
+  }
   if (data.data && typeof data.data === "object") {
     const inner = extractList(data.data);
     if (!inner.object || inner.rows.length) {
@@ -201,7 +207,8 @@ export async function linkStatus() {
     message: current.message,
     userName: current.userName,
     accounts: current.accounts || [],
-    qrReady: Boolean(current.qrUrl)
+    qrReady: Boolean(current.qrUrl),
+    cursor: current.cursor || null
   };
 }
 
@@ -225,7 +232,7 @@ export async function startLink(provider) {
   }
   current.scene = payload.data.scene || "";
   current.qrUrl = payload.data.url || "";
-  current.message = "请用旧站登录页同一个扫码方式确认。扫码前二维码只在这一页显示。";
+  current.message = "请用微信扫这一张二维码。扫旧站网页上的码不会登录这里。";
   await saveSession(current);
   return linkStatus();
 }
@@ -258,7 +265,7 @@ async function finishLogin(current, data) {
 
 export async function pollLink() {
   const current = await session();
-  if (current.phase !== "waiting_scan" || !current.scene) {
+  if (!current.scene || (current.phase !== "waiting_scan" && current.phase !== "needs_scan")) {
     return linkStatus();
   }
   const payload = await callUpstream(current, {
@@ -272,29 +279,37 @@ export async function pollLink() {
     }
   });
   const code = payload && payload.code;
+  const content = String((payload && payload.content) || "");
   if (code === 1000102) {
-    current.message = "等待扫码";
-  } else if (code === 1000103) {
-    current.message = "二维码已过期，正在重新生成";
+    current.phase = "waiting_scan";
+    current.message = "未扫码。请扫这一张二维码，扫旧站网页上的码不会登录这里。";
+  } else if (code === 1000103 || code === -1 || code === -7 || /未登录|登录状态已过期|请重新登录/.test(content)) {
+    current.scene = "";
+    current.qrUrl = "";
+    current.message = "刚才那张二维码已经失效，正在换一张。";
     await saveSession(current);
     return startLink(current.provider);
   } else if (code === 1011) {
-    current.message = payload.content || `浏览器标识未加入登录管理：${current.deviceId}`;
+    current.message = content || `浏览器标识未加入登录管理：${current.deviceId}`;
   } else if (code === 0) {
     const data = payload.data || {};
     if (data.needBind) {
       current.message = data.message || "这个第三方账号还没绑定，请先在旧站用账号绑定后再扫。";
     } else if (data.needSelect && Array.isArray(data.accounts) && data.accounts.length) {
-      current.phase = "choose_account";
       current.loginTicket = data.loginTicket || "";
       current.accounts = data.accounts;
+      if (data.accounts.length === 1) {
+        await saveSession(current);
+        return pickAccount(data.accounts[0].companyId);
+      }
+      current.phase = "choose_account";
       current.message = "扫码成功，请选择要进入的企业账号。";
     } else {
       await finishLogin(current, data);
       return linkStatus();
     }
-  } else if (payload && payload.content) {
-    current.message = String(payload.content);
+  } else if (content) {
+    current.message = content;
   }
   await saveSession(current);
   return linkStatus();
@@ -329,11 +344,138 @@ async function masterState() {
   return (await readState("masters", {})) || {};
 }
 
-function reportBody(report, dim, scope, page) {
+function requestMark(report) {
+  if (report.id === "qdfx_yj") {
+    return "year2";
+  }
+  if (report.id === "qdzl_yj") {
+    return "year";
+  }
+  if (report.id === "qdzl_pl") {
+    return "channelCate";
+  }
+  if (report.id === "qdzl_rx" || report.id === "qdfx_rx") {
+    return "hot2";
+  }
+  if (report.id === "qdfx_jy") {
+    return "shopOp";
+  }
+  return "q=1";
+}
+
+function permanentText(text) {
+  return /不能为空|请选择|参数错误|参数不匹配|无权限/.test(String(text || ""));
+}
+
+function transientText(text) {
+  return /操作失败|请稍后重试|超时|网络|error/i.test(String(text || "")) && !permanentText(text);
+}
+
+function updatedAge(row) {
+  const raw = String((row && row.updatedAt) || "").replace(" ", "T");
+  const updated = Date.parse(raw ? (raw.endsWith("Z") ? raw : `${raw}Z`) : "");
+  return Number.isFinite(updated) ? Date.now() - updated : Number.POSITIVE_INFINITY;
+}
+
+function failureSettled(report, scope, row) {
+  if (!row || row.status !== "failed" || row.attempts < 3) {
+    return false;
+  }
+  const text = String(row.errorText || "");
+  if (transientText(text)) {
+    return updatedAge(row) < 10 * 60 * 1000;
+  }
+  return text.startsWith(`${requestMark(report)} daysType=${scope.daysType} `);
+}
+
+function thinList(report, dim, first, sheets) {
+  if (!first || first.status !== "done") {
+    return false;
+  }
+  if (report.id !== "qdfx_dplb" && report.id !== "qd_gjzbfx_dpck") {
+    return false;
+  }
+  if (String(first.errorText || "").startsWith("thin-ok")) {
+    return false;
+  }
+  if ((first.rowCount || 0) >= 20) {
+    return false;
+  }
+  return sheets.some(
+    (row) => row.reportId === report.id && row.dim === dim && row.pageNo === 1 && row.status === "done" && row.rowCount >= 40 && row.startOn !== first.startOn
+  );
+}
+
+function rawIdentity(raw) {
+  if (!raw || typeof raw !== "object") {
+    return String(raw);
+  }
+  const shopId = raw.shopId || raw.shopID || "";
+  const goodsId = raw.goodsId || raw.spuid || raw.skuId || raw.hpCode || "";
+  const shop = raw.shopName || raw.shop || "";
+  const platform = raw.platform || raw.platformName || "";
+  const name = raw.channelName || raw.platformName || raw.cateName || raw.goodsName || raw.name || "";
+  const sum = raw.sumLine ? "sum" : "";
+  return [shopId, goodsId, shop, platform, name, sum].join("|");
+}
+
+function dedupeRaw(rows) {
+  const seen = new Set();
+  return rows.filter((raw) => {
+    const id = rawIdentity(raw);
+    if (seen.has(id)) {
+      return false;
+    }
+    seen.add(id);
+    return true;
+  });
+}
+
+function failText(report, scope, message) {
+  return `${requestMark(report)} daysType=${scope.daysType} ${String(message || "接口失败")}`.slice(0, 300);
+}
+
+function compareYears(scope) {
+  const year = Number(String(scope.end || scope.start || "").slice(0, 4));
+  const current = Number.isFinite(year) && year >= 2026 ? year : 2026;
+  return { prevYear: current - 1, year: current };
+}
+
+function datedQuery(scope, extra = {}) {
   return {
     startDate: scope.start,
     endDate: scope.end,
     daysType: scope.daysType,
+    queryType: 1,
+    platform: "all",
+    shopId: "",
+    ...extra
+  };
+}
+
+export function reportBody(report, dim, scope, page) {
+  if (report.id === "qdzl_yj") {
+    return { ...compareYears(scope), compareType: 0, lstChannel: null };
+  }
+  if (report.id === "qdfx_yj") {
+    const years = compareYears(scope);
+    return { ...years, compareType: 0, lstChannel: null, queryType: 1, platform: "all", shopId: "" };
+  }
+  if (report.id === "qdzl_rx" || report.id === "qdfx_rx") {
+    const body = datedQuery(scope, { pageNum: Math.max(page, 1), pageSize: PAGE_SIZE });
+    if (dim === "spu") {
+      body.isSpu = true;
+    }
+    return body;
+  }
+  if (report.id === "qdfx_jy") {
+    return datedQuery(scope);
+  }
+  return {
+    startDate: scope.start,
+    endDate: scope.end,
+    daysType: scope.daysType,
+    queryType: 1,
     pageNum: Math.max(page, 1),
     pageSize: PAGE_SIZE,
     shopList: [],
@@ -351,13 +493,28 @@ function sheetHole(report, dim, scope, sheets) {
   );
   const first = pages.find((row) => row.pageNo === 1);
   if (!first) {
-    return { page: 1, kind: report.kind === "object" ? "object" : "list", attempts: 0 };
+    return { page: 1, kind: report.kind === "object" ? "object" : "list", attempts: 0, cause: "new" };
   }
-  if (first.status === "denied" || (first.status === "failed" && first.attempts >= 3)) {
+  if (first.status === "denied") {
     return null;
   }
+  if (first.status === "failed") {
+    if (first.attempts >= 3 && failureSettled(report, scope, first)) {
+      return null;
+    }
+    return { page: 1, kind: first.kind || report.kind, attempts: first.attempts >= 3 ? 0 : first.attempts, cause: "retry" };
+  }
   if (first.status !== "done") {
-    return { page: 1, kind: first.kind || report.kind, attempts: first.attempts };
+    return { page: 1, kind: first.kind || report.kind, attempts: first.attempts, cause: "page" };
+  }
+  const siblingHasRows = sheets.some(
+    (row) => row.reportId === report.id && row.dim === dim && row.pageNo === 1 && row.status === "done" && row.totalRows > 0
+  );
+  if (scope.start === scope.end && first.kind !== "object" && first.totalRows === 0 && first.rowCount === 0 && siblingHasRows && !String(first.errorText || "").startsWith("empty-ok2")) {
+    return { page: 1, kind: "list", attempts: first.attempts, emptyRetry: true, cause: "empty" };
+  }
+  if (scope.start === scope.end && thinList(report, dim, first, sheets)) {
+    return { page: 1, kind: "list", attempts: 0, cause: "retry", thinRetry: true };
   }
   if (first.kind === "object") {
     return null;
@@ -367,22 +524,25 @@ function sheetHole(report, dim, scope, sheets) {
   for (let page = 2; page <= Math.min(need, 200); page += 1) {
     const found = pages.find((row) => row.pageNo === page);
     if (!found) {
-      return { page, kind: "list", attempts: 0 };
+      return { page, kind: "list", attempts: 0, cause: "page" };
     }
-    if (found.status === "failed" && found.attempts < 3) {
-      return { page, kind: "list", attempts: found.attempts };
+    if (found.status === "failed") {
+      if (found.attempts >= 3 && failureSettled(report, scope, found)) {
+        continue;
+      }
+      return { page, kind: "list", attempts: found.attempts >= 3 ? 0 : found.attempts, cause: "retry" };
     }
     if (found.status !== "done" && found.status !== "failed") {
-      return { page, kind: "list", attempts: found.attempts };
+      return { page, kind: "list", attempts: found.attempts, cause: "page" };
     }
   }
   if (report.sumPath) {
     const sum = pages.find((row) => row.pageNo === 0);
     if (!sum) {
-      return { page: 0, kind: "sum", attempts: 0 };
+      return { page: 0, kind: "sum", attempts: 0, cause: "page" };
     }
     if (sum.status === "failed" && sum.attempts < 3) {
-      return { page: 0, kind: "sum", attempts: sum.attempts };
+      return { page: 0, kind: "sum", attempts: sum.attempts, cause: "page" };
     }
   }
   return null;
@@ -400,15 +560,17 @@ async function nextUnit(current) {
   const allowed = Array.isArray(current.allowed) ? new Set(current.allowed) : null;
   const sheets = await listSheetHeads();
   const scopes = collectScopes(shanghaiToday());
-  for (const report of reports()) {
-    if (allowed && report.access && !allowed.has(report.access)) {
-      continue;
-    }
-    for (const dim of report.dims || ["all"]) {
-      for (const scope of scopes) {
-        const hole = sheetHole(report, dim, scope, sheets);
-        if (hole) {
-          return { type: "report", report, dim, scope, ...hole };
+  for (const cause of ["retry", "empty", "page", "new"]) {
+    for (const report of reports()) {
+      if (allowed && report.access && !allowed.has(report.access)) {
+        continue;
+      }
+      for (const dim of report.dims || ["all"]) {
+        for (const scope of scopes) {
+          const hole = sheetHole(report, dim, scope, sheets);
+          if (hole && hole.cause === cause) {
+            return { type: "report", report, dim, scope, ...hole };
+          }
         }
       }
     }
@@ -491,7 +653,7 @@ async function runReport(current, unit) {
       status: "failed",
       kind: unit.kind,
       attempts: unit.attempts + 1,
-      errorText: String(error.message || error),
+      errorText: failText(report, unit.scope, error.message || error),
       payload: {}
     });
     return;
@@ -527,7 +689,7 @@ async function runReport(current, unit) {
       status: "failed",
       kind: unit.kind,
       attempts: unit.attempts + 1,
-      errorText: String((payload && payload.content) || "接口失败"),
+      errorText: failText(report, unit.scope, (payload && payload.content) || "接口失败"),
       payload: {}
     });
     return;
@@ -567,6 +729,14 @@ async function runReport(current, unit) {
     });
     return;
   }
+  const unique = dedupeRaw(extracted.rows);
+  const wholeList = unique.length !== PAGE_SIZE;
+  let note = "";
+  if (unit.emptyRetry && unique.length === 0) {
+    note = "empty-ok2";
+  } else if (unit.thinRetry && unique.length < 20) {
+    note = "thin-ok";
+  }
   await writeSheet({
     reportId: report.id,
     dim: unit.dim,
@@ -575,11 +745,12 @@ async function runReport(current, unit) {
     pageNo: unit.page,
     status: "done",
     kind: "list",
-    totalRows: extracted.total,
+    totalRows: wholeList ? unique.length : extracted.total,
     pageSize: PAGE_SIZE,
     attempts: 0,
-    rowCount: extracted.rows.length,
-    payload: { rows: extracted.rows, total: extracted.total }
+    rowCount: unique.length,
+    errorText: note,
+    payload: { rows: unique, total: wholeList ? unique.length : extracted.total }
   });
 }
 
@@ -604,6 +775,9 @@ export async function tick() {
       return { ok: true, idle: true, phase: current.phase };
     }
     current.phase = "collecting";
+    current.cursor = unit.type === "master"
+      ? { id: unit.master.id, label: unit.master.label, page: "基础资料", dim: "all", start: "2026-09-01", end: shanghaiToday(), pageNo: unit.page || 1 }
+      : { id: unit.report.id, label: unit.report.label, page: unit.report.pageLabel || "", dim: unit.dim || "all", start: unit.scope.start, end: unit.scope.end, pageNo: unit.page || 1 };
     await saveSession(current);
     if (unit.type === "master") {
       await runMaster(current, unit);
