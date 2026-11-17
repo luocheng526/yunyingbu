@@ -1,4 +1,4 @@
-/* xm-module-me profile-workbench-1to1 */
+/* xm-module-me profile-workbench-xm-ui */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -56,21 +56,6 @@
     return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
   }
 
-  function ico(d, c, s) {
-    const size = s || 22;
-    return (
-      '<svg viewBox="0 0 24 24" width="' +
-      size +
-      '" height="' +
-      size +
-      '" fill="none" stroke="' +
-      (c || "currentColor") +
-      '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
-      d +
-      "</svg>"
-    );
-  }
-
   function ensureCss() {
     let css = document.getElementById("xm-me-page-css");
     if (!css) {
@@ -78,120 +63,62 @@
       css.id = "xm-me-page-css";
       document.head.appendChild(css);
     }
-    const sky =
-      "url(\"data:image/svg+xml," +
-      encodeURIComponent(
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 120" fill="none">' +
-          '<path d="M280 120H0V78c28-10 48-28 78-28 22 0 32 14 50 14 24 0 36-26 64-26 26 0 38 22 58 22 34 0 46-40 30-60" fill="#cfe4ff" opacity=".55"/>' +
-          '<path d="M280 120H120V70c18-4 28-18 48-18 14 0 20 10 32 10 18 0 24-22 44-16v76z" fill="#b9d8ff" opacity=".7"/>' +
-          '<rect x="168" y="42" width="22" height="62" rx="3" fill="#93c5fd"/>' +
-          '<rect x="194" y="28" width="28" height="76" rx="3" fill="#60a5fa"/>' +
-          '<rect x="226" y="48" width="20" height="56" rx="3" fill="#93c5fd"/>' +
-          '<rect x="248" y="38" width="18" height="66" rx="3" fill="#7dd3fc"/>' +
-          '<circle cx="208" cy="22" r="10" fill="#93c5fd"/></svg>'
-      ) +
-      "\")";
     css.textContent =
       "#xm-content:has(.me-page){overflow:hidden!important;height:calc(100dvh - 86px);max-height:calc(100dvh - 86px);}" +
-      "#xm-content .me-page,.me-page{padding:2px 10px 8px!important;color:#1f2a44;background:transparent;max-width:none!important;margin:0!important;font-family:PingFang SC,Noto Sans SC,Microsoft YaHei,sans-serif;font-size:16px;font-weight:700;display:flex;flex-direction:column;height:100%;max-height:100%;overflow:hidden;min-height:0;}" +
-      ".me-page *,.me-page *::before,.me-page *::after{box-sizing:border-box;}" +
-      ".me-page h1,.me-page h2,.me-page h3,.me-page p{margin:0;font-weight:800;}" +
-      ".me-page svg{max-width:none!important;display:block;flex:0 0 auto;}" +
-      ".me-page img{max-width:none!important;}" +
-      ".me-page button{border:0!important;background:transparent;color:inherit;height:auto!important;min-width:0!important;min-height:0!important;padding:0;line-height:1.2!important;font:inherit;font-weight:800;border-radius:0;box-shadow:none;cursor:pointer;}" +
-      ".me-hero{display:flex;align-items:center;gap:10px;margin:0 0 8px;flex:0 0 auto;}" +
-      ".me-hero-mark{width:40px;height:40px;border-radius:12px;background:linear-gradient(180deg,#3b82f6,#1677ff);color:#fff;display:grid;place-items:center;box-shadow:0 8px 18px rgba(22,119,255,.28);flex:0 0 40px;}" +
-      ".me-hero-mark svg{width:22px!important;height:22px!important;}" +
-      ".me-hero h1{font-size:24px!important;font-weight:800;letter-spacing:.02em;color:#1f2a44;line-height:1.15;}" +
-      ".me-hero p{margin-top:2px;color:#64748b;font-size:14px;font-weight:700;}" +
-      ".me-banner{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px;align-items:stretch;flex:0 0 auto;}" +
-      ".me-profile{position:relative;overflow:hidden;display:flex;gap:16px;align-items:center;min-height:0;padding:12px 18px;border-radius:18px;border:1px solid #d7e8ff;box-shadow:0 10px 28px rgba(37,99,235,.06);background-color:#eaf3ff;background-image:" +
-      sky +
-      ",linear-gradient(105deg,#e8f2ff 0%,#f5f9ff 48%,#d9ebff 100%);background-repeat:no-repeat;background-position:right 8px bottom,0 0;background-size:160px 86px,auto;}" +
-      ".me-avatar{position:relative;display:block;width:72px;height:72px;flex:0 0 72px;cursor:pointer;z-index:1;margin:0!important;min-height:0!important;overflow:visible;}" +
-      ".me-avatar img{width:72px!important;height:72px!important;max-width:72px!important;border-radius:50%;object-fit:cover;border:3px solid #fff;box-shadow:0 8px 18px rgba(15,23,42,.12);display:block;background:#dbeafe;}" +
+      "#xm-content .me-page,.me-page.xm-ui-scope{padding:4px 8px 8px!important;margin:0!important;max-width:none!important;display:flex;flex-direction:column;height:100%;max-height:100%;overflow:hidden;min-height:0;background:transparent;}" +
+      ".me-page.xm-ui-scope .xm-ui-page-header{margin-bottom:10px;flex:0 0 auto;}" +
+      ".me-page.xm-ui-scope .xm-ui-page-title{font-size:24px;}" +
+      ".me-page.xm-ui-scope .xm-ui-section-title{min-height:40px;padding:8px 16px 8px 20px;}" +
+      ".me-page.xm-ui-scope .xm-ui-stat-card{min-height:72px;padding:12px 16px;}" +
+      ".me-page.xm-ui-scope .xm-ui-stat-card__value{font-size:22px;}" +
+      ".me-page.xm-ui-scope .xm-ui-button{height:auto!important;min-height:34px!important;}" +
+      ".me-page.xm-ui-scope img{max-width:none!important;}" +
+      ".me-page.xm-ui-scope svg{max-width:none!important;}" +
+      ".me-banner{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px;flex:0 0 auto;align-items:stretch;}" +
+      ".me-banner .xm-ui-card,.me-banner .xm-ui-stat-card{height:100%;min-height:0;}" +
+      ".me-banner .xm-ui-card__body{display:flex;align-items:center;gap:16px;padding:12px 16px!important;}" +
+      ".me-avatar{position:relative;display:block;width:72px;height:72px;flex:0 0 72px;cursor:pointer;margin:0!important;overflow:visible;}" +
+      ".me-avatar img{width:72px!important;height:72px!important;border-radius:50%;object-fit:cover;border:3px solid #fff;display:block;background:#dbeafe;}" +
       ".me-page input.me-file,.me-page #who-avatar-file{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;border:0!important;opacity:0!important;}" +
-      ".me-avatar-cam{position:absolute;right:0;bottom:0;width:22px;height:22px;border-radius:50%;background:#1677ff;color:#fff;display:grid;place-items:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(22,119,255,.35);}" +
-      ".me-avatar-cam svg{width:12px!important;height:12px!important;}" +
-      ".me-who{position:relative;z-index:1;min-width:0;flex:1;padding-right:72px;}" +
-      ".me-who h2{font-size:24px!important;font-weight:800;display:inline;color:#0f172a;line-height:1.15;}" +
-      ".me-role{display:inline-flex;margin-left:8px;padding:2px 10px;border-radius:999px;background:#dbeafe;color:#1677ff;font-size:13px;font-weight:800;vertical-align:middle;}" +
-      ".me-meta{margin:6px 0 4px;color:#475569;font-size:14px;font-weight:700;}" +
-      ".me-meta b{font-weight:800;color:#1e293b;}" +
-      ".me-bio{margin:0;color:#475569;font-size:14px;font-weight:700;}" +
-      ".me-safe{background:#fff;border:1px solid #e8eef7;border-radius:18px;padding:12px 16px 12px;box-shadow:0 8px 24px rgba(15,23,42,.04);cursor:pointer;min-height:0;}" +
-      ".me-safe h3{margin:0 0 8px;font-size:16px;display:flex;align-items:center;gap:8px;font-weight:800;}" +
-      ".me-bar-title{width:4px;height:14px;background:#1677ff;border-radius:4px;display:inline-block;}" +
-      ".me-safe-row{display:flex;align-items:center;gap:10px;}" +
-      ".me-safe-ico{width:36px;height:36px;border-radius:50%;background:#dcfce7;color:#16a34a;display:grid;place-items:center;flex:0 0 36px;}" +
-      ".me-safe-ico svg{width:20px!important;height:20px!important;}" +
-      ".me-safe strong{display:block;font-size:15px;font-weight:800;}" +
-      ".me-safe .sub{color:#64748b;font-size:12px;margin-top:4px;font-weight:700;}" +
-      ".me-safe-go{margin-left:auto;color:#cbd5e1;font-size:20px;font-weight:800;padding-bottom:8px;}" +
-      ".me-bar{height:8px;border-radius:99px;background:#e5e7eb;margin-top:10px;overflow:hidden;}" +
-      ".me-bar b{display:block;height:100%;width:86%;background:linear-gradient(90deg,#4ade80,#22c55e);}" +
-      ".me-tabs{display:flex;flex-wrap:nowrap;gap:8px;margin:0 0 8px;padding:0;background:transparent;border:0;flex:0 0 auto;}" +
-      ".me-tabs button{border:1px solid #eef2f7!important;background:#fff!important;border-radius:999px!important;padding:6px 14px!important;font:inherit;font-size:14px!important;font-weight:800!important;cursor:pointer;color:#64748b;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(15,23,42,.04);height:auto!important;}" +
-      ".me-tabs button svg{width:16px!important;height:16px!important;}" +
-      ".me-tabs button.on{background:#1677ff!important;color:#fff!important;border-color:#1677ff!important;box-shadow:0 8px 16px rgba(22,119,255,.28);}" +
-      ".me-split{display:grid;grid-template-columns:minmax(0,.88fr) minmax(0,1fr) minmax(0,1.22fr);gap:10px;align-items:stretch;width:100%;min-width:0;flex:1;min-height:0;overflow:hidden;}" +
+      ".me-avatar-cam{position:absolute;right:0;bottom:0;width:22px;height:22px;border-radius:50%;background:var(--xm-ui-primary,#1677ff);color:#fff;display:grid;place-items:center;border:2px solid #fff;}" +
+      ".me-who{min-width:0;flex:1;}" +
+      ".me-who h2{margin:0;font-size:22px;display:inline;}" +
+      ".me-meta{margin:6px 0 4px;color:var(--xm-ui-text-secondary,#52617a);font-size:13px;}" +
+      ".me-bio{margin:0;color:var(--xm-ui-text-secondary,#52617a);font-size:13px;}" +
+      ".me-page .xm-ui-filter-toolbar{flex:0 0 auto;margin-bottom:8px;padding:8px 10px;}" +
+      ".me-split{display:grid;grid-template-columns:minmax(0,.88fr) minmax(0,1fr) minmax(0,1.22fr);gap:10px;align-items:stretch;flex:1;min-height:0;overflow:hidden;}" +
       ".me-col{min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;}" +
-      ".me-col > .me-card{flex:1 1 auto;min-height:0;}" +
-      ".me-col > .me-card + .me-card{margin-top:10px;flex:1 1 auto;}" +
-      ".me-col:nth-child(2) > .me-card{display:flex;flex-direction:column;}" +
-      "#me-security-card{display:flex;flex-direction:column;min-height:0;padding-bottom:12px;}" +
-      "#me-security-card #password-form{display:flex;flex-direction:column;gap:2px;}" +
-      ".me-sec-actions{margin-top:auto;padding-top:10px;display:flex;flex-direction:column;gap:8px;}" +
+      ".me-col > .xm-ui-card{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;}" +
+      ".me-col > .xm-ui-card:has(.me-actions){flex:0 0 auto;}" +
+      ".me-col > .xm-ui-card + .xm-ui-card{margin-top:10px;}" +
+      ".me-col > .xm-ui-card .xm-ui-card__body{flex:1;display:flex;flex-direction:column;min-height:0;padding:8px 16px 12px!important;}" +
+      "#me-security-card .xm-ui-card__body{gap:6px;}" +
+      "#password-form{display:flex;flex-direction:column;gap:2px;}" +
+      ".me-sec-actions{margin-top:auto;padding-top:8px;display:flex;flex-direction:column;gap:8px;}" +
       ".me-sec-actions form{margin:0;}" +
-      ".me-card{background:#fff;border:1px solid #e8eef7;border-radius:16px;padding:12px 16px 10px;box-shadow:0 8px 24px rgba(15,23,42,.04);}" +
-      ".me-card + .me-card{margin-top:10px;}" +
-      ".me-card-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}" +
-      ".me-card-h h3{margin:0;font-size:16px;display:flex;align-items:center;gap:8px;font-weight:800;}" +
-      ".me-edit{border:1px solid #e2e8f0!important;background:#fff!important;color:#334155!important;border-radius:999px!important;padding:4px 10px!important;font:inherit;font-size:13px!important;font-weight:800!important;cursor:pointer;display:inline-flex;align-items:center;gap:4px;height:auto!important;}" +
-      ".me-edit svg{width:14px!important;height:14px!important;}" +
-      ".me-link{border:0!important;background:transparent!important;color:#1677ff!important;cursor:pointer;font:inherit;font-size:13px!important;font-weight:800!important;height:auto!important;padding:0!important;}" +
+      ".me-sec-actions .xm-ui-button{width:100%;}" +
       ".me-kv{flex:1;}" +
-      ".me-kv div{display:grid;grid-template-columns:76px minmax(0,1fr);gap:8px;padding:6px 0;border-top:1px solid #f1f5f9;font-size:14px;align-items:center;}" +
+      ".me-kv div{display:grid;grid-template-columns:76px minmax(0,1fr);gap:8px;padding:6px 0;border-top:1px solid var(--xm-ui-border,#e4ebf5);font-size:13px;align-items:center;}" +
       ".me-kv div:first-child{border-top:0;}" +
-      ".me-kv em{font-style:normal;color:#64748b;font-size:14px;font-weight:700;}" +
-      ".me-kv strong{font-weight:800;color:#0f172a;display:inline-flex;align-items:center;gap:6px;font-size:15px;}" +
-      ".me-ico-btn{border:0!important;background:transparent!important;color:#94a3b8!important;cursor:pointer;padding:0!important;display:inline-flex;height:auto!important;}" +
-      ".me-ico-btn svg{width:16px!important;height:16px!important;}" +
-      ".me-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:6px 0 8px;}" +
-      ".me-act{border:0!important;background:#f7f9fc!important;border-radius:12px!important;padding:8px 4px 8px!important;cursor:pointer;font:inherit;color:#1e293b;height:auto!important;display:flex;flex-direction:column;align-items:center;min-width:0;}" +
-      ".me-act i{display:grid;place-items:center;height:22px;margin-bottom:4px;font-style:normal;}" +
-      ".me-act i svg{width:20px!important;height:20px!important;}" +
-      ".me-act span{font-size:13px;font-weight:800;white-space:nowrap;}" +
-      ".me-perm{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:12px;background:#eef6ff;margin:4px 0 2px;}" +
-      ".me-perm-ico{width:36px;height:36px;border-radius:12px;background:#fff;display:grid;place-items:center;flex:0 0 36px;color:#1677ff;box-shadow:0 2px 8px rgba(22,119,255,.12);}" +
-      ".me-perm-ico svg{width:20px!important;height:20px!important;}" +
-      ".me-perm strong{display:block;margin-bottom:2px;font-size:15px;font-weight:800;}" +
-      ".me-perm p{margin:0;color:#475569;font-size:13px;line-height:1.4;font-weight:700;}" +
-      ".me-dev{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:6px;align-items:center;padding:8px 0;border-top:1px solid #f1f5f9;font-size:13px;font-weight:700;}" +
-      ".me-dev:first-of-type{border-top:0;}" +
-      ".me-dev-n{display:inline-flex;align-items:center;gap:6px;min-width:0;font-weight:800;flex-wrap:wrap;}" +
-      ".me-dev-n svg{width:16px!important;height:16px!important;flex:0 0 16px;}" +
-      ".me-now{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#dcfce7;color:#16a34a;font-size:11px;font-weight:800;white-space:nowrap;}" +
-      ".me-city,.me-time{color:#64748b;font-size:12px;text-align:right;font-weight:700;white-space:nowrap;}" +
-      ".me-dev-out{border:1px solid #fecdd3!important;background:#fff!important;color:#e11d48!important;border-radius:999px!important;padding:3px 8px!important;font-size:11px!important;font-weight:700!important;height:auto!important;}" +
-      ".me-muted{color:#94a3b8;text-align:right;font-weight:700;}" +
-      ".me-page input:not([type=file]){display:block;width:100%;margin:0 0 8px;padding:8px 12px;border:1px solid #e5e7eb;border-radius:10px;font:inherit;font-size:14px;font-weight:700;background:#fff;box-sizing:border-box;}" +
-      ".me-page button.me-btn{display:block;width:100%;border:0!important;border-radius:10px!important;padding:8px 12px!important;font:inherit;font-size:15px!important;font-weight:800!important;background:#1677ff!important;color:#fff!important;cursor:pointer;height:auto!important;margin:0!important;}" +
-      ".me-page button.me-btn-logout{background:#e11d48!important;}" +
-      ".me-page button.me-btn-hard{}" +
-      ".me-page .status{min-height:0;margin:0 0 4px;font-size:13px;font-weight:700;}" +
-      ".me-page .status.error{color:#b91c1c;}" +
-      ".me-page .status.ok{color:#047857;}" +
+      ".me-kv em{font-style:normal;color:var(--xm-ui-text-secondary,#52617a);}" +
+      ".me-kv strong{font-weight:700;display:inline-flex;align-items:center;gap:6px;}" +
+      ".me-ico-btn{border:0!important;background:transparent!important;color:#8b98ad!important;cursor:pointer;padding:0!important;display:inline-flex;height:auto!important;}" +
+      ".me-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;}" +
+      ".me-actions .xm-ui-button{width:100%;padding:8px 4px!important;min-height:58px!important;flex-direction:column;gap:4px;}" +
+      ".me-perm{margin:0;}" +
+      ".me-page input:not([type=file]){display:block;width:100%;margin:0 0 8px;padding:8px 12px;border:1px solid var(--xm-ui-border-strong,#d7e2f0);border-radius:8px;font:inherit;font-size:13px;background:#fff;box-sizing:border-box;}" +
+      ".me-page .status{min-height:0;margin:0 0 4px;font-size:13px;}" +
+      ".me-page .status.error{color:var(--xm-ui-red,#e5484d);}" +
+      ".me-page .status.ok{color:var(--xm-ui-green,#12b76a);}" +
       ".me-group{margin-top:10px;}" +
-      ".me-group h3{margin:0 0 6px;font-size:14px;font-weight:800;}" +
+      ".me-group h3{margin:0 0 6px;font-size:14px;}" +
       ".me-tags{display:flex;flex-wrap:wrap;gap:6px;}" +
-      ".me-tag{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700;background:#d1fae5;color:#065f46;}" +
-      ".me-tag.off{background:#e5e7eb;color:#9ca3af;}" +
-      ".me-empty{color:#94a3b8;font-size:14px;padding:8px 0;font-weight:700;}" +
       ".me-pane{display:none;}" +
       ".me-pane.on{display:block;flex:1;min-height:0;overflow:auto;}" +
       ".me-pane.on[data-me-pane=basic]{display:flex;flex-direction:column;overflow:hidden;}" +
-      "@media (max-width:900px){.me-banner,.me-split,.me-actions{grid-template-columns:1fr;}.me-who{padding-right:0;}.me-dev{grid-template-columns:1fr auto;}.me-page{height:auto;max-height:none;overflow:auto;}}";
+      ".me-page.xm-ui-scope .xm-ui-table th,.me-page.xm-ui-scope .xm-ui-table td{height:32px;padding:0 8px;font-size:12px;}" +
+      "#device-list,.me-col > .xm-ui-card:has(#device-list) .xm-ui-card__body{overflow:auto;}" +
+      "@media (max-width:900px){.me-banner,.me-split,.me-actions{grid-template-columns:1fr;}.me-page{height:auto;max-height:none;overflow:auto;}}";
   }
 
   function maskPhone(phone) {
@@ -222,6 +149,10 @@
     return text + extra;
   }
 
+  function withAttr(html, extra) {
+    return String(html).replace("<button ", "<button " + extra + " ");
+  }
+
   const CAM =
     '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#fff" stroke-width="2"><path d="M4 8h3l2-2h6l2 2h3v10H4z"/><circle cx="12" cy="13" r="3"/></svg>';
 
@@ -229,123 +160,202 @@
   window.XmModules["/me"] = {
     mount: function (root) {
       ensureCss();
+      const UI = window.XmUI;
+      if (!UI) {
+        root.innerHTML = '<div class="me-page xm-ui-scope">个人中心需要 window.XmUI</div>';
+        return function () {
+          root.innerHTML = "";
+        };
+      }
+
+      const saveBtn = withAttr(UI.button({ label: "保存新密码", type: "submit" }), 'form="password-form"');
+      const logoutBtn = UI.button({ label: "退出登录", type: "submit", variant: "secondary" }).replace(
+        "xm-ui-button--secondary",
+        "xm-ui-button--secondary me-btn-logout"
+      );
+      const hardBtn = withAttr(
+        UI.button({ label: "强制刷新", type: "button", variant: "secondary" }),
+        'id="me-hard-reload" title="绕过缓存重新加载本页"'
+      );
+
+      function quick(label, extra) {
+        return withAttr(UI.button({ label: label, variant: "secondary", size: "small" }), extra);
+      }
+
+      const tabs = UI.FilterToolbar({
+        search: false,
+        tabs: [
+          { label: "基本信息", value: "basic", active: true },
+          { label: "消息通知", value: "notice" },
+          { label: "我的权限", value: "rights" },
+          { label: "登录设备管理", value: "devices" },
+          { label: "操作日志", value: "logs" }
+        ]
+      })
+        .replace(/data-xm-ui-tab="/g, 'data-me-tab="')
+        .replace('class="xm-ui-filter-toolbar"', 'class="xm-ui-filter-toolbar" id="me-tabs"');
+
+      const profileCard = UI.ContentCard({
+        content:
+          '<label class="me-avatar" id="who-avatar" title="点击上传头像" for="who-avatar-file">' +
+          '<img id="who-avatar-img" alt="" src="' +
+          virtualAvatar("脉") +
+          '" />' +
+          '<span class="me-avatar-cam">' +
+          CAM +
+          "</span></label>" +
+          '<input class="me-file" id="who-avatar-file" type="file" accept="image/*" />' +
+          '<div class="me-who"><h2 id="who-name">—</h2> ' +
+          '<span class="xm-ui-status xm-ui-status--blue"><i aria-hidden="true"></i><span id="who-role"></span></span>' +
+          '<p class="me-meta">工号：<b id="who-no"></b><span>　|　</span>所属部门：<b id="who-dept-top"></b></p>' +
+          '<p class="me-bio" id="who-bio"></p></div>'
+      });
+
+      const safeCard = withAttr(
+        UI.StatCard({
+          icon: "check",
+          tone: "green",
+          label: "账号安全",
+          value: "安全等级：高",
+          note: "已开启：登录密码、手机验证、操作日志"
+        }),
+        'data-go="security"'
+      ).replace("<article ", '<article data-go="security" ');
+
+      const securityCard = UI.ContentCard({
+        title: "账号安全",
+        content:
+          '<p id="status" class="status" role="status"></p>' +
+          '<form id="password-form" autocomplete="off">' +
+          '<input id="current-password" type="password" required placeholder="当前密码" />' +
+          '<input id="new-password" type="password" required minlength="8" placeholder="新密码（至少 8 位）" />' +
+          '<input id="confirm-password" type="password" required minlength="8" placeholder="再次输入新密码" />' +
+          "</form>" +
+          '<div class="me-sec-actions">' +
+          saveBtn +
+          '<form id="logout-form">' +
+          logoutBtn +
+          "</form>" +
+          hardBtn +
+          "</div>"
+      }).replace("<section ", '<section id="me-security-card" ');
+
+      const whoCard = UI.ContentCard({
+        title: "个人信息",
+        action: "编辑信息",
+        content:
+          '<div class="me-kv" id="who-view">' +
+          '<div><em>姓名</em><strong id="who-name-2"></strong></div>' +
+          '<div><em>工号</em><strong id="who-no-2"></strong></div>' +
+          '<div><em>部门</em><strong id="who-dept"></strong></div>' +
+          '<div><em>岗位</em><strong id="who-title"></strong></div>' +
+          '<div><em>入职日期</em><strong id="who-created"></strong></div>' +
+          '<div><em>联系方式</em><strong><span id="who-phone"></span> <button class="me-ico-btn" type="button" id="toggle-phone" title="显示">' +
+          UI.icon("search") +
+          "</button></strong></div>" +
+          '<div><em>邮箱</em><strong><span id="who-email"></span> <button class="me-ico-btn" type="button" id="copy-email" title="复制">' +
+          UI.icon("file") +
+          "</button></strong></div>" +
+          '<div><em>汇报对象</em><strong id="who-manager"></strong></div></div>' +
+          '<form id="who-form" hidden><p id="who-status" class="status"></p>' +
+          '<input id="edit-name" placeholder="姓名" />' +
+          '<input id="edit-phone" placeholder="联系方式" />' +
+          '<input id="edit-email" placeholder="邮箱" />' +
+          UI.button({ label: "保存信息", type: "submit" }) +
+          "</form>" +
+          '<span id="who-username" hidden></span>'
+      }).replace('class="xm-ui-text-action"', 'class="xm-ui-text-action" id="who-edit"');
+
+      const quickCard = UI.ContentCard({
+        title: "快捷操作",
+        content:
+          '<div class="me-actions">' +
+          quick("修改密码", 'data-go="security"') +
+          quick("绑定手机", 'data-soon="绑定手机"') +
+          quick("修改邮箱", 'id="go-email"') +
+          quick("头像设置", 'id="go-avatar"') +
+          quick("通知设置", 'data-soon="通知设置"') +
+          quick("界面偏好", 'data-soon="界面偏好"') +
+          quick("语言设置", 'data-soon="语言设置"') +
+          quick("二次验证", 'data-soon="二次验证"') +
+          "</div>"
+      });
+
+      const permCard = UI.ContentCard({
+        title: "我的权限",
+        action: "查看详情",
+        content: UI.StatCard({
+          icon: "award",
+          tone: "blue",
+          label: "运营管理权限组",
+          value: "12",
+          unit: "项",
+          note: "包含：店铺数据、商品管理、推广管理、运营报表等 12 项权限"
+        })
+          .replace('xm-ui-stat-card__label">', 'xm-ui-stat-card__label" id="perm-name">')
+          .replace('xm-ui-stat-card__value">', 'xm-ui-stat-card__value" id="perm-count">')
+          .replace('xm-ui-stat-card__note">', 'xm-ui-stat-card__note" id="perm-desc">')
+      }).replace('class="xm-ui-text-action"', 'class="xm-ui-text-action" data-go="rights"');
+
+      const deviceCard = UI.ContentCard({
+        title: "登录与设备",
+        action: "查看全部",
+        content: '<div id="device-list"></div>'
+      }).replace('class="xm-ui-text-action"', 'class="xm-ui-text-action" data-go="devices"');
+
       root.innerHTML =
-        '<div class="me-page">' +
-        '<div class="me-hero"><div class="me-hero-mark">' +
-        ico('<path d="M12 3 19 7v5c0 5-3.2 8.2-7 9-3.8-.8-7-4-7-9V7z"/>', "#fff", 24) +
-        '</div><div><h1>个人中心</h1><p>管理个人信息、账号安全、偏好设置与系统授权</p></div></div>' +
-        '<div class="me-banner"><section class="me-profile">' +
-        '<label class="me-avatar" id="who-avatar" title="点击上传头像" for="who-avatar-file">' +
-        '<img id="who-avatar-img" alt="" src="' +
-        virtualAvatar("脉") +
-        '" />' +
-        '<span class="me-avatar-cam">' +
-        CAM +
-        "</span></label>" +
-        '<input class="me-file" id="who-avatar-file" type="file" accept="image/*" />' +
-        '<div class="me-who"><h2 id="who-name">—</h2><span class="me-role" id="who-role"></span>' +
-        '<p class="me-meta">工号：<b id="who-no"></b><span>　|　</span>所属部门：<b id="who-dept-top"></b></p>' +
-        '<p class="me-bio" id="who-bio"></p></div></section>' +
-        '<section class="me-safe" data-go="security"><h3><i class="me-bar-title"></i>账号安全</h3>' +
-        '<div class="me-safe-row"><div class="me-safe-ico">' +
-        ico('<path d="M20 6 9 17l-5-5"/>', "#16a34a", 26) +
-        '</div><div><strong>安全等级：高</strong><div class="sub">已开启：登录密码、手机验证、操作日志</div></div><span class="me-safe-go">›</span></div>' +
-        '<div class="me-bar"><b></b></div></section></div>' +
-        '<nav class="me-tabs" id="me-tabs">' +
-        '<button type="button" class="on" data-me-tab="basic">' +
-        ico('<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/>', "currentColor", 20) +
-        "基本信息</button>" +
-        '<button type="button" data-me-tab="notice">' +
-        ico('<path d="M6 9a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/>', "currentColor", 20) +
-        "消息通知</button>" +
-        '<button type="button" data-me-tab="rights">' +
-        ico('<path d="M12 3 20 7v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/>', "currentColor", 20) +
-        "我的权限</button>" +
-        '<button type="button" data-me-tab="devices">' +
-        ico('<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8"/>', "currentColor", 20) +
-        "登录设备管理</button>" +
-        '<button type="button" data-me-tab="logs">' +
-        ico('<rect x="5" y="4" width="14" height="16" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>', "currentColor", 20) +
-        "操作日志</button></nav>" +
+        '<div class="me-page xm-ui-scope">' +
+        UI.PageContentHeader({
+          title: "个人中心",
+          description: "管理个人信息、账号安全、偏好设置与系统授权"
+        }) +
+        '<div class="me-banner">' +
+        profileCard +
+        safeCard +
+        "</div>" +
+        tabs +
         '<div class="me-pane on" data-me-pane="basic"><div class="me-split">' +
-        '<div class="me-col"><section class="me-card" id="me-security-card">' +
-        '<div class="me-card-h"><h3><i class="me-bar-title"></i>账号安全</h3></div>' +
-        '<p id="status" class="status" role="status"></p>' +
-        '<form id="password-form" autocomplete="off">' +
-        '<input id="current-password" type="password" required placeholder="当前密码" />' +
-        '<input id="new-password" type="password" required minlength="8" placeholder="新密码（至少 8 位）" />' +
-        '<input id="confirm-password" type="password" required minlength="8" placeholder="再次输入新密码" />' +
-        '</form>' +
-        '<div class="me-sec-actions">' +
-        '<button class="me-btn" type="submit" form="password-form">保存新密码</button>' +
-        '<form id="logout-form"><button class="me-btn me-btn-logout" type="submit">退出登录</button></form>' +
-        '<button type="button" id="me-hard-reload" class="me-btn me-btn-hard" title="绕过缓存重新加载本页">强制刷新</button></div></section></div>' +
-        '<div class="me-col"><section class="me-card"><div class="me-card-h"><h3><i class="me-bar-title"></i>个人信息</h3>' +
-        '<button class="me-edit" type="button" id="who-edit">' +
-        ico('<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>') +
-        "编辑信息</button></div>" +
-        '<div class="me-kv" id="who-view">' +
-        '<div><em>姓名</em><strong id="who-name-2"></strong></div>' +
-        '<div><em>工号</em><strong id="who-no-2"></strong></div>' +
-        '<div><em>部门</em><strong id="who-dept"></strong></div>' +
-        '<div><em>岗位</em><strong id="who-title"></strong></div>' +
-        '<div><em>入职日期</em><strong id="who-created"></strong></div>' +
-        '<div><em>联系方式</em><strong><span id="who-phone"></span> <button class="me-ico-btn" type="button" id="toggle-phone" title="显示">' +
-        ico('<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>') +
-        "</button></strong></div>" +
-        '<div><em>邮箱</em><strong><span id="who-email"></span> <button class="me-ico-btn" type="button" id="copy-email" title="复制">' +
-        ico('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V4h12"/>') +
-        "</button></strong></div>" +
-        '<div><em>汇报对象</em><strong id="who-manager"></strong></div></div>' +
-        '<form id="who-form" hidden><p id="who-status" class="status"></p>' +
-        '<input id="edit-name" placeholder="姓名" />' +
-        '<input id="edit-phone" placeholder="联系方式" />' +
-        '<input id="edit-email" placeholder="邮箱" />' +
-        '<button class="me-btn" type="submit">保存信息</button></form>' +
-        '<span id="who-username" hidden></span></section></div>' +
-        "<div class=\"me-col\"><section class=\"me-card\"><div class=\"me-card-h\"><h3><i class=\"me-bar-title\"></i>快捷操作</h3></div>" +
-        '<div class="me-actions">' +
-        '<button class="me-act" type="button" data-go="security"><i>' +
-        ico('<path d="M8 11V8a4 4 0 1 1 8 0v3M6 11h12v9H6z"/>', "#1677ff", 28) +
-        "</i><span>修改密码</span></button>" +
-        '<button class="me-act" type="button" data-soon="绑定手机"><i>' +
-        ico('<rect x="8" y="3" width="8" height="18" rx="2"/><path d="M11 18h2"/>', "#0ea5e9", 28) +
-        "</i><span>绑定手机</span></button>" +
-        '<button class="me-act" type="button" id="go-email"><i>' +
-        ico('<rect x="3" y="6" width="18" height="12" rx="2"/><path d="m4 8 8 6 8-6"/>', "#1677ff", 28) +
-        "</i><span>修改邮箱</span></button>" +
-        '<button class="me-act" type="button" id="go-avatar"><i>' +
-        ico('<circle cx="12" cy="8" r="3"/><path d="M5 19c.8-3 3.4-5 7-5s6.2 2 7 5"/>', "#6366f1", 28) +
-        "</i><span>头像设置</span></button>" +
-        '<button class="me-act" type="button" data-soon="通知设置"><i>' +
-        ico('<path d="M6 9a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9"/>', "#ef4444", 28) +
-        "</i><span>通知设置</span></button>" +
-        '<button class="me-act" type="button" data-soon="界面偏好"><i>' +
-        ico('<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8"/>', "#1677ff", 28) +
-        "</i><span>界面偏好</span></button>" +
-        '<button class="me-act" type="button" data-soon="语言设置"><i>' +
-        ico('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/>', "#0d9488", 28) +
-        "</i><span>语言设置</span></button>" +
-        '<button class="me-act" type="button" data-soon="二次验证"><i>' +
-        ico('<path d="M12 3 20 7v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/>', "#1677ff", 28) +
-        "</i><span>二次验证</span></button></div></section>" +
-        '<section class="me-card"><div class="me-card-h"><h3><i class="me-bar-title"></i>我的权限</h3>' +
-        '<button class="me-link" type="button" data-go="rights">查看详情 ></button></div>' +
-        '<div class="me-perm"><div class="me-perm-ico">' +
-        ico('<path d="M12 3 20 7v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/>', "#1677ff", 24) +
-        '</div><div><strong id="perm-name">运营管理权限组</strong><p id="perm-desc"></p></div></div></section>' +
-        '<section class="me-card"><div class="me-card-h"><h3><i class="me-bar-title"></i>登录与设备</h3>' +
-        '<button class="me-link" type="button" data-go="devices">查看全部 ></button></div>' +
-        '<div id="device-list"></div></section></div></div></div>' +
-        '<div class="me-pane" data-me-pane="notice"><section class="me-card"><p class="me-empty">消息通知设置即将开放</p></section></div>' +
-        '<div class="me-pane" data-me-pane="rights"><section class="me-card">' +
-        '<div class="me-card-h"><h3><i class="me-bar-title"></i>我的责权清单</h3><p class="me-muted">灰色表示当前角色未授予</p></div>' +
-        '<div id="duties"></div></section></div>' +
-        '<div class="me-pane" data-me-pane="devices"><section class="me-card">' +
-        '<div class="me-card-h"><h3><i class="me-bar-title"></i>登录设备管理</h3></div>' +
-        '<p class="me-empty" style="padding-top:0">当前登录过的设备。可退出非本机会话。</p>' +
-        '<div id="device-list-all"></div></section></div>' +
-        '<div class="me-pane" data-me-pane="logs"><section class="me-card"><p class="me-empty">操作日志即将开放。设备列表见登录设备管理。</p></section></div></div>';
+        '<div class="me-col">' +
+        securityCard +
+        "</div>" +
+        '<div class="me-col">' +
+        whoCard +
+        "</div>" +
+        '<div class="me-col">' +
+        quickCard +
+        permCard +
+        deviceCard +
+        "</div></div></div>" +
+        '<div class="me-pane" data-me-pane="notice">' +
+        UI.ContentCard({
+          content: UI.EmptyState({ title: "消息通知设置即将开放", description: "该能力即将上线" }).replace(
+            'class="xm-ui-empty-state"',
+            'class="xm-ui-empty-state me-empty"'
+          )
+        }) +
+        "</div>" +
+        '<div class="me-pane" data-me-pane="rights">' +
+        UI.ContentCard({
+          title: "我的责权清单",
+          description: "灰色表示当前角色未授予",
+          content: '<div id="duties"></div>'
+        }) +
+        "</div>" +
+        '<div class="me-pane" data-me-pane="devices">' +
+        UI.ContentCard({
+          title: "登录设备管理",
+          description: "当前登录过的设备。可退出非本机会话。",
+          content: '<div id="device-list-all"></div>'
+        }) +
+        "</div>" +
+        '<div class="me-pane" data-me-pane="logs">' +
+        UI.ContentCard({
+          content: UI.EmptyState({ title: "操作日志即将开放", description: "设备列表见登录设备管理" }).replace(
+            'class="xm-ui-empty-state"',
+            'class="xm-ui-empty-state me-empty"'
+          )
+        }) +
+        "</div></div>";
 
       const statusEl = root.querySelector("#status");
       const whoStatus = root.querySelector("#who-status");
@@ -368,7 +378,9 @@
         const paneId = id === "security" ? "basic" : id;
         const tabId = id === "security" ? "basic" : id;
         root.querySelectorAll("[data-me-tab]").forEach(function (btn) {
-          btn.classList.toggle("on", btn.getAttribute("data-me-tab") === tabId);
+          const on = btn.getAttribute("data-me-tab") === tabId;
+          btn.classList.toggle("is-active", on);
+          btn.classList.toggle("on", on);
         });
         root.querySelectorAll("[data-me-pane]").forEach(function (pane) {
           pane.classList.toggle("on", pane.getAttribute("data-me-pane") === paneId);
@@ -385,6 +397,56 @@
         root.querySelector("#who-avatar-img").src = src || virtualAvatar(name || "脉");
       }
 
+      function deviceTable(managed) {
+        const kick = managed
+          ? UI.button({ label: "退出此设备", size: "small", variant: "secondary" }).replace(
+              "xm-ui-button--small",
+              "xm-ui-button--small me-dev-out"
+            )
+          : "⋯";
+        const columns = [
+          { key: "name", label: "设备" },
+          { key: "city", label: "地点" },
+          { key: "time", label: "时间" },
+          { key: "status", label: "状态", type: "status" }
+        ];
+        if (managed) {
+          columns.push({
+            key: "action",
+            label: "操作",
+            render: function (_value, row) {
+              return row.current ? "本机" : kick;
+            }
+          });
+        }
+        return UI.DataTable({
+          columns: columns,
+          rows: [
+            {
+              name: "Windows · Chrome",
+              city: "深圳市",
+              time: "2026-11-17 10:24",
+              status: { label: "当前设备", tone: "success" },
+              current: true
+            },
+            {
+              name: "iPhone 15",
+              city: "深圳市",
+              time: "2026-11-16 21:08",
+              status: { label: "在线", tone: "blue" },
+              current: false
+            },
+            {
+              name: "Mac · Safari",
+              city: "广州市",
+              time: "2026-11-15 18:32",
+              status: { label: "在线", tone: "blue" },
+              current: false
+            }
+          ]
+        });
+      }
+
       function fillWho(user) {
         currentUser = Object.assign({}, currentUser, user || {});
         user = currentUser;
@@ -394,11 +456,12 @@
         const title = user.title || user.role || (isLuo ? "运营总监" : "");
         const no = user.employeeNo || (isLuo ? "EM0001" : "—");
         const manager = user.managerName || (isLuo ? "韩梦凯（运营副总）" : "—");
-        const created = user.createdAt && !String(user.createdAt).startsWith("2026-01-01")
-          ? user.createdAt
-          : isLuo
-            ? "2021-04-12"
-            : user.createdAt || "—";
+        const created =
+          user.createdAt && !String(user.createdAt).startsWith("2026-01-01")
+            ? user.createdAt
+            : isLuo
+              ? "2021-04-12"
+              : user.createdAt || "—";
         phoneRaw = user.phone || (isLuo ? "13800006608" : "");
         let email = user.email || "";
         if (!email || /demo\.local/i.test(email)) {
@@ -413,9 +476,7 @@
         root.querySelector("#who-no-2").textContent = no;
         root.querySelector("#who-dept-top").textContent = dept;
         root.querySelector("#who-dept").textContent = dept;
-        root.querySelector("#who-created").textContent = isLuo
-          ? "2021-04-12（4年7个月）"
-          : tenure(created);
+        root.querySelector("#who-created").textContent = isLuo ? "2021-04-12（4年7个月）" : tenure(created);
         phoneOpen = false;
         root.querySelector("#who-phone").textContent = maskPhone(phoneRaw);
         root.querySelector("#who-email").textContent = email;
@@ -424,28 +485,8 @@
         root.querySelector("#edit-name").value = user.displayName || name;
         root.querySelector("#edit-phone").value = user.phone || "";
         root.querySelector("#edit-email").value = user.email || "";
-        const compact =
-          '<div class="me-dev"><span class="me-dev-n">' +
-          ico('<rect x="3" y="5" width="18" height="12" rx="2"/>', "#64748b", 18) +
-          " Windows · Chrome<span class=\"me-now\">当前设备</span></span><span class=\"me-city\">深圳市</span><span class=\"me-time\">2026-11-17 10:24</span><span class=\"me-muted\">⋯</span></div>" +
-          '<div class="me-dev"><span class="me-dev-n">' +
-          ico('<rect x="8" y="3" width="8" height="18" rx="2"/>', "#64748b", 18) +
-          " iPhone 15</span><span class=\"me-city\">深圳市</span><span class=\"me-time\">2026-11-16 21:08</span><span class=\"me-muted\">⋯</span></div>" +
-          '<div class="me-dev"><span class="me-dev-n">' +
-          ico('<rect x="3" y="5" width="18" height="12" rx="2"/>', "#64748b", 18) +
-          " Mac · Safari</span><span class=\"me-city\">广州市</span><span class=\"me-time\">2026-11-15 18:32</span><span class=\"me-muted\">⋯</span></div>";
-        const managed =
-          '<div class="me-dev"><span class="me-dev-n">' +
-          ico('<rect x="3" y="5" width="18" height="12" rx="2"/>', "#64748b", 18) +
-          " Windows · Chrome<span class=\"me-now\">当前设备</span></span><span class=\"me-city\">深圳市</span><span class=\"me-time\">2026-11-17 10:24</span><span class=\"me-muted\">本机</span></div>" +
-          '<div class="me-dev"><span class="me-dev-n">' +
-          ico('<rect x="8" y="3" width="8" height="18" rx="2"/>', "#64748b", 18) +
-          " iPhone 15</span><span class=\"me-city\">深圳市</span><span class=\"me-time\">2026-11-16 21:08</span><button type=\"button\" class=\"me-dev-out\">退出此设备</button></div>" +
-          '<div class="me-dev"><span class="me-dev-n">' +
-          ico('<rect x="3" y="5" width="18" height="12" rx="2"/>', "#64748b", 18) +
-          " Mac · Safari</span><span class=\"me-city\">广州市</span><span class=\"me-time\">2026-11-15 18:32</span><button type=\"button\" class=\"me-dev-out\">退出此设备</button></div>";
-        root.querySelector("#device-list").innerHTML = compact;
-        root.querySelector("#device-list-all").innerHTML = managed;
+        root.querySelector("#device-list").innerHTML = deviceTable(false);
+        root.querySelector("#device-list-all").innerHTML = deviceTable(true);
         let uploaded = "";
         try {
           uploaded = sessionStorage.getItem("xm-me-avatar-" + (user.username || "")) || "";
@@ -464,31 +505,29 @@
             }
           });
         });
+        const count = Math.max(granted.length, 12);
         root.querySelector("#perm-name").textContent = "运营管理权限组";
+        const countEl = root.querySelector("#perm-count");
+        if (countEl) {
+          countEl.innerHTML = String(count) + "<small>项</small>";
+        }
         root.querySelector("#perm-desc").textContent =
-          "包含：店铺数据、商品管理、推广管理、运营报表等 " +
-          Math.max(granted.length, 12) +
-          " 项权限";
+          "包含：店铺数据、商品管理、推广管理、运营报表等 " + count + " 项权限";
         if (!groups || !groups.length) {
-          root.querySelector("#duties").innerHTML = '<p class="me-empty">责权清单暂未从服务端同步</p>';
+          root.querySelector("#duties").innerHTML = UI.EmptyState({ title: "责权清单暂未从服务端同步" });
           return;
         }
         root.querySelector("#duties").innerHTML = groups
           .map(function (group) {
             const tags = (group.items || [])
               .map(function (item) {
-                const cls = item.granted ? "me-tag" : "me-tag off";
-                const mark = item.granted ? "✓" : "–";
-                return '<span class="' + cls + '">' + mark + " " + escapeHtml(item.label) + "</span>";
+                return UI.StatusBadge({
+                  label: item.label,
+                  tone: item.granted ? "success" : "neutral"
+                });
               })
               .join("");
-            return (
-              '<div class="me-group"><h3>' +
-              escapeHtml(group.name) +
-              '</h3><div class="me-tags">' +
-              tags +
-              "</div></div>"
-            );
+            return '<div class="me-group"><h3>' + escapeHtml(group.name) + '</h3><div class="me-tags">' + tags + "</div></div>";
           })
           .join("");
       }
@@ -544,8 +583,10 @@
       root.querySelectorAll("[data-soon]").forEach(function (btn) {
         btn.addEventListener("click", function () {
           showTab("notice");
-          root.querySelector('[data-me-pane="notice"] .me-empty').textContent =
-            btn.getAttribute("data-soon") + "即将开放";
+          const empty = root.querySelector('[data-me-pane="notice"] .me-empty h3');
+          if (empty) {
+            empty.textContent = btn.getAttribute("data-soon") + "即将开放";
+          }
         });
       });
       root.querySelector("#device-list-all").addEventListener("click", function (event) {
@@ -553,7 +594,7 @@
         if (!kick) {
           return;
         }
-        const row = kick.closest(".me-dev");
+        const row = kick.closest("tr");
         if (row) {
           row.remove();
         }
@@ -581,7 +622,7 @@
         const open = form.hidden;
         form.hidden = !open;
         view.hidden = open;
-        root.querySelector("#who-edit").lastChild.textContent = open ? "取消" : "编辑信息";
+        root.querySelector("#who-edit").childNodes[0].textContent = open ? "取消" : "编辑信息";
       });
       root.querySelector("#who-form").addEventListener("submit", function (event) {
         event.preventDefault();
@@ -662,9 +703,7 @@
           window.__xmHardReload();
           return;
         }
-        window.location.replace(
-          window.location.pathname + "?_xm=" + Date.now() + (window.location.hash || "")
-        );
+        window.location.replace(window.location.pathname + "?_xm=" + Date.now() + (window.location.hash || ""));
       });
 
       return function unmount() {
