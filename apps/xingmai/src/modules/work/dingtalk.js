@@ -716,7 +716,7 @@ function dingFail(message, code) {
   return error;
 }
 
-async function sendRobotCard(userid, title, markdown, url, button) {
+async function sendRobotCard(userid, title, markdown, url, button, robotCode) {
   const token = await accessToken();
   const res = await transport("https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend", {
     method: "POST",
@@ -725,7 +725,7 @@ async function sendRobotCard(userid, title, markdown, url, button) {
       "x-acs-dingtalk-access-token": token
     },
     body: JSON.stringify({
-      robotCode: dingConfig().clientId,
+      robotCode: robotCode || dingConfig().clientId,
       userIds: [String(userid)],
       msgKey: "sampleActionCard",
       msgParam: JSON.stringify({
@@ -789,21 +789,22 @@ function maskId(value) {
   return `${text.slice(0, 6)}…${text.slice(-4)}`;
 }
 
-async function innerAppBrief() {
+async function robotState() {
   try {
-    const token = await accessToken();
-    const res = await transport("https://api.dingtalk.com/v1.0/microApp/allInnerApps", {
-      headers: { "x-acs-dingtalk-access-token": token },
-      signal: AbortSignal.timeout(8000)
-    });
-    const data = await res.json();
-    return appRows(data.result || data).map((app) => ({
-      name: String(app.name || app.appName || ""),
-      agentId: String(app.agentId || app.agentid || ""),
-      status: app.appStatus ?? ""
-    }));
-  } catch {
-    return [];
+    const data = await oapi("/microapp/list", {});
+    const list = Array.isArray(data.appList) ? data.appList : [];
+    const agentId = String(currentAgentId());
+    const mine = list.find((app) => String(app.agentId || "") === agentId);
+    const named = list
+      .filter((app) => /甄选|汇报|人事|通知/.test(String(app.name || "")))
+      .map((app) => `${app.name}#${app.agentId} 状态${app.appStatus ?? ""}`)
+      .join("，");
+    const self = mine
+      ? `当前应用 ${mine.name || "未命名"} 状态${mine.appStatus ?? ""} 字段 ${Object.keys(mine).join("/")}`
+      : "当前 AgentId 不在已安装应用里";
+    return `${self}。相关应用：${named || "没有"}`;
+  } catch (error) {
+    return `读应用列表失败 ${error.code || ""} ${error.publicMessage || ""}`.slice(0, 300);
   }
 }
 
@@ -817,13 +818,21 @@ export async function popupTo(userid) {
     lastPopup = { channel: "robot", error: "" };
     return { ok: true, channel: "robot", error: "", ...meta };
   } catch (error) {
-    const apps = await innerAppBrief();
-    const names = apps.map((app) => `${app.name || "未命名"}#${app.agentId || "?"}`).join("，");
+    const agentCode = String(currentAgentId() || "");
+    if (agentCode && agentCode !== dingConfig().clientId) {
+      try {
+        await sendRobotCard(userid, "工作汇报", "右下角弹窗测试。请看电脑右下角，点「去处理」打开工作汇报。", workLink("todo"), "去处理", agentCode);
+        lastPopup = { channel: "robot", error: "" };
+        return { ok: true, channel: "robot", error: "", ...meta, robotCode: "agent" };
+      } catch {
+        /* AgentId 也不是机器人编号。 */
+      }
+    }
     return {
       ok: false,
       statusCode: 502,
       channel: "",
-      error: `${error.publicMessage || "机器人消息没有发出"} 当前 Client ID ${meta.appKey}，AgentId ${meta.agentId}。企业内部应用：${names || "没有读到"}`,
+      error: `${error.publicMessage || "机器人消息没有发出"} 当前 Client ID ${meta.appKey}，AgentId ${meta.agentId}。${await robotState()}`,
       ...meta
     };
   }
