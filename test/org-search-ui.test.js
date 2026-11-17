@@ -986,9 +986,20 @@ const SITE_ACL_SMOKE = `<!doctype html>
         const homeOk = after.me && after.me.modules.home && after.me.modules.home.features["home.workbench"].enter;
         const storeOk = after.me && after.me.stores && after.me.stores[storeId] && after.me.stores[storeId].see;
         const gateOff = after.me && after.me.modules.releases && after.me.modules.releases.features["releases.gate"].see === false;
+        const captions = Array.prototype.map.call(document.querySelectorAll(".site-acl-mod caption"), function (el) {
+          return el.textContent.trim();
+        });
+        const catalogOk =
+          captions.indexOf("智能人事") >= 0 &&
+          captions.indexOf("边界数据中心") >= 0 &&
+          captions.indexOf("工作汇报") >= 0 &&
+          captions.indexOf("月度大会") >= 0 &&
+          captions.indexOf("需求与反馈") >= 0 &&
+          captions.indexOf("星脉数据中心") >= 0;
         document.body.setAttribute("data-home", homeOk ? "1" : "0");
         document.body.setAttribute("data-store", storeOk ? "1" : "0");
-        document.body.setAttribute("data-ok", person && homeOk && storeOk && gateOff ? "1" : "0");
+        document.body.setAttribute("data-hr", catalogOk ? "1" : "0");
+        document.body.setAttribute("data-ok", person && homeOk && storeOk && gateOff && catalogOk ? "1" : "0");
       })();
     </script>
   </body>
@@ -1168,6 +1179,9 @@ test("headless chrome assigns website see/enter/edit for a roster person", async
     );
     assert.match(html, /data-home="1"/);
     assert.match(html, /data-store="1"/);
+    assert.match(html, /data-hr="1"/);
+    assert.match(html, /智能人事/);
+    assert.match(html, /边界数据中心/);
   } finally {
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
