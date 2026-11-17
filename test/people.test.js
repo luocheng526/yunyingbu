@@ -67,7 +67,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     const clientText = await clientJs.text();
     assert.equal(clientJs.status, 200);
     assert.match(clientJs.headers.get("cache-control") || "", /no-store/);
-    assert.match(clientText, /data-site-acl-js="0\.1\.229-site-acl-ui"/);
+    assert.match(clientText, /data-site-acl-js="0\.1\.241-acl-ui"/);
     assert.match(clientText, /site-acl-people/);
     assert.match(clientText, /site-acl-matrix/);
     assert.doesNotMatch(clientText, /智能体只读：GET \/api\/people/);
@@ -350,6 +350,13 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /看得见/);
     assert.match(jsText, /进得去/);
     assert.match(jsText, /改得了/);
+    assert.match(jsText, /功能权限/);
+    assert.match(jsText, /数据权限/);
+    assert.match(jsText, /操作权限/);
+    assert.match(jsText, /权限模板/);
+    assert.match(jsText, /复制权限/);
+    assert.match(jsText, /清空权限/);
+    assert.match(jsText, /引用他人权限/);
     assert.match(jsText, /\/api\/people\/org\/site-acl/);
     assert.match(jsText, /勾选保存在服务器/);
     assert.match(jsText, /已保存到服务器/);

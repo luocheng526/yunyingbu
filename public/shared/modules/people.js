@@ -1,4 +1,4 @@
-/* xm-module-people org-board 0.1.240-org-struct */
+/* xm-module-people org-board 0.1.241-acl-ui */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.240-org-struct";
+    const href = "/people.css?v=0.1.241-acl-ui";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -354,29 +354,36 @@
         '<div class="org-table-wrap"><table><thead><tr><th>姓名</th><th>总监</th><th>经理</th><th>主管</th><th>储备</th><th>运营</th><th>助理</th><th>状态</th><th>操作</th></tr></thead>' +
         '<tbody id="rights-members-tbody"></tbody></table></div></div></div></div></section></div>' +
         '<div class="org-pane" data-pane="acl" hidden>' +
-        '<section class="panel site-acl-panel">' +
-        '<div class="site-acl-hero">' +
-        "<div><h2>网站权限</h2>" +
-        '<p class="lead">按成员拆开模块和功能。勾选保存在服务器，配过的人侧栏立刻按这份权限显示。没配过默认全关。罗成配全部；沈子晗、韩梦凯只配自己组。店铺主数据责权不变。</p></div>' +
-        '<div class="site-acl-kpis" id="site-acl-kpis"></div></div>' +
-        '<div class="site-acl" id="site-acl" data-site-acl-js="0.1.229-site-acl-ui">' +
+        '<section class="panel site-acl-panel site-acl-studio">' +
+        '<div class="site-acl" id="site-acl" data-site-acl-js="0.1.241-acl-ui">' +
         '<aside class="site-acl-list">' +
         '<div class="site-acl-list-head"><strong>成员目录</strong><span id="site-acl-count"></span></div>' +
+        '<p class="site-acl-list-stats" id="site-acl-kpis"></p>' +
         '<input type="text" id="site-acl-q" placeholder="搜索姓名 / 经理 / 主管" autocomplete="off" spellcheck="false" />' +
         '<div id="site-acl-people"></div></aside>' +
         '<div class="site-acl-sheet">' +
-        '<div class="site-acl-empty" id="site-acl-empty"><strong>选择成员</strong><span>从左侧点一个人，右侧打开模块、功能和店铺明细。</span></div>' +
+        '<div class="site-acl-empty" id="site-acl-empty"><strong>选择成员</strong><span>从左侧点一个人，再按模块、功能和店铺明细勾选。勾选保存在服务器。</span></div>' +
         '<div id="site-acl-detail" hidden>' +
-        '<div class="site-acl-head"><div class="site-acl-who"><b class="site-acl-avatar" id="site-acl-avatar"></b>' +
+        '<div class="site-acl-hero-card">' +
+        '<div class="site-acl-who"><b class="site-acl-avatar" id="site-acl-avatar"></b>' +
         '<div><h3 id="site-acl-name"></h3><p class="muted" id="site-acl-meta"></p></div></div>' +
+        '<div class="site-acl-status-card"><div class="site-acl-status-row"><strong>权限配置状态</strong><em id="site-acl-badge">未配置</em></div>' +
+        '<p id="site-acl-status-lead">暂无权限配置，该成员将无法访问系统模块</p></div>' +
         '<div class="site-acl-head-actions"><p class="status error" id="site-acl-error" hidden></p>' +
         '<p class="status" id="site-acl-ok" hidden></p>' +
+        '<button type="button" class="ghost" id="site-acl-copy">复制权限</button>' +
+        '<button type="button" class="ghost" id="site-acl-clear">清空权限</button>' +
         '<button type="button" id="site-acl-save">保存权限</button></div></div>' +
         '<div class="site-acl-views">' +
-        '<button type="button" class="site-acl-view is-on" data-acl-view="modules">模块和功能</button>' +
-        '<button type="button" class="site-acl-view" data-acl-view="stores">店铺明细</button></div>' +
+        '<button type="button" class="site-acl-view is-on" data-acl-view="modules"><svg class="site-acl-view-ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1"/><rect x="9" y="1.5" width="5.5" height="5.5" rx="1"/><rect x="1.5" y="9" width="5.5" height="5.5" rx="1"/><rect x="9" y="9" width="5.5" height="5.5" rx="1"/></svg>功能权限</button>' +
+        '<button type="button" class="site-acl-view" data-acl-view="stores"><svg class="site-acl-view-ico" viewBox="0 0 16 16" aria-hidden="true"><ellipse cx="8" cy="4" rx="5" ry="2"/><path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4"/><path d="M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/></svg>数据权限</button>' +
+        '<button type="button" class="site-acl-view" data-acl-view="ops"><svg class="site-acl-view-ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.6v1.6M8 12.8v1.6M1.6 8h1.6M12.8 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M12.6 3.4l-1.1 1.1M4.5 11.5l-1.1 1.1"/></svg>操作权限</button>' +
+        '<button type="button" class="site-acl-view" data-acl-view="templates"><svg class="site-acl-view-ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="2" width="10" height="12" rx="1.5"/><path d="M6 6h4M6 9h4"/></svg>权限模板</button></div>' +
         '<div id="site-acl-modules"></div>' +
-        '<div id="site-acl-stores" hidden></div></div></div></div></section></div>' +
+        '<div id="site-acl-stores" hidden></div>' +
+        '<div id="site-acl-ops" hidden></div>' +
+        '<div id="site-acl-templates" hidden></div>' +
+        '<div class="site-acl-copy-pop" id="site-acl-copy-pop" hidden></div></div></div></div></section></div>' +
         '<div class="org-pane" data-pane="logs" hidden>' +
         '<section class="panel"><h2>改动日志</h2>' +
         '<div class="org-table-wrap"><table><thead><tr><th>时间</th><th>动作</th><th>摘要</th></tr></thead>' +
@@ -2696,6 +2703,8 @@
       let siteAclName = "";
       let siteAclDraft = null;
       let siteAclView = "modules";
+      let siteAclFocus = "home";
+      let siteAclFold = {};
 
       function siteAclCap(value) {
         const edit = Boolean(value && value.edit);
@@ -2747,16 +2756,15 @@
           return person.configured;
         }).length;
         if (host) {
-          host.innerHTML =
-            '<article><span>可配成员</span><b>' +
+          host.textContent =
+            "可配 " +
             people.length +
-            "</b></article><article><span>已配</span><b>" +
+            " · 已配 " +
             set +
-            "</b></article><article><span>未配全关</span><b>" +
+            " · 未配全关 " +
             (people.length - set) +
-            "</b></article><article><span>范围</span><b>" +
-            escapeHtml((siteAclBoard && (siteAclBoard.scopeLabel || siteAclBoard.scope)) || "—") +
-            "</b></article>";
+            " · " +
+            ((siteAclBoard && (siteAclBoard.scopeLabel || siteAclBoard.scope)) || "—");
         }
         if (count) {
           count.textContent = people.length ? people.length + " 人" : "";
@@ -2767,14 +2775,17 @@
         root.querySelectorAll("[data-acl-view]").forEach(function (btn) {
           btn.classList.toggle("is-on", btn.getAttribute("data-acl-view") === siteAclView);
         });
-        const modules = root.querySelector("#site-acl-modules");
-        const stores = root.querySelector("#site-acl-stores");
-        if (modules) {
-          modules.hidden = siteAclView !== "modules";
-        }
-        if (stores) {
-          stores.hidden = siteAclView !== "stores";
-        }
+        const panes = {
+          modules: root.querySelector("#site-acl-modules"),
+          stores: root.querySelector("#site-acl-stores"),
+          ops: root.querySelector("#site-acl-ops"),
+          templates: root.querySelector("#site-acl-templates")
+        };
+        Object.keys(panes).forEach(function (key) {
+          if (panes[key]) {
+            panes[key].hidden = siteAclView !== key;
+          }
+        });
       }
 
       function paintSiteAclPeople() {
@@ -2815,32 +2826,218 @@
           .join("");
       }
 
-      function paintSiteAclSheet() {
-        const empty = root.querySelector("#site-acl-empty");
-        const detail = root.querySelector("#site-acl-detail");
-        if (!siteAclDraft) {
-          empty.hidden = false;
-          detail.hidden = true;
+      function siteAclCatalog() {
+        return (siteAclBoard && siteAclBoard.catalog) || [];
+      }
+
+      function siteAclModSheet(id) {
+        return (siteAclDraft && siteAclDraft.sheet && siteAclDraft.sheet.modules && siteAclDraft.sheet.modules[id]) || {
+          see: false,
+          enter: false,
+          edit: false,
+          features: {}
+        };
+      }
+
+      function siteAclFeatureCount(mod) {
+        const sheet = siteAclModSheet(mod.id);
+        return (mod.features || []).filter(function (feature) {
+          return siteAclCap(sheet.features && sheet.features[feature.id]).see;
+        }).length;
+      }
+
+      function siteAclBelongText(person) {
+        const bits = [person.center, person.supervisor || person.lineManager].filter(Boolean);
+        const belong = bits.length ? "所属：" + bits.join(" / ") : "";
+        return [person.role, belong].filter(Boolean).join(" · ");
+      }
+
+      function emptySiteAclSheet() {
+        const modules = {};
+        siteAclCatalog().forEach(function (mod) {
+          const features = {};
+          (mod.features || []).forEach(function (feature) {
+            features[feature.id] = { see: false, enter: false, edit: false };
+          });
+          modules[mod.id] = { see: false, enter: false, edit: false, features: features };
+        });
+        const stores = {};
+        ((siteAclDraft && siteAclDraft.stores) || []).forEach(function (store) {
+          stores[String(store.id)] = { see: false, enter: false, edit: false };
+        });
+        return { modules: modules, stores: stores };
+      }
+
+      function paintSiteAclPicked() {
+        const host = root.querySelector("#site-acl-picked");
+        if (!host || !siteAclDraft) {
           return;
         }
-        empty.hidden = true;
-        detail.hidden = false;
-        const person = siteAclDraft.person || {};
-        const avatar = root.querySelector("#site-acl-avatar");
-        if (avatar) {
-          avatar.textContent = String(person.name || siteAclName || "—").slice(0, 1);
-        }
-        root.querySelector("#site-acl-name").textContent = person.name || siteAclName;
-        root.querySelector("#site-acl-meta").textContent =
-          [person.role, person.lineManager || person.center, person.configured ? "已配" : "未配，默认全关"].filter(Boolean).join(" · ");
-        const save = root.querySelector("#site-acl-save");
-        if (save) {
-          save.hidden = siteAclLocked();
-          save.disabled = siteAclLocked();
-        }
-        const modules = (siteAclBoard.catalog || [])
+        const picked = siteAclCatalog()
           .map(function (mod) {
-            const sheet = siteAclDraft.sheet.modules[mod.id] || { see: false, enter: false, edit: false, features: {} };
+            const n = siteAclFeatureCount(mod);
+            const on = siteAclCap(siteAclModSheet(mod.id)).see || n > 0;
+            return on ? { name: mod.name, n: n } : null;
+          })
+          .filter(Boolean);
+        const total = picked.reduce(function (sum, row) {
+          return sum + row.n;
+        }, 0);
+        host.innerHTML =
+          '<div class="site-acl-picked-head"><strong>已选权限</strong><span>共 ' +
+          picked.length +
+          " 项</span></div>" +
+          (picked.length
+            ? picked
+                .map(function (row) {
+                  return (
+                    '<div class="site-acl-picked-row"><span>' +
+                    escapeHtml(row.name) +
+                    "</span><b>" +
+                    (row.n ? row.n + " 项功能" : "模块") +
+                    "</b></div>"
+                  );
+                })
+                .join("")
+            : '<p class="muted">还没有勾选模块。</p>') +
+          '<p class="site-acl-picked-total" hidden>' +
+          total +
+          "</p>";
+      }
+
+      function paintSiteAclHelp() {
+        return (
+          '<aside class="site-acl-rail">' +
+          '<section class="site-acl-card" id="site-acl-picked"></section>' +
+          '<section class="site-acl-card site-acl-shortcuts"><div class="site-acl-picked-head"><strong>快捷操作</strong></div>' +
+          '<div class="site-acl-shortcut-grid">' +
+          '<button type="button" class="ghost" data-acl-act="copy"><i class="site-acl-shortcut-ico tone-blue"></i>引用他人权限<span>快速复制已有成员权限</span></button>' +
+          '<button type="button" class="ghost" data-acl-act="templates"><i class="site-acl-shortcut-ico tone-purple"></i>使用权限模板<span>按岗位或角色快速应用</span></button>' +
+          '<button type="button" class="ghost site-acl-danger" data-acl-act="clear"><i class="site-acl-shortcut-ico tone-red"></i>清空全部权限<span>移除该成员的所有权限</span></button>' +
+          '<button type="button" class="ghost" data-acl-act="export"><i class="site-acl-shortcut-ico tone-cyan"></i>导出配置<span>导出当前权限配置清单</span></button></div></section>' +
+          '<section class="site-acl-card site-acl-help"><div class="site-acl-picked-head"><strong>配置说明</strong></div>' +
+          "<ul><li>勾选模块后，可进一步配置该模块下的具体功能。</li>" +
+          "<li>未勾选的模块，成员在左侧菜单中将不可见。</li>" +
+          "<li>勾选保存在服务器，配过的人侧栏立刻按这份权限显示。没配过默认全关。</li>" +
+          "<li>罗成配全部；沈子晗、韩梦凯只配自己组。店铺主数据责权不变。</li></ul></section></aside>"
+        );
+      }
+
+      function paintSiteAclTree() {
+        const locked = siteAclLocked();
+        return (
+          '<aside class="site-acl-tree-card"><div class="site-acl-tree-head"><strong>模块权限配置</strong>' +
+          "<span>选择该成员可访问的系统模块及功能</span></div><div class=\"site-acl-tree\" id=\"site-acl-tree\">" +
+          siteAclCatalog()
+            .map(function (mod) {
+              const sheet = siteAclModSheet(mod.id);
+              const cap = siteAclCap(sheet);
+              const n = siteAclFeatureCount(mod);
+              const open = siteAclFold[mod.id] === false ? false : siteAclFocus === mod.id || siteAclFold[mod.id] === true;
+              const kids = (mod.features || [])
+                .map(function (feature) {
+                  const on = siteAclCap(sheet.features && sheet.features[feature.id]).see;
+                  return (
+                    '<label class="site-acl-tree-feat' +
+                    (on ? " is-on" : "") +
+                    '"><input type="checkbox" data-acl-kind="feature" data-acl-id="' +
+                    escapeHtml(feature.id) +
+                    '" data-acl-cap="see"' +
+                    (on ? " checked" : "") +
+                    (locked ? " disabled" : "") +
+                    " /><span>" +
+                    escapeHtml(feature.name) +
+                    "</span></label>"
+                  );
+                })
+                .join("");
+              return (
+                '<div class="site-acl-tree-mod' +
+                (siteAclFocus === mod.id ? " is-on" : "") +
+                (open ? " is-open" : "") +
+                '" data-acl-mod="' +
+                escapeHtml(mod.id) +
+                '"><div class="site-acl-tree-row">' +
+                '<button type="button" class="site-acl-tree-caret" data-acl-fold="' +
+                escapeHtml(mod.id) +
+                '" aria-label="展开">' +
+                (open ? "▾" : "▸") +
+                "</button>" +
+                '<label class="site-acl-tree-check"><input type="checkbox" data-acl-kind="module" data-acl-id="' +
+                escapeHtml(mod.id) +
+                '" data-acl-cap="see"' +
+                (cap.see ? " checked" : "") +
+                (locked ? " disabled" : "") +
+                ' /></label><button type="button" class="site-acl-tree-name" data-acl-focus="' +
+                escapeHtml(mod.id) +
+                '"><span>' +
+                escapeHtml(mod.name) +
+                "</span><b>" +
+                n +
+                "</b></button></div>" +
+                (open ? '<div class="site-acl-tree-kids">' + kids + "</div>" : "") +
+                "</div>"
+              );
+            })
+            .join("") +
+          "</div></aside>"
+        );
+      }
+
+      function paintSiteAclFocusPanel() {
+        const catalog = siteAclCatalog();
+        const mod =
+          catalog.find(function (item) {
+            return item.id === siteAclFocus;
+          }) || catalog[0];
+        if (!mod) {
+          return '<section class="site-acl-card"><p class="muted">没有模块目录。</p></section>';
+        }
+        siteAclFocus = mod.id;
+        const sheet = siteAclModSheet(mod.id);
+        const feats = mod.features || [];
+        const onN = siteAclFeatureCount(mod);
+        const locked = siteAclLocked();
+        const rows = feats
+          .map(function (feature) {
+            const cap = siteAclCap(sheet.features && sheet.features[feature.id]);
+            return (
+              '<label class="site-acl-feat-row' +
+              (cap.see ? " is-on" : "") +
+              '"><input type="checkbox" data-acl-kind="feature" data-acl-id="' +
+              escapeHtml(feature.id) +
+              '" data-acl-cap="see"' +
+              (cap.see ? " checked" : "") +
+              (locked ? " disabled" : "") +
+              " /><span>" +
+              escapeHtml(feature.name) +
+              "</span></label>"
+            );
+          })
+          .join("");
+        return (
+          '<section class="site-acl-card site-acl-focus"><div class="site-acl-focus-head"><div><strong>' +
+          escapeHtml(mod.name) +
+          " - 功能权限</strong><p>配置该模块下的具体功能权限</p></div></div>" +
+          '<label class="site-acl-feat-row site-acl-feat-all"><input type="checkbox" data-acl-all="' +
+          escapeHtml(mod.id) +
+          '"' +
+          (feats.length && onN === feats.length ? " checked" : "") +
+          (locked ? " disabled" : "") +
+          " /><span>全选</span><b>(" +
+          onN +
+          "/" +
+          feats.length +
+          ")</b></label>" +
+          rows +
+          "</section>"
+        );
+      }
+
+      function paintSiteAclOps() {
+        return siteAclCatalog()
+          .map(function (mod) {
+            const sheet = siteAclModSheet(mod.id);
             const feats = (mod.features || [])
               .map(function (feature) {
                 const cap = siteAclCap(sheet.features && sheet.features[feature.id]);
@@ -2866,7 +3063,110 @@
             );
           })
           .join("");
-        root.querySelector("#site-acl-modules").innerHTML = modules;
+      }
+
+      function paintSiteAclTemplates() {
+        const people = ((siteAclBoard && siteAclBoard.people) || []).filter(function (person) {
+          return person.configured && person.name !== siteAclName;
+        });
+        return (
+          '<section class="site-acl-card"><div class="site-acl-focus-head"><div><strong>权限模板</strong>' +
+          "<p>没有单独的模板库。已配成员的勾选可以直接当模板引用到当前草稿，再点保存权限。</p></div></div>" +
+          (people.length
+            ? '<div class="site-acl-tpl-list">' +
+              people
+                .map(function (person) {
+                  return (
+                    '<button type="button" class="site-acl-tpl" data-acl-copy="' +
+                    escapeHtml(person.name) +
+                    '"><b class="site-acl-avatar">' +
+                    escapeHtml(String(person.name || "").slice(0, 1)) +
+                    "</b><span><strong>" +
+                    escapeHtml(person.name) +
+                    "</strong><small>" +
+                    escapeHtml(siteAclBelongText(person) || "已配") +
+                    "</small></span></button>"
+                  );
+                })
+                .join("") +
+              "</div>"
+            : '<p class="muted">还没有其他已配成员可当模板。</p>') +
+          "</section>"
+        );
+      }
+
+      function paintSiteAclCopyPop() {
+        const pop = root.querySelector("#site-acl-copy-pop");
+        if (!pop) {
+          return;
+        }
+        const people = ((siteAclBoard && siteAclBoard.people) || []).filter(function (person) {
+          return person.name !== siteAclName;
+        });
+        pop.innerHTML =
+          '<div class="site-acl-copy-dialog"><strong>引用他人权限</strong>' +
+          "<p>把已配成员的勾选复制到当前草稿，不会立刻保存。</p>" +
+          '<div class="site-acl-tpl-list">' +
+          people
+            .map(function (person) {
+              return (
+                '<button type="button" class="site-acl-tpl" data-acl-copy="' +
+                escapeHtml(person.name) +
+                '"><b class="site-acl-avatar">' +
+                escapeHtml(String(person.name || "").slice(0, 1)) +
+                "</b><span><strong>" +
+                escapeHtml(person.name) +
+                "</strong><small>" +
+                (person.configured ? "已配" : "未配") +
+                "</small></span></button>"
+              );
+            })
+            .join("") +
+          '</div><button type="button" class="ghost" data-acl-act="copy-close">取消</button></div>';
+      }
+
+      function paintSiteAclSheet() {
+        const empty = root.querySelector("#site-acl-empty");
+        const detail = root.querySelector("#site-acl-detail");
+        if (!siteAclDraft) {
+          empty.hidden = false;
+          detail.hidden = true;
+          return;
+        }
+        empty.hidden = true;
+        detail.hidden = false;
+        const person = siteAclDraft.person || {};
+        const configured = Boolean(person.configured);
+        const avatar = root.querySelector("#site-acl-avatar");
+        if (avatar) {
+          avatar.textContent = String(person.name || siteAclName || "—").slice(0, 1);
+        }
+        root.querySelector("#site-acl-name").textContent = person.name || siteAclName;
+        root.querySelector("#site-acl-meta").textContent = siteAclBelongText(person) || "未填写部门";
+        const badge = root.querySelector("#site-acl-badge");
+        const lead = root.querySelector("#site-acl-status-lead");
+        if (badge) {
+          badge.textContent = configured ? "已配置" : "未配置";
+          badge.classList.toggle("is-on", configured);
+        }
+        if (lead) {
+          lead.textContent = configured
+            ? "已保存到服务器，对方刷新或最多十几秒后侧栏按这份权限显示。"
+            : "暂无权限配置，该成员将无法访问系统模块";
+        }
+        ["#site-acl-save", "#site-acl-copy", "#site-acl-clear"].forEach(function (sel) {
+          const btn = root.querySelector(sel);
+          if (btn) {
+            btn.hidden = siteAclLocked();
+            btn.disabled = siteAclLocked();
+          }
+        });
+        if (!siteAclCatalog().some(function (mod) { return mod.id === siteAclFocus; })) {
+          siteAclFocus = (siteAclCatalog()[0] && siteAclCatalog()[0].id) || "home";
+        }
+        root.querySelector("#site-acl-modules").innerHTML =
+          '<div class="site-acl-func">' + paintSiteAclTree() + paintSiteAclFocusPanel() + paintSiteAclHelp() + "</div>";
+        paintSiteAclPicked();
         const storeRows = (siteAclDraft.stores || [])
           .map(function (store) {
             const cap = siteAclCap(siteAclDraft.sheet.stores && siteAclDraft.sheet.stores[String(store.id)]);
@@ -2881,14 +3181,107 @@
             );
           })
           .join("");
-        root.querySelector("#site-acl-stores").innerHTML = storeRows
-          ? '<table class="site-acl-matrix"><caption>店铺明细</caption>' +
-            siteAclMatrixHead() +
-            "<tbody>" +
-            storeRows +
-            "</tbody></table>"
-          : '<p class="muted">这一组还没有店铺明细。</p>';
+        root.querySelector("#site-acl-stores").innerHTML =
+          '<section class="site-acl-card"><div class="site-acl-focus-head"><div><strong>数据权限</strong>' +
+          "<p>按店铺明细勾选看得见、进得去、改得了。店铺主数据责权不变。</p></div></div>" +
+          (storeRows
+            ? '<table class="site-acl-matrix"><caption>店铺明细</caption>' +
+              siteAclMatrixHead() +
+              "<tbody>" +
+              storeRows +
+              "</tbody></table>"
+            : '<p class="muted">这一组还没有店铺明细。</p>') +
+          "</section>";
+        root.querySelector("#site-acl-ops").innerHTML =
+          '<section class="site-acl-card"><div class="site-acl-focus-head"><div><strong>操作权限</strong>' +
+          "<p>每个模块和功能仍按看得见、进得去、改得了三列勾选。</p></div></div>" +
+          paintSiteAclOps() +
+          "</section>";
+        root.querySelector("#site-acl-templates").innerHTML = paintSiteAclTemplates();
+        const allBox = root.querySelector("input[data-acl-all]");
+        if (allBox) {
+          const focus = siteAclCatalog().find(function (item) {
+            return item.id === allBox.getAttribute("data-acl-all");
+          });
+          const total = focus && focus.features ? focus.features.length : 0;
+          const onN = focus ? siteAclFeatureCount(focus) : 0;
+          allBox.checked = total > 0 && onN === total;
+          allBox.indeterminate = onN > 0 && onN < total;
+        }
         paintSiteAclView();
+      }
+
+      function copySiteAclFrom(name) {
+        if (!name || name === siteAclName || siteAclLocked()) {
+          return;
+        }
+        return fetch("/api/people/org/site-acl/" + encodeURIComponent(name), { credentials: "same-origin" })
+          .then(function (res) {
+            return res.json();
+          })
+          .then(function (data) {
+            if (!data.ok || !siteAclDraft) {
+              showError(root.querySelector("#site-acl-error"), (data && data.error) || "复制失败");
+              return;
+            }
+            siteAclDraft.sheet = {
+              modules: data.sheet.modules,
+              stores: data.sheet.stores
+            };
+            const pop = root.querySelector("#site-acl-copy-pop");
+            if (pop) {
+              pop.hidden = true;
+            }
+            root.querySelector("#site-acl-ok").hidden = false;
+            root.querySelector("#site-acl-ok").textContent = "已引用 " + name + " 的勾选到草稿，点保存权限才生效";
+            paintSiteAclSheet();
+          });
+      }
+
+      function clearSiteAclDraft() {
+        if (!siteAclDraft || siteAclLocked()) {
+          return;
+        }
+        siteAclDraft.sheet = emptySiteAclSheet();
+        root.querySelector("#site-acl-ok").hidden = false;
+        root.querySelector("#site-acl-ok").textContent = "草稿已清空，点保存权限才会写到服务器";
+        paintSiteAclSheet();
+      }
+
+      function exportSiteAclDraft() {
+        if (!siteAclDraft) {
+          return;
+        }
+        const blob = new Blob(
+          [
+            JSON.stringify(
+              {
+                name: siteAclName,
+                person: siteAclDraft.person,
+                modules: siteAclDraft.sheet.modules,
+                stores: siteAclDraft.sheet.stores
+              },
+              null,
+              2
+            )
+          ],
+          { type: "application/json" }
+        );
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "site-acl-" + (siteAclName || "draft") + ".json";
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+
+      function openSiteAclCopyPop() {
+        const pop = root.querySelector("#site-acl-copy-pop");
+        if (!pop) {
+          return;
+        }
+        paintSiteAclCopyPop();
+        pop.hidden = false;
       }
 
       function applySiteAclCheck(kind, id, cap, on) {
@@ -3138,6 +3531,12 @@
       root.querySelector("#site-acl-save").addEventListener("click", function () {
         saveSiteAcl();
       });
+      root.querySelector("#site-acl-copy").addEventListener("click", function () {
+        openSiteAclCopyPop();
+      });
+      root.querySelector("#site-acl-clear").addEventListener("click", function () {
+        clearSiteAclDraft();
+      });
       root.querySelector(".site-acl-views").addEventListener("click", function (event) {
         const btn = event.target.closest("[data-acl-view]");
         if (!btn) {
@@ -3146,7 +3545,58 @@
         siteAclView = btn.getAttribute("data-acl-view") || "modules";
         paintSiteAclView();
       });
+      root.querySelector("#site-acl-detail").addEventListener("click", function (event) {
+        const fold = event.target.closest("[data-acl-fold]");
+        if (fold) {
+          event.preventDefault();
+          const id = fold.getAttribute("data-acl-fold");
+          const open = siteAclFold[id] === false ? false : siteAclFocus === id || siteAclFold[id] === true;
+          siteAclFold[id] = !open;
+          paintSiteAclSheet();
+          return;
+        }
+        const focus = event.target.closest("[data-acl-focus]");
+        if (focus) {
+          siteAclFocus = focus.getAttribute("data-acl-focus") || siteAclFocus;
+          siteAclFold[siteAclFocus] = true;
+          paintSiteAclSheet();
+          return;
+        }
+        const act = event.target.closest("[data-acl-act]");
+        if (act) {
+          const kind = act.getAttribute("data-acl-act");
+          if (kind === "copy") {
+            openSiteAclCopyPop();
+          } else if (kind === "templates") {
+            siteAclView = "templates";
+            paintSiteAclView();
+          } else if (kind === "clear") {
+            clearSiteAclDraft();
+          } else if (kind === "export") {
+            exportSiteAclDraft();
+          } else if (kind === "copy-close") {
+            const pop = root.querySelector("#site-acl-copy-pop");
+            if (pop) {
+              pop.hidden = true;
+            }
+          }
+          return;
+        }
+        const copy = event.target.closest("[data-acl-copy]");
+        if (copy) {
+          copySiteAclFrom(copy.getAttribute("data-acl-copy"));
+        }
+      });
       root.querySelector("#site-acl-detail").addEventListener("change", function (event) {
+        const all = event.target.closest("input[data-acl-all]");
+        if (all) {
+          applySiteAclCheck("module", all.getAttribute("data-acl-all"), "see", all.checked);
+          if (all.checked) {
+            applySiteAclCheck("module", all.getAttribute("data-acl-all"), "enter", true);
+          }
+          paintSiteAclSheet();
+          return;
+        }
         const input = event.target.closest("input[data-acl-kind]");
         if (!input) {
           return;
