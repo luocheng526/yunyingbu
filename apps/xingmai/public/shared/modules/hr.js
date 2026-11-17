@@ -100,18 +100,18 @@
       ".hr-board-head{display:flex;justify-content:flex-end;gap:12px;align-items:center;}" +
       ".hr-board-head .hr-msg:not(:empty){margin-right:auto;}" +
       ".hr-board-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;}" +
-      ".hr-board-kpi{border:0;border-radius:16px;padding:16px 16px 14px;color:#fff;min-height:108px;box-shadow:0 10px 22px rgba(24,49,99,.12);}" +
-      "button.hr-board-kpi{width:100%;text-align:left;cursor:pointer;font:inherit;}" +
+      ".hr-board-kpi{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center;border:0;border-radius:16px;padding:14px 12px 12px;color:#fff;min-height:156px;box-shadow:0 10px 22px rgba(24,49,99,.12);}" +
+      "button.hr-board-kpi{width:100%;text-align:center;cursor:pointer;font:inherit;}" +
       "button.hr-board-kpi.is-on{box-shadow:0 0 0 3px rgba(16,24,40,.35),0 10px 22px rgba(24,49,99,.18);}" +
       ".hr-staff-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}" +
       ".hr-cell{width:100%;min-width:88px;height:28px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 6px;font:inherit;font-size:12px;}" +
       ".hr-cell-wide{min-width:140px;}" +
-      ".hr-board-kpi i{display:flex;width:28px;height:28px;border-radius:8px;align-items:center;justify-content:center;background:rgba(255,255,255,.22);}" +
-      ".hr-board-kpi i svg{width:16px;height:16px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}" +
-      ".hr-board-kpi b{display:block;margin-top:10px;font-size:34px;line-height:1;font-weight:700;font-variant-numeric:tabular-nums;}" +
-      ".hr-board-kpi span{display:block;margin-top:8px;font-size:13px;opacity:.95;}" +
-      ".hr-recruit-kpis .hr-board-kpi b{margin-top:6px;font-size:18px;font-weight:650;}" +
-      ".hr-recruit-kpis .hr-board-kpi span{margin-top:8px;font-size:22px;font-weight:700;line-height:1.25;opacity:1;}" +
+      ".hr-board-kpi i{order:3;display:flex;width:52px;height:52px;border-radius:14px;align-items:center;justify-content:center;background:rgba(255,255,255,.22);}" +
+      ".hr-board-kpi i svg{width:30px;height:30px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}" +
+      ".hr-board-kpi b{order:2;display:block;margin:auto 0;font-size:40px;line-height:1;font-weight:700;font-variant-numeric:tabular-nums;}" +
+      ".hr-board-kpi span{order:1;display:block;margin:0;font-size:16px;font-weight:650;line-height:1.3;opacity:1;}" +
+      ".hr-recruit-kpis .hr-board-kpi b{font-size:18px;font-weight:650;}" +
+      ".hr-recruit-kpis .hr-board-kpi span{font-size:22px;font-weight:700;line-height:1.25;}" +
       ".hr-kpi-list{margin-top:4px;}" +
       ".hr-kpi-list:empty{display:none;}" +
       ".hr-kpi-list h3{margin:0 0 8px;font-size:14px;font-weight:650;color:var(--xm-ink);}" +

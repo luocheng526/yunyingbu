@@ -156,6 +156,9 @@ test("client mounts one page and five in-page tabs", () => {
   assert.match(client, /data-kpi-table/);
   assert.match(client, /状态/);
   assert.match(client, /hr-recruit-kpis/);
+  assert.match(client, /\.hr-board-kpi span\{order:1/);
+  assert.match(client, /\.hr-board-kpi b\{order:2/);
+  assert.match(client, /\.hr-board-kpi i\{order:3;display:flex;width:52px/);
   assert.match(client, /\.hr-board-head\{display:flex;justify-content:flex-end/);
   assert.match(client, /hr-dept-cols/);
   assert.match(client, /deptColumns/);
