@@ -137,6 +137,7 @@ test("GET /people is content-only and uses shared xm shell", async () => {
     assert.match(jsText, /店铺运营状态/);
     assert.match(jsText, /坐席使用情况/);
     assert.match(jsText, /org-hero-kpis/);
+    assert.match(jsText, /id="org-tabs"[\s\S]*id="org-hero-kpis"/);
     assert.match(cssText, /\.org-console-kpis/);
     assert.match(cssText, /\.org-hero-kpi/);
     assert.match(jsText, /总监/);
