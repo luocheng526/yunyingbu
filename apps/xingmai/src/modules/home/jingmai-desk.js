@@ -95,6 +95,7 @@ const SONAME_PACKAGES = {
 
 let fontConfig = "";
 let current = null;
+let openTicket = 0;
 let readerDesk = null;
 let readerIdle = null;
 let chromeInstall = null;
@@ -1322,7 +1323,7 @@ async function acquireDesk(store) {
     current.store = store;
     current.password = "";
     try {
-      await send(current.ws, "Network.clearBrowserCookies");
+      await send(current.ws, "Network.clearBrowserCookies", {}, undefined, 2000);
       return current;
     } catch {
       stopCurrent();
@@ -1343,6 +1344,7 @@ async function acquireDesk(store) {
 }
 
 export async function closeDesk() {
+  openTicket += 1;
   if (!deskUsable(current)) {
     stopCurrent();
     return;
@@ -1351,39 +1353,55 @@ export async function closeDesk() {
   desk.store = "";
   desk.password = "";
   try {
-    await send(desk.ws, "Network.clearBrowserCookies");
-    await send(desk.ws, "Page.navigate", { url: "about:blank" });
+    await send(desk.ws, "Network.clearBrowserCookies", {}, undefined, 2000);
+    await send(desk.ws, "Page.navigate", { url: "about:blank" }, undefined, 2000);
   } catch {
     stopCurrent();
   }
 }
 
-export async function openDesk({ store, loginName, password }) {
-  let desk = null;
+async function finishOpen(desk, loginName, password, ticket, reveal) {
   try {
-    desk = await acquireDesk(store);
-    await send(desk.ws, "Page.navigate", { url: LOGIN_URL });
     let ready = false;
-    for (let attempt = 0; attempt < 40; attempt += 1) {
-      await sleep(250);
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      if (ticket !== openTicket || current !== desk) {
+        return { status: "login", message: "登录已取消" };
+      }
+      await sleep(200);
       ready = Boolean(await evaluate(desk.ws, "!![...document.querySelectorAll('input')].find((node) => (node.placeholder || '').includes('账号'))"));
       if (ready) {
         break;
       }
     }
     if (!ready) {
-      stopCurrent();
+      if (reveal && ticket === openTicket && current === desk) {
+        return { status: "verify", message: "登录页已打开" };
+      }
+      if (ticket === openTicket) {
+        stopCurrent();
+      }
       return { status: "login", message: "服务器没有打开京麦登录页" };
+    }
+    if (ticket !== openTicket || current !== desk) {
+      return { status: "login", message: "登录已取消" };
     }
     const submitted = await fillAndSubmit(desk.ws, loginName, password);
     password = "";
     if (!submitted) {
-      stopCurrent();
+      if (reveal && ticket === openTicket && current === desk) {
+        return { status: "verify", message: "登录页已打开" };
+      }
+      if (ticket === openTicket) {
+        stopCurrent();
+      }
       return { status: "login", message: "服务器没有填上账号" };
     }
     let cookies = [];
     let screen = { status: "verify", message: "" };
     for (let attempt = 0; attempt < 4; attempt += 1) {
+      if (ticket !== openTicket || current !== desk) {
+        return { status: "login", message: "登录已取消" };
+      }
       await sleep(attempt === 0 ? 400 : 300);
       try {
         cookies = await readCookies(desk.ws);
@@ -1407,10 +1425,44 @@ export async function openDesk({ store, loginName, password }) {
       }
     }
     return screen;
+  } finally {
+    password = "";
+  }
+}
+
+export async function openDesk({ store, loginName, password, reveal, onStep } = {}) {
+  const ticket = ++openTicket;
+  const step = function (message) {
+    if (message && typeof onStep === "function") {
+      onStep(message);
+    }
+  };
+  let desk = null;
+  try {
+    step("正在启动浏览器");
+    desk = await acquireDesk(store);
+    if (ticket !== openTicket) {
+      return { status: "login", message: "登录已取消" };
+    }
+    step("正在打开登录页");
+    await send(desk.ws, "Page.navigate", { url: LOGIN_URL }, undefined, 8000);
+    const account = loginName;
+    const secret = password;
+    password = "";
+    if (reveal) {
+      finishOpen(desk, account, secret, ticket, true).catch(function () {});
+      return { status: "verify", message: "登录页已打开" };
+    }
+    return await finishOpen(desk, account, secret, ticket, false);
   } catch (error) {
-    stopCurrent();
+    if (ticket === openTicket) {
+      stopCurrent();
+    }
     if (error && error.code === "browser") {
       return { status: "login", message: error.message };
+    }
+    if (String(error && error.message || "").includes("timeout")) {
+      return { status: "login", message: "登录页没有在 8 秒内打开" };
     }
     return { status: "login", message: "服务器登录没有打开" };
   } finally {
