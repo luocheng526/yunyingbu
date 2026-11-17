@@ -55,7 +55,7 @@ test("侧栏在首页和星脉数据中心之间挂边界数据中心", () => {
 
 test("壳把 /bound 交给边界数据中心模块", () => {
   assert.equal(APP_MODULES["/bound"], "bound");
-  assert.equal(SHELL_ASSET_VER, "0.1.784-homeloop");
+  assert.equal(SHELL_ASSET_VER, "0.1.785-mever");
   const html = renderAppShell("/bound", luocheng);
   assert.equal(html.includes("/shared/modules/bound.js"), true);
   assert.equal(html.includes("边界数据中心"), true);
