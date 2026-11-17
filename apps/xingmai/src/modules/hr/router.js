@@ -65,12 +65,22 @@ function sendErr(res, err) {
 
 hrRouter.use(requireUser);
 
+const accessCache = new Map();
+
 async function viewerAllowed(req) {
+  if (canSeeHr(req.user)) return true;
+  const key = [req.user?.username, req.user?.displayName, req.user?.name, req.user?.department]
+    .map((value) => String(value || ""))
+    .join("|");
+  const hit = accessCache.get(key);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.allowed;
   const [people, users] = await Promise.all([
     loadRoster().catch(() => []),
     listDingUsers().catch(() => [])
   ]);
-  return canSeeHr(req.user, people, users);
+  const allowed = canSeeHr(req.user, people, users);
+  accessCache.set(key, { at: Date.now(), allowed });
+  return allowed;
 }
 
 hrRouter.get("/access", async (req, res) => {

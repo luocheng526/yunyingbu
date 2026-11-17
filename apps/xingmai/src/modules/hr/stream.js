@@ -1,5 +1,5 @@
 import { readDingEnv } from "./dingtalk.js";
-import { pullDay, pullLeaveAndOvertime, shanghaiToday } from "./sync.js";
+import { pullDay, pullLeaveAndOvertime, saveBoardSnapshot, shanghaiToday } from "./sync.js";
 
 const OPEN_URL = "https://api.dingtalk.com/v1.0/gateway/connections/open";
 
@@ -58,7 +58,12 @@ export function interestingEvent(message, corpId) {
 async function refreshUsers(userIds, client) {
   const day = shanghaiToday();
   await pullDay(day, { client, userIds });
-  await pullLeaveAndOvertime(day, client);
+  try {
+    await pullLeaveAndOvertime(day, client);
+  } catch {
+    /* 请假没跟上也不挡住当天留档 */
+  }
+  await saveBoardSnapshot(day);
 }
 
 export function startDingStream({ client, fetchImpl = globalThis.fetch, WebSocketImpl = globalThis.WebSocket } = {}) {

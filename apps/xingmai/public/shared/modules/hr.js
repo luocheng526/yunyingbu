@@ -260,7 +260,7 @@
       ];
       html = '<section class="hr-panel hr-board">' +
         '<div class="hr-board-head"><p class="hr-msg" data-msg></p>' +
-        '<label class="hr-month">统计日<input type="date" data-day value="' + esc(addDays(today, -1)) + '" /></label></div>' +
+        '<label class="hr-month">统计日<input type="date" data-day value="' + esc(today) + '" /></label></div>' +
         teams.map(function (team) {
           return '<section class="hr-team" data-team="' + team.id + '"><h2 class="hr-team-title">' + esc(team.title) + "</h2>" +
             '<div class="hr-board-kpis" data-board></div><div class="hr-kpi-list" data-kpi-list></div>' +
@@ -541,7 +541,7 @@
     });
     setUpdated(root, pack.updatedAt);
     if (!pack.configured) setMsg(root, "钉钉还没配置，看板先按空模板放着。", false);
-    else if (!pack.saved) setMsg(root, "这一天还没归档。每天 10 点保存前一天。", false);
+    else if (!pack.saved) setMsg(root, "这一天还没归档。每天 10 点留档昨天和今天。", false);
     else setMsg(root, "", false);
   }
 
@@ -840,7 +840,7 @@
     var tab = state.tab;
     if (tab === "attendance") {
       var dayInput = root.querySelector("[data-day]");
-      var day = dayInput && dayInput.value ? dayInput.value : addDays(shanghaiToday(), -1);
+      var day = dayInput && dayInput.value ? dayInput.value : shanghaiToday();
       state.boards = state.boards || {};
       var boardReq = state.boards[day]
         ? Promise.resolve(state.boards[day])
@@ -864,8 +864,14 @@
       });
       return;
     }
-    var peopleReq = api("/api/people").then(safePeople).catch(function () { return []; });
-    var statusReq = api("/api/hr/status").catch(function () { return { configured: false }; });
+    if (!state.people) {
+      state.people = api("/api/people").then(safePeople).catch(function () { return []; });
+    }
+    if (!state.status) {
+      state.status = api("/api/hr/status").catch(function () { return { configured: false }; });
+    }
+    var peopleReq = state.people;
+    var statusReq = state.status;
     var dataReq;
     if (tab === "overtime") {
       dataReq = api("/api/hr/effort" + monthQuery(root));
@@ -909,7 +915,7 @@
       btn.setAttribute("aria-selected", on ? "true" : "false");
       btn.tabIndex = on ? 0 : -1;
     });
-    paint(root, id, addDays(shanghaiToday(), -1).slice(0, 7), shanghaiToday());
+    paint(root, id, shanghaiToday().slice(0, 7), shanghaiToday());
     loadTab(root, state);
   }
 
@@ -1013,7 +1019,7 @@
         return '<button type="button" class="hr-tab" role="tab" data-tab="' + tab.id + '" aria-selected="' + (on ? "true" : "false") + '" tabindex="' + (on ? "0" : "-1") + '">' + esc(tab.label) + "</button>";
       }).join("") + '</div><div class="hr-refresh"><span class="hr-updated" data-updated>尚未更新</span>' +
       '<button type="button" class="hr-primary" data-act="refresh-board">刷新数据</button></div></div><div class="hr-body" role="tabpanel"></div></div>';
-    paint(root, state.tab, addDays(shanghaiToday(), -1).slice(0, 7), shanghaiToday());
+    paint(root, state.tab, shanghaiToday().slice(0, 7), shanghaiToday());
 
     function onClick(event) {
       var kpi = event.target.closest("[data-kpi]");
@@ -1033,7 +1039,7 @@
         event.preventDefault();
         if (refresh.disabled) return;
         var dayInput = root.querySelector("[data-day]");
-        var day = dayInput && dayInput.value ? dayInput.value : addDays(shanghaiToday(), -1);
+        var day = dayInput && dayInput.value ? dayInput.value : shanghaiToday();
         refresh.disabled = true;
         refresh.textContent = "正在拉取";
         api("/api/hr/sync", { method: "POST", body: { date: day } })

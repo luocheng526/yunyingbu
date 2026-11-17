@@ -652,7 +652,7 @@ export function daysOfMonth(yearMonth) {
 }
 
 export function shouldReconcileMonth(parts, latest, today) {
-  if (!parts || Number(parts.day) !== 1 || Number(parts.hour) < 10) return false;
+  if (!parts || Number(parts.day) !== 3 || Number(parts.hour) < 10) return false;
   const month = previousMonth(today);
   if (latest && latest.ok && latest.workDate === month) return false;
   return true;
@@ -1098,13 +1098,7 @@ export async function pullLate(workDate, client = createDingClient()) {
 export async function readStoredBoard(date) {
   const dates = [];
   for (let offset = 6; offset >= 0; offset -= 1) dates.push(addDays(date, -offset));
-  const today = shanghaiToday();
-  let metrics = await listBoardMetrics(dates);
-  for (const day of dates) {
-    if (day >= today || metrics[day]) continue;
-    await saveBoardSnapshot(day);
-  }
-  metrics = await listBoardMetrics(dates);
+  const metrics = await listBoardMetrics(dates);
   const punches = await readBoardPunches(date);
   const boards = BOARD_TEAMS.map((team) => {
     const packed = unpackTeam(punches && punches[team.id]);
@@ -1136,7 +1130,7 @@ export async function readStoredBoard(date) {
 
 export async function refreshBoardDay(workDate, client = createDingClient()) {
   const raw = String(workDate || "");
-  const day = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : addDays(shanghaiToday(), -1);
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : shanghaiToday();
   if (!client.configured()) {
     await recordSync("refresh", day, false, "钉钉还没配置");
     return { configured: false, workDate: day, updatedAt: "" };
@@ -1158,18 +1152,29 @@ export async function refreshBoardDay(workDate, client = createDingClient()) {
   };
 }
 
-export async function archiveYesterday(client = createDingClient()) {
-  const yesterday = addDays(shanghaiToday(), -1);
+export async function archiveDay(workDate, kind = "daily", client = createDingClient()) {
+  const day = String(workDate || "");
   if (!client.configured()) {
-    await recordSync("daily", yesterday, false, "钉钉还没配置");
-    return { configured: false, workDate: yesterday };
+    await recordSync(kind, day, false, "钉钉还没配置");
+    return { configured: false, workDate: day };
   }
   await refreshDirectory(client);
-  const pulled = await pullDay(yesterday, { client });
-  await pullLate(yesterday, client);
-  await saveBoardSnapshot(yesterday);
-  await recordSync("daily", yesterday, true, `已保存 ${yesterday}，打卡 ${pulled.punches?.length || 0} 条`);
-  return { configured: true, workDate: yesterday, users: pulled.users, punches: pulled.punches };
+  const pulled = await pullDay(day, { client });
+  let leaveCount = 0;
+  try {
+    const leaves = await pullLeaves(day, day, client);
+    leaveCount = leaves.leaves?.length || 0;
+  } catch (err) {
+    await recordSync(kind, day, false, String(err.message || "这一天的请假没有抓下来").slice(0, 180));
+  }
+  const late = await pullLate(day, client);
+  await saveBoardSnapshot(day);
+  await recordSync(kind, day, true, `已留档 ${day}，打卡 ${pulled.punches?.length || 0} 条，请假 ${leaveCount} 条，迟到 ${late.length} 人`);
+  return { configured: true, workDate: day, users: pulled.users, punches: pulled.punches, leaveCount, lateCount: late.length };
+}
+
+export async function archiveYesterday(client = createDingClient()) {
+  return archiveDay(addDays(shanghaiToday(), -1), "daily", client);
 }
 
 export async function reconcileMonth(yearMonth, client = createDingClient()) {
@@ -1244,16 +1249,16 @@ export function startScheduler(client = createDingClient()) {
     const yesterday = addDays(today, -1);
     if (shouldPullYesterday(parts, await latestSync("daily"), yesterday)) {
       try {
-        await archiveYesterday(client);
+        await archiveDay(yesterday, "daily", client);
       } catch (err) {
-        await recordSync("daily", yesterday, false, String(err.message || "前一天没有保存").slice(0, 180));
+        await recordSync("daily", yesterday, false, String(err.message || "前一天没有留档").slice(0, 180));
       }
     }
-    if (shouldPullYesterday(parts, await latestSync("leave"), yesterday)) {
+    if (shouldPullYesterday(parts, await latestSync("today"), today)) {
       try {
-        await refreshLeaves(client);
+        await archiveDay(today, "today", client);
       } catch (err) {
-        await recordSync("leave", yesterday, false, String(err.message || "请假和调休没有抓下来").slice(0, 180));
+        await recordSync("today", today, false, String(err.message || "当天没有留档").slice(0, 180));
       }
     }
     if (shouldReconcileMonth(parts, await latestSync("month"), today)) {
