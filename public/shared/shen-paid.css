@@ -1,8 +1,13 @@
 /* 沈子晗付费中心：总览 + 店铺下钻。不改全局壳子。 */
+.xm-paid.xm-ui-scope {
+  padding: 24px;
+  background: var(--xm-ui-bg, #f2f6fd);
+}
+
 .xm-paid {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .xm-paid .page-head {
@@ -43,9 +48,6 @@
 }
 
 .xm-paid .kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 12px;
   margin-bottom: 0;
 }
 
@@ -313,6 +315,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 16px;
   width: 100%;
 }
@@ -507,15 +510,7 @@
 
 #paid-board .xm-hm-live-filter select {
   width: 100%;
-  height: 40px;
-  box-sizing: border-box;
-  border: 1px solid #e4e7ed;
-  border-radius: 8px;
-  padding: 0 36px 0 14px;
-  font-size: 14px;
-  color: #262626;
-  background: #fff;
-  appearance: none;
+  min-width: 220px;
 }
 
 #paid-board .xm-hm-live-filter-box:after {
@@ -916,20 +911,26 @@
   margin-top: 12px;
 }
 
-#paid-board .xm-sp-shop-actions button {
-  height: 34px;
-  border-radius: 8px;
-  border: 1px solid #1677ff;
-  background: #1677ff;
-  color: #fff;
-  padding: 0 14px;
+#paid-board .xm-ui-page-actions {
+  position: relative;
+  flex-wrap: wrap;
+}
+
+#paid-board .xm-ui-page-actions .xm-ui-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+#paid-board [data-fee-filter] {
+  display: contents;
+}
+
+#paid-board [data-fee-filter] .xm-ui-stat-card {
   cursor: pointer;
 }
 
-#paid-board .xm-sp-shop-actions button[data-shop-cancel] {
-  background: #fff;
-  color: #374151;
-  border-color: #e4e7ed;
+#paid-board [data-fee-filter].is-on .xm-ui-stat-card {
+  box-shadow: inset 0 0 0 2px var(--xm-ui-primary, #1677ff);
 }
 
 .xm-paid .xm-sub-sort {
@@ -961,14 +962,12 @@
   margin-bottom: 12px;
 }
 
-#paid-board .xm-hl-chart,
 #paid-board .xm-hl-card,
 #paid-board .xm-hl-panel {
   background: #fff;
-  border-radius: 8px;
+  border-radius: 12px;
 }
 
-#paid-board .xm-hl-chart,
 #paid-board .xm-hl-card {
   padding: 14px 16px 8px;
 }
@@ -1412,5 +1411,19 @@
   #paid-board .xm-hl-charts,
   #paid-board .xm-hl-cards {
     grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .xm-sp-live-tabs {
+    flex: 1 1 100%;
+  }
+
+  .xm-sp-live-bar .xm-paid-meta {
+    margin-left: 0;
+  }
+
+  #paid-board .xm-hl-charts {
+    grid-template-columns: 1fr;
   }
 }

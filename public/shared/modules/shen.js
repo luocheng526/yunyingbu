@@ -472,7 +472,7 @@
     mount: function (root) {
       const paidCss = document.querySelector('link[href^="/shared/shen-paid.css"]') || document.createElement("link");
       paidCss.rel = "stylesheet";
-      paidCss.href = "/shared/shen-paid.css?v=0.1.772-paid-relogin";
+      paidCss.href = "/shared/shen-paid.css?v=0.1.956-paid-ui";
       if (!paidCss.parentNode) {
         document.head.appendChild(paidCss);
       }
@@ -534,10 +534,27 @@
 
       let view = parseHash();
       let feeWatch = "";
+      function xmButton(config) {
+        const item = config || {};
+        const html = window.XmUI.button({
+          label: item.label,
+          variant: item.variant,
+          size: item.size,
+          type: item.type,
+          id: item.id,
+          disabled: item.disabled,
+          icon: item.icon
+        });
+        if (!item.extra) {
+          return html;
+        }
+        return html.replace("<button ", "<button " + item.extra + " ");
+      }
+
       root.innerHTML =
-        '<main class="page xm-paid xm-paid-live">' +
+        '<main class="page xm-paid xm-paid-live xm-ui-scope">' +
         '<div class="xm-sp-live-bar" id="paid-live-bar">' +
-        '<nav class="xm-sp-live-tabs" id="paid-tabs" aria-label="主管分组"></nav>' +
+        '<nav class="xm-sp-live-tabs xm-ui-tabs" id="paid-tabs" aria-label="主管分组"></nav>' +
         '<div class="xm-paid-meta"><span class="xm-paid-dot" aria-hidden="true"></span>' +
         '<span id="paid-asof">等待回传</span></div></div>' +
         '<section id="paid-board"></section>' +
@@ -1294,15 +1311,13 @@
       function renderTabs() {
         function link(hash, label, on) {
           return (
-            '<a class="' +
-            (on ? "is-active" : "") +
-            '" href="' +
-            (hash || "#") +
+            '<button type="button" class="xm-ui-tab' +
+            (on ? " is-active" : "") +
             '" data-sp-tab="' +
             escapeHtml(hash) +
             '">' +
             escapeHtml(label) +
-            "</a>"
+            "</button>"
           );
         }
         tabsEl.innerHTML =
@@ -2632,16 +2647,11 @@
           scale: spec.scale || ""
         };
         const delta = spec.delta;
-        const legend = '<i class="is-yest"></i>昨天<i class="is-today"></i>今天';
         const meta = escapeHtml(JSON.stringify(spec.tips || []));
-        return (
-          '<article class="xm-hl-chart" data-deal-chart><div class="xm-hl-chart-head"><span>' +
-          escapeHtml(spec.title) +
-          '</span><span class="xm-hl-legs">' +
-          legend +
-          '</span></div><div class="xm-hl-value">' +
+        const body =
+          '<div class="xm-hl-value">' +
           escapeHtml(spec.value) +
-          "</div><div class=\"xm-hl-sub\">" +
+          '</div><div class="xm-hl-sub">' +
           (deal
             ? dealSubHtml(deal.compare)
             : "昨天 " +
@@ -2653,7 +2663,19 @@
           liveLine(plot) +
           '<div hidden data-deal-meta>' +
           meta +
-          '</div><div class="xm-hl-chart-tip" data-deal-tip hidden></div></article>'
+          '</div><div class="xm-hl-chart-tip" data-deal-tip hidden></div>';
+        return (
+          '<div class="xm-hl-chart" data-deal-chart>' +
+          window.XmUI.ChartCard({
+            title: spec.title,
+            ariaLabel: spec.title,
+            legend: [
+              { label: "昨天", color: "#69b1ff" },
+              { label: "今天", color: "#ff7875" }
+            ],
+            content: body
+          }) +
+          "</div>"
         );
       }
 
@@ -2786,17 +2808,16 @@
 
       function netMark(row) {
         if (row.online) {
-          return '<span class="xm-hl-net is-on">在线</span>';
+          return window.XmUI.StatusBadge({ label: "在线", tone: "success" });
         }
         if (row.loginExpired || row.offline) {
           const reason = row.offlineReason ? ' title="' + escapeHtml(row.offlineReason) + '"' : "";
-          return (
-            '<button type="button" class="xm-hl-net is-off" data-relogin="' +
-            escapeHtml(row.store) +
-            '"' +
-            reason +
-            ">掉线</button>"
-          );
+          return xmButton({
+            label: "掉线",
+            variant: "secondary",
+            size: "small",
+            extra: 'data-relogin="' + escapeHtml(row.store) + '"' + reason
+          });
         }
         return "";
       }
@@ -2806,20 +2827,22 @@
           return rankMark(index);
         }
         if (col.key === "shop") {
-          return (
-            '<button type="button" class="xm-hl-shop" data-open-shop="' +
-            escapeHtml(row.store) +
-            '">' +
-            escapeHtml(row.store) +
-            "</button>"
-          );
+          return xmButton({
+            label: row.store,
+            variant: "secondary",
+            size: "small",
+            extra: 'data-open-shop="' + escapeHtml(row.store) + '"'
+          });
         }
         if (col.key === "login") {
           const badge = netMark(row);
           const relogin = row.loginExpired
-            ? '<button type="button" class="xm-hl-relogin" data-relogin="' +
-              escapeHtml(row.store) +
-              '">重新登录</button>'
+            ? xmButton({
+                label: "重新登录",
+                variant: "secondary",
+                size: "small",
+                extra: 'data-relogin="' + escapeHtml(row.store) + '"'
+              })
             : "";
           if (!badge && !relogin) {
             return "";
@@ -3006,7 +3029,7 @@
             return sum + (layout.widths[col.key] || defaultColWidth(col.key));
           }, 0);
           return (
-            '<div class="xm-hl-table-wrap"><table class="xm-hl-table" style="width:' +
+            '<div class="xm-hl-table-wrap xm-ui-table-wrap"><table class="xm-hl-table xm-ui-table" style="width:' +
             tableWidth +
             'px"><colgroup>' +
             cols
@@ -3064,20 +3087,17 @@
             return diff || a.localeCompare(b, "zh");
           });
           if (!buckets.length) {
-            return homeTable([]);
+            return window.XmUI.EmptyState({ title: "该组还没有店铺" });
           }
           return buckets
             .map(function (name) {
               const listRows = byName[name];
-              return (
-                '<section class="xm-hl-group"><h3>' +
-                escapeHtml(name) +
-                "<span>" +
-                listRows.length +
-                "店</span></h3>" +
-                homeTable(listRows) +
-                "</section>"
-              );
+              return window.XmUI.ContentCard({
+                className: "xm-hl-group",
+                title: name,
+                description: listRows.length + "店",
+                content: homeTable(listRows)
+              });
             })
             .join("");
         }
@@ -3090,31 +3110,7 @@
         renderTabs();
         boardEl.hidden = false;
         kpiEl.hidden = true;
-        boardEl.innerHTML =
-          '<div class="xm-hl"><div class="xm-hm-live-filter"><div class="xm-hm-live-filter-left"><strong class="xm-hm-live-filter-lab">店铺列表</strong>' +
-          '<span class="xm-hm-live-filter-box"><select data-live-filter="pick">' +
-          option("", "责权归属", !pick) +
-          (groups.length
-            ? '<optgroup label="责权归属">' +
-              groups
-                .map(function (name) {
-                  return option("team:" + name, name, pick === "team:" + name);
-                })
-                .join("") +
-              "</optgroup>"
-            : "") +
-          (rows.length
-            ? '<optgroup label="店铺">' +
-              rows
-                .map(function (row) {
-                  return option("shop:" + row.store, row.store, pick === "shop:" + row.store);
-                })
-                .join("") +
-              "</optgroup>"
-            : "") +
-          '</select></span></div><div class="xm-hl-tools"><span class="xm-hl-clock">更新时间 ' +
-          escapeHtml(clock) +
-          '</span><button type="button" data-connect-jingmai>连接京麦</button><button type="button" data-add-shop>新增店铺</button><button type="button" data-head-open>表头设置</button><button type="button" data-refresh>刷新</button>' +
+        const headPop =
           '<div class="xm-hl-pop" data-head-pop hidden><p>实时</p>' +
           liveCols
             .map(function (col) {
@@ -3143,7 +3139,63 @@
               );
             })
             .join("") +
-          "</div></div></div>" +
+          "</div>";
+        const header = window.XmUI.PageContentHeader({
+          eyebrow: "沈子晗运营中心",
+          title: "付费中心",
+          description: "更新时间 " + clock,
+          actions: [
+            { label: "连接京麦", id: "paid-connect" },
+            { label: "新增店铺", variant: "secondary", id: "paid-add-shop" },
+            { label: "表头设置", variant: "secondary", id: "paid-head-open" },
+            { label: "刷新", variant: "secondary", id: "paid-refresh" }
+          ]
+        })
+          .replace('id="paid-connect"', 'id="paid-connect" data-connect-jingmai')
+          .replace('id="paid-add-shop"', 'id="paid-add-shop" data-add-shop')
+          .replace('id="paid-head-open"', 'id="paid-head-open" data-head-open')
+          .replace('id="paid-refresh"', 'id="paid-refresh" data-refresh')
+          .replace("</div></header>", headPop + "</div></header>");
+        function liveStat(label, value, tone, icon, filter) {
+          const card = window.XmUI.StatCard({ label: label, value: value, icon: icon, tone: tone });
+          if (!filter) {
+            return card;
+          }
+          return (
+            '<div data-fee-filter="' +
+            filter +
+            '"' +
+            (feeWatch === filter ? ' class="is-on"' : "") +
+            ' role="button" tabindex="0">' +
+            card +
+            "</div>"
+          );
+        }
+        boardEl.innerHTML =
+          '<div class="xm-hl">' +
+          header +
+          '<div class="xm-hm-live-filter"><div class="xm-hm-live-filter-left"><strong class="xm-hm-live-filter-lab">店铺列表</strong>' +
+          '<span class="xm-hm-live-filter-box"><select class="xm-ui-select" data-live-filter="pick">' +
+          option("", "责权归属", !pick) +
+          (groups.length
+            ? '<optgroup label="责权归属">' +
+              groups
+                .map(function (name) {
+                  return option("team:" + name, name, pick === "team:" + name);
+                })
+                .join("") +
+              "</optgroup>"
+            : "") +
+          (rows.length
+            ? '<optgroup label="店铺">' +
+              rows
+                .map(function (row) {
+                  return option("shop:" + row.store, row.store, pick === "shop:" + row.store);
+                })
+                .join("") +
+              "</optgroup>"
+            : "") +
+          "</select></span></div></div>" +
           '<div class="xm-hl-charts">' +
           homeChart({
             title: "实时总成交金额",
@@ -3172,37 +3224,20 @@
             tHours: feeToday.values,
             tips: trendTips(feeToday, feeYesterday, onlineTotal, "rate")
           }) +
-          '</div><div class="xm-hl-cards">' +
-          [
-            ["实时付费成交额", formatLive(deal), ""],
-            ["付费成交ROI", roi == null ? "—" : roi.toFixed(2), ""],
-            ["实时付费接入店铺数量", String(paidShops), ""],
-            ["实时付费超标店铺", String(hot), "hot"],
-            ["实时费比低店铺", String(cold), "cold"],
-            ["更新时间", clock, ""]
-          ]
-            .map(function (card) {
-              const key = card[2];
-              const on = key && feeWatch === key;
-              return (
-                '<article class="xm-hl-card' +
-                (key ? " is-click" : "") +
-                (on ? " is-on" : "") +
-                '"' +
-                (key ? ' data-fee-filter="' + key + '" role="button" tabindex="0"' : "") +
-                '><div class="label">' +
-                escapeHtml(card[0]) +
-                '</div><div class="xm-hl-value">' +
-                escapeHtml(card[1]) +
-                "</div></article>"
-              );
-            })
-            .join("") +
-          '</div><section class="xm-hl-panel">' +
+          '</div><div class="xm-ui-stat-grid">' +
+          liveStat("实时付费成交额", formatLive(deal), "blue", "chart") +
+          liveStat("付费成交ROI", roi == null ? "—" : roi.toFixed(2), "purple", "award") +
+          liveStat("实时付费接入店铺数量", String(paidShops), "green", "users") +
+          liveStat("实时付费超标店铺", String(hot), "orange", "chart", "hot") +
+          liveStat("实时费比低店铺", String(cold), "purple", "chart", "cold") +
+          liveStat("更新时间", clock, "blue", "file") +
+          "</div>" +
           (feeWatch && !listed.length
-            ? '<p class="xm-hl-empty">' + (feeWatch === "hot" ? "没有费比超标的店铺" : "没有费比偏低的店铺") + "</p>"
+            ? window.XmUI.EmptyState({
+                title: feeWatch === "hot" ? "没有费比超标的店铺" : "没有费比偏低的店铺"
+              })
             : groupedTables(listed)) +
-          '<p class="xm-hl-note">连接京麦和重新登录都在服务器里登录组织中心保存的账号。验证出现在弹出的画面里，点画面就是在服务器上操作。登录成功后服务器每 5 分钟采集。成交金额来自京麦首页经营数据，付费金额、付费成交额和付费 ROI 来自京准通非全站营销概况。分组按组织中心的主管、储备。</p></section>' +
+          '<p class="xm-hl-note">连接京麦和重新登录都在服务器里登录组织中心保存的账号。验证出现在弹出的画面里，点画面就是在服务器上操作。登录成功后服务器每 5 分钟采集。成交金额来自京麦首页经营数据，付费金额、付费成交额和付费 ROI 来自京准通非全站营销概况。分组按组织中心的主管、储备。</p>' +
           '<div class="xm-sp-shop-modal" data-shop-modal hidden><form class="xm-sp-shop-dialog" data-shop-form>' +
           "<h3>新增店铺</h3><p class=\"xm-sp-shop-hint\">保存后归入沈子晗组，并出现在这份全部店铺里。登录账号在组织中心填写。</p>" +
           '<label>店铺名称<input name="storeName" required maxlength="64" autocomplete="off" /></label>' +
@@ -3210,15 +3245,19 @@
           '<label>运营<input name="operator" maxlength="40" autocomplete="off" /></label>' +
           '<label>店铺ID<input name="storeId" maxlength="32" autocomplete="off" /></label>' +
           '<p class="xm-sp-shop-error" data-shop-error hidden></p>' +
-          '<div class="xm-sp-shop-actions"><button type="submit">保存</button>' +
-          '<button type="button" data-shop-cancel>取消</button></div></form></div>' +
+          '<div class="xm-sp-shop-actions">' +
+          xmButton({ label: "保存", type: "submit" }) +
+          xmButton({ label: "取消", variant: "secondary", extra: "data-shop-cancel" }) +
+          "</div></form></div>" +
           '<div class="xm-sp-shop-modal" data-desk-modal hidden><div class="xm-sp-shop-dialog is-desk" role="dialog" aria-modal="true">' +
           '<h3>服务器登录</h3><p class="xm-sp-shop-hint" data-desk-shop>正在服务器上登录…</p>' +
           '<p class="xm-sp-shop-hint" data-desk-state></p>' +
           '<img class="xm-hl-desk" data-desk-shot alt="" />' +
           '<label>验证码<input data-desk-code maxlength="20" autocomplete="off" /></label>' +
-          '<div class="xm-sp-shop-actions"><button type="button" data-desk-code-send>发送验证码</button>' +
-          '<button type="button" data-desk-close>关闭</button></div></div></div>' +
+          '<div class="xm-sp-shop-actions">' +
+          xmButton({ label: "发送验证码", extra: "data-desk-code-send" }) +
+          xmButton({ label: "关闭", variant: "secondary", extra: "data-desk-close" }) +
+          "</div></div></div>" +
           '<pre id="shen-paid-live-snapshot" hidden>' +
           JSON.stringify(snapshot).replace(/</g, "\\u003c") +
           "</pre></div>";
@@ -3659,16 +3698,17 @@
         ];
         kpiEl.hidden = false;
         boardEl.hidden = true;
+        boardEl.innerHTML = "";
+        kpiEl.classList.add("xm-ui-stat-grid");
         kpiEl.innerHTML = cards
           .map(function (card) {
-            return (
-              '<article class="kpi-card"><div class="label">' +
-              escapeHtml(card.label) +
-              '</div><div class="value">' +
-              card.value +
-              (card.unit ? '<span class="unit">' + escapeHtml(card.unit) + "</span>" : "") +
-              "</div></article>"
-            );
+            return window.XmUI.StatCard({
+              label: card.label,
+              value: card.value,
+              unit: card.unit || "",
+              icon: "chart",
+              tone: "blue"
+            });
           })
           .join("");
       }
@@ -3701,7 +3741,7 @@
 
       function renderSubaccounts(accounts) {
         if (!accounts.length) {
-          return '<p class="empty">本地程序尚未回传子账号明细</p>';
+          return window.XmUI.EmptyState({ title: "本地程序尚未回传子账号明细" });
         }
         const body = accounts
           .map(function (group, index) {
@@ -3721,9 +3761,14 @@
             return (
               '<tr class="xm-paid-sub-row" data-sub-index="' +
               index +
-              '"><td><button type="button" class="xm-paid-expand" aria-expanded="false" data-sub-index="' +
-              index +
-              '">▸</button><span class="xm-paid-sub-name">' +
+              '"><td>' +
+              xmButton({
+                label: "▸",
+                variant: "secondary",
+                size: "small",
+                extra: 'aria-expanded="false" data-sub-index="' + index + '"'
+              }).replace("xm-ui-button", "xm-paid-expand xm-ui-button") +
+              '<span class="xm-paid-sub-name">' +
               escapeHtml(group.subAccountName || group.subAccountId) +
               '</span><span class="xm-paid-date">' +
               escapeHtml(group.subAccountId) +
@@ -3733,17 +3778,17 @@
               "</tr>" +
               '<tr class="xm-paid-sub-history" data-sub-index="' +
               index +
-              '" hidden><td colspan="11"><div class="xm-paid-nested"><p class="lead">该子账号各时间段明细</p><table><thead><tr>' +
+              '" hidden><td colspan="11"><div class="xm-paid-nested"><p class="lead">该子账号各时间段明细</p><div class="xm-ui-table-wrap"><table class="xm-ui-table"><thead><tr>' +
               "<th>时间段</th><th>余额</th><th>账户备注</th><th>花费</th><th>投产比</th><th>单量</th>" +
               "<th>订单金额</th><th>展现数</th><th>点击数</th><th>点击率</th><th>平均点击成本</th>" +
               "</tr></thead><tbody>" +
               dayRows +
-              "</tbody></table></div></td></tr>"
+              "</tbody></table></div></div></td></tr>"
             );
           })
           .join("");
         return (
-          '<div class="xm-paid-table-wrap"><table><thead><tr>' +
+          '<div class="xm-paid-table-wrap xm-ui-table-wrap"><table class="xm-ui-table"><thead><tr>' +
           "<th>子账号</th><th>余额</th><th>账户备注</th><th>花费</th><th>投产比</th><th>单量</th>" +
           "<th>订单金额</th><th>展现数</th><th>点击数</th><th>点击率</th><th>平均点击成本</th>" +
           "</tr></thead><tbody>" +
@@ -3776,43 +3821,39 @@
         });
         const rechargeRows = recharge.rows || [];
         const rechargeTable = rechargeRows.length
-          ? '<div class="xm-paid-table-wrap"><table><thead><tr>' +
-            "<th>充值时间</th><th>子账号名称</th><th>充值金额</th><th>账户余额</th>" +
-            "</tr></thead><tbody>" +
-            rechargeRows
-              .map(function (row) {
-                return (
-                  "<tr><td>" +
-                  escapeHtml(shortStamp(row.chargedAt || row.date)) +
-                  "</td><td>" +
-                  recorded(row.subAccountName) +
-                  "</td><td>" +
-                  money(row.amount) +
-                  "</td><td>" +
-                  money(row.balance) +
-                  "</td></tr>"
-                );
+          ? window.XmUI.DataTable({
+              columns: [
+                { key: "time", label: "充值时间" },
+                { key: "name", label: "子账号名称" },
+                { key: "amount", label: "充值金额" },
+                { key: "balance", label: "账户余额" }
+              ],
+              rows: rechargeRows.map(function (row) {
+                const name = String(row.subAccountName == null ? "" : row.subAccountName).trim();
+                return {
+                  time: shortStamp(row.chargedAt || row.date),
+                  name: name || "未记录",
+                  amount: money(row.amount),
+                  balance: money(row.balance)
+                };
               })
-              .join("") +
-            "</tbody></table></div>"
-          : '<p class="empty">暂无充值记录，本地程序回传后在此展示</p>';
+            })
+          : window.XmUI.EmptyState({ title: "暂无充值记录", description: "本地程序回传后在此展示" });
         bodyEl.innerHTML =
-          '<section class="panel"><div class="xm-paid-toolbar"><div class="xm-paid-toolbar-left">' +
-          '<button type="button" class="xm-paid-back" id="paid-back">返回付费中心</button>' +
-          "<h2>" +
-          escapeHtml(store) +
-          "</h2></div></div></section>" +
+          window.XmUI.PageContentHeader({
+            title: store,
+            description:
+              "累计充值 " +
+              money((recharge.totals || {}).amount) +
+              " · " +
+              integer((recharge.totals || {}).count) +
+              " 笔",
+            actions: [{ label: "返回付费中心", variant: "secondary", id: "paid-back" }]
+          }) +
           '<div class="xm-paid-detail-grid">' +
-          '<section class="panel"><h2>子账号</h2>' +
-          renderSubaccounts(accounts) +
-          "</section>" +
-          '<section class="panel"><h2>充值记录</h2><p class="lead">累计充值 ' +
-          money((recharge.totals || {}).amount) +
-          " · " +
-          integer((recharge.totals || {}).count) +
-          " 笔</p>" +
-          rechargeTable +
-          "</section></div>";
+          window.XmUI.ContentCard({ title: "子账号", content: renderSubaccounts(accounts) }) +
+          window.XmUI.ContentCard({ title: "充值记录", content: rechargeTable }) +
+          "</div>";
         const back = root.querySelector("#paid-back");
         if (back) {
           back.addEventListener("click", function () {
@@ -3880,42 +3921,43 @@
         }
         boardEl.hidden = true;
         kpiEl.hidden = true;
+        const backAction = [{ label: "返回付费中心", variant: "secondary", id: "paid-back" }];
         if (!row) {
           bodyEl.innerHTML =
-            '<section class="panel"><button type="button" class="xm-paid-back" id="paid-back">返回付费中心</button>' +
-            '<p class="empty">服务器京麦里没有这家店</p></section>';
+            window.XmUI.PageContentHeader({ title: store, actions: backAction }) +
+            window.XmUI.EmptyState({ title: "服务器京麦里没有这家店" });
         } else {
-          const hours = hourList(null)
-            .map(function (_n, index) {
-              const label = String(index).padStart(2, "0") + ":00";
-              return (
-                "<tr><td>" +
-                label +
-                "</td><td>" +
-                money(row.todayHours[index]) +
-                "</td><td>" +
-                money(row.yesterdayHours[index]) +
-                "</td></tr>"
-              );
-            })
-            .join("");
+          const hours = hourList(null).map(function (_n, index) {
+            return {
+              hour: String(index).padStart(2, "0") + ":00",
+              today: money(row.todayHours[index]),
+              yesterday: money(row.yesterdayHours[index])
+            };
+          });
           bodyEl.innerHTML =
-            '<section class="panel"><div class="xm-paid-toolbar"><div class="xm-paid-toolbar-left">' +
-            '<button type="button" class="xm-paid-back" id="paid-back">返回付费中心</button><h2>' +
-            escapeHtml(row.store) +
-            "</h2></div></div><p class=\"lead\">" +
-            escapeHtml(row.owner) +
-            " · 今日成交 " +
-            money(row.jingmaiGmv) +
-            " · 昨日成交 " +
-            money(row.yesterdayGmv) +
-            " · 推广花费 " +
-            money(row.spend) +
-            "</p></section>" +
-            '<section class="panel"><h2>小时成交</h2><div class="xm-paid-table-wrap"><table><thead><tr>' +
-            "<th>小时</th><th>今天</th><th>昨天</th></tr></thead><tbody>" +
-            hours +
-            "</tbody></table></div></section>";
+            window.XmUI.PageContentHeader({
+              title: row.store,
+              description:
+                (row.owner || "") +
+                " · 今日成交 " +
+                money(row.jingmaiGmv) +
+                " · 昨日成交 " +
+                money(row.yesterdayGmv) +
+                " · 推广花费 " +
+                money(row.spend),
+              actions: backAction
+            }) +
+            window.XmUI.ContentCard({
+              title: "小时成交",
+              content: window.XmUI.DataTable({
+                columns: [
+                  { key: "hour", label: "小时" },
+                  { key: "today", label: "今天" },
+                  { key: "yesterday", label: "昨天" }
+                ],
+                rows: hours
+              })
+            });
         }
         const back = root.querySelector("#paid-back");
         if (back) {

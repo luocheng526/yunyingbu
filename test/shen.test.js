@@ -434,9 +434,10 @@ test("shen module mounts product and paid content only", async () => {
     assert.match(embed.text, /\/api\/shen\/paid\/jingmai/);
     assert.match(embed.text, /连接京麦/);
     assert.match(embed.text, /重新登录/);
-    assert.match(embed.text, /xm-hl-net is-on">在线/);
-    assert.match(embed.text, /xm-hl-net is-off/);
-    assert.match(embed.text, />掉线<\/button>/);
+    assert.match(embed.text, /xm-ui-scope/);
+    assert.match(embed.text, /window\.XmUI/);
+    assert.match(embed.text, /StatusBadge\(\{ label: "在线", tone: "success" \}\)/);
+    assert.match(embed.text, /label: "掉线"/);
     assert.match(embed.text, /key: "login", label: "登录状态"/);
     const homeCols = embed.text.slice(embed.text.indexOf("const HOME_COLS"), embed.text.indexOf("const HEAD_KEY"));
     const homeKeys = [...homeCols.matchAll(/key: "([^"]+)"/g)].map((match) => match[1]);
