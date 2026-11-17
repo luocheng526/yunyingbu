@@ -56,6 +56,21 @@
     return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
   }
 
+  function ico(d, c, s) {
+    const size = s || 22;
+    return (
+      '<svg viewBox="0 0 24 24" width="' +
+      size +
+      '" height="' +
+      size +
+      '" fill="none" stroke="' +
+      (c || "currentColor") +
+      '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+      d +
+      "</svg>"
+    );
+  }
+
   function ensureCss() {
     let css = document.getElementById("xm-me-page-css");
     if (!css) {
@@ -75,18 +90,28 @@
       ".me-page.xm-ui-scope img{max-width:none!important;}" +
       ".me-page.xm-ui-scope svg{max-width:none!important;}" +
       ".me-banner{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px;flex:0 0 auto;align-items:stretch;}" +
-      ".me-banner .xm-ui-card,.me-banner .xm-ui-stat-card{height:100%;min-height:0;}" +
-      ".me-banner .xm-ui-card__body{display:flex;align-items:center;gap:16px;padding:12px 16px!important;}" +
-      ".me-avatar{position:relative;display:block;width:72px;height:72px;flex:0 0 72px;cursor:pointer;margin:0!important;overflow:visible;}" +
-      ".me-avatar img{width:72px!important;height:72px!important;border-radius:50%;object-fit:cover;border:3px solid #fff;display:block;background:#dbeafe;}" +
+      ".me-banner .xm-ui-card,.me-banner .xm-ui-stat-card{height:100%;}" +
+      ".me-banner .xm-ui-stat-card{flex-wrap:wrap;min-height:108px;}" +
+      ".me-banner .me-safe-bar{flex:1 0 100%;}" +
+      ".me-banner .xm-ui-card.me-profile{overflow:hidden;border-color:#d7e8ff;background:#eaf3ff url(\"data:image/svg+xml," +
+      encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 120" fill="none"><path d="M280 120H0V78c28-10 48-28 78-28 22 0 32 14 50 14 24 0 36-26 64-26 26 0 38 22 58 22 34 0 46-40 30-60" fill="#cfe4ff" opacity=".55"/><rect x="168" y="42" width="22" height="62" rx="3" fill="#93c5fd"/><rect x="194" y="28" width="28" height="76" rx="3" fill="#60a5fa"/><rect x="226" y="48" width="20" height="56" rx="3" fill="#93c5fd"/><rect x="248" y="38" width="18" height="66" rx="3" fill="#7dd3fc"/></svg>'
+      ) +
+      "\") no-repeat right 8px bottom;background-size:180px 96px,auto;}" +
+      ".me-banner .me-profile .xm-ui-card__body{display:flex;align-items:center;gap:16px;padding:14px 18px!important;}" +
+      ".me-avatar{position:relative;display:block;width:84px;height:84px;flex:0 0 84px;cursor:pointer;margin:0!important;overflow:visible;}" +
+      ".me-avatar img{width:84px!important;height:84px!important;border-radius:50%;object-fit:cover;border:3px solid #fff;display:block;background:#dbeafe;}" +
       ".me-page input.me-file,.me-page #who-avatar-file{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;border:0!important;opacity:0!important;}" +
       ".me-avatar-cam{position:absolute;right:0;bottom:0;width:22px;height:22px;border-radius:50%;background:var(--xm-ui-primary,#1677ff);color:#fff;display:grid;place-items:center;border:2px solid #fff;}" +
       ".me-who{min-width:0;flex:1;}" +
       ".me-who h2{margin:0;font-size:22px;display:inline;}" +
+      ".me-role{display:inline-flex;margin-left:8px;padding:2px 10px;border-radius:999px;background:var(--xm-ui-primary-soft,#eaf3ff);color:var(--xm-ui-primary,#1677ff);font-size:12px;font-weight:700;}" +
       ".me-meta{margin:6px 0 4px;color:var(--xm-ui-text-secondary,#52617a);font-size:13px;}" +
       ".me-bio{margin:0;color:var(--xm-ui-text-secondary,#52617a);font-size:13px;}" +
+      ".me-safe-bar{margin:0 18px 14px;height:8px;border-radius:99px;background:#e5e7eb;overflow:hidden;}" +
+      ".me-safe-bar span{display:block;height:100%;width:86%;background:linear-gradient(90deg,#4ade80,#22c55e);}" +
       ".me-page .xm-ui-filter-toolbar{flex:0 0 auto;margin-bottom:8px;padding:8px 10px;}" +
-      ".me-split{display:grid;grid-template-columns:minmax(0,.88fr) minmax(0,1fr) minmax(0,1.22fr);gap:10px;align-items:stretch;flex:1;min-height:0;overflow:hidden;}" +
+      ".me-split{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1fr) minmax(0,1.25fr);gap:10px;align-items:stretch;flex:1;min-height:0;overflow:hidden;}" +
       ".me-col{min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;}" +
       ".me-col > .xm-ui-card{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;}" +
       ".me-col > .xm-ui-card:has(.me-actions){flex:0 0 auto;}" +
@@ -104,8 +129,15 @@
       ".me-kv strong{font-weight:700;display:inline-flex;align-items:center;gap:6px;}" +
       ".me-ico-btn{border:0!important;background:transparent!important;color:#8b98ad!important;cursor:pointer;padding:0!important;display:inline-flex;height:auto!important;}" +
       ".me-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;}" +
-      ".me-actions .xm-ui-button{width:100%;padding:8px 4px!important;min-height:58px!important;flex-direction:column;gap:4px;}" +
-      ".me-perm{margin:0;}" +
+      ".me-actions .xm-ui-button{width:100%;padding:10px 4px 8px!important;min-height:64px!important;flex-direction:column;gap:6px;border-color:transparent!important;background:var(--xm-ui-surface-soft,#f7f9fc)!important;color:var(--xm-ui-text,#17233d)!important;box-shadow:none!important;}" +
+      ".me-actions .xm-ui-button span{font-size:12px;font-weight:700;}" +
+      ".me-perm-box{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:12px;background:var(--xm-ui-primary-soft,#eaf3ff);}" +
+      ".me-perm-box strong{display:block;margin-bottom:4px;}" +
+      ".me-perm-box p{margin:0;color:var(--xm-ui-text-secondary,#52617a);font-size:12px;}" +
+      ".me-dev{display:grid;grid-template-columns:minmax(0,1.2fr) auto auto auto;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--xm-ui-border,#e4ebf5);font-size:12px;}" +
+      ".me-dev:first-child{border-top:0;}" +
+      ".me-dev-n{display:inline-flex;align-items:center;gap:8px;font-weight:700;flex-wrap:wrap;}" +
+      ".me-city,.me-time{color:var(--xm-ui-text-muted,#8b98ad);white-space:nowrap;}" +
       ".me-page input:not([type=file]){display:block;width:100%;margin:0 0 8px;padding:8px 12px;border:1px solid var(--xm-ui-border-strong,#d7e2f0);border-radius:8px;font:inherit;font-size:13px;background:#fff;box-sizing:border-box;}" +
       ".me-page .status{min-height:0;margin:0 0 4px;font-size:13px;}" +
       ".me-page .status.error{color:var(--xm-ui-red,#e5484d);}" +
@@ -178,14 +210,18 @@
         'id="me-hard-reload" title="绕过缓存重新加载本页"'
       );
 
-      function quick(label, extra) {
-        return withAttr(UI.button({ label: label, variant: "secondary", size: "small" }), extra);
+      function quick(label, extra, iconPath, color) {
+        return withAttr(UI.button({ label: label, variant: "secondary", size: "small" }), extra).replace(
+          ">" + label,
+          ">" + ico(iconPath, color || "#1677ff", 22) + "<span>" + label + "</span>"
+        );
       }
 
       const tabs = UI.FilterToolbar({
         search: false,
         tabs: [
           { label: "基本信息", value: "basic", active: true },
+          { label: "账号安全", value: "security" },
           { label: "消息通知", value: "notice" },
           { label: "我的权限", value: "rights" },
           { label: "登录设备管理", value: "devices" },
@@ -196,6 +232,7 @@
         .replace('class="xm-ui-filter-toolbar"', 'class="xm-ui-filter-toolbar" id="me-tabs"');
 
       const profileCard = UI.ContentCard({
+        className: "me-profile",
         content:
           '<label class="me-avatar" id="who-avatar" title="点击上传头像" for="who-avatar-file">' +
           '<img id="who-avatar-img" alt="" src="' +
@@ -206,21 +243,20 @@
           "</span></label>" +
           '<input class="me-file" id="who-avatar-file" type="file" accept="image/*" />' +
           '<div class="me-who"><h2 id="who-name">—</h2> ' +
-          '<span class="xm-ui-status xm-ui-status--blue"><i aria-hidden="true"></i><span id="who-role"></span></span>' +
+          '<span class="me-role" id="who-role"></span>' +
           '<p class="me-meta">工号：<b id="who-no"></b><span>　|　</span>所属部门：<b id="who-dept-top"></b></p>' +
           '<p class="me-bio" id="who-bio"></p></div>'
       });
 
-      const safeCard = withAttr(
-        UI.StatCard({
-          icon: "check",
-          tone: "green",
-          label: "账号安全",
-          value: "安全等级：高",
-          note: "已开启：登录密码、手机验证、操作日志"
-        }),
-        'data-go="security"'
-      ).replace("<article ", '<article data-go="security" ');
+      const safeCard = UI.StatCard({
+        icon: "check",
+        tone: "green",
+        label: "账号安全",
+        value: "安全等级：高",
+        note: "已开启：登录密码、手机验证、操作日志"
+      })
+        .replace("<article ", '<article data-go="security" ')
+        .replace("</article>", '<div class="me-safe-bar"><span></span></div></article>');
 
       const securityCard = UI.ContentCard({
         title: "账号安全",
@@ -270,31 +306,24 @@
         title: "快捷操作",
         content:
           '<div class="me-actions">' +
-          quick("修改密码", 'data-go="security"') +
-          quick("绑定手机", 'data-soon="绑定手机"') +
-          quick("修改邮箱", 'id="go-email"') +
-          quick("头像设置", 'id="go-avatar"') +
-          quick("通知设置", 'data-soon="通知设置"') +
-          quick("界面偏好", 'data-soon="界面偏好"') +
-          quick("语言设置", 'data-soon="语言设置"') +
-          quick("二次验证", 'data-soon="二次验证"') +
+          quick("修改密码", 'data-go="security"', '<path d="M8 11V8a4 4 0 1 1 8 0v3M6 11h12v9H6z"/>', "#1677ff") +
+          quick("绑定手机", 'data-soon="绑定手机"', '<rect x="8" y="3" width="8" height="18" rx="2"/><path d="M11 18h2"/>', "#0ea5e9") +
+          quick("修改邮箱", 'id="go-email"', '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="m4 8 8 6 8-6"/>', "#1677ff") +
+          quick("头像设置", 'id="go-avatar"', '<circle cx="12" cy="8" r="3"/><path d="M5 19c.8-3 3.4-5 7-5s6.2 2 7 5"/>', "#6366f1") +
+          quick("通知设置", 'data-soon="通知设置"', '<path d="M6 9a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9"/>', "#ef4444") +
+          quick("界面偏好", 'data-soon="界面偏好"', '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8"/>', "#1677ff") +
+          quick("语言设置", 'data-soon="语言设置"', '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/>', "#0d9488") +
+          quick("二次验证", 'data-soon="二次验证"', '<path d="M12 3 20 7v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/>', "#1677ff") +
           "</div>"
       });
 
       const permCard = UI.ContentCard({
         title: "我的权限",
         action: "查看详情",
-        content: UI.StatCard({
-          icon: "award",
-          tone: "blue",
-          label: "运营管理权限组",
-          value: "12",
-          unit: "项",
-          note: "包含：店铺数据、商品管理、推广管理、运营报表等 12 项权限"
-        })
-          .replace('xm-ui-stat-card__label">', 'xm-ui-stat-card__label" id="perm-name">')
-          .replace('xm-ui-stat-card__value">', 'xm-ui-stat-card__value" id="perm-count">')
-          .replace('xm-ui-stat-card__note">', 'xm-ui-stat-card__note" id="perm-desc">')
+        content:
+          '<div class="me-perm-box"><span class="xm-ui-stat-card__icon xm-ui-tone--blue">' +
+          UI.icon("award") +
+          '</span><div><strong id="perm-name">运营管理权限组</strong><p id="perm-desc"></p></div></div>'
       }).replace('class="xm-ui-text-action"', 'class="xm-ui-text-action" data-go="rights"');
 
       const deviceCard = UI.ContentCard({
@@ -376,7 +405,7 @@
 
       function showTab(id) {
         const paneId = id === "security" ? "basic" : id;
-        const tabId = id === "security" ? "basic" : id;
+        const tabId = id;
         root.querySelectorAll("[data-me-tab]").forEach(function (btn) {
           const on = btn.getAttribute("data-me-tab") === tabId;
           btn.classList.toggle("is-active", on);
@@ -404,47 +433,30 @@
               "xm-ui-button--small me-dev-out"
             )
           : "⋯";
-        const columns = [
-          { key: "name", label: "设备" },
-          { key: "city", label: "地点" },
-          { key: "time", label: "时间" },
-          { key: "status", label: "状态", type: "status" }
-        ];
-        if (managed) {
-          columns.push({
-            key: "action",
-            label: "操作",
-            render: function (_value, row) {
-              return row.current ? "本机" : kick;
-            }
-          });
+        const monitor = ico('<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8"/>', "#64748b", 18);
+        const phone = ico('<rect x="8" y="3" width="8" height="18" rx="2"/><path d="M11 18h2"/>', "#64748b", 18);
+        const now = UI.StatusBadge({ label: "当前设备", tone: "success" });
+        function row(icon, name, city, time, current) {
+          return (
+            '<div class="me-dev"><span class="me-dev-n">' +
+            icon +
+            " " +
+            name +
+            (current ? now : "") +
+            '</span><span class="me-city">' +
+            city +
+            '</span><span class="me-time">' +
+            time +
+            "</span><span>" +
+            (current && managed ? "本机" : current ? "⋯" : kick) +
+            "</span></div>"
+          );
         }
-        return UI.DataTable({
-          columns: columns,
-          rows: [
-            {
-              name: "Windows · Chrome",
-              city: "深圳市",
-              time: "2026-11-17 10:24",
-              status: { label: "当前设备", tone: "success" },
-              current: true
-            },
-            {
-              name: "iPhone 15",
-              city: "深圳市",
-              time: "2026-11-16 21:08",
-              status: { label: "在线", tone: "blue" },
-              current: false
-            },
-            {
-              name: "Mac · Safari",
-              city: "广州市",
-              time: "2026-11-15 18:32",
-              status: { label: "在线", tone: "blue" },
-              current: false
-            }
-          ]
-        });
+        return (
+          row(monitor, "Windows · Chrome", "深圳市", "2026-11-17 10:24", true) +
+          row(phone, "iPhone 15", "深圳市", "2026-11-16 21:08", false) +
+          row(monitor, "Mac · Safari", "广州市", "2026-11-15 18:32", false)
+        );
       }
 
       function fillWho(user) {
@@ -507,10 +519,6 @@
         });
         const count = Math.max(granted.length, 12);
         root.querySelector("#perm-name").textContent = "运营管理权限组";
-        const countEl = root.querySelector("#perm-count");
-        if (countEl) {
-          countEl.innerHTML = String(count) + "<small>项</small>";
-        }
         root.querySelector("#perm-desc").textContent =
           "包含：店铺数据、商品管理、推广管理、运营报表等 " + count + " 项权限";
         if (!groups || !groups.length) {
@@ -594,7 +602,7 @@
         if (!kick) {
           return;
         }
-        const row = kick.closest("tr");
+        const row = kick.closest(".me-dev");
         if (row) {
           row.remove();
         }
