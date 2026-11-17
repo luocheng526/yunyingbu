@@ -7,10 +7,10 @@ import { currentUser, publicProfile, resolveDesk } from "./auth.js";
 import { APP_ICON_PNG } from "./app-icon-png.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.778-nochild
+// xm-fast-shell 0.1.779-watermark
 // login.html 不走 HTML 内存缓存；login.css 禁止 immutable。必须和 home/pages.js 成套发。
 
-export const SHELL_ASSET_VER = "0.1.778-nochild";
+export const SHELL_ASSET_VER = "0.1.779-watermark";
 export const WEB_MANIFEST = {
   name: "星脉甄选运营中心",
   short_name: "星脉甄选",
@@ -137,6 +137,30 @@ function escapeHtml(value) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+const WATERMARK_CELLS = 80;
+
+export function watermarkLabel(user) {
+  const name = String((user && (user.displayName || user.username)) || "").trim();
+  return name ? `甄选：${name}` : "";
+}
+
+export function injectWatermark(html, user) {
+  const text = String(html || "");
+  const label = watermarkLabel(user);
+  if (!label || isLoginHtml(text) || text.includes('class="xm-watermark"')) {
+    return text;
+  }
+  const safe = escapeHtml(label);
+  const cells = Array.from({ length: WATERMARK_CELLS }, () => `<span>${safe}</span>`).join("");
+  const block =
+    `<div class="xm-watermark" data-xm-watermark="${safe}" aria-hidden="true">` +
+    `<div class="xm-watermark-sheet">${cells}</div></div>\n`;
+  if (text.includes("</body>")) {
+    return text.replace("</body>", `${block}  </body>`);
+  }
+  return text + block;
 }
 
 function bootProfile(user) {
@@ -465,6 +489,7 @@ export function injectHtmlShell(req, res, next) {
       }
       if (req.user) {
         html = injectBootUser(html, req.user);
+        html = injectWatermark(html, req.user);
       }
       return send(html);
     }
