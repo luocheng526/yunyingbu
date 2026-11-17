@@ -31,7 +31,9 @@
     splitCombo: false,
     comboMode: "whole",
     profilePane: "info",
-    shopView: "list"
+    shopView: "list",
+    sortKey: "",
+    sortDir: "desc"
   };
   var active = 0;
   var timer = 0;
@@ -52,10 +54,10 @@
     var style = document.createElement("style");
     style.id = "bd-page-style";
     style.textContent = [
-      ".bd-app{display:grid;grid-template-columns:156px minmax(0,1fr);min-height:640px;background:#f4f6fa;color:#1f2329;font-size:13px;}",
+      ".bd-app{display:grid;grid-template-columns:112px minmax(0,1fr);min-height:640px;background:#f4f6fa;color:#1f2329;font-size:13px;}",
       ".bd-side{background:#fff;border-right:1px solid #e6e8ee;padding:8px 0;}",
       ".bd-mod{margin:12px 14px 4px;color:#86909c;font-size:12px;}",
-      ".bd-side button{display:block;width:100%;height:34px;padding:0 14px;border:0;background:transparent;color:#1f2329;text-align:left;cursor:pointer;}",
+      ".bd-side button{display:block;width:100%;height:30px;padding:0 10px;border:0;background:transparent;color:#1f2329;text-align:left;cursor:pointer;font-size:12px;}",
       ".bd-side button.is-on{background:#e8f1ff;color:#3b6cff;font-weight:650;}",
       ".bd-main{min-width:0;padding:16px 16px 24px;}",
       ".bd-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:12px;}",
@@ -69,6 +71,7 @@
       ".bd-presets button{height:24px;padding:0 8px;border:0;border-radius:4px;background:transparent;color:#4e5969;cursor:pointer;font:inherit;font-size:12px;}",
       ".bd-presets button.is-on{background:#e8f1ff;color:#3b6cff;}",
       ".bd-primary{height:30px;padding:0 12px;border:0;border-radius:4px;background:#3b6cff;color:#fff;cursor:pointer;font:inherit;font-size:12px;}",
+      ".bd-kpi-head .bd-primary{margin-left:auto;height:28px;}",
       ".bd-kpis{margin:0 0 12px;padding:8px 4px 12px;background:#fff;border:1px solid #eceff5;border-radius:6px;}",
       ".bd-kpi-head{display:flex;gap:12px;align-items:center;margin:0 12px 4px;font-size:14px;}",
       ".bd-kpi-head span{color:#86909c;font-size:12px;}",
@@ -109,9 +112,13 @@
       ".bd-table th,.bd-table td{padding:8px 10px;border-bottom:1px solid #f0f2f5;text-align:right;white-space:nowrap;}",
       ".bd-table th:first-child,.bd-table td:first-child,.bd-table th:nth-child(2),.bd-table td:nth-child(2){text-align:left;}",
       ".bd-table th{background:#fafafa;color:#3b6cff;font-weight:500;}",
-      ".bd-num{display:inline-block;min-width:56px;padding:2px 6px;border-radius:2px;text-align:right;}",
-      ".bd-num.is-up{background:#ffece8;color:#f53f3f;}",
-      ".bd-num.is-down{background:#e8ffea;color:#00b42a;}",
+      ".bd-table th button{border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;}",
+      ".bd-table tr.bd-total td{font-weight:650;background:#fafafa;}",
+      ".bd-dot{display:inline-block;width:8px;height:8px;margin-right:6px;border-radius:2px;vertical-align:middle;}",
+      ".bd-num{display:inline-block;min-width:56px;padding:2px 6px;border-radius:2px;text-align:right;color:#1d2129;}",
+      ".bd-num.is-neg{color:#00b42a;}",
+      ".bd-num.is-solid.is-up{background:#f53f3f;color:#fff;}",
+      ".bd-num.is-solid.is-down{background:#00b42a;color:#fff;}",
       ".bd-bars{display:flex;flex-direction:column;gap:8px;padding:8px 0;}",
       ".bd-bar{display:grid;grid-template-columns:120px minmax(0,1fr) 120px;gap:8px;align-items:center;}",
       ".bd-bar i{display:block;height:8px;background:#3b6cff;border-radius:4px;}",
@@ -335,7 +342,14 @@
     if (column.rate) {
       text += "%";
     }
-    return '<span class="bd-num ' + (num < 0 ? "is-down" : "is-up") + '">' + esc(text) + "</span>";
+    var solid = column.solid || column.key === "profit" || column.key === "lrl" || column.key === "grossRate";
+    var tone = solid ? (num < 0 ? "is-solid is-down" : "is-solid is-up") : (num < 0 ? "is-neg" : "");
+    return '<span class="bd-num ' + tone + '">' + esc(text) + "</span>";
+  }
+
+  function channelDot(name) {
+    var color = { "京东": "#e1251b", "天猫": "#ff0036", "淘宝": "#ff5000", "抖音": "#111111", "拼多多": "#e02e24", "快手": "#ff4906", "全部": "#3b6cff", "全渠道": "#3b6cff", "汇总": "#3b6cff" }[name] || "";
+    return color ? '<i class="bd-dot" style="background:' + color + '"></i>' : "";
   }
 
   function renderStatus(data) {
@@ -348,11 +362,7 @@
     } else if (coverage.status === "denied") {
       bad = "当前账号没有这个菜单。";
     }
-    var note = "爬虫，非 ERP。查询只读本库，不会因为刷新去旧站重抓。";
-    if (!bad && data.sumNote) {
-      note += esc(data.sumNote);
-    }
-    return '<p class="bd-status">' + note + "</p>" + (bad ? '<p class="bd-banner">' + bad + "</p>" : "");
+    return '<p class="bd-status">爬虫，非 ERP。</p>' + (bad ? '<p class="bd-banner">' + bad + "</p>" : "");
   }
 
   function renderCards(data) {
@@ -360,20 +370,23 @@
       return "";
     }
     var cards = data.cards.filter(function (card) { return card.on; }).map(function (card) {
-      var missing = data.cardStatus !== "ready" || card.value == null || card.value === "";
-      var text = missing ? "未采完" : formatCard(card);
+      var rangeMissing = data.cardStatus !== "ready";
+      var empty = card.value == null || card.value === "";
+      var text = rangeMissing ? "未采完" : (empty ? "—" : formatCard(card));
       var num = Number(card.value);
       var tone = "";
-      if (!missing && num < 0) {
+      if (!rangeMissing && !empty && num < 0) {
         tone = "is-down";
-      } else if (!missing && card.rate && num > 0) {
+      } else if (!rangeMissing && !empty && card.rate && num > 0) {
         tone = "is-up";
       }
       var sub = card.note != null ? card.note : (card.rate ? "" : "达成率 —");
-      return '<article class="bd-kpi"><span>' + esc(card.label) + '</span><b class="' + tone + '">' + text + "</b><em>" + sub + "</em></article>";
-    }).join("");
+      return '<article class="bd-kpi"><span>' + esc(card.label) + '</span><b class="' + tone + '">' + text + "</b><em>" + (sub || "&nbsp;") + "</em></article>";
+    });
     var title = cardTitle(data.page && data.page.id);
-    return '<section class="bd-kpis"><div class="bd-kpi-head"><strong>' + esc(title) + '</strong><span>渠道 ' + esc(data.total) + ' 个</span><span>店铺 ' + esc((data.shops || []).length) + ' 个</span><button type="button" class="bd-outline" data-act="panel" data-panel="cards">设定指标</button></div><div class="bd-kpi-row">' + cards + "</div></section>";
+    var first = cards.slice(0, 9).join("");
+    var rest = cards.slice(9).join("");
+    return '<section class="bd-kpis"><div class="bd-kpi-head"><strong>' + esc(title) + '</strong><span>渠道 ' + esc(data.total) + ' 个</span><span>店铺 ' + esc((data.shops || []).length) + ' 个</span><button type="button" class="bd-primary" data-act="panel" data-panel="cards">设定指标</button></div><div class="bd-kpi-row">' + first + "</div>" + (rest ? '<div class="bd-kpi-row">' + rest + "</div>" : "") + "</section>";
   }
 
   function chips(items, key) {
@@ -584,20 +597,44 @@
     }
     var suffix = data.page && data.page.id === "channelAnalysisNew" ? (state.compare === "mom" ? "环比" : "同比") : "";
     var showOpener = !(data.page && (data.page.id === "channelOverview" || data.page.id === "channelAnalysis"));
+    if (state.sortKey) {
+      var sortColumn = null;
+      cols.forEach(function (column) {
+        if (column.key === state.sortKey) {
+          sortColumn = column;
+        }
+      });
+      if (sortColumn) {
+        list = list.slice().sort(function (left, right) {
+          var a = metricOf(left, sortColumn);
+          var b = metricOf(right, sortColumn);
+          var an = Number(a);
+          var bn = Number(b);
+          var cmp = Number.isFinite(an) && Number.isFinite(bn) ? an - bn : String(a || "").localeCompare(String(b || ""), "zh");
+          return state.sortDir === "asc" ? cmp : -cmp;
+        });
+      }
+    }
     var head = "<tr>" + (showOpener ? "<th></th>" : "") + cols.map(function (column) {
       var label = column.label + (suffix && column.numeric ? suffix : "");
-      return "<th>" + esc(label) + "</th>";
+      var mark = state.sortKey === column.key ? (state.sortDir === "asc" ? " ↑" : " ↓") : "";
+      return '<th><button type="button" data-act="sort" data-key="' + esc(column.key) + '">' + esc(label) + mark + "</button></th>";
     }).join("") + "</tr>";
     var body = list.map(function (row) {
       var cells = cols.map(function (column) {
-        return "<td>" + formatCell(metricOf(row, column), column) + "</td>";
+        var value = formatCell(metricOf(row, column), column);
+        if (column.key === "name") {
+          value = channelDot(row.name) + value;
+        }
+        return "<td>" + value + "</td>";
       }).join("");
       var detail = row.fields && state.open[row.key] ? '<tr><td colspan="' + (cols.length + (showOpener ? 1 : 0)) + '" class="bd-detail">' + row.fields.map(function (field) {
         return "<div>" + esc(field.key) + "：" + esc(field.value) + "</div>";
       }).join("") + '<label>跟进 <input data-act="mark" data-key="' + esc(row.key) + '" data-field="follow" value="' + esc(row.follow) + '"></label><label>打标 <input data-act="mark" data-key="' + esc(row.key) + '" data-field="tag" value="' + esc(row.tag) + '"></label><label>目标 <input data-act="mark" data-key="' + esc(row.key) + '" data-field="target" value="' + esc(row.target) + '"></label></td></tr>' : "";
       var openerLabel = data.page && data.page.id === "channelAnalysisNew" ? "跟进 待办 打标" : "明细";
       var opener = row.fields ? '<button type="button" class="bd-linkish" data-act="expand" data-key="' + esc(row.key) + '">' + openerLabel + "</button>" : "";
-      return "<tr>" + (showOpener ? "<td>" + opener + "</td>" : "") + cells + "</tr>" + detail;
+      var total = row.name === "全部" || row.name === "全渠道" || row.name === "汇总";
+      return '<tr class="' + (total ? "bd-total" : "") + '">' + (showOpener ? "<td>" + opener + "</td>" : "") + cells + "</tr>" + detail;
     }).join("");
     if (!list.length) {
       body = '<tr><td colspan="' + (cols.length + (showOpener ? 1 : 0)) + '">' + (data.coverage.status === "ready" ? "这个范围内没有记录。" : "未采完") + "</td></tr>";
@@ -615,6 +652,7 @@
       }
       return column;
     });
+    columns.splice(1, 0, { key: "platform", label: "渠道", numeric: false, aliases: ["platform", "channelName"] });
     var byShop = {};
     (data.rows || []).forEach(function (row) {
       if (row.shop) {
@@ -799,6 +837,16 @@
       } else if (act === "dim") {
         state.dim = node.getAttribute("data-dim");
         state.pageNo = 1;
+      } else if (act === "sort") {
+        var sortKey = node.getAttribute("data-key");
+        if (state.sortKey === sortKey) {
+          state.sortDir = state.sortDir === "desc" ? "asc" : "desc";
+        } else {
+          state.sortKey = sortKey;
+          state.sortDir = "desc";
+        }
+        paint(root);
+        return;
       } else if (act === "view") {
         state.view = node.getAttribute("data-view");
         paint(root);

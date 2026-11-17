@@ -410,6 +410,7 @@ function columnsFrom(pref, page, tab) {
     numeric: Boolean(column.numeric || column.money || column.rate),
     money: Boolean(column.money),
     rate: Boolean(column.rate),
+    solid: Boolean(column.solid),
     aliases: column.aliases || []
   }));
 }
