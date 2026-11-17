@@ -6,7 +6,7 @@ import { beginRelogin, beginReloginAll, reloginState, resetJingmaiDeps, setJingm
 import { patchConnectPicker } from "../src/modules/home/connect-patch.js";
 import { listCollectTargets, listSessions, resetJingmaiStore, saveSession } from "../src/modules/home/jingmai-store.js";
 import { packJingmaiShops } from "../src/modules/home/local-paid.js";
-import { browserCandidates, browserLaunchOrder, browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginScreenState, readDebugTargets, realBrowserBinary, sessionReady, unpackDebBuffer, waitForDebugPort } from "../src/modules/home/jingmai-desk.js";
+import { browserCandidates, browserLaunchOrder, browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginScreenState, readDebugTargets, realBrowserBinary, resolveBrowserBinary, sessionReady, unpackDebBuffer, waitForDebugPort } from "../src/modules/home/jingmai-desk.js";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import zlib from "node:zlib";
@@ -834,6 +834,8 @@ test("a shell wrapper is not used as the login browser", () => {
     writeFileSync(elf, Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0, 0, 0, 0]));
     assert.equal(realBrowserBinary(script), "");
     assert.equal(realBrowserBinary(elf), elf);
+    assert.equal(resolveBrowserBinary(script), "");
+    assert.equal(resolveBrowserBinary(elf), elf);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

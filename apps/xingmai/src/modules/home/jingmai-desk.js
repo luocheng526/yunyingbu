@@ -218,6 +218,30 @@ export function realBrowserBinary(file) {
   }
 }
 
+export function resolveBrowserBinary(file) {
+  const direct = realBrowserBinary(file);
+  if (direct) {
+    return direct;
+  }
+  if (!file || !existsSync(file)) {
+    return "";
+  }
+  let text = "";
+  try {
+    text = readFileSync(file, "utf8").slice(0, 4000);
+  } catch {
+    return "";
+  }
+  if (!text.startsWith("#!") || text.includes("snap")) {
+    return "";
+  }
+  const match = text.match(/\/opt\/google\/chrome\/chrome\b|\/usr\/lib\/chromium[^ \n"']+|\/usr\/lib64\/chromium[^ \n"']+/);
+  if (!match) {
+    return "";
+  }
+  return realBrowserBinary(match[0]);
+}
+
 function reservePort() {
   return new Promise(function (resolve, reject) {
     const server = createServer();
@@ -975,8 +999,13 @@ export function ensureChrome() {
   });
 }
 
+function deskSession(ws) {
+  return ws && ws.__sessionId ? ws.__sessionId : undefined;
+}
+
 function send(ws, method, params, sessionId, timeoutMs) {
   const id = ws.__seq = (ws.__seq || 0) + 1;
+  const sid = sessionId == null ? deskSession(ws) : sessionId;
   return new Promise(function (resolve, reject) {
     const timer = setTimeout(function () {
       ws.removeEventListener("message", onMessage);
@@ -992,7 +1021,7 @@ function send(ws, method, params, sessionId, timeoutMs) {
       if (message.id !== id) {
         return;
       }
-      if (sessionId && message.sessionId && message.sessionId !== sessionId) {
+      if (sid && message.sessionId && message.sessionId !== sid) {
         return;
       }
       clearTimeout(timer);
@@ -1005,20 +1034,74 @@ function send(ws, method, params, sessionId, timeoutMs) {
     }
     ws.addEventListener("message", onMessage);
     const payload = { id: id, method: method, params: params || {} };
-    if (sessionId) {
-      payload.sessionId = sessionId;
+    if (sid) {
+      payload.sessionId = sid;
     }
     ws.send(JSON.stringify(payload));
   });
 }
 
 function evaluate(ws, expression, timeoutMs) {
-  return send(ws, "Runtime.evaluate", { expression: expression, returnByValue: true, awaitPromise: true }, undefined, timeoutMs).then(function (result) {
+  return send(ws, "Runtime.evaluate", { expression: expression, returnByValue: true, awaitPromise: true }, deskSession(ws), timeoutMs).then(function (result) {
     if (result.exceptionDetails) {
       return null;
     }
     return result.result ? result.result.value : null;
   });
+}
+
+async function reconnectDesk(desk) {
+  if (!desk || !desk.port || !desk.chrome || desk.chrome.exitCode != null) {
+    return false;
+  }
+  try {
+    const list = await readDebugTargets("http://127.0.0.1:" + desk.port + "/json/list", undefined, 2000);
+    const page = Array.isArray(list) ? list.find(function (item) {
+      return item.type === "page" && item.webSocketDebuggerUrl;
+    }) : null;
+    const version = await readDebugTargets("http://127.0.0.1:" + desk.port + "/json/version", undefined, 2000);
+    const browserUrl = version && version.webSocketDebuggerUrl;
+    if (browserUrl) {
+      try {
+        if (desk.ws) {
+          desk.ws.close();
+        }
+      } catch {
+        /* ignore */
+      }
+      desk.ws = await connectSocket(browserUrl);
+      desk.ws.__sessionId = "";
+      if (page && page.id) {
+        try {
+          await send(desk.ws, "Target.setDiscoverTargets", { discover: true }, "", 2000);
+          const attached = await send(desk.ws, "Target.attachToTarget", { targetId: page.id, flatten: true }, "", 3000);
+          desk.ws.__sessionId = attached && attached.sessionId ? attached.sessionId : "";
+          desk.sessionId = desk.ws.__sessionId;
+        } catch {
+          desk.ws.__sessionId = "";
+        }
+      }
+      if (desk.ws.__sessionId) {
+        return true;
+      }
+    }
+    if (!page || !page.webSocketDebuggerUrl) {
+      return false;
+    }
+    try {
+      if (desk.ws) {
+        desk.ws.close();
+      }
+    } catch {
+      /* ignore */
+    }
+    desk.ws = await connectSocket(page.webSocketDebuggerUrl);
+    desk.ws.__sessionId = "";
+    desk.sessionId = "";
+    return desk.ws.readyState === 1;
+  } catch {
+    return false;
+  }
 }
 
 function discard(desk) {
@@ -1345,7 +1428,7 @@ async function launchChrome(signal) {
   if (signal && signal.aborted) {
     throw browserAbortError();
   }
-  lastLaunchNote = "";
+  lastLaunchNote = "正在找服务器上的 Chrome";
   stopBooting();
   const bins = [];
   browserLaunchOrder([
@@ -1353,19 +1436,19 @@ async function launchChrome(signal) {
     "/usr/bin/chromium",
     "/usr/bin/chromium-browser",
     installedBinary(),
-    findChrome()
+    findChrome(),
+    process.env.CHROME_PATH
   ]).forEach(function (path) {
-    const real = realBrowserBinary(path);
+    const real = resolveBrowserBinary(path) || realBrowserBinary(path);
     if (real && bins.indexOf(real) < 0) {
       bins.push(real);
     }
   });
-  if (!bins.length && findChrome()) {
-    bins.push(findChrome());
-  }
   if (!bins.length) {
-    throw browserLaunchError(new Error(browserStartFailure()));
+    lastLaunchNote = "服务器上没有可用的 Chrome";
+    throw browserLaunchError(new Error(lastLaunchNote));
   }
+  lastLaunchNote = "正在启动 " + bins[0];
   let lastError = null;
   for (let i = 0; i < bins.length; i += 1) {
     if (signal && signal.aborted) {
@@ -1373,35 +1456,49 @@ async function launchChrome(signal) {
     }
     const chromePath = bins[i];
     const host = hostChromePath(chromePath);
-    if (host) {
-      fontConfig = "";
-    } else {
+    fontConfig = "";
+    if (!host) {
       try {
-        fontConfig = await ensureLoginFont();
+        fontConfig = await Promise.race([
+          ensureLoginFont(),
+          sleep(1500).then(function () {
+            return "";
+          })
+        ]);
       } catch {
         fontConfig = "";
       }
     }
     libraryPath = libSearchPath(libHome());
-    const budget = 10000;
-    try {
-      return await startChromeProcess(chromePath, signal, budget);
-    } catch (error) {
-      lastError = error;
-      const message = String((error && error.message) || "");
-      if (message && message !== "aborted") {
-        lastLaunchNote = message;
-      }
-      stopBooting();
+    const flagSets = [
+      ["--headless=new", "--remote-debugging-address=127.0.0.1", "--remote-allow-origins=*"],
+      ["--headless=new", "--remote-allow-origins=*"],
+      ["--headless", "--remote-allow-origins=*"]
+    ];
+    for (let f = 0; f < flagSets.length; f += 1) {
       if (signal && signal.aborted) {
         throw browserAbortError();
+      }
+      lastLaunchNote = "正在启动浏览器 " + (i + 1) + "/" + bins.length;
+      try {
+        return await startChromeProcess(chromePath, signal, 8000, flagSets[f]);
+      } catch (error) {
+        lastError = error;
+        const message = String((error && error.message) || "");
+        if (message && message !== "aborted") {
+          lastLaunchNote = message;
+        }
+        stopBooting();
+        if (signal && signal.aborted) {
+          throw browserAbortError();
+        }
       }
     }
   }
   throw browserLaunchError(lastError || new Error(browserStartFailure()));
 }
 
-async function startChromeProcess(chromePath, signal, budgetMs) {
+async function startChromeProcess(chromePath, signal, budgetMs, extraFlags) {
   const dir = mkdtempSync(tmpdir() + "/shen-jingmai-");
   const env = Object.assign({}, process.env);
   if (libraryPath) {
@@ -1410,9 +1507,13 @@ async function startChromeProcess(chromePath, signal, budgetMs) {
   if (fontConfig) {
     env.FONTCONFIG_FILE = fontConfig;
   }
-  const port = await reservePort();
-  const chrome = spawn(chromePath, [
-    "--headless=new",
+  const port = await Promise.race([
+    reservePort(),
+    sleep(2000).then(function () {
+      throw Object.assign(new Error("没有空闲的调试端口"), { code: "browser" });
+    })
+  ]);
+  const flags = [
     "--no-sandbox",
     "--disable-dev-shm-usage",
     "--disable-gpu",
@@ -1422,11 +1523,15 @@ async function startChromeProcess(chromePath, signal, budgetMs) {
     "--lang=zh-CN",
     "--window-size=1100,720",
     "--user-data-dir=" + dir,
-    "--remote-debugging-address=127.0.0.1",
-    "--remote-debugging-port=" + port,
-    "--remote-allow-origins=*",
-    LOGIN_URL
-  ], { env: env, stdio: ["ignore", "pipe", "pipe"] });
+    "--remote-debugging-port=" + port
+  ];
+  (extraFlags || ["--headless=new", "--remote-debugging-address=127.0.0.1", "--remote-allow-origins=*"]).forEach(function (flag) {
+    if (flags.indexOf(flag) < 0) {
+      flags.push(flag);
+    }
+  });
+  flags.push(LOGIN_URL);
+  const chrome = spawn(chromePath, flags, { env: env, stdio: ["ignore", "pipe", "pipe"] });
   booting = chrome;
   const controller = new AbortController();
   bootAbort = controller;
@@ -1474,21 +1579,54 @@ async function startChromeProcess(chromePath, signal, budgetMs) {
         finish(Object.assign(error, { code: "browser" }));
       });
     });
+    const version = await readDebugTargets("http://127.0.0.1:" + readyPort + "/json/version", linked, 4000);
+    const browserUrl = version && version.webSocketDebuggerUrl;
     const list = await readDebugTargets("http://127.0.0.1:" + readyPort + "/json/list", linked, 4000);
     const page = Array.isArray(list) ? list.find(function (item) {
-      return item.type === "page";
+      return item.type === "page" && item.webSocketDebuggerUrl;
     }) : null;
-    if (!page || !page.webSocketDebuggerUrl) {
+    if (!page && !browserUrl) {
       throw Object.assign(new Error("json"), { code: "browser" });
     }
-    const ws = await connectSocket(page.webSocketDebuggerUrl);
+    let ws = null;
+    let sessionId = "";
+    if (browserUrl) {
+      ws = await connectSocket(browserUrl);
+      try {
+        await send(ws, "Target.setDiscoverTargets", { discover: true }, undefined, 3000);
+        const targetId = page && page.id;
+        if (targetId) {
+          const attached = await send(ws, "Target.attachToTarget", { targetId: targetId, flatten: true }, undefined, 4000);
+          sessionId = attached && attached.sessionId ? attached.sessionId : "";
+        }
+      } catch {
+        sessionId = "";
+      }
+    }
+    if (!sessionId) {
+      if (!page || !page.webSocketDebuggerUrl) {
+        throw Object.assign(new Error("json"), { code: "browser" });
+      }
+      try {
+        if (ws) {
+          ws.close();
+        }
+      } catch {
+        /* ignore */
+      }
+      ws = await connectSocket(page.webSocketDebuggerUrl);
+      sessionId = "";
+    }
     if (booting === chrome) {
       booting = null;
     }
     if (bootAbort === controller) {
       bootAbort = null;
     }
-    return { chrome: chrome, dir: dir, ws: ws, port: readyPort, password: "" };
+    if (ws) {
+      ws.__sessionId = sessionId || "";
+    }
+    return { chrome: chrome, dir: dir, ws: ws, port: readyPort, sessionId: sessionId || "", password: "" };
   } catch (error) {
     if (booting === chrome) {
       booting = null;
@@ -1721,14 +1859,19 @@ async function acquireDesk(store, ticket, signal) {
   desk.store = store;
   current = desk;
   loginVisible = true;
-  await send(desk.ws, "Page.enable");
-  await send(desk.ws, "Network.enable");
-  await send(desk.ws, "Emulation.setDeviceMetricsOverride", {
-    width: 1100,
-    height: 720,
-    deviceScaleFactor: 1,
-    mobile: false
-  });
+  lastLaunchNote = "浏览器已打开，正在接登录页";
+  try {
+    await send(desk.ws, "Page.enable", {}, undefined, 3000);
+    await send(desk.ws, "Network.enable", {}, undefined, 3000);
+    await send(desk.ws, "Emulation.setDeviceMetricsOverride", {
+      width: 1100,
+      height: 720,
+      deviceScaleFactor: 1,
+      mobile: false
+    }, undefined, 3000);
+  } catch {
+    /* page commands can continue after the picture is already up */
+  }
   return desk;
 }
 
@@ -1759,21 +1902,24 @@ async function readLoginPage(ws) {
 
 async function finishOpen(desk, loginName, password, ticket) {
   try {
+    loginVisible = true;
+    lastLaunchNote = LOGIN_SCREEN_MESSAGE;
     let streak = 0;
     let sawPage = false;
-    for (let attempt = 0; attempt < 20; attempt += 1) {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
       if (ticket !== openTicket || current !== desk) {
         return { status: "login", message: "登录已取消" };
       }
-      await sleep(700);
+      if (attempt > 0) {
+        await sleep(500);
+      }
       const page = await readLoginPage(desk.ws);
       if (loginPageVisible(page)) {
-        loginVisible = true;
         sawPage = true;
       }
       if (loginPageSettled(page)) {
         streak += 1;
-        if (streak >= 2) {
+        if (streak >= 1) {
           break;
         }
       } else {
@@ -1783,15 +1929,15 @@ async function finishOpen(desk, loginName, password, ticket) {
     if (ticket !== openTicket || current !== desk) {
       return { status: "login", message: "登录已取消" };
     }
-    if (streak >= 2) {
-      await fillAndSubmit(desk.ws, loginName, password);
+    if (streak >= 1 && loginName && password) {
+      try {
+        await fillAndSubmit(desk.ws, loginName, password);
+      } catch {
+        /* keep the picture open for manual login */
+      }
     }
     password = "";
-    loginVisible = true;
-    if (!sawPage) {
-      return { status: "verify", message: LOGIN_SCREEN_MESSAGE, formReady: false };
-    }
-    for (let attempt = 0; attempt < 8; attempt += 1) {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
       if (ticket !== openTicket || current !== desk) {
         return { status: "login", message: "登录已取消" };
       }
@@ -1808,22 +1954,22 @@ async function finishOpen(desk, loginName, password, ticket) {
         return { status: "ok", cookies: cookies };
       }
       const page = await readLoginPage(desk.ws);
-      if (loginPageVisible(page)) {
-        loginVisible = true;
-      }
       const screen = loginScreenState(page && page.text, Boolean(page && page.accountVisible));
       if (screen.status === "login") {
         return screen;
       }
-      await sleep(700);
+      if (sawPage || loginPageVisible(page)) {
+        return { status: "verify", message: LOGIN_SCREEN_MESSAGE, formReady: true };
+      }
+      await sleep(400);
     }
-    return { status: "verify", message: LOGIN_SCREEN_MESSAGE, formReady: true };
+    return { status: "verify", message: LOGIN_SCREEN_MESSAGE, formReady: Boolean(sawPage) };
   } finally {
     password = "";
   }
 }
 
-export async function openDesk({ store, loginName, password, reveal, onStep } = {}) {
+export async function openDesk({ store, loginName, password, reveal, onStep, signal } = {}) {
   const ticket = ++openTicket;
   const step = function (message) {
     if (message && typeof onStep === "function") {
@@ -1833,34 +1979,44 @@ export async function openDesk({ store, loginName, password, reveal, onStep } = 
   let desk = null;
   let launchTimedOut = false;
   let launchTimer = null;
+  const boot = new AbortController();
+  const linked = signal ? AbortSignal.any([signal, boot.signal]) : boot.signal;
   try {
     loginVisible = false;
     shotCache = { at: 0, store: "", image: null, ready: false };
+    lastLaunchNote = "正在启动浏览器";
     step("正在启动浏览器");
-    const launching = acquireDesk(store, ticket);
+    const launching = acquireDesk(store, ticket, linked);
     launching.catch(function () {});
     desk = await Promise.race([
       launching,
       new Promise(function (_resolve, reject) {
         launchTimer = setTimeout(function () {
           launchTimedOut = true;
+          lastLaunchNote = browserStartFailure();
+          try {
+            boot.abort();
+          } catch {
+            /* ignore */
+          }
           stopBooting();
           reject(browserAbortError());
-        }, 50000);
+        }, 12000);
       })
     ]);
-    if (!desk || ticket !== openTicket || launchTimedOut) {
+    if (!desk || ticket !== openTicket || launchTimedOut || linked.aborted) {
       if (desk && desk !== current) {
         discard(desk);
       }
       if (ticket === openTicket) {
         openTicket += 1;
       }
-      return { status: "login", message: launchTimedOut ? browserStartFailure() : "登录已取消" };
+      return { status: "login", message: lastLaunchNote && lastLaunchNote !== "aborted" ? lastLaunchNote : (launchTimedOut ? browserStartFailure() : "登录已取消") };
     }
     step("正在打开登录页");
+    lastLaunchNote = "正在打开京麦登录页";
     try {
-      await send(desk.ws, "Page.navigate", { url: LOGIN_URL }, undefined, 20000);
+      await send(desk.ws, "Page.navigate", { url: LOGIN_URL }, undefined, 8000);
     } catch (error) {
       if (!String(error && error.message || "").includes("timeout")) {
         throw error;
@@ -1874,12 +2030,14 @@ export async function openDesk({ store, loginName, password, reveal, onStep } = 
     if (ticket === openTicket) {
       stopCurrent();
     }
-    if (ticket === openTicket && (launchTimedOut || (error && error.code === "browser"))) {
+    if (ticket === openTicket && (launchTimedOut || (error && error.code === "browser") || (signal && signal.aborted))) {
       openTicket += 1;
     }
-    if (error && (error.code === "browser" || launchTimedOut)) {
+    if (error && (error.code === "browser" || launchTimedOut || (signal && signal.aborted))) {
       console.error("jingmai browser", error.message);
-      const detail = error && error.message && error.message !== "aborted" ? error.message : "";
+      const detail = lastLaunchNote && lastLaunchNote !== "aborted" && lastLaunchNote !== "正在启动浏览器"
+        ? lastLaunchNote
+        : (error && error.message && error.message !== "aborted" ? error.message : "");
       return { status: "login", message: detail || browserStartFailure() };
     }
     if (String(error && error.message || "").includes("timeout")) {
@@ -1895,10 +2053,21 @@ export async function openDesk({ store, loginName, password, reveal, onStep } = 
   }
 }
 
+export function launchNote() {
+  return lastLaunchNote && lastLaunchNote !== "aborted" ? lastLaunchNote : "";
+}
+
 export async function pollDesk(store) {
-  if (!current || current.store !== store || !current.ws || current.ws.readyState !== 1) {
-    const note = lastLaunchNote && lastLaunchNote !== "aborted" ? lastLaunchNote : "";
-    return { status: "opening", message: note || "正在启动浏览器" };
+  if (!current || current.store !== store) {
+    const note = launchNote();
+    return { status: "opening", message: note || "正在启动浏览器", note: note };
+  }
+  if (!deskUsable(current)) {
+    const ok = await reconnectDesk(current);
+    if (!ok) {
+      const note = launchNote();
+      return { status: "opening", message: note || PAGE_WAIT_MESSAGE, note: note };
+    }
   }
   try {
     const cookies = await readCookies(current.ws);
@@ -1906,12 +2075,13 @@ export async function pollDesk(store) {
     if (sessionReady(href, cookies)) {
       return { status: "ok", cookies: cookies };
     }
-    if (!loginVisible) {
-      loginVisible = true;
-      return { status: "verify", message: LOGIN_SCREEN_MESSAGE };
-    }
+    loginVisible = true;
   } catch {
-    return { status: "opening", message: PAGE_WAIT_MESSAGE };
+    const ok = await reconnectDesk(current);
+    if (!ok) {
+      return { status: "opening", message: PAGE_WAIT_MESSAGE };
+    }
+    loginVisible = true;
   }
   return { status: "verify", message: LOGIN_SCREEN_MESSAGE };
 }
@@ -1925,8 +2095,14 @@ function holdShots(ms) {
 }
 
 export async function shotDesk(store) {
-  if (!current || current.store !== store || !current.ws) {
+  if (!current || current.store !== store) {
     return null;
+  }
+  if (!deskUsable(current)) {
+    const ok = await reconnectDesk(current);
+    if (!ok) {
+      return shotCache.ready && shotCache.store === store ? shotCache.image : null;
+    }
   }
   const now = Date.now();
   if (shotCache.ready && shotCache.store === store && shotCache.image && (now - shotCache.at < 1600 || now < shotHold)) {
@@ -1942,11 +2118,17 @@ export async function shotDesk(store) {
 }
 
 async function captureShot(store) {
-  if (!current || current.store !== store || !current.ws || current.ws.readyState !== 1) {
+  if (!current || current.store !== store) {
     return shotCache.ready && shotCache.store === store ? shotCache.image : null;
   }
+  if (!deskUsable(current)) {
+    const ok = await reconnectDesk(current);
+    if (!ok) {
+      return shotCache.ready && shotCache.store === store ? shotCache.image : null;
+    }
+  }
   try {
-    const shot = await send(current.ws, "Page.captureScreenshot", { format: "jpeg", quality: 60 }, undefined, 4000);
+    const shot = await send(current.ws, "Page.captureScreenshot", { format: "jpeg", quality: 60 }, deskSession(current.ws), 4000);
     const image = Buffer.from(shot.data || "", "base64");
     if (!image.length) {
       return shotCache.ready && shotCache.store === store ? shotCache.image : null;
