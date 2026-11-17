@@ -1331,3 +1331,106 @@ test("headless chrome scrolls 店铺主数据 inside the shell content pane", as
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
 });
+
+const ORG_STRUCT_SMOKE = `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="/people.css" />
+  </head>
+  <body>
+    <div id="xm-content"></div>
+    <script src="/shared/modules/people.js"></script>
+    <script>
+      (async function () {
+        function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+        window.XmModules["/people"].mount(document.getElementById("xm-content"));
+        document.querySelector('[data-pane="rights"]').click();
+        await sleep(1400);
+        const tree = document.getElementById("rights-dept-tree");
+        const members = document.getElementById("rights-members-tbody");
+        const title = document.getElementById("rights-members-title");
+        const kpis = document.querySelectorAll(".org-struct .org-hero-kpi");
+        const chart = document.getElementById("rights-tree-chart");
+        const firstTitle = title ? title.textContent : "";
+        const firstCount = members ? members.querySelectorAll("tr").length : 0;
+        const hasLogin = members && members.querySelector(".people-login-btn");
+        const boardBtn = tree && tree.querySelector('[data-tree-select="board:ops"]');
+        if (boardBtn) {
+          boardBtn.click();
+        }
+        await sleep(200);
+        const filteredTitle = title ? title.textContent : "";
+        const filteredCount = members ? members.querySelectorAll("tr").length : 0;
+        const search = document.getElementById("rights-tree-q");
+        if (search) {
+          search.value = "人事";
+          search.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+        await sleep(80);
+        const searched = ((tree && tree.textContent) || "").indexOf("人事和技术部门") >= 0 && ((tree && tree.textContent) || "").indexOf("后端部门") < 0;
+        if (search) {
+          search.value = "";
+          search.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+        document.querySelector("#rights-tree-collapse").click();
+        await sleep(80);
+        const collapsed = tree && !tree.querySelector(".org-struct-kids");
+        document.querySelector("#rights-tree-expand").click();
+        await sleep(80);
+        const expanded = tree && tree.querySelector(".org-struct-kids");
+        const ok =
+          document.querySelector(".org-struct-stage") &&
+          tree &&
+          ((tree.textContent || "").indexOf("组织中心") >= 0) &&
+          kpis.length >= 5 &&
+          chart &&
+          ((chart.innerHTML || "").indexOf("rights-mod-band") >= 0) &&
+          firstCount > 0 &&
+          hasLogin &&
+          firstTitle.indexOf("组织中心") >= 0 &&
+          filteredTitle.indexOf("运营部门管理") >= 0 &&
+          filteredCount > 0 &&
+          filteredCount <= firstCount &&
+          searched &&
+          collapsed &&
+          expanded;
+        document.body.setAttribute("data-first-n", String(firstCount));
+        document.body.setAttribute("data-filtered-n", String(filteredCount));
+        document.body.setAttribute("data-title", filteredTitle);
+        document.body.setAttribute("data-ok", ok ? "1" : "0");
+      })();
+    </script>
+  </body>
+</html>`;
+
+test("headless chrome restyles 责权 as 组织结构 explorer", async () => {
+  resetPeopleStore();
+  resetOrgBoard();
+  resetOrgExtra();
+  const app = createApp();
+  const server = http.createServer((req, res) => {
+    if (req.url === "/__org-struct-smoke") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(ORG_STRUCT_SMOKE);
+      return;
+    }
+    app(req, res);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  try {
+    const html = await chromeDump(`http://127.0.0.1:${port}/__org-struct-smoke`, 16000);
+    assert.match(
+      html,
+      /data-ok="1"/,
+      html.includes("data-ok=") ? html.slice(html.indexOf("data-ok="), html.indexOf("data-ok=") + 280) : html.slice(-400)
+    );
+    assert.match(html, /组织结构/);
+    assert.match(html, /org-struct-stage/);
+    assert.doesNotMatch(html, /新建部门/);
+    assert.doesNotMatch(html, /编制分析/);
+  } finally {
+    await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
+});

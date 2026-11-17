@@ -1213,6 +1213,13 @@ body:has(.people-page) .xm-tabs {
   margin: 0 0 12px;
 }
 
+.org-struct .rights-watch-banner {
+  border: 0;
+  border-radius: 12px;
+  background: var(--xm-primary-soft, #eaf3ff);
+  box-shadow: var(--xm-shadow, 0 3px 14px rgba(31, 54, 88, 0.045));
+}
+
 .rights-watch-kpi {
   padding: 10px 12px;
   background: #fff;
@@ -1245,6 +1252,195 @@ body:has(.people-page) .xm-tabs {
   display: flex;
   flex-direction: column;
   min-height: calc(100vh - 190px);
+}
+
+.org-struct {
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.org-struct-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 14px;
+}
+
+.org-struct .rights-tree-toolbar {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  margin: 0;
+  flex: 0 0 auto;
+  min-width: 148px;
+}
+
+.people-page .org-struct .rights-tree-toolbar button {
+  width: auto;
+  max-width: none;
+  white-space: nowrap;
+}
+
+.org-struct-head h2 {
+  margin: 0;
+  color: var(--xm-primary, #1677ff);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.org-struct .rights-watch-kpis.org-console-kpis {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0 0 12px;
+}
+
+.org-struct .rights-watch-kpi.org-hero-kpi {
+  min-height: 96px;
+}
+
+.rights-watch-kpis-more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.rights-watch-kpis-more .rights-watch-kpi {
+  min-width: 110px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--xm-card, #fff);
+  box-shadow: var(--xm-shadow, 0 3px 14px rgba(31, 54, 88, 0.045));
+}
+
+.org-struct-stage {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.org-struct-tree {
+  min-height: 420px;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--xm-card, #fff);
+  box-shadow: var(--xm-shadow, 0 3px 14px rgba(31, 54, 88, 0.045));
+}
+
+.org-struct-tree input {
+  width: 100%;
+  height: 34px;
+  margin: 0 0 10px;
+  padding: 0 10px;
+  border: 1px solid var(--xm-line, #e5eaf2);
+  border-radius: 8px;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.org-struct-node {
+  margin: 0 0 2px;
+}
+
+.org-struct-node-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.people-page button.org-struct-caret,
+.org-struct-caret {
+  width: 22px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--xm-muted, #6b7280);
+  cursor: pointer;
+  font-size: 12px;
+  box-shadow: none;
+}
+
+.org-struct-caret.is-leaf {
+  visibility: hidden;
+}
+
+.people-page button.org-struct-node-btn,
+.org-struct-node-btn {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--xm-ink, #1f2937);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.org-struct-node-btn b {
+  color: var(--xm-muted, #6b7280);
+  font-weight: 600;
+}
+
+.org-struct-node.is-on > .org-struct-node-row .org-struct-node-btn,
+.people-page .org-struct-node.is-on > .org-struct-node-row button.org-struct-node-btn {
+  background: var(--xm-primary-soft, #eaf3ff);
+  color: var(--xm-primary, #1677ff);
+}
+
+.org-struct-kids {
+  margin: 0 0 0 14px;
+  padding: 0 0 0 8px;
+  border-left: 1px solid var(--xm-line-soft, #eef1f6);
+}
+
+.org-struct-canvas {
+  min-width: 0;
+}
+
+.org-struct-canvas-head,
+.org-struct-members-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 10px;
+}
+
+.org-struct-canvas-head strong,
+.org-struct-members-head strong {
+  color: var(--xm-ink, #1f2937);
+  font-size: 14px;
+}
+
+.org-struct-members {
+  margin: 12px 0 0;
+  padding: 14px 16px 8px;
+  border-radius: 16px;
+  background: var(--xm-card, #fff);
+  box-shadow: var(--xm-shadow, 0 3px 14px rgba(31, 54, 88, 0.045));
+}
+
+.org-struct-members .org-table-wrap {
+  box-shadow: none;
+}
+
+@media (max-width: 1100px) {
+  .org-struct-stage {
+    grid-template-columns: 1fr;
+  }
 }
 
 .rights-watch-issues {
@@ -1284,10 +1480,11 @@ body:has(.people-page) .xm-tabs {
   min-height: 360px;
   overflow: auto;
   margin: 0;
-  padding: 10px;
-  background: #fafafa;
-  border: 1px solid #f0f0f0;
-  border-radius: 12px;
+  padding: 16px;
+  background: var(--xm-card, #fff);
+  border: 0;
+  border-radius: 16px;
+  box-shadow: var(--xm-shadow, 0 3px 14px rgba(31, 54, 88, 0.045));
 }
 
 .rights-tree-fit,
@@ -1360,10 +1557,10 @@ body:has(.people-page) .xm-tabs {
 .rights-mod-band {
   min-height: 0;
   gap: 5px;
-  padding: 5px;
+  padding: 10px;
   background: #fff;
-  border: 1px solid #ff4d4f;
-  border-radius: 12px;
+  border: 1px solid var(--xm-line-soft, #eef1f6);
+  border-radius: 14px;
 }
 
 .rights-mod-manager {
@@ -1371,10 +1568,10 @@ body:has(.people-page) .xm-tabs {
   align-items: center;
   justify-content: center;
   min-height: 26px;
-  padding: 3px 6px;
-  background: #fff2f0;
-  border: 1px solid #ffa39e;
-  border-radius: 4px;
+  padding: 8px 6px;
+  background: var(--xm-primary-soft, #eaf3ff);
+  border: 1px solid var(--xm-primary-soft, #eaf3ff);
+  border-radius: 12px;
   box-sizing: border-box;
   text-align: center;
 }
@@ -1406,13 +1603,13 @@ body:has(.people-page) .xm-tabs {
 }
 
 .rights-mod-lead-seat:nth-child(1) {
-  background: #fff7e6;
-  border-color: #ffd591;
+  background: var(--xm-cyan-soft, #e6f9fc);
+  border-color: var(--xm-cyan-soft, #e6f9fc);
 }
 
 .rights-mod-lead-seat:nth-child(2) {
-  background: #fafafa;
-  border-color: #d9d9d9;
+  background: var(--xm-table-head, #f8fafd);
+  border-color: var(--xm-line-soft, #eef1f6);
 }
 
 .rights-mod-chain {
@@ -1474,8 +1671,8 @@ body:has(.people-page) .xm-tabs {
   align-items: center;
   gap: 6px;
   margin: 0;
-  padding: 0;
-  border-radius: 0;
+  padding: 6px 8px;
+  border-radius: 10px;
   background: transparent;
   border: 0;
   font-size: 12px;
@@ -1483,6 +1680,7 @@ body:has(.people-page) .xm-tabs {
   justify-content: center;
   width: 100%;
   text-align: center;
+  font-weight: 700;
 }
 
 .rights-mod-card em {
@@ -1503,20 +1701,26 @@ body:has(.people-page) .xm-tabs {
 
 .rights-mod-card[data-role="经理"] {
   background: transparent;
+  color: var(--xm-primary, #1677ff);
 }
 
 .rights-mod-card[data-role="主管"],
 .rights-mod-card[data-role="储备"] {
   background: transparent;
+  color: var(--xm-cyan, #06b6d4);
 }
 
 .rights-mod-card[data-role="运营"],
 .rights-mod-card[data-role="店长"] {
-  background: transparent;
+  background: #ecfdf5;
+  color: var(--xm-success, #00b578);
+  border-radius: 999px;
 }
 
 .rights-mod-card[data-role="助理"] {
-  background: transparent;
+  background: #fff7ed;
+  color: var(--xm-warning, #ff9f1a);
+  border-radius: 999px;
 }
 
 .rights-mod-shop {
