@@ -1,6 +1,8 @@
-/* xm-academy-catalog 0.1.171 · dashboard */
+/* xm-academy-catalog 0.1.172 · dashboard */
 .academy-page {
-  max-width: 1320px;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
 }
 
 .academy-svg {

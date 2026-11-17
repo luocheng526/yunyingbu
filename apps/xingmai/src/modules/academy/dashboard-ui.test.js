@@ -4,6 +4,8 @@ import { test } from "node:test";
 
 const js = await readFile(new URL("../../../public/shared/modules/academy.js", import.meta.url), "utf8");
 const css = await readFile(new URL("../../../public/academy.css", import.meta.url), "utf8");
+const shellNav = await readFile(new URL("../../../public/shared/nav.js", import.meta.url), "utf8");
+const navItems = await readFile(new URL("../home/nav-items.js", import.meta.url), "utf8");
 
 test("academy root mounts the complete learning dashboard", () => {
   assert.match(js, /function dashboardPage/);
@@ -38,6 +40,8 @@ test("dashboard controls connect to academy routes and APIs", () => {
 });
 
 test("dashboard CSS reproduces the reference hierarchy and responsive layout", () => {
+  assert.match(css, /\.academy-page\s*\{[^}]*max-width:\s*none/s);
+  assert.match(css, /\.academy-page\s*\{[^}]*width:\s*100%/s);
   assert.match(css, /\.academy-dashboard/);
   assert.match(css, /\.academy-home-head/);
   assert.match(css, /\.academy-metrics/);
@@ -51,4 +55,12 @@ test("dashboard CSS reproduces the reference hierarchy and responsive layout", (
   assert.match(css, /\.academy-promotion-box/);
   assert.match(css, /@media \(max-width:\s*900px\)/);
   assert.match(css, /@media \(max-width:\s*620px\)/);
+});
+
+test("academy is one top-level menu without sidebar children", () => {
+  assert.match(shellNav, /\{ href: "\/academy", label: "甄选商学院" \}/);
+  assert.doesNotMatch(shellNav, /const ACADEMY_CHILDREN/);
+  assert.doesNotMatch(shellNav, /"\/academy": "\/academy\/courses"/);
+  assert.match(navItems, /export const ACADEMY_CHILDREN = \[\]/);
+  assert.match(navItems, /\{ href: "\/academy", label: "甄选商学院" \}/);
 });

@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.171 · dashboard */
+/* xm-module-academy 0.1.172 · dashboard */
 (function () {
-  const ASSET_VER = "0.1.171";
+  const ASSET_VER = "0.1.172";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
