@@ -1634,6 +1634,28 @@ export function loginPageAction(doc, action) {
     }
     return null;
   }
+  function loginSubmit(root) {
+    let found = null;
+    docsOf(root).forEach(function (item) {
+      const nodes = item.querySelectorAll ? item.querySelectorAll("button, [role=button], input[type=submit]") : [];
+      const limit = Math.min(nodes.length, 40);
+      for (let i = 0; i < limit; i += 1) {
+        const text = textOf(nodes[i]);
+        if (!visible(nodes[i]) || (text !== "登录" && text !== "立即登录")) {
+          continue;
+        }
+        found = nodes[i];
+      }
+    });
+    return found;
+  }
+  if (action && action.submit) {
+    const button = loginSubmit(doc);
+    if (!button) {
+      return { kind: "none", x: 0, y: 0 };
+    }
+    return pointOf(button, 0, 0, "button");
+  }
   if (action && action.text) {
     const value = String(action.text).slice(0, 20);
     let input = null;
@@ -1687,7 +1709,7 @@ export function loginPageAction(doc, action) {
     } catch {
       input.value = value;
     }
-    const button = confirmAround(input);
+    const button = confirmAround(input) || loginSubmit(doc);
     if (!button) {
       return { kind: "typed", x: 0, y: 0 };
     }
@@ -1726,6 +1748,14 @@ async function cssPoint(ws, x, y, image) {
     /* keep the point from the picture */
   }
   return { x: px, y: py };
+}
+
+async function pressLoginButton(ws, hit) {
+  if (!hit || hit.x == null || hit.y == null) {
+    return;
+  }
+  holdShots(900);
+  await mouseClick(ws, hit.x, hit.y);
 }
 
 async function mouseClick(ws, x, y, sessionId) {
@@ -1792,7 +1822,7 @@ export async function typeDesk(store, text) {
         : await send(current.ws, "Runtime.evaluate", { expression: expression, returnByValue: true }, undefined, 2500);
       const hit = result && result.result ? result.result.value : null;
       if (hit && hit.kind === "button") {
-        holdShots(900);
+        await pressLoginButton(current.ws, hit);
         return;
       }
       if (hit && hit.kind === "typed") {
@@ -1800,6 +1830,19 @@ export async function typeDesk(store, text) {
       }
     } catch {
       /* try the next frame */
+    }
+  }
+  if (typed) {
+    try {
+      const submit = `(${loginPageAction.toString()})(document, ${JSON.stringify({ submit: true })})`;
+      const result = await send(current.ws, "Runtime.evaluate", { expression: submit, returnByValue: true }, undefined, 2500);
+      const hit = result && result.result ? result.result.value : null;
+      if (hit && hit.kind === "button") {
+        await pressLoginButton(current.ws, hit);
+        return;
+      }
+    } catch {
+      /* the login button stays for the next poll */
     }
   }
   if (!typed) {

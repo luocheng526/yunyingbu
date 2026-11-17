@@ -262,6 +262,22 @@ test("typing the code aims at the confirm button and fills the field", () => {
   assert.equal(aim.y, 236);
 });
 
+test("a login form captcha is submitted with the 登录 button", () => {
+  const account = node("INPUT", { placeholder: "请输入账号名", rect: box(80, 40, 180, 28) });
+  const password = node("INPUT", { placeholder: "请输入密码", rect: box(80, 80, 180, 28) });
+  const code = node("INPUT", { placeholder: "请输入验证码", rect: box(80, 120, 120, 28) });
+  const button = node("BUTTON", { text: "登录", rect: box(80, 170, 180, 36) });
+  const doc = node("DIV", { kids: [account, password, code, button], rect: box(0, 0, 400, 260) });
+  const aim = loginPageAction(doc, { text: "918273" });
+  assert.equal(code.value, "918273");
+  assert.equal(account.value, "");
+  assert.equal(password.value, "");
+  assert.equal(aim.kind, "button");
+  assert.equal(aim.x, 170);
+  assert.equal(aim.y, 188);
+  assert.equal(loginPageAction(doc, { submit: true }).kind, "button");
+});
+
 test("the login picture is shown as soon as the page is up", () => {
   assert.equal(loginOpenReady(0, { status: "verify", message: "" }, false), "wait");
   assert.equal(loginOpenReady(1, { status: "verify", message: "" }, false), "show");
