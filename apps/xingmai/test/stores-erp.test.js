@@ -131,12 +131,9 @@ test("stores module mounts four ERP pages with the screenshot titles", () => {
   assert.match(storesJs, /明细店铺/);
   assert.match(storesJs, /按责权分组/);
   assert.match(storesJs, /\/api\/stores\/erp\/duties/);
-  assert.match(storesJs, /stores-tone-/);
-  assert.match(storesCss, /linear-gradient\(135deg/);
-  assert.match(storesCss, /stores-tone-0/);
-  assert.match(storesCss, /stores-tone-1/);
-  assert.match(storesCss, /stores-tone-2/);
-  assert.match(storesCss, /stores-tone-3/);
+  assert.doesNotMatch(storesJs, /<svg/);
+  assert.match(storesCss, /--xm-primary-soft/);
+  assert.doesNotMatch(storesCss, /linear-gradient/);
   assert.doesNotMatch(storesCss, /#f5f5f7/);
   assert.doesNotMatch(storesCss, /grid-template-columns:\s*200px/);
 });
