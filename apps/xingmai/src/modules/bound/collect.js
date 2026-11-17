@@ -345,13 +345,47 @@ async function masterState() {
 }
 
 function requestMark(report) {
-  if (report.id === "qdzl_yj" || report.id === "qdfx_yj") {
+  if (report.id === "qdfx_yj") {
+    return "year2";
+  }
+  if (report.id === "qdzl_yj") {
     return "year";
   }
   if (report.id === "qdzl_pl") {
     return "channelCate";
   }
+  if (report.id === "qdzl_rx" || report.id === "qdfx_rx") {
+    return "hot2";
+  }
+  if (report.id === "qdfx_jy") {
+    return "shopOp";
+  }
   return "q=1";
+}
+
+function permanentText(text) {
+  return /不能为空|请选择|参数错误|参数不匹配|无权限/.test(String(text || ""));
+}
+
+function transientText(text) {
+  return /操作失败|请稍后重试|超时|网络|error/i.test(String(text || "")) && !permanentText(text);
+}
+
+function updatedAge(row) {
+  const raw = String((row && row.updatedAt) || "").replace(" ", "T");
+  const updated = Date.parse(raw ? (raw.endsWith("Z") ? raw : `${raw}Z`) : "");
+  return Number.isFinite(updated) ? Date.now() - updated : Number.POSITIVE_INFINITY;
+}
+
+function failureSettled(report, scope, row) {
+  if (!row || row.status !== "failed" || row.attempts < 3) {
+    return false;
+  }
+  const text = String(row.errorText || "");
+  if (transientText(text)) {
+    return updatedAge(row) < 10 * 60 * 1000;
+  }
+  return text.startsWith(`${requestMark(report)} daysType=${scope.daysType} `);
 }
 
 function failText(report, scope, message) {
@@ -364,12 +398,35 @@ function compareYears(scope) {
   return { prevYear: current - 1, year: current };
 }
 
+function datedQuery(scope, extra = {}) {
+  return {
+    startDate: scope.start,
+    endDate: scope.end,
+    daysType: scope.daysType,
+    queryType: 1,
+    platform: "all",
+    shopId: "",
+    ...extra
+  };
+}
+
 export function reportBody(report, dim, scope, page) {
   if (report.id === "qdzl_yj") {
     return { ...compareYears(scope), compareType: 0, lstChannel: null };
   }
   if (report.id === "qdfx_yj") {
-    return { ...compareYears(scope), lstChannel: null, shopIds: [] };
+    const years = compareYears(scope);
+    return { ...years, compareType: 0, lstChannel: null, queryType: 1, platform: "all", shopId: "" };
+  }
+  if (report.id === "qdzl_rx" || report.id === "qdfx_rx") {
+    const body = datedQuery(scope, { pageNum: Math.max(page, 1), pageSize: PAGE_SIZE });
+    if (dim === "spu") {
+      body.isSpu = true;
+    }
+    return body;
+  }
+  if (report.id === "qdfx_jy") {
+    return datedQuery(scope);
   }
   return {
     startDate: scope.start,
@@ -398,15 +455,17 @@ function sheetHole(report, dim, scope, sheets) {
   if (first.status === "denied") {
     return null;
   }
-  if (first.status === "failed" && first.attempts >= 3) {
-    const stamped = String(first.errorText || "").startsWith(`${requestMark(report)} daysType=${scope.daysType} `);
-    if (stamped) {
+  if (first.status === "failed") {
+    if (first.attempts >= 3 && failureSettled(report, scope, first)) {
       return null;
     }
-    return { page: 1, kind: first.kind || report.kind, attempts: 0 };
+    return { page: 1, kind: first.kind || report.kind, attempts: first.attempts >= 3 ? 0 : first.attempts };
   }
   if (first.status !== "done") {
     return { page: 1, kind: first.kind || report.kind, attempts: first.attempts };
+  }
+  if (scope.start === scope.end && first.kind !== "object" && first.totalRows === 0 && first.rowCount === 0 && !String(first.errorText || "").startsWith("empty-ok")) {
+    return { page: 1, kind: "list", attempts: first.attempts, emptyRetry: true };
   }
   if (first.kind === "object") {
     return null;
@@ -418,8 +477,11 @@ function sheetHole(report, dim, scope, sheets) {
     if (!found) {
       return { page, kind: "list", attempts: 0 };
     }
-    if (found.status === "failed" && found.attempts < 3) {
-      return { page, kind: "list", attempts: found.attempts };
+    if (found.status === "failed") {
+      if (found.attempts >= 3 && failureSettled(report, scope, found)) {
+        continue;
+      }
+      return { page, kind: "list", attempts: found.attempts >= 3 ? 0 : found.attempts };
     }
     if (found.status !== "done" && found.status !== "failed") {
       return { page, kind: "list", attempts: found.attempts };
@@ -628,6 +690,7 @@ async function runReport(current, unit) {
     pageSize: PAGE_SIZE,
     attempts: 0,
     rowCount: extracted.rows.length,
+    errorText: unit.emptyRetry && extracted.total === 0 && extracted.rows.length === 0 ? "empty-ok" : "",
     payload: { rows: extracted.rows, total: extracted.total }
   });
 }

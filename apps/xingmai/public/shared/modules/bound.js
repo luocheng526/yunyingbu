@@ -938,7 +938,24 @@
       if (!reason && item.readyDays === 0 && item.failedDays > 0) {
         reason = "还没有一天采集成功，已采天数不会增加";
       }
-      var reasonHtml = reason ? '<div class="bd-reason">' + esc(reason) + "</div>" : "";
+      var dates = item.failedDates || [];
+      var failLine = "";
+      if (item.failedDays) {
+        failLine = "失败 " + item.failedDays + " 天";
+        if (item.retries) {
+          failLine += "，已重试 " + item.retries + " 次";
+        }
+        if (dates.length) {
+          failLine += "：" + dates.slice(0, 8).join("、");
+          if (dates.length > 8) {
+            failLine += " 等 " + dates.length + " 天";
+          }
+        }
+      }
+      if (item.failedMonths) {
+        failLine += (failLine ? "。" : "") + "整月失败 " + item.failedMonths + " 个";
+      }
+      var reasonHtml = (reason || failLine) ? '<div class="bd-reason">' + esc([reason, failLine].filter(Boolean).join("。")) + "</div>" : "";
       return '<tr class="' + (current ? "bd-total" : "") + '"><td class="' + (current ? "is-current" : "") + '">' + esc(item.page) + "</td><td>" + esc(item.tab + dim) + "</td><td>" + esc(item.readyDays) + "/" + esc(progress.dayCount) + "</td><td>" + esc(item.failedDays) + "</td><td>" + esc(item.latest || "—") + "</td><td>" + esc(statusText) + reasonHtml + "</td></tr>";
     }).join("");
     return '<section class="bd-block"><h2 class="bd-block-title">采集进度</h2><p class="bd-now">' + esc(now) + "</p><div class=\"bd-meter\"><i style=\"width:" + width + "%\"></i></div><p class=\"bd-status\">已完成 " + esc(done) + " / " + esc(total) + " 张表。进行中 " + esc(counts.partial || 0) + "，失败 " + esc(counts.failed || 0) + "，还没开始 " + esc(counts.pending || 0) + "。范围 " + esc(progress.startOn) + " 至 " + esc(progress.today) + "。</p><div class=\"bd-progress\"><table class=\"bd-table\"><tr><th>页面</th><th>表</th><th>已采天数</th><th>失败</th><th>最近一天</th><th>状态</th></tr>" + rows + "</table></div></section>";

@@ -269,6 +269,13 @@ test("没采完的范围汇总留空，采完的整月和当前页分开算", as
     assert.equal(stackedBody.rows[1].metrics.payAmount, 11);
     assert.equal(stackedBody.shopCount, 1);
     assert.equal(stackedBody.shopRows.find((row) => row.shop === "甲店").metrics.payAmount, 9);
+    assert.equal(stackedBody.cards.find((card) => card.key === "realTimeGmv").label, "实时销售指数");
+    assert.equal(stackedBody.cards.find((card) => card.key === "realTimeGmv").value, 4);
+    const shopScoped = await fetch(`${base}/api/bound/view?page=channelOverview&tab=qdzl_lb&from=2026-11-05&to=2026-11-06&daysType=custom&shop=${encodeURIComponent("甲店")}`);
+    const scopedShop = await shopScoped.json();
+    assert.equal(scopedShop.rows.map((row) => row.name).join(","), "京东");
+    assert.equal(scopedShop.allSum.payAmount, 9);
+    assert.equal(scopedShop.shopRows.length, 1);
   } finally {
     await close();
   }
@@ -548,7 +555,17 @@ test("业绩对比按年份请求，品类分析走渠道类目接口", () => {
   const year = reportBody(byId.qdzl_yj, "all", { start: "2026-11-07", end: "2026-11-07", daysType: 1 }, 1);
   assert.deepEqual(year, { prevYear: 2025, year: 2026, compareType: 0, lstChannel: null });
   const shopYear = reportBody(byId.qdfx_yj, "all", { start: "2026-09-01", end: "2026-09-30", daysType: "month" }, 1);
-  assert.deepEqual(shopYear, { prevYear: 2025, year: 2026, lstChannel: null, shopIds: [] });
+  assert.equal(shopYear.prevYear, 2025);
+  assert.equal(shopYear.year, 2026);
+  assert.equal(shopYear.queryType, 1);
+  assert.equal(shopYear.platform, "all");
+  const hot = reportBody(byId.qdzl_rx, "all", { start: "2026-11-11", end: "2026-11-11", daysType: 1 }, 1);
+  assert.equal(hot.queryType, 1);
+  assert.equal(hot.platform, "all");
+  assert.equal(hot.shopId, "");
+  assert.equal("shopList" in hot, false);
+  const shopOperate = reportBody(byId.qdfx_jy, "all", { start: "2026-11-16", end: "2026-11-16", daysType: 1 }, 1);
+  assert.deepEqual(shopOperate, { startDate: "2026-11-16", endDate: "2026-11-16", daysType: 1, queryType: 1, platform: "all", shopId: "" });
   const cate = reportBody(byId.qdzl_pl, "all", { start: "2026-11-07", end: "2026-11-07", daysType: 1 }, 1);
   assert.equal(cate.startDate, "2026-11-07");
   assert.equal(cate.daysType, 1);
@@ -603,6 +620,8 @@ test("采集进度只数表头，扫码页标出正在采集的表", async () =>
     assert.equal(failed.readyDays, 0);
     assert.equal(failed.failedDays, 1);
     assert.equal(failed.reason, "查询参数不匹配");
+    assert.deepEqual(failed.failedDates, ["2026-09-01"]);
+    assert.equal(failed.retries, 3);
     assert.equal(body.items.some((item) => item.status === "pending"), true);
     assert.equal((await fetch(`${other.base}/api/bound/progress`)).status, 403);
   } finally {
@@ -663,7 +682,7 @@ test("采集进度只数表头，扫码页标出正在采集的表", async () =>
             cursor: { id: "qdzl_yj", label: "业绩对比", page: "渠道总览", dim: "all", start: "2026-09-01", end: "2026-09-01" },
             items: [
               { id: "qdzl_lb", dim: "all", page: "渠道总览", tab: "渠道列表", readyDays: 40, failedDays: 0, latest: "2026-10-10", status: "partial" },
-              { id: "qdzl_yj", dim: "all", page: "渠道总览", tab: "业绩对比", readyDays: 0, failedDays: 2, latest: "", status: "failed", reason: "查询参数不匹配" }
+              { id: "qdzl_yj", dim: "all", page: "渠道总览", tab: "业绩对比", readyDays: 0, failedDays: 2, latest: "", status: "failed", reason: "查询参数不匹配", retries: 3, failedDates: ["2026-11-11", "2026-11-16"] }
             ]
           })
         });
@@ -726,6 +745,7 @@ test("采集进度只数表头，扫码页标出正在采集的表", async () =>
   assert.match(root.innerHTML, /正在采集：渠道总览 \/ 业绩对比/);
   assert.match(root.innerHTML, /正在采/);
   assert.match(root.innerHTML, /查询参数不匹配/);
+  assert.match(root.innerHTML, /失败 2 天，已重试 3 次：2026-11-11、2026-11-16/);
   assert.match(root.innerHTML, /渠道列表/);
   assert.doesNotMatch(root.innerHTML, /bd-qr/);
   stop();

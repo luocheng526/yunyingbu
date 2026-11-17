@@ -623,7 +623,26 @@ export async function readView(query) {
   if (tab && SNAPSHOT_REPORTS.has(tab.id)) {
     normalized = normalized.filter((row) => isTotalRow(row)).concat(normalized.filter((row) => !isTotalRow(row)));
   }
-  const filtered = filterRows(normalized, query);
+  let shopRows = [];
+  let shopStatus = "missing";
+  if (page.id === "channelOverview" && tab && tab.id === "qdzl_lb") {
+    const shopReport = tabById(pageById("channelAnalysis"), "qdfx_dplb");
+    const shopLoaded = await loadScope(all, shopReport, "all", range.from, range.to, daysType);
+    shopStatus = shopLoaded.status.status;
+    let shopNormalized = rowsOf(shopLoaded.pages).map((row, index) => normalizeRow(row, index));
+    if (shopLoaded.mode === "day" && range.from !== range.to) {
+      shopNormalized = collapseSnapshots(shopNormalized);
+    } else {
+      shopNormalized.forEach((row) => fillDerived(row.metrics));
+    }
+    shopRows = filterRows(shopNormalized, query);
+  }
+  const shopPick = text(query.shop, 80);
+  const pickedShop = shopPick ? shopRows.find((row) => row.shop === shopPick && !isTotalRow(row)) : null;
+  let filtered = filterRows(normalized, pickedShop ? { ...query, shop: "" } : query);
+  if (pickedShop) {
+    filtered = filtered.filter((row) => !isTotalRow(row) && (row.name === pickedShop.name || row.shop === shopPick));
+  }
   const marks = await readMarks(filtered.map((row) => row.key));
   const markMap = new Map(marks.map((item) => [item.rowKey, item]));
   filtered.forEach((row) => {
@@ -640,21 +659,7 @@ export async function readView(query) {
   let allSum = null;
   if (complete) {
     const fromSum = sumPayload && sumPayload.raw ? sumRows([normalizeRow(sumPayload.raw, 0)]) : null;
-    allSum = totalRow ? totalRow.metrics : fromSum || sumRows(filtered) || {};
-  }
-  let shopRows = [];
-  let shopStatus = "missing";
-  if (page.id === "channelOverview" && tab && tab.id === "qdzl_lb") {
-    const shopReport = tabById(pageById("channelAnalysis"), "qdfx_dplb");
-    const shopLoaded = await loadScope(all, shopReport, "all", range.from, range.to, daysType);
-    shopStatus = shopLoaded.status.status;
-    let shopNormalized = rowsOf(shopLoaded.pages).map((row, index) => normalizeRow(row, index));
-    if (shopLoaded.mode === "day" && range.from !== range.to) {
-      shopNormalized = collapseSnapshots(shopNormalized);
-    } else {
-      shopNormalized.forEach((row) => fillDerived(row.metrics));
-    }
-    shopRows = shopNormalized;
+    allSum = pickedShop ? pickedShop.metrics : totalRow ? totalRow.metrics : fromSum || sumRows(filtered) || {};
   }
   const cardSheet = page.cards ? sheetsFor(all, page.cards.id, "all", range.from, range.to) : [];
   const cardDay = page.cards && !cardSheet.length ? sheetsFor(all, page.cards.id, "all", range.to, range.to) : [];
@@ -784,7 +789,7 @@ export function catalogBody() {
 }
 
 function plainError(text) {
-  return String(text || "").replace(/^(?:q=1|year|channelCate) daysType=\S+\s+/, "").slice(0, 120);
+  return String(text || "").replace(/^(?:q=1|year2?|channelCate|hot2|shopOp) daysType=\S+\s+/, "").replace(/^empty-ok\s*/, "").slice(0, 120);
 }
 
 function reportProgress(heads, reportId, dim) {
@@ -801,14 +806,21 @@ function reportProgress(heads, reportId, dim) {
   });
   let readyDays = 0;
   let failedDays = 0;
+  let failedMonths = 0;
   let months = 0;
   let latest = "";
   let reason = "";
+  let retries = 0;
+  const failedDates = [];
   groups.forEach((pages, key) => {
     const [startOn, endOn] = key.split("|");
     const state = scopeStatus(pages);
+    const attempts = pages.reduce((max, row) => Math.max(max, Number(row.attempts) || 0), 0);
     if (state.status === "failed" && !reason) {
       reason = plainError(state.error);
+    }
+    if (state.status === "failed") {
+      retries = Math.max(retries, attempts);
     }
     if (startOn === endOn) {
       if (state.status === "ready") {
@@ -818,16 +830,18 @@ function reportProgress(heads, reportId, dim) {
         }
       } else if (state.status === "failed") {
         failedDays += 1;
+        failedDates.push(startOn);
       }
       return;
     }
     if (state.status === "ready") {
       months += 1;
     } else if (state.status === "failed") {
-      failedDays += 1;
+      failedMonths += 1;
     }
   });
-  return { readyDays, failedDays, months, latest, reason };
+  failedDates.sort();
+  return { readyDays, failedDays, failedMonths, months, latest, reason, retries, failedDates };
 }
 
 export async function progressBody() {
@@ -859,7 +873,10 @@ export async function progressBody() {
           months: stats.months,
           latest: stats.latest,
           status,
-          reason: stats.reason || ""
+          reason: stats.reason || "",
+          retries: stats.retries,
+          failedMonths: stats.failedMonths,
+          failedDates: stats.failedDates.slice(0, 90)
         });
       });
     });

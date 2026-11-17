@@ -307,7 +307,7 @@ export const GOODS_CARDS = [
 
 export const CHANNEL_COLUMNS = [
   { key: "name", label: "渠道", aliases: ["channelName", "platformName", "name", "title"] },
-  { key: "realTimeGmv", label: "实时销售额(支付)", aliases: ["realTimeGmv", "ssxse"], numeric: true, money: true },
+  { key: "realTimeGmv", label: "实时销售指数", aliases: ["realTimeGmv", "ssxse"], numeric: true, money: true },
   { key: "payAmount", label: "支付金额(支付)", aliases: ["payAmount", "gmv", "xse"], numeric: true, money: true },
   { key: "noOrderAmount", label: "无订单金额(支付)", aliases: ["noOrderAmount", "wddje", "invalidOrderAmount", "invalidGmv", "zgxse"], numeric: true, money: true },
   { key: "netGmv", label: "净销售额(支付)", aliases: ["netGmv", "jxse"], numeric: true, money: true },
@@ -324,7 +324,7 @@ export const CHANNEL_COLUMNS = [
 ];
 
 export const CHANNEL_CARDS = [
-  { key: "realTimeGmv", label: "实时销售额", aliases: ["realTimeGmv", "ssxse"], money: true, note: "销售目标 —" },
+  { key: "realTimeGmv", label: "实时销售指数", aliases: ["realTimeGmv", "ssxse"], money: true, note: "实时指数，不按所选日期累加" },
   { key: "payAmount", label: "支付金额(支付)", aliases: ["payAmount", "gmv", "xse"], money: true, note: "达成率 —" },
   { key: "netGmv", label: "净销售额(支付)", aliases: ["netGmv", "jxse"], money: true, note: "达成率 —" },
   { key: "tghfXseZb", label: "推广花费销售占比(支付)", aliases: ["tghfXseZb"], rate: true, note: "净销售额占比 —" },
