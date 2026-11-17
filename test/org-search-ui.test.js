@@ -1172,3 +1172,64 @@ test("headless chrome assigns website see/enter/edit for a roster person", async
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
 });
+
+const NOTICE_TAB_SMOKE = `<!doctype html>
+<html lang="zh-CN">
+  <head><meta charset="utf-8" /><link rel="stylesheet" href="/people.css" /></head>
+  <body>
+    <div id="xm-content"></div>
+    <script src="/shared/modules/people.js"></script>
+    <script>
+      (async function () {
+        function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+        window.XmModules["/people"].mount(document.getElementById("xm-content"));
+        await sleep(400);
+        const tabs = Array.prototype.map.call(document.querySelectorAll(".org-tab-name"), function (el) {
+          return el.textContent.trim();
+        });
+        document.body.setAttribute("data-org-tabs", tabs.join(","));
+        const noticeTab = document.querySelector('.org-tab[data-pane="notices"]');
+        if (noticeTab) {
+          noticeTab.click();
+        }
+        await sleep(900);
+        const noticeTabs = Array.prototype.map.call(document.querySelectorAll(".notice-tab"), function (el) {
+          return el.textContent.trim();
+        });
+        const afterLogs = tabs.indexOf("改动日志") >= 0 && tabs.indexOf("公告中心") === tabs.indexOf("改动日志") + 1;
+        const mounted = noticeTabs.indexOf("公告管理") >= 0 && noticeTabs.indexOf("日常公告") >= 0;
+        document.body.setAttribute("data-notice-tabs", noticeTabs.join(","));
+        document.body.setAttribute("data-ok", afterLogs && mounted ? "1" : "0");
+      })();
+    </script>
+  </body>
+</html>`;
+
+test("headless chrome keeps 公告中心 after 改动日志 and mounts the notice board", async () => {
+  resetPeopleStore();
+  resetOrgBoard();
+  resetOrgExtra();
+  const app = createApp();
+  const server = http.createServer((req, res) => {
+    if (req.url === "/__notice-tab-smoke") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(NOTICE_TAB_SMOKE);
+      return;
+    }
+    app(req, res);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  try {
+    const html = await chromeDump(`http://127.0.0.1:${port}/__notice-tab-smoke`, 14000);
+    assert.match(
+      html,
+      /data-ok="1"/,
+      html.includes("data-ok=") ? html.slice(html.indexOf("data-ok="), html.indexOf("data-ok=") + 360) : html.slice(-400)
+    );
+    assert.match(html, /data-org-tabs="店铺主数据,成员管理,责权,权限,改动日志,公告中心"/);
+    assert.match(html, /data-notice-tabs="[^"]*公告管理[^"]*日常公告/);
+  } finally {
+    await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
+});
