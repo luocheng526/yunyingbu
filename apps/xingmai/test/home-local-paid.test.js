@@ -446,7 +446,7 @@ test("live page uses Han+Shen paid totals and leaves paid for local return", () 
   assert.equal(booked.shops[0].feeHi, 45);
 });
 
-test("live shop 状态 follows 10-minute capturedAt", () => {
+test("live shop 状态 stays online when the saved login is still valid", () => {
   const pick = (name) => {
     const start = homeJs.indexOf("function " + name);
     assert.notEqual(start, -1, name);
@@ -465,11 +465,12 @@ test("live shop 状态 follows 10-minute capturedAt", () => {
   const stale = new Date(Date.now() - 11 * 60 * 1000).toISOString();
   const almost = new Date(Date.now() - 9 * 60 * 1000).toISOString();
   assert.equal(fns.liveLinkOf({}).label, "掉线");
-  assert.equal(fns.liveLinkOf({ jzOk: "是", online: true }).kind, "off");
+  assert.equal(fns.liveLinkOf({ jzOk: "是", online: true }).kind, "on");
   assert.equal(fns.liveLinkOf({ capturedAt: fresh }).kind, "on");
   assert.equal(fns.liveLinkOf({ capturedAt: almost }).kind, "on");
   assert.equal(fns.liveLinkOf({ capturedAt: stale }).kind, "off");
-  assert.equal(fns.liveLinkOf({ capturedAt: stale, online: true }).label, "掉线");
+  assert.equal(fns.liveLinkOf({ capturedAt: stale, online: true }).label, "在线");
+  assert.equal(fns.liveLinkOf({ capturedAt: fresh, loginExpired: true, online: true }).label, "掉线");
   assert.match(fns.fmtShopAt("2026-11-13T09:43:03+08:00"), /^2026\/11\/13 09:43:03$/);
   assert.match(fns.fmtShopAt("2026/11/13 09:43:03"), /^2026\/11\/13 09:43:03$/);
   assert.doesNotMatch(homeJs, /label: "是否回传成功"/);

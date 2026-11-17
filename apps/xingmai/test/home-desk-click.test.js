@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { buildLiveView } from "../src/modules/home/jingmai.js";
+import { packJingmaiShops } from "../src/modules/home/local-paid.js";
 import { collectFrameIds, deskUsable, loginOpenReady, loginPageAction, loginScreenState, sessionReady } from "../src/modules/home/jingmai-desk.js";
 import { patchHomeClientSource } from "../src/modules/home/router.js";
 
@@ -21,6 +22,7 @@ test("a shop that just logged in shows a fresh time before the first deal arrive
   });
   assert.equal(view.shops[0].capturedAt, "2026/11/17 09:55:30");
   assert.equal(view.shops[0].loginExpired, false);
+  assert.equal(view.shops[0].online, true);
 });
 
 test("an older deal time stays ahead of an earlier login", () => {
@@ -42,6 +44,55 @@ test("an older deal time stays ahead of an earlier login", () => {
     }]
   });
   assert.equal(view.shops[0].capturedAt, "2026/11/17 09:40:00");
+  assert.equal(view.shops[0].online, true);
+});
+
+test("a logged-in shop stays online when the last sample is older than ten minutes", () => {
+  const view = buildLiveView({
+    now: { day: "2026-11-17", stamp: "2026-11-17 11:36:00" },
+    shops: [{
+      store: "已登录店",
+      enabled: true,
+      cookies: [{ name: "thor", value: "ok" }],
+      authState: "ok",
+      linkedAt: "2026-11-17 10:00:00"
+    }],
+    samples: [{
+      store: "已登录店",
+      day: "2026-11-17",
+      capturedAt: "2026-11-17 11:17:57",
+      dealAmount: 2976,
+      ok: true
+    }]
+  });
+  assert.equal(view.shops[0].online, true);
+  assert.equal(view.shops[0].loginExpired, false);
+  assert.equal(view.shops[0].capturedAt, "2026/11/17 11:17:57");
+  const packed = packJingmaiShops(view, []);
+  assert.equal(packed.records[0].online, true);
+  assert.equal(packed.records[0].capturedAt, "2026/11/17 11:17:57");
+});
+
+test("a shop that still needs a login stays offline", () => {
+  const now = { day: "2026-11-17", stamp: "2026-11-17 11:36:00" };
+  const expired = buildLiveView({
+    now,
+    shops: [{
+      store: "过期店",
+      enabled: true,
+      cookies: [{ name: "thor", value: "old" }],
+      authState: "login_expired"
+    }],
+    samples: []
+  });
+  assert.equal(expired.shops[0].online, false);
+  assert.equal(expired.shops[0].loginExpired, true);
+  const empty = buildLiveView({
+    now,
+    shops: [{ store: "未登录店", enabled: true, cookies: [], authState: "unlinked" }],
+    samples: []
+  });
+  assert.equal(empty.shops[0].online, false);
 });
 
 test("captcha text does not count as a wrong password", () => {
@@ -59,7 +110,7 @@ test("old homepage client keeps the login dialog open after a click", () => {
   const old = "/* xm-module-home 0.1.1039-loginpop */\n      function showDesk(st) {\n        state.desk = st || {};\n";
   const next = patchHomeClientSource(old);
   assert.match(next, /state\.desk\.open = true/);
-  assert.match(next, /0\.1\.1043-deskkeep/);
+  assert.match(next, /0\.1\.1070-liveon/);
   const withClick = patchHomeClientSource(old + "\n            y: Math.round((event.clientY - rect.top) * scaleY)\n          }).then(function (st) {");
   assert.match(withClick, /imageWidth: deskShot.naturalWidth/);
   assert.equal(patchHomeClientSource(homeJs), homeJs);
@@ -213,6 +264,23 @@ test("typing the code does not rebuild the whole page when the picture is alread
   assert.match(next, /!\(status === "screen" && img\)/);
   assert.match(next, /probe.onerror/);
   assert.doesNotMatch(next, /img\.src = "\/api\/home\/live-login\/screen\?t="/);
+});
+
+test("old homepage client keeps a saved login online after the sample goes stale", () => {
+  const old =
+    "      function showDesk(st) {\n        state.desk = st || {};\n" +
+    "  function liveLinkOf(row) {\n" +
+    "    var t = parseLiveAt(row && (row.capturedAt || row.ingestedAt));\n" +
+    "    return Number.isFinite(t) && Date.now() - t <= 6e5\n" +
+    "      ? { label: \"在线\", kind: \"on\" }\n" +
+    "      : { label: \"掉线\", kind: \"off\" };\n" +
+    "  }\n" +
+    "      online: row && row.online,\n" +
+    "      capturedAt: row && (row.capturedAt || row.ingestedAt),";
+  const next = patchHomeClientSource(old);
+  assert.match(next, /row\.online === true/);
+  assert.match(next, /row\.loginExpired === true/);
+  assert.match(next, /loginExpired: row && row.loginExpired === true/);
 });
 
 test("clicking the login picture keeps the dialog open", () => {

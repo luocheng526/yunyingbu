@@ -1,6 +1,6 @@
-/* xm-module-home 0.1.1043-deskkeep */
+/* xm-module-home 0.1.1070-liveon */
 (function () {
-  var HOME_JS_STAMP = "0.1.1043-deskkeep";
+  var HOME_JS_STAMP = "0.1.1070-liveon";
   var VIEWS = [
     { key: "company", label: "数据总揽" },
     { key: "overview", label: "团队概括" },
@@ -2439,6 +2439,12 @@
     );
   }
   function liveLinkOf(row) {
+    if (row && row.loginExpired === true) {
+      return { label: "掉线", kind: "off" };
+    }
+    if (row && row.online === true) {
+      return { label: "在线", kind: "on" };
+    }
     var t = parseLiveAt(row && (row.capturedAt || row.ingestedAt));
     return Number.isFinite(t) && Date.now() - t <= 6e5
       ? { label: "在线", kind: "on" }
@@ -4433,7 +4439,8 @@
       feeRate: fmtRate(fee),
       jzAccount: String((row && (row.accountId || row.jzAccount)) || "").trim() || "—",
       jzOk: String((row && (row.success || row.jzOk)) || "").trim() || "—",
-      online: row && row.online,
+      online: row && row.online === true,
+      loginExpired: row && row.loginExpired === true,
       capturedAt: row && (row.capturedAt || row.ingestedAt),
       feeLo: row && (row.feeLo != null ? row.feeLo : row.feeMin),
       feeHi: row && (row.feeHi != null ? row.feeHi : row.feeMax),
