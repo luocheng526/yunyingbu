@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.106-page2-always */
+/* xm-module-releases 0.1.107-xm-ui */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -102,168 +102,144 @@
       #history-view, #logs-view, #failed-view, #rollback-view, #compare-view {
         max-height: calc(100dvh - 15rem); overflow-y: scroll !important; touch-action: pan-y;
       }
-      .rg-subnav[hidden], .rg-filters[hidden] { display: none !important; }
+      .rg-subnav[hidden], .rg-filters[hidden], .xm-ui-filter-toolbar[hidden] { display: none !important; }
       #history-stats, #current-versions { display: none !important; }
-      .rg-table { width: 100%; border-collapse: collapse; }
-      .rg-table th { text-align: left; font-size: 12px; color: #64748b; font-weight: 650; padding: 10px 12px; border-bottom: 1px solid #e8eef5; background: #f8fafc; white-space: nowrap; }
-      .rg-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; color: #1e293b; vertical-align: middle; }
-      .rg-table td:last-child { white-space: nowrap; }
-      .oc-wrap.page, .oc-wrap.xm-page { max-width: none !important; width: 100%; margin: 0 !important; background: #f3f6fb !important; border: 0 !important; border-radius: 0; padding: 16px 20px 28px; }
-      html:has(.oc-wrap) .xm-content, .xm-content:has(.oc-wrap) { padding: 0 !important; background: #f3f6fb !important; }
-      .oc-hero-card, .rg-head { background: transparent; border: 0; box-shadow: none; padding: 0 0 4px; margin: 0 0 16px; }
-      .rg-cards, .oc-tabs { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px !important; }
-      .rg-cards .oc-tab, html body .xm-content .rg-cards button.oc-tab {
-        display: flex !important; align-items: center; gap: 14px; text-align: left; min-height: 96px;
-        background: #fff !important; color: #1e293b !important; border: 1px solid #e8eef5 !important;
-        border-radius: 16px !important; padding: 16px 18px !important; box-shadow: 0 8px 20px rgba(15,76,129,.06);
-        outline: none !important;
-      }
-      html body .xm-content .rg-cards button.oc-tab.active,
-      html body .xm-content .rg-cards button.oc-tab.active:hover,
-      html body .xm-content .rg-cards button.oc-tab.active:focus,
-      html body .xm-content .rg-cards button.oc-tab.active:focus-visible,
-      html body .xm-content .rg-cards button.oc-tab.active:active {
-        background: linear-gradient(180deg,#3d8bff,#1677ff) !important; color: #fff !important; border-color: transparent !important;
-      }
-      html body .xm-content .rg-cards button.oc-tab.active h2,
-      html body .xm-content .rg-cards button.oc-tab.active .oc-tab-num,
-      html body .xm-content .rg-cards button.oc-tab.active p,
-      html body .xm-content .rg-cards button.oc-tab.active span { color: #fff !important; }
-      .oc-tab[data-tab="failed"]:not(.active) .oc-tab-num { color: #e11d48; }
-      .oc-tab-num { display: block; margin: 0.15rem 0 0.05rem; font-size: 1.7rem; font-weight: 750; }
-      .oc-tab p { display: block; margin: 0; font-size: 12px; }
-      html body .xm-content .rg-subnav button.oc-tab {
-        min-height: 40px !important; background: #fff !important; color: #334155 !important;
-        border: 1px solid #e8eef5 !important; border-radius: 999px !important; box-shadow: none !important; padding: 10px 20px !important;
-        font-size: 14px !important;
-      }
-      html body .xm-content .rg-subnav button.oc-tab.active,
-      html body .xm-content .rg-subnav button.oc-tab.active:hover {
-        background: #1677ff !important; color: #fff !important; border-color: #1677ff !important;
-      }
-      html body .xm-content .rg-filters label { flex-direction: row !important; align-items: center !important; }
-      #failed-view table { table-layout: fixed; width: 100%; }
-      #failed-view th:nth-child(4), #failed-view td.failed-sum { width: 16%; min-width: 10rem; }
-      #failed-view th:nth-child(5), #failed-view td.failed-log { width: 38%; }
-      #failed-view td.failed-sum, #failed-view td.failed-log, .failed-sum, .failed-log {
-        display: table-cell; max-height: none; white-space: pre-wrap; overflow: visible; text-overflow: clip; word-break: break-word; overflow-wrap: anywhere;
-      }
-      .failed-log { color: #9f1239; }
-      .sc-table tr.ticket { border: 0; box-shadow: none; padding: 0; background: transparent; }
-      .sc-ver { font-weight: 650; color: #2563eb; }
+      .oc-wrap.page, .oc-wrap.xm-page, .xm-ui-scope.oc-wrap { max-width: none !important; width: 100%; margin: 0 !important; border: 0 !important; border-radius: 0; padding: 24px 28px 32px; }
+      html:has(.oc-wrap) .xm-content, .xm-content:has(.oc-wrap), .xm-content:has(.xm-ui-scope) { padding: 0 !important; background: var(--xm-ui-bg, #f2f6fd) !important; }
+      button.rg-stat { display: block; width: 100%; margin: 0; padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+      button.rg-stat.is-active .xm-ui-stat-card { border-color: var(--xm-ui-primary, #1677ff); box-shadow: var(--xm-ui-shadow-hover, 0 12px 28px rgba(31, 91, 168, 0.13)); }
+      .sc-ver { font-weight: 650; color: var(--xm-ui-primary, #1677ff); }
+      .sc-change { white-space: normal; }
+      .sc-meta { color: var(--xm-ui-text-muted, #8b98ad); font-size: 12px; margin-top: 4px; }
+      .rg-modal { position: fixed; inset: 0; z-index: 40; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(23, 35, 61, 0.45); }
+      .rg-modal.show { display: flex; }
+      .rg-cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      .rg-cmp-pick { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }
     `;
-  const HTML = `<div class="oc-wrap page xm-page">
-      <header class="rg-head oc-hero-card">
-        <div class="rg-brand oc-hero">
-          <span class="rg-logo" aria-hidden="true">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 4v6c0 4-3 7-7 8-4-1-7-4-7-8V7z"/></svg>
-          </span>
-          <div>
-            <p class="kicker oc-kicker">RELEASE GATE</p>
-            <h1>版本发布中心</h1>
-            <p class="rg-sub oc-path">管理系统版本的发布、审核、上线与回滚，保障版本安全稳定运行</p>
-          </div>
-        </div>
-        <div class="oc-run">
-          <span class="pill run">运行 <span class="ver" id="app-version">读取版本中</span></span>
-          <button type="button" class="act secondary" id="refresh-btn">刷新</button>
-        </div>
-      </header>
-      <nav class="oc-tabs rg-cards" aria-label="版本发布中心页签">
-        <button type="button" class="oc-tab active" data-tab="queue">
-          <span class="rg-ico rg-ico-queue" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/></svg></span>
-          <span class="rg-card-body"><h2>待上线</h2><strong class="oc-tab-num" id="tab-queue-count">—</strong><p id="tab-queue-sub">待审批</p></span>
-        </button>
-        <button type="button" class="oc-tab" data-tab="history">
-          <span class="rg-ico rg-ico-history" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17h16M4 12h16M4 7h16"/></svg></span>
-          <span class="rg-card-body"><h2>版本记录</h2><strong class="oc-tab-num" id="tab-history-count">—</strong><p id="tab-history-sub">个正式版</p></span>
-        </button>
-        <button type="button" class="oc-tab" data-tab="logs">
-          <span class="rg-ico rg-ico-logs" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h8l5 5v13H7z"/><path d="M15 3v5h5M9 13h6M9 17h6"/></svg></span>
-          <span class="rg-card-body"><h2>运行日志</h2><strong class="oc-tab-num oc-tab-num-text">流水</strong><p id="tab-logs-sub">发版流水</p></span>
-        </button>
-        <button type="button" class="oc-tab" data-tab="failed">
-          <span class="rg-ico rg-ico-failed" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16.5" r="0.8" fill="currentColor"/></svg></span>
-          <span class="rg-card-body"><h2>失败版本</h2><strong class="oc-tab-num" id="tab-failed-count">—</strong><p id="tab-failed-sub">个失败版</p></span>
-        </button>
-      </nav>
-      <div id="flash" class="flash" role="status"></div>
-      <div id="lock-view" class="lock-box idle" hidden></div>
-      <section class="oc-card panel rg-board">
-        <nav class="rg-subnav" aria-label="记录页签">
-          <button type="button" class="oc-tab rg-sub" data-tab="history"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span class="rg-sub-label">发布记录</span></button>
-          <button type="button" class="oc-tab rg-sub" data-tab="logs"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg><span class="rg-sub-label">运行日志</span></button>
-          <button type="button" class="oc-tab rg-sub" data-tab="failed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.3 3.2L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.2a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg><span class="rg-sub-label">失败版本</span></button>
-          <button type="button" class="oc-tab rg-sub" data-tab="compare"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M15.5 5.5A6 6 0 0 1 21 11M8.5 18.5A6 6 0 0 1 3 13"/></svg><span class="rg-sub-label">版本对比</span></button>
-          <button type="button" class="oc-tab rg-sub" data-tab="rollback"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span class="rg-sub-label">回滚管理</span></button>
-        </nav>
-        <div class="rg-filters" id="rg-filters">
-          <label>版本号 <input id="flt-ver" type="search" placeholder="请输入版本号" autocomplete="off" /></label>
-          <label>发布状态
-            <select id="flt-status">
-              <option value="">全部</option>
-              <option value="success">已上线</option>
-              <option value="failed">发布失败</option>
-              <option value="rolled">已回滚</option>
-            </select>
-          </label>
-          <label>发布人
-            <select id="flt-who"><option value="">全部</option></select>
-          </label>
-          <label>发布时间
-            <span class="rg-dates" id="flt-dates">
-              <span class="rg-dates-ph">请选择日期范围</span>
-              <input id="flt-from" type="date" />
-              <input id="flt-to" type="date" />
-              <svg class="rg-dates-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>
-            </span>
-          </label>
-          <button type="button" class="act" id="flt-go">查询</button>
-        </div>
-        <div class="pane on" id="pane-queue">
-          <div id="queue-view" class="tickets"></div>
-        </div>
-        <div class="pane" id="pane-history">
-          <div id="history-stats" class="history-stats" hidden>已上线发布 <b>0</b> 个版本</div>
-          <div id="current-versions" class="caps" hidden></div>
-          <div id="history-view"></div>
-        </div>
-        <div class="pane" id="pane-logs">
-          <div id="logs-view" class="log-list"></div>
-        </div>
-        <div class="pane" id="pane-failed">
-          <div id="failed-view"></div>
-        </div>
-        <div class="pane" id="pane-compare">
-          <div class="rg-cmp-pick">
-            <label>版本 A <select id="cmp-a"></select></label>
-            <label>版本 B <select id="cmp-b"></select></label>
-            <button type="button" class="act" id="cmp-go">对比</button>
-          </div>
-          <div id="compare-view" class="rg-cmp"></div>
-        </div>
-        <div class="pane" id="pane-rollback">
-          <div id="rollback-view"></div>
-        </div>
-      </section>
-      <div id="rg-detail" class="rg-modal" hidden>
-        <div class="rg-modal-card">
-          <button type="button" class="act secondary rg-modal-close" id="rg-detail-close">关闭</button>
-          <h2 id="rg-detail-title">版本详情</h2>
-          <dl id="rg-detail-body"></dl>
-        </div>
-      </div>
-    </div>
-
-    <div id="upgrade-mask" aria-live="assertive" aria-modal="true" role="dialog">
-      <div class="upgrade-card">
-        <h2 id="upgrade-title">正在升级，请勿关闭</h2>
-        <button type="button" class="act" id="upgrade-dismiss">关闭</button>
-        <ol id="upgrade-steps"></ol>
-        <div class="upgrade-bar"><i id="upgrade-bar"></i></div>
-        <p class="upgrade-log" id="upgrade-log" hidden></p>
-      </div>
-    </div>`;
+  function xmUi() {
+    return window.XmUI;
+  }
+  function xmBtn(cfg, extra) {
+    const ui = xmUi();
+    const html = ui
+      ? ui.button(cfg)
+      : '<button class="xm-ui-button" type="' + (cfg.type || "button") + '"' + (cfg.disabled ? " disabled" : "") + ">" + (cfg.label || "") + "</button>";
+    if (!extra) {
+      return html;
+    }
+    return html.replace("<button ", "<button " + extra + " ");
+  }
+  function stampId(html, className, id) {
+    return html.replace('class="' + className + '"', 'class="' + className + '" id="' + id + '"');
+  }
+  function buildBoardHtml() {
+    const ui = xmUi();
+    const header = ui
+      ? ui.PageContentHeader({
+          eyebrow: "RELEASE GATE",
+          title: "版本发布中心",
+          description: "管理系统版本的发布、审核、上线与回滚，保障版本安全稳定运行",
+          actions: [{ label: "刷新", variant: "secondary", id: "refresh-btn" }]
+        })
+      : "";
+    const stats = [
+      { tab: "queue", label: "待上线", value: "—", note: "待审批", icon: "file", tone: "orange", countId: "tab-queue-count", subId: "tab-queue-sub", active: true },
+      { tab: "history", label: "版本记录", value: "—", note: "个正式版", icon: "chart", tone: "blue", countId: "tab-history-count", subId: "tab-history-sub" },
+      { tab: "logs", label: "运行日志", value: "流水", note: "发版流水", icon: "file", tone: "purple", subId: "tab-logs-sub" },
+      { tab: "failed", label: "失败版本", value: "—", note: "个失败版", icon: "award", tone: "orange", countId: "tab-failed-count", subId: "tab-failed-sub" }
+    ].map(function (item) {
+      let card = ui
+        ? ui.StatCard({ label: item.label, value: item.value, note: item.note, icon: item.icon, tone: item.tone })
+        : "";
+      if (item.countId) {
+        card = stampId(card, "xm-ui-stat-card__value", item.countId);
+      }
+      if (item.subId) {
+        card = stampId(card, "xm-ui-stat-card__note", item.subId);
+      }
+      return '<button type="button" class="rg-stat' + (item.active ? " is-active" : "") + '" data-tab="' + item.tab + '">' + card + "</button>";
+    }).join("");
+    let toolbar = ui
+      ? ui.FilterToolbar({
+          tabs: [
+            { label: "发布记录", value: "history" },
+            { label: "运行日志", value: "logs" },
+            { label: "失败版本", value: "failed" },
+            { label: "版本对比", value: "compare" },
+            { label: "回滚管理", value: "rollback" }
+          ],
+          filters: [
+            {
+              label: "发布状态",
+              name: "flt-status",
+              options: [
+                { value: "", label: "全部" },
+                { value: "success", label: "已上线" },
+                { value: "failed", label: "发布失败" },
+                { value: "rolled", label: "已回滚" }
+              ]
+            },
+            { label: "发布人", name: "flt-who", options: [{ value: "", label: "全部" }] }
+          ],
+          searchPlaceholder: "请输入版本号",
+          action: "查询"
+        })
+      : "";
+    toolbar = toolbar.replace(/class="xm-ui-tab is-active"/g, 'class="xm-ui-tab"');
+    toolbar = toolbar.replace(/data-xm-ui-tab="/g, 'data-tab="');
+    toolbar = toolbar.replace("<div class=\"xm-ui-tabs\"", "<nav class=\"xm-ui-tabs rg-subnav\" aria-label=\"记录页签\"");
+    toolbar = toolbar.replace("</div><div class=\"xm-ui-filter-toolbar__controls\">", "</nav><div class=\"xm-ui-filter-toolbar__controls\" id=\"rg-filters\">");
+    toolbar = toolbar.replace("<input type=\"search\"", "<input id=\"flt-ver\" type=\"search\" autocomplete=\"off\"");
+    toolbar = toolbar.replace('name="flt-status"', 'id="flt-status" name="flt-status"');
+    toolbar = toolbar.replace('name="flt-who"', 'id="flt-who" name="flt-who"');
+    toolbar = toolbar.replace(
+      ">查询</button>",
+      ' id="flt-go">查询</button>'
+    );
+    const dateField =
+      '<label class="xm-ui-field">发布时间<span class="rg-dates" id="flt-dates">' +
+      '<span class="rg-dates-ph">请选择日期范围</span>' +
+      '<input id="flt-from" type="date" />' +
+      '<input id="flt-to" type="date" />' +
+      "</span></label>";
+    toolbar = toolbar.replace('<div class="xm-ui-filter-toolbar__controls" id="rg-filters">', '<div class="xm-ui-filter-toolbar__controls" id="rg-filters">' + dateField);
+    const board = ui
+      ? ui.ContentCard({
+          className: "rg-board",
+          content:
+            toolbar +
+            '<div class="pane on" id="pane-queue"><div id="queue-view"></div></div>' +
+            '<div class="pane" id="pane-history"><div id="history-stats" class="history-stats" hidden>已上线发布 <b>0</b> 个版本</div><div id="current-versions" class="caps" hidden></div><div id="history-view"></div></div>' +
+            '<div class="pane" id="pane-logs"><div id="logs-view"></div></div>' +
+            '<div class="pane" id="pane-failed"><div id="failed-view"></div></div>' +
+            '<div class="pane" id="pane-compare"><div class="rg-cmp-pick">' +
+            '<label class="xm-ui-field">版本 A <select class="xm-ui-select" id="cmp-a"></select></label>' +
+            '<label class="xm-ui-field">版本 B <select class="xm-ui-select" id="cmp-b"></select></label>' +
+            xmBtn({ label: "对比", size: "small" }, 'id="cmp-go"') +
+            '</div><div id="compare-view" class="rg-cmp"></div></div>' +
+            '<div class="pane" id="pane-rollback"><div id="rollback-view"></div></div>'
+        })
+      : "";
+    const closeBtn = xmBtn({ label: "关闭", variant: "secondary", size: "small", id: "rg-detail-close" }, 'id="rg-detail-close" class="xm-ui-button xm-ui-button--secondary xm-ui-button--small rg-modal-close"');
+    return (
+      '<div class="xm-ui-scope oc-wrap page xm-page">' +
+      header +
+      '<div class="xm-ui-stat-grid rg-cards" aria-label="版本发布中心页签">' + stats + "</div>" +
+      '<p class="xm-ui-status xm-ui-status--success" id="app-version">读取版本中</p>' +
+      '<div id="flash" class="flash" role="status"></div>' +
+      '<div id="lock-view" class="lock-box idle" hidden></div>' +
+      board +
+      '<div id="rg-detail" class="rg-modal" hidden><div class="xm-ui-card rg-modal-card">' +
+      closeBtn +
+      '<div class="xm-ui-card__body"><h2 class="xm-ui-page-title" id="rg-detail-title">版本详情</h2><dl id="rg-detail-body"></dl></div></div></div>' +
+      "</div>" +
+      '<div id="upgrade-mask" aria-live="assertive" aria-modal="true" role="dialog">' +
+      '<div class="upgrade-card"><h2 id="upgrade-title">正在升级，请勿关闭</h2>' +
+      xmBtn({ label: "关闭", variant: "secondary", size: "small", id: "upgrade-dismiss" }, 'id="upgrade-dismiss"') +
+      '<ol id="upgrade-steps"></ol><div class="upgrade-bar"><i id="upgrade-bar"></i></div>' +
+      '<p class="upgrade-log" id="upgrade-log" hidden></p></div></div>'
+    );
+  }
 
   function ensureCss() {
     if (!document.getElementById(STYLE_ID)) {
@@ -275,7 +251,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-25";
+      link.href = "/releases.css?v=sc-ui-26";
       document.head.appendChild(link);
     }
   }
@@ -284,7 +260,13 @@
   window.XmModules["/releases"] = {
     mount: function (root) {
       ensureCss();
-      root.innerHTML = HTML;
+      if (!document.querySelector('link[rel="stylesheet"][href*="xm-ui.css"]')) {
+        const uiCss = document.createElement("link");
+        uiCss.rel = "stylesheet";
+        uiCss.href = "/shared/xm-ui.css";
+        document.head.appendChild(uiCss);
+      }
+      root.innerHTML = buildBoardHtml();
       const mask = root.querySelector("#upgrade-mask");
       if (mask && mask.parentNode !== document.documentElement) {
         document.documentElement.appendChild(mask);
@@ -804,11 +786,11 @@
 
       function activeTabName() {
         const sub = document.querySelector(".rg-subnav");
-        const inner = sub ? sub.querySelector(".oc-tab.active") : null;
+        const inner = sub ? sub.querySelector(".xm-ui-tab.is-active, .oc-tab.active") : null;
         if (inner) {
           return inner.getAttribute("data-tab") || "queue";
         }
-        const card = document.querySelector(".rg-cards .oc-tab.active");
+        const card = document.querySelector(".rg-stat.is-active, .rg-cards .oc-tab.active");
         return (card && card.getAttribute("data-tab")) || "queue";
       }
 
@@ -943,13 +925,16 @@
         if (info.total <= PAGE_SIZE) {
           return '<div class="oc-pager"><span>共 ' + info.total + " 条</span></div>";
         }
+        function pageBtn(label, page, off) {
+          return xmBtn({ label: label, variant: "secondary", size: "small", disabled: off }, 'data-page="' + page + '"');
+        }
         return (
           '<div class="oc-pager" data-pager="' + key + '">' +
-          '<button type="button" class="act secondary" data-page="1"' + (info.page <= 1 ? " disabled" : "") + ">首页</button>" +
-          '<button type="button" class="act secondary" data-page="' + (info.page - 1) + '"' + (info.page <= 1 ? " disabled" : "") + ">上一页</button>" +
+          pageBtn("首页", 1, info.page <= 1) +
+          pageBtn("上一页", info.page - 1, info.page <= 1) +
           "<span>第 " + info.page + " / " + info.pageCount + " 页 · 第 " + info.from + "–" + info.to + " 条 · 共 " + info.total + " 条</span>" +
-          '<button type="button" class="act secondary" data-page="' + (info.page + 1) + '"' + (info.page >= info.pageCount ? " disabled" : "") + ">下一页</button>" +
-          '<button type="button" class="act secondary" data-page="' + info.pageCount + '"' + (info.page >= info.pageCount ? " disabled" : "") + ">末页</button>" +
+          pageBtn("下一页", info.page + 1, info.page >= info.pageCount) +
+          pageBtn("末页", info.pageCount, info.page >= info.pageCount) +
           "</div>"
         );
       }
@@ -960,45 +945,66 @@
           return;
         }
         if (!items.length) {
-          el.innerHTML = '<div class="empty">没有等待通过的单据</div>';
+          const ui = xmUi();
+          el.innerHTML = ui ? ui.EmptyState({ title: "没有等待通过的单据" }) : '<div class="empty">没有等待通过的单据</div>';
           return;
         }
         const paged = paginate(items, "queue");
-        el.innerHTML =
-          "<table class=\"sc-table\"><thead><tr><th>位次</th><th>模块</th><th>改动</th><th>版本</th><th>状态</th><th>操作</th></tr></thead><tbody>" +
-          paged.slice.map(function (item, index) {
+        const ui = xmUi();
+        const rows = paged.slice.map(function (item, index) {
           const seq = item.queueIndex || (paged.from + index);
           const isHead = Number(seq) === 1;
           let confirmBtn;
           if (locked) {
-            confirmBtn = "<button class=\"act\" disabled>有发布正在进行，请等待</button>";
+            confirmBtn = xmBtn({ label: "有发布正在进行，请等待", disabled: true, size: "small" });
           } else if (!isHead) {
-            confirmBtn = "<button class=\"act\" disabled>须先通过第 1 位</button>";
+            confirmBtn = xmBtn({ label: "须先通过第 1 位", disabled: true, size: "small" });
           } else {
-            confirmBtn = "<button class=\"act\" data-act=\"pass\">通过</button>";
+            confirmBtn = xmBtn({ label: "通过", size: "small" }, 'data-act="pass"');
           }
-          return (
-            "<tr class=\"ticket\" data-id=\"" + esc(item.id) + "\" data-module=\"" + esc(item.module) + "\" data-restart=\"" + (item.restart ? "1" : "0") + "\" data-version=\"" + esc(item.version) + "\">" +
-            "<td class=\"sc-seq\">第 " + seq + " 位</td>" +
-            "<td>" + esc(item.module) + "</td>" +
-            "<td class=\"sc-change\">" +
+          const change =
             "<div class=\"sc-sum\">" + esc(item.summary) + demoBadge(item) + "</div>" +
             "<div class=\"sc-meta\">来自对话 · " + esc(item.source || item.applicant || "—") + "</div>" +
             fileList(item) +
             (item.gitRef ? "<div class=\"sc-meta\">git ref · " + esc(item.gitRef) + "</div>" : "") +
             "<div class=\"sc-meta\">验收 · " + esc(item.acceptance || "—") + "</div>" +
-            "<div class=\"sc-meta\">排队序号 · " + seq + "</div>" +
-            "</td>" +
-            "<td><div class=\"sc-ver\">" + esc(item.version) + "</div>" +
-            "<div class=\"sc-meta\">" + (item.restart ? "含后端" : "仅页面") + "</div></td>" +
-            "<td>" + (isHead ? "待上线·发布包已就绪<br>请先点" : "待上线·排队中") + "</td>" +
-            "<td><div class=\"row\">" +
-            confirmBtn +
-            "<button class=\"act danger\" data-act=\"reject\">驳回</button>" +
-            "</div></td></tr>"
-          );
-        }).join("") +
-          "</tbody></table>" + renderPager("queue", paged);
+            "<div class=\"sc-meta\">排队序号 · " + seq + "</div>";
+          return {
+            seq: "第 " + seq + " 位",
+            module: item.module,
+            change: change,
+            ver: '<div class="sc-ver">' + esc(item.version) + "</div><div class=\"sc-meta\">" + (item.restart ? "含后端" : "仅页面") + "</div>",
+            status: { label: isHead ? "待上线·发布包已就绪" : "待上线·排队中", tone: isHead ? "warning" : "neutral" },
+            acts: confirmBtn + xmBtn({ label: "驳回", variant: "secondary", size: "small" }, 'data-act="reject"'),
+            id: item.id,
+            restart: item.restart ? "1" : "0",
+            version: item.version
+          };
+        });
+        el.innerHTML = (ui
+          ? ui.DataTable({
+              columns: [
+                { label: "位次", key: "seq" },
+                { label: "模块", key: "module" },
+                { label: "改动", key: "change", render: function (value) { return value; } },
+                { label: "版本", key: "ver", render: function (value) { return value; } },
+                { label: "状态", key: "status", type: "status" },
+                { label: "操作", key: "acts", render: function (value) { return value; } }
+              ],
+              rows: rows
+            })
+          : "") + renderPager("queue", paged);
+        el.querySelectorAll("tbody tr").forEach(function (tr, i) {
+          const row = rows[i];
+          if (!row) {
+            return;
+          }
+          tr.setAttribute("data-id", row.id);
+          tr.setAttribute("data-module", row.module || "");
+          tr.setAttribute("data-restart", row.restart);
+          tr.setAttribute("data-version", row.version || "");
+          tr.classList.add("ticket");
+        });
       }
 
       function newestFirst(a, b) {
@@ -1138,33 +1144,39 @@
         return '<span class="badge ok">正式版</span>';
       }
       function statusCell(item) {
-        if (item.status === "failed") {
-          return '<span class="rg-st bad">发布失败</span>';
-        }
+        const ui = xmUi();
+        const st = statusTone(item);
+        return ui ? ui.StatusBadge(st) : esc(st.label);
+      }
+      function statusTone(item) {
         if (item.rolledBack) {
-          return '<span class="rg-st rolled">已回滚</span>';
+          return { label: "已回滚", tone: "purple" };
+        }
+        if (item.status === "failed") {
+          return { label: "发布失败", tone: "danger" };
         }
         if (item.status === "success") {
-          return '<span class="rg-st ok">已上线</span>';
+          return { label: "已上线", tone: "success" };
         }
-        return esc(item.status || "—");
+        return { label: item.status || "—", tone: "neutral" };
       }
       function rowActions(item, locked, mode) {
-        const bits = ['<button type="button" class="rg-link" data-act="detail">详情</button>'];
+        const bits = ['<button type="button" class="xm-ui-text-action" data-act="detail">详情</button>'];
         if (mode === "failed" || item.status === "failed") {
-          bits.push('<button type="button" class="rg-link" data-act="showlog">日志</button>');
+          bits.push('<button type="button" class="xm-ui-text-action" data-act="showlog">日志</button>');
           const returned = item.returned || /已发回给「/.test(item.log || "");
           if (returned) {
-            bits.push('<span class="badge">已发回</span>');
+            const ui = xmUi();
+            bits.push(ui ? ui.StatusBadge({ label: "已发回", tone: "neutral", dot: false }) : '<span class="badge">已发回</span>');
           } else {
-            bits.push('<button type="button" class="rg-link" data-act="return">发回</button>');
+            bits.push('<button type="button" class="xm-ui-text-action" data-act="return">发回</button>');
           }
         } else {
-          bits.push('<button type="button" class="rg-link" data-act="compare">对比</button>');
+          bits.push('<button type="button" class="xm-ui-text-action" data-act="compare">对比</button>');
           if (item.snapshotDir) {
             bits.push(locked
-              ? '<button type="button" class="rg-link" disabled>回滚</button>'
-              : '<button type="button" class="rg-link" data-act="rollback">回滚</button>');
+              ? '<button type="button" class="xm-ui-text-action" disabled>回滚</button>'
+              : '<button type="button" class="xm-ui-text-action" data-act="rollback">回滚</button>');
           }
         }
         return bits.join("");
@@ -1174,28 +1186,50 @@
         const filtered = (items || []).filter(function (item) { return matchFilters(item, flt); });
         rememberTickets(filtered);
         fillWhoFilter(allTickets.length ? allTickets : filtered);
+        const ui = xmUi();
         if (!filtered.length) {
-          return '<div class="empty">' + (items && items.length ? "没有符合筛选的记录" : "暂无记录") + "</div>";
+          return ui
+            ? ui.EmptyState({ title: items && items.length ? "没有符合筛选的记录" : "暂无记录" })
+            : '<div class="empty">' + (items && items.length ? "没有符合筛选的记录" : "暂无记录") + "</div>";
         }
         const paged = paginate(filtered, key);
-        return (
-          "<table class=\"rg-table\"><thead><tr><th>序号</th><th>版本号</th><th>版本说明</th><th>提交人</th><th>发布时间</th><th>发布状态</th><th>耗时</th><th>操作</th></tr></thead><tbody>" +
-          paged.slice.map(function (item, index) {
-            const note = item.module ? (item.module + "：" + (item.summary || "—")) : (item.summary || "—");
-            return (
-              "<tr data-id=\"" + esc(item.id) + "\">" +
-              "<td>" + (paged.from + index) + "</td>" +
-              "<td><span class=\"sc-ver\">" + esc(item.version) + "</span>" + demoBadge(item) + kindBadge(item) + "</td>" +
-              "<td class=\"failed-sum\">" + esc(note) + "</td>" +
-              "<td>" + esc(item.applicant || item.source || ticketDialogName(item)) + "</td>" +
-              "<td>" + esc(fmtDay(item.publishFinishedAt || item.reviewedAt || item.submittedAt)) + "</td>" +
-              "<td>" + statusCell(item) + "</td>" +
-              "<td>" + esc(durationText(item)) + "</td>" +
-              "<td>" + rowActions(item, locked, mode) + "</td></tr>"
-            );
-          }).join("") +
-          "</tbody></table>" + renderPager(key, paged)
-        );
+        const rows = paged.slice.map(function (item, index) {
+          const note = item.module ? (item.module + "：" + (item.summary || "—")) : (item.summary || "—");
+          return {
+            seq: paged.from + index,
+            ver: '<span class="sc-ver">' + esc(item.version) + "</span>" + demoBadge(item) + kindBadge(item),
+            note: note,
+            who: item.applicant || item.source || ticketDialogName(item),
+            at: fmtDay(item.publishFinishedAt || item.reviewedAt || item.submittedAt),
+            status: statusTone(item),
+            dur: durationText(item),
+            acts: rowActions(item, locked, mode),
+            id: item.id
+          };
+        });
+        const table = ui
+          ? ui.DataTable({
+              columns: [
+                { label: "序号", key: "seq" },
+                { label: "版本号", key: "ver", render: function (value) { return value; } },
+                { label: "版本说明", key: "note" },
+                { label: "提交人", key: "who" },
+                { label: "发布时间", key: "at" },
+                { label: "发布状态", key: "status", type: "status" },
+                { label: "耗时", key: "dur" },
+                { label: "操作", key: "acts", render: function (value) { return value; } }
+              ],
+              rows: rows
+            })
+          : "";
+        const wrap = document.createElement("div");
+        wrap.innerHTML = table;
+        wrap.querySelectorAll("tbody tr").forEach(function (tr, i) {
+          if (rows[i]) {
+            tr.setAttribute("data-id", rows[i].id);
+          }
+        });
+        return wrap.innerHTML + renderPager(key, paged);
       }
       function showDetail(item, focusLog) {
         const box = document.getElementById("rg-detail");
@@ -1244,6 +1278,10 @@
         if (filters) {
           filters.hidden = name === "logs" || name === "compare";
         }
+        const bar = document.querySelector(".xm-ui-filter-toolbar");
+        if (bar) {
+          bar.hidden = false;
+        }
         const sub = document.querySelector(".rg-subnav");
         if (sub) {
           sub.hidden = false;
@@ -1287,19 +1325,24 @@
         const a = ticketIndex[(document.getElementById("cmp-a") || {}).value];
         const b = ticketIndex[(document.getElementById("cmp-b") || {}).value];
         function card(item, label) {
+          const ui = xmUi();
           if (!item) {
-            return "<article><h3>" + label + "</h3><div class=\"empty\">请选择版本</div></article>";
+            return ui
+              ? ui.ContentCard({ title: label, content: ui.EmptyState({ title: "请选择版本" }) })
+              : "<article><h3>" + label + "</h3><div class=\"empty\">请选择版本</div></article>";
           }
-          return (
-            "<article><h3>" + label + " · " + esc(item.version) + "</h3><dl>" +
+          const body =
+            "<dl>" +
             "<dt>模块</dt><dd>" + esc(item.module || "—") + "</dd>" +
             "<dt>提交人</dt><dd>" + esc(item.applicant || item.source || ticketDialogName(item)) + "</dd>" +
             "<dt>说明</dt><dd>" + esc(item.summary || "—") + "</dd>" +
             "<dt>文件</dt><dd>" + esc((item.files || []).join("、") || "—") + "</dd>" +
             "<dt>时间</dt><dd>" + esc(fmtDay(item.publishFinishedAt || item.reviewedAt)) + "</dd>" +
             "<dt>状态</dt><dd>" + statusCell(item) + "</dd>" +
-            "</dl></article>"
-          );
+            "</dl>";
+          return ui
+            ? ui.ContentCard({ title: label + " · " + item.version, content: body })
+            : "<article><h3>" + label + " · " + esc(item.version) + "</h3>" + body + "</article>";
         }
         el.innerHTML = card(a, "版本 A") + card(b, "版本 B");
       }
@@ -1312,7 +1355,10 @@
           return item.status === "success" && item.snapshotDir;
         }).sort(newestFirst);
         if (!rows.length) {
-          el.innerHTML = '<div class="empty">没有可回滚的版本（需要升级前快照）</div>';
+          const ui = xmUi();
+          el.innerHTML = ui
+            ? ui.EmptyState({ title: "没有可回滚的版本（需要升级前快照）" })
+            : '<div class="empty">没有可回滚的版本（需要升级前快照）</div>';
           return;
         }
         el.innerHTML = recordTable(rows, locked, "rollback", "history");
@@ -1329,7 +1375,8 @@
         }).sort(newestFirst);
         rememberTickets(rows);
         if (!rows.length) {
-          el.innerHTML = '<div class="empty">还没有发布记录</div>';
+          const ui = xmUi();
+          el.innerHTML = ui ? ui.EmptyState({ title: "还没有发布记录" }) : '<div class="empty">还没有发布记录</div>';
           return;
         }
         el.innerHTML = recordTable(rows, locked, "history", "history");
@@ -1346,7 +1393,8 @@
         }).sort(newestFirst);
         rememberTickets(rows);
         if (!rows.length) {
-          el.innerHTML = '<div class="empty">还没有失败的版本</div>';
+          const ui = xmUi();
+          el.innerHTML = ui ? ui.EmptyState({ title: "还没有失败的版本" }) : '<div class="empty">还没有失败的版本</div>';
           return;
         }
         el.innerHTML = recordTable(rows, lastLock.locked, "failed", "failed");
@@ -1359,18 +1407,31 @@
         }
         const paged = pageInfoFromBoard(result, "logs");
         if (!paged.total) {
-          el.innerHTML = '<div class="empty">暂无发版流水</div>';
+          const ui = xmUi();
+          el.innerHTML = ui ? ui.EmptyState({ title: "暂无发版流水" }) : '<div class="empty">暂无发版流水</div>';
           return;
         }
-        el.innerHTML = paged.slice.map(function (item) {
-          return (
-            "<article class=\"log-item\">" +
-            "<div><b>" + esc(item.version) + "</b> · " + esc(item.status) + " · " + esc(item.module) + "</div>" +
-            "<div>" + esc(item.log) + "</div>" +
-            "<div class=\"oc-crumb\">" + esc(fmt(item.publishFinishedAt || item.reviewedAt || item.submittedAt)) + "</div>" +
-            "</article>"
-          );
-        }).join("") + renderPager("logs", paged);
+        const ui = xmUi();
+        el.innerHTML = (ui
+          ? ui.DataTable({
+              columns: [
+                { label: "时间", key: "at" },
+                { label: "版本", key: "ver" },
+                { label: "状态", key: "status", type: "status" },
+                { label: "模块", key: "module" },
+                { label: "流水", key: "log" }
+              ],
+              rows: paged.slice.map(function (item) {
+                return {
+                  at: fmt(item.publishFinishedAt || item.reviewedAt || item.submittedAt),
+                  ver: item.version,
+                  status: statusTone(item),
+                  module: item.module,
+                  log: item.log || "—"
+                };
+              })
+            })
+          : "") + renderPager("logs", paged);
       }
 
       async function loadAllTickets(apiOpts) {
@@ -1554,10 +1615,14 @@
 
       function showBoardTab(name) {
         const cardName = (name === "compare" || name === "rollback") ? "history" : name;
+        document.querySelectorAll(".rg-stat").forEach(function (node) {
+          node.classList.toggle("is-active", node.getAttribute("data-tab") === cardName);
+        });
         document.querySelectorAll(".rg-cards .oc-tab").forEach(function (node) {
           node.classList.toggle("active", node.getAttribute("data-tab") === cardName);
         });
-        document.querySelectorAll(".rg-subnav .oc-tab").forEach(function (node) {
+        document.querySelectorAll(".xm-ui-tab, .rg-subnav .oc-tab").forEach(function (node) {
+          node.classList.toggle("is-active", node.getAttribute("data-tab") === name);
           node.classList.toggle("active", node.getAttribute("data-tab") === name);
         });
         document.querySelectorAll(".pane").forEach(function (pane) {
@@ -1577,9 +1642,12 @@
           });
         }
       }
-      document.querySelectorAll(".oc-tab").forEach(function (tab) {
+      document.querySelectorAll(".rg-stat, .xm-ui-tab, .oc-tab").forEach(function (tab) {
         tab.addEventListener("click", function () {
           const name = tab.getAttribute("data-tab");
+          if (!name) {
+            return;
+          }
           showBoardTab(name);
           if (typeof tab.blur === "function") {
             tab.blur();

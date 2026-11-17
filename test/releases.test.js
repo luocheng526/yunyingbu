@@ -204,8 +204,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /不会自动跳转/);
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /sc-ui-25/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-25/);
+    assert.match(text, /sc-ui-26/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-26/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
     assert.match(text, /id="xm-releases-boot"/);
@@ -217,6 +217,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /data-tab="history"/);
     assert.match(text, /id="tab-queue-count"/);
     assert.match(text, /id="tab-history-count"/);
+    assert.match(text, /xm-ui-scope/);
+    assert.match(text, /xm-ui-page-header/);
     assert.match(text, /oc-hero-card/);
     assert.doesNotMatch(text, /系统中心/);
     assert.doesNotMatch(text, /同意并发布/);
@@ -283,7 +285,9 @@ test("release board scripts parse so tab refresh can run", () => {
   assert.match(theme, /function renderCompare/);
   assert.match(theme, /function renderRollbackList/);
   assert.match(theme, /data-act="detail"/);
-  assert.match(theme, /rg-sub-label">发布记录/);
+  assert.match(theme, /发布记录/);
+  assert.match(theme, /window\.XmUI/);
+  assert.match(theme, /xm-ui-scope/);
   assert.doesNotMatch(theme, /新建发布/);
 });
 
