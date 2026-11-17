@@ -18,6 +18,7 @@ import {
 } from "../src/modules/home/local-paid.js";
 import { homeRouter } from "../src/modules/home/router.js";
 import { loadOrgShops, setJingmaiRequestOrigin } from "../src/modules/home/jingmai-runner.js";
+import { beijingParts } from "../src/modules/home/jingmai.js";
 import { resetJingmaiStore, saveSample, saveSession } from "../src/modules/home/jingmai-store.js";
 
 const snapDir = mkdtempSync(join(tmpdir(), "home-local-paid-"));
@@ -73,14 +74,15 @@ test("live page uses Han+Shen paid totals and leaves paid for local return", () 
   assert.match(homeJs, /xm-hm-desk-mask/);
   assert.match(homeJs, /点掉线的店，在页面中间弹出这一家的登录画面/);
   assert.doesNotMatch(homeJs, /登录未登录店铺/);
-  assert.doesNotMatch(homeJs, /api\("\/api\/home\/live-login", \{\}\)/);
+  assert.match(homeJs, /data-connect-jingmai/);
+  assert.match(homeJs, /api\("\/api\/home\/live-login", \{\}\)/);
   assert.match(homeJs, /function mergeLivePaid/);
   assert.match(homeJs, /function sortLiveShops/);
   assert.match(homeJs, /sortLiveShops\(feePickShops/);
   assert.match(homeJs, /function liveCardsOf/);
   assert.match(homeJs, /label: "实时付费接入店铺数量"/);
   assert.match(homeJs, /实时按付费中心的方式，用组织中心账号在服务器登录京麦/);
-  assert.match(homeJs, /if \(stampClock \|\| !state\.liveAt\)/);
+  assert.match(homeJs, /liveSlotOf\(state\.shops\)/);
   assert.match(homeJs, /timeZone: "Asia\/Shanghai"/);
   assert.match(homeJs, /fillLocalPaid\(blankLive\(\)/);
   assert.doesNotMatch(homeJs, /\/api\/home\/erp-paid/);
@@ -464,17 +466,19 @@ test("live shop 状态 stays online when the saved login is still valid", () => 
   const fresh = new Date().toISOString();
   const stale = new Date(Date.now() - 11 * 60 * 1000).toISOString();
   const almost = new Date(Date.now() - 9 * 60 * 1000).toISOString();
-  assert.equal(fns.liveLinkOf({}).label, "掉线");
+  assert.equal(fns.liveLinkOf({}).label, "");
   assert.equal(fns.liveLinkOf({ jzOk: "是", online: true }).kind, "on");
-  assert.equal(fns.liveLinkOf({ capturedAt: fresh }).kind, "on");
-  assert.equal(fns.liveLinkOf({ capturedAt: almost }).kind, "on");
-  assert.equal(fns.liveLinkOf({ capturedAt: stale }).kind, "off");
+  assert.equal(fns.liveLinkOf({ capturedAt: fresh }).label, "");
+  assert.equal(fns.liveLinkOf({ capturedAt: almost }).label, "");
+  assert.equal(fns.liveLinkOf({ capturedAt: stale }).label, "");
   assert.equal(fns.liveLinkOf({ capturedAt: stale, online: true }).label, "在线");
-  assert.equal(fns.liveLinkOf({ capturedAt: fresh, loginExpired: true, online: true }).label, "掉线");
+  assert.equal(fns.liveLinkOf({ capturedAt: fresh, offline: true }).label, "掉线");
+  assert.equal(fns.liveLinkOf({ capturedAt: fresh, loginExpired: true }).label, "掉线");
+  assert.equal(fns.liveLinkOf({ loginExpired: true, online: true }).label, "在线");
   assert.match(fns.fmtShopAt("2026-11-13T09:43:03+08:00"), /^2026\/11\/13 09:43:03$/);
   assert.match(fns.fmtShopAt("2026/11/13 09:43:03"), /^2026\/11\/13 09:43:03$/);
   assert.doesNotMatch(homeJs, /label: "是否回传成功"/);
-  assert.match(homeJs, /label: "状态"/);
+  assert.match(homeJs, /label: "登录状态"/);
   assert.doesNotMatch(homeJs, /label: "是否成功"/);
 });
 
@@ -595,18 +599,20 @@ test("jingmai org loader keeps every team and hides passwords", async () => {
   const packed = packJingmaiShops({ shops: [] }, shops);
   assert.deepEqual(packed.records.map((row) => row.shopName), ["韩店"]);
   assert.equal(packed.records[0].source, "jingmai-han");
-  assert.equal(packed.records[0].loginExpired, true);
+  assert.equal(packed.records[0].loginExpired, false);
+  assert.equal(packed.records[0].offline, false);
   assert.equal(JSON.stringify(packed).includes("secret"), false);
 });
 
 test("local-paid route reads jingmai sessions for every org shop", async () => {
   const ymd = shanghaiYmd();
+  const freshAt = beijingParts().stamp;
   await resetJingmaiStore();
   await saveSession("韩店", { cookies: [{ name: "thor", value: "t" }], authState: "ok", enabled: true });
   await saveSample({
     store: "韩店",
     day: ymd,
-    capturedAt: `${ymd} 10:00:00`,
+    capturedAt: freshAt,
     ok: true,
     dealAmount: 22,
     paidAmount: 11
@@ -615,7 +621,7 @@ test("local-paid route reads jingmai sessions for every org shop", async () => {
   await saveSample({
     store: "沈店",
     day: ymd,
-    capturedAt: `${ymd} 10:00:00`,
+    capturedAt: freshAt,
     ok: true,
     dealAmount: 14,
     paidAmount: 7
@@ -660,7 +666,8 @@ test("local-paid route reads jingmai sessions for every org shop", async () => {
     assert.equal(data.records.find((row) => row.shopName === "沈店").feeHi, 36);
     assert.equal(data.records.find((row) => row.shopName === "韩店").source, "jingmai-han");
     assert.equal(data.records.find((row) => row.shopName === "沈店").source, "jingmai-shen");
-    assert.equal(data.records.find((row) => row.shopName === "未登录店").loginExpired, true);
+    assert.equal(data.records.find((row) => row.shopName === "未登录店").loginExpired, false);
+    assert.equal(data.records.find((row) => row.shopName === "未登录店").offline, false);
     assert.equal(data.records.find((row) => row.shopName === "未登录店").paidAmount, null);
     assert.deepEqual(data.from, ["jingmai"]);
     assert.equal(JSON.stringify(data).includes("password"), false);
@@ -732,7 +739,7 @@ test("local-paid pack always has ok and records, never empty object", async () =
   assert.equal(Array.isArray(data.records), true);
   assert.doesNotMatch(homeJs, /\/api\/han\/fee-targets/);
   assert.doesNotMatch(homeJs, /\/api\/shen\/fee-targets/);
-  assert.match(homeJs, /LIVE_REFRESH_MS = 10 \* 60 \* 1000/);
+  assert.match(homeJs, /LIVE_REFRESH_MS = 60 \* 1000/);
   assert.match(homeJs, /cache: "no-store"/);
 });
 

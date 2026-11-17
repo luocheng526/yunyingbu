@@ -1136,7 +1136,7 @@ test("fee target is a range and 费比监控 uses 超标 / 加大付费", () => 
   assert.match(homeJs, /shen-home-fee-targets/);
   assert.doesNotMatch(homeJs, /\/api\/han\/fee-targets/);
   assert.doesNotMatch(homeJs, /function overlayFeeBooks/);
-  assert.match(homeJs, /LIVE_REFRESH_MS = 10 \* 60 \* 1000/);
+  assert.match(homeJs, /LIVE_REFRESH_MS = 60 \* 1000/);
   assert.match(homeJs, /cache: "no-store"/);
   assert.match(homeJs, /function refreshLive\(\) \{\n        if \(liveRefreshing\) \{\n          return;\n        \}\n        liveRefreshing = true;\n        paint\(root, state\);\n        return Promise\.resolve\(pullLive\(\)\)/);
   const feeStore = {};
@@ -1189,8 +1189,8 @@ test("live header settings add 付费中心 columns without wiring data", () => 
   assert.match(homeJs, /真实费比/);
   assert.doesNotMatch(homeJs, /是否回传成功/);
   assert.match(homeJs, /function parseLiveAt/);
-  assert.match(homeJs, /Date\.now\(\) - t <= 6e5/);
-  assert.match(homeJs, /label: "状态"/);
+  assert.match(homeJs, /row\.offline === true/);
+  assert.match(homeJs, /label: "登录状态"/);
   assert.match(homeJs, /function liveLinkOf/);
   assert.match(homeJs, /在线/);
   assert.match(homeJs, /掉线/);
@@ -1244,7 +1244,7 @@ test("live header settings add 付费中心 columns without wiring data", () => 
   assert.equal(labels.includes("真实费比"), false);
   assert.equal(labels.includes("是否回传成功"), false);
   assert.equal(labels.includes("回传成功"), false);
-  assert.equal(labels.includes("状态"), true);
+  assert.equal(labels.includes("登录状态"), true);
   assert.equal(labels.includes("是否成功"), false);
   fns.saveLiveHiddenHeads(["liveAmount", "feeGoal"]);
   const hidden = fns.liveCols().map((col) => col.label);

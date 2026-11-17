@@ -125,25 +125,114 @@ const OLD_LIVE_LINK =
   "      : { label: \"掉线\", kind: \"off\" };\n" +
   "  }";
 const KEPT_LIVE_LINK =
-  "  function liveLinkOf(row) {\n" +
-  "    if (row && row.loginExpired === true) {\n" +
-  "      return { label: \"掉线\", kind: \"off\" };\n" +
+  "  var liveBoardSlot = \"\";\n" +
+  "  function fiveMinuteStamp(stamp) {\n" +
+  "    var match = String(stamp || \"\").match(/(\\d{4})[/-](\\d{1,2})[/-](\\d{1,2})[ T](\\d{1,2}):(\\d{2})/);\n" +
+  "    if (!match) {\n" +
+  "      return \"\";\n" +
   "    }\n" +
+  "    var minute = Math.floor(Number(match[5]) / 5) * 5;\n" +
+  "    function pad(value) {\n" +
+  "      value = String(value);\n" +
+  "      return value.length < 2 ? \"0\" + value : value;\n" +
+  "    }\n" +
+  "    return match[1] + \"/\" + pad(match[2]) + \"/\" + pad(match[3]) + \" \" + pad(match[4]) + \":\" + pad(minute);\n" +
+  "  }\n" +
+  "  function liveSlotOf(rows) {\n" +
+  "    var latest = \"\";\n" +
+  "    (rows || []).forEach(function (row) {\n" +
+  "      if (row && row.online === true && row.capturedAt > latest) {\n" +
+  "        latest = row.capturedAt;\n" +
+  "      }\n" +
+  "    });\n" +
+  "    if (!latest) {\n" +
+  "      (rows || []).forEach(function (row) {\n" +
+  "        if (row && row.capturedAt > latest) {\n" +
+  "          latest = row.capturedAt;\n" +
+  "        }\n" +
+  "      });\n" +
+  "    }\n" +
+  "    return fiveMinuteStamp(latest);\n" +
+  "  }\n" +
+  "  function liveLinkOf(row) {\n" +
   "    if (row && row.online === true) {\n" +
   "      return { label: \"在线\", kind: \"on\" };\n" +
   "    }\n" +
-  "    var t = parseLiveAt(row && (row.capturedAt || row.ingestedAt));\n" +
-  "    return Number.isFinite(t) && Date.now() - t <= 6e5\n" +
-  "      ? { label: \"在线\", kind: \"on\" }\n" +
-  "      : { label: \"掉线\", kind: \"off\" };\n" +
+  "    if (row && (row.loginExpired === true || row.offline === true)) {\n" +
+  "      return { label: \"掉线\", kind: \"off\" };\n" +
+  "    }\n" +
+  "    return { label: \"\", kind: \"\" };\n" +
   "  }";
 const OLD_ONLINE_COPY =
   "      online: row && row.online,\n" +
   "      capturedAt: row && (row.capturedAt || row.ingestedAt),";
 const KEPT_ONLINE_COPY =
   "      online: row && row.online === true,\n" +
+  "      offline: row && row.offline === true,\n" +
+  "      offlineReason: row && row.offlineReason ? String(row.offlineReason) : \"\",\n" +
   "      loginExpired: row && row.loginExpired === true,\n" +
   "      capturedAt: row && (row.capturedAt || row.ingestedAt),";
+const OLD_LIVE_AT =
+  "    if (key === \"liveAt\") {\n" +
+  "      return '<td class=\"xm-hm-num\">' + escapeHtml(fmtShopAt(row && (row.capturedAt || row.ingestedAt || row.liveAt)) || \"—\") + \"</td>\";\n" +
+  "    }";
+const KEPT_LIVE_AT =
+  "    if (key === \"liveAt\") {\n" +
+  "      var ownAt = row && (row.capturedAt || row.ingestedAt || row.liveAt);\n" +
+  "      return '<td class=\"xm-hm-num\">' + escapeHtml(ownAt && liveBoardSlot ? liveBoardSlot : \"—\") + \"</td>\";\n" +
+  "    }";
+const OLD_LIVE_ROWS =
+  "      shops.map(function (row, i) {\n" +
+  "        return liveShopRowHtml(row, i, state.liveAt);\n" +
+  "      }).join(\"\")";
+const KEPT_LIVE_ROWS =
+  "      (liveBoardSlot = liveSlotOf(shops), shops).map(function (row, i) {\n" +
+  "        return liveShopRowHtml(row, i, liveBoardSlot || state.liveAt);\n" +
+  "      }).join(\"\")";
+const OLD_LIVE_CLOCK =
+  "        if (stampClock || !state.liveAt) {\n" +
+  "          state.liveAt = shanghaiClock();\n" +
+  "        }";
+const KEPT_LIVE_CLOCK =
+  "        state.liveAt = liveSlotOf(state.shops) || shanghaiClock();";
+const OLD_LIVE_SUM = "    var sum = rows.length ? sumLocalPaid(rows) : {};";
+const KEPT_LIVE_SUM =
+  "    var liveRows = rows.filter(function (row) { return !row || row.online !== false; });\n" +
+  "    var sum = liveRows.length ? sumLocalPaid(liveRows) : {};";
+const OLD_CONNECT_BTN = "'<button type=\"button\" class=\"xm-hm-live-refresh\" data-refresh-live'";
+const KEPT_CONNECT_BTN =
+  "'<button type=\"button\" class=\"xm-hm-live-refresh\" data-connect-jingmai>连接京麦</button>' +\n" +
+  "      '<button type=\"button\" class=\"xm-hm-live-refresh\" data-refresh-live'";
+const OLD_REFRESH_CLICK =
+  "        if (event.target.closest(\"[data-refresh-live]\")) {\n" +
+  "          refreshLive();\n" +
+  "          return;\n" +
+  "        }";
+const KEPT_REFRESH_CLICK =
+  "        if (event.target.closest(\"[data-refresh-live]\")) {\n" +
+  "          refreshLive();\n" +
+  "          return;\n" +
+  "        }\n" +
+  "        if (event.target.closest(\"[data-connect-jingmai]\")) {\n" +
+  "          var seqAll = ++deskSeq;\n" +
+  "          window.clearInterval(deskTimer);\n" +
+  "          deskTimer = 0;\n" +
+  "          state.desk = { open: true, status: \"opening\", store: \"全部店铺\", message: \"正在打开还没有登录的店铺\" };\n" +
+  "          if (!dead) paint(root, state);\n" +
+  "          api(\"/api/home/live-login\", {}).then(function (st) {\n" +
+  "            if (dead || seqAll !== deskSeq) return;\n" +
+  "            var nextAll = st || { status: \"login\", message: \"登录没有打开\" };\n" +
+  "            nextAll.open = true;\n" +
+  "            if (nextAll.status === \"done\" || nextAll.status === \"ok\") {\n" +
+  "              state.desk = null;\n" +
+  "              if (!dead) { paint(root, state); pullLive(); }\n" +
+  "              return;\n" +
+  "            }\n" +
+  "            nextAll.store = nextAll.store || \"全部店铺\";\n" +
+  "            showDesk(nextAll);\n" +
+  "          });\n" +
+  "          return;\n" +
+  "        }";
 
 export function patchHomeClientSource(text) {
   const source = String(text || "");
@@ -158,8 +247,17 @@ export function patchHomeClientSource(text) {
     .replace(OLD_OPENING, KEPT_OPENING)
     .replace(OLD_LIVE_LINK, KEPT_LIVE_LINK)
     .replace(OLD_ONLINE_COPY, KEPT_ONLINE_COPY)
-    .replaceAll("0.1.1039-loginpop", "0.1.1070-liveon")
-    .replaceAll("0.1.1043-deskkeep", "0.1.1070-liveon");
+    .replace(OLD_LIVE_AT, KEPT_LIVE_AT)
+    .replace(OLD_LIVE_ROWS, KEPT_LIVE_ROWS)
+    .replace(OLD_LIVE_CLOCK, KEPT_LIVE_CLOCK)
+    .replace(OLD_LIVE_SUM, KEPT_LIVE_SUM)
+    .replace(OLD_CONNECT_BTN, KEPT_CONNECT_BTN)
+    .replace(OLD_REFRESH_CLICK, KEPT_REFRESH_CLICK)
+    .replace('{ key: "liveOn", label: "状态"', '{ key: "liveOn", label: "登录状态"')
+    .replace("var LIVE_REFRESH_MS = 10 * 60 * 1000;", "var LIVE_REFRESH_MS = 60 * 1000;")
+    .replaceAll("0.1.1039-loginpop", "0.1.1090-paidon")
+    .replaceAll("0.1.1043-deskkeep", "0.1.1090-paidon")
+    .replaceAll("0.1.1070-liveon", "0.1.1090-paidon");
 }
 
 function homeClientSource() {
