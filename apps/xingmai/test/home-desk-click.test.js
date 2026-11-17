@@ -6,7 +6,7 @@ import { beginRelogin, beginReloginAll, reloginState, resetJingmaiDeps, setJingm
 import { patchConnectPicker } from "../src/modules/home/connect-patch.js";
 import { listCollectTargets, listSessions, resetJingmaiStore, saveSession } from "../src/modules/home/jingmai-store.js";
 import { packJingmaiShops } from "../src/modules/home/local-paid.js";
-import { browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginScreenState, sessionReady, unpackDebBuffer } from "../src/modules/home/jingmai-desk.js";
+import { browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginScreenState, sessionReady, unpackDebBuffer } from "../src/modules/home/jingmai-desk.js";
 import { tmpdir } from "node:os";
 import zlib from "node:zlib";
 import { patchHomeClientSource } from "../src/modules/home/router.js";
@@ -626,12 +626,17 @@ test("a login form captcha is submitted with the 登录 button", () => {
   assert.equal(loginPageAction(doc, { submit: true }).kind, "button");
 });
 
-test("the login picture waits until the account box or the captcha is actually there", () => {
-  assert.equal(loginOpenReady(0, { status: "verify", message: "" }, false), "wait");
-  assert.equal(loginOpenReady(1, { status: "verify", message: "" }, false), "wait");
-  assert.equal(loginOpenReady(1, { status: "verify", message: "", formReady: true }, false), "show");
-  assert.equal(loginOpenReady(1, { status: "verify", message: "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。" }, false), "show");
-  assert.equal(loginOpenReady(1, { status: "verify", message: "" }, true), "ok");
+test("the login picture waits until the page has finished refreshing", () => {
+  assert.equal(loginPageSettled(null), false);
+  assert.equal(loginPageSettled({ readyState: "loading", href: "https://passport.shop.jd.com/login", accountVisible: true, passwordVisible: true, loginButtonVisible: true }), false);
+  assert.equal(loginPageSettled({ readyState: "complete", href: "about:blank", accountVisible: true, passwordVisible: true, loginButtonVisible: true }), false);
+  assert.equal(loginPageSettled({ readyState: "complete", href: "https://passport.shop.jd.com/login", bodyHeight: 800 }), false);
+  assert.equal(loginPageSettled({ readyState: "complete", href: "https://passport.shop.jd.com/login", accountVisible: true, passwordVisible: true, loginButtonVisible: true }), true);
+  assert.equal(loginPageSettled({ readyState: "complete", href: "https://passport.shop.jd.com/login", bodyHeight: 800, text: "请完成安全验证" }), true);
+  assert.equal(loginOpenReady(1, { status: "verify", formReady: true }, false), "wait");
+  assert.equal(loginOpenReady(20, { status: "verify", message: "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。" }, false), "wait");
+  assert.equal(loginOpenReady(1, { status: "verify", settled: true }, false), "show");
+  assert.equal(loginOpenReady(1, { status: "verify" }, true), "ok");
   assert.equal(loginOpenReady(0, { status: "login", message: "账号或密码不正确" }, false), "login");
 });
 

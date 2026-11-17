@@ -1400,6 +1400,45 @@ export function deskUsable(desk) {
 
 export const LOGIN_SCREEN_MESSAGE = "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。";
 
+export const PAGE_WAIT_MESSAGE = "正在等京麦页面刷新出来";
+
+const LOGIN_PAGE_EXPR = `(() => {
+  function shown(el) {
+    if (!el) return false;
+    const box = el.getBoundingClientRect();
+    const style = getComputedStyle(el);
+    return box.width > 40 && box.height > 16 && style.visibility !== "hidden" && style.display !== "none" && Number(style.opacity || 1) > 0;
+  }
+  const inputs = [...document.querySelectorAll("input")];
+  const account = inputs.find((node) => (node.placeholder || "").includes("账号"));
+  const password = inputs.find((node) => (node.placeholder || "").includes("密码"));
+  const button = [...document.querySelectorAll("button")].find((node) => (node.innerText || "").includes("立即登录"));
+  return {
+    readyState: document.readyState,
+    href: location.href,
+    accountVisible: shown(account),
+    passwordVisible: shown(password),
+    loginButtonVisible: shown(button),
+    bodyHeight: document.body ? document.body.scrollHeight : 0,
+    text: document.body ? document.body.innerText.slice(0, 500) : ""
+  };
+})()`;
+
+export function loginPageSettled(page) {
+  if (!page || page.readyState !== "complete") {
+    return false;
+  }
+  const href = String(page.href || "");
+  if (!href || href === "about:blank" || href.startsWith("about:")) {
+    return false;
+  }
+  if (page.accountVisible && page.passwordVisible && page.loginButtonVisible) {
+    return true;
+  }
+  const text = String(page.text || "");
+  return (page.bodyHeight || 0) > 240 && /滑块|验证码|安全验证|扫码登录/.test(text);
+}
+
 export function loginOpenReady(attempt, screen, hasCookie) {
   if (hasCookie) {
     return "ok";
@@ -1407,14 +1446,7 @@ export function loginOpenReady(attempt, screen, hasCookie) {
   if (screen && screen.status === "login") {
     return "login";
   }
-  const message = String((screen && screen.message) || "");
-  if (screen && screen.formReady) {
-    return "show";
-  }
-  if (/滑块|验证码|安全验证|扫码|服务器画面/.test(message)) {
-    return "show";
-  }
-  if (attempt >= 17) {
+  if (screen && screen.settled) {
     return "show";
   }
   return "wait";
@@ -1548,25 +1580,42 @@ export async function closeDesk() {
   }
 }
 
+async function readLoginPage(ws) {
+  try {
+    return await evaluate(ws, LOGIN_PAGE_EXPR);
+  } catch {
+    return null;
+  }
+}
+
+async function waitForSettledPage(desk, ticket) {
+  let streak = 0;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    if (ticket !== openTicket || current !== desk) {
+      return { status: "login", message: "登录已取消" };
+    }
+    await sleep(700);
+    const page = await readLoginPage(desk.ws);
+    if (loginPageSettled(page)) {
+      streak += 1;
+      if (streak >= 2) {
+        return { status: "ready", page: page };
+      }
+    } else {
+      streak = 0;
+    }
+  }
+  return { status: "login", message: "登录页还没刷新出来" };
+}
+
 async function finishOpen(desk, loginName, password, ticket) {
   try {
-    let ready = false;
-    for (let attempt = 0; attempt < 24; attempt += 1) {
-      if (ticket !== openTicket || current !== desk) {
-        return { status: "login", message: "登录已取消" };
-      }
-      await sleep(700);
-      ready = Boolean(await evaluate(desk.ws, "!![...document.querySelectorAll('input')].find((node) => (node.placeholder || '').includes('账号'))"));
-      if (ready) {
-        loginVisible = true;
-        break;
-      }
-    }
-    if (!ready) {
-      if (ticket === openTicket) {
+    const waited = await waitForSettledPage(desk, ticket);
+    if (waited.status !== "ready") {
+      if (ticket === openTicket && waited.message !== "登录已取消") {
         stopCurrent();
       }
-      return { status: "login", message: "服务器没有打开京麦登录页" };
+      return waited;
     }
     if (ticket !== openTicket || current !== desk) {
       return { status: "login", message: "登录已取消" };
@@ -1579,39 +1628,50 @@ async function finishOpen(desk, loginName, password, ticket) {
       }
       return { status: "login", message: "服务器没有填上账号" };
     }
-    let cookies = [];
-    let screen = { status: "verify", message: LOGIN_SCREEN_MESSAGE, formReady: true };
-    for (let attempt = 0; attempt < 18; attempt += 1) {
+    loginVisible = false;
+    shotCache = { at: 0, store: "", image: null, ready: false };
+    let streak = 0;
+    for (let attempt = 0; attempt < 24; attempt += 1) {
       if (ticket !== openTicket || current !== desk) {
         return { status: "login", message: "登录已取消" };
       }
-      await sleep(attempt === 0 ? 1200 : 1000);
+      await sleep(700);
+      let cookies = [];
+      let href = "";
       try {
         cookies = await readCookies(desk.ws);
+        href = await evaluate(desk.ws, "location.href");
       } catch {
         cookies = [];
+        href = "";
       }
-      try {
-        screen = await readScreenState(desk.ws);
-      } catch {
-        screen = { status: "verify", message: "" };
-      }
-      const decision = loginOpenReady(attempt, screen, hasSession(cookies));
-      if (decision === "ok") {
+      if (sessionReady(href, cookies)) {
         return { status: "ok", cookies: cookies };
       }
-      if (decision === "login") {
+      const page = await readLoginPage(desk.ws);
+      const screen = loginScreenState(page && page.text, Boolean(page && page.accountVisible));
+      if (screen.status === "login") {
         return screen;
       }
-      if (decision === "show") {
-        return {
-          status: "verify",
-          message: screen.message || LOGIN_SCREEN_MESSAGE,
-          formReady: true
-        };
+      screen.settled = loginPageSettled(page);
+      if (loginOpenReady(attempt, screen, false) === "show") {
+        streak += 1;
+        if (streak >= 2) {
+          loginVisible = true;
+          return {
+            status: "verify",
+            message: screen.message || LOGIN_SCREEN_MESSAGE,
+            formReady: true
+          };
+        }
+      } else {
+        streak = 0;
       }
     }
-    return { status: "verify", message: screen.message || LOGIN_SCREEN_MESSAGE, formReady: true };
+    if (ticket === openTicket) {
+      stopCurrent();
+    }
+    return { status: "login", message: "登录页还没刷新出来" };
   } finally {
     password = "";
   }
@@ -1670,7 +1730,7 @@ export async function pollDesk(store) {
       return { status: "ok", cookies: cookies };
     }
     if (!loginVisible || !(await loginSurfaceReady(current.ws))) {
-      return { status: "opening", message: "正在启动浏览器" };
+      return { status: "opening", message: PAGE_WAIT_MESSAGE };
     }
   } catch {
     return { status: "opening", message: "正在启动浏览器" };

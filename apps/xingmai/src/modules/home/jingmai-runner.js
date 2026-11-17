@@ -1,4 +1,4 @@
-import { browserReady, ensureChrome, jingmaiDesk, LOGIN_SCREEN_MESSAGE } from "./jingmai-desk.js";
+import { browserReady, ensureChrome, jingmaiDesk, LOGIN_SCREEN_MESSAGE, PAGE_WAIT_MESSAGE } from "./jingmai-desk.js";
 import { jingmaiClient } from "./jingmai-client.js";
 import { beijingParts, bindDecision, runTick, sampleFields, sessionStillValid } from "./jingmai.js";
 import { listCollectTargets, listSessions, markAuth, readJingmaiLive, saveSample, saveSession, setRoster } from "./jingmai-store.js";
@@ -534,8 +534,8 @@ export async function reloginState(store) {
     return publicState({
       status: "opening",
       store: name,
-      step: "启动浏览器",
-      message: "正在启动浏览器"
+      step: "打开京麦登录页",
+      message: (state && state.message) || PAGE_WAIT_MESSAGE
     });
   }
   return publicState({
