@@ -171,6 +171,23 @@ export function browserCandidates(found, shell) {
   return list;
 }
 
+export function browserLaunchOrder(paths) {
+  const preferred = [];
+  const rest = [];
+  (paths || []).forEach(function (path) {
+    const value = String(path || "");
+    if (!value) {
+      return;
+    }
+    if (value === "/opt/google/chrome/chrome") {
+      preferred.push(value);
+    } else {
+      rest.push(value);
+    }
+  });
+  return preferred.concat(rest);
+}
+
 export function realBrowserBinary(file) {
   if (!file || !existsSync(file)) {
     return "";
@@ -1330,13 +1347,24 @@ async function launchChrome(signal) {
   }
   lastLaunchNote = "";
   stopBooting();
-  let bins = browserCandidates(findChrome(), installedBinary()).filter(realBrowserBinary);
-  if (!bins.length) {
-    try {
-      bins = [await ensureChrome()];
-    } catch (error) {
-      throw browserLaunchError(error);
+  const bins = [];
+  browserLaunchOrder([
+    "/opt/google/chrome/chrome",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    installedBinary(),
+    findChrome()
+  ]).forEach(function (path) {
+    const real = realBrowserBinary(path);
+    if (real && bins.indexOf(real) < 0) {
+      bins.push(real);
     }
+  });
+  if (!bins.length && findChrome()) {
+    bins.push(findChrome());
+  }
+  if (!bins.length) {
+    throw browserLaunchError(new Error(browserStartFailure()));
   }
   let lastError = null;
   for (let i = 0; i < bins.length; i += 1) {
@@ -1396,6 +1424,7 @@ async function startChromeProcess(chromePath, signal, budgetMs) {
     "--user-data-dir=" + dir,
     "--remote-debugging-address=127.0.0.1",
     "--remote-debugging-port=" + port,
+    "--remote-allow-origins=*",
     LOGIN_URL
   ], { env: env, stdio: ["ignore", "pipe", "pipe"] });
   booting = chrome;
@@ -1691,6 +1720,7 @@ async function acquireDesk(store, ticket, signal) {
   }
   desk.store = store;
   current = desk;
+  loginVisible = true;
   await send(desk.ws, "Page.enable");
   await send(desk.ws, "Network.enable");
   await send(desk.ws, "Emulation.setDeviceMetricsOverride", {
@@ -1757,12 +1787,9 @@ async function finishOpen(desk, loginName, password, ticket) {
       await fillAndSubmit(desk.ws, loginName, password);
     }
     password = "";
-    loginVisible = sawPage || loginVisible;
-    if (!loginVisible) {
-      if (ticket === openTicket) {
-        stopCurrent();
-      }
-      return { status: "login", message: "登录页还没刷新出来" };
+    loginVisible = true;
+    if (!sawPage) {
+      return { status: "verify", message: LOGIN_SCREEN_MESSAGE, formReady: false };
     }
     for (let attempt = 0; attempt < 8; attempt += 1) {
       if (ticket !== openTicket || current !== desk) {
@@ -1880,7 +1907,8 @@ export async function pollDesk(store) {
       return { status: "ok", cookies: cookies };
     }
     if (!loginVisible) {
-      return { status: "opening", message: PAGE_WAIT_MESSAGE };
+      loginVisible = true;
+      return { status: "verify", message: LOGIN_SCREEN_MESSAGE };
     }
   } catch {
     return { status: "opening", message: PAGE_WAIT_MESSAGE };
@@ -1915,9 +1943,6 @@ export async function shotDesk(store) {
 
 async function captureShot(store) {
   if (!current || current.store !== store || !current.ws || current.ws.readyState !== 1) {
-    return shotCache.ready && shotCache.store === store ? shotCache.image : null;
-  }
-  if (!loginVisible) {
     return shotCache.ready && shotCache.store === store ? shotCache.image : null;
   }
   try {

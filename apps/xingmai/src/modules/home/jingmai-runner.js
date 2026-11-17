@@ -388,7 +388,8 @@ async function queueShops(shops, epoch) {
     step: "启动浏览器",
     message: first ? "正在启动浏览器" : "全部店铺已连接",
     failed: false,
-    phase: "opening"
+    phase: "opening",
+    startedAt: Date.now()
   };
   const next = loginQueue.shift();
   if (!next) {
