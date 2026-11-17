@@ -44,9 +44,9 @@
       api: "/api/stores/erp/inventory",
       lead: "商品标签选京东物流，去掉全国仓，剩下的才是京仓库存。可用库存 = 现货 − 占用，小于等于 20 标低库存。",
       kpis: [
-        { key: "jd", label: "本页京仓" },
+        { key: "jd", label: "京仓" },
         { key: "usable", label: "可用库存" },
-        { key: "low", label: "本页低库存" }
+        { key: "low", label: "低库存" }
       ]
     }
   ];
@@ -563,7 +563,26 @@
         .join("");
     }
 
+    var loadSeq = 0;
+    var scanTimer = 0;
+
+    function stopScan() {
+      clearTimeout(scanTimer);
+      scanTimer = 0;
+    }
+
+    function scheduleScan() {
+      stopScan();
+      scanTimer = setTimeout(function () {
+        if (!dead && state.pageId === "inventory") {
+          load();
+        }
+      }, 2000);
+    }
+
     function load() {
+      var seq = ++loadSeq;
+      stopScan();
       var page = pageById(state.pageId);
       var params = new URLSearchParams();
       params.set("pageNum", String(state.pageNum));
@@ -590,7 +609,7 @@
       bodyEl.innerHTML = '<tr><td colspan="8" class="empty">正在加载…</td></tr>';
       fetchJson(page.api + "?" + params.toString())
         .then(function (data) {
-          if (dead) {
+          if (dead || seq !== loadSeq) {
             return;
           }
           state.pages = Math.max(1, Number(data.totalPages || 1));
@@ -600,10 +619,24 @@
           renderKpi(data.summary || { total: data.total, listed: rows.length });
           pagerEl.textContent =
             "第 " + state.pageNum + " / " + state.pages + " 页，共 " + count(data.total) + " 条 · " + (data.source || "xingmai-erp");
+          if (page.id === "inventory" && data.scanning) {
+            setStatus(
+              "正在读取全部商品页，店铺 " +
+                count(data.shopsDone) +
+                " / " +
+                count(data.shopsTotal) +
+                "，商品页 " +
+                count(data.pagesRead) +
+                " / " +
+                count(data.pagesTotal)
+            );
+            scheduleScan();
+            return;
+          }
           setStatus(rows.length ? "" : "没有符合条件的记录");
         })
         .catch(function (err) {
-          if (dead) {
+          if (dead || seq !== loadSeq) {
             return;
           }
           renderKpi({});
@@ -729,6 +762,7 @@
 
     return function unmount() {
       dead = true;
+      stopScan();
       window.removeEventListener("hashchange", onHash);
       root.innerHTML = "";
     };

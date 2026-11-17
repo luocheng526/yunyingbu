@@ -18,6 +18,8 @@
 【京东库存】
 商品库存管理里，商品标签选京东物流（SKU 特征 `isJDexpress=1`），再去掉全国仓（仓库编号 0，或仓库名含「全国仓」）。剩下的分区仓库库存才是京仓。可用库存 = 现货 − 占用。不要用 `/product/jd/product/page` 的 `stockNum`。
 
+默认列表对范围内每家店调用 `jingdong.sku.read.searchSkuList`，从第 1 页读到最后一页，只留京东物流，再查分区库存。不能只读末页或前 20 条。结果按京仓行分页；整店还在扫时接口带 `scanning`，页面继续拉。关键词搜索仍走 ERP 的 SKU 查询。
+
 【对接（已经接上）】
 - 侧栏一级菜单「店铺维护中心」在「甄选商学院」上面 → `/stores`。点击是 `pushState`，不是整页跳。
 - 主框架加载 `/shared/modules/stores.js`，你只往 `#xm-content` 画工作台。

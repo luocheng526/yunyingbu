@@ -373,7 +373,7 @@ test("inventory reads partition stock and hides shop auth", async () => {
   assert.equal(calls.some((item) => String(item.url).includes("/jd/product/page")), false);
 });
 
-test("inventory reads JD logistics SKUs from the tail of each shop", async () => {
+test("inventory reads JD logistics SKUs from every page of each shop", async () => {
   process.env.XM_ERP_TOKEN = "test-token";
   mockErp(async (url) => {
     if (String(url).includes("/jd/shopInfo/page")) {
@@ -381,13 +381,16 @@ test("inventory reads JD logistics SKUs from the tail of each shop", async () =>
     }
     throw new Error("unexpected " + url);
   });
+  const seenPages = [];
   setJdFetchForTests(async (_url, options) => {
     const params = new URLSearchParams(options.body);
     const biz = JSON.parse(params.get("360buy_param_json"));
     const method = params.get("method");
     if (method === "jingdong.sku.read.searchSkuList") {
+      const pageNo = Number(biz.pageNo);
+      seenPages.push(pageNo);
       const data =
-        Number(biz.pageNo) === 2
+        pageNo === 2
           ? [
               {
                 skuId: "10236540030710",
@@ -395,11 +398,11 @@ test("inventory reads JD logistics SKUs from the tail of each shop", async () =>
                 features: [{ featureKey: "isJDexpress", featureValue: "1" }]
               }
             ]
-          : [{ skuId: "1", skuName: "普通商品", features: [] }];
+          : [{ skuId: String(pageNo), skuName: "普通商品", features: [] }];
       return {
         json: async () => ({
           jingdong_sku_read_searchSkuList_responce: {
-            page: { pageSize: 20, totalItem: 40, data }
+            page: { pageSize: 20, totalItem: 60, data }
           }
         })
       };
@@ -428,6 +431,10 @@ test("inventory reads JD logistics SKUs from the tail of each shop", async () =>
   assert.equal(body.records[0].skuId, "10236540030710");
   assert.equal(body.records[0].usableNum, 3);
   assert.equal(body.records[0].warehouseId, "118091428");
+  assert.equal(body.scanning, false);
+  assert.equal(body.pagesRead, 3);
+  assert.equal(body.pagesTotal, 3);
+  assert.deepEqual(seenPages.slice().sort((a, b) => a - b), [1, 2, 3]);
   assert.equal(JSON.stringify(body).includes("99997"), false);
 });
 

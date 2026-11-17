@@ -237,6 +237,7 @@ async function productPage(input, extra) {
 export function resetStoresDutyCacheForTests() {
   userNameCache = { at: 0, names: {} };
   shopAuthCache = { at: 0, map: {} };
+  inventoryScan = null;
   resetJdStockForTests();
 }
 
@@ -396,81 +397,66 @@ async function mapPool(items, limit, fn) {
   return out;
 }
 
-const SHOPS_PER_PAGE = 4;
-const EXPRESS_PER_SHOP = 6;
-const STOCK_CHECK_CAP = 16;
+const SKU_PAGE_SIZE = 20;
+const SCAN_TTL_MS = 10 * 60 * 1000;
+const SCAN_WAIT_MS = 10000;
+const MAX_SKU_PAGES = 800;
 const SKU_SEARCH_FIELD = "skuId,wareId,skuName,stockNum,features";
+
+let inventoryScan = null;
 
 async function searchJdSkuPage(auth, pageNo) {
   const payload = await callJd(auth, "jingdong.sku.read.searchSkuList", {
     pageNo,
-    pageSize: 20,
+    pageSize: SKU_PAGE_SIZE,
     field: SKU_SEARCH_FIELD
   });
   return parseSkuSearch(payload);
 }
 
-async function expressSkusAtTail(auth) {
-  const first = await searchJdSkuPage(auth, 1);
-  const pages = [];
-  if (first.lastPage <= 2) {
-    pages.push(first.skus);
-  }
-  const targets = [];
-  if (first.lastPage > 1) {
-    targets.push(first.lastPage);
-  }
-  if (first.lastPage > 2) {
-    targets.push(first.lastPage - 1);
-  }
-  const rest = await mapPool(targets, 2, async (pageNo) => (await searchJdSkuPage(auth, pageNo)).skus);
-  const seen = new Set();
-  const skus = [];
-  for (const row of [...pages.flat(), ...rest.flat()]) {
-    if (!row?.skuId || seen.has(row.skuId)) {
-      continue;
-    }
-    seen.add(row.skuId);
-    skus.push(row);
-    if (skus.length >= EXPRESS_PER_SHOP) {
-      break;
-    }
-  }
-  return skus;
-}
-
 function inventoryResult(records, extra) {
-  const usable = records.reduce((sum, row) => sum + row.usableNum, 0);
-  const low = records.filter((row) => row.stockLabel === "低库存" || row.stockLabel === "库存异常").length;
+  const summaryRows = extra.summaryRows || records;
+  const usable = summaryRows.reduce((sum, row) => sum + row.usableNum, 0);
+  const low = summaryRows.filter((row) => row.stockLabel === "低库存" || row.stockLabel === "库存异常").length;
   return {
     ok: true,
     source: "jingdong-partition-stock",
     page: "京东库存监控",
     records,
     summary: {
-      jd: records.length,
+      jd: summaryRows.length,
       usable,
       low,
       droppedNational: extra.droppedNational || 0,
       failed: extra.failed || 0,
       listed: records.length
     },
-    total: extra.total ?? records.length,
+    total: extra.total ?? summaryRows.length,
     totalPages: extra.totalPages || 1,
     currentPage: extra.currentPage || 1,
-    pageSize: extra.pageSize || records.length
+    pageSize: extra.pageSize || records.length,
+    scanning: Boolean(extra.scanning),
+    pagesRead: extra.pagesRead || 0,
+    pagesTotal: extra.pagesTotal || 0,
+    shopsDone: extra.shopsDone || 0,
+    shopsTotal: extra.shopsTotal || 0
   };
 }
 
 async function linesForSkus(skus, authFor, meta, readLines) {
-  const groups = await mapPool(skus, 4, async (sku) => {
+  const groups = await mapPool(skus, 2, async (sku) => {
     const shopId = String(sku.shopId ?? "");
     const auth = authFor(shopId);
     if (!auth || !sku.skuId) {
       return { lines: [], droppedNational: 0, failed: 0 };
     }
     try {
-      const stock = await readLines(auth, sku.skuId);
+      let stock;
+      try {
+        stock = await readLines(auth, sku.skuId);
+      } catch {
+        stock = await readLines(auth, sku.skuId);
+      }
       return {
         droppedNational: stock.droppedNational,
         failed: 0,
@@ -496,6 +482,175 @@ async function linesForSkus(skus, authFor, meta, readLines) {
   };
 }
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function searchJdSkuPageRetry(auth, pageNo) {
+  try {
+    return await searchJdSkuPage(auth, pageNo);
+  } catch {
+    await delay(400);
+    return searchJdSkuPage(auth, pageNo);
+  }
+}
+
+async function ingestExpressSkus(scan, skus, shopId, authMap, meta) {
+  const fresh = [];
+  for (const sku of skus) {
+    const skuId = String(sku?.skuId || "");
+    if (!skuId || scan.seen.has(skuId)) {
+      continue;
+    }
+    scan.seen.add(skuId);
+    fresh.push({ ...sku, shopId });
+  }
+  if (!fresh.length || scan.generation !== inventoryScan?.generation) {
+    return;
+  }
+  const listed = await linesForSkus(fresh, (id) => authMap[id], meta, readPartitionLines);
+  if (scan.generation !== inventoryScan?.generation) {
+    return;
+  }
+  scan.droppedNational += listed.droppedNational;
+  scan.failed += listed.failed;
+  scan.records.push(...listed.records);
+  scan.records.sort((a, b) => a.usableNum - b.usableNum || String(a.skuId).localeCompare(String(b.skuId)));
+}
+
+async function readShopSkuPages(scan, shopId, authMap, meta) {
+  const auth = authMap[shopId];
+  if (!auth) {
+    return;
+  }
+  const first = await searchJdSkuPageRetry(auth, 1);
+  if (scan.generation !== inventoryScan?.generation) {
+    return;
+  }
+  const lastPage = Math.min(Math.max(first.lastPage, 1), MAX_SKU_PAGES);
+  scan.pagesTotal += lastPage;
+  scan.pagesRead += 1;
+  if (first.lastPage > MAX_SKU_PAGES) {
+    scan.failed += 1;
+  }
+  await ingestExpressSkus(scan, first.skus, shopId, authMap, meta);
+  if (lastPage <= 1) {
+    return;
+  }
+  const pageNos = [];
+  for (let pageNo = lastPage; pageNo >= 2; pageNo -= 1) {
+    pageNos.push(pageNo);
+  }
+  await mapPool(pageNos, 2, async (pageNo) => {
+    if (scan.generation !== inventoryScan?.generation) {
+      return;
+    }
+    try {
+      const page = await searchJdSkuPageRetry(auth, pageNo);
+      await ingestExpressSkus(scan, page.skus, shopId, authMap, meta);
+    } catch {
+      scan.failed += 1;
+    } finally {
+      if (scan.generation === inventoryScan?.generation) {
+        scan.pagesRead += 1;
+      }
+    }
+  });
+}
+
+async function runInventoryScan(scan, authMap, meta) {
+  try {
+    await mapPool(scan.shopIds, 2, async (shopId) => {
+      if (scan.generation !== inventoryScan?.generation) {
+        return;
+      }
+      try {
+        await readShopSkuPages(scan, shopId, authMap, meta);
+      } catch {
+        scan.failed += 1;
+      } finally {
+        if (scan.generation === inventoryScan?.generation) {
+          scan.shopsDone += 1;
+        }
+      }
+    });
+  } finally {
+    if (scan.generation === inventoryScan?.generation) {
+      scan.running = false;
+      scan.done = true;
+      scan.at = Date.now();
+    }
+  }
+}
+
+function ensureInventoryScan(shopIds, authMap, meta) {
+  const key = shopIds.join(",");
+  const now = Date.now();
+  if (
+    inventoryScan &&
+    inventoryScan.key === key &&
+    (inventoryScan.running || (inventoryScan.done && now - inventoryScan.at < SCAN_TTL_MS))
+  ) {
+    return inventoryScan;
+  }
+  const scan = {
+    key,
+    shopIds,
+    generation: (inventoryScan?.generation || 0) + 1,
+    running: true,
+    done: false,
+    at: 0,
+    records: [],
+    seen: new Set(),
+    droppedNational: 0,
+    failed: 0,
+    pagesRead: 0,
+    pagesTotal: 0,
+    shopsDone: 0,
+    shopsTotal: shopIds.length
+  };
+  inventoryScan = scan;
+  scan.promise = runInventoryScan(scan, authMap, meta).catch(() => {});
+  return scan;
+}
+
+async function waitForFirstRows(scan) {
+  if (scan.done || scan.records.length > 0 || scan.waiting) {
+    return;
+  }
+  scan.waiting = true;
+  const start = Date.now();
+  try {
+    while (!scan.done && scan.records.length === 0 && Date.now() - start < SCAN_WAIT_MS) {
+      await Promise.race([scan.promise, delay(200)]);
+    }
+  } finally {
+    scan.waiting = false;
+  }
+}
+
+function inventoryPage(scan, input) {
+  const pageSize = Math.min(toInt(input.pageSize, 20), 50);
+  const total = scan.records.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
+  const currentPage = Math.min(toInt(input.pageNum, 1), totalPages);
+  const start = (currentPage - 1) * pageSize;
+  return inventoryResult(scan.records.slice(start, start + pageSize), {
+    summaryRows: scan.records,
+    total,
+    totalPages,
+    currentPage,
+    pageSize,
+    droppedNational: scan.droppedNational,
+    failed: scan.failed,
+    scanning: !scan.done,
+    pagesRead: scan.pagesRead,
+    pagesTotal: scan.pagesTotal,
+    shopsDone: scan.shopsDone,
+    shopsTotal: scan.shopsTotal
+  });
+}
+
 export async function listErpInventory(input = {}) {
   const meta = await listErpShopMeta();
   const { ids, emptyDuty } = await resolveShopIds(input);
@@ -513,33 +668,16 @@ export async function listErpInventory(input = {}) {
       skuName: keyword
     });
     const listed = await linesForSkus(data?.records || [], (shopId) => authMap[shopId], meta, readJdWarehouseStock);
-    return {
-      ...inventoryResult(listed.records, {
-        ...pageOf(data),
-        droppedNational: listed.droppedNational,
-        failed: listed.failed
-      })
-    };
+    return inventoryResult(listed.records, {
+      ...pageOf(data),
+      droppedNational: listed.droppedNational,
+      failed: listed.failed
+    });
   }
-  const shopIds = (ids.length ? ids.map(String) : Object.keys(authMap)).filter((id) => authMap[id]);
-  const pageNum = toInt(input.pageNum, 1);
-  const shopPages = Math.max(1, Math.ceil(shopIds.length / SHOPS_PER_PAGE));
-  const windowIds = ids.length === 1 ? shopIds : shopIds.slice((pageNum - 1) * SHOPS_PER_PAGE, pageNum * SHOPS_PER_PAGE);
-  const grouped = await mapPool(windowIds, 3, async (shopId) => {
-    try {
-      const skus = await expressSkusAtTail(authMap[shopId]);
-      return skus.map((sku) => ({ ...sku, shopId }));
-    } catch {
-      return [];
-    }
-  });
-  const listed = await linesForSkus(grouped.flat().slice(0, STOCK_CHECK_CAP), (shopId) => authMap[shopId], meta, readPartitionLines);
-  return inventoryResult(listed.records, {
-    total: listed.records.length,
-    totalPages: ids.length === 1 ? 1 : shopPages,
-    currentPage: ids.length === 1 ? 1 : Math.min(pageNum, shopPages),
-    pageSize: SHOPS_PER_PAGE,
-    droppedNational: listed.droppedNational,
-    failed: listed.failed
-  });
+  const shopIds = (ids.length ? ids.map(String) : Object.keys(authMap))
+    .filter((id) => authMap[id])
+    .sort((a, b) => Number(a) - Number(b));
+  const scan = ensureInventoryScan(shopIds, authMap, meta);
+  await waitForFirstRows(scan);
+  return inventoryPage(scan, input);
 }
