@@ -106,8 +106,6 @@
       ".hr-person{cursor:pointer;}" +
       ".hr-person[aria-expanded='true'] td{background:color-mix(in srgb,var(--xm-primary) 8%,var(--xm-card));}" +
       ".hr-detail td{padding:8px 10px 12px;}" +
-      ".hr-board-head{display:flex;justify-content:flex-end;gap:12px;align-items:center;}" +
-      ".hr-board-head .hr-msg:not(:empty){margin-right:auto;}" +
       ".hr-board-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;}" +
       ".hr-board-kpi{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center;border:0;border-radius:16px;padding:14px 12px 12px;color:#fff;min-height:156px;box-shadow:0 10px 22px rgba(24,49,99,.12);}" +
       "button.hr-board-kpi{width:100%;text-align:center;cursor:pointer;font:inherit;}" +
@@ -121,9 +119,6 @@
       ".hr-board-kpi span{order:1;display:block;margin:0;font-size:16px;font-weight:650;line-height:1.3;opacity:1;}" +
       ".hr-recruit-kpis .hr-board-kpi b{font-size:18px;font-weight:650;}" +
       ".hr-recruit-kpis .hr-board-kpi span{font-size:22px;font-weight:700;line-height:1.25;}" +
-      ".hr-kpi-list{margin-top:4px;}" +
-      ".hr-kpi-list:empty{display:none;}" +
-      ".hr-kpi-list h3{margin:0 0 8px;font-size:14px;font-weight:650;color:var(--xm-ink);}" +
       ".hr-status-work{color:#0f9f6e;font-weight:650;}" +
       ".hr-status-late{color:#7c5cff;font-weight:650;}" +
       ".hr-status-leave{color:#f08a24;font-weight:650;}" +
@@ -133,77 +128,88 @@
       ".hr-tone-punch{background:linear-gradient(135deg,#5b8cff,#3a63f5);}" +
       ".hr-tone-late{background:linear-gradient(135deg,#8d7cff,#6847f0);}" +
       ".hr-tone-leave{background:linear-gradient(135deg,#ffb057,#ff7a18);}" +
-      ".hr-board-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(240px,.8fr);gap:12px;}" +
       ".hr-board-card{padding:14px 16px 16px;}" +
       ".hr-board-card h3{margin:0 0 12px;font-size:14px;font-weight:650;color:var(--xm-ink);}" +
-      ".hr-day-cols{display:flex;align-items:flex-end;gap:8px;height:148px;padding-top:8px;}" +
-      ".hr-dept-cols{height:188px;overflow-x:auto;}" +
-      ".hr-dept-cols .hr-day-col{min-width:46px;}" +
-      ".hr-dept-cols .hr-day-col span:last-child{width:100%;max-height:2.6em;overflow:hidden;line-height:1.25;text-align:center;word-break:break-all;}" +
-      ".hr-day-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px;min-width:0;height:100%;}" +
-      ".hr-day-col b{font-size:12px;color:var(--xm-ink);font-variant-numeric:tabular-nums;}" +
-      ".hr-day-fill{width:100%;max-width:28px;border-radius:8px 8px 4px 4px;background:linear-gradient(180deg,#8d7cff,#3a63f5);min-height:4px;}" +
-      ".hr-day-col span{color:var(--xm-muted);font-size:11px;}" +
       ".hr-team{display:flex;flex-direction:column;gap:12px;}" +
       ".hr-team + .hr-team{margin-top:8px;padding-top:16px;border-top:1px solid var(--xm-line);}" +
       ".hr-team-title{margin:0;font-size:16px;font-weight:700;color:var(--xm-ink);}" +
-      ".hr-board-sub{margin:4px 0 0;font-size:14px;font-weight:650;color:var(--xm-ink);}" +
-      ".hr-home{display:flex;flex-direction:column;gap:12px;}" +
-      ".hr-home-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;}" +
-      ".hr-home-head h2{margin:0;font-size:22px;font-weight:700;}" +
-      ".hr-home-head p{margin:6px 0 0;color:var(--xm-muted);font-size:13px;}" +
-      ".hr-range{display:flex;align-items:center;gap:8px;height:36px;padding:0 10px;border:1px solid var(--xm-line);border-radius:10px;background:var(--xm-card);color:var(--xm-muted);font-size:13px;white-space:nowrap;}" +
-      ".hr-range select{border:0;background:transparent;color:var(--xm-ink);font:inherit;font-weight:650;}" +
-      ".hr-home-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;}" +
-      ".hr-home-kpi{display:flex;align-items:center;gap:10px;padding:14px;border:1px solid var(--xm-line);border-radius:16px;background:var(--xm-card);box-shadow:var(--xm-shadow);min-width:0;}" +
-      ".hr-home-icon{flex:none;width:42px;height:42px;border-radius:14px;display:flex;align-items:center;justify-content:center;}" +
-      ".hr-home-icon svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}" +
+      ".hr-home{display:flex;flex-direction:column;gap:16px;padding:16px;border-radius:16px;background:#f4f7fb;color:#1d2939;font-family:\"PingFang SC\",\"Microsoft YaHei\",sans-serif;}" +
+      ".hr-home-head{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:2px 4px;}" +
+      ".hr-home-head h2{margin:0;font-size:22px;font-weight:700;color:#1d2939;}" +
+      ".hr-home-head p{margin:6px 0 0;color:#98a2b3;font-size:13px;}" +
+      ".hr-range{display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:1px solid #e7edf5;border-radius:10px;background:#fff;color:#667085;font-size:13px;white-space:nowrap;box-shadow:0 1px 2px rgba(16,24,40,.04);}" +
+      ".hr-range::before{content:\"📅\";font-size:14px;}" +
+      ".hr-range select{border:0;background:transparent;color:#1d2939;font:inherit;font-weight:650;}" +
+      ".hr-home-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;}" +
+      ".hr-home-kpi{display:flex;align-items:center;gap:12px;padding:16px 14px;border:0;border-radius:16px;background:#fff;box-shadow:0 8px 24px rgba(31,45,61,.06);min-width:0;}" +
+      ".hr-home-icon{flex:none;width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;font-style:normal;}" +
       ".hr-home-kpi-main{min-width:0;flex:1;}" +
-      ".hr-home-kpi-main span{display:block;color:var(--xm-muted);font-size:13px;}" +
-      ".hr-home-kpi-main b{display:block;margin-top:2px;font-size:26px;line-height:1.1;font-variant-numeric:tabular-nums;}" +
-      ".hr-home-kpi-main b small{font-size:13px;font-weight:650;margin-left:2px;}" +
-      ".hr-home-kpi-main em{display:block;margin-top:4px;font-style:normal;font-size:12px;color:var(--xm-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
-      ".hr-home-kpi-main em.is-up{color:#12b36a;}" +
+      ".hr-home-kpi-main span{display:block;color:#98a2b3;font-size:13px;font-weight:500;}" +
+      ".hr-home-kpi-main b{display:block;margin-top:4px;color:#1d2939;font-size:28px;line-height:1;font-weight:700;}" +
+      ".hr-home-kpi-main b small{font-size:13px;font-weight:600;margin-left:2px;color:#667085;}" +
+      ".hr-home-kpi-main em{display:block;margin-top:6px;font-style:normal;font-size:12px;font-weight:600;color:#98a2b3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
+      ".hr-home-kpi-main em.is-up{color:#16a34a;}" +
       ".hr-home-kpi-main em.is-down{color:#f04438;}" +
-      ".hr-spark{width:72px;height:32px;flex:none;}" +
-      ".hr-home-row{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(220px,.8fr) minmax(220px,.75fr);gap:12px;}" +
-      ".hr-home-card{padding:14px 16px 16px;min-width:0;}" +
-      ".hr-home-card h3{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0 0 12px;font-size:15px;font-weight:700;}" +
-      ".hr-seg{display:flex;gap:4px;flex-wrap:wrap;}" +
-      ".hr-seg button{border:0;background:transparent;color:var(--xm-muted);font:inherit;font-size:12px;padding:4px 8px;border-radius:8px;cursor:pointer;}" +
-      ".hr-seg button[aria-selected='true']{background:color-mix(in srgb,var(--xm-primary) 12%,var(--xm-card));color:var(--xm-primary);font-weight:650;}" +
-      ".hr-line{width:100%;height:210px;display:block;}" +
-      ".hr-home-quad{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}" +
-      ".hr-home-split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,.8fr);gap:12px;}" +
-      ".hr-legend{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;font-size:13px;}" +
+      ".hr-spark{width:84px;height:40px;flex:none;}" +
+      ".hr-home-row{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(240px,.9fr) minmax(230px,.78fr);gap:14px;}" +
+      ".hr-home-card{padding:16px 18px 18px;min-width:0;border:0;border-radius:16px;background:#fff;box-shadow:0 8px 24px rgba(31,45,61,.06);}" +
+      ".hr-home-card h3{display:flex;align-items:center;gap:8px;margin:0 0 14px;font-size:16px;font-weight:700;color:#1d2939;}" +
+      ".hr-home-card h3::before{content:\"\";width:3px;height:14px;border-radius:2px;background:#2f6bff;flex:none;}" +
+      ".hr-home-card h3>:last-child{margin-left:auto;}" +
+      ".hr-seg{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}" +
+      ".hr-seg button{border:0;background:#f4f7fb;color:#667085;font:inherit;font-size:12px;font-weight:600;padding:5px 10px;border-radius:8px;cursor:pointer;}" +
+      ".hr-seg-lite button[aria-selected='true']{background:#e8f0ff;color:#2f6bff;}" +
+      ".hr-seg-solid{margin:0 0 8px;}" +
+      ".hr-seg-solid button[aria-selected='true']{background:#2f6bff;color:#fff;}" +
+      ".hr-line{width:100%;height:248px;display:block;}" +
+      ".hr-home-quad{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;}" +
+      ".hr-home-split{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(300px,.86fr);gap:14px;}" +
+      ".hr-legend{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px;font-size:13px;color:#475467;min-width:0;flex:1;}" +
       ".hr-legend li{display:flex;align-items:center;gap:8px;}" +
       ".hr-dot{width:8px;height:8px;border-radius:99px;flex:none;}" +
-      ".hr-legend b{margin-left:auto;font-variant-numeric:tabular-nums;}" +
-      ".hr-donut-wrap{display:flex;align-items:center;gap:12px;}" +
-      ".hr-donut{width:132px;height:132px;flex:none;}" +
-      ".hr-todo{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--xm-line);}" +
-      ".hr-todo i{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex:none;color:#fff;font-style:normal;font-weight:700;}" +
-      ".hr-todo b{display:block;font-size:13px;font-weight:650;}" +
-      ".hr-todo span{color:var(--xm-muted);font-size:12px;}" +
-      ".hr-bar-row{display:grid;grid-template-columns:78px minmax(0,1fr) 42px;gap:8px;align-items:center;margin:8px 0;font-size:12px;}" +
-      ".hr-bar{height:8px;border-radius:99px;background:color-mix(in srgb,var(--xm-ink) 8%,var(--xm-card));overflow:hidden;}" +
-      ".hr-bar i{display:block;height:100%;border-radius:99px;}" +
-      ".hr-rank{margin:10px 0;font-size:13px;}" +
-      ".hr-rank-top{display:flex;justify-content:space-between;gap:8px;}" +
-      ".hr-rank-bar{height:8px;border-radius:99px;background:linear-gradient(90deg,#8eb6ff,#3b82f6);margin-top:6px;}" +
-      ".hr-funnel{display:flex;gap:8px;}" +
-      ".hr-funnel div{flex:1;background:color-mix(in srgb,var(--xm-primary) 8%,var(--xm-card));border-radius:12px;padding:10px 6px;text-align:center;}" +
-      ".hr-funnel b{display:block;font-size:18px;}" +
-      ".hr-funnel span{color:var(--xm-muted);font-size:12px;}" +
-      ".hr-meter{height:8px;border-radius:99px;background:color-mix(in srgb,var(--xm-primary) 12%,var(--xm-card));overflow:hidden;margin:10px 0;}" +
-      ".hr-meter i{display:block;height:100%;background:linear-gradient(90deg,#7cb0ff,#3b82f6);}" +
-      ".hr-pill{border-radius:99px;padding:2px 8px;font-size:12px;white-space:nowrap;}" +
+      ".hr-legend b{margin-left:auto;color:#1d2939;font-variant-numeric:tabular-nums;font-weight:700;}" +
+      ".hr-legend em{font-style:normal;color:#98a2b3;min-width:42px;text-align:right;}" +
+      ".hr-donut-wrap{display:flex;align-items:center;gap:16px;}" +
+      ".hr-donut{width:148px;height:148px;flex:none;}" +
+      ".hr-todo{display:flex;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid #f2f4f7;}" +
+      ".hr-todo i{width:36px;height:36px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex:none;font-style:normal;font-size:16px;}" +
+      ".hr-todo div{min-width:0;flex:1;}" +
+      ".hr-todo b{display:block;font-size:14px;font-weight:650;color:#1d2939;}" +
+      ".hr-todo span{flex:none;color:#98a2b3;font-size:12px;}" +
+      ".hr-bar-row{display:grid;grid-template-columns:78px minmax(0,1fr) 46px;gap:8px;align-items:center;margin:10px 0;font-size:12px;color:#667085;}" +
+      ".hr-bar{height:8px;border-radius:99px;background:#eef3fb;overflow:hidden;}" +
+      ".hr-bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#8eb6ff,#2f6bff);}" +
+      ".hr-cols{display:flex;align-items:flex-end;gap:8px;height:168px;padding-top:8px;}" +
+      ".hr-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0;}" +
+      ".hr-col b{font-size:12px;color:#2f6bff;font-weight:700;margin-bottom:6px;}" +
+      ".hr-col i{width:100%;max-width:28px;border-radius:8px 8px 3px 3px;background:linear-gradient(180deg,#9ec5ff,#2f6bff);min-height:6px;}" +
+      ".hr-col span{margin-top:8px;color:#98a2b3;font-size:12px;text-align:center;}" +
+      ".hr-rank{margin:12px 0;font-size:13px;color:#344054;}" +
+      ".hr-rank-top{display:flex;align-items:center;gap:8px;}" +
+      ".hr-rank-top span{flex:1;min-width:0;}" +
+      ".hr-rank-top b{color:#2f6bff;font-weight:700;}" +
+      ".hr-medal{width:22px;height:22px;border-radius:50%;color:#fff;font-size:12px;font-style:normal;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex:none;}" +
+      ".hr-rank-track{height:8px;margin:8px 0 0 30px;border-radius:99px;background:#eef3fb;overflow:hidden;}" +
+      ".hr-rank-track i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#8eb6ff,#2f6bff);}" +
+      ".hr-funnel{display:flex;align-items:center;gap:6px;}" +
+      ".hr-funnel div{flex:1;border-radius:12px;padding:12px 6px;text-align:center;}" +
+      ".hr-funnel b{display:block;font-size:20px;font-weight:700;color:#1d2939;}" +
+      ".hr-funnel span{color:#667085;font-size:12px;}" +
+      ".hr-funnel em{font-style:normal;color:#c5d0e0;font-size:18px;}" +
+      ".hr-meter{height:8px;border-radius:99px;background:#e8eef8;overflow:hidden;margin:12px 0;}" +
+      ".hr-meter i{display:block;height:100%;background:linear-gradient(90deg,#5ee0a0,#2f6bff);}" +
+      ".hr-home .hr-table-wrap{border:0;box-shadow:none;}" +
+      ".hr-home th{color:#98a2b3;font-size:12px;font-weight:600;}" +
+      ".hr-home td{color:#344054;font-size:13px;}" +
+      ".hr-line{background:repeating-linear-gradient(#fff 0 46px,#eef2f6 46px 47px);}" +
+      ".hr-lead{margin:0 0 4px;color:#667085;font-size:13px;}" +
+      ".hr-pill{border-radius:99px;padding:2px 8px;font-size:12px;font-weight:650;white-space:nowrap;}" +
       ".hr-pill-try{color:#d48806;background:#fff7e6;}" +
       ".hr-pill-ok{color:#0f9f6e;background:#e8fff3;}" +
       ".hr-pill-off{color:#8c8c8c;background:#f5f5f5;}" +
-      ".hr-linkish{border:0;background:transparent;color:var(--xm-primary);font:inherit;font-size:12px;cursor:pointer;}" +
+      ".hr-linkish{border:0;background:transparent;color:#2f6bff;font:inherit;font-size:13px;font-weight:600;cursor:pointer;}" +
       "@media (max-width:1100px){.hr-home-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}.hr-home-row,.hr-home-quad,.hr-home-split{grid-template-columns:1fr;}}" +
-      "@media (max-width:980px){.hr-board-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}.hr-board-grid{grid-template-columns:1fr;}}";
+      "@media (max-width:980px){.hr-board-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}}";
     document.head.appendChild(style);
   }
 
@@ -289,7 +295,7 @@
     var html = "";
     if (tab === "attendance") {
       html = '<section class="hr-home" data-home>' +
-        '<header class="hr-home-head"><div><h2 data-hello>上午好</h2><p>这里是智能人事管理中心，助力团队高效协同与人才发展</p></div>' +
+        '<header class="hr-home-head"><div><h2 data-hello><span class="hr-wave">👋</span>上午好</h2><p>这里是智能人事管理中心，助力团队高效协同与人才发展</p></div>' +
         '<label class="hr-range"><select data-range>' +
         '<option value="7">近7天</option><option value="30" selected>近30天</option><option value="month">本月</option><option value="year">今年</option>' +
         '</select><span data-range-text></span></label></header>' +
@@ -413,14 +419,7 @@
   }
 
   function homeIcon(kind) {
-    var paths = {
-      staff: '<circle cx="8" cy="5" r="2.2"/><path d="M3.2 13c.5-2.2 2.2-3.3 4.8-3.3s4.3 1.1 4.8 3.3"/>',
-      hired: '<path d="M8 3.2v6.2"/><path d="M5.6 7.2L8 9.6l2.4-2.4"/><path d="M3.4 12.8h9.2"/>',
-      left: '<path d="M8 9.6V3.4"/><path d="M5.6 5.6L8 3.2l2.4 2.4"/><path d="M3.4 12.8h9.2"/>',
-      lunch: '<path d="M3.6 7.2h8.8v1.6a4.4 4.4 0 0 1-8.8 0z"/><path d="M6 4.4V7.2"/><path d="M8 3.6V7.2"/><path d="M10 4.4V7.2"/>',
-      cake: '<path d="M3.4 12.8h9.2V8H3.4z"/><path d="M8 3.6v4.4"/><path d="M6.4 4.6c.4.9 2.8.9 3.2 0"/><path d="M3.4 10.4h9.2"/>'
-    };
-    return '<svg viewBox="0 0 16 16" aria-hidden="true">' + (paths[kind] || paths.staff) + "</svg>";
+    return { staff: "👥", hired: "↓", left: "↑", lunch: "🍴", cake: "🎂" }[kind] || "•";
   }
 
   function signed(value) {
@@ -434,14 +433,17 @@
     var max = Math.max.apply(null, nums.concat([1]));
     var min = Math.min.apply(null, nums);
     var span = max - min || 1;
-    var width = 88;
-    var height = 36;
-    var points = nums.map(function (num, index) {
-      var x = nums.length === 1 ? width : (index / (nums.length - 1)) * width;
-      var y = height - ((num - min) / span) * (height - 6) - 3;
-      return x.toFixed(1) + "," + y.toFixed(1);
-    }).join(" ");
-    return '<svg class="hr-spark" viewBox="0 0 ' + width + " " + height + '" aria-hidden="true"><polyline points="' + points + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    var width = 92;
+    var height = 40;
+    var pts = nums.map(function (num, index) {
+      var x = nums.length === 1 ? width / 2 : (index / (nums.length - 1)) * width;
+      var y = height - ((num - min) / span) * (height - 8) - 4;
+      return [x, y];
+    });
+    var line = pts.map(function (point) { return point[0].toFixed(1) + "," + point[1].toFixed(1); }).join(" ");
+    var area = "0," + height + " " + line + " " + width + "," + height;
+    return '<svg class="hr-spark" viewBox="0 0 ' + width + " " + height + '" aria-hidden="true"><polygon points="' + area + '" fill="' + color + '" opacity="0.16"/>' +
+      '<polyline points="' + line + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   }
 
   function homeKpi(card) {
@@ -457,60 +459,73 @@
     var values = rows.map(function (row) { return Number(row[key]) || 0; });
     var max = Math.max.apply(null, values.concat([1]));
     var width = 640;
-    var height = 210;
-    var pad = 28;
+    var height = 248;
+    var padL = 36;
+    var padR = 16;
+    var padT = 28;
+    var padB = 28;
     var points = values.map(function (num, index) {
-      var x = values.length === 1 ? pad : pad + (index / (values.length - 1)) * (width - pad * 2);
-      var y = height - pad - (num / max) * (height - pad * 2);
+      var x = values.length === 1 ? padL : padL + (index / (values.length - 1)) * (width - padL - padR);
+      var y = height - padB - (num / max) * (height - padT - padB);
       return [x, y];
     });
     var line = points.map(function (point) { return point[0].toFixed(1) + "," + point[1].toFixed(1); }).join(" ");
     var last = points[points.length - 1];
     var lastRow = rows[rows.length - 1];
-    var label = (key === "rate" ? lastRow.rate + "%" : String(lastRow[key] || 0));
-    var area = line + " " + last[0].toFixed(1) + "," + (height - pad) + " " + points[0][0].toFixed(1) + "," + (height - pad);
-    return '<svg class="hr-line" viewBox="0 0 ' + width + " " + height + '" role="img"><polygon points="' + area + '" fill="rgba(59,130,246,.14)"/>' +
-      '<polyline points="' + line + '" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>' +
-      '<circle cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="4" fill="#3b82f6"/>' +
-      '<text x="' + Math.max(8, last[0] - 78).toFixed(1) + '" y="' + Math.max(16, last[1] - 10).toFixed(1) + '" font-size="12" fill="#3b82f6">' +
-      esc(String(lastRow.date || "").slice(5)) + " " + esc(label) + "</text></svg>";
+    var label = key === "rate" ? lastRow.rate + "%" : String(lastRow[key] || 0);
+    var base = height - padB;
+    var area = points[0][0].toFixed(1) + "," + base + " " + line + " " + last[0].toFixed(1) + "," + base;
+    var tipX = Math.max(8, Math.min(width - 132, last[0] - 64));
+    var tipY = Math.max(4, last[1] - 46);
+    return '<svg class="hr-line" viewBox="0 0 ' + width + " " + height + '" role="img">' +
+      '<polygon points="' + area + '" fill="rgba(47,107,255,.12)"/>' +
+      '<polyline points="' + line + '" fill="none" stroke="#2f6bff" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+      '<circle cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="4.5" fill="#fff" stroke="#2f6bff" stroke-width="2"/>' +
+      '<text x="' + tipX.toFixed(1) + '" y="' + tipY.toFixed(1) + '" font-size="12" font-weight="700" fill="#2f6bff">' + esc(String(lastRow.date || "").slice(5) + " " + label) + "</text></svg>";
   }
 
-  var HOME_COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#8b5cf6", "#06b6d4", "#ec4899", "#94a3b8"];
+  var HOME_COLORS = ["#2f6bff", "#22c55e", "#f5a524", "#8b5cf6", "#22c3ee", "#f43f8a", "#94a3b8"];
 
   function donut(parts, center) {
     var total = parts.reduce(function (sum, part) { return sum + (Number(part.count) || 0); }, 0) || 1;
-    var radius = 42;
+    var radius = 52;
     var circ = 2 * Math.PI * radius;
     var offset = 0;
     var rings = parts.map(function (part, index) {
       var len = ((Number(part.count) || 0) / total) * circ;
-      var node = '<circle cx="60" cy="60" r="' + radius + '" fill="none" stroke="' + HOME_COLORS[index % HOME_COLORS.length] + '" stroke-width="14" stroke-dasharray="' +
-        len.toFixed(2) + " " + (circ - len).toFixed(2) + '" stroke-dashoffset="' + (-offset).toFixed(2) + '" transform="rotate(-90 60 60)"/>';
+      var node = '<circle cx="70" cy="70" r="' + radius + '" fill="none" stroke="' + (part.color || HOME_COLORS[index % HOME_COLORS.length]) + '" stroke-width="16" stroke-linecap="butt" stroke-dasharray="' +
+        len.toFixed(2) + " " + (circ - len).toFixed(2) + '" stroke-dashoffset="' + (-offset).toFixed(2) + '" transform="rotate(-90 70 70)"/>';
       offset += len;
       return node;
     }).join("");
-    return '<svg class="hr-donut" viewBox="0 0 120 120">' + rings +
-      '<text x="60" y="56" text-anchor="middle" font-size="12" fill="currentColor" opacity="0.65">' + esc(center.label) + "</text>" +
-      '<text x="60" y="76" text-anchor="middle" font-size="20" font-weight="700" fill="currentColor">' + esc(center.value) + "</text></svg>";
+    return '<svg class="hr-donut" viewBox="0 0 140 140">' + rings +
+      '<text x="70" y="66" text-anchor="middle" font-size="12" fill="#98a2b3">' + esc(center.label) + "</text>" +
+      '<text x="70" y="90" text-anchor="middle" font-size="26" font-weight="700" fill="#1d2939">' + esc(center.value) + "</text></svg>";
   }
 
   function legend(parts) {
     var total = parts.reduce(function (sum, part) { return sum + (Number(part.count) || 0); }, 0) || 1;
     return '<ul class="hr-legend">' + parts.map(function (part, index) {
       var ratio = part.ratio != null ? part.ratio : Math.round((Number(part.count) || 0) / total * 1000) / 10;
-      return "<li><i class=\"hr-dot\" style=\"background:" + HOME_COLORS[index % HOME_COLORS.length] + "\"></i><span>" + esc(part.name || part.label) +
-        "</span><b>" + esc(part.count || 0) + " · " + esc(ratio) + "%</b></li>";
+      return "<li><i class=\"hr-dot\" style=\"background:" + (part.color || HOME_COLORS[index % HOME_COLORS.length]) + "\"></i><span>" + esc(part.name || part.label) +
+        "</span><b>" + esc(part.count || 0) + "</b><em>" + esc(ratio) + "%</em></li>";
     }).join("") + "</ul>";
   }
 
   function bars(parts) {
     var max = parts.reduce(function (peak, part) { return Math.max(peak, Number(part.ratio) || 0); }, 0) || 1;
-    return parts.map(function (part, index) {
-      var width = Math.max(2, Math.round(((Number(part.ratio) || 0) / max) * 100));
-      return '<div class="hr-bar-row"><span>' + esc(part.label) + '</span><span class="hr-bar"><i style="width:' + width + "%;background:" +
-        HOME_COLORS[index % HOME_COLORS.length] + '"></i></span><b>' + esc(part.ratio || 0) + "%</b></div>";
+    return parts.map(function (part) {
+      var width = Math.max(4, Math.round(((Number(part.ratio) || 0) / max) * 100));
+      return '<div class="hr-bar-row"><span>' + esc(part.label) + '</span><span class="hr-bar"><i style="width:' + width + '%"></i></span><b>' + esc(part.ratio || 0) + "%</b></div>";
     }).join("");
+  }
+
+  function columns(parts) {
+    var max = parts.reduce(function (peak, part) { return Math.max(peak, Number(part.ratio) || 0); }, 0) || 1;
+    return '<div class="hr-cols">' + parts.map(function (part) {
+      var height = Math.max(8, Math.round(((Number(part.ratio) || 0) / max) * 100));
+      return '<div class="hr-col"><b>' + esc(part.ratio || 0) + '%</b><i style="height:' + height + '%"></i><span>' + esc(part.label) + "</span></div>";
+    }).join("") + "</div>";
   }
 
   function fillHome(root, pack) {
@@ -522,7 +537,7 @@
     var lunch = kpis.lunch || {};
     var birthday = kpis.birthday || {};
     var hello = root.querySelector("[data-hello]");
-    if (hello) hello.textContent = (data.hello || "上午好") + (data.viewer ? "，" + data.viewer : "");
+    if (hello) hello.innerHTML = '<span class="hr-wave">👋</span>' + esc((data.hello || "上午好") + (data.viewer ? "，" + data.viewer : ""));
     var range = data.range || {};
     var rangeText = root.querySelector("[data-range-text]");
     if (rangeText) rangeText.textContent = (range.start || "") + " 至 " + (range.end || "");
@@ -532,10 +547,10 @@
     if (kpiBox) {
       var birthdayHint = birthday.next ? "最近 " + birthday.next.name + " " + birthday.next.date : "本月没有即将到来的生日";
       kpiBox.innerHTML = [
-        homeKpi({ icon: "staff", label: "在职人数", value: active.value || 0, unit: "人", hint: "较上月 " + signed(active.delta) + " 人 " + (Number(active.delta) >= 0 ? "↑ " : "↓ ") + Math.abs(Number(active.percent) || 0) + "%", good: Number(active.delta) >= 0, spark: active.spark, bg: "#e8f1ff", color: "#3b82f6" }),
-        homeKpi({ icon: "hired", label: "本月入职", value: hired.value || 0, unit: "人", hint: "较上月 " + signed(hired.delta) + " 人 " + (Number(hired.delta) >= 0 ? "↑ " : "↓ ") + Math.abs(Number(hired.percent) || 0) + "%", good: Number(hired.delta) >= 0, spark: hired.spark, bg: "#e9fbf1", color: "#12b36a" }),
+        homeKpi({ icon: "staff", label: "在职人数", value: active.value || 0, unit: "人", hint: "较上月 " + signed(active.delta) + " 人 " + (Number(active.delta) >= 0 ? "↑ " : "↓ ") + Math.abs(Number(active.percent) || 0) + "%", good: Number(active.delta) >= 0, spark: active.spark, bg: "#e8f1ff", color: "#2f6bff" }),
+        homeKpi({ icon: "hired", label: "本月入职", value: hired.value || 0, unit: "人", hint: "较上月 " + signed(hired.delta) + " 人 " + (Number(hired.delta) >= 0 ? "↑ " : "↓ ") + Math.abs(Number(hired.percent) || 0) + "%", good: Number(hired.delta) >= 0, spark: hired.spark, bg: "#e9fbf1", color: "#16a34a" }),
         homeKpi({ icon: "left", label: "本月离职", value: left.value || 0, unit: "人", hint: "离职率 " + (left.rate || 0) + "% " + (Number(left.rateDelta) <= 0 ? "↓ " : "↑ ") + Math.abs(Number(left.rateDelta) || 0) + "pct", good: Number(left.rateDelta) <= 0, spark: left.spark, bg: "#fff1f0", color: "#f04438" }),
-        homeKpi({ icon: "lunch", label: "今天午餐人数", value: lunch.value || 0, unit: "人", hint: "较昨日 " + signed(lunch.delta) + " 人", good: null, spark: lunch.spark, bg: "#fff6e8", color: "#f59e0b" }),
+        homeKpi({ icon: "lunch", label: "今天午餐人数", value: lunch.value || 0, unit: "人", hint: "较昨日 " + signed(lunch.delta) + " 人", good: null, spark: lunch.spark, bg: "#fff6e8", color: "#f5a524" }),
         homeKpi({ icon: "cake", label: "本月生日", value: birthday.value || 0, unit: "人", hint: birthdayHint, good: null, spark: birthday.spark, bg: "#f3e8ff", color: "#8b5cf6" })
       ].join("");
     }
@@ -543,10 +558,10 @@
     var metricNames = { active: "在职人数", hired: "入职人数", left: "离职人数", rate: "离职率" };
     var trend = root.querySelector("[data-trend-card]");
     if (trend) {
-      trend.innerHTML = "<h3>人员情况趋势<span class=\"hr-seg\">" + ["7", "30", "month", "year"].map(function (key) {
+      trend.innerHTML = "<h3>人员情况趋势<span class=\"hr-seg hr-seg-lite\">" + ["7", "30", "month", "year"].map(function (key) {
         var label = { "7": "近7天", "30": "近30天", month: "本月", year: "今年" }[key];
         return '<button type="button" data-range-pick="' + key + '" aria-selected="' + (range.key === key ? "true" : "false") + '">' + label + "</button>";
-      }).join("") + "</span></h3><div class=\"hr-seg\">" + ["active", "hired", "left", "rate"].map(function (key) {
+      }).join("") + "</span></h3><div class=\"hr-seg hr-seg-solid\">" + ["active", "hired", "left", "rate"].map(function (key) {
         return '<button type="button" data-trend="' + key + '" aria-selected="' + (metric === key ? "true" : "false") + '">' + metricNames[key] + "</button>";
       }).join("") + "</div>" + lineChart(data.series, metric);
     }
@@ -561,31 +576,33 @@
     var openTodo = root.getAttribute("data-todo") || "";
     var todoBox = root.querySelector("[data-todos]");
     if (todoBox) {
-      var todoColors = { probation: "#f59e0b", late: "#3b82f6", recruit: "#8b5cf6" };
+      var todoTones = { probation: ["#fff6e8", "⏳"], late: ["#e8f1ff", "📅"], recruit: ["#f3e8ff", "👤"] };
       todoBox.innerHTML = '<h3>待办事项 (' + todos.length + ')<button type="button" class="hr-linkish" data-act="todo-all">' + (openTodo === "all" ? "收起" : "查看全部") + "</button></h3>" +
         (todos.length ? todos.map(function (item) {
-          var names = openTodo === "all" && item.names && item.names.length ? '<div class="hr-todo"><span>' + esc(item.names.join("、")) + "</span></div>" : "";
-          return '<div class="hr-todo"><i style="background:' + (todoColors[item.kind] || "#94a3b8") + '">!</i><div><b>' + esc(item.title) + "</b><span>" + esc(item.when) + "</span></div></div>" + names;
+          var tone = todoTones[item.kind] || ["#f4f7fb", "•"];
+          var names = openTodo === "all" && item.names && item.names.length ? '<div class="hr-todo"><div><b>' + esc(item.names.join("、")) + "</b></div></div>" : "";
+          return '<div class="hr-todo"><i style="background:' + tone[0] + '">' + tone[1] + '</i><div><b>' + esc(item.title) + "</b></div><span>" + esc(item.when) + "</span></div>" + names;
         }).join("") : '<div class="hr-empty">暂无待办</div>');
     }
     var teamBox = root.querySelector("[data-teams]");
     var teams = data.teams || [];
     var teamMax = teams.reduce(function (peak, team) { return Math.max(peak, Number(team.value) || 0); }, 0) || 1;
     if (teamBox) {
-      teamBox.innerHTML = "<h3>团队人效TOP5</h3><p class=\"hr-msg\">" + esc(data.teamMetric || "") + "</p>" + (teams.length ? teams.map(function (team, index) {
+      var medals = ["#f5b942", "#c5cdd8", "#e0a36a", "#8eb6ff", "#8eb6ff"];
+      teamBox.innerHTML = "<h3>团队人效TOP5</h3><p class=\"hr-lead\">" + esc(data.teamMetric || "") + "</p>" + (teams.length ? teams.map(function (team, index) {
         var width = Math.max(8, Math.round(((Number(team.value) || 0) / teamMax) * 100));
-        return '<div class="hr-rank"><div class="hr-rank-top"><span>' + (index + 1) + " " + esc(team.name) + "</span><b>" + esc(team.value) + esc(team.unit || "") +
-          '</b></div><div class="hr-rank-bar" style="width:' + width + '%"></div></div>';
+        return '<div class="hr-rank"><div class="hr-rank-top"><i class="hr-medal" style="background:' + medals[index] + '">' + (index + 1) + "</i><span>" + esc(team.name) + "</span><b>" + esc(team.value) + esc(team.unit || "") +
+          '</b></div><div class="hr-rank-track"><i style="width:' + width + '%"></i></div></div>';
       }).join("") : '<div class="hr-empty">还没有团队数据</div>');
     }
     var gender = data.gender || { male: 0, female: 0 };
     var genderBox = root.querySelector("[data-gender]");
     if (genderBox) {
-      var genderParts = [{ name: "男", count: gender.male || 0 }, { name: "女", count: gender.female || 0 }].filter(function (part) { return part.count; });
+      var genderParts = [{ name: "男", count: gender.male || 0, color: "#2f6bff" }, { name: "女", count: gender.female || 0, color: "#fb7185" }].filter(function (part) { return part.count; });
       genderBox.innerHTML = "<h3>性别结构</h3>" + (genderParts.length ? '<div class="hr-donut-wrap">' + donut(genderParts, { label: "在职", value: (gender.male || 0) + (gender.female || 0) }) + legend(genderParts) + "</div>" : '<div class="hr-empty">还没有填写性别</div>');
     }
     var ageBox = root.querySelector("[data-age]");
-    if (ageBox) ageBox.innerHTML = "<h3>年龄结构</h3>" + (data.ageReady ? bars(data.ages || []) : '<div class="hr-empty">花名册还没填生日</div>');
+    if (ageBox) ageBox.innerHTML = "<h3>年龄结构</h3>" + (data.ageReady ? columns(data.ages || []) : '<div class="hr-empty">花名册还没填生日</div>');
     var tenureBox = root.querySelector("[data-tenure]");
     if (tenureBox) tenureBox.innerHTML = "<h3>司龄结构</h3>" + (data.tenureReady ? bars(data.tenures || []) : '<div class="hr-empty">还没有入职日期</div>');
     var moveKey = root.getAttribute("data-move") || "hired";
@@ -599,17 +616,18 @@
         return "<tr><td>" + esc(row.name) + "</td><td>" + esc(row.department) + "</td><td>" + esc(row.position) + "</td><td>" + esc(row.date) +
           "</td><td>" + esc(row.probation) + '</td><td><span class="' + pill + '">' + esc(row.status) + "</span></td></tr>";
       }).join("") : emptyRow(6, moveKey === "left" ? "这个范围没有离职" : "这个范围没有入职");
-      moveBox.innerHTML = '<h3>入离职明细<span class="hr-seg"><button type="button" data-move="hired" aria-selected="' + (moveKey !== "left") + '">新入职 (' + hiredRows.length +
+      moveBox.innerHTML = '<h3>入离职明细<span class="hr-seg hr-seg-solid"><button type="button" data-move="hired" aria-selected="' + (moveKey !== "left") + '">新入职 (' + hiredRows.length +
         ')</button><button type="button" data-move="left" aria-selected="' + (moveKey === "left") + '">已离职 (' + leftRows.length + ")</button></span></h3>" +
         table(["姓名", "部门", "岗位", moveKey === "left" ? "离职日期" : "入职日期", "试用期", "状态"], body).replace("hr-card ", "");
     }
     var recruit = data.recruit || { steps: [], registered: 0, done: 0, rate: 0 };
     var recruitBox = root.querySelector("[data-recruit-progress]");
     if (recruitBox) {
-      recruitBox.innerHTML = '<h3>招聘进度</h3><p>本月登记 ' + esc(recruit.registered || 0) + " 人，已录用 " + esc(recruit.done || 0) + " 人，录用率 " + esc(recruit.rate || 0) +
+      var stepBg = ["#e8f1ff", "#e7f8fb", "#f3e8ff", "#e9fbf1"];
+      recruitBox.innerHTML = '<h3>招聘进度</h3><p class="hr-lead">本月登记 ' + esc(recruit.registered || 0) + " 人，已录用 " + esc(recruit.done || 0) + " 人，录用率 " + esc(recruit.rate || 0) +
         '%</p><div class="hr-meter"><i style="width:' + Math.max(0, Math.min(100, Number(recruit.rate) || 0)) + '%"></i></div><div class="hr-funnel">' +
-        (recruit.steps || []).map(function (step) {
-          return "<div><b>" + esc(step.count || 0) + "</b><span>" + esc(step.label) + "</span></div>";
+        (recruit.steps || []).map(function (step, index) {
+          return (index ? "<em>›</em>" : "") + '<div style="background:' + stepBg[index % stepBg.length] + '"><b>' + esc(step.count || 0) + "</b><span>" + esc(step.label) + "</span></div>";
         }).join("") + "</div>";
     }
     setMsg(root, "", false);
