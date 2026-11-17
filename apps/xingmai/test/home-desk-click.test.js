@@ -410,6 +410,7 @@ test("连接京麦 lists shops that still need a login and does not open the bro
 test("opening a shop reports the browser step before the login page is ready", async () => {
   await resetJingmaiStore();
   let closed = false;
+  let pageUp = false;
   let release = function () {};
   setJingmaiDeps({
     loadOrg: async () => [
@@ -422,10 +423,11 @@ test("opening a shop reports the browser step before the login page is ready", a
         }
         return new Promise(function (resolve) {
           release = function () {
+            pageUp = true;
             if (options && options.onStep) {
               options.onStep("正在打开登录页");
             }
-            resolve({ status: "verify", message: "登录页已打开" });
+            resolve({ status: "verify", message: "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。" });
           };
         });
       },
@@ -433,7 +435,9 @@ test("opening a shop reports the browser step before the login page is ready", a
         closed = true;
       },
       poll: async function () {
-        return { status: "screen", message: "登录页已打开" };
+        return pageUp
+          ? { status: "verify", message: "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。" }
+          : { status: "opening", message: "正在启动浏览器" };
       }
     }
   });
@@ -458,6 +462,7 @@ test("opening a shop reports the browser step before the login page is ready", a
     assert.equal(screen.status, "screen");
     assert.equal(screen.store, "飒望生活日用旗舰店");
     assert.equal(screen.step, "京麦登录页");
+    assert.match(screen.message, /服务器画面/);
   } finally {
     resetJingmaiDeps();
   }
@@ -621,9 +626,11 @@ test("a login form captcha is submitted with the 登录 button", () => {
   assert.equal(loginPageAction(doc, { submit: true }).kind, "button");
 });
 
-test("the login picture is shown as soon as the page is up", () => {
+test("the login picture waits until the account box or the captcha is actually there", () => {
   assert.equal(loginOpenReady(0, { status: "verify", message: "" }, false), "wait");
-  assert.equal(loginOpenReady(1, { status: "verify", message: "" }, false), "show");
+  assert.equal(loginOpenReady(1, { status: "verify", message: "" }, false), "wait");
+  assert.equal(loginOpenReady(1, { status: "verify", message: "", formReady: true }, false), "show");
+  assert.equal(loginOpenReady(1, { status: "verify", message: "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。" }, false), "show");
   assert.equal(loginOpenReady(1, { status: "verify", message: "" }, true), "ok");
   assert.equal(loginOpenReady(0, { status: "login", message: "账号或密码不正确" }, false), "login");
 });

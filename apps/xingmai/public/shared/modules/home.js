@@ -5229,11 +5229,15 @@
             if (dead || seq !== deskSeq || !state.desk || !state.desk.preview) {
               return;
             }
+            var note = state.desk.message || "";
+            if (!note || note.indexOf("启动") >= 0 || note.indexOf("登录页已打开") >= 0) {
+              note = "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。";
+            }
             showDesk({
               open: true,
               status: "screen",
               store: name,
-              message: state.desk.message || "登录页已打开"
+              message: note
             });
           };
           probe.src = "/api/home/live-login/screen?store=" + encodeURIComponent(name) + "&t=" + Date.now();

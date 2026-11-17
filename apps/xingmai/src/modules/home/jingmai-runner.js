@@ -1,4 +1,4 @@
-import { browserReady, ensureChrome, jingmaiDesk } from "./jingmai-desk.js";
+import { browserReady, ensureChrome, jingmaiDesk, LOGIN_SCREEN_MESSAGE } from "./jingmai-desk.js";
 import { jingmaiClient } from "./jingmai-client.js";
 import { beijingParts, bindDecision, runTick, sampleFields, sessionStillValid } from "./jingmai.js";
 import { listCollectTargets, listSessions, markAuth, readJingmaiLive, saveSample, saveSession, setRoster } from "./jingmai-store.js";
@@ -323,7 +323,7 @@ async function startQueued(shop, epoch) {
   if (opened.status === "verify") {
     loginCursor.phase = "screen";
     loginCursor.step = "京麦登录页";
-    loginCursor.message = opened.message || "登录页已打开";
+    loginCursor.message = opened.message || LOGIN_SCREEN_MESSAGE;
     return publicState({
       status: "screen",
       store: shop.store,
@@ -502,21 +502,16 @@ export async function reloginState(store) {
   if (loginCursor.failed || loginCursor.phase === "failed") {
     return publicState({ status: "failed", store: name, step: loginCursor.step, message: loginCursor.message || "登录没有打开" });
   }
-  if (loginCursor.phase === "opening") {
-    return publicState({
-      status: "opening",
-      store: name,
-      step: loginCursor.step || "打开京麦登录页",
-      message: loginCursor.message || "正在打开「" + name + "」的登录画面"
-    });
-  }
   const state = await deps.desk.poll(name);
-  if (state.status === "opening") {
+  if (state.status === "verify" || state.status === "screen") {
+    loginCursor.phase = "screen";
+    loginCursor.step = "京麦登录页";
+    loginCursor.message = state.message || LOGIN_SCREEN_MESSAGE;
     return publicState({
-      status: "opening",
+      status: "screen",
       store: name,
-      step: loginCursor.step || "打开京麦登录页",
-      message: loginCursor.message || state.message
+      step: "京麦登录页",
+      message: loginCursor.message
     });
   }
   if (state.status === "ok") {
@@ -534,6 +529,14 @@ export async function reloginState(store) {
   }
   if (state.status === "missing") {
     return publicState({ status: "missing", store: name, message: state.message || "请重新打开登录" });
+  }
+  if (state.status === "opening" || loginCursor.phase === "opening") {
+    return publicState({
+      status: "opening",
+      store: name,
+      step: "启动浏览器",
+      message: "正在启动浏览器"
+    });
   }
   return publicState({
     status: "screen",
